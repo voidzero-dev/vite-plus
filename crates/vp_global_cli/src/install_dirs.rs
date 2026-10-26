@@ -104,6 +104,9 @@ pub(crate) fn prepare(dirs: &VpDirs) -> Result<(), Error> {
         empty.push(root);
     }
     for root in empty {
+        if is_owned(&root)? {
+            continue;
+        }
         fs::create_dir_all(&root)?;
         let mut marker = fs::OpenOptions::new()
             .write(true)
@@ -161,6 +164,25 @@ mod tests {
                 }
             });
         }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn prepare_accepts_aliased_empty_roots() {
+        EnvConfig::scoped(|env| {
+            let mut dirs = env.dirs.clone();
+            dirs.data = env.dirs.data.join("data");
+            dirs.cache = env.dirs.data.join("cache");
+            dirs.config = dirs.data.clone();
+            dirs.state = dirs.data.clone();
+            fs::create_dir(&dirs.data).unwrap();
+            std::os::unix::fs::symlink(&dirs.data, &dirs.cache).unwrap();
+
+            prepare(&dirs).unwrap();
+
+            assert!(is_owned(&dirs.data).unwrap());
+            assert!(is_owned(&dirs.cache).unwrap());
+        });
     }
 
     #[test]
