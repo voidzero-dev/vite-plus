@@ -102,7 +102,7 @@ pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
     let shims = collect_shim_files(dirs, &plan.binary_targets);
     if plan.directories.is_empty() && shims.is_empty() {
         return Err(Error::Other(vt_str::format!(
-            "Refusing to remove {}: Vite+ installation ownership could not be verified. Check your directory overrides and inspect unmarked directories manually.",
+            "Refusing to remove {}: Vite+ could not verify that it manages this directory. Check your directory overrides and inspect the directory before removing it manually.",
             dirs.data.as_path().display()
         )));
     }

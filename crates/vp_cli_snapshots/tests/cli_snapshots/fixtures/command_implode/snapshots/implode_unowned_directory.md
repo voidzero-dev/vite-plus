@@ -26,7 +26,7 @@ An unrelated override fails before touching files or profiles
 **Exit code:** 1
 
 ```
-error: Refusing to remove <home>/Documents: Vite+ installation ownership could not be verified. Check your directory overrides and inspect unmarked directories manually.
+error: Refusing to remove <home>/Documents: Vite+ could not verify that it manages this directory. Check your directory overrides and inspect the directory before removing it manually.
 ```
 
 ## `vpt print-file $HOME/.bashrc`
