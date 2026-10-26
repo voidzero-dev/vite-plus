@@ -32,6 +32,8 @@ Prefer local fixtures or mock servers for tests that depend on external services
 
 For behavior changes, find nearby tests before editing and add or update coverage in the same area. Choose checks for the changed layer:
 
+Run checks that install the global CLI in the [isolated environment below](#local-cli-installation).
+
 | Change                         | Validation                                                                                                                         |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
 | Documentation / agent guidance | Verify referenced paths, commands, and links; `git diff --check -- <files>`                                                        |
@@ -43,6 +45,28 @@ For behavior changes, find nearby tests before editing and add or update coverag
 | Full pre-merge check           | `pnpm bootstrap-cli && pnpm test && git status`                                                                                    |
 
 Validate `vp check`, lint, format, and type-check changes end-to-end: bundled-tool routing can hide config drift. Use `vp check --fix` only when you intend to apply formatting or lint fixes. Documentation-only changes need no unrelated test suites.
+
+### Local CLI Installation
+
+For local validation, always set `VP_SELF_SETUP_NO_MODIFY_PATH=1` when running `pnpm bootstrap-cli`, `pnpm bootstrap-cli:ci`, or `pnpm install-global-cli`. Set `VP_HOME` to the absolute path of a fresh temporary directory. `VP_HOME` redirects installation files; it does not isolate the user's shell profiles. `CI=true` does not suppress profile writes either. The [first-start setup](crates/vp_global_cli/src/self_setup.rs) uses `VP_SELF_SETUP_NO_MODIFY_PATH=1` to skip persistent shell/PATH configuration.
+
+Keep environment and `PATH` changes local to the validation process. Apply the required build environment first, then run the installation and its checks in one subshell:
+
+```sh
+(
+  set -e
+  test_vp_home="$(mktemp -d)"
+  trap 'rm -rf -- "$test_vp_home"' EXIT
+  export VP_HOME="$test_vp_home"
+  export VP_SELF_SETUP_NO_MODIFY_PATH=1
+  pnpm bootstrap-cli
+  export PATH="$VP_HOME/bin:$PATH"
+  vp --version
+  # Run further checks that use this installation here.
+)
+```
+
+Remove temporary installations after their checks finish. Do not edit real shell startup files or persistent user `PATH` for tests. Test shell setup through the snapshot runner's isolated home directories instead.
 
 ### CLI Snapshots
 
