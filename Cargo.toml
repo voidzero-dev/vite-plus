@@ -198,11 +198,11 @@ fspy = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "a3c087a77
 futures = "0.3.31"
 futures-util = "0.3.31"
 glob = "0.3.2"
-globstar = "0.0.4"
+globstar = "0.0.6"
 heck = "0.5.0"
 hex = "0.4.3"
 html5gum = "0.8.1"
-httpmock = "0.8"
+httpmock = "0.9"
 idna_adapter = "=1.0.0"
 ignore = "0.4"
 indicatif = "0.18"
@@ -263,7 +263,7 @@ rolldown-notify-debouncer-full = "0.8.0"
 rustc-hash = "2.1.1"
 rustls = { version = "0.23.46", default-features = false, features = ["ring", "std", "tls12"] }
 same-file = "1.0.6"
-saphyr = { version = "0.2.1", default-features = false }
+saphyr = { version = "0.3.0", default-features = false }
 schemars = "1.0.0"
 self_cell = "1.2.0"
 semver = "1.0.26"
