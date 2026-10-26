@@ -4,9 +4,8 @@
 
 import { createRequire } from 'node:module';
 
-import type { FrozenTsconfig } from '../binding/index.js';
-
 import { type WatchSink, watchSink } from '../../../oxc-node/packages/core/watch-report.mjs';
+import type { FrozenTsconfig } from '../binding/index.js';
 
 // oxc-node's watch reporting for a loader of its own (`@oxc-node/core/watch-report`),
 // bundled from the vendored source, so it matches the binding. `script-preload.ts` also
