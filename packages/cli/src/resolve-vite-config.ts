@@ -1,6 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { getEnv } from '@voidzero-dev/vite-task-client';
+import type { UserConfig } from 'vite';
+
 import { findMonorepoRoot } from '../binding/index.js';
 import { withConfigMetadataResolution } from './define-config.ts';
 import { VITE_CONFIG_FILES } from './utils/constants.ts';
@@ -53,25 +56,43 @@ export interface ResolveViteConfigOptions {
 }
 
 /**
- * Resolve vite.config.ts and return the config object.
+ * Load vite.config.ts metadata without resolving Vite's plugins or server options.
  */
-export async function resolveViteConfig(cwd: string, options?: ResolveViteConfigOptions) {
-  const { resolveConfig } = await import('./index.js');
+export async function resolveViteConfig(
+  cwd: string,
+  options?: ResolveViteConfigOptions,
+): Promise<UserConfig & { configFile: string | undefined }> {
+  const { loadConfigFromFile } = await import('./index.js');
 
   // This loads the config purely to read a non-plugin block (lint/fmt/pack/run/
   // staged/create…), so skip the user's plugin factory while it evaluates.
   return withConfigMetadataResolution(async () => {
+    // Preserve resolveConfig's environment defaults, including Vite Task's
+    // tracked NODE_ENV, before evaluating function configs and their imports.
+    if (process.env.NODE_ENV === undefined) {
+      const nodeEnv = getEnv('NODE_ENV');
+      if (nodeEnv !== undefined) {
+        process.env.NODE_ENV = nodeEnv;
+      }
+    }
+    if (!process.env.NODE_ENV) {
+      process.env.NODE_ENV = 'development';
+    }
+
+    let configFile: string | undefined;
     if (options?.traverseUp && !hasViteConfig(cwd)) {
       const workspaceRoot = findMonorepoRoot(cwd);
       if (workspaceRoot) {
-        const configFile = findViteConfigUp(path.dirname(cwd), workspaceRoot);
-        if (configFile) {
-          return resolveConfig({ root: cwd, configFile }, 'build');
-        }
+        configFile = findViteConfigUp(path.dirname(cwd), workspaceRoot);
       }
     }
 
-    return resolveConfig({ root: cwd }, 'build');
+    const result = await loadConfigFromFile(
+      { command: 'build', mode: 'development', isSsrBuild: false, isPreview: false },
+      configFile,
+      cwd,
+    );
+    return { ...result?.config, configFile: result?.path };
   });
 }
 
