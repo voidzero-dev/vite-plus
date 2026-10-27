@@ -19,6 +19,14 @@ This approach enables users to access Vite, Rolldown, and related tools through 
 
 ## Build Steps
 
+### Vite Source Preparation
+
+Before core bundling, [`brand-vite.ts`](../tools/src/brand-vite.ts) applies branding and the [`patch-vite-config.ts`](../tools/src/patch-vite-config.ts) resolver patch to the vendored Vite source. `sync-remote` runs this preparation. The root build script also runs it before generating Vite types and building core.
+
+The resolver patch adds an optional internal eighth argument to `resolveConfig`. The `resolveConfigFile()` helper exported by `vite-plus` selects `rootResolution: 'config-file'` through a private type bridge. After a config file loads, this mode resolves an unset or relative `root` from that file's directory, before plugin `apply` and `config` hooks. Absolute roots are preserved, and an inline `root` retains priority. Calls without this option keep their existing behavior. Vite still handles config loading, environment initialization, configuration metadata, and plugin hooks.
+
+[`build.ts`](build.ts) calls `assertViteConfigPatched()` before any bundling starts. It rejects missing, changed, duplicate, or partially applied patch anchors. When the Vite pin changes, review the patch against the new source. The guard validates `src/node/config.ts`; it does not check whether generated type declarations are current.
+
 The build process executes 5 steps in sequence:
 
 ### Step 1: Bundle Rolldown Pluginutils (`bundleRolldownPluginutils`)
@@ -299,8 +307,8 @@ dist/
 
 ### Updating Vite
 
-1. Update the `vite` git submodule to the new version
-2. Run `pnpm -C packages/core build`
+1. Update the Vite pin in [`packages/tools/.upstream-versions.json`](../tools/.upstream-versions.json) and review the resolver patch against the new source
+2. Follow the [upstream sync and build instructions](../../CONTRIBUTING.md#pull-upstream-dependencies) to prepare the source, regenerate Vite types, and rebuild the packages
 3. Verify `bundledVersions.vite` in `package.json` is updated
 4. Test with `pnpm test`
 
@@ -324,6 +332,8 @@ dist/
 
 ## Build Commands
 
+These direct core builds require prepared Vite sources and current Vite types. The [standard repository build](../../CONTRIBUTING.md#build-vite-and-upstream-dependencies) includes both prerequisites.
+
 ```bash
 # Build the core package
 pnpm -C packages/core build
@@ -339,6 +349,7 @@ RELEASE_BUILD=1 pnpm -C packages/core build
 ### Build Flow
 
 ```
+   assertViteConfigPatched()      Validate prepared Vite source before bundling
 1. bundleRolldownPluginutils()    Copy pre-built dist
 2. bundleRolldown()               Copy + rewrite module specifiers
 3. buildVite()                    Full Rolldown build with transforms
