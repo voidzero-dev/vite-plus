@@ -28,12 +28,13 @@ afterEach(async () => {
 
 // Plugins read `root` in their `config` hook, as TanStack Start does to find
 // its entries, so the fixture plugin records the value it sees there.
-function writeConfig(dir: string, fields = ''): string {
+function writeConfig(dir: string, root?: string): string {
   const configFile = path.join(dir, 'vite.config.mjs');
+  const rootField = root === undefined ? '' : `root: ${JSON.stringify(root)},`;
   fs.writeFileSync(
     configFile,
     `export default {
-  ${fields}
+  ${rootField}
   plugins: [{ name: 'record-root', config: (config) => ({ seenRoot: config.root }) }],
 };
 `,
@@ -66,10 +67,7 @@ describe('resolveConfigFromFile', () => {
       }[kind];
       const expectedRoot = path.resolve(configDir, root ?? '');
       fs.mkdirSync(expectedRoot, { recursive: true });
-      const configFile = writeConfig(
-        configDir,
-        root === undefined ? '' : `root: ${JSON.stringify(root)},`,
-      );
+      const configFile = writeConfig(configDir, root);
       const cwd = process.cwd();
 
       const config = await resolveConfigFromFile(configFile);
@@ -108,7 +106,7 @@ describe('resolveConfigFromFile', () => {
   it('resolves a relative root from the workspace base instead of the config directory', async () => {
     const configDir = path.join(tempDir, 'config');
     fs.mkdirSync(configDir);
-    const configFile = writeConfig(configDir, "root: 'app',");
+    const configFile = writeConfig(configDir, 'app');
     fs.mkdirSync(path.join(tempDir, 'app'));
 
     const config = await resolveConfigFromFile(configFile, { rootBase: tempDir });
@@ -122,7 +120,7 @@ describe('resolveConfigFromFile', () => {
     const rootBase = path.join(tempDir, 'workspace');
     fs.mkdirSync(root);
     fs.mkdirSync(rootBase);
-    const configFile = writeConfig(tempDir, `root: ${JSON.stringify(root)},`);
+    const configFile = writeConfig(tempDir, root);
 
     const config = await resolveConfigFromFile(configFile, { rootBase });
 
@@ -271,13 +269,14 @@ export default {
     async (kind) => {
       const configFile = path.join(tempDir, 'vite.config.mjs');
       const evaluationsFile = path.join(tempDir, 'evaluations.log');
-      const exportValue =
-        kind === 'object'
-          ? '{ lint: { rules: {} } }'
-          : `${kind === 'async function' ? 'async ' : ''}() => {
+      let exportValue = '{ lint: { rules: {} } }';
+      if (kind !== 'object') {
+        const asyncKeyword = kind === 'async function' ? 'async ' : '';
+        exportValue = `${asyncKeyword}() => {
   appendFileSync(${JSON.stringify(evaluationsFile)}, 'function\\n');
   return { lint: { rules: {} } };
 }`;
+      }
       fs.writeFileSync(
         configFile,
         `import { appendFileSync } from 'node:fs';
@@ -377,14 +376,21 @@ assert.equal(second.nodeEnv, ${JSON.stringify(expected)});`,
     const workspace = path.join(tempDir, 'workspace');
     const configDir = path.join(workspace, 'config');
     const configFile = path.join(configDir, 'vite.config.mjs');
-    fs.mkdirSync(path.join(configDir, 'app'), { recursive: true });
-    fs.mkdirSync(path.join(launcher, 'app'), { recursive: true });
-    fs.mkdirSync(path.join(workspace, 'app'));
+    const configRoot = path.join(configDir, 'app');
+    const workspaceRoot = path.join(workspace, 'app');
+    const launcherRoot = path.join(launcher, 'app');
+    fs.mkdirSync(configRoot, { recursive: true });
+    fs.mkdirSync(launcherRoot, { recursive: true });
+    fs.mkdirSync(workspaceRoot);
     const esmEntry = new URL('../../dist/index.js', import.meta.url);
     const entry = new URL(
       entryType === 'import' ? '../../dist/index.js' : '../../dist/index.cjs',
       import.meta.url,
     );
+    const loadApi =
+      entryType === 'import'
+        ? `await import(${JSON.stringify(entry.href)})`
+        : `createRequire(import.meta.url)(${JSON.stringify(fileURLToPath(entry))})`;
     fs.writeFileSync(
       configFile,
       `import assert from 'node:assert/strict';
@@ -414,27 +420,23 @@ export default defineConfig({
         `import assert from 'node:assert/strict';
 import { realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
-const api = ${
-          entryType === 'import'
-            ? `await import(${JSON.stringify(entry.href)})`
-            : `createRequire(import.meta.url)(${JSON.stringify(fileURLToPath(entry))})`
-        };
+const api = ${loadApi};
 const marker = process.env.VP_RESOLVING_CONFIG_METADATA;
 const cwd = process.cwd();
 const configFile = ${JSON.stringify(path.relative(launcher, configFile))};
 const defaults = await api.resolveConfigFromFile(configFile);
-assert.equal(realpathSync.native(defaults.root), realpathSync.native(${JSON.stringify(path.join(configDir, 'app'))}));
-assert.equal(defaults.seenRoot, ${JSON.stringify(path.join(configDir, 'app'))});
+assert.equal(realpathSync.native(defaults.root), realpathSync.native(${JSON.stringify(configRoot)}));
+assert.equal(defaults.seenRoot, ${JSON.stringify(configRoot)});
 assert.equal(process.env.VP_RESOLVING_CONFIG_METADATA, marker);
 const config = await api.resolveConfigFromFile(configFile, { rootBase: ${JSON.stringify(path.relative(launcher, workspace))} });
-assert.equal(realpathSync.native(config.root), realpathSync.native(${JSON.stringify(path.join(workspace, 'app'))}));
-assert.equal(config.seenRoot, ${JSON.stringify(path.join(workspace, 'app'))});
+assert.equal(realpathSync.native(config.root), realpathSync.native(${JSON.stringify(workspaceRoot)}));
+assert.equal(config.seenRoot, ${JSON.stringify(workspaceRoot)});
 assert.deepEqual(config.lint, { rules: {} });
 assert.equal(config.inlineConfig.root, undefined);
 for (const rootBase of [cwd, '']) {
   const fromCwd = await api.resolveConfigFromFile(configFile, { rootBase });
-  assert.equal(realpathSync.native(fromCwd.root), realpathSync.native(${JSON.stringify(path.join(launcher, 'app'))}));
-  assert.equal(fromCwd.seenRoot, ${JSON.stringify(path.join(launcher, 'app'))});
+  assert.equal(realpathSync.native(fromCwd.root), realpathSync.native(${JSON.stringify(launcherRoot)}));
+  assert.equal(fromCwd.seenRoot, ${JSON.stringify(launcherRoot)});
 }
 assert.equal(process.cwd(), cwd);
 assert.equal(process.env.VP_RESOLVING_CONFIG_METADATA, marker);`,

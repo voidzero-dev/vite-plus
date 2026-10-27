@@ -98,12 +98,13 @@ describe('findViteConfigUp', () => {
 
 // Plugins read `root` in their `config` hook, as TanStack Start does to find
 // its entries, so the fixture plugin records the value it sees there.
-function writeConfig(dir: string, fields = ''): string {
+function writeConfig(dir: string, root?: string): string {
   const configFile = path.join(dir, 'vite.config.mjs');
+  const rootField = root === undefined ? '' : `root: ${JSON.stringify(root)},`;
   fs.writeFileSync(
     configFile,
     `export default {
-  ${fields}
+  ${rootField}
   plugins: [{ name: 'record-root', config: (config) => ({ seenRoot: config.root }) }],
 };
 `,
@@ -118,14 +119,15 @@ function realPath(file: string): string {
 }
 
 describe('resolveViteConfig', () => {
-  it.each(['unset', 'relative', 'absolute'])(
+  it.each(['unset', 'relative', 'absolute'] as const)(
     'uses the caller root when the local config root is %s',
     async (kind) => {
-      const root = kind === 'relative' ? 'app' : path.join(tempDir, 'app');
-      const configFile = writeConfig(
-        tempDir,
-        kind === 'unset' ? '' : `root: ${JSON.stringify(root)},`,
-      );
+      const root = {
+        unset: undefined,
+        relative: 'app',
+        absolute: path.join(tempDir, 'app'),
+      }[kind];
+      const configFile = writeConfig(tempDir, root);
 
       const config = await resolveViteConfig(tempDir);
 
@@ -136,16 +138,17 @@ describe('resolveViteConfig', () => {
     },
   );
 
-  it.each(['unset', 'relative', 'absolute'])(
+  it.each(['unset', 'relative', 'absolute'] as const)(
     'uses the package root when traverseUp finds a config with root %s',
     async (kind) => {
       fs.writeFileSync(path.join(tempDir, 'pnpm-workspace.yaml'), "packages:\n  - 'packages/*'\n");
       fs.writeFileSync(path.join(tempDir, 'package.json'), '{"name":"fixture"}');
-      const root = kind === 'relative' ? 'app' : path.join(tempDir, 'app');
-      const configFile = writeConfig(
-        tempDir,
-        kind === 'unset' ? '' : `root: ${JSON.stringify(root)},`,
-      );
+      const root = {
+        unset: undefined,
+        relative: 'app',
+        absolute: path.join(tempDir, 'app'),
+      }[kind];
+      const configFile = writeConfig(tempDir, root);
       const packageDir = path.join(tempDir, 'packages', 'lib');
       fs.mkdirSync(packageDir, { recursive: true });
       fs.writeFileSync(path.join(packageDir, 'package.json'), '{"name":"lib"}');

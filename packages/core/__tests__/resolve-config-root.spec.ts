@@ -21,7 +21,7 @@ const resolveWithOptions = resolveConfig as (
   internalOptions?: { rootBase?: string },
 ) => Promise<ResolvedConfig>;
 
-function resolve(config: InlineConfig, rootBase?: string) {
+function resolve(config: InlineConfig, rootBase?: string): Promise<ResolvedConfig> {
   return resolveWithOptions(
     config,
     'build',
@@ -57,7 +57,7 @@ function expectedRoot(root: string): string {
   }
 }
 
-function writeConfig(config: Record<string, unknown>, dir = configDir) {
+function writeConfig(config: Record<string, unknown>, dir = configDir): string {
   const file = path.join(dir, 'vite.config.mjs');
   writeFileSync(file, `export default ${JSON.stringify(config)};\n`);
   return file;

@@ -29,14 +29,14 @@ const upstreamLoadResult = `    if (loadResult) {
       configFileDependencies = loadResult.dependencies
     }`;
 
-const patchedLoadResult = `    if (loadResult) {
-      config = mergeConfig(loadResult.config, config)
-      configFile = loadResult.path
-      configFileDependencies = loadResult.dependencies
+const patchedLoadResult = upstreamLoadResult.replace(
+  '\n    }',
+  `
       if (internalOptions?.rootBase !== undefined && inlineConfig.root == null) {
         config.root = path.resolve(internalOptions.rootBase, config.root ?? '')
       }
-    }`;
+    }`,
+);
 
 function patchError(detail: string): Error {
   return new Error(

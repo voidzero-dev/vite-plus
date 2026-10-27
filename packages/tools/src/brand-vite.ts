@@ -101,7 +101,7 @@ function logPatch(file: string, desc: string, result: 'patched' | 'already') {
   }
 }
 
-export function brandVite(rootDir: string = process.cwd()) {
+export function brandVite(rootDir: string = process.cwd()): void {
   log('Applying Vite+ branding patches...');
 
   const nodeDir = join(rootDir, VITE_NODE_DIR);
@@ -216,14 +216,13 @@ export function brandVite(rootDir: string = process.cwd()) {
   const configFile = join(nodeDir, 'config.ts');
   const configSource = readFileSync(configFile, 'utf-8');
   // Validate both config patches in memory before writing either edit.
-  const patchedConfig = patchViteConfig(
-    replaceInSource(
-      configFile,
-      configSource,
-      '      !process.env.VITE_CONFIG_NATIVE_IGNORE_WARNING &&\n        createNativeConfigCompatPlugin(nativeIncompatibilities),',
-      "      // Vite+ manages config loading, so Vite's native-config-loader\n      // migration notice is noise. Never register the compat-check plugin.\n      false &&\n        createNativeConfigCompatPlugin(nativeIncompatibilities),",
-    ),
+  const configWithoutNotice = replaceInSource(
+    configFile,
+    configSource,
+    '      !process.env.VITE_CONFIG_NATIVE_IGNORE_WARNING &&\n        createNativeConfigCompatPlugin(nativeIncompatibilities),',
+    "      // Vite+ manages config loading, so Vite's native-config-loader\n      // migration notice is noise. Never register the compat-check plugin.\n      false &&\n        createNativeConfigCompatPlugin(nativeIncompatibilities),",
   );
+  const patchedConfig = patchViteConfig(configWithoutNotice);
   if (patchedConfig !== configSource) {
     writeFileSync(configFile, patchedConfig, 'utf-8');
   }

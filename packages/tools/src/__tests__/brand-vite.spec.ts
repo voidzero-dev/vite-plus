@@ -66,7 +66,13 @@ function write(file: string, source: string) {
   writeFileSync(file, source);
 }
 
-function createUpstreamFixture(configSource = upstreamSources['config.ts']) {
+function createUpstreamFixture(configSource = upstreamSources['config.ts']): {
+  root: string;
+  nodeDir: string;
+  manifest: string;
+  lockfile: string;
+  unrelatedSource: string;
+} {
   const root = mkdtempSync(join(tmpdir(), 'vp-brand-vite-'));
   const viteDir = join(root, 'vite');
   const nodeDir = join(viteDir, 'packages/vite/src/node');
