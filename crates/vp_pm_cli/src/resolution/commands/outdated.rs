@@ -145,7 +145,7 @@ impl Npm {
         cmd.arg_if("--long", args.long)
             .repeated("--workspace", args.filter.iter())
             .arg_if("--include-workspace-root", args.workspace_root)
-            .arg_if("--workspaces", args.recursive)
+            .arg_if("--workspaces", args.recursive && !args.workspace_root)
             .extend(args.packages.iter());
         cmd.arg_if("--omit=dev", args.prod)
             .arg_if("--include=dev", args.dev)
@@ -389,7 +389,7 @@ mod tests {
     #[test]
     fn npm_outdated_recursive_preserves_workspace_options() {
         for (flags, expected) in [
-            (vec!["-r", "-w"], vec!["outdated", "--include-workspace-root", "--workspaces"]),
+            (vec!["-r", "-w"], vec!["outdated", "--include-workspace-root"]),
             (vec!["-r", "--filter", "app"], vec!["outdated", "--workspace", "app", "--workspaces"]),
         ] {
             let args = parse_args::<OutdatedArgs>(flags).unwrap();
