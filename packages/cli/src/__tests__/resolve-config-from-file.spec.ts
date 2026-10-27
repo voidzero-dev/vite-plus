@@ -7,7 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
-import { normalizePath, resolveConfig } from 'vite';
+import { normalizePath } from 'vite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { resolveConfigFromFile } from '../index.js';
@@ -52,36 +52,47 @@ describe('resolveConfigFromFile', () => {
     await expect(resolveConfigFromFile('')).rejects.toThrow('Config file path must not be empty.');
   });
 
-  it.each(['unset', 'empty', 'relative', 'absolute'])(
-    'preserves normal Vite root resolution when root is %s and rootBase is omitted',
+  it.each(['unset', 'empty', 'relative', 'parent-relative', 'absolute'] as const)(
+    'resolves a %s root from the config directory when rootBase is omitted',
     async (kind) => {
-      const root =
-        kind === 'unset'
-          ? undefined
-          : kind === 'empty'
-            ? ''
-            : kind === 'relative'
-              ? 'app'
-              : tempDir;
+      const configDir = path.join(tempDir, 'config');
+      fs.mkdirSync(configDir);
+      const root = {
+        unset: undefined,
+        empty: '',
+        relative: 'app',
+        'parent-relative': '../app',
+        absolute: tempDir,
+      }[kind];
+      const expectedRoot = path.resolve(configDir, root ?? '');
+      fs.mkdirSync(expectedRoot, { recursive: true });
       const configFile = writeConfig(
-        tempDir,
+        configDir,
         root === undefined ? '' : `root: ${JSON.stringify(root)},`,
       );
       const cwd = process.cwd();
 
-      const expected = await resolveConfig({ configFile }, 'build');
       const config = await resolveConfigFromFile(configFile);
 
-      expect(config.root).toBe(expected.root);
-      if (root === undefined) {
-        expect(config).not.toHaveProperty('seenRoot');
-      } else {
-        expect(config).toHaveProperty('seenRoot', root);
-      }
+      expect(realPath(config.root)).toBe(realPath(expectedRoot));
+      expect(config).toHaveProperty('seenRoot', expectedRoot);
       expect(config.inlineConfig.root).toBeUndefined();
       expect(process.cwd()).toBe(cwd);
     },
   );
+
+  it.each([
+    { name: 'undefined options', options: undefined },
+    { name: 'empty options', options: {} },
+    { name: 'undefined rootBase', options: { rootBase: undefined } },
+  ])('uses the config directory with $name', async ({ options }) => {
+    const configFile = writeConfig(tempDir);
+
+    const config = await resolveConfigFromFile(configFile, options);
+
+    expect(realPath(config.root)).toBe(realPath(tempDir));
+    expect(config).toHaveProperty('seenRoot', tempDir);
+  });
 
   it('uses an explicit workspace base when the config is in a subdirectory', async () => {
     const configDir = path.join(tempDir, 'config');
@@ -133,13 +144,17 @@ describe('resolveConfigFromFile', () => {
     );
   });
 
-  it('provides the root before plugin filtering and early config hooks', async () => {
-    const configFile = path.join(tempDir, 'vite.config.mjs');
-    const root = path.join(tempDir, 'app');
-    fs.mkdirSync(root);
-    fs.writeFileSync(
-      configFile,
-      `import assert from 'node:assert/strict';
+  it.each(['default', 'explicit'])(
+    'provides the %s base root before plugin filtering and early config hooks',
+    async (base) => {
+      const configDir = path.join(tempDir, 'config');
+      fs.mkdirSync(configDir);
+      const configFile = path.join(configDir, 'vite.config.mjs');
+      const root = path.join(base === 'default' ? configDir : tempDir, 'app');
+      fs.mkdirSync(root);
+      fs.writeFileSync(
+        configFile,
+        `import assert from 'node:assert/strict';
 export default {
   root: 'app',
   plugins: [{
@@ -157,14 +172,18 @@ export default {
     },
   }],
 };\n`,
-    );
-    const cwd = process.cwd();
+      );
+      const cwd = process.cwd();
 
-    const config = await resolveConfigFromFile(configFile, { rootBase: tempDir });
+      const config = await resolveConfigFromFile(
+        configFile,
+        base === 'default' ? undefined : { rootBase: tempDir },
+      );
 
-    expect(config.lint).toEqual({ rules: { 'no-console': 'error' } });
-    expect(process.cwd()).toBe(cwd);
-  });
+      expect(config.lint).toEqual({ rules: { 'no-console': 'error' } });
+      expect(process.cwd()).toBe(cwd);
+    },
+  );
 
   it('provides file metadata to sync and async hooks and retains added dependencies', async () => {
     const configFile = path.join(tempDir, 'vite.config.mjs');
@@ -356,8 +375,9 @@ assert.equal(second.nodeEnv, ${JSON.stringify(expected)});`,
   it.each(['import', 'require'])('resolves through the built %s entry', async (entryType) => {
     const launcher = path.join(tempDir, 'launcher');
     const workspace = path.join(tempDir, 'workspace');
-    const configFile = path.join(workspace, 'config', 'vite.config.mjs');
-    fs.mkdirSync(path.dirname(configFile), { recursive: true });
+    const configDir = path.join(workspace, 'config');
+    const configFile = path.join(configDir, 'vite.config.mjs');
+    fs.mkdirSync(path.join(configDir, 'app'), { recursive: true });
     fs.mkdirSync(path.join(launcher, 'app'), { recursive: true });
     fs.mkdirSync(path.join(workspace, 'app'));
     const esmEntry = new URL('../../dist/index.js', import.meta.url);
@@ -403,14 +423,19 @@ const marker = process.env.VP_RESOLVING_CONFIG_METADATA;
 const cwd = process.cwd();
 const configFile = ${JSON.stringify(path.relative(launcher, configFile))};
 const defaults = await api.resolveConfigFromFile(configFile);
-assert.equal(realpathSync.native(defaults.root), realpathSync.native(${JSON.stringify(path.join(launcher, 'app'))}));
-assert.equal(defaults.seenRoot, 'app');
+assert.equal(realpathSync.native(defaults.root), realpathSync.native(${JSON.stringify(path.join(configDir, 'app'))}));
+assert.equal(defaults.seenRoot, ${JSON.stringify(path.join(configDir, 'app'))});
 assert.equal(process.env.VP_RESOLVING_CONFIG_METADATA, marker);
 const config = await api.resolveConfigFromFile(configFile, { rootBase: ${JSON.stringify(path.relative(launcher, workspace))} });
 assert.equal(realpathSync.native(config.root), realpathSync.native(${JSON.stringify(path.join(workspace, 'app'))}));
 assert.equal(config.seenRoot, ${JSON.stringify(path.join(workspace, 'app'))});
 assert.deepEqual(config.lint, { rules: {} });
 assert.equal(config.inlineConfig.root, undefined);
+for (const rootBase of [cwd, '']) {
+  const fromCwd = await api.resolveConfigFromFile(configFile, { rootBase });
+  assert.equal(realpathSync.native(fromCwd.root), realpathSync.native(${JSON.stringify(path.join(launcher, 'app'))}));
+  assert.equal(fromCwd.seenRoot, ${JSON.stringify(path.join(launcher, 'app'))});
+}
 assert.equal(process.cwd(), cwd);
 assert.equal(process.env.VP_RESOLVING_CONFIG_METADATA, marker);`,
       ],
