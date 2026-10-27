@@ -32,14 +32,31 @@ npm 6 lists both production and development dependencies
 }
 ```
 
-## `vp pm list -P --no-optional --exclude-peers`
+## `vp pm list -P --json`
+
+npm 6 uses --production to list only production dependencies
+
+```
+{
+  "name": "command-list-npm10",
+  "version": "1.0.0",
+  "dependencies": {
+    "testnpm2": {
+      "version": "1.0.1",
+      "from": "testnpm2@1.0.1",
+      "resolved": "http://127.0.0.1:<port>/testnpm2/-/testnpm2-1.0.1.tgz"
+    }
+  }
+}
+```
+
+## `vp pm list --no-optional --exclude-peers`
 
 reject omit filters without equivalent npm 6 options
 
 **Exit code:** 1
 
 ```
-npm < 7 does not support --prod.
 npm < 7 does not support --no-optional.
 npm < 7 does not support --exclude-peers.
 ```

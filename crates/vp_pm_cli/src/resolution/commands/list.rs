@@ -27,7 +27,7 @@ pub struct ListArgs {
     pub(crate) parseable: bool,
 
     /// Only production dependencies
-    #[arg(short = 'P', long, not_supported(npm < "7", yarn >= "2", bun))]
+    #[arg(short = 'P', long, not_supported(yarn >= "2", bun))]
     pub(crate) prod: bool,
 
     /// Include dev dependencies
@@ -103,7 +103,11 @@ impl Npm {
         cmd.option("--depth", args.depth).arg_if("--json", args.json);
         cmd.arg_if("--long", args.long).arg_if("--parseable", args.parseable);
         if args.prod {
-            cmd.arg("--omit").arg("dev");
+            if self.supports_v7_commands() {
+                cmd.arg("--omit").arg("dev");
+            } else {
+                cmd.arg("--production");
+            }
         }
         if args.dev {
             if self.supports_v7_commands() {
@@ -457,7 +461,6 @@ mod tests {
                 expect_unsupported(
                     resolution,
                     &[
-                        "npm < 7 does not support --prod.",
                         "npm < 7 does not support --no-optional.",
                         "npm < 7 does not support --exclude-peers.",
                     ],
@@ -469,6 +472,16 @@ mod tests {
                     ["list", "--omit", "dev", "--omit", "optional", "--omit", "peer"]
                 );
             }
+        }
+        for (dialect, flags) in [
+            (npm("6.14.18"), vec!["--production"]),
+            (npm("7.0.0"), vec!["--omit", "dev"]),
+            (Npm::unknown_version(), vec!["--omit", "dev"]),
+        ] {
+            let args = parse_args::<ListArgs>(["-P"]).unwrap();
+            let resolution = resolve(&dialect, args);
+            assert!(resolution.diagnostics.is_empty());
+            assert_eq!(expect_run(resolution.outcome).args, [vec!["list"], flags].concat());
         }
         let args = parse_args::<ListArgs>(["--", "--omit", "peer"]).unwrap();
         let resolution = resolve(&npm("6.14.18"), args);

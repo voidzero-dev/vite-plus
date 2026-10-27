@@ -60,7 +60,7 @@ pub struct OutdatedArgs {
     pub(crate) format: Option<OutdatedFormat>,
 
     /// Check recursively across all workspaces
-    #[arg(short = 'r', long, not_supported(yarn))]
+    #[arg(short = 'r', long, not_supported(npm < "7", yarn))]
     pub(crate) recursive: bool,
 
     /// Filter packages in monorepo
@@ -72,7 +72,7 @@ pub struct OutdatedArgs {
     pub(crate) workspace_root: bool,
 
     /// Only production and optional dependencies
-    #[arg(short = 'P', long, not_supported(yarn))]
+    #[arg(short = 'P', long, not_supported(npm < "7", yarn))]
     pub(crate) prod: bool,
 
     /// Include dev dependencies
@@ -80,7 +80,7 @@ pub struct OutdatedArgs {
     pub(crate) dev: bool,
 
     /// Exclude optional dependencies
-    #[arg(long, not_supported(yarn))]
+    #[arg(long, not_supported(npm < "7", yarn))]
     pub(crate) no_optional: bool,
 
     /// Only show compatible versions
@@ -107,7 +107,7 @@ pub struct OutdatedArgs {
 impl Resolve<OutdatedArgs> for Pnpm {
     fn resolve(&self, args: &OutdatedArgs, _diag: &mut Diagnostics) -> CommandResolution {
         if args.global {
-            return Npm::resolve_outdated(args);
+            return Npm::unknown_version().resolve_outdated(args);
         }
 
         let mut cmd = CommandBuilder::new("pnpm");
@@ -130,7 +130,7 @@ impl Resolve<OutdatedArgs> for Pnpm {
 }
 
 impl Npm {
-    fn resolve_outdated(args: &OutdatedArgs) -> CommandResolution {
+    fn resolve_outdated(&self, args: &OutdatedArgs) -> CommandResolution {
         let mut cmd = CommandBuilder::new("npm");
         cmd.arg("outdated");
         match args.format {
@@ -148,7 +148,10 @@ impl Npm {
             .arg_if("--all", args.recursive)
             .extend(args.packages.iter());
         cmd.arg_if("--omit=dev", args.prod)
-            .arg_if("--include=dev", args.dev)
+            .arg_if(
+                if self.supports_v7_commands() { "--include=dev" } else { "--also=dev" },
+                args.dev,
+            )
             .arg_if("--omit=optional", args.no_optional)
             .extend(args.pass_through_args.iter());
         if args.global {
@@ -160,14 +163,14 @@ impl Npm {
 
 impl Resolve<OutdatedArgs> for Npm {
     fn resolve(&self, args: &OutdatedArgs, _diag: &mut Diagnostics) -> CommandResolution {
-        Self::resolve_outdated(args)
+        self.resolve_outdated(args)
     }
 }
 
 impl Resolve<OutdatedArgs> for Yarn {
     fn resolve(&self, args: &OutdatedArgs, diag: &mut Diagnostics) -> CommandResolution {
         if args.global {
-            return Npm::resolve_outdated(args);
+            return Npm::unknown_version().resolve_outdated(args);
         }
 
         if self.is_berry() {
@@ -201,7 +204,7 @@ impl Resolve<OutdatedArgs> for Yarn {
 impl Resolve<OutdatedArgs> for Bun {
     fn resolve(&self, args: &OutdatedArgs, _diag: &mut Diagnostics) -> CommandResolution {
         if args.global {
-            return Npm::resolve_outdated(args);
+            return Npm::unknown_version().resolve_outdated(args);
         }
 
         let mut cmd = CommandBuilder::new("bun");
@@ -230,6 +233,39 @@ mod tests {
         OutdatedArgs {
             packages: packages.iter().map(ToString::to_string).collect(),
             ..Default::default()
+        }
+    }
+
+    #[test]
+    fn npm_dependency_filter_version_boundaries() {
+        for (dialect, flag) in [
+            (npm("6.14.18"), "--also=dev"),
+            (npm("7.0.0"), "--include=dev"),
+            (Npm::unknown_version(), "--include=dev"),
+        ] {
+            let args = parse_args::<OutdatedArgs>(["-D", "react", "--", "--json"]).unwrap();
+            let resolution = resolve(&dialect, args);
+            assert!(resolution.diagnostics.is_empty());
+            assert_eq!(expect_run(resolution.outcome).args, ["outdated", "react", flag, "--json"]);
+        }
+
+        let args = parse_args::<OutdatedArgs>(["-r", "-P", "--no-optional"]).unwrap();
+        expect_unsupported(
+            resolve(&npm("6.14.18"), args),
+            &[
+                "npm < 7 does not support --recursive.",
+                "npm < 7 does not support --prod.",
+                "npm < 7 does not support --no-optional.",
+            ],
+        );
+        for dialect in [npm("7.0.0"), Npm::unknown_version()] {
+            let args = parse_args::<OutdatedArgs>(["-r", "-P", "--no-optional"]).unwrap();
+            let resolution = resolve(&dialect, args);
+            assert!(resolution.diagnostics.is_empty());
+            assert_eq!(
+                expect_run(resolution.outcome).args,
+                ["outdated", "--all", "--omit=dev", "--omit=optional"]
+            );
         }
     }
 

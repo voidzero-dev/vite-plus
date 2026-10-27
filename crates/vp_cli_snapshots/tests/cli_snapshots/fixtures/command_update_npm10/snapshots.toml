@@ -31,4 +31,5 @@ steps = [
   { argv = ["vpt", "json-edit", "package.json", "devDependencies.yocto-queue", "^1.0.0"], snapshot = false },
   { argv = ["vp", "update", "-D", "--", "--ignore-scripts", "--silent"], envs = [["NODE_ENV", "production"]], comment = "npm 6 uses --also=dev to include development updates" },
   ["vpt", "grep-file", "node_modules/yocto-queue/package.json", '"version": "1.2.2"'],
+  { argv = ["vp", "update", "-P"], comment = "reject --prod because npm 6 selects updates through outdated, whose --production still reports installed devDependencies" },
 ]

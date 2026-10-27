@@ -45,7 +45,7 @@ pub struct UpdateArgs {
     pub(crate) dev: bool,
 
     /// Update dependencies (production)
-    #[arg(short = 'P', long, not_supported(yarn >= "2", bun < "1.4"))]
+    #[arg(short = 'P', long, not_supported(npm < "7", yarn >= "2", bun < "1.4"))]
     pub(crate) prod: bool,
 
     /// Interactive mode
@@ -105,7 +105,10 @@ impl Resolve<UpdateArgs> for Npm {
                 args.dev,
             )
             .arg_if("--include=prod", args.prod)
-            .arg_if("--no-optional", args.no_optional)
+            .arg_if(
+                if self.supports_v7_commands() { "--omit=optional" } else { "--no-optional" },
+                args.no_optional,
+            )
             .arg_if("--no-save", args.no_save)
             .extend(args.pass_through_args.iter())
             .extend(args.packages.iter());
@@ -621,13 +624,35 @@ mod tests {
                 ["update", flag, "--no-audit", "react"]
             );
         }
+
+        for (dialect, flag) in [
+            (npm("6.14.18"), "--no-optional"),
+            (npm("7.0.0"), "--omit=optional"),
+            (Npm::unknown_version(), "--omit=optional"),
+        ] {
+            let args = parse_args::<UpdateArgs>(["--no-optional", "react"]).unwrap();
+            let resolution = resolve(&dialect, args);
+            assert!(resolution.diagnostics.is_empty());
+            assert_eq!(expect_run(resolution.outcome).args, ["update", flag, "react"]);
+        }
+
+        let args = parse_args::<UpdateArgs>(["-P", "react"]).unwrap();
+        expect_unsupported(resolve(&npm("6.14.18"), args), &["npm < 7 does not support --prod."]);
+        for dialect in [npm("7.0.0"), Npm::unknown_version()] {
+            let args = parse_args::<UpdateArgs>(["-P", "react"]).unwrap();
+            let resolution = resolve(&dialect, args);
+            assert!(resolution.diagnostics.is_empty());
+            assert_eq!(expect_run(resolution.outcome).args, ["update", "--include=prod", "react"]);
+        }
     }
 
     #[test]
     fn test_npm_update_preserves_native_selectors() {
-        for (flag, native_flag) in
-            [("-D", "--include=dev"), ("-P", "--include=prod"), ("--no-optional", "--no-optional")]
-        {
+        for (flag, native_flag) in [
+            ("-D", "--include=dev"),
+            ("-P", "--include=prod"),
+            ("--no-optional", "--omit=optional"),
+        ] {
             let args = parse_args::<UpdateArgs>([flag, "react"]).unwrap();
             let resolution = resolve(&npm("11.16.0"), args);
             assert!(resolution.diagnostics.is_empty());

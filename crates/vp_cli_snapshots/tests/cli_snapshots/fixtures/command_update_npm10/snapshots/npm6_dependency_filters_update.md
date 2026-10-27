@@ -32,3 +32,13 @@ updated 1 package in <duration>
 ```
 node_modules/yocto-queue/package.json: found "\"version\": \"1.2.2\""
 ```
+
+## `vp update -P`
+
+reject --prod because npm 6 selects updates through outdated, whose --production still reports installed devDependencies
+
+**Exit code:** 1
+
+```
+npm < 7 does not support --prod.
+```
