@@ -53,10 +53,37 @@ system npm on system Node.js
 system npm child on system Node.js
 ```
 
+## `PATH=${VP_HOME}/js_runtime/node/20.20.2/bin${PATH_SEPARATOR}${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} VP_NODE_MANAGER=system-only VP_NODE_DIST_MIRROR=http://127.0.0.1:1 NPM_CONFIG_REGISTRY=http://127.0.0.1:1 vpx node -p process.execPath.includes('system-bin')`
+
+vpx looks up system-only Node.js on PATH without the inherited managed runtime.
+
+```
+true
+```
+
+## `PATH=${VP_HOME}/js_runtime/node/20.20.2/bin${PATH_SEPARATOR}${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} VP_NPM_MANAGER=system-only VP_NODE_DIST_MIRROR=http://127.0.0.1:1 NPM_CONFIG_REGISTRY=http://127.0.0.1:1 vpx npm nested`
+
+vpx looks up system-only npm on PATH without the npm bundled with the inherited managed runtime.
+
+```
+system npm on managed Node.js
+system npm child on managed Node.js
+```
+
 ## `PATH=${VP_HOME}/js_runtime/node/20.20.2/bin${PATH_SEPARATOR}${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} EXPECTED_PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} VP_NODE_MANAGER=system-only VP_NODE_DIST_MIRROR=http://127.0.0.1:1 NPM_CONFIG_REGISTRY=http://127.0.0.1:1 node run-shim.cjs node -p 'process.env.PATH === process.env.EXPECTED_PATH'`
 
 System-only Node.js removes the inherited managed runtime directory from the child PATH and keeps the other entries in order.
 
 ```
 true
+```
+
+## `PATH=${VP_HOME}/js_runtime/node/20.20.2/bin${PATH_SEPARATOR}${VP_HOME}/bin VP_NPM_MANAGER=system-only VP_NODE_DIST_MIRROR=http://127.0.0.1:1 NPM_CONFIG_REGISTRY=http://127.0.0.1:1 vpx npm --version`
+
+Without a system npm, vpx fails instead of running the inherited managed npm or downloading one through dlx.
+
+**Exit code:** 1
+
+```
+error: vpx: VP_NPM_MANAGER=system-only requires a system 'npm' on PATH, but none was found
 ```

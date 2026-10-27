@@ -492,8 +492,10 @@ async fn run_node(args: Vec<String>, cwd: &AbsolutePath) -> i32 {
     // stdout belongs to the script; route vp's own output to stderr.
     output::route_user_output_to_stderr();
     // As `vp node` does: dispatch assumes the shell's PATH lookup already preferred a
-    // system-first Node.js, so repeat that lookup here.
-    if let Ok(config) = super::env::config::load_config().await
+    // system-first Node.js, so repeat that lookup here. System-only Node.js is left to
+    // dispatch, which skips managed installs a parent left on PATH.
+    if !crate::shim::dispatch::requires_system_tool("node")
+        && let Ok(config) = super::env::config::load_config().await
         && config.shim_mode_for_tool("node") == super::env::config::ShimMode::SystemFirst
         && let Some(node) = crate::shim::dispatch::find_system_tool("node")
     {

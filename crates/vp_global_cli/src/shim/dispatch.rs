@@ -1219,15 +1219,18 @@ fn bypass_to_system(tool: &str, args: &[String], env: ToolPathEnv) -> i32 {
     }
 }
 
-/// The system tool for `VP_BYPASS`.
-///
-/// A system-only tool skips managed installs left on PATH. So does npm when
-/// Node.js is system-only, because the npm bundled with a managed runtime
-/// would run that runtime.
-fn find_bypass_tool(tool: &str) -> Option<AbsolutePathBuf> {
+/// Whether a PATH lookup of `tool` must skip managed installs left on PATH:
+/// a system-only tool, or npm when Node.js is system-only, because the npm
+/// bundled with a managed runtime would run that runtime.
+pub(crate) fn requires_system_tool(tool: &str) -> bool {
     let npm_on_system_only_node = vp_shared::EnvConfig::get().node_system_only()
         && PackageManagerType::from_tool(tool) == Some(PackageManagerType::Npm);
-    if system_only_variable_for_tool(tool).is_some() || npm_on_system_only_node {
+    system_only_variable_for_tool(tool).is_some() || npm_on_system_only_node
+}
+
+/// The system tool for `VP_BYPASS`.
+fn find_bypass_tool(tool: &str) -> Option<AbsolutePathBuf> {
+    if requires_system_tool(tool) {
         current_dir().ok().and_then(|cwd| find_system_only_tool(tool, &cwd))
     } else {
         find_system_tool(tool)
