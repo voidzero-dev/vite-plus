@@ -27,7 +27,6 @@ pub struct ListArgs {
     pub(crate) parseable: bool,
 
     /// Only production dependencies
-    // Legacy npm --production also excludes peers, unlike --omit=dev.
     #[arg(short = 'P', long, not_supported(npm < "7", yarn >= "2", bun))]
     pub(crate) prod: bool,
 
