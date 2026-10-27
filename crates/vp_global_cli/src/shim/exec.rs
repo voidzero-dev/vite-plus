@@ -6,6 +6,17 @@
 use vp_shared::{ToolPathEnv, exit_code_from_status, output};
 use vt_path::AbsolutePath;
 
+use super::dispatch::restrict_child_env;
+
+/// Report a child environment that could not be prepared for `path`.
+fn report_env_error(path: &AbsolutePath, error: &std::io::Error) -> i32 {
+    output::error(&format!(
+        "Failed to prepare the environment for {}: {error}",
+        path.as_path().display()
+    ));
+    1
+}
+
 /// Keep the child's `PWD` consistent with the process cwd; the std-Command
 /// sibling of [`vp_command::sync_child_pwd`] (rationale there). Shim
 /// children run in the inherited cwd, which a leading `-C <dir>` changes
@@ -24,6 +35,10 @@ fn sync_child_pwd(cmd: &mut std::process::Command) {
 /// Unlike `exec_tool()`, this does NOT replace the current process on Unix,
 /// allowing the caller to run code after the tool exits.
 pub fn spawn_tool(path: &AbsolutePath, args: &[String], env: ToolPathEnv) -> i32 {
+    let env = match restrict_child_env(env) {
+        Ok(env) => env,
+        Err(e) => return report_env_error(path, &e),
+    };
     // Use the same managed .cmd policy as vp_command. Otherwise an interactive
     // package-manager shim leaves cmd.exe waiting at its batch termination
     // prompt after Ctrl+C, even though the trampoline and vp have exited.
@@ -70,6 +85,10 @@ pub fn exec_tool(path: &AbsolutePath, args: &[String], env: ToolPathEnv) -> i32 
 fn exec_unix(path: &AbsolutePath, args: &[String], env: ToolPathEnv) -> i32 {
     use std::os::unix::process::CommandExt;
 
+    let env = match restrict_child_env(env) {
+        Ok(env) => env,
+        Err(e) => return report_env_error(path, &e),
+    };
     let mut cmd = std::process::Command::new(path.as_path());
     cmd.args(args).envs(env.into_envs());
     sync_child_pwd(&mut cmd);

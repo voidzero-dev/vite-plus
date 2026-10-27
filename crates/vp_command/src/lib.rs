@@ -23,7 +23,8 @@ mod external_tool;
 mod ps1_shim;
 
 pub use external_tool::{
-    ExternalToolQuery, find_external_tool, is_managed_install, is_managed_runtime,
+    ExternalToolQuery, find_external_tool, is_managed_install, is_managed_package_manager,
+    is_managed_runtime,
 };
 pub use ps1_shim::rewrite_cmd_to_powershell;
 

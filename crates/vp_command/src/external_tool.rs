@@ -92,16 +92,22 @@ pub fn find_external_tool(
 /// Whether `path` resolves into a Vite+-managed Node.js runtime or package
 /// manager, that is, under `<DATA>/js_runtime` or `<DATA>/package_manager`.
 pub fn is_managed_install(path: &Path) -> bool {
-    resolves_under_data(path, &["js_runtime", "package_manager"])
+    resolves_under_data(path, &[Path::new("js_runtime"), Path::new("package_manager")])
 }
 
 /// Whether `path` resolves into a Vite+-managed Node.js runtime, that is,
 /// under `<DATA>/js_runtime`. This includes the npm bundled with it.
 pub fn is_managed_runtime(path: &Path) -> bool {
-    resolves_under_data(path, &["js_runtime"])
+    resolves_under_data(path, &[Path::new("js_runtime")])
 }
 
-fn resolves_under_data(path: &Path, directories: &[&str]) -> bool {
+/// Whether `path` resolves into a Vite+-managed install of one package-manager
+/// family, that is, under `<DATA>/package_manager/<family>`.
+pub fn is_managed_package_manager(path: &Path, family: &str) -> bool {
+    resolves_under_data(path, &[&Path::new("package_manager").join(family)])
+}
+
+fn resolves_under_data(path: &Path, directories: &[&Path]) -> bool {
     let Ok(target) = path.canonicalize() else {
         return false;
     };
@@ -176,6 +182,8 @@ mod tests {
         EnvConfig::with_vars([(env_vars::VP_HOME, home.as_path())], |_| {
             assert!(is_managed_install(&pnpm));
             assert!(!is_managed_runtime(&pnpm));
+            assert!(is_managed_package_manager(&pnpm, "pnpm"));
+            assert!(!is_managed_package_manager(&pnpm, "yarn"));
         });
     }
 }

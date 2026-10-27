@@ -94,6 +94,22 @@ impl ToolPathEnv {
         Ok(())
     }
 
+    /// Remove the PATH entries matching `remove` and stop recording `tools`.
+    /// The remaining entries keep their order.
+    pub fn remove_dirs(
+        &mut self,
+        remove: impl Fn(&Path) -> bool,
+        tools: &[&str],
+    ) -> io::Result<()> {
+        let paths: Vec<_> = env::split_paths(&self.path).filter(|path| !remove(path)).collect();
+        self.path = env::join_paths(paths)
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+        for tool in tools {
+            self.tools.remove(*tool);
+        }
+        Ok(())
+    }
+
     pub fn into_envs(self) -> [(&'static str, OsString); 2] {
         [
             ("PATH", self.path),
@@ -192,6 +208,18 @@ mod tests {
         let envs = child.into_envs();
         assert_eq!(envs[0].1, path);
         assert_eq!(envs[1].1, "node,npm,npx");
+    }
+
+    #[test]
+    fn removing_directories_keeps_the_order_of_the_others() {
+        let path =
+            env::join_paths(["/managed/bin", "/vp/bin", "/managed/bin", "/system/bin"]).unwrap();
+        let mut child = ToolPathEnv::new(path, "node,npm,pnpm");
+        child.remove_dirs(|path| path == Path::new("/managed/bin"), &["node", "npm"]).unwrap();
+        let envs = child.into_envs();
+        let paths: Vec<_> = env::split_paths(&envs[0].1).collect();
+        assert_eq!(paths, [PathBuf::from("/vp/bin"), PathBuf::from("/system/bin")]);
+        assert_eq!(envs[1].1, "pnpm");
     }
 
     #[test]
