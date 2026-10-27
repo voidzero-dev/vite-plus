@@ -1,0 +1,29 @@
+docs/guide/migrate-rules.md
+  s_8fd37943dbbc1c::t_f603ed42304109 203
+packages/cli/src/__tests__/resolve-vite-config.spec.ts
+  s_8fd37943dbbc1c::t_e008e4738d4c2f 3,7,10-11,13,15-18,20-24,26,99-198
+packages/cli/src/index.cts
+  s_8fd37943dbbc1c::t_c6d8270ce5a3f3 11,23
+packages/cli/src/index.ts
+  s_8fd37943dbbc1c::t_d49bf640a41248 1,29
+packages/cli/src/resolve-vite-config.ts
+  s_8fd37943dbbc1c::t_57d5f94f413401 58,60-64,66,68-75
+packages/cli/src/define-config.ts
+  s_8fd37943dbbc1c::t_a65405dfcc4c4e 3,9-10,1052-1105
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b15c177400c06cd865c5d21b3c43573722696a27",
+  "prompts": {},
+  "sessions": {
+    "s_8fd37943dbbc1c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7a41359f-404c-4078-9e2a-da5737a9c39a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "leaysgur <6259812+leaysgur@users.noreply.github.com>"
+    }
+  }
+}
