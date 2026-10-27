@@ -1,5 +1,5 @@
 export const staged = {
-  '*.txt': 'node verify-staged.mjs',
+  '*.txt': 'vpt stat-file',
 };
 
 export const pack = {

@@ -1,20 +1,11 @@
-import assert from 'node:assert/strict';
-import { realpathSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
 import { defineConfig, lazyPlugins, normalizePath } from 'vite-plus';
 
 import { pack, staged } from './settings.mjs';
 
-const configFile = fileURLToPath(import.meta.url);
-const configDir = dirname(configFile);
-// CLI metadata reads retain the command's root override, even when the file sets root.
-const root = configDir;
-
-assert.equal(process.env.NODE_ENV, 'development');
+console.log(`config NODE_ENV: ${process.env.NODE_ENV}`);
 
 export default defineConfig({
+  // CLI metadata reads retain the command's root override, even when the file sets root.
   root: 'app',
   plugins: [
     lazyPlugins(() => {
@@ -23,23 +14,23 @@ export default defineConfig({
     {
       name: 'provide-tool-config',
       apply(config) {
-        assert.equal(config.root, root);
+        console.log(`apply root: ${normalizePath(String(config.root))}`);
         return true;
       },
       config: {
         order: 'pre',
         handler(config) {
-          assert.equal(config.root, root);
+          console.log(`config root: ${normalizePath(String(config.root))}`);
           return { staged, pack };
         },
       },
       async configResolved(config) {
-        assert.equal(config.configFile, normalizePath(configFile));
-        assert.equal(realpathSync.native(config.root), realpathSync.native(root));
-        assert.ok(
-          config.configFileDependencies.includes(normalizePath(join(configDir, 'settings.mjs'))),
-        );
-        writeFileSync(join(configDir, 'resolved.txt'), 'configResolved passed\n');
+        console.log(`configResolved root: ${normalizePath(config.root)}`);
+        console.log(`configResolved configFile: ${config.configFile}`);
+        console.log('configResolved dependencies:');
+        for (const dependency of config.configFileDependencies.map(normalizePath).sort()) {
+          console.log(`  ${dependency}`);
+        }
       },
     },
   ],

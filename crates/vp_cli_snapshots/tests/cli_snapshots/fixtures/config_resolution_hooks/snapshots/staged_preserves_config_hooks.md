@@ -16,15 +16,23 @@
 ## `git add input.txt`
 
 
-## `vp staged --quiet --no-stash`
+## `vp staged --verbose --no-stash`
 
-Run staged configuration supplied by a Vite plugin with normal config metadata.
-
-```
-```
-
-## `vpt print-file result.txt`
+Run staged configuration supplied by a Vite plugin and print the matched files.
 
 ```
-staged command from plugin passed
+config NODE_ENV: development
+apply root: <workspace>
+config root: <workspace>
+configResolved root: <workspace>
+configResolved configFile: <workspace>/vite.config.mjs
+configResolved dependencies:
+  <workspace>/settings.mjs
+  <workspace>/vite.config.mjs
+⚠ Skipping backup because `--no-stash` was used. This might result in data loss.
+
+✔ vpt stat-file
+
+→ vpt stat-file:
+<workspace>/input.txt: file
 ```
