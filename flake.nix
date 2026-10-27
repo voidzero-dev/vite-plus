@@ -42,8 +42,6 @@
             cargo-insta
             typos
             cargo-shear
-            dprint
-            taplo
             # no-op shim: the tools above are provided by this devShell
             (writeShellScriptBin "cargo-binstall" ''
               echo "cargo-binstall: skipped (tools are provided by the nix devShell)" >&2
