@@ -14,8 +14,8 @@ npm 6 uses --also=dev to include development dependencies
 
 ```
 Package                     Current  Wanted  Latest  Location
-test-vite-plus-top-package    1.0.0   1.0.0   1.1.0  command-outdated-npm10
-testnpm2                      1.0.0   1.0.0   1.0.1  command-outdated-npm10
+test-vite-plus-top-package    1.0.0   1.0.0   1.1.0  command-outdated-npm
+testnpm2                      1.0.0   1.0.0   1.0.1  command-outdated-npm
 ```
 
 ## `vp outdated -r -P --no-optional`
