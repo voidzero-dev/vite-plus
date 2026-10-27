@@ -11,7 +11,7 @@ use vt_path::{AbsolutePath, AbsolutePathBuf};
 use crate::{error::Error, integrity, platform, registry};
 
 pub const INSTALL_LOCKFILE: &str = "vp-install-lock.yaml";
-const INSTALL_RECEIPT: &str = "node_modules/.vp-install-complete";
+pub const INSTALL_RECEIPT: &str = "node_modules/.vp-install-complete";
 // This can never match a frozen install's 32-byte SHA-256 digest.
 const UNLOCKED_INSTALL_RECEIPT: &[u8] = b"unlocked";
 
@@ -64,6 +64,11 @@ pub(crate) async fn record_install(version_dir: &AbsolutePath) -> Result<(), Err
         return Ok(());
     };
     write(version_dir.join(INSTALL_RECEIPT), Sha256::digest(content).to_vec()).await
+}
+
+/// Whether the completion receipt records a frozen install of this companion lockfile.
+pub fn matches_install_receipt(lockfile: &[u8], receipt: &[u8]) -> bool {
+    receipt == Sha256::digest(lockfile).as_slice()
 }
 
 /// Restore the release's lockfile before a frozen install. Returns whether it changed.
@@ -135,7 +140,7 @@ pub async fn prepare(
         return Ok(true);
     };
     let content = tokio::fs::read(target).await?;
-    Ok(receipt != Sha256::digest(content).as_slice())
+    Ok(!matches_install_receipt(&content, &receipt))
 }
 
 fn from_archive(data: &[u8]) -> Result<Option<Vec<u8>>, Error> {

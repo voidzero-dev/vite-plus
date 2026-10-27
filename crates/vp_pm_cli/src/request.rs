@@ -463,29 +463,11 @@ fn extract_tgz_file(
 ///   covers that one file instead of the tgz.
 /// * `expected_hash` - Optional expected hash, "algorithm.hex" or SRI "algorithm-base64" (see [`verify_file_hash`])
 /// * `message` - Optional message shown above a progress bar while downloading (see [`HttpClient::download_file`])
+/// * `npm_config` - npm configuration used for the download.
 ///
 /// # Returns
 /// * `Ok(())` - If the tgz file is downloaded, verified (if hash provided) and extracted successfully.
 /// * `Err(e)` - If the tgz file is not downloaded, verified or extracted successfully.
-#[cfg(test)]
-pub(crate) async fn download_and_extract_tgz_with_hash(
-    url: &str,
-    target_dir: impl AsRef<Path>,
-    archive_file: Option<&Path>,
-    expected_hash: Option<&str>,
-    message: Option<&str>,
-) -> Result<(), Error> {
-    download_and_extract_tgz_with_hash_and_config(
-        url,
-        target_dir,
-        archive_file,
-        expected_hash,
-        message,
-        &NpmConfig::load(),
-    )
-    .await
-}
-
 pub(crate) async fn download_and_extract_tgz_with_hash_and_config(
     url: &str,
     target_dir: impl AsRef<Path>,
@@ -1260,7 +1242,15 @@ mod tests {
         });
 
         let url = vt_str::format!("{}/test-package.tgz", server.base_url());
-        let result = download_and_extract_tgz_with_hash(&url, &target_dir, None, None, None).await;
+        let result = download_and_extract_tgz_with_hash_and_config(
+            &url,
+            &target_dir,
+            None,
+            None,
+            None,
+            &NpmConfig { values: Default::default() },
+        )
+        .await;
         assert!(result.is_ok(), "Failed to download and extract: {result:?}");
 
         assert!(target_dir.join("package/bin/yarn").exists());
@@ -1292,7 +1282,15 @@ mod tests {
         let target_dir = temp_dir.path().join("extracted");
         let url = vt_str::format!("{}/corrupt.tgz", server.base_url());
 
-        let result = download_and_extract_tgz_with_hash(&url, &target_dir, None, None, None).await;
+        let result = download_and_extract_tgz_with_hash_and_config(
+            &url,
+            &target_dir,
+            None,
+            None,
+            None,
+            &NpmConfig { values: Default::default() },
+        )
+        .await;
         assert!(result.is_err(), "corrupt archive should fail to extract: {result:?}");
         assert!(
             mock.hits() > 1,
@@ -1319,9 +1317,15 @@ mod tests {
         let wrong_hash = "sha512.0000000000000000000000000000000000000000000000000000000000000000\
              0000000000000000000000000000000000000000000000000000000000000000";
 
-        let result =
-            download_and_extract_tgz_with_hash(&url, &target_dir, None, Some(wrong_hash), None)
-                .await;
+        let result = download_and_extract_tgz_with_hash_and_config(
+            &url,
+            &target_dir,
+            None,
+            Some(wrong_hash),
+            None,
+            &NpmConfig { values: Default::default() },
+        )
+        .await;
         assert!(result.is_err(), "hash mismatch should fail: {result:?}");
         assert!(
             mock.hits() > 1,

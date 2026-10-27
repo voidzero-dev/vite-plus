@@ -3,6 +3,12 @@
 ## `vpt mkdir -p external project home/js_runtime/node`
 
 
+## `vpt write-file home/.vp-owned 'vite-plus-owned-directory
+'`
+
+The fixture owns the preseeded runtime directory
+
+
 ## `vpt cp -r $VP_HOME/js_runtime/node/22.18.0 home/js_runtime/node/22.18.0`
 
 
