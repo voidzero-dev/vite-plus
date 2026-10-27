@@ -8,7 +8,12 @@ const {
   defaultInclude,
 } = require('vitest/config');
 
-const { defineConfig, defineProject, lazyPlugins, resolveConfigFile } = require('./define-config');
+const {
+  defineConfig,
+  defineProject,
+  lazyPlugins,
+  resolveConfigFromFile,
+} = require('./define-config');
 
 module.exports = {
   ...vite,
@@ -20,5 +25,5 @@ module.exports = {
   defineProject,
   defineConfig,
   lazyPlugins,
-  resolveConfigFile,
+  resolveConfigFromFile,
 };

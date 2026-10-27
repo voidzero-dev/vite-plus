@@ -23,7 +23,7 @@ This approach enables users to access Vite, Rolldown, and related tools through 
 
 Before core bundling, [`brand-vite.ts`](../tools/src/brand-vite.ts) applies branding and the [`patch-vite-config.ts`](../tools/src/patch-vite-config.ts) resolver patch to the vendored Vite source. `sync-remote` runs this preparation. The root build script also runs it before generating Vite types and building core.
 
-The resolver patch adds an optional internal eighth argument to `resolveConfig`. The `resolveConfigFile(configFile, { rootBase })` helper exported by `vite-plus` passes an explicit base directory through a private type bridge. After a config file loads, an unset or relative `root` resolves from that base, before plugin `apply` and `config` hooks. Absolute roots are preserved, and an inline `root` retains priority. Without `rootBase`, the helper keeps Vite's normal root resolution behavior.
+The resolver patch adds an optional internal eighth argument to `resolveConfig`. The `resolveConfigFromFile(configFile, { rootBase })` helper exported by `vite-plus` passes an explicit base directory through a private type bridge. After a config file loads, an unset or relative `root` resolves from that base, before plugin `apply` and `config` hooks. Absolute roots are preserved, and an inline `root` retains priority. Without `rootBase`, the helper keeps Vite's normal root resolution behavior.
 
 Editor integrations can pass their workspace directory explicitly; the config file can be in a subdirectory. Existing CLI callers keep their inline `root: cwd`, including when `vp pack` finds a parent config. Vite still handles config loading, environment initialization, configuration metadata, and plugin hooks.
 

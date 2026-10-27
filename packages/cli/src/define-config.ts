@@ -1071,7 +1071,7 @@ type ResolveConfigWithInternalOptions = (
 
 const resolveConfigWithInternalOptions = resolveConfig as ResolveConfigWithInternalOptions;
 
-export interface ResolveConfigFileOptions {
+export interface ResolveConfigFromFileOptions {
   /**
    * Base directory for an unset or relative `root` in the config file.
    * Relative paths resolve from `process.cwd()`. Does not change the process cwd.
@@ -1094,9 +1094,9 @@ export interface ResolveConfigFileOptions {
  * Plugins outside `lazyPlugins` still run their hooks and side effects,
  * e.g. TanStack Start's router generator scans `src/routes`.
  */
-export async function resolveConfigFile(
+export async function resolveConfigFromFile(
   configFile: string,
-  options: ResolveConfigFileOptions = {},
+  options: ResolveConfigFromFileOptions = {},
 ): Promise<ResolvedConfig> {
   if (configFile.length === 0) {
     throw new Error('Config file path must not be empty.');

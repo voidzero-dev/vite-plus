@@ -10,7 +10,7 @@ import { promisify } from 'node:util';
 import { normalizePath, resolveConfig } from 'vite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { resolveConfigFile } from '../index.js';
+import { resolveConfigFromFile } from '../index.js';
 import { findViteConfigUp, resolveViteConfig } from '../resolve-vite-config.js';
 
 let tempDir: string;
@@ -122,9 +122,9 @@ function realPath(file: string): string {
   return fs.realpathSync.native(file);
 }
 
-describe('resolveConfigFile', () => {
+describe('resolveConfigFromFile', () => {
   it('rejects an empty path instead of searching cwd', async () => {
-    await expect(resolveConfigFile('')).rejects.toThrow('Config file path must not be empty.');
+    await expect(resolveConfigFromFile('')).rejects.toThrow('Config file path must not be empty.');
   });
 
   it.each(['unset', 'empty', 'relative', 'absolute'])(
@@ -145,7 +145,7 @@ describe('resolveConfigFile', () => {
       const cwd = process.cwd();
 
       const expected = await resolveConfig({ configFile }, 'build');
-      const config = await resolveConfigFile(configFile);
+      const config = await resolveConfigFromFile(configFile);
 
       expect(config.root).toBe(expected.root);
       if (root === undefined) {
@@ -163,7 +163,7 @@ describe('resolveConfigFile', () => {
     fs.mkdirSync(configDir);
     const configFile = writeConfig(configDir);
 
-    const config = await resolveConfigFile(configFile, { rootBase: tempDir });
+    const config = await resolveConfigFromFile(configFile, { rootBase: tempDir });
 
     expect(config).toHaveProperty('seenRoot', tempDir);
     expect(realPath(config.root)).toBe(realPath(tempDir));
@@ -175,7 +175,7 @@ describe('resolveConfigFile', () => {
     const configFile = writeConfig(configDir, "root: 'app',");
     fs.mkdirSync(path.join(tempDir, 'app'));
 
-    const config = await resolveConfigFile(configFile, { rootBase: tempDir });
+    const config = await resolveConfigFromFile(configFile, { rootBase: tempDir });
 
     expect(config).toHaveProperty('seenRoot', path.join(tempDir, 'app'));
     expect(realPath(config.root)).toBe(realPath(path.join(tempDir, 'app')));
@@ -188,7 +188,7 @@ describe('resolveConfigFile', () => {
     fs.mkdirSync(rootBase);
     const configFile = writeConfig(tempDir, `root: ${JSON.stringify(root)},`);
 
-    const config = await resolveConfigFile(configFile, { rootBase });
+    const config = await resolveConfigFromFile(configFile, { rootBase });
 
     expect(config).toHaveProperty('seenRoot', root);
     expect(realPath(config.root)).toBe(realPath(root));
@@ -199,7 +199,7 @@ describe('resolveConfigFile', () => {
     fs.writeFileSync(path.join(tempDir, 'lint.mjs'), 'export const lint = { rules: {} };\n');
     fs.writeFileSync(configFile, "import { lint } from './lint.mjs';\nexport default { lint };\n");
 
-    const config = await resolveConfigFile(configFile);
+    const config = await resolveConfigFromFile(configFile);
 
     expect(config.lint).toEqual({ rules: {} });
     expect(config.configFile).toBe(normalizePath(configFile));
@@ -235,7 +235,7 @@ export default {
     );
     const cwd = process.cwd();
 
-    const config = await resolveConfigFile(configFile, { rootBase: tempDir });
+    const config = await resolveConfigFromFile(configFile, { rootBase: tempDir });
 
     expect(config.lint).toEqual({ rules: { 'no-console': 'error' } });
     expect(process.cwd()).toBe(cwd);
@@ -280,7 +280,7 @@ export default {
 };\n`,
     );
 
-    const config = await resolveConfigFile(configFile);
+    const config = await resolveConfigFromFile(configFile);
 
     expect(config.configFileDependencies.map(realPath)).toContain(realPath(pluginDependency));
   });
@@ -301,7 +301,7 @@ export default {
 });\n`,
     );
 
-    const config = await resolveConfigFile(configFile, { rootBase: tempDir });
+    const config = await resolveConfigFromFile(configFile, { rootBase: tempDir });
 
     expect(config).toHaveProperty('functionEnv', {
       command: 'build',
@@ -341,7 +341,7 @@ appendFileSync(${JSON.stringify(evaluationsFile)}, 'module\\n');
 export default ${exportValue};\n`,
       );
 
-      await resolveConfigFile(configFile);
+      await resolveConfigFromFile(configFile);
 
       expect(fs.readFileSync(evaluationsFile, 'utf8')).toBe(
         kind === 'object' ? 'module\n' : 'module\nfunction\n',
@@ -390,9 +390,9 @@ export default ${exportValue};\n`,
           '--input-type=module',
           '--eval',
           `import assert from 'node:assert/strict';
-import { resolveConfigFile } from ${JSON.stringify(new URL('../define-config.ts', import.meta.url).href)};
-const first = await resolveConfigFile(${JSON.stringify(configFile)});
-const second = await resolveConfigFile(${JSON.stringify(configFile)});
+import { resolveConfigFromFile } from ${JSON.stringify(new URL('../define-config.ts', import.meta.url).href)};
+const first = await resolveConfigFromFile(${JSON.stringify(configFile)});
+const second = await resolveConfigFromFile(${JSON.stringify(configFile)});
 assert.equal(first.nodeEnv, ${JSON.stringify(expected)});
 assert.equal(second.nodeEnv, ${JSON.stringify(expected)});`,
         ],
@@ -408,7 +408,7 @@ assert.equal(second.nodeEnv, ${JSON.stringify(expected)});`,
       'export default () => ({ metadata: process.env.VP_RESOLVING_CONFIG_METADATA });\n',
     );
 
-    const config = await resolveConfigFile(configFile);
+    const config = await resolveConfigFromFile(configFile);
 
     expect(config).toHaveProperty('metadata', '1');
   });
@@ -423,7 +423,7 @@ assert.equal(second.nodeEnv, ${JSON.stringify(expected)});`,
 };\n`,
     );
 
-    await expect(resolveConfigFile(configFile)).rejects.toThrow('plugin rejected');
+    await expect(resolveConfigFromFile(configFile)).rejects.toThrow('plugin rejected');
 
     expect(process.env.VP_RESOLVING_CONFIG_METADATA).toBe(originalMetadata);
   });
@@ -477,11 +477,11 @@ const api = ${
 const marker = process.env.VP_RESOLVING_CONFIG_METADATA;
 const cwd = process.cwd();
 const configFile = ${JSON.stringify(path.relative(launcher, configFile))};
-const defaults = await api.resolveConfigFile(configFile);
+const defaults = await api.resolveConfigFromFile(configFile);
 assert.equal(realpathSync.native(defaults.root), realpathSync.native(${JSON.stringify(path.join(launcher, 'app'))}));
 assert.equal(defaults.seenRoot, 'app');
 assert.equal(process.env.VP_RESOLVING_CONFIG_METADATA, marker);
-const config = await api.resolveConfigFile(configFile, { rootBase: ${JSON.stringify(path.relative(launcher, workspace))} });
+const config = await api.resolveConfigFromFile(configFile, { rootBase: ${JSON.stringify(path.relative(launcher, workspace))} });
 assert.equal(realpathSync.native(config.root), realpathSync.native(${JSON.stringify(path.join(workspace, 'app'))}));
 assert.equal(config.seenRoot, ${JSON.stringify(path.join(workspace, 'app'))});
 assert.deepEqual(config.lint, { rules: {} });

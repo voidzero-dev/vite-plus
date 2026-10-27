@@ -1,4 +1,9 @@
-import { defineConfig, defineProject, lazyPlugins, resolveConfigFile } from './define-config.ts';
+import {
+  defineConfig,
+  defineProject,
+  lazyPlugins,
+  resolveConfigFromFile,
+} from './define-config.ts';
 
 export * from 'vite';
 
@@ -26,5 +31,5 @@ export type {
   WatcherTriggerPattern,
 } from 'vitest/config';
 
-export { defineConfig, defineProject, lazyPlugins, resolveConfigFile };
-export type { ResolveConfigFileOptions } from './define-config.ts';
+export { defineConfig, defineProject, lazyPlugins, resolveConfigFromFile };
+export type { ResolveConfigFromFileOptions } from './define-config.ts';
