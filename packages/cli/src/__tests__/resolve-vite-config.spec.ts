@@ -1,24 +1,29 @@
 import fs from 'node:fs';
 import { mkdtempSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
+import { normalizePath } from 'vite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { findViteConfigUp } from '../resolve-vite-config.js';
+import { resolveConfigFile } from '../index.js';
+import { findViteConfigUp, resolveViteConfig } from '../resolve-vite-config.js';
+
+let tempDir: string;
+
+beforeEach(() => {
+  // Resolve symlinks (macOS /var -> /private/var) to match path.resolve behavior
+  tempDir = fs.realpathSync(mkdtempSync(path.join(tmpdir(), 'vite-config-test-')));
+});
+
+afterEach(async () => {
+  // Vite removes its bundled config asynchronously. Allow transient Windows
+  // file locks to clear; persistent cleanup errors still fail the test.
+  await rm(tempDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+});
 
 describe('findViteConfigUp', () => {
-  let tempDir: string;
-
-  beforeEach(() => {
-    // Resolve symlinks (macOS /var -> /private/var) to match path.resolve behavior
-    tempDir = fs.realpathSync(mkdtempSync(path.join(tmpdir(), 'vite-config-test-')));
-  });
-
-  afterEach(() => {
-    fs.rmSync(tempDir, { recursive: true, force: true });
-  });
-
   it('should find config in the start directory', () => {
     fs.writeFileSync(path.join(tempDir, 'vite.config.ts'), '');
     const result = findViteConfigUp(tempDir, tempDir);
@@ -89,5 +94,105 @@ describe('findViteConfigUp', () => {
 
     const result = findViteConfigUp(subDir, tempDir);
     expect(result).toBe(path.join(tempDir, `vite.config.${extension}`));
+  });
+});
+
+// Plugins read `root` in their `config` hook, as TanStack Start does to find
+// its entries, so the fixture plugin records the value it sees there.
+function writeConfig(dir: string, fields = ''): string {
+  const configFile = path.join(dir, 'vite.config.mjs');
+  fs.writeFileSync(
+    configFile,
+    `export default {
+  ${fields}
+  plugins: [{ name: 'record-root', config: (config) => ({ seenRoot: config.root }) }],
+};
+`,
+  );
+  return configFile;
+}
+
+// Vite stores the real path, which may differ from `tempDir` in casing or
+// short names on Windows.
+function realPath(file: string): string {
+  return fs.realpathSync.native(file);
+}
+
+describe('resolveConfigFile', () => {
+  it('resolves root to the config directory regardless of cwd', async () => {
+    const configFile = writeConfig(tempDir);
+
+    const config = await resolveConfigFile(configFile);
+
+    expect(config).toHaveProperty('seenRoot', tempDir);
+    expect(realPath(config.root)).toBe(realPath(tempDir));
+  });
+
+  it('resolves a relative root from the config directory', async () => {
+    const configFile = writeConfig(tempDir, "root: 'app',");
+    fs.mkdirSync(path.join(tempDir, 'app'));
+
+    const config = await resolveConfigFile(configFile);
+
+    expect(config).toHaveProperty('seenRoot', path.join(tempDir, 'app'));
+    expect(realPath(config.root)).toBe(realPath(path.join(tempDir, 'app')));
+  });
+
+  it('keeps the config file and its dependencies', async () => {
+    const configFile = path.join(tempDir, 'vite.config.mjs');
+    fs.writeFileSync(path.join(tempDir, 'lint.mjs'), 'export const lint = { rules: {} };\n');
+    fs.writeFileSync(configFile, "import { lint } from './lint.mjs';\nexport default { lint };\n");
+
+    const config = await resolveConfigFile(configFile);
+
+    expect(config.lint).toEqual({ rules: {} });
+    expect(config.configFile).toBe(normalizePath(configFile));
+    expect(config.configFileDependencies.map(realPath)).toContain(
+      realPath(path.join(tempDir, 'lint.mjs')),
+    );
+  });
+
+  it('evaluates the config as a config-metadata resolution', async () => {
+    const configFile = path.join(tempDir, 'vite.config.mjs');
+    fs.writeFileSync(
+      configFile,
+      'export default () => ({ metadata: process.env.VP_RESOLVING_CONFIG_METADATA });\n',
+    );
+
+    const config = await resolveConfigFile(configFile);
+
+    expect(config).toHaveProperty('metadata', '1');
+  });
+});
+
+describe('resolveViteConfig', () => {
+  it('keeps a relative root from the config', async () => {
+    writeConfig(tempDir, "root: 'app',");
+    fs.mkdirSync(path.join(tempDir, 'app'));
+
+    const config = await resolveViteConfig(tempDir);
+
+    expect(config).toHaveProperty('seenRoot', path.join(tempDir, 'app'));
+  });
+
+  it('resolves a workspace config found by traverseUp from its own directory', async () => {
+    fs.writeFileSync(path.join(tempDir, 'pnpm-workspace.yaml'), "packages:\n  - 'packages/*'\n");
+    fs.writeFileSync(path.join(tempDir, 'package.json'), '{"name":"fixture"}');
+    const configFile = writeConfig(tempDir);
+    const packageDir = path.join(tempDir, 'packages', 'lib');
+    fs.mkdirSync(packageDir, { recursive: true });
+    fs.writeFileSync(path.join(packageDir, 'package.json'), '{"name":"lib"}');
+
+    const config = await resolveViteConfig(packageDir, { traverseUp: true });
+
+    expect(config.configFile).toBe(normalizePath(configFile));
+    expect(config).toHaveProperty('seenRoot', tempDir);
+  });
+
+  it('resolves without a config file', async () => {
+    const config = await resolveViteConfig(tempDir);
+
+    expect(config.configFile).toBeUndefined();
+    expect(config.lint).toBeUndefined();
   });
 });

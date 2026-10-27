@@ -1,13 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { ignoreInput, ignoreOutput } from '@voidzero-dev/vite-task-client';
 import type { OxfmtConfig } from 'oxfmt';
 import type { OxlintConfig } from 'oxlint';
-import { searchForWorkspaceRoot } from 'vite';
-import type { Alias, Plugin, PluginOption, UserConfig } from 'vite';
+import { loadConfigFromFile, normalizePath, resolveConfig, searchForWorkspaceRoot } from 'vite';
+import type { Alias, Plugin, PluginOption, ResolvedConfig, UserConfig } from 'vite';
 import {
   defineConfig as viteDefineConfig,
   defineProject as viteDefineProject,
@@ -1047,6 +1047,60 @@ export async function withConfigMetadataResolution<T>(fn: () => Promise<T>): Pro
       configMetadataSavedValue = undefined;
     }
   }
+}
+
+/**
+ * Resolve a Vite config file to read a non-plugin block (`lint`, `fmt`,
+ * `pack`, …) from it, for tools such as oxlint, oxfmt, and Vite+ itself.
+ *
+ * Unlike `resolveConfig({ configFile }, 'build')`, the result does not depend
+ * on `process.cwd()`: a relative `root` in the config is resolved from the
+ * config's directory, and without one `root` is that directory. Editor
+ * integrations rely on this, since one process serves every workspace folder.
+ *
+ * The config is evaluated once, as a config-metadata resolution, so
+ * `lazyPlugins` skips its factory. Plugins outside `lazyPlugins` still run
+ * their hooks and side effects, e.g. TanStack Start's router generator scans
+ * `src/routes`.
+ */
+export async function resolveConfigFile(configFile: string): Promise<ResolvedConfig> {
+  return withConfigMetadataResolution(async () => {
+    // Load the config before resolving it to read the user's `root`. Neither
+    // plain `resolveConfig` call resolves `root` from the config's directory:
+    // - `resolveConfig({ configFile })` falls back to `process.cwd()`, which
+    //   an editor may set to another workspace folder.
+    // - `resolveConfig({ root: dirname(configFile), configFile })` overrides
+    //   the user's `root`, e.g. `root: 'app'` with sources in `app/src`.
+    const configEnv: ConfigEnv = {
+      command: 'build',
+      mode: 'development',
+      isSsrBuild: false,
+      isPreview: false,
+    };
+    const loaded = await loadConfigFromFile(configEnv, configFile);
+    if (!loaded) {
+      throw new Error(`Failed to load config file: ${configFile}`);
+    }
+    // An absolute `root` is kept as is.
+    const root = resolve(dirname(loaded.path), loaded.config.root ?? '');
+    // Passing the loaded config inline evaluates it only once, but differs
+    // from `resolveConfig({ configFile }, 'build')`:
+    // - The config file is evaluated before `resolveConfig` defaults
+    //   `NODE_ENV` to `development` or reads it from Vite Task, so the first
+    //   evaluation in a process may see it unset.
+    // - `configEnv.isSsrBuild` in plugin hooks follows the user's `build.ssr`.
+    // - `resolved.inlineConfig` holds the user config.
+    // - Plugin hooks do not see the config file path; it is restored below.
+    // Loading the config twice, once to read `root` and then through
+    // `resolveConfig({ root, configFile })`, avoids these differences but runs
+    // the config and its side effects twice.
+    const config = await resolveConfig({ ...loaded.config, root, configFile: false }, 'build');
+    // Restore what `configFile: false` drops, e.g. for `vp pack` to watch the config.
+    return Object.assign(config, {
+      configFile: loaded.path,
+      configFileDependencies: loaded.dependencies.map((file) => normalizePath(resolve(file))),
+    });
+  });
 }
 
 export function lazyPlugins(cb: () => PluginOption[]): PluginOption[] | undefined;
