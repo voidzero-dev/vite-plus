@@ -12,7 +12,7 @@ pub struct PruneArgs {
     pub(crate) prod: bool,
 
     /// Remove optional dependencies
-    #[arg(long, not_supported(yarn, bun < "1.4"))]
+    #[arg(long, not_supported(npm < "7", yarn, bun < "1.4"))]
     pub(crate) no_optional: bool,
 
     /// Additional arguments
@@ -124,6 +124,16 @@ mod tests {
             assert!(resolution.diagnostics.is_empty());
             assert_eq!(expect_run(resolution.outcome).args, ["prune", flag, "--no-audit"]);
         }
+
+        let args = parse_args::<PruneArgs>(["--no-optional"]).unwrap();
+        expect_unsupported(
+            resolve(&npm("6.14.18"), args),
+            &["npm < 7 does not support --no-optional."],
+        );
+        let args = parse_args::<PruneArgs>(["--no-optional"]).unwrap();
+        let resolution = resolve(&npm("7.0.0"), args);
+        assert!(resolution.diagnostics.is_empty());
+        assert_eq!(expect_run(resolution.outcome).args, ["prune", "--omit=optional"]);
     }
 
     #[test]
