@@ -102,7 +102,7 @@ For an incremental configuration-loading change, with dependencies and native
 bindings already built, run these commands from the repository root:
 
 ```bash
-node packages/tools/src/index.ts brand-vite
+pnpm brand-vite
 pnpm --filter vite build-types
 pnpm --filter @voidzero-dev/vite-plus-core build
 pnpm --filter vite-plus build-ts
