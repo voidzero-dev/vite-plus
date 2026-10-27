@@ -1,8 +1,11 @@
+import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import { mkdtempSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 
 import { normalizePath } from 'vite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -11,6 +14,7 @@ import { resolveConfigFile } from '../index.js';
 import { findViteConfigUp, resolveViteConfig } from '../resolve-vite-config.js';
 
 let tempDir: string;
+const exec = promisify(execFile);
 
 beforeEach(() => {
   // Resolve symlinks (macOS /var -> /private/var) to match path.resolve behavior
@@ -119,6 +123,10 @@ function realPath(file: string): string {
 }
 
 describe('resolveConfigFile', () => {
+  it('rejects an empty path instead of searching cwd', async () => {
+    await expect(resolveConfigFile('')).rejects.toThrow('Config file path must not be empty.');
+  });
+
   it('resolves root to the config directory regardless of cwd', async () => {
     const configFile = writeConfig(tempDir);
 
@@ -152,6 +160,198 @@ describe('resolveConfigFile', () => {
     );
   });
 
+  it('provides the root before plugin filtering and early config hooks', async () => {
+    const configFile = path.join(tempDir, 'vite.config.mjs');
+    const root = path.join(tempDir, 'app');
+    fs.mkdirSync(root);
+    fs.writeFileSync(
+      configFile,
+      `import assert from 'node:assert/strict';
+export default {
+  root: 'app',
+  plugins: [{
+    name: 'check-early-root',
+    apply(config) {
+      assert.equal(config.root, ${JSON.stringify(root)});
+      return true;
+    },
+    config: {
+      order: 'pre',
+      handler(config) {
+        assert.equal(config.root, ${JSON.stringify(root)});
+        return { lint: { rules: { 'no-console': 'error' } } };
+      },
+    },
+  }],
+};\n`,
+    );
+    const cwd = process.cwd();
+
+    const config = await resolveConfigFile(configFile);
+
+    expect(config.lint).toEqual({ rules: { 'no-console': 'error' } });
+    expect(process.cwd()).toBe(cwd);
+  });
+
+  it('provides file metadata to sync and async hooks and retains added dependencies', async () => {
+    const configFile = path.join(tempDir, 'vite.config.mjs');
+    const dependency = path.join(tempDir, 'lint.mjs');
+    const pluginDependency = path.join(tempDir, 'plugin-settings.json');
+    fs.writeFileSync(dependency, 'export const lint = { rules: {} };\n');
+    fs.writeFileSync(pluginDependency, '{}');
+    fs.writeFileSync(
+      configFile,
+      `import assert from 'node:assert/strict';
+import { realpathSync } from 'node:fs';
+import { lint } from './lint.mjs';
+function checkMetadata(config) {
+  assert.equal(config.configFile, ${JSON.stringify(normalizePath(configFile))});
+  assert.ok(config.configFileDependencies.map((file) => realpathSync.native(file)).includes(
+    realpathSync.native(${JSON.stringify(dependency)}),
+  ));
+  assert.equal(process.env.VP_RESOLVING_CONFIG_METADATA, '1');
+}
+export default {
+  lint,
+  plugins: [{
+    name: 'check-sync-metadata',
+    configResolved: {
+      order: 'pre',
+      handler(config) {
+        checkMetadata(config);
+        config.configFileDependencies.push(${JSON.stringify(normalizePath(pluginDependency))});
+      },
+    },
+  }, {
+    name: 'check-async-metadata',
+    async configResolved(config) {
+      await Promise.resolve();
+      checkMetadata(config);
+    },
+  }],
+};\n`,
+    );
+
+    const config = await resolveConfigFile(configFile);
+
+    expect(config.configFileDependencies.map(realPath)).toContain(realPath(pluginDependency));
+  });
+
+  it('preserves Vite config environments and keeps the file config out of inlineConfig', async () => {
+    const configFile = path.join(tempDir, 'vite.config.mjs');
+    fs.writeFileSync(
+      configFile,
+      `export default (env) => ({
+  mode: 'custom',
+  build: { ssr: true },
+  functionEnv: { ...env },
+  lint: { rules: {} },
+  plugins: [{
+    name: 'record-environment',
+    config(_config, hookEnv) { return { hookEnv: { ...hookEnv } }; },
+  }],
+});\n`,
+    );
+
+    const config = await resolveConfigFile(configFile);
+
+    expect(config).toHaveProperty('functionEnv', {
+      command: 'build',
+      mode: 'development',
+      isSsrBuild: false,
+      isPreview: false,
+    });
+    expect(config).toHaveProperty('hookEnv', {
+      command: 'build',
+      mode: 'custom',
+      isSsrBuild: false,
+      isPreview: false,
+    });
+    expect(config.mode).toBe('custom');
+    expect(config.inlineConfig.configFile).toBe(configFile);
+    expect(config.inlineConfig.lint).toBeUndefined();
+    expect(config.inlineConfig.build?.ssr).toBeUndefined();
+  });
+
+  it.each(['object', 'function', 'async function'])(
+    'evaluates a %s config only once',
+    async (kind) => {
+      const configFile = path.join(tempDir, 'vite.config.mjs');
+      const evaluationsFile = path.join(tempDir, 'evaluations.log');
+      const exportValue =
+        kind === 'object'
+          ? '{ lint: { rules: {} } }'
+          : `${kind === 'async function' ? 'async ' : ''}() => {
+  appendFileSync(${JSON.stringify(evaluationsFile)}, 'function\\n');
+  return { lint: { rules: {} } };
+}`;
+      fs.writeFileSync(
+        configFile,
+        `import { appendFileSync } from 'node:fs';
+appendFileSync(${JSON.stringify(evaluationsFile)}, 'module\\n');
+export default ${exportValue};\n`,
+      );
+
+      await resolveConfigFile(configFile);
+
+      expect(fs.readFileSync(evaluationsFile, 'utf8')).toBe(
+        kind === 'object' ? 'module\n' : 'module\nfunction\n',
+      );
+    },
+  );
+
+  it.each([
+    { name: 'unset', nodeEnv: undefined, taskNodeEnv: undefined, expected: 'development' },
+    { name: 'explicit', nodeEnv: 'production', taskNodeEnv: undefined, expected: 'production' },
+    {
+      name: 'provided by Vite Task',
+      nodeEnv: undefined,
+      taskNodeEnv: 'production',
+      expected: 'production',
+    },
+  ])(
+    'initializes NODE_ENV before evaluation when $name',
+    async ({ nodeEnv, taskNodeEnv, expected }) => {
+      const configFile = path.join(tempDir, 'vite.config.mjs');
+      fs.writeFileSync(configFile, 'export default () => ({ nodeEnv: process.env.NODE_ENV });\n');
+      const env = { ...process.env };
+      delete env.NODE_ENV;
+      delete env.VP_RUN_NODE_CLIENT_PATH;
+      if (nodeEnv !== undefined) {
+        env.NODE_ENV = nodeEnv;
+      }
+      if (taskNodeEnv !== undefined) {
+        const clientFile = path.join(tempDir, 'task-client.cjs');
+        fs.writeFileSync(
+          clientFile,
+          `exports.load = () => ({
+  getEnv: (name) => name === 'NODE_ENV' ? ${JSON.stringify(taskNodeEnv)} : undefined,
+  getEnvs: () => ({}),
+  ignoreInput() {},
+  ignoreOutput() {},
+});\n`,
+        );
+        env.VP_RUN_NODE_CLIENT_PATH = clientFile;
+      }
+
+      // Start outside Vitest's NODE_ENV=test and cached Vite Task client state.
+      await exec(
+        process.execPath,
+        [
+          '--input-type=module',
+          '--eval',
+          `import assert from 'node:assert/strict';
+import { resolveConfigFile } from ${JSON.stringify(new URL('../define-config.ts', import.meta.url).href)};
+const first = await resolveConfigFile(${JSON.stringify(configFile)});
+const second = await resolveConfigFile(${JSON.stringify(configFile)});
+assert.equal(first.nodeEnv, ${JSON.stringify(expected)});
+assert.equal(second.nodeEnv, ${JSON.stringify(expected)});`,
+        ],
+        { env, cwd: tempDir },
+      );
+    },
+  );
+
   it('evaluates the config as a config-metadata resolution', async () => {
     const configFile = path.join(tempDir, 'vite.config.mjs');
     fs.writeFileSync(
@@ -162,6 +362,70 @@ describe('resolveConfigFile', () => {
     const config = await resolveConfigFile(configFile);
 
     expect(config).toHaveProperty('metadata', '1');
+  });
+
+  it('restores the metadata marker when a plugin rejects', async () => {
+    const originalMetadata = process.env.VP_RESOLVING_CONFIG_METADATA;
+    const configFile = path.join(tempDir, 'vite.config.mjs');
+    fs.writeFileSync(
+      configFile,
+      `export default {
+  plugins: [{ name: 'reject-config', configResolved() { throw new Error('plugin rejected'); } }],
+};\n`,
+    );
+
+    await expect(resolveConfigFile(configFile)).rejects.toThrow('plugin rejected');
+
+    expect(process.env.VP_RESOLVING_CONFIG_METADATA).toBe(originalMetadata);
+  });
+
+  it.each(['import', 'require'])('resolves through the built %s entry', async (entryType) => {
+    const configFile = path.join(tempDir, 'vite.config.mjs');
+    const esmEntry = new URL('../../dist/index.js', import.meta.url);
+    const entry = new URL(
+      entryType === 'import' ? '../../dist/index.js' : '../../dist/index.cjs',
+      import.meta.url,
+    );
+    fs.writeFileSync(
+      configFile,
+      `import assert from 'node:assert/strict';
+import { realpathSync } from 'node:fs';
+import { defineConfig, lazyPlugins } from ${JSON.stringify(normalizePath(fileURLToPath(esmEntry)))};
+export default defineConfig({
+  lint: { rules: {} },
+  plugins: [
+    lazyPlugins(() => { throw new Error('lazy plugin factory must not run'); }),
+    {
+      name: 'check-published-helper',
+      configResolved(config) {
+        assert.equal(config.configFile, ${JSON.stringify(normalizePath(configFile))});
+        assert.equal(realpathSync.native(config.root), realpathSync.native(${JSON.stringify(tempDir)}));
+        assert.equal(process.env.VP_RESOLVING_CONFIG_METADATA, '1');
+      },
+    },
+  ],
+});\n`,
+    );
+
+    await exec(
+      process.execPath,
+      [
+        '--input-type=module',
+        '--eval',
+        `import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+const api = ${
+          entryType === 'import'
+            ? `await import(${JSON.stringify(entry.href)})`
+            : `createRequire(import.meta.url)(${JSON.stringify(fileURLToPath(entry))})`
+        };
+const marker = process.env.VP_RESOLVING_CONFIG_METADATA;
+const config = await api.resolveConfigFile(${JSON.stringify(configFile)});
+assert.deepEqual(config.lint, { rules: {} });
+assert.equal(process.env.VP_RESOLVING_CONFIG_METADATA, marker);`,
+      ],
+      { cwd: tempDir },
+    );
   });
 });
 

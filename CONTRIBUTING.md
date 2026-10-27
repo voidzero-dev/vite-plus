@@ -93,6 +93,25 @@ To create a release build of Vite+ and all upstream dependencies, run:
 just build
 ```
 
+The build first applies the Vite+ source patches to the pinned Vite checkout.
+These include the internal configuration root option used by `resolveConfigFile()`.
+Keep changes to these patches in `packages/tools/src/`; `brand-vite` restores the
+Vite files it manages before it applies them again.
+
+For an incremental configuration-loading change, with dependencies and native
+bindings already built, run these commands from the repository root:
+
+```bash
+node packages/tools/src/index.ts brand-vite
+pnpm --filter vite build-types
+pnpm --filter @voidzero-dev/vite-plus-core build
+pnpm --filter vite-plus build-ts
+```
+
+Run the preparation and type build before a filtered core build. The core build
+rejects a Vite checkout without the configuration patch. Build the CLI against
+the matching core output so its helper uses the new option at runtime.
+
 ## Git Hooks (optional)
 
 Pre-commit checks are opt-in. Run `vp config` after a build to install the hook dispatcher; each commit then runs `vp staged` on staged files. `vp staged` loads its config from `vite.config.ts` and needs the built JS packages, so build first. Opt out with `vp hooks disable`, or skip one run with `VP_GIT_HOOKS=0`. If husky was active in your clone before, run `git config --unset core.hooksPath` once first.

@@ -1,0 +1,13 @@
+[[case]]
+name = "staged_preserves_config_hooks"
+vp = "local"
+unset-env = ["NODE_ENV"]
+steps = [
+  { argv = ["git", "init", "--quiet"], snapshot = false },
+  { argv = ["git", "add", "input.txt"], snapshot = false },
+  { argv = ["git", "commit", "--quiet", "-m", "initial"], snapshot = false },
+  { argv = ["vpt", "write-file", "input.txt", "changed\n"], snapshot = false },
+  { argv = ["git", "add", "input.txt"], snapshot = false },
+  { argv = ["vp", "staged", "--quiet", "--no-stash"], comment = "Run staged configuration supplied by a Vite plugin with normal config metadata." },
+  ["vpt", "print-file", "result.txt"],
+]
