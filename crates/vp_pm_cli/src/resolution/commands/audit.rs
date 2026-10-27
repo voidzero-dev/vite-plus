@@ -38,7 +38,10 @@ impl Resolve<AuditArgs> for Npm {
             cmd.arg("fix");
         }
         cmd.option("--audit-level", args.level.as_ref())
-            .arg_if("--omit=dev", args.production)
+            .arg_if(
+                if self.supports_v7_commands() { "--omit=dev" } else { "--production" },
+                args.production,
+            )
             .arg_if("--json", args.json)
             .extend(args.pass_through_args.iter());
         cmd.into()
@@ -296,6 +299,28 @@ mod tests {
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["npm", "audit", "--severity", "high"]);
+    }
+
+    #[test]
+    fn npm_dependency_filter_version_boundaries() {
+        for (version, flag) in [("6.14.18", "--production"), ("7.0.0", "--omit=dev")] {
+            for fix in [false, true] {
+                let args = AuditArgs {
+                    production: true,
+                    fix,
+                    pass_through_args: vec!["--json".into()],
+                    ..Default::default()
+                };
+                let resolution = resolve(&npm(version), args);
+                assert!(resolution.diagnostics.is_empty());
+                let expected = if fix {
+                    vec!["audit", "fix", flag, "--json"]
+                } else {
+                    vec!["audit", flag, "--json"]
+                };
+                assert_eq!(expect_run(resolution.outcome).args, expected);
+            }
+        }
     }
 
     #[test]

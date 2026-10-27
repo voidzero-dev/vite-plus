@@ -57,6 +57,11 @@ impl Npm {
         Self { version: None }
     }
 
+    /// `--omit` and `--include` landed in npm 7. Unknown versions are treated as current.
+    pub(crate) fn supports_v7_commands(&self) -> bool {
+        self.version.as_ref().is_none_or(|version| version >= &Version::new(7, 0, 0))
+    }
+
     /// `pkg get`, `pkg set`, and `pkg delete` landed in npm 7.20.0.
     /// Unknown versions are treated as current.
     pub(crate) fn supports_v7_20_commands(&self) -> bool {

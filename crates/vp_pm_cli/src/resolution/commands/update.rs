@@ -100,7 +100,10 @@ impl Resolve<UpdateArgs> for Npm {
             cmd.arg("--include-workspace-root");
         }
         cmd.arg_if("--workspaces", args.recursive)
-            .arg_if("--include=dev", args.dev)
+            .arg_if(
+                if self.supports_v7_commands() { "--include=dev" } else { "--also=dev" },
+                args.dev,
+            )
             .arg_if("--include=prod", args.prod)
             .arg_if("--no-optional", args.no_optional)
             .arg_if("--no-save", args.no_save)
@@ -605,6 +608,19 @@ mod tests {
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["update", "--include-workspace-root", "--workspaces"]);
+    }
+
+    #[test]
+    fn npm_dependency_filter_version_boundaries() {
+        for (version, flag) in [("6.14.18", "--also=dev"), ("7.0.0", "--include=dev")] {
+            let args = parse_args::<UpdateArgs>(["-D", "react", "--", "--no-audit"]).unwrap();
+            let resolution = resolve(&npm(version), args);
+            assert!(resolution.diagnostics.is_empty());
+            assert_eq!(
+                expect_run(resolution.outcome).args,
+                ["update", flag, "--no-audit", "react"]
+            );
+        }
     }
 
     #[test]

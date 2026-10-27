@@ -29,3 +29,15 @@ steps = [
   { argv = ["vp", "pm", "list", "--dev", "--json"], envs = [["NODE_ENV", "production"]], comment = "include installed dev dependencies without excluding other dependency types" },
   { argv = ["vp", "pm", "list", "--", "--include=dev", "--json"], comment = "raw native include remains available and lists all four dependency types" },
 ]
+
+[[case]]
+name = "npm6_dependency_filters_list"
+vp = "global"
+env = { npm_config_audit = "false", npm_config_fund = "false" }
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "npm@6.14.18"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "peerDependencies", "{}"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts", "--silent"], snapshot = false },
+  { argv = ["vp", "pm", "list", "-D", "--json"], envs = [["NODE_ENV", "production"]], comment = "npm 6 lists both production and development dependencies" },
+  { argv = ["vp", "pm", "list", "-P", "--no-optional", "--exclude-peers"], comment = "reject omit filters without equivalent npm 6 options" },
+]

@@ -241,9 +241,15 @@ impl Resolve<InstallArgs> for Npm {
         let use_ci = args.frozen_lockfile && !args.no_frozen_lockfile;
         let mut cmd = CommandBuilder::new("npm");
         cmd.arg(if use_ci { "ci" } else { "install" });
-        cmd.arg_if("--omit=dev", args.prod)
-            .arg_if("--include=dev", args.dev)
-            .arg_if("--omit=optional", args.no_optional);
+        if self.supports_v7_commands() {
+            cmd.arg_if("--omit=dev", args.prod)
+                .arg_if("--include=dev", args.dev)
+                .arg_if("--omit=optional", args.no_optional);
+        } else {
+            cmd.arg_if("--production", args.prod)
+                .arg_if("--production=false", args.dev)
+                .arg_if("--no-optional", args.no_optional);
+        }
         cmd.arg_if("--package-lock-only", args.lockfile_only && !use_ci)
             .arg_if("--prefer-offline", args.prefer_offline)
             .arg_if("--offline", args.offline)
@@ -581,6 +587,32 @@ mod tests {
         );
 
         assert_eq!(command.args, vec!["install", "--omit=dev"]);
+    }
+
+    #[test]
+    fn npm_dependency_filter_version_boundaries() {
+        for (version, filters) in [
+            ("6.14.18", vec!["--production", "--production=false", "--no-optional"]),
+            ("7.0.0", vec!["--omit=dev", "--include=dev", "--omit=optional"]),
+            ("12.2.1", vec!["--omit=dev", "--include=dev", "--omit=optional"]),
+        ] {
+            for frozen_lockfile in [false, true] {
+                let args = InstallArgs {
+                    prod: true,
+                    dev: true,
+                    no_optional: true,
+                    frozen_lockfile,
+                    pass_through_args: vec!["--production=true".into()],
+                    ..Default::default()
+                };
+                let resolution = resolve(&npm(version), args);
+                assert!(resolution.diagnostics.is_empty());
+                let mut expected = vec![if frozen_lockfile { "ci" } else { "install" }];
+                expected.extend(&filters);
+                expected.push("--production=true");
+                assert_eq!(expect_run(resolution.outcome).args, expected, "npm {version}");
+            }
+        }
     }
 
     #[test]

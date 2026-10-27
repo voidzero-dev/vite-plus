@@ -1,0 +1,7 @@
+{
+  "name": "optional-parent",
+  "version": "1.0.0",
+  "optionalDependencies": {
+    "is-number": "7.0.0"
+  }
+}

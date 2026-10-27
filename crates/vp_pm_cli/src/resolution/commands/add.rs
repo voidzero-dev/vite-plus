@@ -166,7 +166,7 @@ impl SaveDependencyArgs {
 impl Resolve<AddArgs> for Pnpm {
     fn resolve(&self, args: &AddArgs, _diag: &mut Diagnostics) -> CommandResolution {
         if args.global {
-            return Npm::resolve_add(args);
+            return Npm::unknown_version().resolve_add(args);
         }
         let mut cmd = CommandBuilder::new("pnpm");
         cmd.repeated("--filter", args.filter.iter());
@@ -216,7 +216,7 @@ impl Resolve<AddArgs> for Pnpm {
 }
 
 impl Npm {
-    fn resolve_add(args: &AddArgs) -> CommandResolution {
+    fn resolve_add(&self, args: &AddArgs) -> CommandResolution {
         let mut cmd = CommandBuilder::new("npm");
         if args.global {
             cmd.arg("install")
@@ -247,7 +247,10 @@ impl Npm {
         }
         cmd.arg_if("--save-exact", args.save_exact)
             .arg_if("--ignore-scripts", args.ignore_scripts)
-            .arg_if("--omit=optional", args.no_optional)
+            .arg_if(
+                if self.supports_v7_commands() { "--omit=optional" } else { "--no-optional" },
+                args.no_optional,
+            )
             .arg_if("--package-lock-only", args.lockfile_only)
             .arg_if("--prefer-offline", args.prefer_offline)
             .arg_if("--offline", args.offline)
@@ -263,14 +266,14 @@ impl Npm {
 
 impl Resolve<AddArgs> for Npm {
     fn resolve(&self, args: &AddArgs, _diag: &mut Diagnostics) -> CommandResolution {
-        Self::resolve_add(args)
+        self.resolve_add(args)
     }
 }
 
 impl Resolve<AddArgs> for Yarn {
     fn resolve(&self, args: &AddArgs, diag: &mut Diagnostics) -> CommandResolution {
         if args.global {
-            return Npm::resolve_add(args);
+            return Npm::unknown_version().resolve_add(args);
         }
 
         let mut cmd = CommandBuilder::new("yarn");
@@ -312,7 +315,7 @@ impl Resolve<AddArgs> for Yarn {
 impl Resolve<AddArgs> for Bun {
     fn resolve(&self, args: &AddArgs, _diag: &mut Diagnostics) -> CommandResolution {
         if args.global {
-            return Npm::resolve_add(args);
+            return Npm::unknown_version().resolve_add(args);
         }
         let mut cmd = CommandBuilder::new("bun");
         cmd.arg("add").repeated("--filter", args.filter.iter());

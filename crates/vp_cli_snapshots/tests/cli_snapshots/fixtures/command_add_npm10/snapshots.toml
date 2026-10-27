@@ -15,3 +15,45 @@ steps = [
   { argv = ["vp", "add", "test-vite-plus-package-optional", "--", "--loglevel=warn", "--no-audit"], comment = "support pass through arguments" },
   { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
 ]
+
+[[case]]
+name = "npm6_dependency_filters_add"
+vp = "global"
+env = { npm_config_audit = "false", npm_config_fund = "false" }
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "npm@6.14.18"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "dependencies.is-number", "6.0.0"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts", "--silent"], snapshot = false },
+  { argv = ["vp", "pm", "pack", "--", "./optional-parent", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "add", "./optional-parent-1.0.0.tgz", "--ignore-scripts", "--silent"], comment = "without a filter, the optional dependency is installed inside the added package" },
+  ["vpt", "stat-file", "node_modules/optional-parent/node_modules/is-number/package.json", "--assert", "file"],
+  { argv = ["vpt", "rm", "-rf", "node_modules/optional-parent", "package-lock.json"], snapshot = false },
+  ["vp", "add", "./optional-parent-1.0.0.tgz", "--no-optional", "--ignore-scripts", "--silent"],
+  ["vpt", "stat-file", "node_modules/optional-parent/package.json", "--assert", "file"],
+  ["vpt", "stat-file", "node_modules/optional-parent/node_modules/is-number/package.json", "--assert", "missing"],
+  { argv = ["vpt", "rm", "-rf", "node_modules/optional-parent", "package-lock.json"], snapshot = false },
+  ["vp", "install", "./optional-parent-1.0.0.tgz", "--no-optional", "--ignore-scripts", "--silent"],
+  ["vpt", "stat-file", "node_modules/optional-parent/package.json", "--assert", "file"],
+  ["vpt", "stat-file", "node_modules/optional-parent/node_modules/is-number/package.json", "--assert", "missing"],
+  ["vpt", "stat-file", "node_modules/is-number/package.json", "--assert", "file"],
+]
+
+[[case]]
+name = "npm10_dependency_filters_add"
+vp = "global"
+env = { npm_config_audit = "false", npm_config_fund = "false" }
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "dependencies.is-number", "6.0.0"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts", "--silent"], snapshot = false },
+  { argv = ["vp", "pm", "pack", "--", "./optional-parent", "--ignore-scripts"], snapshot = false },
+  ["vp", "add", "./optional-parent-1.0.0.tgz", "--ignore-scripts", "--silent"],
+  ["vpt", "stat-file", "node_modules/optional-parent/node_modules/is-number/package.json", "--assert", "file"],
+  { argv = ["vpt", "rm", "-rf", "node_modules/optional-parent", "package-lock.json"], snapshot = false },
+  ["vp", "add", "./optional-parent-1.0.0.tgz", "--no-optional", "--ignore-scripts", "--silent"],
+  ["vpt", "stat-file", "node_modules/optional-parent/package.json", "--assert", "file"],
+  ["vpt", "stat-file", "node_modules/optional-parent/node_modules/is-number/package.json", "--assert", "missing"],
+  { argv = ["vpt", "rm", "-rf", "node_modules/optional-parent", "package-lock.json"], snapshot = false },
+  ["vp", "install", "./optional-parent-1.0.0.tgz", "--no-optional", "--ignore-scripts", "--silent"],
+  ["vpt", "stat-file", "node_modules/optional-parent/package.json", "--assert", "file"],
+  ["vpt", "stat-file", "node_modules/optional-parent/node_modules/is-number/package.json", "--assert", "missing"],
+]
