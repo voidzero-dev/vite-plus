@@ -8,7 +8,7 @@
 
 ## `NODE_ENV=production vp outdated -D`
 
-npm 6 uses --also=dev to include development dependencies
+npm 6 reports installed development dependencies
 
 **Exit code:** 1
 

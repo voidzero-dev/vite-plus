@@ -136,6 +136,10 @@ added 1 package in <duration>
 preserve npm's native optional dependency exclusion
 
 ```
+npm warn config optional Use `--omit=optional` to exclude optional dependencies, or
+npm warn config `--include=optional` to include them.
+npm warn config
+npm warn config       Default value does install optional deps unless otherwise omitted.
 
 changed 1 package in <duration>
 ```
