@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import { defineConfig, lazyPlugins, normalizePath } from 'vite-plus';
 
-import { staged } from './settings.mjs';
+import { pack, staged } from './settings.mjs';
 
 const configFile = fileURLToPath(import.meta.url);
 const configDir = dirname(configFile);
@@ -20,7 +20,7 @@ export default defineConfig({
       throw new Error('metadata resolution must skip lazy plugin factories');
     }),
     {
-      name: 'provide-staged-config',
+      name: 'provide-tool-config',
       apply(config) {
         assert.equal(config.root, root);
         return true;
@@ -29,7 +29,7 @@ export default defineConfig({
         order: 'pre',
         handler(config) {
           assert.equal(config.root, root);
-          return { staged };
+          return { staged, pack };
         },
       },
       async configResolved(config) {
