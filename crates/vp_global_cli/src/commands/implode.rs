@@ -1,12 +1,15 @@
-//! `vp implode` — completely remove vp and all its data from this system.
+//! `vp implode` removes verified Vite+ artifacts and preserves unverified data.
 
-use std::{
-    io::Write,
-    path::{Component, Path, PathBuf},
-    process::ExitStatus,
-};
+#![warn(clippy::print_stdout)]
+
+mod plan;
+
+#[cfg(any(windows, test))]
+use std::path::{Path, PathBuf};
+use std::{io::Write, process::ExitStatus};
 
 use console::style;
+use plan::RemovalPlan;
 use rustc_hash::FxHashSet;
 use vp_shared::output;
 use vt_path::AbsolutePathBuf;
@@ -16,10 +19,10 @@ use crate::{
     cli::exit_status,
     commands::{
         env::setup::shim_filename,
-        global::install::is_vp_shim_target,
         shell::{ALL_SHELL_PROFILES, ShellProfileKind, abbreviate_home_path, resolve_profile_path},
     },
     error::Error,
+    install_dirs::{self, lexical_path},
     shim::DEFAULT_SHIM_TOOLS,
 };
 
@@ -36,18 +39,31 @@ const DEFERRED_DELETE_ATTEMPTS: usize = 100;
 #[cfg(windows)]
 const DEFERRED_DELETE_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(100);
 
-fn lexical_path(path: &Path) -> PathBuf {
-    let mut normalized = PathBuf::new();
-    for component in path.components() {
-        match component {
-            Component::CurDir => {}
-            Component::ParentDir => {
-                normalized.pop();
-            }
-            _ => normalized.push(component.as_os_str()),
+fn validate_delete_roots(
+    roots: &[AbsolutePathBuf],
+    user_home: &AbsolutePathBuf,
+) -> Result<(), Error> {
+    let home = lexical_path(user_home.as_path());
+    let canonical_home = dunce::canonicalize(user_home)?;
+    for root in roots {
+        let path = root.as_path();
+        let canonical = match dunce::canonicalize(path) {
+            Ok(path) => path,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => path.to_path_buf(),
+            Err(error) => return Err(error.into()),
+        };
+        if path.parent().is_none()
+            || home.starts_with(path)
+            || canonical.parent().is_none()
+            || canonical_home.starts_with(&canonical)
+        {
+            return Err(Error::Other(vt_str::format!(
+                "Refusing to remove protected directory {}: it is a filesystem root, the user home, or an ancestor of the user home. Check your Vite+ directory overrides.",
+                path.display()
+            )));
         }
     }
-    normalized
+    Ok(())
 }
 
 pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
@@ -55,30 +71,15 @@ pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
     let dirs = &env_config.dirs;
     let homebrew = crate::homebrew::owns_current_exe();
 
-    // Build a unique set of Vite+-owned roots. In a single-root layout, data,
-    // config, and state use the same directory. Cache is inside that directory.
-    // Removing each category separately could remove the same path twice.
+    // In a single-root layout, data, config, and state share a directory.
+    // Keep the nested cache root until its ownership has been checked separately.
     //
     // The default Unix `<BIN>` is under `<DATA>`, so removal of `<DATA>` also
     // removes it. Never remove a separately resolved `<BIN>` because a bin from
     // an explicit override group can be shared. Remove only Vite+-owned shims.
-    let mut roots: Vec<AbsolutePathBuf> = [&dirs.data, &dirs.cache, &dirs.config, &dirs.state]
-        .into_iter()
-        .map(|root| {
-            AbsolutePathBuf::new(lexical_path(root.as_path()))
-                .expect("resolved Vite+ roots remain absolute after lexical normalization")
-        })
-        .collect();
-    roots.sort_by(|a, b| a.as_path().cmp(b.as_path()));
-    roots.dedup();
-    let mut delete_set: Vec<AbsolutePathBuf> = Vec::new();
-    for root in roots {
-        if !delete_set.iter().any(|kept| root.as_path().starts_with(kept.as_path())) {
-            delete_set.push(root);
-        }
-    }
+    let roots = install_dirs::roots(dirs);
 
-    if !delete_set.iter().any(|root| root.as_path().exists()) {
+    if !roots.iter().any(|root| root.as_path().exists()) {
         if homebrew {
             output::info("No Vite+-managed data directories exist.");
             print_homebrew_uninstall_notice();
@@ -88,8 +89,23 @@ pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
         return Ok(exit_status(0));
     }
 
-    // Use the user home to resolve shell-profile paths.
+    // Validate every deletion target before changing profiles, PATH, or files, even with --yes.
     let user_home = &env_config.user_home;
+    // Resolving symlinks before `..` can differ from lexical normalization.
+    validate_delete_roots(
+        &[dirs.data.clone(), dirs.cache.clone(), dirs.config.clone(), dirs.state.clone()],
+        user_home,
+    )?;
+    validate_delete_roots(&roots, user_home)?;
+    let plan = RemovalPlan::new(dirs, &roots)?;
+    validate_delete_roots(&plan.directories, user_home)?;
+    let shims = collect_shim_files(dirs, &plan.binary_targets);
+    if plan.directories.is_empty() && shims.is_empty() {
+        return Err(Error::Other(vt_str::format!(
+            "Refusing to remove {}: Vite+ could not verify that it manages this directory. Check your directory overrides and inspect the directory before removing it manually.",
+            dirs.data.as_path().display()
+        )));
+    }
 
     let source_matcher = VitePlusSourceMatcher::new(&dirs.config, user_home);
 
@@ -97,7 +113,7 @@ pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
     let affected_profiles = collect_affected_profiles(user_home, &source_matcher);
 
     // Confirmation
-    if !yes && !confirm_implode(&delete_set, &dirs.bin, &affected_profiles)? {
+    if !yes && !confirm_implode(&plan, dirs, &affected_profiles)? {
         return Ok(exit_status(0));
     }
 
@@ -105,7 +121,7 @@ pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
     // running executable before changing any path because the data root can
     // contain that executable.
     #[cfg(windows)]
-    let cleanup_source = match prepare_deferred_delete_source(&delete_set) {
+    let cleanup_source = match prepare_deferred_delete_source(&plan.directories) {
         Ok(source) => source,
         Err(e) => {
             output::error(&vt_str::format!("Failed to prepare the removal helper: {e}"));
@@ -116,9 +132,9 @@ pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
     // Clean shell profiles with the stored content. Do not read them again.
     clean_affected_profiles(&affected_profiles, &source_matcher);
 
-    // Remove Windows PATH entry
+    // Honor the installer's PATH opt-out during isolated installation and removal tests.
     #[cfg(windows)]
-    {
+    if std::env::var(vp_shared::env_vars::VP_SELF_SETUP_NO_MODIFY_PATH).as_deref() != Ok("1") {
         if let Err(e) = remove_windows_path_entry(&dirs.bin) {
             output::warn(&vt_str::format!("Vite+ could not clean the Windows PATH: {e}"));
         } else {
@@ -126,10 +142,15 @@ pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
         }
     }
 
-    // Remove vp-owned shim files from the (potentially shared) bin directory,
-    // then the owned roots.
-    remove_shim_files(dirs);
-    for root in &delete_set {
+    remove_shim_files(dirs, &shims);
+    if let Some(current) = &plan.current_link {
+        #[cfg(unix)]
+        std::fs::remove_file(current)?;
+        #[cfg(windows)]
+        std::fs::remove_dir(current)?;
+        output::success(&vt_str::format!("Removed {}", current.as_path().display()));
+    }
+    for root in &plan.directories {
         if root.as_path().exists() {
             #[cfg(unix)]
             remove_vite_plus_dir(root)?;
@@ -139,13 +160,48 @@ pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
     }
 
     output::raw("");
-    output::success("Vite+ removed its managed files and shell entries from your system.");
+    output::success("Vite+ removed its verified files and shell entries from your system.");
+    report_preserved_paths(&plan.preserved_roots);
+    if dirs.bin.as_path().exists()
+        && !plan.preserved_roots.iter().any(|root| dirs.bin.as_path().starts_with(root.as_path()))
+    {
+        output::note(&vt_str::format!(
+            "Shared bin directory preserved: {}",
+            dirs.bin.as_path().display()
+        ));
+    }
     if homebrew {
         print_homebrew_uninstall_notice();
     }
     output::note("Restart your terminal to apply shell changes.");
 
     Ok(exit_status(0))
+}
+
+fn report_preserved_paths(roots: &[AbsolutePathBuf]) {
+    let mut paths = Vec::new();
+    for root in roots {
+        if !root.as_path().exists() {
+            continue;
+        }
+        match std::fs::read_dir(root).and_then(|entries| {
+            entries.map(|entry| entry.map(|entry| entry.path())).collect::<Result<Vec<_>, _>>()
+        }) {
+            Ok(entries) if !entries.is_empty() => paths.extend(entries),
+            _ => paths.push(root.as_path().to_path_buf()),
+        }
+    }
+    paths.sort();
+    paths.dedup();
+    if paths.is_empty() {
+        return;
+    }
+    output::note(
+        "Some paths were preserved to protect unverified data. Inspect them before removing anything:",
+    );
+    for path in paths {
+        output::raw(&vt_str::format!("  {}", path.display()));
+    }
 }
 
 fn print_homebrew_uninstall_notice() {
@@ -157,47 +213,72 @@ fn print_homebrew_uninstall_notice() {
     );
 }
 
-/// Remove the shim files vite-plus owns from the bin directory.
-///
-/// Do not remove the bin directory directly because a bin from an explicit
-/// override group can be shared with other tools. Removal of the default Unix
-/// `<DATA>` root also removes its bin directory.
-///
-/// Get package-shim names from `<DATA>/bins/*.json`. Also check `vp` and the
-/// default environment shims because those files are not in the metadata.
-/// Remove a Unix candidate only if it links to this install's `vp`. Remove a
-/// Windows candidate only if Vite+ created the trampoline.
-fn remove_shim_files(dirs: &vp_shared::VpDirs) {
+/// Shared bin directories are never removal units. Identify each shim separately.
+fn collect_shim_files(
+    dirs: &vp_shared::VpDirs,
+    binary_targets: &[AbsolutePathBuf],
+) -> Vec<AbsolutePathBuf> {
     let mut names = recorded_bin_shim_names(dirs);
     names.insert(shim_filename("vp"));
     names.extend(DEFAULT_SHIM_TOOLS.iter().map(|tool| shim_filename(tool)));
     #[cfg(windows)]
     names.insert("vp-use.cmd".to_string());
 
+    let mut paths = Vec::new();
+    for bin in [&dirs.bin, &dirs.fallback_bin()] {
+        for name in &names {
+            let path = bin.join(name);
+            let owned = match std::fs::read_link(&path) {
+                Ok(target) => {
+                    let target = lexical_path(&bin.as_path().join(target));
+                    binary_targets.iter().any(|binary| {
+                        target == lexical_path(binary.as_path())
+                            || same_file::is_same_file(&path, binary).unwrap_or(false)
+                    })
+                }
+                Err(_) => {
+                    #[cfg(windows)]
+                    {
+                        dirs.owns_windows_trampoline(path.as_path())
+                            || (name == "vp-use.cmd"
+                                && std::fs::read_to_string(&path).is_ok_and(|content| {
+                                    content
+                                        == crate::commands::env::setup::vp_use_cmd_content(
+                                            &vp_shared::EnvConfig::get(),
+                                        )
+                                }))
+                    }
+                    #[cfg(not(windows))]
+                    {
+                        false
+                    }
+                }
+            };
+            if owned {
+                paths.push(path);
+            }
+        }
+    }
+    paths.sort();
+    paths.dedup();
+    paths
+}
+
+fn remove_shim_files(dirs: &vp_shared::VpDirs, paths: &[AbsolutePathBuf]) {
     let mut removed = 0;
     #[cfg(windows)]
     let mut scheduled = 0;
-    for name in names {
-        let path = dirs.bin.join(&name);
-        if !is_vp_shim_target(&path) {
-            continue;
-        }
-        let pointer = std::path::Path::new(&name)
-            .file_stem()
-            .and_then(|stem| stem.to_str())
-            .map(|stem| dirs.bin.join(vp_shared::shim_pointer_file_name(stem)));
+    for path in paths {
+        let name = path.as_path().file_name().unwrap().to_string_lossy();
+        let pointer = (cfg!(windows) && dirs.owns_windows_trampoline(path.as_path())).then(|| {
+            AbsolutePathBuf::new(path.as_path().with_extension(vp_shared::SHIM_POINTER_EXTENSION))
+                .unwrap()
+        });
         match std::fs::remove_file(path.as_path()) {
             Ok(()) => {
                 removed += 1;
-                if let Some(pointer) = pointer.as_ref() {
-                    remove_shim_pointer(pointer, &name);
-                }
             }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                if let Some(pointer) = pointer.as_ref() {
-                    remove_shim_pointer(pointer, &name);
-                }
-            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
             Err(e) => {
                 #[cfg(windows)]
                 if let Some(pointer) = pointer.as_ref() {
@@ -214,22 +295,24 @@ fn remove_shim_files(dirs: &vp_shared::VpDirs) {
                     }
                 }
                 output::warn(&vt_str::format!("Vite+ could not remove shim {name}: {e}"));
+                continue;
             }
+        }
+        if let Some(pointer) = pointer.as_ref() {
+            remove_shim_pointer(pointer, &name);
         }
     }
     if removed > 0 {
         output::success(&vt_str::format!(
-            "Vite+ removed {removed} shim{} from {}",
-            if removed == 1 { "" } else { "s" },
-            dirs.bin.as_path().display()
+            "Vite+ removed {removed} shim{}.",
+            if removed == 1 { "" } else { "s" }
         ));
     }
     #[cfg(windows)]
     if scheduled > 0 {
         output::success(&vt_str::format!(
-            "Vite+ scheduled removal of {scheduled} locked shim{} from {}",
-            if scheduled == 1 { "" } else { "s" },
-            dirs.bin.as_path().display()
+            "Vite+ scheduled removal of {scheduled} locked shim{}.",
+            if scheduled == 1 { "" } else { "s" }
         ));
     }
 }
@@ -318,8 +401,8 @@ fn collect_affected_profiles(
 /// Show confirmation prompt and require the user to type "boom".
 /// Returns `Ok(true)` if confirmed, `Ok(false)` if aborted.
 fn confirm_implode(
-    delete_set: &[AbsolutePathBuf],
-    bin_dir: &vt_path::AbsolutePath,
+    plan: &RemovalPlan,
+    dirs: &vp_shared::VpDirs,
     affected_profiles: &[AffectedProfile],
 ) -> Result<bool, Error> {
     if !vp_shared::is_stdin_terminal() {
@@ -333,15 +416,32 @@ fn confirm_implode(
         output::warn(
             "This will remove Vite+-managed data, shims, and shell entries. The Homebrew package will remain installed.",
         );
+    } else if plan.preserved_roots.iter().any(|root| root.as_path().exists()) {
+        output::warn(
+            "This will remove verified Vite+ files and shell entries. Unverified data will be preserved.",
+        );
     } else {
         output::warn("This will completely remove vite-plus from your system!");
     }
     output::raw("");
     output::raw("  Directories to remove:");
-    for root in delete_set {
+    for root in &plan.directories {
         output::raw(&vt_str::format!("    - {}", root.as_path().display()));
     }
-    output::raw(&vt_str::format!("  Shim files to remove from: {}", bin_dir.as_path().display()));
+    if let Some(current) = &plan.current_link {
+        output::raw(&vt_str::format!("  Current link to remove: {}", current.as_path().display()));
+    }
+    for bin in [&dirs.bin, &dirs.fallback_bin()] {
+        output::raw(&vt_str::format!(
+            "  Verified shims to remove from: {}",
+            bin.as_path().display()
+        ));
+    }
+    for root in &plan.preserved_roots {
+        if root.as_path().exists() {
+            output::raw(&vt_str::format!("  Root to preserve: {}", root.as_path().display()));
+        }
+    }
     if !affected_profiles.is_empty() {
         output::raw("  Shell profiles to clean:");
         for profile in affected_profiles {
@@ -1545,7 +1645,119 @@ mod tests {
     }
 
     #[test]
-    fn execute_normalizes_category_roots_before_deduplication() {
+    fn validate_delete_roots_rejects_home_ancestors_and_filesystem_roots() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().join("home")).unwrap();
+        std::fs::create_dir_all(&home).unwrap();
+        for ancestor in home.as_path().ancestors() {
+            let root = AbsolutePathBuf::new(ancestor.to_path_buf()).unwrap();
+            let error = validate_delete_roots(std::slice::from_ref(&root), &home).unwrap_err();
+            assert!(error.to_string().contains("Refusing to remove protected directory"));
+        }
+    }
+
+    #[test]
+    fn validate_delete_roots_allows_dedicated_installations() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().join("home")).unwrap();
+        std::fs::create_dir_all(&home).unwrap();
+        let roots = [home.join(".vite-plus"), home.join("../home-other"), home.join("../custom")];
+        for root in &roots {
+            std::fs::create_dir_all(root).unwrap();
+        }
+        validate_delete_roots(&roots, &home).unwrap();
+        validate_delete_roots(&[home.join("missing")], &home).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn validate_delete_roots_checks_symlinked_roots_and_home() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let base = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let home = base.join("home");
+        let alias = base.join("alias");
+        std::fs::create_dir_all(home.join(".vite-plus")).unwrap();
+        std::os::unix::fs::symlink(&base, &alias).unwrap();
+        for root in [&alias, &alias.join("home")] {
+            assert!(validate_delete_roots(std::slice::from_ref(root), &home).is_err());
+        }
+        let aliased_home = alias.join("home");
+        assert!(validate_delete_roots(std::slice::from_ref(&home), &aliased_home).is_err());
+        validate_delete_roots(&[alias.join("home/.vite-plus")], &home).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn execute_rejects_user_home_before_modifying_files() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let home = temp_dir.path().join("home");
+        let xdg = temp_dir.path().join("xdg");
+        std::fs::create_dir_all(&home).unwrap();
+        std::fs::write(home.join("personal.txt"), "keep").unwrap();
+        let profile = "# Vite+ bin\n. \"$HOME/env\"\n";
+        std::fs::write(home.join(".bashrc"), profile).unwrap();
+
+        let elsewhere = temp_dir.path().join("elsewhere");
+        std::fs::create_dir_all(&elsewhere).unwrap();
+        std::fs::create_dir(home.join("child")).unwrap();
+        std::os::unix::fs::symlink(home.join("child"), elsewhere.join("route")).unwrap();
+        for root in [&home, &home.join("child/.."), &home.join(".."), &elsewhere.join("route/..")] {
+            vp_shared::EnvConfig::with_vars(
+                [
+                    (env_vars::VP_HOME, root.as_os_str()),
+                    ("HOME", home.as_os_str()),
+                    ("USERPROFILE", home.as_os_str()),
+                    ("ZDOTDIR", home.as_os_str()),
+                    (env_vars::XDG_CONFIG_HOME, xdg.as_os_str()),
+                    (env_vars::XDG_DATA_HOME, xdg.as_os_str()),
+                ],
+                |_| {
+                    let error = execute(true).unwrap_err();
+                    assert!(error.to_string().contains("Refusing to remove protected directory"));
+                    assert_eq!(std::fs::read_to_string(home.join("personal.txt")).unwrap(), "keep");
+                    assert_eq!(std::fs::read_to_string(home.join(".bashrc")).unwrap(), profile);
+                },
+            );
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn execute_validates_all_split_roots_before_deleting_any() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let home = temp_dir.path().join("z-home");
+        let data = temp_dir.path().join("a-data");
+        let bin = temp_dir.path().join("bin");
+        let xdg = temp_dir.path().join("xdg");
+        std::fs::create_dir_all(&home).unwrap();
+        std::fs::create_dir_all(&data).unwrap();
+        std::fs::write(home.join("personal.txt"), "keep").unwrap();
+        std::fs::write(data.join("data.txt"), "keep").unwrap();
+        vp_shared::EnvConfig::with_vars(
+            [
+                (env_vars::VP_HOME, None),
+                (env_vars::VP_BIN_DIR, Some(bin.as_os_str())),
+                (env_vars::VP_DATA_DIR, Some(data.as_os_str())),
+                (env_vars::VP_CACHE_DIR, Some(home.as_os_str())),
+                (env_vars::XDG_CONFIG_HOME, Some(xdg.as_os_str())),
+                (env_vars::XDG_DATA_HOME, Some(xdg.as_os_str())),
+                (env_vars::XDG_STATE_HOME, Some(xdg.as_os_str())),
+                ("HOME", Some(home.as_os_str())),
+                ("USERPROFILE", Some(home.as_os_str())),
+                ("ZDOTDIR", Some(home.as_os_str())),
+            ],
+            |_| {
+                let error = execute(true).unwrap_err();
+                assert!(error.to_string().contains("Refusing to remove protected directory"));
+                assert_eq!(std::fs::read_to_string(home.join("personal.txt")).unwrap(), "keep");
+                assert_eq!(std::fs::read_to_string(data.join("data.txt")).unwrap(), "keep");
+            },
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn execute_preserves_unowned_cache_while_removing_owned_split_roots() {
         let temp_dir = tempfile::tempdir().unwrap();
         let home = temp_dir.path().join("home");
         let bin = temp_dir.path().join("bin");
@@ -1557,8 +1769,6 @@ mod tests {
         std::fs::create_dir_all(&home).unwrap();
         std::fs::create_dir_all(&data).unwrap();
         std::fs::create_dir_all(&normalized_cache).unwrap();
-        std::fs::write(data.join("data.txt"), b"data").unwrap();
-        std::fs::write(normalized_cache.join("cache.txt"), b"cache").unwrap();
 
         vp_shared::EnvConfig::with_vars(
             [
@@ -1567,18 +1777,34 @@ mod tests {
                 (env_vars::VP_DATA_DIR, Some(data.as_os_str())),
                 (env_vars::VP_CACHE_DIR, Some(cache.as_os_str())),
                 (env_vars::XDG_CONFIG_HOME, Some(xdg_config.as_os_str())),
+                (env_vars::XDG_DATA_HOME, Some(xdg_config.as_os_str())),
                 (env_vars::XDG_STATE_HOME, Some(xdg_state.as_os_str())),
                 ("HOME", Some(home.as_os_str())),
                 ("USERPROFILE", Some(home.as_os_str())),
+                ("ZDOTDIR", Some(home.as_os_str())),
             ],
-            |_| {
+            |config| {
+                install_dirs::prepare(&config.dirs).unwrap();
+                std::fs::write(data.join("data.txt"), b"data").unwrap();
+                std::fs::write(normalized_cache.join("cache.txt"), b"cache").unwrap();
+                let profile = vt_str::format!(
+                    "# personal config\n# Vite+ bin\n. \"{}/env\"\n",
+                    config.dirs.config.as_path().display()
+                );
+                std::fs::write(home.join(".bashrc"), profile.as_bytes()).unwrap();
+                let marker = normalized_cache.join(install_dirs::OWNERSHIP_MARKER);
+                std::fs::remove_file(&marker).unwrap();
                 let result = execute(true).unwrap();
                 assert!(result.success());
-                assert!(!data.exists(), "data root must be removed");
-                assert!(
-                    !normalized_cache.exists(),
-                    "lexically distinct cache root must be removed"
+                assert_eq!(
+                    std::fs::read_to_string(home.join(".bashrc")).unwrap(),
+                    "# personal config\n"
                 );
+                assert!(!data.exists(), "owned data root must be removed");
+                assert_eq!(std::fs::read(normalized_cache.join("cache.txt")).unwrap(), b"cache");
+                std::fs::write(&marker, b"").unwrap();
+                assert!(execute(true).unwrap().success());
+                assert!(!normalized_cache.exists(), "marked cache root must be removed");
             },
         );
     }
@@ -1606,7 +1832,17 @@ mod tests {
             std::fs::write(bins_dir.join("eslint.json").as_path(), "{}").unwrap();
             std::os::unix::fs::symlink("/usr/bin/eslint", bin.join("eslint").as_path()).unwrap();
 
-            remove_shim_files(&config.dirs);
+            let other = config.dirs.data.join("other/bin/vp");
+            std::fs::create_dir_all(other.parent().unwrap()).unwrap();
+            std::fs::write(&other, b"another vp").unwrap();
+            std::os::unix::fs::symlink(&other, bin.join("pnpm")).unwrap();
+            std::fs::create_dir_all(config.dirs.fallback_bin()).unwrap();
+            let fallback = config.dirs.fallback_bin().join("node");
+            std::os::unix::fs::symlink(&vp_target, &fallback).unwrap();
+            let shims = collect_shim_files(&config.dirs, &[vp_target]);
+            remove_shim_files(&config.dirs, &shims);
+            assert!(!fallback.as_path().exists());
+            assert!(bin.join("pnpm").as_path().exists(), "another installation's shim must remain");
 
             assert!(bin.join("node").as_path().is_file(), "unrelated node binary must be kept");
             assert!(
@@ -1626,8 +1862,8 @@ mod tests {
                 "recorded package shim that points at vp must be removed"
             );
             assert!(
-                !bin.join("tsc.shim").as_path().exists(),
-                "sidecar next to a removed shim must be removed"
+                bin.join("tsc.shim").as_path().exists(),
+                "Unix symlinks do not grant ownership of neighboring files"
             );
         });
     }
@@ -1643,7 +1879,18 @@ mod tests {
             std::fs::write(bin.join("node.exe").as_path(), b"owned-node").unwrap();
             config.dirs.write_shim_pointer("node").unwrap();
 
-            remove_shim_files(&config.dirs);
+            std::fs::write(bin.join("vp-use.cmd"), b"foreign script").unwrap();
+            let shims = collect_shim_files(&config.dirs, &[]);
+            remove_shim_files(&config.dirs, &shims);
+            assert_eq!(std::fs::read(bin.join("vp-use.cmd")).unwrap(), b"foreign script");
+            std::fs::write(
+                bin.join("vp-use.cmd"),
+                crate::commands::env::setup::vp_use_cmd_content(&config),
+            )
+            .unwrap();
+            let shims = collect_shim_files(&config.dirs, &[]);
+            remove_shim_files(&config.dirs, &shims);
+            assert!(!bin.join("vp-use.cmd").as_path().exists());
 
             assert_eq!(std::fs::read(bin.join("vp.exe").as_path()).unwrap(), b"foreign-vp");
             assert_eq!(std::fs::read(bin.join("unrelated.txt").as_path()).unwrap(), b"keep");

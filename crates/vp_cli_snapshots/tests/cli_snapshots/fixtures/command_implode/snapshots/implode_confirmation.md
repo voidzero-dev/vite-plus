@@ -11,7 +11,8 @@ warn: This will completely remove vite-plus from your system!
 
   Directories to remove:
     - <home>/.vite-plus
-  Shim files to remove from: <home>/.vite-plus/bin
+  Verified shims to remove from: <home>/.vite-plus/bin
+  Verified shims to remove from: <home>/.vite-plus/fallback-bin
 
 Type boom to confirm:
 ```
@@ -23,7 +24,8 @@ warn: This will completely remove vite-plus from your system!
 
   Directories to remove:
     - <home>/.vite-plus
-  Shim files to remove from: <home>/.vite-plus/bin
+  Verified shims to remove from: <home>/.vite-plus/bin
+  Verified shims to remove from: <home>/.vite-plus/fallback-bin
 
 Type boom to confirm:
 uninstall
@@ -47,7 +49,8 @@ warn: This will completely remove vite-plus from your system!
 
   Directories to remove:
     - <home>/.vite-plus
-  Shim files to remove from: <home>/.vite-plus/bin
+  Verified shims to remove from: <home>/.vite-plus/bin
+  Verified shims to remove from: <home>/.vite-plus/fallback-bin
 
 Type boom to confirm:
 ```
@@ -59,7 +62,8 @@ warn: This will completely remove vite-plus from your system!
 
   Directories to remove:
     - <home>/.vite-plus
-  Shim files to remove from: <home>/.vite-plus/bin
+  Verified shims to remove from: <home>/.vite-plus/bin
+  Verified shims to remove from: <home>/.vite-plus/fallback-bin
 
 Type boom to confirm:
 implode
@@ -83,7 +87,8 @@ warn: This will completely remove vite-plus from your system!
 
   Directories to remove:
     - <home>/.vite-plus
-  Shim files to remove from: <home>/.vite-plus/bin
+  Verified shims to remove from: <home>/.vite-plus/bin
+  Verified shims to remove from: <home>/.vite-plus/fallback-bin
 
 Type boom to confirm:
 ```
@@ -95,7 +100,8 @@ warn: This will completely remove vite-plus from your system!
 
   Directories to remove:
     - <home>/.vite-plus
-  Shim files to remove from: <home>/.vite-plus/bin
+  Verified shims to remove from: <home>/.vite-plus/bin
+  Verified shims to remove from: <home>/.vite-plus/fallback-bin
 
 Type boom to confirm:
 

@@ -44,7 +44,9 @@ test.each([false, true])(
     const workspacePath = join(tempDir, 'pnpm-workspace.yaml');
     writeFileSync(
       workspacePath,
-      readFileSync(workspacePath, 'utf8').replace(/  lint-staged: .+/, '  lint-staged: ^16.2.6'),
+      readFileSync(workspacePath, 'utf8')
+        .replace(/  lint-staged: .+/, '  lint-staged: ^16.2.6')
+        .replace(/^  oxc-(?:minify|transform): .+\n/gm, ''),
     );
 
     vi.spyOn(process, 'cwd').mockReturnValue(tempDir);
@@ -80,6 +82,12 @@ test.each([false, true])(
       }
       if (url === 'https://registry.npmjs.org/oxlint-tsgolint/latest') {
         return Response.json({ version: '7.0.2004' });
+      }
+      if (
+        url === 'https://registry.npmjs.org/oxc-minify/latest' ||
+        url === 'https://registry.npmjs.org/oxc-transform/latest'
+      ) {
+        throw new Error('Unused root catalog packages must not be updated');
       }
       if (url.startsWith('https://registry.npmjs.org/') && url.endsWith('/latest')) {
         return Response.json({ version: '1.2.3' });
@@ -130,6 +138,8 @@ test.each([false, true])(
     expect(versions['@oxlint/plugins'].new).toBe('1.88.0');
     expect(versions['@oxlint/plugins'].new).toBe(versions.oxlint.new);
     expect(versions['oxlint-tsgolint'].new).toBe('7.0.2004');
+    expect(versions).not.toHaveProperty('oxc-minify');
+    expect(versions).not.toHaveProperty('oxc-transform');
     expect(versions['oxc-node']).toEqual(
       failInstall
         ? { old: pinnedOxcNode, new: pinnedOxcNode }

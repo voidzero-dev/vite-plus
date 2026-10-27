@@ -579,6 +579,8 @@ impl CaseHome {
         let this = Self { home: root.join("home") };
         let vp_home = this.vp_home();
         std::fs::create_dir_all(&vp_home).unwrap();
+        // Provisioning emulates a fresh install into this case-owned directory.
+        std::fs::write(vp_home.join(".vp-owned"), b"vite-plus-owned-directory\n").unwrap();
         std::fs::create_dir_all(root.join("npm-global/lib")).unwrap();
         // Best-effort: if linking fails, the case downloads the runtime.
         if seed_runtime && let Some(seed) = flavor::js_runtime_seed_dir() {

@@ -49,3 +49,15 @@ home/current/bin/.vp-setup-complete: file
 ```
 user/.zshenv: missing
 ```
+
+## `vpt stat-file home/.vp-owned --assert file`
+
+```
+home/.vp-owned: file
+```
+
+## `vpt stat-file home/cache/.vp-owned --assert file`
+
+```
+home/cache/.vp-owned: file
+```

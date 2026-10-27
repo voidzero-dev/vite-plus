@@ -109,10 +109,10 @@ brew-prefix/bin/.vp-setup-complete: missing
 Cleanup removes user data and leaves the Homebrew package installed
 
 ```
-✓ Vite+ removed 3 shims from <workspace>/home/bin
+✓ Vite+ removed 14 shims.
 ✓ Removed <workspace>/home
 
-✓ Vite+ removed its managed files and shell entries from your system.
+✓ Vite+ removed its verified files and shell entries from your system.
 note: The Homebrew package remains installed. Run `brew uninstall vite-plus` to remove it.
 note: To run `vp` again, restart your terminal or run `hash -r` in Bash. The remaining Homebrew package will start setup again.
 note: Restart your terminal to apply shell changes.
