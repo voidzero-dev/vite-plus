@@ -10,7 +10,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vite-plus/test';
 import { normalizePath, resolveConfig } from '../dist/vite/node/index.js';
 import type { InlineConfig, ResolvedConfig } from '../dist/vite/node/index.js';
 
-type RootResolution = 'cwd' | 'config-file';
 const resolveWithOptions = resolveConfig as (
   config: InlineConfig,
   command: 'build' | 'serve',
@@ -19,10 +18,10 @@ const resolveWithOptions = resolveConfig as (
   isPreview: undefined,
   patchConfig: undefined,
   patchPlugins: undefined,
-  internalOptions?: { rootResolution?: RootResolution },
+  internalOptions?: { rootBase?: string },
 ) => Promise<ResolvedConfig>;
 
-function resolve(config: InlineConfig, rootResolution?: RootResolution) {
+function resolve(config: InlineConfig, rootBase?: string) {
   return resolveWithOptions(
     config,
     'build',
@@ -31,7 +30,7 @@ function resolve(config: InlineConfig, rootResolution?: RootResolution) {
     undefined,
     undefined,
     undefined,
-    rootResolution === undefined ? undefined : { rootResolution },
+    rootBase === undefined ? undefined : { rootBase },
   );
 }
 
@@ -65,25 +64,24 @@ function writeConfig(config: Record<string, unknown>, dir = configDir) {
 }
 
 describe('built core config root resolution', () => {
-  it.each([undefined, 'cwd'] as const)(
-    'preserves cwd-relative defaults with rootResolution=%s',
-    async (rootResolution) => {
-      const cwd = process.cwd();
-      for (const root of [undefined, '', 'app']) {
-        const configFile = writeConfig({ root });
-        const config = await resolve({ configFile }, rootResolution);
-        expect(config.root).toBe(expectedRoot(path.resolve(cwd, root ?? '')));
-      }
-      expect(process.cwd()).toBe(cwd);
-    },
-  );
+  it('preserves normal Vite root resolution when rootBase is omitted', async () => {
+    const cwd = process.cwd();
+    for (const root of [undefined, '', 'app']) {
+      const configFile = writeConfig({ root });
+      const normal = await resolveConfig({ configFile }, 'build');
+      const config = await resolve({ configFile });
+      expect(config.root).toBe(normal.root);
+      expect(config.root).toBe(expectedRoot(path.resolve(cwd, root ?? '')));
+    }
+    expect(process.cwd()).toBe(cwd);
+  });
 
   it.each([undefined, '', '.', '..', 'app'])(
-    'resolves file root %s from the config directory when enabled',
+    'resolves file root %s from the supplied config directory base',
     async (root) => {
       const cwd = process.cwd();
       const configFile = writeConfig({ root });
-      const config = await resolve({ configFile }, 'config-file');
+      const config = await resolve({ configFile }, configDir);
 
       expect(config.root).toBe(expectedRoot(path.resolve(configDir, root ?? '')));
       expect(config.configFile).toBe(normalizePath(configFile));
@@ -91,10 +89,25 @@ describe('built core config root resolution', () => {
     },
   );
 
+  it.each([undefined, 'app'])(
+    'uses an independent workspace base for root %s in a nested config file',
+    async (root) => {
+      const nestedDir = path.join(configDir, 'configs', 'nested');
+      const workspaceBase = path.join(tempDir, 'workspace');
+      mkdirSync(nestedDir, { recursive: true });
+      mkdirSync(path.join(workspaceBase, 'app'), { recursive: true });
+      const configFile = writeConfig({ root }, nestedDir);
+      const config = await resolve({ configFile }, workspaceBase);
+
+      expect(config.root).toBe(expectedRoot(path.resolve(workspaceBase, root ?? '')));
+      expect(config.configFile).toBe(normalizePath(configFile));
+    },
+  );
+
   it('preserves an absolute root from the config file', async () => {
     const root = path.join(tempDir, 'absolute');
     mkdirSync(root);
-    const config = await resolve({ configFile: writeConfig({ root }) }, 'config-file');
+    const config = await resolve({ configFile: writeConfig({ root }) }, configDir);
 
     expect(config.root).toBe(expectedRoot(root));
   });
@@ -104,14 +117,14 @@ describe('built core config root resolution', () => {
     async (value) => {
       const root = value === 'absolute' ? tempDir : value;
       const configFile = writeConfig({ root: 'app' });
-      const config = await resolve({ configFile, root }, 'config-file');
+      const config = await resolve({ configFile, root }, configDir);
 
       expect(config.root).toBe(expectedRoot(path.resolve(root)));
     },
   );
 
   it('leaves no-file resolution unchanged', async () => {
-    const config = await resolve({ root: tempDir }, 'config-file');
+    const config = await resolve({ root: tempDir }, configDir);
 
     expect(config.configFile).toBeUndefined();
     expect(config.root).toBe(expectedRoot(tempDir));
@@ -119,10 +132,12 @@ describe('built core config root resolution', () => {
 
   it('does not load a file when configFile is false', async () => {
     writeFileSync(path.join(configDir, 'vite.config.mjs'), "throw new Error('must not load');\n");
-    const config = await resolve({ configFile: false, root: configDir }, 'config-file');
+    for (const root of [undefined, configDir]) {
+      const config = await resolve({ configFile: false, root }, configDir);
 
-    expect(config.configFile).toBeUndefined();
-    expect(config.root).toBe(expectedRoot(configDir));
+      expect(config.configFile).toBeUndefined();
+      expect(config.root).toBe(expectedRoot(root ?? process.cwd()));
+    }
   });
 
   it('honors a root supplied by a config hook after file root resolution', async () => {
@@ -132,7 +147,7 @@ describe('built core config root resolution', () => {
         configFile,
         plugins: [{ name: 'change-root', config: () => ({ root: 'plugin-app' }) }],
       },
-      'config-file',
+      configDir,
     );
 
     expect(config.root).toBe(expectedRoot(path.resolve('plugin-app')));
@@ -145,7 +160,7 @@ describe('built core config root resolution', () => {
       const link = path.join(tempDir, 'linked-project');
       symlinkSync(configDir, link, process.platform === 'win32' ? 'junction' : 'dir');
       const configFile = path.join(link, 'vite.config.mjs');
-      const config = await resolve({ configFile }, 'config-file');
+      const config = await resolve({ configFile }, link);
 
       expect(config.configFile).toBe(normalizePath(configFile));
       expect(config.root).toBe(

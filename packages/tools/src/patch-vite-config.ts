@@ -18,7 +18,7 @@ const patchedSignature = upstreamSignature.replace(
   '): Promise<ResolvedConfig> {',
   `  /** @internal */
   internalOptions?: {
-    rootResolution?: 'cwd' | 'config-file'
+    rootBase?: string
   },
 ): Promise<ResolvedConfig> {`,
 );
@@ -33,14 +33,8 @@ const patchedLoadResult = `    if (loadResult) {
       config = mergeConfig(loadResult.config, config)
       configFile = loadResult.path
       configFileDependencies = loadResult.dependencies
-      if (
-        internalOptions?.rootResolution === 'config-file' &&
-        inlineConfig.root == null
-      ) {
-        config.root = path.resolve(
-          path.dirname(loadResult.path),
-          config.root ?? '',
-        )
+      if (internalOptions?.rootBase !== undefined && inlineConfig.root == null) {
+        config.root = path.resolve(internalOptions.rootBase, config.root ?? '')
       }
     }`;
 
@@ -65,7 +59,7 @@ function patchState(source: string): 'upstream' | 'patched' {
     upstreamLoads === 1 &&
     patchedSignatures === 0 &&
     patchedLoads === 0 &&
-    !/\b(?:internalOptions|rootResolution)\b/.test(source)
+    !/\b(?:internalOptions|rootBase)\b/.test(source)
   ) {
     return 'upstream';
   }
@@ -74,8 +68,8 @@ function patchState(source: string): 'upstream' | 'patched' {
     patchedLoads === 1 &&
     upstreamSignatures === 0 &&
     upstreamLoads === 0 &&
-    source.match(/\binternalOptions\b/g)?.length === 2 &&
-    source.match(/\brootResolution\b/g)?.length === 2
+    source.match(/\binternalOptions\b/g)?.length === 3 &&
+    source.match(/\brootBase\b/g)?.length === 3
   ) {
     return 'patched';
   }
@@ -87,7 +81,7 @@ function patchState(source: string): 'upstream' | 'patched' {
 /** Validate the complete patch before a build can produce a core that ignores it. */
 export function assertViteConfigPatched(source: string): void {
   if (patchState(source) !== 'patched') {
-    throw patchError('The config-file root resolution patch has not been applied');
+    throw patchError('The root base resolution patch has not been applied');
   }
 }
 

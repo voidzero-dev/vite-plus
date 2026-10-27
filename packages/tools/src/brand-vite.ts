@@ -11,7 +11,7 @@
  * 3. build.ts: Remove startup build banner and change error prefix
  * 4. logger.ts: Change default prefix from '[vite]' to '[vite+]'
  * 5. plugins/reporter.ts: Suppress redundant "vite v<version>" native reporter line
- * 6. config.ts: Suppress the native-loader notice and support config-file-relative roots
+ * 6. config.ts: Suppress the native-loader notice and support an explicit root base
  */
 
 import { execFileSync } from 'node:child_process';
@@ -229,7 +229,7 @@ export function brandVite(rootDir: string = process.cwd()) {
   }
   logPatch(
     'config.ts',
-    'Suppressed native config loader notice and enabled config-file-relative roots',
+    'Suppressed native config loader notice and enabled an explicit root base',
     patchedConfig === configSource ? 'already' : 'patched',
   );
 

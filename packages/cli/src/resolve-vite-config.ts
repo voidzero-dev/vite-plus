@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { findMonorepoRoot } from '../binding/index.js';
+import { withConfigMetadataResolution } from './define-config.ts';
 import { VITE_CONFIG_FILES } from './utils/constants.ts';
 
 /**
@@ -55,29 +56,23 @@ export interface ResolveViteConfigOptions {
  * Resolve vite.config.ts and return the config object.
  */
 export async function resolveViteConfig(cwd: string, options?: ResolveViteConfigOptions) {
-  const { resolveConfig, resolveConfigFile } = await import('./index.js');
+  const { resolveConfig } = await import('./index.js');
 
-  // `resolveConfigFile` takes a path, so look up the config here instead of leaving it to Vite.
-  // `VITE_CONFIG_FILES` mirrors Vite's lookup order.
-  let configFile = findViteConfig(cwd);
-  if (!configFile && options?.traverseUp) {
-    const workspaceRoot = findMonorepoRoot(cwd);
-    if (workspaceRoot) {
-      configFile = findViteConfigUp(path.dirname(cwd), workspaceRoot);
+  // This loads the config purely to read a non-plugin block (lint/fmt/pack/run/
+  // staged/create…), so skip the user's plugin factory while it evaluates.
+  return withConfigMetadataResolution(async () => {
+    if (options?.traverseUp && !hasViteConfig(cwd)) {
+      const workspaceRoot = findMonorepoRoot(cwd);
+      if (workspaceRoot) {
+        const configFile = findViteConfigUp(path.dirname(cwd), workspaceRoot);
+        if (configFile) {
+          return resolveConfig({ root: cwd, configFile }, 'build');
+        }
+      }
     }
-  }
 
-  // This loads the config purely to read a non-plugin block (lint/fmt/pack/run/ staged/create…),
-  // so `resolveConfigFile` skips the user's plugin factory.
-  // `root` resolves from the config's directory, not `cwd`,
-  // including for a workspace config found from a package directory by `traverseUp`.
-  if (configFile) {
-    return resolveConfigFile(configFile);
-  }
-  // Without a config, callers still expect a resolved config with every block unset.
-  // The lookup above already covered Vite's config names,
-  // so `configFile: false` skips a second search and runs no user code.
-  return resolveConfig({ root: cwd, configFile: false }, 'build');
+    return resolveConfig({ root: cwd }, 'build');
+  });
 }
 
 export async function resolveUniversalViteConfig(err: null | Error, viteConfigCwd: string) {

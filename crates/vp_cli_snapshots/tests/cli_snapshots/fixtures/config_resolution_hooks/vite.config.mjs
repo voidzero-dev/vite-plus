@@ -9,7 +9,8 @@ import { pack, staged } from './settings.mjs';
 
 const configFile = fileURLToPath(import.meta.url);
 const configDir = dirname(configFile);
-const root = join(configDir, 'app');
+// CLI metadata reads retain the command's root override, even when the file sets root.
+const root = configDir;
 
 assert.equal(process.env.NODE_ENV, 'development');
 

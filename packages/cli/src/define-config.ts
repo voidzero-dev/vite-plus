@@ -1066,18 +1066,27 @@ type ResolveConfigWithInternalOptions = (
   isPreview?: boolean,
   patchConfig?: (config: ResolvedConfig) => void,
   patchPlugins?: (plugins: Plugin[]) => void,
-  internalOptions?: { rootResolution?: 'cwd' | 'config-file' },
+  internalOptions?: { rootBase?: string },
 ) => Promise<ResolvedConfig>;
 
 const resolveConfigWithInternalOptions = resolveConfig as ResolveConfigWithInternalOptions;
+
+export interface ResolveConfigFileOptions {
+  /**
+   * Base directory for an unset or relative `root` in the config file.
+   * Relative paths resolve from `process.cwd()`. Does not change the process cwd.
+   * Without this option, Vite keeps its normal root resolution behavior.
+   */
+  rootBase?: string;
+}
 
 /**
  * Resolve a Vite config file to read a non-plugin block (`lint`, `fmt`, `pack`, …) from it,
  * for tools such as oxlint, oxfmt, and Vite+ itself.
  *
- * Unlike `resolveConfig({ configFile }, 'build')`, a relative `root` in the config
- * is resolved from the config's directory. Without one, `root` is that directory.
- * Editor integrations rely on this, since one process serves every workspace folder.
+ * By default, root resolution matches `resolveConfig({ configFile }, 'build')`.
+ * Editor integrations can supply `rootBase` to resolve an unset or relative `root`
+ * from the intended workspace directory, even when the config is in a subdirectory.
  *
  * A relative config file path is still resolved from `process.cwd()`.
  * The resolver loads the config once, as a config-metadata resolution,
@@ -1085,10 +1094,14 @@ const resolveConfigWithInternalOptions = resolveConfig as ResolveConfigWithInter
  * Plugins outside `lazyPlugins` still run their hooks and side effects,
  * e.g. TanStack Start's router generator scans `src/routes`.
  */
-export async function resolveConfigFile(configFile: string): Promise<ResolvedConfig> {
+export async function resolveConfigFile(
+  configFile: string,
+  options: ResolveConfigFileOptions = {},
+): Promise<ResolvedConfig> {
   if (configFile.length === 0) {
     throw new Error('Config file path must not be empty.');
   }
+  const rootBase = options.rootBase === undefined ? undefined : resolve(options.rootBase);
   return withConfigMetadataResolution(() =>
     resolveConfigWithInternalOptions(
       { configFile },
@@ -1098,7 +1111,7 @@ export async function resolveConfigFile(configFile: string): Promise<ResolvedCon
       undefined,
       undefined,
       undefined,
-      { rootResolution: 'config-file' },
+      { rootBase },
     ),
   );
 }

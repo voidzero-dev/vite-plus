@@ -7,7 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
-import { normalizePath } from 'vite';
+import { normalizePath, resolveConfig } from 'vite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { resolveConfigFile } from '../index.js';
@@ -127,23 +127,71 @@ describe('resolveConfigFile', () => {
     await expect(resolveConfigFile('')).rejects.toThrow('Config file path must not be empty.');
   });
 
-  it('resolves root to the config directory regardless of cwd', async () => {
-    const configFile = writeConfig(tempDir);
+  it.each(['unset', 'empty', 'relative', 'absolute'])(
+    'preserves normal Vite root resolution when root is %s and rootBase is omitted',
+    async (kind) => {
+      const root =
+        kind === 'unset'
+          ? undefined
+          : kind === 'empty'
+            ? ''
+            : kind === 'relative'
+              ? 'app'
+              : tempDir;
+      const configFile = writeConfig(
+        tempDir,
+        root === undefined ? '' : `root: ${JSON.stringify(root)},`,
+      );
+      const cwd = process.cwd();
 
-    const config = await resolveConfigFile(configFile);
+      const expected = await resolveConfig({ configFile }, 'build');
+      const config = await resolveConfigFile(configFile);
+
+      expect(config.root).toBe(expected.root);
+      if (root === undefined) {
+        expect(config).not.toHaveProperty('seenRoot');
+      } else {
+        expect(config).toHaveProperty('seenRoot', root);
+      }
+      expect(config.inlineConfig.root).toBeUndefined();
+      expect(process.cwd()).toBe(cwd);
+    },
+  );
+
+  it('uses an explicit workspace base when the config is in a subdirectory', async () => {
+    const configDir = path.join(tempDir, 'config');
+    fs.mkdirSync(configDir);
+    const configFile = writeConfig(configDir);
+
+    const config = await resolveConfigFile(configFile, { rootBase: tempDir });
 
     expect(config).toHaveProperty('seenRoot', tempDir);
     expect(realPath(config.root)).toBe(realPath(tempDir));
   });
 
-  it('resolves a relative root from the config directory', async () => {
-    const configFile = writeConfig(tempDir, "root: 'app',");
+  it('resolves a relative root from the workspace base instead of the config directory', async () => {
+    const configDir = path.join(tempDir, 'config');
+    fs.mkdirSync(configDir);
+    const configFile = writeConfig(configDir, "root: 'app',");
     fs.mkdirSync(path.join(tempDir, 'app'));
 
-    const config = await resolveConfigFile(configFile);
+    const config = await resolveConfigFile(configFile, { rootBase: tempDir });
 
     expect(config).toHaveProperty('seenRoot', path.join(tempDir, 'app'));
     expect(realPath(config.root)).toBe(realPath(path.join(tempDir, 'app')));
+  });
+
+  it('preserves an absolute config root when a workspace base is supplied', async () => {
+    const root = path.join(tempDir, 'app');
+    const rootBase = path.join(tempDir, 'workspace');
+    fs.mkdirSync(root);
+    fs.mkdirSync(rootBase);
+    const configFile = writeConfig(tempDir, `root: ${JSON.stringify(root)},`);
+
+    const config = await resolveConfigFile(configFile, { rootBase });
+
+    expect(config).toHaveProperty('seenRoot', root);
+    expect(realPath(config.root)).toBe(realPath(root));
   });
 
   it('keeps the config file and its dependencies', async () => {
@@ -187,7 +235,7 @@ export default {
     );
     const cwd = process.cwd();
 
-    const config = await resolveConfigFile(configFile);
+    const config = await resolveConfigFile(configFile, { rootBase: tempDir });
 
     expect(config.lint).toEqual({ rules: { 'no-console': 'error' } });
     expect(process.cwd()).toBe(cwd);
@@ -253,7 +301,7 @@ export default {
 });\n`,
     );
 
-    const config = await resolveConfigFile(configFile);
+    const config = await resolveConfigFile(configFile, { rootBase: tempDir });
 
     expect(config).toHaveProperty('functionEnv', {
       command: 'build',
@@ -269,6 +317,7 @@ export default {
     });
     expect(config.mode).toBe('custom');
     expect(config.inlineConfig.configFile).toBe(configFile);
+    expect(config.inlineConfig.root).toBeUndefined();
     expect(config.inlineConfig.lint).toBeUndefined();
     expect(config.inlineConfig.build?.ssr).toBeUndefined();
   });
@@ -380,7 +429,12 @@ assert.equal(second.nodeEnv, ${JSON.stringify(expected)});`,
   });
 
   it.each(['import', 'require'])('resolves through the built %s entry', async (entryType) => {
-    const configFile = path.join(tempDir, 'vite.config.mjs');
+    const launcher = path.join(tempDir, 'launcher');
+    const workspace = path.join(tempDir, 'workspace');
+    const configFile = path.join(workspace, 'config', 'vite.config.mjs');
+    fs.mkdirSync(path.dirname(configFile), { recursive: true });
+    fs.mkdirSync(path.join(launcher, 'app'), { recursive: true });
+    fs.mkdirSync(path.join(workspace, 'app'));
     const esmEntry = new URL('../../dist/index.js', import.meta.url);
     const entry = new URL(
       entryType === 'import' ? '../../dist/index.js' : '../../dist/index.cjs',
@@ -389,17 +443,17 @@ assert.equal(second.nodeEnv, ${JSON.stringify(expected)});`,
     fs.writeFileSync(
       configFile,
       `import assert from 'node:assert/strict';
-import { realpathSync } from 'node:fs';
 import { defineConfig, lazyPlugins } from ${JSON.stringify(normalizePath(fileURLToPath(esmEntry)))};
 export default defineConfig({
+  root: 'app',
   lint: { rules: {} },
   plugins: [
     lazyPlugins(() => { throw new Error('lazy plugin factory must not run'); }),
     {
       name: 'check-published-helper',
+      config(config) { return { seenRoot: config.root }; },
       configResolved(config) {
         assert.equal(config.configFile, ${JSON.stringify(normalizePath(configFile))});
-        assert.equal(realpathSync.native(config.root), realpathSync.native(${JSON.stringify(tempDir)}));
         assert.equal(process.env.VP_RESOLVING_CONFIG_METADATA, '1');
       },
     },
@@ -413,6 +467,7 @@ export default defineConfig({
         '--input-type=module',
         '--eval',
         `import assert from 'node:assert/strict';
+import { realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
 const api = ${
           entryType === 'import'
@@ -420,43 +475,73 @@ const api = ${
             : `createRequire(import.meta.url)(${JSON.stringify(fileURLToPath(entry))})`
         };
 const marker = process.env.VP_RESOLVING_CONFIG_METADATA;
-const config = await api.resolveConfigFile(${JSON.stringify(configFile)});
+const cwd = process.cwd();
+const configFile = ${JSON.stringify(path.relative(launcher, configFile))};
+const defaults = await api.resolveConfigFile(configFile);
+assert.equal(realpathSync.native(defaults.root), realpathSync.native(${JSON.stringify(path.join(launcher, 'app'))}));
+assert.equal(defaults.seenRoot, 'app');
+assert.equal(process.env.VP_RESOLVING_CONFIG_METADATA, marker);
+const config = await api.resolveConfigFile(configFile, { rootBase: ${JSON.stringify(path.relative(launcher, workspace))} });
+assert.equal(realpathSync.native(config.root), realpathSync.native(${JSON.stringify(path.join(workspace, 'app'))}));
+assert.equal(config.seenRoot, ${JSON.stringify(path.join(workspace, 'app'))});
 assert.deepEqual(config.lint, { rules: {} });
+assert.equal(config.inlineConfig.root, undefined);
+assert.equal(process.cwd(), cwd);
 assert.equal(process.env.VP_RESOLVING_CONFIG_METADATA, marker);`,
       ],
-      { cwd: tempDir },
+      { cwd: launcher },
     );
   });
 });
 
 describe('resolveViteConfig', () => {
-  it('keeps a relative root from the config', async () => {
-    writeConfig(tempDir, "root: 'app',");
-    fs.mkdirSync(path.join(tempDir, 'app'));
+  it.each(['unset', 'relative', 'absolute'])(
+    'uses the caller root when the local config root is %s',
+    async (kind) => {
+      const root = kind === 'relative' ? 'app' : path.join(tempDir, 'app');
+      const configFile = writeConfig(
+        tempDir,
+        kind === 'unset' ? '' : `root: ${JSON.stringify(root)},`,
+      );
 
-    const config = await resolveViteConfig(tempDir);
+      const config = await resolveViteConfig(tempDir);
 
-    expect(config).toHaveProperty('seenRoot', path.join(tempDir, 'app'));
-  });
+      expect(config.configFile).toBe(normalizePath(configFile));
+      expect(config).toHaveProperty('seenRoot', tempDir);
+      expect(realPath(config.root)).toBe(realPath(tempDir));
+      expect(config.inlineConfig.root).toBe(tempDir);
+    },
+  );
 
-  it('resolves a workspace config found by traverseUp from its own directory', async () => {
-    fs.writeFileSync(path.join(tempDir, 'pnpm-workspace.yaml'), "packages:\n  - 'packages/*'\n");
-    fs.writeFileSync(path.join(tempDir, 'package.json'), '{"name":"fixture"}');
-    const configFile = writeConfig(tempDir);
-    const packageDir = path.join(tempDir, 'packages', 'lib');
-    fs.mkdirSync(packageDir, { recursive: true });
-    fs.writeFileSync(path.join(packageDir, 'package.json'), '{"name":"lib"}');
+  it.each(['unset', 'relative', 'absolute'])(
+    'uses the package root when traverseUp finds a config with root %s',
+    async (kind) => {
+      fs.writeFileSync(path.join(tempDir, 'pnpm-workspace.yaml'), "packages:\n  - 'packages/*'\n");
+      fs.writeFileSync(path.join(tempDir, 'package.json'), '{"name":"fixture"}');
+      const root = kind === 'relative' ? 'app' : path.join(tempDir, 'app');
+      const configFile = writeConfig(
+        tempDir,
+        kind === 'unset' ? '' : `root: ${JSON.stringify(root)},`,
+      );
+      const packageDir = path.join(tempDir, 'packages', 'lib');
+      fs.mkdirSync(packageDir, { recursive: true });
+      fs.writeFileSync(path.join(packageDir, 'package.json'), '{"name":"lib"}');
 
-    const config = await resolveViteConfig(packageDir, { traverseUp: true });
+      const config = await resolveViteConfig(packageDir, { traverseUp: true });
 
-    expect(config.configFile).toBe(normalizePath(configFile));
-    expect(config).toHaveProperty('seenRoot', tempDir);
-  });
+      expect(config.configFile).toBe(normalizePath(configFile));
+      expect(config).toHaveProperty('seenRoot', packageDir);
+      expect(realPath(config.root)).toBe(realPath(packageDir));
+      expect(config.inlineConfig.root).toBe(packageDir);
+    },
+  );
 
   it('resolves without a config file', async () => {
     const config = await resolveViteConfig(tempDir);
 
     expect(config.configFile).toBeUndefined();
     expect(config.lint).toBeUndefined();
+    expect(realPath(config.root)).toBe(realPath(tempDir));
+    expect(config.inlineConfig.root).toBe(tempDir);
   });
 });

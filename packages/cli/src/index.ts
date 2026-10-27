@@ -27,3 +27,4 @@ export type {
 } from 'vitest/config';
 
 export { defineConfig, defineProject, lazyPlugins, resolveConfigFile };
+export type { ResolveConfigFileOptions } from './define-config.ts';
