@@ -57,6 +57,8 @@ export interface ResolveViteConfigOptions {
 export async function resolveViteConfig(cwd: string, options?: ResolveViteConfigOptions) {
   const { resolveConfig, resolveConfigFile } = await import('./index.js');
 
+  // `resolveConfigFile` takes a path, so look up the config here instead of leaving it to Vite.
+  // `VITE_CONFIG_FILES` mirrors Vite's lookup order.
   let configFile = findViteConfig(cwd);
   if (!configFile && options?.traverseUp) {
     const workspaceRoot = findMonorepoRoot(cwd);
@@ -65,13 +67,16 @@ export async function resolveViteConfig(cwd: string, options?: ResolveViteConfig
     }
   }
 
-  // This loads the config purely to read a non-plugin block (lint/fmt/pack/run/
-  // staged/create…), so `resolveConfigFile` skips the user's plugin factory.
-  // `root` resolves from the config's directory, not `cwd`, including for a
-  // workspace config found from a package directory by `traverseUp`.
+  // This loads the config purely to read a non-plugin block (lint/fmt/pack/run/ staged/create…),
+  // so `resolveConfigFile` skips the user's plugin factory.
+  // `root` resolves from the config's directory, not `cwd`,
+  // including for a workspace config found from a package directory by `traverseUp`.
   if (configFile) {
     return resolveConfigFile(configFile);
   }
+  // Without a config, callers still expect a resolved config with every block unset.
+  // The lookup above already covered Vite's config names,
+  // so `configFile: false` skips a second search and runs no user code.
   return resolveConfig({ root: cwd, configFile: false }, 'build');
 }
 
