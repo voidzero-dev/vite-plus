@@ -1,0 +1,21 @@
+justfile
+  s_1bfe34d1d0733d::t_f1cc6bb876cd95 20
+vite.config.ts
+  s_1bfe34d1d0733d::t_dbd56fc578d6d8 5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d718c7f111c3e8aa53213b6cddd2ca0d68130cbe",
+  "prompts": {},
+  "sessions": {
+    "s_1bfe34d1d0733d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cb449671-4c3b-428f-a014-4c57230aa44c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "leaysgur <6259812+leaysgur@users.noreply.github.com>"
+    }
+  }
+}
