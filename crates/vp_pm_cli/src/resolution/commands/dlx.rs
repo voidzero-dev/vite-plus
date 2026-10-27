@@ -52,7 +52,7 @@ impl Resolve<DlxArgs> for Npm {
         for package in &args.package {
             cmd.arg(vt_str::format!("--package={package}"));
         }
-        if !args.shell_mode && (!args.package.is_empty() || package_spec.contains('@')) {
+        if !args.shell_mode && !args.package.is_empty() {
             cmd.arg(vt_str::format!("--package={package_spec}"));
         }
         cmd.arg("--yes");
@@ -62,7 +62,7 @@ impl Resolve<DlxArgs> for Npm {
         if args.shell_mode {
             cmd.arg("-c").arg(build_shell_command(package_spec, command_args));
         } else {
-            let command = if args.package.is_empty() && !package_spec.contains('@') {
+            let command = if args.package.is_empty() {
                 package_spec.to_string()
             } else {
                 extract_command_from_spec(package_spec)
@@ -256,23 +256,11 @@ mod tests {
 
     #[test]
     fn test_npm_exec_with_version() {
-        let command = expect_run(
-            resolve(&npm("11.0.0"), dlx_args("typescript@5.5.4", &["tsc", "--version"])).outcome,
-        );
+        let command =
+            expect_run(resolve(&npm("11.0.0"), dlx_args("create-vue@3.10.0", &["my-app"])).outcome);
 
         assert_eq!(command.program, "npm");
-        assert_eq!(
-            command.args,
-            vec![
-                "exec",
-                "--package=typescript@5.5.4",
-                "--yes",
-                "--",
-                "typescript",
-                "tsc",
-                "--version"
-            ]
-        );
+        assert_eq!(command.args, vec!["exec", "--yes", "--", "create-vue@3.10.0", "my-app"]);
     }
 
     #[test]
@@ -345,37 +333,20 @@ mod tests {
     #[test]
     fn test_npm_exec_scoped_package_with_version() {
         let command = expect_run(
-            resolve(&npm("11.0.0"), dlx_args("@vue/cli@5.0.0", &["create", "my-app"])).outcome,
+            resolve(&npm("11.0.0"), dlx_args("@angular/cli@19.2.15", &["--version"])).outcome,
         );
 
         assert_eq!(command.program, "npm");
-        assert_eq!(
-            command.args,
-            vec!["exec", "--package=@vue/cli@5.0.0", "--yes", "--", "cli", "create", "my-app"]
-        );
+        assert_eq!(command.args, vec!["exec", "--yes", "--", "@angular/cli@19.2.15", "--version"]);
     }
 
     #[test]
     fn test_npm_exec_scoped_package_without_version() {
-        let command = expect_run(
-            resolve(&npm("11.0.0"), dlx_args("@vue/cli", &["create", "my-app"])).outcome,
-        );
+        let command =
+            expect_run(resolve(&npm("11.0.0"), dlx_args("@angular/cli", &["--version"])).outcome);
 
         assert_eq!(command.program, "npm");
-        assert_eq!(
-            command.args,
-            vec!["exec", "--package=@vue/cli", "--yes", "--", "cli", "create", "my-app"]
-        );
-    }
-
-    #[test]
-    fn test_npm_exec_version_requires_package_flag_and_extracted_command() {
-        let command =
-            expect_run(resolve(&npm("11.0.0"), dlx_args("create-vue@3.10.0", &["my-app"])).outcome);
-
-        assert!(command.args.contains(&"--package=create-vue@3.10.0".to_string()));
-        let separator_pos = command.args.iter().position(|arg| arg == "--").unwrap();
-        assert_eq!(command.args[separator_pos + 1], "create-vue");
+        assert_eq!(command.args, vec!["exec", "--yes", "--", "@angular/cli", "--version"]);
     }
 
     #[test]
