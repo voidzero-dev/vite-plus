@@ -1,17 +1,8 @@
-import assert from 'node:assert/strict';
-import { realpathSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
 import { defineConfig, normalizePath } from 'vite-plus';
 
-const configFile = fileURLToPath(import.meta.url);
-const workspaceDir = dirname(configFile);
-const packageDir = join(workspaceDir, 'packages', 'lib');
-
-function assertPackageRoot(root) {
-  assert.equal(realpathSync.native(root), realpathSync.native(packageDir));
-  assert.equal(realpathSync.native(process.cwd()), realpathSync.native(packageDir));
+function printRoot(hook, config) {
+  console.log(`${hook} root: ${normalizePath(String(config.root))}`);
+  console.log(`${hook} cwd: ${normalizePath(process.cwd())}`);
 }
 
 export default defineConfig({
@@ -19,21 +10,20 @@ export default defineConfig({
   root: 'configured-root',
   plugins: [
     {
-      name: 'verify-shared-config-package-root',
+      name: 'print-shared-config-package-root',
       apply(config) {
-        assertPackageRoot(config.root);
+        printRoot('apply', config);
         return true;
       },
       config: {
         order: 'pre',
         handler(config) {
-          assertPackageRoot(config.root);
+          printRoot('config', config);
         },
       },
       configResolved(config) {
-        assertPackageRoot(config.root);
-        assert.equal(config.configFile, normalizePath(configFile));
-        writeFileSync('resolved.txt', 'shared config hooks used package cwd\n');
+        printRoot('configResolved', config);
+        console.log(`configResolved configFile: ${config.configFile}`);
       },
     },
   ],

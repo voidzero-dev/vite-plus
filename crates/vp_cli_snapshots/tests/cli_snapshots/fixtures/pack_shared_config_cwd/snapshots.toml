@@ -4,5 +4,6 @@ vp = "local"
 cwd = "packages/lib"
 steps = [
   { argv = ["vp", "pack", "--logLevel", "silent"], comment = "Load the parent config through traverseUp while plugin hooks and pack paths stay at the package cwd, overriding the file's root." },
-  ["node", "../../verify-pack.mjs"],
+  ["vpt", "print-file", "dist/index.mjs"],
+  ["vpt", "stat-file", "../../dist", "../../configured-root/dist"],
 ]
