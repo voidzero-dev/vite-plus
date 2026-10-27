@@ -9,13 +9,183 @@ import * as yaml from 'yaml';
 
 import { VITEST_VERSION } from '../../../cli/src/utils/constants.ts';
 import {
+  collectWorkspaceCatalogReferences,
   mergePnpmWorkspaces,
+  mergeWorkspaceYaml,
   syncCargoOxcVersions,
   syncViteDevtoolsDependencies,
 } from '../sync-remote-deps.ts';
 import { alignVendoredVitestDependencies } from '../vendored-vitest.ts';
 
 const VITE_PACKAGE = { devDependencies: { typescript: '~7.0.2' } };
+
+describe('imported workspace dependencies', () => {
+  test('keeps only upstream build roots and bundled packages across repeated syncs', () => {
+    const main = {
+      packages: [
+        'packages/*',
+        '!packages/excluded',
+        'rolldown',
+        'rolldown/packages/*',
+        '!rolldown/packages/browser-tests',
+        '!rolldown/packages/rollup-tests',
+        'vite',
+        'vite/packages/*',
+      ],
+    };
+    const merged = mergePnpmWorkspaces(main, {}, {}, VITE_PACKAGE, verkit);
+    expect(merged.packages).toEqual([
+      'packages/*',
+      '!packages/excluded',
+      'rolldown',
+      'rolldown/packages/rolldown',
+      'vite',
+      'vite/packages/vite',
+    ]);
+    expect(mergePnpmWorkspaces(merged, {}, {}, VITE_PACKAGE, verkit)).toEqual(merged);
+  });
+
+  test('removes unused catalog entries without importing benchmarks or nested fixtures', () => {
+    const root = mkdtempSync(join(tmpdir(), 'vp-workspace-catalog-'));
+    const writePackage = (directory: string, pkg: object) => {
+      mkdirSync(join(root, directory), { recursive: true });
+      writeFileSync(join(root, directory, 'package.json'), JSON.stringify(pkg));
+    };
+    try {
+      writePackage('.', { devDependencies: { typescript: 'catalog:', vitest: 'catalog:' } });
+      writePackage('packages/cli', {
+        dependencies: { 'project-only': 'catalog:', 'literal-version': '^1.0.0' },
+        devDependencies: { 'peer-tool': 'catalog:' },
+        optionalDependencies: { 'optional-tool': 'catalog:default' },
+        peerDependencies: { 'peer-tool': '*', 'named-tool': 'catalog:legacy' },
+      });
+      writePackage('rolldown', { devDependencies: { 'loader-tool': 'catalog:' } });
+      writePackage('rolldown/packages/rolldown', {
+        devDependencies: { 'build-tool': 'catalog:' },
+      });
+      for (const directory of [
+        'rolldown/packages/bench',
+        'vite/packages/create-vite',
+        'packages/excluded',
+        'packages/cli/fixtures/react',
+        'docs',
+      ]) {
+        writePackage(directory, { dependencies: { react: 'catalog:' } });
+      }
+      const main = `packages:
+  - packages/*
+  - '!packages/excluded'
+  - rolldown/packages/*
+  - vite/packages/*
+catalog:
+  # Keep this project-owned requirement.
+  project-only: ^1.0.0
+  peer-tool: ^1.0.0
+  optional-tool: ^1.0.0
+  named-tool: ^1.0.0
+  literal-version: ^1.0.0
+  react: ^19.1.0
+  typescript: ~7.0.2
+  vitest: 5.0.5
+`;
+      const rolldown = 'catalog:\n  build-tool: ^2.0.0\n  loader-tool: ^1.0.0\n  react: ^19.0.0\n';
+      const vite = 'catalog:\n  react: ^20.0.0\n';
+      const references = collectWorkspaceCatalogReferences(root, yaml.parse(main).packages);
+      const merged = mergeWorkspaceYaml(
+        main,
+        rolldown,
+        vite,
+        VITE_PACKAGE,
+        yaml,
+        verkit,
+        references,
+      );
+      expect(yaml.parse(merged).catalog).toEqual({
+        'build-tool': '^2.0.0',
+        'loader-tool': '^1.0.0',
+        'optional-tool': '^1.0.0',
+        'peer-tool': '^1.0.0',
+        'project-only': '^1.0.0',
+        typescript: '~7.0.2',
+        vitest: '5.0.5',
+      });
+      expect(merged).toContain('# Keep this project-owned requirement.');
+      expect(
+        mergeWorkspaceYaml(merged, rolldown, vite, VITE_PACKAGE, yaml, verkit, references),
+      ).toBe(merged);
+
+      // A new dependency in a retained upstream package must still be imported.
+      writePackage('vite/packages/vite', { peerDependencies: { 'new-tool': 'catalog:' } });
+      const updatedReferences = collectWorkspaceCatalogReferences(
+        root,
+        yaml.parse(merged).packages,
+      );
+      const updated = mergeWorkspaceYaml(
+        merged,
+        rolldown,
+        'catalog:\n  new-tool: ^1.0.0\n',
+        VITE_PACKAGE,
+        yaml,
+        verkit,
+        updatedReferences,
+      );
+      expect(yaml.parse(updated).catalog['new-tool']).toBe('^1.0.0');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('mergePnpmWorkspaces() upstream catalog versions', () => {
+  test.each([
+    ['^4.0.9', '^4.0.8'],
+    ['^5.0.0', '^4.0.8'],
+    ['=5.0.0', '^4.0.8'],
+    ['^4.0.8', '=4.0.9'],
+  ])('replaces the root range %s with upstream %s', (current, upstream) => {
+    const main = { catalog: { micromatch: current, 'project-only': '^1.0.0' } };
+    const dependency = { catalog: { micromatch: upstream } };
+    for (const [rolldown, vite] of [
+      [dependency, {}],
+      [{}, dependency],
+    ]) {
+      const merged = mergePnpmWorkspaces(main, rolldown, vite, VITE_PACKAGE, verkit);
+      expect(merged.catalog?.micromatch).toBe(upstream);
+      expect(merged.catalog?.['project-only']).toBe('^1.0.0');
+      expect(mergePnpmWorkspaces(merged, rolldown, vite, VITE_PACKAGE, verkit)).toEqual(merged);
+    }
+  });
+
+  test.each([
+    ['^4.0.8', '^4.0.9', '^4.0.9'],
+    ['^4.0.9', '^4.0.8', '^4.0.9'],
+    ['^4.0.8', '=4.0.9', '=4.0.9'],
+  ])(
+    'merges upstream ranges %s and %s independently of the root range',
+    (rolldown, vite, expected) => {
+      const merged = mergePnpmWorkspaces(
+        { catalog: { micromatch: '^5.0.0' } },
+        { catalog: { micromatch: rolldown } },
+        { catalog: { micromatch: vite } },
+        VITE_PACKAGE,
+        verkit,
+      );
+      expect(merged.catalog?.micromatch).toBe(expected);
+    },
+  );
+
+  test('preserves the selected Oxc versions when upstream uses an older release', () => {
+    const merged = mergePnpmWorkspaces(
+      { catalog: { 'oxc-parser': '=0.155.0', '@oxc-project/runtime': '=0.155.0' } },
+      { catalog: { 'oxc-parser': '=0.154.0', '@oxc-project/runtime': '=0.154.0' } },
+      {},
+      VITE_PACKAGE,
+      verkit,
+    );
+    expect(merged.catalog?.['oxc-parser']).toBe('=0.155.0');
+    expect(merged.catalog?.['@oxc-project/runtime']).toBe('=0.155.0');
+  });
+});
 
 describe('vendored Vitest dependency alignment', () => {
   test('can be imported from stdin without running the bootstrap', () => {

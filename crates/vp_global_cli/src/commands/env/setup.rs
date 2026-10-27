@@ -1188,7 +1188,7 @@ exit $LASTEXITCODE
 // cmd.exe wrapper for `vp env use` (cmd.exe cannot define shell functions).
 // Users run `vp-use 24` in cmd.exe instead of `vp env use 24`.
 #[cfg(windows)]
-fn vp_use_cmd_content(config: &vp_shared::EnvConfig) -> String {
+pub(crate) fn vp_use_cmd_content(config: &vp_shared::EnvConfig) -> String {
     let vp_exe = config.dirs.data.join("current").join("bin").join("vp.exe");
     let mut exports: Vec<_> = config.dir_envs.iter().collect();
     exports.sort_unstable_by_key(|(name, _)| *name);

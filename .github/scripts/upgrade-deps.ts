@@ -65,9 +65,7 @@ type PnpmWorkspaceVersions = {
   oxlintTsgolint: string;
   oxcProjectRuntime: string;
   oxcProjectTypes: string;
-  oxcMinify: string;
   oxcParser: string;
-  oxcTransform: string;
 };
 
 type PnpmWorkspaceEntry = {
@@ -371,22 +369,10 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
       newVersion: versions.oxcProjectTypes,
     },
     {
-      name: 'oxc-minify',
-      pattern: /oxc-minify: =([\d.]+(?:-[\w.]+)?)/,
-      replacement: `oxc-minify: =${versions.oxcMinify}`,
-      newVersion: versions.oxcMinify,
-    },
-    {
       name: 'oxc-parser',
       pattern: /oxc-parser: =([\d.]+(?:-[\w.]+)?)/,
       replacement: `oxc-parser: =${versions.oxcParser}`,
       newVersion: versions.oxcParser,
-    },
-    {
-      name: 'oxc-transform',
-      pattern: /oxc-transform: =([\d.]+(?:-[\w.]+)?)/,
-      replacement: `oxc-transform: =${versions.oxcTransform}`,
-      newVersion: versions.oxcTransform,
     },
   ];
 
@@ -552,9 +538,7 @@ async function upgradeDependencies(): Promise<void> {
     oxlintTsgolintVersion,
     oxcProjectRuntimeVersion,
     oxcProjectTypesVersion,
-    oxcMinifyVersion,
     oxcParserVersion,
-    oxcTransformVersion,
   ] = await Promise.all([
     getLatestNpmVersionForMajor('vitest', SUPPORTED_VITEST_MAJOR),
     getLatestNpmVersion('tsdown'),
@@ -568,9 +552,7 @@ async function upgradeDependencies(): Promise<void> {
     getLatestNpmVersion('oxlint-tsgolint'),
     getLatestNpmVersion('@oxc-project/runtime'),
     getLatestNpmVersion('@oxc-project/types'),
-    getLatestNpmVersion('oxc-minify'),
     getLatestNpmVersion('oxc-parser'),
-    getLatestNpmVersion('oxc-transform'),
   ]);
 
   console.log(`vitest: ${vitestVersion}`);
@@ -585,9 +567,7 @@ async function upgradeDependencies(): Promise<void> {
   console.log(`oxlint-tsgolint: ${oxlintTsgolintVersion}`);
   console.log(`@oxc-project/runtime: ${oxcProjectRuntimeVersion}`);
   console.log(`@oxc-project/types: ${oxcProjectTypesVersion}`);
-  console.log(`oxc-minify: ${oxcMinifyVersion}`);
   console.log(`oxc-parser: ${oxcParserVersion}`);
-  console.log(`oxc-transform: ${oxcTransformVersion}`);
 
   await updateUpstreamVersions();
   await updatePnpmWorkspace({
@@ -602,9 +582,7 @@ async function upgradeDependencies(): Promise<void> {
     oxlintTsgolint: oxlintTsgolintVersion,
     oxcProjectRuntime: oxcProjectRuntimeVersion,
     oxcProjectTypes: oxcProjectTypesVersion,
-    oxcMinify: oxcMinifyVersion,
     oxcParser: oxcParserVersion,
-    oxcTransform: oxcTransformVersion,
   });
   await updateVitestVersionConstant(vitestVersion);
   // Keep the selected versions available if installation or upstream sync fails.

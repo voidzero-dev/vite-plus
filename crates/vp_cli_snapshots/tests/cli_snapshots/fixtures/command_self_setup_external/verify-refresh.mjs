@@ -27,10 +27,12 @@ function createBundle(source, prefix, label) {
 
 function createEnvironment(directory) {
   const home = path.join(directory, 'home');
+  const vpHome = path.join(home, '.vite-plus');
   const system = path.join(directory, 'system/bin');
-  const runtime = path.join(home, 'js_runtime/node', process.versions.node, 'bin');
+  const runtime = path.join(vpHome, 'js_runtime/node', process.versions.node, 'bin');
   fs.mkdirSync(system, { recursive: true });
   fs.mkdirSync(runtime, { recursive: true });
+  fs.writeFileSync(path.join(vpHome, '.vp-owned'), 'vite-plus-owned-directory\n');
   fs.symlinkSync(process.execPath, path.join(system, 'node'));
   fs.symlinkSync(process.execPath, path.join(runtime, 'node'));
   fs.writeFileSync(path.join(directory, '.node-version'), process.versions.node);
@@ -41,15 +43,15 @@ function createEnvironment(directory) {
   return {
     ...env,
     HOME: home,
-    VP_HOME: home,
+    VP_HOME: vpHome,
     VP_SELF_SETUP_NO_MODIFY_PATH: '1',
     NPM_CONFIG_REGISTRY: 'http://127.0.0.1:9',
     PATH: [
-      path.join(home, 'bin'),
+      path.join(vpHome, 'bin'),
       path.join(directory, 'brew/bin'),
       system,
       env.PATH,
-      path.join(home, 'fallback-bin'),
+      path.join(vpHome, 'fallback-bin'),
     ].join(path.delimiter),
   };
 }

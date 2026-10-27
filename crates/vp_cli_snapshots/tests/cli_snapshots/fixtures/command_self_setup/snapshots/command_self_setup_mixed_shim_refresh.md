@@ -3,6 +3,12 @@
 ## `vpt mkdir -p external home/bin user-bin`
 
 
+## `vpt write-file home/.vp-owned 'vite-plus-owned-directory
+'`
+
+The fixture owns the preseeded shim directory
+
+
 ## `vpt cp $VP_HOME/bin/vp external/vp`
 
 

@@ -18,6 +18,7 @@ mod commands;
 mod error;
 mod help;
 mod homebrew;
+mod install_dirs;
 mod js_executor;
 mod self_setup;
 mod shim;
