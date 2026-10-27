@@ -1,5 +1,5 @@
 {
-  "name": "command-update-npm10",
+  "name": "command-update-npm",
   "version": "1.0.0",
   "dependencies": {
     "testnpm2": "*"

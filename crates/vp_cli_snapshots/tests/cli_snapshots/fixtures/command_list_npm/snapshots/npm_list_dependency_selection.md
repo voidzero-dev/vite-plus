@@ -13,7 +13,7 @@ production listing excludes dev but keeps optional and peer dependencies
 ```
 {
   "version": "1.0.0",
-  "name": "command-list-npm10",
+  "name": "command-list-npm",
   "dependencies": {
     "test-vite-plus-package-optional": {
       "version": "1.0.0",
@@ -41,7 +41,7 @@ production listing respects both exclusions
 ```
 {
   "version": "1.0.0",
-  "name": "command-list-npm10",
+  "name": "command-list-npm",
   "dependencies": {
     "testnpm2": {
       "version": "1.0.1",
@@ -59,7 +59,7 @@ include installed dev dependencies without excluding other dependency types
 ```
 {
   "version": "1.0.0",
-  "name": "command-list-npm10",
+  "name": "command-list-npm",
   "dependencies": {
     "test-vite-plus-package-optional": {
       "version": "1.0.0",
@@ -92,7 +92,7 @@ raw native include remains available and lists all four dependency types
 ```
 {
   "version": "1.0.0",
-  "name": "command-list-npm10",
+  "name": "command-list-npm",
   "dependencies": {
     "test-vite-plus-package-optional": {
       "version": "1.0.0",

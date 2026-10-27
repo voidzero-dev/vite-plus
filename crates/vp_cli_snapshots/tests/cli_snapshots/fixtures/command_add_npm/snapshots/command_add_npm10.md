@@ -59,7 +59,7 @@ added 1 package in <duration>
 
 ```
 {
-  "name": "command-add-npm10",
+  "name": "command-add-npm",
   "version": "1.0.0",
   "packageManager": "npm@10.9.4",
   "devDependencies": {
@@ -82,7 +82,7 @@ npm does not support --allow-build.
 
 ```
 {
-  "name": "command-add-npm10",
+  "name": "command-add-npm",
   "version": "1.0.0",
   "packageManager": "npm@10.9.4",
   "devDependencies": {
@@ -105,7 +105,7 @@ added 1 package in <duration>
 
 ```
 {
-  "name": "command-add-npm10",
+  "name": "command-add-npm",
   "version": "1.0.0",
   "packageManager": "npm@10.9.4",
   "devDependencies": {
@@ -130,7 +130,7 @@ added 1 package in <duration>
 
 ```
 {
-  "name": "command-add-npm10",
+  "name": "command-add-npm",
   "version": "1.0.0",
   "packageManager": "npm@10.9.4",
   "devDependencies": {
@@ -158,7 +158,7 @@ up to date in <duration>
 
 ```
 {
-  "name": "command-add-npm10",
+  "name": "command-add-npm",
   "version": "1.0.0",
   "packageManager": "npm@10.9.4",
   "devDependencies": {

@@ -19,7 +19,7 @@ should list installed packages
 ```
 {
   "version": "1.0.0",
-  "name": "command-list-npm10",
+  "name": "command-list-npm",
   "dependencies": {
     "test-vite-plus-package-optional": {
       "version": "1.0.0",
@@ -47,7 +47,7 @@ should list specific package
 ```
 {
   "version": "1.0.0",
-  "name": "command-list-npm10",
+  "name": "command-list-npm",
   "dependencies": {
     "testnpm2": {
       "version": "1.0.1",
@@ -65,7 +65,7 @@ should list packages with depth limit
 ```
 {
   "version": "1.0.0",
-  "name": "command-list-npm10",
+  "name": "command-list-npm",
   "dependencies": {
     "test-vite-plus-package-optional": {
       "version": "1.0.0",
@@ -93,7 +93,7 @@ should list packages with extended info
 ```
 {
   "version": "1.0.0",
-  "name": "command-list-npm10",
+  "name": "command-list-npm",
   "devDependencies": {
     "test-vite-plus-package": "1.0.0"
   },
@@ -101,7 +101,7 @@ should list packages with extended info
     "test-vite-plus-package-optional": "1.0.0"
   },
   "packageManager": "npm@10.8.0",
-  "_id": "command-list-npm10@1.0.0",
+  "_id": "command-list-npm@1.0.0",
   "extraneous": false,
   "path": "<workspace>",
   "_dependencies": {
@@ -163,7 +163,7 @@ should list packages in parseable format
 ```
 {
   "version": "1.0.0",
-  "name": "command-list-npm10",
+  "name": "command-list-npm",
   "dependencies": {
     "test-vite-plus-package-optional": {
       "version": "1.0.0",
@@ -191,7 +191,7 @@ should exclude dev dependencies using --omit dev
 ```
 {
   "version": "1.0.0",
-  "name": "command-list-npm10",
+  "name": "command-list-npm",
   "dependencies": {
     "test-vite-plus-package-optional": {
       "version": "1.0.0",
@@ -214,7 +214,7 @@ include installed dev dependencies in a production environment
 ```
 {
   "version": "1.0.0",
-  "name": "command-list-npm10",
+  "name": "command-list-npm",
   "dependencies": {
     "test-vite-plus-package-optional": {
       "version": "1.0.0",
@@ -242,7 +242,7 @@ should exclude optional dependencies (uses --omit optional)
 ```
 {
   "version": "1.0.0",
-  "name": "command-list-npm10",
+  "name": "command-list-npm",
   "dependencies": {
     "test-vite-plus-package-optional": {
       "version": "1.0.0",
@@ -270,7 +270,7 @@ should exclude peer dependencies (uses --omit peer)
 ```
 {
   "version": "1.0.0",
-  "name": "command-list-npm10",
+  "name": "command-list-npm",
   "dependencies": {
     "test-vite-plus-package": {
       "version": "1.0.0",
@@ -293,7 +293,7 @@ should support pass through arguments
 ```
 {
   "version": "1.0.0",
-  "name": "command-list-npm10",
+  "name": "command-list-npm",
   "dependencies": {
     "test-vite-plus-package-optional": {
       "version": "1.0.0",

@@ -15,7 +15,7 @@ npm 6 lists both production and development dependencies
 
 ```
 {
-  "name": "command-list-npm10",
+  "name": "command-list-npm",
   "version": "1.0.0",
   "dependencies": {
     "test-vite-plus-package": {
@@ -38,7 +38,7 @@ npm 6 uses --production to list only production dependencies
 
 ```
 {
-  "name": "command-list-npm10",
+  "name": "command-list-npm",
   "version": "1.0.0",
   "dependencies": {
     "testnpm2": {

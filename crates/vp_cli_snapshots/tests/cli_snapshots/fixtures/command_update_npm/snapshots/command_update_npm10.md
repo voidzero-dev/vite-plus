@@ -13,7 +13,7 @@ added 3 packages in <duration>
 
 ```
 {
-  "name": "command-update-npm10",
+  "name": "command-update-npm",
   "version": "1.0.0",
   "dependencies": {
     "testnpm2": "*"
@@ -42,7 +42,7 @@ npm does not support --latest.
 
 ```
 {
-  "name": "command-update-npm10",
+  "name": "command-update-npm",
   "version": "1.0.0",
   "dependencies": {
     "testnpm2": "*"
@@ -70,7 +70,7 @@ up to date in <duration>
 
 ```
 {
-  "name": "command-update-npm10",
+  "name": "command-update-npm",
   "version": "1.0.0",
   "dependencies": {
     "testnpm2": "*"
@@ -98,7 +98,7 @@ up to date in <duration>
 
 ```
 {
-  "name": "command-update-npm10",
+  "name": "command-update-npm",
   "version": "1.0.0",
   "dependencies": {
     "testnpm2": "*"
@@ -144,7 +144,7 @@ changed 1 package in <duration>
 
 ```
 {
-  "name": "command-update-npm10",
+  "name": "command-update-npm",
   "version": "1.0.0",
   "devDependencies": {
     "test-vite-plus-package": "*"
@@ -170,7 +170,7 @@ added 2 packages in <duration>
 
 ```
 {
-  "name": "command-update-npm10",
+  "name": "command-update-npm",
   "version": "1.0.0",
   "devDependencies": {
     "test-vite-plus-package": "*"

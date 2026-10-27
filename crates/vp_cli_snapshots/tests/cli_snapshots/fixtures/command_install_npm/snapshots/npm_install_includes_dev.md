@@ -60,19 +60,19 @@ node_modules/dev-only-fixture/package.json: file
   "devDependencies": {
     "dev-only-fixture": "file:./dev-dep"
   },
-  "name": "command-install-npm11",
+  "name": "command-install-npm",
   "packageManager": "npm@11.16.0",
   "private": true,
   "version": "1.0.0"
 }
 {
-  "name": "command-install-npm11",
+  "name": "command-install-npm",
   "version": "1.0.0",
   "lockfileVersion": 3,
   "requires": true,
   "packages": {
     "": {
-      "name": "command-install-npm11",
+      "name": "command-install-npm",
       "version": "1.0.0",
       "dependencies": {
         "prod-only-fixture": "file:./prod-dep"
