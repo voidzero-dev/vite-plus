@@ -1528,6 +1528,11 @@ async fn download_package_manager_inner(
     tracing::debug!("Rename package dir to {}", bin_name);
     tokio::fs::rename(&extracted_package_dir, &target_dir_tmp.join(&bin_name)).await?;
 
+    // Finish shims before publishing the directory to lock-free cache readers.
+    tracing::debug!("Create shim files for {}", bin_name);
+    let tmp_bin_dir = AbsolutePath::new(&target_dir_tmp).unwrap().join(&bin_name).join("bin");
+    create_shim_files(package_manager_type, &tmp_bin_dir).await?;
+
     // Use a file-based lock to ensure atomicity of remove + rename operations
     // This prevents DirectoryNotEmpty error when multiple processes/threads
     // try to install the same package manager version concurrently.
@@ -1540,9 +1545,7 @@ async fn download_package_manager_inner(
     tracing::debug!("Lock acquired: {:?}", lock_path);
 
     // Check again after acquiring the lock, in case another thread completed
-    // the installation while we were downloading (same completeness check as the
-    // fast-path above; create_shim_files below runs under this lock, so post-lock
-    // the install is all-or-nothing)
+    // the installation while we were preparing it in the temporary directory.
     if is_package_manager_install_complete(&install_dir, &bin_name)? {
         tracing::debug!("install already complete after lock acquisition, skip rename");
         verify_cached_cli_hash(
@@ -1569,10 +1572,6 @@ async fn download_package_manager_inner(
     tracing::debug!("Rename {:?} to {:?}", target_dir_tmp, target_dir);
     remove_dir_all_force(&target_dir).await?;
     tokio::fs::rename(&target_dir_tmp, &target_dir).await?;
-
-    // create shim file
-    tracing::debug!("Create shim files for {}", bin_name);
-    create_shim_files(package_manager_type, &install_dir.join("bin")).await?;
 
     Ok((install_dir, package_name, version))
 }
@@ -1802,6 +1801,10 @@ async fn download_bun_package_manager(
     // Clean up the extracted package directory
     remove_dir_all_force(&package_dir).await?;
 
+    // Finish shims before publishing the directory to lock-free cache readers.
+    tracing::debug!("Create shim files for bun");
+    create_shim_files(PackageManagerType::Bun, AbsolutePath::new(&tmp_bin_dir).unwrap()).await?;
+
     // Acquire lock for atomic rename
     let lock_path = parent_dir.join(format!("{version}.lock"));
     tracing::debug!("Acquire lock file: {:?}", lock_path);
@@ -1818,10 +1821,6 @@ async fn download_bun_package_manager(
     tracing::debug!("Rename {:?} to {:?}", target_dir_tmp, target_dir);
     remove_dir_all_force(&target_dir).await?;
     tokio::fs::rename(&target_dir_tmp, &target_dir).await?;
-
-    // Create native binary shims
-    tracing::debug!("Create shim files for bun");
-    create_shim_files(PackageManagerType::Bun, &install_dir.join("bin")).await?;
 
     Ok((install_dir, package_name, version.clone()))
 }
@@ -2006,6 +2005,10 @@ async fn download_pnpm_native_package_manager(
     // Clean up the extracted package directory
     remove_dir_all_force(&package_dir).await?;
 
+    // Finish shims before publishing the directory to lock-free cache readers.
+    tracing::debug!("Create native shim files for pnpm");
+    create_pnpm_native_shim_files(AbsolutePath::new(&tmp_bin_dir).unwrap()).await?;
+
     // Acquire lock for atomic rename
     let lock_path = parent_dir.join(format!("{version}.lock"));
     tracing::debug!("Acquire lock file: {:?}", lock_path);
@@ -2022,10 +2025,6 @@ async fn download_pnpm_native_package_manager(
     tracing::debug!("Rename {:?} to {:?}", target_dir_tmp, target_dir);
     remove_dir_all_force(&target_dir).await?;
     tokio::fs::rename(&target_dir_tmp, &target_dir).await?;
-
-    // Create native binary shims
-    tracing::debug!("Create native shim files for pnpm");
-    create_pnpm_native_shim_files(&install_dir.join("bin")).await?;
 
     Ok((install_dir, package_name, version.clone()))
 }
@@ -4100,6 +4099,97 @@ mod tests {
             },
         )
         .await;
+    }
+
+    #[tokio::test]
+    async fn test_package_manager_install_is_complete_when_published() {
+        use std::future::Future;
+
+        use httpmock::prelude::*;
+
+        for (kind, version, package, entries) in [
+            (
+                PackageManagerType::Npm,
+                "11.0.0",
+                "npm".to_owned(),
+                vec!["package/bin/npm-cli.js", "package/bin/npx-cli.js"],
+            ),
+            (
+                PackageManagerType::Bun,
+                "1.2.0",
+                get_bun_platform_package_name().unwrap(),
+                vec![if cfg!(windows) { "package/bin/bun.exe" } else { "package/bin/bun" }],
+            ),
+            (
+                PackageManagerType::Pnpm,
+                "12.0.0",
+                get_pnpm_platform_package_name().unwrap().to_owned(),
+                vec![if cfg!(windows) { "package/pnpm.exe" } else { "package/pnpm" }],
+            ),
+        ] {
+            let vp_home = create_temp_dir();
+            let server = MockServer::start();
+            server.mock(|when, then| {
+                when.method(GET).path(format!("/{package}/{version}"));
+                then.status(200).json_body(serde_json::json!({"dist": {}}));
+            });
+            let basename = package.rsplit('/').next().unwrap();
+            let tarball = create_tgz(
+                &entries
+                    .iter()
+                    .map(|path| (*path, b"mock executable".as_slice()))
+                    .collect::<Vec<_>>(),
+            );
+            server.mock(|when, then| {
+                when.method(GET).path(format!("/{package}/-/{basename}-{version}.tgz"));
+                then.status(200).body(tarball);
+            });
+
+            EnvConfig::with_vars_async(
+                [
+                    (env_vars::VP_HOME, vp_home.path().as_os_str()),
+                    (env_vars::NPM_CONFIG_REGISTRY, std::ffi::OsStr::new(&server.base_url())),
+                ],
+                |_| async {
+                    let install_dir = package_manager_install_dir(kind, version).unwrap();
+                    let target_dir = install_dir.parent().unwrap();
+                    let mut install = Box::pin(download_package_manager(kind, version, None));
+                    let mut incomplete = Vec::new();
+                    // Inspect at async suspension points, as a lock-free cache reader could.
+                    std::future::poll_fn(|cx| {
+                        let result = install.as_mut().poll(cx);
+                        if target_dir.as_path().exists() {
+                            for name in kind.bin_names() {
+                                for extension in ["", ".cmd", ".ps1"] {
+                                    let path =
+                                        install_dir.join("bin").join(format!("{name}{extension}"));
+                                    if fs::read(&path).map_or(true, |bytes| bytes.is_empty()) {
+                                        incomplete.push(path.clone());
+                                    }
+                                    #[cfg(unix)]
+                                    if extension.is_empty() {
+                                        use std::os::unix::fs::PermissionsExt;
+                                        if fs::metadata(&path).map_or(true, |meta| {
+                                            meta.permissions().mode() & 0o111 == 0
+                                        }) {
+                                            incomplete.push(path);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        result
+                    })
+                    .await
+                    .unwrap();
+                    assert!(
+                        incomplete.is_empty(),
+                        "{kind} published unfinished shims: {incomplete:?}"
+                    );
+                },
+            )
+            .await;
+        }
     }
 
     #[tokio::test]

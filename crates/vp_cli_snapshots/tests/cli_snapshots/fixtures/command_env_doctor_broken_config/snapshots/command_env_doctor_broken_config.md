@@ -20,7 +20,7 @@ VITE+ - The Unified Toolchain for the Web
 Installation
   ✓ Bin dir           ~/.vite-plus/bin
   ✓ Data dir          ~/.vite-plus
-  ✓ Cache dir         ~/.vite-plus/cache (not created yet)
+  ✓ Cache dir         ~/.vite-plus/cache
   ✓ Config dir        ~/.vite-plus
   ✓ State dir         ~/.vite-plus
 

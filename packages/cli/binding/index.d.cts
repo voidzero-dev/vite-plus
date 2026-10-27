@@ -1669,6 +1669,15 @@ export interface TypeScriptOptions {
   rewriteImportExtensions?: 'rewrite' | 'remove' | boolean;
 }
 
+/**
+ * The selected tsconfig and its original source, sent to an asynchronous loader.
+ * `None` selects discovery explicitly, without consulting the receiving thread's env.
+ */
+export interface FrozenTsconfig {
+  path?: string;
+  source?: string;
+}
+
 export interface LoadContext {
   /** Export conditions of the relevant `package.json` */
   conditions?: Array<string>;
@@ -4238,6 +4247,14 @@ export declare namespace oxcNode {
     ) => ResolveFnOutput | Promise<ResolveFnOutput>,
   ): ResolveFnOutput | Promise<ResolveFnOutput>;
   export function enableWatchReport(): void;
+  export function freezeTransformDeps(): string;
+  /** Freeze the effective config before registering the off-thread ESM hooks. */
+  export function freezeTsconfig(cwd: string): FrozenTsconfig;
+  /** Apply a frozen selection, including discovery without the receiving thread's env. */
+  export function initializeLoader(
+    path?: string | undefined | null,
+    source?: string | undefined | null,
+  ): void;
   export function load(
     url: string,
     context: LoadContext,

@@ -78,6 +78,20 @@ steps = [
 ]
 
 [[case]]
+name = "vpx_script_async_loader_settings"
+vp = ["local", "global"]
+env = { VP_NODE_VERSION = "22.18.0" }
+comment = "Off-thread ESM hooks receive the CommonJS preload's tsconfig selection and TypeScript dependency policy."
+steps = [
+  { argv = ["vpx", "--tsconfig", "tsconfig.alt.json", "src/resolution.ts"], comment = "The loader thread honors --tsconfig instead of discovering the default config" },
+  { argv = ["vpx", "./src/print-setup.ts"], envs = [["TS_NODE_PROJECT", "missing.json"]], comment = "A missing environment-selected config keeps its TS_NODE_PROJECT diagnostic label" },
+  { argv = ["vpt", "mkdir", "-p", "node_modules/ts-dep"], snapshot = false },
+  { argv = ["vpt", "write-file", "node_modules/ts-dep/package.json", "{ \"name\": \"ts-dep\", \"type\": \"module\", \"exports\": \"./index.ts\" }\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "node_modules/ts-dep/index.ts", "export enum Level { High = 'high' }\nexport const level: Level = Level.High;\n"], snapshot = false },
+  { argv = ["vpx", "./src/ts-dependency.ts"], comment = "The loader thread transforms published TypeScript dependencies" },
+]
+
+[[case]]
 name = "vpx_script_tsconfig_transforms"
 vp = ["local", "global"]
 comment = "tsconfig options that change the transform, and the decorator error."
