@@ -1,0 +1,33 @@
+[[case]]
+name = "migration_workspace_oxc_script_directory"
+vp = ["global", "local"]
+local-registry = true
+steps = [
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  ["vp", "run", "format"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "packages/app/.oxfmtrc.json"],
+  { argv = ["vpt", "stat-file", "packages/other/.oxfmtrc.json", "--assert", "missing"], comment = "the unrelated workspace config still migrates" },
+  ["vpt", "print-file", "packages/other/vite.config.ts"],
+  { argv = ["vp", "run", "format"], comment = "the script still loads its explicit config after changing directories" },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vp", "run", "format"],
+]
+
+[[case]]
+name = "migration_workspace_oxc_bare_import"
+vp = ["global", "local"]
+local-registry = true
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "scripts.format", "vp fmt --check packages/app/src/index.js"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "import fmt from '@repo/config';\nexport default { fmt };\n"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  ["vp", "run", "format"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "packages/app/.oxfmtrc.json"],
+  { argv = ["vpt", "stat-file", "packages/other/.oxfmtrc.json", "--assert", "missing"], comment = "a bare workspace import does not preserve unrelated configs" },
+  ["vpt", "print-file", "packages/other/vite.config.ts"],
+  { argv = ["vp", "run", "format"], comment = "the workspace package still imports its JSON config after migration" },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vp", "run", "format"],
+]

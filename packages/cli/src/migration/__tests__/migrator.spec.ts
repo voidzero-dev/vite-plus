@@ -8893,6 +8893,125 @@ export default { fmt, lint };
   );
 
   it.each([
+    'cd packages/app && vp fmt -c .oxfmtrc.json src',
+    'echo cd && cd packages/app && vp fmt -c .oxfmtrc.json src',
+    'cd packages && cd "app" && vp fmt --config=.oxfmtrc.json src',
+    'vp fmt -c packages/app/.oxfmtrc.json src && cd packages/app && vp fmt -c .oxfmtrc.json src',
+  ])('preserves configs after script directory changes: %s', (script) => {
+    const appDir = path.join(tmpDir, 'packages/app');
+    fs.mkdirSync(appDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'root', scripts: { fmt: script } }),
+    );
+    fs.writeFileSync(path.join(appDir, 'package.json'), JSON.stringify({ name: 'app' }));
+    for (const directory of [tmpDir, appDir]) {
+      fs.writeFileSync(path.join(directory, '.oxfmtrc.json'), '{"singleQuote":true}\n');
+      fs.writeFileSync(path.join(directory, 'vite.config.ts'), 'export default {};\n');
+    }
+    const workspaceInfo = {
+      ...makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
+      packages: [{ name: 'app', path: 'packages/app' }],
+    };
+
+    for (let run = 0; run < 2; run++) {
+      finalizeCoreMigrationForExistingVitePlus(workspaceInfo, true);
+      expect(fs.readFileSync(path.join(appDir, '.oxfmtrc.json'), 'utf8')).toBe(
+        '{"singleQuote":true}\n',
+      );
+      expect(fs.readFileSync(path.join(appDir, 'vite.config.ts'), 'utf8')).toBe(
+        'export default {};\n',
+      );
+      expect(fs.existsSync(path.join(tmpDir, '.oxfmtrc.json'))).toBe(false);
+      expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).toContain('fmt:');
+    }
+  });
+
+  it.each([
+    'cd "$PACKAGE_DIR" && vp fmt -c .oxfmtrc.json src',
+    '(cd packages/app && vp fmt -c .oxfmtrc.json src)',
+    'cd packages/app || vp fmt -c .oxfmtrc.json src',
+    'echo done || cd packages/app && vp fmt -c .oxfmtrc.json src',
+    'CDPATH=packages cd app && vp fmt -c .oxfmtrc.json src',
+  ])('preserves workspace configs when the script directory is uncertain: %s', (script) => {
+    const appDir = path.join(tmpDir, 'packages/app');
+    fs.mkdirSync(appDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'root', scripts: { fmt: script } }),
+    );
+    fs.writeFileSync(path.join(appDir, 'package.json'), JSON.stringify({ name: 'app' }));
+    fs.writeFileSync(path.join(appDir, '.oxfmtrc.json'), '{"singleQuote":true}\n');
+    fs.writeFileSync(path.join(tmpDir, '.oxfmtrc.json'), '{"semi":false}\n');
+    const workspaceInfo = {
+      ...makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
+      packages: [{ name: 'app', path: 'packages/app' }],
+    };
+
+    expect(finalizeCoreMigrationForExistingVitePlus(workspaceInfo, true).oxcConfigs).toBe(false);
+    expect(fs.readFileSync(path.join(appDir, '.oxfmtrc.json'), 'utf8')).toBe(
+      '{"singleQuote":true}\n',
+    );
+    expect(fs.readFileSync(path.join(tmpDir, '.oxfmtrc.json'), 'utf8')).toBe('{"semi":false}\n');
+  });
+
+  it.each([
+    { entry: { exports: './shared.js' }, specifier: '@repo/config' },
+    {
+      entry: { exports: { '.': { import: './shared.js', require: './shared.cjs' } } },
+      specifier: '@repo/config',
+    },
+    {
+      entry: { exports: { node: './shared.cjs', development: './shared.js' } },
+      specifier: '@repo/config',
+    },
+    { entry: { exports: { './fmt': './shared.js' } }, specifier: '@repo/config/fmt' },
+    { entry: { exports: { './*': './*.js' } }, specifier: '@repo/config/shared' },
+    { entry: { main: './shared.js' }, specifier: '@repo/config' },
+    { entry: { module: './shared.js' }, specifier: '@repo/config' },
+    { entry: {}, specifier: '@repo/config/shared' },
+  ])('preserves bare workspace config imports: $entry', ({ entry, specifier }) => {
+    const configDir = path.join(tmpDir, 'packages/config');
+    const appDir = path.join(tmpDir, 'packages/app');
+    for (const directory of [configDir, appDir]) {
+      fs.mkdirSync(directory, { recursive: true });
+      fs.writeFileSync(path.join(directory, '.oxfmtrc.json'), '{"singleQuote":true}\n');
+    }
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify({ name: 'root' }));
+    fs.writeFileSync(path.join(appDir, 'package.json'), JSON.stringify({ name: 'app' }));
+    fs.writeFileSync(
+      path.join(configDir, 'package.json'),
+      JSON.stringify({ name: '@repo/config', ...entry }),
+    );
+    // Vite resolves a package's .js entry to its TypeScript source.
+    fs.writeFileSync(
+      path.join(configDir, 'shared.ts'),
+      "import fmt from './.oxfmtrc.json';\nexport default fmt;\n",
+    );
+    fs.writeFileSync(path.join(configDir, 'shared.cjs'), 'module.exports = {};\n');
+    fs.writeFileSync(path.join(configDir, '.oxlintrc.json'), '{"rules":{"no-console":"error"}}\n');
+    const config = `import fmt from '${specifier}';\nexport default { fmt };\n`;
+    fs.writeFileSync(path.join(tmpDir, 'vite.config.ts'), config);
+    const workspaceInfo = {
+      ...makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
+      packages: [
+        { name: '@repo/config', path: 'packages/config' },
+        { name: 'app', path: 'packages/app' },
+      ],
+    };
+
+    for (let run = 0; run < 2; run++) {
+      finalizeCoreMigrationForExistingVitePlus(workspaceInfo, true);
+      expect(fs.readFileSync(path.join(configDir, '.oxfmtrc.json'), 'utf8')).toBe(
+        '{"singleQuote":true}\n',
+      );
+      expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).toBe(config);
+      expect(fs.existsSync(path.join(configDir, '.oxlintrc.json'))).toBe(false);
+      expect(fs.existsSync(path.join(appDir, '.oxfmtrc.json'))).toBe(false);
+    }
+  });
+
+  it.each([
     ['.', '.', 'script'],
     ['packages/app', '.', 'script'],
     ['.', 'packages/app', 'script'],
