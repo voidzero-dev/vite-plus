@@ -72,6 +72,24 @@ Only the exact lowercase value is system-only; managed config.json stays in effe
 false
 ```
 
+## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} NEST_DEPTH=8 VP_NODE_MANAGER=system-only VP_NODE_DIST_MIRROR=http://127.0.0.1:1 NPM_CONFIG_REGISTRY=http://127.0.0.1:1 node nest-node.cjs`
+
+Nested calls with the same arguments and cwd still run through 8 shim entries.
+
+```
+NESTED_NODE_OK
+```
+
+## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} NEST_DEPTH=9 VP_NODE_MANAGER=system-only VP_NODE_DIST_MIRROR=http://127.0.0.1:1 NPM_CONFIG_REGISTRY=http://127.0.0.1:1 node nest-node.cjs`
+
+A 9th identical entry is treated as a forwarding loop, so the count reaches nested shims.
+
+**Exit code:** 1
+
+```
+vp: VP_NODE_MANAGER=system-only requires a system 'node' on PATH that does not forward back to Vite+, but the one in '<workspace>/system-bin' re-entered the shim more than 8 times with the same arguments and directory
+```
+
 ## `node list-managed.cjs`
 
 The system-only steps downloaded nothing.

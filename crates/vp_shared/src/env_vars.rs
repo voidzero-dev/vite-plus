@@ -163,6 +163,11 @@ pub const VP_BYPASS: &str = "VP_BYPASS";
 /// Comma-separated tools whose real binary directories have been injected into PATH.
 pub const VP_PATH_INJECTED_TOOLS: &str = "VP_PATH_INJECTED_TOOLS";
 
+/// `<count>:<fingerprint>` of consecutive identical system-only shim entries,
+/// passed to the shim's children to detect a system tool that forwards back
+/// to Vite+.
+pub const VP_SYSTEM_ONLY_REENTRY: &str = "VP_SYSTEM_ONLY_REENTRY";
+
 /// Explicit tsconfig for the `vpx <script>` loader hooks, set from `vpx --tsconfig`.
 pub const VP_SCRIPT_TSCONFIG: &str = "VP_SCRIPT_TSCONFIG";
 

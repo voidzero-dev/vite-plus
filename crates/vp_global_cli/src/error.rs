@@ -56,6 +56,13 @@ pub enum Error {
     #[error("{variable}=system-only requires a system '{tool}' on PATH, but none was found")]
     SystemToolNotFound { tool: Str, variable: &'static str },
 
+    /// The system tool selected under `VP_*_MANAGER=system-only` keeps
+    /// forwarding back to the Vite+ shim.
+    #[error(
+        "{variable}=system-only requires a system '{tool}' on PATH that does not forward back to Vite+, but the one in '{dir}' re-entered the shim more than {limit} times with the same arguments and directory"
+    )]
+    SystemToolReentry { tool: Str, variable: &'static str, dir: String, limit: u32 },
+
     #[error("{0}")]
     Setup(#[from] vp_setup::error::Error),
 
