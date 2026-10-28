@@ -115,6 +115,8 @@ jobs:
         run: |
           docker run --rm -e VP_NODE_DIST_MIRROR -w /app "$IMAGE" bash -euc '
             git clone --depth 1 https://github.com/why-reproductions-are-required/vite-plus-vitest-browser-mode .
+            # Align the fixture imports and browser provider with the installed toolchain.
+            vp migrate --no-interactive --no-agent
             vp install --frozen-lockfile
             vp exec playwright install --with-deps chromium
             vp test
