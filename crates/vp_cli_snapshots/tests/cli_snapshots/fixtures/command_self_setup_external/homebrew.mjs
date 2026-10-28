@@ -77,6 +77,18 @@ const archive = createArchive({
   'package/bin/pnpx.cjs': pnpmCode,
 });
 const integrity = 'sha512-' + createHash('sha512').update(archive).digest('base64');
+// A small local Node distribution keeps fresh-root setup independent of the network.
+const nodeArchives = new Map(
+  ['darwin-x64', 'darwin-arm64', 'linux-x64', 'linux-arm64', 'linux-x64-musl', 'linux-arm64-musl'].map(
+    (platform) => {
+      const directory = `node-v99.0.0-${platform}`;
+      return [
+        `${directory}.tar.gz`,
+        createArchive({ [`${directory}/bin/node`]: '#!/bin/sh\nexec "$TEST_SYSTEM_NODE" "$@"\n' }),
+      ];
+    },
+  ),
+);
 let downloads = 0,
   installs = 0,
   rejectInstall = false,
@@ -85,6 +97,16 @@ let authorization = `Bearer ${token}`;
 const server = createServer((request, response) => {
   if (request.url === '/index.json')
     return response.end(JSON.stringify([{ version: 'v99.0.0', lts: 'Fixture' }]));
+  if (request.url === '/v99.0.0/SHASUMS256.txt.asc') return response.writeHead(404).end();
+  if (request.url === '/v99.0.0/SHASUMS256.txt') {
+    return response.end(
+      [...nodeArchives]
+        .map(([name, data]) => `${createHash('sha256').update(data).digest('hex')}  ${name}\n`)
+        .join(''),
+    );
+  }
+  const nodeArchive = nodeArchives.get(request.url?.replace('/v99.0.0/', ''));
+  if (nodeArchive) return response.end(nodeArchive);
   if (request.url === '/installed') {
     installs++;
     return response.writeHead(rejectInstall ? 500 : 200).end();
@@ -132,13 +154,19 @@ function keg(version) {
   return prefix;
 }
 
-function environment(name, auth = true) {
+function environment(name, auth = true, seedRuntime = true) {
   const home = path.join(root, name);
-  const nodeRoot = path.join(home, 'js_runtime/node/99.0.0');
-  fs.mkdirSync(path.join(nodeRoot, 'bin'), { recursive: true });
-  fs.mkdirSync(path.join(nodeRoot, 'lib/node_modules'), { recursive: true });
-  fs.symlinkSync(node, path.join(nodeRoot, 'bin/node'));
-  fs.symlinkSync(npmRoot, path.join(nodeRoot, 'lib/node_modules/npm'));
+  const vpHome = path.join(home, '.vite-plus');
+  fs.mkdirSync(home, { recursive: true });
+  if (seedRuntime) {
+    const nodeRoot = path.join(vpHome, 'js_runtime/node/99.0.0');
+    fs.mkdirSync(path.join(nodeRoot, 'bin'), { recursive: true });
+    fs.mkdirSync(path.join(nodeRoot, 'lib/node_modules'), { recursive: true });
+    fs.symlinkSync(node, path.join(nodeRoot, 'bin/node'));
+    fs.symlinkSync(npmRoot, path.join(nodeRoot, 'lib/node_modules/npm'));
+    // These cases model an existing installation with a provisioned runtime.
+    fs.writeFileSync(path.join(vpHome, '.vp-owned'), 'vite-plus-owned-directory\n');
+  }
   fs.writeFileSync(
     path.join(home, '.npmrc'),
     `registry=${url}/registry/\n${auth ? `//127.0.0.1:${server.address().port}/registry/:_authToken=\${NPM_TOKEN}\n` : ''}`,
@@ -146,7 +174,7 @@ function environment(name, auth = true) {
   return {
     ...originalEnv,
     HOME: home,
-    VP_HOME: home,
+    VP_HOME: vpHome,
     VP_SELF_SETUP_NO_MODIFY_PATH: '1',
     VP_NODE_DIST_MIRROR: url,
     VP_NODE_MANAGER: 'yes',
@@ -154,16 +182,17 @@ function environment(name, auth = true) {
     VP_PNPM_MANAGER: 'yes',
     NPM_TOKEN: token,
     TEST_REGISTRY: url,
+    TEST_SYSTEM_NODE: node,
     TEST_CLI_BINARY: path.join(home, 'vp-path'),
     npm_config_fetch_retries: '0',
     npm_config_cache: path.join(home, 'npm-cache'),
     PATH: [
-      path.join(home, 'bin'),
+      path.join(vpHome, 'bin'),
       path.join(root, 'brew/bin'),
       path.dirname(node),
       '/usr/bin',
       '/bin',
-      path.join(home, 'fallback-bin'),
+      path.join(vpHome, 'fallback-bin'),
     ].join(path.delimiter),
   };
 }
@@ -185,6 +214,7 @@ try {
   fs.mkdirSync(path.dirname(publicVp), { recursive: true });
   fs.symlinkSync(path.join(old, 'bin/vp'), publicVp);
   const env = environment('user');
+  const userNpmrc = fs.readFileSync(path.join(env.HOME, '.npmrc'), 'utf8');
   rejectInstall = true;
   await run(publicVp, ['--help'], env, root, 1);
   const settingsFile = path.join(env.VP_HOME, 'config.json');
@@ -285,11 +315,55 @@ try {
   const removed = await run(publicVp, ['implode', '--yes'], env);
   assert.ok((removed.stdout + removed.stderr).includes('brew uninstall voidzero-dev/vite-plus/vp'));
   assert.ok(!fs.existsSync(env.VP_HOME));
+  assert.equal(fs.readFileSync(path.join(env.HOME, '.npmrc'), 'utf8'), userNpmrc);
   assert.ok(fs.existsSync(publicVp));
   assert.ok(fs.existsSync(userPackage(secondUser)));
   console.log(
     'Ownership commands use the tap name; migration preserves global packages and refreshes their shims.',
   );
+  for (const split of [false, true]) {
+    const fresh = environment(`fresh-${split ? 'split' : 'single'}`, true, false);
+    const data = split ? path.join(fresh.HOME, 'data') : fresh.VP_HOME;
+    const cache = split ? path.join(fresh.HOME, 'cache') : path.join(data, 'cache');
+    const bin = split ? path.join(fresh.HOME, 'bin') : path.join(data, 'bin');
+    const config = split ? path.join(fresh.HOME, 'config/vite-plus') : data;
+    const state = split ? path.join(fresh.HOME, 'state/vite-plus') : data;
+    if (split) {
+      delete fresh.VP_HOME;
+      Object.assign(fresh, {
+        VP_BIN_DIR: bin,
+        VP_DATA_DIR: data,
+        VP_CACHE_DIR: cache,
+        XDG_CONFIG_HOME: path.dirname(config),
+        XDG_STATE_HOME: path.dirname(state),
+      });
+      fresh.PATH = [bin, path.dirname(publicVp), path.dirname(node), '/usr/bin', '/bin'].join(
+        path.delimiter,
+      );
+    }
+    const roots = [...new Set([data, cache, config, state])];
+    const npmrc = fs.readFileSync(path.join(fresh.HOME, '.npmrc'), 'utf8');
+    for (let attempt = 0; attempt < 2; attempt++) {
+      for (const directory of roots) assert.ok(!fs.existsSync(directory), directory);
+      const before = installs;
+      await Promise.all([run(publicVp, ['--help'], fresh), run(publicVp, ['--help'], fresh)]);
+      assert.equal(installs, before + 1, 'fresh concurrent setup must install once');
+      for (const directory of roots) {
+        assert.equal(
+          fs.readFileSync(path.join(directory, '.vp-owned'), 'utf8'),
+          'vite-plus-owned-directory\n',
+        );
+      }
+      assert.equal(fs.readlinkSync(path.join(bin, 'vp')), publicVp);
+      assert.equal(fs.readlinkSync(path.join(data, 'fallback-bin/npm')), publicVp);
+      await run(path.join(bin, 'node'), ['--version'], fresh);
+      await run(publicVp, ['implode', '--yes'], fresh);
+      for (const directory of roots) assert.ok(!fs.existsSync(directory), directory);
+      assert.ok(!fs.existsSync(path.join(bin, 'vp')));
+      assert.ok(fs.existsSync(publicVp));
+      assert.equal(fs.readFileSync(path.join(fresh.HOME, '.npmrc'), 'utf8'), npmrc);
+    }
+  }
   console.log('User installations and cleanup stay independent.');
 
   for (const [name, registry] of [
