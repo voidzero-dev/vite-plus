@@ -39,8 +39,6 @@ env:
   VP_NODE_DIST_MIRROR: ${{ vars.VP_NODE_DIST_MIRROR || 'https://nodejs.org/dist' }}
   # New Node.js releases can appear before both musl archives are available.
   MUSL_NODE_VERSION: '24.22.1'
-  # Pin the template tool so installer smoke tests do not depend on new releases.
-  CREATE_VITE_VERSION: '9.3.3'
 
 jobs:
   test-install-sh:
@@ -98,7 +96,7 @@ jobs:
           vp --version
           vp --help
           # test create command
-          vp create vite@${{ env.CREATE_VITE_VERSION }} --no-interactive --no-agent -- hello --no-interactive -t vanilla
+          vp create vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
           test -f hello/package.json
           cd hello
           vp run build
@@ -824,7 +822,7 @@ jobs:
               vp --version
 
               # FIXME: qemu: uncaught target signal 11 (Segmentation fault) - core dumped
-              # vp create vite@${{ env.CREATE_VITE_VERSION }} --no-interactive --no-agent -- hello --no-interactive -t vanilla
+              # vp create vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
               # cd hello && vp run build
             "
 
@@ -875,7 +873,7 @@ jobs:
               vp env run --node \"\$VP_NODE_VERSION\" -- node -p \"process.versions\"
 
               # Test create command
-              vp create vite@${{ env.CREATE_VITE_VERSION }} --no-interactive --no-agent -- hello --no-interactive -t vanilla
+              vp create vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
               test -f hello/package.json
               cd hello
               vp run build
@@ -945,7 +943,7 @@ jobs:
               vp env run --node \"\$VP_NODE_VERSION\" -- node -p \"process.versions\"
 
               # FIXME: QEMU doesn't support all syscalls needed by rolldown/tsdown
-              # vp create vite@${{ env.CREATE_VITE_VERSION }} --no-interactive --no-agent -- hello --no-interactive -t vanilla
+              # vp create vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
               # cd hello && vp run build && vp --version
 
               # Verify upgrade
@@ -1015,7 +1013,7 @@ jobs:
           Write-Host "PATH: $env:Path"
           vp --version
           vp --help
-          vp create vite@${{ env.CREATE_VITE_VERSION }} --no-interactive --no-agent -- hello --no-interactive -t vanilla
+          vp create vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (-not (Test-Path hello/package.json)) { throw 'create-vite did not generate package.json' }
           cd hello
@@ -1089,7 +1087,7 @@ jobs:
           Write-Host "PATH: $env:Path"
           vp --version
           vp --help
-          vp create vite@${{ env.CREATE_VITE_VERSION }} --no-interactive --no-agent -- hello --no-interactive -t vanilla
+          vp create vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (-not (Test-Path hello/package.json)) { throw 'create-vite did not generate package.json' }
           cd hello
@@ -1194,7 +1192,7 @@ jobs:
           Write-Host "PATH: $env:Path"
           vp --version
           vp --help
-          vp create vite@${{ env.CREATE_VITE_VERSION }} --no-interactive --no-agent -- hello --no-interactive -t vanilla
+          vp create vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (-not (Test-Path hello/package.json)) { throw 'create-vite did not generate package.json' }
           cd hello
@@ -1390,7 +1388,7 @@ jobs:
           vp --help
           # $env:VP_LOG = "trace"
           # test create command
-          vp create vite@${{ env.CREATE_VITE_VERSION }} --no-interactive --no-agent -- hello --no-interactive -t vanilla
+          vp create vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (-not (Test-Path hello/package.json)) { throw 'create-vite did not generate package.json' }
           cd hello
@@ -1438,7 +1436,7 @@ jobs:
           dir "%USERPROFILE%\.vite-plus\bin"
 
           REM test create command
-          vp create vite@${{ env.CREATE_VITE_VERSION }} --no-interactive --no-agent -- hello-cmd --no-interactive -t vanilla
+          vp create vite --no-interactive --no-agent -- hello-cmd --no-interactive -t vanilla
           if errorlevel 1 exit /b %errorlevel%
           if not exist hello-cmd\package.json exit /b 1
           cd hello-cmd && vp run build && vp --version
@@ -1479,7 +1477,7 @@ jobs:
           vp --version
           vp --help
           # test create command
-          vp create vite@${{ env.CREATE_VITE_VERSION }} --no-interactive --no-agent -- hello-bash --no-interactive -t vanilla
+          vp create vite --no-interactive --no-agent -- hello-bash --no-interactive -t vanilla
           test -f hello-bash/package.json
           cd hello-bash
           vp run build
