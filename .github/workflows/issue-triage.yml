@@ -132,7 +132,7 @@ jobs:
 
           while IFS='|' read -r name color description <&3; do
             if ! label_exists "$name"; then
-              gh label create "$name" --color "$color" --description "$description" ||
+              gh label create --color "$color" --description "$description" -- "$name" ||
                 label_exists "$name"
             fi
           done 3<<'EOF'
