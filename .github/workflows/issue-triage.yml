@@ -156,6 +156,6 @@ jobs:
           triage-skill: .agents/skills/triage
           auto-pr-on-fix: true
           bot-logins: ${{ steps.app-token.outputs.app-slug }}[bot]
-          # Match upstream's default models, routed through AI Gateway.
-          triage-model: cloudflare-ai-gateway/claude-opus-4-6
+          # Route Claude models through AI Gateway.
+          triage-model: cloudflare-ai-gateway/claude-opus-4-8
           verification-model: cloudflare-ai-gateway/claude-sonnet-4-6
