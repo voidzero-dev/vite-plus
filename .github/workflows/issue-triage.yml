@@ -51,6 +51,7 @@ jobs:
         }}
     steps:
       - name: Checkout
+        if: env.PREPARE_TRIAGE == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
@@ -147,7 +148,6 @@ jobs:
         env:
           # AI Gateway creates the default gateway on the first authenticated request.
           CLOUDFLARE_GATEWAY_ID: default
-          NODE_OPTIONS: --import=${{ github.workspace }}/.github/scripts/triagebot-models.mjs
         with:
           read-token: ${{ github.token }}
           write-token: ${{ steps.app-token.outputs.token }}
@@ -156,6 +156,6 @@ jobs:
           triage-skill: .agents/skills/triage
           auto-pr-on-fix: true
           bot-logins: ${{ steps.app-token.outputs.app-slug }}[bot]
-          # Match Astro's factory models through AI Gateway (medium thinking by default).
-          triage-model: cloudflare-ai-gateway/claude-opus-5-5
+          # Use the action's default models through AI Gateway.
+          triage-model: cloudflare-ai-gateway/claude-opus-4-6
           verification-model: cloudflare-ai-gateway/claude-sonnet-4-6
