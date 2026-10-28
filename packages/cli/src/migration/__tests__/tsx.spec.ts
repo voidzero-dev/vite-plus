@@ -214,21 +214,15 @@ describe('rewriteTsxCommand', () => {
     expect(result.kept).toEqual([expect.stringContaining('--eval')]);
   });
 
-  it
-    .skipIf(process.platform === 'win32')
-    .each([
-      'NODE_OPTIONS="--import "tsx',
-      "NODE_OPTIONS=--import' tsx'",
-      `NODE_OPTIONS='--import "tsx"'`,
-    ])('preserves shell assignment semantics for %s', (assignment) => {
+  it.skipIf(process.platform === 'win32').each([
+    ['NODE_OPTIONS="--import "tsx', '--import vite-plus/register'],
+    ["NODE_OPTIONS=--import' tsx'", '--import vite-plus/register'],
+    [`NODE_OPTIONS='--import "tsx"'`, '--import "vite-plus/register"'],
+  ])('preserves shell assignment semantics for %s', (assignment, expected) => {
     const command = `${assignment} sh -c 'printenv NODE_OPTIONS'`;
     const result = rewriteTsxCommand(command);
     expect(result.kept).toEqual([]);
-    expect(execFileSync('sh', ['-c', result.command], { encoding: 'utf8' }).trim()).toBe(
-      assignment.includes('"tsx"')
-        ? '--import "vite-plus/register"'
-        : '--import vite-plus/register',
-    );
+    expect(execFileSync('sh', ['-c', result.command], { encoding: 'utf8' }).trim()).toBe(expected);
     expect(rewriteTsxCommand(result.command).command).toBe(result.command);
   });
 
