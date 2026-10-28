@@ -30,6 +30,7 @@ defaults:
 jobs:
   detect-changes:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
       pull-requests: read
@@ -62,6 +63,7 @@ jobs:
     # job waits for this check and propagates failures.
     if: needs.detect-changes.outputs.code-changed == 'false'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
       packages: read
@@ -97,6 +99,7 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.code-changed == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
       packages: read
@@ -118,6 +121,7 @@ jobs:
           - os: macos-latest
             target: aarch64-apple-darwin
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
@@ -145,6 +149,7 @@ jobs:
     if: needs.detect-changes.outputs.code-changed == 'true'
     name: Build Windows tests
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       XWIN_ACCEPT_LICENSE: '1'
       # The MSVC STL from xwin's VS17 manifest static-asserts a minimum Clang
@@ -231,6 +236,7 @@ jobs:
     needs: build-windows-tests
     name: Test (Windows)
     runs-on: namespace-profile-windows-4c-8g
+    timeout-minutes: 20
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
@@ -270,6 +276,7 @@ jobs:
     if: needs.detect-changes.outputs.code-changed == 'true'
     name: Test (Linux x64 musl)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     container:
       image: node:26.12.1-alpine
     env:
@@ -326,6 +333,7 @@ jobs:
     if: needs.detect-changes.outputs.code-changed == 'true'
     name: Lint
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
@@ -378,6 +386,7 @@ jobs:
     if: needs.detect-changes.outputs.code-changed == 'true'
     name: Build Windows CLI binaries
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
@@ -406,6 +415,7 @@ jobs:
             target: x86_64-pc-windows-msvc
             test-node: 26.0.0
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
@@ -952,6 +962,7 @@ jobs:
           - os: macos-latest
             target: aarch64-apple-darwin
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
@@ -1040,6 +1051,7 @@ jobs:
           - os: macos-latest
             target: aarch64-apple-darwin
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
@@ -1155,6 +1167,7 @@ jobs:
     # ConPTY spawn blocked and every case timed out at 60s. #2126 (vite-task
     # bump) resolved that; revert to windows-latest if it recurs.
     runs-on: namespace-profile-windows-4c-8g
+    timeout-minutes: 20
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
@@ -1330,6 +1343,7 @@ jobs:
     needs:
       - download-previous-rolldown-binaries
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
@@ -1469,6 +1483,7 @@ jobs:
     needs:
       - build-cli-test-binaries
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     # Run if: not a PR, OR PR has 'test: install-e2e' label
     if: >-
       github.event_name != 'pull_request' ||
@@ -1584,6 +1599,7 @@ jobs:
           #   vp_bin: vp.exe
           #   vp_insecure_tls: ''
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
@@ -1671,6 +1687,7 @@ jobs:
 
   done:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     if: always()
     needs:
       - docs-fmt
