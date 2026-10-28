@@ -1113,6 +1113,7 @@ jobs:
       - name: Prewarm managed runtimes
         run: bash .github/scripts/prewarm-node.sh "$HOME/.vite-plus/bin/vp"
         env:
+          VP_NODE_DIST_MIRROR: https://npmmirror.com/mirrors/node
           VP_LOG: vp_js_runtime=info
 
       - wait: [snapshot-shells, playwright]
@@ -1236,6 +1237,7 @@ jobs:
         shell: bash
         run: bash .github/scripts/prewarm-node.sh "$USERPROFILE/.vite-plus/bin/vp.exe"
         env:
+          VP_NODE_DIST_MIRROR: https://npmmirror.com/mirrors/node
           VP_LOG: vp_js_runtime=info
 
       # Keep fixtures outside runner.temp: setup-node writes an .npmrc there,
