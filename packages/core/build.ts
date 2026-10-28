@@ -60,7 +60,7 @@ try {
 } catch (cause) {
   throw new Error(
     'Prepare the Vite source before building core. From the repository root, run ' +
-      '`pnpm brand-vite` and `pnpm --filter vite build-types`.',
+      '`pnpm exec tool brand-vite` and `pnpm --filter vite build-types`.',
     { cause },
   );
 }
