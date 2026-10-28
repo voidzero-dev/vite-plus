@@ -1,4 +1,4 @@
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use backon::{ExponentialBuilder, Retryable};
 use js_semver::{Range, Version};
@@ -211,7 +211,6 @@ pub async fn download_runtime_with_provider<P: JsRuntimeProvider>(
         return Ok(runtime);
     }
 
-    let started = Instant::now();
     let download_message = format!("Downloading {} v{version}...", provider.name());
     tracing::info!("{download_message}");
 
@@ -272,11 +271,7 @@ pub async fn download_runtime_with_provider<P: JsRuntimeProvider>(
     // Move extracted directory to cache location
     move_to_cache(&extracted_path, install_dir, &binary_path).await?;
 
-    tracing::info!(
-        "{} {version} installed at {install_dir:?} in {:.1}s",
-        provider.name(),
-        started.elapsed().as_secs_f64()
-    );
+    tracing::info!("{} {version} installed at {install_dir:?}", provider.name());
 
     Ok(runtime)
 }

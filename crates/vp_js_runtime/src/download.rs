@@ -3,10 +3,7 @@
 //! This module provides platform-agnostic utilities for downloading,
 //! verifying, and extracting runtime archives.
 
-use std::{
-    fs::File,
-    time::{Duration, Instant},
-};
+use std::{fs::File, time::Duration};
 
 use backon::{ExponentialBuilder, Retryable};
 use futures_util::StreamExt;
@@ -44,7 +41,6 @@ pub async fn download_file(
     message: &str,
 ) -> Result<(), Error> {
     let client = vp_shared::shared_http_client()?;
-    let started = Instant::now();
     let archive_filename = target_path.as_path().file_name().unwrap_or_default().to_string_lossy();
 
     tracing::info!("Fetching archive: {archive_filename}");
@@ -177,11 +173,7 @@ pub async fn download_file(
             .with_max_times(3),
     )
     .notify(|_, delay| {
-        tracing::warn!(
-            "Retrying {archive_filename} after {:.1}s; next attempt in {:.1}s",
-            started.elapsed().as_secs_f64(),
-            delay.as_secs_f64()
-        );
+        tracing::warn!("Retrying {archive_filename} in {:.1}s", delay.as_secs_f64());
     })
     .await
     .map_err(|e| Error::DownloadFailed {
@@ -193,10 +185,7 @@ pub async fn download_file(
 
     let size_bytes = result?;
 
-    tracing::info!(
-        "Downloaded {archive_filename}: {size_bytes} bytes in {:.1}s",
-        started.elapsed().as_secs_f64()
-    );
+    tracing::info!("Downloaded {archive_filename}: {size_bytes} bytes");
 
     Ok(())
 }
