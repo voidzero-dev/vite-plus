@@ -1110,10 +1110,11 @@ jobs:
 
       # Seed the repository pin, default LTS, and shared fixture versions before
       # command timers start. Keep the version list shared across platforms.
+      # Set the repository Actions variable to switch Node.js download sources.
       - name: Prewarm managed runtimes
         run: bash .github/scripts/prewarm-node.sh "$HOME/.vite-plus/bin/vp"
         env:
-          VP_NODE_DIST_MIRROR: https://npmmirror.com/mirrors/node
+          VP_NODE_DIST_MIRROR: ${{ vars.VP_NODE_DIST_MIRROR || 'https://nodejs.org/dist' }}
           VP_LOG: vp_js_runtime=info
 
       - wait: [snapshot-shells, playwright]
@@ -1237,7 +1238,7 @@ jobs:
         shell: bash
         run: bash .github/scripts/prewarm-node.sh "$USERPROFILE/.vite-plus/bin/vp.exe"
         env:
-          VP_NODE_DIST_MIRROR: https://npmmirror.com/mirrors/node
+          VP_NODE_DIST_MIRROR: ${{ vars.VP_NODE_DIST_MIRROR || 'https://nodejs.org/dist' }}
           VP_LOG: vp_js_runtime=info
 
       # Keep fixtures outside runner.temp: setup-node writes an .npmrc there,
