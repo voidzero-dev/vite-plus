@@ -358,26 +358,25 @@ function rewriteSegment(
   } else if (values.slice(start).some((value) => TSX_COMMAND.test(value))) {
     rewrite.kept.push(KEEP_OTHER);
   }
-  if (environment.replacements.length) {
-    // All children inherit this assignment. Keep it and their edits together if one
-    // still needs tsx, rather than installing both loaders in the same process.
-    const taskStart = ['npm', 'pnpm', 'yarn', 'bun'].includes(values[start]) ? start : first;
-    const reason =
-      environment.keepReason ??
-      packageTaskKeepReason(rewrite, values.slice(taskStart), assignments);
-    if (reason && rewrite.kept.length === keptStart) {
-      rewrite.kept.push(reason);
-    }
-    if (rewrite.kept.length !== keptStart) {
-      rewrite.edits.length = editStart;
-    } else {
-      for (const replacement of environment.replacements) {
-        const index = replacement.index - inherited.length;
-        if (index >= 0) {
-          const token = tokens[index];
-          rewrite.edits.push(literalEdit(rewrite.command, token, replacement.value));
-        }
-      }
+  if (!environment.replacements.length) {
+    return;
+  }
+  // All children inherit this assignment. Keep it and their edits together if one
+  // still needs tsx, rather than installing both loaders in the same process.
+  const taskStart = ['npm', 'pnpm', 'yarn', 'bun'].includes(values[start]) ? start : first;
+  const reason =
+    environment.keepReason ?? packageTaskKeepReason(rewrite, values.slice(taskStart), assignments);
+  if (reason && rewrite.kept.length === keptStart) {
+    rewrite.kept.push(reason);
+  }
+  if (rewrite.kept.length !== keptStart) {
+    rewrite.edits.length = editStart;
+    return;
+  }
+  for (const replacement of environment.replacements) {
+    const index = replacement.index - inherited.length;
+    if (index >= 0) {
+      rewrite.edits.push(literalEdit(rewrite.command, tokens[index], replacement.value));
     }
   }
 }
@@ -425,31 +424,22 @@ function packageTaskKeepReason(
   values: readonly string[],
   inherited: readonly string[],
 ): string | undefined {
-  const [manager, command, name] = values;
+  const [manager, command] = values;
   if (!['npm', 'pnpm', 'yarn', 'bun'].includes(manager)) {
     return undefined;
   }
   if (['exec', 'x', 'dlx'].includes(command)) {
     return undefined;
   }
-  if (command === 'run' || command === 'run-script') {
-    // Later flags can select another workspace; forwarded arguments can supply
-    // an entry that the script itself does not name. Neither is resolved here.
-    return taskKeepReason(
-      rewrite,
-      values.length !== 3 || name?.startsWith('-') ? undefined : name,
-      inherited,
-      true,
-    );
+  const explicitRun = command === 'run' || command === 'run-script';
+  const name = explicitRun ? values[2] : command;
+  const expectedLength = explicitRun ? 3 : 2;
+  // Includes lifecycle commands and script shorthands. Extra arguments can select
+  // another workspace or supply an entry that the script itself does not name.
+  if (values.length !== expectedLength || name?.startsWith('-')) {
+    return KEEP_INHERITED_OPTIONS;
   }
-  // Includes npm's lifecycle commands and package-manager script shorthands.
-  // Unknown options (workspace filters, --prefix, etc.) cannot select this package.
-  return taskKeepReason(
-    rewrite,
-    values.length !== 2 || command?.startsWith('-') ? undefined : command,
-    inherited,
-    true,
-  );
+  return taskKeepReason(rewrite, name, inherited, true);
 }
 
 function applyEdits(command: string, edits: readonly Edit[]): string {
@@ -465,16 +455,14 @@ function literalEdit(command: string, token: LiteralCommandToken, value: string)
   const assignment = /^([A-Za-z_]\w*=)/.exec(raw);
   const prefix = assignment?.[1] ?? '';
   const quote = raw[prefix.length];
-  const content = value.slice(prefix.length);
-  let text: string;
-  if (quote === '"' && (prefix !== '' || raw.endsWith(quote))) {
-    text = `${prefix}"${content.replaceAll(/[\\"$`]/g, '\\$&')}"`;
-  } else if (quote === "'" && (prefix !== '' || raw.endsWith(quote))) {
-    text = `${prefix}'${content.replaceAll("'", "'\\''")}'`;
-  } else {
-    text = `${prefix}${/^[\w./=:-]+$/.test(content) ? content : `"${content.replaceAll(/[\\"$`]/g, '\\$&')}"`}`;
+  const preserveQuote = prefix !== '' || raw.endsWith(quote);
+  let content = value.slice(prefix.length);
+  if (quote === "'" && preserveQuote) {
+    content = `'${content.replaceAll("'", "'\\''")}'`;
+  } else if ((quote === '"' && preserveQuote) || !/^[\w./=:-]+$/.test(content)) {
+    content = `"${content.replaceAll(/[\\"$`]/g, '\\$&')}"`;
   }
-  return { start: token.start, end: token.end, text };
+  return { start: token.start, end: token.end, text: `${prefix}${content}` };
 }
 
 interface EnvironmentOptions {
@@ -699,19 +687,18 @@ function rewriteNodeLoader(
     const scripts = scanned.inlineCode
       ? []
       : tokens.slice(scanned.entryIndex).map(({ value }) => value);
-    const reason =
-      environment.keepReason ??
-      (environment.replacements.length && scanned.runScript !== undefined
-        ? taskKeepReason(
-            rewrite,
-            scanned.entryIndex < tokens.length ? undefined : scanned.runScript,
-            environment.assignments,
-            false,
-          )
-        : undefined) ??
-      [...scanned.preloads, ...(scanned.test ? scripts : scripts.slice(0, 1))]
-        .map((script) => scriptKeepReason(rewrite.cwd, script))
-        .find((reason) => reason !== undefined);
+    let reason = environment.keepReason;
+    if (
+      reason === undefined &&
+      environment.replacements.length &&
+      scanned.runScript !== undefined
+    ) {
+      const name = scanned.entryIndex < tokens.length ? undefined : scanned.runScript;
+      reason = taskKeepReason(rewrite, name, environment.assignments, false);
+    }
+    reason ??= [...scanned.preloads, ...(scanned.test ? scripts : scripts.slice(0, 1))]
+      .map((script) => scriptKeepReason(rewrite.cwd, script))
+      .find((reason) => reason !== undefined);
     if (reason) {
       rewrite.kept.push(reason);
     } else {
