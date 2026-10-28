@@ -146,14 +146,14 @@ const OXNODE_RUNNER: ScriptRunnerMigration = {
     if (/[*?[{]/.test(script)) {
       return undefined;
     }
-    const file = script.startsWith('~/')
-      ? path.join(os.homedir(), script.slice(2))
-      : path.isAbsolute(script)
-        ? script
-        : cwd === undefined
-          ? undefined
-          : path.resolve(cwd, script);
-    if (file === undefined) {
+    let file: string;
+    if (script.startsWith('~/')) {
+      file = path.join(os.homedir(), script.slice(2));
+    } else if (path.isAbsolute(script)) {
+      file = script;
+    } else if (cwd !== undefined) {
+      file = path.resolve(cwd, script);
+    } else {
       return undefined;
     }
     try {

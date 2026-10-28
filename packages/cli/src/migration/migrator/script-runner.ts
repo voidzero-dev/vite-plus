@@ -715,13 +715,14 @@ function scanOptions(
     }
     const name = optionName(value);
     const inline = value.includes('=');
+    const argument = inline ? value.slice(value.indexOf('=') + 1) : tokens[index + 1]?.value;
     if (directRunner && runner.dropOptions?.has(name)) {
       // The profile declares this option redundant for vpx.
       scanned.removals.push(removal(tokens, index));
       continue;
     }
     if (LOADER_OPTIONS.has(name)) {
-      const loader = inline ? value.slice(value.indexOf('=') + 1) : tokens[index + 1]?.value;
+      const loader = argument;
       if (loader !== undefined && runner.loaderPattern.test(loader)) {
         scanned.runnerLoader = true;
         if (runner.isLoader && !runner.isLoader(name, loader)) {
@@ -761,9 +762,7 @@ function scanOptions(
     scanned.registerKeepReason ??= runner.registerKeepOptions?.get(name);
     if (runner.registerInlineCodeKeepReason) {
       const code = ['-e', '-p', '-pe', '--eval', '--print'].includes(name)
-        ? inline
-          ? value.slice(value.indexOf('=') + 1)
-          : tokens[index + 1]?.value
+        ? argument
         : /^-(?:pe|ep|e|p)(.+)$/.exec(value)?.[1];
       if (code !== undefined) {
         scanned.registerKeepReason ??= runner.registerInlineCodeKeepReason(code);
@@ -773,9 +772,7 @@ function scanOptions(
     scanned.watch ||= name === '--watch';
     scanned.inlineCode ||= ['-e', '-p', '-pe', '--eval', '--print', '--run'].includes(name);
     if (name === '--run') {
-      scanned.runScript = inline
-        ? value.slice(value.indexOf('=') + 1)
-        : (tokens[index + 1]?.value ?? '');
+      scanned.runScript = argument ?? '';
     }
     if (
       !inline &&
