@@ -162,6 +162,7 @@ describe('Oxlint JSON extends migration', () => {
     write('packages/b/.oxlintrc.json', { extends: ['../a/.oxlintrc.json'] });
     const unsupported = "export { default } from './other.mjs';";
     const pendingViteConfig = write('packages/b/vite.config.mjs', unsupported);
+    write('packages/b/other.mjs', 'export default {};');
     expect(migrateWorkspace().warnings).toHaveLength(1);
     fs.writeFileSync(
       pendingViteConfig,
@@ -619,6 +620,7 @@ export default { define: { configs: JSON.stringify([a, b]) } };`,
     }
     const original = "export { default } from './another-config.mjs';";
     const viteConfig = write('packages/b/vite.config.mjs', original);
+    write('packages/b/another-config.mjs', 'export default {};');
 
     const report = migrateWorkspace();
 
@@ -668,6 +670,7 @@ export default { define: { configs: JSON.stringify([a, b]) } };`,
       } else {
         write('packages/b/.oxlintrc.json', { extends: ['../a/.oxlintrc.json'] });
       }
+      write('packages/b/another-config.mjs', 'export default {};');
       write('packages/b/vite.config.mjs', "export { default } from './another-config.mjs';");
 
       expect(migrateWorkspace().warnings).toHaveLength(1);
@@ -849,6 +852,7 @@ export default { define: { configs: JSON.stringify([a, b]) } };`,
     write('packages/b/.oxlintrc.json', { extends: ['../a/.oxlintrc.json'] });
     const original = "export { default } from './other.mjs';";
     const viteConfig = write('packages/b/vite.config.mjs', original);
+    write('packages/b/other.mjs', 'export default {};');
     expect(migrateWorkspace().warnings).toHaveLength(1);
 
     const modulePath = path.join(project, '.oxlintrc.ts');
@@ -884,6 +888,7 @@ export default { define: { configs: JSON.stringify([a, b]) } };`,
       createWorkspace(['a']);
       write('.oxlintrc.json', { rules: { 'no-debugger': 'warn' } });
       write('packages/a/.oxlintrc.json', { extends: ['../../.oxlintrc.json'] });
+      write('packages/a/another.mjs', 'export default {};');
       write('packages/a/vite.config.mjs', "export { default } from './another.mjs';");
       expect(migrateWorkspace(['a']).warnings).toHaveLength(1);
       fs.unlinkSync(path.join(project, 'packages/a/.oxlintrc.json'));
@@ -1225,6 +1230,7 @@ export default { define: { configs: JSON.stringify([a, b]) } };`,
     write('base.json', { rules: { 'no-debugger': 'error' } });
     const source = write('.oxlintrc.json', { extends: ['./base.json'] });
     const original = fs.readFileSync(source, 'utf8');
+    write('another-config.mjs', 'export default {};');
     write('vite.config.mjs', "export { default } from './another-config.mjs';");
     const report = createMigrationReport();
 
