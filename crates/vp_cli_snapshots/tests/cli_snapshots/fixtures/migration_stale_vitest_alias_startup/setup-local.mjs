@@ -7,7 +7,13 @@ const sourcePackageDir = path.dirname(require.resolve('vite-plus/package.json'))
 const localPackageDir = path.join('node_modules', 'vite-plus');
 
 fs.mkdirSync('node_modules', { recursive: true });
-fs.cpSync(sourcePackageDir, localPackageDir, { recursive: true, dereference: true });
+// Skip node_modules. The workspace package links `vite` to itself, and
+// dereferencing that link while copying makes `cpSync` throw ELOOP.
+fs.cpSync(sourcePackageDir, localPackageDir, {
+  recursive: true,
+  dereference: true,
+  filter: (src) => path.basename(src) !== 'node_modules',
+});
 
 // Keep Vite+ current so the fixture tests only the stale Vitest alias.
 const { version } = JSON.parse(fs.readFileSync(path.join(sourcePackageDir, 'package.json'), 'utf8'));
