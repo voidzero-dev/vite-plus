@@ -1,0 +1,11 @@
+{
+  "compilerOptions": {
+    "module": "CommonJS",
+    "target": "ES2022",
+    "jsx": "react",
+    "jsxFactory": "projectJsx"
+  },
+  "ts-node": {
+    "transpileOnly": false
+  }
+}
