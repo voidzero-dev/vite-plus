@@ -1,6 +1,9 @@
 //! Doctor command implementation for environment diagnostics.
 
-use std::process::ExitStatus;
+use std::{
+    process::ExitStatus,
+    sync::atomic::{AtomicBool, Ordering},
+};
 
 use console::style;
 use vp_pm_cli::{package_manager_bin_path, package_manager_install_dir};
@@ -42,6 +45,9 @@ const KNOWN_VERSION_MANAGERS: &[(&str, &str)] = &[
 /// Column width for left-side keys in aligned output
 const KEY_WIDTH: usize = 18;
 
+// Warnings come from many checks that otherwise return nothing, so they are recorded as they print.
+static HAS_WARNINGS: AtomicBool = AtomicBool::new(false);
+
 /// Print a section header (bold, with blank line before).
 fn print_section(name: &str) {
     vp_shared::output::print_stdout_line(format_args!(""));
@@ -60,6 +66,12 @@ fn print_check(status: &str, key: &str, value: &str) {
     } else {
         vp_shared::output::print_stdout_line(format_args!("  {status} {key:<KEY_WIDTH$}{value}"));
     }
+}
+
+/// Print an aligned key-value line with a warning indicator, and record it for the summary.
+fn print_warning(key: &str, value: &str) {
+    HAS_WARNINGS.store(true, Ordering::Relaxed);
+    print_check(&style(output::WARN_SIGN).yellow().to_string(), key, value);
 }
 
 fn print_package_manager_mode(key: &str, mode: ShimMode) {
@@ -168,6 +180,13 @@ pub async fn execute(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<Exit
             style("\u{2717} Some issues found.").red().bold()
         ));
         Ok(super::exit_status(1))
+    } else if HAS_WARNINGS.load(Ordering::Relaxed) {
+        // Warnings describe setups that still work, so they keep the zero exit code.
+        vp_shared::output::print_stdout_line(format_args!(
+            "{}",
+            style("\u{26A0} Some warnings found.").yellow().bold()
+        ));
+        Ok(ExitStatus::default())
     } else {
         vp_shared::output::print_stdout_line(format_args!(
             "{}",
@@ -304,8 +323,7 @@ async fn check_shim_mode(scope: EnvScope) -> Option<(config::Config, Option<Abso
                     );
                     system_node_path = Some(system_node);
                 } else {
-                    print_check(
-                        &style(output::WARN_SIGN).yellow().to_string(),
+                    print_warning(
                         "System Node.js",
                         &style("not found (will fall back to managed)").yellow().to_string(),
                     );
@@ -429,13 +447,11 @@ async fn check_package_manager_resolution(
                             package_manager_bin_path(&directory, name).as_path().exists()
                         })
                     });
-            let status = if installed { "installed" } else { "not installed" };
-            let indicator = if installed {
-                style(output::CHECK).green().to_string()
+            if installed {
+                print_check(&style(output::CHECK).green().to_string(), "PM binaries", "installed");
             } else {
-                style(output::WARN_SIGN).yellow().to_string()
-            };
-            print_check(&indicator, "PM binaries", status);
+                print_warning("PM binaries", "not installed");
+            }
             true
         }
         Ok(_) => {
@@ -482,8 +498,7 @@ fn check_env_sourcing() -> EnvSourcingStatus {
 
     // Second: check all shell profiles (interactive terminal sessions)
     if let Some(file) = check_profile_files(&env_path, ALL_SHELL_PROFILES) {
-        print_check(
-            &style(output::WARN_SIGN).yellow().to_string(),
+        print_warning(
             "IDE integration",
             &format!(
                 "{} {}",
@@ -502,8 +517,7 @@ fn check_session_override() {
     if let Ok(version) = std::env::var(config::VERSION_ENV_VAR) {
         let version = version.trim();
         if !version.is_empty() {
-            print_check(
-                &style(output::WARN_SIGN).yellow().to_string(),
+            print_warning(
                 "Session override",
                 &style(format!("{}={version}", env_vars::VP_NODE_VERSION)).yellow().to_string(),
             );
@@ -514,8 +528,7 @@ fn check_session_override() {
 
     // Also check session version file
     if let Some(version) = config::read_session_version_sync() {
-        print_check(
-            &style(output::WARN_SIGN).yellow().to_string(),
+        print_warning(
             "Session override (file)",
             &style(format!("{}={version}", config::SESSION_VERSION_FILE)).yellow().to_string(),
         );
@@ -601,8 +614,7 @@ async fn check_path(scope: EnvScope) -> bool {
                     &format!("{display} (system)"),
                 );
             } else {
-                print_check(
-                    &style(output::WARN_SIGN).yellow().to_string(),
+                print_warning(
                     tool,
                     &format!("{} {}", style(&display).yellow(), style("(not vp shim)").dim()),
                 );
@@ -732,8 +744,7 @@ fn print_ide_setup_guidance(env_dir: &vt_path::AbsolutePath) {
     };
 
     print_section("IDE Setup");
-    print_check(
-        &style(output::WARN_SIGN).yellow().to_string(),
+    print_warning(
         "",
         &style("GUI applications may not see shell PATH changes.").yellow().to_string(),
     );
@@ -828,11 +839,7 @@ async fn check_current_resolution(
                 &system_node.as_path().display().to_string(),
             );
         } else {
-            print_check(
-                &style(output::WARN_SIGN).yellow().to_string(),
-                "System Node.js",
-                &style("not found in PATH").yellow().to_string(),
-            );
+            print_warning("System Node.js", &style("not found in PATH").yellow().to_string());
             print_hint("Install Node.js or run 'vp env on' to use managed Node.js.");
         }
         return (true, None);
@@ -861,11 +868,7 @@ async fn check_current_resolution(
             if tokio::fs::try_exists(&binary_path).await.unwrap_or(false) {
                 print_check(&style(output::CHECK).green().to_string(), "Node binary", "installed");
             } else {
-                print_check(
-                    &style(output::WARN_SIGN).yellow().to_string(),
-                    "Node binary",
-                    &style("not installed").yellow().to_string(),
-                );
+                print_warning("Node binary", &style("not installed").yellow().to_string());
                 print_hint("Version will be downloaded on first use.");
             }
             (true, Some(resolution))
@@ -963,11 +966,7 @@ async fn check_dev_engines(
     print_section("devEngines");
     for finding in findings {
         if finding.warn {
-            print_check(
-                &style(output::WARN_SIGN).yellow().to_string(),
-                finding.key,
-                &style(&finding.message).yellow().to_string(),
-            );
+            print_warning(finding.key, &style(&finding.message).yellow().to_string());
         } else {
             print_check(" ", finding.key, &finding.message);
         }
@@ -1295,8 +1294,7 @@ fn check_conflicts() {
     if !conflicts.is_empty() {
         print_section("Conflicts");
         for manager in &conflicts {
-            print_check(
-                &style(output::WARN_SIGN).yellow().to_string(),
+            print_warning(
                 manager,
                 &style(format!(
                     "detected ({} is set)",
