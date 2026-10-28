@@ -11,6 +11,7 @@ describe('generator template', () => {
   // The scaffolded generator is executed directly with `node bin/index.ts`
   // (see discoverTemplate), so its imports must resolve under Node type
   // stripping, which does not remap `.js` specifiers to `.ts` files.
+  // Allow slow CI startup and leave time to report the child process timeout.
   it('bin/index.ts runs directly with node', () => {
     const result = spawnSync(process.execPath, ['bin/index.ts', '--help'], {
       cwd: generatorTemplateDir,
@@ -18,7 +19,8 @@ describe('generator template', () => {
       timeout: 30_000,
     });
 
+    expect(result.error).toBeUndefined();
     expect(result.stderr).not.toContain('ERR_MODULE_NOT_FOUND');
     expect(result.status).toBe(0);
-  });
+  }, 35_000);
 });

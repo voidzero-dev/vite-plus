@@ -6,7 +6,7 @@
 ## `vpt cp assert_use.fish 'vp "$project\with spaces"/assert_use.fish'`
 
 
-## `vpt write-file 'vp "$project\with spaces"/.node-version' 22.18.0`
+## `vpt write-file 'vp "$project\with spaces"/.node-version' 22.23.4`
 
 
 ## `cd 'vp "$project\with spaces"' && PATH=${workspace}/bin:${PATH} fish --no-config assert_use.fish`
@@ -14,7 +14,7 @@
 verifies the Fish wrapper help, explicit use, unset, file-based use, and failure branches
 
 ```
-Using Node.js <version> (resolved from 20.18.0)
+Using Node.js <version> (resolved from 20.20.2)
 Reverted selected components to project environment resolution
 Using Node.js <version> (resolved from .node-version)
 error: Unexpected argument '--invalid-option'

@@ -23,6 +23,9 @@ defaults:
   run:
     shell: bash
 
+env:
+  VP_NODE_DIST_MIRROR: ${{ vars.VP_NODE_DIST_MIRROR || 'https://nodejs.org/dist' }}
+
 jobs:
   detect-changes:
     runs-on: namespace-profile-linux-x64-default

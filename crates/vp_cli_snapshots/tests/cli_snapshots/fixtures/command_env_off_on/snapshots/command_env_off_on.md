@@ -9,7 +9,7 @@ Provide a system Node.js after the Vite+ bin on PATH, as in a user's shell.
 
 ## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} vp run assert-managed`
 
-Managed mode: should use project's engines.node 22.18.0
+Managed mode: should use project's engines.node 22.23.4
 
 ```
 VITE+ - The Unified Toolchain for the Web
@@ -34,7 +34,7 @@ Run `vp env on` to always use Vite+ managed tools.
 
 ## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} vp run assert-not-managed`
 
-System-first mode: must use the system Node.js, not 22.18.0
+System-first mode: must use Node.js from system-bin
 
 ```
 VITE+ - The Unified Toolchain for the Web
@@ -59,7 +59,7 @@ Run `vp env off` to prefer system tools instead.
 
 ## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} vp run assert-managed`
 
-Managed mode restored: should use 22.18.0 again
+Managed mode restored: should use 22.23.4 again
 
 ```
 VITE+ - The Unified Toolchain for the Web

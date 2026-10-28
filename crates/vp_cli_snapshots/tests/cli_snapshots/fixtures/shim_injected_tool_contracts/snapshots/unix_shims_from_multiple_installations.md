@@ -1,6 +1,6 @@
 # unix_shims_from_multiple_installations
 
-## `vp env exec --node 22.18.0 node assert-unix-shim-path.cjs multiple`
+## `vp env exec --node 22.23.4 node assert-unix-shim-path.cjs multiple`
 
 Unix shims pointing to different vp binaries must not execute one another
 

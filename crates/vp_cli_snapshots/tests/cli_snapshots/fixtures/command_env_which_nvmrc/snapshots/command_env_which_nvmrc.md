@@ -16,6 +16,6 @@ Core tool - shows resolved Node.js binary path from .nvmrc
 VITE+ - The Unified Toolchain for the Web
 
 <home>/.vite-plus/js_runtime/node/<version>/bin/node
-  Version:    20.18.0
+  Version:    20.20.2
   Source:     <workspace>/.nvmrc
 ```

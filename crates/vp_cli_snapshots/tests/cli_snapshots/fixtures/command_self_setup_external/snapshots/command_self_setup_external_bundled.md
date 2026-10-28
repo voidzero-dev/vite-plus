@@ -6,7 +6,7 @@
 ## `vpt cp $VP_HOME/bin/vp external/bin/vp`
 
 
-## `vpt cp $VP_HOME/js_runtime/node/22.18.0/bin/node system/bin/node`
+## `vpt cp $VP_HOME/js_runtime/node/22.23.4/bin/node system/bin/node`
 
 
 ## `vpt chmod +x system/bin/node`
