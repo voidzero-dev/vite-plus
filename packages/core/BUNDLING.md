@@ -21,7 +21,9 @@ This approach enables users to access Vite, Rolldown, and related tools through 
 
 ### Vite Source Preparation
 
-Before core bundling, [`brand-vite.ts`](../tools/src/brand-vite.ts) applies branding and the [`patch-vite-config.ts`](../tools/src/patch-vite-config.ts) resolver patch to the vendored Vite source. `sync-remote` runs this preparation. The root build script also runs it before generating Vite types and building core.
+Before core bundling, [`brand-vite.ts`](../tools/src/brand-vite.ts) applies branding and the [`patch-vite-config.ts`](../tools/src/patch-vite-config.ts) resolver patch to the vendored Vite source. `sync-remote` runs this preparation. [CI](../../.github/actions/build-upstream/action.yml) also applies it after checking out upstream sources.
+
+Regular `pnpm build` runs use the prepared sources. If the patch code changes after synchronization, run `pnpm brand-vite` once, then `pnpm build` to regenerate Vite types and rebuild the packages.
 
 The resolver patch adds an optional internal eighth argument to `resolveConfig`. The `resolveConfigFromFile(configFile, options?)` helper exported by `vite-plus` passes a base directory through a private type bridge. By default, this base is the config file's parent directory. With an absolute `configFile`, default root resolution is independent of `process.cwd()`. Callers can pass `{ rootBase: projectRoot }` to use a different project directory, including when the config is in a subdirectory. Relative `configFile` and explicit `rootBase` paths resolve from `process.cwd()`; the helper does not change the process cwd.
 
@@ -336,7 +338,7 @@ dist/
 
 ## Build Commands
 
-These direct core builds require prepared Vite sources and current Vite types. The [standard repository build](../../CONTRIBUTING.md#build-vite-and-upstream-dependencies) includes both prerequisites.
+These direct core builds require [prepared Vite sources](#vite-source-preparation) and current Vite types. The [standard repository build](../../CONTRIBUTING.md#build-vite-and-upstream-dependencies) regenerates Vite types before building core. For a direct core build after source changes, run `pnpm --filter vite build-types` first.
 
 ```bash
 # Build the core package
