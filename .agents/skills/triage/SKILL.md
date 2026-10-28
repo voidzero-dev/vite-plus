@@ -12,7 +12,7 @@ Run only the stage named by the `step` argument, then return the structured resu
 - `verify`: follow [verify.md](verify.md).
 - `fix`: follow [fix.md](fix.md).
 
-Use `/tmp/vite-plus-triage/gh-<issueDetails.number>` as `triageDir`. Keep `report.md`, reproduction projects, logs, and scratch files there. Never put triage files inside the Vite+ checkout.
+Use `/tmp/vite-plus-triage/gh-<issueDetails.number>` as `triageDir`. Keep `report.md`, reproduction projects, reference checkouts, logs, scratch scripts, and generated artifacts there. Do not commit triage data or put it inside the Vite+ checkout: triagebot-action stages every new or changed file in the worktree.
 
 ## Safety
 

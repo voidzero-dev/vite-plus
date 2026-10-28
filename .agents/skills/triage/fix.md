@@ -48,7 +48,9 @@ Return `fixed: true` only when the original reproduction passes, the regression 
 
 ## 5. Clean Up
 
-Remove debug code, temporary files, build artifacts, and unrelated generated changes. `git status --short` must show only intended source and test files.
+Remove debug code and unrelated generated changes. Move reports, reproduction projects, reference checkouts, logs, scratch scripts, build artifacts, and other triage data into `triageDir`, or delete temporary files that are no longer needed. Do not commit triage data.
+
+The action stages every new or changed file in the checkout. Review `git status --short --untracked-files=all` before returning; it must show only intended source and regression-test changes.
 
 ## 6. Append to `report.md`
 
