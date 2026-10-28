@@ -371,17 +371,21 @@ the point.
 `seed-runtime = true` (default) symlinks a provisioned managed Node runtime
 into the case `VP_HOME` so commands do not download ~50MB per case.
 
-Reuse the Node versions in [`node-versions.txt`](node-versions.txt) when a
-fixture needs a fixed runtime. CI prepares these versions, the repository's
+Prefer one fixed runtime per Node major. Reuse the versions below, and add
+another only when a fixture tests behavior that differs between versions.
+Use `22.18.0` for ordinary cases that do not need a different major.
+
+| Node major | Default fixed runtime | Required exceptions                                                                                                                                             |
+| ---------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 20         | `20.18.0`             | None; unsupported-runtime and migration cases share this version.                                                                                               |
+| 22         | `22.18.0`             | The repository pin tests synchronous loader hooks, enabled from `22.22.3`; `22.18.0` tests asynchronous hooks.                                                  |
+| 24         | `24.12.0`             | `24.3.0` is the unsupported migration input; `24.11.0` is the exact supported upgrade target. `24.12.0` tests synchronous loader hooks, enabled from `24.11.1`. |
+| 26         | `26.12.0`             | None; script, bare config-file argument, and executable packaging cases share this version.                                                                     |
+
+CI prepares [`node-versions.txt`](node-versions.txt), the repository's
 `.node-version`, and the default LTS before snapshot command timers start.
-Use `22.18.0` for ordinary cases and `20.18.0` for unsupported-runtime cases.
-The `20.19.0` pin retains the Node 20 migration input.
-The Node 24 pins retain the below-policy migration input (`24.3.0`), migration
-minimum (`24.11.0`), and synchronous loader (`24.12.0`) coverage. Node `26.12.0`
-covers the bare config-file argument. The newer Node 22 loader case uses the
-repository pin. Major-version and LTS/latest alias cases retain their selectors.
-Keep different versions only when the case needs their behavior, and update the
-shared list if another fixed runtime is required. Cases with
+Update the shared list and document the test reason when adding an exception.
+Major-version and LTS/latest alias cases retain their selectors. Cases with
 `seed-runtime = false` still test installation into an empty runtime directory.
 
 Fixture configs may import bare `vite-plus` and
