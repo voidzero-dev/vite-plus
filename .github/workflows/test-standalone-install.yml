@@ -852,7 +852,7 @@ jobs:
               export VP_HOME=\"\$HOME/.vite-plus\"
               sh /workspace/.github/scripts/pin-install-node.sh
               cat /workspace/packages/cli/install.sh | VP_LEGACY_INSTALLER_URL=file:///workspace/packages/cli/install-legacy.sh bash
-              export PATH=\"\$HOME/.vite-plus/bin:\$PATH\"
+              . \"\$HOME/.vite-plus/env\"
 
               vp --version
               vp --help
