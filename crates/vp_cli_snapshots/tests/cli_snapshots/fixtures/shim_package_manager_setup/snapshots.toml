@@ -41,7 +41,7 @@ steps = [
   { argv = ["vp", "env", "off", "node"], snapshot = false },
   { argv = ["vp", "env", "off", "pnpm"], snapshot = false },
   { argv = ["vp", "install"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-dispatch-bin${PATH_SEPARATOR}${PATH}"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:9"]], comment = "a system-first package manager resolves offline and receives the Node.js selected by system-first Node mode" },
-  { argv = ["vp", "env", "exec", "--node", "20.18.0", "pnpm", "--version"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-dispatch-bin${PATH_SEPARATOR}${PATH}"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:9"]], comment = "explicit Node execution inspects the system manager before resolving its declared range" },
+  { argv = ["vp", "env", "exec", "--node", "20.20.2", "pnpm", "--version"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-dispatch-bin${PATH_SEPARATOR}${PATH}"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:9"]], comment = "explicit Node execution inspects the system manager before resolving its declared range" },
 ]
 
 [[case]]

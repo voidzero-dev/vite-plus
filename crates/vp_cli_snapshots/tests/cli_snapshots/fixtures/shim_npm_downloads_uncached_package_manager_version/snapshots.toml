@@ -9,13 +9,13 @@ skip-platforms = ["windows"]
 steps = [
   # Share the Node.js pin with the other shim fixtures. This case still
   # installs it into an unseeded home to test an uncached runtime.
-  { argv = ["vpt", "write-file", ".node-version", "22.18.0\n"], comment = "Pin the project Node.js version", snapshot = false },
-  { argv = ["vpt", "rm", "-rf", "$VP_HOME/js_runtime/node/22.18.0"], comment = "Ensure pinned Node.js is not cached", snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "write-file", ".node-version", "22.23.4\n"], comment = "Pin the project Node.js version", snapshot = false },
+  { argv = ["vpt", "rm", "-rf", "$VP_HOME/js_runtime/node/22.23.4"], comment = "Ensure pinned Node.js is not cached", snapshot = false, continue-on-failure = true },
   { argv = ["vpt", "rm", "-rf", "$VP_HOME/package_manager/npm/10.5.0", "$VP_HOME/package_manager/npm/10.5.0.lock"], comment = "Ensure pinned npm is not cached", snapshot = false, continue-on-failure = true },
-  { argv = ["vpt", "stat-file", "$VP_HOME/js_runtime/node/22.18.0", "--assert", "missing"], comment = "pinned Node.js@22.18.0 is uncached" },
+  { argv = ["vpt", "stat-file", "$VP_HOME/js_runtime/node/22.23.4", "--assert", "missing"], comment = "pinned Node.js@22.23.4 is uncached" },
   { argv = ["vpt", "stat-file", "$VP_HOME/package_manager/npm/10.5.0", "--assert", "missing"], comment = "pinned npm@10.5.0 is uncached" },
   { argv = ["node", "check-npm-version.mjs", "10.5.0", "npm shim auto-downloaded Node.js and packageManager on first invocation"], timeout = 120000 },
-  { argv = ["vpt", "stat-file", "$VP_HOME/js_runtime/node/22.18.0/bin/node", "--assert", "file"], comment = "pinned Node.js@22.18.0 is now cached" },
+  { argv = ["vpt", "stat-file", "$VP_HOME/js_runtime/node/22.23.4/bin/node", "--assert", "file"], comment = "pinned Node.js@22.23.4 is now cached" },
   { argv = ["vpt", "stat-file", "$VP_HOME/package_manager/npm/10.5.0/npm/bin/npm", "--assert", "file"], comment = "pinned npm@10.5.0 is now cached" },
   { argv = ["node", "check-npm-version.mjs", "10.5.0", "subsequent invocations reuse the cached version"] },
 ]

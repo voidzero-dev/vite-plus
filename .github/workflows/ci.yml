@@ -1111,12 +1111,9 @@ jobs:
       # Seed the repository pin, default LTS, and shared fixture versions before
       # command timers start. Keep the version list shared across platforms.
       - name: Prewarm managed runtimes
-        run: |
-          "$HOME/.vite-plus/bin/vp" node --version
-          VP_NODE_VERSION=lts "$HOME/.vite-plus/bin/vp" node --version
-          while read -r node_version; do
-            VP_NODE_VERSION="$node_version" "$HOME/.vite-plus/bin/vp" node --version
-          done < crates/vp_cli_snapshots/tests/cli_snapshots/node-versions.txt
+        run: bash .github/scripts/prewarm-node.sh "$HOME/.vite-plus/bin/vp"
+        env:
+          VP_LOG: vp_js_runtime=info
 
       - wait: [snapshot-shells, playwright]
 
@@ -1237,12 +1234,9 @@ jobs:
       # command timers start. Keep the version list shared across platforms.
       - name: Prewarm managed runtimes
         shell: bash
-        run: |
-          "$USERPROFILE/.vite-plus/bin/vp.exe" node --version
-          VP_NODE_VERSION=lts "$USERPROFILE/.vite-plus/bin/vp.exe" node --version
-          while read -r node_version; do
-            VP_NODE_VERSION="$node_version" "$USERPROFILE/.vite-plus/bin/vp.exe" node --version
-          done < crates/vp_cli_snapshots/tests/cli_snapshots/node-versions.txt
+        run: bash .github/scripts/prewarm-node.sh "$USERPROFILE/.vite-plus/bin/vp.exe"
+        env:
+          VP_LOG: vp_js_runtime=info
 
       # Keep fixtures outside runner.temp: setup-node writes an .npmrc there,
       # which Yarn Classic discovers when walking parent directories.

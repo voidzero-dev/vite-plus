@@ -7,7 +7,7 @@ Warnings describe setups that still work, so doctor names them in the summary an
 source the env file so the output has no platform-specific IDE guidance
 
 
-## `VP_NODE_VERSION=20.18.0 vp env doctor node`
+## `VP_NODE_VERSION=20.20.2 vp env doctor node`
 
 ```
 VITE+ - The Unified Toolchain for the Web
@@ -23,7 +23,7 @@ Installation
 Configuration
   ✓ Node.js           managed mode
   ✓ IDE integration   env sourced in ~/.profile
-  ⚠ Session override  VP_NODE_VERSION=20.18.0
+  ⚠ Session override  VP_NODE_VERSION=20.20.2
   note: Overrides all file-based resolution.
   note: Run 'vp env use --unset' to remove.
 
@@ -35,7 +35,7 @@ PATH
 Node.js Resolution
     Directory         <workspace>
     Source            VP_NODE_VERSION
-    Version           20.18.0
+    Version           20.20.2
   ⚠ Node binary       not installed
   note: Version will be downloaded on first use.
 

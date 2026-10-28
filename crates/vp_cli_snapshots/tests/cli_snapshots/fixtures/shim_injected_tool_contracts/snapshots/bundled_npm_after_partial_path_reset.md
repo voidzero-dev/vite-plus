@@ -6,7 +6,7 @@
 ## `vp env on npm`
 
 
-## `vp env exec --node 22.18.0 node assert-unix-shim-path.cjs partial`
+## `vp env exec --node 22.23.4 node assert-unix-shim-path.cjs partial`
 
 A retained Node symlink provides the installation for restoring bundled npm and npx
 
