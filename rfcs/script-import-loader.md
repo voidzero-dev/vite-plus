@@ -88,21 +88,38 @@ CommonJS resolution, JSX defaults, or supported decorator syntax. The acceptance
 claim is complete replacement of the **preload integration surface**, not identical
 output for every program accepted by tsx.
 
-`VP_SCRIPT_TSCONFIG` explicitly selects a config, including the value set by
-`vpx --tsconfig`. `TSX_TSCONFIG_PATH` is accepted as a compatibility fallback so an
-integration can replace its preload without renaming its existing config variable.
-Without either, the existing `OXC_TSCONFIG_PATH` / `TS_NODE_PROJECT` behavior and
-per-file discovery apply. Configuration is established before either hook path
-resolves or transforms application files. The loader does not change environment
-variables; children inherit the original values.
+The first nonempty environment variable in this order selects one tsconfig for
+resolution and transforms:
+
+1. `VP_SCRIPT_TSCONFIG`
+2. `TSX_TSCONFIG_PATH`
+3. `TS_NODE_PROJECT`
+4. `OXC_TSCONFIG_PATH`
+
+Unset and empty values fall through to the next variable. If none selects a path,
+the loader uses per-file discovery. `TSX_TSCONFIG_PATH` lets an integration replace
+its preload without renaming its existing config variable.
+
+During the first registration in each application thread, the preload captures
+this selection from JavaScript's `process.env` and passes it to `initializeLoader`.
+Later environment changes or repeated registration do not select another config
+in that thread. The native context fixes the effective path on its first transform
+or resolve, or earlier when `script-register.ts` calls `freezeTsconfig` for an
+asynchronous hook thread. Freezing selects the path and diagnostic source; config
+parsing still waits until a resolver uses it.
+
+Public registration does not rewrite `process.env`. Children inherit environment
+values under Node.js rules. The `vpx` CLI first sets `VP_SCRIPT_TSCONFIG` from `--tsconfig`, or
+clears an inherited `VP_SCRIPT_TSCONFIG` when that flag is absent. The remaining
+variables then follow the same precedence.
 
 Each JavaScript thread owns its native resolver, config selection, dependency
-policy, and resolution caches. Concurrent workers can select different configs or
-clear their parent's config variables. Reading Rust's process environment is not
-sufficient: Node.js workers have their own `process.env` values. The preload
-captures the effective config in JavaScript, and `initializeLoader` explicitly
-selects that path or automatic discovery. The asynchronous ESM hook receives the
-same selection through `module.register` data before its first resolve.
+policy, and resolution caches. Application workers select from their own
+environment at registration; they can select different configs or clear their
+parent's variables without changing the parent's selection. Reading Rust's process
+environment is not sufficient: Node.js workers have their own `process.env` values.
+An internal asynchronous ESM hook thread instead receives its caller's frozen
+selection through `module.register` data before its first resolve.
 
 oxc-node stores these values in a loader context per thread, as introduced in
 [oxc-node#888](https://github.com/oxc-project/oxc-node/pull/888). Async native
@@ -112,8 +129,29 @@ to embedders while keeping their NAPI registration disabled. The off-thread ESM
 hooks receive the frozen tsconfig, diagnostic source, and dependency policy from
 the preload's thread.
 
-Do not load tsx and this preload together. They both claim TypeScript files, and
-their registration order is not a supported compatibility mechanism.
+### Custom Loader Chains
+
+The public entry supports project hooks registered with `--loader` or
+`--experimental-loader` that compose with the Vite+ TypeScript transformer. For
+example, one hook can select a TypeScript variant while another turns an image
+into a JavaScript module. Each hook must delegate requests it does not handle and
+preserve the formats and source expected by the next hook.
+
+These flags register asynchronous hooks even when Vite+ uses synchronous hooks.
+Node.js owns their ordering: asynchronous hooks form a last-registered-first chain;
+when both kinds are present, synchronous hooks run before that chain. Changing
+the custom-loader order can change the result. See
+[Node.js hook chaining](https://nodejs.org/api/module.html#chaining-of-asynchronous-customization-hooks).
+
+The fixtures cover these asynchronous project-loader chains on both Vite+ hook
+paths, including loader-supplied CommonJS source. They do not establish support
+for arbitrary additional synchronous `module.registerHooks()` hooks. The
+[older Node.js CommonJS source limitation](./vpx-script-execution.md#known-limitations)
+still applies to affected hook compositions.
+
+Competing TypeScript transformers are unsupported. Do not load tsx, ts-node's
+hooks, or a standalone oxc-node registration alongside `vite-plus/register`;
+registration order cannot make their compiler policies equivalent.
 
 ## Migration
 
@@ -152,12 +190,16 @@ CLI snapshot fixtures cover the asynchronous hook path on Node.js 22.18 and
 7. An unsupported Node.js version fails before the native binding loads.
 8. Migration preserves command structure, keeps unsupported uses and dependencies,
    removes tsx when unused, and makes no further changes on a second run.
+9. Custom asynchronous loader chains preserve their observable order, asset
+   modules, and `require()` calls in loader-supplied CommonJS source.
 
 Run the existing loader and migration suites as regressions, the TypeScript unit
 suite, `vp check`, and a full package build. Review generated snapshot output.
 
 The installed-package cases live in
 [`command_script_import`](../crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/command_script_import/snapshots.toml).
+Custom-loader cases live in
+[`command_script_import_custom_loaders`](../crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/command_script_import_custom_loaders/snapshots.toml).
 The migration integration case lives in
 [`migration_tsx_preload`](../crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_tsx_preload/snapshots.toml),
 alongside the existing loader and migration regression fixtures. Unit tests in
