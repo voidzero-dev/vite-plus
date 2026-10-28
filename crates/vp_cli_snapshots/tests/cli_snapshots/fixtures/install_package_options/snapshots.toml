@@ -48,7 +48,7 @@ name = "yarn_3_lockfile_only"
 vp = "global"
 env = { YARN_ENABLE_TELEMETRY = "0", YARN_ENABLE_GLOBAL_CACHE = "0", YARN_NODE_LINKER = "node-modules" }
 steps = [
-  { argv = ["vpt", "write-file", ".node-version", "22.18.0\n"], snapshot = false },
+  { argv = ["vpt", "write-file", ".node-version", "22.23.4\n"], snapshot = false },
   { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@3.0.0"], snapshot = false },
   { argv = ["vp", "add", "./dep", "--lockfile-only"], comment = "Yarn 3 supports update-lockfile without installing packages" },
   ["vpt", "stat-file", "yarn.lock", "--assert", "file"],

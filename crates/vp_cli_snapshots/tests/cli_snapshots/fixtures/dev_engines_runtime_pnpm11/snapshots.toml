@@ -6,5 +6,5 @@ vp = "global"
 # runtime from nodejs.org inside its 60s budget, which times out when the
 # Windows runner's connection stalls.
 steps = [
-  { argv = ["vp", "dlx", "-s", "print-current-version"], comment = "should print Node.js version 22.18.0 from devEngines.runtime", continue-on-failure = true },
+  { argv = ["vp", "dlx", "-s", "print-current-version"], comment = "should print Node.js version 22.23.4 from devEngines.runtime", continue-on-failure = true },
 ]

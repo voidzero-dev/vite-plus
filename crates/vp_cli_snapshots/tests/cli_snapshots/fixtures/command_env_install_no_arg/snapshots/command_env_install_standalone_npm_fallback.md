@@ -30,10 +30,10 @@ installing standalone npm does not install Node.js
 <home>/.vite-plus/js_runtime/node: missing
 ```
 
-## `vp env install 22.18.0`
+## `vp env install 22.23.4`
 
 
-## `VP_NODE_VERSION=22.18.0 node assert-installed-npm.cjs`
+## `VP_NODE_VERSION=22.23.4 node assert-installed-npm.cjs`
 
 the standalone npm fallback is installed but is not selected
 
@@ -41,7 +41,7 @@ the standalone npm fallback is installed but is not selected
 Standalone npm is installed but is not current
 ```
 
-## `VP_NODE_VERSION=22.18.0 vp env current npm --json`
+## `VP_NODE_VERSION=22.23.4 vp env current npm --json`
 
 installing standalone npm does not select it: current reports Node's bundled npm until a version is configured
 

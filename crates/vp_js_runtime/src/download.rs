@@ -41,7 +41,9 @@ pub async fn download_file(
     message: &str,
 ) -> Result<(), Error> {
     let client = vp_shared::shared_http_client()?;
+    let archive_filename = target_path.as_path().file_name().unwrap_or_default().to_string_lossy();
 
+    tracing::info!("Fetching archive: {archive_filename}");
     tracing::debug!("Downloading {url} to {target_path:?}");
 
     // Create progress bar (only in TTY and not in CI). Built once and reused
@@ -162,7 +164,7 @@ pub async fn download_file(
             )));
         }
 
-        Ok(())
+        Ok(bytes_written)
     })
     .retry(
         ExponentialBuilder::default()
@@ -170,6 +172,9 @@ pub async fn download_file(
             .with_min_delay(Duration::from_millis(500))
             .with_max_times(3),
     )
+    .notify(|_, delay| {
+        tracing::warn!("Retrying {archive_filename} in {:.1}s", delay.as_secs_f64());
+    })
     .await
     .map_err(|e| Error::DownloadFailed {
         url: url.into(),
@@ -178,9 +183,9 @@ pub async fn download_file(
 
     drop(progress);
 
-    result?;
+    let size_bytes = result?;
 
-    tracing::debug!("Download completed: {target_path:?}");
+    tracing::info!("Downloaded {archive_filename}: {size_bytes} bytes");
 
     Ok(())
 }

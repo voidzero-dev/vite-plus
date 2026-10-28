@@ -65,12 +65,12 @@ if [ "$VP_NODE_VERSION" != "18.20.0" ]; then
     exit 1
 fi
 
-vp env use 20.18.0 --no-install || {
+vp env use 20.20.2 --no-install || {
     echo "vp env use failed through the POSIX wrapper"
     exit 1
 }
-if [ "${VP_NODE_VERSION:-}" != "20.18.0" ]; then
-    echo "VP_NODE_VERSION mismatch: expected 20.18.0, got ${VP_NODE_VERSION:-<unset>}"
+if [ "${VP_NODE_VERSION:-}" != "20.20.2" ]; then
+    echo "VP_NODE_VERSION mismatch: expected 20.20.2, got ${VP_NODE_VERSION:-<unset>}"
     exit 1
 fi
 
@@ -87,8 +87,8 @@ vp env use --no-install || {
     echo "vp env use without a version failed through the POSIX wrapper"
     exit 1
 }
-if [ "${VP_NODE_VERSION:-}" != "22.18.0" ]; then
-    echo "file-based VP_NODE_VERSION mismatch: expected 22.18.0, got ${VP_NODE_VERSION:-<unset>}"
+if [ "${VP_NODE_VERSION:-}" != "22.23.4" ]; then
+    echo "file-based VP_NODE_VERSION mismatch: expected 22.23.4, got ${VP_NODE_VERSION:-<unset>}"
     exit 1
 fi
 
