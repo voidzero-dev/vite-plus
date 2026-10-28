@@ -1,0 +1,6 @@
+{
+  "name": "@repo/config",
+  "private": true,
+  "type": "module",
+  "exports": "./shared.js"
+}

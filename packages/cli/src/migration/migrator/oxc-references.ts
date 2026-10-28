@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { parseLiteralCommands } from '../../../binding/index.js';
 import { readJsonFile } from '../../utils/json.ts';
 import { detectConfigs } from '../detector.ts';
 
@@ -11,6 +12,57 @@ const CONFIG_SOURCE_EXTENSIONS: Record<string, string[]> = {
   '.cjs': ['.cts'],
   '.jsx': ['.tsx'],
 };
+
+interface ConfigPackage {
+  name?: string;
+  scripts?: Record<string, string>;
+  exports?: unknown;
+  main?: string;
+  module?: string;
+}
+
+function exportTargets(value: unknown): string[] {
+  if (typeof value === 'string') {
+    return [value];
+  }
+  // Inspect all conditions and fallback entries, independent of the config loader.
+  return value && typeof value === 'object' ? Object.values(value).flatMap(exportTargets) : [];
+}
+
+function workspaceConfigEntries(pkg: ConfigPackage, subpath: string): string[] {
+  if (pkg.exports === undefined) {
+    if (subpath !== '.') {
+      return [subpath];
+    }
+    const entries = [pkg.module, pkg.main].filter((entry): entry is string => !!entry);
+    return entries.length ? entries : ['./index'];
+  }
+  if (
+    pkg.exports &&
+    typeof pkg.exports === 'object' &&
+    !Array.isArray(pkg.exports) &&
+    Object.keys(pkg.exports).some((key) => key.startsWith('.'))
+  ) {
+    const exports = pkg.exports as Record<string, unknown>;
+    if (Object.hasOwn(exports, subpath)) {
+      return exportTargets(exports[subpath]);
+    }
+    return Object.entries(exports).flatMap(([key, value]) => {
+      const star = key.indexOf('*');
+      if (
+        star === -1 ||
+        !subpath.startsWith(key.slice(0, star)) ||
+        !subpath.endsWith(key.slice(star + 1)) ||
+        subpath.length < key.length - 1
+      ) {
+        return [];
+      }
+      const match = subpath.slice(star, subpath.length - (key.length - star - 1));
+      return exportTargets(value).map((target) => target.replaceAll('*', match));
+    });
+  }
+  return subpath === '.' ? exportTargets(pkg.exports) : [];
+}
 
 function resolveConfigReferences(directory: string, reference: string): string[] | undefined {
   // Package imports can select different modules for different loaders or
@@ -74,18 +126,62 @@ export function findReferencedOxcConfigs(projectPaths: string[]): Set<string> {
   const modulePaths = new Set<string>();
   const unresolvedConfigDirectories = new Set<string>();
   const migrationCandidates = new Set<string>();
+  const packages = new Map<string, ConfigPackage>();
+  const workspacePackages = new Map<string, { directory: string; pkg: ConfigPackage }>();
   for (const directory of projectDirectories) {
     const packageJsonPath = path.join(directory, 'package.json');
     if (fs.existsSync(packageJsonPath)) {
-      const pkg = readJsonFile(packageJsonPath) as { scripts?: Record<string, string> };
-      for (const script of Object.values(pkg.scripts ?? {})) {
-        // Inspect config arguments without executing shell commands. An unknown
-        // path (for example an environment variable or a preceding `cd`) means
-        // we cannot safely decide that a standalone config is unused.
-        const words = (script.match(/(?:[^\s"';&|]+|"[^"]*"|'[^']*')+/g) ?? []).map((word) =>
+      const pkg = readJsonFile(packageJsonPath) as ConfigPackage;
+      packages.set(directory, pkg);
+      if (pkg.name) {
+        workspacePackages.set(pkg.name, { directory, pkg });
+      }
+    }
+  }
+  for (const directory of projectDirectories) {
+    for (const script of Object.values(packages.get(directory)?.scripts ?? {})) {
+      const commands = parseLiteralCommands(script, true);
+      const onlyAndCommands = commands?.every(
+        (tokens, index) =>
+          index === 0 ||
+          script.slice(commands[index - 1].at(-1)!.end, tokens[0].start).trim() === '&&',
+      );
+      const commandWords = commands?.map((tokens) => tokens.map(({ value }) => value)) ?? [
+        (script.match(/(?:[^\s"';&|]+|"[^"]*"|'[^']*')+/g) ?? []).map((word) =>
           word.replace(/(["'])(.*?)\1/g, '$2'),
+        ),
+      ];
+      // Unsupported shell syntax can change directories in a subshell or expand
+      // an unknown path. In that case any workspace package can be the target.
+      let workingDirectory: string | undefined =
+        !commands && /\b(?:cd|pushd|popd)\b/.test(script) ? undefined : directory;
+      for (const words of commandWords) {
+        if (commands && ['cd', 'pushd', 'popd'].includes(words[0])) {
+          const args = words.slice(words[1] === '--' || words[1] === '/d' ? 2 : 1);
+          // Other control flow can skip cd and still execute a later command.
+          // Only resolve a literal directory change in an && chain.
+          const target =
+            words[0] === 'cd' &&
+            args.length === 1 &&
+            args[0] !== '-' &&
+            !args[0].startsWith('~') &&
+            workingDirectory &&
+            onlyAndCommands
+              ? path.resolve(workingDirectory, args[0])
+              : undefined;
+          workingDirectory =
+            target && fs.existsSync(target) && fs.statSync(target).isDirectory()
+              ? fs.realpathSync(target)
+              : undefined;
+          continue;
+        }
+        const command = words.find(
+          (word) => !/^[A-Za-z_]\w*=/.test(word) && word !== 'command' && word !== 'builtin',
         );
-        const changesDirectory = words.includes('cd');
+        if (command && ['cd', 'pushd', 'popd'].includes(command)) {
+          workingDirectory = undefined;
+        }
+        const owner = workingDirectory ? referenceDirectory(workingDirectory) : directory;
         for (let index = 0; index < words.length; index++) {
           const word = words[index];
           let reference: string;
@@ -98,9 +194,15 @@ export function findReferencedOxcConfigs(projectPaths: string[]): Set<string> {
           } else {
             continue;
           }
-          const filenames = resolveConfigReferences(directory, reference);
-          if (!filenames?.length || changesDirectory) {
-            unresolvedConfigDirectories.add(directory);
+          if (!workingDirectory) {
+            for (const project of projectDirectories) {
+              unresolvedConfigDirectories.add(project);
+            }
+            continue;
+          }
+          const filenames = resolveConfigReferences(workingDirectory, reference);
+          if (!filenames?.length) {
+            unresolvedConfigDirectories.add(owner);
           } else {
             // Known references are matched by file identity below. Do not let
             // their basenames also preserve a different config in this package.
@@ -112,11 +214,11 @@ export function findReferencedOxcConfigs(projectPaths: string[]): Set<string> {
             } else if (CONFIG_MODULE_EXTENSIONS.includes(path.extname(filename))) {
               modulePaths.add(fs.realpathSync(filename));
             } else {
-              unresolvedConfigDirectories.add(directory);
+              unresolvedConfigDirectories.add(owner);
             }
           }
         }
-        configReferences.push({ directory, content: words.join(' ') });
+        configReferences.push({ directory: owner, content: words.join(' ') });
       }
     }
     const projectConfigs = detectConfigs(directory);
@@ -152,9 +254,30 @@ export function findReferencedOxcConfigs(projectPaths: string[]): Set<string> {
     // between tokens. Extra matches only preserve more configs.
     // Canonical paths keep cycles, including symlink cycles, finite.
     const unresolvedContent = content.replace(
-      /(["'`])((?:\.{1,2}\/|\/|#)[^"'`\r\n]+)\1/g,
+      /(["'`])([^"'`\r\n]+)\1/g,
       (match, _quote, reference: string) => {
-        const filenames = resolveConfigReferences(path.dirname(modulePath), reference);
+        const name = reference.match(/^(?:@[^/]+\/)?[^/]+/)?.[0] ?? '';
+        const workspace = workspacePackages.get(name);
+        let filenames: string[] | undefined;
+        if (/^(?:\.{1,2}\/|\/|#)/.test(reference)) {
+          filenames = resolveConfigReferences(path.dirname(modulePath), reference);
+        } else if (workspace) {
+          const { directory: packageDirectory, pkg } = workspace;
+          const entries = workspaceConfigEntries(pkg, `.${reference.slice(name.length)}`);
+          filenames = [];
+          for (const entry of entries) {
+            const resolved = resolveConfigReferences(packageDirectory, entry);
+            if (!resolved?.length) {
+              unresolvedConfigDirectories.add(packageDirectory);
+            }
+            filenames.push(...(resolved ?? []));
+          }
+          if (!entries.length) {
+            unresolvedConfigDirectories.add(packageDirectory);
+          }
+        } else {
+          return match;
+        }
         if (!filenames) {
           unresolvedConfigDirectories.add(directory);
         }
