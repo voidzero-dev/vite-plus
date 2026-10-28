@@ -1583,7 +1583,8 @@ pub(crate) fn resolve_effective_tool(
 }
 
 /// System-only lookup: like [`find_external_tool_in`], but managed installs
-/// and the fallback-bin directory never count as the system tool.
+/// and the fallback-bin directory never count as the system tool. A foreign
+/// tool in a shared bin directory does; the shims beside it do not.
 fn find_system_only_tool(tool: &str, cwd: &AbsolutePath) -> Option<AbsolutePathBuf> {
     let inputs = ExternalToolInputs::from_process_env()?;
     vp_command::find_external_tool(tool, &inputs.query(true), cwd)
@@ -2908,6 +2909,27 @@ mod tests {
         EnvConfig::with_vars(system_only_vars(&layout, &path, &managers, &extra), |_| {
             assert_eq!(find_bypass_tool("npm").unwrap().as_path(), system_npm);
             assert_eq!(find_bypass_tool("npx"), None);
+        });
+    }
+
+    /// Under `VP_BYPASS`, a system-only tool may be a foreign executable in a
+    /// bin directory shared with other tools; otherwise bypass skips that bin.
+    #[test]
+    fn test_bypass_selects_foreign_tool_in_bin_with_system_only() {
+        let layout = SystemOnlyLayout::new();
+        let bin = layout.home.join("bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        let foreign_node = create_fake_executable(&bin, "node");
+        let system_node = create_fake_executable(&layout.system_bin, "node");
+        let path = std::env::join_paths([&bin, &layout.system_bin]).unwrap();
+        let extra = [(env_vars::VP_BYPASS, std::ffi::OsString::new())];
+
+        EnvConfig::with_vars(system_only_vars(&layout, &path, &[], &extra), |_| {
+            assert_eq!(find_bypass_tool("node").unwrap().as_path(), system_node);
+        });
+        let managers = [(env_vars::VP_NODE_MANAGER, "system-only")];
+        EnvConfig::with_vars(system_only_vars(&layout, &path, &managers, &extra), |_| {
+            assert_eq!(find_bypass_tool("node").unwrap().as_path(), foreign_node);
         });
     }
 

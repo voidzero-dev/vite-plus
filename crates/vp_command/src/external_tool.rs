@@ -21,8 +21,11 @@ pub struct ExternalToolQuery<'a> {
     /// Canonicalized executable to exclude, or `None` to exclude no executable.
     pub self_exe: Option<&'a Path>,
     /// Also skip Vite+-managed runtimes and package managers (see
-    /// [`is_managed_install`]) and the Vite+ fallback-bin directory, so that a
-    /// managed install left on PATH never counts as the system tool.
+    /// [`is_managed_install`]), global packages, and the Vite+ fallback-bin
+    /// directory, so that a managed install left on PATH never counts as the
+    /// system tool. The bin directory is then searched rather than skipped:
+    /// a configured bin can be shared with foreign tools, and its shims are
+    /// rejected by identity instead.
     pub exclude_managed: bool,
 }
 
@@ -30,7 +33,8 @@ pub struct ExternalToolQuery<'a> {
 ///
 /// Skips the Vite+ bin directory, the bypass directories, shims from other
 /// installations, and `self_exe`. Those would otherwise dispatch back into vp.
-/// With [`ExternalToolQuery::exclude_managed`], also skips managed installs.
+/// With [`ExternalToolQuery::exclude_managed`], also skips managed installs,
+/// but keeps foreign tools in the bin directory eligible.
 /// `cwd` only resolves relative PATH entries.
 pub fn find_external_tool(
     tool: &str,
@@ -43,13 +47,14 @@ pub fn find_external_tool(
     tracing::debug!("path_var: {:?}", query.path);
     tracing::debug!("bypass_paths: {:?}", query.bypass);
 
-    // Filter PATH to exclude our bin directory and any bypass directories.
+    // Filter PATH to exclude our bin directory (system-only lookups keep it
+    // and reject its shims by identity below) and any bypass directories.
     // Relative entries are resolved against cwd because `which` reports
     // matches from them as relative paths, which `AbsolutePathBuf` rejects;
     // `~`-prefixed entries are left to `which`'s own tilde expansion.
     let mut filtered_paths: Vec<_> = std::env::split_paths(query.path)
         .filter(|p| {
-            p != bin_dir
+            (query.exclude_managed || p != bin_dir)
                 && !query.bypass.iter().any(|bp| p == bp)
                 && fallback_bin.as_ref().is_none_or(|fallback| p != fallback.as_path())
         })
@@ -69,7 +74,9 @@ pub fn find_external_tool(
         if !vp_shared::is_windows_trampoline(resolved.as_path())
             && !is_unix_shim
             && (query.self_exe.is_none() || canonical.as_deref() != query.self_exe)
-            && !(query.exclude_managed && is_managed_install(resolved.as_path()))
+            && !(query.exclude_managed
+                && (is_managed_install(resolved.as_path())
+                    || is_global_package(resolved.as_path())))
         {
             return Some(resolved);
         }
@@ -105,6 +112,14 @@ pub fn is_managed_runtime(path: &Path) -> bool {
 /// family, that is, under `<DATA>/package_manager/<family>`.
 pub fn is_managed_package_manager(path: &Path, family: &str) -> bool {
     resolves_under_data(path, &[&Path::new("package_manager").join(family)])
+}
+
+/// Whether `path` resolves into a `vp install -g` package, that is, under
+/// `<DATA>/packages` (the directory of `get_packages_dir` in
+/// `vp_global_cli`). An old `corepack enable` can leave links from the bin
+/// directory into a Corepack installed there.
+fn is_global_package(path: &Path) -> bool {
+    resolves_under_data(path, &[Path::new("packages")])
 }
 
 fn resolves_under_data(path: &Path, directories: &[&Path]) -> bool {
@@ -168,6 +183,61 @@ mod tests {
             assert_eq!(find(&[&runtime, &system], true, &cwd), Some(system_node.clone()));
             assert_eq!(find(&[&fallback, &system], true, &cwd), Some(system_node.clone()));
             assert_eq!(find(&[&runtime, &fallback], true, &cwd), None);
+        });
+    }
+
+    #[test]
+    fn exclude_managed_keeps_foreign_tools_in_bin() {
+        let temp = tempfile::tempdir().unwrap();
+        let home = temp.path().join("home");
+        let bin = home.join("bin");
+        let system = temp.path().join("system");
+        let foreign_node = fake_executable(&bin, "node");
+        let system_node = fake_executable(&system, "node");
+        let cwd = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+
+        EnvConfig::with_vars([(env_vars::VP_HOME, home.as_path())], |config| {
+            assert_eq!(config.dirs.bin.as_path(), bin);
+            // Without the option, the bin directory is skipped as before.
+            assert_eq!(find(&[&bin, &system], false, &cwd), Some(system_node.clone()));
+            assert_eq!(find(&[&bin, &system], true, &cwd), Some(foreign_node.clone()));
+
+            // A shim in the same directory is rejected by identity.
+            std::fs::remove_file(&foreign_node).unwrap();
+            #[cfg(unix)]
+            {
+                let vp = fake_executable(&home.join("current").join("bin"), "vp");
+                std::os::unix::fs::symlink(&vp, bin.join("node")).unwrap();
+            }
+            #[cfg(windows)]
+            {
+                fake_executable(&bin, "node");
+                config.dirs.write_shim_pointer("node").unwrap();
+            }
+            assert_eq!(find(&[&bin, &system], true, &cwd), Some(system_node.clone()));
+            assert_eq!(find(&[&bin], true, &cwd), None);
+        });
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn exclude_managed_skips_links_into_global_packages() {
+        let temp = tempfile::tempdir().unwrap();
+        let home = temp.path().join("home");
+        let bin = home.join("bin");
+        let system = temp.path().join("system");
+        let package_node = fake_executable(
+            &home.join("packages").join("corepack").join("lib").join("node_modules"),
+            "node",
+        );
+        std::fs::create_dir_all(&bin).unwrap();
+        std::os::unix::fs::symlink(&package_node, bin.join("node")).unwrap();
+        let system_node = fake_executable(&system, "node");
+        let cwd = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+
+        EnvConfig::with_vars([(env_vars::VP_HOME, home.as_path())], |_| {
+            assert_eq!(find(&[&bin, &system], true, &cwd), Some(system_node.clone()));
+            assert_eq!(find(&[&bin, &system], false, &cwd), Some(system_node.clone()));
         });
     }
 

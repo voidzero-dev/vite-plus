@@ -173,9 +173,10 @@ pub async fn execute_vpx(args: &[String], cwd: &AbsolutePath) -> i32 {
             return execute_global_binary(global_bin, &positional[1..], cwd).await;
         }
 
-        // 3. Try system PATH (excluding vite-plus bin dir). A system-only tool
-        //    also skips managed installs a parent left on PATH, and fails
-        //    instead of falling back to `dlx`, which would download it.
+        // 3. Try system PATH (excluding the vite-plus bin dir, or only its shims
+        //    for a system-only tool). A system-only tool also skips managed
+        //    installs a parent left on PATH, and fails instead of falling back to
+        //    `dlx`, which would download it.
         let path_bin = if dispatch::requires_system_tool(&cmd_name) {
             // Short aliases (`pn`, `pnx`) map to the binaries the family installs.
             let bin_name = vp_pm_cli::PackageManagerType::from_tool(&cmd_name)
