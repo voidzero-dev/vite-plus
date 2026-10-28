@@ -1108,12 +1108,15 @@ jobs:
       - name: Install Global CLI vp
         run: pnpm bootstrap-cli:ci
 
-      # Seed both the repository pin and the default LTS before command timers
-      # start. Fixtures without a version pin use LTS, not the repository pin.
+      # Seed the repository pin, default LTS, and shared fixture versions before
+      # command timers start. Keep the version list shared across platforms.
       - name: Prewarm managed runtimes
         run: |
           "$HOME/.vite-plus/bin/vp" node --version
           VP_NODE_VERSION=lts "$HOME/.vite-plus/bin/vp" node --version
+          while read -r node_version; do
+            VP_NODE_VERSION="$node_version" "$HOME/.vite-plus/bin/vp" node --version
+          done < crates/vp_cli_snapshots/tests/cli_snapshots/node-versions.txt
 
       - wait: [snapshot-shells, playwright]
 
@@ -1230,13 +1233,16 @@ jobs:
         shell: bash
         run: pnpm bootstrap-cli:ci
 
-      # Seed both the repository pin and the default LTS before command timers
-      # start. Fixtures without a version pin use LTS, not the repository pin.
+      # Seed the repository pin, default LTS, and shared fixture versions before
+      # command timers start. Keep the version list shared across platforms.
       - name: Prewarm managed runtimes
         shell: bash
         run: |
           "$USERPROFILE/.vite-plus/bin/vp.exe" node --version
           VP_NODE_VERSION=lts "$USERPROFILE/.vite-plus/bin/vp.exe" node --version
+          while read -r node_version; do
+            VP_NODE_VERSION="$node_version" "$USERPROFILE/.vite-plus/bin/vp.exe" node --version
+          done < crates/vp_cli_snapshots/tests/cli_snapshots/node-versions.txt
 
       # Keep fixtures outside runner.temp: setup-node writes an .npmrc there,
       # which Yarn Classic discovers when walking parent directories.

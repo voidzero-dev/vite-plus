@@ -371,6 +371,19 @@ the point.
 `seed-runtime = true` (default) symlinks a provisioned managed Node runtime
 into the case `VP_HOME` so commands do not download ~50MB per case.
 
+Reuse the Node versions in [`node-versions.txt`](node-versions.txt) when a
+fixture needs a fixed runtime. CI prepares these versions, the repository's
+`.node-version`, and the default LTS before snapshot command timers start.
+Use `22.18.0` for ordinary cases and `20.18.0` for unsupported-runtime cases.
+The `20.19.0` pin retains the Node 20 migration input.
+The Node 24 pins retain the below-policy migration input (`24.3.0`), migration
+minimum (`24.11.0`), and synchronous loader (`24.12.0`) coverage. Node `26.12.0`
+covers the bare config-file argument. The newer Node 22 loader case uses the
+repository pin. Major-version and LTS/latest alias cases retain their selectors.
+Keep different versions only when the case needs their behavior, and update the
+shared list if another fixed runtime is required. Cases with
+`seed-runtime = false` still test installation into an empty runtime directory.
+
 Fixture configs may import bare `vite-plus` and
 `@voidzero-dev/vite-plus-core`: the runner links the checkout packages
 into the run root's `node_modules`, where Node's upward walk finds them
