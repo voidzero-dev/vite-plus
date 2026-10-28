@@ -115,7 +115,7 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-          - os: namespace-profile-mac-default
+          - os: macos-latest
             target: aarch64-apple-darwin
     runs-on: ${{ matrix.os }}
     steps:
@@ -399,7 +399,7 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             test-node: 22.18.0
-          - os: namespace-profile-mac-default
+          - os: macos-latest
             target: aarch64-apple-darwin
             test-node: 24.11.0
           - os: namespace-profile-windows-4c-8g
@@ -949,7 +949,7 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-          - os: namespace-profile-mac-default
+          - os: macos-latest
             target: aarch64-apple-darwin
     runs-on: ${{ matrix.os }}
     steps:
@@ -1032,12 +1032,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, namespace-profile-mac-default]
+        os: [ubuntu-latest, macos-latest]
         shard: [1, 2, 3]
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-          - os: namespace-profile-mac-default
+          - os: macos-latest
             target: aarch64-apple-darwin
     runs-on: ${{ matrix.os }}
     steps:
@@ -1567,7 +1567,7 @@ jobs:
             # vp's cache already, so vp never calls its HttpClient through sfw
             # in this test — leave the verification on there.
             vp_insecure_tls: '1'
-          - os: namespace-profile-mac-default
+          - os: macos-latest
             target: aarch64-apple-darwin
             sfw_asset: sfw-free-macos-arm64
             vp_bin: vp
