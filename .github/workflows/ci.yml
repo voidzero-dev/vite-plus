@@ -27,6 +27,10 @@ defaults:
   run:
     shell: bash
 
+env:
+  # Change the repository Actions variable to switch managed Node.js downloads.
+  VP_NODE_DIST_MIRROR: ${{ vars.VP_NODE_DIST_MIRROR || 'https://nodejs.org/dist' }}
+
 jobs:
   detect-changes:
     runs-on: ubuntu-latest
@@ -118,7 +122,7 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-          - os: macos-latest
+          - os: namespace-profile-mac-default
             target: aarch64-apple-darwin
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
@@ -280,6 +284,8 @@ jobs:
     container:
       image: node:26.12.1-alpine
     env:
+      # Mirrors of official Node.js releases do not provide musl archives.
+      VP_NODE_DIST_MIRROR: https://unofficial-builds.nodejs.org/download/release
       # GitHub Actions sets HOME=/github/home in containers, but the euid home is /root.
       # Pin Rust tooling paths to avoid $HOME mismatch issues.
       CARGO_HOME: /root/.cargo
@@ -408,7 +414,7 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             test-node: 22.18.0
-          - os: macos-latest
+          - os: namespace-profile-mac-default
             target: aarch64-apple-darwin
             test-node: 24.11.0
           - os: namespace-profile-windows-4c-8g
@@ -959,7 +965,7 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-          - os: macos-latest
+          - os: namespace-profile-mac-default
             target: aarch64-apple-darwin
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
@@ -1043,12 +1049,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, namespace-profile-mac-default]
         shard: [1, 2, 3]
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-          - os: macos-latest
+          - os: namespace-profile-mac-default
             target: aarch64-apple-darwin
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
@@ -1110,11 +1116,9 @@ jobs:
 
       # Seed the repository pin, default LTS, and shared fixture versions before
       # command timers start. Keep the version list shared across platforms.
-      # Set the repository Actions variable to switch Node.js download sources.
       - name: Prewarm managed runtimes
         run: bash .github/scripts/prewarm-node.sh "$HOME/.vite-plus/bin/vp"
         env:
-          VP_NODE_DIST_MIRROR: ${{ vars.VP_NODE_DIST_MIRROR || 'https://nodejs.org/dist' }}
           VP_LOG: vp_js_runtime=info
 
       - wait: [snapshot-shells, playwright]
@@ -1238,7 +1242,6 @@ jobs:
         shell: bash
         run: bash .github/scripts/prewarm-node.sh "$USERPROFILE/.vite-plus/bin/vp.exe"
         env:
-          VP_NODE_DIST_MIRROR: ${{ vars.VP_NODE_DIST_MIRROR || 'https://nodejs.org/dist' }}
           VP_LOG: vp_js_runtime=info
 
       # Keep fixtures outside runner.temp: setup-node writes an .npmrc there,
@@ -1374,10 +1377,14 @@ jobs:
       # Run bootstrap-cli:ci and E2E tests inside an Alpine container where musl is native.
       # Can't run on the glibc host because NAPI .node files are musl-linked.
       - name: Run E2E in Alpine container
+        env:
+          # Mirrors of official Node.js releases do not provide musl archives.
+          VP_NODE_DIST_MIRROR: https://unofficial-builds.nodejs.org/download/release
         run: |
           docker run --rm \
             -e CI=true \
             -e GITHUB_ACTIONS=true \
+            -e VP_NODE_DIST_MIRROR \
             -v "${{ github.workspace }}:/workspace" \
             -w /workspace \
             node:22.23.4-alpine sh -ec "
@@ -1466,6 +1473,7 @@ jobs:
       - name: Run vp in node:24-bookworm-slim without a CA store
         run: |
           docker run --rm \
+            -e VP_NODE_DIST_MIRROR \
             -v "${{ github.workspace }}/target/debug/vp:/usr/local/bin/vp:ro" \
             node:24-bookworm-slim bash -c '
               set -ex
@@ -1475,7 +1483,7 @@ jobs:
               # Exercise commands on the mounted build without installing a published package.
               touch /usr/local/bin/.vp-setup-complete
               vp --version
-              # HTTPS to nodejs.org through the shared client; exits nonzero
+              # HTTPS to the Node.js mirror through the shared client; exits nonzero
               # without the bundled-roots fallback.
               vp env list-remote --lts --json > /tmp/vp-versions.json
               node -e "const versions = require(\"/tmp/vp-versions.json\"); if (!versions.node?.length) process.exit(1)"
@@ -1585,7 +1593,7 @@ jobs:
             # vp's cache already, so vp never calls its HttpClient through sfw
             # in this test — leave the verification on there.
             vp_insecure_tls: '1'
-          - os: macos-latest
+          - os: namespace-profile-mac-default
             target: aarch64-apple-darwin
             sfw_asset: sfw-free-macos-arm64
             vp_bin: vp

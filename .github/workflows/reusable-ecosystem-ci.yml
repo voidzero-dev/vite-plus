@@ -22,6 +22,9 @@ defaults:
   run:
     shell: bash
 
+env:
+  VP_NODE_DIST_MIRROR: ${{ vars.VP_NODE_DIST_MIRROR || 'https://nodejs.org/dist' }}
+
 jobs:
   build:
     name: Build vite-plus packages (${{ inputs.build-runner || inputs.runner }})

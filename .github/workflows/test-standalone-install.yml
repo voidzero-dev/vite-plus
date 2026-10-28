@@ -36,6 +36,7 @@ defaults:
     shell: bash
 
 env:
+  VP_NODE_DIST_MIRROR: ${{ vars.VP_NODE_DIST_MIRROR || 'https://nodejs.org/dist' }}
   # New Node.js releases can appear before both musl archives are available.
   MUSL_NODE_VERSION: '24.22.1'
 
@@ -773,6 +774,7 @@ jobs:
       - name: Run install.sh in ARM64 container
         run: |
           docker run --rm --platform linux/arm64 \
+            -e VP_NODE_DIST_MIRROR \
             -v "${{ github.workspace }}:/workspace" \
             ubuntu:20.04 bash -c "
               ls -al ~/
@@ -824,6 +826,9 @@ jobs:
   test-install-sh-musl-x64:
     name: Test install.sh (Linux x64 musl)
     runs-on: ubuntu-latest
+    env:
+      # Mirrors of official Node.js releases do not provide musl archives.
+      VP_NODE_DIST_MIRROR: https://unofficial-builds.nodejs.org/download/release
     permissions:
       contents: read
     steps:
@@ -835,6 +840,7 @@ jobs:
             -v "${{ github.workspace }}:/workspace" \
             -e CI=true \
             -e VP_NODE_VERSION=${{ env.MUSL_NODE_VERSION }} \
+            -e VP_NODE_DIST_MIRROR \
             alpine:3.21 sh -c "
               # libstdc++: required by unofficial-builds Node.js musl binary
               apk add --no-cache bash curl ca-certificates libstdc++
@@ -879,6 +885,9 @@ jobs:
   test-install-sh-musl-arm64:
     name: Test install.sh (Linux ARM64 musl via QEMU)
     runs-on: ubuntu-latest
+    env:
+      # Mirrors of official Node.js releases do not provide musl archives.
+      VP_NODE_DIST_MIRROR: https://unofficial-builds.nodejs.org/download/release
     permissions:
       contents: read
     steps:
@@ -896,6 +905,7 @@ jobs:
             -v "${{ github.workspace }}:/workspace" \
             -e CI=true \
             -e VP_NODE_VERSION=${{ env.MUSL_NODE_VERSION }} \
+            -e VP_NODE_DIST_MIRROR \
             alpine:3.21 sh -c "
               # libstdc++ is needed by unofficial-builds Node.js musl binary
               apk add --no-cache bash curl ca-certificates libstdc++

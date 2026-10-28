@@ -98,6 +98,7 @@ Environment overrides, mainly for CI:
 | `VP_SNAP_ARTIFACTS_DIR`       | Directory for phase timings and failure diagnostics; unset disables artifacts                           |
 | `VP_SNAP_NEXTEST_CONFIG`      | With `--list`, write nextest overrides for the discovered isolated cases                                |
 | `VP_SNAP_PREWARM_MANIFEST`    | With `--list`, write a JSON array of Bun archive URLs derived from runnable cases                       |
+| `VP_NODE_DIST_MIRROR`         | Node.js distribution mirror inherited by case commands; case and step overrides take precedence         |
 
 Windows CI generates its nextest configuration from the same case definitions.
 Exact nextest runs read only the selected fixture; listing and native shard
@@ -368,6 +369,9 @@ can load files installed beside `pwsh.exe`. `cmd.exe` also runs from its
 canonical system path. `CI` and `NO_COLOR` are deliberately NOT
 set: with a PTY attached, the CLI behaves interactively by default, which is
 the point.
+`VP_NODE_DIST_MIRROR` is inherited when configured so case downloads use the same
+source as CI preparation. Case `env` and step `envs` override it; case `unset-env`
+can remove it to exercise the default source.
 `seed-runtime = true` (default) symlinks a provisioned managed Node runtime
 into the case `VP_HOME` so commands do not download ~50MB per case.
 

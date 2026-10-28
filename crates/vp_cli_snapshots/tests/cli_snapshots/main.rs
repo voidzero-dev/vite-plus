@@ -773,6 +773,9 @@ impl CaseHome {
 
     fn base_env(&self, path_env: OsString) -> BTreeMap<String, OsString> {
         let mut env = BTreeMap::new();
+        if let Some(mirror) = std::env::var_os("VP_NODE_DIST_MIRROR") {
+            env.insert("VP_NODE_DIST_MIRROR".into(), mirror);
+        }
         env.insert("PATH".into(), path_env);
         // xterm-256color keeps anstream from stripping the OSC 8 milestone
         // sequences used by test steps. It is harmless during env setup.
@@ -860,7 +863,7 @@ fn compose_path_env(tool_dirs: &[PathBuf]) -> OsString {
 }
 
 /// The environment every step starts from. Deliberately small and fully
-/// controlled: no ambient variables survive except through the composed PATH.
+/// controlled: only the configured Node mirror and the composed PATH survive.
 /// Notably absent: `CI` and `NO_COLOR`; the PTY makes real interactive
 /// behaviour the default, and grid rendering strips styling from snapshots.
 fn baseline_env(case_home: &CaseHome, install: &CaseInstall) -> BTreeMap<String, OsString> {
