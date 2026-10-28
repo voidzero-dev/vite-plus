@@ -12,6 +12,8 @@ We recommend turning both `typeAware` and `typeCheck` on so `vp check` becomes t
 
 ## Usage
 
+If formatting fails, `vp check` stops before lint and type checks run. To fix formatting and apply available lint fixes, run `vp check --fix`. This command changes files. To skip formatting and run the remaining enabled checks, run `vp check --no-fmt`.
+
 ```bash
 vp check
 vp check --fix              # Format and run autofixers.
@@ -21,6 +23,8 @@ vp check --no-fmt           # Skip format; run lint (and type-check if enabled).
 vp check --no-lint          # Skip lint rules; keep type-check when enabled.
 vp check --no-fmt --no-lint # Type-check only (requires both `typeAware` and `typeCheck` enabled).
 ```
+
+Put `vp check` flags before file paths. For example, use `vp check --fix src/index.ts`. Arguments after the first path go to the format and lint tools instead of `vp check`.
 
 ## Configuration
 
