@@ -1,0 +1,13 @@
+{
+  "name": "migration-workspace-oxc-references",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.3.4",
+  "scripts": {
+    "format": "cd packages/app && vp fmt --check -c .oxfmtrc.json src/index.js"
+  },
+  "devDependencies": {
+    "@repo/config": "workspace:*",
+    "vite-plus": "latest"
+  }
+}
