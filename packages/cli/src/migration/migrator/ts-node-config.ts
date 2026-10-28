@@ -77,6 +77,52 @@ function nearestTsconfig(dir: string): string | undefined {
   }
 }
 
+function readTsNodeEnvironment(
+  context: TsNodeRunContext,
+): { options: TsNodeOptions; project?: string } | { keepReason: string } {
+  const options: TsNodeOptions = {};
+  let project: string | undefined;
+  for (const assignment of context.environment) {
+    const separator = assignment.indexOf('=');
+    if (separator < 0) {
+      continue;
+    }
+    const originalName = assignment.slice(0, separator);
+    const name = originalName.toUpperCase();
+    const value = assignment.slice(separator + 1);
+    if (
+      originalName !== name &&
+      (name.startsWith('TS_NODE_') || (context.publicRegister && name === 'NODE_OPTIONS'))
+    ) {
+      return {
+        keepReason: `\`${originalName}\` uses platform-dependent environment variable casing`,
+      };
+    }
+    if (name === 'TS_NODE_PROJECT') {
+      project = value || undefined;
+    } else if (name === 'TS_NODE_TRANSPILE_ONLY' || name === 'TS_NODE_TYPE_CHECK') {
+      const parsed = booleanEnvironment(value);
+      if (parsed === undefined) {
+        return { keepReason: `\`${name}\` does not have a literal boolean value` };
+      }
+      options[name === 'TS_NODE_TRANSPILE_ONLY' ? 'transpileOnly' : 'typeCheck'] = parsed;
+    } else if (name.startsWith('TS_NODE_')) {
+      return {
+        keepReason: `\`${name}\` configures ts-node behavior that vp migrate does not translate`,
+      };
+    } else if (
+      ['OXC_TSCONFIG_PATH', 'TSX_TSCONFIG_PATH', 'VP_SCRIPT_TSCONFIG'].includes(name) &&
+      value
+    ) {
+      return {
+        keepReason: `\`${name}\` would select a different configuration for the Vite+ loader`,
+      };
+    }
+  }
+
+  return { options, project };
+}
+
 /** Read only data; migration must not load ts-node or a project's compiler. */
 function readTsNodeOptions(
   file: string,
@@ -159,46 +205,9 @@ export function prepareTsNodeRun(
     }
     args = [...(context.nodeOptionsArgs ?? []), ...args];
   }
-  const environment: TsNodeOptions = {};
-  let environmentProject: string | undefined;
-  for (const assignment of context.environment) {
-    const separator = assignment.indexOf('=');
-    if (separator < 0) {
-      continue;
-    }
-    const originalName = assignment.slice(0, separator);
-    const name = originalName.toUpperCase();
-    const value = assignment.slice(separator + 1);
-    if (context.publicRegister && name === 'NODE_OPTIONS' && originalName !== name) {
-      return {
-        keepReason: `\`${originalName}\` uses platform-dependent environment variable casing`,
-      };
-    }
-    if (name.startsWith('TS_NODE_') && originalName !== name) {
-      return {
-        keepReason: `\`${originalName}\` uses platform-dependent environment variable casing`,
-      };
-    }
-    if (name === 'TS_NODE_PROJECT') {
-      environmentProject = value || undefined;
-    } else if (name === 'TS_NODE_TRANSPILE_ONLY' || name === 'TS_NODE_TYPE_CHECK') {
-      const parsed = booleanEnvironment(value);
-      if (parsed === undefined) {
-        return { keepReason: `\`${name}\` does not have a literal boolean value` };
-      }
-      environment[name === 'TS_NODE_TRANSPILE_ONLY' ? 'transpileOnly' : 'typeCheck'] = parsed;
-    } else if (name.startsWith('TS_NODE_')) {
-      return {
-        keepReason: `\`${name}\` configures ts-node behavior that vp migrate does not translate`,
-      };
-    } else if (
-      ['OXC_TSCONFIG_PATH', 'TSX_TSCONFIG_PATH', 'VP_SCRIPT_TSCONFIG'].includes(name) &&
-      value
-    ) {
-      return {
-        keepReason: `\`${name}\` would select a different configuration for the Vite+ loader`,
-      };
-    }
+  const environment = readTsNodeEnvironment(context);
+  if ('keepReason' in environment) {
+    return environment;
   }
 
   const explicit: TsNodeOptions = {};
@@ -208,9 +217,7 @@ export function prepareTsNodeRun(
     return { keepReason: `vp migrate does not translate the \`${executable}\` execution mode` };
   }
   const edits: NonNullable<TsNodeRunPreparation['edits']> = [];
-  let project: string | undefined;
-  let projectIndex: number | undefined;
-  let projectInline = false;
+  let project: { path: string; index: number; inline: boolean } | undefined;
   let entry: string | undefined;
   let loaders = 0;
   for (let index = 0; index < args.length; index++) {
@@ -277,16 +284,15 @@ export function prepareTsNodeRun(
       continue;
     }
     if (!nodeLoader && (name === '-P' || name === '--project')) {
-      if (projectIndex !== undefined) {
+      if (project !== undefined) {
         return { keepReason: 'the command selects a ts-node project more than once' };
       }
-      project = inline ?? args[index + 1];
-      projectIndex = index;
-      projectInline = inline !== undefined;
-      if (!project || project.startsWith('-')) {
+      const projectPath = inline ?? args[index + 1];
+      if (!projectPath || projectPath.startsWith('-')) {
         return { keepReason: `\`${name}\` does not name a tsconfig` };
       }
-      if (!projectInline) {
+      project = { path: projectPath, index, inline: inline !== undefined };
+      if (!project.inline) {
         index++;
       }
       continue;
@@ -331,7 +337,7 @@ export function prepareTsNodeRun(
     return { keepReason: 'vp migrate only replaces ts-node commands that name a script file' };
   }
 
-  const selectedProject = project ?? environmentProject;
+  const selectedProject = project?.path ?? environment.project;
   if (context.shebang && selectedProject !== undefined) {
     return {
       keepReason:
@@ -339,7 +345,6 @@ export function prepareTsNodeRun(
     };
   }
   let configFile: string | undefined;
-  let configArgument = project;
   if (selectedProject) {
     configFile = path.resolve(cwd, selectedProject);
     if (fs.statSync(configFile, { throwIfNoEntry: false })?.isDirectory()) {
@@ -349,7 +354,7 @@ export function prepareTsNodeRun(
         };
       }
       configFile = path.join(configFile, 'tsconfig.json');
-      configArgument = path.join(project, 'tsconfig.json');
+      project.path = path.join(project.path, 'tsconfig.json');
     }
   } else {
     let searchDir = cwd;
@@ -390,17 +395,17 @@ export function prepareTsNodeRun(
         'the ts-node shebang needs a pinned tsconfig, whose path depends on the caller; migrate it manually',
     };
   }
-  const options = { ...environment, ...config.options, ...explicit };
+  const options = { ...environment.options, ...config.options, ...explicit };
   if (options.transpileOnly !== true || options.typeCheck === true) {
     return { keepReason: KEEP_TYPE_CHECK };
   }
-  if (projectIndex !== undefined) {
+  if (project !== undefined) {
     edits.push({
-      index: projectIndex,
-      value: `--tsconfig=${configArgument!.split(path.sep).join('/')}`,
+      index: project.index,
+      value: `--tsconfig=${project.path.split(path.sep).join('/')}`,
     });
-    if (!projectInline) {
-      edits.push({ index: projectIndex + 1 });
+    if (!project.inline) {
+      edits.push({ index: project.index + 1 });
     }
   }
   if (configFile && selectedProject === undefined) {

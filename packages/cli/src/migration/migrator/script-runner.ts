@@ -750,10 +750,14 @@ interface ScannedOptions {
 }
 
 function importEdits(command: string, scanned: ScannedOptions): Edit[] {
-  return scanned.imports.flatMap(({ token, value, option }) => [
-    ...(option ? [literalEdit(command, option, '--import')] : []),
-    literalEdit(command, token, value),
-  ]);
+  const edits: Edit[] = [];
+  for (const { token, value, option } of scanned.imports) {
+    if (option) {
+      edits.push(literalEdit(command, option, '--import'));
+    }
+    edits.push(literalEdit(command, token, value));
+  }
+  return edits;
 }
 
 /** Read options from the executable to the entry file. */

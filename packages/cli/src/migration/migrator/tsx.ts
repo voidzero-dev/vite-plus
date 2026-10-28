@@ -203,13 +203,15 @@ export function typescriptScriptKeepReason(
       ? `\`${script}\` does not exist yet, so vp migrate cannot check it`
       : undefined;
   }
-  for (const [, base, extension] of runner === 'tsx' ? source.matchAll(RELATIVE_REQUIRE) : []) {
-    const resolve = (ext: string) => path.resolve(path.dirname(file), `${base}.${ext}`);
-    const typescript = fs.existsSync(resolve(extension))
-      ? undefined
-      : TYPESCRIPT_EXTENSIONS[extension].find((ext) => fs.existsSync(resolve(ext)));
-    if (typescript) {
-      return `\`${script}\` requires \`${base}.${extension}\`, which only ${runner} resolves to \`${base}.${typescript}\`; write the TypeScript extension`;
+  if (runner === 'tsx') {
+    for (const [, base, extension] of source.matchAll(RELATIVE_REQUIRE)) {
+      const resolve = (ext: string) => path.resolve(path.dirname(file), `${base}.${ext}`);
+      const typescript = fs.existsSync(resolve(extension))
+        ? undefined
+        : TYPESCRIPT_EXTENSIONS[extension].find((ext) => fs.existsSync(resolve(ext)));
+      if (typescript) {
+        return `\`${script}\` requires \`${base}.${extension}\`, which only ${runner} resolves to \`${base}.${typescript}\`; write the TypeScript extension`;
+      }
     }
   }
   // A comment can start a line before ES module syntax, as in `/* banner */ import ...`.
