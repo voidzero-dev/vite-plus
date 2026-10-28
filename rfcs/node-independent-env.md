@@ -71,6 +71,8 @@ Outside a Vite+ project, `auto` must not silently install a managed runtime when
 
 For a user replacing fnm, `on` remains the appropriate mode: `.nvmrc` and `.node-version` work across projects regardless of Vite+ adoption. For a user keeping fnm, `auto` delegates outside Vite+ projects. The two modes address different scenarios.
 
+Older binaries reject `auto` in the existing mode fields. Before downgrading to such a version, users must run `vp env on` or `vp env off` with the newer binary for each scope configured as `auto`. Phase two must document and test this downgrade procedure; it must not map unknown modes to managed ownership.
+
 ### Project Detection
 
 Determine activation from static project metadata in Rust. Do not load JavaScript, execute a Vite config, inspect an installed toolchain, or contact a registry to decide ownership.
@@ -83,13 +85,33 @@ An ordinary Vite dependency, `vite.config.*`, `.node-version`, `.nvmrc`, or `eng
 
 If relevant metadata is unreadable or invalid, report a detection error rather than changing ownership based on a guess. Diagnostics must identify the file. Do not edit project metadata as a side effect of detection.
 
+Run detection only for scopes that need an automatic ownership decision. Broken project metadata must not prevent `env on/off`, an explicit `env install <version>`, or an explicit execution override from repairing that scope.
+
 ### Overrides and Shell Integration
 
 Resolve explicit command and session choices before automatic activation. For example, `vp env exec --node 16.20.2 node -v` uses that managed version even outside a Vite+ project. In `auto` mode, `vp env use 16.20.2` temporarily selects managed Node until `vp env use --unset node`; it does not change package-manager ownership. Apply the same rule to family-specific package-manager session overrides. Keep existing `on/off` precedence unchanged.
 
-Evaluate activation when a shim or environment-aware command runs, using the effective working directory after `-C`. Do not rewrite configuration on `cd`, and do not create a permanent session override when entering a project. Leaving the project must restore delegation on the next invocation. Inherited tool selections within a running command retain the existing recursion and child-process rules.
+Within `auto`, use the first applicable source for each tool:
+
+| Source                                               | Effect                                                                               |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Explicit execution option, such as `env exec --node` | Start a new selection with the requested managed tool                                |
+| Inherited tool selection in a child invocation       | Retain the parent's selection under the existing recursion rules                     |
+| Shell environment override                           | Use the selected managed tool in that shell and its children                         |
+| Fallback session file                                | Use the selected managed tool for processes sharing the state directory              |
+| Project detection                                    | Use managed tools in an applicable Vite+ project; otherwise delegate to system tools |
+
+The shell wrapper sets session overrides through environment variables. Direct invocation without the wrapper can write `<STATE>/.session-node-version` or a family-specific session file; these files affect other shells that share the state directory until unset. Diagnostics must distinguish these sources and identify the file. CI jobs that need independent overrides should use separate state directories.
+
+Evaluate activation when a shim or environment-aware command runs, using the effective working directory after `-C`. Do not rewrite configuration on `cd` or create a session override when entering a project. A fresh tool invocation from the shell after leaving the project restores delegation unless an override is active. A package script that changes directory retains its inherited selection; a direct `vp env exec` starts a new selection. Preserve these existing child-process rules and explain inherited ownership in diagnostics.
 
 Vite+ can only make this decision when the shell invokes its shim. The Vite+ shim directory must precede the external manager's executable directory on `PATH`, and the external tools must remain discoverable after excluding Vite+ shims. Document shell initialization order and test managers that change `PATH` on directory changes. If another manager places its binary before the Vite+ shim, the shell bypasses Vite+; `doctor` should explain that condition.
+
+### Resolution API (Phase Two)
+
+Use a shared, side-effect-free `EnvironmentPlan` to resolve ownership before downloading tools or constructing a child environment. Its inputs are the effective working directory, original `PATH`, configuration, overrides, inherited selections, and applicable project metadata. For each tool, return the configured mode, effective owner, selection source, activation reason, and an external executable or managed requirement to resolve. Inspection and execution consume the same plan; diagnostic version probes remain a separate operation.
+
+Resolve external tools against the original `PATH`, skipping Vite+ shims with the existing external-tool lookup. The current `system_first` lookup stops at the first match and cannot supply this behavior when the Vite+ shim comes first. Preserve its existing behavior for `off`. Resolve Node and package-manager ownership before prepending either tool, so managed Node's bundled npm cannot replace the intended system npm during resolution.
 
 ### Diagnostics
 
@@ -126,7 +148,9 @@ For example, a fresh `vp env install 16.20.2` installs Node.js 16.20.2 without p
 
 Retain first-run deployment, environment-management preferences, shell integration, Windows trampolines, and the handoff to the installed executable. Continue to preserve arguments, the working directory, environment, standard input, and exit status across that handoff.
 
-Preserve a supplied `vp-install-lock.yaml` companion locally during native setup, without recovering it from the registry. Write the wrapper `package.json` for the deployed version during native setup. It records the matching `vite-plus` dependency and pinned installer pnpm version. Save an explicit installation registry, including the preview-build registry fallback, in that version's `.npmrc`. A later shell can then finish toolchain installation without the original installer's environment variables.
+Preserve a supplied `vp-install-lock.yaml` companion locally during native setup, without recovering it from the registry. Write the wrapper `package.json` for the deployed version during native setup. It records the matching `vite-plus` dependency and pinned installer pnpm version.
+
+Choose the explicit installation registry first, then a saved registry, then the preview-build fallback when applicable. Save the selected registry in that version's `.npmrc`. Update only the registry setting and retain authentication, scoped registries, and other settings. Persist the registry even when a failed attempt has left a payload `package.json`. A later shell can then finish toolchain installation without the original installer's environment variables.
 
 Do not resolve, download, or execute Node or pnpm during ordinary native command setup. Explicit installer setup retains its runtime selection and dependency installation. Windows can still fetch its native trampoline package when the standalone executable has no sibling trampoline.
 
@@ -140,29 +164,40 @@ Keep script-path lookup free of installation side effects. Add an asynchronous p
 - Global fallback after project-local resolution fails.
 - Global toolchain inspection.
 
-Project-local resolution must not install the global payload when a usable local entrypoint exists. Explicit script-directory overrides remain caller-owned. Existing complete payloads with valid installation receipts, including externally managed bundles, require no writes. External bundles remain owned by their installer. Managed payloads must pass the release lockfile and completion-receipt checks before use; recover a missing companion using the saved installation registry when JavaScript preparation is needed.
+Project-local resolution must not install the global payload when a usable local entrypoint exists. Explicit script-directory overrides remain caller-owned. Existing complete managed payloads with valid installation receipts require no writes. External bundles remain owned by their installer and do not require Vite+ installation receipts. Managed payloads must pass the release lockfile and completion-receipt checks before use; recover a missing companion using the saved installation registry when JavaScript preparation is needed.
 
 Use the existing production-dependency installer for deferred installation. It selects a managed LTS runtime and invokes the pinned pnpm entrypoint by absolute path. Preserve the project's selected runtime for the command itself; the installer runtime must not become a session override or project pin.
 
 Installation status belongs on stderr so JSON and command output remain parseable. Retain the existing captured install log on failure.
 
+### Follow-up: Payload Ownership API
+
+A later refactor should resolve the payload location and owner once: managed release, external bundle, local bootstrap, or explicit scripts override. A shared payload service can then return the prepared package and scripts directories to the executor. Keep ownership separate from readiness; missing files in a caller-owned payload do not authorize a managed release install. Retain the existing disk markers for compatibility. This typed API is a follow-up, not part of the startup implementation.
+
 ## Installation State and Concurrency
 
-Track JavaScript readiness separately from native setup. An installed `package.json` alone does not establish readiness: pnpm can write package files before it finishes the dependency graph.
+Track JavaScript readiness separately from native setup and payload ownership. An installed `package.json` alone does not establish readiness: pnpm can write package files before it finishes the dependency graph. Explicit and deferred installation must use the same readiness check.
 
 Use the following state in the version directory:
 
-| State                                                                                 | Meaning                                                                                                      |
-| ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `node_modules/vite-plus/package.json` and `dist/bin.js` exist, with no pending marker | A candidate payload; managed installations must also pass the release lockfile and completion-receipt checks |
-| Payload missing                                                                       | Install on first global toolchain use                                                                        |
-| `.vp-js-deps-pending` exists                                                          | An installation started but has not completed; retry before using the payload                                |
+| State                                                                                               | Meaning                                                                                                      |
+| --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `bin/.vp-setup-complete` exists                                                                     | Native setup is complete; it does not establish JavaScript readiness                                         |
+| `.vp-local-deps` exists                                                                             | The local bootstrap owns the payload; managed installation must not replace it                               |
+| `node_modules/vite-plus/package.json` and `dist/bin.js` exist, with no pending marker               | A candidate payload; managed installations must also pass the release lockfile and completion-receipt checks |
+| Candidate payload, matching completion receipt, and working lockfile equal to the release companion | The managed payload is ready; reuse it without writes                                                        |
+| Payload missing                                                                                     | Install on first global toolchain use                                                                        |
+| `.vp-js-deps-pending` exists                                                                        | An installation started but has not completed; retry before using the payload                                |
+
+For releases that supply an installation lockfile, a missing or invalid receipt requires preparation under the installation lock. Preserve compatibility with older releases that do not supply a companion.
 
 Write the pending marker before installation. Remove it after successful completion and recording the installation receipt. Keep it on failure or interruption, even if package files now exist. A failed toolchain installation must leave native setup and `vp env` usable.
 
-Serialize deferred installs with a per-version `.vp-js-deps.lock` file. Acquire the operating-system lock outside the async executor, then recheck readiness after acquiring it. Hold the lock until installation finishes. Process exit releases the lock; a leftover lock file does not indicate an active installation.
+Serialize managed payload writers with a per-version `.vp-js-deps.lock` file. The shared `ProductionDepsTransaction` guard owns the lock for deferred installation, explicit setup, upgrades, and the legacy installer. Native metadata preparation also uses the guard. Acquire the operating-system lock outside the async executor before extracting the payload or changing its companion, wrapper manifest, registry configuration, or readiness state. Recheck readiness after acquiring it, then hold the lock through installation and completion recording. Callers must not bypass the transaction by invoking the dependency installer directly.
 
-Preserve the saved registry and authentication configuration when applying the installer's `minimum-release-age=0` override.
+Process exit releases the lock; a leftover lock file does not indicate an active installation. Failure handling must keep the lock path stable for waiting installers. Failed upgrade or legacy installation attempts leave an inactive directory available for retry, rather than deleting the directory and its lock beneath those processes. Activate the new version only after preparation succeeds. Release the guard before invoking the installed binary for shim refresh or command handoff, because its native setup can acquire the same lock.
+
+Preserve the saved registry and authentication configuration when applying the installer's `minimum-release-age=0` override. Use preserving updates for both native registry persistence and dependency installation, under the same transaction.
 
 ## Backward Compatibility
 
@@ -185,8 +220,9 @@ For startup separation, cover these cases:
 - Deferred global execution, global fallback, and global toolchain inspection.
 - Project-local execution without installing the global payload.
 - An installer failure after it writes package files, followed by successful native commands and a retry.
-- Concurrent first-use commands sharing one completed installation.
-- Saved registry configuration and clean stdout during installation.
+- Concurrent first-use commands, including an explicit installer racing a deferred command, sharing one completed installation.
+- Explicit and deferred retries after pending state or a missing entrypoint, even when `package.json` exists.
+- Saved registry configuration across setup retries, preserving authentication and scoped registries, and clean stdout during installation.
 - Existing setup handoff, retry, external-bundle, and upgrade behavior.
 
 Use controlled installer fixtures for failure and concurrency cases. Supplement them with a real Node.js 16 smoke test on a supported platform.
@@ -196,15 +232,19 @@ For automatic activation, cover these cases:
 - Keep a simulated fnm/nvm runtime on `PATH`, enter a Vite+ project, run `node`, leave for a legacy project, and run `node` again. Assert the selected executable and version in each directory, with no manual mode changes.
 - Repeat through `vp node`, `vp env exec`, direct package-manager shims, and environment inspection. Assert consistent ownership and clean machine-readable output.
 - Detect an uninstalled Vite+ project, a workspace member with a root declaration, a member with its own declaration, an excluded directory, a nested repository, and an ordinary Vite project. Do not use `node_modules` as the activation signal.
-- Exercise scoped modes and session overrides. Unsetting a session override restores directory-based activation. Switching Node ownership does not change a package-manager family's configured mode.
+- Exercise scoped modes, shell overrides, and shared session files across two shells. Unsetting an override restores directory-based activation. Switching Node ownership does not change a package-manager family's configured mode.
+- Preserve a child's inherited tool after it changes directory; reevaluate ownership for a fresh invocation or direct `env exec`. Test mixed Node and package-manager modes using the original `PATH`.
 - Outside a Vite+ project with no system Node, report a missing tool without installing a managed runtime. Explicit `env install` and `env exec --node` remain available.
-- Change or remove the declaring dependency and verify that the next invocation reflects the change. Invalid relevant metadata produces a useful error without a mode change.
+- Change or remove the declaring dependency and verify that the next invocation reflects the change. Invalid relevant metadata produces a useful error without a mode change; explicit recovery commands remain usable.
 - Test shell initialization and directory hooks that reorder `PATH`; ensure `doctor` identifies a bypassed Vite+ shim. Cover supported shells on Unix and Windows.
+- Reset `auto` scopes with the newer binary before running an older binary that cannot read `auto` configuration.
 
 ## Implementation Plan
 
 1. Ship native startup separation with deferred JavaScript installation and legacy-runtime checks. This layer is independently useful for users replacing fnm.
-2. Implement the opt-in `auto` mode with a shared ownership resolver, static project detection, shell diagnostics, and the coexistence tests above. This layer addresses users who keep fnm/nvm.
+2. Implement the opt-in `auto` mode with the shared `EnvironmentPlan`, static project detection, shell diagnostics, and the coexistence tests above. This layer addresses users who keep fnm/nvm.
+
+The typed payload service is an optional follow-up refactor. Measure warm JavaScript startup before changing receipt validation or adding a persistent readiness cache.
 
 ## Alternatives Considered
 
@@ -213,3 +253,7 @@ Rewriting the environment subcommands would leave the startup dependency in plac
 An early `env` dispatch before setup would avoid installing JavaScript, but would also skip deployment, shims, and external-install receipts. Separating native and JavaScript setup preserves those behaviors without duplicating command parsing for aliases and `-C`.
 
 Keeping eager installation under a separate modern runtime supports old project runtimes, but still prevents environment management when that installer runtime cannot run. Deferred installation removes that requirement from the management path.
+
+A preassembled, verified JavaScript payload archive could remove the installation-time Node and pnpm dependency. It would require changes to release packaging and platform distribution. Reuse deferred pnpm installation with a shared transaction for this change; consider an archive if installation cost or reliability justifies that release work.
+
+For `auto`, shell directory-change hooks could avoid metadata checks on each invocation, but would compete with other managers' `PATH` changes and miss IDE or CI invocations. Resolve ownership at invocation time. An explicit project activation marker would remove ambiguity from dependency detection, but would require repository changes; reserve it for a future override if workspace cases demonstrate the need.

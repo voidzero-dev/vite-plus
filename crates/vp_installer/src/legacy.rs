@@ -42,7 +42,7 @@ pub(super) async fn install(
         let version_dir = install_dir.join(target_version);
         tokio::fs::create_dir_all(&version_dir).await?;
 
-        let result = install_new_version(
+        install_new_version(
             opts,
             platform_data,
             &version_dir,
@@ -50,14 +50,7 @@ pub(super) async fn install(
             target_version,
             current_version.is_some(),
         )
-        .await;
-
-        // On failure, clean up the partial version directory (matches vp upgrade behavior)
-        if result.is_err() {
-            let _ = tokio::fs::remove_dir_all(&version_dir).await;
-        }
-
-        result?;
+        .await?;
     }
 
     // --- Post-activation setup (always runs, even for same-version repair) ---
@@ -105,8 +98,8 @@ pub(super) async fn install(
     Ok(())
 }
 
-/// Extract, install deps, and activate a new version. Separated so the caller
-/// can clean up the version directory on failure.
+/// Extract, install deps, and activate a new version. Failed payloads remain
+/// inactive and retryable without unlinking a lock held by a waiting writer.
 async fn install_new_version(
     opts: &cli::Options,
     platform_data: &[u8],
@@ -115,6 +108,9 @@ async fn install_new_version(
     version: &str,
     has_previous: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let transaction = install::ProductionDepsTransaction::acquire(version_dir).await?;
+    let registry = transaction.registry(opts.registry.as_deref()).await?;
+    let registry = registry.as_deref();
     if !opts.quiet {
         print_info("extracting binary...");
     }
@@ -132,13 +128,13 @@ async fn install_new_version(
         );
     }
 
-    install::generate_wrapper_package_json(version_dir, version).await?;
-
-    if !opts.quiet {
-        print_info("installing dependencies (this may take a moment)...");
+    transaction.save_registry(registry).await?;
+    if !transaction.is_complete().await? {
+        if !opts.quiet {
+            print_info("installing dependencies (this may take a moment)...");
+        }
+        transaction.install(version, registry, !opts.quiet, None).await?;
     }
-    install::install_production_deps(version_dir, opts.registry.as_deref(), !opts.quiet, None)
-        .await?;
 
     let previous_version =
         if has_previous { install::save_previous_version(install_dir).await? } else { None };

@@ -169,6 +169,58 @@ if (action === 'native') {
   assert.deepEqual(fs.readdirSync(path.join(home, 'js_runtime/node')), ['index_cache.json']);
   console.log('Node 16 selection works with absent and unusable Node executables');
   console.log('Environment management does not install the JavaScript toolchain');
+} else if (action === 'registry') {
+  const npmrc = path.join(installed, '.npmrc');
+  const marker = path.join(installed, 'bin/.vp-setup-complete');
+  const retained = [
+    '# Keep authentication and scoped registry settings.',
+    '//127.0.0.1:9/:_authToken=fixture-token',
+    '@fixture:registry=https://scope.example.invalid/',
+    'strict-ssl=false',
+  ];
+  for (const state of ['missing', 'partial']) {
+    write(
+      npmrc,
+      [
+        ...retained,
+        'registry=https://old.example.invalid/',
+        ' registry = https://duplicate.example.invalid/',
+      ].join('\n') + '\n',
+    );
+    if (state === 'partial') {
+      write(path.join(payload, 'package.json'), '{"name":"vite-plus"}');
+      write(pending, '');
+    }
+    fs.unlinkSync(marker);
+    run(
+      ['env', '--help'],
+      { NPM_CONFIG_REGISTRY: 'http://127.0.0.1:9' },
+      0,
+      path.join(installed, 'bin', binName),
+    );
+    const content = fs.readFileSync(npmrc, 'utf8');
+    for (const line of retained) assert.ok(content.split(/\r?\n/).includes(line));
+    assert.deepEqual(
+      content.split(/\r?\n/).filter((line) => /^\s*registry\s*=/.test(line)),
+      ['registry=http://127.0.0.1:9'],
+    );
+    assert.ok(!fs.existsSync(path.join(payload, 'dist/bin.js')));
+    assert.equal(fs.existsSync(pending), state === 'partial');
+    assert.ok(!fs.existsSync(receipt));
+    assert.ok(!fs.existsSync(path.join(home, 'js_runtime')));
+    assert.ok(!fs.existsSync(path.join(home, 'package_manager')));
+    // Another retry without a registry override must retain the saved configuration.
+    fs.unlinkSync(marker);
+    run(['env', '--help'], {}, 0, path.join(installed, 'bin', binName));
+    assert.equal(fs.readFileSync(npmrc, 'utf8'), content);
+  }
+  console.log(
+    'Native setup retries preserve comments, authentication, and scoped registry settings',
+  );
+  console.log(
+    'The registry is updated with missing or partial payloads and retained without an override',
+  );
+  console.log('Retries do not install Node, pnpm, or complete a partial JavaScript payload');
 } else {
   seedInstaller();
   const globalArgs = ['lint', '--init'];
@@ -234,8 +286,14 @@ if (action === 'native') {
     checkInstalled();
     console.log('A partial failed install leaves environment management usable');
     console.log('The next global command retries despite existing package files');
-  } else if (action === 'concurrent') {
-    await checkConcurrent(globalArgs);
+  } else if (action.startsWith('concurrent')) {
+    const kinds =
+      action === 'concurrent-explicit'
+        ? ['explicit', 'deferred']
+        : action === 'concurrent-deferred'
+          ? ['deferred', 'explicit']
+          : ['deferred', 'deferred'];
+    await checkConcurrent(globalArgs, kinds);
   } else if (action === 'receipt') {
     checkOutput(run(globalArgs), globalArgs);
     assert.equal(installCount(), 1);
@@ -333,20 +391,47 @@ if (action === 'native') {
   }
 }
 
-async function checkConcurrent(args) {
+async function checkConcurrent(args, kinds) {
   let release;
   const entered = new Promise((resolve) => {
     release = resolve;
   });
-  const server = http.createServer((_request, response) => release(response));
+  let duplicate;
+  const unexpectedInstall = new Promise((resolve) => {
+    duplicate = resolve;
+  });
+  let requests = 0;
+  const server = http.createServer((_request, response) => {
+    requests += 1;
+    if (requests === 1) release(response);
+    else duplicate();
+  });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const extra = {
     TEST_INSTALL_GATE: `http://127.0.0.1:${server.address().port}`,
     VP_LOG: 'vp_setup=debug',
   };
   const children = [];
-  function start() {
-    const child = spawn(external, args, { cwd: project, env: { ...env, ...extra } });
+  function start(kind) {
+    const explicit = kind === 'explicit';
+    const child = spawn(
+      explicit ? path.join(installed, 'bin', binName) : external,
+      explicit ? [] : args,
+      {
+        cwd: project,
+        env: {
+          ...env,
+          ...extra,
+          ...(explicit
+            ? {
+                VP_SELF_SETUP_SHELL: 'sh',
+                VP_SETUP_NODE_VERSION: version,
+                NPM_CONFIG_REGISTRY: 'http://127.0.0.1:9',
+              }
+            : {}),
+        },
+      },
+    );
     children.push(child);
     let stdout = '';
     let stderr = '';
@@ -369,25 +454,55 @@ async function checkConcurrent(args) {
     const result = new Promise((resolve, reject) => {
       child.on('error', reject);
       child.on('close', (code) =>
-        code === 0 ? resolve({ stdout, stderr }) : reject(new Error(stderr)),
+        code === 0 ? resolve({ stdout, stderr }) : reject(new Error(stdout + stderr)),
       );
     });
     return { lock, result };
   }
   try {
-    const first = start();
-    const response = await entered;
-    const second = start();
-    await second.lock;
+    const first = start(kinds[0]);
+    const response = await Promise.race([
+      entered,
+      first.result.then(() => {
+        throw new Error('The first command exited before installation');
+      }),
+    ]);
+    const second = start(kinds[1]);
+    await Promise.race([
+      second.lock,
+      second.result.then(() => {
+        throw new Error('The second command did not wait for installation');
+      }),
+      unexpectedInstall.then(() => {
+        throw new Error('Concurrent commands entered the installer');
+      }),
+    ]);
     assert.equal(installCount(), 1);
     response.end('continue');
-    for (const result of await Promise.all([first.result, second.result])) {
-      // VP_LOG writes tracing to stdout; the final line belongs to the mock CLI.
-      checkOutput({ stdout: result.stdout.trim().split('\n').at(-1) }, args);
+    const results = await Promise.all([first.result, second.result]);
+    for (const [index, result] of results.entries()) {
+      if (kinds[index] === 'explicit') {
+        assert.deepEqual(
+          result.stdout
+            .trim()
+            .split(/\r?\n/)
+            .filter((line) => /^[A-Z_]+=/.test(line))
+            .map((line) => line.split('=')[0]),
+          ['INSTALL_DIR', 'SHIM_DIR', 'CACHE_DIR', 'CONFIG_DIR', 'STATE_DIR'],
+        );
+      } else {
+        // VP_LOG writes tracing to stdout; the final line belongs to the mock CLI.
+        checkOutput({ stdout: result.stdout.trim().split('\n').at(-1) }, args);
+      }
     }
     assert.equal(installCount(), 1);
     checkInstalled();
-    console.log('Concurrent commands share one successful dependency installation');
+    assert.equal(requests, 1);
+    console.log(
+      kinds.includes('explicit')
+        ? `${kinds.join(' then ')}: both commands share one successful dependency installation`
+        : 'Concurrent commands share one successful dependency installation',
+    );
   } finally {
     for (const child of children) child.kill();
     server.closeAllConnections();
