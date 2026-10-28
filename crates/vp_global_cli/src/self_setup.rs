@@ -65,6 +65,8 @@ pub(crate) async fn maybe_run() -> Result<Option<ExitCode>, Error> {
         }
         return execute_installed(&installed_binary, false);
     }
+    // Claim fresh roots before the setup lock, preferences, or payload make them nonempty.
+    crate::install_dirs::prepare(&EnvConfig::get().dirs)?;
     let lock = if let Some(state) = &external { Some(state.lock().await?) } else { None };
     // Another invocation may have finished while this one waited for setup.
     if reuse
@@ -268,7 +270,6 @@ async fn run(
     } else {
         version_dir.join("bin").join(VP_BINARY_NAME)
     };
-    crate::install_dirs::prepare(dirs)?;
     if deploy {
         tokio::fs::create_dir_all(version_dir.join("bin")).await?;
         install::clear_self_setup_marker(&version_dir).await?;
