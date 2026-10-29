@@ -2,7 +2,7 @@
 name = "migration_oxnode_custom_loaders"
 vp = "local"
 local-registry = true
-env = { VP_NODE_VERSION = "22.23.2" }
+env = { VP_NODE_VERSION = "22.23.4" }
 unset-env = ["NODE_OPTIONS", "VP_SCRIPT_TSCONFIG", "TSX_TSCONFIG_PATH", "OXC_TSCONFIG_PATH", "TS_NODE_PROJECT"]
 comment = "The local registry supplies published oxc-node 0.1.0 to compare original and migrated loader chains. The variant and image loaders are locally authored fixtures; the referenced Athena Crisis loaders are not in its public tree."
 steps = [
@@ -44,7 +44,7 @@ steps = [
 name = "migration_oxnode_shebang_sync"
 vp = "local"
 local-registry = true
-env = { VP_NODE_VERSION = "26.5.0" }
+env = { VP_NODE_VERSION = "26.12.1" }
 unset-env = ["NODE_OPTIONS", "VP_SCRIPT_TSCONFIG", "TSX_TSCONFIG_PATH", "OXC_TSCONFIG_PATH", "TS_NODE_PROJECT"]
 skip-platforms = ["windows"]
 comment = "The local registry supplies published oxc-node 1.0.1 to compare original and migrated loader chains. The variant and image loaders are locally authored fixtures; the referenced Athena Crisis loaders are not in its public tree."
