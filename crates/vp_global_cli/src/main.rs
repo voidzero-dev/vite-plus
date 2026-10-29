@@ -311,6 +311,24 @@ fn dump_dirs_from_env_config() -> bool {
     true
 }
 
+fn is_homebrew_recovery_command(args: &[String]) -> bool {
+    // A shim's arguments belong to the wrapped tool, even when they look like vp commands.
+    if !args.first().is_some_and(|name| {
+        std::path::Path::new(name).file_name().is_some_and(|name| name == "vp" || name == "vp.exe")
+    }) {
+        return false;
+    }
+    let Ok(args) = try_parse_args_from(args.iter().cloned()) else { return false };
+    !args.version
+        && matches!(
+            args.command,
+            Some(cli::Commands::Implode { .. } | cli::Commands::Upgrade { .. })
+                | Some(cli::Commands::Env(cli::EnvArgs {
+                    command: Some(cli::EnvSubcommands::Doctor { .. }),
+                }))
+        )
+}
+
 #[tokio::main]
 async fn main() -> ExitCode {
     // Probe before tracing, directory resolution, or argument dispatch can emit output.
@@ -335,16 +353,36 @@ async fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
-    match self_setup::maybe_run().await {
-        Ok(Some(code)) => return code,
-        Ok(None) => {}
-        Err(error) => {
+    let mut args: Vec<String> = std::env::args().collect();
+    // Homebrew owns the executable independently of the user's npm payload. Keep diagnostics,
+    // cleanup, and Homebrew upgrade guidance available after interrupted dependency setup.
+    // Explicit installer handoffs and tool shims must retain their normal setup behavior.
+    let recovery = homebrew::owns_current_exe()
+        && [
+            vp_shared::env_vars::VP_SELF_SETUP_SHELL,
+            vp_shared::env_vars::VP_SELF_SETUP_REPLACE_EXISTING,
+            vp_shared::env_vars::VP_SHIM_TOOL,
+            "VITE_PLUS_SHIM_TOOL",
+            "VP_COMPLETE",
+        ]
+        .iter()
+        .all(|name| env::var_os(name).is_none())
+        && is_homebrew_recovery_command(&args);
+    if recovery {
+        if let Err(error) = vp_shared::validate_vp_dir_env() {
             output::error(&error.to_string());
             return ExitCode::FAILURE;
         }
+    } else {
+        match self_setup::maybe_run().await {
+            Ok(Some(code)) => return code,
+            Ok(None) => {}
+            Err(error) => {
+                output::error(&error.to_string());
+                return ExitCode::FAILURE;
+            }
+        }
     }
-
-    let mut args: Vec<String> = std::env::args().collect();
 
     // Replace bash completion script to fix completion for items containing ':'
     if env::var_os("VP_COMPLETE").is_some_and(|shell| shell == "bash") && args.len() == 1 {
@@ -536,12 +574,38 @@ mod tests {
 
     use super::{
         extract_unknown_argument, has_pass_as_value_suggestion, is_affirmative_response,
-        normalize_args, parse_leading_chdir, replace_top_level_typoed_subcommand,
-        try_parse_args_from,
+        is_homebrew_recovery_command, normalize_args, parse_leading_chdir,
+        replace_top_level_typoed_subcommand, try_parse_args_from,
     };
 
     fn s(v: &[&str]) -> Vec<String> {
         v.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn homebrew_recovery_commands_do_not_require_the_js_payload() {
+        for args in [
+            s(&["vp", "env", "doctor"]),
+            s(&["vp", "-C", "project", "env", "doctor", "node"]),
+            s(&["vp", "-Cproject", "implode", "--yes"]),
+            s(&["vp", "-C=project", "upgrade", "--check"]),
+            s(&["/brew/bin/vp", "upgrade", "--rollback"]),
+        ] {
+            assert!(is_homebrew_recovery_command(&args), "{args:?}");
+        }
+        for args in [
+            s(&["vp", "--help"]),
+            s(&["vp", "env", "setup", "--refresh"]),
+            s(&["vp", "fmt"]),
+            s(&["vp", "--version", "upgrade"]),
+            s(&["vp", "implode", "--unknown"]),
+            s(&["vp", "run", "upgrade", "--check"]),
+            s(&["vpr", "upgrade", "--check"]),
+            s(&["/brew/bin/vpx", "env", "doctor"]),
+            s(&["node", "implode", "--yes"]),
+        ] {
+            assert!(!is_homebrew_recovery_command(&args), "{args:?}");
+        }
     }
 
     #[test]

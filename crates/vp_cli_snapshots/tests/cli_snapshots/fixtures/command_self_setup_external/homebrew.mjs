@@ -91,10 +91,12 @@ const nodeArchives = new Map(
 );
 let downloads = 0,
   installs = 0,
+  registryRequests = 0,
   rejectInstall = false,
   corrupt = false;
 let authorization = `Bearer ${token}`;
 const server = createServer((request, response) => {
+  if (request.url?.startsWith('/registry/')) registryRequests++;
   if (request.url === '/index.json')
     return response.end(JSON.stringify([{ version: 'v99.0.0', lts: 'Fixture' }]));
   if (request.url === '/v99.0.0/SHASUMS256.txt.asc') return response.writeHead(404).end();
@@ -219,7 +221,7 @@ try {
   await run(publicVp, ['--help'], env, root, 1);
   const settingsFile = path.join(env.VP_HOME, 'config.json');
   const preferences = fs.readFileSync(settingsFile, 'utf8');
-  assert.ok(!fs.existsSync(path.join(userPackage(env), '.vp-deps-complete')));
+  assert.ok(!fs.existsSync(path.join(userPackage(env), 'node_modules/.vp-install-complete')));
   const failureLog = fs.readFileSync(path.join(userPackage(env), '../upgrade.log'), 'utf8');
   assert.ok(failureLog.includes('exit code 17') && !failureLog.includes(token));
   for (const name of ['VP_NODE_MANAGER', 'VP_PM_MANAGER', 'VP_PNPM_MANAGER']) delete env[name];
@@ -271,13 +273,48 @@ try {
 
   fs.writeFileSync(path.join(userPackage(env), 'pnpm-lock.yaml'), 'interrupted resolution');
   rejectInstall = true;
-  await run(publicVp, ['--help'], { ...env, VP_SELF_SETUP_REPLACE_EXISTING: '1' }, root, 1);
-  assert.ok(!fs.existsSync(path.join(userPackage(env), '.vp-deps-complete')));
+  await run(publicVp, ['--help'], env, root, 1);
+  assert.ok(!fs.existsSync(path.join(userPackage(env), 'node_modules/.vp-install-complete')));
   rejectInstall = false;
   await run(publicVp, ['--help'], env);
   assert.equal(installs, 4);
   assert.equal(fs.readFileSync(settingsFile, 'utf8'), preferences);
   console.log('A failed frozen refresh invalidates completion and retries with saved preferences.');
+
+  const sharedReceipt = path.join(userPackage(env), 'node_modules/.vp-install-complete');
+  fs.unlinkSync(sharedReceipt);
+  const incomplete = await run(
+    publicVp,
+    ['--help'],
+    { ...env, VP_SKIP_DEPS_INSTALL: '1' },
+    root,
+    1,
+  );
+  assert.ok(incomplete.stderr.includes('no matching completion receipt'));
+  assert.equal(installs, 4, 'a dependency bypass must fail without entering a setup loop');
+  await run(publicVp, ['--help'], env);
+  assert.equal(installs, 5, 'missing shared receipt must trigger dependency repair');
+  fs.writeFileSync(sharedReceipt, 'corrupt');
+  await run(publicVp, ['--help'], env);
+  assert.equal(installs, 6, 'invalid shared receipt must trigger dependency repair');
+  // The binary and version stay unchanged, but the companion now identifies a new payload.
+  const publishedLock = path.join(replacement, 'libexec/vp-install-lock.yaml');
+  fs.writeFileSync(publishedLock, lockfile + '# replacement companion\n');
+  const copiedLock = path.join(userPackage(env), 'bin/vp-install-lock.yaml');
+  rejectInstall = true;
+  await run(publicVp, ['--help'], env, root, 1);
+  assert.equal(fs.readFileSync(copiedLock, 'utf8'), lockfile + '# replacement companion\n');
+  assert.ok(!fs.existsSync(sharedReceipt));
+  fs.writeFileSync(publishedLock, lockfile);
+  rejectInstall = false;
+  await run(publicVp, ['--help'], env);
+  assert.equal(installs, 7, 'restoring the companion must repair its dependency installation');
+  const repaired = fs.readFileSync(sharedReceipt);
+  assert.equal(repaired.toString('hex'), createHash('sha256').update(lockfile).digest('hex'));
+  await run(publicVp, ['--help'], env);
+  assert.equal(installs, 7, 'completed repair must be reused');
+  assert.equal(fs.readFileSync(settingsFile, 'utf8'), preferences);
+  console.log('Missing receipts, corrupt receipts, and changed companions trigger dependency repair.');
 
   const upgrade = await run(publicVp, ['upgrade'], env, root, 1);
   assert.ok(upgrade.stderr.includes('brew upgrade voidzero-dev/vite-plus/vp'));
@@ -308,7 +345,7 @@ try {
   const globalShim = path.join(secondUser.VP_HOME, 'bin/global-tool');
   fs.symlinkSync(previous, globalShim);
   await run(publicVp, ['--help'], secondUser);
-  assert.equal(installs, 5);
+  assert.equal(installs, 8);
   assert.notEqual(userPackage(env), userPackage(secondUser));
   assert.equal(fs.readlinkSync(globalShim), publicVp);
   assert.ok(fs.existsSync(metadata) && fs.existsSync(previous));
@@ -409,7 +446,53 @@ try {
   authorization = `Bearer ${token}`;
   console.log('Registry overrides and basic authentication work with the shared downloader.');
 
-  await run(publicVp, ['--help'], environment('unauthenticated', false), root, 1);
+  const unauthenticated = environment('unauthenticated', false);
+  await run(publicVp, ['--help'], unauthenticated, root, 1);
+  const requestsBeforeRecovery = registryRequests;
+  const diagnostic = await run(
+    publicVp,
+    ['-C', root, 'env', 'doctor', 'node'],
+    unauthenticated,
+    root,
+    1,
+  );
+  assert.ok(diagnostic.stdout.includes('CLI dependencies'));
+  const checkAfterFailure = await run(publicVp, ['upgrade', '--check'], unauthenticated);
+  assert.ok(
+    (checkAfterFailure.stdout + checkAfterFailure.stderr).includes(
+      'brew outdated voidzero-dev/vite-plus/vp',
+    ),
+  );
+  const upgradeAfterFailure = await run(publicVp, ['upgrade'], unauthenticated, root, 1);
+  assert.ok(upgradeAfterFailure.stderr.includes('brew upgrade voidzero-dev/vite-plus/vp'));
+  const cleanupAfterFailure = await run(publicVp, ['implode', '--yes'], unauthenticated);
+  assert.ok(
+    (cleanupAfterFailure.stdout + cleanupAfterFailure.stderr).includes(
+      'brew uninstall voidzero-dev/vite-plus/vp',
+    ),
+  );
+  assert.ok(!fs.existsSync(unauthenticated.VP_HOME));
+  assert.ok(fs.existsSync(publicVp));
+  assert.equal(registryRequests, requestsBeforeRecovery, 'recovery must not retry npm setup');
+  console.log(
+    'After authentication failure, diagnostics, upgrade guidance, and cleanup remain available.',
+  );
+
+  for (const installerEnv of [
+    { VP_SELF_SETUP_SHELL: 'sh' },
+    { VP_SELF_SETUP_REPLACE_EXISTING: '1' },
+  ]) {
+    const explicit = environment(`explicit-${Object.keys(installerEnv)[0]}`, false);
+    const requestsBefore = registryRequests;
+    await run(publicVp, ['upgrade', '--check'], { ...explicit, ...installerEnv }, root, 1);
+    assert.ok(registryRequests > requestsBefore, 'explicit setup must still install dependencies');
+  }
+  const alias = path.join(root, 'brew/bin/vpr');
+  fs.symlinkSync(publicVp, alias);
+  const requestsBeforeAlias = registryRequests;
+  await run(alias, ['upgrade', '--check'], environment('alias', false), root, 1);
+  assert.ok(registryRequests > requestsBeforeAlias, 'shim arguments must not bypass setup');
+
   corrupt = true;
   await run(publicVp, ['--help'], environment('corrupt'), root, 1);
   console.log('Missing authentication and corrupted pnpm tarballs stop setup.');

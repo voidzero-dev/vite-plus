@@ -13,12 +13,13 @@ on:
       - '.github/scripts/*homebrew*'
       - '.github/scripts/__tests__/homebrew-formula.mjs'
       - '.github/scripts/__tests__/homebrew-preview.rb'
-      - '.github/workflows/test-homebrew.yml'
+      - '.github/workflows/test-homebrew*.yml'
       - '.github/workflows/release.yml'
       - 'crates/vp_setup/**'
       - 'crates/vp_global_cli/src/self_setup*'
       - 'crates/vp_global_cli/src/self_setup/**'
       - 'crates/vp_global_cli/src/homebrew.rs'
+      - 'crates/vp_global_cli/src/main.rs'
       - 'crates/vp_pm_cli/**'
 
 concurrency:
@@ -42,6 +43,7 @@ jobs:
     outputs:
       test: >-
         ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'test: install-e2e') || steps.paths.outputs.packaging == 'true' }}
+      published: ${{ steps.formula.outputs.published }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -61,16 +63,36 @@ jobs:
               - '.github/scripts/*homebrew*'
               - '.github/scripts/__tests__/homebrew-formula.mjs'
               - '.github/scripts/__tests__/homebrew-preview.rb'
-              - '.github/workflows/test-homebrew.yml'
+              - '.github/workflows/test-homebrew*.yml'
               - '.github/workflows/release.yml'
               - 'crates/vp_setup/**'
               - 'crates/vp_global_cli/src/self_setup*'
               - 'crates/vp_global_cli/src/self_setup/**'
               - 'crates/vp_global_cli/src/homebrew.rs'
+              - 'crates/vp_global_cli/src/main.rs'
               - 'crates/vp_pm_cli/**'
 
       - name: Check formula publication rules
         run: node --test .github/scripts/__tests__/homebrew-formula.mjs
+
+      - name: Check whether the candidate targets a published release
+        id: formula
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          import { publishedFormulaVersion } from './.github/scripts/update-homebrew-formula.mjs';
+          const source = fs.readFileSync('HomebrewFormula/vp.rb', 'utf8');
+          const published = !source.includes('  disable!');
+          if (published) publishedFormulaVersion(source);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `published=${published}\n`);
+          JS
+
+  published:
+    needs: changes
+    if: needs.changes.outputs.test == 'true' && needs.changes.outputs.published == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/test-homebrew-published.yml
 
   install:
     name: Homebrew (${{ matrix.target }})

@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import {
+  publishedFormulaVersion,
   releaseAssets,
   targets,
   updateFormula,
@@ -24,6 +27,53 @@ const release = {
   prerelease: false,
   assets: assets.map((asset) => ({ name: asset.name, browser_download_url: asset.url })),
 };
+
+await test('published tests reject disabled, mixed-version, and incomplete candidates', () => {
+  const candidate = updateFormula(formula, version, assets);
+  assert.equal(publishedFormulaVersion(candidate), version);
+  assert.throws(
+    () =>
+      publishedFormulaVersion(
+        candidate.replace(
+          '  license',
+          '  # The updater removes this gate after publication.\n  disable! date: "2026-01-01", because: "not published"\n\n  license',
+        ),
+      ),
+    /waiting for its first compatible release/,
+  );
+  assert.throws(
+    () => publishedFormulaVersion(candidate.replace(`/v${version}/`, '/v99.0.0/')),
+    /same version/,
+  );
+  assert.throws(
+    () =>
+      publishedFormulaVersion(
+        candidate.replace(assets[0].url, 'https://example.test/local.tar.gz'),
+      ),
+    /all four published release URLs/,
+  );
+  assert.throws(
+    () => publishedFormulaVersion(candidate.replace(assets[0].name, assets[1].name)),
+    /all four targets/,
+  );
+});
+
+await test('published mode cannot replace release artifacts with checkout fixtures', () => {
+  const script = new URL('../test-homebrew.mjs', import.meta.url);
+  for (const option of ['binary', 'packages-dir', 'replacement-binary', 'replacement-version']) {
+    assert.throws(
+      () =>
+        execFileSync(
+          process.execPath,
+          [fileURLToPath(script), '--published', `--${option}`, 'fixture'],
+          { stdio: 'pipe' },
+        ),
+      (error) =>
+        error.status === 1 &&
+        error.stderr.toString().includes(`--${option} cannot override published artifacts`),
+    );
+  }
+});
 
 function download(url) {
   return Promise.resolve(new Response(url.endsWith('vp-checksums.txt') ? checksums : archive));

@@ -17,6 +17,26 @@ const repository = 'voidzero-dev/vite-plus';
 const assetBlock = /  # BEGIN RELEASE ASSETS\n[\s\S]*?  # END RELEASE ASSETS/;
 const launchGate = /  # The updater removes this gate[^\n]*\n  disable! [^\n]*\n\n/;
 
+// Published-artifact tests must use the candidate's actual URLs and lockfile.
+// Reject mixed releases instead of deriving an expected version from the checkout.
+export function publishedFormulaVersion(source) {
+  assert.ok(!/^\s*disable!\s/m.test(source), 'The tap is waiting for its first compatible release');
+  const urls = [
+    ...source.matchAll(
+      /url "(https:\/\/github\.com\/voidzero-dev\/vite-plus\/releases\/download\/v([^/]+)\/([^"]+))"/g,
+    ),
+  ];
+  assert.equal(urls.length, targets.length, 'Expected all four published release URLs');
+  const version = urls[0][2];
+  stableVersion(version);
+  assert.deepEqual(
+    urls.map(([, , value, name]) => [value, name]).sort(),
+    targets.map(([, , target]) => [version, `vp-${target}.tar.gz`]).sort(),
+    'Formula release URLs must name the same version and all four targets',
+  );
+  return version;
+}
+
 function stableVersion(version) {
   assert.match(
     version,

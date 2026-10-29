@@ -71,6 +71,33 @@ pub fn matches_install_receipt(lockfile: &[u8], receipt: &[u8]) -> bool {
     receipt == Sha256::digest(lockfile).as_slice()
 }
 
+/// Check completion without changing files or recovering a missing companion.
+/// External installers use this before deciding whether first-start setup can be skipped.
+pub async fn is_complete(source: &AbsolutePath, version_dir: &AbsolutePath) -> Result<bool, Error> {
+    let Some(receipt) = read_optional(&version_dir.join(INSTALL_RECEIPT)).await? else {
+        return Ok(false);
+    };
+    if EnvConfig::get().setup_skip_install_lockfile {
+        return Ok(receipt == UNLOCKED_INSTALL_RECEIPT);
+    }
+    let Some(content) = read_optional(&version_dir.join("bin").join(INSTALL_LOCKFILE)).await?
+    else {
+        return Ok(false);
+    };
+    let sibling = source
+        .parent()
+        .ok_or_else(|| Error::Setup("Binary has no parent".into()))?
+        .join(INSTALL_LOCKFILE);
+    if let Some(published) = read_optional(&sibling).await?
+        && published != content
+    {
+        return Ok(false);
+    }
+    Ok(matches_install_receipt(&content, &receipt)
+        && read_optional(&version_dir.join("pnpm-lock.yaml")).await?.as_deref()
+            == Some(content.as_slice()))
+}
+
 /// Restore the release's lockfile before a frozen install. Returns whether it changed.
 pub async fn restore(version_dir: &AbsolutePath) -> Result<bool, Error> {
     let content = tokio::fs::read(version_dir.join("bin").join(INSTALL_LOCKFILE)).await?;
@@ -185,6 +212,58 @@ mod tests {
     use vt_path::AbsolutePathBuf;
 
     use super::*;
+
+    #[tokio::test]
+    async fn external_completion_tracks_the_published_lock_and_shared_receipt() {
+        EnvConfig::scoped_async(|env| async move {
+            let source = env.dirs.data.join("keg/libexec/vp");
+            let directory = env.dirs.cli_package("1.4.0", "test-platform");
+            let published = source.parent().unwrap().join(INSTALL_LOCKFILE);
+            tokio::fs::create_dir_all(source.parent().unwrap()).await.unwrap();
+            tokio::fs::create_dir_all(directory.join("bin")).await.unwrap();
+            tokio::fs::create_dir_all(directory.join("node_modules")).await.unwrap();
+            tokio::fs::write(&published, "release lock").await.unwrap();
+            assert!(prepare(&source, &directory, "1.4.0", None).await.unwrap());
+            assert!(!is_complete(&source, &directory).await.unwrap());
+            record_install(&directory).await.unwrap();
+            assert!(is_complete(&source, &directory).await.unwrap());
+
+            for corruption in ["missing receipt", "invalid receipt", "working lock", "companion"] {
+                match corruption {
+                    "missing receipt" => invalidate_install(&directory).await.unwrap(),
+                    "invalid receipt" => {
+                        tokio::fs::write(directory.join(INSTALL_RECEIPT), "corrupt").await.unwrap();
+                    }
+                    "working lock" => {
+                        tokio::fs::write(directory.join("pnpm-lock.yaml"), "different lock")
+                            .await
+                            .unwrap();
+                    }
+                    _ => {
+                        // A same-version archive replacement must not reuse the old payload.
+                        tokio::fs::write(&published, "new published lock").await.unwrap();
+                    }
+                }
+                assert!(!is_complete(&source, &directory).await.unwrap(), "{corruption}");
+                assert!(prepare(&source, &directory, "1.4.0", None).await.unwrap());
+                record_install(&directory).await.unwrap();
+                assert!(is_complete(&source, &directory).await.unwrap());
+            }
+
+            EnvConfig::with_vars_async([("VP_SETUP_SKIP_INSTALL_LOCKFILE", "1")], |_| async {
+                assert!(!is_complete(&source, &directory).await.unwrap());
+                record_install(&directory).await.unwrap();
+                tokio::fs::remove_file(&published).await.unwrap();
+                tokio::fs::remove_file(directory.join("bin").join(INSTALL_LOCKFILE)).await.unwrap();
+                assert!(is_complete(&source, &directory).await.unwrap());
+                assert!(!prepare(&source, &directory, "1.4.0", None).await.unwrap());
+            })
+            .await;
+            // Unlocked completion must not survive removal of the explicit bypass.
+            assert!(!is_complete(&source, &directory).await.unwrap());
+        })
+        .await;
+    }
 
     #[test]
     fn failed_writes_preserve_the_previous_file_and_allow_retry() {

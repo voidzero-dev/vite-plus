@@ -96,8 +96,15 @@ The first `vp` invocation uses the shared authenticated downloader for pinned
 pnpm and prepares a compatible Node.js runtime. It copies `vp-install-lock.yaml`
 into the user directory and installs `vite-plus@A` with `--frozen-lockfile`.
 Dependencies are keyed by CLI version and platform.
+Completion uses the shared installer's receipt for the published lockfile. The
+fast path checks that receipt, the companion and working lockfiles, and the CLI
+package version and entrypoint. Missing or inconsistent state retries setup;
+there is no separate Homebrew dependency-completion marker.
 Setup saves management choices before downloads so a failed attempt can retry
 without asking again. The Homebrew files stay unchanged.
+Native recovery commands (`vp env doctor`, `vp implode`, and `vp upgrade`)
+remain available without dependency setup, including after an authentication
+failure. Explicit installer requests still run setup.
 
 ```text
 <CONFIG>/config.json                 # saved before downloads
@@ -271,8 +278,19 @@ but tapping this repository also downloads unrelated project files. A separate
 tap repository would reduce that cost at the expense of a separate review process.
 
 After both the GitHub archives and matching npm packages are published,
-automation opens a formula update PR with the version, target URLs, and
-checksums. A failed update leaves the previous formula available. Use a formula
+automation tests the candidate formula on all four supported platforms before
+opening its update PR. These checks install the formula unchanged, including the
+published archive and companion lockfile, and run first-use setup plus `fmt`,
+`lint`, and `build` without project-local dependencies. Formula PRs repeat these
+checks once the launch gate is removed. Source-build tests remain separate so
+they cannot mask publication errors with rebuilt artifacts.
+
+Prepare the candidate once and pass the same immutable artifact to every test
+runner and the formula PR job. If the formula or guide changes on `main` during
+verification, prepare and verify a new candidate before opening the update PR.
+
+The update PR contains the version, target URLs, and checksums. A failed check
+or update leaves the previous formula available. Use a formula
 `revision` for recipe fixes and a new release for CLI changes. A formula-only
 merge must not trigger another product release.
 
