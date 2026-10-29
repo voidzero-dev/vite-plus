@@ -213,10 +213,7 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
         management_default()?
     };
     let version = env!("CARGO_PKG_VERSION");
-    let registry = std::env::var(env_vars::NPM_CONFIG_REGISTRY_UPPER)
-        .or_else(|_| std::env::var(env_vars::NPM_CONFIG_REGISTRY))
-        .ok()
-        .filter(|value| !value.is_empty());
+    let registry = vp_pm_cli::npm_registry_override();
     let registry = registry.as_deref();
     let skip_deps = std::env::var_os("VP_SKIP_DEPS_INSTALL").is_some_and(|value| !value.is_empty());
     let local_version = local_install_version();
@@ -250,6 +247,10 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
         version_dir.join("bin").join(VP_BINARY_NAME)
     };
     crate::install_dirs::prepare(dirs)?;
+    if deploy {
+        // A shared data root can stay unowned while setup owns its new version directory.
+        crate::install_dirs::prepare_version(&version_dir)?;
+    }
     // Native setup, explicit setup, and deferred installation share one payload writer.
     let transaction = if bundled {
         None
@@ -300,7 +301,12 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
             }
             if let Some(transaction) = &transaction {
                 transaction
-                    .install(version, registry, true, preferred.map(install::NodeVersion::Preferred))
+                    .install(
+                        version,
+                        registry,
+                        true,
+                        preferred.map(install::NodeVersion::Preferred),
+                    )
                     .await?;
             }
         }

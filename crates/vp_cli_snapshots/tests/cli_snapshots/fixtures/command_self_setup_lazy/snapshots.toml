@@ -67,3 +67,13 @@ steps = [{ argv = ["node", "verify.mjs", "concurrent-explicit"], interactions = 
 name = "command_self_setup_lazy_registry_retry"
 vp = "global"
 steps = [{ argv = ["node", "verify.mjs", "registry"], interactions = [{ expect-milestone = "lazy-setup:verify:complete" }] }]
+
+[[case]]
+name = "command_self_setup_lazy_registry_cold"
+vp = "global"
+steps = [{ argv = ["node", "verify.mjs", "registry-cold"], interactions = [{ expect-milestone = "lazy-setup:verify:complete" }] }]
+
+[[case]]
+name = "command_self_setup_lazy_registry_override"
+vp = "global"
+steps = [{ argv = ["node", "verify.mjs", "registry-override"], interactions = [{ expect-milestone = "lazy-setup:verify:complete" }] }]

@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
 const writePayload = require('./payload.cjs');
+const registry = process.env.TEST_INSTALL_REGISTRY ?? 'http://127.0.0.1:9';
 
 assert.deepEqual(process.argv.slice(2), [
   'install',
@@ -15,7 +16,7 @@ assert.deepEqual(process.argv.slice(2), [
   '--config.dedupe-peers=false',
   '--config.inject-workspace-packages=false',
   '--registry',
-  'http://127.0.0.1:9',
+  registry,
 ]);
 assert.equal(process.env.CI, 'true');
 assert.equal(process.env.npm_config_peers_suffix_max_length, '1000');
@@ -27,7 +28,7 @@ assert.equal(
 assert.ok(fs.existsSync('.vp-js-deps-pending'));
 assert.ok(!fs.existsSync('node_modules/.vp-install-complete'));
 const npmrc = fs.readFileSync('.npmrc', 'utf8');
-assert.match(npmrc, /registry=http:\/\/127\.0\.0\.1:9/);
+assert.ok(npmrc.split(/\r?\n/).includes(`registry=${registry}`));
 assert.match(npmrc, /minimum-release-age=0/);
 fs.appendFileSync('install-count', 'install\n');
 

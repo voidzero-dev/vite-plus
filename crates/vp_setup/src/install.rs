@@ -15,7 +15,9 @@ use std::{
 use flate2::read::GzDecoder;
 use tar::Archive;
 use vp_js_runtime::{JsRuntimeType, download_runtime};
-use vp_pm_cli::{PackageManagerType, download_package_manager};
+use vp_pm_cli::{
+    PackageManagerType, download_package_manager_for_directory, npm_registry_override,
+};
 use vp_shared::EnvConfig;
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
@@ -310,13 +312,8 @@ impl<'a> ProductionDepsTransaction<'a> {
     ) -> Result<(), Error> {
         self.save_registry(registry).await?;
         generate_wrapper_package_json(self.version_dir, version).await?;
-        Box::pin(install_production_deps(
-            self.version_dir,
-            registry,
-            show_progress,
-            node_version,
-        ))
-        .await
+        Box::pin(install_production_deps(self.version_dir, registry, show_progress, node_version))
+            .await
     }
 }
 
@@ -344,7 +341,8 @@ pub async fn ensure_production_deps(
     if transaction.is_complete().await? {
         return Ok(());
     }
-    let registry = transaction.registry(None).await?;
+    let registry = npm_registry_override();
+    let registry = transaction.registry(registry.as_deref()).await?;
     if !transaction
         .needs_install(
             &version_dir.join("bin").join(crate::VP_BINARY_NAME),
@@ -428,7 +426,7 @@ async fn install_production_deps(
 
     let (node_runtime, pnpm_entry) = vp_shared::progress::with_spinner(
         show_progress.then_some("Preparing Node.js and pnpm..."),
-        prepare_install_runtime(node_version),
+        prepare_install_runtime(version_dir, node_version),
     )
     .await?;
     let output = vp_shared::progress::with_spinner(
@@ -487,16 +485,19 @@ async fn dependency_install_args<'a>(
 }
 
 async fn prepare_install_runtime(
+    version_dir: &AbsolutePath,
     node_version: Option<NodeVersion<'_>>,
 ) -> Result<(vp_js_runtime::JsRuntime, AbsolutePathBuf), Error> {
-    let (pnpm_dir, _, _) =
-        download_package_manager(PackageManagerType::Pnpm, PINNED_PNPM_VERSION, None)
-            .await
-            .map_err(|error| {
-                Error::Setup(
-                    format!("Failed to install pnpm {PINNED_PNPM_VERSION}: {error}").into(),
-                )
-            })?;
+    let (pnpm_dir, _, _) = download_package_manager_for_directory(
+        version_dir,
+        PackageManagerType::Pnpm,
+        PINNED_PNPM_VERSION,
+        None,
+    )
+    .await
+    .map_err(|error| {
+        Error::Setup(format!("Failed to install pnpm {PINNED_PNPM_VERSION}: {error}").into())
+    })?;
     let pnpm_entry = pnpm_dir.join("bin").join("pnpm.cjs");
     if !tokio::fs::try_exists(&pnpm_entry).await.unwrap_or(false) {
         return Err(Error::Setup(
@@ -931,30 +932,41 @@ mod tests {
                     tokio::fs::write(binary, "").await.unwrap();
                 }
 
-                let (runtime, entry) =
-                    prepare_install_runtime(Some(NodeVersion::Preferred("22.23.1"))).await.unwrap();
+                let (runtime, entry) = prepare_install_runtime(
+                    &env.dirs.data,
+                    Some(NodeVersion::Preferred("22.23.1")),
+                )
+                .await
+                .unwrap();
                 assert_eq!(runtime.version(), "22.23.1");
                 assert_eq!(entry, pnpm.join("bin/pnpm.cjs"));
                 index.assert_calls(0);
 
                 let (runtime, _) =
-                    prepare_install_runtime(Some(NodeVersion::Required("22.23.1"))).await.unwrap();
+                    prepare_install_runtime(&env.dirs.data, Some(NodeVersion::Required("22.23.1")))
+                        .await
+                        .unwrap();
                 assert_eq!(runtime.version(), "22.23.1");
                 index.assert_calls(0);
 
-                let (runtime, _) = prepare_install_runtime(None).await.unwrap();
+                let (runtime, _) = prepare_install_runtime(&env.dirs.data, None).await.unwrap();
                 assert_eq!(runtime.version(), DEFAULT_INSTALL_NODE_VERSION);
                 index.assert_calls(0);
 
                 tokio::fs::write(manifest, r#"{"engines":{"node":">=24"}}"#).await.unwrap();
-                let (runtime, _) =
-                    prepare_install_runtime(Some(NodeVersion::Preferred("22.23.1"))).await.unwrap();
+                let (runtime, _) = prepare_install_runtime(
+                    &env.dirs.data,
+                    Some(NodeVersion::Preferred("22.23.1")),
+                )
+                .await
+                .unwrap();
                 assert_eq!(runtime.version(), DEFAULT_INSTALL_NODE_VERSION);
                 index.assert_calls(0);
 
-                let error = prepare_install_runtime(Some(NodeVersion::Required("22.23.1")))
-                    .await
-                    .unwrap_err();
+                let error =
+                    prepare_install_runtime(&env.dirs.data, Some(NodeVersion::Required("22.23.1")))
+                        .await
+                        .unwrap_err();
                 assert!(error.to_string().contains(
                     "Node.js 22.23.1 required by the target Vite+ release is not supported by pnpm"
                 ));

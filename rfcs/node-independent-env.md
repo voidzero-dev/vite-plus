@@ -123,7 +123,7 @@ Automatic activation does not install the global Vite+ JavaScript payload. Manag
 
 ## Startup Dependency
 
-The global CLI implements environment management in Rust. Version resolution, downloads, signature checks, archive extraction, configuration edits, and shim setup do not execute JavaScript. Before this change, the dependency comes before command dispatch: `main()` calls `self_setup::maybe_run()`, which installs the global JavaScript payload when the setup marker is absent. That installation downloads the latest LTS Node and runs pinned pnpm, even for `vp env --help`.
+The global CLI implements environment management in Rust. Version resolution, downloads, signature checks, archive extraction, configuration edits, and shim setup do not execute JavaScript. Before this change, the dependency comes before command dispatch: `main()` calls `self_setup::maybe_run()`, which installs the global JavaScript payload when the setup marker is absent. That installation downloads the release's pinned Node runtime and runs pinned pnpm, even for `vp env --help`.
 
 The installer selects its own runtime, so Node.js 16 does not prevent setup. However, environment management still depends on downloading and executing an unrelated modern Node version before the first command can run.
 
@@ -150,11 +150,13 @@ Retain first-run deployment, environment-management preferences, shell integrati
 
 Preserve a supplied `vp-install-lock.yaml` companion locally during native setup, without recovering it from the registry. Write the wrapper `package.json` for the deployed version during native setup. It records the matching `vite-plus` dependency and pinned installer pnpm version.
 
-Choose the explicit installation registry first, then a saved registry, then the preview-build fallback when applicable. Save the selected registry in that version's `.npmrc`. Update only the registry setting and retain authentication, scoped registries, and other settings. Persist the registry even when a failed attempt has left a payload `package.json`. A later shell can then finish toolchain installation without the original installer's environment variables.
+Choose the explicit installation registry first, then a saved registry, then the preview-build fallback when applicable. Apply current registry environment overrides on deferred attempts as well. Save the selected registry in that version's `.npmrc`. Update only the registry setting and retain authentication, scoped registries, and other settings. Persist the registry even when a failed attempt has left a payload `package.json`. A later shell can then finish toolchain installation without the original installer's environment variables.
 
 Do not resolve, download, or execute Node or pnpm during ordinary native command setup. Explicit installer setup retains its runtime selection and dependency installation. Windows can still fetch its native trampoline package when the standalone executable has no sibling trampoline.
 
 Keep `.vp-setup-complete` as the native setup marker. Existing installations retain their markers. Keep external-install receipts under the resolved state directory and preserve the read-only bundled-package path described in [Directory Layout](./directory-layout.md).
+
+Record `.vp-owned` when setup creates a new managed version directory. This ownership evidence is independent of JavaScript readiness, so `vp implode` can remove a native-only installation from a shared data root. Never claim a preexisting version directory. Preserve the unowned root, unrelated files, and nested unowned directory categories. The setup-complete marker alone must not authorize deletion.
 
 ## Global JavaScript Dependencies
 
@@ -166,7 +168,9 @@ Keep script-path lookup free of installation side effects. Add an asynchronous p
 
 Project-local resolution must not install the global payload when a usable local entrypoint exists. Explicit script-directory overrides remain caller-owned. Existing complete managed payloads with valid installation receipts require no writes. External bundles remain owned by their installer and do not require Vite+ installation receipts. Managed payloads must pass the release lockfile and completion-receipt checks before use; recover a missing companion using the saved installation registry when JavaScript preparation is needed.
 
-Use the existing production-dependency installer for deferred installation. It selects a managed LTS runtime and invokes the pinned pnpm entrypoint by absolute path. Preserve the project's selected runtime for the command itself; the installer runtime must not become a session override or project pin.
+Use the existing production-dependency installer for deferred installation. Its default managed runtime is the release's Node.js version from the repository's `.node-version`, and it invokes the pinned pnpm entrypoint by absolute path. Explicit setup can reuse a compatible requested runtime. When upgrade metadata declares an exact runtime, use that version or fail before activating the release. Preserve the project's selected runtime for the command itself; the installer runtime must not become a session override or project pin.
+
+Bootstrap pnpm from the installation directory's npm configuration, including its saved registry and authentication. Do not inherit registry configuration from the invoking project or an ancestor workspace. This must work with an empty pnpm cache in a later shell, as well as with an already cached installer.
 
 Installation status belongs on stderr so JSON and command output remain parseable. Retain the existing captured install log on failure.
 
@@ -223,6 +227,8 @@ For startup separation, cover these cases:
 - Concurrent first-use commands, including an explicit installer racing a deferred command, sharing one completed installation.
 - Explicit and deferred retries after pending state or a missing entrypoint, even when `package.json` exists.
 - Saved registry configuration across setup retries, preserving authentication and scoped registries, and clean stdout during installation.
+- Cold pnpm downloads from the saved registry in a later shell, current registry overrides, and isolation from project and ancestor workspace configuration.
+- Uninstalling native-only versions from owned and shared data roots, without claiming preexisting directories or removing unrelated files.
 - Existing setup handoff, retry, external-bundle, and upgrade behavior.
 
 Use controlled installer fixtures for failure and concurrency cases. Supplement them with a real Node.js 16 smoke test on a supported platform.

@@ -1388,6 +1388,25 @@ pub async fn download_package_manager_for_cwd(
     .await
 }
 
+/// Download a package manager using npm configuration from an isolated installation
+/// directory. Ancestor workspace configuration must not capture this installation.
+pub async fn download_package_manager_for_directory(
+    directory: &AbsolutePath,
+    package_manager_type: PackageManagerType,
+    version_or_latest: &str,
+    expected_hash: Option<&str>,
+) -> Result<(AbsolutePathBuf, Str, Str), Error> {
+    let npm_config = NpmConfig::load_for_directory(directory);
+    download_package_manager_with_config(
+        Some(directory),
+        package_manager_type,
+        version_or_latest,
+        expected_hash,
+        &npm_config,
+    )
+    .await
+}
+
 async fn download_package_manager_with_config(
     cwd: Option<&AbsolutePath>,
     package_manager_type: PackageManagerType,

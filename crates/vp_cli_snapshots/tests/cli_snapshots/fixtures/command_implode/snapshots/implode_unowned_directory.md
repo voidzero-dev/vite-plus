@@ -50,18 +50,19 @@ Setup succeeds without claiming a nonempty personal directory
 
 ## `VP_HOME=${HOME}/Documents vp implode --yes`
 
-Only the newly owned cache is removed; the unmarked parent is preserved
+The owned native version and cache are removed; the unmarked parent is preserved
 
 ```
 ✓ Cleaned ~/.bashrc
+✓ Vite+ removed 14 shims.
+✓ Removed <home>/Documents/current
+✓ Removed <home>/Documents/0.0.0-test
 ✓ Removed <home>/Documents/cache
 
 ✓ Vite+ removed its verified files and shell entries from your system.
 note: Some paths were preserved to protect unverified data. Inspect them before removing anything:
-  <home>/Documents/0.0.0-test
   <home>/Documents/bin
   <home>/Documents/config.json
-  <home>/Documents/current
   <home>/Documents/env
   <home>/Documents/env.fish
   <home>/Documents/env.nu
@@ -77,6 +78,18 @@ note: Restart your terminal to apply shell changes.
 
 ```
 <home>/Documents/cache: missing
+```
+
+## `vpt stat-file $HOME/Documents/0.0.0-test --assert missing`
+
+```
+<home>/Documents/0.0.0-test: missing
+```
+
+## `vpt stat-file $HOME/Documents/current --assert missing`
+
+```
+<home>/Documents/current: missing
 ```
 
 ## `vpt stat-file $HOME/Documents/.vp-owned --assert missing`

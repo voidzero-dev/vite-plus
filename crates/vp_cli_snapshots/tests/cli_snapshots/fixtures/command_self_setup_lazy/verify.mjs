@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 
+import { createArchive } from './archive.mjs';
 import writePayload from './payload.cjs';
 
 const action = process.argv[2];
@@ -17,6 +18,8 @@ const binName = process.platform === 'win32' ? 'vp.exe' : 'vp';
 const nodeName = process.platform === 'win32' ? 'node.exe' : 'node';
 const external = path.join(root, 'external/bin', binName);
 const version = process.versions.node;
+// Match the repository's installer pin with a real runtime before seeding its cache.
+assert.equal(version, fs.readFileSync('.node-version', 'utf8').trim());
 const source = fs.realpathSync(path.join(process.env.VP_HOME, 'bin', binName));
 const lockfile = "lockfileVersion: '9.0'\n# Controlled lazy-install fixture.\n";
 
@@ -115,7 +118,7 @@ function seedIndex() {
   );
 }
 
-function seedInstaller() {
+function seedInstaller({ pnpm = true } = {}) {
   seedIndex();
   const node =
     process.platform === 'win32'
@@ -125,16 +128,17 @@ function seedInstaller() {
   fs.copyFileSync(process.execPath, node);
   fs.chmodSync(node, 0o755);
   write(path.join(project, '.node-version'), `${version}\n`);
+  if (!pnpm) return;
   const wrapper = JSON.parse(fs.readFileSync(path.join(installed, 'package.json'), 'utf8'));
   const pnpmPackage = path.join(home, 'package_manager/pnpm', wrapper.packageManager.slice(5), 'pnpm');
   write(
     path.join(pnpmPackage, 'package.json'),
     JSON.stringify({ name: 'pnpm', engines: { node: '>=18.12' } }),
   );
-  const pnpm = path.join(pnpmPackage, 'bin');
-  write(path.join(pnpm, 'pnpm.cjs'), fs.readFileSync(path.resolve('install.cjs')));
-  write(path.join(pnpm, 'payload.cjs'), fs.readFileSync(path.resolve('payload.cjs')));
-  for (const suffix of ['', '.cmd', '.ps1']) write(path.join(pnpm, `pnpm${suffix}`), 'cached');
+  const pnpmBin = path.join(pnpmPackage, 'bin');
+  write(path.join(pnpmBin, 'pnpm.cjs'), fs.readFileSync(path.resolve('install.cjs')));
+  write(path.join(pnpmBin, 'payload.cjs'), fs.readFileSync(path.resolve('payload.cjs')));
+  for (const suffix of ['', '.cmd', '.ps1']) write(path.join(pnpmBin, `pnpm${suffix}`), 'cached');
 }
 
 function installCount() {
@@ -221,6 +225,8 @@ if (action === 'native') {
     'The registry is updated with missing or partial payloads and retained without an override',
   );
   console.log('Retries do not install Node, pnpm, or complete a partial JavaScript payload');
+} else if (action === 'registry-cold' || action === 'registry-override') {
+  await checkColdRegistry(action === 'registry-override');
 } else {
   seedInstaller();
   const globalArgs = ['lint', '--init'];
@@ -388,6 +394,106 @@ if (action === 'native') {
     assert.equal(installCount(), 1);
     console.log(`${action}: first use installs the global payload with the saved registry`);
     console.log('Later commands reuse it and stdout contains only command output');
+  }
+}
+
+async function checkColdRegistry(override) {
+  seedInstaller({ pnpm: false });
+  const wrapper = JSON.parse(fs.readFileSync(path.join(installed, 'package.json'), 'utf8'));
+  const pnpmVersion = wrapper.packageManager.slice(5);
+  const archive = createArchive({
+    'package/package.json': JSON.stringify({
+      name: 'pnpm',
+      version: pnpmVersion,
+      engines: { node: '>=18.12' },
+    }),
+    'package/bin/pnpm.cjs': fs.readFileSync(path.resolve('install.cjs'), 'utf8'),
+    'package/bin/payload.cjs': fs.readFileSync(path.resolve('payload.cjs'), 'utf8'),
+    'package/bin/pnpx.cjs': '',
+  });
+  const tarballPath = `/pnpm/-/pnpm-${pnpmVersion}.tgz`;
+  const registries = [];
+  const children = [];
+  async function startRegistry(token) {
+    const requests = [];
+    const server = http.createServer((request, response) => {
+      requests.push({ url: request.url, authorization: request.headers.authorization });
+      if (request.url !== tarballPath) {
+        response.writeHead(404).end();
+      } else if (request.headers.authorization !== `Bearer ${token}`) {
+        response.writeHead(401).end();
+      } else {
+        response.writeHead(200, { 'content-type': 'application/octet-stream' }).end(archive);
+      }
+    });
+    const registry = { server, requests, token };
+    registries.push(registry);
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    registry.url = `http://127.0.0.1:${server.address().port}`;
+    return registry;
+  }
+  try {
+    const saved = await startRegistry('saved-token');
+    const alternative = await startRegistry('override-token');
+    const auth = registries.map(({ url, token }) => `//${new URL(url).host}/:_authToken=${token}`);
+    fs.appendFileSync(path.join(installed, '.npmrc'), `${auth.join('\n')}\n`);
+    // Native setup must save the registry without contacting it or downloading pnpm.
+    fs.unlinkSync(path.join(installed, 'bin/.vp-setup-complete'));
+    run(['env', '--help'], { NPM_CONFIG_REGISTRY: saved.url }, 0, path.join(installed, 'bin', binName));
+    assert.ok(fs.readFileSync(path.join(installed, '.npmrc'), 'utf8').includes(`registry=${saved.url}`));
+    assert.ok(!fs.existsSync(path.join(home, 'package_manager')));
+    assert.deepEqual(saved.requests, []);
+    assert.deepEqual(alternative.requests, []);
+
+    // Both the command's project and an ancestor workspace disagree with the install directory.
+    // Auth is intentionally wrong there: bootstrap must read the saved installation config.
+    const projectConfig = [
+      `registry=${alternative.url}`,
+      ...registries.map(({ url }) => `//${new URL(url).host}/:_authToken=wrong-project-token`),
+    ].join('\n') + '\n';
+    write(path.join(project, '.npmrc'), projectConfig);
+    write(path.join(root, '.npmrc'), projectConfig);
+    write(path.join(root, 'package.json'), '{"name":"registry-workspace","private":true}');
+    write(path.join(root, 'pnpm-workspace.yaml'), 'packages:\n  - project\n');
+
+    const selected = override ? alternative : saved;
+    const child = spawn(path.join(installed, 'bin', binName), ['toolchain', '--global', '--json'], {
+      cwd: project,
+      env: {
+        ...env,
+        TEST_INSTALL_REGISTRY: selected.url,
+        ...(override ? { npm_config_registry: selected.url } : {}),
+      },
+    });
+    children.push(child);
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (data) => { stdout += data; });
+    child.stderr.on('data', (data) => { stderr += data; });
+    const code = await new Promise((resolve, reject) => {
+      child.on('error', reject);
+      child.on('close', resolve);
+    });
+    assert.equal(code, 0, stdout + stderr);
+    assert.equal(JSON.parse(stdout).source.scope, 'global');
+    assert.deepEqual(selected.requests, [{ url: tarballPath, authorization: `Bearer ${selected.token}` }]);
+    assert.deepEqual((override ? saved : alternative).requests, []);
+    assert.equal(installCount(), 1);
+    checkInstalled();
+    const npmrc = fs.readFileSync(path.join(installed, '.npmrc'), 'utf8');
+    for (const line of auth) assert.ok(npmrc.split(/\r?\n/).includes(line));
+    assert.ok(npmrc.split(/\r?\n/).includes(`registry=${selected.url}`));
+    console.log(override
+      ? 'A current registry override takes precedence over the saved installation registry'
+      : 'A later shell downloads uncached pnpm from the saved installation registry');
+    console.log('Installer authentication comes from the installation directory, not the project or ancestor workspace');
+    console.log('Exactly one authenticated pnpm download completes the toolchain installation');
+  } finally {
+    for (const child of children) child.kill();
+    for (const { server } of registries) {
+      server.closeAllConnections();
+      server.close();
+    }
   }
 }
 

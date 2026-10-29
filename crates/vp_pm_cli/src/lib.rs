@@ -18,7 +18,9 @@ pub(crate) mod resolution;
 mod shim;
 
 pub use cli::{ManagedGlobalCommand, PackageManagerCommand, PmCommand};
-pub use config::{npm_authorization_for_url, npm_registry, npm_registry_for_scope};
+pub use config::{
+    npm_authorization_for_url, npm_registry, npm_registry_for_scope, npm_registry_override,
+};
 pub use dispatch::{
     DispatchResult, dispatch, dispatch_with_metadata, dispatch_with_package_manager,
     dispatch_with_resolved_package_manager,
@@ -28,7 +30,8 @@ pub use lifecycle_env::LifecycleEnvContext;
 pub use package_manager::{
     EnvironmentPackageManagerResolution, PackageManager, PackageManagerBuilder,
     PackageManagerResolution, PackageManagerSource, PackageManagerType, download_package_manager,
-    download_package_manager_for_cwd, ensure_package_manager_bin, fetch_package_manager_versions,
+    download_package_manager_for_cwd, download_package_manager_for_directory,
+    ensure_package_manager_bin, fetch_package_manager_versions,
     fetch_package_manager_versions_for_cwd, get_package_manager_type_and_version,
     is_package_manager_dist_tag, npm_version_from_package_json, package_manager_bin_path,
     package_manager_install_dir, resolve_environment_package_manager,
