@@ -54,7 +54,6 @@ mod providers;
 mod runtime;
 
 /// Embed the repository's Node.js pin so installed binaries need no source checkout.
-/// `.github/scripts/upgrade-deps.ts` keeps `.node-version` within Node 24.
 pub const DEFAULT_NODE_VERSION: &str = include_str!("../../../.node-version").trim_ascii();
 
 pub use dev_engines::{
