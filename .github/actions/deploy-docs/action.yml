@@ -50,10 +50,12 @@ runs:
         VP_REMOTE_CACHE_URL: https://voidzero-remote-cache.voidzero-docs.workers.dev/projects/vite-plus
         VP_REMOTE_CACHE: ${{ inputs.remote-cache }}
 
-    # void 0.24 requires a platform connection that these deploy jobs do not configure.
-    - run: vpx void@0.23.0 deploy --dir .vitepress/dist
+    - run: |
+        vpx void@1.3.0 connect "$VOID_API_URL" --no-login
+        vpx void@1.3.0 deploy --platform void --dir .vitepress/dist
       shell: bash
       working-directory: docs
       env:
+        VOID_API_URL: https://api.void.cloud
         VOID_PROJECT: ${{ inputs.void-project }}
         VOID_TOKEN: ${{ inputs.void-token }}
