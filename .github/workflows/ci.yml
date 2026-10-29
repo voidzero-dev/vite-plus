@@ -1124,7 +1124,7 @@ jobs:
       - name: Install Global CLI vp
         run: pnpm bootstrap-cli:ci
 
-      # Seed the repository pin, default LTS, and shared fixture versions before
+      # Seed the repository pin, aliases, and shared fixture selectors before
       # command timers start. Keep the version list shared across platforms.
       - name: Prewarm managed runtimes
         run: bash .github/scripts/prewarm-node.sh "$HOME/.vite-plus/bin/vp"
@@ -1246,7 +1246,7 @@ jobs:
         shell: bash
         run: pnpm bootstrap-cli:ci
 
-      # Seed the repository pin, default LTS, and shared fixture versions before
+      # Seed the repository pin, aliases, and shared fixture selectors before
       # command timers start. Keep the version list shared across platforms.
       - name: Prewarm managed runtimes
         shell: bash
