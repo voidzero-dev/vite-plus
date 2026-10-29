@@ -781,7 +781,8 @@ jobs:
             -v "${{ github.workspace }}:/workspace" \
             ubuntu:20.04 bash -c "
               ls -al ~/
-              apt-get update && apt-get install -y curl ca-certificates
+              # The ARM64 Node.js runtime requires libatomic.so.1.
+              apt-get update && apt-get install -y curl ca-certificates libatomic1
               export VP_HOME=\"\$HOME/.vite-plus\"
               cat /workspace/packages/cli/install.sh | VP_LEGACY_INSTALLER_URL=file:///workspace/packages/cli/install-legacy.sh bash
               if [ -f ~/.profile ]; then

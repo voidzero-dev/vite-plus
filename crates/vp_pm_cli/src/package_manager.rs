@@ -265,20 +265,62 @@ impl PackageManagerBuilder {
     }
 }
 
+/// Reads npm's version from the `package.json` of the npm package that `npm` resolves into.
+///
+/// `npm --version` prints this field, but it starts Node.js and loads npm first. That cost is a
+/// large share of short commands such as `vp run`. Only npm reads its manifest:
+///
+/// - In an npm project without a pinned version, `vp` uses the npm on PATH and must ask for
+///   its version. For pnpm, yarn, and bun, `vp` resolves the version itself; they run
+///   `--version` only in system-first mode.
+/// - pnpm and yarn can switch to the version that the project selects (`packageManager`,
+///   `yarnPath`) before they answer, so their manifest on disk can disagree with `--version`.
+///   npm does not switch.
+///
+/// The PATH entry is normally a symlink into the package (`bin/npm` ->
+/// `lib/node_modules/npm/bin/npm-cli.js`). Returns `None` when the nearest `package.json`
+/// within four parents is not npm's, for example for a version-manager shim, Corepack, or
+/// Windows `npm.cmd`; the caller then runs `npm --version`.
+pub fn npm_version_from_package_json(npm: &AbsolutePath) -> Option<Version> {
+    #[derive(Deserialize)]
+    struct Manifest {
+        #[serde(default)]
+        name: Str,
+        #[serde(default)]
+        version: Str,
+    }
+
+    let executable = fs::canonicalize(npm.as_path()).ok()?;
+    let manifest = executable
+        .ancestors()
+        .skip(1)
+        .take(4)
+        .find_map(|dir| fs::read(dir.join("package.json")).ok())?;
+    let manifest: Manifest = serde_json::from_slice(&manifest).ok()?;
+    if manifest.name != "npm" {
+        return None;
+    }
+    Version::parse(&manifest.version).ok()
+}
+
 // Version gates and migration must use the npm on PATH, not the latest registry release.
 async fn resolve_npm_from_path(cwd: &AbsolutePath) -> Result<PackageManager, Error> {
     let npm = vp_command::resolve_bin("npm", None, cwd)?;
-    let output = tokio::process::Command::new(npm.as_path())
-        .arg("--version")
-        .current_dir(cwd)
-        // User preloads can print to stdout; only the actual command should run them.
-        .env_remove("NODE_OPTIONS")
-        .output()
-        .await?;
-    if !output.status.success() {
-        return Err(io::Error::other("failed to read npm version").into());
-    }
-    let version = Version::parse(String::from_utf8_lossy(&output.stdout).trim())?;
+    let version = if let Some(version) = npm_version_from_package_json(&npm) {
+        version
+    } else {
+        let output = tokio::process::Command::new(npm.as_path())
+            .arg("--version")
+            .current_dir(cwd)
+            // User preloads can print to stdout; only the actual command should run them.
+            .env_remove("NODE_OPTIONS")
+            .output()
+            .await?;
+        if !output.status.success() {
+            return Err(io::Error::other("failed to read npm version").into());
+        }
+        Version::parse(String::from_utf8_lossy(&output.stdout).trim())?
+    };
     let bin_prefix = npm
         .parent()
         .ok_or_else(|| Error::CannotFindBinaryPath("npm".into()))?
@@ -2186,6 +2228,91 @@ mod tests {
                     .await
                     .unwrap();
             assert_eq!(version, "9.8.7");
+        })
+        .await;
+    }
+
+    /// Lays out npm like a Node.js install and returns `<root>/bin/npm`:
+    ///
+    /// ```text
+    /// <root>/
+    /// ├── bin/npm -> ../lib/node_modules/npm/bin/npm-cli.js
+    /// └── lib/node_modules/npm/
+    ///     ├── package.json      `package_json`
+    ///     └── bin/npm-cli.js    `cli`
+    /// ```
+    #[cfg(unix)]
+    fn install_npm_package(root: &AbsolutePath, package_json: &str, cli: &str) -> AbsolutePathBuf {
+        use std::os::unix::fs::PermissionsExt;
+
+        let package = root.join("lib/node_modules/npm");
+        fs::create_dir_all(package.join("bin")).unwrap();
+        fs::write(package.join("package.json"), package_json).unwrap();
+        let cli_path = package.join("bin/npm-cli.js");
+        fs::write(&cli_path, cli).unwrap();
+        fs::set_permissions(&cli_path, fs::Permissions::from_mode(0o755)).unwrap();
+        fs::create_dir_all(root.join("bin")).unwrap();
+        let npm = root.join("bin/npm");
+        std::os::unix::fs::symlink("../lib/node_modules/npm/bin/npm-cli.js", &npm).unwrap();
+        npm
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn npm_version_is_read_from_the_package_that_npm_links_into() {
+        let dir = create_temp_dir();
+        let root = AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
+        let npm = install_npm_package(&root, r#"{"name":"npm","version":"11.19.0"}"#, "");
+        assert_eq!(npm_version_from_package_json(&npm), Some(Version::new(11, 19, 0)));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn npm_version_is_not_read_unless_the_nearest_manifest_is_npms() {
+        for package_json in [
+            // Corepack's `npm` shim resolves into the corepack package.
+            r#"{"name":"corepack","version":"0.34.0"}"#,
+            r#"{"name":"npm"}"#,
+            r#"{"name":"npm","version":"not-a-version"}"#,
+            "{ broken",
+        ] {
+            let dir = create_temp_dir();
+            let root = AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
+            let npm = install_npm_package(&root, package_json, "");
+            assert_eq!(npm_version_from_package_json(&npm), None, "{package_json}");
+        }
+
+        // A shim outside any package, five levels below an npm manifest.
+        let dir = create_temp_dir();
+        let root = AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
+        fs::write(root.join("package.json"), r#"{"name":"npm","version":"11.19.0"}"#).unwrap();
+        let shim_dir = root.join("a/b/c/d");
+        fs::create_dir_all(&shim_dir).unwrap();
+        let shim = shim_dir.join("npm");
+        fs::write(&shim, "#!/bin/sh\n").unwrap();
+        assert_eq!(npm_version_from_package_json(&shim), None);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test(flavor = "current_thread")]
+    async fn npm_default_reads_the_version_of_the_npm_on_path_without_running_it() {
+        let dir = create_temp_dir();
+        let root = AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
+        // A separate global prefix whose npm differs from the one bundled with Node.js. Running
+        // it fails, so a spawned `npm --version` would surface as an error.
+        let npm = install_npm_package(
+            &root,
+            r#"{"name":"npm","version":"10.9.2"}"#,
+            "#!/bin/sh\nexit 1\n",
+        );
+        let bin_dir = npm.parent().unwrap();
+
+        EnvConfig::with_vars_async([("PATH", bin_dir.as_path())], |_| async {
+            let version =
+                resolve_package_manager_version_for_cwd(&root, PackageManagerType::Npm, "default")
+                    .await
+                    .unwrap();
+            assert_eq!(version, "10.9.2");
         })
         .await;
     }
