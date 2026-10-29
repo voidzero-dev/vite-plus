@@ -423,7 +423,7 @@ async function updateVitestVersionConstant(vitestVersion: string): Promise<void>
   console.log('Updated packages/cli/src/utils/constants.ts');
 }
 
-// ============ Update the development, CI, and default Node.js version ============
+// Update the shared Node.js pin for development, CI, and installation.
 function updateDefaultNodeVersion(nodeVersion: string): void {
   const filePath = path.join(ROOT, '.node-version');
   const oldVersion = fs.readFileSync(filePath, 'utf8').trim();
