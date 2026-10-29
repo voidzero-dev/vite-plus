@@ -53,6 +53,9 @@ mod provider;
 mod providers;
 mod runtime;
 
+/// Default Node.js release, kept within Node 24 by `.github/scripts/upgrade-deps.ts`.
+pub const DEFAULT_NODE_VERSION: &str = "24.22.2";
+
 pub use dev_engines::{
     nvmrc_version_spans, parse_node_version_content, read_node_version_file, read_nvmrc_file,
 };

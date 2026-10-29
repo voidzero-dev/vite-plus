@@ -266,11 +266,11 @@ async fn execute_core_tool(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatu
 /// Format the resolution source for human-friendly display.
 ///
 /// When a `source_path` is available, shows the full file path instead of just the source type name.
-/// For env var and lts sources, annotations like `(session)` and `(fallback)` are preserved.
+/// Session overrides and the built-in fallback include an explanatory annotation.
 fn format_source(source: &str, source_path: Option<&AbsolutePath>) -> String {
     match source {
         s if s == VERSION_ENV_VAR => format!("{s} (session)"),
-        "lts" => "lts (fallback)".to_string(),
+        "builtin" => "Vite+ default (fallback)".to_string(),
         _ => match source_path {
             Some(path) => path.as_path().display().to_string(),
             None => source.to_string(),

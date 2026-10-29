@@ -97,17 +97,10 @@ async fn show_default(scope: EnvScope) -> Result<ExitStatus, Error> {
                 }
             }
             None => {
-                let provider = vp_js_runtime::NodeProvider::new();
-                match provider.resolve_latest_version().await {
-                    Ok(version) => {
-                        vp_shared::output::print_stdout_line(format_args!(
-                            "No default Node.js version configured. Using latest LTS ({version})."
-                        ));
-                    }
-                    Err(_) => vp_shared::output::print_stdout_line(format_args!(
-                        "No default Node.js version configured."
-                    )),
-                }
+                vp_shared::output::print_stdout_line(format_args!(
+                    "No default Node.js version configured. Using Vite+'s pinned version ({}).",
+                    vp_js_runtime::DEFAULT_NODE_VERSION
+                ));
                 vp_shared::output::print_stdout_line(format_args!(
                     "  Run 'vp env default <version>' to set a default."
                 ));

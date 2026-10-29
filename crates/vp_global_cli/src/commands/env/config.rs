@@ -9,8 +9,8 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Deserializer, Serialize, de};
 use vp_js_runtime::{
-    NodeProvider, VersionSource, is_valid_version, normalize_version, read_nvmrc_file,
-    read_package_json, resolve_node_version,
+    DEFAULT_NODE_VERSION, NodeProvider, VersionSource, is_valid_version, normalize_version,
+    read_nvmrc_file, read_package_json, resolve_node_version,
 };
 use vp_pm_cli::PackageManagerType;
 use vt_path::{AbsolutePath, AbsolutePathBuf};
@@ -344,7 +344,7 @@ pub async fn delete_session_package_manager(kind: PackageManagerType) -> Result<
 /// 4. `package.json#engines.node` in current or parent directories
 /// 5. `.nvmrc` file in current or parent directories
 /// 6. User default from config.json
-/// 7. Latest LTS version
+/// 7. Node.js release pinned by Vite+
 pub async fn resolve_version(cwd: &AbsolutePath) -> Result<VersionResolution, Error> {
     // Session override via environment variable (set by `vp env use`)
     if let Some(env_version) = vp_shared::EnvConfig::get().node_version.as_deref() {
@@ -524,14 +524,13 @@ pub async fn resolve_version_from_files(cwd: &AbsolutePath) -> Result<VersionRes
         });
     }
 
-    // CLI-specific: Fall back to latest LTS
-    let version = provider.resolve_latest_version().await?;
+    // Keep unconfigured projects on the Node.js release pinned by Vite+.
     Ok(VersionResolution {
-        version: version.to_string(),
-        source: "lts".into(),
+        version: DEFAULT_NODE_VERSION.into(),
+        source: "builtin".into(),
         source_path: None,
         project_root: None,
-        is_range: true, // LTS fallback is always a range (re-resolve periodically)
+        is_range: false,
     })
 }
 
@@ -894,22 +893,60 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_resolve_version_invalid_node_version_falls_through_to_lts() {
+    async fn test_builtin_default_does_not_follow_latest_lts() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let server = httpmock::MockServer::start_async().await;
+        let index = server.mock(|when, then| {
+            when.path("/index.json");
+            then.status(200).json_body(serde_json::json!([
+                {"version": "v26.13.0", "lts": "Newer LTS"}
+            ]));
+        });
+        vp_shared::EnvConfig::with_vars_async(
+            [
+                (env_vars::VP_HOME, temp_dir.path().as_os_str()),
+                (env_vars::VP_NODE_DIST_MIRROR, std::ffi::OsStr::new(&server.base_url())),
+            ],
+            |_| async {
+                let resolution = resolve_version(&temp_path).await.unwrap();
+                assert_eq!(resolution.version, DEFAULT_NODE_VERSION);
+                assert_eq!(resolution.source, "builtin");
+                assert!(!resolution.is_range);
+                index.assert_calls(0);
+
+                // An explicit LTS default still opts into upstream major-version changes.
+                save_config(&Config {
+                    default_node_version: Some("lts".into()),
+                    ..Default::default()
+                })
+                .await
+                .unwrap();
+                let resolution = resolve_version(&temp_path).await.unwrap();
+                assert_eq!(resolution.version, "26.13.0");
+                assert_eq!(resolution.source, "default");
+                assert!(resolution.is_range);
+                index.assert_calls(1);
+            },
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn test_resolve_version_invalid_node_version_falls_through_to_builtin_default() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
         with_mock_node_index([(env_vars::VP_HOME, temp_dir.path().as_os_str())], || async {
             // Create .node-version file with invalid version
             tokio::fs::write(temp_path.join(".node-version"), "invalid-version\n").await.unwrap();
 
-            // resolve_version should NOT fail - it should fall through to LTS
+            // An invalid project declaration should use the built-in default.
             let resolution = resolve_version(&temp_path).await.unwrap();
 
-            // Should fall through to LTS since the .node-version is invalid
-            // and no user default is configured
-            assert_eq!(resolution.version, "24.11.0");
-            assert_eq!(resolution.source, "lts");
+            assert_eq!(resolution.version, DEFAULT_NODE_VERSION);
+            assert_eq!(resolution.source, "builtin");
             assert!(resolution.source_path.is_none());
-            assert!(resolution.is_range, "LTS fallback should be marked as range");
+            assert!(!resolution.is_range, "The built-in fallback is an exact version");
         })
         .await;
     }

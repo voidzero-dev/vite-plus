@@ -232,7 +232,7 @@ static MANAGED_TEST_VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
 // context so fixture-pinned versions elsewhere stay assertable.
 static WHICH_NODE_VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(
-        r#"(?m)(Node:\s+|"nodeVersion":\s*"|Default Node\.js version set to [^()\n]+ \(currently |No default Node\.js version configured\. Using latest LTS \(|Currently resolves to:\s+|^\S+@\S+\s{2,})\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?"#,
+        r#"(?m)(Node:\s+|"nodeVersion":\s*"|Default Node\.js version set to [^()\n]+ \(currently |No default Node\.js version configured\. Using Vite\+'s pinned version \(|Currently resolves to:\s+|^\S+@\S+\s{2,})\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?"#,
     )
     .unwrap()
 });

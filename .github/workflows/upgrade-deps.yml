@@ -107,6 +107,10 @@ jobs:
 
             ### Background
             - Upgrade script: `./.github/scripts/upgrade-deps.ts`
+            - The installer and fallback Node.js runtime are pinned to the latest
+              stable `24.x` release in `crates/vp_js_runtime/src/lib.rs`.
+              Keep the exact version selected by the upgrade script. Do not replace
+              it with a moving LTS alias or advance the major version.
             - Vitest is capped at the latest stable `5.x` release. Keep the exact
               version selected by the upgrade script when merging upstream catalogs.
               Official Vitest packages must use that version. Do not bypass the cap.

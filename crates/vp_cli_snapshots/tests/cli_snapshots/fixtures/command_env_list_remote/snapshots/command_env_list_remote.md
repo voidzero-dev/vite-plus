@@ -7,7 +7,7 @@ An unconfigured Node.js default explains the effective fallback without claiming
 ```
 VITE+ - The Unified Toolchain for the Web
 
-No default Node.js version configured. Using latest LTS (<version>).
+No default Node.js version configured. Using Vite+'s pinned version (<version>).
   Run 'vp env default <version>' to set a default.
 ```
 

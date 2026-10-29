@@ -436,8 +436,7 @@ pub async fn resolve_node_version(
 /// 3. `engines.node` in package.json
 /// 4. `.nvmrc` file
 ///
-/// If no version source is found, uses the latest installed version from cache,
-/// or falls back to the latest LTS version from the network.
+/// If no version source is found, uses the Node.js release pinned by Vite+.
 ///
 /// When the resolved version from the highest priority source does NOT satisfy
 /// constraints from lower priority sources, a warning is emitted.
@@ -525,9 +524,8 @@ async fn resolve_version_for_project(
     cache_dir: &AbsolutePath,
 ) -> Result<Str, Error> {
     if version_req.is_empty() {
-        // No source specified - fetch latest LTS from network
-        tracing::debug!("No version source specified, fetching latest LTS from network");
-        return provider.resolve_latest_version().await;
+        // An upstream LTS promotion must not change an implicit runtime selection.
+        return Ok(crate::DEFAULT_NODE_VERSION.into());
     }
 
     // Handle LTS aliases (lts/*, lts/iron, lts/-1)
@@ -720,7 +718,12 @@ mod tests {
                         then.status(200).body(NODE_INDEX);
                     })
                     .await;
-                let entries: Vec<NodeVersionEntry> = serde_json::from_str(NODE_INDEX).unwrap();
+                let mut entries: Vec<NodeVersionEntry> = serde_json::from_str(NODE_INDEX).unwrap();
+                // The pinned fallback does not need to appear in the remote version index.
+                entries.push(NodeVersionEntry {
+                    version: format!("v{}", crate::DEFAULT_NODE_VERSION).into(),
+                    lts: crate::LtsInfo::NotLts,
+                });
                 let mut archives = Vec::new();
                 for entry in &entries {
                     let version = entry.version.trim_start_matches('v');
@@ -822,16 +825,16 @@ mod tests {
 
     #[tokio::test]
     async fn test_download_runtime_for_project_no_dev_engines() {
-        with_mock_mirror(&["24.11.0"], |temp_path| async move {
+        with_mock_mirror(&[crate::DEFAULT_NODE_VERSION], |temp_path| async move {
             // Create package.json without devEngines (minified, will use default 2-space indent)
             let package_json = r#"{"name": "test-project"}"#;
             tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
 
             let runtime = download_runtime_for_project(&temp_path).await.unwrap();
 
-            // Should download the latest LTS
+            // Should download the release pinned by Vite+
             assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
-            assert_eq!(runtime.version(), "24.11.0");
+            assert_eq!(runtime.version(), crate::DEFAULT_NODE_VERSION);
 
             // Should NOT write .node-version
             assert!(!tokio::fs::try_exists(temp_path.join(".node-version")).await.unwrap());
@@ -846,7 +849,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_download_runtime_for_project_does_not_write_back_when_no_version() {
-        with_mock_mirror(&["24.11.0"], |temp_path| async move {
+        with_mock_mirror(&[crate::DEFAULT_NODE_VERSION], |temp_path| async move {
             // Create package.json with runtime but no version
             let package_json = r#"{
   "name": "test-project",
@@ -860,7 +863,7 @@ mod tests {
             tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
 
             let runtime = download_runtime_for_project(&temp_path).await.unwrap();
-            assert_eq!(runtime.version(), "24.11.0");
+            assert_eq!(runtime.version(), crate::DEFAULT_NODE_VERSION);
 
             // .node-version should NOT be written (auto-write was removed)
             assert!(
@@ -927,13 +930,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_download_runtime_for_project_no_package_json() {
-        with_mock_mirror(&["24.11.0"], |temp_path| async move {
+        with_mock_mirror(&[crate::DEFAULT_NODE_VERSION], |temp_path| async move {
             // No package.json file
             let runtime = download_runtime_for_project(&temp_path).await.unwrap();
 
-            // Should download the latest LTS
+            // Should download the release pinned by Vite+
             assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
-            assert_eq!(runtime.version(), "24.11.0");
+            assert_eq!(runtime.version(), crate::DEFAULT_NODE_VERSION);
 
             // Should NOT write .node-version
             assert!(
@@ -1332,7 +1335,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_invalid_node_version_file_is_ignored() {
-        with_mock_mirror(&["24.11.0"], |temp_path| async move {
+        with_mock_mirror(&[crate::DEFAULT_NODE_VERSION], |temp_path| async move {
             // Create .node-version with invalid version
             tokio::fs::write(temp_path.join(".node-version"), "invalid\n").await.unwrap();
 
@@ -1340,40 +1343,40 @@ mod tests {
             let package_json = r#"{"name": "test-project"}"#;
             tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
 
-            // Should fall through to fetch latest LTS since .node-version is invalid
+            // Should use the pinned default since .node-version is invalid
             let runtime = download_runtime_for_project(&temp_path).await.unwrap();
             assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
-            assert_eq!(runtime.version(), "24.11.0");
+            assert_eq!(runtime.version(), crate::DEFAULT_NODE_VERSION);
         })
         .await;
     }
 
     #[tokio::test]
     async fn test_invalid_engines_node_is_ignored() {
-        with_mock_mirror(&["24.11.0"], |temp_path| async move {
+        with_mock_mirror(&[crate::DEFAULT_NODE_VERSION], |temp_path| async move {
             // Create package.json with invalid engines.node
             let package_json = r#"{"engines":{"node":"invalid"}}"#;
             tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
 
-            // Should fall through to fetch latest LTS since engines.node is invalid
+            // Should use the pinned default since engines.node is invalid
             let runtime = download_runtime_for_project(&temp_path).await.unwrap();
             assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
-            assert_eq!(runtime.version(), "24.11.0");
+            assert_eq!(runtime.version(), crate::DEFAULT_NODE_VERSION);
         })
         .await;
     }
 
     #[tokio::test]
     async fn test_invalid_dev_engines_runtime_is_ignored() {
-        with_mock_mirror(&["24.11.0"], |temp_path| async move {
+        with_mock_mirror(&[crate::DEFAULT_NODE_VERSION], |temp_path| async move {
             // Create package.json with invalid devEngines.runtime version
             let package_json = r#"{"devEngines":{"runtime":{"name":"node","version":"invalid"}}}"#;
             tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
 
-            // Should fall through to fetch latest LTS since devEngines.runtime is invalid
+            // Should use the pinned default since devEngines.runtime is invalid
             let runtime = download_runtime_for_project(&temp_path).await.unwrap();
             assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
-            assert_eq!(runtime.version(), "24.11.0");
+            assert_eq!(runtime.version(), crate::DEFAULT_NODE_VERSION);
         })
         .await;
     }

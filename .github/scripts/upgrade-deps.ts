@@ -5,6 +5,7 @@ import path from 'node:path';
 import {
   findLatestStableVersionForMajor,
   getBundledDependencyRanges,
+  getLatestNodeVersion,
 } from './upgrade-deps-utils.ts';
 
 const ROOT = process.cwd();
@@ -79,6 +80,8 @@ const STABLE_SEMVER_TAG_RE = /^v?\d+\.\d+\.\d+$/;
 // Vitest major upgrades can change the bundled API, export shims, and CLI
 // behavior. Advance this only after Vite+ has adapted to the new major.
 const SUPPORTED_VITEST_MAJOR = 5;
+// The default runtime must not follow a new LTS major without a compatibility review.
+const SUPPORTED_NODE_MAJOR = 24;
 
 const isFullSha = (s: string): boolean => /^[0-9a-f]{40}$/.test(s);
 
@@ -420,6 +423,26 @@ async function updateVitestVersionConstant(vitestVersion: string): Promise<void>
   console.log('Updated packages/cli/src/utils/constants.ts');
 }
 
+// ============ Update the installer and fallback Node.js version ============
+function updateDefaultNodeVersion(nodeVersion: string): void {
+  const filePath = path.join(ROOT, 'crates/vp_js_runtime/src/lib.rs');
+  const content = fs.readFileSync(filePath, 'utf8');
+  const pattern = /pub const DEFAULT_NODE_VERSION: &str = "(\d+\.\d+\.\d+)";/;
+  let oldVersion: string | undefined;
+  const updated = content.replace(pattern, (_match: string, captured: string) => {
+    oldVersion = captured;
+    return `pub const DEFAULT_NODE_VERSION: &str = "${nodeVersion}";`;
+  });
+  if (oldVersion === undefined) {
+    throw new Error(
+      `Failed to match DEFAULT_NODE_VERSION in ${filePath} — the pattern ${pattern} is stale, ` +
+        `please update it in .github/scripts/upgrade-deps.ts`,
+    );
+  }
+  fs.writeFileSync(filePath, updated);
+  recordChange('Node.js default', oldVersion, nodeVersion);
+}
+
 // ============ Write metadata files for PR description ============
 const formatVersion = (v: Change): string => {
   if (v.tag) {
@@ -527,6 +550,7 @@ async function upgradeDependencies(): Promise<void> {
   console.log('Fetching latest versions…');
 
   const [
+    nodeVersion,
     vitestVersion,
     tsdownVersion,
     lightningcssVersion,
@@ -540,6 +564,7 @@ async function upgradeDependencies(): Promise<void> {
     oxcProjectTypesVersion,
     oxcParserVersion,
   ] = await Promise.all([
+    getLatestNodeVersion(SUPPORTED_NODE_MAJOR),
     getLatestNpmVersionForMajor('vitest', SUPPORTED_VITEST_MAJOR),
     getLatestNpmVersion('tsdown'),
     // Mirror exactly what the bundled @tsdown/css depends on.
@@ -555,6 +580,7 @@ async function upgradeDependencies(): Promise<void> {
     getLatestNpmVersion('oxc-parser'),
   ]);
 
+  console.log(`Node.js default: ${nodeVersion}`);
   console.log(`vitest: ${vitestVersion}`);
   console.log(`tsdown: ${tsdownVersion}`);
   console.log(`lightningcss (from @tsdown/css): ${lightningcssVersion}`);
@@ -585,6 +611,7 @@ async function upgradeDependencies(): Promise<void> {
     oxcParser: oxcParserVersion,
   });
   await updateVitestVersionConstant(vitestVersion);
+  updateDefaultNodeVersion(nodeVersion);
   // Keep the selected versions available if installation or upstream sync fails.
   writeMetaFiles();
 

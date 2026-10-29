@@ -13,7 +13,7 @@ use std::{
 
 use flate2::read::GzDecoder;
 use tar::Archive;
-use vp_js_runtime::{JsRuntimeType, NodeProvider, download_runtime};
+use vp_js_runtime::{DEFAULT_NODE_VERSION, JsRuntimeType, download_runtime};
 use vp_pm_cli::{PackageManagerType, download_package_manager};
 use vp_shared::EnvConfig;
 use vt_path::{AbsolutePath, AbsolutePathBuf};
@@ -302,21 +302,11 @@ async fn prepare_install_runtime(
     .map_err(|error| {
         Error::Setup(format!("Failed to read pnpm's Node.js requirement: {error}").into())
     })?;
-    let node_version =
-        match preferred_node_version.filter(|version| supports_pnpm_node(&package, version)) {
-            Some(version) => version.to_string(),
-            None => NodeProvider::new()
-                .resolve_latest_version()
-                .await
-                .map_err(|error| {
-                    Error::Setup(
-                        format!("Failed to resolve the latest Node.js LTS version: {error}").into(),
-                    )
-                })?
-                .to_string(),
-        };
+    let node_version = preferred_node_version
+        .filter(|version| supports_pnpm_node(&package, version))
+        .unwrap_or(DEFAULT_NODE_VERSION);
     let node_runtime =
-        download_runtime(JsRuntimeType::Node, &node_version).await.map_err(|error| {
+        download_runtime(JsRuntimeType::Node, node_version).await.map_err(|error| {
             Error::Setup(format!("Failed to install Node.js {node_version}: {error}").into())
         })?;
     Ok((node_runtime, pnpm_entry))
@@ -680,15 +670,15 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn bootstrap_reuses_project_node_and_only_resolves_lts_for_incompatible_pnpm() {
-        use vp_js_runtime::{JsRuntimeProvider, Platform};
+    async fn bootstrap_reuses_compatible_node_and_otherwise_uses_pinned_default() {
+        use vp_js_runtime::{JsRuntimeProvider, NodeProvider, Platform};
         use vp_shared::{EnvConfig, env_vars};
 
         let server = httpmock::MockServer::start_async().await;
         let index = server.mock(|when, then| {
             when.path("/index.json");
             then.status(200).json_body(serde_json::json!([
-                {"version":"v24.11.0", "lts":"Krypton"},
+                {"version":"v26.13.0", "lts":"Newer LTS"},
                 {"version":"v22.23.1", "lts":"Jod"}
             ]));
         });
@@ -711,7 +701,7 @@ mod tests {
                 }
                 let manifest = pnpm.join("package.json");
                 tokio::fs::write(&manifest, r#"{"engines":{"node":">=18.12"}}"#).await.unwrap();
-                for version in ["22.23.1", "24.11.0"] {
+                for version in ["22.23.1", DEFAULT_NODE_VERSION] {
                     let binary = env
                         .dirs
                         .data
@@ -727,10 +717,14 @@ mod tests {
                 assert_eq!(entry, pnpm.join("bin/pnpm.cjs"));
                 index.assert_calls(0);
 
+                let (runtime, _) = prepare_install_runtime(None).await.unwrap();
+                assert_eq!(runtime.version(), DEFAULT_NODE_VERSION);
+                index.assert_calls(0);
+
                 tokio::fs::write(manifest, r#"{"engines":{"node":">=24"}}"#).await.unwrap();
                 let (runtime, _) = prepare_install_runtime(Some("22.23.1")).await.unwrap();
-                assert_eq!(runtime.version(), "24.11.0");
-                index.assert_calls(1);
+                assert_eq!(runtime.version(), DEFAULT_NODE_VERSION);
+                index.assert_calls(0);
             },
         )
         .await;
