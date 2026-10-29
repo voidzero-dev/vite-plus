@@ -3,7 +3,7 @@ name: Issue Triage
 # Requires the VoidZero bot GitHub App to be installed with contents, issues,
 # and pull requests write permissions. Configure VOIDZERO_BOT_ID,
 # VOIDZERO_BOT_KEY, CLOUDFLARE_ACCOUNT_ID, and CLOUDFLARE_API_KEY as secrets.
-# The Cloudflare token needs AI Gateway and Workers AI access.
+# The Cloudflare token needs Workers AI access.
 
 on:
   issues:
@@ -132,7 +132,7 @@ jobs:
 
           while IFS='|' read -r name color description <&3; do
             if ! label_exists "$name"; then
-              gh label create "$name" --color "$color" --description "$description" ||
+              gh label create --color "$color" --description "$description" -- "$name" ||
                 label_exists "$name"
             fi
           done 3<<'EOF'
@@ -145,9 +145,6 @@ jobs:
 
       - name: Run triagebot
         uses: withastro/triagebot-action@51d30da13c0bd571a3822fc56882de40fead0086 # main
-        env:
-          # AI Gateway creates the default gateway on the first authenticated request.
-          CLOUDFLARE_GATEWAY_ID: default
         with:
           read-token: ${{ github.token }}
           write-token: ${{ steps.app-token.outputs.token }}
@@ -156,6 +153,5 @@ jobs:
           triage-skill: .agents/skills/triage
           auto-pr-on-fix: true
           bot-logins: ${{ steps.app-token.outputs.app-slug }}[bot]
-          # Use the action's default models through AI Gateway.
-          triage-model: cloudflare-ai-gateway/claude-opus-4-6
-          verification-model: cloudflare-ai-gateway/claude-sonnet-4-6
+          triage-model: cloudflare-workers-ai/@cf/moonshotai/kimi-k2.7-code
+          verification-model: cloudflare-workers-ai/@cf/moonshotai/kimi-k2.6
