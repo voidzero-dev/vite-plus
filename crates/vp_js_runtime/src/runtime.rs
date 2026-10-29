@@ -169,13 +169,27 @@ fn log_checksum_only(archive_filename: &str) {
     );
 }
 
+/// Fail when `VP_NODE_MANAGER=system-only` restricts Node.js to the system.
+///
+/// # Errors
+///
+/// Returns [`Error::DisabledBySystemOnly`] in system-only mode.
+pub fn ensure_managed_node_allowed() -> Result<(), Error> {
+    if vp_shared::EnvConfig::get().node_system_only() {
+        return Err(Error::DisabledBySystemOnly { variable: vp_shared::env_vars::VP_NODE_MANAGER });
+    }
+    Ok(())
+}
+
 /// Download and cache a JavaScript runtime using a provider
 ///
 /// This is the generic download function that works with any `JsRuntimeProvider`.
 ///
 /// # Errors
 ///
-/// Returns an error if download, verification, or extraction fails.
+/// Returns an error if download, verification, or extraction fails, or
+/// [`Error::DisabledBySystemOnly`] for Node.js in system-only mode, even when the
+/// version is already cached.
 ///
 /// # Panics
 ///
@@ -185,6 +199,10 @@ pub async fn download_runtime_with_provider<P: JsRuntimeProvider>(
     runtime_type: JsRuntimeType,
     version: &str,
 ) -> Result<JsRuntime, Error> {
+    // Checked before the cache lookup: system-only also forbids cached installs.
+    match runtime_type {
+        JsRuntimeType::Node => ensure_managed_node_allowed()?,
+    }
     let platform = Platform::current();
     let cache_dir = crate::cache::get_cache_dir()?;
 
@@ -1811,5 +1829,43 @@ mod tests {
         let resolution = resolve_node_version(&child_path, true).await.unwrap().unwrap();
         assert_eq!(&*resolution.version, "20.18.0");
         assert_eq!(resolution.source, VersionSource::NvmrcFile);
+    }
+
+    /// System-only mode rejects a managed Node.js before the cache lookup, so
+    /// an already installed version is not used either.
+    #[tokio::test]
+    async fn test_system_only_rejects_cached_runtime() {
+        let vp_home = TempDir::new().unwrap();
+        let provider = NodeProvider::new();
+        let install_dir = vp_home.path().join("js_runtime").join("node").join("24.0.0");
+        let binary = install_dir.join(provider.binary_relative_path(Platform::current()).as_str());
+        std::fs::create_dir_all(binary.parent().unwrap()).unwrap();
+        std::fs::write(&binary, "").unwrap();
+
+        for (manager, rejected) in [(None, false), (Some("no"), false), (Some("system-only"), true)]
+        {
+            vp_shared::EnvConfig::with_vars_async(
+                [
+                    (env_vars::VP_HOME, Some(vp_home.path().as_os_str())),
+                    (env_vars::VP_NODE_MANAGER, manager.map(std::ffi::OsStr::new)),
+                ],
+                |_| async {
+                    let result =
+                        download_runtime_with_provider(&provider, JsRuntimeType::Node, "24.0.0")
+                            .await;
+                    if rejected {
+                        assert!(matches!(
+                            result,
+                            Err(Error::DisabledBySystemOnly {
+                                variable: env_vars::VP_NODE_MANAGER
+                            })
+                        ));
+                    } else {
+                        assert_eq!(result.unwrap().get_binary_path().as_path(), binary);
+                    }
+                },
+            )
+            .await;
+        }
     }
 }

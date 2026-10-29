@@ -420,7 +420,14 @@ function Get-PayloadAndHandoff {
             $binarySource = $LocalBinary
         }
         $binarySource = (Resolve-Path -LiteralPath $binarySource).Path
-        if (Test-SelfSetupSupport -BinarySource $binarySource) {
+        $systemOnly = @(Get-SystemOnlyVariables)
+        if ($systemOnly.Count -gt 0) {
+            # Binaries without system-only support would ignore it and download managed tools.
+            if (-not (Test-SystemOnlySupport -BinarySource $binarySource)) {
+                Write-Error-Exit "vite-plus $ViteVersion does not support $($systemOnly -join ', '). Choose a version that supports it, or unset those variables."
+            }
+            Invoke-InstallHandoff -BinarySource $binarySource
+        } elseif (Test-SelfSetupSupport -BinarySource $binarySource) {
             Invoke-InstallHandoff -BinarySource $binarySource
         } else {
             Invoke-LegacyInstaller -BinarySource $binarySource
@@ -440,6 +447,29 @@ function Test-SelfSetupSupport {
         # Old binaries must exit with help rather than opening an interactive picker.
         $response = & $BinarySource --help 2>$null
         return $LASTEXITCODE -eq 0 -and @($response).Count -eq 1 -and $response -ceq 'vite-plus-self-setup-v1'
+    } catch {
+        return $false
+    } finally {
+        $env:VP_SELF_SETUP_SUPPORT_CHECK = $previous
+    }
+}
+
+# The VP_*_MANAGER=system-only settings (exact, lowercase value only).
+function Get-SystemOnlyVariables {
+    foreach ($name in 'VP_NODE_MANAGER', 'VP_PM_MANAGER', 'VP_NPM_MANAGER', 'VP_PNPM_MANAGER', 'VP_YARN_MANAGER', 'VP_BUN_MANAGER') {
+        if ([Environment]::GetEnvironmentVariable($name) -ceq 'system-only') {
+            "$name=system-only"
+        }
+    }
+}
+
+function Test-SystemOnlySupport {
+    param([string]$BinarySource)
+    $previous = $env:VP_SELF_SETUP_SUPPORT_CHECK
+    try {
+        $env:VP_SELF_SETUP_SUPPORT_CHECK = 'system-only'
+        $response = @(& $BinarySource --help 2>$null)
+        return $LASTEXITCODE -eq 0 -and $response.Count -eq 2 -and $response[0] -ceq 'vite-plus-self-setup-v1' -and $response[1] -ceq 'vite-plus-self-setup-system-only'
     } catch {
         return $false
     } finally {

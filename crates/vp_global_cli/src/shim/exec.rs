@@ -3,8 +3,19 @@
 //! On Unix, uses execve to replace the current process.
 //! On Windows, spawns the process and waits for completion.
 
-use vp_shared::{ToolPathEnv, exit_code_from_status, output};
+use vp_shared::{ToolPathEnv, env_vars, exit_code_from_status, output};
 use vt_path::AbsolutePath;
+
+use super::dispatch::{restrict_child_env, system_only_reentry};
+
+/// Report a child environment that could not be prepared for `path`.
+fn report_env_error(path: &AbsolutePath, error: &std::io::Error) -> i32 {
+    output::error(&format!(
+        "Failed to prepare the environment for {}: {error}",
+        path.as_path().display()
+    ));
+    1
+}
 
 /// Keep the child's `PWD` consistent with the process cwd; the std-Command
 /// sibling of [`vp_command::sync_child_pwd`] (rationale there). Shim
@@ -19,11 +30,23 @@ fn sync_child_pwd(cmd: &mut std::process::Command) {
     }
 }
 
+/// Pass on the entry count of a system-only shim, so the shim detects a
+/// system tool that forwards the call back to it.
+fn pass_system_only_reentry(cmd: &mut std::process::Command) {
+    if let Some(value) = system_only_reentry() {
+        cmd.env(env_vars::VP_SYSTEM_ONLY_REENTRY, value);
+    }
+}
+
 /// Spawn a tool as a child process and wait for completion.
 ///
 /// Unlike `exec_tool()`, this does NOT replace the current process on Unix,
 /// allowing the caller to run code after the tool exits.
 pub fn spawn_tool(path: &AbsolutePath, args: &[String], env: ToolPathEnv) -> i32 {
+    let env = match restrict_child_env(env) {
+        Ok(env) => env,
+        Err(e) => return report_env_error(path, &e),
+    };
     // Use the same managed .cmd policy as vp_command. Otherwise an interactive
     // package-manager shim leaves cmd.exe waiting at its batch termination
     // prompt after Ctrl+C, even though the trampoline and vp have exited.
@@ -37,6 +60,7 @@ pub fn spawn_tool(path: &AbsolutePath, args: &[String], env: ToolPathEnv) -> i32
     };
     cmd.args(args).envs(env.into_envs());
     sync_child_pwd(&mut cmd);
+    pass_system_only_reentry(&mut cmd);
     // Ctrl+C reaches the child too; wait for its cleanup instead of dying first, so the
     // caller sees the child's exit.
     #[cfg(windows)]
@@ -70,9 +94,14 @@ pub fn exec_tool(path: &AbsolutePath, args: &[String], env: ToolPathEnv) -> i32 
 fn exec_unix(path: &AbsolutePath, args: &[String], env: ToolPathEnv) -> i32 {
     use std::os::unix::process::CommandExt;
 
+    let env = match restrict_child_env(env) {
+        Ok(env) => env,
+        Err(e) => return report_env_error(path, &e),
+    };
     let mut cmd = std::process::Command::new(path.as_path());
     cmd.args(args).envs(env.into_envs());
     sync_child_pwd(&mut cmd);
+    pass_system_only_reentry(&mut cmd);
 
     // exec replaces the current process - this only returns on error
     let err = cmd.exec();

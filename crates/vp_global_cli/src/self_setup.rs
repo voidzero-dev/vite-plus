@@ -394,6 +394,9 @@ fn shim_mode(preference: Option<ManagerPreference>) -> Option<config::ShimMode> 
     match preference? {
         ManagerPreference::Yes => Some(config::ShimMode::Managed),
         ManagerPreference::No => Some(config::ShimMode::SystemFirst),
+        // Installation does not accept `system-only` yet; like an unrecognized
+        // value, it falls through to the next preference.
+        ManagerPreference::SystemOnly => None,
     }
 }
 

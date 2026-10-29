@@ -185,6 +185,8 @@ impl NodeProvider {
     ///
     /// Returns an error only if the download fails and no local cache exists.
     pub async fn fetch_version_index(&self) -> Result<Vec<NodeVersionEntry>, Error> {
+        // System-only mode resolves no managed versions, even from the cache.
+        crate::runtime::ensure_managed_node_allowed()?;
         let cache_dir = crate::cache::get_cache_dir()?;
         let cache_path = cache_dir.join("node/index_cache.json");
 
@@ -1544,5 +1546,50 @@ fedcba987654  node-v22.13.1-win-x64.zip";
             );
         })
         .await;
+    }
+
+    /// System-only mode neither queries the mirror nor reads the index cache.
+    #[tokio::test]
+    async fn test_system_only_rejects_version_index_without_network() {
+        use httpmock::prelude::*;
+
+        let vp_home = tempfile::TempDir::new().unwrap();
+        let server = MockServer::start_async().await;
+        let index = server
+            .mock_async(|when, then| {
+                when.method(GET).path("/index.json");
+                then.status(200).body(NODE_INDEX);
+            })
+            .await;
+        let mirror = server.base_url();
+        let vars = |manager: Option<&'static str>| {
+            [
+                (env_vars::VP_HOME, Some(vp_home.path().as_os_str())),
+                (env_vars::VP_NODE_DIST_MIRROR, Some(std::ffi::OsStr::new(mirror.as_str()))),
+                (env_vars::VP_NODE_MANAGER, manager.map(std::ffi::OsStr::new)),
+            ]
+        };
+
+        // Without a cache, the lookup fails before any request.
+        vp_shared::EnvConfig::with_vars_async(vars(Some("system-only")), |_| async {
+            let error = NodeProvider::new().fetch_version_index().await.unwrap_err();
+            assert!(matches!(
+                error,
+                Error::DisabledBySystemOnly { variable: env_vars::VP_NODE_MANAGER }
+            ));
+        })
+        .await;
+        index.assert_hits_async(0).await;
+
+        // A fresh cache is not used either.
+        vp_shared::EnvConfig::with_vars_async(vars(None), |_| async {
+            NodeProvider::new().fetch_version_index().await.unwrap();
+        })
+        .await;
+        vp_shared::EnvConfig::with_vars_async(vars(Some("system-only")), |_| async {
+            assert!(NodeProvider::new().fetch_version_index().await.is_err());
+        })
+        .await;
+        index.assert_hits_async(1).await;
     }
 }

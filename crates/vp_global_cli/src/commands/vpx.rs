@@ -14,7 +14,10 @@ use vp_shared::{PrependOptions, ToolPathEnv, exit_code_from_status, output};
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
 use super::vpx_script;
-use crate::{commands::env::config, shim::dispatch};
+use crate::{
+    commands::env::config::{self, EffectiveMode},
+    shim::dispatch,
+};
 
 /// Parsed vpx flags.
 #[derive(Debug, Default)]
@@ -170,8 +173,25 @@ pub async fn execute_vpx(args: &[String], cwd: &AbsolutePath) -> i32 {
             return execute_global_binary(global_bin, &positional[1..], cwd).await;
         }
 
-        // 3. Try system PATH (excluding vite-plus bin dir)
-        if let Some(path_bin) = find_on_path(&cmd_name) {
+        // 3. Try system PATH (excluding the vite-plus bin dir, or only its shims
+        //    for a system-only tool). A system-only tool also skips managed
+        //    installs a parent left on PATH, and fails instead of falling back to
+        //    `dlx`, which would download it.
+        let path_bin = if dispatch::requires_system_tool(&cmd_name) {
+            // Short aliases (`pn`, `pnx`) map to the binaries the family installs.
+            let bin_name = vp_pm_cli::PackageManagerType::from_tool(&cmd_name)
+                .map_or(cmd_name.as_str(), |kind| kind.bin_name_for_tool(&cmd_name));
+            match dispatch::resolve_effective_tool(bin_name, EffectiveMode::SystemOnly) {
+                Ok(path) => path,
+                Err(e) => {
+                    output::error(&format!("vpx: {e}"));
+                    return 1;
+                }
+            }
+        } else {
+            find_on_path(&cmd_name)
+        };
+        if let Some(path_bin) = path_bin {
             tracing::debug!("vpx: found on PATH at {}", path_bin.as_path().display());
             let child_env = match local_bin_env(cwd) {
                 Ok(env) => env,
@@ -229,23 +249,37 @@ async fn find_global_binary(cmd: &str) -> Option<GlobalBinary> {
 /// Execute a globally installed binary.
 ///
 /// Ensures the required Node.js version is installed, prepends its bin dir
-/// and local node_modules/.bin dirs to PATH, then executes.
+/// and local node_modules/.bin dirs to PATH, then executes. System-only
+/// Node.js comes from PATH, and its directory is not added again.
 async fn execute_global_binary(bin: GlobalBinary, args: &[String], cwd: &AbsolutePath) -> i32 {
+    let node_system_only = vp_shared::EnvConfig::get().node_system_only();
     // Ensure Node.js is installed and locate its binary
-    let node_path = match dispatch::ensure_installed(&bin.node_version).await {
-        Ok(p) => p,
-        Err(e) => {
-            output::error(&format!("vpx: Failed to install Node {}: {e}", bin.node_version));
-            return 1;
+    let node_path = if node_system_only {
+        match dispatch::resolve_effective_tool("node", EffectiveMode::SystemOnly) {
+            Ok(path) => path.expect("system-only resolution returns a path or an error"),
+            Err(e) => {
+                output::error(&format!("vpx: {e}"));
+                return 1;
+            }
+        }
+    } else {
+        match dispatch::ensure_installed(&bin.node_version).await {
+            Ok(p) => p,
+            Err(e) => {
+                output::error(&format!("vpx: Failed to install Node {}: {e}", bin.node_version));
+                return 1;
+            }
         }
     };
 
     // Prepend Node.js bin dir to PATH
-    let node_bin_dir = node_path.parent().expect("Node has no parent directory");
     let mut child_env = ToolPathEnv::from_env();
-    if let Err(error) = child_env.prepend(node_bin_dir, &["node"], PrependOptions::default()) {
-        output::error(&format!("vpx: {error}"));
-        return 1;
+    if !node_system_only {
+        let node_bin_dir = node_path.parent().expect("Node has no parent directory");
+        if let Err(error) = child_env.prepend(node_bin_dir, &["node"], PrependOptions::default()) {
+            output::error(&format!("vpx: {error}"));
+            return 1;
+        }
     }
 
     if let Err(error) = prepend_node_modules_bin_to_path(cwd, &mut child_env) {

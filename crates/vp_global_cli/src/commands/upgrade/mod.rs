@@ -9,7 +9,7 @@ use console::style;
 use vp_pm_cli::HttpClient;
 use vp_setup::{install, integrity, platform, registry};
 use vp_shared::output;
-use vt_path::AbsolutePathBuf;
+use vt_path::{AbsolutePath, AbsolutePathBuf};
 
 use crate::error::Error;
 
@@ -166,6 +166,32 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
         output::info("installing...");
     }
 
+    install_version(
+        &platform_data,
+        install_dir,
+        &resolved.version,
+        current_version,
+        options.force,
+        options.silent,
+        options.registry.as_deref(),
+    )
+    .await
+}
+
+/// Install `version` from its platform tarball and switch to it.
+async fn install_version(
+    platform_data: &[u8],
+    install_dir: &AbsolutePathBuf,
+    version: &str,
+    current_version: &str,
+    force: bool,
+    silent: bool,
+    registry: Option<&str>,
+) -> Result<ExitStatus, Error> {
+    // Refuse before touching the install directory: the target may be the
+    // retained previous version, which failed-install cleanup would delete.
+    ensure_staged_system_only_support(platform_data, version).await?;
+
     // Step 8: Create version directory.
     //
     // A forced reinstall of the active version cannot write into the active
@@ -173,24 +199,21 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
     // Install into a unique semver build-metadata directory instead, then
     // repoint `current` after the install has completed.
     let active_install_dir = install::read_current_version(install_dir).await;
-    let install_dir_name = install::target_install_dir_name(
-        &resolved.version,
-        active_install_dir.as_deref(),
-        options.force,
-    );
+    let install_dir_name =
+        install::target_install_dir_name(version, active_install_dir.as_deref(), force);
     let version_dir = install_dir.join(&install_dir_name);
     tokio::fs::create_dir_all(&version_dir).await?;
 
     // Step 9: Extract platform binary and install via npm
     let result = install_platform_and_main(
-        &platform_data,
+        platform_data,
         &version_dir,
         install_dir,
         &install_dir_name,
-        &resolved.version,
+        version,
         current_version,
-        options.silent,
-        options.registry.as_deref(),
+        silent,
+        registry,
     )
     .await;
 
@@ -215,17 +238,7 @@ async fn install_platform_and_main(
     silent: bool,
     registry: Option<&str>,
 ) -> Result<ExitStatus, Error> {
-    // Extract platform package (binary only; .node files installed via npm optionalDeps)
-    install::extract_platform_package(platform_data, version_dir).await?;
-
-    // Verify binary was extracted
-    let binary_name = vp_setup::VP_BINARY_NAME;
-    let binary_path = version_dir.join("bin").join(binary_name);
-    if !tokio::fs::try_exists(&binary_path).await.unwrap_or(false) {
-        return Err(Error::Upgrade(
-            "Binary not found after extraction. The download may be corrupted.".into(),
-        ));
-    }
+    extract_binary(platform_data, version_dir).await?;
 
     // Generate wrapper package.json that declares vite-plus as a dependency
     install::generate_wrapper_package_json(version_dir, new_version).await?;
@@ -278,6 +291,79 @@ async fn install_platform_and_main(
     Ok(ExitStatus::default())
 }
 
+/// Extract the platform package into `dir` and return the path of its binary.
+async fn extract_binary(
+    platform_data: &[u8],
+    dir: &AbsolutePath,
+) -> Result<AbsolutePathBuf, Error> {
+    // Extract platform package (binary only; .node files installed via npm optionalDeps)
+    install::extract_platform_package(platform_data, dir).await?;
+
+    // Verify binary was extracted
+    let binary_path = dir.join("bin").join(vp_setup::VP_BINARY_NAME);
+    if !tokio::fs::try_exists(&binary_path).await.unwrap_or(false) {
+        return Err(Error::Upgrade(
+            "Binary not found after extraction. The download may be corrupted.".into(),
+        ));
+    }
+    Ok(binary_path)
+}
+
+/// Refuse a target without system-only support while a
+/// `VP_*_MANAGER=system-only` variable is set. The probe runs from a temporary
+/// directory, so a refusal leaves every install directory unchanged.
+async fn ensure_staged_system_only_support(
+    platform_data: &[u8],
+    target: &str,
+) -> Result<(), Error> {
+    let variables = vp_shared::EnvConfig::get().system_only_variables();
+    if variables.is_empty() {
+        return Ok(());
+    }
+    let staging = tempfile::tempdir().map_err(|e| {
+        Error::Upgrade(format!("Failed to create a temporary directory: {e}").into())
+    })?;
+    let dir = AbsolutePathBuf::new(staging.path().to_path_buf())
+        .ok_or_else(|| Error::Upgrade("Temporary directory must be absolute".into()))?;
+    let binary = extract_binary(platform_data, &dir).await?;
+    let support = vp_setup::support::probe_self_setup(&binary, true).await.map_err(|e| {
+        Error::Upgrade(
+            format!(
+                "Failed to run the downloaded vp binary from a temporary directory ({}): {e}. \
+                 Set TMPDIR (TMP or TEMP on Windows) to a directory that allows running programs.",
+                dir.as_path().display()
+            )
+            .into(),
+        )
+    })?;
+    require_system_only_support(support, target, &variables)
+}
+
+/// Refuse to switch to `binary` while a `VP_*_MANAGER=system-only` variable is
+/// set, unless the binary supports system-only mode.
+async fn ensure_system_only_support(binary: &AbsolutePath, target: &str) -> Result<(), Error> {
+    let variables = vp_shared::EnvConfig::get().system_only_variables();
+    if variables.is_empty() {
+        return Ok(());
+    }
+    let support = vp_setup::support::probe_self_setup(binary, true).await?;
+    require_system_only_support(support, target, &variables)
+}
+
+/// A target without system-only support would download managed tools.
+fn require_system_only_support(
+    support: vp_setup::support::SelfSetupSupport,
+    target: &str,
+    variables: &[&str],
+) -> Result<(), Error> {
+    if support == vp_setup::support::SelfSetupSupport::SystemOnly {
+        return Ok(());
+    }
+    Err(Error::Upgrade(
+        vp_setup::support::system_only_unsupported_message(target, variables).into(),
+    ))
+}
+
 /// Execute rollback to the previous version.
 #[allow(clippy::print_stderr)]
 async fn execute_rollback(
@@ -303,6 +389,9 @@ async fn execute_rollback(
         output::info(&format!("switching from {} {} {}", current_version, output::ARROW, previous));
     }
 
+    ensure_system_only_support(&prev_dir.join("bin").join(vp_setup::VP_BINARY_NAME), &previous)
+        .await?;
+
     // Save the current version as the new "previous" before swapping
     install::save_previous_version(install_dir).await?;
 
@@ -321,4 +410,152 @@ async fn execute_rollback(
     }
 
     Ok(ExitStatus::default())
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use vp_shared::{EnvConfig, env_vars};
+
+    use super::*;
+
+    #[tokio::test]
+    async fn system_only_requires_target_support() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = tempfile::tempdir().unwrap();
+        let script = |name: &str, body: &str| {
+            let path = temp.path().join(name);
+            std::fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+            AbsolutePathBuf::new(path).unwrap()
+        };
+        let supported = script(
+            "supported",
+            r#"echo vite-plus-self-setup-v1; [ "$VP_SELF_SETUP_SUPPORT_CHECK" = system-only ] && echo vite-plus-self-setup-system-only; exit 0"#,
+        );
+        let unsupported = script("unsupported", "echo vite-plus-self-setup-v1");
+
+        let managers = |node: Option<&'static str>| {
+            [
+                (env_vars::VP_NODE_MANAGER, node),
+                (env_vars::VP_PM_MANAGER, None),
+                (env_vars::VP_NPM_MANAGER, None),
+                (env_vars::VP_PNPM_MANAGER, None),
+                (env_vars::VP_YARN_MANAGER, None),
+                (env_vars::VP_BUN_MANAGER, None),
+            ]
+        };
+        EnvConfig::with_vars_async(managers(None), |_| async {
+            ensure_system_only_support(&unsupported, "0.1.0").await.unwrap();
+        })
+        .await;
+        EnvConfig::with_vars_async(managers(Some("system-only")), |_| async {
+            ensure_system_only_support(&supported, "9.0.0").await.unwrap();
+            let error = ensure_system_only_support(&unsupported, "0.1.0").await.unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains("vite-plus 0.1.0 does not support VP_NODE_MANAGER=system-only"),
+                "{error}"
+            );
+        })
+        .await;
+    }
+
+    fn node_system_only() -> [(&'static str, Option<&'static str>); 6] {
+        [
+            (env_vars::VP_NODE_MANAGER, Some("system-only")),
+            (env_vars::VP_PM_MANAGER, None),
+            (env_vars::VP_NPM_MANAGER, None),
+            (env_vars::VP_PNPM_MANAGER, None),
+            (env_vars::VP_YARN_MANAGER, None),
+            (env_vars::VP_BUN_MANAGER, None),
+        ]
+    }
+
+    /// A platform tarball whose `vp` binary is the shell script `vp_script`.
+    fn platform_tarball(vp_script: &str) -> Vec<u8> {
+        use flate2::{Compression, write::GzEncoder};
+
+        let mut archive = tar::Builder::new(GzEncoder::new(Vec::new(), Compression::default()));
+        for (path, data, mode) in
+            [("package/package.json", "{}", 0o644), ("package/vp", vp_script, 0o755)]
+        {
+            let mut header = tar::Header::new_gnu();
+            header.set_size(data.len() as u64);
+            header.set_mode(mode);
+            header.set_cksum();
+            archive.append_data(&mut header, path, data.as_bytes()).unwrap();
+        }
+        archive.into_inner().unwrap().finish().unwrap()
+    }
+
+    #[tokio::test]
+    async fn system_only_refusal_preserves_retained_version() {
+        let temp = tempfile::tempdir().unwrap();
+        let install_dir = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let retained = install_dir.join("0.1.0");
+        std::fs::create_dir_all(&retained).unwrap();
+        std::fs::write(retained.join("marker"), "").unwrap();
+        std::fs::write(install_dir.join(".previous-version"), "0.1.0").unwrap();
+        let tarball = platform_tarball("#!/bin/sh\necho vite-plus-self-setup-v1\n");
+
+        EnvConfig::with_vars_async(node_system_only(), |_| async {
+            let error = Box::pin(install_version(
+                &tarball,
+                &install_dir,
+                "0.1.0",
+                "9.9.9",
+                false,
+                true,
+                None,
+            ))
+            .await
+            .unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains("vite-plus 0.1.0 does not support VP_NODE_MANAGER=system-only"),
+                "{error}"
+            );
+        })
+        .await;
+
+        assert!(retained.join("marker").as_path().exists(), "retained version was removed");
+        assert!(!retained.join("bin").as_path().exists(), "retained version was modified");
+        assert_eq!(
+            std::fs::read_to_string(install_dir.join(".previous-version")).unwrap(),
+            "0.1.0"
+        );
+    }
+
+    #[tokio::test]
+    async fn system_only_probe_launch_failure_explains_temporary_directory() {
+        let temp = tempfile::tempdir().unwrap();
+        let install_dir = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let tarball = platform_tarball("#!/nonexistent/sh\n");
+
+        EnvConfig::with_vars_async(node_system_only(), |_| async {
+            let error = Box::pin(install_version(
+                &tarball,
+                &install_dir,
+                "9.0.0",
+                "0.1.0",
+                false,
+                true,
+                None,
+            ))
+            .await
+            .unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains("Failed to run the downloaded vp binary from a temporary directory"),
+                "{error}"
+            );
+        })
+        .await;
+
+        assert!(!install_dir.join("9.0.0").as_path().exists(), "version directory was created");
+    }
 }

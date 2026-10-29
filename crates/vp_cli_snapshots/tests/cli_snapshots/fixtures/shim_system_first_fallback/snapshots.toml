@@ -45,6 +45,9 @@ steps = [
   { argv = ["node", "--version"], tty = false, envs = [["PATH", "${workspace}/foreign-bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin${PATH_SEPARATOR}${PATH}"]], comment = "The external manager forwards to the managed fallback without re-entering itself." },
   { argv = ["node", "--version"], tty = false, envs = [["PATH", "${workspace}/foreign-bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin${PATH_SEPARATOR}${PATH}"], ["VP_PATH_INJECTED_TOOLS", "node"]], comment = "An inherited injection marker must not cause recursion either." },
   { argv = ["vp", "env", "exec", "node", "--version"], envs = [["PATH", "${workspace}/foreign-bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin${PATH_SEPARATOR}${PATH}"]], comment = "env exec still runs managed Node when the inherited PATH contains the external manager." },
+  # Under system-only the shim selects the external manager, which forwards straight back.
+  { argv = ["node", "--version"], tty = false, timeout = 20000, envs = [["PATH", "${workspace}/foreign-bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin${PATH_SEPARATOR}${PATH}"], ["VP_NODE_MANAGER", "system-only"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "System-only Node.js detects the forwarding loop and fails instead of re-entering the external manager forever or using the managed runtime.", continue-on-failure = true },
+  { argv = ["npm", "--version"], tty = false, timeout = 20000, envs = [["PATH", "${workspace}/foreign-bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin${PATH_SEPARATOR}${PATH}"], ["VP_NODE_MANAGER", "system-only"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "npm on system-only Node.js reports the loop that its query of the external manager ran into.", continue-on-failure = true },
 ]
 
 [[case]]
@@ -64,6 +67,7 @@ steps = [
   { argv = ["node", "list-shims.cjs", "shared-bin", "data/fallback-bin"], comment = "Setup preserves the existing executable in the shared bin." },
   { argv = ["sh", "split.sh"], envs = [["HOME", "${workspace}/user"], ["VP_HOME", ""], ["VP_BIN_DIR", "${workspace}/shared-bin"], ["VP_DATA_DIR", "${workspace}/data"], ["VP_CACHE_DIR", "${workspace}/cache"], ["XDG_CONFIG_HOME", "${workspace}/config"]], comment = "The generated shell script puts shared bin first and data-root fallback last." },
   { argv = ["node", "-p", "process.execPath.includes('shared-bin')"], envs = [["PATH", "${workspace}/shared-bin${PATH_SEPARATOR}${PATH}"]], comment = "The foreign Node remains executable." },
+  { argv = ["vpx", "node", "-p", "process.execPath.includes('shared-bin')"], envs = [["HOME", "${workspace}/user"], ["VP_HOME", ""], ["VP_BIN_DIR", "${workspace}/shared-bin"], ["VP_DATA_DIR", "${workspace}/data"], ["VP_CACHE_DIR", "${workspace}/cache"], ["XDG_CONFIG_HOME", "${workspace}/config"], ["PATH", "${workspace}/shared-bin${PATH_SEPARATOR}${PATH}"], ["VP_NODE_MANAGER", "system-only"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "System-only Node.js selects the foreign Node in the shared bin." },
 
   # System-first adds a fallback under data while keeping the foreign Node intact.
   { argv = ["vp", "env", "off", "node"], envs = [["HOME", "${workspace}/user"], ["VP_HOME", ""], ["VP_BIN_DIR", "${workspace}/shared-bin"], ["VP_DATA_DIR", "${workspace}/data"], ["VP_CACHE_DIR", "${workspace}/cache"], ["XDG_CONFIG_HOME", "${workspace}/config"], ["PATH", "${workspace}/data/current/bin${PATH_SEPARATOR}${PATH}"]], snapshot = false },
@@ -105,4 +109,59 @@ steps = [
   { argv = ["vpx", "--print", "process.execPath.includes('system-bin')"], envs = [["PATH", "${VP_HOME}/fallback-bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "A Vite+ shim before system Node.js selects managed Node.js." },
   ["vp", "env", "on", "node"],
   { argv = ["vpx", "--print", "process.execPath.includes('system-bin')"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "Managed mode ignores system Node.js." },
+]
+
+[[case]]
+name = "system_only_overrides_managed_shims"
+vp = "global"
+comment = "With managed config.json, VP_*_MANAGER=system-only makes the shims use only system tools: no downloads, no network, no cached managed installs, and an unchanged child PATH."
+# The pinned pnpm must not switch itself to another version.
+env = { npm_config_manage_package_manager_versions = "false" }
+steps = [
+  { argv = ["node", "setup-system-node.cjs"], snapshot = false },
+  { argv = ["node", "setup-system-tools.cjs"], snapshot = false },
+  { argv = ["vpt", "write-file", "package.json", '{"packageManager":"pnpm@10.18.0"}'], snapshot = false },
+  { argv = ["node", "list-managed.cjs"], comment = "Managed installs before the system-only steps: the pinned runtime is cached, and the override is not." },
+
+  # The unreachable mirror and registry fail any request, and VP_NODE_VERSION would select a managed version.
+  { argv = ["node", "-p", "process.execPath.includes('system-bin')"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["VP_NODE_MANAGER", "system-only"], ["VP_NODE_VERSION", "24.0.0"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "The node shim runs system Node.js, ignoring the session override and the cached managed runtime." },
+  { argv = ["node", "-p", "process.env.PATH === process.env.EXPECTED_PATH"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["EXPECTED_PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["VP_NODE_MANAGER", "system-only"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "The system Node.js directory is not moved to the front of the child PATH." },
+  { argv = ["npm", "--version"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["EXPECTED_PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["VP_NODE_MANAGER", "system-only"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "npm follows its own (managed) mode: without an npm pin it is the npm beside system Node.js, and the child PATH is unchanged." },
+
+  # Family-specific values take precedence over VP_PM_MANAGER (ADR-2).
+  { argv = ["pnpm", "--version"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["VP_PNPM_MANAGER", "system-only"], ["VP_PM_MANAGER", "yes"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "VP_PNPM_MANAGER=system-only wins over VP_PM_MANAGER=yes and over the packageManager pin. Node.js stays managed, so only its directory is added to the child PATH." },
+  { argv = ["npm", "--version"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["VP_PNPM_MANAGER", "yes"], ["VP_PM_MANAGER", "system-only"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "VP_PM_MANAGER=system-only applies to families without their own value." },
+  { argv = ["node", "-p", "process.execPath.includes('system-bin')"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["VP_NODE_MANAGER", "System-Only"]], comment = "Only the exact lowercase value is system-only; managed config.json stays in effect." },
+  { argv = ["node", "nest-node.cjs"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["NEST_DEPTH", "8"], ["VP_NODE_MANAGER", "system-only"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "Nested calls with the same arguments and cwd still run through 8 shim entries." },
+  { argv = ["node", "nest-node.cjs"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["NEST_DEPTH", "9"], ["VP_NODE_MANAGER", "system-only"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "A 9th identical entry is treated as a forwarding loop, so the count reaches nested shims.", continue-on-failure = true },
+  { argv = ["node", "list-managed.cjs"], comment = "The system-only steps downloaded nothing." },
+
+  { argv = ["node", "check-managed-pnpm.cjs"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["VP_PNPM_MANAGER", "yes"], ["VP_PM_MANAGER", "system-only"]], comment = "VP_PNPM_MANAGER=yes wins over VP_PM_MANAGER=system-only, so the shim selects the pinned managed pnpm instead of the system one." },
+  { argv = ["node", "--version"], envs = [["PATH", "${VP_HOME}/bin"], ["VP_NODE_MANAGER", "system-only"]], comment = "Without a system Node.js on PATH, the shim fails instead of using the managed runtime.", continue-on-failure = true },
+]
+
+[[case]]
+name = "system_only_child_processes"
+vp = "global"
+comment = "System-only restrictions hold for what the selected tools run: a `#!/usr/bin/env node` shebang and a nested `npm` resolve from the child PATH, which loses the managed runtime directory whether a parent left it first on PATH or the shim would add it for managed Node.js. A nested managed npm would print its version instead of the system marker."
+# The fake npm is a shebang script, and run-shim.cjs starts shims without the `.exe` suffix.
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["node", "setup-system-node.cjs"], snapshot = false },
+  { argv = ["node", "setup-child-tools.cjs"], snapshot = false },
+
+  # The seeded runtime for the .node-version pin plays the managed runtime. It is only read:
+  # it links the shared seed, so the case cannot plant fake managed tools there.
+  # Its npm prints a version where the system npm prints a marker.
+  # run-shim.cjs starts the shim by path while the managed runtime is first on PATH.
+  # The unreachable mirror and registry fail any request.
+  { argv = ["node", "run-shim.cjs", "npm", "nested"], envs = [["PATH", "${VP_HOME}/js_runtime/node/20.18.0/bin${PATH_SEPARATOR}${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["VP_PATH_INJECTED_TOOLS", "node,npm,npx"], ["VP_NODE_MANAGER", "system-only"], ["VP_NPM_MANAGER", "system-only"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "With the managed runtime inherited first on PATH, system npm runs on system Node.js, and so does its nested npm." },
+  { argv = ["node", "run-shim.cjs", "npm", "nested"], envs = [["PATH", "${VP_HOME}/js_runtime/node/20.18.0/bin${PATH_SEPARATOR}${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["VP_PATH_INJECTED_TOOLS", "node"], ["VP_NPM_MANAGER", "system-only"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "System-only npm on an inherited managed Node.js: Node.js stays managed, and the nested npm is the system one, not the npm bundled with the runtime." },
+  { argv = ["npm", "nested"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["VP_NPM_MANAGER", "system-only"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "System-only npm on the pinned managed Node.js: the shim does not expose the runtime directory, so the nested npm is the system one." },
+  { argv = ["node", "run-shim.cjs", "npm", "nested"], envs = [["PATH", "${VP_HOME}/js_runtime/node/20.18.0/bin${PATH_SEPARATOR}${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["VP_PATH_INJECTED_TOOLS", "node,npm,npx"], ["VP_NODE_MANAGER", "system-only"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "System-only Node.js with npm in its own (managed) mode: the npm beside system Node.js runs on it, and the nested npm does not reach the npm bundled with the inherited managed runtime." },
+  { argv = ["npm", "nested"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["VP_NODE_MANAGER", "system-only"], ["VP_NPM_MANAGER", "system-only"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "Both system-only without an inherited managed runtime: system npm and its nested npm run on system Node.js." },
+  { argv = ["vpx", "node", "-p", "process.execPath.includes('system-bin')"], envs = [["PATH", "${VP_HOME}/js_runtime/node/20.18.0/bin${PATH_SEPARATOR}${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["VP_NODE_MANAGER", "system-only"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "vpx looks up system-only Node.js on PATH without the inherited managed runtime." },
+  { argv = ["vpx", "npm", "nested"], envs = [["PATH", "${VP_HOME}/js_runtime/node/20.18.0/bin${PATH_SEPARATOR}${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["VP_NPM_MANAGER", "system-only"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "vpx looks up system-only npm on PATH without the npm bundled with the inherited managed runtime." },
+  { argv = ["node", "run-shim.cjs", "node", "-p", "process.env.PATH === process.env.EXPECTED_PATH"], envs = [["PATH", "${VP_HOME}/js_runtime/node/20.18.0/bin${PATH_SEPARATOR}${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["EXPECTED_PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["VP_NODE_MANAGER", "system-only"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "System-only Node.js removes the inherited managed runtime directory from the child PATH and keeps the other entries in order." },
+  { argv = ["vpx", "npm", "--version"], envs = [["PATH", "${VP_HOME}/js_runtime/node/20.18.0/bin${PATH_SEPARATOR}${VP_HOME}/bin"], ["VP_NPM_MANAGER", "system-only"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "Without a system npm, vpx fails instead of running the inherited managed npm or downloading one through dlx.", continue-on-failure = true },
 ]

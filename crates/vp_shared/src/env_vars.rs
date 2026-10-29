@@ -109,7 +109,7 @@ pub const VP_YARN_VERSION: &str = "VP_YARN_VERSION";
 /// Override the bun and bunx shim version.
 pub const VP_BUN_VERSION: &str = "VP_BUN_VERSION";
 
-/// Node.js management preference (`yes` or `no`).
+/// Node.js management preference (`yes`, `no`, or [`SYSTEM_ONLY`]).
 pub const VP_NODE_MANAGER: &str = "VP_NODE_MANAGER";
 
 /// Package-manager management preference shared by every family.
@@ -127,6 +127,10 @@ pub const VP_YARN_MANAGER: &str = "VP_YARN_MANAGER";
 
 /// Bun management preference; takes precedence over `VP_PM_MANAGER`.
 pub const VP_BUN_MANAGER: &str = "VP_BUN_MANAGER";
+
+/// `VP_*_MANAGER` value that restricts a tool to its system installation at
+/// run time. Matched exactly (lowercase only).
+pub const SYSTEM_ONLY: &str = "system-only";
 
 /// Enable debug output for shim dispatch.
 pub const VP_DEBUG_SHIM: &str = "VP_DEBUG_SHIM";
@@ -157,6 +161,11 @@ pub const VP_BYPASS: &str = "VP_BYPASS";
 
 /// Comma-separated tools whose real binary directories have been injected into PATH.
 pub const VP_PATH_INJECTED_TOOLS: &str = "VP_PATH_INJECTED_TOOLS";
+
+/// `<count>:<fingerprint>` of consecutive identical system-only shim entries,
+/// passed to the shim's children to detect a system tool that forwards back
+/// to Vite+.
+pub const VP_SYSTEM_ONLY_REENTRY: &str = "VP_SYSTEM_ONLY_REENTRY";
 
 /// Explicit tsconfig for the `vpx <script>` loader hooks, set from `vpx --tsconfig`.
 pub const VP_SCRIPT_TSCONFIG: &str = "VP_SCRIPT_TSCONFIG";

@@ -736,7 +736,14 @@ acquire_and_handoff() (
     binary_source="$(cd "$(dirname "$LOCAL_BINARY")" && pwd -P)/$(basename "$LOCAL_BINARY")"
   fi
 
-  if supports_self_setup "$binary_source"; then
+  local system_only
+  system_only=$(system_only_variables)
+  if [ -n "$system_only" ]; then
+    # Binaries without system-only support would ignore it and download managed tools.
+    supports_system_only "$binary_source" ||
+      error "vite-plus $VP_VERSION does not support $system_only. Choose a version that supports it, or unset those variables."
+    handoff_install "$binary_source"
+  elif supports_self_setup "$binary_source"; then
     handoff_install "$binary_source"
   else
     run_legacy_installer "$binary_source"
@@ -748,6 +755,23 @@ supports_self_setup() {
   # Old binaries must exit with help rather than opening an interactive picker.
   response=$(VP_SELF_SETUP_SUPPORT_CHECK=1 "$1" --help 2>/dev/null && printf '.') || return 1
   [ "$response" = $'vite-plus-self-setup-v1\n.' ]
+}
+
+# Print the VP_*_MANAGER=system-only settings (exact, lowercase value only).
+system_only_variables() {
+  local name settings=""
+  for name in VP_NODE_MANAGER VP_PM_MANAGER VP_NPM_MANAGER VP_PNPM_MANAGER VP_YARN_MANAGER VP_BUN_MANAGER; do
+    if [ "${!name-}" = "system-only" ]; then
+      settings="${settings:+$settings, }$name=system-only"
+    fi
+  done
+  printf '%s' "$settings"
+}
+
+supports_system_only() {
+  local response
+  response=$(VP_SELF_SETUP_SUPPORT_CHECK=system-only "$1" --help 2>/dev/null && printf '.') || return 1
+  [ "$response" = $'vite-plus-self-setup-v1\nvite-plus-self-setup-system-only\n.' ]
 }
 
 run_legacy_installer() (

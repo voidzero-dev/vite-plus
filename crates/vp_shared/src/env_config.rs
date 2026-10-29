@@ -103,14 +103,18 @@ fn persisted_dir_envs() -> HashMap<&'static str, String> {
 
 /// Management preference from a `VP_*_MANAGER` variable.
 ///
-/// Only the exact values `yes` and `no` are recognized. Any other value,
-/// including a non-UTF-8 one, counts as unset.
+/// Only the exact values `yes`, `no`, and `system-only` are recognized. Any
+/// other value, including a differently cased or non-UTF-8 one, counts as unset.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ManagerPreference {
     /// `yes`: Vite+ manages the tool.
     Yes,
     /// `no`: prefer the system tool.
     No,
+    /// `system-only`: use only the system tool. Unlike the other values, this
+    /// one overrides `config.json` at run time, and Vite+ neither downloads nor
+    /// uses a managed installation of the tool.
+    SystemOnly,
 }
 
 impl ManagerPreference {
@@ -118,6 +122,7 @@ impl ManagerPreference {
         match std::env::var(name).as_deref() {
             Ok("yes") => Some(Self::Yes),
             Ok("no") => Some(Self::No),
+            Ok(env_vars::SYSTEM_ONLY) => Some(Self::SystemOnly),
             _ => None,
         }
     }
@@ -237,6 +242,51 @@ pub struct EnvConfig {
 }
 
 impl EnvConfig {
+    /// Explicit management preference for a package-manager family (`npm`,
+    /// `pnpm`, `yarn`, or `bun`), with the variable that supplied it.
+    ///
+    /// The family-specific variable takes precedence over `VP_PM_MANAGER`. An
+    /// unrecognized value counts as unset and falls through to the next
+    /// variable. An unknown family consults only `VP_PM_MANAGER`.
+    #[must_use]
+    pub fn package_manager_preference(
+        &self,
+        family: &str,
+    ) -> Option<(ManagerPreference, &'static str)> {
+        let family_specific = match family {
+            "npm" => self.npm_manager.map(|preference| (preference, env_vars::VP_NPM_MANAGER)),
+            "pnpm" => self.pnpm_manager.map(|preference| (preference, env_vars::VP_PNPM_MANAGER)),
+            "yarn" => self.yarn_manager.map(|preference| (preference, env_vars::VP_YARN_MANAGER)),
+            "bun" => self.bun_manager.map(|preference| (preference, env_vars::VP_BUN_MANAGER)),
+            _ => None,
+        };
+        family_specific
+            .or_else(|| self.pm_manager.map(|preference| (preference, env_vars::VP_PM_MANAGER)))
+    }
+
+    /// Whether `VP_NODE_MANAGER=system-only` restricts Node.js to the system.
+    #[must_use]
+    pub fn node_system_only(&self) -> bool {
+        self.node_manager == Some(ManagerPreference::SystemOnly)
+    }
+
+    /// The `VP_*_MANAGER` variables currently set to `system-only`.
+    #[must_use]
+    pub fn system_only_variables(&self) -> Vec<&'static str> {
+        [
+            (env_vars::VP_NODE_MANAGER, self.node_manager),
+            (env_vars::VP_PM_MANAGER, self.pm_manager),
+            (env_vars::VP_NPM_MANAGER, self.npm_manager),
+            (env_vars::VP_PNPM_MANAGER, self.pnpm_manager),
+            (env_vars::VP_YARN_MANAGER, self.yarn_manager),
+            (env_vars::VP_BUN_MANAGER, self.bun_manager),
+        ]
+        .into_iter()
+        .filter(|(_, preference)| *preference == Some(ManagerPreference::SystemOnly))
+        .map(|(name, _)| name)
+        .collect()
+    }
+
     /// Read configuration from the real process environment.
     ///
     /// Non-test builds call this function on the first [`EnvConfig::get`] and
@@ -464,6 +514,114 @@ impl EnvConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const MANAGER_VARS: [&str; 6] = [
+        env_vars::VP_NODE_MANAGER,
+        env_vars::VP_PM_MANAGER,
+        env_vars::VP_NPM_MANAGER,
+        env_vars::VP_PNPM_MANAGER,
+        env_vars::VP_YARN_MANAGER,
+        env_vars::VP_BUN_MANAGER,
+    ];
+
+    /// Unset every `VP_*_MANAGER` variable, then apply `vars`.
+    fn with_manager_vars<R>(
+        vars: &[(&'static str, &str)],
+        f: impl FnOnce(Arc<EnvConfig>) -> R,
+    ) -> R {
+        let pins = MANAGER_VARS
+            .into_iter()
+            .map(|name| (name, vars.iter().find(|(var, _)| *var == name).map(|(_, value)| *value)));
+        EnvConfig::with_vars(pins, f)
+    }
+
+    #[test]
+    fn system_only_requires_exact_lowercase_value() {
+        for (value, expected) in [
+            ("system-only", Some(ManagerPreference::SystemOnly)),
+            ("System-Only", None),
+            ("SYSTEM-ONLY", None),
+            ("system_only", None),
+            ("yes", Some(ManagerPreference::Yes)),
+            ("no", Some(ManagerPreference::No)),
+        ] {
+            with_manager_vars(&[(env_vars::VP_NODE_MANAGER, value)], |config| {
+                assert_eq!(config.node_manager, expected, "{value}");
+                assert_eq!(
+                    config.node_system_only(),
+                    expected == Some(ManagerPreference::SystemOnly)
+                );
+            });
+        }
+    }
+
+    #[test]
+    fn family_preference_takes_precedence_over_shared_preference() {
+        with_manager_vars(
+            &[(env_vars::VP_PNPM_MANAGER, "system-only"), (env_vars::VP_PM_MANAGER, "yes")],
+            |config| {
+                assert_eq!(
+                    config.package_manager_preference("pnpm"),
+                    Some((ManagerPreference::SystemOnly, env_vars::VP_PNPM_MANAGER))
+                );
+                assert_eq!(
+                    config.package_manager_preference("npm"),
+                    Some((ManagerPreference::Yes, env_vars::VP_PM_MANAGER))
+                );
+            },
+        );
+        with_manager_vars(
+            &[(env_vars::VP_PNPM_MANAGER, "yes"), (env_vars::VP_PM_MANAGER, "system-only")],
+            |config| {
+                assert_eq!(
+                    config.package_manager_preference("pnpm"),
+                    Some((ManagerPreference::Yes, env_vars::VP_PNPM_MANAGER))
+                );
+                for family in ["npm", "yarn", "bun", "unknown"] {
+                    assert_eq!(
+                        config.package_manager_preference(family),
+                        Some((ManagerPreference::SystemOnly, env_vars::VP_PM_MANAGER)),
+                        "{family}"
+                    );
+                }
+            },
+        );
+    }
+
+    #[test]
+    fn unrecognized_family_preference_falls_through() {
+        with_manager_vars(
+            &[(env_vars::VP_YARN_MANAGER, "System-Only"), (env_vars::VP_PM_MANAGER, "system-only")],
+            |config| {
+                assert_eq!(
+                    config.package_manager_preference("yarn"),
+                    Some((ManagerPreference::SystemOnly, env_vars::VP_PM_MANAGER))
+                );
+            },
+        );
+        with_manager_vars(&[], |config| {
+            assert_eq!(config.package_manager_preference("npm"), None);
+            assert!(config.system_only_variables().is_empty());
+        });
+    }
+
+    #[test]
+    fn system_only_variables_lists_each_system_only_variable() {
+        with_manager_vars(
+            &[
+                (env_vars::VP_NODE_MANAGER, "system-only"),
+                (env_vars::VP_PM_MANAGER, "no"),
+                (env_vars::VP_BUN_MANAGER, "system-only"),
+                (env_vars::VP_YARN_MANAGER, "System-Only"),
+            ],
+            |config| {
+                assert_eq!(
+                    config.system_only_variables(),
+                    [env_vars::VP_NODE_MANAGER, env_vars::VP_BUN_MANAGER]
+                );
+            },
+        );
+    }
 
     #[test]
     fn installation_lockfile_bypass_requires_explicit_opt_in() {

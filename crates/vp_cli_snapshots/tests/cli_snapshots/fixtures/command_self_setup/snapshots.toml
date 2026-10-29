@@ -14,6 +14,17 @@ steps = [
 ]
 
 [[case]]
+name = "command_self_setup_system_only_probe"
+vp = "global"
+env = { VP_SKIP_DEPS_INSTALL = "1" }
+steps = [
+  { argv = ["vpt", "rm", "$VP_HOME/current/bin/.vp-setup-complete"], snapshot = false },
+  { argv = ["vp", "--help"], envs = [["VP_SELF_SETUP_SUPPORT_CHECK", "system-only"]], comment = "The system-only check value adds a second line after the unchanged v1 response" },
+  { argv = ["vp", "--help"], envs = [["VP_SELF_SETUP_SUPPORT_CHECK", "System-Only"]], comment = "Only the exact lowercase value asks for system-only support" },
+  ["vpt", "stat-file", "$VP_HOME/current/bin/.vp-setup-complete", "--assert", "missing"],
+]
+
+[[case]]
 name = "command_self_setup_handoff"
 vp = "global"
 requires = ["bash"]

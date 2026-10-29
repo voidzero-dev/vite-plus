@@ -40,6 +40,27 @@ try {
     # setup-vp evaluates downloaded text in a script block, with no sibling legacy file.
     # A child process also keeps installer exit calls from bypassing server cleanup.
     $powershell = (Get-Process -Id $PID).Path
+
+    # A legacy release cannot honor system-only, so the installer must stop before legacy setup.
+    # Restore the workflow's value afterwards; the install below reproduces setup-vp with it.
+    $previousNodeManager = $env:VP_NODE_MANAGER
+    $env:VP_NODE_MANAGER = 'system-only'
+    try {
+        # Windows PowerShell 5.1 turns redirected child stderr into errors, which 'Stop' would throw.
+        $ErrorActionPreference = 'Continue'
+        $output = & $powershell -NoProfile -Command '& ([scriptblock]::Create((irm -TimeoutSec 15 $env:VP_TEST_INSTALLER_URL)))' 2>&1 | Out-String
+        $exitCode = $LASTEXITCODE
+        $ErrorActionPreference = 'Stop'
+        if ($exitCode -eq 0) { throw 'The installer accepted system-only for a legacy release' }
+        if (-not $output.Contains('does not support VP_NODE_MANAGER=system-only')) { throw "Unexpected system-only failure: $output" }
+    } finally {
+        $ErrorActionPreference = 'Stop'
+        $env:VP_NODE_MANAGER = $previousNodeManager
+    }
+    if (Test-Path -LiteralPath (Join-Path $env:VP_HOME 'bin/vp.exe')) { throw 'The system-only attempt installed vp' }
+    $requests = @(Select-String -LiteralPath $stderr -Pattern 'GET /install-legacy.bin ' -SimpleMatch)
+    if ($requests.Count -ne 1) { throw 'The system-only attempt fetched the legacy script' }
+
     & $powershell -NoProfile -Command '& ([scriptblock]::Create((irm -TimeoutSec 15 $env:VP_TEST_INSTALLER_URL)))'
     if ($LASTEXITCODE -ne 0) { throw "Remote install failed with exit code $LASTEXITCODE" }
 

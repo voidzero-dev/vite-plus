@@ -21,6 +21,7 @@ pub mod integrity;
 pub mod lockfile;
 pub mod platform;
 pub mod registry;
+pub mod support;
 
 /// Maximum number of old versions to keep.
 pub const MAX_VERSIONS_KEEP: usize = 3;

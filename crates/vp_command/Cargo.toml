@@ -24,6 +24,7 @@ nix = { workspace = true, features = ["signal", "term"] }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+vp_shared = { workspace = true, features = ["test-utils"] }
 tokio = { workspace = true, features = ["macros", "test-util"] }
 
 [lints]
