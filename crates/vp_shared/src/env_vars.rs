@@ -246,7 +246,7 @@ pub const VP_INSECURE_TLS: &str = "VP_INSECURE_TLS";
 /// do not implement directory resolution again.
 pub const VP_DUMP_DIRS: &str = "VP_DUMP_DIRS";
 
-/// Bootstrap capability probe; presence requests only the self-setup contract.
+/// Bootstrap capability probe; upgrade preparation uses a versioned request value.
 pub const VP_SELF_SETUP_SUPPORT_CHECK: &str = "VP_SELF_SETUP_SUPPORT_CHECK";
 
 /// Skip persistent shell/PATH changes during first-start installation.

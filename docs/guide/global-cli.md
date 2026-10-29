@@ -113,7 +113,7 @@ These variables control the installer scripts and the standalone Windows install
 - **Values**: An exact version, a version range, or an alias such as `22.23.1`, `22`, `^22.18.0`, `lts`, or `latest`. The installer resolves the value once to an exact version.
 - **Default**: Unset or empty (use the embedded Node.js default). Project files, `VP_NODE_VERSION`, session overrides, and the user-level default do not change this default.
 - **Compatibility**: The resolved version must meet the Node.js requirements of both the global CLI and its pinned `pnpm`. Otherwise, the installer uses the embedded default. An invalid or unresolvable value causes an error.
-- **Scope**: Initial dependency installation only. This variable does not set a project pin, session override, or global default. `vp upgrade` also uses the embedded Node.js default. Legacy installers use the runtime policy of the selected older CLI version.
+- **Scope**: Initial dependency installation only. This variable does not set a project pin, session override, or global default. [`vp upgrade`](/guide/upgrade#global-vp) uses the target binary's embedded Node.js default when both versions support the dependency-installation handoff. Older upgrade clients and legacy installers keep their existing runtime policy.
 
 #### `VP_SETUP_NODE_VERSION_FILE`
 

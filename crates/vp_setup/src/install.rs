@@ -344,7 +344,9 @@ async fn run_pnpm_install(
         .args(args)
         .current_dir(version_dir)
         .env("CI", "true")
-        .env("PATH", path);
+        .env("PATH", path)
+        // Lifecycle commands must not inherit the upgrade helper's entry point.
+        .env_remove(crate::upgrade::PREPARE_ENV);
 
     if args.contains(&"--frozen-lockfile") {
         // --config leaves numbers as strings. Environment values get pnpm's numeric parsing.

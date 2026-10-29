@@ -23,6 +23,7 @@ mod js_executor;
 mod self_setup;
 mod shim;
 mod upgrade_check;
+mod upgrade_prepare;
 
 use std::{
     env,
@@ -314,8 +315,8 @@ fn dump_dirs_from_env_config() -> bool {
 #[tokio::main]
 async fn main() -> ExitCode {
     // Probe before tracing, directory resolution, or argument dispatch can emit output.
-    if env::var_os(vp_shared::env_vars::VP_SELF_SETUP_SUPPORT_CHECK).is_some() {
-        vp_shared::output::print_stdout_line(format_args!("vite-plus-self-setup-v1"));
+    if let Some(request) = env::var_os(vp_shared::env_vars::VP_SELF_SETUP_SUPPORT_CHECK) {
+        output::print_stdout(format_args!("{}", vp_setup::upgrade::capability_response(&request)));
         return ExitCode::SUCCESS;
     }
 
@@ -329,6 +330,15 @@ async fn main() -> ExitCode {
 
     // Initialize tracing
     vp_shared::init_tracing();
+
+    match upgrade_prepare::maybe_run().await {
+        Ok(Some(code)) => return code,
+        Ok(None) => {}
+        Err(error) => {
+            output::error(&error.to_string());
+            return ExitCode::FAILURE;
+        }
+    }
 
     // Internal directory queries are also used by the local installer before deployment.
     if dump_dirs_from_env_config() {
