@@ -30,8 +30,10 @@ export function publishedFormulaVersion(source) {
   const version = urls[0][2];
   stableVersion(version);
   assert.deepEqual(
-    urls.map(([, , value, name]) => [value, name]).sort(),
-    targets.map(([, , target]) => [version, `vp-${target}.tar.gz`]).sort(),
+    urls.map(([, , value, name]) => [value, name]).toSorted((a, b) => a[1].localeCompare(b[1])),
+    targets
+      .map(([, , target]) => [version, `vp-${target}.tar.gz`])
+      .toSorted((a, b) => a[1].localeCompare(b[1])),
     'Formula release URLs must name the same version and all four targets',
   );
   return version;
