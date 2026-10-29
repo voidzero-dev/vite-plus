@@ -27,9 +27,14 @@ defaults:
   run:
     shell: bash
 
+env:
+  # Change the repository Actions variable to switch managed Node.js downloads.
+  VP_NODE_DIST_MIRROR: ${{ vars.VP_NODE_DIST_MIRROR || 'https://nodejs.org/dist' }}
+
 jobs:
   detect-changes:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
       pull-requests: read
@@ -62,6 +67,7 @@ jobs:
     # job waits for this check and propagates failures.
     if: needs.detect-changes.outputs.code-changed == 'false'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
       packages: read
@@ -97,6 +103,7 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.code-changed == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
       packages: read
@@ -118,6 +125,7 @@ jobs:
           - os: namespace-profile-mac-default
             target: aarch64-apple-darwin
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
@@ -145,6 +153,7 @@ jobs:
     if: needs.detect-changes.outputs.code-changed == 'true'
     name: Build Windows tests
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       XWIN_ACCEPT_LICENSE: '1'
       # The MSVC STL from xwin's VS17 manifest static-asserts a minimum Clang
@@ -231,6 +240,7 @@ jobs:
     needs: build-windows-tests
     name: Test (Windows)
     runs-on: namespace-profile-windows-4c-8g
+    timeout-minutes: 20
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
@@ -270,9 +280,12 @@ jobs:
     if: needs.detect-changes.outputs.code-changed == 'true'
     name: Test (Linux x64 musl)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     container:
       image: node:26.12.1-alpine
     env:
+      # Mirrors of official Node.js releases do not provide musl archives.
+      VP_NODE_DIST_MIRROR: https://unofficial-builds.nodejs.org/download/release
       # GitHub Actions sets HOME=/github/home in containers, but the euid home is /root.
       # Pin Rust tooling paths to avoid $HOME mismatch issues.
       CARGO_HOME: /root/.cargo
@@ -326,6 +339,7 @@ jobs:
     if: needs.detect-changes.outputs.code-changed == 'true'
     name: Lint
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
@@ -378,6 +392,7 @@ jobs:
     if: needs.detect-changes.outputs.code-changed == 'true'
     name: Build Windows CLI binaries
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
@@ -406,6 +421,7 @@ jobs:
             target: x86_64-pc-windows-msvc
             test-node: 26.0.0
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
@@ -952,6 +968,7 @@ jobs:
           - os: namespace-profile-mac-default
             target: aarch64-apple-darwin
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
@@ -1040,6 +1057,7 @@ jobs:
           - os: namespace-profile-mac-default
             target: aarch64-apple-darwin
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
@@ -1096,12 +1114,12 @@ jobs:
       - name: Install Global CLI vp
         run: pnpm bootstrap-cli:ci
 
-      # Seed both the repository pin and the default LTS before command timers
-      # start. Fixtures without a version pin use LTS, not the repository pin.
+      # Seed the repository pin, default LTS, and shared fixture versions before
+      # command timers start. Keep the version list shared across platforms.
       - name: Prewarm managed runtimes
-        run: |
-          "$HOME/.vite-plus/bin/vp" node --version
-          VP_NODE_VERSION=lts "$HOME/.vite-plus/bin/vp" node --version
+        run: bash .github/scripts/prewarm-node.sh "$HOME/.vite-plus/bin/vp"
+        env:
+          VP_LOG: vp_js_runtime=info
 
       - wait: [snapshot-shells, playwright]
 
@@ -1155,6 +1173,7 @@ jobs:
     # ConPTY spawn blocked and every case timed out at 60s. #2126 (vite-task
     # bump) resolved that; revert to windows-latest if it recurs.
     runs-on: namespace-profile-windows-4c-8g
+    timeout-minutes: 20
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
@@ -1217,13 +1236,13 @@ jobs:
         shell: bash
         run: pnpm bootstrap-cli:ci
 
-      # Seed both the repository pin and the default LTS before command timers
-      # start. Fixtures without a version pin use LTS, not the repository pin.
+      # Seed the repository pin, default LTS, and shared fixture versions before
+      # command timers start. Keep the version list shared across platforms.
       - name: Prewarm managed runtimes
         shell: bash
-        run: |
-          "$USERPROFILE/.vite-plus/bin/vp.exe" node --version
-          VP_NODE_VERSION=lts "$USERPROFILE/.vite-plus/bin/vp.exe" node --version
+        run: bash .github/scripts/prewarm-node.sh "$USERPROFILE/.vite-plus/bin/vp.exe"
+        env:
+          VP_LOG: vp_js_runtime=info
 
       # Keep fixtures outside runner.temp: setup-node writes an .npmrc there,
       # which Yarn Classic discovers when walking parent directories.
@@ -1330,6 +1349,7 @@ jobs:
     needs:
       - download-previous-rolldown-binaries
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
@@ -1357,10 +1377,14 @@ jobs:
       # Run bootstrap-cli:ci and E2E tests inside an Alpine container where musl is native.
       # Can't run on the glibc host because NAPI .node files are musl-linked.
       - name: Run E2E in Alpine container
+        env:
+          # Mirrors of official Node.js releases do not provide musl archives.
+          VP_NODE_DIST_MIRROR: https://unofficial-builds.nodejs.org/download/release
         run: |
           docker run --rm \
             -e CI=true \
             -e GITHUB_ACTIONS=true \
+            -e VP_NODE_DIST_MIRROR \
             -v "${{ github.workspace }}:/workspace" \
             -w /workspace \
             node:22.23.4-alpine sh -ec "
@@ -1449,6 +1473,7 @@ jobs:
       - name: Run vp in node:24-bookworm-slim without a CA store
         run: |
           docker run --rm \
+            -e VP_NODE_DIST_MIRROR \
             -v "${{ github.workspace }}/target/debug/vp:/usr/local/bin/vp:ro" \
             node:24-bookworm-slim bash -c '
               set -ex
@@ -1458,7 +1483,7 @@ jobs:
               # Exercise commands on the mounted build without installing a published package.
               touch /usr/local/bin/.vp-setup-complete
               vp --version
-              # HTTPS to nodejs.org through the shared client; exits nonzero
+              # HTTPS to the Node.js mirror through the shared client; exits nonzero
               # without the bundled-roots fallback.
               vp env list-remote --lts --json > /tmp/vp-versions.json
               node -e "const versions = require(\"/tmp/vp-versions.json\"); if (!versions.node?.length) process.exit(1)"
@@ -1469,6 +1494,7 @@ jobs:
     needs:
       - build-cli-test-binaries
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     # Run if: not a PR, OR PR has 'test: install-e2e' label
     if: >-
       github.event_name != 'pull_request' ||
@@ -1584,6 +1610,7 @@ jobs:
           #   vp_bin: vp.exe
           #   vp_insecure_tls: ''
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
@@ -1671,6 +1698,7 @@ jobs:
 
   done:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     if: always()
     needs:
       - docs-fmt

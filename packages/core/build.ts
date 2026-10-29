@@ -19,6 +19,7 @@ import { glob } from 'tinyglobby';
 import { generateLicenseFile } from '../../scripts/generate-license.js';
 import viteRolldownConfig from '../../vite/packages/vite/rolldown.config.js';
 import cliPkgJson from '../cli/package.json' with { type: 'json' };
+import { assertViteConfigPatched } from '../tools/src/patch-vite-config.ts';
 import { buildCjsDeps } from './build-support/build-cjs-deps.js';
 import { replaceThirdPartyCjsRequires } from './build-support/find-create-require.js';
 import { RewriteImportsPlugin } from './build-support/rewrite-imports.js';
@@ -52,6 +53,17 @@ const rolldownViteSourceDir = resolve(projectDir, '..', '..', 'vite', 'packages'
 const tsdownSourceDir = resolve(projectDir, 'node_modules/tsdown');
 
 // Main build orchestration
+try {
+  assertViteConfigPatched(
+    await readFile(join(rolldownViteSourceDir, 'src/node/config.ts'), 'utf-8'),
+  );
+} catch (cause) {
+  throw new Error(
+    'Prepare the Vite source before building core. From the repository root, run ' +
+      '`pnpm exec tool brand-vite` and `pnpm --filter vite build-types`.',
+    { cause },
+  );
+}
 await bundleRolldownPluginutils();
 await bundleRolldown();
 await buildVite();

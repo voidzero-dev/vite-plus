@@ -219,7 +219,7 @@ name = "node_preflight"
 vp = "global"
 comment = "Upgrade the unsupported runtime pin before installation, then keep it on rerun."
 steps = [
-  { argv = ["vpt", "write-file", ".node-version", "20.19.0\n"], snapshot = false },
+  { argv = ["vpt", "write-file", ".node-version", "20.20.2\n"], snapshot = false },
   ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
   ["vpt", "print-file", ".node-version"],
   ["vpt", "print-file", "package.json"],
@@ -233,7 +233,7 @@ name = "volta_runtime_upgrade"
 vp = "global"
 comment = "Upgrade the Volta pin before converting it to .node-version, including the cached setup decision."
 steps = [
-  { argv = ["vpt", "json-edit", "package.json", "volta.node", "20.19.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "volta.node", "20.20.2"], snapshot = false },
   ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
   ["vpt", "print-file", ".node-version", "package.json"],
   ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],

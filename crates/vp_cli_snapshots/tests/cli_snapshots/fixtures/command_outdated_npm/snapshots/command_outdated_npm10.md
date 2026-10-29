@@ -100,15 +100,13 @@ testnpm2    1.0.0   1.0.0   1.0.1  node_modules/testnpm2  workspace    dependenc
 
 ## `vp outdated -r`
 
-should support recursive output
+should report that no workspaces are configured
 
 **Exit code:** 1
 
 ```
-Package                        Current  Wanted  Latest  Location                                    Depended by
-test-vite-plus-other-optional    1.0.0   1.0.0   1.1.0  node_modules/test-vite-plus-other-optional  workspace
-test-vite-plus-top-package       1.0.0   1.0.0   1.1.0  node_modules/test-vite-plus-top-package     workspace
-testnpm2                         1.0.0   1.0.0   1.0.1  node_modules/testnpm2                       workspace
+npm error No workspaces found!
+npm error A complete log of this run can be found in: <home>/.npm/_logs/<timestamp>-debug-0.log
 ```
 
 ## `vp outdated -P`

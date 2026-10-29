@@ -36,6 +36,7 @@ defaults:
     shell: bash
 
 env:
+  VP_NODE_DIST_MIRROR: ${{ vars.VP_NODE_DIST_MIRROR || 'https://nodejs.org/dist' }}
   # New Node.js releases can appear before both musl archives are available.
   MUSL_NODE_VERSION: '24.22.1'
 
@@ -96,7 +97,10 @@ jobs:
           vp --help
           # test create command
           vp create vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
-          cd hello && vp run build && vp --version
+          test -f hello/package.json
+          cd hello
+          vp run build
+          vp --version
 
       - name: Set PATH
         shell: bash
@@ -773,6 +777,7 @@ jobs:
       - name: Run install.sh in ARM64 container
         run: |
           docker run --rm --platform linux/arm64 \
+            -e VP_NODE_DIST_MIRROR \
             -v "${{ github.workspace }}:/workspace" \
             ubuntu:20.04 bash -c "
               ls -al ~/
@@ -824,6 +829,9 @@ jobs:
   test-install-sh-musl-x64:
     name: Test install.sh (Linux x64 musl)
     runs-on: ubuntu-latest
+    env:
+      # Mirrors of official Node.js releases do not provide musl archives.
+      VP_NODE_DIST_MIRROR: https://unofficial-builds.nodejs.org/download/release
     permissions:
       contents: read
     steps:
@@ -835,13 +843,14 @@ jobs:
             -v "${{ github.workspace }}:/workspace" \
             -e CI=true \
             -e VP_NODE_VERSION=${{ env.MUSL_NODE_VERSION }} \
-            alpine:3.21 sh -c "
+            -e VP_NODE_DIST_MIRROR \
+            alpine:3.21 sh -ec "
               # libstdc++: required by unofficial-builds Node.js musl binary
               apk add --no-cache bash curl ca-certificates libstdc++
               export VP_HOME=\"\$HOME/.vite-plus\"
               sh /workspace/.github/scripts/pin-install-node.sh
               cat /workspace/packages/cli/install.sh | VP_LEGACY_INSTALLER_URL=file:///workspace/packages/cli/install-legacy.sh bash
-              export PATH=\"\$HOME/.vite-plus/bin:\$PATH\"
+              . \"\$HOME/.vite-plus/env\"
 
               vp --version
               vp --help
@@ -865,7 +874,10 @@ jobs:
 
               # Test create command
               vp create vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
-              cd hello && vp run build && vp --version
+              test -f hello/package.json
+              cd hello
+              vp run build
+              vp --version
               cd ..
 
               # Verify upgrade
@@ -879,6 +891,9 @@ jobs:
   test-install-sh-musl-arm64:
     name: Test install.sh (Linux ARM64 musl via QEMU)
     runs-on: ubuntu-latest
+    env:
+      # Mirrors of official Node.js releases do not provide musl archives.
+      VP_NODE_DIST_MIRROR: https://unofficial-builds.nodejs.org/download/release
     permissions:
       contents: read
     steps:
@@ -896,6 +911,7 @@ jobs:
             -v "${{ github.workspace }}:/workspace" \
             -e CI=true \
             -e VP_NODE_VERSION=${{ env.MUSL_NODE_VERSION }} \
+            -e VP_NODE_DIST_MIRROR \
             alpine:3.21 sh -c "
               # libstdc++ is needed by unofficial-builds Node.js musl binary
               apk add --no-cache bash curl ca-certificates libstdc++
@@ -998,8 +1014,11 @@ jobs:
           vp --version
           vp --help
           vp create vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path hello/package.json)) { throw 'create-vite did not generate package.json' }
           cd hello
           vp run build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           vp --version
 
       - name: Verify bin setup
@@ -1069,8 +1088,11 @@ jobs:
           vp --version
           vp --help
           vp create vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path hello/package.json)) { throw 'create-vite did not generate package.json' }
           cd hello
           vp run build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           vp --version
 
       - name: Verify bin setup
@@ -1171,8 +1193,11 @@ jobs:
           vp --version
           vp --help
           vp create vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path hello/package.json)) { throw 'create-vite did not generate package.json' }
           cd hello
           vp run build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           vp --version
 
       - name: Verify bin setup
@@ -1364,7 +1389,12 @@ jobs:
           # $env:VP_LOG = "trace"
           # test create command
           vp create vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
-          cd hello && vp run build && vp --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path hello/package.json)) { throw 'create-vite did not generate package.json' }
+          cd hello
+          vp run build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          vp --version
 
       - name: Verify bin setup on powershell
         shell: pwsh
@@ -1407,6 +1437,8 @@ jobs:
 
           REM test create command
           vp create vite --no-interactive --no-agent -- hello-cmd --no-interactive -t vanilla
+          if errorlevel 1 exit /b %errorlevel%
+          if not exist hello-cmd\package.json exit /b 1
           cd hello-cmd && vp run build && vp --version
 
       - name: Verify bin setup on cmd
@@ -1446,7 +1478,10 @@ jobs:
           vp --help
           # test create command
           vp create vite --no-interactive --no-agent -- hello-bash --no-interactive -t vanilla
-          cd hello-bash && vp run build && vp --version
+          test -f hello-bash/package.json
+          cd hello-bash
+          vp run build
+          vp --version
 
       - name: Verify bin setup on bash
         shell: bash

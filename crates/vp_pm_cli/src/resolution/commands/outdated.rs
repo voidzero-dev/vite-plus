@@ -60,7 +60,7 @@ pub struct OutdatedArgs {
     pub(crate) format: Option<OutdatedFormat>,
 
     /// Check recursively across all workspaces
-    #[arg(short = 'r', long, not_supported(npm < "7", yarn))]
+    #[arg(short = 'r', long, not_supported(npm < "7.14.0", yarn))]
     pub(crate) recursive: bool,
 
     /// Filter packages in monorepo
@@ -145,7 +145,7 @@ impl Npm {
         cmd.arg_if("--long", args.long)
             .repeated("--workspace", args.filter.iter())
             .arg_if("--include-workspace-root", args.workspace_root)
-            .arg_if("--all", args.recursive)
+            .arg_if("--workspaces", args.recursive && !args.workspace_root)
             .extend(args.packages.iter());
         cmd.arg_if("--omit=dev", args.prod)
             .arg_if(
@@ -253,18 +253,18 @@ mod tests {
         expect_unsupported(
             resolve(&npm("6.14.18"), args),
             &[
-                "npm < 7 does not support --recursive.",
+                "npm < 7.14.0 does not support --recursive.",
                 "npm < 7 does not support --prod.",
                 "npm < 7 does not support --no-optional.",
             ],
         );
-        for dialect in [npm("7.0.0"), Npm::unknown_version()] {
+        for dialect in [npm("7.14.0"), Npm::unknown_version()] {
             let args = parse_args::<OutdatedArgs>(["-r", "-P", "--no-optional"]).unwrap();
             let resolution = resolve(&dialect, args);
             assert!(resolution.diagnostics.is_empty());
             assert_eq!(
                 expect_run(resolution.outcome).args,
-                ["outdated", "--all", "--omit=dev", "--omit=optional"]
+                ["outdated", "--workspaces", "--omit=dev", "--omit=optional"]
             );
         }
     }
@@ -402,12 +402,37 @@ mod tests {
 
     #[test]
     fn test_npm_outdated_recursive() {
-        let command = expect_run(
-            resolve(&npm("11.0.0"), OutdatedArgs { recursive: true, ..Default::default() }).outcome,
-        );
+        for version in ["7.14.0", "10.8.0", "11.0.0"] {
+            let args = parse_args::<OutdatedArgs>(["-r"]).unwrap();
+            let command = expect_run(resolve(&npm(version), args).outcome);
 
-        assert_eq!(command.program, "npm");
-        assert_eq!(command.args, vec!["outdated", "--all"]);
+            assert_eq!(command.program, "npm");
+            assert_eq!(command.args, vec!["outdated", "--workspaces"]);
+        }
+    }
+
+    #[test]
+    fn npm_outdated_recursive_rejects_unsupported_versions() {
+        for version in ["6.14.18", "7.13.0"] {
+            let args = parse_args::<OutdatedArgs>(["-r"]).unwrap();
+            expect_unsupported(
+                resolve(&npm(version), args),
+                &["npm < 7.14.0 does not support --recursive."],
+            );
+        }
+    }
+
+    #[test]
+    fn npm_outdated_recursive_preserves_workspace_options() {
+        for (flags, expected) in [
+            (vec!["-r", "-w"], vec!["outdated", "--include-workspace-root"]),
+            (vec!["-r", "--filter", "app"], vec!["outdated", "--workspace", "app", "--workspaces"]),
+        ] {
+            let args = parse_args::<OutdatedArgs>(flags).unwrap();
+            let command = expect_run(resolve(&npm("11.0.0"), args).outcome);
+
+            assert_eq!(command.args, expected);
+        }
     }
 
     #[test]

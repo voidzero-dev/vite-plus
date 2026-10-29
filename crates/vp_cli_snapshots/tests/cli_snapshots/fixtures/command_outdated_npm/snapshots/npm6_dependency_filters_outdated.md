@@ -25,7 +25,7 @@ reject options without equivalent npm 6 options because npm 6 --production still
 **Exit code:** 1
 
 ```
-npm < 7 does not support --recursive.
+npm < 7.14.0 does not support --recursive.
 npm < 7 does not support --prod.
 npm < 7 does not support --no-optional.
 ```

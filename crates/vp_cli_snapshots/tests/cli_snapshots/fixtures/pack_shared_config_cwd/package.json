@@ -1,0 +1,6 @@
+{
+  "name": "pack-shared-config-cwd",
+  "private": true,
+  "type": "module",
+  "workspaces": ["packages/*"]
+}

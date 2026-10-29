@@ -6,7 +6,7 @@ env = { VP_SELF_SETUP_NO_MODIFY_PATH = "1", NPM_CONFIG_REGISTRY = "http://127.0.
 steps = [
   { argv = ["vpt", "mkdir", "-p", "external/bin", "system/bin", "home"], snapshot = false },
   { argv = ["vpt", "cp", "$VP_HOME/bin/vp", "external/bin/vp"], snapshot = false },
-  { argv = ["vpt", "cp", "$VP_HOME/js_runtime/node/22.18.0/bin/node", "system/bin/node"], snapshot = false },
+  { argv = ["vpt", "cp", "$VP_HOME/js_runtime/node/22.23.4/bin/node", "system/bin/node"], snapshot = false },
   { argv = ["vpt", "chmod", "+x", "system/bin/node"], snapshot = false },
   { argv = ["vpt", "write-file", "external/node_modules/vite-plus/package.json", '{"name":"vite-plus","version":"0.3.2"}'], snapshot = false },
   { argv = ["vpt", "write-file", "external/node_modules/vite-plus/dist/bin.js", "console.log('external bundled CLI: ' + process.argv.slice(2).join(' '));"], snapshot = false },

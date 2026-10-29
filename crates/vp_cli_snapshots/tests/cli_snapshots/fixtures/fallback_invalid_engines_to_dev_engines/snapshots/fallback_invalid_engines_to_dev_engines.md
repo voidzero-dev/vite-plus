@@ -2,7 +2,7 @@
 
 ## `vp exec node -e console.log(process.version)`
 
-Should use devEngines.runtime 22.18.0, not LTS
+Should use devEngines.runtime 22.23.4, not LTS
 
 ```
 VITE+ - The Unified Toolchain for the Web
@@ -19,6 +19,6 @@ Should show devEngines.runtime source
 VITE+ - The Unified Toolchain for the Web
 
 <home>/.vite-plus/js_runtime/node/<version>/bin/node
-  Version:    22.18.0
+  Version:    22.23.4
   Source:     <workspace>/package.json
 ```

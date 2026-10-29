@@ -2,6 +2,6 @@
   "name": "command_vpx_script_node24-cjs",
   "private": true,
   "engines": {
-    "node": "24.12.0"
+    "node": "24.22.1"
   }
 }

@@ -28,13 +28,13 @@ Examples:
 Documentation: https://viteplus.dev/guide/env
 ```
 
-## `vp env use 20.18.0 --no-install`
+## `vp env use 20.20.2 --no-install`
 
 should output export command to stdout
 
 ```
-export VP_NODE_VERSION=20.18.0
-Using Node.js <version> (resolved from 20.18.0)
+export VP_NODE_VERSION=20.20.2
+Using Node.js <version> (resolved from 20.20.2)
 ```
 
 ## `vp env use --unset`
@@ -82,7 +82,7 @@ Valid examples:
   vp env use latest      # Latest version
 ```
 
-## `VP_NODE_VERSION=20.18.0 VP_NPM_VERSION=10.9.4 vp env use --silent-if-unchanged --no-install`
+## `VP_NODE_VERSION=20.20.2 VP_NPM_VERSION=10.9.4 vp env use --silent-if-unchanged --no-install`
 
 an unchanged project environment emits no shell mutations
 

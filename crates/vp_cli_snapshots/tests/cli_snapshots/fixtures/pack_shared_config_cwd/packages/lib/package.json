@@ -1,0 +1,5 @@
+{
+  "name": "shared-config-library",
+  "private": true,
+  "type": "module"
+}

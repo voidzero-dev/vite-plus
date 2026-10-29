@@ -1,6 +1,6 @@
 # yarn_3_lockfile_only
 
-## `vpt write-file .node-version '22.18.0
+## `vpt write-file .node-version '22.23.4
 '`
 
 
