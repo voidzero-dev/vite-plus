@@ -3,8 +3,6 @@
 //! Downloads and installs a new version of the CLI from the npm registry
 //! with SHA-512 integrity verification.
 
-mod preparation;
-
 use std::process::ExitStatus;
 
 use console::style;
@@ -229,12 +227,11 @@ async fn install_platform_and_main(
         ));
     }
 
-    // Let the target release choose its Node.js, pnpm, and installation policy.
-    // Releases without this protocol retain the legacy installation path.
-    if !preparation::prepare(&binary_path, silent, registry).await? {
-        install::generate_wrapper_package_json(version_dir, new_version).await?;
-        install::install_production_deps(version_dir, registry, !silent, None).await?;
-    }
+    // Generate wrapper package.json that declares vite-plus as a dependency
+    install::generate_wrapper_package_json(version_dir, new_version).await?;
+
+    // Install production dependencies (pnpm installs vite-plus + all transitive deps)
+    install::install_production_deps(version_dir, registry, !silent, None).await?;
 
     // Save previous version for rollback
     let previous_version = install::save_previous_version(install_dir).await?;
