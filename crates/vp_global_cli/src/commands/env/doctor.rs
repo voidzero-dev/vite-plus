@@ -112,7 +112,28 @@ pub async fn execute(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<Exit
         print_check(" ", "CLI formula", &homebrew.formula);
         print_check(" ", "CLI binary", &abbreviate_home(&homebrew.binary.to_string()));
         if let Some(package) = crate::homebrew::user_package_dir()? {
-            print_check(" ", "CLI dependencies", &abbreviate_home(&package.to_string()));
+            let display = abbreviate_home(&package.to_string());
+            let problem =
+                match crate::self_setup::package_complete(&homebrew.binary, &package).await {
+                    Ok(true) => None,
+                    Ok(false) => Some("incomplete"),
+                    Err(_) => Some("could not verify"),
+                };
+            if let Some(problem) = problem {
+                has_errors = true;
+                print_check(
+                    &style(output::CROSS).red().to_string(),
+                    "CLI dependencies",
+                    &format!("{display} {}", style(format!("({problem})")).red()),
+                );
+                print_hint("Run 'vp --help' to retry CLI dependency setup.");
+            } else {
+                print_check(
+                    &style(output::CHECK).green().to_string(),
+                    "CLI dependencies",
+                    &display,
+                );
+            }
         }
     }
     has_errors |= !check_dirs().await;

@@ -109,7 +109,7 @@ impl SetupState {
     }
 }
 
-pub(super) async fn package_complete(
+pub(crate) async fn package_complete(
     source: &AbsolutePath,
     package: &AbsolutePath,
 ) -> Result<bool, Error> {

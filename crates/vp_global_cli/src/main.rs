@@ -354,21 +354,31 @@ async fn main() -> ExitCode {
     }
 
     let mut args: Vec<String> = std::env::args().collect();
-    // Homebrew owns the executable independently of the user's npm payload. Keep diagnostics,
-    // cleanup, and Homebrew upgrade guidance available after interrupted dependency setup.
-    // Explicit installer handoffs and tool shims must retain their normal setup behavior.
-    let recovery = homebrew::owns_current_exe()
-        && [
-            vp_shared::env_vars::VP_SELF_SETUP_SHELL,
-            vp_shared::env_vars::VP_SELF_SETUP_REPLACE_EXISTING,
-            vp_shared::env_vars::VP_SHIM_TOOL,
-            "VITE_PLUS_SHIM_TOOL",
-            "VP_COMPLETE",
-        ]
-        .iter()
-        .all(|name| env::var_os(name).is_none())
+    // Homebrew owns the executable independently of the user's npm payload. Diagnostics and
+    // configured tool shims must remain available after interrupted CLI dependency setup.
+    let homebrew = homebrew::owns_current_exe();
+    let implicit_setup = [
+        vp_shared::env_vars::VP_SELF_SETUP_SHELL,
+        vp_shared::env_vars::VP_SELF_SETUP_REPLACE_EXISTING,
+        "VP_COMPLETE",
+    ]
+    .iter()
+    .all(|name| env::var_os(name).is_none());
+    let recovery = homebrew
+        && implicit_setup
+        && [vp_shared::env_vars::VP_SHIM_TOOL, "VITE_PLUS_SHIM_TOOL"]
+            .iter()
+            .all(|name| env::var_os(name).is_none())
         && is_homebrew_recovery_command(&args);
-    if recovery {
+    let configured_shim = homebrew
+        && implicit_setup
+        && commands::env::config::get_config_path().is_ok_and(|path| path.as_path().is_file())
+        && args.first().and_then(|argv0| shim::peek_shim_tool(argv0)).is_some_and(|tool| {
+            // These aliases can execute the JavaScript CLI package. Other shims resolve their
+            // own runtime, package manager, or global package without that package.
+            !matches!(tool.as_str(), "vpr" | "vpx")
+        });
+    if recovery || configured_shim {
         if let Err(error) = vp_shared::validate_vp_dir_env() {
             output::error(&error.to_string());
             return ExitCode::FAILURE;
