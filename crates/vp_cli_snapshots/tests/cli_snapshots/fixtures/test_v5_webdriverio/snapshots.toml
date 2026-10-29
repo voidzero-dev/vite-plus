@@ -1,7 +1,8 @@
 [[case]]
 name = "community_provider_and_browser_protocol"
 vp = "local"
-env = { PLAYWRIGHT_BROWSERS_PATH = "0" }
+# ChromeDriver ZIP extraction stalls on Node 26 with the current dependencies.
+env = { PLAYWRIGHT_BROWSERS_PATH = "0", VP_NODE_VERSION = "24.22.1" }
 # Native Chrome logs vary on Windows even when all protocol assertions pass.
 # Assert success through the exit status; the runner keeps full output on failure.
 steps = [
@@ -14,7 +15,8 @@ name = "packed_community_provider_and_browser_protocol"
 vp = "global"
 skip-platforms = ["windows"]
 local-registry = true
-env = { PLAYWRIGHT_BROWSERS_PATH = "0" }
+# Keep the packed provider on the same runtime as the unpacked case.
+env = { PLAYWRIGHT_BROWSERS_PATH = "0", VP_NODE_VERSION = "24.22.1" }
 steps = [
   { argv = ["node", "prepare-packed.mjs"], snapshot = false },
   { argv = ["vpt", "write-file", "package.json", "{\"name\":\"test-v5-webdriverio\",\"private\":true,\"type\":\"module\",\"packageManager\":\"pnpm@11.24.0\",\"devDependencies\":{\"vite-plus\":\"latest\",\"@vitest/browser-webdriverio\":\"5.0.0\",\"webdriverio\":\"9.20.1\"}}\n"], snapshot = false },
