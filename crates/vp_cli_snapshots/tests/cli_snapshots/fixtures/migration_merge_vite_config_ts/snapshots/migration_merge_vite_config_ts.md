@@ -153,4 +153,6 @@ peerDependencyRules:
   allowedVersions:
     vite: '*'
     vitest: '*'
+packages:
+  - .
 ```

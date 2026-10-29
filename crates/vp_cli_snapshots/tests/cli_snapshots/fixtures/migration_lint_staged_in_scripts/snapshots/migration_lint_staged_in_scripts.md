@@ -54,6 +54,8 @@ peerDependencyRules:
     - vite
   allowedVersions:
     vite: '*'
+packages:
+  - .
 ```
 
 ## `vpt print-file vite.config.ts`

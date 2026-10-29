@@ -49,4 +49,6 @@ peerDependencyRules:
     - vite
   allowedVersions:
     vite: '*'
+packages:
+  - .
 ```

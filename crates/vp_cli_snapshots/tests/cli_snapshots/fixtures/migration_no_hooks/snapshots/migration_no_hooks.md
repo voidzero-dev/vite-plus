@@ -44,6 +44,8 @@ peerDependencyRules:
     - vite
   allowedVersions:
     vite: '*'
+packages:
+  - .
 ```
 
 ## `vpt stat-file .vite-hooks --assert-not dir`

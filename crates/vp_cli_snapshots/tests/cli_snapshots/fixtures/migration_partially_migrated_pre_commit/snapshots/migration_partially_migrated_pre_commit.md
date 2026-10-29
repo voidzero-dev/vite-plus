@@ -50,6 +50,8 @@ peerDependencyRules:
     - vite
   allowedVersions:
     vite: '*'
+packages:
+  - .
 ```
 
 ## `vpt print-file .husky/pre-commit`
