@@ -150,21 +150,21 @@ Options:
 
 The upgrade command uses `vp_global_cli` and the shared `vp_setup` library.
 It installs the same binary and bundled lockfile as the script installers.
+The running binary controls activation and rollback. The downloaded target
+binary prepares its dependencies with its own Node.js pin, pnpm pin, and
+installation rules.
 
-```
-┌──────────────────────────────────────────────────────┐
-│                     vp upgrade                       │
-├──────────────────────────────────────────────────────┤
-│  1. Resolve version (registry query)                 │
-│  2. Check if already installed                       │
-│  3. Download and verify platform archive             │
-│  4. Extract binary + vp-install-lock.yaml            │
-│  5. Generate wrapper and restore pnpm-lock.yaml      │
-│  6. Install dependencies with --frozen-lockfile      │
-│  7. Swap current → {version}                         │
-│  8. Refresh shims (non-fatal)                        │
-│  9. Cleanup old versions (non-fatal, keep 3)         │
-└──────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    A["Running vp<br/>Resolve, download, verify, and extract"] --> P{"Target supports<br/>preparation?"}
+    P -->|Yes| T["Target vp<br/>Prepare dependencies"]
+    P -->|"No: successful probe"| L["Running vp<br/>Legacy preparation"]
+    T -->|Success| S["Running vp<br/>Save rollback version<br/>Switch current"]
+    L -->|Success| S
+    S --> R["Refresh setup and shims<br/>Clean old versions<br/>Non-fatal"]
+    P -->|"Probe failed"| F["Stop upgrade<br/>Keep current and rollback record"]
+    T -->|Failure| F
+    L -->|Failure| F
 ```
 
 ### Implementation Flow
@@ -257,14 +257,58 @@ Platform detection reuses existing logic from `vp_js_runtime` or mirrors the bas
 - `uname -m` → arch (x64, arm64)
 - Linux: detect gnu vs musl libc
 
-#### Step 4: Extract and Install
+#### Step 4: Extract and Prepare Dependencies
 
 1. Create the version directory under the data root resolved by `VpDirs`, with a `bin/` subdirectory.
 2. Extract the binary and `vp-install-lock.yaml` into `bin/`, along with `vp-shim.exe` on Windows.
-3. Generate the wrapper `package.json` with an exact `vite-plus` dependency and the installer's pinned pnpm version.
-4. Restore `bin/vp-install-lock.yaml` as `pnpm-lock.yaml` in the version directory.
-5. Write the installation's `.npmrc` with `minimum-release-age=0` so new versions are immediately available.
-6. Run managed pnpm with `install --ignore-workspace --frozen-lockfile` in the version directory. Activation waits for a successful install.
+3. Probe the target binary for the versioned preparation capability.
+4. Ask a supported target to prepare its dependencies. Use the legacy parent-side installation only when the probe succeeds without that capability.
+5. Wait for successful preparation before recording the rollback version or switching `current`.
+
+A forced reinstall of the active version uses a separate directory named
+`<version>+force.<pid>.<timestamp>`. This also avoids overwriting the running
+executable on Windows.
+
+##### Preparation Protocol
+
+The caller runs the downloaded binary with `--help` and
+`VP_SELF_SETUP_SUPPORT_CHECK=upgrade-prepare-v1`. A supported target returns
+exactly `vite-plus-upgrade-prepare-v1\n` and exits before normal self-setup.
+The existing `VP_SELF_SETUP_SUPPORT_CHECK=1` request still returns exactly
+`vite-plus-self-setup-v1\n`, so shell and Windows installers keep their contract.
+Older self-setup binaries return the original token for the new probe value;
+older binaries without self-setup process `--help` normally.
+
+After a successful capability response, the caller runs the target with
+`VP_UPGRADE_PREPARE=upgrade-prepare-v1`. This internal entry point accepts only
+an optional `--silent`. It derives its version directory from its executable
+path and requires an inactive binary under `<DATA>/<version>/bin/`.
+It runs before normal self-setup and does not activate the version, change
+management preferences, modify shell files, or write the final setup marker.
+
+The target generates the wrapper `package.json` using its own
+`CARGO_PKG_VERSION` and pinned pnpm version. It uses `DEFAULT_NODE_VERSION`,
+embedded from the repository's `.node-version` at build time, for installation.
+It restores `bin/vp-install-lock.yaml` as `pnpm-lock.yaml`, writes
+`minimum-release-age=0` to the installation's `.npmrc`, and runs managed pnpm
+with `install --ignore-workspace --frozen-lockfile`. The existing
+`VP_SETUP_SKIP_INSTALL_LOCKFILE=1` bypass remains available.
+
+The caller pins the resolved `VpDirs` roots in the child environment. An explicit
+`--registry` sets both `npm_config_registry` and `NPM_CONFIG_REGISTRY`; otherwise
+the existing registry precedence applies. Mirror, proxy, timeout, and lockfile
+bypass settings remain available. Initial-install controls such as
+`VP_SETUP_NODE_VERSION`, `VP_SETUP_NODE_VERSION_FILE`, and `VP_SKIP_DEPS_INSTALL`
+do not control upgrade preparation. The pnpm process does not inherit
+`VP_UPGRADE_PREPARE`, so nested commands cannot reenter this helper accidentally.
+The helper has no interactive input. Normal runs inherit output streams;
+silent runs show captured diagnostics only on failure.
+
+A failed probe or preparation stops the upgrade and removes the staged version.
+The active version and rollback record remain unchanged. A supported target's
+installation failure never falls back to the running binary's installation
+logic. Already-released upgrade clients retain their original flow because they
+do not know this protocol.
 
 Missing advertised lockfiles and integrity failures stop installation. Older
 packages without a companion keep the legacy dependency installation behavior.
@@ -272,6 +316,10 @@ When an older upgrade client drops the companion, the new binary's self-setup
 recovers it from the verified platform archive before completing a frozen
 install. See [Global installation lockfile](./merge-global-and-local-cli.md#global-installation-lockfile)
 for generation, retry, and compatibility details.
+
+Successful preparation writes the normal installation receipt. After activation,
+the target's self-setup checks that receipt and avoids a second dependency
+installation before refreshing setup and shims.
 
 #### Step 5: Version Swap
 
@@ -337,10 +385,12 @@ After the `current` link swap, any **new** invocation of `vp` will use the new b
 
 The `--rollback` flag switches the `current` symlink to the previously active version.
 
-To track the previous version, we can:
+The running binary records the previous version after dependency preparation
+succeeds and before activation:
 
 1. Read the `current` symlink target before updating
-2. After the update, write the previous version to `~/.vite-plus/.previous-version`
+2. Write that version to `<DATA>/.previous-version`
+3. Switch `current` to the prepared version
 
 For `--rollback`:
 
@@ -356,7 +406,8 @@ For `--rollback`:
 | Network failure during download | Clean up partial temp files, exit with helpful message        |
 | Integrity mismatch (SHA-512)    | Delete downloaded file, report expected vs actual hash, abort |
 | Corrupted tarball               | Verify extraction success, clean up version dir if partial    |
-| `vp install` fails              | Remove the version dir, keep current version unchanged        |
+| Capability probe fails          | Remove the staged version; keep current and rollback unchanged |
+| Dependency preparation fails    | Remove the staged version; keep current and rollback unchanged |
 | Disk full                       | Detect and report, clean up partial state                     |
 | Permission denied               | Report with suggestion to check directory ownership           |
 | Registry returns error          | Parse npm error JSON, show human-readable message             |
@@ -366,18 +417,19 @@ Key principle: **The `current` symlink is only swapped after all pre-swap steps 
 ### File Structure
 
 ```
-crates/vp_global_cli/
-├── src/
-│   ├── commands/
-│   │   ├── upgrade/
-│   │   │   ├── mod.rs        # Module root, public execute() function
-│   │   │   ├── registry.rs   # npm registry client (version resolution, tarball URLs)
-│   │   │   ├── platform.rs   # Platform detection (os, arch, libc)
-│   │   │   ├── download.rs   # HTTP download + tarball extraction
-│   │   │   └── install.rs    # Extract, dependency install, symlink swap, cleanup
-│   │   ├── mod.rs            # Add upgrade module
-│   │   └── ...
-│   └── cli.rs                # Add Upgrade command variant
+crates/vp_global_cli/src/
+├── commands/upgrade/
+│   ├── mod.rs             # Download, activation, rollback, and cleanup
+│   └── preparation.rs     # Target capability probe and preparation handoff
+├── upgrade_prepare.rs    # Target entry point before normal self-setup
+└── self_setup.rs         # Setup and shim refresh after activation
+
+crates/vp_setup/src/
+├── upgrade.rs            # Versioned preparation protocol
+├── install.rs            # Extraction, dependency installation, and version links
+├── lockfile.rs           # Release lockfile and installation receipt
+├── registry.rs           # Release resolution and archive metadata
+└── platform.rs           # Platform detection
 ```
 
 ### Platform Detection

@@ -41,10 +41,6 @@ vp upgrade <version>              # install a specific version
 vp upgrade --registry <registry>  # use a custom npm registry
 ```
 
-After downloading and verifying the target release, `vp upgrade` asks its binary to install the JavaScript dependencies. This uses the target release's embedded Node.js default, pinned pnpm version, and installation lockfile. The current version stays active until dependency installation succeeds.
-
-This handoff requires support in both the running CLI and the target binary. Older upgrade clients and targets without this support keep their existing installation behavior. After activation, commands without a project or user runtime selection use the new release's embedded Node.js default.
-
 ### Automatic Update Checks
 
 The global CLI checks for updates in the background during normal terminal use, caching results for 24 hours. When a newer version is available, it prints a notice to stderr without installing it.

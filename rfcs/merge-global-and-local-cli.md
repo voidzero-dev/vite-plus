@@ -99,10 +99,13 @@ This decouples the `vp` binary from vite-plus's internal file layout.
   `--frozen-lockfile`. `install.ps1` uses the same flow on Windows.
 
 - **Upgrade** (`vp upgrade`):
-  Downloads the CLI platform archive with the binary and lockfile, generates the
-  wrapper `package.json`, and restores the bundled lockfile before the frozen
-  dependency install. pnpm downloads `vite-plus` and its dependencies using the
-  versions and integrity values recorded in that lockfile.
+  Downloads and verifies the CLI platform archive, then asks a supported target
+  binary to prepare dependencies before activation. The target generates the
+  wrapper `package.json` and installs with its own Node.js pin, pnpm pin, and
+  bundled lockfile. The running binary switches `current` only after preparation
+  succeeds. Targets without preparation support and older upgrade clients keep
+  their existing installation path. See the
+  [preparation protocol](./upgrade-command.md#preparation-protocol).
 
 - **Local dev** (`pnpm bootstrap-cli`):
   Copies `vp` binary, generates wrapper `package.json`, symlinks
