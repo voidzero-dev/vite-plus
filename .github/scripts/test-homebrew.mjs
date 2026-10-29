@@ -10,15 +10,13 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 
-import {
-  generateInstallLockfile,
-  INSTALL_LOCKFILE,
-  INSTALL_PNPM_VERSION,
-} from '../../packages/cli/generate-install-lockfile.ts';
-import { targets, updateFormula } from './update-homebrew-formula.mjs';
+import { publishedFormulaVersion, targets, updateFormula } from './update-homebrew-formula.mjs';
+
+const INSTALL_LOCKFILE = 'vp-install-lock.yaml';
 
 const { values } = parseArgs({
   options: {
+    published: { type: 'boolean', default: false },
     binary: { type: 'string' },
     'packages-dir': { type: 'string' },
     'replacement-binary': { type: 'string' },
@@ -26,11 +24,20 @@ const { values } = parseArgs({
     'brew-source': { type: 'string', default: 'https://github.com/Homebrew/brew' },
   },
 });
-assert.ok(values.binary, '--binary is required');
 const repository = fileURLToPath(new URL('../../', import.meta.url));
-const version = (
-  await fs.readFile(path.join(repository, 'crates/vp_global_cli/Cargo.toml'), 'utf8')
-).match(/^version = "([^"]+)"/m)[1];
+const formula = await fs.readFile(path.join(repository, 'HomebrewFormula/vp.rb'), 'utf8');
+if (values.published) {
+  for (const option of ['binary', 'packages-dir', 'replacement-binary', 'replacement-version']) {
+    assert.ok(!values[option], `--${option} cannot override published artifacts`);
+  }
+} else {
+  assert.ok(values.binary, '--binary is required');
+}
+const version = values.published
+  ? publishedFormulaVersion(formula)
+  : (await fs.readFile(path.join(repository, 'crates/vp_global_cli/Cargo.toml'), 'utf8')).match(
+      /^version = "([^"]+)"/m,
+    )[1];
 const replacementVersion = values['replacement-version'] ?? version;
 // Build sandboxes permit writes in system temporary directories. Keep Homebrew outside them.
 const root = await fs.realpath(await fs.mkdtemp(path.join(homedir(), 'vp-homebrew-e2e-')));
@@ -190,9 +197,11 @@ const packageDir = (env, value = version) =>
   path.join(env.VP_HOME, 'cli-packages', value, platform);
 const shim = (env, tool) => path.join(env.VP_HOME, 'bin', tool);
 const publicVp = path.join(prefix, 'bin/vp');
-const formula = await fs.readFile(path.join(repository, 'HomebrewFormula/vp.rb'), 'utf8');
 
 async function formulaFor(binary, value, registryUrl, revision = false) {
+  // Published mode needs only Node's standard library and must never rebuild its companion.
+  const { generateInstallLockfile, INSTALL_PNPM_VERSION } =
+    await import('../../packages/cli/generate-install-lockfile.ts');
   const payload = path.join(root, `payload-${value}${revision ? '-revision' : ''}`);
   await fs.mkdir(payload);
   await fs.copyFile(path.resolve(binary), path.join(payload, 'vp'));
@@ -237,7 +246,11 @@ async function formulaFor(binary, value, registryUrl, revision = false) {
 }
 
 try {
-  const upstream = await registry(values['packages-dir'] && path.resolve(values['packages-dir']));
+  // Real network access here is intentional: this mode verifies the exact artifacts
+  // users download after publication, including transitive native npm dependencies.
+  const upstream = values.published
+    ? 'https://registry.npmjs.org'
+    : await registry(values['packages-dir'] && path.resolve(values['packages-dir']));
   const privateRegistry = await mirrorRegistry(upstream, true);
   await run('git', ['clone', '--depth', '1', values['brew-source'], prefix]);
   const brewHome = path.join(root, 'brew-home');
@@ -274,7 +287,7 @@ try {
   await fs.mkdir(path.join(tapSource, 'HomebrewFormula'), { recursive: true });
   await fs.writeFile(
     path.join(tapSource, 'HomebrewFormula/vp.rb'),
-    await formulaFor(values.binary, version, upstream),
+    values.published ? formula : await formulaFor(values.binary, version, upstream),
   );
   await run('git', ['init', tapSource]);
   await run('git', ['-C', tapSource, 'add', '.']);
@@ -302,9 +315,7 @@ try {
   for (const alias of ['vpr', 'vpx']) {
     assert.equal(await fs.realpath(path.join(prefix, 'bin', alias)), await fs.realpath(publicVp));
   }
-  console.log(
-    'Homebrew installs the current native binary and aliases without npm tools or user setup.',
-  );
+  console.log('Homebrew installs the native binary and aliases without npm tools or user setup.');
 
   const first = await user('first-user', upstream);
   const second = await user('second-user', privateRegistry.url, true);
@@ -332,6 +343,7 @@ try {
     run(publicVp, ['--help'], first, project),
   ]);
   await run(publicVp, ['--help'], second, project);
+  assert.ok((await run(publicVp, ['--version'], first, project)).includes(version));
   assert.ok([...privateRegistry.requests].some((url) => url.startsWith('/pnpm')));
   assert.ok([...privateRegistry.requests].some((url) => url.startsWith('/vite-plus')));
   assert.equal(
@@ -359,7 +371,7 @@ try {
       delete env[variable];
     }
   }
-  const marker = path.join(packageDir(first), '.vp-deps-complete');
+  const marker = path.join(packageDir(first), 'node_modules/.vp-install-complete');
   const completed = (await fs.stat(marker)).mtimeMs;
   await run(shim(first, 'vp'), ['--help'], first, project);
   assert.equal((await fs.stat(marker)).mtimeMs, completed);
@@ -380,7 +392,7 @@ try {
   await run(publicVp, ['install', '-g', 'typescript@5.8.3'], first, project);
   const previous = path.join(first.VP_HOME, 'script-install/bin/vp');
   await fs.mkdir(path.dirname(previous), { recursive: true });
-  await fs.copyFile(path.resolve(values.binary), previous);
+  await fs.copyFile(publicVp, previous);
   await fs.symlink('script-install', path.join(first.VP_HOME, 'current'));
   for (const name of ['vp', 'tsc']) {
     await fs.unlink(shim(first, name));
@@ -395,63 +407,77 @@ try {
     'Migration refreshes global-package shims without replacing preferences or installed packages.',
   );
 
-  let nextRegistry = upstream;
-  if (replacementVersion !== version) {
-    assert.ok(values['replacement-binary'] && values['packages-dir']);
-    const packages = path.join(root, 'next-packages');
-    await fs.cp(path.resolve(values['packages-dir']), packages, { recursive: true });
-    for (const archive of await fs.readdir(packages)) {
-      if (!archive.endsWith('.tgz')) {
-        continue;
-      }
-      const unpacked = await fs.mkdtemp(path.join(root, 'next-package-'));
-      await run('tar', ['-xzf', path.join(packages, archive), '-C', unpacked]);
-      const manifestPath = path.join(unpacked, 'package/package.json');
-      const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
-      manifest.version = replacementVersion;
-      if (manifest.name === 'vite-plus') {
-        manifest.dependencies.vite = `npm:@voidzero-dev/vite-plus-core@${replacementVersion}`;
-      }
-      await fs.writeFile(manifestPath, JSON.stringify(manifest));
-      await run('tar', ['-czf', path.join(packages, archive), '-C', unpacked, 'package']);
-    }
-    nextRegistry = await registry(packages);
-  }
   await fs.chmod(oldKeg, 0o755);
   await fs.chmod(path.join(oldKeg, 'bin'), 0o755);
   await fs.chmod(path.join(oldKeg, 'libexec'), 0o755);
-  const tap = (await run(brew, ['--repository', 'viteplus/e2e'], brewEnv)).trim();
-  await fs.writeFile(
-    path.join(tap, 'HomebrewFormula/vp.rb'),
-    await formulaFor(
-      values['replacement-binary'] ?? values.binary,
-      replacementVersion,
-      nextRegistry,
-      replacementVersion === version,
-    ),
-  );
-  await run(brew, ['upgrade', '--build-from-source', formulaName], brewEnv);
-  await run(brew, ['cleanup', '--prune=all', formulaName], brewEnv);
-  await assert.rejects(fs.access(oldKeg));
-  await fs.writeFile(path.join(first.HOME, '.npmrc'), `registry=${nextRegistry}/\n`);
-  await run(shim(first, 'vp'), ['--help'], first, project);
-  for (const name of ['node', 'pn', 'tsc']) {
-    await run(shim(first, name), ['--version'], first, project);
+  if (!values.published) {
+    let nextRegistry = upstream;
+    if (replacementVersion !== version) {
+      assert.ok(values['replacement-binary'] && values['packages-dir']);
+      const packages = path.join(root, 'next-packages');
+      await fs.cp(path.resolve(values['packages-dir']), packages, { recursive: true });
+      for (const archive of await fs.readdir(packages)) {
+        if (!archive.endsWith('.tgz')) {
+          continue;
+        }
+        const unpacked = await fs.mkdtemp(path.join(root, 'next-package-'));
+        await run('tar', ['-xzf', path.join(packages, archive), '-C', unpacked]);
+        const manifestPath = path.join(unpacked, 'package/package.json');
+        const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
+        manifest.version = replacementVersion;
+        if (manifest.name === 'vite-plus') {
+          manifest.dependencies.vite = `npm:@voidzero-dev/vite-plus-core@${replacementVersion}`;
+        }
+        await fs.writeFile(manifestPath, JSON.stringify(manifest));
+        await run('tar', ['-czf', path.join(packages, archive), '-C', unpacked, 'package']);
+      }
+      nextRegistry = await registry(packages);
+    }
+    const tap = (await run(brew, ['--repository', 'viteplus/e2e'], brewEnv)).trim();
+    await fs.writeFile(
+      path.join(tap, 'HomebrewFormula/vp.rb'),
+      await formulaFor(
+        values['replacement-binary'] ?? values.binary,
+        replacementVersion,
+        nextRegistry,
+        replacementVersion === version,
+      ),
+    );
+    await run(brew, ['upgrade', '--build-from-source', formulaName], brewEnv);
+    await run(brew, ['cleanup', '--prune=all', formulaName], brewEnv);
+    await assert.rejects(fs.access(oldKeg));
+    await fs.writeFile(path.join(first.HOME, '.npmrc'), `registry=${nextRegistry}/\n`);
+    await run(shim(first, 'vp'), ['--help'], first, project);
+    for (const name of ['node', 'pn', 'tsc']) {
+      await run(shim(first, name), ['--version'], first, project);
+    }
+    await run(shim(first, 'pnx'), ['--help'], first, project);
+    await run(path.join(first.VP_HOME, 'fallback-bin/npm'), ['--version'], first, project);
+    await fs.access(
+      path.join(packageDir(first, replacementVersion), 'node_modules/.vp-install-complete'),
+    );
+    await run(publicVp, ['build'], first, project);
+    assert.equal(await fs.readFile(path.join(first.VP_HOME, 'config.json'), 'utf8'), settings);
+    assert.ok(
+      (await run(publicVp, ['upgrade'], first, project, 1)).includes(`brew upgrade ${formulaName}`),
+    );
+    assert.ok(
+      (await run(publicVp, ['upgrade', '--check'], first, project)).includes(
+        `brew outdated ${formulaName}`,
+      ),
+    );
+    console.log(
+      'Homebrew upgrade and old-keg cleanup preserve both shim directories and saved preferences.',
+    );
   }
-  await run(shim(first, 'pnx'), ['--help'], first, project);
-  await run(path.join(first.VP_HOME, 'fallback-bin/npm'), ['--version'], first, project);
-  await fs.access(path.join(packageDir(first, replacementVersion), '.vp-deps-complete'));
-  await run(publicVp, ['build'], first, project);
-  assert.equal(await fs.readFile(path.join(first.VP_HOME, 'config.json'), 'utf8'), settings);
-  assert.ok(
-    (await run(publicVp, ['upgrade'], first, project, 1)).includes(`brew upgrade ${formulaName}`),
-  );
-  assert.ok(
-    (await run(publicVp, ['upgrade', '--check'], first, project)).includes(
-      `brew outdated ${formulaName}`,
-    ),
-  );
   await run(brew, ['test', formulaName], brewEnv);
+  const tap = (await run(brew, ['--repository', 'viteplus/e2e'], brewEnv)).trim();
+  if (values.published) {
+    assert.equal(await fs.readFile(path.join(tap, 'HomebrewFormula/vp.rb'), 'utf8'), formula);
+    console.log(
+      `Published ${version} archives and npm packages pass installation and runtime checks.`,
+    );
+  }
   if (process.platform === 'linux' && process.arch === 'x64') {
     const file = path.join(tap, 'HomebrewFormula/vp.rb');
     const fixture = await fs.readFile(file, 'utf8');
@@ -464,16 +490,13 @@ try {
       await fs.writeFile(file, fixture);
     }
   }
-  console.log(
-    'Homebrew upgrade and old-keg cleanup preserve both shim directories and saved preferences.',
-  );
 
   await run(publicVp, ['implode', '--yes'], first, project);
   await assert.rejects(fs.access(first.VP_HOME));
   await fs.access(publicVp);
   await run(brew, ['uninstall', formulaName], brewEnv);
   await assert.rejects(fs.access(publicVp));
-  await fs.access(path.join(packageDir(second), '.vp-deps-complete'));
+  await fs.access(path.join(packageDir(second), 'node_modules/.vp-install-complete'));
   console.log(
     'Implode removes one user installation; brew uninstall leaves the other user data intact.',
   );

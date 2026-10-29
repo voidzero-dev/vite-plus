@@ -109,10 +109,11 @@ impl SetupState {
     }
 }
 
-pub(super) const PACKAGE_MARKER: &str = ".vp-deps-complete";
-
-pub(super) fn package_complete(package: &AbsolutePath) -> bool {
-    package.join(PACKAGE_MARKER).as_path().is_file() && package_matches_binary(package)
+pub(super) async fn package_complete(
+    source: &AbsolutePath,
+    package: &AbsolutePath,
+) -> Result<bool, Error> {
+    Ok(package_matches_binary(package) && vp_setup::lockfile::is_complete(source, package).await?)
 }
 
 pub(super) fn package_matches_binary(package: &AbsolutePath) -> bool {
@@ -130,10 +131,11 @@ pub(super) fn package_matches_binary(package: &AbsolutePath) -> bool {
 mod tests {
     use super::*;
 
-    #[test]
-    fn dependency_completion_requires_the_matching_package_and_entrypoint() {
-        EnvConfig::scoped(|env| {
+    #[tokio::test]
+    async fn dependency_completion_requires_the_matching_package_and_install_receipt() {
+        EnvConfig::scoped_async(|env| async move {
             let directory = env.dirs.cli_package(env!("CARGO_PKG_VERSION"), "test-platform");
+            let source = directory.join("bin/vp");
             let package = directory.join("node_modules/vite-plus");
             std::fs::create_dir_all(package.join("dist")).unwrap();
             let manifest = package.join("package.json");
@@ -143,12 +145,24 @@ mod tests {
             )
             .unwrap();
             std::fs::write(package.join("dist/bin.js"), b"// CLI").unwrap();
-            assert!(!package_complete(&directory));
-            std::fs::write(directory.join(PACKAGE_MARKER), b"").unwrap();
-            assert!(package_complete(&directory));
-            std::fs::write(&manifest, br#"{"version":"0.0.0"}"#).unwrap();
-            assert!(!package_complete(&directory));
-        });
+            assert!(!package_complete(&source, &directory).await.unwrap());
+            // An old external marker cannot substitute for the shared install receipt.
+            std::fs::write(directory.join(".vp-deps-complete"), b"").unwrap();
+            assert!(!package_complete(&source, &directory).await.unwrap());
+            // Explicitly unlocked installs still require the shared installer's receipt.
+            EnvConfig::with_vars_async([("VP_SETUP_SKIP_INSTALL_LOCKFILE", "1")], |_| async {
+                std::fs::write(directory.join(vp_setup::lockfile::INSTALL_RECEIPT), b"unlocked")
+                    .unwrap();
+                assert!(package_complete(&source, &directory).await.unwrap());
+                std::fs::remove_file(package.join("dist/bin.js")).unwrap();
+                assert!(!package_complete(&source, &directory).await.unwrap());
+                std::fs::write(package.join("dist/bin.js"), b"// CLI").unwrap();
+                std::fs::write(&manifest, br#"{"version":"0.0.0"}"#).unwrap();
+                assert!(!package_complete(&source, &directory).await.unwrap());
+            })
+            .await;
+        })
+        .await;
     }
 
     #[tokio::test]

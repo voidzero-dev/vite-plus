@@ -100,10 +100,15 @@ async fn completed_external(
     retains_binary: bool,
     user_package: Option<&AbsolutePath>,
 ) -> Result<Option<AbsolutePathBuf>, Error> {
-    if user_package.is_some_and(|package| !external::package_complete(package)) {
+    let Some(binary) = state.completed_binary(retains_binary).await? else {
+        return Ok(None);
+    };
+    if let Some(package) = user_package
+        && !external::package_complete(&binary, package).await?
+    {
         return Ok(None);
     }
-    state.completed_binary(retains_binary).await
+    Ok(Some(binary))
 }
 
 fn execute_installed(
@@ -290,21 +295,15 @@ async fn run(
         false
     };
     let needs_deps = needs_dependency_install
-        || user_package.map_or_else(
-            || !version_dir.join("node_modules/vite-plus/package.json").as_path().is_file(),
-            |package| !external::package_complete(package),
-        );
+        || if let Some(package) = user_package {
+            !external::package_complete(&binary, package).await?
+        } else {
+            !version_dir.join("node_modules/vite-plus/package.json").as_path().is_file()
+        };
     // Standalone retries also return the selected runtime when dependencies already exist.
     let node_version =
         if !skip_deps && (deploy || needs_deps) { runtime::resolve().await? } else { None };
     if needs_deps {
-        if let Some(package) = user_package {
-            match tokio::fs::remove_file(package.join(external::PACKAGE_MARKER)).await {
-                Ok(()) => {}
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                Err(error) => return Err(error.into()),
-            }
-        }
         output::info(&format!("installing vite-plus@{version}..."));
         install::generate_wrapper_package_json(&version_dir, version).await?;
         if !skip_deps {
@@ -323,14 +322,19 @@ async fn run(
             )
             .await?;
         }
-        if user_package.is_some() {
-            if !external::package_matches_binary(&version_dir) {
-                return Err(Error::Other(
-                    "Vite+ dependencies do not match this CLI version".into(),
-                ));
-            }
-            tokio::fs::write(version_dir.join(external::PACKAGE_MARKER), b"").await?;
+        if user_package.is_some() && !external::package_matches_binary(&version_dir) {
+            return Err(Error::Other("Vite+ dependencies do not match this CLI version".into()));
         }
+    }
+    if let Some(package) = user_package
+        && !external::package_complete(&binary, package).await?
+    {
+        // Legacy archives and local dependency bypasses may not produce a receipt.
+        // Never re-execute into setup when the payload cannot pass its completion check.
+        return Err(Error::Other(
+            "Homebrew dependency installation has no matching completion receipt. Reinstall a formula with a published installation lockfile."
+                .into(),
+        ));
     }
     if let Some(version) = node_version {
         runtime::write_resolution(&version).await?;

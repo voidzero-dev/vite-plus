@@ -1,0 +1,59 @@
+name: Test published Homebrew artifacts
+
+permissions: {}
+
+on:
+  workflow_call:
+    inputs:
+      candidate-artifact-id:
+        description: Prepared candidate artifact from this workflow run, or test the checked-in formula.
+        type: string
+        default: ''
+      ref:
+        description: Checkout SHA used to prepare the candidate.
+        type: string
+        default: ''
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  install:
+    name: Published Homebrew (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+
+      - name: Download the prepared candidate
+        if: inputs.candidate-artifact-id != ''
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          artifact-ids: ${{ inputs.candidate-artifact-id }}
+          merge-multiple: true
+
+      - name: Install the unchanged candidate and run its published packages
+        run: node .github/scripts/test-homebrew.mjs --published
