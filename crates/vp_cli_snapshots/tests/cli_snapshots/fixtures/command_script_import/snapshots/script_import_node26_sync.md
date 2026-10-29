@@ -9,7 +9,7 @@ The complete preload contract runs on Node.js 26 synchronous hooks.
 
 ```
 {
-  "node": "26.5.0",
+  "node": "26.12.1",
   "requireExport": "<repo>/packages/cli/dist/register.js",
   "importExport": "file://<repo>/packages/cli/dist/register.js",
   "sameExport": true

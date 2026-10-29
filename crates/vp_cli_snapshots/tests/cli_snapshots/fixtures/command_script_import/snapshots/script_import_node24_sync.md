@@ -9,7 +9,7 @@ The complete preload contract runs on Node.js 24 synchronous hooks.
 
 ```
 {
-  "node": "24.12.0",
+  "node": "24.22.1",
   "requireExport": "<repo>/packages/cli/dist/register.js",
   "importExport": "file://<repo>/packages/cli/dist/register.js",
   "sameExport": true
