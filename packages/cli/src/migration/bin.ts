@@ -80,7 +80,6 @@ import {
   rewriteStandaloneProject,
   planVitestV5Migration,
   refreshVitestV5Migration,
-  retryPreservedOxlintConfigs,
   prepareOxlintConfigs,
   removeMigratedOxlintConfigs,
   shouldSkipStagedMigrationForHooks,
@@ -1181,19 +1180,9 @@ async function main() {
       coreMigrationResult.scripts ||
       coreMigrationResult.tsconfigTypes ||
       coreMigrationResult.imports ||
+      coreMigrationResult.oxcConfigs ||
       coreMigrationResult.tsdownConfig ||
       coreMigrationResult.taskCacheConfig
-    ) {
-      didMigrate = true;
-    }
-
-    if (
-      retryPreservedOxlintConfigs(
-        workspaceInfoOptional.rootDir,
-        true,
-        report,
-        workspaceInfoOptional.packages,
-      )
     ) {
       didMigrate = true;
     }
