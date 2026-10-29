@@ -65,7 +65,6 @@ jobs:
               - '!docs/**'
               - '!.github/workflows/deploy-docs-preview.yml'
               - '!.github/workflows/deploy-docs.yml'
-              - '!netlify.toml'
             snapshots:
               - 'crates/vp_cli_snapshots/**'
 
