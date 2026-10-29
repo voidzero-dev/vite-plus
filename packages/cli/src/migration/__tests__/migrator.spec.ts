@@ -52,6 +52,7 @@ const {
   injectLintTypeCheckDefaults,
   ensureSvelteRuneGlobals,
   mergeViteConfigFiles,
+  migrateEsbuildConfigInViteConfig,
   rewriteEslintPackageJson,
   collectInstalledPackageNames,
   sanitizeMigratedOxlintConfig,
@@ -8664,6 +8665,7 @@ describe('existing Vite+ core migration finalization', () => {
       imports: true,
       tsdownConfig: false,
       taskCacheConfig: false,
+      esbuildMinifyConfig: false,
       taskCacheWarnings: [],
     });
 
@@ -8743,6 +8745,7 @@ export default defineConfig({
       imports: true,
       tsdownConfig: true,
       taskCacheConfig: false,
+      esbuildMinifyConfig: false,
       taskCacheWarnings: [],
     });
     expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).toContain(
@@ -8762,6 +8765,7 @@ export default defineConfig({
       imports: false,
       tsdownConfig: false,
       taskCacheConfig: false,
+      esbuildMinifyConfig: false,
       taskCacheWarnings: [],
     });
   });
@@ -8801,6 +8805,7 @@ export default defineConfig({ entry: 'src/index.ts' });
       imports: true,
       tsdownConfig: false,
       taskCacheConfig: false,
+      esbuildMinifyConfig: false,
       taskCacheWarnings: [],
     });
     expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).toBe(originalViteConfig);
@@ -8865,6 +8870,7 @@ export default defineConfig({
 
     expect(finalizeCoreMigrationForExistingVitePlus(workspaceInfo, true, report)).toMatchObject({
       taskCacheConfig: false,
+      esbuildMinifyConfig: false,
       taskCacheWarnings: [],
     });
     expect(report.migratedTaskCacheConfigCount).toBe(2);
@@ -8905,6 +8911,54 @@ export default defineConfig({
       'vite.config.ts: Move `env`, `untrackedEnv`, `input`, and `output` under `cache` manually in tasks `build`, `dev`; they were left unchanged.',
     );
     expect(result.taskCacheWarnings[0]).toContain('/config/run#cache');
+  });
+
+  it('reports the esbuild minify switch as a migration on an otherwise up-to-date project', () => {
+    // The rewrite is the project's ONLY pending change and the static case
+    // emits no warnings. `didMigrate` must therefore see this flag, or the
+    // "already using Vite+" fast exit would swallow the vite.config rewrite
+    // (no summary, no formatting pass).
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'test', devDependencies: { 'vite-plus': 'latest' } }, null, 2),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'vite.config.ts'),
+      `import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  build: {
+    minify: 'esbuild',
+    sourcemap: true,
+  },
+});
+`,
+    );
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+
+    expect(finalizeCoreMigrationForExistingVitePlus(workspaceInfo, true)).toEqual({
+      dependencies: false,
+      scripts: false,
+      tsconfigTypes: false,
+      imports: false,
+      tsdownConfig: false,
+      taskCacheConfig: false,
+      esbuildMinifyConfig: true,
+      taskCacheWarnings: [],
+    });
+    expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).toContain('minify: true');
+
+    // Converged: a second run finds nothing left to migrate.
+    expect(finalizeCoreMigrationForExistingVitePlus(workspaceInfo, true)).toEqual({
+      dependencies: false,
+      scripts: false,
+      tsconfigTypes: false,
+      imports: false,
+      tsdownConfig: false,
+      taskCacheConfig: false,
+      esbuildMinifyConfig: false,
+      taskCacheWarnings: [],
+    });
   });
 });
 
@@ -9540,5 +9594,319 @@ describe('collectMigrationSetupPlan non-interactive editor conflicts', () => {
 
     expect(plan.editorConflictDecisions.get('externalDependencies.xml')).toBe('skip');
     expect(plan.editorConflictDecisions.get('workspace.xml')).toBe('skip');
+  });
+});
+
+describe('migrateEsbuildConfigInViteConfig', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-esbuild-config-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('rewrites static build.minify esbuild to true and preserves comments', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'vite.config.ts'),
+      `import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  build: {
+    /* keep me */
+    minify: 'esbuild',
+    sourcemap: true,
+  },
+});
+`,
+    );
+    const report = createMigrationReport();
+
+    const rewritten = migrateEsbuildConfigInViteConfig(tmpDir, true, report);
+
+    expect(rewritten).toBe(true);
+    const after = fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf-8');
+    expect(after).toContain('minify: true');
+    expect(after).toContain('/* keep me */');
+    expect(after).not.toContain('esbuild');
+    expect(report.esbuildMinifyMigrationCount).toBe(1);
+    expect(report.warnings).toHaveLength(0);
+  });
+
+  it('rewrites quoted minify keys', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'vite.config.ts'),
+      `export default {
+  build: {
+    'minify': 'esbuild',
+  },
+};
+`,
+    );
+    const report = createMigrationReport();
+
+    migrateEsbuildConfigInViteConfig(tmpDir, true, report);
+
+    const after = fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf-8');
+    expect(after).toContain(`'minify': true`);
+    expect(report.esbuildMinifyMigrationCount).toBe(1);
+  });
+
+  it('leaves unrelated minify options alone but diagnoses them', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'vite.config.ts'),
+      `import { somePlugin } from 'some-plugin';
+
+export default defineConfig({
+  plugins: [somePlugin({ minify: 'esbuild' })],
+});
+`,
+    );
+    const report = createMigrationReport();
+
+    migrateEsbuildConfigInViteConfig(tmpDir, true, report);
+
+    const after = fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf-8');
+    expect(after).toBe(`import { somePlugin } from 'some-plugin';
+
+export default defineConfig({
+  plugins: [somePlugin({ minify: 'esbuild' })],
+});
+`);
+    expect(report.esbuildMinifyMigrationCount).toBe(0);
+    expect(report.warnings).toHaveLength(1);
+    expect(report.warnings[0]).toContain('esbuild');
+  });
+
+  it('rewrites minify inside a defineConfig callback expression body', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'vite.config.ts'),
+      `import { defineConfig } from 'vite-plus';
+
+export default defineConfig((config) => ({
+  build: {
+    minify: 'esbuild',
+    sourcemap: true,
+  },
+}));
+`,
+    );
+    const report = createMigrationReport();
+
+    const rewritten = migrateEsbuildConfigInViteConfig(tmpDir, true, report);
+
+    expect(rewritten).toBe(true);
+    const after = fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf-8');
+    expect(after).toContain('minify: true');
+    expect(report.esbuildMinifyMigrationCount).toBe(1);
+    expect(report.warnings).toHaveLength(0);
+  });
+
+  it('rewrites direct return statements in callback block bodies', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'vite.config.ts'),
+      `import { defineConfig } from 'vite-plus';
+
+export default defineConfig(() => {
+  return { build: { minify: 'esbuild' } };
+});
+`,
+    );
+    const report = createMigrationReport();
+
+    const rewritten = migrateEsbuildConfigInViteConfig(tmpDir, true, report);
+
+    expect(rewritten).toBe(true);
+    expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf-8')).toContain('minify: true');
+    expect(report.esbuildMinifyMigrationCount).toBe(1);
+  });
+
+  it('rewrites direct returns of classic function callbacks', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'vite.config.ts'),
+      `import { defineConfig } from 'vite-plus';
+
+export default defineConfig(function (config) {
+  return { build: { minify: 'esbuild' } };
+});
+`,
+    );
+    const report = createMigrationReport();
+
+    const rewritten = migrateEsbuildConfigInViteConfig(tmpDir, true, report);
+
+    expect(rewritten).toBe(true);
+    expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf-8')).toContain('minify: true');
+    expect(report.esbuildMinifyMigrationCount).toBe(1);
+  });
+
+  it('diagnoses a dynamic minify selection in a callback instead of rewriting it', () => {
+    // Production-only esbuild selection: no span is collectable, but the
+    // dynamic walk must still flag the config so the Vite 8 failure is not
+    // silent.
+    fs.writeFileSync(
+      path.join(tmpDir, 'vite.config.ts'),
+      `import { defineConfig } from 'vite-plus';
+
+export default defineConfig(({ mode }) => ({
+  build: {
+    minify: mode === 'legacy' ? 'esbuild' : true,
+  },
+}));
+`,
+    );
+    const report = createMigrationReport();
+
+    const rewritten = migrateEsbuildConfigInViteConfig(tmpDir, true, report);
+
+    expect(rewritten).toBe(false);
+    expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf-8')).toContain(
+      `mode === 'legacy' ? 'esbuild' : true`,
+    );
+    expect(report.esbuildMinifyMigrationCount).toBe(0);
+    expect(report.warnings).toHaveLength(1);
+    expect(report.warnings[0]).toContain('esbuild');
+  });
+
+  it('ignores computed identifier keys that collide with option names', () => {
+    // `[build]` is an unrelated plugin option, not Vite's `build` key; the
+    // rewrite must not fire, but the raw occurrence is still diagnosed.
+    fs.writeFileSync(
+      path.join(tmpDir, 'vite.config.ts'),
+      `const build = 'plugin';
+
+export default {
+  [build]: {
+    minify: 'esbuild',
+  },
+};
+`,
+    );
+    const report = createMigrationReport();
+
+    const rewritten = migrateEsbuildConfigInViteConfig(tmpDir, true, report);
+
+    expect(rewritten).toBe(false);
+    expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf-8')).toContain(
+      "minify: 'esbuild'",
+    );
+    expect(report.esbuildMinifyMigrationCount).toBe(0);
+    expect(report.warnings).toHaveLength(1);
+    expect(report.warnings[0]).toContain('esbuild');
+  });
+
+  it('treats computed string-literal keys as option names', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'vite.config.ts'),
+      `export default {
+  ['build']: {
+    minify: 'esbuild',
+  },
+};
+`,
+    );
+    const report = createMigrationReport();
+
+    const rewritten = migrateEsbuildConfigInViteConfig(tmpDir, true, report);
+
+    expect(rewritten).toBe(true);
+    expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf-8')).toContain('minify: true');
+    expect(report.esbuildMinifyMigrationCount).toBe(1);
+  });
+
+  it('diagnoses dynamic minify values without rewriting them', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'vite.config.ts'),
+      `import { defineConfig } from 'vite-plus';
+
+const useEsbuild = () => false;
+
+export default defineConfig({
+  build: { minify: useEsbuild() ? 'esbuild' : true },
+});
+`,
+    );
+    const report = createMigrationReport();
+
+    migrateEsbuildConfigInViteConfig(tmpDir, true, report);
+
+    const after = fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf-8');
+    expect(after).toContain(`'esbuild' : true`);
+    expect(report.esbuildMinifyMigrationCount).toBe(0);
+    expect(report.warnings).toHaveLength(1);
+    expect(report.warnings[0]).toContain('installing `esbuild` separately');
+  });
+
+  it('diagnoses transformWithEsbuild usage', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'vite.config.ts'),
+      `import { transformWithEsbuild } from 'vite';
+
+export default {
+  plugins: [
+    {
+      name: 'esbuild-transform',
+      transform(code, id) {
+        return transformWithEsbuild(code, id);
+      },
+    },
+  ],
+};
+`,
+    );
+    const report = createMigrationReport();
+
+    migrateEsbuildConfigInViteConfig(tmpDir, true, report);
+
+    expect(report.esbuildMinifyMigrationCount).toBe(0);
+    expect(report.warnings).toHaveLength(1);
+    expect(report.warnings[0]).toContain('transformWithOxc');
+  });
+
+  it('ignores minify esbuild mentions inside comments', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'vite.config.ts'),
+      `import { defineConfig } from 'vite-plus';
+
+// The old config used minify: "esbuild" before we migrated.
+export default defineConfig({
+  build: { minify: true },
+});
+`,
+    );
+    const report = createMigrationReport();
+
+    migrateEsbuildConfigInViteConfig(tmpDir, true, report);
+
+    expect(report.esbuildMinifyMigrationCount).toBe(0);
+    expect(report.warnings).toHaveLength(0);
+  });
+
+  it('does not warn for oxc-compatible configs', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'vite.config.ts'),
+      `import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  build: { minify: true },
+});
+`,
+    );
+    const report = createMigrationReport();
+
+    migrateEsbuildConfigInViteConfig(tmpDir, true, report);
+
+    expect(report.esbuildMinifyMigrationCount).toBe(0);
+    expect(report.warnings).toHaveLength(0);
+  });
+
+  it('does nothing when no vite config exists', () => {
+    const report = createMigrationReport();
+
+    expect(() => migrateEsbuildConfigInViteConfig(tmpDir, true, report)).not.toThrow();
+    expect(report.esbuildMinifyMigrationCount).toBe(0);
+    expect(report.warnings).toHaveLength(0);
   });
 });
