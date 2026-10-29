@@ -171,7 +171,53 @@ fn format_install_failure_message(exit_code: i32, log_path: Option<&AbsolutePath
     format!("Failed to install production dependencies (exit code: {exit_code}){log_msg}")
 }
 
-/// Record the exit code without registry output, which can contain credentials.
+/// Fixed diagnostics are the only subprocess output that can enter the upgrade log.
+/// Do not accept arbitrary `ERR_PNPM_*` values or copy the matching output line:
+/// package names, URLs, and even unrecognized error identifiers can contain secrets.
+const INSTALL_FAILURE_DIAGNOSTICS: &[(&str, &str)] = &[
+    ("ERR_PNPM_FETCH_401", "Check npm registry authentication in your user configuration."),
+    ("ERR_PNPM_FETCH_403", "Check your permission to download packages from the npm registry."),
+    (
+        "ERR_PNPM_OUTDATED_LOCKFILE",
+        "The installation lockfile does not match the package manifest. Retry with an updated Vite+ release.",
+    ),
+    (
+        "ERR_PNPM_LOCKFILE_BREAKING_CHANGE",
+        "The installation lockfile is incompatible with pnpm. Retry with an updated Vite+ release.",
+    ),
+    ("ERR_PNPM_TARBALL_INTEGRITY", "A package failed checksum validation. Retry the command."),
+    ("ENOSPC", "Free disk space before retrying the command."),
+    ("EDQUOT", "Free disk space or increase the storage quota before retrying the command."),
+    ("EACCES", "Check write permissions for the Vite+ data and cache directories."),
+    ("EPERM", "Check permissions for the Vite+ data and cache directories."),
+];
+
+fn install_failure_log(exit_code: i32, stdout: &[u8], stderr: &[u8]) -> String {
+    let mut content = format!(
+        "Stage: production dependency installation.\npnpm install failed with exit code {exit_code}.\n"
+    );
+    let mut recognized = false;
+    for (code, hint) in INSTALL_FAILURE_DIAGNOSTICS {
+        let reported = [stdout, stderr].iter().any(|output| {
+            output
+                .split(|byte| !byte.is_ascii_alphanumeric() && *byte != b'_')
+                .any(|token| token == code.as_bytes())
+        });
+        if reported {
+            recognized = true;
+            content.push_str(&format!("Reported error: {code}.\n{hint}\n"));
+        }
+    }
+    if !recognized {
+        content.push_str(
+            "No recognized error identifier was reported. Check the Node.js/pnpm runtime, disk space, and npm configuration before retrying.\n",
+        );
+    }
+    content.push_str("Registry output is not saved because it can contain credentials.\n");
+    content
+}
+
+/// Record the failed stage, exit code, and allowlisted diagnostics without raw output.
 ///
 /// The log is written to the **parent** of `version_dir` (i.e. `<DATA>/upgrade.log`)
 /// so it survives the cleanup that removes `version_dir` on failure.
@@ -180,13 +226,13 @@ fn format_install_failure_message(exit_code: i32, log_path: Option<&AbsolutePath
 pub async fn write_upgrade_log(
     version_dir: &AbsolutePath,
     exit_code: i32,
+    stdout: &[u8],
+    stderr: &[u8],
 ) -> Option<AbsolutePathBuf> {
     // Write to parent dir so the log survives version_dir cleanup on failure
     let parent = version_dir.as_path().parent()?;
     let log_path = AbsolutePathBuf::new(parent.join("upgrade.log"))?;
-    let content = format!(
-        "pnpm install failed with exit code {exit_code}.\nCheck npm registry access and authentication in your user configuration.\nRegistry output is not saved because it can contain credentials.\n"
-    );
+    let content = install_failure_log(exit_code, stdout, stderr);
     match tokio::fs::write(&log_path, &content).await {
         Ok(()) => Some(log_path),
         Err(e) => {
@@ -207,7 +253,7 @@ pub enum NodeVersion<'a> {
 /// Install production dependencies with a compatible managed Node.js and pinned pnpm.
 ///
 /// Spawns: `node <managed-pnpm>/bin/pnpm.cjs install --ignore-workspace`
-/// with `CI=true`. On failure, records the exit code in the parent directory's `upgrade.log`.
+/// with `CI=true`. On failure, records safe diagnostics in the parent directory's `upgrade.log`.
 pub async fn install_production_deps(
     version_dir: &AbsolutePath,
     registry: Option<&str>,
@@ -240,7 +286,8 @@ pub async fn install_production_deps(
 
     if !output.status.success() {
         let exit_code = vp_shared::exit_code_from_status(output.status);
-        let log_path = write_upgrade_log(version_dir, exit_code).await;
+        let log_path =
+            write_upgrade_log(version_dir, exit_code, &output.stdout, &output.stderr).await;
         return Err(Error::Setup(
             format_install_failure_message(
                 vp_shared::exit_code_from_status(output.status),
@@ -1105,7 +1152,7 @@ mod tests {
         let version_dir = AbsolutePathBuf::new(temp.path().join("0.1.15").to_path_buf()).unwrap();
         tokio::fs::create_dir(&version_dir).await.unwrap();
 
-        let result = write_upgrade_log(&version_dir, 17).await;
+        let result = write_upgrade_log(&version_dir, 17, b"", b"ENOSPC: private path").await;
         assert!(result.is_some(), "write_upgrade_log should return log path");
 
         let log_path = result.unwrap();
@@ -1119,11 +1166,69 @@ mod tests {
 
         let content = tokio::fs::read_to_string(&log_path).await.unwrap();
         assert!(content.contains("exit code 17"));
+        assert!(content.contains("Reported error: ENOSPC."));
+        assert!(!content.contains("private path"));
         assert!(content.contains("Registry output is not saved"));
 
         // Log should survive version_dir removal
         tokio::fs::remove_dir_all(&version_dir).await.unwrap();
         assert!(log_path.as_path().exists(), "upgrade.log should survive version_dir cleanup");
+    }
+
+    #[test]
+    fn install_failure_log_distinguishes_safe_causes_with_the_same_exit_code() {
+        let cases = [
+            ("ERR_PNPM_FETCH_401", "Check npm registry authentication"),
+            ("ERR_PNPM_OUTDATED_LOCKFILE", "The installation lockfile does not match"),
+            ("ENOSPC", "Free disk space before retrying"),
+        ];
+        for (code, hint) in cases {
+            let output = format!(
+                "{code}: https://private-user:private-password@registry.example.test/private-package?token=private-token\nAuthorization: Bearer private-bearer\n_authToken=private-config-token\n"
+            );
+            for (stdout, stderr) in [(output.as_bytes(), &[][..]), (&[][..], output.as_bytes())] {
+                let content = install_failure_log(1, stdout, stderr);
+                assert!(content.contains("Stage: production dependency installation."));
+                assert!(content.contains("exit code 1"));
+                assert!(content.contains(&format!("Reported error: {code}.")));
+                assert!(content.contains(hint));
+                assert!(!content.contains("private-"));
+                assert!(!content.contains("registry.example.test"));
+                assert!(!content.contains("Authorization"));
+                assert!(!content.contains("_authToken"));
+                if code != "ERR_PNPM_FETCH_401" {
+                    assert!(!content.contains("authentication"));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn install_failure_log_deduplicates_known_codes_from_both_streams() {
+        let content = install_failure_log(
+            1,
+            b"ERR_PNPM_FETCH_401 Unauthorized\nERR_PNPM_FETCH_401 Unauthorized",
+            b"ENOSPC: no space\nERR_PNPM_FETCH_401 Unauthorized",
+        );
+        assert_eq!(content.matches("Reported error: ERR_PNPM_FETCH_401.").count(), 1);
+        assert_eq!(content.matches("Reported error: ENOSPC.").count(), 1);
+    }
+
+    #[test]
+    fn install_failure_log_omits_unknown_output_and_partial_identifiers() {
+        for output in [
+            &b""[..],
+            b"ERR_PNPM_PRIVATE_SECRET=private-token\nhttps://private-user:private-password@example.test/",
+            b"PREFIX_ERR_PNPM_FETCH_401 ERR_PNPM_FETCH_401_PRIVATE ENOSPC_PRIVATE",
+            b"\xff\xfeprivate-token",
+        ] {
+            let content = install_failure_log(1, output, output);
+            assert!(content.contains("No recognized error identifier was reported."));
+            assert!(!content.contains("Reported error:"));
+            assert!(!content.contains("private"));
+            assert!(!content.contains("SECRET"));
+            assert!(!content.contains("authentication"));
+        }
     }
 
     #[tokio::test]

@@ -79,15 +79,20 @@ const archive = createArchive({
 const integrity = 'sha512-' + createHash('sha512').update(archive).digest('base64');
 // A small local Node distribution keeps fresh-root setup independent of the network.
 const nodeArchives = new Map(
-  ['darwin-x64', 'darwin-arm64', 'linux-x64', 'linux-arm64', 'linux-x64-musl', 'linux-arm64-musl'].map(
-    (platform) => {
-      const directory = `node-v99.0.0-${platform}`;
-      return [
-        `${directory}.tar.gz`,
-        createArchive({ [`${directory}/bin/node`]: '#!/bin/sh\nexec "$TEST_SYSTEM_NODE" "$@"\n' }),
-      ];
-    },
-  ),
+  [
+    'darwin-x64',
+    'darwin-arm64',
+    'linux-x64',
+    'linux-arm64',
+    'linux-x64-musl',
+    'linux-arm64-musl',
+  ].map((platform) => {
+    const directory = `node-v99.0.0-${platform}`;
+    return [
+      `${directory}.tar.gz`,
+      createArchive({ [`${directory}/bin/node`]: '#!/bin/sh\nexec "$TEST_SYSTEM_NODE" "$@"\n' }),
+    ];
+  }),
 );
 let downloads = 0,
   installs = 0,
@@ -282,7 +287,24 @@ try {
   console.log('A failed frozen refresh invalidates completion and retries with saved preferences.');
 
   const sharedReceipt = path.join(userPackage(env), 'node_modules/.vp-install-complete');
+  async function checkIncompleteDependencies() {
+    const requestsBefore = registryRequests;
+    const installsBefore = installs;
+    const receiptBefore = fs.existsSync(sharedReceipt) ? fs.readFileSync(sharedReceipt) : undefined;
+    const result = await run(publicVp, ['env', 'doctor', 'node'], env, root, 1);
+    assert.match(result.stdout, /CLI dependencies.*\(incomplete\)/);
+    assert.ok(result.stdout.includes("Run 'vp --help' to retry CLI dependency setup."));
+    assert.ok(!result.stdout.includes('All checks passed'));
+    assert.equal(registryRequests, requestsBefore, 'doctor must not access the registry');
+    assert.equal(installs, installsBefore, 'doctor must not install dependencies');
+    assert.deepEqual(
+      fs.existsSync(sharedReceipt) ? fs.readFileSync(sharedReceipt) : undefined,
+      receiptBefore,
+      'doctor must not change the completion receipt',
+    );
+  }
   fs.unlinkSync(sharedReceipt);
+  await checkIncompleteDependencies();
   const incomplete = await run(
     publicVp,
     ['--help'],
@@ -295,6 +317,7 @@ try {
   await run(publicVp, ['--help'], env);
   assert.equal(installs, 5, 'missing shared receipt must trigger dependency repair');
   fs.writeFileSync(sharedReceipt, 'corrupt');
+  await checkIncompleteDependencies();
   await run(publicVp, ['--help'], env);
   assert.equal(installs, 6, 'invalid shared receipt must trigger dependency repair');
   // The binary and version stay unchanged, but the companion now identifies a new payload.
@@ -314,7 +337,9 @@ try {
   await run(publicVp, ['--help'], env);
   assert.equal(installs, 7, 'completed repair must be reused');
   assert.equal(fs.readFileSync(settingsFile, 'utf8'), preferences);
-  console.log('Missing receipts, corrupt receipts, and changed companions trigger dependency repair.');
+  console.log(
+    'Missing receipts, corrupt receipts, and changed companions trigger dependency repair.',
+  );
 
   const upgrade = await run(publicVp, ['upgrade'], env, root, 1);
   assert.ok(upgrade.stderr.includes('brew upgrade voidzero-dev/vite-plus/vp'));
@@ -324,6 +349,8 @@ try {
   );
   const doctor = await run(publicVp, ['env', 'doctor', 'node'], env);
   assert.ok(doctor.stdout.includes('CLI dependencies'));
+  assert.ok(!doctor.stdout.includes('(incomplete)'));
+  console.log('Doctor reports missing or corrupt dependency receipts without registry access.');
   const secondUser = environment('second-user');
   // Model migration from a script install with a managed global package.
   const previous = path.join(secondUser.VP_HOME, 'current/bin/vp');
@@ -358,6 +385,126 @@ try {
   console.log(
     'Ownership commands use the tap name; migration preserves global packages and refreshes their shims.',
   );
+
+  const cached = environment('cached-shims');
+  await run(publicVp, ['--help'], cached);
+  const cachedReceipt = path.join(userPackage(cached), 'node_modules/.vp-install-complete');
+  const packageRoot = path.join(
+    cached.VP_HOME,
+    'packages/cached-tool/lib/node_modules/cached-tool',
+  );
+  fs.mkdirSync(packageRoot, { recursive: true });
+  fs.mkdirSync(path.join(cached.VP_HOME, 'bins'), { recursive: true });
+  fs.writeFileSync(
+    path.join(packageRoot, 'package.json'),
+    JSON.stringify({ name: 'cached-tool', version: '1.0.0', bin: { 'cached-tool': 'cli.js' } }),
+  );
+  fs.writeFileSync(path.join(packageRoot, 'cli.js'), "console.log('cached global tool');");
+  fs.writeFileSync(
+    path.join(cached.VP_HOME, 'packages/cached-tool.json'),
+    JSON.stringify({
+      name: 'cached-tool',
+      version: '1.0.0',
+      platform: { node: '99.0.0' },
+      bins: ['cached-tool'],
+      jsBins: ['cached-tool'],
+      manager: 'npm',
+      installedAt: '2026-01-01T00:00:00Z',
+    }),
+  );
+  fs.writeFileSync(
+    path.join(cached.VP_HOME, 'bins/cached-tool.json'),
+    JSON.stringify({
+      name: 'cached-tool',
+      package: 'cached-tool',
+      version: '1.0.0',
+      nodeVersion: '99.0.0',
+      source: 'vp',
+    }),
+  );
+  fs.symlinkSync(publicVp, path.join(cached.VP_HOME, 'bin/cached-tool'));
+  const cachedNode = await run(node, ['--version'], cached);
+  const checkCachedTools = async () => {
+    const before = { installs, registryRequests };
+    for (const [tool, expected] of [
+      ['node', cachedNode.stdout.trim()],
+      ['pnpm', 'pinned pnpm tool'],
+      ['cached-tool', 'cached global tool'],
+    ]) {
+      const result = await run(path.join(cached.VP_HOME, 'bin', tool), ['--version'], cached);
+      assert.equal(result.stdout.trim(), expected);
+      assert.equal(result.stderr, '');
+    }
+    for (const variable of ['VP_SHIM_TOOL', 'VITE_PLUS_SHIM_TOOL']) {
+      const result = await run(publicVp, ['--version'], { ...cached, [variable]: 'node' });
+      assert.equal(result.stdout, cachedNode.stdout);
+      assert.equal(result.stderr, '');
+    }
+    assert.deepEqual(
+      { installs, registryRequests },
+      before,
+      'cached shims must not repair the CLI',
+    );
+  };
+  rejectInstall = true;
+  fs.unlinkSync(cachedReceipt);
+  await checkCachedTools();
+  fs.writeFileSync(cachedReceipt, 'corrupt');
+  await checkCachedTools();
+  assert.equal(fs.readFileSync(cachedReceipt, 'utf8'), 'corrupt');
+  // A new keg has no matching first-start receipt. Saved tool configuration remains usable.
+  const cachedUpgrade = keg('cached-upgrade');
+  fs.unlinkSync(publicVp);
+  fs.symlinkSync(path.join(cachedUpgrade, 'bin/vp'), publicVp);
+  await checkCachedTools();
+  for (const tool of ['vp', 'vpr', 'vpx']) {
+    const before = installs;
+    await run(path.join(cached.VP_HOME, 'bin', tool), ['--help'], cached, root, 1);
+    assert.equal(installs, before + 1, `${tool} must still repair its CLI dependencies`);
+  }
+  for (const installerEnv of [
+    { VP_SELF_SETUP_SHELL: 'sh' },
+    { VP_SELF_SETUP_REPLACE_EXISTING: '1' },
+  ]) {
+    const before = installs;
+    await run(
+      path.join(cached.VP_HOME, 'bin/node'),
+      ['--version'],
+      { ...cached, ...installerEnv },
+      root,
+      1,
+    );
+    assert.equal(
+      installs,
+      before + 1,
+      'explicit installer handoffs must still install dependencies',
+    );
+  }
+  const beforeFreshShim = installs;
+  await run(
+    publicVp,
+    ['--version'],
+    { ...environment('fresh-shim'), VP_SHIM_TOOL: 'node' },
+    root,
+    1,
+  );
+  assert.equal(
+    installs,
+    beforeFreshShim + 1,
+    'an unconfigured shim must still run first-start setup',
+  );
+  rejectInstall = false;
+  fs.unlinkSync(publicVp);
+  fs.symlinkSync(path.join(replacement, 'bin/vp'), publicVp);
+  unlock(cachedUpgrade);
+  fs.rmSync(cachedUpgrade, { recursive: true });
+  console.log(
+    'Cached Node, package managers, and global tools run without CLI dependency repair after a keg upgrade.',
+  );
+  console.log(
+    'CLI aliases, explicit installers, and unconfigured shims still prepare CLI dependencies.',
+  );
+
   for (const split of [false, true]) {
     const fresh = environment(`fresh-${split ? 'split' : 'single'}`, true, false);
     const data = split ? path.join(fresh.HOME, 'data') : fresh.VP_HOME;

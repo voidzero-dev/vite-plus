@@ -93,9 +93,11 @@ CLI version and platform. Setup saves management choices before downloads and
 serializes concurrent attempts, so a failed attempt can retry without asking again.
 
 `vp env doctor`, `vp implode`, and `vp upgrade` bypass dependency setup and
-remain available after installation failures. Other invocations, including
-`vp --help` and `vp --version`, still run setup when needed. Explicit installer
-requests also run setup.
+remain available after installation failures. Doctor checks dependency completeness
+without downloading anything. Configured tool shims can run independently of the
+CLI package, so an interrupted CLI installation does not block cached tools.
+CLI invocations, including `vpr`, `vpx`, `vp --help`, and `vp --version`, still run
+setup when needed. Explicit installer requests also run setup.
 
 ```text
 <CONFIG>/config.json                 # saved before downloads
@@ -149,7 +151,7 @@ as its global fallback.
 Later invocations reuse setup while its completion checks remain valid. The
 checks compare the shared install receipt with the companion and working
 lockfiles, and check the CLI package version and entrypoint. Missing or
-inconsistent state triggers repair. Setup writes only to user directories.
+inconsistent state triggers repair when the CLI runs. Setup writes only to user directories.
 
 ### 5. Upgrade through Homebrew
 
@@ -209,6 +211,8 @@ shared downloader for metadata, integrity checks, caching, and locking.
 Setup retains the shared installer's explicit lockfile bypass option. Authentication
 failures stop setup without a public-registry fallback. Credentials stay out of
 command arguments, logs, and receipts; no Homebrew-specific npm settings are needed.
+Failure logs retain known error codes and fixed guidance for authentication,
+lockfile, and disk-space errors, without saving raw package-manager output.
 
 ## Commands and migration
 
@@ -220,7 +224,7 @@ installed formula. For the official tap:
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
 | `vp upgrade`                               | Directs users to `brew upgrade voidzero-dev/vite-plus/vp`, including requests for explicit versions, force, or rollback. |
 | `vp upgrade --check`                       | Directs users to `brew outdated voidzero-dev/vite-plus/vp`.                                                              |
-| `vp env doctor`                            | Reports the Homebrew executable and CLI dependency directory.                                                            |
+| `vp env doctor`                            | Reports the Homebrew executable and checks CLI dependency completeness without downloading.                              |
 | `vp implode`                               | Removes user-managed dependencies, runtimes, settings, and shims.                                                        |
 | `brew uninstall voidzero-dev/vite-plus/vp` | Removes the Homebrew package and keeps user data.                                                                        |
 

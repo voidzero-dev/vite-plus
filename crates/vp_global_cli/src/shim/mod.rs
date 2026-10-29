@@ -146,16 +146,21 @@ const LEGACY_SHIM_TOOL_ENV_VAR: &str = "VITE_PLUS_SHIM_TOOL";
 /// IMPORTANT: This function clears both env vars after reading to
 /// prevent them from leaking to child processes.
 pub fn detect_shim_tool(argv0: &str) -> Option<String> {
+    let tool = peek_shim_tool(argv0);
     // Always clear both env vars to prevent them from leaking to child processes.
-    // We read them first, then clear immediately.
     // SAFETY: We're at program startup before any threads are spawned.
-    let env_tool = std::env::var(SHIM_TOOL_ENV_VAR)
-        .ok()
-        .or_else(|| std::env::var(LEGACY_SHIM_TOOL_ENV_VAR).ok());
     unsafe {
         std::env::remove_var(SHIM_TOOL_ENV_VAR);
         std::env::remove_var(LEGACY_SHIM_TOOL_ENV_VAR);
     }
+    tool
+}
+
+/// Inspect shim mode before setup without consuming an installer's re-exec environment.
+pub(crate) fn peek_shim_tool(argv0: &str) -> Option<String> {
+    let env_tool = std::env::var(SHIM_TOOL_ENV_VAR)
+        .ok()
+        .or_else(|| std::env::var(LEGACY_SHIM_TOOL_ENV_VAR).ok());
 
     // Check VP_SHIM_TOOL env var first (set by trampoline exe on Windows).
     // This takes priority over argv[0] because the trampoline spawns vp.exe
@@ -245,6 +250,8 @@ mod tests {
             std::env::set_var(SHIM_TOOL_ENV_VAR, "node");
             std::env::remove_var(LEGACY_SHIM_TOOL_ENV_VAR);
         }
+        assert_eq!(peek_shim_tool("vp"), Some("node".to_string()));
+        assert_eq!(std::env::var(SHIM_TOOL_ENV_VAR).as_deref(), Ok("node"));
         let result = detect_shim_tool("vp");
         assert_eq!(result, Some("node".to_string()));
         // Env var should be cleared after detection

@@ -23,7 +23,9 @@ It uses the same runtime selection and lockfile recovery options as the [script 
 It stores dependencies in `<DATA>/cli-packages/<version>/<platform>` and sets up your preferences and shims.
 `<DATA>` comes from the [Vite+ directory configuration](/guide/global-cli#installation-variables).
 The native executable stays under Homebrew's control. Later invocations reuse the completed setup.
-`vp env doctor` shows both locations.
+`vp env doctor` shows both locations and checks whether CLI dependencies are complete without downloading anything.
+If dependencies are incomplete, fix the reported problem and run `vp --help` to retry setup.
+Configured tool shims can still run cached Node.js, package managers, and global packages while CLI dependency repair is pending.
 
 ## Custom npm registry
 

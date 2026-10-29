@@ -7,6 +7,7 @@ mod shell;
 use std::{path::Path, process::ExitCode};
 
 use dialoguer::{Confirm, theme::ColorfulTheme};
+pub(crate) use external::package_complete;
 use vp_pm_cli::PackageManagerType;
 use vp_setup::{SELF_SETUP_MARKER, VP_BINARY_NAME, install, is_commit_preview_version};
 use vp_shared::{EnvConfig, ManagerPreference, env_vars, output};
