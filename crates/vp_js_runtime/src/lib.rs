@@ -53,8 +53,9 @@ mod provider;
 mod providers;
 mod runtime;
 
-/// Default Node.js release, kept within Node 24 by `.github/scripts/upgrade-deps.ts`.
-pub const DEFAULT_NODE_VERSION: &str = "24.22.2";
+/// Embed the repository's Node.js pin so installed binaries need no source checkout.
+/// `.github/scripts/upgrade-deps.ts` keeps `.node-version` within Node 24.
+pub const DEFAULT_NODE_VERSION: &str = include_str!("../../../.node-version").trim_ascii();
 
 pub use dev_engines::{
     nvmrc_version_spans, parse_node_version_content, read_node_version_file, read_nvmrc_file,

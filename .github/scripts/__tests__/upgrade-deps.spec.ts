@@ -37,19 +37,12 @@ test.each([false, true])(
       'pnpm-workspace.yaml',
       'packages/tools/.upstream-versions.json',
       'packages/cli/src/utils/constants.ts',
-      'crates/vp_js_runtime/src/lib.rs',
     ]) {
       mkdirSync(dirname(join(tempDir, file)), { recursive: true });
       copyFileSync(join(root, file), join(tempDir, file));
     }
-    const runtimePath = join(tempDir, 'crates/vp_js_runtime/src/lib.rs');
-    writeFileSync(
-      runtimePath,
-      readFileSync(runtimePath, 'utf8').replace(
-        /pub const DEFAULT_NODE_VERSION: &str = "[\d.]+";/,
-        'pub const DEFAULT_NODE_VERSION: &str = "24.9.0";',
-      ),
-    );
+    const nodeVersionPath = join(tempDir, '.node-version');
+    writeFileSync(nodeVersionPath, '24.9.0\n');
     const workspacePath = join(tempDir, 'pnpm-workspace.yaml');
     writeFileSync(
       workspacePath,
@@ -150,11 +143,9 @@ test.each([false, true])(
     expect(readFileSync(workspacePath, 'utf8')).toContain("\n  '@oxlint/plugins': =1.88.0\n");
     expect(readFileSync(workspacePath, 'utf8')).toContain('\n  oxlint: =1.88.0\n');
     expect(readFileSync(workspacePath, 'utf8')).toContain('\n  oxlint-tsgolint: =7.0.2004\n');
-    expect(readFileSync(runtimePath, 'utf8')).toContain(
-      'pub const DEFAULT_NODE_VERSION: &str = "24.10.2";',
-    );
+    expect(readFileSync(nodeVersionPath, 'utf8')).toBe('24.10.2\n');
     const versions = JSON.parse(readFileSync(join(metaDir, 'versions.json'), 'utf8'));
-    expect(versions['Node.js default']).toEqual({ old: '24.9.0', new: '24.10.2' });
+    expect(versions['Node.js']).toEqual({ old: '24.9.0', new: '24.10.2' });
     expect(versions['lint-staged']).toEqual({ old: '16.2.6', new: '17.5.1' });
     expect(versions['@oxlint/plugins'].new).toBe('1.88.0');
     expect(versions['@oxlint/plugins'].new).toBe(versions.oxlint.new);

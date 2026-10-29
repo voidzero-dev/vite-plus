@@ -14,7 +14,7 @@ Run `vp migrate` to replace exact `voidzero-dev/setup-vp@v1` references in GitHu
 
 ## Node.js During Installation
 
-The Vite+ installer uses a pinned Node.js 24 release by default. The dependency-upgrade workflow updates this pin within Node.js 24. With versions that support [`VP_SETUP_NODE_VERSION`](/guide/global-cli#vp-setup-node-version), `setup-vp` can use the project's version for installation too. This avoids a second Node.js download when that version supports both the global CLI and its pinned `pnpm`.
+The Vite+ installer uses the Node.js 24 release embedded from the Vite+ repository's `.node-version` by default. The dependency-upgrade workflow updates this file within Node.js 24. With versions that support [`VP_SETUP_NODE_VERSION`](/guide/global-cli#vp-setup-node-version), `setup-vp` can use the project's version for installation too. This avoids a second Node.js download when that version supports both the global CLI and its pinned `pnpm`.
 
 `setup-vp` selects the version before it starts the installer. An explicit Node.js version takes precedence over a version-file input. Without either input, it checks the working directory and its parents using the [project declaration order](/guide/env#node-js-selection). The integration passes the selection through `VP_SETUP_NODE_VERSION`; the installer itself does not read project declarations.
 

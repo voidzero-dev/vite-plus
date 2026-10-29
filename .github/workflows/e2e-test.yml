@@ -38,6 +38,7 @@ jobs:
         with:
           filters: |
             related-files:
+              - '.node-version'
               - 'packages/**/build.ts'
               - .github/workflows/e2e-test.yml
               - .github/workflows/reusable-ecosystem-ci.yml

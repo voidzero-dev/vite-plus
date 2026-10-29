@@ -71,7 +71,7 @@ irm https://vite.plus/ps1 | iex
 
 On Windows, you can instead download and run [`vp-setup.exe`](https://setup.viteplus.dev).
 
-The installer uses a pinned Node.js 24 release to install its JavaScript dependencies. The dependency-upgrade workflow updates this pin within Node.js 24. CI integrations can select another compatible version through [`VP_SETUP_NODE_VERSION`](#vp-setup-node-version).
+The installer uses the Node.js 24 release pinned in the Vite+ repository's `.node-version` to install its JavaScript dependencies. This version is embedded in the CLI at build time. Development and CI use the same file, which the dependency-upgrade workflow updates within Node.js 24. CI integrations can select another compatible version through [`VP_SETUP_NODE_VERSION`](#vp-setup-node-version).
 
 After installation, open a new shell and run:
 

@@ -423,24 +423,15 @@ async function updateVitestVersionConstant(vitestVersion: string): Promise<void>
   console.log('Updated packages/cli/src/utils/constants.ts');
 }
 
-// ============ Update the installer and fallback Node.js version ============
+// ============ Update the development, CI, and default Node.js version ============
 function updateDefaultNodeVersion(nodeVersion: string): void {
-  const filePath = path.join(ROOT, 'crates/vp_js_runtime/src/lib.rs');
-  const content = fs.readFileSync(filePath, 'utf8');
-  const pattern = /pub const DEFAULT_NODE_VERSION: &str = "(\d+\.\d+\.\d+)";/;
-  let oldVersion: string | undefined;
-  const updated = content.replace(pattern, (_match: string, captured: string) => {
-    oldVersion = captured;
-    return `pub const DEFAULT_NODE_VERSION: &str = "${nodeVersion}";`;
-  });
-  if (oldVersion === undefined) {
-    throw new Error(
-      `Failed to match DEFAULT_NODE_VERSION in ${filePath} — the pattern ${pattern} is stale, ` +
-        `please update it in .github/scripts/upgrade-deps.ts`,
-    );
+  const filePath = path.join(ROOT, '.node-version');
+  const oldVersion = fs.readFileSync(filePath, 'utf8').trim();
+  if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(oldVersion)) {
+    throw new Error(`Expected an exact stable Node.js version in ${filePath}`);
   }
-  fs.writeFileSync(filePath, updated);
-  recordChange('Node.js default', oldVersion, nodeVersion);
+  fs.writeFileSync(filePath, `${nodeVersion}\n`);
+  recordChange('Node.js', oldVersion, nodeVersion);
 }
 
 // ============ Write metadata files for PR description ============
@@ -580,7 +571,7 @@ async function upgradeDependencies(): Promise<void> {
     getLatestNpmVersion('oxc-parser'),
   ]);
 
-  console.log(`Node.js default: ${nodeVersion}`);
+  console.log(`Node.js: ${nodeVersion}`);
   console.log(`vitest: ${vitestVersion}`);
   console.log(`tsdown: ${tsdownVersion}`);
   console.log(`lightningcss (from @tsdown/css): ${lightningcssVersion}`);
