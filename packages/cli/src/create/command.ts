@@ -96,6 +96,10 @@ export function getPackageRunner(workspaceInfo: WorkspaceInfo) {
         args: ['dlx'],
       };
     case 'yarn':
+      // Match `vp dlx`: Yarn Classic has no dlx command.
+      if (workspaceInfo.downloadPackageManager.version.startsWith('1.')) {
+        return { command: 'npx', args: ['--yes'] };
+      }
       return {
         command: 'yarn',
         args: ['dlx'],
