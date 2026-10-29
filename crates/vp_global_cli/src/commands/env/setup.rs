@@ -1010,6 +1010,7 @@ def --env --wrapped vp [...args: string@"nu-complete vp"] {
 
 # Shell completion for nushell (delegates to fish completions dynamically)
 def "nu-complete vp" [context: string] {
+    if (%which fish | %is-empty) { return null }
     let fish_cmd = $"VP_COMPLETE=fish command vp | source; complete '--do-complete=($context)'"
     ^fish --command $fish_cmd | %from tsv --flexible --noheaders --no-infer | %rename value description | %update value {|row|
         let value = $row.value
@@ -1022,6 +1023,7 @@ def "nu-complete vp" [context: string] {
 }
 # Completion logic for vpr (translates context to 'vp run ...')
 def "nu-complete vpr" [context: string] {
+    if (%which fish | %is-empty) { return null }
     let modified_context = if ($context =~ '^vpr(?<cwd>\s+-C\s+(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s') {
         $context | %str replace -r '^vpr(?<cwd>\s+-C\s+(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s' 'vp$cwd run '
     } else if ($context =~ '^vpr(?<cwd>\s+-C=?(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s') {
@@ -1968,10 +1970,28 @@ mod tests {
                 assert!(sigil.contains("| %update value {|row|"), "got: {sigil}");
                 assert!(sigil.contains(r#"("/tmp/vp%home" | %path expand"#), "got: {sigil}");
                 assert!(sigil.contains("^fish --command"), "got: {sigil}");
+                assert!(
+                    sigil.contains("if (%which fish | %is-empty) { return null }"),
+                    "got: {sigil}"
+                );
+                assert_eq!(
+                    sigil.matches("if (%which fish | %is-empty) { return null }").count(),
+                    2,
+                    "guard should appear in both vp and vpr completers, got: {sigil}"
+                );
 
                 let legacy = render_env_content(EnvShell::Nu, &config, NuSyntax::Legacy);
                 assert!(legacy.contains("| update value {|row|"), "got: {legacy}");
                 assert!(legacy.contains("^fish --command"), "got: {legacy}");
+                assert!(
+                    legacy.contains("if (which fish | is-empty) { return null }"),
+                    "got: {legacy}"
+                );
+                assert_eq!(
+                    legacy.matches("if (which fish | is-empty) { return null }").count(),
+                    2,
+                    "guard should appear in both vp and vpr completers, got: {legacy}"
+                );
                 assert_eq!(
                     legacy.replace("/tmp/vp%home", "").matches('%').count(),
                     0,
