@@ -9,6 +9,7 @@ on:
   push:
     branches: [main]
     paths:
+      - '.node-version'
       - 'HomebrewFormula/**'
       - '.github/scripts/*homebrew*'
       - '.github/scripts/__tests__/homebrew-formula.mjs'
@@ -59,6 +60,7 @@ jobs:
         with:
           filters: |
             packaging:
+              - '.node-version'
               - 'HomebrewFormula/**'
               - '.github/scripts/*homebrew*'
               - '.github/scripts/__tests__/homebrew-formula.mjs'

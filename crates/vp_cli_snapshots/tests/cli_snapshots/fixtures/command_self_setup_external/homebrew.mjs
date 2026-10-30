@@ -11,6 +11,17 @@ import { createArchive } from './archive.mjs';
 const root = path.resolve('homebrew-test');
 const source =
   process.env.TEST_VP_BINARY ?? fs.realpathSync(path.join(process.env.VP_HOME, 'bin/vp'));
+const checkout = process.env.TEST_VP_BINARY
+  ? path.resolve(import.meta.dirname, '../../../../../..')
+  : path.resolve(
+      fs.realpathSync(path.join(process.env.VP_HOME, 'current/node_modules/vite-plus')),
+      '../..',
+    );
+const installNode = fs.readFileSync(path.join(checkout, '.node-version'), 'utf8').trim();
+const compatibleNode = '22.23.4';
+const runtimeNode = '99.0.0';
+assert.notEqual(installNode, runtimeNode);
+assert.notEqual(installNode, compatibleNode);
 const node = fs.realpathSync(process.execPath);
 const npmRoot = path.resolve(path.dirname(node), '../lib/node_modules/npm');
 assert.ok(
@@ -50,6 +61,7 @@ const pnpmCode = `
   const fs = require('node:fs');
   const assert = require('node:assert/strict');
   if (process.argv.includes('install')) {
+    assert.equal(process.env.TEST_NODE_VERSION, process.env.TEST_EXPECTED_INSTALL_NODE);
     if (process.env.TEST_USERCONFIG) {
       assert.equal(process.env.npm_config_userconfig, process.env.TEST_USERCONFIG);
       assert.equal(process.env.NPM_CONFIG_USERCONFIG, process.env.TEST_USERCONFIG);
@@ -77,43 +89,61 @@ const archive = createArchive({
   'package/bin/pnpx.cjs': pnpmCode,
 });
 const integrity = 'sha512-' + createHash('sha512').update(archive).digest('base64');
+function nodeScript(version) {
+  return `#!/bin/sh\nexport TEST_NODE_VERSION=${version}\nexec "$TEST_SYSTEM_NODE" "$@"\n`;
+}
 // A small local Node distribution keeps fresh-root setup independent of the network.
 const nodeArchives = new Map(
-  [
-    'darwin-x64',
-    'darwin-arm64',
-    'linux-x64',
-    'linux-arm64',
-    'linux-x64-musl',
-    'linux-arm64-musl',
-  ].map((platform) => {
-    const directory = `node-v99.0.0-${platform}`;
-    return [
-      `${directory}.tar.gz`,
-      createArchive({ [`${directory}/bin/node`]: '#!/bin/sh\nexec "$TEST_SYSTEM_NODE" "$@"\n' }),
-    ];
-  }),
+  [installNode, compatibleNode, runtimeNode].flatMap((version) =>
+    [
+      'darwin-x64',
+      'darwin-arm64',
+      'linux-x64',
+      'linux-arm64',
+      'linux-x64-musl',
+      'linux-arm64-musl',
+    ].map((platform) => {
+      const directory = `node-v${version}-${platform}`;
+      return [
+        `/v${version}/${directory}.tar.gz`,
+        createArchive({ [`${directory}/bin/node`]: nodeScript(version) }),
+      ];
+    }),
+  ),
 );
+const nodeDownloads = new Map();
 let downloads = 0,
   installs = 0,
+  indexRequests = 0,
   registryRequests = 0,
   rejectInstall = false,
   corrupt = false;
 let authorization = `Bearer ${token}`;
 const server = createServer((request, response) => {
   if (request.url?.startsWith('/registry/')) registryRequests++;
-  if (request.url === '/index.json')
-    return response.end(JSON.stringify([{ version: 'v99.0.0', lts: 'Fixture' }]));
-  if (request.url === '/v99.0.0/SHASUMS256.txt.asc') return response.writeHead(404).end();
-  if (request.url === '/v99.0.0/SHASUMS256.txt') {
+  if (request.url === '/index.json') {
+    indexRequests++;
+    return response.end(JSON.stringify([{ version: `v${runtimeNode}`, lts: 'Fixture' }]));
+  }
+  if (request.url?.endsWith('/SHASUMS256.txt.asc')) return response.writeHead(404).end();
+  const checksum = /^\/v(\d+\.\d+\.\d+)\/SHASUMS256\.txt$/.exec(request.url);
+  if (checksum) {
     return response.end(
       [...nodeArchives]
-        .map(([name, data]) => `${createHash('sha256').update(data).digest('hex')}  ${name}\n`)
+        .filter(([name]) => name.startsWith(`/v${checksum[1]}/`))
+        .map(
+          ([name, data]) =>
+            `${createHash('sha256').update(data).digest('hex')}  ${path.basename(name)}\n`,
+        )
         .join(''),
     );
   }
-  const nodeArchive = nodeArchives.get(request.url?.replace('/v99.0.0/', ''));
-  if (nodeArchive) return response.end(nodeArchive);
+  const nodeArchive = nodeArchives.get(request.url);
+  if (nodeArchive) {
+    const version = request.url.split('/')[1].slice(1);
+    nodeDownloads.set(version, (nodeDownloads.get(version) ?? 0) + 1);
+    return response.end(nodeArchive);
+  }
   if (request.url === '/installed') {
     installs++;
     return response.writeHead(rejectInstall ? 500 : 200).end();
@@ -161,17 +191,25 @@ function keg(version) {
   return prefix;
 }
 
-function environment(name, auth = true, seedRuntime = true) {
+function environment(name, auth = true, seedRuntime = true, seedInstallRuntime = seedRuntime) {
   const home = path.join(root, name);
   const vpHome = path.join(home, '.vite-plus');
   fs.mkdirSync(home, { recursive: true });
   if (seedRuntime) {
-    const nodeRoot = path.join(vpHome, 'js_runtime/node/99.0.0');
-    fs.mkdirSync(path.join(nodeRoot, 'bin'), { recursive: true });
-    fs.mkdirSync(path.join(nodeRoot, 'lib/node_modules'), { recursive: true });
-    fs.symlinkSync(node, path.join(nodeRoot, 'bin/node'));
-    fs.symlinkSync(npmRoot, path.join(nodeRoot, 'lib/node_modules/npm'));
-    // These cases model an existing installation with a provisioned runtime.
+    for (const version of seedInstallRuntime ? [runtimeNode, installNode] : [runtimeNode]) {
+      const nodeRoot = path.join(vpHome, 'js_runtime/node', version);
+      fs.mkdirSync(path.join(nodeRoot, 'bin'), { recursive: true });
+      fs.mkdirSync(path.join(nodeRoot, 'lib/node_modules'), { recursive: true });
+      fs.writeFileSync(path.join(nodeRoot, 'bin/node'), nodeScript(version), { mode: 0o755 });
+      fs.symlinkSync(npmRoot, path.join(nodeRoot, 'lib/node_modules/npm'));
+      for (const command of ['npm', 'npx']) {
+        fs.symlinkSync(
+          `../lib/node_modules/npm/bin/${command}-cli.js`,
+          path.join(nodeRoot, 'bin', command),
+        );
+      }
+    }
+    // Existing installations already have their tool and dependency-install runtimes.
     fs.writeFileSync(path.join(vpHome, '.vp-owned'), 'vite-plus-owned-directory\n');
   }
   fs.writeFileSync(
@@ -190,6 +228,7 @@ function environment(name, auth = true, seedRuntime = true) {
     NPM_TOKEN: token,
     TEST_REGISTRY: url,
     TEST_SYSTEM_NODE: node,
+    TEST_EXPECTED_INSTALL_NODE: installNode,
     TEST_CLI_BINARY: path.join(home, 'vp-path'),
     npm_config_fetch_retries: '0',
     npm_config_cache: path.join(home, 'npm-cache'),
@@ -224,6 +263,7 @@ try {
   const userNpmrc = fs.readFileSync(path.join(env.HOME, '.npmrc'), 'utf8');
   rejectInstall = true;
   await run(publicVp, ['--help'], env, root, 1);
+  assert.equal(indexRequests, 0, 'dependency setup must use the release pin without resolving LTS');
   const settingsFile = path.join(env.VP_HOME, 'config.json');
   const preferences = fs.readFileSync(settingsFile, 'utf8');
   assert.ok(!fs.existsSync(path.join(userPackage(env), 'node_modules/.vp-install-complete')));
@@ -234,6 +274,7 @@ try {
   const retry = await Promise.all([run(publicVp, ['--help'], env), run(publicVp, ['--help'], env)]);
   assert.equal(installs, 2, 'retry must install once across concurrent launches');
   assert.equal(downloads, 1, 'the retry must reuse bootstrapped pnpm');
+  assert.equal(indexRequests, 0, 'dependency retries must also use the release pin');
   assert.ok(retry.every((result) => !result.stderr.includes('manage Node')));
   assert.equal(fs.readFileSync(settingsFile, 'utf8'), preferences);
   assert.ok(!fs.existsSync(path.join(old, 'bin/.vp-setup-complete')));
@@ -266,7 +307,12 @@ try {
   fs.rmSync(old, { recursive: true });
   await run(savedBinary, ['--help'], env);
   await run(path.join(env.VP_HOME, 'bin/vp'), ['--help'], env);
-  await run(path.join(env.VP_HOME, 'bin/node'), ['--version'], env);
+  const runtime = await run(
+    path.join(env.VP_HOME, 'bin/node'),
+    ['-p', 'process.env.TEST_NODE_VERSION'],
+    env,
+  );
+  assert.equal(runtime.stdout.trim(), runtimeNode, 'normal Node selection must still resolve LTS');
   for (const shim of ['pn', 'pnx']) {
     const output = await run(path.join(env.VP_HOME, 'bin', shim), ['--version'], env);
     assert.equal(output.stdout.trim(), 'pinned pnpm tool');
@@ -505,6 +551,38 @@ try {
     'CLI aliases, explicit installers, and unconfigured shims still prepare CLI dependencies.',
   );
 
+  for (const [requested, expected] of [
+    [compatibleNode, compatibleNode],
+    ['20.18.0', installNode],
+  ]) {
+    const selected = environment(`setup-node-${requested}`, true, true, false);
+    selected.VP_SETUP_NODE_VERSION = requested;
+    selected.VP_SETUP_NODE_VERSION_FILE = path.join(selected.HOME, 'selected-node');
+    selected.TEST_EXPECTED_INSTALL_NODE = expected;
+    const before = { installs, indexRequests };
+    const result = await run(publicVp, ['--help'], selected);
+    assert.equal(installs, before.installs + 1);
+    assert.equal(indexRequests, before.indexRequests, 'exact setup overrides must not resolve LTS');
+    assert.equal(fs.readFileSync(selected.VP_SETUP_NODE_VERSION_FILE, 'utf8'), requested);
+    assert.ok(fs.existsSync(path.join(selected.VP_HOME, 'js_runtime/node', expected)));
+    if (requested !== expected) {
+      assert.ok((result.stdout + result.stderr).includes('using a separate installation runtime'));
+      assert.ok(!fs.existsSync(path.join(selected.VP_HOME, 'js_runtime/node', requested)));
+    } else {
+      assert.ok(!fs.existsSync(path.join(selected.VP_HOME, 'js_runtime/node', installNode)));
+    }
+    const runtime = await run(
+      path.join(selected.VP_HOME, 'bin/node'),
+      ['-p', 'process.env.TEST_NODE_VERSION'],
+      selected,
+    );
+    assert.equal(
+      runtime.stdout.trim(),
+      runtimeNode,
+      'setup overrides must not change runtime selection',
+    );
+  }
+
   for (const split of [false, true]) {
     const fresh = environment(`fresh-${split ? 'split' : 'single'}`, true, false);
     const data = split ? path.join(fresh.HOME, 'data') : fresh.VP_HOME;
@@ -529,9 +607,19 @@ try {
     const npmrc = fs.readFileSync(path.join(fresh.HOME, '.npmrc'), 'utf8');
     for (let attempt = 0; attempt < 2; attempt++) {
       for (const directory of roots) assert.ok(!fs.existsSync(directory), directory);
-      const before = installs;
+      const before = {
+        installs,
+        indexRequests,
+        nodeDownloads: nodeDownloads.get(installNode) ?? 0,
+      };
       await Promise.all([run(publicVp, ['--help'], fresh), run(publicVp, ['--help'], fresh)]);
-      assert.equal(installs, before + 1, 'fresh concurrent setup must install once');
+      assert.equal(installs, before.installs + 1, 'fresh concurrent setup must install once');
+      assert.equal(indexRequests, before.indexRequests, 'fresh setup must not resolve LTS');
+      assert.equal(
+        nodeDownloads.get(installNode),
+        before.nodeDownloads + 1,
+        'fresh concurrent setup must download the release runtime once',
+      );
       for (const directory of roots) {
         assert.equal(
           fs.readFileSync(path.join(directory, '.vp-owned'), 'utf8'),

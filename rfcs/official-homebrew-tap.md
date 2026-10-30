@@ -86,8 +86,11 @@ Node.js, npm, pnpm, or user setup.
 
 ### 3. Prepare dependencies on first use
 
-Running `vp` prepares compatible Node.js and pinned pnpm, copies
+Running `vp` prepares Node.js and pinned pnpm, copies
 `vp-install-lock.yaml`, and installs `vite-plus@A` with `--frozen-lockfile`.
+By default, it uses the Node.js version embedded in the CLI release from
+`.node-version`; a compatible `VP_SETUP_NODE_VERSION` can override it.
+This installation runtime does not change Node.js selection for projects or tool shims.
 The [shared installer](../crates/vp_setup/src/install.rs) saves dependencies by
 CLI version and platform. Setup saves management choices before downloads and
 serializes concurrent attempts, so a failed attempt can retry without asking again.
@@ -171,8 +174,9 @@ continue to point through those links, even after Homebrew removes version `A`.
 ```
 
 Running `vp` after the upgrade installs `B`'s dependencies and records completion.
-Setup preserves preferences and reuses compatible bootstrap tools. Recovery
-commands retain the setup bypass described above.
+The new binary supplies its release's default Node.js pin; the formula needs no
+separate pin. Setup preserves preferences and reuses cached bootstrap tools that
+match the selected versions. Recovery commands retain the setup bypass described above.
 
 ```text
 <DATA>/cli-packages/B/<platform>/
