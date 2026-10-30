@@ -10,7 +10,11 @@ assert.equal(cliRequire('vite/package.json').name, '@voidzero-dev/vite-plus-core
 if (project.devDependencies.vite) {
   assert.equal(
     project.devDependencies.vite,
-    `npm:@voidzero-dev/vite-plus-core@${cliRequire('vite-plus/package.json').version}`,
+    cliRequire('vite-plus/package.json').dependencies.vite,
+  );
+  assert.equal(
+    project.devDependencies.vite,
+    `npm:@voidzero-dev/vite-plus-core@${cliRequire('vite/package.json').version}`,
   );
   assert.equal(require.resolve('vite/package.json'), cliRequire.resolve('vite/package.json'));
   assert.equal(vitestRequire.resolve('vite/package.json'), cliRequire.resolve('vite/package.json'));

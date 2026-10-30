@@ -320,6 +320,13 @@ Migration converts the Volta `volta.node` pin to `.node-version`, because Vite+ 
 - pnpm accepts the logical default catalog as either top-level `catalog` or `catalogs.default`, but not both. Migration preserves the existing form and never creates the other form beside it.
 - When an existing named catalog already owns `vite-plus`, `vite`, or `vitest`, migration reuses that managed toolchain catalog for newly added dependencies and overrides. It creates a top-level default catalog only when no managed or default catalog can be reused.
 
+**Peer rules.** The core version encodes the bundled Vite version: core `8.3.500` bundles Vite `8.3.5` (see the [RFC](https://github.com/voidzero-dev/vite-plus/blob/main/rfcs/core-version-alignment.md)). pnpm checks `vite` peer ranges against the `vite` alias, so a plugin that supports the bundled Vite passes, and a plugin that does not support it fails.
+
+- Migration does not add `vite` to `peerDependencyRules.allowAny` or `peerDependencyRules.allowedVersions`.
+- Migration removes an existing `vite` entry from both fields, also an entry that you wrote. The only purpose of that entry was to accept the `1.x` core alias. It removes a field, or `peerDependencyRules`, when no entry remains. Other entries stay. The migrate summary names the removed rule.
+- For a preview build (`0.0.0-commit.<sha>`) or a Vite+ prerelease core (such as `8.4.0-vp.0`), migration keeps writing the `vite` rule. Package managers do not accept these versions for ranges such as `^8.0.0`.
+- After migration, a plugin whose `vite` peer range excludes the bundled Vite (for example `^7.0.0`) produces a peer warning. With `strictPeerDependencies`, the install fails. Update the plugin, or add a rule scoped to that plugin, such as `allowedVersions: { 'vite-plugin-foo>vite': '*' }`. Migration removes only the plain `vite` key.
+
 **Other rules.**
 
 - Packages that use `vite-plus` without a direct `vite` declaration keep that layout (see [Vite and Overrides](#vite-and-overrides)).

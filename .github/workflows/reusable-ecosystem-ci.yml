@@ -85,11 +85,15 @@ jobs:
           # and installs them like a real release, with every package manager
           # (including bun) resolving the standard
           # `vite -> npm:@voidzero-dev/vite-plus-core@<version>` alias. Pin
-          # both packages to 0.0.0 so a correctly installed local build is
+          # the CLI to 0.0.0 and core to its local version (release counter
+          # 99, for example 8.3.599) so a correctly installed local build is
           # always distinguishable from any published version
           # (verify-install.ts asserts it), even on a release commit that
-          # leaves packages/{core,cli} at a published version.
-          (cd packages/core && npm pkg set version=0.0.0)
+          # leaves packages/{core,cli} at a published version. The local core
+          # version still encodes the bundled Vite, so peer checks run as they
+          # do for a release (rfcs/core-version-alignment.md).
+          CORE_VERSION=$(node packages/tools/src/core-version.ts local)
+          (cd packages/core && npm pkg set version="$CORE_VERSION")
           (cd packages/cli && npm pkg set version=0.0.0)
           cd packages/core && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
           cd packages/cli && pnpm pack --pack-destination ../../tmp/tgz && cd ../..

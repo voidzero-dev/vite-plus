@@ -3,7 +3,7 @@ import path from 'node:path';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import type { OxlintConfig } from 'oxlint';
-import { coerce, satisfies } from 'verkit';
+import { coerce, satisfies, tryParse } from 'verkit';
 
 import { VITEST_VERSION, VITE_PLUS_OVERRIDE_PACKAGES } from '../../utils/constants.ts';
 import { readJsonFile } from '../../utils/json.ts';
@@ -211,6 +211,35 @@ export const VITEST_BROWSER_DEP_NAMES = [
 // and must be left untouched.
 export const VITEST_IS_MANAGED_OVERRIDE = 'vitest' in VITE_PLUS_OVERRIDE_PACKAGES;
 
+const CORE_ALIAS_PREFIX = 'npm:@voidzero-dev/vite-plus-core@';
+
+/**
+ * Whether pnpm still needs the managed `vite` peer rule (`allowAny: [vite]`,
+ * `allowedVersions: { vite: '*' }`) for the given core alias.
+ *
+ * A stable core version encodes the bundled Vite version (`8.3.500` bundles
+ * Vite `8.3.5`, see rfcs/core-version-alignment.md). Package managers check
+ * `vite` peer ranges against it correctly, so the rule would only hide real
+ * incompatibilities. Every other spec still needs the rule: a preview
+ * (`0.0.0-commit.<sha>`), a Vite+ prerelease (`8.4.0-vp.0` fails `^8.0.0`), a
+ * `1.x` core from before the alignment, a dist-tag, or a `file:` or URL spec
+ * whose version is unknown.
+ */
+export function vitePeerDependencyRuleRequired(
+  viteSpec: string | undefined = VITE_PLUS_OVERRIDE_PACKAGES.vite,
+): boolean {
+  if (!viteSpec?.startsWith(CORE_ALIAS_PREFIX)) {
+    return true;
+  }
+  const version = tryParse(viteSpec.slice(CORE_ALIAS_PREFIX.length));
+  return (
+    !version ||
+    version.major < 8 ||
+    (version.prerelease?.length ?? 0) > 0 ||
+    (version.build?.length ?? 0) > 0
+  );
+}
+
 // Fallback specs used when normalizing a stale wrapper alias. Real user
 // ranges (e.g. `vitest: ^3.0.0`) are preserved — only the wrapper alias is
 // rewritten. For `vitest`, we substitute the vitest version vite-plus
@@ -334,7 +363,7 @@ function checkPackageVersion(projectPath: string, name: string, minVersion: stri
   return true;
 }
 
-type PnpmPeerDependencyRules = {
+export type PnpmPeerDependencyRules = {
   allowAny?: string[];
   allowedVersions?: Record<string, string>;
   [key: string]: unknown;

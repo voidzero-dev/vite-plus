@@ -31,6 +31,7 @@ export interface MigrationReport {
   gitHooksConfigured: boolean;
   frameworkShimAdded: boolean;
   packageManagerBootstrapConfigured: boolean;
+  vitePeerDependencyRuleRemoved: boolean;
   dependencyUpgrades: DependencyVersionChange[];
   warnings: string[];
   manualSteps: string[];
@@ -58,6 +59,7 @@ export function createMigrationReport(): MigrationReport {
     gitHooksConfigured: false,
     frameworkShimAdded: false,
     packageManagerBootstrapConfigured: false,
+    vitePeerDependencyRuleRemoved: false,
     dependencyUpgrades: [],
     warnings: [],
     manualSteps: [],

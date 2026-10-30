@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { decodeCoreVersion, encodeCoreVersion } from '../../packages/tools/src/core-version.ts';
 import {
   findLatestStableVersionForMajor,
   getBundledDependencyRanges,
@@ -573,8 +574,35 @@ function syncBundledDependencies(): void {
     recordChange(name, changes.get(name)?.old ?? oldRange, range);
     pkg[field][name] = range;
   }
+  syncCoreVersion(pkg);
   fs.writeFileSync(filePath, JSON.stringify(pkg, null, 2) + '\n');
   writeMetaFiles();
+}
+
+// The core version encodes the bundled Vite version (rfcs/core-version-alignment.md).
+// When the bundled Vite changes, restart the release counter at 0. The release
+// workflow selects the next unpublished counter.
+function syncCoreVersion(pkg: { version?: unknown; bundledVersions?: Record<string, string> }) {
+  const vitePath = path.join(ROOT, 'vite/packages/vite/package.json');
+  const viteVersion = readJsonFile(vitePath).version;
+  if (typeof viteVersion !== 'string' || !viteVersion.trim()) {
+    throw new Error(`Missing version in ${vitePath}`);
+  }
+  pkg.bundledVersions = { ...pkg.bundledVersions, vite: viteVersion };
+  const current = typeof pkg.version === 'string' ? pkg.version : undefined;
+  let currentVite: string | undefined;
+  try {
+    currentVite = current === undefined ? undefined : decodeCoreVersion(current).vite;
+  } catch {
+    currentVite = undefined;
+  }
+  if (currentVite === viteVersion) {
+    return;
+  }
+  const name = '@voidzero-dev/vite-plus-core';
+  const next = encodeCoreVersion(viteVersion, 0);
+  recordChange(name, changes.get(name)?.old ?? current, next);
+  pkg.version = next;
 }
 
 async function upgradeDependencies(): Promise<void> {
