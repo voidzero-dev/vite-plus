@@ -57,10 +57,10 @@ const KEEP_WATCH_PATH = '`--watch-path` has no `vpx` equivalent; use `--include`
 const KEEP_SHELL =
   'the command uses shell syntax that vp migrate does not rewrite, such as pipes, variables, or subshells';
 const KEEP_OTHER = 'vp migrate does not rewrite this use of tsx';
-const KEEP_TSX_TSCONFIG =
-  '`TSX_TSCONFIG_PATH` selects the tsconfig for tsx only; pass it to `vpx` as `--tsconfig`';
 const KEEP_NODE_OPTIONS =
   '`NODE_OPTIONS` loads tsx, whose hooks would compete with those of `vpx`; remove it first';
+const KEEP_INHERITED_OPTIONS =
+  '`NODE_OPTIONS` loads tsx into a child command that vp migrate cannot check';
 const KEEP_WATCH_TEST = '`vpx --watch` does not run `--test`';
 
 // Options that `vpx` does not run as tsx does. `-c` is Node.js' `--check`, but `vpx -c`
@@ -237,18 +237,29 @@ interface Rewrite {
   cwd?: string;
   edits: Edit[];
   kept: string[];
+  /** Package scripts already being checked through an inherited preload. */
+  checkingScripts: ReadonlySet<string>;
 }
 
 /**
  * Rewrite the tsx invocations in a command to `vpx`: `tsx a.ts` becomes `vpx a.ts`,
  * `tsx watch a.ts` becomes `vpx --watch a.ts` (`vpx watch` runs the npm package `watch`),
- * and `node --import tsx a.ts` becomes `vpx a.ts`. Package-manager wrappers such as
+ * and `node --import tsx a.ts` keeps Node.js with `vite-plus/register`. Wrappers such as
  * `npx tsx` go away with tsx, since `vpx` is a bin of vite-plus. A form `vpx` cannot run
  * stays as it is, with the reason in `kept`. With `cwd`, the directory the command runs
  * in, the scripts it runs are checked for syntax `vpx` runs differently.
  */
 export function rewriteTsxCommand(command: string, cwd?: string): TsxCommandRewrite {
-  if (!TSX_COMMAND.test(command)) {
+  return rewriteCommand(command, cwd, [], new Set());
+}
+
+function rewriteCommand(
+  command: string,
+  cwd: string | undefined,
+  inherited: readonly string[],
+  checkingScripts: ReadonlySet<string>,
+): TsxCommandRewrite {
+  if (!TSX_COMMAND.test(command) && !envKeepReason(inherited)) {
     return { command, kept: [] };
   }
   const segments = parseLiteralCommands(command, true);
@@ -256,7 +267,7 @@ export function rewriteTsxCommand(command: string, cwd?: string): TsxCommandRewr
   if (!segments || /%\w+%/.test(command)) {
     return { command, kept: [KEEP_SHELL] };
   }
-  const rewrite: Rewrite = { command, cwd, edits: [], kept: [] };
+  const rewrite: Rewrite = { command, cwd, edits: [], kept: [], checkingScripts };
   for (const tokens of segments) {
     const name = tokens[0].value;
     // After `cd` or another shell state change, scripts are no longer checked.
@@ -264,19 +275,20 @@ export function rewriteTsxCommand(command: string, cwd?: string): TsxCommandRewr
       rewrite.cwd = undefined;
       continue;
     }
-    rewriteSegment(rewrite, tokens);
+    rewriteSegment(rewrite, tokens, inherited);
   }
-  let rewritten = command;
-  for (const edit of rewrite.edits.toSorted((a, b) => b.start - a.start)) {
-    rewritten = rewritten.slice(0, edit.start) + edit.text + rewritten.slice(edit.end);
-  }
+  const rewritten = applyEdits(command, rewrite.edits);
   if (!rewrite.kept.length && TSX_COMMAND.test(rewritten)) {
     rewrite.kept.push(KEEP_OTHER);
   }
   return { command: rewritten, kept: rewrite.kept };
 }
 
-function rewriteSegment(rewrite: Rewrite, tokens: LiteralCommandToken[]): void {
+function rewriteSegment(
+  rewrite: Rewrite,
+  tokens: LiteralCommandToken[],
+  inherited: readonly string[],
+): void {
   const values = tokens.map(({ value }) => value);
   // Environment assignments and cross-env stay in front of the command.
   let first = 0;
@@ -292,30 +304,206 @@ function rewriteSegment(rewrite: Rewrite, tokens: LiteralCommandToken[]): void {
     first++;
     skipAssignments();
   }
+  // Inspect simple `env KEY=value command` wrappers. Options can change the
+  // environment or working directory, so retain preloads for those forms.
+  let unknownEnvironment = false;
+  while (values[first] === 'env') {
+    first++;
+    if (values[first] === '--') {
+      first++;
+    }
+    if (values[first]?.startsWith('-')) {
+      unknownEnvironment = true;
+      break;
+    }
+    skipAssignments();
+  }
   if (first >= values.length) {
     return;
   }
-  // tsx reads TSX_TSCONFIG_PATH, where `vpx` takes `--tsconfig`, and tsx hooks loaded
-  // through NODE_OPTIONS would compete with those of `vpx`. Both reach the commands a
-  // launcher runs.
-  const envReason = envKeepReason(values.slice(0, first));
+  // tsx hooks loaded through NODE_OPTIONS would compete with those of `vpx`.
+  // Environment assignments also reach the commands a launcher runs.
+  const assignments = [...inherited, ...values.slice(0, first)];
+  const envReason = envKeepReason(assignments);
+  const environment = scanEnvironmentOptions(assignments);
+  if (unknownEnvironment) {
+    environment.keepReason ??= KEEP_INHERITED_OPTIONS;
+  }
+  environment.keepReason ??= environment.preloads
+    .map((script) => scriptKeepReason(rewrite.cwd, script))
+    .find((reason) => reason !== undefined);
+  const editStart = rewrite.edits.length;
+  const keptStart = rewrite.kept.length;
   const start = first + getCommandStartIndex(values.slice(first));
+  // Nested wrappers can reveal another environment command whose assignments
+  // and options were not inspected above.
+  if (['env', 'cross-env', 'cross-env-shell'].includes(values[start])) {
+    environment.keepReason ??= KEEP_INHERITED_OPTIONS;
+  }
   const launcher = COMMAND_LAUNCHERS.get(values[start]);
   if (values[start] === 'tsx') {
     rewriteTsx(rewrite, tokens, first, start, envReason);
   } else if (values[start] === 'node') {
-    rewriteNodeLoader(rewrite, tokens, first, start, envReason);
+    rewriteNodeLoader(rewrite, tokens, first, start, envReason, environment);
   } else if (shell) {
     for (const token of tokens.slice(start)) {
-      rewriteQuotedCommand(rewrite, token, envReason);
+      rewriteQuotedCommand(rewrite, token, assignments);
     }
   } else if (launcher) {
     for (let index = start + 1; index < tokens.length; index++) {
       if (launcher(values[index - 1])) {
-        rewriteQuotedCommand(rewrite, tokens[index], envReason);
+        rewriteQuotedCommand(rewrite, tokens[index], assignments);
       }
     }
+  } else if (values.slice(start).some((value) => TSX_COMMAND.test(value))) {
+    rewrite.kept.push(KEEP_OTHER);
   }
+  if (!environment.replacements.length) {
+    return;
+  }
+  // All children inherit this assignment. Keep it and their edits together if one
+  // still needs tsx, rather than installing both loaders in the same process.
+  const taskStart = ['npm', 'pnpm', 'yarn', 'bun'].includes(values[start]) ? start : first;
+  const reason =
+    environment.keepReason ?? packageTaskKeepReason(rewrite, values.slice(taskStart), assignments);
+  if (reason && rewrite.kept.length === keptStart) {
+    rewrite.kept.push(reason);
+  }
+  if (rewrite.kept.length !== keptStart) {
+    rewrite.edits.length = editStart;
+    return;
+  }
+  for (const replacement of environment.replacements) {
+    const index = replacement.index - inherited.length;
+    if (index >= 0) {
+      rewrite.edits.push(literalEdit(rewrite.command, tokens[index], replacement.value));
+    }
+  }
+}
+
+/** Check package scripts that inherit a preload without changing their definitions here. */
+function taskKeepReason(
+  rewrite: Rewrite,
+  name: string | undefined,
+  inherited: readonly string[],
+  lifecycle: boolean,
+): string | undefined {
+  if (!name || !rewrite.cwd) {
+    return KEEP_INHERITED_OPTIONS;
+  }
+  const scripts = readNearestPackageJson(rewrite.cwd)?.scripts;
+  if (!isPlainRecord(scripts) || typeof scripts[name] !== 'string') {
+    return KEEP_INHERITED_OPTIONS;
+  }
+  const names = lifecycle ? [`pre${name}`, name, `post${name}`] : [name];
+  for (const task of names) {
+    const command = scripts[task];
+    if (typeof command !== 'string') {
+      continue;
+    }
+    const key = `${rewrite.cwd}\0${task}`;
+    if (rewrite.checkingScripts.has(key)) {
+      return KEEP_INHERITED_OPTIONS;
+    }
+    const checking = new Set([...rewrite.checkingScripts, key]);
+    // The task has its own migration. Check that result under the inherited
+    // preload too: `node file.cts` can need tsx without naming it in the task.
+    const migrated = rewriteCommand(command, rewrite.cwd, [], checking);
+    const reason =
+      migrated.kept[0] ??
+      rewriteCommand(migrated.command, rewrite.cwd, inherited, checking).kept[0];
+    if (reason) {
+      return `script \`${task}\` needs tsx: ${reason}`;
+    }
+  }
+  return undefined;
+}
+
+function packageTaskKeepReason(
+  rewrite: Rewrite,
+  values: readonly string[],
+  inherited: readonly string[],
+): string | undefined {
+  const [manager, command] = values;
+  if (!['npm', 'pnpm', 'yarn', 'bun'].includes(manager)) {
+    return undefined;
+  }
+  if (['exec', 'x', 'dlx'].includes(command)) {
+    return undefined;
+  }
+  const explicitRun = command === 'run' || command === 'run-script';
+  const name = explicitRun ? values[2] : command;
+  const expectedLength = explicitRun ? 3 : 2;
+  // Includes lifecycle commands and script shorthands. Extra arguments can select
+  // another workspace or supply an entry that the script itself does not name.
+  if (values.length !== expectedLength || name?.startsWith('-')) {
+    return KEEP_INHERITED_OPTIONS;
+  }
+  return taskKeepReason(rewrite, name, inherited, true);
+}
+
+function applyEdits(command: string, edits: readonly Edit[]): string {
+  for (const edit of edits.toSorted((a, b) => b.start - a.start)) {
+    command = command.slice(0, edit.start) + edit.text + command.slice(edit.end);
+  }
+  return command;
+}
+
+/** Preserve the surrounding quote style when replacing one complete shell token. */
+function literalEdit(command: string, token: LiteralCommandToken, value: string): Edit {
+  const raw = command.slice(token.start, token.end);
+  const assignment = /^([A-Za-z_]\w*=)/.exec(raw);
+  const prefix = assignment?.[1] ?? '';
+  const quote = raw[prefix.length];
+  const preserveQuote = prefix !== '' || raw.endsWith(quote);
+  let content = value.slice(prefix.length);
+  if (quote === "'" && preserveQuote) {
+    content = `'${content.replaceAll("'", "'\\''")}'`;
+  } else if ((quote === '"' && preserveQuote) || !/^[\w./=:-]+$/.test(content)) {
+    content = `"${content.replaceAll(/[\\"$`]/g, '\\$&')}"`;
+  }
+  return { start: token.start, end: token.end, text: `${prefix}${content}` };
+}
+
+interface EnvironmentOptions {
+  assignments: readonly string[];
+  replacements: { index: number; value: string }[];
+  preloads: string[];
+  keepReason?: string;
+}
+
+/** NODE_OPTIONS uses double quotes and spaces, not shell single quotes or tab separators. */
+function scanEnvironmentOptions(assignments: readonly string[]): EnvironmentOptions {
+  const result: EnvironmentOptions = { assignments, replacements: [], preloads: [] };
+  for (const [index, assignment] of assignments.entries()) {
+    if (!/^NODE_OPTIONS=/i.test(assignment)) {
+      continue;
+    }
+    const value = assignment.slice(13);
+    const shellOnlySyntax = value.includes("'") || value.replaceAll(/"[^"]*"/g, '').includes('\t');
+    const segments = shellOnlySyntax ? undefined : parseLiteralCommands(value, false);
+    if (!segments || segments.length !== 1) {
+      if (TSX_COMMAND.test(value)) {
+        result.keepReason = KEEP_NODE_OPTIONS;
+      }
+      continue;
+    }
+    const scanned = scanOptions(segments[0], 0, false);
+    result.preloads.push(...scanned.preloads);
+    if (scanned.loaders !== scanned.imports.length || scanned.entryIndex !== segments[0].length) {
+      if (TSX_COMMAND.test(value)) {
+        result.keepReason = KEEP_NODE_OPTIONS;
+      }
+      continue;
+    }
+    if (scanned.imports.length) {
+      result.replacements.push({
+        index,
+        value: `${assignment.slice(0, 13)}${applyEdits(value, importEdits(value, scanned))}`,
+      });
+    }
+  }
+  return result;
 }
 
 /**
@@ -323,9 +511,6 @@ function rewriteSegment(rewrite: Rewrite, tokens: LiteralCommandToken[]): void {
  * Names match in any case, as on Windows.
  */
 function envKeepReason(assignments: readonly string[]): string | undefined {
-  if (assignments.some((value) => /^TSX_TSCONFIG_PATH=/i.test(value))) {
-    return KEEP_TSX_TSCONFIG;
-  }
   if (
     assignments.some((value) => /^NODE_OPTIONS=/i.test(value) && TSX_COMMAND.test(value.slice(13)))
   ) {
@@ -345,7 +530,7 @@ function optionName(arg: string): string {
 
 /** Remove `tokens[index]` with the space before it. */
 function removal(tokens: LiteralCommandToken[], index: number): Edit {
-  return { start: tokens[index - 1].end, end: tokens[index].end, text: '' };
+  return { start: tokens[index - 1]?.end ?? tokens[index].start, end: tokens[index].end, text: '' };
 }
 
 /**
@@ -490,8 +675,37 @@ function rewriteNodeLoader(
   first: number,
   start: number,
   keepReason: string | undefined,
+  environment: EnvironmentOptions,
 ): void {
   const scanned = scanOptions(tokens, start + 1, false);
+  if (
+    scanned.loaders === scanned.imports.length &&
+    (scanned.imports.length || environment.replacements.length)
+  ) {
+    // Node.js keeps control of eval, test discovery, and native watch mode. Only the
+    // compiler checks apply, including other preloads named in NODE_OPTIONS.
+    const scripts = scanned.inlineCode
+      ? []
+      : tokens.slice(scanned.entryIndex).map(({ value }) => value);
+    let reason = environment.keepReason;
+    if (
+      reason === undefined &&
+      environment.replacements.length &&
+      scanned.runScript !== undefined
+    ) {
+      const name = scanned.entryIndex < tokens.length ? undefined : scanned.runScript;
+      reason = taskKeepReason(rewrite, name, environment.assignments, false);
+    }
+    reason ??= [...scanned.preloads, ...(scanned.test ? scripts : scripts.slice(0, 1))]
+      .map((script) => scriptKeepReason(rewrite.cwd, script))
+      .find((reason) => reason !== undefined);
+    if (reason) {
+      rewrite.kept.push(reason);
+    } else {
+      rewrite.edits.push(...importEdits(rewrite.command, scanned));
+    }
+    return;
+  }
   if (!scanned.loaders) {
     // `NODE_OPTIONS='--import tsx' node a.ts` loads tsx without a flag of its own.
     if (keepReason === KEEP_NODE_OPTIONS) {
@@ -517,11 +731,19 @@ interface ScannedOptions {
   /** Removals of tsx loader flags, and for tsx, of `--no-cache`. */
   removals: Edit[];
   loaders: number;
+  /** Plain tsx --import arguments to replace without changing the Node.js command. */
+  imports: { token: LiteralCommandToken; value: string }[];
   /** Local `--require` and `--import` modules, which load before the scripts. */
   preloads: string[];
   keepReason?: string;
   test: boolean;
   watch: boolean;
+  inlineCode: boolean;
+  runScript?: string;
+}
+
+function importEdits(command: string, scanned: ScannedOptions): Edit[] {
+  return scanned.imports.map(({ token, value }) => literalEdit(command, token, value));
 }
 
 /** Read the options of `tsx` (`tsx` true) or `node` from `tokens[index]` up to the entry. */
@@ -530,9 +752,11 @@ function scanOptions(tokens: LiteralCommandToken[], index: number, tsx: boolean)
     entryIndex: tokens.length,
     removals: [],
     loaders: 0,
+    imports: [],
     preloads: [],
     test: false,
     watch: false,
+    inlineCode: false,
   };
   for (; index < tokens.length; index++) {
     const { value } = tokens[index];
@@ -556,6 +780,14 @@ function scanOptions(tokens: LiteralCommandToken[], index: number, tsx: boolean)
           end: tokens[inline ? index : index + 1].end,
         });
         scanned.loaders++;
+        if (name === '--import' && loader === 'tsx') {
+          scanned.imports.push({
+            token: tokens[inline ? index : index + 1],
+            value: inline
+              ? `${value.slice(0, value.indexOf('=') + 1)}vite-plus/register`
+              : 'vite-plus/register',
+          });
+        }
       } else if (loader !== undefined && (loader.startsWith('.') || path.isAbsolute(loader))) {
         scanned.preloads.push(loader);
       }
@@ -567,6 +799,12 @@ function scanOptions(tokens: LiteralCommandToken[], index: number, tsx: boolean)
     scanned.keepReason ??= KEEP_OPTIONS.get(name);
     scanned.test ||= name === '--test';
     scanned.watch ||= name === '--watch';
+    scanned.inlineCode ||= ['-e', '-p', '-pe', '--eval', '--print', '--run'].includes(name);
+    if (name === '--run') {
+      scanned.runScript = inline
+        ? value.slice(value.indexOf('=') + 1)
+        : (tokens[index + 1]?.value ?? '');
+    }
     if (
       !inline &&
       (NODE_OPTIONS_WITH_VALUE.has(name) ||
@@ -600,33 +838,24 @@ function runReason(
 }
 
 /**
- * Rewrite a command that a launcher runs, given as one quoted argument. `inherited` keeps
- * tsx for it, as when the launcher passes on `TSX_TSCONFIG_PATH`.
+ * Rewrite a command that a launcher runs, including the environment it inherits.
  */
 function rewriteQuotedCommand(
   rewrite: Rewrite,
   token: LiteralCommandToken,
-  inherited: string | undefined,
+  inherited: readonly string[],
 ): void {
   const raw = rewrite.command.slice(token.start, token.end);
   const quote = raw[0];
   if ((quote !== '"' && quote !== "'") || raw.length < 2 || !raw.endsWith(quote)) {
     return;
   }
-  const inner = rewriteTsxCommand(token.value, rewrite.cwd);
+  const inner = rewriteCommand(token.value, rewrite.cwd, inherited, rewrite.checkingScripts);
   rewrite.kept.push(...inner.kept);
   if (inner.command === token.value) {
     return;
   }
-  if (inherited) {
-    rewrite.kept.push(inherited);
-  } else if (!inner.command.includes(quote)) {
-    rewrite.edits.push({
-      start: token.start,
-      end: token.end,
-      text: `${quote}${inner.command}${quote}`,
-    });
-  }
+  rewrite.edits.push(literalEdit(rewrite.command, token, inner.command));
 }
 
 /** The commands in a scripts or lint-staged record. */
@@ -944,10 +1173,10 @@ export async function confirmTsxMigration(interactive: boolean): Promise<boolean
   if (interactive) {
     const confirmed = await prompts.confirm({
       message:
-        'Migrate tsx scripts to vpx?\n  ' +
+        'Migrate tsx scripts to Vite+?\n  ' +
         styleText(
           'gray',
-          "vpx is Vite+'s built-in TypeScript script runner: `tsx <file>` becomes `vpx <file>`, `tsx watch` becomes `vpx --watch`, and the tsx dependency is removed once nothing uses it.",
+          '`tsx <file>` becomes `vpx <file>`, `tsx watch` becomes `vpx --watch`, and `node --import tsx` uses `vite-plus/register`. The tsx dependency is removed once nothing uses it.',
         ),
       initialValue: true,
     });
@@ -956,6 +1185,6 @@ export async function confirmTsxMigration(interactive: boolean): Promise<boolean
     }
     return confirmed;
   }
-  prompts.log.info('tsx scripts detected. Auto-migrating to vpx...');
+  prompts.log.info('tsx scripts detected. Auto-migrating to Vite+...');
   return true;
 }

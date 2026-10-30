@@ -5,6 +5,7 @@
 import { createRequire } from 'node:module';
 
 import { type WatchSink, watchSink } from '../../../oxc-node/packages/core/watch-report.mjs';
+import type { FrozenTsconfig } from '../binding/index.js';
 
 // oxc-node's watch reporting for a loader of its own (`@oxc-node/core/watch-report`),
 // bundled from the vendored source, so it matches the binding. `script-preload.ts` also
@@ -26,6 +27,29 @@ export function loadOxcNode(): OxcNodeBinding {
 }
 
 const WATCH_SINK = Symbol.for('vite-plus:script-watch-sink');
+const SCRIPT_CONFIG = Symbol.for('vite-plus:script-config');
+
+/**
+ * Capture this JavaScript thread's configuration before its first resolve. Worker
+ * environments can differ from the native process environment, including clearing
+ * the parent's variables. Both emitted preload entries share this selection.
+ */
+export function threadScriptConfig(): FrozenTsconfig {
+  const holder = globalThis as { [SCRIPT_CONFIG]?: FrozenTsconfig };
+  if (holder[SCRIPT_CONFIG] === undefined) {
+    const source = [
+      'VP_SCRIPT_TSCONFIG',
+      'TSX_TSCONFIG_PATH',
+      'TS_NODE_PROJECT',
+      'OXC_TSCONFIG_PATH',
+    ].find((name) => process.env[name]);
+    holder[SCRIPT_CONFIG] = {
+      path: source ? process.env[source] : undefined,
+      source: source === 'TS_NODE_PROJECT' || source === 'OXC_TSCONFIG_PATH' ? source : undefined,
+    };
+  }
+  return holder[SCRIPT_CONFIG];
+}
 
 /**
  * Where this thread reports the files watch mode restarts on, or `null` when nobody is
