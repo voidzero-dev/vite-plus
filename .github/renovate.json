@@ -239,7 +239,7 @@
       "enabled": false
     },
     {
-      "description": "Ignore vite-task git dependency digest updates: every crate from that repository shares one revision and is bumped by hand with the bump-vite-task skill. Match the git source, not crate names, so crates added upstream (pty_terminal_test, snapshot_test, vt_select) stay covered without editing a list here.",
+      "description": "Ignore vite-task git dependency digest updates: every crate from that repository shares one revision, which the upgrade-deps workflow moves to the latest main commit. Match the git source, not crate names, so crates added upstream (pty_terminal_test, snapshot_test, vt_select) stay covered without editing a list here.",
       "matchDatasources": ["git-refs"],
       "matchPackageNames": ["https://github.com/voidzero-dev/vite-task.git"],
       "enabled": false

@@ -8,6 +8,8 @@ allowed-tools: Read, Grep, Glob, Edit, Bash, Agent, WebFetch
 
 Update the vite-task git dependency in `Cargo.toml` to the latest commit on the vite-task main branch, fix any breaking changes, and create a PR.
 
+The daily `Upgrade Upstream Dependencies` workflow (`.github/workflows/upgrade-deps.yml`) already moves the revision with the other upstream dependencies and follows steps 4, 6, and 7 in its PR. Use this skill for a bump that cannot wait for the next run.
+
 ## Steps
 
 ### 1. Get current and target commits

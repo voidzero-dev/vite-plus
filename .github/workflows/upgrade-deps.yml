@@ -105,8 +105,9 @@ jobs:
           prompt: |
             Your goal: after the daily upstream-dependency upgrade, bring the project back
             to a fully green state. The upgrade script has attempted to select the latest
-            supported versions, install dependencies, merge the rolldown and vite catalogs,
-            deduplicate dependencies, and synchronize core's external dependencies.
+            supported versions, move the vite-task git revision to its latest `main` commit,
+            install dependencies, merge the rolldown and vite catalogs, deduplicate
+            dependencies, and synchronize core's external dependencies.
             The `build-upstream` action
             has attempted a build — your job is to diagnose and fix every error that
             surfaced, then prove the fix is complete by running a final validation pass.
@@ -140,6 +141,12 @@ jobs:
               copies Vite's postcss and optional fsevents ranges into core and
               updates the upgrade metadata. `@oxlint/plugins` shares Oxlint's release
               version and must use the exact same version selected by the upgrade script.
+            - Every `voidzero-dev/vite-task` git dependency in the root `Cargo.toml`
+              shares one revision. The old and new revisions are recorded under
+              `vite-task` in `${{ env.UPGRADE_DEPS_META_DIR }}/versions.json`; they are
+              equal when `main` has no new commits or does not contain the pinned commit.
+              Keep the revision selected by the upgrade script. `Cargo.lock` follows it
+              on the next cargo command.
 
             ### Outcomes from earlier steps (both ran with continue-on-error)
             - Upgrade dependencies and sync upstream: ${{ steps.build.outcome }}
@@ -166,27 +173,32 @@ jobs:
                from `rolldown/Cargo.toml`, bump it to match (the oxc same-version
                family follows rolldown's umbrella `oxc` version), run `cargo update`,
                and rebuild.
-            3. Follow `.claude/agents/cargo-workspace-merger.md` to synchronize shared root
+            3. If the `vite-task` revision changed, follow steps 4 and 7 of
+               `.claude/skills/bump-vite-task/SKILL.md`: fix compile errors from vite-task
+               API changes on the vite-plus side (never in vite-task), then review the
+               vite-task changelog between the two revisions and update `docs/` for
+               user-facing changes. Skip that skill's clone, PR, and CI steps.
+            4. Follow `.claude/agents/cargo-workspace-merger.md` to synchronize shared root
                Rust dependency requirements with both pinned upstream sources and
                update their Renovate exclusions. Preserve documented integration
                constraints and refresh `Cargo.lock` after the manifest changes.
                Keep the root catalog exclusion in `.github/renovate.json` aligned with
                used dependencies imported from the Rolldown and Vite catalogs.
-            4. If `CLI_HELP_DIFF_CHANGED` is `true`, read the upstream help diff at
+            5. If `CLI_HELP_DIFF_CHANGED` is `true`, read the upstream help diff at
                `$CLI_HELP_DIFF_REPORT`, then follow
                `.claude/skills/sync-upstream-cli-help/SKILL.md` to update the mirrored
                help documents. If it is `false`, do not modify help documents.
-            5. Compare tsdown CLI options with `vp pack` and sync new/removed options per
+            6. Compare tsdown CLI options with `vp pack` and sync new/removed options per
                `.claude/skills/sync-tsdown-cli/SKILL.md`.
-            6. Follow `.claude/skills/sync-upstream-dependency-docs/SKILL.md` to
+            7. Follow `.claude/skills/sync-upstream-dependency-docs/SKILL.md` to
                update version-specific documentation for dependencies changed in this run.
-            7. Install the global CLI:
+            8. Install the global CLI:
                - `pnpm bootstrap-cli:ci`
                - `echo "$HOME/.vite-plus/bin" >> $GITHUB_PATH`
-            8. If any Rust code or `Cargo.toml` was modified, run `cargo check
+            9. If any Rust code or `Cargo.toml` was modified, run `cargo check
                --all-targets --all-features` and `cargo shear`; fix anything they report.
-            9. Run `pnpm run lint` (requires a prior `just build`); fix any errors.
-            10. Smoke-test the CLI: `vp -h`, `vp run -h`, `vp lint -h`, `vp test -h`,
+            10. Run `pnpm run lint` (requires a prior `just build`); fix any errors.
+            11. Smoke-test the CLI: `vp -h`, `vp run -h`, `vp lint -h`, `vp test -h`,
                `vp build -h`, `vp fmt -h`, `vp pack -h`.
 
             ### Generated artifacts and build diffs
@@ -214,6 +226,11 @@ jobs:
             Re-record with `UPDATE_SNAPSHOTS=1` only for cosmetic drift from the
             upgrade (e.g. a bumped version string in help output). Unexpected stack
             traces, missing output, or diverging CLI behavior are regressions to fix.
+            For a vite-task revision change, run focused snapshot filters for the
+            commands its changelog affects (e.g. `just snapshot-test command_run`), as
+            described in step 6 of `.claude/skills/bump-vite-task/SKILL.md`. Output
+            changes that the vite-task changelog describes are intended and may be
+            re-recorded.
             Inspect `git status --short` and `git diff --stat` before finishing;
             every changed file, including generated NAPI bindings, must be intentional.
 
@@ -346,6 +363,8 @@ jobs:
                - Do not guess a URL. Keep the target version unlinked if you cannot verify a link.
                Include the version and a short 7-char SHA in both `From` and `To` for `rolldown`
                and `vite`. Link each SHA label to the full commit in the official repository.
+               `vite-task` has no releases: show only the short SHAs, link each to its commit in
+               `voidzero-dev/vite-task`, and keep the baseline CHANGELOG diff link.
                Omit packages whose old and new values are equal.
                Keep the baseline list of unchanged dependencies after the table.
             3. `## Code changes` — bullet list of the actual non-version edits, each naming
