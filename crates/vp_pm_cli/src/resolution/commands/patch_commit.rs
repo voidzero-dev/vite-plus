@@ -16,7 +16,14 @@ pub struct PatchCommitArgs {
 }
 
 impl Resolve<PatchCommitArgs> for Pnpm {
-    fn resolve(&self, args: &PatchCommitArgs, _diag: &mut Diagnostics) -> CommandResolution {
+    fn resolve(&self, args: &PatchCommitArgs, diag: &mut Diagnostics) -> CommandResolution {
+        if !self.supports_v7_4_commands() {
+            diag.warn(
+                DiagnosticKind::UnsupportedCommandNoop,
+                "pnpm patch-commit requires pnpm >= 7.4.0. Skipping.",
+            );
+            return CommandResolution::Noop;
+        }
         let mut cmd = CommandBuilder::new("pnpm");
         cmd.arg("patch-commit").arg(&args.patch_dir).extend(args.pass_through_args.iter());
         cmd.into()
@@ -44,6 +51,13 @@ impl Resolve<PatchCommitArgs> for Yarn {
             diag.warn(
                 DiagnosticKind::UnsupportedCommandNoop,
                 "yarn classic does not have a 'patch-commit' command.",
+            );
+            return CommandResolution::Noop;
+        }
+        if !self.supports_v3_commands() {
+            diag.warn(
+                DiagnosticKind::UnsupportedCommandNoop,
+                "yarn patch-commit --save requires yarn >= 3.0.0. Skipping.",
             );
             return CommandResolution::Noop;
         }

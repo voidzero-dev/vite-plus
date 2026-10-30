@@ -12,7 +12,7 @@ pub struct DlxArgs {
     pub(crate) package: Vec<String>,
 
     /// Execute within a shell environment
-    #[arg(long = "shell-mode", short = 'c', not_supported(yarn >= "2", bun))]
+    #[arg(long = "shell-mode", short = 'c', not_supported(pnpm < "7.21.0", yarn >= "2", bun))]
     pub(crate) shell_mode: bool,
 
     /// Suppress all output except the executed command's output
