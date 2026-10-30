@@ -283,8 +283,9 @@ and synthetic credentials. In addition to the published-artifact checks, cover:
 - Upgrade and old-keg removal with both shim directories, including `pn` and `pnx`.
 - Independent account data, migration, `vp implode`, and Homebrew uninstall.
 
-Packaging changes and the `test: install-e2e` label trigger installation checks.
-PR tests receive no publishing credentials.
+PR installation checks require the `test: install-e2e` label and cover macOS ARM64
+and Linux ARM64/x64. Pushes to `main` do not run this workflow. Release verification
+continues to cover all four supported platforms. PR tests receive no publishing credentials.
 
 ## Tradeoffs
 
