@@ -258,7 +258,10 @@ def "nu-complete vp current-command" [buffer: string, place: any] {
     if (($place | %describe) starts-with "record") { $place.command | %str join ' ' } else { $buffer }
 }
 # Fish gets the command as an argument, so quotes in it cannot end a fish string.
+# Without fish, return null so Nushell falls back to file completion. Nushell 0.116+ shows no
+# suggestions when a parameter completer fails (#3272).
 def "nu-complete vp fish" [command: string] {
+    if (%which fish | %is-empty) { return null }
     let fish_script = 'VP_COMPLETE=fish command vp | source; complete --do-complete=$argv[1]'
     ^fish --command $fish_script $command | %from tsv --flexible --noheaders --no-infer | %rename value description | %update value {|row|
         let value = $row.value
