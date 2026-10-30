@@ -900,46 +900,54 @@ mod tests {
 
     #[tokio::test]
     async fn release_archives_supply_the_frozen_dependency_tree() {
-        let temp = tempfile::tempdir().unwrap();
-        let directory = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
-        let archive = lockfile::test_archive(true, Some(b"release dependency tree"));
-        extract_platform_package(&archive, &directory).await.unwrap();
-        let args =
-            dependency_install_args(&directory, Some("https://mirror.example")).await.unwrap();
-        assert_eq!(
-            args,
-            [
-                "install",
-                "--ignore-workspace",
-                "--frozen-lockfile",
-                "--lockfile=true",
-                "--config.auto-install-peers=true",
-                "--config.exclude-links-from-lockfile=false",
-                "--config.dedupe-peers=false",
-                "--config.inject-workspace-packages=false",
-                "--registry",
-                "https://mirror.example"
-            ]
-        );
-        assert_eq!(
-            tokio::fs::read(directory.join("pnpm-lock.yaml")).await.unwrap(),
-            b"release dependency tree"
-        );
+        EnvConfig::with_vars_async([("VP_SETUP_SKIP_INSTALL_LOCKFILE", None::<&str>)], |_| async {
+            let temp = tempfile::tempdir().unwrap();
+            let directory = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+            let archive = lockfile::test_archive(true, Some(b"release dependency tree"));
+            extract_platform_package(&archive, &directory).await.unwrap();
+            let args =
+                dependency_install_args(&directory, Some("https://mirror.example")).await.unwrap();
+            assert_eq!(
+                args,
+                [
+                    "install",
+                    "--ignore-workspace",
+                    "--frozen-lockfile",
+                    "--lockfile=true",
+                    "--config.auto-install-peers=true",
+                    "--config.exclude-links-from-lockfile=false",
+                    "--config.dedupe-peers=false",
+                    "--config.inject-workspace-packages=false",
+                    "--registry",
+                    "https://mirror.example"
+                ]
+            );
+            assert_eq!(
+                tokio::fs::read(directory.join("pnpm-lock.yaml")).await.unwrap(),
+                b"release dependency tree"
+            );
+        })
+        .await;
     }
 
     #[tokio::test]
     async fn incomplete_release_archives_fail_but_old_archives_remain_supported() {
-        let temp = tempfile::tempdir().unwrap();
-        let directory = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
-        let error = extract_platform_package(&lockfile::test_archive(true, None), &directory)
-            .await
-            .unwrap_err();
-        assert!(error.to_string().contains("missing vp-install-lock.yaml"));
-        extract_platform_package(&lockfile::test_archive(false, None), &directory).await.unwrap();
-        assert_eq!(
-            dependency_install_args(&directory, None).await.unwrap(),
-            ["install", "--ignore-workspace"]
-        );
+        EnvConfig::with_vars_async([("VP_SETUP_SKIP_INSTALL_LOCKFILE", None::<&str>)], |_| async {
+            let temp = tempfile::tempdir().unwrap();
+            let directory = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+            let error = extract_platform_package(&lockfile::test_archive(true, None), &directory)
+                .await
+                .unwrap_err();
+            assert!(error.to_string().contains("missing vp-install-lock.yaml"));
+            extract_platform_package(&lockfile::test_archive(false, None), &directory)
+                .await
+                .unwrap();
+            assert_eq!(
+                dependency_install_args(&directory, None).await.unwrap(),
+                ["install", "--ignore-workspace"]
+            );
+        })
+        .await;
     }
 
     #[tokio::test]

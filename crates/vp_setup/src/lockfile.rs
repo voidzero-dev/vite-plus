@@ -213,55 +213,67 @@ mod tests {
 
     use super::*;
 
+    // Readers must share the environment lock with bypass coverage, even when
+    // they expect the bypass to be unset. EnvConfig::get() does not take this lock.
     #[tokio::test]
     async fn external_completion_tracks_the_published_lock_and_shared_receipt() {
-        EnvConfig::scoped_async(|env| async move {
-            let source = env.dirs.data.join("keg/libexec/vp");
-            let directory = env.dirs.cli_package("1.4.0", "test-platform");
-            let published = source.parent().unwrap().join(INSTALL_LOCKFILE);
-            tokio::fs::create_dir_all(source.parent().unwrap()).await.unwrap();
-            tokio::fs::create_dir_all(directory.join("bin")).await.unwrap();
-            tokio::fs::create_dir_all(directory.join("node_modules")).await.unwrap();
-            tokio::fs::write(&published, "release lock").await.unwrap();
-            assert!(prepare(&source, &directory, "1.4.0", None).await.unwrap());
-            assert!(!is_complete(&source, &directory).await.unwrap());
-            record_install(&directory).await.unwrap();
-            assert!(is_complete(&source, &directory).await.unwrap());
-
-            for corruption in ["missing receipt", "invalid receipt", "working lock", "companion"] {
-                match corruption {
-                    "missing receipt" => invalidate_install(&directory).await.unwrap(),
-                    "invalid receipt" => {
-                        tokio::fs::write(directory.join(INSTALL_RECEIPT), "corrupt").await.unwrap();
-                    }
-                    "working lock" => {
-                        tokio::fs::write(directory.join("pnpm-lock.yaml"), "different lock")
-                            .await
-                            .unwrap();
-                    }
-                    _ => {
-                        // A same-version archive replacement must not reuse the old payload.
-                        tokio::fs::write(&published, "new published lock").await.unwrap();
-                    }
-                }
-                assert!(!is_complete(&source, &directory).await.unwrap(), "{corruption}");
+        let root = tempfile::tempdir().unwrap();
+        EnvConfig::with_vars_async(
+            [("VP_HOME", Some(root.path().as_os_str())), ("VP_SETUP_SKIP_INSTALL_LOCKFILE", None)],
+            |env| async move {
+                let source = env.dirs.data.join("keg/libexec/vp");
+                let directory = env.dirs.cli_package("1.4.0", "test-platform");
+                let published = source.parent().unwrap().join(INSTALL_LOCKFILE);
+                tokio::fs::create_dir_all(source.parent().unwrap()).await.unwrap();
+                tokio::fs::create_dir_all(directory.join("bin")).await.unwrap();
+                tokio::fs::create_dir_all(directory.join("node_modules")).await.unwrap();
+                tokio::fs::write(&published, "release lock").await.unwrap();
                 assert!(prepare(&source, &directory, "1.4.0", None).await.unwrap());
-                record_install(&directory).await.unwrap();
-                assert!(is_complete(&source, &directory).await.unwrap());
-            }
-
-            EnvConfig::with_vars_async([("VP_SETUP_SKIP_INSTALL_LOCKFILE", "1")], |_| async {
                 assert!(!is_complete(&source, &directory).await.unwrap());
                 record_install(&directory).await.unwrap();
-                tokio::fs::remove_file(&published).await.unwrap();
-                tokio::fs::remove_file(directory.join("bin").join(INSTALL_LOCKFILE)).await.unwrap();
                 assert!(is_complete(&source, &directory).await.unwrap());
-                assert!(!prepare(&source, &directory, "1.4.0", None).await.unwrap());
-            })
-            .await;
-            // Unlocked completion must not survive removal of the explicit bypass.
-            assert!(!is_complete(&source, &directory).await.unwrap());
-        })
+
+                for corruption in
+                    ["missing receipt", "invalid receipt", "working lock", "companion"]
+                {
+                    match corruption {
+                        "missing receipt" => invalidate_install(&directory).await.unwrap(),
+                        "invalid receipt" => {
+                            tokio::fs::write(directory.join(INSTALL_RECEIPT), "corrupt")
+                                .await
+                                .unwrap();
+                        }
+                        "working lock" => {
+                            tokio::fs::write(directory.join("pnpm-lock.yaml"), "different lock")
+                                .await
+                                .unwrap();
+                        }
+                        _ => {
+                            // A same-version archive replacement must not reuse the old payload.
+                            tokio::fs::write(&published, "new published lock").await.unwrap();
+                        }
+                    }
+                    assert!(!is_complete(&source, &directory).await.unwrap(), "{corruption}");
+                    assert!(prepare(&source, &directory, "1.4.0", None).await.unwrap());
+                    record_install(&directory).await.unwrap();
+                    assert!(is_complete(&source, &directory).await.unwrap());
+                }
+
+                EnvConfig::with_vars_async([("VP_SETUP_SKIP_INSTALL_LOCKFILE", "1")], |_| async {
+                    assert!(!is_complete(&source, &directory).await.unwrap());
+                    record_install(&directory).await.unwrap();
+                    tokio::fs::remove_file(&published).await.unwrap();
+                    tokio::fs::remove_file(directory.join("bin").join(INSTALL_LOCKFILE))
+                        .await
+                        .unwrap();
+                    assert!(is_complete(&source, &directory).await.unwrap());
+                    assert!(!prepare(&source, &directory, "1.4.0", None).await.unwrap());
+                })
+                .await;
+                // Unlocked completion must not survive removal of the explicit bypass.
+                assert!(!is_complete(&source, &directory).await.unwrap());
+            },
+        )
         .await;
     }
 
@@ -296,191 +308,215 @@ mod tests {
 
     #[tokio::test]
     async fn only_completed_installs_of_the_current_lockfile_are_reused() {
-        let temp = tempfile::tempdir().unwrap();
-        let directory = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
-        let source = directory.join("bin/vp");
-        tokio::fs::create_dir(directory.join("bin")).await.unwrap();
-        tokio::fs::create_dir(directory.join("node_modules")).await.unwrap();
-        tokio::fs::write(directory.join("bin").join(INSTALL_LOCKFILE), "release lock")
-            .await
-            .unwrap();
-        assert!(prepare(&source, &directory, "1.4.0", None).await.unwrap());
+        EnvConfig::with_vars_async([("VP_SETUP_SKIP_INSTALL_LOCKFILE", None::<&str>)], |_| async {
+            let temp = tempfile::tempdir().unwrap();
+            let directory = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+            let source = directory.join("bin/vp");
+            tokio::fs::create_dir(directory.join("bin")).await.unwrap();
+            tokio::fs::create_dir(directory.join("node_modules")).await.unwrap();
+            tokio::fs::write(directory.join("bin").join(INSTALL_LOCKFILE), "release lock")
+                .await
+                .unwrap();
+            assert!(prepare(&source, &directory, "1.4.0", None).await.unwrap());
 
-        record_install(&directory).await.unwrap();
-        tokio::fs::write(directory.join("bin").join(crate::SELF_SETUP_MARKER), "").await.unwrap();
-        crate::install::clear_self_setup_marker(&directory).await.unwrap();
-        assert!(!prepare(&source, &directory, "1.4.0", None).await.unwrap());
+            record_install(&directory).await.unwrap();
+            tokio::fs::write(directory.join("bin").join(crate::SELF_SETUP_MARKER), "")
+                .await
+                .unwrap();
+            crate::install::clear_self_setup_marker(&directory).await.unwrap();
+            assert!(!prepare(&source, &directory, "1.4.0", None).await.unwrap());
 
-        // A new attempt that fails must not retain an earlier success receipt.
-        invalidate_install(&directory).await.unwrap();
-        assert!(prepare(&source, &directory, "1.4.0", None).await.unwrap());
+            // A new attempt that fails must not retain an earlier success receipt.
+            invalidate_install(&directory).await.unwrap();
+            assert!(prepare(&source, &directory, "1.4.0", None).await.unwrap());
 
-        record_install(&directory).await.unwrap();
-        tokio::fs::write(directory.join("pnpm-lock.yaml"), "modified lock").await.unwrap();
-        assert!(prepare(&source, &directory, "1.4.0", None).await.unwrap());
-        // Restoring the lockfile alone must not make a subsequent retry skip pnpm.
-        assert!(prepare(&source, &directory, "1.4.0", None).await.unwrap());
+            record_install(&directory).await.unwrap();
+            tokio::fs::write(directory.join("pnpm-lock.yaml"), "modified lock").await.unwrap();
+            assert!(prepare(&source, &directory, "1.4.0", None).await.unwrap());
+            // Restoring the lockfile alone must not make a subsequent retry skip pnpm.
+            assert!(prepare(&source, &directory, "1.4.0", None).await.unwrap());
 
-        record_install(&directory).await.unwrap();
-        for path in ["bin/vp-install-lock.yaml", "pnpm-lock.yaml"] {
-            tokio::fs::write(directory.join(path), "different release lock").await.unwrap();
-        }
-        assert!(prepare(&source, &directory, "1.4.0", None).await.unwrap());
-        record_install(&directory).await.unwrap();
-        assert!(!prepare(&source, &directory, "1.4.0", None).await.unwrap());
+            record_install(&directory).await.unwrap();
+            for path in ["bin/vp-install-lock.yaml", "pnpm-lock.yaml"] {
+                tokio::fs::write(directory.join(path), "different release lock").await.unwrap();
+            }
+            assert!(prepare(&source, &directory, "1.4.0", None).await.unwrap());
+            record_install(&directory).await.unwrap();
+            assert!(!prepare(&source, &directory, "1.4.0", None).await.unwrap());
 
-        tokio::fs::remove_dir_all(directory.join("node_modules")).await.unwrap();
-        assert!(prepare(&source, &directory, "1.4.0", None).await.unwrap());
+            tokio::fs::remove_dir_all(directory.join("node_modules")).await.unwrap();
+            assert!(prepare(&source, &directory, "1.4.0", None).await.unwrap());
+        })
+        .await;
     }
 
     #[tokio::test]
     async fn bootstrap_copies_the_release_lock_and_replaces_an_old_clients_resolution() {
-        let temp = tempfile::tempdir().unwrap();
-        let root = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
-        let source = root.join("download/vp");
-        let version_dir = root.join("installed");
-        tokio::fs::create_dir_all(root.join("download")).await.unwrap();
-        tokio::fs::create_dir_all(version_dir.join("bin")).await.unwrap();
-        tokio::fs::write(root.join("download").join(INSTALL_LOCKFILE), "release lock")
-            .await
-            .unwrap();
-        tokio::fs::write(version_dir.join("pnpm-lock.yaml"), "freshly resolved tree")
-            .await
-            .unwrap();
-
-        assert!(prepare(&source, &version_dir, "1.4.0", Some("http://127.0.0.1:1")).await.unwrap());
-        assert_eq!(
-            tokio::fs::read_to_string(version_dir.join("pnpm-lock.yaml")).await.unwrap(),
-            "release lock"
-        );
-        // A retry still requires a frozen install even when a failed attempt
-        // already restored the working lockfile. No registry request is needed.
-        assert!(
-            prepare(&version_dir.join("bin/vp"), &version_dir, "1.4.0", Some("http://127.0.0.1:1"))
+        EnvConfig::with_vars_async([("VP_SETUP_SKIP_INSTALL_LOCKFILE", None::<&str>)], |_| async {
+            let temp = tempfile::tempdir().unwrap();
+            let root = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+            let source = root.join("download/vp");
+            let version_dir = root.join("installed");
+            tokio::fs::create_dir_all(root.join("download")).await.unwrap();
+            tokio::fs::create_dir_all(version_dir.join("bin")).await.unwrap();
+            tokio::fs::write(root.join("download").join(INSTALL_LOCKFILE), "release lock")
                 .await
-                .unwrap()
-        );
-        tokio::fs::write(version_dir.join("pnpm-lock.yaml"), "modified working copy")
-            .await
-            .unwrap();
-        assert!(restore(&version_dir).await.unwrap());
-        #[cfg(unix)]
-        {
-            let alias = root.join("alias");
-            std::os::unix::fs::symlink(&version_dir, &alias).unwrap();
-            assert!(prepare(&alias.join("bin/vp"), &version_dir, "1.4.0", None).await.unwrap());
+                .unwrap();
+            tokio::fs::write(version_dir.join("pnpm-lock.yaml"), "freshly resolved tree")
+                .await
+                .unwrap();
+
+            assert!(
+                prepare(&source, &version_dir, "1.4.0", Some("http://127.0.0.1:1")).await.unwrap()
+            );
             assert_eq!(
-                tokio::fs::read_to_string(version_dir.join("bin").join(INSTALL_LOCKFILE))
-                    .await
-                    .unwrap(),
+                tokio::fs::read_to_string(version_dir.join("pnpm-lock.yaml")).await.unwrap(),
                 "release lock"
             );
-        }
+            // A retry still requires a frozen install even when a failed attempt
+            // already restored the working lockfile. No registry request is needed.
+            assert!(
+                prepare(
+                    &version_dir.join("bin/vp"),
+                    &version_dir,
+                    "1.4.0",
+                    Some("http://127.0.0.1:1")
+                )
+                .await
+                .unwrap()
+            );
+            tokio::fs::write(version_dir.join("pnpm-lock.yaml"), "modified working copy")
+                .await
+                .unwrap();
+            assert!(restore(&version_dir).await.unwrap());
+            #[cfg(unix)]
+            {
+                let alias = root.join("alias");
+                std::os::unix::fs::symlink(&version_dir, &alias).unwrap();
+                assert!(prepare(&alias.join("bin/vp"), &version_dir, "1.4.0", None).await.unwrap());
+                assert_eq!(
+                    tokio::fs::read_to_string(version_dir.join("bin").join(INSTALL_LOCKFILE))
+                        .await
+                        .unwrap(),
+                    "release lock"
+                );
+            }
+        })
+        .await;
     }
 
     #[tokio::test]
     async fn standalone_and_old_upgrade_clients_recover_the_verified_lockfile() {
-        for version in ["1.4.0", "0.0.0-commit.0123456789abcdef0123456789abcdef01234567"] {
-            let server = MockServer::start();
-            let data = test_archive(true, Some(b"published lock"));
-            let suffix = platform::detect_platform_suffix().unwrap();
-            let metadata = server.mock(|when, then| {
-                when.method(GET).path(format!("/@voidzero-dev/vite-plus-cli-{suffix}/{version}"));
-                then.status(200).json_body(serde_json::json!({
-                    "version": version, "vpInstallLockfile": true,
-                    "dist": {
-                        "tarball": format!("{}/platform.tgz", server.base_url()),
-                        "integrity": format!("sha512-{}", base64_simd::STANDARD.encode_to_string(Sha512::digest(&data))),
-                        "attestations": { "provenance": { "predicateType": "https://slsa.dev/provenance/v1" } }
-                    }
-                }));
-            });
-            let tarball = server.mock(|when, then| {
-                when.method(GET).path("/platform.tgz");
-                then.status(200).body(data);
-            });
-            let temp = tempfile::tempdir().unwrap();
-            let directory = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
-            tokio::fs::create_dir(directory.join("bin")).await.unwrap();
-            assert!(
-                prepare(&directory.join("vp"), &directory, version, Some(&server.base_url()))
-                    .await
-                    .unwrap()
-            );
-            assert_eq!(
-                tokio::fs::read(directory.join("pnpm-lock.yaml")).await.unwrap(),
-                b"published lock"
-            );
-            metadata.assert();
-            tarball.assert();
-        }
+        EnvConfig::with_vars_async([("VP_SETUP_SKIP_INSTALL_LOCKFILE", None::<&str>)], |_| async {
+            for version in ["1.4.0", "0.0.0-commit.0123456789abcdef0123456789abcdef01234567"] {
+                let server = MockServer::start();
+                let data = test_archive(true, Some(b"published lock"));
+                let suffix = platform::detect_platform_suffix().unwrap();
+                let metadata = server.mock(|when, then| {
+                    when.method(GET).path(format!("/@voidzero-dev/vite-plus-cli-{suffix}/{version}"));
+                    then.status(200).json_body(serde_json::json!({
+                        "version": version, "vpInstallLockfile": true,
+                        "dist": {
+                            "tarball": format!("{}/platform.tgz", server.base_url()),
+                            "integrity": format!("sha512-{}", base64_simd::STANDARD.encode_to_string(Sha512::digest(&data))),
+                            "attestations": { "provenance": { "predicateType": "https://slsa.dev/provenance/v1" } }
+                        }
+                    }));
+                });
+                let tarball = server.mock(|when, then| {
+                    when.method(GET).path("/platform.tgz");
+                    then.status(200).body(data);
+                });
+                let temp = tempfile::tempdir().unwrap();
+                let directory = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+                tokio::fs::create_dir(directory.join("bin")).await.unwrap();
+                assert!(
+                    prepare(&directory.join("vp"), &directory, version, Some(&server.base_url()))
+                        .await
+                        .unwrap()
+                );
+                assert_eq!(
+                    tokio::fs::read(directory.join("pnpm-lock.yaml")).await.unwrap(),
+                    b"published lock"
+                );
+                metadata.assert();
+                tarball.assert();
+            }
+        })
+        .await;
     }
 
     #[tokio::test]
     async fn missing_or_modified_published_lockfiles_fail_without_falling_back() {
-        for corrupt in [false, true] {
-            let server = MockServer::start();
-            let data = test_archive(true, None);
-            let suffix = platform::detect_platform_suffix().unwrap();
-            server.mock(|when, then| {
-                when.method(GET).path(format!("/@voidzero-dev/vite-plus-cli-{suffix}/1.4.0"));
-                then.status(200).json_body(serde_json::json!({
-                    "version": "1.4.0", "vpInstallLockfile": true,
-                    "dist": {
-                        "tarball": format!("{}/platform.tgz", server.base_url()),
-                        "integrity": format!("sha512-{}", base64_simd::STANDARD.encode_to_string(Sha512::digest(if corrupt { b"different".as_slice() } else { &data }))),
-                        "attestations": { "provenance": { "predicateType": "https://slsa.dev/provenance/v1" } }
-                    }
+        EnvConfig::with_vars_async([("VP_SETUP_SKIP_INSTALL_LOCKFILE", None::<&str>)], |_| async {
+            for corrupt in [false, true] {
+                let server = MockServer::start();
+                let data = test_archive(true, None);
+                let suffix = platform::detect_platform_suffix().unwrap();
+                server.mock(|when, then| {
+                    when.method(GET).path(format!("/@voidzero-dev/vite-plus-cli-{suffix}/1.4.0"));
+                    then.status(200).json_body(serde_json::json!({
+                        "version": "1.4.0", "vpInstallLockfile": true,
+                        "dist": {
+                            "tarball": format!("{}/platform.tgz", server.base_url()),
+                            "integrity": format!("sha512-{}", base64_simd::STANDARD.encode_to_string(Sha512::digest(if corrupt { b"different".as_slice() } else { &data }))),
+                            "attestations": { "provenance": { "predicateType": "https://slsa.dev/provenance/v1" } }
+                        }
+                    }));
+                });
+                server.mock(|when, then| {
+                    when.method(GET).path("/platform.tgz");
+                    then.status(200).body(data);
+                });
+                let temp = tempfile::tempdir().unwrap();
+                let directory = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+                tokio::fs::create_dir(directory.join("bin")).await.unwrap();
+                let error =
+                    prepare(&directory.join("vp"), &directory, "1.4.0", Some(&server.base_url()))
+                        .await
+                        .unwrap_err();
+                assert!(error.to_string().contains(if corrupt {
+                    "Integrity mismatch"
+                } else {
+                    "missing vp-install-lock.yaml"
                 }));
-            });
-            server.mock(|when, then| {
-                when.method(GET).path("/platform.tgz");
-                then.status(200).body(data);
-            });
-            let temp = tempfile::tempdir().unwrap();
-            let directory = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
-            tokio::fs::create_dir(directory.join("bin")).await.unwrap();
-            let error =
-                prepare(&directory.join("vp"), &directory, "1.4.0", Some(&server.base_url()))
-                    .await
-                    .unwrap_err();
-            assert!(error.to_string().contains(if corrupt {
-                "Integrity mismatch"
-            } else {
-                "missing vp-install-lock.yaml"
-            }));
-            assert!(!directory.join("pnpm-lock.yaml").as_path().exists());
-        }
+                assert!(!directory.join("pnpm-lock.yaml").as_path().exists());
+            }
+        })
+        .await;
     }
 
     #[tokio::test]
     async fn legacy_releases_and_previews_without_companions_keep_existing_behavior() {
-        for version in ["1.3.0", "0.0.0-commit.0123456789abcdef0123456789abcdef01234567"] {
-            let server = MockServer::start();
-            let suffix = platform::detect_platform_suffix().unwrap();
-            let metadata = server.mock(|when, then| {
-                when.method(GET).path(format!("/@voidzero-dev/vite-plus-cli-{suffix}/{version}"));
-                then.status(200).json_body(serde_json::json!({
-                    "version": version,
-                    "dist": {
-                        "tarball": format!("{}/unused.tgz", server.base_url()), "integrity": "sha512-old",
-                        "attestations": { "provenance": { "predicateType": "https://slsa.dev/provenance/v1" } }
-                    }
-                }));
-            });
-            let tarball = server.mock(|when, then| {
-                when.method(GET).path("/unused.tgz");
-                then.status(500);
-            });
-            let temp = tempfile::tempdir().unwrap();
-            let directory = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
-            assert!(
-                !prepare(&directory.join("vp"), &directory, version, Some(&server.base_url()))
-                    .await
-                    .unwrap()
-            );
-            metadata.assert();
-            tarball.assert_calls(0);
-        }
+        EnvConfig::with_vars_async([("VP_SETUP_SKIP_INSTALL_LOCKFILE", None::<&str>)], |_| async {
+            for version in ["1.3.0", "0.0.0-commit.0123456789abcdef0123456789abcdef01234567"] {
+                let server = MockServer::start();
+                let suffix = platform::detect_platform_suffix().unwrap();
+                let metadata = server.mock(|when, then| {
+                    when.method(GET).path(format!("/@voidzero-dev/vite-plus-cli-{suffix}/{version}"));
+                    then.status(200).json_body(serde_json::json!({
+                        "version": version,
+                        "dist": {
+                            "tarball": format!("{}/unused.tgz", server.base_url()), "integrity": "sha512-old",
+                            "attestations": { "provenance": { "predicateType": "https://slsa.dev/provenance/v1" } }
+                        }
+                    }));
+                });
+                let tarball = server.mock(|when, then| {
+                    when.method(GET).path("/unused.tgz");
+                    then.status(500);
+                });
+                let temp = tempfile::tempdir().unwrap();
+                let directory = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+                assert!(
+                    !prepare(&directory.join("vp"), &directory, version, Some(&server.base_url()))
+                        .await
+                        .unwrap()
+                );
+                metadata.assert();
+                tarball.assert_calls(0);
+            }
+        })
+        .await;
     }
 }
