@@ -6,6 +6,7 @@ import {
   findLatestStableVersionForMajor,
   getBundledDependencyRanges,
   getLatestNodeVersion,
+  setViteTaskRevision,
 } from './upgrade-deps-utils.ts';
 
 const ROOT = process.cwd();
@@ -27,6 +28,12 @@ type GitHubTag = {
 type LatestTag = {
   sha: string;
   tag: string;
+};
+
+type GitHubRef = {
+  object?: {
+    sha?: unknown;
+  };
 };
 
 type LatestTagOptions = {
@@ -242,6 +249,31 @@ async function updateUpstreamVersions(): Promise<void> {
 
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2) + '\n');
   console.log('Updated .upstream-versions.json');
+}
+
+// ============ Update the vite-task revision in Cargo.toml ============
+async function updateViteTask(): Promise<void> {
+  const res = await fetchGitHubRepo('voidzero-dev', 'vite-task', 'git/ref/heads/main');
+  if (!res.ok) {
+    throw new Error(`Failed to fetch voidzero-dev/vite-task main: ${res.status} ${res.statusText}`);
+  }
+  const sha = ((await res.json()) as GitHubRef).object?.sha;
+  if (typeof sha !== 'string' || !isFullSha(sha)) {
+    throw new Error('Invalid ref structure for voidzero-dev/vite-task main: missing SHA');
+  }
+  console.log(`vite-task -> main (${sha.slice(0, 7)})`);
+
+  const filePath = path.join(ROOT, 'Cargo.toml');
+  const { content, previous } = setViteTaskRevision(fs.readFileSync(filePath, 'utf8'), sha);
+  // A pin to a commit outside main, such as an unmerged fix, stays until main contains it.
+  if (await containsCommit('voidzero-dev', 'vite-task', previous, sha)) {
+    fs.writeFileSync(filePath, content);
+    recordChange('vite-task', previous, sha);
+    console.log('Updated vite-task revision in Cargo.toml');
+  } else {
+    console.log(`vite-task main does not contain the pinned ${previous.slice(0, 7)}; keeping it`);
+    recordChange('vite-task', previous, previous);
+  }
 }
 
 // ============ Update pnpm-workspace.yaml ============
@@ -494,6 +526,14 @@ function writeMetaFiles(): void {
     for (const [name, v] of changed) {
       bodyLines.push(`| \`${name}\` | \`${formatOld(v)}\` | \`${formatVersion(v)}\` |`);
     }
+    const viteTask = changes.get('vite-task');
+    if (viteTask?.old && viteTask.old !== viteTask.new) {
+      // vite-task publishes no releases; the anchor opens CHANGELOG.md in the compare view.
+      bodyLines.push(
+        '',
+        `vite-task changes: [CHANGELOG.md diff](https://github.com/voidzero-dev/vite-task/compare/${viteTask.old}...${viteTask.new}#diff-06572a96a58dc510037d5efa622f9bec8519bc1beab13c9f251e97e657a9d4ed)`,
+      );
+    }
   } else {
     bodyLines.push('_No version changes._');
   }
@@ -587,6 +627,7 @@ async function upgradeDependencies(): Promise<void> {
   console.log(`oxc-parser: ${oxcParserVersion}`);
 
   await updateUpstreamVersions();
+  await updateViteTask();
   await updatePnpmWorkspace({
     vitest: vitestVersion,
     tsdown: tsdownVersion,

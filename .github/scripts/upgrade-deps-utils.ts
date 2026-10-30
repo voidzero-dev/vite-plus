@@ -43,6 +43,28 @@ export function getBundledDependencyRanges(
   });
 }
 
+const VITE_TASK_GIT = 'git = "https://github.com/voidzero-dev/vite-task.git"';
+const VITE_TASK_REV_RE =
+  /(git = "https:\/\/github\.com\/voidzero-dev\/vite-task\.git", rev = ")([0-9a-f]{40})"/g;
+
+// Every crate from vite-task shares one revision. Match the git source rather
+// than crate names so crates added upstream are moved together.
+export function setViteTaskRevision(
+  cargoToml: string,
+  revision: string,
+): { content: string; previous: string } {
+  const dependencyCount = cargoToml.split(VITE_TASK_GIT).length - 1;
+  const revisions = Array.from(cargoToml.matchAll(VITE_TASK_REV_RE), (match) => match[2]);
+  const [previous, ...rest] = new Set(revisions);
+  if (!previous || rest.length || revisions.length !== dependencyCount) {
+    throw new Error(
+      `Expected every vite-task dependency in Cargo.toml to use \`${VITE_TASK_GIT}, rev = "<sha>"\` ` +
+        'with one shared revision',
+    );
+  }
+  return { content: cargoToml.replaceAll(VITE_TASK_REV_RE, `$1${revision}"`), previous };
+}
+
 const STABLE_VERSION_RE = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
 type ParsedVersion = {
