@@ -23,11 +23,10 @@ if (project.devDependencies.vite) {
   );
 } else {
   assert.deepEqual(Object.keys(project.devDependencies), ['vite-plus']);
-  assert.equal(require('vite/package.json').name, 'vite');
-  assert.equal(vitestRequire('vite/package.json').name, 'vite');
-  assert.notEqual(
-    cliRequire.resolve('vite/package.json'),
-    vitestRequire.resolve('vite/package.json'),
-  );
-  console.log('npm installed separate CLI core and upstream Vitest peer without overrides');
+  // The core version encodes the bundled Vite version, so it satisfies Vitest's
+  // `vite` peer range. npm resolves that peer to the CLI's core instead of
+  // installing upstream Vite (rfcs/core-version-alignment.md).
+  assert.equal(require('vite/package.json').name, '@voidzero-dev/vite-plus-core');
+  assert.equal(vitestRequire.resolve('vite/package.json'), cliRequire.resolve('vite/package.json'));
+  console.log('npm shares the CLI core with the Vitest peer without a project alias or overrides');
 }
