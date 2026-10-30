@@ -284,7 +284,8 @@ and synthetic credentials. In addition to the published-artifact checks, cover:
 - Independent account data, migration, `vp implode`, and Homebrew uninstall.
 
 PR installation checks require the `test: install-e2e` label and cover macOS ARM64
-and Linux ARM64/x64. Pushes to `main` do not run this workflow. Release verification
+and Linux ARM64/x64. The workflow also supports manual runs on these platforms.
+Pushes to `main` do not run this workflow. Release verification
 continues to cover all four supported platforms. PR tests receive no publishing credentials.
 
 ## Tradeoffs
