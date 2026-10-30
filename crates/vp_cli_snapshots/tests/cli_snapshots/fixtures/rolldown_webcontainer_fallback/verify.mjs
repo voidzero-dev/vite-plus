@@ -115,25 +115,37 @@ const context = createContext({
     arch: 'x64',
   },
 });
-const loader = new SourceTextModule(source, {
-  context,
-  identifier: bindingUrl,
-  initializeImportMeta(meta) {
-    meta.url = bindingUrl;
+const modules = new Map();
+function sharedModule(url, moduleSource = readFileSync(new URL(url), 'utf8')) {
+  let module = modules.get(url);
+  if (!module) {
+    module = new SourceTextModule(moduleSource, {
+      context,
+      identifier: url,
+      initializeImportMeta(meta) {
+        meta.url = url;
+      },
+    });
+    modules.set(url, module);
+  }
+  return module;
+}
+const nodeModule = new SyntheticModule(
+  ['createRequire'],
+  function () {
+    this.setExport('createRequire', (url) => {
+      // Rolldown's runtime chunk creates `__require` next to the loader.
+      assert.equal(new URL('.', url).href, new URL('.', bindingUrl).href);
+      return isolatedRequire;
+    });
   },
-});
-await loader.link((specifier) => {
-  assert.equal(specifier, 'node:module');
-  return new SyntheticModule(
-    ['createRequire'],
-    function () {
-      this.setExport('createRequire', (url) => {
-        assert.equal(url, bindingUrl);
-        return isolatedRequire;
-      });
-    },
-    { context },
-  );
+  { context },
+);
+const loader = sharedModule(bindingUrl, source);
+await loader.link((specifier, referencingModule) => {
+  if (specifier === 'node:module') return nodeModule;
+  assert.match(specifier, /^\.\/rolldown-runtime-[\w-]+\.mjs$/);
+  return sharedModule(new URL(specifier, referencingModule.identifier).href);
 });
 await loader.evaluate();
 
