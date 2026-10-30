@@ -3,7 +3,14 @@
 ## `node upgrade-node.mjs incompatible`
 
 ```
-An incompatible target Node pin fails without falling back or starting pnpm.
-The current version and rollback record remain unchanged.
-Only the two metadata requests and platform download occur; all stay local.
+Upgrade exit: 1
+stderr: error: Setup error: Node.js <target-node> required by the target Vite+ release is not supported by pnpm <version>
+Install attempts: 0
+Current is original: true
+Rollback: rollback-sentinel
+Remaining staged directories: 0
+Requests:
+  /vite-plus/latest
+  /@voidzero-dev/vite-plus-cli-<platform>/<release>
+  /platform.tgz
 ```

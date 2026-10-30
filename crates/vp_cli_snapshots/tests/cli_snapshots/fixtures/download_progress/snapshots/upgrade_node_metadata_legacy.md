@@ -3,7 +3,18 @@
 ## `node upgrade-node.mjs legacy`
 
 ```
-Missing platform metadata preserves the running binary's embedded Node default.
-Activation follows successful installation; setup reuses the completion receipt.
-Only the two metadata requests and platform download occur; all stay local.
+Upgrade exit: 0
+stderr: (empty)
+Install attempts: 1
+Attempt 1: runtime=<embedded>; expected executable=true
+  During install: current is original=true; rollback=rollback-sentinel
+  Install inputs: frozen=true; lockfile matches=true; dependency matches=true
+  After upgrade: staged exists=true; receipt matches=true; current is staged=true
+Current is original: false
+Rollback: <original-release>
+Remaining staged directories: 1
+Requests:
+  /vite-plus/latest
+  /@voidzero-dev/vite-plus-cli-<platform>/<release>
+  /platform.tgz
 ```

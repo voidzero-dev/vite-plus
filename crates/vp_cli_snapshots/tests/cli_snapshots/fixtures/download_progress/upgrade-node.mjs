@@ -7,6 +7,7 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
   realpathSync,
   rmSync,
   symlinkSync,
@@ -114,16 +115,17 @@ write(join(pnpm, 'package.json'), JSON.stringify({
 }));
 for (const shim of ['pnpm', 'pnpm.cmd', 'pnpm.ps1']) write(join(pnpm, 'bin', shim), 'unused');
 write(join(pnpm, 'bin/pnpm.cjs'), `
-const assert = require('node:assert/strict');
 const fs = require('node:fs');
-assert.equal(process.versions.node, ${JSON.stringify(expectedNode)});
-assert.equal(fs.realpathSync(process.execPath), fs.realpathSync(${JSON.stringify(join(home, 'js_runtime/node', expectedNode, nodePath))}));
-assert.equal(fs.realpathSync(${JSON.stringify(current)}), fs.realpathSync(${JSON.stringify(old)}));
-assert.equal(fs.readFileSync(${JSON.stringify(previous)}, 'utf8'), 'rollback-sentinel');
-assert.ok(process.argv.includes('--frozen-lockfile'));
-assert.equal(fs.readFileSync('pnpm-lock.yaml', 'utf8'), ${JSON.stringify(lockfile)});
-assert.equal(JSON.parse(fs.readFileSync('package.json')).dependencies['vite-plus'], ${JSON.stringify(version)});
-fs.appendFileSync(${JSON.stringify(attempts)}, process.cwd() + '\\n');
+fs.appendFileSync(${JSON.stringify(attempts)}, JSON.stringify({
+  directory: fs.realpathSync(process.cwd()),
+  runtime: process.versions.node,
+  executableMatches: fs.realpathSync(process.execPath) === fs.realpathSync(${JSON.stringify(join(home, 'js_runtime/node', expectedNode, nodePath))}),
+  currentIsOriginal: fs.realpathSync(${JSON.stringify(current)}) === fs.realpathSync(${JSON.stringify(old)}),
+  rollback: fs.readFileSync(${JSON.stringify(previous)}, 'utf8'),
+  frozen: process.argv.includes('--frozen-lockfile'),
+  lockfileMatches: fs.readFileSync('pnpm-lock.yaml', 'utf8') === ${JSON.stringify(lockfile)},
+  dependencyMatches: JSON.parse(fs.readFileSync('package.json')).dependencies['vite-plus'] === ${JSON.stringify(version)},
+}) + '\\n');
 if (${failure}) process.exit(17);
 fs.mkdirSync('node_modules/vite-plus', { recursive: true });
 fs.writeFileSync('node_modules/vite-plus/package.json', JSON.stringify({name: 'vite-plus', version: ${JSON.stringify(version)}}));
@@ -158,39 +160,37 @@ try {
       return error;
     },
   );
-  assert.equal(result.code, failure || incompatible ? 1 : 0, result.stderr);
-  if (incompatible) {
-    assert.ok(result.stderr.includes(targetNode), result.stderr);
-    assert.equal(existsSync(attempts), false);
-    console.log('An incompatible target Node pin fails without falling back or starting pnpm.');
-  } else {
-    const directories = readFileSync(attempts, 'utf8').trim().split('\n');
-    assert.equal(directories.length, 1);
-    const installed = directories[0];
-    console.log(legacy
-      ? 'Missing platform metadata preserves the running binary\'s embedded Node default.'
-      : 'Upgrade installs dependencies with the target metadata\'s Node pin before activation.');
-    if (failure) {
-      assert.equal(existsSync(installed), false);
-      console.log('A failed dependency install removes the staged version.');
-    } else {
-      assert.equal(realpathSync(current), realpathSync(installed));
-      assert.equal(readFileSync(previous, 'utf8'), version);
-      assert.deepEqual(readFileSync(join(installed, 'node_modules/.vp-install-complete')),
-        createHash('sha256').update(lockfile).digest());
-      console.log('Activation follows successful installation; setup reuses the completion receipt.');
-    }
+  const observations = existsSync(attempts)
+    ? readFileSync(attempts, 'utf8').trim().split('\n').map(JSON.parse)
+    : [];
+  const active = existsSync(current) ? realpathSync(current) : undefined;
+  const rollback = existsSync(previous) ? readFileSync(previous, 'utf8') : '(missing)';
+  console.log(`Upgrade exit: ${result.code}`);
+  console.log(`stderr: ${result.stderr.trim()
+    .replaceAll(home, '<upgrade-home>')
+    .replaceAll(targetNode, '<target-node>') || '(empty)'}`);
+  console.log(`Install attempts: ${observations.length}`);
+  for (const [index, observation] of observations.entries()) {
+    const installed = observation.directory;
+    const receipt = join(installed, 'node_modules/.vp-install-complete');
+    const receiptMatches =
+      existsSync(receipt) &&
+      readFileSync(receipt).equals(createHash('sha256').update(lockfile).digest());
+    const runtime = observation.runtime === defaultNode ? '<embedded>' : observation.runtime;
+    console.log(`Attempt ${index + 1}: runtime=${runtime}; expected executable=${observation.executableMatches}`);
+    console.log(`  During install: current is original=${observation.currentIsOriginal}; rollback=${observation.rollback}`);
+    console.log(`  Install inputs: frozen=${observation.frozen}; lockfile matches=${observation.lockfileMatches}; dependency matches=${observation.dependencyMatches}`);
+    console.log(`  After upgrade: staged exists=${existsSync(installed)}; receipt matches=${receiptMatches}; current is staged=${active === installed}`);
   }
-  if (failure || incompatible) {
-    assert.equal(realpathSync(current), realpathSync(old));
-    assert.equal(readFileSync(previous, 'utf8'), 'rollback-sentinel');
-    console.log('The current version and rollback record remain unchanged.');
+  console.log(`Current is original: ${active === realpathSync(old)}`);
+  console.log(`Rollback: ${rollback === version ? '<original-release>' : rollback}`);
+  console.log(`Remaining staged directories: ${readdirSync(home).filter((name) => name.startsWith(`${version}+force.`)).length}`);
+  console.log('Requests:');
+  for (const url of requests) {
+    console.log(`  ${url
+      .replace(/^\/@voidzero-dev\/vite-plus-cli-[^/]+\//, '/@voidzero-dev/vite-plus-cli-<platform>/')
+      .replaceAll(`/${version}`, '/<release>')}`);
   }
-  assert.equal(requests.length, 3);
-  assert.equal(requests[0], '/vite-plus/latest');
-  assert.ok(requests[1].endsWith(`/${version}`));
-  assert.equal(requests[2], '/platform.tgz');
-  console.log('Only the two metadata requests and platform download occur; all stay local.');
 } finally {
   server.close();
   server.closeAllConnections();
