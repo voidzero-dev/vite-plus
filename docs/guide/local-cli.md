@@ -61,26 +61,26 @@ bun add -D vite-plus
 
 :::
 
-Add overrides to your package manager so that other packages resolve the Vite+ versions. Alias `vite` to `@voidzero-dev/vite-plus-core`, setting `<vite-plus-version>` to the installed `vite-plus` version. Pin `vitest` to `<vitest-version>`, using the bundled version shown by `vp toolchain vitest` so the whole project shares a single Vitest copy with `vp test`. Without the `vitest` pin, a dependency or workspace package can pull a different Vitest than the bundled runner, splitting Vitest's internals (mocks, `expect`, runner state):
+Add overrides to your package manager so that other packages resolve the Vite+ versions. Alias `vite` to `@voidzero-dev/vite-plus-core`, setting `<core-version>` to the core version that the installed `vite-plus` uses, shown by `vp toolchain vite-plus-core`. Pin `vitest` to `<vitest-version>`, using the bundled version shown by `vp toolchain vitest` so the whole project shares a single Vitest copy with `vp test`. Without the `vitest` pin, a dependency or workspace package can pull a different Vitest than the bundled runner, splitting Vitest's internals (mocks, `expect`, runner state):
 
 ::: code-group
 
 ```yaml [pnpm-workspace.yaml]
 overrides:
-  vite@*: npm:@voidzero-dev/vite-plus-core@<vite-plus-version> # Match the installed vite-plus version
+  vite@*: npm:@voidzero-dev/vite-plus-core@<core-version> # Match the version from vp toolchain vite-plus-core
   vitest@*: <vitest-version> # Match the version from vp toolchain vitest
 ```
 
 ```json [npm / Bun package.json]
 "overrides": {
-  "vite": "npm:@voidzero-dev/vite-plus-core@<vite-plus-version>",
+  "vite": "npm:@voidzero-dev/vite-plus-core@<core-version>",
   "vitest": "<vitest-version>"
 }
 ```
 
 ```json [Yarn package.json]
 "resolutions": {
-  "vite": "npm:@voidzero-dev/vite-plus-core@<vite-plus-version>",
+  "vite": "npm:@voidzero-dev/vite-plus-core@<core-version>",
   "vitest": "<vitest-version>"
 }
 ```
@@ -95,11 +95,11 @@ For example, update an existing `vite` development dependency as follows. Keep t
 ```json [package.json]
 {
   "devDependencies": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@<vite-plus-version>",
+    "vite": "npm:@voidzero-dev/vite-plus-core@<core-version>",
     "vite-plus": "<vite-plus-version>"
   },
   "overrides": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@<vite-plus-version>",
+    "vite": "npm:@voidzero-dev/vite-plus-core@<core-version>",
     "vitest": "<vitest-version>"
   }
 }
@@ -113,9 +113,10 @@ If you also declare `vitest` directly, set its dependency entry to the exact ver
 Dependencies and plugins can import `vite` or `vitest` directly, even when your own code imports from `vite-plus`. These overrides align their dependencies with the toolchain Vite+ uses:
 
 - The `vite` alias directs those imports to Vite+'s core package. Separate Vite instances can break runtime identity checks: [issue #1391](https://github.com/voidzero-dev/vite-plus/issues/1391) reported TanStack Start returning 404s because an `instanceof` check crossed two copies. [PR #2617](https://github.com/voidzero-dev/vite-plus/pull/2617) addresses the CLI side by sharing Vite through the same alias.
+- The core version encodes the bundled Vite version. Its major and minor are the Vite major and minor, and its patch is the Vite patch times 100 plus a release counter. For example, core `8.3.500` bundles Vite `8.3.5`. Package managers compare this version with the `vite` peer ranges of plugins, so a plugin that supports the bundled Vite passes the check, and a plugin that does not support it still gets a peer warning. [Issue #2806](https://github.com/voidzero-dev/vite-plus/issues/2806) describes the earlier `1.x` versions, which failed every check.
 - The exact `vitest` pin keeps dependencies and `vp test` on the same Vitest version, avoiding separate mocks, `expect` instances, and runner state. [PR #2365](https://github.com/voidzero-dev/vite-plus/pull/2365) documents this requirement for manual installation.
 
-Keep the core alias aligned with your installed `vite-plus` version and update the Vitest pin to match its bundled version when upgrading. [Issue #2356](https://github.com/voidzero-dev/vite-plus/issues/2356) describes how dependency bots can update these packages independently and leave incompatible versions installed together.
+Keep the core alias aligned with the core version of your installed `vite-plus` and update the Vitest pin to match its bundled version when upgrading. [Issue #2356](https://github.com/voidzero-dev/vite-plus/issues/2356) describes how dependency bots can update these packages independently and leave incompatible versions installed together.
 
 :::
 

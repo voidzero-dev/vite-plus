@@ -107,11 +107,15 @@ jobs:
           # and installs them like a real release, with every package manager
           # (including bun) resolving the standard
           # `vite -> npm:@voidzero-dev/vite-plus-core@<version>` alias. Pin
-          # both packages to 0.0.0 so a correctly installed local build is
+          # the CLI to 0.0.0 and core to its local version (release counter
+          # 99, for example 8.3.599) so a correctly installed local build is
           # always distinguishable from any published version, even on a
           # release commit that leaves packages/{core,cli} at a published
-          # version.
-          (cd packages/core && npm pkg set version=0.0.0)
+          # version. The local core version still encodes the bundled Vite,
+          # so peer checks run as they do for a release
+          # (rfcs/core-version-alignment.md).
+          CORE_VERSION=$(node packages/tools/src/core-version.ts local)
+          (cd packages/core && npm pkg set version="$CORE_VERSION")
           (cd packages/cli && npm pkg set version=0.0.0)
           cd packages/core && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
           cd packages/cli && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
@@ -181,6 +185,7 @@ jobs:
       # The local registry serves the packed 0.0.0 build, so create pins the
       # exact version like a real release. The vp binary was built before the
       # pack step pinned the package versions, so align the version explicitly.
+      # The "Set local core version" step sets VP_CORE_VERSION the same way.
       VP_VERSION: '0.0.0'
       # Force full dependency rewriting so the library template's existing
       # vite-plus dep gets overridden with the local build
@@ -203,6 +208,9 @@ jobs:
         with:
           name: vite-plus-packages
           path: tmp/tgz
+
+      - name: Set local core version
+        run: echo "VP_CORE_VERSION=$(node packages/tools/src/core-version.ts local)" >> "$GITHUB_ENV"
 
       - name: Install vp CLI
         run: |
@@ -238,8 +246,8 @@ jobs:
           echo "$handshake"
           echo "$handshake" | node -e 'const { env } = JSON.parse(require("node:fs").readFileSync(0, "utf8")); for (const [k, v] of Object.entries(env)) console.log(`${k}=${v}`)' >> "$GITHUB_ENV"
 
-      # No VP_OVERRIDE_PACKAGES: with VP_VERSION=0.0.0 the product default
-      # override map already pins `vite` to npm:@voidzero-dev/vite-plus-core@0.0.0
+      # No VP_OVERRIDE_PACKAGES: with VP_CORE_VERSION set, the product default
+      # override map already pins `vite` to npm:@voidzero-dev/vite-plus-core@<local>
       # and `vitest` to the bundled version (see VITE_PLUS_OVERRIDE_PACKAGES in
       # packages/cli/src/utils/constants.ts), and stays correct across vitest
       # bumps without editing this workflow.

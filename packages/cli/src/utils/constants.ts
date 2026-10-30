@@ -1,9 +1,17 @@
 import { createRequire } from 'node:module';
 
+import corePkg from '../../../core/package.json' with { type: 'json' };
 import cliPkg from '../../package.json' with { type: 'json' };
 
 export const VITE_PLUS_NAME = 'vite-plus';
 export const VITE_PLUS_VERSION = process.env.VP_VERSION || cliPkg.version;
+
+// The core version encodes the bundled Vite version (rfcs/core-version-alignment.md),
+// so it differs from the vite-plus version. Preview builds publish every package
+// at one `0.0.0-<pre>` version, so a preview VP_VERSION also selects the core.
+export const VITE_PLUS_CORE_VERSION =
+  process.env.VP_CORE_VERSION ||
+  (process.env.VP_VERSION?.startsWith('0.0.0') ? process.env.VP_VERSION : corePkg.version);
 
 // Mirrors Vite's DEFAULT_CONFIG_FILES order so readers and writers target the same file.
 export const VITE_CONFIG_FILES = [
@@ -27,7 +35,7 @@ export const TSDOWN_MIGRATION_SKILL_URL =
 export const VITE_PLUS_OVERRIDE_PACKAGES: Record<string, string> = process.env.VP_OVERRIDE_PACKAGES
   ? JSON.parse(process.env.VP_OVERRIDE_PACKAGES)
   : {
-      vite: `npm:@voidzero-dev/vite-plus-core@${VITE_PLUS_VERSION}`,
+      vite: `npm:@voidzero-dev/vite-plus-core@${VITE_PLUS_CORE_VERSION}`,
       // The runner inlines its assertion and runner state. Its remaining
       // official dependencies use exact versions; community providers and
       // Istanbul internals have their own version ranges.

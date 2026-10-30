@@ -28,9 +28,11 @@ import {
   VITEST_BROWSER_DEP_NAMES,
   VITEST_IS_MANAGED_OVERRIDE,
   pnpmOverrideKey,
+  vitePeerDependencyRuleRequired,
   type CatalogDependencyResolver,
   type ManagedOverrideKeyStyle,
   type PackageJsonDependencyField,
+  type PnpmPeerDependencyRules,
 } from './shared.ts';
 
 // Official packages that do not declare a required `vitest` peer. Keep them
@@ -555,6 +557,69 @@ export function removeVitestPeerDependencyRule(peerDependencyRules: {
   if (peerDependencyRules.allowedVersions) {
     delete peerDependencyRules.allowedVersions.vitest;
   }
+}
+
+// Remove every `vite` entry from pnpm peerDependencyRules, in place. Once the
+// core version encodes the bundled Vite (see `vitePeerDependencyRuleRequired`),
+// the rule only hides real incompatibilities. Migration cannot tell whether an
+// earlier migration or the user wrote the entry; its only purpose was to accept
+// the `1.x` alias, so both go.
+export function removeVitePeerDependencyRule(peerDependencyRules: {
+  allowAny?: string[];
+  allowedVersions?: Record<string, string>;
+}): void {
+  if (Array.isArray(peerDependencyRules.allowAny)) {
+    peerDependencyRules.allowAny = peerDependencyRules.allowAny.filter((key) => key !== 'vite');
+  }
+  if (peerDependencyRules.allowedVersions) {
+    delete peerDependencyRules.allowedVersions.vite;
+  }
+}
+
+// The pnpm peerDependencyRules keys vite-plus manages: the managed override
+// keys, minus `vite` once its core alias satisfies `vite` peer ranges.
+export function managedPeerDependencyRuleKeys(usesVitest: boolean): string[] {
+  const keys = Object.keys(managedOverridePackages(usesVitest));
+  return vitePeerDependencyRuleRequired() ? keys : keys.filter((key) => key !== 'vite');
+}
+
+// Re-derive the managed pnpm peerDependencyRules on top of the package.json
+// `pnpm.peerDependencyRules` shape. Returns the new rules, or `undefined` when
+// no rule remains so the caller can drop the field. Does not mutate `rules`.
+export function mergeManagedPnpmPeerDependencyRules(
+  rules: PnpmPeerDependencyRules | undefined,
+  usesVitest: boolean,
+): PnpmPeerDependencyRules | undefined {
+  const seed: PnpmPeerDependencyRules = { ...rules };
+  if (Array.isArray(seed.allowAny)) {
+    seed.allowAny = [...seed.allowAny];
+  }
+  if (seed.allowedVersions) {
+    seed.allowedVersions = { ...seed.allowedVersions };
+  }
+  // Common case: drop a lingering managed `vitest` peer rule.
+  if (!usesVitest) {
+    removeVitestPeerDependencyRule(seed);
+  }
+  if (!vitePeerDependencyRuleRequired()) {
+    removeVitePeerDependencyRule(seed);
+  }
+  const keys = managedPeerDependencyRuleKeys(usesVitest);
+  const next: PnpmPeerDependencyRules = {
+    ...seed,
+    allowAny: [...new Set([...(seed.allowAny ?? []), ...keys])],
+    allowedVersions: {
+      ...seed.allowedVersions,
+      ...Object.fromEntries(keys.map((key) => [key, '*'])),
+    },
+  };
+  if (next.allowAny?.length === 0) {
+    delete next.allowAny;
+  }
+  if (next.allowedVersions && Object.keys(next.allowedVersions).length === 0) {
+    delete next.allowedVersions;
+  }
+  return Object.keys(next).length > 0 ? next : undefined;
 }
 
 // Legacy wrapper package names that may appear as the target of override

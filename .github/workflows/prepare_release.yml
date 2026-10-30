@@ -38,14 +38,15 @@ jobs:
       # release.yml updates HomebrewFormula/vp.rb after the release archives and
       # their checksums are published. Do not point the tap at unpublished assets.
       - name: Bump versions
+        id: versions
         env:
           VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
           update_json() {
-            local file=$1
-            sed -i -E "s/^(\s*\"version\":\s*)\"[^\"]+\"/\1\"$VERSION\"/" "$file"
-            grep -qF "\"version\": \"$VERSION\"" "$file" || { echo "::error::Failed to update $file"; exit 1; }
+            local file=$1 version=${2:-$VERSION}
+            sed -i -E "s/^(\s*\"version\":\s*)\"[^\"]+\"/\1\"$version\"/" "$file"
+            grep -qF "\"version\": \"$version\"" "$file" || { echo "::error::Failed to update $file"; exit 1; }
             echo "Updated $file"
           }
           update_toml() {
@@ -54,12 +55,17 @@ jobs:
             grep -qF "version = \"$VERSION\"" "$file" || { echo "::error::Failed to update $file"; exit 1; }
             echo "Updated $file"
           }
+          # The core version encodes the bundled Vite version and a release
+          # counter read from the registry (rfcs/core-version-alignment.md).
+          CORE_VERSION=$(node packages/tools/src/core-version.ts next --vite-plus "$VERSION")
+          echo "core-version=$CORE_VERSION" >> "$GITHUB_OUTPUT"
           update_json packages/cli/package.json
-          update_json packages/core/package.json
+          update_json packages/core/package.json "$CORE_VERSION"
           update_json packages/prompts/package.json
           update_json packages/create-vite-plus/package.json
           update_toml packages/cli/binding/Cargo.toml
           update_toml crates/vp_global_cli/Cargo.toml
+          node packages/tools/src/core-version.ts check --release
 
       - name: Refresh Cargo.lock
         run: cargo check
@@ -81,7 +87,7 @@ jobs:
           base: main
           sign-commits: true
           body: |
-            Release vite-plus v${{ inputs.version }}.
+            Release vite-plus v${{ inputs.version }} with @voidzero-dev/vite-plus-core ${{ steps.versions.outputs.core-version }}.
 
             For a stable release, complete the `HomebrewFormula/vp.rb` update after publication by merging the generated `release/homebrew-v${{ inputs.version }}` PR.
 

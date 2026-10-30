@@ -35,6 +35,7 @@ export function toolchainFromManifest(input: unknown): SyncVersionsToolchain {
   const manifest = toolchainManifestSchema.parse(input);
   return {
     vitePlus: requiredToolVersion(manifest.nodes, 'vite-plus'),
+    vitePlusCore: requiredToolVersion(manifest.nodes, 'vite-plus-core'),
     vitest: requiredToolVersion(manifest.nodes, 'vitest'),
   };
 }

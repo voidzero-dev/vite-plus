@@ -24,6 +24,11 @@ for (const name of [
 assert.equal(ModuleRunner, VpModuleRunner);
 const config = {};
 assert.equal(vite.defineConfig(config), config);
-assert.equal(pkg.dependencies.vite, `npm:@voidzero-dev/vite-plus-core@${pkg.version}`);
+// The core version encodes the bundled Vite version, so it differs from the
+// vite-plus version (rfcs/core-version-alignment.md).
+assert.equal(
+  pkg.dependencies.vite,
+  `npm:@voidzero-dev/vite-plus-core@${require('vite/package.json').version}`,
+);
 assert.equal(pkg.dependencies['@voidzero-dev/vite-plus-core'], undefined);
 console.log('Packed alias, ESM, CommonJS, and module-runner identity passed');

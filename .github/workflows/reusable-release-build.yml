@@ -86,14 +86,17 @@ jobs:
           #   cliPkg.version (VITE_PLUS_VERSION). Without this a preview
           #   `vp migrate` pins the build-time release placeholder instead of
           #   the test build, and skips the registry-bridge .npmrc.
-          # - packages/core: the release build bakes ${VERSION} into bundled
-          #   Rolldown's binding version guards, matching the
-          #   @voidzero-dev/vite-plus-<platform> packages published as
-          #   ${VERSION}. A release checkout already carries ${VERSION}; this
-          #   only changes preview builds.
+          # - packages/core: only for preview builds, which publish every
+          #   package as 0.0.0-commit.<sha>. A release checkout already
+          #   carries the core version, which encodes the bundled Vite
+          #   version (rfcs/core-version-alignment.md). Release builds bake
+          #   the CLI version into bundled Rolldown's binding version guards.
           # The list feeds the verify step below, so a stamped file cannot
           # silently drop out of verification.
-          PKG_JSON_STAMP_FILES="packages/cli/package.json packages/core/package.json"
+          PKG_JSON_STAMP_FILES="packages/cli/package.json"
+          if [[ "$VERSION" == 0.0.0-* ]]; then
+            PKG_JSON_STAMP_FILES="$PKG_JSON_STAMP_FILES packages/core/package.json"
+          fi
           for f in $PKG_JSON_STAMP_FILES; do
             pnpm exec json-edit "$f" '_.version = process.env.VERSION'
           done

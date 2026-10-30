@@ -26,6 +26,7 @@ import {
   injectLintTypeCheckDefaults,
   managedOverridePackages,
   mergeManagedPnpmOverrides,
+  mergeManagedPnpmPeerDependencyRules,
   mergeStagedConfigToViteConfig,
   mergeTsdownConfigFile,
   mergeViteConfigFiles,
@@ -42,7 +43,6 @@ import {
   removeLintStagedFromPackageJson,
   removeMigratedOxlintConfigs,
   removeManagedVitestEntry,
-  removeVitestPeerDependencyRule,
   rewriteAllImports,
   rewriteBunCatalog,
   rewriteLintStagedConfigFile,
@@ -54,6 +54,7 @@ import {
   setDirectViteEdge,
   sourceTreeReferencesRetainedVitestModule,
   takePnpmWorkspaceSettings,
+  trackVitePeerDependencyRuleRemoval,
   usesVitestBrowserMode,
   usesWebdriverioProvider,
   workspaceUsesVitestDirectly,
@@ -84,6 +85,11 @@ export function rewriteStandaloneProject(
   }
 
   const packageManager = workspaceInfo.packageManager;
+  const reportVitePeerDependencyRuleRemoval = trackVitePeerDependencyRuleRemoval(
+    projectPath,
+    packageManager,
+    report,
+  );
   const catalogDependencyResolver = createCatalogDependencyResolver(projectPath, packageManager);
   const vitestEcosystemPackages = collectVitestEcosystemInstallDependencyNames(projectPath);
   // Captured before `rewritePackageJson` strips `oxlint`; the import rewriter
@@ -196,13 +202,10 @@ export function rewriteStandaloneProject(
         // whose target is a removed package, before re-merging the user's
         // overrides into the new pnpm config.
         dropRemovePackageOverrideKeys(pkg.pnpm?.overrides);
-        // Common case: drop a lingering managed `vitest` override + its peer
-        // rules before re-merging.
+        // Common case: drop a lingering managed `vitest` override before
+        // re-merging. `mergeManagedPnpmPeerDependencyRules` drops its peer rule.
         if (!usesVitest) {
           removeManagedVitestEntry(pkg.pnpm?.overrides, 'pnpm-ranged');
-          if (pkg.pnpm?.peerDependencyRules) {
-            removeVitestPeerDependencyRule(pkg.pnpm.peerDependencyRules);
-          }
         }
         // Project already has pnpm config in package.json -- keep using it.
         // `mergeManagedPnpmOverrides` writes the range-qualified keys and drops
@@ -211,16 +214,10 @@ export function rewriteStandaloneProject(
         pkg.pnpm = {
           ...pkg.pnpm,
           overrides: mergeManagedPnpmOverrides(pkg.pnpm?.overrides, managed),
-          peerDependencyRules: {
-            ...pkg.pnpm?.peerDependencyRules,
-            allowAny: [
-              ...new Set([...(pkg.pnpm?.peerDependencyRules?.allowAny ?? []), ...overrideKeys]),
-            ],
-            allowedVersions: {
-              ...pkg.pnpm?.peerDependencyRules?.allowedVersions,
-              ...Object.fromEntries(overrideKeys.map((key) => [key, '*'])),
-            },
-          },
+          peerDependencyRules: mergeManagedPnpmPeerDependencyRules(
+            pkg.pnpm?.peerDependencyRules,
+            usesVitest,
+          ),
         };
       } else {
         movedPnpmSettings = takePnpmWorkspaceSettings(pkg);
@@ -355,6 +352,7 @@ export function rewriteStandaloneProject(
   dropDeadOxlintPluginsDependency(projectPath, workspaceInfo.packages, originalOxlintDependencies);
   wrapLazyPluginsInViteConfig(projectPath, silent, report);
   migrateTaskCacheConfigInViteConfig(projectPath, silent, report);
+  reportVitePeerDependencyRuleRemoval();
 }
 
 /**
@@ -367,6 +365,11 @@ export function rewriteMonorepo(
   silent = false,
   report?: MigrationReport,
 ): void {
+  const reportVitePeerDependencyRuleRemoval = trackVitePeerDependencyRuleRemoval(
+    workspaceInfo.rootDir,
+    workspaceInfo.packageManager,
+    report,
+  );
   const catalogDependencyResolver = createCatalogDependencyResolver(
     workspaceInfo.rootDir,
     workspaceInfo.packageManager,
@@ -530,6 +533,7 @@ export function rewriteMonorepo(
     wrapLazyPluginsInViteConfig(projectPath, silent, report);
     migrateTaskCacheConfigInViteConfig(projectPath, silent, report);
   }
+  reportVitePeerDependencyRuleRemoval();
 }
 
 /**
