@@ -85,7 +85,8 @@ pub const VP_NODE_SKIP_SIGNATURE_VERIFY: &str = "VP_NODE_SKIP_SIGNATURE_VERIFY";
 /// Override Node.js version (takes highest priority in version resolution).
 pub const VP_NODE_VERSION: &str = "VP_NODE_VERSION";
 
-/// Opt-in Node.js selector for first-start installation; defaults to LTS when unset.
+/// Opt-in Node.js selector for first-start installation.
+/// Defaults to the pinned Node.js release when unset.
 pub const VP_SETUP_NODE_VERSION: &str = "VP_SETUP_NODE_VERSION";
 /// File used to return the exact project Node.js version to a CI installer.
 pub const VP_SETUP_NODE_VERSION_FILE: &str = "VP_SETUP_NODE_VERSION_FILE";

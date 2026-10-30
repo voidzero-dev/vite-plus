@@ -46,6 +46,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node .github/scripts/upgrade-deps.ts
 
+      - name: Use the updated Node.js pin
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+
       - name: Build
         uses: ./.github/actions/build-upstream
         id: build-upstream
@@ -107,6 +113,11 @@ jobs:
 
             ### Background
             - Upgrade script: `./.github/scripts/upgrade-deps.ts`
+            - Development, CI, and global CLI dependency installation use the
+              latest stable `24.x` release pinned in `.node-version`.
+              Keep the exact version selected by the upgrade script. Do not replace
+              it with a moving LTS alias or advance the major version.
+              Runtime commands keep their latest LTS fallback.
             - Vitest is capped at the latest stable `5.x` release. Keep the exact
               version selected by the upgrade script when merging upstream catalogs.
               Official Vitest packages must use that version. Do not bypass the cap.

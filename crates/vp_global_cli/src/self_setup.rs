@@ -263,7 +263,13 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
                     "Requested Node.js {version} does not support this Vite+ release; using a separate installation runtime."
                 ));
             }
-            install::install_production_deps(&version_dir, registry, true, preferred).await?;
+            install::install_production_deps(
+                &version_dir,
+                registry,
+                true,
+                preferred.map(install::NodeVersion::Preferred),
+            )
+            .await?;
         }
     }
     if let Some(version) = node_version {
