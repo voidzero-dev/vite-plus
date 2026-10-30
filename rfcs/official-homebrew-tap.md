@@ -7,14 +7,37 @@ disabled until maintainers publish a compatible release and merge its formula up
 
 Issue [#1171](https://github.com/voidzero-dev/vite-plus/issues/1171) requested
 Homebrew distribution for atomic Linux desktops and enterprise management.
-The [core formula](https://github.com/Homebrew/homebrew-core/blob/main/Formula/v/vite-plus.rb)
-requires Rust and JavaScript builds when a bottle is unavailable. Issue
-[#2719](https://github.com/voidzero-dev/vite-plus/issues/2719) also exposed a
-mismatch between Homebrew installation and first-run setup, addressed by
-[#2729](https://github.com/voidzero-dev/vite-plus/pull/2729).
+We maintain our own tap as the official Homebrew distribution so it can use the
+same release artifacts and dependency setup as the script installer. Two Core
+packaging requirements prevent delivering that model through the
+[Core formula](https://github.com/Homebrew/homebrew-core/blob/main/Formula/v/vite-plus.rb):
 
-The official tap installs the native CLI from GitHub Releases and reuses the
-script installer's dependency setup with the user's npm configuration.
+- **Native release artifacts.** [Core policy](https://docs.brew.sh/Acceptable-Formulae#source-availability-and-licences)
+  requires source builds for platform-specific software. The tap installs our
+  published native binaries and matching lockfile directly. Core instead builds
+  its own bottles; users compile Rust and JavaScript only when installing from
+  source, such as when a compatible bottle is unavailable.
+- **CLI dependency ownership.** [Core's language packaging requirements](https://docs.brew.sh/Language-Specific-Formulae#shared-requirements)
+  place application dependencies inside the formula prefix and prohibit automatic
+  downloads of required code at runtime. Our shared installer prepares matching
+  CLI dependencies in the invoking account's data directory on first use, using
+  that account's npm configuration. This constraint concerns the CLI payload;
+  it does not prohibit Node.js or package-manager management as a tool feature.
+
+Homebrew's [installation environment](https://github.com/Homebrew/brew/blob/main/Library/Homebrew/formula.rb)
+also isolates `HOME`, overrides `NPM_CONFIG_USERCONFIG`, and clears sensitive
+environment variables. This applies to taps too. Homebrew can execute commands,
+but we run user setup in a subsequent `vp` invocation to use the account's
+registry credentials and shell configuration. Issue
+[#2719](https://github.com/voidzero-dev/vite-plus/issues/2719), fixed by
+[#2729](https://github.com/voidzero-dev/vite-plus/pull/2729), exposed the need to
+keep installation and user setup consistent.
+
+Owning the tap also lets our release workflow open the formula update automatically
+after release artifacts and npm packages are published. The update becomes
+available after its platform tests pass and maintainers merge it. Core remains
+compatible through its separate packaging model; this proposal does not remove or
+deprecate its formula.
 
 ## Proposal
 
