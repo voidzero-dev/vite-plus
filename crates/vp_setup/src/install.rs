@@ -197,6 +197,14 @@ pub async fn write_upgrade_log(
     }
 }
 
+/// Select the runtime for dependency installation.
+pub enum NodeVersion<'a> {
+    /// Reuse a CI-selected runtime when it supports the pinned pnpm.
+    Preferred(&'a str),
+    /// Use the target release's exact runtime or fail before activation.
+    Required(&'a str),
+}
+
 /// Install production dependencies with a compatible managed Node.js and pinned pnpm.
 ///
 /// Spawns: `node <managed-pnpm>/bin/pnpm.cjs install --ignore-workspace [--registry <url>]`
@@ -205,7 +213,7 @@ pub async fn install_production_deps(
     version_dir: &AbsolutePath,
     registry: Option<&str>,
     show_progress: bool,
-    preferred_node_version: Option<&str>,
+    node_version: Option<NodeVersion<'_>>,
 ) -> Result<(), Error> {
     tracing::debug!("Running pnpm install in {}", version_dir.as_path().display());
     lockfile::invalidate_install(version_dir).await?;
@@ -222,7 +230,7 @@ pub async fn install_production_deps(
 
     let (node_runtime, pnpm_entry) = vp_shared::progress::with_spinner(
         show_progress.then_some("Preparing Node.js and pnpm..."),
-        prepare_install_runtime(preferred_node_version),
+        prepare_install_runtime(node_version),
     )
     .await?;
     let output = vp_shared::progress::with_spinner(
@@ -280,7 +288,7 @@ async fn dependency_install_args<'a>(
 }
 
 async fn prepare_install_runtime(
-    preferred_node_version: Option<&str>,
+    node_version: Option<NodeVersion<'_>>,
 ) -> Result<(vp_js_runtime::JsRuntime, AbsolutePathBuf), Error> {
     let (pnpm_dir, _, _) =
         download_package_manager(PackageManagerType::Pnpm, PINNED_PNPM_VERSION, None)
@@ -302,9 +310,21 @@ async fn prepare_install_runtime(
     .map_err(|error| {
         Error::Setup(format!("Failed to read pnpm's Node.js requirement: {error}").into())
     })?;
-    let node_version = preferred_node_version
-        .filter(|version| supports_pnpm_node(&package, version))
-        .unwrap_or(DEFAULT_NODE_VERSION);
+    let node_version = match node_version {
+        Some(NodeVersion::Required(version)) => {
+            if !supports_pnpm_node(&package, version) {
+                return Err(Error::Setup(
+                    format!(
+                        "Node.js {version} required by the target Vite+ release is not supported by pnpm {PINNED_PNPM_VERSION}"
+                    )
+                    .into(),
+                ));
+            }
+            version
+        }
+        Some(NodeVersion::Preferred(version)) if supports_pnpm_node(&package, version) => version,
+        _ => DEFAULT_NODE_VERSION,
+    };
     let node_runtime =
         download_runtime(JsRuntimeType::Node, node_version).await.map_err(|error| {
             Error::Setup(format!("Failed to install Node.js {node_version}: {error}").into())
@@ -712,9 +732,15 @@ mod tests {
                     tokio::fs::write(binary, "").await.unwrap();
                 }
 
-                let (runtime, entry) = prepare_install_runtime(Some("22.23.1")).await.unwrap();
+                let (runtime, entry) =
+                    prepare_install_runtime(Some(NodeVersion::Preferred("22.23.1"))).await.unwrap();
                 assert_eq!(runtime.version(), "22.23.1");
                 assert_eq!(entry, pnpm.join("bin/pnpm.cjs"));
+                index.assert_calls(0);
+
+                let (runtime, _) =
+                    prepare_install_runtime(Some(NodeVersion::Required("22.23.1"))).await.unwrap();
+                assert_eq!(runtime.version(), "22.23.1");
                 index.assert_calls(0);
 
                 let (runtime, _) = prepare_install_runtime(None).await.unwrap();
@@ -722,8 +748,18 @@ mod tests {
                 index.assert_calls(0);
 
                 tokio::fs::write(manifest, r#"{"engines":{"node":">=24"}}"#).await.unwrap();
-                let (runtime, _) = prepare_install_runtime(Some("22.23.1")).await.unwrap();
+                let (runtime, _) =
+                    prepare_install_runtime(Some(NodeVersion::Preferred("22.23.1"))).await.unwrap();
                 assert_eq!(runtime.version(), DEFAULT_NODE_VERSION);
+                index.assert_calls(0);
+
+                let error = prepare_install_runtime(Some(NodeVersion::Required("22.23.1")))
+                    .await
+                    .err()
+                    .unwrap();
+                assert!(error.to_string().contains(
+                    "Node.js 22.23.1 required by the target Vite+ release is not supported by pnpm"
+                ));
                 index.assert_calls(0);
             },
         )

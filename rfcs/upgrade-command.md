@@ -200,6 +200,11 @@ The archive contains `vp` or `vp.exe`, the bundled
 `vpInstallLockfile: true` to advertise the companion. Release and commit preview
 packages use this layout; preview metadata supplies a content-addressed URL.
 
+The platform manifest also publishes `vpNodeVersion`, the exact Node.js version
+from the release checkout's `.node-version`. The binary embeds the same pin at
+build time. The existing exact-version metadata request supplies this field;
+upgrades do not read the current repository pin or resolve another `latest` tag.
+
 The upgrade command does not extract the main JavaScript package itself. The
 subsequent pnpm installation downloads `vite-plus`, NAPI packages, and transitive
 dependencies using the bundled lockfile.
@@ -264,7 +269,7 @@ Platform detection reuses existing logic from `vp_js_runtime` or mirrors the bas
 3. Generate the wrapper `package.json` with an exact `vite-plus` dependency and the installer's pinned pnpm version.
 4. Restore `bin/vp-install-lock.yaml` as `pnpm-lock.yaml` in the version directory.
 5. Write the installation's `.npmrc` with `minimum-release-age=0` so new versions are immediately available.
-6. Run managed pnpm with `install --ignore-workspace --frozen-lockfile` in the version directory. Activation waits for a successful install.
+6. Run managed pnpm with `install --ignore-workspace --frozen-lockfile` in the version directory, using `vpNodeVersion` from the target's platform metadata. Activation waits for a successful install.
 
 Missing advertised lockfiles and integrity failures stop installation. Older
 packages without a companion keep the legacy dependency installation behavior.
@@ -272,6 +277,15 @@ When an older upgrade client drops the companion, the new binary's self-setup
 recovers it from the verified platform archive before completing a frozen
 install. See [Global installation lockfile](./merge-global-and-local-cli.md#global-installation-lockfile)
 for generation, retry, and compatibility details.
+
+If `vpNodeVersion` is absent, the running binary keeps its existing Node.js
+selection. A present value must be an exact stable version. Invalid metadata,
+an incompatible pnpm runtime, or a failed dependency install stops the upgrade
+before it changes `current` or the rollback record. Unlike the optional
+`VP_SETUP_NODE_VERSION` override for initial installation, this release pin
+cannot silently fall back to the running binary's default. The running binary
+still selects pnpm and executes the installation logic. Clients released before
+this metadata support keep their existing behavior.
 
 #### Step 5: Version Swap
 

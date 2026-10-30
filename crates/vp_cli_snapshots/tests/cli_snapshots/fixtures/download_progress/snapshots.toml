@@ -68,6 +68,26 @@ skip-platforms = ["windows"]
 steps = [{ argv = ["node", "install.mjs", "upgrade-handoff"], tty = false }]
 
 [[case]]
+name = "upgrade_node_metadata"
+vp = "global"
+steps = [{ argv = ["node", "upgrade-node.mjs", "metadata"], tty = false }]
+
+[[case]]
+name = "upgrade_node_metadata_legacy"
+vp = "global"
+steps = [{ argv = ["node", "upgrade-node.mjs", "legacy"], tty = false }]
+
+[[case]]
+name = "upgrade_node_metadata_failure"
+vp = "global"
+steps = [{ argv = ["node", "upgrade-node.mjs", "failure"], tty = false }]
+
+[[case]]
+name = "upgrade_node_metadata_incompatible"
+vp = "global"
+steps = [{ argv = ["node", "upgrade-node.mjs", "incompatible"], tty = false }]
+
+[[case]]
 name = "installation_peer_config"
 vp = "global"
 skip-platforms = ["windows"]
