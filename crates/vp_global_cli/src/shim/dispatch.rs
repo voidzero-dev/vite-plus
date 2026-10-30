@@ -205,6 +205,51 @@ fn get_npm_global_prefix(
     node_dir.clone()
 }
 
+/// Whether npm's effective `dry-run` setting is enabled for this command.
+///
+/// A CLI flag wins. Otherwise `npm config get dry-run` reports the value from
+/// the environment and `.npmrc`. If npm cannot report it, assume a real install.
+fn npm_dry_run_enabled(args: &[String], npm_path: &AbsolutePath, env: &ToolPathEnv) -> bool {
+    if let Some(dry_run) = npm_dry_run_from_args(args) {
+        return dry_run;
+    }
+    std::process::Command::new(npm_path.as_path())
+        .args(["config", "get", "dry-run"])
+        .envs(env.clone().into_envs())
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .and_then(|output| std::str::from_utf8(&output.stdout).ok().map(npm_config_bool))
+        .unwrap_or(false)
+}
+
+/// The last `--dry-run`, `--dry-run=<value>`, or `--no-dry-run` flag before `--`.
+fn npm_dry_run_from_args(args: &[String]) -> Option<bool> {
+    let mut dry_run = None;
+    for arg in args.iter().take_while(|arg| *arg != "--") {
+        if arg == "--dry-run" {
+            dry_run = Some(true);
+        } else if arg == "--no-dry-run" {
+            dry_run = Some(false);
+        } else if let Some(value) = arg.strip_prefix("--dry-run=") {
+            dry_run = Some(npm_config_bool(value));
+        }
+    }
+    dry_run
+}
+
+/// Parse a boolean npm config value the way npm's option parser (nopt) does:
+/// numbers are true when nonzero, `false` and `null` are false, and any other
+/// string is true. `npm config get` prints environment values unparsed, such
+/// as `1` for `NPM_CONFIG_DRY_RUN=1`.
+fn npm_config_bool(value: &str) -> bool {
+    let value = value.trim();
+    if let Ok(number) = value.parse::<f64>() {
+        return number != 0.0;
+    }
+    !value.is_empty() && value != "false" && value != "null"
+}
+
 /// After npm install -g completes, check if installed binaries are on PATH.
 ///
 /// First determines the actual npm global bin directory (which may differ from the
@@ -291,16 +336,27 @@ fn check_npm_global_install_result(
                     if config.source == BinSource::Vp {
                         // Managed by vp install -g — warn about the conflict
                         managed_conflicts.push((bin_name, config.package.clone()));
-                    } else if config.source == BinSource::Npm && config.package != package_name {
-                        // Link exists from a different npm package — recreate link for new owner.
-                        // The old symlink points at the previous package's binary; we must
-                        // replace it so it resolves to the new package's binary in npm's bin dir.
+                    } else if config.source == BinSource::Npm {
+                        // Recreate the link when a different npm package now owns the binary,
+                        // or when a reinstall under another Node.js version put the binary
+                        // in a different npm bin dir. Otherwise the link keeps launching the
+                        // previous binary.
                         #[cfg(unix)]
                         let source_path = npm_bin_dir.join(&bin_name);
                         #[cfg(windows)]
                         let source_path = npm_bin_dir.join(vt_str::format!("{bin_name}.cmd"));
 
-                        if source_path.as_path().exists() {
+                        let same_owner = config.package == package_name;
+                        if source_path.as_path().exists()
+                            && !(same_owner
+                                && npm_bin_link_targets(&bin_dir, &bin_name, &source_path))
+                        {
+                            if same_owner && config.node_version != node_version {
+                                output::note(&vt_str::format!(
+                                    "Moving '{bin_name}' from Node.js {} to {node_version}",
+                                    config.node_version
+                                ));
+                            }
                             let _ = std::fs::remove_file(shim_path.as_path());
                             create_bin_link(
                                 &bin_dir,
@@ -421,6 +477,27 @@ fn link_missing_npm_bins(
         if source_path.as_path().exists() {
             create_bin_link(bin_dir, bin_name, source_path, package_name, node_version);
         }
+    }
+}
+
+/// Whether the existing npm bin link in `bin_dir` launches `source_path`.
+fn npm_bin_link_targets(
+    bin_dir: &AbsolutePath,
+    bin_name: &str,
+    source_path: &AbsolutePath,
+) -> bool {
+    #[cfg(unix)]
+    {
+        std::fs::read_link(bin_dir.join(bin_name).as_path())
+            .is_ok_and(|target| target == source_path.as_path())
+    }
+
+    #[cfg(windows)]
+    {
+        // `create_bin_link` writes the quoted source path into the `.cmd` wrapper.
+        let quoted_source = vt_str::format!("\"{}\"", source_path.as_path().display());
+        std::fs::read_to_string(bin_dir.join(vt_str::format!("{bin_name}.cmd")).as_path())
+            .is_ok_and(|content| content.contains(quoted_source.as_str()))
     }
 }
 
@@ -916,7 +993,8 @@ pub async fn dispatch(tool: &str, args: &[String], env: ToolPathEnv) -> i32 {
     if tool == "npm" {
         if let Some(parsed) = parse_npm_global_install(args) {
             let exit_code = exec::spawn_tool(&tool_path, args, child_env.clone());
-            if exit_code == 0 {
+            // A dry run changes no files in the npm prefix, so the links stay as they are.
+            if exit_code == 0 && !npm_dry_run_enabled(args, &tool_path, &child_env) {
                 let node_dir = node_prefix_from_binary(&node_path);
                 let node_version = resolution.as_ref().map_or_else(
                     || read_node_version(&node_path).unwrap_or_else(|| "unknown".into()),
@@ -1922,6 +2000,77 @@ mod tests {
             link_missing_npm_bins(&bin_dir, &candidates, "22.18.0");
             assert_eq!(BinConfig::load_sync("test-cli").unwrap().unwrap().package, "npm-package");
             assert!(bin_dir.join("test-cli").as_path().exists());
+        });
+    }
+
+    #[test]
+    fn test_npm_dry_run_from_args() {
+        assert_eq!(npm_dry_run_from_args(&s(&["install", "-g", "pkg"])), None);
+        assert_eq!(npm_dry_run_from_args(&s(&["install", "-g", "--dry-run", "pkg"])), Some(true));
+        assert_eq!(npm_dry_run_from_args(&s(&["i", "-g", "pkg", "--dry-run=false"])), Some(false));
+        assert_eq!(npm_dry_run_from_args(&s(&["i", "-g", "--dry-run=1", "pkg"])), Some(true));
+        // The last flag wins, as in npm.
+        assert_eq!(
+            npm_dry_run_from_args(&s(&["i", "-g", "--dry-run", "--no-dry-run", "pkg"])),
+            Some(false)
+        );
+        // Arguments after `--` are not npm flags.
+        assert_eq!(npm_dry_run_from_args(&s(&["i", "-g", "pkg", "--", "--dry-run"])), None);
+    }
+
+    #[test]
+    fn test_npm_config_bool() {
+        for value in ["true", "1", "yes", "true\n"] {
+            assert!(npm_config_bool(value), "{value:?} should be true");
+        }
+        for value in ["false", "0", "null", "", "false\n"] {
+            assert!(!npm_config_bool(value), "{value:?} should be false");
+        }
+    }
+
+    #[test]
+    fn test_npm_reinstall_under_new_node_version_moves_link() {
+        let temp = TempDir::new().unwrap();
+        // One npm prefix per Node.js version, as with Vite+-managed runtimes.
+        let install = |version: &str| {
+            let prefix = AbsolutePathBuf::new(temp.path().join("node").join(version)).unwrap();
+            let package_dir = prefix.join("lib").join("node_modules").join("test-package");
+            std::fs::create_dir_all(&package_dir).unwrap();
+            std::fs::write(
+                package_dir.join("package.json"),
+                r#"{"name":"test-package","bin":{"test-cli":"cli.js"}}"#,
+            )
+            .unwrap();
+            #[cfg(unix)]
+            let source = prefix.join("bin").join("test-cli");
+            #[cfg(windows)]
+            let source = prefix.join("test-cli.cmd");
+            std::fs::create_dir_all(source.parent().unwrap()).unwrap();
+            std::fs::write(&source, "").unwrap();
+            (prefix, source)
+        };
+        let (_, old_source) = install("22.18.0");
+        let (new_prefix, new_source) = install("24.11.0");
+
+        vp_shared::EnvConfig::with_vars([(env_vars::VP_HOME, temp.path())], |_| {
+            let bin_dir = config::get_bin_dir().unwrap();
+            std::fs::create_dir_all(&bin_dir).unwrap();
+            create_bin_link(&bin_dir, "test-cli", &old_source, "test-package", "22.18.0");
+            assert!(npm_bin_link_targets(&bin_dir, "test-cli", &old_source));
+
+            let packages = s(&["test-package"]);
+            check_npm_global_install_result(&packages, None, &new_prefix, &new_prefix, "24.11.0");
+            assert!(npm_bin_link_targets(&bin_dir, "test-cli", &new_source));
+            assert!(!npm_bin_link_targets(&bin_dir, "test-cli", &old_source));
+            let config = BinConfig::load_sync("test-cli").unwrap().unwrap();
+            assert_eq!(config.package, "test-package");
+            assert_eq!(config.node_version, "24.11.0");
+
+            // A repeat install under the same Node.js version keeps the link as is.
+            let metadata = std::fs::read(BinConfig::path("test-cli").unwrap()).unwrap();
+            check_npm_global_install_result(&packages, None, &new_prefix, &new_prefix, "24.11.0");
+            assert!(npm_bin_link_targets(&bin_dir, "test-cli", &new_source));
+            assert_eq!(std::fs::read(BinConfig::path("test-cli").unwrap()).unwrap(), metadata);
         });
     }
 

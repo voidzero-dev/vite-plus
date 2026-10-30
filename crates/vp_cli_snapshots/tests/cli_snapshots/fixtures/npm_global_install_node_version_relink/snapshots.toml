@@ -1,0 +1,22 @@
+# Each Vite+-managed Node.js version has its own npm global prefix. The runner
+# seeds the runtime directory from a shared cache, so each step sets a
+# case-local prefix per Node.js version instead.
+[[case]]
+name = "npm_global_install_node_version_relink"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { tty = false, argv = ["npm", "install", "-g", "--ignore-scripts", "./pkg"], envs = [["NPM_CONFIG_PREFIX", "${workspace}/node-24"]], comment = "Install with Node.js 24 (creates the link)", continue-on-failure = true },
+  { argv = ["vpt", "grep-file", "$VP_HOME/bins/npm-global-relink-cli.json", "\"nodeVersion\": \"24.22.1\""], comment = "BinConfig records Node.js 24", continue-on-failure = true },
+  { tty = false, argv = ["npm", "install", "-g", "--ignore-scripts", "./pkg"], envs = [["VP_NODE_VERSION", "26.12.1"], ["NPM_CONFIG_PREFIX", "${workspace}/node-26"]], comment = "Install again with Node.js 26 (moves the link to the new prefix)", continue-on-failure = true },
+  { argv = ["vpt", "grep-file", "$VP_HOME/bins/npm-global-relink-cli.json", "\"nodeVersion\": \"26.12.1\""], comment = "BinConfig records Node.js 26", continue-on-failure = true },
+  { tty = false, argv = ["npm", "install", "-g", "--ignore-scripts", "--dry-run", "./pkg"], envs = [["NPM_CONFIG_PREFIX", "${workspace}/node-24"]], comment = "Dry run with Node.js 24, whose prefix still has the package (the link stays on Node.js 26)", continue-on-failure = true },
+  { tty = false, argv = ["npm", "install", "-g", "--ignore-scripts", "./pkg"], envs = [["NPM_CONFIG_PREFIX", "${workspace}/node-24"], ["npm_config_dry_run", "true"]], comment = "Dry run from the npm environment config (the link stays on Node.js 26)", continue-on-failure = true },
+  { argv = ["vpt", "grep-file", "$VP_HOME/bins/npm-global-relink-cli.json", "\"nodeVersion\": \"26.12.1\""], comment = "BinConfig still records Node.js 26", continue-on-failure = true },
+  { argv = ["vpt", "rm", "-rf", "node-24"], comment = "Remove the Node.js 24 copy: the command must not depend on it", continue-on-failure = true },
+  { argv = ["npm-global-relink-cli"], comment = "Should be callable via the moved link", continue-on-failure = true },
+  { tty = false, argv = ["npm", "install", "-g", "--ignore-scripts", "./pkg"], envs = [["VP_NODE_VERSION", "26.12.1"], ["NPM_CONFIG_PREFIX", "${workspace}/node-26"]], comment = "Install again with Node.js 26 (the link is current, so no message)" },
+]
+after = [
+  { tty = false, argv = ["npm", "uninstall", "-g", "--ignore-scripts", "npm-global-relink-pkg"], envs = [["VP_NODE_VERSION", "26.12.1"], ["NPM_CONFIG_PREFIX", "${workspace}/node-26"]], continue-on-failure = true },
+]
