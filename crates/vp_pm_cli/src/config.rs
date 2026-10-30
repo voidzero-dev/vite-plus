@@ -37,6 +37,11 @@ impl NpmConfig {
         Self::load_for_project_with_cwd(Some(project_root), Some(cwd))
     }
 
+    /// Load an isolated installation's npmrc without inheriting an ancestor workspace.
+    pub(crate) fn load_for_directory(directory: &AbsolutePath) -> Self {
+        Self::load_for_project_with_cwd(Some(directory.as_path().to_path_buf()), Some(directory))
+    }
+
     fn load_for_project(project_root: Option<PathBuf>) -> Self {
         Self::load_for_project_with_cwd(project_root, None)
     }
@@ -378,6 +383,12 @@ pub fn npm_registry_for_scope(cwd: &AbsolutePath, scope: Option<&str>) -> String
 #[must_use]
 pub fn npm_authorization_for_url(cwd: &AbsolutePath, url: &str) -> Option<String> {
     NpmConfig::load_for_cwd(cwd).authorization_header(url)
+}
+
+/// Get an explicit registry environment override, ignoring empty values.
+#[must_use]
+pub fn npm_registry_override() -> Option<String> {
+    env_value("registry").map(|value| expand_value(&value))
 }
 
 /// Get the configured NPM registry URL.
@@ -1042,6 +1053,43 @@ mod tests {
         EnvConfig::with_vars(std::iter::empty::<(&str, &str)>(), |_| {
             let config = NpmConfig::load_for_cwd(cwd);
             assert_eq!(config.registry_for_package("pnpm"), "https://target.example");
+        });
+    }
+
+    #[test]
+    fn isolated_installation_keeps_its_registry_and_auth_inside_a_workspace() {
+        with_isolated_npm_config(|| {
+            let workspace = project_with_npmrc("registry=https://workspace.example\n");
+            fs::write(workspace.path().join("pnpm-workspace.yaml"), "packages:\n  - '**'\n")
+                .unwrap();
+            let directory = workspace.path().join("vp/1.4.0");
+            fs::create_dir_all(&directory).unwrap();
+            fs::write(directory.join("package.json"), r#"{"name":"vp-global","private":true}"#)
+                .unwrap();
+            fs::write(
+                directory.join(".npmrc"),
+                "registry=https://mirror.example\nuserconfig=./auth.npmrc\n",
+            )
+            .unwrap();
+            fs::write(directory.join("auth.npmrc"), "//mirror.example/:_authToken=SAVED\n")
+                .unwrap();
+            EnvConfig::with_vars(
+                [("npm_config_userconfig", None::<&str>), ("NPM_CONFIG_USERCONFIG", None)],
+                |_| {
+                    let directory = AbsolutePath::new(&directory).unwrap();
+                    let config = NpmConfig::load_for_directory(directory);
+                    assert_eq!(config.registry_for_package("pnpm"), "https://mirror.example");
+                    assert_eq!(
+                        config.authorization_header("https://mirror.example/pnpm/-/pnpm.tgz"),
+                        Some("Bearer SAVED".to_string())
+                    );
+                    assert_eq!(config.authorization_header("https://workspace.example/pnpm"), None);
+                    assert_eq!(
+                        NpmConfig::load_for_cwd(directory).registry_for_package("pnpm"),
+                        "https://workspace.example"
+                    );
+                },
+            );
         });
     }
 

@@ -71,6 +71,23 @@ pub fn matches_install_receipt(lockfile: &[u8], receipt: &[u8]) -> bool {
     receipt == Sha256::digest(lockfile).as_slice()
 }
 
+/// Check an installation without restoring files or contacting the registry.
+pub(crate) async fn is_install_complete(version_dir: &AbsolutePath) -> Result<bool, Error> {
+    let Some(receipt) = read_optional(&version_dir.join(INSTALL_RECEIPT)).await? else {
+        return Ok(false);
+    };
+    if EnvConfig::get().setup_skip_install_lockfile {
+        return Ok(receipt == UNLOCKED_INSTALL_RECEIPT);
+    }
+    let Some(companion) = read_optional(&version_dir.join("bin").join(INSTALL_LOCKFILE)).await?
+    else {
+        return Ok(false);
+    };
+    Ok(matches_install_receipt(&companion, &receipt)
+        && read_optional(&version_dir.join("pnpm-lock.yaml")).await?.as_deref()
+            == Some(companion.as_slice()))
+}
+
 /// Restore the release's lockfile before a frozen install. Returns whether it changed.
 pub async fn restore(version_dir: &AbsolutePath) -> Result<bool, Error> {
     let content = tokio::fs::read(version_dir.join("bin").join(INSTALL_LOCKFILE)).await?;
@@ -82,6 +99,28 @@ pub async fn restore(version_dir: &AbsolutePath) -> Result<bool, Error> {
     invalidate_install(version_dir).await?;
     write(target, content).await?;
     Ok(true)
+}
+
+/// Preserve an available bootstrap companion without contacting the registry.
+pub async fn copy_companion(
+    source: &AbsolutePath,
+    version_dir: &AbsolutePath,
+) -> Result<(), Error> {
+    if EnvConfig::get().setup_skip_install_lockfile {
+        return Ok(());
+    }
+    let target = version_dir.join("bin").join(INSTALL_LOCKFILE);
+    let sibling = source
+        .parent()
+        .ok_or_else(|| Error::Setup("Binary has no parent".into()))?
+        .join(INSTALL_LOCKFILE);
+    if sibling != target
+        && let Some(content) = read_optional(&sibling).await?
+    {
+        // Read before writing: paths can alias through a symlinked installation root.
+        write(target, content).await?;
+    }
+    Ok(())
 }
 
 /// Copy the bootstrap companion, or recover it for a standalone executable.
@@ -100,16 +139,7 @@ pub async fn prepare(
         return Ok(receipt.as_deref() != Some(UNLOCKED_INSTALL_RECEIPT));
     }
     let target = version_dir.join("bin").join(INSTALL_LOCKFILE);
-    let sibling = source
-        .parent()
-        .ok_or_else(|| Error::Setup("Binary has no parent".into()))?
-        .join(INSTALL_LOCKFILE);
-    if sibling != target && tokio::fs::try_exists(&sibling).await? {
-        // Read before writing: different paths may alias the same file through
-        // a symlinked installation root. Copying it onto itself would truncate it.
-        let content = tokio::fs::read(sibling).await?;
-        write(target.clone(), content).await?;
-    }
+    copy_companion(source, version_dir).await?;
     if !tokio::fs::try_exists(&target).await? {
         // A copied executable, including one extracted by an older vp upgrade,
         // may have lost its companion. Only fetch archives that advertise it.
@@ -185,6 +215,61 @@ mod tests {
     use vt_path::AbsolutePathBuf;
 
     use super::*;
+
+    #[tokio::test]
+    async fn native_setup_copies_only_an_available_companion() {
+        EnvConfig::with_vars_async(
+            [(vp_shared::env_vars::VP_SETUP_SKIP_INSTALL_LOCKFILE, "0")],
+            |_| async {
+                let temp = tempfile::tempdir().unwrap();
+                let root = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+                let source = root.join("download/vp");
+                let directory = root.join("installed");
+                tokio::fs::create_dir_all(directory.join("bin")).await.unwrap();
+                // A raw executable needs no registry request or working pnpm lockfile.
+                copy_companion(&source, &directory).await.unwrap();
+                assert!(!directory.join("pnpm-lock.yaml").as_path().exists());
+                assert!(!directory.join("bin").join(INSTALL_LOCKFILE).as_path().exists());
+
+                tokio::fs::create_dir(root.join("download")).await.unwrap();
+                tokio::fs::write(root.join("download").join(INSTALL_LOCKFILE), "release lock")
+                    .await
+                    .unwrap();
+                copy_companion(&source, &directory).await.unwrap();
+                assert_eq!(
+                    tokio::fs::read_to_string(directory.join("bin").join(INSTALL_LOCKFILE))
+                        .await
+                        .unwrap(),
+                    "release lock"
+                );
+                assert!(!directory.join("pnpm-lock.yaml").as_path().exists());
+                assert!(!is_install_complete(&directory).await.unwrap());
+            },
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn readiness_reuses_unlocked_receipts_only_with_an_explicit_bypass() {
+        let temp = tempfile::tempdir().unwrap();
+        let directory = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        tokio::fs::create_dir(directory.join("node_modules")).await.unwrap();
+        tokio::fs::write(directory.join(INSTALL_RECEIPT), UNLOCKED_INSTALL_RECEIPT).await.unwrap();
+        for bypass in ["0", "1"] {
+            EnvConfig::with_vars_async(
+                [(vp_shared::env_vars::VP_SETUP_SKIP_INSTALL_LOCKFILE, bypass)],
+                |_| async {
+                    assert_eq!(is_install_complete(&directory).await.unwrap(), bypass == "1");
+                    if bypass == "1" {
+                        // The bypass must not read an unusable sibling companion.
+                        tokio::fs::create_dir(directory.join(INSTALL_LOCKFILE)).await.unwrap();
+                        copy_companion(&directory.join("vp"), &directory).await.unwrap();
+                    }
+                },
+            )
+            .await;
+        }
+    }
 
     #[test]
     fn failed_writes_preserve_the_previous_file_and_allow_retry() {

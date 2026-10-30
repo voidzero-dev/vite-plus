@@ -60,6 +60,8 @@ const pnpmArchive = createArchive({
       fs.mkdirSync('node_modules/vite-plus', { recursive: true });
       fs.writeFileSync('node_modules/vite-plus/package.json', '{"name":"vite-plus"}');
       if (!response.ok) process.exit(17);
+      fs.mkdirSync('node_modules/vite-plus/dist', { recursive: true });
+      fs.writeFileSync('node_modules/vite-plus/dist/bin.js', '// Installed fixture entrypoint.');
     });
   `,
 });
@@ -170,6 +172,7 @@ try {
     const receipt = join(installed[0], 'node_modules/.vp-install-complete');
     assert.equal(existsSync(marker), false);
     assert.equal(existsSync(receipt), resolutionRetry);
+    assert.equal(existsSync(join(installed[0], 'node_modules/vite-plus/dist/bin.js')), resolutionRetry);
     assert.equal(existsSync(resolutionFile), false);
     assert.deepEqual(phases, ['download', 'prepare', 'dependencies']);
     console.log(

@@ -182,7 +182,7 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
     tokio::fs::create_dir_all(&version_dir).await?;
 
     // Step 9: Extract platform binary and install via npm
-    let result = install_platform_and_main(
+    install_platform_and_main(
         &platform_data,
         &version_dir,
         install_dir,
@@ -192,18 +192,11 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
         options.silent,
         options.registry.as_deref(),
     )
-    .await;
-
-    // On failure, clean up the version directory
-    if result.is_err() {
-        tracing::debug!("Cleaning up failed install at {}", version_dir.as_path().display());
-        let _ = tokio::fs::remove_dir_all(&version_dir).await;
-    }
-
-    result
+    .await
 }
 
-/// Core installation logic, separated for error cleanup.
+/// Prepare an inactive version before activation. Failed payloads remain retryable;
+/// removing the directory would unlink the transaction lock beneath waiting writers.
 #[allow(clippy::print_stderr)]
 async fn install_platform_and_main(
     platform_data: &[u8],
@@ -216,7 +209,10 @@ async fn install_platform_and_main(
     registry: Option<&str>,
 ) -> Result<ExitStatus, Error> {
     let new_version = &resolved.version;
-    // Extract platform package (binary only; .node files installed via npm optionalDeps)
+    let transaction = install::ProductionDepsTransaction::acquire(version_dir).await?;
+    let registry = transaction.registry(registry).await?;
+    let registry = registry.as_deref();
+    // Extract under the same lock as the companion and JavaScript payload.
     install::extract_platform_package(platform_data, version_dir).await?;
 
     // Verify binary was extracted
@@ -228,12 +224,11 @@ async fn install_platform_and_main(
         ));
     }
 
-    // Generate wrapper package.json that declares vite-plus as a dependency
-    install::generate_wrapper_package_json(version_dir, new_version).await?;
-
-    // Install production dependencies (pnpm installs vite-plus + all transitive deps)
-    let node_version = resolved.node_version.as_deref().map(install::NodeVersion::Required);
-    install::install_production_deps(version_dir, registry, !silent, node_version).await?;
+    transaction.save_registry(registry).await?;
+    if !transaction.is_complete().await? {
+        let node_version = resolved.node_version.as_deref().map(install::NodeVersion::Required);
+        transaction.install(new_version, registry, !silent, node_version).await?;
+    }
 
     // Save previous version for rollback
     let previous_version = install::save_previous_version(install_dir).await?;
@@ -243,6 +238,8 @@ async fn install_platform_and_main(
 
     // Swap current link — POINT OF NO RETURN
     install::swap_current_link(install_dir, install_dir_name).await?;
+    // The new binary's native setup acquires this same payload lock.
+    drop(transaction);
 
     // Post-swap operations: non-fatal (the update already succeeded)
     if let Err(e) = install::refresh_shims(install_dir).await {

@@ -113,13 +113,17 @@ fn covered(path: &AbsolutePathBuf, directories: &[AbsolutePathBuf]) -> bool {
     directories.iter().any(|directory| path.as_path().starts_with(directory.as_path()))
 }
 
-/// A usable executable or familiar layout alone is not an installation receipt.
+/// Explicit directory ownership also covers native installations without JavaScript.
+/// Unmarked versions still require matching package metadata and an install receipt.
 fn verified_version(directory: &AbsolutePathBuf) -> Result<bool, Error> {
     let Some(name) = directory.as_path().file_name().and_then(|name| name.to_str()) else {
         return Ok(false);
     };
     if js_semver::Version::parse(name).is_err() {
         return Ok(false);
+    }
+    if install_dirs::is_owned(directory)? {
+        return Ok(true);
     }
     let canonical = dunce::canonicalize(directory)?;
     let Some(receipt) = read_contained_file(&canonical, INSTALL_RECEIPT)? else {
@@ -255,6 +259,59 @@ mod tests {
             let wrong_version = env.dirs.data.join("2.0.0");
             fs::rename(&forced, &wrong_version).unwrap();
             assert!(!verified_version(&wrong_version).unwrap());
+        });
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn native_ownership_removes_a_version_and_current_without_claiming_the_shared_root() {
+        vp_shared::EnvConfig::scoped(|env| {
+            fs::write(env.dirs.data.join("personal.txt"), b"keep").unwrap();
+            let version = env.dirs.data.join("1.4.0");
+            install_dirs::prepare_version(&version).unwrap();
+            // No package metadata, dependency receipt, or surviving binary is required.
+            let current = env.dirs.data.join("current");
+            std::os::unix::fs::symlink(&version, &current).unwrap();
+
+            let plan = RemovalPlan::new(&env.dirs, &install_dirs::roots(&env.dirs)).unwrap();
+            assert_eq!(plan.directories, vec![version.clone()]);
+            assert_eq!(plan.current_link, Some(current));
+            assert_eq!(plan.preserved_roots, vec![env.dirs.data.clone()]);
+            assert!(!install_dirs::is_owned(&env.dirs.data).unwrap());
+
+            let personal = version.join("personal");
+            fs::create_dir(&personal).unwrap();
+            let mut dirs = env.dirs.clone();
+            dirs.cache = personal;
+            let plan = RemovalPlan::new(&dirs, &install_dirs::roots(&dirs)).unwrap();
+            assert!(plan.directories.is_empty(), "unowned nested categories remain protected");
+            assert!(plan.current_link.is_none());
+        });
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn native_ownership_rejects_borrowed_markers_and_version_directory_links() {
+        vp_shared::EnvConfig::scoped(|env| {
+            let version = env.dirs.data.join("1.4.0");
+            fs::create_dir(&version).unwrap();
+            let outside_marker = env.dirs.data.join("outside-marker");
+            fs::write(&outside_marker, b"vite-plus-owned-directory\n").unwrap();
+            let marker = version.join(install_dirs::OWNERSHIP_MARKER);
+            std::os::unix::fs::symlink(outside_marker, &marker).unwrap();
+            assert!(!verified_version(&version).unwrap());
+
+            fs::remove_file(&marker).unwrap();
+            fs::create_dir(&marker).unwrap();
+            assert!(!verified_version(&version).unwrap());
+
+            fs::remove_dir(&marker).unwrap();
+            fs::write(marker, b"vite-plus-owned-directory\n").unwrap();
+            let outside_version = env.dirs.data.join("personal");
+            fs::rename(&version, &outside_version).unwrap();
+            std::os::unix::fs::symlink(outside_version, &version).unwrap();
+            let plan = RemovalPlan::new(&env.dirs, &install_dirs::roots(&env.dirs)).unwrap();
+            assert!(plan.directories.is_empty());
         });
     }
 
