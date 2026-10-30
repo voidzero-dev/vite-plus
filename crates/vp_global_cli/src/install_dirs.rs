@@ -114,10 +114,16 @@ pub(crate) fn prepare(dirs: &VpDirs) -> Result<(), Error> {
             continue;
         }
         fs::create_dir_all(&root)?;
-        let mut marker = fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(root.join(OWNERSHIP_MARKER))?;
+        let marker =
+            fs::OpenOptions::new().write(true).create_new(true).open(root.join(OWNERSHIP_MARKER));
+        let mut marker = match marker {
+            Ok(marker) => marker,
+            // Concurrent first launches can claim the same empty root before taking the setup lock.
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists && is_owned(&root)? => {
+                continue;
+            }
+            Err(error) => return Err(error.into()),
+        };
         marker.write_all(OWNERSHIP_CONTENT)?;
     }
     Ok(())
@@ -188,6 +194,34 @@ mod tests {
 
             assert!(is_owned(&dirs.data).unwrap());
             assert!(is_owned(&dirs.cache).unwrap());
+        });
+    }
+
+    #[test]
+    fn prepare_supports_concurrent_first_launches() {
+        EnvConfig::scoped(|env| {
+            let mut dirs = env.dirs.clone();
+            dirs.data = env.dirs.data.join("data");
+            dirs.cache = env.dirs.data.join("cache");
+            dirs.config = env.dirs.data.join("config");
+            dirs.state = env.dirs.data.join("state");
+            let barrier = std::sync::Barrier::new(8);
+            std::thread::scope(|scope| {
+                let workers: Vec<_> = (0..8)
+                    .map(|_| {
+                        scope.spawn(|| {
+                            barrier.wait();
+                            prepare(&dirs)
+                        })
+                    })
+                    .collect();
+                for worker in workers {
+                    worker.join().unwrap().unwrap();
+                }
+            });
+            for root in roots(&dirs) {
+                assert!(is_owned(&root).unwrap());
+            }
         });
     }
 

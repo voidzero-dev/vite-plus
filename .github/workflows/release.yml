@@ -336,6 +336,87 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release edit "v${VERSION}" --draft=false --repo "${{ github.repository }}"
 
+  update-homebrew:
+    name: Open Homebrew formula PR
+    runs-on: ubuntu-latest
+    needs: [check, Release]
+    if: >-
+      needs.check.outputs.version_changed == 'true' &&
+      !contains(needs.check.outputs.version, '-')
+    permissions:
+      contents: read
+    concurrency:
+      group: update-homebrew-formula
+      cancel-in-progress: false
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: app-token
+        with:
+          client-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Preserve fixes in an existing formula PR
+        id: existing-pr
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            const { owner, repo } = context.repo;
+            const branch = `release/homebrew-v${process.env.VERSION}`;
+            const { data: pulls } = await github.rest.pulls.list({
+              owner, repo, head: `${owner}:${branch}`, state: 'all', per_page: 1,
+            });
+            if (pulls.length) {
+              core.setOutput('exists', 'true');
+              core.notice(`Preserving ${pulls[0].html_url}. Push fixes or rerun checks on that PR.`);
+              return;
+            }
+            try {
+              await github.rest.git.getRef({ owner, repo, ref: `heads/${branch}` });
+              core.setFailed(`Branch ${branch} already exists. Open its PR manually to preserve its changes.`);
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
+
+      - name: Check publication and update formula
+        if: steps.existing-pr.outputs.exists != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node .github/scripts/update-homebrew-formula.mjs "$VERSION"
+
+      - uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        if: steps.existing-pr.outputs.exists != 'true'
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          add-paths: |
+            HomebrewFormula/vp.rb
+            docs/guide/homebrew.md
+          commit-message: 'chore: update Homebrew vp to ${{ env.VERSION }}'
+          title: 'chore: update Homebrew vp to ${{ env.VERSION }}'
+          branch: release/homebrew-v${{ env.VERSION }}
+          base: main
+          sign-commits: true
+          body: |
+            Update the official Homebrew tap to `vp@${{ env.VERSION }}`.
+
+            The formula downloads the native CLI from GitHub Releases. On first use, `vp` installs matching dependencies in the user's data directory.
+
+            This PR runs installation checks against the published packages on all four supported platforms. Fix formula or test failures here before merging.
+
   # Deploy viteplus.dev from the release commit after the npm packages and the
   # GitHub release are published, so the site and the install scripts always
   # match the released vp. Skipped for prereleases: production docs must keep

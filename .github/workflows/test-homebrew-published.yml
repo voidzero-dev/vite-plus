@@ -1,0 +1,45 @@
+name: Test published Homebrew artifacts
+
+permissions: {}
+
+on:
+  workflow_call:
+    inputs:
+      platforms:
+        description: JSON array of runner and target pairs to test.
+        type: string
+        default: >-
+          [
+            {"os":"macos-latest","target":"aarch64-apple-darwin"},
+            {"os":"macos-15-intel","target":"x86_64-apple-darwin"},
+            {"os":"ubuntu-latest","target":"x86_64-unknown-linux-gnu"},
+            {"os":"ubuntu-24.04-arm","target":"aarch64-unknown-linux-gnu"}
+          ]
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  install:
+    name: Published Homebrew (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(inputs.platforms) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+
+      - name: Install the PR formula and run its published packages
+        run: node .github/scripts/test-homebrew.mjs --published
