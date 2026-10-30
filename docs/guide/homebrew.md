@@ -19,8 +19,10 @@ vp
 The explicit repository URL is required. The formula is part of the Vite+ repository.
 
 On first use, `vp` prepares Node.js and pinned pnpm, then installs matching CLI dependencies from the published lockfile.
-It uses the same runtime selection and lockfile recovery options as the [script installer](/guide/global-cli#installation-variables).
-It stores dependencies in `<DATA>/cli-packages/<version>/<platform>` and sets up your preferences and shims.
+By default, installation uses the Node.js version embedded in that CLI release from `.node-version`.
+It accepts a compatible `VP_SETUP_NODE_VERSION` override and the same lockfile recovery options as the [script installer](/guide/global-cli#installation-variables).
+This installation runtime does not change your Node.js version selection for projects or tool shims.
+`vp` stores dependencies in `<DATA>/cli-packages/<version>/<platform>` and sets up your preferences and shims.
 `<DATA>` comes from the [Vite+ directory configuration](/guide/global-cli#installation-variables).
 The native executable stays under Homebrew's control. Later invocations reuse the completed setup.
 `vp env doctor` shows both locations and checks whether CLI dependencies are complete without downloading anything.
