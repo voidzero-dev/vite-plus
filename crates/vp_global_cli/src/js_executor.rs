@@ -407,6 +407,21 @@ impl JsExecutor {
         Ok(output)
     }
 
+    /// Select the same scripts directory for execution and read-only completion.
+    /// A local CLI without metadata must not use another toolchain's metadata.
+    pub(crate) fn resolve_project_scripts_dir(
+        &self,
+        project_path: &AbsolutePath,
+    ) -> Result<AbsolutePathBuf, Error> {
+        if let Some(entry) = Self::resolve_local_vite_plus(project_path) {
+            return entry
+                .parent()
+                .map(AbsolutePath::to_absolute_path_buf)
+                .ok_or(Error::JsScriptsDirNotFound);
+        }
+        self.get_scripts_dir()
+    }
+
     /// Resolve the local vite-plus package root from the project directory.
     pub(crate) fn resolve_local_vite_plus_package_dir(
         project_path: &AbsolutePath,

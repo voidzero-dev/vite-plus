@@ -96,6 +96,12 @@ To create a release build of Vite+ and all upstream dependencies, run:
 just build
 ```
 
+## Completion integration tests
+
+After building the JavaScript packages, run `pnpm test:completion` for the metadata and startup integration tests. It builds `vp_global_cli` and uses Cargo's reported executable. To use a prebuilt binary, set `VP_COMPLETION_CONSUMER_BIN` to its exact path; an invalid path fails the suite.
+
+CI runs this suite separately with the downloaded native binary. Ordinary `pnpm test:unit` does not build Rust or discover the `*.integration.ts` files.
+
 ## Git Hooks (optional)
 
 Pre-commit checks are opt-in. Run `vp config` after a build to install the hook dispatcher; each commit then runs `vp staged` on staged files. `vp staged` loads its config from `vite.config.ts` and needs the built JS packages, so build first. Opt out with `vp hooks disable`, or skip one run with `VP_GIT_HOOKS=0`. If husky was active in your clone before, run `git config --unset core.hooksPath` once first.

@@ -20,7 +20,8 @@
     "docs:dev": "pnpm -C docs dev",
     "docs:build": "pnpm -C docs build",
     "docs:update-trusted-stack-stats": "pnpm -C docs update-trusted-stack-stats",
-    "prepare": "vp config"
+    "prepare": "vp config",
+    "test:completion": "node packages/tools/src/test-completion.ts"
   },
   "devDependencies": {
     "@e18e/eslint-plugin": "catalog:",
