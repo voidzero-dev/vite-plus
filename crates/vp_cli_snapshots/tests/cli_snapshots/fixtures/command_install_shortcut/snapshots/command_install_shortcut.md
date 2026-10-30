@@ -8,7 +8,7 @@ install shortcut
 $ vp install ⊘ cache disabled
 
 dependencies:
- tslib 2.8.1
+ tslib 2.8.1 (2.9.1 is available)
 
 Done in <duration> using pnpm <version>
 ```
