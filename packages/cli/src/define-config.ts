@@ -775,11 +775,11 @@ interface VitestCachePathContext {
  * (`<cacheDir>/results.json`, written atomically through `.tmp-*` siblings)
  * and the fs module cache (`<workspaceRoot>/node_modules/.vitest-cache`, or
  * `fsModuleCachePath` when overridden). Under `vp run`, file-system tracking
- * would record those cache reads/writes as task inputs the run itself
- * modifies, so every `vp test` task would stay permanently uncacheable
- * ("not cached because it modified its input"). Tell the runner these
- * tool-managed paths are neither inputs nor outputs, mirroring what Vite
- * does for `.vite-temp` and the optimizer cache dir.
+ * would record those cache reads and writes as task inputs and outputs. A
+ * later run would miss whenever Vitest's own cache files differed, and a hit
+ * would restore them. Tell the runner these tool-managed paths are neither
+ * inputs nor outputs, mirroring what Vite does for `.vite-temp` and the
+ * optimizer cache dir.
  *
  * Runtime project injection appends to `vitest.projects` without calling
  * `configureVitest` again. Observe those attachments as well as the initial
