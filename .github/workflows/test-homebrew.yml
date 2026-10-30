@@ -3,13 +3,14 @@ name: Test Homebrew installation
 permissions: {}
 
 on:
+  workflow_dispatch:
   pull_request:
     types: [opened, synchronize, reopened, labeled]
 
 concurrency:
   # A skipped run for an unrelated label must not cancel installation tests.
   group: >-
-    ${{ github.workflow }}-${{ github.event.pull_request.number }}-${{ github.event.action == 'labeled' && github.event.label.name != 'test: install-e2e' && 'unrelated-label' || 'install' }}
+    ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event.action == 'labeled' && github.event.label.name != 'test: install-e2e' && 'unrelated-label' || 'install' }}
   cancel-in-progress: true
 
 defaults:
@@ -19,8 +20,10 @@ defaults:
 jobs:
   check-formula:
     if: >-
-      contains(github.event.pull_request.labels.*.name, 'test: install-e2e') &&
-      (github.event.action != 'labeled' || github.event.label.name == 'test: install-e2e')
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' &&
+       contains(github.event.pull_request.labels.*.name, 'test: install-e2e') &&
+       (github.event.action != 'labeled' || github.event.label.name == 'test: install-e2e'))
     runs-on: ubuntu-latest
     permissions:
       contents: read
