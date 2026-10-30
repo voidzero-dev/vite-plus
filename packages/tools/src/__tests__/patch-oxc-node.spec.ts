@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'vitest';
 
-import { exposeLoaderInitialization, setOxcVersion } from '../patch-oxc-node.ts';
+import {
+  exposeLoaderInitialization,
+  fixOxc156ApiRenames,
+  setOxcVersion,
+} from '../patch-oxc-node.ts';
 
 describe('setOxcVersion', () => {
   const cargoToml = `[dependencies]
@@ -48,5 +52,26 @@ pub fn transform_async_js() {}
     expect(() =>
       exposeLoaderInitialization(source.replace('freezeTsconfig', 'freezeConfig')),
     ).toThrow(/freezeTsconfig registration/);
+  });
+});
+
+describe('fixOxc156ApiRenames', () => {
+  const source = `fn visit_variable_declaration(&mut self, it: &VariableDeclaration<'a>) {
+    self.0 |= it.kind.is_await();
+    walk::walk_variable_declaration(self, it);
+}
+`;
+
+  test('follows the oxc 0.156 rename and stays idempotent', () => {
+    const patched = fixOxc156ApiRenames(source);
+    expect(patched).toContain('it.kind.is_await_using()');
+    expect(patched).not.toContain('it.kind.is_await()');
+    expect(fixOxc156ApiRenames(patched)).toBe(patched);
+  });
+
+  test('fails when upstream drops the renamed call', () => {
+    expect(() => fixOxc156ApiRenames(source.replace('is_await()', 'is_lexical()'))).toThrow(
+      /`is_await` call/,
+    );
   });
 });

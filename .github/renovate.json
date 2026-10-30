@@ -213,6 +213,7 @@
         "self_cell",
         "serde",
         "serde_json",
+        "simd-utf16-len",
         "simdutf8",
         "smallvec",
         "sugar_path",
