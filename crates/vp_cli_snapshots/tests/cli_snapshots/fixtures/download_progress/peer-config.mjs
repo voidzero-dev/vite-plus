@@ -9,6 +9,7 @@ import {
   mkdirSync,
   readFileSync,
   readlinkSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -23,7 +24,8 @@ import { createArchive } from './archive.mjs';
 const exec = promisify(execFile);
 const bypass = process.argv.includes('bypass');
 const runnerHome = process.env.VP_HOME;
-const cli = join(runnerHome, 'current/node_modules/vite-plus');
+const cli = realpathSync(join(runnerHome, 'current/node_modules/vite-plus'));
+const installNode = readFileSync(resolve(cli, '../../.node-version'), 'utf8').trim();
 const { generateInstallLockfile, installManifest, INSTALL_PNPM_VERSION } = await import(
   pathToFileURL(join(cli, 'generate-install-lockfile.ts')).href
 );
@@ -190,6 +192,15 @@ function createInstallation(name, settings = []) {
   const nodeBin = join(home, 'js_runtime/node', process.versions.node, 'bin');
   mkdirSync(nodeBin, { recursive: true });
   symlinkSync(process.execPath, join(nodeBin, 'node'));
+  // Upgrade uses the embedded installer pin, independently of the setup override.
+  if (installNode !== process.versions.node) {
+    const installNodeBin = join(home, 'js_runtime/node', installNode, 'bin');
+    mkdirSync(installNodeBin, { recursive: true });
+    copyFileSync(
+      join(runnerHome, 'js_runtime/node', installNode, 'bin/node'),
+      join(installNodeBin, 'node'),
+    );
+  }
   cpSync(pnpmRoot, join(home, 'package_manager/pnpm', INSTALL_PNPM_VERSION), { recursive: true });
   return { directory, home, ...user };
 }

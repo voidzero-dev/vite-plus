@@ -54,6 +54,11 @@
   ],
   "packageRules": [
     {
+      "description": "Manage the shared Node.js pin through .github/workflows/upgrade-deps.yml.",
+      "matchFileNames": [".node-version"],
+      "enabled": false
+    },
+    {
       "description": "Require review for Windows SDK and cargo-xwin updates.",
       "matchManagers": ["custom.regex"],
       "matchFileNames": [".github/actions/setup-xwin/action.yml"],

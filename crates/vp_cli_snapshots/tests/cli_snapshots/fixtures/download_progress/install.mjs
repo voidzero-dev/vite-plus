@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { once } from 'node:events';
 import {
   copyFileSync,
@@ -29,13 +29,19 @@ const user = resolve('user');
 const external = resolve('external');
 const resolutionDir = resolve('resolution');
 const resolutionFile = join(resolutionDir, 'node-version');
-const nodeBin = join(home, 'js_runtime/node/99.0.0/bin');
-for (const directory of [nodeBin, user, external]) mkdirSync(directory, { recursive: true });
-// Use the runner's real Node for the mock pnpm program, without a network download.
+const nodeBin = join(external, 'node-bin');
+for (const directory of [home, user, nodeBin]) mkdirSync(directory, { recursive: true });
+// Expose only Node so the host's npm and npx do not change shim preferences.
 symlinkSync(process.execPath, join(nodeBin, 'node'));
 copyFileSync(join(process.env.VP_HOME, 'bin/vp'), join(external, 'vp'));
 const lockfile = "lockfileVersion: '9.0'\n";
 writeFileSync(join(external, 'vp-install-lock.yaml'), lockfile);
+const musl = process.platform === 'linux' && !process.report.getReport().header.glibcVersionRuntime;
+const platform = `${process.platform}-${process.arch}${musl ? '-musl' : ''}`;
+const nodeArchives = new Map();
+let runtimeDownloads = 0;
+let checksumRequests = 0;
+let indexRequests = 0;
 
 const pnpmArchive = createArchive({
   'package/package.json': JSON.stringify({
@@ -76,9 +82,27 @@ async function checkpoint(phase) {
 
 /** @returns {Promise<void>} */
 async function handleRequest(request, response) {
-  if (request.url === '/index.json') {
+  const checksum = /^\/v(\d+\.\d+\.\d+)\/SHASUMS256\.txt$/.exec(request.url);
+  if (checksum) {
+    checksumRequests++;
+    const version = checksum[1];
+    const nodeRoot = `node-v${version}-${platform}`;
+    // Serve the exact default selected by the installer. The tiny Unix wrapper
+    // runs the mock pnpm with the runner's real Node, without an external download.
+    const executable = `'${process.execPath.replaceAll("'", "'\\''")}'`;
+    const archive = createArchive({
+      [`${nodeRoot}/bin/node`]: `#!/bin/sh\nexec ${executable} "$@"\n`,
+    });
+    nodeArchives.set(`/v${version}/${nodeRoot}.tar.gz`, archive);
     await checkpoint('prepare');
-    response.end(JSON.stringify([{ version: 'v99.0.0', lts: 'Fixture' }]));
+    response.end(`${createHash('sha256').update(archive).digest('hex')}  ${nodeRoot}.tar.gz\n`);
+  } else if (nodeArchives.has(request.url)) {
+    runtimeDownloads++;
+    response.end(nodeArchives.get(request.url));
+  } else if (request.url === '/index.json') {
+    // A pinned default must not resolve the latest LTS alias.
+    indexRequests++;
+    response.writeHead(404).end();
   } else if (/^\/pnpm\/-\/pnpm-[\d.]+\.tgz$/.test(request.url)) {
     await checkpoint('download');
     response.setHeader('Content-Length', pnpmArchive.length);
@@ -188,6 +212,9 @@ try {
       ? ['download', 'prepare', 'dependencies', 'dependencies']
       : ['download', 'prepare', 'dependencies'],
   );
+  assert.equal(indexRequests, 0);
+  assert.equal(checksumRequests, 1);
+  assert.equal(runtimeDownloads, 1);
   if (failure) {
     assert.equal(stdout, '');
     const log = readFileSync(join(home, 'upgrade.log'), 'utf8');

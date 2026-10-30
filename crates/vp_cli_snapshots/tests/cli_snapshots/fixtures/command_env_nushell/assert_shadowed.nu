@@ -25,6 +25,8 @@ def "path exists" [] { }
 def "from tsv" [] { }
 def rename [] { }
 def any [] { }
+def which [] { }
+def is-empty [] { }
 def fish [] { }
 
 source env.nu

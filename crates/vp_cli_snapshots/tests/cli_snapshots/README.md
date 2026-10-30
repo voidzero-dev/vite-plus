@@ -387,8 +387,10 @@ cases that do not need a different major.
 | 24         | `24.22.1`             | `24.3.0` is the unsupported migration input; `24.11.0` is the exact supported upgrade target.                                         |
 | 26         | `26.12.1`             | None; script, bare config-file argument, and executable packaging cases share this version.                                           |
 
-CI prepares [`node-versions.txt`](node-versions.txt), the repository's
-`.node-version`, and the default LTS before snapshot command timers start.
+CI prepares the exact versions and selectors in [`node-versions.txt`](node-versions.txt),
+the repository's `.node-version`, and both `lts` and `latest` before snapshot
+command timers start. The selectors `20`, `22`, `22.23`, and `24.22` cover cases
+that intentionally resolve a major or minor version instead of an exact pin.
 When updating the defaults, check the [Node.js release index](https://nodejs.org/dist/index.json)
 and update the fixture pins and shared list together. Document the test reason
 when adding an exception. Version strings in configuration-only tests do not

@@ -54,7 +54,10 @@ async function withBatch(run: (directory: string) => Promise<void>) {
       await writeFile(
         join(directory, `pkg-${index}.tgz`),
         await createTarGzip([
-          { name: 'package/package.json', data: JSON.stringify({ name, version, files: ['vp'] }) },
+          {
+            name: 'package/package.json',
+            data: JSON.stringify({ name, version, files: ['vp'], vpNodeVersion: '24.22.1' }),
+          },
           { name: 'package/vp', data: 'binary', attrs: { mode: '755' } },
         ]),
       );
@@ -82,6 +85,7 @@ describe('preview installation lockfile', () => {
           decoder.decode(entries.find((entry) => entry.name === 'package/package.json')!.data),
         );
         expect(manifest.vpInstallLockfile).toBe(true);
+        expect(manifest.vpNodeVersion).toBe('24.22.1');
         expect(manifest.files).toEqual(['vp', INSTALL_LOCKFILE]);
         expect(
           decoder.decode(
