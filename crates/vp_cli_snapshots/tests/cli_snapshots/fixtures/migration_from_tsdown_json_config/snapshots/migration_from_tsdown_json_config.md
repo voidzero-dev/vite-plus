@@ -86,11 +86,6 @@ catalog:
   vite-plus: <version>
 overrides:
   vite@*: 'catalog:'
-peerDependencyRules:
-  allowAny:
-    - vite
-  allowedVersions:
-    vite: '*'
 ```
 
 ## `vp migrate --no-interactive`
