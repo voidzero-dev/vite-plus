@@ -232,7 +232,18 @@ pub async fn download_runtime_with_provider<P: JsRuntimeProvider>(
             let shasums_content =
                 resolve_shasums_content(url, signature.as_ref(), &download_info.archive_filename)
                     .await?;
-            Some(provider.parse_shasums(&shasums_content, &download_info.archive_filename)?)
+            match provider.parse_shasums(&shasums_content, &download_info.archive_filename) {
+                Ok(hash) => Some(hash),
+                Err(Error::HashNotFound { filename }) => {
+                    return Err(Error::MissingPlatformArchive {
+                        runtime: provider.name().into(),
+                        version: version.into(),
+                        platform: provider.platform_string(platform),
+                        filename,
+                    });
+                }
+                Err(error) => return Err(error),
+            }
         }
         HashVerification::None => None,
     };
@@ -680,6 +691,7 @@ mod tests {
     use vp_shared::env_vars;
 
     use super::*;
+    use crate::{NodeProvider, Platform};
 
     /// A fixed version index, so resolved versions don't move with new Node.js releases.
     const NODE_INDEX: &str = r#"[
@@ -1215,7 +1227,8 @@ mod tests {
                     )
                     .await
                     .unwrap();
-                    assert!(matches!(result, Err(Error::HashNotFound { .. })));
+                    // An empty SHASUMS file means the expected platform archive is not listed.
+                    assert!(matches!(result, Err(Error::MissingPlatformArchive { .. })));
                 }
                 checksums.assert_hits_async(2).await;
             },
@@ -1577,6 +1590,67 @@ mod tests {
                 tokio::fs::read_to_string(temp_path.join(".node-version")).await.unwrap();
             assert_eq!(node_version_content, "latest\n", ".node-version should remain unchanged");
         })
+        .await;
+    }
+
+    /// A release may exist for other platforms but omit the tarball for the host
+    /// platform. In that case the SHASUMS file downloads successfully but does
+    /// not contain the expected archive filename. The error must describe the
+    /// missing platform archive instead of the generic "Hash not found" message.
+    #[tokio::test]
+    async fn test_download_runtime_missing_platform_archive() {
+        use httpmock::prelude::*;
+
+        let vp_home = TempDir::new().unwrap();
+        let server = MockServer::start_async().await;
+        let provider = NodeProvider::new();
+        let platform = Platform::current();
+        let version = "27.0.0-alpha.0.0.0";
+        let info = provider.get_download_info(version, platform);
+
+        vp_shared::EnvConfig::with_vars_async(
+            [
+                (env_vars::VP_HOME, vp_home.path().as_os_str()),
+                (env_vars::VP_NODE_DIST_MIRROR, std::ffi::OsStr::new(&server.base_url())),
+                (env_vars::VP_NODE_SKIP_SIGNATURE_VERIFY, std::ffi::OsStr::new("1")),
+            ],
+            |_| async {
+                server
+                    .mock_async(|when, then| {
+                        when.method(GET).path("/index.json");
+                        then.status(200).body(format!(
+                            "[{{\"version\":\"v{version}\",\"lts\":false}}]"
+                        ));
+                    })
+                    .await;
+                server
+                    .mock_async(|when, then| {
+                        when.method(GET).path(format!("/v{version}/SHASUMS256.txt"));
+                        // Only list a different platform so the host platform tarball is missing.
+                        then.status(200).body(
+                            "deadbeef  node-v27.0.0-alpha.0.0.0-darwin-arm64.tar.gz\n",
+                        );
+                    })
+                    .await;
+
+                let error = download_runtime(JsRuntimeType::Node, version).await.unwrap_err();
+                assert!(
+                    matches!(
+                        error,
+                        Error::MissingPlatformArchive {
+                            ref runtime,
+                            version: ref v,
+                            platform: ref p,
+                            ref filename,
+                        } if AsRef::<str>::as_ref(runtime) == "node"
+                            && AsRef::<str>::as_ref(v) == version
+                            && filename == &info.archive_filename
+                            && p == &provider.platform_string(platform)
+                    ),
+                    "expected MissingPlatformArchive error, got {error}"
+                );
+            },
+        )
         .await;
     }
 
