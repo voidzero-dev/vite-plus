@@ -248,19 +248,24 @@ after publication:
 
 1. The [updater](../.github/scripts/update-homebrew-formula.mjs) checks the release
    tag for the tap formula, verifies all release archives, and waits for matching
-   npm packages. It prepares one candidate with versioned URLs and checksums.
-2. The [published-artifact checks](../.github/workflows/test-homebrew-published.yml)
-   install that unchanged candidate on all four platforms. They check first use,
-   then `fmt`, `lint`, and `build` without project-local dependencies.
-3. After all four jobs pass, automation opens a PR with the same candidate artifact.
-   It rejects the candidate if the formula or guide changed on `main` during testing.
-   Maintainers review and merge the formula update to make it available.
+   npm packages. Automation opens `release/homebrew-vX.Y.Z` with the formula's
+   versioned URLs and checksums.
+2. The PR runs [published-artifact checks](../.github/workflows/test-homebrew-published.yml)
+   on all four platforms. They install its formula, check first use, then run
+   `fmt`, `lint`, and `build` without project-local dependencies.
+3. Each push to the PR reruns these checks. Maintainers review and merge only after
+   all four platforms pass for the latest changes, making the formula available.
 
-Failures leave the previous formula available. The first compatible release removes
-the disable gate through this process; older releases without the tap formula cannot
-enable it. Enabled formula PRs repeat the published-artifact checks. Source-build
-tests remain separate. Use a formula `revision` for recipe fixes and a product
-release for CLI changes; formula-only merges do not trigger product releases.
+The [CI workflow](../.github/workflows/ci.yml) includes these checks in `done`,
+which fails unless the required published-artifact tests succeed. Release retries
+leave an existing formula PR and its branch unchanged, preserving pushed fixes.
+
+Failures leave the previous formula available. Fix formula or test-script bugs in
+the same PR; retry transient failures without changing it. A bug in the published
+CLI or npm packages requires a new patch release. The first compatible release
+removes the disable gate through this process; older releases without the tap
+formula cannot enable it. Use a formula `revision` for recipe fixes to an enabled
+version; formula-only merges do not trigger product releases.
 
 `HOMEBREW_VP_PR_VERSION` selects a published preview by PR number or full commit
 SHA. The formula downloads and verifies the native package from the registry bridge;
@@ -285,8 +290,9 @@ and synthetic credentials. In addition to the published-artifact checks, cover:
 
 PR installation checks require the `test: install-e2e` label and cover macOS ARM64
 and Linux ARM64/x64. The workflow also supports manual runs on these platforms.
-Pushes to `main` do not run this workflow. Release verification
-continues to cover all four supported platforms. PR tests receive no publishing credentials.
+Pushes to `main` do not run this workflow. Formula-update PRs run published-artifact
+checks automatically on all four supported platforms, without that label or a
+source build. PR tests receive no publishing credentials.
 
 ## Tradeoffs
 
