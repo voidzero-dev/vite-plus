@@ -1,3 +1,5 @@
+/// <reference types="node" />
+
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -80,7 +82,7 @@ const STABLE_SEMVER_TAG_RE = /^v?\d+\.\d+\.\d+$/;
 // Vitest major upgrades can change the bundled API, export shims, and CLI
 // behavior. Advance this only after Vite+ has adapted to the new major.
 const SUPPORTED_VITEST_MAJOR = 5;
-// The default runtime must not follow a new LTS major without a compatibility review.
+// Review compatibility before advancing the shared development, CI, and installation pin.
 const SUPPORTED_NODE_MAJOR = 24;
 
 const isFullSha = (s: string): boolean => /^[0-9a-f]{40}$/.test(s);
@@ -424,7 +426,7 @@ async function updateVitestVersionConstant(vitestVersion: string): Promise<void>
 }
 
 // Update the shared Node.js pin for development, CI, and installation.
-function updateDefaultNodeVersion(nodeVersion: string): void {
+function updateNodeVersionFile(nodeVersion: string): void {
   const filePath = path.join(ROOT, '.node-version');
   const oldVersion = fs.readFileSync(filePath, 'utf8').trim();
   if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(oldVersion)) {
@@ -602,7 +604,7 @@ async function upgradeDependencies(): Promise<void> {
     oxcParser: oxcParserVersion,
   });
   await updateVitestVersionConstant(vitestVersion);
-  updateDefaultNodeVersion(nodeVersion);
+  updateNodeVersionFile(nodeVersion);
   // Keep the selected versions available if installation or upstream sync fails.
   writeMetaFiles();
 

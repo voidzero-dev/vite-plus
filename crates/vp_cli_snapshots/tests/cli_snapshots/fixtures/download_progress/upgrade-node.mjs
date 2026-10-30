@@ -28,10 +28,10 @@ const windows = process.platform === 'win32';
 const binaryName = windows ? 'vp.exe' : 'vp';
 const runnerHome = process.env.VP_HOME;
 const cli = realpathSync(join(runnerHome, 'current/node_modules/vite-plus'));
-const defaultNode = readFileSync(resolve(cli, '../../.node-version'), 'utf8').trim();
+const installNode = readFileSync(resolve(cli, '../../.node-version'), 'utf8').trim();
 const targetNode = '22.23.4';
-assert.notEqual(targetNode, defaultNode);
-const expectedNode = legacy ? defaultNode : targetNode;
+assert.notEqual(targetNode, installNode);
+const expectedNode = legacy ? installNode : targetNode;
 const version = JSON.parse(readFileSync(join(cli, 'package.json'), 'utf8')).version;
 const pnpmVersion = /export const INSTALL_PNPM_VERSION = '([^']+)';/.exec(
   readFileSync(join(cli, 'generate-install-lockfile.ts'), 'utf8'),
@@ -66,6 +66,7 @@ if (windows) {
   payload['package/vp-shim.exe'] = readFileSync(join(runnerHome, 'current/bin/vp-shim.exe'));
 }
 const archive = createArchive(payload);
+const integrity = `sha512-${createHash('sha512').update(archive).digest('base64')}`;
 const requests = [];
 let registry;
 const server = createServer((request, response) => {
@@ -81,7 +82,7 @@ const server = createServer((request, response) => {
   if (main || platform) {
     // Only the selected platform package determines the installation runtime.
     const nodeMetadata = {};
-    if (main) nodeMetadata.vpNodeVersion = defaultNode;
+    if (main) nodeMetadata.vpNodeVersion = installNode;
     else if (!legacy) nodeMetadata.vpNodeVersion = targetNode;
     response.setHeader('Content-Type', 'application/json');
     response.end(JSON.stringify({
@@ -90,7 +91,7 @@ const server = createServer((request, response) => {
       ...nodeMetadata,
       dist: {
         tarball: `${registry}/platform.tgz`,
-        integrity: `sha512-${createHash('sha512').update(archive).digest('base64')}`,
+        integrity,
         attestations: { provenance: { predicateType: 'https://slsa.dev/provenance/v1' } },
       },
     }));
@@ -103,7 +104,7 @@ await once(server, 'listening');
 registry = `http://127.0.0.1:${server.address().port}`;
 
 const nodePath = windows ? 'node.exe' : 'bin/node';
-for (const nodeVersion of [defaultNode, targetNode]) {
+for (const nodeVersion of [installNode, targetNode]) {
   const destination = join(home, 'js_runtime/node', nodeVersion, nodePath);
   mkdirSync(dirname(destination), { recursive: true });
   copyFileSync(join(runnerHome, 'js_runtime/node', nodeVersion, nodePath), destination);
@@ -111,7 +112,7 @@ for (const nodeVersion of [defaultNode, targetNode]) {
 const pnpm = join(home, 'package_manager/pnpm', pnpmVersion, 'pnpm');
 write(join(pnpm, 'package.json'), JSON.stringify({
   version: pnpmVersion,
-  engines: { node: incompatible ? `>=${defaultNode}` : '*' },
+  engines: { node: incompatible ? `>=${installNode}` : '*' },
 }));
 for (const shim of ['pnpm', 'pnpm.cmd', 'pnpm.ps1']) write(join(pnpm, 'bin', shim), 'unused');
 write(join(pnpm, 'bin/pnpm.cjs'), `
@@ -165,10 +166,11 @@ try {
     : [];
   const active = existsSync(current) ? realpathSync(current) : undefined;
   const rollback = existsSync(previous) ? readFileSync(previous, 'utf8') : '(missing)';
-  console.log(`Upgrade exit: ${result.code}`);
-  console.log(`stderr: ${result.stderr.trim()
+  const stderr = result.stderr.trim()
     .replaceAll(home, '<upgrade-home>')
-    .replaceAll(targetNode, '<target-node>') || '(empty)'}`);
+    .replaceAll(targetNode, '<target-node>');
+  console.log(`Upgrade exit: ${result.code}`);
+  console.log(`stderr: ${stderr || '(empty)'}`);
   console.log(`Install attempts: ${observations.length}`);
   for (const [index, observation] of observations.entries()) {
     const installed = observation.directory;
@@ -176,7 +178,7 @@ try {
     const receiptMatches =
       existsSync(receipt) &&
       readFileSync(receipt).equals(createHash('sha256').update(lockfile).digest());
-    const runtime = observation.runtime === defaultNode ? '<embedded>' : observation.runtime;
+    const runtime = observation.runtime === installNode ? '<embedded>' : observation.runtime;
     console.log(`Attempt ${index + 1}: runtime=${runtime}; expected executable=${observation.executableMatches}`);
     console.log(`  During install: current is original=${observation.currentIsOriginal}; rollback=${observation.rollback}`);
     console.log(`  Install inputs: frozen=${observation.frozen}; lockfile matches=${observation.lockfileMatches}; dependency matches=${observation.dependencyMatches}`);
@@ -187,9 +189,10 @@ try {
   console.log(`Remaining staged directories: ${readdirSync(home).filter((name) => name.startsWith(`${version}+force.`)).length}`);
   console.log('Requests:');
   for (const url of requests) {
-    console.log(`  ${url
+    const requestPath = url
       .replace(/^\/@voidzero-dev\/vite-plus-cli-[^/]+\//, '/@voidzero-dev/vite-plus-cli-<platform>/')
-      .replaceAll(`/${version}`, '/<release>')}`);
+      .replaceAll(`/${version}`, '/<release>');
+    console.log(`  ${requestPath}`);
   }
 } finally {
   server.close();

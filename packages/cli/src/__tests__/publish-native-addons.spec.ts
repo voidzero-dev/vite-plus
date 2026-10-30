@@ -53,9 +53,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.stubEnv('VERSION', '1.4.0');
   vi.spyOn(console, 'log').mockImplementation(() => {});
-  vi.mocked(readFileSync).mockImplementation((path) =>
-    String(path).endsWith('.node-version') ? '24.22.1\n' : 'lockfile',
-  );
 });
 
 afterEach(() => {

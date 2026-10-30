@@ -755,8 +755,7 @@ mod tests {
 
                 let error = prepare_install_runtime(Some(NodeVersion::Required("22.23.1")))
                     .await
-                    .err()
-                    .unwrap();
+                    .unwrap_err();
                 assert!(error.to_string().contains(
                     "Node.js 22.23.1 required by the target Vite+ release is not supported by pnpm"
                 ));
