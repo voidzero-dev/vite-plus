@@ -232,6 +232,10 @@ JSX that depends on a compiler plugin is not supported. `vpx` compiles JSX only 
 
 `vp migrate` can replace `oxnode <file>` with `vpx <file>` and `oxnode watch <file>` with `vpx --watch <file>`. Both use oxc-node's transformer and watcher. Node.js commands and literal `NODE_OPTIONS` assignments that load `@oxc-node/core/register` use `vite-plus/register` instead. Migration removes the standalone development dependencies only when no remaining commands or imports need them. See [oxnode to `vpx`](/guide/migrate-rules#oxnode-to-vpx).
 
+### Coming from ts-node
+
+`vp migrate` can replace supported transpile-only ts-node commands with `vpx`. Supported Node.js preloads and literal `NODE_OPTIONS` assignments use `vite-plus/register`. Migration keeps commands that type-check because neither replacement performs that check. Custom compiler settings and remaining loader or API usage can also keep `ts-node` installed. See [ts-node to `vpx`](/guide/migrate-rules#ts-node-to-vpx).
+
 ## `vp exec`
 
 Use `vp exec` to run tools already installed in your project or available in your environment.

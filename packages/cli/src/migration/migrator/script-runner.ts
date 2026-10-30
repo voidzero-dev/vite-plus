@@ -50,6 +50,8 @@ export interface ScriptRunnerMigration {
   registerKeepOptions?: ReadonlyMap<string, string>;
   registerPreloadKeepReason?: (option: string, value: string) => string | undefined;
   registerInlineCodeKeepReason?: (code: string) => string | undefined;
+  /** Require a literal Node.js invocation when configuration preflight depends on its argv. */
+  registerEnvRequiresNode?: boolean;
   prepareRun?: (
     args: readonly string[],
     context: {
@@ -57,11 +59,17 @@ export interface ScriptRunnerMigration {
       environment: readonly string[];
       nodeLoader: boolean;
       executable: string;
+      shebang?: boolean;
+      publicRegister?: boolean;
+      /** Original literal NODE_OPTIONS arguments, or undefined when they cannot be parsed. */
+      nodeOptionsArgs?: readonly string[];
     },
   ) => {
     keepReason?: string;
     /** Argument indices after the executable; no value removes that argument. */
     edits?: readonly { index: number; value?: string }[];
+    /** Options to add before the existing arguments, without changing their source ranges. */
+    prependArgs?: readonly string[];
   };
   /** Report unsupported uses even when no command can be converted. */
   detectKeptUses?: boolean;
@@ -79,8 +87,6 @@ const KEEP_REPL = '`vpx` does not start a TypeScript REPL';
 const KEEP_SHELL =
   'the command uses shell syntax that vp migrate does not rewrite, such as pipes, variables, or subshells';
 const KEEP_WATCH_TEST = '`vpx --watch` does not run `--test`';
-// Stands for the file that the kernel appends to a shebang's command.
-const SHEBANG_ENTRY = './shebang.ts';
 
 // package.json fields that name a runner without using it: dependency declarations and prose.
 const IGNORED_FIELDS = new Set([
@@ -274,18 +280,27 @@ function rewriteSegment(
     rewriteRunner(runner, rewrite, tokens, first, start, envReason, assignments);
   } else if (values[start] === 'node') {
     rewriteNodeLoader(runner, rewrite, tokens, first, start, envReason, assignments, environment);
-  } else if (shell) {
-    for (const token of tokens.slice(start)) {
-      rewriteQuotedCommand(runner, rewrite, token, assignments);
-    }
-  } else if (launcher) {
-    for (let index = start + 1; index < tokens.length; index++) {
-      if (launcher(values[index - 1])) {
-        rewriteQuotedCommand(runner, rewrite, tokens[index], assignments);
+  } else if (shell || launcher) {
+    const commands = shell
+      ? tokens.slice(start)
+      : tokens.slice(start + 1).filter((_, index) => launcher!(values[start + index]));
+    let checked = commands.length > 0;
+    for (const token of commands) {
+      if (!rewriteQuotedCommand(runner, rewrite, token, assignments)) {
+        checked = false;
       }
+    }
+    if (!checked && environment.replacements.length && runner.registerEnvRequiresNode) {
+      rewrite.kept.push(
+        `vp migrate only replaces ${runner.name} in NODE_OPTIONS when every launcher target is a quoted literal node command`,
+      );
     }
   } else if (values.slice(start).some((value) => runner.commandPattern.test(value))) {
     rewrite.kept.push(`vp migrate does not rewrite this use of ${runner.name}`);
+  } else if (environment.replacements.length && runner.registerEnvRequiresNode) {
+    rewrite.kept.push(
+      `vp migrate only replaces ${runner.name} in NODE_OPTIONS for a literal node command`,
+    );
   }
   if (!environment.replacements.length) {
     return;
@@ -383,7 +398,7 @@ function applyEdits(command: string, pending: readonly Edit[]): string {
   let rewritten = command;
   // An option normalization and a loader removal can cover the same whitespace.
   const edits: Edit[] = [];
-  for (const edit of pending.toSorted((a, b) => b.start - a.start)) {
+  for (const edit of pending.toSorted((a, b) => b.start - a.start || b.end - a.end)) {
     const previous = edits.at(-1);
     if (previous?.text === '' && edit.text === '' && edit.end >= previous.start) {
       previous.start = Math.min(previous.start, edit.start);
@@ -417,6 +432,7 @@ function literalEdit(command: string, token: LiteralCommandToken, value: string)
 interface EnvironmentOptions {
   replacements: { index: number; value: string }[];
   preloads: string[];
+  args?: string[];
   keepReason?: string;
 }
 
@@ -425,7 +441,7 @@ function scanEnvironmentOptions(
   runner: ScriptRunnerMigration,
   assignments: readonly string[],
 ): EnvironmentOptions {
-  const result: EnvironmentOptions = { replacements: [], preloads: [] };
+  const result: EnvironmentOptions = { replacements: [], preloads: [], args: [] };
   for (const [index, assignment] of assignments.entries()) {
     if (!/^NODE_OPTIONS=/i.test(assignment)) {
       continue;
@@ -434,6 +450,7 @@ function scanEnvironmentOptions(
     const shellOnlySyntax = value.includes("'") || value.replaceAll(/"[^"]*"/g, '').includes('\t');
     const segments = shellOnlySyntax ? undefined : parseLiteralCommands(value, false);
     if (!segments || segments.length !== 1) {
+      result.args = undefined;
       if (runner.commandPattern.test(value)) {
         result.keepReason =
           runner.envKeepReason([assignment]) ??
@@ -441,6 +458,7 @@ function scanEnvironmentOptions(
       }
       continue;
     }
+    result.args?.push(...segments[0].map(({ value }) => value));
     const scanned = scanOptions(runner, segments[0], 0, false);
     result.preloads.push(...scanned.preloads);
     result.keepReason ??= scanned.registerKeepReason;
@@ -559,7 +577,15 @@ function rewriteNodeLoader(
     original.loaders === original.imports.length &&
     (original.imports.length || environmentOptions.replacements.length)
   ) {
-    const prepared = prepareRun(runner, rewrite, tokens, start, environment, true);
+    const prepared = prepareRun(
+      runner,
+      rewrite,
+      tokens,
+      start,
+      environment,
+      true,
+      environmentOptions,
+    );
     const scanned = scanOptions(runner, prepared.tokens, start + 1, false);
     // Keep Node.js in charge of eval, test discovery, and native watch mode.
     const scripts = scanned.inlineCode
@@ -634,6 +660,7 @@ function prepareRun(
   start: number,
   environment: readonly string[],
   nodeLoader: boolean,
+  publicRegister?: EnvironmentOptions,
 ): { tokens: LiteralCommandToken[]; edits: Edit[]; keepReason?: string } {
   const prepared = runner.prepareRun?.(
     tokens.slice(start + 1).map(({ value }) => value),
@@ -642,9 +669,24 @@ function prepareRun(
       environment,
       nodeLoader,
       executable: tokens[start].value,
+      publicRegister: publicRegister !== undefined,
+      nodeOptionsArgs: publicRegister?.args,
     },
   );
   const edits: Edit[] = [];
+  const added = prepared?.prependArgs?.map(quoteArgument) ?? [];
+  if (
+    added.some((value) => value === undefined) ||
+    prepared?.edits?.some(
+      (edit) => edit.value !== undefined && quoteArgument(edit.value) === undefined,
+    )
+  ) {
+    return {
+      tokens,
+      edits,
+      keepReason: 'a rewritten argument needs shell escaping that vp migrate does not support',
+    };
+  }
   const changes = new Map(prepared?.edits?.map((edit) => [start + 1 + edit.index, edit]));
   const normalized = tokens.flatMap((token, index) => {
     const change = changes.get(index);
@@ -655,13 +697,37 @@ function prepareRun(
       edits.push(removal(tokens, index));
       return [];
     }
-    const text = /^[\w./:=@+-]+$/.test(change.value)
-      ? change.value
-      : `'${change.value.replaceAll("'", "'\\''")}'`;
+    const text = quoteArgument(change.value)!;
     edits.push({ start: token.start, end: token.end, text });
     return [{ ...token, value: change.value }];
   });
+  if (prepared?.prependArgs?.length) {
+    const position = tokens[start].end;
+    edits.push({
+      start: position,
+      end: position,
+      text: ` ${added.join(' ')}`,
+    });
+    normalized.splice(
+      start + 1,
+      0,
+      ...prepared.prependArgs.map((value) => ({
+        ...tokens[start],
+        value,
+        start: position,
+        end: position,
+      })),
+    );
+  }
   return { tokens: normalized, edits, keepReason: prepared?.keepReason };
+}
+
+function quoteArgument(value: string): string | undefined {
+  if (/^[\w./:=@+-]+$/.test(value)) {
+    return value;
+  }
+  // Double quotes work in both POSIX shells and cmd.exe for these literal paths.
+  return /^[\w./:=@+ -]+$/.test(value) ? `"${value}"` : undefined;
 }
 
 /** The options before the script entry. */
@@ -672,7 +738,7 @@ interface ScannedOptions {
   removals: Edit[];
   loaders: number;
   runnerLoader: boolean;
-  imports: { token: LiteralCommandToken; value: string }[];
+  imports: { token: LiteralCommandToken; value: string; option?: LiteralCommandToken }[];
   registerKeepReason?: string;
   inlineCode: boolean;
   runScript?: string;
@@ -684,7 +750,14 @@ interface ScannedOptions {
 }
 
 function importEdits(command: string, scanned: ScannedOptions): Edit[] {
-  return scanned.imports.map(({ token, value }) => literalEdit(command, token, value));
+  const edits: Edit[] = [];
+  for (const { token, value, option } of scanned.imports) {
+    if (option) {
+      edits.push(literalEdit(command, option, '--import'));
+    }
+    edits.push(literalEdit(command, token, value));
+  }
+  return edits;
 }
 
 /** Read options from the executable to the entry file. */
@@ -740,9 +813,8 @@ function scanOptions(
         if (runner.isRegister?.(name, loader)) {
           scanned.imports.push({
             token: tokens[inline ? index : index + 1],
-            value: inline
-              ? `${value.slice(0, value.indexOf('=') + 1)}vite-plus/register`
-              : 'vite-plus/register',
+            value: inline ? '--import=vite-plus/register' : 'vite-plus/register',
+            option: !inline && name !== '--import' ? tokens[index] : undefined,
           });
         }
       } else if (loader !== undefined) {
@@ -811,11 +883,11 @@ function rewriteQuotedCommand(
   rewrite: Rewrite,
   token: LiteralCommandToken,
   environment: readonly string[],
-): void {
+): boolean {
   const raw = rewrite.command.slice(token.start, token.end);
   const quote = raw[0];
   if ((quote !== '"' && quote !== "'") || raw.length < 2 || !raw.endsWith(quote)) {
-    return;
+    return false;
   }
   const inner = rewriteScriptRunnerCommand(
     runner,
@@ -828,6 +900,7 @@ function rewriteQuotedCommand(
   if (inner.command !== token.value) {
     rewrite.edits.push(literalEdit(rewrite.command, token, inner.command));
   }
+  return token.value.trim() !== '';
 }
 
 /** The commands in a scripts or lint-staged record. */
@@ -948,9 +1021,25 @@ function rewriteRunnerShebang(
   }
   const [line, prefix, command] = match;
   // The kernel runs the shebang's command with the file appended.
-  // Its working directory belongs to the caller, not to the script's directory.
-  const original = `${command} ${SHEBANG_ENTRY}`;
-  const result = rewriteScriptRunnerCommand(runner, original);
+  const entry = quoteArgument(`./${path.basename(file)}`);
+  if (entry === undefined) {
+    return { reason: 'the script path needs shell escaping that vp migrate does not support' };
+  }
+  const shebangRunner = runner.prepareRun
+    ? {
+        ...runner,
+        prepareRun: (
+          args: readonly string[],
+          context: Parameters<NonNullable<ScriptRunnerMigration['prepareRun']>>[1],
+        ) =>
+          // Inspect entry-relative configuration; shebang mode rejects settings
+          // that would need a path pinned relative to the caller.
+          runner.prepareRun!(args, { ...context, cwd: path.dirname(file), shebang: true }),
+      }
+    : runner;
+  // The caller supplies the runtime working directory, not the script's location.
+  const original = `${command} ${entry}`;
+  const result = rewriteScriptRunnerCommand(shebangRunner, original);
   if (result.command === original && !result.kept.length) {
     return undefined;
   }
@@ -976,7 +1065,7 @@ function rewriteRunnerShebang(
   if (reason) {
     return { reason };
   }
-  const rewritten = result.command.slice(0, -` ${SHEBANG_ENTRY}`.length);
+  const rewritten = result.command.slice(0, -` ${entry}`.length);
   // Node.js can run an extensionless entry, while vpx can interpret it as a package.
   if (!path.extname(file) && /^vpx(?:\s|$)/.test(rewritten)) {
     return undefined;

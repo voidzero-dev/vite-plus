@@ -8,7 +8,7 @@ import { migrationPrompt, upgradePrompt } from '../.vitepress/theme/data/migrati
 
 ## Overview
 
-This command is the starting point for consolidating separate Vite, Vitest, Oxlint, Oxfmt, ESLint, Prettier, tsdown, tsup, tsx, and oxnode setups into Vite+.
+This command is the starting point for consolidating separate Vite, Vitest, Oxlint, Oxfmt, ESLint, Prettier, tsdown, tsup, tsx, oxnode, and ts-node setups into Vite+.
 
 Use it when you want to take an existing project and move it onto the Vite+ defaults instead of wiring each tool by hand.
 
