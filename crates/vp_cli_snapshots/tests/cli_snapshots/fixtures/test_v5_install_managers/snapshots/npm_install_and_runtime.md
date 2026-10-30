@@ -3,10 +3,10 @@
 ## `vpt json-edit package.json packageManager npm@10.9.4`
 
 
-## `vpt json-edit package.json overrides.vitest 5.0.5`
+## `vpt json-edit package.json overrides.vitest 5.1.0-beta.1`
 
 
-## `vpt json-edit package.json overrides.@vitest/browser 5.0.5`
+## `vpt json-edit package.json overrides.@vitest/browser 5.1.0-beta.1`
 
 
 ## `vp install --ignore-scripts -- --no-audit --no-fund`

@@ -88,6 +88,15 @@ if (process.env.GITHUB_ENV) {
 
 await prepareWebdriverioProject(project, repoRoot, cli);
 
+if (project === 'npmx.dev') {
+  // The pinned workspace enables strict peer checks. Supply devframe's optional
+  // cac peer explicitly so migration satisfies its ^7.0.0 requirement.
+  const packagePath = join(repoRoot, 'package.json');
+  const pkg = JSON.parse(await readFile(packagePath, 'utf-8'));
+  pkg.devDependencies.cac = '7.0.0';
+  await writeFile(packagePath, `${JSON.stringify(pkg, null, 2)}\n`, 'utf-8');
+}
+
 if (project === 'rollipop') {
   const oxfmtrc = await readFile(join(repoRoot, '.oxfmtrc.json'), 'utf-8');
   await writeFile(
@@ -361,10 +370,8 @@ ${registration}`,
 }
 
 if (project === 'npmx.dev') {
-  // Vitest 5 adds browser optimizer dependencies after Nuxt's config hook has
-  // filtered its exclusions. Reapply that filter only in the Nuxt test project.
-  // Remove when an upstream fix preserves those exclusions after the merge.
-  // https://github.com/why-reproductions-are-required/vitest-browser-optimizer-config-order
+  // Nuxt loads app modules before per-file mocks; use request interception.
+  // https://vitest.dev/config/browser/importmapmocks
   const viteConfigPath = join(repoRoot, 'vite.config.ts');
   const viteConfig = await readFile(viteConfigPath, 'utf-8');
   await writeFile(viteConfigPath, patchNpmxVitestConfig(viteConfig), 'utf-8');

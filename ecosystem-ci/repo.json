@@ -104,7 +104,7 @@
   "npmx.dev": {
     "repository": "https://github.com/npmx-dev/npmx.dev.git",
     "branch": "main",
-    "hash": "0e44738831077879c7ab00469fc50f5dbcf18650",
+    "hash": "3472596fa5e63dea39bd6c5f3fb561371d2f6034",
     "forceFreshMigration": true,
     "playwright": true
   },
@@ -117,7 +117,7 @@
   "vite-plus-jest-dom-repro": {
     "repository": "https://github.com/why-reproductions-are-required/vite-plus-jest-dom-repro.git",
     "branch": "master",
-    "hash": "01bd9ce1ac66ee3c21ed8a7f14311317d87fb999",
+    "hash": "7b37379a257da03fc06658863ed3b61685ba63c7",
     "forceFreshMigration": true
   },
   "bun-vite-template": {
