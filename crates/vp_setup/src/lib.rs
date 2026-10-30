@@ -22,6 +22,9 @@ pub mod lockfile;
 pub mod platform;
 pub mod registry;
 
+/// Node.js version used to install the global CLI's dependencies by default.
+pub const DEFAULT_INSTALL_NODE_VERSION: &str = include_str!("../../../.node-version").trim_ascii();
+
 /// Maximum number of old versions to keep.
 pub const MAX_VERSIONS_KEEP: usize = 3;
 

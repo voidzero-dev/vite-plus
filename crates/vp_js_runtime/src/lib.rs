@@ -53,9 +53,6 @@ mod provider;
 mod providers;
 mod runtime;
 
-/// Embed the repository's Node.js pin so installed binaries need no source checkout.
-pub const DEFAULT_NODE_VERSION: &str = include_str!("../../../.node-version").trim_ascii();
-
 pub use dev_engines::{
     nvmrc_version_spans, parse_node_version_content, read_node_version_file, read_nvmrc_file,
 };

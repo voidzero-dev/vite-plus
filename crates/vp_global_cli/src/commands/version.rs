@@ -216,7 +216,7 @@ pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
     let node_info = get_node_version_info(&cwd)
         .await
         .map(|(v, s)| match s.as_str() {
-            "builtin" | "lts" | "default" | "system" => format!("v{v}"),
+            "lts" | "default" | "system" => format!("v{v}"),
             _ => format!("v{v} ({s})"),
         })
         .unwrap_or(NOT_FOUND.to_string());

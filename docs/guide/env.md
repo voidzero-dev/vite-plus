@@ -39,9 +39,9 @@ To select the project's Node.js version, Vite+ checks the current directory firs
 3. `engines.node` in `package.json`
 4. `.nvmrc` file
 
-If no directory declares a version, Vite+ uses the global default (`vp env default`). If no global default is set, it uses the Node.js version pinned in the Vite+ repository's [`.node-version`](https://github.com/voidzero-dev/vite-plus/blob/main/.node-version). Each Vite+ release embeds this pin at build time, so new Node.js releases do not change its fallback.
+If no directory declares a version, Vite+ uses the global default (`vp env default`) and then the latest LTS.
 
-These rules select Node.js for project commands. The installer uses the same embedded default. Only [`VP_SETUP_NODE_VERSION`](/guide/global-cli#vp-setup-node-version) changes its dependency-installation runtime; [`setup-vp`](/guide/ci#node-js-during-installation) supplies this override from the CI inputs or project declarations.
+These rules select Node.js for project commands. The installer uses the Node.js version pinned in the Vite+ repository's [`.node-version`](https://github.com/voidzero-dev/vite-plus/blob/main/.node-version). Each release embeds this installation default at build time. Only [`VP_SETUP_NODE_VERSION`](/guide/global-cli#vp-setup-node-version) changes its dependency-installation runtime; [`setup-vp`](/guide/ci#node-js-during-installation) supplies this override from the CI inputs or project declarations.
 
 `devEngines.runtime` ranks above `engines.node` because it declares the development-environment requirement, while `engines.node` is a consumer-facing support range. `vp env doctor` warns when declared sources conflict.
 

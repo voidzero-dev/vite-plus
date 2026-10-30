@@ -104,7 +104,7 @@ This decouples the `vp` binary from vite-plus's internal file layout.
   dependency install. pnpm downloads `vite-plus` and its dependencies using the
   versions and integrity values recorded in that lockfile. The target's platform
   metadata supplies its Node.js pin through `vpNodeVersion`; older packages
-  without this field keep the running binary's selection. See the
+  without this field use the running binary's installation default. See the
   [upgrade flow](./upgrade-command.md#step-4-extract-and-install) for validation
   and activation behavior.
 

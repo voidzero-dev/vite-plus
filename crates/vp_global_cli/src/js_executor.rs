@@ -181,7 +181,7 @@ impl JsExecutor {
     /// 3. Project sources (.node-version, devEngines.runtime, engines.node, .nvmrc) —
     ///    delegates to `download_runtime_for_project()` for cache-aware resolution
     /// 4. User default from config.json
-    /// 5. Node.js release pinned by Vite+
+    /// 5. Latest LTS
     pub async fn ensure_project_runtime(
         &mut self,
         project_path: &AbsolutePath,
@@ -212,8 +212,8 @@ impl JsExecutor {
             // 3. Check if project has any *valid* version source.
             //    resolve_node_version returns Some for any non-empty value,
             //    even invalid ones. We must validate before routing to
-            //    download_runtime_for_project, which uses the built-in default when
-            //    all sources are invalid and would skip the user's configured default.
+            //    download_runtime_for_project, which falls to LTS on all-invalid
+            //    and would skip the user's configured default.
             let has_valid_project_source = has_valid_version_source(project_path).await?;
 
             let runtime = if has_valid_project_source {
@@ -222,7 +222,7 @@ impl JsExecutor {
                 // and intra-project fallback chain
                 download_runtime_for_project(project_path).await?
             } else {
-                // No valid project source: use the configured default, then the built-in default.
+                // No valid project source, fall back to user default from config, then LTS
                 let resolution = config::resolve_version(project_path).await?;
                 download_runtime(JsRuntimeType::Node, &resolution.version).await?
             };
@@ -492,7 +492,7 @@ fn local_vite_plus_is_older(local: &str, global: &str) -> bool {
 /// later call `normalize_version` on the same values.
 ///
 /// Returns `false` when all sources are missing or invalid, so the caller
-/// can fall through to the user's configured default instead of the built-in default.
+/// can fall through to the user's configured default instead of LTS.
 async fn has_valid_version_source(project_path: &AbsolutePath) -> Result<bool, Error> {
     Ok(config::resolve_project_version_source(project_path, false).await?.is_some())
 }

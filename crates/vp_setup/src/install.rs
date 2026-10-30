@@ -13,12 +13,12 @@ use std::{
 
 use flate2::read::GzDecoder;
 use tar::Archive;
-use vp_js_runtime::{DEFAULT_NODE_VERSION, JsRuntimeType, download_runtime};
+use vp_js_runtime::{JsRuntimeType, download_runtime};
 use vp_pm_cli::{PackageManagerType, download_package_manager};
 use vp_shared::EnvConfig;
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
-use crate::{error::Error, lockfile};
+use crate::{DEFAULT_INSTALL_NODE_VERSION, error::Error, lockfile};
 
 /// Validate that a path from a tarball entry is safe (no path traversal).
 ///
@@ -323,7 +323,7 @@ async fn prepare_install_runtime(
             version
         }
         Some(NodeVersion::Preferred(version)) if supports_pnpm_node(&package, version) => version,
-        _ => DEFAULT_NODE_VERSION,
+        _ => DEFAULT_INSTALL_NODE_VERSION,
     };
     let node_runtime =
         download_runtime(JsRuntimeType::Node, node_version).await.map_err(|error| {
@@ -721,7 +721,7 @@ mod tests {
                 }
                 let manifest = pnpm.join("package.json");
                 tokio::fs::write(&manifest, r#"{"engines":{"node":">=18.12"}}"#).await.unwrap();
-                for version in ["22.23.1", DEFAULT_NODE_VERSION] {
+                for version in ["22.23.1", DEFAULT_INSTALL_NODE_VERSION] {
                     let binary = env
                         .dirs
                         .data
@@ -744,13 +744,13 @@ mod tests {
                 index.assert_calls(0);
 
                 let (runtime, _) = prepare_install_runtime(None).await.unwrap();
-                assert_eq!(runtime.version(), DEFAULT_NODE_VERSION);
+                assert_eq!(runtime.version(), DEFAULT_INSTALL_NODE_VERSION);
                 index.assert_calls(0);
 
                 tokio::fs::write(manifest, r#"{"engines":{"node":">=24"}}"#).await.unwrap();
                 let (runtime, _) =
                     prepare_install_runtime(Some(NodeVersion::Preferred("22.23.1"))).await.unwrap();
-                assert_eq!(runtime.version(), DEFAULT_NODE_VERSION);
+                assert_eq!(runtime.version(), DEFAULT_INSTALL_NODE_VERSION);
                 index.assert_calls(0);
 
                 let error = prepare_install_runtime(Some(NodeVersion::Required("22.23.1")))

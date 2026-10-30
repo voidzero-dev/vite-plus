@@ -11,7 +11,7 @@ You'll need the following tools installed on your system:
 - Rust and Cargo
 - cargo-binstall
 
-The root `.node-version` also supplies the default Node.js version embedded in the CLI.
+The root `.node-version` also supplies the Node.js version used to install the global CLI's JavaScript dependencies.
 The dependency-upgrade workflow keeps this shared development, CI, and installer pin on Node.js 24.
 
 If you haven't installed Node.js and pnpm, we recommend using Vite+ to manage them. See [environment management](https://viteplus.dev/guide/env) for details.

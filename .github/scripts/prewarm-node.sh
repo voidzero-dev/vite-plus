@@ -10,7 +10,7 @@ prewarm_node() {
   time VP_NODE_VERSION="$version" "$vp_bin" node --version || return "$?"
 }
 
-# Development, CI, and the built-in runtime all use this pin.
+# Development, CI, and the installer all use this pin.
 prewarm_node "$(< .node-version)"
 prewarm_node lts
 prewarm_node latest

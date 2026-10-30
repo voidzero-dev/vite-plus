@@ -1202,14 +1202,6 @@ async fn cached_project_source_still_current(
     cwd: &AbsolutePathBuf,
     entry: &ResolveCacheEntry,
 ) -> Result<bool, String> {
-    // A CLI upgrade can replace the implicit LTS fallback or update its exact pin.
-    // Explicit LTS selections use the project or configured-default source instead.
-    if entry.source == "lts"
-        || (entry.source == "builtin" && entry.version != vp_js_runtime::DEFAULT_NODE_VERSION)
-    {
-        return Ok(false);
-    }
-
     let Some(current) =
         config::resolve_project_version_source(cwd, false).await.map_err(|e| format!("{e}"))?
     else {
@@ -1448,37 +1440,6 @@ mod tests {
             },
         )
         .await;
-    }
-
-    #[tokio::test]
-    async fn test_resolve_with_cache_refreshes_fallback_after_cli_upgrade() {
-        for (source, version) in [("lts", "26.13.0"), ("builtin", "24.11.0")] {
-            let temp = TempDir::new().unwrap();
-            let vp_home = AbsolutePathBuf::new(temp.path().join("vp-home")).unwrap();
-            let cwd = AbsolutePathBuf::new(temp.path().join("project")).unwrap();
-            std::fs::create_dir(&cwd).unwrap();
-            vp_shared::EnvConfig::with_vars_async(
-                [(env_vars::VP_HOME, vp_home.as_path())],
-                |_| async {
-                    let mut entry = cache_entry(source, None);
-                    entry.version = version.to_string();
-                    let mut cache = ResolveCache::default();
-                    cache.insert(&cwd, entry);
-                    cache.save(&cache::get_cache_path().unwrap());
-
-                    let resolved = resolve_with_cache(&cwd).await.unwrap();
-
-                    assert_eq!(resolved.version, vp_js_runtime::DEFAULT_NODE_VERSION);
-                    assert_eq!(resolved.source, "builtin");
-                    let saved = ResolveCache::load(&cache::get_cache_path().unwrap());
-                    assert_eq!(
-                        saved.get(&cwd).unwrap().version,
-                        vp_js_runtime::DEFAULT_NODE_VERSION
-                    );
-                },
-            )
-            .await;
-        }
     }
 
     #[tokio::test]
