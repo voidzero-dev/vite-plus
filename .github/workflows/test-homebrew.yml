@@ -3,30 +3,13 @@ name: Test Homebrew installation
 permissions: {}
 
 on:
-  workflow_dispatch:
   pull_request:
     types: [opened, synchronize, reopened, labeled]
-  push:
-    branches: [main]
-    paths:
-      - '.node-version'
-      - 'HomebrewFormula/**'
-      - '.github/scripts/*homebrew*'
-      - '.github/scripts/__tests__/homebrew-formula.mjs'
-      - '.github/scripts/__tests__/homebrew-preview.rb'
-      - '.github/workflows/test-homebrew*.yml'
-      - '.github/workflows/release.yml'
-      - 'crates/vp_setup/**'
-      - 'crates/vp_global_cli/src/self_setup*'
-      - 'crates/vp_global_cli/src/self_setup/**'
-      - 'crates/vp_global_cli/src/homebrew.rs'
-      - 'crates/vp_global_cli/src/main.rs'
-      - 'crates/vp_pm_cli/**'
 
 concurrency:
   # A skipped run for an unrelated label must not cancel installation tests.
   group: >-
-    ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event.action == 'labeled' && github.event.label.name != 'test: install-e2e' && github.event.label.name || 'install' }}
+    ${{ github.workflow }}-${{ github.event.pull_request.number }}-${{ github.event.action == 'labeled' && github.event.label.name != 'test: install-e2e' && 'unrelated-label' || 'install' }}
   cancel-in-progress: true
 
 defaults:
@@ -34,16 +17,14 @@ defaults:
     shell: bash
 
 jobs:
-  changes:
+  check-formula:
     if: >-
-      github.event.action != 'labeled' || github.event.label.name == 'test: install-e2e'
+      contains(github.event.pull_request.labels.*.name, 'test: install-e2e') &&
+      (github.event.action != 'labeled' || github.event.label.name == 'test: install-e2e')
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read
     outputs:
-      test: >-
-        ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'test: install-e2e') || steps.paths.outputs.packaging == 'true' }}
       published: ${{ steps.formula.outputs.published }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -54,25 +35,6 @@ jobs:
         with:
           node-version-file: .node-version
           package-manager-cache: false
-
-      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
-        id: paths
-        with:
-          filters: |
-            packaging:
-              - '.node-version'
-              - 'HomebrewFormula/**'
-              - '.github/scripts/*homebrew*'
-              - '.github/scripts/__tests__/homebrew-formula.mjs'
-              - '.github/scripts/__tests__/homebrew-preview.rb'
-              - '.github/workflows/test-homebrew*.yml'
-              - '.github/workflows/release.yml'
-              - 'crates/vp_setup/**'
-              - 'crates/vp_global_cli/src/self_setup*'
-              - 'crates/vp_global_cli/src/self_setup/**'
-              - 'crates/vp_global_cli/src/homebrew.rs'
-              - 'crates/vp_global_cli/src/main.rs'
-              - 'crates/vp_pm_cli/**'
 
       - name: Check formula publication rules
         run: node --test .github/scripts/__tests__/homebrew-formula.mjs
@@ -90,16 +52,22 @@ jobs:
           JS
 
   published:
-    needs: changes
-    if: needs.changes.outputs.test == 'true' && needs.changes.outputs.published == 'true'
+    needs: check-formula
+    if: needs.check-formula.outputs.published == 'true'
     permissions:
       contents: read
     uses: ./.github/workflows/test-homebrew-published.yml
+    with:
+      platforms: >-
+        [
+          {"os":"macos-latest","target":"aarch64-apple-darwin"},
+          {"os":"ubuntu-latest","target":"x86_64-unknown-linux-gnu"},
+          {"os":"ubuntu-24.04-arm","target":"aarch64-unknown-linux-gnu"}
+        ]
 
   install:
     name: Homebrew (${{ matrix.target }})
-    needs: changes
-    if: needs.changes.outputs.test == 'true'
+    needs: check-formula
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     permissions:
@@ -111,8 +79,6 @@ jobs:
         include:
           - os: macos-latest
             target: aarch64-apple-darwin
-          - os: macos-15-intel
-            target: x86_64-apple-darwin
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
           - os: ubuntu-24.04-arm
@@ -127,7 +93,6 @@ jobs:
 
       - uses: ./.github/actions/setup-rust
         with:
-          save-cache: ${{ github.ref_name == 'main' }}
           cache-key: homebrew-${{ matrix.target }}-ci
 
       - uses: ./.github/actions/setup-ci-node
