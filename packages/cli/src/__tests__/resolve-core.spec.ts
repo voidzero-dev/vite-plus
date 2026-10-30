@@ -128,15 +128,30 @@ describe('resolveCore', () => {
     );
   });
 
-  it('checks only the package name for the repository workspace spec', () => {
-    writeCli(join(root, 'cli'), cliPkg.version, 'workspace:@voidzero-dev/vite-plus-core@*');
-    writeCore(bundled, '@voidzero-dev/vite-plus-core', '0.0.0-any');
-    writeCore(projectCore, '@voidzero-dev/vite-plus-core', '0.0.0-any');
-    expect(resolveCore('', project, cliModule)).toBe(join(bundled, 'index.js'));
-    writeCore(bundled, 'vite', '8.2.2');
-    expect(() => resolveCore('', project, cliModule)).toThrow(
-      'Expected @voidzero-dev/vite-plus-core, but found vite@8.2.2',
-    );
+  describe('with the repository workspace spec', () => {
+    beforeEach(() => {
+      writeCli(join(root, 'cli'), cliPkg.version, 'workspace:@voidzero-dev/vite-plus-core@*');
+      writeCore(bundled, '@voidzero-dev/vite-plus-core', '0.0.0-any');
+    });
+
+    it('compares the project core with the core that the CLI resolves', () => {
+      writeCore(projectCore, '@voidzero-dev/vite-plus-core', '0.0.0-any');
+      expect(resolveCore('', project, cliModule)).toBe(join(bundled, 'index.js'));
+    });
+
+    it('rejects a stale project core', () => {
+      writeCore(projectCore, '@voidzero-dev/vite-plus-core', '0.0.0-stale');
+      expect(() => resolveCore('', project, cliModule)).toThrow(
+        'Expected @voidzero-dev/vite-plus-core@0.0.0-any, but found @voidzero-dev/vite-plus-core@0.0.0-stale',
+      );
+    });
+
+    it('rejects upstream Vite in the CLI dependency', () => {
+      writeCore(bundled, 'vite', '8.2.2');
+      expect(() => resolveCore('', project, cliModule)).toThrow(
+        'Expected @voidzero-dev/vite-plus-core, but found vite@8.2.2',
+      );
+    });
   });
 
   it('does not fall back to the project when the CLI dependency is missing', () => {
