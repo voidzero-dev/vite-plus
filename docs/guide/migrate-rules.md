@@ -262,6 +262,7 @@ Migration rewrites commands provided by the Vite+ toolchain in `package.json` sc
 | `prettier`    | `vp fmt`, when its optional migration runs  |
 | `tsup`        | `vp pack`, when its optional migration runs |
 | `tsx`         | `vpx`, when its optional migration runs     |
+| `oxnode`      | `vpx`, when its optional migration runs     |
 
 For commands launched through `bunx`, migration preserves `bunx` and its `--bun` flag (keeping the user's chosen runtime) and rewrites only the managed command. tsx is the exception: `bunx tsx` becomes `vpx`, and `bunx --bun tsx` keeps tsx (see [tsx to `vpx`](#tsx-to-vpx)). This also works when `bunx` follows a command-launcher delimiter such as `run` or `--`:
 
@@ -302,6 +303,28 @@ Migration removes the `tsx` devDependency only when nothing uses tsx anymore: no
 Tool configurations and source files need manual edits. For example, change `nodeArguments: ['--import=tsx']` to `nodeArguments: ['--import=vite-plus/register']`, or Mocha's `"import": "tsx"` setting to `"import": "vite-plus/register"`. Keep tsx if the project uses its programmatic APIs.
 
 See [Coming from tsx](/guide/vpx#coming-from-tsx) for the other differences.
+
+### oxnode to `vpx`
+
+Migration offers to replace `oxnode`, the command from `@oxc-node/cli`, with `vpx`. It rewrites `package.json` scripts, lint-staged tasks in `package.json` and JSON files, and `#!/usr/bin/env oxnode` shebangs. Node.js preload shebangs such as `#!/usr/bin/env -S node --import @oxc-node/core/register` keep Node.js and use `vite-plus/register`, including in extensionless scripts. The migration preserves the shebang's `env` syntax, flags, and relative paths. On a project that already uses Vite+, run `vp migrate --full` to include this migration.
+
+| Before                                                    | After                                                |
+| --------------------------------------------------------- | ---------------------------------------------------- |
+| `oxnode ./scripts/seed.ts`                                | `vpx ./scripts/seed.ts`                              |
+| `oxnode -C dev ./build.ts`                                | `vpx -C dev ./build.ts`                              |
+| `oxnode watch --include "config/*.json" ./server.ts`      | `vpx --watch --include "config/*.json" ./server.ts`  |
+| `node --import @oxc-node/core/register ./scripts/seed.ts` | `node --import vite-plus/register ./scripts/seed.ts` |
+| `NODE_OPTIONS='--import @oxc-node/core/register' mocha`   | `NODE_OPTIONS='--import vite-plus/register' mocha`   |
+
+The `node --import @oxc-node/core/register` and `register.mjs` forms keep Node.js, its wrappers, arguments, and native watch, eval, and test modes. Literal `NODE_OPTIONS` assignments also use the public preload. Commands that use the `oxnode` executable follow the `vpx` rules instead: `oxnode --watch` stays unchanged because it starts Node.js's watcher, while `oxnode watch` and `vpx --watch` use oxc-node's watcher.
+
+Commands that explicitly set `OXC_TRANSFORM_ALL` to anything other than `typescript` stay unchanged. Nonempty `VP_SCRIPT_TSCONFIG` and `TSX_TSCONFIG_PATH` assignments also stay unchanged because they would change config selection. Commands that read an environment file stay unchanged because it can select a different transform mode. Migration checks the named script and local preloads for standalone oxc-node API usage, which would configure a different loader after migration; it does not follow their imports.
+
+Custom asynchronous `--loader` and `--experimental-loader` hooks stay in their original order when the register import changes. This supports project loaders for resolution and assets alongside the Vite+ TypeScript loader. It does not establish compatibility with a second TypeScript transformer or arbitrary synchronous `module.registerHooks()` chains.
+
+Node.js preload commands stay unchanged when an additional `--require` or `--import` can change loader settings, or inline code still calls standalone oxc-node APIs. Migration checks explicit local shebang loaders relative to the owning package for standalone API references, without following their imports. It leaves the paths unchanged: at runtime, relative loader paths use the caller's working directory, not the script's directory.
+
+The `@oxc-node/cli` and `@oxc-node/core` development dependencies are removed only when no remaining use needs them. Loader references, API imports, CI commands, hooks, and shell scripts can keep these dependencies installed. Runtime and peer dependencies stay in place.
 
 ## Continuous Integration Rules
 
