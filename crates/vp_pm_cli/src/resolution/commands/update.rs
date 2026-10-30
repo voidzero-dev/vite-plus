@@ -29,39 +29,39 @@ pub struct UpdateArgs {
     pub(crate) ignore_node_mismatch: bool,
 
     /// Update recursively in all workspace packages
-    #[arg(short = 'r', long, not_supported(npm < "8.1.0", yarn < "2", bun < "1.4"))]
+    #[arg(short = 'r', long, conflicts_with = "global", not_supported(npm < "8.1.0", yarn < "2", bun < "1.4"))]
     pub(crate) recursive: bool,
 
     /// Filter packages in monorepo (can be used multiple times)
-    #[arg(long, value_name = "PATTERN", not_supported(npm < "7.14.0", yarn >= "2", bun < "1.4"))]
+    #[arg(long, value_name = "PATTERN", conflicts_with = "global", not_supported(npm < "7.14.0", yarn >= "2", bun < "1.4"))]
     pub(crate) filter: Vec<String>,
 
     /// Include workspace root
-    #[arg(short = 'w', long, not_supported(npm < "8.1.0", yarn, bun))]
+    #[arg(short = 'w', long, conflicts_with = "global", not_supported(npm < "8.1.0", yarn, bun))]
     pub(crate) workspace_root: bool,
 
     /// Update devDependencies
-    #[arg(short = 'D', long, not_supported(yarn, bun < "1.4"))]
+    #[arg(short = 'D', long, conflicts_with = "global", not_supported(yarn, bun < "1.4"))]
     pub(crate) dev: bool,
 
     /// Update dependencies (production)
-    #[arg(short = 'P', long, not_supported(npm < "7", yarn >= "2", bun < "1.4"))]
+    #[arg(short = 'P', long, conflicts_with = "global", not_supported(npm < "7", yarn >= "2", bun < "1.4"))]
     pub(crate) prod: bool,
 
     /// Interactive mode
-    #[arg(short = 'i', long, not_supported(npm))]
+    #[arg(short = 'i', long, conflicts_with = "global", not_supported(npm))]
     pub(crate) interactive: bool,
 
     /// Exclude optionalDependencies
-    #[arg(long, not_supported(yarn >= "2", bun < "1.4"))]
+    #[arg(long, conflicts_with = "global", not_supported(yarn >= "2", bun < "1.4"))]
     pub(crate) no_optional: bool,
 
     /// Update lockfile only, don't modify package.json
-    #[arg(long)]
+    #[arg(long, conflicts_with = "global")]
     pub(crate) no_save: bool,
 
     /// Only update if package exists in workspace (pnpm-specific)
-    #[arg(long, not_supported(npm, yarn, bun))]
+    #[arg(long, conflicts_with = "global", not_supported(npm, yarn, bun))]
     pub(crate) workspace: bool,
 
     /// Packages to update (optional - updates all if omitted)

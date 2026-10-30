@@ -12,19 +12,19 @@ pub struct AddArgs {
     pub(crate) save_dependency: SaveDependencyArgs,
 
     /// Save exact version rather than semver range
-    #[arg(short = 'E', long)]
+    #[arg(short = 'E', long, conflicts_with = "global")]
     pub(crate) save_exact: bool,
 
     /// Save the new dependency to the specified catalog name
-    #[arg(long, value_name = "CATALOG_NAME", not_supported(npm, pnpm < "10.12.0", yarn, bun < "1.4"))]
+    #[arg(long, value_name = "CATALOG_NAME", conflicts_with = "global", not_supported(npm, pnpm < "10.12.0", yarn, bun < "1.4"))]
     pub(crate) save_catalog_name: Option<String>,
 
     /// Save the new dependency to the default catalog
-    #[arg(long, not_supported(npm, pnpm < "10.12.0", yarn, bun < "1.4"))]
+    #[arg(long, conflicts_with = "global", not_supported(npm, pnpm < "10.12.0", yarn, bun < "1.4"))]
     pub(crate) save_catalog: bool,
 
     /// A list of package names allowed to run postinstall
-    #[arg(long, value_name = "NAMES", not_supported(npm, pnpm < "10.4.0", yarn, bun))]
+    #[arg(long, value_name = "NAMES", conflicts_with = "global", not_supported(npm, pnpm < "10.4.0", yarn, bun))]
     pub(crate) allow_build: Option<String>,
 
     /// Do not run lifecycle scripts
@@ -82,15 +82,15 @@ pub struct AddArgs {
     pub(crate) silent: bool,
 
     /// Filter packages in monorepo (can be used multiple times)
-    #[arg(long, value_name = "PATTERN", not_supported(npm < "7.14.0", yarn < "2", bun < "1.4"))]
+    #[arg(long, value_name = "PATTERN", conflicts_with = "global", not_supported(npm < "7.14.0", yarn < "2", bun < "1.4"))]
     pub(crate) filter: Vec<String>,
 
     /// Add to workspace root
-    #[arg(short = 'w', long, not_supported(npm < "8.1.0", yarn >= "2", bun))]
+    #[arg(short = 'w', long, conflicts_with = "global", not_supported(npm < "8.1.0", yarn >= "2", bun))]
     pub(crate) workspace_root: bool,
 
     /// Only add if package exists in workspace (pnpm-specific)
-    #[arg(long, not_supported(npm, yarn, bun))]
+    #[arg(long, conflicts_with = "global", not_supported(npm, yarn, bun))]
     pub(crate) workspace: bool,
 
     /// Install globally
@@ -126,19 +126,19 @@ pub(crate) enum SaveDependencyTarget {
 #[group(id = "save_dependency_target", multiple = false)]
 pub(crate) struct SaveDependencyArgs {
     /// Save to `dependencies` (default)
-    #[arg(short = 'P', long)]
+    #[arg(short = 'P', long, conflicts_with = "global")]
     pub(crate) save_prod: bool,
 
     /// Save to `devDependencies`
-    #[arg(short = 'D', long)]
+    #[arg(short = 'D', long, conflicts_with = "global")]
     pub(crate) save_dev: bool,
 
     /// Save to `peerDependencies` and `devDependencies`
-    #[arg(long)]
+    #[arg(long, conflicts_with = "global")]
     pub(crate) save_peer: bool,
 
     /// Save to `optionalDependencies`
-    #[arg(short = 'O', long)]
+    #[arg(short = 'O', long, conflicts_with = "global")]
     pub(crate) save_optional: bool,
 }
 

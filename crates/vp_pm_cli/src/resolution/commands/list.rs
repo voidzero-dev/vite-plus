@@ -11,7 +11,7 @@ pub struct ListArgs {
     pub(crate) pattern: Option<String>,
 
     /// Maximum depth of dependency tree
-    #[arg(long, not_supported(yarn >= "2", bun))]
+    #[arg(long, conflicts_with = "global", not_supported(yarn >= "2", bun))]
     pub(crate) depth: Option<u32>,
 
     /// Output in JSON format
@@ -19,43 +19,43 @@ pub struct ListArgs {
     pub(crate) json: bool,
 
     /// Show extended information
-    #[arg(long, not_supported(yarn, bun))]
+    #[arg(long, conflicts_with = "global", not_supported(yarn, bun))]
     pub(crate) long: bool,
 
     /// Parseable output format
-    #[arg(long, not_supported(yarn, bun))]
+    #[arg(long, conflicts_with = "global", not_supported(yarn, bun))]
     pub(crate) parseable: bool,
 
     /// Only production dependencies
-    #[arg(short = 'P', long, not_supported(yarn >= "2", bun))]
+    #[arg(short = 'P', long, conflicts_with = "global", not_supported(yarn >= "2", bun))]
     pub(crate) prod: bool,
 
     /// Include dev dependencies
-    #[arg(short = 'D', long, not_supported(yarn >= "2", bun))]
+    #[arg(short = 'D', long, conflicts_with = "global", not_supported(yarn >= "2", bun))]
     pub(crate) dev: bool,
 
     /// Exclude optional dependencies
-    #[arg(long, not_supported(npm < "7", yarn, bun))]
+    #[arg(long, conflicts_with = "global", not_supported(npm < "7", yarn, bun))]
     pub(crate) no_optional: bool,
 
     /// Exclude peer dependencies
-    #[arg(long, not_supported(npm < "7", yarn, bun))]
+    #[arg(long, conflicts_with = "global", not_supported(npm < "7", yarn, bun))]
     pub(crate) exclude_peers: bool,
 
     /// Show only project packages
-    #[arg(long, not_supported(npm, yarn, bun))]
+    #[arg(long, conflicts_with = "global", not_supported(npm, yarn, bun))]
     pub(crate) only_projects: bool,
 
     /// Use a finder function
-    #[arg(long, value_name = "FINDER_NAME", not_supported(npm, pnpm < "10.16.0", yarn, bun))]
+    #[arg(long, value_name = "FINDER_NAME", conflicts_with = "global", not_supported(npm, pnpm < "10.16.0", yarn, bun))]
     pub(crate) find_by: Option<String>,
 
     /// List across all workspaces
-    #[arg(short = 'r', long, not_supported(npm < "7.14.0", yarn, bun))]
+    #[arg(short = 'r', long, conflicts_with = "global", not_supported(npm < "7.14.0", yarn, bun))]
     pub(crate) recursive: bool,
 
     /// Filter packages in monorepo
-    #[arg(long, value_name = "PATTERN", not_supported(npm < "7.14.0", yarn, bun))]
+    #[arg(long, value_name = "PATTERN", conflicts_with = "global", not_supported(npm < "7.14.0", yarn, bun))]
     pub(crate) filter: Vec<String>,
 
     /// List global packages
@@ -190,12 +190,17 @@ mod tests {
     };
 
     #[test]
-    fn test_parser_accepts_short_dev_and_global_flags() {
-        let args = parse_args::<ListArgs>(["react", "-D", "-g"]).unwrap();
-
+    fn test_parser_accepts_short_dev_and_global_flags_separately() {
+        let args = parse_args::<ListArgs>(["react", "-D"]).unwrap();
         assert_eq!(args.pattern, Some("react".to_string()));
         assert!(args.dev);
+
+        let args = parse_args::<ListArgs>(["react", "-g"]).unwrap();
+        assert_eq!(args.pattern, Some("react".to_string()));
         assert!(args.global);
+
+        let error = parse_args::<ListArgs>(["react", "-D", "-g"]).unwrap_err();
+        assert_eq!(error.kind(), clap::error::ErrorKind::ArgumentConflict);
     }
 
     #[test]
