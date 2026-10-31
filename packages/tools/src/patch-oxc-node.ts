@@ -56,6 +56,24 @@ export function exposeLoaderInitialization(source: string): string {
   return source;
 }
 
+/**
+ * Follow oxc 0.156's rename of `VariableDeclarationKind::is_await` to
+ * `is_await_using`; both return `self == Self::AwaitUsing`. Upstream oxc-node
+ * still calls the 0.155 name. Drop this patch once the vendored source calls
+ * `is_await_using` on its own.
+ */
+export function fixOxc156ApiRenames(source: string): string {
+  const original = 'it.kind.is_await()';
+  const replacement = 'it.kind.is_await_using()';
+  if (source.includes(replacement)) {
+    return source;
+  }
+  if (!source.includes(original)) {
+    throw new Error('[patch-oxc-node] Could not find the `is_await` call in oxc-node/src/lib.rs');
+  }
+  return source.replace(original, replacement);
+}
+
 export function patchOxcNode(rootDir: string = process.cwd()): void {
   const version = oxcVersion(readFileSync(join(rootDir, 'Cargo.toml'), 'utf-8'), 'Cargo.toml');
   const cargoTomlPath = join(rootDir, OXC_NODE_DIR, 'Cargo.toml');
@@ -67,7 +85,7 @@ export function patchOxcNode(rootDir: string = process.cwd()): void {
   }
   const libPath = join(rootDir, OXC_NODE_DIR, 'src/lib.rs');
   const source = readFileSync(libPath, 'utf-8');
-  const patchedSource = exposeLoaderInitialization(source);
+  const patchedSource = fixOxc156ApiRenames(exposeLoaderInitialization(source));
   if (patchedSource !== source) {
     writeFileSync(libPath, patchedSource, 'utf-8');
     log('✓ lib.rs: loader initialization available to embedders');

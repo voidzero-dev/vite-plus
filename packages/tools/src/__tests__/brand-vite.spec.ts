@@ -61,6 +61,22 @@ const upstreamSources = {
   ].join('\n'),
 };
 
+const dtsConfigSource = [
+  '  plugins: [',
+  '    esmifyPostcssLoadConfigDts(),',
+  '    patchTypes(),',
+  '    addNodePrefix(),',
+  '    dts({',
+  '      emitDtsOnly: true,',
+  '    }),',
+  '  ],',
+  '}',
+  '',
+  'function addNodePrefix(): Plugin {',
+  '}',
+  '',
+].join('\n');
+
 function write(file: string, source: string) {
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, source);
@@ -69,6 +85,7 @@ function write(file: string, source: string) {
 function createUpstreamFixture(configSource = upstreamSources['config.ts']): {
   root: string;
   nodeDir: string;
+  dtsConfig: string;
   manifest: string;
   lockfile: string;
   unrelatedSource: string;
@@ -80,9 +97,11 @@ function createUpstreamFixture(configSource = upstreamSources['config.ts']): {
   for (const [file, source] of Object.entries(upstreamSources)) {
     write(join(nodeDir, file), file === 'config.ts' ? configSource : source);
   }
+  const dtsConfig = join(viteDir, 'packages/vite/rolldown.dts.config.ts');
   const manifest = join(viteDir, 'packages/vite/package.json');
   const lockfile = join(viteDir, 'pnpm-lock.yaml');
   const unrelatedSource = join(nodeDir, 'server.ts');
+  write(dtsConfig, dtsConfigSource);
   write(manifest, '{"devDependencies":{"@vitest/utils":"4.1.10"}}\n');
   write(lockfile, '# upstream lockfile\n');
   write(unrelatedSource, '// upstream source\n');
@@ -102,11 +121,11 @@ function createUpstreamFixture(configSource = upstreamSources['config.ts']): {
     'upstream fixture',
   );
 
-  return { root, nodeDir, manifest, lockfile, unrelatedSource };
+  return { root, nodeDir, dtsConfig, manifest, lockfile, unrelatedSource };
 }
 
 test('branding preserves aligned dependencies and unrelated changes across repeated builds', () => {
-  const { root, nodeDir, manifest, lockfile, unrelatedSource } = createUpstreamFixture();
+  const { root, nodeDir, dtsConfig, manifest, lockfile, unrelatedSource } = createUpstreamFixture();
   try {
     alignVendoredVitestDependencies(root, '5.0.0');
     const alignedManifest = readFileSync(manifest, 'utf8');
@@ -127,11 +146,16 @@ test('branding preserves aligned dependencies and unrelated changes across repea
       expect(() => assertViteConfigPatched(configSource)).not.toThrow();
       expect(configSource).toContain('false &&\n        createNativeConfigCompatPlugin');
       expect(configSource).not.toContain('!process.env.VITE_CONFIG_NATIVE_IGNORE_WARNING');
+      const patchedDtsConfig = readFileSync(dtsConfig, 'utf8');
+      expect(patchedDtsConfig).toContain('removeOrphanRuntimeChunk(),');
+      expect(patchedDtsConfig).toContain('function removeOrphanRuntimeChunk(): Plugin {');
+      expect(patchedDtsConfig).not.toBe(dtsConfigSource);
       const sources = Object.entries(upstreamSources).map(([file, upstream]) => {
         const source = readFileSync(join(nodeDir, file), 'utf8');
         expect(source).not.toBe(upstream);
         return source;
       });
+      sources.push(patchedDtsConfig);
       if (brandedSources) {
         expect(sources).toEqual(brandedSources);
       }

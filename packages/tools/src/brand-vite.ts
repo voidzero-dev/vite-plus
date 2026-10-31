@@ -12,6 +12,9 @@
  * 4. logger.ts: Change default prefix from '[vite]' to '[vite+]'
  * 5. plugins/reporter.ts: Suppress redundant "vite v<version>" native reporter line
  * 6. config.ts: Suppress the native-loader notice and support an explicit root base
+ * 7. rolldown.dts.config.ts: Drop the orphan `rolldown-runtime` d.ts chunk that
+ *    rolldown >= 1.2.16 emits in `emitDtsOnly` builds (nothing imports it and
+ *    its undeclared `__exportAll` re-export fails `tsconfig.check.json`)
  */
 
 import { execFileSync } from 'node:child_process';
@@ -122,6 +125,9 @@ export function brandVite(rootDir: string = process.cwd()): void {
     ],
     { cwd: nodeDir },
   );
+  execFileSync('git', ['restore', '--source=HEAD', '--', 'rolldown.dts.config.ts'], {
+    cwd: join(rootDir, VITE_DIR, 'packages', 'vite'),
+  });
 
   // 1. constants.ts: Add VITE_PLUS_VERSION constant after VERSION
   const constantsFile = join(nodeDir, 'constants.ts');
@@ -230,6 +236,62 @@ export function brandVite(rootDir: string = process.cwd()): void {
     'config.ts',
     'Suppressed native config loader notice and enabled an explicit root base',
     patchedConfig === configSource ? 'already' : 'patched',
+  );
+
+  // 7. rolldown.dts.config.ts: rolldown >= 1.2.16 places the JS runtime
+  // helpers in a standalone `rolldown-runtime` chunk. In `emitDtsOnly` builds
+  // the helper bodies are treeshaken and no chunk imports the runtime, leaving
+  // an orphan d.ts whose `export { __exportAll as t }` has no declaration and
+  // fails `tsc --project tsconfig.check.json`. Drop the chunk from the bundle
+  // while it stays unreferenced.
+  const dtsConfigFile = join(rootDir, VITE_DIR, 'packages', 'vite', 'rolldown.dts.config.ts');
+  const dtsConfigResults = [
+    replaceInFile(
+      dtsConfigFile,
+      '    addNodePrefix(),\n    dts({',
+      '    addNodePrefix(),\n    removeOrphanRuntimeChunk(),\n    dts({',
+    ),
+    replaceInFile(
+      dtsConfigFile,
+      'function addNodePrefix(): Plugin {',
+      `// Vite+: drop the orphan rolldown-runtime d.ts chunk (see brand-vite.ts).
+function removeOrphanRuntimeChunk(): Plugin {
+  return {
+    name: 'remove-orphan-runtime-chunk',
+    generateBundle: {
+      // Run after rolldown-plugin-dts drops the JS chunk twins so only
+      // surviving d.ts chunks count as references. The \`imports\` metadata
+      // still lists the runtime chunk from the JS chunk graph, so check the
+      // emitted code instead.
+      order: 'post',
+      handler(_options, bundle) {
+        const runtimeFile = Object.keys(bundle).find((fileName) =>
+          fileName.endsWith('rolldown-runtime.d.ts'),
+        )
+        if (!runtimeFile) {
+          return
+        }
+        const isReferenced = Object.values(bundle).some(
+          (item) =>
+            item.type === 'chunk' &&
+            item.fileName !== runtimeFile &&
+            item.code.includes('rolldown-runtime'),
+        )
+        if (!isReferenced) {
+          delete bundle[runtimeFile]
+        }
+      },
+    },
+  }
+}
+
+function addNodePrefix(): Plugin {`,
+    ),
+  ];
+  logPatch(
+    'rolldown.dts.config.ts',
+    'Dropped orphan rolldown-runtime d.ts chunk from the bundle',
+    dtsConfigResults.includes('patched') ? 'patched' : 'already',
   );
 
   log('Done!');
