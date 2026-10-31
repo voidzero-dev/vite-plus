@@ -5,6 +5,7 @@
 //! 2. Node.js installation (if needed)
 //! 3. Tool execution (core shims and package binaries)
 
+use vp_command::FirstPathMatch;
 use vp_pm_cli::{PackageManagerType, ensure_package_manager_bin};
 use vp_shared::{PrependOptions, ToolPathEnv, env_vars, output};
 use vt_path::{AbsolutePath, AbsolutePathBuf, current_dir};
@@ -1538,24 +1539,11 @@ pub(crate) fn find_system_tool(tool: &str) -> Option<AbsolutePathBuf> {
 /// exercise them without mutating the process-wide working directory.
 fn find_system_tool_in(tool: &str, cwd: &AbsolutePath) -> Option<AbsolutePathBuf> {
     let path = std::env::var_os("PATH")?;
-    let paths = std::env::split_paths(&path).map(|path| {
-        if path.is_absolute() || path.starts_with("~") { path } else { cwd.as_path().join(path) }
-    });
-    let path = std::env::join_paths(paths).ok()?;
-    let resolved = vp_command::resolve_bin(tool, Some(&path), cwd).ok()?;
-    let canonical = resolved.as_path().canonicalize().ok();
     let self_real = std::env::current_exe().ok().and_then(|exe| exe.canonicalize().ok());
-    let is_unix_shim = cfg!(unix)
-        && canonical
-            .as_ref()
-            .is_some_and(|target| target.file_name().is_some_and(|name| name == "vp"));
-    if vp_shared::is_windows_trampoline(resolved.as_path())
-        || is_unix_shim
-        || (self_real.is_some() && canonical == self_real)
-    {
-        None
-    } else {
-        Some(resolved)
+    match vp_command::classify_first_path_match(tool, &path, self_real.as_deref(), cwd) {
+        // A managed install first on PATH is a parent's selection, which system-first reuses.
+        FirstPathMatch::System(path) | FirstPathMatch::VpOwned(path) => Some(path),
+        FirstPathMatch::ViteShim(_) | FirstPathMatch::NotFound => None,
     }
 }
 
@@ -2764,6 +2752,48 @@ mod tests {
             vars.push((name, Some(value.clone())));
         }
         vars
+    }
+
+    #[test]
+    fn test_find_system_tool_reuses_managed_installs_but_not_shims() {
+        let layout = SystemOnlyLayout::new();
+        let exe = |name: &str| if cfg!(windows) { format!("{name}.exe") } else { name.to_owned() };
+        let managed_node = layout.managed_bin.join(exe("node"));
+        let system_node = create_fake_executable(&layout.system_bin, "node");
+        let empty = layout.home.join("empty");
+        std::fs::create_dir_all(&empty).unwrap();
+        let shim_dir = layout.home.join("bin");
+        std::fs::create_dir_all(&shim_dir).unwrap();
+        #[cfg(unix)]
+        {
+            let vp_dir = layout.home.join("current");
+            std::fs::create_dir_all(&vp_dir).unwrap();
+            let vp = create_fake_executable(&vp_dir, "vp");
+            std::os::unix::fs::symlink(&vp, shim_dir.join("node")).unwrap();
+        }
+        #[cfg(windows)]
+        {
+            let shim = create_fake_executable(&shim_dir, "node");
+            EnvConfig::with_vars(system_only_vars(&layout, &layout.path(), &[], &[]), |config| {
+                config.dirs.write_shim_pointer_beside(&shim).unwrap();
+            });
+        }
+        let cases = [
+            (layout.path(), Some(managed_node)),
+            (std::env::join_paths([&layout.system_bin]).unwrap(), Some(system_node)),
+            (std::env::join_paths([&empty]).unwrap(), None),
+            (std::env::join_paths([&shim_dir, &layout.system_bin]).unwrap(), None),
+        ];
+        for (path, expected) in cases {
+            EnvConfig::with_vars(system_only_vars(&layout, &path, &[], &[]), |_| {
+                let found = find_system_tool_in("node", &layout.cwd);
+                assert_eq!(
+                    found.as_ref().map(|path| path.as_path()),
+                    expected.as_deref(),
+                    "{path:?}"
+                );
+            });
+        }
     }
 
     #[test]
