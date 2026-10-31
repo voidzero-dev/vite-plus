@@ -76,6 +76,22 @@ pub async fn execute(
         let args: Vec<String> = command[1..].to_vec();
         // stdout belongs to the dispatched tool; route vp's own output to stderr.
         vp_shared::output::route_user_output_to_stderr();
+        // A system-only tool comes from PATH here, not from dispatch: its shim
+        // fails without searching PATH, even when a system tool comes before it.
+        if !from_wrapper
+            && is_core_shim_tool(tool)
+            && crate::shim::dispatch::system_only_variable_for_tool(tool).is_some()
+        {
+            // Short aliases (`pn`, `pnx`) map to the binaries the family installs.
+            let bin_name = vp_pm_cli::PackageManagerType::from_tool(tool)
+                .map_or(tool.as_str(), |kind| kind.bin_name_for_tool(tool));
+            let path = crate::shim::dispatch::resolve_effective_tool(
+                bin_name,
+                config::EffectiveMode::SystemOnly,
+            )?
+            .expect("system-only resolution returns a path or an error");
+            return Ok(exit_status(crate::shim::exec::exec_tool(&path, &args, env)));
+        }
         // Dispatch assumes the shell's PATH lookup already preferred system-first tools, so repeat it here.
         if !from_wrapper
             && is_core_shim_tool(tool)

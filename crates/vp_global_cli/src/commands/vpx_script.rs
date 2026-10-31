@@ -491,11 +491,27 @@ async fn run_node(args: Vec<String>, cwd: &AbsolutePath) -> i32 {
 
     // stdout belongs to the script; route vp's own output to stderr.
     output::route_user_output_to_stderr();
-    // As `vp node` does: dispatch assumes the shell's PATH lookup already preferred a
-    // system-first Node.js, so repeat that lookup here. System-only Node.js is left to
-    // dispatch, which skips managed installs a parent left on PATH.
-    if !crate::shim::dispatch::requires_system_tool("node")
-        && let Ok(config) = super::env::config::load_config().await
+    // As `vp node` does: system-only Node.js comes from PATH here, not from dispatch,
+    // since its shim fails without searching PATH.
+    if crate::shim::dispatch::system_only_variable_for_tool("node").is_some() {
+        return match crate::shim::dispatch::resolve_effective_tool(
+            "node",
+            super::env::config::EffectiveMode::SystemOnly,
+        ) {
+            Ok(node) => crate::shim::exec::exec_tool(
+                &node.expect("system-only resolution returns a path or an error"),
+                &args,
+                env,
+            ),
+            Err(error) => {
+                output::error(&format!("vpx: {error}"));
+                1
+            }
+        };
+    }
+    // Dispatch assumes the shell's PATH lookup already preferred a system-first Node.js,
+    // so repeat that lookup here.
+    if let Ok(config) = super::env::config::load_config().await
         && config.shim_mode_for_tool("node") == super::env::config::ShimMode::SystemFirst
         && let Some(node) = crate::shim::dispatch::find_system_tool("node")
     {

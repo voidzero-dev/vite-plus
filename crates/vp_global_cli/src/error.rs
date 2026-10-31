@@ -52,16 +52,19 @@ pub enum Error {
     #[error("Upgrade error: {0}")]
     Upgrade(Str),
 
-    /// A `VP_*_MANAGER=system-only` variable requires a system tool that PATH lacks.
-    #[error("{variable}=system-only requires a system '{tool}' on PATH, but none was found")]
+    /// A `VP_*_MANAGER=system-only` variable requires a system tool that PATH
+    /// lacks before the Vite+ shims.
+    #[error(
+        "{variable}=system-only requires a system '{tool}' on PATH before the Vite+ shims, but none was found"
+    )]
     SystemToolNotFound { tool: Str, variable: &'static str },
 
-    /// The system tool selected under `VP_*_MANAGER=system-only` keeps
-    /// forwarding back to the Vite+ shim.
+    /// A `VP_*_MANAGER=system-only` tool reached the Vite+ shim at the front
+    /// of PATH, where managed `config.json` places it.
     #[error(
-        "{variable}=system-only requires a system '{tool}' on PATH that does not forward back to Vite+, but the one in '{dir}' re-entered the shim more than {limit} times with the same arguments and directory"
+        "{variable}=system-only requires a system '{tool}', but the Vite+ shim comes first on PATH; run `vp env off {component}` to move the shims after the system tools"
     )]
-    SystemToolReentry { tool: Str, variable: &'static str, dir: String, limit: u32 },
+    SystemToolBehindShim { tool: Str, variable: &'static str, component: Str },
 
     #[error("{0}")]
     Setup(#[from] vp_setup::error::Error),

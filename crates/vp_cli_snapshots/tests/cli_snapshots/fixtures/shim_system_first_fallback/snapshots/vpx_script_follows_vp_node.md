@@ -1,6 +1,6 @@
 # vpx_script_follows_vp_node
 
-vpx script mode runs on the Node.js that vp node selects, including system-first mode.
+vpx script mode runs on the Node.js that vp node selects, including system-first and system-only modes.
 
 ## `node ../setup-system-node.cjs`
 
@@ -45,4 +45,12 @@ Managed mode ignores system Node.js.
 
 ```
 false
+```
+
+## `PATH=${workspace}/system-bin${PATH_SEPARATOR}${VP_HOME}/bin${PATH_SEPARATOR}${PATH} VP_NODE_MANAGER=system-only VP_NODE_DIST_MIRROR=http://127.0.0.1:1 NPM_CONFIG_REGISTRY=http://127.0.0.1:1 vpx --print process.execPath.includes('system-bin')`
+
+System-only: the system Node.js first on PATH, as vp node selects, even with managed config.json.
+
+```
+true
 ```
