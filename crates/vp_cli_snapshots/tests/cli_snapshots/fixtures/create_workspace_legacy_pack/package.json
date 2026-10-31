@@ -1,0 +1,5 @@
+{
+  "name": "workspace-legacy-pack",
+  "private": true,
+  "packageManager": "pnpm@11.24.0"
+}
