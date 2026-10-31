@@ -13,7 +13,8 @@
 
 import { dirname, join } from 'node:path';
 
-import { CONFIG_METADATA_ENV, DEFAULT_ENVS, resolve } from './utils/constants.ts';
+import { CONFIG_METADATA_ENV, DEFAULT_ENVS } from './utils/constants.ts';
+import { resolveProjectTool } from './utils/resolve-project-tool.ts';
 import { resolveTsgolintExecutable } from './utils/tsgolint-path.ts';
 
 export { resolveWindowsTsgolintExecutable } from './utils/tsgolint-path.ts';
@@ -37,11 +38,11 @@ export async function lint(): Promise<{
   // resolve the main entry point and derive the bin path from it.
   // resolve('oxlint') returns .../oxlint/dist/index.js, so we need to go up
   // two directories (past 'dist') to reach the package root.
-  const oxlintMainPath = resolve('oxlint');
+  const oxlintMainPath = resolveProjectTool('oxlint');
   const oxlintPackageRoot = dirname(dirname(oxlintMainPath));
   const binPath = join(oxlintPackageRoot, 'bin', 'oxlint');
   const oxlintTsgolintPath = resolveTsgolintExecutable(
-    resolve('oxlint-tsgolint/bin/tsgolint'),
+    resolveProjectTool('oxlint-tsgolint/bin/tsgolint'),
     import.meta.url,
   );
   const result = {
