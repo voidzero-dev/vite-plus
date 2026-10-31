@@ -821,10 +821,15 @@ function fileUsesTsx(content: string, file: string): boolean {
     return jsonUsesTsx(parseJsonc(content), false);
   }
   if (CODE_EXTENSIONS.has(extension)) {
-    return TSX_CODE_REFERENCE.test(content);
+    // Comments and JSDoc/Markdown fences, such as ```` ```tsx ````, are not real
+    // uses of tsx.
+    return TSX_CODE_REFERENCE.test(stripComments(content));
   }
   // An extensionless file can be JavaScript, such as an executable, as well as shell.
-  return TSX_TEXT_REFERENCE.test(content) || (extension === '' && TSX_CODE_REFERENCE.test(content));
+  return (
+    TSX_TEXT_REFERENCE.test(content) ||
+    (extension === '' && TSX_CODE_REFERENCE.test(stripComments(content)))
+  );
 }
 
 /**

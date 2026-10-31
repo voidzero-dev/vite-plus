@@ -742,4 +742,40 @@ describe('migrateTsxToVpx', () => {
       'Kept the tsx devDependency in package.json: `scripts` in packages/b/package.json still uses tsx.',
     ]);
   });
+
+  it('removes tsx when the only reference is a code fence inside a JSDoc comment', () => {
+    write('package.json', {
+      type: 'module',
+      scripts: { start: 'tsx index.ts' },
+      devDependencies: { tsx: '^4.20.0' },
+    });
+    write(
+      'index.ts',
+      [
+        '/**',
+        ' * @example',
+        ' * ```tsx',
+        ' * const isEditing = useEditingStore(selectIsEditing);',
+        ' * ```',
+        ' */',
+        'export function useEditingStore() {}',
+        '',
+      ].join('\n'),
+    );
+    const report = createMigrationReport();
+
+    expect(detectTsxProject(root)).toBe(true);
+    expect(migrateTsxToVpx(root, undefined, report)).toEqual({
+      changed: true,
+      dependencyRemoved: true,
+    });
+
+    expect(readJson('package.json')).toEqual({
+      type: 'module',
+      scripts: { start: 'vpx index.ts' },
+      devDependencies: {},
+    });
+    expect(report.tsxMigrated).toBe(true);
+    expect(report.warnings).toEqual([]);
+  });
 });
