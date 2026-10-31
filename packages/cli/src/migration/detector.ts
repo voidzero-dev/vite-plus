@@ -85,6 +85,12 @@ const MIGRATION_WARNING_DETECTIONS = [
     warning:
       'Jest configuration detected. Vitest is highly compatible with Jest, and so we recommend migrating. See the Vitest Jest migration guide: https://vitest.dev/guide/migration/jest, then re-run vp migrate.',
   },
+  {
+    packageName: 'turbo',
+    configFiles: ['turbo.json'],
+    warning:
+      'Turborepo detected (turbo.json). Task orchestration and caching were not migrated; see https://viteplus.dev/guide/run and https://viteplus.dev/guide/cache.',
+  },
 ] as const;
 
 function hasDependency(packageJson: Record<string, unknown>, packageName: string): boolean {
