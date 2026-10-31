@@ -46,6 +46,9 @@ pub enum FieldValue {
 ///   values). Absent keys may exist via the spread and are treated as
 ///   [`FieldValue::NonStatic`] by [`FieldMap::get`], but not by
 ///   [`FieldMap::get_declared`].
+///
+/// Either way, [`FieldMap::get`] treats every field as
+/// [`FieldValue::NonStatic`] when `plugins` may be non-static.
 pub struct FieldMap {
     map: FxHashMap<Box<str>, FieldValue>,
     open: bool,
@@ -64,8 +67,11 @@ impl FieldMap {
         Self { map: FxHashMap::default(), open: false }
     }
 
-    /// Look up a field by name.
+    /// Look up a field's runtime value.
     ///
+    /// - non-static `plugins` (including ones that may exist in a spread):
+    ///   returns `Some(NonStatic)` for every key, because plugin `config`
+    ///   hooks can add or override any field.
     /// - closed map: returns the stored value, or `None` if the field is
     ///   definitively absent.
     /// - open map: returns the stored value if explicitly declared after the
@@ -73,15 +79,23 @@ impl FieldMap {
     ///   may exist in the spread).
     #[must_use]
     pub fn get(&self, key: &str) -> Option<FieldValue> {
+        match self.get_ignoring_plugins("plugins") {
+            Some(FieldValue::NonStatic) => Some(FieldValue::NonStatic),
+            _ => self.get_ignoring_plugins(key),
+        }
+    }
+
+    fn get_ignoring_plugins(&self, key: &str) -> Option<FieldValue> {
         self.map.get(key).cloned().or_else(|| self.open.then_some(FieldValue::NonStatic))
     }
 
     /// Like [`get`](Self::get), but only for fields the config explicitly
     /// declares. Unlike `get`, an open map (spread, computed keys, or an
     /// unanalyzable config) does NOT report undeclared keys as `NonStatic`:
-    /// they return `None`. Use this when a merely-possible field must not
-    /// change behavior (e.g. `defaultPackage`, where erroring on every
-    /// unanalyzable config would break unrelated commands).
+    /// they return `None`. Plugins do not affect the result either. Use this
+    /// when a merely-possible field must not change behavior (e.g.
+    /// `defaultPackage`, where erroring on every unanalyzable config would
+    /// break unrelated commands).
     #[must_use]
     pub fn get_declared(&self, key: &str) -> Option<FieldValue> {
         self.map.get(key).cloned()
@@ -426,8 +440,8 @@ fn count_returns_in_stmt(stmt: &Statement<'_>) -> usize {
 /// Fields declared after the last spread/computed key are still extractable:
 ///
 /// ```js
-/// { a: 1, ...x, b: 2 }  // open{ b: Json(2) };  get("a") = NonStatic, get("b") = Json(2)
-/// { a: 1, [k]: 2, b: 3 } // open{ b: Json(3) };  get("a") = NonStatic, get("b") = Json(3)
+/// { a: 1, ...x, b: 2 }  // open{ b: Json(2) };  get_declared("a") = None, get_declared("b") = Json(2)
+/// { a: 1, [k]: 2, b: 3 } // open{ b: Json(3) };  get_declared("a") = None, get_declared("b") = Json(3)
 /// { a: 1, b: 2 }         // closed{ a: Json(1), b: Json(2) }; get("c") = None
 /// ```
 fn extract_object_fields(obj: &oxc_ast::ast::ObjectExpression<'_>) -> FieldMap {
@@ -584,6 +598,11 @@ mod tests {
         // Closed map without the key: definitively absent either way.
         let map = parse("export default { run: {} };");
         assert_eq!(map.get_declared("defaultPackage"), None);
+    }
+
+    /// Shorthand for asserting a field is declared as JSON, ignoring spreads and plugins.
+    fn assert_declared_json(map: &FieldMap, key: &str, expected: serde_json::Value) {
+        assert_eq!(map.get_declared(key), Some(FieldValue::Json(expected)));
     }
 
     /// Shorthand for asserting a field is `NonStatic`.
@@ -947,8 +966,30 @@ mod tests {
                 plugins: [myPlugin()],
             }",
         );
-        assert_json(&result, "run", serde_json::json!({ "cacheScripts": true }));
+        assert_declared_json(&result, "run", serde_json::json!({ "cacheScripts": true }));
         assert_non_static(&result, "plugins");
+    }
+
+    #[test]
+    fn non_static_plugins_make_every_field_non_static() {
+        // Plugin `config` hooks can add or override any field.
+        let result = parse(
+            r"export default {
+                run: { cacheScripts: true },
+                plugins: [myPlugin()],
+            }",
+        );
+        assert_non_static(&result, "run");
+        assert_non_static(&result, "lint");
+        assert_declared_json(&result, "run", serde_json::json!({ "cacheScripts": true }));
+    }
+
+    #[test]
+    fn static_plugins_keep_fields_static() {
+        // JSON values cannot contain hooks, so a static `plugins` field changes nothing.
+        let result = parse(r"export default { run: { cacheScripts: true }, plugins: [] }");
+        assert_json(&result, "run", serde_json::json!({ "cacheScripts": true }));
+        assert!(result.get("lint").is_none());
     }
 
     #[test]
@@ -1005,7 +1046,7 @@ mod tests {
             ",
         );
         assert_non_static(&result, "x");
-        assert_json(&result, "b", serde_json::json!("ok"));
+        assert_declared_json(&result, "b", serde_json::json!("ok"));
     }
 
     #[test]
@@ -1021,7 +1062,7 @@ mod tests {
         assert_non_static(&result, "a");
         assert_non_static(&result, "run");
         assert_non_static(&result, "x");
-        assert_json(&result, "b", serde_json::json!("ok"));
+        assert_declared_json(&result, "b", serde_json::json!("ok"));
     }
 
     #[test]
@@ -1038,11 +1079,20 @@ mod tests {
 
     #[test]
     fn spread_then_explicit_run() {
-        // run is explicitly declared after the spread and is still extractable as Json.
+        // The spread may contain plugins, so `run` is only static once `plugins` is declared after it.
         let result = parse(
             r"
             const base = { plugins: [] };
             export default { ...base, run: { cacheScripts: true } }
+            ",
+        );
+        assert_non_static(&result, "run");
+        assert_declared_json(&result, "run", serde_json::json!({ "cacheScripts": true }));
+
+        let result = parse(
+            r"
+            const base = { plugins: [] };
+            export default { ...base, plugins: [], run: { cacheScripts: true } }
             ",
         );
         assert_json(&result, "run", serde_json::json!({ "cacheScripts": true }));
@@ -1065,7 +1115,7 @@ mod tests {
             ",
         );
         assert_non_static(&result, "dynamic");
-        assert_json(&result, "plain", serde_json::json!("ok"));
+        assert_declared_json(&result, "plain", serde_json::json!("ok"));
     }
 
     #[test]
@@ -1080,7 +1130,7 @@ mod tests {
         );
         assert_non_static(&result, "a");
         assert_non_static(&result, "run");
-        assert_json(&result, "b", serde_json::json!(2));
+        assert_declared_json(&result, "b", serde_json::json!(2));
     }
 
     #[test]
@@ -1210,7 +1260,7 @@ mod tests {
             });
             ",
         );
-        assert_json(&result, "run", serde_json::json!({ "cacheScripts": true }));
+        assert_declared_json(&result, "run", serde_json::json!({ "cacheScripts": true }));
         assert_non_static(&result, "plugins");
     }
 
@@ -1244,7 +1294,7 @@ mod tests {
             });
             ",
         );
-        assert_json(&result, "run", serde_json::json!({ "cacheScripts": true }));
+        assert_declared_json(&result, "run", serde_json::json!({ "cacheScripts": true }));
         assert_non_static(&result, "plugins");
     }
 

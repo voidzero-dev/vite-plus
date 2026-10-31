@@ -38,16 +38,19 @@ Searches for config files in the same order as Vite's
 
 ## Return type
 
-`resolve_static_config` returns `Option<FxHashMap<Box<str>, FieldValue>>`:
+`resolve_static_config` returns a `FieldMap`. `FieldMap::get` answers what a field is at runtime:
 
-- **`None`** — config is not statically analyzable (no config file, parse error, no
-  `export default`/`module.exports`, or the exported value is not an object literal).
-  Caller should fall back to runtime evaluation (e.g. NAPI).
-- **`Some(map)`** — config object was successfully located:
-  - `FieldValue::Json(value)` — field value extracted as pure JSON
-  - `FieldValue::NonStatic` — field exists but contains non-JSON expressions
-    (function calls, variables, template literals with interpolation, etc.)
-  - Key absent — field does not exist in the config object
+- `Some(FieldValue::Json(value))` — field value extracted as pure JSON
+- `Some(FieldValue::NonStatic)` — field contains non-JSON expressions, may come from a spread or
+  computed key, or the config is not statically analyzable. Caller should fall back to runtime
+  evaluation (e.g. NAPI).
+- `None` — field does not exist in the config object
+
+When `plugins` is non-static, or may exist in a spread, `get` returns `NonStatic` for every field:
+plugin `config` hooks can add or override any field at runtime.
+
+`FieldMap::get_declared` only reports fields written in the config object, ignoring spreads and
+plugins. Use it for heuristics where a field that merely might exist must not change behavior.
 
 ## Limitations
 
