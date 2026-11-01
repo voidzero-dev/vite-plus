@@ -124,8 +124,8 @@ selection through `module.register` data before its first resolve.
 oxc-node stores these values in a loader context per thread, as introduced in
 [oxc-node#888](https://github.com/oxc-project/oxc-node/pull/888). Async native
 transform tasks carry their caller's context onto the task thread.
-`packages/tools/src/patch-oxc-node.ts` exposes the upstream frozen tsconfig APIs
-to embedders while keeping their NAPI registration disabled. The off-thread ESM
+Upstream exposes the frozen tsconfig APIs to embedders while keeping their NAPI
+registration disabled ([oxc-node#895](https://github.com/oxc-project/oxc-node/pull/895)). The off-thread ESM
 hooks receive the frozen tsconfig, diagnostic source, and dependency policy from
 the preload's thread.
 

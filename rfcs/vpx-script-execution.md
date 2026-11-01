@@ -201,7 +201,7 @@ oxc-node is vendored the way Rolldown is:
 
 - `packages/tools/.upstream-versions.json` pins the oxc-node commit, including the worker loader isolation from [oxc-node#888](https://github.com/oxc-project/oxc-node/pull/888). The daily `upgrade-deps` workflow advances it to stable tags that contain the pinned commit.
 - `sync-remote` clones it into the gitignored `oxc-node/` and runs `packages/tools/src/patch-oxc-node.ts`. CI checks it out in the shared clone action and the security workflow and runs the script before any cargo command, because `Cargo.lock` records the rewritten manifest.
-- `patch-oxc-node.ts` points oxc-node's `oxc` dependency at the workspace version, so the binding links one copy of oxc. It also exposes the frozen tsconfig APIs to embedders while keeping their NAPI registration disabled.
+- `patch-oxc-node.ts` points oxc-node's `oxc` dependency at the workspace version and adapts an AST predicate, so the binding compiles against one copy of oxc. Upstream exposes the frozen tsconfig APIs to embedders while keeping their NAPI registration disabled.
 - The root `Cargo.toml` adds `oxc-node = { path = "./oxc-node", default-features = false, features = ["yarn_pnp"] }` and excludes `oxc-node/` from the workspace lints. `yarn_pnp` matches the `oxc_resolver` feature the workspace enables, which changes oxc-node's file system signature. Without its `napi` feature, oxc-node links as a plain library with no NAPI exports and no global allocator, so nothing collides with the `transform` export that `rolldown_binding` links.
 - The binding's `oxc-node` feature compiles `packages/cli/binding/src/oxc_node.rs`; `build.ts` enables `rolldown,oxc-node` for every build, so dev builds compile it too, at no extra crate cost.
 
