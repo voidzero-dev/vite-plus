@@ -17,7 +17,7 @@ defaults:
 jobs:
   inputs:
     name: Detect native input changes
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -248,7 +248,7 @@ jobs:
     name: Clear stale binary size report
     needs: inputs
     if: needs.inputs.outputs.changed != 'true' && github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       issues: write
@@ -276,7 +276,7 @@ jobs:
   comment:
     name: Report binary size
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     # Fork runs get a read-only token regardless of this block; the script
     # then keeps the report in the job summary and skips the PR comment.

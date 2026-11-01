@@ -37,7 +37,7 @@ jobs:
       github.repository == 'voidzero-dev/vite-plus' &&
       github.event.label.name == 'preview-build'
     name: Compute preview metadata
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     outputs:
@@ -87,7 +87,7 @@ jobs:
       github.repository == 'voidzero-dev/vite-plus' &&
       github.event.label.name == 'preview-build'
     name: Pack preview packages
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs:
       - prepare
       - build-rust
