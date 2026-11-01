@@ -16,7 +16,7 @@ concurrency:
 jobs:
   cleanup:
     if: github.repository == 'voidzero-dev/vite-plus' && github.event.repository.fork == false
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       packages: write

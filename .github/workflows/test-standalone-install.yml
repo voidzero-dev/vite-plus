@@ -51,7 +51,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             name: Linux x64 glibc
           - os: macos-15-intel
             name: macOS x64
@@ -152,7 +152,7 @@ jobs:
 
   test-install-sh-provenance:
     name: Test install.sh (npm provenance)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
@@ -165,7 +165,7 @@ jobs:
 
   test-vp-upgrade-provenance:
     name: Test vp upgrade (npm provenance)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
@@ -261,7 +261,7 @@ jobs:
 
   test-install-sh-layout:
     name: Test install.sh layout (fresh split + grandfather)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     env:
@@ -588,7 +588,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             name: Linux x64 glibc
           - os: macos-latest
             name: macOS ARM64
@@ -716,7 +716,7 @@ jobs:
 
   test-install-sh-readonly-config:
     name: Test legacy install.sh (readonly shell config)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     env:
@@ -762,7 +762,7 @@ jobs:
 
   test-install-sh-arm64:
     name: Test install.sh (Linux ARM64 glibc via QEMU)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
@@ -830,7 +830,7 @@ jobs:
 
   test-install-sh-musl-x64:
     name: Test install.sh (Linux x64 musl)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       # Mirrors of official Node.js releases do not provide musl archives.
       VP_NODE_DIST_MIRROR: https://unofficial-builds.nodejs.org/download/release
@@ -892,7 +892,7 @@ jobs:
 
   test-install-sh-musl-arm64:
     name: Test install.sh (Linux ARM64 musl via QEMU)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       # Mirrors of official Node.js releases do not provide musl archives.
       VP_NODE_DIST_MIRROR: https://unofficial-builds.nodejs.org/download/release
