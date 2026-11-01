@@ -534,15 +534,35 @@ jobs:
                   check_run_id: upgrade.id,
                 })
               : [];
-            const timeouts = [
-              ...new Set(
-                annotations
-                  .map(({ message }) => message)
-                  .filter((message) =>
-                    /^The action .*has timed out|has exceeded the maximum execution time/.test(message),
-                  ),
-              ),
-            ];
+            const messages = [...new Set(annotations.map(({ message }) => message))];
+            const timeouts = messages.filter((message) => /has exceeded the maximum execution time/.test(message));
+            const stepTimeouts = messages.filter((message) => /^The action .*has timed out/.test(message));
+            if (stepTimeouts.length > 0) {
+              // Hosted runners omit the step name from this message. It is logged as the step
+              // ends, in the second the next step starts, so the step that timed out is the
+              // last one that started in an earlier second.
+              const named = new Set();
+              try {
+                const { data: log } = await github.rest.actions.downloadJobLogsForWorkflowRun({
+                  owner,
+                  repo,
+                  job_id: upgrade.id,
+                });
+                const lines = String(log).matchAll(
+                  /^(\S{19})\S* ##\[error\](The action [^\r\n]*has timed out[^\r\n]*)/gm,
+                );
+                for (const [, second, message] of lines) {
+                  const loggedAt = new Date(`${second}Z`);
+                  const step = upgrade.steps
+                    .filter((step) => step.started_at && new Date(step.started_at) < loggedAt)
+                    .at(-1);
+                  named.add(step ? `\`${step.name}\`: ${message}` : message);
+                }
+              } catch (error) {
+                core.warning(`Could not read the upgrade job log: ${error.message}`);
+              }
+              timeouts.push(...(named.size > 0 ? named : stepTimeouts));
+            }
             const commandTimeouts = process.env.COMMAND_TIMEOUTS.trim();
             if (timeouts.length === 0 && !commandTimeouts) {
               core.info('No timeouts found.');
