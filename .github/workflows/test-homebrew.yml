@@ -24,7 +24,7 @@ jobs:
       (github.event_name == 'pull_request' &&
        contains(github.event.pull_request.labels.*.name, 'test: install-e2e') &&
        (github.event.action != 'labeled' || github.event.label.name == 'test: install-e2e'))
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     outputs:
@@ -64,7 +64,7 @@ jobs:
       platforms: >-
         [
           {"os":"macos-latest","target":"aarch64-apple-darwin"},
-          {"os":"ubuntu-latest","target":"x86_64-unknown-linux-gnu"},
+          {"os":"ubuntu-24.04","target":"x86_64-unknown-linux-gnu"},
           {"os":"ubuntu-24.04-arm","target":"aarch64-unknown-linux-gnu"}
         ]
 
@@ -82,7 +82,7 @@ jobs:
         include:
           - os: macos-latest
             target: aarch64-apple-darwin
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
