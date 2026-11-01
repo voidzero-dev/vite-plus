@@ -37,7 +37,7 @@ jobs:
         github.event.pull_request.head.repo.full_name == github.repository ||
         (github.event.action == 'labeled' && github.event.label.name == 'docs-preview')
       )
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
@@ -70,7 +70,7 @@ jobs:
       github.event.pull_request.head.repo.full_name != github.repository &&
       github.event.action == 'labeled' &&
       github.event.label.name == 'docs-preview'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     # A delayed old run must not cancel a build for a newer approved commit.
     concurrency:
