@@ -1,6 +1,6 @@
 # Upgrading Vite+
 
-Use `vp upgrade` to update the global `vp` binary. To update the local `vite-plus` package in a project, see [Update Vite+](/guide/upgrade-project).
+Use `vp upgrade` to update the global `vp` binary, or [Homebrew](#homebrew) if it owns your installation. To update the local `vite-plus` package in a project, see [Update Vite+](/guide/upgrade-project).
 
 ## Overview
 
@@ -93,11 +93,13 @@ The [official Homebrew tap](/guide/homebrew) owns its installed binary. Update i
 brew upgrade voidzero-dev/vite-plus/vp
 ```
 
-`vp upgrade` detects Homebrew installations and directs you to this command without downloading or installing another version. This also applies to `--force`, a specific version, and `--rollback`. Use Homebrew to manage these installations.
+`vp upgrade` detects the installed formula and shows its Homebrew upgrade command without downloading or installing another version. This also applies to `--force`, a specific version, and `--rollback`. The script installer's rollback and automatic pruning do not apply to Homebrew installations.
 
-First use installs the new version's per-user dependencies and preserves your management preferences.
+For the tap, run `vp` after upgrading to install the new version's dependencies in your user data directory. Setup preserves your management preferences.
 
-`vp upgrade --check` directs you to `brew outdated voidzero-dev/vite-plus/vp`. Automatic npm update checks and notices are disabled for Homebrew installations.
+For the tap, `vp upgrade --check` directs you to `brew outdated voidzero-dev/vite-plus/vp`. Automatic npm update checks and notices are disabled for Homebrew installations.
+
+If you installed Homebrew Core's `vite-plus`, use `brew upgrade vite-plus` or `brew outdated vite-plus` instead. Core provides its JavaScript dependencies with the formula. To change distributions, follow [Switch from Homebrew Core](/guide/homebrew#switch-from-homebrew-core); an upgrade does not switch taps.
 
 ## Preview Builds
 
@@ -112,6 +114,8 @@ You can find preview builds in pull requests that automatically update upstream 
 Preview builds are addressed by pull request number or commit SHA. They are not a stable version range, and you should avoid leaving them in long-lived branches unless a maintainer asks you to.
 
 ### Global `vp` Preview
+
+For a Homebrew installation, follow the [tap preview instructions](/guide/homebrew#test-a-preview-build).
 
 Install a preview build of the global CLI by passing `VP_PR_VERSION` to the installer. Pass a pull request number or a commit SHA:
 

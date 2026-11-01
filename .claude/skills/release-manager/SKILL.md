@@ -482,6 +482,8 @@ Local clients can also mislead in the other direction. npm and pnpm cache a look
 
    In an isolated Homebrew installation, update the tap, install or upgrade `voidzero-dev/vite-plus/vp`, and run `brew test voidzero-dev/vite-plus/vp`. Unset `HOMEBREW_VP_PR_VERSION` for stable verification. Confirm `"$(brew --prefix)/bin/vp" --version` reports the target version, so a script-install shim cannot mask the result. Keep the tap release pending if the formula update or these checks are incomplete.
 
+   After the first formula enablement PR merges, publish the guide's availability update through the [manual docs deployment procedure](../../../rfcs/deploy-docs-on-release.md#manual-deploys). Use a branch based on the current stable release tag with only the approved availability edits to `docs/guide/homebrew.md`. Review the diff and deployment SHA, then confirm that the production guide no longer shows the availability warning. The formula merge updates the main preview site; it does not update production documentation.
+
    ```bash
    npm view vite-plus version                       # X.Y.Z
    npm view @voidzero-dev/vite-plus-core version    # X.Y.Z
@@ -574,6 +576,7 @@ After the release ships and announcements are approved or confirmed complete, re
 - [ ] CI green; any fixes landed via separate PRs to main, merged back, and added to the changelog
 - [ ] Release PR merged; `release` environment approved by someone other than the merger; npm + GitHub release + Docker image all published
 - [ ] For a stable release, `HomebrewFormula/vp.rb` updated to the target version and verified archive checksums; all four published-artifact checks passed for the formula PR's latest changes before merge; Homebrew installation and `brew test` verified without the preview selector
+- [ ] For the first tap release, guide availability edits deployed from the stable release plus the scoped documentation fix; production guide no longer shows the availability warning
 - [ ] GitHub release notes polished (release manager approved before applying), retitled, and validated; Installation ends with the Docker usage block and is followed by the Create a New App section; the prerelease flag matches the version
 - [ ] Installs verified (npm versions + latest tag, `vp upgrade`, `vp --version` output inside the ghcr Docker image)
 - [ ] Announcements handed over in chat (Discord and any requested X drafts), or confirmed complete by the release manager

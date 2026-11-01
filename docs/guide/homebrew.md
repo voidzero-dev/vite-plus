@@ -1,12 +1,14 @@
 # Homebrew tap
 
 ::: warning Availability
-Stable installation stays disabled until the first release with per-user Homebrew setup is published. Preview builds can be tested with the selector below.
+Stable installation stays disabled until a compatible release is published and its formula update passes the platform tests and is merged. You can [test a preview build](#test-a-preview-build) before then.
 Use the [script installer](/guide/global-cli) in the meantime.
 :::
 
-The official tap installs the native `vp` CLI and its dependency lockfile from GitHub Releases on macOS and glibc Linux, for ARM64 and x64.
-Homebrew needs no Node.js, pnpm, or npm registry access to install it.
+The official tap supports macOS and glibc Linux on ARM64 and x64. Homebrew manages the native `vp` executable; `vp` manages its JavaScript dependencies, downloaded Node.js versions, package managers, and settings in your user directories.
+Stable installation downloads the executable and its dependency lockfile from GitHub Releases. This step needs no existing Node.js or package manager installation, or npm registry access.
+
+## Install
 
 When the tap becomes available, run:
 
@@ -16,18 +18,18 @@ brew install voidzero-dev/vite-plus/vp
 vp
 ```
 
-The explicit repository URL is required. The formula is part of the Vite+ repository.
+The explicit repository URL is required because the formula is part of the Vite+ repository.
+If you already use Vite+, follow the steps to switch from the [script installer](#switch-from-the-script-installer) or [Homebrew Core](#switch-from-homebrew-core).
 
-On first use, `vp` prepares Node.js and pinned pnpm, then installs matching CLI dependencies from the published lockfile.
-By default, installation uses the Node.js version embedded in that CLI release from `.node-version`.
-It accepts a compatible `VP_SETUP_NODE_VERSION` override and the same lockfile recovery options as the [script installer](/guide/global-cli#installation-variables).
-This installation runtime does not change your Node.js version selection for projects or tool shims.
-`vp` stores dependencies in `<DATA>/cli-packages/<version>/<platform>` and sets up your preferences and shims.
+## First use
+
+On first use, `vp` installs its matching CLI dependencies and configures your shell and tool-management preferences. This step needs access to Node.js downloads and your npm registry.
+Setup uses the release's pinned Node.js and pnpm versions, even if you choose to prefer system tools. A compatible [`VP_SETUP_NODE_VERSION`](/guide/global-cli#vp-setup-node-version) can override the installation runtime without changing Node.js selection for your projects.
+`vp` stores dependencies in `<DATA>/cli-packages/<version>/<platform>`.
 `<DATA>` comes from the [Vite+ directory configuration](/guide/global-cli#installation-variables).
-The native executable stays under Homebrew's control. Later invocations reuse the completed setup.
-`vp env doctor` shows both locations and checks whether CLI dependencies are complete without downloading anything.
-If dependencies are incomplete, fix the reported problem and run `vp --help` to retry setup.
-Configured tool shims can still run cached Node.js, package managers, and global packages while CLI dependency repair is pending.
+
+Open a new terminal after setup so the shims are available on `PATH`. Later invocations reuse the completed setup.
+Use [`vp env on` and `vp env off`](/guide/env) to change which tools `vp` manages.
 
 ## Custom npm registry
 
@@ -43,20 +45,48 @@ You can select another file with `NPM_CONFIG_USERCONFIG` or override the registr
 Relative user-config paths resolve from your current directory. No Homebrew-specific npm variables are required.
 
 Authentication failures stop setup. Fix the configuration and run `vp` again; setup preserves your management choices.
-If pnpm fails, setup reports its exit code and omits registry output, which can contain credentials.
+
+## Recover from failed setup
+
+Run `vp env doctor` to inspect the executable, dependency directory, and shims. Its CLI dependency check reads local files and does not install or repair dependencies. Other checks can fetch Node.js version metadata.
+
+Fix the reported configuration, access, or disk-space problem, then run `vp --help` to retry setup.
+For a lockfile error, the [installer recovery option](/guide/global-cli#vp-setup-skip-install-lockfile) also works with Homebrew:
+
+```bash
+VP_SETUP_SKIP_INSTALL_LOCKFILE=1 vp --help
+```
+
+This resolves dependencies without the published lockfile. A later invocation without the override restores the normal lockfile checks and can reinstall those dependencies.
+If pnpm fails, the reported log contains its exit code and recognized error codes, without raw package-manager output.
+Configured tool shims can run cached Node.js, package managers, and global packages independently of CLI dependency repair.
 
 ## Switch from the script installer
 
-Install the tap with the commands above. Then invoke Homebrew's executable directly, so an existing script-install shim cannot take precedence:
+Run the `brew tap` and `brew install` commands above. Then invoke Homebrew's executable directly, so an existing script-install shim cannot take precedence:
 
 ```bash
 "$(brew --prefix)/bin/vp" env setup --refresh
-hash -r
 ```
 
 Use the same directory overrides as your existing installation.
 Setup preserves your preferences, runtimes, and global packages, and updates their shims to Homebrew's public `vp` command.
 Do not run `vp implode` to migrate: it removes that user data.
+Open a new terminal after switching.
+
+## Switch from Homebrew Core
+
+Core's `vite-plus` formula and this tap provide the same commands and cannot be installed together. Once the stable tap is available, switch with:
+
+```bash
+brew tap voidzero-dev/vite-plus https://github.com/voidzero-dev/vite-plus
+brew uninstall vite-plus
+brew install voidzero-dev/vite-plus/vp
+"$(brew --prefix)/bin/vp" env setup --refresh
+```
+
+Keep your existing directory settings and open a new terminal afterward. `brew uninstall` keeps your Vite+ user data; the setup command preserves your preferences, runtimes, and global packages. Do not run `vp implode` during the switch.
+You can also stay on Core and continue using `brew upgrade vite-plus`.
 
 ## Upgrade or remove
 
@@ -64,7 +94,7 @@ Do not run `vp implode` to migrate: it removes that user data.
 brew upgrade voidzero-dev/vite-plus/vp
 ```
 
-The first invocation of the new version installs its matching dependencies and preserves your preferences.
+Run `vp` after upgrading to prepare its matching dependencies. Setup preserves your preferences.
 `vp upgrade` identifies the official tap and directs you to `brew upgrade voidzero-dev/vite-plus/vp`.
 
 For complete removal, remove your user data before uninstalling the executable:
@@ -74,23 +104,32 @@ vp implode
 brew uninstall voidzero-dev/vite-plus/vp
 ```
 
-`brew uninstall` alone keeps user data. Each user can remove their own data with `vp implode` before the shared executable is removed.
+`brew uninstall` alone keeps user data. On a shared machine, each operating-system account can remove its own data with `vp implode` before the executable is removed.
 
 ## Test a preview build
 
-Set `HOMEBREW_VP_PR_VERSION` to a PR number or full commit SHA. The PR must have a published `preview-build` that includes Homebrew tap support.
+Set `HOMEBREW_VP_PR_VERSION` to a PR number or full commit SHA. The PR must have a published `preview-build` that includes Homebrew tap support. Use a full SHA to keep installation and verification on the same commit:
 
 ```bash
-HOMEBREW_VP_PR_VERSION="<pr-or-sha>" brew install voidzero-dev/vite-plus/vp
-HOMEBREW_VP_PR_VERSION="<pr-or-sha>" brew test voidzero-dev/vite-plus/vp
+brew tap voidzero-dev/vite-plus https://github.com/voidzero-dev/vite-plus
+HOMEBREW_VP_PR_VERSION="<full-commit-sha>" brew install voidzero-dev/vite-plus/vp
+HOMEBREW_VP_PR_VERSION="<full-commit-sha>" brew test voidzero-dev/vite-plus/vp
 ```
 
-Use `brew reinstall` instead of `brew install` to replace an installed build. Use a full SHA to keep installation and verification on the same commit.
-`brew test` uses temporary user data and does not change your shell configuration.
+Use `brew reinstall` instead of `brew install` to replace an installed tap build. If Core's `vite-plus` is installed, run `brew uninstall vite-plus` first; do not run `vp implode`.
+`brew test` uses temporary user data and does not change your shell configuration. Run `vp` afterward to set up the preview for your account. If switching from the script installer, [refresh its shims](#switch-from-the-script-installer) to use the Homebrew executable.
 
 Homebrew downloads only the native preview package from the registry bridge and verifies its checksum. It resolves PR numbers to the latest published commit, which can differ from the current PR head.
 First launch installs the matching dependencies from the bridge. An explicit `NPM_CONFIG_REGISTRY` must point to a registry that also serves those preview packages.
 
 The selector is specific to this tap. It does not change other Homebrew formulae, and no npm client is needed during `brew install`.
 To test changes to the formula itself, first check out the PR in the tap repository. Set `HOMEBREW_NO_AUTO_UPDATE=1` for these commands to keep that checkout.
-To return to a stable release once available, run `brew reinstall voidzero-dev/vite-plus/vp` without the selector.
+
+To return to a stable release once available, clear the overrides, restore the tap's `main` branch if you changed its checkout, and update it before reinstalling:
+
+```bash
+unset HOMEBREW_VP_PR_VERSION HOMEBREW_NO_AUTO_UPDATE
+git -C "$(brew --repository voidzero-dev/vite-plus)" switch main
+brew update
+brew reinstall voidzero-dev/vite-plus/vp
+```

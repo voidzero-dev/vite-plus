@@ -21,8 +21,9 @@ packaging requirements prevent delivering that model through the
   place application dependencies inside the formula prefix and prohibit automatic
   downloads of required code at runtime. Our shared installer prepares matching
   CLI dependencies in the invoking account's data directory on first use, using
-  that account's npm configuration. This constraint concerns the CLI payload;
-  it does not prohibit Node.js or package-manager management as a tool feature.
+  that account's npm configuration. Core can still support tool-management
+  features, but its formula also requires Homebrew's Node.js. The tap leaves
+  runtime and package-manager setup with `vp`, as the script installer does.
 
 Homebrew's [installation environment](https://github.com/Homebrew/brew/blob/main/Library/Homebrew/formula.rb)
 also isolates `HOME`, overrides `NPM_CONFIG_USERCONFIG`, and clears sensitive
@@ -119,9 +120,10 @@ CLI version and platform. Setup saves management choices before downloads and
 serializes concurrent attempts, so a failed attempt can retry without asking again.
 
 `vp env doctor`, `vp implode`, and `vp upgrade` bypass dependency setup and
-remain available after installation failures. Doctor checks dependency completeness
-without downloading anything. Configured tool shims can run independently of the
-CLI package, so an interrupted CLI installation does not block cached tools.
+remain available after installation failures. Doctor checks CLI dependency
+completeness from local files without installing or repairing dependencies;
+its Node.js checks can fetch version metadata. Configured tool shims run independently
+of the CLI package, so an interrupted CLI installation does not block cached tools.
 CLI invocations, including `vpr`, `vpx`, `vp --help`, and `vp --version`, still run
 setup when needed. Explicit installer requests also run setup.
 
@@ -196,10 +198,9 @@ continue to point through those links, even after Homebrew removes version `A`.
 └── vpx -> ../Cellar/vp/B/bin/vpx
 ```
 
-Running `vp` after the upgrade installs `B`'s dependencies and records completion.
-The new binary supplies its release's default Node.js pin; the formula needs no
-separate pin. Setup preserves preferences and reuses cached bootstrap tools that
-match the selected versions. Recovery commands retain the setup bypass described above.
+Running `vp` after the upgrade prepares `B`'s dependency directory through the
+same first-use setup and records completion. It preserves management preferences
+and reuses cached tools where their versions match. Recovery commands still bypass setup.
 
 ```text
 <DATA>/cli-packages/B/<platform>/
@@ -236,10 +237,12 @@ relative user-config paths resolve before pnpm changes directories. The
 shared downloader for metadata, integrity checks, caching, and locking.
 
 Setup retains the shared installer's explicit lockfile bypass option. Authentication
-failures stop setup without a public-registry fallback. Credentials stay out of
-command arguments, logs, and receipts; no Homebrew-specific npm settings are needed.
-Failure logs retain known error codes and fixed guidance for authentication,
-lockfile, and disk-space errors, without saving raw package-manager output.
+failures stop setup without a public-registry fallback. Use npm authentication
+settings for credentials, as above; registry URLs can appear in command arguments
+and HTTP diagnostics. No Homebrew-specific npm settings are needed.
+The pnpm failure log records the failed stage, exit code, and recognized error codes
+with guidance for authentication, lockfile, and disk-space errors. It does not save
+raw package-manager output, and setup receipts contain no npm authentication fields.
 
 ## Commands and migration
 
@@ -251,7 +254,7 @@ installed formula. For the official tap:
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
 | `vp upgrade`                               | Directs users to `brew upgrade voidzero-dev/vite-plus/vp`, including requests for explicit versions, force, or rollback. |
 | `vp upgrade --check`                       | Directs users to `brew outdated voidzero-dev/vite-plus/vp`.                                                              |
-| `vp env doctor`                            | Reports the Homebrew executable and checks CLI dependency completeness without downloading.                              |
+| `vp env doctor`                            | Reports the Homebrew executable and checks local CLI dependency state without installing dependencies.                   |
 | `vp implode`                               | Removes user-managed dependencies, runtimes, settings, and shims.                                                        |
 | `brew uninstall voidzero-dev/vite-plus/vp` | Removes the Homebrew package and keeps user data.                                                                        |
 
@@ -260,9 +263,11 @@ requires `vp implode` before `brew uninstall`; migration must preserve user data
 The formula conflicts with Core's `vite-plus` because both provide the same commands.
 
 Migration refreshes shims and preserves preferences, runtimes, and global packages.
-The [Homebrew guide](../docs/guide/homebrew.md#switch-from-the-script-installer)
-shows how to invoke Homebrew's binary when script-install shims take precedence.
-Core's upgrade notice also explains how to switch to the tap.
+The Homebrew guide covers switching from the
+[script installer](../docs/guide/homebrew.md#switch-from-the-script-installer) and
+[Core](../docs/guide/homebrew.md#switch-from-homebrew-core), including how to invoke
+Homebrew's binary when existing shims take precedence. Core's upgrade notice also
+shows its own upgrade command and the optional switch to the tap.
 
 ## Repository and releases
 
@@ -289,6 +294,12 @@ CLI or npm packages requires a new patch release. The first compatible release
 removes the disable gate through this process; older releases without the tap
 formula cannot enable it. Use a formula `revision` for recipe fixes to an enabled
 version; formula-only merges do not trigger product releases.
+
+The first formula update also removes the guide's availability warning. Since
+production documentation deploys from release commits, that later merge needs a
+[manual documentation deployment](deploy-docs-on-release.md#manual-deploys).
+Deploy only the availability edits on a branch based on the current stable tag,
+then verify the production guide. This avoids publishing unrelated unreleased changes.
 
 `HOMEBREW_VP_PR_VERSION` selects a published preview by PR number or full commit
 SHA. The formula downloads and verifies the native package from the registry bridge;

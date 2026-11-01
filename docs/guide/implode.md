@@ -35,4 +35,6 @@ brew uninstall voidzero-dev/vite-plus/vp
 
 The confirmation prompt explains that the Homebrew package will remain installed. After cleanup, `vp implode` shows the uninstall command for the owning formula.
 
+For Homebrew Core, use `brew uninstall vite-plus` instead. To switch from [the script installer](/guide/homebrew#switch-from-the-script-installer) or [Homebrew Core](/guide/homebrew#switch-from-homebrew-core) while keeping your data, follow the migration instructions instead of running `vp implode`.
+
 Restart your terminal before you run `vp` again. In Bash, you can run `hash -r` instead to clear cached command paths. If the Homebrew package is still installed, the next `vp` command starts first-run setup again.
