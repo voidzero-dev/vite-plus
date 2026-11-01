@@ -322,9 +322,9 @@ Commands that explicitly set `OXC_TRANSFORM_ALL` to anything other than `typescr
 
 Custom asynchronous `--loader` and `--experimental-loader` hooks stay in their original order when the register import changes. This supports project loaders for resolution and assets alongside the Vite+ TypeScript loader. It does not establish compatibility with a second TypeScript transformer or arbitrary synchronous `module.registerHooks()` chains.
 
-Node.js preload commands stay unchanged when an additional `--require` or `--import` can change loader settings, or inline code still calls standalone oxc-node APIs. Migration checks explicit local shebang loaders relative to the owning package for standalone API references, without following their imports. It leaves the paths unchanged: at runtime, relative loader paths use the caller's working directory, not the script's directory.
+Direct `oxnode` commands and Node.js preload commands stay unchanged when an additional `--require` or `--import` can change loader settings. Node.js commands also stay unchanged when inline code still calls standalone oxc-node APIs. Migration checks explicit local shebang loaders relative to the owning package for standalone API references, without following their imports. It leaves the paths unchanged: at runtime, relative loader paths use the caller's working directory, not the script's directory.
 
-The `@oxc-node/cli` and `@oxc-node/core` development dependencies are removed only when no remaining use needs them. Loader references, API imports, CI commands, hooks, and shell scripts can keep these dependencies installed. Runtime and peer dependencies stay in place.
+The `@oxc-node/cli` and `@oxc-node/core` development dependencies are removed only when no remaining use needs them. Loader references, API imports, CI commands, hooks, and shell scripts can keep these dependencies installed. Migration also checks files named by `--env-file` and `--env-file-if-exists`, regardless of their filename. If it cannot resolve or read an environment file, it keeps the dependencies for manual review. Runtime and peer dependencies stay in place.
 
 ## Continuous Integration Rules
 

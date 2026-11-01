@@ -748,7 +748,11 @@ function scanOptions(
           });
         }
       } else if (loader !== undefined) {
-        scanned.registerKeepReason ??= runner.registerPreloadKeepReason?.(name, loader);
+        const reason = runner.registerPreloadKeepReason?.(name, loader);
+        scanned.registerKeepReason ??= reason;
+        if (directRunner) {
+          scanned.keepReason ??= reason;
+        }
         if (loader.startsWith('.') || path.isAbsolute(loader)) {
           scanned.preloads.push(loader);
         }
@@ -893,7 +897,15 @@ export function detectScriptRunnerProject(
           ? runner.commandPattern.test(command)
           : rewriteScriptRunnerCommand(runner, command, dir).command !== command,
       ) ||
-      (runner.detectKeptUses && findRunnerUse(runner, dir) !== undefined) ||
+      (runner.detectKeptUses &&
+        findRunnerUse(
+          runner,
+          dir,
+          ownsRunnerAtRuntime(runner, pkg) ||
+            runner.dependencies.some(
+              (dependency) => pkg.devDependencies?.[dependency] !== undefined,
+            ),
+        ) !== undefined) ||
       sourceTreeMatches(
         dir,
         (content, file) => {
@@ -1018,7 +1030,11 @@ function rewriteRunnerShebangs(
  * Find a remaining use, including nested packages and build output that can resolve
  * the package's runner dependencies.
  */
-function findRunnerUse(runner: ScriptRunnerMigration, dir: string): string | undefined {
+function findRunnerUse(
+  runner: ScriptRunnerMigration,
+  dir: string,
+  retainUnverified = true,
+): string | undefined {
   let found: string | undefined;
   sourceTreeMatches(
     dir,
@@ -1026,11 +1042,13 @@ function findRunnerUse(runner: ScriptRunnerMigration, dir: string): string | und
       if (LOCKFILES.has(path.basename(file))) {
         return false;
       }
-      const uses = fileUsesRunner(runner, content, file);
-      if (uses) {
+      if (fileUsesRunner(runner, content, file)) {
         found = `${displayRelative(file)} still uses ${runner.name}`;
+      } else if (path.basename(file) !== 'package.json') {
+        // Source and shell files can start Node from an unknown working directory.
+        found = environmentFileUse(runner, content, undefined, retainUnverified);
       }
-      return uses;
+      return found !== undefined;
     },
     {
       crossPackageBoundaries: true,
@@ -1047,13 +1065,100 @@ function findRunnerUse(runner: ScriptRunnerMigration, dir: string): string | und
         )?.[0];
         if (field !== undefined) {
           found = `\`${field}\` in ${displayRelative(path.join(packageDir, 'package.json'))} still uses ${runner.name}`;
+        } else {
+          found = packageCommands(pkg)
+            .map((command) => environmentFileUse(runner, command, packageDir, retainUnverified))
+            .find((reason) => reason !== undefined);
+          // Tool options can also pass env files to Node, with an unknown cwd.
+          found ??= environmentFileUse(
+            runner,
+            JSON.stringify(
+              Object.fromEntries(
+                Object.entries(pkg).filter(
+                  ([key]) => !IGNORED_FIELDS.has(key) && key !== 'scripts' && key !== 'lint-staged',
+                ),
+              ),
+            ),
+            undefined,
+            retainUnverified,
+          );
         }
-        return field !== undefined;
+        return found !== undefined;
       },
       skipDirs: USE_SCAN_SKIP_DIRS,
     },
   );
   return found;
+}
+
+const ENV_FILE_OPTION = /--env[-_]file(?:[-_]if[-_]exists)?(?=$|[=\s'"])/;
+
+/** Explicit Node.js environment inputs need checking regardless of their extension. */
+function environmentFileUse(
+  runner: ScriptRunnerMigration,
+  command: string,
+  cwd?: string,
+  retainUnverified = true,
+): string | undefined {
+  if (!ENV_FILE_OPTION.test(command)) {
+    return undefined;
+  }
+  const unchecked = retainUnverified
+    ? `an explicit Node.js env file could load ${runner.name}, but vp migrate cannot check it`
+    : undefined;
+  const segments = parseLiteralCommands(command, true);
+  if (!cwd || !segments || /%\w+%/.test(command)) {
+    return unchecked;
+  }
+  for (const tokens of segments) {
+    const values = tokens.map(({ value }) => value);
+    if (SHELL_STATE_COMMANDS.includes(values[0]) || values[0] === 'chdir') {
+      cwd = undefined;
+    }
+    if (!values.some((value) => ENV_FILE_OPTION.test(value))) {
+      continue;
+    }
+    const start = getCommandStartIndex(values);
+    // Wrappers can change the working directory or interpret nested commands.
+    if (!cwd || values[start] !== 'node') {
+      return unchecked;
+    }
+    for (let index = start + 1; index < values.length; index++) {
+      const value = values[index];
+      if (value === '--' || !value.startsWith('-')) {
+        break;
+      }
+      const name = optionName(value);
+      const inline = value.includes('=');
+      const takesArgument = NODE_OPTIONS_WITH_VALUE.has(name);
+      const argument = inline ? value.slice(value.indexOf('=') + 1) : values[index + 1];
+      if (name === '--env-file' || name === '--env-file-if-exists') {
+        if (!argument) {
+          return unchecked;
+        }
+        const file = path.resolve(cwd, argument);
+        try {
+          if (runner.textReference.test(fs.readFileSync(file, 'utf8'))) {
+            return `${displayRelative(file)} still uses ${runner.name}`;
+          }
+        } catch {
+          // An optional file can exist on another machine or be generated later.
+          if (retainUnverified) {
+            return `the env file ${displayRelative(file)} could load ${runner.name}, but vp migrate cannot read it`;
+          }
+        }
+      } else if (
+        ENV_FILE_OPTION.test(value) ||
+        (takesArgument && argument && ENV_FILE_OPTION.test(argument))
+      ) {
+        return unchecked;
+      }
+      if (!inline && takesArgument) {
+        index++;
+      }
+    }
+  }
+  return undefined;
 }
 
 /** Whether a file still runs, imports, or loads the runner. */

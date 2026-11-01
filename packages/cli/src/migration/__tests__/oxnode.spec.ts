@@ -101,6 +101,8 @@ describe('rewriteOxnodeCommand', () => {
       'node --import vite-plus/register --import vite-plus/register a.ts',
     ],
     ['oxnode --import @oxc-node/core/register a.ts', 'vpx a.ts'],
+    ['oxnode --import vite-plus/register a.ts', 'vpx --import vite-plus/register a.ts'],
+    ['oxnode --loader ./image-loader.js a.ts', 'vpx --loader ./image-loader.js a.ts'],
     ['oxnode a.ts && oxnode watch b.ts', 'vpx a.ts && vpx --watch b.ts'],
     ["node -e 'console.log(1)' && oxnode a.ts", "node -e 'console.log(1)' && vpx a.ts"],
     ['concurrently "oxnode watch api.ts" "vp dev"', 'concurrently "vpx --watch api.ts" "vp dev"'],
@@ -114,6 +116,12 @@ describe('rewriteOxnodeCommand', () => {
 
   it.each([
     ['oxnode --watch a.ts', 'Node.js watcher'],
+    ['oxnode -r ./setup.cjs a.ts', 'additional startup preload'],
+    ['oxnode --require=dotenv/config a.ts', 'additional startup preload'],
+    ['oxnode --import ./setup.mjs a.ts', 'additional startup preload'],
+    ['oxnode --import=./setup.ts a.ts', 'additional startup preload'],
+    ['oxnode watch -r ./setup.cjs a.ts', 'additional startup preload'],
+    ['pnpm exec oxnode -r ./setup.cjs a.ts', 'additional startup preload'],
     ['node -r ./setup.cjs --import @oxc-node/core/register a.ts', 'additional startup preload'],
     [
       'node --require=dotenv/config --import @oxc-node/core/register a.ts',
@@ -254,6 +262,28 @@ describe('oxnode migration', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it('retains a direct runner whose startup preload enables dependency transforms', () => {
+    const devDependencies = { '@oxc-node/cli': '1.0.1', '@oxc-node/core': '1.0.1' };
+    write('package.json', {
+      scripts: { build: 'oxnode build.ts', run: 'oxnode -r ./setup.cjs entry.ts' },
+      devDependencies,
+    });
+    write('setup.cjs', "process.env.OXC_TRANSFORM_ALL = '1';\n");
+    write('entry.ts', "import value from 'jsx-dep'; console.log(value);\n");
+    const report = createMigrationReport();
+
+    expect(migrateOxnodeToVpx(root, undefined, report)).toEqual({
+      changed: true,
+      dependencyRemoved: false,
+    });
+    expect(readJson('package.json').scripts).toEqual({
+      build: 'vpx build.ts',
+      run: 'oxnode -r ./setup.cjs entry.ts',
+    });
+    expect(readJson('package.json').devDependencies).toEqual(devDependencies);
+    expect(report.warnings).toContainEqual(expect.stringContaining('additional startup preload'));
   });
 
   it('rewrites scripts, JSON staged tasks and shebangs, and removes unused packages', () => {
@@ -552,18 +582,21 @@ describe('oxnode migration', () => {
   });
 
   it.each([
-    'oxnode --import ./setup.ts a.ts',
-    'oxnode ./setup.ts',
-    'node --import @oxc-node/core/register --loader ./setup.ts a.ts',
-    'NODE_OPTIONS="--import @oxc-node/core/register --loader ./setup.ts" node a.ts',
-  ])('retains %s when a named file configures the standalone loader', (command) => {
+    ['oxnode --import ./setup.ts a.ts', 'additional startup preload'],
+    ['oxnode ./setup.ts', 'standalone oxc-node API'],
+    ['node --import @oxc-node/core/register --loader ./setup.ts a.ts', 'standalone oxc-node API'],
+    [
+      'NODE_OPTIONS="--import @oxc-node/core/register --loader ./setup.ts" node a.ts',
+      'standalone oxc-node API',
+    ],
+  ])('retains %s when a named file configures the standalone loader', (command, reason) => {
     write(
       'setup.ts',
       "import { setTsconfigPath } from '@oxc-node/core'; setTsconfigPath('cli.json');\n",
     );
     expect(rewriteOxnodeCommand(command, root)).toEqual({
       command,
-      kept: [expect.stringContaining('standalone oxc-node API')],
+      kept: [expect.stringContaining(reason)],
     });
   });
 
@@ -598,5 +631,145 @@ describe('oxnode migration', () => {
       run: 'node --env-file=.env.local run.ts',
     });
     expect(readJson('package.json').devDependencies['@oxc-node/core']).toBe('^1.0.0');
+  });
+
+  it.each([
+    'node --env-file=config/node.env run.ts',
+    'node --env-file config/runtime.conf run.ts',
+    'node --env-file-if-exists=config/runtime.conf run.ts',
+    'node --env-file-if-exists config/node.env run.ts',
+    'node --env_file=config/node.env run.ts',
+    'node --env_file_if_exists config/runtime.conf run.ts',
+    'node --env-file="config/node options.env" run.ts',
+    'node --env-file "config/node options.env" run.ts',
+    'node --env-file=config/safe.conf --env-file=config/runtime.conf run.ts',
+  ])('retains dependencies loaded through %s', (command) => {
+    const devDependencies = { '@oxc-node/cli': '^1.0.0', '@oxc-node/core': '^1.0.0' };
+    write('package.json', {
+      scripts: { build: 'oxnode build.ts', run: command },
+      devDependencies,
+    });
+    for (const file of ['config/node.env', 'config/runtime.conf', 'config/node options.env']) {
+      write(file, 'NODE_OPTIONS=--import=@oxc-node/core/register\n');
+    }
+    write('config/safe.conf', 'NODE_ENV=production\n');
+
+    expect(migrateOxnodeToVpx(root)).toEqual({ changed: true, dependencyRemoved: false });
+    expect(readJson('package.json').scripts).toEqual({ build: 'vpx build.ts', run: command });
+    expect(readJson('package.json').devDependencies).toEqual(devDependencies);
+  });
+
+  it.each(['--env-file', '--env-file-if-exists'])(
+    'removes unused dependencies when %s names a readable file without a runner',
+    (option) => {
+      const command = `node ${option}=config/runtime.conf run.ts`;
+      write('package.json', {
+        scripts: { build: 'oxnode build.ts', run: command },
+        devDependencies: { '@oxc-node/cli': '^1.0.0', '@oxc-node/core': '^1.0.0' },
+      });
+      write('config/runtime.conf', 'NODE_ENV=production\n');
+
+      expect(migrateOxnodeToVpx(root)).toEqual({ changed: true, dependencyRemoved: true });
+      expect(readJson('package.json').scripts).toEqual({ build: 'vpx build.ts', run: command });
+      expect(readJson('package.json').devDependencies).toEqual({});
+    },
+  );
+
+  it.each([
+    'node --env-file=config/missing.env run.ts',
+    'node --env-file-if-exists=config/missing.env run.ts',
+    'node --env-file=$ENV_FILE run.ts',
+    'node --env-file=%ENV_FILE% run.ts',
+    'cd config && node --env-file=node.env run.ts',
+    'custom-launcher node --env-file=config/safe.conf run.ts',
+  ])('retains dependencies when the runtime env file cannot be checked in %s', (command) => {
+    const devDependencies = { '@oxc-node/cli': '^1.0.0', '@oxc-node/core': '^1.0.0' };
+    write('package.json', {
+      scripts: { build: 'oxnode build.ts', run: command },
+      devDependencies,
+    });
+    write('node.env', 'NODE_ENV=production\n');
+    write('config/safe.conf', 'NODE_ENV=production\n');
+    write('config/node.env', 'NODE_OPTIONS=--import=@oxc-node/core/register\n');
+
+    expect(migrateOxnodeToVpx(root)).toEqual({ changed: true, dependencyRemoved: false });
+    expect(readJson('package.json').scripts).toEqual({ build: 'vpx build.ts', run: command });
+    expect(readJson('package.json').devDependencies).toEqual(devDependencies);
+  });
+
+  it('resolves a workspace env file relative to the package that runs Node.js', () => {
+    const devDependencies = { '@oxc-node/cli': '^1.0.0', '@oxc-node/core': '^1.0.0' };
+    write('package.json', { devDependencies });
+    write('config/runtime.conf', 'NODE_ENV=production\n');
+    write('packages/app/package.json', {
+      scripts: {
+        build: 'oxnode build.ts',
+        run: 'node --env-file=config/runtime.conf run.ts',
+      },
+    });
+    write('packages/app/config/runtime.conf', 'NODE_OPTIONS=--import=@oxc-node/core/register\n');
+
+    expect(migrateOxnodeToVpx(root, [{ name: 'app', path: 'packages/app' }])).toEqual({
+      changed: true,
+      dependencyRemoved: false,
+    });
+    expect(readJson('packages/app/package.json').scripts).toEqual({
+      build: 'vpx build.ts',
+      run: 'node --env-file=config/runtime.conf run.ts',
+    });
+    expect(readJson('package.json').devDependencies).toEqual(devDependencies);
+  });
+
+  it('retains dependencies when tool settings load an env file from an unknown directory', () => {
+    const devDependencies = { '@oxc-node/cli': '^1.0.0', '@oxc-node/core': '^1.0.0' };
+    write('package.json', {
+      scripts: { build: 'oxnode build.ts' },
+      ava: { nodeArguments: ['--env-file=config/runtime.conf'] },
+      devDependencies,
+    });
+    expect(migrateOxnodeToVpx(root)).toEqual({ changed: true, dependencyRemoved: false });
+    expect(readJson('package.json').devDependencies).toEqual(devDependencies);
+  });
+
+  it('retains dependencies when a shell script loads an env file', () => {
+    const devDependencies = { '@oxc-node/cli': '^1.0.0', '@oxc-node/core': '^1.0.0' };
+    write('package.json', { scripts: { build: 'oxnode build.ts' }, devDependencies });
+    write('scripts/run.sh', '#!/bin/sh\nnode --env-file=config/runtime.conf run.ts\n');
+    expect(migrateOxnodeToVpx(root)).toEqual({ changed: true, dependencyRemoved: false });
+    expect(readJson('package.json').devDependencies).toEqual(devDependencies);
+  });
+
+  it('detects a loader in a later env file after an unavailable optional input', () => {
+    write('package.json', {
+      scripts: {
+        run: 'node --env-file-if-exists=missing.env --env-file=config/runtime.conf run.ts',
+      },
+    });
+    write('config/runtime.conf', 'NODE_OPTIONS=--import=@oxc-node/core/register\n');
+    expect(detectOxnodeProject(root)).toBe(true);
+  });
+
+  it.each(['--env-file', '--env-file-if-exists'])(
+    'does not detect oxnode solely because %s names an unavailable file',
+    (option) => {
+      write('package.json', { scripts: { run: `node ${option}=config/missing.env run.ts` } });
+
+      expect(detectOxnodeProject(root)).toBe(false);
+    },
+  );
+
+  it.each([
+    'node run.ts --env-file=config/runtime.conf',
+    'node -- run.ts --env-file=config/runtime.conf',
+  ])('does not treat application arguments as Node.js env-file options in %s', (command) => {
+    write('package.json', {
+      scripts: { build: 'oxnode build.ts', run: command },
+      devDependencies: { '@oxc-node/cli': '^1.0.0', '@oxc-node/core': '^1.0.0' },
+    });
+    write('config/runtime.conf', 'NODE_OPTIONS=--import=@oxc-node/core/register\n');
+
+    expect(migrateOxnodeToVpx(root)).toEqual({ changed: true, dependencyRemoved: true });
+    expect(readJson('package.json').scripts).toEqual({ build: 'vpx build.ts', run: command });
+    expect(readJson('package.json').devDependencies).toEqual({});
   });
 });
