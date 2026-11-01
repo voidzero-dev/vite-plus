@@ -15,7 +15,7 @@ on:
 jobs:
   cleanup:
     if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       actions: write
     steps:
@@ -39,7 +39,7 @@ jobs:
 
   cleanup-rust:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     concurrency:
       group: cleanup-main-rust-caches
       cancel-in-progress: false
