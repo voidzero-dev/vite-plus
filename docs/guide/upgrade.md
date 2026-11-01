@@ -99,7 +99,7 @@ For the tap, run `vp` after upgrading to install the new version's dependencies 
 
 For the tap, `vp upgrade --check` directs you to `brew outdated voidzero-dev/vite-plus/vp`. Automatic npm update checks and notices are disabled for Homebrew installations.
 
-For the `vite-plus` formula, use `brew upgrade vite-plus` or `brew outdated vite-plus` instead. To switch to the tap, follow the [migration steps](/guide/homebrew#switch-from-homebrew-core).
+To switch to the tap, follow the [migration steps](/guide/homebrew#switch-an-existing-installation).
 
 ## Preview Builds
 
