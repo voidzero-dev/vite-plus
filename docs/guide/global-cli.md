@@ -428,7 +428,7 @@ For example, `VP_VERSION=1.0.0 vp-setup.exe --version 2.0.0` installs version 2.
 
 ### Homebrew
 
-The [official Homebrew tap](/guide/homebrew) installs the native CLI. The first `vp` command installs matching JavaScript dependencies in your data directory and sets up your shell, shims, and environment-management preferences. Homebrew Core's `vite-plus` formula instead provides bundled JavaScript dependencies. Both store user setup state in your directories without writing to the Homebrew prefix.
+The [official Homebrew tap](/guide/homebrew) installs the native CLI. The first `vp` command installs matching JavaScript dependencies in your data directory and sets up your shell, shims, and environment-management preferences. Setup stores its state in your directories without writing to the Homebrew prefix.
 
 Later commands reuse that setup while the installed binary remains unchanged. Generated shims follow Homebrew's public `vp` entrypoint when Homebrew replaces a version. Setup preserves your saved management preferences during this replacement.
 

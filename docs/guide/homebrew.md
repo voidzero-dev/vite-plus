@@ -19,7 +19,7 @@ vp
 ```
 
 The explicit repository URL is required because the formula is part of the Vite+ repository.
-If you already use Vite+, follow the steps to switch from the [script installer](#switch-from-the-script-installer) or [Homebrew Core](#switch-from-homebrew-core).
+If you already use Vite+, follow the [migration steps](#switch-an-existing-installation).
 
 ## First use
 
@@ -61,7 +61,12 @@ This resolves dependencies without the published lockfile. A later invocation wi
 If pnpm fails, the reported log contains its exit code and recognized error codes, without raw package-manager output.
 Configured tool shims can run cached Node.js, package managers, and global packages independently of CLI dependency repair.
 
-## Switch from the script installer
+## Switch an existing installation
+
+Keep your existing directory settings. Migration preserves your preferences, runtimes, and global packages, and updates their shims to Homebrew's public `vp` command.
+Do not run `vp implode`: it removes that user data. Open a new terminal after switching.
+
+### Switch from the script installer
 
 Run the `brew tap` and `brew install` commands above. Then invoke Homebrew's executable directly, so an existing script-install shim cannot take precedence:
 
@@ -69,14 +74,9 @@ Run the `brew tap` and `brew install` commands above. Then invoke Homebrew's exe
 "$(brew --prefix)/bin/vp" env setup --refresh
 ```
 
-Use the same directory overrides as your existing installation.
-Setup preserves your preferences, runtimes, and global packages, and updates their shims to Homebrew's public `vp` command.
-Do not run `vp implode` to migrate: it removes that user data.
-Open a new terminal after switching.
+### Switch from Homebrew Core
 
-## Switch from Homebrew Core
-
-Core's `vite-plus` formula and this tap provide the same commands and cannot be installed together. Once the stable tap is available, switch with:
+The `vite-plus` formula provides the same commands and must be removed before installing the tap. Once the stable tap is available, switch with:
 
 ```bash
 brew tap voidzero-dev/vite-plus https://github.com/voidzero-dev/vite-plus
@@ -84,9 +84,6 @@ brew uninstall vite-plus
 brew install voidzero-dev/vite-plus/vp
 "$(brew --prefix)/bin/vp" env setup --refresh
 ```
-
-Keep your existing directory settings and open a new terminal afterward. `brew uninstall` keeps your Vite+ user data; the setup command preserves your preferences, runtimes, and global packages. Do not run `vp implode` during the switch.
-You can also stay on Core and continue using `brew upgrade vite-plus`.
 
 ## Upgrade or remove
 
@@ -116,7 +113,7 @@ HOMEBREW_VP_PR_VERSION="<full-commit-sha>" brew install voidzero-dev/vite-plus/v
 HOMEBREW_VP_PR_VERSION="<full-commit-sha>" brew test voidzero-dev/vite-plus/vp
 ```
 
-Use `brew reinstall` instead of `brew install` to replace an installed tap build. If Core's `vite-plus` is installed, run `brew uninstall vite-plus` first; do not run `vp implode`.
+Use `brew reinstall` instead of `brew install` to replace an installed tap build. If the `vite-plus` formula is installed, run `brew uninstall vite-plus` first; this keeps your user data.
 `brew test` uses temporary user data and does not change your shell configuration. Run `vp` afterward to set up the preview for your account. If switching from the script installer, [refresh its shims](#switch-from-the-script-installer) to use the Homebrew executable.
 
 Homebrew downloads only the native preview package from the registry bridge and verifies its checksum. It resolves PR numbers to the latest published commit, which can differ from the current PR head.
