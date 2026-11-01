@@ -34,6 +34,7 @@ test.each([false, true])(
     });
 
     for (const file of [
+      'Cargo.toml',
       'pnpm-workspace.yaml',
       'packages/tools/.upstream-versions.json',
       'packages/cli/src/utils/constants.ts',
@@ -41,6 +42,8 @@ test.each([false, true])(
       mkdirSync(dirname(join(tempDir, file)), { recursive: true });
       copyFileSync(join(root, file), join(tempDir, file));
     }
+    const nodeVersionPath = join(tempDir, '.node-version');
+    writeFileSync(nodeVersionPath, '24.9.0\n');
     const workspacePath = join(tempDir, 'pnpm-workspace.yaml');
     writeFileSync(
       workspacePath,
@@ -52,14 +55,34 @@ test.each([false, true])(
     vi.spyOn(process, 'cwd').mockReturnValue(tempDir);
     vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.stubEnv('UPGRADE_DEPS_META_DIR', metaDir);
-    // Each run also covers one side of the oxc-node pin guard: a release that does not
-    // contain the pinned commit leaves the pin alone.
+    // Each run also covers one side of the oxc-node and vite-task pin guards: a target
+    // that does not contain the pinned commit leaves the pin alone.
     const pinnedOxcNode = JSON.parse(
       readFileSync(join(tempDir, 'packages/tools/.upstream-versions.json'), 'utf8'),
     )['oxc-node'].hash;
+    const cargoTomlPath = join(tempDir, 'Cargo.toml');
+    const pinnedViteTask = /vite-task\.git", rev = "([0-9a-f]{40})"/.exec(
+      readFileSync(cargoTomlPath, 'utf8'),
+    )![1];
+    const viteTaskMain = 'b'.repeat(40);
     vi.stubGlobal('fetch', async (url: string) => {
+      if (url === 'https://nodejs.org/dist/index.json') {
+        return Response.json([
+          { version: 'v26.13.0', lts: 'Lithium' },
+          { version: 'v24.9.0', lts: 'Krypton' },
+          { version: 'v24.11.0-rc.1', lts: false },
+          { version: 'v24.10.2', lts: 'Krypton' },
+        ]);
+      }
       if (url.startsWith('https://api.github.com/repos/oxc-project/oxc-node/compare/')) {
         expect(url).toContain(`/compare/${pinnedOxcNode}...`);
+        return Response.json({ status: failInstall ? 'diverged' : 'ahead' });
+      }
+      if (url === 'https://api.github.com/repos/voidzero-dev/vite-task/git/ref/heads/main') {
+        return Response.json({ object: { sha: viteTaskMain } });
+      }
+      if (url.startsWith('https://api.github.com/repos/voidzero-dev/vite-task/compare/')) {
+        expect(url).toContain(`/compare/${pinnedViteTask}...${viteTaskMain}`);
         return Response.json({ status: failInstall ? 'diverged' : 'ahead' });
       }
       if (url.startsWith('https://api.github.com/repos/')) {
@@ -133,7 +156,9 @@ test.each([false, true])(
     expect(readFileSync(workspacePath, 'utf8')).toContain("\n  '@oxlint/plugins': =1.88.0\n");
     expect(readFileSync(workspacePath, 'utf8')).toContain('\n  oxlint: =1.88.0\n');
     expect(readFileSync(workspacePath, 'utf8')).toContain('\n  oxlint-tsgolint: =7.0.2004\n');
+    expect(readFileSync(nodeVersionPath, 'utf8')).toBe('24.10.2\n');
     const versions = JSON.parse(readFileSync(join(metaDir, 'versions.json'), 'utf8'));
+    expect(versions['Node.js']).toEqual({ old: '24.9.0', new: '24.10.2' });
     expect(versions['lint-staged']).toEqual({ old: '16.2.6', new: '17.5.1' });
     expect(versions['@oxlint/plugins'].new).toBe('1.88.0');
     expect(versions['@oxlint/plugins'].new).toBe(versions.oxlint.new);
@@ -145,8 +170,17 @@ test.each([false, true])(
         ? { old: pinnedOxcNode, new: pinnedOxcNode }
         : { old: pinnedOxcNode, new: 'a'.repeat(40), tag: 'v1.2.3' },
     );
-    if (!failInstall) {
+    const viteTaskRev = failInstall ? pinnedViteTask : viteTaskMain;
+    expect(versions['vite-task']).toEqual({ old: pinnedViteTask, new: viteTaskRev });
+    const cargoToml = readFileSync(cargoTomlPath, 'utf8');
+    expect(cargoToml).toContain(`vite-task.git", rev = "${viteTaskRev}"`);
+    expect(cargoToml).not.toContain(failInstall ? viteTaskMain : pinnedViteTask);
+    const viteTaskCompare = `https://github.com/voidzero-dev/vite-task/compare/${pinnedViteTask}...${viteTaskMain}`;
+    if (failInstall) {
+      expect(readFileSync(join(metaDir, 'pr-body.md'), 'utf8')).not.toContain(viteTaskCompare);
+    } else {
       expect(versions['yuku-parser']).toEqual({ old: '^0.9.3', new: '0.11.2' });
+      expect(readFileSync(join(metaDir, 'pr-body.md'), 'utf8')).toContain(viteTaskCompare);
     }
     expect(readFileSync(join(metaDir, 'commit-message.txt'), 'utf8')).toContain(
       '- lint-staged: 16.2.6 -> 17.5.1',

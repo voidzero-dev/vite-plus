@@ -187,7 +187,7 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
         &version_dir,
         install_dir,
         &install_dir_name,
-        &resolved.version,
+        &resolved,
         current_version,
         options.silent,
         options.registry.as_deref(),
@@ -210,11 +210,12 @@ async fn install_platform_and_main(
     version_dir: &AbsolutePathBuf,
     install_dir: &AbsolutePathBuf,
     install_dir_name: &str,
-    new_version: &str,
+    resolved: &registry::ResolvedVersion,
     current_version: &str,
     silent: bool,
     registry: Option<&str>,
 ) -> Result<ExitStatus, Error> {
+    let new_version = &resolved.version;
     // Extract platform package (binary only; .node files installed via npm optionalDeps)
     install::extract_platform_package(platform_data, version_dir).await?;
 
@@ -231,7 +232,8 @@ async fn install_platform_and_main(
     install::generate_wrapper_package_json(version_dir, new_version).await?;
 
     // Install production dependencies (pnpm installs vite-plus + all transitive deps)
-    install::install_production_deps(version_dir, registry, !silent, None).await?;
+    let node_version = resolved.node_version.as_deref().map(install::NodeVersion::Required);
+    install::install_production_deps(version_dir, registry, !silent, node_version).await?;
 
     // Save previous version for rollback
     let previous_version = install::save_previous_version(install_dir).await?;

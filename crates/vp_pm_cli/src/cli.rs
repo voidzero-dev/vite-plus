@@ -784,10 +784,133 @@ mod tests {
     }
 
     #[test]
+    fn managed_global_rejects_project_only_options() {
+        let cases: &[(&[&str], &[&[&str]])] = &[
+            (
+                &["install"],
+                &[
+                    &["--prod"],
+                    &["--dev"],
+                    &["--no-optional"],
+                    &["--frozen-lockfile"],
+                    &["--no-frozen-lockfile"],
+                    &["--lockfile-only"],
+                    &["--prefer-offline"],
+                    &["--offline"],
+                    &["--no-lockfile"],
+                    &["--fix-lockfile"],
+                    &["--shamefully-hoist"],
+                    &["--resolution-only"],
+                    &["--filter", "app"],
+                    &["--workspace-root"],
+                    &["--save-exact"],
+                    &["--save-peer"],
+                    &["--save-optional"],
+                    &["--save-catalog"],
+                ],
+            ),
+            (
+                &["add"],
+                &[
+                    &["--save-prod"],
+                    &["--save-dev"],
+                    &["--save-peer"],
+                    &["--save-optional"],
+                    &["--save-exact"],
+                    &["--save-catalog-name", "default"],
+                    &["--save-catalog"],
+                    &["--allow-build", "react"],
+                    &["--filter", "app"],
+                    &["--workspace-root"],
+                    &["--workspace"],
+                ],
+            ),
+            (
+                &["remove"],
+                &[
+                    &["--save-dev"],
+                    &["--save-optional"],
+                    &["--save-prod"],
+                    &["--filter", "app"],
+                    &["--workspace-root"],
+                    &["--recursive"],
+                ],
+            ),
+            (
+                &["update"],
+                &[
+                    &["--recursive"],
+                    &["--filter", "app"],
+                    &["--workspace-root"],
+                    &["--dev"],
+                    &["--prod"],
+                    &["--interactive"],
+                    &["--no-optional"],
+                    &["--no-save"],
+                    &["--workspace"],
+                ],
+            ),
+            (
+                &["outdated"],
+                &[
+                    &["--recursive"],
+                    &["--filter", "app"],
+                    &["--workspace-root"],
+                    &["--prod"],
+                    &["--dev"],
+                    &["--no-optional"],
+                    &["--compatible"],
+                    &["--sort-by", "name"],
+                ],
+            ),
+            (
+                &["pm", "list"],
+                &[
+                    &["--depth", "0"],
+                    &["--long"],
+                    &["--parseable"],
+                    &["--prod"],
+                    &["--dev"],
+                    &["--no-optional"],
+                    &["--exclude-peers"],
+                    &["--only-projects"],
+                    &["--find-by", "finder"],
+                    &["--recursive"],
+                    &["--filter", "app"],
+                ],
+            ),
+        ];
+        for &(command, options) in cases {
+            for option in options {
+                let mut argv = command.to_vec();
+                argv.extend_from_slice(option);
+                argv.push("react");
+                assert!(parse(&argv).is_ok(), "{argv:?}");
+                for global in ["-g", "--global"] {
+                    let mut argv = argv.clone();
+                    argv.push(global);
+                    let error = parse(&argv).unwrap_err();
+                    assert_eq!(error.kind(), clap::error::ErrorKind::ArgumentConflict, "{argv:?}");
+                    assert!(error.to_string().contains("--global"), "{error}");
+                }
+            }
+        }
+    }
+
+    #[test]
     fn projects_managed_global_commands() {
-        let install =
-            parse(&["install", "-g", "--node", "22", "--force", "--concurrency", "2", "tsx"])
-                .unwrap();
+        let install = parse(&[
+            "install",
+            "-g",
+            "--node",
+            "22",
+            "--force",
+            "--silent",
+            "--concurrency",
+            "2",
+            "tsx",
+        ])
+        .unwrap();
         let Some(ManagedGlobalCommand::Install { packages, node, force, concurrency, .. }) =
             install.managed_global_command()
         else {

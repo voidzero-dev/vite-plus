@@ -894,6 +894,36 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_unconfigured_project_follows_latest_lts() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let server = httpmock::MockServer::start_async().await;
+        let index = server.mock(|when, then| {
+            when.path("/index.json");
+            then.status(200).json_body(serde_json::json!([
+                {"version": "v27.1.0", "lts": false},
+                {"version": "v26.13.0", "lts": "Newer LTS"},
+                {"version": "v24.22.1", "lts": "Krypton"}
+            ]));
+        });
+        vp_shared::EnvConfig::with_vars_async(
+            [
+                (env_vars::VP_HOME, temp_dir.path().as_os_str()),
+                (env_vars::VP_NODE_DIST_MIRROR, std::ffi::OsStr::new(&server.base_url())),
+            ],
+            |_| async {
+                let resolution = resolve_version(&temp_path).await.unwrap();
+                assert_eq!(resolution.version, "26.13.0");
+                assert_eq!(resolution.source, "lts");
+                assert!(resolution.is_range);
+                assert!(resolution.source_path.is_none());
+                index.assert_calls(1);
+            },
+        )
+        .await;
+    }
+
+    #[tokio::test]
     async fn test_resolve_version_invalid_node_version_falls_through_to_lts() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();

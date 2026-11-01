@@ -5,6 +5,8 @@ import path from 'node:path';
 import {
   findLatestStableVersionForMajor,
   getBundledDependencyRanges,
+  getLatestNodeVersion,
+  setViteTaskRevision,
 } from './upgrade-deps-utils.ts';
 
 const ROOT = process.cwd();
@@ -26,6 +28,12 @@ type GitHubTag = {
 type LatestTag = {
   sha: string;
   tag: string;
+};
+
+type GitHubRef = {
+  object?: {
+    sha?: unknown;
+  };
 };
 
 type LatestTagOptions = {
@@ -79,6 +87,8 @@ const STABLE_SEMVER_TAG_RE = /^v?\d+\.\d+\.\d+$/;
 // Vitest major upgrades can change the bundled API, export shims, and CLI
 // behavior. Advance this only after Vite+ has adapted to the new major.
 const SUPPORTED_VITEST_MAJOR = 5;
+// Review compatibility before advancing the shared development, CI, and installation pin.
+const SUPPORTED_NODE_MAJOR = 24;
 
 const isFullSha = (s: string): boolean => /^[0-9a-f]{40}$/.test(s);
 
@@ -239,6 +249,31 @@ async function updateUpstreamVersions(): Promise<void> {
 
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2) + '\n');
   console.log('Updated .upstream-versions.json');
+}
+
+// ============ Update the vite-task revision in Cargo.toml ============
+async function updateViteTask(): Promise<void> {
+  const res = await fetchGitHubRepo('voidzero-dev', 'vite-task', 'git/ref/heads/main');
+  if (!res.ok) {
+    throw new Error(`Failed to fetch voidzero-dev/vite-task main: ${res.status} ${res.statusText}`);
+  }
+  const sha = ((await res.json()) as GitHubRef).object?.sha;
+  if (typeof sha !== 'string' || !isFullSha(sha)) {
+    throw new Error('Invalid ref structure for voidzero-dev/vite-task main: missing SHA');
+  }
+  console.log(`vite-task -> main (${sha.slice(0, 7)})`);
+
+  const filePath = path.join(ROOT, 'Cargo.toml');
+  const { content, previous } = setViteTaskRevision(fs.readFileSync(filePath, 'utf8'), sha);
+  // A pin to a commit outside main, such as an unmerged fix, stays until main contains it.
+  if (await containsCommit('voidzero-dev', 'vite-task', previous, sha)) {
+    fs.writeFileSync(filePath, content);
+    recordChange('vite-task', previous, sha);
+    console.log('Updated vite-task revision in Cargo.toml');
+  } else {
+    console.log(`vite-task main does not contain the pinned ${previous.slice(0, 7)}; keeping it`);
+    recordChange('vite-task', previous, previous);
+  }
 }
 
 // ============ Update pnpm-workspace.yaml ============
@@ -420,6 +455,17 @@ async function updateVitestVersionConstant(vitestVersion: string): Promise<void>
   console.log('Updated packages/cli/src/utils/constants.ts');
 }
 
+// Update the shared Node.js pin for development, CI, and installation.
+function updateNodeVersionFile(nodeVersion: string): void {
+  const filePath = path.join(ROOT, '.node-version');
+  const oldVersion = fs.readFileSync(filePath, 'utf8').trim();
+  if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(oldVersion)) {
+    throw new Error(`Expected an exact stable Node.js version in ${filePath}`);
+  }
+  fs.writeFileSync(filePath, `${nodeVersion}\n`);
+  recordChange('Node.js', oldVersion, nodeVersion);
+}
+
 // ============ Write metadata files for PR description ============
 const formatVersion = (v: Change): string => {
   if (v.tag) {
@@ -480,6 +526,14 @@ function writeMetaFiles(): void {
     for (const [name, v] of changed) {
       bodyLines.push(`| \`${name}\` | \`${formatOld(v)}\` | \`${formatVersion(v)}\` |`);
     }
+    const viteTask = changes.get('vite-task');
+    if (viteTask?.old && viteTask.old !== viteTask.new) {
+      // vite-task publishes no releases; the anchor opens CHANGELOG.md in the compare view.
+      bodyLines.push(
+        '',
+        `vite-task changes: [CHANGELOG.md diff](https://github.com/voidzero-dev/vite-task/compare/${viteTask.old}...${viteTask.new}#diff-06572a96a58dc510037d5efa622f9bec8519bc1beab13c9f251e97e657a9d4ed)`,
+      );
+    }
   } else {
     bodyLines.push('_No version changes._');
   }
@@ -527,6 +581,7 @@ async function upgradeDependencies(): Promise<void> {
   console.log('Fetching latest versions…');
 
   const [
+    nodeVersion,
     vitestVersion,
     tsdownVersion,
     lightningcssVersion,
@@ -540,6 +595,7 @@ async function upgradeDependencies(): Promise<void> {
     oxcProjectTypesVersion,
     oxcParserVersion,
   ] = await Promise.all([
+    getLatestNodeVersion(SUPPORTED_NODE_MAJOR),
     getLatestNpmVersionForMajor('vitest', SUPPORTED_VITEST_MAJOR),
     getLatestNpmVersion('tsdown'),
     // Mirror exactly what the bundled @tsdown/css depends on.
@@ -555,6 +611,7 @@ async function upgradeDependencies(): Promise<void> {
     getLatestNpmVersion('oxc-parser'),
   ]);
 
+  console.log(`Node.js: ${nodeVersion}`);
   console.log(`vitest: ${vitestVersion}`);
   console.log(`tsdown: ${tsdownVersion}`);
   console.log(`lightningcss (from @tsdown/css): ${lightningcssVersion}`);
@@ -570,6 +627,7 @@ async function upgradeDependencies(): Promise<void> {
   console.log(`oxc-parser: ${oxcParserVersion}`);
 
   await updateUpstreamVersions();
+  await updateViteTask();
   await updatePnpmWorkspace({
     vitest: vitestVersion,
     tsdown: tsdownVersion,
@@ -585,6 +643,7 @@ async function upgradeDependencies(): Promise<void> {
     oxcParser: oxcParserVersion,
   });
   await updateVitestVersionConstant(vitestVersion);
+  updateNodeVersionFile(nodeVersion);
   // Keep the selected versions available if installation or upstream sync fails.
   writeMetaFiles();
 
