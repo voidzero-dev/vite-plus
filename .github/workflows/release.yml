@@ -402,9 +402,7 @@ jobs:
         if: steps.existing-pr.outputs.exists != 'true'
         with:
           token: ${{ steps.app-token.outputs.token }}
-          add-paths: |
-            HomebrewFormula/vp.rb
-            docs/guide/homebrew.md
+          add-paths: HomebrewFormula/vp.rb
           commit-message: 'chore: update Homebrew vp to ${{ env.VERSION }}'
           title: 'chore: update Homebrew vp to ${{ env.VERSION }}'
           branch: release/homebrew-v${{ env.VERSION }}

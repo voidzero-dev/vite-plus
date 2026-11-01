@@ -295,12 +295,6 @@ removes the disable gate through this process; older releases without the tap
 formula cannot enable it. Use a formula `revision` for recipe fixes to an enabled
 version; formula-only merges do not trigger product releases.
 
-The first formula update also removes the guide's availability warning. Since
-production documentation deploys from release commits, that later merge needs a
-[manual documentation deployment](deploy-docs-on-release.md#manual-deploys).
-Deploy only the availability edits on a branch based on the current stable tag,
-then verify the production guide. This avoids publishing unrelated unreleased changes.
-
 `HOMEBREW_VP_PR_VERSION` selects a published preview by PR number or full commit
 SHA. The formula downloads and verifies the native package from the registry bridge;
 setup installs matching preview dependencies. See the

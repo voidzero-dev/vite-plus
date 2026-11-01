@@ -156,16 +156,8 @@ async function main() {
   const file = new URL('../../HomebrewFormula/vp.rb', import.meta.url);
   const source = await readFile(file, 'utf8');
   const result = updateFormula(source, version, assets);
-  const guide = new URL('../../docs/guide/homebrew.md', import.meta.url);
-  const guideSource = await readFile(guide, 'utf8');
-  const guideResult = guideSource
-    .replace(/::: warning Availability\n[\s\S]*?:::\n\n/, '')
-    .replace('When the tap becomes available, run:', 'Install the tap:');
   if (result !== source) {
     await writeFile(file, result);
-  }
-  if (guideResult !== guideSource) {
-    await writeFile(guide, guideResult);
   }
 }
 

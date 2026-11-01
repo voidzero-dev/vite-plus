@@ -1,16 +1,11 @@
 # Homebrew tap
 
-::: warning Availability
-Stable installation stays disabled until a compatible release is published and its formula update passes the platform tests and is merged. You can [test a preview build](#test-a-preview-build) before then.
-Use the [script installer](/guide/global-cli) in the meantime.
-:::
-
 The official tap supports macOS and glibc Linux on ARM64 and x64. Homebrew manages the native `vp` executable; `vp` manages its JavaScript dependencies, downloaded Node.js versions, package managers, and settings in your user directories.
 Stable installation downloads the executable and its dependency lockfile from GitHub Releases. This step needs no existing Node.js or package manager installation, or npm registry access.
 
 ## Install
 
-When the tap becomes available, run:
+Install the tap:
 
 ```bash
 brew tap voidzero-dev/vite-plus https://github.com/voidzero-dev/vite-plus
@@ -76,7 +71,7 @@ Run the `brew tap` and `brew install` commands above. Then invoke Homebrew's exe
 
 ### Switch from Homebrew Core
 
-The `vite-plus` formula provides the same commands and must be removed before installing the tap. Once the stable tap is available, switch with:
+The `vite-plus` formula provides the same commands and must be removed before installing the tap:
 
 ```bash
 brew tap voidzero-dev/vite-plus https://github.com/voidzero-dev/vite-plus
@@ -122,7 +117,7 @@ First launch installs the matching dependencies from the bridge. An explicit `NP
 The selector is specific to this tap. It does not change other Homebrew formulae, and no npm client is needed during `brew install`.
 To test changes to the formula itself, first check out the PR in the tap repository. Set `HOMEBREW_NO_AUTO_UPDATE=1` for these commands to keep that checkout.
 
-To return to a stable release once available, clear the overrides, restore the tap's `main` branch if you changed its checkout, and update it before reinstalling:
+To return to a stable release, clear the overrides, restore the tap's `main` branch if you changed its checkout, and update it before reinstalling:
 
 ```bash
 unset HOMEBREW_VP_PR_VERSION HOMEBREW_NO_AUTO_UPDATE

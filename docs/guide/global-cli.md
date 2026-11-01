@@ -71,7 +71,7 @@ irm https://vite.plus/ps1 | iex
 
 On Windows, you can instead download and run [`vp-setup.exe`](https://setup.viteplus.dev).
 
-For macOS and Linux, see the [Homebrew tap guide](/guide/homebrew) for availability and installation instructions.
+For macOS and Linux, see the [Homebrew tap guide](/guide/homebrew) for installation instructions.
 
 The installer uses the Node.js version pinned in the Vite+ repository's [`.node-version`](https://github.com/voidzero-dev/vite-plus/blob/main/.node-version) to install its JavaScript dependencies. Each Vite+ release embeds this version at build time. Development and CI use the same file, which the dependency-upgrade workflow keeps up to date. CI integrations can select another compatible version through [`VP_SETUP_NODE_VERSION`](#vp-setup-node-version).
 
@@ -444,7 +444,7 @@ Use Homebrew to [upgrade](/guide/upgrade#homebrew) or [remove](/guide/implode#ho
 
 `vp env doctor` identifies the Homebrew source, formula name, and binary path. It checks the `vp` command and the user shim directory on `PATH` separately. If only the shim directory is missing, follow its shell setup instructions to enable the shims.
 
-See the [official tap guide](/guide/homebrew) for availability, registry configuration, and migration instructions.
+See the [official tap guide](/guide/homebrew) for registry configuration and migration instructions.
 
 ## Use It Without a Local Package
 
