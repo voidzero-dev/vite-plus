@@ -76,6 +76,8 @@ jobs:
 
       - name: Check upgrade dependencies with Kimi K3
         id: check-upgrade-dependencies
+        # Preserve partial repairs in a draft PR if the agent fails or exhausts its quota.
+        continue-on-error: true
         timeout-minutes: 180
         uses: anthropics/claude-code-action@1d6de8cb0c237e7c15e9e1bdf973826ebae490cc # v1.0.248
         env:
@@ -265,10 +267,14 @@ jobs:
             actions: read
 
       - name: Update lockfile
+        id: update-lockfile
+        # An interrupted repair can leave manifests that cannot be installed yet.
+        continue-on-error: true
         # Dedupe runs in upgrade-deps.ts, before dependency sync and validation.
         run: pnpm install --no-frozen-lockfile
 
       - name: Format code
+        id: format
         # `pnpm fmt` runs `vp fmt`, which loads the freshly built NAPI binding. When
         # `build-upstream` fails (e.g. an upstream rolldown/oxc desync the in-workflow
         # fixup could not resolve) the binding is never produced and `vp fmt` aborts.
@@ -292,8 +298,35 @@ jobs:
           pnpm test:unit
           just snapshot-test
 
+      - name: Record upgrade status
+        id: upgrade-status
+        shell: bash
+        env:
+          REPAIR_OUTCOME: ${{ steps.check-upgrade-dependencies.outcome }}
+          LOCKFILE_OUTCOME: ${{ steps.update-lockfile.outcome }}
+          FORMAT_OUTCOME: ${{ steps.format.outcome }}
+          VALIDATION_OUTCOME: ${{ steps.final-validation.outcome }}
+        run: |
+          draft=false
+          printf '| Step | Outcome |\n| --- | --- |\n' >> "$GITHUB_STEP_SUMMARY"
+          for result in "Dependency repair:$REPAIR_OUTCOME" \
+                        "Lockfile update:$LOCKFILE_OUTCOME" \
+                        "Formatting:$FORMAT_OUTCOME" \
+                        "Final validation:$VALIDATION_OUTCOME"; do
+            name="${result%:*}"
+            outcome="${result##*:}"
+            printf '| %s | %s |\n' "$name" "$outcome" >> "$GITHUB_STEP_SUMMARY"
+            if [ "$outcome" != success ]; then
+              draft=true
+              echo "::warning::$name did not complete successfully ($outcome)."
+            fi
+          done
+          echo "draft=$draft" >> "$GITHUB_OUTPUT"
+
       - name: Enhance PR description with Kimi K3
         id: enhance-pr-description
+        # Retain the baseline description instead of calling an unavailable agent again.
+        if: steps.check-upgrade-dependencies.outcome == 'success'
         continue-on-error: true
         uses: anthropics/claude-code-action@1d6de8cb0c237e7c15e9e1bdf973826ebae490cc # v1.0.248
         env:
@@ -449,7 +482,7 @@ jobs:
           base: main
           branch: deps/upstream-update
           title: 'feat(deps): upgrade upstream dependencies'
-          draft: ${{ steps.final-validation.outcome != 'success' }}
+          draft: ${{ steps.upgrade-status.outputs.draft != 'false' }}
           sign-commits: true
           token: ${{ steps.app-token.outputs.token }}
           body: ${{ steps.pr-content.outputs.body }}
@@ -463,8 +496,8 @@ jobs:
         run: gh pr comment "${PR_NUMBER}" --repo "${GITHUB_REPOSITORY}" --body-file "${UPGRADE_DEPS_META_DIR}/cli-help-report.md"
 
       - name: Report validation failure
-        if: always() && steps.final-validation.outcome != 'success'
+        if: always() && steps.upgrade-status.outputs.draft != 'false'
         shell: bash
         run: |
-          echo '::error::The upgraded dependencies did not pass final validation.'
+          echo '::error::Dependency repair or validation did not complete successfully. See the failed steps and job summary.'
           exit 1
