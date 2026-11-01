@@ -847,17 +847,18 @@ async fn select_core_tool(
     .then(|| find_system_tool("node"))
     .flatten();
     let node_is_inherited = inherited_node.is_some();
-    let system_node = if node_system_only {
-        resolve_effective_tool("node", EffectiveMode::SystemOnly)
-            .map_err(|e| vec![e.to_string()])?
-    } else if node_is_inherited {
+    let system_node = if node_is_inherited {
         inherited_node
-    } else if PackageManagerType::from_tool(tool).is_some() {
-        let config = config::load_config()
-            .await
-            .map_err(|error| vec![format!("Failed to load Node.js shim mode: {error}")])?;
-        resolve_effective_tool("node", config::effective_node_mode(&config))
-            .map_err(|e| vec![e.to_string()])?
+    } else if node_system_only || PackageManagerType::from_tool(tool).is_some() {
+        let mode = if node_system_only {
+            EffectiveMode::SystemOnly
+        } else {
+            let config = config::load_config()
+                .await
+                .map_err(|error| vec![format!("Failed to load Node.js shim mode: {error}")])?;
+            config::effective_node_mode(&config)
+        };
+        resolve_effective_tool("node", mode).map_err(|e| vec![e.to_string()])?
     } else {
         None
     };
@@ -888,6 +889,11 @@ async fn select_core_tool(
             let (runtime_path, tool_path) =
                 resolve_bundled_tool(node_path, tool, resolution.is_none())
                     .map_err(|error| vec![format!("Tool '{tool}' not found: {error}")])?;
+            // An external Node.js wrapper first on PATH may still select a
+            // managed runtime, which system-only Node.js rules out.
+            reject_managed_runtime("node", &runtime_path)
+                .and_then(|()| reject_managed_runtime(tool, &tool_path))
+                .map_err(|error| vec![error.to_string()])?;
             node_path = runtime_path;
             (tool_path, true)
         }
@@ -1131,14 +1137,11 @@ pub(crate) async fn package_binary_invocation(
     mut env: ToolPathEnv,
 ) -> Result<(AbsolutePathBuf, Vec<String>, ToolPathEnv), String> {
     let node_system_only = vp_shared::EnvConfig::get().node_system_only();
-    let node_path = if node_system_only {
-        resolve_effective_tool("node", EffectiveMode::SystemOnly)
-            .map_err(|e| e.to_string())?
-            .expect("system-only resolution returns a path or an error")
-    } else {
-        ensure_installed(node_version)
+    let node_path = match resolve_system_only_tool("node") {
+        Some(node) => node.map_err(|e| e.to_string())?,
+        None => ensure_installed(node_version)
             .await
-            .map_err(|e| format!("Failed to install Node {node_version}: {e}"))?
+            .map_err(|e| format!("Failed to install Node {node_version}: {e}"))?,
     };
 
     // Locate the actual binary in the package directory
@@ -1225,8 +1228,18 @@ pub(crate) fn locate_package_binary(
 
 /// Bypass shim and use system tool.
 fn bypass_to_system(tool: &str, args: &[String], env: ToolPathEnv) -> i32 {
-    match find_bypass_tool(tool) {
-        Some(system_path) => exec::exec_tool(&system_path, args, env),
+    match find_system_tool(tool) {
+        Some(system_path) => {
+            // System-only tools fail before bypass; npm on system-only Node.js
+            // follows its own mode, which must not run a managed runtime.
+            if requires_system_tool(tool)
+                && let Err(error) = reject_managed_runtime(tool, &system_path)
+            {
+                eprintln!("vp: {error}");
+                return 1;
+            }
+            exec::exec_tool(&system_path, args, env)
+        }
         None => {
             eprintln!("vp: VP_BYPASS is set but no system '{tool}' found in PATH");
             1
@@ -1234,8 +1247,8 @@ fn bypass_to_system(tool: &str, args: &[String], env: ToolPathEnv) -> i32 {
     }
 }
 
-/// Whether a PATH lookup of `tool` must skip managed installs left on PATH:
-/// a system-only tool, or npm when Node.js is system-only, because the npm
+/// Whether `tool` must not come from a managed install: a system-only tool
+/// (rule S), or npm when only Node.js is system-only (rule N), because the npm
 /// bundled with a managed runtime would run that runtime.
 pub(crate) fn requires_system_tool(tool: &str) -> bool {
     let npm_on_system_only_node = vp_shared::EnvConfig::get().node_system_only()
@@ -1259,20 +1272,10 @@ async fn system_only_shim_error(tool: &str) -> Option<Error> {
         .await
         .is_ok_and(|config| config.shim_mode_for_tool(tool) == config::ShimMode::Managed);
     Some(if shims_first {
-        let component = kind.map_or_else(|| "node".into(), |kind| kind.to_string().into());
-        Error::SystemToolBehindShim { tool: bin.into(), variable, component }
+        system_tool_behind_shim(bin, variable)
     } else {
         Error::SystemToolNotFound { tool: bin.into(), variable }
     })
-}
-
-/// The system tool for `VP_BYPASS`.
-fn find_bypass_tool(tool: &str) -> Option<AbsolutePathBuf> {
-    if requires_system_tool(tool) {
-        current_dir().ok().and_then(|cwd| find_system_only_tool(tool, &cwd))
-    } else {
-        find_system_tool(tool)
-    }
 }
 
 /// Resolve version with caching.
@@ -1475,19 +1478,26 @@ pub(crate) fn find_system_tool(tool: &str) -> Option<AbsolutePathBuf> {
 /// `cwd` only resolves relative PATH entries; it is a parameter so tests can
 /// exercise them without mutating the process-wide working directory.
 fn find_system_tool_in(tool: &str, cwd: &AbsolutePath) -> Option<AbsolutePathBuf> {
-    let path = std::env::var_os("PATH")?;
-    let self_real = std::env::current_exe().ok().and_then(|exe| exe.canonicalize().ok());
-    match vp_command::classify_first_path_match(tool, &path, self_real.as_deref(), cwd) {
+    match first_path_match(tool, cwd) {
         // A managed install first on PATH is a parent's selection, which system-first reuses.
         FirstPathMatch::System(path) | FirstPathMatch::VpOwned(path) => Some(path),
         FirstPathMatch::ViteShim(_) | FirstPathMatch::NotFound => None,
     }
 }
 
+/// Classify the first match of `tool` on the process PATH.
+fn first_path_match(tool: &str, cwd: &AbsolutePath) -> FirstPathMatch {
+    let Some(path) = std::env::var_os("PATH") else {
+        return FirstPathMatch::NotFound;
+    };
+    let self_real = std::env::current_exe().ok().and_then(|exe| exe.canonicalize().ok());
+    vp_command::classify_first_path_match(tool, &path, self_real.as_deref(), cwd)
+}
+
 /// Locate `tool` according to its effective mode.
 ///
-/// - `SystemOnly`: the first PATH match outside Vite+ installations, shims,
-///   and managed installs. Fails when there is none.
+/// - `SystemOnly`: [`resolve_system_only_tool`]. Pass it only for a tool with
+///   a system-only variable; any other tool gets `None`.
 /// - `SystemFirst`: [`find_system_tool`].
 /// - `Managed`: `None`; the caller resolves the managed tool.
 pub(crate) fn resolve_effective_tool(
@@ -1498,21 +1508,71 @@ pub(crate) fn resolve_effective_tool(
         EffectiveMode::Managed => Ok(None),
         EffectiveMode::SystemFirst => Ok(find_system_tool(tool)),
         EffectiveMode::SystemOnly => {
-            let cwd = current_dir()?;
-            find_system_only_tool(tool, &cwd).map(Some).ok_or_else(|| Error::SystemToolNotFound {
-                tool: tool.into(),
-                variable: system_only_variable_for_tool(tool).unwrap_or(env_vars::VP_NODE_MANAGER),
-            })
+            debug_assert!(
+                system_only_variable_for_tool(tool).is_some(),
+                "{tool} has no system-only variable"
+            );
+            resolve_system_only_tool(tool).transpose()
         }
     }
 }
 
-/// System-only lookup: like [`find_external_tool_in`], but managed installs
-/// and the fallback-bin directory never count as the system tool. A foreign
-/// tool in a shared bin directory does; the shims beside it do not.
-fn find_system_only_tool(tool: &str, cwd: &AbsolutePath) -> Option<AbsolutePathBuf> {
-    let inputs = ExternalToolInputs::from_process_env()?;
-    vp_command::find_external_tool(tool, &inputs.query(true), cwd)
+/// Locate `tool` when it is system-only, or return `None` when it is not.
+///
+/// The tool is the first PATH match, which must be a system tool. A Vite+
+/// shim or managed install there fails instead of searching further. Short
+/// aliases (`pn`, `pnx`) map to the binaries the family installs.
+pub(crate) fn resolve_system_only_tool(tool: &str) -> Option<Result<AbsolutePathBuf, Error>> {
+    let variable = system_only_variable_for_tool(tool)?;
+    let tool =
+        PackageManagerType::from_tool(tool).map_or(tool, |kind| kind.bin_name_for_tool(tool));
+    let cwd = match current_dir() {
+        Ok(cwd) => cwd,
+        Err(error) => return Some(Err(error.into())),
+    };
+    Some(match first_path_match(tool, &cwd) {
+        FirstPathMatch::System(path) => Ok(path),
+        // The shims of this installation come first; `vp env off` moves them.
+        FirstPathMatch::ViteShim(shim)
+            if shim.parent().is_some_and(|dir| {
+                dir.as_path() == vp_shared::EnvConfig::get().dirs.bin.as_path()
+            }) =>
+        {
+            Err(system_tool_behind_shim(tool, variable))
+        }
+        FirstPathMatch::ViteShim(_) | FirstPathMatch::NotFound => {
+            Err(Error::SystemToolNotFound { tool: tool.into(), variable })
+        }
+        FirstPathMatch::VpOwned(path) => Err(Error::SystemToolManagedInstall {
+            tool: tool.into(),
+            variable,
+            path: path.as_path().display().to_string().into(),
+        }),
+    })
+}
+
+/// The error for system-only `tool` behind the shims of this installation;
+/// `tool` is the binary name, not an alias.
+fn system_tool_behind_shim(tool: &str, variable: &'static str) -> Error {
+    let component = PackageManagerType::from_tool(tool)
+        .map_or_else(|| "node".into(), |kind| kind.to_string().into());
+    Error::SystemToolBehindShim { tool: tool.into(), variable, component }
+}
+
+/// Reject a managed runtime, or the npm bundled with it, that PATH selects
+/// for `tool` while Node.js is system-only: running it would run managed
+/// Node.js. Pinned managed npm is not a runtime and stays allowed.
+pub(crate) fn reject_managed_runtime(tool: &str, path: &AbsolutePath) -> Result<(), Error> {
+    if vp_shared::EnvConfig::get().node_system_only()
+        && vp_command::is_managed_runtime(path.as_path())
+    {
+        return Err(Error::SystemToolManagedInstall {
+            tool: tool.into(),
+            variable: env_vars::VP_NODE_MANAGER,
+            path: path.as_path().display().to_string().into(),
+        });
+    }
+    Ok(())
 }
 
 /// Process-dependent inputs for [`vp_command::find_external_tool`].
@@ -1536,12 +1596,11 @@ impl ExternalToolInputs {
         Some(Self { path, bypass, self_exe })
     }
 
-    fn query(&self, exclude_managed: bool) -> vp_command::ExternalToolQuery<'_> {
+    fn query(&self) -> vp_command::ExternalToolQuery<'_> {
         vp_command::ExternalToolQuery {
             path: &self.path,
             bypass: &self.bypass,
             self_exe: self.self_exe.as_deref(),
-            exclude_managed,
         }
     }
 }
@@ -1549,7 +1608,7 @@ impl ExternalToolInputs {
 /// Explicit bypass skips Vite+ installations and the directories listed by the caller.
 fn find_external_tool_in(tool: &str, cwd: &AbsolutePath) -> Option<AbsolutePathBuf> {
     let inputs = ExternalToolInputs::from_process_env()?;
-    vp_command::find_external_tool(tool, &inputs.query(false), cwd)
+    vp_command::find_external_tool(tool, &inputs.query(), cwd)
 }
 
 #[cfg(test)]
@@ -2691,30 +2750,46 @@ mod tests {
         vars
     }
 
-    #[test]
-    fn test_find_system_tool_reuses_managed_installs_but_not_shims() {
-        let layout = SystemOnlyLayout::new();
-        let exe = |name: &str| if cfg!(windows) { format!("{name}.exe") } else { name.to_owned() };
-        let managed_node = layout.managed_bin.join(exe("node"));
-        let system_node = create_fake_executable(&layout.system_bin, "node");
-        let empty = layout.home.join("empty");
-        std::fs::create_dir_all(&empty).unwrap();
-        let shim_dir = layout.home.join("bin");
-        std::fs::create_dir_all(&shim_dir).unwrap();
+    /// Make `dir/<tool>` a Vite+ shim: a link to `vp` on Unix, a trampoline
+    /// with a shim pointer on Windows.
+    fn make_shim(
+        layout: &SystemOnlyLayout,
+        dir: &std::path::Path,
+        tool: &str,
+    ) -> std::path::PathBuf {
+        std::fs::create_dir_all(dir).unwrap();
         #[cfg(unix)]
         {
             let vp_dir = layout.home.join("current");
             std::fs::create_dir_all(&vp_dir).unwrap();
             let vp = create_fake_executable(&vp_dir, "vp");
-            std::os::unix::fs::symlink(&vp, shim_dir.join("node")).unwrap();
+            let shim = dir.join(tool);
+            std::os::unix::fs::symlink(&vp, &shim).unwrap();
+            shim
         }
         #[cfg(windows)]
         {
-            let shim = create_fake_executable(&shim_dir, "node");
-            EnvConfig::with_vars(system_only_vars(&layout, &layout.path(), &[], &[]), |config| {
+            let shim = create_fake_executable(dir, tool);
+            EnvConfig::with_vars(system_only_vars(layout, &layout.path(), &[], &[]), |config| {
                 config.dirs.write_shim_pointer_beside(&shim).unwrap();
             });
+            shim
         }
+    }
+
+    fn exe(name: &str) -> String {
+        if cfg!(windows) { format!("{name}.exe") } else { name.to_owned() }
+    }
+
+    #[test]
+    fn test_find_system_tool_reuses_managed_installs_but_not_shims() {
+        let layout = SystemOnlyLayout::new();
+        let managed_node = layout.managed_bin.join(exe("node"));
+        let system_node = create_fake_executable(&layout.system_bin, "node");
+        let empty = layout.home.join("empty");
+        std::fs::create_dir_all(&empty).unwrap();
+        let shim_dir = layout.home.join("bin");
+        make_shim(&layout, &shim_dir, "node");
         let cases = [
             (layout.path(), Some(managed_node)),
             (std::env::join_paths([&layout.system_bin]).unwrap(), Some(system_node)),
@@ -2823,37 +2898,80 @@ mod tests {
         .await;
     }
 
+    /// A system-only lookup takes the first PATH match only: a Vite+ shim or a
+    /// managed install there fails instead of searching further.
     #[test]
-    fn test_resolve_effective_tool_system_only_skips_managed_installs() {
+    fn test_resolve_system_only_tool_classifies_the_first_match() {
         let layout = SystemOnlyLayout::new();
         let system_node = create_fake_executable(&layout.system_bin, "node");
-        let only_managed = std::env::join_paths([&layout.managed_bin]).unwrap();
+        let managed_node = layout.managed_bin.join(exe("node"));
+        let bin = layout.home.join("bin");
+        let fallback_bin = layout.home.join("fallback-bin");
+        make_shim(&layout, &bin, "node");
+        make_shim(&layout, &bin, "pnpm");
+        make_shim(&layout, &fallback_bin, "node");
+        let empty = layout.home.join("empty");
+        std::fs::create_dir_all(&empty).unwrap();
+        let resolve =
+            |dirs: &[&std::path::Path], managers: &[(&'static str, &'static str)], tool: &str| {
+                let path = std::env::join_paths(dirs).unwrap();
+                EnvConfig::with_vars(system_only_vars(&layout, &path, managers, &[]), |_| {
+                    resolve_system_only_tool(tool)
+                        .expect("the tool is system-only")
+                        .map_err(|error| error.to_string())
+                })
+            };
+        let node = &[(env_vars::VP_NODE_MANAGER, "system-only")];
+        let not_found = |tool: &str, variable| {
+            Err(Error::SystemToolNotFound { tool: tool.into(), variable }.to_string())
+        };
 
-        let managers = [(env_vars::VP_NODE_MANAGER, "system-only")];
-        EnvConfig::with_vars(system_only_vars(&layout, &layout.path(), &managers, &[]), |_| {
-            let resolved = resolve_effective_tool("node", EffectiveMode::SystemOnly).unwrap();
-            assert_eq!(resolved.unwrap().as_path(), system_node);
+        let system = resolve(&[&layout.system_bin, &layout.managed_bin], node, "node");
+        assert_eq!(system.unwrap().as_path(), system_node);
+        // A managed runtime first on PATH is reported, not skipped.
+        assert_eq!(
+            resolve(&[&layout.managed_bin, &layout.system_bin], node, "node"),
+            Err(Error::SystemToolManagedInstall {
+                tool: "node".into(),
+                variable: env_vars::VP_NODE_MANAGER,
+                path: managed_node.display().to_string().into(),
+            }
+            .to_string())
+        );
+        // The shims of this installation come first, so `vp env off` moves them.
+        let behind_shim = |tool: &str, variable, component: &str| {
+            Err(Error::SystemToolBehindShim {
+                tool: tool.into(),
+                variable,
+                component: component.into(),
+            }
+            .to_string())
+        };
+        assert_eq!(
+            resolve(&[&bin, &layout.system_bin], node, "node"),
+            behind_shim("node", env_vars::VP_NODE_MANAGER, "node")
+        );
+        let pm = &[(env_vars::VP_PM_MANAGER, "system-only")];
+        assert_eq!(
+            resolve(&[&bin, &layout.system_bin], pm, "pnpm"),
+            behind_shim("pnpm", env_vars::VP_PM_MANAGER, "pnpm")
+        );
+        // A short alias resolves the binary the family installs.
+        assert_eq!(
+            resolve(&[&bin, &layout.system_bin], pm, "pn"),
+            behind_shim("pnpm", env_vars::VP_PM_MANAGER, "pnpm")
+        );
+        // Fallback shims come last, so no system tool comes before them.
+        assert_eq!(
+            resolve(&[&fallback_bin, &layout.system_bin], node, "node"),
+            not_found("node", env_vars::VP_NODE_MANAGER)
+        );
+        assert_eq!(resolve(&[&empty], node, "node"), not_found("node", env_vars::VP_NODE_MANAGER));
+
+        EnvConfig::with_vars(system_only_vars(&layout, &layout.path(), node, &[]), |_| {
             assert!(resolve_effective_tool("node", EffectiveMode::Managed).unwrap().is_none());
-        });
-        EnvConfig::with_vars(system_only_vars(&layout, &only_managed, &managers, &[]), |_| {
-            let error = resolve_effective_tool("node", EffectiveMode::SystemOnly).unwrap_err();
-            assert!(
-                matches!(
-                    &error,
-                    Error::SystemToolNotFound { tool, variable: env_vars::VP_NODE_MANAGER }
-                        if tool == "node"
-                ),
-                "{error}"
-            );
-        });
-        // A package manager names the variable that made it system-only.
-        let managers = [(env_vars::VP_PM_MANAGER, "system-only")];
-        EnvConfig::with_vars(system_only_vars(&layout, &only_managed, &managers, &[]), |_| {
-            let error = resolve_effective_tool("pnpm", EffectiveMode::SystemOnly).unwrap_err();
-            assert!(matches!(
-                error,
-                Error::SystemToolNotFound { variable: env_vars::VP_PM_MANAGER, .. }
-            ));
+            // A tool without a system-only setting is left to its own mode.
+            assert!(resolve_system_only_tool("pnpm").is_none());
         });
     }
 
@@ -2873,88 +2991,118 @@ mod tests {
         .await;
     }
 
-    /// System-only Node.js ignores session overrides, the configured default,
-    /// and a managed runtime inherited from a parent, and adds nothing to PATH.
+    /// Write `dir/node`, whose `-p process.execPath` probe reports `exec_path`.
+    #[cfg(unix)]
+    fn create_exec_path_node(dir: &std::path::Path, exec_path: &std::path::Path) {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::create_dir_all(dir).unwrap();
+        let node = dir.join("node");
+        std::fs::write(&node, format!("#!/bin/sh\necho '{}'\n", exec_path.display())).unwrap();
+        std::fs::set_permissions(&node, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    /// Npm on system-only Node.js (rule N) runs beside the first Node.js on
+    /// PATH, ignoring session overrides, the configured default, and an
+    /// inherited managed runtime. A managed runtime selected through PATH, even
+    /// behind an external wrapper, fails instead.
+    #[cfg(unix)]
     #[tokio::test]
-    async fn test_select_core_tool_system_only_node_ignores_managed_selections() {
+    async fn test_select_core_tool_npm_on_system_only_node_rejects_managed_runtime() {
         let layout = SystemOnlyLayout::new();
-        let system_node = create_fake_executable(&layout.system_bin, "node");
+        let system_node = layout.system_bin.join("node");
+        create_exec_path_node(&layout.system_bin, &system_node);
+        let system_npm = create_fake_executable(&layout.system_bin, "npm");
         std::fs::write(layout.home.join(config::SESSION_VERSION_FILE), "24.0.0").unwrap();
         std::fs::write(layout.home.join("config.json"), r#"{"defaultNodeVersion":"24.0.0"}"#)
             .unwrap();
-        let path = layout.path();
         let managers = [(env_vars::VP_NODE_MANAGER, "system-only")];
         let extra = [
             (env_vars::VP_NODE_VERSION, "24.0.0".into()),
             (env_vars::VP_PATH_INJECTED_TOOLS, "node,npm".into()),
         ];
-        EnvConfig::with_vars_async(
-            system_only_vars(&layout, &path, &managers, &extra),
-            |_| async {
-                for tool in ["node", "pnpm"] {
-                    // The inherited shortcut must not reuse the managed runtime.
-                    let managed = AbsolutePathBuf::new(layout.managed_bin.join(if cfg!(windows) {
-                        "node.exe"
-                    } else {
-                        "node"
-                    }))
-                    .unwrap();
-                    assert!(!reuses_inherited_tool(tool, &managed));
+        let select = |dirs: &[&std::path::Path]| {
+            let path = std::env::join_paths(dirs).unwrap();
+            let vars = system_only_vars(&layout, &path, &managers, &extra);
+            let cwd = layout.cwd.clone();
+            EnvConfig::with_vars_async(vars, move |_| async move {
+                select_core_tool("npm", &cwd, ToolPathEnv::from_env())
+                    .await
+                    .map(|selection| (selection, path))
+            })
+        };
+
+        let (selection, path) = select(&[&layout.system_bin, &layout.managed_bin]).await.unwrap();
+        assert_eq!(selection.node_path.as_path(), system_node.canonicalize().unwrap());
+        assert_eq!(selection.tool_path.as_path(), system_npm.canonicalize().unwrap());
+        assert!(selection.resolution.is_none());
+        assert_eq!(child_path(selection.child_env), path);
+
+        let managed_node = layout.managed_bin.join("node");
+        let managed_install = |path: &std::path::Path| {
+            vec![
+                Error::SystemToolManagedInstall {
+                    tool: "node".into(),
+                    variable: env_vars::VP_NODE_MANAGER,
+                    path: path.display().to_string().into(),
                 }
-                let selection =
-                    select_core_tool("node", &layout.cwd, ToolPathEnv::from_env()).await.unwrap();
-                assert_eq!(selection.node_path.as_path(), system_node);
-                assert_eq!(selection.tool_path.as_path(), system_node);
-                assert!(selection.resolution.is_none());
-                assert_eq!(child_path(selection.child_env), path);
-            },
-        )
-        .await;
+                .to_string(),
+            ]
+        };
+        let error = select(&[&layout.managed_bin, &layout.system_bin]).await.err();
+        assert_eq!(error, Some(managed_install(&managed_node)));
+
+        // An external wrapper first on PATH that runs the managed runtime.
+        let wrapper_bin = layout.home.parent().unwrap().join("wrapper-bin");
+        create_exec_path_node(&wrapper_bin, &managed_node);
+        let error = select(&[&wrapper_bin, &layout.system_bin]).await.err();
+        assert_eq!(error, Some(managed_install(&managed_node.canonicalize().unwrap())));
     }
 
-    /// Under `VP_BYPASS`, system-only Node.js also skips the npm bundled with a
-    /// managed runtime; otherwise bypass keeps reporting the first PATH match.
+    /// Npm on system-only Node.js (rule N) is selected from PATH as before, as
+    /// under `VP_BYPASS`, but never as the npm bundled with a managed runtime.
+    /// Pinned managed npm runs on the PATH `node`, so it stays allowed.
     #[test]
-    fn test_bypass_skips_managed_runtime_npm_with_system_only_node() {
+    fn test_reject_managed_runtime_allows_pinned_npm() {
         let layout = SystemOnlyLayout::new();
         let system_npm = create_fake_executable(&layout.system_bin, "npm");
-        let managed_npm = layout.managed_bin.join(if cfg!(windows) { "npm.exe" } else { "npm" });
+        let managed_npm = layout.managed_bin.join(exe("npm"));
+        let pinned_bin = layout.home.join("package_manager").join("npm").join("10.0.0").join("bin");
+        std::fs::create_dir_all(&pinned_bin).unwrap();
+        let pinned_npm = create_fake_executable(&pinned_bin, "npm");
+        let bypass = |path: &std::ffi::OsStr, managers: &[(&'static str, &'static str)]| {
+            let extra = [
+                (env_vars::VP_BYPASS, std::ffi::OsString::new()),
+                (env_vars::VP_PATH_INJECTED_TOOLS, "npm".into()),
+            ];
+            EnvConfig::with_vars(system_only_vars(&layout, path, managers, &extra), |_| {
+                let npm = find_system_tool("npm").unwrap();
+                reject_managed_runtime("npm", &npm)
+                    .map(|()| npm.as_path().to_path_buf())
+                    .map_err(|error| error.to_string())
+            })
+        };
+
         let path = layout.path();
-        let extra = [(env_vars::VP_BYPASS, std::ffi::OsString::new())];
-
-        EnvConfig::with_vars(system_only_vars(&layout, &path, &[], &extra), |_| {
-            assert_eq!(find_bypass_tool("npm").unwrap().as_path(), managed_npm);
-        });
-        let managers = [(env_vars::VP_NODE_MANAGER, "system-only")];
-        EnvConfig::with_vars(system_only_vars(&layout, &path, &managers, &extra), |_| {
-            assert_eq!(find_bypass_tool("npm").unwrap().as_path(), system_npm);
-            assert_eq!(find_bypass_tool("npx"), None);
-        });
-    }
-
-    /// Under `VP_BYPASS`, a system-only tool may be a foreign executable in a
-    /// bin directory shared with other tools; otherwise bypass skips that bin.
-    #[test]
-    fn test_bypass_selects_foreign_tool_in_bin_with_system_only() {
-        let layout = SystemOnlyLayout::new();
-        let bin = layout.home.join("bin");
-        std::fs::create_dir_all(&bin).unwrap();
-        let foreign_node = create_fake_executable(&bin, "node");
-        let system_node = create_fake_executable(&layout.system_bin, "node");
-        let path = std::env::join_paths([&bin, &layout.system_bin]).unwrap();
-        let extra = [(env_vars::VP_BYPASS, std::ffi::OsString::new())];
-
-        EnvConfig::with_vars(system_only_vars(&layout, &path, &[], &extra), |_| {
-            assert_eq!(find_bypass_tool("node").unwrap().as_path(), system_node);
-        });
-        let managers = [(env_vars::VP_NODE_MANAGER, "system-only")];
-        EnvConfig::with_vars(system_only_vars(&layout, &path, &managers, &extra), |_| {
-            assert_eq!(find_bypass_tool("node").unwrap().as_path(), foreign_node);
-        });
+        assert_eq!(bypass(&path, &[]), Ok(managed_npm.clone()));
+        let node = [(env_vars::VP_NODE_MANAGER, "system-only")];
+        assert_eq!(
+            bypass(&path, &node),
+            Err(Error::SystemToolManagedInstall {
+                tool: "npm".into(),
+                variable: env_vars::VP_NODE_MANAGER,
+                path: managed_npm.display().to_string().into(),
+            }
+            .to_string())
+        );
+        let pinned_first = std::env::join_paths([&pinned_bin, &layout.system_bin]).unwrap();
+        assert_eq!(bypass(&pinned_first, &node), Ok(pinned_npm));
+        let system_first = std::env::join_paths([&layout.system_bin, &layout.managed_bin]).unwrap();
+        assert_eq!(bypass(&system_first, &node), Ok(system_npm));
     }
 
     /// With system-only Node.js, a managed package manager selected by a parent
-    /// is still reused, unless its family is system-only too.
+    /// is still reused, unless its family is system-only too. The managed
+    /// runtime and its bundled npm never are.
     #[test]
     fn test_reuses_inherited_managed_package_manager_with_system_only_node() {
         let layout = SystemOnlyLayout::new();
@@ -2983,6 +3131,10 @@ mod tests {
         EnvConfig::with_vars(system_only_vars(&layout, &path, &managers, &[]), |_| {
             assert!(reuses_inherited_tool("pnpm", &pnpm));
             assert!(!reuses_inherited_tool("npm", &npm));
+            // Nor is the inherited managed runtime itself.
+            let node = AbsolutePathBuf::new(layout.managed_bin.join(exe("node"))).unwrap();
+            assert!(!reuses_inherited_tool("node", &node));
+            assert!(!reuses_inherited_tool("pnpm", &node));
         });
         let managers = [
             (env_vars::VP_NODE_MANAGER, "system-only"),

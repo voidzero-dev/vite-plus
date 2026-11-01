@@ -54,3 +54,13 @@ System-only: the system Node.js first on PATH, as vp node selects, even with man
 ```
 true
 ```
+
+## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} VP_NODE_MANAGER=system-only VP_NODE_DIST_MIRROR=http://127.0.0.1:1 NPM_CONFIG_REGISTRY=http://127.0.0.1:1 vpx --print process.execPath.includes('system-bin')`
+
+System-only with the node shim first on PATH fails and suggests `vp env off node`, as vp node does.
+
+**Exit code:** 1
+
+```
+error: vpx: VP_NODE_MANAGER=system-only requires a system 'node', but the Vite+ shim comes first on PATH; run `vp env off node` to move the shims after the system tools
+```

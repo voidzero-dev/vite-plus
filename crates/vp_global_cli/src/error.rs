@@ -66,6 +66,13 @@ pub enum Error {
     )]
     SystemToolBehindShim { tool: Str, variable: &'static str, component: Str },
 
+    /// A `VP_*_MANAGER=system-only` lookup reached a Vite+ managed install,
+    /// which a process with other settings left on PATH.
+    #[error(
+        "{variable}=system-only rejects the Vite+ managed install at '{path}' that PATH selects for '{tool}'; run `vp env doctor` to check PATH"
+    )]
+    SystemToolManagedInstall { tool: Str, variable: &'static str, path: Str },
+
     #[error("{0}")]
     Setup(#[from] vp_setup::error::Error),
 

@@ -80,17 +80,9 @@ pub async fn execute(
         // fails without searching PATH, even when a system tool comes before it.
         if !from_wrapper
             && is_core_shim_tool(tool)
-            && crate::shim::dispatch::system_only_variable_for_tool(tool).is_some()
+            && let Some(path) = crate::shim::dispatch::resolve_system_only_tool(tool)
         {
-            // Short aliases (`pn`, `pnx`) map to the binaries the family installs.
-            let bin_name = vp_pm_cli::PackageManagerType::from_tool(tool)
-                .map_or(tool.as_str(), |kind| kind.bin_name_for_tool(tool));
-            let path = crate::shim::dispatch::resolve_effective_tool(
-                bin_name,
-                config::EffectiveMode::SystemOnly,
-            )?
-            .expect("system-only resolution returns a path or an error");
-            return Ok(exit_status(crate::shim::exec::exec_tool(&path, &args, env)));
+            return Ok(exit_status(crate::shim::exec::exec_tool(&path?, &args, env)));
         }
         // Dispatch assumes the shell's PATH lookup already preferred system-first tools, so repeat it here.
         if !from_wrapper
@@ -99,6 +91,10 @@ pub async fn execute(
                 == config::ShimMode::SystemFirst
             && let Some(path) = crate::shim::dispatch::find_system_tool(tool)
         {
+            // Npm on system-only Node.js must not be the npm bundled with a managed runtime.
+            if crate::shim::dispatch::requires_system_tool(tool) {
+                crate::shim::dispatch::reject_managed_runtime(tool, &path)?;
+            }
             return Ok(exit_status(crate::shim::exec::exec_tool(&path, &args, env)));
         }
         let exit_code = shim_dispatch(tool, &args, env).await;

@@ -493,16 +493,9 @@ async fn run_node(args: Vec<String>, cwd: &AbsolutePath) -> i32 {
     output::route_user_output_to_stderr();
     // As `vp node` does: system-only Node.js comes from PATH here, not from dispatch,
     // since its shim fails without searching PATH.
-    if crate::shim::dispatch::system_only_variable_for_tool("node").is_some() {
-        return match crate::shim::dispatch::resolve_effective_tool(
-            "node",
-            super::env::config::EffectiveMode::SystemOnly,
-        ) {
-            Ok(node) => crate::shim::exec::exec_tool(
-                &node.expect("system-only resolution returns a path or an error"),
-                &args,
-                env,
-            ),
+    if let Some(node) = crate::shim::dispatch::resolve_system_only_tool("node") {
+        return match node {
+            Ok(node) => crate::shim::exec::exec_tool(&node, &args, env),
             Err(error) => {
                 output::error(&format!("vpx: {error}"));
                 1
