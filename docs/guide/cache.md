@@ -64,6 +64,8 @@ tasks: {
 }
 ```
 
+A task that rewrites a file it also reads stays cacheable. For example, `tsc --incremental` reads and rewrites `tsconfig.tsbuildinfo`: the next run is a cache hit if the file is as `tsc` left it. If the file is missing, as on a fresh checkout, the hit restores it.
+
 ## Environment Variables
 
 By default, tasks run in a clean environment. Only a small set of common variables, such as `PATH`, `HOME`, and `CI`, are passed through. Other environment variables are neither visible to the task nor included in the cache fingerprint.

@@ -56,6 +56,27 @@ export function exposeLoaderInitialization(source: string): string {
   return source;
 }
 
+/**
+ * Track the oxc 0.156 rename of `VariableDeclarationKind::is_await` to
+ * `is_await_using` (same `AwaitUsing` semantics). oxc-node v1.0.1 still calls the
+ * old name and does not compile against the workspace oxc version without this.
+ * Remove once the pinned oxc-node calls `is_await_using` itself.
+ */
+export function fixVariableDeclarationKindRename(source: string): string {
+  const original = 'self.0 |= it.kind.is_await();';
+  const replacement = 'self.0 |= it.kind.is_await_using();';
+  if (source.includes(original)) {
+    return source.replace(original, replacement);
+  }
+  if (!source.includes(replacement)) {
+    throw new Error(
+      '[patch-oxc-node] Could not find the `is_await` call in oxc-node/src/lib.rs. ' +
+        'The vendored oxc-node may have absorbed the oxc rename; drop fixVariableDeclarationKindRename.',
+    );
+  }
+  return source;
+}
+
 export function patchOxcNode(rootDir: string = process.cwd()): void {
   const version = oxcVersion(readFileSync(join(rootDir, 'Cargo.toml'), 'utf-8'), 'Cargo.toml');
   const cargoTomlPath = join(rootDir, OXC_NODE_DIR, 'Cargo.toml');
@@ -67,10 +88,15 @@ export function patchOxcNode(rootDir: string = process.cwd()): void {
   }
   const libPath = join(rootDir, OXC_NODE_DIR, 'src/lib.rs');
   const source = readFileSync(libPath, 'utf-8');
-  const patchedSource = exposeLoaderInitialization(source);
+  const exposedSource = exposeLoaderInitialization(source);
+  const patchedSource = fixVariableDeclarationKindRename(exposedSource);
   if (patchedSource !== source) {
     writeFileSync(libPath, patchedSource, 'utf-8');
-    log('✓ lib.rs: loader initialization available to embedders');
+    const changes = [
+      exposedSource !== source && 'loader initialization available to embedders',
+      patchedSource !== exposedSource && 'is_await_using rename',
+    ].filter(Boolean);
+    log(`✓ lib.rs: ${changes.join(', ')}`);
   }
 }
 

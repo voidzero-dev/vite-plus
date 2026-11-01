@@ -12,6 +12,7 @@
  * 4. logger.ts: Change default prefix from '[vite]' to '[vite+]'
  * 5. plugins/reporter.ts: Suppress redundant "vite v<version>" native reporter line
  * 6. config.ts: Suppress the native-loader notice and support an explicit root base
+ * 7. rolldown.dts.config.ts: Remove runtime-only chunks from the dts build
  */
 
 import { execFileSync } from 'node:child_process';
@@ -119,6 +120,7 @@ export function brandVite(rootDir: string = process.cwd()): void {
       'logger.ts',
       'plugins/reporter.ts',
       'config.ts',
+      '../../rolldown.dts.config.ts',
     ],
     { cwd: nodeDir },
   );
@@ -230,6 +232,41 @@ export function brandVite(rootDir: string = process.cwd()): void {
     'config.ts',
     'Suppressed native config loader notice and enabled an explicit root base',
     patchedConfig === configSource ? 'already' : 'patched',
+  );
+
+  // 7. rolldown.dts.config.ts: Drop the orphan runtime chunk from the dts build.
+  // Since rolldown v1.2.16 (rolldown/rolldown#11353), emitted entries place the
+  // runtime in its own chunk. In this dts-only build the chunk only re-exports
+  // runtime helpers (`export { __exportAll as t }`), no declaration imports it,
+  // and `tsc --project tsconfig.check.json` rejects the undeclared helper, so
+  // remove chunks that contain nothing but the rolldown runtime module.
+  const dtsConfigFile = join(rootDir, VITE_DIR, 'packages', 'vite', 'rolldown.dts.config.ts');
+  logPatch(
+    'rolldown.dts.config.ts',
+    'Dropped runtime-only chunks from the dts build',
+    replaceInFile(
+      dtsConfigFile,
+      '  plugins: [\n    esmifyPostcssLoadConfigDts(),',
+      `  plugins: [
+    // Vite+ patch: remove chunks that only host the rolldown runtime module.
+    // Dts-only output never references their helper exports, and the emitted
+    // orphan chunk fails vite's post-build dts type-check.
+    {
+      name: 'remove-runtime-only-chunks',
+      generateBundle(_options, bundle) {
+        for (const [fileName, chunk] of Object.entries(bundle)) {
+          if (
+            chunk.type === 'chunk' &&
+            Object.keys(chunk.modules).length > 0 &&
+            Object.keys(chunk.modules).every((id) => id.includes('rolldown/runtime'))
+          ) {
+            delete bundle[fileName]
+          }
+        }
+      },
+    },
+    esmifyPostcssLoadConfigDts(),`,
+    ),
   );
 
   log('Done!');

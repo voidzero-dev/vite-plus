@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'vitest';
 
-import { exposeLoaderInitialization, setOxcVersion } from '../patch-oxc-node.ts';
+import {
+  exposeLoaderInitialization,
+  fixVariableDeclarationKindRename,
+  setOxcVersion,
+} from '../patch-oxc-node.ts';
 
 describe('setOxcVersion', () => {
   const cargoToml = `[dependencies]
@@ -48,5 +52,18 @@ pub fn transform_async_js() {}
     expect(() =>
       exposeLoaderInitialization(source.replace('freezeTsconfig', 'freezeConfig')),
     ).toThrow(/freezeTsconfig registration/);
+  });
+});
+
+describe('fixVariableDeclarationKindRename', () => {
+  test('tracks the oxc 0.156 is_await_using rename and is idempotent', () => {
+    const source = 'self.0 |= it.kind.is_await();';
+    const patched = fixVariableDeclarationKindRename(source);
+    expect(patched).toBe('self.0 |= it.kind.is_await_using();');
+    expect(fixVariableDeclarationKindRename(patched)).toBe(patched);
+  });
+
+  test('fails when the vendored oxc-node no longer has either spelling', () => {
+    expect(() => fixVariableDeclarationKindRename('self.0 = true;')).toThrow(/`is_await` call/);
   });
 });
