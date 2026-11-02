@@ -16,3 +16,23 @@ steps = [
   ["vp", "run", "build"],
   { argv = ["vp", "run", "run"], comment = "The retained command still transforms its JSX dependency after a fresh install." },
 ]
+
+[[case]]
+name = "migration_oxnode_inherited_startup_preload"
+vp = ["local", "global"]
+local-registry = true
+env = { VP_NODE_VERSION = "22.23.4" }
+unset-env = ["NODE_OPTIONS", "OXC_TRANSFORM_ALL", "VP_SCRIPT_TSCONFIG", "TSX_TSCONFIG_PATH", "OXC_TSCONFIG_PATH", "TS_NODE_PROJECT"]
+comment = "Published oxc-node 1.0.1 verifies startup ordering with a preload inherited through NODE_OPTIONS and no register import to replace. The local registry supplies it; the JSX dependency is a local fixture."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "scripts.run", "NODE_OPTIONS='-r ./setup.cjs' oxnode entry.ts"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "run", "run"], comment = "The inherited preload enables JSX dependency transforms before the standalone loader initializes." },
+  ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  { argv = ["vpt", "print-file", "package.json", "setup.cjs"], comment = "The build migrates, while the inherited-preload command and both oxc-node dependencies stay intact." },
+  { argv = ["vpt", "rm", "-rf", "node_modules"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  ["vpt", "stat-file", "node_modules/@oxc-node/cli", "node_modules/@oxc-node/core"],
+  ["vp", "run", "build"],
+  { argv = ["vp", "run", "run"], comment = "After a fresh install, the preserved command still prints the JSX dependency's value." },
+]

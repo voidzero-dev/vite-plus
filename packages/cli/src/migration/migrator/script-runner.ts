@@ -273,7 +273,16 @@ function rewriteSegment(
   }
   const launcher = COMMAND_LAUNCHERS.get(values[start]);
   if (values[start] === runner.name || runner.aliases?.includes(values[start])) {
-    rewriteRunner(runner, rewrite, tokens, first, start, envReason, assignments);
+    // Inherited startup hooks also matter when no register import needs replacing.
+    rewriteRunner(
+      runner,
+      rewrite,
+      tokens,
+      first,
+      start,
+      envReason ?? environment.keepReason,
+      assignments,
+    );
   } else if (values[start] === 'node') {
     rewriteNodeLoader(runner, rewrite, tokens, first, start, envReason, assignments, environment);
   } else if (shell) {

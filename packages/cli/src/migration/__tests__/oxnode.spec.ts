@@ -103,6 +103,14 @@ describe('rewriteOxnodeCommand', () => {
     ['oxnode --import @oxc-node/core/register a.ts', 'vpx a.ts'],
     ['oxnode --import vite-plus/register a.ts', 'vpx --import vite-plus/register a.ts'],
     ['oxnode --loader ./image-loader.js a.ts', 'vpx --loader ./image-loader.js a.ts'],
+    [
+      'NODE_OPTIONS="--loader ./image-loader.js" oxnode a.ts',
+      'NODE_OPTIONS="--loader ./image-loader.js" vpx a.ts',
+    ],
+    [
+      'NODE_OPTIONS=--import=vite-plus/register oxnode a.ts',
+      'NODE_OPTIONS=--import=vite-plus/register vpx a.ts',
+    ],
     ['oxnode a.ts && oxnode watch b.ts', 'vpx a.ts && vpx --watch b.ts'],
     ["node -e 'console.log(1)' && oxnode a.ts", "node -e 'console.log(1)' && vpx a.ts"],
     ['concurrently "oxnode watch api.ts" "vp dev"', 'concurrently "vpx --watch api.ts" "vp dev"'],
@@ -122,6 +130,14 @@ describe('rewriteOxnodeCommand', () => {
     ['oxnode --import=./setup.ts a.ts', 'additional startup preload'],
     ['oxnode watch -r ./setup.cjs a.ts', 'additional startup preload'],
     ['pnpm exec oxnode -r ./setup.cjs a.ts', 'additional startup preload'],
+    ["NODE_OPTIONS='-r ./setup.cjs' oxnode a.ts", 'additional startup preload'],
+    [
+      'cross-env NODE_OPTIONS="--require=dotenv/config" pnpm exec oxnode a.ts',
+      'additional startup preload',
+    ],
+    ["NODE_OPTIONS='--import ./setup.mjs' oxnode watch a.ts", 'additional startup preload'],
+    ['NODE_OPTIONS="-r ./setup.cjs" concurrently "oxnode a.ts"', 'additional startup preload'],
+    ['cross-env-shell NODE_OPTIONS="-r ./setup.cjs" "oxnode a.ts"', 'additional startup preload'],
     ['node -r ./setup.cjs --import @oxc-node/core/register a.ts', 'additional startup preload'],
     [
       'node --require=dotenv/config --import @oxc-node/core/register a.ts',
@@ -264,27 +280,30 @@ describe('oxnode migration', () => {
     fs.rmSync(root, { recursive: true, force: true });
   });
 
-  it('retains a direct runner whose startup preload enables dependency transforms', () => {
-    const devDependencies = { '@oxc-node/cli': '1.0.1', '@oxc-node/core': '1.0.1' };
-    write('package.json', {
-      scripts: { build: 'oxnode build.ts', run: 'oxnode -r ./setup.cjs entry.ts' },
-      devDependencies,
-    });
-    write('setup.cjs', "process.env.OXC_TRANSFORM_ALL = '1';\n");
-    write('entry.ts', "import value from 'jsx-dep'; console.log(value);\n");
-    const report = createMigrationReport();
+  it.each(['oxnode -r ./setup.cjs entry.ts', "NODE_OPTIONS='-r ./setup.cjs' oxnode entry.ts"])(
+    'retains %s when its startup preload enables dependency transforms',
+    (command) => {
+      const devDependencies = { '@oxc-node/cli': '1.0.1', '@oxc-node/core': '1.0.1' };
+      write('package.json', {
+        scripts: { build: 'oxnode build.ts', run: command },
+        devDependencies,
+      });
+      write('setup.cjs', "process.env.OXC_TRANSFORM_ALL = '1';\n");
+      write('entry.ts', "import value from 'jsx-dep'; console.log(value);\n");
+      const report = createMigrationReport();
 
-    expect(migrateOxnodeToVpx(root, undefined, report)).toEqual({
-      changed: true,
-      dependencyRemoved: false,
-    });
-    expect(readJson('package.json').scripts).toEqual({
-      build: 'vpx build.ts',
-      run: 'oxnode -r ./setup.cjs entry.ts',
-    });
-    expect(readJson('package.json').devDependencies).toEqual(devDependencies);
-    expect(report.warnings).toContainEqual(expect.stringContaining('additional startup preload'));
-  });
+      expect(migrateOxnodeToVpx(root, undefined, report)).toEqual({
+        changed: true,
+        dependencyRemoved: false,
+      });
+      expect(readJson('package.json').scripts).toEqual({
+        build: 'vpx build.ts',
+        run: command,
+      });
+      expect(readJson('package.json').devDependencies).toEqual(devDependencies);
+      expect(report.warnings).toContainEqual(expect.stringContaining('additional startup preload'));
+    },
+  );
 
   it('rewrites scripts, JSON staged tasks and shebangs, and removes unused packages', () => {
     write('package.json', {
