@@ -579,6 +579,48 @@ describe('migrateTsxToVpx', () => {
       'ava.config.mjs still uses tsx',
     ],
     [
+      'an import after a regular expression containing slashes',
+      'src/regex.ts',
+      'const slash = /[//]/; import("tsx/esm/api");\n',
+      'src/regex.ts still uses tsx',
+    ],
+    [
+      'a command string containing comment markers',
+      'src/command.ts',
+      'execSync(`tsx job.ts --url https://example.com --glob "src/*"`);\n',
+      'src/command.ts still uses tsx',
+    ],
+    [
+      'a runtime import after a Unicode comment',
+      'src/unicode.ts',
+      'const emoji = "🦀"; /* 文档: import("tsx") */ import("tsx/esm/api");\n',
+      'src/unicode.ts still uses tsx',
+    ],
+    [
+      'an import after a line comment',
+      'src/commented-import.ts',
+      'import(// Load the runtime\n"tsx/esm/api");\n',
+      'src/commented-import.ts still uses tsx',
+    ],
+    [
+      'a JSDoc import type',
+      'src/options.js',
+      "/** @param {import('tsx/esm/api').RegisterOptions} options */\nexport function withDefaults(options) { return options; }\n",
+      'src/options.js still uses tsx',
+    ],
+    [
+      'a JSDoc import tag',
+      'src/options.js',
+      "/** @import { RegisterOptions } from 'tsx/esm/api' */\n/** @param {RegisterOptions} options */\nexport function withDefaults(options) { return options; }\n",
+      'src/options.js still uses tsx',
+    ],
+    [
+      'a file that cannot be parsed',
+      'src/invalid.ts',
+      'const value = ; /* import("tsx") */\n',
+      'src/invalid.ts still uses tsx',
+    ],
+    [
       'a framework component',
       'src/pages/index.astro',
       "---\nimport { tsImport } from 'tsx/esm/api';\n---\n",
@@ -601,6 +643,61 @@ describe('migrateTsxToVpx', () => {
     expect(readJson('package.json').scripts.dev).toBe('vpx --watch src/server.ts');
     expect(readJson('package.json').devDependencies).toEqual({ tsx: '^4.20.0' });
     expect(report.warnings).toContain(`Kept the tsx devDependency in package.json: ${user}.`);
+  });
+
+  it.each([
+    [
+      'js',
+      '@typedef {{ nested: { enabled: boolean }, options: import("tsx/esm/api").RegisterOptions }} Options',
+    ],
+    ['jsx', '@param {"}" | import("tsx/esm/api").RegisterOptions} options'],
+    ['mjs', '@type {typeof import("tsx/esm/api")}'],
+    ['js', '@type import("tsx/esm/api").RegisterOptions'],
+    ['js', '@type typeof import("tsx/esm/api")'],
+    ['js', '@type null | import("tsx/esm/api").RegisterOptions - Options for registration.'],
+    ['js', '@type Record<string, import("tsx/esm/api").RegisterOptions>'],
+    ['js', '@type (\n * import("tsx/esm/api").RegisterOptions\n * | undefined\n * )'],
+    ['js', '@type function(import("tsx/esm/api").RegisterOptions): void'],
+    ['js', '@type null | function(import("tsx/esm/api").RegisterOptions): void'],
+    ['js', '@this import("tsx/esm/api").RegisterOptions'],
+    ['js', '@enum import("tsx/esm/api").RegisterOptions'],
+    ['js', '@extends Base<import("tsx/esm/api").RegisterOptions>'],
+    ['js', '@param options {import("tsx/esm/api").RegisterOptions}'],
+    ['js', '@arg options {import("tsx/esm/api").RegisterOptions}'],
+    ['js', '@argument [options={}] {import("tsx/esm/api").RegisterOptions}'],
+    ['js', '@property options.nested {import("tsx/esm/api").RegisterOptions}'],
+    ['js', '@prop [options="]"] {import("tsx/esm/api").RegisterOptions}'],
+    ['js', '@param options[].nested {import("tsx/esm/api").RegisterOptions}'],
+    ['js', '@template T, [U=import("tsx/esm/api").RegisterOptions]'],
+    ['js', '@template {object} T, [U=import("tsx/esm/api").RegisterOptions]'],
+    ['js', '@template T, U,\n * [V=object], [W=import("tsx/esm/api").RegisterOptions]'],
+    ['js', '@template {import("tsx/esm/api").RegisterOptions} T, [U=object]'],
+    [
+      'cjs',
+      '@returns {import("tsx/esm/api", { with: { "resolution-mode": "import" } }).RegisterOptions}',
+    ],
+    ['js', '@import * as tsx from "tsx/esm/api"'],
+    ['js', '@template [T=import("tsx/esm/api").RegisterOptions]'],
+    ['js', '@template {object} [T=object], [U=import("tsx/esm/api").RegisterOptions]'],
+    ['js', '@import {\n * RegisterOptions\n * } from "tsx/esm/api"'],
+    ['js', '@param {{\n * options: import(\n * "tsx/esm/api"\n * ).RegisterOptions\n * }} options'],
+  ])('keeps tsx for a .%s JSDoc type: %s', (extension, annotation) => {
+    write('package.json', {
+      scripts: { start: 'tsx src/server.ts' },
+      devDependencies: { tsx: '^4.20.0' },
+    });
+    write(
+      `src/options.${extension}`,
+      `/** ${annotation} */\nfunction withDefaults(options) { return options; }\n`,
+    );
+    const report = createMigrationReport();
+
+    expect(migrateTsxToVpx(root, undefined, report).dependencyRemoved).toBe(false);
+    expect(readJson('package.json').scripts.start).toBe('vpx src/server.ts');
+    expect(readJson('package.json').devDependencies).toEqual({ tsx: '^4.20.0' });
+    expect(report.warnings).toEqual([
+      `Kept the tsx devDependency in package.json: src/options.${extension} still uses tsx.`,
+    ]);
   });
 
   it.each(['dependencies', 'optionalDependencies', 'peerDependencies'])(
@@ -741,5 +838,138 @@ describe('migrateTsxToVpx', () => {
       expect.stringContaining('Kept tsx in packages/b/package.json scripts "calc"'),
       'Kept the tsx devDependency in package.json: `scripts` in packages/b/package.json still uses tsx.',
     ]);
+  });
+
+  it.each([
+    ['a line comment', 'index.ts', '// import("tsx/esm/api");\nexport {};\n'],
+    ['a loader comment', 'index.js', '/* node --import tsx */\nexport {};\n'],
+    [
+      'a JSDoc description',
+      'index.js',
+      '/** Use import("tsx/esm/api") to load TypeScript. */\nexport {};\n',
+    ],
+    [
+      'a parameter description',
+      'index.js',
+      '/** @param {object} options - See import("tsx/esm/api").RegisterOptions. */\nexport function run(options) {}\n',
+    ],
+    [
+      'an unbraced type description',
+      'index.js',
+      '/** @type object See import("tsx/esm/api").RegisterOptions. */\nexport const options = {};\n',
+    ],
+    [
+      'an unbraced union type description',
+      'index.js',
+      '/** @type object | undefined - See import("tsx/esm/api").RegisterOptions. */\nexport const options = {};\n',
+    ],
+    [
+      'an example after an unbraced type',
+      'index.js',
+      '/** @type object\n * @example\n * import("tsx/esm/api");\n */\nexport const options = {};\n',
+    ],
+    [
+      'a name-first parameter description',
+      'index.js',
+      '/** @param options {object} See import("tsx/esm/api").RegisterOptions. */\nexport function run(options) {}\n',
+    ],
+    [
+      'an optional parameter default',
+      'index.js',
+      '/** @param [options=import("tsx/esm/api")] {object} */\nexport function run(options) {}\n',
+    ],
+    [
+      'a required template parameter description',
+      'index.js',
+      '/** @template T See import("tsx/esm/api").RegisterOptions. */\nexport function run() {}\n',
+    ],
+    [
+      'a defaulted template parameter description',
+      'index.js',
+      '/** @template {object} T, [U=object] See import("tsx/esm/api").RegisterOptions. */\nexport function run() {}\n',
+    ],
+    ['a JSDoc example', 'index.js', '/** @example\n * import("tsx/esm/api");\n */\nexport {};\n'],
+    [
+      'a fenced JSDoc example',
+      'index.js',
+      '/** @example\n * ```js\n * @import { RegisterOptions } from "tsx/esm/api"\n * ```\n */\nexport {};\n',
+    ],
+    [
+      'a non-JSDoc block',
+      'index.js',
+      '/* @param {import("tsx/esm/api").RegisterOptions} options */\nexport function run(options) {}\n',
+    ],
+    [
+      'a type tag in TypeScript',
+      'index.ts',
+      '/** @param {import("tsx/esm/api").RegisterOptions} options */\nexport function run(options: object) {}\n',
+    ],
+    [
+      'an import of another package',
+      'index.js',
+      '/** @import { Options } from "tsx-other" */\nexport {};\n',
+    ],
+    [
+      'a comment inside a template expression',
+      'index.mts',
+      'export const message = `value: ${/* import("tsx") */ 1}`;\n',
+    ],
+    [
+      'a comment inside JSX',
+      'index.tsx',
+      'export const element = <div>{/* import("tsx") */}</div>;\n',
+    ],
+    [
+      'a comment after Unicode text',
+      'index.ts',
+      'export const emoji = "🦀"; /* 文档: import("tsx") */\n',
+    ],
+  ])('removes tsx when only %s mentions it', (_, file, content) => {
+    write('package.json', {
+      scripts: { start: 'tsx src/server.ts' },
+      devDependencies: { tsx: '^4.20.0' },
+    });
+    write(file, content);
+    const report = createMigrationReport();
+
+    expect(migrateTsxToVpx(root, undefined, report).dependencyRemoved).toBe(true);
+    expect(readJson('package.json').devDependencies).toEqual({});
+    expect(report.warnings).toEqual([]);
+  });
+
+  it('removes tsx when the only reference is a code fence inside a JSDoc comment', () => {
+    write('package.json', {
+      type: 'module',
+      scripts: { start: 'tsx index.ts' },
+      devDependencies: { tsx: '^4.20.0' },
+    });
+    write(
+      'index.ts',
+      [
+        '/**',
+        ' * @example',
+        ' * ```tsx',
+        ' * const isEditing = useEditingStore(selectIsEditing);',
+        ' * ```',
+        ' */',
+        'export function useEditingStore() {}',
+        '',
+      ].join('\n'),
+    );
+    const report = createMigrationReport();
+
+    expect(detectTsxProject(root)).toBe(true);
+    expect(migrateTsxToVpx(root, undefined, report)).toEqual({
+      changed: true,
+      dependencyRemoved: true,
+    });
+
+    expect(readJson('package.json')).toEqual({
+      type: 'module',
+      scripts: { start: 'vpx index.ts' },
+      devDependencies: {},
+    });
+    expect(report.tsxMigrated).toBe(true);
+    expect(report.warnings).toEqual([]);
   });
 });
