@@ -78,10 +78,10 @@ jobs:
             --output "${UPGRADE_DEPS_META_DIR}/cli-help-report.md" \
             --github-output "${GITHUB_OUTPUT}"
 
-      - name: Record Kimi K3 start time
+      - name: Record Kimi K3.1 Pro start time
         run: echo "CHECK_UPGRADE_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
 
-      - name: Check upgrade dependencies with Kimi K3
+      - name: Check upgrade dependencies with Kimi K3.1 Pro
         id: check-upgrade-dependencies
         timeout-minutes: ${{ fromJSON(env.CHECK_UPGRADE_TIMEOUT_MINUTES) }}
         # After a timeout, keep the partial fixes for a draft PR; the report-timeouts
@@ -101,12 +101,12 @@ jobs:
             {
               "env": {
                 "ANTHROPIC_BASE_URL": "https://api.kimi.com/coding/",
-                "ANTHROPIC_MODEL": "k3[1m]",
-                "ANTHROPIC_DEFAULT_OPUS_MODEL": "k3[1m]",
+                "ANTHROPIC_MODEL": "k3.1-pro[1m]",
+                "ANTHROPIC_DEFAULT_OPUS_MODEL": "k3.1-pro[1m]",
                 "ANTHROPIC_DEFAULT_SONNET_MODEL": "kimi-for-coding",
                 "ANTHROPIC_DEFAULT_HAIKU_MODEL": "kimi-for-coding",
-                "ANTHROPIC_DEFAULT_FABLE_MODEL": "k3[1m]",
-                "CLAUDE_CODE_SUBAGENT_MODEL": "k3[1m]",
+                "ANTHROPIC_DEFAULT_FABLE_MODEL": "k3.1-pro[1m]",
+                "CLAUDE_CODE_SUBAGENT_MODEL": "k3.1-pro[1m]",
                 "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "1048576",
                 "CLAUDE_CODE_MAX_CONTEXT_TOKENS": "1048576",
                 "CLAUDE_CODE_EFFORT_LEVEL": "max"
@@ -270,22 +270,22 @@ jobs:
             Do NOT run `git commit` or `git push`. A later workflow step commits every
             modified file for you.
           claude_args: |
-            --model "k3[1m]" --max-turns 400 --allowedTools "Bash,Edit,Replace,NotebookEditCell"
+            --model "k3.1-pro[1m]" --max-turns 400 --allowedTools "Bash,Edit,Replace,NotebookEditCell"
           additional_permissions: |
             actions: read
 
-      - name: Check Kimi K3 result
+      - name: Check Kimi K3.1 Pro result
         id: check-upgrade-result
         env:
           EXECUTION_FILE: ${{ steps.check-upgrade-dependencies.outputs.execution_file }}
           OUTCOME: ${{ steps.check-upgrade-dependencies.outcome }}
         run: |
-          # Read the transcript now: the next Kimi K3 step overwrites the execution file.
+          # Read the transcript now: the next Kimi K3.1 Pro step overwrites the execution file.
           node .github/scripts/agent-command-timeouts.ts "${EXECUTION_FILE}" --github-output "${GITHUB_OUTPUT}" ||
-            echo '::warning::Could not read command timeouts from the Kimi K3 execution file.'
+            echo '::warning::Could not read command timeouts from the Kimi K3.1 Pro execution file.'
           elapsed=$(( $(date +%s) - CHECK_UPGRADE_STARTED_AT ))
           if [ "${OUTCOME}" = failure ] && [ "${elapsed}" -lt $(( CHECK_UPGRADE_TIMEOUT_MINUTES * 60 )) ]; then
-            echo '::error::Kimi K3 failed before reaching its timeout.'
+            echo '::error::Kimi K3.1 Pro failed before reaching its timeout.'
             exit 1
           fi
 
@@ -317,7 +317,7 @@ jobs:
           pnpm test:unit
           just snapshot-test
 
-      - name: Enhance PR description with Kimi K3
+      - name: Enhance PR description with Kimi K3.1 Pro
         id: enhance-pr-description
         # Keep the job within its own time limit so the PR is still created.
         timeout-minutes: 30
@@ -333,12 +333,12 @@ jobs:
             {
               "env": {
                 "ANTHROPIC_BASE_URL": "https://api.kimi.com/coding/",
-                "ANTHROPIC_MODEL": "k3[1m]",
-                "ANTHROPIC_DEFAULT_OPUS_MODEL": "k3[1m]",
+                "ANTHROPIC_MODEL": "k3.1-pro[1m]",
+                "ANTHROPIC_DEFAULT_OPUS_MODEL": "k3.1-pro[1m]",
                 "ANTHROPIC_DEFAULT_SONNET_MODEL": "kimi-for-coding",
                 "ANTHROPIC_DEFAULT_HAIKU_MODEL": "kimi-for-coding",
-                "ANTHROPIC_DEFAULT_FABLE_MODEL": "k3[1m]",
-                "CLAUDE_CODE_SUBAGENT_MODEL": "k3[1m]",
+                "ANTHROPIC_DEFAULT_FABLE_MODEL": "k3.1-pro[1m]",
+                "CLAUDE_CODE_SUBAGENT_MODEL": "k3.1-pro[1m]",
                 "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "1048576",
                 "CLAUDE_CODE_MAX_CONTEXT_TOKENS": "1048576",
                 "CLAUDE_CODE_EFFORT_LEVEL": "max"
@@ -361,7 +361,7 @@ jobs:
             ### Build outcomes from earlier steps
             - Upgrade dependencies and sync upstream: ${{ steps.build.outcome }}
             - build-upstream action: ${{ steps.build-upstream.outcome }}
-            - Kimi K3 fixups: ${{ steps.check-upgrade-dependencies.outcome == 'success' && 'success' || 'timed out' }}
+            - Kimi K3.1 Pro fixups: ${{ steps.check-upgrade-dependencies.outcome == 'success' && 'success' || 'timed out' }}
 
             ### Output files to OVERWRITE (these live outside the repo and will NOT be committed)
             - `${{ env.UPGRADE_DEPS_META_DIR }}/commit-message.txt`
@@ -412,7 +412,7 @@ jobs:
               two output files. A later workflow step will consume them.
             - Do NOT modify any file inside the repository working tree.
           claude_args: |
-            --model "k3[1m]" --allowedTools "Bash,Read,Write,Edit"
+            --model "k3.1-pro[1m]" --allowedTools "Bash,Read,Write,Edit"
           additional_permissions: |
             actions: read
 
@@ -478,7 +478,7 @@ jobs:
           base: main
           branch: deps/upstream-update
           title: 'feat(deps): upgrade upstream dependencies'
-          # Final validation does not cover all Kimi K3 fixups, such as documentation
+          # Final validation does not cover all Kimi K3.1 Pro fixups, such as documentation
           # syncs, so a timed-out fixup run stays a draft even when validation passes.
           draft: ${{ steps.final-validation.outcome != 'success' || steps.check-upgrade-dependencies.outcome != 'success' }}
           sign-commits: true
@@ -504,7 +504,7 @@ jobs:
     name: Report timeouts
     needs: upgrade
     # Also runs when the upgrade job fails or exceeds its own time limit. Kept
-    # separate so the Kimi K3 steps never receive a token that can write issues.
+    # separate so the Kimi K3.1 Pro steps never receive a token that can write issues.
     if: always() && needs.upgrade.result != 'skipped'
     runs-on: ubuntu-24.04
     permissions:
@@ -575,7 +575,7 @@ jobs:
               sections.push(['### Step and job timeouts', ...timeouts.map((message) => `- ${message}`)].join('\n'));
             }
             if (commandTimeouts) {
-              sections.push(`### Kimi K3 command timeouts\n${commandTimeouts}`);
+              sections.push(`### Kimi K3.1 Pro command timeouts\n${commandTimeouts}`);
             }
             const body = sections.join('\n\n');
 
