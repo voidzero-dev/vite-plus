@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 
-import { exposeLoaderInitialization, setOxcVersion } from '../patch-oxc-node.ts';
+import { applyOxcApiCompat, exposeLoaderInitialization, setOxcVersion } from '../patch-oxc-node.ts';
 
 describe('setOxcVersion', () => {
   const cargoToml = `[dependencies]
@@ -48,5 +48,24 @@ pub fn transform_async_js() {}
     expect(() =>
       exposeLoaderInitialization(source.replace('freezeTsconfig', 'freezeConfig')),
     ).toThrow(/freezeTsconfig registration/);
+  });
+});
+
+describe('applyOxcApiCompat', () => {
+  const source = `        fn visit_variable_declaration(&mut self, it: &VariableDeclaration<'a>) {
+            self.0 |= it.kind.is_await();
+            walk::walk_variable_declaration(self, it);
+        }
+`;
+
+  test('renames the oxc 0.155 API and stays idempotent', () => {
+    const patched = applyOxcApiCompat(source);
+    expect(patched).toContain('it.kind.is_await_using()');
+    expect(patched).not.toContain('it.kind.is_await()');
+    expect(applyOxcApiCompat(patched)).toBe(patched);
+  });
+
+  test('fails when the call site changes upstream', () => {
+    expect(() => applyOxcApiCompat('fn visit_variable_declaration() {}')).toThrow(/is_await/);
   });
 });

@@ -40,6 +40,27 @@ export function setOxcVersion(cargoToml: string, version: string): string {
   return replaceCargoCrateVersion(cargoToml, 'oxc', version);
 }
 
+/**
+ * oxc 0.156 renamed `VariableDeclarationKind::is_await` to `is_await_using`;
+ * both mean `await using` declarations. oxc-node normally pins its own oxc, but
+ * the binding links the workspace oxc (which follows Rolldown), so keep the
+ * call compiling against the newer API.
+ */
+export function applyOxcApiCompat(source: string): string {
+  const original = 'it.kind.is_await()';
+  const replacement = 'it.kind.is_await_using()';
+  if (source.includes(replacement)) {
+    return source;
+  }
+  if (source.includes(original)) {
+    return source.replace(original, replacement);
+  }
+  throw new Error(
+    '[patch-oxc-node] Could not find the `is_await` call in oxc-node/src/lib.rs.\n' +
+      '  The upstream code may have changed. Please review the oxc API compat patch.',
+  );
+}
+
 /** Keep the loader's JS environment and diagnostic source without its NAPI exports. */
 export function exposeLoaderInitialization(source: string): string {
   for (const name of ['freezeTsconfig', 'initializeLoader']) {
@@ -67,10 +88,10 @@ export function patchOxcNode(rootDir: string = process.cwd()): void {
   }
   const libPath = join(rootDir, OXC_NODE_DIR, 'src/lib.rs');
   const source = readFileSync(libPath, 'utf-8');
-  const patchedSource = exposeLoaderInitialization(source);
+  const patchedSource = applyOxcApiCompat(exposeLoaderInitialization(source));
   if (patchedSource !== source) {
     writeFileSync(libPath, patchedSource, 'utf-8');
-    log('✓ lib.rs: loader initialization available to embedders');
+    log('✓ lib.rs: loader initialization available to embedders, oxc API compat applied');
   }
 }
 

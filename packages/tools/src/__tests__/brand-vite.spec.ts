@@ -61,6 +61,17 @@ const upstreamSources = {
   ].join('\n'),
 };
 
+const dtsConfigSource = [
+  "import { defineConfig } from 'rolldown'",
+  'export default defineConfig({',
+  '  plugins: [',
+  '    addNodePrefix(),',
+  '    dts({',
+  '  ],',
+  '})',
+  '',
+].join('\n');
+
 function write(file: string, source: string) {
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, source);
@@ -69,6 +80,7 @@ function write(file: string, source: string) {
 function createUpstreamFixture(configSource = upstreamSources['config.ts']): {
   root: string;
   nodeDir: string;
+  dtsConfigFile: string;
   manifest: string;
   lockfile: string;
   unrelatedSource: string;
@@ -80,6 +92,8 @@ function createUpstreamFixture(configSource = upstreamSources['config.ts']): {
   for (const [file, source] of Object.entries(upstreamSources)) {
     write(join(nodeDir, file), file === 'config.ts' ? configSource : source);
   }
+  const dtsConfigFile = join(viteDir, 'packages/vite/rolldown.dts.config.ts');
+  write(dtsConfigFile, dtsConfigSource);
   const manifest = join(viteDir, 'packages/vite/package.json');
   const lockfile = join(viteDir, 'pnpm-lock.yaml');
   const unrelatedSource = join(nodeDir, 'server.ts');
@@ -102,11 +116,12 @@ function createUpstreamFixture(configSource = upstreamSources['config.ts']): {
     'upstream fixture',
   );
 
-  return { root, nodeDir, manifest, lockfile, unrelatedSource };
+  return { root, nodeDir, dtsConfigFile, manifest, lockfile, unrelatedSource };
 }
 
 test('branding preserves aligned dependencies and unrelated changes across repeated builds', () => {
-  const { root, nodeDir, manifest, lockfile, unrelatedSource } = createUpstreamFixture();
+  const { root, nodeDir, dtsConfigFile, manifest, lockfile, unrelatedSource } =
+    createUpstreamFixture();
   try {
     alignVendoredVitestDependencies(root, '5.0.0');
     const alignedManifest = readFileSync(manifest, 'utf8');
@@ -123,6 +138,11 @@ test('branding preserves aligned dependencies and unrelated changes across repea
       expect(readFileSync(unrelatedSource, 'utf8')).toBe('// unrelated local source change\n');
       expect(readFileSync(join(nodeDir, 'cli.ts'), 'utf8')).toContain("cac('vp')");
       expect(readFileSync(join(nodeDir, 'build.ts'), 'utf8')).not.toContain('logger.info(');
+      const dtsConfigPatched = readFileSync(dtsConfigFile, 'utf8');
+      expect(dtsConfigPatched).toContain('function stripOrphanRuntimeChunk(): Plugin {');
+      expect(dtsConfigPatched).toContain(
+        '    addNodePrefix(),\n    stripOrphanRuntimeChunk(),\n    dts({',
+      );
       const configSource = readFileSync(join(nodeDir, 'config.ts'), 'utf8');
       expect(() => assertViteConfigPatched(configSource)).not.toThrow();
       expect(configSource).toContain('false &&\n        createNativeConfigCompatPlugin');

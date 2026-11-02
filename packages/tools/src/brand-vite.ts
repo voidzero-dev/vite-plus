@@ -12,6 +12,8 @@
  * 4. logger.ts: Change default prefix from '[vite]' to '[vite+]'
  * 5. plugins/reporter.ts: Suppress redundant "vite v<version>" native reporter line
  * 6. config.ts: Suppress the native-loader notice and support an explicit root base
+ * 7. rolldown.dts.config.ts: Drop the orphan `rolldown-runtime` chunk Rolldown
+ *    1.2.16 leaves in emitDtsOnly builds (rolldown/rolldown#11213)
  */
 
 import { execFileSync } from 'node:child_process';
@@ -122,6 +124,9 @@ export function brandVite(rootDir: string = process.cwd()): void {
     ],
     { cwd: nodeDir },
   );
+  execFileSync('git', ['restore', '--source=HEAD', '--', 'rolldown.dts.config.ts'], {
+    cwd: join(rootDir, VITE_DIR, 'packages', 'vite'),
+  });
 
   // 1. constants.ts: Add VITE_PLUS_VERSION constant after VERSION
   const constantsFile = join(nodeDir, 'constants.ts');
@@ -230,6 +235,59 @@ export function brandVite(rootDir: string = process.cwd()): void {
     'config.ts',
     'Suppressed native config loader notice and enabled an explicit root base',
     patchedConfig === configSource ? 'already' : 'patched',
+  );
+
+  // 7. rolldown.dts.config.ts: Drop the orphan `rolldown-runtime` chunk.
+  // Rolldown 1.2.16 emits a standalone runtime chunk in emitDtsOnly builds even
+  // when every helper reference was tree-shaken away
+  // (https://github.com/rolldown/rolldown/issues/11213). The chunk renders only
+  // `export { __exportAll as t };` with no definition, which fails the
+  // `build-types-check` tsc pass over dist. Nothing imports the chunk, so
+  // deleting it restores the Rolldown 1.2.15 output byte-for-byte.
+  const dtsConfigFile = join(rootDir, VITE_DIR, 'packages', 'vite', 'rolldown.dts.config.ts');
+  const orphanChunkPlugin =
+    '/**\n' +
+    ' * Vite+ patch: drop the orphan `rolldown-runtime` chunk Rolldown 1.2.16\n' +
+    ' * leaves in emitDtsOnly builds\n' +
+    ' * (https://github.com/rolldown/rolldown/issues/11213). It holds only an\n' +
+    ' * unused `__exportAll` facade export that fails the `tsc` types check.\n' +
+    ' * Chunk metadata still lists it as an import of `index.d.ts`, but the\n' +
+    ' * rendered code never references it; in an emitDtsOnly build a chunk\n' +
+    ' * containing only the JS runtime module is never legitimate dts content.\n' +
+    ' */\n' +
+    'function stripOrphanRuntimeChunk(): Plugin {\n' +
+    '  return {\n' +
+    "    name: 'strip-orphan-runtime-chunk',\n" +
+    '    generateBundle: {\n' +
+    "      order: 'post',\n" +
+    '      handler(_opts, bundle) {\n' +
+    '        for (const [fileName, chunk] of Object.entries(bundle)) {\n' +
+    '          if (\n' +
+    "            chunk.type === 'chunk' &&\n" +
+    '            chunk.moduleIds.length > 0 &&\n' +
+    "            chunk.moduleIds.every((id) => id === '\\0rolldown/runtime.js')\n" +
+    '          ) {\n' +
+    '            delete bundle[fileName]\n' +
+    '          }\n' +
+    '        }\n' +
+    '      },\n' +
+    '    },\n' +
+    '  }\n' +
+    '}\n' +
+    '\n' +
+    'export default defineConfig({';
+  const dtsConfigResults = [
+    replaceInFile(dtsConfigFile, 'export default defineConfig({', orphanChunkPlugin),
+    replaceInFile(
+      dtsConfigFile,
+      '    addNodePrefix(),\n    dts({',
+      '    addNodePrefix(),\n    stripOrphanRuntimeChunk(),\n    dts({',
+    ),
+  ];
+  logPatch(
+    'rolldown.dts.config.ts',
+    'Dropped orphan rolldown-runtime chunk from the dts build',
+    dtsConfigResults.includes('patched') ? 'patched' : 'already',
   );
 
   log('Done!');
