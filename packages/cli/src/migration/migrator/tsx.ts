@@ -110,6 +110,9 @@ const TSX_CODE_REFERENCE = new RegExp(
 // JSDoc types in JavaScript can depend on tsx's declarations without a runtime import.
 const JSDOC_TYPE_TAG =
   /(?:^|\s)@(arg|argument|augments|enum|extends|implements|import|param|prop|property|return|returns|satisfies|template|this|type|typedef)\b\s*/g;
+const JSDOC_PARAMETER_NAME = /^[^\s{[=]+(?:\[\])?(?:\.[^\s{[=]+)*/;
+const JSDOC_TEMPLATE_PARAMETER_NAME =
+  /^(?:(?:in|out|const)\s+)*[$\p{ID_Start}][$\u200C\u200D\p{ID_Continue}]*/u;
 const TSX_IMPORT_TYPE = /\bimport\s*\(\s*(['"])tsx(?:\/[^'"]*)?\1\s*(?:,|\))/;
 const TSX_JSDOC_IMPORT =
   /^(?:[^\s{},]+\s*,\s*)?(?:\{[^}]*\}|\*\s+as\s+[^\s{},]+|[^\s{},]+)\s+from\s*(['"])tsx(?:\/[^'"]*)?\1/;
@@ -821,58 +824,63 @@ function jsdocUsesTsx(value: string): boolean {
   const text = value
     .replaceAll(/^\s*\* ?/gm, '')
     .replaceAll(/```[\s\S]*?(?:```|$)|~~~[\s\S]*?(?:~~~|$)/g, '');
-  for (const tag of text.matchAll(JSDOC_TYPE_TAG)) {
-    let body = text.slice(tag.index + tag[0].length);
-    if (tag[1] === 'import') {
-      if (TSX_JSDOC_IMPORT.test(body)) {
-        return true;
-      }
-      continue;
+  for (const match of text.matchAll(JSDOC_TYPE_TAG)) {
+    const [tag, name] = match;
+    if (jsdocTagUsesTsx(name, text.slice(match.index + tag.length))) {
+      return true;
     }
-    // Parameter and property types can follow the name, including an optional
-    // name with a default value. Defaults themselves are not type expressions.
-    if (/^(?:arg|argument|param|prop|property)$/.test(tag[1]) && !body.startsWith('{')) {
-      const end = body.startsWith('[')
-        ? jsdocDelimitedEnd(body)
-        : /^[^\s{[=]+(?:\[\])?(?:\.[^\s{[=]+)*/.exec(body)?.[0].length;
-      body = end === undefined ? '' : body.slice(end).trimStart();
+  }
+  return false;
+}
+
+function jsdocTagUsesTsx(name: string, body: string): boolean {
+  if (name === 'import') {
+    return TSX_JSDOC_IMPORT.test(body);
+  }
+  // Parameter and property types can follow the name, including an optional
+  // name with a default value. Defaults themselves are not type expressions.
+  if (/^(?:arg|argument|param|prop|property)$/.test(name) && !body.startsWith('{')) {
+    const end = body.startsWith('[')
+      ? jsdocDelimitedEnd(body)
+      : JSDOC_PARAMETER_NAME.exec(body)?.[0].length;
+    if (end === undefined) {
+      return false;
     }
-    if (body.startsWith('{')) {
-      const end = jsdocDelimitedEnd(body);
-      if (end === undefined) {
-        continue;
-      }
-      if (TSX_IMPORT_TYPE.test(body.slice(0, end))) {
-        return true;
-      }
-      body = body.slice(end).trimStart();
-    } else if (/^(?:type|this|enum|augments|extends|implements)$/.test(tag[1])) {
-      if (jsdocUnbracedTypeUsesTsx(body)) {
-        return true;
-      }
+    body = body.slice(end).trimStart();
+  }
+  if (body.startsWith('{')) {
+    const end = jsdocDelimitedEnd(body);
+    if (end === undefined) {
+      return false;
     }
-    if (tag[1] !== 'template') {
-      continue;
+    if (TSX_IMPORT_TYPE.test(body.slice(0, end))) {
+      return true;
     }
-    // A constraint is followed by a comma-separated list of required names and
-    // bracketed defaults. Stop at the first description, not the first name.
-    while (body) {
-      const end = body.startsWith('[')
-        ? jsdocDelimitedEnd(body)
-        : /^(?:(?:in|out|const)\s+)*[$\p{ID_Start}][$\u200C\u200D\p{ID_Continue}]*/u.exec(body)?.[0]
-            .length;
-      if (end === undefined) {
-        break;
-      }
-      if (body.startsWith('[') && TSX_IMPORT_TYPE.test(body.slice(0, end))) {
-        return true;
-      }
-      body = body.slice(end).trimStart();
-      if (!body.startsWith(',')) {
-        break;
-      }
-      body = body.slice(1).trimStart();
+    body = body.slice(end).trimStart();
+  } else if (/^(?:type|this|enum|augments|extends|implements)$/.test(name)) {
+    return jsdocUnbracedTypeUsesTsx(body);
+  }
+  if (name !== 'template') {
+    return false;
+  }
+  // A constraint is followed by a comma-separated list of required names and
+  // bracketed defaults. Stop at the first description, not the first name.
+  while (body) {
+    const hasDefault = body.startsWith('[');
+    const end = hasDefault
+      ? jsdocDelimitedEnd(body)
+      : JSDOC_TEMPLATE_PARAMETER_NAME.exec(body)?.[0].length;
+    if (end === undefined) {
+      return false;
     }
+    if (hasDefault && TSX_IMPORT_TYPE.test(body.slice(0, end))) {
+      return true;
+    }
+    body = body.slice(end).trimStart();
+    if (!body.startsWith(',')) {
+      return false;
+    }
+    body = body.slice(1).trimStart();
   }
   return false;
 }
@@ -902,18 +910,19 @@ function jsdocUnbracedTypeUsesTsx(body: string): boolean {
   }
   // Wrapping the candidate in parentheses requires exactly one type. Try the
   // longest prefix first so unions and types with spaces are not cut short.
-  const ends = Array.from(body.matchAll(/\s+|$/g), (match) => match.index);
-  for (const end of ends.toReversed()) {
-    const type = body.slice(0, end);
-    if (parseSync('jsdoc.ts', `type T = (${type});`).errors.length === 0) {
-      // An unsupported JSDoc type can follow a valid prefix, for example
-      // `null | function(import('tsx/esm/api').RegisterOptions): void`.
-      const rest = body.slice(end).trimStart();
-      return (
-        TSX_IMPORT_TYPE.test(type) ||
-        (/^(?:[|&<.([?!:]|extends\b|is\b)/.test(rest) && TSX_IMPORT_TYPE.test(rest))
-      );
+  const boundaries = Array.from(body.matchAll(/\s+|$/g)).toReversed();
+  for (const boundary of boundaries) {
+    const type = body.slice(0, boundary.index);
+    if (parseSync('jsdoc.ts', `type T = (${type});`).errors.length > 0) {
+      continue;
     }
+    if (TSX_IMPORT_TYPE.test(type)) {
+      return true;
+    }
+    // An unsupported JSDoc type can follow a valid prefix, for example
+    // `null | function(import('tsx/esm/api').RegisterOptions): void`.
+    const rest = body.slice(boundary.index).trimStart();
+    return /^(?:[|&<.([?!:]|extends\b|is\b)/.test(rest) && TSX_IMPORT_TYPE.test(rest);
   }
   // Keep the dependency for JSDoc-only syntax that the TS parser cannot read.
   return true;
@@ -936,37 +945,36 @@ function fileUsesTsx(content: string, file: string): boolean {
   if (extension === '.json' || extension === '.jsonc') {
     return jsonUsesTsx(parseJsonc(content), false);
   }
-  if (CODE_EXTENSIONS.has(extension)) {
-    // Only parse files with a possible reference. Regex-based comment stripping can
-    // mistake a regex literal for a comment and hide a real import of tsx.
-    if (!content.includes('tsx')) {
-      return false;
-    }
-    // Framework components need their own parsers. Keep the conservative text scan.
-    if (!SCRIPT_EXTENSIONS.includes(extension)) {
-      return TSX_CODE_REFERENCE.test(content);
-    }
-    const parsed = parseSync(file, content);
-    if (parsed.errors.length > 0) {
-      return TSX_CODE_REFERENCE.test(content);
-    }
-    let code = '';
-    let offset = 0;
-    for (const comment of parsed.comments) {
-      if (
-        /\.(?:[cm]?js|jsx)$/.test(file) &&
-        comment.type === 'Block' &&
-        jsdocUsesTsx(comment.value)
-      ) {
-        return true;
-      }
-      code += `${content.slice(offset, comment.start)} `;
-      offset = comment.end;
-    }
-    return TSX_CODE_REFERENCE.test(code + content.slice(offset));
+  if (!CODE_EXTENSIONS.has(extension)) {
+    // An extensionless file can be JavaScript, such as an executable, as well as shell.
+    return (
+      TSX_TEXT_REFERENCE.test(content) || (extension === '' && TSX_CODE_REFERENCE.test(content))
+    );
   }
-  // An extensionless file can be JavaScript, such as an executable, as well as shell.
-  return TSX_TEXT_REFERENCE.test(content) || (extension === '' && TSX_CODE_REFERENCE.test(content));
+  // Only parse files with a possible reference. Regex-based comment stripping can
+  // mistake a regex literal for a comment and hide a real import of tsx.
+  if (!content.includes('tsx')) {
+    return false;
+  }
+  // Framework components need their own parsers. Keep the conservative text scan.
+  if (!SCRIPT_EXTENSIONS.includes(extension)) {
+    return TSX_CODE_REFERENCE.test(content);
+  }
+  const parsed = parseSync(file, content);
+  if (parsed.errors.length > 0) {
+    return TSX_CODE_REFERENCE.test(content);
+  }
+  const isJavaScript = /\.(?:[cm]?js|jsx)$/.test(file);
+  let codeWithoutComments = '';
+  let offset = 0;
+  for (const comment of parsed.comments) {
+    if (isJavaScript && comment.type === 'Block' && jsdocUsesTsx(comment.value)) {
+      return true;
+    }
+    codeWithoutComments += `${content.slice(offset, comment.start)} `;
+    offset = comment.end;
+  }
+  return TSX_CODE_REFERENCE.test(codeWithoutComments + content.slice(offset));
 }
 
 /**
