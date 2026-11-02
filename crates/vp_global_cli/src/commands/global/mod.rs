@@ -32,7 +32,10 @@ struct NpmRegistry {
 }
 
 impl NpmRegistry {
+    /// Use the npm bundled with the managed Node.js runtime. System-only npm
+    /// forbids it, so fail before resolving or downloading the runtime.
     async fn resolve() -> Result<Self, Error> {
+        vp_pm_cli::ensure_managed_package_manager_allowed(vp_pm_cli::PackageManagerType::Npm)?;
         let cwd = current_dir()?;
         let resolution = resolve_version(&cwd).await?;
         let runtime = vp_js_runtime::download_runtime(
@@ -311,6 +314,39 @@ fn parse_npm_view_version(stdout: &[u8]) -> Result<String, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn latest_versions_reject_system_only_npm_before_resolving_node() {
+        use std::ffi::OsStr;
+
+        use vp_shared::env_vars;
+
+        let temp = tempfile::tempdir().unwrap();
+        for variable in [env_vars::VP_NPM_MANAGER, env_vars::VP_PM_MANAGER] {
+            let system_only = |name| (name == variable).then(|| OsStr::new("system-only"));
+            let vars = [
+                (env_vars::VP_HOME, Some(temp.path().as_os_str())),
+                // An unreachable mirror fails any Node.js resolution or download.
+                (env_vars::VP_NODE_DIST_MIRROR, Some(OsStr::new("http://127.0.0.1:1"))),
+                (env_vars::VP_NODE_MANAGER, None),
+                (env_vars::VP_NPM_MANAGER, system_only(env_vars::VP_NPM_MANAGER)),
+                (env_vars::VP_PM_MANAGER, system_only(env_vars::VP_PM_MANAGER)),
+            ];
+            vp_shared::EnvConfig::with_vars_async(vars, |env| async move {
+                let error = latest_package_versions(&["typescript".to_owned()], 1).await.unwrap_err();
+                assert!(
+                    matches!(
+                        error,
+                        Error::Install(vp_error::Error::DisabledBySystemOnly { ref tool, variable: v })
+                            if tool == "npm" && v == variable
+                    ),
+                    "{variable}: {error}"
+                );
+                assert!(!env.dirs.data.join("js_runtime").as_path().exists());
+            })
+            .await;
+        }
+    }
 
     #[test]
     fn parses_json_string_version() {
