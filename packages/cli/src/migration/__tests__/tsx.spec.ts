@@ -603,6 +603,18 @@ describe('migrateTsxToVpx', () => {
       'src/commented-import.ts still uses tsx',
     ],
     [
+      'a JSDoc import type',
+      'src/options.js',
+      "/** @param {import('tsx/esm/api').RegisterOptions} options */\nexport function withDefaults(options) { return options; }\n",
+      'src/options.js still uses tsx',
+    ],
+    [
+      'a JSDoc import tag',
+      'src/options.js',
+      "/** @import { RegisterOptions } from 'tsx/esm/api' */\n/** @param {RegisterOptions} options */\nexport function withDefaults(options) { return options; }\n",
+      'src/options.js still uses tsx',
+    ],
+    [
       'a file that cannot be parsed',
       'src/invalid.ts',
       'const value = ; /* import("tsx") */\n',
@@ -631,6 +643,41 @@ describe('migrateTsxToVpx', () => {
     expect(readJson('package.json').scripts.dev).toBe('vpx --watch src/server.ts');
     expect(readJson('package.json').devDependencies).toEqual({ tsx: '^4.20.0' });
     expect(report.warnings).toContain(`Kept the tsx devDependency in package.json: ${user}.`);
+  });
+
+  it.each([
+    [
+      'js',
+      '@typedef {{ nested: { enabled: boolean }, options: import("tsx/esm/api").RegisterOptions }} Options',
+    ],
+    ['jsx', '@param {"}" | import("tsx/esm/api").RegisterOptions} options'],
+    ['mjs', '@type {typeof import("tsx/esm/api")}'],
+    [
+      'cjs',
+      '@returns {import("tsx/esm/api", { with: { "resolution-mode": "import" } }).RegisterOptions}',
+    ],
+    ['js', '@import * as tsx from "tsx/esm/api"'],
+    ['js', '@template [T=import("tsx/esm/api").RegisterOptions]'],
+    ['js', '@template {object} [T=object], [U=import("tsx/esm/api").RegisterOptions]'],
+    ['js', '@import {\n * RegisterOptions\n * } from "tsx/esm/api"'],
+    ['js', '@param {{\n * options: import(\n * "tsx/esm/api"\n * ).RegisterOptions\n * }} options'],
+  ])('keeps tsx for a .%s JSDoc type: %s', (extension, annotation) => {
+    write('package.json', {
+      scripts: { start: 'tsx src/server.ts' },
+      devDependencies: { tsx: '^4.20.0' },
+    });
+    write(
+      `src/options.${extension}`,
+      `/** ${annotation} */\nfunction withDefaults(options) { return options; }\n`,
+    );
+    const report = createMigrationReport();
+
+    expect(migrateTsxToVpx(root, undefined, report).dependencyRemoved).toBe(false);
+    expect(readJson('package.json').scripts.start).toBe('vpx src/server.ts');
+    expect(readJson('package.json').devDependencies).toEqual({ tsx: '^4.20.0' });
+    expect(report.warnings).toEqual([
+      `Kept the tsx devDependency in package.json: src/options.${extension} still uses tsx.`,
+    ]);
   });
 
   it.each(['dependencies', 'optionalDependencies', 'peerDependencies'])(
@@ -776,6 +823,37 @@ describe('migrateTsxToVpx', () => {
   it.each([
     ['a line comment', 'index.ts', '// import("tsx/esm/api");\nexport {};\n'],
     ['a loader comment', 'index.js', '/* node --import tsx */\nexport {};\n'],
+    [
+      'a JSDoc description',
+      'index.js',
+      '/** Use import("tsx/esm/api") to load TypeScript. */\nexport {};\n',
+    ],
+    [
+      'a parameter description',
+      'index.js',
+      '/** @param {object} options - See import("tsx/esm/api").RegisterOptions. */\nexport function run(options) {}\n',
+    ],
+    ['a JSDoc example', 'index.js', '/** @example\n * import("tsx/esm/api");\n */\nexport {};\n'],
+    [
+      'a fenced JSDoc example',
+      'index.js',
+      '/** @example\n * ```js\n * @import { RegisterOptions } from "tsx/esm/api"\n * ```\n */\nexport {};\n',
+    ],
+    [
+      'a non-JSDoc block',
+      'index.js',
+      '/* @param {import("tsx/esm/api").RegisterOptions} options */\nexport function run(options) {}\n',
+    ],
+    [
+      'a type tag in TypeScript',
+      'index.ts',
+      '/** @param {import("tsx/esm/api").RegisterOptions} options */\nexport function run(options: object) {}\n',
+    ],
+    [
+      'an import of another package',
+      'index.js',
+      '/** @import { Options } from "tsx-other" */\nexport {};\n',
+    ],
     [
       'a comment inside a template expression',
       'index.mts',

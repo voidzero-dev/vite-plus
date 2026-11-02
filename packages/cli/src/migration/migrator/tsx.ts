@@ -107,6 +107,12 @@ const TSX_CODE_REFERENCE = new RegExp(
       .source,
   ].join('|'),
 );
+// JSDoc types in JavaScript can depend on tsx's declarations without a runtime import.
+const JSDOC_TYPE_TAG =
+  /(?:^|\s)@(arg|argument|augments|enum|extends|implements|import|param|prop|property|return|returns|satisfies|template|this|type|typedef)\b\s*/g;
+const TSX_IMPORT_TYPE = /\bimport\s*\(\s*(['"])tsx(?:\/[^'"]*)?\1\s*(?:,|\))/;
+const TSX_JSDOC_IMPORT =
+  /^(?:[^\s{},]+\s*,\s*)?(?:\{[^}]*\}|\*\s+as\s+[^\s{},]+|[^\s{},]+)\s+from\s*(['"])tsx(?:\/[^'"]*)?\1/;
 // In shell scripts, CI workflows, and git hooks: tsx in command position, with or
 // without arguments, or a loader flag.
 const TSX_TEXT_REFERENCE = new RegExp(
@@ -807,7 +813,59 @@ function findTsxUse(dir: string): string | undefined {
   return found;
 }
 
-/** Whether `file` runs, imports, or loads tsx. */
+/** Whether a JSDoc type annotation or import tag needs tsx's declarations. */
+function jsdocUsesTsx(value: string): boolean {
+  if (!value.startsWith('*')) {
+    return false;
+  }
+  const text = value
+    .replaceAll(/^\s*\* ?/gm, '')
+    .replaceAll(/```[\s\S]*?(?:```|$)|~~~[\s\S]*?(?:~~~|$)/g, '');
+  for (const tag of text.matchAll(JSDOC_TYPE_TAG)) {
+    let body = text.slice(tag.index + tag[0].length);
+    if (tag[1] === 'import') {
+      if (TSX_JSDOC_IMPORT.test(body)) {
+        return true;
+      }
+      continue;
+    }
+    // A type is enclosed in braces; @template defaults use brackets. Limit the
+    // scan to these expressions so descriptions cannot keep the dependency.
+    while (body.startsWith('{') || (tag[1] === 'template' && body.startsWith('['))) {
+      const open = body[0];
+      const close = open === '{' ? '}' : ']';
+      let depth = 0;
+      let end: number | undefined;
+      // Quoted types can contain braces or brackets that are not delimiters.
+      for (const token of body.matchAll(
+        /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|[{}[\]]/g,
+      )) {
+        if (token[0] === open) {
+          depth++;
+        } else if (token[0] === close && --depth === 0) {
+          end = token.index;
+          break;
+        }
+      }
+      if (end === undefined) {
+        break;
+      }
+      if (TSX_IMPORT_TYPE.test(body.slice(1, end))) {
+        return true;
+      }
+      if (tag[1] !== 'template') {
+        break;
+      }
+      body = body
+        .slice(end + 1)
+        .trimStart()
+        .replace(/^,\s*/, '');
+    }
+  }
+  return false;
+}
+
+/** Whether `file` runs, imports, loads, or imports types from tsx. */
 function fileUsesTsx(content: string, file: string): boolean {
   if (TSX_SHEBANG.test(content)) {
     return true;
@@ -841,6 +899,13 @@ function fileUsesTsx(content: string, file: string): boolean {
     let code = '';
     let offset = 0;
     for (const comment of parsed.comments) {
+      if (
+        /\.(?:[cm]?js|jsx)$/.test(file) &&
+        comment.type === 'Block' &&
+        jsdocUsesTsx(comment.value)
+      ) {
+        return true;
+      }
       code += `${content.slice(offset, comment.start)} `;
       offset = comment.end;
     }

@@ -7,3 +7,21 @@ steps = [
   { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "migration must not warn that use-editing.ts still uses tsx" },
   { argv = ["vpt", "print-file", "package.json"], comment = "start runs vpx, and the unused tsx devDependency is removed" },
 ]
+
+[[case]]
+name = "migration_tsx_jsdoc_import_type"
+vp = "local"
+steps = [
+  { argv = ["vpt", "write-file", "options.js", "/** @param {import('tsx/esm/api').RegisterOptions} options */\nexport function withDefaults(options) { return options; }\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "a JSDoc import type still needs the tsx declarations" },
+  { argv = ["vpt", "print-file", "package.json"], comment = "start runs vpx, and the tsx devDependency stays" },
+]
+
+[[case]]
+name = "migration_tsx_jsdoc_import_tag"
+vp = "local"
+steps = [
+  { argv = ["vpt", "write-file", "options.js", "/** @import { RegisterOptions } from 'tsx/esm/api' */\n/** @param {RegisterOptions} options */\nexport function withDefaults(options) { return options; }\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "a JSDoc @import tag still needs the tsx declarations" },
+  { argv = ["vpt", "print-file", "package.json"], comment = "start runs vpx, and the tsx devDependency stays" },
+]
