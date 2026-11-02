@@ -25,6 +25,25 @@ describe('ts-node migration', () => {
   const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8');
   const readJson = (file: string) => JSON.parse(read(file));
 
+  const expectRetained = () => {
+    const command = 'ts-node -T a.ts';
+    const report = createMigrationReport();
+    for (const invocation of [
+      command,
+      'TS_NODE_PROJECT=tsconfig.json node -r ts-node/register/transpile-only a.ts',
+      'TS_NODE_PROJECT=tsconfig.json NODE_OPTIONS="-r ts-node/register/transpile-only" node a.ts',
+    ]) {
+      expect(rewriteTsNodeCommand(invocation, root)).toEqual({
+        command: invocation,
+        kept: [expect.stringContaining('CommonJS interop')],
+      });
+    }
+    expect(migrateTsNodeToVpx(root, undefined, report).dependencyRemoved).toBe(false);
+    expect(readJson('package.json').scripts.run).toBe(command);
+    expect(readJson('package.json').devDependencies['ts-node']).toBe('10.9.2');
+    expect(report.warnings).toContainEqual(expect.stringContaining('CommonJS interop'));
+  };
+
   beforeEach(() => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-ts-node-'));
     vi.spyOn(process, 'cwd').mockReturnValue(root);
@@ -41,43 +60,156 @@ describe('ts-node migration', () => {
     fs.rmSync(root, { recursive: true, force: true });
   });
 
-  it.each([
-    "import { value } from './dep.cjs'; console.log(value);",
-    "import { value as renamed } from './dep.cjs'; console.log(renamed);",
-    "import dependency, { value } from './dep.cjs'; console.log(dependency, value);",
-    "import { /* named value */ value }\nfrom './dep.cjs'; console.log(value);",
-    "import { type Shape, value } from './dep.cjs'; console.log(value);",
-  ])('retains named CommonJS interop in %s', (source) => {
-    const command = 'ts-node -T a.ts';
-    write('package.json', { scripts: { run: command }, devDependencies: { 'ts-node': '10.9.2' } });
-    write('tsconfig.json', { compilerOptions: { module: 'CommonJS', target: 'ES2022' } });
-    write('dep.cjs', 'module.exports = Object.assign({}, { value: 42 });\n');
-    write('a.ts', source);
-    const report = createMigrationReport();
-    expect(rewriteTsNodeCommand(command, root)).toEqual({
-      command,
-      kept: [expect.stringContaining('named imports from CommonJS')],
+  describe('CommonJS interop', () => {
+    beforeEach(() => {
+      write('package.json', {
+        scripts: { run: 'ts-node -T a.ts' },
+        devDependencies: { 'ts-node': '10.9.2' },
+      });
+      write('tsconfig.json', { compilerOptions: { module: 'CommonJS', target: 'ES2022' } });
+      write('dep.cjs', 'module.exports = Object.assign({}, { value: 42 });\n');
+      write('dep.js', 'module.exports = Object.assign({}, { value: 42 });\n');
     });
-    expect(migrateTsNodeToVpx(root, undefined, report).dependencyRemoved).toBe(false);
-    expect(readJson('package.json').scripts.run).toBe(command);
-    expect(readJson('package.json').devDependencies['ts-node']).toBe('10.9.2');
-    expect(report.warnings).toContainEqual(expect.stringContaining('named imports from CommonJS'));
-  });
 
-  it.each([
-    "import type { Shape } from './dep.cjs'; export {};",
-    "import { type Shape } from './dep.cjs'; export {};",
-    "import dependency from './dep.cjs'; console.log(dependency);",
-    "import { default as dependency } from './dep.cjs'; console.log(dependency);",
-    "// import { value } from './dep.cjs';\nexport {};",
-    'console.log("import { value } from \'./dep.cjs\'");',
-    "import { value } from './dep.mjs'; console.log(value);",
-  ])('does not mistake safe syntax for named CommonJS interop in %s', (source) => {
-    write('a.ts', source);
-    expect(rewriteTsNodeCommand('ts-node -T a.ts', root)).toEqual({
-      command: 'vpx a.ts',
-      kept: [],
+    it.each([
+      "import { value } from './dep.cjs'; console.log(value);",
+      "import { value as renamed } from './dep.cjs'; console.log(renamed);",
+      "import dependency, { value } from './dep.cjs'; console.log(dependency, value);",
+      "import { /* named value */ value }\nfrom './dep.cjs'; console.log(value);",
+      "import { type Shape, value } from './dep.cjs'; console.log(value);",
+      "import * as dependency from './dep.cjs'; console.log(dependency.value);",
+      "export { value } from './dep.cjs'; console.log('loaded');",
+      "export { type Shape, value } from './dep.cjs';",
+      "export * from './dep.cjs';",
+      "export * as dependency from './dep.cjs';",
+      "import { value } from './dep.js'; console.log(value);",
+      "import { value } from './dep'; console.log(value);",
+      "import value from 'node:fs'; console.log(value);",
+      "import * as dependency from 'node:fs'; console.log(dependency);",
+    ])('retains runtime bindings in %s', (source) => {
+      write('a.ts', source);
+      expectRetained();
     });
+
+    it.each([undefined, false, true])(
+      'retains default bindings with esModuleInterop=%s',
+      (esModuleInterop) => {
+        write('tsconfig.json', {
+          compilerOptions: { module: 'CommonJS', target: 'ES2022', esModuleInterop },
+        });
+        // Even with esModuleInterop, TypeScript unwraps __esModule.default;
+        // Node's default import is the entire CommonJS exports object.
+        write('dep.cjs', 'exports.__esModule = true; exports.default = 42;\n');
+        for (const source of [
+          "import value from './dep.cjs'; console.log(value);",
+          "import { default as value } from './dep.cjs'; console.log(value);",
+          "export { default } from './dep.cjs';",
+          "export { default as value } from './dep.cjs';",
+        ]) {
+          write('a.ts', source);
+          expectRetained();
+        }
+      },
+    );
+
+    it.each([
+      ['dependency', 'node_modules/dependency/index.js', {}],
+      ['dependency', 'node_modules/dependency/main.cjs', { main: './main.cjs' }],
+      [
+        'dependency/value',
+        'node_modules/dependency/main.js',
+        { exports: { './value': './main.js' } },
+      ],
+      ['./nested/dep.js', 'nested/dep.js', { type: 'commonjs' }],
+      ['./nested', 'nested/index.js', {}],
+      ['./nested/dep.cts', 'nested/dep.cts', {}],
+    ])('resolves CommonJS target %s', (specifier, file, pkg) => {
+      write(file, 'module.exports = Object.assign({}, { value: 42 });\n');
+      write(path.join(path.dirname(file), 'package.json'), pkg);
+      write('a.ts', `import { value } from '${specifier}'; console.log(value);`);
+      expectRetained();
+    });
+
+    it('retains a dependency whose import and require conditions select different modules', () => {
+      write('node_modules/dependency/package.json', {
+        exports: { import: './import.mjs', require: './require.mjs' },
+      });
+      write('node_modules/dependency/import.mjs', 'export const value = 1;');
+      write('node_modules/dependency/require.mjs', 'export const value = 2;');
+      write('a.ts', "import { value } from 'dependency'; console.log(value);");
+      expectRetained();
+    });
+
+    it('resolves imports relative to the real entry behind a symlink', () => {
+      write('package.json', { ...readJson('package.json'), type: 'module' });
+      write('dep.js', 'export const value = 1;');
+      write('actual/package.json', { type: 'commonjs' });
+      write('actual/dep.js', 'module.exports = Object.assign({}, { value: 42 });');
+      write('actual/entry.ts', "import { value } from './dep.js'; console.log(value);");
+      fs.rmSync(path.join(root, 'a.ts'));
+      fs.symlinkSync(path.join(root, 'actual/entry.ts'), path.join(root, 'a.ts'));
+      expectRetained();
+    });
+
+    it.each(['./missing.js', 'missing-package', './invalid/dep.js'])(
+      'retains a binding when the target cannot be checked: %s',
+      (specifier) => {
+        write('invalid/package.json', '{');
+        write('invalid/dep.js', 'exports.value = 42;');
+        write('a.ts', `import { value } from '${specifier}'; console.log(value);`);
+        expectRetained();
+      },
+    );
+
+    it.each([
+      "import type { Shape } from './dep.cjs'; export {};",
+      "import { type Shape } from './dep.cjs'; export {};",
+      "export type { Shape } from './dep.cjs';",
+      "export { type Shape } from './dep.cjs';",
+      "export type * from './dep.cjs';",
+      "export type * as dependency from './dep.cjs';",
+      "import './dep.cjs';",
+      "// import { value } from './dep.cjs';\nexport {};",
+      'console.log("import { value } from \'./dep.cjs\'");',
+      "import { readFileSync } from 'node:fs'; console.log(typeof readFileSync);",
+    ])('does not mistake type-only syntax or safe bindings for CommonJS interop: %s', (source) => {
+      write('a.ts', source);
+      expect(rewriteTsNodeCommand('ts-node -T a.ts', root)).toEqual({
+        command: 'vpx --tsconfig=tsconfig.json a.ts',
+        kept: [],
+      });
+    });
+
+    it.each(['./dep.mjs', './esm/dep.js', 'esm-dependency'])(
+      'accepts checked ES module bindings from %s',
+      (specifier) => {
+        write('dep.mjs', 'export const value = 42; export default value;');
+        write('esm/dep.js', 'export const value = 42; export default value;');
+        write('esm/package.json', { type: 'module' });
+        write('node_modules/esm-dependency/package.json', {
+          type: 'module',
+          exports: './index.js',
+        });
+        write(
+          'node_modules/esm-dependency/index.js',
+          'export const value = 42; export default value;',
+        );
+        for (const source of [
+          `import { value } from '${specifier}'; console.log(value);`,
+          `import value from '${specifier}'; console.log(value);`,
+          `import * as dependency from '${specifier}'; console.log(dependency.value);`,
+          `export { value } from '${specifier}';`,
+          `export * as dependency from '${specifier}';`,
+          `export * from '${specifier}';`,
+        ]) {
+          write('a.ts', source);
+          expect(rewriteTsNodeCommand('ts-node -T a.ts', root)).toEqual({
+            command: 'vpx --tsconfig=tsconfig.json a.ts',
+            kept: [],
+          });
+        }
+      },
+    );
   });
 
   it.each([

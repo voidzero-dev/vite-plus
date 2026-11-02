@@ -6,7 +6,7 @@ import { styleText } from 'node:util';
 import type { Program } from '@oxc-project/types';
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
-import { analyzeMigrationSource } from '../../../binding/index.js';
+import { analyzeMigrationSource, ResolverFactory } from '../../../binding/index.js';
 import { type WorkspacePackage } from '../../types/index.ts';
 import { cancelAndExit } from '../../utils/prompts.ts';
 import {
@@ -24,6 +24,88 @@ import { type MigrationReport } from '../report.ts';
 const TS_NODE_REFERENCE =
   /(?:^|[\s;&|("'=/\\`])ts-node(?:-(?:cwd|esm|script|transpile-only))?(?:\.(?:cmd|exe|ps1))?(?=$|[@/\s;&|)"'`])/i;
 const TS_NODE_LOADERS = /^ts-node(?:\/.*)?$/;
+
+/** Check module metadata only; migration must not execute a project's dependencies. */
+function incompatibleModuleSource(file: string, source: string): string | undefined {
+  file = fs.realpathSync(file);
+  const { ast } = JSON.parse(analyzeMigrationSource(file, source)) as {
+    ast: { node: Program };
+  };
+  let requireResolver: ResolverFactory | undefined;
+  let importResolver: ResolverFactory | undefined;
+  for (const node of ast.node.body) {
+    let specifier: string;
+    let namedOnly = false;
+    if (node.type === 'ImportDeclaration' && node.importKind !== 'type') {
+      const bindings = node.specifiers.filter(
+        (binding) => binding.type !== 'ImportSpecifier' || binding.importKind !== 'type',
+      );
+      if (!bindings.length) {
+        continue;
+      }
+      specifier = node.source.value;
+      namedOnly = bindings.every(
+        (binding) =>
+          binding.type === 'ImportSpecifier' &&
+          (binding.imported.type === 'Identifier'
+            ? binding.imported.name
+            : binding.imported.value) !== 'default',
+      );
+    } else if (
+      node.type === 'ExportNamedDeclaration' &&
+      node.source &&
+      node.exportKind !== 'type'
+    ) {
+      const bindings = node.specifiers.filter((binding) => binding.exportKind !== 'type');
+      if (!bindings.length) {
+        continue;
+      }
+      specifier = node.source.value;
+      namedOnly = bindings.every(
+        (binding) =>
+          (binding.local.type === 'Identifier' ? binding.local.name : binding.local.value) !==
+          'default',
+      );
+    } else if (node.type === 'ExportAllDeclaration' && node.exportKind !== 'type') {
+      specifier = node.source.value;
+    } else {
+      continue;
+    }
+
+    requireResolver ??= new ResolverFactory({
+      conditionNames: ['node', 'require', 'module-sync', 'node-addons'],
+      builtinModules: true,
+      moduleType: true,
+      nodePath: false,
+    });
+    importResolver ??= requireResolver.cloneWithOptions({
+      conditionNames: ['node', 'import', 'module-sync', 'node-addons'],
+      builtinModules: true,
+      moduleType: true,
+      nodePath: false,
+    });
+    const required = requireResolver.sync(path.dirname(file), specifier);
+    const imported = importResolver.sync(path.dirname(file), specifier);
+    // Built-in named exports are provided by Node, not inferred from CommonJS source.
+    if (namedOnly && required.builtin && required.builtin.resolved === imported.builtin?.resolved) {
+      continue;
+    }
+    if (
+      required.path &&
+      required.path === imported.path &&
+      String(required.moduleType) === 'module' &&
+      String(imported.moduleType) === 'module'
+    ) {
+      continue;
+    }
+    // Retain unknown targets and every CommonJS binding, including defaults:
+    // esModuleInterop=false reads exports.default, while true can unwrap
+    // __esModule.default. Node instead exposes the entire CommonJS exports object.
+    return specifier;
+  }
+  return undefined;
+}
+
 function isTsNodeLoader(option: string, value: string): boolean {
   return (
     ((option === '-r' || option === '--require' || option === '--import') &&
@@ -83,6 +165,10 @@ const TS_NODE_RUNNER: ScriptRunnerMigration = {
   },
   prepareRun: (args, context) => prepareTsNodeRun(args, context),
   scriptKeepReason(cwd, script) {
+    const reason = typescriptScriptKeepReason(cwd, script, 'ts-node');
+    if (reason) {
+      return reason;
+    }
     if (cwd !== undefined && !/[*?[{]/.test(script)) {
       try {
         const file = script.startsWith('~/')
@@ -92,31 +178,15 @@ const TS_NODE_RUNNER: ScriptRunnerMigration = {
         if (TS_NODE_REFERENCE.test(source)) {
           return `\`${script}\` uses a standalone ts-node API or loader that does not configure the bundled \`vpx\` loader`;
         }
-        const { ast } = JSON.parse(analyzeMigrationSource(file, source)) as {
-          ast: { node: Program };
-        };
-        const namedCommonJsImport = ast.node.body.find(
-          (node) =>
-            node.type === 'ImportDeclaration' &&
-            node.importKind !== 'type' &&
-            node.source.value.endsWith('.cjs') &&
-            node.specifiers.some(
-              (specifier) =>
-                specifier.type === 'ImportSpecifier' &&
-                specifier.importKind !== 'type' &&
-                (specifier.imported.type === 'Identifier'
-                  ? specifier.imported.name
-                  : specifier.imported.value) !== 'default',
-            ),
-        );
-        if (namedCommonJsImport) {
-          return `\`${script}\` uses named imports from CommonJS, which \`vpx\` leaves to Node.js instead of compiling to require(); migrate the interop manually`;
+        const incompatible = incompatibleModuleSource(file, source);
+        if (incompatible !== undefined) {
+          return `\`${script}\` has runtime bindings from \`${incompatible}\` whose CommonJS interop or import/require resolution may change with \`vpx\`; migrate the bindings manually`;
         }
       } catch {
-        // The shared source check also reports generated entries that do not exist yet.
+        return `\`${script}\` cannot be read or parsed, so vp migrate cannot check its CommonJS interop`;
       }
     }
-    return typescriptScriptKeepReason(cwd, script, 'ts-node');
+    return undefined;
   },
   detectKeptUses: true,
 };

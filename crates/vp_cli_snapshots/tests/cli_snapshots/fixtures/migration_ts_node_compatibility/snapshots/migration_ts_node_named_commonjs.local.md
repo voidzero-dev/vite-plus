@@ -41,8 +41,8 @@ VITE+ - The Unified Toolchain for the Web
     vite              → <version>
 • Package manager settings configured
 ! Warnings:
-  - Kept ts-node in package.json scripts "cli": `named.ts` uses named imports from CommonJS, which `vpx` leaves to Node.js instead of compiling to require(); migrate the interop manually.
-  - Kept ts-node in package.json scripts "register": `named.ts` uses named imports from CommonJS, which `vpx` leaves to Node.js instead of compiling to require(); migrate the interop manually.
+  - Kept ts-node in package.json scripts "cli": `named.ts` has runtime bindings from `./dep.cjs` whose CommonJS interop or import/require resolution may change with `vpx`; migrate the bindings manually.
+  - Kept ts-node in package.json scripts "register": `named.ts` has runtime bindings from `./dep.cjs` whose CommonJS interop or import/require resolution may change with `vpx`; migrate the bindings manually.
   - Kept the ts-node devDependency in package.json: `scripts` in package.json still uses ts-node.
 ```
 
