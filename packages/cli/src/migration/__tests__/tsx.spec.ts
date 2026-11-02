@@ -579,6 +579,36 @@ describe('migrateTsxToVpx', () => {
       'ava.config.mjs still uses tsx',
     ],
     [
+      'an import after a regular expression containing slashes',
+      'src/regex.ts',
+      'const slash = /[//]/; import("tsx/esm/api");\n',
+      'src/regex.ts still uses tsx',
+    ],
+    [
+      'a command string containing comment markers',
+      'src/command.ts',
+      'execSync(`tsx job.ts --url https://example.com --glob "src/*"`);\n',
+      'src/command.ts still uses tsx',
+    ],
+    [
+      'a runtime import after a Unicode comment',
+      'src/unicode.ts',
+      'const emoji = "🦀"; /* 文档: import("tsx") */ import("tsx/esm/api");\n',
+      'src/unicode.ts still uses tsx',
+    ],
+    [
+      'an import after a line comment',
+      'src/commented-import.ts',
+      'import(// Load the runtime\n"tsx/esm/api");\n',
+      'src/commented-import.ts still uses tsx',
+    ],
+    [
+      'a file that cannot be parsed',
+      'src/invalid.ts',
+      'const value = ; /* import("tsx") */\n',
+      'src/invalid.ts still uses tsx',
+    ],
+    [
       'a framework component',
       'src/pages/index.astro',
       "---\nimport { tsImport } from 'tsx/esm/api';\n---\n",
@@ -741,6 +771,37 @@ describe('migrateTsxToVpx', () => {
       expect.stringContaining('Kept tsx in packages/b/package.json scripts "calc"'),
       'Kept the tsx devDependency in package.json: `scripts` in packages/b/package.json still uses tsx.',
     ]);
+  });
+
+  it.each([
+    ['a line comment', 'index.ts', '// import("tsx/esm/api");\nexport {};\n'],
+    ['a loader comment', 'index.js', '/* node --import tsx */\nexport {};\n'],
+    [
+      'a comment inside a template expression',
+      'index.mts',
+      'export const message = `value: ${/* import("tsx") */ 1}`;\n',
+    ],
+    [
+      'a comment inside JSX',
+      'index.tsx',
+      'export const element = <div>{/* import("tsx") */}</div>;\n',
+    ],
+    [
+      'a comment after Unicode text',
+      'index.ts',
+      'export const emoji = "🦀"; /* 文档: import("tsx") */\n',
+    ],
+  ])('removes tsx when only %s mentions it', (_, file, content) => {
+    write('package.json', {
+      scripts: { start: 'tsx src/server.ts' },
+      devDependencies: { tsx: '^4.20.0' },
+    });
+    write(file, content);
+    const report = createMigrationReport();
+
+    expect(migrateTsxToVpx(root, undefined, report).dependencyRemoved).toBe(true);
+    expect(readJson('package.json').devDependencies).toEqual({});
+    expect(report.warnings).toEqual([]);
   });
 
   it('removes tsx when the only reference is a code fence inside a JSDoc comment', () => {

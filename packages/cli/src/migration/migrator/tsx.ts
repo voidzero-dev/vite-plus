@@ -6,7 +6,11 @@ import { styleText } from 'node:util';
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { parse as parseJsonc } from 'jsonc-parser';
 
-import { type LiteralCommandToken, parseLiteralCommands } from '../../../binding/index.js';
+import {
+  type LiteralCommandToken,
+  parseLiteralCommands,
+  parseSync,
+} from '../../../binding/index.js';
 import { type WorkspacePackage } from '../../types/index.ts';
 import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
 import { readNearestPackageJson } from '../../utils/package.ts';
@@ -821,15 +825,29 @@ function fileUsesTsx(content: string, file: string): boolean {
     return jsonUsesTsx(parseJsonc(content), false);
   }
   if (CODE_EXTENSIONS.has(extension)) {
-    // Comments and JSDoc/Markdown fences, such as ```` ```tsx ````, are not real
-    // uses of tsx.
-    return TSX_CODE_REFERENCE.test(stripComments(content));
+    // Only parse files with a possible reference. Regex-based comment stripping can
+    // mistake a regex literal for a comment and hide a real import of tsx.
+    if (!content.includes('tsx')) {
+      return false;
+    }
+    // Framework components need their own parsers. Keep the conservative text scan.
+    if (!SCRIPT_EXTENSIONS.includes(extension)) {
+      return TSX_CODE_REFERENCE.test(content);
+    }
+    const parsed = parseSync(file, content);
+    if (parsed.errors.length > 0) {
+      return TSX_CODE_REFERENCE.test(content);
+    }
+    let code = '';
+    let offset = 0;
+    for (const comment of parsed.comments) {
+      code += `${content.slice(offset, comment.start)} `;
+      offset = comment.end;
+    }
+    return TSX_CODE_REFERENCE.test(code + content.slice(offset));
   }
   // An extensionless file can be JavaScript, such as an executable, as well as shell.
-  return (
-    TSX_TEXT_REFERENCE.test(content) ||
-    (extension === '' && TSX_CODE_REFERENCE.test(stripComments(content)))
-  );
+  return TSX_TEXT_REFERENCE.test(content) || (extension === '' && TSX_CODE_REFERENCE.test(content));
 }
 
 /**
