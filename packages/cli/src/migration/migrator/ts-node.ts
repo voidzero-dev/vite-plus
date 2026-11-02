@@ -3,8 +3,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { styleText } from 'node:util';
 
+import type { Program } from '@oxc-project/types';
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
+import { analyzeMigrationSource } from '../../../binding/index.js';
 import { type WorkspacePackage } from '../../types/index.ts';
 import { cancelAndExit } from '../../utils/prompts.ts';
 import {
@@ -89,6 +91,26 @@ const TS_NODE_RUNNER: ScriptRunnerMigration = {
         const source = fs.readFileSync(file, 'utf8').replace(/^#![^\n]*\n?/, '');
         if (TS_NODE_REFERENCE.test(source)) {
           return `\`${script}\` uses a standalone ts-node API or loader that does not configure the bundled \`vpx\` loader`;
+        }
+        const { ast } = JSON.parse(analyzeMigrationSource(file, source)) as {
+          ast: { node: Program };
+        };
+        const namedCommonJsImport = ast.node.body.find(
+          (node) =>
+            node.type === 'ImportDeclaration' &&
+            node.importKind !== 'type' &&
+            node.source.value.endsWith('.cjs') &&
+            node.specifiers.some(
+              (specifier) =>
+                specifier.type === 'ImportSpecifier' &&
+                specifier.importKind !== 'type' &&
+                (specifier.imported.type === 'Identifier'
+                  ? specifier.imported.name
+                  : specifier.imported.value) !== 'default',
+            ),
+        );
+        if (namedCommonJsImport) {
+          return `\`${script}\` uses named imports from CommonJS, which \`vpx\` leaves to Node.js instead of compiling to require(); migrate the interop manually`;
         }
       } catch {
         // The shared source check also reports generated entries that do not exist yet.

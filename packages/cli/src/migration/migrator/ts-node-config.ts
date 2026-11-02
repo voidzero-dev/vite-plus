@@ -127,7 +127,7 @@ function readTsNodeEnvironment(
 function readTsNodeOptions(
   file: string,
   ancestors = new Set<string>(),
-): { options?: TsNodeOptions; keepReason?: string } {
+): { options?: TsNodeOptions; compilerOptions?: Record<string, unknown>; keepReason?: string } {
   const keepConfig = (reason: string) => ({
     keepReason: `the ts-node configuration in \`${file}\` ${reason}`,
   });
@@ -146,6 +146,7 @@ function readTsNodeOptions(
     return keepConfig('cannot be read');
   }
   let inherited: TsNodeOptions = {};
+  let compilerOptions: Record<string, unknown> = {};
   if (config.extends !== undefined) {
     if (
       typeof config.extends !== 'string' ||
@@ -162,10 +163,17 @@ function readTsNodeOptions(
       return result;
     }
     inherited = result.options ?? {};
+    compilerOptions = result.compilerOptions ?? {};
+  }
+  if (config.compilerOptions !== undefined) {
+    if (!isPlainRecord(config.compilerOptions)) {
+      return keepConfig('has an invalid `compilerOptions` object');
+    }
+    compilerOptions = { ...compilerOptions, ...config.compilerOptions };
   }
   const settings = config['ts-node'];
   if (settings === undefined) {
-    return { options: inherited };
+    return { options: inherited, compilerOptions };
   }
   if (!isPlainRecord(settings)) {
     return keepConfig('has an invalid `ts-node` object');
@@ -178,7 +186,7 @@ function readTsNodeOptions(
       return keepConfig(`has a non-boolean \`ts-node.${key}\` value`);
     }
   }
-  return { options: { ...inherited, ...settings } };
+  return { options: { ...inherited, ...settings }, compilerOptions };
 }
 
 /**
@@ -398,6 +406,18 @@ export function prepareTsNodeRun(
   const options = { ...environment.options, ...config.options, ...explicit };
   if (options.transpileOnly !== true || options.typeCheck === true) {
     return { keepReason: KEEP_TYPE_CHECK };
+  }
+  if (
+    configFile &&
+    config.compilerOptions?.target == null &&
+    typeof config.compilerOptions?.useDefineForClassFields !== 'boolean'
+  ) {
+    // An existing config disables ts-node's Node-version defaults. It then supplies
+    // target ES5, while the Vite+ loader uses define semantics for an absent target.
+    return {
+      keepReason:
+        'the ts-node config defaults to assignment class fields, while the Vite+ loader defaults to define semantics; set compilerOptions.useDefineForClassFields explicitly before migrating',
+    };
   }
   if (project !== undefined) {
     edits.push({

@@ -42,6 +42,45 @@ describe('ts-node migration', () => {
   });
 
   it.each([
+    "import { value } from './dep.cjs'; console.log(value);",
+    "import { value as renamed } from './dep.cjs'; console.log(renamed);",
+    "import dependency, { value } from './dep.cjs'; console.log(dependency, value);",
+    "import { /* named value */ value }\nfrom './dep.cjs'; console.log(value);",
+    "import { type Shape, value } from './dep.cjs'; console.log(value);",
+  ])('retains named CommonJS interop in %s', (source) => {
+    const command = 'ts-node -T a.ts';
+    write('package.json', { scripts: { run: command }, devDependencies: { 'ts-node': '10.9.2' } });
+    write('tsconfig.json', { compilerOptions: { module: 'CommonJS', target: 'ES2022' } });
+    write('dep.cjs', 'module.exports = Object.assign({}, { value: 42 });\n');
+    write('a.ts', source);
+    const report = createMigrationReport();
+    expect(rewriteTsNodeCommand(command, root)).toEqual({
+      command,
+      kept: [expect.stringContaining('named imports from CommonJS')],
+    });
+    expect(migrateTsNodeToVpx(root, undefined, report).dependencyRemoved).toBe(false);
+    expect(readJson('package.json').scripts.run).toBe(command);
+    expect(readJson('package.json').devDependencies['ts-node']).toBe('10.9.2');
+    expect(report.warnings).toContainEqual(expect.stringContaining('named imports from CommonJS'));
+  });
+
+  it.each([
+    "import type { Shape } from './dep.cjs'; export {};",
+    "import { type Shape } from './dep.cjs'; export {};",
+    "import dependency from './dep.cjs'; console.log(dependency);",
+    "import { default as dependency } from './dep.cjs'; console.log(dependency);",
+    "// import { value } from './dep.cjs';\nexport {};",
+    'console.log("import { value } from \'./dep.cjs\'");',
+    "import { value } from './dep.mjs'; console.log(value);",
+  ])('does not mistake safe syntax for named CommonJS interop in %s', (source) => {
+    write('a.ts', source);
+    expect(rewriteTsNodeCommand('ts-node -T a.ts', root)).toEqual({
+      command: 'vpx a.ts',
+      kept: [],
+    });
+  });
+
+  it.each([
     ['ts-node -T a.ts --flag', 'vpx a.ts --flag'],
     ['ts-node --transpileOnly a.ts', 'vpx a.ts'],
     ['ts-node --transpile-only --esm a.ts', 'vpx a.ts'],
@@ -213,10 +252,13 @@ describe('ts-node migration', () => {
   });
 
   it('pins the CLI config and retains Node loaders that need an implicit config pin', () => {
-    write('tsconfig.json', { 'ts-node': { transpileOnly: true } });
+    write('tsconfig.json', {
+      compilerOptions: { useDefineForClassFields: false },
+      'ts-node': { transpileOnly: true },
+    });
     write('scripts/tsconfig.json', {
       'ts-node': { transpileOnly: true },
-      compilerOptions: { jsx: 'react' },
+      compilerOptions: { jsx: 'react', useDefineForClassFields: false },
     });
     expect(rewriteTsNodeCommand('ts-node scripts/a.ts', root)).toEqual({
       command: 'vpx --tsconfig=scripts/tsconfig.json scripts/a.ts',
@@ -236,7 +278,10 @@ describe('ts-node migration', () => {
 
   it('keeps explicit TS_NODE_PROJECT files for Node loaders and literal NODE_OPTIONS', () => {
     write('tsconfig.json', { 'ts-node': { typeCheck: true } });
-    write('configs/runner.json', { 'ts-node': { transpileOnly: true } });
+    write('configs/runner.json', {
+      compilerOptions: { useDefineForClassFields: false },
+      'ts-node': { transpileOnly: true },
+    });
     for (const [before, after] of [
       ['node -r ts-node/register a.ts', 'node --import vite-plus/register a.ts'],
       [
@@ -281,7 +326,10 @@ describe('ts-node migration', () => {
   });
 
   it('translates explicit project paths with spaces using portable quotes', () => {
-    write('config files/tsconfig.json', { 'ts-node': { transpileOnly: true } });
+    write('config files/tsconfig.json', {
+      compilerOptions: { useDefineForClassFields: false },
+      'ts-node': { transpileOnly: true },
+    });
     expect(rewriteTsNodeCommand('ts-node -P "config files" a.ts', root)).toEqual({
       command: 'vpx "--tsconfig=config files/tsconfig.json" a.ts',
       kept: [],
@@ -295,7 +343,10 @@ describe('ts-node migration', () => {
   });
 
   it('retains generated config arguments that require platform-specific escaping', () => {
-    write("config's.json", { 'ts-node': { transpileOnly: true } });
+    write("config's.json", {
+      compilerOptions: { useDefineForClassFields: false },
+      'ts-node': { transpileOnly: true },
+    });
     const command = 'ts-node -P "config\'s.json" a.ts';
     expect(rewriteTsNodeCommand(command, root)).toEqual({
       command,
@@ -352,7 +403,10 @@ describe('ts-node migration', () => {
 
   it('keeps shebangs whose selected config cannot be pinned independently of caller cwd', () => {
     write('package.json', { devDependencies: { 'ts-node': '^10.9.2' } });
-    write('scripts/tsconfig.json', { 'ts-node': { transpileOnly: true } });
+    write('scripts/tsconfig.json', {
+      compilerOptions: { useDefineForClassFields: false },
+      'ts-node': { transpileOnly: true },
+    });
     const source = '#!/usr/bin/env -S ts-node -T\nexport {};\n';
     write('scripts/release.ts', source);
     const report = createMigrationReport();

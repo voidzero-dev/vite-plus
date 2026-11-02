@@ -3,7 +3,7 @@
 ## `vpt rm scripts/release.ts`
 
 
-## `vpt write-file tsconfig.json '{"ts-node":{"transpileOnly":true}}
+## `vpt write-file tsconfig.json '{"compilerOptions":{"useDefineForClassFields":false},"ts-node":{"transpileOnly":true}}
 '`
 
 

@@ -32,6 +32,44 @@ describe('prepareTsNodeRun', () => {
     });
   }
 
+  it.each([{}, { compilerOptions: { module: 'CommonJS' } }])(
+    'retains an existing config with implicit class-field defaults: %j',
+    (value) => {
+      config(value);
+      expect(prepare(['-T', 'scripts/a.ts']).keepReason).toContain('useDefineForClassFields');
+      expect(prepare(['-T', '-P', 'tsconfig.json', 'scripts/a.ts']).keepReason).toContain(
+        'useDefineForClassFields',
+      );
+      expect(
+        prepare(
+          ['-r', 'ts-node/register/transpile-only', 'scripts/a.ts'],
+          ['TS_NODE_PROJECT=tsconfig.json'],
+          'node',
+        ).keepReason,
+      ).toContain('useDefineForClassFields');
+    },
+  );
+
+  it.each([
+    { target: 'ES2020' },
+    { target: 'ES2022' },
+    { useDefineForClassFields: false },
+    { useDefineForClassFields: true },
+  ])('accepts inherited explicit class-field settings: %j', (compilerOptions) => {
+    config({ compilerOptions }, 'base.json');
+    config({ extends: './base.json', compilerOptions: { module: 'CommonJS' } });
+    expect(prepare(['-T', 'scripts/a.ts'])).toEqual({
+      edits: [{ index: 0 }],
+      prependArgs: ['--tsconfig=tsconfig.json'],
+    });
+  });
+
+  it('retains inherited configs that still omit both class-field settings', () => {
+    config({ compilerOptions: { module: 'CommonJS' } }, 'base.json');
+    config({ extends: './base.json' });
+    expect(prepare(['-T', 'scripts/a.ts']).keepReason).toContain('useDefineForClassFields');
+  });
+
   it.each(['-T', '--transpileOnly', '--transpile-only'])(
     'removes %s while leaving script arguments intact',
     (flag) => {
@@ -48,7 +86,10 @@ describe('prepareTsNodeRun', () => {
 
   it('reads transpile-only mode from the nearest entrypoint config', () => {
     config({ 'ts-node': { transpileOnly: false } });
-    config({ 'ts-node': { transpileOnly: true } }, 'scripts/tsconfig.json');
+    config(
+      { compilerOptions: { useDefineForClassFields: false }, 'ts-node': { transpileOnly: true } },
+      'scripts/tsconfig.json',
+    );
     expect(prepare(['scripts/a.ts'])).toEqual({
       edits: [],
       prependArgs: ['--tsconfig=scripts/tsconfig.json'],
@@ -60,7 +101,13 @@ describe('prepareTsNodeRun', () => {
   });
 
   it('reads JSONC and local inherited ts-node settings', () => {
-    config({ 'ts-node': { transpileOnly: true, files: true } }, 'base.json');
+    config(
+      {
+        compilerOptions: { useDefineForClassFields: false },
+        'ts-node': { transpileOnly: true, files: true },
+      },
+      'base.json',
+    );
     fs.writeFileSync(
       path.join(cwd, 'tsconfig.json'),
       '{ // project config\n"extends": "./base", "ts-node": { "esm": true, }, }',
@@ -72,7 +119,10 @@ describe('prepareTsNodeRun', () => {
   });
 
   it('merges environment, inherited config, and CLI in order', () => {
-    config({ 'ts-node': { transpileOnly: true } }, 'base.json');
+    config(
+      { compilerOptions: { useDefineForClassFields: false }, 'ts-node': { transpileOnly: true } },
+      'base.json',
+    );
     config({ extends: './base.json', 'ts-node': { transpileOnly: false } });
     expect(prepare(['scripts/a.ts'], ['TS_NODE_TRANSPILE_ONLY=true']).keepReason).toContain(
       'type-checks',
@@ -116,7 +166,10 @@ describe('prepareTsNodeRun', () => {
   });
 
   it('finds a Node preload configuration from cwd rather than the script directory', () => {
-    config({ 'ts-node': { transpileOnly: true } });
+    config({
+      compilerOptions: { useDefineForClassFields: false },
+      'ts-node': { transpileOnly: true },
+    });
     config({ 'ts-node': { typeCheck: true } }, 'scripts/tsconfig.json');
     expect(prepare(['--require=ts-node/register', 'scripts/a.ts'], [], 'node')).toEqual({
       edits: [],
@@ -125,7 +178,10 @@ describe('prepareTsNodeRun', () => {
   });
 
   it.each(['-P', '--project', '--project='])('maps %s to a checked tsconfig file', (flag) => {
-    config({ 'ts-node': { transpileOnly: true } }, 'scripts/config.json');
+    config(
+      { compilerOptions: { useDefineForClassFields: false }, 'ts-node': { transpileOnly: true } },
+      'scripts/config.json',
+    );
     const inline = flag.endsWith('=');
     const args = inline ? [`${flag}scripts/config.json`] : [flag, 'scripts/config.json'];
     const expected = [{ index: 0, value: '--tsconfig=scripts/config.json' }];
@@ -135,7 +191,10 @@ describe('prepareTsNodeRun', () => {
   });
 
   it('maps project directories and gives CLI project selection precedence over the environment', () => {
-    config({ 'ts-node': { transpileOnly: true } }, 'scripts/tsconfig.json');
+    config(
+      { compilerOptions: { useDefineForClassFields: false }, 'ts-node': { transpileOnly: true } },
+      'scripts/tsconfig.json',
+    );
     expect(prepare(['-P', 'scripts', 'scripts/a.ts'], ['TS_NODE_PROJECT=missing.json'])).toEqual({
       edits: [{ index: 0, value: '--tsconfig=scripts/tsconfig.json' }, { index: 1 }],
     });
@@ -150,7 +209,10 @@ describe('prepareTsNodeRun', () => {
   it('keeps relative project paths portable when the working directory contains spaces', () => {
     const spaced = path.join(cwd, 'my project');
     fs.mkdirSync(spaced);
-    config({ 'ts-node': { transpileOnly: true } }, 'my project/ts config.json');
+    config(
+      { compilerOptions: { useDefineForClassFields: false }, 'ts-node': { transpileOnly: true } },
+      'my project/ts config.json',
+    );
     const result = prepareTsNodeRun(['-P', './ts config.json', 'a.ts'], {
       cwd: spaced,
       environment: [],
@@ -287,7 +349,10 @@ describe('prepareTsNodeRun', () => {
   it('follows entrypoint symlinks when deciding whether type checking is enabled', () => {
     fs.mkdirSync(path.join(cwd, 'actual'));
     config({ 'ts-node': { typeCheck: true } }, 'actual/tsconfig.json');
-    config({ 'ts-node': { transpileOnly: true } }, 'scripts/tsconfig.json');
+    config(
+      { compilerOptions: { useDefineForClassFields: false }, 'ts-node': { transpileOnly: true } },
+      'scripts/tsconfig.json',
+    );
     fs.writeFileSync(path.join(cwd, 'actual/a.ts'), 'export {};\n');
     fs.rmSync(path.join(cwd, 'scripts/a.ts'));
     fs.symlinkSync(path.join(cwd, 'actual/a.ts'), path.join(cwd, 'scripts/a.ts'));
@@ -328,7 +393,10 @@ describe('prepareTsNodeRun', () => {
   });
 
   it('does not pass an implicit tsconfig pin to Node.js', () => {
-    config({ 'ts-node': { transpileOnly: true } });
+    config({
+      compilerOptions: { useDefineForClassFields: false },
+      'ts-node': { transpileOnly: true },
+    });
     const context = {
       cwd,
       environment: [],
