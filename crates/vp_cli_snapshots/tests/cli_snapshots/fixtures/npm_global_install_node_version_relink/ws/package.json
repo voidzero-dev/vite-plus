@@ -1,0 +1,5 @@
+{
+  "name": "npm-global-relink-workspace",
+  "private": true,
+  "workspaces": ["packages/*"]
+}

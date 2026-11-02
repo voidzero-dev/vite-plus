@@ -205,37 +205,34 @@ fn get_npm_global_prefix(
     node_dir.clone()
 }
 
-/// Whether npm's effective `dry-run` setting is enabled for this command.
+/// Whether npm's effective `dry-run` setting was enabled for an install, or
+/// `None` when npm cannot report it.
 ///
-/// A CLI flag wins. Otherwise `npm config get dry-run` reports the value from
-/// the environment and `.npmrc`. If npm cannot report it, assume a real install.
-fn npm_dry_run_enabled(args: &[String], npm_path: &AbsolutePath, env: &ToolPathEnv) -> bool {
-    if let Some(dry_run) = npm_dry_run_from_args(args) {
-        return dry_run;
-    }
-    std::process::Command::new(npm_path.as_path())
+/// The probe receives the install's own arguments, so npm applies the same
+/// global mode, config files (`--userconfig`, global-only npmrc lookup), and
+/// flag parsing (`--dry-run false`, `--no-dry-run`, abbreviations) as it did
+/// for the install. The subcommand and package specs become extra keys, so
+/// npm prints one `key=value` line per key, starting with `dry-run`.
+fn npm_dry_run_enabled(
+    args: &[String],
+    npm_path: &AbsolutePath,
+    env: &ToolPathEnv,
+) -> Option<bool> {
+    let output = std::process::Command::new(npm_path.as_path())
         .args(["config", "get", "dry-run"])
+        .args(args)
         .envs(env.clone().into_envs())
         .output()
-        .ok()
-        .filter(|output| output.status.success())
-        .and_then(|output| std::str::from_utf8(&output.stdout).ok().map(npm_config_bool))
-        .unwrap_or(false)
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    npm_dry_run_from_config_output(std::str::from_utf8(&output.stdout).ok()?)
 }
 
-/// The last `--dry-run`, `--dry-run=<value>`, or `--no-dry-run` flag before `--`.
-fn npm_dry_run_from_args(args: &[String]) -> Option<bool> {
-    let mut dry_run = None;
-    for arg in args.iter().take_while(|arg| *arg != "--") {
-        if arg == "--dry-run" {
-            dry_run = Some(true);
-        } else if arg == "--no-dry-run" {
-            dry_run = Some(false);
-        } else if let Some(value) = arg.strip_prefix("--dry-run=") {
-            dry_run = Some(npm_config_bool(value));
-        }
-    }
-    dry_run
+/// Read the `dry-run=<value>` line that `npm config get dry-run <keys...>` prints.
+fn npm_dry_run_from_config_output(stdout: &str) -> Option<bool> {
+    stdout.lines().find_map(|line| line.strip_prefix("dry-run=")).map(npm_config_bool)
 }
 
 /// Parse a boolean npm config value the way npm's option parser (nopt) does:
@@ -993,8 +990,18 @@ pub async fn dispatch(tool: &str, args: &[String], env: ToolPathEnv) -> i32 {
     if tool == "npm" {
         if let Some(parsed) = parse_npm_global_install(args) {
             let exit_code = exec::spawn_tool(&tool_path, args, child_env.clone());
+            if exit_code != 0 {
+                return exit_code;
+            }
             // A dry run changes no files in the npm prefix, so the links stay as they are.
-            if exit_code == 0 && !npm_dry_run_enabled(args, &tool_path, &child_env) {
+            // When npm cannot report the setting, do not guess that the install was real.
+            let Some(dry_run) = npm_dry_run_enabled(args, &tool_path, &child_env) else {
+                output::note(
+                    "Could not read npm's dry-run setting, so links in ~/.vite-plus/bin/ were not changed.",
+                );
+                return exit_code;
+            };
+            if !dry_run {
                 let node_dir = node_prefix_from_binary(&node_path);
                 let node_version = resolution.as_ref().map_or_else(
                     || read_node_version(&node_path).unwrap_or_else(|| "unknown".into()),
@@ -2004,18 +2011,17 @@ mod tests {
     }
 
     #[test]
-    fn test_npm_dry_run_from_args() {
-        assert_eq!(npm_dry_run_from_args(&s(&["install", "-g", "pkg"])), None);
-        assert_eq!(npm_dry_run_from_args(&s(&["install", "-g", "--dry-run", "pkg"])), Some(true));
-        assert_eq!(npm_dry_run_from_args(&s(&["i", "-g", "pkg", "--dry-run=false"])), Some(false));
-        assert_eq!(npm_dry_run_from_args(&s(&["i", "-g", "--dry-run=1", "pkg"])), Some(true));
-        // The last flag wins, as in npm.
-        assert_eq!(
-            npm_dry_run_from_args(&s(&["i", "-g", "--dry-run", "--no-dry-run", "pkg"])),
-            Some(false)
-        );
-        // Arguments after `--` are not npm flags.
-        assert_eq!(npm_dry_run_from_args(&s(&["i", "-g", "pkg", "--", "--dry-run"])), None);
+    fn test_npm_dry_run_from_config_output() {
+        let output = "dry-run=true\ninstall=undefined\npkg=undefined\n";
+        assert_eq!(npm_dry_run_from_config_output(output), Some(true));
+        // `npm config get` prints environment values unparsed.
+        assert_eq!(npm_dry_run_from_config_output("dry-run=1\ninstall=undefined\n"), Some(true));
+        // A package spec that looks like the key does not hide the real value.
+        let output = "dry-run=false\ninstall=undefined\ndry-run=true=undefined\n";
+        assert_eq!(npm_dry_run_from_config_output(output), Some(false));
+        // `--help` and `--version` replace the key lines with other output.
+        assert_eq!(npm_dry_run_from_config_output("10.9.9\n"), None);
+        assert_eq!(npm_dry_run_from_config_output(""), None);
     }
 
     #[test]
