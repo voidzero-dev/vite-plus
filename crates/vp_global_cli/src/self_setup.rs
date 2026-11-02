@@ -17,6 +17,29 @@ use crate::{
     error::Error,
 };
 
+/// Reuse a completed external installation without ever starting or repairing setup.
+/// Missing, stale, unreadable or malformed receipts leave completion on its quiet fallback.
+pub(crate) async fn complete_from_existing_install() -> Option<ExitCode> {
+    let binary = std::env::current_exe().ok()?;
+    #[cfg(target_os = "macos")]
+    let binary = std::fs::canonicalize(binary).ok()?;
+    let bin = binary.parent()?;
+    if bin.join(SELF_SETUP_MARKER).try_exists().ok()? {
+        return None;
+    }
+    let data = normalize_target(&EnvConfig::get().dirs.data).ok()?;
+    if dunce::simplified(&binary).starts_with(dunce::simplified(data.as_path())) {
+        return None;
+    }
+    let state = external::SetupState::new(&binary, local_install_version().as_deref()).ok()?;
+    let installed = state.completed_binary(has_bundled_package(&binary)).await.ok()??;
+    let real_installed = std::fs::canonicalize(&installed).ok()?;
+    if real_installed == binary || !real_installed.parent()?.join(SELF_SETUP_MARKER).is_file() {
+        return None;
+    }
+    execute_installed(&installed, false).ok().flatten()
+}
+
 pub(crate) async fn maybe_run() -> Result<Option<ExitCode>, Error> {
     let shell = std::env::var(env_vars::VP_SELF_SETUP_SHELL).ok();
     if let Some(shell) = shell.as_deref() {
