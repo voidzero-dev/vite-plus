@@ -829,40 +829,94 @@ function jsdocUsesTsx(value: string): boolean {
       }
       continue;
     }
-    // A type is enclosed in braces; @template defaults use brackets. Limit the
-    // scan to these expressions so descriptions cannot keep the dependency.
-    while (body.startsWith('{') || (tag[1] === 'template' && body.startsWith('['))) {
-      const open = body[0];
-      const close = open === '{' ? '}' : ']';
-      let depth = 0;
-      let end: number | undefined;
-      // Quoted types can contain braces or brackets that are not delimiters.
-      for (const token of body.matchAll(
-        /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|[{}[\]]/g,
-      )) {
-        if (token[0] === open) {
-          depth++;
-        } else if (token[0] === close && --depth === 0) {
-          end = token.index;
-          break;
-        }
+    // Parameter and property types can follow the name, including an optional
+    // name with a default value. Defaults themselves are not type expressions.
+    if (/^(?:arg|argument|param|prop|property)$/.test(tag[1]) && !body.startsWith('{')) {
+      const end = body.startsWith('[')
+        ? jsdocDelimitedEnd(body)
+        : /^[^\s{[=]+(?:\[\])?(?:\.[^\s{[=]+)*/.exec(body)?.[0].length;
+      body = end === undefined ? '' : body.slice(end).trimStart();
+    }
+    if (body.startsWith('{')) {
+      const end = jsdocDelimitedEnd(body);
+      if (end === undefined) {
+        continue;
       }
+      if (TSX_IMPORT_TYPE.test(body.slice(0, end))) {
+        return true;
+      }
+      body = body.slice(end).trimStart();
+    } else if (/^(?:type|this|enum|augments|extends|implements)$/.test(tag[1])) {
+      if (jsdocUnbracedTypeUsesTsx(body)) {
+        return true;
+      }
+    }
+    if (tag[1] !== 'template') {
+      continue;
+    }
+    // A constraint is followed by a comma-separated list of required names and
+    // bracketed defaults. Stop at the first description, not the first name.
+    while (body) {
+      const end = body.startsWith('[')
+        ? jsdocDelimitedEnd(body)
+        : /^(?:(?:in|out|const)\s+)*[$\p{ID_Start}][$\u200C\u200D\p{ID_Continue}]*/u.exec(body)?.[0]
+            .length;
       if (end === undefined) {
         break;
       }
-      if (TSX_IMPORT_TYPE.test(body.slice(1, end))) {
+      if (body.startsWith('[') && TSX_IMPORT_TYPE.test(body.slice(0, end))) {
         return true;
       }
-      if (tag[1] !== 'template') {
+      body = body.slice(end).trimStart();
+      if (!body.startsWith(',')) {
         break;
       }
-      body = body
-        .slice(end + 1)
-        .trimStart()
-        .replace(/^,\s*/, '');
+      body = body.slice(1).trimStart();
     }
   }
   return false;
+}
+
+/** End of a braced type or bracketed name/default, excluding trailing prose. */
+function jsdocDelimitedEnd(body: string): number | undefined {
+  const open = body[0];
+  const close = open === '{' ? '}' : ']';
+  let depth = 0;
+  // Quoted types and defaults can contain braces or brackets.
+  for (const token of body.matchAll(
+    /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|[{}[\]]/g,
+  )) {
+    if (token[0] === open) {
+      depth++;
+    } else if (token[0] === close && --depth === 0) {
+      return token.index + 1;
+    }
+  }
+  return undefined;
+}
+
+/** Find the complete unbraced type before a tag's description or the next tag. */
+function jsdocUnbracedTypeUsesTsx(body: string): boolean {
+  if (!TSX_IMPORT_TYPE.test(body)) {
+    return false;
+  }
+  // Wrapping the candidate in parentheses requires exactly one type. Try the
+  // longest prefix first so unions and types with spaces are not cut short.
+  const ends = Array.from(body.matchAll(/\s+|$/g), (match) => match.index);
+  for (const end of ends.toReversed()) {
+    const type = body.slice(0, end);
+    if (parseSync('jsdoc.ts', `type T = (${type});`).errors.length === 0) {
+      // An unsupported JSDoc type can follow a valid prefix, for example
+      // `null | function(import('tsx/esm/api').RegisterOptions): void`.
+      const rest = body.slice(end).trimStart();
+      return (
+        TSX_IMPORT_TYPE.test(type) ||
+        (/^(?:[|&<.([?!:]|extends\b|is\b)/.test(rest) && TSX_IMPORT_TYPE.test(rest))
+      );
+    }
+  }
+  // Keep the dependency for JSDoc-only syntax that the TS parser cannot read.
+  return true;
 }
 
 /** Whether `file` runs, imports, loads, or imports types from tsx. */
