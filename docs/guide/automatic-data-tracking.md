@@ -39,6 +39,8 @@ For this task, Vite Task records source files, config files, missing files the c
 
 File system tracking also tracks outputs. If you omit [`cache.output`](/config/run#cache-output), Vite Task archives files the command writes after a successful run and restores them on a cache hit.
 
+Tasks remain cacheable when they read and rewrite the same file. For example, `tsc --incremental` rewrites its `tsconfig.tsbuildinfo` file. The next run can be a cache hit when that file is unchanged or missing; a cache hit restores the recorded file.
+
 ### Limitations
 
 Vite Task cannot track environment variable reads, and it cannot always tell which tracked paths are stable inputs, generated outputs, or tool-managed cache paths that should not become inputs or outputs.

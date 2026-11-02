@@ -7,10 +7,10 @@ packages:
 catalog:
   '@clack/core': ^1.5.1
   '@e18e/eslint-plugin': ^0.8.1
-  '@emnapi/core': 2.0.0-alpha.5
-  '@emnapi/runtime': 2.0.0-alpha.5
+  '@emnapi/core': 2.0.0-beta.2
+  '@emnapi/runtime': 2.0.0-beta.2
   '@napi-rs/cli': ^3.10.0
-  '@napi-rs/wasm-runtime': ~1.2.5
+  '@napi-rs/wasm-runtime': 1.2.6
   '@nkzw/safe-word-list': ^3.1.0
   '@oxc-node/cli': ^1.0.1
   '@oxc-node/core': ^1.0.1
@@ -19,28 +19,28 @@ catalog:
   # Kept at the oxlint version by .github/scripts/upgrade-deps.ts
   '@oxlint/plugins': =1.90.0
   '@rolldown/pluginutils': ^1.0.0
-  '@tsdown/css': ^0.23.3
-  '@tsdown/exe': ^0.23.3
+  '@tsdown/css': ^0.23.4
+  '@tsdown/exe': ^0.23.4
   '@types/cross-spawn': ^6.0.6
   '@types/node': 24.10.3
   '@types/validate-npm-package-name': ^4.0.2
   '@typescript/native-preview': 7.0.0-dev.20260707.2
-  '@vitest/browser': 5.0.5
-  '@vitest/browser-playwright': 5.0.5
-  '@vitest/browser-preview': 5.0.5
+  '@vitest/browser': 5.1.0
+  '@vitest/browser-playwright': 5.1.0
+  '@vitest/browser-preview': 5.1.0
   '@vitest/browser-webdriverio': 5.0.0
-  '@vitest/mocker': 5.0.5
-  '@vitest/pretty-format': 5.0.5
-  '@vitest/snapshot': 5.0.5
-  '@vitest/spy': 5.0.5
-  '@vitest/utils': 5.0.5
+  '@vitest/mocker': 5.1.0
+  '@vitest/pretty-format': 5.1.0
+  '@vitest/snapshot': 5.1.0
+  '@vitest/spy': 5.1.0
+  '@vitest/utils': 5.1.0
   bingo: ^0.13.2
-  cac: ^7.0.0
+  cac: ^7.1.0
   consola: ^3.4.2
   cross-spawn: ^7.0.5
   detect-indent: ^7.0.2
   detect-newline: ^4.0.1
-  emnapi: 2.0.0-alpha.5
+  emnapi: 2.0.0-beta.2
   execa: ^9.2.0
   fresh-import: ^0.2.1
   glob: ^13.0.0
@@ -59,19 +59,19 @@ catalog:
   picomatch: ^4.0.2
   pirates: ^4.0.7
   playwright: ^1.57.0
-  remeda: ^2.50.0
+  remeda: ^2.53.0
   rolldown-plugin-dts: ^0.28.0
   rollup: ^4.63.0
   semver: ^7.8.0
   signal-exit: 4.1.0
   source-map: 0.8.0
   tinyglobby: ^0.2.15
-  tsdown: ^0.23.3
+  tsdown: ^0.23.4
   typescript: ~7.0.2
   valibot: 1.5.0
   validate-npm-package-name: ^8.0.0
   verkit: ^0.5.0
-  vitest: 5.0.5
+  vitest: 5.1.0
   yaml: ^2.9.1
   # Keep generator option schemas compatible with bingo's Zod version.
   zod: ^4.4.3

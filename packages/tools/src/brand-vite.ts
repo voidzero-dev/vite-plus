@@ -12,6 +12,7 @@
  * 4. logger.ts: Change default prefix from '[vite]' to '[vite+]'
  * 5. plugins/reporter.ts: Suppress redundant "vite v<version>" native reporter line
  * 6. config.ts: Suppress the native-loader notice and support an explicit root base
+ * 7. rolldown.dts.config.ts: Drop an orphaned declaration runtime chunk
  */
 
 import { execFileSync } from 'node:child_process';
@@ -119,6 +120,7 @@ export function brandVite(rootDir: string = process.cwd()): void {
       'logger.ts',
       'plugins/reporter.ts',
       'config.ts',
+      '../../rolldown.dts.config.ts',
     ],
     { cwd: nodeDir },
   );
@@ -230,6 +232,40 @@ export function brandVite(rootDir: string = process.cwd()): void {
     'config.ts',
     'Suppressed native config loader notice and enabled an explicit root base',
     patchedConfig === configSource ? 'already' : 'patched',
+  );
+
+  // 7. Rolldown 1.2.16 can emit a declaration runtime chunk containing only
+  // an unresolved helper export after @internal class members are stripped.
+  // Remove that chunk when none of the generated declarations reference it.
+  const dtsConfigFile = join(rootDir, VITE_DIR, 'packages', 'vite', 'rolldown.dts.config.ts');
+  logPatch(
+    'rolldown.dts.config.ts',
+    'Dropped orphaned declaration runtime chunks',
+    replaceInFile(
+      dtsConfigFile,
+      `        for (const chunk of Object.values(bundle)) {
+          if (chunk.type !== 'chunk') continue
+
+          const ast = parseAst(chunk.code, { lang: 'ts', sourceType: 'module' })`,
+      `        for (const chunk of Object.values(bundle)) {
+          if (chunk.type !== 'chunk') continue
+
+          if (
+            chunk.fileName === 'chunks/rolldown-runtime.d.ts' &&
+            chunk.code.trim() === 'export { __exportAll as t };' &&
+            !Object.values(bundle).some(
+              (other) =>
+                other.type === 'chunk' &&
+                other.fileName !== chunk.fileName &&
+                other.code.includes('rolldown-runtime'),
+            )
+          ) {
+            delete bundle[chunk.fileName]
+            continue
+          }
+
+          const ast = parseAst(chunk.code, { lang: 'ts', sourceType: 'module' })`,
+    ),
   );
 
   log('Done!');

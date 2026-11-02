@@ -61,6 +61,12 @@ const upstreamSources = {
   ].join('\n'),
 };
 
+const upstreamDtsConfig = `        for (const chunk of Object.values(bundle)) {
+          if (chunk.type !== 'chunk') continue
+
+          const ast = parseAst(chunk.code, { lang: 'ts', sourceType: 'module' })
+`;
+
 function write(file: string, source: string) {
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, source);
@@ -69,6 +75,7 @@ function write(file: string, source: string) {
 function createUpstreamFixture(configSource = upstreamSources['config.ts']): {
   root: string;
   nodeDir: string;
+  dtsConfig: string;
   manifest: string;
   lockfile: string;
   unrelatedSource: string;
@@ -81,9 +88,11 @@ function createUpstreamFixture(configSource = upstreamSources['config.ts']): {
     write(join(nodeDir, file), file === 'config.ts' ? configSource : source);
   }
   const manifest = join(viteDir, 'packages/vite/package.json');
+  const dtsConfig = join(viteDir, 'packages/vite/rolldown.dts.config.ts');
   const lockfile = join(viteDir, 'pnpm-lock.yaml');
   const unrelatedSource = join(nodeDir, 'server.ts');
   write(manifest, '{"devDependencies":{"@vitest/utils":"4.1.10"}}\n');
+  write(dtsConfig, upstreamDtsConfig);
   write(lockfile, '# upstream lockfile\n');
   write(unrelatedSource, '// upstream source\n');
   git('init');
@@ -102,11 +111,11 @@ function createUpstreamFixture(configSource = upstreamSources['config.ts']): {
     'upstream fixture',
   );
 
-  return { root, nodeDir, manifest, lockfile, unrelatedSource };
+  return { root, nodeDir, dtsConfig, manifest, lockfile, unrelatedSource };
 }
 
 test('branding preserves aligned dependencies and unrelated changes across repeated builds', () => {
-  const { root, nodeDir, manifest, lockfile, unrelatedSource } = createUpstreamFixture();
+  const { root, nodeDir, dtsConfig, manifest, lockfile, unrelatedSource } = createUpstreamFixture();
   try {
     alignVendoredVitestDependencies(root, '5.0.0');
     const alignedManifest = readFileSync(manifest, 'utf8');
@@ -132,6 +141,10 @@ test('branding preserves aligned dependencies and unrelated changes across repea
         expect(source).not.toBe(upstream);
         return source;
       });
+      const dtsConfigSource = readFileSync(dtsConfig, 'utf8');
+      expect(dtsConfigSource).toContain("chunk.fileName === 'chunks/rolldown-runtime.d.ts'");
+      expect(dtsConfigSource).toContain('delete bundle[chunk.fileName]');
+      sources.push(dtsConfigSource);
       if (brandedSources) {
         expect(sources).toEqual(brandedSources);
       }
