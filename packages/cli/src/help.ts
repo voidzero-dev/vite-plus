@@ -908,8 +908,7 @@ const commandHelpDocs = {
           },
           {
             label: '--env-file <file>',
-            description:
-              'Load environment variables from a file, when used together with --env, variables in --env take precedence',
+            description: 'Load environment variables from a file, can be repeated',
           },
           {
             label: '--env-prefix <prefix>',

@@ -12,6 +12,7 @@
  * 4. logger.ts: Change default prefix from '[vite]' to '[vite+]'
  * 5. plugins/reporter.ts: Suppress redundant "vite v<version>" native reporter line
  * 6. config.ts: Suppress the native-loader notice and support an explicit root base
+ * 7. rolldown.dts.config.ts: Omit Rolldown's invalid helper-only declaration chunk
  */
 
 import { execFileSync } from 'node:child_process';
@@ -123,6 +124,11 @@ export function brandVite(rootDir: string = process.cwd()): void {
     { cwd: nodeDir },
   );
 
+  const packageDir = join(rootDir, VITE_DIR, 'packages', 'vite');
+  execFileSync('git', ['restore', '--source=HEAD', '--', 'rolldown.dts.config.ts'], {
+    cwd: packageDir,
+  });
+
   // 1. constants.ts: Add VITE_PLUS_VERSION constant after VERSION
   const constantsFile = join(nodeDir, 'constants.ts');
   logPatch(
@@ -230,6 +236,19 @@ export function brandVite(rootDir: string = process.cwd()): void {
     'config.ts',
     'Suppressed native config loader notice and enabled an explicit root base',
     patchedConfig === configSource ? 'already' : 'patched',
+  );
+
+  // 7. Rolldown 1.2.16 may leave its runtime helper in a standalone declaration
+  // chunk. The chunk only re-exports an undeclared helper and has no importers.
+  const dtsConfigFile = join(packageDir, 'rolldown.dts.config.ts');
+  logPatch(
+    'rolldown.dts.config.ts',
+    "Omitted Rolldown's invalid helper-only declaration chunk",
+    replaceInFile(
+      dtsConfigFile,
+      "        for (const chunk of Object.values(bundle)) {\n          if (chunk.type !== 'chunk') continue\n\n          const ast = parseAst(chunk.code, { lang: 'ts', sourceType: 'module' })",
+      "        for (const chunk of Object.values(bundle)) {\n          if (chunk.type !== 'chunk') continue\n\n          if (\n            chunk.fileName === 'chunks/rolldown-runtime.d.ts' &&\n            chunk.code.trim() === 'export { __exportAll as t };'\n          ) {\n            delete bundle[chunk.fileName]\n            continue\n          }\n\n          const ast = parseAst(chunk.code, { lang: 'ts', sourceType: 'module' })",
+    ),
   );
 
   log('Done!');

@@ -56,6 +56,21 @@ export function exposeLoaderInitialization(source: string): string {
   return source;
 }
 
+/** Backport oxc-node's oxc 0.156 compatibility fix to the pinned v1.0.1 source. */
+export function supportOxc156(source: string): string {
+  const original = 'self.0 |= it.kind.is_await();';
+  const replacement = 'self.0 |= it.kind.is_await_using();';
+  if (source.includes(original)) {
+    return source.replace(original, replacement);
+  }
+  if (!source.includes(replacement)) {
+    throw new Error(
+      '[patch-oxc-node] Could not find the top-level await declaration check in oxc-node/src/lib.rs',
+    );
+  }
+  return source;
+}
+
 export function patchOxcNode(rootDir: string = process.cwd()): void {
   const version = oxcVersion(readFileSync(join(rootDir, 'Cargo.toml'), 'utf-8'), 'Cargo.toml');
   const cargoTomlPath = join(rootDir, OXC_NODE_DIR, 'Cargo.toml');
@@ -67,10 +82,16 @@ export function patchOxcNode(rootDir: string = process.cwd()): void {
   }
   const libPath = join(rootDir, OXC_NODE_DIR, 'src/lib.rs');
   const source = readFileSync(libPath, 'utf-8');
-  const patchedSource = exposeLoaderInitialization(source);
+  const exposedSource = exposeLoaderInitialization(source);
+  const patchedSource = supportOxc156(exposedSource);
   if (patchedSource !== source) {
     writeFileSync(libPath, patchedSource, 'utf-8');
+  }
+  if (exposedSource !== source) {
     log('✓ lib.rs: loader initialization available to embedders');
+  }
+  if (patchedSource !== exposedSource) {
+    log('✓ lib.rs: oxc 0.156 variable declaration API');
   }
 }
 

@@ -52,6 +52,8 @@ Vite Task uses [automatic data tracking](/guide/automatic-data-tracking) to lear
 
 Use [`cache.input`](/config/run#cache-input) or [`cache.output`](/config/run#cache-output) when a task needs manual tracking rules. `input` controls what invalidates the cache. `output` controls which files Vite Task restores on a cache hit.
 
+Tasks that rewrite a file they also read can be cached. For example, `tsc --incremental` reads and rewrites `tsconfig.tsbuildinfo`: the next run is a cache hit if the file matches the previous result or is missing, as on a fresh clone. A cache hit restores the saved file.
+
 ```ts [vite.config.ts]
 tasks: {
   build: {

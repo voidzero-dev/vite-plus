@@ -59,6 +59,13 @@ const upstreamSources = {
     '        createNativeConfigCompatPlugin(nativeIncompatibilities),',
     '',
   ].join('\n'),
+  '../../rolldown.dts.config.ts': [
+    '        for (const chunk of Object.values(bundle)) {',
+    "          if (chunk.type !== 'chunk') continue",
+    '',
+    "          const ast = parseAst(chunk.code, { lang: 'ts', sourceType: 'module' })",
+    '',
+  ].join('\n'),
 };
 
 function write(file: string, source: string) {
@@ -127,6 +134,9 @@ test('branding preserves aligned dependencies and unrelated changes across repea
       expect(() => assertViteConfigPatched(configSource)).not.toThrow();
       expect(configSource).toContain('false &&\n        createNativeConfigCompatPlugin');
       expect(configSource).not.toContain('!process.env.VITE_CONFIG_NATIVE_IGNORE_WARNING');
+      expect(readFileSync(join(nodeDir, '../../rolldown.dts.config.ts'), 'utf8')).toContain(
+        'delete bundle[chunk.fileName]',
+      );
       const sources = Object.entries(upstreamSources).map(([file, upstream]) => {
         const source = readFileSync(join(nodeDir, file), 'utf8');
         expect(source).not.toBe(upstream);

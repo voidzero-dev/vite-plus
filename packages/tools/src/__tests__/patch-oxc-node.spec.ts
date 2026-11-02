@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 
-import { exposeLoaderInitialization, setOxcVersion } from '../patch-oxc-node.ts';
+import { exposeLoaderInitialization, setOxcVersion, supportOxc156 } from '../patch-oxc-node.ts';
 
 describe('setOxcVersion', () => {
   const cargoToml = `[dependencies]
@@ -19,6 +19,21 @@ oxc_resolver = { version = "11.24.3" }
 
   test('fails without an oxc dependency', () => {
     expect(() => setOxcVersion('[dependencies]\n', '0.152.0')).toThrow(/`oxc` dependency/);
+  });
+});
+
+describe('supportOxc156', () => {
+  test('uses the renamed await-using check without changing its behavior', () => {
+    const source = 'self.0 |= it.kind.is_await();';
+    const patched = supportOxc156(source);
+    expect(patched).toBe('self.0 |= it.kind.is_await_using();');
+    expect(supportOxc156(patched)).toBe(patched);
+  });
+
+  test('fails when the declaration check cannot be found', () => {
+    expect(() => supportOxc156('self.0 |= it.kind.is_using();')).toThrow(
+      /top-level await declaration check/,
+    );
   });
 });
 
