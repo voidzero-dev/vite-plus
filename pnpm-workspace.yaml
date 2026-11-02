@@ -48,7 +48,7 @@ catalog:
   # Kept in lockstep with the bundled @tsdown/css by .github/scripts/upgrade-deps.ts
   lightningcss: ^1.33.0
   lint-staged: ^17.6.0
-  minimatch: ^10.0.3
+  minimatch: ^11.0.0
   nanotar: ^0.3.0
   oxc-parser: =0.156.0
   oxfmt: =0.75.0
