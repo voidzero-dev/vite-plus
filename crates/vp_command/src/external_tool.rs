@@ -143,12 +143,6 @@ pub fn is_managed_runtime(path: &Path) -> bool {
     resolves_under_data(path, &[Path::new("js_runtime")])
 }
 
-/// Whether `path` resolves into a Vite+-managed install of one package-manager
-/// family, that is, under `<DATA>/package_manager/<family>`.
-pub fn is_managed_package_manager(path: &Path, family: &str) -> bool {
-    resolves_under_data(path, &[&Path::new("package_manager").join(family)])
-}
-
 /// Whether `path` resolves into a `vp install -g` package, that is, under
 /// `<DATA>/packages` (the directory of `get_packages_dir` in
 /// `vp_global_cli`). An old `corepack enable` can leave links from the bin
@@ -334,8 +328,6 @@ mod tests {
         EnvConfig::with_vars([(env_vars::VP_HOME, home.as_path())], |_| {
             assert!(is_managed_install(&pnpm));
             assert!(!is_managed_runtime(&pnpm));
-            assert!(is_managed_package_manager(&pnpm, "pnpm"));
-            assert!(!is_managed_package_manager(&pnpm, "yarn"));
         });
     }
 }

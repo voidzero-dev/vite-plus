@@ -247,10 +247,10 @@ async fn find_global_binary(cmd: &str) -> Option<GlobalBinary> {
 /// Execute a globally installed binary.
 ///
 /// Ensures the required Node.js version is installed, prepends its bin dir
-/// and local node_modules/.bin dirs to PATH, then executes. System-only
-/// Node.js comes from PATH, and its directory is not added again.
+/// and local node_modules/.bin dirs to PATH, then executes. The Node.js
+/// directory is not added when Node.js or npm is system-only (see
+/// [`dispatch::node_dir_joins_child_path`]).
 async fn execute_global_binary(bin: GlobalBinary, args: &[String], cwd: &AbsolutePath) -> i32 {
-    let node_system_only = vp_shared::EnvConfig::get().node_system_only();
     // Ensure Node.js is installed and locate its binary
     let node_path = match dispatch::resolve_system_only_tool("node") {
         Some(Ok(path)) => path,
@@ -269,7 +269,7 @@ async fn execute_global_binary(bin: GlobalBinary, args: &[String], cwd: &Absolut
 
     // Prepend Node.js bin dir to PATH
     let mut child_env = ToolPathEnv::from_env();
-    if !node_system_only {
+    if dispatch::node_dir_joins_child_path() {
         let node_bin_dir = node_path.parent().expect("Node has no parent directory");
         if let Err(error) = child_env.prepend(node_bin_dir, &["node"], PrependOptions::default()) {
             output::error(&format!("vpx: {error}"));

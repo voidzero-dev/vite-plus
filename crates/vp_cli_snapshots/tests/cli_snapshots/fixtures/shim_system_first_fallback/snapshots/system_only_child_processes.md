@@ -1,6 +1,6 @@
 # system_only_child_processes
 
-System-only restrictions hold for what the selected tools run: a `#!/usr/bin/env node` shebang and a nested `npm` resolve from the child PATH, which loses the managed runtime directory whether a parent left it first on PATH or the shim would add it for managed Node.js. A nested managed npm would print its version instead of the system marker.
+System-only settings hold for what the selected tools run: a `#!/usr/bin/env node` shebang and a nested `npm` resolve from the child PATH. The shims never add a managed directory that exposes a system-only tool to it, and leave directories inherited from a parent in place; where Vite+ selects a system-only tool from PATH, a managed install there fails. A nested managed npm would print its version instead of the system marker.
 
 ## `node setup-system-node.cjs`
 
@@ -78,6 +78,15 @@ VITE+ - The Unified Toolchain for the Web
 Selected commands and shims will now prefer system tools, falling back to managed tools.
 
 Run `vp env on` to always use Vite+ managed tools.
+```
+
+## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin VP_NPM_MANAGER=system-only VP_NODE_DIST_MIRROR=http://127.0.0.1:1 NPM_CONFIG_REGISTRY=http://127.0.0.1:1 npm nested`
+
+System-only npm on managed Node.js: the shell runs system npm, whose shebang reaches the node shim. The shim adds no managed runtime directory to the child PATH, so the nested npm is the system one, not the npm bundled with the runtime.
+
+```
+system npm on managed Node.js
+system npm child on managed Node.js
 ```
 
 ## `vp env off node`

@@ -187,11 +187,10 @@ fn get_npm_global_prefix(
 ) -> AbsolutePathBuf {
     // `npm config get prefix` respects NPM_CONFIG_PREFIX, .npmrc, and other
     // npm config mechanisms.
-    if let Ok(env) = restrict_child_env(env.clone())
-        && let Ok(output) = std::process::Command::new(npm_path.as_path())
-            .args(["config", "get", "prefix"])
-            .envs(env.into_envs())
-            .output()
+    if let Ok(output) = std::process::Command::new(npm_path.as_path())
+        .args(["config", "get", "prefix"])
+        .envs(env.clone().into_envs())
+        .output()
     {
         if output.status.success() {
             if let Ok(prefix) = std::str::from_utf8(&output.stdout) {
@@ -716,20 +715,22 @@ async fn resolve_package_manager_tool(
 /// System-only tools add no directories: a resolved system directory may be a
 /// canonical path missing from PATH, and adding it would reorder the user's
 /// PATH. Children reach the system tools through the PATH entries before the
-/// shims, where system-only shims fail, after [`restrict_child_env`] removes
-/// the managed directories they must not run.
+/// shims, where system-only shims fail. Nor is the selected Node.js directory
+/// added while npm is system-only (see [`node_dir_joins_child_path`]);
+/// children then resolve `node` from PATH, normally through its shim.
+/// Directories inherited from a parent stay as they are.
 async fn prepare_js_child_path(
     cwd: &AbsolutePath,
     node_bin_dir: &AbsolutePath,
     mut env: ToolPathEnv,
 ) -> Result<ToolPathEnv, Error> {
-    let node_system_only = vp_shared::EnvConfig::get().node_system_only();
-    if !node_system_only {
+    if node_dir_joins_child_path() {
         env.prepend(node_bin_dir, &["node"], PrependOptions::default())?;
     }
     if vp_pm_cli::system_only_variable(PackageManagerType::Npm).is_some() {
         return Ok(env);
     }
+    let node_system_only = vp_shared::EnvConfig::get().node_system_only();
     if let Some(npm_path) = resolve_package_manager_tool(cwd, "npm").await? {
         if let Some(bin_dir) = npm_path.parent() {
             env.prepend(bin_dir, PackageManagerType::Npm.bin_names(), PrependOptions::default())?;
@@ -771,40 +772,15 @@ fn reuses_inherited_tool(tool: &str, path: &AbsolutePath) -> bool {
             && vp_command::is_managed_runtime(path.as_path()))
 }
 
-/// Remove from a child PATH the managed directories that a system-only
-/// component must not run, keeping the order of the remaining entries.
+/// Whether the selected Node.js directory joins a child PATH.
 ///
-/// PATH selects whole directories, so a managed runtime directory goes when
-/// either Node.js or npm is system-only: it also holds the bundled npm. A
-/// still-managed Node.js is then reached through the shims on PATH. Inherited
-/// selections of the removed tools are dropped so child shims do not reuse
-/// them. Every tool the shims execute (`exec_tool` / `spawn_tool`) is started
-/// with this environment.
-pub(crate) fn restrict_child_env(mut env: ToolPathEnv) -> std::io::Result<ToolPathEnv> {
-    let restricted_families: Vec<_> = [
-        PackageManagerType::Npm,
-        PackageManagerType::Pnpm,
-        PackageManagerType::Yarn,
-        PackageManagerType::Bun,
-    ]
-    .into_iter()
-    .filter(|&kind| vp_pm_cli::system_only_variable(kind).is_some())
-    .collect();
-    if vp_shared::EnvConfig::get().node_system_only()
-        || restricted_families.contains(&PackageManagerType::Npm)
-    {
-        let mut tools = vec!["node"];
-        tools.extend_from_slice(PackageManagerType::Npm.bin_names());
-        env.remove_dirs(vp_command::is_managed_runtime, &tools)?;
-    }
-    for kind in restricted_families {
-        let family = kind.to_string();
-        env.remove_dirs(
-            |dir| vp_command::is_managed_package_manager(dir, &family),
-            kind.bin_names(),
-        )?;
-    }
-    Ok(env)
+/// System-only Node.js already comes from PATH, so its directory is not added.
+/// Neither is any Node.js directory while npm is system-only: a managed one
+/// would expose its bundled npm, and PATH selects whole directories, so
+/// children resolve managed Node.js from PATH, normally through its shim.
+pub(crate) fn node_dir_joins_child_path() -> bool {
+    !vp_shared::EnvConfig::get().node_system_only()
+        && vp_pm_cli::system_only_variable(PackageManagerType::Npm).is_none()
 }
 
 /// Node.js, the tool, and the child PATH selected for a core shim.
@@ -1136,7 +1112,6 @@ pub(crate) async fn package_binary_invocation(
     node_version: &str,
     mut env: ToolPathEnv,
 ) -> Result<(AbsolutePathBuf, Vec<String>, ToolPathEnv), String> {
-    let node_system_only = vp_shared::EnvConfig::get().node_system_only();
     let node_path = match resolve_system_only_tool("node") {
         Some(node) => node.map_err(|e| e.to_string())?,
         None => ensure_installed(node_version)
@@ -1154,7 +1129,7 @@ pub(crate) async fn package_binary_invocation(
     let child_env = if let Ok(cwd) = current_dir() {
         prepare_js_child_path(&cwd, node_bin_dir, env).await.map_err(|error| error.to_string())?
     } else {
-        if !node_system_only {
+        if node_dir_joins_child_path() {
             env.prepend(node_bin_dir, &["node"], PrependOptions::default())
                 .map_err(|error| error.to_string())?;
         }
@@ -2712,6 +2687,7 @@ mod tests {
         if cfg!(windows) { dir } else { dir.join("bin") }
     }
 
+    #[cfg(unix)]
     fn child_path(env: ToolPathEnv) -> std::ffi::OsString {
         let [(_, path), _] = env.into_envs();
         path
@@ -3145,95 +3121,90 @@ mod tests {
         });
     }
 
-    /// The first `tool` a child process would find on `path`.
-    fn first_on_path(path: &std::ffi::OsStr, tool: &str) -> Option<std::path::PathBuf> {
-        let name = if cfg!(windows) { format!("{tool}.exe") } else { tool.to_owned() };
-        std::env::split_paths(path).map(|dir| dir.join(&name)).find(|file| file.is_file())
-    }
-
-    /// Whatever the selected tool, a child process that resolves `node` or
-    /// `npm` from PATH (a `#!/usr/bin/env node` shebang, a nested `npm` call)
-    /// must not reach a managed runtime that system-only Node.js or npm rules
-    /// out. Other entries keep their order.
+    /// The selected Node.js directory stays out of a child PATH when Node.js is
+    /// system-only, or when npm is (its own variable or `VP_PM_MANAGER`).
     #[test]
-    fn test_restrict_child_env_removes_managed_runtime_for_system_only_node_or_npm() {
+    fn test_node_dir_joins_child_path_follows_node_and_npm() {
         let layout = SystemOnlyLayout::new();
-        let system_node = create_fake_executable(&layout.system_bin, "node");
-        let system_npm = create_fake_executable(&layout.system_bin, "npm");
-        let other = layout.cwd.as_path().join("other-bin");
-        let path = std::env::join_paths([&layout.managed_bin, &other, &layout.system_bin]).unwrap();
-        let tools = "node,npm,npx,pnpm";
-        let extra = [(env_vars::VP_PATH_INJECTED_TOOLS, tools.into())];
-
-        EnvConfig::with_vars(system_only_vars(&layout, &path, &[], &extra), |_| {
-            let child = restrict_child_env(ToolPathEnv::from_env()).unwrap();
-            assert_eq!(child.into_envs(), ToolPathEnv::new(path.clone(), tools).into_envs());
-        });
-
-        // `VP_PM_MANAGER` also restricts pnpm, so its inherited selection goes too.
-        for (managers, remaining_tools) in [
-            (&[(env_vars::VP_NODE_MANAGER, "system-only")][..], "pnpm"),
-            (&[(env_vars::VP_NPM_MANAGER, "system-only")], "pnpm"),
-            (&[(env_vars::VP_PM_MANAGER, "system-only")], ""),
+        let path = layout.path();
+        for (managers, expected) in [
+            (&[(env_vars::VP_NPM_MANAGER, "system-only")][..], false),
+            (&[(env_vars::VP_PM_MANAGER, "system-only")], false),
+            (&[(env_vars::VP_PM_MANAGER, "system-only"), (env_vars::VP_NPM_MANAGER, "yes")], true),
+            (&[(env_vars::VP_PNPM_MANAGER, "system-only")], true),
+            (&[], true),
+            (&[(env_vars::VP_NODE_MANAGER, "system-only")], false),
             (
                 &[
                     (env_vars::VP_NODE_MANAGER, "system-only"),
                     (env_vars::VP_NPM_MANAGER, "system-only"),
                 ],
-                "pnpm",
+                false,
+            ),
+            (
+                &[
+                    (env_vars::VP_NODE_MANAGER, "system-only"),
+                    (env_vars::VP_PM_MANAGER, "system-only"),
+                ],
+                false,
             ),
         ] {
-            EnvConfig::with_vars(system_only_vars(&layout, &path, managers, &extra), |_| {
-                let child = restrict_child_env(ToolPathEnv::from_env()).unwrap();
-                let [(_, child_path), (_, child_tools)] = child.into_envs();
-                assert_eq!(first_on_path(&child_path, "node"), Some(system_node.clone()));
-                assert_eq!(first_on_path(&child_path, "npm"), Some(system_npm.clone()));
-                assert_eq!(
-                    std::env::split_paths(&child_path).collect::<Vec<_>>(),
-                    [other.clone(), layout.system_bin.clone()],
-                    "{managers:?}"
-                );
-                assert_eq!(child_tools, remaining_tools, "{managers:?}");
+            EnvConfig::with_vars(system_only_vars(&layout, &path, managers, &[]), |_| {
+                assert_eq!(node_dir_joins_child_path(), expected, "{managers:?}");
             });
         }
     }
 
-    /// A system-only package-manager family loses only its own managed
-    /// directories; a managed Node.js and other families stay on PATH.
-    #[test]
-    fn test_restrict_child_env_removes_only_the_system_only_family() {
+    /// With system-only npm, the child PATH gets no managed Node.js directory,
+    /// which would expose its bundled npm, and records neither `node` nor
+    /// `npm`. Directories inherited from a parent stay in order. With managed
+    /// npm, the runtime and its npm are added as before.
+    #[tokio::test]
+    async fn test_prepare_js_child_path_skips_managed_node_with_system_only_npm() {
         let layout = SystemOnlyLayout::new();
-        let pnpm_bin = layout
-            .home
-            .join("package_manager")
-            .join("pnpm")
-            .join("10.0.0")
-            .join("pnpm")
-            .join("bin");
-        std::fs::create_dir_all(&pnpm_bin).unwrap();
-        create_fake_executable(&pnpm_bin, "pnpm");
-        let system_pnpm = create_fake_executable(&layout.system_bin, "pnpm");
-        let path =
-            std::env::join_paths([&pnpm_bin, &layout.managed_bin, &layout.system_bin]).unwrap();
-        let extra = [(env_vars::VP_PATH_INJECTED_TOOLS, "node,pnpm,pnpx".into())];
+        let node_dir = node_install_dir_in(&layout.home, "22.0.0");
+        std::fs::create_dir_all(&node_dir).unwrap();
+        create_fake_executable(&node_dir, "node");
+        // The bundled npm is a `.cmd` script on Windows.
+        if cfg!(windows) {
+            std::fs::write(node_dir.join("npm.cmd"), "").unwrap();
+        } else {
+            create_fake_executable(&node_dir, "npm");
+        }
+        let node_dir = AbsolutePathBuf::new(node_dir).unwrap();
+        let other = layout.cwd.as_path().join("other-bin");
+        let path = std::env::join_paths([&layout.managed_bin, &other, &layout.system_bin]).unwrap();
+        let prepare = |managers: &'static [(&'static str, &'static str)]| {
+            let vars = system_only_vars(&layout, &path, managers, &[]);
+            let (cwd, node_dir) = (layout.cwd.clone(), node_dir.clone());
+            EnvConfig::with_vars_async(vars, move |_| async move {
+                prepare_js_child_path(&cwd, &node_dir, ToolPathEnv::from_env())
+                    .await
+                    .unwrap()
+                    .into_envs()
+            })
+        };
 
-        let managers = [(env_vars::VP_PNPM_MANAGER, "system-only")];
-        EnvConfig::with_vars(system_only_vars(&layout, &path, &managers, &extra), |_| {
-            let child = restrict_child_env(ToolPathEnv::from_env()).unwrap();
-            let [(_, child_path), (_, child_tools)] = child.into_envs();
-            assert_eq!(first_on_path(&child_path, "pnpm"), Some(system_pnpm.clone()));
-            assert_eq!(
-                std::env::split_paths(&child_path).collect::<Vec<_>>(),
-                [layout.managed_bin.clone(), layout.system_bin.clone()]
-            );
-            assert_eq!(child_tools, "node");
-        });
+        for managers in [
+            &[(env_vars::VP_NPM_MANAGER, "system-only")][..],
+            &[(env_vars::VP_PM_MANAGER, "system-only")],
+        ] {
+            let [(_, child_path), (_, child_tools)] = prepare(managers).await;
+            assert_eq!(child_path, path, "{managers:?}");
+            assert_eq!(child_tools, "", "{managers:?}");
+        }
 
-        let managers = [(env_vars::VP_YARN_MANAGER, "system-only")];
-        EnvConfig::with_vars(system_only_vars(&layout, &path, &managers, &extra), |_| {
-            let child = restrict_child_env(ToolPathEnv::from_env()).unwrap();
-            assert_eq!(child_path(child), path);
-        });
+        let [(_, child_path), (_, child_tools)] = prepare(&[]).await;
+        assert_eq!(
+            std::env::split_paths(&child_path).collect::<Vec<_>>(),
+            [
+                node_dir.as_path().to_path_buf(),
+                layout.managed_bin.clone(),
+                other.clone(),
+                layout.system_bin.clone()
+            ]
+        );
+        assert_eq!(child_tools, "node,npm");
     }
 
     /// Bundled npm of a system-only Node.js reached through a symlinked PATH
