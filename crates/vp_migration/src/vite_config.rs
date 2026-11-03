@@ -866,6 +866,8 @@ rule:
             - kind: parenthesized_expression
             - kind: as_expression
             - kind: satisfies_expression
+            - kind: type_assertion
+            - kind: non_null_expression
       inside:
         pattern: defineConfig($$$ARGS)
 fix: |-
@@ -901,6 +903,8 @@ rule:
             - kind: parenthesized_expression
             - kind: as_expression
             - kind: satisfies_expression
+            - kind: type_assertion
+            - kind: non_null_expression
       inside:
         pattern: defineConfig($$$ARGS)
 fix: |-
@@ -1529,6 +1533,7 @@ export default defineConfig(async ({ command, mode }) => {
                 config.clone(),
                 format!("() => {{ return {config}; }}"),
                 format!("((() => {{ return {config}; }}) as UserConfigFn) satisfies UserConfigFn"),
+                format!("<UserConfigFn>(() => {{ return {config}; }})!"),
             ] {
                 let source = format!("export default defineConfig({argument});");
                 let result = merge_json_config_content(&source, "{}", "lint").unwrap();
@@ -1554,7 +1559,9 @@ export default defineConfig(async ({ command, mode }) => {
                 format!("({callback})"),
                 format!("({callback}) as UserConfigFn"),
                 format!("({callback}) satisfies UserConfigFn"),
-                format!("((({callback}) as UserConfigFn) satisfies UserConfigFn)"),
+                format!("<UserConfigFn>({callback})"),
+                format!("({callback})!"),
+                format!("<UserConfigFn>((({callback}) as UserConfigFn) satisfies UserConfigFn)!"),
             ] {
                 let source = format!("export default defineConfig({argument});");
                 let result = merge_json_config_content(&source, "{}", "lint").unwrap();
@@ -1574,6 +1581,7 @@ export default defineConfig(async ({ command, mode }) => {
             format!("wrap({callback})"),
             format!("{callback}()"),
             format!("condition ? {callback} : otherConfig"),
+            format!("<UserConfigFn>wrap({callback})!"),
         ] {
             let source = format!("export default defineConfig({argument});");
             let result = merge_json_config_content(&source, "{}", "lint").unwrap();

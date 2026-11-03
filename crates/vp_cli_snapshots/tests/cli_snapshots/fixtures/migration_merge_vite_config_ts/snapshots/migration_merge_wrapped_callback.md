@@ -4,12 +4,12 @@ Merge settings through parentheses and type wrappers while preserving nested fun
 
 ## `vpt replace-file-content vite.config.ts 'export default defineConfig({' 'import type { UserConfigFn } from '\''vite'\'';
 
-export default defineConfig(((() => {
+export default defineConfig(<UserConfigFn>(((() => {
   return {'`
 
 
 ## `vpt replace-file-content vite.config.ts }); '  };
-}) as UserConfigFn) satisfies UserConfigFn);'`
+}) as UserConfigFn) satisfies UserConfigFn)'\!');'`
 
 
 ## `vp migrate --no-interactive`
@@ -39,7 +39,7 @@ import { defineConfig } from 'vite-plus';
 
 import type { UserConfigFn } from 'vite-plus';
 
-export default defineConfig(((() => {
+export default defineConfig(<UserConfigFn>(((() => {
   return {
     staged: {
       "*": "vp check --fix"
@@ -95,7 +95,7 @@ export default defineConfig(((() => {
       },
     },
   }
-}) as UserConfigFn) satisfies UserConfigFn);
+}) as UserConfigFn) satisfies UserConfigFn)!);
 ```
 
 ## `vpt stat-file .oxlintrc.json --assert missing`
