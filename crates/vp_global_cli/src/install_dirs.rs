@@ -89,6 +89,26 @@ pub(crate) fn is_owned(root: &AbsolutePathBuf) -> Result<bool, Error> {
     }
 }
 
+/// Record ownership only when this setup creates the version directory itself.
+/// The marker also lets uninstall remove an interrupted native installation;
+/// setup completion and JavaScript dependency receipts are separate concerns.
+pub(crate) fn prepare_version(directory: &AbsolutePathBuf) -> Result<(), Error> {
+    match fs::create_dir(directory) {
+        Ok(()) => mark_owned(directory),
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn mark_owned(directory: &AbsolutePathBuf) -> Result<(), Error> {
+    let mut marker = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(directory.join(OWNERSHIP_MARKER))?;
+    marker.write_all(OWNERSHIP_CONTENT)?;
+    Ok(())
+}
+
 /// Claim only empty or newly created roots. Installing into an unowned, nonempty
 /// directory must never grant permission to delete its existing contents.
 pub(crate) fn prepare(dirs: &VpDirs) -> Result<(), Error> {
@@ -114,11 +134,7 @@ pub(crate) fn prepare(dirs: &VpDirs) -> Result<(), Error> {
             continue;
         }
         fs::create_dir_all(&root)?;
-        let mut marker = fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(root.join(OWNERSHIP_MARKER))?;
-        marker.write_all(OWNERSHIP_CONTENT)?;
+        mark_owned(&root)?;
     }
     Ok(())
 }
@@ -170,6 +186,49 @@ mod tests {
                 }
             });
         }
+    }
+
+    #[test]
+    fn prepare_version_only_claims_new_directories() {
+        EnvConfig::scoped(|env| {
+            fs::write(env.dirs.data.join("personal.txt"), b"keep").unwrap();
+            prepare(&env.dirs).unwrap();
+            assert!(!is_owned(&env.dirs.data).unwrap());
+
+            let version = env.dirs.data.join("1.4.0");
+            prepare_version(&version).unwrap();
+            assert!(is_owned(&version).unwrap());
+            prepare_version(&version).unwrap();
+            assert!(is_owned(&version).unwrap());
+
+            for empty in [true, false] {
+                let existing = env.dirs.data.join(if empty { "1.3.0" } else { "1.2.0" });
+                fs::create_dir(&existing).unwrap();
+                if !empty {
+                    fs::write(existing.join("personal.txt"), b"keep").unwrap();
+                }
+                prepare_version(&existing).unwrap();
+                assert!(!is_owned(&existing).unwrap());
+                if !empty {
+                    assert_eq!(fs::read(existing.join("personal.txt")).unwrap(), b"keep");
+                }
+            }
+            assert!(!is_owned(&env.dirs.data).unwrap());
+            assert_eq!(fs::read(env.dirs.data.join("personal.txt")).unwrap(), b"keep");
+        });
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn prepare_version_does_not_claim_a_directory_link() {
+        EnvConfig::scoped(|env| {
+            let personal = env.dirs.data.join("personal");
+            fs::create_dir(&personal).unwrap();
+            let version = env.dirs.data.join("1.4.0");
+            std::os::unix::fs::symlink(&personal, &version).unwrap();
+            prepare_version(&version).unwrap();
+            assert!(!is_owned(&personal).unwrap());
+        });
     }
 
     #[cfg(unix)]

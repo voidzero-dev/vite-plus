@@ -128,8 +128,9 @@ fs.appendFileSync(${JSON.stringify(attempts)}, JSON.stringify({
   dependencyMatches: JSON.parse(fs.readFileSync('package.json')).dependencies['vite-plus'] === ${JSON.stringify(version)},
 }) + '\\n');
 if (${failure}) process.exit(17);
-fs.mkdirSync('node_modules/vite-plus', { recursive: true });
+fs.mkdirSync('node_modules/vite-plus/dist', { recursive: true });
 fs.writeFileSync('node_modules/vite-plus/package.json', JSON.stringify({name: 'vite-plus', version: ${JSON.stringify(version)}}));
+fs.writeFileSync('node_modules/vite-plus/dist/bin.js', '');
 `);
 
 const env = {

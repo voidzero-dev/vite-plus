@@ -2,6 +2,8 @@
 
 `vp env` manages the complete JavaScript environment: one Node.js runtime and one selected package manager. npm, pnpm, Yarn, and Bun are peer package-manager families. It belongs to the [global CLI](/guide/global-cli) and is not included in the project-local `vite-plus` package.
 
+The native global CLI can manage Node.js without an existing Node installation, including older releases such as Node.js 16 when a binary is available for your platform. Environment management does not install the Vite+ JavaScript toolchain. Commands run through `vp env exec` and package-manager shims retain their own Node.js requirements.
+
 ## Overview
 
 Think of the project environment as two independently selected components:

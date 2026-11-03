@@ -5,6 +5,7 @@
 
 use std::{
     env,
+    fs::OpenOptions,
     io::{Cursor, Read as _},
     path::Path,
     process::{self, Output},
@@ -14,7 +15,9 @@ use std::{
 use flate2::read::GzDecoder;
 use tar::Archive;
 use vp_js_runtime::{JsRuntimeType, download_runtime};
-use vp_pm_cli::{PackageManagerType, download_package_manager};
+use vp_pm_cli::{
+    PackageManagerType, download_package_manager_for_directory, npm_registry_override,
+};
 use vp_shared::EnvConfig;
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
@@ -138,7 +141,7 @@ pub async fn clear_self_setup_marker(version_dir: &AbsolutePath) -> Result<(), E
 /// The `packageManager` field pins pnpm to a known-good version, ensuring
 /// consistent behavior regardless of the user's global pnpm version.
 /// pnpm will install `vite-plus` and all its transitive deps via `vp install`.
-pub async fn generate_wrapper_package_json(
+async fn generate_wrapper_package_json(
     version_dir: &AbsolutePath,
     version: &str,
 ) -> Result<(), Error> {
@@ -156,12 +159,202 @@ pub async fn generate_wrapper_package_json(
     Ok(())
 }
 
-/// Create a local `.npmrc` in the version directory to bypass pnpm's
-/// `minimumReleaseAge` setting that may block installing recently-published packages.
-pub async fn write_release_age_overrides(version_dir: &AbsolutePath) -> Result<(), Error> {
+/// Update one installation setting without replacing authentication, scoped
+/// registries, comments, or other caller-provided configuration.
+async fn write_npmrc_setting(
+    version_dir: &AbsolutePath,
+    setting: &str,
+    value: &str,
+) -> Result<(), Error> {
     let npmrc_path = version_dir.join(".npmrc");
-    tokio::fs::write(&npmrc_path, "minimum-release-age=0\n").await?;
+    let existing = match tokio::fs::read_to_string(&npmrc_path).await {
+        Ok(content) => content,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(error) => return Err(error.into()),
+    };
+    let mut content = String::new();
+    for line in existing.split_inclusive('\n') {
+        if line.split_once('=').is_some_and(|(key, _)| key.trim() == setting) {
+            continue;
+        }
+        content.push_str(line);
+    }
+    if !content.is_empty() && !content.ends_with('\n') {
+        content.push('\n');
+    }
+    content.push_str(&format!("{setting}={value}\n"));
+    tokio::task::spawn_blocking(move || lockfile::write_atomic(&npmrc_path, content.as_bytes()))
+        .await
+        .map_err(|error| Error::Setup(error.to_string().into()))??;
     Ok(())
+}
+
+/// Bypass release-age restrictions only within this installation.
+async fn write_release_age_overrides(version_dir: &AbsolutePath) -> Result<(), Error> {
+    write_npmrc_setting(version_dir, "minimum-release-age", "0").await
+}
+
+const PRODUCTION_DEPS_PENDING: &str = ".vp-js-deps-pending";
+
+/// The local bootstrap owns this payload and provisions its dependencies separately.
+pub const LOCAL_DEPS_MARKER: &str = ".vp-local-deps";
+
+fn production_payload_ready(version_dir: &AbsolutePath) -> bool {
+    let package = version_dir.join("node_modules/vite-plus");
+    !version_dir.join(PRODUCTION_DEPS_PENDING).as_path().exists()
+        && package.join("package.json").as_path().is_file()
+        && package.join("dist/bin.js").as_path().is_file()
+}
+
+async fn production_deps_ready(version_dir: &AbsolutePath) -> Result<bool, Error> {
+    Ok(production_payload_ready(version_dir) && lockfile::is_install_complete(version_dir).await?)
+}
+
+async fn saved_install_registry(version_dir: &AbsolutePath) -> Result<Option<String>, Error> {
+    let content = match tokio::fs::read_to_string(version_dir.join(".npmrc")).await {
+        Ok(content) => content,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error.into()),
+    };
+    // Native setup saves a literal registry URL here for use by a later shell.
+    Ok(content.lines().rev().find_map(|line| {
+        let (key, value) = line.split_once('=')?;
+        (key.trim() == "registry" && !value.trim().is_empty()).then(|| value.trim().to_string())
+    }))
+}
+
+/// One managed payload writer. Keep this guard through preparation and receipt
+/// publication, and never remove its directory while a waiter can hold the lock.
+pub struct ProductionDepsTransaction<'a> {
+    version_dir: &'a AbsolutePath,
+    _lock: std::fs::File,
+}
+
+impl<'a> ProductionDepsTransaction<'a> {
+    pub async fn acquire(version_dir: &'a AbsolutePath) -> Result<Self, Error> {
+        tokio::fs::create_dir_all(version_dir).await?;
+        tracing::debug!("Waiting for global JavaScript dependency installation lock");
+        let lock_path = version_dir.join(".vp-js-deps.lock");
+        let lock = tokio::task::spawn_blocking(move || {
+            let file = OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .truncate(false)
+                .open(lock_path.as_path())?;
+            file.lock()?;
+            Ok::<_, std::io::Error>(file)
+        })
+        .await
+        .map_err(|error| Error::Setup(error.to_string().into()))??;
+        Ok(Self { version_dir, _lock: lock })
+    }
+
+    /// Check again after acquiring the lock or extracting the release companion.
+    pub async fn is_complete(&self) -> Result<bool, Error> {
+        production_deps_ready(self.version_dir).await
+    }
+
+    /// Explicit installer input wins; later shells otherwise reuse native setup's registry.
+    pub async fn registry(&self, registry: Option<&str>) -> Result<Option<String>, Error> {
+        match registry {
+            Some(registry) => Ok(Some(registry.to_owned())),
+            None => saved_install_registry(self.version_dir).await,
+        }
+    }
+
+    pub async fn save_registry(&self, registry: Option<&str>) -> Result<(), Error> {
+        if let Some(registry) = registry {
+            write_npmrc_setting(self.version_dir, "registry", registry).await?;
+        }
+        Ok(())
+    }
+
+    /// Native setup preserves metadata without resolving or installing any tool.
+    pub async fn prepare_native(
+        &self,
+        source: &AbsolutePath,
+        version: &str,
+        registry: Option<&str>,
+        copy_companion: bool,
+    ) -> Result<(), Error> {
+        if copy_companion {
+            lockfile::copy_companion(source, self.version_dir).await?;
+        }
+        self.save_registry(registry).await?;
+        if !self.version_dir.join("node_modules/vite-plus/package.json").as_path().is_file() {
+            generate_wrapper_package_json(self.version_dir, version).await?;
+        }
+        Ok(())
+    }
+
+    /// Prepare the companion and use the same payload readiness rules for eager
+    /// and deferred installation. Legacy releases can lack a receipt.
+    pub async fn needs_install(
+        &self,
+        source: &AbsolutePath,
+        version: &str,
+        registry: Option<&str>,
+    ) -> Result<bool, Error> {
+        self.save_registry(registry).await?;
+        let needs_install =
+            Box::pin(lockfile::prepare(source, self.version_dir, version, registry)).await?;
+        Ok(needs_install || !production_payload_ready(self.version_dir))
+    }
+
+    /// Install while retaining the transaction through pending/receipt updates.
+    pub async fn install(
+        &self,
+        version: &str,
+        registry: Option<&str>,
+        show_progress: bool,
+        node_version: Option<NodeVersion<'_>>,
+    ) -> Result<(), Error> {
+        self.save_registry(registry).await?;
+        generate_wrapper_package_json(self.version_dir, version).await?;
+        Box::pin(install_production_deps(self.version_dir, registry, show_progress, node_version))
+            .await
+    }
+}
+
+/// Install the global JavaScript payload on first use, retaining native setup
+/// if installation fails. Existing complete installations need no writes.
+pub async fn ensure_production_deps(
+    version_dir: &AbsolutePath,
+    version: &str,
+) -> Result<(), Error> {
+    if tokio::fs::try_exists(version_dir.join(LOCAL_DEPS_MARKER)).await? {
+        return if production_payload_ready(version_dir) {
+            Ok(())
+        } else {
+            Err(Error::Setup(
+                "Local Vite+ dependencies are incomplete; finish the local bootstrap before running JavaScript toolchain commands."
+                    .into(),
+            ))
+        };
+    }
+    if production_deps_ready(version_dir).await? {
+        return Ok(());
+    }
+    let transaction = ProductionDepsTransaction::acquire(version_dir).await?;
+    // Another writer may have completed the payload while we waited.
+    if transaction.is_complete().await? {
+        return Ok(());
+    }
+    let registry = npm_registry_override();
+    let registry = transaction.registry(registry.as_deref()).await?;
+    if !transaction
+        .needs_install(
+            &version_dir.join("bin").join(crate::VP_BINARY_NAME),
+            version,
+            registry.as_deref(),
+        )
+        .await?
+    {
+        return Ok(());
+    }
+    vp_shared::output::note("Installing the Vite+ toolchain for first use...");
+    transaction.install(version, registry.as_deref(), false, None).await
 }
 
 fn format_install_failure_message(exit_code: i32, log_path: Option<&AbsolutePathBuf>) -> String {
@@ -209,7 +402,7 @@ pub enum NodeVersion<'a> {
 ///
 /// Spawns: `node <managed-pnpm>/bin/pnpm.cjs install --ignore-workspace [--registry <url>]`
 /// with `CI=true`. On failure, writes stdout+stderr to the parent directory's `upgrade.log`.
-pub async fn install_production_deps(
+async fn install_production_deps(
     version_dir: &AbsolutePath,
     registry: Option<&str>,
     show_progress: bool,
@@ -223,6 +416,9 @@ pub async fn install_production_deps(
         );
     }
 
+    // package.json and bin.js can appear before pnpm finishes. Retain this
+    // marker on error or interruption so the next JS command retries.
+    tokio::fs::write(version_dir.join(PRODUCTION_DEPS_PENDING), b"").await?;
     // Keep the bypass local to this Vite+ installation.
     write_release_age_overrides(version_dir).await?;
 
@@ -230,7 +426,7 @@ pub async fn install_production_deps(
 
     let (node_runtime, pnpm_entry) = vp_shared::progress::with_spinner(
         show_progress.then_some("Preparing Node.js and pnpm..."),
-        prepare_install_runtime(node_version),
+        prepare_install_runtime(version_dir, node_version),
     )
     .await?;
     let output = vp_shared::progress::with_spinner(
@@ -251,6 +447,7 @@ pub async fn install_production_deps(
     }
 
     lockfile::record_install(version_dir).await?;
+    tokio::fs::remove_file(version_dir.join(PRODUCTION_DEPS_PENDING)).await?;
     if show_progress {
         vp_shared::output::success("Dependencies installed.");
     }
@@ -288,16 +485,19 @@ async fn dependency_install_args<'a>(
 }
 
 async fn prepare_install_runtime(
+    version_dir: &AbsolutePath,
     node_version: Option<NodeVersion<'_>>,
 ) -> Result<(vp_js_runtime::JsRuntime, AbsolutePathBuf), Error> {
-    let (pnpm_dir, _, _) =
-        download_package_manager(PackageManagerType::Pnpm, PINNED_PNPM_VERSION, None)
-            .await
-            .map_err(|error| {
-                Error::Setup(
-                    format!("Failed to install pnpm {PINNED_PNPM_VERSION}: {error}").into(),
-                )
-            })?;
+    let (pnpm_dir, _, _) = download_package_manager_for_directory(
+        version_dir,
+        PackageManagerType::Pnpm,
+        PINNED_PNPM_VERSION,
+        None,
+    )
+    .await
+    .map_err(|error| {
+        Error::Setup(format!("Failed to install pnpm {PINNED_PNPM_VERSION}: {error}").into())
+    })?;
     let pnpm_entry = pnpm_dir.join("bin").join("pnpm.cjs");
     if !tokio::fs::try_exists(&pnpm_entry).await.unwrap_or(false) {
         return Err(Error::Setup(
@@ -732,30 +932,41 @@ mod tests {
                     tokio::fs::write(binary, "").await.unwrap();
                 }
 
-                let (runtime, entry) =
-                    prepare_install_runtime(Some(NodeVersion::Preferred("22.23.1"))).await.unwrap();
+                let (runtime, entry) = prepare_install_runtime(
+                    &env.dirs.data,
+                    Some(NodeVersion::Preferred("22.23.1")),
+                )
+                .await
+                .unwrap();
                 assert_eq!(runtime.version(), "22.23.1");
                 assert_eq!(entry, pnpm.join("bin/pnpm.cjs"));
                 index.assert_calls(0);
 
                 let (runtime, _) =
-                    prepare_install_runtime(Some(NodeVersion::Required("22.23.1"))).await.unwrap();
+                    prepare_install_runtime(&env.dirs.data, Some(NodeVersion::Required("22.23.1")))
+                        .await
+                        .unwrap();
                 assert_eq!(runtime.version(), "22.23.1");
                 index.assert_calls(0);
 
-                let (runtime, _) = prepare_install_runtime(None).await.unwrap();
+                let (runtime, _) = prepare_install_runtime(&env.dirs.data, None).await.unwrap();
                 assert_eq!(runtime.version(), DEFAULT_INSTALL_NODE_VERSION);
                 index.assert_calls(0);
 
                 tokio::fs::write(manifest, r#"{"engines":{"node":">=24"}}"#).await.unwrap();
-                let (runtime, _) =
-                    prepare_install_runtime(Some(NodeVersion::Preferred("22.23.1"))).await.unwrap();
+                let (runtime, _) = prepare_install_runtime(
+                    &env.dirs.data,
+                    Some(NodeVersion::Preferred("22.23.1")),
+                )
+                .await
+                .unwrap();
                 assert_eq!(runtime.version(), DEFAULT_INSTALL_NODE_VERSION);
                 index.assert_calls(0);
 
-                let error = prepare_install_runtime(Some(NodeVersion::Required("22.23.1")))
-                    .await
-                    .unwrap_err();
+                let error =
+                    prepare_install_runtime(&env.dirs.data, Some(NodeVersion::Required("22.23.1")))
+                        .await
+                        .unwrap_err();
                 assert!(error.to_string().contains(
                     "Node.js 22.23.1 required by the target Vite+ release is not supported by pnpm"
                 ));
@@ -1086,6 +1297,192 @@ mod tests {
             !version_dir.join("bunfig.toml").as_path().exists(),
             "bunfig.toml should not be created"
         );
+    }
+
+    #[tokio::test]
+    async fn release_age_override_preserves_install_registry() {
+        let temp = tempfile::tempdir().unwrap();
+        let version_dir = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let npmrc = version_dir.join(".npmrc");
+        tokio::fs::write(
+            &npmrc,
+            "registry=https://registry.example/\n//registry.example/:_authToken=${TOKEN}\nminimum-release-age=1440\n",
+        )
+        .await
+        .unwrap();
+        write_release_age_overrides(&version_dir).await.unwrap();
+        write_release_age_overrides(&version_dir).await.unwrap();
+        assert_eq!(
+            tokio::fs::read_to_string(npmrc).await.unwrap(),
+            "registry=https://registry.example/\n//registry.example/:_authToken=${TOKEN}\nminimum-release-age=0\n"
+        );
+        assert_eq!(
+            saved_install_registry(&version_dir).await.unwrap().as_deref(),
+            Some("https://registry.example/")
+        );
+    }
+
+    #[tokio::test]
+    async fn native_retry_preserves_npmrc_with_missing_or_partial_payload() {
+        for partial in [false, true] {
+            let temp = tempfile::tempdir().unwrap();
+            let directory = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+            let npmrc = directory.join(".npmrc");
+            let retained = "# registry=https://comment.example/\r\n@private:registry=https://private.example/\r\n//private.example/:_authToken=${TOKEN}\r\nstrict-ssl=true";
+            tokio::fs::write(
+                &npmrc,
+                format!(
+                    "registry=https://old.example/\n registry = https://older.example/\n{retained}"
+                ),
+            )
+            .await
+            .unwrap();
+            if partial {
+                tokio::fs::create_dir_all(directory.join("node_modules/vite-plus")).await.unwrap();
+                tokio::fs::write(directory.join("node_modules/vite-plus/package.json"), "{}")
+                    .await
+                    .unwrap();
+            }
+            let transaction = ProductionDepsTransaction::acquire(&directory).await.unwrap();
+            transaction
+                .prepare_native(
+                    &directory.join("bin/vp"),
+                    "1.4.0",
+                    Some("https://new.example/"),
+                    false,
+                )
+                .await
+                .unwrap();
+            assert_eq!(
+                tokio::fs::read_to_string(&npmrc).await.unwrap(),
+                format!("{retained}\nregistry=https://new.example/\n")
+            );
+            assert_eq!(
+                transaction.registry(None).await.unwrap().as_deref(),
+                Some("https://new.example/")
+            );
+            assert_eq!(
+                transaction.registry(Some("https://override.example/")).await.unwrap().as_deref(),
+                Some("https://override.example/")
+            );
+            transaction
+                .prepare_native(&directory.join("bin/vp"), "1.4.0", None, false)
+                .await
+                .unwrap();
+            assert_eq!(
+                tokio::fs::read_to_string(&npmrc).await.unwrap(),
+                format!("{retained}\nregistry=https://new.example/\n")
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn transaction_retries_incomplete_payload_despite_a_valid_receipt() {
+        EnvConfig::with_vars_async(
+            [(vp_shared::env_vars::VP_SETUP_SKIP_INSTALL_LOCKFILE, "0")],
+            |_| async {
+                let temp = tempfile::tempdir().unwrap();
+                let directory = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+                tokio::fs::create_dir(directory.join("bin")).await.unwrap();
+                tokio::fs::create_dir_all(directory.join("node_modules/vite-plus/dist"))
+                    .await
+                    .unwrap();
+                for file in
+                    ["node_modules/vite-plus/package.json", "node_modules/vite-plus/dist/bin.js"]
+                {
+                    tokio::fs::write(directory.join(file), "payload").await.unwrap();
+                }
+                for file in ["bin/vp-install-lock.yaml", "pnpm-lock.yaml"] {
+                    tokio::fs::write(directory.join(file), "release lock").await.unwrap();
+                }
+                lockfile::record_install(&directory).await.unwrap();
+                let transaction = ProductionDepsTransaction::acquire(&directory).await.unwrap();
+                let source = directory.join("bin/vp");
+                assert!(!transaction.needs_install(&source, "1.4.0", None).await.unwrap());
+                tokio::fs::write(directory.join(PRODUCTION_DEPS_PENDING), "").await.unwrap();
+                assert!(transaction.needs_install(&source, "1.4.0", None).await.unwrap());
+                tokio::fs::remove_file(directory.join(PRODUCTION_DEPS_PENDING)).await.unwrap();
+                tokio::fs::remove_file(directory.join("node_modules/vite-plus/dist/bin.js"))
+                    .await
+                    .unwrap();
+                assert!(transaction.needs_install(&source, "1.4.0", None).await.unwrap());
+            },
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn deferred_setup_preserves_caller_owned_local_dependencies() {
+        let temp = tempfile::tempdir().unwrap();
+        let directory = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        tokio::fs::write(directory.join(LOCAL_DEPS_MARKER), "").await.unwrap();
+        let error = ensure_production_deps(&directory, "local-test").await.unwrap_err();
+        assert!(error.to_string().contains("finish the local bootstrap"));
+
+        tokio::fs::create_dir_all(directory.join("node_modules/vite-plus/dist")).await.unwrap();
+        tokio::fs::write(directory.join("node_modules/vite-plus/package.json"), "{}")
+            .await
+            .unwrap();
+        assert!(ensure_production_deps(&directory, "local-test").await.is_err());
+        tokio::fs::write(directory.join("node_modules/vite-plus/dist/bin.js"), "local payload")
+            .await
+            .unwrap();
+        ensure_production_deps(&directory, "local-test").await.unwrap();
+        assert_eq!(
+            tokio::fs::read_to_string(directory.join("node_modules/vite-plus/dist/bin.js"))
+                .await
+                .unwrap(),
+            "local payload"
+        );
+        assert!(!directory.join(".vp-js-deps.lock").as_path().exists());
+        assert!(!directory.join(lockfile::INSTALL_RECEIPT).as_path().exists());
+        assert!(!directory.join("bin").join(lockfile::INSTALL_LOCKFILE).as_path().exists());
+    }
+
+    #[tokio::test]
+    async fn deferred_setup_reuses_only_a_complete_frozen_payload() {
+        EnvConfig::with_vars_async(
+            [(vp_shared::env_vars::VP_SETUP_SKIP_INSTALL_LOCKFILE, "0")],
+            |_| async {
+                let temp = tempfile::tempdir().unwrap();
+                let directory = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+                tokio::fs::create_dir(directory.join("bin")).await.unwrap();
+                tokio::fs::create_dir_all(directory.join("node_modules/vite-plus/dist"))
+                    .await
+                    .unwrap();
+                for file in
+                    ["node_modules/vite-plus/package.json", "node_modules/vite-plus/dist/bin.js"]
+                {
+                    tokio::fs::write(directory.join(file), "").await.unwrap();
+                }
+                for file in ["bin/vp-install-lock.yaml", "pnpm-lock.yaml"] {
+                    tokio::fs::write(directory.join(file), "release lock").await.unwrap();
+                }
+                assert!(!production_deps_ready(&directory).await.unwrap());
+                lockfile::record_install(&directory).await.unwrap();
+                ensure_production_deps(&directory, "1.4.0").await.unwrap();
+                assert!(!directory.join(".vp-js-deps.lock").as_path().exists());
+
+                tokio::fs::write(directory.join(PRODUCTION_DEPS_PENDING), "").await.unwrap();
+                assert!(!production_deps_ready(&directory).await.unwrap());
+                tokio::fs::remove_file(directory.join(PRODUCTION_DEPS_PENDING)).await.unwrap();
+                tokio::fs::write(directory.join("pnpm-lock.yaml"), "changed lock").await.unwrap();
+                assert!(!production_deps_ready(&directory).await.unwrap());
+                assert_eq!(
+                    tokio::fs::read_to_string(directory.join("pnpm-lock.yaml")).await.unwrap(),
+                    "changed lock"
+                );
+                lockfile::restore(&directory).await.unwrap();
+                assert!(!production_deps_ready(&directory).await.unwrap());
+                lockfile::record_install(&directory).await.unwrap();
+                assert!(production_deps_ready(&directory).await.unwrap());
+                tokio::fs::remove_file(directory.join("node_modules/vite-plus/dist/bin.js"))
+                    .await
+                    .unwrap();
+                assert!(!production_deps_ready(&directory).await.unwrap());
+            },
+        )
+        .await;
     }
 
     /// Build a fake managed Node.js runtime that records how `run_pnpm_install`

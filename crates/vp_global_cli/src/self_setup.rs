@@ -34,6 +34,9 @@ pub(crate) async fn maybe_run() -> Result<Option<ExitCode>, Error> {
     // Once the binary path is resolved, normal commands only check marker existence.
     if bin.join(SELF_SETUP_MARKER).try_exists()? {
         if let Some(shell) = shell.as_deref() {
+            // A native-only first run does not complete an explicit installation.
+            let source = AbsolutePathBuf::new(binary.clone()).ok_or(Error::CliBinaryNotFound)?;
+            run(&binary, is_external_bundle(&source)?).await?;
             print_shell_result(shell);
             return Ok(Some(ExitCode::SUCCESS));
         }
@@ -117,6 +120,13 @@ fn has_bundled_package(binary: &Path) -> bool {
     cfg!(unix) && package.join("package.json").is_file() && package.join("dist/bin.js").is_file()
 }
 
+/// Bundled payloads outside the managed data directory belong to their installer.
+pub(crate) fn is_external_bundle(binary: &AbsolutePath) -> Result<bool, Error> {
+    let data = normalize_target(&EnvConfig::get().dirs.data)?;
+    Ok(!dunce::simplified(binary.as_path()).starts_with(dunce::simplified(data.as_path()))
+        && has_bundled_package(binary.as_path()))
+}
+
 fn local_install_version() -> Option<String> {
     let skip_deps = std::env::var_os("VP_SKIP_DEPS_INSTALL")?;
     if skip_deps.is_empty() {
@@ -148,6 +158,23 @@ fn print_shell_result(shell: &str) {
             ));
         }
     }
+}
+
+/// The preview bridge is a default, not an override of a registry saved by
+/// native setup in an earlier shell.
+async fn resolve_install_registry(
+    transaction: Option<&install::ProductionDepsTransaction<'_>>,
+    version: &str,
+    registry: Option<&str>,
+) -> Result<Option<String>, Error> {
+    let registry = match transaction {
+        Some(transaction) => transaction.registry(registry).await?,
+        None => registry.map(str::to_owned),
+    };
+    Ok(registry.or_else(|| {
+        is_commit_preview_version(version)
+            .then(|| "https://registry-bridge.viteplus.dev/".to_string())
+    }))
 }
 
 /// Setup Vite+ for the first run
@@ -186,16 +213,8 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
         management_default()?
     };
     let version = env!("CARGO_PKG_VERSION");
-    let registry = std::env::var(env_vars::NPM_CONFIG_REGISTRY_UPPER)
-        .or_else(|_| std::env::var(env_vars::NPM_CONFIG_REGISTRY))
-        .ok()
-        .filter(|value| !value.is_empty())
-        .or_else(|| {
-            is_commit_preview_version(version)
-                .then(|| "https://registry-bridge.viteplus.dev/".to_string())
-        });
+    let registry = vp_pm_cli::npm_registry_override();
     let registry = registry.as_deref();
-    // The local bootstrap provisions JS dependencies itself after this invocation.
     let skip_deps = std::env::var_os("VP_SKIP_DEPS_INSTALL").is_some_and(|value| !value.is_empty());
     let local_version = local_install_version();
     let install_version = local_version.as_deref().unwrap_or(version);
@@ -229,6 +248,18 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
     };
     crate::install_dirs::prepare(dirs)?;
     if deploy {
+        // A shared data root can stay unowned while setup owns its new version directory.
+        crate::install_dirs::prepare_version(&version_dir)?;
+    }
+    // Native setup, explicit setup, and deferred installation share one payload writer.
+    let transaction = if bundled {
+        None
+    } else {
+        Some(install::ProductionDepsTransaction::acquire(&version_dir).await?)
+    };
+    let registry = resolve_install_registry(transaction.as_ref(), version, registry).await?;
+    let registry = registry.as_deref();
+    if deploy {
         tokio::fs::create_dir_all(version_dir.join("bin")).await?;
         install::clear_self_setup_marker(&version_dir).await?;
         if !same_file::is_same_file(source, binary.as_path()).unwrap_or(false) {
@@ -239,23 +270,28 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
             temporary.persist(binary.as_path()).map_err(|error| error.error)?;
         }
     }
-    // Old upgrade clients and interrupted installs may leave an incomplete tree.
-    // Only an explicit lockfile bypass can reuse a completed unlocked install.
-    let needs_dependency_install = if !skip_deps && !bundled {
+    // Explicit installers retain their eager dependency and runtime-selection contract.
+    // Incidental first startup only prepares native environment management.
+    if std::env::var_os(env_vars::VP_SELF_SETUP_SHELL).is_some() {
         let source = AbsolutePathBuf::new(source.to_path_buf()).ok_or(Error::CliBinaryNotFound)?;
-        vp_setup::lockfile::prepare(&source, &version_dir, version, registry).await?
-    } else {
-        false
-    };
-    let needs_deps = needs_dependency_install
-        || !version_dir.join("node_modules/vite-plus/package.json").as_path().is_file();
-    // Standalone retries also return the selected runtime when dependencies already exist.
-    let node_version =
-        if !skip_deps && (deploy || needs_deps) { runtime::resolve().await? } else { None };
-    if needs_deps {
-        output::info(&format!("installing vite-plus@{version}..."));
-        install::generate_wrapper_package_json(&version_dir, version).await?;
-        if !skip_deps {
+        let needs_deps = if let Some(transaction) = &transaction {
+            if skip_deps {
+                if !version_dir.join("node_modules/vite-plus/package.json").as_path().is_file() {
+                    output::info(&format!("installing vite-plus@{version}..."));
+                }
+                transaction.prepare_native(&source, version, registry, false).await?;
+                false
+            } else {
+                transaction.needs_install(&source, version, registry).await?
+            }
+        } else {
+            false
+        };
+        // Standalone retries also return the selected runtime when dependencies already exist.
+        let node_version =
+            if !skip_deps && (deploy || needs_deps) { runtime::resolve().await? } else { None };
+        if needs_deps {
+            output::info(&format!("installing vite-plus@{version}..."));
             let preferred =
                 node_version.as_deref().filter(|version| runtime::supports_cli(version));
             if let Some(version) = node_version.as_deref().filter(|_| preferred.is_none()) {
@@ -263,17 +299,27 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
                     "Requested Node.js {version} does not support this Vite+ release; using a separate installation runtime."
                 ));
             }
-            install::install_production_deps(
-                &version_dir,
-                registry,
-                true,
-                preferred.map(install::NodeVersion::Preferred),
-            )
-            .await?;
+            if let Some(transaction) = &transaction {
+                transaction
+                    .install(
+                        version,
+                        registry,
+                        true,
+                        preferred.map(install::NodeVersion::Preferred),
+                    )
+                    .await?;
+            }
         }
+        if let Some(version) = node_version {
+            runtime::write_resolution(&version).await?;
+        }
+    } else if let Some(transaction) = &transaction {
+        let source = AbsolutePathBuf::new(source.to_path_buf()).ok_or(Error::CliBinaryNotFound)?;
+        transaction.prepare_native(&source, version, registry, !skip_deps).await?;
     }
-    if let Some(version) = node_version {
-        runtime::write_resolution(&version).await?;
+    if local_version.is_some() && !bundled {
+        // The source bootstrap links and builds this payload after native setup.
+        tokio::fs::write(version_dir.join(install::LOCAL_DEPS_MARKER), b"").await?;
     }
     #[cfg(windows)]
     if !bundled && !version_dir.join("bin/vp-shim.exe").as_path().is_file() {
@@ -513,4 +559,40 @@ async fn remove_previous_install(previous: Option<&AbsolutePath>) -> Result<(), 
     }
     output::warn("The previous Vite+ installation is still present.");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn preview_registry_priority_preserves_native_setup_choice() {
+        let temporary = tempfile::tempdir().unwrap();
+        let directory = AbsolutePathBuf::new(temporary.path().to_path_buf()).unwrap();
+        let transaction = install::ProductionDepsTransaction::acquire(&directory).await.unwrap();
+        let preview = "0.0.0-commit.0123456789abcdef0123456789abcdef01234567";
+        assert_eq!(
+            resolve_install_registry(Some(&transaction), preview, None).await.unwrap().as_deref(),
+            Some("https://registry-bridge.viteplus.dev/")
+        );
+        assert!(
+            resolve_install_registry(Some(&transaction), "1.4.0", None).await.unwrap().is_none()
+        );
+        transaction.save_registry(Some("https://saved.example/")).await.unwrap();
+        assert_eq!(
+            resolve_install_registry(Some(&transaction), preview, None).await.unwrap().as_deref(),
+            Some("https://saved.example/")
+        );
+        assert_eq!(
+            resolve_install_registry(
+                Some(&transaction),
+                preview,
+                Some("https://explicit.example/")
+            )
+            .await
+            .unwrap()
+            .as_deref(),
+            Some("https://explicit.example/")
+        );
+    }
 }

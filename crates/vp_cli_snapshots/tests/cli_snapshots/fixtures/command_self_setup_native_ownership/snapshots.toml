@@ -1,0 +1,9 @@
+[[case]]
+name = "command_self_setup_native_shared_root_uninstall"
+vp = "global"
+steps = [{ argv = ["node", "verify.mjs", "shared"], interactions = [{ expect-milestone = "native-ownership:verify:complete" }] }]
+
+[[case]]
+name = "command_self_setup_native_owned_root_uninstall"
+vp = "global"
+steps = [{ argv = ["node", "verify.mjs", "owned"], interactions = [{ expect-milestone = "native-ownership:verify:complete" }] }]

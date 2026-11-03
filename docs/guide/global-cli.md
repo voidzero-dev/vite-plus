@@ -45,6 +45,8 @@ onUnmounted(() => {
 
 The global CLI is a standalone `vp` binary for machine-level runtime and package management. It includes a Vite+ toolchain, does not require Node.js to be installed first, and can be used without adding `vite-plus` to a project.
 
+When a standalone binary first runs an ordinary command, setup prepares the executable, shims, and shell configuration without running Node.js. The first command that needs the global toolchain installs its JavaScript dependencies. Explicit installers and `vp upgrade` prepare those dependencies during installation. Commands that use an existing project-local `vite-plus` installation use that package. A failed toolchain installation leaves `vp env` available and retries on the next global toolchain command.
+
 Choose the global CLI when you want one command available across projects for any combination of:
 
 - managing Node.js and package-manager versions

@@ -19,7 +19,7 @@ pub async fn execute(
         return delegate::execute(cwd, "toolchain", &args, raw_subcommand).await;
     }
 
-    let scripts_dir = JsExecutor::new(None).get_scripts_dir()?;
+    let scripts_dir = JsExecutor::new(None).ensure_scripts_dir().await?;
     let package_dir = scripts_dir.parent().ok_or(Error::JsScriptsDirNotFound)?;
     let manifest_path = scripts_dir.join("toolchain.json");
     let manifest = vp_toolchain::load_manifest(&manifest_path)?;

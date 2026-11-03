@@ -1,0 +1,79 @@
+[[case]]
+name = "command_self_setup_without_node"
+vp = "global"
+steps = [{ argv = ["node", "verify.mjs", "native"], interactions = [{ expect-milestone = "lazy-setup:verify:complete" }] }]
+
+[[case]]
+name = "command_self_setup_lazy_global"
+vp = "global"
+steps = [{ argv = ["node", "verify.mjs", "global"], interactions = [{ expect-milestone = "lazy-setup:verify:complete" }] }]
+
+[[case]]
+name = "command_self_setup_lazy_fallback"
+vp = "global"
+steps = [{ argv = ["node", "verify.mjs", "fallback"], interactions = [{ expect-milestone = "lazy-setup:verify:complete" }] }]
+
+[[case]]
+name = "command_self_setup_lazy_toolchain"
+vp = "global"
+steps = [{ argv = ["node", "verify.mjs", "toolchain"], interactions = [{ expect-milestone = "lazy-setup:verify:complete" }] }]
+
+[[case]]
+name = "command_self_setup_lazy_local"
+vp = "global"
+steps = [{ argv = ["node", "verify.mjs", "local"], interactions = [{ expect-milestone = "lazy-setup:verify:complete" }] }]
+
+[[case]]
+name = "command_self_setup_lazy_retry"
+vp = "global"
+steps = [{ argv = ["node", "verify.mjs", "retry"], interactions = [{ expect-milestone = "lazy-setup:verify:complete" }] }]
+
+[[case]]
+name = "command_self_setup_lazy_concurrent"
+vp = "global"
+steps = [{ argv = ["node", "verify.mjs", "concurrent"], interactions = [{ expect-milestone = "lazy-setup:verify:complete" }] }]
+
+[[case]]
+name = "command_self_setup_lazy_receipt"
+vp = "global"
+steps = [{ argv = ["node", "verify.mjs", "receipt"], interactions = [{ expect-milestone = "lazy-setup:verify:complete" }] }]
+
+[[case]]
+name = "command_self_setup_lazy_vpx"
+vp = "global"
+steps = [{ argv = ["node", "verify.mjs", "vpx"], interactions = [{ expect-milestone = "lazy-setup:verify:complete" }] }]
+
+[[case]]
+name = "command_self_setup_lazy_local_bootstrap"
+vp = "global"
+steps = [{ argv = ["node", "verify.mjs", "bootstrap"], interactions = [{ expect-milestone = "lazy-setup:verify:complete" }] }]
+
+[[case]]
+name = "command_self_setup_lazy_explicit_after_native"
+vp = "global"
+steps = [{ argv = ["node", "verify.mjs", "explicit"], interactions = [{ expect-milestone = "lazy-setup:verify:complete" }] }]
+
+[[case]]
+name = "command_self_setup_lazy_concurrent_deferred_then_explicit"
+vp = "global"
+steps = [{ argv = ["node", "verify.mjs", "concurrent-deferred"], interactions = [{ expect-milestone = "lazy-setup:verify:complete" }] }]
+
+[[case]]
+name = "command_self_setup_lazy_concurrent_explicit_then_deferred"
+vp = "global"
+steps = [{ argv = ["node", "verify.mjs", "concurrent-explicit"], interactions = [{ expect-milestone = "lazy-setup:verify:complete" }] }]
+
+[[case]]
+name = "command_self_setup_lazy_registry_retry"
+vp = "global"
+steps = [{ argv = ["node", "verify.mjs", "registry"], interactions = [{ expect-milestone = "lazy-setup:verify:complete" }] }]
+
+[[case]]
+name = "command_self_setup_lazy_registry_cold"
+vp = "global"
+steps = [{ argv = ["node", "verify.mjs", "registry-cold"], interactions = [{ expect-milestone = "lazy-setup:verify:complete" }] }]
+
+[[case]]
+name = "command_self_setup_lazy_registry_override"
+vp = "global"
+steps = [{ argv = ["node", "verify.mjs", "registry-override"], interactions = [{ expect-milestone = "lazy-setup:verify:complete" }] }]

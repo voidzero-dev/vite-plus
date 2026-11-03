@@ -28,7 +28,8 @@ pub const DEFAULT_INSTALL_NODE_VERSION: &str = include_str!("../../../.node-vers
 /// Maximum number of old versions to keep.
 pub const MAX_VERSIONS_KEEP: usize = 3;
 
-/// Stored beside a deployed binary after its first-start setup completes.
+/// Stored beside a deployed binary after native setup completes. JavaScript
+/// dependencies are installed separately when the global toolchain is needed.
 pub const SELF_SETUP_MARKER: &str = ".vp-setup-complete";
 
 pub use vp_shared::VP_BINARY_NAME;

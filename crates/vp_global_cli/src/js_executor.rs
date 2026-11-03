@@ -109,6 +109,29 @@ impl JsExecutor {
         AbsolutePathBuf::new(scripts_dir).ok_or(Error::JsScriptsDirNotFound)
     }
 
+    /// Prepare the global payload only when it will be used. Explicit script
+    /// directories belong to the caller, as do already-bundled installations.
+    pub async fn ensure_scripts_dir(&self) -> Result<AbsolutePathBuf, Error> {
+        let scripts_dir = self.get_scripts_dir()?;
+        if self.scripts_dir.is_none()
+            && std::env::var_os(env_vars::VP_GLOBAL_CLI_JS_SCRIPTS_DIR).is_none()
+        {
+            let version_dir = scripts_dir
+                .parent()
+                .and_then(AbsolutePath::parent)
+                .and_then(AbsolutePath::parent)
+                .ok_or(Error::JsScriptsDirNotFound)?;
+            let binary = Self::get_bin_path()?;
+            let binary = AbsolutePathBuf::new(std::fs::canonicalize(binary.as_path())?)
+                .ok_or(Error::CliBinaryNotFound)?;
+            if !crate::self_setup::is_external_bundle(&binary)? {
+                vp_setup::install::ensure_production_deps(version_dir, env!("CARGO_PKG_VERSION"))
+                    .await?;
+            }
+        }
+        Ok(scripts_dir)
+    }
+
     /// Get the path to the current Rust binary (vp).
     ///
     /// This is passed to JS scripts via `VP_CLI_BIN` environment variable
@@ -314,10 +337,10 @@ impl JsExecutor {
         project_path: &AbsolutePath,
         args: &[String],
     ) -> Result<ExitStatus, Error> {
+        let scripts_dir = self.ensure_scripts_dir().await?;
         let runtime = self.ensure_cli_runtime().await?;
         let node_binary = runtime.get_binary_path();
         let bin_prefix = runtime.get_bin_prefix();
-        let scripts_dir = self.get_scripts_dir()?;
         let entry_point = scripts_dir.join("bin.js");
 
         let mut cmd = Self::create_js_command(&node_binary, &bin_prefix)?;
@@ -341,6 +364,7 @@ impl JsExecutor {
         project_path: &AbsolutePath,
         args: &[String],
     ) -> Result<ExitStatus, Error> {
+        self.ensure_scripts_dir().await?;
         let runtime = self.ensure_cli_runtime().await?;
         let node_binary = runtime.get_binary_path();
         let bin_prefix = runtime.get_bin_prefix();
@@ -348,7 +372,7 @@ impl JsExecutor {
     }
 
     /// Prepare a JS command with the entry point resolved.
-    fn prepare_js_entry(
+    async fn prepare_js_entry(
         &self,
         project_path: &AbsolutePath,
         node_binary: &AbsolutePath,
@@ -363,7 +387,7 @@ impl JsExecutor {
                     commands::warn_missing_local_cli_if_project(project_path);
                 }
                 // Fall back to the global installation's bin.js
-                let scripts_dir = self.get_scripts_dir()?;
+                let scripts_dir = self.ensure_scripts_dir().await?;
                 scripts_dir.join("bin.js")
             }
         };
@@ -390,7 +414,7 @@ impl JsExecutor {
         bin_prefix: &AbsolutePath,
         args: &[String],
     ) -> Result<ExitStatus, Error> {
-        let cmd = self.prepare_js_entry(project_path, node_binary, bin_prefix, args)?;
+        let cmd = self.prepare_js_entry(project_path, node_binary, bin_prefix, args).await?;
         Ok(vp_command::execute_with_terminal_guard(cmd).await?)
     }
 
@@ -402,7 +426,7 @@ impl JsExecutor {
         bin_prefix: &AbsolutePath,
         args: &[String],
     ) -> Result<Output, Error> {
-        let mut cmd = self.prepare_js_entry(project_path, node_binary, bin_prefix, args)?;
+        let mut cmd = self.prepare_js_entry(project_path, node_binary, bin_prefix, args).await?;
         let output = cmd.output().await?;
         Ok(output)
     }
@@ -607,8 +631,8 @@ mod tests {
         assert_eq!(cmd.as_std().get_program(), OsStr::new(expected_program));
     }
 
-    #[test]
-    fn test_prepare_test_command_does_not_probe_node() {
+    #[tokio::test]
+    async fn test_prepare_test_command_does_not_probe_node() {
         use std::ffi::OsStr;
 
         let project = tempfile::TempDir::new().unwrap();
@@ -633,6 +657,7 @@ mod tests {
                 &bin_prefix,
                 &["test".into(), "run".into()],
             )
+            .await
             .unwrap();
 
         assert_eq!(cmd.as_std().get_program(), node_binary.as_path().as_os_str());

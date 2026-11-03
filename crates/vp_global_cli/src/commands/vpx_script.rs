@@ -14,7 +14,7 @@ use std::io::Read as _;
 use vp_shared::{env_vars, output};
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
-use crate::js_executor::JsExecutor;
+use crate::{error::Error, js_executor::JsExecutor};
 
 /// `vite-plus/dist` entries: the CommonJS `--require` preload and the `--import`.
 const PRELOAD_ENTRY: &str = "script-preload.cjs";
@@ -386,13 +386,17 @@ fn has_vpx_shebang(path: &AbsolutePath) -> bool {
 /// Find the `vite-plus/dist` directory holding `entries`: the project's `vite-plus`
 /// first, so teams run the loader version pinned in their lockfile, then the global
 /// install.
-fn resolve_loader_dir(cwd: &AbsolutePath, entries: &[&str]) -> Option<AbsolutePathBuf> {
-    choose_loader_dir(
-        JsExecutor::resolve_local_vite_plus_package_dir(cwd),
-        || JsExecutor::new(None).get_scripts_dir().ok(),
-        entries,
-    )
-    .map(real_dir)
+async fn resolve_loader_dir(
+    cwd: &AbsolutePath,
+    entries: &[&str],
+) -> Result<Option<AbsolutePathBuf>, Error> {
+    if let Some(local) =
+        choose_loader_dir(JsExecutor::resolve_local_vite_plus_package_dir(cwd), || None, entries)
+    {
+        return Ok(Some(real_dir(local)));
+    }
+    let global = JsExecutor::new(None).ensure_scripts_dir().await?;
+    Ok(choose_loader_dir(None, || Some(global), entries).map(real_dir))
 }
 
 /// `dir` with symlinks resolved. pnpm links `vite-plus` into its store, where the native
@@ -428,13 +432,20 @@ pub async fn execute(
     cwd: &AbsolutePath,
 ) -> i32 {
     let entries = if invocation.watch { WATCH_ENTRIES } else { SCRIPT_ENTRIES };
-    let Some(loader_dir) = resolve_loader_dir(cwd, entries) else {
-        output::error(if invocation.watch {
-            "vpx: The watcher was not found. Upgrade vite-plus to run scripts with vpx --watch."
-        } else {
-            "vpx: The script loader was not found. Upgrade vite-plus to run script files with vpx."
-        });
-        return 1;
+    let loader_dir = match resolve_loader_dir(cwd, entries).await {
+        Ok(Some(dir)) => dir,
+        Ok(None) => {
+            output::error(if invocation.watch {
+                "vpx: The watcher was not found. Upgrade vite-plus to run scripts with vpx --watch."
+            } else {
+                "vpx: The script loader was not found. Upgrade vite-plus to run script files with vpx."
+            });
+            return 1;
+        }
+        Err(error) => {
+            output::error(&format!("vpx: {error}"));
+            return 1;
+        }
     };
 
     let tsconfig = invocation.tsconfig.or(tsconfig);
