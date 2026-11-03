@@ -68,7 +68,7 @@ jobs:
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'pull_request' &&
       github.event.workflow_run.path == '.github/workflows/publish-preview.yml'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       pull-requests: read
@@ -226,7 +226,7 @@ jobs:
     name: Publish preview local CLI and dependencies
     needs: authorize
     if: needs.authorize.outputs.eligible == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Required-reviewer gate before either publishing job can run,
     # applied to FORK PRs only. The `authorize` job proves the PR is open and
     # labeled; for a fork, the gate proves a human looked at this specific run
@@ -331,7 +331,7 @@ jobs:
   prepare-global:
     name: Generate preview installation lockfile
     needs: [authorize, publish-local]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Resolve published dependencies without any publishing credentials. Code
     # comes from the default branch; the artifacts remain data, never programs.
     permissions:
@@ -399,7 +399,7 @@ jobs:
   publish:
     name: Publish preview global CLI and update PR tag
     needs: [authorize, publish-local, prepare-global]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # publish-local already passed the required environment approval for forks.
     # Re-check authorization below before minting this job's publishing token.
     permissions:
@@ -435,7 +435,7 @@ jobs:
     name: Compare preview binaries with latest release
     needs: authorize
     if: needs.authorize.outputs.eligible == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: read
@@ -501,8 +501,9 @@ jobs:
   comment:
     name: Comment bridge version
     needs: [authorize, publish]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
+      contents: read
       pull-requests: write
       # issues:write as well as pull-requests:write, because createComment is
       # the issues endpoint and the create path runs on a PR that has no comment
@@ -525,7 +526,8 @@ jobs:
           script: |
             const version = process.env.BRIDGE_VERSION;
             const pr = Number(process.env.PR_NUMBER);
-            const shortSha = process.env.HEAD_SHA.slice(0, 7);
+            const headSha = process.env.HEAD_SHA;
+            const shortSha = headSha.slice(0, 7);
             const isFork = process.env.IS_FORK === 'true';
             const marker = '<!-- pkg-pr-bridge-version -->';
             const bridge = 'https://registry-bridge.viteplus.dev/';
@@ -533,6 +535,20 @@ jobs:
               `https://raw.githubusercontent.com/${process.env.HEAD_REPO}/${process.env.HEAD_SHA}/packages/cli`;
             const artifactUrl = (id) =>
               `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${process.env.RUN_ID}/artifacts/${id}`;
+            // Inspect the formula as data; never execute PR code in this job.
+            const [headOwner, headRepo] = process.env.HEAD_REPO.split('/');
+            let hasHomebrewFormula = false;
+            try {
+              const { data } = await github.rest.repos.getContent({
+                owner: headOwner,
+                repo: headRepo,
+                path: 'HomebrewFormula/vp.rb',
+                ref: headSha,
+              });
+              hasHomebrewFormula = data.type === 'file';
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
             // Built as a line array (not a template literal) so the inline
             // backticks and the fenced json block don't need backslash-escaping.
             const body = [
@@ -570,6 +586,36 @@ jobs:
               `$env:VP_PR_VERSION="${pr}"; $env:VP_LEGACY_INSTALLER_URL="${installerScripts}/install-legacy.ps1"; irm ${installerScripts}/install.ps1 | iex`,
               '```',
               '',
+              ...(hasHomebrewFormula
+                ? [
+                    '**Or install with Homebrew (macOS / glibc Linux):**',
+                    '',
+                    'These commands use the formula and binary from this published commit. Replace `brew install` with `brew reinstall` if the tap package is already installed.',
+                    'If Homebrew Core’s `vite-plus` is installed, run `brew uninstall vite-plus` first. This keeps your user data; do not run `vp implode` to switch installations.',
+                    '',
+                    '```bash',
+                    '(',
+                    '  set -eu',
+                    '  export HOMEBREW_NO_AUTO_UPDATE=1',
+                    `  export HOMEBREW_VP_PR_VERSION=${headSha}`,
+                    '  brew tap voidzero-dev/vite-plus https://github.com/voidzero-dev/vite-plus',
+                    '  preview_tap="$(brew --repository voidzero-dev/vite-plus)"',
+                    `  git -C "$preview_tap" fetch --depth=1 https://github.com/${process.env.HEAD_REPO}.git "$HOMEBREW_VP_PR_VERSION"`,
+                    '  git -C "$preview_tap" switch --detach "$HOMEBREW_VP_PR_VERSION"',
+                    '  brew install voidzero-dev/vite-plus/vp',
+                    '  brew test voidzero-dev/vite-plus/vp',
+                    '  "$(brew --prefix)/bin/vp"',
+                    ')',
+                    '```',
+                    '',
+                    'The tap stays at the tested commit. Return it to `main` after testing:',
+                    '',
+                    '```bash',
+                    'git -C "$(brew --repository voidzero-dev/vite-plus)" switch main',
+                    '```',
+                    '',
+                  ]
+                : []),
               '**Or download the standalone Windows installer built from this commit:**',
               '',
               '| Architecture | Installer |',
@@ -659,7 +705,7 @@ jobs:
     name: Docker preview image
     needs: [authorize, publish]
     if: needs.authorize.outputs.is-fork == 'false'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # No id-token here (SR-5): this job runs the preview package's install
     # scripts, so it must not be able to mint a bridge token.
     permissions:
@@ -703,7 +749,7 @@ jobs:
   comment-docker-preview:
     name: Comment Docker preview
     needs: [authorize, publish-docker-preview]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       packages: read
       pull-requests: write

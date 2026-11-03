@@ -28,7 +28,8 @@ on:
     types: [labeled]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # Other label events skip this workflow and must not cancel a preview build.
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event.label.name }}
   cancel-in-progress: true
 
 jobs:
@@ -37,7 +38,7 @@ jobs:
       github.repository == 'voidzero-dev/vite-plus' &&
       github.event.label.name == 'preview-build'
     name: Compute preview metadata
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     outputs:
@@ -87,7 +88,7 @@ jobs:
       github.repository == 'voidzero-dev/vite-plus' &&
       github.event.label.name == 'preview-build'
     name: Pack preview packages
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs:
       - prepare
       - build-rust

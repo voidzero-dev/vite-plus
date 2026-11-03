@@ -205,9 +205,12 @@ fn report_preserved_paths(roots: &[AbsolutePathBuf]) {
 }
 
 fn print_homebrew_uninstall_notice() {
-    output::note(
-        "The Homebrew package remains installed. Run `brew uninstall vite-plus` to remove it.",
-    );
+    let Some(homebrew) = crate::homebrew::current() else { return };
+    output::note(&format!(
+        "The {} package remains installed. Run `brew uninstall {}` to remove it.",
+        homebrew.source_label(),
+        homebrew.formula,
+    ));
     output::note(
         "To run `vp` again, restart your terminal or run `hash -r` in Bash. The remaining Homebrew package will start setup again.",
     );
@@ -412,10 +415,11 @@ fn confirm_implode(
         ));
     }
 
-    if crate::homebrew::owns_current_exe() {
-        output::warn(
-            "This will remove Vite+-managed data, shims, and shell entries. The Homebrew package will remain installed.",
-        );
+    if let Some(homebrew) = crate::homebrew::current() {
+        output::warn(&format!(
+            "This will remove Vite+-managed data, shims, and shell entries. The {} package will remain installed.",
+            homebrew.source_label(),
+        ));
     } else if plan.preserved_roots.iter().any(|root| root.as_path().exists()) {
         output::warn(
             "This will remove verified Vite+ files and shell entries. Unverified data will be preserved.",

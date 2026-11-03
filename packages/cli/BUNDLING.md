@@ -320,14 +320,7 @@ A binding built by `pnpm build` contains:
 
 ### Export Chain
 
-```
-User imports 'vite-plus/rolldown'
-  → packages/cli re-exports from @voidzero-dev/vite-plus-core/rolldown
-    → packages/core/dist/rolldown/index.mjs
-      → Native binding: @voidzero-dev/vite-plus-darwin-arm64
-        (rewritten from @rolldown/binding-darwin-arm64)
-        → vite-plus.darwin-arm64.node (contains rolldown_binding)
-```
+Rolldown subpaths are exported by `@voidzero-dev/vite-plus-core`, not `vite-plus`. In projects that alias `vite` to core, they are available as `vite/rolldown` and `vite/rolldown/*`. See [Core Package Bundling](../core/BUNDLING.md#release-build-native-binding-rewriting) for the native binding resolution chain.
 
 ### Platform-Specific Publishing
 

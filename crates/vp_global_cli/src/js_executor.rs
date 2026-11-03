@@ -82,7 +82,8 @@ impl JsExecutor {
     /// Resolution order:
     /// 1. Explicitly provided `scripts_dir`
     /// 2. `VP_GLOBAL_CLI_JS_SCRIPTS_DIR` environment variable
-    /// 3. Auto-detect from binary location (../dist relative to binary)
+    /// 3. Per-user dependencies for a bare Homebrew installation
+    /// 4. Bundled dependencies relative to the binary
     pub fn get_scripts_dir(&self) -> Result<AbsolutePathBuf, Error> {
         // 1. Use explicitly provided scripts_dir
         if let Some(dir) = &self.scripts_dir {
@@ -94,7 +95,11 @@ impl JsExecutor {
             return AbsolutePathBuf::new(dir.into()).ok_or(Error::JsScriptsDirNotFound);
         }
 
-        // 3. Auto-detect from binary location
+        if let Some(package) = crate::homebrew::user_package_dir()? {
+            return Ok(package.join("node_modules/vite-plus/dist"));
+        }
+
+        // 4. Auto-detect from binary location
         // JS scripts are at ../node_modules/vite-plus/dist relative to the binary directory
         // e.g., <DATA>/<version>/bin/vp -> <DATA>/<version>/node_modules/vite-plus/dist/
         let exe_path = std::env::current_exe().map_err(|_| Error::JsScriptsDirNotFound)?;
@@ -114,6 +119,12 @@ impl JsExecutor {
     /// This is passed to JS scripts via `VP_CLI_BIN` environment variable
     /// so they can invoke vp commands when needed.
     fn get_bin_path() -> Result<AbsolutePathBuf, Error> {
+        #[cfg(unix)]
+        if let Some(public) = crate::homebrew::current().and_then(|install| install.public_binary())
+        {
+            // A running JS command can invoke vp after Homebrew removes its original keg.
+            return Ok(public);
+        }
         let exe_path = std::env::current_exe().map_err(|_| Error::CliBinaryNotFound)?;
         AbsolutePathBuf::new(exe_path).ok_or(Error::CliBinaryNotFound)
     }
