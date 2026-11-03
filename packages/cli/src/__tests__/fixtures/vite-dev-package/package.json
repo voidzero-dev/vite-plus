@@ -1,0 +1,8 @@
+{
+  "name": "vite-app-example",
+  "private": true,
+  "devDependencies": {
+    "vite": "^8.0.0",
+    "vitest": "^5.0.0"
+  }
+}
