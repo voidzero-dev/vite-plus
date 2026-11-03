@@ -5,10 +5,7 @@
 
 use std::process::ExitStatus;
 
-use semver::Version;
-use vp_shared::{PrependOptions, ToolPathEnv};
 use vt_path::AbsolutePath;
-use vt_str::Str;
 
 use crate::{
     EnvironmentPackageManagerResolution, PackageManager, PackageManagerType,
@@ -64,7 +61,7 @@ async fn dispatch_with_manager(
     source: ManagerSource<'_>,
 ) -> Result<DispatchResult, Error> {
     let render_diagnostics = command.should_render_diagnostics();
-    let mut manager = match source {
+    let manager = match source {
         ManagerSource::Detect => {
             PackageManager::builder(cwd)
                 .package_manager_type(PackageManagerType::Pnpm)
@@ -76,49 +73,11 @@ async fn dispatch_with_manager(
         }
         ManagerSource::Resolved(manager) => manager,
     };
-    if manager.client == PackageManagerType::Yarn {
-        // The selected launcher can delegate through yarnPath before executing a command.
-        manager.version = effective_yarn_version(cwd, &manager).await?;
-    }
     let package_manager = manager.client;
     let why_hint_packages = command.why_hint_packages(package_manager).map(<[String]>::to_vec);
     let resolution = command.resolve_for_manager(&manager)?;
     let status = run_resolution(cwd, resolution, render_diagnostics).await?;
     Ok(DispatchResult { status, why_hint_packages })
-}
-
-async fn effective_yarn_version(
-    cwd: &AbsolutePath,
-    manager: &PackageManager,
-) -> Result<Str, Error> {
-    let mut env = ToolPathEnv::from_env();
-    env.prepend(manager.get_bin_prefix(), &manager.bin_names(), PrependOptions::default())?;
-    let executable =
-        vp_command::resolve_bin("yarn", Some(manager.bin_prefix.as_path().as_os_str()), cwd)?;
-    let (program, prefix_args) = vp_command::rewrite_cmd_to_powershell(&executable)
-        .unwrap_or_else(|| (executable, Vec::new()));
-    let output = vp_command::build_command(&program, cwd)
-        .args(prefix_args)
-        .arg("--version")
-        .envs(env.into_envs())
-        .output()
-        .await?;
-    if !output.status.success() {
-        return Err(Error::UserMessage(vt_str::format!(
-            "Failed to read Yarn version:\n{}{}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr),
-        )));
-    }
-    let version = String::from_utf8_lossy(&output.stdout);
-    let version = version.trim();
-    let version =
-        Version::parse(version).map_err(|source| Error::InvalidPackageManagerVersion {
-            manager: manager.client,
-            version: version.to_owned(),
-            source,
-        })?;
-    Ok(version.to_string().into())
 }
 
 async fn build_selected_package_manager(
