@@ -15,11 +15,11 @@ scripts vpx cannot run keep tsx, with a warning for each
 ```
 VITE+ - The Unified Toolchain for the Web
 
-● tsx scripts detected. Auto-migrating to vpx...
+● tsx scripts detected. Auto-migrating to Vite+...
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • 1 config update applied
-• tsx scripts migrated to `vpx`
+• tsx scripts migrated to Vite+
 ! Warnings:
   - Kept tsx in package.json scripts "calc": `vpx` does not run TypeScript passed to --eval or --print.
   - Kept tsx in package.json scripts "repl": `vpx` does not start a TypeScript REPL.
@@ -39,7 +39,7 @@ the other scripts run vpx, and the tsx devDependency stays
   },
   "name": "migration-tsx",
   "scripts": {
-    "bench": "vpx ./scripts/bench.ts",
+    "bench": "node --import vite-plus/register ./scripts/bench.ts",
     "calc": "tsx -e 'console.log(1 + 1)'",
     "dev": "vpx --watch --clear-screen=false src/server.ts",
     "repl": "tsx",

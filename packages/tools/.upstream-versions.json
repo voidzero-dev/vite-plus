@@ -12,6 +12,6 @@
   "oxc-node": {
     "repo": "https://github.com/oxc-project/oxc-node.git",
     "branch": "main",
-    "hash": "6d5376df15df5446a91d01d53f3d7965d8b9708e"
+    "hash": "7ff14c3b1d15e2ef12310ee209d0b72b58fa880e"
   }
 }

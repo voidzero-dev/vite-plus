@@ -6,6 +6,10 @@
 `vpr` is available as a standalone shorthand for `vp run`. All examples below work with both `vp run` and `vpr`.
 :::
 
+::: info
+Vite Task parses simple commands and `&&` chains itself instead of passing them to a shell, so they behave the same on every platform. Other shell syntax, such as pipes or redirects, may behave differently across platforms.
+:::
+
 ## Overview
 
 Use `vp run` with existing `package.json` scripts:
@@ -232,7 +236,7 @@ vp run -w build
 
 ## Compound Commands
 
-Commands joined with `&&` are split into independent sub-tasks. Each sub-task is cached separately when [caching is enabled](/guide/cache#when-is-caching-enabled). This works for both `vite.config.ts` tasks and `package.json` scripts:
+Commands joined with `&&` are split into independent sub-tasks, unless they also use other shell syntax. Each sub-task is cached separately when [caching is enabled](/guide/cache#when-is-caching-enabled). This works for both `vite.config.ts` tasks and `package.json` scripts:
 
 ```json [package.json]
 {
@@ -265,6 +269,24 @@ $ vp build ○ cache miss: 'index.html' modified, executing
 ---
 vp run: 1/2 cache hit (50%), 2/2 successful, 120ms saved.
 ```
+
+### Environment Variable Prefixes
+
+Environment variable prefixes such as `FOO=bar command` work on every platform, without extra tools like `cross-env`:
+
+```json [package.json]
+{
+  "scripts": {
+    "build": "NODE_ENV=production node build.js"
+  }
+}
+```
+
+A prefix applies only to the command it directly precedes. In `FOO=1 a && b`, `FOO` is set for `a` but not for `b`.
+
+::: warning
+Prefixes may not work on every platform when the command also uses other shell syntax.
+:::
 
 ### Nested `vp run`
 

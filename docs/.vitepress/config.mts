@@ -182,6 +182,7 @@ const guideSidebar = [
   {
     text: 'Global CLI',
     items: [
+      { text: 'Homebrew', link: '/guide/homebrew' },
       { text: 'Environment', link: '/guide/env' },
       { text: 'Upgrading Vite+', link: '/guide/upgrade' },
       { text: 'Removing Vite+', link: '/guide/implode' },

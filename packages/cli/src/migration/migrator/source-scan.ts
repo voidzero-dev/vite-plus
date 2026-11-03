@@ -201,6 +201,8 @@ export function sourceTreeMatches(
     // package imports/scripts, even when they are not workspace members.
     crossPackageBoundaries?: boolean;
     extensions?: ReadonlySet<string>;
+    /** Additional text files whose names do not have a known source extension. */
+    fileNamePattern?: RegExp;
     includePackageReferences?: boolean;
     includeExtensionless?: boolean;
     matchesPackage?: (projectPath: string, pkg: DependencyBag) => boolean;
@@ -238,6 +240,7 @@ export function sourceTreeMatches(
         entry.isFile() &&
         !['.pnp.cjs', '.pnp.loader.mjs'].includes(entry.name) &&
         (extensions.has(path.extname(entry.name)) ||
+          options.fileNamePattern?.test(entry.name) ||
           (options.includeExtensionless && path.extname(entry.name) === '') ||
           (options.includePackageReferences && entry.name === 'package.json'))
       ) {

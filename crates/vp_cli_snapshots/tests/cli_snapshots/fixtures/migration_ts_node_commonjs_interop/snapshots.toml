@@ -1,0 +1,58 @@
+[[case]]
+name = "migration_ts_node_commonjs_interop"
+vp = ["local", "global"]
+local-registry = true
+env = { VP_NODE_VERSION = "22.23.4" }
+unset-env = ["NODE_OPTIONS", "VP_SCRIPT_TSCONFIG", "TSX_TSCONFIG_PATH", "OXC_TSCONFIG_PATH", "TS_NODE_PROJECT", "TS_NODE_TRANSPILE_ONLY", "TS_NODE_TYPE_CHECK"]
+comment = "The local registry fetches pinned ts-node 10.9.2 and TypeScript 5.9.3 to compare real CommonJS bindings. Re-exports, namespace imports, .js targets, and default imports must retain their values after migration and a fresh install. Checked ES module bindings still migrate."
+steps = [
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  ["vp", "run", "reexport"],
+  ["vp", "run", "reexport-register"],
+  ["vp", "run", "namespace"],
+  ["vp", "run", "namespace-register"],
+  ["vp", "run", "js"],
+  ["vp", "run", "js-register"],
+  ["vp", "run", "default"],
+  ["vp", "run", "default-register"],
+  ["vp", "run", "safe"],
+  ["vp", "run", "safe-register"],
+  ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  { argv = ["vpt", "print-file", "package.json", "tsconfig.json"], comment = "CommonJS commands and ts-node stay; the checked ES module commands migrate." },
+  { argv = ["vpt", "rm", "-rf", "node_modules"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  ["vpt", "stat-file", "node_modules/ts-node"],
+  ["vp", "run", "reexport"],
+  ["vp", "run", "reexport-register"],
+  ["vp", "run", "namespace"],
+  ["vp", "run", "namespace-register"],
+  ["vp", "run", "js"],
+  ["vp", "run", "js-register"],
+  ["vp", "run", "default"],
+  ["vp", "run", "default-register"],
+  ["vp", "run", "safe"],
+  ["vp", "run", "safe-register"],
+]
+
+[[case]]
+name = "migration_ts_node_default_interop"
+vp = "local"
+local-registry = true
+env = { VP_NODE_VERSION = "22.23.4" }
+unset-env = ["NODE_OPTIONS", "VP_SCRIPT_TSCONFIG", "TSX_TSCONFIG_PATH", "OXC_TSCONFIG_PATH", "TS_NODE_PROJECT", "TS_NODE_TRANSPILE_ONLY", "TS_NODE_TYPE_CHECK"]
+comment = "esModuleInterop=true still unwraps __esModule.default in ts-node. Node's native default import returns the whole exports object, so migration must retain this command too."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "scripts", '{"cli":"ts-node -T default.ts","register":"TS_NODE_PROJECT=tsconfig.json node --require ts-node/register/transpile-only default.ts"}'], snapshot = false },
+  { argv = ["vpt", "json-edit", "tsconfig.json", "compilerOptions.esModuleInterop", "true"], snapshot = false },
+  { argv = ["vpt", "write-file", "default.cjs", "exports.__esModule = true; exports.default = 42;\n"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  ["vp", "run", "cli"],
+  ["vp", "run", "register"],
+  ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "package.json", "tsconfig.json", "default.cjs"],
+  { argv = ["vpt", "rm", "-rf", "node_modules"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  ["vpt", "stat-file", "node_modules/ts-node"],
+  ["vp", "run", "cli"],
+  ["vp", "run", "register"],
+]
