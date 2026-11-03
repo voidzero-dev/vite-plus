@@ -37,6 +37,8 @@ export default defineConfig({
 
 For this task, Vite Task records source files, config files, missing files the command checked, and directories the command scanned. Subsequent runs re-run the task when one of those tracked inputs changes.
 
+A task can rewrite a file it also reads, such as `tsc --incremental` updating `tsconfig.tsbuildinfo`. Vite Task fingerprints the file as the task left it, so the next run can use the cache. If the file is missing on a fresh checkout, a cache hit restores it.
+
 File system tracking also tracks outputs. If you omit [`cache.output`](/config/run#cache-output), Vite Task archives files the command writes after a successful run and restores them on a cache hit.
 
 ### Limitations

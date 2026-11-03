@@ -344,6 +344,8 @@ tasks: {
 
 Use `{ auto: true }` to keep automatic write tracking while adding explicit output globs.
 
+Output globs restore matching symbolic links as links on a cache hit. Automatic write tracking does not detect symbolic link creation, so add an explicit output glob for links that the task creates.
+
 This is useful when a task writes files that should not be restored from the cache. For example, exclude TypeScript `.tsbuildinfo` files:
 
 ```ts [vite.config.ts]
