@@ -27,7 +27,7 @@ Put native arguments after `--` to pass them through without translation:
 vp install -- --registry=https://registry.npmjs.org
 ```
 
-## Manage Dependencies
+## Core Commands
 
 - [install](./install)
 - [add](./add)
@@ -35,44 +35,44 @@ vp install -- --registry=https://registry.npmjs.org
 - [update](./update)
 - [dedupe](./dedupe)
 - [outdated](./outdated)
+- [list](./list)
 - [why](./why)
 - [info](./info)
 - [link](./link)
 - [unlink](./unlink)
+- [rebuild](./rebuild)
 - [dlx](./dlx)
 
-## `vp pm` Commands
+## Forwarded Commands
 
-- **Dependency management**
-  - [ci](./ci)
-  - [prune](./prune)
+- **Install and cleanup**
+  - [pm ci](./ci)
+  - [pm prune](./prune)
 - **Inspection and diagnostics**
-  - [list](./list)
-  - [licenses](./licenses)
-  - [search](./search)
-  - [audit](./audit)
-  - [fund](./fund)
-  - [ping](./ping)
+  - [pm licenses](./licenses)
+  - [pm search](./search)
+  - [pm audit](./audit)
+  - [pm fund](./fund)
+  - [pm ping](./ping)
 - **Local development**
-  - [rebuild](./rebuild)
-  - [approve-builds](./approve-builds)
-  - [patch](./patch)
-  - [patch-commit](./patch-commit)
+  - [pm approve-builds](./approve-builds)
+  - [pm patch](./patch)
+  - [pm patch-commit](./patch-commit)
 - **Publishing**
-  - [pack](./pack)
-  - [version](./version)
-  - [publish](./publish)
-  - [stage](./stage)
-  - [dist-tag](./dist-tag)
-  - [deprecate](./deprecate)
+  - [pm pack](./pack)
+  - [pm version](./version)
+  - [pm publish](./publish)
+  - [pm stage](./stage)
+  - [pm dist-tag](./dist-tag)
+  - [pm deprecate](./deprecate)
 - **Registry and accounts**
-  - [login](./login)
-  - [logout](./logout)
-  - [whoami](./whoami)
-  - [token](./token)
-  - [owner](./owner)
-  - [team](./team)
+  - [pm login](./login)
+  - [pm logout](./logout)
+  - [pm whoami](./whoami)
+  - [pm token](./token)
+  - [pm owner](./owner)
+  - [pm team](./team)
 - **Configuration and maintenance**
-  - [config](./config)
-  - [pkg](./pkg)
-  - [cache](./cache)
+  - [pm config](./config)
+  - [pm pkg](./pkg)
+  - [pm cache](./cache)

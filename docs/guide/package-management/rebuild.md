@@ -1,11 +1,11 @@
-# vp pm rebuild
+# vp rebuild
 
-Rebuild installed packages, for example after switching Node.js versions or when a native addon needs recompilation. Alias: `vp pm rb`. The global CLI also accepts `vp rebuild`.
+Rebuild installed packages, for example after switching Node.js versions or when a native addon needs recompilation. This top-level command requires the global CLI. Both the global and project-local CLI accept `vp pm rebuild` and its alias `vp pm rb`.
 
 ```bash
-vp pm rebuild
-vp pm rebuild better-sqlite3 sharp
-vp pm rebuild -- --update-binary
+vp rebuild
+vp rebuild better-sqlite3 sharp
+vp rebuild -- --update-binary
 ```
 
 ## Options

@@ -1,11 +1,11 @@
-# vp pm list
+# vp list
 
-List installed dependencies. Alias: `vp pm ls`. The global CLI also accepts `vp list` and `vp ls`.
+List installed dependencies. Alias: `vp ls`. These top-level commands require the global CLI. Both the global and project-local CLI accept `vp pm list` and `vp pm ls`.
 
 ```bash
-vp pm list
-vp pm list react --depth 2
-vp pm list --json
+vp list
+vp list react --depth 2
+vp list --json
 vp list -g
 ```
 

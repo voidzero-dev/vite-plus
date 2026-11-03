@@ -26,7 +26,7 @@ fn documentation_url_for_command_path(command_path: &[&str]) -> Option<String> {
             | "info" | "view" | "show" | "link" | "unlink" | "rebuild" | "pm",
             ..,
         ] => "/guide/package-management/",
-        ["dlx"] => "/guide/vpx",
+        ["dlx"] => "/guide/package-management/dlx",
         ["env", ..] => "/guide/env",
         ["toolchain" | "upgrade"] => "/guide/upgrade",
         ["implode"] => "/guide/implode",
@@ -729,6 +729,10 @@ Options:
         assert_eq!(
             documentation_url_for_command_path(&["add"]),
             Some(vp_shared::documentation_url("/guide/package-management/"))
+        );
+        assert_eq!(
+            documentation_url_for_command_path(&["dlx"]),
+            Some(vp_shared::documentation_url("/guide/package-management/dlx"))
         );
         assert_eq!(
             documentation_url_for_command_path(&["env", "list"]),

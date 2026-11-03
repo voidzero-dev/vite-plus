@@ -115,7 +115,7 @@ Vite+ covers the full frontend development cycle, from starting a project throug
 - [`vp toolchain`](/guide/upgrade#show-the-toolchain) shows the active project toolchain; use `--global` to inspect the global installation instead.
 - [`vp run`](/guide/run) runs tasks across workspaces with caching.
 - [`vp cache clean`](/guide/cache) clears task cache entries.
-- [`vp exec`](/guide/vpx) runs local project binaries, while [`vp dlx`](/guide/vpx) and [`vpx`](/guide/vpx) download and run package binaries.
+- [`vp exec`](/guide/vpx) runs local project binaries, while [`vp dlx`](/guide/package-management/dlx) and [`vpx`](/guide/vpx) download and run package binaries.
 - [`vp config`](/guide/commit-hooks) installs the Git hook dispatcher and configures agent integration.
 - [`vp hooks`](/guide/commit-hooks) manages the Git hook dispatcher, and [`vp staged`](/guide/commit-hooks) runs checks on staged files.
 - [Monorepo Guide](/guide/monorepo) covers multi-package project structure and commands.
