@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'vitest';
 
-import { exposeLoaderInitialization, setOxcVersion } from '../patch-oxc-node.ts';
+import {
+  exposeLoaderInitialization,
+  patchTopLevelAwait,
+  setOxcVersion,
+} from '../patch-oxc-node.ts';
 
 describe('setOxcVersion', () => {
   const cargoToml = `[dependencies]
@@ -19,6 +23,21 @@ oxc_resolver = { version = "11.24.3" }
 
   test('fails without an oxc dependency', () => {
     expect(() => setOxcVersion('[dependencies]\n', '0.152.0')).toThrow(/`oxc` dependency/);
+  });
+});
+
+describe('patchTopLevelAwait', () => {
+  test('uses the Oxc 0.156 await-using predicate idempotently', () => {
+    const source = 'self.0 |= it.kind.is_await();';
+    const patched = patchTopLevelAwait(source);
+    expect(patched).toBe('self.0 |= it.kind.is_await_using();');
+    expect(patchTopLevelAwait(patched)).toBe(patched);
+  });
+
+  test('fails when upstream changes the declaration check', () => {
+    expect(() => patchTopLevelAwait('self.0 |= it.kind.is_using();')).toThrow(
+      /top-level await declaration check/,
+    );
   });
 });
 

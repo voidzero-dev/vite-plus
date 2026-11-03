@@ -56,6 +56,19 @@ export function exposeLoaderInitialization(source: string): string {
   return source;
 }
 
+/** Adapt top-level await detection to the VariableDeclarationKind API in Oxc 0.156. */
+export function patchTopLevelAwait(source: string): string {
+  const original = 'it.kind.is_await()';
+  const replacement = 'it.kind.is_await_using()';
+  if (source.includes(original)) {
+    return source.replace(original, replacement);
+  }
+  if (source.includes(replacement)) {
+    return source;
+  }
+  throw new Error('[patch-oxc-node] Could not find the top-level await declaration check');
+}
+
 export function patchOxcNode(rootDir: string = process.cwd()): void {
   const version = oxcVersion(readFileSync(join(rootDir, 'Cargo.toml'), 'utf-8'), 'Cargo.toml');
   const cargoTomlPath = join(rootDir, OXC_NODE_DIR, 'Cargo.toml');
@@ -67,10 +80,10 @@ export function patchOxcNode(rootDir: string = process.cwd()): void {
   }
   const libPath = join(rootDir, OXC_NODE_DIR, 'src/lib.rs');
   const source = readFileSync(libPath, 'utf-8');
-  const patchedSource = exposeLoaderInitialization(source);
+  const patchedSource = patchTopLevelAwait(exposeLoaderInitialization(source));
   if (patchedSource !== source) {
     writeFileSync(libPath, patchedSource, 'utf-8');
-    log('✓ lib.rs: loader initialization available to embedders');
+    log('✓ lib.rs: loader initialization and top-level await compatibility patched');
   }
 }
 
