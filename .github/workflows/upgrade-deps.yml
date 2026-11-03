@@ -90,6 +90,7 @@ jobs:
         uses: anthropics/claude-code-action@1d6de8cb0c237e7c15e9e1bdf973826ebae490cc # v1.0.248
         env:
           ANTHROPIC_BASE_URL: https://api.kimi.com/coding/
+          BASH_MAX_TIMEOUT_MS: '1800000'
           CLI_HELP_DIFF_CHANGED: ${{ steps.cli-help-diff.outputs.has-changes }}
           CLI_HELP_DIFF_REPORT: ${{ env.UPGRADE_DEPS_META_DIR }}/cli-help-report.md
           RELEASE_BUILD: 'true'
@@ -166,8 +167,11 @@ jobs:
                upgrade operations: `pnpm dedupe`,
                `node .github/scripts/upgrade-deps.ts --sync-bundled-deps`, then
                `pnpm install --no-frozen-lockfile` before building or testing.
-            2. Re-run the steps in `./.github/actions/build-upstream/action.yml`; fix any
-               non-zero exits. If the Rust build fails inside a vendored `rolldown`
+            2. Reuse successful outputs from `./.github/actions/build-upstream/action.yml`.
+               If the action failed, fix the failure and complete its remaining build commands.
+               Rebuild affected packages after source or dependency changes. Preserve the
+               action's target, profile, compiler, and linker settings for native builds.
+               If the Rust build fails inside a vendored `rolldown`
                crate with an oxc API mismatch (e.g. `oxc_ast::template_element` taking
                a different number of arguments, or any `oxc_*` type/signature error),
                the root `Cargo.toml` oxc pins are out of sync with the bumped rolldown.
@@ -195,7 +199,9 @@ jobs:
                - `echo "$HOME/.vite-plus/bin" >> $GITHUB_PATH`
             8. If any Rust code or `Cargo.toml` was modified, run `cargo check
                --all-targets --all-features` and `cargo shear`; fix anything they report.
-            9. Run `pnpm run lint` (requires a prior `just build`); fix any errors.
+            9. Run `pnpm run lint`; fix any errors. Reuse the completed build outputs
+               from step 2 and rebuild packages affected by later changes first.
+               Do not run `just build` only to prepare for lint.
             10. Smoke-test the CLI: `vp -h`, `vp run -h`, `vp lint -h`, `vp test -h`,
                `vp build -h`, `vp fmt -h`, `vp pack -h`.
 
@@ -234,8 +240,11 @@ jobs:
             ### Running long commands (IMPORTANT)
             Run every long-running command (`just build`, `pnpm bootstrap-cli:ci`,
             `pnpm test:unit`, `cargo check`, etc.) in the FOREGROUND — a single Bash tool call
-            that blocks until the command exits. The Bash tool already gives you a 10-minute
-            timeout per call, which is enough for these builds.
+            that blocks until the command exits. Set `timeout: 1800000` explicitly on
+            each long-running Bash call. `BASH_MAX_TIMEOUT_MS` permits 30 minutes per call;
+            it does not change the default timeout or a shorter timeout you request.
+            Stream command output. If saving a log, use `set -o pipefail` with `tee`
+            so progress remains visible and command failures keep a non-zero exit code.
 
             Do NOT do any of the following:
             - Spawn a background process (`&`, `nohup`, `disown`, `setsid`, `screen`, `tmux`).
@@ -246,8 +255,9 @@ jobs:
               whether a build succeeded, just run it in the foreground and read its exit
               code and stdout/stderr in the single tool result.
 
-            If a foreground command legitimately hits the 10-minute Bash timeout, report
-            that and stop — do not start polling.
+            If a foreground command reaches the 30-minute Bash timeout, stop any task
+            the tool moved to the background. Report the command and its last build output,
+            then stop — do not start polling.
 
             ### Commit rule
             Do NOT run `git commit` or `git push`. A later workflow step commits every
