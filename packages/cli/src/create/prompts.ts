@@ -87,8 +87,18 @@ export function suggestAvailableTargetDir(defaultTargetDir: string, cwd: string)
 
 function describeExistingTarget(projectDirFullPath: string, stats: fs.Stats) {
   if (stats.isSymbolicLink()) {
+    let linkedPath: string;
+    try {
+      linkedPath = fs.realpathSync(projectDirFullPath);
+    } catch {
+      // Dangling links can still be removed, even when their destination cannot be resolved.
+      linkedPath = path.resolve(
+        path.dirname(projectDirFullPath),
+        fs.readlinkSync(projectDirFullPath),
+      );
+    }
     return {
-      description: `Target path "${projectDirFullPath}" is a symbolic link`,
+      description: `Target path "${projectDirFullPath}" is a symbolic link to "${linkedPath}"`,
       removeLabel: 'Remove symbolic link and continue',
     };
   }

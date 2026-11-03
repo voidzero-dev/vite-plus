@@ -115,7 +115,7 @@ describe('target directory helpers', () => {
     expect(fs.existsSync(sentinel)).toBe(true);
     expect(fs.lstatSync(targetDir, { throwIfNoEntry: false })).toBeUndefined();
     expect(mockSelect).toHaveBeenCalledWith({
-      message: `Target path "${targetDir}" is a symbolic link. Please choose how to proceed:`,
+      message: `Target path "${targetDir}" is a symbolic link to "${fs.realpathSync(linkedDir)}". Please choose how to proceed:`,
       options: [
         { label: 'Cancel operation', value: 'no' },
         { label: 'Remove symbolic link and continue', value: 'yes' },
@@ -140,7 +140,7 @@ describe('target directory helpers', () => {
     expect(fs.existsSync(sentinel)).toBe(true);
     expect(fs.lstatSync(targetDir, { throwIfNoEntry: false })).toBeUndefined();
     expect(mockSelect).toHaveBeenCalledWith({
-      message: `Target path "${targetDir}" is a symbolic link. Please choose how to proceed:`,
+      message: `Target path "${targetDir}" is a symbolic link to "${fs.realpathSync(linkedDir)}". Please choose how to proceed:`,
       options: [
         { label: 'Cancel operation', value: 'no' },
         { label: 'Remove symbolic link and continue', value: 'yes' },
@@ -151,11 +151,8 @@ describe('target directory helpers', () => {
   it('recognizes and removes a dangling target symlink', async () => {
     const cwd = makeTempDir();
     const targetDir = path.join(cwd, 'new-project');
-    fs.symlinkSync(
-      path.join(cwd, 'missing-directory'),
-      targetDir,
-      process.platform === 'win32' ? 'junction' : 'dir',
-    );
+    const linkedDir = path.join(cwd, 'missing-directory');
+    fs.symlinkSync(linkedDir, targetDir, process.platform === 'win32' ? 'junction' : 'dir');
     mockSelect.mockResolvedValue('yes');
 
     expect(isTargetDirAvailable(targetDir)).toBe(false);
@@ -163,7 +160,67 @@ describe('target directory helpers', () => {
     await checkProjectDirExists(targetDir, true);
 
     expect(fs.lstatSync(targetDir, { throwIfNoEntry: false })).toBeUndefined();
+    expect(mockSelect).toHaveBeenCalledWith({
+      message: `Target path "${targetDir}" is a symbolic link to "${linkedDir}". Please choose how to proceed:`,
+      options: [
+        { label: 'Cancel operation', value: 'no' },
+        { label: 'Remove symbolic link and continue', value: 'yes' },
+      ],
+    });
   });
+
+  it('shows the final destination of a chain of symbolic links', async () => {
+    const cwd = makeTempDir();
+    const linkedDir = makeTempDir();
+    const intermediateLink = path.join(cwd, 'intermediate');
+    const targetDir = path.join(cwd, 'new-project');
+    const linkType = process.platform === 'win32' ? 'junction' : 'dir';
+    fs.writeFileSync(path.join(linkedDir, 'keep.txt'), 'keep');
+    fs.symlinkSync(linkedDir, intermediateLink, linkType);
+    fs.symlinkSync(intermediateLink, targetDir, linkType);
+    mockSelect.mockResolvedValue('yes');
+
+    await checkProjectDirExists(targetDir, true);
+
+    expect(mockSelect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: `Target path "${targetDir}" is a symbolic link to "${fs.realpathSync(linkedDir)}". Please choose how to proceed:`,
+      }),
+    );
+    expect(fs.lstatSync(targetDir, { throwIfNoEntry: false })).toBeUndefined();
+    expect(fs.lstatSync(intermediateLink).isSymbolicLink()).toBe(true);
+    expect(fs.readFileSync(path.join(linkedDir, 'keep.txt'), 'utf8')).toBe('keep');
+  });
+
+  // Windows junctions require absolute targets; relative directory symlinks need extra privileges.
+  it.skipIf(process.platform === 'win32').each([false, true])(
+    'resolves a relative symlink destination from its parent (dangling: %s)',
+    async (dangling) => {
+      const cwd = makeTempDir();
+      const linkedDir = path.join(cwd, 'linked-directory');
+      const targetDir = path.join(cwd, 'projects', 'new-project');
+      fs.mkdirSync(path.dirname(targetDir));
+      if (!dangling) {
+        fs.mkdirSync(linkedDir);
+        fs.writeFileSync(path.join(linkedDir, 'keep.txt'), 'keep');
+      }
+      fs.symlinkSync('../linked-directory', targetDir, 'dir');
+      mockSelect.mockResolvedValue('yes');
+
+      await checkProjectDirExists(targetDir, true);
+
+      const destination = dangling ? linkedDir : fs.realpathSync(linkedDir);
+      expect(mockSelect).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: `Target path "${targetDir}" is a symbolic link to "${destination}". Please choose how to proceed:`,
+        }),
+      );
+      expect(fs.lstatSync(targetDir, { throwIfNoEntry: false })).toBeUndefined();
+      if (!dangling) {
+        expect(fs.readFileSync(path.join(linkedDir, 'keep.txt'), 'utf8')).toBe('keep');
+      }
+    },
+  );
 
   it('recognizes and removes an existing file at the target path', async () => {
     const cwd = makeTempDir();
