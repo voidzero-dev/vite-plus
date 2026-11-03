@@ -206,6 +206,14 @@ alongside the existing loader and migration regression fixtures. Unit tests in
 `packages/cli/src/migration/__tests__/tsx.spec.ts` cover shell quoting, inherited
 options, and dependency retention.
 
+The [`migration_ts_node_real`](../crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/migration_ts_node_real/snapshots.toml)
+cases install pinned published ts-node and TypeScript packages through the local
+registry. Snapshots show execution before migration, the rewritten commands, and
+execution after a clean reinstall. Distinct JSX factories expose explicit project
+selection and CLI versus preload config discovery. A deliberate type error shows
+which transpile-only commands migrate and which type-checking commands retain
+their original diagnostics.
+
 ## References
 
 - [Node.js `--import`](https://nodejs.org/api/cli.html#--importmodule)

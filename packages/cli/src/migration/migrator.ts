@@ -5,6 +5,8 @@ export * from './migrator/tsup.ts';
 export * from './migrator/tsx.ts';
 export * from './migrator/script-runner.ts';
 export * from './migrator/oxnode.ts';
+export * from './migrator/ts-node.ts';
+export * from './migrator/ts-node-config.ts';
 export * from './migrator/tsconfig.ts';
 export * from './migrator/framework-shim.ts';
 export * from './migrator/vitest-ecosystem.ts';
