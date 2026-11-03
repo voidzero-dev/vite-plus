@@ -1,0 +1,17 @@
+{
+  "name": "migration-oxnode",
+  "type": "module",
+  "scripts": {
+    "dev": "oxnode watch --clear-screen=false ./scripts/seed.ts",
+    "seed": "oxnode -C dev ./scripts/seed.ts",
+    "loader": "node --import @oxc-node/core/register ./scripts/seed.ts",
+    "loader-eval": "node --import=@oxc-node/core/register.mjs --eval \"import('./scripts/seed.ts')\"",
+    "loader-test": "node --import @oxc-node/core/register --test --test-reporter=dot ./scripts/seed.ts",
+    "env-loader": "NODE_OPTIONS='--import @oxc-node/core/register' node ./scripts/seed.ts"
+  },
+  "devDependencies": {
+    "@oxc-node/cli": "file:.fixture/oxc-cli",
+    "@oxc-node/core": "file:.fixture/oxc-core",
+    "vite": "^7.0.0"
+  }
+}
