@@ -8,6 +8,29 @@ use crate::{
     },
 };
 
+fn resolve_yarn_effective_version(manager: &PackageManager) -> Option<Version> {
+    if manager.client != PackageManagerType::Yarn {
+        return None;
+    }
+    let bin_prefix = manager.get_bin_prefix();
+    let cwd = vt_path::current_dir().ok()?;
+    let yarn_bin = vp_command::resolve_bin("yarn", Some(bin_prefix.as_path().as_os_str()), &cwd)
+        .ok()?
+        .as_path()
+        .to_path_buf();
+    let output = std::process::Command::new(&yarn_bin)
+        .arg("--version")
+        .current_dir(cwd.as_path())
+        .env_remove("NODE_OPTIONS")
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    Version::parse(stdout.trim()).ok()
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Resolution {
     pub(crate) outcome: CommandResolution,
@@ -37,12 +60,15 @@ where
 
 pub(crate) fn resolve_for_manager<A>(manager: &PackageManager, args: A) -> Result<Resolution, Error>
 where
-    A: Diagnosis,
+    A: Diagnosis + Clone,
     Npm: Resolve<A>,
     Pnpm: Resolve<A>,
     Yarn: Resolve<A>,
     Bun: Resolve<A>,
 {
+    // Keep a clone so we can re-resolve with the effective Yarn version if the launcher
+    // would otherwise skip or reject the command.
+    let args_for_retry = args.clone();
     let mut resolution = match manager.client {
         PackageManagerType::Npm => {
             let dialect =
@@ -63,6 +89,26 @@ where
         }
     };
 
+    // The Yarn launcher can delegate execution to a different release selected by
+    // `yarnPath` in `.yarnrc.yml`. When Vite+ would otherwise skip or reject a command
+    // because of the launcher version, ask that launcher which version it will actually
+    // run and resolve against the effective version instead.
+    let mut effective_yarn_version: Option<Version> = None;
+    if manager.client == PackageManagerType::Yarn
+        && matches!(
+            resolution.outcome,
+            CommandResolution::Noop | CommandResolution::InvalidArgument(_)
+        )
+    {
+        let launcher_version = parse_version(manager).ok();
+        if let Some(version) = resolve_yarn_effective_version(manager) {
+            if launcher_version.as_ref() != Some(&version) {
+                effective_yarn_version = Some(version.clone());
+                resolution = resolve(&Yarn::new(version), args_for_retry);
+            }
+        }
+    }
+
     if let CommandResolution::Run(command) = &mut resolution.outcome {
         let mut env = ToolPathEnv::from_env();
         env.prepend(manager.get_bin_prefix(), &manager.bin_names(), PrependOptions::default())?;
@@ -75,7 +121,12 @@ where
                 command.env.insert("PNPM_CONFIG_UPDATE_NOTIFIER".to_string(), "false".to_string());
             }
             PackageManagerType::Yarn if command.program == "yarn" => {
-                match parse_version(manager)?.major {
+                let version = if let Some(version) = effective_yarn_version {
+                    version
+                } else {
+                    parse_version(manager)?
+                };
+                match version.major {
                     0 | 1 => {
                         command.env.insert(
                             "YARN_DISABLE_SELF_UPDATE_CHECK".to_string(),
@@ -281,5 +332,72 @@ mod tests {
                 "{client}@{version}"
             );
         }
+    }
+
+    #[cfg(unix)]
+    fn yarn_manager_with_fake_version(
+        launcher_version: &str,
+        reported_version: &str,
+    ) -> (PackageManager, tempfile::TempDir) {
+        use std::os::unix::fs::PermissionsExt;
+
+        use vt_path::AbsolutePathBuf;
+
+        let temp_dir = tempfile::tempdir().expect("failed to create temp directory");
+        let bin_dir = temp_dir.path().join("bin");
+        std::fs::create_dir(&bin_dir).unwrap();
+        let yarn = bin_dir.join("yarn");
+        std::fs::write(
+            &yarn,
+            vt_str::format!("#!/bin/sh\nprintf '{}\\n'\n", reported_version).as_str(),
+        )
+        .unwrap();
+        std::fs::set_permissions(&yarn, std::fs::Permissions::from_mode(0o755)).unwrap();
+        (
+            PackageManager::from_bin_prefix(
+                PackageManagerType::Yarn,
+                launcher_version,
+                AbsolutePathBuf::new(bin_dir).unwrap(),
+            ),
+            temp_dir,
+        )
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn yarn_re_resolves_declined_commands_with_effective_version() {
+        use crate::resolution::UnlinkArgs;
+        let (manager, _temp_dir) = yarn_manager_with_fake_version("2.4.2", "3.8.7");
+
+        let resolution = resolve_for_manager(
+            &manager,
+            UnlinkArgs { package: Some("linked-lib".to_string()), ..Default::default() },
+        )
+        .unwrap();
+
+        let command = crate::resolution::test_utils::expect_run(resolution.outcome);
+        assert_eq!(command.program, "yarn");
+        assert_eq!(command.args, vec!["unlink", "linked-lib"]);
+        assert!(resolution.diagnostics.is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn yarn_keeps_declined_command_when_effective_version_matches_launcher() {
+        use crate::resolution::UnlinkArgs;
+        let (manager, _temp_dir) = yarn_manager_with_fake_version("2.4.2", "2.4.2");
+
+        let resolution = resolve_for_manager(
+            &manager,
+            UnlinkArgs { package: Some("linked-lib".to_string()), ..Default::default() },
+        )
+        .unwrap();
+
+        assert_eq!(resolution.outcome, CommandResolution::Noop);
+        assert_eq!(resolution.diagnostics.len(), 1);
+        assert_eq!(
+            resolution.diagnostics[0].message,
+            "yarn unlink requires Yarn Classic or yarn >= 3.0.0. Skipping."
+        );
     }
 }
