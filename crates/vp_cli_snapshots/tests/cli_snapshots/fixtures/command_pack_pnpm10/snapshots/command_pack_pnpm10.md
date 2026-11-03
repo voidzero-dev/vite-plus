@@ -142,3 +142,42 @@ Reject recursive pack before pnpm 10.11.0.
 ```
 pnpm < 10.11.0 does not support --recursive.
 ```
+
+## `vpt json-edit package.json packageManager pnpm@9.15.9`
+
+
+## `vp pm pack --out package.tgz`
+
+Reject --out before pnpm 10.0.0.
+
+**Exit code:** 1
+
+```
+pnpm < 10.0.0 does not support --out.
+```
+
+## `vpt json-edit package.json packageManager pnpm@9.13.2`
+
+
+## `vp pm pack --json`
+
+Reject --json before pnpm 9.14.0.
+
+**Exit code:** 1
+
+```
+pnpm < 9.14.0 does not support --json.
+```
+
+## `vpt json-edit package.json packageManager pnpm@8.2.0`
+
+
+## `vp pm pack --pack-gzip-level 0`
+
+Reject --pack-gzip-level before pnpm 8.3.0, including an explicit zero.
+
+**Exit code:** 1
+
+```
+pnpm < 8.3.0 does not support --pack-gzip-level.
+```

@@ -102,7 +102,7 @@ jobs:
     # them (code changes get `vp check` in cli-e2e-test). The required `done`
     # job waits for this check and propagates failures.
     if: needs.detect-changes.outputs.code-changed == 'false'
-    runs-on: ubuntu-24.04
+    runs-on: namespace-profile-linux-x64-default
     timeout-minutes: 20
     permissions:
       contents: read
@@ -156,7 +156,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-24.04
+          - os: namespace-profile-linux-x64-default
             target: x86_64-unknown-linux-gnu
           - os: namespace-profile-mac-default
             target: aarch64-apple-darwin
@@ -188,7 +188,7 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.code-changed == 'true'
     name: Build Windows tests
-    runs-on: ubuntu-24.04
+    runs-on: namespace-profile-linux-x64-default
     timeout-minutes: 20
     env:
       XWIN_ACCEPT_LICENSE: '1'
@@ -315,7 +315,7 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.code-changed == 'true'
     name: Test (Linux x64 musl)
-    runs-on: ubuntu-24.04
+    runs-on: namespace-profile-linux-x64-default
     timeout-minutes: 20
     container:
       image: node:${{ needs.detect-changes.outputs.node-version }}-alpine
@@ -374,7 +374,7 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.code-changed == 'true'
     name: Lint
-    runs-on: ubuntu-24.04
+    runs-on: namespace-profile-linux-x64-default
     timeout-minutes: 20
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
@@ -427,7 +427,7 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.code-changed == 'true'
     name: Build Windows CLI binaries
-    runs-on: ubuntu-24.04
+    runs-on: namespace-profile-linux-x64-default
     timeout-minutes: 20
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
@@ -447,7 +447,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-24.04
+          - os: namespace-profile-linux-x64-default
             target: x86_64-unknown-linux-gnu
             test-node: 22.18.0
           - os: namespace-profile-mac-default
@@ -999,7 +999,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-24.04
+          - os: namespace-profile-linux-x64-default
             target: x86_64-unknown-linux-gnu
           - os: namespace-profile-mac-default
             target: aarch64-apple-darwin
@@ -1085,10 +1085,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, namespace-profile-mac-default]
+        os: [namespace-profile-linux-x64-default, namespace-profile-mac-default]
         shard: [1, 2, 3]
         include:
-          - os: ubuntu-24.04
+          - os: namespace-profile-linux-x64-default
             target: x86_64-unknown-linux-gnu
           - os: namespace-profile-mac-default
             target: aarch64-apple-darwin
@@ -1164,10 +1164,27 @@ jobs:
           export VP_SNAP_SH_BIN="$(command -v sh)"
           export VP_SNAP_BASH_BIN="$(command -v bash)"
           export VP_SNAP_ZSH_BIN="$(command -v zsh)"
-          VP_SNAP_GLOBAL_VP="$HOME/.vite-plus/bin/vp" \
-          VP_SNAP_JS_RUNTIME_DIR="$HOME/.vite-plus/js_runtime" \
-          VP_SNAP_FISH_BIN="$(command -v fish)" \
-          VP_SNAP_NU_BIN="$(command -v nu)" \
+          export VP_SNAP_GLOBAL_VP="$HOME/.vite-plus/bin/vp"
+          export VP_SNAP_JS_RUNTIME_DIR="$HOME/.vite-plus/js_runtime"
+          # Missing optional shells must leave their overrides unset.
+          if VP_SNAP_FISH_BIN="$(command -v fish)"; then
+            export VP_SNAP_FISH_BIN
+          else
+            unset VP_SNAP_FISH_BIN
+          fi
+          if VP_SNAP_NU_BIN="$(command -v nu)"; then
+            export VP_SNAP_NU_BIN
+          else
+            unset VP_SNAP_NU_BIN
+          fi
+          # Fetch pinned package-manager archives before command timers start.
+          # Cases still download from the registry into their isolated homes.
+          VP_SNAP_PREWARM_MANIFEST="$RUNNER_TEMP/snapshot-prewarm.json" \
+            ./target/snapshot-tests/cli_snapshots --list > "$RUNNER_TEMP/snapshot-test-list.txt"
+          node packages/tools/src/local-npm-registry.ts \
+            --snapshot-cache "$VP_SNAP_REGISTRY_CACHE_DIR" \
+            --request-log "$VP_SNAP_ARTIFACTS_DIR/prewarm/registry.jsonl" \
+            --prewarm-manifest "$RUNNER_TEMP/snapshot-prewarm.json"
           ./target/snapshot-tests/cli_snapshots --test-threads 8
         env:
           RUST_BACKTRACE: '1'
@@ -1177,6 +1194,7 @@ jobs:
           CARGO_BIN_EXE_vpt: ${{ github.workspace }}/target/snapshot-tests/vpt
           VP_SNAP_SHARD: ${{ matrix.shard }}/3
           VP_SNAP_ARTIFACTS_DIR: ${{ runner.temp }}/snapshot-artifacts
+          VP_SNAP_REGISTRY_CACHE_DIR: ${{ runner.temp }}/snapshot-registry-cache
 
       - name: Upload snapshot diagnostics and timings
         if: ${{ !cancelled() }}
@@ -1318,7 +1336,7 @@ jobs:
             VP_SNAP_PREWARM_MANIFEST="$RUNNER_TEMP/snapshot-prewarm.json" \
             cargo-nextest nextest list --archive-file windows-snapshot-tests.tar.zst --workspace-remap . \
             > "$RUNNER_TEMP/snapshot-test-list.txt"
-          # Derive Bun archives from the same fixtures as the test list, so
+          # Derive package-manager archives from the same fixtures as the test list, so
           # version changes need no matching CI edit. Only response bytes are shared.
           node packages/tools/src/local-npm-registry.ts \
             --snapshot-cache "$VP_SNAP_REGISTRY_CACHE_DIR" \
@@ -1384,7 +1402,7 @@ jobs:
     name: CLI E2E test (Linux x64 musl)
     needs:
       - download-previous-rolldown-binaries
-    runs-on: ubuntu-24.04
+    runs-on: namespace-profile-linux-x64-default
     timeout-minutes: 20
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
@@ -1473,7 +1491,7 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.code-changed == 'true'
     name: Cert-less image E2E test
-    runs-on: ubuntu-24.04
+    runs-on: namespace-profile-linux-x64-default
     timeout-minutes: 30
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
@@ -1530,7 +1548,7 @@ jobs:
     name: Local CLI `vp install` E2E test
     needs:
       - build-cli-test-binaries
-    runs-on: ubuntu-24.04
+    runs-on: namespace-profile-linux-x64-default
     timeout-minutes: 20
     # Run if: not a PR, OR PR has 'test: install-e2e' label
     if: >-

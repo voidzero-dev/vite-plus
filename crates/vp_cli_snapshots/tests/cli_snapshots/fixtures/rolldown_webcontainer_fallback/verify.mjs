@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, sep } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createContext, SourceTextModule, SyntheticModule } from 'node:vm';
 
 const mode = process.argv[2];
@@ -115,20 +115,38 @@ const context = createContext({
     arch: 'x64',
   },
 });
-const loader = new SourceTextModule(source, {
-  context,
-  identifier: bindingUrl,
-  initializeImportMeta(meta) {
-    meta.url = bindingUrl;
-  },
-});
-await loader.link((specifier) => {
+const modules = new Map();
+function loadModule(url) {
+  if (!modules.has(url)) {
+    modules.set(
+      url,
+      new SourceTextModule(readFileSync(new URL(url), 'utf8'), {
+        context,
+        identifier: url,
+        initializeImportMeta(meta) {
+          meta.url = url;
+        },
+      }),
+    );
+  }
+  return modules.get(url);
+}
+
+const loader = loadModule(bindingUrl);
+await loader.link((specifier, referencingModule) => {
+  // Rolldown can extract its CommonJS helpers into a shared runtime chunk.
+  // Evaluate that chunk in the same context so its require stays isolated.
+  if (specifier.startsWith('./')) {
+    const url = new URL(specifier, referencingModule.identifier);
+    assert.equal(dirname(fileURLToPath(url)), sharedDir);
+    return loadModule(url.href);
+  }
   assert.equal(specifier, 'node:module');
   return new SyntheticModule(
     ['createRequire'],
     function () {
       this.setExport('createRequire', (url) => {
-        assert.equal(url, bindingUrl);
+        assert.ok(modules.has(url), 'createRequire must belong to a loaded shared module');
         return isolatedRequire;
       });
     },

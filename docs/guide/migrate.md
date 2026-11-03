@@ -8,7 +8,7 @@ import { migrationPrompt, upgradePrompt } from '../.vitepress/theme/data/migrati
 
 ## Overview
 
-This command is the starting point for consolidating separate Vite, Vitest, Oxlint, Oxfmt, ESLint, Prettier, tsdown, tsup, and tsx setups into Vite+.
+This command is the starting point for consolidating separate Vite, Vitest, Oxlint, Oxfmt, ESLint, Prettier, tsdown, tsup, tsx, oxnode, and ts-node setups into Vite+.
 
 Use it when you want to take an existing project and move it onto the Vite+ defaults instead of wiring each tool by hand.
 
@@ -151,7 +151,7 @@ View and copy this prompt into your coding agent to upgrade an existing Vite+ 0.
 
 ### Vitest
 
-Vitest is automatically migrated through `vp migrate`. `vite-plus` re-exports upstream `vitest@5.0.5` under `vite-plus/test*`, so for node-mode tests a single `vite-plus` install is enough — you no longer need to install `vitest` directly.
+Vitest is automatically migrated through `vp migrate`. `vite-plus` re-exports upstream `vitest@5.1.0` under `vite-plus/test*`, so for node-mode tests a single `vite-plus` install is enough — you no longer need to install `vitest` directly.
 
 For browser mode, you can use the base browser runtime (`@vitest/browser`) and Preview provider (`@vitest/browser-preview`) included in `vite-plus`. To use Playwright or WebDriverIO, you also need the opt-in provider (`@vitest/browser-playwright` or `@vitest/browser-webdriverio`) and its framework peer (`playwright` or `webdriverio`).
 
