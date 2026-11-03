@@ -43,7 +43,7 @@ jobs:
       github.event.workflow_run.event == 'pull_request' &&
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.path == '.github/workflows/build-docs-fork-preview.yml'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read
@@ -71,7 +71,7 @@ jobs:
     name: 'Deploy PR #${{ needs.authorize.outputs.pr }} at ${{ github.event.workflow_run.head_sha }}'
     needs: authorize
     if: github.event_name == 'workflow_run' && needs.authorize.outputs.pr != ''
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     # Serialize uploads per PR and let the running deployment finish.
     # Keep only the last queued job; recheck the head before uploading.
@@ -103,7 +103,7 @@ jobs:
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: '24'
+          node-version-file: .node-version
           package-manager-cache: false
 
       # Install only the deployment tool, outside both the checkout and the

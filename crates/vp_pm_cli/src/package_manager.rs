@@ -28,6 +28,9 @@ use crate::{
     shim,
 };
 
+mod bootstrap;
+pub use bootstrap::bootstrap_pnpm;
+
 #[derive(Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 struct PackageJson {
@@ -265,20 +268,62 @@ impl PackageManagerBuilder {
     }
 }
 
+/// Reads npm's version from the `package.json` of the npm package that `npm` resolves into.
+///
+/// `npm --version` prints this field, but it starts Node.js and loads npm first. That cost is a
+/// large share of short commands such as `vp run`. Only npm reads its manifest:
+///
+/// - In an npm project without a pinned version, `vp` uses the npm on PATH and must ask for
+///   its version. For pnpm, yarn, and bun, `vp` resolves the version itself; they run
+///   `--version` only in system-first mode.
+/// - pnpm and yarn can switch to the version that the project selects (`packageManager`,
+///   `yarnPath`) before they answer, so their manifest on disk can disagree with `--version`.
+///   npm does not switch.
+///
+/// The PATH entry is normally a symlink into the package (`bin/npm` ->
+/// `lib/node_modules/npm/bin/npm-cli.js`). Returns `None` when the nearest `package.json`
+/// within four parents is not npm's, for example for a version-manager shim, Corepack, or
+/// Windows `npm.cmd`; the caller then runs `npm --version`.
+pub fn npm_version_from_package_json(npm: &AbsolutePath) -> Option<Version> {
+    #[derive(Deserialize)]
+    struct Manifest {
+        #[serde(default)]
+        name: Str,
+        #[serde(default)]
+        version: Str,
+    }
+
+    let executable = fs::canonicalize(npm.as_path()).ok()?;
+    let manifest = executable
+        .ancestors()
+        .skip(1)
+        .take(4)
+        .find_map(|dir| fs::read(dir.join("package.json")).ok())?;
+    let manifest: Manifest = serde_json::from_slice(&manifest).ok()?;
+    if manifest.name != "npm" {
+        return None;
+    }
+    Version::parse(&manifest.version).ok()
+}
+
 // Version gates and migration must use the npm on PATH, not the latest registry release.
 async fn resolve_npm_from_path(cwd: &AbsolutePath) -> Result<PackageManager, Error> {
     let npm = vp_command::resolve_bin("npm", None, cwd)?;
-    let output = tokio::process::Command::new(npm.as_path())
-        .arg("--version")
-        .current_dir(cwd)
-        // User preloads can print to stdout; only the actual command should run them.
-        .env_remove("NODE_OPTIONS")
-        .output()
-        .await?;
-    if !output.status.success() {
-        return Err(io::Error::other("failed to read npm version").into());
-    }
-    let version = Version::parse(String::from_utf8_lossy(&output.stdout).trim())?;
+    let version = if let Some(version) = npm_version_from_package_json(&npm) {
+        version
+    } else {
+        let output = tokio::process::Command::new(npm.as_path())
+            .arg("--version")
+            .current_dir(cwd)
+            // User preloads can print to stdout; only the actual command should run them.
+            .env_remove("NODE_OPTIONS")
+            .output()
+            .await?;
+        if !output.status.success() {
+            return Err(io::Error::other("failed to read npm version").into());
+        }
+        Version::parse(String::from_utf8_lossy(&output.stdout).trim())?
+    };
     let bin_prefix = npm
         .parent()
         .ok_or_else(|| Error::CannotFindBinaryPath("npm".into()))?
@@ -1359,6 +1404,7 @@ async fn download_package_manager_with_config(
         version_or_latest,
         expected_hash,
         npm_config,
+        None,
     )
     .await?;
     #[cfg(windows)]
@@ -1417,6 +1463,7 @@ async fn download_package_manager_inner(
     version_or_latest: &str,
     expected_hash: Option<&str>,
     npm_config: &NpmConfig,
+    tarball_url: Option<&str>,
 ) -> Result<(AbsolutePathBuf, Str, Str), Error> {
     let version = resolve_package_manager_version_with_config(
         cwd,
@@ -1465,7 +1512,9 @@ async fn download_package_manager_inner(
             .await;
     }
 
-    let tgz_url = npm_config.package_tgz_url(&package_name, &version);
+    let tgz_url = tarball_url
+        .map(Str::from)
+        .unwrap_or_else(|| npm_config.package_tgz_url(&package_name, &version));
     // <DATA>/package_manager/pnpm/10.0.0
     let target_dir = data_dir.join("package_manager").join(&bin_name).join(&version);
     let install_dir = target_dir.join(&bin_name);
@@ -1528,6 +1577,11 @@ async fn download_package_manager_inner(
     tracing::debug!("Rename package dir to {}", bin_name);
     tokio::fs::rename(&extracted_package_dir, &target_dir_tmp.join(&bin_name)).await?;
 
+    // Finish shims before publishing the directory to lock-free cache readers.
+    tracing::debug!("Create shim files for {}", bin_name);
+    let tmp_bin_dir = AbsolutePath::new(&target_dir_tmp).unwrap().join(&bin_name).join("bin");
+    create_shim_files(package_manager_type, &tmp_bin_dir).await?;
+
     // Use a file-based lock to ensure atomicity of remove + rename operations
     // This prevents DirectoryNotEmpty error when multiple processes/threads
     // try to install the same package manager version concurrently.
@@ -1540,9 +1594,7 @@ async fn download_package_manager_inner(
     tracing::debug!("Lock acquired: {:?}", lock_path);
 
     // Check again after acquiring the lock, in case another thread completed
-    // the installation while we were downloading (same completeness check as the
-    // fast-path above; create_shim_files below runs under this lock, so post-lock
-    // the install is all-or-nothing)
+    // the installation while we were preparing it in the temporary directory.
     if is_package_manager_install_complete(&install_dir, &bin_name)? {
         tracing::debug!("install already complete after lock acquisition, skip rename");
         verify_cached_cli_hash(
@@ -1569,10 +1621,6 @@ async fn download_package_manager_inner(
     tracing::debug!("Rename {:?} to {:?}", target_dir_tmp, target_dir);
     remove_dir_all_force(&target_dir).await?;
     tokio::fs::rename(&target_dir_tmp, &target_dir).await?;
-
-    // create shim file
-    tracing::debug!("Create shim files for {}", bin_name);
-    create_shim_files(package_manager_type, &install_dir.join("bin")).await?;
 
     Ok((install_dir, package_name, version))
 }
@@ -1802,6 +1850,10 @@ async fn download_bun_package_manager(
     // Clean up the extracted package directory
     remove_dir_all_force(&package_dir).await?;
 
+    // Finish shims before publishing the directory to lock-free cache readers.
+    tracing::debug!("Create shim files for bun");
+    create_shim_files(PackageManagerType::Bun, AbsolutePath::new(&tmp_bin_dir).unwrap()).await?;
+
     // Acquire lock for atomic rename
     let lock_path = parent_dir.join(format!("{version}.lock"));
     tracing::debug!("Acquire lock file: {:?}", lock_path);
@@ -1818,10 +1870,6 @@ async fn download_bun_package_manager(
     tracing::debug!("Rename {:?} to {:?}", target_dir_tmp, target_dir);
     remove_dir_all_force(&target_dir).await?;
     tokio::fs::rename(&target_dir_tmp, &target_dir).await?;
-
-    // Create native binary shims
-    tracing::debug!("Create shim files for bun");
-    create_shim_files(PackageManagerType::Bun, &install_dir.join("bin")).await?;
 
     Ok((install_dir, package_name, version.clone()))
 }
@@ -2006,6 +2054,10 @@ async fn download_pnpm_native_package_manager(
     // Clean up the extracted package directory
     remove_dir_all_force(&package_dir).await?;
 
+    // Finish shims before publishing the directory to lock-free cache readers.
+    tracing::debug!("Create native shim files for pnpm");
+    create_pnpm_native_shim_files(AbsolutePath::new(&tmp_bin_dir).unwrap()).await?;
+
     // Acquire lock for atomic rename
     let lock_path = parent_dir.join(format!("{version}.lock"));
     tracing::debug!("Acquire lock file: {:?}", lock_path);
@@ -2022,10 +2074,6 @@ async fn download_pnpm_native_package_manager(
     tracing::debug!("Rename {:?} to {:?}", target_dir_tmp, target_dir);
     remove_dir_all_force(&target_dir).await?;
     tokio::fs::rename(&target_dir_tmp, &target_dir).await?;
-
-    // Create native binary shims
-    tracing::debug!("Create native shim files for pnpm");
-    create_pnpm_native_shim_files(&install_dir.join("bin")).await?;
 
     Ok((install_dir, package_name, version.clone()))
 }
@@ -2187,6 +2235,91 @@ mod tests {
                     .await
                     .unwrap();
             assert_eq!(version, "9.8.7");
+        })
+        .await;
+    }
+
+    /// Lays out npm like a Node.js install and returns `<root>/bin/npm`:
+    ///
+    /// ```text
+    /// <root>/
+    /// ├── bin/npm -> ../lib/node_modules/npm/bin/npm-cli.js
+    /// └── lib/node_modules/npm/
+    ///     ├── package.json      `package_json`
+    ///     └── bin/npm-cli.js    `cli`
+    /// ```
+    #[cfg(unix)]
+    fn install_npm_package(root: &AbsolutePath, package_json: &str, cli: &str) -> AbsolutePathBuf {
+        use std::os::unix::fs::PermissionsExt;
+
+        let package = root.join("lib/node_modules/npm");
+        fs::create_dir_all(package.join("bin")).unwrap();
+        fs::write(package.join("package.json"), package_json).unwrap();
+        let cli_path = package.join("bin/npm-cli.js");
+        fs::write(&cli_path, cli).unwrap();
+        fs::set_permissions(&cli_path, fs::Permissions::from_mode(0o755)).unwrap();
+        fs::create_dir_all(root.join("bin")).unwrap();
+        let npm = root.join("bin/npm");
+        std::os::unix::fs::symlink("../lib/node_modules/npm/bin/npm-cli.js", &npm).unwrap();
+        npm
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn npm_version_is_read_from_the_package_that_npm_links_into() {
+        let dir = create_temp_dir();
+        let root = AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
+        let npm = install_npm_package(&root, r#"{"name":"npm","version":"11.19.0"}"#, "");
+        assert_eq!(npm_version_from_package_json(&npm), Some(Version::new(11, 19, 0)));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn npm_version_is_not_read_unless_the_nearest_manifest_is_npms() {
+        for package_json in [
+            // Corepack's `npm` shim resolves into the corepack package.
+            r#"{"name":"corepack","version":"0.34.0"}"#,
+            r#"{"name":"npm"}"#,
+            r#"{"name":"npm","version":"not-a-version"}"#,
+            "{ broken",
+        ] {
+            let dir = create_temp_dir();
+            let root = AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
+            let npm = install_npm_package(&root, package_json, "");
+            assert_eq!(npm_version_from_package_json(&npm), None, "{package_json}");
+        }
+
+        // A shim outside any package, five levels below an npm manifest.
+        let dir = create_temp_dir();
+        let root = AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
+        fs::write(root.join("package.json"), r#"{"name":"npm","version":"11.19.0"}"#).unwrap();
+        let shim_dir = root.join("a/b/c/d");
+        fs::create_dir_all(&shim_dir).unwrap();
+        let shim = shim_dir.join("npm");
+        fs::write(&shim, "#!/bin/sh\n").unwrap();
+        assert_eq!(npm_version_from_package_json(&shim), None);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test(flavor = "current_thread")]
+    async fn npm_default_reads_the_version_of_the_npm_on_path_without_running_it() {
+        let dir = create_temp_dir();
+        let root = AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
+        // A separate global prefix whose npm differs from the one bundled with Node.js. Running
+        // it fails, so a spawned `npm --version` would surface as an error.
+        let npm = install_npm_package(
+            &root,
+            r#"{"name":"npm","version":"10.9.2"}"#,
+            "#!/bin/sh\nexit 1\n",
+        );
+        let bin_dir = npm.parent().unwrap();
+
+        EnvConfig::with_vars_async([("PATH", bin_dir.as_path())], |_| async {
+            let version =
+                resolve_package_manager_version_for_cwd(&root, PackageManagerType::Npm, "default")
+                    .await
+                    .unwrap();
+            assert_eq!(version, "10.9.2");
         })
         .await;
     }
@@ -4100,6 +4233,97 @@ mod tests {
             },
         )
         .await;
+    }
+
+    #[tokio::test]
+    async fn test_package_manager_install_is_complete_when_published() {
+        use std::future::Future;
+
+        use httpmock::prelude::*;
+
+        for (kind, version, package, entries) in [
+            (
+                PackageManagerType::Npm,
+                "11.0.0",
+                "npm".to_owned(),
+                vec!["package/bin/npm-cli.js", "package/bin/npx-cli.js"],
+            ),
+            (
+                PackageManagerType::Bun,
+                "1.2.0",
+                get_bun_platform_package_name().unwrap(),
+                vec![if cfg!(windows) { "package/bin/bun.exe" } else { "package/bin/bun" }],
+            ),
+            (
+                PackageManagerType::Pnpm,
+                "12.0.0",
+                get_pnpm_platform_package_name().unwrap().to_owned(),
+                vec![if cfg!(windows) { "package/pnpm.exe" } else { "package/pnpm" }],
+            ),
+        ] {
+            let vp_home = create_temp_dir();
+            let server = MockServer::start();
+            server.mock(|when, then| {
+                when.method(GET).path(format!("/{package}/{version}"));
+                then.status(200).json_body(serde_json::json!({"dist": {}}));
+            });
+            let basename = package.rsplit('/').next().unwrap();
+            let tarball = create_tgz(
+                &entries
+                    .iter()
+                    .map(|path| (*path, b"mock executable".as_slice()))
+                    .collect::<Vec<_>>(),
+            );
+            server.mock(|when, then| {
+                when.method(GET).path(format!("/{package}/-/{basename}-{version}.tgz"));
+                then.status(200).body(tarball);
+            });
+
+            EnvConfig::with_vars_async(
+                [
+                    (env_vars::VP_HOME, vp_home.path().as_os_str()),
+                    (env_vars::NPM_CONFIG_REGISTRY, std::ffi::OsStr::new(&server.base_url())),
+                ],
+                |_| async {
+                    let install_dir = package_manager_install_dir(kind, version).unwrap();
+                    let target_dir = install_dir.parent().unwrap();
+                    let mut install = Box::pin(download_package_manager(kind, version, None));
+                    let mut incomplete = Vec::new();
+                    // Inspect at async suspension points, as a lock-free cache reader could.
+                    std::future::poll_fn(|cx| {
+                        let result = install.as_mut().poll(cx);
+                        if target_dir.as_path().exists() {
+                            for name in kind.bin_names() {
+                                for extension in ["", ".cmd", ".ps1"] {
+                                    let path =
+                                        install_dir.join("bin").join(format!("{name}{extension}"));
+                                    if fs::read(&path).map_or(true, |bytes| bytes.is_empty()) {
+                                        incomplete.push(path.clone());
+                                    }
+                                    #[cfg(unix)]
+                                    if extension.is_empty() {
+                                        use std::os::unix::fs::PermissionsExt;
+                                        if fs::metadata(&path).map_or(true, |meta| {
+                                            meta.permissions().mode() & 0o111 == 0
+                                        }) {
+                                            incomplete.push(path);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        result
+                    })
+                    .await
+                    .unwrap();
+                    assert!(
+                        incomplete.is_empty(),
+                        "{kind} published unfinished shims: {incomplete:?}"
+                    );
+                },
+            )
+            .await;
+        }
     }
 
     #[tokio::test]

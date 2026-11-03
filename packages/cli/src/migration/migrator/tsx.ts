@@ -6,7 +6,11 @@ import { styleText } from 'node:util';
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { parse as parseJsonc } from 'jsonc-parser';
 
-import { type LiteralCommandToken, parseLiteralCommands } from '../../../binding/index.js';
+import {
+  type LiteralCommandToken,
+  parseLiteralCommands,
+  parseSync,
+} from '../../../binding/index.js';
 import { type WorkspacePackage } from '../../types/index.ts';
 import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
 import { readNearestPackageJson } from '../../utils/package.ts';
@@ -103,6 +107,15 @@ const TSX_CODE_REFERENCE = new RegExp(
       .source,
   ].join('|'),
 );
+// JSDoc types in JavaScript can depend on tsx's declarations without a runtime import.
+const JSDOC_TYPE_TAG =
+  /(?:^|\s)@(arg|argument|augments|enum|extends|implements|import|param|prop|property|return|returns|satisfies|template|this|type|typedef)\b\s*/g;
+const JSDOC_PARAMETER_NAME = /^[^\s{[=]+(?:\[\])?(?:\.[^\s{[=]+)*/;
+const JSDOC_TEMPLATE_PARAMETER_NAME =
+  /^(?:(?:in|out|const)\s+)*[$\p{ID_Start}][$\u200C\u200D\p{ID_Continue}]*/u;
+const TSX_IMPORT_TYPE = /\bimport\s*\(\s*(['"])tsx(?:\/[^'"]*)?\1\s*(?:,|\))/;
+const TSX_JSDOC_IMPORT =
+  /^(?:[^\s{},]+\s*,\s*)?(?:\{[^}]*\}|\*\s+as\s+[^\s{},]+|[^\s{},]+)\s+from\s*(['"])tsx(?:\/[^'"]*)?\1/;
 // In shell scripts, CI workflows, and git hooks: tsx in command position, with or
 // without arguments, or a loader flag.
 const TSX_TEXT_REFERENCE = new RegExp(
@@ -803,7 +816,119 @@ function findTsxUse(dir: string): string | undefined {
   return found;
 }
 
-/** Whether `file` runs, imports, or loads tsx. */
+/** Whether a JSDoc type annotation or import tag needs tsx's declarations. */
+function jsdocUsesTsx(value: string): boolean {
+  if (!value.startsWith('*')) {
+    return false;
+  }
+  const text = value
+    .replaceAll(/^\s*\* ?/gm, '')
+    .replaceAll(/```[\s\S]*?(?:```|$)|~~~[\s\S]*?(?:~~~|$)/g, '');
+  for (const match of text.matchAll(JSDOC_TYPE_TAG)) {
+    const [tag, name] = match;
+    if (jsdocTagUsesTsx(name, text.slice(match.index + tag.length))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function jsdocTagUsesTsx(name: string, body: string): boolean {
+  if (name === 'import') {
+    return TSX_JSDOC_IMPORT.test(body);
+  }
+  // Parameter and property types can follow the name, including an optional
+  // name with a default value. Defaults themselves are not type expressions.
+  if (/^(?:arg|argument|param|prop|property)$/.test(name) && !body.startsWith('{')) {
+    const end = body.startsWith('[')
+      ? jsdocDelimitedEnd(body)
+      : JSDOC_PARAMETER_NAME.exec(body)?.[0].length;
+    if (end === undefined) {
+      return false;
+    }
+    body = body.slice(end).trimStart();
+  }
+  if (body.startsWith('{')) {
+    const end = jsdocDelimitedEnd(body);
+    if (end === undefined) {
+      return false;
+    }
+    if (TSX_IMPORT_TYPE.test(body.slice(0, end))) {
+      return true;
+    }
+    body = body.slice(end).trimStart();
+  } else if (/^(?:type|this|enum|augments|extends|implements)$/.test(name)) {
+    return jsdocUnbracedTypeUsesTsx(body);
+  }
+  if (name !== 'template') {
+    return false;
+  }
+  // A constraint is followed by a comma-separated list of required names and
+  // bracketed defaults. Stop at the first description, not the first name.
+  while (body) {
+    const hasDefault = body.startsWith('[');
+    const end = hasDefault
+      ? jsdocDelimitedEnd(body)
+      : JSDOC_TEMPLATE_PARAMETER_NAME.exec(body)?.[0].length;
+    if (end === undefined) {
+      return false;
+    }
+    if (hasDefault && TSX_IMPORT_TYPE.test(body.slice(0, end))) {
+      return true;
+    }
+    body = body.slice(end).trimStart();
+    if (!body.startsWith(',')) {
+      return false;
+    }
+    body = body.slice(1).trimStart();
+  }
+  return false;
+}
+
+/** End of a braced type or bracketed name/default, excluding trailing prose. */
+function jsdocDelimitedEnd(body: string): number | undefined {
+  const open = body[0];
+  const close = open === '{' ? '}' : ']';
+  let depth = 0;
+  // Quoted types and defaults can contain braces or brackets.
+  for (const token of body.matchAll(
+    /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|[{}[\]]/g,
+  )) {
+    if (token[0] === open) {
+      depth++;
+    } else if (token[0] === close && --depth === 0) {
+      return token.index + 1;
+    }
+  }
+  return undefined;
+}
+
+/** Find the complete unbraced type before a tag's description or the next tag. */
+function jsdocUnbracedTypeUsesTsx(body: string): boolean {
+  if (!TSX_IMPORT_TYPE.test(body)) {
+    return false;
+  }
+  // Wrapping the candidate in parentheses requires exactly one type. Try the
+  // longest prefix first so unions and types with spaces are not cut short.
+  const boundaries = Array.from(body.matchAll(/\s+|$/g)).toReversed();
+  for (const boundary of boundaries) {
+    const type = body.slice(0, boundary.index);
+    if (parseSync('jsdoc.ts', `type T = (${type});`).errors.length > 0) {
+      continue;
+    }
+    if (TSX_IMPORT_TYPE.test(type)) {
+      return true;
+    }
+    // An unsupported JSDoc type can follow a valid prefix, for example
+    // `null | function(import('tsx/esm/api').RegisterOptions): void`.
+    const rest = body.slice(boundary.index).trimStart();
+    return /^(?:[|&<.([?!:]|extends\b|is\b)/.test(rest) && TSX_IMPORT_TYPE.test(rest);
+  }
+  // Keep the dependency for JSDoc-only syntax that the TS parser cannot read.
+  return true;
+}
+
+/** Whether `file` runs, imports, loads, or imports types from tsx. */
 function fileUsesTsx(content: string, file: string): boolean {
   if (TSX_SHEBANG.test(content)) {
     return true;
@@ -820,11 +945,36 @@ function fileUsesTsx(content: string, file: string): boolean {
   if (extension === '.json' || extension === '.jsonc') {
     return jsonUsesTsx(parseJsonc(content), false);
   }
-  if (CODE_EXTENSIONS.has(extension)) {
+  if (!CODE_EXTENSIONS.has(extension)) {
+    // An extensionless file can be JavaScript, such as an executable, as well as shell.
+    return (
+      TSX_TEXT_REFERENCE.test(content) || (extension === '' && TSX_CODE_REFERENCE.test(content))
+    );
+  }
+  // Only parse files with a possible reference. Regex-based comment stripping can
+  // mistake a regex literal for a comment and hide a real import of tsx.
+  if (!content.includes('tsx')) {
+    return false;
+  }
+  // Framework components need their own parsers. Keep the conservative text scan.
+  if (!SCRIPT_EXTENSIONS.includes(extension)) {
     return TSX_CODE_REFERENCE.test(content);
   }
-  // An extensionless file can be JavaScript, such as an executable, as well as shell.
-  return TSX_TEXT_REFERENCE.test(content) || (extension === '' && TSX_CODE_REFERENCE.test(content));
+  const parsed = parseSync(file, content);
+  if (parsed.errors.length > 0) {
+    return TSX_CODE_REFERENCE.test(content);
+  }
+  const isJavaScript = /\.(?:[cm]?js|jsx)$/.test(file);
+  let codeWithoutComments = '';
+  let offset = 0;
+  for (const comment of parsed.comments) {
+    if (isJavaScript && comment.type === 'Block' && jsdocUsesTsx(comment.value)) {
+      return true;
+    }
+    codeWithoutComments += `${content.slice(offset, comment.start)} `;
+    offset = comment.end;
+  }
+  return TSX_CODE_REFERENCE.test(codeWithoutComments + content.slice(offset));
 }
 
 /**

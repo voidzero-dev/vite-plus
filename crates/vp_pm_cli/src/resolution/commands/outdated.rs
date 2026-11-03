@@ -60,35 +60,35 @@ pub struct OutdatedArgs {
     pub(crate) format: Option<OutdatedFormat>,
 
     /// Check recursively across all workspaces
-    #[arg(short = 'r', long, not_supported(yarn))]
+    #[arg(short = 'r', long, conflicts_with = "global", not_supported(npm < "7.14.0", yarn))]
     pub(crate) recursive: bool,
 
     /// Filter packages in monorepo
-    #[arg(long, value_name = "PATTERN", not_supported(npm < "7.14.0", yarn))]
+    #[arg(long, value_name = "PATTERN", conflicts_with = "global", not_supported(npm < "7.14.0", yarn))]
     pub(crate) filter: Vec<String>,
 
     /// Include workspace root
-    #[arg(short = 'w', long, not_supported(npm < "8.1.0", yarn, bun))]
+    #[arg(short = 'w', long, conflicts_with = "global", not_supported(npm < "8.1.0", yarn, bun))]
     pub(crate) workspace_root: bool,
 
     /// Only production and optional dependencies
-    #[arg(short = 'P', long, not_supported(yarn))]
+    #[arg(short = 'P', long, conflicts_with = "global", not_supported(npm < "7", yarn))]
     pub(crate) prod: bool,
 
     /// Include dev dependencies
-    #[arg(short = 'D', long, not_supported(yarn, bun))]
+    #[arg(short = 'D', long, conflicts_with = "global", not_supported(yarn, bun))]
     pub(crate) dev: bool,
 
     /// Exclude optional dependencies
-    #[arg(long, not_supported(yarn))]
+    #[arg(long, conflicts_with = "global", not_supported(npm < "7", yarn))]
     pub(crate) no_optional: bool,
 
     /// Only show compatible versions
-    #[arg(long, not_supported(npm, yarn, bun))]
+    #[arg(long, conflicts_with = "global", not_supported(npm, yarn, bun))]
     pub(crate) compatible: bool,
 
     /// Sort results by field
-    #[arg(long, value_name = "FIELD", not_supported(npm, yarn, bun))]
+    #[arg(long, value_name = "FIELD", conflicts_with = "global", not_supported(npm, yarn, bun))]
     pub(crate) sort_by: Option<String>,
 
     /// Check globally installed packages
@@ -107,7 +107,7 @@ pub struct OutdatedArgs {
 impl Resolve<OutdatedArgs> for Pnpm {
     fn resolve(&self, args: &OutdatedArgs, _diag: &mut Diagnostics) -> CommandResolution {
         if args.global {
-            return Npm::resolve_outdated(args);
+            return Npm::unknown_version().resolve_outdated(args);
         }
 
         let mut cmd = CommandBuilder::new("pnpm");
@@ -130,7 +130,7 @@ impl Resolve<OutdatedArgs> for Pnpm {
 }
 
 impl Npm {
-    fn resolve_outdated(args: &OutdatedArgs) -> CommandResolution {
+    fn resolve_outdated(&self, args: &OutdatedArgs) -> CommandResolution {
         let mut cmd = CommandBuilder::new("npm");
         cmd.arg("outdated");
         match args.format {
@@ -145,10 +145,13 @@ impl Npm {
         cmd.arg_if("--long", args.long)
             .repeated("--workspace", args.filter.iter())
             .arg_if("--include-workspace-root", args.workspace_root)
-            .arg_if("--all", args.recursive)
+            .arg_if("--workspaces", args.recursive && !args.workspace_root)
             .extend(args.packages.iter());
         cmd.arg_if("--omit=dev", args.prod)
-            .arg_if("--include=dev", args.dev)
+            .arg_if(
+                if self.supports_v7_commands() { "--include=dev" } else { "--also=dev" },
+                args.dev,
+            )
             .arg_if("--omit=optional", args.no_optional)
             .extend(args.pass_through_args.iter());
         if args.global {
@@ -160,14 +163,14 @@ impl Npm {
 
 impl Resolve<OutdatedArgs> for Npm {
     fn resolve(&self, args: &OutdatedArgs, _diag: &mut Diagnostics) -> CommandResolution {
-        Self::resolve_outdated(args)
+        self.resolve_outdated(args)
     }
 }
 
 impl Resolve<OutdatedArgs> for Yarn {
     fn resolve(&self, args: &OutdatedArgs, diag: &mut Diagnostics) -> CommandResolution {
         if args.global {
-            return Npm::resolve_outdated(args);
+            return Npm::unknown_version().resolve_outdated(args);
         }
 
         if self.is_berry() {
@@ -201,7 +204,7 @@ impl Resolve<OutdatedArgs> for Yarn {
 impl Resolve<OutdatedArgs> for Bun {
     fn resolve(&self, args: &OutdatedArgs, _diag: &mut Diagnostics) -> CommandResolution {
         if args.global {
-            return Npm::resolve_outdated(args);
+            return Npm::unknown_version().resolve_outdated(args);
         }
 
         let mut cmd = CommandBuilder::new("bun");
@@ -230,6 +233,39 @@ mod tests {
         OutdatedArgs {
             packages: packages.iter().map(ToString::to_string).collect(),
             ..Default::default()
+        }
+    }
+
+    #[test]
+    fn npm_dependency_filter_version_boundaries() {
+        for (dialect, flag) in [
+            (npm("6.14.18"), "--also=dev"),
+            (npm("7.0.0"), "--include=dev"),
+            (Npm::unknown_version(), "--include=dev"),
+        ] {
+            let args = parse_args::<OutdatedArgs>(["-D", "react", "--", "--json"]).unwrap();
+            let resolution = resolve(&dialect, args);
+            assert!(resolution.diagnostics.is_empty());
+            assert_eq!(expect_run(resolution.outcome).args, ["outdated", "react", flag, "--json"]);
+        }
+
+        let args = parse_args::<OutdatedArgs>(["-r", "-P", "--no-optional"]).unwrap();
+        expect_unsupported(
+            resolve(&npm("6.14.18"), args),
+            &[
+                "npm < 7.14.0 does not support --recursive.",
+                "npm < 7 does not support --prod.",
+                "npm < 7 does not support --no-optional.",
+            ],
+        );
+        for dialect in [npm("7.14.0"), Npm::unknown_version()] {
+            let args = parse_args::<OutdatedArgs>(["-r", "-P", "--no-optional"]).unwrap();
+            let resolution = resolve(&dialect, args);
+            assert!(resolution.diagnostics.is_empty());
+            assert_eq!(
+                expect_run(resolution.outcome).args,
+                ["outdated", "--workspaces", "--omit=dev", "--omit=optional"]
+            );
         }
     }
 
@@ -366,12 +402,37 @@ mod tests {
 
     #[test]
     fn test_npm_outdated_recursive() {
-        let command = expect_run(
-            resolve(&npm("11.0.0"), OutdatedArgs { recursive: true, ..Default::default() }).outcome,
-        );
+        for version in ["7.14.0", "10.8.0", "11.0.0"] {
+            let args = parse_args::<OutdatedArgs>(["-r"]).unwrap();
+            let command = expect_run(resolve(&npm(version), args).outcome);
 
-        assert_eq!(command.program, "npm");
-        assert_eq!(command.args, vec!["outdated", "--all"]);
+            assert_eq!(command.program, "npm");
+            assert_eq!(command.args, vec!["outdated", "--workspaces"]);
+        }
+    }
+
+    #[test]
+    fn npm_outdated_recursive_rejects_unsupported_versions() {
+        for version in ["6.14.18", "7.13.0"] {
+            let args = parse_args::<OutdatedArgs>(["-r"]).unwrap();
+            expect_unsupported(
+                resolve(&npm(version), args),
+                &["npm < 7.14.0 does not support --recursive."],
+            );
+        }
+    }
+
+    #[test]
+    fn npm_outdated_recursive_preserves_workspace_options() {
+        for (flags, expected) in [
+            (vec!["-r", "-w"], vec!["outdated", "--include-workspace-root"]),
+            (vec!["-r", "--filter", "app"], vec!["outdated", "--workspace", "app", "--workspaces"]),
+        ] {
+            let args = parse_args::<OutdatedArgs>(flags).unwrap();
+            let command = expect_run(resolve(&npm("11.0.0"), args).outcome);
+
+            assert_eq!(command.args, expected);
+        }
     }
 
     #[test]

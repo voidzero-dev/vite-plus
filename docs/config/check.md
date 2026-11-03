@@ -2,6 +2,8 @@
 
 `vp check` runs format, lint, and type checks together. The `check` block in `vite.config.ts` sets defaults for the composite command, mirroring the `--no-fmt` and `--no-lint` CLI flags.
 
+See [Check usage](/guide/check#usage) for the execution order and how to skip formatting after a failure.
+
 This is useful when a project wants to keep most of the toolchain but skip one step by default. For example, a team that lints but does not format can disable `check.fmt` so a plain `vp check` (the command agents and contributors run most) only lints, without anyone needing to remember `--no-fmt`.
 
 ## Example

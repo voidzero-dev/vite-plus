@@ -41,6 +41,8 @@ test.each([false, true])(
       mkdirSync(dirname(join(tempDir, file)), { recursive: true });
       copyFileSync(join(root, file), join(tempDir, file));
     }
+    const nodeVersionPath = join(tempDir, '.node-version');
+    writeFileSync(nodeVersionPath, '24.9.0\n');
     const workspacePath = join(tempDir, 'pnpm-workspace.yaml');
     writeFileSync(
       workspacePath,
@@ -58,6 +60,14 @@ test.each([false, true])(
       readFileSync(join(tempDir, 'packages/tools/.upstream-versions.json'), 'utf8'),
     )['oxc-node'].hash;
     vi.stubGlobal('fetch', async (url: string) => {
+      if (url === 'https://nodejs.org/dist/index.json') {
+        return Response.json([
+          { version: 'v26.13.0', lts: 'Lithium' },
+          { version: 'v24.9.0', lts: 'Krypton' },
+          { version: 'v24.11.0-rc.1', lts: false },
+          { version: 'v24.10.2', lts: 'Krypton' },
+        ]);
+      }
       if (url.startsWith('https://api.github.com/repos/oxc-project/oxc-node/compare/')) {
         expect(url).toContain(`/compare/${pinnedOxcNode}...`);
         return Response.json({ status: failInstall ? 'diverged' : 'ahead' });
@@ -133,7 +143,9 @@ test.each([false, true])(
     expect(readFileSync(workspacePath, 'utf8')).toContain("\n  '@oxlint/plugins': =1.88.0\n");
     expect(readFileSync(workspacePath, 'utf8')).toContain('\n  oxlint: =1.88.0\n');
     expect(readFileSync(workspacePath, 'utf8')).toContain('\n  oxlint-tsgolint: =7.0.2004\n');
+    expect(readFileSync(nodeVersionPath, 'utf8')).toBe('24.10.2\n');
     const versions = JSON.parse(readFileSync(join(metaDir, 'versions.json'), 'utf8'));
+    expect(versions['Node.js']).toEqual({ old: '24.9.0', new: '24.10.2' });
     expect(versions['lint-staged']).toEqual({ old: '16.2.6', new: '17.5.1' });
     expect(versions['@oxlint/plugins'].new).toBe('1.88.0');
     expect(versions['@oxlint/plugins'].new).toBe(versions.oxlint.new);

@@ -758,12 +758,15 @@ mod tests {
         let provider = NodeProvider::new();
         let platform = Platform { os: Os::Linux, arch: Arch::X64 };
 
-        // VP_NODE_DIST_MIRROR is left unset, so this exercises the
+        // Clear VP_NODE_DIST_MIRROR so this exercises the
         // official (default) source where signature verification is required.
-        let info =
-            vp_shared::EnvConfig::with_vars([(env_vars::VP_HOME, std::env::temp_dir())], |_| {
-                provider.get_download_info("22.13.1", platform)
-            });
+        let info = vp_shared::EnvConfig::with_vars(
+            [
+                (env_vars::VP_HOME, Some(std::env::temp_dir().as_os_str())),
+                (env_vars::VP_NODE_DIST_MIRROR, None),
+            ],
+            |_| provider.get_download_info("22.13.1", platform),
+        );
 
         #[cfg(not(target_env = "musl"))]
         {
@@ -954,9 +957,13 @@ fedcba987654  node-v22.13.1-win-x64.zip";
 
     #[test]
     fn test_get_dist_url_default() {
-        vp_shared::EnvConfig::with_vars([(env_vars::VP_HOME, std::env::temp_dir())], |_| {
-            assert_eq!(get_dist_url(), DEFAULT_NODE_DIST_URL)
-        });
+        vp_shared::EnvConfig::with_vars(
+            [
+                (env_vars::VP_HOME, Some(std::env::temp_dir().as_os_str())),
+                (env_vars::VP_NODE_DIST_MIRROR, None),
+            ],
+            |_| assert_eq!(get_dist_url(), DEFAULT_NODE_DIST_URL),
+        );
     }
 
     #[test]

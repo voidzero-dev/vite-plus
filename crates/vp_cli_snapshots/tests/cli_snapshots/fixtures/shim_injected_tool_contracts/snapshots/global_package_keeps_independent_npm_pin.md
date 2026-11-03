@@ -6,7 +6,7 @@
 ## `vp env on npm`
 
 
-## `vp install -g --node 22.18.0 ./runtime-probe`
+## `vp install -g --node 22.23.4 ./runtime-probe`
 
 
 ## `npx --version`

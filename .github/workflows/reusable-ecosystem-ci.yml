@@ -22,6 +22,9 @@ defaults:
   run:
     shell: bash
 
+env:
+  VP_NODE_DIST_MIRROR: ${{ vars.VP_NODE_DIST_MIRROR || 'https://nodejs.org/dist' }}
+
 jobs:
   build:
     name: Build vite-plus packages (${{ inputs.build-runner || inputs.runner }})
@@ -111,6 +114,10 @@ jobs:
       # Avoid Windows dynamic port reservations around the default 63315.
       # https://github.com/vitest-dev/vitest/issues/9035
       ECOSYSTEM_VITEST_PORT: '7357'
+      # Without a project pin, vp runs project commands on the latest LTS.
+      # `node-version` only selects the bootstrap Node.js for actions/setup-node.
+      # vp ignores an empty value.
+      VP_NODE_VERSION: ${{ matrix.project.vp-node-version || '' }}
     permissions:
       contents: read
       packages: read
@@ -248,6 +255,8 @@ jobs:
               vp test
           - name: vinext
             node-version: 24
+            # better-sqlite3 12.6.2 does not compile against the Node 26 headers.
+            vp-node-version: 24.22.1
             # The full vinext suite (~7000 tests) outgrew a 15-minute budget
             # on 4-core runners, so run one shard of the unit project here;
             # the rest of the suite is covered by vinext's own CI.
@@ -372,11 +381,15 @@ jobs:
               vp test run --project browser --browser.name=chrome --api.port="$ECOSYSTEM_VITEST_PORT"
           - name: sqlocal
             node-version: 24
+            # The WebDriverIO provider cannot connect to Chrome on Node 26 (see #3266).
+            vp-node-version: 24.22.1
             command: |
               # OPFS setup can exceed the upstream 1-second hook timeout on CI.
               vp test run --browser.name=chrome --hookTimeout=5000 --api.port="$ECOSYSTEM_VITEST_PORT"
           - name: brazilian-utils
             node-version: 24
+            # The WebDriverIO provider cannot connect to Chrome on Node 26 (see #3266).
+            vp-node-version: 24.22.1
             command: |
               vp test run --browser.enabled --browser.name=chrome --browser.headless --api.port="$ECOSYSTEM_VITEST_PORT"
           - name: solid-vite-plugin

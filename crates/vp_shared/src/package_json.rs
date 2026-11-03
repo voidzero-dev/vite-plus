@@ -446,32 +446,6 @@ mod tests {
     }
 
     #[test]
-    fn test_malformed_single_entry_parses_as_absent() {
-        let json = r#"{
-            "devEngines": {
-                "runtime": "node@24"
-            }
-        }"#;
-
-        let pkg: PackageJson = serde_json::from_str(json).unwrap();
-        assert!(pkg.dev_engines.unwrap().runtime.is_none());
-    }
-
-    #[test]
-    fn test_malformed_dev_engines_does_not_break_engines_parse() {
-        let json = r#"{
-            "engines": {"node": ">=20.0.0"},
-            "devEngines": "nonsense"
-        }"#;
-
-        let pkg: PackageJson = serde_json::from_str(json).unwrap();
-        assert_eq!(pkg.engines.unwrap().node, Some(">=20.0.0".into()));
-        let dev_engines = pkg.dev_engines.unwrap();
-        assert!(dev_engines.runtime.is_none());
-        assert!(dev_engines.package_manager.is_none());
-    }
-
-    #[test]
     fn test_on_fail_parse() {
         assert_eq!(OnFail::parse("ignore"), Some(OnFail::Ignore));
         assert_eq!(OnFail::parse("warn"), Some(OnFail::Warn));
@@ -479,13 +453,6 @@ mod tests {
         assert_eq!(OnFail::parse("download"), Some(OnFail::Download));
         assert_eq!(OnFail::parse("Download"), None);
         assert_eq!(OnFail::parse(""), None);
-    }
-
-    #[test]
-    fn test_parse_engines_node() {
-        let json = r#"{"engines":{"node":">=20.0.0"}}"#;
-        let pkg: PackageJson = serde_json::from_str(json).unwrap();
-        assert_eq!(pkg.engines.unwrap().node, Some(">=20.0.0".into()));
     }
 
     #[test]

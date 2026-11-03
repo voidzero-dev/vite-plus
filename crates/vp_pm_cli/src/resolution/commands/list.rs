@@ -11,7 +11,7 @@ pub struct ListArgs {
     pub(crate) pattern: Option<String>,
 
     /// Maximum depth of dependency tree
-    #[arg(long, not_supported(yarn >= "2", bun))]
+    #[arg(long, conflicts_with = "global", not_supported(yarn >= "2", bun))]
     pub(crate) depth: Option<u32>,
 
     /// Output in JSON format
@@ -19,43 +19,43 @@ pub struct ListArgs {
     pub(crate) json: bool,
 
     /// Show extended information
-    #[arg(long, not_supported(yarn, bun))]
+    #[arg(long, conflicts_with = "global", not_supported(yarn, bun))]
     pub(crate) long: bool,
 
     /// Parseable output format
-    #[arg(long, not_supported(yarn, bun))]
+    #[arg(long, conflicts_with = "global", not_supported(yarn, bun))]
     pub(crate) parseable: bool,
 
     /// Only production dependencies
-    #[arg(short = 'P', long, not_supported(yarn >= "2", bun))]
+    #[arg(short = 'P', long, conflicts_with = "global", not_supported(yarn >= "2", bun))]
     pub(crate) prod: bool,
 
     /// Include dev dependencies
-    #[arg(short = 'D', long, not_supported(yarn >= "2", bun))]
+    #[arg(short = 'D', long, conflicts_with = "global", not_supported(yarn >= "2", bun))]
     pub(crate) dev: bool,
 
     /// Exclude optional dependencies
-    #[arg(long, not_supported(yarn, bun))]
+    #[arg(long, conflicts_with = "global", not_supported(npm < "7", yarn, bun))]
     pub(crate) no_optional: bool,
 
     /// Exclude peer dependencies
-    #[arg(long, not_supported(yarn, bun))]
+    #[arg(long, conflicts_with = "global", not_supported(npm < "7", yarn, bun))]
     pub(crate) exclude_peers: bool,
 
     /// Show only project packages
-    #[arg(long, not_supported(npm, yarn, bun))]
+    #[arg(long, conflicts_with = "global", not_supported(npm, yarn, bun))]
     pub(crate) only_projects: bool,
 
     /// Use a finder function
-    #[arg(long, value_name = "FINDER_NAME", not_supported(npm, pnpm < "10.16.0", yarn, bun))]
+    #[arg(long, value_name = "FINDER_NAME", conflicts_with = "global", not_supported(npm, pnpm < "10.16.0", yarn, bun))]
     pub(crate) find_by: Option<String>,
 
     /// List across all workspaces
-    #[arg(short = 'r', long, not_supported(npm < "7.14.0", yarn, bun))]
+    #[arg(short = 'r', long, conflicts_with = "global", not_supported(npm < "7.14.0", yarn, bun))]
     pub(crate) recursive: bool,
 
     /// Filter packages in monorepo
-    #[arg(long, value_name = "PATTERN", not_supported(npm < "7.14.0", yarn, bun))]
+    #[arg(long, value_name = "PATTERN", conflicts_with = "global", not_supported(npm < "7.14.0", yarn, bun))]
     pub(crate) filter: Vec<String>,
 
     /// List global packages
@@ -70,7 +70,7 @@ pub struct ListArgs {
 impl Resolve<ListArgs> for Pnpm {
     fn resolve(&self, args: &ListArgs, _diag: &mut Diagnostics) -> CommandResolution {
         if args.global {
-            return Npm::resolve_list(args);
+            return Npm::unknown_version().resolve_list(args);
         }
 
         let mut cmd = CommandBuilder::new("pnpm");
@@ -94,7 +94,7 @@ impl Resolve<ListArgs> for Pnpm {
 }
 
 impl Npm {
-    fn resolve_list(args: &ListArgs) -> CommandResolution {
+    fn resolve_list(&self, args: &ListArgs) -> CommandResolution {
         let mut cmd = CommandBuilder::new("npm");
         cmd.arg("list");
         if let Some(pattern) = &args.pattern {
@@ -103,10 +103,18 @@ impl Npm {
         cmd.option("--depth", args.depth).arg_if("--json", args.json);
         cmd.arg_if("--long", args.long).arg_if("--parseable", args.parseable);
         if args.prod {
-            cmd.arg("--omit").arg("dev");
+            if self.supports_v7_commands() {
+                cmd.arg("--omit").arg("dev");
+            } else {
+                cmd.arg("--production");
+            }
         }
         if args.dev {
-            cmd.arg("--include").arg("dev");
+            if self.supports_v7_commands() {
+                cmd.arg("--include").arg("dev");
+            } else {
+                cmd.arg("--production=false");
+            }
         }
         if args.no_optional {
             cmd.arg("--omit").arg("optional");
@@ -125,7 +133,7 @@ impl Npm {
 
 impl Resolve<ListArgs> for Npm {
     fn resolve(&self, args: &ListArgs, _diag: &mut Diagnostics) -> CommandResolution {
-        Self::resolve_list(args)
+        self.resolve_list(args)
     }
 }
 
@@ -140,7 +148,7 @@ impl Resolve<ListArgs> for Yarn {
         }
 
         if args.global {
-            return Npm::resolve_list(args);
+            return Npm::unknown_version().resolve_list(args);
         }
 
         let mut cmd = CommandBuilder::new("yarn");
@@ -160,7 +168,7 @@ impl Resolve<ListArgs> for Yarn {
 impl Resolve<ListArgs> for Bun {
     fn resolve(&self, args: &ListArgs, _diag: &mut Diagnostics) -> CommandResolution {
         if args.global {
-            return Npm::resolve_list(args);
+            return Npm::unknown_version().resolve_list(args);
         }
 
         let mut cmd = CommandBuilder::new("bun");
@@ -182,12 +190,17 @@ mod tests {
     };
 
     #[test]
-    fn test_parser_accepts_short_dev_and_global_flags() {
-        let args = parse_args::<ListArgs>(["react", "-D", "-g"]).unwrap();
-
+    fn test_parser_accepts_short_dev_and_global_flags_separately() {
+        let args = parse_args::<ListArgs>(["react", "-D"]).unwrap();
         assert_eq!(args.pattern, Some("react".to_string()));
         assert!(args.dev);
+
+        let args = parse_args::<ListArgs>(["react", "-g"]).unwrap();
+        assert_eq!(args.pattern, Some("react".to_string()));
         assert!(args.global);
+
+        let error = parse_args::<ListArgs>(["react", "-D", "-g"]).unwrap_err();
+        assert_eq!(error.kind(), clap::error::ErrorKind::ArgumentConflict);
     }
 
     #[test]
@@ -435,10 +448,50 @@ mod tests {
     }
 
     #[test]
-    fn test_npm_list_dev_includes_dev_dependencies() {
-        let args = parse_args::<ListArgs>(["--dev", "--json"]).unwrap();
-        let command = expect_run(resolve(&npm("11.16.0"), args).outcome);
-        assert_eq!(command.args, vec!["list", "--json", "--include", "dev"]);
+    fn npm_dependency_filter_version_boundaries() {
+        for version in ["6.14.18", "7.0.0", "11.16.0"] {
+            let args = parse_args::<ListArgs>(["--dev", "--json"]).unwrap();
+            let resolution = resolve(&npm(version), args);
+            assert!(resolution.diagnostics.is_empty());
+            let expected = if version == "6.14.18" {
+                vec!["list", "--json", "--production=false"]
+            } else {
+                vec!["list", "--json", "--include", "dev"]
+            };
+            assert_eq!(expect_run(resolution.outcome).args, expected);
+
+            let args = parse_args::<ListArgs>(["-P", "--no-optional", "--exclude-peers"]).unwrap();
+            let resolution = resolve(&npm(version), args);
+            if version == "6.14.18" {
+                expect_unsupported(
+                    resolution,
+                    &[
+                        "npm < 7 does not support --no-optional.",
+                        "npm < 7 does not support --exclude-peers.",
+                    ],
+                );
+            } else {
+                assert!(resolution.diagnostics.is_empty());
+                assert_eq!(
+                    expect_run(resolution.outcome).args,
+                    ["list", "--omit", "dev", "--omit", "optional", "--omit", "peer"]
+                );
+            }
+        }
+        for (dialect, flags) in [
+            (npm("6.14.18"), vec!["--production"]),
+            (npm("7.0.0"), vec!["--omit", "dev"]),
+            (Npm::unknown_version(), vec!["--omit", "dev"]),
+        ] {
+            let args = parse_args::<ListArgs>(["-P"]).unwrap();
+            let resolution = resolve(&dialect, args);
+            assert!(resolution.diagnostics.is_empty());
+            assert_eq!(expect_run(resolution.outcome).args, [vec!["list"], flags].concat());
+        }
+        let args = parse_args::<ListArgs>(["--", "--omit", "peer"]).unwrap();
+        let resolution = resolve(&npm("6.14.18"), args);
+        assert!(resolution.diagnostics.is_empty());
+        assert_eq!(expect_run(resolution.outcome).args, ["list", "--omit", "peer"]);
     }
 
     #[test]

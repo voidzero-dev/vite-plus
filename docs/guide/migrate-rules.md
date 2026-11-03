@@ -200,7 +200,7 @@ Object-valued nested npm and Bun overrides are preserved: they are user-defined 
 
 `vite` and `vite/*` imports are rewritten to `vite-plus` **only in config entry files**: `vite.config.*`, `vitest.config.*`, and any config file the migration resolved. Every other file keeps its `vite` imports, for two reasons:
 
-- `vite-plus` is not a guaranteed superset of Vite's exposed surface. It owns only `defineConfig`, `defineProject`, and `lazyPlugins`, so rewriting a pass-through symbol such as `createBuilder` or `loadConfigFromFile` (including in `typeof import('vite')` type positions) can break.
+- `vite-plus` is not a guaranteed superset of Vite's exposed surface. It owns only `defineConfig`, `defineProject`, `lazyPlugins`, and `resolveConfigFromFile`, so rewriting a pass-through symbol such as `createBuilder` or `loadConfigFromFile` (including in `typeof import('vite')` type positions) can break.
 - An unrewritten `vite` import still resolves through the `@voidzero-dev/vite-plus-core` alias in a Vite+ project.
 
 Plugin packages (an unscoped name starting with `vite-plugin-` or `unplugin-`, or `vite` in `peerDependencies`/`dependencies`) skip the rewrite even in config files. Only the `vite` specifier is in scope for this rule.

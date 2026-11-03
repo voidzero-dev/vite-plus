@@ -34,15 +34,15 @@ if ($vp_output | is-empty) {
   }
 }
 
-vp env use 20.18.0 --no-install
+vp env use 20.20.2 --no-install
 if ("VP_NODE_VERSION" not-in $env) {
   error make {
     msg: "vp env use did not set VP_NODE_VERSION"
   }
 }
-if $env.VP_NODE_VERSION != "20.18.0" {
+if $env.VP_NODE_VERSION != "20.20.2" {
   error make {
-    msg: $"VP_NODE_VERSION mismatch: expected 20.18.0, got ($env.VP_NODE_VERSION)"
+    msg: $"VP_NODE_VERSION mismatch: expected 20.20.2, got ($env.VP_NODE_VERSION)"
   }
 }
 
@@ -59,9 +59,9 @@ if ("VP_NODE_VERSION" not-in $env) {
     msg: "vp env use without a version did not set VP_NODE_VERSION"
   }
 }
-if $env.VP_NODE_VERSION != "22.18.0" {
+if $env.VP_NODE_VERSION != "22.23.4" {
   error make {
-    msg: $"file-based VP_NODE_VERSION mismatch: expected 22.18.0, got ($env.VP_NODE_VERSION)"
+    msg: $"file-based VP_NODE_VERSION mismatch: expected 22.23.4, got ($env.VP_NODE_VERSION)"
   }
 }
 
