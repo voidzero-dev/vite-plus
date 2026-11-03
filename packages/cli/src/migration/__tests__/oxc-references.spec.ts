@@ -39,7 +39,7 @@ describe('Oxc reference consumers survive recovery', () => {
     return execFileSync(process.execPath, args, { cwd: directory, encoding: 'utf8' }).trim();
   }
 
-  function loadConfig(directory = project) {
+  function loadConfig(directory = project, loader: 'native' | 'bundle' = 'native') {
     // A fresh process gives each consumer its real cwd and avoids module caching.
     return JSON.parse(
       runNode(
@@ -47,7 +47,7 @@ describe('Oxc reference consumers survive recovery', () => {
           '--input-type=module',
           '-e',
           `import { loadConfigFromFile } from ${JSON.stringify(import.meta.resolve('vite'))};
-const loaded = await loadConfigFromFile({ command: 'build', mode: 'test' }, './vite.config.mjs', process.cwd(), 'silent', undefined, 'native');
+const loaded = await loadConfigFromFile({ command: 'build', mode: 'test' }, './vite.config.mjs', process.cwd(), 'silent', undefined, ${JSON.stringify(loader)});
 console.log(JSON.stringify(loaded.config.define));`,
         ],
         directory,
@@ -182,6 +182,7 @@ console.log(JSON.stringify(loaded.config.define));`,
     'node scripts/print-lint-rules.mjs',
     'node --no-warnings scripts/print-lint-rules.mjs',
     'bun scripts/print-lint-rules.mjs',
+    `"${process.execPath}" scripts/print-lint-rules.mjs`,
   ])('follows a script entry module: %s', (script) => {
     write('package.json', {
       name: 'root',
@@ -206,7 +207,7 @@ console.log(JSON.stringify(loaded.config.define));`,
     'pnpm --dir=packages/app exec',
     'pnpm -C packages/app exec',
     'yarn --cwd packages/app exec',
-    'npm --prefix packages/app exec --',
+    'npm --prefix packages/app run format --',
     'bun --cwd packages/app run',
   ])('uses the directory selected by %s', (wrapper) => {
     workspace('app', 'other');
@@ -225,5 +226,133 @@ console.log(JSON.stringify(loaded.config.define));`,
       expect(read()).toBe('80');
       expect(fs.existsSync(path.join(project, 'packages/other/.oxfmtrc.json'))).toBe(false);
     }
+  });
+
+  it.each([
+    'npm --prefix packages/app exec --',
+    'npm exec --prefix=packages/app --',
+    'npx --prefix packages/app --',
+  ])('keeps the caller cwd for %s', (wrapper) => {
+    workspace('app');
+    write('package.json', {
+      name: 'root',
+      type: 'module',
+      scripts: { read: `${wrapper} node scripts/read.mjs -c .oxfmtrc.json` },
+    });
+    write('.oxfmtrc.json', { printWidth: 80 });
+    write('packages/app/.oxfmtrc.json', { printWidth: 100 });
+    write(
+      'scripts/read.mjs',
+      "import { readFileSync } from 'node:fs'; console.log(JSON.parse(readFileSync(process.argv.at(-1), 'utf8')).printWidth);",
+    );
+    expect(runNode(['scripts/read.mjs', '-c', '.oxfmtrc.json'])).toBe('80');
+    for (let run = 0; run < 2; run++) {
+      recover();
+      expect(runNode(['scripts/read.mjs', '-c', '.oxfmtrc.json'])).toBe('80');
+    }
+  });
+
+  it.each(['dynamic directory', 'package import alias'])(
+    'preserves workspace dependencies behind a %s',
+    (kind) => {
+      workspace('app', 'other');
+      packages[0].name = '@repo/app';
+      write('packages/app/package.json', { name: '@repo/app', type: 'module' });
+      write('package.json', {
+        name: 'root',
+        type: 'module',
+        imports: { '#config': './packages/app/helper.mjs' },
+      });
+      write('packages/app/.oxfmtrc.json', { printWidth: 100 });
+      write(
+        'packages/app/helper.mjs',
+        "import fmt from './.oxfmtrc.json' with { type: 'json' }; export default { WIDTH: fmt.printWidth };",
+      );
+      write(
+        'vite.config.mjs',
+        kind === 'dynamic directory'
+          ? "const app = 'app'; const { default: define } = await import(`./packages/${app}/helper.mjs`); export default { define };"
+          : "import define from '#config'; export default { define };",
+      );
+      expect(loadConfig(project, 'bundle')).toEqual({ WIDTH: 100 });
+      for (let run = 0; run < 2; run++) {
+        recover();
+        expect(loadConfig(project, 'bundle')).toEqual({ WIDTH: 100 });
+      }
+    },
+  );
+
+  it.each(['direct', 'transitive', 'sibling'])(
+    'retains possible cwd dependencies after a %s imported directory change',
+    (kind) => {
+      workspace('app');
+      write('.oxfmtrc.json', { printWidth: 80 });
+      write('packages/app/.oxfmtrc.json', { printWidth: 100 });
+      write('change-cwd.mjs', "process.chdir('packages/app');");
+      write('setup.mjs', "import './change-cwd.mjs';");
+      const read =
+        "import { readFileSync } from 'node:fs'; export default { define: { WIDTH: JSON.parse(readFileSync('./.oxfmtrc.json', 'utf8')).printWidth } };";
+      write('read.mjs', read);
+      write(
+        'vite.config.mjs',
+        kind === 'sibling'
+          ? "import './setup.mjs'; import config from './read.mjs'; export default { ...config };"
+          : `import './${kind === 'direct' ? 'change-cwd' : 'setup'}.mjs'; ${read}`,
+      );
+      expect(loadConfig(project, 'bundle')).toEqual({ WIDTH: 100 });
+      for (let run = 0; run < 2; run++) {
+        recover();
+        expect(loadConfig(project, 'bundle')).toEqual({ WIDTH: 100 });
+      }
+    },
+  );
+
+  it.each([
+    'env NODE_ENV=production',
+    'env -i NODE_ENV=production',
+    'env -u UNUSED NODE_ENV=production',
+    'env -- NODE_ENV=production',
+    '/usr/bin/env NODE_ENV=production',
+    'cross-env NODE_ENV=production',
+    'cross-env-shell NODE_ENV=production',
+  ])('follows modules launched with %s', (launcher) => {
+    workspace('app');
+    write('package.json', {
+      name: 'root',
+      type: 'module',
+      scripts: { rules: `${launcher} node scripts/print-lint-rules.mjs` },
+    });
+    write('.oxlintrc.json', { rules: { 'no-console': 'error' } });
+    write('packages/app/.oxfmtrc.json', { printWidth: 100 });
+    write(
+      'scripts/print-lint-rules.mjs',
+      "import lint from '../.oxlintrc.json' with { type: 'json' }; console.log(lint.rules['no-console']);",
+    );
+    const run = () =>
+      process.platform !== 'win32' && launcher.includes('env') && !launcher.startsWith('cross-')
+        ? execFileSync(
+            'env',
+            [...launcher.split(' ').slice(1), process.execPath, 'scripts/print-lint-rules.mjs'],
+            { cwd: project, encoding: 'utf8' },
+          ).trim()
+        : runNode(['scripts/print-lint-rules.mjs']);
+    expect(run()).toBe('error');
+    for (let attempt = 0; attempt < 2; attempt++) {
+      recover();
+      expect(run()).toBe('error');
+      expect(fs.existsSync(path.join(project, 'packages/app/.oxfmtrc.json'))).toBe(false);
+    }
+  });
+
+  it.each([
+    'env -S "node scripts/hidden.mjs"',
+    'cross-env-shell NODE_ENV=production "node scripts/hidden.mjs"',
+    'node missing-entry.mjs',
+  ])('retains possible dependencies when a command cannot be inspected: %s', (script) => {
+    workspace('app');
+    write('package.json', { name: 'root', scripts: { read: script } });
+    write('packages/app/.oxfmtrc.json', { printWidth: 100 });
+    recover();
+    expect(fs.existsSync(path.join(project, 'packages/app/.oxfmtrc.json'))).toBe(true);
   });
 });

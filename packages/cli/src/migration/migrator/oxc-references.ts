@@ -39,16 +39,6 @@ function stringValue(node: t.Node | undefined): string | undefined {
   return undefined;
 }
 
-function pathPrefix(node: t.Node): string | undefined {
-  if (node.type === 'TemplateLiteral') {
-    return node.quasis[0].value.cooked ?? undefined;
-  }
-  if (node.type === 'BinaryExpression' && node.operator === '+') {
-    return pathPrefix(node.left);
-  }
-  return stringValue(node);
-}
-
 function callName(node: t.Node): string | undefined {
   if (node.type === 'Identifier') {
     return node.name;
@@ -157,43 +147,108 @@ function sourceReferences(filename: string, source: string) {
   return { references: [...references.values()], changesDirectory };
 }
 
-function commandContext(words: string[], directory: string | undefined) {
+interface ScriptContext {
+  words: string[];
+  directory: string | undefined;
+  uncertain?: boolean;
+}
+
+function commandDirectory(directory: string | undefined, target: string | undefined) {
+  const resolved = directory && target ? path.resolve(directory, target) : undefined;
+  return resolved && fs.existsSync(resolved) && fs.statSync(resolved).isDirectory()
+    ? fs.realpathSync(resolved)
+    : undefined;
+}
+
+function commandContext(words: string[], directory: string | undefined): ScriptContext {
   let start = words.findIndex((word) => !/^[A-Za-z_]\w*=/.test(word));
   if (start < 0) {
     return { words: [], directory };
   }
-  const manager = words[start];
+  const manager = path.basename(words[start]);
+  if (['env', 'cross-env', 'cross-env-shell'].includes(manager)) {
+    for (start++; start < words.length; start++) {
+      const word = words[start];
+      if (word === '--') {
+        start++;
+        break;
+      }
+      if (word === '-u' || word === '--unset') {
+        start++;
+      } else if (word === '-C' || word === '--chdir') {
+        directory = commandDirectory(directory, words[++start]);
+      } else if (word.startsWith('--chdir=')) {
+        directory = commandDirectory(directory, word.slice('--chdir='.length));
+      } else if (
+        word === '-i' ||
+        word === '--ignore-environment' ||
+        word.startsWith('--unset=') ||
+        /^[A-Za-z_]\w*=/.test(word)
+      ) {
+        continue;
+      } else if (word.startsWith('-') || /\s/.test(word)) {
+        // Split strings and unknown launcher options can hide commands or cwd changes.
+        return { words: words.slice(start), directory: undefined, uncertain: true };
+      } else {
+        break;
+      }
+    }
+    if (/\s/.test(words[start] ?? '')) {
+      return { words: words.slice(start), directory: undefined, uncertain: true };
+    }
+    return commandContext(words.slice(start), directory);
+  }
   if (!['pnpm', 'npm', 'yarn', 'bun', 'npx', 'bunx'].includes(manager)) {
     return { words: words.slice(start), directory };
   }
-  start++;
-  for (; start < words.length; start++) {
+  let prefix = directory;
+  let subcommand: string | undefined;
+  let uncertain = false;
+  for (start++; start < words.length; start++) {
     const word = words[start];
     const flag = word.split('=')[0];
-    if (['--dir', '-C', '--cwd', '--prefix'].includes(flag)) {
-      const target = word.includes('=') ? word.slice(word.indexOf('=') + 1) : words[++start];
-      const resolved = directory && target ? path.resolve(directory, target) : undefined;
-      directory =
-        resolved && fs.existsSync(resolved) && fs.statSync(resolved).isDirectory()
-          ? fs.realpathSync(resolved)
-          : undefined;
-    } else if (['--filter', '--recursive', '-r', '-R'].includes(flag)) {
-      // Recursive/filter commands can execute in several workspace packages.
-      directory = undefined;
-      if (word === '--filter') {
-        start++;
-      }
-    } else if (['exec', 'run', 'x'].includes(word)) {
+    if (word === '--') {
       start++;
-      if (words[start] === '--') {
-        start++;
-      }
-      break;
-    } else if (!word.startsWith('-')) {
       break;
     }
+    if (['--dir', '-C', '--cwd', '--prefix'].includes(flag)) {
+      const target = word.includes('=') ? word.slice(word.indexOf('=') + 1) : words[++start];
+      if (['npm', 'npx'].includes(manager) && ['--prefix', '-C'].includes(flag)) {
+        prefix = commandDirectory(directory, target);
+      } else if (
+        (manager === 'pnpm' && ['--dir', '-C'].includes(flag)) ||
+        (['yarn', 'bun', 'bunx'].includes(manager) && flag === '--cwd')
+      ) {
+        directory = commandDirectory(directory, target);
+      } else {
+        uncertain = true;
+      }
+    } else if (
+      ['--filter', '--recursive', '-r', '-R', '--workspace', '-w', '--workspaces', '-ws'].includes(
+        flag,
+      )
+    ) {
+      // Workspace selectors can execute in more than one package.
+      uncertain = true;
+      if (['--filter', '--workspace', '-w'].includes(word)) {
+        start++;
+      }
+    } else if (!subcommand && ['exec', 'run', 'run-script', 'x'].includes(word)) {
+      subcommand = word;
+    } else if (!word.startsWith('-')) {
+      break;
+    } else if (!['--offline', '--yes', '-y', '--silent', '-s'].includes(flag)) {
+      // Unknown options can consume a command string or select another workspace.
+      uncertain = true;
+    }
   }
-  return { words: words.slice(start), directory };
+  // npm exec/npx use --prefix for executable lookup, but retain the caller's cwd.
+  // npm run executes scripts from the selected package instead.
+  if (manager === 'npm' && ['run', 'run-script'].includes(subcommand ?? '')) {
+    directory = prefix;
+  }
+  const context = commandContext(words.slice(start), uncertain ? undefined : directory);
+  return { ...context, uncertain: uncertain || context.uncertain };
 }
 
 function exportTargets(value: unknown): string[] {
@@ -372,13 +427,17 @@ export function findReferencedOxcConfigs(projectPaths: string[]): Set<string> {
           workingDirectory = undefined;
         }
         const context = commandContext(words, workingDirectory);
+        if (context.uncertain) {
+          preserveUncertainDirectory(undefined);
+        }
         const commandDirectory = context.directory;
         words = context.words;
         const owner = commandDirectory ? referenceDirectory(commandDirectory) : directory;
+        const executable = path.basename(words[0] ?? '').replace(/\.exe$/i, '');
         const runtimeArgs =
-          words[0] === 'vp' && words[1] === 'node'
+          executable === 'vp' && words[1] === 'node'
             ? words.slice(2)
-            : ['node', 'tsx', 'ts-node', 'oxnode', 'bun', 'vpx'].includes(words[0])
+            : ['node', 'tsx', 'ts-node', 'oxnode', 'bun', 'vpx'].includes(executable)
               ? words.slice(1)
               : CONFIG_MODULE_EXTENSIONS.includes(path.extname(words[0] ?? ''))
                 ? words
@@ -402,7 +461,7 @@ export function findReferencedOxcConfigs(projectPaths: string[]): Set<string> {
             !found ||
             runtimeArgs.some((arg) => ['-e', '-p', '--eval', '--print'].includes(arg))
           ) {
-            preserveUncertainDirectory(commandDirectory);
+            preserveUncertainDirectory(undefined);
           }
         }
         for (let index = 0; index < words.length; index++) {
@@ -497,6 +556,11 @@ export function findReferencedOxcConfigs(projectPaths: string[]): Set<string> {
         continue;
       }
     }
+    if (analysis.changesDirectory) {
+      // An imported module can change cwd before its importer or a sibling reads a file.
+      // Until the execution graph proves otherwise, every workspace cwd is possible.
+      preserveUncertainDirectory(undefined);
+    }
     const cwd = analysis.changesDirectory ? undefined : consumerDirectory;
     let unresolvedContent = content;
     for (const { node, base, required } of analysis.references.toSorted(
@@ -504,17 +568,9 @@ export function findReferencedOxcConfigs(projectPaths: string[]): Set<string> {
     )) {
       const reference = stringValue(node);
       if (reference === undefined) {
-        const prefix = pathPrefix(node);
-        const target =
-          prefix && /^(?:\.{1,2}\/|\/)/.test(prefix)
-            ? path.resolve(
-                base === 'cwd' ? (cwd ?? directory) : path.dirname(modulePath),
-                path.dirname(prefix + '_'),
-              )
-            : undefined;
-        preserveUncertainDirectory(target);
-        // An unresolved module can also contain reads relative to its consumer.
-        preserveUncertainDirectory(cwd);
+        // Neither a dynamic path prefix nor its containing package bounds the
+        // dependencies of the unresolved module graph. Keep all workspace candidates.
+        preserveUncertainDirectory(undefined);
         continue;
       }
       const name = reference.match(/^(?:@[^/]+\/)?[^/]+/)?.[0] ?? '';
@@ -531,14 +587,14 @@ export function findReferencedOxcConfigs(projectPaths: string[]): Set<string> {
         for (const entry of entries) {
           const resolved = resolveConfigReferences(packageDirectory, entry);
           if (!resolved?.length) {
-            preserveUncertainDirectory(packageDirectory);
+            preserveUncertainDirectory(undefined);
           }
           for (const filename of resolved ?? []) {
             filenames.add(filename);
           }
         }
         if (!entries.length) {
-          preserveUncertainDirectory(packageDirectory);
+          preserveUncertainDirectory(undefined);
         }
       } else {
         const bases = new Set<string>();
@@ -555,10 +611,9 @@ export function findReferencedOxcConfigs(projectPaths: string[]): Set<string> {
         for (const origin of bases) {
           const resolved = resolveConfigReferences(origin, reference);
           if (required && !resolved?.length) {
-            preserveUncertainDirectory(path.dirname(path.resolve(origin, reference)));
-            if (base === 'module') {
-              preserveUncertainDirectory(cwd);
-            }
+            preserveUncertainDirectory(
+              base === 'module' ? undefined : path.dirname(path.resolve(origin, reference)),
+            );
           }
           for (const filename of resolved ?? []) {
             filenames.add(filename);

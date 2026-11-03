@@ -312,6 +312,7 @@ export default { define: { configs: JSON.stringify([a, b]) } };`,
   it.each([false, true])(
     'sanitizes missing root plugins with a shared owner: %s',
     async (shared) => {
+      write('local-plugin.mjs', 'export default { rules: {} };');
       write('base.json', {
         jsPlugins: ['./local-plugin.mjs'],
         rules: { 'base/custom': 'error' },
