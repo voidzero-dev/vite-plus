@@ -1164,10 +1164,19 @@ jobs:
           export VP_SNAP_SH_BIN="$(command -v sh)"
           export VP_SNAP_BASH_BIN="$(command -v bash)"
           export VP_SNAP_ZSH_BIN="$(command -v zsh)"
-          VP_SNAP_GLOBAL_VP="$HOME/.vite-plus/bin/vp" \
-          VP_SNAP_JS_RUNTIME_DIR="$HOME/.vite-plus/js_runtime" \
-          VP_SNAP_FISH_BIN="$(command -v fish)" \
-          VP_SNAP_NU_BIN="$(command -v nu)" \
+          export VP_SNAP_GLOBAL_VP="$HOME/.vite-plus/bin/vp"
+          export VP_SNAP_JS_RUNTIME_DIR="$HOME/.vite-plus/js_runtime"
+          VP_SNAP_FISH_BIN="$(command -v fish)"
+          VP_SNAP_NU_BIN="$(command -v nu)"
+          export VP_SNAP_FISH_BIN VP_SNAP_NU_BIN
+          # Fetch pinned package-manager archives before command timers start.
+          # Cases still download from the registry into their isolated homes.
+          VP_SNAP_PREWARM_MANIFEST="$RUNNER_TEMP/snapshot-prewarm.json" \
+            ./target/snapshot-tests/cli_snapshots --list > "$RUNNER_TEMP/snapshot-test-list.txt"
+          node packages/tools/src/local-npm-registry.ts \
+            --snapshot-cache "$VP_SNAP_REGISTRY_CACHE_DIR" \
+            --request-log "$VP_SNAP_ARTIFACTS_DIR/prewarm/registry.jsonl" \
+            --prewarm-manifest "$RUNNER_TEMP/snapshot-prewarm.json"
           ./target/snapshot-tests/cli_snapshots --test-threads 8
         env:
           RUST_BACKTRACE: '1'
@@ -1177,6 +1186,7 @@ jobs:
           CARGO_BIN_EXE_vpt: ${{ github.workspace }}/target/snapshot-tests/vpt
           VP_SNAP_SHARD: ${{ matrix.shard }}/3
           VP_SNAP_ARTIFACTS_DIR: ${{ runner.temp }}/snapshot-artifacts
+          VP_SNAP_REGISTRY_CACHE_DIR: ${{ runner.temp }}/snapshot-registry-cache
 
       - name: Upload snapshot diagnostics and timings
         if: ${{ !cancelled() }}
@@ -1318,7 +1328,7 @@ jobs:
             VP_SNAP_PREWARM_MANIFEST="$RUNNER_TEMP/snapshot-prewarm.json" \
             cargo-nextest nextest list --archive-file windows-snapshot-tests.tar.zst --workspace-remap . \
             > "$RUNNER_TEMP/snapshot-test-list.txt"
-          # Derive Bun archives from the same fixtures as the test list, so
+          # Derive package-manager archives from the same fixtures as the test list, so
           # version changes need no matching CI edit. Only response bytes are shared.
           node packages/tools/src/local-npm-registry.ts \
             --snapshot-cache "$VP_SNAP_REGISTRY_CACHE_DIR" \

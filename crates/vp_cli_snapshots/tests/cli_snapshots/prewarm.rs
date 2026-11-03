@@ -12,21 +12,32 @@ static EXACT_VERSION: LazyLock<regex::Regex> = LazyLock::new(|| {
 });
 
 #[derive(Default)]
-pub struct BunPrewarm {
-    versions: BTreeSet<String>,
+pub struct PackageManagerPrewarm {
+    versions: BTreeSet<(String, String)>,
     packages: BTreeSet<PathBuf>,
 }
 
-impl BunPrewarm {
-    fn version(&mut self, spec: &str) {
+impl PackageManagerPrewarm {
+    fn version(&mut self, manager: &str, spec: &str) {
+        if !matches!(manager, "bun" | "pnpm") {
+            return;
+        }
         if let Some(version) = EXACT_VERSION.captures(spec).and_then(|captures| captures.get(1)) {
-            self.versions.insert(version.as_str().to_owned());
+            // pnpm 12+ selects a native platform package through registry metadata.
+            // Its main tarball is not the archive installed by the CLI.
+            if manager == "pnpm"
+                && version.as_str().split('.').next().unwrap().parse::<u64>().unwrap_or(u64::MAX)
+                    >= 12
+            {
+                return;
+            }
+            self.versions.insert((manager.to_owned(), version.as_str().to_owned()));
         }
     }
 
     fn package_manager(&mut self, value: &Value) {
-        if let Some(spec) = value.as_str().and_then(|value| value.strip_prefix("bun@")) {
-            self.version(spec);
+        if let Some((manager, spec)) = value.as_str().and_then(|value| value.split_once('@')) {
+            self.version(manager, spec);
         }
     }
 
@@ -35,10 +46,10 @@ impl BunPrewarm {
             for entry in entries {
                 self.dev_engine(entry);
             }
-        } else if value["name"] == "bun"
+        } else if let Some(manager) = value["name"].as_str()
             && let Some(version) = value["version"].as_str()
         {
-            self.version(version);
+            self.version(manager, version);
         }
     }
 
@@ -72,7 +83,8 @@ impl BunPrewarm {
     pub fn env<'a>(&mut self, entries: impl IntoIterator<Item = (&'a str, &'a str)>) {
         for (key, value) in entries {
             match key {
-                "VP_BUN_VERSION" => self.version(value),
+                "VP_BUN_VERSION" => self.version("bun", value),
+                "VP_PNPM_VERSION" => self.version("pnpm", value),
                 "VP_PACKAGE_MANAGER" => self.package_manager(&Value::String(value.to_owned())),
                 _ => {}
             }
@@ -114,8 +126,12 @@ impl BunPrewarm {
     pub fn urls(&self, package: &str) -> Vec<String> {
         self.versions
             .iter()
-            .map(|version| {
-                format!("https://registry.npmjs.org/@oven/{package}/-/{package}-{version}.tgz")
+            .map(|(manager, version)| {
+                if manager == "bun" {
+                    format!("https://registry.npmjs.org/@oven/{package}/-/{package}-{version}.tgz")
+                } else {
+                    format!("https://registry.npmjs.org/pnpm/-/pnpm-{version}.tgz")
+                }
             })
             .collect()
     }
