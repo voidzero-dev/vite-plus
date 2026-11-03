@@ -45,7 +45,6 @@ VITE+ - The Unified Toolchain for the Web
 • Dependencies:
     vite-plus  latest → <version>
     vite              → <version>
-• 2 config updates applied
 • Package manager settings configured
 ```
 
@@ -55,12 +54,12 @@ VITE+ - The Unified Toolchain for the Web
 {"singleQuote":true,"semi":false}
 ```
 
-## `vpt stat-file packages/other/.oxfmtrc.json --assert missing`
+## `vpt stat-file packages/other/.oxfmtrc.json --assert file`
 
-the unrelated workspace config still migrates
+an unresolved module graph can reach other workspace packages
 
 ```
-packages/other/.oxfmtrc.json: missing
+packages/other/.oxfmtrc.json: file
 ```
 
 ## `node inspect-config.mjs`

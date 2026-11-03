@@ -9089,7 +9089,11 @@ export default { fmt, lint };
     ['script', 'node check-config.js .oxlintrc.json'],
     ['module', "import shared from '#shared'; export default shared;"],
     ['module', "const filename = '.oxlintrc.json'; export default { define: { filename } };"],
-  ])('scopes uncertain %s references to their package: %s', (kind, reference) => {
+  ])('protects possible configs for a %s reference: %s', (kind, reference) => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'check-config.js'),
+      "import config from './.oxlintrc.json' with { type: 'json' }; console.log(config);",
+    );
     const appDir = path.join(tmpDir, 'packages/app');
     fs.mkdirSync(appDir, { recursive: true });
     for (const dir of [tmpDir, appDir]) {
@@ -9110,12 +9114,17 @@ export default { fmt, lint };
       ...makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
       packages: [{ name: 'app', path: 'packages/app' }],
     };
-    expect(finalizeCoreMigrationForExistingVitePlus(workspaceInfo, true).oxcConfigs).toBe(true);
-    expect(fs.existsSync(path.join(tmpDir, '.oxlintrc.json'))).toBe(true);
-    expect(fs.existsSync(path.join(appDir, '.oxlintrc.json'))).toBe(false);
-    expect(fs.readFileSync(path.join(appDir, 'vite.config.ts'), 'utf8')).toMatch(
-      /"no-console":\s*"error"/,
+    const unresolvedModule = reference.includes('#shared');
+    expect(finalizeCoreMigrationForExistingVitePlus(workspaceInfo, true).oxcConfigs).toBe(
+      !unresolvedModule,
     );
+    expect(fs.existsSync(path.join(tmpDir, '.oxlintrc.json'))).toBe(true);
+    expect(fs.existsSync(path.join(appDir, '.oxlintrc.json'))).toBe(unresolvedModule);
+    if (!unresolvedModule) {
+      expect(fs.readFileSync(path.join(appDir, 'vite.config.ts'), 'utf8')).toMatch(
+        /"no-console":\s*"error"/,
+      );
+    }
   });
 
   it.each([
