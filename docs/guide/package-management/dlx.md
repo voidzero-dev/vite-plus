@@ -27,11 +27,11 @@ Arguments after the command are passed to the executed program, not parsed as Vi
 - **Yarn Modern:** `yarn dlx`.
 - **Bun:** `bun x`.
 
-| Option                 | npm | pnpm | Yarn Classic | Yarn Modern | Bun | Notes                             |
-| ---------------------- | --- | ---- | ------------ | ----------- | --- | --------------------------------- |
-| `-p, --package <name>` | Yes | Yes  | Yes          | Yes         | Yes |                                   |
-| `-c, --shell-mode`     | Yes | Yes  | Yes          | No          | No  |                                   |
-| `-s, --silent`         | Yes | Yes  | Yes          | Yes         | Yes | Bun only suppresses Vite+ output. |
+| Option                 | npm | pnpm            | Yarn Classic | Yarn Modern | Bun | Notes                             |
+| ---------------------- | --- | --------------- | ------------ | ----------- | --- | --------------------------------- |
+| `-p, --package <name>` | Yes | Yes             | Yes          | Yes         | Yes |                                   |
+| `-c, --shell-mode`     | Yes | 7.21.0 or later | Yes          | No          | No  |                                   |
+| `-s, --silent`         | Yes | Yes             | Yes          | Yes         | Yes | Bun only suppresses Vite+ output. |
 
 For installed project binaries, use `vp exec` or `vpx` instead. See [Running Binaries](/guide/vpx) for those workflows.
 

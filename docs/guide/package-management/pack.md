@@ -30,10 +30,10 @@ vp pm pack --pack-destination ./artifacts
 | --------------------------------------- | --------------- | ---------------- | ------------ | ----------- | --- | ------------------------------------ |
 | `-r, --recursive`                       | 7.9.0 or later  | 10.11.0 or later | No           | Yes         | No  |                                      |
 | `--filter <pattern>`                    | 7.9.0 or later  | 10.11.0 or later | No           | Yes         | No  |                                      |
-| `--out <out>`                           | No              | Yes              | Yes          | Yes         | Yes |                                      |
+| `--out <out>`                           | No              | 10.0.0 or later  | Yes          | Yes         | Yes |                                      |
 | `--pack-destination <pack-destination>` | 7.18.0 or later | Yes              | No           | No          | Yes | Vite+ creates the directory for npm. |
-| `--pack-gzip-level <pack-gzip-level>`   | No              | Yes              | No           | No          | Yes |                                      |
-| `--json`                                | Yes             | Yes              | Yes          | Yes         | No  |                                      |
+| `--pack-gzip-level <pack-gzip-level>`   | No              | 8.3.0 or later   | No           | No          | Yes |                                      |
+| `--json`                                | Yes             | 9.14.0 or later  | Yes          | Yes         | No  |                                      |
 
 ## Native Options
 

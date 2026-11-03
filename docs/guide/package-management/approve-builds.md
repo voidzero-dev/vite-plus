@@ -20,7 +20,7 @@ Supply packages to approve, or prefix a name with `!` to request denial where su
 ## Compatibility
 
 - **npm:** 11.16 or later: `npm approve-scripts`. Earlier versions warn and skip. Denials use `npm deny-scripts`.
-- **pnpm:** 10.1 or later: `pnpm approve-builds`.
+- **pnpm:** 10.1 or later: `pnpm approve-builds`. Earlier versions warn and skip.
 - **Yarn Classic:** No command. Warns and exits successfully without performing the operation.
 - **Yarn Modern:** No command. Warns and exits successfully without performing the operation.
 - **Bun:** `bun pm trust` for named packages or `--all`.

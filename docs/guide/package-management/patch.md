@@ -17,7 +17,7 @@ There are no command-specific options.
 ## Compatibility
 
 - **npm:** 12 or later: `npm patch add`. Earlier versions warn and skip.
-- **pnpm:** `pnpm patch`.
+- **pnpm:** 7.4 or later: `pnpm patch`. Earlier versions warn and skip.
 - **Yarn Classic:** No command. Warns and exits successfully without performing the operation.
 - **Yarn Modern:** `yarn patch`.
 - **Bun:** `bun patch`.

@@ -15,9 +15,9 @@ There are no command-specific options.
 ## Compatibility
 
 - **npm:** 12 or later: `npm patch commit`. Earlier versions warn and skip.
-- **pnpm:** `pnpm patch-commit`.
+- **pnpm:** 7.4 or later: `pnpm patch-commit`. Earlier versions warn and skip.
 - **Yarn Classic:** No command. Warns and exits successfully without performing the operation.
-- **Yarn Modern:** `yarn patch-commit --save`.
+- **Yarn Modern:** 3 or later: `yarn patch-commit --save`. Earlier versions warn and skip.
 - **Bun:** `bun patch --commit`.
 
 Review and commit the patch and any manifest or lockfile changes produced by the manager.

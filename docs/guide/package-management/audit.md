@@ -22,7 +22,7 @@ vp pm audit --production --level high
 - **npm:** `npm audit` or `npm audit fix`.
 - **pnpm:** `pnpm audit`.
 - **Yarn Classic:** `yarn audit`.
-- **Yarn Modern:** `yarn npm audit`.
+- **Yarn Modern:** 2.4 or later: `yarn npm audit`. Earlier versions warn and skip.
 - **Bun:** `bun audit` or `bun audit fix`.
 
 | Option            | npm | pnpm | Yarn Classic | Yarn Modern | Bun             | Notes |

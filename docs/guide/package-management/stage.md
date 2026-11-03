@@ -82,8 +82,8 @@ All npm paths, including fallbacks, require npm 11.15 or later and Node.js 22.14
 
 ### `publish`
 
-- **npm:** 11.15 or later: `npm stage publish`.
-- **pnpm:** 11.3 or later: `pnpm stage publish`.
+- **npm:** 11.15 or later: `npm stage publish`. Earlier versions warn and skip.
+- **pnpm:** 11.3 or later: `pnpm stage publish`. Earlier versions warn and skip.
 - **Yarn Classic:** Fallback: `npm stage publish`.
 - **Yarn Modern:** 4.16.0 or later: `yarn npm publish --staged`. Earlier versions use `npm stage publish` as a fallback. Explicit targets use npm fallback.
 - **Bun:** Fallback: `npm stage publish`.
@@ -102,8 +102,8 @@ All npm paths, including fallbacks, require npm 11.15 or later and Node.js 22.14
 
 ### `list`
 
-- **npm:** 11.15 or later: `npm stage list`.
-- **pnpm:** 11.3 or later: `pnpm stage list`.
+- **npm:** 11.15 or later: `npm stage list`. Earlier versions warn and skip.
+- **pnpm:** 11.3 or later: `pnpm stage list`. Earlier versions warn and skip.
 - **Yarn Classic:** Fallback: `npm stage list`.
 - **Yarn Modern:** 4.16.0 or later: `yarn npm stage list`. Earlier versions use `npm stage list` as a fallback.
 - **Bun:** Fallback: `npm stage list`.
@@ -115,8 +115,8 @@ All npm paths, including fallbacks, require npm 11.15 or later and Node.js 22.14
 
 ### `view`
 
-- **npm:** 11.15 or later: `npm stage view`.
-- **pnpm:** 11.3 or later: `pnpm stage view`.
+- **npm:** 11.15 or later: `npm stage view`. Earlier versions warn and skip.
+- **pnpm:** 11.3 or later: `pnpm stage view`. Earlier versions warn and skip.
 - **Yarn Classic:** Fallback: `npm stage view`.
 - **Yarn Modern:** Fallback: `npm stage view`.
 - **Bun:** Fallback: `npm stage view`.
@@ -128,8 +128,8 @@ All npm paths, including fallbacks, require npm 11.15 or later and Node.js 22.14
 
 ### `download`
 
-- **npm:** 11.15 or later: `npm stage download`.
-- **pnpm:** 11.3 or later: `pnpm stage download`.
+- **npm:** 11.15 or later: `npm stage download`. Earlier versions warn and skip.
+- **pnpm:** 11.3 or later: `pnpm stage download`. Earlier versions warn and skip.
 - **Yarn Classic:** Fallback: `npm stage download`.
 - **Yarn Modern:** Fallback: `npm stage download`.
 - **Bun:** Fallback: `npm stage download`.
@@ -140,8 +140,8 @@ All npm paths, including fallbacks, require npm 11.15 or later and Node.js 22.14
 
 ### `approve`
 
-- **npm:** 11.15 or later: `npm stage approve`.
-- **pnpm:** 11.3 or later: `pnpm stage approve`.
+- **npm:** 11.15 or later: `npm stage approve`. Earlier versions warn and skip.
+- **pnpm:** 11.3 or later: `pnpm stage approve`. Earlier versions warn and skip.
 - **Yarn Classic:** Fallback: `npm stage approve`.
 - **Yarn Modern:** 4.16.0 or later: `yarn npm stage approve`. Earlier versions use `npm stage approve` as a fallback.
 - **Bun:** Fallback: `npm stage approve`.
@@ -153,8 +153,8 @@ All npm paths, including fallbacks, require npm 11.15 or later and Node.js 22.14
 
 ### `reject`
 
-- **npm:** 11.15 or later: `npm stage reject`.
-- **pnpm:** 11.3 or later: `pnpm stage reject`.
+- **npm:** 11.15 or later: `npm stage reject`. Earlier versions warn and skip.
+- **pnpm:** 11.3 or later: `pnpm stage reject`. Earlier versions warn and skip.
 - **Yarn Classic:** Fallback: `npm stage reject`.
 - **Yarn Modern:** 4.16.0 or later: `yarn npm stage reject`. Earlier versions use `npm stage reject` as a fallback.
 - **Bun:** Fallback: `npm stage reject`.
