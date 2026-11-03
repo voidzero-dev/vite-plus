@@ -1,6 +1,6 @@
 # Upgrading Vite+
 
-Use `vp upgrade` to update the global `vp` binary. To update the local `vite-plus` package in a project, see [Update Vite+](/guide/upgrade-project).
+Use `vp upgrade` to update the global `vp` binary, or [Homebrew](#homebrew) if it owns your installation. To update the local `vite-plus` package in a project, see [Update Vite+](/guide/upgrade-project).
 
 ## Overview
 
@@ -22,7 +22,7 @@ vp toolchain vite rolldown oxc
 vp toolchain --json
 ```
 
-The command uses the local `vite-plus` package when the project has one. Use `--global` to show the release for the global `vp` command:
+The command uses the local `vite-plus` package when the project has one. Use `--global` or `-g` to show the release for the global `vp` command:
 
 ```bash
 vp toolchain --global
@@ -87,15 +87,19 @@ Older versions are pruned automatically after each upgrade. The active version a
 
 ### Homebrew
 
-Homebrew owns its installed binary and JavaScript package. Update them with:
+The [official Homebrew tap](/guide/homebrew) owns its installed binary. Update it with:
 
 ```bash
-brew upgrade vite-plus
+brew upgrade voidzero-dev/vite-plus/vp
 ```
 
-`vp upgrade` detects Homebrew installations and directs you to this command without downloading or installing another version. This also applies to `--force`, a specific version, and `--rollback`. Use Homebrew to manage these installations.
+`vp upgrade` detects the installed formula and shows its Homebrew upgrade command without downloading or installing another version. This also applies to `--force`, a specific version, and `--rollback`. The script installer's rollback and automatic pruning do not apply to Homebrew installations.
 
-`vp upgrade --check` directs you to `brew outdated vite-plus`. Automatic npm update checks and notices are disabled for Homebrew installations.
+For the tap, run `vp` after upgrading to install the new version's dependencies in your user data directory. Setup preserves your management preferences.
+
+For the tap, `vp upgrade --check` directs you to `brew outdated voidzero-dev/vite-plus/vp`. Automatic npm update checks and notices are disabled for Homebrew installations.
+
+To switch to the tap, follow the [migration steps](/guide/homebrew#switch-an-existing-installation).
 
 ## Preview Builds
 
@@ -110,6 +114,8 @@ You can find preview builds in pull requests that automatically update upstream 
 Preview builds are addressed by pull request number or commit SHA. They are not a stable version range, and you should avoid leaving them in long-lived branches unless a maintainer asks you to.
 
 ### Global `vp` Preview
+
+For a Homebrew installation, follow the [tap preview instructions](/guide/homebrew#test-a-preview-build).
 
 Install a preview build of the global CLI by passing `VP_PR_VERSION` to the installer. Pass a pull request number or a commit SHA:
 

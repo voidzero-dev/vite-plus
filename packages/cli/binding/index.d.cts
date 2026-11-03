@@ -1278,8 +1278,8 @@ export interface ModuleRunnerTransformResult {
    * This will be set if {@link TransformOptions#sourcemap} is `true`.
    */
   map?: SourceMap;
-  deps: Array<string>;
-  dynamicDeps: Array<string>;
+  deps: string[];
+  dynamicDeps: string[];
   /**
    * Parse and transformation errors.
    *
@@ -1667,6 +1667,15 @@ export interface TypeScriptOptions {
    * @default false
    */
   rewriteImportExtensions?: 'rewrite' | 'remove' | boolean;
+}
+
+/**
+ * The selected tsconfig and its original source, sent to an asynchronous loader.
+ * `None` selects discovery explicitly, without consulting the receiving thread's env.
+ */
+export interface FrozenTsconfig {
+  path?: string;
+  source?: string;
 }
 
 export interface LoadContext {
@@ -3374,6 +3383,7 @@ export interface BindingViteResolvePluginConfig {
   tsconfig?: string;
   environmentConsumer: string;
   environmentName: string;
+  convertExternalRequire?: boolean;
   builtins: Array<BindingStringOrRegex>;
   external: true | string[];
   noExternal: true | Array<string | RegExp>;
@@ -3399,6 +3409,8 @@ export interface BindingViteResolvePluginConfig {
 
 export interface BindingViteResolvePluginResolveOptions {
   isBuild: boolean;
+  /** Defaults to `isBuild`. */
+  isBundled?: boolean;
   isProduction: boolean;
   asSrc: boolean;
   preferRelative: boolean;
@@ -4234,6 +4246,15 @@ export declare namespace oxcNode {
       arg1?: ResolveContext | undefined | null,
     ) => ResolveFnOutput | Promise<ResolveFnOutput>,
   ): ResolveFnOutput | Promise<ResolveFnOutput>;
+  export function enableWatchReport(): void;
+  export function freezeTransformDeps(): string;
+  /** Freeze the effective config before registering the off-thread ESM hooks. */
+  export function freezeTsconfig(cwd: string): FrozenTsconfig;
+  /** Apply a frozen selection, including discovery without the receiving thread's env. */
+  export function initializeLoader(
+    path?: string | undefined | null,
+    source?: string | undefined | null,
+  ): void;
   export function load(
     url: string,
     context: LoadContext,
@@ -4245,6 +4266,7 @@ export declare namespace oxcNode {
   ): LoadFnOutput | Promise<LoadFnOutput>;
   export function setTransformDeps(mode?: string | undefined | null): void;
   export function setTsconfigPath(path?: string | undefined | null): void;
+  export function takeWatchDependencies(): Array<string>;
   /** A file transformed for the CommonJS loader. */
   export interface TransformOutput {
     source: string;

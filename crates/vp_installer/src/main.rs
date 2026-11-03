@@ -166,10 +166,10 @@ async fn do_install(opts: &cli::Options, dirs: &VpDirs) -> Result<(), Box<dyn st
     command
         .env_remove(vp_shared::env_vars::VP_SELF_SETUP_SUPPORT_CHECK)
         .env(vp_shared::env_vars::VP_SELF_SETUP_REPLACE_EXISTING, if opts.yes { "1" } else { "0" })
-        .env("VP_NODE_MANAGER", manager)
+        .env(vp_shared::env_vars::VP_NODE_MANAGER, manager)
         .env(
-            "VP_PM_MANAGER",
-            std::env::var("VP_PM_MANAGER")
+            vp_shared::env_vars::VP_PM_MANAGER,
+            std::env::var(vp_shared::env_vars::VP_PM_MANAGER)
                 .ok()
                 .filter(|value| matches!(value.as_str(), "yes" | "no"))
                 .unwrap_or_else(|| manager.to_string()),
@@ -279,7 +279,7 @@ fn auto_detect_node_manager_for_state(state: NodeShimState, interactive: bool) -
     // VP_NODE_MANAGER env var: only "yes" and "no" are recognized;
     // unrecognized values fall through to normal auto-detection
     // (matching install.ps1/install.sh behavior).
-    if let Ok(val) = std::env::var("VP_NODE_MANAGER") {
+    if let Ok(val) = std::env::var(vp_shared::env_vars::VP_NODE_MANAGER) {
         if val.eq_ignore_ascii_case("yes") {
             return true;
         }
@@ -492,7 +492,7 @@ mod tests {
 
     #[test]
     fn foreign_node_requires_interactive_or_explicit_consent() {
-        EnvConfig::with_vars([("VP_NODE_MANAGER", None), ("CI", Some("true"))], |_| {
+        EnvConfig::with_vars([(env_vars::VP_NODE_MANAGER, None), ("CI", Some("true"))], |_| {
             assert!(
                 !auto_detect_node_manager_for_state(NodeShimState::Foreign, false),
                 "silent CI setup must preserve a foreign Node executable"
@@ -503,10 +503,10 @@ mod tests {
             );
         });
 
-        EnvConfig::with_vars([("VP_NODE_MANAGER", Some("yes")), ("CI", None)], |_| {
+        EnvConfig::with_vars([(env_vars::VP_NODE_MANAGER, Some("yes")), ("CI", None)], |_| {
             assert!(auto_detect_node_manager_for_state(NodeShimState::Foreign, false));
         });
-        EnvConfig::with_vars([("VP_NODE_MANAGER", Some("no")), ("CI", None)], |_| {
+        EnvConfig::with_vars([(env_vars::VP_NODE_MANAGER, Some("no")), ("CI", None)], |_| {
             assert!(!auto_detect_node_manager_for_state(NodeShimState::Owned, true));
         });
     }

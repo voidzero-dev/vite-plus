@@ -3,8 +3,9 @@ import path from 'node:path';
 
 import { expect, it } from 'vitest';
 
+import { documentationUrl } from '../../utils/documentation.ts';
 import { formatVitestV5Findings } from '../migrator.ts';
-import { vitestV5Documentation } from '../vitest-v5/documentation.ts';
+import { localSections, vitestV5Documentation } from '../vitest-v5/documentation.ts';
 
 it.each([
   ['benchmark-api', 'https://vitest.dev/guide/migration/#benchmarking-api-rewrite'],
@@ -50,16 +51,17 @@ it('links every block and review, retaining locations and deduplication', () => 
 });
 
 it('keeps local documentation anchors valid', () => {
-  const source = fs.readFileSync(new URL('../vitest-v5/documentation.ts', import.meta.url), 'utf8');
   const guide = fs.readFileSync(
     new URL('../../../../../docs/guide/vitest-v5.md', import.meta.url),
     'utf8',
   );
-  const localSections = source.slice(source.indexOf('const localSections'));
   const headings = Array.from(guide.matchAll(/^## (.+)$/gm), (match) =>
     match[1].toLowerCase().replaceAll(' ', '-'),
   );
-  for (const match of localSections.matchAll(/'[^']+': '([^']+)'/g)) {
-    expect(headings).toContain(match[1]);
+  // `future-finding` has no entry and exercises the fallback anchor.
+  for (const code of [...Object.keys(localSections), 'future-finding']) {
+    const [page, anchor] = vitestV5Documentation(code).split('#');
+    expect(page).toBe(documentationUrl('/guide/vitest-v5'));
+    expect(headings).toContain(anchor);
   }
 });

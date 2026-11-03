@@ -1,8 +1,12 @@
 //! The `oxcNode` namespace: thin forwarders to the vendored oxc-node, which the binding
 //! links with `default-features = false`, so it registers no NAPI exports of its own.
 //! Only what the `vpx <script>` loader in `packages/cli/src/script-*.ts` uses is exported.
+//! `enableWatchReport` and `takeWatchDependencies` feed watch mode the tsconfig files
+//! oxc-node read and the paths a failed resolve looked for.
 
-use ::oxc_node::{LoadContext, LoadFnOutput, OxcResolveOptions, ResolveContext, ResolveFnOutput};
+use ::oxc_node::{
+    FrozenTsconfig, LoadContext, LoadFnOutput, OxcResolveOptions, ResolveContext, ResolveFnOutput,
+};
 use napi::{
     Either, Env, Result,
     bindgen_prelude::{FnArgs, Function, Object, PromiseRaw},
@@ -22,14 +26,41 @@ pub fn set_tsconfig_path(path: Option<String>) -> Result<()> {
     ::oxc_node::set_tsconfig_path(path)
 }
 
+/// Freeze the effective config before registering the off-thread ESM hooks.
+#[napi(namespace = "oxcNode")]
+pub fn freeze_tsconfig(env: Env, cwd: String) -> Result<FrozenTsconfig> {
+    ::oxc_node::freeze_tsconfig_js(env, cwd)
+}
+
+/// Apply a frozen selection, including discovery without the receiving thread's env.
+#[napi(namespace = "oxcNode")]
+pub fn initialize_loader(path: Option<String>, source: Option<String>) -> Result<()> {
+    ::oxc_node::initialize_loader_js(path, source)
+}
+
 #[napi(namespace = "oxcNode")]
 pub fn set_transform_deps(mode: Option<String>) -> Result<()> {
     ::oxc_node::set_transform_deps(mode)
 }
 
 #[napi(namespace = "oxcNode")]
+pub fn freeze_transform_deps() -> String {
+    ::oxc_node::freeze_transform_deps()
+}
+
+#[napi(namespace = "oxcNode")]
 pub fn transforms_dep(path: String) -> bool {
     ::oxc_node::transforms_dep(path)
+}
+
+#[napi(namespace = "oxcNode")]
+pub fn enable_watch_report() {
+    ::oxc_node::enable_watch_report();
+}
+
+#[napi(namespace = "oxcNode")]
+pub fn take_watch_dependencies() -> Vec<String> {
+    ::oxc_node::take_watch_dependencies()
 }
 
 #[napi(namespace = "oxcNode")]

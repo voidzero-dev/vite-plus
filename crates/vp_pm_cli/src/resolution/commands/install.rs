@@ -14,37 +14,37 @@ use crate::{
 #[derive(clap::Args, Clone, Debug, Default, PartialEq, Eq)]
 pub struct InstallArgs {
     /// Do not install devDependencies
-    #[arg(short = 'P', long)]
+    #[arg(short = 'P', long, conflicts_with = "global")]
     pub(crate) prod: bool,
 
     /// Install devDependencies (install) / Save to devDependencies (add)
-    #[arg(short = 'D', long, not_supported(yarn >= "2"))]
+    #[arg(short = 'D', long, conflicts_with = "global", not_supported(yarn >= "2"))]
     pub(crate) dev: bool,
 
     /// Do not install optionalDependencies
-    #[arg(long, not_supported(yarn >= "2"))]
+    #[arg(long, conflicts_with = "global", not_supported(yarn >= "2"))]
     pub(crate) no_optional: bool,
 
     /// Fail if lockfile needs to be updated (CI mode)
-    #[arg(long, overrides_with = "no_frozen_lockfile")]
+    #[arg(long, conflicts_with = "global", overrides_with = "no_frozen_lockfile")]
     pub(crate) frozen_lockfile: bool,
 
     /// Allow lockfile updates (opposite of --frozen-lockfile)
-    #[arg(long, overrides_with = "frozen_lockfile")]
+    #[arg(long, conflicts_with = "global", overrides_with = "frozen_lockfile")]
     pub(crate) no_frozen_lockfile: bool,
 
     /// Only update lockfile, don't install
     // `yarn install --mode update-lockfile` landed in Yarn 3.0.0.
     // https://github.com/yarnpkg/berry/blob/master/CHANGELOG.md#300
-    #[arg(long, not_supported(yarn < "3"))]
+    #[arg(long, conflicts_with = "global", not_supported(yarn < "3"))]
     pub(crate) lockfile_only: bool,
 
     /// Use cached packages when available
-    #[arg(long, not_supported(yarn >= "2", bun < "1.4.1"))]
+    #[arg(long, conflicts_with = "global", not_supported(yarn >= "2", bun < "1.4.1"))]
     pub(crate) prefer_offline: bool,
 
     /// Only use packages already in cache
-    #[arg(long, not_supported(yarn >= "2", bun < "1.4.1"))]
+    #[arg(long, conflicts_with = "global", not_supported(yarn >= "2", bun < "1.4.1"))]
     pub(crate) offline: bool,
 
     /// Force reinstall all dependencies
@@ -56,19 +56,19 @@ pub struct InstallArgs {
     pub(crate) ignore_scripts: bool,
 
     /// Don't read or generate lockfile
-    #[arg(long, not_supported(yarn >= "2", bun))]
+    #[arg(long, conflicts_with = "global", not_supported(yarn >= "2", bun))]
     pub(crate) no_lockfile: bool,
 
     /// Fix broken lockfile entries (pnpm and yarn@4+ only)
-    #[arg(long, not_supported(npm, bun, yarn < "4"))]
+    #[arg(long, conflicts_with = "global", not_supported(npm, bun, yarn < "4"))]
     pub(crate) fix_lockfile: bool,
 
     /// Create flat `node_modules` (pnpm only)
-    #[arg(long, not_supported(npm, bun, yarn))]
+    #[arg(long, conflicts_with = "global", not_supported(npm, bun, yarn))]
     pub(crate) shamefully_hoist: bool,
 
     /// Re-run resolution for peer dependency analysis (pnpm only)
-    #[arg(long, not_supported(npm, bun, yarn))]
+    #[arg(long, conflicts_with = "global", not_supported(npm, bun, yarn))]
     pub(crate) resolution_only: bool,
 
     /// Suppress output (silent mode)
@@ -76,27 +76,27 @@ pub struct InstallArgs {
     pub(crate) silent: bool,
 
     /// Filter packages in monorepo (can be used multiple times)
-    #[arg(long, value_name = "PATTERN", not_supported(npm < "7.14.0", yarn < "2"))]
+    #[arg(long, value_name = "PATTERN", conflicts_with = "global", not_supported(npm < "7.14.0", yarn < "2"))]
     pub(crate) filter: Vec<String>,
 
     /// Install in workspace root only
-    #[arg(short = 'w', long, not_supported(npm < "8.1.0", yarn, bun))]
+    #[arg(short = 'w', long, conflicts_with = "global", not_supported(npm < "8.1.0", yarn, bun))]
     pub(crate) workspace_root: bool,
 
     /// Save exact version (only when adding packages)
-    #[arg(short = 'E', long)]
+    #[arg(short = 'E', long, conflicts_with = "global")]
     pub(crate) save_exact: bool,
 
     /// Save to peerDependencies (only when adding packages)
-    #[arg(long)]
+    #[arg(long, conflicts_with = "global")]
     pub(crate) save_peer: bool,
 
     /// Save to optionalDependencies (only when adding packages)
-    #[arg(short = 'O', long)]
+    #[arg(short = 'O', long, conflicts_with = "global")]
     pub(crate) save_optional: bool,
 
     /// Save the new dependency to the default catalog (only when adding packages)
-    #[arg(long, not_supported(npm, yarn, bun))]
+    #[arg(long, conflicts_with = "global", not_supported(npm, yarn, bun))]
     pub(crate) save_catalog: bool,
 
     /// Install globally (requires package names)
@@ -241,9 +241,15 @@ impl Resolve<InstallArgs> for Npm {
         let use_ci = args.frozen_lockfile && !args.no_frozen_lockfile;
         let mut cmd = CommandBuilder::new("npm");
         cmd.arg(if use_ci { "ci" } else { "install" });
-        cmd.arg_if("--omit=dev", args.prod)
-            .arg_if("--include=dev", args.dev)
-            .arg_if("--omit=optional", args.no_optional);
+        if self.supports_v7_commands() {
+            cmd.arg_if("--omit=dev", args.prod)
+                .arg_if("--include=dev", args.dev)
+                .arg_if("--omit=optional", args.no_optional);
+        } else {
+            cmd.arg_if("--production", args.prod)
+                .arg_if("--production=false", args.dev)
+                .arg_if("--no-optional", args.no_optional);
+        }
         cmd.arg_if("--package-lock-only", args.lockfile_only && !use_ci)
             .arg_if("--prefer-offline", args.prefer_offline)
             .arg_if("--offline", args.offline)
@@ -581,6 +587,32 @@ mod tests {
         );
 
         assert_eq!(command.args, vec!["install", "--omit=dev"]);
+    }
+
+    #[test]
+    fn npm_dependency_filter_version_boundaries() {
+        for (version, filters) in [
+            ("6.14.18", vec!["--production", "--production=false", "--no-optional"]),
+            ("7.0.0", vec!["--omit=dev", "--include=dev", "--omit=optional"]),
+            ("12.2.1", vec!["--omit=dev", "--include=dev", "--omit=optional"]),
+        ] {
+            for frozen_lockfile in [false, true] {
+                let args = InstallArgs {
+                    prod: true,
+                    dev: true,
+                    no_optional: true,
+                    frozen_lockfile,
+                    pass_through_args: vec!["--production=true".into()],
+                    ..Default::default()
+                };
+                let resolution = resolve(&npm(version), args);
+                assert!(resolution.diagnostics.is_empty());
+                let mut expected = vec![if frozen_lockfile { "ci" } else { "install" }];
+                expected.extend(&filters);
+                expected.push("--production=true");
+                assert_eq!(expect_run(resolution.outcome).args, expected, "npm {version}");
+            }
+        }
     }
 
     #[test]

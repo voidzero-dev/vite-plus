@@ -39,6 +39,14 @@ should run specific version
 hello
 ```
 
+## `vp dlx -s @vp-test/cli@npm:vp-test-echo@1.0.0 hello`
+
+npm selects the binary rather than using the scoped alias name
+
+```
+hello
+```
+
 ## `vp dlx -s -p vp-test-echo -p vp-test-upper vp-test-echo hello`
 
 should run with multiple packages

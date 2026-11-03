@@ -23,7 +23,7 @@ use super::{
     package_manager,
     package_metadata::PackageMetadata,
 };
-use crate::{cli::exit_status, error::Error, shim};
+use crate::{cli::exit_status, commands::global::install::extract_binaries, error::Error, shim};
 
 /// Core tools (node, npm, npx)
 const CORE_TOOLS: &[&str] = &["node", "npm", "npx"];
@@ -348,35 +348,11 @@ fn locate_package_binary(
     let package_json: serde_json::Value = serde_json::from_str(&content)
         .map_err(|e| Error::Other(format!("Failed to parse package.json: {e}").into()))?;
 
-    let binary_path = match package_json.get("bin") {
-        Some(serde_json::Value::String(path)) => {
-            // Single binary - check if it matches the name
-            let pkg_name = package_json["name"].as_str().unwrap_or("");
-            let expected_name = pkg_name.split('/').last().unwrap_or(pkg_name);
-            if expected_name == binary_name {
-                node_modules_dir.join(path)
-            } else {
-                return Err(Error::Other(
-                    format!("Binary {} not found in package", binary_name).into(),
-                ));
-            }
-        }
-        Some(serde_json::Value::Object(map)) => {
-            // Multiple binaries - find the one we need
-            if let Some(serde_json::Value::String(path)) = map.get(binary_name) {
-                node_modules_dir.join(path)
-            } else {
-                return Err(Error::Other(
-                    format!("Binary {} not found in package", binary_name).into(),
-                ));
-            }
-        }
-        _ => {
-            return Err(Error::Other(
-                format!("No bin field in package.json for {}", package_name).into(),
-            ));
-        }
-    };
-
-    Ok(binary_path)
+    let bin = extract_binaries(&package_json, &node_modules_dir)
+        .into_iter()
+        .find(|bin| bin.name == binary_name)
+        .ok_or_else(|| {
+            Error::Other(format!("Binary {} not found in package", binary_name).into())
+        })?;
+    Ok(node_modules_dir.join(&bin.path))
 }

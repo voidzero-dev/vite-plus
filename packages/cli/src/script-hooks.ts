@@ -4,6 +4,13 @@
 
 import { createRequire } from 'node:module';
 
+import { type WatchSink, watchSink } from '../../../oxc-node/packages/core/watch-report.mjs';
+
+// oxc-node's watch reporting for a loader of its own (`@oxc-node/core/watch-report`),
+// bundled from the vendored source, so it matches the binding. `script-preload.ts` also
+// imports `@oxc-node/core/signal-ack` this way.
+export { createRelay, flush, withFlush } from '../../../oxc-node/packages/core/watch-report.mjs';
+
 type OxcNodeBinding = typeof import('../binding/index.js').oxcNode;
 
 /**
@@ -16,6 +23,21 @@ export function loadOxcNode(): OxcNodeBinding {
     '../binding/index.cjs',
   ) as typeof import('../binding/index.js');
   return binding.oxcNode;
+}
+
+const WATCH_SINK = Symbol.for('vite-plus:script-watch-sink');
+
+/**
+ * Where this thread reports the files watch mode restarts on, or `null` when nobody is
+ * watching (see oxc-node's `watchSink()`). It opens a channel, so it runs once per thread:
+ * the preload and the `--import` entry are separate bundles and share it here.
+ */
+export function threadWatchSink(): WatchSink | null {
+  const holder = globalThis as { [WATCH_SINK]?: WatchSink | null };
+  if (holder[WATCH_SINK] === undefined) {
+    holder[WATCH_SINK] = watchSink();
+  }
+  return holder[WATCH_SINK];
 }
 
 /** Must match `engines.node` in package.json; `__tests__/vpx-script.spec.ts` checks it. */

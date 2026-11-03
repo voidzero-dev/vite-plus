@@ -2,13 +2,14 @@
 name = "command_self_setup"
 vp = "global"
 # The runner provides local dependencies; this case checks setup and dispatch.
-env = { VP_SKIP_DEPS_INSTALL = "1" }
+env = { VP_SKIP_DEPS_INSTALL = "1", VP_SELF_SETUP_NO_MODIFY_PATH = "1" }
 steps = [
-  { argv = ["vpt", "rm", "$VP_HOME/current/bin/.vp-setup-complete"], snapshot = false },
+  { argv = ["vpt", "rm", "$VP_HOME/current/bin/.vp-setup-complete", "$VP_HOME/.vp-owned"], comment = "An older installation has no directory ownership marker", snapshot = false },
   { argv = ["vp", "--help"], envs = [["VP_SELF_SETUP_SUPPORT_CHECK", "1"]], comment = "The capability probe does not perform setup" },
   ["vpt", "stat-file", "$VP_HOME/current/bin/.vp-setup-complete", "--assert", "missing"],
   { argv = ["vp", "--help"], comment = "An unmarked deployed binary completes setup and executes the requested command", snapshot = false },
   ["vpt", "stat-file", "$VP_HOME/current/bin/.vp-setup-complete", "--assert", "file"],
+  ["vpt", "stat-file", "$VP_HOME/.vp-owned", "--assert", "missing"],
   { argv = ["vp", "not-a-command"], comment = "Once marked, the binary dispatches commands normally", continue-on-failure = true },
 ]
 
@@ -19,10 +20,11 @@ requires = ["bash"]
 skip-platforms = ["windows"]
 steps = [
   { argv = ["vpt", "mkdir", "-p", "external", "project", "home/js_runtime/node"], snapshot = false },
-  { argv = ["vpt", "cp", "-r", "$VP_HOME/js_runtime/node/22.18.0", "home/js_runtime/node/22.18.0"], snapshot = false },
+  { argv = ["vpt", "write-file", "home/.vp-owned", "vite-plus-owned-directory\n"], comment = "The fixture owns the preseeded runtime directory", snapshot = false },
+  { argv = ["vpt", "cp", "-r", "$VP_HOME/js_runtime/node/22.23.4", "home/js_runtime/node/22.23.4"], snapshot = false },
   { argv = ["vpt", "cp", "$VP_HOME/bin/vp", "external/vp"], snapshot = false },
   { argv = ["vpt", "chmod", "+x", "external/vp"], snapshot = false },
-  { argv = ["vpt", "pipe-stdin", "original stdin", "--", "bash", "-c", 'exec ./external/vp "$@" 2>setup.log', "--", "-C", "project", "env", "exec", "--node", "22.18.0", "node", "-e", "console.log(JSON.stringify({cwd: require('node:path').basename(process.cwd()), value: process.env.HANDOFF_VALUE, input: require('node:fs').readFileSync(0, 'utf8')})); process.exit(17)"], tty = false, envs = [["VP_HOME", "${workspace}/home"], ["VP_SKIP_DEPS_INSTALL", "1"], ["VP_VERSION", "handoff-test"], ["VP_NODE_MANAGER", "no"], ["VP_SELF_SETUP_NO_MODIFY_PATH", "1"], ["HANDOFF_VALUE", "original environment"]], comment = "The deployed binary executes the original command with its cwd, environment, stdin and exit status", continue-on-failure = true },
+  { argv = ["vpt", "pipe-stdin", "original stdin", "--", "bash", "-c", 'exec ./external/vp "$@" 2>setup.log', "--", "-C", "project", "env", "exec", "--node", "22.23.4", "node", "-e", "console.log(JSON.stringify({cwd: require('node:path').basename(process.cwd()), value: process.env.HANDOFF_VALUE, input: require('node:fs').readFileSync(0, 'utf8')})); process.exit(17)"], tty = false, envs = [["VP_HOME", "${workspace}/home"], ["VP_SKIP_DEPS_INSTALL", "1"], ["VP_VERSION", "handoff-test"], ["VP_NODE_MANAGER", "no"], ["VP_SELF_SETUP_NO_MODIFY_PATH", "1"], ["HANDOFF_VALUE", "original environment"]], comment = "The deployed binary executes the original command with its cwd, environment, stdin and exit status", continue-on-failure = true },
 ]
 
 [[case]]
@@ -54,6 +56,8 @@ steps = [
   ["vpt", "print-file", "home/config.json"],
   ["vpt", "print-file", "user/.bashrc"],
   ["vpt", "stat-file", "user/.zshenv", "--assert", "missing"],
+  ["vpt", "stat-file", "home/.vp-owned", "--assert", "file"],
+  ["vpt", "stat-file", "home/cache/.vp-owned", "--assert", "file"],
 ]
 
 [[case]]
@@ -108,6 +112,7 @@ skip-platforms = ["windows"]
 env = { VP_SKIP_DEPS_INSTALL = "1", VP_SELF_SETUP_NO_MODIFY_PATH = "1" }
 steps = [
   { argv = ["vpt", "mkdir", "-p", "external", "home/bin", "user-bin"], snapshot = false },
+  { argv = ["vpt", "write-file", "home/.vp-owned", "vite-plus-owned-directory\n"], comment = "The fixture owns the preseeded shim directory", snapshot = false },
   { argv = ["vpt", "cp", "$VP_HOME/bin/vp", "external/vp"], snapshot = false },
   { argv = ["vpt", "chmod", "+x", "external/vp"], snapshot = false },
   { argv = ["node", "seed-owned-shims.cjs"], snapshot = false },

@@ -1,6 +1,9 @@
 //! Doctor command implementation for environment diagnostics.
 
-use std::process::ExitStatus;
+use std::{
+    process::ExitStatus,
+    sync::atomic::{AtomicBool, Ordering},
+};
 
 use console::style;
 use vp_pm_cli::{package_manager_bin_path, package_manager_install_dir};
@@ -42,6 +45,9 @@ const KNOWN_VERSION_MANAGERS: &[(&str, &str)] = &[
 /// Column width for left-side keys in aligned output
 const KEY_WIDTH: usize = 18;
 
+// Warnings come from many checks that otherwise return nothing, so they are recorded as they print.
+static HAS_WARNINGS: AtomicBool = AtomicBool::new(false);
+
 /// Print a section header (bold, with blank line before).
 fn print_section(name: &str) {
     vp_shared::output::print_stdout_line(format_args!(""));
@@ -60,6 +66,12 @@ fn print_check(status: &str, key: &str, value: &str) {
     } else {
         vp_shared::output::print_stdout_line(format_args!("  {status} {key:<KEY_WIDTH$}{value}"));
     }
+}
+
+/// Print an aligned key-value line with a warning indicator, and record it for the summary.
+fn print_warning(key: &str, value: &str) {
+    HAS_WARNINGS.store(true, Ordering::Relaxed);
+    print_check(&style(output::WARN_SIGN).yellow().to_string(), key, value);
 }
 
 fn print_package_manager_mode(key: &str, mode: ShimMode) {
@@ -95,10 +107,33 @@ pub async fn execute(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<Exit
 
     // Section: Installation
     vp_shared::output::print_stdout_line(format_args!("{}", style("Installation").bold()));
-    if crate::homebrew::owns_current_exe() {
-        print_check(" ", "CLI source", "Homebrew");
-        if let Ok(binary) = std::env::current_exe().and_then(std::fs::canonicalize) {
-            print_check(" ", "CLI binary", &abbreviate_home(&binary.display().to_string()));
+    if let Some(homebrew) = crate::homebrew::current() {
+        print_check(" ", "CLI source", homebrew.source_label());
+        print_check(" ", "CLI formula", &homebrew.formula);
+        print_check(" ", "CLI binary", &abbreviate_home(&homebrew.binary.to_string()));
+        if let Some(package) = crate::homebrew::user_package_dir()? {
+            let display = abbreviate_home(&package.to_string());
+            let problem =
+                match crate::self_setup::package_complete(&homebrew.binary, &package).await {
+                    Ok(true) => None,
+                    Ok(false) => Some("incomplete"),
+                    Err(_) => Some("could not verify"),
+                };
+            if let Some(problem) = problem {
+                has_errors = true;
+                print_check(
+                    &style(output::CROSS).red().to_string(),
+                    "CLI dependencies",
+                    &format!("{display} {}", style(format!("({problem})")).red()),
+                );
+                print_hint("Run 'vp --help' to retry CLI dependency setup.");
+            } else {
+                print_check(
+                    &style(output::CHECK).green().to_string(),
+                    "CLI dependencies",
+                    &display,
+                );
+            }
         }
     }
     has_errors |= !check_dirs().await;
@@ -106,7 +141,10 @@ pub async fn execute(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<Exit
 
     // Section: Configuration
     print_section("Configuration");
-    let (environment_config, system_node_path) = check_shim_mode(scope).await;
+    let shim_mode = check_shim_mode(scope).await;
+    let config_readable = shim_mode.is_some();
+    has_errors |= !config_readable;
+    let (environment_config, system_node_path) = shim_mode.unwrap_or_default();
 
     // Check env sourcing: IDE-relevant profiles first, then all shell profiles
     let env_status = cfg!(not(windows)).then(check_env_sourcing);
@@ -125,7 +163,15 @@ pub async fn execute(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<Exit
     // Section: Version Resolution
     let resolution = if scope.includes_node() {
         print_section("Node.js Resolution");
-        check_current_resolution(&cwd, environment_config.node_shim_mode, system_node_path).await
+        let (ok, resolution) = check_current_resolution(
+            &cwd,
+            environment_config.node_shim_mode,
+            system_node_path,
+            config_readable,
+        )
+        .await;
+        has_errors |= !ok;
+        resolution
     } else {
         None
     };
@@ -154,11 +200,16 @@ pub async fn execute(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<Exit
     if has_errors {
         vp_shared::output::print_stdout_line(format_args!(
             "{}",
-            style("\u{2717} Some issues found. Run the suggested commands to fix them.")
-                .red()
-                .bold()
+            style("\u{2717} Some issues found.").red().bold()
         ));
         Ok(super::exit_status(1))
+    } else if HAS_WARNINGS.load(Ordering::Relaxed) {
+        // Warnings describe setups that still work, so they keep the zero exit code.
+        vp_shared::output::print_stdout_line(format_args!(
+            "{}",
+            style("\u{26A0} Some warnings found.").yellow().bold()
+        ));
+        Ok(ExitStatus::default())
     } else {
         vp_shared::output::print_stdout_line(format_args!(
             "{}",
@@ -261,17 +312,14 @@ async fn check_shims(scope: EnvScope) -> bool {
     }
 }
 
-/// Check and display shim mode. Returns the mode and any found system node path.
-async fn check_shim_mode(scope: EnvScope) -> (config::Config, Option<AbsolutePathBuf>) {
+/// Check and display shim mode. Returns the mode and any found system node path,
+/// or `None` when the config cannot be read.
+async fn check_shim_mode(scope: EnvScope) -> Option<(config::Config, Option<AbsolutePathBuf>)> {
     let config = match load_config().await {
         Ok(c) => c,
-        Err(e) => {
-            print_check(
-                &style(output::WARN_SIGN).yellow().to_string(),
-                "Node.js",
-                &style(format!("config error: {e}")).yellow().to_string(),
-            );
-            return (config::Config::default(), None);
+        Err(_) => {
+            print_check(&style(output::CROSS).red().to_string(), "Config", &unreadable_config());
+            return None;
         }
     };
 
@@ -298,8 +346,7 @@ async fn check_shim_mode(scope: EnvScope) -> (config::Config, Option<AbsolutePat
                     );
                     system_node_path = Some(system_node);
                 } else {
-                    print_check(
-                        &style(output::WARN_SIGN).yellow().to_string(),
+                    print_warning(
                         "System Node.js",
                         &style("not found (will fall back to managed)").yellow().to_string(),
                     );
@@ -328,7 +375,14 @@ async fn check_shim_mode(scope: EnvScope) -> (config::Config, Option<AbsolutePat
         }
     }
 
-    (config, system_node_path)
+    Some((config, system_node_path))
+}
+
+fn unreadable_config() -> String {
+    let path = config::get_config_path()
+        .map(|path| abbreviate_home(&path.as_path().display().to_string()))
+        .unwrap_or_default();
+    style(format!("{path} (could not read)")).red().to_string()
 }
 
 async fn check_package_manager_session_override() {
@@ -416,13 +470,11 @@ async fn check_package_manager_resolution(
                             package_manager_bin_path(&directory, name).as_path().exists()
                         })
                     });
-            let status = if installed { "installed" } else { "not installed" };
-            let indicator = if installed {
-                style(output::CHECK).green().to_string()
+            if installed {
+                print_check(&style(output::CHECK).green().to_string(), "PM binaries", "installed");
             } else {
-                style(output::WARN_SIGN).yellow().to_string()
-            };
-            print_check(&indicator, "PM binaries", status);
+                print_warning("PM binaries", "not installed");
+            }
             true
         }
         Ok(_) => {
@@ -469,8 +521,7 @@ fn check_env_sourcing() -> EnvSourcingStatus {
 
     // Second: check all shell profiles (interactive terminal sessions)
     if let Some(file) = check_profile_files(&env_path, ALL_SHELL_PROFILES) {
-        print_check(
-            &style(output::WARN_SIGN).yellow().to_string(),
+        print_warning(
             "IDE integration",
             &format!(
                 "{} {}",
@@ -489,8 +540,7 @@ fn check_session_override() {
     if let Ok(version) = std::env::var(config::VERSION_ENV_VAR) {
         let version = version.trim();
         if !version.is_empty() {
-            print_check(
-                &style(output::WARN_SIGN).yellow().to_string(),
+            print_warning(
                 "Session override",
                 &style(format!("{}={version}", env_vars::VP_NODE_VERSION)).yellow().to_string(),
             );
@@ -501,8 +551,7 @@ fn check_session_override() {
 
     // Also check session version file
     if let Some(version) = config::read_session_version_sync() {
-        print_check(
-            &style(output::WARN_SIGN).yellow().to_string(),
+        print_warning(
             "Session override (file)",
             &style(format!("{}={version}", config::SESSION_VERSION_FILE)).yellow().to_string(),
         );
@@ -569,6 +618,7 @@ async fn check_path(scope: EnvScope) -> bool {
     };
 
     // Show which tool would be executed for each shim
+    let mut ok = vp_path.is_some();
     for tool in selected_shim_tools(scope) {
         if let Some(tool_path) = find_in_path(tool) {
             let expected_dir = super::setup::shim_dir(&settings, tool);
@@ -587,18 +637,22 @@ async fn check_path(scope: EnvScope) -> bool {
                     &format!("{display} (system)"),
                 );
             } else {
-                print_check(
-                    &style(output::WARN_SIGN).yellow().to_string(),
+                print_warning(
                     tool,
                     &format!("{} {}", style(&display).yellow(), style("(not vp shim)").dim()),
                 );
             }
         } else {
-            print_check(" ", tool, "not found");
+            print_check(
+                &style(output::CROSS).red().to_string(),
+                tool,
+                &style("not found").red().to_string(),
+            );
+            ok = false;
         }
     }
 
-    vp_path.is_some()
+    ok
 }
 
 /// Find an executable in PATH.
@@ -713,8 +767,7 @@ fn print_ide_setup_guidance(env_dir: &vt_path::AbsolutePath) {
     };
 
     print_section("IDE Setup");
-    print_check(
-        &style(output::WARN_SIGN).yellow().to_string(),
+    print_warning(
         "",
         &style("GUI applications may not see shell PATH changes.").yellow().to_string(),
     );
@@ -778,19 +831,30 @@ fn format_version_source(source: &str, source_path: Option<&vt_path::AbsolutePat
     }
 }
 
-/// Check current directory version resolution.
+/// Check current directory version resolution. Returns whether the check passed
+/// and the managed resolution, if any.
 async fn check_current_resolution(
     cwd: &AbsolutePathBuf,
     shim_mode: ShimMode,
     system_node_path: Option<AbsolutePathBuf>,
-) -> Option<config::VersionResolution> {
+    config_readable: bool,
+) -> (bool, Option<config::VersionResolution>) {
     print_check(" ", "Directory", &cwd.as_path().display().to_string());
 
     // In system-first mode, show system Node.js info instead of managed resolution
     if shim_mode == ShimMode::SystemFirst {
         if let Some(system_node) = system_node_path {
-            let version = get_node_version(&system_node).await;
             print_check(" ", "Source", "system PATH");
+            let Some(version) = try_get_tool_version(&system_node).await else {
+                print_check(
+                    &style(output::CROSS).red().to_string(),
+                    "Node binary",
+                    &style(format!("{} (could not execute)", system_node.as_path().display()))
+                        .red()
+                        .to_string(),
+                );
+                return (false, None);
+            };
             print_check(" ", "Version", &style(&version).green().bright().to_string());
             print_check(
                 &style(output::CHECK).green().to_string(),
@@ -798,14 +862,10 @@ async fn check_current_resolution(
                 &system_node.as_path().display().to_string(),
             );
         } else {
-            print_check(
-                &style(output::WARN_SIGN).yellow().to_string(),
-                "System Node.js",
-                &style("not found in PATH").yellow().to_string(),
-            );
+            print_warning("System Node.js", &style("not found in PATH").yellow().to_string());
             print_hint("Install Node.js or run 'vp env on' to use managed Node.js.");
         }
-        return None;
+        return (true, None);
     }
 
     match resolve_version(cwd).await {
@@ -831,33 +891,28 @@ async fn check_current_resolution(
             if tokio::fs::try_exists(&binary_path).await.unwrap_or(false) {
                 print_check(&style(output::CHECK).green().to_string(), "Node binary", "installed");
             } else {
-                print_check(
-                    &style(output::WARN_SIGN).yellow().to_string(),
-                    "Node binary",
-                    &style("not installed").yellow().to_string(),
-                );
+                print_warning("Node binary", &style("not installed").yellow().to_string());
                 print_hint("Version will be downloaded on first use.");
             }
-            Some(resolution)
+            (true, Some(resolution))
         }
         Err(e) => {
-            print_check(
-                &style(output::CROSS).red().to_string(),
-                "Resolution",
-                &style(format!("failed: {e}")).red().to_string(),
-            );
-            None
+            // Without a `VP_NODE_VERSION` override or a project version, resolution reads the global config.
+            let reads_config = !config_readable
+                && vp_shared::EnvConfig::get()
+                    .node_version
+                    .as_deref()
+                    .is_none_or(|version| version.trim().is_empty())
+                && matches!(config::resolve_project_version_source(cwd, false).await, Ok(None));
+            let message = if reads_config {
+                unreadable_config()
+            } else {
+                style(format!("failed: {e}")).red().to_string()
+            };
+            print_check(&style(output::CROSS).red().to_string(), "Resolution", &message);
+            (false, None)
         }
     }
-}
-
-/// Get the version string from a Node.js binary.
-async fn get_node_version(node_path: &vt_path::AbsolutePath) -> String {
-    get_tool_version(node_path).await
-}
-
-async fn get_tool_version(tool_path: &vt_path::AbsolutePath) -> String {
-    try_get_tool_version(tool_path).await.unwrap_or_else(|| "unknown".to_string())
 }
 
 async fn try_get_tool_version(tool_path: &vt_path::AbsolutePath) -> Option<String> {
@@ -934,11 +989,7 @@ async fn check_dev_engines(
     print_section("devEngines");
     for finding in findings {
         if finding.warn {
-            print_check(
-                &style(output::WARN_SIGN).yellow().to_string(),
-                finding.key,
-                &style(&finding.message).yellow().to_string(),
-            );
+            print_warning(finding.key, &style(&finding.message).yellow().to_string());
         } else {
             print_check(" ", finding.key, &finding.message);
         }
@@ -1266,8 +1317,7 @@ fn check_conflicts() {
     if !conflicts.is_empty() {
         print_section("Conflicts");
         for manager in &conflicts {
-            print_check(
-                &style(output::WARN_SIGN).yellow().to_string(),
+            print_warning(
                 manager,
                 &style(format!(
                     "detected ({} is set)",

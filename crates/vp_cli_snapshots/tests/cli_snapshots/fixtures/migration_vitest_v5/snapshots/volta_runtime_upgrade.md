@@ -2,7 +2,7 @@
 
 Upgrade the Volta pin before converting it to .node-version, including the cached setup decision.
 
-## `vpt json-edit package.json volta.node 20.19.0`
+## `vpt json-edit package.json volta.node 20.20.2`
 
 
 ## `vp migrate --no-interactive --no-hooks --no-agent --no-editor`

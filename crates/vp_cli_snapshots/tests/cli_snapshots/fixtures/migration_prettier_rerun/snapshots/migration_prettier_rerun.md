@@ -1,19 +1,21 @@
 # migration_prettier_rerun
 
-## `vp migrate --no-interactive`
+## `vp migrate --full --no-interactive`
 
 should detect vite-plus + prettier and auto-migrate prettier
 
 ```
 VITE+ - The Unified Toolchain for the Web
 
+● Prettier configuration detected. Auto-migrating to Oxfmt...
 ◇ Updated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • Dependencies:
     vite-plus  latest → <version>
     vite              → <version>
+• 2 config updates applied
+• Prettier migrated to Oxfmt
 • Package manager settings configured
-• Skipped editor, hooks, and lint setup. Run `vp migrate --full` to apply them.
 ```
 
 ## `vpt print-file package.json`
@@ -24,10 +26,10 @@ check prettier removed from devDependencies and scripts rewritten
 {
   "name": "migration-prettier-rerun",
   "scripts": {
-    "format": "prettier --write ."
+    "format": "vp fmt .",
+    "prepare": "vp config"
   },
   "devDependencies": {
-    "prettier": "^3.0.0",
     "vite-plus": "catalog:"
   }
 }
@@ -37,20 +39,27 @@ check prettier removed from devDependencies and scripts rewritten
 
 check prettier config is removed
 
-**Exit code:** 1
-
 ```
-.prettierrc.json: file
-stat-file assertion failed
+.prettierrc.json: missing
 ```
 
 ## `vpt print-file vite.config.ts`
 
 check oxfmt config merged into vite.config.ts
 
-**Exit code:** 1
-
 ```
-vite.config.ts: not found
-missing file
+import { defineConfig } from "vite-plus";
+
+export default defineConfig({
+  staged: {
+    "*": "vp check --fix"
+  },
+  fmt: {
+    semi: true,
+    singleQuote: true,
+    printWidth: 80,
+    sortPackageJson: false,
+    ignorePatterns: [],
+  },
+});
 ```

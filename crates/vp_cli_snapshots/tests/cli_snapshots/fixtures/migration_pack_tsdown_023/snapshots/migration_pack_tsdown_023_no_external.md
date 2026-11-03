@@ -154,36 +154,32 @@ node_modules/@fixture/pack-bundled/index.js: file
 ## `vpt print-file dist/literal/index.mjs`
 
 ```
-//#region pack-dependency/index.js
+// pack-dependency/index.js
 const bundledValue = 42;
-//#endregion
 export { bundledValue };
 ```
 
 ## `vpt print-file dist/reference/index.mjs`
 
 ```
-//#region pack-dependency/index.js
+// pack-dependency/index.js
 const bundledValue = 42;
-//#endregion
 export { bundledValue };
 ```
 
 ## `vpt print-file dist/callback/index.mjs`
 
 ```
-//#region pack-dependency/index.js
+// pack-dependency/index.js
 const bundledValue = 42;
-//#endregion
 export { bundledValue };
 ```
 
 ## `vpt print-file dist/method/index.mjs`
 
 ```
-//#region pack-dependency/index.js
+// pack-dependency/index.js
 const bundledValue = 42;
-//#endregion
 export { bundledValue };
 ```
 

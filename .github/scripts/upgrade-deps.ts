@@ -5,6 +5,7 @@ import path from 'node:path';
 import {
   findLatestStableVersionForMajor,
   getBundledDependencyRanges,
+  getLatestNodeVersion,
 } from './upgrade-deps-utils.ts';
 
 const ROOT = process.cwd();
@@ -65,9 +66,7 @@ type PnpmWorkspaceVersions = {
   oxlintTsgolint: string;
   oxcProjectRuntime: string;
   oxcProjectTypes: string;
-  oxcMinify: string;
   oxcParser: string;
-  oxcTransform: string;
 };
 
 type PnpmWorkspaceEntry = {
@@ -81,6 +80,8 @@ const STABLE_SEMVER_TAG_RE = /^v?\d+\.\d+\.\d+$/;
 // Vitest major upgrades can change the bundled API, export shims, and CLI
 // behavior. Advance this only after Vite+ has adapted to the new major.
 const SUPPORTED_VITEST_MAJOR = 5;
+// Review compatibility before advancing the shared development, CI, and installation pin.
+const SUPPORTED_NODE_MAJOR = 24;
 
 const isFullSha = (s: string): boolean => /^[0-9a-f]{40}$/.test(s);
 
@@ -371,22 +372,10 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
       newVersion: versions.oxcProjectTypes,
     },
     {
-      name: 'oxc-minify',
-      pattern: /oxc-minify: =([\d.]+(?:-[\w.]+)?)/,
-      replacement: `oxc-minify: =${versions.oxcMinify}`,
-      newVersion: versions.oxcMinify,
-    },
-    {
       name: 'oxc-parser',
       pattern: /oxc-parser: =([\d.]+(?:-[\w.]+)?)/,
       replacement: `oxc-parser: =${versions.oxcParser}`,
       newVersion: versions.oxcParser,
-    },
-    {
-      name: 'oxc-transform',
-      pattern: /oxc-transform: =([\d.]+(?:-[\w.]+)?)/,
-      replacement: `oxc-transform: =${versions.oxcTransform}`,
-      newVersion: versions.oxcTransform,
     },
   ];
 
@@ -432,6 +421,17 @@ async function updateVitestVersionConstant(vitestVersion: string): Promise<void>
   fs.writeFileSync(filePath, updated);
   recordChange('VITEST_VERSION constant', oldVersion, vitestVersion);
   console.log('Updated packages/cli/src/utils/constants.ts');
+}
+
+// Update the shared Node.js pin for development, CI, and installation.
+function updateNodeVersionFile(nodeVersion: string): void {
+  const filePath = path.join(ROOT, '.node-version');
+  const oldVersion = fs.readFileSync(filePath, 'utf8').trim();
+  if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(oldVersion)) {
+    throw new Error(`Expected an exact stable Node.js version in ${filePath}`);
+  }
+  fs.writeFileSync(filePath, `${nodeVersion}\n`);
+  recordChange('Node.js', oldVersion, nodeVersion);
 }
 
 // ============ Write metadata files for PR description ============
@@ -541,6 +541,7 @@ async function upgradeDependencies(): Promise<void> {
   console.log('Fetching latest versions…');
 
   const [
+    nodeVersion,
     vitestVersion,
     tsdownVersion,
     lightningcssVersion,
@@ -552,10 +553,9 @@ async function upgradeDependencies(): Promise<void> {
     oxlintTsgolintVersion,
     oxcProjectRuntimeVersion,
     oxcProjectTypesVersion,
-    oxcMinifyVersion,
     oxcParserVersion,
-    oxcTransformVersion,
   ] = await Promise.all([
+    getLatestNodeVersion(SUPPORTED_NODE_MAJOR),
     getLatestNpmVersionForMajor('vitest', SUPPORTED_VITEST_MAJOR),
     getLatestNpmVersion('tsdown'),
     // Mirror exactly what the bundled @tsdown/css depends on.
@@ -568,11 +568,10 @@ async function upgradeDependencies(): Promise<void> {
     getLatestNpmVersion('oxlint-tsgolint'),
     getLatestNpmVersion('@oxc-project/runtime'),
     getLatestNpmVersion('@oxc-project/types'),
-    getLatestNpmVersion('oxc-minify'),
     getLatestNpmVersion('oxc-parser'),
-    getLatestNpmVersion('oxc-transform'),
   ]);
 
+  console.log(`Node.js: ${nodeVersion}`);
   console.log(`vitest: ${vitestVersion}`);
   console.log(`tsdown: ${tsdownVersion}`);
   console.log(`lightningcss (from @tsdown/css): ${lightningcssVersion}`);
@@ -585,9 +584,7 @@ async function upgradeDependencies(): Promise<void> {
   console.log(`oxlint-tsgolint: ${oxlintTsgolintVersion}`);
   console.log(`@oxc-project/runtime: ${oxcProjectRuntimeVersion}`);
   console.log(`@oxc-project/types: ${oxcProjectTypesVersion}`);
-  console.log(`oxc-minify: ${oxcMinifyVersion}`);
   console.log(`oxc-parser: ${oxcParserVersion}`);
-  console.log(`oxc-transform: ${oxcTransformVersion}`);
 
   await updateUpstreamVersions();
   await updatePnpmWorkspace({
@@ -602,11 +599,10 @@ async function upgradeDependencies(): Promise<void> {
     oxlintTsgolint: oxlintTsgolintVersion,
     oxcProjectRuntime: oxcProjectRuntimeVersion,
     oxcProjectTypes: oxcProjectTypesVersion,
-    oxcMinify: oxcMinifyVersion,
     oxcParser: oxcParserVersion,
-    oxcTransform: oxcTransformVersion,
   });
   await updateVitestVersionConstant(vitestVersion);
+  updateNodeVersionFile(nodeVersion);
   // Keep the selected versions available if installation or upstream sync fails.
   writeMetaFiles();
 

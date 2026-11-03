@@ -831,7 +831,7 @@ PATH
 
 ...
 
-✗ Some issues found. Run the suggested commands to fix them.
+✗ Some issues found.
 ```
 
 ## User Experience
@@ -949,7 +949,11 @@ Configuration
                       Written by 'vp env use'. Run 'vp env use --unset' to remove.
 
 ...
+
+⚠ Some warnings found.
 ```
+
+Warnings describe setups that still work, so they keep the exit code at 0. Errors take precedence: when both appear, the summary is `✗ Some issues found.` and the exit code is 1.
 
 **Doctor Output with System-First Mode:**
 
@@ -1037,7 +1041,7 @@ IDE Setup
         . "$HOME/.vite-plus/env"
       Then restart your IDE to apply changes.
 
-✗ Some issues found. Run the suggested commands to fix them.
+✗ Some issues found.
 ```
 
 ## Shell Configuration Reference

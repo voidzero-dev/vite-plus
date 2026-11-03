@@ -10,10 +10,14 @@ permissions: {}
 jobs:
   upgrade:
     if: github.event.repository.fork == false
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       actions: read
       id-token: write
+    env:
+      CHECK_UPGRADE_TIMEOUT_MINUTES: 180
+    outputs:
+      command-timeouts: ${{ steps.check-upgrade-result.outputs.report }}
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
@@ -46,6 +50,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node .github/scripts/upgrade-deps.ts
 
+      - name: Use the updated Node.js pin
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+
       - name: Build
         uses: ./.github/actions/build-upstream
         id: build-upstream
@@ -68,9 +78,15 @@ jobs:
             --output "${UPGRADE_DEPS_META_DIR}/cli-help-report.md" \
             --github-output "${GITHUB_OUTPUT}"
 
-      - name: Check upgrade dependencies with Kimi K3
+      - name: Record Kimi K3.1 Pro start time
+        run: echo "CHECK_UPGRADE_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: Check upgrade dependencies with Kimi K3.1 Pro
         id: check-upgrade-dependencies
-        timeout-minutes: 180
+        timeout-minutes: ${{ fromJSON(env.CHECK_UPGRADE_TIMEOUT_MINUTES) }}
+        # After a timeout, keep the partial fixes for a draft PR; the report-timeouts
+        # job opens an issue. The next step stops the job after any other failure.
+        continue-on-error: true
         uses: anthropics/claude-code-action@1d6de8cb0c237e7c15e9e1bdf973826ebae490cc # v1.0.248
         env:
           ANTHROPIC_BASE_URL: https://api.kimi.com/coding/
@@ -85,12 +101,12 @@ jobs:
             {
               "env": {
                 "ANTHROPIC_BASE_URL": "https://api.kimi.com/coding/",
-                "ANTHROPIC_MODEL": "k3[1m]",
-                "ANTHROPIC_DEFAULT_OPUS_MODEL": "k3[1m]",
+                "ANTHROPIC_MODEL": "k3.1-pro[1m]",
+                "ANTHROPIC_DEFAULT_OPUS_MODEL": "k3.1-pro[1m]",
                 "ANTHROPIC_DEFAULT_SONNET_MODEL": "kimi-for-coding",
                 "ANTHROPIC_DEFAULT_HAIKU_MODEL": "kimi-for-coding",
-                "ANTHROPIC_DEFAULT_FABLE_MODEL": "k3[1m]",
-                "CLAUDE_CODE_SUBAGENT_MODEL": "k3[1m]",
+                "ANTHROPIC_DEFAULT_FABLE_MODEL": "k3.1-pro[1m]",
+                "CLAUDE_CODE_SUBAGENT_MODEL": "k3.1-pro[1m]",
                 "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "1048576",
                 "CLAUDE_CODE_MAX_CONTEXT_TOKENS": "1048576",
                 "CLAUDE_CODE_EFFORT_LEVEL": "max"
@@ -107,17 +123,24 @@ jobs:
 
             ### Background
             - Upgrade script: `./.github/scripts/upgrade-deps.ts`
+            - Development, CI, and global CLI dependency installation use the
+              latest stable `24.x` release pinned in `.node-version`.
+              Keep the exact version selected by the upgrade script. Do not replace
+              it with a moving LTS alias or advance the major version.
+              Runtime commands keep their latest LTS fallback.
             - Vitest is capped at the latest stable `5.x` release. Keep the exact
               version selected by the upgrade script when merging upstream catalogs.
               Official Vitest packages must use that version. Do not bypass the cap.
             - Sync-remote tool: `pnpm tool sync-remote` (source in
               `packages/tools/src/sync-remote-deps.ts`) — clones rolldown/vite into the
-              working tree, merges their pnpm-workspace catalogs into the root
-              `pnpm-workspace.yaml`, and syncs the root `Cargo.toml` oxc crate
+              working tree, imports only their build roots and bundled packages,
+              and keeps catalog entries referenced by the retained workspace packages.
+              It updates `pnpm-workspace.yaml` and syncs the root `Cargo.toml` oxc crate
               versions to match `rolldown/Cargo.toml`.
             - Build-upstream action: `./.github/actions/build-upstream/action.yml`
-            - Package manager: `pnpm`. Do not downgrade a dependency selected by the
-              upgrade script. Use the latest version that its compatibility policy allows.
+            - Package manager: `pnpm`. Preserve toolchain versions selected by the
+              upgrade script under its compatibility policy. Other shared dependencies
+              follow the pinned upstream requirements.
             - After changing tsdown or rolldown-plugin-dts, run
               `node .github/scripts/upgrade-deps.ts --sync-bundled-deps`, then
               `pnpm install --no-frozen-lockfile`. Core's external `yuku-parser` must
@@ -135,15 +158,11 @@ jobs:
             ### Fixups to perform (in order)
             1. If the `Upgrade dependencies and sync upstream` outcome above is `failure`,
                fix it FIRST — nothing else will work until the merged workspace is correct.
-               Read the failed command in the upgrade log and re-run it. The most common cause is a
-               cross-major semver conflict in the merged catalog, e.g.
-               `Incompatible semver ranges for <pkg>: ^X vs ^Y`. The merger refuses to
-               auto-resolve cross-major conflicts for packages outside its synced list
-               (oxc-* and tinybench). For passthrough deps that vp does NOT import
-               directly (e.g. `diff`, `acorn`, `astring`, anything only present in
-               `rolldown/scripts/package.json` or vite's internals), bump vp's
-               `pnpm-workspace.yaml` catalog entry to match the rolldown/vite version,
-               then re-run `pnpm tool sync-remote` until it exits 0. Complete the remaining
+               Read the failed command in the upgrade log and re-run it. Resolve
+               catalog conflicts against the pinned Rolldown and Vite sources.
+               `sync-remote` follows their requirements for imported dependencies;
+               preserve its explicit Oxc, Vitest, and TypeScript integration policies.
+               Re-run `pnpm tool sync-remote` until it exits 0. Complete the remaining
                upgrade operations: `pnpm dedupe`,
                `node .github/scripts/upgrade-deps.ts --sync-bundled-deps`, then
                `pnpm install --no-frozen-lockfile` before building or testing.
@@ -157,8 +176,12 @@ jobs:
                from `rolldown/Cargo.toml`, bump it to match (the oxc same-version
                family follows rolldown's umbrella `oxc` version), run `cargo update`,
                and rebuild.
-            3. If the rolldown hash changed, follow `.claude/agents/cargo-workspace-merger.md`
-               to resync the workspace.
+            3. Follow `.claude/agents/cargo-workspace-merger.md` to synchronize shared root
+               Rust dependency requirements with both pinned upstream sources and
+               update their Renovate exclusions. Preserve documented integration
+               constraints and refresh `Cargo.lock` after the manifest changes.
+               Keep the root catalog exclusion in `.github/renovate.json` aligned with
+               used dependencies imported from the Rolldown and Vite catalogs.
             4. If `CLI_HELP_DIFF_CHANGED` is `true`, read the upstream help diff at
                `$CLI_HELP_DIFF_REPORT`, then follow
                `.claude/skills/sync-upstream-cli-help/SKILL.md` to update the mirrored
@@ -190,21 +213,23 @@ jobs:
             incorrect source-level fix, fix the source and regenerate until the diff
             is either gone or intentionally kept.
 
-            ### Final validation (this step is complete ONLY when all pass)
-            1. `just build` exits 0.
-            2. `pnpm bootstrap-cli:ci && pnpm test:unit` exits 0.
-            3. `just snapshot-test` exits 0. Snapshot mismatches fail the run with a
-               unified diff. Re-record with `UPDATE_SNAPSHOTS=1` only for cosmetic
-               drift from the upgrade (e.g. a bumped version string in help output);
-               unexpected stack traces, missing output, or diverging CLI behavior are
-               regressions to fix.
-            4. `git status --short` and `git diff --stat` have been inspected, and
-               every changed file is intentional for the upgrade PR. Pay special
-               attention to generated NAPI binding files, because later CI runs fail
-               if a build produces uncommitted binding output changes.
+            ### Validation during fixups
+            Rebuild the affected packages and run focused tests for each fix. For
+            tsdown or declaration-generator changes, run `just snapshot-test
+            command_pack_dts_compat`, `just snapshot-test command_pack_monorepo`,
+            and `just snapshot-test migration_from_tsup_monorepo_success`.
+            A successful internal build does
+            not prove that `vp pack` works with consumers' TypeScript versions.
 
-            If any of the four above fails, diagnose the root cause, fix it, and re-run
-            the final validation. Do not exit with the task marked complete otherwise.
+            Re-record with `UPDATE_SNAPSHOTS=1` only for cosmetic drift from the
+            upgrade (e.g. a bumped version string in help output). Unexpected stack
+            traces, missing output, or diverging CLI behavior are regressions to fix.
+            Inspect `git status --short` and `git diff --stat` before finishing;
+            every changed file, including generated NAPI bindings, must be intentional.
+
+            The workflow's separate Final validation step runs the full build, unit
+            tests, and snapshot suite after this action. Do not launch the full
+            snapshot suite here or leave any validation command running in the background.
 
             ### Running long commands (IMPORTANT)
             Run every long-running command (`just build`, `pnpm bootstrap-cli:ci`,
@@ -228,9 +253,24 @@ jobs:
             Do NOT run `git commit` or `git push`. A later workflow step commits every
             modified file for you.
           claude_args: |
-            --model "k3[1m]" --max-turns 400 --allowedTools "Bash,Edit,Replace,NotebookEditCell"
+            --model "k3.1-pro[1m]" --max-turns 400 --allowedTools "Bash,Edit,Replace,NotebookEditCell"
           additional_permissions: |
             actions: read
+
+      - name: Check Kimi K3.1 Pro result
+        id: check-upgrade-result
+        env:
+          EXECUTION_FILE: ${{ steps.check-upgrade-dependencies.outputs.execution_file }}
+          OUTCOME: ${{ steps.check-upgrade-dependencies.outcome }}
+        run: |
+          # Read the transcript now: the next Kimi K3.1 Pro step overwrites the execution file.
+          node .github/scripts/agent-command-timeouts.ts "${EXECUTION_FILE}" --github-output "${GITHUB_OUTPUT}" ||
+            echo '::warning::Could not read command timeouts from the Kimi K3.1 Pro execution file.'
+          elapsed=$(( $(date +%s) - CHECK_UPGRADE_STARTED_AT ))
+          if [ "${OUTCOME}" = failure ] && [ "${elapsed}" -lt $(( CHECK_UPGRADE_TIMEOUT_MINUTES * 60 )) ]; then
+            echo '::error::Kimi K3.1 Pro failed before reaching its timeout.'
+            exit 1
+          fi
 
       - name: Update lockfile
         # Dedupe runs in upgrade-deps.ts, before dependency sync and validation.
@@ -245,8 +285,25 @@ jobs:
         continue-on-error: true
         run: pnpm fmt
 
-      - name: Enhance PR description with Kimi K3
+      - name: Final validation
+        id: final-validation
+        timeout-minutes: 90
+        # Keep broken upgrades available for review, but only as draft PRs.
+        continue-on-error: true
+        shell: bash
+        env:
+          RELEASE_BUILD: 'true'
+        run: |
+          set -euo pipefail
+          pnpm bootstrap-cli
+          export PATH="$HOME/.vite-plus/bin:$PATH"
+          pnpm test:unit
+          just snapshot-test
+
+      - name: Enhance PR description with Kimi K3.1 Pro
         id: enhance-pr-description
+        # Keep the job within its own time limit so the PR is still created.
+        timeout-minutes: 30
         continue-on-error: true
         uses: anthropics/claude-code-action@1d6de8cb0c237e7c15e9e1bdf973826ebae490cc # v1.0.248
         env:
@@ -259,12 +316,12 @@ jobs:
             {
               "env": {
                 "ANTHROPIC_BASE_URL": "https://api.kimi.com/coding/",
-                "ANTHROPIC_MODEL": "k3[1m]",
-                "ANTHROPIC_DEFAULT_OPUS_MODEL": "k3[1m]",
+                "ANTHROPIC_MODEL": "k3.1-pro[1m]",
+                "ANTHROPIC_DEFAULT_OPUS_MODEL": "k3.1-pro[1m]",
                 "ANTHROPIC_DEFAULT_SONNET_MODEL": "kimi-for-coding",
                 "ANTHROPIC_DEFAULT_HAIKU_MODEL": "kimi-for-coding",
-                "ANTHROPIC_DEFAULT_FABLE_MODEL": "k3[1m]",
-                "CLAUDE_CODE_SUBAGENT_MODEL": "k3[1m]",
+                "ANTHROPIC_DEFAULT_FABLE_MODEL": "k3.1-pro[1m]",
+                "CLAUDE_CODE_SUBAGENT_MODEL": "k3.1-pro[1m]",
                 "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "1048576",
                 "CLAUDE_CODE_MAX_CONTEXT_TOKENS": "1048576",
                 "CLAUDE_CODE_EFFORT_LEVEL": "max"
@@ -287,6 +344,7 @@ jobs:
             ### Build outcomes from earlier steps
             - Upgrade dependencies and sync upstream: ${{ steps.build.outcome }}
             - build-upstream action: ${{ steps.build-upstream.outcome }}
+            - Kimi K3.1 Pro fixups: ${{ steps.check-upgrade-dependencies.outcome == 'success' && 'success' || 'timed out' }}
 
             ### Output files to OVERWRITE (these live outside the repo and will NOT be committed)
             - `${{ env.UPGRADE_DEPS_META_DIR }}/commit-message.txt`
@@ -324,6 +382,7 @@ jobs:
             4. `## Build status` — bullet list:
                - `upgrade-and-sync`: ${{ steps.build.outcome }}
                - `build-upstream`: ${{ steps.build-upstream.outcome }}
+               - `kimi-fixups`: ${{ steps.check-upgrade-dependencies.outcome == 'success' && 'success' || 'timed out' }}
 
             ### Rules
             - Be factual. Only describe changes that are actually present in `git diff`. Do not
@@ -334,7 +393,7 @@ jobs:
               two output files. A later workflow step will consume them.
             - Do NOT modify any file inside the repository working tree.
           claude_args: |
-            --model "k3[1m]" --allowedTools "Bash,Read,Write,Edit"
+            --model "k3.1-pro[1m]" --allowedTools "Bash,Read,Write,Edit"
           additional_permissions: |
             actions: read
 
@@ -400,6 +459,9 @@ jobs:
           base: main
           branch: deps/upstream-update
           title: 'feat(deps): upgrade upstream dependencies'
+          # Final validation does not cover all Kimi K3.1 Pro fixups, such as documentation
+          # syncs, so a timed-out fixup run stays a draft even when validation passes.
+          draft: ${{ steps.final-validation.outcome != 'success' || steps.check-upgrade-dependencies.outcome != 'success' }}
           sign-commits: true
           token: ${{ steps.app-token.outputs.token }}
           body: ${{ steps.pr-content.outputs.body }}
@@ -411,3 +473,122 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           PR_NUMBER: ${{ steps.create-pr.outputs.pull-request-number }}
         run: gh pr comment "${PR_NUMBER}" --repo "${GITHUB_REPOSITORY}" --body-file "${UPGRADE_DEPS_META_DIR}/cli-help-report.md"
+
+      - name: Report validation failure
+        if: always() && steps.final-validation.outcome != 'success'
+        shell: bash
+        run: |
+          echo '::error::The upgraded dependencies did not pass final validation.'
+          exit 1
+
+  report-timeouts:
+    name: Report timeouts
+    needs: upgrade
+    # Also runs when the upgrade job fails or exceeds its own time limit. Kept
+    # separate so the Kimi K3.1 Pro steps never receive a token that can write issues.
+    if: always() && needs.upgrade.result != 'skipped'
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      checks: read
+      issues: write
+    steps:
+      - name: Create or update timeout issue
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          COMMAND_TIMEOUTS: ${{ needs.upgrade.outputs.command-timeouts }}
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt, {
+              owner,
+              repo,
+              run_id: context.runId,
+              attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+            });
+            const upgrade = jobs.find((job) => job.name === 'upgrade');
+            // The runner reports step and job timeouts as annotations on the job's check run.
+            const annotations = upgrade
+              ? await github.paginate(github.rest.checks.listAnnotations, {
+                  owner,
+                  repo,
+                  check_run_id: upgrade.id,
+                })
+              : [];
+            const messages = [...new Set(annotations.map(({ message }) => message))];
+            const timeouts = messages.filter((message) => /has exceeded the maximum execution time/.test(message));
+            const stepTimeouts = messages.filter((message) => /^The action .*has timed out/.test(message));
+            if (stepTimeouts.length > 0) {
+              // Hosted runners omit the step name from this message. It is logged as the step
+              // ends, in the second the next step starts, so the step that timed out is the
+              // last one that started in an earlier second.
+              const named = new Set();
+              try {
+                const { data: log } = await github.rest.actions.downloadJobLogsForWorkflowRun({
+                  owner,
+                  repo,
+                  job_id: upgrade.id,
+                });
+                const lines = String(log).matchAll(
+                  /^(\S{19})\S* ##\[error\](The action [^\r\n]*has timed out[^\r\n]*)/gm,
+                );
+                for (const [, second, message] of lines) {
+                  const loggedAt = new Date(`${second}Z`);
+                  const step = upgrade.steps
+                    .filter((step) => step.started_at && new Date(step.started_at) < loggedAt)
+                    .at(-1);
+                  named.add(step ? `\`${step.name}\`: ${message}` : message);
+                }
+              } catch (error) {
+                core.warning(`Could not read the upgrade job log: ${error.message}`);
+              }
+              timeouts.push(...(named.size > 0 ? named : stepTimeouts));
+            }
+            const commandTimeouts = process.env.COMMAND_TIMEOUTS.trim();
+            if (timeouts.length === 0 && !commandTimeouts) {
+              core.info('No timeouts found.');
+              return;
+            }
+
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+            const sections = [`The [${context.workflow}](${runUrl}) run hit a timeout.`];
+            if (timeouts.length > 0) {
+              sections.push(['### Step and job timeouts', ...timeouts.map((message) => `- ${message}`)].join('\n'));
+            }
+            if (commandTimeouts) {
+              sections.push(`### Kimi K3.1 Pro command timeouts\n${commandTimeouts}`);
+            }
+            const body = sections.join('\n\n');
+
+            const label = 'upgrade-deps-timeout';
+            try {
+              await github.rest.issues.createLabel({
+                owner,
+                repo,
+                name: label,
+                color: 'd73a4a',
+                description: 'Upgrade Upstream Dependencies workflow timeout',
+              });
+            } catch (error) {
+              if (error.status !== 422) throw error; // The label already exists.
+            }
+            const { data: openIssues } = await github.rest.issues.listForRepo({
+              owner,
+              repo,
+              labels: label,
+              state: 'open',
+              per_page: 1,
+            });
+            if (openIssues.length > 0) {
+              await github.rest.issues.createComment({ owner, repo, issue_number: openIssues[0].number, body });
+              core.info(`Commented on issue #${openIssues[0].number}`);
+            } else {
+              const { data: issue } = await github.rest.issues.create({
+                owner,
+                repo,
+                title: `${context.workflow} timed out`,
+                labels: [label],
+                body,
+              });
+              core.info(`Created issue #${issue.number}`);
+            }

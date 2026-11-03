@@ -1,6 +1,6 @@
 # nested_pnpm_preserves_inherited_npm
 
-## `vpt write-file .node-version 22.18.0`
+## `vpt write-file .node-version 22.23.4`
 
 
 ## `vpt json-edit package.json packageManager npm@10.5.0`

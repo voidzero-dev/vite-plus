@@ -308,9 +308,9 @@ mod tests {
 
     /// Shared VP_HOME for tests that download a real Node.js runtime: pinning
     /// isolates them from concurrent scopes, and one shared root keeps the
-    /// download cache warm across tests and runs.
+    /// download cache warm across crates and runs.
     fn shared_vp_home() -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join("vp-global-cli-tests-vp-home");
+        let dir = std::env::temp_dir().join("vp-node-runtime-tests-vp-home");
         std::fs::create_dir_all(&dir).unwrap();
         dir
     }
@@ -326,18 +326,24 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_node_version() {
-        // Shared root keeps the downloaded Node 20.18.0 warm across runs.
+        // Shared root keeps the downloaded Node 20.20.2 warm across runs.
         let vp_home = shared_vp_home();
         vp_shared::EnvConfig::with_vars_async(
             [(env_vars::VP_HOME, vp_home.as_os_str())],
             |_| async {
-                // Run 'node --version' with a specific Node.js version
-                let command = vec!["node".to_string(), "--version".to_string()];
-                let cwd = vt_path::current_dir().unwrap();
-                let result = execute(&cwd, Some("20.18.0"), None, None, &command).await;
-                assert!(result.is_ok());
-                let status = result.unwrap();
-                assert!(status.success());
+                // Keep package-manager selection outside the repository so this
+                // Node-only test does not download the workspace's pnpm version.
+                let project = tempfile::tempdir().unwrap();
+                let cwd = vt_path::AbsolutePathBuf::new(project.path().to_path_buf()).unwrap();
+                tokio::fs::write(cwd.join("package.json"), "{}").await.unwrap();
+                let command = vec![
+                    "node".to_string(),
+                    "-e".to_string(),
+                    "require('node:assert/strict').equal(process.version, 'v20.20.2');".to_string(),
+                ];
+                let result = execute(&cwd, Some("20.20.2"), None, None, &command).await;
+                let status = result.expect("Node execution should succeed");
+                assert!(status.success(), "Node should run with the requested version");
             },
         )
         .await;

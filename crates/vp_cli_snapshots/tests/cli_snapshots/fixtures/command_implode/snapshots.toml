@@ -2,6 +2,7 @@
 name = "implode_confirmation"
 vp = "global"
 seed-runtime = false
+env = { VP_SELF_SETUP_NO_MODIFY_PATH = "1" }
 steps = [
   { argv = ["vp", "implode"], comment = "The old confirmation word leaves the installation intact", interactions = [
     { expect-milestone = "text:implode:ready" },
@@ -25,3 +26,57 @@ steps = [
   ] },
   ["vpt", "stat-file", "$VP_HOME", "--assert", "missing"],
 ]
+
+[[case]]
+name = "implode_unowned_directory"
+vp = "global"
+seed-runtime = false
+skip-platforms = ["windows"]
+env = { VP_SKIP_DEPS_INSTALL = "1", VP_VERSION = "0.0.0-test", VP_NODE_MANAGER = "no", VP_SELF_SETUP_NO_MODIFY_PATH = "1" }
+steps = [
+  { argv = ["vpt", "mkdir", "external"], snapshot = false },
+  { argv = ["vpt", "cp", "$VP_HOME/bin/vp", "external/vp"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "external/vp"], snapshot = false },
+  { argv = ["vpt", "write-file", "$HOME/Documents/personal.txt", "keep my documents\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "$HOME/.bashrc", "# personal config\n# Vite+ bin\n. \"$HOME/Documents/env\"\n"], snapshot = false },
+  { argv = ["vp", "implode", "--yes"], envs = [["VP_HOME", "${HOME}/Documents"]], comment = "An unrelated override fails before touching files or profiles", continue-on-failure = true },
+  ["vpt", "print-file", "$HOME/.bashrc"],
+  { argv = ["./external/vp"], tty = false, envs = [["VP_HOME", "${HOME}/Documents"]], comment = "Setup succeeds without claiming a nonempty personal directory", snapshot = false },
+  ["vpt", "stat-file", "$HOME/Documents/current/bin/.vp-setup-complete", "--assert", "file"],
+  { argv = ["vp", "implode", "--yes"], envs = [["VP_HOME", "${HOME}/Documents"]], comment = "Only the newly owned cache is removed; the unmarked parent is preserved" },
+  ["vpt", "stat-file", "$HOME/Documents/cache", "--assert", "missing"],
+  ["vpt", "stat-file", "$HOME/Documents/.vp-owned", "--assert", "missing"],
+  ["vpt", "print-file", "$HOME/Documents/personal.txt"],
+  ["vpt", "print-file", "$HOME/.bashrc"],
+]
+
+[[case]]
+name = "implode_nested_unowned_cache"
+vp = "global"
+seed-runtime = false
+env = { VP_SELF_SETUP_NO_MODIFY_PATH = "1" }
+steps = [
+  { argv = ["vpt", "rm", "$VP_HOME/cache/.vp-owned"], snapshot = false },
+  { argv = ["vpt", "write-file", "$VP_HOME/cache/personal.txt", "keep\n"], snapshot = false },
+  { argv = ["vp", "implode", "--yes"], comment = "A marked ancestor cannot authorize removal of an unmarked category", snapshot = false },
+  ["vpt", "stat-file", "$VP_HOME", "--assert", "dir"],
+  ["vpt", "print-file", "$VP_HOME/cache/personal.txt"],
+  ["vpt", "stat-file", "$VP_HOME/bin", "--assert", "dir"],
+]
+
+[[case]]
+name = "implode_symlink_parent_override"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [["node", "unsafe-root.mjs"]]
+
+[[case]]
+name = "implode_legacy_upgrade"
+vp = "global"
+steps = [["node", "legacy-upgrade.mjs"]]
+
+[[case]]
+name = "implode_legacy_upgrade_split"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [["node", "legacy-upgrade.mjs", "--split"]]

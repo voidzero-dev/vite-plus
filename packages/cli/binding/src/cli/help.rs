@@ -1,5 +1,9 @@
-use clap::error::{ContextKind, ContextValue, ErrorKind};
+use clap::error::ErrorKind;
 use console::style;
+use vp_cli_help::error::{
+    extract_invalid_subcommand_details, extract_unknown_argument, has_pass_as_value_suggestion,
+    print_subcommand_suggestion, print_unknown_argument_error,
+};
 use vp_error::Error;
 use vp_shared::output;
 use vt::ExitStatus;
@@ -17,7 +21,10 @@ pub(super) fn handle_cli_parse_error(err: clap::Error) -> Result<ExitStatus, Err
     if matches!(err.kind(), ErrorKind::InvalidSubcommand) && print_invalid_subcommand_error(&err) {
         return Ok(ExitStatus(err.exit_code() as u8));
     }
-    if matches!(err.kind(), ErrorKind::UnknownArgument) && print_unknown_argument_error(&err) {
+    if matches!(err.kind(), ErrorKind::UnknownArgument)
+        && let Some(invalid_argument) = extract_unknown_argument(&err)
+    {
+        print_unknown_argument_error(&invalid_argument, has_pass_as_value_suggestion(&err));
         return Ok(ExitStatus(err.exit_code() as u8));
     }
 
@@ -100,27 +107,11 @@ pub(super) fn should_print_help(args: &[String]) -> bool {
     args.is_empty() || matches!(args, [arg] if arg == "-h" || arg == "--help")
 }
 
-fn extract_invalid_subcommand_details(error: &clap::Error) -> Option<(String, Option<String>)> {
-    let invalid_subcommand = match error.get(ContextKind::InvalidSubcommand) {
-        Some(ContextValue::String(value)) => value.as_str(),
-        _ => return None,
-    };
-
-    let suggestion = match error.get(ContextKind::SuggestedSubcommand) {
-        Some(ContextValue::String(value)) => Some(value.to_owned()),
-        Some(ContextValue::Strings(values)) => {
-            vp_shared::string_similarity::pick_best_suggestion(invalid_subcommand, values)
-        }
-        _ => None,
-    };
-
-    Some((invalid_subcommand.to_owned(), suggestion))
-}
-
 fn print_invalid_subcommand_error(error: &clap::Error) -> bool {
-    let Some((invalid_subcommand, suggestion)) = extract_invalid_subcommand_details(error) else {
+    let Some(details) = extract_invalid_subcommand_details(error) else {
         return false;
     };
+    let invalid_subcommand = &details.invalid_subcommand;
 
     if GLOBAL_ONLY_SUBCOMMANDS.contains(&invalid_subcommand.as_str()) {
         let command =
@@ -132,59 +123,10 @@ fn print_invalid_subcommand_error(error: &clap::Error) -> bool {
         return true;
     }
 
-    let highlighted_subcommand =
-        style(&invalid_subcommand).for_stderr().blue().bright().to_string();
-    output::error(&format!("Command '{highlighted_subcommand}' not found"));
+    vp_cli_help::error::print_invalid_subcommand_error(invalid_subcommand);
 
-    if let Some(suggestion) = suggestion {
-        eprintln!();
-        let highlighted_suggestion =
-            style(format!("`vp {suggestion}`")).for_stderr().blue().bright().to_string();
-        eprintln!("Did you mean {highlighted_suggestion}?");
-    }
-
-    true
-}
-
-fn extract_unknown_argument(error: &clap::Error) -> Option<String> {
-    match error.get(ContextKind::InvalidArg) {
-        Some(ContextValue::String(value)) => Some(value.to_owned()),
-        _ => None,
-    }
-}
-
-fn has_pass_as_value_suggestion(error: &clap::Error) -> bool {
-    let contains_pass_as_value = |suggestion: &str| suggestion.contains("as a value");
-
-    match error.get(ContextKind::Suggested) {
-        Some(ContextValue::String(suggestion)) => contains_pass_as_value(suggestion),
-        Some(ContextValue::Strings(suggestions)) => {
-            suggestions.iter().any(|suggestion| contains_pass_as_value(suggestion))
-        }
-        Some(ContextValue::StyledStr(suggestion)) => {
-            contains_pass_as_value(&suggestion.to_string())
-        }
-        Some(ContextValue::StyledStrs(suggestions)) => {
-            suggestions.iter().any(|suggestion| contains_pass_as_value(&suggestion.to_string()))
-        }
-        _ => false,
-    }
-}
-
-fn print_unknown_argument_error(error: &clap::Error) -> bool {
-    let Some(invalid_argument) = extract_unknown_argument(error) else {
-        return false;
-    };
-
-    let highlighted_argument = style(&invalid_argument).for_stderr().blue().bright().to_string();
-    output::error(&format!("Unexpected argument '{highlighted_argument}'"));
-
-    if has_pass_as_value_suggestion(error) {
-        eprintln!();
-        let pass_through_argument = format!("-- {invalid_argument}");
-        let highlighted_pass_through_argument =
-            format!("`{}`", style(&pass_through_argument).for_stderr().blue().bright());
-        eprintln!("Use {highlighted_pass_through_argument} to pass the argument as a value");
+    if let Some(suggestion) = &details.suggestion {
+        print_subcommand_suggestion(suggestion);
     }
 
     true

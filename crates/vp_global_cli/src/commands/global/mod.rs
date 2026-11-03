@@ -12,6 +12,7 @@ use vt_path::{AbsolutePathBuf, current_dir};
 
 use crate::{commands::env::config::resolve_version, error::Error};
 
+pub(crate) mod bin_lock;
 pub mod install;
 pub mod outdated;
 pub mod packages;

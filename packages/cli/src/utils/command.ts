@@ -1,4 +1,5 @@
 import { constants } from 'node:os';
+import { fileURLToPath } from 'node:url';
 
 import spawn from 'cross-spawn';
 
@@ -21,6 +22,20 @@ export interface ExecutionResult {
 export interface RunCommandResult extends ExecutionResult {
   stdout: Buffer;
   stderr: Buffer;
+}
+
+/** Run this CLI version even when a package-manager launcher does not expose `vp` on PATH. */
+export function getVpCommand(
+  args: string[],
+  command = process.env.VP_CLI_BIN,
+): Pick<RunCommandOptions, 'command' | 'args'> {
+  if (command !== undefined) {
+    return { command, args };
+  }
+  return {
+    command: process.execPath,
+    args: [fileURLToPath(import.meta.resolve('vite-plus/bin')), ...args],
+  };
 }
 
 export function exitCodeFromClose(code: number | null, signal: NodeJS.Signals | null) {

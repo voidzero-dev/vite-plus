@@ -17,6 +17,7 @@ import {
   SUPPORTED_GIT_HOOK_NAMES,
 } from '../../config/hooks.ts';
 import type { PackageManager, WorkspacePackage } from '../../types/index.ts';
+import { getVpCommand } from '../../utils/command.ts';
 import { documentationUrl } from '../../utils/documentation.ts';
 import { findGitRoot } from '../../utils/git.ts';
 import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
@@ -171,7 +172,7 @@ function vpConfigHookCommands(script: string | undefined): VpConfigHookCommand[]
   }
   let commands = parseLiteralCommands(script, true);
   // Preserve a leading refresh even when later commands need shell evaluation.
-  // setupGitHooks prepends this form when it cannot rewrite an existing script.
+  // installGitHooks prepends this form when it cannot rewrite an existing script.
   const separator = script.indexOf('&&');
   if (!commands && separator !== -1) {
     const first = parseLiteralCommands(script.slice(0, separator), false)?.[0];
@@ -290,20 +291,6 @@ function normalizeGitHooksPath(hooksPath: string): string {
 }
 
 /**
- * High-level helper that sets up Vite+ hooks when no other hook tool owns the
- * project. Husky setups are deliberately preserved for a dedicated migration.
- */
-export function installGitHooks(
-  projectPath: string,
-  silent = false,
-  report?: MigrationReport,
-  packageManager?: PackageManager,
-  packages: readonly WorkspacePackage[] = [],
-): boolean {
-  return setupGitHooks(projectPath, silent, report, packageManager, packages);
-}
-
-/**
  * Pre-flight check: verify that git hooks can be set up for this project.
  * Returns `null` if hooks setup can proceed, or a warning reason string
  * explaining why hooks setup should be skipped.
@@ -389,11 +376,11 @@ export function shouldSkipStagedMigrationForHooks(
 }
 
 /**
- * Set up git hooks with husky + lint-staged via vp commands.
- * Skips if another hook tool is detected (warns user).
+ * Set up Vite+ hooks when no other hook tool owns the project.
+ * Husky setups are deliberately preserved for a dedicated migration.
  * Returns true if hooks were successfully set up, false if skipped.
  */
-export function setupGitHooks(
+export function installGitHooks(
   projectPath: string,
   silent = false,
   report?: MigrationReport,
@@ -474,10 +461,9 @@ export function setupGitHooks(
     return true;
   }
 
-  const vpBin = process.env.VP_CLI_BIN ?? 'vp';
-
   // Install git hooks via vp config (--no-agent to skip agent setup, handled by migration)
-  const configResult = spawn.sync(vpBin, ['config', '--no-agent'], {
+  const { command, args } = getVpCommand(['config', '--no-agent']);
+  const configResult = spawn.sync(command, args, {
     cwd: projectPath,
     stdio: 'pipe',
   });

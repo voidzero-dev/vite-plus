@@ -1,6 +1,6 @@
 # command_install_invalid_package_json
 
-## `vpt write-file .node-version 22.18.0`
+## `vpt write-file .node-version 22.23.4`
 
 
 ## `vpt write-file package.json not-json`

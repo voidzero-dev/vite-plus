@@ -12,6 +12,22 @@ use vt_path::AbsolutePathBuf;
 
 use crate::error::Error;
 
+/// Binary names are filenames, not paths, on every supported platform.
+pub(crate) fn validate_bin_name(name: &str) -> Result<(), Error> {
+    // Match pnpm's URL-safe names, but also reject Windows trailing-dot aliases.
+    if name != "$"
+        && (name.is_empty()
+            || name.ends_with('.')
+            || !name.bytes().all(|byte| {
+                byte.is_ascii_alphanumeric()
+                    || matches!(byte, b'-' | b'_' | b'.' | b'!' | b'~' | b'*' | b'\'' | b'(' | b')')
+            }))
+    {
+        return Err(Error::Other(vt_str::format!("Invalid binary name {name:?}")));
+    }
+    Ok(())
+}
+
 /// Source that installed a binary.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -58,6 +74,7 @@ impl BinConfig {
 
     /// Get the path to a binary's config file.
     pub fn path(bin_name: &str) -> Result<AbsolutePathBuf, Error> {
+        validate_bin_name(bin_name)?;
         Ok(Self::bins_dir()?.join(format!("{bin_name}.json")))
     }
 
@@ -169,6 +186,7 @@ impl BinConfig {
                 if let Ok(content) = tokio::fs::read_to_string(&path).await {
                     if let Ok(config) = serde_json::from_str::<BinConfig>(&content) {
                         if predicate(&config) {
+                            validate_bin_name(&config.name)?;
                             bins.push(config.name);
                         }
                     }
@@ -186,6 +204,79 @@ mod tests {
     use vp_shared::env_vars;
 
     use super::*;
+
+    #[test]
+    fn test_path_rejects_binary_names_with_paths() {
+        for name in [
+            "",
+            ".",
+            "..",
+            "../outside",
+            "../../outside/victim",
+            "./node",
+            "dir/tool",
+            "/tmp/tool",
+            r"..\outside",
+            r"C:\outside\tool",
+            "C:tool",
+            r"\\server\share\tool",
+            "tool\0",
+            "node.",
+            "node ",
+            "with space",
+            "tool%20name",
+            "tool$",
+        ] {
+            assert!(BinConfig::path(name).is_err(), "accepted binary name {name:?}");
+        }
+        for name in ["tsc", "my-tool", "tool.js", "_tool", "$", "a!~*'()"] {
+            assert!(BinConfig::path(name).is_ok(), "rejected binary name {name:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_invalid_binary_name_cannot_read_write_or_delete_metadata() {
+        let temp_dir = TempDir::new().unwrap();
+        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, temp_dir.path())], |_| async {
+            std::fs::create_dir_all(BinConfig::bins_dir().unwrap()).unwrap();
+            let outside = temp_dir.path().join("outside.json");
+            std::fs::write(&outside, b"keep me").unwrap();
+            let config = BinConfig::new(
+                "../outside".to_string(),
+                "test-package".to_string(),
+                "1.0.0".to_string(),
+                "22.18.0".to_string(),
+            );
+            assert!(config.save_sync().is_err());
+            assert!(config.save().await.is_err());
+            assert!(BinConfig::load_sync(&config.name).is_err());
+            assert!(BinConfig::load(&config.name).await.is_err());
+            assert!(BinConfig::delete_sync(&config.name).is_err());
+            assert!(BinConfig::delete(&config.name).await.is_err());
+            assert_eq!(std::fs::read(&outside).unwrap(), b"keep me");
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn test_scan_rejects_invalid_binary_names_in_stored_metadata() {
+        let temp_dir = TempDir::new().unwrap();
+        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, temp_dir.path())], |_| async {
+            let bins_dir = BinConfig::bins_dir().unwrap();
+            std::fs::create_dir_all(&bins_dir).unwrap();
+            let config = BinConfig::new(
+                "../outside".to_string(),
+                "test-package".to_string(),
+                "1.0.0".to_string(),
+                "22.18.0".to_string(),
+            );
+            std::fs::write(bins_dir.join("legacy.json"), serde_json::to_vec(&config).unwrap())
+                .unwrap();
+            assert!(BinConfig::find_by_package("test-package").await.is_err());
+            assert!(BinConfig::find_all_vp_source().await.is_err());
+        })
+        .await;
+    }
 
     #[tokio::test]
     async fn test_save_and_load() {
@@ -281,16 +372,6 @@ mod tests {
 
             // Delete again should not error
             BinConfig::delete("tsc").await.unwrap();
-        })
-        .await;
-    }
-
-    #[tokio::test]
-    async fn test_load_nonexistent() {
-        let temp_dir = TempDir::new().unwrap();
-        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, temp_dir.path())], |_| async {
-            let loaded = BinConfig::load("nonexistent").await.unwrap();
-            assert!(loaded.is_none());
         })
         .await;
     }

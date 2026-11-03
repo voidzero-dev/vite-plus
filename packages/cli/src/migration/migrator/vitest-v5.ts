@@ -31,7 +31,11 @@ import {
   migrateVitestV5Config,
 } from '../vitest-v5/config.ts';
 import { vitestV5Documentation } from '../vitest-v5/documentation.ts';
-import { lockedVitestVersion } from '../vitest-v5/lockfile.ts';
+import {
+  createLockfileReader,
+  lockedVitestVersion,
+  type LockfileReader,
+} from '../vitest-v5/lockfile.ts';
 import {
   findVitestV5ConfigEntries,
   resolveVitestV5TestModes,
@@ -180,25 +184,21 @@ function lockedSourceVersion(
   directory: string,
   root: string,
   pkg: Record<string, unknown>,
+  readLockfile: LockfileReader,
   manager?: PackageManager,
   expectedRunnerPackage?: string,
 ): string | undefined {
   if (manager !== undefined && manager !== PackageManager.pnpm) {
     const spec = dependency(pkg, 'vitest');
     return spec && !expectedRunnerPackage
-      ? lockedVitestVersion(root, directory, manager, spec)
+      ? lockedVitestVersion(root, directory, manager, spec, readLockfile)
       : undefined;
   }
-  const lockfile = path.join(root, 'pnpm-lock.yaml');
-  if (!fs.existsSync(lockfile)) {
-    return undefined;
-  }
   try {
-    const document = parseDocument(fs.readFileSync(lockfile, 'utf8'));
-    if (document.errors.length) {
-      return undefined;
-    }
-    const lock = record(document.toJS());
+    const lock = readLockfile(path.join(root, 'pnpm-lock.yaml'), (source) => {
+      const document = parseDocument(source);
+      return document.errors.length ? undefined : record(document.toJS());
+    });
     const importer = record(
       record(lock?.importers)?.[path.relative(root, directory).replaceAll('\\', '/') || '.'],
     );
@@ -327,6 +327,7 @@ function sourceVersion(
   directory: string,
   root: string,
   pkg: Record<string, unknown>,
+  readLockfile: LockfileReader,
   manager?: PackageManager,
 ): string | undefined {
   const catalog = createCatalogDependencyResolver(root, manager ?? PackageManager.pnpm);
@@ -357,7 +358,14 @@ function sourceVersion(
   // A stale install or catalog lock entry can still resolve upstream Vitest
   // under this name. Its version is not evidence for the declared wrapper.
   const expectedRunnerPackage = legacyAlias ? LEGACY_RUNNER : undefined;
-  const locked = lockedSourceVersion(directory, root, pkg, manager, expectedRunnerPackage);
+  const locked = lockedSourceVersion(
+    directory,
+    root,
+    pkg,
+    readLockfile,
+    manager,
+    expectedRunnerPackage,
+  );
   if (
     locked &&
     (!spec ||
@@ -390,7 +398,13 @@ function sourceVersion(
   }
   // A workspace member commonly uses the root's test command and dependencies.
   if (directory !== root) {
-    return sourceVersion(root, root, readJson(path.join(root, 'package.json')), manager);
+    return sourceVersion(
+      root,
+      root,
+      readJson(path.join(root, 'package.json')),
+      readLockfile,
+      manager,
+    );
   }
   return undefined;
 }
@@ -685,6 +699,7 @@ export function planVitestV5Migration(
   workspace: MigrationWorkspace,
   originalProjects?: ReadonlyMap<string, ProjectPlan>,
 ): VitestV5MigrationPlan {
+  const readLockfile = createLockfileReader();
   const findings: VitestV5Finding[] = [];
   const directories = [
     workspace.rootDir,
@@ -726,7 +741,7 @@ export function planVitestV5Migration(
     const original = originalProjects?.get(directory);
     const version = original
       ? original.sourceVersion
-      : sourceVersion(directory, workspace.rootDir, pkg, workspace.packageManager);
+      : sourceVersion(directory, workspace.rootDir, pkg, readLockfile, workspace.packageManager);
     const active =
       original?.active ??
       (!!dependency(pkg, 'vitest') ||

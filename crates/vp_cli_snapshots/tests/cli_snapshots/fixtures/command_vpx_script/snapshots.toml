@@ -78,6 +78,20 @@ steps = [
 ]
 
 [[case]]
+name = "vpx_script_async_loader_settings"
+vp = ["local", "global"]
+env = { VP_NODE_VERSION = "22.18.0" }
+comment = "Off-thread ESM hooks receive the CommonJS preload's tsconfig selection and TypeScript dependency policy."
+steps = [
+  { argv = ["vpx", "--tsconfig", "tsconfig.alt.json", "src/resolution.ts"], comment = "The loader thread honors --tsconfig instead of discovering the default config" },
+  { argv = ["vpx", "./src/print-setup.ts"], envs = [["TS_NODE_PROJECT", "missing.json"]], comment = "A missing environment-selected config keeps its TS_NODE_PROJECT diagnostic label" },
+  { argv = ["vpt", "mkdir", "-p", "node_modules/ts-dep"], snapshot = false },
+  { argv = ["vpt", "write-file", "node_modules/ts-dep/package.json", "{ \"name\": \"ts-dep\", \"type\": \"module\", \"exports\": \"./index.ts\" }\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "node_modules/ts-dep/index.ts", "export enum Level { High = 'high' }\nexport const level: Level = Level.High;\n"], snapshot = false },
+  { argv = ["vpx", "./src/ts-dependency.ts"], comment = "The loader thread transforms published TypeScript dependencies" },
+]
+
+[[case]]
 name = "vpx_script_tsconfig_transforms"
 vp = ["local", "global"]
 comment = "tsconfig options that change the transform, and the decorator error."
@@ -187,5 +201,89 @@ name = "vpx_script_watch"
 vp = ["local", "global"]
 skip-platforms = ["windows"]
 cwd = "watch"
-comment = "Node.js --watch restarts when an imported .ts file changes."
-steps = [["node", "verify-watch.mjs"]]
+env = { VP_NODE_VERSION = "22.18.0" }
+comment = "vpx --watch runs oxc-node's watcher, never Node.js' own watch mode, with the script loader. It reruns the script when an imported file or a tsconfig changes, when the file a failed import looked for is created, and when the tsconfig given by --tsconfig changes."
+steps = [
+  ["node", "verify-watch.mjs", "dependency", "--watch"],
+  ["node", "verify-watch.mjs", "tsconfig", "--watch"],
+  ["node", "verify-watch.mjs", "created", "--watch"],
+  { argv = ["node", "verify-watch.mjs", "pinned", "--tsconfig", "tsconfig.b.json", "--watch"], comment = "--tsconfig as a vpx option" },
+  { argv = ["node", "verify-watch.mjs", "pinned-config", "--watch"], comment = "--watch before a separate config file path, and --tsconfig among the Node.js options after it, which wins over a TS_NODE_PROJECT from an env file" },
+]
+
+[[case]]
+name = "vpx_script_watch_node24"
+vp = ["local", "global"]
+skip-platforms = ["windows"]
+cwd = "watch"
+env = { VP_NODE_VERSION = "24.22.1" }
+comment = "On the in-thread module.registerHooks() path, the hooks report the tsconfig files they read too."
+steps = [["node", "verify-watch.mjs", "tsconfig", "--watch"]]
+
+[[case]]
+name = "vpx_script_watch_help"
+vp = ["local", "global"]
+comment = "vpx --watch is the watcher: its help and errors use the vpx --watch name, and --watch-path, which would start Node.js' watch mode, is an error."
+steps = [
+  ["vpx", "--watch", "--help"],
+  { argv = ["vpx", "--watch"], comment = "No entry file", continue-on-failure = true },
+  { argv = ["vpx", "--watch-path=src", "./src/args.ts"], comment = "--watch-path", continue-on-failure = true },
+]
+
+[[case]]
+name = "vpx_script_watch_signals"
+vp = ["local", "global"]
+skip-platforms = ["windows"]
+cwd = "signals"
+# The script acks a SIGINT on a unix socket in TMPDIR, which the watcher skips when the
+# path would pass 100 bytes; the runner's macOS TMPDIR is that long.
+env = { TMPDIR = "/tmp" }
+comment = "A SIGINT sent to the vpx --watch PID reaches the script once, and so does a SIGINT to its whole process group, as Ctrl+C sends it."
+steps = [["node", "watch.mjs"]]
+
+[[case]]
+name = "vpx_script_bare_config_flag"
+vp = ["local", "global"]
+# Detection has no Windows-specific code, and the shared case table runs there; this saves
+# a Node.js download on Windows.
+skip-platforms = ["windows"]
+cwd = "config-file"
+# From 26.12, the project-local bin sees the bare flag. Before that, the
+# Node.js running the bin rewrites it to `--experimental-config-file=node.config.json`.
+env = { VP_NODE_VERSION = "26.12.1" }
+comment = "From Node.js 24.19 and 26.1, a bare --experimental-config-file reads node.config.json and takes no value, so the arguments after it keep their meaning."
+steps = [
+  { argv = ["vpx", "--experimental-config-file", "./main.ts", "--watch"], comment = "--watch after the script belongs to the script" },
+  { argv = ["vpx", "--experimental-config-file", "--tsconfig", "cli.json", "--env-file=.env", "./alias.ts"], comment = "--tsconfig is still vpx's, and wins over the TS_NODE_PROJECT in .env" },
+  { argv = ["vpx", "--experimental-config-file", "--watch", "--include", "extra.json"], comment = "--watch still selects the watcher, which takes --include and reports the missing entry", continue-on-failure = true },
+]
+
+[[case]]
+name = "vpx_script_config_file_path"
+vp = ["local", "global"]
+skip-platforms = ["windows"]
+cwd = "config-file"
+# The fixture's Node.js, 22.23.4, takes the next argument as the config file. Node.js
+# warns that the flag is experimental, with a PID, in the launcher too.
+env = { NODE_NO_WARNINGS = "1" }
+comment = "Before Node.js 24.19 and 26.1, --experimental-config-file takes a separate .json path, so --tsconfig, --watch, and a watcher option after it keep their meaning."
+steps = [
+  { argv = ["vpx", "--experimental-config-file", "custom.json", "--tsconfig", "cli.json", "--env-file=.env", "./alias.ts"], comment = "--tsconfig after the path wins over the TS_NODE_PROJECT in .env" },
+  { argv = ["vpx", "--experimental-config-file", "custom.json", "--watch", "--include", "extra.json"], comment = "--watch after the path selects the watcher, which takes --include and reports the missing entry", continue-on-failure = true },
+]
+
+[[case]]
+name = "vp_run_vpx_script_ctrl_c_cleanup"
+vp = "global"
+# On Windows, the global vpx waits for the script through `vp.exe`, which Ctrl+C used to
+# end at once with STATUS_CONTROL_C_EXIT (0xC000013A). The runner starts steps with Ctrl+C
+# ignored, which children inherit; vite-task clears that, so the script under `vp run`
+# gets Ctrl+C there, where it would not under a direct `vpx`.
+cwd = "ctrl-c"
+comment = "Ctrl+C under vp run reaches the script that vpx runs, and vp run exits after the script's SIGINT cleanup."
+steps = [
+  { argv = ["vp", "run", "cleanup"], interactions = [
+    { "expect-milestone" = "ready" },
+    { "write-key" = "ctrl-c" },
+  ] },
+]

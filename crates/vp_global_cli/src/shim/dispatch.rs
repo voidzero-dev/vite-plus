@@ -16,12 +16,15 @@ use super::{
 use crate::{
     commands::{
         env::{
-            bin_config::{BinConfig, BinSource},
+            bin_config::{BinConfig, BinSource, validate_bin_name},
             config::{self, ShimMode},
             package_manager,
             package_metadata::PackageMetadata,
         },
-        global::install::is_protected_shim,
+        global::{
+            bin_lock,
+            install::{extract_binaries, is_protected_shim},
+        },
     },
     error::Error,
 };
@@ -234,21 +237,29 @@ fn check_npm_global_install_result(
     }
 
     let is_interactive = vp_shared::is_stdin_terminal();
+    let lock = match bin_lock::acquire_sync() {
+        Ok(lock) => lock,
+        Err(error) => {
+            output::error(&error.to_string());
+            return;
+        }
+    };
     // (bin_name, source_path, package_name)
     let mut missing_bins: Vec<(String, AbsolutePathBuf, String)> = Vec::new();
     let mut managed_conflicts: Vec<(String, String)> = Vec::new();
 
     for spec in packages {
         let Some(package_name) = resolve_package_name(spec) else { continue };
-        let Some((_, content)) = read_npm_package_json(npm_prefix, node_dir, &package_name) else {
+        let Some((package_dir, content)) =
+            read_npm_package_json(npm_prefix, node_dir, &package_name)
+        else {
             continue;
         };
         let Ok(package_json) = serde_json::from_str::<serde_json::Value>(&content) else {
             continue;
         };
-        let bin_names = extract_bin_names(&package_json);
-
-        for bin_name in bin_names {
+        for bin in extract_binaries(&package_json, &package_dir) {
+            let bin_name = bin.name;
             // Skip protected shims (core shims and default env shims). Tell
             // the user for non-core names: npm installed the package, but the
             // binary stays unlinked.
@@ -325,6 +336,9 @@ fn check_npm_global_install_result(
         }
     }
 
+    // Never hold the lock while waiting for a user to answer the prompt.
+    drop(lock);
+
     // Deduplicate by bin_name so that when two packages declare the same binary,
     // only the last one is linked (matching npm's "last writer wins" behavior).
     let missing_bins = dedup_missing_bins(missing_bins);
@@ -363,50 +377,50 @@ fn check_npm_global_install_result(
     };
 
     if should_link {
-        for (bin_name, source_path, package_name) in &missing_bins {
-            create_bin_link(&bin_dir, bin_name, source_path, package_name, node_version);
-        }
+        link_missing_npm_bins(&bin_dir, &missing_bins, node_version);
     }
 }
 
-/// Extract binary names from a package.json value.
-fn extract_bin_names(package_json: &serde_json::Value) -> Vec<String> {
-    let mut bins = Vec::new();
-
-    if let Some(bin) = package_json.get("bin") {
-        match bin {
-            serde_json::Value::String(_) => {
-                // Single binary with package name
-                if let Some(name) = package_json["name"].as_str() {
-                    let bin_name = name.split('/').last().unwrap_or(name);
-                    bins.push(bin_name.to_string());
-                }
+fn link_missing_npm_bins(
+    bin_dir: &AbsolutePath,
+    missing_bins: &[(String, AbsolutePathBuf, String)],
+    node_version: &str,
+) {
+    let _lock = match bin_lock::acquire_sync() {
+        Ok(lock) => lock,
+        Err(error) => {
+            output::error(&error.to_string());
+            return;
+        }
+    };
+    for (bin_name, source_path, package_name) in missing_bins {
+        // A different operation may have claimed this name while the prompt was open.
+        match BinConfig::load_sync(bin_name) {
+            Ok(Some(config)) if config.source == BinSource::Vp => {
+                output::warn(&vt_str::format!(
+                    "Skipped '{bin_name}': managed by `vp install -g {}`.",
+                    config.package
+                ));
+                continue;
             }
-            serde_json::Value::Object(map) => {
-                for name in map.keys() {
-                    bins.push(name.clone());
-                }
+            Err(error) => {
+                output::error(&error.to_string());
+                continue;
             }
             _ => {}
         }
-    }
-
-    bins
-}
-
-/// Extract the relative path for a specific bin name from a package.json "bin" field.
-fn extract_bin_path(package_json: &serde_json::Value, bin_name: &str) -> Option<String> {
-    match package_json.get("bin")? {
-        serde_json::Value::String(path) => {
-            // Single binary — matches if the package name's last segment equals bin_name
-            let pkg_name = package_json["name"].as_str()?;
-            let expected = pkg_name.split('/').last().unwrap_or(pkg_name);
-            if expected == bin_name { Some(path.clone()) } else { None }
+        if std::fs::symlink_metadata(bin_dir.join(bin_name)).is_ok() {
+            continue;
         }
-        serde_json::Value::Object(map) => {
-            map.get(bin_name).and_then(|v| v.as_str()).map(str::to_string)
+        #[cfg(windows)]
+        if ["exe", "cmd"].iter().any(|extension| {
+            std::fs::symlink_metadata(bin_dir.join(format!("{bin_name}.{extension}"))).is_ok()
+        }) {
+            continue;
         }
-        _ => None,
+        if source_path.as_path().exists() {
+            create_bin_link(bin_dir, bin_name, source_path, package_name, node_version);
+        }
     }
 }
 
@@ -418,6 +432,10 @@ pub(crate) fn create_bin_link(
     package_name: &str,
     node_version: &str,
 ) {
+    if let Err(error) = validate_bin_name(bin_name) {
+        output::error(&error.to_string());
+        return;
+    }
     let mut linked = false;
 
     #[cfg(unix)]
@@ -505,6 +523,13 @@ fn remove_npm_global_uninstall_links(
     npm_prefix: &AbsolutePath,
 ) {
     let Ok(bin_dir) = config::get_bin_dir() else { return };
+    let _lock = match bin_lock::acquire_sync() {
+        Ok(lock) => lock,
+        Err(error) => {
+            output::error(&error.to_string());
+            return;
+        }
+    };
 
     for (bin_name, package_name, package_dir) in bin_entries {
         // Skip protected shims: a stale Npm BinConfig must not let
@@ -572,10 +597,13 @@ fn remove_npm_global_uninstall_links(
                 Ok(v) => v,
                 Err(_) => continue,
             };
-            let Some(bin_rel_path) = extract_bin_path(&package_json, bin_name) else {
+            let Some(bin) = extract_binaries(&package_json, &node_modules_dir)
+                .into_iter()
+                .find(|bin| bin.name == *bin_name)
+            else {
                 continue;
             };
-            let source_path = node_modules_dir.join(&bin_rel_path);
+            let source_path = node_modules_dir.join(&bin.path);
             if source_path.as_path().exists() {
                 let _ = std::fs::remove_file(link_path.as_path());
                 #[cfg(windows)]
@@ -628,8 +656,8 @@ fn collect_bin_names_from_npm(
         let Ok(package_json) = serde_json::from_str::<serde_json::Value>(&content) else {
             continue;
         };
-        for bin_name in extract_bin_names(&package_json) {
-            all_bins.push((bin_name, package_name.clone(), package_dir.clone()));
+        for bin in extract_binaries(&package_json, &package_dir) {
+            all_bins.push((bin.name, package_name.clone(), package_dir.clone()));
         }
     }
 
@@ -745,16 +773,7 @@ pub async fn dispatch(tool: &str, args: &[String], env: ToolPathEnv) -> i32 {
         PackageManagerType::from_tool(tool).map_or(tool, |kind| kind.bin_name_for_tool(tool));
     if env.contains(inherited_tool)
         && let Some(path) = find_system_tool(inherited_tool)
-        && let Ok(target) = path.as_path().canonicalize()
-        && ["js_runtime", "package_manager"].iter().any(|directory| {
-            vp_shared::EnvConfig::get()
-                .dirs
-                .data
-                .join(directory)
-                .as_path()
-                .canonicalize()
-                .is_ok_and(|root| target.starts_with(root))
-        })
+        && vp_command::is_managed_install(path.as_path())
     {
         return exec::exec_tool(&path, args, env);
     }
@@ -1067,29 +1086,11 @@ pub(crate) fn locate_package_binary(
     let package_json: serde_json::Value =
         serde_json::from_str(&content).map_err(|e| format!("Failed to parse package.json: {e}"))?;
 
-    let binary_path = match package_json.get("bin") {
-        Some(serde_json::Value::String(path)) => {
-            // Single binary - check if it matches the name
-            let pkg_name = package_json["name"].as_str().unwrap_or("");
-            let expected_name = pkg_name.split('/').last().unwrap_or(pkg_name);
-            if expected_name == binary_name {
-                node_modules_dir.join(path)
-            } else {
-                return Err(format!("Binary {} not found in package", binary_name));
-            }
-        }
-        Some(serde_json::Value::Object(map)) => {
-            // Multiple binaries - find the one we need
-            if let Some(serde_json::Value::String(path)) = map.get(binary_name) {
-                node_modules_dir.join(path)
-            } else {
-                return Err(format!("Binary {} not found in package", binary_name));
-            }
-        }
-        _ => {
-            return Err(format!("No bin field in package.json for {}", package_name));
-        }
-    };
+    let bin = extract_binaries(&package_json, &node_modules_dir)
+        .into_iter()
+        .find(|bin| bin.name == binary_name)
+        .ok_or_else(|| format!("Binary {} not found in package", binary_name))?;
+    let binary_path = node_modules_dir.join(&bin.path);
 
     if !binary_path.as_path().exists() {
         return Err(format!(
@@ -1331,68 +1332,40 @@ fn find_system_tool_in(tool: &str, cwd: &AbsolutePath) -> Option<AbsolutePathBuf
     }
 }
 
-/// Explicit bypass skips Vite+ installations and the directories listed by the caller.
-fn find_external_tool_in(tool: &str, cwd: &AbsolutePath) -> Option<AbsolutePathBuf> {
-    let bin_dir = config::get_bin_dir().ok();
-    let path_var = std::env::var_os("PATH")?;
-    tracing::debug!("path_var: {:?}", path_var);
+/// Process-dependent inputs for [`vp_command::find_external_tool`].
+struct ExternalToolInputs {
+    path: std::ffi::OsString,
+    bypass: Vec<std::path::PathBuf>,
+    self_exe: Option<std::path::PathBuf>,
+}
 
-    // Parse VP_BYPASS as a PATH-style list of additional directories to skip.
-    // This prevents infinite loops when multiple vite-plus installations exist in PATH.
-    let bypass_paths: Vec<std::path::PathBuf> = std::env::var_os(env_vars::VP_BYPASS)
-        .map(|v| std::env::split_paths(&v).collect())
-        .unwrap_or_default();
-    tracing::debug!("bypass_paths: {:?}", bypass_paths);
+impl ExternalToolInputs {
+    /// Read PATH, `VP_BYPASS`, and the canonical `current_exe()`.
+    /// Returns `None` when PATH is unset.
+    fn from_process_env() -> Option<Self> {
+        let path = std::env::var_os("PATH")?;
+        // Parse VP_BYPASS as a PATH-style list of additional directories to skip.
+        // This prevents infinite loops when multiple vite-plus installations exist in PATH.
+        let bypass = std::env::var_os(env_vars::VP_BYPASS)
+            .map(|v| std::env::split_paths(&v).collect())
+            .unwrap_or_default();
+        let self_exe = std::env::current_exe().ok().and_then(|exe| exe.canonicalize().ok());
+        Some(Self { path, bypass, self_exe })
+    }
 
-    // Filter PATH to exclude our bin directory and any bypass directories.
-    // Relative entries are resolved against cwd because `which` reports
-    // matches from them as relative paths, which `AbsolutePathBuf` rejects;
-    // `~`-prefixed entries are left to `which`'s own tilde expansion.
-    let mut filtered_paths: Vec<_> = std::env::split_paths(&path_var)
-        .filter(|p| {
-            if let Some(ref bin) = bin_dir {
-                if p == bin.as_path() {
-                    return false;
-                }
-            }
-            !bypass_paths.iter().any(|bp| p == bp)
-        })
-        .map(|p| if p.is_absolute() || p.starts_with("~") { p } else { cwd.as_path().join(p) })
-        .collect();
-
-    // Exclude our executable and shims from other installations, which would
-    // otherwise dispatch back into vp.
-    let self_real = std::env::current_exe().ok().and_then(|exe| exe.canonicalize().ok());
-    loop {
-        // Use vp_command::resolve_bin with filtered PATH - stops at first match
-        let search_path = std::env::join_paths(&filtered_paths).ok()?;
-        let resolved = vp_command::resolve_bin(tool, Some(&search_path), cwd).ok()?;
-        let canonical = resolved.as_path().canonicalize().ok();
-        // A sibling `vp` may itself be a shim sharing an external manager's executable.
-        let is_unix_shim = cfg!(unix)
-            && canonical
-                .as_ref()
-                .is_some_and(|target| target.file_name().is_some_and(|name| name == "vp"));
-        if !vp_shared::is_windows_trampoline(resolved.as_path())
-            && !is_unix_shim
-            && (self_real.is_none() || canonical != self_real)
-        {
-            return Some(resolved);
-        }
-        // Canonicalize both sides of the comparison so symlink-aliased PATH
-        // entries still match the resolved parent.
-        let self_dir = resolved.as_path().parent()?.to_path_buf();
-        let canonical_self_dir = self_dir.canonicalize().ok();
-        let len_before = filtered_paths.len();
-        filtered_paths.retain(|p| {
-            *p != self_dir
-                && (canonical_self_dir.is_none() || p.canonicalize().ok() != canonical_self_dir)
-        });
-        if filtered_paths.len() == len_before {
-            // Nothing left to drop; give up rather than loop forever.
-            return None;
+    fn query(&self) -> vp_command::ExternalToolQuery<'_> {
+        vp_command::ExternalToolQuery {
+            path: &self.path,
+            bypass: &self.bypass,
+            self_exe: self.self_exe.as_deref(),
         }
     }
+}
+
+/// Explicit bypass skips Vite+ installations and the directories listed by the caller.
+fn find_external_tool_in(tool: &str, cwd: &AbsolutePath) -> Option<AbsolutePathBuf> {
+    let inputs = ExternalToolInputs::from_process_env()?;
+    vp_command::find_external_tool(tool, &inputs.query(), cwd)
 }
 
 #[cfg(test)]
@@ -1903,6 +1876,56 @@ mod tests {
     }
 
     #[test]
+    fn test_create_bin_link_rejects_invalid_binary_name() {
+        let temp = TempDir::new().unwrap();
+        vp_shared::EnvConfig::with_vars([(env_vars::VP_HOME, temp.path())], |_| {
+            let bin_dir = config::get_bin_dir().unwrap();
+            std::fs::create_dir_all(&bin_dir).unwrap();
+            let source = bin_dir.join("source.js");
+            std::fs::write(&source, "console.log('test');").unwrap();
+            create_bin_link(&bin_dir, "../outside", &source, "test-package", "22.18.0");
+            for name in ["outside", "outside.cmd", "outside.json"] {
+                assert!(std::fs::symlink_metadata(temp.path().join(name)).is_err());
+            }
+        });
+    }
+
+    #[test]
+    fn test_npm_link_rechecks_owner_after_prompt() {
+        let temp = TempDir::new().unwrap();
+        vp_shared::EnvConfig::with_vars([(env_vars::VP_HOME, temp.path())], |_| {
+            let bin_dir = config::get_bin_dir().unwrap();
+            std::fs::create_dir_all(&bin_dir).unwrap();
+            let source = bin_dir.join("source.js");
+            std::fs::write(&source, "console.log('test');").unwrap();
+            let candidates = vec![("test-cli".into(), source, "npm-package".into())];
+
+            // Another activation claims the name while npm's link prompt is open.
+            BinConfig::new(
+                "test-cli".into(),
+                "managed-package".into(),
+                "1.0.0".into(),
+                "22.18.0".into(),
+            )
+            .save_sync()
+            .unwrap();
+            link_missing_npm_bins(&bin_dir, &candidates, "22.18.0");
+            assert_eq!(
+                BinConfig::load_sync("test-cli").unwrap().unwrap().package,
+                "managed-package"
+            );
+            for name in ["test-cli", "test-cli.cmd", "test-cli.exe"] {
+                assert!(std::fs::symlink_metadata(bin_dir.join(name)).is_err());
+            }
+
+            BinConfig::delete_sync("test-cli").unwrap();
+            link_missing_npm_bins(&bin_dir, &candidates, "22.18.0");
+            assert_eq!(BinConfig::load_sync("test-cli").unwrap().unwrap().package, "npm-package");
+            assert!(bin_dir.join("test-cli").as_path().exists());
+        });
+    }
+
+    #[test]
     fn test_npm_uninstall_preserves_links_until_package_is_removed() {
         let temp = TempDir::new().unwrap();
         let npm_prefix = AbsolutePathBuf::new(temp.path().join("npm-prefix")).unwrap();
@@ -2126,37 +2149,66 @@ mod tests {
         assert_eq!(resolve_package_name("./nonexistent"), None);
     }
 
-    // --- extract_bin_names tests ---
-
     #[test]
-    fn test_extract_bin_names_single() {
-        let json: serde_json::Value =
-            serde_json::from_str(r#"{"name": "my-pkg", "bin": "./cli.js"}"#).unwrap();
-        assert_eq!(extract_bin_names(&json), vec!["my-pkg"]);
+    fn test_locate_package_binary_filters_unsafe_entries() {
+        let temp = TempDir::new().unwrap();
+        vp_shared::EnvConfig::with_vars([(env_vars::VP_HOME, temp.path())], |_| {
+            let metadata = PackageMetadata::new(
+                "my-pkg".to_string(),
+                "1.0.0".to_string(),
+                "22.18.0".to_string(),
+                None,
+                vec!["valid".to_string(), "outside".to_string()],
+                Default::default(),
+                "npm".to_string(),
+            );
+            let package_dir =
+                config::get_node_modules_dir(&metadata.installation_dir().unwrap(), &metadata.name);
+            std::fs::create_dir_all(&package_dir).unwrap();
+            std::fs::write(package_dir.join("cli.js"), "console.log('valid');").unwrap();
+            std::fs::write(package_dir.join("../outside.js"), "console.log('outside');").unwrap();
+            std::fs::write(
+                package_dir.join("package.json"),
+                serde_json::json!({"bin": {
+                    "@scope/valid": "cli.js", "outside": "../outside.js",
+                }})
+                .to_string(),
+            )
+            .unwrap();
+            assert_eq!(
+                locate_package_binary(&metadata, "valid").unwrap(),
+                package_dir.join("cli.js")
+            );
+            assert!(locate_package_binary(&metadata, "outside").is_err());
+        });
     }
 
     #[test]
-    fn test_extract_bin_names_scoped_single() {
-        let json: serde_json::Value =
-            serde_json::from_str(r#"{"name": "@scope/my-pkg", "bin": "./cli.js"}"#).unwrap();
-        assert_eq!(extract_bin_names(&json), vec!["my-pkg"]);
-    }
-
-    #[test]
-    fn test_extract_bin_names_object() {
-        let json: serde_json::Value = serde_json::from_str(
-            r#"{"name": "pkg", "bin": {"cli-a": "./a.js", "cli-b": "./b.js"}}"#,
-        )
-        .unwrap();
-        let mut names = extract_bin_names(&json);
-        names.sort();
-        assert_eq!(names, vec!["cli-a", "cli-b"]);
-    }
-
-    #[test]
-    fn test_extract_bin_names_no_bin() {
-        let json: serde_json::Value = serde_json::from_str(r#"{"name": "pkg"}"#).unwrap();
-        assert!(extract_bin_names(&json).is_empty());
+    fn test_npm_bin_collection_filters_unsafe_entries() {
+        let temp = TempDir::new().unwrap();
+        let prefix = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let package_dir = config::get_node_modules_dir(&prefix, "my-pkg");
+        std::fs::create_dir_all(&package_dir).unwrap();
+        for (manifest, expected) in [
+            (serde_json::json!({"name": "my-pkg", "bin": "./cli.js"}), vec!["my-pkg"]),
+            (serde_json::json!({"name": "@scope/my-pkg", "bin": "./cli.js"}), vec!["my-pkg"]),
+            (
+                serde_json::json!({"bin": {
+                    "cli-a": "./a.js", "@scope/cli-b": "./b.js",
+                    "../victim": "./a.js", "outside": "../outside.js",
+                }}),
+                vec!["cli-a", "cli-b"],
+            ),
+            (serde_json::json!({"name": "my-pkg"}), vec![]),
+        ] {
+            std::fs::write(package_dir.join("package.json"), manifest.to_string()).unwrap();
+            let mut names: Vec<_> = collect_bin_names_from_npm(&s(&["my-pkg"]), &prefix, &prefix)
+                .into_iter()
+                .map(|(name, _, _)| name)
+                .collect();
+            names.sort();
+            assert_eq!(names, expected);
+        }
     }
 
     // --- is_local_path tests ---

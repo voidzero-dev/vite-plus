@@ -97,6 +97,8 @@ Environment overrides, mainly for CI:
 | `VP_SNAP_PACKAGES_DIR`        | Run-scoped directory for sharing packed packages across test processes                                  |
 | `VP_SNAP_ARTIFACTS_DIR`       | Directory for phase timings and failure diagnostics; unset disables artifacts                           |
 | `VP_SNAP_NEXTEST_CONFIG`      | With `--list`, write nextest overrides for the discovered isolated cases                                |
+| `VP_SNAP_PREWARM_MANIFEST`    | With `--list`, write a JSON array of Bun archive URLs derived from runnable cases                       |
+| `VP_NODE_DIST_MIRROR`         | Node.js distribution mirror inherited by case commands; case and step overrides take precedence         |
 
 Windows CI generates its nextest configuration from the same case definitions.
 Exact nextest runs read only the selected fixture; listing and native shard
@@ -139,6 +141,27 @@ including package-manager downloads. Concurrent requests share one download,
 including across nextest processes when `VP_SNAP_REGISTRY_CACHE_DIR` is set.
 Use a fresh directory per run; this is not a persistent dependency cache.
 Package-manager caches and installed packages remain isolated per case.
+
+Windows CI generates a prewarm manifest while listing cases, then passes it to
+`local-npm-registry.ts --prewarm-manifest <file>` before starting test commands.
+The runner collects exact Bun pins from each case's package ancestry
+(`packageManager` and `devEngines.packageManager`), case/step environment overrides,
+`vpt json-edit` of package-manager declarations, `vpt write-file` of package files,
+and `vp env default/use/exec` arguments. Versions are deduplicated and archives
+match the runner platform, including the x64 baseline variant. Changing these
+fixture pins automatically updates preparation; CI contains no separate version list.
+
+Ignored and platform-excluded cases do not contribute pins. Set `prewarm-bun = false`
+for fake installations and configuration-only cases. Script-generated pins must use
+declarative setup or environment overrides to participate; discovery does not execute
+scripts or scan assertions. Floating tags and version ranges retain normal registry
+resolution and are not prewarmed. The manifest includes all runnable cases before
+nextest partitions them, so each shard can reuse the same preparation logic.
+
+Preparation retries
+failed downloads and permits up to 180 seconds per attempt. Tests reuse the
+cached response with their existing deadlines and isolated installations.
+Preparation requests are logged in `prewarm/registry.jsonl` under the artifact root.
 
 `local-registry = true` additionally serves the packed checkout packages.
 Published versions remain available for cases that deliberately install an older
@@ -216,6 +239,7 @@ requires = ["bash"]           # "sh" | "bash" | "zsh" | "cmd" | "fish" | "nu" | 
 ignore = false                # true: only runs with `-- --ignored`
 serial = false                # true: run alone across cargo test/nextest workers
 seed-runtime = true           # false: start from an empty VP_HOME
+prewarm-bun = true            # false: fake install or configuration-only case
 link-node-modules = false     # true: expose the run-root node_modules as
                               #   the workspace's parent-dir node_modules,
                               #   for `../node_modules/vite-plus/...` paths
@@ -243,7 +267,10 @@ preference inference or an empty installation must create a separate home, as th
 `shim_package_manager_setup` fixture does.
 The preparation command sets `VP_SELF_SETUP_NO_MODIFY_PATH=1` so Windows
 self-setup does not add temporary case homes to the user's persistent `PATH`.
-This override applies only to runner preparation, not to fixture commands.
+It also sets `VP_SKIP_DEPS_INSTALL=1`: the case home already has the checkout
+package, and setup would otherwise look up the build's version on npm, which
+is unpublished on a release branch.
+These overrides apply only to runner preparation, not to fixture commands.
 
 A step is a bare argv array or a table:
 
@@ -342,8 +369,34 @@ can load files installed beside `pwsh.exe`. `cmd.exe` also runs from its
 canonical system path. `CI` and `NO_COLOR` are deliberately NOT
 set: with a PTY attached, the CLI behaves interactively by default, which is
 the point.
+`VP_NODE_DIST_MIRROR` is inherited when configured so case downloads use the same
+source as CI preparation. Case `env` and step `envs` override it; case `unset-env`
+can remove it to exercise the default source.
 `seed-runtime = true` (default) symlinks a provisioned managed Node runtime
 into the case `VP_HOME` so commands do not download ~50MB per case.
+
+Use the latest published patch release for each Node major as its default fixed
+runtime. Keep exact pins so snapshots are reproducible, and add an older version
+only when a fixture tests a compatibility boundary. Use `22.23.4` for ordinary
+cases that do not need a different major.
+
+| Node major | Default fixed runtime | Required exceptions                                                                                                                   |
+| ---------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| 20         | `20.20.2`             | None; unsupported-runtime and migration cases share this version.                                                                     |
+| 22         | `22.23.4`             | `22.18.0` tests asynchronous loader and watcher hooks and the exact supported migration target. Synchronous hooks start at `22.22.3`. |
+| 24         | `24.22.1`             | `24.3.0` is the unsupported migration input; `24.11.0` is the exact supported upgrade target.                                         |
+| 26         | `26.12.1`             | None; script, bare config-file argument, and executable packaging cases share this version.                                           |
+
+CI prepares the exact versions and selectors in [`node-versions.txt`](node-versions.txt),
+the repository's `.node-version`, and both `lts` and `latest` before snapshot
+command timers start. The selectors `20`, `22`, `22.23`, and `24.22` cover cases
+that intentionally resolve a major or minor version instead of an exact pin.
+When updating the defaults, check the [Node.js release index](https://nodejs.org/dist/index.json)
+and update the fixture pins and shared list together. Document the test reason
+when adding an exception. Version strings in configuration-only tests do not
+require runtime downloads.
+Major-version and LTS/latest alias cases retain their selectors. Cases with
+`seed-runtime = false` still test installation into an empty runtime directory.
 
 Fixture configs may import bare `vite-plus` and
 `@voidzero-dev/vite-plus-core`: the runner links the checkout packages

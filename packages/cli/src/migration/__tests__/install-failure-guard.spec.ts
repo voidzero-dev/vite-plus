@@ -2,7 +2,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { handleInstallResult } from '../install-result.ts';
+import { createMigrationReport } from '../report.ts';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const binPath = path.resolve(here, '..', 'bin.ts');
@@ -12,85 +15,109 @@ const binPath = path.resolve(here, '..', 'bin.ts');
  * when the install process exits non-zero. Earlier versions of `migration/bin.ts`
  * only summed `installSummary.durationMs` and reported success regardless of
  * `status`, which left the project's `node_modules` desynced from a freshly
- * mutated `package.json` (network/auth failures, registry blips, pnpm lockfile
- * conflicts after override resolution) while still printing
- * "Dependencies installed" to the user.
- *
- * Two install sites need this handling:
- *   1. The full migration path (`executeMigrationPlan`'s final reinstall, run
- *      AFTER manifest/source rewrites land).
- *   2. The early-return path (`main` when `vite-plus` is already a dep but a
- *      stale-wrapper repair or ESLint/Prettier migration touches package.json).
- *
- * Both paths must funnel install results through `handleInstallResult` so that
- * failures warn the user, append to `report.warnings`, and flip
- * `process.exitCode`. This is a guard test — if a future refactor drops the
- * helper or stops calling it from either path, this fails loudly so reviewers
- * can re-evaluate the install-failure UX before it ships.
+ * mutated `package.json` while still printing "Dependencies installed".
  */
-describe('migration install failure handling', () => {
+describe('handleInstallResult', () => {
+  const rootDir = '/project';
+  const failureMessage = (exitCode: number) =>
+    `Dependency installation failed (exit code ${exitCode}). Run \`vp install\` manually in ${rootDir} to resync node_modules.`;
+  let originalExitCode: typeof process.exitCode;
+  let consoleError: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    originalExitCode = process.exitCode;
+    process.exitCode = undefined;
+    consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    process.exitCode = originalExitCode;
+    consoleError.mockRestore();
+  });
+
+  it('credits the install duration on success', () => {
+    const report = createMigrationReport();
+
+    expect(
+      handleInstallResult({ status: 'installed', durationMs: 1234, exitCode: 0 }, rootDir, report),
+    ).toBe(1234);
+    expect(report.warnings).toEqual([]);
+    expect(process.exitCode).toBeUndefined();
+    expect(consoleError).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [7, 7],
+    [undefined, 1],
+  ])('warns and sets exitCode when the install fails with exit code %s', (exitCode, expected) => {
+    const report = createMigrationReport();
+
+    expect(
+      handleInstallResult({ status: 'failed', durationMs: 1234, exitCode }, rootDir, report),
+    ).toBe(0);
+    expect(report.warnings).toEqual([failureMessage(expected)]);
+    expect(process.exitCode).toBe(expected);
+    expect(consoleError).toHaveBeenCalledWith(expect.any(String), failureMessage(expected));
+  });
+
+  it('warns without setting exitCode for a best-effort install that fails', () => {
+    const report = createMigrationReport();
+
+    expect(
+      handleInstallResult({ status: 'failed', durationMs: 1234, exitCode: 7 }, rootDir, report, {
+        propagateExitCode: false,
+      }),
+    ).toBe(0);
+    expect(report.warnings).toEqual([failureMessage(7)]);
+    expect(process.exitCode).toBeUndefined();
+    expect(consoleError).toHaveBeenCalledWith(expect.any(String), failureMessage(7));
+  });
+
+  it.each(['skipped', 'formatted'] as const)('stays silent for a %s install', (status) => {
+    const report = createMigrationReport();
+
+    expect(handleInstallResult({ status, durationMs: 1234 }, rootDir, report)).toBe(0);
+    expect(report.warnings).toEqual([]);
+    expect(process.exitCode).toBeUndefined();
+    expect(consoleError).not.toHaveBeenCalled();
+  });
+});
+
+// `bin.ts` runs `main()` on import, so its install sites cannot be exercised
+// from a unit test. These source guards keep them routed through the helper.
+describe('migration bin install sites', () => {
   const binSource = fs.readFileSync(binPath, 'utf8');
 
-  describe('handleInstallResult helper', () => {
-    it('defines a `handleInstallResult` function in bin.ts', () => {
-      expect(binSource).toMatch(/function handleInstallResult\s*\(/);
-    });
-
-    it('branches on `installSummary.status === "installed"` and credits duration', () => {
-      expect(binSource).toMatch(/installSummary\.status === 'installed'/);
-      expect(binSource).toMatch(/return installSummary\.durationMs/);
-    });
-
-    it('branches on `installSummary.status === "failed"` and warns + flips exitCode', () => {
-      expect(binSource).toMatch(/installSummary\.status === 'failed'/);
-      expect(binSource).toMatch(/warnMsg\(/);
-      expect(binSource).toMatch(/report\.warnings\.push\(/);
-      expect(binSource).toMatch(/process\.exitCode\s*=/);
-    });
+  it('routes every install result through `handleInstallResult`', () => {
+    const installs = Array.from(
+      binSource.matchAll(/const (\w+) = await runViteInstall\(/g),
+      (match) => match[1],
+    );
+    // Every call is captured, so an install whose result is ignored fails here.
+    expect(installs).toHaveLength(binSource.match(/runViteInstall\(/g)?.length ?? 0);
+    expect(installs.length).toBeGreaterThan(0);
+    for (const name of installs) {
+      expect(binSource).toMatch(new RegExp(`handleInstallResult\\(\\s*${name},`));
+      // Reading the duration directly would credit failed installs.
+      expect(binSource).not.toContain(`${name}.durationMs`);
+    }
   });
 
-  describe('full migration path (executeMigrationPlan)', () => {
-    it('defers Vitest compatibility writes until all tool migration abort gates pass', () => {
-      const full = binSource.slice(
-        binSource.indexOf('async function executeMigrationPlan('),
-        binSource.indexOf('async function main('),
-      );
-      const existing = binSource.slice(binSource.indexOf('async function main('));
-      for (const branch of [full, existing]) {
-        expect(branch).not.toContain('applyVitestV5Migration(vitestV5Plan)');
-        const apply = branch.indexOf(
-          'vitestV5Plan = applyRefreshedVitestV5Migration(vitestV5Plan)',
-        );
-        expect(apply).toBeGreaterThan(branch.indexOf('ESLint migration failed.'));
-        expect(apply).toBeGreaterThan(branch.indexOf('Prettier migration failed.'));
-        expect(apply).toBeGreaterThan(branch.indexOf('Complete the tsup migration manually'));
-      }
-      expect(full.indexOf('applyRefreshedVitestV5Migration(vitestV5Plan)')).toBeGreaterThan(
-        full.indexOf('checkVitestVersion(workspaceInfo.rootDir)'),
-      );
-    });
-    it('reconciles `finalInstallSummary` through `handleInstallResult`', () => {
-      // The full-path final reinstall must run through the helper so a failed
-      // install after manifest/source rewrites does not silently report a
-      // desynced project as a successful migration.
-      expect(binSource).toMatch(/finalInstallSummary[\s\S]{0,1500}handleInstallResult\(/);
-    });
-
-    it('does NOT add `finalInstallSummary.durationMs` directly to the return value', () => {
-      // The buggy round-7 version returned
-      //   `initialInstallSummary.durationMs + finalInstallSummary.durationMs`
-      // unconditionally. The fix routes `finalInstallSummary` through the
-      // helper which returns 0 on failure. Catch any regression that re-adds
-      // the raw `.durationMs` access.
-      expect(binSource).not.toMatch(/finalInstallSummary\.durationMs/);
-    });
-  });
-
-  describe('early-return path (main, hasVitePlusDependency branch)', () => {
-    it('reconciles `installSummary` through `handleInstallResult`', () => {
-      expect(binSource).toMatch(
-        /const installSummary = await runViteInstall\([\s\S]{0,1500}handleInstallResult\(/,
-      );
-    });
+  it('defers Vitest compatibility writes until all tool migration abort gates pass', () => {
+    const full = binSource.slice(
+      binSource.indexOf('async function executeMigrationPlan('),
+      binSource.indexOf('async function main('),
+    );
+    const existing = binSource.slice(binSource.indexOf('async function main('));
+    for (const branch of [full, existing]) {
+      expect(branch).not.toContain('applyVitestV5Migration(vitestV5Plan)');
+      const apply = branch.indexOf('vitestV5Plan = applyRefreshedVitestV5Migration(vitestV5Plan)');
+      expect(apply).toBeGreaterThan(branch.indexOf('ESLint migration failed.'));
+      expect(apply).toBeGreaterThan(branch.indexOf('Prettier migration failed.'));
+      expect(apply).toBeGreaterThan(branch.indexOf('Complete the tsup migration manually'));
+    }
+    expect(full.indexOf('applyRefreshedVitestV5Migration(vitestV5Plan)')).toBeGreaterThan(
+      full.indexOf('checkVitestVersion(workspaceInfo.rootDir)'),
+    );
   });
 });

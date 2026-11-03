@@ -185,7 +185,6 @@ pub(crate) async fn execute_for_binary(
     let (created, skipped) =
         refresh_shims(current_exe, &settings, refresh, refresh_entrypoints).await?;
 
-    #[cfg(windows)]
     if refresh {
         if let Err(e) = refresh_package_shims(current_exe, bin_dir).await {
             tracing::warn!("Failed to refresh package shims: {}", e);
@@ -466,6 +465,24 @@ async fn setup_vp_wrapper(
 pub(crate) async fn resolve_unix_vp_shim_target(
     current_exe: &std::path::Path,
 ) -> Result<std::path::PathBuf, Error> {
+    if let Some(homebrew) = crate::homebrew::current()
+        && same_file::is_same_file(current_exe, homebrew.binary.as_path()).unwrap_or(false)
+        && let Some(public) = homebrew.public_binary()
+    {
+        let dirs = &vp_shared::EnvConfig::get().dirs;
+        if unix::passes_through_shims(public.as_path(), dirs.bin.as_path())
+            || unix::passes_through_shims(public.as_path(), dirs.fallback_bin().as_path())
+        {
+            return Err(Error::ConfigError(
+                format!(
+                    "Vite+ shim directories must not contain the Homebrew entrypoint {}. Choose separate VP_BIN_DIR and VP_DATA_DIR paths.",
+                    public.as_path().display()
+                )
+                .into(),
+            ));
+        }
+        return Ok(public.as_path().to_path_buf());
+    }
     let current_exe_canon = tokio::fs::canonicalize(current_exe).await.ok();
     let current_vp = crate::commands::global::install::package_shim_target();
     if let Some(binary) = &current_exe_canon
@@ -636,6 +653,30 @@ async fn refresh_package_shims(
         tracing::debug!("Refreshed package trampoline shim {:?}", shim_path);
     }
 
+    Ok(())
+}
+
+/// Move existing managed package shims to the active installation during migration.
+#[cfg(unix)]
+async fn refresh_package_shims(
+    current_exe: &std::path::Path,
+    bin_dir: &vt_path::AbsolutePath,
+) -> Result<(), Error> {
+    let target = resolve_unix_vp_shim_target(current_exe).await?;
+    let _lock = crate::commands::global::bin_lock::acquire().await?;
+    for name in BinConfig::find_all_vp_source().await? {
+        if crate::commands::global::install::is_protected_shim(&name, true) {
+            continue;
+        }
+        let shim = bin_dir.join(&name);
+        // The saved Vp source and a link to vp identify an owned package shim even
+        // after its old installation is removed. Keep foreign files and direct package links.
+        let Ok(previous) = tokio::fs::read_link(&shim).await else { continue };
+        if previous.file_name().is_some_and(|name| name == "vp") && previous != target {
+            tokio::fs::remove_file(&shim).await?;
+            tokio::fs::symlink(&target, &shim).await?;
+        }
+    }
     Ok(())
 }
 
@@ -1009,9 +1050,22 @@ def --env --wrapped vp [...args: string@"nu-complete vp"] {
 }
 
 # Shell completion for nushell (delegates to fish completions dynamically)
-def "nu-complete vp" [context: string] {
-    let fish_cmd = $"VP_COMPLETE=fish command vp | source; complete '--do-complete=($context)'"
-    ^fish --command $fish_cmd | %from tsv --flexible --noheaders --no-infer | %rename value description | %update value {|row|
+# Nushell 0.116+ binds `buffer` and `place` by name: `buffer` is the whole line up to the cursor,
+# and `place.command` is the words of the current command up to the cursor. Older releases pass
+# the current command in `buffer` and the cursor position in `place`. See "Unified custom
+# completions" in https://www.nushell.sh/blog/2026-09-26-nushell_v0_116_0.html#unified-custom-completions
+# `place` is `any` because it is an int or a record. `oneof<int, record>` needs Nushell 0.105+,
+# and every Nushell release must parse the legacy env.nu.
+def "nu-complete vp current-command" [buffer: string, place: any] {
+    if (($place | %describe) starts-with "record") { $place.command | %str join ' ' } else { $buffer }
+}
+# Fish gets the command as an argument, so quotes in it cannot end a fish string.
+# Without fish, return null so Nushell falls back to file completion. Nushell 0.116+ shows no
+# suggestions when a parameter completer fails (#3272).
+def "nu-complete vp fish" [command: string] {
+    if (%which fish | %is-empty) { return null }
+    let fish_script = 'VP_COMPLETE=fish command vp | source; complete --do-complete=$argv[1]'
+    ^fish --command $fish_script $command | %from tsv --flexible --noheaders --no-infer | %rename value description | %update value {|row|
         let value = $row.value
         let need_quote = ['\' ',' '[' ']' '(' ')' ' ' '\t' "'" '"' "`"] | %any {$in in $value}
         if ($need_quote and ($value | %path exists)) {
@@ -1020,8 +1074,12 @@ def "nu-complete vp" [context: string] {
         } else {$value}
     }
 }
+def "nu-complete vp" [buffer: string, place: any] {
+    nu-complete vp fish (nu-complete vp current-command $buffer $place)
+}
 # Completion logic for vpr (translates context to 'vp run ...')
-def "nu-complete vpr" [context: string] {
+def "nu-complete vpr" [buffer: string, place: any] {
+    let context = nu-complete vp current-command $buffer $place
     let modified_context = if ($context =~ '^vpr(?<cwd>\s+-C\s+(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s') {
         $context | %str replace -r '^vpr(?<cwd>\s+-C\s+(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s' 'vp$cwd run '
     } else if ($context =~ '^vpr(?<cwd>\s+-C=?(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s') {
@@ -1031,15 +1089,7 @@ def "nu-complete vpr" [context: string] {
     } else {
         $context | %str replace -r '^vpr' 'vp run'
     }
-    let fish_cmd = $"VP_COMPLETE=fish command vp | source; complete '--do-complete=($modified_context)'"
-    ^fish --command $fish_cmd | %from tsv --flexible --noheaders --no-infer | %rename value description | %update value {|row|
-        let value = $row.value
-        let need_quote = ['\' ',' '[' ']' '(' ')' ' ' '\t' "'" '"' "`"] | %any {$in in $value}
-        if ($need_quote and ($value | %path exists)) {
-            let expanded_path = if ($value starts-with ~) {$value | %path expand --no-symlink} else {$value}
-            $'"($expanded_path | %str replace --all "\"" "\\\"")"'
-        } else {$value}
-    }
+    nu-complete vp fish $modified_context
 }
 export extern "vpr" [...args: string@"nu-complete vpr"]
 "#;
@@ -1095,8 +1145,52 @@ Register-ArgumentCompleter -Native -CommandName vpr -ScriptBlock $__vpr_comp
 // Keep the wrapper outside bin so it cannot shadow the native executable.
 // Unlike an advanced function, this script forwards all arguments without
 // PowerShell consuming common parameters such as -Verbose or its -V alias.
+// Bare -- recovery is inspired by mise's __mise_restore_double_dash:
+// https://github.com/jdx/mise/blob/34ec0439c868379be87a28591f50d41f84fb8d02/src/shell/pwsh.rs#L45-L103
 const VP_WRAPPER_PS1: &str = r#"# Vite+ PowerShell wrapper (https://viteplus.dev)
 $__vp_bin = '__VP_BIN_WIN__'
+# PowerShell consumes the first bare -- when calling a script. Recover its
+# position from the caller's AST, without evaluating argument expressions again.
+# The call stack also works on Windows PowerShell 5.1, which has no Statement.
+$__vp_stack = @(Get-PSCallStack)
+$__vp_command = $null
+if ($__vp_stack.Count -gt 1) {
+    $__vp_ast = $__vp_stack[1].InvocationInfo.MyCommand.ScriptBlock.Ast
+    $__vp_line = $MyInvocation.ScriptLineNumber
+    $__vp_column = $MyInvocation.OffsetInLine
+    if ($__vp_ast) {
+        $__vp_command = $__vp_ast.Find({ param($node)
+            $node -is [System.Management.Automation.Language.CommandAst] -and
+            $node.Extent.StartLineNumber -eq $__vp_line -and $node.Extent.StartColumnNumber -eq $__vp_column
+        }, $true)
+    }
+}
+if ($__vp_command) {
+    $__vp_index = 0
+    $__vp_elements = $__vp_command.CommandElements
+    for ($__vp_i = 1; $__vp_i -lt $__vp_elements.Count; $__vp_i++) {
+        $__vp_element = $__vp_elements[$__vp_i]
+        # A preceding splat has an unknown length. Leave $args unchanged rather
+        # than reading caller variables, which may have changed or belong to another scope.
+        if ($__vp_element -is [System.Management.Automation.Language.VariableExpressionAst] -and $__vp_element.Splatted) {
+            break
+        }
+        # Only a parameter AST can be consumed. After --%, the separator is literal.
+        if ($__vp_element -is [System.Management.Automation.Language.CommandParameterAst] -and $__vp_element.Extent.Text -ceq '--') {
+            if ($__vp_index -le $args.Count) {
+                $__vp_arguments = [System.Collections.Generic.List[object]]::new()
+                $__vp_arguments.AddRange($args)
+                $__vp_arguments.Insert($__vp_index, '--')
+                $args = $__vp_arguments.ToArray()
+            }
+            break
+        }
+        $__vp_index++
+        if ($__vp_element -is [System.Management.Automation.Language.CommandParameterAst] -and $__vp_element.Argument) {
+            $__vp_index++
+        }
+    }
+}
 $__vp_command_index = 0
 if ($args.Count -ge 1) {
     if ($args[0] -eq "-C") {
@@ -1144,7 +1238,7 @@ exit $LASTEXITCODE
 // cmd.exe wrapper for `vp env use` (cmd.exe cannot define shell functions).
 // Users run `vp-use 24` in cmd.exe instead of `vp env use 24`.
 #[cfg(windows)]
-fn vp_use_cmd_content(config: &vp_shared::EnvConfig) -> String {
+pub(crate) fn vp_use_cmd_content(config: &vp_shared::EnvConfig) -> String {
     let vp_exe = config.dirs.data.join("current").join("bin").join("vp.exe");
     let mut exports: Vec<_> = config.dir_envs.iter().collect();
     exports.sort_unstable_by_key(|(name, _)| *name);
@@ -1737,28 +1831,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_create_env_files_creates_all_files() {
-        let temp_dir = TempDir::new().unwrap();
-        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        vp_shared::EnvConfig::with_vars_async(
-            test_env_vars(temp_dir.path(), temp_dir.path()),
-            |_| async {
-                create_env_files().await.unwrap();
-
-                let env_path = home.join("env");
-                let env_fish_path = home.join("env.fish");
-                let env_nu_path = home.join("env.nu");
-                let env_ps1_path = home.join("env.ps1");
-                assert!(env_path.as_path().exists(), "env file should be created");
-                assert!(env_fish_path.as_path().exists(), "env.fish file should be created");
-                assert!(env_nu_path.as_path().exists(), "env.nu file should be created");
-                assert!(env_ps1_path.as_path().exists(), "env.ps1 file should be created");
-            },
-        )
-        .await;
-    }
-
-    #[tokio::test]
     async fn test_create_env_files_adds_one_bom_only_to_powershell() {
         const UTF8_BOM_BYTES: &[u8] = b"\xEF\xBB\xBF";
 
@@ -1946,10 +2018,16 @@ mod tests {
                 assert!(sigil.contains("| %update value {|row|"), "got: {sigil}");
                 assert!(sigil.contains(r#"("/tmp/vp%home" | %path expand"#), "got: {sigil}");
                 assert!(sigil.contains("^fish --command"), "got: {sigil}");
+                // Completers must not cause the Nushell 0.116 positional-input warning (#3127).
+                assert!(sigil.contains(r#"def "nu-complete vp" [buffer: string, place: any]"#));
+                assert!(sigil.contains(r#"def "nu-complete vpr" [buffer: string, place: any]"#));
+                assert!(!sigil.contains("[context"), "got: {sigil}");
 
                 let legacy = render_env_content(EnvShell::Nu, &config, NuSyntax::Legacy);
                 assert!(legacy.contains("| update value {|row|"), "got: {legacy}");
                 assert!(legacy.contains("^fish --command"), "got: {legacy}");
+                // CI runs only a newer Nushell, so check the legacy fish guard here (#3272).
+                assert!(legacy.contains("if (which fish | is-empty) { return null }"));
                 assert_eq!(
                     legacy.replace("/tmp/vp%home", "").matches('%').count(),
                     0,
@@ -2510,6 +2588,66 @@ mod tests {
                         "legacy corepack shim should be removed"
                     );
                 }
+            },
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn test_unix_package_shim_refresh_waits_for_ownership_changes() {
+        use std::time::Duration;
+
+        let temp_dir = TempDir::new().unwrap();
+        let home = temp_dir.path().join(".vite-plus");
+        let external_vp = temp_dir.path().join("external-vp");
+        let previous = temp_dir.path().join("removed-keg/bin/vp");
+        tokio::fs::write(&external_vp, b"vp").await.unwrap();
+        let external_vp = tokio::fs::canonicalize(external_vp).await.unwrap();
+
+        vp_shared::EnvConfig::with_vars_async(
+            test_env_vars(&home, temp_dir.path()),
+            |env| async move {
+                let bin_dir = &env.dirs.bin;
+                tokio::fs::create_dir_all(bin_dir).await.unwrap();
+                for name in ["managed-tool", "reassigned-tool"] {
+                    BinConfig::new(name.into(), name.into(), "1.0.0".into(), "22.18.0".into())
+                        .save()
+                        .await
+                        .unwrap();
+                    tokio::fs::symlink(&previous, bin_dir.join(name)).await.unwrap();
+                }
+
+                let lock = crate::commands::global::bin_lock::acquire().await.unwrap();
+                let refresh = refresh_package_shims(&external_vp, bin_dir);
+                tokio::pin!(refresh);
+                assert!(
+                    tokio::time::timeout(Duration::from_millis(150), &mut refresh).await.is_err()
+                );
+                for name in ["managed-tool", "reassigned-tool"] {
+                    assert_eq!(tokio::fs::read_link(bin_dir.join(name)).await.unwrap(), previous);
+                }
+
+                // Another operation changes ownership before releasing the shared lock.
+                BinConfig::new_npm(
+                    "reassigned-tool".into(),
+                    "npm-package".into(),
+                    "22.18.0".into(),
+                )
+                .save()
+                .await
+                .unwrap();
+                drop(lock);
+                tokio::time::timeout(Duration::from_secs(5), refresh).await.unwrap().unwrap();
+
+                assert_eq!(
+                    tokio::fs::read_link(bin_dir.join("managed-tool")).await.unwrap(),
+                    external_vp
+                );
+                assert_eq!(
+                    tokio::fs::read_link(bin_dir.join("reassigned-tool")).await.unwrap(),
+                    previous
+                );
             },
         )
         .await;

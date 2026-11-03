@@ -1,18 +1,18 @@
 # fallback_all_invalid_to_user_default
 
-## `vp env default 22.18.0`
+## `vp env default 22.23.4`
 
 Set user default
 
 ```
 VITE+ - The Unified Toolchain for the Web
 
-✓ Default Node.js version set to 22.18.0
+✓ Default Node.js version set to 22.23.4
 ```
 
 ## `vp exec node -e console.log(process.version)`
 
-Should use default 22.18.0, not LTS
+Should use default 22.23.4, not LTS
 
 ```
 VITE+ - The Unified Toolchain for the Web

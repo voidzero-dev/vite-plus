@@ -1,6 +1,6 @@
 # system_pnpm_inherits_global_package_node
 
-## `vp install -g --node 22.18.0 ./runtime-probe`
+## `vp install -g --node 22.23.4 ./runtime-probe`
 
 
 ## `node setup-system-pnpm.cjs`

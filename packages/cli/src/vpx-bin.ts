@@ -3,7 +3,8 @@
  *
  * Package managers and `vp run` put `node_modules/.bin` first on `PATH`, so this bin,
  * not the global `vpx`, runs in package.json scripts. It never hands off to the global
- * CLI. Script files run with the loader shipped in this package. A binary installed in
+ * CLI. Script files run with the loader shipped in this package, and `--watch` runs the
+ * watcher in `script-watch.ts` in this process. A binary installed in
  * `node_modules/.bin` runs directly; a versioned package, `--package`, or
  * `--shell-mode` runs with this package's `vp dlx`. See `packageInvocation`.
  *
@@ -36,9 +37,8 @@ function errorMsg(message: string) {
   console.error(styleText(['red', 'bold'], 'error:'), message);
 }
 
-/** This process's environment with every existing `node_modules/.bin` from `cwd` up first on PATH, nearest first, like the global CLI. */
-function childEnv(cwd: string): NodeJS.ProcessEnv {
-  const env = { ...process.env };
+/** `env` with every existing `node_modules/.bin` from `cwd` up first on PATH, nearest first, like the global CLI. */
+function prependLocalBins(env: NodeJS.ProcessEnv, cwd: string): NodeJS.ProcessEnv {
   const key = Object.keys(env).find((name) => name.toUpperCase() === 'PATH') ?? 'PATH';
   const entries = (env[key] ?? '').split(path.delimiter).filter(Boolean);
   const bins = nodeModulesBinPaths(cwd).filter(
@@ -46,6 +46,11 @@ function childEnv(cwd: string): NodeJS.ProcessEnv {
   );
   env[key] = [...bins, ...entries].join(path.delimiter);
   return env;
+}
+
+/** This process's environment for a child, with `prependLocalBins`. */
+function childEnv(cwd: string): NodeJS.ProcessEnv {
+  return prependLocalBins({ ...process.env }, cwd);
 }
 
 /** Signals Node.js ignores; an ignored signal stays ignored across exec. */
@@ -202,6 +207,8 @@ Options:
   -v, --version         Print the Vite+ version
   -h, --help            Print help
 
+Before a script, --watch reruns it when a file it uses changes (see \`vpx --watch --help\`).
+
 This project-local vpx runs in package.json scripts. It runs binaries installed in
 node_modules/.bin, and downloads a package only for a version, --package, or --shell-mode.
 
@@ -210,7 +217,8 @@ Examples:
   vpx create-vue@latest my-app           # Download and run create-vue
   vpx -p cowsay -c 'echo "hi" | cowsay'  # Shell mode with package
   vpx ./scripts/seed.ts --dry-run        # Run a TypeScript script
-  vpx --watch ./server.ts                # Pass Node.js options before the script
+  vpx --inspect ./server.ts              # Pass Node.js options before the script
+  vpx --watch ./server.ts                # Rerun the script when a file it uses changes
 `;
 
 function fail(message: string, note?: string): never {
@@ -269,7 +277,9 @@ if (!packageFlags || !first.startsWith('-')) {
 }
 
 if (invocation) {
-  const env = childEnv(cwd);
+  // With `--watch`, the watcher runs in this process, as `vp dlx` does below, and starts
+  // the script itself, so it takes this process's environment.
+  const env = invocation.watch ? prependLocalBins(process.env, cwd) : childEnv(cwd);
   const tsconfig = invocation.tsconfig ?? flags.tsconfig;
   if (tsconfig === undefined) {
     delete env.VP_SCRIPT_TSCONFIG;
@@ -280,21 +290,26 @@ if (invocation) {
     }
     env.VP_SCRIPT_TSCONFIG = file;
   }
-  // The preload registers the hooks before any user `--require`; the `--import`
-  // registers the off-thread hooks on older Node.js and routes the entry point
-  // through the ESM loader.
-  runAndExit(
-    process.execPath,
-    [
-      '--require',
-      fileURLToPath(new URL('./script-preload.cjs', import.meta.url)),
-      '--import',
-      new URL('./script-register.js', import.meta.url).href,
-      ...invocation.nodeArgs,
-    ],
-    env,
-    { relayIpc: true },
-  );
+  if (invocation.watch) {
+    process.argv = [...process.argv.slice(0, 2), ...invocation.nodeArgs];
+    await import(new URL('./script-watch.js', import.meta.url).href);
+  } else {
+    // The preload registers the hooks before any user `--require`; the `--import`
+    // registers the off-thread hooks on older Node.js and routes the entry point
+    // through the ESM loader.
+    runAndExit(
+      process.execPath,
+      [
+        '--require',
+        fileURLToPath(new URL('./script-preload.cjs', import.meta.url)),
+        '--import',
+        new URL('./script-register.js', import.meta.url).href,
+        ...invocation.nodeArgs,
+      ],
+      env,
+      { relayIpc: true },
+    );
+  }
 } else {
   if (flags.tsconfig !== undefined) {
     fail('vpx: --tsconfig can only be used when running a script');

@@ -39,7 +39,7 @@ Repositories use `tsx` to run `scripts/*.ts`. Vite+ manages the Node.js version 
 
 ## Non-Goals
 
-Type checking (`vp check`); a TypeScript REPL or TypeScript in `-e`/`-p` or `--check`; a tsx-style `watch` subcommand here (use Node.js `--watch` and `--watch-path`; [#3141](https://github.com/voidzero-dev/vite-plus/issues/3141) plans `vpx watch` on oxc-node's watcher); a programmatic API or public `node --import vite-plus/…` entry (see [Future Enhancements](#future-enhancements)); an on-disk transform cache; `target` downleveling; Bun and Deno.
+Type checking (`vp check`); a TypeScript REPL or TypeScript in `-e`/`-p` or `--check`; a programmatic API or public `node --import vite-plus/…` entry (see [Future Enhancements](#future-enhancements)); an on-disk transform cache; `target` downleveling; Bun and Deno.
 
 ## Command Syntax
 
@@ -48,16 +48,18 @@ vpx [VPX_OPTIONS] [NODE_OPTIONS] <script> [args...]
 ```
 
 - `VPX_OPTIONS`: the existing `vpx` options plus `--tsconfig <path>` and `-v/--version`. `-p/--package` and `-c/--shell-mode` select package mode, so combining them with a script is an error. `-s/--silent` is accepted; script mode prints no Vite+ output either way.
-- `NODE_OPTIONS`: tokens starting with `-` between the `vpx` options and the script, forwarded to Node.js verbatim. `--tsconfig` is also recognized here (`vpx --watch --tsconfig x.json ./a.ts`).
+- `NODE_OPTIONS`: tokens starting with `-` between the `vpx` options and the script, forwarded to Node.js verbatim, except two that `vpx` takes out: `--tsconfig` (`vpx --inspect --tsconfig x.json ./a.ts`) and `--watch` (see [Watch Mode](#watch-mode)).
 - `<script>` and `[args...]`: passed to Node.js unchanged. Tokens after the script, including `--`, belong to the script.
 
 `vpx` options are parsed first, so `-p`, `-c`, `-h`, and `-v` keep their `vpx` meaning; Node.js has the long forms, and `vp node --version` prints the Node.js version. `vpx --version` prints the same report as `vp --version`.
 
 When the first positional token starts with `-` and no script follows, `vpx` forwards the arguments to Node.js with the loader: `--eval`, `--print`, `--check ./a.ts`, `-` (stdin), `--inspect` (REPL). The loader does not transform eval or REPL input, and Node.js reads a `--check` file without it, as with tsx. The help text lives in `VPX_HELP` in `crates/vp_global_cli/src/commands/vpx.rs` and the `command_vpx_pnpm*` snapshots.
 
+`--watch` among the Node.js options runs oxc-node's watcher instead of Node.js' own watch mode (see [Watch Mode](#watch-mode)). Its options are oxc-node's (`--include`, `--exclude`, `--clear-screen`, `--kill-signal`, `--kill-timeout`, `--rerun-on-enter`, `--poll`), which also accept `tsx watch`'s `--ignore` and `--no-cache` and the Node.js watch mode options `--watch-preserve-output` and `--watch-kill-signal`, and `vpx --watch --help` prints them. They go among the Node.js options, and detection knows which of them take a value (`watchOptionsWithValue` in the shared table), so `vpx --watch --exclude ./gen.ts ./main.ts` runs `main.ts`. `vpx watch` stays package mode, so it still runs the npm package `watch`.
+
 ## Script Detection
 
-Detection runs before package-spec parsing, because script paths can contain `@`. It decides the mode and which token gets the missing-file check; it never rewrites the arguments except to remove `--tsconfig`.
+Detection runs before package-spec parsing, because script paths can contain `@`. It decides the mode and which token gets the missing-file check; it never rewrites the arguments except to remove `--tsconfig` and `--watch`.
 
 ```text
 after parsing vpx options, let T = positional[0]
@@ -65,11 +67,16 @@ after parsing vpx options, let T = positional[0]
 if T starts with '-':                      # Node.js invocation; a leading option never named a package bin
     script = first token after the Node.js options (the token after `--`, or `-` for stdin),
              skipping the value of options that take one (every `--option=...` that
-             `node --help` lists on 22, 24, and 26: --import, --require, --env-file, -r, …)
+             `node --help` lists on 22, 24, and 26: --import, --require, --env-file, -r, …,
+             and the watcher's --include, --exclude, --ignore, --kill-signal, --kill-timeout)
+    a bare --experimental-config-file takes the next token only when it ends in .json:
+             older releases take a separate config path, and 24.19, 26.1, and later read
+             the bare flag as node.config.json; a .json file cannot be the script
     after -e, --eval, -p, -pe, --print, --run, or --test, no token is a script: Node.js
              runs that code or package script, or takes test files and globs
     option names match with `_` for `-` (--redirect_warnings), as Node.js accepts
     script is a missing explicit path with a script extension → error
+    --watch or --watch-path among the options → the watcher (--watch removed)
     otherwise → forward to Node.js as-is
 elif is_script(T):
     script = T
@@ -104,6 +111,8 @@ After Node.js options, only a missing explicit path is an error: a bare name may
 | `vpx --eval '…' ./missing.ts`              | node    | After `--eval`, `./missing.ts` is an argument              |
 | `vpx /abs/bin/tool` (`#!/usr/bin/env vpx`) | script  | Shebang guard; otherwise `vpx` would exec itself in a loop |
 | `vpx ./deploy.sh`                          | package | No script extension; runs as a program, without the loader |
+| `vpx --watch ./server.ts`                  | watcher | `--watch` runs oxc-node's watcher, not Node.js' watch mode |
+| `vpx watch ./server.ts`                    | package | `watch` is the npm package of that name                    |
 
 ## Execution Model
 
@@ -135,9 +144,19 @@ The in-thread hooks start about twice as fast as a hooks thread, and Node.js 25.
 
 ### CLI/Loader Contract
 
-The contract is the two flags plus the `VP_SCRIPT_TSCONFIG` environment variable. The global `vp` may be newer or older than the project's `vite-plus`, so it stays stable: new behavior goes into the loader entries, not into new argv. A contract change gets new entry file names, so a `vp` that does not know them falls back to the global loader, as it does for a project too old to ship them. `vpx_script.rs` points readers here for this.
+The contract is the two flags plus the `VP_SCRIPT_TSCONFIG` environment variable, and `node <dist/script-watch.js> <watcher args>` for `--watch`. The global `vp` may be newer or older than the project's `vite-plus`, so it stays stable: new behavior goes into the loader entries, not into new argv. A contract change gets new entry file names, so a `vp` that does not know them falls back to the global loader, as it does for a project too old to ship them. `vpx_script.rs` points readers here for this.
 
-The loader is resolved from the project's `vite-plus` first (`JsExecutor::resolve_local_vite_plus_package_dir`), when its `dist/` has both entries, and from the global install second (`JsExecutor::get_scripts_dir()`), following the global CLI's JS-entry delegation. Teams and CI then run the loader and binding pinned in their lockfile.
+The loader is resolved from the project's `vite-plus` first (`JsExecutor::resolve_local_vite_plus_package_dir`), when its `dist/` has both entries (all three for `--watch`), and from the global install second (`JsExecutor::get_scripts_dir()`), following the global CLI's JS-entry delegation. Teams and CI then run the loader and binding pinned in their lockfile. A project `vite-plus` from before the watcher keeps running `vpx <script>` itself and takes the watcher and its loader from the global install.
+
+### Watch Mode
+
+`vpx --watch <script>` never runs Node.js' own watch mode. Detection takes `--watch` out of the Node.js options and marks the invocation, and both CLIs then run `dist/script-watch.js` (from `packages/cli/src/script-watch.ts`) with the remaining arguments. It bundles oxc-node's watcher, `runWatch` from `@oxc-node/cli/watch`, from the vendored `oxc-node/packages/cli/src/watch`, and calls `runWatch(process.argv.slice(2), { name: 'vpx --watch', loaderArgs, ignoreDirs })`: `loaderArgs` are the two loader flags for the `dist/` it sits in, so the watcher and the loader always come from one `vite-plus`, and `ignoreDirs` is that `vite-plus` package, whose loader files and binding show up in the module graph. The name labels the help, the errors, and the `[vpx]` log lines. Only the vpx side changes; oxc-node's watcher runs as published.
+
+- The global `vpx` runs `node <dist>/script-watch.js <args>` through the same `node` shim path as a script, so the watcher gets the Node.js `vp node` selects and, on Unix, the PID of `vpx`. The project-local bin imports the entry in its own process, after putting `node_modules/.bin` first on `PATH`. Either way the watcher process starts the script with `process.execPath`, so there is one process above the script, as Node.js' watch mode had.
+- `--tsconfig` works as for a script: the CLIs set or clear `VP_SCRIPT_TSCONFIG` before the watcher starts, the runs inherit it, and the preload passes it to `setTsconfigPath()`, which wins over a `TS_NODE_PROJECT` or `OXC_TSCONFIG_PATH` that an `--env-file` sets. The loader reports the config it read, so the watcher reruns on an edit to it.
+- `--watch-path`, which would start Node.js' watch mode, also selects the watcher, which rejects it with a hint to use `--include`. So do `--test`, `--eval`, and the other options that run no file.
+- The watcher sets `WATCH_REPORT_DEPENDENCIES` and an IPC channel, so the loader sends its reports, and its own folder watcher sees files created later on every platform and Node.js version. It owns `SIGINT`, `SIGTERM`, `SIGHUP`, stdin (Return reruns), and the IPC channel until it stops, and exits with the script's code.
+- Ctrl+C from a terminal reaches the script through the process group, so the watcher does not forward it. When the watcher is not the terminal's foreground job (a pipe, `vp run`, a tool), it forwards a `SIGINT` unless the script acks one within 50 ms on the `OXNODE_SIGNAL_ACK` socket, which the preload's `installSignalAck()` does while the script listens for `SIGINT` itself. A `SIGINT` sent to the watcher's PID alone still reaches the script.
 
 ### Environment
 
@@ -162,6 +181,15 @@ The loader is resolved from the project's `vite-plus` first (`JsExecutor::resolv
 
 For a script, the local bin and the global shim resolve the same loader and Node.js; the difference is the local bin's own Node.js startup before it execs the script, about 23–30 ms against the global shim's 5–10 ms ([Performance](#performance)).
 
+## Migration from tsx
+
+`vp migrate` rewrites tsx commands to `vpx` as an optional migration, like Prettier and tsup: always on a fresh project, and with `--full` on one already using Vite+ (`packages/cli/src/migration/migrator/tsx.ts`; behavior in [Migration Rules](../docs/guide/migrate-rules.md#tsx-to-vpx)).
+
+- It reads commands with the same literal-command parser as the other script rewrites and finds the script the way `vpx` does, with the shared value-taking option lists. Commands it cannot read, and forms `vpx` cannot run (eval, `--check`, the REPL, `--test` without files or in watch mode, an entry without an extension), keep tsx with a warning.
+- It has no Node.js check of its own: `vpx` needs the `engines.node` range of `vite-plus` (`SUPPORTED_NODE_RANGE` in `script-hooks.ts`, which a unit test keeps equal), and migration already upgrades incompatible runtime pins to that range for Vite+ itself.
+- The `tsx` devDependency goes only when no scripts, imports (including build output and `package.json#imports` aliases), shebangs, tool settings such as `--import=tsx`, CI workflows, git hooks, or shell scripts use tsx anymore, including in nested packages that can resolve it. A package that lists tsx in `dependencies`, `optionalDependencies`, or `peerDependencies` keeps it, since `vpx` comes from a devDependency.
+- It reads the scripts a command runs, and its local preloads, and keeps tsx when one does not exist yet, as when an earlier command generates it, and when `vpx` would fail on one: a `require()` of `./a.js` that only tsx resolves to `a.ts`, a `.cts` file with `import` or `export`, and a file that mixes `import` with `__dirname`, `__filename`, `require()`, or `module.exports` in a package without `"type": "module"`. tsx compiles the last two to CommonJS; `vpx` rejects the first of them and runs the second as an ES module. These checks are exact and local. The migration skips globs and scripts after a shell state change, and does not look for differences that need module-graph or tsconfig analysis (imports of the named files, standard decorators, tsconfig `paths` in `require()`, a tsconfig `module` of `node16` or `nodenext`); `vpx` reports those when the script runs.
+
 ## Native Side
 
 oxc-node is vendored the way Rolldown is:
@@ -172,7 +200,7 @@ oxc-node is vendored the way Rolldown is:
 - The root `Cargo.toml` adds `oxc-node = { path = "./oxc-node", default-features = false, features = ["yarn_pnp"] }` and excludes `oxc-node/` from the workspace lints. `yarn_pnp` matches the `oxc_resolver` feature the workspace enables, which changes oxc-node's file system signature. Without its `napi` feature, oxc-node links as a plain library with no NAPI exports and no global allocator, so nothing collides with the `transform` export that `rolldown_binding` links.
 - The binding's `oxc-node` feature compiles `packages/cli/binding/src/oxc_node.rs`; `build.ts` enables `rolldown,oxc-node` for every build, so dev builds compile it too, at no extra crate cost.
 
-`oxc_node.rs` forwards what the loader uses under an `oxcNode` namespace: `createResolve`, `load`, `OxcTransformer` (returning a plain `{ source, sourceMap }`), `setTsconfigPath`, `setTransformDeps`, and `transformsDep`. Its `module_exports` hook calls `init_tracing()` (so `OXC_LOG` works; the subscriber stays off otherwise and never replaces `VP_LOG`'s) and `detect_runtime_syntax()` (so `using` stays native on Node.js 24+), which oxc-node's own module hooks do when its `napi` feature is on. An upstream signature change is a compile error in the forwarders. oxc-node's watch reporting (`enable_watch_report`, `take_watch_dependencies`) is not forwarded yet ([#3141](https://github.com/voidzero-dev/vite-plus/issues/3141)).
+`oxc_node.rs` forwards what the loader uses under an `oxcNode` namespace: `createResolve`, `load`, `OxcTransformer` (returning a plain `{ source, sourceMap }`), `setTsconfigPath`, `setTransformDeps`, `transformsDep`, and the watch reporting, `enableWatchReport` and `takeWatchDependencies`. Its `module_exports` hook calls `init_tracing()` (so `OXC_LOG` works; the subscriber stays off otherwise and never replaces `VP_LOG`'s) and `detect_runtime_syntax()` (so `using` stays native on Node.js 24+), which oxc-node's own module hooks do when its `napi` feature is on. An upstream signature change is a compile error in the forwarders.
 
 Issues found during this work were fixed upstream: in v0.1.5 to v0.1.7, including the `napi` feature, `setTsconfigPath()`, `setTransformDeps("typescript")`, and single-transform CommonJS loading, and on `main` since, all the ones found in end-to-end testing against tsx ([oxc-node#835](https://github.com/oxc-project/oxc-node/issues/835), [#837](https://github.com/oxc-project/oxc-node/issues/837), [#839](https://github.com/oxc-project/oxc-node/issues/839) to [#846](https://github.com/oxc-project/oxc-node/issues/846), and [#856](https://github.com/oxc-project/oxc-node/issues/856)), and the one from the final round, [#862](https://github.com/oxc-project/oxc-node/issues/862) (a parent URL ending in `/`, the working directory Node.js resolves the entry point and `--import` against, was resolved as a file). The vendored copy carries no patch. Two oxc transformer issues found in that testing are still open; see [Known Limitations](#known-limitations).
 
@@ -187,6 +215,7 @@ Files: `packages/cli/src/script-preload.ts`, `script-register.ts`, `script-esm-h
 - The CommonJS hook gives oxc-node's error for `require()` of an ES module with top-level await Node.js's `ERR_REQUIRE_ASYNC_MODULE` code, which the binding cannot set, as upstream's `register.mjs` does.
 - `setTransformDeps('typescript')` transforms `.ts .mts .cts .tsx` under `node_modules`, which Node.js refuses to strip, and leaves other dependencies as published; `transformsDep()` gives the pirates matcher the same answer. `OXC_TRANSFORM_ALL` has no effect under `vpx`.
 - Source maps are on for `node_modules` too (`setSourceMapsSupport(true, { nodeModules: true, generatedCode: true })`), as tsx and upstream do, so stack traces in transformed dependencies point at their source. Node.js then reads the `.map` of every dependency that has one.
+- **Watch reports.** Under a watcher (`WATCH_REPORT_DEPENDENCIES` and an IPC channel, which the watcher sets up), the preload calls `enableWatchReport()` before the first transform or resolve, and each hook and the pirates transform send what the binding recorded, the tsconfig files read and the paths a failed resolve looked for, as `{ "watch:import": [url] }`, the message oxc-node's watcher and Node.js' read. The sender and the relay are oxc-node's `@oxc-node/core/watch-report`, bundled from the vendored source. The preload and the `--import` entry are separate bundles, so they share the thread's sink through a global symbol. The off-thread hooks have no IPC channel; `script-register.ts` passes them a port, as upstream's `register.mjs` does, and relays what they post. The preload also installs `@oxc-node/core/signal-ack`, the app side of the watcher's Ctrl+C handshake, a no-op without `OXNODE_SIGNAL_ACK`.
 
 ## Comparison with tsx
 
@@ -203,7 +232,7 @@ Files: `packages/cli/src/script-preload.ts`, `script-register.ts`, `script-esm-h
 | `require()` of `.ts`, interop  | ✓ (compiles ESM to CJS if needed)                     | ✓ (`.cts` with ESM syntax is an error)                                                                                             | Partial                |
 | TypeScript in `node_modules`   | ✓                                                     | ✓                                                                                                                                  | ✗                      |
 | Class fields, `using`          | Lowered to `target`                                   | Native unless `[[Set]]` fields or legacy decorators; `using` lowered on 22.x                                                       | Native                 |
-| Watch                          | `tsx watch` (chokidar)                                | Node.js `--watch`                                                                                                                  | `--watch`              |
+| Watch                          | `tsx watch` (chokidar)                                | `vpx --watch`: oxc-node's watcher, also tsconfig edits and created files                                                           | `--watch`              |
 | TypeScript REPL / `-e`         | ✓                                                     | ✗                                                                                                                                  | Erasable syntax only   |
 | Transform cache                | On disk, about 8 days                                 | None ([Performance](#performance))                                                                                                 | n/a                    |
 
@@ -215,7 +244,8 @@ Files: `packages/cli/src/script-preload.ts`, `script-register.ts`, `script-esm-h
 - On the off-thread releases (22.18 to 22.22.2, 24.11.0), a `--require` preload also runs in the `module.register()` hooks thread, so it runs twice. tsx has the same behavior.
 - On the off-thread releases, starting the hooks thread makes Node.js open stdout and stderr, which sets a pipe non-blocking, so `fs.writeSync(1, …)` to a slow reader can fail with `EAGAIN`. `process.stdout.write()` is not affected. tsx has the same behavior.
 - A `--require` or `--import` in `NODE_OPTIONS` also runs in the local bin's own Node.js before it execs the script, so it runs twice, as under the `tsx` CLI. The global `vpx` runs it once.
-- `vpx --watch` is Node.js watch mode: it restarts on imported files, not on a tsconfig edit or a file created after the first run, which tsx watch misses too ([#3141](https://github.com/voidzero-dev/vite-plus/issues/3141)).
+- A bare `--experimental-config-file` takes the next argument in detection only when it ends in `.json`, the same on every Node.js release: older releases take a separate config path, and 24.19, 26.1, and later read the bare flag as `node.config.json`. On an older release, a separate config path that does not end in `.json` is taken for the script, so `--watch` and `--tsconfig` after it are not vpx's; `--experimental-config-file=<path>` works on every release.
+- `vpx --watch` puts its Ctrl+C ack socket in `TMPDIR`. When that path would pass 100 bytes (the `sun_path` limit), the watcher runs without the ack, so a Ctrl+C while it is not the terminal's foreground job reaches a script that handles `SIGINT` twice, as it would without the loader's ack.
 - On in-thread releases without nodejs/node#62920 (22.22.3+, 24.11.1 to 24.17, 26.0, 26.1), `require()` inside a CommonJS module whose source another load hook supplied can fail. That needs a second loader, which is unsupported.
 - When a tool `fork()`s the local bin, the bin spawns the script and ignores `SIGINT`, so `kill -INT <bin pid>` does not stop the script; Ctrl+C does, through the process group. Forwarding it would deliver Ctrl+C twice; tsx avoids that with its own IPC channel.
 - On Windows, the local bin runs a `.cmd` binary from `node_modules/.bin` through `cmd.exe`, so Ctrl+C there can end with the "Terminate batch job (Y/N)?" prompt. The global `vpx` avoids it by running the binary's `.ps1` sibling, when one exists and stdin is a terminal.
@@ -277,7 +307,7 @@ Other errors, including transform errors, come from Node.js and oxc-node unchang
 ## Testing
 
 - Unit tests in `vpx_script.rs`, `vpx.rs`, and `packages/cli/src/__tests__/vpx-script.spec.ts` run the shared case table, check that the Rust and TypeScript lists match, and cover the local bin's package-mode decision and which binaries it execs without `/bin/sh` (`canExecDirectly`), the loader fallback to the global install and its real path, the Node.js range (equal to `engines.node`), the sync-hooks cutoff, and the helper mapping. `patch-oxc-node.spec.ts`, `sync-remote-deps.spec.ts`, and `toolchain.spec.ts` cover the vendoring.
-- Snapshot fixtures under `crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/` run in both flavors, except one local-only case for a binary that is not installed, and the global shim and the local bin record identical snapshots. `command_vpx_script` pins Node.js 22.18.0 (the `module.register()` path) and covers syntax, resolution and `--tsconfig`, arguments and Node.js options, errors, module formats with `fork()`, `Worker`, and `--test`, TypeScript dependencies, tsconfig-driven transforms and JSX, shebangs, `--watch`, IPC, and signals sent to the PID of `vpx` (Unix), file names with `#` and `%`, and package mode. `command_vpx_script_node22` (22.23.2), `_node24` (24.12.0), and `_node26` (26.5.0) cover the `registerHooks()` path, including CommonJS output that requires runtime helpers the project cannot resolve; `_old_node` (20.18.0) covers the version error. `shim_system_first_fallback` checks that script mode follows `vp node` in system-first mode. Windows runs every case except watch mode, shebangs, IPC, and signals, which a `.cmd` shim cannot carry, and runs its own installed-binary case with a `.cmd` binary.
+- Snapshot fixtures under `crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/` run in both flavors, except one local-only case for a binary that is not installed, and the global shim and the local bin record identical snapshots. `command_vpx_script` pins Node.js 22.18.0 (the `module.register()` path) and covers syntax, resolution and `--tsconfig`, arguments and Node.js options, errors, module formats with `fork()`, `Worker`, and `--test`, TypeScript dependencies, tsconfig-driven transforms and JSX, shebangs, `--watch` (an import edit, a tsconfig edit, a created file, both `--tsconfig` positions with an env file naming another config, the tsconfig edit on 24.12.0 for the `registerHooks()` path, its help and errors, and Ctrl+C to the process group, acked once), a bare `--experimental-config-file` on 26.12.0 and a separate `.json` config path on 22.18.0 (a script argument named `--watch`, then `--tsconfig` and the watcher after the flag or its path), IPC, and signals sent to the PID of `vpx` (Unix), file names with `#` and `%`, and package mode. `command_vpx_script_node22` (22.23.2), `_node24` (24.12.0), and `_node26` (26.5.0) cover the `registerHooks()` path, including CommonJS output that requires runtime helpers the project cannot resolve; `_old_node` (20.18.0) covers the version error. `shim_system_first_fallback` checks that script mode follows `vp node` in system-first mode. Windows runs every case except watch mode, shebangs, IPC, and signals, which a `.cmd` shim cannot carry, and runs its own installed-binary case with a `.cmd` binary.
 
 ## Performance
 
@@ -331,14 +361,13 @@ Package mode through the global `vpx` is unchanged. What changes:
 
 ## Open Items
 
-- Windows Ctrl+C through the `vp.exe` spawn-and-wait path is not verified.
+- Windows Ctrl+C through the `vp.exe` spawn-and-wait path: `vp.exe` handles Ctrl+C and Ctrl+Break while it waits for the child (`vp_command::ConsoleCtrlGuard` in `spawn_tool`, `run_command`, and `execute_with_terminal_guard`, as the `vpx.exe` trampoline and `TerminalStateGuard` on Unix do), so the global `vpx` and `vp run` exit after the script's own cleanup. `vp_run_vpx_script_ctrl_c_cleanup` checks that the global vpx and `vp run` exit after a 300 ms `SIGINT` cleanup, with the script's code. It runs the script as a `vp run` task because the snapshot runner starts steps with Ctrl+C ignored, which only vite-task clears.
 
 ## Future Enhancements
 
-- **`vp migrate` support**: rewrite `tsx` invocations in `package.json` scripts to `vpx`, only when the project's Node.js satisfies the script-mode range and for the cases under "Coming from tsx" in the guide, and remove the devDependency. `ts-node` (which type-checks by default), `esno`, and `jiti` need their own rules.
+- **`vp migrate` rules for other runners**: `ts-node` (which type-checks by default), `esno`, and `jiti` need their own rules.
 - **Public loader entry**: `node --import vite-plus/register ./a.ts`, for tools that must start `node` themselves.
 - **TypeScript eval and REPL**, once oxc-node transforms eval input.
-- **Watch** ([#3141](https://github.com/voidzero-dev/vite-plus/issues/3141)): forward oxc-node's watch reporting so `vpx --watch` restarts on tsconfig edits and new files, and add `vpx watch` on oxc-node's watcher (include and exclude globs, screen clearing, rerun on Enter, polling) once [oxc-node#871](https://github.com/oxc-project/oxc-node/issues/871) lets an embedder run it with its own loader.
 - **Opt-in transform cache**, keyed like tsx's.
 - **Programmatic API**: a `tsImport()` equivalent exported from `vite-plus`.
 

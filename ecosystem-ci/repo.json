@@ -163,7 +163,7 @@
   "tiptap": {
     "repository": "https://github.com/ueberdosis/tiptap.git",
     "branch": "main",
-    "hash": "f434577e6bb2010b321653cb132a57bda18764fa",
+    "hash": "e198d2bd50230848f16d8e01f6d11c48ed149fc3",
     "forceFreshMigration": true
   },
   "10ten-ja-reader": {

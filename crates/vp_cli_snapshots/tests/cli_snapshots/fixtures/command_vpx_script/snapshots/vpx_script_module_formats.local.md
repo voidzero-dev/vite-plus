@@ -9,14 +9,21 @@ A .cts that uses export is CommonJS with ES module syntax; it fails with a clear
 **Exit code:** 1
 
 ```
+<repo>/packages/cli/dist/script-preload.cjs:454
+        const result = oxcNode.load(url, context, nextLoad, HELPER_MODULE_NAME);
+                               ^
 
-node:internal/modules/run_main:123
-    triggerUncaughtException(
-    ^
 Error: Failed to transform <workspace>/src/both.cts: a `.cts` file is CommonJS, but this one uses ES module syntax (`import`, `export` or `import.meta`), which oxc-node does not compile to CommonJS. Rename it to `.mts` to run it as an ES module, or write it as CommonJS with `import x = require("...")` and `export =`.
-    at async nextLoad (node:internal/modules/esm/hooks:748:22)
-    at async Hooks.load (node:internal/modules/esm/hooks:385:20)
-    at async handleMessage (node:internal/modules/esm/worker:199:18) {
+    at load (<repo>/packages/cli/dist/script-preload.cjs:454:25)
+    at nextStep (node:internal/modules/customization_hooks:189:26)
+    at loadWithHooks (node:internal/modules/customization_hooks:374:18)
+    at #loadSync (node:internal/modules/esm/loader:865:14)
+    at ModuleLoader.load (node:internal/modules/esm/loader:824:28)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:609:31)
+    at #createModuleJob (node:internal/modules/esm/loader:640:36)
+    at #getJobFromResolveResult (node:internal/modules/esm/loader:353:34)
+    at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:321:41)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:680:25) {
   code: 'GenericFailure'
 }
 
@@ -30,14 +37,20 @@ Importing it reports the same error
 **Exit code:** 1
 
 ```
+<repo>/packages/cli/dist/script-preload.cjs:454
+        const result = oxcNode.load(url, context, nextLoad, HELPER_MODULE_NAME);
+                               ^
 
-node:internal/modules/run_main:123
-    triggerUncaughtException(
-    ^
 Error: Failed to transform <workspace>/src/both.cts: a `.cts` file is CommonJS, but this one uses ES module syntax (`import`, `export` or `import.meta`), which oxc-node does not compile to CommonJS. Rename it to `.mts` to run it as an ES module, or write it as CommonJS with `import x = require("...")` and `export =`.
-    at async nextLoad (node:internal/modules/esm/hooks:748:22)
-    at async Hooks.load (node:internal/modules/esm/hooks:385:20)
-    at async handleMessage (node:internal/modules/esm/worker:199:18) {
+    at load (<repo>/packages/cli/dist/script-preload.cjs:454:25)
+    at nextStep (node:internal/modules/customization_hooks:189:26)
+    at loadWithHooks (node:internal/modules/customization_hooks:374:18)
+    at #loadSync (node:internal/modules/esm/loader:865:14)
+    at ModuleLoader.load (node:internal/modules/esm/loader:824:28)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:609:31)
+    at #createModuleJob (node:internal/modules/esm/loader:640:36)
+    at #getJobFromResolveResult (node:internal/modules/esm/loader:353:34)
+    at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:321:41) {
   code: 'GenericFailure'
 }
 

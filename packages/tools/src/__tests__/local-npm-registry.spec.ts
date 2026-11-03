@@ -1,10 +1,57 @@
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFile, execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 
 import { expect, it } from 'vitest';
+
+import { RegistryCache } from '../registry-cache.ts';
+
+it('prewarms every generated archive once and picks up changed fixture versions', async () => {
+  const script = fileURLToPath(new URL('../local-npm-registry.ts', import.meta.url));
+  const root = mkdtempSync(path.join(tmpdir(), 'vp-prewarm-manifest-test-'));
+  const requests: string[] = [];
+  const server = createServer((req, res) => {
+    requests.push(req.url!);
+    res.end(Buffer.from([0, 255, 128]));
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const address = server.address();
+    if (!address || typeof address === 'string') {
+      throw new Error('Missing registry address');
+    }
+    const registry = `http://127.0.0.1:${address.port}`;
+    const manifest = path.join(root, 'prewarm.json');
+    const cache = path.join(root, 'cache');
+    const first = `${registry}/bun-1.0.0.tgz`;
+    const second = `${registry}/bun-2.0.0.tgz`;
+    const run = () =>
+      promisify(execFile)(
+        process.execPath,
+        [script, '--snapshot-cache', cache, '--prewarm-manifest', manifest],
+        { timeout: 10_000 },
+      );
+    writeFileSync(manifest, JSON.stringify([first, first]));
+    await run();
+    writeFileSync(manifest, JSON.stringify([first, second]));
+    await run();
+    expect(requests).toEqual(['/bun-1.0.0.tgz', '/bun-2.0.0.tgz']);
+    for (const url of [first, second]) {
+      expect((await new RegistryCache(cache).get(url, 'application/octet-stream')).body).toEqual(
+        Buffer.from([0, 255, 128]),
+      );
+    }
+    expect(requests).toHaveLength(2);
+  } finally {
+    server.closeAllConnections();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 it.each([false, true])(
   'shares a registry with snapshot processes without changing their environment (packed: %s)',

@@ -5,9 +5,10 @@ const vp = path.join(path.dirname(require.resolve('vite-plus/package.json')), 'b
 // The runner's node shim can expand PATHEXT before this script starts.
 // Reset it in a new process that launches real Node directly, so only the
 // NAPI initializer can supply the lowercase extension for this CLI lookup.
+// The first exec can download pnpm. Let the snapshot runner enforce its
+// step deadline and terminate the whole process tree on timeout.
 execFileSync(process.execPath, [vp, 'exec', 'astro', '--version'], {
   cwd: path.resolve('packages/app'),
   env: { ...process.env, PATHEXT: '.COM;.EXE;.BAT;.CMD' },
   stdio: 'inherit',
-  timeout: 30000,
 });

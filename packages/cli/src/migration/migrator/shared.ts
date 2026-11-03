@@ -30,7 +30,11 @@ export function getCommandStartIndex(argv: readonly string[]): number {
     return 0;
   }
   let start = 1;
-  if (argv[start] === 'exec' || argv[start] === 'x') {
+  if (argv[start] === 'exec' || argv[start] === 'x' || argv[start] === 'dlx') {
+    start++;
+  }
+  // `npx --yes tsx`: skip the install prompt flag.
+  if (argv[start] === '-y' || argv[start] === '--yes') {
     start++;
   }
   if (argv[start] === '--') {
@@ -38,6 +42,15 @@ export function getCommandStartIndex(argv: readonly string[]): number {
   }
   return start;
 }
+
+// Scans that decide whether a removed tool is still used. Built output can still load
+// it after migration, so skip only installed source and VCS metadata.
+export const RETENTION_SCAN_SKIP_DIRS: ReadonlySet<string> = new Set([
+  'node_modules',
+  '.git',
+  '.hg',
+  '.svn',
+]);
 
 // Oxlint does not inherit these fields through `extends`.
 export const OXLINT_OWNER_CONFIG_KEYS = new Set(['env', 'globals', 'settings', 'ignorePatterns']);

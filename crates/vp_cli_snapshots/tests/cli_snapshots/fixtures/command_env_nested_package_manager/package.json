@@ -1,0 +1,5 @@
+{
+  "name": "command-env-nested-package-manager",
+  "private": true,
+  "packageManager": "pnpm@10.19.0"
+}

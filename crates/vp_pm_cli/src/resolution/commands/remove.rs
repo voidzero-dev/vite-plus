@@ -8,27 +8,27 @@ use crate::resolution::{
 #[derive(clap::Args, Clone, Debug, Default, PartialEq, Eq)]
 pub struct RemoveArgs {
     /// Only remove from `devDependencies` (pnpm-specific)
-    #[arg(short = 'D', long, not_supported(yarn, bun))]
+    #[arg(short = 'D', long, conflicts_with = "global", not_supported(yarn, bun))]
     pub(crate) save_dev: bool,
 
     /// Only remove from `optionalDependencies` (pnpm-specific)
-    #[arg(short = 'O', long, not_supported(yarn, bun))]
+    #[arg(short = 'O', long, conflicts_with = "global", not_supported(yarn, bun))]
     pub(crate) save_optional: bool,
 
     /// Only remove from `dependencies` (pnpm-specific)
-    #[arg(short = 'P', long, not_supported(yarn, bun))]
+    #[arg(short = 'P', long, conflicts_with = "global", not_supported(yarn, bun))]
     pub(crate) save_prod: bool,
 
     /// Filter packages in monorepo (can be used multiple times)
-    #[arg(long, value_name = "PATTERN", not_supported(npm < "7.14.0", bun < "1.4"))]
+    #[arg(long, value_name = "PATTERN", conflicts_with = "global", not_supported(npm < "7.14.0", bun < "1.4"))]
     pub(crate) filter: Vec<String>,
 
     /// Remove from workspace root
-    #[arg(short = 'w', long, not_supported(npm < "8.1.0", yarn, bun))]
+    #[arg(short = 'w', long, conflicts_with = "global", not_supported(npm < "8.1.0", yarn, bun))]
     pub(crate) workspace_root: bool,
 
     /// Remove recursively from all workspace packages
-    #[arg(short = 'r', long, not_supported(npm < "8.1.0", yarn < "2", bun))]
+    #[arg(short = 'r', long, conflicts_with = "global", not_supported(npm < "8.1.0", yarn < "2", bun))]
     pub(crate) recursive: bool,
 
     /// Remove global packages

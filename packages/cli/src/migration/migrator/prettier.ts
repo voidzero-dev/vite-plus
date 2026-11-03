@@ -6,7 +6,7 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
 import { rewritePrettier } from '../../../binding/index.js';
 import { type WorkspacePackage } from '../../types/index.ts';
-import { runCommandSilently } from '../../utils/command.ts';
+import { getVpCommand, runCommandSilently } from '../../utils/command.ts';
 import { editJsonFile, readJsonFile } from '../../utils/json.ts';
 import { displayRelative } from '../../utils/path.ts';
 import { cancelAndExit } from '../../utils/prompts.ts';
@@ -61,7 +61,6 @@ export function detectPrettierProject(
  * Unsupported config formats are skipped; other errors still fail migration.
  */
 async function runPrettierMigrateStep(
-  vpBin: string,
   cwd: string,
   spinner: ReturnType<typeof getSpinner>,
   failMessage: string,
@@ -69,8 +68,7 @@ async function runPrettierMigrateStep(
 ): Promise<'migrated' | 'skipped' | 'failed'> {
   try {
     const result = await runCommandSilently({
-      command: vpBin,
-      args: ['fmt', '--migrate=prettier'],
+      ...getVpCommand(['fmt', '--migrate=prettier']),
       cwd,
       envs: process.env,
     });
@@ -109,7 +107,6 @@ export async function migratePrettierToOxfmt(
   packages?: WorkspacePackage[],
   options?: { silent?: boolean; report?: MigrationReport },
 ): Promise<'migrated' | 'skipped' | 'failed'> {
-  const vpBin = process.env.VP_CLI_BIN ?? 'vp';
   const spinner = options?.silent ? getSilentSpinner() : getSpinner(interactive);
 
   // Step 1: Generate .oxfmtrc.json from Prettier config
@@ -133,7 +130,6 @@ export async function migratePrettierToOxfmt(
     try {
       spinner.start('Migrating Prettier config to Oxfmt...');
       const result = await runPrettierMigrateStep(
-        vpBin,
         projectPath,
         spinner,
         'Prettier migration failed',

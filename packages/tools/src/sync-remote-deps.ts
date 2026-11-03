@@ -1,5 +1,5 @@
 import { execSync, spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, globSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 
@@ -31,7 +31,9 @@ interface PnpmWorkspace {
 interface PackageJson {
   name?: string;
   version?: string;
+  dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
+  optionalDependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
   exports?: Record<string, unknown>;
   [key: string]: unknown;
@@ -43,6 +45,56 @@ const ROLLDOWN_DIR = 'rolldown';
 const VITE_DIR = 'vite';
 const CORE_PACKAGE_PATH = 'packages/core';
 const VITE_DEVTOOLS_PACKAGE = '@vitejs/devtools';
+
+function workspacePackages(packages: string[] = []): string[] {
+  // Keep upstream build roots and the packages we bundle. Broad globs also
+  // install upstream benchmarks, test servers, and unrelated published tools.
+  return [
+    ...packages.filter((pattern) => !/^!?(rolldown|vite)(\/|$)/.test(pattern)),
+    ROLLDOWN_DIR,
+    `${ROLLDOWN_DIR}/packages/rolldown`,
+    VITE_DIR,
+    `${VITE_DIR}/packages/vite`,
+  ];
+}
+
+export function collectWorkspaceCatalogReferences(
+  rootDir: string,
+  packages: string[],
+): Set<string> {
+  const patterns = workspacePackages(packages);
+  const files = globSync(
+    patterns
+      .filter((pattern) => !pattern.startsWith('!'))
+      .map((pattern) => `${pattern}/package.json`),
+    {
+      cwd: rootDir,
+      exclude: [
+        '**/node_modules/**',
+        ...patterns
+          .filter((pattern) => pattern.startsWith('!'))
+          .map((pattern) => `${pattern.slice(1)}/package.json`),
+      ],
+    },
+  );
+  const references = new Set<string>();
+  for (const file of new Set(['package.json', ...files])) {
+    const pkg: PackageJson = JSON.parse(readFileSync(join(rootDir, file), 'utf8'));
+    for (const field of [
+      'dependencies',
+      'devDependencies',
+      'optionalDependencies',
+      'peerDependencies',
+    ] as const) {
+      for (const [name, version] of Object.entries(pkg[field] ?? {})) {
+        if (version === 'catalog:' || version === 'catalog:default') {
+          references.add(name);
+        }
+      }
+    }
+  }
+  return references;
+}
 
 function log(message: string) {
   console.log(`[sync-rolldown] ${message}`);
@@ -523,26 +575,35 @@ export function mergePnpmWorkspaces(
   main: PnpmWorkspace,
   rolldown: PnpmWorkspace,
   rolldownVite: PnpmWorkspace,
+  vitePackage: PackageJson,
   verkit: typeof import('verkit'),
+  catalogReferences?: ReadonlySet<string>,
 ): PnpmWorkspace {
   const result: PnpmWorkspace = { ...main };
 
-  // Merge packages array
-  const packagesSet = new Set(main.packages || []);
-  // Add rolldown packages
-  packagesSet.add(ROLLDOWN_DIR);
-  packagesSet.add(`${ROLLDOWN_DIR}/packages/*`);
-  // Add vite packages
-  packagesSet.add(VITE_DIR);
-  packagesSet.add(`${VITE_DIR}/packages/*`);
-  result.packages = Array.from(packagesSet);
+  result.packages = workspacePackages(main.packages);
 
   // The upgrade script selects the latest supported Vitest release and updates
   // the runtime constant with it. Upstream catalogs must not replace that pin.
   const vitestVersion = main.catalog?.vitest;
-  const catalog: Record<string, string> = {};
+  // Vite declares its compiler in the root package.json, outside its catalog.
+  // Follow that range exactly, even when Rolldown still uses an older major.
+  const typescriptSpecifier = vitePackage.devDependencies?.typescript;
+  const typescriptRange =
+    typescriptSpecifier === 'catalog:' ? rolldownVite.catalog?.typescript : typescriptSpecifier;
+  if (!typescriptRange || !verkit.normalizeRange(typescriptRange)) {
+    throw new Error('Vite must declare a valid TypeScript devDependency range');
+  }
+  const catalog: Record<string, string> = { typescript: typescriptRange };
+  const upstreamCatalogPackages = new Set<string>();
   for (const workspace of [main, rolldown, rolldownVite]) {
     for (const [pkg, version] of Object.entries(workspace.catalog || {})) {
+      if (catalogReferences && !catalogReferences.has(pkg)) {
+        continue;
+      }
+      if (pkg === 'typescript') {
+        continue;
+      }
       if (REMOVED_VITEST_PACKAGES.has(pkg)) {
         // Unused upstream entries are harmless; actual dependency uses fail in
         // alignVendoredVitestDependencies instead of reinstalling removed packages.
@@ -561,9 +622,17 @@ export function mergePnpmWorkspaces(
         // This community provider does not share the official release schedule.
         catalog[pkg] = main.catalog[pkg];
       } else {
-        catalog[pkg] = catalog[pkg]
-          ? mergeSemverVersions(catalog[pkg], version, pkg, verkit)
-          : version;
+        // Upstream owns ordinary catalog entries, including downgrades. Merge
+        // only declarations from both upstreams or packages whose explicit
+        // policy keeps the higher version selected by this workspace.
+        const mergeExisting = syncedPackages(pkg) || upstreamCatalogPackages.has(pkg);
+        catalog[pkg] =
+          catalog[pkg] && mergeExisting
+            ? mergeSemverVersions(catalog[pkg], version, pkg, verkit)
+            : version;
+      }
+      if (workspace !== main) {
+        upstreamCatalogPackages.add(pkg);
       }
     }
   }
@@ -573,6 +642,7 @@ export function mergePnpmWorkspaces(
 
   // Sort catalog keys alphabetically
   result.catalog = Object.keys(catalog)
+    .filter((pkg) => !catalogReferences || catalogReferences.has(pkg))
     .toSorted()
     .reduce(
       (sorted, key) => {
@@ -581,6 +651,22 @@ export function mergePnpmWorkspaces(
       },
       {} as Record<string, string>,
     );
+
+  // Vite's language-tooling overrides keep legacy compiler API consumers working.
+  const typescriptOverrides = Object.fromEntries(
+    Object.entries(rolldownVite.overrides ?? {}).filter(([selector]) =>
+      />typescript(?:@|$)/.test(selector),
+    ),
+  );
+
+  // Rolldown's build uses the compiler API from its own TypeScript range.
+  // Its catalog reference must not pick up Vite's compiler after the merge.
+  if (rolldown.catalog?.typescript) {
+    typescriptOverrides['rolldown>typescript'] = rolldown.catalog.typescript;
+  }
+  if (Object.keys(typescriptOverrides).length > 0) {
+    result.overrides = { ...result.overrides, ...typescriptOverrides };
+  }
 
   // Merge minimumReleaseAgeExclude
   result.minimumReleaseAgeExclude = mergeMinimumReleaseAgeExclude([
@@ -682,8 +768,10 @@ export function mergeWorkspaceYaml(
   mainSrc: string,
   rolldownSrc: string,
   rolldownViteSrc: string,
+  vitePackage: PackageJson,
   yaml: typeof import('yaml'),
   verkit: typeof import('verkit'),
+  catalogReferences?: ReadonlySet<string>,
 ): string {
   const mainDoc = yaml.parseDocument(mainSrc);
   const rolldown = yaml.parse(rolldownSrc) as PnpmWorkspace | null;
@@ -693,7 +781,9 @@ export function mergeWorkspaceYaml(
     (mainDoc.toJSON() as PnpmWorkspace) ?? {},
     rolldown ?? {},
     rolldownVite ?? {},
+    vitePackage,
     verkit,
+    catalogReferences,
   );
 
   const stringifyOptions = { lineWidth: -1, singleQuote: true } as const;
@@ -864,11 +954,27 @@ export async function syncRemote() {
   const mainSrc = readFileSync(mainWorkspacePath, 'utf-8');
   const rolldownSrc = readFileSync(rolldownWorkspacePath, 'utf-8');
   const rolldownViteSrc = readFileSync(rolldownViteWorkspacePath, 'utf-8');
+  const viteRootPackage = JSON.parse(
+    readFileSync(join(rootDir, VITE_DIR, 'package.json'), 'utf-8'),
+  ) as PackageJson;
+  const mainWorkspace = yaml.parse(mainSrc) as PnpmWorkspace;
+  const catalogReferences = collectWorkspaceCatalogReferences(
+    rootDir,
+    mainWorkspace.packages ?? [],
+  );
 
   log('Merging pnpm-workspace.yaml files...');
 
   // Merge upstream catalogs into the main workspace while preserving its comments.
-  const yamlContent = mergeWorkspaceYaml(mainSrc, rolldownSrc, rolldownViteSrc, yaml, verkit);
+  const yamlContent = mergeWorkspaceYaml(
+    mainSrc,
+    rolldownSrc,
+    rolldownViteSrc,
+    viteRootPackage,
+    yaml,
+    verkit,
+    catalogReferences,
+  );
 
   const vitestVersion = (yaml.parse(yamlContent) as PnpmWorkspace).catalog?.vitest;
   if (!vitestVersion || !verkit.normalize(vitestVersion)) {
