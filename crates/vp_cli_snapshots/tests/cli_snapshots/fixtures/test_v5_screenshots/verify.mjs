@@ -16,18 +16,8 @@ for (const phase of ['record', 'compare', 'failure']) {
   const runner = await createVitest({
     config: false, watch: false, reporters: [], update: phase === 'record',
   }, defineConfig({
-    plugins: [{
-      name: 'browser-server-port',
-      // Set port 0 after Vitest resolves its defaults so the OS chooses the port.
-      enforce: 'post',
-      config: {
-        order: 'post',
-        handler(config) {
-          config.test.api.port = 0;
-        },
-      },
-    }],
     test: {
+      api: { port: 0 },
       include: [phase === 'failure' ? 'failure.test.js' : 'browser.test.js'],
       browser: {
         enabled: true, provider: playwright(), headless: !headed, ui: false,
