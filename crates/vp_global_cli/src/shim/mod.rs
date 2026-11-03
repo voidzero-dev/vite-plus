@@ -1,8 +1,7 @@
-//! Shim module for intercepting node, npm, npx, corepack, and package binary commands.
+//! Shim module for intercepting Node.js, package-manager, and package binary commands.
 //!
 //! This module provides the functionality for the vp binary to act as a shim
-//! when invoked as `node`, `npm`, `npx`, `corepack`, or any globally installed
-//! package binary.
+//! when invoked as a managed tool or any globally installed package binary.
 //!
 //! Detection methods:
 //! - Unix: Symlinks to vp binary preserve argv[0], allowing tool detection
@@ -10,7 +9,6 @@
 //! - Legacy: `.cmd` wrappers call `vp env exec <tool>` directly (deprecated)
 
 mod cache;
-pub(crate) mod corepack;
 pub(crate) mod dispatch;
 pub(crate) mod exec;
 
@@ -21,18 +19,14 @@ pub use dispatch::dispatch;
 pub(crate) use dispatch::find_system_tool;
 use vp_shared::env_vars;
 
-use crate::commands::env::config::get_bin_dir;
-
-/// Core shim tools (node, npm, npx).
-///
-/// `corepack` is also a default shim (see `commands::env::setup::SHIM_TOOLS`)
-/// but is intentionally not a core tool: it is not always bundled with the
-/// resolved Node.js version (removed in Node.js 25+), so it has a dedicated
-/// dispatch path with a managed fallback and never uses recursion passthrough.
-pub const CORE_SHIM_TOOLS: &[&str] = &["node", "npm", "npx"];
+/// Default shims created by `vp env setup`.
+pub const DEFAULT_SHIM_TOOLS: &[&str] = &[
+    "node", "npm", "npx", "pnpm", "pnpx", "pn", "pnx", "yarn", "yarnpkg", "bun", "bunx", "vpx",
+    "vpr",
+];
 
 /// Extract the tool name from argv[0].
-/// We hope all bins should be put under $VP_HOME/bin
+/// Core tool shims can live in either the main or fallback bin directory.
 ///
 /// Handles various formats:
 /// - `node` (Unix)
@@ -48,9 +42,10 @@ pub fn extract_tool_name(argv0: &str) -> String {
     if cfg!(target_os = "linux") {
         stem
     } else {
-        let bin_dir = get_bin_dir();
-        if let Ok(bin_dir) = bin_dir {
-            if let Ok(read_dir) = fs::read_dir(&bin_dir) {
+        let dirs = &vp_shared::EnvConfig::get().dirs;
+        let fallback = dirs.fallback_bin();
+        for bin_dir in [&dirs.bin, &fallback] {
+            if let Ok(read_dir) = fs::read_dir(bin_dir) {
                 for bin in read_dir.flatten() {
                     if bin.path().file_stem().unwrap_or_default().to_string_lossy().to_lowercase()
                         == stem.to_lowercase()
@@ -70,16 +65,16 @@ pub fn extract_tool_name(argv0: &str) -> String {
     }
 }
 
-/// Check if the given tool name is a core shim tool (node/npm/npx).
+/// Check if the given tool name is managed directly by the core shim path.
 #[must_use]
 pub fn is_core_shim_tool(tool: &str) -> bool {
-    CORE_SHIM_TOOLS.contains(&tool)
+    tool == "node" || vp_pm_cli::PackageManagerType::from_tool(tool).is_some()
 }
 
 /// Check if the given tool name is a shim tool (core or package binary).
 ///
 /// This is a quick check that returns true if:
-/// 1. The tool is a core shim (node/npm/npx), OR
+/// 1. The tool is a core shim, OR
 /// 2. The tool name is not "vp" (package binaries are detected later via metadata)
 #[must_use]
 pub fn is_shim_tool(tool: &str) -> bool {
@@ -151,16 +146,21 @@ const LEGACY_SHIM_TOOL_ENV_VAR: &str = "VITE_PLUS_SHIM_TOOL";
 /// IMPORTANT: This function clears both env vars after reading to
 /// prevent them from leaking to child processes.
 pub fn detect_shim_tool(argv0: &str) -> Option<String> {
+    let tool = peek_shim_tool(argv0);
     // Always clear both env vars to prevent them from leaking to child processes.
-    // We read them first, then clear immediately.
     // SAFETY: We're at program startup before any threads are spawned.
-    let env_tool = std::env::var(SHIM_TOOL_ENV_VAR)
-        .ok()
-        .or_else(|| std::env::var(LEGACY_SHIM_TOOL_ENV_VAR).ok());
     unsafe {
         std::env::remove_var(SHIM_TOOL_ENV_VAR);
         std::env::remove_var(LEGACY_SHIM_TOOL_ENV_VAR);
     }
+    tool
+}
+
+/// Inspect shim mode before setup without consuming an installer's re-exec environment.
+pub(crate) fn peek_shim_tool(argv0: &str) -> Option<String> {
+    let env_tool = std::env::var(SHIM_TOOL_ENV_VAR)
+        .ok()
+        .or_else(|| std::env::var(LEGACY_SHIM_TOOL_ENV_VAR).ok());
 
     // Check VP_SHIM_TOOL env var first (set by trampoline exe on Windows).
     // This takes priority over argv[0] because the trampoline spawns vp.exe
@@ -217,27 +217,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_is_shim_tool() {
-        // Core shim tools are always recognized
-        assert!(is_core_shim_tool("node"));
-        assert!(is_core_shim_tool("npm"));
-        assert!(is_core_shim_tool("npx"));
-        assert!(!is_core_shim_tool("yarn")); // yarn is not a core shim tool
-        assert!(!is_core_shim_tool("vp"));
-        assert!(!is_core_shim_tool("cargo"));
-        assert!(!is_core_shim_tool("tsc")); // Package binary, not core
-        // corepack is a default shim but intentionally not a core tool:
-        // it has a dedicated dispatch path and never uses recursion passthrough
-        assert!(!is_core_shim_tool("corepack"));
-
-        // is_shim_tool includes core tools
-        assert!(is_shim_tool("node"));
-        assert!(is_shim_tool("npm"));
-        assert!(is_shim_tool("npx"));
-        assert!(!is_shim_tool("vp")); // vp is never a shim
-    }
-
     /// Test that is_potential_package_binary checks the configured bin directory.
     ///
     /// The function now checks if a shim exists in the configured bin directory
@@ -271,6 +250,8 @@ mod tests {
             std::env::set_var(SHIM_TOOL_ENV_VAR, "node");
             std::env::remove_var(LEGACY_SHIM_TOOL_ENV_VAR);
         }
+        assert_eq!(peek_shim_tool("vp"), Some("node".to_string()));
+        assert_eq!(std::env::var(SHIM_TOOL_ENV_VAR).as_deref(), Ok("node"));
         let result = detect_shim_tool("vp");
         assert_eq!(result, Some("node".to_string()));
         // Env var should be cleared after detection
@@ -315,5 +296,12 @@ mod tests {
     #[serial]
     fn test_detect_shim_tool_vpr() {
         assert_detect_shim_tool_from_argv0("vpr");
+    }
+
+    #[test]
+    #[serial]
+    fn test_detect_shim_tool_pnpm_short_aliases() {
+        assert_detect_shim_tool_from_argv0("pn");
+        assert_detect_shim_tool_from_argv0("pnx");
     }
 }

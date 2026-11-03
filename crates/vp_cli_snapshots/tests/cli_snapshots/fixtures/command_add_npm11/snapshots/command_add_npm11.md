@@ -24,6 +24,17 @@ Options:
   --save-catalog-name <CATALOG_NAME>  Save the new dependency to the specified catalog name
   --save-catalog                      Save the new dependency to the default catalog
   --allow-build <NAMES>               A list of package names allowed to run postinstall
+  --ignore-scripts                    Do not run lifecycle scripts
+  --no-optional                       Do not install optionalDependencies
+  --frozen-lockfile                   Don't update lockfile
+  --no-frozen-lockfile                Allow lockfile updates
+  --lockfile-only                     Only update lockfile, don't install
+  --prefer-offline                    Use cached packages when available
+  --offline                           Only use packages already in cache
+  -f, --force                         Force reinstall all dependencies
+  --no-lockfile                       Don't read or generate lockfile
+  --shamefully-hoist                  Create flat node_modules (pnpm only)
+  --silent                            Suppress Vite+ output and enable native silent mode where supported
   --filter <PATTERN>                  Filter packages in monorepo (can be used multiple times)
   -w, --workspace-root                Add to workspace root
   --workspace                         Only add if package exists in workspace (pnpm-specific)
@@ -32,7 +43,7 @@ Options:
   --concurrency <CONCURRENCY>         Number of global package installs to run in parallel (only with -g)
   -h, --help                          Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp add testnpm2 -D -- --no-audit`
@@ -59,12 +70,12 @@ added 1 package in <duration>
 
 ## `vp add testnpm2 test-vite-plus-install --allow-build=test-vite-plus-install -- --no-audit`
 
-should add packages to dependencies
+reject unsupported --allow-build without adding packages
+
+**Exit code:** 1
 
 ```
-warn: npm does not support --allow-build.
-
-added 1 package in <duration>
+npm does not support --allow-build.
 ```
 
 ## `vpt print-file package.json`
@@ -76,9 +87,6 @@ added 1 package in <duration>
   "packageManager": "npm@11.6.2",
   "devDependencies": {
     "testnpm2": "^1.0.1"
-  },
-  "dependencies": {
-    "test-vite-plus-install": "^1.0.0"
   }
 }
 ```
@@ -102,9 +110,6 @@ added 1 package in <duration>
   "packageManager": "npm@11.6.2",
   "devDependencies": {
     "testnpm2": "^1.0.1"
-  },
-  "dependencies": {
-    "test-vite-plus-install": "^1.0.0"
   },
   "peerDependencies": {
     "test-vite-plus-package": "^1.0.0"
@@ -130,9 +135,6 @@ added 1 package in <duration>
   "packageManager": "npm@11.6.2",
   "devDependencies": {
     "testnpm2": "^1.0.1"
-  },
-  "dependencies": {
-    "test-vite-plus-install": "^1.0.0"
   },
   "peerDependencies": {
     "test-vite-plus-package": "^1.0.0"
@@ -161,9 +163,6 @@ up to date in <duration>
   "packageManager": "npm@11.6.2",
   "devDependencies": {
     "testnpm2": "^1.0.1"
-  },
-  "dependencies": {
-    "test-vite-plus-install": "^1.0.0"
   },
   "peerDependencies": {
     "test-vite-plus-package": "^1.0.0"

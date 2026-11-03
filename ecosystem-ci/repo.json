@@ -3,7 +3,6 @@
     "repository": "https://github.com/langgenius/dify.git",
     "branch": "main",
     "hash": "baf2191ee360c5f058a9e25c2c2c26cafea2bbe6",
-    "directory": "web",
     "forceFreshMigration": true
   },
   "skeleton": {
@@ -14,7 +13,7 @@
   "vibe-dashboard": {
     "repository": "https://github.com/voidzero-dev/vibe-dashboard.git",
     "branch": "main",
-    "hash": "92a143a57478723987e778439a355291835135ec",
+    "hash": "be10551d4b73b7bcb53491311b574fb214a38e1f",
     "forceFreshMigration": true,
     "playwright": true
   },
@@ -31,7 +30,7 @@
   "vue-mini": {
     "repository": "https://github.com/vue-mini/vue-mini.git",
     "branch": "master",
-    "hash": "333c5957bf99a68991c9f91019670c56b65bd896"
+    "hash": "d8ba920b64922c959314226ffcf70af52b27e344"
   },
   "vite-plugin-react": {
     "repository": "https://github.com/vitejs/vite-plugin-react.git",
@@ -55,6 +54,11 @@
     "branch": "main",
     "hash": "439d7df1a5d594458e95071612c5edd93ff736a5"
   },
+  "decoders": {
+    "repository": "https://github.com/nvie/decoders.git",
+    "branch": "main",
+    "hash": "ba339327758fcfda9d2f361e2786513aca901717"
+  },
   "vite-vue-vercel": {
     "repository": "https://github.com/fengmk2/vite-vue-vercel.git",
     "branch": "main",
@@ -76,7 +80,13 @@
   "vinext": {
     "repository": "https://github.com/cloudflare/vinext.git",
     "branch": "main",
-    "hash": "aec4421b2a95bdeb20a295a4ff391473efd724bb",
+    "hash": "2a2ce31ecc286ae38ab1f0bce13d94418da8a513",
+    "forceFreshMigration": true
+  },
+  "videojs-v10": {
+    "repository": "https://github.com/videojs/v10.git",
+    "branch": "main",
+    "hash": "a86f3d735973e47669d529f3edba178585c9cfa9",
     "forceFreshMigration": true
   },
   "reactive-resume": {
@@ -88,15 +98,21 @@
   "yaak": {
     "repository": "https://github.com/mountain-loop/yaak.git",
     "branch": "main",
-    "hash": "b4a1c418bb3f923858dd55729f585e189327a038",
+    "hash": "c6e09a5af3b20fc43cb6000af7b420af24ff510a",
     "forceFreshMigration": true
   },
   "npmx.dev": {
     "repository": "https://github.com/npmx-dev/npmx.dev.git",
     "branch": "main",
-    "hash": "035776c96cf8f089c44e6011264b534b0bcde53c",
+    "hash": "0e44738831077879c7ab00469fc50f5dbcf18650",
     "forceFreshMigration": true,
     "playwright": true
+  },
+  "codiff": {
+    "repository": "https://github.com/nkzw-tech/codiff.git",
+    "branch": "main",
+    "hash": "1bfbe4506f5321bd419d56f40d8b02a5f6fc82c7",
+    "forceFreshMigration": true
   },
   "vite-plus-jest-dom-repro": {
     "repository": "https://github.com/why-reproductions-are-required/vite-plus-jest-dom-repro.git",
@@ -138,5 +154,38 @@
     "branch": "dev",
     "hash": "83f6c6a418ab9319e07d719d86d4fa952f99e266",
     "forceFreshMigration": true
+  },
+  "nuxt-devtools": {
+    "repository": "https://github.com/nuxt/devtools.git",
+    "branch": "main",
+    "hash": "a24195182241ddcce07f9d9e7972608eafbc93fb"
+  },
+  "tiptap": {
+    "repository": "https://github.com/ueberdosis/tiptap.git",
+    "branch": "main",
+    "hash": "e198d2bd50230848f16d8e01f6d11c48ed149fc3",
+    "forceFreshMigration": true
+  },
+  "10ten-ja-reader": {
+    "repository": "https://github.com/birchill/10ten-ja-reader.git",
+    "branch": "main",
+    "hash": "7eabad2d5075ce278c580a59c4deb6b2d794383f"
+  },
+  "sqlocal": {
+    "repository": "https://github.com/DallasHoff/sqlocal.git",
+    "branch": "main",
+    "hash": "ef38d4d76d7e09da5ffc3b3ab0ba98ea78c18000"
+  },
+  "brazilian-utils": {
+    "repository": "https://github.com/brazilian-utils/javascript.git",
+    "branch": "main",
+    "hash": "2b2c73518fbfdad820e4760b19fee99c4d836c94",
+    "forceFreshMigration": true
+  },
+  "solid-vite-plugin": {
+    "repository": "https://github.com/solidjs/solid-vite-plugin.git",
+    "branch": "next",
+    "hash": "5b6612bb8d5c51777dce9564f5dc48aabbdf848f",
+    "playwright": true
   }
 }

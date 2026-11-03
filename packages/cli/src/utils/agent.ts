@@ -5,6 +5,8 @@ import { styleText } from 'node:util';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
+import { SETUP_VP_VERSION } from './constants.ts';
+import { rewriteDocumentationLinks } from './documentation.ts';
 import { pkgRoot } from './path.ts';
 
 // --- Backward-compatible exports ---
@@ -14,7 +16,7 @@ export const AGENTS = [
     id: 'agents',
     label: 'AGENTS.md',
     targetPath: 'AGENTS.md',
-    hint: 'Codex, Amp, OpenCode, and similar agents',
+    hint: 'Claude Code, Codex, Amp, OpenCode, and similar agents',
     aliases: [
       'agents.md',
       'chatgpt',
@@ -105,7 +107,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Set up Vite+
-        uses: voidzero-dev/setup-vp@v1
+        uses: voidzero-dev/setup-vp@${SETUP_VP_VERSION}
         with:
           cache: true
           run-install: true
@@ -130,7 +132,8 @@ export async function selectAgentTargets({
   if (interactive && !agent) {
     const selectedAgentIds = await prompts.multiselect({
       message: 'Which coding agent instruction files should Vite+ create?',
-      options: AGENTS.map((option) => ({
+      // Keep CLAUDE.md available for explicit --agent values and existing projects.
+      options: AGENTS.filter((option) => option.id !== 'claude').map((option) => ({
         label: option.label,
         value: option.id,
         hint: option.hint,
@@ -222,7 +225,7 @@ export function updateExistingAgentInstructions(projectRoot: string): void {
     return;
   }
 
-  const templateContent = fs.readFileSync(templatePath, 'utf-8');
+  const templateContent = rewriteDocumentationLinks(fs.readFileSync(templatePath, 'utf-8'));
 
   for (const targetPath of targetPaths) {
     try {
@@ -373,7 +376,7 @@ export async function detectAgentConflicts({
     return [];
   }
 
-  const incomingContent = await fsPromises.readFile(sourcePath, 'utf-8');
+  const incomingContent = rewriteDocumentationLinks(await fsPromises.readFile(sourcePath, 'utf-8'));
   const shouldLinkToAgents = targetPaths.includes(AGENT_STANDARD_PATH);
 
   const conflicts: AgentConflictInfo[] = [];
@@ -437,7 +440,7 @@ export async function writeAgentInstructions({
   }
 
   const seenRealPaths = new Set<string>();
-  const incomingContent = await fsPromises.readFile(sourcePath, 'utf-8');
+  const incomingContent = rewriteDocumentationLinks(await fsPromises.readFile(sourcePath, 'utf-8'));
   const shouldLinkToAgents = paths.includes(AGENT_STANDARD_PATH);
 
   for (const targetPathToWrite of orderAgentTargetPaths(projectRoot, paths)) {

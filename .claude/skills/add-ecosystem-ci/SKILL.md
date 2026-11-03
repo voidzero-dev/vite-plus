@@ -66,7 +66,6 @@ Present the auto-detected configuration and ask user to confirm or modify:
        "repository": "https://github.com/owner/repo.git",
        "branch": "main",
        "hash": "full-commit-sha",
-       "directory": "web", // only if subdirectory is needed
        "forceFreshMigration": true // only if project already uses vite-plus
      }
    }
@@ -142,8 +141,7 @@ vp run build
 
 ## Important Notes
 
-- The `directory` field is optional - only add it if the package.json is not in the project root
-- If `directory` is specified in repo.json, it must also be specified in the workflow matrix
-- `patch-project.ts` automatically handles running `vp migrate` in the correct directory
+- The workflow matrix `directory` field is optional - only add it if the project commands must run in a subdirectory (like a workspace member)
+- `patch-project.ts` always runs `vp migrate` and `vp install` at the clone root; `vp migrate` rejects workspace member targets
 - `forceFreshMigration` is required for projects that already have `vite-plus` in their package.json — it sets `VP_FORCE_MIGRATE=1` so `vp migrate` forces full dependency rewriting instead of skipping
 - OS exclusions are added to the existing `exclude` section in the workflow matrix

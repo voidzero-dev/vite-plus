@@ -1,5 +1,7 @@
 [[case]]
 name = "command_view_npm10"
+# Exceeded 20 seconds on Windows in CI run 35299447671.
+skip-platforms = ["windows"]
 vp = "global"
 steps = [
   { argv = ["vp", "pm", "view", "testnpm2", "dist.tarball"], comment = "should view testnpm2 package information", continue-on-failure = true },

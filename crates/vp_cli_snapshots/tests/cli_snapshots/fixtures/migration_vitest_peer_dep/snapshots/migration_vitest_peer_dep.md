@@ -1,5 +1,10 @@
 # migration_vitest_peer_dep
 
+## `vpt write-file node_modules/vitest/package.json '{"name":"vitest","version":"4.1.11"}'`
+
+record the original runner version without adding a direct dependency
+
+
 ## `vp migrate --no-interactive`
 
 vitest should be added to devDeps when vitest-browser-svelte is present
@@ -30,13 +35,6 @@ vitest should be in devDependencies
     "vitest-browser-svelte": "^2.1.0",
     "vite-plus": "catalog:",
     "vitest": "catalog:"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
   }
 }
 ```
@@ -49,8 +47,8 @@ catalog:
   vitest: <version>
   vite-plus: <version>
 overrides:
-  vite: 'catalog:'
-  vitest: 'catalog:'
+  vite@*: 'catalog:'
+  vitest@*: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite

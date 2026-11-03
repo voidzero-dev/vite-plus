@@ -30,7 +30,4 @@ pub enum Error {
     /// User-facing message printed without the "Error: " prefix.
     #[error("{0}")]
     UserMessage(Str),
-
-    #[error("{0}")]
-    Other(Str),
 }

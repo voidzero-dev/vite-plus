@@ -1,0 +1,9 @@
+{
+  "name": "plugin-workspace",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.24.0",
+  "devDependencies": {
+    "vite": "^8.0.0"
+  }
+}

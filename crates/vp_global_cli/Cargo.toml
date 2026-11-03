@@ -1,6 +1,6 @@
 [package]
 name = "vp_global_cli"
-version = "0.2.8"
+version = "1.4.0"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -17,34 +17,46 @@ clap = { workspace = true, features = ["derive"] }
 clap_complete = { workspace = true, features = ["unstable-dynamic"] }
 directories = { workspace = true }
 dialoguer = { workspace = true }
+dunce = { workspace = true }
 futures = { workspace = true }
 flate2 = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-node-semver = { workspace = true }
 thiserror = { workspace = true }
 tar = { workspace = true }
+tempfile = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
-owo-colors = { workspace = true }
+console = { workspace = true }
+same-file = { workspace = true }
 oxc_resolver = { workspace = true }
+pathdiff = { workspace = true }
+vt_pty_terminal_test_client = { workspace = true, features = ["testing"] }
+rustc-hash = { workspace = true }
 crossterm = { workspace = true }
 indexmap = { workspace = true }
 indicatif = { workspace = true }
+indoc = { workspace = true }
+js-semver = { workspace = true }
 vp_error = { workspace = true }
 vp_js_runtime = { workspace = true }
 vp_pm_cli = { workspace = true }
 vt_path = { workspace = true }
 vp_command = { workspace = true }
+vp_cli_help = { workspace = true }
 vp_setup = { workspace = true }
 vp_shared = { workspace = true }
+vp_toolchain = { workspace = true }
 vt_str = { workspace = true }
 vt_workspace = { workspace = true }
+url = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
 
 [dev-dependencies]
+httpmock = { workspace = true }
 serial_test = { workspace = true }
-tempfile = { workspace = true }
+temp-env = { workspace = true }
+vp_shared = { workspace = true, features = ["test-utils"] }
 
 [lints]
 workspace = true

@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use ignore::WalkBuilder;
+use ignore::{WalkBuilder, gitignore::GitignoreBuilder};
 use vp_error::Error;
 
 /// File extensions to process for import rewriting.
@@ -15,6 +15,39 @@ const TS_JS_EXTENSIONS: &[&str] = &["ts", "tsx", "mts", "cts", "js", "jsx", "mjs
 pub struct WalkResult {
     /// List of file paths found
     pub files: Vec<PathBuf>,
+}
+
+/// Check a possibly nonexistent directory against repository-owned `.gitignore`
+/// files from `root` down to its parent. Do not use machine-local Git excludes:
+/// migration must produce ignore rules that also work for other contributors.
+pub fn is_directory_gitignored(root: &Path, directory: &Path) -> Result<bool, Error> {
+    let relative = directory
+        .strip_prefix(root)
+        .map_err(|_| Error::InvalidArgument("Ignore target must be inside the root".into()))?;
+    let mut current = root.to_path_buf();
+    let mut matchers = Vec::new();
+    for component in relative.components() {
+        let ignore_file = current.join(".gitignore");
+        if ignore_file.is_file() {
+            let mut builder = GitignoreBuilder::new(&current);
+            if let Some(error) = builder.add(&ignore_file) {
+                return Err(error.into());
+            }
+            matchers.push(builder.build()?);
+        }
+        current.push(component);
+        // Deeper ignore files take precedence. Check each directory before
+        // descending: a negation cannot re-include an ignored parent directory.
+        let matched = matchers
+            .iter()
+            .rev()
+            .map(|matcher| matcher.matched(&current, true))
+            .find(|matched| !matched.is_none());
+        if matched.is_some_and(|matched| matched.is_ignore()) {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 /// Find all TypeScript/JavaScript files in a directory, respecting gitignore
@@ -86,6 +119,47 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
+
+    #[test]
+    fn test_inherited_directory_gitignore() {
+        for (root_rules, package_rules, expected) in [
+            (".vitest/\n", "", true),
+            (".vitest\n", "", true),
+            ("**/.vitest/\n", "", true),
+            ("/.vitest/\n", "", false),
+            ("/packages/unit/.vitest/\n", "", true),
+            (".vitest-reports/\n", "", false),
+            ("# .vitest/\n", "", false),
+            ("\\!.vitest/\n", "", false),
+            (".vitest/\n!/packages/unit/.vitest/\n", "", false),
+            (".vitest/\n", "!/.vitest/\n", false),
+            ("!**/.vitest/\n", "/.vitest/\n", true),
+            ("packages/\n", "!/.vitest/\n", true),
+            ("packages/*\n!packages/unit/\n", "", false),
+        ] {
+            let temp = tempdir().unwrap();
+            let package = temp.path().join("packages/unit");
+            fs::create_dir_all(&package).unwrap();
+            fs::write(temp.path().join(".gitignore"), root_rules).unwrap();
+            fs::write(package.join(".gitignore"), package_rules).unwrap();
+            // Neither a Git repository nor the target directory needs to exist.
+            assert_eq!(
+                is_directory_gitignored(temp.path(), &package.join(".vitest")).unwrap(),
+                expected,
+                "root: {root_rules:?}, package: {package_rules:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_directory_gitignore_boundary() {
+        let temp = tempdir().unwrap();
+        let package = temp.path().join("packages/unit");
+        fs::create_dir_all(&package).unwrap();
+        fs::write(temp.path().join(".gitignore"), ".vitest/\n").unwrap();
+        assert!(!is_directory_gitignored(&package, &package.join(".vitest")).unwrap());
+        assert!(is_directory_gitignored(&package, &temp.path().join(".vitest")).is_err());
+    }
 
     #[test]
     fn test_find_ts_files_basic() {

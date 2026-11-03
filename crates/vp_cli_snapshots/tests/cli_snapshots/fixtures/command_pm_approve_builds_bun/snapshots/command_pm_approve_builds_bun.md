@@ -19,7 +19,7 @@ Options:
   --all       Approve every package currently pending approval (pnpm >= 10.32.0, npm >= 11.16.0). Mutually exclusive with positional packages
   -h, --help  Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp pm approve-builds`
@@ -45,6 +45,6 @@ forwards bun pm trust --all (errors on empty project — no lockfile)
 **Exit code:** 1
 
 ```
-bun pm trust <version> (af24e281)
+bun pm trust <version> (<hash>)
 error: Lockfile not found
 ```

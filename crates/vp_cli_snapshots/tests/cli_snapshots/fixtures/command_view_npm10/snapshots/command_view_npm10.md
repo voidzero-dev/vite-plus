@@ -5,7 +5,7 @@
 should view testnpm2 package information
 
 ```
-https://registry.npmjs.org/testnpm2/-/testnpm2-1.0.1.tgz
+http://127.0.0.1:<port>/testnpm2/-/testnpm2-1.0.1.tgz
 ```
 
 ## `vp pm info testnpm2 dist.tarball`
@@ -13,7 +13,7 @@ https://registry.npmjs.org/testnpm2/-/testnpm2-1.0.1.tgz
 should info alias to view
 
 ```
-https://registry.npmjs.org/testnpm2/-/testnpm2-1.0.1.tgz
+http://127.0.0.1:<port>/testnpm2/-/testnpm2-1.0.1.tgz
 ```
 
 ## `vp pm show testnpm2 dist.tarball`
@@ -21,5 +21,5 @@ https://registry.npmjs.org/testnpm2/-/testnpm2-1.0.1.tgz
 should show alias to view
 
 ```
-https://registry.npmjs.org/testnpm2/-/testnpm2-1.0.1.tgz
+http://127.0.0.1:<port>/testnpm2/-/testnpm2-1.0.1.tgz
 ```

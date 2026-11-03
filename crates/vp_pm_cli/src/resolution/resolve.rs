@@ -1,4 +1,5 @@
 use semver::Version;
+use vp_shared::{PrependOptions, ToolPathEnv};
 
 use crate::{
     Error, PackageManager, PackageManagerType,
@@ -23,7 +24,13 @@ where
     A: Diagnosis,
 {
     let mut diagnostics = Diagnostics::default();
-    let args = args.diagnose(dialect, &mut diagnostics);
+    args.diagnose(dialect, &mut diagnostics);
+    if let Some(message) = diagnostics.unsupported_options_error() {
+        return Resolution {
+            outcome: CommandResolution::InvalidArgument(message),
+            diagnostics: Diagnostics::default(),
+        };
+    }
     let outcome = dialect.resolve(&args, &mut diagnostics);
     Resolution { outcome, diagnostics }
 }
@@ -57,9 +64,34 @@ where
     };
 
     if let CommandResolution::Run(command) = &mut resolution.outcome {
-        command
-            .env
-            .insert("PATH".to_string(), vp_shared::format_path_prepended(manager.get_bin_prefix()));
+        let mut env = ToolPathEnv::from_env();
+        env.prepend(manager.get_bin_prefix(), &manager.bin_names(), PrependOptions::default())?;
+        for (key, value) in env.into_envs() {
+            command.env.insert(key.to_string(), value.to_string_lossy().into_owned());
+        }
+        match manager.client {
+            PackageManagerType::Pnpm => {
+                // Vite+ manages pnpm, so its self-update notification is not useful here.
+                command.env.insert("PNPM_CONFIG_UPDATE_NOTIFIER".to_string(), "false".to_string());
+            }
+            PackageManagerType::Yarn if command.program == "yarn" => {
+                match parse_version(manager)?.major {
+                    0 | 1 => {
+                        command.env.insert(
+                            "YARN_DISABLE_SELF_UPDATE_CHECK".to_string(),
+                            "true".to_string(),
+                        );
+                    }
+                    4.. => {
+                        // Yarn 4 includes version notices in its daily tips.
+                        command.env.insert("YARN_ENABLE_TIPS".to_string(), "false".to_string());
+                    }
+                    // Yarn 2 and 3 reject these settings and have no version notices.
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
     }
 
     Ok(resolution)
@@ -76,14 +108,42 @@ fn parse_version(manager: &PackageManager) -> Result<Version, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::resolution::ApproveBuildsArgs;
+    use crate::resolution::{ApproveBuildsArgs, DlxArgs, InstallArgs};
+
+    #[test]
+    fn unsupported_options_stop_before_lowering_and_report_every_option() {
+        #[vp_pm_cli_macros::pm_args]
+        #[derive(clap::Args)]
+        struct UnsupportedArgs {
+            #[arg(long, not_supported(npm))]
+            first: bool,
+            #[arg(long, not_supported(npm))]
+            second: Option<String>,
+        }
+
+        impl Resolve<UnsupportedArgs> for Npm {
+            fn resolve(&self, _: &UnsupportedArgs, _: &mut Diagnostics) -> CommandResolution {
+                panic!("unsupported options must be rejected before lowering");
+            }
+        }
+
+        let result = resolve(
+            &Npm::new(Version::new(11, 16, 0)),
+            UnsupportedArgs { first: true, second: Some("value".to_string()) },
+        );
+        let CommandResolution::InvalidArgument(message) = result.outcome else {
+            panic!("expected an unsupported-option error");
+        };
+        assert_eq!(message, "npm does not support --first.\nnpm does not support --second.");
+        assert!(result.diagnostics.is_empty(), "errors must not also be rendered as warnings");
+    }
 
     fn package_manager(client: PackageManagerType, version: &str) -> PackageManager {
         let workspace_root = vt_path::current_dir().unwrap();
         PackageManager {
             client,
             version: version.into(),
-            install_dir: workspace_root.join(".test-package-manager"),
+            bin_prefix: workspace_root.join(".test-package-manager").join("bin"),
         }
     }
 
@@ -121,5 +181,105 @@ mod tests {
                 ..
             } if version == "latest"
         ));
+    }
+
+    #[test]
+    fn yarn_update_settings_match_the_major_version() {
+        for (client, version, classic, tips) in [
+            (PackageManagerType::Yarn, "1.22.22", Some("true"), None),
+            (PackageManagerType::Yarn, "2.4.2", None, None),
+            (PackageManagerType::Yarn, "3.8.7", None, None),
+            (PackageManagerType::Yarn, "4.0.0", None, Some("false")),
+            (PackageManagerType::Yarn, "4.12.0", None, Some("false")),
+            (PackageManagerType::Npm, "11.13.0", None, None),
+            (PackageManagerType::Pnpm, "12.3.4", None, None),
+            (PackageManagerType::Bun, "1.0.0", None, None),
+        ] {
+            let manager = package_manager(client, version);
+            let resolution = resolve_for_manager(&manager, InstallArgs::default()).unwrap();
+            let CommandResolution::Run(command) = resolution.outcome else {
+                panic!("expected install command");
+            };
+
+            assert_eq!(
+                command.env.get("YARN_DISABLE_SELF_UPDATE_CHECK").map(String::as_str),
+                classic,
+                "{client}@{version}"
+            );
+            assert_eq!(
+                command.env.get("YARN_ENABLE_TIPS").map(String::as_str),
+                tips,
+                "{client}@{version}"
+            );
+            assert!(!command.env.contains_key("YARN_ENABLE_TELEMETRY"));
+        }
+    }
+
+    #[test]
+    fn yarn_classic_npx_fallback_uses_only_npm_update_settings() {
+        let manager = package_manager(PackageManagerType::Yarn, "1.22.22");
+        let resolution = resolve_for_manager(
+            &manager,
+            DlxArgs { args: vec!["create-vue".to_string()], ..Default::default() },
+        )
+        .unwrap();
+        let CommandResolution::Run(command) = resolution.outcome else {
+            panic!("expected npx command");
+        };
+
+        assert_eq!(command.program, "npx");
+        assert_eq!(
+            command.env.get("npm_config_update_notifier").map(String::as_str),
+            Some("false")
+        );
+        assert!(!command.env.contains_key("YARN_DISABLE_SELF_UPDATE_CHECK"));
+        assert!(!command.env.contains_key("YARN_ENABLE_TIPS"));
+    }
+
+    #[test]
+    fn only_npm_installs_disable_npm_update_notifications() {
+        for (client, version, expected) in [
+            (PackageManagerType::Npm, "11.13.0", Some("false")),
+            (PackageManagerType::Npm, "12.0.2", Some("false")),
+            (PackageManagerType::Npm, "latest", Some("false")),
+            (PackageManagerType::Pnpm, "12.3.4", None),
+            (PackageManagerType::Yarn, "4.0.0", None),
+            (PackageManagerType::Bun, "1.0.0", None),
+        ] {
+            let manager = package_manager(client, version);
+            let resolution = resolve_for_manager(&manager, InstallArgs::default()).unwrap();
+            let CommandResolution::Run(command) = resolution.outcome else {
+                panic!("expected install command");
+            };
+
+            assert_eq!(
+                command.env.get("npm_config_update_notifier").map(String::as_str),
+                expected,
+                "{client}@{version}"
+            );
+        }
+    }
+
+    #[test]
+    fn only_pnpm_installs_disable_update_notifications() {
+        for (client, version, expected) in [
+            (PackageManagerType::Pnpm, "11.25.0", Some("false")),
+            (PackageManagerType::Pnpm, "12.3.4", Some("false")),
+            (PackageManagerType::Npm, "11.0.0", None),
+            (PackageManagerType::Yarn, "4.0.0", None),
+            (PackageManagerType::Bun, "1.0.0", None),
+        ] {
+            let manager = package_manager(client, version);
+            let resolution = resolve_for_manager(&manager, InstallArgs::default()).unwrap();
+            let CommandResolution::Run(command) = resolution.outcome else {
+                panic!("expected install command");
+            };
+
+            assert_eq!(
+                command.env.get("PNPM_CONFIG_UPDATE_NOTIFIER").map(String::as_str),
+                expected,
+                "{client}@{version}"
+            );
+        }
     }
 }

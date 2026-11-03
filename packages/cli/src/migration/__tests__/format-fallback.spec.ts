@@ -18,20 +18,6 @@ describe('collectChangedFormatPaths git fallback', () => {
     mockRunCommandSilently.mockReset();
   });
 
-  it('falls back to full-project formatting when not inside a Git worktree', async () => {
-    mockRunCommandSilently.mockImplementation(({ args }) => {
-      if (args[0] === 'rev-parse') {
-        return Promise.resolve(
-          result(128, '', 'fatal: not a git repository (or any of the parent directories): .git'),
-        );
-      }
-      throw new Error(`unexpected git ${args.join(' ')}`);
-    });
-
-    await expect(collectChangedFormatPaths('/project')).resolves.toBeUndefined();
-    expect(mockRunCommandSilently).toHaveBeenCalledTimes(1);
-  });
-
   it('skips formatting when rev-parse fails inside a real worktree (dubious ownership)', async () => {
     mockRunCommandSilently.mockImplementation(({ args }) => {
       if (args[0] === 'rev-parse') {

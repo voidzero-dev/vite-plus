@@ -31,8 +31,7 @@ export default defineConfig({
     "plugins": [
       "oxc",
       "typescript",
-      "unicorn",
-      "react"
+      "unicorn"
     ],
     "jsPlugins": [
       {

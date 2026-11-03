@@ -1,0 +1,8 @@
+{
+  "name": "command-update-catalog-protocol-legacy-key",
+  "private": true,
+  "devDependencies": {
+    "vite": "^7.0.0"
+  },
+  "packageManager": "pnpm@11.20.0"
+}

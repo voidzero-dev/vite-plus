@@ -23,7 +23,6 @@ provider, Playwright, and package-local Vitest are installed
 {
   "name": "migration-upgrade-browser-peer-only-pnpm",
   "devDependencies": {
-    "vite": "catalog:",
     "vite-plus": "catalog:",
     "@vitest/browser-playwright": "catalog:",
     "playwright": "*",
@@ -53,8 +52,8 @@ catalog:
   vitest: <version>
   '@vitest/browser-playwright': <version>
 overrides:
-  vite: 'catalog:'
-  vitest: 'catalog:'
+  vite@*: 'catalog:'
+  vitest@*: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite

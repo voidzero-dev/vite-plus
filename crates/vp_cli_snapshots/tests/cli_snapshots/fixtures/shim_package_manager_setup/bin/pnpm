@@ -1,0 +1,2 @@
+#!/bin/sh
+printf 'wrong-system-pnpm\n'

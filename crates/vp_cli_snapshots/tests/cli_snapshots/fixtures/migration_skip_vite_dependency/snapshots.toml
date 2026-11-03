@@ -2,6 +2,7 @@
 name = "migration_skip_vite_dependency"
 vp = "global"
 steps = [
+  { argv = ["vpt", "write-file", "node_modules/vitest/package.json", "{\"name\":\"vitest\",\"version\":\"4.1.11\"}"], comment = "record the original runner version without adding a direct dependency", snapshot = false },
   { argv = ["vp", "migrate", "--no-interactive"], comment = "migration should skip rewriting vite imports when vite is in dependencies", continue-on-failure = true },
   { argv = ["vpt", "print-file", "src/index.ts"], comment = "vite imports should NOT be rewritten, vitest imports SHOULD be rewritten", continue-on-failure = true },
   { argv = ["vpt", "print-file", "package.json"], comment = "check package.json", continue-on-failure = true },

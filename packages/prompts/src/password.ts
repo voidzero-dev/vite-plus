@@ -1,12 +1,23 @@
+import type { CANCEL_SYMBOL, Validate } from '@clack/core';
 import { PasswordPrompt } from '@clack/core';
 import color from 'picocolors';
 
-import { type CommonOptions, S_BAR, S_BAR_END, S_PASSWORD_MASK, symbol } from './common.js';
+import {
+  type CommonOptions,
+  getGuide,
+  promptTitle,
+  wrapTextWithPrefix,
+  S_BAR,
+  S_BAR_END,
+  S_PASSWORD_MASK,
+} from './common.js';
 
 export interface PasswordOptions extends CommonOptions {
   message: string;
   mask?: string;
-  validate?: (value: string | undefined) => string | Error | undefined;
+  /** Hint displayed only while the password is empty. */
+  placeholder?: string;
+  validate?: Validate<string>;
   clearOnError?: boolean;
 }
 export const password = (opts: PasswordOptions) => {
@@ -15,15 +26,23 @@ export const password = (opts: PasswordOptions) => {
     mask: opts.mask ?? S_PASSWORD_MASK,
     signal: opts.signal,
     input: opts.input,
+    accessible: opts.accessible,
     output: opts.output,
     render() {
-      const hasGuide = opts.withGuide ?? false;
+      const hasGuide = getGuide(opts);
       const nestedPrefix = '  ';
-      const title = `${hasGuide ? `${color.gray(S_BAR)}\n` : ''}${symbol(this.state)} ${opts.message}\n`;
-      const userInput = this.userInputWithCursor;
+      const title = promptTitle(opts.message, this.state, opts);
+      const userInput =
+        !this.userInput && opts.placeholder
+          ? color.dim(opts.placeholder)
+          : this.userInputWithCursor;
       const masked = this.masked;
 
       switch (this.state) {
+        case 'validating': {
+          const prefix = hasGuide ? `${color.blue(S_BAR)} ` : nestedPrefix;
+          return `${title}${prefix}${color.dim(masked ?? '')}\n${prefix}${color.dim('Validating…')}\n`;
+        }
         case 'error': {
           const errorPrefix = hasGuide ? `${color.yellow(S_BAR)} ` : nestedPrefix;
           const errorPrefixEnd = hasGuide ? `${color.yellow(S_BAR_END)} ` : '';
@@ -31,7 +50,7 @@ export const password = (opts: PasswordOptions) => {
           if (opts.clearOnError) {
             this.clear();
           }
-          return `${title.trim()}\n${errorPrefix}${maskedText}\n${errorPrefixEnd}${color.yellow(this.error)}\n`;
+          return `${title.trim()}\n${errorPrefix}${maskedText}\n${wrapTextWithPrefix(opts.output, color.yellow(this.error), hasGuide ? errorPrefixEnd : nestedPrefix)}\n`;
         }
         case 'submit': {
           const submitPrefix = hasGuide ? `${color.gray(S_BAR)} ` : nestedPrefix;
@@ -48,9 +67,9 @@ export const password = (opts: PasswordOptions) => {
         default: {
           const defaultPrefix = hasGuide ? `${color.blue(S_BAR)} ` : nestedPrefix;
           const defaultPrefixEnd = hasGuide ? color.blue(S_BAR_END) : '';
-          return `${title}${defaultPrefix}${userInput}\n${defaultPrefixEnd}\n`;
+          return `${title}${defaultPrefix}${userInput}${hasGuide ? `\n${defaultPrefixEnd}` : ''}\n`;
         }
       }
     },
-  }).prompt() as Promise<string | symbol>;
+  }).prompt() as Promise<string | typeof CANCEL_SYMBOL>;
 };

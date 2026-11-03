@@ -18,8 +18,8 @@
 
 use std::{collections::HashMap, io::BufReader};
 
-use vp_shared::{PrependOptions, prepend_to_path_env};
-use vt_path::AbsolutePath;
+use vp_shared::{PrependOptions, output, prepend_tools_to_path_env};
+use vt_path::{AbsolutePath, AbsolutePathBuf};
 
 use crate::{error::Error, js_executor::JsExecutor};
 
@@ -30,56 +30,142 @@ struct DepCheckPackageJson {
     dependencies: HashMap<String, serde_json::Value>,
     #[serde(default)]
     dev_dependencies: HashMap<String, serde_json::Value>,
+    #[serde(default)]
+    optional_dependencies: HashMap<String, serde_json::Value>,
 }
 
-/// Check if vite-plus is listed in the nearest package.json's
-/// dependencies or devDependencies.
-///
-/// Returns `true` if vite-plus is found, `false` if not found
-/// or if no package.json exists.
-pub fn has_vite_plus_dependency(cwd: &AbsolutePath) -> bool {
+fn find_nearest_package_json(cwd: &AbsolutePath) -> Option<AbsolutePathBuf> {
     let mut current = cwd;
     loop {
         let package_json_path = current.join("package.json");
         if package_json_path.as_path().exists() {
-            if let Ok(file) = std::fs::File::open(&package_json_path) {
-                if let Ok(pkg) =
-                    serde_json::from_reader::<_, DepCheckPackageJson>(BufReader::new(file))
-                {
-                    return pkg.dependencies.contains_key("vite-plus")
-                        || pkg.dev_dependencies.contains_key("vite-plus");
-                }
-            }
-            return false; // Found package.json but couldn't parse deps → treat as no dependency
+            return Some(package_json_path);
         }
         match current.parent() {
             Some(parent) if parent != current => current = parent,
-            _ => return false, // Reached filesystem root
+            _ => return None,
         }
     }
 }
 
-/// Ensure the JS runtime is downloaded and prepend its bin directory to PATH.
+fn package_json_has_vite_plus_dependency(package_json_path: &AbsolutePath) -> bool {
+    if let Ok(file) = std::fs::File::open(package_json_path)
+        && let Ok(pkg) = serde_json::from_reader::<_, DepCheckPackageJson>(BufReader::new(file))
+    {
+        return pkg.dependencies.contains_key("vite-plus")
+            || pkg.dev_dependencies.contains_key("vite-plus")
+            || pkg.optional_dependencies.contains_key("vite-plus");
+    }
+    false
+}
+
+fn find_vite_plus_dependency(cwd: &AbsolutePath) -> Option<AbsolutePathBuf> {
+    let mut current = cwd;
+    loop {
+        if package_json_has_vite_plus_dependency(&current.join("package.json")) {
+            return Some(current.to_absolute_path_buf());
+        }
+        match current.parent() {
+            Some(parent) if parent != current => current = parent,
+            _ => return None,
+        }
+    }
+}
+
+/// Check if vite-plus is listed in the nearest package.json's
+/// dependencies, devDependencies, or optionalDependencies.
+///
+/// Returns `true` if vite-plus is found, `false` if not found
+/// or if no package.json exists.
+pub fn has_vite_plus_dependency(cwd: &AbsolutePath) -> bool {
+    find_nearest_package_json(cwd)
+        .is_some_and(|package_json_path| package_json_has_vite_plus_dependency(&package_json_path))
+}
+
+pub(crate) fn warn_missing_local_cli_if_project(cwd: &AbsolutePath) {
+    if find_nearest_package_json(cwd).is_none() {
+        return;
+    }
+
+    let install_dir = if has_vite_plus_dependency(cwd)
+        || vt_workspace::find_workspace_root(cwd)
+            .is_ok_and(|(workspace_root, _)| has_vite_plus_dependency(workspace_root.path.as_ref()))
+    {
+        Some(cwd.to_absolute_path_buf())
+    } else {
+        find_vite_plus_dependency(cwd)
+    };
+
+    if let Some(install_dir) = install_dir {
+        output::warn(&format!(
+            "No project-local vite-plus installation was found. Run `vp install` in `{}` to install dependencies.",
+            install_dir.as_path().display()
+        ));
+    } else {
+        output::warn(&format!(
+            "This project does not use vite-plus. Learn how to migrate: {}",
+            vp_shared::documentation_url("/guide/migrate")
+        ));
+    }
+}
+
+/// Select the configured JS runtime and prepend its bin directory to PATH.
 /// This should be called before executing any package manager command.
 ///
 /// If `project_path` contains a package.json, uses the project's runtime
 /// (based on devEngines.runtime). Otherwise, falls back to the CLI's runtime.
 pub async fn prepend_js_runtime_to_path_env(project_path: &AbsolutePath) -> Result<(), Error> {
+    let config = env::config::load_config().await?;
     let mut executor = JsExecutor::new(None);
 
-    // Use project runtime if package.json exists, otherwise use CLI runtime
-    let package_json_path = project_path.join("package.json");
-    let runtime = if package_json_path.as_path().exists() {
-        executor.ensure_project_runtime(project_path).await?
+    let node_bin_prefix = if config.node_shim_mode == env::config::ShimMode::SystemFirst
+        && let Some(system_node) = crate::shim::dispatch::find_system_tool("node")
+        && let Some(bin_dir) = system_node.parent()
+    {
+        bin_dir.to_absolute_path_buf()
     } else {
-        executor.ensure_cli_runtime().await?
+        // Use project runtime if package.json exists, otherwise use CLI runtime
+        let package_json_path = project_path.join("package.json");
+        let runtime = if package_json_path.as_path().exists() {
+            executor.ensure_project_runtime(project_path).await?
+        } else {
+            executor.ensure_cli_runtime().await?
+        };
+        runtime.get_bin_prefix()
     };
 
-    let node_bin_prefix = runtime.get_bin_prefix();
-    // Use dedupe_anywhere=true to check if node bin already exists anywhere in PATH
-    let options = PrependOptions { dedupe_anywhere: true };
-    if prepend_to_path_env(&node_bin_prefix, options) {
-        tracing::debug!("Set PATH to include {:?}", node_bin_prefix);
+    prepend_tools_to_path_env(
+        &node_bin_prefix,
+        &["node"],
+        PrependOptions { dedupe_anywhere: true },
+    )?;
+    if let Some(package_manager) = env::package_manager::resolve_current_spec(project_path).await? {
+        if config.package_manager_shim_mode_for(package_manager.package_manager_type)
+            == env::config::ShimMode::SystemFirst
+            && let Some(system_path) = crate::shim::dispatch::find_system_tool(
+                &package_manager.package_manager_type.to_string(),
+            )
+            && let Some(bin_dir) = system_path.parent()
+        {
+            let tool = package_manager.package_manager_type.to_string();
+            prepend_tools_to_path_env(bin_dir, &[&tool], PrependOptions { dedupe_anywhere: true })?;
+            return Ok(());
+        }
+    }
+    if let Some(package_manager) = env::package_manager::resolve_current(project_path).await? {
+        let (install_dir, _, _) = vp_pm_cli::download_package_manager_for_cwd(
+            project_path,
+            package_manager.package_manager_type,
+            &package_manager.version,
+            package_manager.hash.as_deref(),
+        )
+        .await?;
+        let bin_dir = install_dir.join("bin");
+        prepend_tools_to_path_env(
+            &bin_dir,
+            package_manager.package_manager_type.bin_names(),
+            PrependOptions { dedupe_anywhere: true },
+        )?;
     }
 
     Ok(())
@@ -91,8 +177,11 @@ pub mod global;
 // Category B: JS Script Commands
 pub mod config;
 pub mod create;
+pub mod hooks;
 pub mod migrate;
 pub mod staged;
+pub mod sync_versions;
+pub mod toolchain;
 pub mod version;
 
 // Category D: Environment Management
@@ -102,6 +191,7 @@ pub mod shell;
 // Standalone binary commands
 pub mod vpr;
 pub mod vpx;
+pub mod vpx_script;
 
 // Self-Management
 pub mod implode;

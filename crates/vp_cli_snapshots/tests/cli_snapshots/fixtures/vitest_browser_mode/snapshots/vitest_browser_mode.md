@@ -12,7 +12,7 @@ $ vp test
  Test Files  1 passed (1)
       Tests  1 passed (1)
    Start at  <time>
-   Duration  <duration> (transform <duration>, setup <duration>, import <duration>, tests <duration>, environment <duration>)
+   Duration  <duration> (<timing>)
 ```
 
 ## `vpt write-file src/foo.js 'export default '\''foo'\'';
@@ -32,7 +32,7 @@ $ vp test ○ cache miss: 'src/foo.js' modified, executing
  Test Files  1 passed (1)
       Tests  1 passed (1)
    Start at  <time>
-   Duration  <duration> (transform <duration>, setup <duration>, import <duration>, tests <duration>, environment <duration>)
+   Duration  <duration> (<timing>)
 ```
 
 ## `vpt write-file src/bar.js 'export default '\''bar'\'';
@@ -52,7 +52,7 @@ $ vp test ◉ cache hit, replaying
  Test Files  1 passed (1)
       Tests  1 passed (1)
    Start at  <time>
-   Duration  <duration> (transform <duration>, setup <duration>, import <duration>, tests <duration>, environment <duration>)
+   Duration  <duration> (<timing>)
 
 ---
 vp run: cache hit, <duration> saved.

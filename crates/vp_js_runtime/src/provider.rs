@@ -3,7 +3,6 @@
 //! This module defines the trait that all runtime providers (Node, Bun, Deno)
 //! must implement, along with types for describing download information.
 
-use async_trait::async_trait;
 use vt_str::Str;
 
 use crate::{Error, Platform};
@@ -77,7 +76,6 @@ pub struct DownloadInfo {
 ///
 /// Each runtime (Node.js, Bun, Deno) implements this trait to provide
 /// runtime-specific logic for downloading and installing.
-#[async_trait]
 pub trait JsRuntimeProvider: Send + Sync {
     /// Get the name of this runtime (e.g., "node", "bun", "deno")
     fn name(&self) -> &'static str;

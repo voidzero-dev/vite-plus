@@ -1,5 +1,10 @@
 # migration_monorepo_skip_vite_peer_dependency
 
+## `vpt write-file node_modules/vitest/package.json '{"name":"vitest","version":"4.1.11"}'`
+
+record the original runner version without adding a direct dependency
+
+
 ## `vp migrate --no-interactive`
 
 migration should preserve vite peer contracts in workspace packages
@@ -7,6 +12,7 @@ migration should preserve vite peer contracts in workspace packages
 ```
 VITE+ - The Unified Toolchain for the Web
 
+▲ No package manager is declared in package.json; using pnpm for this migration without adding a pin. Run `vp env pin` to declare it explicitly.
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • 2 config updates applied, 1 file had imports rewritten
@@ -48,15 +54,7 @@ check root package.json (no peerDependencies)
 {
   "name": "migration-monorepo-skip-vite-peer-dependency",
   "devDependencies": {
-    "vite": "catalog:",
     "vite-plus": "catalog:"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
   },
   "scripts": {
     "prepare": "vp config"

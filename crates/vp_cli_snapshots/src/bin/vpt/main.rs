@@ -19,6 +19,7 @@ mod exit;
 mod exit_code;
 mod exit_on_ctrlc;
 mod grep_file;
+mod head_lines;
 mod json_edit;
 mod list_dir;
 mod mkdir;
@@ -64,7 +65,7 @@ fn main() {
     if args.len() < 2 {
         eprintln!("Usage: vpt <subcommand> [args...]");
         eprintln!(
-            "Subcommands: backpressure-run (Unix), barrier, check-tty, chmod, cp, exit, exit-on-ctrlc, grep-file, json-edit, list-dir, mkdir, pipe-stdin, print, print-color, print-cwd, print-env, print-file, print-native-path, probe, read-stdin, replace-file-content, rm, stat-file, touch-file, write-file"
+            "Subcommands: backpressure-run (Unix), barrier, check-tty, chmod, cp, exit, exit-on-ctrlc, grep-file, head-lines, json-edit, list-dir, mkdir, pipe-stdin, print, print-color, print-cwd, print-env, print-file, print-native-path, probe, read-stdin, replace-file-content, rm, stat-file, touch-file, write-file"
         );
         std::process::exit(1);
     }
@@ -85,6 +86,7 @@ fn main() {
         "exit" => exit::run(&args[2..]),
         "exit-on-ctrlc" => exit_on_ctrlc::run(),
         "grep-file" => grep_file::run(&args[2..]),
+        "head-lines" => head_lines::run(&args[2..]),
         "json-edit" => json_edit::run(&args[2..]),
         "list-dir" => list_dir::run(&args[2..]),
         "mkdir" => mkdir::run(&args[2..]),

@@ -7,7 +7,7 @@ migration should detect prettier and auto-migrate including lint-staged
 ```
 VITE+ - The Unified Toolchain for the Web
 
-Prettier configuration detected. Auto-migrating to Oxfmt...
+● Prettier configuration detected. Auto-migrating to Oxfmt...
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • 2 config updates applied
@@ -28,13 +28,6 @@ check prettier removed, scripts rewritten, lint-staged rewritten
   "devDependencies": {
     "vite": "catalog:",
     "vite-plus": "catalog:"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
   }
 }
 ```
@@ -48,7 +41,7 @@ catalog:
   vite: npm:@voidzero-dev/vite-plus-core@<version>
   vite-plus: <version>
 overrides:
-  vite: 'catalog:'
+  vite@*: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite

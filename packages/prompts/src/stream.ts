@@ -5,7 +5,7 @@ import color from 'picocolors';
 import { S_ERROR, S_INFO, S_STEP_SUBMIT, S_SUCCESS, S_WARN, completeColor } from './common.js';
 import type { LogMessageOptions } from './log.js';
 
-const prefix = '   ';
+const prefix = '  ';
 
 // TODO (43081j): this currently doesn't support custom `output` writable
 // because we rely on `columns` existing (i.e. `process.stdout.columns).
@@ -17,8 +17,8 @@ export const stream = {
     iterable: Iterable<string> | AsyncIterable<string>,
     { symbol = '' }: LogMessageOptions = {},
   ) => {
-    process.stdout.write(symbol ? `${symbol}  ` : '');
-    const initialWidth = symbol ? 3 : 0;
+    process.stdout.write(symbol ? `${symbol} ` : '');
+    const initialWidth = symbol ? 2 : 0;
     let lineWidth = initialWidth;
     for await (let chunk of iterable) {
       chunk = chunk.replace(/\n/g, `\n${prefix}`);

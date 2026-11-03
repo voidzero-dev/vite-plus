@@ -18,12 +18,16 @@ export interface MigrationReport {
   removedConfigCount: number;
   tsdownImportCount: number;
   wrappedPluginConfigCount: number;
+  migratedTaskCacheConfigCount: number;
   rewrittenImportFileCount: number;
   preservedUpstreamVitestImportFileCount: number;
   rewrittenImportErrors: Array<{ path: string; message: string }>;
   eslintMigrated: boolean;
   prettierMigrated: boolean;
+  tsupMigrated: boolean;
+  tsxMigrated: boolean;
   nodeVersionFileMigrated: boolean;
+  setupVpVersionUpdatedFileCount: number;
   gitHooksConfigured: boolean;
   frameworkShimAdded: boolean;
   packageManagerBootstrapConfigured: boolean;
@@ -41,12 +45,16 @@ export function createMigrationReport(): MigrationReport {
     removedConfigCount: 0,
     tsdownImportCount: 0,
     wrappedPluginConfigCount: 0,
+    migratedTaskCacheConfigCount: 0,
     rewrittenImportFileCount: 0,
     preservedUpstreamVitestImportFileCount: 0,
     rewrittenImportErrors: [],
     eslintMigrated: false,
+    tsupMigrated: false,
+    tsxMigrated: false,
     prettierMigrated: false,
     nodeVersionFileMigrated: false,
+    setupVpVersionUpdatedFileCount: 0,
     gitHooksConfigured: false,
     frameworkShimAdded: false,
     packageManagerBootstrapConfigured: false,

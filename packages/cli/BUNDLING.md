@@ -13,6 +13,27 @@ The CLI package uses a **4-step build process**:
 
 This architecture allows users to import everything from a single package (`vite-plus`) as a drop-in replacement for `vite`, without needing to know about the separate `@voidzero-dev/vite-plus-core` bundle or `vitest`.
 
+## Core Dependency Identity
+
+The CLI declares its core dependency as `vite`, using
+`workspace:@voidzero-dev/vite-plus-core@*` in the workspace and an exact npm
+alias in packed releases. Runtime imports and generated shims use `vite` and
+its subpaths. This gives the CLI and plugins the same dependency name and
+avoids separate core instances under the alias and canonical package name.
+
+`resolve-core.ts` resolves the alias from the selected CLI package and checks
+its core version. It also checks any Vite dependency declared by the command's
+target project. An incidental hoisted peer does not trigger project validation.
+These checks run before Vite or packaging commands start. Keep the canonical
+name in release metadata and alias targets to identify the published package.
+
+For npm projects without overrides, pin a declared `vite` alias to the exact
+installed `vite-plus` version. npm can replace a tagged alias such as
+`npm:@voidzero-dev/vite-plus-core@latest` with upstream Vite to satisfy Vitest's
+peer range. The CLI rejects that mismatch and directs users to `vp migrate`,
+which writes an exact alias and the package-manager overrides. The npm fixtures
+check shared core identity with an exact alias and rejection of the tagged layout.
+
 ## Build Steps
 
 ### Step 1: tsdown Build (`buildWithTsdown`)
@@ -22,9 +43,9 @@ Bundles all CLI entry points using tsdown (configured in `tsdown.config.ts`). Th
 **ESM build** — bundles all entry points to `dist/`:
 
 - Public API entries: `bin`, `index`, `define-config`, `fmt`, `lint`, `pack`, `pack-bin`
-- Global command entries: `create`, `migrate`, `version`, `config`, `mcp`, `staged`
+- Global command entries: `create`, `migrate`, `version`, `config`, `hooks`, `mcp`, `staged`
 - All third-party dependencies are inlined at build time
-- Only packages that must be resolved at runtime stay external (NAPI binding, `@voidzero-dev/vite-plus-core`, `vitest`, `oxfmt`, `oxlint`)
+- Only packages that must be resolved at runtime stay external (NAPI binding, `vite`, `vitest`, `oxfmt`, `oxlint`)
 - Code splitting creates shared chunks for code used by multiple entries
 - DTS (`.d.ts`) files are generated for all entries
 
@@ -77,20 +98,56 @@ Creates shim files that re-export from `@voidzero-dev/vite-plus-core`, enabling 
 
 ```typescript
 // dist/client.d.ts (triple-slash reference for ambient types)
-/// <reference types="@voidzero-dev/vite-plus-core/client" />
+/// <reference types="vite/client" />
 
 // dist/module-runner.js
-export * from '@voidzero-dev/vite-plus-core/module-runner';
+export * from 'vite/module-runner';
 
 // dist/types/importMeta.d.ts (type-only export)
-export type * from '@voidzero-dev/vite-plus-core/types/importMeta.d.ts';
+export type * from 'vite/types/importMeta.d.ts';
 ```
 
 **Note on export ordering**: In `package.json`, the `./types/internal/*` export (set to `null`) must appear before `./types/*` for correct precedence. More specific patterns must precede wildcards.
 
 ### Step 4: Test Package Export Sync (`syncTestPackageExports`)
 
-Reads vitest's exports plus the three `@vitest/browser-*` provider packages and creates shim files that re-export everything under `./test/*`:
+Reads Vitest's exports plus the Playwright and Preview provider packages and creates re-export shims under `./test/*`.
+
+Ship `vite` as a dependency alias for the same `@voidzero-dev/vite-plus-core` version. Vitest v5 requires a `vite` peer. Yarn users must be able to install `vite-plus` without adding `vite` or `vitest` to their project. Keep the alias in `dependencies`, not `devDependencies`.
+
+The main surface mirrors Vitest `5.0.1`, except for package metadata and wildcard
+exports. Export tests snapshot the final keys. Vite+ 1.0 removes the legacy
+`coverage`, `reporters`, `environments`, and `snapshot` aliases under
+`vite-plus/test/`. Run `vp migrate` to replace imports from either `vitest/*`
+or `vite-plus/test/*` with the `node` or `runtime` entry:
+
+| Removed path suffix        | Replacement              |
+| -------------------------- | ------------------------ |
+| `coverage`, `reporters`    | `vite-plus/test/node`    |
+| `environments`, `snapshot` | `vite-plus/test/runtime` |
+
+The `vite-plus/test/mocker` shim re-exports `@vitest/mocker`; migration still
+uses this path because Vitest v5 has no corresponding entry.
+
+Playwright and Preview provider paths and `browser/providers/*` aliases remain
+available. WebDriverIO has no Vite+ shims. Migration restores its legacy aliases
+to the community-maintained `@vitest/browser-webdriverio` package. Keep the
+optional peer declaration synchronized with Vitest's dependency metadata.
+The `plugins/*` compatibility paths mirror public exports of their named
+standalone packages and retain upstream type declarations.
+
+Removed runner, suite, expect-plugin, and internal module-runner paths have no
+partial shim. Use `TestRunner` and `expect` from `vite-plus/test` where the root
+API supports the old symbol. The migration reports uses without a replacement.
+The resolver uses an explicit package allowlist, so standalone `@vitest/expect`,
+deprecated `@vitest/ws-client`, and `@vitest/istanbul-lib-*` dependencies keep
+their own project resolution.
+
+Inline projects inherit the declaring config's Vite+ plugins. Independent
+projects (`extends: false` or an external base) receive their own plugins.
+Referenced configs that use `defineConfig` or `defineProject` receive the same
+integration, including nested projects. Raw referenced configs retain upstream
+resolution and its soft coverage-version warning when no Vite+ hook runs.
 
 ```typescript
 // For each vitest export like "./node"
@@ -130,6 +187,7 @@ packages/cli/
 │   ├── migrate.js            # Global command: vp migrate
 │   ├── version.js            # Global command: vp --version
 │   ├── config/bin.js         # Global command: vp config
+│   ├── hooks/bin.js          # Global command: vp hooks
 │   ├── mcp.js                # Global command: vp mcp
 │   ├── staged/bin.js         # Global command: vp staged
 │   ├── *-<hash>.js           # Shared chunks (code splitting)
@@ -196,29 +254,30 @@ pub extern crate rolldown_binding;
 
 ### Build-Time Feature Activation
 
-The rolldown feature is only enabled during release builds:
+`build.ts` enables the `rolldown` and `oxc-node` features for every binding build:
 
 ```typescript
 // In build.ts
+const bindingFeatures = ['rolldown', 'oxc-node'];
 await cli.build({
-  features: process.env.RELEASE_BUILD ? ['rolldown'] : void 0,
+  // napi-rs passes each entry as a separate cargo argument after one `--features`.
+  features: [bindingFeatures.join(',')],
   release: process.env.VP_CLI_DEBUG !== '1',
 });
 ```
 
-**When `RELEASE_BUILD=1`**:
+With the features enabled, the build:
 
-1. Enables the `rolldown` Cargo feature
-2. Compiles `rolldown_binding` into the `.node` file
-3. Extracts `napi.dtsHeader` from rolldown's package.json for type definitions
-4. Prepends custom type definitions to the generated `.d.ts` file
+1. Compiles `rolldown_binding` and the vendored `oxc-node` crate into the `.node` file
+2. Extracts `napi.dtsHeader` from rolldown's package.json for type definitions
+3. Prepends custom type definitions to the generated `.d.ts` file
 
 ### Why Conditional Compilation?
 
-| Build Type                  | rolldown Feature | Use Case                                |
-| --------------------------- | ---------------- | --------------------------------------- |
-| Development (`pnpm build`)  | Disabled         | Faster builds, smaller binaries         |
-| Release (`RELEASE_BUILD=1`) | Enabled          | Full distribution with bundled rolldown |
+| Build Type                                    | Features            | Use Case                                     |
+| --------------------------------------------- | ------------------- | -------------------------------------------- |
+| `cargo check` / `cargo test -p vite-plus-cli` | None                | Faster Rust iteration without Rolldown       |
+| `pnpm build` (debug or release)               | `rolldown,oxc-node` | Full binding with bundled Rolldown and hooks |
 
 ### Module Specifier Rewriting
 
@@ -240,23 +299,28 @@ This means:
 
 ### Native Binding Contents
 
-When compiled with `RELEASE_BUILD=1`, the `.node` file contains:
+A binding built by `pnpm build` contains:
 
-| Component          | Source                             | Purpose                        |
-| ------------------ | ---------------------------------- | ------------------------------ |
-| `vt`               | `packages/cli/binding/src/lib.rs`  | Task runner session management |
-| `rolldown_binding` | `rolldown/crates/rolldown_binding` | Rolldown bundler NAPI bindings |
+| Component          | Source                             | Purpose                                     |
+| ------------------ | ---------------------------------- | ------------------------------------------- |
+| `vt`               | `packages/cli/binding/src/lib.rs`  | Task runner session management              |
+| `rolldown_binding` | `rolldown/crates/rolldown_binding` | Rolldown bundler NAPI bindings              |
+| `oxc_node`         | `oxc-node/src/lib.rs`              | `vpx <script>` loader hooks, as `oxcNode.*` |
+
+### oxc-node Script Loader
+
+`vpx <script>` runs TypeScript through [oxc-node](https://github.com/oxc-project/oxc-node), vendored like Rolldown (see [the RFC](../../rfcs/vpx-script-execution.md)):
+
+- `sync-remote` clones it into `oxc-node/` at the hash in `packages/tools/.upstream-versions.json`; CI checks it out in `.github/actions/clone`.
+- The root `Cargo.toml` links it with `default-features = false`, so it registers no NAPI exports and declares no global allocator, and excludes `oxc-node/` from the workspace, so upstream code is not held to workspace lints. `binding/src/oxc_node.rs` forwards the functions the loader uses under an `oxcNode` namespace, so nothing collides with Rolldown's `transform`. `packages/tools/src/patch-oxc-node.ts` sets oxc-node's `oxc` dependency to the workspace version and exposes its frozen tsconfig APIs to embedders while keeping their NAPI registration disabled.
+- `src/script-preload.ts` (the `--require` entry), `src/script-register.ts` (the `--import` entry), and `src/script-esm-hooks.ts` are adapted from oxc-node's `register.mjs` and `esm.mjs`. They load the hooks from this binding, pass `vpx --tsconfig` through `setTsconfigPath()`, and resolve oxc-node's runtime helpers from `@oxc-project/runtime`, a `vite-plus` dependency. Off-thread ESM hooks receive the preload's frozen tsconfig and dependency policy because each thread has a separate loader context.
+- oxc-node's `packages/core/watch-report.mjs` and `signal-ack.mjs` (`@oxc-node/core/watch-report` and `/signal-ack`) are imported from the vendored source and bundled into the loader, so watch mode gets the reports in the format the binding records them.
+- `src/script-watch.ts` (`dist/script-watch.js`, `vpx --watch`) bundles oxc-node's watcher, `packages/cli/src/watch` (`@oxc-node/cli/watch`), from the vendored source the same way, and runs it with the loader entries next to it. It imports upstream's `watch.d.ts` for types, and a `tsdown.config.ts` plugin swaps in the sources, so type checking never reaches code written against upstream's `@types/node`.
+- `pirates`, the CommonJS hook, is bundled into `dist`.
 
 ### Export Chain
 
-```
-User imports 'vite-plus/rolldown'
-  → packages/cli re-exports from @voidzero-dev/vite-plus-core/rolldown
-    → packages/core/dist/rolldown/index.mjs
-      → Native binding: @voidzero-dev/vite-plus-darwin-arm64
-        (rewritten from @rolldown/binding-darwin-arm64)
-        → vite-plus.darwin-arm64.node (contains rolldown_binding)
-```
+Rolldown subpaths are exported by `@voidzero-dev/vite-plus-core`, not `vite-plus`. In projects that alias `vite` to core, they are available as `vite/rolldown` and `vite/rolldown/*`. See [Core Package Bundling](../core/BUNDLING.md#release-build-native-binding-rewriting) for the native binding resolution chain.
 
 ### Platform-Specific Publishing
 
@@ -276,6 +340,72 @@ Native bindings are published as separate platform packages for optimal install 
 These are automatically installed via `optionalDependencies` based on the user's platform. `publish-native-addons.ts` injects the exact-pinned entries into both `vite-plus` (via napi-rs prePublish) and `@voidzero-dev/vite-plus-core` during publish; the committed package.json files carry none of them.
 
 See `publish-native-addons.ts` for the publishing pipeline.
+
+### Global installation lockfile
+
+The release workflow publishes native bindings, prompts, and core first. It then
+publishes `vite-plus` with the `staging` tag and waits until that exact version is
+installable. `generate-install-lockfile.ts` runs pnpm `10.34.7`, the same version
+used by the installer, in an isolated `vp-global` wrapper directory. The wrapper
+pins `vite-plus` to the release version. `pnpm install --lockfile-only` generates
+a standard `pnpm-lock.yaml` from the published registry metadata. The script
+copies its contents unchanged to `vp-install-lock.yaml` for packaging. The
+lockfile includes package integrity and optional dependencies for all supported
+platforms.
+
+The workflow saves the lockfile in the `installation-lockfile` artifact before
+publishing any global CLI package. Release retries restore that lockfile. If the
+artifact is unavailable, the generator can recover the same lockfile from an
+already published global platform package. The local CLI is already published,
+so retries do not need to preserve or repack a local CLI archive.
+
+Build artifact uploads replace earlier build artifacts when a failed job runs
+again, but retries preserve the saved installation lockfile.
+Package publication skips versions that npm already accepted, including during
+its scanning window. A retry resumes uploads to a draft GitHub release and
+leaves an already published GitHub release and its assets unchanged.
+
+Each global CLI platform package and standalone release archive carries the
+lockfile beside `vp`. After the global packages propagate, the workflow runs
+`npm dist-tag add "vite-plus@${VERSION}" latest`. The installer continues to
+select the previous release until this step. The `staging` tag remains available
+for inspecting the most recently staged version.
+
+Tag promotion uses npm `11.21.0` with OIDC. The `vite-plus` trusted publisher for
+`release.yml` must enable **Allow npm dist-tag**, in addition to its existing
+publish permission. See [npm's trusted publishing documentation](https://docs.npmjs.com/trusted-publishers/#managing-dist-tags-with-trusted-publishing).
+This is a distribution tag named `staging`, not the separate `npm stage publish`
+approval flow.
+
+Bootstrap scripts hand the binary and its companion to self-setup, which uses
+`--frozen-lockfile`. Upgrades use the same lockfile. A standalone binary or an
+older upgrade client can recover it from the verified platform package. Older
+packages without a companion retain their existing installation behavior. The
+release-age override remains `0` so a new release can be installed immediately.
+
+Preview builds pack the local packages and global CLI platform packages into
+separate artifacts. The trusted publishing workflow first publishes the local
+CLI and its dependencies under their exact commit version. It omits the PR URL
+from this phase, so the bridge exposes the commit version without moving the
+`pr-<number>` tag. A job without publishing credentials then runs the same pnpm
+lockfile generator against the registry bridge and bundles the result into the
+global CLI packages. The bridge supplies the published archive integrity and
+content-addressed URLs directly; the generator does not predict them.
+
+The workflow saves the prepared global packages before publishing them and
+reuses that artifact on retries. If a new run has no saved artifact, it recovers
+the lockfile from an already published global platform package before attempting
+a new pnpm resolution. A final publishing job validates and rebuilds
+those global packages, then updates the PR tag. Both publishing jobs re-check PR
+authorization and do not run dependency installation or preview code. The fork
+approval gate precedes both jobs. Global CLI packages stay outside the locked
+local CLI dependency graph, so adding the companion cannot change a hash in the
+lockfile.
+
+Use **Re-run failed jobs** to resume a failed release or preview publication.
+The release reuses the successful version check against `vite-plus@latest`.
+Preview retries still require the same PR head, an open PR, and the
+`preview-build` label. If the build artifacts expire, start a new preview build.
 
 ---
 
@@ -308,7 +438,7 @@ For `./types/*` exports, shim files use `export type *` syntax (TypeScript 5.0+)
 
 ```typescript
 // dist/types/importMeta.d.ts
-export type * from '@voidzero-dev/vite-plus-core/types/importMeta.d.ts';
+export type * from 'vite/types/importMeta.d.ts';
 ```
 
 This is important because `./types/*` only exposes `.d.ts` files and should never include runtime code.
@@ -330,7 +460,7 @@ The `./client` export uses a triple-slash reference instead of a regular export 
 
 ```typescript
 // dist/client.d.ts
-/// <reference types="@voidzero-dev/vite-plus-core/client" />
+/// <reference types="vite/client" />
 ```
 
 This allows TypeScript to pick up types like `import.meta.hot`, CSS module types, and asset imports without explicit imports.
@@ -351,33 +481,38 @@ Instead of copying vitest's dist files, we create thin shim files that re-export
 
 Every entry under vitest's own `exports` is shimmed under `./test/*` (wildcard exports and `./package.json` are skipped). The shim is purely a re-export — `vite-plus/test` and friends are aliases for the matching subpath of upstream `vitest`. Examples:
 
-| Vitest Export      | CLI Package Export         |
-| ------------------ | -------------------------- |
-| `vitest`           | `vite-plus/test`           |
-| `vitest/browser`   | `vite-plus/test/browser`   |
-| `vitest/node`      | `vite-plus/test/node`      |
-| `vitest/config`    | `vite-plus/test/config`    |
-| `vitest/reporters` | `vite-plus/test/reporters` |
+| Vitest Export    | CLI Package Export       |
+| ---------------- | ------------------------ |
+| `vitest`         | `vite-plus/test`         |
+| `vitest/browser` | `vite-plus/test/browser` |
+| `vitest/node`    | `vite-plus/test/node`    |
+| `vitest/config`  | `vite-plus/test/config`  |
+| `vitest/runtime` | `vite-plus/test/runtime` |
 
 The full set is regenerated on every build from the upstream vitest `package.json`, so the exact list tracks vitest itself.
 
-In addition to vitest's own exports, the three `@vitest/browser-*` provider packages are projected under two parallel surfaces so existing user code keeps resolving after the deleted `@voidzero-dev/vite-plus-test` wrapper:
+In addition to vitest's own exports, the official browser providers have these aliases:
 
-| Provider Package              | CLI Package Exports                                                                  |
-| ----------------------------- | ------------------------------------------------------------------------------------ |
-| `@vitest/browser-playwright`  | `vite-plus/test/browser-playwright`, `vite-plus/test/browser/providers/playwright`   |
-| `@vitest/browser-preview`     | `vite-plus/test/browser-preview`, `vite-plus/test/browser/providers/preview`         |
-| `@vitest/browser-webdriverio` | `vite-plus/test/browser-webdriverio`, `vite-plus/test/browser/providers/webdriverio` |
+| Provider Package             | CLI Package Exports                                                                |
+| ---------------------------- | ---------------------------------------------------------------------------------- |
+| `@vitest/browser-playwright` | `vite-plus/test/browser-playwright`, `vite-plus/test/browser/providers/playwright` |
+| `@vitest/browser-preview`    | `vite-plus/test/browser-preview`, `vite-plus/test/browser/providers/preview`       |
 
 Each provider's own subpaths (e.g. `./context`) are mirrored under both alias prefixes.
 
-> **Note — webdriverio and playwright are opt-in.** `@vitest/browser` (base) and `@vitest/browser-preview` stay bundled **runtime dependencies** of `vite-plus` (and are stripped from users' manifests during migration) because neither carries a heavy non-optional peer. `@vitest/browser-webdriverio` and `@vitest/browser-playwright` are now vite-plus **devDependencies + optional peerDependencies** — each is kept as a devDependency so build-time shim generation can still emit the `./test/browser-webdriverio*` / `./test/browser-playwright*` exports (the export/shim surfaces above are unchanged), but neither is a bundled runtime dep. They are optional peers because each drags a non-optional framework peer (`webdriverio` / `playwright`) that non-browser consumers must not be forced to install. Users targeting a provider instead **keep** it in their **own** dependencies via `vp migrate` (pinned to the bundled vitest version, with its framework peer ensured), so their rewritten `vite-plus/test/browser-webdriverio` / `vite-plus/test/browser-playwright` imports resolve.
+Browser-context runtime aliases re-export `vitest/browser`, the virtual entry used by Vitest v5. This applies to provider `/context` paths, `./test/browser/context`, `./test/context`, and `./test/plugins/browser-context`. Their declarations retain the upstream browser-context types and module augmentations. The upstream `@vitest/browser/context` JavaScript file is now an error stub, not the browser runtime.
+
+`@vitest/browser` and `@vitest/browser-preview` are bundled runtime dependencies. Playwright stays an optional peer and a development dependency for shim generation. Migration keeps the Playwright provider in the user's dependencies, aligns it with bundled Vitest, and ensures its framework peer.
+
+Vite+ 1.0 has no WebDriverIO exports or shims. Users import from the community-maintained `@vitest/browser-webdriverio` and manage its versions and peers. The optional peer declaration remains synchronized with Vitest's dependency metadata; the development dependency supports compatibility tests only. Migration restores legacy provider aliases to the community package and moves legacy runtime `/context` aliases to the shared `vite-plus/test/browser/context` entry.
 
 #### Why provider d.ts shims are inlined
 
 Provider `.d.ts` shims are NOT plain `export * from '@vitest/browser-playwright'` re-exports — they inline the upstream `.d.ts` content with `vitest/node` / `vitest/browser` / `@vitest/browser*` bare specifiers rewritten to relative paths inside `dist/test/`. The two private shims `dist/test/_at-vitest-browser.d.ts` and `dist/test/_at-vitest-browser/context.d.ts` re-export `@vitest/browser`/`@vitest/browser/context` and are referenced from those rewrites.
 
 This avoids a pnpm-edge type-identity split: when the upstream `.d.ts` is loaded by reference (`export * from '@vitest/browser-playwright'`), TypeScript resolves its internal `import { BrowserProvider } from 'vitest/node'` through the provider package's own pnpm-edge, which can be a different vitest copy than the one a user's `vite.config.ts` sees through `vite-plus`. The mismatch produces two structurally identical but nominally distinct `BrowserProvider` types, so `provider: playwright()` fails the user's typecheck. Rewriting the specifiers routes every type import through vite-plus's own subpath shims, guaranteeing a single vitest identity across the user's whole config.
+
+The copied Playwright declarations still import `playwright` directly. Declare it as an optional peer of `vite-plus`, matching the provider's upstream peer range, so isolated dependency layouts can resolve these types from the copied files.
 
 ### Conditional Export Handling
 
@@ -524,6 +659,7 @@ See `package.json` for the complete list of exports.
 ```typescript
 // Core package name for Vite compatibility exports
 const CORE_PACKAGE_NAME = '@voidzero-dev/vite-plus-core';
+const CORE_IMPORT_SPECIFIER = 'vite';
 
 // Test package name for re-exports (vitest itself, not a bundled wrapper)
 const TEST_PACKAGE_NAME = 'vitest';
@@ -569,4 +705,4 @@ All `./test*` exports are fully managed by `syncTestPackageExports()`. The build
 2. Creates shim files in `dist/test/`
 3. Removes old `./test*` exports from `package.json`
 4. Merges in newly generated test exports
-5. Ensures `dist/test` is in the `files` array
+5. Relies on the existing `dist` entry to include the generated `dist/test` shims

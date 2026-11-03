@@ -2,13 +2,18 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { type WorkspacePackage } from '../../types/index.ts';
+import { VITE_PLUS_NAME } from '../../utils/constants.ts';
+import { editJsonFile, readJsonFile } from '../../utils/json.ts';
+import { detectPackageMetadata } from '../../utils/package.ts';
 import { hasVitestTypesInTsconfig } from '../../utils/tsconfig.ts';
 import { projectUsesVitestDirectly } from '../migrator.ts';
 import {
   OPT_IN_BROWSER_PROVIDERS,
+  OXLINT_PLUGINS_PACKAGE,
+  packageOwnsOxlintApi,
   PLAYWRIGHT_PROVIDER,
-  WEBDRIVERIO_PROVIDER,
   readPackageJsonIfExists,
+  RETENTION_SCAN_SKIP_DIRS,
   type DependencyBag,
 } from './shared.ts';
 
@@ -67,8 +72,7 @@ export function workspaceUsesVitestDirectly(
 //                               `plugins/browser`, `plugins/browser-context`,
 //                               `plugins/browser-client`, `plugins/browser-
 //                               locators`, `plugins/browser-playwright`,
-//                               `plugins/browser-preview`, `plugins/browser-
-//                               webdriverio`), which re-export `@vitest/browser*`
+//                               `plugins/browser-preview`), which re-export `@vitest/browser*`
 //                               under a `/plugins/` segment that the
 //                               `vite-plus/test/browser` hint does not match.
 //                               One prefix covers the whole family.
@@ -99,31 +103,8 @@ const VITEST_BROWSER_SPECIFIER_HINTS = [
   'vite-plus/test/utils',
 ] as const;
 
-// Specifier fragments that signal the WEBDRIVERIO provider specifically. Each
-// is a prefix, matched as a substring, so subpath imports (`/context`,
-// `/provider`, …) are covered too:
-//   - `vitest/browser-webdriverio`, `vitest/browser/providers/webdriverio`, and
-//     `vitest/plugins/browser-webdriverio` are legacy
-//     `@voidzero-dev/vite-plus-test` exports reached through the `vitest` alias
-//   - `@vitest/browser-webdriverio`            pre-migration (incl. `/provider`,
-//                                              `/context` subpaths)
-//   - `vite-plus/test/browser-webdriverio`     migrated (re-run); covers
-//                                              `…/context`
-//   - `vite-plus/test/browser/providers/webdriverio`  migrated provider-subpath
-//                                              form — the import rewriter maps
-//                                              `@vitest/browser-webdriverio/provider`
-//                                              here, so an already-migrated
-//                                              project can contain it. Without
-//                                              this hint a re-run would skip the
-//                                              provider injection and the import
-//                                              would break under pnpm strict /
-//                                              Yarn PnP once the provider is no
-//                                              longer a vite-plus runtime dep.
-//   - `vite-plus/test/plugins/browser-webdriverio`  generated plugin shim that
-//                                              re-exports `@vitest/browser-
-//                                              webdriverio` wholesale; importing
-//                                              it pulls in the (now opt-in)
-//                                              provider, so it signals usage too.
+// Detect the community package and legacy aliases for the versioned migration
+// and driver-build allowances. Generic reconciliation must not repin the provider.
 const WEBDRIVERIO_PROVIDER_SPECIFIER_HINTS = [
   'vitest/browser-webdriverio',
   'vitest/browser/providers/webdriverio',
@@ -136,8 +117,8 @@ const WEBDRIVERIO_PROVIDER_SPECIFIER_HINTS = [
 
 // Specifier fragments that signal the PLAYWRIGHT provider specifically — the
 // playwright analogue of WEBDRIVERIO_PROVIDER_SPECIFIER_HINTS (same prefix /
-// substring matching for `/provider`, `/context` subpaths). Playwright is opt-in
-// just like webdriverio: vite-plus no longer bundles `@vitest/browser-playwright`
+// substring matching for `/provider`, `/context` subpaths). Playwright is opt-in:
+// vite-plus no longer bundles `@vitest/browser-playwright`
 // at runtime, so a source-only user (e.g. `vite.config.ts` importing the
 // provider via a `vite-plus/test/browser-playwright` shim with no declared dep)
 // must still have the provider kept/injected for the rewritten import to resolve.
@@ -156,7 +137,6 @@ const PLAYWRIGHT_PROVIDER_SPECIFIER_HINTS = [
 // Per-provider source-scan hint lists, used to build the `providerSourceModes`
 // map passed to `rewritePackageJson`.
 const BROWSER_PROVIDER_SPECIFIER_HINTS: Record<string, readonly string[]> = {
-  [WEBDRIVERIO_PROVIDER]: WEBDRIVERIO_PROVIDER_SPECIFIER_HINTS,
   [PLAYWRIGHT_PROVIDER]: PLAYWRIGHT_PROVIDER_SPECIFIER_HINTS,
 };
 
@@ -186,6 +166,7 @@ const VITEST_SCAN_SKIP_DIRS = new Set([
   '.svelte-kit',
   '.vite',
   '.cache',
+  '.yarn',
 ]);
 
 /**
@@ -212,11 +193,23 @@ const VITEST_SCAN_SKIP_DIRS = new Set([
  * is a separate package that the migration scans on its own pass, so the root
  * package must not inherit a browser-mode signal from a sub-package.
  */
-function sourceTreeMatches(
+export function sourceTreeMatches(
   projectPath: string,
-  matchesContent: (content: string) => boolean,
+  matchesContent: (content: string, file: string) => boolean,
+  options: {
+    // Nested examples can resolve the root's dependency through source or
+    // package imports/scripts, even when they are not workspace members.
+    crossPackageBoundaries?: boolean;
+    extensions?: ReadonlySet<string>;
+    includePackageReferences?: boolean;
+    includeExtensionless?: boolean;
+    matchesPackage?: (projectPath: string, pkg: DependencyBag) => boolean;
+    skipDirs?: ReadonlySet<string>;
+  } = {},
 ): boolean {
-  const scanDir = (dir: string, isRoot: boolean): boolean => {
+  const skipDirs = options.skipDirs ?? VITEST_SCAN_SKIP_DIRS;
+  const extensions = options.extensions ?? VITEST_SCAN_EXTENSIONS;
+  function scanDir(dir: string, isRoot: boolean): boolean {
     let entries: fs.Dirent[];
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -225,21 +218,44 @@ function sourceTreeMatches(
     }
     // A nested package.json marks a separate workspace package — it is migrated
     // (and scanned) on its own pass, so don't let its files leak into this one.
-    if (!isRoot && entries.some((e) => e.isFile() && e.name === 'package.json')) {
+    if (
+      !options.crossPackageBoundaries &&
+      !isRoot &&
+      entries.some((e) => e.isFile() && e.name === 'package.json')
+    ) {
       return false;
     }
     for (const entry of entries) {
       const entryPath = path.join(dir, entry.name);
       if (entry.isDirectory()) {
-        if (VITEST_SCAN_SKIP_DIRS.has(entry.name)) {
+        if (skipDirs.has(entry.name)) {
           continue;
         }
         if (scanDir(entryPath, false)) {
           return true;
         }
-      } else if (entry.isFile() && VITEST_SCAN_EXTENSIONS.has(path.extname(entry.name))) {
+      } else if (
+        entry.isFile() &&
+        !['.pnp.cjs', '.pnp.loader.mjs'].includes(entry.name) &&
+        (extensions.has(path.extname(entry.name)) ||
+          (options.includeExtensionless && path.extname(entry.name) === '') ||
+          (options.includePackageReferences && entry.name === 'package.json'))
+      ) {
         try {
-          if (matchesContent(fs.readFileSync(entryPath, 'utf8'))) {
+          let content = fs.readFileSync(entryPath, 'utf8');
+          if (entry.name === 'package.json') {
+            // Check alias targets and inline scripts without counting dependency
+            // declarations as uses. Serialization includes conditional targets.
+            const pkg = JSON.parse(content) as DependencyBag & {
+              imports?: unknown;
+              scripts?: unknown;
+            };
+            if (options.matchesPackage?.(dir, pkg)) {
+              return true;
+            }
+            content = JSON.stringify({ imports: pkg.imports, scripts: pkg.scripts });
+          }
+          if (matchesContent(content, entryPath)) {
             return true;
           }
         } catch {
@@ -248,7 +264,7 @@ function sourceTreeMatches(
       }
     }
     return false;
-  };
+  }
 
   return scanDir(projectPath, true);
 }
@@ -335,4 +351,147 @@ export function collectProviderSourceModes(projectPath: string): Record<string, 
     );
   }
   return modes;
+}
+
+/**
+ * Check final source, build output, aliases, scripts, and dependency peers.
+ * A substring scan conservatively retains references the rewriter leaves alone,
+ * including require calls, type references, and strings.
+ */
+export function sourceTreeReferencesOxlintPluginsPackage(
+  projectPath: string,
+  originalDependencies: ReadonlyMap<string, ReadonlySet<string>> = collectOxlintDependencyNames(
+    projectPath,
+  ),
+): boolean {
+  return sourceTreeMatches(projectPath, (content) => content.includes(OXLINT_PLUGINS_PACKAGE), {
+    crossPackageBoundaries: true,
+    includePackageReferences: true,
+    // Node can execute these scripts without a shebang or executable bit.
+    includeExtensionless: true,
+    // Nested fixtures and templates can declare dependencies that this workspace
+    // never installs. Their source still counts, but unknown peers do not.
+    matchesPackage: (dir, pkg) =>
+      projectListsRequiredOxlintPluginsPeer(dir, pkg, {
+        retainUnknownPeers: originalDependencies.has(dir),
+        originalDependencyNames: originalDependencies.get(dir),
+      }),
+    skipDirs: RETENTION_SCAN_SKIP_DIRS,
+  });
+}
+
+// Keep the explicit peer provider in strict package-manager layouts. A copy
+// installed transitively through vite-plus cannot satisfy another plugin's peer.
+export function projectListsRequiredOxlintPluginsPeer(
+  projectPath: string,
+  pkg: DependencyBag,
+  {
+    retainUnknownPeers = true,
+    originalDependencyNames,
+  }: {
+    retainUnknownPeers?: boolean;
+    originalDependencyNames?: ReadonlySet<string>;
+  } = {},
+): boolean {
+  const dependencyNames = collectInstallDependencyNames(pkg);
+  dependencyNames.delete(OXLINT_PLUGINS_PACKAGE);
+  // These toolchain packages do not require an @oxlint/plugins peer.
+  dependencyNames.delete(VITE_PLUS_NAME);
+  dependencyNames.delete('vite');
+  for (const name of dependencyNames) {
+    if (originalDependencyNames && !originalDependencyNames.has(name)) {
+      continue;
+    }
+    const metadata = detectPackageMetadata(projectPath, name);
+    if (!metadata) {
+      if (retainUnknownPeers) {
+        return true;
+      }
+      continue;
+    }
+    try {
+      const installedPkg = readJsonFile(path.join(metadata.path, 'package.json')) as {
+        peerDependencies?: Record<string, string>;
+        peerDependenciesMeta?: Record<string, { optional?: boolean }>;
+      };
+      if (
+        typeof installedPkg.peerDependencies?.[OXLINT_PLUGINS_PACKAGE] === 'string' &&
+        installedPkg.peerDependenciesMeta?.[OXLINT_PLUGINS_PACKAGE]?.optional !== true
+      ) {
+        return true;
+      }
+    } catch {
+      // An unknown peer contract is not evidence that the provider is unused.
+      if (retainUnknownPeers) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+export function collectInstallDependencyNames(pkg?: DependencyBag): Set<string> {
+  return new Set([
+    ...Object.keys(pkg?.dependencies ?? {}),
+    ...Object.keys(pkg?.devDependencies ?? {}),
+    ...Object.keys(pkg?.optionalDependencies ?? {}),
+  ]);
+}
+
+// Capture the original dependency names before migration injects new toolchain
+// packages. Check peers only for original dependencies that survive migration;
+// newly injected packages are not installed until after source cleanup.
+export function collectOxlintDependencyNames(
+  rootDir: string,
+  packages?: readonly { path: string }[],
+): Map<string, ReadonlySet<string>> {
+  const names = new Map<string, ReadonlySet<string>>();
+  for (const dir of [rootDir, ...(packages ?? []).map((pkg) => path.join(rootDir, pkg.path))]) {
+    const pkg = readPackageJsonIfExists(path.join(dir, 'package.json'));
+    names.set(dir, collectInstallDependencyNames(pkg));
+  }
+  return names;
+}
+
+/**
+ * Drop `@oxlint/plugins` from devDependencies once nothing names it any more.
+ *
+ * Runs AFTER the import rewrite, so the scan sees final source. Skips a package
+ * that owns the API as a runtime or peer dependency, and skips any package
+ * whose source, build output, or installed dependencies still require it.
+ */
+export function dropDeadOxlintPluginsDependency(
+  rootDir: string,
+  packages?: readonly { path: string }[],
+  originalDependencies: ReadonlyMap<string, ReadonlySet<string>> = collectOxlintDependencyNames(
+    rootDir,
+    packages,
+  ),
+): boolean {
+  let changed = false;
+  const dirs = [rootDir, ...(packages ?? []).map((pkg) => path.join(rootDir, pkg.path))];
+  for (const dir of dirs) {
+    const packageJsonPath = path.join(dir, 'package.json');
+    const pkg = readPackageJsonIfExists(packageJsonPath);
+    if (pkg?.devDependencies?.[OXLINT_PLUGINS_PACKAGE] === undefined) {
+      continue;
+    }
+    if (
+      packageOwnsOxlintApi(pkg) ||
+      sourceTreeReferencesOxlintPluginsPackage(dir, originalDependencies)
+    ) {
+      continue;
+    }
+    editJsonFile<{
+      devDependencies?: Record<string, string>;
+    }>(packageJsonPath, (json) => {
+      if (json.devDependencies?.[OXLINT_PLUGINS_PACKAGE] === undefined) {
+        return undefined;
+      }
+      delete json.devDependencies[OXLINT_PLUGINS_PACKAGE];
+      changed = true;
+      return json;
+    });
+  }
+  return changed;
 }

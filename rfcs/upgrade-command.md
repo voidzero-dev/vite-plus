@@ -22,8 +22,9 @@ A native `vp upgrade` command would allow users to update the CLI in-place with 
 ├── current → 0.1.0/                 # Symlink to active version
 ├── 0.1.0/                           # Version directory
 │   ├── bin/vp                       # Actual binary
-│   ├── dist/                        # JS bundles + .node files
-│   ├── package.json
+│   ├── bin/vp-install-lock.yaml      # Published installation lockfile
+│   ├── package.json                 # Wrapper with an exact vite-plus dependency
+│   ├── pnpm-lock.yaml               # Restored from the published companion
 │   └── node_modules/
 ├── 0.0.9/                           # Previous version (kept for rollback)
 ├── env                              # POSIX shell env (sourced by shell config)
@@ -147,22 +148,23 @@ Options:
 
 ### Architecture
 
-The upgrade command is implemented entirely in Rust within the `vp_global_cli` crate, mirroring the logic of `install.sh` but running as a native subprocess workflow.
+The upgrade command uses `vp_global_cli` and the shared `vp_setup` library.
+It installs the same binary and bundled lockfile as the script installers.
 
 ```
-┌─────────────────────────────────────────────────┐
-│                vp upgrade                   │
-├─────────────────────────────────────────────────┤
-│  1. Resolve version (npm registry query)        │
-│  2. Check if already installed                  │
-│  3. Download platform binary (.tgz)             │
-│  4. Download main JS bundle (.tgz)              │
-│  5. Extract to ~/.vite-plus/{version}/          │
-│  6. Install production dependencies             │
-│  7. Atomic swap: current → {version}            │
-│  8. Refresh shims (non-fatal)                   │
-│  9. Cleanup old versions (non-fatal, keep 3)    │
-└─────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────┐
+│                     vp upgrade                       │
+├──────────────────────────────────────────────────────┤
+│  1. Resolve version (registry query)                 │
+│  2. Check if already installed                       │
+│  3. Download and verify platform archive             │
+│  4. Extract binary + vp-install-lock.yaml            │
+│  5. Generate wrapper and restore pnpm-lock.yaml      │
+│  6. Install dependencies with --frozen-lockfile      │
+│  7. Swap current → {version}                         │
+│  8. Refresh shims (non-fatal)                        │
+│  9. Cleanup old versions (non-fatal, keep 3)         │
+└──────────────────────────────────────────────────────┘
 ```
 
 ### Implementation Flow
@@ -172,17 +174,14 @@ The upgrade command is implemented entirely in Rust within the `vp_global_cli` c
 Query the npm registry for the target version:
 
 ```
-GET {registry}/vite-plus-cli/{version_or_tag}
+GET {registry}/vite-plus/{version_or_tag}
 ```
 
 - If `VERSION` arg is provided, use it directly
 - If `--tag` is provided, resolve that dist-tag (e.g., `latest`, `test`)
 - Default to `latest`
 
-Parse the JSON response to extract:
-
-- `version`: the resolved semver version
-- `optionalDependencies`: to find the platform-specific package name
+Read `version` from the response.
 
 #### Step 2: Version Comparison
 
@@ -193,19 +192,30 @@ Compare the resolved version against the currently running binary's version (`en
 
 #### Step 3: Download and Verify
 
-Download two tarballs from the npm registry:
+Detect the platform suffix and query
+`@voidzero-dev/vite-plus-cli-{platform_suffix}` for the exact target version.
+Download the `dist.tarball` URL from that package's registry metadata.
+The archive contains `vp` or `vp.exe`, the bundled
+`vp-install-lock.yaml`, and `vp-shim.exe` on Windows. The package manifest sets
+`vpInstallLockfile: true` to advertise the companion. Release and commit preview
+packages use this layout; preview metadata supplies a content-addressed URL.
 
-1. **Platform binary**: `{registry}/@voidzero-dev/vite-plus-cli-{platform_suffix}/-/vite-plus-cli-{suffix}-{version}.tgz`
-   - Contains: `vp` binary + `.node` NAPI files
-2. **Main package**: `{registry}/vite-plus-cli/-/vite-plus-cli-{version}.tgz`
-   - Contains: `dist/` (JS bundles), `package.json`, `templates/`, `rules/`, `AGENTS.md`
+The platform manifest also publishes `vpNodeVersion`, the exact Node.js version
+from the release checkout's `.node-version`. The binary embeds the same pin for
+dependency installation at build time. The existing exact-version metadata
+request supplies this field; upgrades do not read the current repository pin or
+resolve another `latest` tag.
+
+The upgrade command does not extract the main JavaScript package itself. The
+subsequent pnpm installation downloads `vite-plus`, NAPI packages, and transitive
+dependencies using the bundled lockfile.
 
 **Integrity verification**: Each tarball is verified against the `integrity` field from the npm registry metadata. The npm registry provides SHA-512 hashes in the [Subresource Integrity](https://w3c.github.io/webappsec-subresource-integrity/) format:
 
 ```json
 {
   "dist": {
-    "tarball": "https://registry.npmjs.org/vite-plus-cli/-/vite-plus-cli-0.0.0-xxx.tgz",
+    "tarball": "https://registry.npmjs.org/@voidzero-dev/vite-plus-cli-darwin-arm64/-/vite-plus-cli-darwin-arm64-1.4.0.tgz",
     "integrity": "sha512-Z3se9k/NTRf8s5eSmuSoMOFFB/TUGBHIoeWDU5VoHV...",
     "shasum": "3399579218148ae410011bde8934e12209743ef3"
   }
@@ -242,10 +252,10 @@ fn verify_integrity(data: &[u8], expected: &str) -> Result<(), Error> {
 }
 ```
 
-To get the `integrity` field for the platform package, we need to query its metadata separately:
-
-- Main package metadata: `{registry}/vite-plus-cli/{version}` → contains `dist.integrity`
-- Platform package metadata: `{registry}/@voidzero-dev/vite-plus-cli-{suffix}/{version}` → contains `dist.integrity`
+Platform package metadata at
+`{registry}/@voidzero-dev/vite-plus-cli-{suffix}/{version}` supplies the archive's
+`dist.integrity`. The bundled lockfile supplies integrity values for the
+JavaScript packages that pnpm installs.
 
 Platform detection reuses existing logic from `vp_js_runtime` or mirrors the bash script's approach:
 
@@ -255,12 +265,28 @@ Platform detection reuses existing logic from `vp_js_runtime` or mirrors the bas
 
 #### Step 4: Extract and Install
 
-1. Create `~/.vite-plus/{version}/` with `bin/` and `dist/` subdirectories
-2. Extract platform binary to `{version}/bin/vp`, set executable permissions
-3. Extract `.node` files to `{version}/dist/`
-4. Extract JS bundle, templates, rules, package.json to `{version}/`
-5. Strip `devDependencies` and `optionalDependencies` from package.json
-6. Run `vp install --silent` in the version directory to install production dependencies
+1. Create the version directory under the data root resolved by `VpDirs`, with a `bin/` subdirectory.
+2. Extract the binary and `vp-install-lock.yaml` into `bin/`, along with `vp-shim.exe` on Windows.
+3. Generate the wrapper `package.json` with an exact `vite-plus` dependency and the installer's pinned pnpm version.
+4. Restore `bin/vp-install-lock.yaml` as `pnpm-lock.yaml` in the version directory.
+5. Write the installation's `.npmrc` with `minimum-release-age=0` so new versions are immediately available.
+6. Run managed pnpm with `install --ignore-workspace --frozen-lockfile` in the version directory, using `vpNodeVersion` from the target's platform metadata. Activation waits for a successful install.
+
+Missing advertised lockfiles and integrity failures stop installation. Older
+packages without a companion keep the legacy dependency installation behavior.
+When an older upgrade client drops the companion, the new binary's self-setup
+recovers it from the verified platform archive before completing a frozen
+install. See [Global installation lockfile](./merge-global-and-local-cli.md#global-installation-lockfile)
+for generation, retry, and compatibility details.
+
+If `vpNodeVersion` is absent, the running binary uses its Node.js installation
+default. A present value must be an exact stable version. Invalid metadata,
+an incompatible pnpm runtime, or a failed dependency install stops the upgrade
+before it changes `current` or the rollback record. Unlike the optional
+`VP_SETUP_NODE_VERSION` override for initial installation, this release pin
+cannot silently fall back to the running binary's installation default. The
+running binary still selects pnpm and executes the installation logic. Clients
+released before this metadata support keep their existing behavior.
 
 #### Step 5: Version Swap
 
@@ -302,7 +328,7 @@ Key differences on Windows:
 
 After the symlink swap (the **point of no return**), post-update operations are treated as non-fatal. Errors are printed to stderr as warnings but do not trigger the outer error handler (which would delete the now-active version directory).
 
-1. **Refresh shims**: Run the equivalent of `vp env setup --refresh` to ensure node/npm/npx/corepack shims point to the new version. This also refreshes trampoline `.exe` files for globally installed package shims (e.g., `tsc.exe`) by scanning `BinConfig` entries. If this fails, the user can run it manually.
+1. **Refresh shims**: Run the equivalent of `vp env setup --refresh` to ensure node/npm/npx shims point to the new version. This also refreshes trampoline `.exe` files for globally installed package shims (e.g., `tsc.exe`) by scanning `BinConfig` entries. If this fails, the user can run it manually.
 2. **Cleanup old versions**: Remove old version directories, keeping the 3 most recent by **creation time** (matching `install.sh` behavior). The new version and the previous version are always protected from cleanup, even if they fall outside the top 3 (e.g., after a downgrade via `--rollback`).
 
 #### Step 7: Running Binary Consideration

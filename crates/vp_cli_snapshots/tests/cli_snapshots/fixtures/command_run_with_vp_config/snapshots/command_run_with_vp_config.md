@@ -18,7 +18,7 @@ should throw error
 ```
 $ vp not-exist-command ⊘ cache disabled
 
-[1m[31merror:[39m[0m Command '[94mnot-exist-command[39m' not found
+error: Command 'not-exist-command' not found
 
-Did you mean [94m`vp test`[39m?
+Did you mean `vp test`?
 ```

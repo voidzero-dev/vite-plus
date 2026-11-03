@@ -20,6 +20,40 @@ vp create <template>
 vp create <template> -- <template-options>
 ```
 
+### Without the Global CLI
+
+If you haven't installed [the global `vp`](/guide/global-cli) yet. Vite+ provides `create-vite-plus` package running `vp create` through your package manager.
+
+::: code-group
+
+```bash [pnpm]
+pnpm create vite-plus
+```
+
+```bash [npm]
+npm create vite-plus@latest
+```
+
+```bash [Yarn]
+yarn create vite-plus
+```
+
+```bash [Bun]
+bun create vite-plus
+```
+
+:::
+
+The new project uses the package manager that ran the command, unless you pass `--package-manager` or create it inside an existing workspace. Arguments are forwarded to `vp create` unchanged, so the first argument is the template, not the target directory:
+
+```bash
+pnpm create vite-plus vite:application --directory my-app
+```
+
+If you are using npm, there is a `--` needed before options meant for `vp create`, for example `npm create vite-plus@latest -- vite:application --directory my-app`.
+
+After creating the project, run `vp` through your package manager, for example `pnpm exec vp run`.
+
 ## Built-in Templates
 
 Vite+ ships with these built-in templates:
@@ -42,30 +76,36 @@ Run `vp create --list` to see the built-in templates and the common shorthand te
 
 ## Options
 
-- `--directory <dir>` writes the generated project into a specific target directory
+- `--directory <dir>` writes the generated project into a specific target directory. Only built-in templates and bundled `@org` templates support this option.
 - `--agent <name>` creates agent instructions files during scaffolding
 - `--no-agent` skips agent instruction setup
 - `--editor <name>` writes editor config files
 - `--no-editor` skips editor config setup
-- `--git` initialize a git repository
+- `--git` initializes a git repository
 - `--no-git` skips git repository initialization
-- `--hooks` enables pre-commit hook setup
-- `--no-hooks` skips hook setup
 - `--package-manager <name>` uses a specified package manager (`pnpm`, `npm`, `yarn`, or `bun`)
 - `--approve-builds` approves and runs gated dependency build scripts without prompting
 - `--no-interactive` runs without prompts
 - `--verbose` shows detailed scaffolding output
 - `--list` prints the available built-in and popular templates
+- `--hooks` enables pre-commit hook setup (dispatcher + `.vite-hooks` + `staged` config)
+- `--no-hooks` skips hook setup
+
+::: info
+`--git` and `--no-git` are not available when adding a package to an existing monorepo.
+:::
+
+After create, manage the dispatcher with `vp hooks status`, `vp hooks disable`, and `vp hooks enable`. See the [Commit Hooks](/guide/commit-hooks).
 
 ### Dependency build scripts
 
-For security, pnpm, bun, and yarn (Berry) do not run a dependency's build scripts (`install` / `postinstall`, e.g. native builds like `better-sqlite3`) until you approve them. When a template adds such a dependency directly, `vp create` surfaces it after installing instead of leaving the project in a half-built state:
+For security, pnpm, bun, yarn (Berry), and npm (v12+) do not run a dependency's build scripts (`install` / `postinstall`, e.g. native builds like `better-sqlite3`) until you approve them. When a template adds such a dependency directly, `vp create` surfaces it after installing instead of leaving the project in a half-built state:
 
 - Interactive: you are asked which of those dependencies to approve and build (nothing is selected by default).
 - Non-interactive: a note lists them and points at `vp pm approve-builds`.
 - `--approve-builds`: approves and builds them automatically, so non-interactive runs (CI) can produce a ready-to-use project.
 
-Approval is recorded the way each package manager expects: pnpm's `allowBuilds`, bun's `trustedDependencies`, or yarn's `dependenciesMeta.<pkg>.built` (in the workspace root manifest). Transitive build scripts you did not choose (e.g. `esbuild` pulled in by Vite) are left at the package manager's defaults and are not surfaced. npm runs build scripts by default, so there is nothing to approve there.
+Approval is recorded the way each package manager expects: pnpm's `allowBuilds`, bun's `trustedDependencies`, npm's `allowScripts`, or yarn's `dependenciesMeta.<pkg>.built` (in the workspace root manifest). Transitive build scripts you did not choose (e.g. `esbuild` pulled in by Vite) are left at the package manager's defaults and are not surfaced. npm 11 and older run build scripts during install, so there is nothing to approve there.
 
 ## Template Options
 
@@ -128,7 +168,9 @@ If the monorepo has a parent directory matching `generators` or `tools`, the new
 
 Local generators are declared in [`create.templates`](/config/create#create-templates) in the monorepo's `vite.config.ts`. This is the source of truth: only registered templates appear in the `vp create` picker.
 
-`vp create vite:generator` registers the generator for you, adding an entry to `create.templates` in the root `vite.config.ts`:
+`vp create vite:generator` registers the generator for you, adding an entry to `create.templates` in the root `vite.config.ts`.
+
+For example, a generator named `my-generator` created in `generators/my-generator` is registered as follows:
 
 ```ts
 import { defineConfig } from 'vite-plus';
@@ -136,7 +178,11 @@ import { defineConfig } from 'vite-plus';
 export default defineConfig({
   create: {
     templates: [
-      { name: 'my-generator', description: 'Generate new components', template: 'my-generator' },
+      {
+        name: 'my-generator',
+        description: 'A starter for creating a Vite+ code generator.',
+        template: './generators/my-generator',
+      },
     ],
   },
 });

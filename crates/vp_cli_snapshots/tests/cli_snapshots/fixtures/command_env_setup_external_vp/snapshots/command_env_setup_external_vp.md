@@ -1,16 +1,28 @@
 # command_env_setup_external_vp
 
-## `vpt mkdir -p external home`
+## `vpt mkdir -p external/bin home`
 
 Prepare isolated external install and VP_HOME
 
 
-## `vpt cp $VP_HOME/bin/vp external/vp`
+## `vpt write-file home/.vp-owned 'vite-plus-owned-directory
+'`
+
+The fixture owns the preseeded runtime directory
+
+
+## `vpt cp $VP_HOME/bin/vp external/bin/vp`
 
 Simulate a Homebrew-style vp outside VP_HOME
 
 
-## `vpt chmod +x external/vp`
+## `vpt chmod +x external/bin/vp`
+
+
+## `vpt write-file external/node_modules/vite-plus/package.json {}`
+
+
+## `vpt write-file external/node_modules/vite-plus/dist/bin.js '// Bundled CLI'`
 
 
 ## `vpt write-file .node-version '22.18.0
@@ -29,9 +41,9 @@ Preinstall managed Node runtime
 ## `vpt chmod +x home/js_runtime/node/22.18.0/bin/node`
 
 
-## `VP_HOME=${workspace}/home ./external/vp env setup`
+## `VP_HOME=${workspace}/home ./external/bin/vp env setup`
 
-Setup shims from external vp
+Setup shims from external vp without a package-manager-owned marker
 
 
 ## `node assert-shims.mjs`

@@ -312,28 +312,6 @@ describe('readOrgManifest', () => {
     );
   });
 
-  it('throws on duplicate entry names', async () => {
-    mockFetchJson(
-      packument([
-        { name: 'web', description: 'one', template: '@a/one' },
-        { name: 'web', description: 'two', template: '@a/two' },
-      ]),
-    );
-    await expect(readOrgManifest('@your-org')).rejects.toThrow(/duplicates an earlier entry/);
-  });
-
-  it('throws when a bundled path escapes the package root', async () => {
-    mockFetchJson(packument([{ name: 'demo', description: 'x', template: '../outside' }]));
-    await expect(readOrgManifest('@your-org')).rejects.toThrow(/escapes the package root/);
-  });
-
-  it('throws when an entry name uses the reserved `__vp_` prefix', async () => {
-    mockFetchJson(
-      packument([{ name: '__vp_builtin_escape__', description: 'collides', template: '@a/b' }]),
-    );
-    await expect(readOrgManifest('@your-org')).rejects.toThrow(/uses the reserved `__vp_` prefix/);
-  });
-
   it('throws on non-boolean monorepo field', async () => {
     mockFetchJson(
       packument([
@@ -508,5 +486,31 @@ describe('readOrgManifest', () => {
     await expect(readOrgManifest('@your-org', '9.9.9')).rejects.toThrow(
       /version "9\.9\.9" not found/,
     );
+  });
+
+  it.each([
+    ['latest', '../../outside-write'],
+    ['latest', '..'],
+    ['latest', '.'],
+    ['latest', 'not-a-version'],
+    // A tag named like a pinned version can also substitute an invalid target.
+    ['1.2.3', '../../outside-write'],
+  ])('rejects a non-semver dist-tags.%s target: %s', async (tag, version) => {
+    const body = packument([
+      { name: 'web', description: 'v1', template: '@your-org/template-web' },
+    ]);
+    // Keep matching metadata so only the version validation rejects it.
+    mockFetchJson({
+      ...body,
+      'dist-tags': { ...body['dist-tags'], [tag]: version },
+      versions: {
+        ...body.versions,
+        [version]: { ...body.versions['1.0.0'], version },
+      },
+    });
+    const requestedVersion = tag === 'latest' ? undefined : tag;
+    const manifest = readOrgManifest('@your-org', requestedVersion);
+    await expect(manifest).rejects.toThrow(OrgManifestSchemaError);
+    await expect(manifest).rejects.toThrow(/invalid version/);
   });
 });

@@ -1,0 +1,6 @@
+[[case]]
+name = "builtin_tools_without_node_on_path"
+vp = "local"
+steps = [
+  { argv = ["node", "assert-runtime.cjs"], comment = "Built-in tools reuse the current runtime even when its filename is not node and PATH has no node executable." },
+]

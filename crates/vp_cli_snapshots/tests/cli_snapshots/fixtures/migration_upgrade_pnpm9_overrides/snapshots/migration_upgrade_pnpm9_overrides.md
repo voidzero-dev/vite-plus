@@ -33,8 +33,8 @@ pnpm.overrides stay catalog: (not inlined to a version)
   "packageManager": "pnpm@9.15.9",
   "pnpm": {
     "overrides": {
-      "vite": "catalog:",
-      "vitest": "catalog:"
+      "vite@*": "catalog:",
+      "vitest@*": "catalog:"
     },
     "peerDependencyRules": {
       "allowAny": [

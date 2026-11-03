@@ -60,3 +60,26 @@ sub-app should NOT have typeAware/typeCheck
 ```
 vite-plus-monorepo/apps/website/vite.config.ts: missing
 ```
+
+## `vpt print-file vite-plus-monorepo/packages/utils/vite.config.ts`
+
+sub-library should NOT have nested lint or fmt config
+
+```
+import { defineConfig } from "vite-plus";
+
+export default defineConfig({
+  pack: {
+    deps: {
+      // tsdown <0.23 compatibility: resolve external dependency subpaths.
+      // Remove to preserve subpath imports as written (the new default).
+      // https://tsdown.dev/options/dependencies#deps-resolvedepsubpath
+      resolveDepSubpath: true,
+    },
+    dts: {
+      generator: "tsgo",
+    },
+    exports: true,
+  },
+});
+```

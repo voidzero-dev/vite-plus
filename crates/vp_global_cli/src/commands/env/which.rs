@@ -2,56 +2,55 @@
 //!
 //! Shows the path to the tool binary that would be executed.
 //!
-//! For core tools (node, npm, npx, corepack), shows the resolved Node.js
+//! For core tools (node, npm, npx), shows the resolved Node.js
 //! binary path along with version and resolution source.
 //! For global packages, shows the binary path plus package metadata.
 
 use std::process::ExitStatus;
 
 use chrono::Local;
-use owo_colors::OwoColorize;
+use console::style;
 use vp_pm_cli::{
     PackageManagerType, package_manager_bin_path, package_manager_install_dir,
-    resolve_package_manager_from_package_json,
+    resolve_package_manager_version_for_cwd,
 };
 use vp_shared::output;
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
 use super::{
     bin_config::{BinConfig, BinSource},
-    config::{VERSION_ENV_VAR, get_bin_dir, get_node_modules_dir, resolve_version},
+    config::{ShimMode, VERSION_ENV_VAR, get_bin_dir, get_node_modules_dir, resolve_version},
+    package_manager,
     package_metadata::PackageMetadata,
 };
-use crate::{cli::exit_status, error::Error};
+use crate::{cli::exit_status, commands::global::install::extract_binaries, error::Error, shim};
 
-/// Core tools (node, npm, npx, corepack)
-const CORE_TOOLS: &[&str] = &["node", "npm", "npx", "corepack"];
+/// Core tools (node, npm, npx)
+const CORE_TOOLS: &[&str] = &["node", "npm", "npx"];
 
 /// Column width for left-side labels in aligned metadata output
 const LABEL_WIDTH: usize = 10;
 
 /// Execute the which command.
 pub async fn execute(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatus, Error> {
+    let config = super::config::load_config().await?;
+    let mode = if let Some(package_manager) = PackageManagerType::from_tool(tool) {
+        config.package_manager_shim_mode_for(package_manager)
+    } else {
+        config.node_shim_mode
+    };
+    if mode == ShimMode::SystemFirst
+        && let Some(path) = shim::dispatch::find_system_tool(tool)
+    {
+        vp_shared::output::print_stdout_line(format_args!("{}", path.as_path().display()));
+        return Ok(ExitStatus::default());
+    }
     if let Some(status) = execute_package_manager_tool(&cwd, tool).await? {
         return Ok(status);
     }
 
     // Check if this is a core tool
     if CORE_TOOLS.contains(&tool) {
-        // corepack: a vp-managed global install wins over the Node-bundled
-        // copy. Mirror the shim dispatch: BinConfig-based lookup, falling
-        // back to the bundled copy (with the same warning) when the managed
-        // state is unusable, so the diagnostic matches what actually runs.
-        if tool == "corepack" {
-            match crate::shim::dispatch::find_package_for_binary(tool).await {
-                Ok(Some(metadata)) => match locate_package_binary(&metadata, tool) {
-                    Ok(_) => return execute_package_binary(tool, &metadata).await,
-                    Err(e) => warn_unusable_managed_corepack(&e.to_string()),
-                },
-                Ok(None) => {}
-                Err(e) => warn_unusable_managed_corepack(&e),
-            }
-        }
         return execute_core_tool(cwd, tool).await;
     }
 
@@ -61,8 +60,8 @@ pub async fn execute(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatus, Err
     }
 
     // Unknown tool
-    output::error(&format!("tool '{}' not found", tool.bold()));
-    eprintln!("Not a core tool (node, npm, npx, corepack) or installed global package.");
+    output::error(&format!("tool '{}' not found", style(tool).for_stderr().bold()));
+    eprintln!("Not a core tool (node, npm, npx) or installed global package.");
     eprintln!("Run 'vp list -g' to see installed packages.");
     Ok(exit_status(1))
 }
@@ -76,7 +75,7 @@ async fn execute_bin_config_binary(
             if let Some(metadata) = PackageMetadata::load(&bin_config.package).await? {
                 return execute_package_binary(tool, &metadata).await;
             }
-            output::error(&format!("binary '{}' not found", tool.bold()));
+            output::error(&format!("binary '{}' not found", style(tool).for_stderr().bold()));
             eprintln!("Package {} may need to be reinstalled.", bin_config.package);
             eprintln!("Run 'vp install -g {}' to reinstall.", bin_config.package);
             Ok(exit_status(1))
@@ -89,21 +88,29 @@ async fn execute_npm_link_binary(tool: &str, bin_config: &BinConfig) -> Result<E
     let binary_path = match locate_npm_link_binary(tool).await {
         Ok(path) if tokio::fs::try_exists(&path).await.unwrap_or(false) => path,
         _ => {
-            output::error(&format!("binary '{}' not found", tool.bold()));
+            output::error(&format!("binary '{}' not found", style(tool).for_stderr().bold()));
             eprintln!("Package {} may need to be reinstalled.", bin_config.package);
             eprintln!("Run 'npm install -g {}' to recreate the link.", bin_config.package);
             return Ok(exit_status(1));
         }
     };
 
-    println!("{}", binary_path.as_path().display());
-    println!(
+    vp_shared::output::print_stdout_line(format_args!("{}", binary_path.as_path().display()));
+    vp_shared::output::print_stdout_line(format_args!(
         "  {:<LABEL_WIDTH$}  {}",
-        "Package:".dimmed(),
-        bin_config.package.as_str().bright_blue()
-    );
-    println!("  {:<LABEL_WIDTH$}  {}", "Source:".dimmed(), "npm".dimmed());
-    println!("  {:<LABEL_WIDTH$}  {}", "Node:".dimmed(), bin_config.node_version.bright_green());
+        style("Package:").dim(),
+        style(&bin_config.package.as_str()).blue().bright()
+    ));
+    vp_shared::output::print_stdout_line(format_args!(
+        "  {:<LABEL_WIDTH$}  {}",
+        style("Source:").dim(),
+        style("npm").dim()
+    ));
+    vp_shared::output::print_stdout_line(format_args!(
+        "  {:<LABEL_WIDTH$}  {}",
+        style("Node:").dim(),
+        style(&bin_config.node_version).green().bright()
+    ));
 
     Ok(ExitStatus::default())
 }
@@ -152,58 +159,72 @@ async fn execute_package_manager_tool(
     let Some(expected_type) = PackageManagerType::from_tool(tool) else {
         return Ok(None);
     };
-    let Some(resolution) = resolve_package_manager_from_package_json(cwd)? else {
-        return Ok(None);
+    let resolution = package_manager::resolve_shim_for(cwd, expected_type).await?;
+    let (version, source) = match &resolution {
+        Some(resolution) => (
+            resolution.version.to_string(),
+            resolution.source_path.as_ref().map_or_else(
+                || resolution.source.to_string(),
+                |path| path.as_path().display().to_string(),
+            ),
+        ),
+        None if expected_type == PackageManagerType::Npm => return Ok(None),
+        None => (
+            resolve_package_manager_version_for_cwd(cwd, expected_type, "latest")
+                .await?
+                .to_string(),
+            "registry fallback".into(),
+        ),
     };
-    if resolution.package_manager_type != expected_type {
-        return Ok(None);
-    }
 
-    let Some(install_dir) = package_manager_install_dir(expected_type, &resolution.version) else {
+    let Some(install_dir) = package_manager_install_dir(expected_type, &version) else {
         return Ok(None);
     };
     let bin_name = expected_type.bin_name_for_tool(tool);
     let tool_path = package_manager_bin_path(&install_dir, bin_name);
 
     if !tokio::fs::try_exists(&tool_path).await.unwrap_or(false) {
-        output::error(&format!("{} not found", tool.bold()));
-        eprintln!("{expected_type} {} is not installed.", resolution.version);
+        output::error(&format!("{} not found", style(tool).for_stderr().bold()));
+        eprintln!("{expected_type} {version} is not installed.");
         eprintln!("Run 'vp install' inside the project to download it.");
         return Ok(Some(exit_status(1)));
     }
 
-    println!("{}", tool_path.as_path().display());
-    println!(
+    vp_shared::output::print_stdout_line(format_args!("{}", tool_path.as_path().display()));
+    vp_shared::output::print_stdout_line(format_args!(
         "  {:<LABEL_WIDTH$}  {}",
-        "Package:".dimmed(),
-        format!("{}@{}", expected_type, resolution.version).bright_blue()
-    );
-    println!(
+        style("Package:").dim(),
+        style(format!("{expected_type}@{version}")).blue().bright()
+    ));
+    vp_shared::output::print_stdout_line(format_args!(
         "  {:<LABEL_WIDTH$}  {}",
-        "Source:".dimmed(),
-        resolution.source_path.as_path().display().to_string().dimmed()
-    );
+        style("Source:").dim(),
+        style(&source).dim()
+    ));
 
     Ok(Some(ExitStatus::default()))
 }
 
-/// Warn that a vp-managed corepack exists but cannot run (mirrors the shim
-/// dispatch warning).
-fn warn_unusable_managed_corepack(reason: &str) {
-    output::warn(&format!(
-        "Ignoring unusable vp-managed corepack ({reason}); falling back to the \
-         Node-bundled corepack. Run `vp remove -g corepack` to clear it."
-    ));
-}
-
-/// Execute which for a core tool (node, npm, npx, corepack).
+/// Execute which for a core tool (node, npm, npx).
 async fn execute_core_tool(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatus, Error> {
+    if matches!(tool, "npm" | "npx")
+        && super::config::load_config().await?.node_shim_mode == ShimMode::SystemFirst
+        && let Some(path) = shim::dispatch::find_system_tool(tool)
+    {
+        vp_shared::output::print_stdout_line(format_args!("{}", path.as_path().display()));
+        return Ok(ExitStatus::default());
+    }
+
     // Resolve version for current directory
     let resolution = resolve_version(&cwd).await?;
 
     // Get the tool path
-    let home_dir =
-        vp_shared::get_vp_home()?.join("js_runtime").join("node").join(&resolution.version);
+    let home_dir = vp_shared::EnvConfig::get()
+        .dirs
+        .data
+        .join("js_runtime")
+        .join("node")
+        .join(&resolution.version);
 
     #[cfg(windows)]
     let tool_path = if tool == "node" {
@@ -217,31 +238,27 @@ async fn execute_core_tool(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatu
 
     // Check if the tool exists
     if !tokio::fs::try_exists(&tool_path).await.unwrap_or(false) {
-        output::error(&format!("{} not found", tool.bold()));
-        // corepack is no longer bundled starting with Node.js 25 (and a
-        // bundled copy may have been removed); only print that hint when the
-        // Node.js installation itself is present.
-        if tool == "corepack"
-            && crate::shim::dispatch::locate_tool(&resolution.version, "node").is_ok()
-        {
-            eprintln!("corepack is not available for Node.js {}.", resolution.version);
-            eprintln!(
-                "It is installed automatically on first use, or run 'vp install -g corepack'."
-            );
-        } else {
-            eprintln!("Node.js {} is not installed.", resolution.version);
-            eprintln!("Run 'vp env install {}' to install it.", resolution.version);
-        }
+        output::error(&format!("{} not found", style(tool).for_stderr().bold()));
+        eprintln!("Node.js {} is not installed.", resolution.version);
+        eprintln!("Run 'vp env install {}' to install it.", resolution.version);
         return Ok(exit_status(1));
     }
 
     // Print binary path (first line, uncolored, pipe-friendly)
-    println!("{}", tool_path.as_path().display());
+    vp_shared::output::print_stdout_line(format_args!("{}", tool_path.as_path().display()));
 
     // Print metadata
     let source_display = format_source(&resolution.source, resolution.source_path.as_deref());
-    println!("  {:<LABEL_WIDTH$}  {}", "Version:".dimmed(), resolution.version.bright_green());
-    println!("  {:<LABEL_WIDTH$}  {}", "Source:".dimmed(), source_display.dimmed());
+    vp_shared::output::print_stdout_line(format_args!(
+        "  {:<LABEL_WIDTH$}  {}",
+        style("Version:").dim(),
+        style(&resolution.version).green().bright()
+    ));
+    vp_shared::output::print_stdout_line(format_args!(
+        "  {:<LABEL_WIDTH$}  {}",
+        style("Source:").dim(),
+        style(&source_display).dim()
+    ));
 
     Ok(ExitStatus::default())
 }
@@ -271,7 +288,7 @@ async fn execute_package_binary(
 
     // Check if binary exists
     if !tokio::fs::try_exists(&binary_path).await.unwrap_or(false) {
-        output::error(&format!("binary '{}' not found", tool.bold()));
+        output::error(&format!("binary '{}' not found", style(tool).for_stderr().bold()));
         eprintln!("Package {} may need to be reinstalled.", metadata.name);
         eprintln!("Run 'vp install -g {}' to reinstall.", metadata.name);
         return Ok(exit_status(1));
@@ -282,17 +299,29 @@ async fn execute_package_binary(
     let installed_str = installed_local.format("%Y-%m-%d").to_string();
 
     // Print binary path (first line, uncolored, pipe-friendly)
-    println!("{}", binary_path.as_path().display());
+    vp_shared::output::print_stdout_line(format_args!("{}", binary_path.as_path().display()));
 
     // Print metadata
-    println!(
+    vp_shared::output::print_stdout_line(format_args!(
         "  {:<LABEL_WIDTH$}  {}",
-        "Package:".dimmed(),
-        format!("{}@{}", metadata.name, metadata.version).bright_blue()
-    );
-    println!("  {:<LABEL_WIDTH$}  {}", "Binaries:".dimmed(), metadata.bins.join(", "));
-    println!("  {:<LABEL_WIDTH$}  {}", "Node:".dimmed(), metadata.platform.node.bright_green());
-    println!("  {:<LABEL_WIDTH$}  {}", "Installed:".dimmed(), installed_str.dimmed());
+        style("Package:").dim(),
+        style(format!("{}@{}", metadata.name, metadata.version)).blue().bright()
+    ));
+    vp_shared::output::print_stdout_line(format_args!(
+        "  {:<LABEL_WIDTH$}  {}",
+        style("Binaries:").dim(),
+        metadata.bins.join(", ")
+    ));
+    vp_shared::output::print_stdout_line(format_args!(
+        "  {:<LABEL_WIDTH$}  {}",
+        style("Node:").dim(),
+        style(&metadata.platform.node).green().bright()
+    ));
+    vp_shared::output::print_stdout_line(format_args!(
+        "  {:<LABEL_WIDTH$}  {}",
+        style("Installed:").dim(),
+        style(&installed_str).dim()
+    ));
 
     Ok(ExitStatus::default())
 }
@@ -319,35 +348,11 @@ fn locate_package_binary(
     let package_json: serde_json::Value = serde_json::from_str(&content)
         .map_err(|e| Error::Other(format!("Failed to parse package.json: {e}").into()))?;
 
-    let binary_path = match package_json.get("bin") {
-        Some(serde_json::Value::String(path)) => {
-            // Single binary - check if it matches the name
-            let pkg_name = package_json["name"].as_str().unwrap_or("");
-            let expected_name = pkg_name.split('/').last().unwrap_or(pkg_name);
-            if expected_name == binary_name {
-                node_modules_dir.join(path)
-            } else {
-                return Err(Error::Other(
-                    format!("Binary {} not found in package", binary_name).into(),
-                ));
-            }
-        }
-        Some(serde_json::Value::Object(map)) => {
-            // Multiple binaries - find the one we need
-            if let Some(serde_json::Value::String(path)) = map.get(binary_name) {
-                node_modules_dir.join(path)
-            } else {
-                return Err(Error::Other(
-                    format!("Binary {} not found in package", binary_name).into(),
-                ));
-            }
-        }
-        _ => {
-            return Err(Error::Other(
-                format!("No bin field in package.json for {}", package_name).into(),
-            ));
-        }
-    };
-
-    Ok(binary_path)
+    let bin = extract_binaries(&package_json, &node_modules_dir)
+        .into_iter()
+        .find(|bin| bin.name == binary_name)
+        .ok_or_else(|| {
+            Error::Other(format!("Binary {} not found in package", binary_name).into())
+        })?;
+    Ok(node_modules_dir.join(&bin.path))
 }

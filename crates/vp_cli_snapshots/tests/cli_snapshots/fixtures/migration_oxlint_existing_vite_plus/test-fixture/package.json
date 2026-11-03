@@ -1,0 +1,7 @@
+{
+  "name": "uninstalled-test-fixture",
+  "private": true,
+  "devDependencies": {
+    "uninstalled-plugin": "1.0.0"
+  }
+}

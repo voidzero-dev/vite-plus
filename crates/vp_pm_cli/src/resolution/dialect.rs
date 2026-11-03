@@ -56,6 +56,40 @@ impl Npm {
     pub(crate) fn unknown_version() -> Self {
         Self { version: None }
     }
+
+    /// `--omit` and `--include` landed in npm 7. Unknown versions are treated as current.
+    pub(crate) fn supports_v7_commands(&self) -> bool {
+        self.version.as_ref().is_none_or(|version| version >= &Version::new(7, 0, 0))
+    }
+
+    /// `pkg get`, `pkg set`, and `pkg delete` landed in npm 7.20.0.
+    /// Unknown versions are treated as current.
+    pub(crate) fn supports_v7_20_commands(&self) -> bool {
+        self.version.as_ref().is_none_or(|version| version >= &Version::new(7, 20, 0))
+    }
+
+    /// `pkg fix` landed in npm 9.8.0.
+    /// Unknown versions are treated as current.
+    pub(crate) fn supports_v9_8_commands(&self) -> bool {
+        self.version.as_ref().is_none_or(|version| version >= &Version::new(9, 8, 0))
+    }
+
+    /// `stage` landed in npm 11.15.0. Unknown versions are treated as current.
+    pub(crate) fn supports_v11_15_commands(&self) -> bool {
+        self.version.as_ref().is_none_or(|version| version >= &Version::new(11, 15, 0))
+    }
+
+    /// `approve-scripts` and `deny-scripts` landed in npm 11.16.0.
+    /// Unknown versions are treated as current.
+    pub(crate) fn supports_v11_16_commands(&self) -> bool {
+        self.version.as_ref().is_none_or(|version| version >= &Version::new(11, 16, 0))
+    }
+
+    /// `patch add`, `patch commit`, and enforced script approvals landed in npm 12.
+    /// Unknown versions are treated as current.
+    pub(crate) fn supports_v12_commands(&self) -> bool {
+        self.version.as_ref().is_none_or(|version| version >= &Version::new(12, 0, 0))
+    }
 }
 
 impl PackageManagerDialect for Npm {
@@ -66,8 +100,83 @@ impl PackageManagerDialect for Npm {
     }
 }
 
+impl Pnpm {
+    /// `patch` and `patch-commit` landed in pnpm 7.4.0.
+    pub(crate) fn supports_v7_4_commands(&self) -> bool {
+        self.version >= Version::new(7, 4, 0)
+    }
+
+    /// `approve-builds` landed in pnpm 10.1.0.
+    pub(crate) fn supports_v10_1_commands(&self) -> bool {
+        self.version >= Version::new(10, 1, 0)
+    }
+
+    /// `licenses list` landed in pnpm 7.17.0.
+    pub(crate) fn supports_v7_17_commands(&self) -> bool {
+        self.version >= Version::new(7, 17, 0)
+    }
+
+    /// `pkg get`, `pkg set`, `pkg delete`, `pkg fix`, and `stage` landed in pnpm 11.3.0.
+    pub(crate) fn supports_v11_3_commands(&self) -> bool {
+        self.version >= Version::new(11, 3, 0)
+    }
+
+    /// Native `login`, `logout`, `whoami`, `dist-tag`, `deprecate`, `ping`, and `search`
+    /// landed in pnpm 11, along with the `approve-builds !<pkg>` deny syntax.
+    pub(crate) fn supports_v11_commands(&self) -> bool {
+        self.version >= Version::new(11, 0, 0)
+    }
+
+    /// `owner` landed in pnpm 11.1.0.
+    pub(crate) fn supports_v11_1_commands(&self) -> bool {
+        self.version >= Version::new(11, 1, 0)
+    }
+
+    /// `token` landed in pnpm 12.13.0.
+    pub(crate) fn supports_v12_13_commands(&self) -> bool {
+        self.version >= Version::new(12, 13, 0)
+    }
+
+    /// Native `team` commands landed in pnpm 11.13.0.
+    pub(crate) fn supports_v11_13_commands(&self) -> bool {
+        self.version >= Version::new(11, 13, 0)
+    }
+}
+
 impl Yarn {
     pub(crate) fn is_berry(&self) -> bool {
-        self.version.major >= 2
+        crate::package_manager::is_yarn_berry(&self.version)
+    }
+
+    /// `npm audit` landed in Yarn 2.4.0.
+    pub(crate) fn supports_v2_4_commands(&self) -> bool {
+        self.version >= Version::new(2, 4, 0)
+    }
+
+    /// Berry `unlink` and `patch-commit --save` landed in Yarn 3.0.0.
+    pub(crate) fn supports_v3_commands(&self) -> bool {
+        self.version >= Version::new(3, 0, 0)
+    }
+
+    /// `npm publish --staged` and `npm stage list/approve/reject` landed in Yarn 4.16.0.
+    pub(crate) fn supports_v4_16_commands(&self) -> bool {
+        self.version >= Version::new(4, 16, 0)
+    }
+}
+
+impl Bun {
+    /// `bun pm pkg get`, `set`, `delete`, and `fix` landed in Bun 1.2.19.
+    pub(crate) fn supports_v1_2_19_commands(&self) -> bool {
+        self.version >= Version::new(1, 2, 19)
+    }
+
+    /// `bun pm version` landed in Bun 1.2.18.
+    pub(crate) fn supports_v1_2_18_commands(&self) -> bool {
+        self.version >= Version::new(1, 2, 18)
+    }
+
+    /// `dedupe`, `prune`, `audit fix`, and `pm licenses` landed in bun 1.4.
+    pub(crate) fn supports_v1_4_commands(&self) -> bool {
+        self.version >= Version::new(1, 4, 0)
     }
 }

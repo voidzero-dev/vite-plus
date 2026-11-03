@@ -10,7 +10,6 @@ import {
 import {
   VITEST_DIRECT_USAGE_EXCLUDED,
   alignVitestEcosystemPackages,
-  ensureDirectViteForPnpm,
   getAlignedVitestEcosystemDependencySpec,
   getCatalogDependencySpec,
   getScriptRulesYaml,
@@ -24,9 +23,12 @@ import {
 } from '../migrator.ts';
 import {
   BROWSER_PROVIDER_PEER_DEPS,
-  findDeclaredSpec,
+  hasProviderPeerDependency,
   resolveProviderPeerSpec,
   OPT_IN_BROWSER_PROVIDERS,
+  OXLINT_PLUGINS_PACKAGE,
+  OXLINT_PLUGIN_API_PACKAGES,
+  packageOwnsOxlintApi,
   REMOVE_PACKAGES,
   VITEST_BROWSER_DEP_NAMES,
   VITEST_IS_MANAGED_OVERRIDE,
@@ -48,8 +50,8 @@ export function rewritePackageJson(
   skipStagedMigration?: boolean,
   catalogDependencyResolver?: CatalogDependencyResolver,
   vitestBrowserMode?: boolean,
-  // Source-scan signal per opt-in browser provider name (e.g.
-  // `@vitest/browser-webdriverio` → true). A provider with no dep declared but
+  // Source-scan signal per managed opt-in browser provider name (e.g.
+  // `@vitest/browser-playwright` → true). A provider with no dep declared but
   // imported in source still gets kept/injected.
   providerSourceModes?: Partial<Record<string, boolean>>,
   // Whether the project uses vitest DIRECTLY (a required-peer consumer, an
@@ -183,10 +185,35 @@ export function rewritePackageJson(
   const hasBrowserDepSignal = VITEST_BROWSER_DEP_NAMES.some((name) =>
     dependencyGroups.some(({ dependencies }) => dependencies?.[name] !== undefined),
   );
+  // Published plugins keep their upstream imports and the dependencies that
+  // supply them, including optional @oxlint/plugins integrations.
+  const ownsOxlintApi = packageOwnsOxlintApi(pkg);
+  // Rewritten imports need a direct vite-plus dependency. Defer removal of
+  // @oxlint/plugins until dropDeadOxlintPluginsDependency checks the final source.
+  if (pkg.devDependencies?.[OXLINT_PLUGINS_PACKAGE] !== undefined && !ownsOxlintApi) {
+    needVitePlus = true;
+  }
   // remove packages that are replaced with vite-plus
   for (const name of REMOVE_PACKAGES) {
     let wasRemoved = false;
-    for (const { dependencies } of dependencyGroups) {
+    for (const { dependencyField, dependencies } of dependencyGroups) {
+      if (
+        ownsOxlintApi &&
+        (dependencyField === 'peerDependencies' || dependencyField === 'dependencies') &&
+        (OXLINT_PLUGIN_API_PACKAGES as readonly string[]).includes(name)
+      ) {
+        // A `catalog:` reference would dangle once the catalog entry for a
+        // REMOVE_PACKAGES name is dropped, and the next install fails. Resolve
+        // it to the concrete range the catalog currently points at.
+        const current = dependencies?.[name];
+        if (current?.startsWith('catalog:') && dependencies) {
+          const resolved = catalogDependencyResolver?.(current, name);
+          if (resolved) {
+            dependencies[name] = resolved;
+          }
+        }
+        continue;
+      }
       if (dependencies?.[name]) {
         delete dependencies[name];
         wasRemoved = true;
@@ -196,17 +223,9 @@ export function rewritePackageJson(
       needVitePlus = true;
     }
   }
-  // The browser providers (webdriverio, playwright) are opt-in: vite-plus no
-  // longer bundles them at runtime (each drags a heavy non-optional framework
-  // peer), so a user targeting a provider must own it themselves for the
-  // rewritten `vite-plus/test/browser-<provider>` import to resolve. Unlike the
-  // rest of the `@vitest/*` family they are deliberately NOT in
-  // VITE_PLUS_OVERRIDE_PACKAGES (so projects not using a provider stay
-  // untouched), which means the normalization loop above does not add them. We
-  // align each installed provider here using its existing catalog when present,
-  // or the concrete bundled version otherwise, and ensure its runtime framework
-  // peer (`webdriverio` / `playwright`). (`@vitest/browser`/preview stay bundled
-  // + stripped, handled in the REMOVE_PACKAGES loop above.)
+  // Official opt-in providers remain project dependencies. Align their versions
+  // with bundled Vitest and ensure the framework peer required by each shim.
+  // Community providers are excluded from this list.
   let usesAnyOptInProvider = false;
   for (const provider of OPT_IN_BROWSER_PROVIDERS) {
     const usesProvider =
@@ -251,12 +270,10 @@ export function rewritePackageJson(
         { preferredCatalogSpec: catalogDependencyResolver?.preferredCatalogSpec },
       );
     }
-    const peer = BROWSER_PROVIDER_PEER_DEPS[provider]; // 'webdriverio' / 'playwright'
-    const peerPresent = findDeclaredSpec(pkg, peer);
-    if (peer && !peerPresent) {
+    const peer = BROWSER_PROVIDER_PEER_DEPS[provider];
+    if (!hasProviderPeerDependency(pkg, peer)) {
       pkg.devDependencies ??= {};
       pkg.devDependencies[peer] = resolveProviderPeerSpec(
-        pkg,
         peer,
         supportCatalog,
         catalogDependencyResolver,
@@ -376,7 +393,9 @@ export function rewritePackageJson(
       [VITE_PLUS_NAME]: canonicalVitePlusSpec,
     };
   }
-  ensureDirectViteForPnpm(pkg, packageManager, supportCatalog, catalogDependencyResolver);
+  // Vite+ supplies its own `vite` alias for Vitest's peer dependency. Unlike
+  // the pre-#2617 package layout, pnpm consumers do not need an extra direct
+  // Vite dependency just to use Vite+. Keep existing declarations above.
   // Add `vitest` as a direct devDependency when:
   //  - a remaining dependency likely peer-depends on vitest (e.g.
   //    vitest-browser-svelte), OR

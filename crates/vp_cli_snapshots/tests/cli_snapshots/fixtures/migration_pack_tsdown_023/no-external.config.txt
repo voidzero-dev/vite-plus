@@ -1,0 +1,28 @@
+import { defineConfig } from 'vite-plus';
+
+const bundlePatterns = ['@fixture/pack-bundled'];
+
+export default defineConfig({
+  pack: [
+    {
+      entry: 'src/index.ts', outDir: 'dist/literal', dts: false,
+      noExternal: ['@fixture/pack-bundled'],
+    },
+    {
+      entry: 'src/index.ts', outDir: 'dist/reference', dts: false,
+      noExternal: bundlePatterns,
+    },
+    {
+      entry: 'src/index.ts', outDir: 'dist/callback', dts: false,
+      noExternal: (id) => bundlePatterns.includes(id),
+    },
+    {
+      entry: 'src/index.ts', outDir: 'dist/method', dts: false,
+      noExternal(id) { return bundlePatterns.includes(id); },
+      deps: { onlyBundle: bundlePatterns },
+    },
+    {
+      entry: 'src/index.ts', outDir: 'dist/control', dts: false,
+    },
+  ],
+});

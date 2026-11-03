@@ -6,9 +6,10 @@ export default {
     tasks: {
       hello: {
         command: 'node hello.mjs',
-        env: ['FOO', 'BAR'],
-        cache: true,
-        ...(untrackedEnv && { untrackedEnv }),
+        cache: {
+          env: ['FOO', 'BAR'],
+          ...(untrackedEnv && { untrackedEnv }),
+        },
         ...(cwd && { cwd }),
       },
     },

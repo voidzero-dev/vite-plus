@@ -1,0 +1,13 @@
+[[case]]
+name = "yarn_classic_install_includes_dev"
+vp = "global"
+skip-platforms = ["windows"]
+env = { NODE_ENV = "production" }
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.dev-only-fixture", "file:./dev-dep"], snapshot = false },
+  { argv = ["vp", "install", "-D"], comment = "include dev dependencies despite NODE_ENV=production without excluding production dependencies" },
+  ["vpt", "stat-file", "node_modules/prod-only-fixture/package.json", "--assert", "file"],
+  ["vpt", "stat-file", "node_modules/dev-only-fixture/package.json", "--assert", "file"],
+  { argv = ["vp", "install", "--dev", "--frozen-lockfile"], comment = "preserve dev inclusion in frozen-lockfile mode too" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+]

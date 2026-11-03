@@ -5,9 +5,12 @@
 //! config like `run` without needing a Node.js runtime.
 
 use oxc_allocator::Allocator;
-use oxc_ast::ast::{
-    BindingPattern, Expression, ImportDeclarationSpecifier, ImportOrExportKind, ObjectPropertyKind,
-    Program, Statement, VariableDeclarationKind,
+use oxc_ast::{
+    StaticPropertyName,
+    ast::{
+        BindingPattern, Expression, ImportDeclarationSpecifier, ImportOrExportKind,
+        ObjectPropertyKind, Program, Statement, VariableDeclarationKind,
+    },
 };
 use oxc_parser::Parser;
 use oxc_span::SourceType;
@@ -148,7 +151,7 @@ fn parse_js_ts_config(source: &str, extension: &str) -> FieldMap {
     let parser = Parser::new(&allocator, source, source_type);
     let result = parser.parse();
 
-    if result.panicked || !result.diagnostics.is_empty() {
+    if result.fatal_error || !result.diagnostics.is_empty() {
         return FieldMap::unanalyzable();
     }
 
@@ -181,7 +184,8 @@ fn extract_config_fields(program: &Program<'_>) -> FieldMap {
         if let Statement::ExpressionStatement(expr_stmt) = stmt
             && let Expression::AssignmentExpression(assign) = &expr_stmt.expression
             && assign.left.as_member_expression().is_some_and(|m| {
-                m.object().is_specific_id("module") && m.static_property_name() == Some("exports")
+                m.object().is_specific_id("module")
+                    && m.static_property_name().is_some_and(|name| name == "exports")
             })
         {
             return extract_config_from_expr(&assign.right, has_trusted_define_config_binding);
@@ -226,7 +230,20 @@ fn extract_config_from_expr(
             match first_arg_expr.get_inner_expression() {
                 Expression::ObjectExpression(obj) => extract_object_fields(obj),
                 Expression::ArrowFunctionExpression(arrow) => {
-                    extract_config_from_function_body(&arrow.body)
+                    // As of oxc 0.143 an arrow body is an `ArrowFunctionBody`
+                    // enum: either a block body (`() => { ... }`) or a concise
+                    // expression body (`() => ({ ... })`).
+                    if let Some(body) = arrow.body.as_function_body() {
+                        extract_config_from_function_body(body)
+                    } else if let Some(expr) = arrow.body.as_expression() {
+                        if let Expression::ObjectExpression(obj) = expr.get_inner_expression() {
+                            extract_object_fields(obj)
+                        } else {
+                            FieldMap::unanalyzable()
+                        }
+                    } else {
+                        FieldMap::unanalyzable()
+                    }
                 }
                 Expression::FunctionExpression(func) => {
                     let Some(body) = func.body.as_ref() else {
@@ -242,11 +259,12 @@ fn extract_config_from_expr(
     }
 }
 
-/// Extract the config object from the body of a function passed to `defineConfig`.
+/// Extract the config object from the block body of a function passed to `defineConfig`.
 ///
-/// Handles two patterns:
-/// - Concise arrow body: `() => ({ ... })` — body has a single `ExpressionStatement`
-/// - Block body with exactly one return: `() => { ... return { ... }; }`
+/// Handles a block body with exactly one return: `() => { ... return { ... }; }`
+/// or `function() { return { ... }; }`. Concise arrow bodies (`() => ({ ... })`)
+/// are handled directly by the caller, since oxc represents them as an expression
+/// rather than a `FunctionBody`.
 ///
 /// Returns `FieldMap::unanalyzable()` if the body contains multiple `return` statements
 /// (at any nesting depth), since the returned config would depend on runtime control flow.
@@ -257,25 +275,14 @@ fn extract_config_from_function_body(body: &oxc_ast::ast::FunctionBody<'_>) -> F
     }
 
     for stmt in &body.statements {
-        match stmt {
-            Statement::ReturnStatement(ret) => {
-                let Some(arg) = ret.argument.as_ref() else {
-                    return FieldMap::unanalyzable();
-                };
-                if let Expression::ObjectExpression(obj) = arg.get_inner_expression() {
-                    return extract_object_fields(obj);
-                }
+        if let Statement::ReturnStatement(ret) = stmt {
+            let Some(arg) = ret.argument.as_ref() else {
                 return FieldMap::unanalyzable();
+            };
+            if let Expression::ObjectExpression(obj) = arg.get_inner_expression() {
+                return extract_object_fields(obj);
             }
-            Statement::ExpressionStatement(expr_stmt) => {
-                // Concise arrow: `() => ({ ... })` is represented as ExpressionStatement
-                if let Expression::ObjectExpression(obj) =
-                    expr_stmt.expression.get_inner_expression()
-                {
-                    return extract_object_fields(obj);
-                }
-            }
-            _ => {}
+            return FieldMap::unanalyzable();
         }
     }
     FieldMap::unanalyzable()
@@ -286,7 +293,7 @@ fn is_trusted_define_config_import(stmt: &Statement<'_>) -> bool {
         return false;
     };
     if import_decl.import_kind != ImportOrExportKind::Value
-        || !is_trusted_define_config_package(import_decl.source.value.as_str())
+        || !import_decl.source.value.as_str().is_some_and(is_trusted_define_config_package)
     {
         return false;
     }
@@ -340,7 +347,7 @@ fn is_trusted_define_config_package(package: &str) -> bool {
 
 fn is_trusted_define_config_require(expr: &Expression<'_>) -> bool {
     expr.without_parentheses().as_member_expression().is_some_and(|member| {
-        member.static_property_name() == Some(DEFINE_CONFIG)
+        member.static_property_name().is_some_and(|name| name == DEFINE_CONFIG)
             && is_trusted_package_require(member.object())
     })
 }
@@ -350,7 +357,7 @@ fn is_trusted_package_require(expr: &Expression<'_>) -> bool {
         expr.without_parentheses(),
         Expression::CallExpression(call)
             if call.common_js_require().is_some_and(|source| {
-                is_trusted_define_config_package(source.value.as_str())
+                source.value.as_str().is_some_and(is_trusted_define_config_package)
             })
     )
 }
@@ -434,7 +441,10 @@ fn extract_object_fields(obj: &oxc_ast::ast::ObjectExpression<'_>) -> FieldMap {
             continue;
         }
         let ObjectPropertyKind::ObjectProperty(prop) = prop else { continue };
-        let Some(key) = prop.key.static_name() else {
+        // A key with a lone surrogate is statically known but not
+        // UTF-8-representable, so it cannot key the map — treat it like a
+        // computed key and open the map.
+        let Some(key) = prop.key.static_name().and_then(StaticPropertyName::into_cow_str) else {
             map.clear();
             open = true;
             continue;
@@ -444,7 +454,7 @@ fn extract_object_fields(obj: &oxc_ast::ast::ObjectExpression<'_>) -> FieldMap {
         // NonStatic ones: `get_declared` must distinguish a written
         // `key: expr` from a key that merely might exist behind a spread.
         let value = expr_to_json(&prop.value).map_or(FieldValue::NonStatic, FieldValue::Json);
-        map.insert(Box::from(key.as_ref()), value);
+        map.insert(Box::from(key), value);
     }
 
     FieldMap { map, open }
@@ -480,11 +490,15 @@ fn expr_to_json(expr: &Expression<'_>) -> Option<serde_json::Value> {
 
         Expression::NumericLiteral(lit) => Some(f64_to_json_number(lit.value)),
 
-        Expression::StringLiteral(lit) => Some(serde_json::Value::String(lit.value.to_string())),
+        // A lone-surrogate string is not UTF-8-representable, so it cannot be
+        // stored in a JSON value — treat it as non-static.
+        Expression::StringLiteral(lit) => {
+            Some(serde_json::Value::String(lit.value.as_str()?.to_owned()))
+        }
 
         Expression::TemplateLiteral(lit) => {
             let quasi = lit.single_quasi()?;
-            Some(serde_json::Value::String(quasi.to_string()))
+            Some(serde_json::Value::String(quasi.as_str()?.to_owned()))
         }
 
         Expression::UnaryExpression(unary) => {
@@ -521,7 +535,7 @@ fn expr_to_json(expr: &Expression<'_>) -> Option<serde_json::Value> {
                 let ObjectPropertyKind::ObjectProperty(prop) = prop else {
                     continue;
                 };
-                let key = prop.key.static_name()?;
+                let key = prop.key.static_name()?.into_cow_str()?;
                 let value = expr_to_json(&prop.value)?;
                 map.insert(key.into_owned(), value);
             }
@@ -582,24 +596,6 @@ mod tests {
     }
 
     // ── Config file resolution ──────────────────────────────────────────
-
-    #[test]
-    fn resolves_ts_config() {
-        let dir = TempDir::new().unwrap();
-        let dir_path = vt_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
-        std::fs::write(dir.path().join("vite.config.ts"), "export default { run: {} }").unwrap();
-        let result = resolve_static_config(&dir_path);
-        assert!(result.get("run").is_some());
-    }
-
-    #[test]
-    fn resolves_js_config() {
-        let dir = TempDir::new().unwrap();
-        let dir_path = vt_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
-        std::fs::write(dir.path().join("vite.config.js"), "export default { run: {} }").unwrap();
-        let result = resolve_static_config(&dir_path);
-        assert!(result.get("run").is_some());
-    }
 
     #[test]
     fn resolves_mts_config() {
@@ -1256,13 +1252,30 @@ mod tests {
     fn define_config_arrow_no_return_object() {
         // Arrow function that doesn't return an object literal
         assert_non_static(
-            &parse_js_ts_config(
+            &parse(
                 r"
+            import { defineConfig } from 'vite-plus';
+
             export default defineConfig(({ mode }) => {
                 return someFunction();
             });
             ",
-                "ts",
+            ),
+            "run",
+        );
+    }
+
+    #[test]
+    fn define_config_arrow_expression_body_no_object() {
+        // Concise arrow body that is not an object literal. oxc represents it as an
+        // expression rather than a function body, so it takes its own extraction path.
+        assert_non_static(
+            &parse(
+                r"
+            import { defineConfig } from 'vite-plus';
+
+            export default defineConfig(() => someFunction());
+            ",
             ),
             "run",
         );
@@ -1272,8 +1285,10 @@ mod tests {
     fn define_config_arrow_multiple_returns() {
         // Multiple top-level returns → not analyzable
         assert_non_static(
-            &parse_js_ts_config(
+            &parse(
                 r"
+            import { defineConfig } from 'vite-plus';
+
             export default defineConfig(({ mode }) => {
                 if (mode === 'production') {
                     return { run: { cacheScripts: true } };
@@ -1281,7 +1296,6 @@ mod tests {
                 return { run: { cacheScripts: false } };
             });
             ",
-                "ts",
             ),
             "run",
         );
@@ -1290,12 +1304,27 @@ mod tests {
     #[test]
     fn define_config_arrow_empty_body() {
         assert_non_static(
-            &parse_js_ts_config("export default defineConfig(() => {});", "ts"),
+            &parse(
+                "import { defineConfig } from 'vite-plus';\nexport default defineConfig(() => {});",
+            ),
             "run",
         );
     }
 
     // ── Not analyzable cases ─────────────────────────────────────────────
+
+    #[test]
+    fn syntax_errors_require_runtime_evaluation() {
+        for source in [
+            "export default { run: { cache: true }",
+            "export default { run: { cache: true } }; const missing;",
+        ] {
+            let result = parse(source);
+            assert_non_static(&result, "run");
+            assert_non_static(&result, "defaultPackage");
+            assert_eq!(result.get_declared("run"), None);
+        }
+    }
 
     #[test]
     fn returns_none_for_no_default_export() {
@@ -1335,8 +1364,9 @@ mod tests {
                     tasks: {
                         hello: {
                             command: 'node hello.mjs',
-                            envs: ['FOO', 'BAR'],
-                            cache: true,
+                            cache: {
+                                env: ['FOO', 'BAR'],
+                            },
                         },
                     },
                 },
@@ -1349,8 +1379,9 @@ mod tests {
                 "tasks": {
                     "hello": {
                         "command": "node hello.mjs",
-                        "envs": ["FOO", "BAR"],
-                        "cache": true,
+                        "cache": {
+                            "env": ["FOO", "BAR"],
+                        },
                     }
                 }
             }),

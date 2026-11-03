@@ -1,8 +1,12 @@
-use std::{path::Path, time::Duration};
+use std::{
+    path::{Component, Path},
+    time::Duration,
+};
 
 use backon::{ExponentialBuilder, Retryable};
 use flate2::read::GzDecoder;
 use futures_util::stream::StreamExt;
+use indicatif::ProgressBar;
 use reqwest::{Response, StatusCode};
 use serde::de::DeserializeOwned;
 use sha1::Sha1;
@@ -10,12 +14,16 @@ use sha2::{Digest, Sha224, Sha256, Sha512};
 use tar::Archive;
 use tokio::{fs, io::AsyncWriteExt};
 use vp_error::Error;
+use vp_shared::progress::Progress;
+
+use crate::config::NpmConfig;
 
 /// HTTP client with built-in retry support
 #[derive(Clone)]
 pub struct HttpClient {
     max_times: usize,
     min_delay: u64,
+    npm_config: Option<NpmConfig>,
 }
 
 impl Default for HttpClient {
@@ -25,6 +33,8 @@ impl Default for HttpClient {
 }
 
 impl HttpClient {
+    const MAX_NPM_REDIRECTS: usize = 10;
+
     /// Create a new HTTP client with default settings (3 retries, 500ms min delay)
     #[must_use]
     pub const fn new() -> Self {
@@ -39,7 +49,88 @@ impl HttpClient {
     /// * `min_delay` - Minimum delay in milliseconds for exponential backoff
     #[must_use]
     pub(crate) const fn with_config(max_times: usize, min_delay: u64) -> Self {
-        Self { max_times, min_delay }
+        Self { max_times, min_delay, npm_config: None }
+    }
+
+    pub(crate) fn with_npm_config(max_times: usize, min_delay: u64, npm_config: NpmConfig) -> Self {
+        Self { max_times, min_delay, npm_config: Some(npm_config) }
+    }
+
+    fn apply_auth(&self, request: reqwest::RequestBuilder, url: &str) -> reqwest::RequestBuilder {
+        match &self.npm_config {
+            Some(config) => config.apply_auth(request, url),
+            None => request,
+        }
+    }
+
+    fn request_client(&self) -> Result<&'static reqwest::Client, Error> {
+        if self.npm_config.is_some() {
+            Ok(vp_shared::shared_http_client_without_redirects()?)
+        } else {
+            Ok(vp_shared::shared_http_client()?)
+        }
+    }
+
+    async fn send_get(
+        &self,
+        client: &reqwest::Client,
+        url: &str,
+        accept: Option<&str>,
+        timeout: Option<Duration>,
+    ) -> Result<Response, Error> {
+        let mut url = url.to_string();
+        let deadline = timeout.map(|timeout| std::time::Instant::now() + timeout);
+        let mut allow_auth = true;
+        for redirects in 0..=Self::MAX_NPM_REDIRECTS {
+            let mut request = client.get(&url);
+            if let Some(accept) = accept {
+                request = request.header(reqwest::header::ACCEPT, accept);
+            }
+            if let Some(deadline) = deadline {
+                let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+                if remaining.is_zero() {
+                    return Err(Error::Io(std::io::Error::new(
+                        std::io::ErrorKind::TimedOut,
+                        "package registry request timed out",
+                    )));
+                }
+                request = request.timeout(remaining);
+            }
+            let request = if allow_auth { self.apply_auth(request, &url) } else { request };
+            let response = request.send().await?;
+            if self.npm_config.is_some()
+                && matches!(
+                    response.status(),
+                    StatusCode::MOVED_PERMANENTLY
+                        | StatusCode::FOUND
+                        | StatusCode::SEE_OTHER
+                        | StatusCode::TEMPORARY_REDIRECT
+                        | StatusCode::PERMANENT_REDIRECT
+                )
+                && let Some(location) = response.headers().get(reqwest::header::LOCATION)
+            {
+                if redirects == Self::MAX_NPM_REDIRECTS {
+                    return Err(Error::InvalidArgument(
+                        "too many package registry redirects".into(),
+                    ));
+                }
+                let location = location.to_str().map_err(|_| {
+                    Error::InvalidArgument("invalid package registry redirect location".into())
+                })?;
+                let next_url = response.url().join(location).map_err(|_| {
+                    Error::InvalidArgument("invalid package registry redirect location".into())
+                })?;
+                // Match reqwest's existing behavior: credentials removed on a
+                // cross-origin redirect must not return later in the chain.
+                if next_url.origin() != response.url().origin() {
+                    allow_auth = false;
+                }
+                url = next_url.to_string();
+                continue;
+            }
+            return Ok(response.error_for_status()?);
+        }
+        unreachable!("the redirect limit returns before the loop can end")
     }
 
     /// Get raw bytes from a URL
@@ -53,15 +144,62 @@ impl HttpClient {
     /// * `Ok(Vec<u8>)` - The raw bytes from the response
     /// * `Err(e)` - If the request fails
     pub async fn get_bytes(&self, url: &str) -> Result<Vec<u8>, Error> {
+        self.fetch_bytes(url, None).await
+    }
+
+    /// Get raw bytes from a URL, showing a progress bar while they download
+    ///
+    /// The `message` is displayed alongside the progress bar (e.g. "Downloading
+    /// vite-plus@1.0.0..."), shown only on a TTY and outside CI so
+    /// piped/non-interactive output stays clean.
+    ///
+    /// # Arguments
+    ///
+    /// * `url` - The URL to fetch bytes from
+    /// * `message` - Message shown alongside the progress bar
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(Vec<u8>)` - The raw bytes from the response
+    /// * `Err(e)` - If the request fails
+    pub async fn download_bytes(&self, url: &str, message: &str) -> Result<Vec<u8>, Error> {
+        let progress = Progress::download(message);
+        self.fetch_bytes(url, progress.as_ref().map(Progress::bar)).await
+    }
+
+    /// Internal helper to read a response body into memory.
+    async fn fetch_bytes(
+        &self,
+        url: &str,
+        progress: Option<&ProgressBar>,
+    ) -> Result<Vec<u8>, Error> {
         tracing::debug!("Fetching bytes from: {}", url);
 
         let client = vp_shared::shared_http_client()?;
 
         // Read the body inside the retry so a mid-body connection drop gets
-        // retried instead of failing outright, like `download_file`.
-        let bytes = (|| async {
+        // retried instead of failing outright, like `download_file`. The
+        // progress position is reset at the start of every attempt so a
+        // retried download doesn't double-count bytes.
+        (|| async {
             let response = client.get(url).send().await?.error_for_status()?;
-            Ok::<_, Error>(response.bytes().await?)
+            if let Some(pb) = progress {
+                pb.set_position(0);
+                if let Some(size) = response.content_length() {
+                    pb.set_length(size);
+                }
+            }
+
+            let mut bytes = Vec::new();
+            let mut stream = response.bytes_stream();
+            while let Some(chunk_result) = stream.next().await {
+                let chunk = chunk_result?;
+                if let Some(pb) = progress {
+                    pb.inc(chunk.len() as u64);
+                }
+                bytes.extend_from_slice(&chunk);
+            }
+            Ok::<_, Error>(bytes)
         })
         .retry(
             ExponentialBuilder::default()
@@ -69,9 +207,7 @@ impl HttpClient {
                 .with_min_delay(Duration::from_millis(self.min_delay))
                 .with_max_times(self.max_times),
         )
-        .await?;
-
-        Ok(bytes.to_vec())
+        .await
     }
 
     /// Get JSON data from a URL
@@ -116,13 +252,10 @@ impl HttpClient {
     ) -> Result<T, Error> {
         tracing::debug!("Fetching JSON from: {} (accept: {:?})", url, accept);
 
-        let client = vp_shared::shared_http_client()?;
+        let client = self.request_client()?;
         (|| async {
-            let mut request = client.get(url);
-            if let Some(accept) = accept {
-                request = request.header(reqwest::header::ACCEPT, accept);
-            }
-            let response = request.send().await?.error_for_status()?;
+            let timeout = self.npm_config.as_ref().map(|_| vp_shared::request_timeout());
+            let response = self.send_get(client, url, accept, timeout).await?;
             Ok::<T, Error>(response.json::<T>().await?)
         })
         .retry(
@@ -131,15 +264,22 @@ impl HttpClient {
                 .with_min_delay(Duration::from_millis(self.min_delay))
                 .with_max_times(self.max_times),
         )
+        .when(|error| !is_not_found(error))
         .await
     }
 
     /// Download a file to a specified path
     ///
+    /// The optional `message` is displayed alongside a progress bar (e.g. "Downloading
+    /// pnpm v10.0.0..."), shown only on a TTY and outside CI so piped/non-interactive
+    /// output stays clean. Pass `None` for downloads that shouldn't surface progress
+    /// (e.g. small metadata probes).
+    ///
     /// # Arguments
     ///
     /// * `url` - The URL of the file to download
     /// * `target_path` - The path where the file will be saved
+    /// * `message` - Optional message shown alongside the progress bar
     ///
     /// # Returns
     ///
@@ -149,19 +289,42 @@ impl HttpClient {
         &self,
         url: &str,
         target_path: impl AsRef<Path>,
+        message: Option<&str>,
     ) -> Result<(), Error> {
         let target_path = target_path.as_ref();
         tracing::debug!("Downloading {} to {:?}", url, target_path);
 
-        let client = vp_shared::shared_http_client()?;
+        let client = self.request_client()?;
+
+        // Progress bar (only in TTY and not in CI). Built once and reused across
+        // retry attempts; its position is reset at the start of every attempt so
+        // a retried download doesn't double-count bytes.
+        let progress = message.and_then(Progress::download);
 
         // Make the request *and* the body stream a single retried unit. Doing
         // the request inline (instead of calling `self.get`) avoids a double
         // retry layer. A truncated download (bytes written != advertised
         // Content-Length) returns an error so the retry re-downloads.
-        (|| async {
-            let response = client.get(url).send().await?.error_for_status()?;
-            Self::write_response_to_file(response, target_path).await
+        //
+        // Tarballs are large, so the request gets the longer, configurable
+        // download budget instead of the shared client's 2-minute default —
+        // a slow-but-steady transfer must be allowed to finish.
+        let timeout = vp_shared::download_timeout();
+        let result = (|| async {
+            let response = self.send_get(client, url, None, Some(timeout)).await?;
+            if let Some(ref pb) = progress {
+                let pb = pb.bar();
+                pb.set_position(0);
+                if let Some(size) = response.content_length() {
+                    pb.set_length(size);
+                }
+            }
+            Self::write_response_to_file(
+                response,
+                target_path,
+                progress.as_ref().map(Progress::bar),
+            )
+            .await
         })
         .retry(
             ExponentialBuilder::default()
@@ -169,7 +332,10 @@ impl HttpClient {
                 .with_min_delay(Duration::from_millis(self.min_delay))
                 .with_max_times(self.max_times),
         )
-        .await?;
+        .await;
+
+        drop(progress);
+        result?;
 
         tracing::debug!("Download completed: {:?}", target_path);
         Ok(())
@@ -180,7 +346,11 @@ impl HttpClient {
     /// Captures the advertised `Content-Length` before streaming and verifies
     /// the number of bytes written matches it, so a truncated/short read
     /// surfaces as an error that the caller's retry can re-download.
-    async fn write_response_to_file(response: Response, target_path: &Path) -> Result<(), Error> {
+    async fn write_response_to_file(
+        response: Response,
+        target_path: &Path,
+        progress: Option<&ProgressBar>,
+    ) -> Result<(), Error> {
         let content_length = response.content_length();
 
         // Create the target file
@@ -192,6 +362,9 @@ impl HttpClient {
         while let Some(chunk_result) = stream.next().await {
             let chunk = chunk_result?;
             bytes_written += chunk.len() as u64;
+            if let Some(pb) = progress {
+                pb.inc(chunk.len() as u64);
+            }
             file.write_all(&chunk).await?;
         }
 
@@ -231,28 +404,91 @@ fn extract_tgz(tgz_file: impl AsRef<Path>, target_dir: impl AsRef<Path>) -> Resu
     Ok(())
 }
 
+/// Extract exactly one regular file from a tgz archive.
+///
+/// Unlike [`extract_tgz`], this function never writes an archive-controlled
+/// path or link. Use it when an integrity pin covers one file inside an
+/// unauthenticated archive.
+fn extract_tgz_file(
+    tgz_file: impl AsRef<Path>,
+    archive_file: impl AsRef<Path>,
+    target_file: impl AsRef<Path>,
+) -> Result<(), Error> {
+    let tgz_file = tgz_file.as_ref();
+    let archive_file = archive_file.as_ref();
+    let target_file = target_file.as_ref();
+    tracing::debug!("Extract {:?} from tgz {:?} to {:?}", archive_file, tgz_file, target_file);
+
+    let file = std::fs::File::open(tgz_file)?;
+    let tar_stream = GzDecoder::new(file);
+    let mut archive = Archive::new(tar_stream);
+
+    for entry in archive.entries()? {
+        let mut entry = entry?;
+        if entry.path()?.as_ref() != archive_file {
+            continue;
+        }
+        if !entry.header().entry_type().is_file() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "package archive CLI entry is not a regular file",
+            )
+            .into());
+        }
+
+        if let Some(parent) = target_file.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let mut output =
+            std::fs::OpenOptions::new().write(true).create_new(true).open(target_file)?;
+        std::io::copy(&mut entry, &mut output)?;
+        tracing::debug!("Extract tgz file finished");
+        return Ok(());
+    }
+
+    Err(std::io::Error::new(
+        std::io::ErrorKind::NotFound,
+        "package archive does not contain the expected CLI entry",
+    )
+    .into())
+}
+
 /// Download a tgz file from a URL and extract it to a target directory with optional hash verification.
 ///
 /// # Arguments
 /// * `url` - The URL of the tgz file to download.
 /// * `target_dir` - The directory to extract the tgz file to.
+/// * `archive_file` - Optional single entry to extract, as a relative path of
+///   normal components. vp ignores every other entry, and `expected_hash`
+///   covers that one file instead of the tgz.
 /// * `expected_hash` - Optional expected hash, "algorithm.hex" or SRI "algorithm-base64" (see [`verify_file_hash`])
+/// * `message` - Optional message shown above a progress bar while downloading (see [`HttpClient::download_file`])
+/// * `npm_config` - npm configuration used for the download.
 ///
 /// # Returns
 /// * `Ok(())` - If the tgz file is downloaded, verified (if hash provided) and extracted successfully.
 /// * `Err(e)` - If the tgz file is not downloaded, verified or extracted successfully.
-pub(crate) async fn download_and_extract_tgz_with_hash(
+pub(crate) async fn download_and_extract_tgz_with_hash_and_config(
     url: &str,
     target_dir: impl AsRef<Path>,
+    archive_file: Option<&Path>,
     expected_hash: Option<&str>,
+    message: Option<&str>,
+    npm_config: &NpmConfig,
 ) -> Result<(), Error> {
+    if let Some(archive_file) = archive_file
+        && (archive_file.as_os_str().is_empty()
+            || !archive_file
+                .components()
+                .all(|component| matches!(component, Component::Normal(_))))
+    {
+        return Err(Error::InvalidArgument(
+            "archive file path must be a safe relative path".into(),
+        ));
+    }
+
     let target_dir = target_dir.as_ref().to_path_buf();
-    tracing::debug!(
-        "Start download and extract {} to {:?}, expected hash: {:?}",
-        url,
-        target_dir,
-        expected_hash
-    );
+    tracing::debug!("Start download and extract {} to {:?}", url, target_dir);
 
     // This is the single retry layer for the whole download → verify → extract
     // pipeline: each attempt does one download (no nested retry — see
@@ -261,25 +497,38 @@ pub(crate) async fn download_and_extract_tgz_with_hash(
     // attempt. A 404 (version not found) and permanent config errors fail fast
     // and propagate unchanged so the caller in `package_manager.rs` can map a
     // 404 to `PackageManagerVersionNotFound`.
-    (|| async { download_and_extract_tgz_with_hash_once(url, &target_dir, expected_hash).await })
-        .retry(
-            ExponentialBuilder::default()
-                .with_jitter()
-                .with_min_delay(Duration::from_millis(500))
-                .with_max_times(3),
+    (|| async {
+        download_and_extract_tgz_once(
+            url,
+            &target_dir,
+            archive_file,
+            expected_hash,
+            message,
+            npm_config,
         )
-        .when(is_retryable_download_error)
         .await
+    })
+    .retry(
+        ExponentialBuilder::default()
+            .with_jitter()
+            .with_min_delay(Duration::from_millis(500))
+            .with_max_times(3),
+    )
+    .when(is_retryable_download_error)
+    .await
 }
 
 /// A single download → verify → extract attempt.
 ///
 /// Starts from clean state by removing and recreating `target_dir`, so a
 /// partially-extracted or corrupt prior attempt cannot interfere with a retry.
-async fn download_and_extract_tgz_with_hash_once(
+async fn download_and_extract_tgz_once(
     url: &str,
     target_dir: &Path,
+    archive_file: Option<&Path>,
     expected_hash: Option<&str>,
+    message: Option<&str>,
+    npm_config: &NpmConfig,
 ) -> Result<(), Error> {
     // Reset target directory so a partial prior attempt can't interfere.
     if fs::try_exists(target_dir).await.unwrap_or(false) {
@@ -288,25 +537,44 @@ async fn download_and_extract_tgz_with_hash_once(
     fs::create_dir_all(target_dir).await?;
 
     // Download the tgz file with a single attempt (no internal retry). The
-    // pipeline retry in `download_and_extract_tgz_with_hash` owns all retries;
+    // pipeline retry in `download_and_extract_tgz` owns all retries;
     // letting `download_file` retry here too would nest two retry layers and
     // multiply attempts (up to N×M downloads) for a persistent failure.
     let tgz_file = target_dir.join("package.tgz");
-    let client = HttpClient::with_config(0, 0);
-    client.download_file(url, &tgz_file).await?;
+    let client = HttpClient::with_npm_config(0, 0, npm_config.clone());
+    client.download_file(url, &tgz_file, message).await?;
 
-    // Verify hash if provided
-    if let Some(expected_hash) = expected_hash {
-        verify_file_hash(&tgz_file, expected_hash).await?;
+    if let Some(archive_file) = archive_file {
+        // The hash covers one entry. The rest of the archive is unauthenticated,
+        // so vp writes only that entry.
+        let target_file = target_dir.join(archive_file);
+        let tgz_file_for_extract = tgz_file.clone();
+        let archive_file_for_extract = archive_file.to_path_buf();
+        let target_file_for_extract = target_file.clone();
+        tokio::task::spawn_blocking(move || {
+            extract_tgz_file(
+                &tgz_file_for_extract,
+                &archive_file_for_extract,
+                &target_file_for_extract,
+            )
+        })
+        .await??;
+
+        if let Some(expected_hash) = expected_hash {
+            verify_file_hash(&target_file, expected_hash).await?;
+        }
+    } else {
+        if let Some(expected_hash) = expected_hash {
+            verify_file_hash(&tgz_file, expected_hash).await?;
+        }
+
+        let tgz_file_for_extract = tgz_file.clone();
+        let target_dir_for_extract = target_dir.to_path_buf();
+        tokio::task::spawn_blocking(move || {
+            extract_tgz(&tgz_file_for_extract, &target_dir_for_extract)
+        })
+        .await??;
     }
-
-    // Extract the tgz file to the target directory
-    let tgz_file_for_extract = tgz_file.clone();
-    let target_dir_for_extract = target_dir.to_path_buf();
-    tokio::task::spawn_blocking(move || {
-        extract_tgz(&tgz_file_for_extract, &target_dir_for_extract)
-    })
-    .await??;
 
     // Remove the temp file
     fs::remove_file(&tgz_file).await?;
@@ -315,7 +583,7 @@ async fn download_and_extract_tgz_with_hash_once(
 }
 
 /// Predicate for the single download → verify → extract retry in
-/// [`download_and_extract_tgz_with_hash`].
+/// [`download_and_extract_tgz`].
 ///
 /// Retries transient failures that a fresh re-download can fix; everything else
 /// fails fast:
@@ -329,17 +597,34 @@ async fn download_and_extract_tgz_with_hash_once(
 ///   from a `spawn_blocking` panic, …) is permanent and is not retried.
 fn is_retryable_download_error(err: &Error) -> bool {
     match err {
-        Error::Reqwest(e) => e.status() != Some(StatusCode::NOT_FOUND),
+        Error::Reqwest(_) => !is_not_found(err),
         Error::Io(_) | Error::IoWithPath { .. } | Error::HashMismatch { .. } => true,
         _ => false,
     }
 }
 
-/// Computes the digest of the given content using the specified algorithm.
-fn compute_digest<D: Digest>(content: &[u8]) -> Vec<u8> {
+/// A registry 404 means the package, version, or dist-tag does not exist, so retrying cannot help.
+pub(crate) fn is_not_found(err: &Error) -> bool {
+    matches!(err, Error::Reqwest(e) if e.status() == Some(StatusCode::NOT_FOUND))
+}
+
+/// Compute the digest of a file in chunks.
+///
+/// A chunked read keeps peak memory flat, because it never holds the whole
+/// artifact. `bin/yarn.js` is about 3 MB, and vp hashes it on every command
+/// that resolves a hash-pinned Yarn.
+fn digest_file<D: Digest>(file_path: &Path) -> Result<Vec<u8>, std::io::Error> {
+    let mut file = std::fs::File::open(file_path)?;
     let mut hasher = D::new();
-    hasher.update(content);
-    hasher.finalize().to_vec()
+    let mut buffer = vec![0u8; 64 * 1024];
+    loop {
+        let read = std::io::Read::read(&mut file, &mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+    Ok(hasher.finalize().to_vec())
 }
 
 /// Verify the hash of a file against an expected hash.
@@ -358,8 +643,7 @@ pub(crate) async fn verify_file_hash(
     file_path: impl AsRef<Path>,
     expected_hash: &str,
 ) -> Result<(), Error> {
-    let file_path = file_path.as_ref();
-    let content = fs::read(file_path).await?;
+    let file_path = file_path.as_ref().to_path_buf();
 
     // "algorithm.hex" carries the hash in hex, SRI "algorithm-base64" in
     // base64; hex never contains '-' and base64 never contains '.', so the
@@ -373,12 +657,19 @@ pub(crate) async fn verify_file_hash(
         return Err(Error::InvalidHashFormat(expected_hash.into()));
     };
 
-    let digest = match algorithm {
-        "sha512" => compute_digest::<Sha512>(&content),
-        "sha256" => compute_digest::<Sha256>(&content),
-        "sha224" => compute_digest::<Sha224>(&content),
-        "sha1" => compute_digest::<Sha1>(&content),
-        _ => return Err(Error::UnsupportedHashAlgorithm(algorithm.into())),
+    // Read and hash on the blocking pool. A hash of a multi-megabyte artifact
+    // is CPU-bound and stalls a runtime worker thread.
+    let algorithm_for_digest = algorithm.to_owned();
+    let digest = tokio::task::spawn_blocking(move || match algorithm_for_digest.as_str() {
+        "sha512" => digest_file::<Sha512>(&file_path).map(Some),
+        "sha256" => digest_file::<Sha256>(&file_path).map(Some),
+        "sha224" => digest_file::<Sha224>(&file_path).map(Some),
+        "sha1" => digest_file::<Sha1>(&file_path).map(Some),
+        _ => Ok(None),
+    })
+    .await??;
+    let Some(digest) = digest else {
+        return Err(Error::UnsupportedHashAlgorithm(algorithm.into()));
     };
     let actual = if separator == '-' {
         base64_simd::STANDARD.encode_to_string(&digest)
@@ -605,6 +896,290 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn npm_auth_is_sent_on_the_first_registry_requests() {
+        let server = MockServer::start();
+        let registry_url = server.base_url();
+        let registry_key = registry_url.trim_start_matches("http:");
+        let client = HttpClient {
+            max_times: 0,
+            min_delay: 0,
+            npm_config: Some(NpmConfig {
+                values: std::collections::HashMap::from([(
+                    vt_str::format!("{registry_key}/:_authtoken").to_string(),
+                    "SECRET".to_string(),
+                )]),
+            }),
+        };
+
+        let authenticated = server.mock(|when, then| {
+            when.method(GET).path("/package").header("authorization", "Bearer SECRET");
+            then.status(200)
+                .header("content-type", "application/json")
+                .json_body(serde_json::json!({ "value": true }));
+        });
+        let authenticated_download = server.mock(|when, then| {
+            when.method(GET).path("/package.tgz").header("authorization", "Bearer SECRET");
+            then.status(200).body("archive");
+        });
+        let result: serde_json::Value =
+            client.get_json(&vt_str::format!("{}/package", server.base_url())).await.unwrap();
+        let target = TempDir::new().unwrap();
+        client
+            .download_file(
+                &vt_str::format!("{}/package.tgz", server.base_url()),
+                target.path().join("package.tgz"),
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(result, serde_json::json!({ "value": true }));
+        authenticated.assert_hits(1);
+        authenticated_download.assert_hits(1);
+        assert_eq!(fs::read(target.path().join("package.tgz")).unwrap(), b"archive");
+    }
+
+    #[tokio::test]
+    async fn npm_auth_is_rechecked_on_same_origin_redirects() {
+        use tokio::{
+            io::{AsyncReadExt, AsyncWriteExt},
+            net::TcpListener,
+        };
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let mut requests = Vec::new();
+            for _ in 0..8 {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut bytes = Vec::new();
+                loop {
+                    let mut buffer = [0u8; 1024];
+                    let count = socket.read(&mut buffer).await.unwrap();
+                    assert!(count > 0, "request ended before its headers");
+                    bytes.extend_from_slice(&buffer[..count]);
+                    if bytes.ends_with(b"\r\n\r\n")
+                        || bytes.windows(4).any(|part| part == b"\r\n\r\n")
+                    {
+                        break;
+                    }
+                }
+                let request = String::from_utf8(bytes).unwrap();
+                let path = request.split_whitespace().nth(1).unwrap().to_string();
+                let has_auth = request
+                    .lines()
+                    .any(|line| line.eq_ignore_ascii_case("authorization: Bearer SECRET"));
+                let response = match path.as_str() {
+                    "/private/metadata" => {
+                        "HTTP/1.1 302 Found\r\nLocation: /public/metadata\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                    }
+                    "/public/metadata" => {
+                        "HTTP/1.1 200 OK\r\nContent-Length: 14\r\nConnection: close\r\n\r\n{\"value\":true}"
+                    }
+                    "/private/package.tgz" => {
+                        "HTTP/1.1 302 Found\r\nLocation: /public/package.tgz\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                    }
+                    "/public/package.tgz" => {
+                        "HTTP/1.1 200 OK\r\nContent-Length: 7\r\nConnection: close\r\n\r\narchive"
+                    }
+                    "/team/private/metadata" => {
+                        "HTTP/1.1 302 Found\r\nLocation: /team//private/metadata\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                    }
+                    "/team//private/metadata" => {
+                        "HTTP/1.1 200 OK\r\nContent-Length: 14\r\nConnection: close\r\n\r\n{\"value\":true}"
+                    }
+                    "/team/private/package.tgz" => {
+                        "HTTP/1.1 302 Found\r\nLocation: /team/private\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                    }
+                    "/team/private" => {
+                        "HTTP/1.1 200 OK\r\nContent-Length: 7\r\nConnection: close\r\n\r\narchive"
+                    }
+                    _ => panic!("unexpected request path: {path}"),
+                };
+                socket.write_all(response.as_bytes()).await.unwrap();
+                requests.push((path, has_auth));
+            }
+            requests
+        });
+
+        let client = HttpClient::with_npm_config(
+            0,
+            0,
+            NpmConfig {
+                values: std::collections::HashMap::from([
+                    (
+                        vt_str::format!("//{addr}/private/:_authtoken").to_string(),
+                        "SECRET".to_string(),
+                    ),
+                    (
+                        vt_str::format!("//{addr}/team/private/:_authtoken").to_string(),
+                        "SECRET".to_string(),
+                    ),
+                ]),
+            },
+        );
+        let metadata: serde_json::Value =
+            client.get_json(&vt_str::format!("http://{addr}/private/metadata")).await.unwrap();
+        let target = TempDir::new().unwrap();
+        let archive = target.path().join("package.tgz");
+        client
+            .download_file(&vt_str::format!("http://{addr}/private/package.tgz"), &archive, None)
+            .await
+            .unwrap();
+
+        assert_eq!(metadata, serde_json::json!({ "value": true }));
+        assert_eq!(fs::read(archive).unwrap(), b"archive");
+        let metadata: serde_json::Value =
+            client.get_json(&vt_str::format!("http://{addr}/team/private/metadata")).await.unwrap();
+        client
+            .download_file(
+                &vt_str::format!("http://{addr}/team/private/package.tgz"),
+                &target.path().join("boundary.tgz"),
+                None,
+            )
+            .await
+            .unwrap();
+        assert_eq!(metadata, serde_json::json!({ "value": true }));
+        assert_eq!(fs::read(target.path().join("boundary.tgz")).unwrap(), b"archive");
+        let requests =
+            tokio::time::timeout(Duration::from_secs(10), server).await.unwrap().unwrap();
+        assert_eq!(
+            requests,
+            [
+                ("/private/metadata".to_string(), true),
+                ("/public/metadata".to_string(), false),
+                ("/private/package.tgz".to_string(), true),
+                ("/public/package.tgz".to_string(), false),
+                ("/team/private/metadata".to_string(), true),
+                ("/team//private/metadata".to_string(), false),
+                ("/team/private/package.tgz".to_string(), true),
+                ("/team/private".to_string(), false),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn npm_auth_is_preserved_on_matching_redirects() {
+        let registry = MockServer::start();
+        let redirect = registry.mock(|when, then| {
+            when.method(GET).path("/private/first").header("authorization", "Bearer SECRET");
+            then.status(302).header("location", "/private/second");
+        });
+        let destination = registry.mock(|when, then| {
+            when.method(GET).path("/private/second").header("authorization", "Bearer SECRET");
+            then.status(200).json_body(serde_json::json!({ "value": true }));
+        });
+        let registry_url = registry.base_url();
+        let client = HttpClient::with_npm_config(
+            0,
+            0,
+            NpmConfig {
+                values: std::collections::HashMap::from([(
+                    vt_str::format!(
+                        "{}/private/:_authtoken",
+                        registry_url.trim_start_matches("http:")
+                    )
+                    .to_string(),
+                    "SECRET".to_string(),
+                )]),
+            },
+        );
+
+        let result: serde_json::Value =
+            client.get_json(&vt_str::format!("{registry_url}/private/first")).await.unwrap();
+        assert_eq!(result, serde_json::json!({ "value": true }));
+        redirect.assert_hits(1);
+        destination.assert_hits(1);
+    }
+
+    #[tokio::test]
+    async fn npm_tarball_download_follows_external_redirect() {
+        use tokio::{
+            io::{AsyncReadExt, AsyncWriteExt},
+            net::TcpListener,
+        };
+
+        let registry = MockServer::start();
+        let cdn = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let cdn_addr = cdn.local_addr().unwrap();
+        let cdn_request = tokio::spawn(async move {
+            let (mut socket, _) = cdn.accept().await.unwrap();
+            let mut bytes = Vec::new();
+            loop {
+                let mut buffer = [0u8; 1024];
+                let count = socket.read(&mut buffer).await.unwrap();
+                assert!(count > 0, "CDN request ended before its headers");
+                bytes.extend_from_slice(&buffer[..count]);
+                if bytes.windows(4).any(|part| part == b"\r\n\r\n") {
+                    break;
+                }
+            }
+            socket
+                .write_all(
+                    b"HTTP/1.1 200 OK\r\nContent-Length: 7\r\nConnection: close\r\n\r\narchive",
+                )
+                .await
+                .unwrap();
+            String::from_utf8(bytes).unwrap()
+        });
+        let redirect = registry.mock(|when, then| {
+            when.method(GET).path("/private/package.tgz").header("authorization", "Bearer SECRET");
+            then.status(302)
+                .header("location", vt_str::format!("http://{cdn_addr}/package.tgz").as_str());
+        });
+        let registry_url = registry.base_url();
+        let client = HttpClient::with_npm_config(
+            0,
+            0,
+            NpmConfig {
+                values: std::collections::HashMap::from([
+                    (
+                        vt_str::format!(
+                            "{}/private/:_authtoken",
+                            registry_url.trim_start_matches("http:")
+                        )
+                        .to_string(),
+                        "SECRET".to_string(),
+                    ),
+                    (
+                        vt_str::format!("//{cdn_addr}/:_authtoken").to_string(),
+                        "CDN_SECRET".to_string(),
+                    ),
+                ]),
+            },
+        );
+        let target = TempDir::new().unwrap();
+        let archive = target.path().join("package.tgz");
+        client
+            .download_file(&vt_str::format!("{registry_url}/private/package.tgz"), &archive, None)
+            .await
+            .unwrap();
+
+        redirect.assert_hits(1);
+        let cdn_request =
+            tokio::time::timeout(Duration::from_secs(10), cdn_request).await.unwrap().unwrap();
+        assert!(cdn_request.starts_with("GET /package.tgz "));
+        assert!(!cdn_request.lines().any(|line| {
+            line.split_once(':').is_some_and(|(name, _)| name.eq_ignore_ascii_case("authorization"))
+        }));
+        assert_eq!(fs::read(archive).unwrap(), b"archive");
+    }
+
+    #[test]
+    fn default_http_client_does_not_apply_npm_auth() {
+        vp_shared::ensure_tls_provider();
+        let client = HttpClient::new();
+        let request = client
+            .apply_auth(
+                reqwest::Client::new().get("https://registry.example/package"),
+                "https://registry.example/package",
+            )
+            .build()
+            .unwrap();
+        assert!(!request.headers().contains_key(reqwest::header::AUTHORIZATION));
+    }
+
+    #[tokio::test]
     async fn test_http_client_download_file() {
         let server = MockServer::start();
         let temp_dir = TempDir::new().unwrap();
@@ -620,7 +1195,7 @@ mod tests {
         let client = HttpClient::new();
         let url = vt_str::format!("{}/file.txt", server.base_url());
 
-        let result = client.download_file(&url, &target_file).await;
+        let result = client.download_file(&url, &target_file, None).await;
         assert!(result.is_ok(), "Failed to download file: {result:?}");
 
         // Verify file exists and has correct content
@@ -636,7 +1211,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let target_file = temp_dir.path().join("test.txt");
 
-        server.mock(|when, then| {
+        let mock = server.mock(|when, then| {
             when.method(GET).path("/server_error");
             then.status(500).body("Internal Server Error");
         });
@@ -645,9 +1220,11 @@ mod tests {
         let url = vt_str::format!("{}/server_error", server.base_url());
 
         // Should fail after retries
-        let result = client.download_file(&url, &target_file).await;
-        // println!("result: {:?}", result);
+        let result = client.download_file(&url, &target_file, None).await;
         assert!(result.is_err(), "Expected download to fail with 500 after retries");
+
+        // Should try 3 times, 1 for first request, 2 for retries
+        mock.assert_hits(3);
     }
 
     #[tokio::test]
@@ -665,7 +1242,15 @@ mod tests {
         });
 
         let url = vt_str::format!("{}/test-package.tgz", server.base_url());
-        let result = download_and_extract_tgz_with_hash(&url, &target_dir, None).await;
+        let result = download_and_extract_tgz_with_hash_and_config(
+            &url,
+            &target_dir,
+            None,
+            None,
+            None,
+            &NpmConfig { values: Default::default() },
+        )
+        .await;
         assert!(result.is_ok(), "Failed to download and extract: {result:?}");
 
         assert!(target_dir.join("package/bin/yarn").exists());
@@ -697,7 +1282,15 @@ mod tests {
         let target_dir = temp_dir.path().join("extracted");
         let url = vt_str::format!("{}/corrupt.tgz", server.base_url());
 
-        let result = download_and_extract_tgz_with_hash(&url, &target_dir, None).await;
+        let result = download_and_extract_tgz_with_hash_and_config(
+            &url,
+            &target_dir,
+            None,
+            None,
+            None,
+            &NpmConfig { values: Default::default() },
+        )
+        .await;
         assert!(result.is_err(), "corrupt archive should fail to extract: {result:?}");
         assert!(
             mock.hits() > 1,
@@ -724,13 +1317,38 @@ mod tests {
         let wrong_hash = "sha512.0000000000000000000000000000000000000000000000000000000000000000\
              0000000000000000000000000000000000000000000000000000000000000000";
 
-        let result = download_and_extract_tgz_with_hash(&url, &target_dir, Some(wrong_hash)).await;
+        let result = download_and_extract_tgz_with_hash_and_config(
+            &url,
+            &target_dir,
+            None,
+            Some(wrong_hash),
+            None,
+            &NpmConfig { values: Default::default() },
+        )
+        .await;
         assert!(result.is_err(), "hash mismatch should fail: {result:?}");
         assert!(
             mock.hits() > 1,
             "a hash mismatch must be retried, but it was only attempted {} time(s)",
             mock.hits()
         );
+    }
+
+    #[tokio::test]
+    async fn test_download_bytes_returns_the_body() {
+        let server = MockServer::start();
+        let body = vec![7u8; 64 * 1024];
+
+        server.mock(|when, then| {
+            when.method(GET).path("/pkg.tgz");
+            then.status(200).body(&body);
+        });
+
+        let client = HttpClient::with_config(0, 10);
+        let url = vt_str::format!("{}/pkg.tgz", server.base_url());
+        let bytes = client.download_bytes(&url, "Downloading pkg...").await.unwrap();
+
+        assert_eq!(bytes, body);
     }
 
     /// `get_bytes` used to read the body outside the retry, so a connection
@@ -797,7 +1415,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // Flaky on musl/Alpine — temp file race condition
     async fn test_verify_file_hash_sha1() {
         use sha1::Sha1;
         use sha2::Digest;
@@ -810,20 +1427,22 @@ mod tests {
         let content = b"Hello, World!";
         let mut file = tokio::fs::File::create(&test_file).await.unwrap();
         file.write_all(content).await.unwrap();
+        // Finish the background write before hashing through another file handle.
+        file.flush().await.unwrap();
 
         // Calculate expected SHA1
         let mut hasher = Sha1::new();
         hasher.update(content);
-        let expected_hash = vt_str::format!("sha1.{:x}", hasher.finalize());
+        let expected_hash = vt_str::format!("sha1.{}", hex::encode(hasher.finalize()));
 
         // Test successful verification
         let result = verify_file_hash(&test_file, &expected_hash).await;
-        assert!(result.is_ok());
+        assert!(result.is_ok(), "{result:?}");
 
         // Test failed verification
         let wrong_hash = "sha1.0000000000000000000000000000000000000000";
         let result = verify_file_hash(&test_file, wrong_hash).await;
-        assert!(result.is_err());
+        assert!(matches!(result, Err(Error::HashMismatch { .. })), "{result:?}");
     }
 
     #[tokio::test]
@@ -838,6 +1457,8 @@ mod tests {
         let content = b"Hello, World!";
         let mut file = tokio::fs::File::create(&test_file).await.unwrap();
         file.write_all(content).await.unwrap();
+        // Finish the background write before hashing through another file handle.
+        file.flush().await.unwrap();
 
         // Calculate the expected SRI (registry `dist.integrity` format)
         let digest = Sha512::digest(content);
@@ -856,7 +1477,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // Flaky on musl/Alpine — temp file race condition
     async fn test_verify_file_hash_sha224() {
         use sha2::{Digest, Sha224};
         use tokio::io::AsyncWriteExt;
@@ -868,20 +1488,22 @@ mod tests {
         let content = b"Test content for SHA224";
         let mut file = tokio::fs::File::create(&test_file).await.unwrap();
         file.write_all(content).await.unwrap();
+        // Finish the background write before hashing through another file handle.
+        file.flush().await.unwrap();
 
         // Calculate expected SHA224
         let mut hasher = Sha224::new();
         hasher.update(content);
-        let expected_hash = vt_str::format!("sha224.{:x}", hasher.finalize());
+        let expected_hash = vt_str::format!("sha224.{}", hex::encode(hasher.finalize()));
 
         // Test successful verification
         let result = verify_file_hash(&test_file, &expected_hash).await;
-        assert!(result.is_ok());
+        assert!(result.is_ok(), "{result:?}");
 
         // Test failed verification
         let wrong_hash = "sha224.00000000000000000000000000000000000000000000000000000000";
         let result = verify_file_hash(&test_file, wrong_hash).await;
-        assert!(result.is_err());
+        assert!(matches!(result, Err(Error::HashMismatch { .. })), "{result:?}");
     }
 
     #[tokio::test]
@@ -900,7 +1522,7 @@ mod tests {
         let url = vt_str::format!("{}/nonexistent", server.base_url());
 
         // Should fail with 404
-        let result = client.download_file(&url, &target_file).await;
+        let result = client.download_file(&url, &target_file, None).await;
         assert!(result.is_err(), "Expected download to fail with 404");
 
         // Should try 4 times, 1 for first request, 3 for retries

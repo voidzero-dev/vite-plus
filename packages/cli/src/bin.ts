@@ -1,7 +1,7 @@
 /**
  * Unified entry point for both the local CLI (via bin/vp) and the global CLI (via Rust vp binary).
  *
- * Global commands (create, migrate, config, staged, --version) are handled by tsdown-bundled modules.
+ * Global commands (create, migrate, sync-versions, config, hooks, staged, --version) are handled by tsdown-bundled modules.
  * All other commands are delegated to the Rust core through NAPI bindings, which
  * uses JavaScript tool resolver functions to locate tool binaries.
  *
@@ -11,6 +11,7 @@
  */
 
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { ensureBlockingStdio, run } from '../binding/index.js';
 import { maybePrintCommandHelp } from './help.ts';
@@ -20,7 +21,6 @@ import { fmt } from './resolve-fmt.ts';
 import { lint } from './resolve-lint.ts';
 import { pack } from './resolve-pack.ts';
 import { test } from './resolve-test.ts';
-import { resolveUniversalViteConfig } from './resolve-vite-config.ts';
 import { vite } from './resolve-vite.ts';
 import { accent, errorMsg, log } from './utils/terminal.ts';
 
@@ -44,12 +44,18 @@ function getErrorMessage(err: unknown): string {
 
 // Parse command line arguments
 let args = process.argv.slice(2);
+const explicitChdirMarker = process.env.VP_EXPLICIT_CHDIR;
+let explicitChdir = explicitChdirMarker === '1';
+if (explicitChdirMarker !== undefined) {
+  delete process.env.VP_EXPLICIT_CHDIR;
+}
 
 // Global `-C <dir>` flag: run as if vp was started in <dir>. The global Rust
 // CLI parses this itself and spawns bin.js with the target cwd already set;
 // this branch covers direct local-bin invocations (`pnpm exec vp -C <dir> ...`).
 // Accepts `-C dir`, `-Cdir`, and `-C=dir`, matching the clap grammar.
 if (args[0]?.startsWith('-C')) {
+  explicitChdir = true;
   const inline = args[0].length > 2;
   const dir = inline ? args[0].slice(args[0][2] === '=' ? 3 : 2) : args[1];
   if (!dir) {
@@ -101,6 +107,8 @@ if (args[0] === 'help' && args[1]) {
 }
 
 const command = args[0];
+const cliDistDir = path.dirname(fileURLToPath(import.meta.url));
+const vitePlusPackagePath = path.dirname(cliDistDir);
 
 if (maybePrintCommandHelp(args)) {
   // Help is rendered by the local CLI so it matches the installed toolchain.
@@ -108,8 +116,12 @@ if (maybePrintCommandHelp(args)) {
   await import('./create/bin.js');
 } else if (command === 'migrate') {
   await import('./migration/bin.js');
+} else if (command === 'sync-versions') {
+  await import('./sync-versions/bin.js');
 } else if (command === 'config') {
   await import('./config/bin.js');
+} else if (command === 'hooks') {
+  await import('./hooks/bin.js');
 } else if (command === '--version' || command === '-V') {
   await import('./version.js');
 } else if (command === 'staged') {
@@ -131,13 +143,24 @@ if (maybePrintCommandHelp(args)) {
     }
 
     const exitCode = await run({
+      nodeExecPath: process.execPath,
       lint,
       pack,
       fmt,
       vite,
       test,
       doc,
-      resolveUniversalViteConfig,
+      toolchainManifestPath: path.join(cliDistDir, 'toolchain.json'),
+      vitePlusPackagePath,
+      // Only task/config-metadata commands need this resolver. Importing it
+      // eagerly also loads Vitest and Vite in the parent of `vp dev`, before
+      // the separate Vite process even starts.
+      resolveUniversalViteConfig: async (err, cwd) => {
+        const { resolveUniversalViteConfig } = await import('./resolve-vite-config.js');
+        return resolveUniversalViteConfig(err, cwd);
+      },
+      nodeVersion: process.version,
+      explicitChdir,
       args: rustCliArgs,
     });
 

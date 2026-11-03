@@ -7,7 +7,7 @@ Yarn Berry bumps the package version
 ```
 ➤ YN0000: pm-version-yarn-berry@workspace:.: Bumped to 1.0.1
 
-➤ YN0000: Done in <duration> <duration>
+➤ YN0000: Done in <duration>
 ➤ YN0000: · Yarn <version>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0000: └ Completed
@@ -15,7 +15,7 @@ Yarn Berry bumps the package version
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Link step
 ➤ YN0000: └ Completed
-➤ YN0000: · Done in <duration> <duration>
+➤ YN0000: · Done in <duration>
 ```
 
 ## `vp pm version 2.0.0 --json`

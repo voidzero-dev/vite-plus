@@ -1,15 +1,14 @@
 # migration_standalone_pnpm
 
-## `vp migrate --no-interactive --no-hooks --package-manager pnpm`
+## `vp migrate --no-interactive --no-hooks`
 
 migration should work with pnpm, write overrides and peerDependencyRules to pnpm-workspace.yaml
 
 ```
 VITE+ - The Unified Toolchain for the Web
 
-Formatting code...
-
-Code formatted
+● Formatting code...
+● Code formatted
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 ✓ Dependencies installed in <duration>
@@ -40,7 +39,7 @@ catalog:
   vite: npm:@voidzero-dev/vite-plus-core@<version>
   vite-plus: <version>
 overrides:
-  vite: "catalog:"
+  vite@*: "catalog:"
 peerDependencyRules:
   allowAny:
     - vite

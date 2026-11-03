@@ -18,7 +18,7 @@ Arguments:
 Options:
   -h, --help  Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp install`
@@ -56,7 +56,7 @@ Packages: -1
 -
 
 dependencies:
-- testnpm2 1.0.1
+- testnpm2
  testnpm2 1.0.0 <- ../test-lib-pnpm
 ```
 

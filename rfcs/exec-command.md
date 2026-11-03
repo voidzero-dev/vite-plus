@@ -179,7 +179,7 @@ Based on pnpm exec behavior (reference: `exec/plugin-commands-script-runners/src
 ### Key Differences from vpx
 
 - `vp exec` prepends only `./node_modules/.bin` from the current directory — it does **not** walk up parent directories. Use `vpx` if you want monorepo root binaries.
-- `vp exec` never falls back to global vp packages or remote download — commands resolve through `node_modules/.bin` + system PATH only.
+- After the Vite+ CLI is selected, `vp exec` never falls back to globally installed executable packages or remote downloads — commands resolve through `node_modules/.bin` + system PATH only.
 
 ## Implementation Architecture
 
@@ -206,7 +206,7 @@ Route in `execute_command()`:
 Commands::Exec { args } => commands::delegate::execute(cwd, "exec", &args).await,
 ```
 
-The global CLI always delegates `exec` to the local CLI — there is no fallback path or direct execution in the global CLI. This follows the same unconditional delegation pattern as other Category C commands.
+The global CLI always delegates `exec` to the JavaScript CLI. Delegation resolves the project's local `vite-plus` first, then falls back to the globally installed `vite-plus` when no local CLI is available. When this fallback occurs inside a project, `vp` recommends migration if `vite-plus` is not declared as a dependency, or recommends installing dependencies if it is declared but unavailable. The Rust global CLI has no direct `exec` implementation.
 
 ### Local CLI
 
@@ -256,16 +256,16 @@ The following existing code is reused:
 
 ## Design Decisions
 
-### 1. Unconditional Delegation (No Global CLI Fallback)
+### 1. Local-First Delegation with Global CLI Fallback
 
-**Decision**: The global CLI always delegates `exec` to the local CLI. There is no fallback path for projects without vite-plus as a dependency.
+**Decision**: The global CLI delegates `exec` to the project-local `vite-plus` when available. Otherwise, it provides migration or installation guidance inside projects and continues with the globally installed `vite-plus` CLI.
 
 **Rationale**:
 
 - Simplifies the global CLI — no need for a direct-execution codepath
 - Consistent with how all Category C commands are dispatched
-- The local CLI has all the workspace awareness needed for `--recursive`, `--filter`, etc.
-- Projects using `vp exec` are expected to have vite-plus installed
+- The delegated CLI has all the workspace awareness needed for `--recursive`, `--filter`, etc.
+- The warning directs projects to migrate or install their declared dependencies without making the global fallback unusable
 
 ### 2. No Directory Walk-Up (Unlike vpx)
 
@@ -278,14 +278,14 @@ The following existing code is reused:
 - Walking up would blur the boundary between package-level and workspace-level binaries
 - Use `vpx` if you want walk-up behavior
 
-### 3. Workspace Features Only via Local CLI
+### 3. Workspace Features Use the Delegated CLI
 
-**Decision**: `--recursive`, `--workspace-root`, `--filter`, `--parallel`, `--reverse`, `--resume-from`, and `--report-summary` only work when vite-plus is a local dependency (local CLI handles them).
+**Decision**: `--recursive`, `--workspace-root`, `--filter`, `--parallel`, `--reverse`, `--resume-from`, and `--report-summary` are handled by the resolved `vite-plus` CLI, whether project-local or the global fallback.
 
 **Rationale**:
 
 - These features require workspace awareness from vite-task infrastructure
-- The global CLI fallback is for simple, single-directory exec
+- The project-local and globally installed CLIs use the same workspace-aware implementation
 - This is consistent with how `vp run` handles workspace features
 
 ### 4. Same Env Var Convention

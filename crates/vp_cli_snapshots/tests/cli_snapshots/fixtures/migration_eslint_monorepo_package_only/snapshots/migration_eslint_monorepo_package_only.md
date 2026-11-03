@@ -7,7 +7,7 @@ migration should warn about package-only eslint
 ```
 VITE+ - The Unified Toolchain for the Web
 
-ESLint detected in workspace packages but no root config found. Package-level ESLint must be migrated manually.
+▲ ESLint detected in workspace packages but no root config found. Package-level ESLint must be migrated manually.
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • 2 config updates applied

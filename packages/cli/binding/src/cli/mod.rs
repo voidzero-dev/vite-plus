@@ -7,6 +7,7 @@ mod app_target;
 mod execution;
 mod handler;
 mod help;
+mod lifecycle_env;
 mod resolver;
 mod script_note;
 mod types;
@@ -18,16 +19,16 @@ use cow_utils::CowUtils;
 pub(crate) use execution::resolve_and_capture_output;
 // Re-exports for lib.rs and check/mod.rs
 pub use resolver::SubcommandResolver;
-use rustc_hash::FxHashMap;
-pub(crate) use types::CapturedCommandOutput;
 pub use types::{
-    BoxedResolverFn, CliOptions, ResolveCommandResult, SynthesizableSubcommand,
+    BoxedResolverFn, CliOptions, ResolveCommandResult, SynthesizableSubcommand, ToolchainArgs,
     ViteConfigResolverFn,
 };
+pub(crate) use types::{CapturedCommandOutput, EnvMap};
 use vp_error::Error;
 pub use vp_shared::init_tracing;
-use vp_shared::{PrependOptions, env_vars, prepend_to_path_env};
+use vp_shared::{PrependOptions, env_vars, prepend_tools_to_path_env};
 use vt::{ExitStatus, Session, SessionConfig};
+use vt_casefold::EnvName;
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 use vt_str::Str;
 
@@ -47,11 +48,13 @@ async fn execute_direct_subcommand(
     subcommand: SynthesizableSubcommand,
     cwd: &AbsolutePathBuf,
     options: Option<CliOptions>,
+    explicit_chdir: bool,
 ) -> Result<ExitStatus, Error> {
     // A bare app command at a workspace root resolves its target first
     // (defaultPackage, package listing); the command then runs as if invoked
     // in the resolved directory (rfcs/cwd-flag.md).
-    let (target, workspace_root_hint) = app_target::resolve_app_target(&subcommand, cwd)?;
+    let (target, workspace_root_hint) =
+        app_target::resolve_app_target(&subcommand, cwd, explicit_chdir)?;
     let retargeted = matches!(&target, app_target::AppTarget::Dir(_));
     let cwd = match &target {
         app_target::AppTarget::Exit(status) => return Ok(*status),
@@ -74,16 +77,19 @@ async fn execute_direct_subcommand(
         SubcommandResolver::new(Arc::clone(&workspace_path))
     };
 
-    let envs: Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>> = Arc::new({
-        let mut envs: FxHashMap<Arc<OsStr>, Arc<OsStr>> = std::env::vars_os()
-            .map(|(k, v)| (Arc::from(k.as_os_str()), Arc::from(v.as_os_str())))
+    let envs: Arc<EnvMap> = Arc::new({
+        let mut envs: EnvMap = std::env::vars_os()
+            .map(|(k, v)| (EnvName::new(Arc::from(k.as_os_str())), Arc::from(v.as_os_str())))
             .collect();
         // When elicitation retargeted the command, the tool runs with the
         // target as its working directory: keep the POSIX PWD consistent,
         // like a real `cd`. Untargeted runs keep the caller's PWD verbatim
         // (it may legitimately differ from cwd through shell symlinks).
         if cfg!(unix) && retargeted {
-            envs.insert(Arc::from(OsStr::new("PWD")), Arc::from(cwd.as_path().as_os_str()));
+            envs.insert(
+                EnvName::new(Arc::from(OsStr::new("PWD"))),
+                Arc::from(cwd.as_path().as_os_str()),
+            );
         }
         envs
     });
@@ -92,6 +98,8 @@ async fn execute_direct_subcommand(
     let status = match subcommand {
         SynthesizableSubcommand::Check {
             fix,
+            quiet,
+            deny_warnings,
             no_fmt,
             no_lint,
             no_error_on_unmatched_pattern,
@@ -100,6 +108,8 @@ async fn execute_direct_subcommand(
             return crate::check::execute_check(
                 &resolver,
                 fix,
+                quiet,
+                deny_warnings,
                 no_fmt,
                 no_lint,
                 no_error_on_unmatched_pattern,
@@ -114,7 +124,6 @@ async fn execute_direct_subcommand(
                 resolve_and_execute_with_filter(
                     &resolver,
                     other,
-                    None,
                     &envs,
                     cwd,
                     FilterStream::Stdout,
@@ -125,7 +134,6 @@ async fn execute_direct_subcommand(
                 resolve_and_execute_with_filter(
                     &resolver,
                     other,
-                    None,
                     &envs,
                     cwd,
                     FilterStream::Stderr,
@@ -133,7 +141,7 @@ async fn execute_direct_subcommand(
                 )
                 .await?
             } else {
-                resolve_and_execute(&resolver, other, None, &envs, cwd).await?
+                resolve_and_execute(&resolver, other, &envs, cwd).await?
             }
         }
     };
@@ -141,21 +149,12 @@ async fn execute_direct_subcommand(
     Ok(status)
 }
 
-fn is_path_env_key(key: &OsStr) -> bool {
-    if cfg!(windows) { key.eq_ignore_ascii_case("PATH") } else { key == "PATH" }
-}
-
 fn try_prepend_to_env_path(
-    envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
+    envs: &Arc<EnvMap>,
     bin_prefix: &AbsolutePath,
-) -> Result<Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>, Error> {
-    let path_key = envs
-        .keys()
-        .find(|key| is_path_env_key(key.as_ref()))
-        .cloned()
-        .unwrap_or_else(|| Arc::from(OsStr::new("PATH")));
+) -> Result<Arc<EnvMap>, Error> {
     let current_path =
-        envs.get(&path_key).map_or_else(Default::default, |path| path.to_os_string());
+        vt::get_path_env(envs).map_or_else(Default::default, |path| path.to_os_string());
     let paths = if current_path.is_empty() {
         Vec::new()
     } else {
@@ -171,15 +170,13 @@ fn try_prepend_to_env_path(
     )
     .map_err(|error| Error::Anyhow(anyhow::Error::new(error)))?;
 
-    let mut envs = FxHashMap::clone(envs);
-    envs.insert(path_key, Arc::from(new_path.as_os_str()));
+    let mut envs = EnvMap::clone(envs);
+    // An existing PATH keeps its spelling (Windows commonly uses `Path`).
+    envs.insert(EnvName::new(Arc::from(OsStr::new("PATH"))), Arc::from(new_path.as_os_str()));
     Ok(Arc::new(envs))
 }
 
-fn prepend_to_env_path(
-    envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
-    bin_prefix: &AbsolutePath,
-) -> Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>> {
+fn prepend_to_env_path(envs: &Arc<EnvMap>, bin_prefix: &AbsolutePath) -> Arc<EnvMap> {
     match try_prepend_to_env_path(envs, bin_prefix) {
         Ok(updated_envs) => updated_envs,
         Err(error) => {
@@ -194,8 +191,8 @@ fn prepend_to_env_path(
 
 async fn envs_with_explicit_package_manager_path(
     cwd: &AbsolutePath,
-    envs: Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
-) -> Result<Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>, Error> {
+    envs: Arc<EnvMap>,
+) -> Result<Arc<EnvMap>, Error> {
     let Some(resolution) = (match vp_pm_cli::resolve_package_manager_from_package_json(cwd) {
         Ok(resolution) => resolution,
         Err(error) => {
@@ -209,7 +206,8 @@ async fn envs_with_explicit_package_manager_path(
         return Ok(envs);
     };
 
-    let (install_dir, _, _) = match vp_pm_cli::download_package_manager(
+    let (install_dir, _, _) = match vp_pm_cli::download_package_manager_for_cwd(
+        cwd,
         resolution.package_manager_type,
         &resolution.version,
         resolution.hash.as_deref(),
@@ -217,6 +215,11 @@ async fn envs_with_explicit_package_manager_path(
     .await
     {
         Ok(result) => result,
+        // A missing package manager has other causes, such as no network or an
+        // unknown version. The command still runs from PATH, so those causes
+        // stay a debug log. An integrity failure is different. If vp hides it,
+        // the user sees only "command not found" further down.
+        Err(error) if error.is_integrity_failure() => return Err(error),
         Err(error) => {
             tracing::debug!(
                 ?error,
@@ -238,6 +241,8 @@ async fn execute_vite_task_command(
     let (workspace_root, _) = vt_workspace::find_workspace_root(&cwd)?;
     let workspace_path: Arc<AbsolutePath> = workspace_root.path.into();
 
+    let node_version = options.as_ref().and_then(|o| o.node_version.clone());
+
     let resolve_vite_config_fn = options
         .as_ref()
         .map(|o| Arc::clone(&o.resolve_universal_vite_config))
@@ -257,9 +262,22 @@ async fn execute_vite_task_command(
     let mut config_loader = VitePlusConfigLoader::new(resolve_vite_config_fn);
 
     // Update PATH to include package manager bin directory BEFORE session init
-    if let Ok(pm) = vp_pm_cli::PackageManager::builder(&cwd).build().await {
-        let bin_prefix = pm.get_bin_prefix();
-        let _ = prepend_to_path_env(&bin_prefix, PrependOptions::default());
+    match vp_pm_cli::PackageManager::builder(&cwd).build().await {
+        Ok(pm) => {
+            let bin_prefix = pm.get_bin_prefix();
+            prepend_tools_to_path_env(&bin_prefix, &pm.bin_names(), PrependOptions::default())?;
+
+            // Stamp the package-manager lifecycle env (`npm_execpath`,
+            // `npm_config_user_agent`) like pnpm/npm/yarn would, so child
+            // runners inside scripts can detect the package manager (#2317).
+            // Session::init snapshots the process env, so this must also happen
+            // before it.
+            lifecycle_env::stamp_package_manager_lifecycle_env(&pm, node_version.as_deref());
+        }
+        Err(error) if error.is_integrity_failure() => return Err(error),
+        Err(error) => {
+            tracing::debug!(?error, "failed to resolve package manager for task PATH setup");
+        }
     }
 
     let session = Session::init(SessionConfig {
@@ -275,6 +293,74 @@ async fn execute_vite_task_command(
     Ok(status)
 }
 
+fn execute_toolchain_command(
+    args: ToolchainArgs,
+    options: Option<&CliOptions>,
+) -> Result<ExitStatus, Error> {
+    if args.global {
+        vp_shared::output::error("The `--global` option requires the global `vp` CLI");
+        return Ok(ExitStatus(1));
+    }
+
+    let options = options.ok_or_else(|| {
+        Error::Anyhow(anyhow::anyhow!("this CLI does not include toolchain metadata"))
+    })?;
+    let manifest_path = toolchain_manifest_path(options).ok_or_else(|| {
+        Error::Anyhow(anyhow::anyhow!("the toolchain manifest path must be absolute"))
+    })?;
+    let manifest = vp_toolchain::load_manifest(&manifest_path).map_err(anyhow::Error::new)?;
+    let version = vp_toolchain::root_version(&manifest).ok_or_else(|| {
+        Error::Anyhow(anyhow::anyhow!("toolchain manifest does not contain vite-plus"))
+    })?;
+    let source = vp_toolchain::Source {
+        scope: vp_toolchain::Scope::Local,
+        path: options.vite_plus_package_path.clone().into(),
+        vite_plus_version: version.into(),
+    };
+    let report = match vp_toolchain::build_report(&manifest, &args.tools, source) {
+        Ok(report) => report,
+        Err(vp_toolchain::ToolchainError::UnknownFilter(filter)) => {
+            let message = format!("`{filter}` is not in the Vite+ toolchain");
+            if args.json {
+                vp_shared::output::raw_stderr(&format!("error: {message}"));
+            } else {
+                vp_shared::output::error(&message);
+                vp_shared::output::raw_stderr(&format!(
+                    "hint: run `vp why {filter}` to show project dependencies"
+                ));
+            }
+            return Ok(ExitStatus(1));
+        }
+        Err(error) => return Err(anyhow::Error::new(error).into()),
+    };
+
+    let rendered = if args.json {
+        vp_toolchain::render_json(&report).map_err(anyhow::Error::new)?
+    } else {
+        vp_toolchain::render(&report)
+    };
+    vp_shared::output::raw_inline(&rendered);
+    Ok(ExitStatus::SUCCESS)
+}
+
+fn toolchain_manifest_path(options: &CliOptions) -> Option<AbsolutePathBuf> {
+    AbsolutePathBuf::new(options.toolchain_manifest_path.clone().into())
+}
+
+fn print_toolchain_why_hint(options: Option<&CliOptions>, packages: &[String]) {
+    let Some(manifest) = options
+        .and_then(toolchain_manifest_path)
+        .and_then(|path| vp_toolchain::load_manifest(&path).ok())
+    else {
+        return;
+    };
+    let Some(hint) = vp_toolchain::why_hint(&manifest, packages) else {
+        return;
+    };
+    vp_shared::output::raw_stderr("");
+    vp_shared::output::raw_stderr(&hint);
+}
+
 /// Main entry point for vite-plus CLI.
 ///
 /// # Arguments
@@ -287,6 +373,7 @@ pub async fn main(
     cwd: AbsolutePathBuf,
     options: Option<CliOptions>,
     args: Option<Vec<String>>,
+    explicit_chdir: bool,
 ) -> Result<ExitStatus, Error> {
     let raw_args: Vec<String> = args.unwrap_or_else(|| env::args().skip(1).collect());
     // The global CLI resolves aliases to their canonical names before
@@ -314,11 +401,12 @@ pub async fn main(
             // through the package manager, so redirecting those to `vpr` would
             // be wrong; and `exec` names a binary rather than a task.
             script_note::print(raw_subcommand.as_deref(), &cwd);
-            execute_direct_subcommand(subcmd, &cwd, options).await
+            execute_direct_subcommand(subcmd, &cwd, options, explicit_chdir).await
         }
         CLIArgs::ViteTask(command) => execute_vite_task_command(command, cwd, options).await,
-        CLIArgs::PackageManager(pm) => execute_pm_command(pm, &cwd).await,
+        CLIArgs::PackageManager(pm) => execute_pm_command(pm, &cwd, options.as_ref()).await,
         CLIArgs::Exec(exec_args) => crate::exec::execute(exec_args, &cwd).await,
+        CLIArgs::Toolchain(args) => execute_toolchain_command(args, options.as_ref()),
     }
 }
 
@@ -327,6 +415,7 @@ pub async fn main(
 async fn execute_pm_command(
     command: vp_pm_cli::PackageManagerCommand,
     cwd: &AbsolutePath,
+    options: Option<&CliOptions>,
 ) -> Result<ExitStatus, Error> {
     // Commands projected into the vite-plus-managed package store only work
     // in the global CLI. The local CLI has no such store, so refuse rather
@@ -334,11 +423,12 @@ async fn execute_pm_command(
     // `--node`, ignoring `--dry-run`, …).
     if command.is_managed_global() {
         return Err(Error::Anyhow(anyhow::anyhow!(
-            "Global package operations (`-g`/`--global`) are only supported by the globally-installed `vp` CLI. See https://viteplus.dev/guide/ to install it, then run the same command via the global `vp` binary.",
+            "Global package operations (`-g`/`--global`) are only supported by the globally-installed `vp` CLI. See {} to install it, then run the same command via the global `vp` binary.",
+            vp_shared::documentation_url("/guide/")
         )));
     }
-    let status = match vp_pm_cli::dispatch(cwd, command).await {
-        Ok(status) => status,
+    let result = match vp_pm_cli::dispatch_with_metadata(cwd, command).await {
+        Ok(result) => result,
         // Render `UserMessage` cleanly (no `error:` prefix) and exit non-zero —
         // matches the global CLI's `is_user_message()` branch in main.rs so the
         // friendly version-gate / usage errors look the same on both surfaces.
@@ -348,7 +438,12 @@ async fn execute_pm_command(
         }
         Err(e) => return Err(Error::Anyhow(anyhow::Error::new(e))),
     };
-    Ok(types::exit_status_from(status))
+    if result.status.success()
+        && let Some(packages) = result.why_hint_packages.as_deref()
+    {
+        print_toolchain_why_hint(options, packages);
+    }
+    Ok(types::exit_status_from(result.status))
 }
 
 #[cfg(test)]
@@ -361,14 +456,17 @@ mod tests {
         time::{SystemTime, UNIX_EPOCH},
     };
 
-    use rustc_hash::FxHashMap;
     use vt::config::UserRunConfig;
+    use vt_casefold::EnvName;
     use vt_path::AbsolutePathBuf;
 
-    use super::{envs_with_explicit_package_manager_path, prepend_to_env_path};
+    use super::{EnvMap, Error, envs_with_explicit_package_manager_path, prepend_to_env_path};
 
-    fn envs_with_path(path: &std::ffi::OsStr) -> Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>> {
-        Arc::new(FxHashMap::from_iter([(Arc::from(OsStr::new("PATH")), Arc::from(path))]))
+    fn envs_with_path(path: &std::ffi::OsStr) -> Arc<EnvMap> {
+        Arc::new(EnvMap::from_iter([(
+            EnvName::new(Arc::from(OsStr::new("PATH"))),
+            Arc::from(path),
+        )]))
     }
 
     #[test]
@@ -380,7 +478,7 @@ mod tests {
         let envs = envs_with_path(original_path.as_os_str());
 
         let updated = prepend_to_env_path(&envs, &pm_bin);
-        let path_value = updated.get(OsStr::new("PATH")).expect("PATH should exist");
+        let path_value = vt::get_path_env(&updated).expect("PATH should exist");
         let paths = std::env::split_paths(path_value).collect::<Vec<_>>();
 
         assert_eq!(paths.first().map(std::path::PathBuf::as_path), Some(pm_bin.as_path()));
@@ -395,7 +493,7 @@ mod tests {
         let envs = envs_with_path(original_path.as_os_str());
 
         let updated = prepend_to_env_path(&envs, &pm_bin);
-        let path_value = updated.get(OsStr::new("PATH")).expect("PATH should exist");
+        let path_value = vt::get_path_env(&updated).expect("PATH should exist");
         let paths = std::env::split_paths(path_value).collect::<Vec<_>>();
 
         assert_eq!(paths, vec![pm_bin.as_path().to_path_buf()]);
@@ -405,10 +503,10 @@ mod tests {
     fn creates_path_when_env_map_has_no_path() {
         let cwd = std::env::current_dir().expect("current_dir should exist");
         let pm_bin = AbsolutePathBuf::new(cwd.join("pm-bin")).expect("pm bin should be absolute");
-        let envs = Arc::new(FxHashMap::default());
+        let envs = Arc::new(EnvMap::default());
 
         let updated = prepend_to_env_path(&envs, &pm_bin);
-        let path_value = updated.get(OsStr::new("PATH")).expect("PATH should be created");
+        let path_value = vt::get_path_env(&updated).expect("PATH should be created");
         let paths = std::env::split_paths(path_value).collect::<Vec<_>>();
 
         assert_eq!(paths, vec![pm_bin.as_path().to_path_buf()]);
@@ -421,13 +519,16 @@ mod tests {
         let pm_bin = AbsolutePathBuf::new(cwd.join("pm-bin")).expect("pm bin should be absolute");
         let original_path = std::env::join_paths([old_bin.as_path()]).expect("valid PATH");
         let key = if cfg!(windows) { "Path" } else { "PATH" };
-        let envs = Arc::new(FxHashMap::from_iter([(
-            Arc::from(OsStr::new(key)),
+        let envs = Arc::new(EnvMap::from_iter([(
+            EnvName::new(Arc::from(OsStr::new(key))),
             Arc::from(original_path.as_os_str()),
         )]));
 
         let updated = prepend_to_env_path(&envs, &pm_bin);
-        let path_value = updated.get(OsStr::new(key)).expect("existing PATH key should be updated");
+        let [(path_key, path_value)] = updated.iter().collect::<Vec<_>>()[..] else {
+            panic!("the existing PATH entry should be updated in place: {updated:?}");
+        };
+        assert_eq!(path_key.inner().as_ref(), OsStr::new(key));
         let paths = std::env::split_paths(path_value).collect::<Vec<_>>();
 
         assert_eq!(paths.first().map(std::path::PathBuf::as_path), Some(pm_bin.as_path()));
@@ -453,8 +554,45 @@ mod tests {
             .await
             .expect("package manager preflight errors should not fail direct commands");
 
-        assert_eq!(updated.get(OsStr::new("PATH")), envs.get(OsStr::new("PATH")));
+        assert_eq!(vt::get_path_env(&updated), vt::get_path_env(&envs));
         fs::remove_dir_all(temp_dir).expect("temp dir should be removed");
+    }
+
+    #[tokio::test]
+    async fn stops_when_the_pinned_package_manager_fails_its_integrity_check() {
+        let suffix =
+            SystemTime::now().duration_since(UNIX_EPOCH).expect("time should be valid").as_nanos();
+        let temp_dir = std::env::temp_dir().join(format!("vite-plus-bad-hash-{suffix}"));
+        let vp_home = temp_dir.join("vp-home");
+        // VP_HOME pins <DATA> to the root, so the cached install lands here.
+        let bin_dir =
+            vp_home.join("package_manager").join("yarn").join("4.17.1").join("yarn").join("bin");
+        fs::create_dir_all(&bin_dir).expect("cached package manager should be created");
+        for shim in ["yarn", "yarn.cmd", "yarn.ps1"] {
+            fs::write(bin_dir.join(shim), "shim").expect("shim should be written");
+        }
+        fs::write(bin_dir.join("yarn.js"), "corrupt").expect("CLI should be written");
+
+        let expected_hash = format!("sha512.{}", "0".repeat(128));
+        fs::write(
+            temp_dir.join("package.json"),
+            format!(r#"{{"name":"fixture","packageManager":"yarn@4.17.1+{expected_hash}"}}"#),
+        )
+        .expect("package.json should be written");
+        let cwd = AbsolutePathBuf::new(temp_dir.clone()).expect("temp dir should be absolute");
+        let original_path = std::env::join_paths([temp_dir.join("old-bin")]).expect("valid PATH");
+        let envs = envs_with_path(original_path.as_os_str());
+
+        vp_shared::EnvConfig::with_vars_async([(vp_shared::env_vars::VP_HOME, &vp_home)], |_| async {
+            let result = envs_with_explicit_package_manager_path(&cwd, envs).await;
+
+        assert!(
+            matches!(result, Err(Error::PackageManagerHashMismatch(_))),
+            "an integrity failure must reach the user instead of a missing command: {result:?}"
+        );
+        fs::remove_dir_all(temp_dir).expect("temp dir should be removed");
+            })
+        .await;
     }
 
     #[tokio::test]
@@ -475,7 +613,7 @@ mod tests {
             .await
             .expect("missing packageManager should not error");
 
-        assert_eq!(updated.get(OsStr::new("PATH")), envs.get(OsStr::new("PATH")));
+        assert_eq!(vt::get_path_env(&updated), vt::get_path_env(&envs));
         assert_eq!(
             fs::read_to_string(temp_dir.join("package.json")).expect("package.json should exist"),
             r#"{"name":"fixture"}"#

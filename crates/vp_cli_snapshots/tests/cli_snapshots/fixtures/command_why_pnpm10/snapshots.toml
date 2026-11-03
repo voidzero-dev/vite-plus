@@ -18,4 +18,7 @@ steps = [
   { argv = ["vp", "why", "test-vite-plus-package-optional", "--no-optional"], comment = "should exclude optional dependencies", continue-on-failure = true },
   { argv = ["vp", "why", "testnpm2", "--find-by", "customFinder"], comment = "should support find-by option (pnpm-specific)", continue-on-failure = true },
   { argv = ["vp", "why", "testnpm2", "--", "--reporter=silent"], comment = "should support pass through arguments", continue-on-failure = true },
+  { argv = ["vp", "why", "--find-by", "customFinder"], comment = "Package names remain required even when a finder is supplied.", continue-on-failure = true },
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "pnpm@10.15.1"], snapshot = false },
+  { argv = ["vp", "why", "testnpm2", "--find-by", "customFinder"], comment = "Reject finders before pnpm 10.16.0.", continue-on-failure = true },
 ]

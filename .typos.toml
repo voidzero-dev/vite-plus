@@ -1,4 +1,9 @@
+[default]
+# Vitest v4 used this misspelled directory; the migrator must recognize it.
+extend-ignore-re = ['\.vitest-attachements\b']
+
 [default.extend-words]
+pn = "pn" # pnpm short alias
 ratatui = "ratatui"
 PUNICODE = "PUNICODE"
 Jod = "Jod" # Node.js v22 LTS codename
@@ -18,4 +23,6 @@ extend-exclude = [
   "packages/cli/src/oxfmt-config.ts",
   # Vendored PGP key/signature blobs: base64 armor trips the spell checker.
   "crates/vp_js_runtime/src/assets/**/*.asc",
+  # Registry recordings contain upstream signatures and integrity hashes.
+  "crates/vp_cli_snapshots/tests/cli_snapshots/registry/**/manifest.json",
 ]

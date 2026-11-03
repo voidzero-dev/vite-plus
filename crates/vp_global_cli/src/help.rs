@@ -1,29 +1,10 @@
-//! Unified help rendering for the global CLI.
-
-use std::{borrow::Cow, fmt::Write as _};
+//! Global help documents and routing.
 
 use clap::{CommandFactory, error::ErrorKind};
-use owo_colors::OwoColorize;
-
-#[derive(Clone, Debug)]
-pub struct HelpDoc {
-    pub usage: Cow<'static, str>,
-    pub summary: Vec<Cow<'static, str>>,
-    pub sections: Vec<HelpSection>,
-    pub documentation_url: Option<Cow<'static, str>>,
-}
-
-#[derive(Clone, Debug)]
-pub enum HelpSection {
-    Rows { title: Cow<'static, str>, rows: Vec<HelpRow> },
-    Lines { title: Cow<'static, str>, lines: Vec<Cow<'static, str>> },
-}
-
-#[derive(Clone, Debug)]
-pub struct HelpRow {
-    pub label: Cow<'static, str>,
-    pub description: Vec<Cow<'static, str>>,
-}
+pub use vp_cli_help::{
+    HelpDoc, HelpRow, HelpSection, accent, accent_command, print_help_doc, render_heading,
+    render_help_doc,
+};
 
 fn row(label: &'static str, description: &'static str) -> HelpRow {
     HelpRow { label: label.into(), description: vec![description.into()] }
@@ -37,129 +18,21 @@ fn section_lines(title: &'static str, lines: Vec<&'static str>) -> HelpSection {
     HelpSection::Lines { title: title.into(), lines: lines.into_iter().map(Into::into).collect() }
 }
 
-fn documentation_url_for_command_path(command_path: &[&str]) -> Option<&'static str> {
-    match command_path {
-        [] => Some("https://viteplus.dev/guide/"),
+fn documentation_url_for_command_path(command_path: &[&str]) -> Option<String> {
+    let path = match command_path {
+        [] => "/guide/",
         [
             "install" | "add" | "remove" | "update" | "dedupe" | "outdated" | "list" | "ls" | "why"
             | "info" | "view" | "show" | "link" | "unlink" | "rebuild" | "pm",
             ..,
-        ] => Some("https://viteplus.dev/guide/install"),
-        ["dlx"] => Some("https://viteplus.dev/guide/vpx"),
-        ["env", ..] => Some("https://viteplus.dev/guide/env"),
-        ["upgrade"] => Some("https://viteplus.dev/guide/upgrade"),
-        ["implode"] => Some("https://viteplus.dev/guide/implode"),
-        _ => None,
-    }
-}
-
-pub fn render_heading(title: &str) -> String {
-    let heading = format!("{title}:");
-    if !should_style_help() {
-        return heading;
-    }
-
-    if should_accent_heading(title) {
-        heading.bold().bright_blue().to_string()
-    } else {
-        heading.bold().to_string()
-    }
-}
-
-fn render_usage_value(usage: &str) -> String {
-    if should_style_help() { usage.bold().to_string() } else { usage.to_string() }
-}
-
-fn should_accent_heading(title: &str) -> bool {
-    title != "Usage"
-}
-
-fn write_documentation_footer(output: &mut String, documentation_url: &str) {
-    let _ = writeln!(output);
-    let _ = writeln!(output, "{} {documentation_url}", render_heading("Documentation"));
-}
-
-pub fn should_style_help() -> bool {
-    vp_shared::is_stdout_terminal()
-        && std::env::var_os("NO_COLOR").is_none()
-        && std::env::var("CLICOLOR").map_or(true, |value| value != "0")
-        && std::env::var("TERM").map_or(true, |term| term != "dumb")
-}
-
-fn render_rows(rows: &[HelpRow]) -> Vec<String> {
-    if rows.is_empty() {
-        return vec![];
-    }
-
-    let label_width = rows.iter().map(|row| row.label.chars().count()).max().unwrap_or(0);
-    let mut output = Vec::new();
-
-    for row in rows {
-        let mut description_iter = row.description.iter();
-        if let Some(first) = description_iter.next() {
-            output.push(format!("  {:label_width$}  {}", row.label, first));
-            for line in description_iter {
-                output.push(format!("  {:label_width$}  {}", "", line));
-            }
-        } else {
-            output.push(format!("  {}", row.label));
-        }
-    }
-
-    output
-}
-
-fn split_comment_suffix(line: &str) -> Option<(&str, &str)> {
-    line.find(" #").map(|index| line.split_at(index))
-}
-
-fn render_muted_comment_suffix(line: &str) -> String {
-    if !should_style_help() {
-        return line.to_string();
-    }
-
-    if let Some((prefix, suffix)) = split_comment_suffix(line) {
-        return format!("{}{}", prefix, suffix.bright_black());
-    }
-
-    line.to_string()
-}
-
-pub fn render_help_doc(doc: &HelpDoc) -> String {
-    let mut output = String::new();
-
-    let _ = writeln!(output, "{} {}", render_heading("Usage"), render_usage_value(&doc.usage));
-
-    if !doc.summary.is_empty() {
-        let _ = writeln!(output);
-        for line in &doc.summary {
-            let _ = writeln!(output, "{line}");
-        }
-    }
-
-    for section in &doc.sections {
-        let _ = writeln!(output);
-        match section {
-            HelpSection::Rows { title, rows } => {
-                let _ = writeln!(output, "{}", render_heading(title));
-                for line in render_rows(rows) {
-                    let _ = writeln!(output, "{line}");
-                }
-            }
-            HelpSection::Lines { title, lines } => {
-                let _ = writeln!(output, "{}", render_heading(title));
-                for line in lines {
-                    let _ = writeln!(output, "{}", render_muted_comment_suffix(line));
-                }
-            }
-        }
-    }
-
-    if let Some(documentation_url) = doc.documentation_url.as_deref() {
-        write_documentation_footer(&mut output, documentation_url);
-    }
-
-    output
+        ] => "/guide/package-management",
+        ["dlx"] => "/guide/vpx",
+        ["env", ..] => "/guide/env",
+        ["toolchain" | "upgrade"] => "/guide/upgrade",
+        ["implode"] => "/guide/implode",
+        _ => return None,
+    };
+    Some(vp_shared::documentation_url(path))
 }
 
 fn is_section_heading(line: &str) -> bool {
@@ -387,12 +260,13 @@ pub fn top_level_help_doc() -> HelpDoc {
                     row("create", "Create a new project from a template"),
                     row("migrate", "Migrate an existing project to Vite+"),
                     row("config", "Configure hooks and agent integration"),
+                    row("hooks", "Manage the Git hook dispatcher"),
                     row("staged", "Run linters on staged files"),
                     row(
                         "install, i",
                         "Install all dependencies, or add packages if package names are provided",
                     ),
-                    row("env", "Manage Node.js versions"),
+                    row("env", "Manage Node.js and package managers"),
                 ],
             ),
             section_rows(
@@ -410,7 +284,10 @@ pub fn top_level_help_doc() -> HelpDoc {
                 vec![
                     row("run", "Run tasks (also available as standalone `vpr`)"),
                     row("exec", "Execute a command from local node_modules/.bin"),
-                    row("node", "Run a Node.js script (shorthand for `env exec node`)"),
+                    row(
+                        "node",
+                        "Run plain Node.js (`env exec node`); `vpx <file>` runs TypeScript",
+                    ),
                     row("dlx", "Execute a package binary without installing it as a dependency"),
                     row("cache", "Manage the task cache"),
                 ],
@@ -443,6 +320,7 @@ pub fn top_level_help_doc() -> HelpDoc {
             section_rows(
                 "Maintain",
                 vec![
+                    row("toolchain", "Show active Vite+ tools, versions, and relationships"),
                     row("upgrade", "Update vp itself to the latest version"),
                     row("implode", "Remove vp and all related data"),
                 ],
@@ -455,34 +333,28 @@ pub fn top_level_help_doc() -> HelpDoc {
 fn env_help_doc() -> HelpDoc {
     HelpDoc {
         usage: "vp env [COMMAND]".into(),
-        summary: vec!["Manage Node.js versions".into()],
+        summary: vec!["Manage Node.js and package-manager environments".into()],
         sections: vec![
             section_rows(
                 "Setup",
                 vec![
                     row("setup", "Create or update shims in VP_HOME/bin"),
-                    row("on", "Enable managed mode - shims always use vite-plus managed Node.js"),
-                    row(
-                        "off",
-                        "Enable system-first mode - shims prefer system Node.js, fallback to managed",
-                    ),
-                    row("print", "Print shell snippet to set environment for current session"),
+                    row("on", "Enable managed mode for selected environment scopes"),
+                    row("off", "Enable system-first mode for selected environment scopes"),
+                    row("print", "Print PATH setup for the resolved environment"),
                 ],
             ),
             section_rows(
                 "Manage",
                 vec![
-                    row("default", "Set or show the global default Node.js version"),
-                    row("pin", "Pin a Node.js version in the current directory"),
-                    row(
-                        "unpin",
-                        "Remove the Node.js pin from the current directory (alias for `pin --unpin`)",
-                    ),
-                    row("use", "Use a specific Node.js version for this shell session"),
-                    row("install, i", "Install a Node.js version"),
-                    row("uninstall, uni", "Uninstall a Node.js version"),
-                    row("clean", "Remove unused managed runtimes and package manager caches"),
-                    row("exec, run", "Execute a command with a specific Node.js version"),
+                    row("default", "Set or show global environment defaults"),
+                    row("pin", "Pin Node.js and package-manager versions in the project"),
+                    row("unpin", "Remove project environment pins (alias for `pin --unpin`)"),
+                    row("use", "Activate an environment for this shell session"),
+                    row("install, i", "Install a resolved or explicit environment"),
+                    row("uninstall, uni", "Uninstall explicit component versions"),
+                    row("clean", "Remove unused runtimes and package managers"),
+                    row("exec, run", "Execute a command in a resolved or explicit environment"),
                 ],
             ),
             section_rows(
@@ -491,10 +363,10 @@ fn env_help_doc() -> HelpDoc {
                     row("current", "Show current environment information"),
                     row("doctor", "Run diagnostics and show environment status"),
                     row("which", "Show path to the tool that would be executed"),
-                    row("list, ls", "List locally installed Node.js versions"),
+                    row("list, ls", "List locally installed environment components"),
                     row(
                         "list-remote, ls-remote",
-                        "List available Node.js versions from the registry",
+                        "List available versions from component registries",
                     ),
                 ],
             ),
@@ -502,27 +374,31 @@ fn env_help_doc() -> HelpDoc {
                 "Examples",
                 vec![
                     "  Setup:",
-                    "    vp env setup                  # Create shims for node, npm, npx, corepack",
-                    "    vp env on                     # Use vite-plus managed Node.js",
-                    "    vp env print                  # Print shell snippet for this session",
+                    "    vp env setup                  # Create Node.js and package-manager shims",
+                    "    vp env on                     # Manage Node.js and package managers",
+                    "    vp env off pm                 # Prefer system package managers only",
+                    "    vp env off pnpm               # Prefer system pnpm only",
+                    "    vp env print                  # Print PATH setup for both components",
                     "",
                     "  Manage:",
-                    "    vp env pin lts                # Pin to latest LTS version",
-                    "    vp env install                # Install version from .node-version / package.json / .nvmrc",
-                    "    vp env use 20                 # Use Node.js 20 for this shell session",
-                    "    vp env use --unset            # Remove session override",
-                    "    vp env clean                  # Remove unused managed caches",
+                    "    vp env default 22.19.0        # Set the Node.js default",
+                    "    vp env default pnpm@12        # Set pnpm's default version",
+                    "    vp env pin 22.19.0            # Pin Node.js for this project",
+                    "    vp env use 22.19.0            # Use Node.js in this shell",
+                    "    vp env clean                  # Clean all unused managed versions",
                     "",
                     "  Inspect:",
                     "    vp env current                # Show current resolved environment",
                     "    vp env current --json         # JSON output for automation",
                     "    vp env doctor                 # Check environment configuration",
                     "    vp env which node             # Show which node binary will be used",
-                    "    vp env list-remote --lts      # List only LTS versions",
+                    "    vp env list node              # List only Node.js installations",
+                    "    vp env list-remote --lts      # List only Node.js LTS versions",
                     "",
                     "  Execute:",
-                    "    vp env exec --node lts npm i  # Execute 'npm i' with latest LTS",
-                    "    vp env exec node -v           # Shim mode (version auto-resolved)",
+                    "    vp env exec --node lts node -v               # Override Node.js",
+                    "    vp env exec --package-manager pnpm@12 pnpm i # Override the package manager",
+                    "    vp env exec node -v                          # Resolve both components",
                 ],
             ),
             section_lines(
@@ -554,6 +430,7 @@ fn skip_clap_unified_help(command: &str) -> bool {
         "create"
             | "migrate"
             | "config"
+            | "hooks"
             | "staged"
             | "dev"
             | "build"
@@ -637,8 +514,7 @@ pub fn maybe_print_unified_clap_subcommand_help(argv: &[String]) -> bool {
     }
 
     if command_path.len() == 1 && command_path[0] == "env" {
-        vp_shared::header::print_header();
-        println!("{}", render_help_doc(&env_help_doc()));
+        print_help_doc(&env_help_doc());
         return true;
     }
 
@@ -651,8 +527,7 @@ pub fn maybe_print_unified_clap_subcommand_help(argv: &[String]) -> bool {
 
 pub fn print_unified_clap_help_for_path(command_path: &[&str]) -> bool {
     if command_path == ["env"] {
-        vp_shared::header::print_header();
-        println!("{}", render_help_doc(&env_help_doc()));
+        print_help_doc(&env_help_doc());
         return true;
     }
 
@@ -673,8 +548,7 @@ pub fn print_unified_clap_help_for_path(command_path: &[&str]) -> bool {
         ..doc
     };
 
-    vp_shared::header::print_header();
-    println!("{}", render_help_doc(&doc));
+    print_help_doc(&doc);
     true
 }
 
@@ -683,8 +557,8 @@ mod tests {
     use super::{
         HelpDoc, documentation_url_for_command_path, has_help_flag_before_terminator,
         parse_clap_help_to_doc, parse_command_rows, parse_rows, render_help_doc,
-        should_skip_parent_help_for_unknown_direct_nested_child, split_comment_suffix,
-        split_label_and_description, strip_ansi,
+        should_skip_parent_help_for_unknown_direct_nested_child, split_label_and_description,
+        strip_ansi,
     };
 
     #[test]
@@ -851,31 +725,18 @@ Options:
     }
 
     #[test]
-    fn split_comment_suffix_extracts_command_comment() {
-        let line = "  vp env list-remote 20         # List Node.js 20.x versions";
-        let (prefix, suffix) = split_comment_suffix(line).expect("expected comment suffix");
-        assert_eq!(prefix, "  vp env list-remote 20        ");
-        assert_eq!(suffix, " # List Node.js 20.x versions");
-    }
-
-    #[test]
-    fn split_comment_suffix_returns_none_without_comment() {
-        assert!(split_comment_suffix("  vp env list").is_none());
-    }
-
-    #[test]
     fn docs_url_is_mapped_for_grouped_commands() {
         assert_eq!(
             documentation_url_for_command_path(&["add"]),
-            Some("https://viteplus.dev/guide/install")
+            Some(vp_shared::documentation_url("/guide/package-management"))
         );
         assert_eq!(
             documentation_url_for_command_path(&["env", "list"]),
-            Some("https://viteplus.dev/guide/env")
+            Some(vp_shared::documentation_url("/guide/env"))
         );
         assert_eq!(
             documentation_url_for_command_path(&["implode"]),
-            Some("https://viteplus.dev/guide/implode")
+            Some(vp_shared::documentation_url("/guide/implode"))
         );
     }
 

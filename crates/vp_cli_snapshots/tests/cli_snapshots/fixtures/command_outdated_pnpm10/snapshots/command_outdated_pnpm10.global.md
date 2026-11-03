@@ -22,7 +22,7 @@ Options:
   --filter <PATTERN>           Filter packages in monorepo
   -w, --workspace-root         Include workspace root
   -P, --prod                   Only production and optional dependencies
-  -D, --dev                    Only dev dependencies
+  -D, --dev                    Include dev dependencies
   --no-optional                Exclude optional dependencies
   --compatible                 Only show compatible versions
   --sort-by <FIELD>            Sort results by field
@@ -30,7 +30,7 @@ Options:
   --concurrency <CONCURRENCY>  Number of global package checks to run in parallel (only with -g)
   -h, --help                   Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp install`

@@ -23,7 +23,7 @@ Options:
   --json                                 Output in JSON format
   -h, --help                             Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp pm pack`

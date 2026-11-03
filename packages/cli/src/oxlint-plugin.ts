@@ -4,11 +4,13 @@ import path from 'node:path';
 import { definePlugin, defineRule } from '@oxlint/plugins';
 import type { Context, ESTree } from '@oxlint/plugins';
 
+import cliPackage from '../package.json' with { type: 'json' };
 import {
   PREFER_VITE_PLUS_IMPORTS_RULE_NAME,
   VITE_PLUS_OXLINT_PLUGIN_NAME,
 } from './oxlint-plugin-config.ts';
 import viteConfigEntryBasenames from './vite-config-entry-basenames.json' with { type: 'json' };
+import vitestV5EntryPoints from './vitest-v5-entry-points.json' with { type: 'json' };
 
 // `declare module 'vitest…'` and `declare module '@vitest/browser…'` are
 // intentionally preserved by `vp migrate` (see migration's import_rewriter and
@@ -36,6 +38,15 @@ function isVitestFamilyDeclareModuleSpecifier(specifier: string): boolean {
 // (no migrate-resolved custom path). vitest/tsdown/@vitest are unaffected.
 const VITE_CONFIG_FILE_BASENAMES = new Set(viteConfigEntryBasenames);
 
+// Keep augmentations on the upstream module whose types the shims re-export.
+function isOxlintFamilyDeclareModuleSpecifier(specifier: string): boolean {
+  return (
+    specifier === OXLINT_PACKAGE ||
+    specifier.startsWith(`${OXLINT_PACKAGE}/`) ||
+    specifier === OXLINT_PLUGINS_PACKAGE
+  );
+}
+
 function isViteSpecifier(specifier: string): boolean {
   return specifier === 'vite' || specifier.startsWith('vite/');
 }
@@ -44,9 +55,37 @@ function isViteConfigFile(filename: string): boolean {
   return VITE_CONFIG_FILE_BASENAMES.has(path.basename(filename));
 }
 
+const OXLINT_PACKAGE = 'oxlint';
+const OXLINT_PLUGINS_PACKAGE = '@oxlint/plugins';
+const OXLINT_PLUGINS_DEV_SUBPATH = 'oxlint/plugins-dev';
+const VITE_PLUS_LINT_PLUGINS = 'vite-plus/lint/plugins';
+const VITE_PLUS_LINT_PLUGINS_DEV = 'vite-plus/lint/plugins-dev';
+
+// Names outside this config surface use the legacy plugin API. Keep this list
+// in sync with the Oxlint rules in crates/vp_migration/src/import_rewriter.rs.
+const OXLINT_CONFIG_SURFACE_EXPORTS = new Set([
+  'defineConfig',
+  'AllowWarnDeny',
+  'DummyRule',
+  'DummyRuleMap',
+  'ExternalPluginEntry',
+  'ExternalPluginsConfig',
+  'OxlintConfig',
+  'OxlintEnv',
+  'OxlintGlobals',
+  'OxlintOverride',
+  'RuleCategories',
+]);
+
 function rewriteVitePlusImportSpecifier(specifier: string): string | null {
   if (specifier === 'vite') {
     return 'vite-plus';
+  }
+
+  // `vite-plus` doesn't export `rolldown` subpaths; they keep resolving through
+  // the core alias. Mirrors the migrate rewriter's exclusion in import_rewriter.rs.
+  if (specifier === 'vite/rolldown' || specifier.startsWith('vite/rolldown/')) {
+    return null;
   }
 
   if (specifier.startsWith('vite/')) {
@@ -72,8 +111,13 @@ function rewriteVitePlusImportSpecifier(specifier: string): string | null {
     return null;
   }
 
+  if (specifier in vitestV5EntryPoints) {
+    return vitestV5EntryPoints[specifier as keyof typeof vitestV5EntryPoints];
+  }
+
   if (specifier.startsWith('vitest/')) {
-    return `vite-plus/test/${specifier.slice('vitest/'.length)}`;
+    const subpath = `./test/${specifier.slice('vitest/'.length)}`;
+    return subpath in cliPackage.exports ? `vite-plus${subpath.slice(1)}` : null;
   }
 
   if (specifier === '@vitest/browser') {
@@ -97,7 +141,6 @@ function rewriteVitePlusImportSpecifier(specifier: string): string | null {
   for (const [prefix, provider] of [
     ['@vitest/browser-playwright', 'playwright'],
     ['@vitest/browser-preview', 'preview'],
-    ['@vitest/browser-webdriverio', 'webdriverio'],
   ] as const) {
     if (specifier === prefix) {
       return `vite-plus/test/${prefix.slice('@vitest/'.length)}`;
@@ -112,7 +155,34 @@ function rewriteVitePlusImportSpecifier(specifier: string): string | null {
     }
   }
 
+  // These entry points expose only plugin APIs. Bare `oxlint` also exposes
+  // config APIs, so it needs the named-binding checks below.
+  if (specifier === OXLINT_PLUGINS_PACKAGE) {
+    return VITE_PLUS_LINT_PLUGINS;
+  }
+
+  if (specifier === OXLINT_PLUGINS_DEV_SUBPATH) {
+    return VITE_PLUS_LINT_PLUGINS_DEV;
+  }
+
   return null;
+}
+
+function moduleBindingName(node: ESTree.ImportSpecifier['imported']): string {
+  return node.type === 'Identifier' ? node.name : node.value;
+}
+
+// Replacing the source affects the whole import. Require named plugin bindings
+// only: the shim has neither config exports nor a default export.
+function importsOxlintPluginApi(node: ESTree.ImportDeclaration): boolean {
+  return (
+    node.specifiers.length > 0 &&
+    node.specifiers.every(
+      (specifier) =>
+        specifier.type === 'ImportSpecifier' &&
+        !OXLINT_CONFIG_SURFACE_EXPORTS.has(moduleBindingName(specifier.imported)),
+    )
+  );
 }
 
 function quoteSpecifier(literal: ESTree.StringLiteral, replacement: string): string {
@@ -120,19 +190,41 @@ function quoteSpecifier(literal: ESTree.StringLiteral, replacement: string): str
   return `${quote}${replacement}${quote}`;
 }
 
-// Keyed by package.json path and invalidated by its mtime so a long-lived lint
-// process (editor/LSP session) re-reads the manifest after the user adds or
-// removes `@nuxt/test-utils`, instead of reusing the pre-edit decision forever.
-const nuxtTestUtilsPackageCache = new Map<
-  string,
-  { mtimeMs: number; usesNuxtTestUtils: boolean }
->();
+type PackageDependencies = {
+  name?: string;
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+  optionalDependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
+};
+
+type PackageMatchCache = Map<string, { mtimeMs: number; matches: boolean }>;
+
+// Separate decisions share the same mtime-based invalidation in editor sessions.
+const nuxtTestUtilsPackageCache: PackageMatchCache = new Map();
+const oxlintOwnerPackageCache: PackageMatchCache = new Map();
+const viteKeeperPackageCache: PackageMatchCache = new Map();
+const vitestKeeperPackageCache: PackageMatchCache = new Map();
 
 function isUpstreamVitestSpecifier(specifier: string): boolean {
   return specifier === 'vitest' || specifier.startsWith('vitest/');
 }
 
-function nearestPackageUsesNuxtTestUtils(filename: string): boolean {
+// Every specifier the migrator's vitest rules rewrite, including the legacy
+// `vite-plus/test/*` entries in the Vitest v5 entry-point map.
+function isVitestFamilySpecifier(specifier: string): boolean {
+  return (
+    isUpstreamVitestSpecifier(specifier) ||
+    specifier.startsWith('@vitest/') ||
+    specifier in vitestV5EntryPoints
+  );
+}
+
+function nearestPackageMatches(
+  filename: string,
+  cache: PackageMatchCache,
+  matchesPackage: (pkg: PackageDependencies) => boolean,
+): boolean {
   if (!path.isAbsolute(filename)) {
     return false;
   }
@@ -144,32 +236,23 @@ function nearestPackageUsesNuxtTestUtils(filename: string): boolean {
       try {
         mtimeMs = fs.statSync(packageJsonPath).mtimeMs;
       } catch {
-        // Unreadable manifest: bypass the cache entirely below. A sentinel
-        // value would collide with an entry cached during an earlier failure
-        // and pin the pre-edit decision.
+        // Bypass the cache when stat fails; a sentinel could reuse stale data.
       }
-      const cached =
-        mtimeMs === undefined ? undefined : nuxtTestUtilsPackageCache.get(packageJsonPath);
+      const cached = mtimeMs === undefined ? undefined : cache.get(packageJsonPath);
       if (cached !== undefined && cached.mtimeMs === mtimeMs) {
-        return cached.usesNuxtTestUtils;
+        return cached.matches;
       }
-      let usesNuxtTestUtils = false;
+      let matches = false;
       try {
-        const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8')) as {
-          dependencies?: Record<string, string>;
-          devDependencies?: Record<string, string>;
-          optionalDependencies?: Record<string, string>;
-        };
-        usesNuxtTestUtils = [pkg.dependencies, pkg.devDependencies, pkg.optionalDependencies].some(
-          (dependencies) => dependencies?.['@nuxt/test-utils'] !== undefined,
-        );
+        const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8')) as PackageDependencies;
+        matches = matchesPackage(pkg);
       } catch {
         // Invalid or unreadable package metadata cannot opt into the exception.
       }
       if (mtimeMs !== undefined) {
-        nuxtTestUtilsPackageCache.set(packageJsonPath, { mtimeMs, usesNuxtTestUtils });
+        cache.set(packageJsonPath, { mtimeMs, matches });
       }
-      return usesNuxtTestUtils;
+      return matches;
     }
     const parent = path.dirname(directory);
     if (parent === directory) {
@@ -179,28 +262,70 @@ function nearestPackageUsesNuxtTestUtils(filename: string): boolean {
   }
 }
 
-function maybeReportLiteral(
+function nearestPackageUsesNuxtTestUtils(filename: string): boolean {
+  return nearestPackageMatches(filename, nuxtTestUtilsPackageCache, (pkg) =>
+    [pkg.dependencies, pkg.devDependencies, pkg.optionalDependencies].some(
+      (dependencies) => dependencies?.['@nuxt/test-utils'] !== undefined,
+    ),
+  );
+}
+
+// Match the migrator's per-package skips (`get_package_rewrite_context` in
+// import_rewriter.rs). A package that depends on `vite` or `vitest` at runtime
+// or as a peer, or a published Vite plugin, runs in projects that may not use
+// Vite+, so its imports of that tool are kept. A devDependency alone does not
+// keep them.
+function dependsOnAtRuntime(pkg: PackageDependencies, name: string): boolean {
+  return [pkg.dependencies, pkg.peerDependencies].some(
+    (dependencies) => dependencies?.[name] !== undefined,
+  );
+}
+
+// `vite-plugin-*` or `unplugin-*`, after any `@scope/`, like the migrator's
+// `package_name_is_plugin`.
+function isPublishedVitePluginName(name: string | undefined): boolean {
+  if (name === undefined) {
+    return false;
+  }
+  const unscoped = name.startsWith('@') ? name.split('/')[1] : name;
+  return unscoped !== undefined && /^(vite-plugin|unplugin)-/.test(unscoped);
+}
+
+function nearestPackageKeepsVite(filename: string): boolean {
+  return nearestPackageMatches(
+    filename,
+    viteKeeperPackageCache,
+    (pkg) => dependsOnAtRuntime(pkg, 'vite') || isPublishedVitePluginName(pkg.name),
+  );
+}
+
+function nearestPackageKeepsVitest(filename: string): boolean {
+  return nearestPackageMatches(filename, vitestKeeperPackageCache, (pkg) =>
+    dependsOnAtRuntime(pkg, 'vitest'),
+  );
+}
+
+// Match the migrator's published-plugin exemption. Development-only APIs do not
+// exempt a package; optional @oxlint/plugins is a consumer runtime dependency.
+function nearestPackageOwnsOxlintApi(filename: string): boolean {
+  return nearestPackageMatches(
+    filename,
+    oxlintOwnerPackageCache,
+    (pkg) =>
+      pkg.optionalDependencies?.[OXLINT_PLUGINS_PACKAGE] !== undefined ||
+      [pkg.dependencies, pkg.peerDependencies].some(
+        (dependencies) =>
+          dependencies?.[OXLINT_PACKAGE] !== undefined ||
+          dependencies?.[OXLINT_PLUGINS_PACKAGE] !== undefined,
+      ),
+  );
+}
+
+function reportSpecifier(
   context: Context,
-  literal: ESTree.Expression | ESTree.TSModuleDeclaration['id'] | null | undefined,
-  preserveUpstreamVitest = false,
-  fileIsViteConfig = false,
-) {
-  if (!literal || literal.type !== 'Literal' || typeof literal.value !== 'string') {
-    return;
-  }
-  if (preserveUpstreamVitest && isUpstreamVitestSpecifier(literal.value)) {
-    return;
-  }
-  // Issue #2004: keep `vite`/`vite/*` imports outside config entry files.
-  if (!fileIsViteConfig && isViteSpecifier(literal.value)) {
-    return;
-  }
-
-  const replacement = rewriteVitePlusImportSpecifier(literal.value);
-  if (!replacement) {
-    return;
-  }
-
+  literal: ESTree.StringLiteral,
+  replacement: string,
+): void {
   context.report({
     node: literal,
     messageId: 'preferVitePlusImports',
@@ -212,6 +337,91 @@ function maybeReportLiteral(
       return fixer.replaceText(literal, quoteSpecifier(literal, replacement));
     },
   });
+}
+
+function isOxlintApiSpecifier(specifier: string): boolean {
+  return specifier === OXLINT_PLUGINS_PACKAGE || specifier === OXLINT_PLUGINS_DEV_SUBPATH;
+}
+
+interface ImportRewriteOptions {
+  preserveUpstreamVitest: boolean;
+  fileIsViteConfig: boolean;
+  ownsOxlintApi: boolean;
+  keepsVite: boolean;
+  keepsVitest: boolean;
+}
+
+function maybeReportLiteral(
+  context: Context,
+  literal: ESTree.Expression | ESTree.TSModuleDeclaration['id'] | null | undefined,
+  {
+    preserveUpstreamVitest,
+    fileIsViteConfig,
+    ownsOxlintApi,
+    keepsVite,
+    keepsVitest,
+  }: ImportRewriteOptions,
+): void {
+  if (!literal || literal.type !== 'Literal' || typeof literal.value !== 'string') {
+    return;
+  }
+  if (preserveUpstreamVitest && isUpstreamVitestSpecifier(literal.value)) {
+    return;
+  }
+  if (keepsVite && isViteSpecifier(literal.value)) {
+    return;
+  }
+  if (keepsVitest && isVitestFamilySpecifier(literal.value)) {
+    return;
+  }
+  // Issue #2004: keep `vite`/`vite/*` imports outside config entry files.
+  if (!fileIsViteConfig && isViteSpecifier(literal.value)) {
+    return;
+  }
+
+  const replacement = rewriteVitePlusImportSpecifier(literal.value);
+  if (!replacement) {
+    return;
+  }
+  if (ownsOxlintApi && isOxlintApiSpecifier(literal.value)) {
+    return;
+  }
+
+  reportSpecifier(context, literal, replacement);
+}
+
+// Bare `oxlint` needs named-binding checks beyond maybeReportLiteral's mapping.
+function reportLegacyOxlintPluginApiExport(
+  context: Context,
+  node: ESTree.ExportNamedDeclaration,
+  ownsOxlintApi: boolean,
+): void {
+  const literal = node.source;
+  if (!literal || literal.value !== OXLINT_PACKAGE || ownsOxlintApi) {
+    return;
+  }
+  if (node.specifiers.length === 0) {
+    return;
+  }
+  const allPluginApi = node.specifiers.every(
+    (specifier) => !OXLINT_CONFIG_SURFACE_EXPORTS.has(moduleBindingName(specifier.local)),
+  );
+  if (!allPluginApi) {
+    return;
+  }
+  reportSpecifier(context, literal, VITE_PLUS_LINT_PLUGINS);
+}
+
+function reportLegacyOxlintPluginApiImport(
+  context: Context,
+  node: ESTree.ImportDeclaration,
+  ownsOxlintApi: boolean,
+): void {
+  const literal = node.source;
+  if (literal.value !== OXLINT_PACKAGE || ownsOxlintApi || !importsOxlintPluginApi(node)) {
+    return;
+  }
+  reportSpecifier(context, literal, VITE_PLUS_LINT_PLUGINS);
 }
 
 export const preferVitePlusImportsRule = defineRule({
@@ -228,30 +438,49 @@ export const preferVitePlusImportsRule = defineRule({
     },
   },
   createOnce(context: Context) {
-    let preserveUpstreamVitest = false;
-    let fileIsViteConfig = false;
+    const options: ImportRewriteOptions = {
+      preserveUpstreamVitest: false,
+      fileIsViteConfig: false,
+      ownsOxlintApi: false,
+      keepsVite: false,
+      keepsVitest: false,
+    };
     return {
       Program() {
-        preserveUpstreamVitest = nearestPackageUsesNuxtTestUtils(context.filename);
-        fileIsViteConfig = isViteConfigFile(context.filename);
+        options.preserveUpstreamVitest = nearestPackageUsesNuxtTestUtils(context.filename);
+        options.fileIsViteConfig = isViteConfigFile(context.filename);
+        options.ownsOxlintApi = nearestPackageOwnsOxlintApi(context.filename);
+        options.keepsVite = nearestPackageKeepsVite(context.filename);
+        options.keepsVitest = nearestPackageKeepsVitest(context.filename);
       },
       ImportDeclaration(node) {
-        maybeReportLiteral(context, node.source, preserveUpstreamVitest, fileIsViteConfig);
+        maybeReportLiteral(context, node.source, options);
+        reportLegacyOxlintPluginApiImport(context, node, options.ownsOxlintApi);
       },
       ExportAllDeclaration(node) {
-        maybeReportLiteral(context, node.source, preserveUpstreamVitest, fileIsViteConfig);
+        maybeReportLiteral(context, node.source, options);
       },
       ExportNamedDeclaration(node) {
-        maybeReportLiteral(context, node.source, preserveUpstreamVitest, fileIsViteConfig);
+        maybeReportLiteral(context, node.source, options);
+        reportLegacyOxlintPluginApiExport(context, node, options.ownsOxlintApi);
       },
       ImportExpression(node) {
-        maybeReportLiteral(context, node.source, preserveUpstreamVitest, fileIsViteConfig);
+        maybeReportLiteral(context, node.source, options);
       },
       TSImportType(node) {
-        maybeReportLiteral(context, node.source, preserveUpstreamVitest, fileIsViteConfig);
+        maybeReportLiteral(context, node.source, options);
       },
       TSExternalModuleReference(node) {
-        maybeReportLiteral(context, node.expression, preserveUpstreamVitest, fileIsViteConfig);
+        // Keep import-equals declarations unchanged, matching the migrator's
+        // treatment of require calls.
+        if (
+          node.expression.type === 'Literal' &&
+          typeof node.expression.value === 'string' &&
+          isOxlintApiSpecifier(node.expression.value)
+        ) {
+          return;
+        }
+        maybeReportLiteral(context, node.expression, options);
       },
       TSModuleDeclaration(node) {
         if (node.global) {
@@ -261,11 +490,12 @@ export const preferVitePlusImportsRule = defineRule({
         if (
           id?.type === 'Literal' &&
           typeof id.value === 'string' &&
-          isVitestFamilyDeclareModuleSpecifier(id.value)
+          (isVitestFamilyDeclareModuleSpecifier(id.value) ||
+            isOxlintFamilyDeclareModuleSpecifier(id.value))
         ) {
           return;
         }
-        maybeReportLiteral(context, id, preserveUpstreamVitest, fileIsViteConfig);
+        maybeReportLiteral(context, id, options);
       },
     };
   },

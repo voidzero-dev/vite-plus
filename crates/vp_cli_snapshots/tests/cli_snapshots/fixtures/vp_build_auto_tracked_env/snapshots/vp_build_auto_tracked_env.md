@@ -6,7 +6,8 @@ first build
 
 ```
 $ vp build
-transforming...✓ 4 modules transformed.
+transforming...
+✓ 4 modules transformed.
 rendering chunks...
 computing gzip size...
 dist/index.html                <size> kB │ gzip: <size> kB
@@ -21,7 +22,8 @@ same env, cache hit
 
 ```
 $ vp build ◉ cache hit, replaying
-transforming...✓ 4 modules transformed.
+transforming...
+✓ 4 modules transformed.
 rendering chunks...
 computing gzip size...
 dist/index.html                <size> kB │ gzip: <size> kB
@@ -39,7 +41,8 @@ VITE_ env changed, cache miss (tracked via vite-task-client)
 
 ```
 $ vp build ○ cache miss: env 'VITE_GREETING' changed, executing
-transforming...✓ 4 modules transformed.
+transforming...
+✓ 4 modules transformed.
 rendering chunks...
 computing gzip size...
 dist/index.html                <size> kB │ gzip: <size> kB

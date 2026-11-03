@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import module from 'node:module';
+import path from 'node:path';
 
+import { cac } from 'cac';
 import {
   buildWithConfigs,
   resolveUserConfig,
@@ -8,8 +10,8 @@ import {
   enableDebug,
   type InlineConfig,
   type ResolvedConfig,
-} from '@voidzero-dev/vite-plus-core/pack';
-import { cac } from 'cac';
+  type TsdownHandle,
+} from 'vite/pack';
 
 import { resolveViteConfig } from './resolve-vite-config.ts';
 
@@ -128,7 +130,8 @@ cli
   })
   .option('--on-success <command>', 'Command to run on success')
   .option('--copy <dir>', 'Copy files to output dir')
-  .option('--public-dir <dir>', 'Alias for --copy, deprecated')
+  // NOTE: `--public-dir` (deprecated alias for `--copy`) was removed from the
+  // tsdown CLI in v0.23.0, so it is no longer forwarded.
   .option('--tsconfig <tsconfig>', 'Set tsconfig path')
   .option('--unbundle', 'Unbundle mode')
   .option('--root <dir>', 'Root directory of input files')
@@ -145,20 +148,22 @@ cli
       flags.envPrefix = DEFAULT_ENV_PREFIXES;
     }
 
-    async function runBuild() {
-      const viteConfig = await resolveViteConfig(process.cwd(), {
-        traverseUp: flags.config !== false,
-      });
+    async function runBuild(): Promise<TsdownHandle> {
+      const viteConfig =
+        flags.config === false
+          ? undefined
+          : await resolveViteConfig(process.cwd(), { traverseUp: true });
 
       const configDeps = new Set<string>();
-      if (viteConfig.configFile) {
-        configDeps.add(viteConfig.configFile);
+      if (viteConfig?.configFile) {
+        // Vite uses forward slashes, but watcher events use native path separators.
+        configDeps.add(path.normalize(viteConfig.configFile));
       }
 
       const configs: ResolvedConfig[] = [];
-      const packConfigs = Array.isArray(viteConfig.pack)
+      const packConfigs = Array.isArray(viteConfig?.pack)
         ? viteConfig.pack
-        : [viteConfig.pack ?? {}];
+        : [viteConfig?.pack ?? {}];
       for (const packConfig of packConfigs) {
         const merged = { ...packConfig, ...flags };
         // Keep postcss/lightningcss external to the dts bundle (see plugin doc)
@@ -167,10 +172,11 @@ cli
           merged.plugins = [...existingPlugins, externalDtsTypeOnlyPlugin()];
         }
         const resolvedConfig = await resolveUserConfig(merged, flags, configDeps);
+        resolvedConfig.forEach((config) => config.configDeps.forEach((dep) => configDeps.add(dep)));
         configs.push(...resolvedConfig);
       }
 
-      await buildWithConfigs(configs, configDeps, runBuild);
+      return buildWithConfigs(configs, configDeps, runBuild);
     }
 
     await runBuild();

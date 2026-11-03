@@ -104,7 +104,10 @@ should hit cache from sub dir
 ```
 ~/packages/array-config$ vp pack ◉ cache hit, replaying
 ℹ entry: ./src/sub/index.ts
+ℹ tsconfig: tsconfig.json
 ℹ Build start
+warn: TypeScript 7.0 does not yet have a stable API and is experimental. Some options will be unavailable.
+ℹ Emit types with typescript@7.0.2
 ℹ dist/index.mjs    <size> kB │ gzip: <size> kB
 ℹ dist/index.d.mts  <size> kB │ gzip: <size> kB
 ℹ 2 files, total: <size> kB
@@ -121,7 +124,10 @@ should hit cache from root after sub dir build
 ```
 ~/packages/array-config$ vp pack ◉ cache hit, replaying
 ℹ entry: ./src/sub/index.ts
+ℹ tsconfig: tsconfig.json
 ℹ Build start
+warn: TypeScript 7.0 does not yet have a stable API and is experimental. Some options will be unavailable.
+ℹ Emit types with typescript@7.0.2
 ℹ dist/index.mjs    <size> kB │ gzip: <size> kB
 ℹ dist/index.d.mts  <size> kB │ gzip: <size> kB
 ℹ 2 files, total: <size> kB

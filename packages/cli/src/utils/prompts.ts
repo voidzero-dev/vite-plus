@@ -1,10 +1,10 @@
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
-import semver from 'semver';
+import { coerce, isGreaterThanOrEqual } from 'verkit';
 
 import { downloadPackageManager as downloadPackageManagerBinding } from '../../binding/index.js';
 import { PackageManager } from '../types/index.ts';
 import { isPnpmIgnoredBuildsError, parseInstallGatedBuilds } from './approve-builds.ts';
-import { runCommandSilently } from './command.ts';
+import { getVpCommand, runCommandSilently } from './command.ts';
 import { reconcilePreviewBridgeRegistry } from './preview-registry.ts';
 import { getSilentSpinner, getSpinner } from './spinner.ts';
 import { accent } from './terminal.ts';
@@ -14,9 +14,9 @@ export interface CommandRunSummary {
   exitCode?: number;
   status: 'installed' | 'formatted' | 'failed' | 'skipped';
   /**
-   * pnpm packages whose build (install/postinstall) scripts were gated during
-   * the install. Only populated when `runViteInstall` is called with
-   * `detectIgnoredBuilds`. See {@link runViteInstall}.
+   * Packages whose build (install/postinstall) scripts the package manager
+   * gated during the install. Only populated when `runViteInstall` is called
+   * with `detectIgnoredBuilds`. See {@link runViteInstall}.
    */
   pendingBuilds?: string[];
 }
@@ -36,11 +36,11 @@ export function shouldIgnoreScriptsForAutoInstall(
   if (packageManager !== PackageManager.pnpm) {
     return false;
   }
-  const coerced = packageManagerVersion ? semver.coerce(packageManagerVersion)?.version : undefined;
+  const coerced = packageManagerVersion ? coerce(packageManagerVersion) : undefined;
   if (!coerced) {
     return false;
   }
-  return semver.gte(coerced, '11.0.0');
+  return isGreaterThanOrEqual(coerced, '11.0.0');
 }
 
 export function cancelAndExit(message = 'Operation cancelled', exitCode = 0): never {
@@ -80,12 +80,14 @@ export async function downloadPackageManager(
   version: string,
   interactive?: boolean,
   silent = false,
+  cwd?: string,
 ) {
   const spinner = silent ? getSilentSpinner() : getSpinner(interactive);
   spinner.start(`${packageManager}@${version} installing...`);
   const downloadResult = await downloadPackageManagerBinding({
     name: packageManager,
     version,
+    cwd,
   });
   spinner.stop(`${packageManager}@${downloadResult.version} installed`);
   return downloadResult;
@@ -100,11 +102,12 @@ export async function runViteInstall(
     packageManager?: PackageManager;
     packageManagerVersion?: string;
     /**
-     * Surface pnpm's gated build scripts instead of suppressing them. When set,
-     * the auto `--ignore-scripts` workaround is skipped (so pnpm records which
-     * packages need approval), a pnpm >= 11 `ERR_PNPM_IGNORED_BUILDS` exit is
-     * treated as a successful install (deps are on disk), and the gated package
-     * names are returned in `pendingBuilds`.
+     * Surface the package manager's gated build scripts instead of suppressing
+     * them. When set, the auto `--ignore-scripts` workaround is skipped (so
+     * pnpm records which packages need approval), a pnpm >= 11
+     * `ERR_PNPM_IGNORED_BUILDS` exit is treated as a successful install (deps
+     * are on disk), and the gated package names (pnpm, yarn, npm >= 12) are
+     * returned in `pendingBuilds`.
      */
     detectIgnoredBuilds?: boolean;
   },
@@ -142,8 +145,7 @@ export async function runViteInstall(
   const startTime = Date.now();
   spinner.start(`Installing dependencies...`);
   const { exitCode, stderr, stdout } = await runCommandSilently({
-    command: process.env.VP_CLI_BIN ?? 'vp',
-    args: ['install', ...installArgs],
+    ...getVpCommand(['install', ...installArgs]),
     cwd,
     envs: process.env,
   });
@@ -188,8 +190,7 @@ export async function runViteFmt(
   spinner.start(`Formatting code...`);
 
   const { exitCode, stderr, stdout } = await runCommandSilently({
-    command: options?.command ?? process.env.VP_CLI_BIN ?? 'vp',
-    args: [...(options?.commandArgs ?? []), 'fmt', ...(paths ?? [])],
+    ...getVpCommand([...(options?.commandArgs ?? []), 'fmt', ...(paths ?? [])], options?.command),
     cwd,
     envs: process.env,
   });

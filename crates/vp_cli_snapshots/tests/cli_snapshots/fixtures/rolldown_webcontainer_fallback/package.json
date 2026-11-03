@@ -1,0 +1,8 @@
+{
+  "name": "rolldown-webcontainer-fallback-test",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@voidzero-dev/vite-plus-core": "latest"
+  }
+}

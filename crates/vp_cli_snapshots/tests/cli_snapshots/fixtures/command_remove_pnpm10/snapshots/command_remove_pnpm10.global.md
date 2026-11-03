@@ -26,7 +26,7 @@ Options:
   --dry-run             Preview what would be removed without actually removing (only with -g)
   -h, --help            Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp remove`
@@ -116,10 +116,10 @@ Packages: -2
 --
 
 dependencies:
-- testnpm2 1.0.1
+- testnpm2
 
 devDependencies:
-- test-vite-plus-install 1.0.0
+- test-vite-plus-install
 
 Done in <duration> using pnpm <version>
 ```
@@ -153,18 +153,6 @@ support remove package from optional dependencies and pass through arguments
   "packageManager": "pnpm@10.18.0"
 }
 ```
-
-## `vp remove -g --dry-run testnpm2`
-
-support remove global package with dry-run
-
-**Exit code:** 1
-
-```
-Failed to uninstall testnpm2: Package testnpm2 is not installed
-```
-
-*(skipped 1 step(s) to the next line boundary: step failed)*
 
 ## `vp rm --stream foo`
 

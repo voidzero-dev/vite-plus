@@ -1,0 +1,9 @@
+[[case]]
+name = "install_package_manager_default"
+vp = ["local", "global"]
+comment = "An unconfigured project installs with pnpm without prompting or pinning the manager."
+steps = [
+  ["vp", "install", "--lockfile-only"],
+  ["vpt", "stat-file", "pnpm-lock.yaml", "--assert", "file"],
+  ["vpt", "print-file", "package.json"],
+]

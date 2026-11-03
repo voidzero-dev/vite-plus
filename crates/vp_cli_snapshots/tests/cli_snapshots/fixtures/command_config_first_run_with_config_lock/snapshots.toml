@@ -1,0 +1,11 @@
+[[case]]
+name = "command_config_first_run_with_config_lock"
+vp = "global"
+steps = [
+  { argv = ["git", "init"], snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "touch-file", ".git/config.lock"], snapshot = false, comment = "a concurrent run in a linked worktree holds the shared config lock and does not release it" },
+  { argv = ["vp", "config", "--no-agent"], tty = false, comment = "first run retries the lock, then reports the Git error", continue-on-failure = true },
+  { argv = ["vpt", "rm", ".git/config.lock"], snapshot = false, comment = "the other run releases the lock" },
+  { argv = ["vp", "config", "--no-agent"], tty = false, comment = "next run writes the git config", continue-on-failure = true },
+  { argv = ["git", "config", "--local", "core.hooksPath"], comment = "should be .vite-hooks/_", continue-on-failure = true },
+]

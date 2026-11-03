@@ -1,0 +1,17 @@
+# `vp build`, `vp dev`, and `vp preview` start Vite through its bin script,
+# which maps `--debug`/`--filter` to DEBUG/VITE_DEBUG_FILTER and starts the
+# `--profile` session.
+[[case]]
+name = "command_build_debug_filter"
+vp = "local"
+steps = [
+  { argv = ["vp", "build", "--debug", "config", "--filter", "no config file"], comment = "--debug enables the vite:config logs, and --filter keeps only the line containing 'no config file' (the resolved config dump is filtered out)" },
+]
+
+[[case]]
+name = "command_build_profile"
+vp = "local"
+steps = [
+  { argv = ["vp", "build", "--profile"], comment = "--profile records a CPU profile of the build" },
+  { argv = ["vpt", "stat-file", "vite-profile-0.cpuprofile", "--assert", "file"], comment = "the profile is written to the project root" },
+]

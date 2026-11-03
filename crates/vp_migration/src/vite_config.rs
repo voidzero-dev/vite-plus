@@ -1,6 +1,5 @@
 use std::{borrow::Cow, path::Path, sync::LazyLock};
 
-use ast_grep_config::{GlobalRules, RuleConfig, from_yaml_string};
 use ast_grep_core::{Doc, Node};
 use ast_grep_language::{LanguageExt, SupportLang};
 use regex::Regex;
@@ -15,8 +14,6 @@ pub struct MergeResult {
     pub content: String,
     /// Whether any changes were made
     pub updated: bool,
-    /// Whether the config uses a function callback
-    pub uses_function_callback: bool,
 }
 
 /// Merge a JSON configuration file into vite.config.ts or vite.config.js
@@ -38,7 +35,6 @@ pub struct MergeResult {
 /// Returns a `MergeResult` containing:
 /// - `content`: The updated vite config content
 /// - `updated`: Whether any changes were made
-/// - `uses_function_callback`: Whether the config uses a function callback
 ///
 /// # Example
 ///
@@ -99,9 +95,6 @@ fn merge_json_config_content(
     ts_config: &str,
     config_key: &str,
 ) -> Result<MergeResult, Error> {
-    // Check if the config uses a function callback (for informational purposes)
-    let uses_function_callback = check_function_callback(vite_config_content)?;
-
     // Strip "$schema" property — it's a JSON Schema annotation not valid in OxlintConfig
     let ts_config = strip_schema_property(ts_config);
 
@@ -111,7 +104,7 @@ fn merge_json_config_content(
     // Apply the transformation
     let (content, updated) = ast_grep::apply_rules(vite_config_content, &rule_yaml)?;
 
-    Ok(MergeResult { content, updated, uses_function_callback })
+    Ok(MergeResult { content, updated })
 }
 
 /// Set the value of a top-level config key in vite.config.ts/js (upsert).
@@ -165,9 +158,6 @@ fn upsert_json_config_content(
     ts_config: &str,
     config_key: &str,
 ) -> Result<MergeResult, Error> {
-    // Check if the config uses a function callback (for informational purposes)
-    let uses_function_callback = check_function_callback(vite_config_content)?;
-
     // Strip "$schema" property — it's a JSON Schema annotation not valid in the config type.
     let ts_config = strip_schema_property(ts_config);
 
@@ -229,11 +219,7 @@ fn upsert_json_config_content(
     }
 
     if edits.is_empty() {
-        return Ok(MergeResult {
-            content: vite_config_content.to_owned(),
-            updated: false,
-            uses_function_callback,
-        });
+        return Ok(MergeResult { content: vite_config_content.to_owned(), updated: false });
     }
 
     edits.sort_by_key(|(start, _, _)| std::cmp::Reverse(*start));
@@ -242,7 +228,7 @@ fn upsert_json_config_content(
         content.replace_range(start..end, &replacement);
     }
 
-    Ok(MergeResult { content, updated: true, uses_function_callback })
+    Ok(MergeResult { content, updated: true })
 }
 
 /// If `parent_object` is a tracked direct config object, mark it as already
@@ -324,6 +310,53 @@ pub fn has_config_key(vite_config_content: &str, config_key: &str) -> Result<boo
     Ok(false)
 }
 
+/// Remove a top-level key from each recognized Vite config object.
+///
+/// Unrecognized config shapes are left untouched. The returned content may
+/// retain whitespace where the property was removed; callers format generated
+/// configs after migration.
+pub fn remove_config_key(
+    vite_config_content: &str,
+    config_key: &str,
+) -> Result<MergeResult, Error> {
+    let grep = SupportLang::TypeScript.ast_grep(vite_config_content);
+    let root = grep.root();
+    let mut edits = Vec::new();
+
+    for node in root.dfs() {
+        let matches_key = match node.kind().as_ref() {
+            "pair" => node.field("key").is_some_and(|key| pair_key_matches(&key, config_key)),
+            "shorthand_property_identifier" => node.text() == config_key,
+            _ => continue,
+        };
+        if !matches_key {
+            continue;
+        }
+        let Some(parent_object) = node.parent() else { continue };
+        if parent_object.kind() != "object" || !is_direct_recognized_config_object(&parent_object) {
+            continue;
+        }
+
+        let range = node.range();
+        edits.push((range.start, range.end));
+        if let Some(next) = node.next_all().find(|sibling| sibling.kind() != "comment")
+            && next.kind() == ","
+        {
+            let comma = next.range();
+            edits.push((comma.start, comma.end));
+        }
+    }
+
+    edits.sort_by_key(|(start, _)| std::cmp::Reverse(*start));
+    let updated = !edits.is_empty();
+    let mut content = vite_config_content.to_owned();
+    for (start, end) in edits {
+        content.replace_range(start..end, "");
+    }
+
+    Ok(MergeResult { content, updated })
+}
+
 /// Wrap safe inline Vite plugin arrays with `lazyPlugins(() => [...])`.
 ///
 /// This transform is intentionally conservative: it only touches direct
@@ -338,16 +371,10 @@ fn wrap_lazy_plugins_content(
     vite_config_content: &str,
     vite_config_path: Option<&Path>,
 ) -> Result<MergeResult, Error> {
-    let uses_function_callback = check_function_callback(vite_config_content)?;
-
     if is_commonjs_config(vite_config_content, vite_config_path)
         || has_conflicting_lazy_plugins_binding(vite_config_content)
     {
-        return Ok(MergeResult {
-            content: vite_config_content.to_owned(),
-            updated: false,
-            uses_function_callback,
-        });
+        return Ok(MergeResult { content: vite_config_content.to_owned(), updated: false });
     }
 
     let grep = SupportLang::TypeScript.ast_grep(vite_config_content);
@@ -388,11 +415,7 @@ fn wrap_lazy_plugins_content(
     }
 
     if replacements.is_empty() {
-        return Ok(MergeResult {
-            content: vite_config_content.to_owned(),
-            updated: false,
-            uses_function_callback,
-        });
+        return Ok(MergeResult { content: vite_config_content.to_owned(), updated: false });
     }
 
     replacements.sort_by_key(|(start, _, _)| std::cmp::Reverse(*start));
@@ -402,16 +425,118 @@ fn wrap_lazy_plugins_content(
     }
     content = ensure_lazy_plugins_import(&content);
 
-    Ok(MergeResult { content, updated: true, uses_function_callback })
+    Ok(MergeResult { content, updated: true })
 }
 
-fn pair_key_matches<D: Doc>(key_node: &Node<'_, D>, config_key: &str) -> bool {
+pub(crate) fn pair_key_matches<D: Doc>(key_node: &Node<'_, D>, config_key: &str) -> bool {
     let text = key_node.text();
     match key_node.kind().as_ref() {
         "property_identifier" => text == config_key,
         "string" => text.trim_matches(|c| c == '"' || c == '\'' || c == '`') == config_key,
         _ => false,
     }
+}
+
+/// Make declaration-generator selection explicit for tsdown 0.23.
+/// Only inspect config objects, leaving plugin options and computed values alone.
+pub(crate) fn rewrite_pack_dts_generators(content: &str, standalone: bool) -> String {
+    let grep = SupportLang::TypeScript.ast_grep(content);
+    let root = grep.root();
+    let mut edits = Vec::new();
+    for node in root.dfs() {
+        if node.kind() != "pair"
+            || !node.field("key").is_some_and(|key| pair_key_matches(&key, "dts"))
+        {
+            continue;
+        }
+        let Some(config) = node.parent() else { continue };
+        if !crate::pack_config::is_pack_object(&config, standalone)
+            || !crate::pack_config::can_edit_object(&config)
+            || crate::pack_config::external_skip_needs_manual_migration(&config)
+        {
+            continue;
+        }
+        let Some(options) = node.field("value").filter(|value| value.kind() == "object") else {
+            continue;
+        };
+        if !crate::pack_config::can_edit_object(&options) {
+            continue;
+        }
+        let children: Vec<_> = options.children().collect();
+        // A spread, computed key, or dynamic selector can affect precedence.
+        if children.iter().any(|child| {
+            child.kind() == "spread_element"
+                || child.kind() == "method_definition"
+                || child.kind() == "shorthand_property_identifier"
+                    && matches!(child.text().as_ref(), "tsgo" | "oxc")
+                || child.field("key").is_some_and(|key| key.kind() == "computed_property_name")
+                || (child.field("key").is_some_and(|key| {
+                    pair_key_matches(&key, "tsgo") || pair_key_matches(&key, "oxc")
+                }) && child.field("value").is_some_and(|value| {
+                    !matches!(value.kind().as_ref(), "true" | "false" | "object")
+                }))
+        }) {
+            continue;
+        }
+        let has_generator = children.iter().any(|child| {
+            child.field("key").is_some_and(|key| pair_key_matches(&key, "generator"))
+                || child.kind() == "shorthand_property_identifier" && child.text() == "generator"
+        });
+        let mut generator = None;
+        let mut boolean_options = Vec::new();
+        for (index, child) in children.iter().enumerate() {
+            let Some(key) = child.field("key") else { continue };
+            let name = if pair_key_matches(&key, "tsgo") {
+                "tsgo"
+            } else if pair_key_matches(&key, "oxc") {
+                "oxc"
+            } else {
+                continue;
+            };
+            let Some(value) = child.field("value") else { continue };
+            if !matches!(value.kind().as_ref(), "true" | "false" | "object") {
+                continue;
+            }
+            if value.kind() != "false" && (generator.is_none() || name == "tsgo") {
+                generator = Some((index, name));
+            }
+            if value.kind() != "object" {
+                boolean_options.push(index);
+            }
+        }
+        if !has_generator
+            && let Some((index, name)) = generator
+            && children[index].field("value").is_some_and(|value| value.kind() == "object")
+        {
+            let start = options.range().start + 1;
+            edits.push((start..start, format!(" generator: '{name}',")));
+        }
+        for index in boolean_options {
+            let child = &children[index];
+            if !has_generator
+                && let Some((selected, name)) = generator
+                && selected == index
+            {
+                if let (Some(key), Some(value)) = (child.field("key"), child.field("value")) {
+                    edits.push((key.range(), "generator".to_owned()));
+                    edits.push((value.range(), format!("'{name}'")));
+                }
+                continue;
+            }
+            edits.push((child.range(), crate::pack_config::property_comments(child)));
+            if let Some(comma) = children[index + 1..].iter().find(|n| n.kind() != "comment")
+                && comma.kind() == ","
+            {
+                edits.push((comma.range(), String::new()));
+            }
+        }
+    }
+    edits.sort_by_key(|(range, _)| std::cmp::Reverse(range.start));
+    let mut result = content.to_owned();
+    for (range, replacement) in edits {
+        result.replace_range(range, &replacement);
+    }
+    result
 }
 
 fn is_commonjs_config(content: &str, path: Option<&Path>) -> bool {
@@ -495,7 +620,7 @@ static RE_NAMESPACE_LAZY_PLUGINS_IMPORT: LazyLock<Regex> =
 /// returns inside nested functions (e.g. an inline plugin's `config()` hook)
 /// do NOT match, so destructive edits never touch them. Used by transforms
 /// that rewrite in place (`wrap_lazy_plugins`, `upsert_json_config`).
-fn is_direct_recognized_config_object<D: Doc>(object_node: &Node<'_, D>) -> bool {
+pub(crate) fn is_direct_recognized_config_object<D: Doc>(object_node: &Node<'_, D>) -> bool {
     let Some(parent) = object_node.parent() else { return false };
     match parent.kind().as_ref() {
         "export_statement" => true,
@@ -524,7 +649,7 @@ fn is_recognized_config_object<D: Doc>(object_node: &Node<'_, D>) -> bool {
     }
 }
 
-fn is_define_config_call<D: Doc>(call_node: &Node<'_, D>) -> bool {
+pub(crate) fn is_define_config_call<D: Doc>(call_node: &Node<'_, D>) -> bool {
     call_node.kind() == "call_expression"
         && call_node.field("function").is_some_and(|f| f.text() == "defineConfig")
 }
@@ -672,40 +797,6 @@ fn strip_import_comments(input: &str) -> String {
     output
 }
 
-/// Check if the vite config uses a function callback pattern
-fn check_function_callback(vite_config_content: &str) -> Result<bool, Error> {
-    // Match both sync and async arrow functions
-    let check_rule = r"
----
-id: check-function-callback
-language: TypeScript
-rule:
-  any:
-    - pattern: defineConfig(($PARAMS) => $BODY)
-    - pattern: defineConfig(async ($PARAMS) => $BODY)
-";
-
-    let globals = GlobalRules::default();
-    let rules: Vec<RuleConfig<SupportLang>> =
-        from_yaml_string::<SupportLang>(check_rule, &globals)?;
-
-    for rule in &rules {
-        if rule.language != SupportLang::TypeScript {
-            continue;
-        }
-
-        let grep = rule.language.ast_grep(vite_config_content);
-        let root = grep.root();
-        let matcher = &rule.matcher;
-
-        if root.find(matcher).is_some() {
-            return Ok(true);
-        }
-    }
-
-    Ok(false)
-}
-
 /// Generate the ast-grep rules YAML for merging JSON config
 ///
 /// This generates six rules:
@@ -815,12 +906,9 @@ fn indent_multiline(s: &str, spaces: usize) -> String {
     let indent = " ".repeat(spaces);
     let lines: Vec<&str> = s.lines().collect();
 
-    if lines.len() <= 1 {
-        return s.to_string();
-    }
-
     // First line doesn't get indented (it's on the same line as the key)
     // Subsequent lines get the specified indent
+    // Join even single-line input so the generated comma stays inside the YAML block.
     lines
         .iter()
         .enumerate()
@@ -861,15 +949,9 @@ fn merge_tsdown_config_content(
     vite_config_content: &str,
     tsdown_config_path: &str,
 ) -> Result<MergeResult, Error> {
-    let uses_function_callback = check_function_callback(vite_config_content)?;
-
     // Check if already migrated (idempotency check)
     if vite_config_content.contains("import tsdownConfig from") {
-        return Ok(MergeResult {
-            content: vite_config_content.to_string(),
-            updated: false,
-            uses_function_callback,
-        });
+        return Ok(MergeResult { content: vite_config_content.to_string(), updated: false });
     }
 
     // Step 1: Add import statement at the beginning
@@ -891,11 +973,62 @@ fn merge_tsdown_config_content(
     let pack_rule = generate_merge_rule("tsdownConfig", "pack");
     let (final_content, _) = ast_grep::apply_rules(&content_with_import, &pack_rule)?;
 
-    Ok(MergeResult { content: final_content, updated: true, uses_function_callback })
+    Ok(MergeResult { content: final_content, updated: true })
 }
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn test_rewrite_pack_dts_generators() {
+        for (input, standalone, expected) in [
+            (
+                "export default defineConfig({ dts: { tsgo: true, sourcemap: true } });",
+                true,
+                "export default defineConfig({ dts: { generator: 'tsgo', sourcemap: true } });",
+            ),
+            (
+                "export default { pack: [{ dts: { 'oxc': true } }, { dts: { tsgo: false } }] };",
+                false,
+                "export default { pack: [{ dts: { generator: 'oxc' } }, { dts: {  } }] };",
+            ),
+            (
+                "export default { pack: { dts: { generator: 'tsc', tsgo: true, oxc: false } } };",
+                false,
+                "export default { pack: { dts: { generator: 'tsc',   } } };",
+            ),
+            (
+                "export default defineConfig([{ dts: { oxc: true, tsgo: true } }]);",
+                true,
+                "export default defineConfig([{ dts: {  generator: 'tsgo' } }]);",
+            ),
+            (
+                "export default { pack: { dts: { tsgo: true /* keep */, sourcemap: true } } };",
+                false,
+                "export default { pack: { dts: { generator: 'tsgo' /* keep */, sourcemap: true } } };",
+            ),
+        ] {
+            let actual = super::rewrite_pack_dts_generators(input, standalone);
+            assert_eq!(actual, expected);
+            assert_eq!(super::rewrite_pack_dts_generators(&actual, standalone), actual);
+        }
+    }
+
+    #[test]
+    fn test_rewrite_pack_dts_generators_preserves_other_options() {
+        for input in [
+            "export default { plugins: [plugin({ dts: { tsgo: true } })] };",
+            "export default { test: { pack: { dts: { tsgo: true } } } };",
+            "export default { pack: { dts: { tsgo: enabled } } };",
+            "export default { pack: { dts: { tsgo: enabled, oxc: true } } };",
+            "export default { pack: { dts: { tsgo, oxc: true } } };",
+            "export default { pack: { dts: { tsgo: true, oxc } } };",
+            "export default { pack: { dts: { ...options, tsgo: true } } };",
+            "export default { pack: { dts: { [key]: value, tsgo: true } } };",
+        ] {
+            assert_eq!(super::rewrite_pack_dts_generators(input, false), input);
+        }
+    }
+
     use std::io::Write;
 
     use tempfile::tempdir;
@@ -917,6 +1050,38 @@ export default defineConfig({
         assert!(has_config_key(cfg, "lint").unwrap());
         assert!(!has_config_key(cfg, "pack").unwrap());
         assert!(!has_config_key(cfg, "staged").unwrap());
+    }
+
+    // ── remove_config_key ─────────────────────────────────────────────────
+
+    #[test]
+    fn test_remove_config_key_from_define_config() {
+        let cfg = r#"export default defineConfig({
+  pack: { exports: true },
+  lint: { options: { typeAware: true, typeCheck: true } },
+  fmt: {},
+});
+"#;
+        let result = remove_config_key(cfg, "lint").unwrap();
+
+        assert!(result.updated);
+        assert!(!result.content.contains("lint:"));
+        assert!(result.content.contains("pack: { exports: true }"));
+        assert!(result.content.contains("fmt: {}"));
+    }
+
+    #[test]
+    fn test_remove_config_key_ignores_nested_and_unrecognized_objects() {
+        for cfg in [
+            "export default defineConfig({ plugin: { lint: {} } });",
+            "export default defineConfig(() => ({ plugin: { config() { return { lint: {} } } } }));",
+            "export default defineConfig(() => config);",
+            "module.exports = { lint: {} };",
+        ] {
+            let result = remove_config_key(cfg, "lint").unwrap();
+            assert!(!result.updated);
+            assert_eq!(result.content, cfg);
+        }
     }
 
     #[test]
@@ -1146,30 +1311,6 @@ export default defineConfig({
     }
 
     #[test]
-    fn test_check_function_callback() {
-        let simple_config = r#"
-import { defineConfig } from 'vite';
-
-export default defineConfig({
-  plugins: [],
-});
-"#;
-        assert!(!check_function_callback(simple_config).unwrap());
-
-        let function_config = r#"
-import { defineConfig } from 'vite';
-
-export default defineConfig((env) => ({
-  plugins: [],
-  server: {
-    port: env.mode === 'production' ? 8080 : 3000,
-  },
-}));
-"#;
-        assert!(check_function_callback(function_config).unwrap());
-    }
-
-    #[test]
     fn test_merge_json_config_content_simple() {
         let vite_config = r#"import { defineConfig } from 'vite';
 
@@ -1196,7 +1337,6 @@ export default defineConfig({
 });"#
         );
         assert!(result.updated);
-        assert!(!result.uses_function_callback);
     }
 
     #[test]
@@ -1240,7 +1380,6 @@ export default defineConfig((env) => ({
 }"#;
 
         let result = merge_json_config_content(vite_config, oxlint_config, "lint").unwrap();
-        assert!(result.uses_function_callback);
         // Function callbacks are now supported
         assert!(result.updated);
         assert!(result.content.contains("lint:"));
@@ -1276,8 +1415,6 @@ export default defineConfig(({ command, mode, isSsrBuild, isPreview }) => {
 
         let result = merge_json_config_content(vite_config, oxlint_config, "lint").unwrap();
         println!("result: {}", result.content);
-        // Detected as function callback
-        assert!(result.uses_function_callback);
         // Now can be auto-migrated using return statement matching
         assert!(result.updated);
         // Both return statements should have lint config added
@@ -1312,8 +1449,6 @@ export default defineConfig(({ mode }) => {
 
         let result = merge_json_config_content(vite_config, oxlint_config, "lint").unwrap();
         println!("result: {}", result.content);
-        // Detected as function callback
-        assert!(result.uses_function_callback);
         // Now can be auto-migrated using return statement matching
         assert!(result.updated);
         assert!(result.content.contains("'no-console': 'warn'"));
@@ -1330,8 +1465,6 @@ export default defineConfig(async ({ command, mode }) => {
 
         let result = merge_json_config_content(vite_config, oxlint_config, "lint").unwrap();
         println!("result: {}", result.content);
-        // Detected as function callback
-        assert!(result.uses_function_callback);
         // Now can be auto-migrated using return statement matching
         assert!(result.updated);
         assert!(result.content.contains("'no-console': 'warn'"));
@@ -1387,7 +1520,6 @@ export default () =>
         let result = merge_json_config_content(vite_config, oxlint_config, "lint").unwrap();
         println!("result: {}", result.content);
         assert!(result.updated);
-        assert!(!result.uses_function_callback);
         assert!(result.content.contains("lint: {"));
         assert!(result.content.contains("'no-console': 'warn'"));
     }
@@ -1411,7 +1543,6 @@ export default () =>
         let result = merge_json_config_content(vite_config, oxlint_config, "lint").unwrap();
         println!("result: {}", result.content);
         assert!(result.updated);
-        assert!(!result.uses_function_callback);
         assert!(result.content.contains("lint: {"));
         assert!(result.content.contains("'no-console': 'warn'"));
         assert!(result.content.contains("server: {"));
@@ -1429,7 +1560,6 @@ export default {
         let result = merge_json_config_content(vite_config, oxlint_config, "lint").unwrap();
         println!("result: {}", result.content);
         assert!(result.updated);
-        assert!(!result.uses_function_callback);
         assert!(result.content.contains("lint: {"));
         assert!(result.content.contains("'no-console': 'warn'"));
         assert!(result.content.contains("server: {"));
@@ -1487,7 +1617,6 @@ export default defineConfig(({ mode }) => {
 })"#
         );
         assert!(result.updated);
-        assert!(result.uses_function_callback);
     }
 
     #[test]
@@ -1734,6 +1863,31 @@ export default defineConfig({});"#;
         let input = "first\nsecond\nthird";
         let expected = "first\n    second\n    third";
         assert_eq!(indent_multiline(input, 4), expected);
+    }
+
+    #[test]
+    fn test_indent_multiline_trailing_line_endings() {
+        for ending in ["\n", "\r\n"] {
+            assert_eq!(indent_multiline(&format!("single line{ending}"), 4), "single line");
+            assert_eq!(
+                indent_multiline(&format!("first{ending}second{ending}"), 4),
+                "first\n    second"
+            );
+        }
+    }
+
+    #[test]
+    fn test_merge_single_line_json_config_with_trailing_line_endings() {
+        let vite_config = "export default defineConfig({ plugins: [] });";
+        for ending in ["", "\n", "\r\n"] {
+            let oxfmt_config = format!("{{\"singleQuote\":true}}{ending}");
+            let result = merge_json_config_content(vite_config, &oxfmt_config, "fmt").unwrap();
+            assert!(result.updated);
+            assert_eq!(
+                result.content,
+                "export default defineConfig({\n  fmt: {\"singleQuote\":true},\n  plugins: []\n});"
+            );
+        }
     }
 
     #[test]
@@ -2210,7 +2364,6 @@ export default defineConfig({
 
         let result = merge_tsdown_config_content(vite_config, "./tsdown.config.ts").unwrap();
         assert!(result.updated);
-        assert!(!result.uses_function_callback);
         // TypeScript files use .js extension in imports
         assert_eq!(
             result.content,
@@ -2236,7 +2389,6 @@ export default defineConfig({
 
         let result = merge_tsdown_config_content(vite_config, "./tsdown.config.ts").unwrap();
         assert!(result.updated);
-        assert!(!result.uses_function_callback);
         assert_eq!(
             result.content,
             r#"import tsdownConfig from './tsdown.config.js';
@@ -2261,7 +2413,6 @@ export default defineConfig((env) => ({
 
         let result = merge_tsdown_config_content(vite_config, "./tsdown.config.ts").unwrap();
         assert!(result.updated);
-        assert!(result.uses_function_callback);
         assert_eq!(
             result.content,
             r#"import tsdownConfig from './tsdown.config.js';
@@ -2327,7 +2478,6 @@ export default defineConfig({
 
         let result = merge_tsdown_config_content(vite_config, "./tsdown.config.ts").unwrap();
         assert!(result.updated);
-        assert!(!result.uses_function_callback);
         assert_eq!(
             result.content,
             r#"import tsdownConfig from './tsdown.config.js';
@@ -2423,7 +2573,6 @@ export default defineConfig({
         // Rest of the file is untouched.
         assert!(result.content.contains("plugins: []"));
         assert!(!result.content.contains(r#""@a""#));
-        assert!(!result.uses_function_callback);
     }
 
     #[test]
@@ -2620,7 +2769,6 @@ export default defineConfig((env) => ({
             upsert_json_config_content(vite_config, r#"{ defaultTemplate: "@b" }"#, "create")
                 .unwrap();
         assert!(result.updated);
-        assert!(result.uses_function_callback);
         assert!(result.content.contains(r#"create: { defaultTemplate: "@b" }"#));
         assert!(!result.content.contains(r#""@a""#));
         assert!(result.content.contains("(env) =>"));

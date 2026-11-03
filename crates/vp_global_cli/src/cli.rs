@@ -7,8 +7,8 @@ use std::{collections::HashSet, ffi::OsStr, process::ExitStatus};
 
 use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
 use clap_complete::ArgValueCompleter;
+use console::style;
 use dialoguer::{Confirm, theme::ColorfulTheme};
-use owo_colors::OwoColorize;
 use tokio::runtime::Runtime;
 use vp_pm_cli::{ManagedGlobalCommand, PackageManagerCommand};
 use vp_shared::output;
@@ -90,9 +90,23 @@ pub enum Commands {
         args: Vec<String>,
     },
 
+    /// Produce a dependency-alignment plan for external automation
+    #[command(name = "sync-versions", hide = true, disable_help_flag = true)]
+    SyncVersions {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
+
     /// In-repo configuration (hooks, agent integration)
     #[command(disable_help_flag = true)]
     Config {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
+
+    /// Manage the Vite+ Git hook dispatcher
+    #[command(disable_help_flag = true)]
+    Hooks {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },
@@ -195,7 +209,22 @@ pub enum Commands {
         args: Vec<String>,
     },
 
-    /// Manage Node.js versions
+    /// Show active Vite+ tools, versions, and relationships
+    Toolchain {
+        /// Tool or package names to show
+        #[arg(value_name = "TOOLS")]
+        tools: Vec<String>,
+
+        /// Print the graph as JSON
+        #[arg(long)]
+        json: bool,
+
+        /// Use the global Vite+ toolchain
+        #[arg(short = 'g', long)]
+        global: bool,
+    },
+
+    /// Manage Node.js and package-manager environments
     Env(EnvArgs),
 
     // =========================================================================
@@ -230,6 +259,10 @@ pub enum Commands {
         /// Custom npm registry URL
         #[arg(long)]
         registry: Option<String>,
+
+        /// Refresh the cached update status without producing output
+        #[arg(long, hide = true)]
+        background_check: bool,
     },
 
     /// Remove vp and all related data
@@ -246,6 +279,8 @@ impl Commands {
     pub fn is_quiet_or_machine_readable(&self) -> bool {
         match self {
             Self::PackageManager(pm) => pm.is_quiet_or_machine_readable(),
+            Self::Toolchain { json, .. } => *json,
+            Self::SyncVersions { .. } => true,
             Self::Upgrade { silent, .. } => *silent,
             Self::Env(args) => {
                 args.command.as_ref().is_some_and(|sub| sub.is_quiet_or_machine_readable())
@@ -268,32 +303,48 @@ pub struct EnvArgs {
 pub enum EnvSubcommands {
     /// Show current environment information
     Current {
+        /// Limit output to node, pm, or a package-manager family
+        scope: Option<String>,
+
         /// Output in JSON format
         #[arg(long)]
         json: bool,
     },
 
     /// Print shell snippet to set environment for current session
-    Print,
-
-    /// Set or show the global default Node.js version
-    #[command(after_long_help = "\
-Examples:
-  vp env default          # Show the current default
-  vp env default lts      # Set the default")]
-    Default {
-        /// Version to set as default (e.g., "20.18.0", "lts", "latest").
-        /// If omitted, prints the current default.
-        version: Option<String>,
+    Print {
+        /// Limit output to node, pm, or a package-manager family
+        scope: Option<String>,
     },
 
-    /// Enable managed mode - shims always use vite-plus managed Node.js
-    On,
+    /// Set or show global Node.js and per-package-manager defaults
+    #[command(after_long_help = "\
+Examples:
+  vp env default          # Show both current defaults
+  vp env default 22.19.0  # Set the Node.js default
+  vp env default pnpm@12  # Set pnpm's default version")]
+    Default {
+        /// Defaults or component selectors. Bare versions select Node.js.
+        values: Vec<String>,
 
-    /// Enable system-first mode - shims prefer system Node.js, fallback to managed
-    Off,
+        /// Clear defaults instead of setting them
+        #[arg(long)]
+        unset: bool,
+    },
 
-    /// Create or update shims in VP_HOME/bin
+    /// Enable managed mode for Node.js, package managers, or one package manager
+    On {
+        /// Change only node, pm, npm, pnpm, yarn, or bun mode
+        scope: Option<String>,
+    },
+
+    /// Enable system-first mode for Node.js, package managers, or one package manager
+    Off {
+        /// Change only node, pm, npm, pnpm, yarn, or bun mode
+        scope: Option<String>,
+    },
+
+    /// Create or update managed and system-first tool shims
     Setup {
         /// Force refresh shims even if they exist
         #[arg(long)]
@@ -304,32 +355,42 @@ Examples:
     },
 
     /// Run diagnostics and show environment status
-    Doctor,
+    Doctor {
+        /// Limit diagnostics to node or package managers
+        scope: Option<String>,
+    },
 
     /// Show path to the tool that would be executed
     Which {
-        /// Tool name (node, npm, or npx)
+        /// Tool name resolved through the environment shims
         tool: String,
     },
 
-    /// Pin a Node.js version in the current directory
-    /// (updates .node-version or package.json#devEngines.runtime)
+    /// Pin Node.js locally and package-manager versions at the workspace root
     #[command(after_long_help = "\
 Examples:
-  vp env pin lts                  # Pin to latest LTS
-  vp env pin --unpin              # Remove the pin
+  vp env pin lts                  # Pin Node.js to latest LTS
+  vp env pin pnpm@10              # Pin the package manager
+  vp env pin 22 pnpm@10           # Pin both components
+  vp env pin --unpin              # Remove both effective pins
   vp env pin \"^20.0.0\" --force    # Overwrite existing pin
   vp env pin 24 --target node-version   # Force the .node-version file
 
-The write target follows the compatibility-first rule: an existing .node-version
-keeps being updated; otherwise the pin is written to package.json#devEngines.runtime;
-.node-version is only created when the directory has no package.json.")]
-    Pin {
-        /// Version to pin (e.g., "20.18.0", "lts", "latest", "^20.0.0").
-        /// If omitted, prints the currently pinned version.
-        version: Option<String>,
+Node.js pins use the current directory. Package-manager pins use the workspace
+root package.json, or the current project package.json outside a workspace.
+Pinning both components can update two different files. --target selects a pin
+source, not a project directory.
 
-        /// Remove the pin from the current directory
+The Node.js write target follows the compatibility-first rule: an existing
+.node-version keeps being updated, as does an effective .nvmrc in the current
+directory.
+Otherwise the pin is written to package.json#devEngines.runtime, or .node-version
+when the directory has no package.json.")]
+    Pin {
+        /// Versions to pin. Bare versions select Node.js; package managers use name@version.
+        specs: Vec<String>,
+
+        /// Remove Node.js pins locally and package-manager pins at the workspace root
         #[arg(long)]
         unpin: bool,
 
@@ -346,26 +407,37 @@ keeps being updated; otherwise the pin is written to package.json#devEngines.run
         target: Option<PinTarget>,
     },
 
-    /// Remove the Node.js pin from current directory (alias for `pin --unpin`)
+    /// Remove Node.js pins locally and package-manager pins at the workspace root
+    #[command(after_long_help = "\
+Alias for pin --unpin. Node.js pins use the current directory. Package-manager
+pins use the workspace root package.json, or the current project package.json
+outside a workspace. Removing both components can update two different files.
+--target selects a pin source, not a project directory.")]
     Unpin {
+        /// Limit removal to node, pm, or a package-manager family
+        scope: Option<String>,
+
         /// Explicitly choose which pin source to remove
         #[arg(long, value_enum)]
         target: Option<PinTarget>,
     },
 
-    /// List locally installed Node.js versions
+    /// List locally installed Node.js and package-manager versions
     #[command(visible_alias = "ls")]
     List {
+        /// Limit output to node, pm, or a package-manager family
+        scope: Option<String>,
+
         /// Output as JSON
         #[arg(long)]
         json: bool,
     },
 
-    /// List available Node.js versions from the registry
+    /// List available Node.js and package-manager versions from registries
     #[command(name = "list-remote", visible_alias = "ls-remote")]
     ListRemote {
-        /// Filter versions by pattern (e.g., "20" for 20.x versions)
-        pattern: Option<String>,
+        /// Optional component selector followed by a version pattern
+        values: Vec<String>,
 
         /// Show only LTS versions
         #[arg(long)]
@@ -384,13 +456,14 @@ keeps being updated; otherwise the pin is written to package.json#devEngines.run
         sort: SortingMethod,
     },
 
-    /// Execute a command with a specific Node.js version
+    /// Execute a command in a resolved or explicit environment
     #[command(
         visible_alias = "run",
         after_long_help = "\
 Examples:
-  vp env exec --node lts npm install  # Pin version for this invocation
-  vp env exec node -v                 # Shim mode: version auto-resolved"
+  vp env exec --node lts node -v                     # Override Node.js
+  vp env exec --package-manager pnpm@12 pnpm install # Override the package manager
+  vp env exec node -v                                # Resolve the full environment"
     )]
     Exec {
         /// Node.js version to use (e.g., "20.18.0", "lts", "^20.0.0").
@@ -399,43 +472,49 @@ Examples:
         #[arg(long)]
         node: Option<String>,
 
-        /// npm version to use (optional, defaults to bundled)
+        /// npm version to use (alias for --package-manager npm@<version>)
         #[arg(long)]
         npm: Option<String>,
+
+        /// Package manager and version to use (for example, pnpm@10)
+        #[arg(long)]
+        package_manager: Option<String>,
 
         /// Command and arguments to run
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         command: Vec<String>,
     },
 
-    /// Uninstall a Node.js version
+    /// Uninstall explicit Node.js or package-manager versions
     #[command(visible_alias = "uni")]
     Uninstall {
-        /// Version to uninstall (e.g., "20.18.0")
+        /// Versions to uninstall. Bare versions select Node.js.
         #[arg(required = true)]
-        version: String,
+        specs: Vec<String>,
     },
 
     /// Remove unused managed runtimes and package manager caches
-    Clean,
-
-    /// Install a Node.js version
-    #[command(visible_alias = "i")]
-    Install {
-        /// Version to install (e.g., "20", "20.18.0", "lts", "latest")
-        /// If not provided, installs the version from .node-version, package.json, or .nvmrc
-        version: Option<String>,
+    Clean {
+        /// Limit cleanup to node, pm, or a package-manager family
+        scope: Option<String>,
     },
 
-    /// Use a specific Node.js version for this shell session
+    /// Install a resolved or explicit environment
+    #[command(visible_alias = "i")]
+    Install {
+        /// Component selectors or explicit versions to install
+        requests: Vec<String>,
+    },
+
+    /// Activate Node.js and package-manager versions for this shell session
     #[command(after_long_help = "\
 Examples:
-  vp env use lts        # Override session with latest LTS
-  vp env use --unset    # Clear the session override")]
+  vp env use 22.19.0  # Override Node.js for this session
+  vp env use pnpm@12  # Override the package manager
+  vp env use --unset  # Clear both session overrides")]
     Use {
-        /// Version to use (e.g., "20", "20.18.0", "lts", "latest").
-        /// If omitted, reads from .node-version, package.json, or .nvmrc.
-        version: Option<String>,
+        /// Component selectors or explicit versions to activate
+        requests: Vec<String>,
 
         /// Remove session override (revert to file-based resolution)
         #[arg(long)]
@@ -454,7 +533,9 @@ Examples:
 impl EnvSubcommands {
     fn is_quiet_or_machine_readable(&self) -> bool {
         match self {
-            Self::Current { json } | Self::List { json } | Self::ListRemote { json, .. } => *json,
+            Self::Current { json, .. }
+            | Self::List { json, .. }
+            | Self::ListRemote { json, .. } => *json,
             _ => false,
         }
     }
@@ -465,8 +546,12 @@ impl EnvSubcommands {
 pub enum PinTarget {
     /// Pin via the .node-version file
     NodeVersion,
-    /// Pin via package.json#devEngines.runtime
+    /// Pin via the .nvmrc file
+    Nvmrc,
+    /// Pin via package.json#devEngines (runtime or packageManager)
     DevEngines,
+    /// Pin via the top-level packageManager field
+    PackageManager,
 }
 
 /// Version sorting order for list-remote command
@@ -566,8 +651,14 @@ async fn run_package_manager_command(
     command: PackageManagerCommand,
 ) -> Result<ExitStatus, Error> {
     match command.managed_global_command() {
-        Some(ManagedGlobalCommand::Install { packages, node, force, concurrency }) => {
-            return managed_install(packages, node, force, concurrency).await;
+        Some(ManagedGlobalCommand::Install {
+            packages,
+            node,
+            force,
+            ignore_scripts,
+            concurrency,
+        }) => {
+            return managed_install(packages, node, force, ignore_scripts, concurrency).await;
         }
         Some(ManagedGlobalCommand::Remove { packages, dry_run }) => {
             return managed_uninstall(packages, dry_run).await;
@@ -611,13 +702,87 @@ async fn run_package_manager_command(
     }
 
     commands::prepend_js_runtime_to_path_env(&cwd).await?;
-    Ok(vp_pm_cli::dispatch(&cwd, command).await?)
+    let selected = commands::env::package_manager::resolve_current_spec(&cwd).await?;
+    let result = if let Some(selected) = selected.as_ref()
+        && commands::env::config::load_config()
+            .await?
+            .package_manager_shim_mode_for(selected.package_manager_type)
+            == commands::env::config::ShimMode::SystemFirst
+        && let Some(system_path) =
+            crate::shim::dispatch::find_system_tool(&selected.package_manager_type.to_string())
+        && let Some(manager) =
+            system_package_manager(selected.package_manager_type, &system_path).await
+    {
+        vp_pm_cli::dispatch_with_resolved_package_manager(&cwd, command, manager).await?
+    } else {
+        let selected = commands::env::package_manager::resolve_current(&cwd).await?;
+        match selected {
+            Some(selected) => {
+                vp_pm_cli::dispatch_with_package_manager(&cwd, command, &selected).await?
+            }
+            None => vp_pm_cli::dispatch_with_metadata(&cwd, command).await?,
+        }
+    };
+    if result.status.success()
+        && let Some(packages) = result.why_hint_packages.as_deref()
+    {
+        print_toolchain_why_hint(&cwd, packages);
+    }
+    Ok(result.status)
+}
+
+fn print_toolchain_why_hint(cwd: &vt_path::AbsolutePath, packages: &[String]) {
+    let Some(manifest) = active_toolchain_manifest(cwd) else {
+        return;
+    };
+    let Some(hint) = vp_toolchain::why_hint(&manifest, packages) else {
+        return;
+    };
+    output::raw_stderr("");
+    output::raw_stderr(&hint);
+}
+
+fn active_toolchain_manifest(cwd: &vt_path::AbsolutePath) -> Option<vp_toolchain::Manifest> {
+    let manifest_path =
+        if let Some(bin_js) = crate::js_executor::JsExecutor::resolve_local_vite_plus(cwd) {
+            bin_js.parent()?.join("toolchain.json")
+        } else {
+            crate::js_executor::JsExecutor::new(None).get_scripts_dir().ok()?.join("toolchain.json")
+        };
+    vp_toolchain::load_manifest(&manifest_path).ok()
+}
+
+async fn system_package_manager(
+    kind: vp_pm_cli::PackageManagerType,
+    executable: &vt_path::AbsolutePath,
+) -> Option<vp_pm_cli::PackageManager> {
+    // Only npm skips `--version`; `npm_version_from_package_json` explains why.
+    let version = if kind == vp_pm_cli::PackageManagerType::Npm
+        && let Some(version) = vp_pm_cli::npm_version_from_package_json(executable)
+    {
+        version.to_string()
+    } else {
+        let output = tokio::process::Command::new(executable.as_path())
+            .arg("--version")
+            .output()
+            .await
+            .ok()?;
+        if !output.status.success() {
+            return None;
+        }
+        let version = std::str::from_utf8(&output.stdout).ok()?.trim();
+        js_semver::Version::parse(version).ok()?;
+        version.to_owned()
+    };
+    let bin_prefix = executable.parent()?.to_absolute_path_buf();
+    Some(vp_pm_cli::PackageManager::from_bin_prefix(kind, version, bin_prefix))
 }
 
 async fn managed_install(
     packages: &[String],
     node: Option<&str>,
     force: bool,
+    ignore_scripts: bool,
     concurrency: Option<usize>,
 ) -> Result<ExitStatus, Error> {
     if let Err((package_name, error)) = global::install::install(
@@ -625,9 +790,9 @@ async fn managed_install(
         global::install::InstallOptions {
             node_version: node,
             force,
+            ignore_scripts,
             concurrency: concurrency.unwrap_or(DEFAULT_GLOBAL_INSTALL_CONCURRENCY),
             update: false,
-            only_bins: None,
         },
     )
     .await
@@ -823,9 +988,9 @@ async fn managed_update(
         global::install::InstallOptions {
             node_version: Some(&current_node_version),
             force: false,
+            ignore_scripts: false,
             concurrency,
             update: true,
-            only_bins: None,
         },
     )
     .await
@@ -876,14 +1041,17 @@ fn prompt_reinstall_node_mismatches(
 ) -> bool {
     output::info("Some global packages were installed with a different Node.js version.");
     output::raw("");
-    output::raw(&format!("Current Node.js: {}", display_node_version(current_node_version).bold()));
+    output::raw(&format!(
+        "Current Node.js: {}",
+        style(&display_node_version(current_node_version)).bold()
+    ));
     output::raw("");
     output::raw("Affected packages:");
     for package in packages {
         output::raw(&format!(
             "- {} (installed with {})",
-            package.name.bold(),
-            display_node_version(&package.installed_node).bold()
+            style(&package.name).bold(),
+            style(&display_node_version(&package.installed_node)).bold()
         ));
     }
     output::raw("");
@@ -908,8 +1076,10 @@ pub async fn run_command(
     cwd: AbsolutePathBuf,
     args: Args,
     raw_subcommand: Option<&str>,
+    explicit_chdir: bool,
 ) -> Result<ExitStatus, Error> {
-    run_command_with_options(cwd, args, RenderOptions::default(), raw_subcommand).await
+    run_command_with_options(cwd, args, RenderOptions::default(), raw_subcommand, explicit_chdir)
+        .await
 }
 
 /// Run the CLI command with rendering options.
@@ -918,12 +1088,14 @@ pub async fn run_command_with_options(
     args: Args,
     render_options: RenderOptions,
     raw_subcommand: Option<&str>,
+    explicit_chdir: bool,
 ) -> Result<ExitStatus, Error> {
     // Apply the global `-C <dir>` flag before anything reads cwd. main
     // normally consumes a leading `-C` pre-parse; this covers orderings that
     // reach clap (e.g. a second `-C`), with identical semantics: the shared
     // helper changes the process cwd, and delegated children receive PWD from
     // the resolved cwd at spawn time.
+    let explicit_chdir = explicit_chdir || args.chdir.is_some();
     if let Some(dir) = &args.chdir {
         cwd =
             crate::apply_chdir(&cwd, dir).map_err(|message| Error::UserMessage(message.into()))?;
@@ -942,7 +1114,7 @@ pub async fn run_command_with_options(
         } else {
             command_with_help_with_options(render_options).print_help().ok();
         }
-        println!();
+        vp_shared::output::print_stdout_line(format_args!(""));
         // Return a successful exit status since help was requested implicitly
         return Ok(std::process::ExitStatus::default());
     };
@@ -965,19 +1137,26 @@ pub async fn run_command_with_options(
 
         Commands::Migrate { args } => commands::migrate::execute(cwd, &args).await,
 
+        Commands::SyncVersions { args } => {
+            commands::sync_versions::execute(cwd, &args, raw_subcommand).await
+        }
+
         Commands::Config { args } => commands::config::execute(cwd, &args, raw_subcommand).await,
+
+        Commands::Hooks { args } => commands::hooks::execute(cwd, &args, raw_subcommand).await,
 
         Commands::Staged { args } => commands::staged::execute(cwd, &args, raw_subcommand).await,
 
         // Category C: Local CLI Delegation (forwarded to the local vite-plus CLI)
         Commands::Dev { args } => {
             maybe_print_runtime_header("dev", &args, render_options.show_header);
-            commands::delegate::execute(cwd, "dev", &args, raw_subcommand).await
+            commands::delegate::execute_app(cwd, "dev", &args, raw_subcommand, explicit_chdir).await
         }
 
         Commands::Build { args } => {
             maybe_print_runtime_header("build", &args, render_options.show_header);
-            commands::delegate::execute(cwd, "build", &args, raw_subcommand).await
+            commands::delegate::execute_app(cwd, "build", &args, raw_subcommand, explicit_chdir)
+                .await
         }
 
         Commands::Test { args } => {
@@ -1010,7 +1189,8 @@ pub async fn run_command_with_options(
 
         Commands::Pack { args } => {
             maybe_print_runtime_header("pack", &args, render_options.show_header);
-            commands::delegate::execute(cwd, "pack", &args, raw_subcommand).await
+            commands::delegate::execute_app(cwd, "pack", &args, raw_subcommand, explicit_chdir)
+                .await
         }
 
         Commands::Run { args } => {
@@ -1025,7 +1205,8 @@ pub async fn run_command_with_options(
 
         Commands::Preview { args } => {
             maybe_print_runtime_header("preview", &args, render_options.show_header);
-            commands::delegate::execute(cwd, "preview", &args, raw_subcommand).await
+            commands::delegate::execute_app(cwd, "preview", &args, raw_subcommand, explicit_chdir)
+                .await
         }
 
         Commands::Cache { args } => {
@@ -1033,10 +1214,23 @@ pub async fn run_command_with_options(
             commands::delegate::execute(cwd, "cache", &args, raw_subcommand).await
         }
 
+        Commands::Toolchain { tools, json, global } => {
+            commands::toolchain::execute(cwd, tools, json, global, raw_subcommand).await
+        }
+
         Commands::Env(args) => commands::env::execute(cwd, args).await,
 
         // Self-Management
-        Commands::Upgrade { version, tag, check, rollback, force, silent, registry } => {
+        Commands::Upgrade {
+            version,
+            tag,
+            check,
+            rollback,
+            force,
+            silent,
+            registry,
+            background_check,
+        } => {
             commands::upgrade::execute(commands::upgrade::UpgradeOptions {
                 version,
                 tag,
@@ -1045,6 +1239,7 @@ pub async fn run_command_with_options(
                 force,
                 silent,
                 registry,
+                background_check,
             })
             .await
         }
@@ -1134,8 +1329,9 @@ pub fn try_parse_args_from_with_options(
 #[cfg(test)]
 mod tests {
     use super::{
-        display_node_version, has_flag_before_terminator, is_same_node_version, raw_subcommand,
-        should_force_global_delegate, should_suppress_header_for_subcommand,
+        Commands, display_node_version, has_flag_before_terminator, is_same_node_version,
+        raw_subcommand, should_force_global_delegate, should_suppress_header_for_subcommand,
+        try_parse_args_from,
     };
 
     fn argv(args: &[&str]) -> Vec<String> {
@@ -1157,6 +1353,31 @@ mod tests {
     fn raw_subcommand_is_none_without_a_subcommand() {
         assert_eq!(raw_subcommand(&argv(&["vp"])), None);
         assert_eq!(raw_subcommand(&argv(&["vp", "--version"])), None);
+    }
+
+    #[test]
+    fn parses_toolchain_global_flags() {
+        for flag in ["--global", "-g"] {
+            let parsed = try_parse_args_from(argv(&["vp", "toolchain", "vite", "--json", flag]))
+                .expect("toolchain global flag should parse");
+            let Some(Commands::Toolchain { tools, json, global }) = parsed.command else {
+                panic!("expected toolchain command");
+            };
+            assert_eq!(tools, vec!["vite"]);
+            assert!(json);
+            assert!(global);
+        }
+    }
+
+    #[test]
+    fn parses_sync_versions_as_machine_readable_global_command() {
+        let parsed = try_parse_args_from(argv(&["vp", "sync-versions", "--json"]))
+            .expect("sync-versions should parse");
+        let Some(Commands::SyncVersions { args }) = parsed.command else {
+            panic!("expected sync-versions command");
+        };
+        assert_eq!(args, vec!["--json"]);
+        assert!(Commands::SyncVersions { args }.is_quiet_or_machine_readable());
     }
 
     #[test]
@@ -1250,5 +1471,48 @@ mod tests {
     #[test]
     fn unknown_subcommand_does_not_suppress_header() {
         assert!(!should_suppress_header_for_subcommand("test", &["--lsp".to_string()]));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn system_npm_version_is_read_from_its_package_without_running_it() {
+        use std::os::unix::fs::PermissionsExt;
+
+        use super::system_package_manager;
+
+        // A Node.js install. Running npm-cli.js fails, so a spawned `npm --version` would
+        // return `None`.
+        //
+        // <root>/
+        // ├── bin/npm -> ../lib/node_modules/npm/bin/npm-cli.js
+        // └── lib/node_modules/npm/
+        //     ├── package.json      {"name":"npm","version":"10.9.2"}
+        //     └── bin/npm-cli.js    exit 1
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let package = root.join("lib/node_modules/npm");
+        std::fs::create_dir_all(package.join("bin")).unwrap();
+        std::fs::write(package.join("package.json"), r#"{"name":"npm","version":"10.9.2"}"#)
+            .unwrap();
+        let cli = package.join("bin/npm-cli.js");
+        std::fs::write(&cli, "#!/bin/sh\nexit 1\n").unwrap();
+        std::fs::set_permissions(&cli, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::create_dir_all(root.join("bin")).unwrap();
+        std::os::unix::fs::symlink("../lib/node_modules/npm/bin/npm-cli.js", root.join("bin/npm"))
+            .unwrap();
+        let npm = vt_path::AbsolutePathBuf::new(root.join("bin/npm")).unwrap();
+
+        let manager = system_package_manager(vp_pm_cli::PackageManagerType::Npm, &npm)
+            .await
+            .expect("npm's version is read without running npm");
+        // Scripts see the version in the user agent.
+        let context =
+            vp_pm_cli::LifecycleEnvContext { vp_version: "0.0.0".into(), node_version: None };
+        let user_agent = manager
+            .lifecycle_env_vars(&context)
+            .into_iter()
+            .find_map(|(name, value)| (name == "npm_config_user_agent").then_some(value))
+            .unwrap();
+        assert!(user_agent.to_string_lossy().starts_with("vp/0.0.0 npm/10.9.2 "), "{user_agent:?}");
     }
 }

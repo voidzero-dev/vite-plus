@@ -3,6 +3,62 @@ use std::path::Path;
 use napi::{anyhow, bindgen_prelude::*};
 use napi_derive::napi;
 
+/// A literal argument with its original JavaScript UTF-16 source range.
+#[napi(object)]
+pub struct LiteralCommandToken {
+    pub value: String,
+    pub start: u32,
+    pub end: u32,
+}
+
+/// Read simple literal commands, optionally separated by `&&`, `||`, or `;`.
+/// Returns null for unsupported syntax. Assignments and wrappers stay in argv;
+/// callers must decide whether a command is safe to rewrite.
+#[napi]
+pub fn parse_literal_commands(
+    source: String,
+    allow_lists: bool,
+) -> Option<Vec<Vec<LiteralCommandToken>>> {
+    let commands = vp_migration::parse_literal_commands(&source, allow_lists)?;
+    let mut byte_offset = 0;
+    let mut utf16_offset = 0;
+    // Ranges arrive in source order. Convert incrementally so non-ASCII scripts
+    // take linear time, including characters represented by surrogate pairs.
+    let mut to_utf16 = |offset| {
+        utf16_offset += source[byte_offset..offset].encode_utf16().count();
+        byte_offset = offset;
+        u32::try_from(utf16_offset).ok()
+    };
+    commands
+        .into_iter()
+        .map(|command| {
+            command
+                .into_iter()
+                .map(|token| {
+                    Some(LiteralCommandToken {
+                        value: token.value,
+                        start: to_utf16(token.range.start)?,
+                        end: to_utf16(token.range.end)?,
+                    })
+                })
+                .collect()
+        })
+        .collect()
+}
+
+/// Parse source and resolve lexical bindings for the TypeScript migration rules.
+#[napi]
+pub fn analyze_migration_source(filename: String, source: String) -> Result<String> {
+    vp_migration::analyze_migration_source(&filename, &source).map_err(Error::from_reason)
+}
+
+/// Check inherited `.gitignore` rules without requiring the directory to exist.
+#[napi]
+pub fn is_directory_gitignored(root: String, directory: String) -> Result<bool> {
+    Ok(vp_migration::is_directory_gitignored(Path::new(&root), Path::new(&directory))
+        .map_err(anyhow::Error::from)?)
+}
+
 /// Rewrite scripts json content using rules from rules_yaml
 ///
 /// # Arguments
@@ -70,8 +126,6 @@ pub struct MergeJsonConfigResult {
     pub content: String,
     /// Whether any changes were made
     pub updated: bool,
-    /// Whether the config uses a function callback
-    pub uses_function_callback: bool,
 }
 
 /// Merge JSON configuration file into vite config file
@@ -90,7 +144,6 @@ pub struct MergeJsonConfigResult {
 /// Returns a `MergeJsonConfigResult` containing:
 /// - `content`: The updated vite config content
 /// - `updated`: Whether any changes were made
-/// - `usesFunctionCallback`: Whether the config uses a function callback
 ///
 /// # Example
 ///
@@ -113,11 +166,7 @@ pub fn merge_json_config(
     )
     .map_err(anyhow::Error::from)?;
 
-    Ok(MergeJsonConfigResult {
-        content: result.content,
-        updated: result.updated,
-        uses_function_callback: result.uses_function_callback,
-    })
+    Ok(MergeJsonConfigResult { content: result.content, updated: result.updated })
 }
 
 /// Set the value of a top-level config key in a vite config file (upsert)
@@ -164,11 +213,7 @@ pub fn upsert_json_config(
     )
     .map_err(anyhow::Error::from)?;
 
-    Ok(MergeJsonConfigResult {
-        content: result.content,
-        updated: result.updated,
-        uses_function_callback: result.uses_function_callback,
-    })
+    Ok(MergeJsonConfigResult { content: result.content, updated: result.updated })
 }
 
 /// Whether `config_key` is already declared as a top-level property in the
@@ -181,6 +226,19 @@ pub fn upsert_json_config(
 pub fn has_config_key(vite_config_path: String, config_key: String) -> Result<bool> {
     let content = std::fs::read_to_string(&vite_config_path).map_err(anyhow::Error::from)?;
     Ok(vp_migration::has_config_key(&content, &config_key).map_err(anyhow::Error::from)?)
+}
+
+/// Remove a top-level key from a recognized Vite config object.
+#[napi]
+pub fn remove_config_key(
+    vite_config_path: String,
+    config_key: String,
+) -> Result<MergeJsonConfigResult> {
+    let content = std::fs::read_to_string(&vite_config_path).map_err(anyhow::Error::from)?;
+    let result =
+        vp_migration::remove_config_key(&content, &config_key).map_err(anyhow::Error::from)?;
+
+    Ok(MergeJsonConfigResult { content: result.content, updated: result.updated })
 }
 
 /// Error from batch import rewriting
@@ -201,6 +259,8 @@ pub struct BatchRewriteResult {
     pub preserved_vitest_files: Vec<String>,
     /// Files that had errors
     pub errors: Vec<BatchRewriteError>,
+    /// Pack configurations that need manual migration
+    pub warnings: Vec<BatchRewriteError>,
 }
 
 /// Merge tsdown config into vite config by importing it
@@ -218,7 +278,6 @@ pub struct BatchRewriteResult {
 /// Returns a `MergeJsonConfigResult` containing:
 /// - `content`: The updated vite config content
 /// - `updated`: Whether any changes were made
-/// - `usesFunctionCallback`: Whether the config uses a function callback
 ///
 /// # Example
 ///
@@ -237,11 +296,7 @@ pub fn merge_tsdown_config(
         vp_migration::merge_tsdown_config(Path::new(&vite_config_path), &tsdown_config_path)
             .map_err(anyhow::Error::from)?;
 
-    Ok(MergeJsonConfigResult {
-        content: result.content,
-        updated: result.updated,
-        uses_function_callback: result.uses_function_callback,
-    })
+    Ok(MergeJsonConfigResult { content: result.content, updated: result.updated })
 }
 
 /// Wrap safe inline `plugins: [...]` arrays in recognized Vite config objects
@@ -252,10 +307,31 @@ pub fn wrap_lazy_plugins(vite_config_path: String) -> Result<MergeJsonConfigResu
     let result = vp_migration::wrap_lazy_plugins(Path::new(&vite_config_path))
         .map_err(anyhow::Error::from)?;
 
-    Ok(MergeJsonConfigResult {
+    Ok(MergeJsonConfigResult { content: result.content, updated: result.updated })
+}
+
+/// Result of moving task cache settings under `cache`
+#[napi(object)]
+pub struct TaskCacheConfigResult {
+    /// The updated vite config content
+    pub content: String,
+    /// Whether any changes were made
+    pub updated: bool,
+    /// Tasks that set cache settings outside `cache` but could not be updated
+    pub manual_tasks: Vec<String>,
+}
+
+/// Move `env`, `untrackedEnv`, `input`, and `output` from the top level of
+/// each static `run.tasks` entry into its `cache` object.
+#[napi]
+pub fn migrate_task_cache_config(vite_config_path: String) -> Result<TaskCacheConfigResult> {
+    let result = vp_migration::migrate_task_cache_config(Path::new(&vite_config_path))
+        .map_err(anyhow::Error::from)?;
+
+    Ok(TaskCacheConfigResult {
         content: result.content,
         updated: result.updated,
-        uses_function_callback: result.uses_function_callback,
+        manual_tasks: result.manual_tasks,
     })
 }
 
@@ -290,11 +366,17 @@ pub fn wrap_lazy_plugins(vite_config_path: String) -> Result<MergeJsonConfigResu
 pub fn rewrite_imports_in_directory(
     root: String,
     preserve_vitest_in_nuxt_packages: Option<bool>,
+    oxlint_owner_dirs: Option<Vec<String>>,
 ) -> Result<BatchRewriteResult> {
     let result = vp_migration::rewrite_imports_in_directory_with_options(
         Path::new(&root),
         vp_migration::RewriteImportsOptions {
             preserve_vitest_in_nuxt_packages: preserve_vitest_in_nuxt_packages.unwrap_or(false),
+            oxlint_owner_dirs: oxlint_owner_dirs
+                .unwrap_or_default()
+                .into_iter()
+                .map(std::path::PathBuf::from)
+                .collect(),
         },
     )
     .map_err(anyhow::Error::from)?;
@@ -309,6 +391,14 @@ pub fn rewrite_imports_in_directory(
             .preserved_vitest_files
             .iter()
             .map(|p| p.to_string_lossy().to_string())
+            .collect(),
+        warnings: result
+            .warnings
+            .iter()
+            .map(|(p, m)| BatchRewriteError {
+                path: p.to_string_lossy().to_string(),
+                message: m.clone(),
+            })
             .collect(),
         errors: result
             .errors

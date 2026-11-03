@@ -5,12 +5,22 @@
 Bun falls back to install because it does not support dedupe
 
 ```
-warn: bun does not support dedupe, falling back to bun install
+warn: bun dedupe requires bun >= 1.4, falling back to bun install
+```
+
+## `vp dedupe --check -- --silent`
+
+reject unsupported --check without falling back to install
+
+**Exit code:** 1
+
+```
+bun < 1.4 does not support --check.
 ```
 
 ## `vpt print-file package.json`
 
-verify Bun completed
+verify Bun manifest is unchanged
 
 ```
 {

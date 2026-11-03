@@ -1,6 +1,6 @@
 {
   "name": "@voidzero-dev/vite-plus-core",
-  "version": "0.2.8",
+  "version": "1.4.0",
   "description": "The Unified Toolchain for the Web",
   "homepage": "https://viteplus.dev/guide",
   "bugs": {
@@ -89,8 +89,14 @@
       "default": "./dist/rolldown/plugins-index.mjs",
       "types": "./dist/rolldown/plugins-index.d.mts"
     },
-    "./rolldown/pluginutils": "./dist/pluginutils/index.mjs",
-    "./rolldown/pluginutils/filter": "./dist/pluginutils/filter/index.mjs",
+    "./rolldown/pluginutils": {
+      "default": "./dist/pluginutils/index.mjs",
+      "types": "./dist/pluginutils/index.d.mts"
+    },
+    "./rolldown/pluginutils/filter": {
+      "default": "./dist/pluginutils/filter/index.mjs",
+      "types": "./dist/pluginutils/filter/index.d.mts"
+    },
     "./rolldown/utils": {
       "default": "./dist/rolldown/utils-index.mjs",
       "types": "./dist/rolldown/utils-index.d.mts"
@@ -107,44 +113,44 @@
     "@oxc-project/runtime": "catalog:",
     "@oxc-project/types": "catalog:",
     "lightningcss": "catalog:",
-    "postcss": "^8.5.6",
-    "yuku-codegen": "^0.5.44",
-    "yuku-parser": "^0.5.44"
+    "postcss": "^8.5.30",
+    "yuku-parser": "0.19.0"
   },
   "devDependencies": {
-    "@ast-grep/napi": "^0.43.0",
-    "@babel/generator": "^7.28.5",
-    "@babel/parser": "^7.28.5",
-    "@babel/types": "^7.28.5",
+    "@ast-grep/napi": "^0.51.0",
     "@emnapi/core": "catalog:",
     "@emnapi/runtime": "catalog:",
     "@napi-rs/cli": "catalog:",
     "@oxc-node/cli": "catalog:",
     "@tsdown/css": "catalog:",
     "@tsdown/exe": "catalog:",
-    "@vitejs/devtools": "^0.4.10",
-    "es-module-lexer": "^1.7.0",
+    "@typescript/native-preview": "catalog:",
+    "@vitejs/devtools": "^0.8.0",
+    "es-module-lexer": "^3.0.0",
     "hookable": "^6.0.1",
-    "magic-string": "^0.30.21",
     "oxc-parser": "catalog:",
     "oxfmt": "catalog:",
-    "picocolors": "^1.1.1",
-    "picomatch": "^4.0.3",
+    "picocolors": "catalog:",
+    "picomatch": "catalog:",
     "pkg-types": "^2.3.0",
     "rolldown": "workspace:*",
     "rolldown-plugin-dts": "catalog:",
-    "rollup": "^4.18.0",
+    "rollup": "catalog:",
     "rollup-plugin-license": "^3.6.0",
-    "semver": "^7.7.3",
+    "semver": "catalog:",
     "tinyglobby": "^0.2.15",
     "tree-kill": "^1.2.2",
     "tsdown": "catalog:",
+    "typescript": "catalog:",
     "vite": "workspace:*"
   },
   "peerDependencies": {
     "@arethetypeswrong/core": "^0.18.1",
     "@types/node": "^20.19.0 || >=22.12.0",
-    "@vitejs/devtools": "^0.4.0",
+    "@typescript/native-preview": "*",
+    "@vitejs/devtools": "^0.7.1 || ^0.8.0",
+    "@volar/typescript": "~2.4.0",
+    "@vue/language-core": "~3.2.0 || ~3.3.0",
     "esbuild": "^0.27.0 || ^0.28.0",
     "jiti": ">=1.21.0",
     "less": "^4.0.0",
@@ -156,11 +162,27 @@
     "terser": "^5.16.0",
     "tsx": "^4.8.1",
     "typescript": "^5.0.0 || ^6.0.0 || ^7.0.0",
-    "unplugin-unused": "^0.5.0",
+    "unplugin-unused": ">=0.5.0",
     "unrun": "*",
+    "vue-tsc": "~3.2.0 || ~3.3.0",
     "yaml": "^2.4.2"
   },
   "peerDependenciesMeta": {
+    "@typescript/native-preview": {
+      "optional": true
+    },
+    "@volar/typescript": {
+      "optional": true
+    },
+    "@vue/language-core": {
+      "optional": true
+    },
+    "typescript": {
+      "optional": true
+    },
+    "vue-tsc": {
+      "optional": true
+    },
     "@arethetypeswrong/core": {
       "optional": true
     },
@@ -171,9 +193,6 @@
       "optional": true
     },
     "tsx": {
-      "optional": true
-    },
-    "typescript": {
       "optional": true
     },
     "unplugin-unused": {
@@ -220,8 +239,8 @@
     "node": "^20.19.0 || ^22.18.0 || >=24.11.0"
   },
   "bundledVersions": {
-    "vite": "8.2.0",
-    "rolldown": "1.2.2",
-    "tsdown": "0.22.14"
+    "vite": "8.3.5",
+    "rolldown": "1.2.15",
+    "tsdown": "0.23.3"
   }
 }

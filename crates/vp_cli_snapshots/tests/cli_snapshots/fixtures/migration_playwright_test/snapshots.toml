@@ -1,0 +1,8 @@
+[[case]]
+name = "migration_playwright_test"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "existing Vite+ upgrade: @playwright/test should remain without adding a direct playwright dependency", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "@vitest/browser-playwright and @vitest/coverage-v8 should become catalog:", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "the default catalog should own the aligned @vitest/* packages", continue-on-failure = true },
+]

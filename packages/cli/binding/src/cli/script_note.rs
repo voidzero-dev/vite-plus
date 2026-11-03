@@ -5,7 +5,7 @@
 //! built-in when they meant the script, so a built-in whose name a script also
 //! uses points at `vpr`.
 
-use owo_colors::OwoColorize;
+use console::style;
 use vp_shared::output;
 use vt::MARKER_ENV_NAME;
 use vt_path::AbsolutePath;
@@ -32,8 +32,8 @@ pub(super) fn print(command: Option<&str>, cwd: &AbsolutePath) {
         return;
     }
 
-    let built_in = format!("`vp {command}`").bright_blue().to_string();
-    let via_run = format!("`vpr {command}`").bright_blue().to_string();
+    let built_in = style(format!("`vp {command}`")).for_stderr().blue().bright().to_string();
+    let via_run = style(format!("`vpr {command}`")).for_stderr().blue().bright().to_string();
     output::note(&format!(
         "You are running {built_in} as a Vite+ built-in command. \
          If you meant to run the {command} npm script, use {via_run} instead."

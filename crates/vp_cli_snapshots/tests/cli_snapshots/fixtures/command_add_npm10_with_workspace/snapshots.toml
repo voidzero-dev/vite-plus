@@ -5,11 +5,11 @@ skip-platforms = ["windows"]
 steps = [
   { argv = ["vp", "add", "testnpm2", "-D", "-w", "--", "--no-audit"], comment = "should add package to workspace root" },
   { argv = ["vpt", "print-file", "package.json", "packages/app/package.json", "packages/utils/package.json"], continue-on-failure = true },
-  { argv = ["vp", "add", "@vite-plus-test/utils", "--workspace", "--", "--no-audit"], comment = "should add @vite-plus-test/utils to workspace root" },
+  { argv = ["vp", "add", "@vite-plus-test/utils", "--workspace", "--", "--no-audit"], comment = "reject unsupported --workspace without adding packages to the root", continue-on-failure = true },
   { argv = ["vpt", "print-file", "package.json", "packages/app/package.json", "packages/utils/package.json"], continue-on-failure = true },
   { argv = ["vp", "add", "testnpm2", "test-vite-plus-install@1.0.0", "--filter", "app", "--", "--no-audit"], comment = "should add packages to packages/app" },
   { argv = ["vpt", "print-file", "package.json", "packages/app/package.json", "packages/utils/package.json"], continue-on-failure = true },
-  { argv = ["vp", "add", "@vite-plus-test/utils", "--workspace", "--filter", "app", "--", "--no-audit"], comment = "should add @vite-plus-test/utils to packages/app" },
+  { argv = ["vp", "add", "@vite-plus-test/utils", "--workspace", "--filter", "app", "--", "--no-audit"], comment = "reject unsupported --workspace without adding packages to app", continue-on-failure = true },
   { argv = ["vpt", "print-file", "package.json", "packages/app/package.json", "packages/utils/package.json"], continue-on-failure = true },
   { argv = ["vp", "add", "testnpm2", "test-vite-plus-install@1.0.0", "--filter", "*", "--", "--no-audit"], comment = "should add testnpm2 test-vite-plus-install to all packages except workspace root" },
   { argv = ["vpt", "print-file", "package.json", "packages/app/package.json", "packages/utils/package.json"], continue-on-failure = true },

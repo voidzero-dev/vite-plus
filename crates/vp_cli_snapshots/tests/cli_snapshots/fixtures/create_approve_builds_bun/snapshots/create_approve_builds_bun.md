@@ -51,10 +51,8 @@ core-js recorded under trustedDependencies
 default run surfaces the gated build with guidance, leaving it untrusted
 
 ```
-
-Build scripts were not run for: core-js.
-
-These dependencies may not work until built. Run vp pm approve-builds core-js in the project to approve them, or re-create with --approve-builds.
+▲ Build scripts were not run for: core-js.
+● These dependencies may not work until built. Run vp pm approve-builds core-js in the project to approve them, or re-create with --approve-builds.
 ◇ Scaffolded default-app
 • Node <version>  bun <version>
 ✓ Dependencies installed in <duration>
@@ -98,7 +96,7 @@ no trustedDependencies, the build was not run
 the guidance's `vp pm approve-builds` command approves the gated build
 
 ```
-bun pm trust <version> (0d9b296a)
+bun pm trust <version> (<hash>)
 
 ./node_modules/core-js @3.39.0
  ✓ [postinstall]: node -e "try{require('./postinstall')}catch(e){}"

@@ -1,15 +1,18 @@
 use std::{env, ffi::OsStr, iter, sync::Arc};
 
-use rustc_hash::FxHashMap;
 use vt::config::user::{
     AutoTracking, EnabledCacheConfig, GlobWithBase, InputBase, UserCacheConfig, UserInputEntry,
 };
+use vt_casefold::EnvName;
 use vt_path::AbsolutePath;
 use vt_str::Str;
 
 use super::{
     help::should_prepend_vitest_run,
-    types::{CliOptions, ResolvedSubcommand, ResolvedUniversalViteConfig, SynthesizableSubcommand},
+    types::{
+        CliOptions, EnvMap, ResolvedSubcommand, ResolvedUniversalViteConfig,
+        SynthesizableSubcommand,
+    },
 };
 
 /// Resolves synthesizable subcommands to concrete programs and arguments.
@@ -36,6 +39,10 @@ impl SubcommandResolver {
     pub fn with_cli_options(mut self, cli_options: CliOptions) -> Self {
         self.cli_options = Some(cli_options);
         self
+    }
+
+    pub(crate) fn workspace_path(&self) -> &AbsolutePath {
+        &self.workspace_path
     }
 
     fn cli_options(&self) -> anyhow::Result<&CliOptions> {
@@ -65,80 +72,47 @@ impl SubcommandResolver {
     pub(super) async fn resolve(
         &self,
         subcommand: SynthesizableSubcommand,
-        resolved_vite_config: Option<&ResolvedUniversalViteConfig>,
-        envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
-    ) -> anyhow::Result<ResolvedSubcommand> {
-        self.resolve_inner(subcommand, resolved_vite_config, envs).await
-    }
-
-    async fn resolve_inner(
-        &self,
-        subcommand: SynthesizableSubcommand,
-        resolved_vite_config: Option<&ResolvedUniversalViteConfig>,
-        envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
+        envs: &Arc<EnvMap>,
+        cwd: &AbsolutePath,
     ) -> anyhow::Result<ResolvedSubcommand> {
         match subcommand {
-            SynthesizableSubcommand::Lint { mut args } => {
+            SynthesizableSubcommand::Lint { args } => {
                 let cli_options = self.cli_options()?;
-                let resolved = (cli_options.lint)().await?;
+                let resolved = (cli_options.lint)(cwd, &args).await?;
                 let js_path = resolved.bin_path;
                 let js_path_str = js_path
                     .to_str()
                     .ok_or_else(|| anyhow::anyhow!("lint JS path is not valid UTF-8"))?;
-                let owned_resolved_vite_config;
-                let resolved_vite_config = if let Some(config) = resolved_vite_config {
-                    config
-                } else {
-                    owned_resolved_vite_config = self.resolve_universal_vite_config().await?;
-                    &owned_resolved_vite_config
-                };
-
-                if let (Some(_), Some(config_file)) =
-                    (&resolved_vite_config.lint, &resolved_vite_config.config_file)
-                {
-                    args.insert(0, "-c".to_string());
-                    args.insert(1, config_file.clone());
-                }
 
                 Ok(ResolvedSubcommand {
-                    program: Arc::from(OsStr::new("node")),
-                    args: iter::once(Str::from("--disable-warning=MODULE_TYPELESS_PACKAGE_JSON"))
-                        .chain(iter::once(Str::from(js_path_str)))
-                        .chain(args.into_iter().map(Str::from))
-                        .collect(),
+                    program: Arc::clone(&cli_options.node_exec_path),
+                    args: [
+                        Str::from("--disable-warning=MODULE_TYPELESS_PACKAGE_JSON"),
+                        Str::from(js_path_str),
+                    ]
+                    .into_iter()
+                    .chain(args.into_iter().map(Str::from))
+                    .collect(),
                     cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
                         env: Some(Box::new([Str::from("OXLINT_TSGOLINT_PATH")])),
                         untracked_env: None,
                         input: None,
                         output: None,
+                        remote: None,
                     }),
                     envs: merge_resolved_envs_with_version(envs, resolved.envs),
                 })
             }
-            SynthesizableSubcommand::Fmt { mut args } => {
+            SynthesizableSubcommand::Fmt { args } => {
                 let cli_options = self.cli_options()?;
-                let resolved = (cli_options.fmt)().await?;
+                let resolved = (cli_options.fmt)(cwd, &args).await?;
                 let js_path = resolved.bin_path;
                 let js_path_str = js_path
                     .to_str()
                     .ok_or_else(|| anyhow::anyhow!("fmt JS path is not valid UTF-8"))?;
-                let owned_resolved_vite_config;
-                let resolved_vite_config = if let Some(config) = resolved_vite_config {
-                    config
-                } else {
-                    owned_resolved_vite_config = self.resolve_universal_vite_config().await?;
-                    &owned_resolved_vite_config
-                };
-
-                if let (Some(_), Some(config_file)) =
-                    (&resolved_vite_config.fmt, &resolved_vite_config.config_file)
-                {
-                    args.insert(0, "-c".to_string());
-                    args.insert(1, config_file.clone());
-                }
 
                 Ok(ResolvedSubcommand {
-                    program: Arc::from(OsStr::new("node")),
+                    program: Arc::clone(&cli_options.node_exec_path),
                     args: iter::once(Str::from(js_path_str))
                         .chain(args.into_iter().map(Str::from))
                         .collect(),
@@ -147,20 +121,21 @@ impl SubcommandResolver {
                         untracked_env: None,
                         input: None,
                         output: None,
+                        remote: None,
                     }),
                     envs: merge_resolved_envs_with_version(envs, resolved.envs),
                 })
             }
             SynthesizableSubcommand::Build { args } => {
                 let cli_options = self.cli_options()?;
-                let resolved = (cli_options.vite)().await?;
+                let resolved = (cli_options.vite)(cwd, &args).await?;
                 let js_path = resolved.bin_path;
                 let js_path_str = js_path
                     .to_str()
                     .ok_or_else(|| anyhow::anyhow!("vite JS path is not valid UTF-8"))?;
 
                 Ok(ResolvedSubcommand {
-                    program: Arc::from(OsStr::new("node")),
+                    program: Arc::clone(&cli_options.node_exec_path),
                     args: iter::once(Str::from(js_path_str))
                         .chain(iter::once(Str::from("build")))
                         .chain(args.into_iter().map(Str::from))
@@ -176,13 +151,14 @@ impl SubcommandResolver {
                         untracked_env: None,
                         input: None,
                         output: None,
+                        remote: None,
                     }),
                     envs: merge_resolved_envs_with_version(envs, resolved.envs),
                 })
             }
             SynthesizableSubcommand::Test { args } => {
                 let cli_options = self.cli_options()?;
-                let resolved = (cli_options.test)().await?;
+                let resolved = (cli_options.test)(cwd, &args).await?;
                 let js_path = resolved.bin_path;
                 let js_path_str = js_path
                     .to_str()
@@ -195,7 +171,7 @@ impl SubcommandResolver {
                 };
 
                 Ok(ResolvedSubcommand {
-                    program: Arc::from(OsStr::new("node")),
+                    program: Arc::clone(&cli_options.node_exec_path),
                     args: iter::once(Str::from(js_path_str)).chain(vitest_args).collect(),
                     cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
                         env: None,
@@ -208,20 +184,21 @@ impl SubcommandResolver {
                             ),
                         ]),
                         output: None,
+                        remote: None,
                     }),
                     envs: merge_resolved_envs_with_version(envs, resolved.envs),
                 })
             }
             SynthesizableSubcommand::Pack { args } => {
                 let cli_options = self.cli_options()?;
-                let resolved = (cli_options.pack)().await?;
+                let resolved = (cli_options.pack)(cwd, &args).await?;
                 let js_path = resolved.bin_path;
                 let js_path_str = js_path
                     .to_str()
                     .ok_or_else(|| anyhow::anyhow!("pack JS path is not valid UTF-8"))?;
 
                 Ok(ResolvedSubcommand {
-                    program: Arc::from(OsStr::new("node")),
+                    program: Arc::clone(&cli_options.node_exec_path),
                     args: iter::once(Str::from(js_path_str))
                         .chain(args.into_iter().map(Str::from))
                         .collect(),
@@ -230,20 +207,21 @@ impl SubcommandResolver {
                         untracked_env: None,
                         input: Some(build_pack_cache_inputs()),
                         output: None,
+                        remote: None,
                     }),
                     envs: merge_resolved_envs(envs, resolved.envs),
                 })
             }
             SynthesizableSubcommand::Dev { args } => {
                 let cli_options = self.cli_options()?;
-                let resolved = (cli_options.vite)().await?;
+                let resolved = (cli_options.vite)(cwd, &args).await?;
                 let js_path = resolved.bin_path;
                 let js_path_str = js_path
                     .to_str()
                     .ok_or_else(|| anyhow::anyhow!("vite JS path is not valid UTF-8"))?;
 
                 Ok(ResolvedSubcommand {
-                    program: Arc::from(OsStr::new("node")),
+                    program: Arc::clone(&cli_options.node_exec_path),
                     args: iter::once(Str::from(js_path_str))
                         .chain(iter::once(Str::from("dev")))
                         .chain(args.into_iter().map(Str::from))
@@ -254,14 +232,14 @@ impl SubcommandResolver {
             }
             SynthesizableSubcommand::Preview { args } => {
                 let cli_options = self.cli_options()?;
-                let resolved = (cli_options.vite)().await?;
+                let resolved = (cli_options.vite)(cwd, &args).await?;
                 let js_path = resolved.bin_path;
                 let js_path_str = js_path
                     .to_str()
                     .ok_or_else(|| anyhow::anyhow!("vite JS path is not valid UTF-8"))?;
 
                 Ok(ResolvedSubcommand {
-                    program: Arc::from(OsStr::new("node")),
+                    program: Arc::clone(&cli_options.node_exec_path),
                     args: iter::once(Str::from(js_path_str))
                         .chain(iter::once(Str::from("preview")))
                         .chain(args.into_iter().map(Str::from))
@@ -272,14 +250,14 @@ impl SubcommandResolver {
             }
             SynthesizableSubcommand::Doc { args } => {
                 let cli_options = self.cli_options()?;
-                let resolved = (cli_options.doc)().await?;
+                let resolved = (cli_options.doc)(cwd, &args).await?;
                 let js_path = resolved.bin_path;
                 let js_path_str = js_path
                     .to_str()
                     .ok_or_else(|| anyhow::anyhow!("doc JS path is not valid UTF-8"))?;
 
                 Ok(ResolvedSubcommand {
-                    program: Arc::from(OsStr::new("node")),
+                    program: Arc::clone(&cli_options.node_exec_path),
                     args: iter::once(Str::from(js_path_str))
                         .chain(args.into_iter().map(Str::from))
                         .collect(),
@@ -288,6 +266,7 @@ impl SubcommandResolver {
                         untracked_env: None,
                         input: None,
                         output: None,
+                        remote: None,
                     }),
                     envs: merge_resolved_envs(envs, resolved.envs),
                 })
@@ -329,25 +308,121 @@ pub(super) fn check_cache_inputs() -> Vec<UserInputEntry> {
     ]
 }
 
-fn merge_resolved_envs(
-    envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
-    resolved_envs: Vec<(String, String)>,
-) -> Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>> {
-    let mut envs = FxHashMap::clone(envs);
+fn merge_resolved_envs(envs: &Arc<EnvMap>, resolved_envs: Vec<(String, String)>) -> Arc<EnvMap> {
+    let mut envs = EnvMap::clone(envs);
     for (k, v) in resolved_envs {
-        envs.entry(Arc::from(OsStr::new(&k))).or_insert_with(|| Arc::from(OsStr::new(&v)));
+        envs.entry(EnvName::new(Arc::from(OsStr::new(&k))))
+            .or_insert_with(|| Arc::from(OsStr::new(&v)));
     }
     Arc::new(envs)
 }
 
 /// Merge resolved envs and inject VP_VERSION for rolldown-vite branding.
 fn merge_resolved_envs_with_version(
-    envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
+    envs: &Arc<EnvMap>,
     resolved_envs: Vec<(String, String)>,
-) -> Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>> {
+) -> Arc<EnvMap> {
     let mut merged = merge_resolved_envs(envs, resolved_envs);
     let map = Arc::make_mut(&mut merged);
-    map.entry(Arc::from(OsStr::new("VP_VERSION")))
+    map.entry(EnvName::new(Arc::from(OsStr::new("VP_VERSION"))))
         .or_insert_with(|| Arc::from(OsStr::new(env!("CARGO_PKG_VERSION"))));
     merged
+}
+
+#[cfg(test)]
+mod tests {
+    use vt_path::AbsolutePathBuf;
+
+    use super::*;
+    use crate::cli::types::{BoxedResolverFn, ResolveCommandResult};
+
+    fn tool_resolver() -> BoxedResolverFn {
+        Box::new(|_, _| {
+            Box::pin(async {
+                Ok(ResolveCommandResult {
+                    bin_path: Arc::from(OsStr::new("tool.js")),
+                    envs: Vec::new(),
+                })
+            })
+        })
+    }
+
+    fn cli_options(runtime: Arc<OsStr>) -> CliOptions {
+        CliOptions {
+            node_exec_path: runtime,
+            node_version: None,
+            lint: tool_resolver(),
+            fmt: tool_resolver(),
+            vite: tool_resolver(),
+            test: tool_resolver(),
+            pack: tool_resolver(),
+            doc: tool_resolver(),
+            toolchain_manifest_path: String::new(),
+            vite_plus_package_path: String::new(),
+            resolve_universal_vite_config: Arc::new(|_| {
+                Box::pin(async { anyhow::bail!("config loading is not expected for this command") })
+            }),
+        }
+    }
+
+    #[tokio::test]
+    async fn builtins_reuse_the_calling_node_runtime() {
+        let temp = tempfile::tempdir().unwrap();
+        let cwd = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let runtime: Arc<OsStr> = Arc::from(cwd.join("custom runtime").as_path().as_os_str());
+        let resolver = SubcommandResolver::new(cwd.clone().into())
+            .with_cli_options(cli_options(Arc::clone(&runtime)));
+        let envs = Arc::new(EnvMap::default());
+        for command in [
+            SynthesizableSubcommand::Lint { args: vec![] },
+            SynthesizableSubcommand::Fmt { args: vec![] },
+            SynthesizableSubcommand::Build { args: vec![] },
+            SynthesizableSubcommand::Test { args: vec![] },
+            SynthesizableSubcommand::Pack { args: vec![] },
+            SynthesizableSubcommand::Dev { args: vec![] },
+            SynthesizableSubcommand::Preview { args: vec![] },
+            SynthesizableSubcommand::Doc { args: vec![] },
+        ] {
+            let resolved = resolver.resolve(command, &envs, &cwd).await.unwrap();
+            assert_eq!(resolved.program, runtime);
+        }
+    }
+
+    #[tokio::test]
+    async fn lint_and_fmt_preserve_args_without_loading_config() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let resolver = SubcommandResolver::new(root.clone().into())
+            .with_cli_options(cli_options(Arc::from(OsStr::new("node"))));
+        let envs = Arc::new(EnvMap::default());
+
+        for cwd in [&root, &root.join("packages/app"), &root.join("packages/app/src")] {
+            for args in [
+                &[][..],
+                &["src"],
+                &["-c", "custom.json", "src"],
+                &["-c./custom.json", "src"],
+                &["-c=custom.json", "src"],
+                &["--config", "custom.json", "src"],
+                &["--config=custom.json", "src"],
+                &["--disable-nested-config", "src"],
+                &["--", "--config"],
+            ] {
+                let tool_args: Vec<String> = args.iter().map(|arg| (*arg).to_string()).collect();
+                for (command, prefix) in [
+                    (
+                        SynthesizableSubcommand::Lint { args: tool_args.clone() },
+                        &["--disable-warning=MODULE_TYPELESS_PACKAGE_JSON", "tool.js"][..],
+                    ),
+                    (SynthesizableSubcommand::Fmt { args: tool_args }, &["tool.js"]),
+                ] {
+                    let resolved = resolver.resolve(command, &envs, cwd).await.unwrap();
+                    let actual_args: Vec<&str> =
+                        resolved.args.iter().map(|arg| arg.as_str()).collect();
+                    let expected_args = [prefix, args].concat();
+                    assert_eq!(actual_args, expected_args);
+                }
+            }
+        }
+    }
 }

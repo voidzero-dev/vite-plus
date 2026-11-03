@@ -11,7 +11,8 @@ should hit cache
 
 ```
 $ vp build ◉ cache hit, replaying
-transforming...✓ 4 modules transformed.
+transforming...
+✓ 4 modules transformed.
 rendering chunks...
 computing gzip size...
 dist/index.html                <size> kB │ gzip: <size> kB

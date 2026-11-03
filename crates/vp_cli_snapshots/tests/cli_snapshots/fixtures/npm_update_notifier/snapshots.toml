@@ -1,0 +1,24 @@
+[[case]]
+name = "npm11_update_notifier"
+vp = "global"
+comment = "Managed npm 11 commands disable update notifications even when the project enables them."
+steps = [
+  ["vp", "pm", "config", "get", "update-notifier"],
+  ["vp", "install"],
+]
+
+[[case]]
+name = "npm_global_update_notifier"
+vp = "global"
+comment = "Global installs disable npm update notifications in the child process."
+steps = [["vp", "install", "-g", "./global-package"]]
+
+[[case]]
+name = "npm12_update_notifier"
+vp = "global"
+comment = "Managed npm 12 commands disable update notifications even when the project enables them."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "npm@12.0.2"], snapshot = false },
+  ["vp", "pm", "config", "get", "update-notifier"],
+  ["vp", "install"],
+]

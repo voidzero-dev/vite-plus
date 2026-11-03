@@ -54,6 +54,14 @@ function resolvePackageJsonWithNode(
   } catch {
     // Packages with an exports map often do not expose `./package.json`.
   }
+  // Read installed manifests independently of public entry points. Import-only
+  // exports and workspace packages whose dist is not built still have metadata.
+  for (const searchPath of require.resolve.paths(packageName) ?? []) {
+    const candidate = path.join(searchPath, packageName, 'package.json');
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
   try {
     return findOwningPackageJson(require.resolve(packageName), packageName);
   } catch {
@@ -150,6 +158,23 @@ export function hasVitePlusDependency(
   } | null,
 ) {
   return Boolean(pkg?.dependencies?.[VITE_PLUS_NAME] || pkg?.devDependencies?.[VITE_PLUS_NAME]);
+}
+
+export function hasPackageManagerDeclaration(
+  pkg?: { packageManager?: unknown; devEngines?: unknown } | null,
+): boolean {
+  if (!pkg) {
+    return false;
+  }
+  if (Object.hasOwn(pkg, 'packageManager')) {
+    return true;
+  }
+  return (
+    typeof pkg.devEngines === 'object' &&
+    pkg.devEngines !== null &&
+    !Array.isArray(pkg.devEngines) &&
+    Object.hasOwn(pkg.devEngines, 'packageManager')
+  );
 }
 
 /**

@@ -111,7 +111,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Set up Vite+
-        uses: voidzero-dev/setup-vp@v1
+        uses: voidzero-dev/setup-vp@<version>
         with:
           cache: true
           run-install: true

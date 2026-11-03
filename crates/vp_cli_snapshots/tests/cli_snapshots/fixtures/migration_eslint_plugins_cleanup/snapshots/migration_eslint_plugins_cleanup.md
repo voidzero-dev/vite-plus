@@ -35,13 +35,6 @@ verify the comprehensive ESLint ecosystem cleanup
     "vite": "catalog:",
     "vue": "^3.5.0",
     "vite-plus": "catalog:"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
   }
 }
 ```
@@ -70,8 +63,7 @@ export default defineConfig({
     "plugins": [
       "oxc",
       "typescript",
-      "unicorn",
-      "react"
+      "unicorn"
     ],
     "categories": {
       "correctness": "warn"

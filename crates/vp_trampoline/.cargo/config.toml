@@ -1,0 +1,24 @@
+# Cargo reads this config only when it runs from this directory.
+# Run `node packages/tools/src/build-trampoline.ts` from the repository root.
+# The helper runs Cargo from this directory.
+
+[unstable]
+# Recompile std with this crate's release profile.
+# The profile uses opt-level = "z" and panic = "immediate-abort".
+# With the raw Win32 source, this reduces the x64 executable to 14 KiB.
+# This operation needs the rust-src component.
+build-std = ["std", "panic_abort"]
+# Replace the default std features to remove panic-unwind and backtrace.
+# The optimize_for_size feature enables smaller code paths.
+# compiler-builtins-mem supplies memory functions without the CRT.
+# The #![no_main] entry point needs these functions.
+build-std-features = ["optimize_for_size", "compiler-builtins-mem"]
+# Use the abort panic strategy for `cargo test`.
+panic-abort-tests = true
+
+[build]
+# Store artifacts in the repository target/ directory.
+# CI, the snapshot runner, and install-global-cli read artifacts there.
+# Cargo resolves this path from the crate directory.
+# CARGO_TARGET_DIR overrides this value.
+target-dir = "../../target"

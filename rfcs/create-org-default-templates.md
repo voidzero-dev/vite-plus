@@ -998,7 +998,7 @@ vp create vite:library
 - **Config field name `defaultTemplate` (singular)**: reads naturally for a
   single value, which is all this RFC ships. If support for multiple default
   orgs is added later, it will live under a separate `defaultTemplates:
-string[]` field rather than overloading the singular form.
+  string[]` field rather than overloading the singular form.
 - **No `--json` output mode on day one**: the fixed-column text table from
   `--no-interactive` is already machine-parseable. Revisit if downstream
   tooling reports friction.

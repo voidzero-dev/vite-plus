@@ -1,0 +1,13 @@
+{
+  "name": "migration-oxlint-required-peer",
+  "private": true,
+  "packageManager": "pnpm@11.24.0",
+  "scripts": {
+    "check-plugin": "node check.cjs"
+  },
+  "devDependencies": {
+    "@oxlint/plugins": "1.79.0",
+    "review-oxlint-plugin": "file:artifacts/review-oxlint-plugin-1.0.0.tgz",
+    "vite-plus": "latest"
+  }
+}

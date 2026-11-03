@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { Scalar, YAMLMap } from 'yaml';
+import { YAMLMap } from 'yaml';
 
 import { PackageManager, type WorkspacePackage } from '../../types/index.ts';
 import {
@@ -10,7 +10,9 @@ import {
   VITE_PLUS_OVERRIDE_PACKAGES,
 } from '../../utils/constants.ts';
 import { readJsonFile } from '../../utils/json.ts';
+import { extractOverrideTargetName } from '../../utils/package-overrides.ts';
 import { detectPackageMetadata } from '../../utils/package.ts';
+import { isAlignableVitestEcosystemPackage } from '../../utils/vitest-ecosystem.ts';
 import {
   bootstrapProjectPaths,
   getCatalogDependencySpec,
@@ -25,26 +27,11 @@ import {
   REMOVE_PACKAGES,
   VITEST_BROWSER_DEP_NAMES,
   VITEST_IS_MANAGED_OVERRIDE,
+  pnpmOverrideKey,
   type CatalogDependencyResolver,
+  type ManagedOverrideKeyStyle,
   type PackageJsonDependencyField,
 } from './shared.ts';
-
-// Official `@vitest/*` packages are versioned in lockstep with vitest and carry
-// an EXACT `vitest` peer (verified against the registry: `@vitest/coverage-v8`,
-// `@vitest/coverage-istanbul`, `@vitest/ui`, `@vitest/web-worker`, the browser
-// family, and the runtime internals all pin `vitest: <version>`), so any the
-// project lists must match the bundled vitest or Vitest runs mixed copies (the
-// `define-config.ts` coverage guard fail-fasts on exactly this skew).
-// `@vitest/eslint-plugin` versions on its own line, and deprecated
-// `@vitest/coverage-c8` never published on the Vitest 4 line, so neither may be
-// pinned to the bundled Vitest version.
-const VITEST_ALIGN_EXCLUDED = new Set([
-  '@vitest/eslint-plugin',
-  // Deprecated at 0.33.0 and replaced by @vitest/coverage-v8. It does not
-  // publish versions on Vitest's current release line, so pinning it to the
-  // bundled Vitest version creates a dependency spec that does not exist.
-  '@vitest/coverage-c8',
-]);
 
 // Official packages that do not declare a required `vitest` peer. Keep them
 // aligned when a project lists them directly, but do not add a direct vitest
@@ -61,58 +48,7 @@ export const VITEST_DIRECT_USAGE_EXCLUDED = new Set([
   '@vitest/ws-client',
 ]);
 
-export function isAlignableVitestEcosystemPackage(name: string): boolean {
-  return name.startsWith('@vitest/') && !VITEST_ALIGN_EXCLUDED.has(name);
-}
-
-// Extract the package name an override/resolution key *targets* — i.e. the
-// package whose version would be forced. This mirrors the grammar of the real
-// package-manager parsers (verified against `@yarnpkg/parsers` parseResolution):
-//   - bare (`pkg`, `@scope/pkg`)
-//   - versioned (`pkg@1`, `@scope/pkg@1`)
-//   - pnpm parent selectors (`parent>pkg`, chained `a@1>b>@scope/pkg`)
-//   - yarn `from/target` selectors (`parent/pkg`, `parent/@scope/pkg`,
-//     `parent@1/pkg`, glob `**/pkg`)
-// For a yarn `from/target` selector the forced package is the TRAILING
-// descriptor, not the parent: `@scope/pkg@4/child` targets `child`, and an
-// npm-alias key like `@scope/pkg@npm:@other/fork@1` is parsed by yarn as
-// `from=@scope/pkg@npm:@other`, `descriptor=fork@1` — so the target is `fork`,
-// NOT `@scope/pkg`. Taking the trailing descriptor is exactly that. (Yarn
-// *rejects* keys whose range embeds a slash, e.g. `pkg@patch:…/…` or git/URL
-// ranges, so those never reach us as valid keys and need no special handling.)
-// Scoped names keep their leading `@` and internal `/`.
-function extractOverrideTargetName(key: string): string {
-  // pnpm parent selector `parent>child` (incl. chains `a>b>child`): the forced
-  // package is the deepest child. pnpm splits at a `>` whose preceding char is
-  // NOT space, `|`, or `@` — this is pnpm's own delimiter rule (DELIMITER_REGEX
-  // = /[^ |@]>/ in @pnpm/parse-overrides) — so a semver comparator range such as
-  // `pkg@>=4`, `pkg@>4`, or `>1 || >2` is NOT mistaken for a parent selector.
-  // Peel parent levels until none remain, keeping the trailing child.
-  let target = key.trim();
-  for (let delim = target.search(/[^ |@]>/); delim !== -1; delim = target.search(/[^ |@]>/)) {
-    target = target.slice(delim + 2).trim();
-  }
-  if (!target) {
-    return target;
-  }
-  // yarn `from/target` selector: drop leading parent/glob segments, keeping the
-  // trailing package descriptor (and a scoped name's own `/`).
-  if (target.includes('/')) {
-    const segments = target.split('/');
-    const last = segments[segments.length - 1];
-    const scope = segments[segments.length - 2];
-    target = scope?.startsWith('@') ? `${scope}/${last}` : last;
-  }
-  // Strip a trailing version/range suffix. The version `@` follows the name
-  // (after the `/` for a scoped name); the leading scope `@` is never a version
-  // separator.
-  const nameStart = target.startsWith('@') ? target.indexOf('/') + 1 : 0;
-  const versionAt = target.indexOf('@', nameStart);
-  if (versionAt > 0) {
-    target = target.slice(0, versionAt);
-  }
-  return target;
-}
+export { isAlignableVitestEcosystemPackage } from '../../utils/vitest-ecosystem.ts';
 
 // True iff a pnpm.overrides key's target (after stripping selector and
 // version suffixes) is a provider whose stale pin must be dropped (see
@@ -209,7 +145,7 @@ function parentChainReachesVitePlus(segments: string[]): boolean {
 //     (scoped) segments; the remaining leading `/`-segments are the `from` chain,
 //     with scoped ancestors (`@scope/name`) rejoined.
 //   - bare/versioned names (`pkg`, `@scope/pkg`, `pkg@4`) have NO parent → `null`.
-function extractOverrideParentSegments(key: string): string[] | null {
+export function extractOverrideParentSegments(key: string): string[] | null {
   let rest = key.trim();
   // Peel every pnpm `>` parent level. pnpm splits at a `>` whose preceding char
   // is NOT space, `|`, or `@` (its DELIMITER_REGEX), so semver comparators like
@@ -398,15 +334,23 @@ export function dropRemovePackageOverrideKeys(
 // vite-plus and must NOT carry a managed `vitest` pin (which would drift on a
 // future `vp update vite-plus`). When `usesVitest` is false the common-case
 // removal logic ACTIVELY strips any lingering `vitest` entry.
-export function managedOverridePackages(usesVitest: boolean): Record<string, string> {
-  if (usesVitest) {
-    return VITE_PLUS_OVERRIDE_PACKAGES;
-  }
+export function managedOverridePackages(
+  usesVitest: boolean,
+  usesWebdriverioProvider = false,
+): Record<string, string> {
   // Drop only `vitest`; every other managed key (e.g. `vite`, and in
   // force-override/CI mode the `@voidzero-dev/vite-plus-core` file: alias) stays.
-  return Object.fromEntries(
-    Object.entries(VITE_PLUS_OVERRIDE_PACKAGES).filter(([key]) => key !== 'vitest'),
-  );
+  const managed = usesVitest
+    ? VITE_PLUS_OVERRIDE_PACKAGES
+    : Object.fromEntries(
+        Object.entries(VITE_PLUS_OVERRIDE_PACKAGES).filter(([key]) => key !== 'vitest'),
+      );
+  // The community provider uses a range for @vitest/browser. An old lockfile
+  // can retain a different browser version than the bundled runner. Align the
+  // official browser package without synchronizing the community provider.
+  return usesWebdriverioProvider && VITEST_IS_MANAGED_OVERRIDE
+    ? { ...managed, '@vitest/browser': VITEST_VERSION }
+    : managed;
 }
 
 // True iff a dependency field lists a vitest ecosystem package — any name that
@@ -546,26 +490,52 @@ export function projectUsesVitestDirectly(
 // alias is always a string, whereas a nested object value (npm/bun `overrides`)
 // is a user override scoped under `vitest` and must be left intact. Returns true
 // iff an entry was removed.
-export function removeManagedVitestEntry(record: Record<string, string> | undefined): boolean {
-  if (VITEST_IS_MANAGED_OVERRIDE && typeof record?.vitest === 'string') {
-    delete record.vitest;
-    return true;
+//
+// `keyStyle` selects which spellings count as managed. Only a pnpm override sink
+// spells the managed key `vitest@*` (see `pnpmOverrideKey`), and such a sink can
+// hold either spelling. A project migrated before the #2309 fix holds the bare
+// key. A project migrated after it holds the ranged key. Every other sink stays
+// `bare`. npm also accepts a range in an override key, so a user-authored
+// `"vitest@*"` in npm `overrides` belongs to the user. Do not delete it.
+export function removeManagedVitestEntry(
+  record: Record<string, string> | undefined,
+  keyStyle: ManagedOverrideKeyStyle = 'bare',
+): boolean {
+  if (!VITEST_IS_MANAGED_OVERRIDE || !record) {
+    return false;
   }
-  return false;
+  let removed = false;
+  for (const key of managedVitestOverrideKeys(keyStyle)) {
+    if (typeof record[key] === 'string') {
+      delete record[key];
+      removed = true;
+    }
+  }
+  return removed;
 }
 
 // Remove a managed `vitest` scalar key from a YAMLMap (pnpm-workspace.yaml
-// `overrides`, `catalog`, and each named `catalogs` entry).
-export function removeYamlMapVitestEntry(map: unknown): void {
+// `overrides`, `catalog`, and each named `catalogs` entry). Only the `overrides`
+// map uses the range-qualified spelling. `catalog`, `catalogs`, and
+// `allowedVersions` key on plain package names, so they stay `bare`.
+export function removeYamlMapVitestEntry(
+  map: unknown,
+  keyStyle: ManagedOverrideKeyStyle = 'bare',
+): void {
   if (!VITEST_IS_MANAGED_OVERRIDE || !(map instanceof YAMLMap)) {
     return;
   }
-  const target = map.items.find(
-    (item) => item.key instanceof Scalar && item.key.value === 'vitest',
-  )?.key;
-  if (target) {
-    map.delete(target);
+  for (const key of managedVitestOverrideKeys(keyStyle)) {
+    map.delete(key);
   }
+}
+
+// The managed spellings of the `vitest` override key: `vitest` everywhere, plus
+// `vitest@*` in a pnpm override sink (see `pnpmOverrideKey`). Exact key
+// equality keeps selector-scoped keys such as `some-app>vitest` out, and, in
+// bare sinks, a user-authored ranged key too.
+function managedVitestOverrideKeys(keyStyle: ManagedOverrideKeyStyle): string[] {
+  return keyStyle === 'pnpm-ranged' ? ['vitest', pnpmOverrideKey('vitest')] : ['vitest'];
 }
 
 // Remove the managed `vitest` entry from pnpm peerDependencyRules (its

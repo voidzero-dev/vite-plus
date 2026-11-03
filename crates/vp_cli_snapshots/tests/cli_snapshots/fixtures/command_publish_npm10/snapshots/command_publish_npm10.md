@@ -30,7 +30,7 @@ Options:
   --filter <PATTERN>         Filter packages in monorepo
   -h, --help                 Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp pm publish --dry-run -- --loglevel error`
@@ -39,4 +39,59 @@ should preview publish without actually publishing (uses npm publish --dry-run)
 
 ```
  command-publish-npm10@1.0.0
+```
+
+## `vp pm publish --dry-run --json -- --ignore-scripts --loglevel error`
+
+should preserve JSON output without publishing
+
+```
+{
+  "id": "command-publish-npm10@1.0.0",
+  "name": "command-publish-npm10",
+  "version": "1.0.0",
+  "size": 175,
+  "unpackedSize": 94,
+  "shasum": "6686281e40fd0fd064b4a50c67e623b29b33743f",
+  "integrity": "sha512-fsEPMhiAduZmzk6kGLc+FvHMbI4SkcvpIEE5y8TkhNTtDKR1K6nMXcmJkfHI5APVP3E1uk43H/x9trb+nx++Zw==",
+  "filename": "command-publish-npm10-1.0.0.tgz",
+  "files": [
+    {
+      "path": "package.json",
+      "size": 94,
+      "mode": 420
+    }
+  ],
+  "entryCount": 1,
+  "bundled": []
+}
+```
+
+## `vpt json-edit package.json private true`
+
+
+## `vpt json-edit package.json packageManager npm@5.8.0`
+
+
+## `vp pm publish --dry-run`
+
+Reject npm versions that publish despite dry-run. The package is private for safety.
+
+**Exit code:** 1
+
+```
+npm < 5.10.0 does not support --dry-run.
+```
+
+## `vpt json-edit package.json packageManager npm@9.4.2`
+
+
+## `vp pm publish --dry-run --provenance`
+
+Reject provenance before npm 9.5.0.
+
+**Exit code:** 1
+
+```
+npm < 9.5.0 does not support --provenance.
 ```

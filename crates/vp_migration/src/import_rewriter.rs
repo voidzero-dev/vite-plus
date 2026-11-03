@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     path::{Path, PathBuf},
     sync::LazyLock,
 };
@@ -10,7 +10,7 @@ use rayon::prelude::*;
 use regex::Regex;
 use vp_error::Error;
 
-use crate::{ast_grep, file_walker};
+use crate::{ast_grep, file_walker, pack_config};
 
 /// ast-grep rules for rewriting vite imports and declare module statements
 ///
@@ -112,6 +112,8 @@ rule:
   pattern: $STR
   kind: string
   regex: ^['"]vite/.+['"]$
+  not:
+    regex: ^['"]vite/rolldown(/.*)?['"]$
   inside:
     kind: import_statement
 transform:
@@ -128,6 +130,8 @@ rule:
   pattern: $STR
   kind: string
   regex: ^['"]vite/.+['"]$
+  not:
+    regex: ^['"]vite/rolldown(/.*)?['"]$
   inside:
     kind: export_statement
 transform:
@@ -144,6 +148,8 @@ rule:
   pattern: $STR
   kind: string
   regex: ^['"]vite/.+['"]$
+  not:
+    regex: ^['"]vite/rolldown(/.*)?['"]$
   inside:
     kind: arguments
     inside:
@@ -165,6 +171,8 @@ rule:
   pattern: $STR
   kind: string
   regex: ^['"]vite/.+['"]$
+  not:
+    regex: ^['"]vite/rolldown(/.*)?['"]$
   inside:
     kind: arguments
     inside:
@@ -202,6 +210,8 @@ rule:
   pattern: $STR
   kind: string
   regex: ^['\"]vite/.+['\"]$
+  not:
+    regex: ^['"]vite/rolldown(/.*)?['"]$
   inside:
     kind: module
 transform:
@@ -216,7 +226,7 @@ fix: $NEW_IMPORT
 /// ast-grep rules for rewriting vitest imports.
 ///
 /// This rewrites (the canonical mapping shared with the `oxlint-plugin.ts`
-/// `rewriteVitePlusImportSpecifier` autofix — both implementations MUST stay
+/// `rewriteVitePlusImportSpecifier` autofix; both implementations MUST stay
 /// in sync and only produce targets that exist in the `vite-plus` package
 /// `exports` map, otherwise Node fails with `ERR_PACKAGE_PATH_NOT_EXPORTED`):
 /// - `import { ... } from 'vitest'` → `import { ... } from 'vite-plus/test'`
@@ -1075,228 +1085,6 @@ transform:
       by: "vite-plus/test/browser/providers/preview"
 fix: $NEW_IMPORT
 ---
-id: rewrite-vitest-browser-webdriverio-import
-language: TypeScript
-rule:
-  pattern: $STR
-  kind: string
-  regex: ^['"]@vitest/browser-webdriverio['"]$
-  inside:
-    kind: import_statement
-transform:
-  NEW_IMPORT:
-    replace:
-      source: $STR
-      replace: "@vitest/browser-webdriverio"
-      by: "vite-plus/test/browser-webdriverio"
-fix: $NEW_IMPORT
----
-id: rewrite-vitest-browser-webdriverio-export
-language: TypeScript
-rule:
-  pattern: $STR
-  kind: string
-  regex: ^['"]@vitest/browser-webdriverio['"]$
-  inside:
-    kind: export_statement
-transform:
-  NEW_IMPORT:
-    replace:
-      source: $STR
-      replace: "@vitest/browser-webdriverio"
-      by: "vite-plus/test/browser-webdriverio"
-fix: $NEW_IMPORT
----
-id: rewrite-vitest-browser-webdriverio-require
-language: TypeScript
-rule:
-  pattern: $STR
-  kind: string
-  regex: ^['"]@vitest/browser-webdriverio['"]$
-  inside:
-    kind: arguments
-    inside:
-      kind: call_expression
-      has:
-        field: function
-        regex: ^require$
-transform:
-  NEW_IMPORT:
-    replace:
-      source: $STR
-      replace: "@vitest/browser-webdriverio"
-      by: "vite-plus/test/browser-webdriverio"
-fix: $NEW_IMPORT
----
-id: rewrite-vitest-browser-webdriverio-dynamic-import
-language: TypeScript
-rule:
-  pattern: $STR
-  kind: string
-  regex: ^['"]@vitest/browser-webdriverio['"]$
-  inside:
-    kind: arguments
-    inside:
-      kind: call_expression
-      has:
-        field: function
-        kind: import
-transform:
-  NEW_IMPORT:
-    replace:
-      source: $STR
-      replace: "@vitest/browser-webdriverio"
-      by: "vite-plus/test/browser-webdriverio"
-fix: $NEW_IMPORT
----
-id: rewrite-vitest-browser-webdriverio-context-import
-language: TypeScript
-rule:
-  pattern: $STR
-  kind: string
-  regex: ^['"]@vitest/browser-webdriverio/context['"]$
-  inside:
-    kind: import_statement
-transform:
-  NEW_IMPORT:
-    replace:
-      source: $STR
-      replace: "@vitest/browser-webdriverio/context"
-      by: "vite-plus/test/browser/context"
-fix: $NEW_IMPORT
----
-id: rewrite-vitest-browser-webdriverio-context-export
-language: TypeScript
-rule:
-  pattern: $STR
-  kind: string
-  regex: ^['"]@vitest/browser-webdriverio/context['"]$
-  inside:
-    kind: export_statement
-transform:
-  NEW_IMPORT:
-    replace:
-      source: $STR
-      replace: "@vitest/browser-webdriverio/context"
-      by: "vite-plus/test/browser/context"
-fix: $NEW_IMPORT
----
-id: rewrite-vitest-browser-webdriverio-context-require
-language: TypeScript
-rule:
-  pattern: $STR
-  kind: string
-  regex: ^['"]@vitest/browser-webdriverio/context['"]$
-  inside:
-    kind: arguments
-    inside:
-      kind: call_expression
-      has:
-        field: function
-        regex: ^require$
-transform:
-  NEW_IMPORT:
-    replace:
-      source: $STR
-      replace: "@vitest/browser-webdriverio/context"
-      by: "vite-plus/test/browser/context"
-fix: $NEW_IMPORT
----
-id: rewrite-vitest-browser-webdriverio-context-dynamic-import
-language: TypeScript
-rule:
-  pattern: $STR
-  kind: string
-  regex: ^['"]@vitest/browser-webdriverio/context['"]$
-  inside:
-    kind: arguments
-    inside:
-      kind: call_expression
-      has:
-        field: function
-        kind: import
-transform:
-  NEW_IMPORT:
-    replace:
-      source: $STR
-      replace: "@vitest/browser-webdriverio/context"
-      by: "vite-plus/test/browser/context"
-fix: $NEW_IMPORT
----
-id: rewrite-vitest-browser-webdriverio-provider-import
-language: TypeScript
-rule:
-  pattern: $STR
-  kind: string
-  regex: ^['"]@vitest/browser-webdriverio/provider['"]$
-  inside:
-    kind: import_statement
-transform:
-  NEW_IMPORT:
-    replace:
-      source: $STR
-      replace: "@vitest/browser-webdriverio/provider"
-      by: "vite-plus/test/browser/providers/webdriverio"
-fix: $NEW_IMPORT
----
-id: rewrite-vitest-browser-webdriverio-provider-export
-language: TypeScript
-rule:
-  pattern: $STR
-  kind: string
-  regex: ^['"]@vitest/browser-webdriverio/provider['"]$
-  inside:
-    kind: export_statement
-transform:
-  NEW_IMPORT:
-    replace:
-      source: $STR
-      replace: "@vitest/browser-webdriverio/provider"
-      by: "vite-plus/test/browser/providers/webdriverio"
-fix: $NEW_IMPORT
----
-id: rewrite-vitest-browser-webdriverio-provider-require
-language: TypeScript
-rule:
-  pattern: $STR
-  kind: string
-  regex: ^['"]@vitest/browser-webdriverio/provider['"]$
-  inside:
-    kind: arguments
-    inside:
-      kind: call_expression
-      has:
-        field: function
-        regex: ^require$
-transform:
-  NEW_IMPORT:
-    replace:
-      source: $STR
-      replace: "@vitest/browser-webdriverio/provider"
-      by: "vite-plus/test/browser/providers/webdriverio"
-fix: $NEW_IMPORT
----
-id: rewrite-vitest-browser-webdriverio-provider-dynamic-import
-language: TypeScript
-rule:
-  pattern: $STR
-  kind: string
-  regex: ^['"]@vitest/browser-webdriverio/provider['"]$
-  inside:
-    kind: arguments
-    inside:
-      kind: call_expression
-      has:
-        field: function
-        kind: import
-transform:
-  NEW_IMPORT:
-    replace:
-      source: $STR
-      replace: "@vitest/browser-webdriverio/provider"
-      by: "vite-plus/test/browser/providers/webdriverio"
-fix: $NEW_IMPORT
----
 id: rewrite-vitest-subpath-import
 language: TypeScript
 rule:
@@ -1567,13 +1355,270 @@ transform:
 fix: $NEW_IMPORT
 "#;
 
+/// ast-grep rules for rewriting Oxlint JS-plugin authoring imports.
+///
+/// - `@oxlint/plugins` → `vite-plus/lint/plugins`
+/// - `oxlint/plugins-dev` → `vite-plus/lint/plugins-dev`
+/// - Named plugin API imports/exports from `oxlint` → `vite-plus/lint/plugins`
+///
+/// Keep the mapping and config-name denylist in sync with `oxlint-plugin.ts`.
+/// The shims use the bundled linter's API and resolve under strict pnpm layouts.
+///
+/// Bare `oxlint` also exposes config APIs. Rewrite a statement only when all
+/// bindings are named and outside that config surface. Leave mixed, default,
+/// namespace, side-effect, export-all, and dynamic-import forms unchanged.
+///
+/// The other two specifiers expose only plugin APIs, so their import, export,
+/// dynamic-import, and import-type forms all rewrite. Preserve require calls
+/// and module augmentations; cleanup retains any remaining `@oxlint/plugins` use.
+/// Published plugins are exempt because consumers may not have Vite+; see
+/// `SkipPackages::skip_oxlint`.
+const REWRITE_OXLINT_PLUGIN_RULES: &str = r#"---
+id: rewrite-oxlint-plugins-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@oxlint/plugins['"]$
+  inside:
+    kind: import_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@oxlint/plugins"
+      by: "vite-plus/lint/plugins"
+fix: $NEW_IMPORT
+---
+id: rewrite-oxlint-plugins-export
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@oxlint/plugins['"]$
+  inside:
+    kind: export_statement
+    field: source
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@oxlint/plugins"
+      by: "vite-plus/lint/plugins"
+fix: $NEW_IMPORT
+---
+id: rewrite-oxlint-plugins-dynamic-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@oxlint/plugins['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        kind: import
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@oxlint/plugins"
+      by: "vite-plus/lint/plugins"
+fix: $NEW_IMPORT
+---
+id: rewrite-oxlint-plugins-dev-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]oxlint/plugins-dev['"]$
+  inside:
+    kind: import_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: oxlint/plugins-dev
+      by: "vite-plus/lint/plugins-dev"
+fix: $NEW_IMPORT
+---
+id: rewrite-oxlint-plugins-dev-export
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]oxlint/plugins-dev['"]$
+  inside:
+    kind: export_statement
+    field: source
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: oxlint/plugins-dev
+      by: "vite-plus/lint/plugins-dev"
+fix: $NEW_IMPORT
+---
+id: rewrite-oxlint-plugins-dev-dynamic-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]oxlint/plugins-dev['"]$
+  inside:
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        kind: import
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: oxlint/plugins-dev
+      by: "vite-plus/lint/plugins-dev"
+fix: $NEW_IMPORT
+---
+id: rewrite-oxlint-plugin-api-export
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]oxlint['"]$
+  inside:
+    kind: export_statement
+    field: source
+    all:
+      - has:
+          kind: export_specifier
+          stopBy: end
+      - not:
+          has:
+            kind: export_specifier
+            stopBy: end
+            has:
+              field: name
+              regex: ^['"]?(defineConfig|AllowWarnDeny|DummyRule|DummyRuleMap|ExternalPluginEntry|ExternalPluginsConfig|OxlintConfig|OxlintEnv|OxlintGlobals|OxlintOverride|RuleCategories)['"]?$
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: oxlint
+      by: "vite-plus/lint/plugins"
+fix: $NEW_IMPORT
+---
+id: rewrite-oxlint-plugin-api-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]oxlint['"]$
+  inside:
+    kind: import_statement
+    all:
+      - has:
+          kind: import_specifier
+          stopBy: end
+      - not:
+          has:
+            kind: import_specifier
+            stopBy: end
+            has:
+              field: name
+              regex: ^['"]?(defineConfig|AllowWarnDeny|DummyRule|DummyRuleMap|ExternalPluginEntry|ExternalPluginsConfig|OxlintConfig|OxlintEnv|OxlintGlobals|OxlintOverride|RuleCategories)['"]?$
+      - not:
+          has:
+            kind: namespace_import
+            stopBy: end
+      - not:
+          has:
+            kind: import_clause
+            has:
+              kind: identifier
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: oxlint
+      by: "vite-plus/lint/plugins"
+fix: $NEW_IMPORT
+"#;
+
 static PARSED_VITE_RULES: LazyLock<Vec<RuleConfig<SupportLang>>> = LazyLock::new(|| {
     ast_grep::load_rules(REWRITE_VITE_RULES).expect("failed to parse vite rewrite rules")
 });
 
 static PARSED_VITEST_RULES: LazyLock<Vec<RuleConfig<SupportLang>>> = LazyLock::new(|| {
-    ast_grep::load_rules(REWRITE_VITEST_RULES).expect("failed to parse vitest rewrite rules")
+    ast_grep::load_rules(&vitest_rewrite_rules()).expect("failed to parse vitest rewrite rules")
 });
+
+static VITEST_V5_ENTRY_POINTS: LazyLock<HashMap<String, String>> = LazyLock::new(|| {
+    serde_json::from_str(include_str!("../../../packages/cli/src/vitest-v5-entry-points.json"))
+        .expect("invalid Vitest entry-point map")
+});
+
+static VITE_PLUS_TEST_SUBPATHS: LazyLock<Vec<String>> = LazyLock::new(|| {
+    let pkg: serde_json::Value =
+        serde_json::from_str(include_str!("../../../packages/cli/package.json"))
+            .expect("invalid vite-plus manifest");
+    pkg["exports"]
+        .as_object()
+        .expect("missing vite-plus exports")
+        .keys()
+        .filter_map(|key| key.strip_prefix("./test/").map(str::to_owned))
+        .collect()
+});
+
+fn vitest_rewrite_rules() -> String {
+    let allowed = VITE_PLUS_TEST_SUBPATHS
+        .iter()
+        .map(|name| regex::escape(name))
+        .collect::<Vec<_>>()
+        .join("|");
+    let generic = REWRITE_VITEST_RULES.replace(
+        r#"regex: ^['"]vitest/.+['"]$"#,
+        &format!(r#"regex: ^['"]vitest/({allowed})['"]$"#),
+    );
+    // Exact public replacements run before the generic subpath rules. Each
+    // generated rule retains the same AST context and Nuxt skip classification.
+    let template = REWRITE_VITEST_RULES
+        .split("---\nid: rewrite-vitest-subpath-import")
+        .nth(1)
+        .expect("missing subpath rule template");
+    let template = format!("---\nid: rewrite-vitest-subpath-import{template}");
+    let mut rules = String::new();
+    let mut entries = VITEST_V5_ENTRY_POINTS.iter().collect::<Vec<_>>();
+    entries.sort_by_key(|(source, _)| *source);
+    for (source, target) in entries {
+        rules.push_str(
+            &template
+                .replace(
+                    "rewrite-vitest-subpath-",
+                    &format!(
+                        "{}{}-",
+                        if source.starts_with("vitest/") {
+                            "rewrite-vitest-subpath-"
+                        } else {
+                            "rewrite-legacy-test-entry-"
+                        },
+                        source.replace('/', "-")
+                    ),
+                )
+                .replace(
+                    r#"regex: ^['"]vitest/.+['"]$"#,
+                    &format!(r#"regex: ^['"]{}['"]$"#, regex::escape(source)),
+                )
+                .replace("replace: vitest/", &format!("replace: \"{source}\""))
+                .replace("by: \"vite-plus/test/\"", &format!("by: \"{target}\"")),
+        );
+        rules.push('\n');
+    }
+    rules.push_str(&generic);
+    rules
+}
 
 const BARE_VITEST_RULE_IDS: [&str; 4] = [
     "rewrite-vitest-import",
@@ -1593,7 +1638,7 @@ fn is_unscoped_vitest_rule(rule: &RuleConfig<SupportLang>) -> bool {
 }
 
 static PARSED_UNSCOPED_VITEST_RULES: LazyLock<Vec<RuleConfig<SupportLang>>> = LazyLock::new(|| {
-    ast_grep::load_rules(REWRITE_VITEST_RULES)
+    ast_grep::load_rules(&vitest_rewrite_rules())
         .expect("failed to parse vitest rewrite rules")
         .into_iter()
         .filter(is_unscoped_vitest_rule)
@@ -1602,7 +1647,7 @@ static PARSED_UNSCOPED_VITEST_RULES: LazyLock<Vec<RuleConfig<SupportLang>>> = La
 
 static PARSED_VITEST_RULES_WITHOUT_UNSCOPED: LazyLock<Vec<RuleConfig<SupportLang>>> =
     LazyLock::new(|| {
-        ast_grep::load_rules(REWRITE_VITEST_RULES)
+        ast_grep::load_rules(&vitest_rewrite_rules())
             .expect("failed to parse vitest rewrite rules")
             .into_iter()
             .filter(|rule| !is_unscoped_vitest_rule(rule))
@@ -1611,6 +1656,11 @@ static PARSED_VITEST_RULES_WITHOUT_UNSCOPED: LazyLock<Vec<RuleConfig<SupportLang
 
 static PARSED_TSDOWN_RULES: LazyLock<Vec<RuleConfig<SupportLang>>> = LazyLock::new(|| {
     ast_grep::load_rules(REWRITE_TSDOWN_RULES).expect("failed to parse tsdown rewrite rules")
+});
+
+static PARSED_OXLINT_PLUGIN_RULES: LazyLock<Vec<RuleConfig<SupportLang>>> = LazyLock::new(|| {
+    ast_grep::load_rules(REWRITE_OXLINT_PLUGIN_RULES)
+        .expect("failed to parse oxlint plugin rewrite rules")
 });
 
 // Regex patterns for rewriting `/// <reference types="..." />` directives.
@@ -1629,6 +1679,11 @@ static RE_REF_VITEST: LazyLock<Regex> = LazyLock::new(|| {
 /// `vitest/{subpath}` → `vite-plus/test/{subpath}`
 static RE_REF_VITEST_SUBPATH: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"^(\s*///\s*<reference\s+types\s*=\s*["'])vitest/(.+?)(["']\s*/>)"#).unwrap()
+});
+
+// Exact legacy entry points also include removed Vite+ provider exports.
+static RE_REF_TEST_ENTRY: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"^(\s*///\s*<reference\s+types\s*=\s*["'])([^"']+)(["']\s*/>)"#).unwrap()
 });
 
 /// `@vitest/browser[/{subpath}]` references that map onto the *nested*
@@ -1658,7 +1713,7 @@ static RE_REF_VITEST_SCOPED_BROWSER_FLAT: LazyLock<Regex> = LazyLock::new(|| {
 /// `vite-plus/test/browser-{provider}` — a plain `@vitest/` → `vite-plus/test/` swap.
 static RE_REF_VITEST_SCOPED_PROVIDER: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
-        r#"^(\s*///\s*<reference\s+types\s*=\s*["'])@vitest/(browser-playwright|browser-preview|browser-webdriverio)(["']\s*/>)"#,
+        r#"^(\s*///\s*<reference\s+types\s*=\s*["'])@vitest/(browser-playwright|browser-preview)(["']\s*/>)"#,
     )
     .unwrap()
 });
@@ -1668,7 +1723,7 @@ static RE_REF_VITEST_SCOPED_PROVIDER: LazyLock<Regex> = LazyLock::new(|| {
 /// provider segment is dropped: → `vite-plus/test/browser/context`.
 static RE_REF_VITEST_SCOPED_PROVIDER_CONTEXT: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
-        r#"^(\s*///\s*<reference\s+types\s*=\s*["'])@vitest/browser-(playwright|preview|webdriverio)/context(["']\s*/>)"#,
+        r#"^(\s*///\s*<reference\s+types\s*=\s*["'])@vitest/browser-(playwright|preview)/context(["']\s*/>)"#,
     )
     .unwrap()
 });
@@ -1678,7 +1733,7 @@ static RE_REF_VITEST_SCOPED_PROVIDER_CONTEXT: LazyLock<Regex> = LazyLock::new(||
 /// rewritten accordingly: → `vite-plus/test/browser/providers/{provider}`.
 static RE_REF_VITEST_SCOPED_PROVIDER_ENTRY: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
-        r#"^(\s*///\s*<reference\s+types\s*=\s*["'])@vitest/browser-(playwright|preview|webdriverio)/provider(["']\s*/>)"#,
+        r#"^(\s*///\s*<reference\s+types\s*=\s*["'])@vitest/browser-(playwright|preview)/provider(["']\s*/>)"#,
     )
     .unwrap()
 });
@@ -1691,6 +1746,11 @@ static RE_REF_VITE: LazyLock<Regex> = LazyLock::new(|| {
 /// `vite/{subpath}` → `vite-plus/{subpath}`
 static RE_REF_VITE_SUBPATH: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"^(\s*///\s*<reference\s+types\s*=\s*["'])vite/(.+?)(["']\s*/>)"#).unwrap()
+});
+
+/// `vite/rolldown[/...]` is not re-exported by `vite-plus`, so it stays untouched.
+static RE_REF_VITE_ROLLDOWN: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"^\s*///\s*<reference\s+types\s*=\s*["']vite/rolldown(/[^"']*)?["']"#).unwrap()
 });
 
 /// bare `tsdown` → `vite-plus/pack`
@@ -1853,6 +1913,19 @@ fn rewrite_reference_types(
                 *preserved_vitest = true;
                 continue;
             }
+            if let Some(captures) = RE_REF_TEST_ENTRY.captures(line)
+                && let Some(target) = VITEST_V5_ENTRY_POINTS.get(&captures[2])
+            {
+                *line = format!(
+                    "{}{}{}{}",
+                    &captures[1],
+                    target,
+                    &captures[3],
+                    &line[captures[0].len()..]
+                );
+                changed = true;
+                continue;
+            }
             if apply_regex_replace(line, &RE_REF_VITEST_CONFIG, "${1}vite-plus${2}") {
                 changed = true;
                 continue;
@@ -1901,8 +1974,25 @@ fn rewrite_reference_types(
                 changed = true;
                 continue;
             }
-            if apply_regex_replace(line, &RE_REF_VITEST_SUBPATH, "${1}vite-plus/test/${2}${3}") {
-                changed = true;
+            if let Some(captures) = RE_REF_VITEST_SUBPATH.captures(line) {
+                let subpath = &captures[2];
+                let original = format!("vitest/{subpath}");
+                let target = VITEST_V5_ENTRY_POINTS.get(&original).cloned().or_else(|| {
+                    VITE_PLUS_TEST_SUBPATHS
+                        .iter()
+                        .any(|name| name == subpath)
+                        .then(|| format!("vite-plus/test/{subpath}"))
+                });
+                if let Some(target) = target {
+                    *line = format!(
+                        "{}{}{}{}",
+                        &captures[1],
+                        target,
+                        &captures[3],
+                        &line[captures[0].len()..]
+                    );
+                    changed = true;
+                }
                 continue;
             }
             if apply_regex_replace(line, &RE_REF_VITEST, "${1}vite-plus/test${2}") {
@@ -1911,7 +2001,9 @@ fn rewrite_reference_types(
             }
         }
         if !skip_packages.skip_vite {
-            if apply_regex_replace(line, &RE_REF_VITE_SUBPATH, "${1}vite-plus/${2}${3}") {
+            if !RE_REF_VITE_ROLLDOWN.is_match(line)
+                && apply_regex_replace(line, &RE_REF_VITE_SUBPATH, "${1}vite-plus/${2}${3}")
+            {
                 changed = true;
                 continue;
             }
@@ -1954,6 +2046,11 @@ struct SkipPackages {
     skip_vitest: bool,
     /// Skip rewriting tsdown imports (tsdown is in peerDependencies or dependencies)
     skip_tsdown: bool,
+    /// Skip rewriting Oxlint JS-plugin API imports (`oxlint` or `@oxlint/plugins`
+    /// is in peerDependencies or dependencies, or @oxlint/plugins is optional).
+    /// Published plugin consumers may not have Vite+. DevDependencies alone
+    /// do not mark a published plugin and do not prevent rewriting.
+    skip_oxlint: bool,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -1963,17 +2060,22 @@ struct PackageRewriteContext {
 }
 
 /// Options controlling directory-wide import rewriting.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct RewriteImportsOptions {
     /// Preserve `vitest` and `vitest/*` module specifiers throughout packages
     /// whose nearest package.json declares `@nuxt/test-utils`.
     pub preserve_vitest_in_nuxt_packages: bool,
+    /// Directories of packages that declared `oxlint` or `@oxlint/plugins` in
+    /// `dependencies` or `peerDependencies`, or optional `@oxlint/plugins`,
+    /// before migration. Capture these before manifest edits so ownership
+    /// does not depend on which dependency declarations survive those edits.
+    pub oxlint_owner_dirs: Vec<PathBuf>,
 }
 
 impl SkipPackages {
     /// Check if all packages should be skipped (file can be skipped entirely)
     const fn all_skipped(&self) -> bool {
-        self.skip_vite && self.skip_vitest && self.skip_tsdown
+        self.skip_vite && self.skip_vitest && self.skip_tsdown && self.skip_oxlint
     }
 }
 
@@ -2094,6 +2196,11 @@ fn get_package_rewrite_context(package_json_path: &Path) -> PackageRewriteContex
                 || has_package("dependencies", "vitest"),
             skip_tsdown: has_package("peerDependencies", "tsdown")
                 || has_package("dependencies", "tsdown"),
+            skip_oxlint: has_package("peerDependencies", "oxlint")
+                || has_package("dependencies", "oxlint")
+                || has_package("peerDependencies", "@oxlint/plugins")
+                || has_package("dependencies", "@oxlint/plugins")
+                || has_package("optionalDependencies", "@oxlint/plugins"),
         },
         uses_nuxt_test_utils: ["dependencies", "devDependencies", "optionalDependencies"]
             .into_iter()
@@ -2115,6 +2222,8 @@ struct RewriteResult {
     pub updated: bool,
     /// Whether an upstream `vitest` specifier was intentionally preserved.
     pub preserved_vitest: bool,
+    /// Pack configurations that need manual migration.
+    pub warnings: Vec<String>,
 }
 
 /// Result of rewriting imports in multiple files
@@ -2128,11 +2237,13 @@ pub struct BatchRewriteResult {
     pub preserved_vitest_files: Vec<PathBuf>,
     /// Files that had errors (path, error message)
     pub errors: Vec<(PathBuf, String)>,
+    /// Pack configurations that need manual migration.
+    pub warnings: Vec<(PathBuf, String)>,
 }
 
 enum FileResult {
-    Modified,
-    Unchanged,
+    Modified(Vec<String>),
+    Unchanged(Vec<String>),
     Error(String),
 }
 
@@ -2178,15 +2289,23 @@ pub fn rewrite_imports_in_directory_with_options(
 
     // Pre-compute package context for each file (requires mutable cache, done sequentially).
     let mut package_context_cache: HashMap<PathBuf, PackageRewriteContext> = HashMap::new();
+    let oxlint_owner_dirs: HashSet<PathBuf> = options.oxlint_owner_dirs.into_iter().collect();
+
     let files_with_context: Vec<(PathBuf, PackageRewriteContext)> = walk_result
         .files
         .into_iter()
         .map(|file_path| {
             let package_context =
                 if let Some(package_json_path) = find_nearest_package_json(&file_path, root) {
-                    *package_context_cache
-                        .entry(package_json_path.clone())
-                        .or_insert_with(|| get_package_rewrite_context(&package_json_path))
+                    *package_context_cache.entry(package_json_path.clone()).or_insert_with(|| {
+                        let mut context = get_package_rewrite_context(&package_json_path);
+                        if let Some(package_dir) = package_json_path.parent()
+                            && oxlint_owner_dirs.contains(package_dir)
+                        {
+                            context.skip_packages.skip_oxlint = true;
+                        }
+                        context
+                    })
                 } else {
                     PackageRewriteContext::default()
                 };
@@ -2200,11 +2319,12 @@ pub fn rewrite_imports_in_directory_with_options(
         .map(|(file_path, package_context)| {
             let skip_packages = package_context.skip_packages;
             if skip_packages.all_skipped() {
-                return (file_path, FileResult::Unchanged, false);
+                return (file_path, FileResult::Unchanged(Vec::new()), false);
             }
 
             match rewrite_import(
                 &file_path,
+                root,
                 &skip_packages,
                 options.preserve_vitest_in_nuxt_packages && package_context.uses_nuxt_test_utils,
             ) {
@@ -2213,10 +2333,18 @@ pub fn rewrite_imports_in_directory_with_options(
                         if let Err(e) = std::fs::write(&file_path, &rewrite_result.content) {
                             (file_path, FileResult::Error(e.to_string()), false)
                         } else {
-                            (file_path, FileResult::Modified, rewrite_result.preserved_vitest)
+                            (
+                                file_path,
+                                FileResult::Modified(rewrite_result.warnings),
+                                rewrite_result.preserved_vitest,
+                            )
                         }
                     } else {
-                        (file_path, FileResult::Unchanged, rewrite_result.preserved_vitest)
+                        (
+                            file_path,
+                            FileResult::Unchanged(rewrite_result.warnings),
+                            rewrite_result.preserved_vitest,
+                        )
                     }
                 }
                 Err(e) => (file_path, FileResult::Error(e.to_string()), false),
@@ -2230,15 +2358,21 @@ pub fn rewrite_imports_in_directory_with_options(
         unchanged_files: Vec::new(),
         preserved_vitest_files: Vec::new(),
         errors: Vec::new(),
+        warnings: Vec::new(),
     };
 
     for (file_path, file_result, preserved_vitest) in results {
         if preserved_vitest {
             batch_result.preserved_vitest_files.push(file_path.clone());
         }
+        if let FileResult::Modified(warnings) | FileResult::Unchanged(warnings) = &file_result {
+            batch_result
+                .warnings
+                .extend(warnings.iter().map(|message| (file_path.clone(), message.clone())));
+        }
         match file_result {
-            FileResult::Modified => batch_result.modified_files.push(file_path),
-            FileResult::Unchanged => batch_result.unchanged_files.push(file_path),
+            FileResult::Modified(_) => batch_result.modified_files.push(file_path),
+            FileResult::Unchanged(_) => batch_result.unchanged_files.push(file_path),
             FileResult::Error(msg) => batch_result.errors.push((file_path, msg)),
         }
     }
@@ -2264,11 +2398,18 @@ pub fn rewrite_imports_in_directory_with_options(
 /// - `updated`: Whether any changes were made
 fn rewrite_import(
     file_path: &Path,
+    root: &Path,
     skip_packages: &SkipPackages,
     preserve_vitest_in_nuxt_package: bool,
 ) -> Result<RewriteResult, Error> {
-    // Read the file
     let content = std::fs::read_to_string(file_path)?;
+    let is_tsdown_config = file_path.file_stem().is_some_and(|stem| stem == "tsdown.config");
+    let is_vite_config = is_vite_config_file(file_path);
+    let preserve_defaults = if !skip_packages.skip_tsdown && (is_tsdown_config || is_vite_config) {
+        Some(pack_config::preserve_legacy_defaults(file_path, root, is_tsdown_config, &content))
+    } else {
+        None
+    };
 
     // Issue #2004: `vite` specifiers are rewritten only in config entry files;
     // everything else keeps its `vite` imports (they still resolve through the
@@ -2278,12 +2419,20 @@ fn rewrite_import(
     // whereas `vite-plus` re-exports no `UserConfig` symbol for a rewritten
     // augmentation to merge with. This is layered ON TOP of the package-level
     // skip (a skipped package stays skipped).
-    rewrite_import_content_full(
+    let mut result = rewrite_import_content_full(
         &content,
         skip_packages,
         preserve_vitest_in_nuxt_package,
-        is_vite_config_file(file_path),
-    )
+        is_vite_config,
+    )?;
+    if let Some(preserve_defaults) = preserve_defaults {
+        let rewritten =
+            pack_config::rewrite_pack_config(&result.content, is_tsdown_config, preserve_defaults);
+        result.updated |= rewritten != result.content;
+        result.content = rewritten;
+        result.warnings = pack_config::pack_config_warnings(&result.content, is_tsdown_config);
+    }
+    Ok(result)
 }
 
 /// Fast pre-filter to skip expensive AST parsing for files with no relevant imports.
@@ -2297,6 +2446,11 @@ fn content_may_need_rewriting(content: &str, skip_packages: &SkipPackages) -> bo
         return true;
     }
     if !skip_packages.skip_tsdown && content.contains("tsdown") {
+        return true;
+    }
+    // Covers the bare `oxlint` specifier plus `@oxlint/plugins` and
+    // `oxlint/plugins-dev`, which all contain it as a substring.
+    if !skip_packages.skip_oxlint && content.contains("oxlint") {
         return true;
     }
     false
@@ -2335,6 +2489,7 @@ fn rewrite_import_content_full(
             content: content.to_string(),
             updated: false,
             preserved_vitest: false,
+            warnings: Vec::new(),
         });
     }
 
@@ -2380,6 +2535,18 @@ fn rewrite_import_content_full(
         }
     }
 
+    // Apply Oxlint JS-plugin API rules if not skipped (using pre-parsed rules).
+    // Unlike `vite`, these are NOT scoped to config entry files: the imports
+    // that break live in the plugin and rule sources themselves.
+    if !skip_packages.skip_oxlint {
+        let oxlint_content =
+            ast_grep::apply_loaded_rules(&new_content, &PARSED_OXLINT_PLUGIN_RULES);
+        if oxlint_content != new_content {
+            new_content = oxlint_content;
+            updated = true;
+        }
+    }
+
     // Apply reference type rewriting (/// <reference types="..." />)
     // These cannot be handled by ast-grep because they are parsed as comments.
     // `vite` reference directives are pass-through type surfaces, so they
@@ -2393,7 +2560,7 @@ fn rewrite_import_content_full(
         &mut preserved_vitest,
     );
 
-    Ok(RewriteResult { content: new_content, updated, preserved_vitest })
+    Ok(RewriteResult { content: new_content, updated, preserved_vitest, warnings: Vec::new() })
 }
 
 #[cfg(test)]
@@ -2404,24 +2571,311 @@ mod tests {
 
     use super::*;
 
-    #[test]
-    fn test_rewrite_import_content_vite() {
-        let vite_config = r#"import { defineConfig } from 'vite'
+    fn write_pack_fixture(root: &Path, relative: &str, content: &str) {
+        let file = root.join(relative);
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(file, content).unwrap();
+    }
 
-export default defineConfig({
-  plugins: [],
-});"#;
-
-        let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"import { defineConfig } from 'vite-plus'
-
-export default defineConfig({
-  plugins: [],
-});"#
+    fn write_tsdown_fixture(root: &Path, version: &str) {
+        write_pack_fixture(
+            root,
+            "node_modules/tsdown/package.json",
+            &serde_json::json!({ "name": "tsdown", "version": version }).to_string(),
         );
+    }
+
+    fn write_toolchain_fixture(root: &Path, version: &str) {
+        write_pack_fixture(root, "node_modules/vite-plus/package.json", r#"{"version":"1.0.0"}"#);
+        write_pack_fixture(
+            root,
+            "node_modules/vite-plus/dist/toolchain.json",
+            &serde_json::json!({
+                "schemaVersion": 1,
+                "nodes": [{
+                    "id": "tsdown", "name": "tsdown", "version": version,
+                    "kind": "tool", "delivery": ["bundled"]
+                }],
+                "edges": []
+            })
+            .to_string(),
+        );
+    }
+
+    #[test]
+    fn pack_defaults_prefer_the_installed_toolchain_manifest() {
+        for (version, legacy) in [("0.22.0", true), ("0.23.0", false), ("invalid", true)] {
+            let temp = tempdir().unwrap();
+            let root = temp.path();
+            write_pack_fixture(root, ".gitignore", "node_modules/\n");
+            write_toolchain_fixture(root, version);
+            // A direct tsdown installation must not override the CLI's manifest.
+            let standalone_version = if legacy { "0.23.0" } else { "0.22.0" };
+            write_tsdown_fixture(root, standalone_version);
+            write_pack_fixture(root, "apps/server-v2/package.json", "{}");
+            write_pack_fixture(
+                root,
+                "apps/server-v2/vite.config.ts",
+                "export default { pack: { entry: ['src/main.ts'], attw: true } };",
+            );
+            assert!(rewrite_imports_in_directory(root).unwrap().errors.is_empty());
+            let actual =
+                std::fs::read_to_string(root.join("apps/server-v2/vite.config.ts")).unwrap();
+            assert_eq!(actual.contains("resolveDepSubpath: true"), legacy, "{actual}");
+            assert_eq!(actual.contains("profile: 'strict'"), legacy, "{actual}");
+        }
+    }
+
+    #[test]
+    fn pack_defaults_do_not_inherit_a_manifest_past_a_local_cli() {
+        for local_manifest in [false, true] {
+            let temp = tempdir().unwrap();
+            let root = temp.path();
+            let package = root.join("packages/legacy");
+            write_pack_fixture(root, ".gitignore", "node_modules/\n");
+            write_toolchain_fixture(root, "0.23.0");
+            write_pack_fixture(&package, "package.json", "{}");
+            if local_manifest {
+                write_toolchain_fixture(&package, "0.22.0");
+            } else {
+                write_pack_fixture(
+                    &package,
+                    "node_modules/vite-plus/package.json",
+                    r#"{"version":"0.2.0"}"#,
+                );
+            }
+            write_tsdown_fixture(&package, "0.23.0");
+            write_pack_fixture(&package, "vite.config.ts", "export default { pack: {} };");
+            assert!(rewrite_imports_in_directory(root).unwrap().errors.is_empty());
+            let actual = std::fs::read_to_string(package.join("vite.config.ts")).unwrap();
+            assert!(actual.contains("resolveDepSubpath: true"), "{actual}");
+        }
+    }
+
+    #[test]
+    fn pack_defaults_follow_the_original_config_toolchain() {
+        for (extension, bundled_import, standalone_import) in [
+            (
+                "ts",
+                "import { defineConfig } from 'vite-plus/pack';",
+                "import { defineConfig } from 'tsdown';",
+            ),
+            (
+                "cts",
+                "const { defineConfig } = require('vite-plus/pack');",
+                "const { defineConfig } = require('tsdown');",
+            ),
+            (
+                "mts",
+                "const { defineConfig } = await import('vite-plus/pack');",
+                "const { defineConfig } = await import('tsdown');",
+            ),
+        ] {
+            let temp = tempdir().unwrap();
+            let root = temp.path();
+            write_pack_fixture(root, ".gitignore", "node_modules/\n");
+            write_pack_fixture(
+                root,
+                "package.json",
+                r#"{"scripts":{"build":"vp pack"},"devDependencies":{"vite-plus":"0.2.0"}}"#,
+            );
+            write_pack_fixture(
+                root,
+                "node_modules/vite-plus/package.json",
+                r#"{"name":"vite-plus","version":"0.2.0"}"#,
+            );
+            write_pack_fixture(
+                root,
+                "node_modules/vite/package.json",
+                r#"{"name":"@voidzero-dev/vite-plus-core","version":"0.2.0"}"#,
+            );
+            write_tsdown_fixture(root, "0.23.0");
+            write_pack_fixture(
+                root,
+                "packages/standalone/package.json",
+                r#"{"scripts":{"build":"tsdown"},"devDependencies":{"tsdown":"0.23.0"}}"#,
+            );
+            let body =
+                "export default defineConfig({ entry: ['src/index.ts'], dts: true, attw: true });";
+            let filename = format!("tsdown.config.{extension}");
+            write_pack_fixture(root, &filename, &format!("{bundled_import}\n{body}"));
+            write_pack_fixture(
+                root,
+                "vite.config.ts",
+                &format!(
+                    "import config from './{filename}';\nimport {{ defineConfig }} from 'vite-plus';\nexport default defineConfig({{ pack: config }});"
+                ),
+            );
+            let standalone_file = format!("packages/standalone/{filename}");
+            write_pack_fixture(
+                root,
+                &standalone_file,
+                &format!(
+                    "// Migration will rewrite imports to 'vite-plus/pack'.\n{standalone_import}\n{body}"
+                ),
+            );
+
+            assert!(rewrite_imports_in_directory(root).unwrap().errors.is_empty());
+            for (file, legacy) in [(&filename, true), (&standalone_file, false)] {
+                let actual = std::fs::read_to_string(root.join(file)).unwrap();
+                assert!(actual.contains("vite-plus/pack"), "{file}: {actual}");
+                assert_eq!(actual.contains("resolveDepSubpath: true"), legacy, "{file}: {actual}");
+                assert_eq!(actual.contains("profile: 'strict'"), legacy, "{file}: {actual}");
+            }
+
+            // The final install upgrades the bundled toolchain before another migration.
+            write_toolchain_fixture(root, "0.23.0");
+            assert!(rewrite_imports_in_directory(root).unwrap().modified_files.is_empty());
+        }
+    }
+
+    #[test]
+    fn pack_defaults_follow_the_installed_tsdown_version() {
+        for (version, legacy) in [
+            ("0.22.9", true),
+            ("0.23.0", false),
+            ("v0.23.0", false),
+            ("0.23.0+build.1", false),
+            ("0.23.0-beta.1", true),
+            ("0.24.0", false),
+            ("1.0.0", false),
+            ("invalid", true),
+        ] {
+            for package in ["vite-plus", "tsdown"] {
+                let temp = tempdir().unwrap();
+                let root = temp.path();
+                write_pack_fixture(root, ".gitignore", "node_modules/\n");
+                write_pack_fixture(root, "package.json", "{}");
+                if package == "tsdown" {
+                    write_tsdown_fixture(root, version);
+                } else {
+                    write_toolchain_fixture(root, version);
+                }
+                // Cover catalog dependencies with packages installed at the workspace root.
+                write_pack_fixture(
+                    root,
+                    "apps/server-v2/package.json",
+                    r#"{"devDependencies":{"vite-plus":"catalog:"}}"#,
+                );
+                let config = "import { defineConfig } from 'vite-plus';\nexport default defineConfig({ pack: { entry: ['src/main.ts'], format: ['esm'], attw: true } });\n";
+                write_pack_fixture(root, "apps/server-v2/vite.config.ts", config);
+                write_pack_fixture(
+                    root,
+                    "apps/server-v2/tsdown.config.ts",
+                    "export default { entry: ['src/main.ts'], attw: {} };",
+                );
+                let result = rewrite_imports_in_directory(root).unwrap();
+                assert!(result.errors.is_empty());
+                let actual =
+                    std::fs::read_to_string(root.join("apps/server-v2/vite.config.ts")).unwrap();
+                assert_eq!(
+                    actual.contains("resolveDepSubpath: true"),
+                    legacy,
+                    "{package}@{version}: {actual}"
+                );
+                assert_eq!(actual.contains("profile: 'strict'"), legacy, "{actual}");
+                let standalone =
+                    std::fs::read_to_string(root.join("apps/server-v2/tsdown.config.ts")).unwrap();
+                assert_eq!(standalone.contains("resolveDepSubpath: true"), legacy, "{standalone}");
+                assert_eq!(standalone.contains("profile: 'strict'"), legacy, "{standalone}");
+                if !legacy {
+                    assert_eq!(actual, config);
+                    assert!(result.modified_files.is_empty());
+                }
+                assert!(rewrite_imports_in_directory(root).unwrap().modified_files.is_empty());
+            }
+        }
+    }
+
+    #[test]
+    fn pack_defaults_use_workspace_local_versions_and_config_tool() {
+        let temp = tempdir().unwrap();
+        let root = temp.path();
+        write_pack_fixture(root, ".gitignore", "node_modules/\n");
+        write_pack_fixture(root, "package.json", "{}");
+        write_toolchain_fixture(root, "0.23.0");
+        write_toolchain_fixture(&root.join("packages/legacy"), "0.22.0");
+        write_tsdown_fixture(root, "0.22.0");
+        for package in ["modern", "legacy"] {
+            write_pack_fixture(root, &format!("packages/{package}/package.json"), "{}");
+            write_pack_fixture(
+                root,
+                &format!("packages/{package}/vite.config.ts"),
+                "export default { pack: { entry: ['src/index.ts'] } };",
+            );
+        }
+        write_pack_fixture(root, "tsdown.config.ts", "export default { entry: ['src/index.ts'] };");
+        assert!(rewrite_imports_in_directory(root).unwrap().errors.is_empty());
+        for (file, legacy) in [
+            ("packages/modern/vite.config.ts", false),
+            ("packages/legacy/vite.config.ts", true),
+            ("tsdown.config.ts", true),
+        ] {
+            let actual = std::fs::read_to_string(root.join(file)).unwrap();
+            assert_eq!(actual.contains("resolveDepSubpath: true"), legacy, "{file}: {actual}");
+        }
+    }
+
+    #[test]
+    fn pack_defaults_do_not_read_installs_outside_the_migration_root() {
+        let temp = tempdir().unwrap();
+        write_toolchain_fixture(temp.path(), "0.23.0");
+        write_pack_fixture(temp.path(), "project/package.json", "{}");
+        write_pack_fixture(
+            temp.path(),
+            "project/vite.config.ts",
+            "export default { pack: { entry: ['src/index.ts'] } };",
+        );
+        let root = temp.path().join("project");
+        assert!(rewrite_imports_in_directory(&root).unwrap().errors.is_empty());
+        let actual = std::fs::read_to_string(root.join("vite.config.ts")).unwrap();
+        assert!(actual.contains("resolveDepSubpath: true"));
+    }
+
+    #[test]
+    fn reports_unchanged_pack_configs_that_need_manual_migration() {
+        let temp = tempfile::tempdir().unwrap();
+        let file = temp.path().join("vite.config.ts");
+        let content = "export default { pack: { external: externalOptions, deps: { skipNodeModulesBundle: true }, bundle: false, dts: { tsgo: true } } };";
+        std::fs::write(&file, content).unwrap();
+        let result = rewrite_imports_in_directory(temp.path()).unwrap();
+        assert!(result.modified_files.is_empty());
+        assert!(result.errors.is_empty());
+        assert_eq!(result.warnings.len(), 1);
+        assert_eq!(result.warnings[0].0, file);
+        assert!(result.warnings[0].1.contains("Migrate this pack config manually"));
+        assert_eq!(std::fs::read_to_string(file).unwrap(), content);
+    }
+
+    #[test]
+    fn migrate_pack_configs_in_workspace_packages() {
+        let temp = tempfile::tempdir().unwrap();
+        let package = temp.path().join("packages/library");
+        std::fs::create_dir_all(&package).unwrap();
+        std::fs::write(
+            temp.path().join("package.json"),
+            r#"{"devDependencies":{"vite-plus":"0.2.0"}}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            package.join("package.json"),
+            r#"{"devDependencies":{"vite-plus":"0.2.0"}}"#,
+        )
+        .unwrap();
+        let vite_config = package.join("vite.config.ts");
+        let tsdown_config = package.join("tsdown.config.mts");
+        let source_file = package.join("example.ts");
+        std::fs::write(&vite_config, "export default { pack: { bundle: false } };").unwrap();
+        std::fs::write(&tsdown_config, "export default { publicDir: 'public' };").unwrap();
+        let example = "export default { pack: { bundle: false } };";
+        std::fs::write(&source_file, example).unwrap();
+        let result = rewrite_imports_in_directory(temp.path()).unwrap();
+        assert!(result.errors.is_empty());
+        assert_eq!(result.modified_files.len(), 2);
+        assert!(std::fs::read_to_string(vite_config).unwrap().contains("unbundle: true"));
+        assert!(std::fs::read_to_string(tsdown_config).unwrap().contains("copy: 'public'"));
+        assert_eq!(std::fs::read_to_string(source_file).unwrap(), example);
+        assert!(rewrite_imports_in_directory(temp.path()).unwrap().modified_files.is_empty());
     }
 
     #[test]
@@ -2523,7 +2977,9 @@ export default defineConfig({{
         .unwrap();
 
         // Run the rewrite
-        let result = rewrite_import(&vite_config_path, &SkipPackages::default(), false).unwrap();
+        let result =
+            rewrite_import(&vite_config_path, temp_dir.path(), &SkipPackages::default(), false)
+                .unwrap();
 
         assert!(result.updated);
         assert_eq!(
@@ -2741,19 +3197,37 @@ export default preview;"#
     }
 
     #[test]
+    fn test_restore_legacy_webdriverio_entries() {
+        for (source, target) in
+            VITEST_V5_ENTRY_POINTS.iter().filter(|(source, _)| source.contains("webdriverio"))
+        {
+            for template in [
+                "import { webdriverio } from 'ENTRY';",
+                "export { webdriverio } from 'ENTRY';",
+                "export * from 'ENTRY';",
+                "const provider = require('ENTRY');",
+                "const provider = await import('ENTRY');",
+                "/// <reference types='ENTRY' />",
+            ] {
+                let content = template.replace("ENTRY", source);
+                let result = rewrite_import_content(&content, &SkipPackages::default()).unwrap();
+                assert_eq!(result.content, template.replace("ENTRY", target), "{source}");
+                let repeated =
+                    rewrite_import_content(&result.content, &SkipPackages::default()).unwrap();
+                assert!(!repeated.updated, "{target}");
+            }
+        }
+    }
+
+    #[test]
     fn test_rewrite_import_content_vitest_browser_webdriverio() {
         let vite_config = r#"import { webdriverio } from '@vitest/browser-webdriverio';
 
 export default webdriverio;"#;
 
         let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"import { webdriverio } from 'vite-plus/test/browser-webdriverio';
-
-export default webdriverio;"#
-        );
+        assert!(!result.updated);
+        assert_eq!(result.content, vite_config);
     }
 
     #[test]
@@ -2763,13 +3237,8 @@ export default webdriverio;"#
 export default something;"#;
 
         let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"import { something } from "vite-plus/test/browser/context";
-
-export default something;"#
-        );
+        assert!(!result.updated);
+        assert_eq!(result.content, vite_config);
     }
 
     #[test]
@@ -2779,13 +3248,8 @@ export default something;"#
 export default webdriverio;"#;
 
         let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"import { webdriverio } from 'vite-plus/test/browser/providers/webdriverio';
-
-export default webdriverio;"#
-        );
+        assert!(!result.updated);
+        assert_eq!(result.content, vite_config);
     }
 
     #[test]
@@ -2839,6 +3303,26 @@ export default ModuleRunner;"#
     }
 
     #[test]
+    fn test_rewrite_import_content_vite_rolldown_subpath_is_kept() {
+        let vite_config = r#"/// <reference types="vite/rolldown/plugins" />
+import "vite/rolldown/plugins";
+import { viteAliasPlugin } from 'vite/rolldown/plugins';
+import 'vite/rolldown';
+export * from "vite/rolldown/utils";
+const a = require('vite/rolldown/plugins');
+const b = await import('vite/rolldown/plugins');
+declare module 'vite/rolldown/plugins' {}
+import { ModuleRunner } from 'vite/module-runner';"#;
+
+        let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            vite_config.replace("'vite/module-runner'", "'vite-plus/module-runner'")
+        );
+    }
+
+    #[test]
     fn test_rewrite_import_content_vite_subpath_double_quotes() {
         let vite_config = r#"import { ModuleRunner } from "vite/module-runner";
 
@@ -2870,19 +3354,14 @@ export default startVitest;"#;
 export default startVitest;"#
         );
 
-        // Test vitest/plugins/runner subpath
+        // Removed and unknown subpaths must not produce unpublished Vite+ paths.
         let vite_config = r#"import { somePlugin } from 'vitest/plugins/runner';
 
 export default somePlugin;"#;
 
         let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"import { somePlugin } from 'vite-plus/test/plugins/runner';
-
-export default somePlugin;"#
-        );
+        assert!(!result.updated);
+        assert_eq!(result.content, vite_config);
     }
 
     #[test]
@@ -3134,7 +3613,10 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';"#,
 
         let result = rewrite_imports_in_directory_with_options(
             temp.path(),
-            RewriteImportsOptions { preserve_vitest_in_nuxt_packages: true },
+            RewriteImportsOptions {
+                preserve_vitest_in_nuxt_packages: true,
+                ..RewriteImportsOptions::default()
+            },
         )
         .unwrap();
 
@@ -3172,7 +3654,10 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';"#,
 
         let result = rewrite_imports_in_directory_with_options(
             temp.path(),
-            RewriteImportsOptions { preserve_vitest_in_nuxt_packages: true },
+            RewriteImportsOptions {
+                preserve_vitest_in_nuxt_packages: true,
+                ..RewriteImportsOptions::default()
+            },
         )
         .unwrap();
 
@@ -3694,6 +4179,255 @@ export default defineConfig({
     }
 
     #[test]
+    fn test_rewrite_import_content_oxlint_plugins_scoped() {
+        let plugin = r#"import { definePlugin, defineRule } from "@oxlint/plugins";
+import type { Context, ESTree } from '@oxlint/plugins';"#;
+
+        let result = rewrite_import_content(plugin, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { definePlugin, defineRule } from "vite-plus/lint/plugins";
+import type { Context, ESTree } from 'vite-plus/lint/plugins';"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_oxlint_plugin_api_bare_specifier() {
+        // The pre-`@oxlint/plugins` authoring API, which is what projects
+        // migrating off a standalone `oxlint` dependency actually have.
+        let rule = r#"import { defineRule } from 'oxlint';
+
+export const noFoo = defineRule({ create: () => ({}) });"#;
+
+        let result = rewrite_import_content(rule, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { defineRule } from 'vite-plus/lint/plugins';
+
+export const noFoo = defineRule({ create: () => ({}) });"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_oxlint_plugin_api_type_only_and_aliased() {
+        let rule = r#"import type { Context } from 'oxlint';
+import { defineRule as rule } from "oxlint";"#;
+
+        let result = rewrite_import_content(rule, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import type { Context } from 'vite-plus/lint/plugins';
+import { defineRule as rule } from "vite-plus/lint/plugins";"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_oxlint_config_surface_is_preserved() {
+        // `oxlint` still owns the config surface; only the plugin authoring API
+        // moved. Redirecting these at `vite-plus/lint/plugins` would break them.
+        let config = r#"import { defineConfig } from 'oxlint';
+import type { OxlintConfig, OxlintOverride } from 'oxlint';
+
+export default defineConfig({});"#;
+
+        let result = rewrite_import_content(config, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, config);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_oxlint_quoted_config_names_are_preserved() {
+        let content = r#"import { "defineConfig" as cfg } from 'oxlint';
+import type { 'OxlintConfig' as Config } from 'oxlint';
+import { 'defineConfig' as cfg2, defineRule } from 'oxlint';
+export { "defineConfig" as config } from 'oxlint';
+export type { 'OxlintOverride' as Override } from 'oxlint';"#;
+
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_oxlint_quoted_plugin_names() {
+        let content = r#"import { "defineRule" as rule } from 'oxlint';
+export { 'definePlugin' as plugin } from 'oxlint';"#;
+
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { "defineRule" as rule } from 'vite-plus/lint/plugins';
+export { 'definePlugin' as plugin } from 'vite-plus/lint/plugins';"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_oxlint_ambiguous_forms_are_left_alone() {
+        // No named specifier means no way to tell the config surface from the
+        // plugin API, so these stay put rather than risk a wrong rewrite.
+        let content = r#"import oxlint from 'oxlint';
+import * as everything from 'oxlint';
+import 'oxlint';
+const lazy = require('oxlint');"#;
+
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_oxlint_plugins_dev_rule_tester() {
+        let test_file = r#"import { RuleTester } from 'oxlint/plugins-dev';
+
+new RuleTester().run('no-foo', noFoo, { valid: [], invalid: [] });"#;
+
+        let result = rewrite_import_content(test_file, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { RuleTester } from 'vite-plus/lint/plugins-dev';
+
+new RuleTester().run('no-foo', noFoo, { valid: [], invalid: [] });"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_oxlint_mixed_surfaces_are_left_alone() {
+        // Replacing the specifier would move `defineConfig` to an entry that
+        // does not export it. Splitting the statement is the user's call.
+        let mixed = r#"import { defineConfig, defineRule } from 'oxlint';"#;
+
+        let result = rewrite_import_content(mixed, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, mixed);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_oxlint_default_binding_is_left_alone() {
+        // `vite-plus/lint/plugins` has no default export, so redirecting a
+        // statement that carries one would leave the file invalid.
+        let mixed = r#"import oxlint, { defineRule } from 'oxlint';
+import * as everything2, { definePlugin } from 'oxlint';"#;
+
+        let result = rewrite_import_content(mixed, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, mixed);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_oxlint_named_reexport() {
+        let barrel = r#"export { defineRule } from 'oxlint';
+export type { Context } from 'oxlint';"#;
+
+        let result = rewrite_import_content(barrel, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"export { defineRule } from 'vite-plus/lint/plugins';
+export type { Context } from 'vite-plus/lint/plugins';"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_oxlint_config_reexport_is_left_alone() {
+        let barrel = r#"export { defineConfig } from 'oxlint';
+export * from 'oxlint';"#;
+
+        let result = rewrite_import_content(barrel, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, barrel);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_oxlint_import_equals_is_left_alone() {
+        // Verified against the parser, not assumed: tree-sitter does not treat
+        // `import x = require(...)` as a plain `import_statement` string, so
+        // the ESM rules never see it. Pinned so that stays true.
+        let cjs = r#"import plugins = require('@oxlint/plugins');"#;
+
+        let result = rewrite_import_content(cjs, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, cjs);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_oxlint_import_type_rewrites() {
+        // A type-position `import(...)` resolves through the shim's re-exported
+        // types, so rewriting it is correct.
+        let ty = r#"type C = import('@oxlint/plugins').Context;"#;
+
+        let result = rewrite_import_content(ty, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"type C = import('vite-plus/lint/plugins').Context;"#);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_oxlint_export_default_literal_is_data() {
+        // `export default '...'` puts the string directly under the
+        // export_statement, so an unconstrained `inside:` rewrote the exported
+        // DATA VALUE. The rules match the `source` field only.
+        let data = r#"export default '@oxlint/plugins';
+export = 'oxlint/plugins-dev';"#;
+
+        let result = rewrite_import_content(data, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, data);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_oxlint_export_const_literal_is_data() {
+        // `inside:` matches the immediate parent. In `export const x = '...'`
+        // the string sits under a lexical_declaration, not directly under the
+        // export_statement, so the re-export rules never see it. Pinned so a
+        // rule loosened to `stopBy: end` cannot start corrupting data.
+        let data = r#"export const pluginApi = '@oxlint/plugins';
+export const legacy = 'oxlint';"#;
+
+        let result = rewrite_import_content(data, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, data);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_oxlint_require_is_left_alone() {
+        // The rules preserve require calls even though the exports support
+        // CommonJS. Dependency cleanup must retain these referenced packages.
+        let cjs = r#"const { defineRule } = require('@oxlint/plugins');
+const { RuleTester } = require('oxlint/plugins-dev');"#;
+
+        let result = rewrite_import_content(cjs, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, cjs);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_oxlint_dynamic_import_still_rewrites() {
+        // Dynamic import resolves through the shim's ESM entry.
+        let dynamic = r#"const plugins = await import('@oxlint/plugins');"#;
+
+        let result = rewrite_import_content(dynamic, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"const plugins = await import('vite-plus/lint/plugins');"#);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_oxlint_skipped_for_published_plugins() {
+        let plugin = r#"import { defineRule } from '@oxlint/plugins';"#;
+
+        let result = rewrite_import_content(
+            plugin,
+            &SkipPackages { skip_oxlint: true, ..SkipPackages::default() },
+        )
+        .unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, plugin);
+    }
+
+    #[test]
     fn test_rewrite_declare_module_tsdown() {
         let content = r#"declare module 'tsdown' {
   interface BuildConfig {
@@ -3803,8 +4537,12 @@ import { describe } from 'vitest';
 
 export default defineConfig({});"#;
 
-        let skip_packages =
-            SkipPackages { skip_vite: true, skip_vitest: false, skip_tsdown: false };
+        let skip_packages = SkipPackages {
+            skip_vite: true,
+            skip_vitest: false,
+            skip_tsdown: false,
+            skip_oxlint: false,
+        };
 
         let result = rewrite_import_content(content, &skip_packages).unwrap();
         assert!(result.updated);
@@ -3826,8 +4564,12 @@ import { describe } from 'vitest';
 
 export default defineConfig({});"#;
 
-        let skip_packages =
-            SkipPackages { skip_vite: false, skip_vitest: true, skip_tsdown: false };
+        let skip_packages = SkipPackages {
+            skip_vite: false,
+            skip_vitest: true,
+            skip_tsdown: false,
+            skip_oxlint: false,
+        };
 
         let result = rewrite_import_content(content, &skip_packages).unwrap();
         assert!(result.updated);
@@ -3850,7 +4592,12 @@ import { build } from 'tsdown';
 
 export default defineConfig({});"#;
 
-        let skip_packages = SkipPackages { skip_vite: true, skip_vitest: true, skip_tsdown: true };
+        let skip_packages = SkipPackages {
+            skip_vite: true,
+            skip_vitest: true,
+            skip_tsdown: true,
+            skip_oxlint: true,
+        };
 
         let result = rewrite_import_content(content, &skip_packages).unwrap();
         assert!(!result.updated);
@@ -3859,10 +4606,20 @@ export default defineConfig({});"#;
 
     #[test]
     fn test_skip_packages_all_skipped() {
-        let skip_all = SkipPackages { skip_vite: true, skip_vitest: true, skip_tsdown: true };
+        let skip_all = SkipPackages {
+            skip_vite: true,
+            skip_vitest: true,
+            skip_tsdown: true,
+            skip_oxlint: true,
+        };
         assert!(skip_all.all_skipped());
 
-        let skip_some = SkipPackages { skip_vite: true, skip_vitest: false, skip_tsdown: true };
+        let skip_some = SkipPackages {
+            skip_vite: true,
+            skip_vitest: false,
+            skip_tsdown: true,
+            skip_oxlint: false,
+        };
         assert!(!skip_some.all_skipped());
 
         let skip_none = SkipPackages::default();
@@ -3902,7 +4659,8 @@ export default defineConfig({});"#;
   "peerDependencies": {
     "vite": "^5.0.0",
     "vitest": "^1.0.0",
-    "tsdown": "^1.0.0"
+    "tsdown": "^1.0.0",
+    "oxlint": "^1.0.0"
   }
 }"#;
         let package_json_path = temp.path().join("package.json");
@@ -3912,7 +4670,124 @@ export default defineConfig({});"#;
         assert!(skip.skip_vite);
         assert!(skip.skip_vitest);
         assert!(skip.skip_tsdown);
+        assert!(skip.skip_oxlint);
         assert!(skip.all_skipped());
+    }
+
+    #[test]
+    fn test_get_skip_packages_from_package_json_with_oxlint_plugins_peer_dependency() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        // A published Oxlint plugin declares the authoring API as a peer so its
+        // consumers supply it. Redirecting those imports at `vite-plus` would
+        // break consumers running plain Oxlint.
+        let pkg_json = r#"{
+  "name": "oxlint-plugin-example",
+  "peerDependencies": {
+    "@oxlint/plugins": "^1.0.0"
+  }
+}"#;
+        let package_json_path = temp.path().join("package.json");
+        fs::write(&package_json_path, pkg_json).unwrap();
+
+        let skip = get_skip_packages_from_package_json(&package_json_path);
+        assert!(skip.skip_oxlint);
+        assert!(!skip.skip_vite);
+    }
+
+    #[test]
+    fn test_get_skip_packages_from_package_json_oxlint_dev_dependency_is_not_a_skip_signal() {
+        use std::fs;
+
+        let temp = tempdir().unwrap();
+
+        // A devDependency is how a project's own in-repo plugin gets its types;
+        // it does not make the package a published Oxlint plugin.
+        let pkg_json = r#"{
+  "name": "my-app",
+  "devDependencies": {
+    "@oxlint/plugins": "^1.0.0",
+    "oxlint": "^1.0.0"
+  }
+}"#;
+        let package_json_path = temp.path().join("package.json");
+        fs::write(&package_json_path, pkg_json).unwrap();
+
+        let skip = get_skip_packages_from_package_json(&package_json_path);
+        assert!(!skip.skip_oxlint);
+    }
+
+    #[test]
+    fn test_captured_oxlint_ownership_stops_at_nested_package_boundary() {
+        let temp = tempdir().unwrap();
+        std::fs::write(temp.path().join("package.json"), "{}").unwrap();
+        let nested = temp.path().join("nested");
+        std::fs::create_dir(&nested).unwrap();
+        std::fs::write(nested.join("package.json"), "{}").unwrap();
+        let content = "import { defineRule } from '@oxlint/plugins';";
+        let root_files = [temp.path().join("plugin.js"), temp.path().join("rule.js")];
+        let nested_file = nested.join("plugin.js");
+        for file in root_files.iter().chain(std::iter::once(&nested_file)) {
+            std::fs::write(file, content).unwrap();
+        }
+
+        let result = rewrite_imports_in_directory_with_options(
+            temp.path(),
+            RewriteImportsOptions {
+                oxlint_owner_dirs: vec![temp.path().to_path_buf()],
+                ..RewriteImportsOptions::default()
+            },
+        )
+        .unwrap();
+
+        assert_eq!(result.modified_files, vec![nested_file.clone()]);
+        for file in root_files {
+            assert_eq!(std::fs::read_to_string(file).unwrap(), content);
+        }
+        assert_eq!(
+            std::fs::read_to_string(nested_file).unwrap(),
+            "import { defineRule } from 'vite-plus/lint/plugins';"
+        );
+    }
+
+    #[test]
+    fn test_optional_oxlint_plugin_api_is_preserved() {
+        let temp = tempdir().unwrap();
+        std::fs::write(
+            temp.path().join("package.json"),
+            r#"{"optionalDependencies":{"@oxlint/plugins":"^1.79.0"}}"#,
+        )
+        .unwrap();
+        let file = temp.path().join("plugin.js");
+        let content = "import { defineRule } from '@oxlint/plugins';";
+        std::fs::write(&file, content).unwrap();
+
+        let result = rewrite_imports_in_directory(temp.path()).unwrap();
+
+        assert!(result.modified_files.is_empty());
+        assert_eq!(std::fs::read_to_string(file).unwrap(), content);
+    }
+
+    #[test]
+    fn test_optional_oxlint_keeps_existing_rewrite_policy() {
+        let temp = tempdir().unwrap();
+        std::fs::write(
+            temp.path().join("package.json"),
+            r#"{"optionalDependencies":{"oxlint":"^1.79.0"}}"#,
+        )
+        .unwrap();
+        let file = temp.path().join("plugin.js");
+        std::fs::write(&file, "import { defineRule } from 'oxlint';").unwrap();
+
+        let result = rewrite_imports_in_directory(temp.path()).unwrap();
+
+        assert_eq!(result.modified_files, vec![file.clone()]);
+        assert_eq!(
+            std::fs::read_to_string(file).unwrap(),
+            "import { defineRule } from 'vite-plus/lint/plugins';"
+        );
     }
 
     #[test]
@@ -4590,27 +5465,24 @@ export default defineConfig({});"#
     fn test_rewrite_require_vitest_browser_webdriverio() {
         let content = r#"const x = require('@vitest/browser-webdriverio');"#;
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(result.content, r#"const x = require('vite-plus/test/browser-webdriverio');"#);
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     #[test]
     fn test_rewrite_require_vitest_browser_webdriverio_context() {
         let content = r#"const x = require('@vitest/browser-webdriverio/context');"#;
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(result.content, r#"const x = require('vite-plus/test/browser/context');"#);
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     #[test]
     fn test_rewrite_require_vitest_browser_webdriverio_provider() {
         let content = r#"const x = require('@vitest/browser-webdriverio/provider');"#;
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"const x = require('vite-plus/test/browser/providers/webdriverio');"#
-        );
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     #[test]
@@ -4695,8 +5567,12 @@ module.exports = defineConfig({});"#
         // also be skipped (parity with the import-shape rule).
         let content = r#"const vi = require('vitest');
 const { defineConfig } = require('vite');"#;
-        let skip_packages =
-            SkipPackages { skip_vite: false, skip_vitest: true, skip_tsdown: false };
+        let skip_packages = SkipPackages {
+            skip_vite: false,
+            skip_vitest: true,
+            skip_tsdown: false,
+            skip_oxlint: false,
+        };
         let result = rewrite_import_content(content, &skip_packages).unwrap();
         assert!(result.updated);
         // vitest require is NOT rewritten; vite require IS rewritten.
@@ -4712,14 +5588,6 @@ const { defineConfig } = require('vite-plus');"#
     // ====================================
 
     #[test]
-    fn test_rewrite_reference_types_vite_client() {
-        let content = r#"/// <reference types="vite/client" />"#;
-        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(result.content, r#"/// <reference types="vite-plus/client" />"#);
-    }
-
-    #[test]
     fn test_rewrite_reference_types_vite_client_single_quotes() {
         let content = r#"/// <reference types='vite/client' />"#;
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
@@ -4730,30 +5598,6 @@ const { defineConfig } = require('vite-plus');"#
     #[test]
     fn test_rewrite_reference_types_bare_vite() {
         let content = r#"/// <reference types="vite" />"#;
-        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(result.content, r#"/// <reference types="vite-plus" />"#);
-    }
-
-    #[test]
-    fn test_rewrite_reference_types_bare_vitest() {
-        let content = r#"/// <reference types="vitest" />"#;
-        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(result.content, r#"/// <reference types="vite-plus/test" />"#);
-    }
-
-    #[test]
-    fn test_rewrite_reference_types_vitest_globals() {
-        let content = r#"/// <reference types="vitest/globals" />"#;
-        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(result.content, r#"/// <reference types="vite-plus/test/globals" />"#);
-    }
-
-    #[test]
-    fn test_rewrite_reference_types_vitest_config() {
-        let content = r#"/// <reference types="vitest/config" />"#;
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(result.content, r#"/// <reference types="vite-plus" />"#);
@@ -4785,14 +5629,6 @@ const { defineConfig } = require('vite-plus');"#
     }
 
     #[test]
-    fn test_rewrite_reference_types_vitest_scoped_browser_context() {
-        let content = r#"/// <reference types="@vitest/browser/context" />"#;
-        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(result.content, r#"/// <reference types="vite-plus/test/browser/context" />"#);
-    }
-
-    #[test]
     fn test_rewrite_reference_types_vitest_scoped_browser_playwright() {
         let content = r#"/// <reference types="@vitest/browser/providers/playwright" />"#;
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
@@ -4819,17 +5655,14 @@ const { defineConfig } = require('vite-plus');"#
         let content = r#"/// <reference types="@vitest/browser/providers/webdriverio" />"#;
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
         assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"/// <reference types="vite-plus/test/browser/providers/webdriverio" />"#
-        );
+        assert_eq!(result.content, r#"/// <reference types="@vitest/browser-webdriverio" />"#);
     }
 
     #[test]
     fn test_rewrite_reference_types_vitest_scoped_provider_context() {
         // `@vitest/browser-{provider}/context` references map onto the shared
         // `vite-plus/test/browser/context` export (the provider segment is dropped).
-        for provider in ["playwright", "preview", "webdriverio"] {
+        for provider in ["playwright", "preview"] {
             let content =
                 format!(r#"/// <reference types="@vitest/browser-{provider}/context" />"#);
             let result = rewrite_import_content(&content, &SkipPackages::default()).unwrap();
@@ -4845,7 +5678,7 @@ const { defineConfig } = require('vite-plus');"#
     fn test_rewrite_reference_types_vitest_scoped_provider_entry() {
         // `@vitest/browser-{provider}/provider` references map to the provider
         // entry point under `vite-plus/test/browser/providers/{provider}`.
-        for provider in ["playwright", "preview", "webdriverio"] {
+        for provider in ["playwright", "preview"] {
             let content =
                 format!(r#"/// <reference types="@vitest/browser-{provider}/provider" />"#);
             let result = rewrite_import_content(&content, &SkipPackages::default()).unwrap();
@@ -5162,8 +5995,12 @@ export default defineConfig({});"#
         let content = r#"/// <reference types="vite/client" />
 /// <reference types="vitest" />"#;
 
-        let skip_packages =
-            SkipPackages { skip_vite: true, skip_vitest: false, skip_tsdown: false };
+        let skip_packages = SkipPackages {
+            skip_vite: true,
+            skip_vitest: false,
+            skip_tsdown: false,
+            skip_oxlint: false,
+        };
         let result = rewrite_import_content(content, &skip_packages).unwrap();
         assert!(result.updated);
         assert_eq!(
@@ -5179,8 +6016,12 @@ export default defineConfig({});"#
 /// <reference types="vitest" />
 /// <reference types="@vitest/browser/matchers" />"#;
 
-        let skip_packages =
-            SkipPackages { skip_vite: false, skip_vitest: true, skip_tsdown: false };
+        let skip_packages = SkipPackages {
+            skip_vite: false,
+            skip_vitest: true,
+            skip_tsdown: false,
+            skip_oxlint: false,
+        };
         let result = rewrite_import_content(content, &skip_packages).unwrap();
         assert!(result.updated);
         assert_eq!(
@@ -5196,8 +6037,12 @@ export default defineConfig({});"#
         let content = r#"/// <reference types="tsdown/client" />
 /// <reference types="vite/client" />"#;
 
-        let skip_packages =
-            SkipPackages { skip_vite: false, skip_vitest: false, skip_tsdown: true };
+        let skip_packages = SkipPackages {
+            skip_vite: false,
+            skip_vitest: false,
+            skip_tsdown: true,
+            skip_oxlint: false,
+        };
         let result = rewrite_import_content(content, &skip_packages).unwrap();
         assert!(result.updated);
         assert_eq!(
@@ -5213,7 +6058,12 @@ export default defineConfig({});"#
 /// <reference types="vitest" />
 /// <reference types="tsdown/client" />"#;
 
-        let skip_packages = SkipPackages { skip_vite: true, skip_vitest: true, skip_tsdown: true };
+        let skip_packages = SkipPackages {
+            skip_vite: true,
+            skip_vitest: true,
+            skip_tsdown: true,
+            skip_oxlint: true,
+        };
         let result = rewrite_import_content(content, &skip_packages).unwrap();
         assert!(!result.updated);
         assert_eq!(result.content, content);
@@ -5302,11 +6152,8 @@ export default defineConfig({});"#
         // `vite-plus/test/browser/providers/{provider}` entry point.
         let content = r#"export * from '@vitest/browser-webdriverio/provider';"#;
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"export * from 'vite-plus/test/browser/providers/webdriverio';"#
-        );
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     #[test]
@@ -5454,11 +6301,8 @@ export default defineConfig({});"#
     fn test_rewrite_dynamic_import_vitest_browser_webdriverio_provider() {
         let content = r#"const p = await import('@vitest/browser-webdriverio/provider');"#;
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"const p = await import('vite-plus/test/browser/providers/webdriverio');"#
-        );
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     #[test]
@@ -5615,21 +6459,17 @@ console.log(pkg.version);"#;
     }
 
     #[test]
-    fn test_rewrite_import_content_vitest_package_json_like_suffix_still_rewritten() {
-        // Sanity check: only the exact `vitest/package.json` subpath is
-        // skipped. A subpath that merely starts with `package.json` (e.g.,
-        // `package.json.js`) MUST still be rewritten by the catch-all rule.
+    fn test_rewrite_import_content_vitest_unknown_package_json_suffix_is_preserved() {
         let content = r#"import 'vitest/package.json.js';"#;
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(result.content, r#"import 'vite-plus/test/package.json.js';"#);
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     // The `rewrite-vitest-subpath-*` rules now explicitly exclude `vitest/config`
     // via `not: regex: ^['"]vitest/(package\.json|config)['"]$` to make the intent
     // robust against rule-reordering or ast-grep conflict-resolution changes.
-    // These tests verify the exclusion holds for all 4 import shapes and that
-    // a similar-but-distinct path like `vitest/config-extra` is NOT excluded.
+    // Unknown paths such as `vitest/config-extra` must remain untouched too.
 
     #[test]
     fn test_rewrite_import_content_vitest_config_export_not_subpath_rewritten() {
@@ -5664,13 +6504,10 @@ console.log(pkg.version);"#;
 
     #[test]
     fn test_rewrite_import_content_vitest_config_extra_subpath_static_import() {
-        // `vitest/config-extra` is NOT `vitest/config` — the subpath exclusion
-        // must not be too broad. It should still be rewritten by the catch-all
-        // subpath rule to `vite-plus/test/config-extra`.
         let content = r#"import { something } from 'vitest/config-extra';"#;
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(result.content, r#"import { something } from 'vite-plus/test/config-extra';"#);
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     #[test]
@@ -5678,8 +6515,8 @@ console.log(pkg.version);"#;
         // Same sanity check for export_statement shape.
         let content = r#"export { something } from 'vitest/config-extra';"#;
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(result.content, r#"export { something } from 'vite-plus/test/config-extra';"#);
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     #[test]
@@ -5687,8 +6524,8 @@ console.log(pkg.version);"#;
         // Same sanity check for require() shape.
         let content = r#"const m = require('vitest/config-extra');"#;
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(result.content, r#"const m = require('vite-plus/test/config-extra');"#);
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     #[test]
@@ -5696,7 +6533,47 @@ console.log(pkg.version);"#;
         // Same sanity check for dynamic import() shape.
         let content = r#"const m = await import('vitest/config-extra');"#;
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(result.content, r#"const m = await import('vite-plus/test/config-extra');"#);
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
+    }
+
+    #[test]
+    fn test_vitest_v5_canonical_entry_points() {
+        for (source, target) in VITEST_V5_ENTRY_POINTS.iter() {
+            for template in [
+                "import { value } from 'SOURCE';",
+                "import * as values from 'SOURCE';",
+                "export { value } from 'SOURCE';",
+                "export * from 'SOURCE';",
+                "const value = require('SOURCE');",
+                "const value = import('SOURCE');",
+                "type Value = typeof import('SOURCE');",
+                "/// <reference types=\"SOURCE\" /> // retain comment",
+            ] {
+                let content = template.replace("SOURCE", source);
+                let result = rewrite_import_content(&content, &SkipPackages::default()).unwrap();
+                assert_eq!(result.content, template.replace("SOURCE", target), "{content}");
+                let repeated =
+                    rewrite_import_content(&result.content, &SkipPackages::default()).unwrap();
+                assert!(!repeated.updated, "{content}");
+                assert_eq!(repeated.content, result.content, "{content}");
+            }
+        }
+    }
+
+    #[test]
+    fn test_vitest_v5_removed_entry_points_are_preserved() {
+        for source in [
+            "vitest/runners",
+            "vitest/suite",
+            "vitest/internal/module-runner",
+            "vitest/plugins/expect",
+            "vitest/unknown",
+        ] {
+            let content = format!("import {{ value }} from '{source}';");
+            let result = rewrite_import_content(&content, &SkipPackages::default()).unwrap();
+            assert!(!result.updated, "{source}");
+            assert_eq!(result.content, content);
+        }
     }
 }

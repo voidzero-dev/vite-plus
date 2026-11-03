@@ -1,0 +1,12 @@
+[[case]]
+name = "create_generator_npm"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL", "CI"]
+comment = "A generator added to an npm workspace uses installable dependency ranges instead of catalog references."
+steps = [
+  { argv = ["vp", "create", "vite:generator", "--no-interactive", "--directory", "tools/my-generator"], snapshot = false },
+  { argv = ["vpt", "print-file", "tools/my-generator/package.json"] },
+  { argv = ["vp", "install"], snapshot = false },
+  { argv = ["node", "tools/my-generator/bin/index.ts", "--help"], snapshot = false },
+]

@@ -8,7 +8,12 @@
 //! - Stream-based response parsing (modelled after `terminal-colorsaurus`)
 //! - Gradient/fade generation and RGB ANSI coloring
 
-use std::sync::{LazyLock, OnceLock};
+#![deny(clippy::print_stdout)]
+
+use std::{
+    io,
+    sync::{LazyLock, OnceLock},
+};
 #[cfg(unix)]
 use std::{
     io::Write,
@@ -557,8 +562,10 @@ pub fn print_header() {
     if !should_print_header() {
         return;
     }
-    println!("{}", vite_plus_header());
-    println!();
+    crate::output::print_and_flush(
+        &mut io::stdout().lock(),
+        &format!("{}\n\n", vite_plus_header()),
+    );
 }
 
 #[cfg(all(test, unix))]

@@ -30,13 +30,6 @@ check eslint removed and scripts rewritten
   "devDependencies": {
     "vite": "catalog:",
     "vite-plus": "catalog:"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
   }
 }
 ```
@@ -50,7 +43,7 @@ catalog:
   vite: npm:@voidzero-dev/vite-plus-core@<version>
   vite-plus: <version>
 overrides:
-  vite: 'catalog:'
+  vite@*: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite
@@ -82,8 +75,7 @@ export default defineConfig({
     "plugins": [
       "oxc",
       "typescript",
-      "unicorn",
-      "react"
+      "unicorn"
     ],
     "categories": {
       "correctness": "warn"

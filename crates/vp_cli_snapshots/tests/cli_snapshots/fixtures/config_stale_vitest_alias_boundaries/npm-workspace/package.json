@@ -1,0 +1,4 @@
+{
+  "name": "npm-workspace",
+  "workspaces": ["packages/*"]
+}

@@ -1,5 +1,10 @@
 # migration_monorepo_root_vitest_adjacent
 
+## `vpt write-file node_modules/vitest/package.json '{"name":"vitest","version":"4.1.11"}'`
+
+record the original runner version without adding a direct dependency
+
+
 ## `vp migrate --no-interactive`
 
 root with a vitest-adjacent dep but no direct vitest still gets a direct vitest pin
@@ -7,6 +12,7 @@ root with a vitest-adjacent dep but no direct vitest still gets a direct vitest 
 ```
 VITE+ - The Unified Toolchain for the Web
 
+▲ No package manager is declared in package.json; using pnpm for this migration without adding a pin. Run `vp env pin` to declare it explicitly.
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • 2 config updates applied
@@ -24,17 +30,9 @@ vitest pinned at the root even though vite-plus is injected first
     "prepare": "vp config"
   },
   "devDependencies": {
-    "vite": "catalog:",
     "vitest-browser-svelte": "^2.1.0",
     "vite-plus": "catalog:",
     "vitest": "catalog:"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
   }
 }
 ```

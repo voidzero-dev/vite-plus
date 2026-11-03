@@ -36,7 +36,7 @@ export default defineConfig({
   },
   fmt: {},
   lint: {
-    plugins: ["oxc", "typescript", "unicorn", "react"],
+    plugins: ["oxc", "typescript", "unicorn"],
     categories: {
       correctness: "warn",
     },
@@ -128,13 +128,27 @@ export default defineConfig({
           "typescript/triple-slash-reference": "error",
           "react/rules-of-hooks": "error",
           "react/exhaustive-deps": "warn",
+          "react/static-components": "error",
+          "react/use-memo": "error",
+          "react/preserve-manual-memoization": "error",
+          "react/incompatible-library": "warn",
+          "react/immutability": "error",
+          "react/globals": "error",
+          "react/refs": "error",
+          "react/set-state-in-effect": "error",
+          "react/error-boundaries": "error",
+          "react/purity": "error",
+          "react/set-state-in-render": "error",
+          "react/unsupported-syntax": "warn",
           "react/only-export-components": [
             "error",
             {
               allowConstantExport: true,
+              allowCompoundComponents: true,
             },
           ],
         },
+        plugins: ["react"],
         env: {
           es2020: true,
           browser: true,
@@ -158,6 +172,11 @@ export default defineConfig({
   plugins: lazyPlugins(() => [react()]),
 });
 ```
+
+## `cd my-react-ts && vp check`
+
+migrated rule options must be accepted by the bundled Oxlint
+
 
 ## `node check-pkg.cjs`
 

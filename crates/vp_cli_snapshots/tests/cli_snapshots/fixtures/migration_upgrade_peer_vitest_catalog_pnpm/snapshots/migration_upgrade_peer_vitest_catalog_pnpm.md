@@ -23,7 +23,6 @@ peer uses its resolved public range without gaining direct Vitest
 {
   "name": "migration-upgrade-peer-vitest-catalog-pnpm",
   "devDependencies": {
-    "vite": "catalog:",
     "vite-plus": "catalog:"
   },
   "peerDependencies": {
@@ -50,7 +49,7 @@ catalog:
 catalogs:
   test: {}
 overrides:
-  vite: 'catalog:'
+  vite@*: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite

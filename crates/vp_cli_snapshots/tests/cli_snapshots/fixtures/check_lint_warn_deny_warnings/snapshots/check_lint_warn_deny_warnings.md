@@ -18,3 +18,28 @@ warn: Lint warnings found
 
 Found 0 errors and 1 warning in 2 files (<duration>, <n> threads)
 ```
+
+## `vp check --quiet`
+
+warnings stay hidden but denyWarnings still fails
+
+**Exit code:** 1
+
+```
+pass: All 3 files are correctly formatted (<duration>, <n> threads)
+warn: Lint warnings found
+
+Found 0 errors and 1 warning in 2 files (<duration>, <n> threads)
+```
+
+## `vp lint --quiet`
+
+standalone lint also hides diagnostics and preserves the denyWarnings failure
+
+**Exit code:** 1
+
+```
+
+Found 1 warning and 0 errors.
+Finished in <duration> on 2 files with <n> rules using <n> threads.
+```

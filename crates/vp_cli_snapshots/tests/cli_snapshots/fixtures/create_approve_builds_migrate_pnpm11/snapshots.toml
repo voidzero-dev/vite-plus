@@ -1,5 +1,7 @@
 [[case]]
 name = "create_approve_builds_migrate_pnpm11"
+# Exceeded 20 seconds on Windows in CI run 35299447671.
+skip-platforms = ["windows"]
 vp = "local"
 env = { ADBLOCK = "1", PNPM_CONFIG_MINIMUM_RELEASE_AGE = "0" }
 unset-env = ["VP_SKIP_INSTALL", "CI"]

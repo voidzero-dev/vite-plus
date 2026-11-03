@@ -1,0 +1,13 @@
+{
+  "name": "core-command-root",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.24.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "devDependencies": {
+    "vite": "8.2.2",
+    "vite-plus": "latest"
+  }
+}

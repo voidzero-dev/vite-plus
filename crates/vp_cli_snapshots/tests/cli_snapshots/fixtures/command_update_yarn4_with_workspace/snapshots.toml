@@ -3,16 +3,79 @@ name = "command_update_yarn4_with_workspace"
 vp = "global"
 skip-platforms = ["windows"]
 steps = [
-  { argv = ["vp", "update", "testnpm2"], comment = "should update all testnpm2 versions" },
-  { argv = ["vpt", "print-file", "package.json", "packages/utils/package.json"], continue-on-failure = true },
-  { argv = ["vp", "update", "testnpm2", "--latest", "--filter", "app"], comment = "should update in specific package" },
-  { argv = ["vpt", "print-file", "packages/app/package.json"], continue-on-failure = true },
-  { argv = ["vp", "up", "-D", "--filter", "app"], comment = "should update dev dependencies in app" },
-  { argv = ["vpt", "print-file", "packages/app/package.json"], continue-on-failure = true },
-  { argv = ["vp", "update", "--filter", "*"], comment = "should update in all packages" },
-  { argv = ["vpt", "print-file", "packages/app/package.json", "packages/utils/package.json"], continue-on-failure = true },
-  { argv = ["vp", "update", "-r", "--no-save"], comment = "should update recursively without saving" },
+  { argv = ["vp", "update", "testnpm2", "--latest", "--filter", "app"], comment = "Berry filtered update fails instead of updating every workspace", continue-on-failure = true },
+  { argv = ["vp", "up", "-D", "--filter", "app"], comment = "the up alias rejects filters without a package argument", continue-on-failure = true },
+  { argv = ["vp", "update", "--filter", "*"], comment = "wildcard filters are also unsupported", continue-on-failure = true },
+  { argv = ["vp", "update", "--workspace", "--filter", "app", "@vite-plus-test/utils"], comment = "workspace dependency updates reject filters", continue-on-failure = true },
+  { argv = ["vp", "update", "testnpm2", "--filter", "app", "--filter", "@vite-plus-test/utils", "--recursive"], comment = "recursive update must not silently discard workspace filters", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json", "packages/app/package.json", "packages/utils/package.json"], comment = "root, selected, and unselected workspace manifests remain unchanged", continue-on-failure = true },
+  ["vpt", "stat-file", "yarn.lock", "--assert", "missing"],
+  ["vpt", "stat-file", ".pnp.cjs", "--assert", "missing"],
+  ["vpt", "stat-file", "node_modules", "--assert", "missing"],
+  { argv = ["vp", "update", "testnpm2"], comment = "unfiltered update still updates all testnpm2 versions" },
+  { argv = ["vpt", "print-file", "package.json", "packages/app/package.json", "packages/utils/package.json"], continue-on-failure = true },
+  { argv = ["vp", "update", "-r", "--no-save"], comment = "recursive no-save updates resolutions without changing workspace manifests", continue-on-failure = true },
   { argv = ["vpt", "print-file", "package.json", "packages/app/package.json"], continue-on-failure = true },
-  { argv = ["vp", "update", "--workspace", "--filter", "app", "@vite-plus-test/utils"], comment = "should update workspace dependency" },
-  { argv = ["vpt", "print-file", "packages/app/package.json"], continue-on-failure = true },
+]
+
+[[case]]
+name = "berry_recursive_preserves_ranges"
+vp = "global"
+local-registry = true
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "write-file", "package.json", '{"name":"root","private":true,"packageManager":"yarn@4.10.3","workspaces":["packages/*"],"dependencies":{"testnpm2":"1.0.0","@test/scoped":"npm:testnpm2@1.0.0","is-number":"6.0.0"}}'], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/app/package.json", '{"name":"app","version":"1.0.0","dependencies":{"testnpm2":"1.0.0","@test/scoped":"npm:testnpm2@1.0.0","is-number":"6.0.0"}}'], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/utils/package.json", '{"name":"utils","version":"1.0.0","dependencies":{"testnpm2":"1.0.0","@test/scoped":"npm:testnpm2@1.0.0","is-number":"6.0.0"}}'], snapshot = false },
+  { argv = ["vpt", "write-file", ".yarnrc.yml", "nodeLinker: node-modules\n"], snapshot = false },
+  { argv = ["vp", "install"], snapshot = false },
+  { argv = ["node", "recursive-range.cjs"], snapshot = false },
+  { argv = ["vp", "update", "--recursive", "testnpm2"], cwd = "packages/app", comment = "update the named package within its existing range across all workspaces" },
+  ["vpt", "print-file", "package.json", "packages/app/package.json", "packages/utils/package.json", "yarn.lock"],
+]
+
+[[case]]
+name = "berry_recursive_no_save"
+vp = "global"
+local-registry = true
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "write-file", "package.json", '{"name":"root","private":true,"packageManager":"yarn@4.10.3","workspaces":["packages/*"],"dependencies":{"testnpm2":"1.0.0","@test/scoped":"npm:testnpm2@1.0.0","is-number":"6.0.0"}}'], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/app/package.json", '{"name":"app","version":"1.0.0","dependencies":{"testnpm2":"1.0.0","@test/scoped":"npm:testnpm2@1.0.0","is-number":"6.0.0"}}'], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/utils/package.json", '{"name":"utils","version":"1.0.0","dependencies":{"testnpm2":"1.0.0","@test/scoped":"npm:testnpm2@1.0.0","is-number":"6.0.0"}}'], snapshot = false },
+  { argv = ["vpt", "write-file", ".yarnrc.yml", "nodeLinker: node-modules\n"], snapshot = false },
+  { argv = ["vp", "install"], snapshot = false },
+  { argv = ["node", "recursive-range.cjs"], snapshot = false },
+  { argv = ["vp", "update", "--recursive", "--no-save"], cwd = "packages/app", comment = "omitting packages re-resolves scoped and unscoped dependencies while preserving each manifest" },
+  ["vpt", "print-file", "package.json", "packages/app/package.json", "packages/utils/package.json", "yarn.lock"],
+]
+
+[[case]]
+name = "berry_recursive_update_from_child"
+vp = "global"
+local-registry = true
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "write-file", "package.json", '{"name":"root","private":true,"packageManager":"yarn@4.10.3","workspaces":["packages/*"],"dependencies":{"is-number":"6.0.0"}}'], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/app/package.json", '{"name":"app","version":"1.0.0","dependencies":{"is-number":"6.0.0"}}'], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/utils/package.json", '{"name":"utils","version":"1.0.0","dependencies":{"is-number":"6.0.0"}}'], snapshot = false },
+  { argv = ["vpt", "write-file", ".yarnrc.yml", "nodeLinker: node-modules\n"], snapshot = false },
+  { argv = ["vp", "install"], snapshot = false },
+  { argv = ["vp", "update", "--recursive", "--latest", "is-number@7.0.0", "--", "--mode", "skip-build"], cwd = "packages/app", comment = "recursive update changes every workspace manifest, not just lockfile resolutions" },
+  ["vpt", "print-file", "package.json", "packages/app/package.json", "packages/utils/package.json"],
+]
+
+[[case]]
+name = "berry_recursive_update_all_from_child"
+vp = "global"
+local-registry = true
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "write-file", "package.json", '{"name":"root","private":true,"packageManager":"yarn@4.10.3","workspaces":["packages/*"],"dependencies":{"is-number":"6.0.0"}}'], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/app/package.json", '{"name":"app","version":"1.0.0","dependencies":{"is-number":"6.0.0"}}'], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/utils/package.json", '{"name":"utils","version":"1.0.0","dependencies":{"is-number":"6.0.0"}}'], snapshot = false },
+  { argv = ["vpt", "write-file", ".yarnrc.yml", "nodeLinker: node-modules\n"], snapshot = false },
+  { argv = ["vp", "install"], snapshot = false },
+  { argv = ["vp", "update", "--recursive", "--latest"], cwd = "packages/app", comment = "omitting package names still updates all workspace dependencies" },
+  ["vpt", "print-file", "package.json", "packages/app/package.json", "packages/utils/package.json"],
 ]

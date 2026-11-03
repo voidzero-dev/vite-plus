@@ -1,10 +1,20 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import type { PluginOption, UserConfig } from '@voidzero-dev/vite-plus-core';
+import { ignoreInput, ignoreOutput } from '@voidzero-dev/vite-task-client';
 import type { OxfmtConfig } from 'oxfmt';
 import type { OxlintConfig } from 'oxlint';
+import { resolveConfig, searchForWorkspaceRoot } from 'vite';
+import type {
+  Alias,
+  InlineConfig as ViteInlineConfig,
+  Plugin,
+  PluginOption,
+  ResolvedConfig,
+  UserConfig,
+} from 'vite';
 import {
   defineConfig as viteDefineConfig,
   defineProject as viteDefineProject,
@@ -21,8 +31,9 @@ import type { PackUserConfig } from './pack.ts';
 import type { RunConfig } from './run-config.ts';
 import type { StagedConfig } from './staged-config.ts';
 import { CONFIG_METADATA_ENV, VITEST_VERSION } from './utils/constants.ts';
+import { VITEST_RESOLVER_PACKAGES } from './utils/vitest-ecosystem.ts';
 
-declare module '@voidzero-dev/vite-plus-core' {
+declare module 'vite' {
   interface UserConfig {
     /**
      * Options for oxlint
@@ -94,12 +105,8 @@ declare module '@voidzero-dev/vite-plus-core' {
     };
 
     /**
-     * Vitest test configuration.
-     *
-     * Vitest augments vite's `UserConfig` with a `test` field via
-     * `declare module 'vite'`, but vite-plus-core is a fork of vite so that
-     * augmentation does not apply here. Re-declare it locally so user
-     * configs like `defineConfig({ test: { globals: true } })` typecheck.
+     * Vitest may augment a separate Vite copy, for example an npm peer dependency.
+     * Keep the public test field on the CLI's core types in that layout too.
      */
     test?: VitestInlineConfig;
   }
@@ -114,6 +121,16 @@ type ViteUserConfigExport =
   | ViteUserConfigFnObject
   | ViteUserConfigFnPromise
   | ViteUserConfigFn;
+
+type DefinedViteUserConfig<T extends ViteUserConfigExport> = T extends ViteUserConfigFnPromise
+  ? ViteUserConfigFnPromise
+  : T extends ViteUserConfigFnObject
+    ? ViteUserConfigFnObject
+    : T extends ViteUserConfigFn
+      ? ViteUserConfigFn
+      : T extends Promise<UserConfig>
+        ? Promise<UserConfig>
+        : UserConfig;
 
 /**
  * `require` anchored at THIS module's location so `require.resolve` reaches
@@ -152,10 +169,9 @@ const vitePlusModuleFile = fileURLToPath(import.meta.url);
 
 /**
  * Absolute path to the bundled `vitest` package's `package.json`, used as a
- * second `this.resolve` importer. The nested `@vitest/*` family (`@vitest/expect`,
- * `@vitest/runner`, `@vitest/snapshot`, …) are dependencies of `vitest` itself —
- * not direct deps of `vite-plus` — so under pnpm's isolated layout they are
- * reachable from `vitest`'s location but not from [[vitePlusModuleFile]].
+ * second `this.resolve` importer. Supported transitive packages can be
+ * reachable from `vitest`'s location but not from [[vitePlusModuleFile]]
+ * under pnpm's isolated layout.
  * Resolving `package.json` is condition-agnostic, so this is safe with
  * `require.resolve`. Cached; `null` once an attempt has failed so we never retry.
  */
@@ -172,6 +188,30 @@ function getVitestAnchor(): string | null {
   return vitestAnchor;
 }
 
+// The bundled manifest is fixed for this module's lifetime. Share it across
+// browser entry points and project configs, just like the cached package path.
+let vitestExports: Record<string, unknown> | undefined;
+function getVitestImportTarget(id: string): string {
+  const anchor = getVitestAnchor();
+  if (!anchor) {
+    throw new Error('Cannot resolve the bundled Vitest package. Reinstall vite-plus.');
+  }
+  vitestExports ??= (
+    JSON.parse(readFileSync(anchor, 'utf8')) as {
+      exports: Record<string, unknown>;
+    }
+  ).exports;
+  let target = vitestExports[id === 'vitest' ? '.' : `.${id.slice('vitest'.length)}`];
+  while (target && typeof target === 'object') {
+    const conditions = target as Record<string, unknown>;
+    target = conditions.import ?? conditions.default;
+  }
+  if (typeof target !== 'string' || !target.startsWith('./')) {
+    throw new Error(`The bundled Vitest has no ESM export for ${id}.`);
+  }
+  return resolve(anchor, '..', target);
+}
+
 /**
  * Match the `vitest` / `@vitest/*` family of bare specifiers — the imports a
  * browser-mode Vite dev server must resolve. Any query string is stripped
@@ -184,12 +224,9 @@ export function isVitestFamilySpecifier(id: string): boolean {
   if (bare.startsWith('.') || bare.startsWith('/') || bare.startsWith('\0')) {
     return false;
   }
-  return (
-    bare === 'vitest' ||
-    bare.startsWith('vitest/') ||
-    bare === '@vitest/browser' ||
-    bare.startsWith('@vitest/')
-  );
+  const segments = bare.split('/');
+  const packageName = bare.startsWith('@') ? segments.slice(0, 2).join('/') : segments[0];
+  return VITEST_RESOLVER_PACKAGES.has(packageName);
 }
 
 /**
@@ -199,10 +236,10 @@ export function isVitestFamilySpecifier(id: string): boolean {
  * and `@vitest/browser` are transitive deps. pnpm's isolated layout only
  * exposes a package's *direct* deps, so the browser-mode Vite dev server
  * (rooted at the consumer project) cannot resolve `vitest/internal/browser`,
- * `@vitest/expect`, etc. Non-browser tests are unaffected — vitest's own
+ * `@vitest/mocker`, etc. Non-browser tests are unaffected — vitest's own
  * module runner handles resolution there.
  *
- * This plugin re-resolves the `vitest` / `@vitest/*` family through Vite's OWN
+ * This plugin re-resolves the explicit Vitest runtime allowlist through Vite's OWN
  * resolver, but ROOTED at `vite-plus`'s location ([[vitePlusModuleFile]]) and
  * then the bundled `vitest`'s location ([[getVitestAnchor]]) BEFORE the
  * project. So every such import binds to the same physical (pinned) Vitest that
@@ -243,10 +280,96 @@ export function isVitestFamilySpecifier(id: string): boolean {
  *     [[vitePlusCoverageVersionGuardPlugin]] fails fast on a mismatch instead.
  */
 function vitePlusVitestResolverPlugin(): PluginOption {
+  let isVitestServer = false;
   return {
     name: 'vite-plus:vitest-resolver',
     enforce: 'pre',
+    config: {
+      order: 'post',
+      handler(config, { command }) {
+        // Vitest adds this environment before post config hooks, including for
+        // programmatic runners and child projects. A browser test config alone
+        // must not redirect application dependencies during `vp dev` or `vp build`.
+        isVitestServer = command === 'serve' && !!config.environments?.['__vitest__'];
+        if (!isVitestServer || !config.test?.browser?.enabled) {
+          return;
+        }
+        // The browser optimizer resolves forced includes with an alias-only
+        // resolver, without user resolveId hooks. Keep its runtime entry points
+        // on the same graph as the browser runner in isolated installs.
+        const aliases = config.resolve?.alias;
+        const entries: Alias[] = Array.isArray(aliases)
+          ? [...aliases]
+          : Object.entries(aliases ?? {}).map(([find, replacement]) => ({ find, replacement }));
+        const runtimeRequire = createRequire(getVitestAnchor()!);
+        const targets = new Map(
+          [
+            'vitest',
+            'vitest/internal/browser',
+            'vitest/internal/traces',
+            'expect-type',
+            'magic-string',
+            'chai',
+            'vite/module-runner',
+          ].map((id) => [
+            id,
+            id.startsWith('vitest') ? getVitestImportTarget(id) : runtimeRequire.resolve(id),
+          ]),
+        );
+        if (config.test.browser.provider?.name === 'preview') {
+          const previewRequire = createRequire(vitePlusRequire.resolve('@vitest/browser-preview'));
+          // Preview's forced includes need the same isolated-layout fallback.
+          // These entries may be CommonJS; the browser optimizer converts them.
+          for (const id of ['@testing-library/user-event', '@testing-library/dom']) {
+            targets.set(id, previewRequire.resolve(id));
+          }
+        }
+        for (const [id, replacement] of targets) {
+          if (
+            entries.some(({ find }) =>
+              typeof find === 'string'
+                ? id === find || id.startsWith(`${find}/`)
+                : new RegExp(find).test(id),
+            )
+          ) {
+            continue;
+          }
+          entries.push({
+            find: new RegExp(`^${id}$`),
+            replacement,
+          });
+        }
+        config.resolve ??= {};
+        config.resolve.alias = entries;
+      },
+    },
+    configResolved(config) {
+      // Vite merges plugin arrays from inherited and referenced configs. Remove
+      // duplicate Vite+ hooks before it creates the server's plugin container.
+      const seen = new Set<string>();
+      const plugins = config.plugins as Plugin[];
+      const unique = plugins.filter((plugin) => {
+        if (!VITE_PLUS_TEST_PLUGIN_NAMES.has(plugin.name)) {
+          return true;
+        }
+        if (seen.has(plugin.name)) {
+          return false;
+        }
+        seen.add(plugin.name);
+        return true;
+      });
+      plugins.splice(0, plugins.length, ...unique);
+    },
     async resolveId(id, importer, options) {
+      if (isVitestServer && id === 'vite-plus/test') {
+        // pnpm can install separate vite-plus/Vitest peer instances for a
+        // workspace's root and children. Externalizing the child wrapper lets
+        // Node load its uninitialized runner state, bypassing Vite's hooks.
+        // Resolve the API before externalization through Vitest's own resolver:
+        // it selects the active runner (or the browser's optimized instance),
+        // not the Vitest copy next to this config's vite-plus installation.
+        return this.resolve('vitest', importer, { ...options, skipSelf: true });
+      }
       if (!isVitestFamilySpecifier(id)) {
         return null;
       }
@@ -288,10 +411,9 @@ function vitePlusVitestResolverPlugin(): PluginOption {
  * Absent packages are silently skipped so the server-deps optimizer never
  * tries to resolve a name that does not exist in the project's node_modules.
  *
- * The check is deferred to a `configResolved` plugin hook so that
- * `resolvedConfig.root` points at the actual project root (the value vite has
- * already normalised), rather than relying on `process.cwd()` at config-load
- * time (which can differ in workspace / monorepo setups).
+ * The environment hook adds installed packages to the module-runner options
+ * inherited by shared-server projects. The resolved-config hook also handles
+ * independent project servers, using each project's resolved root.
  *
  * Exported for unit testing.
  */
@@ -311,11 +433,13 @@ export const AUTO_INLINE_DEPS: ReadonlyArray<string> = [
  *
  * Exported for unit testing. The `_createRequire` parameter lets tests inject
  * a controlled resolver without needing to spy on Node's ESM module namespace.
+ * Callers may share installation results for the same root within one config load.
  */
 export function computeAutoInlineList(
   existingInline: (string | RegExp)[] | true | undefined,
   projectRoot: string,
   _createRequire: (from: string) => { resolve: (id: string) => string } = createRequire,
+  installedPackages = new Map<string, boolean>(),
 ): (string | RegExp)[] | null {
   // User opted into "inline everything" — don't touch.
   if (existingInline === true) {
@@ -323,7 +447,7 @@ export function computeAutoInlineList(
   }
   // Build a require resolver anchored at the project root so we only
   // inline packages that are actually installed there.
-  const projectRequire = _createRequire(`${projectRoot}/package.json`);
+  let projectRequire: ReturnType<typeof _createRequire> | undefined;
   // Start from a copy of the user-supplied array (or a fresh array when
   // none was provided) so the originating user-config object is not mutated.
   const merged: (string | RegExp)[] = Array.isArray(existingInline) ? [...existingInline] : [];
@@ -332,10 +456,18 @@ export function computeAutoInlineList(
     if (merged.some((entry) => entry === pkg || (entry instanceof RegExp && entry.test(pkg)))) {
       continue;
     }
-    try {
-      projectRequire.resolve(pkg);
-    } catch {
-      // Package not installed in the project — skip silently.
+    let installed = installedPackages.get(pkg);
+    if (installed === undefined) {
+      projectRequire ??= _createRequire(`${projectRoot}/package.json`);
+      try {
+        projectRequire.resolve(pkg);
+        installed = true;
+      } catch {
+        installed = false;
+      }
+      installedPackages.set(pkg, installed);
+    }
+    if (!installed) {
       continue;
     }
     merged.push(pkg);
@@ -349,33 +481,57 @@ export function computeAutoInlineList(
 }
 
 function vitePlusAutoInlineMatcherPlugin(): PluginOption {
+  let projectRoot = '';
+  let isVitestServer = false;
+  const installedByRoot = new Map<string, Map<string, boolean>>();
+  type TestConfig = Pick<VitestInlineConfig, 'server'>;
+  function inlineList(existing: (string | RegExp)[] | true | undefined, root: string) {
+    root = resolve(root);
+    let installed = installedByRoot.get(root);
+    if (!installed) {
+      installed = new Map();
+      installedByRoot.set(root, installed);
+    }
+    return computeAutoInlineList(existing, root, createRequire, installed);
+  }
   return {
     name: 'vite-plus:auto-inline-matcher-deps',
     enforce: 'pre',
-    configResolved(resolvedConfig) {
-      // Access the vitest test config via the augmented field. Vitest augments
-      // vite's `UserConfig` but not `ResolvedConfig`, so we use `any` here.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const testConfig = (resolvedConfig as any).test as
-        | { server?: { deps?: { inline?: (string | RegExp)[] | true } } }
-        | undefined;
-      const merged = computeAutoInlineList(testConfig?.server?.deps?.inline, resolvedConfig.root);
-      if (merged === null) {
+    config: {
+      order: 'post',
+      handler(config, { command }) {
+        isVitestServer = command === 'serve' && !!config.environments?.['__vitest__'];
+        projectRoot = resolve(config.root ?? '.');
+        // Reuse positive and negative lookups across environments and the
+        // resolved-config hook, but refresh them when Vite reloads the config.
+        installedByRoot.clear();
+      },
+    },
+    configEnvironment(_name, config) {
+      if (!isVitestServer) {
         return;
       }
-      // Mutate the resolved config so the finalised inline list is visible
-      // to vitest when it reads test.server.deps.inline.
-      if (!testConfig) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (resolvedConfig as any).test = { server: { deps: { inline: merged } } };
-      } else {
-        if (!testConfig.server) {
-          testConfig.server = {};
-        }
-        if (!testConfig.server.deps) {
-          testConfig.server.deps = {};
-        }
-        testConfig.server.deps.inline = merged;
+      const existing = config.resolve?.noExternal;
+      const merged = inlineList(
+        typeof existing === 'string' || existing instanceof RegExp ? [existing] : existing,
+        projectRoot,
+      );
+      if (merged !== null) {
+        config.resolve ??= {};
+        config.resolve.noExternal = merged;
+      }
+    },
+    configResolved(resolvedConfig) {
+      if (!isVitestServer) {
+        return;
+      }
+      const config = resolvedConfig as { root: string; test?: TestConfig };
+      const merged = inlineList(config.test?.server?.deps?.inline, config.root);
+      if (merged !== null) {
+        config.test ??= {};
+        config.test.server ??= {};
+        config.test.server.deps ??= {};
+        config.test.server.deps.inline = merged;
       }
     },
   };
@@ -565,10 +721,7 @@ const coverageGuardedVitestInstances = new WeakSet<object>();
 function vitePlusCoverageVersionGuardPlugin(): PluginOption {
   return {
     name: 'vite-plus:coverage-version-guard',
-    // `configureVitest` is a Vitest-specific plugin hook absent from Vite's
-    // `Plugin` type (vite-plus-core is a vite fork, so Vitest's `declare module
-    // 'vite'` augmentation does not reach it). Cast the object so the extra hook
-    // type-checks; Vitest invokes it via `getSortedPluginHooks('configureVitest')`.
+    // Vitest invokes this hook via `getSortedPluginHooks('configureVitest')`.
     configureVitest(context: VitestConfigureContext) {
       const { vitest } = context;
       // Coverage is global and the provider is imported once from the runner, so
@@ -604,14 +757,118 @@ function vitePlusCoverageVersionGuardPlugin(): PluginOption {
 }
 
 /**
- * Inject the vitest resolver plugin, the auto-inline matcher plugin, and the
- * coverage version guard into a single inline project config. Used both for
+ * The `configureVitest` plugin hook context, narrowed to the fields the cache
+ * path plugin reads: the shared runner's resolved Vite config (`cacheDir`,
+ * `root`), the resolved `fsModuleCachePath` overrides, and the attached
+ * projects (each carrying its own resolved `fsModuleCachePath`).
+ */
+interface VitestCachePathContext {
+  vitest: {
+    viteConfig: { cacheDir: string; root: string };
+    config: { fsModuleCachePath?: string };
+    projects: Array<{ config: { fsModuleCachePath?: string } }>;
+  };
+}
+
+/**
+ * Vitest 5.0.4 enables its on-disk caches by default: the results cache
+ * (`<cacheDir>/results.json`, written atomically through `.tmp-*` siblings)
+ * and the fs module cache (`<workspaceRoot>/node_modules/.vitest-cache`, or
+ * `fsModuleCachePath` when overridden). Under `vp run`, file-system tracking
+ * would record those cache reads/writes as task inputs the run itself
+ * modifies, so every `vp test` task would stay permanently uncacheable
+ * ("not cached because it modified its input"). Tell the runner these
+ * tool-managed paths are neither inputs nor outputs, mirroring what Vite
+ * does for `.vite-temp` and the optimizer cache dir.
+ *
+ * Runtime project injection appends to `vitest.projects` without calling
+ * `configureVitest` again. Observe those attachments as well as the initial
+ * list. Both ignore calls are no-ops outside `vp run`.
+ */
+function vitePlusVitestCachePathsPlugin(): PluginOption {
+  const observedProjectLists = new WeakSet<object>();
+  return {
+    name: 'vite-plus:vitest-cache-paths',
+    configureVitest(context: VitestCachePathContext) {
+      const { vitest } = context;
+      const { projects } = vitest;
+      if (observedProjectLists.has(projects)) {
+        return;
+      }
+      observedProjectLists.add(projects);
+
+      const ignoredPaths = new Set<string>();
+      const ignoreCachePath = (path: string) => {
+        if (!path || ignoredPaths.has(path)) {
+          return;
+        }
+        ignoredPaths.add(path);
+        ignoreInput(path);
+        ignoreOutput(path);
+      };
+
+      // Results and dependency-record caches live under the resolved Vite
+      // cacheDir, which Vitest points at its own subdirectory.
+      ignoreCachePath(vitest.viteConfig.cacheDir);
+
+      // Mirror Vitest's fs module cache layout: the shared root cache plus
+      // any per-project override.
+      const rootCache =
+        vitest.config.fsModuleCachePath ||
+        join(searchForWorkspaceRoot(vitest.viteConfig.root), 'node_modules', '.vitest-cache');
+      ignoreCachePath(rootCache);
+      for (const project of projects) {
+        ignoreCachePath(project.config.fsModuleCachePath || rootCache);
+      }
+
+      // Vitest's injectTestProjects resolves and attaches projects before
+      // pushing them here, even when an async `order: 'pre'` hook started
+      // injection before this hook. A restart replaces the array, so each
+      // new list gets its own observer and resolved root cache.
+      const push = projects.push;
+      projects.push = function (...addedProjects) {
+        const length = push.apply(this, addedProjects);
+        for (const project of addedProjects) {
+          ignoreCachePath(project.config.fsModuleCachePath || rootCache);
+        }
+        return length;
+      };
+    },
+  } as PluginOption;
+}
+
+/**
+ * Inject the vitest resolver plugin, the auto-inline matcher plugin, the
+ * coverage version guard, and the cache-paths plugin into a single inline
+ * project config. Used both for
  * root configs and for object-shaped entries inside `test.projects`.
  *
  * The shapes overlap (both have an optional top-level `plugins` array and
  * an optional `test.server.deps.inline`), so a shared helper keeps the
  * wiring consistent.
  */
+const VITE_PLUS_TEST_PLUGIN_NAMES: ReadonlySet<string> = new Set([
+  'vite-plus:vitest-resolver',
+  'vite-plus:auto-inline-matcher-deps',
+  'vite-plus:coverage-version-guard',
+  'vite-plus:vitest-cache-paths',
+]);
+
+function withoutVitePlusTestPlugins(plugin: PluginOption): PluginOption {
+  if (Array.isArray(plugin)) {
+    return plugin.filter(keepUserPlugin).map(withoutVitePlusTestPlugins);
+  }
+  // Injected plugins are never async, and re-wrapping with `.then` drops own props that tools like Vike look up.
+  if (plugin instanceof Promise) {
+    return plugin;
+  }
+  return plugin && VITE_PLUS_TEST_PLUGIN_NAMES.has(plugin.name) ? false : plugin;
+}
+
+function keepUserPlugin(plugin: PluginOption): boolean {
+  return !plugin || !('name' in plugin) || !VITE_PLUS_TEST_PLUGIN_NAMES.has(plugin.name);
+}
+
 function injectPluginIntoInlineConfig<
   T extends {
     plugins?: UserConfig['plugins'];
@@ -624,16 +881,15 @@ function injectPluginIntoInlineConfig<
       vitePlusVitestResolverPlugin(),
       vitePlusAutoInlineMatcherPlugin(),
       vitePlusCoverageVersionGuardPlugin(),
-      ...(config.plugins ?? []),
+      vitePlusVitestCachePathsPlugin(),
+      ...(config.plugins ?? []).filter(keepUserPlugin).map(withoutVitePlusTestPlugins),
     ],
   };
 }
 
 /**
- * Walk `config.test?.projects` and inject the vite-plus plugins into each
- * project entry. Vitest spins up an independent Vite pipeline per project, so
- * root-level plugins do NOT propagate — without this, files matched by a
- * project's `include` glob never get the vitest resolver / auto-inline plugins.
+ * Inline projects inherit root plugins by default in Vitest v5. Only projects
+ * with inheritance disabled or an external base need their own injection.
  *
  * Entry shapes (from `TestProjectConfiguration`):
  *   - string  (glob path like `'./packages/*'`)  → passed through unchanged.
@@ -658,22 +914,30 @@ function injectPluginIntoProject(project: TestProjectConfiguration): TestProject
     const wrapped: UserProjectConfigFn = (env: ConfigEnv) => {
       const result = project(env);
       if (result instanceof Promise) {
-        return result.then(injectPluginIntoInlineConfig);
+        return result.then(injectIndependentProject);
       }
-      return injectPluginIntoInlineConfig(result);
+      return injectIndependentProject(result);
     };
     return wrapped;
   }
   if (project instanceof Promise) {
-    return project.then(injectPluginIntoInlineConfig);
+    return project.then(injectIndependentProject);
   }
   if (typeof project === 'object' && project !== null) {
-    return injectPluginIntoInlineConfig(project);
+    return injectIndependentProject(project);
   }
   return project;
 }
 
-function injectPlugin(config: UserConfig): UserConfig {
+function injectIndependentProject(
+  config: UserWorkspaceConfig & { extends?: string | boolean },
+): UserWorkspaceConfig {
+  return config.extends === false || typeof config.extends === 'string'
+    ? injectPlugin(config)
+    : config;
+}
+
+function injectPlugin<T extends UserConfig>(config: T): T {
   const injected = injectPluginIntoInlineConfig(config);
   const projects = injected.test?.projects;
   if (!projects || projects.length === 0) {
@@ -704,35 +968,33 @@ function injectPluginIntoConfig(config: ViteUserConfigExport): ViteUserConfigExp
   return injectPlugin(config);
 }
 
-export function defineConfig(config: UserConfig): UserConfig;
-export function defineConfig(config: Promise<UserConfig>): Promise<UserConfig>;
-export function defineConfig(config: ViteUserConfigFnObject): ViteUserConfigFnObject;
-export function defineConfig(config: ViteUserConfigFnPromise): ViteUserConfigFnPromise;
-export function defineConfig(config: ViteUserConfigExport): ViteUserConfigExport;
-
-export function defineConfig(config: ViteUserConfigExport): ViteUserConfigExport {
-  return viteDefineConfig(injectPluginIntoConfig(config));
+/**
+ * Keep a single generic signature so callback returns receive one contextual
+ * config type. Separate sync and async overloads make TypeScript widen nested
+ * literals in async callbacks before overload resolution (for example, an
+ * Oxlint rule severity of `'warn'` becomes `string`).
+ */
+export function defineConfig<T extends ViteUserConfigExport>(config: T): DefinedViteUserConfig<T> {
+  return viteDefineConfig(injectPluginIntoConfig(config)) as DefinedViteUserConfig<T>;
 }
 
 /**
  * Inject the vite-plus plugins into a `defineProject` export. A project config
- * (`UserWorkspaceConfig`) cannot itself nest `test.projects`, so this only
- * touches the top-level `plugins` array (no project recursion like
- * [[injectPluginIntoConfig]] does).
+ * (`UserWorkspaceConfig`) can itself declare nested projects in v5. Referenced
+ * configs own a Vite server, so inject at their root and apply inheritance rules
+ * to their inline children.
  */
 function injectPluginIntoProjectExport(config: UserProjectConfigExport): UserProjectConfigExport {
   if (typeof config === 'function') {
     return (env: ConfigEnv) => {
       const result = config(env);
-      return result instanceof Promise
-        ? result.then(injectPluginIntoInlineConfig)
-        : injectPluginIntoInlineConfig(result);
+      return result instanceof Promise ? result.then(injectPlugin) : injectPlugin(result);
     };
   }
   if (config instanceof Promise) {
-    return config.then(injectPluginIntoInlineConfig);
+    return config.then(injectPlugin);
   }
-  return injectPluginIntoInlineConfig(config);
+  return injectPlugin(config);
 }
 
 /**
@@ -792,6 +1054,71 @@ export async function withConfigMetadataResolution<T>(fn: () => Promise<T>): Pro
       configMetadataSavedValue = undefined;
     }
   }
+}
+
+// The bundled core's internal parameters are not part of its public type
+// contract. Keep this bridge private to the helper.
+type ResolveConfigWithInternalOptions = (
+  inlineConfig: ViteInlineConfig,
+  command: 'build' | 'serve',
+  defaultMode?: string,
+  defaultNodeEnv?: string,
+  isPreview?: boolean,
+  patchConfig?: (config: ResolvedConfig) => void,
+  patchPlugins?: (plugins: Plugin[]) => void,
+  internalOptions?: { rootBase?: string },
+) => Promise<ResolvedConfig>;
+
+const resolveConfigWithInternalOptions = resolveConfig as ResolveConfigWithInternalOptions;
+
+export interface ResolveConfigFromFileOptions {
+  /**
+   * Base directory for an unset or relative `root` in the config file.
+   * Defaults to the config file's parent directory.
+   * Relative paths resolve from `process.cwd()`. Does not change the process cwd.
+   */
+  rootBase?: string;
+}
+
+/**
+ * Resolve a Vite config file to read a non-plugin block (`lint`, `fmt`, `pack`, …) from it,
+ * for tools such as oxlint, oxfmt, and Vite+ itself.
+ *
+ * With an absolute `configFile`, default resolution of the initial `root` from the
+ * config file is independent of `process.cwd()`: an unset or relative `root`
+ * resolves from the config file's parent directory.
+ * Callers can supply `rootBase` to use a different project directory,
+ * such as when the config is in a subdirectory. Absolute roots are preserved.
+ * Plugin hooks can later change `root` using Vite's normal semantics. For example,
+ * a relative `root` returned by a `config` hook resolves from `process.cwd()`.
+ *
+ * Relative `configFile` and explicit `rootBase` paths still resolve from `process.cwd()`.
+ * The helper does not change the process cwd; config code and plugins can still read it.
+ * The resolver loads the config once, as a config-metadata resolution,
+ * so `lazyPlugins` skips its factory.
+ * Plugins outside `lazyPlugins` still run their hooks and side effects,
+ * e.g. TanStack Start's router generator scans `src/routes`.
+ */
+export async function resolveConfigFromFile(
+  configFile: string,
+  options: ResolveConfigFromFileOptions = {},
+): Promise<ResolvedConfig> {
+  if (configFile.length === 0) {
+    throw new Error('Config file path must not be empty.');
+  }
+  const rootBase = resolve(options.rootBase ?? dirname(resolve(configFile)));
+  return withConfigMetadataResolution(() =>
+    resolveConfigWithInternalOptions(
+      { configFile },
+      'build',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { rootBase },
+    ),
+  );
 }
 
 export function lazyPlugins(cb: () => PluginOption[]): PluginOption[] | undefined;

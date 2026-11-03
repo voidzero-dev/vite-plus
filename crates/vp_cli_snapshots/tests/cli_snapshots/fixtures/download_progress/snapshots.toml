@@ -1,0 +1,120 @@
+[[case]]
+name = "download_progress_known_length"
+vp = "global"
+# The mock Node distribution uses Unix tar archives.
+skip-platforms = ["windows"]
+steps = [["node", "download.mjs", "known"]]
+
+[[case]]
+name = "download_progress_unknown_length"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [["node", "download.mjs", "unknown"]]
+
+[[case]]
+name = "download_progress_non_tty"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [{ argv = ["node", "download.mjs", "known"], tty = false }]
+
+[[case]]
+name = "download_progress_ci"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [{ argv = ["node", "download.mjs", "known"], envs = [["CI", "1"]] }]
+
+[[case]]
+name = "installation_progress_interactive"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [{ argv = ["node", "install.mjs", "interactive"], interactions = [
+  { expect-milestone = "install:download:ready" },
+  { write-key = "enter" },
+  { expect-milestone = "install:prepare:ready" },
+  { write-key = "enter" },
+  { expect-milestone = "install:dependencies:ready" },
+  { write-key = "enter" },
+] }]
+
+[[case]]
+name = "installation_progress_failure"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [{ argv = ["node", "install.mjs", "interactive", "failure"], interactions = [
+  { expect-milestone = "install:download:ready" },
+  { write-key = "enter" },
+  { expect-milestone = "install:prepare:ready" },
+  { write-key = "enter" },
+  { expect-milestone = "install:dependencies:ready" },
+  { write-key = "enter" },
+] }]
+
+[[case]]
+name = "installation_resolution_retry"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [{ argv = ["node", "install.mjs", "resolution-retry"], tty = false }]
+
+[[case]]
+name = "installation_dependency_retry"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [{ argv = ["node", "install.mjs", "dependency-retry"], tty = false }]
+
+[[case]]
+name = "installation_upgrade_handoff"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [{ argv = ["node", "install.mjs", "upgrade-handoff"], tty = false }]
+
+[[case]]
+name = "upgrade_node_metadata"
+vp = "global"
+steps = [{ argv = ["node", "upgrade-node.mjs", "metadata"], tty = false }]
+
+[[case]]
+name = "upgrade_node_metadata_legacy"
+vp = "global"
+steps = [{ argv = ["node", "upgrade-node.mjs", "legacy"], tty = false }]
+
+[[case]]
+name = "upgrade_node_metadata_failure"
+vp = "global"
+steps = [{ argv = ["node", "upgrade-node.mjs", "failure"], tty = false }]
+
+[[case]]
+name = "upgrade_node_metadata_incompatible"
+vp = "global"
+steps = [{ argv = ["node", "upgrade-node.mjs", "incompatible"], tty = false }]
+
+[[case]]
+name = "installation_peer_config"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [{ argv = ["node", "peer-config.mjs"], tty = false }]
+
+[[case]]
+name = "installation_lockfile_bypass"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [{ argv = ["node", "peer-config.mjs", "bypass"], tty = false }]
+
+[[case]]
+name = "installation_progress_non_tty"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [{ argv = ["node", "install.mjs"], tty = false, formatted-snapshot = true }]
+
+[[case]]
+name = "installation_progress_ci"
+vp = "global"
+skip-platforms = ["windows"]
+# The installer captures stdout while setup diagnostics retain the terminal on stderr.
+steps = [{ argv = ["node", "install.mjs"], envs = [["CI", "1"]], formatted-snapshot = true }]
+
+[[case]]
+name = "installation_progress_no_color"
+vp = "global"
+skip-platforms = ["windows"]
+env = { CI = "1", NO_COLOR = "1" }
+steps = [{ argv = ["node", "install.mjs"], formatted-snapshot = true }]

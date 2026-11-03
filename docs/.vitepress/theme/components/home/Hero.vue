@@ -3,6 +3,7 @@
     <div class="w-full sm:w-2xl flex flex-col justify-start items-center gap-10 px-5 sm:px-0">
       <div class="flex flex-col justify-start items-center gap-4">
         <img src="/icon.svg" alt="Vite+ Logo" class="w-9" />
+        <p class="text-sm font-mono text-[var(--color-brand)]">Vite+ 1.0 is here</p>
         <h1 class="text-center text-primary text-balance shine-text">
           <span class="inline-block">The Unified</span>
           <span class="inline-block">Toolchain for the Web</span>
@@ -15,12 +16,12 @@
       <div class="flex flex-wrap items-center justify-center gap-5">
         <a href="/guide" target="_self" class="button button--primary"> Get started </a>
         <a
-          href="https://voidzero.dev/posts/announcing-vite-plus-beta"
+          href="https://voidzero.dev/posts/announcing-vite-plus-1-0"
           target="_blank"
           rel="noopener noreferrer"
           class="button"
         >
-          Read the Beta Announcement
+          Read the 1.0 Announcement
         </a>
         <CopyPrompt />
       </div>

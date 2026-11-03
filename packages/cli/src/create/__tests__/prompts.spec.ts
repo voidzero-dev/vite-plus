@@ -40,6 +40,7 @@ describe('target directory helpers', () => {
     fs.mkdirSync(path.join(cwd, 'fate-template'), { recursive: true });
     fs.writeFileSync(path.join(cwd, 'fate-template', 'package.json'), '{}');
 
-    expect(suggestAvailableTargetDir('fate-template', cwd)).not.toBe('fate-template');
+    const suggested = suggestAvailableTargetDir('fate-template', cwd);
+    expect(fs.existsSync(path.join(cwd, suggested))).toBe(false);
   });
 });

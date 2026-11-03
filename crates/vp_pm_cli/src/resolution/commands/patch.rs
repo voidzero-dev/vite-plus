@@ -16,7 +16,14 @@ pub struct PatchArgs {
 }
 
 impl Resolve<PatchArgs> for Pnpm {
-    fn resolve(&self, args: &PatchArgs, _diag: &mut Diagnostics) -> CommandResolution {
+    fn resolve(&self, args: &PatchArgs, diag: &mut Diagnostics) -> CommandResolution {
+        if !self.supports_v7_4_commands() {
+            diag.warn(
+                DiagnosticKind::UnsupportedCommandNoop,
+                "pnpm patch requires pnpm >= 7.4.0. Skipping.",
+            );
+            return CommandResolution::Noop;
+        }
         let mut cmd = CommandBuilder::new("pnpm");
         cmd.arg("patch").arg(&args.package).extend(args.pass_through_args.iter());
         cmd.into()
@@ -24,9 +31,17 @@ impl Resolve<PatchArgs> for Pnpm {
 }
 
 impl Resolve<PatchArgs> for Npm {
-    fn resolve(&self, _args: &PatchArgs, diag: &mut Diagnostics) -> CommandResolution {
-        diag.warn(DiagnosticKind::UnsupportedCommandNoop, "npm does not have a 'patch' command.");
-        CommandResolution::Noop
+    fn resolve(&self, args: &PatchArgs, diag: &mut Diagnostics) -> CommandResolution {
+        if !self.supports_v12_commands() {
+            diag.warn(
+                DiagnosticKind::UnsupportedCommandNoop,
+                "npm does not have a 'patch' command.",
+            );
+            return CommandResolution::Noop;
+        }
+        let mut cmd = CommandBuilder::new("npm");
+        cmd.arg("patch").arg("add").arg(&args.package).extend(args.pass_through_args.iter());
+        cmd.into()
     }
 }
 
@@ -58,7 +73,7 @@ mod tests {
     use super::*;
     use crate::resolution::{
         resolve,
-        test_utils::{bun, npm, parse_args, pnpm, yarn},
+        test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
     };
 
     fn patch_args(package: &str) -> PatchArgs {
@@ -66,12 +81,29 @@ mod tests {
     }
 
     #[test]
+    fn test_npm_patch() {
+        for manager in [npm("12.0.0"), npm("12.0.2"), Npm::unknown_version()] {
+            for package in
+                ["left-pad@1.3.0", "@scope/pkg@1.0.0", "add", "commit", "update", "ls", "rm"]
+            {
+                let result = resolve(
+                    &manager,
+                    PatchArgs {
+                        package: package.to_string(),
+                        pass_through_args: vec!["--edit-dir".to_string(), ".patches".to_string()],
+                    },
+                );
+                assert!(result.diagnostics.is_empty());
+                let command = expect_run(result.outcome);
+                assert_eq!(command.program, "npm");
+                assert_eq!(command.args, vec!["patch", "add", package, "--edit-dir", ".patches"]);
+            }
+        }
+    }
+
+    #[test]
     fn test_pnpm_patch() {
-        let CommandResolution::Run(command) =
-            resolve(&pnpm("10.0.0"), patch_args("left-pad")).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&pnpm("10.0.0"), patch_args("left-pad")).outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["patch", "left-pad"]);
@@ -79,11 +111,7 @@ mod tests {
 
     #[test]
     fn test_yarn_berry_patch() {
-        let CommandResolution::Run(command) =
-            resolve(&yarn("4.0.0"), patch_args("left-pad")).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&yarn("4.0.0"), patch_args("left-pad")).outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["patch", "left-pad"]);
@@ -91,11 +119,7 @@ mod tests {
 
     #[test]
     fn test_bun_patch() {
-        let CommandResolution::Run(command) =
-            resolve(&bun("1.3.11"), patch_args("left-pad")).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&bun("1.3.11"), patch_args("left-pad")).outcome);
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, vec!["patch", "left-pad"]);
@@ -103,12 +127,14 @@ mod tests {
 
     #[test]
     fn test_npm_patch_not_supported() {
-        let result = resolve(&npm("11.0.0"), patch_args("left-pad"));
+        for version in ["10.0.0", "11.0.0", "12.0.0-beta.1"] {
+            let result = resolve(&npm(version), patch_args("left-pad"));
 
-        assert_eq!(result.outcome, CommandResolution::Noop);
-        assert_eq!(result.diagnostics.len(), 1);
-        assert_eq!(result.diagnostics[0].kind, DiagnosticKind::UnsupportedCommandNoop);
-        assert_eq!(result.diagnostics[0].message, "npm does not have a 'patch' command.");
+            assert_eq!(result.outcome, CommandResolution::Noop);
+            assert_eq!(result.diagnostics.len(), 1);
+            assert_eq!(result.diagnostics[0].kind, DiagnosticKind::UnsupportedCommandNoop);
+            assert_eq!(result.diagnostics[0].message, "npm does not have a 'patch' command.");
+        }
     }
 
     #[test]
@@ -123,17 +149,16 @@ mod tests {
 
     #[test]
     fn test_patch_with_pass_through_args() {
-        let CommandResolution::Run(command) = resolve(
-            &pnpm("10.0.0"),
-            PatchArgs {
-                package: "left-pad".to_string(),
-                pass_through_args: vec!["--edit-dir".to_string(), ".patches".to_string()],
-            },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                PatchArgs {
+                    package: "left-pad".to_string(),
+                    pass_through_args: vec!["--edit-dir".to_string(), ".patches".to_string()],
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.args, vec!["patch", "left-pad", "--edit-dir", ".patches"]);
     }

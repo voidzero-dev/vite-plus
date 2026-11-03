@@ -70,8 +70,10 @@ This decouples the `vp` binary from vite-plus's internal file layout.
 ├── current -> <version>/             # Symlink to active version
 ├── <version>/
 │   ├── bin/
-│   │   └── vp                        # Rust binary (from CLI platform package)
+│   │   ├── vp                        # Rust binary (from CLI platform package)
+│   │   └── vp-install-lock.yaml      # Published installation lockfile
 │   ├── package.json                  # Wrapper: { "dependencies": { "vite-plus": "<version>" } }
+│   ├── pnpm-lock.yaml                # Working copy restored from bin/vp-install-lock.yaml
 │   └── node_modules/
 │       ├── vite-plus/                # Installed as npm dependency
 │       │   ├── dist/bin.js           # JS entry point (found by Rust binary)
@@ -90,12 +92,21 @@ This decouples the `vp` binary from vite-plus's internal file layout.
 **Install flows:**
 
 - **Production** (`curl -fsSL https://vite.plus | bash`):
-  Downloads CLI platform tarball from `@voidzero-dev/vite-plus-cli-{platform}` (extracts only `vp` binary),
-  generates wrapper `package.json`, runs `vp install --silent` which installs `vite-plus` + all transitive deps via npm.
+  Downloads the CLI platform archive from `@voidzero-dev/vite-plus-cli-{platform}`
+  and extracts the binary and its bundled `vp-install-lock.yaml`. The script
+  delegates to the binary's self-setup, which generates the wrapper `package.json`,
+  restores `pnpm-lock.yaml`, and installs dependencies with managed pnpm and
+  `--frozen-lockfile`. `install.ps1` uses the same flow on Windows.
 
 - **Upgrade** (`vp upgrade`):
-  Downloads CLI platform tarball from `@voidzero-dev/vite-plus-cli-{platform}` (binary only),
-  generates wrapper `package.json`, runs `vp install --silent`. No main tarball download needed.
+  Downloads the CLI platform archive with the binary and lockfile, generates the
+  wrapper `package.json`, and restores the bundled lockfile before the frozen
+  dependency install. pnpm downloads `vite-plus` and its dependencies using the
+  versions and integrity values recorded in that lockfile. The target's platform
+  metadata supplies its Node.js pin through `vpNodeVersion`; older packages
+  without this field use the running binary's installation default. See the
+  [upgrade flow](./upgrade-command.md#step-4-extract-and-install) for validation
+  and activation behavior.
 
 - **Local dev** (`pnpm bootstrap-cli`):
   Copies `vp` binary, generates wrapper `package.json`, symlinks
@@ -106,61 +117,105 @@ This decouples the `vp` binary from vite-plus's internal file layout.
   Copies `vp` binary, generates wrapper `package.json` with `file:` protocol
   refs to tgz files, runs `npm install`.
 
+### Global Installation Lockfile
+
+Each `@voidzero-dev/vite-plus-cli-{platform}` package contains
+`vp-install-lock.yaml` beside `vp` or `vp.exe`. Release and commit preview builds
+both use this layout. Standalone release archives also include the companion.
+The lockfile describes the global wrapper's `vite-plus` dependency and its
+transitive dependencies, including optional packages for all supported platforms.
+CLI binary packages remain outside this dependency graph, so adding the lockfile
+to them cannot change an integrity value recorded inside it.
+
+Release builds publish the local CLI under `staging`, then use the installer's
+pinned pnpm version to generate a standard lockfile from that published version.
+The workflow promotes the local CLI to `latest` after the global packages are
+available. Preview builds also publish the local CLI first, generate the lockfile
+from the registry, then publish the global packages and update the PR tag.
+Publishing retries reuse the prepared artifacts.
+See [Global installation lockfile](../packages/cli/BUNDLING.md#global-installation-lockfile)
+for the publication order and generator entry points.
+
+The platform manifest advertises the companion with `vpInstallLockfile: true`.
+Extraction fails if an advertised companion is missing. A standalone executable
+or an older upgrade client can lose the companion; self-setup recovers it from
+the exact platform package and verifies that archive's integrity. Companion
+writes use a temporary file and atomic rename, so interrupted writes can be retried.
+A successful frozen install records the companion's SHA-256 digest in
+`node_modules/.vp-install-complete`. Self-setup reuses that install after an
+upgrade or a later setup failure. Missing receipts or changed lockfiles require
+another frozen install, even when `node_modules` already exists. Each install
+attempt clears the receipt before it starts. Older packages without a companion
+retain their existing installation behavior. Local development and already
+bundled external installations keep their existing setup paths.
+
+The installation's `.npmrc` keeps `minimum-release-age=0` so a newly published
+version can be installed immediately. This does not change the versions recorded
+in the installation lockfile. Generation and frozen installation pin all five
+settings that pnpm checks in `lockfile.settings`:
+`auto-install-peers=true`, `peers-suffix-max-length=1000`,
+`exclude-links-from-lockfile=false`, `dedupe-peers=false`, and
+`inject-workspace-packages=false`. Boolean values use command-line flags. The
+numeric peer suffix limit uses subprocess environment overrides because pnpm
+parses `--config` numbers as strings. Both override user files and inherited
+environment values. Registry, authentication, and proxy settings remain inherited.
+Frozen installation also sets `--lockfile=true` so user configuration cannot
+disable the published lockfile.
+
+`VP_SETUP_SKIP_INSTALL_LOCKFILE=1` is an explicit emergency override for setup and
+upgrades. It skips companion extraction, recovery, and restoration, then runs
+pnpm with `--no-frozen-lockfile --lockfile=false`. The installer warns that it is
+resolving dependencies again. The wrapper still pins the requested CLI version.
+There is no automatic fallback after a frozen install fails.
+
+A successful bypass writes `unlocked` to `node_modules/.vp-install-complete`,
+instead of a lockfile digest. This lets upgrade handoff finish without repeating
+dependency installation while the override is set. A later setup without the
+override cannot reuse this receipt as a frozen install. Failed attempts clear
+the receipt before running pnpm, as they do for frozen installs.
+
 ### Command Routing
 
-The Rust `vp` binary (`crates/vp_global_cli/`) routes commands in two categories:
+The Rust `vp` binary (`crates/vp_global_cli/`) parses every command with clap (`crates/vp_global_cli/src/cli.rs`) and routes it down one of the paths below:
 
-```
-                       vp <command>
-                            │
-              ┌─────────────┴──────────────┐
-              │                            │
-              ▼                            ▼
-     ┌────────────────┐         ┌────────────────┐
-     │   Category A   │         │   Category B   │
-     │    Pkg Mgr     │         │   JavaScript   │
-     │    (Rust)      │         │   (Node.js)    │
-     └───────┬────────┘         └───────┬────────┘
-             │                          │
-       vp_pm_cli::                oxc_resolver finds
-       dispatch                     local vite-plus
-             │                          │
-             ▼                    ┌─────┴─────┐
-     ┌────────────────┐          │  found?   │
-     │ install        │          └─────┬─────┘
-     │ add            │           yes ╱ ╲ no
-     │ remove         │             ╱     ╲
-     │ update         │            ▼       ▼
-     │ ...            │      ┌────────┐ ┌────────┐
-     └────────────────┘      │ local  │ │ global │
-                             │ bin.js │ │ bin.js │
-                             └───┬────┘ └───┬────┘
-                                 └─────┬────┘
-                                       │
-                                       ▼
-                              ┌────────────────┐
-                              │     bin.ts      │
-                              │   routes to:    │
-                              ├────────────────┤
-                              │ build, test,    │
-                              │ lint, fmt, run  │
-                              │   → NAPI        │
-                              ├────────────────┤
-                              │ install, add,   │
-                              │ remove, update  │
-                              │ dlx, pm <…>     │
-                              │   → NAPI        │
-                              │   → vp_pm_cli │
-                              ├────────────────┤
-                              │ create, migrate │
-                              │ --version       │
-                              │   → dist/       │
-                              │     global/*.js │
-                              └────────────────┘
+```mermaid
+flowchart TD
+    vp["vp &lt;command&gt;"]
+
+    vp --> A["Category A<br/>Package Manager (Rust)"]
+    vp --> B["Category B<br/>JS Script Commands"]
+    vp --> C["Category C<br/>Local CLI Delegation"]
+    vp --> G["Rust-native global commands"]
+
+    A -->|"--global"| managed["commands::global<br/>managed install store"]
+    A --> pm["vp_pm_cli::dispatch<br/>install, add, remove, update, ..."]
+
+    B --> resolve
+    B -->|"migrate: local older than global"| globalBin
+    C --> resolve["oxc_resolver finds local vite-plus"]
+    resolve -->|found| localBin["local dist/bin.js"]
+    resolve -->|not found| globalBin["global dist/bin.js"]
+    localBin --> binTs
+    globalBin --> binTs["bin.ts"]
+    binTs --> js["B: create, migrate, config, hooks, staged<br/>→ dist/*.js"]
+    binTs --> napi["C: dev, build, test, lint, fmt, check, pack, run, exec, preview, cache<br/>→ NAPI"]
+
+    G --> toolchain["toolchain<br/>commands::toolchain"]
+    toolchain -->|"local vite-plus found"| C
+    toolchain -->|"--global or no local"| manifest["render global toolchain.json in Rust"]
+    G --> version["--version<br/>commands::version"]
+    G --> env["env<br/>commands::env"]
+    G --> selfmgmt["upgrade, implode<br/>commands::{upgrade, implode}"]
 ```
 
-- **Category A (Package Manager)**: `install`, `add`, `remove`, `update`, `dedupe`, `outdated`, `why`, `info`, `link`, `unlink`, `dlx`, `pm <subcmd>` — clap definitions and dispatch live in the shared `crates/vp_pm_cli/` crate. Both the global CLI and the local CLI binding flatten `vp_pm_cli::PackageManagerCommand` into their top-level argument parser and call `vp_pm_cli::dispatch` to run the underlying package manager (pnpm/npm/yarn/bun). The global CLI additionally intercepts `--global` for vite-plus-managed installs (`commands::env::global_install`) before delegating.
-- **Category B (JavaScript)**: All other commands (`build`, `test`, `lint`, `create`, `migrate`, `--version`, etc.) — Rust uses `oxc_resolver` to find the project's local `vite-plus/dist/bin.js` and runs it. Falls back to the global installation's `dist/bin.js` if no local installation exists. The unified `bin.ts` entry point then routes to either NAPI bindings (task commands and PM commands, the latter via `vp_pm_cli::dispatch`) or rolldown-bundled modules in `dist/global/` (create, migrate, version).
+- **Category A (Package Manager)**: `install`, `add`, `remove`, `update`, `dedupe`, `outdated`, `why`, `info`, `link`, `unlink`, `dlx`, `pm <subcmd>` — clap definitions and dispatch live in the shared `crates/vp_pm_cli/` crate. Both the global CLI and the local CLI binding flatten `vp_pm_cli::PackageManagerCommand` into their top-level argument parser and call `vp_pm_cli::dispatch` to run the underlying package manager (pnpm/npm/yarn/bun). From the global `vp` binary these commands are handled entirely in Rust by `run_package_manager_command` and never reach `bin.ts`; the NAPI path is only taken when the local JavaScript entry point is invoked directly (for example `npx vp install`). The global CLI additionally intercepts the `--global` projections (`PackageManagerCommand::managed_global_command`) and serves them from the vite-plus-managed install store in `commands::global` before delegating.
+- **Category B (JS Script Commands)**: `create`, `migrate`, `config`, `hooks`, `staged` — implemented in JavaScript. Rust uses `oxc_resolver` to find the project's local `vite-plus/dist/bin.js` and runs it with the managed Node.js runtime, falling back to the global installation's `dist/bin.js` when no local installation exists. The unified `bin.ts` entry point then loads the tsdown-bundled module for the command (entries are declared in `packages/cli/tsdown.config.ts`). `migrate` is the one exception to local-first resolution: `JsExecutor::delegate_migrate` compares versions and runs the global CLI instead when the project's local `vite-plus` is older than the global `vp`.
+- **Category C (Local CLI Delegation)**: `dev`, `build`, `test`, `lint`, `fmt`, `check`, `pack`, `run`, `exec`, `preview`, `cache` — forwarded to the local vite-plus CLI through `commands::delegate`, which resolves `bin.js` the same way as Category B; `bin.ts` then routes them to the NAPI binding. `lint --init` and `fmt --init`/`--migrate` are forced to the global installation (`commands::delegate::execute_global`).
+- **Rust-native global commands**: the remaining top-level variants are handled in Rust by the global binary. `env`, `upgrade`, and `implode` have no local counterpart; `--version` and `toolchain` also exist in the local CLI and are reached there when the JavaScript entry point is invoked directly (for example `npx vp --version`).
+  - `toolchain` (`commands::toolchain`) is a hybrid: when `--global` is absent and a project-local `vite-plus` resolves, it delegates to the local CLI like Category C; otherwise (`--global`, or no local installation) it loads and renders the global installation's `toolchain.json` directly in Rust rather than falling back through the global `bin.js`.
+  - `--version` (`commands::version`) prints the `vp` binary version and the bundled tool versions directly from Rust; it never reaches `bin.ts`.
+  - `env` (`commands::env`) manages Node.js versions, shims, and pins.
+  - `upgrade` and `implode` (`commands::upgrade`, `commands::implode`) are the self-management commands for the `vp` binary and its install directory.
 
 ### Global scripts_dir Resolution (Rust)
 
@@ -236,7 +291,7 @@ if (command === 'create') {
    - `.node` NAPI binaries installed via npm optionalDependencies (not manually copied)
    - Removed `extract_main_package()`, `strip_dev_dependencies()`, `MAIN_PACKAGE_ENTRIES`
    - Added `generate_wrapper_package_json()` for upgrade command
-   - Simplified install scripts: only extract `vp` binary + generate wrapper
+   - Install scripts extract `vp` and its companion lockfile, then delegate permanent installation to self-setup
    - Simplified `install-global-cli.ts`: symlink-based local dev, wrapper-based CI
 
 5. **Updated build system**:
@@ -262,7 +317,7 @@ if (command === 'create') {
 
 10. **Separated `vp` binary into dedicated CLI platform packages**:
     - `@voidzero-dev/vite-plus-{platform}` packages now contain only the `.node` NAPI binding (~20MB)
-    - `@voidzero-dev/vite-plus-cli-{platform}` packages contain only the `vp` Rust binary (~5MB)
+    - `@voidzero-dev/vite-plus-cli-{platform}` packages contain the `vp` Rust binary and its installation lockfile; Windows packages also include `vp-shim.exe`
     - `publish-native-addons.ts` creates and publishes both NAPI and CLI packages separately
     - Install scripts (`install.sh`, `install.ps1`) construct CLI package suffix directly instead of querying optionalDependencies
     - Upgrade registry (`registry.rs`) queries CLI packages directly instead of looking up optionalDependencies

@@ -7,7 +7,7 @@ should pack current package
 ```
 ➤ YN0000: package.json
 ➤ YN0000: Package archive generated in <workspace>/package.tgz
-➤ YN0000: Done in <duration> <duration>
+➤ YN0000: Done in <duration>
 ```
 
 ## `vp pm pack --out ./dist/package.tgz`
@@ -17,7 +17,7 @@ should pack with output file
 ```
 ➤ YN0000: package.json
 ➤ YN0000: Package archive generated in <workspace>/dist/package.tgz
-➤ YN0000: Done in <duration> <duration>
+➤ YN0000: Done in <duration>
 ```
 
 ## `vp pm pack --json`
@@ -38,5 +38,5 @@ should support pass through arguments
 ```
 ➤ YN0000: dist/package.tgz
 ➤ YN0000: package.json
-➤ YN0000: Done in <duration> <duration>
+➤ YN0000: Done in <duration>
 ```

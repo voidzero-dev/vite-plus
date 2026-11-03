@@ -1,0 +1,10 @@
+{
+  "name": "migration-oxlint-unknown-rule-strip",
+  "scripts": {
+    "lint": "oxlint"
+  },
+  "devDependencies": {
+    "oxlint": "^1.82.0",
+    "vite": "^8.3.0"
+  }
+}

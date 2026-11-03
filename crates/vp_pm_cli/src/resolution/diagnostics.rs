@@ -2,7 +2,8 @@ use std::ops::Index;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum DiagnosticKind {
-    UnsupportedOptionDropped,
+    /// Support checks reject the request before command lowering.
+    UnsupportedOption,
     UnsupportedCommandNoop,
     FallbackCommand,
     BehaviorChange,
@@ -48,17 +49,28 @@ impl Diagnostics {
         option: &str,
         rule: &crate::resolution::PmSupportRule,
     ) {
-        let message = if let Some(version) = rule.version_rule() {
-            vt_str::format!(
-                "{} {}{} does not support {option}.",
-                rule.manager_name(),
-                version.operator(),
-                version.original(),
-            )
-        } else {
+        let versions = rule
+            .version_rules()
+            .iter()
+            .map(|version| vt_str::format!("{} {}", version.operator(), version.original()))
+            .collect::<Vec<_>>()
+            .join(" && ");
+        let message = if versions.is_empty() {
             vt_str::format!("{} does not support {option}.", rule.manager_name())
+        } else {
+            vt_str::format!("{} {versions} does not support {option}.", rule.manager_name())
         };
-        self.warn(DiagnosticKind::UnsupportedOptionDropped, message);
+        self.warn(DiagnosticKind::UnsupportedOption, message);
+    }
+
+    pub(crate) fn unsupported_options_error(&self) -> Option<String> {
+        let messages = self
+            .entries
+            .iter()
+            .filter(|entry| entry.kind == DiagnosticKind::UnsupportedOption)
+            .map(|entry| entry.message.as_str())
+            .collect::<Vec<_>>();
+        if messages.is_empty() { None } else { Some(messages.join("\n")) }
     }
 
     pub(crate) fn is_empty(&self) -> bool {
@@ -68,11 +80,6 @@ impl Diagnostics {
     #[cfg(test)]
     pub(crate) fn len(&self) -> usize {
         self.entries.len()
-    }
-
-    #[cfg(test)]
-    pub(crate) fn iter(&self) -> impl Iterator<Item = &Diagnostic> {
-        self.entries.iter()
     }
 
     pub(crate) fn render(&self) {
@@ -96,6 +103,31 @@ impl Index<usize> for Diagnostics {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn version_conditions_have_spaces_around_operators() {
+        use crate::resolution::{PmSupportRule, VersionOperator};
+
+        for operator in [
+            VersionOperator::Less,
+            VersionOperator::LessEqual,
+            VersionOperator::Greater,
+            VersionOperator::GreaterEqual,
+            VersionOperator::Equal,
+        ] {
+            let mut diagnostics = Diagnostics::default();
+            let rule = PmSupportRule::manager("yarn").with_version(
+                operator,
+                "2",
+                semver::Version::new(2, 0, 0),
+            );
+            diagnostics.unsupported_option("--example", &rule);
+            assert_eq!(
+                diagnostics.unsupported_options_error(),
+                Some(vt_str::format!("yarn {operator} 2 does not support --example.").to_string()),
+            );
+        }
+    }
 
     #[test]
     fn preserves_diagnostic_levels() {

@@ -28,13 +28,6 @@ user's Vitest and @vitest/ui stay direct devDependencies (not converted to catal
     "vite": "catalog:",
     "vitest": "<version>",
     "vite-plus": "catalog:"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
   }
 }
 ```
@@ -48,7 +41,7 @@ catalog:
   vite: npm:@voidzero-dev/vite-plus-core@latest
   vite-plus: <version>
 overrides:
-  vite: 'catalog:'
+  vite@*: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite
@@ -63,5 +56,11 @@ unmanaged Vitest ecosystem versions remain stable on rerun
 ```
 VITE+ - The Unified Toolchain for the Web
 
-This project is already using Vite+! Happy coding!
+▲ No package manager is declared in package.json; using pnpm for this migration without adding a pin. Run `vp env pin` to declare it explicitly.
+◇ Updated . to Vite+ <version>
+• Node <version>  pnpm <version>
+• Dependencies:
+    vite               → <version>
+    vitest      4.0.13 → <version>
+    @vitest/ui  4.0.13 → <version>
 ```

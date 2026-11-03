@@ -18,7 +18,7 @@ Options:
   --check     Check if deduplication would make changes
   -h, --help  Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp dedupe`
@@ -157,7 +157,7 @@ Packages: -1
 -
 
 dependencies:
-- testnpm2 1.0.1
+- testnpm2
 ```
 
 ## `vpt print-file package.json`

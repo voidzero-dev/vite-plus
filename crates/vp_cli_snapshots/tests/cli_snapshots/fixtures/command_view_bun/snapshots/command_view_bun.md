@@ -20,7 +20,7 @@ Options:
   --json      Output in JSON format
   -h, --help  Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp pm view testnpm2`
@@ -31,7 +31,7 @@ should view package information
 testnpm2@1.0.1 | ISC | deps: 0 | versions: 2
 
 dist
- .tarball: https://registry.npmjs.org/testnpm2/-/testnpm2-1.0.1.tgz
+ .tarball: http://127.0.0.1:<port>/testnpm2/-/testnpm2-1.0.1.tgz
  .shasum: 8c7b209a673c360e540ab2777242171fd30fdee9
  .integrity: sha512-F4AQ+KmzhbOSlt7ae+X2O8IJktFZAcN6OK169TT4ny7M3e4Vje7NITZTOU31AtEk9L/Z8lrCrqinl/eY6WPuEw==
 

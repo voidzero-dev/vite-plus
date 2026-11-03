@@ -1,0 +1,2 @@
+# Recursive pack writes child archives here while the root package is scanned.
+*.tgz

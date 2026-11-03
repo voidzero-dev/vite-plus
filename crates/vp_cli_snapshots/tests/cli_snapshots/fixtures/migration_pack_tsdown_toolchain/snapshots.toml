@@ -1,0 +1,22 @@
+[[case]]
+name = "migration_pack_tsdown_toolchain"
+vp = "global"
+env = { VP_VERSION = "1.0.1" }
+comment = "Use the original config imports to distinguish legacy vp pack from standalone tsdown 0.23.0 in the same workspace, with both tools installed at the root."
+steps = [
+  { argv = ["vpt", "write-file", "node_modules/vite-plus/package.json", '{"name":"vite-plus","version":"0.2.0"}'], snapshot = false },
+  { argv = ["vpt", "write-file", "node_modules/vite/package.json", '{"name":"@voidzero-dev/vite-plus-core","version":"0.2.0","bundledVersions":{"vite":"8.0.0"}}'], snapshot = false },
+  { argv = ["vpt", "write-file", "node_modules/tsdown/package.json", '{"name":"tsdown","version":"0.23.0"}'], snapshot = false },
+  ["vp", "migrate", "--no-interactive"],
+  ["vpt", "print-file", "tsdown.config.ts"],
+  ["vpt", "print-file", "vite.config.ts"],
+  ["vpt", "print-file", "packages/standalone/tsdown.config.ts"],
+  ["vpt", "print-file", "packages/standalone/vite.config.ts"],
+  ["vpt", "print-file", "packages/standalone/package.json"],
+  { argv = ["vpt", "write-file", "node_modules/vite-plus/package.json", '{"name":"vite-plus","version":"1.0.1"}'], snapshot = false },
+  { argv = ["vpt", "write-file", "node_modules/vite-plus/dist/toolchain.json", '{"schemaVersion":1,"nodes":[{"id":"tsdown","name":"tsdown","version":"0.23.0","kind":"tool","delivery":["bundled"]}],"edges":[]}'], snapshot = false, comment = "Model the final install before repeating migration." },
+  { argv = ["vpt", "rm", "-r", "node_modules/tsdown"], snapshot = false },
+  ["vp", "migrate", "--no-interactive"],
+  ["vpt", "print-file", "tsdown.config.ts"],
+  ["vpt", "print-file", "packages/standalone/tsdown.config.ts"],
+]

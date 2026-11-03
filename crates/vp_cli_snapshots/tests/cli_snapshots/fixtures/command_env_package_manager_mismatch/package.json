@@ -1,0 +1,5 @@
+{
+  "name": "command-env-package-manager-mismatch",
+  "private": true,
+  "packageManager": "pnpm@10.18.0"
+}

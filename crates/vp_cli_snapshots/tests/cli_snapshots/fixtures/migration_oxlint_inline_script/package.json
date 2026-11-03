@@ -1,0 +1,11 @@
+{
+  "name": "migration-oxlint-inline-script",
+  "private": true,
+  "packageManager": "pnpm@11.24.0",
+  "scripts": {
+    "check-plugin": "node -e \"console.log(typeof require('@oxlint/plugins').defineRule)\""
+  },
+  "devDependencies": {
+    "@oxlint/plugins": "1.79.0"
+  }
+}

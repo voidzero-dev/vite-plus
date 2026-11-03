@@ -7,6 +7,7 @@ bundled monorepo: extract tarball, scaffold, inject create.defaultTemplate
 ```
 ◇ Scaffolded my-mono
 • Node <version>  pnpm <version>
+→ Git (optional): git -C my-mono add -A && git -C my-mono commit -m "chore: initial commit"
 → Next: cd my-mono && vp run
 ```
 
@@ -44,7 +45,7 @@ catalog:
   vite: npm:@voidzero-dev/vite-plus-core@<version>
   vite-plus: <version>
 overrides:
-  vite: "catalog:"
+  vite@*: "catalog:"
 peerDependencyRules:
   allowAny:
     - vite

@@ -7,9 +7,8 @@ migration should merge vite.config.ts and remove oxlintrc and oxfmtrc
 ```
 VITE+ - The Unified Toolchain for the Web
 
-✔ Merged .oxlintrc.json into vite.config.ts
-
-✔ Merged .oxfmtrc.json into vite.config.ts
+◆ ✔ Merged .oxlintrc.json into vite.config.ts
+◆ ✔ Merged .oxfmtrc.json into vite.config.ts
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • 4 config updates applied, 1 file had imports rewritten
@@ -21,6 +20,7 @@ VITE+ - The Unified Toolchain for the Web
 check vite.config.ts
 
 ```
+// vp migrate: merged .oxlintrc.json (aba19784a1d2c46ab69279abb5cab90f).
 import react from '@vitejs/plugin-react';
 import { defineConfig, lazyPlugins } from 'vite-plus';
 
@@ -50,6 +50,13 @@ export default defineConfig({
         "specifier": "vite-plus/oxlint-plugin"
       }
     ]
+  },
+  test: {
+    // Vitest v4 compatibility: preserve mock call history.
+    // Remove after tests no longer rely on calls from setup or earlier tests.
+    // https://viteplus.dev/guide/vitest-v5#remove-unneeded-compatibility-settings
+    // https://vitest.dev/guide/migration/#clearmocks-is-enabled-by-default
+    clearMocks: false
   },
   plugins: lazyPlugins(() => [react()]),
 });
@@ -124,8 +131,8 @@ catalog:
 
 minimumReleaseAge: 1440
 overrides:
-  vite: 'catalog:'
-  vitest: 'catalog:'
+  vite@*: 'catalog:'
+  vitest@*: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite
@@ -209,7 +216,6 @@ check only-oxlint package.json
     "lint": "vp lint --fix"
   },
   "devDependencies": {
-    "vite": "catalog:",
     "vite-plus": "catalog:"
   }
 }
@@ -220,6 +226,7 @@ check only-oxlint package.json
 check only-oxlint vite.config.ts
 
 ```
+// vp migrate: merged packages%2Fonly-oxlint%2F.oxlintrc.json (b648b436b7a8c2627c4008844cff0e45).
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({

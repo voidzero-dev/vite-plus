@@ -36,7 +36,6 @@ check package.json
     "prepare": "vp config"
   },
   "devDependencies": {
-    "vite": "catalog:",
     "vite-plus": "catalog:"
   },
   "devEngines": {
@@ -93,7 +92,7 @@ catalog:
   vite: npm:@voidzero-dev/vite-plus-core@<version>
   vite-plus: <version>
 overrides:
-  vite: "catalog:"
+  vite@*: "catalog:"
 peerDependencyRules:
   allowAny:
     - vite
@@ -239,10 +238,9 @@ check utils normalizes vite-plus to catalog:
     "prepublishOnly": "vp run build"
   },
   "devDependencies": {
-    "@types/node": "^26.1.1",
-    "bumpp": "^11.1.0",
+    "@types/node": "^26.6.5",
+    "bumpp": "^12.3.0",
     "typescript": "^7.0.2",
-    "vite": "catalog:",
     "vite-plus": "catalog:"
   }
 }
@@ -366,8 +364,8 @@ check vite-plus-generator package.json
     "dev": "node bin/index.ts"
   },
   "dependencies": {
-    "bingo": "^0.9.3",
-    "zod": "^3.25.76"
+    "bingo": "^0.13.2",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "catalog:",
@@ -415,7 +413,6 @@ check package.json
     "prepare": "vp config"
   },
   "devDependencies": {
-    "vite": "catalog:",
     "vite-plus": "catalog:"
   },
   "devEngines": {

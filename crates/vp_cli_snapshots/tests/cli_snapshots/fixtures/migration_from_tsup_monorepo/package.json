@@ -1,0 +1,8 @@
+{
+  "name": "migration-from-tsup-monorepo",
+  "private": true,
+  "devDependencies": {
+    "vite": "^7.0.0"
+  },
+  "packageManager": "pnpm@10.18.0"
+}

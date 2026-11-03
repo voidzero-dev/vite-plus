@@ -1,0 +1,5 @@
+{
+  "name": "create-approve-builds-pnpm11",
+  "private": true,
+  "packageManager": "pnpm@11.0.0"
+}

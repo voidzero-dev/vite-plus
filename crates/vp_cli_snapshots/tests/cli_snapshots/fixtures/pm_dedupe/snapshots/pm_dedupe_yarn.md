@@ -8,9 +8,19 @@ Yarn Classic falls back to install because install already deduplicates dependen
 warn: Yarn Classic dedupes during install, falling back to yarn install
 ```
 
+## `vp dedupe --check -- --silent`
+
+reject unsupported --check without falling back to install
+
+**Exit code:** 1
+
+```
+yarn < 2 does not support --check.
+```
+
 ## `vpt print-file package.json`
 
-verify Yarn Classic completed
+verify Yarn Classic manifest is unchanged
 
 ```
 {

@@ -24,10 +24,7 @@ append foo (write-file with the full appended content)
 should succeed with staged .ts files
 
 ```
-✔ Backed up original state in git stash (<hash>)
-✔ Running tasks for staged files...
-✔ Applying modifications from tasks...
-✔ Cleaning up temporary files...
+✔ vp check --fix
 ```
 
 ## `git add -A`
@@ -72,15 +69,10 @@ should fail when staged .js file has lint errors
 **Exit code:** 1
 
 ```
-✔ Backed up original state in git stash (<hash>)
-⚠ Running tasks for staged files...
-  ❯ Config object — 1 file
-    ↓ *.ts — no files
-    ❯ *.js — 1 file
-      ✖ vp lint [FAILED]
-↓ Skipped because of errors from tasks.
-✔ Reverting to original state because of errors...
-✔ Cleaning up temporary files...
+✖ vp lint
+✖ Failed to run tasks for staged files!
+↓ Skipped staging changes from tasks…
+✔ Done reverting to original state!
 
 ✖ vp lint:
 

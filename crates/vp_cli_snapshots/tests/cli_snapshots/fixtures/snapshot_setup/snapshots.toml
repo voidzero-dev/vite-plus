@@ -1,0 +1,6 @@
+[[case]]
+name = "prepared_home_matches_cli_setup"
+vp = ["global", "local"]
+steps = [
+  { argv = ["node", "verify.mjs"], comment = "The prepared home has the same preferences, environment files, and shims as setup followed by enabling package-manager management." },
+]

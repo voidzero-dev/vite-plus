@@ -3,6 +3,7 @@ name = "check_fmt_fail"
 vp = "local"
 steps = [
   { argv = ["vp", "check"], continue-on-failure = true },
+  { argv = ["vp", "check", "--quiet"], comment = "quiet does not suppress formatting failures", continue-on-failure = true },
   { argv = ["vp", "check", "--fix"], continue-on-failure = true },
   { argv = ["vp", "check"], comment = "should pass after fix", continue-on-failure = true },
 ]

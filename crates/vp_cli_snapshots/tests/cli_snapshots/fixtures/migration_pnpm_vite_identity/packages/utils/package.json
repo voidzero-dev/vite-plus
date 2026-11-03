@@ -1,0 +1,8 @@
+{
+  "name": "utils",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "vite-plus": "latest"
+  }
+}

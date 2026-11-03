@@ -1,5 +1,3 @@
 {
-  "scripts": {
-    "localhelp": "vp dev --help"
-  }
+  "private": true
 }

@@ -4,8 +4,10 @@ use serde_json::{Map, Value};
 use vp_error::Error;
 
 use crate::{
-    ast_grep, eslint::rewrite_eslint_script, prettier::rewrite_prettier_script,
-    script_rewrite::rewrite_bunx_commands,
+    ast_grep,
+    eslint::rewrite_eslint_script,
+    prettier::rewrite_prettier_script,
+    script_rewrite::{rewrite_bunx_commands, rewrite_pack_flags},
 };
 
 // Marker to replace "cross-env " before ast-grep processing
@@ -29,7 +31,7 @@ fn rewrite_script(script: &str, rules: &[RuleConfig<SupportLang>]) -> String {
     // matches an active rule, then process ordinary commands.
     let rewritten_bunx =
         rewrite_bunx_commands(&preprocessed, |inner| ast_grep::apply_loaded_rules(inner, rules));
-    let result = ast_grep::apply_loaded_rules(&rewritten_bunx, rules);
+    let result = rewrite_pack_flags(&ast_grep::apply_loaded_rules(&rewritten_bunx, rules));
 
     // Step 3: Replace cross-env marker back with "cross-env " (only if we replaced it)
 
@@ -107,6 +109,130 @@ pub fn rewrite_scripts(scripts_json: &str, rules_yaml: &str) -> Result<Option<St
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn assert_bash_syntax(script: &str) {
+        #[cfg(unix)]
+        {
+            let output = std::process::Command::new("bash")
+                .args(["-n", "-c", script])
+                .output()
+                .expect("bash is required to check migrated script syntax");
+            assert!(
+                output.status.success(),
+                "invalid Bash script: {script}\n{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+        #[cfg(not(unix))]
+        let _ = script;
+    }
+
+    fn assert_conditional_redirects(
+        rewrite: impl Fn(&str) -> Result<Option<String>, vp_error::Error>,
+        command: &str,
+        replacement: &str,
+    ) {
+        for (input, expected) in [
+            ("[[ -d src ]] 2>/dev/null && COMMAND", "[[ -d src ]] 2> /dev/null && REPLACEMENT"),
+            (
+                "[[ -d src ]] 2>/dev/null 1>&2 && COMMAND",
+                "[[ -d src ]] 2> /dev/null 1>& 2 && REPLACEMENT",
+            ),
+            ("[[ -d src ]] >/dev/null && COMMAND", "[[ -d src ]] > /dev/null && REPLACEMENT"),
+            (
+                "if [[ -d src ]] 2>/dev/null; then COMMAND; fi",
+                "if [[ -d src ]] 2> /dev/null; then REPLACEMENT; fi",
+            ),
+            (
+                "([[ -d src ]] 2>/dev/null && COMMAND)",
+                "( [[ -d src ]] 2> /dev/null && REPLACEMENT )",
+            ),
+            (
+                "[[ -d src ]] 2>/dev/null && bunx COMMAND",
+                "[[ -d src ]] 2> /dev/null && bunx REPLACEMENT",
+            ),
+            (
+                "echo '[[ -d src ]]2>/dev/null' && [[ -d src ]] 2>/dev/null && COMMAND",
+                "echo '[[ -d src ]]2>/dev/null' && [[ -d src ]] 2> /dev/null && REPLACEMENT",
+            ),
+            (
+                "[[ -n ']]2>' ]] 2>/dev/null && COMMAND",
+                "[[ -n ']]2>' ]] 2> /dev/null && REPLACEMENT",
+            ),
+            ("echo \"literal ]]2>\" && COMMAND", "echo \"literal ]]2>\" && REPLACEMENT"),
+        ] {
+            let input = input.replace("COMMAND", command);
+            let expected = expected.replace("REPLACEMENT", replacement);
+            assert_bash_syntax(&input);
+            let scripts = serde_json::json!({ "check": input }).to_string();
+            let rewritten = rewrite(&scripts).unwrap().expect("script should be migrated");
+            let value: Value = serde_json::from_str(&rewritten).unwrap();
+            let actual = value["check"].as_str().unwrap();
+            assert_eq!(actual, expected, "input: {input}");
+            assert_bash_syntax(actual);
+            assert!(rewrite(&rewritten).unwrap().is_none(), "migration should be idempotent");
+        }
+
+        let unchanged =
+            serde_json::json!({ "check": "[[ -d src ]] 2>/dev/null && echo  unchanged" })
+                .to_string();
+        assert!(rewrite(&unchanged).unwrap().is_none());
+    }
+
+    #[test]
+    fn eslint_preserves_conditional_redirects() {
+        assert_conditional_redirects(crate::rewrite_eslint, "eslint --cache .", "vp lint .");
+    }
+
+    #[test]
+    fn prettier_preserves_conditional_redirects() {
+        assert_conditional_redirects(crate::rewrite_prettier, "prettier --write .", "vp fmt .");
+    }
+
+    #[test]
+    fn pack_preserves_conditional_redirects() {
+        assert_conditional_redirects(
+            |scripts| {
+                crate::rewrite_scripts(
+                    scripts,
+                    include_str!("../../../packages/cli/rules/vite-tools.yml"),
+                )
+            },
+            "vp pack --public-dir public",
+            "vp pack --copy public",
+        );
+    }
+
+    #[test]
+    fn migrate_pack_copy_flag() {
+        let rules =
+            ast_grep::load_rules(include_str!("../../../packages/cli/rules/vite-tools.yml"))
+                .unwrap();
+        for (input, expected) in [
+            ("tsdown --public-dir public", "vp pack --copy public"),
+            ("vp pack --public-dir=public", "vp pack --copy=public"),
+            (
+                "MODE=prod vp pack --public-dir 'public files'",
+                "MODE=prod vp pack --copy 'public files'",
+            ),
+            (
+                "cross-env MODE=prod tsdown --public-dir public",
+                "cross-env MODE=prod vp pack --copy public",
+            ),
+            ("bunx tsdown --public-dir public", "bunx vp pack --copy public"),
+            (
+                "vp pack --public-dir one && vp pack --public-dir two",
+                "vp pack --copy one && vp pack --copy two",
+            ),
+            ("vp build --public-dir public", "vp build --public-dir public"),
+            ("echo --public-dir public", "echo --public-dir public"),
+            ("vp pack -- --public-dir public", "vp pack -- --public-dir public"),
+        ] {
+            let actual = rewrite_script(input, &rules);
+            assert_eq!(actual, expected);
+            assert_eq!(rewrite_script(&actual, &rules), actual);
+        }
+    }
 
     const RULES_YAML: &str = r#"
 # vite --version / vite -v => vp --version / vp -v (global flags, not dev-specific)

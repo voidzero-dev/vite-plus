@@ -1,4 +1,3 @@
-use semver::Version;
 use vp_pm_cli_macros::pm_args;
 
 use crate::resolution::{
@@ -60,7 +59,7 @@ impl Resolve<VersionArgs> for Bun {
         if args.json {
             return unsupported_json("Bun");
         }
-        if self.version().is_some_and(|version| !bun_supports_version_command(version)) {
+        if !self.supports_v1_2_18_commands() {
             diag.warn(
                 DiagnosticKind::BehaviorChange,
                 vt_str::format!(
@@ -105,16 +104,14 @@ fn is_yarn_classic_increment(value: &str) -> bool {
     )
 }
 
-fn bun_supports_version_command(version: &Version) -> bool {
-    version >= &Version::new(1, 2, 18)
-}
-
 #[cfg(test)]
 mod tests {
+    use semver::Version;
+
     use super::*;
     use crate::resolution::{
         PackageManagerDialect, resolve,
-        test_utils::{bun, npm, parse_args, pnpm, yarn},
+        test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
     };
 
     #[test]
@@ -135,15 +132,11 @@ mod tests {
             ..Default::default()
         };
 
-        let CommandResolution::Run(command) = resolve(&npm("11.0.0"), args.clone()).outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&npm("11.0.0"), args.clone()).outcome);
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, ["version", "prerelease", "--preid", "beta"]);
 
-        let CommandResolution::Run(command) = resolve(&pnpm("10.0.0"), args).outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&pnpm("10.0.0"), args).outcome);
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, ["version", "prerelease", "--preid", "beta"]);
     }
@@ -154,18 +147,14 @@ mod tests {
             &yarn("1.22.22"),
             VersionArgs { new_version: Some("patch".to_string()), ..Default::default() },
         );
-        let CommandResolution::Run(patch) = patch.outcome else {
-            panic!("expected command resolution");
-        };
+        let patch = expect_run(patch.outcome);
         assert_eq!(patch.args, ["version", "--patch"]);
 
         let explicit = resolve(
             &yarn("1.22.22"),
             VersionArgs { new_version: Some("2.0.0".to_string()), ..Default::default() },
         );
-        let CommandResolution::Run(explicit) = explicit.outcome else {
-            panic!("expected command resolution");
-        };
+        let explicit = expect_run(explicit.outcome);
         assert_eq!(explicit.args, ["version", "--new-version", "2.0.0"]);
     }
 
@@ -175,9 +164,7 @@ mod tests {
             &yarn("4.0.0"),
             VersionArgs { new_version: Some("patch".to_string()), ..Default::default() },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.args, ["version", "patch"]);
     }
@@ -188,9 +175,7 @@ mod tests {
             &bun("1.3.11"),
             VersionArgs { new_version: Some("patch".to_string()), ..Default::default() },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, ["pm", "version", "patch"]);
@@ -221,9 +206,7 @@ mod tests {
         let dialect = bun("1.2.17");
         assert_eq!(dialect.version(), Some(&Version::new(1, 2, 17)));
         let resolution = resolve(&dialect, VersionArgs::default());
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.args, ["pm", "version"]);
         assert_eq!(resolution.diagnostics.len(), 1);

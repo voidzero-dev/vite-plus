@@ -1,0 +1,10 @@
+{
+  "name": "scripted-dep",
+  "version": "1.0.0",
+  "bin": {
+    "scripted-dep": "check-script.cjs"
+  },
+  "scripts": {
+    "postinstall": "node -e \"require('node:fs').writeFileSync('postinstall-ran', '')\""
+  }
+}

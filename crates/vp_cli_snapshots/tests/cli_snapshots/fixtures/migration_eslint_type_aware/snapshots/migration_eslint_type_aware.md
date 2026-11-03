@@ -30,13 +30,6 @@ check typescript-eslint and @typescript-eslint/* are removed; typescript is pres
     "typescript": "^5.6.0",
     "vite": "catalog:",
     "vite-plus": "catalog:"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
   }
 }
 ```
@@ -57,8 +50,7 @@ export default defineConfig({
     "plugins": [
       "oxc",
       "typescript",
-      "unicorn",
-      "react"
+      "unicorn"
     ],
     "categories": {
       "correctness": "warn"

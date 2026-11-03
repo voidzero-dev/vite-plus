@@ -33,13 +33,6 @@ check package.json
     "vitest": "catalog:",
     "playwright": "*",
     "vite-plus": "catalog:"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
   }
 }
 ```
@@ -55,8 +48,8 @@ catalog:
   vite-plus: <version>
   '@vitest/browser-playwright': <version>
 overrides:
-  vite: 'catalog:'
-  vitest: 'catalog:'
+  vite@*: 'catalog:'
+  vitest@*: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite

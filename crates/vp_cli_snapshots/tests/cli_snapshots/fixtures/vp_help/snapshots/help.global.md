@@ -13,9 +13,10 @@ Start:
   create      Create a new project from a template
   migrate     Migrate an existing project to Vite+
   config      Configure hooks and agent integration
+  hooks       Manage the Git hook dispatcher
   staged      Run linters on staged files
   install, i  Install all dependencies, or add packages if package names are provided
-  env         Manage Node.js versions
+  env         Manage Node.js and package managers
 
 Develop:
   dev          Run the development server
@@ -27,7 +28,7 @@ Develop:
 Execute:
   run    Run tasks (also available as standalone `vpr`)
   exec   Execute a command from local node_modules/.bin
-  node   Run a Node.js script (shorthand for `env exec node`)
+  node   Run plain Node.js (`env exec node`); `vpx <file>` runs TypeScript
   dlx    Execute a package binary without installing it as a dependency
   cache  Manage the task cache
 
@@ -51,8 +52,9 @@ Manage Dependencies:
   pm                         Forward a command to the package manager
 
 Maintain:
-  upgrade  Update vp itself to the latest version
-  implode  Remove vp and all related data
+  toolchain  Show active Vite+ tools, versions, and relationships
+  upgrade    Update vp itself to the latest version
+  implode    Remove vp and all related data
 
 Documentation: https://viteplus.dev/guide/
 

@@ -1,6 +1,6 @@
-// Properly formatted file
+// Formatted only under the vite.config.ts options (single quotes, no semicolons)
 function example() {
-  return 'hello';
+  return 'hello'
 }
 
-export { example };
+export { example }

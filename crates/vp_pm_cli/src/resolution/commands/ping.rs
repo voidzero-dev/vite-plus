@@ -18,17 +18,25 @@ pub struct PingArgs {
 
 impl Npm {
     fn resolve_ping(args: &PingArgs) -> CommandResolution {
-        let mut cmd = CommandBuilder::new("npm");
-        cmd.arg("ping")
-            .option("--registry", args.registry.as_ref())
-            .extend(args.pass_through_args.iter());
-        cmd.into()
+        resolve_ping("npm", args)
     }
+}
+
+fn resolve_ping(program: &str, args: &PingArgs) -> CommandResolution {
+    let mut cmd = CommandBuilder::new(program);
+    cmd.arg("ping")
+        .option("--registry", args.registry.as_ref())
+        .extend(args.pass_through_args.iter());
+    cmd.into()
 }
 
 impl Resolve<PingArgs> for Pnpm {
     fn resolve(&self, args: &PingArgs, _diag: &mut Diagnostics) -> CommandResolution {
-        Npm::resolve_ping(args)
+        if self.supports_v11_commands() {
+            resolve_ping("pnpm", args)
+        } else {
+            Npm::resolve_ping(args)
+        }
     }
 }
 
@@ -54,8 +62,8 @@ impl Resolve<PingArgs> for Npm {
 mod tests {
     use super::*;
     use crate::resolution::{
-        CommandResolution, resolve,
-        test_utils::{bun, npm, parse_args, pnpm, yarn},
+        resolve,
+        test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
     };
 
     #[test]
@@ -69,11 +77,29 @@ mod tests {
     }
 
     #[test]
+    fn test_pnpm_native_version_boundary() {
+        let args = PingArgs {
+            registry: Some("https://registry.example.com".into()),
+            pass_through_args: vec!["--help".into()],
+        };
+        for (version, program) in
+            [("10.99.0", "npm"), ("11.0.0-rc.1", "npm"), ("11.0.0", "pnpm"), ("12.13.0", "pnpm")]
+        {
+            let resolution = resolve(&pnpm(version), args.clone());
+            assert!(resolution.diagnostics.is_empty());
+            let command = expect_run(resolution.outcome);
+            assert_eq!(command.program, program, "{version}");
+            assert_eq!(
+                command.args,
+                vec!["ping", "--registry", "https://registry.example.com", "--help"]
+            );
+        }
+    }
+
+    #[test]
     fn test_ping_basic() {
         let resolution = resolve(&pnpm("10.0.0"), PingArgs::default());
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["ping"]);
@@ -88,9 +114,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["ping", "--registry", "https://registry.npmjs.org"]);
@@ -99,9 +123,7 @@ mod tests {
     #[test]
     fn test_bun_ping_uses_npm_without_warning() {
         let resolution = resolve(&bun("1.3.11"), PingArgs::default());
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["ping"]);
@@ -111,20 +133,7 @@ mod tests {
     #[test]
     fn test_yarn_ping_uses_npm() {
         let resolution = resolve(&yarn("4.0.0"), PingArgs::default());
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
-
-        assert_eq!(command.program, "npm");
-        assert_eq!(command.args, vec!["ping"]);
-    }
-
-    #[test]
-    fn test_yarn_classic_ping_uses_npm() {
-        let resolution = resolve(&yarn("1.22.0"), PingArgs::default());
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["ping"]);

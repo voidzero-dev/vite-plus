@@ -5,7 +5,7 @@
 
 use std::{
     env,
-    io::{Cursor, Read as _, Write as _},
+    io::{Cursor, Read as _},
     path::Path,
     process::{self, Output},
     time::{SystemTime, UNIX_EPOCH},
@@ -13,11 +13,12 @@ use std::{
 
 use flate2::read::GzDecoder;
 use tar::Archive;
-use vp_js_runtime::{JsRuntimeType, NodeProvider, download_runtime};
-use vp_pm_cli::{PackageManagerType, download_package_manager};
+use vp_js_runtime::{JsRuntimeType, download_runtime};
+use vp_pm_cli::{bootstrap_pnpm, npm_user_config_path};
+use vp_shared::EnvConfig;
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
-use crate::error::Error;
+use crate::{DEFAULT_INSTALL_NODE_VERSION, error::Error, lockfile};
 
 /// Validate that a path from a tarball entry is safe (no path traversal).
 ///
@@ -31,11 +32,12 @@ fn is_safe_tar_path(path: &Path) -> bool {
         && !path.components().any(|c| matches!(c, std::path::Component::ParentDir))
 }
 
-/// Extract the platform-specific package (binary only).
+/// Extract the platform-specific binary and its installation lockfile.
 ///
 /// From the platform tarball, extracts:
 /// - The `vp` binary → `{version_dir}/bin/vp`
 /// - The `vp-shim.exe` trampoline → `{version_dir}/bin/vp-shim.exe` (Windows only)
+/// - The release lockfile → `{version_dir}/bin/vp-install-lock.yaml`
 ///
 /// `.node` files are no longer extracted here — npm installs them
 /// via the platform package's optionalDependencies.
@@ -48,11 +50,14 @@ pub async fn extract_platform_package(
 
     let data = tgz_data.to_vec();
     let bin_dir_clone = bin_dir.clone();
+    let skip_lockfile = EnvConfig::get().setup_skip_install_lockfile;
 
     tokio::task::spawn_blocking(move || {
         let cursor = Cursor::new(data);
         let decoder = GzDecoder::new(cursor);
         let mut archive = Archive::new(decoder);
+        let mut requires_lockfile = false;
+        let mut has_lockfile = false;
 
         for entry_result in archive.entries()? {
             let mut entry = entry_result?;
@@ -67,6 +72,23 @@ pub async fn extract_platform_package(
             }
 
             let file_name = relative.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
+            if relative == Path::new("package.json") && entry.header().entry_type().is_file() {
+                let manifest: serde_json::Value = serde_json::from_reader(&mut entry)?;
+                requires_lockfile = manifest
+                    .get("vpInstallLockfile")
+                    .and_then(serde_json::Value::as_bool)
+                    .unwrap_or(false);
+            } else if !skip_lockfile
+                && relative == Path::new(lockfile::INSTALL_LOCKFILE)
+                && entry.header().entry_type().is_file()
+            {
+                lockfile::write_atomic(
+                    &bin_dir_clone.join(lockfile::INSTALL_LOCKFILE),
+                    &mut entry,
+                )?;
+                has_lockfile = true;
+            }
 
             if file_name == "vp" || file_name == "vp.exe" || file_name == "vp-shim.exe" {
                 // Binary goes to bin/
@@ -84,6 +106,12 @@ pub async fn extract_platform_package(
             }
         }
 
+        if requires_lockfile && !has_lockfile && !skip_lockfile {
+            return Err(Error::Setup(
+                format!("Platform package is missing {}", lockfile::INSTALL_LOCKFILE).into(),
+            ));
+        }
+
         Ok::<(), Error>(())
     })
     .await
@@ -94,7 +122,16 @@ pub async fn extract_platform_package(
 
 /// The pnpm version pinned in the wrapper package.json for global installs.
 /// This ensures consistent install behavior regardless of the user's global pnpm version.
-const PINNED_PNPM_VERSION: &str = "10.33.0";
+const PINNED_PNPM_VERSION: &str = "10.34.7";
+
+/// A reused target version must run its own setup again before accepting commands.
+pub async fn clear_self_setup_marker(version_dir: &AbsolutePath) -> Result<(), Error> {
+    match tokio::fs::remove_file(version_dir.join("bin").join(crate::SELF_SETUP_MARKER)).await {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error.into()),
+    }
+}
 
 /// Generate a wrapper `package.json` that declares `vite-plus` as a dependency.
 ///
@@ -127,111 +164,75 @@ pub async fn write_release_age_overrides(version_dir: &AbsolutePath) -> Result<(
     Ok(())
 }
 
-fn is_affirmative_response(input: &str) -> bool {
-    matches!(input.trim().to_ascii_lowercase().as_str(), "y" | "yes")
-}
-
-fn should_prompt_release_age_override(silent: bool) -> bool {
-    !silent && vp_shared::is_stdin_terminal() && vp_shared::is_stderr_terminal()
-}
-
-fn prompt_release_age_override(version: &str) -> bool {
-    eprintln!();
-    eprintln!("warn: Your minimumReleaseAge setting prevented installing vite-plus@{version}.");
-    eprintln!("This setting helps protect against newly published compromised packages.");
-    eprintln!("Proceeding will disable this protection for this Vite+ install only.");
-    eprint!("Do you want to proceed? (y/N): ");
-    if std::io::stderr().flush().is_err() {
-        return false;
-    }
-
-    let mut input = String::new();
-    if std::io::stdin().read_line(&mut input).is_err() {
-        return false;
-    }
-
-    is_affirmative_response(&input)
-}
-
-fn is_release_age_error(stdout: &[u8], stderr: &[u8]) -> bool {
-    let output =
-        format!("{}\n{}", String::from_utf8_lossy(stdout), String::from_utf8_lossy(stderr));
-    let lower = output.to_ascii_lowercase();
-
-    // This wrapper install path is pinned to pnpm via packageManager, so this
-    // detection follows pnpm's resolver/reporter output rather than npm/yarn.
-    //
-    // pnpm's PnpmError prefixes internal codes with ERR_PNPM_, so
-    // `NO_MATURE_MATCHING_VERSION` becomes `ERR_PNPM_NO_MATURE_MATCHING_VERSION`
-    // in CLI output. We still match the unprefixed code as a fallback in case
-    // future reporter/log output includes the raw internal code.
-    // https://github.com/pnpm/pnpm/blob/16cfde66ec71125d692ea828eba2a5f9b3cc54fc/core/error/src/index.ts#L18-L20
-    //
-    // npm-resolver chooses NO_MATURE_MATCHING_VERSION when
-    // publishedBy/minimumReleaseAge rejects a matching version, and uses the
-    // "does not meet the minimumReleaseAge constraint" message.
-    // https://github.com/pnpm/pnpm/blob/16cfde66ec71125d692ea828eba2a5f9b3cc54fc/resolving/npm-resolver/src/index.ts#L76-L84
-    //
-    // default-reporter handles both ERR_PNPM_NO_MATURE_MATCHING_VERSION and
-    // ERR_PNPM_NO_MATCHING_VERSION, and may append guidance mentioning
-    // minimumReleaseAgeExclude when the error has an immatureVersion.
-    // https://github.com/pnpm/pnpm/blob/16cfde66ec71125d692ea828eba2a5f9b3cc54fc/cli/default-reporter/src/reportError.ts#L163-L164
-    //
-    // pnpm itself notes that NO_MATCHING_VERSION can also happen under
-    // minimumReleaseAge when all candidate versions are newer than the threshold.
-    // Because it is also used for real missing versions, we only treat it as
-    // release-age related when accompanied by the age-gate text below.
-    // https://github.com/pnpm/pnpm/blob/16cfde66ec71125d692ea828eba2a5f9b3cc54fc/deps/inspection/outdated/src/createManifestGetter.ts#L66-L76
-    //
-    // minimum-release-age is the pnpm .npmrc key; npm's min-release-age is
-    // intentionally not treated as a pnpm signal here.
-    // https://github.com/pnpm/pnpm/blob/16cfde66ec71125d692ea828eba2a5f9b3cc54fc/config/reader/src/types.ts#L73-L74
-    let has_release_age_text = output.contains("does not meet the minimumReleaseAge constraint")
-        || output.contains("minimumReleaseAge")
-        || output.contains("minimumReleaseAgeExclude")
-        || lower.contains("minimum release age")
-        || lower.contains("minimum-release-age");
-
-    output.contains("ERR_PNPM_NO_MATURE_MATCHING_VERSION")
-        || output.contains("NO_MATURE_MATCHING_VERSION")
-        || (output.contains("ERR_PNPM_NO_MATCHING_VERSION") && has_release_age_text)
-        || has_release_age_text
-}
-
-fn format_install_failure_message(
-    exit_code: i32,
-    log_path: Option<&AbsolutePathBuf>,
-    release_age_blocked: bool,
-) -> String {
+fn format_install_failure_message(exit_code: i32, log_path: Option<&AbsolutePathBuf>) -> String {
     let log_msg = log_path
         .map_or_else(String::new, |p| format!(". See log for details: {}", p.as_path().display()));
 
-    if release_age_blocked {
-        format!(
-            "Upgrade blocked by your minimumReleaseAge setting. Wait until the package is old enough or adjust your package manager configuration explicitly{log_msg}"
-        )
-    } else {
-        format!("Failed to install production dependencies (exit code: {exit_code}){log_msg}")
-    }
+    format!("Failed to install production dependencies (exit code: {exit_code}){log_msg}")
 }
 
-/// Write stdout and stderr from a failed install to `upgrade.log`.
+/// Fixed diagnostics are the only subprocess output that can enter the upgrade log.
+/// Do not accept arbitrary `ERR_PNPM_*` values or copy the matching output line:
+/// package names, URLs, and even unrecognized error identifiers can contain secrets.
+const INSTALL_FAILURE_DIAGNOSTICS: &[(&str, &str)] = &[
+    ("ERR_PNPM_FETCH_401", "Check npm registry authentication in your user configuration."),
+    ("ERR_PNPM_FETCH_403", "Check your permission to download packages from the npm registry."),
+    (
+        "ERR_PNPM_OUTDATED_LOCKFILE",
+        "The installation lockfile does not match the package manifest. Retry with an updated Vite+ release.",
+    ),
+    (
+        "ERR_PNPM_LOCKFILE_BREAKING_CHANGE",
+        "The installation lockfile is incompatible with pnpm. Retry with an updated Vite+ release.",
+    ),
+    ("ERR_PNPM_TARBALL_INTEGRITY", "A package failed checksum validation. Retry the command."),
+    ("ENOSPC", "Free disk space before retrying the command."),
+    ("EDQUOT", "Free disk space or increase the storage quota before retrying the command."),
+    ("EACCES", "Check write permissions for the Vite+ data and cache directories."),
+    ("EPERM", "Check permissions for the Vite+ data and cache directories."),
+];
+
+fn install_failure_log(exit_code: i32, stdout: &[u8], stderr: &[u8]) -> String {
+    let mut content = format!(
+        "Stage: production dependency installation.\npnpm install failed with exit code {exit_code}.\n"
+    );
+    let mut recognized = false;
+    for (code, hint) in INSTALL_FAILURE_DIAGNOSTICS {
+        let reported = [stdout, stderr].iter().any(|output| {
+            output
+                .split(|byte| !byte.is_ascii_alphanumeric() && *byte != b'_')
+                .any(|token| token == code.as_bytes())
+        });
+        if reported {
+            recognized = true;
+            content.push_str(&format!("Reported error: {code}.\n{hint}\n"));
+        }
+    }
+    if !recognized {
+        content.push_str(
+            "No recognized error identifier was reported. Check the Node.js/pnpm runtime, disk space, and npm configuration before retrying.\n",
+        );
+    }
+    content.push_str("Registry output is not saved because it can contain credentials.\n");
+    content
+}
+
+/// Record the failed stage, exit code, and allowlisted diagnostics without raw output.
 ///
-/// The log is written to the **parent** of `version_dir` (i.e. `~/.vite-plus/upgrade.log`)
+/// The log is written to the **parent** of `version_dir` (i.e. `<DATA>/upgrade.log`)
 /// so it survives the cleanup that removes `version_dir` on failure.
 ///
 /// Returns the log file path on success, or `None` if writing failed.
 pub async fn write_upgrade_log(
     version_dir: &AbsolutePath,
+    exit_code: i32,
     stdout: &[u8],
     stderr: &[u8],
 ) -> Option<AbsolutePathBuf> {
     // Write to parent dir so the log survives version_dir cleanup on failure
     let parent = version_dir.as_path().parent()?;
     let log_path = AbsolutePathBuf::new(parent.join("upgrade.log"))?;
-    let stdout_str = String::from_utf8_lossy(stdout);
-    let stderr_str = String::from_utf8_lossy(stderr);
-    let content = format!("=== stdout ===\n{stdout_str}\n=== stderr ===\n{stderr_str}");
+    let content = install_failure_log(exit_code, stdout, stderr);
     match tokio::fs::write(&log_path, &content).await {
         Ok(()) => Some(log_path),
         Err(e) => {
@@ -241,97 +242,164 @@ pub async fn write_upgrade_log(
     }
 }
 
-/// Install production dependencies with managed Node.js LTS and pinned pnpm.
+/// Select the runtime for dependency installation.
+pub enum NodeVersion<'a> {
+    /// Reuse a CI-selected runtime when it supports the pinned pnpm.
+    Preferred(&'a str),
+    /// Use the target release's exact runtime or fail before activation.
+    Required(&'a str),
+}
+
+/// Install production dependencies with a compatible managed Node.js and pinned pnpm.
 ///
-/// Spawns: `node <managed-pnpm>/bin/pnpm.cjs install [--registry <url>]` with `CI=true`.
-/// On failure, writes stdout+stderr to `{version_dir}/upgrade.log` for debugging.
+/// Spawns: `node <managed-pnpm>/bin/pnpm.cjs install --ignore-workspace`
+/// with `CI=true`. On failure, records safe diagnostics in the parent directory's `upgrade.log`.
 pub async fn install_production_deps(
     version_dir: &AbsolutePath,
     registry: Option<&str>,
-    silent: bool,
-    new_version: &str,
+    show_progress: bool,
+    node_version: Option<NodeVersion<'_>>,
 ) -> Result<(), Error> {
     tracing::debug!("Running pnpm install in {}", version_dir.as_path().display());
-
-    // Do not pass `--silent` to the inner install: pnpm suppresses the
-    // release-age error body in silent mode, which would leave upgrade.log
-    // empty and make the release-age gate impossible to detect. This outer
-    // process captures the output and only surfaces it through the log.
-    let mut args = vec!["install"];
-    if let Some(registry_url) = registry {
-        args.push("--registry");
-        args.push(registry_url);
+    lockfile::invalidate_install(version_dir).await?;
+    if EnvConfig::get().setup_skip_install_lockfile {
+        vp_shared::output::warn(
+            "VP_SETUP_SKIP_INSTALL_LOCKFILE=1: ignoring the installation lockfile; resolving dependencies again.",
+        );
     }
 
-    let node_version = NodeProvider::new().resolve_latest_version().await.map_err(|error| {
-        Error::Setup(format!("Failed to resolve the latest Node.js LTS version: {error}").into())
+    // Keep the bypass local to this Vite+ installation.
+    write_release_age_overrides(version_dir).await?;
+
+    let args = dependency_install_args(version_dir, registry).await?;
+
+    let (node_runtime, pnpm_entry) = vp_shared::progress::with_spinner(
+        show_progress.then_some("Preparing Node.js and pnpm..."),
+        prepare_install_runtime(node_version, registry),
+    )
+    .await?;
+    let output = vp_shared::progress::with_spinner(
+        show_progress.then_some("Installing dependencies..."),
+        run_pnpm_install(version_dir, &node_runtime, &pnpm_entry, &args, registry),
+    )
+    .await?;
+
+    if !output.status.success() {
+        let exit_code = vp_shared::exit_code_from_status(output.status);
+        let log_path =
+            write_upgrade_log(version_dir, exit_code, &output.stdout, &output.stderr).await;
+        return Err(Error::Setup(
+            format_install_failure_message(
+                vp_shared::exit_code_from_status(output.status),
+                log_path.as_ref(),
+            )
+            .into(),
+        ));
+    }
+
+    lockfile::record_install(version_dir).await?;
+    if show_progress {
+        vp_shared::output::success("Dependencies installed.");
+    }
+    Ok(())
+}
+
+async fn dependency_install_args<'a>(
+    version_dir: &AbsolutePath,
+    registry: Option<&'a str>,
+) -> Result<Vec<&'a str>, Error> {
+    // An ancestor workspace must not capture the install or supply its lockfile.
+    let mut args = vec!["install", "--ignore-workspace"];
+    if EnvConfig::get().setup_skip_install_lockfile {
+        // Disable both pnpm's CI default and reading any existing working lockfile.
+        args.extend(["--no-frozen-lockfile", "--lockfile=false"]);
+    } else if tokio::fs::try_exists(version_dir.join("bin").join(lockfile::INSTALL_LOCKFILE))
+        .await?
+    {
+        lockfile::restore(version_dir).await?;
+        // Keep these flags and the numeric setting in run_pnpm_install in sync with
+        // packages/cli/generate-install-lockfile.ts.
+        args.extend([
+            "--frozen-lockfile",
+            "--lockfile=true",
+            "--config.auto-install-peers=true",
+            "--config.exclude-links-from-lockfile=false",
+            "--config.dedupe-peers=false",
+            "--config.inject-workspace-packages=false",
+        ]);
+    }
+    if let Some(registry_url) = registry {
+        args.extend(["--registry", registry_url]);
+    }
+    Ok(args)
+}
+
+async fn prepare_install_runtime(
+    node_version: Option<NodeVersion<'_>>,
+    registry: Option<&str>,
+) -> Result<(vp_js_runtime::JsRuntime, AbsolutePathBuf), Error> {
+    let pnpm_dir = bootstrap_pnpm(PINNED_PNPM_VERSION, registry).await.map_err(|error| {
+        Error::Setup(format!("Failed to install pnpm {PINNED_PNPM_VERSION}: {error}").into())
     })?;
-    let node_runtime =
-        download_runtime(JsRuntimeType::Node, &node_version).await.map_err(|error| {
-            Error::Setup(format!("Failed to install Node.js {node_version}: {error}").into())
-        })?;
-    let (pnpm_dir, _, _) =
-        download_package_manager(PackageManagerType::Pnpm, PINNED_PNPM_VERSION, None)
-            .await
-            .map_err(|error| {
-                Error::Setup(
-                    format!("Failed to install pnpm {PINNED_PNPM_VERSION}: {error}").into(),
-                )
-            })?;
     let pnpm_entry = pnpm_dir.join("bin").join("pnpm.cjs");
     if !tokio::fs::try_exists(&pnpm_entry).await.unwrap_or(false) {
         return Err(Error::Setup(
             format!("pnpm entry not found at {}", pnpm_entry.as_path().display()).into(),
         ));
     }
-    let output = run_pnpm_install(version_dir, &node_runtime, &pnpm_entry, &args, registry).await?;
-
-    if !output.status.success() {
-        let log_path = write_upgrade_log(version_dir, &output.stdout, &output.stderr).await;
-        let release_age_blocked = is_release_age_error(&output.stdout, &output.stderr);
-
-        if !release_age_blocked {
-            return Err(Error::Setup(
-                format_install_failure_message(
-                    vp_shared::exit_code_from_status(output.status),
-                    log_path.as_ref(),
-                    false,
-                )
-                .into(),
-            ));
+    let package: serde_json::Value = serde_json::from_slice(
+        &tokio::fs::read(pnpm_dir.join("package.json")).await?,
+    )
+    .map_err(|error| {
+        Error::Setup(format!("Failed to read pnpm's Node.js requirement: {error}").into())
+    })?;
+    let node_version = match node_version {
+        Some(NodeVersion::Required(version)) => {
+            if !supports_pnpm_node(&package, version) {
+                return Err(Error::Setup(
+                    format!(
+                        "Node.js {version} required by the target Vite+ release is not supported by pnpm {PINNED_PNPM_VERSION}"
+                    )
+                    .into(),
+                ));
+            }
+            version
         }
+        Some(NodeVersion::Preferred(version)) if supports_pnpm_node(&package, version) => version,
+        _ => DEFAULT_INSTALL_NODE_VERSION,
+    };
+    let node_runtime =
+        download_runtime(JsRuntimeType::Node, node_version).await.map_err(|error| {
+            Error::Setup(format!("Failed to install Node.js {node_version}: {error}").into())
+        })?;
+    Ok((node_runtime, pnpm_entry))
+}
 
-        if !should_prompt_release_age_override(silent) || !prompt_release_age_override(new_version)
-        {
-            return Err(Error::Setup(
-                format_install_failure_message(
-                    vp_shared::exit_code_from_status(output.status),
-                    log_path.as_ref(),
-                    true,
-                )
-                .into(),
-            ));
-        }
+fn supports_pnpm_node(package: &serde_json::Value, version: &str) -> bool {
+    let Some(range) = package["engines"]["node"].as_str() else { return false };
+    let (Ok(range), Ok(version)) =
+        (js_semver::Range::parse(range), js_semver::Version::parse(version))
+    else {
+        return false;
+    };
+    range.satisfies(&version)
+}
 
-        // Only create the local override after explicit consent. This preserves
-        // minimumReleaseAge protection for the default and non-interactive paths.
-        write_release_age_overrides(version_dir).await?;
-        let retry_output =
-            run_pnpm_install(version_dir, &node_runtime, &pnpm_entry, &args, registry).await?;
-        if !retry_output.status.success() {
-            let retry_log_path =
-                write_upgrade_log(version_dir, &retry_output.stdout, &retry_output.stderr).await;
-            return Err(Error::Setup(
-                format_install_failure_message(
-                    vp_shared::exit_code_from_status(retry_output.status),
-                    retry_log_path.as_ref(),
-                    false,
-                )
-                .into(),
-            ));
-        }
+/// Keep pnpm's registry and user config aligned with the native downloader when
+/// its working directory differs from the caller's.
+fn configure_pnpm_command(
+    command: &mut tokio::process::Command,
+    registry: Option<&str>,
+) -> Result<(), Error> {
+    if let Some(registry) = registry {
+        command.env(vp_shared::env_vars::NPM_CONFIG_REGISTRY, registry);
+        command.env(vp_shared::env_vars::NPM_CONFIG_REGISTRY_UPPER, registry);
     }
-
+    if let Some(path) = npm_user_config_path(None) {
+        let path = vt_path::current_dir()?.join(path);
+        command.env("npm_config_userconfig", path.as_path());
+        command.env("NPM_CONFIG_USERCONFIG", path.as_path());
+    }
     Ok(())
 }
 
@@ -359,9 +427,14 @@ async fn run_pnpm_install(
         .env("CI", "true")
         .env("PATH", path);
 
-    if let Some(registry_url) = registry {
-        cmd.env(vp_shared::env_vars::NPM_CONFIG_REGISTRY, registry_url);
+    if args.contains(&"--frozen-lockfile") {
+        // --config leaves numbers as strings. Environment values get pnpm's numeric parsing.
+        // Override both spellings so neither an inherited value nor the user npmrc can win.
+        cmd.env("npm_config_peers_suffix_max_length", "1000")
+            .env("NPM_CONFIG_PEERS_SUFFIX_MAX_LENGTH", "1000");
     }
+
+    configure_pnpm_command(&mut cmd, registry)?;
 
     let output = cmd.output().await?;
     Ok(output)
@@ -412,24 +485,7 @@ pub async fn swap_current_link(install_dir: &AbsolutePath, version: &str) -> Res
     #[cfg(windows)]
     {
         // Windows: junction swap (not atomic)
-        // Remove whatever exists at current_link — could be a junction, symlink, or directory.
-        // We don't rely on junction::exists() since it may not detect junctions created by
-        // cmd /c mklink /J (used by install.ps1).
-        if current_link.as_path().exists() {
-            // std::fs::remove_dir works on junctions/symlinks without removing target contents
-            if let Err(e) = std::fs::remove_dir(&current_link) {
-                tracing::debug!("remove_dir failed ({}), trying junction::delete", e);
-                junction::delete(&current_link).map_err(|e| {
-                    Error::Setup(
-                        format!(
-                            "Failed to remove existing junction at {}: {e}",
-                            current_link.as_path().display()
-                        )
-                        .into(),
-                    )
-                })?;
-            }
-        }
+        remove_windows_current_link(&current_link)?;
 
         junction::create(&version_dir, &current_link).map_err(|e| {
             Error::Setup(
@@ -446,7 +502,59 @@ pub async fn swap_current_link(install_dir: &AbsolutePath, version: &str) -> Res
     Ok(())
 }
 
-/// Refresh shims by running `vp env setup --refresh` with the new binary.
+/// Remove the Windows `current` entry without following its target.
+#[cfg(windows)]
+fn remove_windows_current_link(current_link: &AbsolutePath) -> Result<(), Error> {
+    match std::fs::symlink_metadata(current_link) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => {
+            return Err(Error::Setup(
+                format!(
+                    "Failed to inspect the current link at {}: {error}",
+                    current_link.as_path().display()
+                )
+                .into(),
+            ));
+        }
+        Ok(_) => {}
+    }
+
+    // remove_dir removes a junction or directory symlink without changing its
+    // target. It also detects a dangling junction because symlink_metadata did
+    // not follow the missing target.
+    if let Err(remove_error) = std::fs::remove_dir(current_link) {
+        tracing::debug!("remove_dir failed ({remove_error}), trying junction::delete");
+        junction::delete(current_link).map_err(|junction_error| {
+            Error::Setup(
+                format!(
+                    "Failed to remove the current link at {}: {remove_error}. Junction cleanup also failed: {junction_error}",
+                    current_link.as_path().display()
+                )
+                .into(),
+            )
+        })?;
+
+        // junction::delete removes the reparse data. Remove the empty directory
+        // that remains, unless the API removed the directory too.
+        if let Err(error) = std::fs::remove_dir(current_link)
+            && error.kind() != std::io::ErrorKind::NotFound
+        {
+            return Err(Error::Setup(
+                format!(
+                    "Failed to remove the current directory at {}: {error}",
+                    current_link.as_path().display()
+                )
+                .into(),
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+/// Hand off to the newly activated binary using the legacy refresh command.
+/// New binaries without a setup marker intercept this invocation as self-setup;
+/// legacy rollback targets still execute `env setup --refresh` normally.
 pub async fn refresh_shims(install_dir: &AbsolutePath) -> Result<(), Error> {
     let vp_binary = install_dir.join("current").join("bin").join(crate::VP_BINARY_NAME);
 
@@ -537,7 +645,7 @@ pub async fn cleanup_old_versions(
         // Only consider entries that parse as semver. Forced-reinstall dirs use
         // semver build metadata (see `forced_reinstall_dir_name`), so they pass
         // this filter and get garbage-collected like any other version dir.
-        if node_semver::Version::parse(&name_str).is_ok() {
+        if js_semver::Version::parse(&name_str).is_ok() {
             let metadata = entry.metadata().await?;
             // Use creation time (birth time), fallback to modified time
             let time = metadata.created().unwrap_or_else(|_| {
@@ -550,16 +658,7 @@ pub async fn cleanup_old_versions(
         }
     }
 
-    // Sort newest first (by creation time, matching install.sh)
-    versions.sort_by_key(|b| std::cmp::Reverse(b.0));
-
-    // Remove versions beyond the keep limit, but never remove protected versions
-    for (_time, path) in versions.into_iter().skip(max_keep) {
-        let name = path.as_path().file_name().and_then(|n| n.to_str()).unwrap_or("");
-        if protected_versions.contains(&name) {
-            tracing::debug!("Skipping protected version: {}", name);
-            continue;
-        }
+    for path in versions_to_remove(versions, max_keep, protected_versions) {
         tracing::debug!("Cleaning up old version: {}", path.as_path().display());
         if let Err(e) = tokio::fs::remove_dir_all(&path).await {
             tracing::warn!("Failed to remove {}: {}", path.as_path().display(), e);
@@ -567,6 +666,31 @@ pub async fn cleanup_old_versions(
     }
 
     Ok(())
+}
+
+/// Select the version directories that [`cleanup_old_versions`] removes.
+///
+/// Kept apart from the directory scan so tests can supply exact creation times,
+/// which some filesystems record too coarsely (or not at all) to order fresh dirs.
+fn versions_to_remove(
+    mut versions: Vec<(SystemTime, AbsolutePathBuf)>,
+    max_keep: usize,
+    protected_versions: &[&str],
+) -> Vec<AbsolutePathBuf> {
+    // Sort newest first (by creation time, matching install.sh)
+    versions.sort_by_key(|b| std::cmp::Reverse(b.0));
+
+    // Remove versions beyond the keep limit, but never remove protected versions
+    let mut removable = Vec::new();
+    for (_time, path) in versions.into_iter().skip(max_keep) {
+        let name = path.as_path().file_name().and_then(|n| n.to_str()).unwrap_or("");
+        if protected_versions.contains(&name) {
+            tracing::debug!("Skipping protected version: {}", name);
+            continue;
+        }
+        removable.push(path);
+    }
+    removable
 }
 
 /// Read the previous version from `.previous-version` file.
@@ -625,11 +749,231 @@ mod tests {
     use super::*;
 
     #[test]
+    fn expands_userconfig_before_resolving_against_the_caller() {
+        let home = tempfile::tempdir().unwrap();
+        let relative = vt_path::current_dir().unwrap().join("config/enterprise.npmrc");
+        let cases = [
+            ("config/enterprise.npmrc", relative.as_path().to_path_buf()),
+            ("~/enterprise.npmrc", home.path().join("enterprise.npmrc")),
+            ("${HOME}/enterprise.npmrc", home.path().join("enterprise.npmrc")),
+        ];
+        for (selector, expected) in cases {
+            for variable in ["npm_config_userconfig", "NPM_CONFIG_USERCONFIG"] {
+                EnvConfig::with_vars(
+                    [
+                        ("HOME", home.path().to_str()),
+                        ("USERPROFILE", home.path().to_str()),
+                        ("npm_config_userconfig", None),
+                        ("NPM_CONFIG_USERCONFIG", None),
+                    ],
+                    |_| {
+                        // Clear both spellings before setting either: they alias on Windows.
+                        EnvConfig::with_vars([(variable, selector)], |_| {
+                            let mut command = tokio::process::Command::new("node");
+                            configure_pnpm_command(
+                                &mut command,
+                                Some("https://registry.example.test/"),
+                            )
+                            .unwrap();
+                            let command_env = |name: &str| {
+                                command
+                                    .as_std()
+                                    .get_envs()
+                                    .find(|(key, _)| {
+                                        if cfg!(windows) {
+                                            key.eq_ignore_ascii_case(name)
+                                        } else {
+                                            *key == name
+                                        }
+                                    })
+                                    .and_then(|(_, value)| value)
+                            };
+                            for name in ["npm_config_userconfig", "NPM_CONFIG_USERCONFIG"] {
+                                assert_eq!(
+                                    command_env(name).map(std::path::Path::new),
+                                    Some(expected.as_path()),
+                                    "{variable}={selector}"
+                                );
+                            }
+                            for name in ["npm_config_registry", "NPM_CONFIG_REGISTRY"] {
+                                assert_eq!(
+                                    command_env(name),
+                                    Some(std::ffi::OsStr::new("https://registry.example.test/"))
+                                );
+                            }
+                            assert_eq!(command.as_std().get_args().len(), 0);
+                        });
+                    },
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn bootstrap_reuses_compatible_node_and_otherwise_uses_pinned_default() {
+        use vp_js_runtime::{JsRuntimeProvider, NodeProvider, Platform};
+        use vp_shared::{EnvConfig, env_vars};
+
+        let server = httpmock::MockServer::start_async().await;
+        let index = server.mock(|when, then| {
+            when.path("/index.json");
+            then.status(200).json_body(serde_json::json!([
+                {"version":"v26.13.0", "lts":"Newer LTS"},
+                {"version":"v22.23.1", "lts":"Jod"}
+            ]));
+        });
+        let root = tempfile::tempdir().unwrap();
+        EnvConfig::with_vars_async(
+            [
+                (env_vars::VP_HOME, root.path().to_str().unwrap()),
+                (env_vars::VP_NODE_DIST_MIRROR, server.base_url().as_str()),
+            ],
+            |env| async move {
+                let pnpm = env
+                    .dirs
+                    .data
+                    .join("package_manager/pnpm")
+                    .join(PINNED_PNPM_VERSION)
+                    .join("pnpm");
+                tokio::fs::create_dir_all(pnpm.join("bin")).await.unwrap();
+                for name in ["pnpm", "pnpm.cmd", "pnpm.ps1", "pnpm.cjs"] {
+                    tokio::fs::write(pnpm.join("bin").join(name), "").await.unwrap();
+                }
+                let manifest = pnpm.join("package.json");
+                tokio::fs::write(&manifest, r#"{"engines":{"node":">=18.12"}}"#).await.unwrap();
+                for version in ["22.23.1", DEFAULT_INSTALL_NODE_VERSION] {
+                    let binary = env
+                        .dirs
+                        .data
+                        .join("js_runtime/node")
+                        .join(version)
+                        .join(NodeProvider::new().binary_relative_path(Platform::current()));
+                    tokio::fs::create_dir_all(binary.parent().unwrap()).await.unwrap();
+                    tokio::fs::write(binary, "").await.unwrap();
+                }
+
+                let (runtime, entry) =
+                    prepare_install_runtime(Some(NodeVersion::Preferred("22.23.1")), None)
+                        .await
+                        .unwrap();
+                assert_eq!(runtime.version(), "22.23.1");
+                assert_eq!(entry, pnpm.join("bin/pnpm.cjs"));
+                index.assert_calls(0);
+
+                let (runtime, _) =
+                    prepare_install_runtime(Some(NodeVersion::Required("22.23.1")), None)
+                        .await
+                        .unwrap();
+                assert_eq!(runtime.version(), "22.23.1");
+                index.assert_calls(0);
+
+                let (runtime, _) = prepare_install_runtime(None, None).await.unwrap();
+                assert_eq!(runtime.version(), DEFAULT_INSTALL_NODE_VERSION);
+                index.assert_calls(0);
+
+                tokio::fs::write(manifest, r#"{"engines":{"node":">=24"}}"#).await.unwrap();
+                let (runtime, _) =
+                    prepare_install_runtime(Some(NodeVersion::Preferred("22.23.1")), None)
+                        .await
+                        .unwrap();
+                assert_eq!(runtime.version(), DEFAULT_INSTALL_NODE_VERSION);
+                index.assert_calls(0);
+
+                let error = prepare_install_runtime(Some(NodeVersion::Required("22.23.1")), None)
+                    .await
+                    .unwrap_err();
+                assert!(error.to_string().contains(
+                    "Node.js 22.23.1 required by the target Vite+ release is not supported by pnpm"
+                ));
+                index.assert_calls(0);
+            },
+        )
+        .await;
+    }
+
+    #[test]
+    fn pnpm_node_compatibility_fails_closed() {
+        assert!(!supports_pnpm_node(&serde_json::json!({}), "22.23.1"));
+        assert!(!supports_pnpm_node(&serde_json::json!({"engines":{"node":"invalid"}}), "22.23.1"));
+        assert!(!supports_pnpm_node(&serde_json::json!({"engines":{"node":">=18.12"}}), "invalid"));
+    }
+
+    #[tokio::test]
+    async fn release_archives_supply_the_frozen_dependency_tree() {
+        EnvConfig::with_vars_async([("VP_SETUP_SKIP_INSTALL_LOCKFILE", None::<&str>)], |_| async {
+            let temp = tempfile::tempdir().unwrap();
+            let directory = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+            let archive = lockfile::test_archive(true, Some(b"release dependency tree"));
+            extract_platform_package(&archive, &directory).await.unwrap();
+            let args =
+                dependency_install_args(&directory, Some("https://mirror.example")).await.unwrap();
+            assert_eq!(
+                args,
+                [
+                    "install",
+                    "--ignore-workspace",
+                    "--frozen-lockfile",
+                    "--lockfile=true",
+                    "--config.auto-install-peers=true",
+                    "--config.exclude-links-from-lockfile=false",
+                    "--config.dedupe-peers=false",
+                    "--config.inject-workspace-packages=false",
+                    "--registry",
+                    "https://mirror.example"
+                ]
+            );
+            assert_eq!(
+                tokio::fs::read(directory.join("pnpm-lock.yaml")).await.unwrap(),
+                b"release dependency tree"
+            );
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn incomplete_release_archives_fail_but_old_archives_remain_supported() {
+        EnvConfig::with_vars_async([("VP_SETUP_SKIP_INSTALL_LOCKFILE", None::<&str>)], |_| async {
+            let temp = tempfile::tempdir().unwrap();
+            let directory = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+            let error = extract_platform_package(&lockfile::test_archive(true, None), &directory)
+                .await
+                .unwrap_err();
+            assert!(error.to_string().contains("missing vp-install-lock.yaml"));
+            extract_platform_package(&lockfile::test_archive(false, None), &directory)
+                .await
+                .unwrap();
+            assert_eq!(
+                dependency_install_args(&directory, None).await.unwrap(),
+                ["install", "--ignore-workspace"]
+            );
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn invalidate_only_the_target_versions_setup() {
+        let root = tempfile::tempdir().unwrap();
+        let root = AbsolutePathBuf::new(root.path().to_path_buf()).unwrap();
+        let old = root.join("1.0.0");
+        let target = root.join("1.1.0");
+        for version in [&old, &target] {
+            tokio::fs::create_dir_all(version.join("bin")).await.unwrap();
+            tokio::fs::write(version.join("bin").join(crate::SELF_SETUP_MARKER), b"")
+                .await
+                .unwrap();
+        }
+        clear_self_setup_marker(&target).await.unwrap();
+        assert!(!target.join("bin").join(crate::SELF_SETUP_MARKER).as_path().exists());
+        assert!(old.join("bin").join(crate::SELF_SETUP_MARKER).as_path().is_file());
+        clear_self_setup_marker(&target).await.unwrap();
+    }
+
+    #[test]
     fn forced_active_version_installs_to_unique_semver_dir() {
         let dir = target_install_dir_name("0.1.23", Some("0.1.23"), true);
 
         assert!(dir.starts_with("0.1.23+force."));
-        assert!(node_semver::Version::parse(&dir).is_ok(), "{dir} should remain semver-compatible");
+        assert!(js_semver::Version::parse(&dir).is_ok(), "{dir} should remain semver-compatible");
     }
 
     #[test]
@@ -655,6 +999,29 @@ mod tests {
         assert!(!is_install_dir_for_version("0.1.24", "0.1.23"));
     }
 
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn swap_current_link_replaces_a_dangling_windows_junction() {
+        let temp = tempfile::tempdir().unwrap();
+        let install_dir = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let old_version = install_dir.join("old-version");
+        let new_version = install_dir.join("new-version");
+        let current_link = install_dir.join("current");
+
+        std::fs::create_dir(&old_version).unwrap();
+        std::fs::create_dir(&new_version).unwrap();
+        std::fs::write(new_version.join("active"), b"active").unwrap();
+        junction::create(&old_version, &current_link).unwrap();
+        std::fs::remove_dir(&old_version).unwrap();
+
+        assert!(!current_link.as_path().exists());
+        assert!(std::fs::symlink_metadata(&current_link).is_ok());
+
+        swap_current_link(&install_dir, "new-version").await.unwrap();
+
+        assert!(current_link.join("active").as_path().is_file());
+    }
+
     #[test]
     fn test_is_safe_tar_path_normal() {
         assert!(is_safe_tar_path(Path::new("dist/index.js")));
@@ -676,103 +1043,102 @@ mod tests {
         assert!(!is_safe_tar_path(Path::new("/usr/bin/vp")));
     }
 
-    #[tokio::test]
-    async fn test_cleanup_preserves_active_downgraded_version() {
-        let temp = tempfile::tempdir().unwrap();
-        let install_dir = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
-
-        // Create 7 version directories with staggered creation times.
-        // Simulate: installed 0.1-0.7 in order, then rolled back to 0.2.0
-        for v in ["0.1.0", "0.2.0", "0.3.0", "0.4.0", "0.5.0", "0.6.0", "0.7.0"] {
-            tokio::fs::create_dir(install_dir.join(v)).await.unwrap();
-            // Small delay to ensure distinct creation times
-            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-        }
-
-        // Simulate rollback: current points to 0.2.0 (low semver rank)
-        #[cfg(unix)]
-        tokio::fs::symlink("0.2.0", install_dir.join("current")).await.unwrap();
-
-        // Cleanup keeping top 5, with 0.2.0 protected (the active version)
-        cleanup_old_versions(&install_dir, 5, &["0.2.0"]).await.unwrap();
-
-        // 0.2.0 is the active version — it MUST survive cleanup
-        assert!(
-            tokio::fs::try_exists(install_dir.join("0.2.0")).await.unwrap(),
-            "Active version 0.2.0 was deleted by cleanup"
-        );
+    /// Select cleanup candidates from dirs created one second apart, oldest first.
+    fn removed_versions(
+        created_oldest_first: &[&str],
+        max_keep: usize,
+        protected_versions: &[&str],
+    ) -> Vec<std::ffi::OsString> {
+        let install_dir = AbsolutePathBuf::new(std::env::temp_dir()).unwrap();
+        let versions = created_oldest_first
+            .iter()
+            .zip(0..)
+            .map(|(name, secs)| {
+                (UNIX_EPOCH + std::time::Duration::from_secs(secs), install_dir.join(name))
+            })
+            .collect();
+        versions_to_remove(versions, max_keep, protected_versions)
+            .iter()
+            .map(|path| path.as_path().file_name().unwrap().to_os_string())
+            .collect()
     }
 
-    #[tokio::test]
-    async fn test_cleanup_sorts_by_creation_time_not_semver() {
-        let temp = tempfile::tempdir().unwrap();
-        let install_dir = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+    #[test]
+    fn test_cleanup_preserves_active_downgraded_version() {
+        // Simulate: installed 0.1-0.7 in order, then rolled back to 0.2.0.
+        // Keep the top 5, with 0.2.0 protected (the active version).
+        let removed = removed_versions(
+            &["0.1.0", "0.2.0", "0.3.0", "0.4.0", "0.5.0", "0.6.0", "0.7.0"],
+            5,
+            &["0.2.0"],
+        );
 
-        // Create versions in non-semver order with creation times:
-        // 0.5.0 (oldest), 0.1.0, 0.3.0, 0.7.0, 0.2.0, 0.6.0 (newest)
-        for v in ["0.5.0", "0.1.0", "0.3.0", "0.7.0", "0.2.0", "0.6.0"] {
-            tokio::fs::create_dir(install_dir.join(v)).await.unwrap();
-            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-        }
+        // 0.2.0 is the active version — it MUST survive cleanup
+        assert_eq!(removed, ["0.1.0"], "Active version 0.2.0 must survive cleanup");
+    }
+
+    #[test]
+    fn test_cleanup_sorts_by_creation_time_not_semver() {
+        // Creation order: 0.5.0 (oldest), 0.1.0, 0.3.0, 0.7.0, 0.2.0, 0.6.0 (newest)
+        let removed =
+            removed_versions(&["0.5.0", "0.1.0", "0.3.0", "0.7.0", "0.2.0", "0.6.0"], 4, &[]);
 
         // Keep top 4 by creation time → keep 0.6.0, 0.2.0, 0.7.0, 0.3.0
         // Remove 0.1.0 and 0.5.0 (oldest by creation time)
-        cleanup_old_versions(&install_dir, 4, &[]).await.unwrap();
-
-        // The 4 newest by creation time should survive
-        assert!(tokio::fs::try_exists(install_dir.join("0.6.0")).await.unwrap());
-        assert!(tokio::fs::try_exists(install_dir.join("0.2.0")).await.unwrap());
-        assert!(tokio::fs::try_exists(install_dir.join("0.7.0")).await.unwrap());
-        assert!(tokio::fs::try_exists(install_dir.join("0.3.0")).await.unwrap());
-
-        // The 2 oldest by creation time should be removed
-        assert!(
-            !tokio::fs::try_exists(install_dir.join("0.5.0")).await.unwrap(),
-            "0.5.0 (oldest by creation time) should have been removed"
-        );
-        assert!(
-            !tokio::fs::try_exists(install_dir.join("0.1.0")).await.unwrap(),
-            "0.1.0 (second oldest by creation time) should have been removed"
-        );
+        assert_eq!(removed, ["0.1.0", "0.5.0"]);
     }
 
-    #[tokio::test]
-    async fn test_cleanup_removes_old_forced_reinstall_dir() {
-        let temp = tempfile::tempdir().unwrap();
-        let install_dir = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
-
+    #[test]
+    fn test_cleanup_removes_old_forced_reinstall_dir() {
         // Forced reinstall directories use semver build metadata. They should
         // still be eligible for normal old-version cleanup.
         let old_forced = "0.1.23+force.123.456";
-        for v in [old_forced, "0.1.24", "0.1.25", "0.1.26", "0.1.27", "0.1.28"] {
-            tokio::fs::create_dir(install_dir.join(v)).await.unwrap();
-            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-        }
+        let removed = removed_versions(
+            &[old_forced, "0.1.24", "0.1.25", "0.1.26", "0.1.27", "0.1.28"],
+            5,
+            &[],
+        );
 
-        cleanup_old_versions(&install_dir, 5, &[]).await.unwrap();
+        assert_eq!(removed, [old_forced], "old forced reinstall directory should be removed");
+    }
+
+    #[test]
+    fn test_cleanup_preserves_protected_forced_reinstall_dir() {
+        let protected_forced = "0.1.23+force.123.456";
+        let removed = removed_versions(
+            &[protected_forced, "0.1.24", "0.1.25", "0.1.26", "0.1.27", "0.1.28"],
+            5,
+            &[protected_forced],
+        );
 
         assert!(
-            !tokio::fs::try_exists(install_dir.join(old_forced)).await.unwrap(),
-            "old forced reinstall directory should be removed by cleanup"
+            removed.is_empty(),
+            "active forced reinstall directory should be preserved when protected"
         );
     }
 
     #[tokio::test]
-    async fn test_cleanup_preserves_protected_forced_reinstall_dir() {
+    async fn test_cleanup_removes_only_unprotected_version_dirs() {
         let temp = tempfile::tempdir().unwrap();
         let install_dir = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
 
-        let protected_forced = "0.1.23+force.123.456";
-        for v in [protected_forced, "0.1.24", "0.1.25", "0.1.26", "0.1.27", "0.1.28"] {
-            tokio::fs::create_dir(install_dir.join(v)).await.unwrap();
-            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        // Keeping no versions makes the outcome independent of creation order.
+        let forced = "0.1.23+force.123.456";
+        for name in [forced, "0.1.24", "0.1.25", "current"] {
+            tokio::fs::create_dir(install_dir.join(name)).await.unwrap();
         }
 
-        cleanup_old_versions(&install_dir, 5, &[protected_forced]).await.unwrap();
+        cleanup_old_versions(&install_dir, 0, &["0.1.25"]).await.unwrap();
 
+        assert!(!tokio::fs::try_exists(install_dir.join(forced)).await.unwrap());
+        assert!(!tokio::fs::try_exists(install_dir.join("0.1.24")).await.unwrap());
         assert!(
-            tokio::fs::try_exists(install_dir.join(protected_forced)).await.unwrap(),
-            "active forced reinstall directory should be preserved when protected"
+            tokio::fs::try_exists(install_dir.join("0.1.25")).await.unwrap(),
+            "protected version must survive cleanup"
+        );
+        assert!(
+            tokio::fs::try_exists(install_dir.join("current")).await.unwrap(),
+            "non-version entries must survive cleanup"
         );
     }
 
@@ -790,14 +1156,11 @@ mod tests {
     #[tokio::test]
     async fn test_write_upgrade_log_creates_log_in_parent_dir() {
         let temp = tempfile::tempdir().unwrap();
-        // Simulate ~/.vite-plus/0.1.15/ structure
+        // Simulate a `<DATA>/0.1.15/` install structure
         let version_dir = AbsolutePathBuf::new(temp.path().join("0.1.15").to_path_buf()).unwrap();
         tokio::fs::create_dir(&version_dir).await.unwrap();
 
-        let stdout = b"some stdout output";
-        let stderr = b"error: something went wrong";
-
-        let result = write_upgrade_log(&version_dir, stdout, stderr).await;
+        let result = write_upgrade_log(&version_dir, 17, b"", b"ENOSPC: private path").await;
         assert!(result.is_some(), "write_upgrade_log should return log path");
 
         let log_path = result.unwrap();
@@ -810,28 +1173,70 @@ mod tests {
         assert!(log_path.as_path().exists(), "upgrade.log should exist");
 
         let content = tokio::fs::read_to_string(&log_path).await.unwrap();
-        assert!(content.contains("=== stdout ==="), "log should have stdout section");
-        assert!(content.contains("some stdout output"), "log should contain stdout");
-        assert!(content.contains("=== stderr ==="), "log should have stderr section");
-        assert!(content.contains("error: something went wrong"), "log should contain stderr");
+        assert!(content.contains("exit code 17"));
+        assert!(content.contains("Reported error: ENOSPC."));
+        assert!(!content.contains("private path"));
+        assert!(content.contains("Registry output is not saved"));
 
         // Log should survive version_dir removal
         tokio::fs::remove_dir_all(&version_dir).await.unwrap();
         assert!(log_path.as_path().exists(), "upgrade.log should survive version_dir cleanup");
     }
 
-    #[tokio::test]
-    async fn test_write_upgrade_log_handles_empty_output() {
-        let temp = tempfile::tempdir().unwrap();
-        let version_dir = AbsolutePathBuf::new(temp.path().join("0.1.15").to_path_buf()).unwrap();
-        tokio::fs::create_dir(&version_dir).await.unwrap();
+    #[test]
+    fn install_failure_log_distinguishes_safe_causes_with_the_same_exit_code() {
+        let cases = [
+            ("ERR_PNPM_FETCH_401", "Check npm registry authentication"),
+            ("ERR_PNPM_OUTDATED_LOCKFILE", "The installation lockfile does not match"),
+            ("ENOSPC", "Free disk space before retrying"),
+        ];
+        for (code, hint) in cases {
+            let output = format!(
+                "{code}: https://private-user:private-password@registry.example.test/private-package?token=private-token\nAuthorization: Bearer private-bearer\n_authToken=private-config-token\n"
+            );
+            for (stdout, stderr) in [(output.as_bytes(), &[][..]), (&[][..], output.as_bytes())] {
+                let content = install_failure_log(1, stdout, stderr);
+                assert!(content.contains("Stage: production dependency installation."));
+                assert!(content.contains("exit code 1"));
+                assert!(content.contains(&format!("Reported error: {code}.")));
+                assert!(content.contains(hint));
+                assert!(!content.contains("private-"));
+                assert!(!content.contains("registry.example.test"));
+                assert!(!content.contains("Authorization"));
+                assert!(!content.contains("_authToken"));
+                if code != "ERR_PNPM_FETCH_401" {
+                    assert!(!content.contains("authentication"));
+                }
+            }
+        }
+    }
 
-        let result = write_upgrade_log(&version_dir, b"", b"").await;
-        assert!(result.is_some());
+    #[test]
+    fn install_failure_log_deduplicates_known_codes_from_both_streams() {
+        let content = install_failure_log(
+            1,
+            b"ERR_PNPM_FETCH_401 Unauthorized\nERR_PNPM_FETCH_401 Unauthorized",
+            b"ENOSPC: no space\nERR_PNPM_FETCH_401 Unauthorized",
+        );
+        assert_eq!(content.matches("Reported error: ERR_PNPM_FETCH_401.").count(), 1);
+        assert_eq!(content.matches("Reported error: ENOSPC.").count(), 1);
+    }
 
-        let content = tokio::fs::read_to_string(result.unwrap()).await.unwrap();
-        assert!(content.contains("=== stdout ==="));
-        assert!(content.contains("=== stderr ==="));
+    #[test]
+    fn install_failure_log_omits_unknown_output_and_partial_identifiers() {
+        for output in [
+            &b""[..],
+            b"ERR_PNPM_PRIVATE_SECRET=private-token\nhttps://private-user:private-password@example.test/",
+            b"PREFIX_ERR_PNPM_FETCH_401 ERR_PNPM_FETCH_401_PRIVATE ENOSPC_PRIVATE",
+            b"\xff\xfeprivate-token",
+        ] {
+            let content = install_failure_log(1, output, output);
+            assert!(content.contains("No recognized error identifier was reported."));
+            assert!(!content.contains("Reported error:"));
+            assert!(!content.contains("private"));
+            assert!(!content.contains("SECRET"));
+            assert!(!content.contains("authentication"));
+        }
     }
 
     #[tokio::test]
@@ -863,23 +1268,20 @@ mod tests {
     async fn fake_pnpm_runtime(
         version_dir: &AbsolutePath,
     ) -> (AbsolutePathBuf, AbsolutePathBuf, vp_js_runtime::JsRuntime, AbsolutePathBuf) {
-        use std::os::unix::fs::PermissionsExt;
-
         let node_bin = version_dir.join("node").join("bin");
         let pnpm_bin = version_dir.join("pnpm").join("bin");
         tokio::fs::create_dir_all(&node_bin).await.unwrap();
         tokio::fs::create_dir_all(&pnpm_bin).await.unwrap();
 
         let node_binary = node_bin.join("node");
-        tokio::fs::write(
+        // Reuse a checked-in executable: concurrent test processes can inherit a freshly
+        // written script's write descriptor and cause ETXTBSY on Linux.
+        tokio::fs::symlink(
+            concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/fake-node.sh"),
             &node_binary,
-            "#!/bin/sh\nprintf '%s\\n' \"$@\" > invocation.txt\nprintf '%s' \"$PATH\" > path.txt\nprintf '%s' \"$npm_config_registry\" > registry.txt\n",
         )
         .await
         .unwrap();
-        tokio::fs::set_permissions(&node_binary, std::fs::Permissions::from_mode(0o755))
-            .await
-            .unwrap();
         let pnpm_entry = pnpm_bin.join("pnpm.cjs");
         tokio::fs::write(&pnpm_entry, "").await.unwrap();
         let node_runtime = vp_js_runtime::JsRuntime::from_system(JsRuntimeType::Node, node_binary);
@@ -935,42 +1337,5 @@ mod tests {
 
         let registry = tokio::fs::read_to_string(version_dir.join("registry.txt")).await.unwrap();
         assert_eq!(registry, registry_url);
-    }
-
-    #[test]
-    fn test_is_release_age_error_detects_pnpm_no_mature_code() {
-        assert!(is_release_age_error(
-            b"",
-            b"ERR_PNPM_NO_MATURE_MATCHING_VERSION Version 0.1.16 of vite-plus does not meet the minimumReleaseAge constraint",
-        ));
-    }
-
-    #[test]
-    fn test_is_release_age_error_detects_minimum_release_age_message() {
-        assert!(is_release_age_error(
-            b"",
-            b"Version 0.1.16 (released just now) of vite-plus does not meet the minimumReleaseAge constraint",
-        ));
-    }
-
-    #[test]
-    fn test_is_release_age_error_detects_no_matching_with_release_age_context() {
-        assert!(is_release_age_error(
-            b"",
-            b"ERR_PNPM_NO_MATCHING_VERSION No matching version found. Add the package name to minimumReleaseAgeExclude if you want to ignore the time it was published.",
-        ));
-    }
-
-    #[test]
-    fn test_is_release_age_error_ignores_plain_no_matching_version() {
-        assert!(!is_release_age_error(
-            b"",
-            b"ERR_PNPM_NO_MATCHING_VERSION No matching version found for vite-plus@999.999.999",
-        ));
-    }
-
-    #[test]
-    fn test_is_release_age_error_ignores_npm_min_release_age() {
-        assert!(!is_release_age_error(b"", b"min-release-age prevented installing vite-plus",));
     }
 }

@@ -24,7 +24,6 @@ root should not gain a direct vitest
   "name": "migration-upgrade-monorepo-vitest-localized-pnpm",
   "private": true,
   "devDependencies": {
-    "vite": "catalog:",
     "vite-plus": "catalog:"
   },
   "devEngines": {
@@ -46,7 +45,6 @@ only the peer consumer should gain local vitest
   "name": "app",
   "devDependencies": {
     "@vitest/ui": "catalog:",
-    "vite": "catalog:",
     "vite-plus": "catalog:",
     "vitest": "catalog:"
   }
@@ -66,8 +64,8 @@ catalog:
   vitest: <version>
   '@vitest/ui': <version>
 overrides:
-  vite: 'catalog:'
-  vitest: 'catalog:'
+  vite@*: 'catalog:'
+  vitest@*: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite

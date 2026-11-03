@@ -13,9 +13,10 @@ Start:
   create      Create a new project from a template
   migrate     Migrate an existing project to Vite+
   config      Configure hooks and agent integration
+  hooks       Manage the Git hook dispatcher
   staged      Run linters on staged files
   install, i  Install all dependencies, or add packages if package names are provided
-  env         Manage Node.js versions
+  env         Manage Node.js and package managers
 
 Develop:
   dev          Run the development server
@@ -27,7 +28,7 @@ Develop:
 Execute:
   run    Run tasks (also available as standalone `vpr`)
   exec   Execute a command from local node_modules/.bin
-  node   Run a Node.js script (shorthand for `env exec node`)
+  node   Run plain Node.js (`env exec node`); `vpx <file>` runs TypeScript
   dlx    Execute a package binary without installing it as a dependency
   cache  Manage the task cache
 
@@ -51,8 +52,9 @@ Manage Dependencies:
   pm                         Forward a command to the package manager
 
 Maintain:
-  upgrade  Update vp itself to the latest version
-  implode  Remove vp and all related data
+  toolchain  Show active Vite+ tools, versions, and relationships
+  upgrade    Update vp itself to the latest version
+  implode    Remove vp and all related data
 
 Documentation: https://viteplus.dev/guide/
 
@@ -105,7 +107,7 @@ Arguments:
 
 Options:
   -P, --prod                   Do not install devDependencies
-  -D, --dev                    Only install devDependencies (install) / Save to devDependencies (add)
+  -D, --dev                    Install devDependencies (install) / Save to devDependencies (add)
   --no-optional                Do not install optionalDependencies
   --frozen-lockfile            Fail if lockfile needs to be updated (CI mode)
   --no-frozen-lockfile         Allow lockfile updates (opposite of --frozen-lockfile)
@@ -115,7 +117,7 @@ Options:
   -f, --force                  Force reinstall all dependencies
   --ignore-scripts             Do not run lifecycle scripts
   --no-lockfile                Don't read or generate lockfile
-  --fix-lockfile               Fix broken lockfile entries (pnpm and yarn@2+ only)
+  --fix-lockfile               Fix broken lockfile entries (pnpm and yarn@4+ only)
   --shamefully-hoist           Create flat `node_modules` (pnpm only)
   --resolution-only            Re-run resolution for peer dependency analysis (pnpm only)
   --silent                     Suppress output (silent mode)
@@ -130,7 +132,7 @@ Options:
   --concurrency <CONCURRENCY>  Number of global package installs to run in parallel (only with -g)
   -h, --help                   Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp add -h`
@@ -157,6 +159,17 @@ Options:
   --save-catalog-name <CATALOG_NAME>  Save the new dependency to the specified catalog name
   --save-catalog                      Save the new dependency to the default catalog
   --allow-build <NAMES>               A list of package names allowed to run postinstall
+  --ignore-scripts                    Do not run lifecycle scripts
+  --no-optional                       Do not install optionalDependencies
+  --frozen-lockfile                   Don't update lockfile
+  --no-frozen-lockfile                Allow lockfile updates
+  --lockfile-only                     Only update lockfile, don't install
+  --prefer-offline                    Use cached packages when available
+  --offline                           Only use packages already in cache
+  -f, --force                         Force reinstall all dependencies
+  --no-lockfile                       Don't read or generate lockfile
+  --shamefully-hoist                  Create flat node_modules (pnpm only)
+  --silent                            Suppress Vite+ output and enable native silent mode where supported
   --filter <PATTERN>                  Filter packages in monorepo (can be used multiple times)
   -w, --workspace-root                Add to workspace root
   --workspace                         Only add if package exists in workspace (pnpm-specific)
@@ -165,7 +178,7 @@ Options:
   --concurrency <CONCURRENCY>         Number of global package installs to run in parallel (only with -g)
   -h, --help                          Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp remove -h`
@@ -194,7 +207,7 @@ Options:
   --dry-run             Preview what would be removed without actually removing (only with -g)
   -h, --help            Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp update -h`
@@ -221,15 +234,15 @@ Options:
   -r, --recursive              Update recursively in all workspace packages
   --filter <PATTERN>           Filter packages in monorepo (can be used multiple times)
   -w, --workspace-root         Include workspace root
-  -D, --dev                    Update only devDependencies
-  -P, --prod                   Update only dependencies (production)
+  -D, --dev                    Update devDependencies
+  -P, --prod                   Update dependencies (production)
   -i, --interactive            Interactive mode
-  --no-optional                Don't update optionalDependencies
+  --no-optional                Exclude optionalDependencies
   --no-save                    Update lockfile only, don't modify package.json
   --workspace                  Only update if package exists in workspace (pnpm-specific)
   -h, --help                   Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp link -h`
@@ -250,7 +263,7 @@ Arguments:
 Options:
   -h, --help  Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp unlink -h`
@@ -272,7 +285,7 @@ Options:
   -r, --recursive  Unlink in every workspace package
   -h, --help       Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp dedupe -h`
@@ -293,7 +306,7 @@ Options:
   --check     Check if deduplication would make changes
   -h, --help  Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp outdated -h`
@@ -318,7 +331,7 @@ Options:
   --filter <PATTERN>           Filter packages in monorepo
   -w, --workspace-root         Include workspace root
   -P, --prod                   Only production and optional dependencies
-  -D, --dev                    Only dev dependencies
+  -D, --dev                    Include dev dependencies
   --no-optional                Exclude optional dependencies
   --compatible                 Only show compatible versions
   --sort-by <FIELD>            Sort results by field
@@ -326,7 +339,7 @@ Options:
   --concurrency <CONCURRENCY>  Number of global package checks to run in parallel (only with -g)
   -h, --help                   Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp why -h`
@@ -359,7 +372,7 @@ Options:
   --find-by <FINDER_NAME>  Use a finder function defined in .pnpmfile.cjs
   -h, --help               Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp info -h`
@@ -382,7 +395,7 @@ Options:
   --json      Output in JSON format
   -h, --help  Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp pm -h`
@@ -404,11 +417,14 @@ Commands:
   patch-commit      Commit a prepared package patch
   pack              Create a tarball of the package
   list              List installed packages [alias: ls]
+  licenses          Inspect licenses of installed dependencies
   view, info, show  View package information from the registry
   version           Forward the native package version command
+  pkg               Manage package.json fields
   publish           Publish package to registry
   stage             Stage a package for publishing (npm staged publishing workflow)
   owner             Manage package owners [alias: author]
+  team              Manage organization teams and memberships
   cache             Manage package cache
   config            Manage package manager configuration [alias: c]
   login             Log in to a registry [alias: adduser]
@@ -426,7 +442,7 @@ Commands:
 Options:
   -h, --help  Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp pm ci -h`
@@ -446,7 +462,7 @@ Arguments:
 Options:
   -h, --help  Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp env`
@@ -458,54 +474,58 @@ VITE+ - The Unified Toolchain for the Web
 
 Usage: vp env [COMMAND]
 
-Manage Node.js versions
+Manage Node.js and package-manager environments
 
 Setup:
   setup  Create or update shims in VP_HOME/bin
-  on     Enable managed mode - shims always use vite-plus managed Node.js
-  off    Enable system-first mode - shims prefer system Node.js, fallback to managed
-  print  Print shell snippet to set environment for current session
+  on     Enable managed mode for selected environment scopes
+  off    Enable system-first mode for selected environment scopes
+  print  Print PATH setup for the resolved environment
 
 Manage:
-  default         Set or show the global default Node.js version
-  pin             Pin a Node.js version in the current directory
-  unpin           Remove the Node.js pin from the current directory (alias for `pin --unpin`)
-  use             Use a specific Node.js version for this shell session
-  install, i      Install a Node.js version
-  uninstall, uni  Uninstall a Node.js version
-  clean           Remove unused managed runtimes and package manager caches
-  exec, run       Execute a command with a specific Node.js version
+  default         Set or show global environment defaults
+  pin             Pin Node.js and package-manager versions in the project
+  unpin           Remove project environment pins (alias for `pin --unpin`)
+  use             Activate an environment for this shell session
+  install, i      Install a resolved or explicit environment
+  uninstall, uni  Uninstall explicit component versions
+  clean           Remove unused runtimes and package managers
+  exec, run       Execute a command in a resolved or explicit environment
 
 Inspect:
   current                 Show current environment information
   doctor                  Run diagnostics and show environment status
   which                   Show path to the tool that would be executed
-  list, ls                List locally installed Node.js versions
-  list-remote, ls-remote  List available Node.js versions from the registry
+  list, ls                List locally installed environment components
+  list-remote, ls-remote  List available versions from component registries
 
 Examples:
   Setup:
-    vp env setup                  # Create shims for node, npm, npx, corepack
-    vp env on                     # Use vite-plus managed Node.js
-    vp env print                  # Print shell snippet for this session
+    vp env setup                  # Create Node.js and package-manager shims
+    vp env on                     # Manage Node.js and package managers
+    vp env off pm                 # Prefer system package managers only
+    vp env off pnpm               # Prefer system pnpm only
+    vp env print                  # Print PATH setup for both components
 
   Manage:
-    vp env pin lts                # Pin to latest LTS version
-    vp env install                # Install version from .node-version / package.json / .nvmrc
-    vp env use 20                 # Use Node.js 20 for this shell session
-    vp env use --unset            # Remove session override
-    vp env clean                  # Remove unused managed caches
+    vp env default 22.19.0        # Set the Node.js default
+    vp env default pnpm@12        # Set pnpm's default version
+    vp env pin 22.19.0            # Pin Node.js for this project
+    vp env use 22.19.0            # Use Node.js in this shell
+    vp env clean                  # Clean all unused managed versions
 
   Inspect:
     vp env current                # Show current resolved environment
     vp env current --json         # JSON output for automation
     vp env doctor                 # Check environment configuration
     vp env which node             # Show which node binary will be used
-    vp env list-remote --lts      # List only LTS versions
+    vp env list node              # List only Node.js installations
+    vp env list-remote --lts      # List only Node.js LTS versions
 
   Execute:
-    vp env exec --node lts npm i  # Execute 'npm i' with latest LTS
-    vp env exec node -v           # Shim mode (version auto-resolved)
+    vp env exec --node lts node -v               # Override Node.js
+    vp env exec --package-manager pnpm@12 pnpm i # Override the package manager
+    vp env exec node -v                          # Resolve both components
 
 Related Commands:
   vp install -g <package>       # Install a package globally

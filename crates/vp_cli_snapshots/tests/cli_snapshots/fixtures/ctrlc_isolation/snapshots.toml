@@ -1,5 +1,7 @@
 [[case]]
 name = "ctrlc_interrupt"
+# Exceeded 20 seconds on Windows in CI run 35299447671.
+skip-platforms = ["windows"]
 vp = "global"
 comment = """
 Scripts a ctrl-c: `vpt exit-on-ctrlc` emits a `ready` milestone, waits for the
@@ -17,6 +19,8 @@ steps = [
 
 [[case]]
 name = "explicit_serial"
+# Exceeded 20 seconds on Windows in CI run 35299447671.
+skip-platforms = ["windows"]
 vp = "global"
 serial = true
 comment = """

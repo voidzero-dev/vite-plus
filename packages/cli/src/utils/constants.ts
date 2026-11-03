@@ -5,16 +5,32 @@ import cliPkg from '../../package.json' with { type: 'json' };
 export const VITE_PLUS_NAME = 'vite-plus';
 export const VITE_PLUS_VERSION = process.env.VP_VERSION || cliPkg.version;
 
-export const VITEST_VERSION = '4.1.10';
+// Mirrors Vite's DEFAULT_CONFIG_FILES order so readers and writers target the same file.
+export const VITE_CONFIG_FILES = [
+  'vite.config.js',
+  'vite.config.mjs',
+  'vite.config.ts',
+  'vite.config.cjs',
+  'vite.config.mts',
+  'vite.config.cts',
+] as const;
+
+export const VITEST_VERSION = '5.0.5';
+
+// Exact action release used by generated workflows and the @v1 migration.
+// The Renovate custom manager keeps this value current.
+export const SETUP_VP_VERSION = 'v1.21.2';
+
+export const TSDOWN_MIGRATION_SKILL_URL =
+  'https://github.com/rolldown/tsdown/blob/main/skills/tsdown-migrate/SKILL.md';
 
 export const VITE_PLUS_OVERRIDE_PACKAGES: Record<string, string> = process.env.VP_OVERRIDE_PACKAGES
   ? JSON.parse(process.env.VP_OVERRIDE_PACKAGES)
   : {
       vite: `npm:@voidzero-dev/vite-plus-core@${VITE_PLUS_VERSION}`,
-      // Pin `vitest` only. The `@vitest/*` family (expect, runner, snapshot, spy,
-      // utils, mocker, pretty-format) are EXACT (`4.1.9`) dependencies of `vitest`
-      // itself, so a single `vitest` override cascades one consistent version to
-      // the whole tree — overriding the indirect deps individually is redundant.
+      // The runner inlines its assertion and runner state. Its remaining
+      // official dependencies use exact versions; community providers and
+      // Istanbul internals have their own version ranges.
       // Coverage providers (`@vitest/coverage-v8` / `-istanbul`) are vitest PEER
       // deps the project installs and versions itself — vite-plus never adds,
       // pins, or overrides them. The runtime guard in `define-config.ts` only
@@ -99,6 +115,6 @@ export const DEFAULT_ENVS = {
 // Env var set while `vite.config.ts` is loaded only to read a config block, not
 // to run the Vite pipeline. `lazyPlugins` skips the user's plugin factory while
 // it is `'1'`. Single source of truth shared by `withConfigMetadataResolution`
-// (in-process) and the oxlint/oxfmt resolvers + bins (which load the config in
-// a subprocess). Keep the `bin/oxlint`/`bin/oxfmt` literals in sync with this.
+// (in-process) and the oxlint/oxfmt resolvers (which load the config in
+// a subprocess).
 export const CONFIG_METADATA_ENV = 'VP_RESOLVING_CONFIG_METADATA';

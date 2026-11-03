@@ -18,11 +18,11 @@ should show actual config error, not 'No staged config found'
 failed to load config from <workspace>/vite.config.ts
 Failed to load vite.config: Build failed with 1 error:
 
-[PARSE_ERROR] Unexpected token
+[PARSE_ERROR] Expected `}` but found `EOF`
    ╭─[ vite.config.ts:5:42 ]
    │
  5 │   // syntax error: missing closing brace
    │                                          │
-   │                                          ╰─
+   │                                          ╰─ `}` expected
 ───╯
 ```

@@ -4,7 +4,8 @@
 
 ```
 $ vp build
-transforming...✓ 4 modules transformed.
+transforming...
+✓ 4 modules transformed.
 rendering chunks...
 computing gzip size...
 dist/index.html                <size> kB │ gzip: <size> kB
@@ -19,7 +20,8 @@ should hit cache
 
 ```
 $ vp build ◉ cache hit, replaying
-transforming...✓ 4 modules transformed.
+transforming...
+✓ 4 modules transformed.
 rendering chunks...
 computing gzip size...
 dist/index.html                <size> kB │ gzip: <size> kB
@@ -37,7 +39,8 @@ env changed, should miss cache
 
 ```
 $ vp build ○ cache miss: env 'VITE_MY_VAR' changed, executing
-transforming...✓ 4 modules transformed.
+transforming...
+✓ 4 modules transformed.
 rendering chunks...
 computing gzip size...
 dist/index.html                <size> kB │ gzip: <size> kB

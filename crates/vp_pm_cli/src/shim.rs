@@ -217,6 +217,8 @@ pub(crate) fn pwsh_shim(relative_file: &str) -> String {
 #[cfg(test)]
 #[cfg(not(windows))] // FIXME
 mod tests {
+    use std::{os::unix::fs::PermissionsExt, process::Command};
+
     use tempfile::TempDir;
     use tokio::fs::read_to_string;
 
@@ -224,6 +226,29 @@ mod tests {
 
     fn format_shim(shim: &str) -> String {
         shim.replace(' ', "·")
+    }
+
+    #[tokio::test]
+    async fn test_native_shim_forwards_subcommand() {
+        let temp_dir = TempDir::new().unwrap();
+        let source = temp_dir.path().join("bin").join("bun.native");
+        let target = temp_dir.path().join("bin").join("bunx");
+
+        tokio::fs::create_dir_all(source.parent().unwrap()).await.unwrap();
+        tokio::fs::write(&source, "#!/bin/sh\nprintf '%s\\n' \"$@\"\n").await.unwrap();
+        tokio::fs::set_permissions(&source, std::fs::Permissions::from_mode(0o755)).await.unwrap();
+
+        write_native_shims_with_args(&source, &target, &["x"]).await.unwrap();
+
+        let output = Command::new(&target).args(["--bun", "vitest"]).output().unwrap();
+        assert!(output.status.success());
+        assert_eq!(String::from_utf8(output.stdout).unwrap(), "x\n--bun\nvitest\n");
+
+        let cmd = read_to_string(target.with_extension("cmd")).await.unwrap();
+        assert!(cmd.contains("@\"%~dp0\\bun.native\" x %*"));
+
+        let pwsh = read_to_string(target.with_extension("ps1")).await.unwrap();
+        assert!(pwsh.contains("& \"$basedir/bun.native\" x $args"));
     }
 
     #[test]

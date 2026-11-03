@@ -3,4 +3,6 @@ name = "check_lint_warn_deny_warnings"
 vp = "local"
 steps = [
   { argv = ["vp", "check"], continue-on-failure = true },
+  { argv = ["vp", "check", "--quiet"], comment = "warnings stay hidden but denyWarnings still fails", continue-on-failure = true },
+  { argv = ["vp", "lint", "--quiet"], comment = "standalone lint also hides diagnostics and preserves the denyWarnings failure", continue-on-failure = true },
 ]

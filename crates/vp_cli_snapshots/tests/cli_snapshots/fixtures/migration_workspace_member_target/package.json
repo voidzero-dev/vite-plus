@@ -1,0 +1,7 @@
+{
+  "name": "workspace-root",
+  "private": true,
+  "workspaces": [
+    "vendor/*"
+  ]
+}

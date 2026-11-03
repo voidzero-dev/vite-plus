@@ -5,24 +5,25 @@
   "type": "module",
   "scripts": {
     "build": "pnpm -F rolldown build-binding:release && pnpm -F rolldown build-node && pnpm -F vite build-types && pnpm -F @voidzero-dev/* -F vite-plus build",
-    "bootstrap-cli": "pnpm build && cargo build -p vp_global_cli -p vp_trampoline --release && pnpm install-global-cli",
+    "bootstrap-cli": "pnpm build && cargo build -p vp_global_cli --release && node packages/tools/src/build-trampoline.ts --release && pnpm install-global-cli",
     "bootstrap-cli:ci": "pnpm install-global-cli",
     "install-global-cli": "tool install-global-cli",
     "local-registry": "node packages/tools/src/local-npm-registry.ts",
     "local-registry:ps": "node packages/tools/src/local-npm-registry.ts --ps",
     "local-registry:kill": "node packages/tools/src/local-npm-registry.ts --kill",
-    "tsgo": "tsgo -b tsconfig.json",
+    "tsgo": "tsc -b tsconfig.json",
     "lint": "vp lint --type-aware --type-check --threads 4",
-    "test": "vp test run",
+    "test": "vp test && just snapshot-test",
     "snapshot-test": "just snapshot-test",
+    "test:unit": "vp test",
     "fmt": "vp fmt",
-    "test:unit": "vp test run",
     "docs:dev": "pnpm -C docs dev",
     "docs:build": "pnpm -C docs build",
     "docs:update-trusted-stack-stats": "pnpm -C docs update-trusted-stack-stats",
-    "prepare": "husky"
+    "prepare": "vp config"
   },
   "devDependencies": {
+    "@e18e/eslint-plugin": "catalog:",
     "@emnapi/core": "catalog:",
     "@emnapi/runtime": "catalog:",
     "@napi-rs/cli": "catalog:",
@@ -30,20 +31,14 @@
     "@types/node": "catalog:",
     "@typescript/native-preview": "catalog:",
     "@voidzero-dev/vite-plus-tools": "workspace:*",
-    "husky": "catalog:",
-    "lint-staged": "catalog:",
     "playwright": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plus": "workspace:*",
     "vitest": "catalog:"
   },
-  "lint-staged": {
-    "*.@(js|ts|tsx|md|yaml|yml)": "vp check --fix",
-    "*.rs": "cargo fmt --"
-  },
   "engines": {
     "node": ">=22.18.0"
   },
-  "packageManager": "pnpm@11.20.0"
+  "packageManager": "pnpm@12.11.2"
 }

@@ -82,43 +82,52 @@ The check fails silently. No notice, no error, no retry spam.
 ### Overview
 
 ```
-Command starts
+Foreground `vp` starts
        │
-       ├──────────────────────────────┐
-       │                              │
-       ▼                              ▼
-  Run the actual command        Spawn background task:
-       │                         1. Check if cache is fresh (<24h)
-       │                            → Yes: read cached version
-       │                            → No:  query npm registry,
-       │                                   write result to cache file
-       │                              │
-       ▼                              ▼
-  Command finishes              Background task finishes
-       │                              │
-       ▼                              ▼
-  If newer version found, print one-line notice
-  Show tip (existing behavior)
-  Exit
+       ├── parse the requested command and read the local cache
+       │          │
+       │          ├── ineligible command or fresh cache → spawn nothing
+       │          └── stale/missing cache → launch detached
+       │                         `vp upgrade --background-check`
+       │                                  │
+       │                                  ├── fresh cache or lock held → exit silently
+       │                                  └── acquire OS file lock → atomically write
+       │                                      `unknown` cooldown → query registry
+       │                                      → atomically write final status
+       │
+       └── run the requested command without waiting for registry I/O
+                  │
+                  └── if no helper was launched, optionally print a cached notice
 ```
 
-The background task runs concurrently with the command. When the command finishes, we check if the background task has a result (with a very short timeout — if it hasn't finished, skip the notice this time).
+The foreground process performs only argument and cache checks before launching the helper, avoiding a new process while the cache is fresh. The helper is placed in a separate process group with standard streams disconnected, so it can finish after the foreground command and its shell prompt return. A command that launches a helper does not consume its result; a later eligible command can display the notice.
 
 ### Cache File
 
-Location: `~/.vite-plus/.upgrade-check.json`
+Locations:
+
+- Cache: `~/.vite-plus/cache/upgrade-check.json`
+- Cross-process lock: `~/.vite-plus/cache/upgrade-check.lock`
 
 Format (single JSON line for simplicity):
 
 ```json
-{ "latest": "0.2.0", "checked_at": 1711500000, "prompted_at": 1711500000 }
+{
+  "checked_for": "0.1.0",
+  "latest": "0.2.0",
+  "status": "available",
+  "checked_at": 1711500000,
+  "prompted_at": 1711500000
+}
 ```
 
-- `latest`: The version string returned by the npm registry for the `latest` dist-tag
-- `checked_at`: Unix timestamp (seconds) of when the registry was last queried
+- `checked_for`: The installed `vp` version this result applies to
+- `latest`: The version returned by the npm registry during the latest successful check
+- `status`: `available`, `current`, or `unknown`
+- `checked_at`: Unix timestamp (seconds) of when the latest check attempt began or completed
 - `prompted_at`: Unix timestamp (seconds) of when the user was last shown the notice
 
-The file is small and cheap to read. A direct overwrite is sufficient — if corruption occurs (e.g., process killed mid-write), the worst case is one extra registry query.
+Cache writes use a temporary file plus atomic replacement. An OS file lock serializes workers and prompt timestamp updates, releases automatically when a process exits, and stores a generation token so a worker cannot write into an install that was removed or replaced while its request was in flight. The worker writes an `unknown` result with a fresh `checked_at` before its first network await, so cancellation, offline registries, and abrupt shell exit cannot cause a request on every invocation.
 
 ### Check Logic (Pseudocode)
 
@@ -159,9 +168,11 @@ The notice is **not shown** when:
 | Stderr is not a TTY             | Non-interactive / piped / redirected output                     |
 | Already prompted within 24h     | Show at most once per day, not on every run                     |
 
-### Commands That Trigger the Check
+### Check Triggers and Foreground Suppression
 
-The background check runs on **all** commands except:
+After parsing an eligible foreground command, `vp` checks opt-out and CI state plus the local cache. It launches a detached worker only when that cache is stale or missing. The worker repeats the cache check after startup, then uses the cross-process lock and another cache check to coordinate concurrent invocations. Its standard streams are discarded, and foreground commands never wait for its registry request.
+
+The cached notice is not displayed after:
 
 - `vp upgrade` (already handles version checking)
 - `vp implode` (removing the tool)
@@ -170,45 +181,33 @@ The background check runs on **all** commands except:
 - Any command with quiet/machine-readable flags (`--silent`, `-s`, `--json`, `--parseable`, `--format json/list`)
 - Shim invocations (`node`, `npm`, `npx` via vp)
 
-This keeps the check broadly useful without interfering with special commands.
+Shim invocations do not pass through the foreground notice path.
 
 ### File Structure
 
 ```
 crates/vp_global_cli/src/
 ├── upgrade_check.rs        # New: cache read/write, background check, display
-├── main.rs                # Modified: spawn check, display result after command
+├── main.rs                # Modified: conditionally launch helper and display cached result
+└── cli.rs                 # Modified: hidden background-check option
 ```
 
 No new crate — this is a small, focused module in the existing `vp_global_cli` crate. It imports `resolve_version` from the existing `commands/upgrade/registry.rs`.
 
 ### Implementation Details
 
-#### Async Background Check
+#### Background Check Command
 
 ```rust
-// In main.rs, before running the command:
-let update_handle = if should_run_for_command(&args, &raw_args) {
-    Some(tokio::spawn(check_for_update()))
-} else {
-    None
-};
-
-// After command completes:
-if let Some(handle) = update_handle {
-    // Wait up to 500ms for the result — if the network is slow, skip it
-    match tokio::time::timeout(Duration::from_millis(500), handle).await {
-        Ok(Ok(Some(result))) => {
-            display_upgrade_notice(&result); // also records prompted_at
-        }
-        _ => {} // Timeout, error, or no update — silent
-    }
+if options.background_check {
+    run_background_check().await;
+    return Ok(ExitStatus::default());
 }
 ```
 
-The 500ms timeout ensures that even if the registry is slow, the user's command exits promptly. In practice, most checks will read from cache (instant) or complete the network request during the time the actual command runs.
+`--background-check` is hidden because it is an implementation detail of the foreground launcher. The foreground `vp` process configures and spawns this command as a detached child before running the requested command. The hidden command repeats the cheap policy and cache checks to close races between concurrent foreground invocations.
 
-`display_upgrade_notice` updates `prompted_at` in the cache file after showing the notice, so subsequent runs within 24h are silent.
+Foreground commands that did not launch a helper call `display_cached_upgrade_notice` after completing. This path performs no network work and only acquires the lock when an available, unprompted cached result exists.
 
 ## Design Decisions
 
@@ -223,16 +222,18 @@ The 500ms timeout ensures that even if the registry is slow, the user's command 
 
 **Rationale**: Deterministic behavior, no surprises. The cache file is tiny and cheap to read. 24 hours is long enough to not annoy, short enough to be useful.
 
-### 2. Background Async (Not Post-Command Blocking)
+### 2. Detached Background Process (Not an In-Process Task)
 
-**Decision**: Spawn the registry query concurrently with the command.
+**Decision**: Let eligible foreground `vp` commands launch the hidden Rust check command as a detached process, but only after determining that the cache is stale.
 
 **Alternatives considered**:
 
 - Check after the command finishes — adds visible latency
+- Let shell integrations launch a worker — excludes shells without an integration and starts unnecessary processes while the cache is fresh
+- Spawn a Tokio task inside the foreground CLI — its runtime must wait or cancel the request when the CLI exits
 - Separate background daemon — heavyweight, harder to manage
 
-**Rationale**: The registry query runs in parallel with the actual command. By the time the command finishes, the check is usually done. The 500ms timeout is a safety net for slow networks.
+**Rationale**: The foreground process can avoid almost all helper launches with a cheap cache read, while the detached process has no registry-request latency tail. Keeping the launcher in `vp` also provides consistent behavior across shells without maintaining a daemon.
 
 ### 3. Stderr for the Notice
 
@@ -261,7 +262,8 @@ The 500ms timeout ensures that even if the registry is slow, the user's command 
 
 ### Unit Tests
 
-- Cache read/write: valid JSON, corrupt file, missing file
+- Cache read/write: valid JSON, atomic replacement, corrupt/missing files
+- OS file-lock exclusivity, automatic release, and install-generation invalidation
 - `should_check`: respects env vars, cache freshness, TTY detection
 - Version comparison: same version, different version, pre-release
 
@@ -270,18 +272,19 @@ The 500ms timeout ensures that even if the registry is slow, the user's command 
 - Mock registry server returning a version, verify notice is displayed
 - Verify no notice when cache is fresh
 - Verify no notice in CI mode
-- Verify timeout behavior (slow mock server)
+- Start concurrent checks against a slow mock registry; verify exactly one request and that the cooldown is persisted before the response
+- Verify an eligible foreground command launches a detached check only when the cache is stale
 
 ### Manual Testing
 
 ```bash
 # Clear cache to force a fresh check
-rm ~/.vite-plus/.upgrade-check.json
+rm ~/.vite-plus/cache/upgrade-check.json
 
-# Run any command — should show notice if behind latest
-vp --version
+# Run an eligible foreground command to launch the check
+vp build
 
-# Run again immediately — should not re-query (cached)
+# Run again after the background request completes — should not re-query (cached)
 vp build
 
 # Disable and verify

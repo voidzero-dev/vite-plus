@@ -56,15 +56,13 @@ mod tests {
     use super::*;
     use crate::resolution::{
         resolve,
-        test_utils::{bun, npm, parse_args, pnpm, yarn},
+        test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
     };
 
     fn resolved_args<D: Resolve<CiArgs>>(dialect: &D, args: CiArgs) -> Vec<String> {
         let resolution = resolve(dialect, args);
         assert!(resolution.diagnostics.is_empty());
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
         command.args
     }
 

@@ -1,0 +1,9 @@
+{
+  "name": "review-oxlint-plugin",
+  "version": "1.0.0",
+  "exports": "./index.cjs",
+  "packageManager": "pnpm@11.24.0",
+  "peerDependencies": {
+    "@oxlint/plugins": "^1.79.0"
+  }
+}

@@ -4,6 +4,7 @@ import path from 'node:path';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
+import { removeConfigKey } from '../../../binding/index.js';
 import { rewriteMonorepoProject } from '../../migration/migrator.ts';
 import { PackageManager, type WorkspaceInfo } from '../../types/index.ts';
 import { editJsonFile } from '../../utils/json.ts';
@@ -152,6 +153,7 @@ export async function executeMonorepoTemplate(
     : 'utils';
   const libraryProjectPath = path.join(fullPath, libraryDir);
   setPackageName(libraryProjectPath, libraryPackageName);
+  removeNestedLibraryToolConfig(libraryProjectPath);
   // Perform auto-migration on the created library
   rewriteMonorepoProject(
     libraryProjectPath,
@@ -163,6 +165,28 @@ export async function executeMonorepoTemplate(
   alignMonorepoTypeScriptVersion(fullPath, appProjectPath, libraryProjectPath);
 
   return { exitCode: 0, projectDir: templateInfo.targetDir };
+}
+
+/**
+ * Remove the root-only lint and format options shipped by the standalone library template.
+ *
+ * The same remote template is also used by `vite:library`, where this config is
+ * valid. A library created as a workspace member, however, gets its lint and
+ * format config from the monorepo root, so retaining them here creates invalid
+ * nested config.
+ */
+export function removeNestedLibraryToolConfig(projectPath: string): void {
+  const configPath = path.join(projectPath, 'vite.config.ts');
+  if (!fs.existsSync(configPath)) {
+    return;
+  }
+
+  for (const configKey of ['lint', 'fmt']) {
+    const result = removeConfigKey(configPath, configKey);
+    if (result.updated) {
+      fs.writeFileSync(configPath, result.content);
+    }
+  }
 }
 
 /**
@@ -231,20 +255,21 @@ export function alignMonorepoTypeScriptVersion(
  * scaffolded sub-package. After migration its scripts already use `vp ...` and
  * nothing imports `'vite'` directly, so `vite-plus` provides them transitively.
  *
- * pnpm is the exception and keeps them: pnpm only surfaces the
- * pnpm-workspace.yaml `overrides.vite: catalog:` entry through a package that
- * directly depends on `vite`, so keeping the aliased devDep lets `vp why vite`
- * reflect the override (resolving to @voidzero-dev/vite-plus-core). npm, yarn,
- * and bun redirect the transitive/peer vite via their root
- * overrides/resolutions regardless of a direct dep, so the aliased keys are
- * dead weight and are dropped.
+ * pnpm is the exception and keeps them: a package needs a DIRECT `vite` edge for
+ * `vite` to resolve to @voidzero-dev/vite-plus-core there (and for `vp why vite`
+ * to show it) rather than pnpm auto-installing an upstream Vite to satisfy
+ * Vitest's peer. Migration points that edge at the workspace catalog, which owns
+ * the alias; the `vite@*` workspace override covers the transitive and peer
+ * declarations instead (see `pnpmOverrideKey`). npm, yarn, and bun redirect the
+ * transitive/peer vite via their root overrides/resolutions regardless of a
+ * direct dep, so the aliased keys are dead weight and are dropped.
  */
 export function dropAliasedRuntimeDevDeps(
   appProjectPath: string,
   packageManager: PackageManager,
 ): void {
-  // pnpm keeps the aliased vite/vitest so the pnpm-workspace.yaml override has
-  // a direct consumer to redirect; see the doc comment above.
+  // pnpm keeps the aliased vite/vitest so the package has a direct `vite` edge
+  // to point at the workspace catalog; see the doc comment above.
   if (packageManager === PackageManager.pnpm) {
     return;
   }

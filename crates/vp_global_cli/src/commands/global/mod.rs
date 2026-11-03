@@ -7,17 +7,18 @@ use futures::{StreamExt, stream::FuturesUnordered};
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use tar::Archive;
 use tokio::process::Command;
-use vp_shared::format_path_prepended;
+use vp_shared::{PrependOptions, ToolPathEnv};
 use vt_path::{AbsolutePathBuf, current_dir};
 
 use crate::{commands::env::config::resolve_version, error::Error};
 
+pub(crate) mod bin_lock;
 pub mod install;
 pub mod outdated;
 pub mod packages;
 
-/// Core shims that should not be overwritten by package binaries.
-pub(crate) const CORE_SHIMS: &[&str] = &["node", "npm", "npx", "vp"];
+/// Legacy managed globals superseded by the default package-manager shims.
+pub(crate) const LEGACY_PACKAGE_MANAGER_PACKAGES: &[&str] = &["yarn", "pnpm", "bun", "corepack"];
 
 #[derive(Debug)]
 struct PackageVersion {
@@ -60,9 +61,11 @@ async fn npm_view(
     package_spec: &str,
     field: &str,
 ) -> Result<Vec<u8>, Error> {
+    let mut env = ToolPathEnv::from_env();
+    env.prepend(node_bin_dir, &["node", "npm", "npx"], PrependOptions::default())?;
     let output = Command::new(npm_path.as_path())
-        .args(["view", package_spec, field, "--json"])
-        .env("PATH", format_path_prepended(node_bin_dir.as_path()))
+        .args(["view", "-g", package_spec, field, "--json"])
+        .envs(env.into_envs())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
@@ -291,7 +294,7 @@ fn parse_npm_view_version(stdout: &[u8]) -> Result<String, Error> {
                 .iter()
                 .filter_map(|version| version.as_str())
                 .filter_map(|version| {
-                    node_semver::Version::parse(version).ok().map(|parsed| (parsed, version))
+                    js_semver::Version::parse(version).ok().map(|parsed| (parsed, version))
                 })
                 .max_by(|(a, _), (b, _)| a.cmp(b))
                 .map(|(_, version)| version)

@@ -1,17 +1,21 @@
 //! Configuration and version resolution for the env command.
 //!
 //! This module provides:
-//! - VP_HOME path resolution
+//! - Directory helpers over `EnvConfig::dirs`
 //! - Version resolution with priority order
 //! - Config file management
 
-use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+
+use serde::{Deserialize, Deserializer, Serialize, de};
 use vp_js_runtime::{
     NodeProvider, VersionSource, is_valid_version, normalize_version, read_nvmrc_file,
     read_package_json, resolve_node_version,
 };
+use vp_pm_cli::PackageManagerType;
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
+use super::package_manager::ALL_PACKAGE_MANAGERS;
 use crate::error::Error;
 
 /// Config file name
@@ -28,16 +32,125 @@ pub enum ShimMode {
     SystemFirst,
 }
 
-/// User configuration stored in VP_HOME/config.json
+/// User configuration stored in `<CONFIG>/config.json`
 #[derive(Serialize, Deserialize, Default, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Config {
     /// Default Node.js version when no project version file is found
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default_node_version: Option<String>,
-    /// Shim mode for tool resolution
-    #[serde(default, skip_serializing_if = "is_default_shim_mode")]
-    pub shim_mode: ShimMode,
+    /// Default versions used by package-manager shims when the project does not select that family.
+    #[serde(
+        default,
+        alias = "defaultPackageManager",
+        deserialize_with = "deserialize_package_manager_default_versions",
+        skip_serializing_if = "BTreeMap::is_empty"
+    )]
+    pub default_package_manager_versions: BTreeMap<String, String>,
+    /// Node.js shim mode. `shimMode` is accepted as the legacy field name.
+    #[serde(default, alias = "shimMode", skip_serializing_if = "is_default_shim_mode")]
+    pub node_shim_mode: ShimMode,
+    /// Explicit per-package-manager shim modes. An absent family has not been configured yet.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub package_manager_shim_modes: BTreeMap<String, ShimMode>,
+}
+
+impl Config {
+    #[must_use]
+    pub fn default_package_manager_version_for(
+        &self,
+        package_manager: PackageManagerType,
+    ) -> Option<&str> {
+        self.default_package_manager_versions.get(&package_manager.to_string()).map(String::as_str)
+    }
+
+    pub fn set_default_package_manager_version(
+        &mut self,
+        package_manager: PackageManagerType,
+        version: String,
+    ) {
+        self.default_package_manager_versions.insert(package_manager.to_string(), version);
+    }
+
+    pub fn clear_default_package_manager_version(&mut self, package_manager: PackageManagerType) {
+        self.default_package_manager_versions.remove(&package_manager.to_string());
+    }
+
+    #[must_use]
+    pub fn configured_package_manager_shim_mode_for(
+        &self,
+        package_manager: PackageManagerType,
+    ) -> Option<ShimMode> {
+        self.package_manager_shim_modes.get(&package_manager.to_string()).copied()
+    }
+
+    #[must_use]
+    pub fn package_manager_shim_mode_for(&self, package_manager: PackageManagerType) -> ShimMode {
+        self.configured_package_manager_shim_mode_for(package_manager).unwrap_or_default()
+    }
+
+    /// Node.js and each package-manager family have their own mode; package binaries are always managed.
+    #[must_use]
+    pub fn shim_mode_for_tool(&self, tool: &str) -> ShimMode {
+        if tool == "node" {
+            self.node_shim_mode
+        } else if let Some(kind) = PackageManagerType::from_tool(tool) {
+            self.package_manager_shim_mode_for(kind)
+        } else {
+            ShimMode::Managed
+        }
+    }
+
+    pub fn set_shim_modes(&mut self, node: bool, package_manager: bool, mode: ShimMode) {
+        if node {
+            self.node_shim_mode = mode;
+        }
+        if package_manager {
+            self.set_all_package_manager_shim_modes(mode);
+        }
+    }
+
+    pub fn set_all_package_manager_shim_modes(&mut self, mode: ShimMode) {
+        self.package_manager_shim_modes.clear();
+        for package_manager in ALL_PACKAGE_MANAGERS {
+            self.set_package_manager_shim_mode(package_manager, mode);
+        }
+    }
+
+    pub fn set_package_manager_shim_mode(
+        &mut self,
+        package_manager: PackageManagerType,
+        mode: ShimMode,
+    ) {
+        self.package_manager_shim_modes.insert(package_manager.to_string(), mode);
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum PackageManagerDefaultVersions {
+    Versions(BTreeMap<String, String>),
+    Legacy(String),
+}
+
+fn deserialize_package_manager_default_versions<'de, D>(
+    deserializer: D,
+) -> Result<BTreeMap<String, String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    match PackageManagerDefaultVersions::deserialize(deserializer)? {
+        PackageManagerDefaultVersions::Versions(versions) => Ok(versions),
+        PackageManagerDefaultVersions::Legacy(spec) => {
+            let (name, version) = spec
+                .split_once('@')
+                .filter(|(name, version)| {
+                    PackageManagerType::from_name(name).is_some() && !version.is_empty()
+                })
+                .ok_or_else(|| de::Error::custom("invalid legacy package-manager default"))?;
+            Ok(BTreeMap::from([(name.to_string(), version.to_string())]))
+        }
+    }
 }
 
 /// Check if shim mode is the default (for skip_serializing_if)
@@ -61,21 +174,14 @@ pub struct VersionResolution {
     pub is_range: bool,
 }
 
-/// Get the VP_HOME directory path.
-///
-/// Uses `VP_HOME` environment variable if set, otherwise defaults to `~/.vite-plus`.
-pub fn get_vp_home() -> Result<AbsolutePathBuf, Error> {
-    Ok(vp_shared::get_vp_home()?)
-}
-
-/// Get the bin directory path (~/.vite-plus/bin/).
+/// Get the bin directory path (`<BIN>`).
 pub fn get_bin_dir() -> Result<AbsolutePathBuf, Error> {
-    Ok(get_vp_home()?.join("bin"))
+    Ok(vp_shared::EnvConfig::get().dirs.bin.clone())
 }
 
-/// Get the packages directory path (~/.vite-plus/packages/).
+/// Get the packages directory path (`<DATA>/packages`).
 pub fn get_packages_dir() -> Result<AbsolutePathBuf, Error> {
-    Ok(get_vp_home()?.join("packages"))
+    Ok(vp_shared::EnvConfig::get().dirs.data.join("packages"))
 }
 
 /// Get the node_modules directory path for a package.
@@ -110,9 +216,9 @@ pub fn get_node_modules_dir(prefix: &AbsolutePath, package_name: &str) -> Absolu
     }
 }
 
-/// Get the config file path.
+/// Get the config file path (`<CONFIG>/config.json`).
 pub fn get_config_path() -> Result<AbsolutePathBuf, Error> {
-    Ok(get_vp_home()?.join(CONFIG_FILE))
+    Ok(vp_shared::EnvConfig::get().dirs.config.join(CONFIG_FILE))
 }
 
 /// Load configuration from disk.
@@ -131,10 +237,11 @@ pub async fn load_config() -> Result<Config, Error> {
 /// Save configuration to disk.
 pub async fn save_config(config: &Config) -> Result<(), Error> {
     let config_path = get_config_path()?;
-    let vite_plus_home = get_vp_home()?;
 
     // Ensure directory exists
-    tokio::fs::create_dir_all(&vite_plus_home).await?;
+    if let Some(parent) = config_path.parent() {
+        tokio::fs::create_dir_all(parent).await?;
+    }
 
     let content = serde_json::to_string_pretty(config)?;
     tokio::fs::write(&config_path, content).await?;
@@ -145,18 +252,34 @@ pub async fn save_config(config: &Config) -> Result<(), Error> {
 /// Set by `vp env use` command.
 pub const VERSION_ENV_VAR: &str = vp_shared::env_vars::VP_NODE_VERSION;
 
+/// Environment variable selecting the package manager for vp commands.
+pub const PACKAGE_MANAGER_ENV_VAR: &str = vp_shared::env_vars::VP_PACKAGE_MANAGER;
+
 /// Session version file name, written by `vp env use` so shims work without the shell eval wrapper.
 pub const SESSION_VERSION_FILE: &str = ".session-node-version";
 
-/// Get the path to the session version file (~/.vite-plus/.session-node-version).
+/// Get the path to the session version file (`<STATE>/.session-node-version`).
 pub fn get_session_version_path() -> Result<AbsolutePathBuf, Error> {
-    Ok(get_vp_home()?.join(SESSION_VERSION_FILE))
+    Ok(vp_shared::EnvConfig::get().dirs.state.join(SESSION_VERSION_FILE))
+}
+
+pub fn get_session_package_manager_path(
+    kind: PackageManagerType,
+) -> Result<AbsolutePathBuf, Error> {
+    Ok(vp_shared::EnvConfig::get().dirs.state.join(format!(".session-{kind}-version")))
 }
 
 /// Read the session version file. Returns `None` if the file is missing or empty.
 pub async fn read_session_version() -> Option<String> {
     let path = get_session_version_path().ok()?;
     let content = tokio::fs::read_to_string(&path).await.ok()?;
+    let trimmed = content.trim().to_string();
+    if trimmed.is_empty() { None } else { Some(trimmed) }
+}
+
+pub async fn read_session_package_manager(kind: PackageManagerType) -> Option<String> {
+    let path = get_session_package_manager_path(kind).ok()?;
+    let content = tokio::fs::read_to_string(path).await.ok()?;
     let trimmed = content.trim().to_string();
     if trimmed.is_empty() { None } else { Some(trimmed) }
 }
@@ -180,10 +303,31 @@ pub async fn write_session_version(version: &str) -> Result<(), Error> {
     Ok(())
 }
 
+pub async fn write_session_package_manager(
+    kind: PackageManagerType,
+    version: &str,
+) -> Result<(), Error> {
+    let path = get_session_package_manager_path(kind)?;
+    if let Some(parent) = path.parent() {
+        tokio::fs::create_dir_all(parent).await?;
+    }
+    tokio::fs::write(path, version).await?;
+    Ok(())
+}
+
 /// Delete the session version file. Ignores "not found" errors.
 pub async fn delete_session_version() -> Result<(), Error> {
     let path = get_session_version_path()?;
     match tokio::fs::remove_file(&path).await {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e.into()),
+    }
+}
+
+pub async fn delete_session_package_manager(kind: PackageManagerType) -> Result<(), Error> {
+    let path = get_session_package_manager_path(kind)?;
+    match tokio::fs::remove_file(path).await {
         Ok(()) => Ok(()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(e) => Err(e.into()),
@@ -203,11 +347,12 @@ pub async fn delete_session_version() -> Result<(), Error> {
 /// 7. Latest LTS version
 pub async fn resolve_version(cwd: &AbsolutePath) -> Result<VersionResolution, Error> {
     // Session override via environment variable (set by `vp env use`)
-    if let Some(env_version) = vp_shared::EnvConfig::get().node_version {
+    if let Some(env_version) = vp_shared::EnvConfig::get().node_version.as_deref() {
         let env_version = env_version.trim();
         if !env_version.is_empty() {
+            let version = resolve_version_alias(env_version, &NodeProvider::new()).await?;
             return Ok(VersionResolution {
-                version: env_version.to_string(),
+                version,
                 source: VERSION_ENV_VAR.into(),
                 source_path: None,
                 project_root: None,
@@ -452,10 +597,43 @@ pub async fn resolve_version_alias(
     })
 }
 
+/// Run `test` with `vars` and a local `VP_NODE_DIST_MIRROR`, so version resolution stays offline.
+#[cfg(test)]
+pub(super) async fn with_mock_node_index<Fut: Future<Output = ()>>(
+    vars: impl IntoIterator<Item = (&'static str, &std::ffi::OsStr)>,
+    test: impl FnOnce() -> Fut,
+) {
+    use httpmock::prelude::*;
+
+    // Fixed versions keep resolved aliases stable across new Node.js releases.
+    const NODE_INDEX: &str = r#"[
+        {"version": "v25.1.0", "lts": false},
+        {"version": "v24.11.0", "lts": "Krypton"},
+        {"version": "v24.10.0", "lts": false},
+        {"version": "v22.21.0", "lts": "Jod"},
+        {"version": "v22.20.0", "lts": "Jod"},
+        {"version": "v20.19.0", "lts": "Iron"},
+        {"version": "v20.18.0", "lts": "Iron"}
+    ]"#;
+
+    let server = MockServer::start_async().await;
+    server
+        .mock_async(|when, then| {
+            when.method(GET).path("/index.json");
+            then.status(200).body(NODE_INDEX);
+        })
+        .await;
+    let vars = vars
+        .into_iter()
+        .map(|(name, value)| (name, value.to_os_string()))
+        .chain([(vp_shared::env_vars::VP_NODE_DIST_MIRROR, server.base_url().into())]);
+    vp_shared::EnvConfig::with_vars_async(vars, |_| test()).await;
+}
+
 #[cfg(test)]
 mod tests {
     use tempfile::TempDir;
-    use vp_js_runtime::VersionSource;
+    use vp_shared::env_vars;
     use vt_path::AbsolutePathBuf;
 
     use super::*;
@@ -560,74 +738,35 @@ mod tests {
     async fn test_resolve_version_from_node_version_file() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test());
+        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, temp_dir.path())], |_| async {
+            // Create .node-version file
+            tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
 
-        // Create .node-version file
-        tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
-
-        let resolution = resolve_version(&temp_path).await.unwrap();
-        assert_eq!(resolution.version, "20.18.0");
-        assert_eq!(resolution.source, ".node-version");
-        assert!(resolution.source_path.is_some());
+            let resolution = resolve_version(&temp_path).await.unwrap();
+            assert_eq!(resolution.version, "20.18.0");
+            assert_eq!(resolution.source, ".node-version");
+            assert!(resolution.source_path.is_some());
+        })
+        .await;
     }
 
     #[tokio::test]
     async fn test_resolve_version_walks_up_directory() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test());
+        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, temp_dir.path())], |_| async {
+            // Create .node-version in parent
+            tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
 
-        // Create .node-version in parent
-        tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
+            // Create subdirectory
+            let subdir = temp_path.join("subdir");
+            tokio::fs::create_dir(&subdir).await.unwrap();
 
-        // Create subdirectory
-        let subdir = temp_path.join("subdir");
-        tokio::fs::create_dir(&subdir).await.unwrap();
-
-        let resolution = resolve_version(&subdir).await.unwrap();
-        assert_eq!(resolution.version, "20.18.0");
-        assert_eq!(resolution.source, ".node-version");
-    }
-
-    #[tokio::test]
-    async fn test_resolve_version_from_engines_node() {
-        let temp_dir = TempDir::new().unwrap();
-        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-
-        // Create package.json with engines.node
-        // Also create an empty .node-version to stop walk-up from finding parent project's version
-        let package_json = r#"{"engines":{"node":"20.18.0"}}"#;
-        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
-
-        // Use resolve_node_version directly with walk_up=false to test engines.node specifically
-        let resolution = resolve_node_version(&temp_path, false)
-            .await
-            .map_err(|e| Error::ConfigError(e.to_string().into()))
-            .unwrap()
-            .unwrap();
-
-        assert_eq!(&*resolution.version, "20.18.0");
-        assert_eq!(resolution.source, VersionSource::EnginesNode);
-    }
-
-    #[tokio::test]
-    async fn test_resolve_version_from_dev_engines() {
-        let temp_dir = TempDir::new().unwrap();
-        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-
-        // Create package.json with devEngines.runtime
-        let package_json = r#"{"devEngines":{"runtime":{"name":"node","version":"20.18.0"}}}"#;
-        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
-
-        // Use resolve_node_version directly with walk_up=false to test devEngines specifically
-        let resolution = resolve_node_version(&temp_path, false)
-            .await
-            .map_err(|e| Error::ConfigError(e.to_string().into()))
-            .unwrap()
-            .unwrap();
-
-        assert_eq!(&*resolution.version, "20.18.0");
-        assert_eq!(resolution.source, VersionSource::DevEnginesRuntime);
+            let resolution = resolve_version(&subdir).await.unwrap();
+            assert_eq!(resolution.version, "20.18.0");
+            assert_eq!(resolution.source, ".node-version");
+        })
+        .await;
     }
 
     #[tokio::test]
@@ -687,17 +826,18 @@ mod tests {
     async fn test_resolve_version_node_version_takes_priority() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test());
+        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, temp_dir.path())], |_| async {
+            // Create both .node-version and package.json with engines.node
+            tokio::fs::write(temp_path.join(".node-version"), "22.0.0\n").await.unwrap();
+            let package_json = r#"{"engines":{"node":"20.18.0"}}"#;
+            tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
 
-        // Create both .node-version and package.json with engines.node
-        tokio::fs::write(temp_path.join(".node-version"), "22.0.0\n").await.unwrap();
-        let package_json = r#"{"engines":{"node":"20.18.0"}}"#;
-        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
-
-        let resolution = resolve_version(&temp_path).await.unwrap();
-        // .node-version should take priority
-        assert_eq!(resolution.version, "22.0.0");
-        assert_eq!(resolution.source, ".node-version");
+            let resolution = resolve_version(&temp_path).await.unwrap();
+            // .node-version should take priority
+            assert_eq!(resolution.version, "22.0.0");
+            assert_eq!(resolution.source, ".node-version");
+        })
+        .await;
     }
 
     #[tokio::test]
@@ -709,157 +849,173 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // Requires running outside of any Node.js project (walk-up finds .node-version)
     async fn test_resolve_version_alias_default_no_source_path() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(
-            temp_dir.path(),
-        ));
+        with_mock_node_index([(env_vars::VP_HOME, temp_dir.path().as_os_str())], || async {
+            let config =
+                Config { default_node_version: Some("lts".to_string()), ..Default::default() };
+            save_config(&config).await.unwrap();
 
-        let config = Config { default_node_version: Some("lts".to_string()), ..Default::default() };
-        save_config(&config).await.unwrap();
+            // Create empty dir to resolve version in (no .node-version)
+            let test_dir = temp_path.join("test-project");
+            tokio::fs::create_dir_all(&test_dir).await.unwrap();
 
-        // Create empty dir to resolve version in (no .node-version)
-        let test_dir = temp_path.join("test-project");
-        tokio::fs::create_dir_all(&test_dir).await.unwrap();
-
-        let resolution = resolve_version(&test_dir).await.unwrap();
-        assert_eq!(resolution.source, "default");
-        assert!(resolution.source_path.is_none(), "Alias defaults should not have source_path");
+            let resolution = resolve_version(&test_dir).await.unwrap();
+            assert_eq!(resolution.version, "24.11.0");
+            assert_eq!(resolution.source, "default");
+            assert!(resolution.source_path.is_none(), "Alias defaults should not have source_path");
+            assert!(resolution.is_range);
+        })
+        .await;
     }
 
     #[tokio::test]
-    #[ignore] // Requires running outside of any Node.js project (walk-up finds .node-version)
     async fn test_resolve_version_exact_default_has_source_path() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(
-            temp_dir.path(),
-        ));
+        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, temp_dir.path())], |_| async {
+            let config =
+                Config { default_node_version: Some("20.18.0".to_string()), ..Default::default() };
+            save_config(&config).await.unwrap();
 
-        let config =
-            Config { default_node_version: Some("20.18.0".to_string()), ..Default::default() };
-        save_config(&config).await.unwrap();
+            // Create empty dir to resolve version in (no .node-version)
+            let test_dir = temp_path.join("test-project");
+            tokio::fs::create_dir_all(&test_dir).await.unwrap();
 
-        // Create empty dir to resolve version in (no .node-version)
-        let test_dir = temp_path.join("test-project");
-        tokio::fs::create_dir_all(&test_dir).await.unwrap();
+            let resolution = resolve_version(&test_dir).await.unwrap();
+            assert_eq!(resolution.source, "default");
+            assert!(
+                resolution.source_path.is_some(),
+                "Exact version defaults should have source_path"
+            );
+        })
+        .await;
+    }
 
-        let resolution = resolve_version(&test_dir).await.unwrap();
-        assert_eq!(resolution.source, "default");
-        assert!(resolution.source_path.is_some(), "Exact version defaults should have source_path");
+    #[tokio::test]
+    async fn test_unconfigured_project_follows_latest_lts() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let server = httpmock::MockServer::start_async().await;
+        let index = server.mock(|when, then| {
+            when.path("/index.json");
+            then.status(200).json_body(serde_json::json!([
+                {"version": "v27.1.0", "lts": false},
+                {"version": "v26.13.0", "lts": "Newer LTS"},
+                {"version": "v24.22.1", "lts": "Krypton"}
+            ]));
+        });
+        vp_shared::EnvConfig::with_vars_async(
+            [
+                (env_vars::VP_HOME, temp_dir.path().as_os_str()),
+                (env_vars::VP_NODE_DIST_MIRROR, std::ffi::OsStr::new(&server.base_url())),
+            ],
+            |_| async {
+                let resolution = resolve_version(&temp_path).await.unwrap();
+                assert_eq!(resolution.version, "26.13.0");
+                assert_eq!(resolution.source, "lts");
+                assert!(resolution.is_range);
+                assert!(resolution.source_path.is_none());
+                index.assert_calls(1);
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
     async fn test_resolve_version_invalid_node_version_falls_through_to_lts() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(
-            temp_dir.path(),
-        ));
+        with_mock_node_index([(env_vars::VP_HOME, temp_dir.path().as_os_str())], || async {
+            // Create .node-version file with invalid version
+            tokio::fs::write(temp_path.join(".node-version"), "invalid-version\n").await.unwrap();
 
-        // Create .node-version file with invalid version
-        tokio::fs::write(temp_path.join(".node-version"), "invalid-version\n").await.unwrap();
+            // resolve_version should NOT fail - it should fall through to LTS
+            let resolution = resolve_version(&temp_path).await.unwrap();
 
-        // resolve_version should NOT fail - it should fall through to LTS
-        let resolution = resolve_version(&temp_path).await.unwrap();
-
-        // Should fall through to LTS since the .node-version is invalid
-        // and no user default is configured
-        assert_eq!(resolution.source, "lts");
-        assert!(resolution.source_path.is_none());
-        assert!(resolution.is_range, "LTS fallback should be marked as range");
+            // Should fall through to LTS since the .node-version is invalid
+            // and no user default is configured
+            assert_eq!(resolution.version, "24.11.0");
+            assert_eq!(resolution.source, "lts");
+            assert!(resolution.source_path.is_none());
+            assert!(resolution.is_range, "LTS fallback should be marked as range");
+        })
+        .await;
     }
 
     #[tokio::test]
     async fn test_resolve_version_invalid_node_version_falls_through_to_default() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(
-            temp_dir.path(),
-        ));
+        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, temp_dir.path())], |_| async {
+            // Create .node-version file with invalid version
+            tokio::fs::write(temp_path.join(".node-version"), "not-a-version\n").await.unwrap();
 
-        // Create .node-version file with invalid version
-        tokio::fs::write(temp_path.join(".node-version"), "not-a-version\n").await.unwrap();
+            // Create config with a default version
+            let config =
+                Config { default_node_version: Some("20.18.0".to_string()), ..Default::default() };
+            save_config(&config).await.unwrap();
 
-        // Create config with a default version
-        let config =
-            Config { default_node_version: Some("20.18.0".to_string()), ..Default::default() };
-        save_config(&config).await.unwrap();
+            // resolve_version should NOT fail - it should fall through to user default
+            let resolution = resolve_version(&temp_path).await.unwrap();
 
-        // resolve_version should NOT fail - it should fall through to user default
-        let resolution = resolve_version(&temp_path).await.unwrap();
-
-        // Should fall through to user default since .node-version is invalid
-        assert_eq!(resolution.source, "default");
-        assert_eq!(resolution.version, "20.18.0");
+            // Should fall through to user default since .node-version is invalid
+            assert_eq!(resolution.source, "default");
+            assert_eq!(resolution.version, "20.18.0");
+        })
+        .await;
     }
 
     #[tokio::test]
     async fn test_resolve_version_invalid_node_version_falls_through_to_engines_node() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(
-            temp_dir.path(),
-        ));
+        with_mock_node_index([(env_vars::VP_HOME, temp_dir.path().as_os_str())], || async {
+            // Create .node-version file with invalid version (typo or unsupported alias)
+            tokio::fs::write(temp_path.join(".node-version"), "laetst\n").await.unwrap();
 
-        // Create .node-version file with invalid version (typo or unsupported alias)
-        tokio::fs::write(temp_path.join(".node-version"), "laetst\n").await.unwrap();
+            // Create package.json with valid engines.node
+            let package_json = r#"{"engines":{"node":"^20.18.0"}}"#;
+            tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
 
-        // Create package.json with valid engines.node
-        let package_json = r#"{"engines":{"node":"^20.18.0"}}"#;
-        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+            // resolve_version should NOT fail - it should fall through to engines.node
+            let resolution = resolve_version(&temp_path).await.unwrap();
 
-        // resolve_version should NOT fail - it should fall through to engines.node
-        let resolution = resolve_version(&temp_path).await.unwrap();
-
-        // Should fall through to engines.node since .node-version is invalid
-        assert_eq!(resolution.source, "engines.node");
-        // Version should be resolved from ^20.18.0 (a 20.x version)
-        assert!(
-            resolution.version.starts_with("20."),
-            "Expected version to start with '20.', got: {}",
-            resolution.version
-        );
+            // Should fall through to engines.node since .node-version is invalid
+            assert_eq!(resolution.source, "engines.node");
+            assert_eq!(resolution.version, "20.19.0");
+        })
+        .await;
     }
 
     #[tokio::test]
     async fn test_resolve_version_invalid_node_version_falls_through_to_dev_engines() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(
-            temp_dir.path(),
-        ));
+        with_mock_node_index([(env_vars::VP_HOME, temp_dir.path().as_os_str())], || async {
+            // Create .node-version file with invalid version
+            tokio::fs::write(temp_path.join(".node-version"), "invalid\n").await.unwrap();
 
-        // Create .node-version file with invalid version
-        tokio::fs::write(temp_path.join(".node-version"), "invalid\n").await.unwrap();
+            // Create package.json with devEngines.runtime but no engines.node
+            let package_json = r#"{"devEngines":{"runtime":{"name":"node","version":"^20.18.0"}}}"#;
+            tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
 
-        // Create package.json with devEngines.runtime but no engines.node
-        let package_json = r#"{"devEngines":{"runtime":{"name":"node","version":"^20.18.0"}}}"#;
-        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+            // resolve_version should NOT fail - it should fall through to devEngines.runtime
+            let resolution = resolve_version(&temp_path).await.unwrap();
 
-        // resolve_version should NOT fail - it should fall through to devEngines.runtime
-        let resolution = resolve_version(&temp_path).await.unwrap();
-
-        // Should fall through to devEngines.runtime since .node-version is invalid
-        assert_eq!(resolution.source, "devEngines.runtime");
-        // Version should be resolved from ^20.18.0 (a 20.x version)
-        assert!(
-            resolution.version.starts_with("20."),
-            "Expected version to start with '20.', got: {}",
-            resolution.version
-        );
+            // Should fall through to devEngines.runtime since .node-version is invalid
+            assert_eq!(resolution.source, "devEngines.runtime");
+            assert_eq!(resolution.version, "20.19.0");
+        })
+        .await;
     }
 
     #[tokio::test]
     async fn test_resolve_version_invalid_engines_node_falls_through_to_dev_engines() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(
-            temp_dir.path(),
-        ));
-
+        with_mock_node_index([(env_vars::VP_HOME, temp_dir.path().as_os_str())], || async {
         // Create package.json with invalid engines.node but valid devEngines.runtime
         // No .node-version file — resolve_node_version returns EnginesNode source
         let package_json = r#"{"engines":{"node":"invalid"},"devEngines":{"runtime":{"name":"node","version":"^20.18.0"}}}"#;
@@ -869,11 +1025,9 @@ mod tests {
         let resolution = resolve_version(&temp_path).await.unwrap();
 
         assert_eq!(resolution.source, "devEngines.runtime");
-        assert!(
-            resolution.version.starts_with("20."),
-            "Expected version to start with '20.', got: {}",
-            resolution.version
-        );
+        assert_eq!(resolution.version, "20.19.0");
+    })
+        .await;
     }
 
     #[tokio::test]
@@ -994,44 +1148,64 @@ mod tests {
     async fn test_resolve_version_latest_alias_in_node_version() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test());
+        with_mock_node_index([(env_vars::VP_HOME, temp_dir.path().as_os_str())], || async {
+            // Create .node-version file with "latest" alias
+            tokio::fs::write(temp_path.join(".node-version"), "latest\n").await.unwrap();
 
-        // Create .node-version file with "latest" alias
-        tokio::fs::write(temp_path.join(".node-version"), "latest\n").await.unwrap();
+            let resolution = resolve_version(&temp_path).await.unwrap();
 
-        let resolution = resolve_version(&temp_path).await.unwrap();
-
-        // Should resolve from .node-version
-        assert_eq!(resolution.source, ".node-version");
-        // "latest" is a range (should be re-resolved periodically)
-        assert!(resolution.is_range, "'latest' should be marked as a range");
-        // Version should be at least v20.x
-        assert!(
-            resolution.version.starts_with("2") || resolution.version.starts_with("3"),
-            "Expected version to be at least v20.x, got: {}",
-            resolution.version
-        );
+            // Should resolve from .node-version
+            assert_eq!(resolution.source, ".node-version");
+            // "latest" is a range (should be re-resolved periodically)
+            assert!(resolution.is_range, "'latest' should be marked as a range");
+            // "latest" includes non-LTS releases
+            assert_eq!(resolution.version, "25.1.0");
+        })
+        .await;
     }
 
     #[tokio::test]
     async fn test_resolve_version_env_var_takes_priority() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig {
-            node_version: Some("22.0.0".into()),
-            ..vp_shared::EnvConfig::for_test()
-        });
+        vp_shared::EnvConfig::with_vars_async(
+            [
+                (env_vars::VP_HOME, temp_dir.path().as_os_str()),
+                (env_vars::VP_NODE_VERSION, std::ffi::OsStr::new("22.0.0")),
+            ],
+            |_| async {
+                // Create .node-version file
+                tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
 
-        // Create .node-version file
-        tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
+                let resolution = resolve_version(&temp_path).await.unwrap();
 
-        let resolution = resolve_version(&temp_path).await.unwrap();
+                // VP_NODE_VERSION should take priority over .node-version
+                assert_eq!(resolution.version, "22.0.0");
+                assert_eq!(resolution.source, VERSION_ENV_VAR);
+                assert!(resolution.source_path.is_none());
+                assert!(!resolution.is_range);
+            },
+        )
+        .await;
+    }
 
-        // VP_NODE_VERSION should take priority over .node-version
-        assert_eq!(resolution.version, "22.0.0");
-        assert_eq!(resolution.source, VERSION_ENV_VAR);
-        assert!(resolution.source_path.is_none());
-        assert!(!resolution.is_range);
+    #[tokio::test]
+    async fn test_resolve_version_env_var_partial_version() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        with_mock_node_index(
+            [
+                (env_vars::VP_HOME, temp_dir.path().as_os_str()),
+                (env_vars::VP_NODE_VERSION, std::ffi::OsStr::new("22")),
+            ],
+            || async {
+                let resolution = resolve_version(&temp_path).await.unwrap();
+
+                assert_eq!(resolution.version, "22.21.0");
+                assert_eq!(resolution.source, VERSION_ENV_VAR);
+            },
+        )
+        .await;
     }
 
     /// Verify that the env var source is accepted by `vp env install` (no-arg) source validation.
@@ -1041,25 +1215,29 @@ mod tests {
     async fn test_env_var_source_accepted_by_install_validation() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig {
-            node_version: Some("22.0.0".into()),
-            ..vp_shared::EnvConfig::for_test()
-        });
+        vp_shared::EnvConfig::with_vars_async(
+            [
+                (env_vars::VP_HOME, temp_dir.path().as_os_str()),
+                (env_vars::VP_NODE_VERSION, std::ffi::OsStr::new("22.0.0")),
+            ],
+            |_| async {
+                let resolution = resolve_version(&temp_path).await.unwrap();
 
-        let resolution = resolve_version(&temp_path).await.unwrap();
-
-        // The install command uses this match to validate sources.
-        // VERSION_ENV_VAR must be accepted alongside project-file sources.
-        let accepted = matches!(
-            resolution.source.as_str(),
-            ".node-version" | "engines.node" | "devEngines.runtime" | VERSION_ENV_VAR
-        );
-        assert!(
-            accepted,
-            "Install source validation should accept '{}' but it was rejected",
-            resolution.source
-        );
-        assert_eq!(resolution.version, "22.0.0");
+                // The install command uses this match to validate sources.
+                // VERSION_ENV_VAR must be accepted alongside project-file sources.
+                let accepted = matches!(
+                    resolution.source.as_str(),
+                    ".node-version" | "engines.node" | "devEngines.runtime" | VERSION_ENV_VAR
+                );
+                assert!(
+                    accepted,
+                    "Install source validation should accept '{}' but it was rejected",
+                    resolution.source
+                );
+                assert_eq!(resolution.version, "22.0.0");
+            },
+        )
+        .await;
     }
 
     // ── Session version file tests ──
@@ -1067,164 +1245,163 @@ mod tests {
     #[tokio::test]
     async fn test_write_and_read_session_version() {
         let temp_dir = TempDir::new().unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(
-            temp_dir.path(),
-        ));
+        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, temp_dir.path())], |_| async {
+            // Write a session version
+            write_session_version("22.0.0").await.unwrap();
 
-        // Write a session version
-        write_session_version("22.0.0").await.unwrap();
+            // Read it back (async)
+            let version = read_session_version().await;
+            assert_eq!(version.as_deref(), Some("22.0.0"));
 
-        // Read it back (async)
-        let version = read_session_version().await;
-        assert_eq!(version.as_deref(), Some("22.0.0"));
-
-        // Read it back (sync)
-        let version_sync = read_session_version_sync();
-        assert_eq!(version_sync.as_deref(), Some("22.0.0"));
+            // Read it back (sync)
+            let version_sync = read_session_version_sync();
+            assert_eq!(version_sync.as_deref(), Some("22.0.0"));
+        })
+        .await;
     }
 
     #[tokio::test]
     async fn test_read_session_version_returns_none_when_missing() {
         let temp_dir = TempDir::new().unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(
-            temp_dir.path(),
-        ));
-
-        assert!(read_session_version().await.is_none());
-        assert!(read_session_version_sync().is_none());
+        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, temp_dir.path())], |_| async {
+            assert!(read_session_version().await.is_none());
+            assert!(read_session_version_sync().is_none());
+        })
+        .await;
     }
 
     #[tokio::test]
     async fn test_read_session_version_returns_none_for_empty_file() {
         let temp_dir = TempDir::new().unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(
-            temp_dir.path(),
-        ));
+        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, temp_dir.path())], |_| async {
+            // Write empty content
+            let path = get_session_version_path().unwrap();
+            tokio::fs::create_dir_all(path.parent().unwrap()).await.unwrap();
+            tokio::fs::write(&path, "").await.unwrap();
 
-        // Write empty content
-        let path = get_session_version_path().unwrap();
-        tokio::fs::create_dir_all(path.parent().unwrap()).await.unwrap();
-        tokio::fs::write(&path, "").await.unwrap();
+            assert!(read_session_version().await.is_none());
+            assert!(read_session_version_sync().is_none());
 
-        assert!(read_session_version().await.is_none());
-        assert!(read_session_version_sync().is_none());
-
-        // Also test whitespace-only content
-        tokio::fs::write(&path, "   \n  ").await.unwrap();
-        assert!(read_session_version().await.is_none());
-        assert!(read_session_version_sync().is_none());
+            // Also test whitespace-only content
+            tokio::fs::write(&path, "   \n  ").await.unwrap();
+            assert!(read_session_version().await.is_none());
+            assert!(read_session_version_sync().is_none());
+        })
+        .await;
     }
 
     #[tokio::test]
     async fn test_read_session_version_trims_whitespace() {
         let temp_dir = TempDir::new().unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(
-            temp_dir.path(),
-        ));
+        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, temp_dir.path())], |_| async {
+            write_session_version("20.18.0").await.unwrap();
 
-        write_session_version("20.18.0").await.unwrap();
+            // Overwrite with whitespace-padded content
+            let path = get_session_version_path().unwrap();
+            tokio::fs::write(&path, "  20.18.0  \n").await.unwrap();
 
-        // Overwrite with whitespace-padded content
-        let path = get_session_version_path().unwrap();
-        tokio::fs::write(&path, "  20.18.0  \n").await.unwrap();
-
-        assert_eq!(read_session_version().await.as_deref(), Some("20.18.0"));
-        assert_eq!(read_session_version_sync().as_deref(), Some("20.18.0"));
+            assert_eq!(read_session_version().await.as_deref(), Some("20.18.0"));
+            assert_eq!(read_session_version_sync().as_deref(), Some("20.18.0"));
+        })
+        .await;
     }
 
     #[tokio::test]
     async fn test_delete_session_version() {
         let temp_dir = TempDir::new().unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(
-            temp_dir.path(),
-        ));
+        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, temp_dir.path())], |_| async {
+            // Write then delete
+            write_session_version("22.0.0").await.unwrap();
+            assert!(read_session_version().await.is_some());
 
-        // Write then delete
-        write_session_version("22.0.0").await.unwrap();
-        assert!(read_session_version().await.is_some());
-
-        delete_session_version().await.unwrap();
-        assert!(read_session_version().await.is_none());
+            delete_session_version().await.unwrap();
+            assert!(read_session_version().await.is_none());
+        })
+        .await;
     }
 
     #[tokio::test]
     async fn test_delete_session_version_ignores_missing_file() {
         let temp_dir = TempDir::new().unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(
-            temp_dir.path(),
-        ));
-
-        // Deleting a non-existent file should succeed
-        let result = delete_session_version().await;
-        assert!(result.is_ok());
+        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, temp_dir.path())], |_| async {
+            // Deleting a non-existent file should succeed
+            let result = delete_session_version().await;
+            assert!(result.is_ok());
+        })
+        .await;
     }
 
     #[tokio::test]
     async fn test_resolve_version_session_file_takes_priority_over_node_version() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig {
-            is_ci: cfg!(windows),
-            ..vp_shared::EnvConfig::for_test_with_home(temp_dir.path())
-        });
+        let vars = vec![
+            (env_vars::VP_HOME, temp_dir.path().as_os_str()),
+            #[cfg(windows)]
+            ("CI", std::ffi::OsStr::new("1")),
+        ];
+        vp_shared::EnvConfig::with_vars_async(vars, |_| async {
+            // Create .node-version file
+            tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
 
-        // Create .node-version file
-        tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
+            // Write session version file
+            write_session_version("22.0.0").await.unwrap();
 
-        // Write session version file
-        write_session_version("22.0.0").await.unwrap();
+            let resolution = resolve_version(&temp_path).await.unwrap();
 
-        let resolution = resolve_version(&temp_path).await.unwrap();
+            // Session file should take priority over .node-version
+            assert_eq!(resolution.version, "22.0.0");
+            assert_eq!(resolution.source, SESSION_VERSION_FILE);
+            assert!(resolution.source_path.is_some());
+            assert!(!resolution.is_range);
 
-        // Session file should take priority over .node-version
-        assert_eq!(resolution.version, "22.0.0");
-        assert_eq!(resolution.source, SESSION_VERSION_FILE);
-        assert!(resolution.source_path.is_some());
-        assert!(!resolution.is_range);
-
-        // Clean up
-        delete_session_version().await.unwrap();
+            // Clean up
+            delete_session_version().await.unwrap();
+        })
+        .await;
     }
 
     #[tokio::test]
     async fn test_resolve_version_env_var_takes_priority_over_session_file() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig {
-            node_version: Some("24.0.0".into()),
-            vite_plus_home: Some(temp_dir.path().into()),
-            ..vp_shared::EnvConfig::for_test()
-        });
+        vp_shared::EnvConfig::with_vars_async(
+            [
+                (env_vars::VP_HOME, temp_dir.path().as_os_str()),
+                (env_vars::VP_NODE_VERSION, std::ffi::OsStr::new("24.0.0")),
+            ],
+            |_| async {
+                // Write session version file with different version
+                write_session_version("22.0.0").await.unwrap();
 
-        // Write session version file with different version
-        write_session_version("22.0.0").await.unwrap();
+                let resolution = resolve_version(&temp_path).await.unwrap();
 
-        let resolution = resolve_version(&temp_path).await.unwrap();
+                // Env var should take priority over session file
+                assert_eq!(resolution.version, "24.0.0");
+                assert_eq!(resolution.source, VERSION_ENV_VAR);
 
-        // Env var should take priority over session file
-        assert_eq!(resolution.version, "24.0.0");
-        assert_eq!(resolution.source, VERSION_ENV_VAR);
-
-        // Clean up
-        delete_session_version().await.unwrap();
+                // Clean up
+                delete_session_version().await.unwrap();
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
     async fn test_resolve_version_falls_through_when_no_session_file() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(
-            temp_dir.path(),
-        ));
+        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, temp_dir.path())], |_| async {
+            // Create .node-version file
+            tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
 
-        // Create .node-version file
-        tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
+            let resolution = resolve_version(&temp_path).await.unwrap();
 
-        let resolution = resolve_version(&temp_path).await.unwrap();
-
-        // Should fall through to .node-version since no session file exists
-        assert_eq!(resolution.version, "20.18.0");
-        assert_eq!(resolution.source, ".node-version");
+            // Should fall through to .node-version since no session file exists
+            assert_eq!(resolution.version, "20.18.0");
+            assert_eq!(resolution.source, ".node-version");
+        })
+        .await;
     }
 
     /// Verify that the session file source is accepted by `vp env install` (no-arg) source validation.
@@ -1234,74 +1411,85 @@ mod tests {
     async fn test_session_file_source_accepted_by_install_validation() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig {
-            is_ci: cfg!(windows),
-            ..vp_shared::EnvConfig::for_test_with_home(temp_dir.path())
-        });
+        let vars = vec![
+            (env_vars::VP_HOME, temp_dir.path().as_os_str()),
+            #[cfg(windows)]
+            ("CI", std::ffi::OsStr::new("1")),
+        ];
+        vp_shared::EnvConfig::with_vars_async(vars, |_| async {
+            // Write session version file
+            write_session_version("22.0.0").await.unwrap();
 
-        // Write session version file
-        write_session_version("22.0.0").await.unwrap();
+            let resolution = resolve_version(&temp_path).await.unwrap();
 
-        let resolution = resolve_version(&temp_path).await.unwrap();
+            // The install command uses this match to validate sources.
+            // SESSION_VERSION_FILE must be accepted alongside project-file sources.
+            let accepted = matches!(
+                resolution.source.as_str(),
+                ".node-version"
+                    | "engines.node"
+                    | "devEngines.runtime"
+                    | VERSION_ENV_VAR
+                    | SESSION_VERSION_FILE
+            );
+            assert!(
+                accepted,
+                "Install source validation should accept '{}' but it was rejected",
+                resolution.source
+            );
+            assert_eq!(resolution.version, "22.0.0");
+            assert_eq!(resolution.source, SESSION_VERSION_FILE);
 
-        // The install command uses this match to validate sources.
-        // SESSION_VERSION_FILE must be accepted alongside project-file sources.
-        let accepted = matches!(
-            resolution.source.as_str(),
-            ".node-version"
-                | "engines.node"
-                | "devEngines.runtime"
-                | VERSION_ENV_VAR
-                | SESSION_VERSION_FILE
-        );
-        assert!(
-            accepted,
-            "Install source validation should accept '{}' but it was rejected",
-            resolution.source
-        );
-        assert_eq!(resolution.version, "22.0.0");
-        assert_eq!(resolution.source, SESSION_VERSION_FILE);
-
-        // Clean up
-        delete_session_version().await.unwrap();
+            // Clean up
+            delete_session_version().await.unwrap();
+        })
+        .await;
     }
 
     #[tokio::test]
     async fn test_resolve_version_empty_env_var_is_ignored() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig {
-            node_version: Some("".into()),
-            ..vp_shared::EnvConfig::for_test()
-        });
+        vp_shared::EnvConfig::with_vars_async(
+            [
+                (env_vars::VP_HOME, temp_dir.path().as_os_str()),
+                (env_vars::VP_NODE_VERSION, std::ffi::OsStr::new("")),
+            ],
+            |_| async {
+                // Create .node-version file
+                tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
 
-        // Create .node-version file
-        tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
+                let resolution = resolve_version(&temp_path).await.unwrap();
 
-        let resolution = resolve_version(&temp_path).await.unwrap();
-
-        // Empty env var should be ignored, should fall through to .node-version
-        assert_eq!(resolution.version, "20.18.0");
-        assert_eq!(resolution.source, ".node-version");
+                // Empty env var should be ignored, should fall through to .node-version
+                assert_eq!(resolution.version, "20.18.0");
+                assert_eq!(resolution.source, ".node-version");
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
     async fn test_resolve_version_whitespace_env_var_is_ignored() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig {
-            node_version: Some("   ".into()),
-            ..vp_shared::EnvConfig::for_test()
-        });
+        vp_shared::EnvConfig::with_vars_async(
+            [
+                (env_vars::VP_HOME, temp_dir.path().as_os_str()),
+                (env_vars::VP_NODE_VERSION, std::ffi::OsStr::new("   ")),
+            ],
+            |_| async {
+                // Create .node-version file
+                tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
 
-        // Create .node-version file
-        tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
+                let resolution = resolve_version(&temp_path).await.unwrap();
 
-        let resolution = resolve_version(&temp_path).await.unwrap();
-
-        // Whitespace env var should be ignored, should fall through to .node-version
-        assert_eq!(resolution.version, "20.18.0");
-        assert_eq!(resolution.source, ".node-version");
+                // Whitespace env var should be ignored, should fall through to .node-version
+                assert_eq!(resolution.version, "20.18.0");
+                assert_eq!(resolution.source, ".node-version");
+            },
+        )
+        .await;
     }
 
     // ── resolve_version_from_files tests ──
@@ -1312,19 +1500,23 @@ mod tests {
     async fn test_resolve_version_from_files_ignores_env_var() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig {
-            node_version: Some("22.0.0".into()),
-            ..vp_shared::EnvConfig::for_test()
-        });
+        vp_shared::EnvConfig::with_vars_async(
+            [
+                (env_vars::VP_HOME, temp_dir.path().as_os_str()),
+                (env_vars::VP_NODE_VERSION, std::ffi::OsStr::new("22.0.0")),
+            ],
+            |_| async {
+                // Create .node-version file with different version
+                tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
 
-        // Create .node-version file with different version
-        tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
+                // resolve_version_from_files should skip env var and use .node-version
+                let resolution = resolve_version_from_files(&temp_path).await.unwrap();
 
-        // resolve_version_from_files should skip env var and use .node-version
-        let resolution = resolve_version_from_files(&temp_path).await.unwrap();
-
-        assert_eq!(resolution.version, "20.18.0");
-        assert_eq!(resolution.source, ".node-version");
+                assert_eq!(resolution.version, "20.18.0");
+                assert_eq!(resolution.source, ".node-version");
+            },
+        )
+        .await;
     }
 
     /// Verify that `resolve_version_from_files` ignores session file override.
@@ -1332,24 +1524,23 @@ mod tests {
     async fn test_resolve_version_from_files_ignores_session_file() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig::for_test_with_home(
-            temp_dir.path(),
-        ));
+        vp_shared::EnvConfig::with_vars_async([(env_vars::VP_HOME, temp_dir.path())], |_| async {
+            // Write session version file
+            write_session_version("22.0.0").await.unwrap();
 
-        // Write session version file
-        write_session_version("22.0.0").await.unwrap();
+            // Create .node-version file with different version
+            tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
 
-        // Create .node-version file with different version
-        tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
+            // resolve_version_from_files should skip session file and use .node-version
+            let resolution = resolve_version_from_files(&temp_path).await.unwrap();
 
-        // resolve_version_from_files should skip session file and use .node-version
-        let resolution = resolve_version_from_files(&temp_path).await.unwrap();
+            assert_eq!(resolution.version, "20.18.0");
+            assert_eq!(resolution.source, ".node-version");
 
-        assert_eq!(resolution.version, "20.18.0");
-        assert_eq!(resolution.source, ".node-version");
-
-        // Clean up
-        delete_session_version().await.unwrap();
+            // Clean up
+            delete_session_version().await.unwrap();
+        })
+        .await;
     }
 
     /// Verify that `resolve_version_from_files` still respects both env var and session file.
@@ -1357,22 +1548,111 @@ mod tests {
     async fn test_resolve_version_still_respects_overrides() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig {
-            node_version: Some("22.0.0".into()),
-            ..vp_shared::EnvConfig::for_test_with_home(temp_dir.path())
-        });
+        vp_shared::EnvConfig::with_vars_async(
+            [
+                (env_vars::VP_HOME, temp_dir.path().as_os_str()),
+                (env_vars::VP_NODE_VERSION, std::ffi::OsStr::new("22.0.0")),
+            ],
+            |_| async {
+                // Create .node-version file
+                tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
 
-        // Create .node-version file
-        tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
+                // resolve_version should still use env var (existing behavior)
+                let resolution = resolve_version(&temp_path).await.unwrap();
+                assert_eq!(resolution.version, "22.0.0");
+                assert_eq!(resolution.source, VERSION_ENV_VAR);
 
-        // resolve_version should still use env var (existing behavior)
-        let resolution = resolve_version(&temp_path).await.unwrap();
-        assert_eq!(resolution.version, "22.0.0");
-        assert_eq!(resolution.source, VERSION_ENV_VAR);
+                // But resolve_version_from_files should skip it
+                let resolution_from_files = resolve_version_from_files(&temp_path).await.unwrap();
+                assert_eq!(resolution_from_files.version, "20.18.0");
+                assert_eq!(resolution_from_files.source, ".node-version");
+            },
+        )
+        .await;
+    }
 
-        // But resolve_version_from_files should skip it
-        let resolution_from_files = resolve_version_from_files(&temp_path).await.unwrap();
-        assert_eq!(resolution_from_files.version, "20.18.0");
-        assert_eq!(resolution_from_files.source, ".node-version");
+    #[test]
+    fn node_only_mode_change_leaves_package_managers_undecided() {
+        let mut config = Config::default();
+        config.set_shim_modes(true, false, ShimMode::SystemFirst);
+        assert_eq!(config.node_shim_mode, ShimMode::SystemFirst);
+        assert_eq!(config.configured_package_manager_shim_mode_for(PackageManagerType::Pnpm), None);
+        assert_eq!(
+            config.package_manager_shim_mode_for(PackageManagerType::Pnpm),
+            ShimMode::Managed
+        );
+    }
+
+    #[test]
+    fn package_manager_mode_change_preserves_other_package_manager_modes() {
+        let mut config = Config::default();
+        config.set_package_manager_shim_mode(PackageManagerType::Pnpm, ShimMode::SystemFirst);
+
+        assert_eq!(
+            config.configured_package_manager_shim_mode_for(PackageManagerType::Pnpm),
+            Some(ShimMode::SystemFirst)
+        );
+        assert_eq!(config.configured_package_manager_shim_mode_for(PackageManagerType::Bun), None);
+
+        config.set_shim_modes(false, true, ShimMode::Managed);
+        assert_eq!(
+            config.configured_package_manager_shim_mode_for(PackageManagerType::Pnpm),
+            Some(ShimMode::Managed)
+        );
+        assert_eq!(
+            config.configured_package_manager_shim_mode_for(PackageManagerType::Bun),
+            Some(ShimMode::Managed)
+        );
+        assert_eq!(config.package_manager_shim_modes.len(), ALL_PACKAGE_MANAGERS.len());
+    }
+
+    #[test]
+    fn package_manager_only_mode_change_preserves_node_mode() {
+        let mut config = Config { node_shim_mode: ShimMode::SystemFirst, ..Config::default() };
+        config.set_shim_modes(false, true, ShimMode::Managed);
+        assert_eq!(config.node_shim_mode, ShimMode::SystemFirst);
+        assert_eq!(config.package_manager_shim_modes.len(), ALL_PACKAGE_MANAGERS.len());
+    }
+
+    #[test]
+    fn legacy_shim_mode_loads_as_node_shim_mode() {
+        let config: Config = serde_json::from_str(r#"{"shimMode":"system_first"}"#).unwrap();
+
+        assert_eq!(config.node_shim_mode, ShimMode::SystemFirst);
+        assert_eq!(
+            serde_json::to_value(config).unwrap(),
+            serde_json::json!({ "nodeShimMode": "system_first" })
+        );
+    }
+
+    #[test]
+    fn legacy_package_manager_default_migrates_to_version_map() {
+        let config: Config =
+            serde_json::from_str(r#"{"defaultPackageManager":"pnpm@10.18.0"}"#).unwrap();
+
+        assert_eq!(
+            config.default_package_manager_version_for(PackageManagerType::Pnpm),
+            Some("10.18.0")
+        );
+        assert_eq!(
+            serde_json::to_value(config).unwrap()["defaultPackageManagerVersions"]["pnpm"],
+            "10.18.0"
+        );
+    }
+
+    #[tokio::test]
+    async fn package_manager_session_file_round_trip() {
+        let temp_dir = TempDir::new().unwrap();
+        vp_shared::EnvConfig::with_vars_async(
+            [(vp_shared::env_vars::VP_HOME, temp_dir.path())],
+            |_| async {
+                let kind = PackageManagerType::Pnpm;
+                write_session_package_manager(kind, "10.18.0").await.unwrap();
+                assert_eq!(read_session_package_manager(kind).await.as_deref(), Some("10.18.0"));
+                delete_session_package_manager(kind).await.unwrap();
+                assert!(read_session_package_manager(kind).await.is_none());
+            },
+        )
+        .await;
     }
 }

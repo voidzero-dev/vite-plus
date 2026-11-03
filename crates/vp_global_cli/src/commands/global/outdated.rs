@@ -5,7 +5,7 @@ use std::{
     process::ExitStatus,
 };
 
-use owo_colors::OwoColorize;
+use console::style;
 use serde::Serialize;
 use vp_pm_cli::OutdatedFormat;
 
@@ -280,33 +280,50 @@ fn print_json(packages: &[OutdatedPackage]) -> Result<(), Error> {
     }
 
     let json = serde_json::to_string_pretty(&output)?;
-    println!("{json}");
+    vp_shared::output::print_stdout_line(format_args!("{json}"));
     Ok(())
 }
 
 fn print_list(packages: &[OutdatedPackage], long: bool) {
     for (index, package) in packages.iter().enumerate() {
         if index > 0 {
-            println!();
+            vp_shared::output::print_stdout_line(format_args!(""));
         }
 
-        println!("{} {}", package.name.bold(), "(global)".dimmed());
+        vp_shared::output::print_stdout_line(format_args!(
+            "{} {}",
+            style(&package.name).bold(),
+            style("(global)").dim()
+        ));
         if package.wanted == package.latest {
-            println!("{} {} {}", package.current.dimmed(), "=>".dimmed(), package.wanted.bold());
+            vp_shared::output::print_stdout_line(format_args!(
+                "{} {} {}",
+                style(&package.current).dim(),
+                style("=>").dim(),
+                style(&package.wanted).bold()
+            ));
         } else {
-            println!(
+            vp_shared::output::print_stdout_line(format_args!(
                 "{} {} {} {}",
-                package.current.dimmed(),
-                "=>".dimmed(),
-                package.wanted.bold(),
-                format!("(latest: {})", package.latest).dimmed()
-            );
+                style(&package.current).dim(),
+                style("=>").dim(),
+                style(&package.wanted).bold(),
+                style(format!("(latest: {})", package.latest)).dim()
+            ));
         }
 
         if long {
-            println!("{} {}", "node".dimmed(), package.node);
+            vp_shared::output::print_stdout_line(format_args!(
+                "{} {}",
+                style("node").dim(),
+                package.node
+            ));
             if !package.bins.is_empty() {
-                println!("{} {}", "bins".dimmed(), package.bins.join(", "));
+                vp_shared::output::print_stdout_line(format_args!(
+                    "{} {}",
+                    style("bins").dim(),
+                    package.bins.join(", ")
+                ));
             }
         }
     }
@@ -336,30 +353,30 @@ fn print_table(packages: &[OutdatedPackage], long: bool) {
 
     let gap = 3;
     if long {
-        println!(
+        vp_shared::output::print_stdout_line(format_args!(
             "{:<w_pkg$}{:>gap$}{:<w_current$}{:>gap$}{:<w_wanted$}{:>gap$}{:<w_latest$}{:>gap$}{:<w_node$}{:>gap$}{}",
             col_pkg, "", col_current, "", col_wanted, "", col_latest, "", col_node, "", col_bins
-        );
-        println!(
+        ));
+        vp_shared::output::print_stdout_line(format_args!(
             "{:<w_pkg$}{:>gap$}{:<w_current$}{:>gap$}{:<w_wanted$}{:>gap$}{:<w_latest$}{:>gap$}{:<w_node$}{:>gap$}{}",
             "---", "", "---", "", "---", "", "---", "", "---", "", "---"
-        );
+        ));
     } else {
-        println!(
+        vp_shared::output::print_stdout_line(format_args!(
             "{:<w_pkg$}{:>gap$}{:<w_current$}{:>gap$}{:<w_wanted$}{:>gap$}{}",
             col_pkg, "", col_current, "", col_wanted, "", col_latest
-        );
-        println!(
+        ));
+        vp_shared::output::print_stdout_line(format_args!(
             "{:<w_pkg$}{:>gap$}{:<w_current$}{:>gap$}{:<w_wanted$}{:>gap$}---",
             "---", "", "---", "", "---", ""
-        );
+        ));
     }
 
     for package in packages {
         if long {
-            println!(
+            vp_shared::output::print_stdout_line(format_args!(
                 "{}{:>gap$}{:<w_current$}{:>gap$}{:<w_wanted$}{:>gap$}{:<w_latest$}{:>gap$}{:<w_node$}{:>gap$}{}",
-                format!("{:<w_pkg$}", package.name).bright_blue(),
+                style(format!("{:<w_pkg$}", package.name)).blue().bright(),
                 "",
                 package.current,
                 "",
@@ -370,18 +387,18 @@ fn print_table(packages: &[OutdatedPackage], long: bool) {
                 package.node,
                 "",
                 package.bins.join(", ")
-            );
+            ));
         } else {
-            println!(
+            vp_shared::output::print_stdout_line(format_args!(
                 "{}{:>gap$}{:<w_current$}{:>gap$}{:<w_wanted$}{:>gap$}{}",
-                format!("{:<w_pkg$}", package.name).bright_blue(),
+                style(format!("{:<w_pkg$}", package.name)).blue().bright(),
                 "",
                 package.current,
                 "",
                 package.wanted,
                 "",
                 package.latest
-            );
+            ));
         }
     }
 }

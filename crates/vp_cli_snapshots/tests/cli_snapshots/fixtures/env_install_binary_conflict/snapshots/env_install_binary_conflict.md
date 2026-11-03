@@ -8,7 +8,7 @@ Install pkg-a which provides env-binary-conflict-cli binary
 VITE+ - The Unified Toolchain for the Web
 
 info: Installing 1 global package with Node.js <version>
-✓ Installed env-binary-conflict-pkg-a 1.0.0
+ Installed env-binary-conflict-pkg-a 1.0.0
   Bins: env-binary-conflict-cli
 ```
 
@@ -64,8 +64,8 @@ VITE+ - The Unified Toolchain for the Web
 
 info: Installing 1 global package with Node.js <version>
 Uninstalling env-binary-conflict-pkg-a (conflicts with env-binary-conflict-pkg-b)...
-Uninstalled env-binary-conflict-pkg-a
-✓ Installed env-binary-conflict-pkg-b 2.0.0
+- Uninstalled env-binary-conflict-pkg-a
+ Installed env-binary-conflict-pkg-b 2.0.0
   Bins: env-binary-conflict-cli
 ```
 
@@ -88,7 +88,7 @@ Bin config should now point to pkg-b
 Cleanup
 
 ```
-Uninstalled env-binary-conflict-pkg-b
+- Uninstalled env-binary-conflict-pkg-b
 ```
 
 ## `vpt stat-file $VP_HOME/bins/env-binary-conflict-cli.json --assert missing`

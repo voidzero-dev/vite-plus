@@ -1,0 +1,67 @@
+import assert from 'node:assert/strict';
+import { realpathSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { isAbsolute, relative } from 'node:path';
+import { inspect } from 'node:util';
+import { createVitest } from 'vite-plus/test/node';
+import { configFor, executablePath, project } from './config.mjs';
+
+const require = createRequire(import.meta.resolve('vite-plus/package.json'));
+
+if (process.argv.includes('--packed')) {
+  for (const name of ['vite-plus', 'vite', 'vitest', '@vitest/browser-playwright']) {
+    const installed = relative(realpathSync(process.cwd()), realpathSync(require.resolve(`${name}/package.json`)));
+    assert.ok(!isAbsolute(installed) && !installed.startsWith('..'), `${name} must come from the packed installation: ${installed}`);
+  }
+}
+
+// Reuse one Chromium process across the matrix to avoid concurrent browser
+// launches stalling on CI. Each provider connection still owns its contexts,
+// so projects retain their isolation and run in parallel.
+const browserServer = await require('playwright').chromium.launchServer({ executablePath, headless: true, host: '127.0.0.1' });
+process.env.VP_TEST_BROWSER_WS_ENDPOINT = browserServer.wsEndpoint();
+try {
+  for (const [name, count] of [['raw', 1], ['helper', 1], ['shared', 2], ['shared-node', 2], ['inherited', 2], ['separate', 2], ['independent', 3], ['referenced', 2], ['nested', 2], ['injected', 3], ['injected-hook', 2]]) {
+    const runner = await createVitest({ config: false, watch: false, reporters: [] }, configFor(name));
+    try {
+      if (name === 'injected') {
+        // Vitest 5.0.4 rejects projects that share sequence.groupOrder but
+        // resolve different maxWorkers, and runtime-injected projects resolve
+        // maxWorkers differently from the root project. Give each injected
+        // project its own group.
+        const browserProject = project('injected-browser');
+        const nodeProject = project('injected-node', false);
+        browserProject.test.sequence = { groupOrder: 1 };
+        nodeProject.test.sequence = { groupOrder: 2 };
+        await runner.injectTestProject([
+          { extends: false, ...browserProject },
+          { extends: false, ...nodeProject },
+        ]);
+      }
+      assert.equal(runner.projects.length, count, name);
+      for (const project of runner.projects) {
+        if (project.config.browser.enabled) {
+          assert.equal(project.config.api.port, 0, `${name}: ${project.name} must use an OS-assigned port`);
+        }
+      }
+      const servers = new Set(runner.projects.map((project) => project.vite));
+      if (name === 'shared' || name === 'shared-node') assert.equal(servers.size, 1);
+      if (name === 'separate') assert.equal(servers.size, 2);
+      const result = await runner.start();
+      assert.equal(result.unhandledErrors.length, 0, inspect(result.unhandledErrors));
+      const files = runner.state.getFiles();
+      assert.equal(files.length, count, name);
+      for (const file of files) {
+        assert.equal(file.tasks.length, 3);
+        assert.equal(file.result.state, 'pass', inspect(file.tasks.map((task) => task.result), { depth: 5 }));
+        for (const task of file.tasks) assert.equal(task.result.state, 'pass', inspect(task.result));
+      }
+      console.log(`${name}: ${count} projects; string, boolean, number, object, expression, and dotted defines passed`);
+    } finally {
+      await runner.close();
+    }
+  }
+} finally {
+  delete process.env.VP_TEST_BROWSER_WS_ENDPOINT;
+  await browserServer.close();
+}

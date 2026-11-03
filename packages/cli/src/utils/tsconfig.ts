@@ -5,7 +5,8 @@ import { styleText } from 'node:util';
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { applyEdits, modify, parse as parseJsonc } from 'jsonc-parser';
 
-import { runCommandSilently } from './command.ts';
+import vitestV5EntryPoints from '../vitest-v5-entry-points.json' with { type: 'json' };
+import { getVpCommand, runCommandSilently } from './command.ts';
 import { BASEURL_TSCONFIG_FIX_PACKAGE, createBaseUrlTsconfigFixArgs } from './constants.ts';
 import { cancelAndExit } from './prompts.ts';
 
@@ -102,8 +103,7 @@ export async function fixBaseUrlInTsconfig(
         prompts.log.info(`Running vp dlx ${BASEURL_TSCONFIG_FIX_PACKAGE} ${fixArgs.join(' ')}`);
       }
       const result = await runCommandSilently({
-        command: process.env.VP_CLI_BIN ?? 'vp',
-        args: ['dlx', BASEURL_TSCONFIG_FIX_PACKAGE, ...fixArgs],
+        ...getVpCommand(['dlx', BASEURL_TSCONFIG_FIX_PACKAGE, ...fixArgs]),
         cwd: projectPath,
         envs: process.env,
       });
@@ -175,6 +175,10 @@ export function removeDeprecatedTsconfigFalseOption(filePath: string, optionName
 // rewritten here (tsdown is not part of the vite scoping).
 const TSCONFIG_TYPE_REPLACEMENTS: Record<string, string> = {
   'tsdown/client': 'vite-plus/pack/client',
+  // Removed Vite+ exports must also migrate in type-only entry lists.
+  ...Object.fromEntries(
+    Object.entries(vitestV5EntryPoints).filter(([source]) => source.startsWith('vite-plus/')),
+  ),
 };
 
 export function hasTypesToRewriteInTsconfig(filePath: string): boolean {

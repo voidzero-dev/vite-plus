@@ -1,0 +1,9 @@
+{
+  "name": "plugin-consumer",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.24.0",
+  "dependencies": {
+    "oxlint-plugin-optional-example": "file:../artifacts/oxlint-plugin-optional-example-1.0.0.tgz"
+  }
+}

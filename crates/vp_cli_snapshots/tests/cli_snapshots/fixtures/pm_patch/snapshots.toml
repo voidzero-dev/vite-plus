@@ -8,12 +8,34 @@ steps = [
 ]
 
 [[case]]
+name = "pm_patch_npm12"
+vp = ["local", "global"]
+cwd = "npm12"
+env = { npm_config_audit = "false", npm_config_fund = "false" }
+steps = [
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "pm", "patch", "is-number", "--", "--edit-dir", "edit"], comment = "npm 12 prepares a dependency for editing" },
+  { argv = ["vpt", "stat-file", "edit/package.json", "--assert", "file"] },
+  { argv = ["vpt", "write-file", "edit/vp-patch-probe.txt", "patched by vp\n"], snapshot = false },
+  { argv = ["vp", "pm", "patch-commit", "edit", "--", "--patches-dir", ".patches", "--keep-edit-dir"], comment = "npm 12 saves the patch and registers it in the manifest and lockfile" },
+  { argv = ["vpt", "stat-file", ".patches/is-number@7.0.0.patch", "--assert", "file"] },
+  { argv = ["vpt", "stat-file", "edit", "--assert", "dir"] },
+  { argv = ["vpt", "print-file", "package.json"] },
+  { argv = ["vpt", "rm", "-r", "node_modules"], snapshot = false },
+  { argv = ["vp", "install", "--frozen-lockfile", "--ignore-scripts"], comment = "a clean install reapplies the committed patch" },
+  { argv = ["vpt", "print-file", "node_modules/is-number/vp-patch-probe.txt"] },
+]
+
+[[case]]
 name = "pm_patch_pnpm"
 vp = "local"
 cwd = "pnpm"
 steps = [
   { argv = ["vp", "pm", "patch", "placeholder", "--", "--version"], comment = "pnpm receives the patch command" },
   { argv = ["vp", "pm", "patch-commit", "placeholder", "--", "--version"], comment = "pnpm receives the patch-commit command" },
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "pnpm@7.3.0"], snapshot = false },
+  { argv = ["vp", "pm", "patch", "placeholder"], comment = "Before pnpm 7.4.0, patch warns and skips execution." },
+  { argv = ["vp", "pm", "patch-commit", "placeholder"], comment = "Before pnpm 7.4.0, patch-commit also warns and skips execution." },
 ]
 
 [[case]]
@@ -23,4 +45,6 @@ cwd = "yarn"
 steps = [
   { argv = ["vp", "pm", "patch", "placeholder"], comment = "Yarn Classic warns and exits successfully because patch is unsupported" },
   { argv = ["vp", "pm", "patch-commit", "placeholder"], comment = "Yarn Classic warns and exits successfully because patch-commit is unsupported" },
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@2.4.2"], snapshot = false },
+  { argv = ["vp", "pm", "patch-commit", "placeholder"], comment = "Yarn 2 cannot save patches with --save, so warn and skip execution." },
 ]

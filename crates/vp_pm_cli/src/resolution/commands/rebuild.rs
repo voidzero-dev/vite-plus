@@ -28,13 +28,14 @@ impl Resolve<RebuildArgs> for Pnpm {
 }
 
 impl Resolve<RebuildArgs> for Yarn {
-    fn resolve(&self, _args: &RebuildArgs, diag: &mut Diagnostics) -> CommandResolution {
-        let message = if self.is_berry() {
-            "yarn berry does not support the rebuild command"
-        } else {
-            "yarn v1 does not support the rebuild command"
-        };
-        diag.warn(DiagnosticKind::UnsupportedCommandNoop, message);
+    fn resolve(&self, args: &RebuildArgs, diag: &mut Diagnostics) -> CommandResolution {
+        if self.is_berry() {
+            return resolve_rebuild("yarn", args);
+        }
+        diag.warn(
+            DiagnosticKind::UnsupportedCommandNoop,
+            "yarn v1 does not support the rebuild command",
+        );
         CommandResolution::Noop
     }
 }
@@ -60,7 +61,7 @@ mod tests {
     use super::*;
     use crate::resolution::{
         resolve,
-        test_utils::{bun, npm, parse_args, pnpm, yarn},
+        test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
     };
 
     #[test]
@@ -73,11 +74,7 @@ mod tests {
 
     #[test]
     fn test_npm_rebuild() {
-        let CommandResolution::Run(command) =
-            resolve(&npm("11.0.0"), RebuildArgs::default()).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&npm("11.0.0"), RebuildArgs::default()).outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["rebuild"]);
@@ -85,11 +82,7 @@ mod tests {
 
     #[test]
     fn test_pnpm_rebuild() {
-        let CommandResolution::Run(command) =
-            resolve(&pnpm("10.0.0"), RebuildArgs::default()).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&pnpm("10.0.0"), RebuildArgs::default()).outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["rebuild"]);
@@ -104,14 +97,37 @@ mod tests {
     }
 
     #[test]
-    fn test_yarn2_rebuild_not_supported() {
-        let result = resolve(&yarn("4.0.0"), RebuildArgs::default());
+    fn test_yarn_berry_rebuild() {
+        for version in ["2.0.0", "3.0.0", "4.0.0"] {
+            let result = resolve(&yarn(version), RebuildArgs::default());
+            let command = expect_run(result.outcome);
 
-        assert_eq!(result.outcome, CommandResolution::Noop);
-        assert_eq!(
-            result.diagnostics[0].message,
-            "yarn berry does not support the rebuild command"
-        );
+            assert_eq!(command.program, "yarn");
+            assert_eq!(command.args, vec!["rebuild"]);
+            assert!(result.diagnostics.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_yarn_berry_rebuild_with_packages() {
+        let args = parse_args::<RebuildArgs>(["better-sqlite3", "sharp"]).unwrap();
+        let result = resolve(&yarn("4.0.0"), args);
+        let command = expect_run(result.outcome);
+
+        assert_eq!(command.program, "yarn");
+        assert_eq!(command.args, vec!["rebuild", "better-sqlite3", "sharp"]);
+        assert!(result.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn test_yarn_berry_rebuild_with_pass_through() {
+        let args = parse_args::<RebuildArgs>(["--", "--help"]).unwrap();
+        let result = resolve(&yarn("4.0.0"), args);
+        let command = expect_run(result.outcome);
+
+        assert_eq!(command.program, "yarn");
+        assert_eq!(command.args, vec!["rebuild", "--help"]);
+        assert!(result.diagnostics.is_empty());
     }
 
     #[test]
@@ -124,17 +140,16 @@ mod tests {
 
     #[test]
     fn test_npm_rebuild_with_packages() {
-        let CommandResolution::Run(command) = resolve(
-            &npm("11.0.0"),
-            RebuildArgs {
-                packages: vec!["better-sqlite3".to_string(), "sharp".to_string()],
-                ..Default::default()
-            },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &npm("11.0.0"),
+                RebuildArgs {
+                    packages: vec!["better-sqlite3".to_string(), "sharp".to_string()],
+                    ..Default::default()
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["rebuild", "better-sqlite3", "sharp"]);
@@ -142,14 +157,13 @@ mod tests {
 
     #[test]
     fn test_pnpm_rebuild_with_packages() {
-        let CommandResolution::Run(command) = resolve(
-            &pnpm("10.0.0"),
-            RebuildArgs { packages: vec!["better-sqlite3".to_string()], ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                RebuildArgs { packages: vec!["better-sqlite3".to_string()], ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["rebuild", "better-sqlite3"]);
@@ -157,17 +171,16 @@ mod tests {
 
     #[test]
     fn test_pnpm_rebuild_with_packages_and_pass_through() {
-        let CommandResolution::Run(command) = resolve(
-            &pnpm("11.0.6"),
-            RebuildArgs {
-                packages: vec!["better-sqlite3".to_string()],
-                pass_through_args: vec!["--recursive".to_string()],
-            },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("11.0.6"),
+                RebuildArgs {
+                    packages: vec!["better-sqlite3".to_string()],
+                    pass_through_args: vec!["--recursive".to_string()],
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["rebuild", "--recursive", "better-sqlite3"]);

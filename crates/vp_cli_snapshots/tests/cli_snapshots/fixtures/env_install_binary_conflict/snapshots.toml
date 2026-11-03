@@ -12,3 +12,57 @@ steps = [
   { argv = ["vp", "remove", "-g", "env-binary-conflict-pkg-b"], comment = "Cleanup", continue-on-failure = true },
   { argv = ["vpt", "stat-file", "$VP_HOME/bins/env-binary-conflict-cli.json", "--assert", "missing"], comment = "Bin config should be deleted", continue-on-failure = true },
 ]
+
+[[case]]
+name = "env_install_without_backup_storage"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  ["vpt", "mkdir", "readonly-tmp"],
+  ["vpt", "chmod", "555", "readonly-tmp"],
+  ["vpt", "json-edit", "env-binary-conflict-pkg-a/package.json", "bin", "{}"],
+  { argv = ["vp", "install", "-g", "./env-binary-conflict-pkg-a"], envs = [["TMPDIR", "${workspace}/readonly-tmp"]], comment = "A package without binaries needs no rollback storage" },
+  ["vpt", "stat-file", "$VP_HOME/packages/env-binary-conflict-pkg-a.json", "--assert", "file"],
+  { argv = ["vp", "install", "-g", "./env-binary-conflict-pkg-b"], envs = [["TMPDIR", "${workspace}/readonly-tmp"]], comment = "New binaries need no backup of existing files" },
+  ["env-binary-conflict-cli"],
+  ["vpt", "stat-file", "$VP_HOME/bins/env-binary-conflict-cli.json", "--assert", "file"],
+]
+after = [["vpt", "chmod", "755", "readonly-tmp"]]
+
+[[case]]
+name = "env_install_rollback_preserves_existing_files"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  ["vpt", "json-edit", "env-binary-conflict-pkg-a/package.json", "bin", "{\"aaa-rollback-cli\":\"./cli.js\",\"zzz-rollback-cli\":\"./cli.js\"}"],
+  ["vpt", "write-file", "$VP_HOME/bin/aaa-rollback-cli", "#!/bin/sh\necho original-first\n"],
+  ["vpt", "write-file", "$VP_HOME/bin/zzz-rollback-cli", "#!/bin/sh\necho original-unattempted\n"],
+  ["vpt", "chmod", "+x", "$VP_HOME/bin/aaa-rollback-cli"],
+  ["vpt", "chmod", "+x", "$VP_HOME/bin/zzz-rollback-cli"],
+  { argv = ["vp", "install", "-g", "./env-binary-conflict-pkg-a"], comment = "A regular file prevents shim creation without authorizing rollback to delete existing files", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "$VP_HOME/bin/aaa-rollback-cli", "--assert", "file"], continue-on-failure = true },
+  ["aaa-rollback-cli"],
+  ["vpt", "stat-file", "$VP_HOME/bin/zzz-rollback-cli", "--assert", "file"],
+  ["zzz-rollback-cli"],
+  ["vpt", "stat-file", "$VP_HOME/packages/env-binary-conflict-pkg-a.json", "--assert", "missing"],
+  ["vpt", "stat-file", "$VP_HOME/bins/aaa-rollback-cli.json", "--assert", "missing"],
+  ["vpt", "stat-file", "$VP_HOME/bins/zzz-rollback-cli.json", "--assert", "missing"],
+]
+
+[[case]]
+name = "env_install_rollback_restores_npm_owner"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { tty = false, argv = ["npm", "install", "-g", "./env-binary-conflict-pkg-a"] },
+  ["vpt", "print-file", "$VP_HOME/bins/env-binary-conflict-cli.json"],
+  ["vpt", "json-edit", "env-binary-conflict-pkg-a/package.json", "bin.zzz-rollback-cli", "./cli.js"],
+  ["vpt", "mkdir", "$VP_HOME/bin/zzz-rollback-cli"],
+  { argv = ["vp", "install", "-g", "./env-binary-conflict-pkg-a"], comment = "A failure after replacing the npm link must restore the link and its ownership", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "$VP_HOME/bin/env-binary-conflict-cli", "--assert", "symlink"], continue-on-failure = true },
+  ["env-binary-conflict-cli"],
+  ["vpt", "print-file", "$VP_HOME/bins/env-binary-conflict-cli.json"],
+  ["vpt", "stat-file", "$VP_HOME/bin/zzz-rollback-cli", "--assert", "dir"],
+  ["vpt", "stat-file", "$VP_HOME/packages/env-binary-conflict-pkg-a.json", "--assert", "missing"],
+  ["vpt", "stat-file", "$VP_HOME/bins/zzz-rollback-cli.json", "--assert", "missing"],
+]

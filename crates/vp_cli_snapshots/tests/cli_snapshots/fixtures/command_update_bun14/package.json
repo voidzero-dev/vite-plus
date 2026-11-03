@@ -1,0 +1,15 @@
+{
+  "name": "command-update-bun14",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "is-number": "6.0.0"
+  },
+  "devDependencies": {
+    "yocto-queue": "0.1.0"
+  },
+  "optionalDependencies": {
+    "isarray": "1.0.0"
+  },
+  "packageManager": "bun@1.4.0"
+}

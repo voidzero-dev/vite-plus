@@ -1,8 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PackageManager } from '../../types/index.ts';
 
-vi.mock('../command.ts', () => ({
+vi.mock(import('../command.ts'), async (importOriginal) => ({
+  ...(await importOriginal()),
   runCommandSilently: vi.fn(),
 }));
 
@@ -18,7 +19,19 @@ function installResult(exitCode: number, stdout = '', stderr = '') {
 describe('runViteInstall with detectIgnoredBuilds', () => {
   beforeEach(() => {
     mockRun.mockReset();
-    delete process.env.VP_SKIP_INSTALL;
+    vi.stubEnv('VP_SKIP_INSTALL', undefined);
+    vi.stubEnv('VP_CLI_BIN', undefined);
+  });
+
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('preserves an explicit VP_CLI_BIN override and its arguments', async () => {
+    vi.stubEnv('VP_CLI_BIN', '/custom/vp');
+    mockRun.mockResolvedValue(installResult(0));
+    await runViteInstall('/project', false, ['--offline'], { silent: true });
+    expect(mockRun).toHaveBeenCalledWith(
+      expect.objectContaining({ command: '/custom/vp', args: ['install', '--offline'] }),
+    );
   });
 
   it('treats pnpm >= 11 ERR_PNPM_IGNORED_BUILDS exit-1 as a completed install', async () => {
@@ -38,7 +51,9 @@ describe('runViteInstall with detectIgnoredBuilds', () => {
     expect(summary.pendingBuilds).toEqual(['better-sqlite3', 'esbuild']);
     // Detection mode must NOT add --ignore-scripts (that would hide the builds
     // from `approve-builds` afterwards).
-    expect(mockRun).toHaveBeenCalledWith(expect.objectContaining({ args: ['install'] }));
+    expect(mockRun).toHaveBeenCalledWith(
+      expect.objectContaining({ command: process.execPath, args: [expect.any(String), 'install'] }),
+    );
   });
 
   it('still reports a genuine non-zero exit (no ignored-builds error) as failed', async () => {
@@ -74,7 +89,7 @@ describe('runViteInstall with detectIgnoredBuilds', () => {
     expect(summary.status).toBe('installed');
     expect(summary.pendingBuilds).toBeUndefined();
     expect(mockRun).toHaveBeenCalledWith(
-      expect.objectContaining({ args: ['install', '--ignore-scripts'] }),
+      expect.objectContaining({ args: [expect.any(String), 'install', '--ignore-scripts'] }),
     );
   });
 });

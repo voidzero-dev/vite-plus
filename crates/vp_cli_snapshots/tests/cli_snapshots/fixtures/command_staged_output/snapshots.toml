@@ -1,0 +1,33 @@
+[[case]]
+name = "command_staged_output"
+vp = ["local", "global"]
+comment = "Seven staged files produce one command result; quiet, verbose, debug, and failures retain their behavior."
+steps = [
+  { argv = ["git", "init"], snapshot = false },
+  { argv = ["git", "add", "package.json", "vite.config.ts", "fail.mjs", "output.mjs"], snapshot = false },
+  { argv = ["git", "-c", "user.name=Vite Plus", "-c", "user.email=vite-plus@example.com", "commit", "-m", "init"], snapshot = false },
+  { argv = ["git", "add", "file1.ts", "file2.ts", "file3.ts", "file4.ts", "file5.ts", "file6.ts", "file7.ts"], snapshot = false },
+  { argv = ["vp", "staged"], comment = "One result for seven files in a terminal." },
+  { argv = ["git", "diff", "--exit-code"], comment = "Task fixes are staged." },
+  { argv = ["git", "show", ":file1.ts"], comment = "The staged content was formatted." },
+  { argv = ["git", "stash", "list"], comment = "The backup stash was cleaned up." },
+  { argv = ["vp", "staged"], tty = false, comment = "Piped output is compact too." },
+  { argv = ["vp", "staged", "--quiet"], comment = "Quiet mode has no success output." },
+  { argv = ["vp", "staged", "--verbose"], comment = "Verbose mode retains successful task output." },
+  { argv = ["vp", "staged", "--debug"], snapshot = false, comment = "Debug mode still runs, but its full workflow log is not recorded." },
+  { argv = ["git", "-c", "user.name=Vite Plus", "-c", "user.email=vite-plus@example.com", "commit", "-m", "checked"], snapshot = false },
+  { argv = ["vp", "staged"], comment = "No staged files is still reported." },
+  { argv = ["vpt", "write-file", "note.txt", "no matching task\n"], snapshot = false },
+  { argv = ["git", "add", "note.txt"], snapshot = false },
+  { argv = ["vp", "staged"], comment = "No matching tasks is still reported." },
+  { argv = ["vpt", "write-file", "output.out", "output\n"], snapshot = false },
+  { argv = ["git", "add", "output.out"], snapshot = false },
+  { argv = ["vp", "staged", "--quiet", "--verbose"], comment = "Quiet verbose mode preserves indented task output." },
+  { argv = ["git", "-c", "user.name=Vite Plus", "-c", "user.email=vite-plus@example.com", "commit", "-m", "output"], snapshot = false },
+  { argv = ["vpt", "write-file", "fail.js", "export const fail = true;\n"], snapshot = false },
+  { argv = ["git", "add", "fail.js"], snapshot = false },
+  { argv = ["vp", "staged"], comment = "Failures retain diagnostics and rollback status.", continue-on-failure = true },
+  { argv = ["git", "diff", "--exit-code"], comment = "The working tree was restored.", continue-on-failure = true },
+  { argv = ["git", "show", ":fail.js"], comment = "The index retains the original staged content." },
+  { argv = ["git", "stash", "list"], comment = "Failure cleanup removed the backup stash." },
+]

@@ -1,6 +1,6 @@
 #![allow(clippy::allow_attributes, clippy::disallowed_types)]
 
-use std::{ffi::OsString, path::Path, sync::Arc};
+use std::{path::Path, sync::Arc};
 
 use thiserror::Error;
 use vt_path::{AbsolutePath, AbsolutePathBuf, relative::FromPathError};
@@ -24,17 +24,6 @@ pub enum Error {
     #[error(transparent)]
     Serde(#[from] serde_json::Error),
 
-    #[error("Env value is not valid unicode: {key} = {value:?}")]
-    EnvValueIsNotValidUnicode { key: Str, value: OsString },
-
-    #[cfg(unix)]
-    #[error("Unsupported file type: {0:?}")]
-    UnsupportedFileType(nix::dir::Type),
-
-    #[cfg(windows)]
-    #[error("Unsupported file type: {0:?}")]
-    UnsupportedFileType(std::fs::FileType),
-
     #[error(transparent)]
     Utf8Error(#[from] bstr::Utf8Error),
 
@@ -44,27 +33,6 @@ pub enum Error {
 
     #[error(transparent)]
     WorkspaceError(#[from] vt_workspace::Error),
-
-    #[error("Lint failed, reason: {reason}")]
-    LintFailed { status: Str, reason: Str },
-
-    #[error("Fmt failed")]
-    FmtFailed { status: Str, reason: Str },
-
-    #[error("Vite failed")]
-    Vite { status: Str, reason: Str },
-
-    #[error("Test failed")]
-    TestFailed { status: Str, reason: Str },
-
-    #[error("Lib failed")]
-    LibFailed { status: Str, reason: Str },
-
-    #[error("Doc failed, reason: {reason}")]
-    DocFailed { status: Str, reason: Str },
-
-    #[error("Resolve universal vite config failed")]
-    ResolveUniversalViteConfigFailed { status: Str, reason: Str },
 
     #[error("The path ({}) is not a valid relative path because: {reason}", .path.display())]
     InvalidRelativePath { path: Box<Path>, reason: FromPathError },
@@ -106,11 +74,15 @@ pub enum Error {
     #[error(transparent)]
     JoinError(#[from] tokio::task::JoinError),
 
-    #[error("User cancelled by Ctrl+C")]
-    UserCancelled,
-
     #[error("Hash mismatch: expected {expected}, got {actual}")]
     HashMismatch { expected: Str, actual: Str },
+
+    /// A `packageManager` integrity pin does not match the artifact it covers.
+    ///
+    /// This variant boxes its payload. Without the box, it makes every
+    /// `Result<_, Error>` in the CLI larger (`clippy::result_large_err`).
+    #[error(transparent)]
+    PackageManagerHashMismatch(#[from] Box<PackageManagerHashMismatch>),
 
     #[error("Invalid hash format: {0}")]
     InvalidHashFormat(Str),
@@ -130,4 +102,34 @@ pub enum Error {
 
     #[error(transparent)]
     Anyhow(#[from] anyhow::Error),
+}
+
+impl Error {
+    /// Whether the error says that an artifact failed its integrity check.
+    ///
+    /// Some callers continue when a managed tool is missing. They must stop for
+    /// this error. The user must fix an unverified artifact, and a fallback
+    /// hides the cause behind a later, unrelated failure.
+    #[must_use]
+    pub const fn is_integrity_failure(&self) -> bool {
+        matches!(self, Self::PackageManagerHashMismatch(_) | Self::HashMismatch { .. })
+    }
+}
+
+/// Details of a failed `packageManager` integrity check.
+///
+/// `basis` names the artifact that vp hashed: the extracted CLI for Yarn 2+ or
+/// the npm package tarball for npm, pnpm, and Yarn Classic. Naming the artifact
+/// distinguishes a wrong hash basis from a corrupt download.
+#[derive(Error, Debug)]
+#[error(
+    "Hash mismatch for {name}@{version}: expected {expected}, got {actual}\n\
+     The `packageManager` hash covers {basis}. Corepack hashes the same artifact."
+)]
+pub struct PackageManagerHashMismatch {
+    pub name: Str,
+    pub version: Str,
+    pub expected: Str,
+    pub actual: Str,
+    pub basis: Str,
 }

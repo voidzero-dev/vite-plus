@@ -4,7 +4,9 @@ export default {
     tasks: {
       install: {
         command: 'vp install --prod --silent',
-        input: [{ auto: true }, '!node_modules/**', '!package-lock.json'],
+        cache: {
+          input: [{ auto: true }, '!node_modules/**', '!package-lock.json'],
+        },
       },
     },
   },

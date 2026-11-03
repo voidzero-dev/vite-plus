@@ -1,0 +1,11 @@
+{
+  "name": "migration-oxlint-existing-vite-plus",
+  "private": true,
+  "type": "module",
+  "packageManager": "npm@11.11.1",
+  "workspaces": ["packages/*"],
+  "devDependencies": {
+    "@oxlint/plugins": "1.79.0",
+    "vite-plus": "^0.1.20"
+  }
+}

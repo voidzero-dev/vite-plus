@@ -6,19 +6,25 @@
 
 `vp check` is the default command for fast static checks in Vite+. It brings together formatting through [Oxfmt](https://oxc.rs/docs/guide/usage/formatter.html), linting through [Oxlint](https://oxc.rs/docs/guide/usage/linter.html), and TypeScript type checks through [tsgolint](https://github.com/oxc-project/tsgolint). By merging all of these tasks into a single command, `vp check` is faster than running formatting, linting, and type checking as separate tools in separate commands.
 
-When `typeCheck` is enabled in the `lint.options` block in `vite.config.ts`, `vp check` also runs TypeScript type checks through the Oxlint type-aware path powered by the TypeScript Go toolchain and [tsgolint](https://github.com/oxc-project/tsgolint). `vp create` and `vp migrate` enable both `typeAware` and `typeCheck` by default.
+When both `typeAware` and `typeCheck` are enabled in the `lint.options` block in `vite.config.ts`, `vp check` also runs TypeScript type checks through the Oxlint type-aware path powered by the TypeScript Go toolchain and [tsgolint](https://github.com/oxc-project/tsgolint). `vp create` and `vp migrate` enable both `typeAware` and `typeCheck` by default.
 
-We recommend turning `typeCheck` on so `vp check` becomes the single command for static checks during development.
+We recommend turning both `typeAware` and `typeCheck` on so `vp check` becomes the single command for static checks during development.
 
 ## Usage
 
 ```bash
 vp check
-vp check --fix             # Format and run autofixers.
-vp check --no-fmt          # Skip format; run lint (and type-check if enabled).
-vp check --no-lint         # Skip lint rules; keep type-check when enabled.
-vp check --no-fmt --no-lint # Type-check only (requires `typeCheck` enabled).
+vp check --fix              # Format and run autofixers.
+vp check --quiet            # Hide lint warnings; still report and fail on errors.
+vp check --deny-warnings    # Treat lint warnings as errors.
+vp check --no-fmt           # Skip format; run lint (and type-check if enabled).
+vp check --no-lint          # Skip lint rules; keep type-check when enabled.
+vp check --no-fmt --no-lint # Type-check only (requires both `typeAware` and `typeCheck` enabled).
 ```
+
+If formatting fails, `vp check` stops before lint and type checks run. To fix formatting and apply available lint fixes, run `vp check --fix`. This command changes files. To skip formatting and run the remaining enabled checks, run `vp check --no-fmt`.
+
+Put `vp check` flags before file paths. For example, use `vp check --fix src/index.ts`. Arguments after the first path go to the format and lint tools instead of `vp check`.
 
 ## Configuration
 
@@ -27,6 +33,8 @@ vp check --no-fmt --no-lint # Type-check only (requires `typeCheck` enabled).
 - [`lint`](/guide/lint#configuration) block in `vite.config.ts`
 - [`fmt`](/guide/fmt#configuration) block in `vite.config.ts`
 - TypeScript project structure and tsconfig files for type-aware linting
+
+When run from a workspace package, `vp check` uses the workspace-root `lint` and `fmt` blocks. Package configs cannot replace root format settings, lint rules, or type-check options. File paths and TypeScript projects are still resolved from the package working directory.
 
 Recommended base `lint` config:
 
@@ -57,4 +65,4 @@ export default defineConfig({
 });
 ```
 
-These options only affect `vp check`; standalone `vp fmt` and `vp lint` still run normally. A step is skipped if it is disabled in config or the matching `--no-fmt` / `--no-lint` flag is passed. Because the defaults apply to every `vp check` run, a pre-commit hook that calls `vp check` will skip the disabled step too. See [Check config](/config/check) for the full reference.
+These options only affect `vp check`; standalone `vp fmt` and `vp lint` still run normally. A step is skipped if it is disabled in config or the matching `--no-fmt` / `--no-lint` flag is passed. Because the defaults apply to every `vp check` run, a pre-commit hook that calls `vp check` will skip the disabled step too. See [Check Config](/config/check) for the full reference.

@@ -1,7 +1,488 @@
-import * as semver from 'semver';
-import { describe, expect, test } from 'vitest';
+import { spawnSync } from 'node:child_process';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
-import { mergePnpmWorkspaces, syncCargoOxcVersions } from '../sync-remote-deps.ts';
+import * as verkit from 'verkit';
+import { describe, expect, test } from 'vitest';
+import * as yaml from 'yaml';
+
+import { VITEST_VERSION } from '../../../cli/src/utils/constants.ts';
+import {
+  collectWorkspaceCatalogReferences,
+  mergePnpmWorkspaces,
+  mergeWorkspaceYaml,
+  syncCargoOxcVersions,
+  syncViteDevtoolsDependencies,
+} from '../sync-remote-deps.ts';
+import { alignVendoredVitestDependencies } from '../vendored-vitest.ts';
+
+const VITE_PACKAGE = { devDependencies: { typescript: '~7.0.2' } };
+
+describe('imported workspace dependencies', () => {
+  test('keeps only upstream build roots and bundled packages across repeated syncs', () => {
+    const main = {
+      packages: [
+        'packages/*',
+        '!packages/excluded',
+        'rolldown',
+        'rolldown/packages/*',
+        '!rolldown/packages/browser-tests',
+        '!rolldown/packages/rollup-tests',
+        'vite',
+        'vite/packages/*',
+      ],
+    };
+    const merged = mergePnpmWorkspaces(main, {}, {}, VITE_PACKAGE, verkit);
+    expect(merged.packages).toEqual([
+      'packages/*',
+      '!packages/excluded',
+      'rolldown',
+      'rolldown/packages/rolldown',
+      'vite',
+      'vite/packages/vite',
+    ]);
+    expect(mergePnpmWorkspaces(merged, {}, {}, VITE_PACKAGE, verkit)).toEqual(merged);
+  });
+
+  test('removes unused catalog entries without importing benchmarks or nested fixtures', () => {
+    const root = mkdtempSync(join(tmpdir(), 'vp-workspace-catalog-'));
+    const writePackage = (directory: string, pkg: object) => {
+      mkdirSync(join(root, directory), { recursive: true });
+      writeFileSync(join(root, directory, 'package.json'), JSON.stringify(pkg));
+    };
+    try {
+      writePackage('.', { devDependencies: { typescript: 'catalog:', vitest: 'catalog:' } });
+      writePackage('packages/cli', {
+        dependencies: { 'project-only': 'catalog:', 'literal-version': '^1.0.0' },
+        devDependencies: { 'peer-tool': 'catalog:' },
+        optionalDependencies: { 'optional-tool': 'catalog:default' },
+        peerDependencies: { 'peer-tool': '*', 'named-tool': 'catalog:legacy' },
+      });
+      writePackage('rolldown', { devDependencies: { 'loader-tool': 'catalog:' } });
+      writePackage('rolldown/packages/rolldown', {
+        devDependencies: { 'build-tool': 'catalog:' },
+      });
+      for (const directory of [
+        'rolldown/packages/bench',
+        'vite/packages/create-vite',
+        'packages/excluded',
+        'packages/cli/fixtures/react',
+        'docs',
+      ]) {
+        writePackage(directory, { dependencies: { react: 'catalog:' } });
+      }
+      const main = `packages:
+  - packages/*
+  - '!packages/excluded'
+  - rolldown/packages/*
+  - vite/packages/*
+catalog:
+  # Keep this project-owned requirement.
+  project-only: ^1.0.0
+  peer-tool: ^1.0.0
+  optional-tool: ^1.0.0
+  named-tool: ^1.0.0
+  literal-version: ^1.0.0
+  react: ^19.1.0
+  typescript: ~7.0.2
+  vitest: 5.0.5
+`;
+      const rolldown = 'catalog:\n  build-tool: ^2.0.0\n  loader-tool: ^1.0.0\n  react: ^19.0.0\n';
+      const vite = 'catalog:\n  react: ^20.0.0\n';
+      const references = collectWorkspaceCatalogReferences(root, yaml.parse(main).packages);
+      const merged = mergeWorkspaceYaml(
+        main,
+        rolldown,
+        vite,
+        VITE_PACKAGE,
+        yaml,
+        verkit,
+        references,
+      );
+      expect(yaml.parse(merged).catalog).toEqual({
+        'build-tool': '^2.0.0',
+        'loader-tool': '^1.0.0',
+        'optional-tool': '^1.0.0',
+        'peer-tool': '^1.0.0',
+        'project-only': '^1.0.0',
+        typescript: '~7.0.2',
+        vitest: '5.0.5',
+      });
+      expect(merged).toContain('# Keep this project-owned requirement.');
+      expect(
+        mergeWorkspaceYaml(merged, rolldown, vite, VITE_PACKAGE, yaml, verkit, references),
+      ).toBe(merged);
+
+      // A new dependency in a retained upstream package must still be imported.
+      writePackage('vite/packages/vite', { peerDependencies: { 'new-tool': 'catalog:' } });
+      const updatedReferences = collectWorkspaceCatalogReferences(
+        root,
+        yaml.parse(merged).packages,
+      );
+      const updated = mergeWorkspaceYaml(
+        merged,
+        rolldown,
+        'catalog:\n  new-tool: ^1.0.0\n',
+        VITE_PACKAGE,
+        yaml,
+        verkit,
+        updatedReferences,
+      );
+      expect(yaml.parse(updated).catalog['new-tool']).toBe('^1.0.0');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('mergePnpmWorkspaces() upstream catalog versions', () => {
+  test.each([
+    ['^4.0.9', '^4.0.8'],
+    ['^5.0.0', '^4.0.8'],
+    ['=5.0.0', '^4.0.8'],
+    ['^4.0.8', '=4.0.9'],
+  ])('replaces the root range %s with upstream %s', (current, upstream) => {
+    const main = { catalog: { micromatch: current, 'project-only': '^1.0.0' } };
+    const dependency = { catalog: { micromatch: upstream } };
+    for (const [rolldown, vite] of [
+      [dependency, {}],
+      [{}, dependency],
+    ]) {
+      const merged = mergePnpmWorkspaces(main, rolldown, vite, VITE_PACKAGE, verkit);
+      expect(merged.catalog?.micromatch).toBe(upstream);
+      expect(merged.catalog?.['project-only']).toBe('^1.0.0');
+      expect(mergePnpmWorkspaces(merged, rolldown, vite, VITE_PACKAGE, verkit)).toEqual(merged);
+    }
+  });
+
+  test.each([
+    ['^4.0.8', '^4.0.9', '^4.0.9'],
+    ['^4.0.9', '^4.0.8', '^4.0.9'],
+    ['^4.0.8', '=4.0.9', '=4.0.9'],
+  ])(
+    'merges upstream ranges %s and %s independently of the root range',
+    (rolldown, vite, expected) => {
+      const merged = mergePnpmWorkspaces(
+        { catalog: { micromatch: '^5.0.0' } },
+        { catalog: { micromatch: rolldown } },
+        { catalog: { micromatch: vite } },
+        VITE_PACKAGE,
+        verkit,
+      );
+      expect(merged.catalog?.micromatch).toBe(expected);
+    },
+  );
+
+  test('preserves the selected Oxc versions when upstream uses an older release', () => {
+    const merged = mergePnpmWorkspaces(
+      { catalog: { 'oxc-parser': '=0.155.0', '@oxc-project/runtime': '=0.155.0' } },
+      { catalog: { 'oxc-parser': '=0.154.0', '@oxc-project/runtime': '=0.154.0' } },
+      {},
+      VITE_PACKAGE,
+      verkit,
+    );
+    expect(merged.catalog?.['oxc-parser']).toBe('=0.155.0');
+    expect(merged.catalog?.['@oxc-project/runtime']).toBe('=0.155.0');
+  });
+});
+
+describe('vendored Vitest dependency alignment', () => {
+  test('can be imported from stdin without running the bootstrap', () => {
+    const root = mkdtempSync(join(tmpdir(), 'vp-vendored-vitest-import-'));
+    try {
+      const url = new URL('../vendored-vitest.ts', import.meta.url).href;
+      const result = spawnSync(process.execPath, ['--input-type=module', '-'], {
+        cwd: root,
+        encoding: 'utf8',
+        input: `import ${JSON.stringify(url)};`,
+      });
+      expect(result.stderr).toBe('');
+      expect(result.status).toBe(0);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test('keeps the bootstrap runtime pin in sync with the root catalog', () => {
+    const workspace = yaml.parse(
+      readFileSync(new URL('../../../../pnpm-workspace.yaml', import.meta.url), 'utf8'),
+    );
+    expect(workspace.catalog.vitest).toBe(VITEST_VERSION);
+  });
+
+  test.each(['4.1.10', '^5.0.0', '5.1.0-beta.1'])(
+    'rejects an unsupported bootstrap runtime pin %s before changing manifests',
+    (version) => {
+      const root = mkdtempSync(join(tmpdir(), 'vp-vendored-vitest-bootstrap-'));
+      try {
+        const constantsDir = join(root, 'packages/cli/src/utils');
+        mkdirSync(constantsDir, { recursive: true });
+        writeFileSync(
+          join(constantsDir, 'constants.ts'),
+          `export const VITEST_VERSION = '${version}';\n`,
+        );
+        const script = join(root, 'vendored-vitest.ts');
+        copyFileSync(new URL('../vendored-vitest.ts', import.meta.url), script);
+        const result = spawnSync(process.execPath, [script], { cwd: root, encoding: 'utf8' });
+        expect(result.status).not.toBe(0);
+        expect(result.stderr).toContain('VITEST_VERSION must declare an exact stable v5 version');
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    },
+  );
+
+  test.each(['5.0.0', '5.1.2'])(
+    'runs before dependency installation with the selected %s runtime pin',
+    (version) => {
+      const root = mkdtempSync(join(tmpdir(), 'vp-vendored-vitest-bootstrap-'));
+      try {
+        const constantsDir = join(root, 'packages/cli/src/utils');
+        mkdirSync(constantsDir, { recursive: true });
+        writeFileSync(
+          join(constantsDir, 'constants.ts'),
+          `export const VITEST_VERSION = '${version}';\n`,
+        );
+        // Copy the entry point outside the repo so it cannot resolve node_modules.
+        const script = join(root, 'vendored-vitest.ts');
+        copyFileSync(new URL('../vendored-vitest.ts', import.meta.url), script);
+        const directory = join(root, 'vite/packages/vite');
+        mkdirSync(directory, { recursive: true });
+        const manifest = join(directory, 'package.json');
+        writeFileSync(
+          manifest,
+          JSON.stringify({
+            dependencies: { '@vitest/utils': '4.1.10' },
+            devDependencies: { vitest: 'catalog:' },
+            optionalDependencies: { '@vitest/spy': '^4.1.10' },
+          }),
+        );
+        const run = () => spawnSync(process.execPath, [script], { cwd: root, encoding: 'utf8' });
+        const first = run();
+        expect(first.stderr).toBe('');
+        expect(first.status).toBe(0);
+        const source = readFileSync(manifest, 'utf8');
+        expect(JSON.parse(source)).toEqual({
+          dependencies: { '@vitest/utils': version },
+          devDependencies: { vitest: 'catalog:' },
+          optionalDependencies: { '@vitest/spy': version },
+        });
+        expect(run().status).toBe(0);
+        expect(readFileSync(manifest, 'utf8')).toBe(source);
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    },
+  );
+
+  test.each(['=4.1.11', '^5.1.0', '5.2.0', '^6.0.0'])(
+    'preserves the selected exact runner version against upstream %s',
+    (upstream) => {
+      const merged = mergePnpmWorkspaces(
+        { catalog: { vitest: '5.0.0' } },
+        { catalog: { vitest: upstream } },
+        {},
+        VITE_PACKAGE,
+        verkit,
+      );
+      expect(merged.catalog?.vitest).toBe('5.0.0');
+    },
+  );
+
+  test('aligns official catalog entries to the selected runner and preserves the community provider', () => {
+    const merged = mergePnpmWorkspaces(
+      {
+        catalog: {
+          vitest: '5.1.2',
+          '@vitest/browser': '5.0.0',
+          '@vitest/browser-webdriverio': '5.0.0-rc.1',
+        },
+      },
+      {
+        catalog: {
+          vitest: '^4.1.6',
+          '@vitest/browser': '^5.2.0',
+          '@vitest/browser-webdriverio': '5.3.0',
+          '@vitest/utils': '4.1.11',
+          '@vitest/expect': '4.1.11',
+          '@vitest/runner': '4.1.11',
+          '@vitest/eslint-plugin': '^1.0.0',
+        },
+      },
+      {
+        catalog: {
+          '@vitest/coverage-v8': '4.1.11',
+          '@vitest/coverage-istanbul': '^4.1.11',
+          '@vitest/ui': '^5.2.0',
+          '@vitest/web-worker': '4.1.11',
+        },
+      },
+      VITE_PACKAGE,
+      verkit,
+    );
+    expect(merged.catalog).toEqual({
+      typescript: '~7.0.2',
+      vitest: '5.1.2',
+      '@vitest/browser': '5.1.2',
+      '@vitest/browser-webdriverio': '5.0.0-rc.1',
+      '@vitest/utils': '5.1.2',
+      '@vitest/coverage-v8': '5.1.2',
+      '@vitest/coverage-istanbul': '5.1.2',
+      '@vitest/ui': '5.1.2',
+      '@vitest/web-worker': '5.1.2',
+      '@vitest/eslint-plugin': '^1.0.0',
+    });
+  });
+
+  test.each(['^5.0.0', '=5.0.0', '4.1.11', '6.0.0', '5.1.0-beta.1'])(
+    'rejects an unreviewed root runner version %s',
+    (vitest) => {
+      expect(() =>
+        mergePnpmWorkspaces({ catalog: { vitest } }, {}, {}, VITE_PACKAGE, verkit),
+      ).toThrow('The root Vitest catalog entry must be an exact stable v5 version');
+    },
+  );
+
+  test('does not infer a missing root pin from an upstream catalog', () => {
+    expect(() =>
+      mergePnpmWorkspaces({}, { catalog: { vitest: '^4.1.6' } }, {}, VITE_PACKAGE, verkit),
+    ).toThrow('The root Vitest catalog entry must be an exact stable v5 version');
+  });
+
+  test('still resolves tinybench to the higher major version', () => {
+    const merged = mergePnpmWorkspaces(
+      { catalog: { tinybench: '^6.0.0' } },
+      { catalog: { tinybench: '^2.9.0' } },
+      {},
+      VITE_PACKAGE,
+      verkit,
+    );
+    expect(merged.catalog?.tinybench).toBe('^6.0.0');
+  });
+
+  // upgrade-deps.ts pins the oxc-node release it selected in the root catalog;
+  // rolldown's catalog can lag a major behind and must not block the merge.
+  test.each(['@oxc-node/cli', '@oxc-node/core'])(
+    'resolves the %s cross-major conflict to the higher version',
+    (name) => {
+      const merged = mergePnpmWorkspaces(
+        { catalog: { [name]: '^1.0.0' } },
+        { catalog: { [name]: '^0.1.0' } },
+        {},
+        VITE_PACKAGE,
+        verkit,
+      );
+      expect(merged.catalog?.[name]).toBe('^1.0.0');
+    },
+  );
+
+  test.each(['@vitest/expect', '@vitest/runner'])(
+    'rejects actual dependencies on removed package %s',
+    (name) => {
+      const root = mkdtempSync(join(tmpdir(), 'vp-vendored-vitest-'));
+      try {
+        mkdirSync(join(root, 'vite', 'packages'), { recursive: true });
+        writeFileSync(
+          join(root, 'vite', 'package.json'),
+          JSON.stringify({ devDependencies: { [name]: 'catalog:' } }),
+        );
+        expect(() => alignVendoredVitestDependencies(root, '5.0.0')).toThrow(
+          `Migrate removed ${name} use`,
+        );
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    },
+  );
+
+  test('aligns direct Vite workspace dependencies and leaves fixture manifests alone', () => {
+    const root = mkdtempSync(join(tmpdir(), 'vp-vendored-vitest-'));
+    try {
+      const directory = join(root, 'vite');
+      mkdirSync(join(directory, 'packages/test/fixtures'), { recursive: true });
+      writeFileSync(
+        join(directory, 'package.json'),
+        JSON.stringify({
+          devDependencies: { vitest: '^4.0.0', '@vitest/eslint-plugin': '^1.0.0' },
+        }),
+      );
+      writeFileSync(
+        join(directory, 'packages/test/package.json'),
+        JSON.stringify({
+          devDependencies: {
+            vitest: 'catalog:',
+            '@vitest/utils': '4.1.10',
+            '@vitest/web-worker': 'catalog:legacy',
+            '@vitest/browser-webdriverio': '^5.0.0-beta.5',
+          },
+        }),
+      );
+      writeFileSync(join(directory, 'packages/test/fixtures/package.json'), '\ufeff{}');
+      alignVendoredVitestDependencies(root, '5.0.0');
+      expect(
+        JSON.parse(readFileSync(join(directory, 'package.json'), 'utf8')).devDependencies,
+      ).toEqual({ vitest: '5.0.0', '@vitest/eslint-plugin': '^1.0.0' });
+      expect(
+        JSON.parse(readFileSync(join(directory, 'packages/test/package.json'), 'utf8'))
+          .devDependencies,
+      ).toEqual({
+        vitest: 'catalog:',
+        '@vitest/utils': '5.0.0',
+        '@vitest/web-worker': '5.0.0',
+        '@vitest/browser-webdriverio': '^5.0.0-beta.5',
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test('leaves Rolldown Vitest dependencies unchanged', () => {
+    const root = mkdtempSync(join(tmpdir(), 'vp-vendored-vitest-'));
+    try {
+      mkdirSync(join(root, 'vite/packages'), { recursive: true });
+      const directory = join(root, 'rolldown/packages/browser-tests');
+      mkdirSync(directory, { recursive: true });
+      const source = JSON.stringify({
+        devDependencies: {
+          vitest: 'catalog:',
+          '@vitest/browser-playwright': '4.1.10',
+          '@vitest/runner': '4.1.10',
+        },
+      });
+      const manifest = join(directory, 'package.json');
+      writeFileSync(manifest, source);
+      alignVendoredVitestDependencies(root, '5.0.0');
+      expect(readFileSync(manifest, 'utf8')).toBe(source);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('syncViteDevtoolsDependencies()', () => {
+  test('uses the DevTools ranges declared by Vite', () => {
+    const corePackage = {
+      devDependencies: { '@vitejs/devtools': '^0.6.1' },
+      peerDependencies: { '@vitejs/devtools': '^0.4.0 || ^0.5.0 || ^0.6.0' },
+    };
+    const vitePackage = {
+      devDependencies: { '@vitejs/devtools': '^0.4.12' },
+      peerDependencies: { '@vitejs/devtools': '^0.4.0 || ^0.5.0' },
+    };
+
+    syncViteDevtoolsDependencies(corePackage, vitePackage);
+
+    expect(corePackage.devDependencies['@vitejs/devtools']).toBe('^0.4.12');
+    expect(corePackage.peerDependencies['@vitejs/devtools']).toBe('^0.4.0 || ^0.5.0');
+  });
+
+  test('fails when Vite no longer declares a DevTools range', () => {
+    expect(() => syncViteDevtoolsDependencies({}, {})).toThrow(
+      'Vite package.json must define @vitejs/devtools in devDependencies and peerDependencies',
+    );
+  });
+});
 
 describe('mergePnpmWorkspaces() minimumReleaseAgeExclude', () => {
   test('drops versioned upstream entries already covered by a glob or bare pattern', () => {
@@ -37,7 +518,7 @@ describe('mergePnpmWorkspaces() minimumReleaseAgeExclude', () => {
     };
     const rolldownVite = {};
 
-    const result = mergePnpmWorkspaces(main, rolldown, rolldownVite, semver);
+    const result = mergePnpmWorkspaces(main, rolldown, rolldownVite, VITE_PACKAGE, verkit);
 
     // Nothing redundant should survive; the original broad rules plus the
     // genuinely-specific `lodash-es@4.18.1` pin remain.
@@ -61,7 +542,7 @@ describe('mergePnpmWorkspaces() minimumReleaseAgeExclude', () => {
       minimumReleaseAgeExclude: ['some-pkg@1.2.3'],
     };
 
-    const result = mergePnpmWorkspaces(main, rolldown, {}, semver);
+    const result = mergePnpmWorkspaces(main, rolldown, {}, VITE_PACKAGE, verkit);
 
     expect(result.minimumReleaseAgeExclude).toContain('lodash-es@4.18.1');
     expect(result.minimumReleaseAgeExclude).toContain('some-pkg@1.2.3');
@@ -75,7 +556,7 @@ describe('mergePnpmWorkspaces() minimumReleaseAgeExclude', () => {
       minimumReleaseAgeExclude: ['oxc-parser', '@oxc-parser/*'],
     };
 
-    const result = mergePnpmWorkspaces(main, rolldown, {}, semver);
+    const result = mergePnpmWorkspaces(main, rolldown, {}, VITE_PACKAGE, verkit);
 
     expect(result.minimumReleaseAgeExclude).toEqual(['@oxc-parser/*', 'oxc-parser']);
   });

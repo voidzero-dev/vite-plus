@@ -29,8 +29,7 @@ export default defineConfig({
     "plugins": [
       "oxc",
       "typescript",
-      "unicorn",
-      "react"
+      "unicorn"
     ],
     "categories": {
       "correctness": "warn"

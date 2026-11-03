@@ -56,39 +56,39 @@ pub struct OutdatedArgs {
     pub(crate) long: bool,
 
     /// Output format: table (default), list, or json
-    #[arg(long, value_name = "FORMAT", value_parser = clap::value_parser!(OutdatedFormat))]
+    #[arg(long, value_name = "FORMAT", value_parser = clap::value_parser!(OutdatedFormat), not_supported(yarn >= "2", bun))]
     pub(crate) format: Option<OutdatedFormat>,
 
     /// Check recursively across all workspaces
-    #[arg(short = 'r', long, not_supported(yarn))]
+    #[arg(short = 'r', long, conflicts_with = "global", not_supported(npm < "7.14.0", yarn))]
     pub(crate) recursive: bool,
 
     /// Filter packages in monorepo
-    #[arg(long, value_name = "PATTERN", not_supported(yarn))]
+    #[arg(long, value_name = "PATTERN", conflicts_with = "global", not_supported(npm < "7.14.0", yarn))]
     pub(crate) filter: Vec<String>,
 
     /// Include workspace root
-    #[arg(short = 'w', long, not_supported(yarn, bun))]
+    #[arg(short = 'w', long, conflicts_with = "global", not_supported(npm < "8.1.0", yarn, bun))]
     pub(crate) workspace_root: bool,
 
     /// Only production and optional dependencies
-    #[arg(short = 'P', long, not_supported(npm, yarn))]
+    #[arg(short = 'P', long, conflicts_with = "global", not_supported(npm < "7", yarn))]
     pub(crate) prod: bool,
 
-    /// Only dev dependencies
-    #[arg(short = 'D', long, not_supported(npm, yarn, bun))]
+    /// Include dev dependencies
+    #[arg(short = 'D', long, conflicts_with = "global", not_supported(yarn, bun))]
     pub(crate) dev: bool,
 
     /// Exclude optional dependencies
-    #[arg(long, not_supported(npm, yarn))]
+    #[arg(long, conflicts_with = "global", not_supported(npm < "7", yarn))]
     pub(crate) no_optional: bool,
 
     /// Only show compatible versions
-    #[arg(long, not_supported(npm, yarn, bun))]
+    #[arg(long, conflicts_with = "global", not_supported(npm, yarn, bun))]
     pub(crate) compatible: bool,
 
     /// Sort results by field
-    #[arg(long, value_name = "FIELD", not_supported(npm, yarn, bun))]
+    #[arg(long, value_name = "FIELD", conflicts_with = "global", not_supported(npm, yarn, bun))]
     pub(crate) sort_by: Option<String>,
 
     /// Check globally installed packages
@@ -107,7 +107,7 @@ pub struct OutdatedArgs {
 impl Resolve<OutdatedArgs> for Pnpm {
     fn resolve(&self, args: &OutdatedArgs, _diag: &mut Diagnostics) -> CommandResolution {
         if args.global {
-            return Npm::resolve_outdated(args);
+            return Npm::unknown_version().resolve_outdated(args);
         }
 
         let mut cmd = CommandBuilder::new("pnpm");
@@ -130,7 +130,7 @@ impl Resolve<OutdatedArgs> for Pnpm {
 }
 
 impl Npm {
-    fn resolve_outdated(args: &OutdatedArgs) -> CommandResolution {
+    fn resolve_outdated(&self, args: &OutdatedArgs) -> CommandResolution {
         let mut cmd = CommandBuilder::new("npm");
         cmd.arg("outdated");
         match args.format {
@@ -145,9 +145,15 @@ impl Npm {
         cmd.arg_if("--long", args.long)
             .repeated("--workspace", args.filter.iter())
             .arg_if("--include-workspace-root", args.workspace_root)
-            .arg_if("--all", args.recursive)
+            .arg_if("--workspaces", args.recursive && !args.workspace_root)
             .extend(args.packages.iter());
-        cmd.extend(args.pass_through_args.iter());
+        cmd.arg_if("--omit=dev", args.prod)
+            .arg_if(
+                if self.supports_v7_commands() { "--include=dev" } else { "--also=dev" },
+                args.dev,
+            )
+            .arg_if("--omit=optional", args.no_optional)
+            .extend(args.pass_through_args.iter());
         if args.global {
             cmd.arg("-g");
         }
@@ -157,23 +163,17 @@ impl Npm {
 
 impl Resolve<OutdatedArgs> for Npm {
     fn resolve(&self, args: &OutdatedArgs, _diag: &mut Diagnostics) -> CommandResolution {
-        Self::resolve_outdated(args)
+        self.resolve_outdated(args)
     }
 }
 
 impl Resolve<OutdatedArgs> for Yarn {
     fn resolve(&self, args: &OutdatedArgs, diag: &mut Diagnostics) -> CommandResolution {
         if args.global {
-            return Npm::resolve_outdated(args);
+            return Npm::unknown_version().resolve_outdated(args);
         }
 
         if self.is_berry() {
-            if args.format.is_some() {
-                diag.warn(
-                    DiagnosticKind::UnsupportedOptionDropped,
-                    "--format not supported by yarn@2+",
-                );
-            }
             diag.note(
                 DiagnosticKind::BehaviorChange,
                 "yarn@2+ uses 'yarn upgrade-interactive' for checking outdated packages",
@@ -190,9 +190,8 @@ impl Resolve<OutdatedArgs> for Yarn {
                 cmd.arg("--json");
             }
             Some(OutdatedFormat::List) => {
-                diag.warn(
-                    DiagnosticKind::UnsupportedOptionDropped,
-                    "yarn@1 not support list format",
+                return CommandResolution::InvalidArgument(
+                    "Yarn Classic does not support --format list.".into(),
                 );
             }
             Some(OutdatedFormat::Table) | None => {}
@@ -203,9 +202,9 @@ impl Resolve<OutdatedArgs> for Yarn {
 }
 
 impl Resolve<OutdatedArgs> for Bun {
-    fn resolve(&self, args: &OutdatedArgs, diag: &mut Diagnostics) -> CommandResolution {
+    fn resolve(&self, args: &OutdatedArgs, _diag: &mut Diagnostics) -> CommandResolution {
         if args.global {
-            return Npm::resolve_outdated(args);
+            return Npm::unknown_version().resolve_outdated(args);
         }
 
         let mut cmd = CommandBuilder::new("bun");
@@ -213,12 +212,6 @@ impl Resolve<OutdatedArgs> for Bun {
             .repeated("--filter", args.filter.iter())
             .arg_if("--recursive", args.recursive)
             .extend(args.packages.iter());
-        if args.format == Some(OutdatedFormat::Json) {
-            diag.warn(
-                DiagnosticKind::UnsupportedOptionDropped,
-                "bun outdated does not support --format json",
-            );
-        }
         cmd.arg_if("--production", args.prod);
         if args.no_optional {
             cmd.arg("--omit").arg("optional");
@@ -233,13 +226,46 @@ mod tests {
     use super::*;
     use crate::resolution::{
         resolve,
-        test_utils::{bun, npm, parse_args, pnpm, yarn},
+        test_utils::{bun, expect_run, expect_unsupported, npm, parse_args, pnpm, yarn},
     };
 
     fn outdated_args(packages: &[&str]) -> OutdatedArgs {
         OutdatedArgs {
             packages: packages.iter().map(ToString::to_string).collect(),
             ..Default::default()
+        }
+    }
+
+    #[test]
+    fn npm_dependency_filter_version_boundaries() {
+        for (dialect, flag) in [
+            (npm("6.14.18"), "--also=dev"),
+            (npm("7.0.0"), "--include=dev"),
+            (Npm::unknown_version(), "--include=dev"),
+        ] {
+            let args = parse_args::<OutdatedArgs>(["-D", "react", "--", "--json"]).unwrap();
+            let resolution = resolve(&dialect, args);
+            assert!(resolution.diagnostics.is_empty());
+            assert_eq!(expect_run(resolution.outcome).args, ["outdated", "react", flag, "--json"]);
+        }
+
+        let args = parse_args::<OutdatedArgs>(["-r", "-P", "--no-optional"]).unwrap();
+        expect_unsupported(
+            resolve(&npm("6.14.18"), args),
+            &[
+                "npm < 7.14.0 does not support --recursive.",
+                "npm < 7 does not support --prod.",
+                "npm < 7 does not support --no-optional.",
+            ],
+        );
+        for dialect in [npm("7.14.0"), Npm::unknown_version()] {
+            let args = parse_args::<OutdatedArgs>(["-r", "-P", "--no-optional"]).unwrap();
+            let resolution = resolve(&dialect, args);
+            assert!(resolution.diagnostics.is_empty());
+            assert_eq!(
+                expect_run(resolution.outcome).args,
+                ["outdated", "--workspaces", "--omit=dev", "--omit=optional"]
+            );
         }
     }
 
@@ -273,11 +299,7 @@ mod tests {
 
     #[test]
     fn test_pnpm_outdated_basic() {
-        let CommandResolution::Run(command) =
-            resolve(&pnpm("10.0.0"), OutdatedArgs::default()).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&pnpm("10.0.0"), OutdatedArgs::default()).outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["outdated"]);
@@ -285,11 +307,8 @@ mod tests {
 
     #[test]
     fn test_pnpm_outdated_with_packages() {
-        let CommandResolution::Run(command) =
-            resolve(&pnpm("10.0.0"), outdated_args(&["*babel*", "eslint-*"])).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command =
+            expect_run(resolve(&pnpm("10.0.0"), outdated_args(&["*babel*", "eslint-*"])).outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["outdated", "*babel*", "eslint-*"]);
@@ -297,14 +316,13 @@ mod tests {
 
     #[test]
     fn test_pnpm_outdated_json() {
-        let CommandResolution::Run(command) = resolve(
-            &pnpm("10.0.0"),
-            OutdatedArgs { format: Some(OutdatedFormat::Json), ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                OutdatedArgs { format: Some(OutdatedFormat::Json), ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["outdated", "--format", "json"]);
@@ -312,11 +330,7 @@ mod tests {
 
     #[test]
     fn test_npm_outdated_basic() {
-        let CommandResolution::Run(command) =
-            resolve(&npm("11.0.0"), OutdatedArgs::default()).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&npm("11.0.0"), OutdatedArgs::default()).outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["outdated"]);
@@ -324,14 +338,13 @@ mod tests {
 
     #[test]
     fn test_npm_outdated_json() {
-        let CommandResolution::Run(command) = resolve(
-            &npm("11.0.0"),
-            OutdatedArgs { format: Some(OutdatedFormat::Json), ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &npm("11.0.0"),
+                OutdatedArgs { format: Some(OutdatedFormat::Json), ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["outdated", "--json"]);
@@ -339,11 +352,7 @@ mod tests {
 
     #[test]
     fn test_yarn_outdated_basic() {
-        let CommandResolution::Run(command) =
-            resolve(&yarn("1.22.19"), OutdatedArgs::default()).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolve(&yarn("1.22.19"), OutdatedArgs::default()).outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["outdated"]);
@@ -351,14 +360,17 @@ mod tests {
 
     #[test]
     fn test_pnpm_outdated_with_filter() {
-        let CommandResolution::Run(command) = resolve(
-            &pnpm("10.0.0"),
-            OutdatedArgs { filter: vec!["app".to_string()], recursive: true, ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                OutdatedArgs {
+                    filter: vec!["app".to_string()],
+                    recursive: true,
+                    ..Default::default()
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["--filter", "app", "outdated", "--recursive"]);
@@ -366,11 +378,9 @@ mod tests {
 
     #[test]
     fn test_pnpm_outdated_prod_only() {
-        let CommandResolution::Run(command) =
-            resolve(&pnpm("10.0.0"), OutdatedArgs { prod: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&pnpm("10.0.0"), OutdatedArgs { prod: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["outdated", "--prod"]);
@@ -378,14 +388,13 @@ mod tests {
 
     #[test]
     fn test_npm_outdated_list_format() {
-        let CommandResolution::Run(command) = resolve(
-            &npm("11.0.0"),
-            OutdatedArgs { format: Some(OutdatedFormat::List), ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &npm("11.0.0"),
+                OutdatedArgs { format: Some(OutdatedFormat::List), ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["outdated", "--parseable"]);
@@ -393,26 +402,48 @@ mod tests {
 
     #[test]
     fn test_npm_outdated_recursive() {
-        let CommandResolution::Run(command) =
-            resolve(&npm("11.0.0"), OutdatedArgs { recursive: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        for version in ["7.14.0", "10.8.0", "11.0.0"] {
+            let args = parse_args::<OutdatedArgs>(["-r"]).unwrap();
+            let command = expect_run(resolve(&npm(version), args).outcome);
 
-        assert_eq!(command.program, "npm");
-        assert_eq!(command.args, vec!["outdated", "--all"]);
+            assert_eq!(command.program, "npm");
+            assert_eq!(command.args, vec!["outdated", "--workspaces"]);
+        }
+    }
+
+    #[test]
+    fn npm_outdated_recursive_rejects_unsupported_versions() {
+        for version in ["6.14.18", "7.13.0"] {
+            let args = parse_args::<OutdatedArgs>(["-r"]).unwrap();
+            expect_unsupported(
+                resolve(&npm(version), args),
+                &["npm < 7.14.0 does not support --recursive."],
+            );
+        }
+    }
+
+    #[test]
+    fn npm_outdated_recursive_preserves_workspace_options() {
+        for (flags, expected) in [
+            (vec!["-r", "-w"], vec!["outdated", "--include-workspace-root"]),
+            (vec!["-r", "--filter", "app"], vec!["outdated", "--workspace", "app", "--workspaces"]),
+        ] {
+            let args = parse_args::<OutdatedArgs>(flags).unwrap();
+            let command = expect_run(resolve(&npm("11.0.0"), args).outcome);
+
+            assert_eq!(command.args, expected);
+        }
     }
 
     #[test]
     fn test_npm_outdated_with_workspace() {
-        let CommandResolution::Run(command) = resolve(
-            &npm("11.0.0"),
-            OutdatedArgs { filter: vec!["app".to_string()], ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &npm("11.0.0"),
+                OutdatedArgs { filter: vec!["app".to_string()], ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["outdated", "--workspace", "app"]);
@@ -420,18 +451,16 @@ mod tests {
 
     #[test]
     fn test_global_outdated() {
-        let CommandResolution::Run(command) =
-            resolve(&pnpm("10.0.0"), OutdatedArgs { global: true, ..Default::default() }).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(&pnpm("10.0.0"), OutdatedArgs { global: true, ..Default::default() }).outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["outdated", "-g"]);
     }
 
     #[test]
-    fn global_outdated_uses_npm_lowering_after_current_dialect_support_checks() {
+    fn legacy_global_lowering_does_not_bypass_dialect_support_checks() {
         let args = OutdatedArgs {
             packages: vec!["react".to_string()],
             long: true,
@@ -444,33 +473,33 @@ mod tests {
         };
 
         let yarn_resolution = resolve(&yarn("1.22.19"), args.clone());
-        let CommandResolution::Run(yarn_command) = yarn_resolution.outcome else {
-            panic!("expected command resolution");
-        };
-        assert_eq!(yarn_command.program, "npm");
-        assert_eq!(yarn_command.args, vec!["outdated", "--parseable", "react", "-g"]);
-        assert_eq!(yarn_resolution.diagnostics.len(), 4);
+        expect_unsupported(
+            yarn_resolution,
+            &[
+                "yarn does not support --long.",
+                "yarn does not support --recursive.",
+                "yarn does not support --filter.",
+                "yarn does not support --workspace-root.",
+            ],
+        );
 
         let bun_resolution = resolve(&bun("1.3.11"), args);
-        let CommandResolution::Run(bun_command) = bun_resolution.outcome else {
-            panic!("expected command resolution");
-        };
-        assert_eq!(bun_command.program, "npm");
-        assert_eq!(
-            bun_command.args,
-            vec!["outdated", "--parseable", "--workspace", "app", "--all", "react", "-g"]
+        expect_unsupported(
+            bun_resolution,
+            &[
+                "bun does not support --long.",
+                "bun does not support --format.",
+                "bun does not support --workspace-root.",
+            ],
         );
-        assert_eq!(bun_resolution.diagnostics.len(), 2);
     }
 
     #[test]
     fn test_pnpm_outdated_with_workspace_root() {
-        let CommandResolution::Run(command) =
+        let command = expect_run(
             resolve(&pnpm("10.0.0"), OutdatedArgs { workspace_root: true, ..Default::default() })
-                .outcome
-        else {
-            panic!("expected command resolution");
-        };
+                .outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["outdated", "--workspace-root"]);
@@ -478,14 +507,13 @@ mod tests {
 
     #[test]
     fn test_pnpm_outdated_with_workspace_root_and_recursive() {
-        let CommandResolution::Run(command) = resolve(
-            &pnpm("10.0.0"),
-            OutdatedArgs { workspace_root: true, recursive: true, ..Default::default() },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                OutdatedArgs { workspace_root: true, recursive: true, ..Default::default() },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["outdated", "--workspace-root", "--recursive"]);
@@ -493,25 +521,24 @@ mod tests {
 
     #[test]
     fn test_pnpm_outdated_with_all_flags() {
-        let CommandResolution::Run(command) = resolve(
-            &pnpm("10.0.0"),
-            OutdatedArgs {
-                packages: vec!["react".to_string()],
-                long: true,
-                format: Some(OutdatedFormat::Json),
-                recursive: true,
-                filter: vec!["app".to_string()],
-                workspace_root: true,
-                prod: true,
-                compatible: true,
-                sort_by: Some("name".to_string()),
-                ..Default::default()
-            },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &pnpm("10.0.0"),
+                OutdatedArgs {
+                    packages: vec!["react".to_string()],
+                    long: true,
+                    format: Some(OutdatedFormat::Json),
+                    recursive: true,
+                    filter: vec!["app".to_string()],
+                    workspace_root: true,
+                    prod: true,
+                    compatible: true,
+                    sort_by: Some("name".to_string()),
+                    ..Default::default()
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(
@@ -536,12 +563,10 @@ mod tests {
 
     #[test]
     fn test_npm_outdated_with_workspace_root() {
-        let CommandResolution::Run(command) =
+        let command = expect_run(
             resolve(&npm("11.0.0"), OutdatedArgs { workspace_root: true, ..Default::default() })
-                .outcome
-        else {
-            panic!("expected command resolution");
-        };
+                .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["outdated", "--include-workspace-root"]);
@@ -549,18 +574,17 @@ mod tests {
 
     #[test]
     fn test_npm_outdated_with_workspace_root_and_workspace() {
-        let CommandResolution::Run(command) = resolve(
-            &npm("11.0.0"),
-            OutdatedArgs {
-                filter: vec!["app".to_string()],
-                workspace_root: true,
-                ..Default::default()
-            },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &npm("11.0.0"),
+                OutdatedArgs {
+                    filter: vec!["app".to_string()],
+                    workspace_root: true,
+                    ..Default::default()
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(command.program, "npm");
         assert_eq!(
@@ -570,56 +594,90 @@ mod tests {
     }
 
     #[test]
-    fn yarn_classic_supports_json_and_warns_list_format() {
-        let list_resolution = resolve(
-            &yarn("1.22.19"),
-            OutdatedArgs { format: Some(OutdatedFormat::List), ..Default::default() },
-        );
-        let CommandResolution::Run(list_command) = list_resolution.outcome else {
-            panic!("expected command resolution");
-        };
-
-        assert_eq!(list_command.program, "yarn");
-        assert_eq!(list_command.args, vec!["outdated"]);
-        assert_eq!(list_resolution.diagnostics[0].message, "yarn@1 not support list format");
-
-        let json_resolution = resolve(
-            &yarn("1.22.19"),
-            OutdatedArgs { format: Some(OutdatedFormat::Json), ..Default::default() },
-        );
-        let CommandResolution::Run(json_command) = json_resolution.outcome else {
-            panic!("expected command resolution");
-        };
-        assert_eq!(json_command.args, vec!["outdated", "--json"]);
-        assert!(json_resolution.diagnostics.is_empty());
+    fn yarn_classic_rejects_only_list_format() {
+        for version in ["1.22.19", "1.22.22"] {
+            let args = parse_args::<OutdatedArgs>(["--format", "list"]).unwrap();
+            expect_unsupported(
+                resolve(&yarn(version), args),
+                &["Yarn Classic does not support --format list."],
+            );
+        }
     }
 
     #[test]
-    fn yarn_berry_uses_upgrade_interactive_and_warns_format() {
-        let resolution = resolve(
-            &yarn("4.0.0"),
-            OutdatedArgs { format: Some(OutdatedFormat::Json), ..Default::default() },
-        );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+    fn yarn_berry_rejects_explicit_formats() {
+        for version in ["2.0.0", "2.4.2", "3.6.0", "4.10.3"] {
+            for format in ["table", "list", "json"] {
+                let args = parse_args::<OutdatedArgs>(["--format", format]).unwrap();
+                expect_unsupported(
+                    resolve(&yarn(version), args),
+                    &["yarn >= 2 does not support --format."],
+                );
+            }
+        }
+    }
 
-        assert_eq!(command.program, "yarn");
-        assert_eq!(command.args, vec!["upgrade-interactive"]);
-        assert_eq!(resolution.diagnostics[0].message, "--format not supported by yarn@2+");
-        assert_eq!(
-            resolution.diagnostics[1].message,
-            "yarn@2+ uses 'yarn upgrade-interactive' for checking outdated packages"
+    #[test]
+    fn yarn_berry_reports_format_with_other_unsupported_options() {
+        let args = parse_args::<OutdatedArgs>(["--format", "json", "--long"]).unwrap();
+        expect_unsupported(
+            resolve(&yarn("4.10.3"), args),
+            &["yarn does not support --long.", "yarn >= 2 does not support --format."],
         );
     }
 
     #[test]
-    fn bun_outdated_supports_subset_and_warns_json_format() {
+    fn yarn_berry_uses_upgrade_interactive_without_format() {
+        for version in ["2.0.0", "3.6.0", "4.10.3"] {
+            let args = parse_args::<OutdatedArgs>(["--", "--help"]).unwrap();
+            let resolution = resolve(&yarn(version), args);
+            let command = expect_run(resolution.outcome);
+
+            assert_eq!(command.program, "yarn");
+            assert_eq!(command.args, vec!["upgrade-interactive", "--help"]);
+            assert_eq!(resolution.diagnostics.len(), 1);
+            assert_eq!(
+                resolution.diagnostics[0].message,
+                "yarn@2+ uses 'yarn upgrade-interactive' for checking outdated packages"
+            );
+        }
+    }
+
+    #[test]
+    fn supported_formats_are_preserved_for_other_managers() {
+        for format in [OutdatedFormat::Table, OutdatedFormat::List, OutdatedFormat::Json] {
+            let args = OutdatedArgs { format: Some(format), ..Default::default() };
+            let npm_resolution = resolve(&npm("12.0.2"), args.clone());
+            let mut expected = vec!["outdated"];
+            match format {
+                OutdatedFormat::Json => expected.push("--json"),
+                OutdatedFormat::List => expected.push("--parseable"),
+                OutdatedFormat::Table => {}
+            }
+            assert_eq!(expect_run(npm_resolution.outcome).args, expected);
+            assert!(npm_resolution.diagnostics.is_empty());
+
+            let pnpm_resolution = resolve(&pnpm("11.3.0"), args.clone());
+            assert_eq!(
+                expect_run(pnpm_resolution.outcome).args,
+                vec!["outdated", "--format", format.as_str()]
+            );
+            assert!(pnpm_resolution.diagnostics.is_empty());
+
+            if format != OutdatedFormat::List {
+                let yarn_resolution = resolve(&yarn("1.22.22"), args);
+                assert_eq!(expect_run(yarn_resolution.outcome).args, expected);
+                assert!(yarn_resolution.diagnostics.is_empty());
+            }
+        }
+    }
+
+    #[test]
+    fn bun_outdated_preserves_default_and_supported_flags() {
         let resolution = resolve(
             &bun("1.3.11"),
             OutdatedArgs {
                 packages: vec!["react".to_string()],
-                format: Some(OutdatedFormat::Json),
                 filter: vec!["app".to_string()],
                 recursive: true,
                 prod: true,
@@ -627,9 +685,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "bun");
         assert_eq!(
@@ -645,14 +701,61 @@ mod tests {
                 "optional"
             ]
         );
-        assert_eq!(
-            resolution.diagnostics[0].message,
-            "bun outdated does not support --format json"
-        );
+        assert!(resolution.diagnostics.is_empty());
     }
 
     #[test]
-    fn unsupported_fields_are_dropped_for_yarn_and_bun() {
+    fn bun_outdated_rejects_explicit_formats() {
+        for version in ["1.3.11", "1.3.14", "1.4.0"] {
+            for format in ["table", "json", "list"] {
+                let args = parse_args::<OutdatedArgs>(["--format", format]).unwrap();
+                expect_unsupported(
+                    resolve(&bun(version), args),
+                    &["bun does not support --format."],
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn bun_outdated_reports_formats_with_other_unsupported_options() {
+        for format in ["table", "json", "list"] {
+            let args = parse_args::<OutdatedArgs>(["--format", format, "--long"]).unwrap();
+            expect_unsupported(
+                resolve(&bun("1.4.0"), args),
+                &["bun does not support --long.", "bun does not support --format."],
+            );
+        }
+    }
+
+    #[test]
+    fn bun_outdated_preserves_raw_args_without_named_format() {
+        for raw_args in [vec!["--json"], vec!["--format", "list"]] {
+            let args =
+                parse_args::<OutdatedArgs>(std::iter::once("--").chain(raw_args.clone())).unwrap();
+            let resolution = resolve(&bun("1.4.0"), args);
+            assert_eq!(expect_run(resolution.outcome).args, [vec!["outdated"], raw_args].concat());
+            assert!(resolution.diagnostics.is_empty());
+        }
+    }
+
+    #[test]
+    fn npm_outdated_maps_dependency_type_filters() {
+        for (args, expected) in [
+            (
+                OutdatedArgs { prod: true, no_optional: true, ..Default::default() },
+                vec!["outdated", "--omit=dev", "--omit=optional"],
+            ),
+            (OutdatedArgs { dev: true, ..Default::default() }, vec!["outdated", "--include=dev"]),
+        ] {
+            let resolution = resolve(&npm("11.16.0"), args);
+            assert!(resolution.diagnostics.is_empty());
+            assert_eq!(expect_run(resolution.outcome).args, expected);
+        }
+    }
+
+    #[test]
+    fn unsupported_fields_are_rejected_for_yarn_and_bun() {
         let yarn_resolution = resolve(
             &yarn("1.22.19"),
             OutdatedArgs {
@@ -668,11 +771,20 @@ mod tests {
                 ..Default::default()
             },
         );
-        let CommandResolution::Run(yarn_command) = yarn_resolution.outcome else {
-            panic!("expected command resolution");
-        };
-        assert_eq!(yarn_command.args, vec!["outdated"]);
-        assert_eq!(yarn_resolution.diagnostics.len(), 9);
+        expect_unsupported(
+            yarn_resolution,
+            &[
+                "yarn does not support --long.",
+                "yarn does not support --recursive.",
+                "yarn does not support --filter.",
+                "yarn does not support --workspace-root.",
+                "yarn does not support --prod.",
+                "yarn does not support --dev.",
+                "yarn does not support --no-optional.",
+                "yarn does not support --compatible.",
+                "yarn does not support --sort-by.",
+            ],
+        );
 
         let bun_resolution = resolve(
             &bun("1.3.11"),
@@ -685,10 +797,15 @@ mod tests {
                 ..Default::default()
             },
         );
-        let CommandResolution::Run(bun_command) = bun_resolution.outcome else {
-            panic!("expected command resolution");
-        };
-        assert_eq!(bun_command.args, vec!["outdated"]);
-        assert_eq!(bun_resolution.diagnostics.len(), 5);
+        expect_unsupported(
+            bun_resolution,
+            &[
+                "bun does not support --long.",
+                "bun does not support --workspace-root.",
+                "bun does not support --dev.",
+                "bun does not support --compatible.",
+                "bun does not support --sort-by.",
+            ],
+        );
     }
 }

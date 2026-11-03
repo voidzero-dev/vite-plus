@@ -1,0 +1,19 @@
+{
+  "name": "migration-pack-tsdown-toolchain",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vp pack"
+  },
+  "devDependencies": {
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "10.33.0",
+      "onFail": "download"
+    }
+  }
+}

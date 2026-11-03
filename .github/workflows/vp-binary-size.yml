@@ -17,8 +17,8 @@ defaults:
 jobs:
   inputs:
     name: Detect native input changes
-    if: github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     permissions:
       contents: read
     outputs:
@@ -26,7 +26,7 @@ jobs:
       merge_base_sha: ${{ steps.merge_base.outputs.sha }}
     steps:
       - name: Check out PR
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           # Full commit graph for merge-base resolution, but no historical
@@ -59,7 +59,7 @@ jobs:
         uses: ./.github/actions/compute-native-cache-input-hash
 
       - name: Check out merge base
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ steps.merge_base.outputs.sha }}
           persist-credentials: false
@@ -106,6 +106,7 @@ jobs:
             platform: windows
             target: x86_64-pc-windows-msvc
     runs-on: ${{ matrix.settings.os }}
+    timeout-minutes: 30
     permissions:
       contents: read
     env:
@@ -113,7 +114,7 @@ jobs:
       RELEASE_BUILD: 'true'
       VERSION: '0.0.0-native-size'
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ matrix.source == 'base' && needs.inputs.outputs.merge_base_sha || github.event.pull_request.head.sha }}
           persist-credentials: false
@@ -130,7 +131,7 @@ jobs:
         if: matrix.settings.builder == 'upstream'
         run: rustup target add ${{ matrix.settings.target }}
 
-      - uses: oxc-project/setup-node@4c588e9266bd930b6ddc34307df0659ed511d187 # v1.3.1
+      - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
         if: matrix.settings.builder == 'upstream'
 
       - name: Build final artifacts
@@ -154,8 +155,34 @@ jobs:
           TARGET: ${{ matrix.settings.target }}
         run: |
           node <<'NODE'
-          const { existsSync, readFileSync, writeFileSync } = require('node:fs');
+          const { existsSync, readFileSync, readdirSync, writeFileSync } = require('node:fs');
           const { gzipSync } = require('node:zlib');
+
+          function includeAllFiles() {
+            return true;
+          }
+
+          function includeNonNodeFiles(file) {
+            return !file.endsWith('.node');
+          }
+
+          function measureDirectory(directory, includeFile = includeAllFiles) {
+            let files = 0;
+            let raw = 0;
+            function visit(currentDirectory) {
+              for (const entry of readdirSync(currentDirectory, { withFileTypes: true })) {
+                const entryPath = `${currentDirectory}/${entry.name}`;
+                if (entry.isDirectory()) {
+                  visit(entryPath);
+                } else if (entry.isFile() && includeFile(entryPath)) {
+                  files += 1;
+                  raw += readFileSync(entryPath).length;
+                }
+              }
+            }
+            visit(directory);
+            return { path: directory, files, raw };
+          }
 
           const target = process.env.TARGET;
           const paths =
@@ -188,6 +215,17 @@ jobs:
               gzip: gzipSync(contents, { level: 9 }).length,
             };
           }
+          if (process.env.PLATFORM === 'linux') {
+            const cliDistDirectory = 'packages/cli/dist';
+            const coreDistDirectory = 'packages/core/dist';
+            for (const directory of [cliDistDirectory, coreDistDirectory]) {
+              if (!existsSync(directory)) {
+                throw new Error(`Expected final dist package at ${directory}`);
+              }
+            }
+            artifacts.cliDist = measureDirectory(cliDistDirectory);
+            artifacts.coreDist = measureDirectory(coreDistDirectory, includeNonNodeFiles);
+          }
 
           const result = {
             source: process.env.SOURCE,
@@ -199,7 +237,7 @@ jobs:
           NODE
 
       - name: Upload size measurements
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: native-size-${{ matrix.source }}-${{ matrix.settings.platform }}
           path: ${{ runner.temp }}/native-size-${{ matrix.source }}-${{ matrix.settings.platform }}.json
@@ -210,7 +248,8 @@ jobs:
     name: Clear stale binary size report
     needs: inputs
     if: needs.inputs.outputs.changed != 'true' && github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     permissions:
       issues: write
       pull-requests: write
@@ -237,15 +276,17 @@ jobs:
   comment:
     name: Report binary size
     needs: build
-    if: github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # Fork runs get a read-only token regardless of this block; the script
+    # then keeps the report in the job summary and skips the PR comment.
     permissions:
       contents: read
       issues: write
       pull-requests: write
     steps:
       - name: Download size measurements
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: native-size-*
           path: ${{ runner.temp }}/native-size
@@ -256,6 +297,7 @@ jobs:
         env:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           SIZE_DIR: ${{ runner.temp }}/native-size
+          SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
         with:
           script: |
             const fs = require('node:fs');
@@ -350,16 +392,42 @@ jobs:
             };
 
             const shortSha = process.env.HEAD_SHA.slice(0, 7);
-            const rows = artifacts.flatMap((artifact) => [
-              `| ${artifact.name} | Binary | ${formatSize(artifact.baseRaw)} | ${formatSize(artifact.headRaw)} | ${formatDelta(artifact.baseRaw, artifact.headRaw)} |`,
-              `| ${artifact.name} | gzip -9 | ${formatSize(artifact.baseGzip)} | ${formatSize(artifact.headGzip)} | ${formatDelta(artifact.baseGzip, artifact.headGzip)} |`,
-            ]);
+            const distArtifacts = [
+              {
+                name: '`packages/cli/dist`',
+                baseRaw: baseLinux.artifacts.cliDist.raw,
+                headRaw: headLinux.artifacts.cliDist.raw,
+              },
+              {
+                name: '`packages/core/dist`',
+                baseRaw: baseLinux.artifacts.coreDist.raw,
+                headRaw: headLinux.artifacts.coreDist.raw,
+              },
+              {
+                name: 'Combined package dist',
+                baseRaw:
+                  baseLinux.artifacts.cliDist.raw + baseLinux.artifacts.coreDist.raw,
+                headRaw:
+                  headLinux.artifacts.cliDist.raw + headLinux.artifacts.coreDist.raw,
+              },
+            ];
+            const rows = [
+              ...distArtifacts.map(
+                (artifact) =>
+                  `| ${artifact.name} | Directory total | ${formatSize(artifact.baseRaw)} | ${formatSize(artifact.headRaw)} | ${formatDelta(artifact.baseRaw, artifact.headRaw)} |`,
+              ),
+              ...artifacts.flatMap((artifact) => [
+                `| ${artifact.name} | Binary | ${formatSize(artifact.baseRaw)} | ${formatSize(artifact.headRaw)} | ${formatDelta(artifact.baseRaw, artifact.headRaw)} |`,
+                `| ${artifact.name} | gzip -9 | ${formatSize(artifact.baseGzip)} | ${formatSize(artifact.headGzip)} | ${formatDelta(artifact.baseGzip, artifact.headGzip)} |`,
+              ]),
+            ];
             const body = [
               marker,
               '',
-              `### Native binary sizes (\`${shortSha}\`)`,
+              `### CLI artifact sizes (\`${shortSha}\`)`,
               '',
               'Final release artifacts built by the canonical `build-upstream` and `build-windows-cli` actions.',
+              'The dist rows use the Linux build. The core total excludes `.node` files to match the release artifact.',
               '',
               '| Artifact | Format | Base | PR | Change |',
               '| --- | --- | ---: | ---: | ---: |',
@@ -367,6 +435,11 @@ jobs:
             ].join('\n');
 
             await core.summary.addRaw(body.replace(marker, '')).write();
+
+            if (process.env.SAME_REPO !== 'true') {
+              core.info('Fork PR: the report stays in the job summary above.');
+              return;
+            }
 
             const comments = await github.paginate(github.rest.issues.listComments, {
               owner: context.repo.owner,

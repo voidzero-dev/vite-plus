@@ -7,12 +7,12 @@ Install multiple global packages
 ```
 VITE+ - The Unified Toolchain for the Web
 
-info: Installing 2 global packages with Node.js <version>
-✓ Installed parallel-pkg-a 1.0.0
-  Bins: parallel-a
+\x1b[94;1minfo: Installing 2 global packages with Node.js <version>
+\x1b[32m+ Installed \x1b[1mparallel-pkg-a \x1b[1m1.0.0
+  Bins: \x1b[1mparallel-a
 
-✓ Installed parallel-pkg-b 2.0.0
-  Bins: parallel-b
+\x1b[32m+ Installed \x1b[1mparallel-pkg-b \x1b[1m2.0.0
+  Bins: \x1b[1mparallel-b
 ```
 
 ## `parallel-a`
@@ -31,9 +31,9 @@ parallel-b ok
 
 ## `vp remove -g parallel-pkg-a parallel-pkg-b`
 
-Cleanup
+Installation and removal use plus/minus markers and the same package styling
 
 ```
-Uninstalled parallel-pkg-a
-Uninstalled parallel-pkg-b
+\x1b[31m- Uninstalled \x1b[1mparallel-pkg-a
+\x1b[31m- Uninstalled \x1b[1mparallel-pkg-b
 ```

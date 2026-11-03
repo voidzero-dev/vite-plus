@@ -29,39 +29,39 @@ pub struct UpdateArgs {
     pub(crate) ignore_node_mismatch: bool,
 
     /// Update recursively in all workspace packages
-    #[arg(short = 'r', long)]
+    #[arg(short = 'r', long, conflicts_with = "global", not_supported(npm < "8.1.0", yarn < "2", bun < "1.4"))]
     pub(crate) recursive: bool,
 
     /// Filter packages in monorepo (can be used multiple times)
-    #[arg(long, value_name = "PATTERN")]
+    #[arg(long, value_name = "PATTERN", conflicts_with = "global", not_supported(npm < "7.14.0", yarn >= "2", bun < "1.4"))]
     pub(crate) filter: Vec<String>,
 
     /// Include workspace root
-    #[arg(short = 'w', long)]
+    #[arg(short = 'w', long, conflicts_with = "global", not_supported(npm < "8.1.0", yarn, bun))]
     pub(crate) workspace_root: bool,
 
-    /// Update only devDependencies
-    #[arg(short = 'D', long)]
+    /// Update devDependencies
+    #[arg(short = 'D', long, conflicts_with = "global", not_supported(yarn, bun < "1.4"))]
     pub(crate) dev: bool,
 
-    /// Update only dependencies (production)
-    #[arg(short = 'P', long)]
+    /// Update dependencies (production)
+    #[arg(short = 'P', long, conflicts_with = "global", not_supported(npm < "7", yarn >= "2", bun < "1.4"))]
     pub(crate) prod: bool,
 
     /// Interactive mode
-    #[arg(short = 'i', long, not_supported(npm))]
+    #[arg(short = 'i', long, conflicts_with = "global", not_supported(npm))]
     pub(crate) interactive: bool,
 
-    /// Don't update optionalDependencies
-    #[arg(long)]
+    /// Exclude optionalDependencies
+    #[arg(long, conflicts_with = "global", not_supported(yarn >= "2", bun < "1.4"))]
     pub(crate) no_optional: bool,
 
     /// Update lockfile only, don't modify package.json
-    #[arg(long)]
+    #[arg(long, conflicts_with = "global")]
     pub(crate) no_save: bool,
 
     /// Only update if package exists in workspace (pnpm-specific)
-    #[arg(long)]
+    #[arg(long, conflicts_with = "global", not_supported(npm, yarn, bun))]
     pub(crate) workspace: bool,
 
     /// Packages to update (optional - updates all if omitted)
@@ -100,7 +100,10 @@ impl Resolve<UpdateArgs> for Npm {
             cmd.arg("--include-workspace-root");
         }
         cmd.arg_if("--workspaces", args.recursive)
-            .arg_if("--include=dev", args.dev)
+            .arg_if(
+                if self.supports_v7_commands() { "--include=dev" } else { "--also=dev" },
+                args.dev,
+            )
             .arg_if("--include=prod", args.prod)
             .arg_if("--no-optional", args.no_optional)
             .arg_if("--no-save", args.no_save)
@@ -112,6 +115,10 @@ impl Resolve<UpdateArgs> for Npm {
 
 impl Resolve<UpdateArgs> for Yarn {
     fn resolve(&self, args: &UpdateArgs, _diag: &mut Diagnostics) -> CommandResolution {
+        let recursive_resolutions = self.is_berry() && args.recursive && !args.latest;
+        if args.no_save && !recursive_resolutions {
+            return CommandResolution::InvalidArgument("yarn does not support --no-save.".into());
+        }
         if self.is_berry() {
             Yarn::resolve_berry_update(args)
         } else {
@@ -123,25 +130,33 @@ impl Resolve<UpdateArgs> for Yarn {
 impl Yarn {
     fn resolve_berry_update(args: &UpdateArgs) -> CommandResolution {
         let mut cmd = CommandBuilder::new("yarn");
-        if !args.filter.is_empty() {
-            cmd.arg("workspaces").arg("foreach").arg("--all");
-            cmd.repeated("--include", args.filter.iter());
-        }
         cmd.arg("up")
-            .arg_if("--recursive", args.recursive)
+            .arg_if("--recursive", args.recursive && !args.latest)
             .arg_if("--interactive", args.interactive)
             .extend(args.pass_through_args.iter())
             .extend(args.packages.iter());
+        // Raw arguments may contain package patterns, so don't widen their selection.
+        if args.recursive && args.packages.is_empty() && args.pass_through_args.is_empty() {
+            // Recursive mode needs ** to match scoped names; ordinary up treats * as all.
+            cmd.arg(if args.latest { "*" } else { "**" });
+        }
         cmd.into()
     }
 
     fn resolve_v1_update(args: &UpdateArgs) -> CommandResolution {
+        if args.filter.len() > 1 {
+            return CommandResolution::InvalidArgument(
+                "yarn < 2 does not support multiple --filter options.".into(),
+            );
+        }
         let mut cmd = CommandBuilder::new("yarn");
         if let Some(filter) = args.filter.first() {
             cmd.arg("workspace").arg(filter);
         }
-        cmd.arg("upgrade")
+        cmd.arg(if args.interactive { "upgrade-interactive" } else { "upgrade" })
             .arg_if("--latest", args.latest)
+            .arg_if("--production=true", args.prod)
+            .arg_if("--ignore-optional", args.no_optional)
             .extend(args.pass_through_args.iter())
             .extend(args.packages.iter());
         cmd.into()
@@ -152,13 +167,13 @@ impl Resolve<UpdateArgs> for Bun {
     fn resolve(&self, args: &UpdateArgs, _diag: &mut Diagnostics) -> CommandResolution {
         let mut cmd = CommandBuilder::new("bun");
         cmd.arg("update")
+            .repeated("--filter", args.filter.iter())
             .arg_if("--latest", args.latest)
+            .arg_if("--dev", args.dev)
             .arg_if("--interactive", args.interactive)
             .arg_if("--production", args.prod);
-        if args.no_optional {
-            cmd.arg("--omit").arg("optional");
-        }
-        cmd.arg_if("--no-save", args.no_save)
+        cmd.arg_if("--no-optional", args.no_optional)
+            .arg_if("--no-save", args.no_save)
             .arg_if("--recursive", args.recursive)
             .extend(args.pass_through_args.iter())
             .extend(args.packages.iter());
@@ -170,8 +185,8 @@ impl Resolve<UpdateArgs> for Bun {
 mod tests {
     use super::*;
     use crate::resolution::{
-        CommandResolution, resolve,
-        test_utils::{bun, npm, parse_args, pnpm, yarn},
+        resolve,
+        test_utils::{bun, expect_run, expect_unsupported, npm, parse_args, pnpm, yarn},
     };
 
     fn update_args(packages: &[&str]) -> UpdateArgs {
@@ -215,9 +230,7 @@ mod tests {
     #[test]
     fn test_pnpm_basic_update() {
         let resolution = resolve(&pnpm("10.0.0"), update_args(&["react"]));
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["update", "react"]);
@@ -228,9 +241,7 @@ mod tests {
         let mut options = update_args(&["react"]);
         options.latest = true;
         let resolution = resolve(&pnpm("10.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["update", "--latest", "react"]);
@@ -239,9 +250,7 @@ mod tests {
     #[test]
     fn test_pnpm_update_all() {
         let resolution = resolve(&pnpm("10.0.0"), UpdateArgs::default());
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["update"]);
@@ -252,9 +261,7 @@ mod tests {
         let mut options = update_args(&["react"]);
         options.filter = vec!["app".to_string()];
         let resolution = resolve(&pnpm("10.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["--filter", "app", "update", "react"]);
@@ -264,9 +271,7 @@ mod tests {
     fn test_pnpm_update_recursive() {
         let options = UpdateArgs { recursive: true, ..Default::default() };
         let resolution = resolve(&pnpm("10.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["update", "--recursive"]);
@@ -276,9 +281,7 @@ mod tests {
     fn test_pnpm_update_interactive() {
         let options = UpdateArgs { interactive: true, ..Default::default() };
         let resolution = resolve(&pnpm("10.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["update", "--interactive"]);
@@ -288,9 +291,7 @@ mod tests {
     fn test_pnpm_update_dev_only() {
         let options = UpdateArgs { dev: true, ..Default::default() };
         let resolution = resolve(&pnpm("10.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["update", "--dev"]);
@@ -300,9 +301,7 @@ mod tests {
     fn test_pnpm_update_no_optional() {
         let options = UpdateArgs { no_optional: true, ..Default::default() };
         let resolution = resolve(&pnpm("10.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["update", "--no-optional"]);
@@ -313,9 +312,7 @@ mod tests {
         let mut options = update_args(&["react"]);
         options.no_save = true;
         let resolution = resolve(&pnpm("10.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["update", "--no-save", "react"]);
@@ -327,9 +324,7 @@ mod tests {
         options.workspace = true;
         options.filter = vec!["app".to_string()];
         let resolution = resolve(&pnpm("10.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["--filter", "app", "update", "--workspace", "@myorg/utils"]);
@@ -338,9 +333,7 @@ mod tests {
     #[test]
     fn test_yarn_v1_basic_update() {
         let resolution = resolve(&yarn("1.22.0"), update_args(&["react"]));
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["upgrade", "react"]);
@@ -351,9 +344,7 @@ mod tests {
         let mut options = update_args(&["react"]);
         options.latest = true;
         let resolution = resolve(&yarn("1.22.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["upgrade", "--latest", "react"]);
@@ -364,50 +355,156 @@ mod tests {
         let mut options = update_args(&["react"]);
         options.filter = vec!["app".to_string()];
         let resolution = resolve(&yarn("1.22.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["workspace", "app", "upgrade", "react"]);
     }
 
     #[test]
+    fn test_update_rejects_workspace_dependency_selection_outside_pnpm() {
+        let args = parse_args::<UpdateArgs>(["--workspace", "react"]).unwrap();
+        for (resolution, message) in [
+            (resolve(&npm("11.16.0"), args.clone()), "npm does not support --workspace."),
+            (resolve(&yarn("1.22.22"), args.clone()), "yarn does not support --workspace."),
+            (resolve(&yarn("4.16.0"), args.clone()), "yarn does not support --workspace."),
+            (resolve(&bun("1.3.14"), args.clone()), "bun does not support --workspace."),
+            (resolve(&bun("1.4.0"), args), "bun does not support --workspace."),
+        ] {
+            expect_unsupported(resolution, &[message]);
+        }
+    }
+
+    #[test]
+    fn test_yarn_classic_rejects_multiple_filters() {
+        let args = parse_args::<UpdateArgs>(["--filter", "app", "--filter", "web"]).unwrap();
+        expect_unsupported(
+            resolve(&yarn("1.22.22"), args),
+            &["yarn < 2 does not support multiple --filter options."],
+        );
+    }
+
+    #[test]
+    fn test_yarn_classic_update_interactive() {
+        let args = parse_args::<UpdateArgs>([
+            "--interactive",
+            "--latest",
+            "--prod",
+            "--no-optional",
+            "react",
+        ])
+        .unwrap();
+        let resolution = resolve(&yarn("1.22.22"), args);
+        assert!(resolution.diagnostics.is_empty());
+        assert_eq!(
+            expect_run(resolution.outcome).args,
+            vec![
+                "upgrade-interactive",
+                "--latest",
+                "--production=true",
+                "--ignore-optional",
+                "react"
+            ]
+        );
+    }
+
+    #[test]
+    fn test_update_keeps_raw_workspace_options() {
+        let args = parse_args::<UpdateArgs>([
+            "react",
+            "--",
+            "--workspace",
+            "--recursive",
+            "--interactive",
+            "--filter",
+            "app",
+            "--filter",
+            "web",
+        ])
+        .unwrap();
+        for (resolution, subcommand) in [
+            (resolve(&npm("11.16.0"), args.clone()), "update"),
+            (resolve(&yarn("1.22.22"), args.clone()), "upgrade"),
+            (resolve(&yarn("4.16.0"), args.clone()), "up"),
+            (resolve(&bun("1.3.14"), args), "update"),
+        ] {
+            assert!(resolution.diagnostics.is_empty());
+            assert_eq!(
+                expect_run(resolution.outcome).args,
+                vec![
+                    subcommand,
+                    "--workspace",
+                    "--recursive",
+                    "--interactive",
+                    "--filter",
+                    "app",
+                    "--filter",
+                    "web",
+                    "react"
+                ]
+            );
+        }
+    }
+
+    #[test]
     fn test_yarn_v4_basic_update() {
         let resolution = resolve(&yarn("4.0.0"), update_args(&["react"]));
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["up", "react"]);
     }
 
     #[test]
+    fn test_yarn_update_keeps_raw_pass_through() {
+        let args = parse_args::<UpdateArgs>(["react", "--", "--no-save"]).unwrap();
+        let resolution = resolve(&yarn("4.10.3"), args);
+        assert!(resolution.diagnostics.is_empty());
+        assert_eq!(expect_run(resolution.outcome).args, vec!["up", "--no-save", "react"]);
+    }
+
+    #[test]
+    fn test_yarn_update_rejects_no_save() {
+        for version in ["1.22.0", "2.0.0", "3.0.0", "4.0.0"] {
+            let args = parse_args::<UpdateArgs>(["react", "--no-save"]).unwrap();
+            expect_unsupported(
+                resolve(&yarn(version), args),
+                &["yarn does not support --no-save."],
+            );
+        }
+    }
+
+    #[test]
     fn test_yarn_v4_update_interactive() {
         let options = UpdateArgs { interactive: true, ..Default::default() };
         let resolution = resolve(&yarn("4.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["up", "--interactive"]);
     }
 
     #[test]
-    fn test_yarn_v4_update_with_filter() {
+    fn test_yarn_berry_update_rejects_filter() {
         let mut options = update_args(&["react"]);
         options.filter = vec!["app".to_string()];
         let resolution = resolve(&yarn("4.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
 
-        assert_eq!(command.program, "yarn");
-        assert_eq!(
-            command.args,
-            vec!["workspaces", "foreach", "--all", "--include", "app", "up", "react"]
+        expect_unsupported(resolution, &["yarn >= 2 does not support --filter."]);
+    }
+
+    #[test]
+    fn test_yarn_filters_and_selectors_are_rejected_together() {
+        let args =
+            parse_args::<UpdateArgs>(["--filter", "app", "-D", "-P", "--no-optional"]).unwrap();
+        expect_unsupported(
+            resolve(&yarn("4.16.0"), args),
+            &[
+                "yarn >= 2 does not support --filter.",
+                "yarn does not support --dev.",
+                "yarn >= 2 does not support --prod.",
+                "yarn >= 2 does not support --no-optional.",
+            ],
         );
     }
 
@@ -415,20 +512,69 @@ mod tests {
     fn test_yarn_v4_update_recursive() {
         let options = UpdateArgs { recursive: true, ..Default::default() };
         let resolution = resolve(&yarn("4.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        assert!(resolution.diagnostics.is_empty());
+        assert_eq!(expect_run(resolution.outcome).args, vec!["up", "--recursive", "**"]);
+    }
 
-        assert_eq!(command.program, "yarn");
-        assert_eq!(command.args, vec!["up", "--recursive"]);
+    #[test]
+    fn test_yarn_recursive_latest_uses_project_wide_update() {
+        for version in ["2.4.2", "3.0.0", "3.6.0", "4.0.0", "4.16.0"] {
+            for (argv, expected) in [
+                (vec!["-r", "--latest", "react"], vec!["up", "react"]),
+                (vec!["-r", "--latest"], vec!["up", "*"]),
+                (
+                    vec!["-r", "--latest", "--interactive", "react"],
+                    vec!["up", "--interactive", "react"],
+                ),
+            ] {
+                let args = parse_args::<UpdateArgs>(argv).unwrap();
+                let resolution = resolve(&yarn(version), args);
+                assert!(resolution.diagnostics.is_empty());
+                assert_eq!(expect_run(resolution.outcome).args, expected);
+            }
+        }
+    }
+
+    #[test]
+    fn test_yarn_recursive_preserves_ranges_and_raw_patterns() {
+        for version in ["3.0.0", "3.6.0", "4.0.0", "4.16.0"] {
+            for (argv, expected) in [
+                (vec!["-r", "react"], vec!["up", "--recursive", "react"]),
+                (vec!["-r", "--no-save", "react"], vec!["up", "--recursive", "react"]),
+                (vec!["-r"], vec!["up", "--recursive", "**"]),
+                (vec!["-r", "--no-save"], vec!["up", "--recursive", "**"]),
+                (vec!["-r", "@test/scoped"], vec!["up", "--recursive", "@test/scoped"]),
+                (vec!["-r", "--", "@test/*"], vec!["up", "--recursive", "@test/*"]),
+                (vec!["-r", "--", "react"], vec!["up", "--recursive", "react"]),
+                (vec!["-r", "--latest", "--", "react"], vec!["up", "react"]),
+                (
+                    vec!["-r", "--", "--mode", "skip-build"],
+                    vec!["up", "--recursive", "--mode", "skip-build"],
+                ),
+            ] {
+                let args = parse_args::<UpdateArgs>(argv).unwrap();
+                let resolution = resolve(&yarn(version), args);
+                assert!(resolution.diagnostics.is_empty());
+                assert_eq!(expect_run(resolution.outcome).args, expected);
+            }
+        }
+    }
+
+    #[test]
+    fn test_yarn_recursive_latest_rejects_no_save() {
+        for version in ["3.0.0", "4.16.0"] {
+            let args = parse_args::<UpdateArgs>(["-r", "--latest", "--no-save", "react"]).unwrap();
+            expect_unsupported(
+                resolve(&yarn(version), args),
+                &["yarn does not support --no-save."],
+            );
+        }
     }
 
     #[test]
     fn test_npm_basic_update() {
         let resolution = resolve(&npm("11.0.0"), update_args(&["react"]));
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["update", "react"]);
@@ -437,9 +583,7 @@ mod tests {
     #[test]
     fn test_npm_update_all() {
         let resolution = resolve(&npm("11.0.0"), UpdateArgs::default());
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["update"]);
@@ -450,9 +594,7 @@ mod tests {
         let mut options = update_args(&["react"]);
         options.filter = vec!["app".to_string()];
         let resolution = resolve(&npm("11.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["update", "--workspace", "app", "react"]);
@@ -462,36 +604,84 @@ mod tests {
     fn test_npm_update_recursive() {
         let options = UpdateArgs { recursive: true, ..Default::default() };
         let resolution = resolve(&npm("11.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["update", "--include-workspace-root", "--workspaces"]);
     }
 
     #[test]
-    fn test_npm_update_dev_only() {
-        let options = UpdateArgs { dev: true, ..Default::default() };
-        let resolution = resolve(&npm("11.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+    fn npm_dependency_filter_version_boundaries() {
+        for (version, flag) in [("6.14.18", "--also=dev"), ("7.0.0", "--include=dev")] {
+            let args = parse_args::<UpdateArgs>(["-D", "react", "--", "--no-audit"]).unwrap();
+            let resolution = resolve(&npm(version), args);
+            assert!(resolution.diagnostics.is_empty());
+            assert_eq!(
+                expect_run(resolution.outcome).args,
+                ["update", flag, "--no-audit", "react"]
+            );
+        }
 
-        assert_eq!(command.program, "npm");
-        assert_eq!(command.args, vec!["update", "--include=dev"]);
+        for dialect in [npm("6.14.18"), npm("7.0.0"), Npm::unknown_version()] {
+            let args = parse_args::<UpdateArgs>(["--no-optional", "react"]).unwrap();
+            let resolution = resolve(&dialect, args);
+            assert!(resolution.diagnostics.is_empty());
+            assert_eq!(expect_run(resolution.outcome).args, ["update", "--no-optional", "react"]);
+        }
+
+        let args = parse_args::<UpdateArgs>(["-P", "react"]).unwrap();
+        expect_unsupported(resolve(&npm("6.14.18"), args), &["npm < 7 does not support --prod."]);
+        for dialect in [npm("7.0.0"), Npm::unknown_version()] {
+            let args = parse_args::<UpdateArgs>(["-P", "react"]).unwrap();
+            let resolution = resolve(&dialect, args);
+            assert!(resolution.diagnostics.is_empty());
+            assert_eq!(expect_run(resolution.outcome).args, ["update", "--include=prod", "react"]);
+        }
     }
 
     #[test]
-    fn test_npm_update_no_optional() {
-        let options = UpdateArgs { no_optional: true, ..Default::default() };
-        let resolution = resolve(&npm("11.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+    fn test_npm_update_preserves_native_selectors() {
+        for (flag, native_flag) in
+            [("-D", "--include=dev"), ("-P", "--include=prod"), ("--no-optional", "--no-optional")]
+        {
+            let args = parse_args::<UpdateArgs>([flag, "react"]).unwrap();
+            let resolution = resolve(&npm("11.16.0"), args);
+            assert!(resolution.diagnostics.is_empty());
+            assert_eq!(expect_run(resolution.outcome).args, ["update", native_flag, "react"]);
+        }
+    }
 
-        assert_eq!(command.program, "npm");
-        assert_eq!(command.args, vec!["update", "--no-optional"]);
+    #[test]
+    fn test_yarn_rejects_update_selectors() {
+        for version in ["1.22.22", "2.4.2", "3.6.0", "4.16.0"] {
+            let args = parse_args::<UpdateArgs>(["-D", "-P", "--no-optional"]).unwrap();
+            let mut messages = vec!["yarn does not support --dev."];
+            if version != "1.22.22" {
+                messages.extend([
+                    "yarn >= 2 does not support --prod.",
+                    "yarn >= 2 does not support --no-optional.",
+                ]);
+            }
+            expect_unsupported(resolve(&yarn(version), args), &messages);
+        }
+    }
+
+    #[test]
+    fn test_update_keeps_raw_selectors() {
+        let args =
+            parse_args::<UpdateArgs>(["react", "--", "--dev", "--prod", "--no-optional"]).unwrap();
+        for (resolution, subcommand) in [
+            (resolve(&npm("11.16.0"), args.clone()), "update"),
+            (resolve(&yarn("1.22.22"), args.clone()), "upgrade"),
+            (resolve(&yarn("4.16.0"), args.clone()), "up"),
+            (resolve(&bun("1.3.14"), args), "update"),
+        ] {
+            assert!(resolution.diagnostics.is_empty());
+            assert_eq!(
+                expect_run(resolution.outcome).args,
+                vec![subcommand, "--dev", "--prod", "--no-optional", "react"]
+            );
+        }
     }
 
     #[test]
@@ -499,31 +689,24 @@ mod tests {
         let mut options = update_args(&["react"]);
         options.no_save = true;
         let resolution = resolve(&npm("11.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["update", "--no-save", "react"]);
     }
 
     #[test]
-    fn test_npm_latest_and_interactive_warn_without_args() {
+    fn test_npm_unsupported_options_are_rejected_together() {
         let mut options = update_args(&["react"]);
         options.latest = true;
         options.interactive = true;
+        options.dev = true;
+        options.prod = true;
+        options.no_optional = true;
         let resolution = resolve(&npm("11.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
-
-        assert_eq!(command.program, "npm");
-        assert_eq!(command.args, vec!["update", "react"]);
-        let messages =
-            resolution.diagnostics.iter().map(|entry| entry.message.as_str()).collect::<Vec<_>>();
-        assert_eq!(
-            messages,
-            vec!["npm does not support --latest.", "npm does not support --interactive."]
+        expect_unsupported(
+            resolution,
+            &["npm does not support --latest.", "npm does not support --interactive."],
         );
     }
 
@@ -532,9 +715,7 @@ mod tests {
         let mut options = update_args(&["react", "react-dom", "vite"]);
         options.latest = true;
         let resolution = resolve(&pnpm("10.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["update", "--latest", "react", "react-dom", "vite"]);
@@ -549,9 +730,7 @@ mod tests {
         options.dev = true;
         options.interactive = true;
         let resolution = resolve(&pnpm("10.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(
@@ -572,37 +751,21 @@ mod tests {
     }
 
     #[test]
-    fn test_yarn_v4_update_multiple_filters() {
-        let mut options = update_args(&["lodash"]);
-        options.filter = vec!["app".to_string(), "web".to_string()];
-        let resolution = resolve(&yarn("4.0.0"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+    fn test_yarn_berry_update_rejects_multiple_filters() {
+        for recursive in [false, true] {
+            let mut options = update_args(&["lodash"]);
+            options.filter = vec!["app".to_string(), "web".to_string()];
+            options.recursive = recursive;
+            let resolution = resolve(&yarn("4.0.0"), options);
 
-        assert_eq!(command.program, "yarn");
-        assert_eq!(
-            command.args,
-            vec![
-                "workspaces",
-                "foreach",
-                "--all",
-                "--include",
-                "app",
-                "--include",
-                "web",
-                "up",
-                "lodash"
-            ]
-        );
+            expect_unsupported(resolution, &["yarn >= 2 does not support --filter."]);
+        }
     }
 
     #[test]
     fn test_bun_basic_update() {
         let resolution = resolve(&bun("1.3.11"), UpdateArgs::default());
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, vec!["update"]);
@@ -612,45 +775,82 @@ mod tests {
     fn test_bun_update_latest() {
         let options = UpdateArgs { latest: true, ..Default::default() };
         let resolution = resolve(&bun("1.3.11"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, vec!["update", "--latest"]);
     }
 
     #[test]
-    fn test_bun_update_prod() {
-        let options = UpdateArgs { prod: true, ..Default::default() };
-        let resolution = resolve(&bun("1.3.11"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
-
-        assert_eq!(command.program, "bun");
-        assert_eq!(command.args, vec!["update", "--production"]);
+    fn test_bun_update_dev_only() {
+        for version in ["1.4.0", "1.4.2"] {
+            for (argv, expected) in [
+                (vec!["-D"], vec!["update", "--dev"]),
+                (
+                    vec!["react", "--dev", "--latest", "--", "--ignore-scripts"],
+                    vec!["update", "--latest", "--dev", "--ignore-scripts", "react"],
+                ),
+            ] {
+                let args = parse_args::<UpdateArgs>(argv).unwrap();
+                let resolution = resolve(&bun(version), args);
+                assert!(resolution.diagnostics.is_empty());
+                let command = expect_run(resolution.outcome);
+                assert_eq!(command.program, "bun");
+                assert_eq!(command.args, expected);
+            }
+        }
     }
 
     #[test]
-    fn test_bun_update_no_optional() {
-        let options = UpdateArgs { no_optional: true, ..Default::default() };
-        let resolution = resolve(&bun("1.3.11"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+    fn test_bun_update_rejects_dev_before_1_4() {
+        let args = parse_args::<UpdateArgs>(["--dev", "react"]).unwrap();
+        expect_unsupported(resolve(&bun("1.3.14"), args), &["bun < 1.4 does not support --dev."]);
+    }
 
-        assert_eq!(command.program, "bun");
-        assert_eq!(command.args, vec!["update", "--omit", "optional"]);
+    #[test]
+    fn test_bun_update_rejects_all_unsupported_options() {
+        let args = parse_args::<UpdateArgs>([
+            "--filter",
+            "web",
+            "--workspace-root",
+            "--dev",
+            "--prod",
+            "--no-optional",
+        ])
+        .unwrap();
+        expect_unsupported(
+            resolve(&bun("1.3.14"), args),
+            &[
+                "bun < 1.4 does not support --filter.",
+                "bun does not support --workspace-root.",
+                "bun < 1.4 does not support --dev.",
+                "bun < 1.4 does not support --prod.",
+                "bun < 1.4 does not support --no-optional.",
+            ],
+        );
+    }
+
+    #[test]
+    fn test_bun_update_prod_and_optional_selection() {
+        for version in ["1.4.0", "1.4.1"] {
+            for (flags, expected) in [
+                (vec!["-P"], vec!["update", "--production"]),
+                (vec!["--no-optional"], vec!["update", "--no-optional"]),
+                (vec!["-P", "--no-optional"], vec!["update", "--production", "--no-optional"]),
+            ] {
+                let args = parse_args::<UpdateArgs>(flags).unwrap();
+                let resolution = resolve(&bun(version), args);
+                assert!(resolution.diagnostics.is_empty());
+                assert_eq!(expect_run(resolution.outcome).args, expected);
+            }
+        }
     }
 
     #[test]
     fn test_bun_update_no_save() {
         let options = UpdateArgs { no_save: true, ..Default::default() };
         let resolution = resolve(&bun("1.3.11"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, vec!["update", "--no-save"]);
@@ -658,13 +858,40 @@ mod tests {
 
     #[test]
     fn test_bun_update_recursive() {
-        let options = UpdateArgs { recursive: true, ..Default::default() };
-        let resolution = resolve(&bun("1.3.11"), options);
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        for version in ["1.4.0", "1.4.1"] {
+            let options = UpdateArgs { recursive: true, ..Default::default() };
+            let resolution = resolve(&bun(version), options);
+            assert!(resolution.diagnostics.is_empty());
+            let command = expect_run(resolution.outcome);
+            assert_eq!(command.program, "bun");
+            assert_eq!(command.args, vec!["update", "--recursive"]);
+        }
+    }
+
+    #[test]
+    fn test_bun_update_with_filter() {
+        let options = UpdateArgs { filter: vec!["web".to_string()], ..Default::default() };
+        let resolution = resolve(&bun("1.4.0"), options);
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "bun");
-        assert_eq!(command.args, vec!["update", "--recursive"]);
+        assert_eq!(command.args, vec!["update", "--filter", "web"]);
+        assert!(resolution.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn test_bun_update_rejects_workspace_selection_before_1_4() {
+        for version in ["1.3.11", "1.3.14", "1.4.0-beta.1"] {
+            for interactive in [false, true] {
+                for (argv, message) in [
+                    (vec!["--recursive"], "bun < 1.4 does not support --recursive."),
+                    (vec!["--filter", "web"], "bun < 1.4 does not support --filter."),
+                ] {
+                    let mut args = parse_args::<UpdateArgs>(argv).unwrap();
+                    args.interactive = interactive;
+                    expect_unsupported(resolve(&bun(version), args), &[message]);
+                }
+            }
+        }
     }
 }

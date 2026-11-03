@@ -7,9 +7,8 @@ migration should work with npm, add overrides, and update lockfile
 ```
 VITE+ - The Unified Toolchain for the Web
 
-Formatting code...
-
-Code formatted
+● Formatting code...
+● Code formatted
 ◇ Migrated . to Vite+ <version>
 • Node <version>  npm <version>
 ✓ Dependencies installed in <duration>
@@ -30,7 +29,7 @@ check package.json has overrides field (not pnpm.overrides)
   "overrides": {
     "vite": "npm:@voidzero-dev/vite-plus-core@<version>"
   },
-  "packageManager": "npm@10.9.2"
+  "packageManager": "npm@11.13.0"
 }
 ```
 

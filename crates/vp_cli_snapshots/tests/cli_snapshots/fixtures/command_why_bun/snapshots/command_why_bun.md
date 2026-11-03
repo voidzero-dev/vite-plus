@@ -30,7 +30,7 @@ Options:
   --find-by <FINDER_NAME>  Use a finder function defined in .pnpmfile.cjs
   -h, --help               Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp install`
@@ -40,7 +40,7 @@ should install packages first
 ```
 VITE+ - The Unified Toolchain for the Web
 
-bun install <version> (af24e281)
+bun install <version> (<hash>)
 
  test-vite-plus-package@1.0.0
  test-vite-plus-package-optional@1.0.0

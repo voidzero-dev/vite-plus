@@ -1,0 +1,7 @@
+[[case]]
+name = "command_version_local_tools"
+vp = "local"
+comment = "Resolve bundled tool versions from the local vite-plus package."
+steps = [
+  ["vp", "-V"],
+]

@@ -1,5 +1,7 @@
 import path from 'node:path';
 
+import { normalize } from 'verkit';
+
 import { fetchNpmResource, getNpmRegistry } from '../utils/npm-config.ts';
 import { readPackageJsonFromTarball } from './org-tarball.ts';
 
@@ -223,6 +225,8 @@ export class CreateConfigSchemaError extends Error {
   }
 }
 
+const makeCreateConfigError = (message: string) => new CreateConfigSchemaError(message);
+
 /**
  * Validate `create.templates` from `vite.config.ts`. Returns `[]` when the field
  * is absent or an empty array; throws {@link CreateConfigSchemaError} when present
@@ -235,17 +239,28 @@ export function validateCreateTemplates(templates: unknown): CreateTemplateEntry
   if (!Array.isArray(templates)) {
     throw new CreateConfigSchemaError('create.templates must be an array');
   }
-  const makeError = (message: string) => new CreateConfigSchemaError(message);
-  return validateTemplateEntries(templates, 'create.templates', makeError, (entry, index) => {
-    const validated = validateTemplateEntry(entry, index, 'create.templates', makeError);
-    // `vite:*` names are builtin templates; a local entry resolves before the
-    // builtin in `vp create <name>`, so allowing the prefix would let config
-    // silently shadow e.g. `vite:application`.
-    if (validated.name.startsWith('vite:')) {
-      throw makeError(`create.templates[${index}].name uses the reserved \`vite:\` prefix`);
-    }
-    return validated;
-  });
+  return validateTemplateEntries(
+    templates,
+    'create.templates',
+    makeCreateConfigError,
+    (entry, index) => {
+      const validated = validateTemplateEntry(
+        entry,
+        index,
+        'create.templates',
+        makeCreateConfigError,
+      );
+      // `vite:*` names are builtin templates; a local entry resolves before the
+      // builtin in `vp create <name>`, so allowing the prefix would let config
+      // silently shadow e.g. `vite:application`.
+      if (validated.name.startsWith('vite:')) {
+        throw makeCreateConfigError(
+          `create.templates[${index}].name uses the reserved \`vite:\` prefix`,
+        );
+      }
+      return validated;
+    },
+  );
 }
 
 interface RegistryPackument {
@@ -332,6 +347,14 @@ export async function readOrgManifest(
     if (!resolvedVersion) {
       return null;
     }
+  }
+  // Registry versions become cache-path components, so reject malformed
+  // values even when the registry has matching version metadata.
+  if (normalize(resolvedVersion) === null) {
+    throw new OrgManifestSchemaError(
+      `invalid version "${resolvedVersion}" (expected a semantic version)`,
+      packageName,
+    );
   }
   const meta = packument.versions?.[resolvedVersion];
   if (!meta) {

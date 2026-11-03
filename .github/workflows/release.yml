@@ -16,7 +16,7 @@ jobs:
   check:
     if: github.repository == 'voidzero-dev/vite-plus'
     name: Check version
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     outputs:
@@ -45,7 +45,7 @@ jobs:
       cache-key: release
 
   request-approval:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [check, build-rust]
     if: needs.check.outputs.version_changed == 'true'
     steps:
@@ -55,60 +55,77 @@ jobs:
           content: 'Requesting approval for vite-plus v${{ needs.check.outputs.version }}: ${{ github.server_url }}/${{ github.repository }}/actions/workflows/release.yml'
 
   Release:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: release
     needs: [check, build-rust, request-approval]
     if: needs.check.outputs.version_changed == 'true'
     permissions:
+      actions: read # restore the lockfile on release job retries
       contents: write
       packages: write
       id-token: write # Required for OIDC
     env:
       VERSION: ${{ needs.check.outputs.version }}
+      # npm publish-time scanning makes a successful upload temporarily
+      # unavailable to installs. After each dependency tier becomes visible on
+      # this runner's registry edge, allow time for other CDN edges to settle.
+      PUBLISH_PROPAGATION_MIN_SECONDS: '60'
+      PUBLISH_PROPAGATION_TIMEOUT_SECONDS: '600'
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: '24.18.0'
+          node-version-file: .node-version
           package-manager-cache: false
           registry-url: 'https://registry.npmjs.org'
+
+      # OIDC dist-tag operations require npm >=11.21.0 and the vite-plus
+      # trusted publisher's "Allow npm dist-tag" permission.
+      - name: Install npm with OIDC dist-tag support
+        run: npm install --global npm@11.21.0
 
       - name: Install dependencies
         run: pnpm install
 
       - name: Download cli dist
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: packages/cli/dist
           pattern: cli
           merge-multiple: true
 
       - name: Download cli docs
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: packages/cli/docs
           pattern: cli-docs
           merge-multiple: true
 
       - name: Download cli binding
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: packages/cli/artifacts
           pattern: vite-plus-native-*
 
       - name: Download core dist
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: packages/core/dist
           pattern: core
           merge-multiple: true
 
+      - name: Download prompts dist
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: prompts
+          path: packages/prompts/dist
+
       - name: Download LICENSE files
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: packages
           pattern: licenses
@@ -121,13 +138,13 @@ jobs:
           upload: 'false'
 
       - name: Download Rust CLI binaries
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: rust-cli-artifacts
           pattern: vp-global-cli-*
 
       - name: Download installer binaries (Windows)
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: installer-artifacts
           pattern: vp-setup-*
@@ -146,21 +163,120 @@ jobs:
           ls -la installer-release/ || echo "No installer binaries found"
 
       - name: Download release archives
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: binary-release
           pattern: vp-release-archive-*
           merge-multiple: true
 
       - name: Prepare and publish native addons
-        run: node ./packages/cli/publish-native-addons.ts --mode npm
+        run: node ./packages/cli/publish-native-addons.ts --mode npm --phase native
 
-      - name: Publish
-        run: |
+      - name: Publish prompts
+        run: >-
+          node ./.github/scripts/publish-npm-package.ts
+          "@voidzero-dev/vite-plus-prompts@${VERSION}"
+          --
+          pnpm publish --filter=./packages/prompts --tag latest --access public --no-git-checks
+
+      - name: Publish core dependency tier
+        run: >-
+          node ./.github/scripts/publish-npm-package.ts
+          "@voidzero-dev/vite-plus-core@${VERSION}"
+          --
           pnpm publish --filter=./packages/core --tag latest --access public --no-git-checks
-          pnpm publish --filter=./packages/cli --tag latest --access public --no-git-checks
+
+      # The CLI pins core via workspace:* (rewritten to this exact version).
+      # Wait for both its install metadata and tarball before publishing the CLI.
+      - name: Wait for core to propagate
+        run: >-
+          node ./.github/scripts/wait-for-npm-packages.ts
+          "@voidzero-dev/vite-plus-core@${VERSION}"
+
+      # Make the exact local CLI version installable without moving latest.
+      # Bootstrap keeps selecting the previous release until its matching global
+      # packages and lockfile are available.
+      - name: Publish local CLI with the staging tag
+        run: >-
+          node ./.github/scripts/publish-npm-package.ts
+          "vite-plus@${VERSION}"
+          --
+          pnpm publish --filter=./packages/cli --tag staging --access public --no-git-checks
+
+      - name: Wait for the local CLI to propagate
+        run: >-
+          node ./.github/scripts/wait-for-npm-packages.ts
+          "vite-plus@${VERSION}"
+          "@voidzero-dev/vite-plus-prompts@${VERSION}"
+
+      # Keep the first pnpm resolution when retrying a partially published release.
+      - name: Restore installation lockfile from an earlier attempt
+        id: install-lockfile
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          artifact_id=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts" \
+            --jq '.artifacts[] | select(.name == "installation-lockfile" and .expired == false) | .id')
+          if [ -n "$artifact_id" ]; then
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > "$RUNNER_TEMP/installation-lockfile.zip"
+            unzip -o "$RUNNER_TEMP/installation-lockfile.zip" -d binary-release
+            echo "restored=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate global installation lockfile
+        run: node ./packages/cli/generate-install-lockfile.ts
+
+      # Save before publishing any platform package, including while npm still
+      # hides accepted versions during scanning. Retries must not resolve again.
+      - name: Save installation lockfile for release retries
+        if: steps.install-lockfile.outputs.restored != 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: installation-lockfile
+          path: binary-release/vp-install-lock.yaml
+          if-no-files-found: error
+
+      - name: Publish CLI binaries with the installation lockfile
+        run: node ./packages/cli/publish-native-addons.ts --mode npm --phase cli
+
+      # The preceding step waits for every global package to propagate.
+      # Promote the existing version; never repack or republish the local CLI.
+      - name: Promote the local CLI to latest
+        run: npm dist-tag add "vite-plus@${VERSION}" latest
+
+      - name: Create release archive checksums
+        working-directory: binary-release
+        run: sha256sum vp-* > vp-checksums.txt
+
+      # create-vite-plus pins vite-plus via workspace:* (rewritten to this exact
+      # version), so it publishes only after vite-plus is installable.
+      - name: Publish create-vite-plus
+        run: >-
+          node ./.github/scripts/publish-npm-package.ts
+          "create-vite-plus@${VERSION}"
+          --
+          pnpm publish --filter=./packages/create-vite-plus --tag latest --access public --no-git-checks
+
+      # Publishing can succeed even if the runner loses the response. Do not
+      # replace assets on a published release, including an immutable release.
+      - name: Check whether the GitHub release is already published
+        id: github-release
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            try {
+              const { data } = await github.rest.repos.getReleaseByTag({
+                ...context.repo,
+                tag: `v${process.env.VERSION}`,
+              });
+              core.setOutput('published', String(!data.draft));
+            } catch (error) {
+              if (error.status !== 404) throw error;
+              core.setOutput('published', 'false');
+            }
 
       - name: Create release body
+        if: steps.github-release.outputs.published != 'true'
         env:
           REPOSITORY: ${{ github.repository }}
           COMMIT_SHA: ${{ github.sha }}
@@ -174,6 +290,7 @@ jobs:
 
           - \`@voidzero-dev/vite-plus-core@${VERSION}\`
           - \`vite-plus@${VERSION}\`
+          - \`create-vite-plus@${VERSION}\`
 
           ### Installation
 
@@ -193,7 +310,8 @@ jobs:
           EOF
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
+        if: steps.github-release.outputs.published != 'true'
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         id: release
         with:
           body_path: ./RELEASE_BODY.md
@@ -203,22 +321,135 @@ jobs:
           name: vite-plus v${{ env.VERSION }}
           tag_name: v${{ env.VERSION }}
           target_commitish: ${{ github.sha }}
+          overwrite_files: true
+          fail_on_unmatched_files: true
           files: |
             installer-release/vp-setup-*.exe
             binary-release/vp-*.tar.gz
             binary-release/vp-*.zip
+            binary-release/vp-checksums.txt
+            binary-release/vp-install-lock.yaml
 
       - name: Publish GitHub Release
+        if: steps.github-release.outputs.published != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release edit "v${VERSION}" --draft=false --repo "${{ github.repository }}"
+
+  update-homebrew:
+    name: Open Homebrew formula PR
+    runs-on: ubuntu-24.04
+    needs: [check, Release]
+    if: >-
+      needs.check.outputs.version_changed == 'true' &&
+      !contains(needs.check.outputs.version, '-')
+    permissions:
+      contents: read
+    concurrency:
+      group: update-homebrew-formula
+      cancel-in-progress: false
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: app-token
+        with:
+          client-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Preserve fixes in an existing formula PR
+        id: existing-pr
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            const { owner, repo } = context.repo;
+            const branch = `release/homebrew-v${process.env.VERSION}`;
+            const { data: pulls } = await github.rest.pulls.list({
+              owner, repo, head: `${owner}:${branch}`, state: 'all', per_page: 1,
+            });
+            if (pulls.length) {
+              core.setOutput('exists', 'true');
+              core.notice(`Preserving ${pulls[0].html_url}. Push fixes or rerun checks on that PR.`);
+              return;
+            }
+            try {
+              await github.rest.git.getRef({ owner, repo, ref: `heads/${branch}` });
+              core.setFailed(`Branch ${branch} already exists. Open its PR manually to preserve its changes.`);
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
+
+      - name: Check publication and update formula
+        if: steps.existing-pr.outputs.exists != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node .github/scripts/update-homebrew-formula.mjs "$VERSION"
+
+      - uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        if: steps.existing-pr.outputs.exists != 'true'
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          add-paths: HomebrewFormula/vp.rb
+          commit-message: 'chore: update Homebrew vp to ${{ env.VERSION }}'
+          title: 'chore: update Homebrew vp to ${{ env.VERSION }}'
+          branch: release/homebrew-v${{ env.VERSION }}
+          base: main
+          sign-commits: true
+          body: |
+            Update the official Homebrew tap to `vp@${{ env.VERSION }}`.
+
+            The formula downloads the native CLI from GitHub Releases. On first use, `vp` installs matching dependencies in the user's data directory.
+
+            This PR runs installation checks against the published packages on all four supported platforms. Fix formula or test failures here before merging.
+
+  # Deploy viteplus.dev from the release commit after the npm packages and the
+  # GitHub release are published, so the site and the install scripts always
+  # match the released vp. Skipped for prereleases: production docs must keep
+  # describing the latest stable release. See rfcs/deploy-docs-on-release.md.
+  deploy-docs:
+    name: Deploy docs
+    runs-on: ubuntu-24.04
+    needs: [check, Release]
+    if: >-
+      needs.check.outputs.version_changed == 'true' &&
+      !contains(needs.check.outputs.version, '-')
+    # Shared with deploy-docs.yml so production deploys serialize across both
+    # entry paths. Only the newest pending run survives in the group; if this
+    # job's pending run is replaced by a manual dispatch, the canceled job
+    # holds back discord-notify and the deploy must be re-run.
+    concurrency:
+      group: deploy-docs
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write # authenticate remote cache uploads
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - uses: ./.github/actions/deploy-docs
+        with:
+          void-project: viteplus
+          void-token: ${{ secrets.VOID_TOKEN }}
 
   # Build and push the official toolchain Docker image to GHCR after the npm
   # release is published (the image installs vp from npm, so the version must
   # exist first). See docker/Dockerfile and docs/guide/docker.md.
   publish-docker:
     name: Publish Docker image
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [check, Release]
     if: needs.check.outputs.version_changed == 'true'
     permissions:
@@ -230,12 +461,12 @@ jobs:
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
-      - uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
 
-      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Log in to GHCR
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -254,7 +485,7 @@ jobs:
             type=raw,value=latest
 
       - name: Build and push
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: docker
           file: docker/Dockerfile
@@ -266,15 +497,22 @@ jobs:
             VP_VERSION=${{ env.VERSION }}
           provenance: false
 
-  # Announce the release on Discord last, after the Docker images are published,
-  # so the message can include the GHCR image. Runs after the npm release
-  # (Release) and the images (publish-docker).
+  # Announce the release on Discord last, after the Docker images and the docs
+  # are published, so the message never points at a missing image or a site
+  # that still shows the previous release.
   discord-notify:
     name: Notify Discord
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # publish-docker already needs Release, so depending on it orders this last.
-    needs: [check, publish-docker]
-    if: needs.check.outputs.version_changed == 'true'
+    # deploy-docs is skipped for prereleases; gate on its result explicitly so
+    # prerelease announcements still go out, while a failed docs deploy on a
+    # stable release holds the announcement back.
+    needs: [check, publish-docker, deploy-docs]
+    if: >-
+      !cancelled() &&
+      needs.check.outputs.version_changed == 'true' &&
+      needs.publish-docker.result == 'success' &&
+      (needs.deploy-docs.result == 'success' || needs.deploy-docs.result == 'skipped')
     env:
       VERSION: ${{ needs.check.outputs.version }}
       IMAGE: ghcr.io/voidzero-dev/vite-plus
@@ -293,6 +531,7 @@ jobs:
             **Published Packages:**
             • @voidzero-dev/vite-plus-core@${{ env.VERSION }}
             • vite-plus@${{ env.VERSION }}
+            • create-vite-plus@${{ env.VERSION }}
 
             **Docker (GHCR):**
             • `docker pull ${{ env.IMAGE }}:${{ env.VERSION }}`

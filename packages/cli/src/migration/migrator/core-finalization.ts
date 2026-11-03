@@ -5,7 +5,14 @@ import { rewriteScripts } from '../../../binding/index.js';
 import { type WorkspacePackage } from '../../types/index.ts';
 import { editJsonFile, readJsonFile } from '../../utils/json.ts';
 import { rulesDir } from '../../utils/path.ts';
-import { hasTsconfigTypesToRewrite, rewriteAllImports, rewriteTsconfigTypes } from '../migrator.ts';
+import {
+  dropDeadOxlintPluginsDependency,
+  hasTsconfigTypesToRewrite,
+  mergeTsdownConfigFile,
+  migrateTaskCacheConfigInViteConfig,
+  rewriteAllImports,
+  rewriteTsconfigTypes,
+} from '../migrator.ts';
 import { type MigrationReport } from '../report.ts';
 
 const RULES_YAML_PATH = path.join(rulesDir, 'vite-tools.yml');
@@ -22,15 +29,38 @@ export function readRulesYaml(): string {
   return cachedRulesYaml;
 }
 
+// Each rule is one YAML document introduced by a `---` separator line. Split on the
+// separators instead of on blank lines, which a formatter is free to collapse. Comment
+// lines directly above a separator describe the rule below it, so they move with it.
+function splitRuleDocuments(yaml: string): string[] {
+  const lines = yaml.split('\n');
+  const documents: string[] = [];
+  let start = 0;
+  for (const [index, line] of lines.entries()) {
+    if (line.trimEnd() !== '---') {
+      continue;
+    }
+    let documentStart = index;
+    while (documentStart > start && lines[documentStart - 1].trimStart().startsWith('#')) {
+      documentStart--;
+    }
+    if (documentStart > start) {
+      documents.push(lines.slice(start, documentStart).join('\n'));
+      start = documentStart;
+    }
+  }
+  documents.push(lines.slice(start).join('\n'));
+  return documents;
+}
+
 export function getScriptRulesYaml(skipStagedMigration?: boolean): string {
   const yaml = readRulesYaml();
   if (!skipStagedMigration) {
     return yaml;
   }
-  cachedRulesYamlNoLintStaged ??= yaml
-    .split('\n\n\n')
-    .filter((block) => !block.includes('id: replace-lint-staged'))
-    .join('\n\n\n');
+  cachedRulesYamlNoLintStaged ??= splitRuleDocuments(yaml)
+    .filter((document) => !document.includes('id: replace-lint-staged'))
+    .join('\n');
   return cachedRulesYamlNoLintStaged;
 }
 
@@ -50,9 +80,15 @@ export type PendingCoreMigration = {
 };
 
 export type CoreMigrationFinalizationResult = {
+  dependencies: boolean;
   scripts: boolean;
   tsconfigTypes: boolean;
   imports: boolean;
+  tsdownConfig: boolean;
+  taskCacheConfig: boolean;
+  // Kept out of the report so that review items alone do not make an
+  // up-to-date project run the rest of the migration.
+  taskCacheWarnings: string[];
 };
 
 function getCoreMigrationProjectPaths(workspaceInfo: CoreMigrationWorkspace): string[] {
@@ -114,9 +150,13 @@ export function finalizeCoreMigrationForExistingVitePlus(
 ): CoreMigrationFinalizationResult {
   const projectPaths = getCoreMigrationProjectPaths(workspaceInfo);
   const result: CoreMigrationFinalizationResult = {
+    dependencies: false,
     scripts: false,
     tsconfigTypes: false,
     imports: false,
+    tsdownConfig: false,
+    taskCacheConfig: false,
+    taskCacheWarnings: [],
   };
 
   if (pending.scripts) {
@@ -133,6 +173,23 @@ export function finalizeCoreMigrationForExistingVitePlus(
   }
 
   result.imports = rewriteAllImports(workspaceInfo.rootDir, silent, report, true);
+  result.dependencies = dropDeadOxlintPluginsDependency(
+    workspaceInfo.rootDir,
+    workspaceInfo.packages,
+  );
+
+  // Partial migrations can already have a Vite+ dependency while leaving
+  // tsdown.config.* undiscoverable by vp pack. Finalize those configs on the
+  // existing-Vite+ path just as the fresh migration path does.
+  for (const projectPath of projectPaths) {
+    result.tsdownConfig = mergeTsdownConfigFile(projectPath, silent, report) || result.tsdownConfig;
+  }
+
+  for (const projectPath of projectPaths) {
+    result.taskCacheConfig =
+      migrateTaskCacheConfigInViteConfig(projectPath, silent, report, result.taskCacheWarnings) ||
+      result.taskCacheConfig;
+  }
 
   return result;
 }

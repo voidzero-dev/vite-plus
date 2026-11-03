@@ -1,0 +1,265 @@
+[[case]]
+name = "migration_oxlint_extends"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+# Lint each file separately because directory traversal order differs across platforms.
+steps = [
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], comment = "Original inherited errors and warnings", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "example.test.js"], comment = "Original override rules and plugin", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"] },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "Path extends become imports of shared TypeScript configs" },
+  { argv = ["vpt", "print-file", "shared/nested/first.ts"], comment = "Nested imports preserve overrides and their plugin declarations" },
+  { argv = ["vpt", "print-file", "shared/base.ts"] },
+  { argv = ["vpt", "print-file", "shared/second.ts"], comment = "Relative plugin paths resolve from the shared module" },
+  { argv = ["vpt", "stat-file", ".oxlintrc.json", "--assert-not", "file"] },
+  { argv = ["vpt", "print-file", "shared/second.jsonc"], comment = "Shared JSON configs are retained" },
+  { argv = ["vp", "exec", "tsc", "--noEmit"], comment = "Generated config types accept the resolved inheritance" },
+  { argv = ["vp", "lint", "--threads=1", "index.js"], comment = "The diagnostics and exit code match the original config without a config flag", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "example.test.js"], comment = "The override diagnostics and exit code match the original config", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"] },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "A second migration leaves the config unchanged" },
+  { argv = ["vp", "lint", "--threads=1", "index.js"], comment = "The diagnostics and exit code remain unchanged after the second migration", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "example.test.js"], comment = "The override diagnostics and exit code also remain unchanged", continue-on-failure = true },
+  { argv = ["vpt", "replace-file-content", "shared/base.ts", '"no-debugger": "error"', '"no-debugger": "warn"'], comment = "Edits to the shared TS config propagate through its imports" },
+  { argv = ["vp", "lint", "--threads=1", "index.js"], comment = "The edited base rule now warns in index.js", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "example.test.js"], comment = "The test override remains unchanged after the shared config edit", continue-on-failure = true },
+]
+
+[[case]]
+name = "migration_oxlint_extends_type_options"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "json-edit", "shared/base.json", "options", '{"typeAware":true,"typeCheck":true}'], snapshot = false },
+  { argv = ["vpt", "json-edit", ".oxlintrc.json", "rules.typescript/no-floating-promises", '"error"'], snapshot = false },
+  { argv = ["vpt", "write-file", "tsconfig.json", '{"compilerOptions":{"target":"ESNext","strict":true},"include":["*.ts"]}'], snapshot = false },
+  { argv = ["vpt", "write-file", "type-error.ts", "export const value: string = 1;\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "type-aware.ts", "Promise.resolve(1);\n"], snapshot = false },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "type-error.ts"], comment = "Inherited typeCheck reports the original TypeScript diagnostic", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "type-aware.ts"], comment = "Inherited typeAware enables no-floating-promises", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"] },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "Local options stay empty so inherited settings remain live" },
+  { argv = ["vp", "lint", "--threads=1", "type-error.ts"], comment = "Imported typeCheck produces the same diagnostic and exit code", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "type-aware.ts"], comment = "Imported typeAware produces the same diagnostic and exit code", continue-on-failure = true },
+  { argv = ["vpt", "replace-file-content", "shared/base.ts", "typeAware: true", "typeAware: false"] },
+  { argv = ["vpt", "replace-file-content", "shared/base.ts", "typeCheck: true", "typeCheck: false"] },
+  { argv = ["vp", "lint", "--threads=1", "type-error.ts"], comment = "Disabling the shared options removes the TypeScript diagnostic" },
+  { argv = ["vp", "lint", "--threads=1", "type-aware.ts"], comment = "Disabling the shared options removes the type-aware diagnostic" },
+]
+
+[[case]]
+name = "migration_oxlint_extends_import_paths"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "cp", "shared/base.json", "shared/base#%.json"], snapshot = false },
+  { argv = ["vpt", "cp", "shared/nested/first.json", "shared/nested/first#%.json"], snapshot = false },
+  { argv = ["vpt", "json-edit", "shared/nested/first#%.json", "extends", '["../base#%.json"]'], snapshot = false },
+  { argv = ["vpt", "json-edit", ".oxlintrc.json", "extends", '["./shared/nested/first#%.json","./shared/second.jsonc"]'], snapshot = false },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], comment = "Original diagnostics with special characters in shared config paths", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"] },
+  { argv = ["vpt", "print-file", "vite.config.ts"] },
+  { argv = ["vpt", "print-file", "shared/nested/first#%.ts"] },
+  { argv = ["vp", "exec", "tsc", "--noEmit"], comment = "TypeScript resolves the literal import paths" },
+  { argv = ["vp", "lint", "--threads=1", "index.js"], comment = "The migrated imports retain the same diagnostics and exit code", continue-on-failure = true },
+]
+
+[[case]]
+name = "migration_oxlint_extends_backslash_path"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "cp", "shared/base.json", 'shared/base\name.json'], snapshot = false },
+  { argv = ["vpt", "json-edit", "shared/nested/first.json", "extends", '["../base\\name.json"]'], snapshot = false },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], comment = "Original diagnostics with a literal backslash in the shared config filename", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"], comment = "Warn and preserve the JSON because TypeScript treats the backslash as a separator" },
+  { argv = ["vpt", "stat-file", ".oxlintrc.json", "--assert", "file"] },
+  { argv = ["vpt", "stat-file", "shared/nested/first.ts", "--assert", "missing"] },
+  { argv = ["vpt", "stat-file", 'shared/base\name.ts', "--assert", "missing"] },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], comment = "The retained JSON still produces the same diagnostics and exit code", continue-on-failure = true },
+]
+
+[[case]]
+name = "migration_oxlint_extends_query_path"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "cp", "shared/base.json", "shared/base?.json"], snapshot = false },
+  { argv = ["vpt", "json-edit", "shared/nested/first.json", "extends", '["../base?.json"]'], snapshot = false },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], comment = "The original JSON resolves the question mark as part of the filename", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"], comment = "Warn and preserve the JSON instead of emitting an unresolvable import" },
+  { argv = ["vpt", "stat-file", ".oxlintrc.json", "--assert", "file"] },
+  { argv = ["vpt", "stat-file", "shared/nested/first.ts", "--assert", "missing"] },
+  { argv = ["vpt", "stat-file", "shared/base?.ts", "--assert", "missing"] },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], comment = "The retained JSON still produces the same diagnostics and exit code", continue-on-failure = true },
+]
+
+[[case]]
+name = "migration_oxlint_extends_override_paths"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "write-file", ".oxlintrc.json", '{"extends":["./configs/base.json"]}'], snapshot = false },
+  { argv = ["vpt", "write-file", "configs/base.json", '{"options":{"typeAware":false,"typeCheck":false},"rules":{"no-debugger":"error"},"overrides":[{"files":["src/**"],"excludeFiles":["src/skip.js"],"rules":{"no-debugger":"off"}}]}'], snapshot = false },
+  { argv = ["vpt", "write-file", "src/allowed.js", "debugger;\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "src/skip.js", "debugger;\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "configs/src/allowed.js", "debugger;\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "configs/src/skip.js", "debugger;\n"], snapshot = false },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "src/allowed.js"], comment = "Original inherited override matches the consumer-relative path", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "src/skip.js"], comment = "Original excludeFiles prevents the override", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "configs/src/allowed.js"], comment = "The declaring directory does not rebase the inherited glob", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "configs/src/skip.js"], continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"] },
+  { argv = ["vp", "lint", "--threads=1", "src/allowed.js"], comment = "The imported override matches the same path", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "src/skip.js"], comment = "The imported exclusion has the same effect", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "configs/src/allowed.js"], comment = "The declaring-directory path retains its original diagnostic", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "configs/src/skip.js"], continue-on-failure = true },
+]
+
+[[case]]
+name = "migration_oxlint_extends_directory_alias"
+vp = "local"
+skip-platforms = ["windows"]
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "write-file", ".oxlintrc.json", '{"extends":["./aliases/base.json"]}'], snapshot = false },
+  { argv = ["vpt", "write-file", "configs/nested/base.json", '{"extends":["../common.json"],"options":{"typeAware":false,"typeCheck":false}}'], snapshot = false },
+  { argv = ["vpt", "write-file", "configs/common.json", '{"rules":{"no-debugger":"error"}}'], snapshot = false },
+  { argv = ["vpt", "write-file", "common.json", '{"rules":{"no-debugger":"off"}}'], snapshot = false },
+  { argv = ["vpt", "write-file", "index.js", "debugger;\n"], snapshot = false },
+  { argv = ["node", "create-directory-link.mjs"], snapshot = false },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], comment = "Oxlint follows the directory link before resolving the parent component", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"] },
+  { argv = ["vpt", "print-file", "configs/nested/base.ts"] },
+  { argv = ["vp", "lint", "--threads=1", "index.js"], comment = "The migrated graph selects the same physical parent config", continue-on-failure = true },
+]
+
+[[case]]
+name = "migration_oxlint_extends_directory_junction"
+vp = "local"
+skip-platforms = ["linux", "macos"]
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "write-file", ".oxlintrc.json", '{"extends":["./aliases/base.json"]}'], snapshot = false },
+  { argv = ["vpt", "write-file", "configs/nested/base.json", '{"extends":["../common.json"],"options":{"typeAware":false,"typeCheck":false}}'], snapshot = false },
+  { argv = ["vpt", "write-file", "configs/common.json", '{"rules":{"no-debugger":"error"}}'], snapshot = false },
+  { argv = ["vpt", "write-file", "common.json", '{"rules":{"no-debugger":"off"}}'], snapshot = false },
+  { argv = ["vpt", "write-file", "index.js", "debugger;\n"], snapshot = false },
+  { argv = ["node", "create-directory-link.mjs"], snapshot = false },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], comment = "Windows resolves the parent component before following the directory junction", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"] },
+  { argv = ["vpt", "print-file", "configs/nested/base.ts"] },
+  { argv = ["vp", "lint", "--threads=1", "index.js"], comment = "The migrated graph selects the same lexical parent config", continue-on-failure = true },
+]
+
+[[case]]
+name = "migration_oxlint_extends_check_js"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "write-file", "vite.config.js", "export default {};\n"], snapshot = false },
+  { argv = ["vpt", "json-edit", "tsconfig.json", "compilerOptions.allowJs", "true"], snapshot = false },
+  { argv = ["vpt", "json-edit", "tsconfig.json", "compilerOptions.checkJs", "true"], snapshot = false },
+  { argv = ["vpt", "json-edit", "tsconfig.json", "include", '["vite.config.js"]'], snapshot = false },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], comment = "Original inherited diagnostics", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"] },
+  { argv = ["vpt", "print-file", "vite.config.js"] },
+  { argv = ["vp", "exec", "tsc", "--noEmit"], comment = "JavaScript config imports type-check without allowImportingTsExtensions" },
+  { argv = ["vp", "lint", "--threads=1", "index.js"], comment = "The generated imports preserve the diagnostics and exit code", continue-on-failure = true },
+]
+
+[[case]]
+name = "migration_oxlint_extends_check_mjs"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "write-file", "vite.config.mjs", "export default {};\n"], snapshot = false },
+  { argv = ["vpt", "json-edit", "tsconfig.json", "compilerOptions.allowJs", "true"], snapshot = false },
+  { argv = ["vpt", "json-edit", "tsconfig.json", "compilerOptions.checkJs", "true"], snapshot = false },
+  { argv = ["vpt", "json-edit", "tsconfig.json", "include", '["vite.config.mjs"]'], snapshot = false },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], comment = "Original inherited diagnostics", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"] },
+  { argv = ["vpt", "print-file", "vite.config.mjs"] },
+  { argv = ["vp", "exec", "tsc", "--noEmit"], comment = "JavaScript config imports type-check without allowImportingTsExtensions" },
+  { argv = ["vp", "lint", "--threads=1", "index.js"], comment = "The generated imports preserve the diagnostics and exit code", continue-on-failure = true },
+]
+
+[[case]]
+name = "migration_oxlint_extends_isolated_retry"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "write-file", ".oxlintrc.json", '{"extends":["./missing.json"]}'], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"] },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "The failed migration records a pending marker without a lint block" },
+  { argv = ["vpt", "write-file", "missing.json", '{"rules":{"no-debugger":"error"},"options":{"typeAware":false,"typeCheck":false}}'], comment = "Repair the only unreadable config" },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], comment = "The repaired JSON loads before retrying", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"] },
+  { argv = ["vpt", "stat-file", ".oxlintrc.json", "--assert", "missing"] },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "The successful retry replaces the pending marker with the lint config" },
+  { argv = ["vp", "lint", "--threads=1", "index.js"], comment = "The migrated config retains the same diagnostic and exit code", continue-on-failure = true },
+]
+
+[[case]]
+name = "migration_oxlint_extends_lint_conflict_retry"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "write-file", "vite.config.mjs", "export default { lint: {} };\n"], snapshot = false },
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], comment = "The original JSON inheritance is selected explicitly", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"] },
+  { argv = ["vpt", "print-file", "vite.config.mjs"], comment = "The lint conflict records a pending marker" },
+  { argv = ["vpt", "replace-file-content", "vite.config.mjs", "lint: {},", ""], comment = "Remove the conflicting lint block" },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"] },
+  { argv = ["vpt", "stat-file", ".oxlintrc.json", "--assert", "missing"] },
+  { argv = ["vpt", "print-file", "vite.config.mjs"] },
+  { argv = ["vp", "lint", "--threads=1", "index.js"], comment = "The retried migration retains the original diagnostics and exit code", continue-on-failure = true },
+]
+
+[[case]]
+name = "migration_oxlint_extends_ts_check_pragma"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "write-file", "vite.config.mjs", "// @ts-check\n/** @type {string} */\nexport const value = 1;\nexport default {};\n"], snapshot = false },
+  { argv = ["vpt", "json-edit", "tsconfig.json", "compilerOptions.allowJs", "true"], snapshot = false },
+  { argv = ["vpt", "json-edit", "tsconfig.json", "include", '["vite.config.mjs"]'], snapshot = false },
+  { argv = ["vp", "install"], snapshot = false },
+  { argv = ["vp", "exec", "tsc", "--noEmit"], comment = "The file-level pragma enables the original type diagnostic", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"] },
+  { argv = ["vpt", "print-file", "vite.config.mjs"], comment = "Generated imports follow the file-level pragma and precede the statement's type annotation" },
+  { argv = ["vp", "exec", "tsc", "--noEmit"], comment = "The pragma still enables the same type diagnostic after migration", continue-on-failure = true },
+  { argv = ["vpt", "replace-file-content", "vite.config.mjs", "@ts-check", "@ts-nocheck"] },
+  { argv = ["vpt", "json-edit", "tsconfig.json", "compilerOptions.checkJs", "true"] },
+  { argv = ["vp", "exec", "tsc", "--noEmit"], comment = "A leading ts-nocheck pragma can still disable project-level JavaScript checking" },
+]
+
+[[case]]
+name = "migration_oxlint_extends_missing_plugin"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vp", "lint", "--threads=1", "-c", ".oxlintrc.json", "index.js"], comment = "Original inherited diagnostics before a missing generated plugin is added", continue-on-failure = true },
+  { argv = ["vpt", "json-edit", ".oxlintrc.json", "jsPlugins", '["eslint-plugin-vp-missing"]'], snapshot = false },
+  { argv = ["vpt", "json-edit", ".oxlintrc.json", "rules.vp-missing/no-foo", '"error"'], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"], comment = "Sanitize missing generated package references without discarding inheritance" },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "The missing plugin and its rule are removed while inherited plugin rules remain" },
+  { argv = ["vp", "lint", "--threads=1", "index.js"], comment = "Lint loads successfully and reports the inherited diagnostics", continue-on-failure = true },
+  { argv = ["vp", "lint", "--threads=1", "example.test.js"], comment = "Inherited override plugins still run", continue-on-failure = true },
+]

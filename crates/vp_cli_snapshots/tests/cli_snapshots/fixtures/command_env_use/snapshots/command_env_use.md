@@ -7,12 +7,12 @@ should show help
 ```
 VITE+ - The Unified Toolchain for the Web
 
-Usage: vp env use [OPTIONS] [VERSION]
+Usage: vp env use [OPTIONS] [REQUESTS]...
 
-Use a specific Node.js version for this shell session
+Activate Node.js and package-manager versions for this shell session
 
 Arguments:
-  [VERSION]  Version to use (e.g., "20", "20.18.0", "lts", "latest"). If omitted, reads from .node-version, package.json, or .nvmrc
+  [REQUESTS]...  Component selectors or explicit versions to activate
 
 Options:
   --unset                Remove session override (revert to file-based resolution)
@@ -21,19 +21,20 @@ Options:
   -h, --help             Print help (see a summary with '-h')
 
 Examples:
-  vp env use lts        # Override session with latest LTS
-  vp env use --unset    # Clear the session override
+  vp env use 22.19.0  # Override Node.js for this session
+  vp env use pnpm@12  # Override the package manager
+  vp env use --unset  # Clear both session overrides
 
 Documentation: https://viteplus.dev/guide/env
 ```
 
-## `vp env use 20.18.0 --no-install`
+## `vp env use 20.20.2 --no-install`
 
 should output export command to stdout
 
 ```
-export VP_NODE_VERSION=20.18.0
-Using Node.js <version> (resolved from 20.18.0)
+export VP_NODE_VERSION=20.20.2
+Using Node.js <version> (resolved from 20.20.2)
 ```
 
 ## `vp env use --unset`
@@ -42,7 +43,11 @@ should output unset command to stdout
 
 ```
 unset VP_NODE_VERSION
-Reverted to file-based Node.js version resolution
+unset VP_NPM_VERSION
+unset VP_PNPM_VERSION
+unset VP_YARN_VERSION
+unset VP_BUN_VERSION
+Reverted selected components to project environment resolution
 ```
 
 ## `vp env use d`
@@ -75,4 +80,11 @@ Valid examples:
   vp env use 20.18.0     # Exact version
   vp env use lts         # Latest LTS version
   vp env use latest      # Latest version
+```
+
+## `VP_NODE_VERSION=20.20.2 VP_NPM_VERSION=10.9.4 vp env use --silent-if-unchanged --no-install`
+
+an unchanged project environment emits no shell mutations
+
+```
 ```

@@ -1,0 +1,51 @@
+[[case]]
+name = "install_ignore_scripts"
+vp = ["local", "global"]
+comment = "Install and add preserve --ignore-scripts before or after the package name. A plain install without the flag runs both root and dependency postinstall scripts."
+env = { npm_config_ignore_scripts = "false", npm_config_audit = "false", npm_config_fund = "false" }
+steps = [
+  { argv = ["npm", "pack", "./scripted-dep", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts", "./scripted-dep-1.0.0.tgz"], snapshot = false },
+  ["vpt", "stat-file", "node_modules/scripted-dep/package.json", "--assert", "file"],
+  ["vpt", "stat-file", "root-postinstall-ran", "--assert", "missing"],
+  ["vpt", "stat-file", "node_modules/scripted-dep/postinstall-ran", "--assert", "missing"],
+  { argv = ["vpt", "rm", "-rf", "node_modules", "package-lock.json"], snapshot = false },
+  { argv = ["vp", "install", "./scripted-dep-1.0.0.tgz", "--ignore-scripts"], snapshot = false },
+  ["vpt", "stat-file", "node_modules/scripted-dep/package.json", "--assert", "file"],
+  ["vpt", "stat-file", "root-postinstall-ran", "--assert", "missing"],
+  ["vpt", "stat-file", "node_modules/scripted-dep/postinstall-ran", "--assert", "missing"],
+  { argv = ["vpt", "rm", "-rf", "node_modules", "package-lock.json"], snapshot = false },
+  { argv = ["vp", "add", "--ignore-scripts", "./scripted-dep-1.0.0.tgz"], snapshot = false },
+  ["vpt", "stat-file", "node_modules/scripted-dep/package.json", "--assert", "file"],
+  ["vpt", "stat-file", "root-postinstall-ran", "--assert", "missing"],
+  ["vpt", "stat-file", "node_modules/scripted-dep/postinstall-ran", "--assert", "missing"],
+  { argv = ["vpt", "rm", "-rf", "node_modules", "package-lock.json"], snapshot = false },
+  { argv = ["vp", "add", "./scripted-dep-1.0.0.tgz", "--ignore-scripts"], snapshot = false },
+  ["vpt", "stat-file", "node_modules/scripted-dep/package.json", "--assert", "file"],
+  ["vpt", "stat-file", "root-postinstall-ran", "--assert", "missing"],
+  ["vpt", "stat-file", "node_modules/scripted-dep/postinstall-ran", "--assert", "missing"],
+  { argv = ["vpt", "rm", "-rf", "node_modules", "package-lock.json"], snapshot = false },
+  { argv = ["vp", "install"], snapshot = false },
+  ["vpt", "stat-file", "root-postinstall-ran", "--assert", "file"],
+  ["vpt", "stat-file", "node_modules/scripted-dep/postinstall-ran", "--assert", "file"],
+]
+
+[[case]]
+name = "global_install_ignore_scripts"
+vp = "global"
+comment = "Managed global install and add skip dependency lifecycle scripts when requested. Without the flag, scripts still run. The installed binary works in either case."
+env = { npm_config_ignore_scripts = "false", npm_config_audit = "false", npm_config_fund = "false" }
+steps = [
+  { argv = ["npm", "pack", "./scripted-dep", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "install", "-g", "./scripted-dep-1.0.0.tgz", "--ignore-scripts"], snapshot = false },
+  ["scripted-dep", "skipped"],
+  { argv = ["vp", "remove", "-g", "scripted-dep"], snapshot = false },
+  { argv = ["vp", "add", "-g", "--ignore-scripts", "./scripted-dep-1.0.0.tgz"], snapshot = false },
+  ["scripted-dep", "skipped"],
+  { argv = ["vp", "remove", "-g", "scripted-dep"], snapshot = false },
+  { argv = ["vp", "install", "-g", "./scripted-dep-1.0.0.tgz"], snapshot = false },
+  ["scripted-dep", "ran"],
+]
+after = [
+  { argv = ["vp", "remove", "-g", "scripted-dep"], continue-on-failure = true },
+]

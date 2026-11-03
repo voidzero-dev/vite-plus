@@ -1,0 +1,9 @@
+{
+  "name": "command-yarn-classic-filtered-dependencies",
+  "private": true,
+  "packageManager": "yarn@1.22.22",
+  "workspaces": ["packages/*"],
+  "dependencies": {
+    "lodash": "4.17.21"
+  }
+}

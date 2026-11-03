@@ -11,6 +11,240 @@ mod redact;
 
 use redact::{redact_output, redact_version_probe_output};
 
+const TS7_WARNING: &str = "warn: TypeScript 7.0 does not yet have a stable API and is experimental. Some options will be unavailable.";
+
+#[test]
+fn normalizes_pack_warning_interleavings_without_dropping_messages() {
+    let startup = [
+        "ℹ entry: ./src/index.ts",
+        "ℹ tsconfig: tsconfig.json",
+        "ℹ Build start",
+        "ℹ Emit types with typescript@7.0.2",
+    ];
+    for copies in [1, 2] {
+        for position in 0..=startup.len() {
+            for ending in ["", "\n"] {
+                let mut lines = startup.to_vec();
+                lines.splice(position..position, std::iter::repeat_n(TS7_WARNING, copies));
+                let mut expected = startup.to_vec();
+                expected.splice(3..3, std::iter::repeat_n(TS7_WARNING, copies));
+                let expected = format!("{}{}", expected.join("\n"), ending);
+                let input = format!("{}{}", lines.join("\n"), ending);
+                for input in [input.clone(), input.replace('\n', "\r\n")] {
+                    assert_eq!(redact_output(input, &[], true), expected);
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn keeps_pack_warnings_outside_a_complete_startup_block_in_place() {
+    for lines in [
+        vec![TS7_WARNING, "ℹ Emit types with typescript@7.0.2"],
+        vec!["ℹ entry: a.ts", TS7_WARNING, "warn: plugin failed", "ℹ Build start"],
+        vec!["ℹ entry: a.ts", TS7_WARNING, "", "ℹ Build start"],
+        vec!["ℹ entry: a.ts", TS7_WARNING, "$ vp pack", "ℹ Build start"],
+        vec!["ℹ entry: a.ts", TS7_WARNING, "ℹ Build start", "ℹ Build start"],
+        vec!["ℹ entry: a.ts", TS7_WARNING, "ℹ entry: b.ts", "ℹ Build start"],
+        vec!["ℹ entry: a.ts", "warn: another warning", "ℹ Build start"],
+    ] {
+        let input = lines.join("\n");
+        assert_eq!(redact_output(input.clone(), &[], true), input);
+    }
+}
+
+#[test]
+fn normalizes_concurrent_tsup_workers_without_changing_each_workers_order() {
+    let js =
+        ["CJS Build start", "CJS dist/index.cjs <size> B", "CJS ⚡️ Build success in <duration>"];
+    let dts =
+        ["DTS Build start", "DTS ⚡️ Build success in <duration>", "DTS dist/index.d.cts <size> B"];
+    // Enumerate every interleaving while preserving each worker's own order.
+    for mask in (0u32..64).filter(|mask| mask.count_ones() == 3) {
+        let mut js_lines = js.iter();
+        let mut dts_lines = dts.iter();
+        let lines: Vec<_> = (0..6)
+            .map(|bit| {
+                if mask & (1 << bit) == 0 {
+                    *js_lines.next().unwrap()
+                } else {
+                    *dts_lines.next().unwrap()
+                }
+            })
+            .collect();
+        for ending in ["", "\n"] {
+            let input = format!("{}{}", lines.join("\n"), ending);
+            let expected = format!("{}{}", [js, dts].concat().join("\n"), ending);
+            for input in [input.clone(), input.replace('\n', "\r\n")] {
+                assert_eq!(redact_output(input, &[], true), expected);
+            }
+        }
+    }
+}
+
+#[test]
+fn preserves_tsup_artifacts_and_separate_builds() {
+    let input = concat!(
+        "ESM Build start\nDTS Build start\nCJS Build start\n",
+        "ESM dist/index.mjs 10 B\nCJS dist/z.cjs 20 B\nCJS dist/a.cjs 30 B\n",
+        "CJS dist/a.cjs 30 B\nDTS ⚡️ Build success in 1.5s\n",
+        "DTS dist/index.d.ts 15 B\nCJS ⚡️ Build success in 20ms\n",
+        "ESM ⚡️ Build success in 30ms\n",
+    );
+    let expected = concat!(
+        "CJS Build start\nCJS dist/z.cjs <size> B\nCJS dist/a.cjs <size> B\n",
+        "CJS dist/a.cjs <size> B\nCJS ⚡️ Build success in <duration>\n",
+        "ESM Build start\nESM dist/index.mjs <size> B\nESM ⚡️ Build success in <duration>\n",
+        "DTS Build start\nDTS ⚡️ Build success in <duration>\nDTS dist/index.d.ts <size> B\n",
+    );
+    assert_eq!(
+        redact_output(format!("$ vp run build a\n{input}$ vp run build b\n{input}"), &[], true),
+        format!("$ vp run build a\n{expected}$ vp run build b\n{expected}")
+    );
+}
+
+#[test]
+fn preserves_incomplete_or_failed_tsup_builds() {
+    for input in [
+        "DTS Build start\nCJS Build start\nCJS ⚡️ Build success in <duration>\n",
+        "DTS Build start\nCJS Build start\nCJS Build start\nCJS ⚡️ Build success in <duration>\nDTS ⚡️ Build success in <duration>\n",
+        "DTS Build start\nCJS Build start\nCJS ⚡️ Build success in <duration>\nCJS ⚡️ Build success in <duration>\nDTS ⚡️ Build success in <duration>\n",
+        "DTS Build start\nCJS Build start\nError: build failed\nCJS ⚡️ Build success in <duration>\nDTS ⚡️ Build success in <duration>\n",
+        "DTS Build start\nCJS Build start\nwarn: plugin warning\nCJS ⚡️ Build success in <duration>\nDTS ⚡️ Build success in <duration>\n",
+    ] {
+        assert_eq!(redact_output(input.into(), &[], true), input);
+    }
+}
+
+#[test]
+fn masks_yarn_compound_elapsed_times_as_one_duration() {
+    for elapsed in ["999ms", "1s", "1s 0ms", "1m 2s", "1h 2m 3s 4ms"] {
+        let input = format!(
+            "➤ YN0000: Done in {elapsed}\n\
+             ➤ YN0000: · Done with warnings in {elapsed}\n\
+             ➤ YN0000: · Done with errors in {elapsed}\n\
+             ➤ YN0000: · Failed with errors in {elapsed}\n\
+             [app]: Process exited (exit code 0), completed in {elapsed}\n"
+        );
+        assert_eq!(
+            redact_output(input, &[], true),
+            "➤ YN0000: Done in <duration>\n\
+             ➤ YN0000: · Done with warnings in <duration>\n\
+             ➤ YN0000: · Done with errors in <duration>\n\
+             ➤ YN0000: · Failed with errors in <duration>\n\
+             [app]: Process exited (exit code 0), completed in <duration>\n"
+        );
+    }
+    assert_eq!(
+        redact_output("timings: 1s 200ms\ntransform 1s, tests 200ms\n".to_owned(), &[], true),
+        "timings: <duration> <duration>\ntransform <duration>, tests <duration>\n"
+    );
+}
+
+#[test]
+fn masks_durations_with_a_space_before_the_unit() {
+    assert_eq!(
+        redact_output("  VITE+ v1.2.0  ready in 123 ms\n".to_owned(), &[], true),
+        "  VITE+ <version>  ready in <duration>\n"
+    );
+}
+
+#[test]
+fn omits_optional_yarn_step_timing_without_hiding_completion_text() {
+    for suffix in ["", " in 999ms", " in 1s", " in 1s 0ms", " in 1m 2s"] {
+        assert_eq!(
+            redact_output(format!("➤ YN0000: └ Completed{suffix}\n"), &[], true),
+            "➤ YN0000: └ Completed\n"
+        );
+    }
+    assert_eq!(
+        redact_output("Completed in 1s 2ms\n".to_owned(), &[], true),
+        "Completed in <duration>\n"
+    );
+}
+
+#[test]
+fn masks_only_the_vitest_help_version_banner() {
+    for version in ["4.1.11", "5.0.1", "5.1.0-rc.1+build.2"] {
+        let input = format!("vitest/{version}\n\nUsage:\n  $ vitest [...filters]\n");
+        assert_eq!(
+            redact_output(input, &[], true),
+            "vitest/<version>\n\nUsage:\n  $ vitest [...filters]\n"
+        );
+    }
+    let input = concat!(
+        "fixture: vitest/5.0.1\n",
+        "vitest/5.0.1/config.js\n",
+        "https://example.com/vitest/5.0.1\n",
+        "installed vitest@5.0.1\n",
+        "5.0.1\n",
+    );
+    assert_eq!(redact_output(input.to_owned(), &[], true), input);
+}
+
+#[test]
+fn masks_vitest_v5_timing_but_preserves_coverage_percentages() {
+    let input = " Duration  112ms (transform 57%, import 28%, worker 8%, tests 6%)\nCoverage 90%\n";
+    assert_eq!(
+        redact_output(input.to_owned(), &[], true),
+        " Duration  <duration> (<timing>)\nCoverage 90%\n"
+    );
+}
+
+#[test]
+fn omits_optional_vitest_transform_cache_hint() {
+    let summary = " Tests  1 passed (1)\n Duration  3.4s (transform 84%, tests 16%)\n";
+    for project in ["", "[unit] "] {
+        for ci_hint in [
+            "",
+            "           on CI this only helps when the cache directory is persisted between runs\n",
+        ] {
+            let hint = format!(
+                "\n Transform {project}transforming modules took 2.8s · 84% of tracked time, re-done on every run\n\
+                 {}persist transforms across runs with fsModuleCache: true\n\
+                 {ci_hint}{}learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns\n",
+                "           ", "           "
+            );
+            let expected = redact_output(summary.to_owned(), &[], true);
+            assert_eq!(redact_output(format!("{summary}{hint}"), &[], true), expected);
+            assert_eq!(
+                redact_output(format!("{summary}{}", hint.trim_end_matches('\n')), &[], true),
+                expected
+            );
+            assert_eq!(
+                redact_output(format!("{summary}{hint}").replace('\n', "\r\n"), &[], true),
+                expected
+            );
+            assert_eq!(
+                redact_output(format!("{summary}{hint}\nnext command\n"), &[], true),
+                format!("{expected}\nnext command\n")
+            );
+        }
+    }
+}
+
+#[test]
+fn preserves_transform_errors_and_incomplete_cache_hints() {
+    for input in [
+        "Transform failed: cannot load module\n",
+        "\n Transform transforming modules took 2.8s · 84% of tracked time, re-done on every run\n",
+        "persist transforms across runs with fsModuleCache: true\n",
+        "learn more: https://example.com/improving-performance\n",
+    ] {
+        assert_eq!(redact_output(input.to_owned(), &[], true), input.replace("2.8s", "<duration>"));
+    }
+}
+
+#[test]
+fn masks_vitest_api_port_but_preserves_other_localhost_urls() {
+    let input = "API started at http://localhost:63316/\nBrowser runner started at http://localhost:63317/__vitest_test__/?sessionId=keep-session\nhttp://localhost:9229/\n";
+    assert_eq!(
+        redact_output(input.to_owned(), &[], true),
+        "API started at http://localhost:<port>/\nBrowser runner started at http://localhost:<port>/__vitest_test__/?sessionId=keep-session\nhttp://localhost:9229/\n"
+    );
+}
+
 #[test]
 fn masks_bare_version_block_only_for_version_probe_steps() {
     // `npm --version` / `npx --version` print a bare semver alone in the
@@ -21,6 +255,13 @@ fn masks_bare_version_block_only_for_version_probe_steps() {
     // `.node-version` file is a fixture-controlled assertion.
     let node_version_file = "```\n25.8.2\n```\n".to_owned();
     assert_eq!(redact_output(node_version_file.clone(), &[], true), node_version_file);
+}
+
+#[test]
+fn normalizes_piped_windows_line_endings() {
+    // Non-TTY Node version probes must share snapshots with Unix and PTY output.
+    let input = "```\nv22.18.0\r\n\n```\n".to_owned();
+    assert_eq!(redact_output(input, &[], true), "```\n<version>\n\n```\n");
 }
 
 #[test]
@@ -45,6 +286,23 @@ fn masks_size_numbers_keeping_units_and_spares_plain_stems() {
         redacted,
         "dist/assets/index-<hash>.js  <size> kB | gzip: <size> kB, <size>MB total\nkeep vite-tsconfig.js\n"
     );
+}
+
+#[test]
+fn masks_yarn_file_hashes_and_lockfile_diff_checksums() {
+    let input = concat!(
+        "➤ YN0085: │ + dep@file:./dep#./dep::hash=8572a9&locator=app%40workspace%3A.\n",
+        "➤ YN0028: │ -  checksum: 10c0/deadbeef\n",
+        "➤ YN0028: │ +  version: 2.0.0\n",
+        "checksum: 10c0/deadbeef\n",
+    );
+    let expected = concat!(
+        "➤ YN0085: │ + dep@file:./dep#./dep::hash=<hash>&locator=app%40workspace%3A.\n",
+        "➤ YN0028: │ -  checksum: <hash>\n",
+        "➤ YN0028: │ +  version: 2.0.0\n",
+        "checksum: 10c0/deadbeef\n",
+    );
+    assert_eq!(redact_output(input.to_owned(), &[], true), expected);
 }
 
 #[test]
@@ -77,11 +335,109 @@ fn masks_bare_runtime_tool_versions_by_name_context() {
 }
 
 #[test]
+fn masks_bun_build_hash_only_in_bun_banners() {
+    // bun banners append the build's short commit hash after the version,
+    // which changes with every bun release.
+    let input = "bun pm trust v1.4.0 (34cbb9a40)\n".to_owned();
+    assert_eq!(redact_output(input, &[], true), "bun pm trust <version> (<hash>)\n");
+    // Parenthesized hex without a preceding masked version stays verbatim.
+    let unrelated = "commit (deadbeef1) applied\n".to_owned();
+    assert_eq!(redact_output(unrelated.clone(), &[], true), unrelated);
+}
+
+#[test]
+fn drops_bun_slow_filesystem_warning_with_optional_progress() {
+    let result = concat!(
+        "\n./node_modules/core-js @3.39.0\n",
+        " ✓ [postinstall]: node -e \"try{require('./postinstall')}catch(e){}\"\n",
+        "\n 1 script ran across 1 package [12ms]\n",
+    );
+    let expected = redact_output(format!("bun pm trust v1.4.0 (34cbb9a40)\n{result}"), &[], true);
+    for prefix in ["", "  ⚙️  core-js [1/1] ", "  ⚙ @scope/pkg [12/34] ", "  🔍 Resolving [1/1] "]
+    {
+        for cache in ["/private/tmp/vp-local-registry-bun-PXkDcD", "C:/cache with spaces/bun"] {
+            let input = format!(
+                "bun pm trust v1.4.0 (34cbb9a40)\n\
+                 {prefix}warn: Slow filesystem detected. If {cache} is a network drive, consider setting $BUN_INSTALL_CACHE_DIR to a local folder.\n\
+                 {result}"
+            );
+            assert_eq!(redact_output(input, &[], true), expected);
+        }
+    }
+}
+
+#[test]
+fn preserves_other_bun_warnings_and_script_failures() {
+    let input = concat!(
+        "warn: install failed for core-js\n",
+        "  ⚙️  core-js [1/1] warn: postinstall failed\n",
+        "  🔍 Resolving [1/1] warn: package not found\n",
+        "warn: Slow filesystem detected. Custom diagnostic.\n",
+        "error: postinstall script from \"core-js\" exited with 1\n",
+    );
+    assert_eq!(redact_output(input.to_owned(), &[], true), input);
+}
+
+#[test]
+fn masks_lint_staged_backup_hashes() {
+    let input = concat!(
+        "✔ Backed up original state in git stash (a1b2c3d)\n",
+        "✔ Done backing up original state (d4e5f6a)!\n",
+        "commit (deadbeef1) applied\n",
+    )
+    .to_owned();
+    assert_eq!(
+        redact_output(input, &[], true),
+        concat!(
+            "✔ Backed up original state in git stash (<hash>)\n",
+            "✔ Done backing up original state (<hash>)!\n",
+            "commit (deadbeef1) applied\n",
+        )
+    );
+}
+
+#[test]
+fn normalizes_managed_executable_paths_and_missing_commands() {
+    let input = concat!(
+        r#""bin_path": "<home>/.vite-plus/js_runtime/node/24.18.1/node.exe""#,
+        "\n",
+        r#""pnpm": "<home>/.vite-plus/package_manager/pnpm/<version>/pnpm/bin/pnpm.cmd""#,
+        "\n",
+        r#""npm": "<home>/.vite-plus/js_runtime/node/22.18.0/npm.cmd""#,
+        "\n",
+        r#""npx": "<home>/.vite-plus/js_runtime/node/22.18.0/npx.cmd""#,
+        "\n",
+        r#"export PATH="<home>/.vite-plus/js_runtime/node/22.18.0:$PATH""#,
+        "\n",
+        "error: Command execution failed: No such file or directory (os error 2)\n",
+    )
+    .to_owned();
+    assert_eq!(
+        redact_output(input, &[], true),
+        concat!(
+            r#""bin_path": "<home>/.vite-plus/js_runtime/node/<version>/bin/node""#,
+            "\n",
+            r#""pnpm": "<home>/.vite-plus/package_manager/pnpm/<version>/pnpm/bin/pnpm""#,
+            "\n",
+            r#""npm": "<home>/.vite-plus/js_runtime/node/<version>/bin/npm""#,
+            "\n",
+            r#""npx": "<home>/.vite-plus/js_runtime/node/<version>/bin/npx""#,
+            "\n",
+            r#"export PATH="<home>/.vite-plus/js_runtime/node/<version>/bin:$PATH""#,
+            "\n",
+            "error: Command execution failed: program not found\n",
+        )
+    );
+}
+
+#[test]
 fn masks_managed_node_versions_in_environment_output() {
     let input = concat!(
         "Node: 24.18.1\n",
         "\"nodeVersion\": \"24.18.1\"\n",
         "✓ Default Node.js version set to lts (currently 24.18.1)\n",
+        "No default Node.js version configured. Using latest LTS (24.18.1).\n",
+        "  Currently resolves to: 24.18.1\n",
         "just-a-normal-package@0.0.0   24.18.1        just-a-normal-package\n",
         "fixture pin: 22.18.0\n",
     )
@@ -92,6 +448,8 @@ fn masks_managed_node_versions_in_environment_output() {
             "Node: <version>\n",
             "\"nodeVersion\": \"<version>\"\n",
             "✓ Default Node.js version set to lts (currently <version>)\n",
+            "No default Node.js version configured. Using latest LTS (<version>).\n",
+            "  Currently resolves to: <version>\n",
             "just-a-normal-package@0.0.0   <version>        just-a-normal-package\n",
             "fixture pin: 22.18.0\n",
         )
@@ -117,10 +475,68 @@ fn strips_pnpm_store_location_diagnostics() {
 }
 
 #[test]
+fn normalizes_pnpm_removed_dependency_versions() {
+    // pnpm can report a removal with or without the package version, depending
+    // on whether its manifest read finishes before the package is unlinked.
+    for section in ["dependencies", "devDependencies", "optionalDependencies"] {
+        for version in [" 1.0.0", "", " 1.0.0-beta.1+build.2"] {
+            let input = format!(
+                "Packages: -2\n--\n\n{section}:\n- testnpm2{version}\n- @scope/pkg{version}\n\nDone in 1s using pnpm 10.18.0\n"
+            );
+            let expected = format!(
+                "Packages: -2\n--\n\n{section}:\n- testnpm2\n- @scope/pkg\n\nDone in <duration> using pnpm <version>\n"
+            );
+            assert_eq!(redact_output(input, &[], true), expected);
+        }
+    }
+}
+
+#[test]
+fn normalizes_pnpm_dedupe_removed_versions_without_done_line() {
+    for section in ["dependencies", "devDependencies", "optionalDependencies"] {
+        for version in [" 1.0.0", "", " 1.0.0-beta.1+build.2"] {
+            let input = format!(
+                "Packages: -2\n--\n\n{section}:\n- testnpm2{version}\n- @scope/pkg{version}\n testnpm2 1.0.1\n\n- after-section 3.0.0\n"
+            );
+            let expected = format!(
+                "Packages: -2\n--\n\n{section}:\n- testnpm2\n- @scope/pkg\n testnpm2 1.0.1\n\n- after-section 3.0.0\n"
+            );
+            assert_eq!(redact_output(input, &[], true), expected);
+        }
+    }
+}
+
+#[test]
+fn preserves_pnpm_added_versions_and_text_outside_dependency_sections() {
+    let input = concat!(
+        "- outside 2.0.0\n\n",
+        "optionalDependencies:\n",
+        "- testnpm2 1.0.0\n",
+        " testnpm2 1.0.1\n",
+        " @scope/pkg 2.0.0 (3.0.0 is available)\n\n",
+        "- after-section 3.0.0\n",
+        "\"testnpm2\": \"1.0.1\"\n\n",
+        "Done in 1s using pnpm 10.18.0\n",
+    )
+    .to_owned();
+    let expected = input
+        .replace("- testnpm2 1.0.0", "- testnpm2")
+        .replace("1s using pnpm 10.18.0", "<duration> using pnpm <version>");
+    assert_eq!(redact_output(input, &[], true), expected);
+}
+
+#[test]
+fn preserves_dependency_versions_without_pnpm_output() {
+    let input = "optionalDependencies:\n- testnpm2 1.0.0\n".to_owned();
+    assert_eq!(redact_output(input.clone(), &[], true), input);
+}
+
+#[test]
 fn masks_current_vite_plus_version_in_upgrade_check_output() {
     let input = concat!(
         "info: found vite-plus@0.1.21-alpha.7 (current: 0.2.4)\n",
         "Update available: 0.2.4 → 0.1.21-alpha.7\n",
+        "vp update available: 0.2.4 → 0.3.0, run vp upgrade\n",
     )
     .to_owned();
     assert_eq!(
@@ -128,6 +544,7 @@ fn masks_current_vite_plus_version_in_upgrade_check_output() {
         concat!(
             "info: found vite-plus@0.1.21-alpha.7 (current: <version>)\n",
             "Update available: <version> → 0.1.21-alpha.7\n",
+            "vp update available: <version> → 0.3.0, run vp upgrade\n",
         )
     );
 }
@@ -280,6 +697,26 @@ fn masks_vitest_ecosystem_versions_but_not_unrelated_deps() {
 }
 
 #[test]
+fn masks_vitest_wildcard_override_versions_but_preserves_selectors_and_ranges() {
+    for version in ["5.0.3", "5.1.0", "6.0.0-beta.1"] {
+        let input = format!("  '@vitest/browser@*': {version}\n  \"vitest@*\": \"{version}\"\n");
+        assert_eq!(
+            redact_output(input, &[], true),
+            "  '@vitest/browser@*': <version>\n  \"vitest@*\": \"<version>\"\n"
+        );
+    }
+    let input = concat!(
+        "  '@vitest/browser@*': 'catalog:'\n",
+        "  '@vitest/browser@4.0.0': 4.0.13\n",
+        "  '@vitest/browser@^4': 4.0.13\n",
+        "  '@vitest/browser@*': ^5.0.0\n",
+        "  '@vitest/browser-webdriverio': ^5.0.0\n",
+        "  'typescript@*': 5.4.0\n",
+    );
+    assert_eq!(redact_output(input.to_owned(), &[], true), input);
+}
+
+#[test]
 fn replaces_paths_with_labels() {
     let input = "built /tmp/stage-1/dist in 3ms\n".to_owned();
     assert_eq!(
@@ -289,14 +726,84 @@ fn replaces_paths_with_labels() {
 }
 
 #[test]
+fn masks_toolchain_build_time_in_human_and_json_output() {
+    let input = concat!(
+        "vite-task (built 2026-08-06T09:30:00Z, revision ebe5837)\n",
+        "      \"builtAt\": \"2026-08-06T09:30:00Z\",\n",
+    )
+    .to_owned();
+    assert_eq!(
+        redact_output(input, &[], true),
+        concat!(
+            "vite-task (built <build-time>, revision ebe5837)\n",
+            "      \"builtAt\": \"<build-time>\",\n",
+        )
+    );
+}
+
+#[test]
+fn masks_toolchain_versions_and_revisions_in_human_hint_and_json_output() {
+    let revision = "ebe583739b0b1e7828199b9ee9dd52273fa2fd20";
+    let human = format!(
+        "Vite+ toolchain (global)\n\nvite-plus@0.2.8\n├── bundles vite@8.2.1\n└── compiles vite-task (revision {revision})\n"
+    );
+    assert_eq!(
+        redact_output(human, &[], true),
+        "Vite+ toolchain (global)\n\nvite-plus@<version>\n├── bundles vite@<version>\n└── compiles vite-task (revision <revision>)\n"
+    );
+
+    let hint = "Vite+ also provides vite@8.2.1 through its toolchain.\n".to_owned();
+    assert_eq!(
+        redact_output(hint, &[], true),
+        "Vite+ also provides vite@<version> through its toolchain.\n"
+    );
+
+    let json = format!(
+        "{{\n  \"schemaVersion\": 1,\n  \"source\": {{\"vitePlusVersion\": \"0.2.8\"}},\n  \"nodes\": [{{\"version\": \"8.2.1\", \"revision\": \"{revision}\"}}],\n  \"edges\": []\n}}\n"
+    );
+    assert_eq!(
+        redact_output(json, &[], true),
+        "{\n  \"schemaVersion\": 1,\n  \"source\": {\"vitePlusVersion\": \"<version>\"},\n  \"nodes\": [{\"version\": \"<version>\", \"revision\": \"<revision>\"}],\n  \"edges\": []\n}\n"
+    );
+}
+
+#[test]
+fn keeps_unrelated_build_times_visible() {
+    let input = "plugin built 2026-08-06T09:30:00Z\n".to_owned();
+    assert_eq!(redact_output(input.clone(), &[], true), input);
+}
+
+#[test]
 fn redacts_forward_slash_windows_path_variants() {
     // Windows children also print file:// and stack-frame forms with forward
     // slashes; those must redact even though the pair is backslash-form.
     let input = "at file:///E:/Temp/ws/src/main.ts\n".to_owned();
     assert_eq!(
         redact_output(input, &[("E:\\Temp\\ws", "<workspace>")], true),
-        "at file:///<workspace>/src/main.ts\n"
+        "at file://<workspace>/src/main.ts\n"
     );
+}
+
+#[test]
+fn file_urls_redact_to_one_spelling_on_every_platform() {
+    // The slash before a Windows drive letter is part of the URL, not the path.
+    let windows = "Failed to transform file:///D:/a/ws/main.ts\n".to_owned();
+    let unix = "Failed to transform file:///tmp/ws/main.ts\n".to_owned();
+    let expected = "Failed to transform file://<workspace>/main.ts\n";
+    assert_eq!(redact_output(windows, &[("D:\\a\\ws", "<workspace>")], true), expected);
+    assert_eq!(redact_output(unix, &[("/tmp/ws", "<workspace>")], true), expected);
+}
+
+#[test]
+fn file_urls_with_percent_encoded_paths_redact() {
+    let windows = "at file:///C:/Users/First%20Last/ws/main.ts\n".to_owned();
+    let unix = "at file:///home/first%20last/ws/main.ts\n".to_owned();
+    let expected = "at file://<workspace>/main.ts\n";
+    assert_eq!(
+        redact_output(windows, &[("C:\\Users\\First Last\\ws", "<workspace>")], true),
+        expected
+    );
+    assert_eq!(redact_output(unix, &[("/home/first last/ws", "<workspace>")], true), expected);
 }
 
 #[cfg(windows)]
@@ -325,4 +832,23 @@ fn collapses_debug_escaped_separators_and_preserves_urls() {
         redact_output(input, &[("E:\\Temp\\ws", "<workspace>")], true),
         "at \"<workspace>/src\" see https://viteplus.dev/guide/\n"
     );
+}
+
+#[test]
+fn strips_pnpm_slow_request_warning_but_preserves_request_errors() {
+    let input = concat!(
+        "devDependencies:\n test-vite-plus-package 1.0.0\n\n",
+        "\u{2009}WARN\u{2009} Request took 12675ms: https://registry.npmjs.org/pnpm\n\n",
+        " WARN Request took 10.5s: https://registry.npmjs.org/@scope%2Fpkg\n",
+        "\u{2009}WARN\u{2009} GET https://registry.npmjs.org/pkg error (ETIMEDOUT). Will retry in 10 seconds.\n",
+        "\u{2009}WARN\u{2009} deprecated example@1.0.0: use another package\n",
+        "Done in 13s using pnpm 10.18.0\n",
+    );
+    let expected = concat!(
+        "devDependencies:\n test-vite-plus-package 1.0.0\n\n",
+        "\u{2009}WARN\u{2009} GET https://registry.npmjs.org/pkg error (ETIMEDOUT). Will retry in 10 seconds.\n",
+        "\u{2009}WARN\u{2009} deprecated example@1.0.0: use another package\n\n",
+        "Done in <duration> using pnpm <version>\n",
+    );
+    assert_eq!(redact_output(input.into(), &[], true), expected);
 }

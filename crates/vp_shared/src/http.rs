@@ -1,11 +1,12 @@
-//! Process-wide shared `reqwest::Client`.
+//! Process-wide shared `reqwest::Client` instances.
 //!
-//! Built once, lazily, and reused for every HTTP call vp makes. The single
-//! instance lets us configure proxy honoring and custom-CA injection in one
-//! place so HTTPS-intercepting tools like Socket Firewall Free (sfw) and
-//! corporate MITM proxies work without per-call setup.
+//! Built lazily and reused for HTTP calls vp makes. The default client follows
+//! redirects; a second client lets package-registry callers recheck credentials
+//! on each redirect. Both use the same proxy and custom-CA setup so
+//! HTTPS-intercepting tools like Socket Firewall Free (sfw) and corporate MITM
+//! proxies work without per-call setup.
 //!
-//! Configuration sources (all read at first call):
+//! Configuration sources (read when the pair is first built):
 //! - `HTTPS_PROXY` / `HTTP_PROXY` / `NO_PROXY` — honored automatically by
 //!   reqwest. With the `system-proxy` feature enabled, macOS System Settings
 //!   proxies and Windows registry proxies are also picked up.
@@ -28,10 +29,9 @@
 //! debug-level trace. A populated system store is used as-is; the bundled
 //! roots are never merged over it.
 //!
-//! Note: env vars are read exactly once at the first HTTP call. In long-lived
+//! Note: both clients read env vars once when first built. In long-lived
 //! processes (e.g. the NAPI binding embedded in Node), later
-//! `process.env.SSL_CERT_FILE = ...` mutations do *not* re-configure the
-//! client.
+//! `process.env.SSL_CERT_FILE = ...` mutations do *not* re-configure them.
 
 use std::{ffi::OsStr, path::Path, sync::OnceLock, time::Duration};
 
@@ -61,10 +61,64 @@ pub struct HttpClientError {
 /// silently hang a build.
 const REQUEST_TIMEOUT: Duration = Duration::from_mins(2);
 
+/// Total time budget for a metadata request, including redirects.
+#[must_use]
+pub const fn request_timeout() -> Duration {
+    REQUEST_TIMEOUT
+}
+
 /// TCP connect timeout. Distinct from the request timeout above — without
 /// this, a black-holed proxy can stall every HTTP call for kernel-level
 /// retries (multiple minutes).
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Default per-request timeout for large file downloads (Node.js runtimes,
+/// package-manager tarballs). Those archives are tens of megabytes, so on
+/// slow or flaky connections the shared [`REQUEST_TIMEOUT`] aborts an
+/// otherwise healthy transfer; this budget is far more forgiving while still
+/// bounding a stuck stream. Overridable via `VP_DOWNLOAD_TIMEOUT`.
+const DEFAULT_DOWNLOAD_TIMEOUT: Duration = Duration::from_mins(10);
+
+/// Largest accepted `VP_DOWNLOAD_TIMEOUT` value. Longer budgets are
+/// absurd for a download — and extreme values (e.g. `u64::MAX`) overflow when
+/// reqwest computes the request deadline: `Instant + Duration` panics, which
+/// the release profile turns into an abort.
+const MAX_DOWNLOAD_TIMEOUT: Duration = Duration::from_hours(24);
+
+/// Per-request timeout for large file downloads.
+///
+/// Returns [`DEFAULT_DOWNLOAD_TIMEOUT`] unless `VP_DOWNLOAD_TIMEOUT` is
+/// set to a positive integer number of seconds no larger than
+/// [`MAX_DOWNLOAD_TIMEOUT`]. A set-but-invalid value (non-numeric, zero,
+/// negative, above the maximum) warns and falls back to the default. The
+/// value is a plain number of seconds today; duration formats like `10m`
+/// may be supported later.
+///
+/// Call sites apply this per request rather than raising the shared client's
+/// [`REQUEST_TIMEOUT`], which stays short so a single stuck metadata fetch
+/// cannot hang a build.
+#[must_use]
+pub fn download_timeout() -> Duration {
+    let Some(value) = std::env::var_os(env_vars::VP_DOWNLOAD_TIMEOUT) else {
+        return DEFAULT_DOWNLOAD_TIMEOUT;
+    };
+    if os_str_is_blank(&value) {
+        return DEFAULT_DOWNLOAD_TIMEOUT;
+    }
+    match value.to_str().and_then(|s| s.trim().parse::<u64>().ok()) {
+        Some(secs) if secs > 0 && secs <= MAX_DOWNLOAD_TIMEOUT.as_secs() => {
+            Duration::from_secs(secs)
+        }
+        _ => {
+            output::warn(&vt_str::format!(
+                "ignoring invalid {}={value:?}: expected a number of seconds between 1 and {}",
+                env_vars::VP_DOWNLOAD_TIMEOUT,
+                MAX_DOWNLOAD_TIMEOUT.as_secs()
+            ));
+            DEFAULT_DOWNLOAD_TIMEOUT
+        }
+    }
+}
 
 /// Get the process-wide `reqwest::Client`.
 ///
@@ -75,11 +129,21 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 /// `HTTPS_PROXY`, bad `SSL_CERT_FILE`, …). The outcome is cached, so later
 /// calls report the same error without retrying.
 pub fn shared_http_client() -> Result<&'static reqwest::Client, HttpClientError> {
-    static CLIENT: OnceLock<Result<reqwest::Client, HttpClientError>> = OnceLock::new();
-    CLIENT.get_or_init(build_client).as_ref().map_err(Clone::clone)
+    Ok(&shared_clients()?.0)
 }
 
-fn build_client() -> Result<reqwest::Client, HttpClientError> {
+/// Shared client for callers that must inspect each redirect before sending another request.
+pub fn shared_http_client_without_redirects() -> Result<&'static reqwest::Client, HttpClientError> {
+    Ok(&shared_clients()?.1)
+}
+
+fn shared_clients() -> Result<&'static (reqwest::Client, reqwest::Client), HttpClientError> {
+    static CLIENTS: OnceLock<Result<(reqwest::Client, reqwest::Client), HttpClientError>> =
+        OnceLock::new();
+    CLIENTS.get_or_init(build_clients).as_ref().map_err(Clone::clone)
+}
+
+fn build_clients() -> Result<(reqwest::Client, reqwest::Client), HttpClientError> {
     crate::ensure_tls_provider();
 
     let extra_certs = extra_certs_from_env();
@@ -92,9 +156,9 @@ fn build_client() -> Result<reqwest::Client, HttpClientError> {
         );
     }
 
-    match build_with(extra_certs.clone(), insecure) {
-        Ok(client) => Ok(client),
-        Err(err) => build_with_bundled_roots(extra_certs, insecure)
+    match build_pair(extra_certs.clone(), insecure) {
+        Ok(clients) => Ok(clients),
+        Err(err) => build_pair_with_bundled_roots(extra_certs, insecure)
             .ok_or_else(|| HttpClientError { cause: format_error_chain(&err).into() }),
     }
 }
@@ -141,9 +205,19 @@ fn extra_certs_from_env() -> Vec<reqwest::Certificate> {
     extra_certs
 }
 
+fn build_pair(
+    extra_certs: Vec<reqwest::Certificate>,
+    insecure: bool,
+) -> Result<(reqwest::Client, reqwest::Client), reqwest::Error> {
+    let default = build_with(extra_certs.clone(), insecure, true)?;
+    let without_redirects = build_with(extra_certs, insecure, false)?;
+    Ok((default, without_redirects))
+}
+
 fn build_with(
     extra_certs: Vec<reqwest::Certificate>,
     insecure: bool,
+    follow_redirects: bool,
 ) -> Result<reqwest::Client, reqwest::Error> {
     let mut builder =
         reqwest::Client::builder().timeout(REQUEST_TIMEOUT).connect_timeout(CONNECT_TIMEOUT);
@@ -152,6 +226,19 @@ fn build_with(
     }
     if insecure {
         builder = builder.tls_danger_accept_invalid_certs(true);
+    }
+    if !follow_redirects {
+        builder = builder.redirect(reqwest::redirect::Policy::none());
+    }
+    // Each `#[tokio::test]` runs on its own runtime, but this client is shared by
+    // the whole test binary. An idle connection belongs to the runtime that opened
+    // it, and httpmock reuses server ports across tests, so another test can send
+    // on it just as that runtime shuts down. The request then fails with "runtime
+    // dropped the dispatch task" after the server has counted it, and the retry
+    // counts it again.
+    #[cfg(feature = "test-utils")]
+    {
+        builder = builder.pool_max_idle_per_host(0);
     }
     builder.build()
 }
@@ -164,26 +251,26 @@ fn build_with(
 /// `SSL_CERT_FILE`) is still present on the retry, so the caller reports the
 /// original error.
 #[cfg(not(target_os = "windows"))]
-fn build_with_bundled_roots(
+fn build_pair_with_bundled_roots(
     mut extra_certs: Vec<reqwest::Certificate>,
     insecure: bool,
-) -> Option<reqwest::Client> {
+) -> Option<(reqwest::Client, reqwest::Client)> {
     extra_certs.extend(bundled_root_certs());
-    let client = build_with(extra_certs, insecure).ok()?;
+    let clients = build_pair(extra_certs, insecure).ok()?;
     tracing::debug!(
         "system CA store is empty; using the bundled Mozilla root certificates for TLS \
          verification"
     );
-    Some(client)
+    Some(clients)
 }
 
 /// Windows uses native-tls over SChannel, whose store is never empty; the
 /// bundled roots stay out of the binary there.
 #[cfg(target_os = "windows")]
-fn build_with_bundled_roots(
+fn build_pair_with_bundled_roots(
     _extra_certs: Vec<reqwest::Certificate>,
     _insecure: bool,
-) -> Option<reqwest::Client> {
+) -> Option<(reqwest::Client, reqwest::Client)> {
     None
 }
 
@@ -275,7 +362,7 @@ mod tests {
 
     /// The bundled-roots retry must not paper over failures the bundle cannot
     /// fix: a bad `SSL_CERT_FILE` poisons the retry as well, and the original
-    /// error surfaces. Exercises `build_client` directly because
+    /// error surfaces. Exercises `build_clients` directly because
     /// `shared_http_client` caches its first outcome process-wide.
     ///
     /// Non-Windows only, like the fallback itself: native-tls rejects the bad
@@ -285,7 +372,7 @@ mod tests {
     #[test]
     #[serial_test::serial(env)]
     fn bundled_roots_fallback_does_not_mask_other_build_failures() {
-        let result = with_invalid_ssl_cert_file("fallback", build_client);
+        let result = with_invalid_ssl_cert_file("fallback", build_clients);
 
         assert!(
             result.is_err(),
@@ -301,6 +388,56 @@ mod tests {
         assert!(message.contains(cause), "{message}");
         assert!(message.contains("HTTPS_PROXY"), "{message}");
         assert!(message.contains(env_vars::NODE_EXTRA_CA_CERTS), "{message}");
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn download_timeout_defaults_to_ten_minutes() {
+        // SAFETY: tests are run serially within this module for env vars.
+        unsafe {
+            std::env::remove_var(env_vars::VP_DOWNLOAD_TIMEOUT);
+        }
+        assert_eq!(download_timeout(), DEFAULT_DOWNLOAD_TIMEOUT);
+        assert_eq!(download_timeout(), Duration::from_mins(10));
+        // The download budget must stay more forgiving than the shared
+        // per-request default, or slow tarball downloads keep timing out.
+        assert!(DEFAULT_DOWNLOAD_TIMEOUT > REQUEST_TIMEOUT);
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn download_timeout_honors_override_and_rejects_invalid_values() {
+        // SAFETY: tests are run serially within this module for env vars.
+        unsafe {
+            std::env::set_var(env_vars::VP_DOWNLOAD_TIMEOUT, "1800");
+        }
+        assert_eq!(download_timeout(), Duration::from_mins(30));
+        unsafe {
+            std::env::set_var(env_vars::VP_DOWNLOAD_TIMEOUT, " 120 ");
+        }
+        assert_eq!(download_timeout(), Duration::from_secs(120));
+        // Boundary: the maximum itself is accepted...
+        unsafe {
+            std::env::set_var(env_vars::VP_DOWNLOAD_TIMEOUT, "86400");
+        }
+        assert_eq!(download_timeout(), MAX_DOWNLOAD_TIMEOUT);
+        // ...anything beyond it is not. Regression for extreme parseable
+        // values (u64::MAX) overflowing the request-deadline computation
+        // (`Instant + Duration` panics; the release profile aborts), which
+        // crashed every download instead of falling back with a warning.
+        for invalid in ["0", "-1", "abc", "1.5", "", "  ", "86401", "18446744073709551615"] {
+            unsafe {
+                std::env::set_var(env_vars::VP_DOWNLOAD_TIMEOUT, invalid);
+            }
+            assert_eq!(
+                download_timeout(),
+                DEFAULT_DOWNLOAD_TIMEOUT,
+                "should fall back to the default: {invalid:?}"
+            );
+        }
+        unsafe {
+            std::env::remove_var(env_vars::VP_DOWNLOAD_TIMEOUT);
+        }
     }
 
     #[test]

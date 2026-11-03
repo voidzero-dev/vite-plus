@@ -1,0 +1,7 @@
+[[case]]
+name = "vite_task_bunx_wrapper"
+vp = "local"
+steps = [
+  { argv = ["vp", "install"], snapshot = false },
+  { argv = ["vp", "run", "gate:test"], comment = "managed bunx should execute the package binary without recursively invoking the matching package script" },
+]

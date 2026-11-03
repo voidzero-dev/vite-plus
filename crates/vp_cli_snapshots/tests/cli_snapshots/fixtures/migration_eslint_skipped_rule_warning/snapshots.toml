@@ -1,0 +1,6 @@
+[[case]]
+name = "migration_eslint_skipped_rule_warning"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "Skipped ESLint rules should report warning", continue-on-failure = true },
+]

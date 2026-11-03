@@ -1,0 +1,22 @@
+[[case]]
+name = "pnpm_short_aliases_existing_installation"
+vp = "global"
+env = { npm_config_manage_package_manager_versions = "false" }
+steps = [
+  { argv = ["pnpm", "--version"], snapshot = false },
+  { argv = ["node", "assert-aliases.cjs", "10.18.0"], comment = "Short aliases reuse an already installed pre-v11 pnpm." },
+  ["vp", "env", "which", "pn"],
+  ["vp", "env", "which", "pnx"],
+  { argv = ["pn", "exec", "node", "assert-aliases.cjs", "10.18.0"], comment = "Nested explicit shim calls preserve the inherited package manager." },
+  { argv = ["node", "assert-aliases.cjs", "10.19.0"], envs = [["VP_PNPM_VERSION", "10.19.0"]], comment = "Both aliases honor the pnpm version override." },
+  { argv = ["vp", "env", "exec", "--package-manager", "pnpm@10.19.0", "node", "assert-aliases.cjs", "10.19.0"], comment = "An explicitly injected version takes precedence over the project pin." },
+]
+
+[[case]]
+name = "pnpm_short_aliases_native"
+vp = "global"
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "pnpm@12.0.0"], snapshot = false },
+  { argv = ["pn", "--version"], snapshot = false },
+  { argv = ["node", "assert-aliases.cjs", "12.0.0"], comment = "Short aliases also dispatch through native pnpm and its dlx wrapper." },
+]

@@ -1,0 +1,79 @@
+[[case]]
+name = "pm_pkg_npm"
+vp = ["local", "global"]
+cwd = "npm"
+steps = [
+  { argv = ["vp", "pm", "pkg", "get", "name"], tty = false, comment = "get output has no Vite+ header when piped" },
+  ["vp", "pm", "pkg", "set", "scripts.build=vite build", "description=managed by vp"],
+  ["vp", "pm", "pkg", "set", "private=true", "--json"],
+  ["vp", "pm", "pkg", "get", "scripts.build", "description", "private"],
+  ["vp", "pm", "pkg", "delete", "scripts.build", "description"],
+  { argv = ["vpt", "json-edit", "package.json", "scripts", "\"invalid\""], snapshot = false },
+  ["vp", "pm", "pkg", "fix"],
+  ["vp", "pm", "pkg", "get"],
+]
+
+[[case]]
+name = "pm_pkg_pnpm"
+vp = ["local", "global"]
+cwd = "pnpm"
+steps = [
+  { argv = ["vp", "pm", "pkg", "get", "name"], tty = false, comment = "pnpm preserves its native unquoted string output" },
+  ["vp", "pm", "pkg", "get", "name", "--json"],
+  ["vp", "pm", "pkg", "set", "scripts.build=vite build", "description=managed by vp"],
+  ["vp", "pm", "pkg", "set", "private=true", "--json"],
+  ["vp", "pm", "pkg", "get", "scripts.build", "description", "private"],
+  ["vp", "pm", "pkg", "delete", "scripts.build", "description"],
+  { argv = ["vpt", "json-edit", "package.json", "scripts", "\"invalid\""], snapshot = false },
+  ["vp", "pm", "pkg", "fix"],
+  ["vp", "pm", "pkg", "get"],
+]
+
+[[case]]
+name = "pm_pkg_bun"
+vp = ["local", "global"]
+cwd = "bun"
+steps = [
+  { argv = ["vp", "pm", "pkg", "get", "name"], tty = false },
+  ["vp", "pm", "pkg", "get", "name", "--json"],
+  ["vp", "pm", "pkg", "set", "scripts.build=vite build", "description=managed by vp"],
+  ["vp", "pm", "pkg", "set", "private=true", "--json"],
+  ["vp", "pm", "pkg", "get", "scripts.build", "description", "private"],
+  ["vp", "pm", "pkg", "delete", "scripts.build", "description"],
+  { argv = ["vpt", "json-edit", "package.json", "name", "\"PM-PKG-BUN\""], snapshot = false },
+  ["vp", "pm", "pkg", "fix"],
+  ["vp", "pm", "pkg", "get"],
+]
+
+[[case]]
+name = "pm_pkg_yarn"
+vp = ["local", "global"]
+cwd = "yarn"
+steps = [
+  ["vp", "pm", "pkg", "get", "name"],
+  ["vp", "pm", "pkg", "set", "name=changed"],
+  ["vp", "pm", "pkg", "delete", "version"],
+  ["vp", "pm", "pkg", "fix"],
+  { argv = ["vpt", "print-file", "package.json"], comment = "all unsupported commands exit successfully and leave the manifest unchanged" },
+]
+
+[[case]]
+name = "pm_pkg_old_pnpm"
+vp = ["local", "global"]
+cwd = "pnpm"
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "\"pnpm@11.2.0\""], snapshot = false },
+  ["vp", "pm", "pkg", "set", "name=changed"],
+  ["vpt", "print-file", "package.json"],
+]
+
+[[case]]
+name = "pm_pkg_old_npm_fix"
+vp = ["local", "global"]
+cwd = "npm"
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "\"npm@9.7.2\""], snapshot = false },
+  ["vp", "pm", "pkg", "get", "name"],
+  ["vp", "pm", "pkg", "fix"],
+  ["vpt", "print-file", "package.json"],
+]

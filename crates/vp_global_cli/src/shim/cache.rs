@@ -39,7 +39,7 @@ pub struct ResolveCacheEntry {
     pub is_range: bool,
 }
 
-/// Resolution cache stored in VP_HOME/cache/resolve_cache.json.
+/// Resolution cache stored in `<CACHE>/resolve_cache.json`.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ResolveCache {
     /// Cache format version for upgrade compatibility
@@ -182,10 +182,9 @@ impl ResolveCache {
     }
 }
 
-/// Get the cache file path.
+/// Get the cache file path (`<CACHE>/resolve_cache.json`).
 pub fn get_cache_path() -> Option<AbsolutePathBuf> {
-    let home = crate::commands::env::config::get_vp_home().ok()?;
-    Some(home.join("cache").join("resolve_cache.json"))
+    Some(vp_shared::EnvConfig::get().dirs.cache.join("resolve_cache.json"))
 }
 
 /// Invalidate the entire resolve cache by deleting the cache file.
@@ -211,6 +210,7 @@ pub fn now_timestamp() -> u64 {
 #[cfg(test)]
 mod tests {
     use tempfile::TempDir;
+    use vp_shared::env_vars;
 
     use super::*;
 
@@ -344,52 +344,48 @@ mod tests {
         assert_eq!(cached_entry.unwrap().version, "20.20.0");
     }
 
-    // Run serially: mutates VP_HOME env var which affects get_cache_path()
     #[test]
-    #[serial_test::serial]
     fn test_invalidate_cache_removes_file() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
-        // Set VP_HOME to temp dir so invalidate_cache() targets our test file
-        let cache_dir = temp_path.join("cache");
-        std::fs::create_dir_all(&cache_dir).unwrap();
-        let cache_file = cache_dir.join("resolve_cache.json");
+        // Pin VP_HOME to the temp dir so invalidate_cache() targets our test file
+        vp_shared::EnvConfig::with_vars([(env_vars::VP_HOME, temp_path.as_path())], |_| {
+            let cache_dir = temp_path.join("cache");
+            std::fs::create_dir_all(&cache_dir).unwrap();
+            let cache_file = cache_dir.join("resolve_cache.json");
 
-        // Create a cache with an entry and save it
-        let mut cache = ResolveCache::default();
-        cache.insert(
-            &temp_path,
-            ResolveCacheEntry {
-                version: "20.18.0".to_string(),
-                source: ".node-version".to_string(),
-                project_root: None,
-                resolved_at: now_timestamp(),
-                version_file_mtime: 0,
-                source_path: None,
-                is_range: false,
-            },
-        );
-        cache.save(&cache_file);
-        assert!(std::fs::metadata(cache_file.as_path()).is_ok(), "Cache file should exist");
+            // Create a cache with an entry and save it
+            let mut cache = ResolveCache::default();
+            cache.insert(
+                &temp_path,
+                ResolveCacheEntry {
+                    version: "20.18.0".to_string(),
+                    source: ".node-version".to_string(),
+                    project_root: None,
+                    resolved_at: now_timestamp(),
+                    version_file_mtime: 0,
+                    source_path: None,
+                    is_range: false,
+                },
+            );
+            cache.save(&cache_file);
+            assert!(std::fs::metadata(cache_file.as_path()).is_ok(), "Cache file should exist");
 
-        // Point VP_HOME to our temp dir and call invalidate_cache
-        unsafe {
-            std::env::set_var(vp_shared::env_vars::VP_HOME, temp_path.as_path());
-        }
-        invalidate_cache();
-        unsafe {
-            std::env::remove_var(vp_shared::env_vars::VP_HOME);
-        }
+            invalidate_cache();
 
-        // Cache file should be removed
-        assert!(
-            std::fs::metadata(cache_file.as_path()).is_err(),
-            "Cache file should be removed after invalidation"
-        );
+            // Cache file should be removed
+            assert!(
+                std::fs::metadata(cache_file.as_path()).is_err(),
+                "Cache file should be removed after invalidation"
+            );
 
-        // Loading from removed file should return empty default cache
-        let loaded_cache = ResolveCache::load(&cache_file);
-        assert!(loaded_cache.get(&temp_path).is_none(), "Cache should be empty after invalidation");
+            // Loading from removed file should return empty default cache
+            let loaded_cache = ResolveCache::load(&cache_file);
+            assert!(
+                loaded_cache.get(&temp_path).is_none(),
+                "Cache should be empty after invalidation"
+            );
+        });
     }
 }

@@ -1,4 +1,5 @@
 use thiserror::Error;
+use vt_path::AbsolutePath;
 use vt_str::Str;
 
 /// Errors that can occur during JavaScript runtime management
@@ -39,6 +40,10 @@ pub enum Error {
     /// Failed to parse version index
     #[error("Failed to parse version index: {reason}")]
     VersionIndexParseFailed { reason: Str },
+
+    /// Failed to parse package.json
+    #[error("Failed to parse {path}: {reason}")]
+    PackageJsonParseFailed { path: Box<AbsolutePath>, reason: Str },
 
     /// No version matching the requirement found
     #[error("No version matching '{version_req}' found")]
@@ -86,5 +91,5 @@ pub enum Error {
 
     /// Semver range parsing error
     #[error(transparent)]
-    SemverRange(#[from] node_semver::SemverError),
+    SemverRange(#[from] js_semver::SemverError),
 }

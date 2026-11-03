@@ -1,4 +1,4 @@
-const vite = require('@voidzero-dev/vite-plus-core');
+const vite = require('vite');
 
 const {
   configDefaults,
@@ -8,7 +8,12 @@ const {
   defaultInclude,
 } = require('vitest/config');
 
-const { defineConfig, defineProject, lazyPlugins } = require('./define-config');
+const {
+  defineConfig,
+  defineProject,
+  lazyPlugins,
+  resolveConfigFromFile,
+} = require('./define-config');
 
 module.exports = {
   ...vite,
@@ -20,4 +25,5 @@ module.exports = {
   defineProject,
   defineConfig,
   lazyPlugins,
+  resolveConfigFromFile,
 };

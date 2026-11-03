@@ -26,7 +26,7 @@ Options:
   --dry-run             Preview what would be removed without actually removing (only with -g)
   -h, --help            Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp remove`
@@ -46,11 +46,12 @@ For more information, try '--help'.
 
 ## `vp remove testnpm2 -D`
 
-should error when remove not exists package from dev dependencies
+reject unsupported --save-dev even when the package is absent
+
+**Exit code:** 1
 
 ```
-bun remove <version> (af24e281)
-package.json doesn't have dependencies, there's nothing to remove!
+bun does not support --save-dev.
 ```
 
 ## `vpt print-file package.json`
@@ -68,7 +69,7 @@ package.json doesn't have dependencies, there's nothing to remove!
 should add packages to dependencies
 
 ```
-bun add <version> (af24e281)
+bun add <version> (<hash>)
 
 installed testnpm2@1.0.1
 
@@ -78,7 +79,7 @@ installed testnpm2@1.0.1
 ## `vp add -D test-vite-plus-install`
 
 ```
-bun add <version> (af24e281)
+bun add <version> (<hash>)
 
 installed test-vite-plus-install@1.0.0
 
@@ -88,7 +89,7 @@ installed test-vite-plus-install@1.0.0
 ## `vp add -O test-vite-plus-package-optional`
 
 ```
-bun add <version> (af24e281)
+bun add <version> (<hash>)
 
 installed test-vite-plus-package-optional@1.0.0
 
@@ -119,7 +120,7 @@ installed test-vite-plus-package-optional@1.0.0
 should remove packages from dependencies
 
 ```
-bun remove <version> (af24e281)
+bun remove <version> (<hash>)
 
 - testnpm2
 - test-vite-plus-install
@@ -141,15 +142,12 @@ bun remove <version> (af24e281)
 
 ## `vp remove -O test-vite-plus-package-optional`
 
-should remove package from optional dependencies
+reject --save-optional without removing the dependency
+
+**Exit code:** 1
 
 ```
-bun remove <version> (af24e281)
-
-package.json has no dependencies! Deleted empty lockfile
-
-- test-vite-plus-package-optional
-1 package removed [<duration>]
+bun does not support --save-optional.
 ```
 
 ## `vpt print-file package.json`
@@ -158,6 +156,9 @@ package.json has no dependencies! Deleted empty lockfile
 {
   "name": "command-remove-bun",
   "version": "1.0.0",
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  },
   "packageManager": "bun@1.3.11"
 }
 ```

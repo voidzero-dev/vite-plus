@@ -112,10 +112,10 @@ Packages: -2
 --
 
 dependencies:
-- testnpm2 1.0.1
+- testnpm2
 
 devDependencies:
-- test-vite-plus-install 1.0.0
+- test-vite-plus-install
 
 Done in <duration> using pnpm <version>
 ```
@@ -149,18 +149,6 @@ support remove package from optional dependencies and pass through arguments
   "packageManager": "pnpm@10.18.0"
 }
 ```
-
-## `vp remove -g --dry-run testnpm2`
-
-support remove global package with dry-run
-
-**Exit code:** 1
-
-```
-error: Global package operations (`-g`/`--global`) are only supported by the globally-installed `vp` CLI. See https://viteplus.dev/guide/ to install it, then run the same command via the global `vp` binary.
-```
-
-*(skipped 1 step(s) to the next line boundary: step failed)*
 
 ## `vp rm --stream foo`
 

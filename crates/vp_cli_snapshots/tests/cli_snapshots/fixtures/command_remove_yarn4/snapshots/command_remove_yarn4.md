@@ -2,17 +2,23 @@
 
 ## `vp remove testnpm2 -D`
 
-should error when remove not exists package
+reject unsupported --save-dev even when the package is absent
 
 **Exit code:** 1
 
 ```
-Usage Error: Pattern testnpm2 doesn't match any packages referenced by this workspace
-
-$ yarn remove [-A,--all] [--mode #0] ...
+yarn does not support --save-dev.
 ```
 
-*(skipped 1 step(s) to the next line boundary: step failed)*
+## `vpt print-file package.json`
+
+```
+{
+  "name": "command-remove-yarn4",
+  "version": "1.0.0",
+  "packageManager": "yarn@4.10.3"
+}
+```
 
 ## `vp add testnpm2`
 
@@ -28,7 +34,7 @@ should add packages to dependencies
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Link step
 ➤ YN0000: └ Completed
-➤ YN0000: · Done in <duration> <duration>
+➤ YN0000: · Done in <duration>
 ```
 
 ## `vp add -D test-vite-plus-install`
@@ -43,7 +49,7 @@ should add packages to dependencies
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Link step
 ➤ YN0000: └ Completed
-➤ YN0000: · Done in <duration> <duration>
+➤ YN0000: · Done in <duration>
 ```
 
 ## `vp add -O test-vite-plus-package-optional`
@@ -58,7 +64,7 @@ should add packages to dependencies
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Link step
 ➤ YN0000: └ Completed
-➤ YN0000: · Done in <duration> <duration>
+➤ YN0000: · Done in <duration>
 ```
 
 ## `vpt print-file package.json`
@@ -93,7 +99,7 @@ should remove packages from dependencies
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Link step
 ➤ YN0000: └ Completed
-➤ YN0000: · Done in <duration> <duration>
+➤ YN0000: · Done in <duration>
 ```
 
 ## `vpt print-file package.json`
@@ -109,9 +115,32 @@ should remove packages from dependencies
 }
 ```
 
-## `vp remove -D test-vite-plus-package-optional`
+## `vp remove -O test-vite-plus-package-optional`
 
-support ignore -O flag and remove package from optional dependencies
+reject unsupported --save-optional without removing the optional dependency
+
+**Exit code:** 1
+
+```
+yarn does not support --save-optional.
+```
+
+## `vpt print-file package.json`
+
+```
+{
+  "name": "command-remove-yarn4",
+  "version": "1.0.0",
+  "packageManager": "yarn@4.10.3",
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
+```
+
+## `vp remove test-vite-plus-package-optional`
+
+remove optional dependencies without a section selector
 
 ```
 ➤ YN0000: · Yarn <version>
@@ -122,7 +151,7 @@ support ignore -O flag and remove package from optional dependencies
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Link step
 ➤ YN0000: └ Completed
-➤ YN0000: · Done in <duration> <duration>
+➤ YN0000: · Done in <duration>
 ```
 
 ## `vpt print-file package.json`
@@ -134,15 +163,3 @@ support ignore -O flag and remove package from optional dependencies
   "packageManager": "yarn@4.10.3"
 }
 ```
-
-## `vp remove -g --dry-run testnpm2`
-
-support remove global package with dry-run
-
-**Exit code:** 1
-
-```
-Failed to uninstall testnpm2: Package testnpm2 is not installed
-```
-
-*(skipped 1 step(s) to the next line boundary: step failed)*

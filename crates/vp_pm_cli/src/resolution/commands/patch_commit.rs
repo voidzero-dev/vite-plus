@@ -16,7 +16,14 @@ pub struct PatchCommitArgs {
 }
 
 impl Resolve<PatchCommitArgs> for Pnpm {
-    fn resolve(&self, args: &PatchCommitArgs, _diag: &mut Diagnostics) -> CommandResolution {
+    fn resolve(&self, args: &PatchCommitArgs, diag: &mut Diagnostics) -> CommandResolution {
+        if !self.supports_v7_4_commands() {
+            diag.warn(
+                DiagnosticKind::UnsupportedCommandNoop,
+                "pnpm patch-commit requires pnpm >= 7.4.0. Skipping.",
+            );
+            return CommandResolution::Noop;
+        }
         let mut cmd = CommandBuilder::new("pnpm");
         cmd.arg("patch-commit").arg(&args.patch_dir).extend(args.pass_through_args.iter());
         cmd.into()
@@ -24,12 +31,17 @@ impl Resolve<PatchCommitArgs> for Pnpm {
 }
 
 impl Resolve<PatchCommitArgs> for Npm {
-    fn resolve(&self, _args: &PatchCommitArgs, diag: &mut Diagnostics) -> CommandResolution {
-        diag.warn(
-            DiagnosticKind::UnsupportedCommandNoop,
-            "npm does not have a 'patch-commit' command.",
-        );
-        CommandResolution::Noop
+    fn resolve(&self, args: &PatchCommitArgs, diag: &mut Diagnostics) -> CommandResolution {
+        if !self.supports_v12_commands() {
+            diag.warn(
+                DiagnosticKind::UnsupportedCommandNoop,
+                "npm does not have a 'patch-commit' command.",
+            );
+            return CommandResolution::Noop;
+        }
+        let mut cmd = CommandBuilder::new("npm");
+        cmd.arg("patch").arg("commit").arg(&args.patch_dir).extend(args.pass_through_args.iter());
+        cmd.into()
     }
 }
 
@@ -39,6 +51,13 @@ impl Resolve<PatchCommitArgs> for Yarn {
             diag.warn(
                 DiagnosticKind::UnsupportedCommandNoop,
                 "yarn classic does not have a 'patch-commit' command.",
+            );
+            return CommandResolution::Noop;
+        }
+        if !self.supports_v3_commands() {
+            diag.warn(
+                DiagnosticKind::UnsupportedCommandNoop,
+                "yarn patch-commit --save requires yarn >= 3.0.0. Skipping.",
             );
             return CommandResolution::Noop;
         }
@@ -65,7 +84,7 @@ mod tests {
     use super::*;
     use crate::resolution::{
         resolve,
-        test_utils::{bun, npm, parse_args, pnpm, yarn},
+        test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
     };
 
     fn patch_commit_args(patch_dir: &str) -> PatchCommitArgs {
@@ -73,12 +92,40 @@ mod tests {
     }
 
     #[test]
+    fn test_npm_patch_commit() {
+        for manager in [npm("12.0.0"), npm("12.0.2"), Npm::unknown_version()] {
+            let result = resolve(
+                &manager,
+                PatchCommitArgs {
+                    patch_dir: "patches/left pad".to_string(),
+                    pass_through_args: vec![
+                        "--patches-dir".to_string(),
+                        ".patches".to_string(),
+                        "--keep-edit-dir".to_string(),
+                    ],
+                },
+            );
+            assert!(result.diagnostics.is_empty());
+            let command = expect_run(result.outcome);
+            assert_eq!(command.program, "npm");
+            assert_eq!(
+                command.args,
+                vec![
+                    "patch",
+                    "commit",
+                    "patches/left pad",
+                    "--patches-dir",
+                    ".patches",
+                    "--keep-edit-dir"
+                ]
+            );
+        }
+    }
+
+    #[test]
     fn test_pnpm_patch_commit() {
-        let CommandResolution::Run(command) =
-            resolve(&pnpm("10.0.0"), patch_commit_args("patches/left-pad")).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command =
+            expect_run(resolve(&pnpm("10.0.0"), patch_commit_args("patches/left-pad")).outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["patch-commit", "patches/left-pad"]);
@@ -86,11 +133,8 @@ mod tests {
 
     #[test]
     fn test_yarn_berry_patch_commit() {
-        let CommandResolution::Run(command) =
-            resolve(&yarn("4.0.0"), patch_commit_args("patches/left-pad")).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command =
+            expect_run(resolve(&yarn("4.0.0"), patch_commit_args("patches/left-pad")).outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["patch-commit", "--save", "patches/left-pad"]);
@@ -98,11 +142,8 @@ mod tests {
 
     #[test]
     fn test_bun_patch_commit_uses_flag() {
-        let CommandResolution::Run(command) =
-            resolve(&bun("1.3.11"), patch_commit_args("patches/left-pad")).outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command =
+            expect_run(resolve(&bun("1.3.11"), patch_commit_args("patches/left-pad")).outcome);
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, vec!["patch", "--commit", "patches/left-pad"]);
@@ -110,12 +151,17 @@ mod tests {
 
     #[test]
     fn test_npm_patch_commit_not_supported() {
-        let result = resolve(&npm("11.0.0"), patch_commit_args("patches/left-pad"));
+        for version in ["10.0.0", "11.0.0", "12.0.0-beta.1"] {
+            let result = resolve(&npm(version), patch_commit_args("patches/left-pad"));
 
-        assert_eq!(result.outcome, CommandResolution::Noop);
-        assert_eq!(result.diagnostics.len(), 1);
-        assert_eq!(result.diagnostics[0].kind, DiagnosticKind::UnsupportedCommandNoop);
-        assert_eq!(result.diagnostics[0].message, "npm does not have a 'patch-commit' command.");
+            assert_eq!(result.outcome, CommandResolution::Noop);
+            assert_eq!(result.diagnostics.len(), 1);
+            assert_eq!(result.diagnostics[0].kind, DiagnosticKind::UnsupportedCommandNoop);
+            assert_eq!(
+                result.diagnostics[0].message,
+                "npm does not have a 'patch-commit' command."
+            );
+        }
     }
 
     #[test]
@@ -133,17 +179,16 @@ mod tests {
 
     #[test]
     fn test_patch_commit_with_pass_through_args() {
-        let CommandResolution::Run(command) = resolve(
-            &bun("1.3.11"),
-            PatchCommitArgs {
-                patch_dir: "patches/left-pad".to_string(),
-                pass_through_args: vec!["--patches-dir".to_string(), ".patches".to_string()],
-            },
-        )
-        .outcome
-        else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(
+            resolve(
+                &bun("1.3.11"),
+                PatchCommitArgs {
+                    patch_dir: "patches/left-pad".to_string(),
+                    pass_through_args: vec!["--patches-dir".to_string(), ".patches".to_string()],
+                },
+            )
+            .outcome,
+        );
 
         assert_eq!(
             command.args,

@@ -75,6 +75,162 @@ prepare packages
 }
 ```
 
+## `vp remove testnpm2 -r --workspace-root --filter=app --filter=@vite-plus-test/utils`
+
+reject unsupported --workspace-root without removing packages
+
+**Exit code:** 1
+
+```
+yarn does not support --workspace-root.
+```
+
+## `vpt print-file package.json packages/app/package.json packages/admin/package.json packages/utils/package.json`
+
+all manifests remain unchanged
+
+```
+{
+  "name": "command-remove-yarn4-with-workspace",
+  "version": "1.0.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "packageManager": "yarn@4.10.3",
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
+{
+  "name": "app",
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
+{
+  "name": "admin",
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
+```
+
+## `vp remove testnpm2 -r --filter=app --filter=@vite-plus-test/utils`
+
+recursive remove affects only app and utils
+
+```
+[app]: Process started
+[app]: ➤ YN0000: · Yarn <version>
+[app]: ➤ YN0000: ┌ Resolution step
+[app]: ➤ YN0000: └ Completed
+[app]: ➤ YN0000: ┌ Fetch step
+[app]: ➤ YN0000: └ Completed
+[app]: ➤ YN0000: ┌ Link step
+[app]: ➤ YN0000: └ Completed
+[app]: ➤ YN0000: · Done in <duration>
+[app]: Process exited (exit code 0), completed in <duration>
+
+[@vite-plus-test/utils]: Process started
+[@vite-plus-test/utils]: ➤ YN0000: · Yarn <version>
+[@vite-plus-test/utils]: ➤ YN0000: ┌ Resolution step
+[@vite-plus-test/utils]: ➤ YN0000: └ Completed
+[@vite-plus-test/utils]: ➤ YN0000: ┌ Fetch step
+[@vite-plus-test/utils]: ➤ YN0000: └ Completed
+[@vite-plus-test/utils]: ➤ YN0000: ┌ Link step
+[@vite-plus-test/utils]: ➤ YN0000: └ Completed
+[@vite-plus-test/utils]: ➤ YN0000: · Done in <duration>
+[@vite-plus-test/utils]: Process exited (exit code 0), completed in <duration>
+
+Done in <duration>
+```
+
+## `vpt print-file package.json packages/app/package.json packages/admin/package.json packages/utils/package.json`
+
+root and admin keep testnpm2
+
+```
+{
+  "name": "command-remove-yarn4-with-workspace",
+  "version": "1.0.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "packageManager": "yarn@4.10.3",
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
+{
+  "name": "app",
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
+{
+  "name": "admin",
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
+```
+
 ## `vp remove testnpm2 -r`
 
 should remove package from all workspaces and root
@@ -88,7 +244,7 @@ should remove package from all workspaces and root
 ➤ YN0000: └ Completed
 ➤ YN0000: ┌ Link step
 ➤ YN0000: └ Completed
-➤ YN0000: · Done in <duration> <duration>
+➤ YN0000: · Done in <duration>
 ```
 
 ## `vpt print-file package.json packages/app/package.json packages/admin/package.json packages/utils/package.json`
@@ -140,18 +296,12 @@ should remove package from all workspaces and root
 
 ## `vp remove -O test-vite-plus-package-optional -r`
 
-should remove optional package from all workspaces
+reject --save-optional before removing dependencies from any workspace
+
+**Exit code:** 1
 
 ```
-➤ YN0000: · Yarn <version>
-➤ YN0000: ┌ Resolution step
-➤ YN0085: │ - test-vite-plus-package-optional@npm:1.0.0
-➤ YN0000: └ Completed
-➤ YN0000: ┌ Fetch step
-➤ YN0000: └ Completed
-➤ YN0000: ┌ Link step
-➤ YN0000: └ Completed
-➤ YN0000: · Done in <duration> <duration>
+yarn does not support --save-optional.
 ```
 
 ## `vpt print-file package.json packages/app/package.json packages/admin/package.json packages/utils/package.json`
@@ -166,18 +316,27 @@ should remove optional package from all workspaces
   "packageManager": "yarn@4.10.3",
   "dependencies": {
     "test-vite-plus-install": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
   }
 }
 {
   "name": "app",
   "dependencies": {
     "test-vite-plus-install": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
   }
 }
 {
   "name": "admin",
   "dependencies": {
     "test-vite-plus-install": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
   }
 }
 {
@@ -185,13 +344,16 @@ should remove optional package from all workspaces
   "version": "1.0.0",
   "dependencies": {
     "test-vite-plus-install": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
   }
 }
 ```
 
-## `vp remove test-vite-plus-install --filter=app`
+## `vp remove test-vite-plus-install -r --filter=app`
 
-should remove package by filter=app
+recursive remove affects only app
 
 ```
 [app]: Process started
@@ -202,10 +364,10 @@ should remove package by filter=app
 [app]: ➤ YN0000: └ Completed
 [app]: ➤ YN0000: ┌ Link step
 [app]: ➤ YN0000: └ Completed
-[app]: ➤ YN0000: · Done in <duration> <duration>
-[app]: Process exited (exit code 0), completed in <duration> <duration>
+[app]: ➤ YN0000: · Done in <duration>
+[app]: Process exited (exit code 0), completed in <duration>
 
-Done in <duration> <duration>
+Done in <duration>
 ```
 
 ## `vpt print-file package.json packages/app/package.json packages/admin/package.json packages/utils/package.json`
@@ -220,15 +382,24 @@ Done in <duration> <duration>
   "packageManager": "yarn@4.10.3",
   "dependencies": {
     "test-vite-plus-install": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
   }
 }
 {
-  "name": "app"
+  "name": "app",
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
 }
 {
   "name": "admin",
   "dependencies": {
     "test-vite-plus-install": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
   }
 }
 {
@@ -236,6 +407,9 @@ Done in <duration> <duration>
   "version": "1.0.0",
   "dependencies": {
     "test-vite-plus-install": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
   }
 }
 ```
@@ -253,10 +427,10 @@ should remove package by filter=*
 [app]: ➤ YN0000: └ Completed
 [app]: ➤ YN0000: ┌ Link step
 [app]: ➤ YN0000: └ Completed
-[app]: ➤ YN0000: · Done in <duration> <duration>
-[app]: Process exited (exit code 0), completed in <duration> <duration>
+[app]: ➤ YN0000: · Done in <duration>
+[app]: Process exited (exit code 0), completed in <duration>
 
-Done in <duration> <duration>
+Done in <duration>
 ```
 
 ## `vp remove test-vite-plus-install --filter=*`
@@ -270,8 +444,8 @@ Done in <duration> <duration>
 [command-remove-yarn4-with-workspace]: ➤ YN0000: └ Completed
 [command-remove-yarn4-with-workspace]: ➤ YN0000: ┌ Link step
 [command-remove-yarn4-with-workspace]: ➤ YN0000: └ Completed
-[command-remove-yarn4-with-workspace]: ➤ YN0000: · Done in <duration> <duration>
-[command-remove-yarn4-with-workspace]: Process exited (exit code 0), completed in <duration> <duration>
+[command-remove-yarn4-with-workspace]: ➤ YN0000: · Done in <duration>
+[command-remove-yarn4-with-workspace]: Process exited (exit code 0), completed in <duration>
 
 [admin]: Process started
 [admin]: ➤ YN0000: · Yarn <version>
@@ -281,8 +455,8 @@ Done in <duration> <duration>
 [admin]: ➤ YN0000: └ Completed
 [admin]: ➤ YN0000: ┌ Link step
 [admin]: ➤ YN0000: └ Completed
-[admin]: ➤ YN0000: · Done in <duration> <duration>
-[admin]: Process exited (exit code 0), completed in <duration> <duration>
+[admin]: ➤ YN0000: · Done in <duration>
+[admin]: Process exited (exit code 0), completed in <duration>
 
 [app]: Process started
 [app]: ➤ YN0000: · Yarn <version>
@@ -292,10 +466,10 @@ Done in <duration> <duration>
 [app]: ➤ YN0000: └ Completed
 [app]: ➤ YN0000: ┌ Link step
 [app]: ➤ YN0000: └ Completed
-[app]: ➤ YN0000: · Done in <duration> <duration>
-[app]: Process exited (exit code 0), completed in <duration> <duration>
+[app]: ➤ YN0000: · Done in <duration>
+[app]: Process exited (exit code 0), completed in <duration>
 
-Done in <duration> <duration>
+Done in <duration>
 ```
 
 ## `vpt print-file package.json packages/app/package.json packages/admin/package.json packages/utils/package.json`
@@ -307,19 +481,31 @@ Done in <duration> <duration>
   "workspaces": [
     "packages/*"
   ],
-  "packageManager": "yarn@4.10.3"
+  "packageManager": "yarn@4.10.3",
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
 }
 {
-  "name": "app"
+  "name": "app",
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
 }
 {
-  "name": "admin"
+  "name": "admin",
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
 }
 {
   "name": "@vite-plus-test/utils",
   "version": "1.0.0",
   "dependencies": {
     "test-vite-plus-install": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
   }
 }
 ```

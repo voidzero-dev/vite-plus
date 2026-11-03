@@ -1,10 +1,25 @@
 name: Publish preview build
 
-# Publishes a labeled PR's commit build to the registry bridge
-# (https://github.com/voidzero-dev/pkg-pr-registry-bridge), which serves it as
-# the npm version 0.0.0-commit.<sha>. Registered builds:
-# https://registry-bridge.viteplus.dev/-/refs
-# Triggered by adding the `preview-build` label.
+# BUILD WORKFLOW. Builds a labeled PR and packs its packages into a workflow
+# artifact. It holds no secrets and no OIDC permission, so it is safe to run
+# for a pull request from a fork.
+#
+# Despite the name, it publishes nothing. Publishing happens in
+# publish-preview-register.yml, which triggers when this workflow completes and
+# runs from the default branch. The split exists because GitHub denies fork
+# pull_request runs both secrets and `id-token`, so a fork PR cannot
+# authenticate to the bridge from here at all.
+#
+# The `preview-build` label check below is a convenience gate that saves build
+# minutes. It is NOT the security boundary: on pull_request events GitHub runs
+# the workflow file from the merge ref, so a PR author can edit this file and
+# delete the check. publish-preview-register.yml re-establishes authorization
+# from the API.
+#
+# NOTE: the workflow NAME above is what publish-preview-register.yml matches on.
+# Renaming it silently stops preview publishing.
+#
+# Registered builds: https://registry-bridge.viteplus.dev/-/refs
 
 permissions: {}
 
@@ -13,23 +28,40 @@ on:
     types: [labeled]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # Other label events skip this workflow and must not cancel a preview build.
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event.label.name }}
   cancel-in-progress: true
 
 jobs:
   prepare:
     if: >-
       github.repository == 'voidzero-dev/vite-plus' &&
-      contains(github.event.pull_request.labels.*.name, 'preview-build')
-    name: Compute snapshot version
-    runs-on: ubuntu-latest
+      github.event.label.name == 'preview-build'
+    name: Compute preview metadata
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     outputs:
       version: ${{ steps.version.outputs.version }}
+      docs-origin: ${{ steps.docs.outputs.origin }}
     steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - name: Test preview documentation origin
+        run: node --test .github/scripts/__tests__/preview-docs-origin.mjs
+      - name: Resolve preview documentation origin
+        id: docs
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const { previewDocsOrigin } = await import(`${process.env.GITHUB_WORKSPACE}/.github/scripts/preview-docs-origin.ts`);
+            core.setOutput('origin', previewDocsOrigin(context.payload.pull_request));
       # Use the exact version the registry bridge serves (0.0.0-commit.<head-sha>,
-      # same head SHA the bridge registers below), so the built Rust binary and JS
+      # the same head SHA publish-preview-register.yml registers), so the built
+      # Rust binary and JS
       # dist carry the version that actually gets installed: CARGO_PKG_VERSION and
       # cliPkg.version both equal it, instead of the build-time release placeholder.
       # `napi pre-publish` reuses this for consistent optionalDependencies entries.
@@ -41,41 +73,40 @@ jobs:
     name: Build bindings and binaries
     if: >-
       github.repository == 'voidzero-dev/vite-plus' &&
-      contains(github.event.pull_request.labels.*.name, 'preview-build')
+      github.event.label.name == 'preview-build'
     needs: prepare
     permissions:
       contents: read
     uses: ./.github/workflows/reusable-release-build.yml
     with:
       version: ${{ needs.prepare.outputs.version }}
+      docs-origin: ${{ needs.prepare.outputs.docs-origin }}
       cache-key: pkg-pr-new
 
   publish:
     if: >-
       github.repository == 'voidzero-dev/vite-plus' &&
-      contains(github.event.pull_request.labels.*.name, 'preview-build')
-    name: Pkg Preview
-    runs-on: ubuntu-latest
+      github.event.label.name == 'preview-build'
+    name: Pack preview packages
+    runs-on: ubuntu-24.04
     needs:
       - prepare
       - build-rust
+    # Read-only, and deliberately no `id-token`. Everything that needs a write
+    # permission (the sticky comment, the Docker image) moved to the trusted
+    # workflow, because fork pull_request runs are denied those permissions
+    # anyway.
     permissions:
       contents: read
-      # The "Comment bridge version" step creates/updates a sticky comment via
-      # github.rest.issues.createComment/updateComment; comment writes on PRs
-      # are gated on pull-requests:write, and creating an issue comment is
-      # gated on issues:write (the create path runs on PRs without one yet).
-      pull-requests: write
-      issues: write
     env:
       VERSION: ${{ needs.prepare.outputs.version }}
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
           package-manager-cache: false
@@ -84,35 +115,44 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      # The registry bridge rewrites dependencies by package name. Stamp core
+      # before pnpm pack so the dependency named `vite` already aliases the
+      # preview version. Keep the CLI manifest aligned with its built dist too.
+      - name: Set preview package versions
+        run: |
+          for package in cli core; do
+            pnpm exec json-edit "packages/$package/package.json" '_.version = process.env.VERSION'
+          done
+
       - name: Download cli dist
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: packages/cli/dist
           pattern: cli
           merge-multiple: true
 
       - name: Download cli docs
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: packages/cli/docs
           pattern: cli-docs
           merge-multiple: true
 
       - name: Download cli binding
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: packages/cli/artifacts
           pattern: vite-plus-native-*
 
       - name: Download core dist
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: packages/core/dist
           pattern: core
           merge-multiple: true
 
       - name: Download prompts dist
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: packages/prompts/dist
           pattern: prompts
@@ -125,7 +165,7 @@ jobs:
           upload: 'false'
 
       - name: Download Rust CLI binaries
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: rust-cli-artifacts
           pattern: vp-global-cli-*
@@ -135,260 +175,70 @@ jobs:
       - name: Prepare native addon and CLI binary packages
         run: node ./packages/cli/publish-native-addons.ts --mode pkg-pr-new
 
-      # Publish this commit build to the registry bridge so it can be installed
-      # as the npm version 0.0.0-commit.<sha>
-      # (https://github.com/voidzero-dev/pkg-pr-registry-bridge). The bridge
-      # action packs the locally built package directories prepared above (the
-      # two preview packages and every platform binary) with `pnpm pack`,
-      # re-packs them under the commit version with matching integrity, uploads
-      # them to the bridge, and registers the ref. This build publishes under
-      # the PR head commit, so pass that SHA (not the merge commit github.sha).
-      # Restricted to same-repo PRs because fork PRs do not receive the admin
-      # token secret. A bridge failure fails the job: install.sh and the Docker
-      # preview install PR builds through the bridge, so a silently missing ref
-      # would only surface later as a broken install.
-      - name: Register commit build with the registry bridge
-        id: bridge
-        if: github.event.pull_request.head.repo.full_name == github.repository
-        uses: voidzero-dev/pkg-pr-registry-bridge@f57eaa9063ca6af90ea6471ef881c8b46c64a060 # main
+      # Pack the local CLI and its dependencies separately from the global
+      # binary packages. `mode: pack` runs
+      # `pnpm pack` and nothing else: no network, no credentials. The trusted
+      # workflow validates every archive, rewrites and re-packs it under the commit
+      # version, and uploads it.
+      #
+      # Runs for fork PRs too. That is the point of the split: the old
+      # same-repo gate here existed only because fork runs cannot read the
+      # admin token secret.
+      - name: Pack packages for the registry bridge
+        uses: voidzero-dev/pkg-pr-registry-bridge@4ca2c31c250c7137ae191bf01a8bb106d30aa106 # main
         with:
+          mode: pack
+          # The PR head commit, not the merge commit github.sha. Advisory here;
+          # the publishing workflow re-derives it from workflow_run.head_sha.
           sha: ${{ github.event.pull_request.head.sha }}
-          admin-token: ${{ secrets.PKG_PR_BRIDGE_ADMIN_TOKEN }}
-          # The locally built directories to pack and publish. (This is also
-          # the action's default, passed explicitly so the published set is
-          # reviewable here.)
+          output-dir: bridge-packages
+          # The locally built directories to pack. Listed here rather than left
+          # to the action's default, so the published set is reviewable in this
+          # repo and does not move when the action does.
           packages: |
             packages/cli/npm/*
-            packages/cli/cli-npm/*
             packages/cli
             packages/core
             packages/prompts
-          # Surfaced by the bridge's /-/refs so a registered ref links back to its
-          # PR. Always present here (this workflow only runs on pull_request).
-          pr-url: ${{ github.event.pull_request.html_url }}
+            packages/create-vite-plus
+          # Must match the upload step in publish-preview-register.yml, which
+          # validates the same batch from main.
+          workspace-packages: vite-plus,create-vite-plus,@voidzero-dev/vite-plus-*
 
-      # Once the bridge has the commit build, post (or update) a sticky PR comment
-      # with the resolved npm versions and per-package-manager registry config, so
-      # reviewers can install the build directly. The outcome gate skips this on
-      # fork PRs, where the bridge step itself is skipped.
-      - name: Comment bridge version on the PR
-        if: steps.bridge.outcome == 'success'
-        continue-on-error: true
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
-        env:
-          # The synthetic version (0.0.0-commit.<sha>) the bridge action
-          # published, so the version scheme has one source of truth (the action).
-          BRIDGE_VERSION: ${{ steps.bridge.outputs.version }}
+      - name: Pack global CLI packages for the registry bridge
+        uses: voidzero-dev/pkg-pr-registry-bridge@4ca2c31c250c7137ae191bf01a8bb106d30aa106 # main
         with:
-          script: |
-            const version = process.env.BRIDGE_VERSION;
-            const shortSha = context.payload.pull_request.head.sha.slice(0, 7);
-            const pr = context.payload.pull_request.number;
-            const marker = '<!-- pkg-pr-bridge-version -->';
-            const bridge = 'https://registry-bridge.viteplus.dev/';
-            // Built as a line array (not a template literal) so the inline
-            // backticks and the fenced json block don't need backslash-escaping.
-            const body = [
-              marker,
-              '',
-              `### Registry bridge build (\`${shortSha}\`)`,
-              '',
-              'This commit build is published to the [registry bridge](https://github.com/voidzero-dev/pkg-pr-registry-bridge), which serves these as ordinary npm versions (every other package proxies to npmjs):',
-              '',
-              '| Package | Version |',
-              '| --- | --- |',
-              `| \`vite-plus\` | \`${version}\` |`,
-              `| \`@voidzero-dev/vite-plus-core\` | \`${version}\` |`,
-              '',
-              '**Install the Vite+ CLI built from this commit, then migrate a project:**',
-              '',
-              '```bash',
-              '# macOS / Linux',
-              `curl -fsSL https://vite.plus | VP_PR_VERSION=${pr} bash`,
-              '```',
-              '```powershell',
-              '# Windows (PowerShell)',
-              `$env:VP_PR_VERSION="${pr}"; irm https://vite.plus/ps1 | iex`,
-              '```',
-              '',
-              `After installing, upgrade the current project's \`vite-plus\` to this test build with:`,
-              '',
-              '```bash',
-              'vp migrate',
-              '```',
-              '',
-              `**Or** point your package manager at the bridge registry \`${bridge}\`:`,
-              '',
-              '| Package manager | Registry config |',
-              '| --- | --- |',
-              `| npm / pnpm / Bun | \`.npmrc\`: \`registry=${bridge}\` |`,
-              `| Yarn (v2+) | \`.yarnrc.yml\`: \`npmRegistryServer: "${bridge}"\` |`,
-              '',
-              'Then pin the build (`vite` aliases to vite-plus-core; pnpm can use a catalog, npm an `overrides` entry):',
-              '',
-              '```json',
-              '{',
-              '  "devDependencies": {',
-              `    "vite-plus": "${version}",`,
-              `    "vite": "npm:@voidzero-dev/vite-plus-core@${version}"`,
-              '  }',
-              '}',
-              '```',
-            ].join('\n');
-            const comments = await github.paginate(github.rest.issues.listComments, {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: pr,
-            });
-            const existing = comments.find((c) => c.body && c.body.includes(marker));
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: pr,
-                body,
-              });
-            }
+          mode: pack
+          sha: ${{ github.event.pull_request.head.sha }}
+          output-dir: bridge-cli-packages
+          packages: packages/cli/cli-npm/*
+          workspace-packages: '@voidzero-dev/vite-plus-cli-*'
 
-  # Build and push a preview Docker image from the registry bridge build so the
-  # image can be verified before a real release. Tagged `pr-<number>`; never
-  # `latest`. See docker/Dockerfile and docs/guide/docker.md.
-  publish-docker-preview:
-    if: >-
-      github.repository == 'voidzero-dev/vite-plus' &&
-      contains(github.event.pull_request.labels.*.name, 'preview-build')
-    name: Docker preview image
-    runs-on: ubuntu-latest
-    needs: publish
-    permissions:
-      contents: read
-      packages: write
-    env:
-      IMAGE: ghcr.io/voidzero-dev/vite-plus
-      TAG: pr-${{ github.event.pull_request.number }}
-    steps:
-      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
-
-      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
-
-      - name: Log in to GHCR
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+      - name: Upload packed global CLI packages
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          name: bridge-cli-packages
+          path: bridge-cli-packages
+          overwrite: true
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
 
-      # Builds from this PR's registry bridge build (VP_PR_VERSION resolves it
-      # through the bridge). The bridge must have the commit build first, hence
-      # `needs: publish`.
-      # amd64-only: this throwaway preview avoids the slow arm64 QEMU leg; arm64
-      # is covered by the release build and the test-install-sh-arm64 job.
-      - name: Build and push preview image
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+      - name: Upload packed packages
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          context: docker
-          file: docker/Dockerfile
-          platforms: linux/amd64
-          push: true
-          tags: ${{ env.IMAGE }}:${{ env.TAG }}
-          build-args: |
-            VP_PR_VERSION=${{ github.event.pull_request.number }}
-          # Single-manifest image (no attestation index): simpler for consumers
-          # and lets the comment job read the size via `docker manifest inspect`.
-          provenance: false
-
-  # Post (or update) a single sticky PR comment with the preview image tag after
-  # it publishes. Re-runs reuse the same comment via the hidden marker instead of
-  # creating a new one.
-  comment-docker-preview:
-    if: >-
-      github.repository == 'voidzero-dev/vite-plus' &&
-      contains(github.event.pull_request.labels.*.name, 'preview-build')
-    name: Comment Docker preview
-    runs-on: ubuntu-latest
-    needs: publish-docker-preview
-    permissions:
-      contents: read
-      packages: read
-      pull-requests: write
-    env:
-      IMAGE: ghcr.io/voidzero-dev/vite-plus
-      PR_NUMBER: ${{ github.event.pull_request.number }}
-    steps:
-      - name: Log in to GHCR
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      # Compressed download size from the registry manifest (config + layers),
-      # without pulling the image. Matches what `docker pull` transfers and what
-      # the GHCR package page shows.
-      - name: Measure image size
-        id: size
-        run: |
-          bytes=$(docker manifest inspect "${IMAGE}:pr-${PR_NUMBER}" | jq '[.config.size] + [.layers[].size] | add')
-          echo "compressed=$(numfmt --to=si --suffix=B "$bytes")" >> "$GITHUB_OUTPUT"
-
-      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
-        env:
-          COMPRESSED_SIZE: ${{ steps.size.outputs.compressed }}
-        with:
-          script: |
-            const image = process.env.IMAGE;
-            const pr = context.payload.pull_request.number;
-            const marker = '<!-- docker-preview -->';
-            // Built as a line array (not a template literal) so the fenced code
-            // blocks don't collide with the YAML block-scalar indentation.
-            const body = [
-              marker,
-              '## 🐳 Docker preview image',
-              '',
-              "Built from this PR's registry bridge build:",
-              '',
-              '| Image | Compressed size |',
-              '| --- | --- |',
-              `| \`${image}:pr-${pr}\` | ${process.env.COMPRESSED_SIZE} |`,
-              '',
-              '```bash',
-              `# remove any stale local copy from a previous run, then pull fresh`,
-              `docker rmi ${image}:pr-${pr} 2>/dev/null; docker pull ${image}:pr-${pr}`,
-              '```',
-              '',
-              'Quick check:',
-              '',
-              '```bash',
-              `docker run --rm ${image}:pr-${pr} vp --version`,
-              '```',
-              '',
-              'See [docs/guide/docker.md](https://github.com/voidzero-dev/vite-plus/blob/main/docs/guide/docker.md) for usage.',
-            ].join('\n');
-            const comments = await github.paginate(github.rest.issues.listComments, {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: pr,
-            });
-            const existing = comments.find((c) => c.body && c.body.includes(marker));
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: pr,
-                body,
-              });
-            }
+          name: bridge-packages
+          path: bridge-packages
+          overwrite: true
+          # A silently empty artifact would make the publishing workflow fail with a
+          # confusing "no packed tarballs" instead of failing here.
+          if-no-files-found: error
+          # Must outlive the approval wait, not just the run. The publishing
+          # publish job is gated on a required-reviewer environment, and GitHub
+          # keeps a pending deployment open far longer than a day, so a
+          # retention of 1 would let the artifact expire out from under an
+          # approval given the next morning.
+          retention-days: 7
+          # The payload is already-gzipped .tgz files, so re-deflating them costs
+          # time for no size gain.
+          compression-level: 0

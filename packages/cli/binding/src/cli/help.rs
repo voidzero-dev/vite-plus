@@ -1,16 +1,30 @@
-use clap::error::{ContextKind, ContextValue, ErrorKind};
-use owo_colors::OwoColorize;
+use clap::error::ErrorKind;
+use console::style;
+use vp_cli_help::error::{
+    extract_invalid_subcommand_details, extract_unknown_argument, has_pass_as_value_suggestion,
+    print_subcommand_suggestion, print_unknown_argument_error,
+};
 use vp_error::Error;
 use vp_shared::output;
 use vt::ExitStatus;
 
 use super::types::SynthesizableSubcommand;
 
+/// Subcommands that exist only in the global `vp` binary.
+///
+/// Keep in sync with the self-management variants of `Commands` in
+/// `crates/vp_global_cli/src/cli.rs`; the local CLI cannot run them and only
+/// needs the names to point users at the global installation.
+const GLOBAL_ONLY_SUBCOMMANDS: &[&str] = &["env", "upgrade", "implode"];
+
 pub(super) fn handle_cli_parse_error(err: clap::Error) -> Result<ExitStatus, Error> {
     if matches!(err.kind(), ErrorKind::InvalidSubcommand) && print_invalid_subcommand_error(&err) {
         return Ok(ExitStatus(err.exit_code() as u8));
     }
-    if matches!(err.kind(), ErrorKind::UnknownArgument) && print_unknown_argument_error(&err) {
+    if matches!(err.kind(), ErrorKind::UnknownArgument)
+        && let Some(invalid_argument) = extract_unknown_argument(&err)
+    {
+        print_unknown_argument_error(&invalid_argument, has_pass_as_value_suggestion(&err));
         return Ok(ExitStatus(err.exit_code() as u8));
     }
 
@@ -36,19 +50,15 @@ fn is_vitest_help_flag(arg: &str) -> bool {
     matches!(arg, "-h" | "--help")
 }
 
-/// Help/version flags of the forwarded app tools (Vite and tsdown are
-/// cac-based: `-v, --version`; vp's own clap surface uses `-V`). Requests for
-/// these must always reach the tool, never target elicitation.
-pub(super) fn is_app_tool_help_or_version_flag(arg: &str) -> bool {
-    matches!(arg, "-h" | "--help" | "-v" | "-V" | "--version")
-}
-
 fn is_vitest_watch_flag(arg: &str) -> bool {
     matches!(arg, "-w" | "--watch")
 }
 
 fn is_vitest_test_subcommand(arg: &str) -> bool {
-    matches!(arg, "run" | "watch" | "dev" | "related" | "bench" | "init" | "list")
+    matches!(
+        arg,
+        "run" | "watch" | "dev" | "related" | "bench" | "init" | "list" | "doctor" | "complete"
+    )
 }
 
 fn has_flag_before_terminator(args: &[String], flag: &str) -> bool {
@@ -97,79 +107,26 @@ pub(super) fn should_print_help(args: &[String]) -> bool {
     args.is_empty() || matches!(args, [arg] if arg == "-h" || arg == "--help")
 }
 
-fn extract_invalid_subcommand_details(error: &clap::Error) -> Option<(String, Option<String>)> {
-    let invalid_subcommand = match error.get(ContextKind::InvalidSubcommand) {
-        Some(ContextValue::String(value)) => value.as_str(),
-        _ => return None,
-    };
-
-    let suggestion = match error.get(ContextKind::SuggestedSubcommand) {
-        Some(ContextValue::String(value)) => Some(value.to_owned()),
-        Some(ContextValue::Strings(values)) => {
-            vp_shared::string_similarity::pick_best_suggestion(invalid_subcommand, values)
-        }
-        _ => None,
-    };
-
-    Some((invalid_subcommand.to_owned(), suggestion))
-}
-
 fn print_invalid_subcommand_error(error: &clap::Error) -> bool {
-    let Some((invalid_subcommand, suggestion)) = extract_invalid_subcommand_details(error) else {
+    let Some(details) = extract_invalid_subcommand_details(error) else {
         return false;
     };
+    let invalid_subcommand = &details.invalid_subcommand;
 
-    let highlighted_subcommand = invalid_subcommand.bright_blue().to_string();
-    output::error(&format!("Command '{highlighted_subcommand}' not found"));
-
-    if let Some(suggestion) = suggestion {
-        eprintln!();
-        let highlighted_suggestion = format!("`vp {suggestion}`").bright_blue().to_string();
-        eprintln!("Did you mean {highlighted_suggestion}?");
+    if GLOBAL_ONLY_SUBCOMMANDS.contains(&invalid_subcommand.as_str()) {
+        let command =
+            style(format!("`{invalid_subcommand}`")).for_stderr().blue().bright().to_string();
+        output::error(&format!(
+            "The {command} command is only available in the global `vp` CLI. See {} to install it, then run the same command via the global `vp` binary.",
+            vp_shared::documentation_url("/guide/")
+        ));
+        return true;
     }
 
-    true
-}
+    vp_cli_help::error::print_invalid_subcommand_error(invalid_subcommand);
 
-fn extract_unknown_argument(error: &clap::Error) -> Option<String> {
-    match error.get(ContextKind::InvalidArg) {
-        Some(ContextValue::String(value)) => Some(value.to_owned()),
-        _ => None,
-    }
-}
-
-fn has_pass_as_value_suggestion(error: &clap::Error) -> bool {
-    let contains_pass_as_value = |suggestion: &str| suggestion.contains("as a value");
-
-    match error.get(ContextKind::Suggested) {
-        Some(ContextValue::String(suggestion)) => contains_pass_as_value(suggestion),
-        Some(ContextValue::Strings(suggestions)) => {
-            suggestions.iter().any(|suggestion| contains_pass_as_value(suggestion))
-        }
-        Some(ContextValue::StyledStr(suggestion)) => {
-            contains_pass_as_value(&suggestion.to_string())
-        }
-        Some(ContextValue::StyledStrs(suggestions)) => {
-            suggestions.iter().any(|suggestion| contains_pass_as_value(&suggestion.to_string()))
-        }
-        _ => false,
-    }
-}
-
-fn print_unknown_argument_error(error: &clap::Error) -> bool {
-    let Some(invalid_argument) = extract_unknown_argument(error) else {
-        return false;
-    };
-
-    let highlighted_argument = invalid_argument.bright_blue().to_string();
-    output::error(&format!("Unexpected argument '{highlighted_argument}'"));
-
-    if has_pass_as_value_suggestion(error) {
-        eprintln!();
-        let pass_through_argument = format!("-- {invalid_argument}");
-        let highlighted_pass_through_argument =
-            format!("`{}`", pass_through_argument.bright_blue());
-        eprintln!("Use {highlighted_pass_through_argument} to pass the argument as a value");
+    if let Some(suggestion) = &details.suggestion {
+        print_subcommand_suggestion(suggestion);
     }
 
     true
@@ -202,7 +159,9 @@ pub(super) fn print_help() {
   {bold}preview{reset}        Preview production build
   {bold}cache{reset}          Manage the task cache
   {bold}config{reset}         Configure hooks and agent integration
+  {bold}hooks{reset}          Manage the Git hook dispatcher
   {bold}staged{reset}         Run linters on staged files
+  {bold}toolchain{reset}      Show Vite+ tool versions and relationships
 
 {bold_underline}Package Manager Commands:{reset}
   {bold}install{reset}    Install all dependencies, or add packages if package names are provided
@@ -253,13 +212,15 @@ mod tests {
     }
 
     #[test]
-    fn test_with_run_subcommand_does_not_prepend_run() {
-        assert!(!should_prepend_vitest_run(&["run".to_string(), "--coverage".to_string()]));
-    }
-
-    #[test]
-    fn test_with_watch_subcommand_does_not_prepend_run() {
-        assert!(!should_prepend_vitest_run(&["watch".to_string()]));
+    fn test_with_subcommand_does_not_prepend_run() {
+        for args in [
+            vec!["run".to_string(), "--coverage".to_string()],
+            vec!["watch".to_string()],
+            vec!["doctor".to_string()],
+            vec!["complete".to_string(), "zsh".to_string()],
+        ] {
+            assert!(!should_prepend_vitest_run(&args), "unexpected run prefix for {args:?}");
+        }
     }
 
     #[test]
@@ -311,7 +272,7 @@ mod tests {
     fn global_subcommands_produce_invalid_subcommand_error() {
         use clap::error::ErrorKind;
 
-        for subcommand in ["config", "create", "env", "migrate"] {
+        for subcommand in ["config", "create", "env", "hooks", "implode", "migrate", "upgrade"] {
             let error = CLIArgs::try_parse_from(["vp", subcommand])
                 .expect_err(&format!("expected error for global subcommand '{subcommand}'"));
             assert_eq!(

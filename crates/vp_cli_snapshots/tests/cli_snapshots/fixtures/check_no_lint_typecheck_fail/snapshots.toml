@@ -3,4 +3,5 @@ name = "check_no_lint_typecheck_fail"
 vp = "local"
 steps = [
   { argv = ["vp", "check", "--no-lint"], continue-on-failure = true },
+  { argv = ["vp", "check", "--no-lint", "--quiet"], comment = "type errors are still reported when lint rules are skipped", continue-on-failure = true },
 ]

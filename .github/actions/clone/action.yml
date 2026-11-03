@@ -2,6 +2,10 @@ name: 'Clone Repositories'
 description: 'Clone self and upstream repositories'
 
 inputs:
+  setup-node:
+    description: 'Set to false to keep a caller-provided Node.js with native TypeScript support (for example, on Alpine)'
+    required: false
+    default: 'true'
   ecosystem-ci-project:
     description: 'The ecosystem ci project to clone'
     required: false
@@ -15,12 +19,24 @@ outputs:
 runs:
   using: 'composite'
   steps:
+    # Run the bootstrap scripts with native TypeScript support before installing dependencies.
+    - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      if: ${{ inputs.setup-node != 'false' }}
+      with:
+        node-version-file: .node-version
+        package-manager-cache: false
+
+    - name: Validate bootstrap Node.js
+      shell: bash
+      run: node -e "require('node:assert/strict').ok(process.features.typescript, 'Clone bootstrap requires native TypeScript support')"
+
     - name: Output rolldown and vite hash
       shell: bash
       id: upstream-versions
       run: |
         node -e "console.log('ROLLDOWN_HASH=' + require('./packages/tools/.upstream-versions.json').rolldown.hash)" >> $GITHUB_OUTPUT
         node -e "console.log('ROLLDOWN_VITE_HASH=' + require('./packages/tools/.upstream-versions.json')['vite'].hash)" >> $GITHUB_OUTPUT
+        node -e "console.log('OXC_NODE_HASH=' + require('./packages/tools/.upstream-versions.json')['oxc-node'].hash)" >> $GITHUB_OUTPUT
 
     - name: Output ecosystem ci project hash
       shell: bash
@@ -33,19 +49,38 @@ runs:
       env:
         INPUTS_ECOSYSTEM_CI_PROJECT: ${{ inputs.ecosystem-ci-project }}
 
-    - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         repository: rolldown/rolldown
         path: rolldown
         ref: ${{ steps.upstream-versions.outputs.ROLLDOWN_HASH }}
         persist-credentials: false
 
-    - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         repository: vitejs/vite
         path: vite
         ref: ${{ steps.upstream-versions.outputs.ROLLDOWN_VITE_HASH }}
         persist-credentials: false
+
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        repository: oxc-project/oxc-node
+        path: oxc-node
+        ref: ${{ steps.upstream-versions.outputs.OXC_NODE_HASH }}
+        persist-credentials: false
+
+    # oxc-node compiles into the native binding, and Cargo.lock records the
+    # patched manifest, so patch it before any cargo command reads it.
+    - name: Patch vendored oxc-node
+      shell: bash
+      run: node packages/tools/src/patch-oxc-node.ts
+
+    # Match the manifests used by sync-remote when it generated the root lockfile.
+    # The later dependency installation uses --frozen-lockfile, so alignment must run first.
+    - name: Align vendored Vite's Vitest dependencies
+      shell: bash
+      run: node packages/tools/src/vendored-vitest.ts
 
     # Disable autocrlf to preserve LF line endings on Windows
     # This prevents prettier/eslint from failing with "Delete ␍" errors
@@ -57,6 +92,6 @@ runs:
     - name: Clone ecosystem ci project
       if: ${{ inputs.ecosystem-ci-project != '' }}
       shell: bash
-      run: npx tsx ecosystem-ci/clone.ts ${INPUTS_ECOSYSTEM_CI_PROJECT}
+      run: node ecosystem-ci/clone.ts ${INPUTS_ECOSYSTEM_CI_PROJECT}
       env:
         INPUTS_ECOSYSTEM_CI_PROJECT: ${{ inputs.ecosystem-ci-project }}

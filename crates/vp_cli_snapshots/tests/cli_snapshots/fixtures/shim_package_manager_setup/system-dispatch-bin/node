@@ -1,0 +1,2 @@
+#!/bin/sh
+printf 'system-node\n'

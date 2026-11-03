@@ -9,4 +9,8 @@ steps = [
   { argv = ["vpt", "rm", "-rf", "./dist"], continue-on-failure = true },
   { argv = ["vp", "pm", "pack", "--json", "--", "--loglevel=warn"], comment = "should support pass through arguments" },
   { argv = ["vpt", "rm", "-f", "command-pack-npm10-1.0.0.tgz"], snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "npm@7.8.0"], snapshot = false },
+  { argv = ["vp", "pm", "pack", "--filter", "app"], comment = "Reject workspace selection before npm 7.9.0.", continue-on-failure = true },
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "npm@7.17.0"], snapshot = false },
+  { argv = ["vp", "pm", "pack", "--pack-destination", "dist"], comment = "Reject pack-destination before npm 7.18.0.", continue-on-failure = true },
 ]

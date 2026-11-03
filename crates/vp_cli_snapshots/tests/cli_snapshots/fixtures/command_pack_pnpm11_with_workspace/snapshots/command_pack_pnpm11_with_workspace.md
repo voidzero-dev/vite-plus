@@ -66,16 +66,8 @@ should pack all packages in workspace (sorted by name for determinism)
 ]
 ```
 
-## `vpt print-file out.json`
+## `vpt rm -f command-pack-pnpm11-with-workspace-1.0.0.tgz app-1.0.0.tgz vite-plus-test-utils-1.0.0.tgz`
 
-**Exit code:** 1
-
-```
-out.json: not found
-missing file
-```
-
-*(skipped 1 step(s) to the next line boundary: step failed)*
 
 ## `vp pm pack --filter app`
 
@@ -121,16 +113,8 @@ should pack multiple packages (sorted by name for determinism)
 ]
 ```
 
-## `vpt print-file out.json`
+## `vpt rm -f command-pack-pnpm11-with-workspace-1.0.0.tgz app-1.0.0.tgz vite-plus-test-utils-1.0.0.tgz`
 
-**Exit code:** 1
-
-```
-out.json: not found
-missing file
-```
-
-*(skipped 1 step(s) to the next line boundary: step failed)*
 
 ## `vp pm pack --out ./dist/package.tgz`
 
@@ -139,12 +123,10 @@ should pack with output file
 ```
 package: command-pack-pnpm11-with-workspace@1.0.0
 Tarball Contents
-app-1.0.0.tgz
 package.json
 packages/app/package.json
 packages/utils/package.json
 pnpm-workspace.yaml
-vite-plus-test-utils-1.0.0.tgz
 Tarball Details
 <workspace>/dist/package.tgz
 ```
@@ -161,12 +143,10 @@ should pack with destination
 ```
 package: command-pack-pnpm11-with-workspace@1.0.0
 Tarball Contents
-app-1.0.0.tgz
 package.json
 packages/app/package.json
 packages/utils/package.json
 pnpm-workspace.yaml
-vite-plus-test-utils-1.0.0.tgz
 Tarball Details
 <workspace>/dist/command-pack-pnpm11-with-workspace-1.0.0.tgz
 ```
@@ -183,12 +163,10 @@ should pack with gzip compression level
 ```
 package: command-pack-pnpm11-with-workspace@1.0.0
 Tarball Contents
-app-1.0.0.tgz
 package.json
 packages/app/package.json
 packages/utils/package.json
 pnpm-workspace.yaml
-vite-plus-test-utils-1.0.0.tgz
 Tarball Details
 command-pack-pnpm11-with-workspace-1.0.0.tgz
 ```

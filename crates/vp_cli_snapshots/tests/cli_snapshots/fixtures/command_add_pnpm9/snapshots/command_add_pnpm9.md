@@ -24,6 +24,17 @@ Options:
   --save-catalog-name <CATALOG_NAME>  Save the new dependency to the specified catalog name
   --save-catalog                      Save the new dependency to the default catalog
   --allow-build <NAMES>               A list of package names allowed to run postinstall
+  --ignore-scripts                    Do not run lifecycle scripts
+  --no-optional                       Do not install optionalDependencies
+  --frozen-lockfile                   Don't update lockfile
+  --no-frozen-lockfile                Allow lockfile updates
+  --lockfile-only                     Only update lockfile, don't install
+  --prefer-offline                    Use cached packages when available
+  --offline                           Only use packages already in cache
+  -f, --force                         Force reinstall all dependencies
+  --no-lockfile                       Don't read or generate lockfile
+  --shamefully-hoist                  Create flat node_modules (pnpm only)
+  --silent                            Suppress Vite+ output and enable native silent mode where supported
   --filter <PATTERN>                  Filter packages in monorepo (can be used multiple times)
   -w, --workspace-root                Add to workspace root
   --workspace                         Only add if package exists in workspace (pnpm-specific)
@@ -32,7 +43,7 @@ Options:
   --concurrency <CONCURRENCY>         Number of global package installs to run in parallel (only with -g)
   -h, --help                          Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp add testnpm2 -D`
@@ -95,8 +106,7 @@ should error because allow-build is not supported at pnpm@9
 **Exit code:** 1
 
 ```
- ERROR  Unknown option: 'allow-build'
-For help, run: pnpm help add
+pnpm < 10.4.0 does not support --allow-build.
 ```
 
 ## `vp install test-vite-plus-package@1.0.0 --save-peer`

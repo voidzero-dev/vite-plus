@@ -45,11 +45,19 @@ cwd?: string,
  *   `{ "task": "build", "from": "dependencies" }` runs `build` in each
  *   direct workspace dependency that defines a `build` task.
  */
-dependsOn?: Array<DependsOnEntry>, } & ({
+dependsOn?: Array<DependsOnEntry>,
 /**
- * Whether to cache the task
+ * Whether and how to cache the task.
+ *
+ * - Omitted or `true`: caching enabled with default settings (same as `{}`)
+ * - `false`: caching disabled
+ * - Object: caching enabled with the given settings
  */
-cache?: true,
+cache?: TaskCache, };
+
+export type TaskCache = boolean | TaskCacheConfig;
+
+export type TaskCacheConfig = {
 /**
  * Environment variable names to be fingerprinted and passed to the task.
  */
@@ -79,11 +87,7 @@ input?: Array<string | GlobWithBase | AutoTracking>,
  * - `{auto: true}` enables automatic output tracking
  * - Negative patterns (e.g. `"!dist/cache/**"`) exclude matched files
  */
-output?: Array<string | GlobWithBase | AutoTracking>, } | {
-/**
- * Whether to cache the task
- */
-cache: false, });
+output?: Array<string | GlobWithBase | AutoTracking>, };
 
 export type TaskDefinition = Task | Command;
 
@@ -100,7 +104,8 @@ scripts?: boolean,
 /**
  * Global cache kill switch for task entries.
  *
- * When `false`, overrides all tasks to disable caching, even tasks with `cache: true`.
+ * When `false`, overrides all tasks to disable caching, even tasks with `cache: true`
+ * or a `cache` object.
  * When `true`, respects each task's individual `cache` setting
  * (each task's `cache` defaults to `true` if omitted).
  *

@@ -1,0 +1,12 @@
+[[case]]
+name = "create_skip_hooks_without_git"
+vp = "local"
+steps = [
+  { argv = ["vp", "create", "vite:application", "--directory", "app", "--package-manager", "pnpm", "--no-agent", "--no-editor"], comment = "declining Git initialization should skip the pre-commit hooks prompt", snapshot = false, continue-on-failure = true, interactions = [
+    { "expect-milestone" = "confirm:confirm:yes" },
+    { "write-key" = "left" },
+    { "expect-milestone" = "confirm:confirm:no" },
+    { "write-key" = "enter" },
+  ] },
+  { argv = ["vpt", "stat-file", "app/.vite-hooks/pre-commit", "--assert", "missing"], comment = "pre-commit hooks should not be configured without a Git repository", continue-on-failure = true },
+]

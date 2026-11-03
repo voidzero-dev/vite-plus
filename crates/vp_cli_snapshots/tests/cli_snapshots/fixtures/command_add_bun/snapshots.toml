@@ -1,7 +1,8 @@
 [[case]]
 name = "command_add_bun"
 vp = "global"
-skip-platforms = ["windows"]
+# Exceeded 50 seconds on Linux in CI run 38677540536.
+skip-platforms = ["windows", "linux"]
 steps = [
   { argv = ["vp", "add", "--help"], comment = "should show help", continue-on-failure = true },
   { argv = ["vp", "add"], comment = "should error because no packages specified", continue-on-failure = true },

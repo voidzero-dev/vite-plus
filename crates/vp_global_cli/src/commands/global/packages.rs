@@ -2,7 +2,7 @@
 
 use std::process::ExitStatus;
 
-use owo_colors::OwoColorize;
+use console::style;
 
 use crate::{commands::env::package_metadata::PackageMetadata, error::Error};
 
@@ -19,22 +19,29 @@ pub async fn execute(json: bool, pattern: Option<&str>) -> Result<ExitStatus, Er
 
     if packages.is_empty() {
         if json {
-            println!("[]");
+            vp_shared::output::print_stdout_line(format_args!("[]"));
         } else if pattern.is_some() {
-            println!("No global packages matching '{}'.", pattern.unwrap());
-            println!();
-            println!("Run 'vp list -g' to see all installed global packages.");
+            vp_shared::output::print_stdout_line(format_args!(
+                "No global packages matching '{}'.",
+                pattern.unwrap()
+            ));
+            vp_shared::output::print_stdout_line(format_args!(""));
+            vp_shared::output::print_stdout_line(format_args!(
+                "Run 'vp list -g' to see all installed global packages."
+            ));
         } else {
-            println!("No global packages installed.");
-            println!();
-            println!("Install packages with: vp install -g <package>");
+            vp_shared::output::print_stdout_line(format_args!("No global packages installed."));
+            vp_shared::output::print_stdout_line(format_args!(""));
+            vp_shared::output::print_stdout_line(format_args!(
+                "Install packages with: vp install -g <package>"
+            ));
         }
         return Ok(ExitStatus::default());
     }
 
     if json {
         let json_output = serde_json::to_string_pretty(&packages).map_err(Error::JsonError)?;
-        println!("{json_output}");
+        vp_shared::output::print_stdout_line(format_args!("{json_output}"));
     } else {
         let col_pkg = "Package";
         let col_node = "Node version";
@@ -50,20 +57,26 @@ pub async fn execute(json: bool, pattern: Option<&str>) -> Result<ExitStatus, Er
         }
 
         let gap = 3;
-        println!("{:<w_pkg$}{:>gap$}{:<w_node$}{:>gap$}{}", col_pkg, "", col_node, "", col_bins);
-        println!("{:<w_pkg$}{:>gap$}{:<w_node$}{:>gap$}{}", "---", "", "---", "", "---");
+        vp_shared::output::print_stdout_line(format_args!(
+            "{:<w_pkg$}{:>gap$}{:<w_node$}{:>gap$}{}",
+            col_pkg, "", col_node, "", col_bins
+        ));
+        vp_shared::output::print_stdout_line(format_args!(
+            "{:<w_pkg$}{:>gap$}{:<w_node$}{:>gap$}{}",
+            "---", "", "---", "", "---"
+        ));
 
         for pkg in &packages {
             let name = format!("{:<w_pkg$}", format!("{}@{}", pkg.name, pkg.version));
             let bins = pkg.bins.join(", ");
-            println!(
+            vp_shared::output::print_stdout_line(format_args!(
                 "{}{:>gap$}{:<w_node$}{:>gap$}{}",
-                name.bright_blue(),
+                style(&name).blue().bright(),
                 "",
                 pkg.platform.node,
                 "",
                 bins
-            );
+            ));
         }
     }
 

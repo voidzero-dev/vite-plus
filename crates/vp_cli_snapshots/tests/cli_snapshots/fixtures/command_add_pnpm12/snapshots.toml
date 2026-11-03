@@ -2,17 +2,19 @@
 name = "command_add_pnpm12"
 vp = "global"
 skip-platforms = ["windows"]
+# pnpm 12 rejects npm-style options such as `--loglevel`, so this case passes
+# through `--save-exact`, a pnpm 12 `add` option whose effect shows in package.json.
 steps = [
   { argv = ["vp", "add", "--help"], comment = "should show help", continue-on-failure = true },
   { argv = ["vp", "add"], comment = "should error because no packages specified", continue-on-failure = true },
-  { argv = ["vp", "add", "testnpm2", "-D", "--", "--loglevel=verbose", "--verbose"], comment = "should add package as dev dependencies" },
-  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "add", "testnpm2", "-D"], comment = "should add package as dev dependencies" },
+  ["vpt", "print-file", "package.json"],
   { argv = ["vp", "add", "testnpm2", "test-vite-plus-install", "--allow-build=test-vite-plus-install"], comment = "should add packages to dependencies" },
-  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  ["vpt", "print-file", "package.json"],
   { argv = ["vp", "install", "test-vite-plus-package@1.0.0", "--save-peer"], comment = "should install package alias for add" },
-  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  ["vpt", "print-file", "package.json"],
   { argv = ["vp", "add", "test-vite-plus-package-optional", "-O"], comment = "should add package as optional dependencies" },
-  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
-  { argv = ["vp", "add", "test-vite-plus-package-optional", "--", "--loglevel=warn"], comment = "support pass through arguments" },
-  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  ["vpt", "print-file", "package.json"],
+  { argv = ["vp", "add", "is-number", "--", "--save-exact"], comment = "support pass through arguments: pnpm saves the exact version without `^`" },
+  ["vpt", "print-file", "package.json"],
 ]

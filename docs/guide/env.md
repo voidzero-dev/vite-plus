@@ -1,35 +1,125 @@
 # Environment
 
-`vp env` manages Node.js versions globally and per project.
+`vp env` manages the complete JavaScript environment: one Node.js runtime and one selected package manager. npm, pnpm, Yarn, and Bun are peer package-manager families. It belongs to the [global CLI](/guide/global-cli) and is not included in the project-local `vite-plus` package.
 
 ## Overview
 
-Managed mode is on by default, so `node`, `npm`, and related shims resolve through Vite+ and pick the right Node.js version for the current project.
+Think of the project environment as two independently selected components:
 
-Vite+ checks the current directory first, then walks up through its parents. The nearest directory
-with a supported declaration wins. Within each directory, sources are checked in this order:
+- **Node.js** is the runtime used to execute JavaScript tools and scripts. Each project can declare the Node.js version it needs.
+- **The package manager** installs and manages project dependencies. Each project can select npm, pnpm, Yarn, or Bun and declare its version.
+
+For example, a project can use Node.js 24 with pnpm 10. Changing its Node.js version does not change its package-manager selection, and switching from pnpm to Yarn does not change its Node.js version. Vite+ resolves both components when you run a command so that you can move between projects without manually switching tools.
+
+Vite+ connects these selections to your shell through **shims**: small launchers named `node`, `npm`, `pnpm`, `yarn`, and `bun`, along with their aliases. In managed mode, a shim resolves and launches the appropriate tool for the current project. Commands such as `vp install` use the project's selected package manager; invoking `pnpm` directly always runs pnpm, even in a project that selects another manager.
+
+Managed mode is on by default, so Node.js and configured package-manager shims resolve through Vite+ and pick the right versions for the current project. Fresh installers record managed mode for npm, pnpm, Yarn, and Bun after the user enables environment management.
+
+Use `vp env off` to disable managed mode for Node.js and package managers. See [Environment Modes](#environment-modes) below for details and how to switch to system tools.
+
+Most commands operate on both components when no selector is given. Add `node`, `pm`, `npm`, `pnpm`, `yarn`, or `bun` to narrow the command. `pm` means all four families for listing and cleanup, but the single selected package manager for project operations.
+
+Unqualified versions remain Node.js versions for compatibility:
+
+```bash
+vp env pin 22.0.0               # Node.js only
+vp env pin pnpm@10.18.0         # pnpm only
+vp env pin node@24 pnpm@12      # Both components
+vp env pin 22.0.0 pnpm@10.18.0  # Also both components
+```
+
+Use `vp env pin` to save a project's versions, `vp env default` to set fallback versions, and `vp env use` to override versions for the current shell. Run `vp env current` to see the resolved environment.
+
+## Node.js Selection
+
+To select the project's Node.js version, Vite+ checks the current directory first, then walks up through its parents. The nearest directory with a supported declaration wins. Within each directory, sources are checked in this order:
 
 1. `.node-version` file
 2. `devEngines.runtime` in `package.json` (the [devEngines standard](https://docs.npmjs.com/cli/v11/configuring-npm/package-json#devengines))
 3. `engines.node` in `package.json`
 4. `.nvmrc` file
 
-If no directory declares a version, Vite+ uses the global default (`vp env default`) and then the
-latest LTS.
+If no directory declares a version, Vite+ uses the global default (`vp env default`) and then the latest LTS.
 
 `devEngines.runtime` ranks above `engines.node` because it declares the development-environment requirement, while `engines.node` is a consumer-facing support range. `vp env doctor` warns when declared sources conflict.
 
-When a project declares `packageManager` (or `devEngines.packageManager`) in `package.json`, matching package-manager shims also use that package-manager version. For example, `packageManager: "npm@10.9.4"` makes both `npm` and `npx` run through npm 10.9.4. Alias pairs follow the installed package-manager shims: `npm`/`npx`, `pnpm`/`pnpx`, `yarn`/`yarnpkg`, and `bun`/`bunx`. Vite+ does not translate mismatched commands, so a project pinned to `pnpm` still lets `npm` fall back to the npm that comes with the resolved Node.js runtime.
+::: tip Using pnpm with Vite+ runtime management
+pnpm can also manage the runtime declared in `devEngines.runtime`. When both pnpm and Vite+ manage Node.js, they can download the same version separately or select different versions, causing inconsistent behavior between commands.
 
-By default, Vite+ stores its managed runtime and related files in `~/.vite-plus`. If needed, you can override that location with `VP_HOME`.
+If your project uses Vite+ to manage Node.js and pnpm versions, add these settings to the project's `pnpm-workspace.yaml` (pnpm 11+):
 
-If you want to keep that behavior, run:
+```yaml
+runtimeOnFail: ignore
+pmOnFail: ignore
+```
+
+[`runtimeOnFail`](https://pnpm.io/settings/cli#runtimeonfail) disables pnpm's automatic management of declared runtimes. [`pmOnFail`](https://pnpm.io/settings/cli#pmonfail) prevents pnpm from switching to the package-manager version declared in `package.json`. Commit these settings so the project shares the same policy.
+
+`runtimeOnFail: ignore` also affects other declared runtimes, including Bun and Deno. If the project relies on pnpm to manage them, consider that before enabling this setting. Switching an existing project to this policy can change runtime entries in `pnpm-lock.yaml` on the next install; review and commit those changes with the configuration.
+:::
+
+## Package-Manager Selection
+
+Package-manager selection uses this priority:
+
+1. Explicit command override
+2. `VP_PACKAGE_MANAGER`
+3. Top-level `packageManager`
+4. `devEngines.packageManager`
+5. Lockfile or manager-specific configuration
+6. The named package manager's global default version
+7. The named shim's latest release (Node.js' bundled version for `npm`)
+
+`VP_PACKAGE_MANAGER` selects the manager and version for commands such as `vp install`. Direct package-manager shims ignore this variable and use independent version overrides:
+
+| Variable          | Shims                       |
+| ----------------- | --------------------------- |
+| `VP_NPM_VERSION`  | `npm`, `npx`                |
+| `VP_PNPM_VERSION` | `pnpm`, `pnpx`, `pn`, `pnx` |
+| `VP_YARN_VERSION` | `yarn`, `yarnpkg`           |
+| `VP_BUN_VERSION`  | `bun`, `bunx`               |
+
+These variables accept a version, range, or npm dist-tag, such as `10.18.0`, `10`, `latest`, or `latest-10`, and override the matching shim's project and default versions. They do not change the manager or version selected by `vp install`.
+
+`vp env use pnpm@10.20.0` sets `VP_PNPM_VERSION` for the current shell, just as `vp env use node@22` sets `VP_NODE_VERSION`. Each package manager has its own override, so switching Yarn does not clear a pnpm override. `vp env use` does not set or clear `VP_PACKAGE_MANAGER`.
+
+Direct shims resolve their version from the matching environment variable, then the matching session file when no shell wrapper is available, then project configuration and the family default. `vp env current pnpm` and `vp env which pnpm` inspect this shim selection; `vp env current pm` reports the manager selected for vp commands.
+
+```bash
+VP_PACKAGE_MANAGER=pnpm@10.18.0 vp install
+VP_PNPM_VERSION=10.20.0 pnpm --version
+```
+
+The overrides apply in managed mode. A package manager can also perform its own version switching after Vite+ launches it; for example, pnpm 11+'s [`pmOnFail`](https://pnpm.io/settings/cli#pmonfail) defaults to `download` and may switch back to the version in `package.json`. To let Vite+ control the pnpm version, set `pmOnFail: ignore` in the project's `pnpm-workspace.yaml`. In pnpm 10, the corresponding setting is `managePackageManagerVersions`.
+
+A project selection applies only to its matching shims. For example, pnpm controls `pnpm`, `pnpx`, `pn`, and `pnx`; invoking `npm` still resolves npm independently. Without a matching project selection, a named shim uses its configured default version and otherwise uses the latest release without prompting. The npm shim falls back to Node's bundled npm. `vp env use npm` selects standalone npm's latest release for the current shell when no project version or global default is configured.
+
+Package-manager specs follow npm's order: an exact version, then a semver range, then a dist-tag. `default` is an alias of `latest`, except for npm, where it selects the npm on `PATH`.
+
+::: details Dist-tag caching
+When a package-manager dist-tag such as `latest` or `latest-10` is resolved, including a named shim falling back to the latest release, the resolved version is cached for one hour. An expired cache remains available when the registry cannot be reached.
+:::
+
+`pn` runs the same managed binary as `pnpm`, and `pnx` runs the same managed binary as `pnpx` (`pnpm dlx`). These aliases also work with managed pnpm versions older than v11.
+
+## Environment Modes
+
+Managed mode is on by default, so Node.js and configured package-manager shims resolve through Vite+ and pick the right versions for the current project. Fresh installers record managed mode for npm, pnpm, Yarn, and Bun after the user enables environment management.
+
+To enable managed mode, run:
 
 ```bash
 vp env on
 ```
 
-This enables managed mode, where the shims always use the Vite+-managed Node.js installation.
+This enables managed mode for both components. Their modes can also be changed independently, including one package-manager family:
+
+```bash
+vp env on node
+vp env off pm
+vp env off pnpm
+vp env on bun
+```
 
 If you do not want Vite+ to manage Node.js first, run:
 
@@ -37,22 +127,28 @@ If you do not want Vite+ to manage Node.js first, run:
 vp env off
 ```
 
-This switches to system-first mode, where the shims prefer your system Node.js and only fall back to the Vite+-managed runtime when needed.
+This switches both components to system-first mode. Vite+ prefers system tools and falls back to managed installations. Mixed configurations compose: package-manager launchers that look up Node.js through PATH receive the runtime selected by the Node mode.
+
+Using `pm` records the selected mode for all currently supported package managers and replaces their individual choices. An unscoped `on` or `off` does the same while also changing Node.js.
 
 ## Commands
 
 ### Setup
 
-- `vp env setup` creates or updates shims in `VP_HOME/bin` (and writes the per-shell setup scripts under `VP_HOME`)
-- `vp env on` enables managed mode so shims always use Vite+-managed Node.js
-- `vp env off` enables system-first mode so shims prefer system Node.js first
-- `vp env print` prints the shell snippet for the current session
+- `vp env setup` creates tool shims and writes shell setup scripts.
+- `vp env setup --refresh` recreates Vite+ shims and regenerates shell setup scripts using your saved preferences.
+- `vp env on` / `vp env off` switches between Vite+-managed and system-first modes; append `node`, `pm`, `npm`, `pnpm`, `yarn`, or `bun` to narrow the change.
+- `vp env print` prints PATH setup for both components; append a selector to print one.
+
+Upgrades refresh the setup automatically. Open a new terminal or reload your shell setup script afterward.
 
 PowerShell needs to dot-source the generated setup script in the current shell before `vp env use` can affect only that shell session:
 
 ```powershell
-. "$env:USERPROFILE\.vite-plus\env.ps1"
+. "$env:APPDATA\vite-plus\env.ps1"
 ```
+
+If an older Vite+ install uses `%USERPROFILE%\.vite-plus`, source the `env.ps1` file in that directory instead.
 
 Add that line to the end of your PowerShell `$PROFILE` to apply it automatically in new shells. It does not require elevated privileges.
 
@@ -76,29 +172,42 @@ node --version
 vp-use --unset
 ```
 
-Only `vp env use` needs this alternate command. Other `vp env` commands work normally in Command Prompt. `vp env setup` creates `vp-use.cmd` under `VP_HOME/bin` on Windows.
+Only `vp env use` needs this alternate command. Other `vp env` commands work normally in Command Prompt. `vp env setup` creates `vp-use.cmd` in the bin directory on Windows.
 
-In CI, `vp env use` can still run without shell initialization. It writes a temporary session file under `VP_HOME` so later shim calls in the same job can resolve the selected Node.js version.
+In CI, `vp env use` can run without shell initialization. It writes a temporary session file per runtime or package manager in the resolved state directory, such as `.session-node-version` or `.session-pnpm-version`. Later shim calls in the same job use these files to resolve the same environment.
+
+#### Shell completion
+
+The global CLI supports Tab completion in Bash, Zsh, Fish, Nushell, and PowerShell. Run `vp env setup` and follow its printed shell setup instructions to enable it. Press Tab to complete commands, or project task names after `vp run` and `vpr`.
+
+- **Zsh**: Run `autoload -Uz compinit; compinit` before loading the setup script if your shell has not initialized completion.
+- **Nushell**: Completion requires `fish` on `PATH`. Use Nushell 0.112.1 or later; see [Nushell version](/guide/global-cli#nushell-version).
 
 ### Manage
 
-- `vp env default` sets or shows the global default Node.js version
-- `vp env pin` pins a Node.js version in the current directory: an existing `.node-version` keeps being updated; otherwise the pin is written to `package.json#devEngines.runtime`; `.node-version` is only created when the directory has no `package.json`. Use `--target node-version` or `--target dev-engines` to choose explicitly. An existing `engines.node` is never modified.
-- `vp env unpin` removes the pin from the same source `vp env pin` would write
-- `vp env use` sets a Node.js version for the current shell session
-- `vp env install` installs a Node.js version
-- `vp env uninstall` removes an installed Node.js version
-- `vp env clean` removes unused managed Node.js runtimes, all downloaded package managers, and the Corepack cache.
-- `vp env exec` runs a command with a specific Node.js version
-- `vp node` runs a Node.js script — shorthand for `vp env exec node`
+- `vp env default` shows the global Node.js default and each configured package-manager version. Bare versions set Node.js; qualified specs such as `pnpm@10.18.0` set that package manager's shim default without replacing the defaults for Bun, Yarn, or npm. `--unset` clears all defaults unless scoped.
+- `vp env default <lts|latest>` and package-manager dist-tags such as `pnpm@latest` or `pnpm@latest-10` re-resolve on each use, so the default follows the tag, including new majors for `latest`. Other versions and ranges, such as `24` or `pnpm@10`, resolve to an exact version when set.
+- `vp env pin` shows or writes project pins. Node.js pins use the current directory. Package-manager pins use the workspace root `package.json`, or the current project `package.json` outside a workspace. Pinning both components can update two different files.
+
+  Existing `.node-version` and top-level `packageManager` fields keep being updated for compatibility. An existing `.nvmrc` is updated when it is the effective Node source in the current directory. Its comments and other non-version content are preserved. Otherwise Vite+ writes the matching `devEngines` entry.
+
+  Use `--target node-version`, `--target nvmrc`, `--target dev-engines`, or `--target package-manager` to choose the pin source explicitly. This does not change the project directory. Package-manager output shows the file path relative to the current working directory and the field that was updated, or the target before an existing overwrite prompt. Pinning in a child directory does not modify an inherited `.nvmrc`.
+
+- `vp env unpin` (alias for `vp env pin --unpin`) removes both effective pins by default. Append a selector to remove one. Node.js removal uses the current directory. Package-manager removal uses the workspace root manifest, or the current project manifest outside a workspace. `--target` selects the pin source within that scope. The output identifies the removed package-manager field, or the fields checked when no matching pin is found. Lower-priority declarations are not deleted.
+- `vp env use` activates the complete project environment. Explicit specs override selected components; `--unset` clears both unless scoped.
+- `vp env install` installs the complete resolved environment, a selected component, or explicit specs.
+- `vp env uninstall` removes the Node.js version resolved from an explicit version or selector, such as `22` or `lts`. Package managers require a qualified exact version, such as `pnpm@10.18.0`.
+- `vp env clean` removes unused installs. Use `clean node`, `clean pm`, or a concrete manager. Current and configured-default versions are preserved.
+- `vp env exec` runs a command in the resolved environment. Use `--node` and `--package-manager`; `--npm` is an alias for `--package-manager npm@…`.
+- `vp node` uses the resolved Node.js runtime and exposes the selected package-manager path to child processes. It runs Node.js as is, so TypeScript files get Node.js type stripping only; [`vpx <file>`](/guide/vpx#running-scripts) runs them on the same runtime with full TypeScript support.
 
 ### Inspect
 
 - `vp env current` shows the current resolved environment
-- `vp env doctor` runs environment diagnostics
+- `vp env doctor` runs environment diagnostics. Append `node` to focus on Node.js, `pm` for all package managers, or `npm`, `pnpm`, `yarn`, or `bun` for a specific package manager.
 - `vp env which` shows which tool path will be used
-- `vp env list` shows locally installed Node.js versions
-- `vp env list-remote` shows available Node.js versions from the registry
+- `vp env list` shows separate Node.js, npm, pnpm, Yarn, and Bun sections; selectors narrow output
+- `vp env list-remote` fetches Node.js and all four PM registries concurrently; selectors narrow network work. `--lts` implicitly selects Node.js.
 
 ## Project Setup
 
@@ -110,50 +219,90 @@ In CI, `vp env use` can still run without shell initialization. It writes a temp
 
 ```bash
 # Setup
-vp env setup                  # Create shims for node, npm, npx, corepack
-vp env on                     # Use Vite+ managed Node.js
-vp env print                  # Print shell snippet for this session
+vp env setup                  # Create Node.js and package-manager shims
+vp env on                     # Manage Node.js and package managers
+vp env off pm                 # Prefer system package managers only
+vp env off pnpm               # Prefer system pnpm only
+vp env print                  # Print PATH setup for both components
 
 # Manage
-vp env pin lts                # Pin the project to the latest LTS release
-vp env install                # Install the version from .node-version, package.json, or .nvmrc
-vp env default lts            # Set the global default version
-vp env use 20                 # Use Node.js 20 for the current shell session
-vp env use --unset            # Remove the session override
-vp env clean                  # Remove unused managed caches
+vp env pin lts                # Pin Node.js only to an exact version
+vp env pin node@26            # Pin Node.js 26 to an exact version
+vp env pin lts pnpm@10        # Pin both project components to exact versions
+vp env pin pnpm@latest-10     # Pin pnpm to the version of its latest-10 dist-tag
+vp env install                # Install the complete resolved environment
+vp env use 20 pnpm@10         # Override both components for this shell
+vp env use --unset pnpm       # Remove only the pnpm session version
+vp env use --unset pm         # Remove all package-manager session versions
+
+# Manage (global)
+vp env default lts            # Always use the latest LTS, including new majors
+vp env default node@24        # Pin the Node.js default to an exact version
+vp env default pnpm@10        # Pin the pnpm default to an exact version
+vp env clean                  # Remove unused managed Node.js and package manager versions
 
 # Inspect
 vp env current                # Show current resolved environment
 vp env current --json         # JSON output for automation
 vp env which node             # Show which node binary will be used
 vp env which npx              # Show pinned package-manager alias when packageManager matches
-vp env list-remote --lts      # List only LTS versions
+vp env list                   # Show every locally installed component
+vp env list node              # Show only Node.js installations
+vp env list-remote --lts      # List only Node.js LTS versions
 
 # Execute
-vp env exec --node lts npm i  # Execute npm with latest LTS
+vp env exec --node lts --package-manager pnpm@10 pnpm install
 vp env exec node -v           # Use shim mode with automatic version resolution
 vp node script.js             # Shorthand: run a Node.js script with the resolved version
 vp node -e "console.log(1+1)" # Shorthand: forward any node flag or argument
 ```
 
-## Corepack
+## JSON output
 
-Vite+ creates a `corepack` shim by default, so corepack works without a system Node.js installation:
+The JSON output for `current`, `list`, and `list-remote` is organized by component. `current --json` returns sibling `node` and `package_manager` objects:
 
-- On Node.js 24 and earlier, the shim runs the corepack bundled with the resolved Node.js version.
-- On Node.js 25 and later, where corepack is no longer bundled, Vite+ installs corepack as a managed global package on first use. Only the `corepack` binary is linked; run `vp install -g corepack` yourself if you also want the package's pnpm/yarn launchers exposed directly.
-- If you install corepack explicitly with `vp install -g corepack`, that installation is always preferred.
-
-`corepack enable` normally creates `pnpm`/`yarn` launchers next to the corepack binary, which under Vite+ would not be on `PATH`. The shim fixes this by defaulting `--install-directory` to `VP_HOME/bin`, so after `corepack enable` the launchers are available everywhere and still resolve the project's Node.js and package-manager versions:
-
-```bash
-corepack enable               # pnpm and yarn now resolve via corepack
-corepack disable              # Remove the pnpm/yarn launchers again
+```json
+{
+  "node": {
+    "version": "22.0.0",
+    "source": "devEngines.runtime",
+    "source_path": "/project/package.json",
+    "project_root": "/project",
+    "bin_path": "/home/.local/share/vite-plus/js_runtime/node/22.0.0/bin/node",
+    "installed": true,
+    "mode": "managed"
+  },
+  "package_manager": {
+    "name": "pnpm",
+    "version": "10.18.0",
+    "source": "packageManager",
+    "source_path": "/project/package.json",
+    "project_root": "/project",
+    "bin_paths": {
+      "pnpm": "/home/.local/share/vite-plus/package_manager/pnpm/10.18.0/pnpm/bin/pnpm",
+      "pnpx": "/home/.local/share/vite-plus/package_manager/pnpm/10.18.0/pnpm/bin/pnpx"
+    },
+    "installed": true,
+    "mode": "managed"
+  }
+}
 ```
 
-The launchers reference the corepack copy that created them. If that copy is later removed (for example by uninstalling the Node.js version it shipped with), rerun `corepack enable` to recreate them.
+`list --json` and `list-remote --json` group the component arrays:
 
-Shims owned by Vite+ (`npm`, `npx`, and binaries installed with `vp install -g`) are protected: if corepack removes or replaces them, Vite+ restores them and prints a warning.
+```json
+{
+  "node": [],
+  "package_managers": {
+    "npm": [],
+    "pnpm": [],
+    "yarn": [],
+    "bun": []
+  }
+}
+```
+
+Selectors omit unselected top-level fields or PM families. Registry listing is all-or-error: Vite+ prints no partial human or JSON result when any selected registry request fails.
 
 ## Custom Node.js Mirror
 

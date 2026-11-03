@@ -4,5 +4,5 @@
     "vite": "^7.0.0",
     "vitest": "^4.0.0"
   },
-  "packageManager": "npm@10.9.2"
+  "packageManager": "npm@11.13.0"
 }

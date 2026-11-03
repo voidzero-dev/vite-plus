@@ -1,0 +1,6 @@
+{
+  "name": "app",
+  "dependencies": {
+    "testnpm2": "^1.0.1"
+  }
+}

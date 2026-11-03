@@ -4,37 +4,44 @@
 
 use std::process::ExitStatus;
 
-use owo_colors::OwoColorize;
-
-use super::config::{ShimMode, load_config, save_config};
+use super::{
+    config::{ShimMode, load_config, save_config},
+    spec::EnvScope,
+};
 use crate::{error::Error, help};
 
-fn accent_command(command: &str) -> String {
-    if help::should_style_help() {
-        format!("`{}`", command.bright_blue())
-    } else {
-        format!("`{command}`")
-    }
-}
-
 /// Execute the `vp env on` command.
-pub async fn execute() -> Result<ExitStatus, Error> {
+pub async fn execute(scope: Option<String>) -> Result<ExitStatus, Error> {
+    let scope = EnvScope::parse(scope.as_deref())?;
     let mut config = load_config().await?;
-
-    if config.shim_mode == ShimMode::Managed {
-        println!("Node.js management is already set to managed.");
-        println!("All vp commands and shims will always use Vite+ managed Node.js.");
-        return Ok(ExitStatus::default());
+    if let EnvScope::PackageManager(package_manager) = scope {
+        config.set_package_manager_shim_mode(package_manager, ShimMode::Managed);
+    } else {
+        config.set_shim_modes(
+            scope.includes_node(),
+            scope.includes_package_managers(),
+            ShimMode::Managed,
+        );
     }
-
-    config.shim_mode = ShimMode::Managed;
+    super::setup::refresh_shims(&std::env::current_exe()?, &config, false, false).await?;
     save_config(&config).await?;
 
-    println!("\u{2713} Node.js management set to managed.");
-    println!();
-    println!("All vp commands and shims will now always use Vite+ managed Node.js.");
-    println!();
-    println!("Run {} to prefer system Node.js instead.", accent_command("vp env off"));
+    let component = match scope {
+        EnvScope::All => "Node.js and package-manager management".into(),
+        EnvScope::Node => "Node.js management".into(),
+        EnvScope::PackageManagers => "Package-manager management".into(),
+        EnvScope::PackageManager(package_manager) => format!("{package_manager} management"),
+    };
+    vp_shared::output::print_stdout_line(format_args!("\u{2713} {component} set to managed."));
+    vp_shared::output::print_stdout_line(format_args!(""));
+    vp_shared::output::print_stdout_line(format_args!(
+        "Selected commands and shims will now use Vite+ managed tools."
+    ));
+    vp_shared::output::print_stdout_line(format_args!(""));
+    vp_shared::output::print_stdout_line(format_args!(
+        "Run {} to prefer system tools instead.",
+        help::accent_command("vp env off")
+    ));
 
     Ok(ExitStatus::default())
 }

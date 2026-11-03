@@ -7,7 +7,7 @@ migration should detect both eslint and prettier and auto-migrate
 ```
 VITE+ - The Unified Toolchain for the Web
 
-Prettier configuration detected. Auto-migrating to Oxfmt...
+● Prettier configuration detected. Auto-migrating to Oxfmt...
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • 4 config updates applied
@@ -33,13 +33,6 @@ check eslint and prettier removed, scripts rewritten
   "devDependencies": {
     "vite": "catalog:",
     "vite-plus": "catalog:"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
   }
 }
 ```
@@ -53,7 +46,7 @@ catalog:
   vite: npm:@voidzero-dev/vite-plus-core@<version>
   vite-plus: <version>
 overrides:
-  vite: 'catalog:'
+  vite@*: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite
@@ -92,8 +85,7 @@ export default defineConfig({
     "plugins": [
       "oxc",
       "typescript",
-      "unicorn",
-      "react"
+      "unicorn"
     ],
     "categories": {
       "correctness": "warn"

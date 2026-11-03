@@ -5,7 +5,7 @@ skip-platforms = ["windows"]
 unset-env = ["CI", "VP_SKIP_INSTALL"]
 local-registry = true
 steps = [
-  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--package-manager", "pnpm"], comment = "migration should work with pnpm, write overrides and peerDependencyRules to pnpm-workspace.yaml", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks"], comment = "migration should work with pnpm, write overrides and peerDependencyRules to pnpm-workspace.yaml", continue-on-failure = true },
   { argv = ["vpt", "print-file", "package.json"], comment = "check package.json has no pnpm section", continue-on-failure = true },
   { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "check pnpm-workspace.yaml has overrides, peerDependencyRules, and catalog", continue-on-failure = true },
 ]

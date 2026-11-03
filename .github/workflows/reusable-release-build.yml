@@ -14,6 +14,11 @@ on:
         type: string
         required: false
         default: 'release'
+      docs-origin:
+        description: 'Documentation origin compiled into the native CLI, NAPI binding, and installer.'
+        type: string
+        required: false
+        default: 'https://viteplus.dev'
 
 jobs:
   build-rust:
@@ -25,6 +30,7 @@ jobs:
       RELEASE_BUILD: 'true'
       DEBUG: 'napi:*'
       VERSION: ${{ inputs.version }}
+      VITE_PLUS_DOCS_ORIGIN: ${{ inputs.docs-origin }}
     strategy:
       fail-fast: false
       matrix:
@@ -34,13 +40,13 @@ jobs:
           - target: x86_64-apple-darwin
             os: macos-latest
           - target: aarch64-unknown-linux-gnu
-            os: ubuntu-latest
+            os: ubuntu-24.04
           - target: aarch64-unknown-linux-musl
-            os: ubuntu-latest
+            os: ubuntu-24.04
           - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
+            os: ubuntu-24.04
           - target: x86_64-unknown-linux-musl
-            os: ubuntu-latest
+            os: ubuntu-24.04
           - target: x86_64-pc-windows-msvc
             os: namespace-profile-windows-4c-8g
           - target: aarch64-pc-windows-msvc
@@ -48,7 +54,7 @@ jobs:
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
-      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+      - uses: ./.github/actions/setup-rust
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: ${{ inputs.cache-key }}
@@ -56,7 +62,7 @@ jobs:
       - name: Rustup Adds Target
         run: rustup target add ${{ matrix.settings.target }}
 
-      - uses: oxc-project/setup-node@4c588e9266bd930b6ddc34307df0659ed511d187 # v1.3.1
+      - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
 
       - name: Set build version
         shell: bash
@@ -66,9 +72,15 @@ jobs:
           # the version that gets published/installed (the release version, or
           # 0.0.0-commit.<sha> for preview builds). Anchored to the line-start
           # `version = "..."` so crate dependency versions are never touched.
+          # Stable Homebrew formula updates run in release.yml after publication;
+          # preview stamps use HOMEBREW_VP_PR_VERSION without changing that formula.
           for f in crates/vp_global_cli/Cargo.toml packages/cli/binding/Cargo.toml; do
+            # shellcheck disable=SC2016 # JavaScript expands process.env.VERSION.
             node -e 'const fs=require("fs"),f=process.argv[1];fs.writeFileSync(f,fs.readFileSync(f,"utf8").replace(/^version = "[^"]*"/m,`version = "${process.env.VERSION}"`))' "$f"
           done
+          # Keep the workspace package entries in Cargo.lock consistent with
+          # the stamped versions before later commands use --locked.
+          cargo update --workspace
           # Stamp the package.json files too:
           # - packages/cli: the bundled JS dist inlines ${VERSION} as
           #   cliPkg.version (VITE_PLUS_VERSION). Without this a preview
@@ -109,16 +121,18 @@ jobs:
           target: ${{ matrix.settings.target }}
 
       - name: Upload Vite+ native artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: vite-plus-native-${{ matrix.settings.target }}
+          overwrite: true
           path: ./packages/cli/binding/*.node
           if-no-files-found: error
 
       - name: Upload Rust CLI binary artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: vp-global-cli-${{ matrix.settings.target }}
+          overwrite: true
           path: |
             ./target/${{ matrix.settings.target }}/release/vp
             ./target/${{ matrix.settings.target }}/release/vp.exe
@@ -129,16 +143,61 @@ jobs:
         shell: bash
         working-directory: ./target/${{ matrix.settings.target }}/release
         run: |
+          mkdir -p sync-versions
+          cp ../../../packages/cli/dist/sync-versions/bin.mjs sync-versions/bin.mjs
+          cp ../../../packages/cli/dist/toolchain.json toolchain.json
           if [ -f vp.exe ]; then
-            7z a "vp-${{ matrix.settings.target }}.zip" vp.exe vp-shim.exe
+            7z a "vp-${{ matrix.settings.target }}.zip" vp.exe vp-shim.exe sync-versions/bin.mjs toolchain.json
           else
-            tar -czf "vp-${{ matrix.settings.target }}.tar.gz" vp
+            tar -czf "vp-${{ matrix.settings.target }}.tar.gz" vp sync-versions/bin.mjs toolchain.json
           fi
 
+      - name: Verify packaged sync-versions planner
+        if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
+        shell: bash
+        working-directory: ./target/${{ matrix.settings.target }}/release
+        run: |
+          set -euo pipefail
+          archive_dir="$(mktemp -d)"
+          cleanup() {
+            rm -rf "${archive_dir}"
+          }
+          trap cleanup EXIT
+          tar -xzf "vp-${{ matrix.settings.target }}.tar.gz" -C "${archive_dir}"
+          # Skip first-start setup because this build's preview packages are not published yet.
+          touch "${archive_dir}/.vp-setup-complete"
+
+          node --input-type=module -e '
+            const before = JSON.stringify({ devDependencies: { "vite-plus": "0.0.0" } }) + "\n";
+            process.stdout.write(JSON.stringify({
+              schemaVersion: 1,
+              workspace: ".",
+              manifests: [{ path: "package.json", kind: "packageJson", contents: before }],
+            }));
+          ' | "${archive_dir}/vp" sync-versions --json > "${archive_dir}/plan.json"
+
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const [planPath, expectedVersion] = process.argv.slice(1);
+            const plan = JSON.parse(fs.readFileSync(planPath, "utf8"));
+            const before = JSON.stringify({ devDependencies: { "vite-plus": "0.0.0" } }) + "\n";
+            const after = JSON.stringify({ devDependencies: { "vite-plus": expectedVersion } }) + "\n";
+            if (
+              plan.tool?.name !== "vite-plus" ||
+              plan.tool.version !== expectedVersion ||
+              plan.replacements?.length !== 1 ||
+              plan.replacements[0].before !== before ||
+              plan.replacements[0].after !== after
+            ) {
+              throw new Error("Unexpected packaged sync plan: " + JSON.stringify(plan));
+            }
+          ' "${archive_dir}/plan.json" "${VERSION}"
+
       - name: Upload release archive
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: vp-release-archive-${{ matrix.settings.target }}
+          overwrite: true
           path: |
             ./target/${{ matrix.settings.target }}/release/vp-*.tar.gz
             ./target/${{ matrix.settings.target }}/release/vp-*.zip
@@ -146,9 +205,10 @@ jobs:
 
       - name: Upload installer binary artifact (Windows only)
         if: contains(matrix.settings.target, 'windows')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: vp-setup-${{ matrix.settings.target }}
+          overwrite: true
           path: ./target/${{ matrix.settings.target }}/release/vp-setup.exe
           if-no-files-found: error
 
@@ -158,42 +218,47 @@ jobs:
           rm ./packages/core/dist/**/*.node
 
       - name: Upload core dist
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
         with:
           name: core
+          overwrite: true
           path: ./packages/core/dist
           if-no-files-found: error
 
       - name: Upload prompts dist
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
         with:
           name: prompts
+          overwrite: true
           path: ./packages/prompts/dist
           if-no-files-found: error
 
       - name: Upload cli dist
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
         with:
           name: cli
+          overwrite: true
           path: ./packages/cli/dist
           if-no-files-found: error
 
       - name: Upload cli docs
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
         with:
           name: cli-docs
+          overwrite: true
           path: ./packages/cli/docs
           if-no-files-found: error
 
       - name: Upload LICENSE files
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
         with:
           name: licenses
+          overwrite: true
           path: |
             ./packages/core/LICENSE
             ./packages/cli/LICENSE

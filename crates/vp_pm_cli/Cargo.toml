@@ -12,12 +12,12 @@ backon = { workspace = true }
 base64-simd = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 cow-utils = { workspace = true }
-crossterm = { workspace = true }
 flate2 = { workspace = true }
 futures-util = { workspace = true }
 hex = { workspace = true }
+indicatif = { workspace = true }
 indoc = { workspace = true }
-node-semver = { workspace = true }
+js-semver = { workspace = true }
 pathdiff = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
@@ -49,6 +49,7 @@ doctest = false
 [dev-dependencies]
 httpmock = { workspace = true }
 test-log = { workspace = true }
+vp_shared = { workspace = true, features = ["test-utils"] }
 
 [lints]
 workspace = true

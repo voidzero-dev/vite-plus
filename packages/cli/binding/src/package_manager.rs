@@ -11,6 +11,7 @@ pub struct DownloadPackageManagerOptions {
     pub name: String,
     pub version: String,
     pub expected_hash: Option<String>,
+    pub cwd: Option<String>,
 }
 
 #[napi(object)]
@@ -31,6 +32,7 @@ pub struct DownloadPackageManagerResult {
 ///   - `name`: The name of the package manager
 ///   - `version`: The version of the package manager
 ///   - `expected_hash`: The expected hash of the package manager
+///   - `cwd`: An absolute directory used to load workspace npm configuration
 ///
 /// ## Returns
 ///
@@ -71,13 +73,24 @@ pub async fn download_package_manager(
         }
     };
 
-    let (install_dir, package_name, version) = vp_pm_cli::download_package_manager(
-        package_manager_type,
-        &options.version,
-        options.expected_hash.as_deref(),
-    )
-    .await
-    .map_err(anyhow::Error::from)?;
+    let result = if let Some(cwd) = options.cwd {
+        let cwd = AbsolutePathBuf::new(cwd.into()).ok_or(Error::from_reason("invalid cwd"))?;
+        vp_pm_cli::download_package_manager_for_cwd(
+            &cwd,
+            package_manager_type,
+            &options.version,
+            options.expected_hash.as_deref(),
+        )
+        .await
+    } else {
+        vp_pm_cli::download_package_manager(
+            package_manager_type,
+            &options.version,
+            options.expected_hash.as_deref(),
+        )
+        .await
+    };
+    let (install_dir, package_name, version) = result.map_err(anyhow::Error::from)?;
 
     Ok(DownloadPackageManagerResult {
         name: options.name,
@@ -162,5 +175,55 @@ pub async fn detect_workspace(cwd: String) -> Result<DetectWorkspaceResult> {
         Err(e) => {
             return Err(anyhow::Error::from(e).into());
         }
+    }
+}
+
+/// Find the monorepo root containing `cwd` with the same rules as `vp run` and `vp install`.
+///
+/// Returns `null` when `cwd` is not inside a pnpm or `package.json` workspace.
+#[napi]
+pub fn find_monorepo_root(cwd: String) -> Result<Option<String>> {
+    let cwd = AbsolutePathBuf::new(cwd.into()).ok_or(Error::from_reason("invalid cwd"))?;
+    match find_workspace_root(&cwd) {
+        Ok((workspace_root, _)) => match workspace_root.workspace_file {
+            WorkspaceFile::PnpmWorkspaceYaml(_) | WorkspaceFile::NpmWorkspaceJson(_) => {
+                Ok(Some(workspace_root.path.as_path().to_string_lossy().to_string()))
+            }
+            WorkspaceFile::NonWorkspacePackage(_) => Ok(None),
+        },
+        Err(PackageJsonNotFound(_)) => Ok(None),
+        Err(e) => Err(anyhow::Error::from(e).into()),
+    }
+}
+
+/// Resolve the npm registry for packages in `scope` (without `@`) from the npm config at `cwd`.
+#[napi]
+pub fn resolve_npm_registry(cwd: String, scope: Option<String>) -> Result<String> {
+    let cwd = AbsolutePathBuf::new(cwd.into()).ok_or(Error::from_reason("invalid cwd"))?;
+    Ok(vp_pm_cli::npm_registry_for_scope(&cwd, scope.as_deref()))
+}
+
+/// Resolve the `Authorization` header value npm would send to `url` from the npm config at `cwd`.
+#[napi]
+pub fn resolve_npm_authorization(cwd: String, url: String) -> Result<Option<String>> {
+    let cwd = AbsolutePathBuf::new(cwd.into()).ok_or(Error::from_reason("invalid cwd"))?;
+    Ok(vp_pm_cli::npm_authorization_for_url(&cwd, &url))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn download_package_manager_rejects_relative_cwd() {
+        let error = download_package_manager(DownloadPackageManagerOptions {
+            name: "pnpm".to_string(),
+            version: "latest".to_string(),
+            expected_hash: None,
+            cwd: Some("relative/project".to_string()),
+        })
+        .await
+        .unwrap_err();
+        assert_eq!(error.reason, "invalid cwd");
     }
 }

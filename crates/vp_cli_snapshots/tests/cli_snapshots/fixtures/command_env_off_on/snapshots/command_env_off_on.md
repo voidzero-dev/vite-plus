@@ -1,8 +1,15 @@
 # command_env_off_on
 
-## `vp run assert-managed`
+`vp env off` switches project scripts from the managed engines.node runtime to the system Node.js on PATH; `vp env on` switches back.
 
-Managed mode: should use project's engines.node 22.18.0
+## `node src/setup-system-node.cjs`
+
+Provide a system Node.js after the Vite+ bin on PATH, as in a user's shell.
+
+
+## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} vp run assert-managed`
+
+Managed mode: should use project's engines.node 22.23.4
 
 ```
 VITE+ - The Unified Toolchain for the Web
@@ -18,24 +25,22 @@ Switch to system-first mode
 ```
 VITE+ - The Unified Toolchain for the Web
 
-✓ Node.js management set to system-first.
+✓ Node.js and package-manager management set to system-first.
 
-All vp commands and shims will now prefer system Node.js, falling back to managed if not found.
+Selected commands and shims will now prefer system tools, falling back to managed tools.
 
-Run `vp env on` to always use Vite+ managed Node.js.
+Run `vp env on` to always use Vite+ managed tools.
 ```
 
-## `vp run assert-not-managed`
+## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} vp run assert-not-managed`
 
-System-first mode: must NOT use 22.18.0
-
-**Exit code:** 1
+System-first mode: must use Node.js from system-bin
 
 ```
 VITE+ - The Unified Toolchain for the Web
 
 $ node src/assert-not-managed.mjs ⊘ cache disabled
-Expected system Node.js, got managed <version>
+OK: system <version>
 ```
 
 ## `vp env on`
@@ -45,16 +50,16 @@ Switch back to managed mode
 ```
 VITE+ - The Unified Toolchain for the Web
 
-✓ Node.js management set to managed.
+✓ Node.js and package-manager management set to managed.
 
-All vp commands and shims will now always use Vite+ managed Node.js.
+Selected commands and shims will now use Vite+ managed tools.
 
-Run `vp env off` to prefer system Node.js instead.
+Run `vp env off` to prefer system tools instead.
 ```
 
-## `vp run assert-managed`
+## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} vp run assert-managed`
 
-Managed mode restored: should use 22.18.0 again
+Managed mode restored: should use 22.23.4 again
 
 ```
 VITE+ - The Unified Toolchain for the Web

@@ -1,12 +1,21 @@
 //! Doctor command implementation for environment diagnostics.
 
-use std::process::ExitStatus;
+use std::{
+    process::ExitStatus,
+    sync::atomic::{AtomicBool, Ordering},
+};
 
-use owo_colors::OwoColorize;
+use console::style;
+use vp_pm_cli::{package_manager_bin_path, package_manager_install_dir};
 use vp_shared::{env_vars, output};
 use vt_path::{AbsolutePathBuf, current_dir};
 
-use super::config::{self, ShimMode, get_bin_dir, get_vp_home, load_config, resolve_version};
+use super::{
+    config::{self, ShimMode, get_bin_dir, load_config, resolve_version},
+    package_manager,
+    setup::shim_filename,
+    spec::EnvScope,
+};
 use crate::{
     commands::shell::{ALL_SHELL_PROFILES, IDE_SHELL_PROFILES, ShellProfile, resolve_profile_path},
     error::Error,
@@ -33,34 +42,52 @@ const KNOWN_VERSION_MANAGERS: &[(&str, &str)] = &[
     ("n", "N_PREFIX"),
 ];
 
-use super::setup::SHIM_TOOLS;
-
 /// Column width for left-side keys in aligned output
 const KEY_WIDTH: usize = 18;
 
+// Warnings come from many checks that otherwise return nothing, so they are recorded as they print.
+static HAS_WARNINGS: AtomicBool = AtomicBool::new(false);
+
 /// Print a section header (bold, with blank line before).
 fn print_section(name: &str) {
-    println!();
-    println!("{}", name.bold());
+    vp_shared::output::print_stdout_line(format_args!(""));
+    vp_shared::output::print_stdout_line(format_args!("{}", style(&name).bold()));
 }
 
 /// Print an aligned key-value line with a status indicator.
 ///
-/// `status` should be a colored string like "✓".green(), "✗".red(), etc.
+/// `status` should be a styled string like `style("✓").green().to_string()`.
 /// Use `" "` for informational lines with no status.
 fn print_check(status: &str, key: &str, value: &str) {
     if status.trim().is_empty() {
-        println!("  {key:<KEY_WIDTH$}{value}");
+        vp_shared::output::print_stdout_line(format_args!("    {key:<KEY_WIDTH$}{value}"));
     } else if key.trim().is_empty() {
-        println!("  {status} {value}");
+        vp_shared::output::print_stdout_line(format_args!("  {status} {value}"));
     } else {
-        println!("  {status} {key:<KEY_WIDTH$}{value}");
+        vp_shared::output::print_stdout_line(format_args!("  {status} {key:<KEY_WIDTH$}{value}"));
     }
+}
+
+/// Print an aligned key-value line with a warning indicator, and record it for the summary.
+fn print_warning(key: &str, value: &str) {
+    HAS_WARNINGS.store(true, Ordering::Relaxed);
+    print_check(&style(output::WARN_SIGN).yellow().to_string(), key, value);
+}
+
+fn print_package_manager_mode(key: &str, mode: ShimMode) {
+    let mode = match mode {
+        ShimMode::Managed => "managed mode",
+        ShimMode::SystemFirst => "system-first mode",
+    };
+    print_check(&style(output::CHECK).green().to_string(), key, mode);
 }
 
 /// Print a continuation/hint line (dimmed).
 fn print_hint(text: &str) {
-    println!("  {}", format!("note: {text}").dimmed());
+    vp_shared::output::print_stdout_line(format_args!(
+        "  {}",
+        style(format!("note: {text}")).dim()
+    ));
 }
 
 /// Abbreviate home directory to `~` for display.
@@ -74,33 +101,87 @@ fn abbreviate_home(path: &str) -> String {
 }
 
 /// Execute the doctor command.
-pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
+pub async fn execute(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<ExitStatus, Error> {
+    let scope = EnvScope::parse(scope.as_deref())?;
     let mut has_errors = false;
 
     // Section: Installation
-    println!("{}", "Installation".bold());
-    has_errors |= !check_vite_plus_home().await;
-    has_errors |= !check_bin_dir().await;
+    vp_shared::output::print_stdout_line(format_args!("{}", style("Installation").bold()));
+    if let Some(homebrew) = crate::homebrew::current() {
+        print_check(" ", "CLI source", homebrew.source_label());
+        print_check(" ", "CLI formula", &homebrew.formula);
+        print_check(" ", "CLI binary", &abbreviate_home(&homebrew.binary.to_string()));
+        if let Some(package) = crate::homebrew::user_package_dir()? {
+            let display = abbreviate_home(&package.to_string());
+            let problem =
+                match crate::self_setup::package_complete(&homebrew.binary, &package).await {
+                    Ok(true) => None,
+                    Ok(false) => Some("incomplete"),
+                    Err(_) => Some("could not verify"),
+                };
+            if let Some(problem) = problem {
+                has_errors = true;
+                print_check(
+                    &style(output::CROSS).red().to_string(),
+                    "CLI dependencies",
+                    &format!("{display} {}", style(format!("({problem})")).red()),
+                );
+                print_hint("Run 'vp --help' to retry CLI dependency setup.");
+            } else {
+                print_check(
+                    &style(output::CHECK).green().to_string(),
+                    "CLI dependencies",
+                    &display,
+                );
+            }
+        }
+    }
+    has_errors |= !check_dirs().await;
+    has_errors |= !check_shims(scope).await;
 
     // Section: Configuration
     print_section("Configuration");
-    let (shim_mode, system_node_path) = check_shim_mode().await;
+    let shim_mode = check_shim_mode(scope).await;
+    let config_readable = shim_mode.is_some();
+    has_errors |= !config_readable;
+    let (environment_config, system_node_path) = shim_mode.unwrap_or_default();
 
     // Check env sourcing: IDE-relevant profiles first, then all shell profiles
     let env_status = cfg!(not(windows)).then(check_env_sourcing);
 
-    check_session_override();
+    if scope.includes_node() {
+        check_session_override();
+    }
+    if scope.includes_package_managers() {
+        check_package_manager_session_override().await;
+    }
 
     // Section: PATH
     print_section("PATH");
-    has_errors |= !check_path().await;
+    has_errors |= !check_path(scope).await;
 
     // Section: Version Resolution
-    print_section("Version Resolution");
-    let resolution = check_current_resolution(&cwd, shim_mode, system_node_path).await;
+    let resolution = if scope.includes_node() {
+        print_section("Node.js Resolution");
+        let (ok, resolution) = check_current_resolution(
+            &cwd,
+            environment_config.node_shim_mode,
+            system_node_path,
+            config_readable,
+        )
+        .await;
+        has_errors |= !ok;
+        resolution
+    } else {
+        None
+    };
+    if scope.includes_package_managers() {
+        print_section("Package Manager Resolution");
+        has_errors |= !check_package_manager_resolution(&cwd, scope, &environment_config).await;
+    }
 
     // Section: devEngines (conditional, see rfcs/dev-engines.md)
-    check_dev_engines(&cwd, resolution.as_ref()).await;
+    check_dev_engines(&cwd, resolution.as_ref(), scope).await;
 
     // Section: Conflicts (conditional)
     check_conflicts();
@@ -110,154 +191,305 @@ pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
         Some(EnvSourcingStatus::IdeFound) | None => {} // All good, no guidance needed
         Some(EnvSourcingStatus::ShellOnly | EnvSourcingStatus::NotFound) => {
             // Show IDE setup guidance when env is not in IDE-relevant profiles
-            if let Ok(bin_dir) = get_bin_dir() {
-                print_ide_setup_guidance(&bin_dir);
-            }
+            print_ide_setup_guidance(&vp_shared::EnvConfig::get().dirs.config);
         }
     }
 
     // Summary
-    println!();
+    vp_shared::output::print_stdout_line(format_args!(""));
     if has_errors {
-        println!(
+        vp_shared::output::print_stdout_line(format_args!(
             "{}",
-            "\u{2717} Some issues found. Run the suggested commands to fix them.".red().bold()
-        );
+            style("\u{2717} Some issues found.").red().bold()
+        ));
         Ok(super::exit_status(1))
+    } else if HAS_WARNINGS.load(Ordering::Relaxed) {
+        // Warnings describe setups that still work, so they keep the zero exit code.
+        vp_shared::output::print_stdout_line(format_args!(
+            "{}",
+            style("\u{26A0} Some warnings found.").yellow().bold()
+        ));
+        Ok(ExitStatus::default())
     } else {
-        println!("{}", "\u{2713} All checks passed".green().bold());
+        vp_shared::output::print_stdout_line(format_args!(
+            "{}",
+            style("\u{2713} All checks passed").green().bold()
+        ));
         Ok(ExitStatus::default())
     }
 }
 
-/// Check VP_HOME directory.
-async fn check_vite_plus_home() -> bool {
-    let home = match get_vp_home() {
-        Ok(h) => h,
-        Err(e) => {
+/// Report the five resolved category roots.
+///
+/// `vp env setup` creates `bin` and `config`, so they must exist. Vite+ creates
+/// `data`, `cache`, and `state` when it first needs them. Report a missing lazy
+/// directory as "not created yet", not as an error.
+async fn check_dirs() -> bool {
+    let dirs = &vp_shared::EnvConfig::get().dirs;
+    let rows: [(&str, &AbsolutePathBuf, bool); 5] = [
+        ("Bin dir", &dirs.bin, true),
+        ("Data dir", &dirs.data, false),
+        ("Cache dir", &dirs.cache, false),
+        ("Config dir", &dirs.config, true),
+        ("State dir", &dirs.state, false),
+    ];
+
+    let mut ok = true;
+    for (label, dir, required) in rows {
+        let display = abbreviate_home(&dir.as_path().display().to_string());
+        if tokio::fs::try_exists(dir).await.unwrap_or(false) {
+            print_check(&style(output::CHECK).green().to_string(), label, &display);
+        } else if required {
             print_check(
-                &output::CROSS.red().to_string(),
-                env_vars::VP_HOME,
-                &format!("{e}").red().to_string(),
+                &style(output::CROSS).red().to_string(),
+                label,
+                &format!("{display} {}", style("(does not exist)").red()),
             );
-            return false;
+            print_hint("Run 'vp env setup' to create the directory.");
+            ok = false;
+        } else {
+            print_check(
+                &style(output::CHECK).green().to_string(),
+                label,
+                &format!("{display} {}", style("(not created yet)").black().bright()),
+            );
         }
-    };
+    }
+    ok
+}
 
-    let display = abbreviate_home(&home.as_path().display().to_string());
-
-    if tokio::fs::try_exists(&home).await.unwrap_or(false) {
-        print_check(&output::CHECK.green().to_string(), env_vars::VP_HOME, &display);
-        true
-    } else {
-        print_check(
-            &output::CROSS.red().to_string(),
-            env_vars::VP_HOME,
-            &"does not exist".red().to_string(),
-        );
-        print_hint("Run 'vp env setup' to create it.");
-        false
+/// Check shim files in the bin directory. A missing bin directory is
+/// already reported by [`check_dirs`].
+fn selected_shim_tools(scope: EnvScope) -> Vec<&'static str> {
+    match scope {
+        EnvScope::All => crate::shim::DEFAULT_SHIM_TOOLS.to_vec(),
+        EnvScope::Node => vec!["node"],
+        EnvScope::PackageManagers | EnvScope::PackageManager(_) => crate::shim::DEFAULT_SHIM_TOOLS
+            .iter()
+            .copied()
+            .filter(|tool| {
+                vp_pm_cli::PackageManagerType::from_tool(tool).is_some_and(|kind| {
+                    scope.package_manager().is_none_or(|selected| selected == kind)
+                })
+            })
+            .collect(),
     }
 }
 
-/// Check bin directory and shim files.
-async fn check_bin_dir() -> bool {
-    let bin_dir = match get_bin_dir() {
-        Ok(d) => d,
-        Err(_) => return false,
-    };
+async fn check_shims(scope: EnvScope) -> bool {
+    let config = vp_shared::EnvConfig::get();
+    let bin_dir = &config.dirs.bin;
 
-    if !tokio::fs::try_exists(&bin_dir).await.unwrap_or(false) {
-        print_check(
-            &output::CROSS.red().to_string(),
-            "Bin directory",
-            &"does not exist".red().to_string(),
-        );
-        print_hint("Run 'vp env setup' to create bin directory and shims.");
+    if !tokio::fs::try_exists(bin_dir).await.unwrap_or(false) {
         return false;
     }
 
-    print_check(&output::CHECK.green().to_string(), "Bin directory", "exists");
-
+    let settings = match load_config().await {
+        Ok(settings) => settings,
+        Err(_) => return false,
+    };
     let mut missing = Vec::new();
 
-    for tool in SHIM_TOOLS {
-        let shim_path = bin_dir.join(shim_filename(tool));
+    let tools = selected_shim_tools(scope);
+    for tool in &tools {
+        let shim_path = super::setup::shim_dir(&settings, tool).join(shim_filename(tool));
         if !tokio::fs::try_exists(&shim_path).await.unwrap_or(false) {
             missing.push(*tool);
         }
     }
 
     if missing.is_empty() {
-        print_check(&output::CHECK.green().to_string(), "Shims", &SHIM_TOOLS.join(", "));
+        print_check(&style(output::CHECK).green().to_string(), "Shims", &tools.join(", "));
         true
     } else {
         print_check(
-            &output::CROSS.red().to_string(),
+            &style(output::CROSS).red().to_string(),
             "Missing shims",
-            &missing.join(", ").red().to_string(),
+            &style(&missing.join(", ")).red().to_string(),
         );
         print_hint("Run 'vp env setup' to create missing shims.");
         false
     }
 }
 
-/// Get the filename for a shim (platform-specific).
-fn shim_filename(tool: &str) -> String {
-    #[cfg(windows)]
-    {
-        // All tools use trampoline .exe files on Windows
-        format!("{tool}.exe")
-    }
-
-    #[cfg(not(windows))]
-    {
-        tool.to_string()
-    }
-}
-
-/// Check and display shim mode. Returns the mode and any found system node path.
-async fn check_shim_mode() -> (ShimMode, Option<AbsolutePathBuf>) {
+/// Check and display shim mode. Returns the mode and any found system node path,
+/// or `None` when the config cannot be read.
+async fn check_shim_mode(scope: EnvScope) -> Option<(config::Config, Option<AbsolutePathBuf>)> {
     let config = match load_config().await {
         Ok(c) => c,
-        Err(e) => {
-            print_check(
-                &output::WARN_SIGN.yellow().to_string(),
-                "Node.js mode",
-                &format!("config error: {e}").yellow().to_string(),
-            );
-            return (ShimMode::default(), None);
+        Err(_) => {
+            print_check(&style(output::CROSS).red().to_string(), "Config", &unreadable_config());
+            return None;
         }
     };
 
     let mut system_node_path = None;
 
-    match config.shim_mode {
-        ShimMode::Managed => {
-            print_check(&output::CHECK.green().to_string(), "Node.js mode", "managed");
-        }
-        ShimMode::SystemFirst => {
-            print_check(
-                &output::CHECK.green().to_string(),
-                "Node.js mode",
-                &"system-first".bright_blue().to_string(),
-            );
-
-            // Check if system Node.js is available
-            if let Some(system_node) = shim::find_system_tool("node") {
-                print_check(" ", "System Node.js", &system_node.as_path().display().to_string());
-                system_node_path = Some(system_node);
-            } else {
+    if scope.includes_node() {
+        match config.node_shim_mode {
+            ShimMode::Managed => {
+                print_check(&style(output::CHECK).green().to_string(), "Node.js", "managed mode");
+            }
+            ShimMode::SystemFirst => {
                 print_check(
-                    &output::WARN_SIGN.yellow().to_string(),
-                    "System Node.js",
-                    &"not found (will fall back to managed)".yellow().to_string(),
+                    &style(output::CHECK).green().to_string(),
+                    "Node.js",
+                    &style("system-first mode").blue().bright().to_string(),
                 );
+
+                // Check if system Node.js is available
+                if let Some(system_node) = shim::find_system_tool("node") {
+                    print_check(
+                        " ",
+                        "System Node.js",
+                        &system_node.as_path().display().to_string(),
+                    );
+                    system_node_path = Some(system_node);
+                } else {
+                    print_warning(
+                        "System Node.js",
+                        &style("not found (will fall back to managed)").yellow().to_string(),
+                    );
+                }
+            }
+        }
+    }
+    if scope.includes_package_managers() {
+        if let Some(package_manager) = scope.package_manager() {
+            print_package_manager_mode(
+                "Package manager",
+                config.package_manager_shim_mode_for(package_manager),
+            );
+        } else {
+            let modes = package_manager::ALL_PACKAGE_MANAGERS.map(|package_manager| {
+                (package_manager, config.package_manager_shim_mode_for(package_manager))
+            });
+            let shared_mode = modes[0].1;
+            if modes.iter().all(|(_, mode)| *mode == shared_mode) {
+                print_package_manager_mode("Package manager", shared_mode);
+            } else {
+                for (package_manager, mode) in modes {
+                    print_package_manager_mode(package_manager::title(package_manager), mode);
+                }
             }
         }
     }
 
-    (config.shim_mode, system_node_path)
+    Some((config, system_node_path))
+}
+
+fn unreadable_config() -> String {
+    let path = config::get_config_path()
+        .map(|path| abbreviate_home(&path.as_path().display().to_string()))
+        .unwrap_or_default();
+    style(format!("{path} (could not read)")).red().to_string()
+}
+
+async fn check_package_manager_session_override() {
+    for kind in package_manager::ALL_PACKAGE_MANAGERS {
+        let environment = package_manager::environment_version(kind);
+        let session = config::read_session_package_manager(kind).await;
+        if let Some(value) = environment.or(session) {
+            print_check(" ", "PM session", &format!("{kind}@{value}"));
+        }
+    }
+}
+
+async fn check_package_manager_resolution(
+    cwd: &AbsolutePathBuf,
+    scope: EnvScope,
+    config: &config::Config,
+) -> bool {
+    let selected_type = if let Some(kind) = scope.package_manager() {
+        Some(kind)
+    } else {
+        match package_manager::resolve_current_spec(cwd).await {
+            Ok(selected) => selected.map(|resolution| resolution.package_manager_type),
+            Err(error) => {
+                print_check(
+                    &style(output::CROSS).red().to_string(),
+                    "Package manager",
+                    &error.to_string(),
+                );
+                return false;
+            }
+        }
+    };
+    let Some(selected_type) = selected_type else {
+        print_check(" ", "Package manager", "not selected");
+        return true;
+    };
+
+    if config.package_manager_shim_mode_for(selected_type) == ShimMode::SystemFirst
+        && let Some(system_binary) = shim::find_system_tool(&selected_type.to_string())
+    {
+        let Some(version) = try_get_tool_version(&system_binary).await else {
+            print_check(" ", "Source", "system PATH");
+            print_check(
+                &style(output::CROSS).red().to_string(),
+                "PM binary",
+                &style(format!("{} (could not execute)", system_binary.as_path().display()))
+                    .red()
+                    .to_string(),
+            );
+            return false;
+        };
+        print_check(" ", "Source", "system PATH");
+        print_check(
+            " ",
+            "Version",
+            &style(format!("{selected_type}@{version}")).green().bright().to_string(),
+        );
+        print_check(
+            &style(output::CHECK).green().to_string(),
+            "PM binary",
+            &system_binary.as_path().display().to_string(),
+        );
+        return true;
+    }
+
+    let resolution = match scope.package_manager() {
+        Some(kind) => package_manager::resolve_shim_for(cwd, kind).await,
+        None => package_manager::resolve_current(cwd).await,
+    };
+    match resolution {
+        Ok(Some(resolution)) => {
+            print_check(" ", "Source", &resolution.source);
+            print_check(
+                " ",
+                "Version",
+                &style(format!("{}@{}", resolution.package_manager_type, resolution.version))
+                    .green()
+                    .bright()
+                    .to_string(),
+            );
+            let installed =
+                package_manager_install_dir(resolution.package_manager_type, &resolution.version)
+                    .is_some_and(|directory| {
+                        resolution.package_manager_type.bin_names().iter().all(|name| {
+                            package_manager_bin_path(&directory, name).as_path().exists()
+                        })
+                    });
+            if installed {
+                print_check(&style(output::CHECK).green().to_string(), "PM binaries", "installed");
+            } else {
+                print_warning("PM binaries", "not installed");
+            }
+            true
+        }
+        Ok(_) => {
+            print_check(" ", "Package manager", "not selected");
+            true
+        }
+        Err(error) => {
+            print_check(
+                &style(output::CROSS).red().to_string(),
+                "Package manager",
+                &error.to_string(),
+            );
+            false
+        }
+    }
 }
 
 /// Check profile files for env sourcing and classify where it was found.
@@ -265,29 +497,22 @@ async fn check_shim_mode() -> (ShimMode, Option<AbsolutePathBuf>) {
 /// Tries IDE-relevant profiles first, then falls back to all shell profiles.
 /// Returns `EnvSourcingStatus` indicating where (if anywhere) the sourcing was found.
 fn check_env_sourcing() -> EnvSourcingStatus {
-    let bin_dir = match get_bin_dir() {
-        Ok(d) => d,
-        Err(_) => return EnvSourcingStatus::NotFound,
-    };
-
-    let home_path = bin_dir
-        .parent()
-        .map(|p| p.as_path().display().to_string())
-        .unwrap_or_else(|| bin_dir.as_path().display().to_string());
-    let home_path = if let Ok(home_dir) = std::env::var("HOME") {
-        if let Some(suffix) = home_path.strip_prefix(&home_dir) {
+    let config = vp_shared::EnvConfig::get();
+    let env_path = config.dirs.config.as_path().display().to_string();
+    let env_path = if let Ok(home_dir) = std::env::var("HOME") {
+        if let Some(suffix) = env_path.strip_prefix(&home_dir) {
             format!("$HOME{suffix}")
         } else {
-            home_path
+            env_path
         }
     } else {
-        home_path
+        env_path
     };
 
     // First: check IDE-relevant profiles (login/environment files visible to GUI apps)
-    if let Some(file) = check_profile_files(&home_path, IDE_SHELL_PROFILES) {
+    if let Some(file) = check_profile_files(&env_path, IDE_SHELL_PROFILES) {
         print_check(
-            &output::CHECK.green().to_string(),
+            &style(output::CHECK).green().to_string(),
             "IDE integration",
             &format!("env sourced in {file}"),
         );
@@ -295,14 +520,13 @@ fn check_env_sourcing() -> EnvSourcingStatus {
     }
 
     // Second: check all shell profiles (interactive terminal sessions)
-    if let Some(file) = check_profile_files(&home_path, ALL_SHELL_PROFILES) {
-        print_check(
-            &output::WARN_SIGN.yellow().to_string(),
+    if let Some(file) = check_profile_files(&env_path, ALL_SHELL_PROFILES) {
+        print_warning(
             "IDE integration",
             &format!(
                 "{} {}",
-                format!("env sourced in {file}").yellow(),
-                "(may not be visible to GUI apps)".dimmed(),
+                style(format!("env sourced in {file}")).yellow(),
+                style("(may not be visible to GUI apps)").dim(),
             ),
         );
         return EnvSourcingStatus::ShellOnly;
@@ -316,10 +540,9 @@ fn check_session_override() {
     if let Ok(version) = std::env::var(config::VERSION_ENV_VAR) {
         let version = version.trim();
         if !version.is_empty() {
-            print_check(
-                &output::WARN_SIGN.yellow().to_string(),
+            print_warning(
                 "Session override",
-                &format!("{}={version}", env_vars::VP_NODE_VERSION).yellow().to_string(),
+                &style(format!("{}={version}", env_vars::VP_NODE_VERSION)).yellow().to_string(),
             );
             print_hint("Overrides all file-based resolution.");
             print_hint("Run 'vp env use --unset' to remove.");
@@ -328,21 +551,37 @@ fn check_session_override() {
 
     // Also check session version file
     if let Some(version) = config::read_session_version_sync() {
-        print_check(
-            &output::WARN_SIGN.yellow().to_string(),
+        print_warning(
             "Session override (file)",
-            &format!("{}={version}", config::SESSION_VERSION_FILE).yellow().to_string(),
+            &style(format!("{}={version}", config::SESSION_VERSION_FILE)).yellow().to_string(),
         );
         print_hint("Written by 'vp env use'. Run 'vp env use --unset' to remove.");
     }
 }
 
 /// Check PATH configuration.
-async fn check_path() -> bool {
+async fn check_path(scope: EnvScope) -> bool {
     let bin_dir = match get_bin_dir() {
         Ok(d) => d,
         Err(_) => return false,
     };
+
+    // The public vp can be on PATH even when the user's shim directory is not.
+    let vp_path = find_in_path("vp");
+    if let Some(path) = &vp_path {
+        print_check(
+            &style(output::CHECK).green().to_string(),
+            "vp",
+            &abbreviate_home(&path.display().to_string()),
+        );
+    } else {
+        print_check(
+            &style(output::CROSS).red().to_string(),
+            "vp",
+            &style("not in PATH").red().to_string(),
+        );
+        print_hint("Run 'vp env setup' to create the vp shim.");
+    }
 
     let path_var = std::env::var_os("PATH").unwrap_or_default();
     let paths: Vec<_> = std::env::split_paths(&path_var).collect();
@@ -354,39 +593,66 @@ async fn check_path() -> bool {
     let bin_display = abbreviate_home(&bin_dir.as_path().display().to_string());
 
     if bin_in_path {
-        print_check(&output::CHECK.green().to_string(), "vp", "in PATH");
+        print_check(&style(output::CHECK).green().to_string(), "Shim dir", &bin_display);
     } else {
-        print_check(&output::CROSS.red().to_string(), "vp", &"not in PATH".red().to_string());
+        print_check(
+            &style(output::CROSS).red().to_string(),
+            "Shim dir",
+            &style("not in PATH").red().to_string(),
+        );
         print_hint(&format!("Expected: {bin_display}"));
-        println!();
-        print_path_fix(&bin_dir);
+        vp_shared::output::print_stdout_line(format_args!(""));
+        print_path_fix(&vp_shared::EnvConfig::get().dirs.config);
         return false;
     }
 
+    let fallback = vp_shared::EnvConfig::get().dirs.fallback_bin();
+    if !paths.iter().any(|path| path == fallback.as_path()) {
+        print_check(&style(output::CROSS).red().to_string(), "Fallback dir", "not in PATH");
+        print_path_fix(&vp_shared::EnvConfig::get().dirs.config);
+        return false;
+    }
+    let settings = match load_config().await {
+        Ok(settings) => settings,
+        Err(_) => return false,
+    };
+
     // Show which tool would be executed for each shim
-    for tool in SHIM_TOOLS {
+    let mut ok = vp_path.is_some();
+    for tool in selected_shim_tools(scope) {
         if let Some(tool_path) = find_in_path(tool) {
-            let expected = bin_dir.join(shim_filename(tool));
+            let expected_dir = super::setup::shim_dir(&settings, tool);
+            let expected = expected_dir.join(shim_filename(tool));
             let display = abbreviate_home(&tool_path.display().to_string());
             if tool_path == expected.as_path() {
                 print_check(
-                    &output::CHECK.green().to_string(),
+                    &style(output::CHECK).green().to_string(),
                     tool,
-                    &format!("{display} {}", "(vp shim)".dimmed()),
+                    &format!("{display} {}", style("(vp shim)").dim()),
+                );
+            } else if expected_dir == fallback {
+                print_check(
+                    &style(output::CHECK).green().to_string(),
+                    tool,
+                    &format!("{display} (system)"),
                 );
             } else {
-                print_check(
-                    &output::WARN_SIGN.yellow().to_string(),
+                print_warning(
                     tool,
-                    &format!("{} {}", display.yellow(), "(not vp shim)".dimmed()),
+                    &format!("{} {}", style(&display).yellow(), style("(not vp shim)").dim()),
                 );
             }
         } else {
-            print_check(" ", tool, "not found");
+            print_check(
+                &style(output::CROSS).red().to_string(),
+                tool,
+                &style("not found").red().to_string(),
+            );
+            ok = false;
         }
     }
 
-    true
+    ok
 }
 
 /// Find an executable in PATH.
@@ -396,46 +662,63 @@ fn find_in_path(name: &str) -> Option<std::path::PathBuf> {
 }
 
 /// Print PATH fix instructions for shell setup.
-fn print_path_fix(bin_dir: &vt_path::AbsolutePath) {
+fn print_path_fix(env_dir: &vt_path::AbsolutePath) {
     #[cfg(not(windows))]
     {
-        // Derive vite_plus_home from bin_dir (parent), using $HOME prefix for readability
-        let home_path = bin_dir
-            .parent()
-            .map(|p| p.as_path().display().to_string())
-            .unwrap_or_else(|| bin_dir.as_path().display().to_string());
-        let home_path = if let Ok(home_dir) = std::env::var("HOME") {
-            if let Some(suffix) = home_path.strip_prefix(&home_dir) {
+        // Show the environment-file paths relative to $HOME when possible.
+        let env_path = env_dir.as_path().display().to_string();
+        let env_path = if let Ok(home_dir) = std::env::var("HOME") {
+            if let Some(suffix) = env_path.strip_prefix(&home_dir) {
                 format!("$HOME{suffix}")
             } else {
-                home_path
+                env_path
             }
         } else {
-            home_path
+            env_path
         };
 
-        println!("  {}", "Add to your shell profile (~/.zshrc, ~/.bashrc, etc.):".dimmed());
-        println!();
-        println!("  . \"{home_path}/env\"");
-        println!();
-        println!("  {}", "For fish shell, add to ~/.config/fish/config.fish:".dimmed());
-        println!();
-        println!("  source \"{home_path}/env.fish\"");
-        println!();
-        println!("  {}", "For Nushell, add to ~/.config/nushell/config.nu:".dimmed());
-        println!();
-        println!("  source '{home_path}/env.nu'");
-        println!();
-        println!("  {}", "Then restart your terminal.".dimmed());
+        vp_shared::output::print_stdout_line(format_args!(
+            "  {}",
+            style("Add to your shell profile (~/.zshrc, ~/.bashrc, etc.):").dim()
+        ));
+        vp_shared::output::print_stdout_line(format_args!(""));
+        vp_shared::output::print_stdout_line(format_args!("  . \"{env_path}/env\""));
+        vp_shared::output::print_stdout_line(format_args!(""));
+        vp_shared::output::print_stdout_line(format_args!(
+            "  {}",
+            style("For fish shell, add to ~/.config/fish/config.fish:").dim()
+        ));
+        vp_shared::output::print_stdout_line(format_args!(""));
+        vp_shared::output::print_stdout_line(format_args!("  source \"{env_path}/env.fish\""));
+        vp_shared::output::print_stdout_line(format_args!(""));
+        vp_shared::output::print_stdout_line(format_args!(
+            "  {}",
+            style("For Nushell, add to ~/.config/nushell/config.nu:").dim()
+        ));
+        vp_shared::output::print_stdout_line(format_args!(""));
+        vp_shared::output::print_stdout_line(format_args!("  source '{env_path}/env.nu'"));
+        vp_shared::output::print_stdout_line(format_args!(""));
+        vp_shared::output::print_stdout_line(format_args!(
+            "  {}",
+            style("Then restart your terminal.").dim()
+        ));
     }
 
     #[cfg(windows)]
     {
-        let _ = bin_dir;
-        println!("  {}", "Add the bin directory to your PATH via:".dimmed());
-        println!("  System Properties -> Environment Variables -> Path");
-        println!();
-        println!("  {}", "Then restart your terminal.".dimmed());
+        let _ = env_dir;
+        vp_shared::output::print_stdout_line(format_args!(
+            "  {}",
+            style("Add the bin directory to your PATH via:").dim()
+        ));
+        vp_shared::output::print_stdout_line(format_args!(
+            "  System Properties -> Environment Variables -> Path"
+        ));
+        vp_shared::output::print_stdout_line(format_args!(""));
+        vp_shared::output::print_stdout_line(format_args!(
+            "  {}",
+            style("Then restart your terminal.").dim()
+        ));
     }
 }
 
@@ -446,15 +729,16 @@ fn print_path_fix(bin_dir: &vt_path::AbsolutePath) {
 ///
 /// Returns `Some(display_path)` if any profile file contains a reference
 /// to the vite-plus env file, `None` otherwise.
-fn check_profile_files(vite_plus_home: &str, profile_files: &[ShellProfile]) -> Option<String> {
-    let home_dir = AbsolutePathBuf::new(std::env::var_os("HOME")?.into())?;
-    let home_dir_display = home_dir.as_path().display().to_string();
+fn check_profile_files(env_dir: &str, profile_files: &[ShellProfile]) -> Option<String> {
+    let config = vp_shared::EnvConfig::get();
+    let user_home = &config.user_home;
+    let home_dir_display = user_home.as_path().display().to_string();
 
     for profile in profile_files {
-        let full_path = resolve_profile_path(profile, &home_dir);
+        let full_path = resolve_profile_path(profile, user_home);
         if let Ok(content) = std::fs::read_to_string(&full_path) {
-            let mut search_strings = vec![format!("{vite_plus_home}/{}", profile.env_file)];
-            if let Some(suffix) = vite_plus_home.strip_prefix("$HOME") {
+            let mut search_strings = vec![format!("{env_dir}/{}", profile.env_file)];
+            if let Some(suffix) = env_dir.strip_prefix("$HOME") {
                 search_strings.push(format!("{home_dir_display}{suffix}/{}", profile.env_file));
                 search_strings.push(format!("~{suffix}/{}", profile.env_file));
             }
@@ -469,52 +753,66 @@ fn check_profile_files(vite_plus_home: &str, profile_files: &[ShellProfile]) -> 
 }
 
 /// Print IDE setup guidance for GUI applications.
-fn print_ide_setup_guidance(bin_dir: &vt_path::AbsolutePath) {
-    // Derive vite_plus_home display path from bin_dir.parent(), using $HOME prefix
-    let home_path = bin_dir
-        .parent()
-        .map(|p| p.as_path().display().to_string())
-        .unwrap_or_else(|| bin_dir.as_path().display().to_string());
-    let home_path = if let Ok(home_dir) = std::env::var("HOME") {
-        if let Some(suffix) = home_path.strip_prefix(&home_dir) {
+fn print_ide_setup_guidance(env_dir: &vt_path::AbsolutePath) {
+    // Show the environment-file paths relative to $HOME when possible.
+    let env_path = env_dir.as_path().display().to_string();
+    let env_path = if let Ok(home_dir) = std::env::var("HOME") {
+        if let Some(suffix) = env_path.strip_prefix(&home_dir) {
             format!("$HOME{suffix}")
         } else {
-            home_path
+            env_path
         }
     } else {
-        home_path
+        env_path
     };
 
     print_section("IDE Setup");
-    print_check(
-        &output::WARN_SIGN.yellow().to_string(),
+    print_warning(
         "",
-        &"GUI applications may not see shell PATH changes.".yellow().to_string(),
+        &style("GUI applications may not see shell PATH changes.").yellow().to_string(),
     );
-    println!();
+    vp_shared::output::print_stdout_line(format_args!(""));
 
     #[cfg(target_os = "macos")]
     {
-        println!("  {}", "macOS:".dimmed());
-        println!("  {}", "Add to ~/.zshenv or ~/.profile:".dimmed());
-        println!("  . \"{home_path}/env\"");
-        println!("  {}", "Then restart your IDE to apply changes.".dimmed());
+        vp_shared::output::print_stdout_line(format_args!("  {}", style("macOS:").dim()));
+        vp_shared::output::print_stdout_line(format_args!(
+            "  {}",
+            style("Add to ~/.zshenv or ~/.profile:").dim()
+        ));
+        vp_shared::output::print_stdout_line(format_args!("  . \"{env_path}/env\""));
+        vp_shared::output::print_stdout_line(format_args!(
+            "  {}",
+            style("Then restart your IDE to apply changes.").dim()
+        ));
     }
 
     #[cfg(target_os = "linux")]
     {
-        println!("  {}", "Linux:".dimmed());
-        println!("  {}", "Add to ~/.profile:".dimmed());
-        println!("  . \"{home_path}/env\"");
-        println!("  {}", "Then log out and log back in for changes to take effect.".dimmed());
+        vp_shared::output::print_stdout_line(format_args!("  {}", style("Linux:").dim()));
+        vp_shared::output::print_stdout_line(format_args!(
+            "  {}",
+            style("Add to ~/.profile:").dim()
+        ));
+        vp_shared::output::print_stdout_line(format_args!("  . \"{env_path}/env\""));
+        vp_shared::output::print_stdout_line(format_args!(
+            "  {}",
+            style("Then log out and log back in for changes to take effect.").dim()
+        ));
     }
 
     // Fallback for other Unix platforms
     #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     {
-        println!("  {}", "Add to your shell profile:".dimmed());
-        println!("  . \"{home_path}/env\"");
-        println!("  {}", "Then restart your IDE to apply changes.".dimmed());
+        vp_shared::output::print_stdout_line(format_args!(
+            "  {}",
+            style("Add to your shell profile:").dim()
+        ));
+        vp_shared::output::print_stdout_line(format_args!("  . \"{env_path}/env\""));
+        vp_shared::output::print_stdout_line(format_args!(
+            "  {}",
+            style("Then restart your IDE to apply changes.").dim()
+        ));
     }
 }
 
@@ -533,34 +831,41 @@ fn format_version_source(source: &str, source_path: Option<&vt_path::AbsolutePat
     }
 }
 
-/// Check current directory version resolution.
+/// Check current directory version resolution. Returns whether the check passed
+/// and the managed resolution, if any.
 async fn check_current_resolution(
     cwd: &AbsolutePathBuf,
     shim_mode: ShimMode,
     system_node_path: Option<AbsolutePathBuf>,
-) -> Option<config::VersionResolution> {
+    config_readable: bool,
+) -> (bool, Option<config::VersionResolution>) {
     print_check(" ", "Directory", &cwd.as_path().display().to_string());
 
     // In system-first mode, show system Node.js info instead of managed resolution
     if shim_mode == ShimMode::SystemFirst {
         if let Some(system_node) = system_node_path {
-            let version = get_node_version(&system_node).await;
             print_check(" ", "Source", "system PATH");
-            print_check(" ", "Version", &version.bright_green().to_string());
+            let Some(version) = try_get_tool_version(&system_node).await else {
+                print_check(
+                    &style(output::CROSS).red().to_string(),
+                    "Node binary",
+                    &style(format!("{} (could not execute)", system_node.as_path().display()))
+                        .red()
+                        .to_string(),
+                );
+                return (false, None);
+            };
+            print_check(" ", "Version", &style(&version).green().bright().to_string());
             print_check(
-                &output::CHECK.green().to_string(),
+                &style(output::CHECK).green().to_string(),
                 "Node binary",
                 &system_node.as_path().display().to_string(),
             );
         } else {
-            print_check(
-                &output::WARN_SIGN.yellow().to_string(),
-                "System Node.js",
-                &"not found in PATH".yellow().to_string(),
-            );
+            print_warning("System Node.js", &style("not found in PATH").yellow().to_string());
             print_hint("Install Node.js or run 'vp env on' to use managed Node.js.");
         }
-        return None;
+        return (true, None);
     }
 
     match resolve_version(cwd).await {
@@ -568,13 +873,15 @@ async fn check_current_resolution(
             let source_display =
                 format_version_source(&resolution.source, resolution.source_path.as_deref());
             print_check(" ", "Source", &source_display);
-            print_check(" ", "Version", &resolution.version.bright_green().to_string());
+            print_check(" ", "Version", &style(&resolution.version).green().bright().to_string());
 
             // Check if Node.js is installed
-            let home_dir = match vp_shared::get_vp_home() {
-                Ok(d) => d.join("js_runtime").join("node").join(&resolution.version),
-                Err(_) => return None,
-            };
+            let home_dir = vp_shared::EnvConfig::get()
+                .dirs
+                .data
+                .join("js_runtime")
+                .join("node")
+                .join(&resolution.version);
 
             #[cfg(windows)]
             let binary_path = home_dir.join("node.exe");
@@ -582,36 +889,36 @@ async fn check_current_resolution(
             let binary_path = home_dir.join("bin").join("node");
 
             if tokio::fs::try_exists(&binary_path).await.unwrap_or(false) {
-                print_check(&output::CHECK.green().to_string(), "Node binary", "installed");
+                print_check(&style(output::CHECK).green().to_string(), "Node binary", "installed");
             } else {
-                print_check(
-                    &output::WARN_SIGN.yellow().to_string(),
-                    "Node binary",
-                    &"not installed".yellow().to_string(),
-                );
+                print_warning("Node binary", &style("not installed").yellow().to_string());
                 print_hint("Version will be downloaded on first use.");
             }
-            Some(resolution)
+            (true, Some(resolution))
         }
         Err(e) => {
-            print_check(
-                &output::CROSS.red().to_string(),
-                "Resolution",
-                &format!("failed: {e}").red().to_string(),
-            );
-            None
+            // Without a `VP_NODE_VERSION` override or a project version, resolution reads the global config.
+            let reads_config = !config_readable
+                && vp_shared::EnvConfig::get()
+                    .node_version
+                    .as_deref()
+                    .is_none_or(|version| version.trim().is_empty())
+                && matches!(config::resolve_project_version_source(cwd, false).await, Ok(None));
+            let message = if reads_config {
+                unreadable_config()
+            } else {
+                style(format!("failed: {e}")).red().to_string()
+            };
+            print_check(&style(output::CROSS).red().to_string(), "Resolution", &message);
+            (false, None)
         }
     }
 }
 
-/// Get the version string from a Node.js binary.
-async fn get_node_version(node_path: &vt_path::AbsolutePath) -> String {
-    match tokio::process::Command::new(node_path.as_path()).arg("--version").output().await {
-        Ok(output) if output.status.success() => {
-            String::from_utf8_lossy(&output.stdout).trim().to_string()
-        }
-        _ => "unknown".to_string(),
-    }
+async fn try_get_tool_version(tool_path: &vt_path::AbsolutePath) -> Option<String> {
+    let output =
+        tokio::process::Command::new(tool_path.as_path()).arg("--version").output().await.ok()?;
+    output.status.success().then(|| String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
 /// One devEngines doctor finding.
@@ -669,8 +976,12 @@ async fn find_nearest_dev_engines_node_version(cwd: &AbsolutePathBuf) -> Option<
 /// All checks are semver-aware: an exact version satisfying a declared range is
 /// not a conflict. Findings are warnings or notes; they never fail the doctor run
 /// and are never auto-fixed.
-async fn check_dev_engines(cwd: &AbsolutePathBuf, resolution: Option<&config::VersionResolution>) {
-    let findings = collect_dev_engines_findings(cwd, resolution).await;
+async fn check_dev_engines(
+    cwd: &AbsolutePathBuf,
+    resolution: Option<&config::VersionResolution>,
+    scope: EnvScope,
+) {
+    let findings = collect_dev_engines_findings(cwd, resolution, scope).await;
     if findings.is_empty() {
         return;
     }
@@ -678,11 +989,7 @@ async fn check_dev_engines(cwd: &AbsolutePathBuf, resolution: Option<&config::Ve
     print_section("devEngines");
     for finding in findings {
         if finding.warn {
-            print_check(
-                &output::WARN_SIGN.yellow().to_string(),
-                finding.key,
-                &finding.message.yellow().to_string(),
-            );
+            print_warning(finding.key, &style(&finding.message).yellow().to_string());
         } else {
             print_check(" ", finding.key, &finding.message);
         }
@@ -721,8 +1028,8 @@ async fn nvmrc_conflict_finding(
 
     let project_root = resolution.project_root.as_ref()?;
     let declared = vp_js_runtime::read_nvmrc_file(project_root).await?;
-    let version = node_semver::Version::parse(&resolution.version).ok()?;
-    let range = node_semver::Range::parse(declared.as_str()).ok()?;
+    let version = js_semver::Version::parse(&resolution.version).ok()?;
+    let range = js_semver::Range::parse(declared.as_str()).ok()?;
     if range.satisfies(&version) {
         return None;
     }
@@ -740,9 +1047,12 @@ async fn nvmrc_conflict_finding(
 async fn collect_dev_engines_findings(
     cwd: &AbsolutePathBuf,
     resolution: Option<&config::VersionResolution>,
+    scope: EnvScope,
 ) -> Vec<DevEnginesFinding> {
+    let check_node = scope.includes_node();
+    let check_package_managers = scope.includes_package_managers();
     let mut findings = Vec::new();
-    if let Some(finding) = nvmrc_conflict_finding(resolution).await {
+    if check_node && let Some(finding) = nvmrc_conflict_finding(resolution).await {
         findings.push(finding);
     }
 
@@ -761,26 +1071,33 @@ async fn collect_dev_engines_findings(
     // monorepo it can be a different (higher) file than the nearest package.json
     // used by the Node.js runtime checks above.
     let nearest_pkg_path = pkg_dir.join("package.json");
-    let root_doc = read_workspace_root_doc(cwd, &nearest_pkg_path).await;
+    let root_doc = if check_package_managers {
+        read_workspace_root_doc(cwd, &nearest_pkg_path).await
+    } else {
+        None
+    };
     let (pm_raw, pm_pkg): (&serde_json::Value, &vp_shared::PackageJson) = match &root_doc {
         Some((root_raw, root_pkg)) => (root_raw, root_pkg),
         None => (&raw, &pkg),
     };
 
-    let runtime_field = pkg.dev_engines.as_ref().and_then(|de| de.runtime.as_ref());
-    let package_manager_field =
-        pm_pkg.dev_engines.as_ref().and_then(|de| de.package_manager.as_ref());
+    let runtime_field =
+        check_node.then(|| pkg.dev_engines.as_ref().and_then(|de| de.runtime.as_ref())).flatten();
+    let package_manager_field = check_package_managers
+        .then(|| pm_pkg.dev_engines.as_ref().and_then(|de| de.package_manager.as_ref()))
+        .flatten();
 
     // .node-version vs devEngines.runtime (semver-aware: only exact .node-version
     // values can conflict with a declared range). Both sides follow the resolution
     // walk: the check fires only when a .node-version actually wins resolution, and
     // the devEngines.runtime declaration may live in an ancestor manifest rather
     // than the nearest package.json.
-    if let Ok(Some(resolution)) = vp_js_runtime::resolve_node_version(cwd, true).await
+    if check_node
+        && let Ok(Some(resolution)) = vp_js_runtime::resolve_node_version(cwd, true).await
         && resolution.source == vp_js_runtime::VersionSource::NodeVersionFile
-        && let Ok(version) = node_semver::Version::parse(&resolution.version)
+        && let Ok(version) = js_semver::Version::parse(&resolution.version)
         && let Some(declared) = find_nearest_dev_engines_node_version(cwd).await
-        && let Ok(range) = node_semver::Range::parse(declared.as_str())
+        && let Ok(range) = js_semver::Range::parse(declared.as_str())
         && !range.satisfies(&version)
     {
         findings.push(DevEnginesFinding::warn(
@@ -793,10 +1110,11 @@ async fn collect_dev_engines_findings(
     }
 
     // Resolved Node.js version vs engines.node
-    if let Some(resolution) = resolution
+    if check_node
+        && let Some(resolution) = resolution
         && let Some(engines_node) = pkg.engines.as_ref().and_then(|e| e.node.as_ref())
-        && let Ok(version) = node_semver::Version::parse(&resolution.version)
-        && let Ok(range) = node_semver::Range::parse(engines_node.as_str())
+        && let Ok(version) = js_semver::Version::parse(&resolution.version)
+        && let Ok(range) = js_semver::Range::parse(engines_node.as_str())
         && !range.satisfies(&version)
     {
         findings.push(DevEnginesFinding::warn(
@@ -816,7 +1134,7 @@ async fn collect_dev_engines_findings(
         let Some(field) = field else { continue };
         for entry in field.entries() {
             if let Some(version) = &entry.version
-                && node_semver::Range::parse(version.as_str()).is_err()
+                && js_semver::Range::parse(version.as_str()).is_err()
             {
                 findings.push(DevEnginesFinding::warn(
                     "Spec",
@@ -868,8 +1186,8 @@ async fn collect_dev_engines_findings(
             }
             Some(entry) => {
                 if let Some(required) = &entry.version
-                    && let Ok(range) = node_semver::Range::parse(required.as_str())
-                    && let Ok(version) = node_semver::Version::parse(pm_version)
+                    && let Ok(range) = js_semver::Range::parse(required.as_str())
+                    && let Ok(version) = js_semver::Version::parse(pm_version)
                     && !range.satisfies(&version)
                 {
                     findings.push(DevEnginesFinding::warn_with_hint(
@@ -909,12 +1227,15 @@ async fn collect_dev_engines_findings(
     // Malformed entries that lenient parsing skipped (raw JSON inspection):
     // runtime entries come from the nearest package.json, packageManager entries
     // from the workspace root package.json
-    if let Some(raw_dev_engines) = raw.get("devEngines").and_then(serde_json::Value::as_object)
+    if check_node
+        && let Some(raw_dev_engines) = raw.get("devEngines").and_then(serde_json::Value::as_object)
         && let Some(value) = raw_dev_engines.get("runtime")
     {
         collect_malformed_entry_findings("runtime", value, &mut findings);
     }
-    if let Some(raw_dev_engines) = pm_raw.get("devEngines").and_then(serde_json::Value::as_object)
+    if check_package_managers
+        && let Some(raw_dev_engines) =
+            pm_raw.get("devEngines").and_then(serde_json::Value::as_object)
         && let Some(value) = raw_dev_engines.get("packageManager")
     {
         collect_malformed_entry_findings("packageManager", value, &mut findings);
@@ -996,17 +1317,16 @@ fn check_conflicts() {
     if !conflicts.is_empty() {
         print_section("Conflicts");
         for manager in &conflicts {
-            print_check(
-                &output::WARN_SIGN.yellow().to_string(),
+            print_warning(
                 manager,
-                &format!(
+                &style(format!(
                     "detected ({} is set)",
                     KNOWN_VERSION_MANAGERS
                         .iter()
                         .find(|(n, _)| n == manager)
                         .map(|(_, e)| *e)
                         .unwrap_or("in PATH")
-                )
+                ))
                 .yellow()
                 .to_string(),
             );
@@ -1025,10 +1345,32 @@ mod tests {
     #[cfg(not(windows))]
     use crate::commands::shell::{ShellProfileKind, ShellProfileRoot};
 
+    #[test]
+    fn test_selected_shim_tools_respect_scope() {
+        assert_eq!(selected_shim_tools(EnvScope::Node), vec!["node"]);
+        assert_eq!(
+            selected_shim_tools(EnvScope::PackageManager(vp_pm_cli::PackageManagerType::Pnpm)),
+            vec!["pnpm", "pnpx", "pn", "pnx"]
+        );
+        assert_eq!(
+            selected_shim_tools(EnvScope::PackageManagers),
+            vec!["npm", "npx", "pnpm", "pnpx", "pn", "pnx", "yarn", "yarnpkg", "bun", "bunx"]
+        );
+        assert_eq!(selected_shim_tools(EnvScope::All), crate::shim::DEFAULT_SHIM_TOOLS);
+    }
+
     /// Test helper: write `files` into a temp project and collect devEngines findings.
     async fn dev_engines_findings_for(
         files: &[(&str, &str)],
         resolved: Option<(&str, &str)>,
+    ) -> Vec<DevEnginesFinding> {
+        dev_engines_findings_for_scope(files, resolved, EnvScope::All).await
+    }
+
+    async fn dev_engines_findings_for_scope(
+        files: &[(&str, &str)],
+        resolved: Option<(&str, &str)>,
+        scope: EnvScope,
     ) -> Vec<DevEnginesFinding> {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
@@ -1042,7 +1384,28 @@ mod tests {
             project_root: Some(temp_path.clone()),
             is_range: false,
         });
-        collect_dev_engines_findings(&temp_path, resolution.as_ref()).await
+        collect_dev_engines_findings(&temp_path, resolution.as_ref(), scope).await
+    }
+
+    #[tokio::test]
+    async fn test_dev_engines_findings_respect_scope() {
+        let package_json = r#"{
+            "packageManager": "npm@10.5.0",
+            "devEngines": {
+                "runtime": {"name": "node", "version": "^24.0.0"},
+                "packageManager": {"name": "pnpm", "version": "^11.0.0"}
+            }
+        }"#;
+        let files = [(".node-version", "20.18.0\n"), ("package.json", package_json)];
+
+        let node = dev_engines_findings_for_scope(&files, None, EnvScope::Node).await;
+        assert_eq!(node.len(), 1, "findings: {:?}", messages(&node));
+        assert_eq!(node[0].key, "Runtime");
+
+        let package_managers =
+            dev_engines_findings_for_scope(&files, None, EnvScope::PackageManagers).await;
+        assert_eq!(package_managers.len(), 1, "findings: {:?}", messages(&package_managers));
+        assert_eq!(package_managers[0].key, "PackageManager");
     }
 
     // npm-install-checks: "semver version is not in range" (via .node-version)
@@ -1349,7 +1712,7 @@ mod tests {
         tokio::fs::write(app_dir.join("package.json"), r#"{"name": "app"}"#).await.unwrap();
         tokio::fs::write(app_dir.join(".node-version"), "20.18.0\n").await.unwrap();
 
-        let findings = collect_dev_engines_findings(&app_dir, None).await;
+        let findings = collect_dev_engines_findings(&app_dir, None, EnvScope::All).await;
         assert_eq!(findings.len(), 1, "findings: {:?}", messages(&findings));
         assert!(findings[0].warn);
         assert!(
@@ -1376,7 +1739,7 @@ mod tests {
         .await
         .unwrap();
 
-        let findings = collect_dev_engines_findings(&app_dir, None).await;
+        let findings = collect_dev_engines_findings(&app_dir, None, EnvScope::All).await;
         assert!(findings.is_empty(), "findings: {:?}", messages(&findings));
     }
 
@@ -1408,7 +1771,7 @@ mod tests {
 
         // running from the nested package still diagnoses the workspace root's
         // packageManager vs devEngines.packageManager conflict
-        let findings = collect_dev_engines_findings(&app_dir, None).await;
+        let findings = collect_dev_engines_findings(&app_dir, None, EnvScope::All).await;
         assert_eq!(findings.len(), 1, "findings: {:?}", messages(&findings));
         assert!(findings[0].warn);
         assert_eq!(findings[0].key, "PackageManager");
@@ -1519,40 +1882,8 @@ mod tests {
         path
     }
 
-    /// Helper to save and restore PATH and VP_BYPASS around a test.
-    struct EnvGuard {
-        original_path: Option<std::ffi::OsString>,
-        original_bypass: Option<std::ffi::OsString>,
-    }
-
-    impl EnvGuard {
-        fn new() -> Self {
-            Self {
-                original_path: std::env::var_os("PATH"),
-                original_bypass: std::env::var_os(env_vars::VP_BYPASS),
-            }
-        }
-    }
-
-    impl Drop for EnvGuard {
-        fn drop(&mut self) {
-            unsafe {
-                match &self.original_path {
-                    Some(v) => std::env::set_var("PATH", v),
-                    None => std::env::remove_var("PATH"),
-                }
-                match &self.original_bypass {
-                    Some(v) => std::env::set_var(env_vars::VP_BYPASS, v),
-                    None => std::env::remove_var(env_vars::VP_BYPASS),
-                }
-            }
-        }
-    }
-
     #[test]
-    #[serial]
     fn test_find_system_node_skips_bypass_paths() {
-        let _guard = EnvGuard::new();
         let temp = TempDir::new().unwrap();
         let dir_a = temp.path().join("bin_a");
         let dir_b = temp.path().join("bin_b");
@@ -1562,40 +1893,37 @@ mod tests {
         create_fake_executable(&dir_b, "node");
 
         let path = std::env::join_paths([dir_a.as_path(), dir_b.as_path()]).unwrap();
-        // SAFETY: This test runs in isolation with serial_test
-        unsafe {
-            std::env::set_var("PATH", &path);
-            std::env::set_var(env_vars::VP_BYPASS, dir_a.as_os_str());
-        }
-
-        let result = shim::find_system_tool("node");
-        assert!(result.is_some(), "Should find node in non-bypassed directory");
-        assert!(
-            result.unwrap().as_path().starts_with(&dir_b),
-            "Should find node in dir_b, not dir_a"
+        temp_env::with_vars(
+            [("PATH", Some(path.as_os_str())), (env_vars::VP_BYPASS, Some(dir_a.as_os_str()))],
+            || {
+                let result = shim::find_system_tool("node");
+                assert!(result.is_some(), "Should find node in non-bypassed directory");
+                assert!(
+                    result.unwrap().as_path().starts_with(&dir_b),
+                    "Should find node in dir_b, not dir_a"
+                );
+            },
         );
     }
 
     #[test]
-    #[serial]
     fn test_find_system_node_returns_none_when_all_paths_bypassed() {
-        let _guard = EnvGuard::new();
         let temp = TempDir::new().unwrap();
         let dir_a = temp.path().join("bin_a");
         std::fs::create_dir_all(&dir_a).unwrap();
         create_fake_executable(&dir_a, "node");
 
-        // SAFETY: This test runs in isolation with serial_test
-        unsafe {
-            std::env::set_var("PATH", dir_a.as_os_str());
-            std::env::set_var(env_vars::VP_BYPASS, dir_a.as_os_str());
-        }
-
-        let result = shim::find_system_tool("node");
-        assert!(result.is_none(), "Should return None when all paths are bypassed");
+        temp_env::with_vars(
+            [("PATH", Some(dir_a.as_os_str())), (env_vars::VP_BYPASS, Some(dir_a.as_os_str()))],
+            || {
+                let result = shim::find_system_tool("node");
+                assert!(result.is_none(), "Should return None when all paths are bypassed");
+            },
+        );
     }
 
     #[test]
+    #[serial]
     fn test_abbreviate_home() {
         if let Ok(home) = std::env::var("HOME") {
             let path = format!("{home}/.vite-plus");
@@ -1606,74 +1934,7 @@ mod tests {
         }
     }
 
-    /// Guard for env vars used by profile file tests.
-    #[cfg(not(windows))]
-    struct ProfileEnvGuard {
-        original_home: Option<std::ffi::OsString>,
-        original_zdotdir: Option<std::ffi::OsString>,
-        original_xdg_config: Option<std::ffi::OsString>,
-        original_xdg_data: Option<std::ffi::OsString>,
-    }
-
-    #[cfg(not(windows))]
-    impl ProfileEnvGuard {
-        fn new(
-            home: &std::path::Path,
-            zdotdir: Option<&std::path::Path>,
-            xdg_config: Option<&std::path::Path>,
-            xdg_data: Option<&std::path::Path>,
-        ) -> Self {
-            let guard = Self {
-                original_home: std::env::var_os("HOME"),
-                original_zdotdir: std::env::var_os("ZDOTDIR"),
-                original_xdg_config: std::env::var_os("XDG_CONFIG_HOME"),
-                original_xdg_data: std::env::var_os("XDG_DATA_HOME"),
-            };
-            unsafe {
-                std::env::set_var("HOME", home);
-                match zdotdir {
-                    Some(v) => std::env::set_var("ZDOTDIR", v),
-                    None => std::env::remove_var("ZDOTDIR"),
-                }
-                match xdg_config {
-                    Some(v) => std::env::set_var("XDG_CONFIG_HOME", v),
-                    None => std::env::remove_var("XDG_CONFIG_HOME"),
-                }
-                match xdg_data {
-                    Some(v) => std::env::set_var("XDG_DATA_HOME", v),
-                    None => std::env::remove_var("XDG_DATA_HOME"),
-                }
-            }
-            guard
-        }
-    }
-
-    #[cfg(not(windows))]
-    impl Drop for ProfileEnvGuard {
-        fn drop(&mut self) {
-            unsafe {
-                match &self.original_home {
-                    Some(v) => std::env::set_var("HOME", v),
-                    None => std::env::remove_var("HOME"),
-                }
-                match &self.original_zdotdir {
-                    Some(v) => std::env::set_var("ZDOTDIR", v),
-                    None => std::env::remove_var("ZDOTDIR"),
-                }
-                match &self.original_xdg_config {
-                    Some(v) => std::env::set_var("XDG_CONFIG_HOME", v),
-                    None => std::env::remove_var("XDG_CONFIG_HOME"),
-                }
-                match &self.original_xdg_data {
-                    Some(v) => std::env::set_var("XDG_DATA_HOME", v),
-                    None => std::env::remove_var("XDG_DATA_HOME"),
-                }
-            }
-        }
-    }
-
     #[test]
-    #[serial]
     #[cfg(not(windows))]
     fn test_check_profile_files_finds_zdotdir() {
         let temp = TempDir::new().unwrap();
@@ -1684,23 +1945,30 @@ mod tests {
 
         std::fs::write(zdotdir.join(".zshenv"), ". \"$HOME/.vite-plus/env\"\n").unwrap();
 
-        let _guard = ProfileEnvGuard::new(&fake_home, Some(&zdotdir), None, None);
-
-        let result = check_profile_files(
-            "$HOME/.vite-plus",
-            &[ShellProfile {
-                root: ShellProfileRoot::Zsh,
-                path: ".zshenv",
-                env_file: "env",
-                kind: ShellProfileKind::Main,
-            }],
+        temp_env::with_vars(
+            [
+                ("HOME", Some(fake_home.as_os_str())),
+                ("ZDOTDIR", Some(zdotdir.as_os_str())),
+                ("XDG_CONFIG_HOME", None),
+                ("XDG_DATA_HOME", None),
+            ],
+            || {
+                let result = check_profile_files(
+                    "$HOME/.vite-plus",
+                    &[ShellProfile {
+                        root: ShellProfileRoot::Zsh,
+                        path: ".zshenv",
+                        env_file: "env",
+                        kind: ShellProfileKind::Main,
+                    }],
+                );
+                assert!(result.is_some(), "Should find .zshenv in ZDOTDIR");
+                assert!(result.unwrap().ends_with(".zshenv"));
+            },
         );
-        assert!(result.is_some(), "Should find .zshenv in ZDOTDIR");
-        assert!(result.unwrap().ends_with(".zshenv"));
     }
 
     #[test]
-    #[serial]
     #[cfg(not(windows))]
     fn test_check_profile_files_finds_xdg_fish() {
         let temp = TempDir::new().unwrap();
@@ -1713,23 +1981,30 @@ mod tests {
         std::fs::write(fish_dir.join("vite-plus.fish"), "source \"$HOME/.vite-plus/env.fish\"\n")
             .unwrap();
 
-        let _guard = ProfileEnvGuard::new(&fake_home, None, Some(&xdg_config), None);
-
-        let result = check_profile_files(
-            "$HOME/.vite-plus",
-            &[ShellProfile {
-                root: ShellProfileRoot::Fish,
-                path: "fish/conf.d/vite-plus.fish",
-                env_file: "env.fish",
-                kind: ShellProfileKind::Snippet,
-            }],
+        temp_env::with_vars(
+            [
+                ("HOME", Some(fake_home.as_os_str())),
+                ("ZDOTDIR", None),
+                ("XDG_CONFIG_HOME", Some(xdg_config.as_os_str())),
+                ("XDG_DATA_HOME", None),
+            ],
+            || {
+                let result = check_profile_files(
+                    "$HOME/.vite-plus",
+                    &[ShellProfile {
+                        root: ShellProfileRoot::Fish,
+                        path: "fish/conf.d/vite-plus.fish",
+                        env_file: "env.fish",
+                        kind: ShellProfileKind::Snippet,
+                    }],
+                );
+                assert!(result.is_some(), "Should find vite-plus.fish in XDG_CONFIG_HOME");
+                assert!(result.unwrap().contains("vite-plus.fish"));
+            },
         );
-        assert!(result.is_some(), "Should find vite-plus.fish in XDG_CONFIG_HOME");
-        assert!(result.unwrap().contains("vite-plus.fish"));
     }
 
     #[test]
-    #[serial]
     #[cfg(not(windows))]
     fn test_check_profile_files_finds_xdg_nushell() {
         let temp = TempDir::new().unwrap();
@@ -1741,23 +2016,30 @@ mod tests {
 
         std::fs::write(fish_dir.join("vite-plus.nu"), "source '~/.vite-plus/env.nu'\n").unwrap();
 
-        let _guard = ProfileEnvGuard::new(&fake_home, None, None, Some(&xdg_data));
-
-        let result = check_profile_files(
-            "$HOME/.vite-plus",
-            &[ShellProfile {
-                root: ShellProfileRoot::NushellData,
-                path: "nushell/vendor/autoload/vite-plus.nu",
-                env_file: "env.nu",
-                kind: ShellProfileKind::Snippet,
-            }],
+        temp_env::with_vars(
+            [
+                ("HOME", Some(fake_home.as_os_str())),
+                ("ZDOTDIR", None),
+                ("XDG_CONFIG_HOME", None),
+                ("XDG_DATA_HOME", Some(xdg_data.as_os_str())),
+            ],
+            || {
+                let result = check_profile_files(
+                    "$HOME/.vite-plus",
+                    &[ShellProfile {
+                        root: ShellProfileRoot::NushellData,
+                        path: "nushell/vendor/autoload/vite-plus.nu",
+                        env_file: "env.nu",
+                        kind: ShellProfileKind::Snippet,
+                    }],
+                );
+                assert!(result.is_some(), "Should find vite-plus.nu in XDG_DATA_HOME");
+                assert!(result.unwrap().contains("vite-plus.nu"));
+            },
         );
-        assert!(result.is_some(), "Should find vite-plus.nu in XDG_DATA_HOME");
-        assert!(result.unwrap().contains("vite-plus.nu"));
     }
 
     #[test]
-    #[serial]
     #[cfg(not(windows))]
     fn test_check_profile_files_finds_posix_env_in_bashrc() {
         let temp = TempDir::new().unwrap();
@@ -1767,31 +2049,38 @@ mod tests {
         std::fs::write(fake_home.join(".bashrc"), "# some config\n. \"$HOME/.vite-plus/env\"\n")
             .unwrap();
 
-        let _guard = ProfileEnvGuard::new(&fake_home, None, None, None);
-
-        let result = check_profile_files(
-            "$HOME/.vite-plus",
-            &[
-                ShellProfile {
-                    root: ShellProfileRoot::Home,
-                    path: ".bashrc",
-                    env_file: "env",
-                    kind: ShellProfileKind::Main,
-                },
-                ShellProfile {
-                    root: ShellProfileRoot::Home,
-                    path: ".profile",
-                    env_file: "env",
-                    kind: ShellProfileKind::Main,
-                },
+        temp_env::with_vars(
+            [
+                ("HOME", Some(fake_home.as_os_str())),
+                ("ZDOTDIR", None),
+                ("XDG_CONFIG_HOME", None),
+                ("XDG_DATA_HOME", None),
             ],
+            || {
+                let result = check_profile_files(
+                    "$HOME/.vite-plus",
+                    &[
+                        ShellProfile {
+                            root: ShellProfileRoot::Home,
+                            path: ".bashrc",
+                            env_file: "env",
+                            kind: ShellProfileKind::Main,
+                        },
+                        ShellProfile {
+                            root: ShellProfileRoot::Home,
+                            path: ".profile",
+                            env_file: "env",
+                            kind: ShellProfileKind::Main,
+                        },
+                    ],
+                );
+                assert!(result.is_some(), "Should find env sourcing in .bashrc");
+                assert_eq!(result.unwrap(), "~/.bashrc");
+            },
         );
-        assert!(result.is_some(), "Should find env sourcing in .bashrc");
-        assert_eq!(result.unwrap(), "~/.bashrc");
     }
 
     #[test]
-    #[serial]
     #[cfg(not(windows))]
     fn test_check_profile_files_finds_fish_env() {
         let temp = TempDir::new().unwrap();
@@ -1802,23 +2091,30 @@ mod tests {
         std::fs::write(fish_dir.join("config.fish"), "source \"$HOME/.vite-plus/env.fish\"\n")
             .unwrap();
 
-        let _guard = ProfileEnvGuard::new(&fake_home, None, None, None);
-
-        let result = check_profile_files(
-            "$HOME/.vite-plus",
-            &[ShellProfile {
-                root: ShellProfileRoot::Fish,
-                path: "fish/config.fish",
-                env_file: "env.fish",
-                kind: ShellProfileKind::Main,
-            }],
+        temp_env::with_vars(
+            [
+                ("HOME", Some(fake_home.as_os_str())),
+                ("ZDOTDIR", None),
+                ("XDG_CONFIG_HOME", None),
+                ("XDG_DATA_HOME", None),
+            ],
+            || {
+                let result = check_profile_files(
+                    "$HOME/.vite-plus",
+                    &[ShellProfile {
+                        root: ShellProfileRoot::Fish,
+                        path: "fish/config.fish",
+                        env_file: "env.fish",
+                        kind: ShellProfileKind::Main,
+                    }],
+                );
+                assert!(result.is_some(), "Should find env.fish sourcing in fish config");
+                assert_eq!(result.unwrap(), "~/.config/fish/config.fish");
+            },
         );
-        assert!(result.is_some(), "Should find env.fish sourcing in fish config");
-        assert_eq!(result.unwrap(), "~/.config/fish/config.fish");
     }
 
     #[test]
-    #[serial]
     #[cfg(not(windows))]
     fn test_check_profile_files_finds_nushell_env() {
         let temp = TempDir::new().unwrap();
@@ -1834,23 +2130,30 @@ mod tests {
         std::fs::write(nushell_autoload_dir.join("vite-plus.nu"), "source '~/.vite-plus/env.nu'\n")
             .unwrap();
 
-        let _guard = ProfileEnvGuard::new(&fake_home, None, None, None);
-
-        let result = check_profile_files(
-            "$HOME/.vite-plus",
-            &[ShellProfile {
-                root: ShellProfileRoot::NushellData,
-                path: "nushell/vendor/autoload/vite-plus.nu",
-                env_file: "env.nu",
-                kind: ShellProfileKind::Snippet,
-            }],
+        temp_env::with_vars(
+            [
+                ("HOME", Some(fake_home.as_os_str())),
+                ("ZDOTDIR", None),
+                ("XDG_CONFIG_HOME", None),
+                ("XDG_DATA_HOME", None),
+            ],
+            || {
+                let result = check_profile_files(
+                    "$HOME/.vite-plus",
+                    &[ShellProfile {
+                        root: ShellProfileRoot::NushellData,
+                        path: "nushell/vendor/autoload/vite-plus.nu",
+                        env_file: "env.nu",
+                        kind: ShellProfileKind::Snippet,
+                    }],
+                );
+                assert!(result.is_some(), "Should find env.nu sourcing in Nushell autoload");
+                assert_eq!(result.unwrap(), format!("~/{nushell_autoload_path}/vite-plus.nu"));
+            },
         );
-        assert!(result.is_some(), "Should find env.nu sourcing in Nushell autoload");
-        assert_eq!(result.unwrap(), format!("~/{nushell_autoload_path}/vite-plus.nu"));
     }
 
     #[test]
-    #[serial]
     #[cfg(not(windows))]
     fn test_check_profile_files_returns_none_when_not_found() {
         let temp = TempDir::new().unwrap();
@@ -1860,30 +2163,37 @@ mod tests {
         // Create a .bashrc without vite-plus sourcing
         std::fs::write(fake_home.join(".bashrc"), "# no vite-plus here\nexport FOO=bar\n").unwrap();
 
-        let _guard = ProfileEnvGuard::new(&fake_home, None, None, None);
-
-        let result = check_profile_files(
-            "$HOME/.vite-plus",
-            &[
-                ShellProfile {
-                    root: ShellProfileRoot::Home,
-                    path: ".bashrc",
-                    env_file: "env",
-                    kind: ShellProfileKind::Main,
-                },
-                ShellProfile {
-                    root: ShellProfileRoot::Home,
-                    path: ".profile",
-                    env_file: "env",
-                    kind: ShellProfileKind::Main,
-                },
+        temp_env::with_vars(
+            [
+                ("HOME", Some(fake_home.as_os_str())),
+                ("ZDOTDIR", None),
+                ("XDG_CONFIG_HOME", None),
+                ("XDG_DATA_HOME", None),
             ],
+            || {
+                let result = check_profile_files(
+                    "$HOME/.vite-plus",
+                    &[
+                        ShellProfile {
+                            root: ShellProfileRoot::Home,
+                            path: ".bashrc",
+                            env_file: "env",
+                            kind: ShellProfileKind::Main,
+                        },
+                        ShellProfile {
+                            root: ShellProfileRoot::Home,
+                            path: ".profile",
+                            env_file: "env",
+                            kind: ShellProfileKind::Main,
+                        },
+                    ],
+                );
+                assert!(result.is_none(), "Should return None when env sourcing not found");
+            },
         );
-        assert!(result.is_none(), "Should return None when env sourcing not found");
     }
 
     #[test]
-    #[serial]
     #[cfg(not(windows))]
     fn test_check_profile_files_finds_absolute_path() {
         let temp = TempDir::new().unwrap();
@@ -1894,18 +2204,26 @@ mod tests {
         let abs_path = format!(". \"{}/home/.vite-plus/env\"\n", temp.path().display());
         std::fs::write(fake_home.join(".zshenv"), &abs_path).unwrap();
 
-        let _guard = ProfileEnvGuard::new(&fake_home, None, None, None);
-
-        let result = check_profile_files(
-            "$HOME/.vite-plus",
-            &[ShellProfile {
-                root: ShellProfileRoot::Zsh,
-                path: ".zshenv",
-                env_file: "env",
-                kind: ShellProfileKind::Main,
-            }],
+        temp_env::with_vars(
+            [
+                ("HOME", Some(fake_home.as_os_str())),
+                ("ZDOTDIR", None),
+                ("XDG_CONFIG_HOME", None),
+                ("XDG_DATA_HOME", None),
+            ],
+            || {
+                let result = check_profile_files(
+                    "$HOME/.vite-plus",
+                    &[ShellProfile {
+                        root: ShellProfileRoot::Zsh,
+                        path: ".zshenv",
+                        env_file: "env",
+                        kind: ShellProfileKind::Main,
+                    }],
+                );
+                assert!(result.is_some(), "Should find absolute path form of env sourcing");
+                assert_eq!(result.unwrap(), "~/.zshenv");
+            },
         );
-        assert!(result.is_some(), "Should find absolute path form of env sourcing");
-        assert_eq!(result.unwrap(), "~/.zshenv");
     }
 }

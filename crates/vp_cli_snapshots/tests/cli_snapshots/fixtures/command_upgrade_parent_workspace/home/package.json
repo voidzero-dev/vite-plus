@@ -1,0 +1,13 @@
+{
+  "name": "home-workspace",
+  "private": true,
+  "dependencies": {
+    "kami": "workspace:*"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "11.25.0"
+    }
+  }
+}

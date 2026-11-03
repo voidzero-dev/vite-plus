@@ -1,0 +1,6 @@
+{
+  "jsPlugins": ["./lint/plugin.js"],
+  "rules": {
+    "local/no-foo": "error"
+  }
+}

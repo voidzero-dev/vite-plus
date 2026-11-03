@@ -5,3 +5,11 @@ skip-platforms = ["windows"]
 steps = [
   { argv = ["vp", "--version"], continue-on-failure = true },
 ]
+
+[[case]]
+name = "command_version_closed_pipe"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "head-lines", "1", "--", "vp", "--version"], tty = false, comment = "Closing stdout after the first line does not make the version command fail" },
+]

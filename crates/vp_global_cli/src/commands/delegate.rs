@@ -16,7 +16,20 @@ pub async fn execute(
     args: &[String],
     raw_subcommand: Option<&str>,
 ) -> Result<ExitStatus, Error> {
-    let mut executor = JsExecutor::new(None).with_raw_subcommand(raw_subcommand);
+    execute_app(cwd, command, args, raw_subcommand, false).await
+}
+
+/// Execute an app command and preserve whether the user supplied `-C`.
+pub async fn execute_app(
+    cwd: AbsolutePathBuf,
+    command: &str,
+    args: &[String],
+    raw_subcommand: Option<&str>,
+    explicit_chdir: bool,
+) -> Result<ExitStatus, Error> {
+    let mut executor = JsExecutor::new(None)
+        .with_raw_subcommand(raw_subcommand)
+        .with_explicit_chdir(explicit_chdir);
     let mut full_args = vec![command.to_string()];
     full_args.extend(args.iter().cloned());
     executor.delegate_to_local_cli(&cwd, &full_args).await
@@ -28,7 +41,7 @@ pub async fn execute_output(
     command: &str,
     args: &[String],
 ) -> Result<Output, Error> {
-    let mut executor = JsExecutor::new(None);
+    let mut executor = JsExecutor::new(None).without_missing_local_cli_warning();
     let mut full_args = vec![command.to_string()];
     full_args.extend(args.iter().cloned());
     executor.delegate_to_local_cli_output(&cwd, &full_args).await
@@ -47,13 +60,4 @@ pub async fn execute_global(
     let mut full_args = vec![command.to_string()];
     full_args.extend(args.iter().cloned());
     executor.delegate_to_global_cli(&cwd, &full_args).await
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn test_delegate_command_module_exists() {
-        // Basic test to ensure the module compiles
-        assert!(true);
-    }
 }

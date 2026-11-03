@@ -5,8 +5,7 @@ export default {
     tasks: {
       hello: {
         command: 'node -p process.env.MY_ENV',
-        untrackedEnv,
-        cache: true,
+        cache: { untrackedEnv },
       },
     },
   },

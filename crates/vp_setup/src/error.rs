@@ -21,4 +21,9 @@ pub enum Error {
 
     #[error("Unsupported integrity format: {0} (only sha512 is supported)")]
     UnsupportedIntegrity(Str),
+
+    #[error(
+        "Refusing to install {package}@{version}: the package does not contain supported npm provenance metadata. Vite+ only installs release binaries published with npm provenance."
+    )]
+    UnsupportedPlatformPackageProvenance { package: Str, version: Str },
 }

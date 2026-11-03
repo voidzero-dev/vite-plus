@@ -1,28 +1,40 @@
 //! Setup command implementation for creating bin directory and shims.
 //!
 //! Creates the following structure:
-//! - ~/.vite-plus/bin/     - Contains vp symlink and node/npm/npx/corepack shims
-//! - ~/.vite-plus/current/ - Contains the actual vp CLI binary
+//! - `<BIN>/`     - Contains vp symlink and default tool shims
+//! - `<DATA>/current/` - Contains the actual vp CLI binary
 //!
 //! On Unix:
 //! - bin/vp is a symlink to the active vp binary
-//! - bin/node, bin/npm, bin/npx, bin/corepack are symlinks to the active vp binary
+//! - Default tool shims are symlinks to the active vp binary
 //! - Symlinks preserve argv[0], allowing tool detection via the symlink name
 //!
 //! On Windows:
-//! - bin/vp.exe, bin/node.exe, bin/npm.exe, bin/npx.exe, bin/corepack.exe are trampoline executables
+//! - bin/vp.exe and default tool shims are trampoline executables
 //! - Each trampoline detects its tool name from its own filename and spawns
 //!   current\bin\vp.exe with VP_SHIM_TOOL env var set
 //! - This avoids the "Terminate batch job (Y/N)?" prompt from .cmd wrappers
 
 use std::process::ExitStatus;
 
-use owo_colors::OwoColorize;
+#[cfg(windows)]
+use indoc::formatdoc;
+use vp_shared::output;
 
-use super::config::{get_bin_dir, get_vp_home};
-use crate::{error::Error, help};
+use crate::{
+    commands::{
+        env::{bin_config::BinConfig, package_metadata::PackageMetadata},
+        global::{LEGACY_PACKAGE_MANAGER_PACKAGES, install::uninstall},
+        shell::{ALL_SHELL_PROFILES, Shell, ShellProfileRoot, resolve_profile_path},
+    },
+    error::Error,
+    help,
+};
 
-/// Shells that get a generated `~/.vite-plus/env.*` setup script.
+#[cfg(unix)]
+mod unix;
+
+/// Shells that get a generated `<CONFIG>/env.*` setup script.
 #[derive(Clone, Copy, Debug)]
 enum EnvShell {
     Posix,
@@ -31,8 +43,74 @@ enum EnvShell {
     Powershell,
 }
 
+const UTF8_BOM: char = '\u{feff}';
+
+/// First Nushell release with the `%` sigil, which calls a built-in even when a
+/// user command or alias has the same name. See "No more shadows, call internals
+/// with %" in <https://www.nushell.sh/blog/2026-04-11-nushell_v0_112_1.html>.
+const NU_BUILTIN_SIGIL_VERSION: &str = "0.112.1";
+
+/// Maximum time to wait for `nu` to print its version.
+const NU_VERSION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Nushell syntax that the generated `env.nu` uses.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum NuSyntax {
+    /// Prefix built-ins with `%`, so user commands cannot shadow them.
+    BuiltinSigil,
+    /// Use plain built-in names. Nushell before 0.112.1 reads `%update` as an
+    /// external command, and the rest of the line then fails to parse.
+    Legacy,
+}
+
+impl NuSyntax {
+    /// Choose the syntax for a `nu` version string. Unknown versions get
+    /// `Legacy`, because every Nushell version can parse it.
+    fn for_version(version: &str) -> Self {
+        let minimum = js_semver::Version::parse(NU_BUILTIN_SIGIL_VERSION);
+        match (js_semver::Version::parse(version.trim()), minimum) {
+            (Ok(version), Ok(minimum)) if version >= minimum => Self::BuiltinSigil,
+            _ => Self::Legacy,
+        }
+    }
+
+    /// Detect the syntax from `VP_NU_VERSION`, or else from the `nu` on `PATH`.
+    /// When `nu` is not installed, fails, or does not answer in time, use `Legacy`.
+    async fn detect(config: &vp_shared::EnvConfig) -> Self {
+        if let Some(version) = &config.nu_version {
+            return Self::for_version(version);
+        }
+        let Ok(cwd) = vt_path::current_dir() else { return Self::Legacy };
+        let Ok(nu) = vp_command::resolve_bin("nu", None, &cwd) else { return Self::Legacy };
+        let mut command = vp_command::build_command(&nu, &cwd);
+        // `--version` exits before the engine starts, so the user's config,
+        // autoload files, and plugins cannot affect the result.
+        command
+            .arg("--version")
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
+            .kill_on_drop(true);
+        // A `nu` that does not answer must not stop `vp env setup`.
+        match tokio::time::timeout(NU_VERSION_TIMEOUT, command.output()).await {
+            Ok(Ok(result)) if result.status.success() => {
+                Self::for_version(&String::from_utf8_lossy(&result.stdout))
+            }
+            _ => Self::Legacy,
+        }
+    }
+
+    /// The prefix for a built-in command name.
+    const fn builtin_prefix(self) -> &'static str {
+        match self {
+            Self::BuiltinSigil => "%",
+            Self::Legacy => "",
+        }
+    }
+}
+
 impl EnvShell {
-    /// File name written under `~/.vite-plus/` for this shell's setup script.
+    /// File name written under `<CONFIG>/` for this shell's setup script.
     const fn env_file_name(self) -> &'static str {
         match self {
             EnvShell::Posix => "env",
@@ -41,122 +119,281 @@ impl EnvShell {
             EnvShell::Powershell => "env.ps1",
         }
     }
-}
 
-/// Tools to create shims for (node, npm, npx, corepack, vpx, vpr)
-pub(crate) const SHIM_TOOLS: &[&str] = &["node", "npm", "npx", "corepack", "vpx", "vpr"];
-
-fn accent_command(command: &str) -> String {
-    if help::should_style_help() {
-        format!("`{}`", command.bright_blue())
-    } else {
-        format!("`{command}`")
+    fn source_command(self, env_dir: &vt_path::AbsolutePath) -> String {
+        let path = env_dir.join(self.env_file_name()).to_string();
+        match self {
+            Self::Posix => format!(". \"{}\"", escape_posix_double_quoted_string(&path)),
+            Self::Fish => format!("source \"{}\"", escape_fish_double_quoted_string(&path)),
+            Self::Nu => format!("source \"{}\"", escape_nu_double_quoted_string(&path)),
+            Self::Powershell => format!(". '{}'", escape_powershell_single_quoted_string(&path)),
+        }
     }
 }
 
 /// Execute the setup command.
 pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error> {
-    let vite_plus_home = get_vp_home()?;
+    execute_for_binary(&std::env::current_exe()?, refresh, refresh, env_only).await
+}
 
-    // Ensure home directory exists (env files are written here)
-    tokio::fs::create_dir_all(&vite_plus_home).await?;
+// Self-setup must create shims for the deployed binary, not the temporary download.
+pub(crate) async fn execute_for_binary(
+    current_exe: &std::path::Path,
+    refresh: bool,
+    refresh_entrypoints: bool,
+    env_only: bool,
+) -> Result<ExitStatus, Error> {
+    let config = vp_shared::EnvConfig::get();
+    let dirs = &config.dirs;
+
+    // Ensure config directory exists (env files are written here)
+    tokio::fs::create_dir_all(&dirs.config).await?;
 
     // Create env files with PATH guard (prevents duplicate PATH entries)
-    create_env_files(&vite_plus_home).await?;
+    create_env_files().await?;
 
     if env_only {
-        println!("{}", help::render_heading("Setup"));
-        println!("  Updated shell environment files.");
-        println!("  Run {} to verify setup.", accent_command("vp env doctor"));
+        output::raw(&help::render_heading("Setup"));
+        output::raw("  Updated shell environment files.");
+        output::raw(&format!("  Run {} to verify setup.", help::accent_command("vp env doctor")));
         return Ok(ExitStatus::default());
     }
 
-    let bin_dir = get_bin_dir()?;
+    let bin_dir = &dirs.bin;
 
-    println!("{}", help::render_heading("Setup"));
-    println!("  Preparing vite-plus environment.");
-    println!();
+    output::raw(&help::render_heading("Setup"));
+    output::raw("  Preparing vite-plus environment.");
+    output::raw("");
 
     // Ensure bin directory exists
-    tokio::fs::create_dir_all(&bin_dir).await?;
+    tokio::fs::create_dir_all(bin_dir).await?;
 
-    #[cfg(windows)]
-    tokio::fs::write(bin_dir.join("vp-use.cmd"), VP_USE_CMD_CONTENT).await?;
+    // Inspect the old layout before cleanup or shim creation changes ownership.
+    let mut settings = super::config::load_config().await?;
+    initialize_package_manager_shim_modes(current_exe, &mut settings).await?;
 
-    // Get the current executable path (for shims)
-    let current_exe = std::env::current_exe()?;
-
-    // Create wrapper script in bin/
-    setup_vp_wrapper(&current_exe, &bin_dir, refresh).await?;
-
-    // Create shims for node, npm, npx, corepack
-    let mut created = Vec::new();
-    let mut skipped = Vec::new();
-
-    for tool in SHIM_TOOLS {
-        let result = create_shim(&current_exe, &bin_dir, tool, refresh).await?;
-        if result {
-            created.push(*tool);
-        } else {
-            skipped.push(*tool);
-        }
-
-        // Remove corepack-written .cmd/.ps1/extensionless launchers that
-        // would shadow an existing trampoline .exe in PowerShell/Git Bash
-        // (create_shim skips existing shims without cleaning siblings).
-        #[cfg(windows)]
-        cleanup_legacy_windows_shim(&bin_dir, tool).await;
-
-        // Drop stale `npm install -g` link configs for default shim names
-        // (e.g. a pre-default-shim `npm i -g corepack`): the link itself is
-        // replaced by the shim above, and a leftover Npm-sourced BinConfig
-        // would let a later `npm uninstall -g` delete the default shim.
-        if let Ok(Some(config)) = super::bin_config::BinConfig::load(tool).await
-            && config.source == super::bin_config::BinSource::Npm
-        {
-            let _ = super::bin_config::BinConfig::delete(tool).await;
-        }
+    if refresh {
+        cleanup_legacy_package_manager_installs(&bin_dir).await;
     }
 
     #[cfg(windows)]
+    tokio::fs::write(bin_dir.join("vp-use.cmd"), vp_use_cmd_content(&config)).await?;
+
+    // Create wrapper script in bin/
+    setup_vp_wrapper(current_exe, bin_dir, refresh_entrypoints).await?;
+
+    let (created, skipped) =
+        refresh_shims(current_exe, &settings, refresh, refresh_entrypoints).await?;
+
     if refresh {
-        if let Err(e) = refresh_package_shims(&bin_dir).await {
+        if let Err(e) = refresh_package_shims(current_exe, bin_dir).await {
             tracing::warn!("Failed to refresh package shims: {}", e);
         }
     }
 
     // Best-effort cleanup of .old files from rename-before-copy on Windows
     #[cfg(windows)]
-    if refresh {
-        cleanup_old_files(&bin_dir).await;
+    if refresh || refresh_entrypoints {
+        cleanup_old_files(bin_dir).await;
     }
 
     // Print results
     if !created.is_empty() {
-        println!("{}", help::render_heading("Created Shims"));
-        for tool in &created {
-            let shim_path = bin_dir.join(shim_filename(tool));
-            println!("  {}", shim_path.as_path().display());
+        output::raw(&help::render_heading("Created Shims"));
+        for shim_path in &created {
+            output::raw(&format!("  {}", shim_path.as_path().display()));
         }
     }
 
     if !skipped.is_empty() && !refresh {
         if !created.is_empty() {
-            println!();
+            output::raw("");
         }
-        println!("{}", help::render_heading("Skipped Shims"));
-        for tool in &skipped {
-            let shim_path = bin_dir.join(shim_filename(tool));
-            println!("  {}", shim_path.as_path().display());
+        output::raw(&help::render_heading("Skipped Shims"));
+        for shim_path in &skipped {
+            output::raw(&format!("  {}", shim_path.as_path().display()));
         }
-        println!();
-        println!("  Use --refresh to update existing shims.");
+        output::raw("");
+        output::raw("  Use --refresh to update existing shims.");
     }
 
-    println!();
-    print_path_instructions(&bin_dir);
+    output::raw("");
+    print_path_instructions(&dirs.config);
 
     Ok(ExitStatus::default())
+}
+
+/// Complete preferences once, while the pre-upgrade shim layout is still available.
+/// Existing main-bin shims must stay there: a parent shell can have cached them.
+async fn initialize_package_manager_shim_modes(
+    current_exe: &std::path::Path,
+    settings: &mut super::config::Config,
+) -> Result<(), Error> {
+    use super::{config::ShimMode, package_manager::ALL_PACKAGE_MANAGERS};
+
+    let dirs = &vp_shared::EnvConfig::get().dirs;
+    let fallback_bin = dirs.fallback_bin();
+    let mut changed = false;
+    for kind in ALL_PACKAGE_MANAGERS {
+        if settings.configured_package_manager_shim_mode_for(kind).is_some() {
+            continue;
+        }
+
+        let mut has_managed_tool = false;
+        let mut has_system_first_tool = false;
+        for tool in kind.bin_names() {
+            let main_shim = dirs.bin.join(shim_filename(tool));
+            // Older global installs can use direct package links rather than vp shims.
+            let legacy_install = tokio::fs::symlink_metadata(&main_shim).await.is_ok()
+                && BinConfig::load(tool).await?.is_some_and(|bin_config| {
+                    LEGACY_PACKAGE_MANAGER_PACKAGES.contains(&bin_config.package.as_str())
+                });
+            has_managed_tool |= is_owned_shim(&main_shim, current_exe) || legacy_install;
+            has_system_first_tool |=
+                is_owned_shim(&fallback_bin.join(shim_filename(tool)), current_exe)
+                    || crate::shim::dispatch::find_system_tool(tool).is_some();
+        }
+        let mode = if has_managed_tool {
+            ShimMode::Managed
+        } else if has_system_first_tool {
+            ShimMode::SystemFirst
+        } else {
+            ShimMode::Managed
+        };
+        settings.set_package_manager_shim_mode(kind, mode);
+        changed = true;
+    }
+    if changed {
+        super::config::save_config(settings).await?;
+    }
+    Ok(())
+}
+
+fn is_owned_shim(path: &vt_path::AbsolutePath, current_exe: &std::path::Path) -> bool {
+    crate::commands::global::install::is_vp_shim_target(path)
+        || (std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink())
+            && std::fs::canonicalize(path).is_ok_and(|target| {
+                std::fs::canonicalize(current_exe).is_ok_and(|source| source == target)
+            }))
+}
+
+/// Resolve placement independently for Node.js and each package-manager family.
+pub(super) fn shim_dir(settings: &super::config::Config, tool: &str) -> vt_path::AbsolutePathBuf {
+    let dirs = &vp_shared::EnvConfig::get().dirs;
+    match settings.shim_mode_for_tool(tool) {
+        super::config::ShimMode::Managed => dirs.bin.clone(),
+        super::config::ShimMode::SystemFirst => dirs.fallback_bin(),
+    }
+}
+
+/// Reconcile both shim directories from effective preferences; setup and mode changes share this path.
+pub(crate) async fn refresh_shims(
+    current_exe: &std::path::Path,
+    settings: &super::config::Config,
+    refresh: bool,
+    refresh_entrypoints: bool,
+) -> Result<(Vec<vt_path::AbsolutePathBuf>, Vec<vt_path::AbsolutePathBuf>), Error> {
+    let dirs = &vp_shared::EnvConfig::get().dirs;
+    let fallback_bin = dirs.fallback_bin();
+    tokio::fs::create_dir_all(&dirs.bin).await?;
+    tokio::fs::create_dir_all(&fallback_bin).await?;
+    let mut created = Vec::new();
+    let mut skipped = Vec::new();
+    for tool in crate::shim::DEFAULT_SHIM_TOOLS {
+        let bin_dir = shim_dir(settings, tool);
+        let other_dir = if bin_dir == dirs.bin { &fallback_bin } else { &dirs.bin };
+        let shim_path = bin_dir.join(shim_filename(tool));
+        let refresh_tool =
+            if matches!(*tool, "vpx" | "vpr") { refresh_entrypoints } else { refresh };
+        let exists = tokio::fs::symlink_metadata(&shim_path).await.is_ok();
+        // A configured bin directory can contain foreign tools. Never replace them to change modes.
+        let foreign = exists
+            && crate::shim::is_core_shim_tool(tool)
+            && !is_owned_shim(&shim_path, current_exe);
+        if !foreign && create_shim(current_exe, &bin_dir, tool, refresh_tool).await? {
+            created.push(shim_path);
+        } else {
+            skipped.push(shim_path);
+        }
+
+        let stale = other_dir.join(shim_filename(tool));
+        if is_owned_shim(&stale, current_exe) {
+            #[cfg(unix)]
+            tokio::fs::remove_file(&stale).await?;
+            #[cfg(windows)]
+            {
+                remove_or_rename_to_old(&stale).await;
+                let pointer = stale.as_path().with_extension(vp_shared::SHIM_POINTER_EXTENSION);
+                tokio::fs::remove_file(pointer).await?;
+                cleanup_legacy_windows_shim(other_dir, tool).await;
+            }
+        }
+        #[cfg(windows)]
+        if !foreign {
+            cleanup_legacy_windows_shim(&bin_dir, tool).await;
+        }
+        // Old npm-global metadata must not let uninstall remove a default shim.
+        if let Ok(Some(config)) = BinConfig::load(tool).await
+            && config.source == super::bin_config::BinSource::Npm
+        {
+            BinConfig::delete(tool).await?;
+        }
+    }
+    #[cfg(windows)]
+    cleanup_old_files(&fallback_bin).await;
+    Ok((created, skipped))
+}
+
+/// Remove legacy managed installs left by versions that did not expose package-manager shims.
+async fn cleanup_legacy_package_manager_installs(bin_dir: &vt_path::AbsolutePath) {
+    for package_name in LEGACY_PACKAGE_MANAGER_PACKAGES {
+        let has_metadata = match PackageMetadata::load(package_name).await {
+            Ok(metadata) => metadata.is_some(),
+            Err(error) => {
+                vp_shared::output::warn(&format!(
+                    "Failed to inspect legacy global package '{package_name}': {error}"
+                ));
+                continue;
+            }
+        };
+        let has_bin_config = match BinConfig::find_by_package(package_name).await {
+            Ok(bins) => !bins.is_empty(),
+            Err(error) => {
+                vp_shared::output::warn(&format!(
+                    "Failed to inspect legacy shims for '{package_name}': {error}"
+                ));
+                continue;
+            }
+        };
+
+        if (has_metadata || has_bin_config)
+            && let Err(error) = uninstall(package_name, false).await
+        {
+            vp_shared::output::warn(&format!(
+                "Failed to remove legacy global package '{package_name}': {error}"
+            ));
+        }
+    }
+
+    // Corepack is no longer exposed, so remove its old default shim even when no package metadata remains.
+    #[cfg(unix)]
+    {
+        let shim_path = bin_dir.join("corepack");
+        match tokio::fs::remove_file(&shim_path).await {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => vp_shared::output::warn(&format!(
+                "Failed to remove legacy Corepack shim at {}: {error}",
+                shim_path.as_path().display()
+            )),
+        }
+    }
+
+    #[cfg(windows)]
+    {
+        remove_or_rename_to_old(&bin_dir.join("corepack.exe")).await;
+        cleanup_legacy_windows_shim(bin_dir, "corepack").await;
+    }
 }
 
 /// Create symlink in bin/ that points to the active vp binary.
@@ -168,7 +405,7 @@ async fn setup_vp_wrapper(
     #[cfg(unix)]
     {
         let bin_vp = bin_dir.join("vp");
-        let target = resolve_unix_vp_shim_target(current_exe, bin_dir).await?;
+        let target = resolve_unix_vp_shim_target(current_exe).await?;
         let existing = tokio::fs::symlink_metadata(&bin_vp).await.ok();
 
         let should_create_symlink = match existing.as_ref() {
@@ -196,14 +433,13 @@ async fn setup_vp_wrapper(
 
     #[cfg(windows)]
     {
-        let _ = current_exe;
         let bin_vp_exe = bin_dir.join("vp.exe");
 
         // Create trampoline bin/vp.exe that forwards to current\bin\vp.exe
         let should_create = refresh || !tokio::fs::try_exists(&bin_vp_exe).await.unwrap_or(false);
 
         if should_create {
-            let trampoline_src = get_trampoline_path()?;
+            let trampoline_src = trampoline_path_for_binary(current_exe)?;
             // On refresh, the existing vp.exe may still be running (the trampoline
             // that launched us). Windows prevents overwriting a running exe, so we
             // rename it to a timestamped .old file first, then copy the new one.
@@ -212,6 +448,7 @@ async fn setup_vp_wrapper(
             }
 
             tokio::fs::copy(trampoline_src.as_path(), &bin_vp_exe).await?;
+            write_shim_pointer_beside(bin_vp_exe.as_path());
             tracing::debug!("Created trampoline {:?}", bin_vp_exe);
         }
 
@@ -227,23 +464,38 @@ async fn setup_vp_wrapper(
 #[cfg(unix)]
 pub(crate) async fn resolve_unix_vp_shim_target(
     current_exe: &std::path::Path,
-    bin_dir: &vt_path::AbsolutePath,
 ) -> Result<std::path::PathBuf, Error> {
-    if let Some(vite_plus_home) = bin_dir.parent() {
-        let standalone_vp = vite_plus_home.join("current").join("bin").join("vp");
-        if tokio::fs::try_exists(&standalone_vp).await.unwrap_or(false) {
-            let standalone_vp = tokio::fs::canonicalize(&standalone_vp).await.ok();
-            let current_exe = tokio::fs::canonicalize(current_exe).await.ok();
-            if standalone_vp.is_some() && standalone_vp == current_exe {
-                return Ok(std::path::PathBuf::from("../current/bin/vp"));
-            }
+    if let Some(homebrew) = crate::homebrew::current()
+        && same_file::is_same_file(current_exe, homebrew.binary.as_path()).unwrap_or(false)
+        && let Some(public) = homebrew.public_binary()
+    {
+        let dirs = &vp_shared::EnvConfig::get().dirs;
+        if unix::passes_through_shims(public.as_path(), dirs.bin.as_path())
+            || unix::passes_through_shims(public.as_path(), dirs.fallback_bin().as_path())
+        {
+            return Err(Error::ConfigError(
+                format!(
+                    "Vite+ shim directories must not contain the Homebrew entrypoint {}. Choose separate VP_BIN_DIR and VP_DATA_DIR paths.",
+                    public.as_path().display()
+                )
+                .into(),
+            ));
         }
+        return Ok(public.as_path().to_path_buf());
+    }
+    let current_exe_canon = tokio::fs::canonicalize(current_exe).await.ok();
+    let current_vp = crate::commands::global::install::package_shim_target();
+    if let Some(binary) = &current_exe_canon
+        && tokio::fs::canonicalize(&current_vp).await.is_ok_and(|target| target == *binary)
+    {
+        return Ok(current_vp.as_path().to_path_buf());
     }
 
-    Ok(current_exe.to_path_buf())
+    let binary = current_exe_canon.unwrap_or_else(|| current_exe.to_path_buf());
+    Ok(unix::external_shim_target(current_exe).unwrap_or(binary))
 }
 
-/// Create a single shim for a default shim tool (node/npm/npx/corepack/vpx/vpr).
+/// Create a single default tool shim.
 ///
 /// Returns `true` if the shim was created, `false` if it already exists.
 pub(crate) async fn create_shim(
@@ -255,7 +507,7 @@ pub(crate) async fn create_shim(
     let shim_path = bin_dir.join(shim_filename(tool));
 
     #[cfg(unix)]
-    let desired_target = resolve_unix_vp_shim_target(source, bin_dir).await?;
+    let desired_target = resolve_unix_vp_shim_target(source).await?;
 
     let existing = tokio::fs::symlink_metadata(&shim_path).await.ok();
     if existing.is_some() {
@@ -303,7 +555,7 @@ pub(crate) async fn create_shim(
 }
 
 /// Get the filename for a shim (platform-specific).
-fn shim_filename(tool: &str) -> String {
+pub(crate) fn shim_filename(tool: &str) -> String {
     #[cfg(windows)]
     {
         // All tools use trampoline .exe files on Windows
@@ -326,12 +578,9 @@ async fn create_unix_shim(
     shim_path: &vt_path::AbsolutePath,
     tool: &str,
 ) -> Result<(), Error> {
-    let bin_dir = shim_path.parent().ok_or_else(|| {
-        Error::Other(format!("Cannot find parent directory for {tool} shim").into())
-    })?;
-    let target = resolve_unix_vp_shim_target(source, bin_dir).await?;
+    let target = resolve_unix_vp_shim_target(source).await?;
     tokio::fs::symlink(&target, shim_path).await?;
-    tracing::debug!("Created symlink shim at {:?} -> {:?}", shim_path, target);
+    tracing::debug!("Created {tool} symlink shim at {:?} -> {:?}", shim_path, target);
 
     Ok(())
 }
@@ -346,13 +595,14 @@ async fn create_unix_shim(
 /// See: <https://github.com/voidzero-dev/vite-plus/issues/835>
 #[cfg(windows)]
 async fn create_windows_shim(
-    _source: &std::path::Path,
+    source: &std::path::Path,
     bin_dir: &vt_path::AbsolutePath,
     tool: &str,
 ) -> Result<(), Error> {
-    let trampoline_src = get_trampoline_path()?;
+    let trampoline_src = trampoline_path_for_binary(source)?;
     let shim_path = bin_dir.join(format!("{tool}.exe"));
     tokio::fs::copy(trampoline_src.as_path(), &shim_path).await?;
+    write_shim_pointer_beside(shim_path.as_path());
 
     // Clean up legacy .cmd and shell script wrappers from previous versions
     cleanup_legacy_windows_shim(bin_dir, tool).await;
@@ -367,7 +617,10 @@ async fn create_windows_shim(
 /// Discovers all package binaries tracked by BinConfig with `source: Vp`
 /// and replaces their `.exe` with the current trampoline.
 #[cfg(windows)]
-async fn refresh_package_shims(bin_dir: &vt_path::AbsolutePath) -> Result<(), Error> {
+async fn refresh_package_shims(
+    current_exe: &std::path::Path,
+    bin_dir: &vt_path::AbsolutePath,
+) -> Result<(), Error> {
     use super::bin_config::BinConfig;
 
     let package_bins = BinConfig::find_all_vp_source().await?;
@@ -376,11 +629,11 @@ async fn refresh_package_shims(bin_dir: &vt_path::AbsolutePath) -> Result<(), Er
         return Ok(());
     }
 
-    let trampoline_src = get_trampoline_path()?;
+    let trampoline_src = trampoline_path_for_binary(current_exe)?;
 
     for bin_name in &package_bins {
-        // Core shims (SHIM_TOOLS + vp) are already refreshed by the main loop.
-        if bin_name == "vp" || SHIM_TOOLS.contains(&bin_name.as_str()) {
+        // Default shims and vp are already refreshed by the main loop.
+        if bin_name == "vp" || crate::shim::DEFAULT_SHIM_TOOLS.contains(&bin_name.as_str()) {
             continue;
         }
 
@@ -392,6 +645,7 @@ async fn refresh_package_shims(bin_dir: &vt_path::AbsolutePath) -> Result<(), Er
             tracing::warn!("Failed to refresh package shim {}: {}", bin_name, e);
             continue;
         }
+        write_shim_pointer_beside(shim_path.as_path());
 
         // Remove legacy .cmd/shell wrappers that could shadow the .exe in Git Bash.
         cleanup_legacy_windows_shim(bin_dir, bin_name).await;
@@ -402,12 +656,51 @@ async fn refresh_package_shims(bin_dir: &vt_path::AbsolutePath) -> Result<(), Er
     Ok(())
 }
 
+/// Move existing managed package shims to the active installation during migration.
+#[cfg(unix)]
+async fn refresh_package_shims(
+    current_exe: &std::path::Path,
+    bin_dir: &vt_path::AbsolutePath,
+) -> Result<(), Error> {
+    let target = resolve_unix_vp_shim_target(current_exe).await?;
+    let _lock = crate::commands::global::bin_lock::acquire().await?;
+    for name in BinConfig::find_all_vp_source().await? {
+        if crate::commands::global::install::is_protected_shim(&name, true) {
+            continue;
+        }
+        let shim = bin_dir.join(&name);
+        // The saved Vp source and a link to vp identify an owned package shim even
+        // after its old installation is removed. Keep foreign files and direct package links.
+        let Ok(previous) = tokio::fs::read_link(&shim).await else { continue };
+        if previous.file_name().is_some_and(|name| name == "vp") && previous != target {
+            tokio::fs::remove_file(&shim).await?;
+            tokio::fs::symlink(&target, &shim).await?;
+        }
+    }
+    Ok(())
+}
+
+/// Write `<name>.shim` next to a trampoline copy, with the resolved layout.
+#[cfg(windows)]
+fn write_shim_pointer_beside(exe_path: &std::path::Path) {
+    if let Err(e) = vp_shared::EnvConfig::get().dirs.write_shim_pointer_beside(exe_path) {
+        tracing::warn!("Vite+ could not write the shim pointer for {}: {e}", exe_path.display());
+    }
+}
+
 /// Get the path to the trampoline template binary (vp-shim.exe).
 ///
 /// The trampoline binary is distributed alongside vp.exe in the same directory.
 /// In tests, `VP_TRAMPOLINE_PATH` can override the resolved path.
 #[cfg(windows)]
 pub(crate) fn get_trampoline_path() -> Result<vt_path::AbsolutePathBuf, Error> {
+    trampoline_path_for_binary(&std::env::current_exe()?)
+}
+
+#[cfg(windows)]
+fn trampoline_path_for_binary(
+    current_exe: &std::path::Path,
+) -> Result<vt_path::AbsolutePathBuf, Error> {
     // Allow tests to override the trampoline path
     if let Ok(override_path) = std::env::var(vp_shared::env_vars::VP_TRAMPOLINE_PATH) {
         let path = std::path::PathBuf::from(override_path);
@@ -417,7 +710,6 @@ pub(crate) fn get_trampoline_path() -> Result<vt_path::AbsolutePathBuf, Error> {
         }
     }
 
-    let current_exe = std::env::current_exe()?;
     let bin_dir = current_exe
         .parent()
         .ok_or_else(|| Error::Other("Cannot find parent directory of vp.exe".into()))?;
@@ -498,9 +790,9 @@ pub(crate) async fn cleanup_legacy_windows_shim(bin_dir: &vt_path::AbsolutePath,
     let cmd_path = bin_dir.join(format!("{tool}.cmd"));
     let _ = tokio::fs::remove_file(&cmd_path).await;
 
-    // Remove .ps1 launchers (corepack's cmd-shim writes them; PowerShell
-    // resolves `<tool>.ps1` ahead of `<tool>.exe`, so a leftover would shadow
-    // the trampoline). Vite+ never creates per-tool .ps1 files in bin.
+    // Remove legacy .ps1 launchers because PowerShell resolves them ahead of
+    // `<tool>.exe`, which would shadow the trampoline. Vite+ does not create
+    // per-tool .ps1 files in bin.
     let ps1_path = bin_dir.join(format!("{tool}.ps1"));
     let _ = tokio::fs::remove_file(&ps1_path).await;
 
@@ -523,52 +815,125 @@ pub(crate) async fn cleanup_legacy_windows_shim(bin_dir: &vt_path::AbsolutePath,
 }
 
 // POSIX env file (bash/zsh)
-// When sourced multiple times, removes existing entry and re-prepends to front
-// Uses parameter expansion to split PATH around the bin entry in O(1) operations
+// When sourced multiple times, removes existing entries and re-prepends to front
+// Uses parameter expansion to preserve PATH entries containing spaces
 // Includes vp() shell function wrapper for `vp env use` (evals stdout)
 // Includes shell completion support
 const ENV_TEMPLATE_POSIX: &str = r#"#!/bin/sh
 # Vite+ environment setup (https://viteplus.dev)
-export VP_HOME="__VP_HOME__"
-__vp_bin="__VP_BIN__"
-case ":${PATH}:" in
-    *":${__vp_bin}:"*)
-        __vp_tmp=":${PATH}:"
-        __vp_before="${__vp_tmp%%":${__vp_bin}:"*}"
-        __vp_before="${__vp_before#:}"
-        __vp_after="${__vp_tmp#*":${__vp_bin}:"}"
-        __vp_after="${__vp_after%:}"
-        export PATH="${__vp_bin}${__vp_before:+:${__vp_before}}${__vp_after:+:${__vp_after}}"
-        unset __vp_tmp __vp_before __vp_after
-        ;;
-    *)
-        export PATH="$__vp_bin:$PATH"
-        ;;
-esac
-unset __vp_bin
+__ENV_EXPORTS____vp_bin="__VP_BIN__"
+__vp_fallback="__VP_FALLBACK_BIN__"
+# Split PATH on ':' once; repeated `${PATH#*pattern}` stripping is super-linear on long PATHs.
+# A function scopes zsh's option changes; other shells restore noglob and IFS explicitly.
+__vp_dedupe_path() {
+    __vp_ifs_set=${IFS+1}
+    __vp_ifs=${IFS-}
+    IFS=:
+    __vp_glob=
+    if [ -n "${ZSH_VERSION-}" ]; then
+        setopt localoptions shwordsplit noglob
+    else
+        case $- in *f*) ;; *) set -f; __vp_glob=1 ;; esac
+    fi
+    __vp_new=
+    # A non-empty sentinel last field keeps trailing empty entries consistent across shells.
+    __vp_path="${PATH}:."
+    for __vp_dir in $__vp_path; do
+        case "$__vp_dir" in
+            "$__vp_bin"|"$__vp_fallback") ;;
+            *) __vp_new="${__vp_new}:${__vp_dir}" ;;
+        esac
+    done
+    if [ -n "$__vp_ifs_set" ]; then IFS=$__vp_ifs; else unset IFS; fi
+    [ -z "$__vp_glob" ] || set +f
+    __vp_new="${__vp_new%:*}"
+    PATH="${__vp_new#:}"
+}
+# Assigning a read-only IFS aborts dash and zsh, so probe it in a subshell first and fall back
+# to stripping each copy with parameter expansion, which leaves IFS and shell options alone.
+if (IFS=:) 2>/dev/null; then
+    __vp_dedupe_path
+else
+    for __vp_dir in "$__vp_bin" "$__vp_fallback"; do
+        while case ":${PATH}:" in *":${__vp_dir}:"*) true ;; *) false ;; esac; do
+            __vp_tmp=":${PATH}:"
+            __vp_before="${__vp_tmp%%":${__vp_dir}:"*}"
+            __vp_before="${__vp_before#:}"
+            __vp_after="${__vp_tmp#*":${__vp_dir}:"}"
+            __vp_after="${__vp_after%:}"
+            PATH="${__vp_before}${__vp_before:+${__vp_after:+:}}${__vp_after}"
+        done
+    done
+fi
+unset -f __vp_dedupe_path
+export PATH="${__vp_bin}${PATH:+:${PATH}}:${__vp_fallback}"
+unset __vp_bin __vp_fallback __vp_dir __vp_path __vp_new __vp_ifs __vp_ifs_set __vp_glob \
+    __vp_tmp __vp_before __vp_after
+hash -r 2>/dev/null || true
 
 # Shell function wrapper: intercepts `vp env use` to eval its stdout,
 # which sets/unsets VP_NODE_VERSION in the current shell session.
 vp() {
-    if [ "$1" = "env" ] && [ "$2" = "use" ]; then
+    __vp_env_use=
+    if [ "${1-}" = "env" ] && [ "${2-}" = "use" ]; then
+        __vp_env_use=1
+    elif [ "${1-}" = "-C" ] && [ "${3-}" = "env" ] && [ "${4-}" = "use" ]; then
+        __vp_env_use=1
+    else
+        case "${1-}" in
+            -C?*)
+                if [ "${2-}" = "env" ] && [ "${3-}" = "use" ]; then
+                    __vp_env_use=1
+                fi
+                ;;
+        esac
+    fi
+
+    if [ -n "$__vp_env_use" ]; then
+        unset __vp_env_use
         case " $* " in *" -h "*|*" --help "*) command vp "$@"; return; esac
         __vp_out="$(VP_ENV_USE_EVAL_ENABLE=1 VP_SHELL=sh command vp "$@")" || return $?
         eval "$__vp_out"
     else
-        command vp "$@"
+        unset __vp_env_use
+        command vp "$@" || return $?
+        # Mode changes move executables between directories; discard cached command paths.
+        hash -r 2>/dev/null || true
     fi
 }
 
 # Dynamic shell completion for bash/zsh
-if [ -n "$BASH_VERSION" ] && type complete >/dev/null 2>&1; then
+if [ -n "${BASH_VERSION-}" ] && type complete >/dev/null 2>&1; then
     eval "$(VP_COMPLETE=bash command vp)"
-elif [ -n "$ZSH_VERSION" ] && type compdef >/dev/null 2>&1; then
+elif [ -n "${ZSH_VERSION-}" ] && type compdef >/dev/null 2>&1; then
     eval "$(VP_COMPLETE=zsh command vp)"
     eval '
     _vpr_complete() {
         local -a orig=("${words[@]}")
-        words=("vp" "run" "${orig[@]:1}")
-        CURRENT=$((CURRENT + 1))
+        if [[ "${orig[2]-}" == "-C" ]]; then
+            if (( ${#orig[@]} >= 4 )); then
+                words=("vp" "-C" "${orig[3]}" "run" "${orig[@]:3}")
+                if (( CURRENT >= 4 )); then
+                    CURRENT=$((CURRENT + 1))
+                fi
+            else
+                words=("vp" "${orig[@]:1}")
+            fi
+        elif [[ "${orig[2]-}" == -C?* ]]; then
+            if (( ${#orig[@]} >= 3 )); then
+                words=("vp" "${orig[2]}" "run" "${orig[@]:2}")
+                if (( CURRENT >= 3 )); then
+                    CURRENT=$((CURRENT + 1))
+                fi
+            else
+                words=("vp" "${orig[@]:1}")
+            fi
+        else
+            words=("vp" "run" "${orig[@]:1}")
+            if (( CURRENT >= 2 )); then
+                CURRENT=$((CURRENT + 1))
+            fi
+        fi
         ${=_comps[vp]}
     }
     compdef _vpr_complete vpr
@@ -577,22 +942,38 @@ fi
 "#;
 
 const ENV_TEMPLATE_FISH: &str = r#"# Vite+ environment setup (https://viteplus.dev)
-set -gx VP_HOME "__VP_HOME__"
-set -l __vp_idx (contains -i -- __VP_BIN__ $PATH)
-and set -e PATH[$__vp_idx]
-set -gx PATH __VP_BIN__ $PATH
+__ENV_EXPORTS__while set -l __vp_idx (contains -i -- "__VP_BIN__" $PATH)
+    set -e PATH[$__vp_idx]
+end
+while set -l __vp_idx (contains -i -- "__VP_FALLBACK_BIN__" $PATH)
+    set -e PATH[$__vp_idx]
+end
+set -gx PATH "__VP_BIN__" $PATH "__VP_FALLBACK_BIN__"
 
 # Shell function wrapper: intercepts `vp env use` to eval its stdout,
 # which sets/unsets VP_NODE_VERSION in the current shell session.
 function vp
-    if test (count $argv) -ge 2; and test "$argv[1]" = "env"; and test "$argv[2]" = "use"
+    set -l __vp_command_index 1
+    if test (count $argv) -ge 1
+        if test "$argv[1]" = "-C"
+            set __vp_command_index 3
+        else if string match -qr '^-C.+' -- "$argv[1]"
+            set __vp_command_index 2
+        end
+    end
+    set -l __vp_next_index (math $__vp_command_index + 1)
+
+    if test (count $argv) -ge $__vp_next_index; and test "$argv[$__vp_command_index]" = "env"; and test "$argv[$__vp_next_index]" = "use"
         if contains -- -h $argv; or contains -- --help $argv
             command vp $argv; return
         end
         set -lx VP_ENV_USE_EVAL_ENABLE 1
         set -lx VP_SHELL fish
         set -l __vp_out (command vp $argv); or return $status
-        eval (string join ';' $__vp_out)
+        for __vp_command in $__vp_out
+            eval $__vp_command; or return $status
+        end
+        return 0
     else
         command vp $argv
     end
@@ -604,7 +985,21 @@ VP_COMPLETE=fish command vp | source
 function __vpr_complete
     set -l tokens (commandline --current-process --tokenize --cut-at-cursor)
     set -l current (commandline --current-token)
-    VP_COMPLETE=fish command vp -- vp run $tokens[2..] $current
+    set -l args $tokens[2..]
+    set -l translated vp
+    if test (count $args) -eq 0; and string match -qr '^-C' -- "$current"
+        # Keep completing the global -C option until its value is finished.
+    else if test (count $args) -ge 1; and test "$args[1]" = "-C"
+        set -a translated -C
+        if test (count $args) -ge 2
+            set -a translated "$args[2]" run $args[3..]
+        end
+    else if test (count $args) -ge 1; and string match -qr '^-C.+' -- "$args[1]"
+        set -a translated "$args[1]" run $args[2..]
+    else
+        set -a translated run $args
+    end
+    VP_COMPLETE=fish command vp -- $translated $current
 end
 complete -c vpr --keep-order --exclusive --arguments "(__vpr_complete)"
 "#;
@@ -612,33 +1007,42 @@ complete -c vpr --keep-order --exclusive --arguments "(__vpr_complete)"
 // Nushell env file with vp wrapper function.
 // Completions delegate to Fish dynamically (VP_COMPLETE=fish) because clap_complete_nushell
 // generates multiple rest params (e.g. for `vp install`), which Nushell does not support.
+// Every shadowable built-in carries the `%` sigil: Nushell resolves names at parse time, and
+// env.nu is parsed after the user's config, so a user `def update []` would otherwise replace
+// the built-in and stop Nushell at startup. `NuSyntax::Legacy` strips the sigils.
 const ENV_TEMPLATE_NU: &str = r#"# Vite+ environment setup (https://viteplus.dev)
-$env.VP_HOME = ("__VP_HOME__" | path expand --no-symlink)
-$env.PATH = ($env.PATH | where { $in != "__VP_BIN__" } | prepend "__VP_BIN__")
+__ENV_EXPORTS__$env.PATH = ($env.PATH | where { $in != "__VP_BIN__" and $in != "__VP_FALLBACK_BIN__" } | %prepend "__VP_BIN__" | %append "__VP_FALLBACK_BIN__")
 
 # Shell function wrapper: intercepts `vp env use` to parse its stdout,
 # which sets/unsets VP_NODE_VERSION in the current shell session.
 def --env --wrapped vp [...args: string@"nu-complete vp"] {
-    if ($args | length) >= 2 and $args.0 == "env" and $args.1 == "use" {
+    let command_args = if ($args | %length) >= 2 and $args.0 == "-C" {
+        $args | %skip 2
+    } else if ($args | %length) >= 1 and ($args.0 | %str starts-with "-C") and $args.0 != "-C" {
+        $args | %skip 1
+    } else {
+        $args
+    }
+    if ($command_args | %length) >= 2 and $command_args.0 == "env" and $command_args.1 == "use" {
         if ("-h" in $args) or ("--help" in $args) {
             ^vp ...$args
             return
         }
-        let out = (with-env { VP_ENV_USE_EVAL_ENABLE: "1", VP_SHELL: "nu" } {
+        let out = (%with-env { VP_ENV_USE_EVAL_ENABLE: "1", VP_SHELL: "nu" } {
             ^vp ...$args
         })
-        let lines = ($out | lines)
-        let exports = ($lines | where { $in =~ '^\$env\.' } | parse '$env.{key} = "{value}"')
-        let export_keys = ($exports | get key? | default [])
+        let lines = ($out | %lines)
+        let exports = ($lines | where { $in =~ '^\$env\.' } | %parse '$env.{key} = "{value}"')
+        let export_keys = ($exports | %get key? | %default [])
         # Exclude keys that also appear in exports: when vp emits `hide-env X` then
         # `$env.X = "v"` (e.g. `vp env use` with no args resolving from .node-version),
         # the set should win.
-        let unsets = ($lines | where { $in =~ '^hide-env ' } | parse 'hide-env {key}' | get key? | default [] | where { $in not-in $export_keys })
-        if ($exports | is-not-empty) {
-            load-env ($exports | reduce -f {} {|it, acc| $acc | insert $it.key $it.value})
+        let unsets = ($lines | where { $in =~ '^hide-env ' } | %parse 'hide-env {key}' | %get key? | %default [] | where { $in not-in $export_keys })
+        if ($exports | %is-not-empty) {
+            %load-env ($exports | %reduce -f {} {|it, acc| $acc | %insert $it.key $it.value})
         }
         for key in $unsets {
-            if ($key in $env) { hide-env $key }
+            if ($key in $env) { %hide-env $key }
         }
     } else {
         ^vp ...$args
@@ -646,65 +1050,62 @@ def --env --wrapped vp [...args: string@"nu-complete vp"] {
 }
 
 # Shell completion for nushell (delegates to fish completions dynamically)
-def "nu-complete vp" [context: string] {
-    let fish_cmd = $"VP_COMPLETE=fish command vp | source; complete '--do-complete=($context)'"
-    fish --command $fish_cmd | from tsv --flexible --noheaders --no-infer | rename value description | update value {|row|
+# Nushell 0.116+ binds `buffer` and `place` by name: `buffer` is the whole line up to the cursor,
+# and `place.command` is the words of the current command up to the cursor. Older releases pass
+# the current command in `buffer` and the cursor position in `place`. See "Unified custom
+# completions" in https://www.nushell.sh/blog/2026-09-26-nushell_v0_116_0.html#unified-custom-completions
+# `place` is `any` because it is an int or a record. `oneof<int, record>` needs Nushell 0.105+,
+# and every Nushell release must parse the legacy env.nu.
+def "nu-complete vp current-command" [buffer: string, place: any] {
+    if (($place | %describe) starts-with "record") { $place.command | %str join ' ' } else { $buffer }
+}
+# Fish gets the command as an argument, so quotes in it cannot end a fish string.
+# Without fish, return null so Nushell falls back to file completion. Nushell 0.116+ shows no
+# suggestions when a parameter completer fails (#3272).
+def "nu-complete vp fish" [command: string] {
+    if (%which fish | %is-empty) { return null }
+    let fish_script = 'VP_COMPLETE=fish command vp | source; complete --do-complete=$argv[1]'
+    ^fish --command $fish_script $command | %from tsv --flexible --noheaders --no-infer | %rename value description | %update value {|row|
         let value = $row.value
-        let need_quote = ['\' ',' '[' ']' '(' ')' ' ' '\t' "'" '"' "`"] | any {$in in $value}
-        if ($need_quote and ($value | path exists)) {
-            let expanded_path = if ($value starts-with ~) {$value | path expand --no-symlink} else {$value}
-            $'"($expanded_path | str replace --all "\"" "\\\"")"'
+        let need_quote = ['\' ',' '[' ']' '(' ')' ' ' '\t' "'" '"' "`"] | %any {$in in $value}
+        if ($need_quote and ($value | %path exists)) {
+            let expanded_path = if ($value starts-with ~) {$value | %path expand --no-symlink} else {$value}
+            $'"($expanded_path | %str replace --all "\"" "\\\"")"'
         } else {$value}
     }
 }
+def "nu-complete vp" [buffer: string, place: any] {
+    nu-complete vp fish (nu-complete vp current-command $buffer $place)
+}
 # Completion logic for vpr (translates context to 'vp run ...')
-def "nu-complete vpr" [context: string] {
-    let modified_context = ($context | str replace -r '^vpr' 'vp run')
-    let fish_cmd = $"VP_COMPLETE=fish command vp | source; complete '--do-complete=($modified_context)'"
-    fish --command $fish_cmd | from tsv --flexible --noheaders --no-infer | rename value description | update value {|row|
-        let value = $row.value
-        let need_quote = ['\' ',' '[' ']' '(' ')' ' ' '\t' "'" '"' "`"] | any {$in in $value}
-        if ($need_quote and ($value | path exists)) {
-            let expanded_path = if ($value starts-with ~) {$value | path expand --no-symlink} else {$value}
-            $'"($expanded_path | str replace --all "\"" "\\\"")"'
-        } else {$value}
+def "nu-complete vpr" [buffer: string, place: any] {
+    let context = nu-complete vp current-command $buffer $place
+    let modified_context = if ($context =~ '^vpr(?<cwd>\s+-C\s+(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s') {
+        $context | %str replace -r '^vpr(?<cwd>\s+-C\s+(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s' 'vp$cwd run '
+    } else if ($context =~ '^vpr(?<cwd>\s+-C=?(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s') {
+        $context | %str replace -r '^vpr(?<cwd>\s+-C=?(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s' 'vp$cwd run '
+    } else if ($context =~ '^vpr\s+-C') {
+        $context | %str replace -r '^vpr' 'vp'
+    } else {
+        $context | %str replace -r '^vpr' 'vp run'
     }
+    nu-complete vp fish $modified_context
 }
 export extern "vpr" [...args: string@"nu-complete vpr"]
 "#;
 
 const ENV_TEMPLATE_PS1: &str = r#"# Vite+ environment setup (https://viteplus.dev)
-$env:VP_HOME = "__VP_HOME_WIN__"
-$__vp_bin = "__VP_BIN_WIN__"
-if ($env:Path -split ';' -notcontains $__vp_bin) {
-    $env:Path = "$__vp_bin;$env:Path"
-}
+__ENV_EXPORTS__$__vp_bin = '__VP_BIN_WIN__'
+$__vp_fallback = '__VP_FALLBACK_BIN_WIN__'
+$env:PATH = @(
+    $__vp_bin
+    $env:PATH -split [IO.Path]::PathSeparator | Where-Object { $_ -and $_ -ne $__vp_bin -and $_ -ne $__vp_fallback }
+    $__vp_fallback
+) -join [IO.Path]::PathSeparator
 
-# Shell function wrapper: intercepts `vp env use` to eval its stdout,
-# which sets/unsets VP_NODE_VERSION in the current shell session.
-function vp {
-    if ($args.Count -ge 2 -and $args[0] -eq "env" -and $args[1] -eq "use") {
-        if ($args -contains "-h" -or $args -contains "--help") {
-            & (Join-Path $__vp_bin "vp") @args; return
-        }
-        $env:VP_ENV_USE_EVAL_ENABLE = "1"
-        $env:VP_SHELL = "pwsh"
-        $output = & (Join-Path $__vp_bin "vp") @args 2>&1 | ForEach-Object {
-            if ($_ -is [System.Management.Automation.ErrorRecord]) {
-                Write-Host $_.Exception.Message
-            } else {
-                $_
-            }
-        }
-        Remove-Item Env:VP_ENV_USE_EVAL_ENABLE -ErrorAction SilentlyContinue
-        Remove-Item Env:VP_SHELL -ErrorAction SilentlyContinue
-        if ($LASTEXITCODE -eq 0 -and $output) {
-            Invoke-Expression ($output -join "`n")
-        }
-    } else {
-        & (Join-Path $__vp_bin "vp") @args
-    }
-}
+# A script can propagate native failure through both $? and $LASTEXITCODE.
+# A plain function returns $? = $true even when its native command fails.
+Set-Alias vp (Join-Path $PSScriptRoot "vp.ps1")
 
 # Dynamic shell completion for PowerShell
 $env:VP_COMPLETE = "powershell"
@@ -717,7 +1118,15 @@ $__vpr_comp = {
     $env:VP_COMPLETE = "powershell"
     $commandLine = $commandAst.Extent.Text
     $args = $commandLine.Substring(0, [math]::Min($cursorPosition, $commandLine.Length))
-    $args = $args -replace '^(vpr\.exe|vpr)\b', 'vp run'
+    if ($args -match '^(vpr\.exe|vpr)\b(\s+-C\s+(?:"[^"]*"|''[^'']*''|\S+))\s') {
+        $args = $args -replace '^(vpr\.exe|vpr)\b(\s+-C\s+(?:"[^"]*"|''[^'']*''|\S+))\s', 'vp$2 run '
+    } elseif ($args -match '^(vpr\.exe|vpr)\b(\s+-C=?(?:"[^"]*"|''[^'']*''|\S+))\s') {
+        $args = $args -replace '^(vpr\.exe|vpr)\b(\s+-C=?(?:"[^"]*"|''[^'']*''|\S+))\s', 'vp$2 run '
+    } elseif ($args -match '^(vpr\.exe|vpr)\b\s+-C') {
+        $args = $args -replace '^(vpr\.exe|vpr)\b', 'vp'
+    } else {
+        $args = $args -replace '^(vpr\.exe|vpr)\b', 'vp run'
+    }
     if ($wordToComplete -eq "") { $args += " ''" }
     $results = Invoke-Expression @"
 & (Join-Path $__vp_bin 'vp') -- $args
@@ -733,25 +1142,150 @@ $__vpr_comp = {
 Register-ArgumentCompleter -Native -CommandName vpr -ScriptBlock $__vpr_comp
 "#;
 
+// Keep the wrapper outside bin so it cannot shadow the native executable.
+// Unlike an advanced function, this script forwards all arguments without
+// PowerShell consuming common parameters such as -Verbose or its -V alias.
+// Bare -- recovery is inspired by mise's __mise_restore_double_dash:
+// https://github.com/jdx/mise/blob/34ec0439c868379be87a28591f50d41f84fb8d02/src/shell/pwsh.rs#L45-L103
+const VP_WRAPPER_PS1: &str = r#"# Vite+ PowerShell wrapper (https://viteplus.dev)
+$__vp_bin = '__VP_BIN_WIN__'
+# PowerShell consumes the first bare -- when calling a script. Recover its
+# position from the caller's AST, without evaluating argument expressions again.
+# The call stack also works on Windows PowerShell 5.1, which has no Statement.
+$__vp_stack = @(Get-PSCallStack)
+$__vp_command = $null
+if ($__vp_stack.Count -gt 1) {
+    $__vp_ast = $__vp_stack[1].InvocationInfo.MyCommand.ScriptBlock.Ast
+    $__vp_line = $MyInvocation.ScriptLineNumber
+    $__vp_column = $MyInvocation.OffsetInLine
+    if ($__vp_ast) {
+        $__vp_command = $__vp_ast.Find({ param($node)
+            $node -is [System.Management.Automation.Language.CommandAst] -and
+            $node.Extent.StartLineNumber -eq $__vp_line -and $node.Extent.StartColumnNumber -eq $__vp_column
+        }, $true)
+    }
+}
+if ($__vp_command) {
+    $__vp_index = 0
+    $__vp_elements = $__vp_command.CommandElements
+    for ($__vp_i = 1; $__vp_i -lt $__vp_elements.Count; $__vp_i++) {
+        $__vp_element = $__vp_elements[$__vp_i]
+        # A preceding splat has an unknown length. Leave $args unchanged rather
+        # than reading caller variables, which may have changed or belong to another scope.
+        if ($__vp_element -is [System.Management.Automation.Language.VariableExpressionAst] -and $__vp_element.Splatted) {
+            break
+        }
+        # Only a parameter AST can be consumed. After --%, the separator is literal.
+        if ($__vp_element -is [System.Management.Automation.Language.CommandParameterAst] -and $__vp_element.Extent.Text -ceq '--') {
+            if ($__vp_index -le $args.Count) {
+                $__vp_arguments = [System.Collections.Generic.List[object]]::new()
+                $__vp_arguments.AddRange($args)
+                $__vp_arguments.Insert($__vp_index, '--')
+                $args = $__vp_arguments.ToArray()
+            }
+            break
+        }
+        $__vp_index++
+        if ($__vp_element -is [System.Management.Automation.Language.CommandParameterAst] -and $__vp_element.Argument) {
+            $__vp_index++
+        }
+    }
+}
+$__vp_command_index = 0
+if ($args.Count -ge 1) {
+    if ($args[0] -eq "-C") {
+        $__vp_command_index = 2
+    } elseif ("$($args[0])" -like "-C?*") {
+        $__vp_command_index = 1
+    }
+}
+# Intercept `vp env use` to set/unset VP_NODE_VERSION in the current session.
+if ($args.Count -ge ($__vp_command_index + 2) -and $args[$__vp_command_index] -eq "env" -and $args[$__vp_command_index + 1] -eq "use") {
+    if ($args -contains "-h" -or $args -contains "--help") {
+        & (Join-Path $__vp_bin "vp") @args
+        exit $LASTEXITCODE
+    }
+    $previousEvalEnable = $env:VP_ENV_USE_EVAL_ENABLE
+    $previousShell = $env:VP_SHELL
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $env:VP_ENV_USE_EVAL_ENABLE = "1"
+        $env:VP_SHELL = "pwsh"
+        # Windows PowerShell 5.1 treats native stderr as an error when redirected.
+        $ErrorActionPreference = "Continue"
+        $output = & (Join-Path $__vp_bin "vp") @args 2>&1 | ForEach-Object {
+            if ($_ -is [System.Management.Automation.ErrorRecord]) {
+                Write-Host $_.Exception.Message
+            } else {
+                $_
+            }
+        }
+    } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+        $env:VP_ENV_USE_EVAL_ENABLE = $previousEvalEnable
+        $env:VP_SHELL = $previousShell
+    }
+    if ($LASTEXITCODE -eq 0 -and $output) {
+        Invoke-Expression ($output -join "`n")
+    }
+} else {
+    & (Join-Path $__vp_bin "vp") @args
+}
+# Exits only this script, preserving the caller's session and native exit code.
+exit $LASTEXITCODE
+"#;
+
 // cmd.exe wrapper for `vp env use` (cmd.exe cannot define shell functions).
 // Users run `vp-use 24` in cmd.exe instead of `vp env use 24`.
 #[cfg(windows)]
-const VP_USE_CMD_CONTENT: &str = "@echo off\r\nset VP_ENV_USE_EVAL_ENABLE=1\r\nset VP_HOME=%~dp0..\r\nfor /f \"delims=\" %%i in ('%~dp0..\\current\\bin\\vp.exe env use %*') do %%i\r\nset VP_ENV_USE_EVAL_ENABLE=\r\n";
+pub(crate) fn vp_use_cmd_content(config: &vp_shared::EnvConfig) -> String {
+    let vp_exe = config.dirs.data.join("current").join("bin").join("vp.exe");
+    let mut exports: Vec<_> = config.dir_envs.iter().collect();
+    exports.sort_unstable_by_key(|(name, _)| *name);
+    let export_lines: String =
+        exports.into_iter().map(|(name, value)| format!("set {name}={value}\n")).collect();
+    formatdoc! {
+        r#"
+        @echo off
+        setlocal
+        set VP_ENV_USE_EVAL_ENABLE=1
+        set VP_SHELL=cmd
+        {export_lines}set "__VP_USE_OUT=%TEMP%\vp-use-%RANDOM%-%RANDOM%.tmp"
+        "{vp_exe}" env use %* > "%__VP_USE_OUT%"
+        set "__VP_USE_STATUS=%ERRORLEVEL%"
+        endlocal & set "__VP_USE_OUT=%__VP_USE_OUT%" & set "__VP_USE_STATUS=%__VP_USE_STATUS%"
+        {export_lines}if "%__VP_USE_STATUS%"=="0" for /f "usebackq delims=" %%i in ("%__VP_USE_OUT%") do %%i
+        del /q "%__VP_USE_OUT%" >nul 2>&1
+        set "__VP_USE_OUT="
+        set "__VP_USE_STATUS=" & exit /b %__VP_USE_STATUS%
+        "#,
+        vp_exe = vp_exe.as_path().display(),
+        export_lines = export_lines
+    }
+    .replace('\n', "\r\n")
+}
 
-fn render_home_relative_path(path: &std::path::Path, home_dir: Option<&std::path::Path>) -> String {
+fn render_home_relative_path(path: &std::path::Path, home_dir: &std::path::Path) -> String {
+    fn render_path(path: &std::path::Path) -> String {
+        let rendered = path.display().to_string();
+        // Windows: `C:\Users\xxx\.vite-plus` → `C:/Users/xxx/.vite-plus`
+        // Unix: `/tmp/vp\home` → `/tmp/vp\home` (the backslash is preserved)
+        if cfg!(windows) { rendered.replace('\\', "/") } else { rendered }
+    }
+
     // Use $HOME-relative path if install dir is under HOME (like rustup's ~/.cargo/env).
     // This makes the env file portable across sessions where HOME may differ.
-    home_dir
-        .and_then(|h| path.strip_prefix(h).ok())
+    path.strip_prefix(home_dir)
+        .ok()
         .map(|s| {
             if s.as_os_str().is_empty() {
                 "$HOME".to_string()
             } else {
                 // Normalize to forward slashes for $HOME/... paths (POSIX-style)
-                format!("$HOME/{}", s.display().to_string().replace('\\', "/"))
+                format!("$HOME/{}", render_path(s))
             }
         })
-        .unwrap_or_else(|| path.display().to_string().replace('\\', "/"))
+        .unwrap_or_else(|| render_path(path))
 }
 
 fn render_nu_path_ref(path_ref: &str) -> String {
@@ -762,115 +1296,373 @@ fn render_nu_path_ref(path_ref: &str) -> String {
     }
 }
 
-/// Render the env-file content for `shell` against `vite_plus_home`.
-fn render_env_content(shell: EnvShell, vite_plus_home: &vt_path::AbsolutePath) -> String {
-    let bin_path = vite_plus_home.join("bin");
-    let home_dir = vp_shared::EnvConfig::get().user_home;
-    let home_dir = home_dir.as_deref();
-    let home_path_ref = render_home_relative_path(vite_plus_home.as_path(), home_dir);
-    let bin_path_ref = render_home_relative_path(bin_path.as_path(), home_dir);
+/// Escape a value for a POSIX-shell double-quoted string.
+pub(crate) fn escape_posix_double_quoted_string(value: &str) -> String {
+    value.replace('\\', "\\\\").replace('$', "\\$").replace('`', "\\`").replace('"', "\\\"")
+}
+
+/// Escape a value for a Fish double-quoted string.
+pub(crate) fn escape_fish_double_quoted_string(value: &str) -> String {
+    value.replace('\\', "\\\\").replace('$', "\\$").replace('"', "\\\"")
+}
+
+/// Escape only the literal suffix of a `$HOME`-relative path. Keep `$HOME`
+/// available for expansion when the POSIX or Fish environment file runs.
+fn escape_home_relative_double_quoted_path(path_ref: &str, escape: fn(&str) -> String) -> String {
+    path_ref
+        .strip_prefix("$HOME")
+        .map_or_else(|| escape(path_ref), |suffix| format!("$HOME{}", escape(suffix)))
+}
+
+/// Escape a value for a Nushell double-quoted string.
+///
+/// Example: `vp "home\with spaces"` → `vp \"home\\with spaces\"`
+/// https://www.nushell.sh/book/working_with_strings.html#double-quoted-strings
+pub(crate) fn escape_nu_double_quoted_string(value: &str) -> String {
+    // `vp "home\with spaces"` → `vp \"home\\with spaces\"`
+    value.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+/// Escape a value for a PowerShell single-quoted string.
+pub(crate) fn escape_powershell_single_quoted_string(value: &str) -> String {
+    value.replace('\'', "''")
+}
+
+/// Render export lines for the persisted layout values in
+/// [`EnvConfig::dir_envs`]. The map contains only an explicit absolute
+/// `VP_HOME`. Sort the lines to keep the output stable.
+fn render_dir_envs(shell: EnvShell, config: &vp_shared::EnvConfig, nu_syntax: NuSyntax) -> String {
+    let home_dir = config.user_home.as_path();
+    let mut exports: Vec<_> = config.dir_envs.iter().collect();
+    exports.sort_unstable_by_key(|(name, _)| *name);
+    exports
+        .into_iter()
+        .map(|(name, value)| match shell {
+            EnvShell::Posix => {
+                let path_ref = render_home_relative_path(std::path::Path::new(value), home_dir);
+                let escaped = escape_home_relative_double_quoted_path(
+                    &path_ref,
+                    escape_posix_double_quoted_string,
+                );
+                format!("export {name}=\"{escaped}\"\n")
+            }
+            EnvShell::Fish => {
+                let path_ref = render_home_relative_path(std::path::Path::new(value), home_dir);
+                let escaped = escape_home_relative_double_quoted_path(
+                    &path_ref,
+                    escape_fish_double_quoted_string,
+                );
+                format!("set -gx {name} \"{escaped}\"\n")
+            }
+            EnvShell::Nu => {
+                let path_ref = render_nu_path_ref(&render_home_relative_path(
+                    std::path::Path::new(value),
+                    home_dir,
+                ));
+                format!(
+                    "$env.{name} = (\"{}\" | {}path expand --no-symlink)\n",
+                    escape_nu_double_quoted_string(&path_ref),
+                    nu_syntax.builtin_prefix()
+                )
+            }
+            // PowerShell uses the actual absolute path (not $HOME-relative)
+            EnvShell::Powershell => {
+                let escaped = escape_powershell_single_quoted_string(value);
+                format!("$env:{name} = '{escaped}'\n")
+            }
+        })
+        .collect()
+}
+
+/// Render the environment-file content for `shell` and the resolved config.
+///
+/// Put the resolved bin directory on `PATH`. Persist an explicit `VP_HOME`, but
+/// do not export the internal split-directory group.
+fn render_env_content(
+    shell: EnvShell,
+    config: &vp_shared::EnvConfig,
+    nu_syntax: NuSyntax,
+) -> String {
+    let dirs = &config.dirs;
+    let home_dir = config.user_home.as_path();
+    let bin_path_ref = render_home_relative_path(dirs.bin.as_path(), home_dir);
+    let fallback_path_ref = render_home_relative_path(dirs.fallback_bin().as_path(), home_dir);
+    let dir_envs = render_dir_envs(shell, config, nu_syntax);
 
     match shell {
-        EnvShell::Posix => ENV_TEMPLATE_POSIX
-            .replace("__VP_HOME__", &home_path_ref)
-            .replace("__VP_BIN__", &bin_path_ref),
-        EnvShell::Fish => ENV_TEMPLATE_FISH
-            .replace("__VP_HOME__", &home_path_ref)
-            .replace("__VP_BIN__", &bin_path_ref),
+        EnvShell::Posix => {
+            let bin_path_ref = escape_home_relative_double_quoted_path(
+                &bin_path_ref,
+                escape_posix_double_quoted_string,
+            );
+            let fallback_path_ref = escape_home_relative_double_quoted_path(
+                &fallback_path_ref,
+                escape_posix_double_quoted_string,
+            );
+            ENV_TEMPLATE_POSIX
+                .replace("__VP_FALLBACK_BIN__", &fallback_path_ref)
+                .replace("__ENV_EXPORTS__", &dir_envs)
+                .replace("__VP_BIN__", &bin_path_ref)
+        }
+        EnvShell::Fish => {
+            let bin_path_ref = escape_home_relative_double_quoted_path(
+                &bin_path_ref,
+                escape_fish_double_quoted_string,
+            );
+            let fallback_path_ref = escape_home_relative_double_quoted_path(
+                &fallback_path_ref,
+                escape_fish_double_quoted_string,
+            );
+            ENV_TEMPLATE_FISH
+                .replace("__VP_FALLBACK_BIN__", &fallback_path_ref)
+                .replace("__ENV_EXPORTS__", &dir_envs)
+                .replace("__VP_BIN__", &bin_path_ref)
+        }
         EnvShell::Nu => {
             // Nushell requires `~` instead of `$HOME` in string literals — `$HOME` is not
             // expanded at parse time, so PATH entries would contain a literal "$HOME/...".
-            let home_path_ref_nu = render_nu_path_ref(&home_path_ref);
-            let bin_path_ref_nu = render_nu_path_ref(&bin_path_ref);
+            let bin_path_ref_nu =
+                escape_nu_double_quoted_string(&render_nu_path_ref(&bin_path_ref));
+            // Strip the sigils before substitution: paths can contain `%`.
             ENV_TEMPLATE_NU
-                .replace("__VP_HOME__", &home_path_ref_nu)
+                .replace('%', nu_syntax.builtin_prefix())
+                .replace(
+                    "__VP_FALLBACK_BIN__",
+                    &escape_nu_double_quoted_string(&render_nu_path_ref(&fallback_path_ref)),
+                )
+                .replace("__ENV_EXPORTS__", &dir_envs)
                 .replace("__VP_BIN__", &bin_path_ref_nu)
         }
         EnvShell::Powershell => {
             // PowerShell uses the actual absolute path (not $HOME-relative)
-            let home_path_win = vite_plus_home.as_path().display().to_string();
-            let bin_path_win = bin_path.as_path().display().to_string();
+            let bin_path_win =
+                escape_powershell_single_quoted_string(&dirs.bin.as_path().display().to_string());
             ENV_TEMPLATE_PS1
-                .replace("__VP_HOME_WIN__", &home_path_win)
+                .replace(
+                    "__VP_FALLBACK_BIN_WIN__",
+                    &escape_powershell_single_quoted_string(&dirs.fallback_bin().to_string()),
+                )
+                .replace("__ENV_EXPORTS__", &dir_envs)
                 .replace("__VP_BIN_WIN__", &bin_path_win)
         }
     }
 }
 
-/// Create env files with PATH guard (prevents duplicate PATH entries).
+/// Create environment files under `<CONFIG>/`. Add a guard that prevents
+/// duplicate `PATH` entries.
 ///
 /// Creates:
-/// - `~/.vite-plus/env` (POSIX shell — bash/zsh) with `vp()` wrapper function
-/// - `~/.vite-plus/env.fish` (fish shell) with `vp` wrapper function
-/// - `~/.vite-plus/env.nu` (Nushell) with `vp env use` wrapper function
-/// - `~/.vite-plus/env.ps1` (PowerShell) with PATH setup + `vp` function
-async fn create_env_files(vite_plus_home: &vt_path::AbsolutePath) -> Result<(), Error> {
+/// - `env` (POSIX shell — bash/zsh) with `vp()` wrapper function
+/// - `env.fish` (fish shell) with `vp` wrapper function
+/// - `env.nu` (Nushell) with `vp env use` wrapper function
+/// - `env.ps1` (PowerShell) with PATH setup + alias to the `vp.ps1` wrapper
+async fn create_env_files() -> Result<(), Error> {
+    let config = vp_shared::EnvConfig::get();
+    let ps1_wrapper = VP_WRAPPER_PS1.replace(
+        "__VP_BIN_WIN__",
+        &escape_powershell_single_quoted_string(&config.dirs.bin.to_string()),
+    );
+    // Like env.ps1, the wrapper needs a BOM for non-ASCII paths on PowerShell 5.1.
+    tokio::fs::write(config.dirs.config.join("vp.ps1"), format!("{UTF8_BOM}{ps1_wrapper}")).await?;
+    let nu_syntax = NuSyntax::detect(&config).await;
     for shell in [EnvShell::Posix, EnvShell::Fish, EnvShell::Nu, EnvShell::Powershell] {
-        let content = render_env_content(shell, vite_plus_home);
-        tokio::fs::write(vite_plus_home.join(shell.env_file_name()), content).await?;
+        let mut content = render_env_content(shell, &config, nu_syntax);
+        if matches!(shell, EnvShell::Powershell) {
+            // Windows PowerShell 5.1 uses the active ANSI code page for a
+            // UTF-8 script without a BOM. The BOM preserves non-ASCII paths.
+            content.insert(0, UTF8_BOM);
+        }
+        tokio::fs::write(config.dirs.config.join(shell.env_file_name()), content).await?;
     }
 
     Ok(())
 }
 
-/// Print instructions for adding bin directory to PATH.
-fn print_path_instructions(bin_dir: &vt_path::AbsolutePath) {
-    // Derive vite_plus_home from bin_dir (parent), using $HOME prefix for readability
-    let home_path = bin_dir
-        .parent()
-        .map(|p| p.as_path().display().to_string())
-        .unwrap_or_else(|| bin_dir.as_path().display().to_string());
-    let (home_path, nu_home_path) = if let Ok(home_dir) = std::env::var("HOME") {
-        if let Some(suffix) = home_path.strip_prefix(&home_dir) {
-            // POSIX/Fish use $HOME; Nushell's `source` is a parse-time keyword
-            // that cannot expand $HOME (a runtime env var), so use ~ instead.
-            (format!("$HOME{suffix}"), format!("~{suffix}"))
-        } else {
-            (home_path.clone(), home_path)
+/// Inspect the explicitly selected shell without changing its profiles.
+/// Bash only checks non-login startup; the printed advice must keep that qualification.
+/// Zsh login startup can reorder PATH after `.zshenv`, so require `.zshrc`.
+fn has_configured_profile(config: &vp_shared::EnvConfig) -> bool {
+    let shell = config.vp_shell.as_deref().map(str::to_ascii_lowercase);
+    for profile in ALL_SHELL_PROFILES {
+        let relevant = match shell.as_deref() {
+            Some("zsh") => profile.path == ".zshrc",
+            Some("bash") => profile.path == ".bashrc",
+            Some("sh") => profile.path == ".profile",
+            Some("fish") => matches!(profile.root, ShellProfileRoot::Fish),
+            Some("nu" | "nushell") => profile.env_file == "env.nu",
+            _ => false,
+        };
+        if !relevant {
+            continue;
         }
-    } else {
-        (home_path.clone(), home_path)
-    };
-
-    println!("{}", help::render_heading("Next Steps"));
-    println!("  Add to your shell profile (~/.zshrc, ~/.bashrc, etc.):");
-    println!();
-    println!("  . \"{home_path}/env\"");
-    println!();
-    println!("  For fish shell, add to ~/.config/fish/config.fish:");
-    println!();
-    println!("  source \"{home_path}/env.fish\"");
-    println!();
-    println!("  For Nushell, add to ~/.config/nushell/config.nu:");
-    println!();
-    println!("  source '{nu_home_path}/env.nu'");
-    println!();
-    println!("  For PowerShell, add to your $PROFILE:");
-    println!();
-    println!("  . \"{home_path}/env.ps1\"");
-    println!();
-    println!("  For IDE support (VS Code, Cursor), ensure bin directory is in system PATH:");
-
-    #[cfg(target_os = "macos")]
-    {
-        println!("  - macOS: Add to ~/.profile or use launchd");
+        let path = resolve_profile_path(profile, &config.user_home);
+        let Ok(content) = std::fs::read_to_string(path) else { continue };
+        let env_file = config.dirs.config.join(profile.env_file);
+        let absolute = env_file.to_string();
+        let home_relative =
+            render_home_relative_path(env_file.as_path(), config.user_home.as_path());
+        let escape = match profile.env_file {
+            "env.fish" => escape_fish_double_quoted_string,
+            "env.nu" => escape_nu_double_quoted_string,
+            _ => escape_posix_double_quoted_string,
+        };
+        let escaped_relative = if profile.env_file == "env.nu" {
+            escape(&render_nu_path_ref(&home_relative))
+        } else {
+            escape_home_relative_double_quoted_path(&home_relative, escape)
+        };
+        let mut arguments = vec![
+            format!("\"{}\"", escape(&absolute)),
+            format!("'{absolute}'"),
+            absolute,
+            format!("\"{escaped_relative}\""),
+            format!("\"{}\"", escaped_relative.replacen("$HOME", "${HOME}", 1)),
+            render_nu_path_ref(&escaped_relative),
+        ];
+        if profile.env_file == "env.nu" {
+            arguments.push(format!("'{}'", render_nu_path_ref(&home_relative)));
+        }
+        for line in content.lines() {
+            let line = line.trim_start();
+            let Some(argument) = line.strip_prefix(". ").or_else(|| line.strip_prefix("source "))
+            else {
+                continue;
+            };
+            let argument = argument.trim_start();
+            if arguments.iter().any(|expected| {
+                argument.strip_prefix(expected).is_some_and(|rest| {
+                    rest.is_empty()
+                        || rest.starts_with(char::is_whitespace)
+                        || rest.starts_with(';')
+                })
+            }) {
+                return true;
+            }
+        }
     }
+    false
+}
 
-    #[cfg(target_os = "linux")]
-    {
-        println!("  - Linux: Add to ~/.profile for display manager integration");
+/// Print instructions for sourcing the environment files and adding bin to `PATH`.
+fn print_path_instructions(env_dir: &vt_path::AbsolutePath) {
+    output::raw(&help::render_heading("Next Steps"));
+    let env = vp_shared::EnvConfig::get();
+    let explicit_shell = env.vp_shell.as_deref().and_then(|s| s.parse::<Shell>().ok());
+    // SHELL is a login-shell hint, not proof of the current shell or its startup mode.
+    let login_shell = if cfg!(unix) { std::env::var("SHELL").ok() } else { None };
+    let shell_name = env
+        .vp_shell
+        .as_deref()
+        .filter(|_| explicit_shell.is_some())
+        .or_else(|| login_shell.as_deref().and_then(|path| path.rsplit('/').next()));
+    let shell = explicit_shell.or_else(|| shell_name.and_then(|s| s.parse::<Shell>().ok()));
+    let shell_name = shell_name.map(str::to_ascii_lowercase);
+    let is_hint = explicit_shell.is_none() && shell.is_some();
+    let commands: &[(Shell, &str, Option<EnvShell>, &[&str])] = &[
+        (Shell::Posix, "Bash/Zsh", Some(EnvShell::Posix), &["sh", "bash", "zsh"]),
+        (Shell::Fish, "Fish", Some(EnvShell::Fish), &["fish"]),
+        (Shell::NuShell, "Nushell", Some(EnvShell::Nu), &["nu"]),
+        (Shell::PowerShell, "PowerShell", Some(EnvShell::Powershell), &["pwsh", "powershell"]),
+        (Shell::Cmd, "cmd.exe", None, &["cmd"]),
+    ];
+    let cwd = vt_path::current_dir().ok();
+    let default_shell = if cfg!(windows) { Shell::Cmd } else { Shell::Posix };
+    let mut shown = Vec::new();
+    if !is_hint {
+        output::raw("  Activate Vite+ in this terminal:");
     }
-
-    #[cfg(target_os = "windows")]
-    {
-        println!("  - Windows: System Properties -> Environment Variables -> Path");
+    for &(kind, label, env_shell, binaries) in commands {
+        let show = match shell {
+            Some(selected) => selected == kind,
+            None => {
+                kind == default_shell
+                    || binaries.iter().any(|bin| {
+                        cwd.as_ref()
+                            .is_some_and(|cwd| vp_command::resolve_bin(bin, None, cwd).is_ok())
+                    })
+            }
+        };
+        if !show {
+            continue;
+        }
+        shown.push(kind);
+        let command = match env_shell {
+            Some(env_shell) => env_shell.source_command(env_dir),
+            None => format!(
+                "set \"PATH={};%PATH%;{}\"",
+                env.dirs.bin.to_string().replace('%', "%%"),
+                env.dirs.fallback_bin().to_string().replace('%', "%%")
+            ),
+        };
+        if is_hint {
+            let label = match shell_name.as_deref() {
+                Some("zsh") => "Zsh",
+                Some("bash") => "Bash",
+                Some("sh") => "sh",
+                _ => label,
+            };
+            output::raw(&format!("  For {label}, run:"));
+        }
+        if shell.is_some() {
+            output::raw(&format!("  {command}"));
+        } else {
+            output::raw(&format!("  {label}: {command}"));
+        }
     }
-
-    println!();
-    println!(
-        "  Restart your terminal and IDE, then run {} to verify.",
-        accent_command("vp env doctor")
-    );
+    output::raw("");
+    if shown.iter().any(|s| matches!(s, Shell::Posix | Shell::Fish | Shell::NuShell)) {
+        let conditional = is_hint || shell.is_none();
+        let configured = !conditional && has_configured_profile(&env);
+        if shell_name.as_deref() == Some("bash") {
+            output::raw(if conditional {
+                "  If your ~/.bashrc does not already load Vite+, add this command for interactive non-login Bash sessions."
+            } else if configured {
+                "  Or start an interactive non-login Bash shell to load your configured ~/.bashrc."
+            } else {
+                "  Add the command to ~/.bashrc for interactive non-login Bash sessions."
+            });
+            output::raw(
+                "  Login Bash shells must also load the command through their login profile.",
+            );
+        } else {
+            output::raw(match (shell_name.as_deref(), conditional, configured) {
+                (Some("zsh"), true, _) => {
+                    "  If your .zshrc does not already load Vite+, add this command."
+                }
+                (_, true, _) => {
+                    "  If your shell profile does not already load Vite+, add the command for your shell."
+                }
+                (_, _, true) => "  Or open a new terminal to load your configured shell profile.",
+                (Some("zsh"), _, _) => {
+                    "  Add the command to your .zshrc file to activate future Zsh terminals."
+                }
+                _ => {
+                    "  Add the command for your shell to its profile to activate future terminals."
+                }
+            });
+        }
+    }
+    if shown.contains(&Shell::PowerShell) {
+        output::raw(if shell == Some(Shell::PowerShell) {
+            "  Add this command to $PROFILE if it is not already there, for future PowerShell sessions."
+        } else {
+            "  For PowerShell, add its command to $PROFILE if it is not already there."
+        });
+    }
+    if shown.contains(&Shell::Cmd) {
+        output::raw(
+            "  For future cmd.exe sessions, add these directories to your user PATH if missing:",
+        );
+        output::raw(&format!("  At the start: {}", env.dirs.bin.as_path().display()));
+        output::raw(&format!("  At the end: {}", env.dirs.fallback_bin().as_path().display()));
+        output::raw("  System Properties -> Environment Variables -> User variables -> Path");
+        output::raw("  Open a new terminal after updating PATH.");
+    }
+    output::raw("");
+    output::raw(&format!(
+        "  Restart an already-running IDE to load its environment. Run {} to verify.",
+        help::accent_command("vp env doctor")
+    ));
 }
 
 #[cfg(test)]
@@ -880,79 +1672,378 @@ mod tests {
 
     use super::*;
 
+    /// Helper: vars pinning a single-root install at `root`; `user_home`
+    /// is set separately (both `HOME` and `USERPROFILE`, for the platforms'
+    /// differing precedence) to exercise $HOME-relative vs absolute rendering.
+    fn test_env_vars<'a>(
+        root: &'a std::path::Path,
+        user_home: &'a std::path::Path,
+    ) -> [(&'static str, &'a std::ffi::OsStr); 4] {
+        [
+            (vp_shared::env_vars::VP_HOME, root.as_os_str()),
+            ("HOME", user_home.as_os_str()),
+            ("USERPROFILE", user_home.as_os_str()),
+            // Keep env.nu independent of the developer's installed Nushell.
+            (vp_shared::env_vars::VP_NU_VERSION, std::ffi::OsStr::new(NU_BUILTIN_SIGIL_VERSION)),
+        ]
+    }
+
+    #[cfg(windows)]
+    fn write_fake_trampoline(dir: &std::path::Path) -> std::path::PathBuf {
+        let trampoline = dir.join("vp-shim.exe");
+        std::fs::write(&trampoline, b"fake-trampoline").unwrap();
+        trampoline
+    }
+
     #[test]
-    fn test_shim_tools_contains_default_shims() {
-        // corepack is a default shim (#858, #1309). It must NOT be a core
-        // shim: `vp install -g corepack` stays allowed (CORE_SHIMS guard) and
-        // dispatch uses a dedicated resolution path instead of the core one.
-        assert!(SHIM_TOOLS.contains(&"corepack"));
-        assert!(!crate::commands::global::CORE_SHIMS.contains(&"corepack"));
-    }
-
-    /// Helper: create a test_guard with user_home set to the given path.
-    fn home_guard(home: impl Into<std::path::PathBuf>) -> vp_shared::TestEnvGuard {
-        vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig {
-            user_home: Some(home.into()),
-            ..vp_shared::EnvConfig::for_test()
-        })
-    }
-
-    #[cfg(windows)]
-    struct FakeTrampolineGuard(Option<std::ffi::OsString>);
-
-    #[cfg(windows)]
-    impl FakeTrampolineGuard {
-        fn new(dir: &std::path::Path) -> Self {
-            let trampoline = dir.join("vp-shim.exe");
-            std::fs::write(&trampoline, b"fake-trampoline").unwrap();
-            let previous = std::env::var_os(vp_shared::env_vars::VP_TRAMPOLINE_PATH);
-            // SAFETY: This Windows-only test is serialized and the guard restores the variable.
-            unsafe {
-                std::env::set_var(vp_shared::env_vars::VP_TRAMPOLINE_PATH, &trampoline);
-            }
-            Self(previous)
-        }
-    }
-
-    #[cfg(windows)]
-    impl Drop for FakeTrampolineGuard {
-        fn drop(&mut self) {
-            // SAFETY: This Windows-only test is serialized and restores the previous value.
-            unsafe {
-                if let Some(previous) = self.0.take() {
-                    std::env::set_var(vp_shared::env_vars::VP_TRAMPOLINE_PATH, previous);
-                } else {
-                    std::env::remove_var(vp_shared::env_vars::VP_TRAMPOLINE_PATH);
+    #[cfg(not(windows))]
+    fn test_configured_profile_checks_the_selected_shell_and_current_install() {
+        let temp = TempDir::new().unwrap();
+        let home = temp.path().join("user");
+        let vp_home = home.join(".vite-plus");
+        let zsh = temp.path().join("zsh");
+        std::fs::create_dir_all(&home).unwrap();
+        std::fs::create_dir_all(&zsh).unwrap();
+        vp_shared::EnvConfig::with_vars(
+            [
+                ("HOME", home.as_os_str()),
+                ("USERPROFILE", home.as_os_str()),
+                ("VP_HOME", vp_home.as_os_str()),
+                ("VP_SHELL", std::ffi::OsStr::new("zsh")),
+                ("ZDOTDIR", zsh.as_os_str()),
+            ],
+            |config| {
+                assert!(!has_configured_profile(&config));
+                std::fs::write(home.join(".bashrc"), ". \"$HOME/.vite-plus/env\"\n").unwrap();
+                assert!(!has_configured_profile(&config), "Bash does not configure Zsh");
+                std::fs::write(zsh.join(".zshenv"), ". \"$HOME/.vite-plus/env\"\n").unwrap();
+                assert!(!has_configured_profile(&config), ".zshenv runs before login PATH setup");
+                let profile = zsh.join(".zshrc");
+                for line in [
+                    "# . \"$HOME/.vite-plus/env\"",
+                    ". \"$HOME/other-install/env\"",
+                    ". \"$HOME/.vite-plus/env.fish\"",
+                ] {
+                    std::fs::write(&profile, line).unwrap();
+                    assert!(!has_configured_profile(&config), "{line}");
                 }
-            }
+                for line in [
+                    ". \"$HOME/.vite-plus/env\"",
+                    "source \"${HOME}/.vite-plus/env\" # existing setup",
+                    ". ~/.vite-plus/env",
+                ] {
+                    std::fs::write(&profile, line).unwrap();
+                    assert!(has_configured_profile(&config), "{line}");
+                }
+                std::fs::remove_file(&profile).unwrap();
+                assert!(!has_configured_profile(&config), "Do not cache profile state");
+            },
+        );
+    }
+
+    #[test]
+    #[cfg(not(windows))]
+    fn test_profile_check_does_not_infer_unknown_shell_or_bash_startup_mode() {
+        let temp = TempDir::new().unwrap();
+        let home = temp.path().join("user");
+        let vp_home = home.join(".vite-plus");
+        let xdg = home.join(".config");
+        std::fs::create_dir_all(xdg.join("fish")).unwrap();
+        std::fs::write(xdg.join("fish/config.fish"), "source \"$HOME/.vite-plus/env.fish\"\n")
+            .unwrap();
+        std::fs::write(home.join(".bash_profile"), ". \"$HOME/.vite-plus/env\"\n").unwrap();
+        for shell in [None, Some("unknown"), Some("bash")] {
+            vp_shared::EnvConfig::with_vars(
+                [
+                    ("HOME", Some(home.as_os_str())),
+                    ("USERPROFILE", Some(home.as_os_str())),
+                    ("VP_HOME", Some(vp_home.as_os_str())),
+                    ("XDG_CONFIG_HOME", Some(xdg.as_os_str())),
+                    ("VP_SHELL", shell.map(std::ffi::OsStr::new)),
+                    ("SHELL", Some(std::ffi::OsStr::new("/bin/bash"))),
+                ],
+                |config| {
+                    assert!(!has_configured_profile(&config), "{shell:?}");
+                },
+            );
         }
+    }
+
+    #[test]
+    fn test_render_env_content_does_not_export_split_dir_group() {
+        let temp_dir = TempDir::new().unwrap();
+        let custom_bin = temp_dir.path().join("custom-bin");
+        let custom_data = temp_dir.path().join("custom-data");
+        let custom_cache = temp_dir.path().join("custom-cache");
+        vp_shared::EnvConfig::with_vars(
+            [
+                (vp_shared::env_vars::VP_HOME, None),
+                (vp_shared::env_vars::VP_BIN_DIR, Some(custom_bin.as_os_str())),
+                (vp_shared::env_vars::VP_DATA_DIR, Some(custom_data.as_os_str())),
+                (vp_shared::env_vars::VP_CACHE_DIR, Some(custom_cache.as_os_str())),
+                ("HOME", Some(temp_dir.path().as_os_str())),
+                ("USERPROFILE", Some(temp_dir.path().as_os_str())),
+            ],
+            |_| {
+                let config = vp_shared::EnvConfig::get();
+                let content = render_env_content(EnvShell::Posix, &config, NuSyntax::BuiltinSigil);
+                assert!(!content.contains("VP_BIN_DIR"));
+                assert!(!content.contains("VP_DATA_DIR"));
+                assert!(!content.contains("VP_CACHE_DIR"));
+                assert!(content.contains("$HOME/custom-bin"));
+            },
+        );
+    }
+
+    #[test]
+    fn test_render_env_content_omits_resolved_dirs_without_vp_home() {
+        let temp_dir = TempDir::new().unwrap();
+        vp_shared::EnvConfig::with_vars(
+            [
+                ("HOME", Some(temp_dir.path().as_os_str())),
+                ("USERPROFILE", Some(temp_dir.path().as_os_str())),
+                (vp_shared::env_vars::VP_HOME, None),
+                (vp_shared::env_vars::VP_BIN_DIR, None),
+                (vp_shared::env_vars::VP_DATA_DIR, None),
+                (vp_shared::env_vars::VP_CACHE_DIR, None),
+            ],
+            |_| {
+                let config = vp_shared::EnvConfig::get();
+                for shell in [EnvShell::Posix, EnvShell::Fish, EnvShell::Nu, EnvShell::Powershell] {
+                    let content = render_env_content(shell, &config, NuSyntax::BuiltinSigil);
+                    assert!(
+                        !content.contains("VP_HOME="),
+                        "{shell:?} env file should not pin VP_HOME when unset, got: {content}"
+                    );
+                    assert!(
+                        !content.contains("XDG_"),
+                        "{shell:?} env file should not re-export XDG_*, got: {content}"
+                    );
+                    assert!(
+                        !content.contains("VP_BIN_DIR")
+                            && !content.contains("VP_DATA_DIR")
+                            && !content.contains("VP_CACHE_DIR"),
+                        "{shell:?} env file should omit VP_*_DIR, got: {content}"
+                    );
+                }
+            },
+        );
     }
 
     #[tokio::test]
-    async fn test_create_env_files_creates_all_files() {
+    async fn test_create_env_files_adds_one_bom_only_to_powershell() {
+        const UTF8_BOM_BYTES: &[u8] = b"\xEF\xBB\xBF";
+
         let temp_dir = TempDir::new().unwrap();
         let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = home_guard(temp_dir.path());
+        vp_shared::EnvConfig::with_vars_async(
+            test_env_vars(temp_dir.path(), temp_dir.path()),
+            |_| async {
+                create_env_files().await.unwrap();
+                create_env_files().await.unwrap();
 
-        create_env_files(&home).await.unwrap();
+                for shell in [EnvShell::Posix, EnvShell::Fish, EnvShell::Nu, EnvShell::Powershell] {
+                    let bytes = tokio::fs::read(home.join(shell.env_file_name())).await.unwrap();
+                    if matches!(shell, EnvShell::Powershell) {
+                        assert!(bytes.starts_with(UTF8_BOM_BYTES));
+                        assert!(!bytes[UTF8_BOM_BYTES.len()..].starts_with(UTF8_BOM_BYTES));
+                    } else {
+                        assert!(!bytes.starts_with(UTF8_BOM_BYTES));
+                    }
+                }
+            },
+        )
+        .await;
+    }
 
-        let env_path = home.join("env");
-        let env_fish_path = home.join("env.fish");
-        let env_nu_path = home.join("env.nu");
-        let env_ps1_path = home.join("env.ps1");
-        assert!(env_path.as_path().exists(), "env file should be created");
-        assert!(env_fish_path.as_path().exists(), "env.fish file should be created");
-        assert!(env_nu_path.as_path().exists(), "env.nu file should be created");
-        assert!(env_ps1_path.as_path().exists(), "env.ps1 file should be created");
+    #[test]
+    fn test_escape_nu_double_quoted_string() {
+        assert_eq!(
+            escape_nu_double_quoted_string(r#"vp "home\with spaces""#),
+            r#"vp \"home\\with spaces\""#
+        );
+    }
+
+    #[test]
+    fn test_escape_shell_string_literals() {
+        let value = r#"$USER "double" `tick` slash\ single'"#;
+        assert_eq!(
+            escape_posix_double_quoted_string(value),
+            r#"\$USER \"double\" \`tick\` slash\\ single'"#
+        );
+        assert_eq!(
+            escape_fish_double_quoted_string(value),
+            r#"\$USER \"double\" `tick` slash\\ single'"#
+        );
+        assert_eq!(
+            escape_nu_double_quoted_string(value),
+            r#"$USER \"double\" `tick` slash\\ single'"#
+        );
+        assert_eq!(
+            escape_powershell_single_quoted_string(value),
+            r#"$USER "double" `tick` slash\ single''"#
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_render_env_content_preserves_metacharacter_dirs() {
+        let temp_dir = TempDir::new().unwrap();
+        let special = r#"$USER-"-'-`-\"#;
+        let custom_bin = temp_dir.path().join(format!("bin-{special}"));
+        let custom_data = temp_dir.path().join(format!("data-{special}"));
+        let custom_cache = temp_dir.path().join(format!("cache-{special}"));
+
+        vp_shared::EnvConfig::with_vars(
+            [
+                (vp_shared::env_vars::VP_HOME, None),
+                (vp_shared::env_vars::VP_BIN_DIR, Some(custom_bin.as_os_str())),
+                (vp_shared::env_vars::VP_DATA_DIR, Some(custom_data.as_os_str())),
+                (vp_shared::env_vars::VP_CACHE_DIR, Some(custom_cache.as_os_str())),
+                ("HOME", Some(temp_dir.path().as_os_str())),
+                ("USERPROFILE", Some(temp_dir.path().as_os_str())),
+            ],
+            |_| {
+                let config = vp_shared::EnvConfig::get();
+                let home_dir = config.user_home.as_path();
+
+                let bin_ref = render_home_relative_path(custom_bin.as_path(), home_dir);
+                let posix_bin_ref = escape_home_relative_double_quoted_path(
+                    &bin_ref,
+                    escape_posix_double_quoted_string,
+                );
+                let fish_bin_ref = escape_home_relative_double_quoted_path(
+                    &bin_ref,
+                    escape_fish_double_quoted_string,
+                );
+                let nu_bin_ref = escape_nu_double_quoted_string(&render_nu_path_ref(&bin_ref));
+                let ps_bin_ref = escape_powershell_single_quoted_string(
+                    &custom_bin.as_path().display().to_string(),
+                );
+                let posix_content =
+                    render_env_content(EnvShell::Posix, &config, NuSyntax::BuiltinSigil);
+                let fish_content =
+                    render_env_content(EnvShell::Fish, &config, NuSyntax::BuiltinSigil);
+                let nu_content = render_env_content(EnvShell::Nu, &config, NuSyntax::BuiltinSigil);
+                let ps_content =
+                    render_env_content(EnvShell::Powershell, &config, NuSyntax::BuiltinSigil);
+                assert!(posix_content.contains(&format!("__vp_bin=\"{posix_bin_ref}\"")));
+                assert!(fish_content.contains(&format!("contains -i -- \"{fish_bin_ref}\"")));
+                assert!(nu_content.contains(&format!("prepend \"{nu_bin_ref}\"")));
+                assert!(ps_content.contains(&format!("$__vp_bin = '{ps_bin_ref}'")));
+                for content in [&posix_content, &fish_content, &nu_content, &ps_content] {
+                    assert!(!content.contains("VP_BIN_DIR"));
+                    assert!(!content.contains("VP_DATA_DIR"));
+                    assert!(!content.contains("VP_CACHE_DIR"));
+                }
+
+                // Source the generated POSIX file and verify that PATH retains
+                // every literal metacharacter without exporting the overrides.
+                let env_file = temp_dir.path().join("env");
+                std::fs::write(&env_file, posix_content).unwrap();
+                let output = std::process::Command::new("sh")
+                    .args([
+                        "-c",
+                        r#". "$1"; printf '%s\n%s\n%s\n%s\n' "${VP_BIN_DIR-unset}" "${VP_DATA_DIR-unset}" "${VP_CACHE_DIR-unset}" "${PATH%%:*}""#,
+                        "sh",
+                    ])
+                    .arg(&env_file)
+                    .env("HOME", temp_dir.path())
+                    .env_remove(vp_shared::env_vars::VP_BIN_DIR)
+                    .env_remove(vp_shared::env_vars::VP_DATA_DIR)
+                    .env_remove(vp_shared::env_vars::VP_CACHE_DIR)
+                    .output()
+                    .unwrap();
+                assert!(
+                    output.status.success(),
+                    "sourcing env failed: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+                assert_eq!(
+                    String::from_utf8(output.stdout).unwrap(),
+                    format!("unset\nunset\nunset\n{}\n", custom_bin.display())
+                );
+            },
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_render_env_content_escapes_nu_paths() {
+        let home = std::path::PathBuf::from(r#"/tmp/vp "home\with spaces""#);
+        vp_shared::EnvConfig::with_vars(
+            [
+                (vp_shared::env_vars::VP_HOME, home.as_os_str()),
+                ("HOME", std::ffi::OsStr::new("/nonexistent-home-dir")),
+                ("USERPROFILE", std::ffi::OsStr::new("/nonexistent-home-dir")),
+            ],
+            |_| {
+                let config = vp_shared::EnvConfig::get();
+                let content = render_env_content(EnvShell::Nu, &config, NuSyntax::BuiltinSigil);
+
+                assert!(
+                    content.contains(r#"prepend "/tmp/vp \"home\\with spaces\"/bin""#),
+                    "env.nu should escape the bin path for a Nushell string literal, got: {content}"
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn test_nu_syntax_for_version() {
+        assert_eq!(NuSyntax::for_version("0.112.1"), NuSyntax::BuiltinSigil);
+        assert_eq!(NuSyntax::for_version("0.116.1\n"), NuSyntax::BuiltinSigil);
+        assert_eq!(NuSyntax::for_version("1.0.0"), NuSyntax::BuiltinSigil);
+        // 0.112.0 was never released; its pre-release builds may lack `%`.
+        assert_eq!(NuSyntax::for_version("0.112.0"), NuSyntax::Legacy);
+        assert_eq!(NuSyntax::for_version("0.111.0"), NuSyntax::Legacy);
+        assert_eq!(NuSyntax::for_version(""), NuSyntax::Legacy);
+        assert_eq!(NuSyntax::for_version("not a version"), NuSyntax::Legacy);
+    }
+
+    // A user `def update []` must not stop Nushell at startup (#3092).
+    #[cfg(unix)]
+    #[test]
+    fn test_render_env_content_nu_syntax() {
+        let home = std::path::PathBuf::from("/tmp/vp%home");
+        vp_shared::EnvConfig::with_vars(
+            [
+                (vp_shared::env_vars::VP_HOME, home.as_os_str()),
+                ("HOME", std::ffi::OsStr::new("/nonexistent-home-dir")),
+                ("USERPROFILE", std::ffi::OsStr::new("/nonexistent-home-dir")),
+            ],
+            |_| {
+                let config = vp_shared::EnvConfig::get();
+                let sigil = render_env_content(EnvShell::Nu, &config, NuSyntax::BuiltinSigil);
+                assert!(sigil.contains("| %update value {|row|"), "got: {sigil}");
+                assert!(sigil.contains(r#"("/tmp/vp%home" | %path expand"#), "got: {sigil}");
+                assert!(sigil.contains("^fish --command"), "got: {sigil}");
+                // Completers must not cause the Nushell 0.116 positional-input warning (#3127).
+                assert!(sigil.contains(r#"def "nu-complete vp" [buffer: string, place: any]"#));
+                assert!(sigil.contains(r#"def "nu-complete vpr" [buffer: string, place: any]"#));
+                assert!(!sigil.contains("[context"), "got: {sigil}");
+
+                let legacy = render_env_content(EnvShell::Nu, &config, NuSyntax::Legacy);
+                assert!(legacy.contains("| update value {|row|"), "got: {legacy}");
+                assert!(legacy.contains("^fish --command"), "got: {legacy}");
+                // CI runs only a newer Nushell, so check the legacy fish guard here (#3272).
+                assert!(legacy.contains("if (which fish | is-empty) { return null }"));
+                assert_eq!(
+                    legacy.replace("/tmp/vp%home", "").matches('%').count(),
+                    0,
+                    "Nushell before 0.112.1 cannot parse the `%` sigil, got: {legacy}"
+                );
+                assert!(legacy.contains(r#"$env.VP_HOME = ("/tmp/vp%home" | path expand"#));
+            },
+        );
     }
 
     #[tokio::test]
     async fn test_create_env_files_nu_contains_path_guard() {
         let temp_dir = TempDir::new().unwrap();
         let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = home_guard(temp_dir.path());
-
-        create_env_files(&home).await.unwrap();
+        vp_shared::EnvConfig::with_vars_async(test_env_vars(temp_dir.path(), temp_dir.path()), |_| async {
+        create_env_files().await.unwrap();
 
         let nu_content = tokio::fs::read_to_string(home.join("env.nu")).await.unwrap();
         assert!(
@@ -972,281 +2063,386 @@ mod tests {
             "env.nu should use dynamic Fish completion delegation"
         );
         assert!(nu_content.contains("load-env"), "env.nu should use load-env to apply exports");
+    })
+        .await;
     }
 
     #[tokio::test]
     async fn test_create_env_files_replaces_placeholder_with_home_relative_path() {
         let temp_dir = TempDir::new().unwrap();
         let home = AbsolutePathBuf::new(temp_dir.path().join("vp_home")).unwrap();
-        let _guard = home_guard(temp_dir.path());
-        tokio::fs::create_dir_all(&home).await.unwrap();
+        vp_shared::EnvConfig::with_vars_async(
+            test_env_vars(home.as_path(), temp_dir.path()),
+            |_| async {
+                tokio::fs::create_dir_all(&home).await.unwrap();
 
-        create_env_files(&home).await.unwrap();
+                create_env_files().await.unwrap();
 
-        let env_content = tokio::fs::read_to_string(home.join("env")).await.unwrap();
-        let fish_content = tokio::fs::read_to_string(home.join("env.fish")).await.unwrap();
-        let nu_content = tokio::fs::read_to_string(home.join("env.nu")).await.unwrap();
-        let ps1_content = tokio::fs::read_to_string(home.join("env.ps1")).await.unwrap();
+                let env_content = tokio::fs::read_to_string(home.join("env")).await.unwrap();
+                let fish_content = tokio::fs::read_to_string(home.join("env.fish")).await.unwrap();
+                let nu_content = tokio::fs::read_to_string(home.join("env.nu")).await.unwrap();
+                let ps1_content = tokio::fs::read_to_string(home.join("env.ps1")).await.unwrap();
 
-        // Placeholder should be fully replaced
-        assert!(
-            !env_content.contains("__VP_BIN__"),
-            "env file should not contain __VP_BIN__ placeholder"
-        );
-        assert!(
-            !fish_content.contains("__VP_BIN__"),
-            "env.fish file should not contain __VP_BIN__ placeholder"
-        );
-        assert!(
-            !env_content.contains("__VP_HOME__") && !fish_content.contains("__VP_HOME__"),
-            "env files should not contain __VP_HOME__ placeholder"
-        );
-        assert!(
-            !nu_content.contains("__VP_HOME__") && !ps1_content.contains("__VP_HOME_WIN__"),
-            "env files should not contain VP_HOME placeholders"
-        );
+                // Placeholder should be fully replaced
+                assert!(
+                    !env_content.contains("__VP_BIN__"),
+                    "env file should not contain __VP_BIN__ placeholder"
+                );
+                assert!(
+                    !fish_content.contains("__VP_BIN__"),
+                    "env.fish file should not contain __VP_BIN__ placeholder"
+                );
+                assert!(
+                    !env_content.contains("__ENV_EXPORTS__")
+                        && !fish_content.contains("__ENV_EXPORTS__"),
+                    "env files should not contain __ENV_EXPORTS__ placeholder"
+                );
+                assert!(
+                    !nu_content.contains("__ENV_EXPORTS__")
+                        && !ps1_content.contains("__ENV_EXPORTS__"),
+                    "env files should not contain VP_HOME placeholders"
+                );
 
-        // Should use $HOME-relative path since install dir is under HOME
-        assert!(
-            env_content.contains("$HOME/vp_home/bin"),
-            "env file should reference $HOME/vp_home/bin, got: {env_content}"
-        );
-        assert!(
-            fish_content.contains("$HOME/vp_home/bin"),
-            "env.fish file should reference $HOME/vp_home/bin, got: {fish_content}"
-        );
-        assert!(
-            env_content.contains("export VP_HOME=\"$HOME/vp_home\""),
-            "env file should export VP_HOME, got: {env_content}"
-        );
-        assert!(
-            fish_content.contains("set -gx VP_HOME \"$HOME/vp_home\""),
-            "env.fish file should export VP_HOME, got: {fish_content}"
-        );
-        assert!(
-            nu_content.contains("$env.VP_HOME = (\"~/vp_home\" | path expand --no-symlink)"),
-            "env.nu file should set home-relative VP_HOME, got: {nu_content}"
-        );
-        assert!(
-            nu_content.contains("~/vp_home/bin"),
-            "env.nu file should reference ~/vp_home/bin, got: {nu_content}"
-        );
-
-        let expected_home = home.as_path().display().to_string();
-        assert!(
-            ps1_content.contains(&format!("$env:VP_HOME = \"{expected_home}\"")),
-            "env.ps1 file should set VP_HOME, got: {ps1_content}"
-        );
+                // Should use $HOME-relative path since install dir is under HOME
+                assert!(
+                    env_content.contains("$HOME/vp_home/bin"),
+                    "env file should reference $HOME/vp_home/bin, got: {env_content}"
+                );
+                assert!(
+                    fish_content.contains("$HOME/vp_home/bin"),
+                    "env.fish file should reference $HOME/vp_home/bin, got: {fish_content}"
+                );
+                assert!(
+                    nu_content.contains("~/vp_home/bin"),
+                    "env.nu file should reference ~/vp_home/bin, got: {nu_content}"
+                );
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
     async fn test_create_env_files_uses_absolute_path_when_not_under_home() {
         let temp_dir = TempDir::new().unwrap();
         let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        // Set user_home to a different path so install dir is NOT under HOME
-        let _guard = home_guard("/nonexistent-home-dir");
+        // Set user_home to a different path so install dir is NOT under HOME.
+        // A second tempdir keeps it absolute on every platform — Windows
+        // rejects root-relative fakes like "/nonexistent-home-dir", and the
+        // home fallback can't save a test that pins both HOME and
+        // USERPROFILE.
+        let other_home = TempDir::new().unwrap();
+        vp_shared::EnvConfig::with_vars_async(
+            test_env_vars(home.as_path(), other_home.path()),
+            |_| async {
+                create_env_files().await.unwrap();
 
-        create_env_files(&home).await.unwrap();
+                let env_content = tokio::fs::read_to_string(home.join("env")).await.unwrap();
+                let fish_content = tokio::fs::read_to_string(home.join("env.fish")).await.unwrap();
 
-        let env_content = tokio::fs::read_to_string(home.join("env")).await.unwrap();
-        let fish_content = tokio::fs::read_to_string(home.join("env.fish")).await.unwrap();
+                // Should use absolute path since install dir is not under HOME
+                let expected_bin = home.join("bin");
+                let expected_str = expected_bin.as_path().display().to_string().replace('\\', "/");
+                assert!(
+                    env_content.contains(&expected_str),
+                    "env file should use absolute path {expected_str}, got: {env_content}"
+                );
+                assert!(
+                    fish_content.contains(&expected_str),
+                    "env.fish file should use absolute path {expected_str}, got: {fish_content}"
+                );
 
-        // Should use absolute path since install dir is not under HOME
-        let expected_bin = home.join("bin");
-        let expected_str = expected_bin.as_path().display().to_string().replace('\\', "/");
-        let expected_home = home.as_path().display().to_string().replace('\\', "/");
-        assert!(
-            env_content.contains(&expected_str),
-            "env file should use absolute path {expected_str}, got: {env_content}"
-        );
-        assert!(
-            fish_content.contains(&expected_str),
-            "env.fish file should use absolute path {expected_str}, got: {fish_content}"
-        );
-        assert!(
-            env_content.contains(&format!("export VP_HOME=\"{expected_home}\"")),
-            "env file should export absolute VP_HOME {expected_home}, got: {env_content}"
-        );
-        assert!(
-            fish_content.contains(&format!("set -gx VP_HOME \"{expected_home}\"")),
-            "env.fish file should export absolute VP_HOME {expected_home}, got: {fish_content}"
-        );
-
-        // Should NOT use $HOME-relative path
-        assert!(!env_content.contains("$HOME/bin"), "env file should not reference $HOME/bin");
+                // Should NOT use $HOME-relative path
+                assert!(
+                    !env_content.contains("$HOME/bin"),
+                    "env file should not reference $HOME/bin"
+                );
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
     async fn test_create_env_files_posix_contains_path_guard() {
         let temp_dir = TempDir::new().unwrap();
         let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = home_guard(temp_dir.path());
+        vp_shared::EnvConfig::with_vars_async(
+            test_env_vars(temp_dir.path(), temp_dir.path()),
+            |_| async {
+                create_env_files().await.unwrap();
 
-        create_env_files(&home).await.unwrap();
+                let env_content = tokio::fs::read_to_string(home.join("env")).await.unwrap();
 
-        let env_content = tokio::fs::read_to_string(home.join("env")).await.unwrap();
-
-        // Verify PATH guard structure: case statement checks for duplicate
-        assert!(
-            env_content.contains("case \":${PATH}:\" in"),
-            "env file should contain PATH guard case statement"
-        );
-        assert!(
-            env_content.contains("*\":${__vp_bin}:\"*)"),
-            "env file should check for existing bin in PATH"
-        );
-        // Verify it re-prepends to front when already present
-        assert!(
-            env_content.contains("export PATH=\"${__vp_bin}"),
-            "env file should re-prepend bin to front of PATH"
-        );
-        // Verify simple prepend for new entry
-        assert!(
-            env_content.contains("export PATH=\"$__vp_bin:$PATH\""),
-            "env file should prepend bin to PATH for new entry"
-        );
+                // Verify PATH guard structure: a single split pass drops every duplicate.
+                assert!(
+                    env_content.contains("for __vp_dir in $__vp_path; do"),
+                    "env file should contain a PATH cleanup loop"
+                );
+                assert!(
+                    env_content.contains("\"$__vp_bin\"|\"$__vp_fallback\") ;;"),
+                    "env file should check for existing bin in PATH"
+                );
+                // Verify it re-prepends exactly once after cleanup.
+                assert!(
+                    env_content
+                        .contains("export PATH=\"${__vp_bin}${PATH:+:${PATH}}:${__vp_fallback}\""),
+                    "env file should prepend bin to PATH after removing duplicates"
+                );
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
     async fn test_create_env_files_fish_contains_path_guard() {
         let temp_dir = TempDir::new().unwrap();
         let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = home_guard(temp_dir.path());
+        vp_shared::EnvConfig::with_vars_async(
+            test_env_vars(temp_dir.path(), temp_dir.path()),
+            |_| async {
+                create_env_files().await.unwrap();
 
-        create_env_files(&home).await.unwrap();
+                let fish_content = tokio::fs::read_to_string(home.join("env.fish")).await.unwrap();
 
-        let fish_content = tokio::fs::read_to_string(home.join("env.fish")).await.unwrap();
-
-        // Verify fish PATH guard: remove existing entry before prepending
-        assert!(
-            fish_content.contains("contains -i --"),
-            "env.fish should check for existing bin in PATH"
-        );
-        assert!(
-            fish_content.contains("set -e PATH[$__vp_idx]"),
-            "env.fish should remove existing entry"
-        );
-        assert!(fish_content.contains("set -gx PATH"), "env.fish should set PATH globally");
+                // Verify fish PATH guard: remove existing entry before prepending
+                assert!(
+                    fish_content.contains("contains -i --"),
+                    "env.fish should check for existing bin in PATH"
+                );
+                assert!(
+                    fish_content.contains("set -e PATH[$__vp_idx]"),
+                    "env.fish should remove existing entry"
+                );
+                assert!(fish_content.contains("set -gx PATH"), "env.fish should set PATH globally");
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
     async fn test_create_env_files_is_idempotent() {
         let temp_dir = TempDir::new().unwrap();
         let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = home_guard(temp_dir.path());
+        vp_shared::EnvConfig::with_vars_async(
+            test_env_vars(temp_dir.path(), temp_dir.path()),
+            |_| async {
+                // Create env files twice
+                create_env_files().await.unwrap();
+                let first_env = tokio::fs::read_to_string(home.join("env")).await.unwrap();
+                let first_fish = tokio::fs::read_to_string(home.join("env.fish")).await.unwrap();
+                let first_ps1 = tokio::fs::read_to_string(home.join("env.ps1")).await.unwrap();
 
-        // Create env files twice
-        create_env_files(&home).await.unwrap();
-        let first_env = tokio::fs::read_to_string(home.join("env")).await.unwrap();
-        let first_fish = tokio::fs::read_to_string(home.join("env.fish")).await.unwrap();
-        let first_ps1 = tokio::fs::read_to_string(home.join("env.ps1")).await.unwrap();
+                create_env_files().await.unwrap();
+                let second_env = tokio::fs::read_to_string(home.join("env")).await.unwrap();
+                let second_fish = tokio::fs::read_to_string(home.join("env.fish")).await.unwrap();
+                let second_ps1 = tokio::fs::read_to_string(home.join("env.ps1")).await.unwrap();
 
-        create_env_files(&home).await.unwrap();
-        let second_env = tokio::fs::read_to_string(home.join("env")).await.unwrap();
-        let second_fish = tokio::fs::read_to_string(home.join("env.fish")).await.unwrap();
-        let second_ps1 = tokio::fs::read_to_string(home.join("env.ps1")).await.unwrap();
-
-        assert_eq!(first_env, second_env, "env file should be identical after second write");
-        assert_eq!(first_fish, second_fish, "env.fish file should be identical after second write");
-        assert_eq!(first_ps1, second_ps1, "env.ps1 file should be identical after second write");
+                assert_eq!(
+                    first_env, second_env,
+                    "env file should be identical after second write"
+                );
+                assert_eq!(
+                    first_fish, second_fish,
+                    "env.fish file should be identical after second write"
+                );
+                assert_eq!(
+                    first_ps1, second_ps1,
+                    "env.ps1 file should be identical after second write"
+                );
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
     async fn test_create_env_files_posix_contains_vp_shell_function() {
         let temp_dir = TempDir::new().unwrap();
         let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = home_guard(temp_dir.path());
+        vp_shared::EnvConfig::with_vars_async(
+            test_env_vars(temp_dir.path(), temp_dir.path()),
+            |_| async {
+                create_env_files().await.unwrap();
 
-        create_env_files(&home).await.unwrap();
+                let env_content = tokio::fs::read_to_string(home.join("env")).await.unwrap();
 
-        let env_content = tokio::fs::read_to_string(home.join("env")).await.unwrap();
-
-        // Verify vp() shell function wrapper is present
-        assert!(env_content.contains("vp() {"), "env file should contain vp() shell function");
-        assert!(
-            env_content.contains("\"$1\" = \"env\""),
-            "env file should check for 'env' subcommand"
-        );
-        assert!(
-            env_content.contains("\"$2\" = \"use\""),
-            "env file should check for 'use' subcommand"
-        );
-        assert!(env_content.contains("eval \"$__vp_out\""), "env file should eval the output");
-        assert!(
-            env_content.contains("command vp \"$@\""),
-            "env file should use 'command vp' for passthrough"
-        );
+                // Verify vp() shell function wrapper is present
+                assert!(
+                    env_content.contains("vp() {"),
+                    "env file should contain vp() shell function"
+                );
+                assert!(
+                    env_content.contains("\"${1-}\" = \"env\""),
+                    "env file should check for 'env' subcommand"
+                );
+                assert!(
+                    env_content.contains("\"${2-}\" = \"use\""),
+                    "env file should check for 'use' subcommand"
+                );
+                assert!(
+                    env_content.contains("eval \"$__vp_out\""),
+                    "env file should eval the output"
+                );
+                assert!(
+                    env_content.contains("command vp \"$@\""),
+                    "env file should use 'command vp' for passthrough"
+                );
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
     async fn test_create_env_files_fish_contains_vp_function() {
         let temp_dir = TempDir::new().unwrap();
         let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = home_guard(temp_dir.path());
+        vp_shared::EnvConfig::with_vars_async(
+            test_env_vars(temp_dir.path(), temp_dir.path()),
+            |_| async {
+                create_env_files().await.unwrap();
 
-        create_env_files(&home).await.unwrap();
+                let fish_content = tokio::fs::read_to_string(home.join("env.fish")).await.unwrap();
 
-        let fish_content = tokio::fs::read_to_string(home.join("env.fish")).await.unwrap();
-
-        // Verify fish vp function wrapper is present
-        assert!(fish_content.contains("function vp"), "env.fish file should contain vp function");
-        assert!(
-            fish_content.contains("\"$argv[1]\" = \"env\""),
-            "env.fish should check for 'env' subcommand"
-        );
-        assert!(
-            fish_content.contains("\"$argv[2]\" = \"use\""),
-            "env.fish should check for 'use' subcommand"
-        );
+                // Verify fish vp function wrapper is present
+                assert!(
+                    fish_content.contains("function vp"),
+                    "env.fish file should contain vp function"
+                );
+                assert!(
+                    fish_content.contains("\"$argv[$__vp_command_index]\" = \"env\""),
+                    "env.fish should check for 'env' subcommand"
+                );
+                assert!(
+                    fish_content.contains("\"$argv[$__vp_next_index]\" = \"use\""),
+                    "env.fish should check for 'use' subcommand"
+                );
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
-    async fn test_create_env_files_ps1_contains_vp_function() {
+    async fn test_create_env_files_ps1_contains_vp_alias() {
         let temp_dir = TempDir::new().unwrap();
         let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = home_guard(temp_dir.path());
+        vp_shared::EnvConfig::with_vars_async(
+            test_env_vars(temp_dir.path(), temp_dir.path()),
+            |_| async {
+                create_env_files().await.unwrap();
 
-        create_env_files(&home).await.unwrap();
+                let ps1_content = tokio::fs::read_to_string(home.join("env.ps1")).await.unwrap();
 
-        let ps1_content = tokio::fs::read_to_string(home.join("env.ps1")).await.unwrap();
+                let wrapper = tokio::fs::read_to_string(home.join("vp.ps1")).await.unwrap();
 
-        // Verify PowerShell function is present
-        assert!(ps1_content.contains("function vp {"), "env.ps1 should contain vp function");
-        assert!(ps1_content.contains("Invoke-Expression"), "env.ps1 should use Invoke-Expression");
-        // Should not contain placeholders
-        assert!(
-            !ps1_content.contains("__VP_BIN_WIN__"),
-            "env.ps1 should not contain __VP_BIN_WIN__ placeholder"
-        );
+                assert!(
+                    ps1_content.contains("Set-Alias vp (Join-Path $PSScriptRoot \"vp.ps1\")"),
+                    "env.ps1 should alias vp to the script wrapper"
+                );
+                assert!(
+                    wrapper.contains("Invoke-Expression"),
+                    "vp.ps1 should evaluate environment exports"
+                );
+                assert!(wrapper.starts_with(UTF8_BOM), "vp.ps1 should preserve non-ASCII paths");
+                assert!(wrapper.contains("exit $LASTEXITCODE"));
+                // Should not contain placeholders
+                assert!(
+                    !ps1_content.contains("__VP_BIN_WIN__") && !wrapper.contains("__VP_BIN_WIN__"),
+                    "PowerShell scripts should not contain __VP_BIN_WIN__ placeholders"
+                );
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
     #[cfg(windows)]
-    #[serial_test::serial]
     async fn test_execute_creates_cmd_wrapper_in_fresh_home() {
         let temp_dir = TempDir::new().unwrap();
         let fresh_home = temp_dir.path().join("new-vite-plus");
-        let _trampoline_guard = FakeTrampolineGuard::new(temp_dir.path());
-        let _env_guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig {
-            vite_plus_home: Some(fresh_home.clone()),
-            user_home: Some(temp_dir.path().to_path_buf()),
-            ..vp_shared::EnvConfig::for_test()
-        });
+        let trampoline = write_fake_trampoline(temp_dir.path());
+        vp_shared::EnvConfig::with_vars_async(
+            [
+                (vp_shared::env_vars::VP_HOME, fresh_home.as_os_str()),
+                ("HOME", temp_dir.path().as_os_str()),
+                ("USERPROFILE", temp_dir.path().as_os_str()),
+                (vp_shared::env_vars::VP_TRAMPOLINE_PATH, trampoline.as_os_str()),
+            ],
+            |_| async {
+                assert!(!fresh_home.exists(), "install root should not exist before initial setup");
+                let status = execute(false, false).await.unwrap();
 
-        assert!(!fresh_home.exists(), "VP_HOME should not exist before initial setup");
-        let status = execute(false, false).await.unwrap();
+                assert!(status.success(), "initial vp env setup should succeed");
+                let bin_dir = AbsolutePathBuf::new(fresh_home.join("bin")).unwrap();
+                let cmd_content =
+                    tokio::fs::read_to_string(bin_dir.join("vp-use.cmd")).await.unwrap();
+                let expected_exe = fresh_home.join("current").join("bin").join("vp.exe");
+                assert!(
+                    cmd_content.contains(&format!("\"{}\" env use %*", expected_exe.display())),
+                    "vp-use.cmd should invoke the install-local vp.exe, got: {cmd_content}"
+                );
+                assert!(cmd_content.contains("setlocal\r\n"));
+                assert!(cmd_content.contains("set VP_SHELL=cmd\r\n"));
+                assert!(
+                    cmd_content.contains("exit /b %__VP_USE_STATUS%"),
+                    "vp-use.cmd should preserve the vp env use exit status"
+                );
+            },
+        )
+        .await;
+    }
 
-        assert!(status.success(), "initial vp env setup should succeed");
-        let bin_dir = AbsolutePathBuf::new(fresh_home.join("bin")).unwrap();
-        let cmd_content = tokio::fs::read_to_string(bin_dir.join("vp-use.cmd")).await.unwrap();
-        assert!(
-            cmd_content.contains("set VP_HOME=%~dp0..\r\nfor /f"),
-            "vp-use.cmd should set VP_HOME before invoking vp env use, got: {cmd_content}"
-        );
-        assert!(
-            cmd_content.contains("%~dp0..\\current\\bin\\vp.exe env use %*"),
-            "vp-use.cmd should invoke the install-local vp.exe"
-        );
+    #[tokio::test]
+    #[cfg(windows)]
+    async fn test_setup_does_not_claim_foreign_windows_executable() {
+        let temp_dir = TempDir::new().unwrap();
+        let install_root = temp_dir.path().join("vite-plus");
+        let bin_dir = install_root.join("bin");
+        let node = bin_dir.join("node.exe");
+        let pointer = bin_dir.join("node.shim");
+        let trampoline = write_fake_trampoline(temp_dir.path());
+
+        tokio::fs::create_dir_all(&bin_dir).await.unwrap();
+        tokio::fs::write(&node, b"foreign-node").await.unwrap();
+
+        vp_shared::EnvConfig::with_vars_async(
+            [
+                (vp_shared::env_vars::VP_HOME, install_root.as_os_str()),
+                ("HOME", temp_dir.path().as_os_str()),
+                ("USERPROFILE", temp_dir.path().as_os_str()),
+                (vp_shared::env_vars::VP_TRAMPOLINE_PATH, trampoline.as_os_str()),
+            ],
+            |_| async {
+                execute(false, true).await.unwrap();
+                assert!(!pointer.exists(), "--env-only must not write shim ownership markers");
+
+                execute(false, false).await.unwrap();
+                assert_eq!(tokio::fs::read(&node).await.unwrap(), b"foreign-node");
+                assert!(
+                    !pointer.exists(),
+                    "setup without --refresh must not claim a skipped executable"
+                );
+
+                // Reusing a bin directory must refresh Vite+ entrypoints without replacing Node.
+                for tool in ["vp", "vpx", "vpr"] {
+                    tokio::fs::write(bin_dir.join(format!("{tool}.exe")), b"old-entrypoint")
+                        .await
+                        .unwrap();
+                    tokio::fs::write(bin_dir.join(format!("{tool}.shim")), b"old-data-root")
+                        .await
+                        .unwrap();
+                }
+                execute_for_binary(&std::env::current_exe().unwrap(), false, true, false)
+                    .await
+                    .unwrap();
+                let dirs = &vp_shared::EnvConfig::get().dirs;
+                for tool in ["vp", "vpx", "vpr"] {
+                    let entrypoint = bin_dir.join(format!("{tool}.exe"));
+                    assert_eq!(tokio::fs::read(&entrypoint).await.unwrap(), b"fake-trampoline");
+                    assert!(dirs.owns_windows_trampoline(&entrypoint));
+                }
+                assert_eq!(tokio::fs::read(&node).await.unwrap(), b"foreign-node");
+                assert!(!pointer.exists());
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -1254,16 +2450,21 @@ mod tests {
     async fn test_create_env_files_does_not_create_cmd_wrapper_on_unix() {
         let temp_dir = TempDir::new().unwrap();
         let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = home_guard(temp_dir.path());
-        let bin_dir = home.join("bin");
-        tokio::fs::create_dir_all(&bin_dir).await.unwrap();
+        vp_shared::EnvConfig::with_vars_async(
+            test_env_vars(temp_dir.path(), temp_dir.path()),
+            |_| async {
+                let bin_dir = home.join("bin");
+                tokio::fs::create_dir_all(&bin_dir).await.unwrap();
 
-        create_env_files(&home).await.unwrap();
+                create_env_files().await.unwrap();
 
-        assert!(
-            !bin_dir.join("vp-use.cmd").as_path().exists(),
-            "vp-use.cmd should only be created on Windows"
-        );
+                assert!(
+                    !bin_dir.join("vp-use.cmd").as_path().exists(),
+                    "vp-use.cmd should only be created on Windows"
+                );
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -1271,22 +2472,185 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let fresh_home = temp_dir.path().join("new-vite-plus");
         // Directory does NOT exist yet — execute should create it
-        let _guard = vp_shared::EnvConfig::test_guard(vp_shared::EnvConfig {
-            vite_plus_home: Some(fresh_home.clone()),
-            user_home: Some(temp_dir.path().to_path_buf()),
-            ..vp_shared::EnvConfig::for_test()
-        });
+        vp_shared::EnvConfig::with_vars_async(
+            test_env_vars(&fresh_home, temp_dir.path()),
+            |_| async {
+                let status = execute(false, true).await.unwrap();
+                assert!(status.success(), "execute --env-only should succeed");
 
-        let status = execute(false, true).await.unwrap();
-        assert!(status.success(), "execute --env-only should succeed");
+                // Directory should now exist
+                assert!(fresh_home.exists(), "config directory should be created");
 
-        // Directory should now exist
-        assert!(fresh_home.exists(), "VP_HOME directory should be created");
+                // Env files should be written
+                assert!(fresh_home.join("env").exists(), "env file should be created");
+                assert!(fresh_home.join("env.fish").exists(), "env.fish file should be created");
+                assert!(fresh_home.join("env.ps1").exists(), "env.ps1 file should be created");
+            },
+        )
+        .await;
+    }
 
-        // Env files should be written
-        assert!(fresh_home.join("env").exists(), "env file should be created");
-        assert!(fresh_home.join("env.fish").exists(), "env.fish file should be created");
-        assert!(fresh_home.join("env.ps1").exists(), "env.ps1 file should be created");
+    #[tokio::test]
+    #[cfg_attr(windows, serial_test::serial)]
+    async fn test_execute_refresh_removes_legacy_package_manager_installs() {
+        use crate::commands::{
+            env::{bin_config::BinConfig, package_metadata::PackageMetadata},
+            global::LEGACY_PACKAGE_MANAGER_PACKAGES,
+        };
+
+        let temp_dir = TempDir::new().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().join(".vite-plus")).unwrap();
+        let bin_dir = home.join("bin");
+        vp_shared::EnvConfig::with_vars_async(
+            test_env_vars(home.as_path(), temp_dir.path()),
+            |_| async {
+                #[cfg(windows)]
+                let trampoline = write_fake_trampoline(temp_dir.path());
+
+                tokio::fs::create_dir_all(&bin_dir).await.unwrap();
+                // This test covers cleanup; make placement independent of the host PATH.
+                let mut settings = super::super::config::Config::default();
+                settings
+                    .set_all_package_manager_shim_modes(super::super::config::ShimMode::Managed);
+                super::super::config::save_config(&settings).await.unwrap();
+                let mut package_dirs = Vec::new();
+                for package_name in LEGACY_PACKAGE_MANAGER_PACKAGES {
+                    let mut metadata = PackageMetadata::new(
+                        package_name.to_string(),
+                        "1.0.0".to_string(),
+                        "22.0.0".to_string(),
+                        None,
+                        vec![package_name.to_string()],
+                        Default::default(),
+                        "npm".to_string(),
+                    );
+                    metadata.install_id = "123e4567-e89b-42d3-a456-426614174000".to_string();
+                    metadata.save().await.unwrap();
+                    let package_dir = metadata.installation_dir().unwrap();
+                    tokio::fs::create_dir_all(&package_dir).await.unwrap();
+                    package_dirs.push(package_dir);
+
+                    BinConfig::new(
+                        package_name.to_string(),
+                        package_name.to_string(),
+                        "1.0.0".to_string(),
+                        "22.0.0".to_string(),
+                    )
+                    .save()
+                    .await
+                    .unwrap();
+                }
+
+                #[cfg(unix)]
+                tokio::fs::write(bin_dir.join("corepack"), "legacy corepack shim").await.unwrap();
+                #[cfg(windows)]
+                for suffix in [".exe", ".cmd", ".ps1", ""] {
+                    tokio::fs::write(
+                        bin_dir.join(format!("corepack{suffix}")),
+                        "legacy corepack shim",
+                    )
+                    .await
+                    .unwrap();
+                }
+
+                #[cfg(not(windows))]
+                let status = execute(true, false).await.unwrap();
+                #[cfg(windows)]
+                let status = vp_shared::EnvConfig::with_vars_async(
+                    [(vp_shared::env_vars::VP_TRAMPOLINE_PATH, trampoline.as_os_str())],
+                    |_| async { execute(true, false).await.unwrap() },
+                )
+                .await;
+
+                assert!(status.success());
+                for (package_name, package_dir) in
+                    LEGACY_PACKAGE_MANAGER_PACKAGES.iter().zip(package_dirs)
+                {
+                    assert!(PackageMetadata::load(package_name).await.unwrap().is_none());
+                    assert!(BinConfig::load(package_name).await.unwrap().is_none());
+                    assert!(!package_dir.as_path().exists());
+                }
+                for tool in ["pnpm", "yarn", "bun"] {
+                    assert!(
+                        std::fs::symlink_metadata(bin_dir.join(shim_filename(tool)).as_path())
+                            .is_ok(),
+                        "{tool} should be recreated as a default shim"
+                    );
+                }
+                let corepack_suffixes: &[&str] =
+                    if cfg!(windows) { &[".exe", ".cmd", ".ps1", ""] } else { &[""] };
+                for suffix in corepack_suffixes {
+                    assert!(
+                        std::fs::symlink_metadata(
+                            bin_dir.join(format!("corepack{suffix}")).as_path(),
+                        )
+                        .is_err(),
+                        "legacy corepack shim should be removed"
+                    );
+                }
+            },
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn test_unix_package_shim_refresh_waits_for_ownership_changes() {
+        use std::time::Duration;
+
+        let temp_dir = TempDir::new().unwrap();
+        let home = temp_dir.path().join(".vite-plus");
+        let external_vp = temp_dir.path().join("external-vp");
+        let previous = temp_dir.path().join("removed-keg/bin/vp");
+        tokio::fs::write(&external_vp, b"vp").await.unwrap();
+        let external_vp = tokio::fs::canonicalize(external_vp).await.unwrap();
+
+        vp_shared::EnvConfig::with_vars_async(
+            test_env_vars(&home, temp_dir.path()),
+            |env| async move {
+                let bin_dir = &env.dirs.bin;
+                tokio::fs::create_dir_all(bin_dir).await.unwrap();
+                for name in ["managed-tool", "reassigned-tool"] {
+                    BinConfig::new(name.into(), name.into(), "1.0.0".into(), "22.18.0".into())
+                        .save()
+                        .await
+                        .unwrap();
+                    tokio::fs::symlink(&previous, bin_dir.join(name)).await.unwrap();
+                }
+
+                let lock = crate::commands::global::bin_lock::acquire().await.unwrap();
+                let refresh = refresh_package_shims(&external_vp, bin_dir);
+                tokio::pin!(refresh);
+                assert!(
+                    tokio::time::timeout(Duration::from_millis(150), &mut refresh).await.is_err()
+                );
+                for name in ["managed-tool", "reassigned-tool"] {
+                    assert_eq!(tokio::fs::read_link(bin_dir.join(name)).await.unwrap(), previous);
+                }
+
+                // Another operation changes ownership before releasing the shared lock.
+                BinConfig::new_npm(
+                    "reassigned-tool".into(),
+                    "npm-package".into(),
+                    "22.18.0".into(),
+                )
+                .save()
+                .await
+                .unwrap();
+                drop(lock);
+                tokio::time::timeout(Duration::from_secs(5), refresh).await.unwrap().unwrap();
+
+                assert_eq!(
+                    tokio::fs::read_link(bin_dir.join("managed-tool")).await.unwrap(),
+                    external_vp
+                );
+                assert_eq!(
+                    tokio::fs::read_link(bin_dir.join("reassigned-tool")).await.unwrap(),
+                    previous
+                );
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -1301,9 +2665,14 @@ mod tests {
         tokio::fs::create_dir_all(&bin_dir).await.unwrap();
         tokio::fs::write(&standalone_vp, b"vp").await.unwrap();
 
-        let target = resolve_unix_vp_shim_target(standalone_vp.as_path(), &bin_dir).await.unwrap();
-
-        assert_eq!(target, std::path::Path::new("../current/bin/vp"));
+        vp_shared::EnvConfig::with_vars_async(
+            test_env_vars(home.as_path(), temp_dir.path()),
+            |_| async {
+                let target = resolve_unix_vp_shim_target(standalone_vp.as_path()).await.unwrap();
+                assert_eq!(target, standalone_vp.as_path());
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -1320,9 +2689,14 @@ mod tests {
         tokio::fs::write(&standalone_vp, b"stale-vp").await.unwrap();
         tokio::fs::write(&external_vp, b"active-vp").await.unwrap();
 
-        let target = resolve_unix_vp_shim_target(&external_vp, &bin_dir).await.unwrap();
-
-        assert_eq!(target, external_vp);
+        vp_shared::EnvConfig::with_vars_async(
+            test_env_vars(home.as_path(), temp_dir.path()),
+            |_| async {
+                let target = resolve_unix_vp_shim_target(&external_vp).await.unwrap();
+                assert_eq!(target, external_vp);
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -1336,9 +2710,46 @@ mod tests {
         tokio::fs::create_dir_all(&bin_dir).await.unwrap();
         tokio::fs::write(&external_vp, b"vp").await.unwrap();
 
-        let target = resolve_unix_vp_shim_target(&external_vp, &bin_dir).await.unwrap();
+        vp_shared::EnvConfig::with_vars_async(
+            test_env_vars(home.as_path(), temp_dir.path()),
+            |_| async {
+                let target = resolve_unix_vp_shim_target(&external_vp).await.unwrap();
+                assert_eq!(target, external_vp);
+            },
+        )
+        .await;
+    }
 
-        assert_eq!(target, external_vp);
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn test_unix_vp_shim_target_split_bin_uses_data_current() {
+        let temp_dir = TempDir::new().unwrap();
+        let user_home = temp_dir.path();
+        let data = user_home.join(".local/share/vite-plus");
+        let bin_dir = AbsolutePathBuf::new(data.join("bin")).unwrap();
+        let version_vp = data.join("0.1.0").join("bin").join("vp");
+        let current = data.join("current");
+
+        tokio::fs::create_dir_all(version_vp.parent().unwrap()).await.unwrap();
+        tokio::fs::create_dir_all(&bin_dir).await.unwrap();
+        tokio::fs::write(&version_vp, b"vp").await.unwrap();
+        tokio::fs::symlink("0.1.0", &current).await.unwrap();
+
+        vp_shared::EnvConfig::with_vars_async(
+            [
+                (vp_shared::env_vars::VP_HOME, None),
+                (vp_shared::env_vars::VP_BIN_DIR, None),
+                (vp_shared::env_vars::VP_DATA_DIR, None),
+                (vp_shared::env_vars::XDG_DATA_HOME, None),
+                ("HOME", Some(user_home.as_os_str())),
+                ("USERPROFILE", Some(user_home.as_os_str())),
+            ],
+            |_| async {
+                let target = resolve_unix_vp_shim_target(&version_vp).await.unwrap();
+                assert_eq!(target, data.join("current").join("bin").join("vp").as_path());
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -1357,11 +2768,17 @@ mod tests {
         tokio::fs::write(&external_vp, b"active-vp").await.unwrap();
         tokio::fs::symlink("../current/bin/vp", &node_shim).await.unwrap();
 
-        let created = create_shim(&external_vp, &bin_dir, "node", false).await.unwrap();
-        let target = tokio::fs::read_link(&node_shim).await.unwrap();
+        vp_shared::EnvConfig::with_vars_async(
+            test_env_vars(home.as_path(), temp_dir.path()),
+            |_| async {
+                let created = create_shim(&external_vp, &bin_dir, "node", false).await.unwrap();
+                let target = tokio::fs::read_link(&node_shim).await.unwrap();
 
-        assert!(created, "stale shims should be recreated");
-        assert_eq!(target, external_vp);
+                assert!(created, "stale shims should be recreated");
+                assert_eq!(target, external_vp);
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -1377,11 +2794,17 @@ mod tests {
         tokio::fs::write(&external_vp, b"vp").await.unwrap();
         tokio::fs::symlink("../current/bin/vp", &node_shim).await.unwrap();
 
-        let created = create_shim(&external_vp, &bin_dir, "node", false).await.unwrap();
-        let target = tokio::fs::read_link(&node_shim).await.unwrap();
+        vp_shared::EnvConfig::with_vars_async(
+            test_env_vars(home.as_path(), temp_dir.path()),
+            |_| async {
+                let created = create_shim(&external_vp, &bin_dir, "node", false).await.unwrap();
+                let target = tokio::fs::read_link(&node_shim).await.unwrap();
 
-        assert!(created, "broken shims should be recreated");
-        assert_eq!(target, external_vp);
+                assert!(created, "broken shims should be recreated");
+                assert_eq!(target, external_vp);
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -1400,10 +2823,15 @@ mod tests {
         tokio::fs::write(&external_vp, b"active-vp").await.unwrap();
         tokio::fs::symlink("../current/bin/vp", &vp_shim).await.unwrap();
 
-        setup_vp_wrapper(&external_vp, &bin_dir, false).await.unwrap();
-        let target = tokio::fs::read_link(&vp_shim).await.unwrap();
-
-        assert_eq!(target, external_vp);
+        vp_shared::EnvConfig::with_vars_async(
+            test_env_vars(home.as_path(), temp_dir.path()),
+            |_| async {
+                setup_vp_wrapper(&external_vp, &bin_dir, false).await.unwrap();
+                let target = tokio::fs::read_link(&vp_shim).await.unwrap();
+                assert_eq!(target, external_vp);
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
@@ -1419,49 +2847,281 @@ mod tests {
         tokio::fs::write(&external_vp, b"vp").await.unwrap();
         tokio::fs::symlink("../current/bin/vp", &vp_shim).await.unwrap();
 
-        setup_vp_wrapper(&external_vp, &bin_dir, false).await.unwrap();
-        let target = tokio::fs::read_link(&vp_shim).await.unwrap();
-
-        assert_eq!(target, external_vp);
+        vp_shared::EnvConfig::with_vars_async(
+            test_env_vars(home.as_path(), temp_dir.path()),
+            |_| async {
+                setup_vp_wrapper(&external_vp, &bin_dir, false).await.unwrap();
+                let target = tokio::fs::read_link(&vp_shim).await.unwrap();
+                assert_eq!(target, external_vp);
+            },
+        )
+        .await;
     }
 
     #[tokio::test]
     async fn test_create_env_files_contains_dynamic_completion() {
         let temp_dir = TempDir::new().unwrap();
         let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = home_guard(temp_dir.path());
+        vp_shared::EnvConfig::with_vars_async(
+            test_env_vars(temp_dir.path(), temp_dir.path()),
+            |_| async {
+                create_env_files().await.unwrap();
 
-        create_env_files(&home).await.unwrap();
+                let env_content = tokio::fs::read_to_string(home.join("env")).await.unwrap();
+                let fish_content = tokio::fs::read_to_string(home.join("env.fish")).await.unwrap();
+                let ps1_content = tokio::fs::read_to_string(home.join("env.ps1")).await.unwrap();
 
-        let env_content = tokio::fs::read_to_string(home.join("env")).await.unwrap();
-        let fish_content = tokio::fs::read_to_string(home.join("env.fish")).await.unwrap();
-        let ps1_content = tokio::fs::read_to_string(home.join("env.ps1")).await.unwrap();
+                assert!(
+                    env_content.contains("VP_COMPLETE=bash")
+                        && env_content.contains("VP_COMPLETE=zsh"),
+                    "env file should contain completion for bash and zsh"
+                );
+                assert!(
+                    fish_content.contains("VP_COMPLETE=fish"),
+                    "env.fish file should contain completion for fish"
+                );
+                assert!(
+                    ps1_content.contains("VP_COMPLETE = \"powershell\""),
+                    "env.ps1 file should contain completion for PowerShell"
+                );
 
-        assert!(
-            env_content.contains("VP_COMPLETE=bash") && env_content.contains("VP_COMPLETE=zsh"),
-            "env file should contain completion for bash and zsh"
-        );
-        assert!(
-            fish_content.contains("VP_COMPLETE=fish"),
-            "env.fish file should contain completion for fish"
-        );
-        assert!(
-            ps1_content.contains("VP_COMPLETE = \"powershell\""),
-            "env.ps1 file should contain completion for PowerShell"
-        );
+                assert!(
+                    env_content.contains("compdef _vpr_complete vpr"),
+                    "env should have vpr completion for zsh"
+                );
+                assert!(
+                    env_content.contains("eval '") && env_content.contains("_vpr_complete() {"),
+                    "env should wrap zsh-specific code in eval"
+                );
+                assert!(
+                    fish_content.contains("complete -c vpr"),
+                    "env.fish should have vpr completion"
+                );
+                assert!(
+                    ps1_content.contains("Register-ArgumentCompleter -Native -CommandName vpr"),
+                    "env.ps1 should have vpr completion"
+                );
+            },
+        )
+        .await;
+    }
 
-        assert!(
-            env_content.contains("compdef _vpr_complete vpr"),
-            "env should have vpr completion for zsh"
-        );
-        assert!(
-            env_content.contains("eval '") && env_content.contains("_vpr_complete() {"),
-            "env should wrap zsh-specific code in eval"
-        );
-        assert!(fish_content.contains("complete -c vpr"), "env.fish should have vpr completion");
-        assert!(
-            ps1_content.contains("Register-ArgumentCompleter -Native -CommandName vpr"),
-            "env.ps1 should have vpr completion"
-        );
+    #[test]
+    fn test_render_env_content_cwd_completion_regressions() {
+        let temp_dir = TempDir::new().unwrap();
+        vp_shared::EnvConfig::with_vars(test_env_vars(temp_dir.path(), temp_dir.path()), |_| {
+            let config = vp_shared::EnvConfig::get();
+            let posix_content =
+                render_env_content(EnvShell::Posix, &config, NuSyntax::BuiltinSigil);
+            let nu_content = render_env_content(EnvShell::Nu, &config, NuSyntax::BuiltinSigil);
+            let ps1_content =
+                render_env_content(EnvShell::Powershell, &config, NuSyntax::BuiltinSigil);
+
+            assert!(posix_content.contains("if (( CURRENT >= 4 )); then"));
+            assert!(posix_content.contains("if (( CURRENT >= 3 )); then"));
+            assert!(nu_content.contains(r#"-C=?(?:"[^"]*"|\x27[^\x27]*\x27|\S+)"#));
+            assert!(VP_WRAPPER_PS1.contains(r#""$($args[0])" -like "-C?*""#));
+            assert!(!VP_WRAPPER_PS1.contains("$args[0].StartsWith"));
+            assert!(ps1_content.contains(r#"-C=?(?:"[^"]*"|''[^'']*''|\S+)"#));
+        });
+    }
+
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn test_posix_vp_wrapper_evals_env_use_after_cwd_flag() {
+        use std::{os::unix::fs::PermissionsExt, process::Command};
+
+        let temp_dir = TempDir::new().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let bin_dir = home.join("bin");
+        tokio::fs::create_dir_all(&bin_dir).await.unwrap();
+        let fake_vp = bin_dir.join("vp");
+        tokio::fs::write(
+            &fake_vp,
+            r#"#!/bin/sh
+if [ -n "$VP_COMPLETE" ]; then
+    exit 0
+fi
+case " $* " in
+    *" env use 20.18.0 "*) echo 'export VP_NODE_VERSION=20.18.0' ;;
+    *" env use --unset "*) echo 'unset VP_NODE_VERSION' ;;
+    *" env "*) exit 0 ;;
+    "  ") exit 0 ;;
+    *) exit 88 ;;
+esac
+"#,
+        )
+        .await
+        .unwrap();
+        let mut permissions = std::fs::metadata(&fake_vp).unwrap().permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(&fake_vp, permissions).unwrap();
+
+        vp_shared::EnvConfig::with_vars_async(
+            test_env_vars(temp_dir.path(), temp_dir.path()),
+            |_| async {
+                create_env_files().await.unwrap();
+
+                let status = Command::new("sh")
+                    .arg("-c")
+                    .arg(
+                        r#"set -eu
+. "$1"
+vp -C "$2" env use 20.18.0
+[ "$VP_NODE_VERSION" = "20.18.0" ]
+vp "-C=$2" env use --unset
+[ -z "${VP_NODE_VERSION+x}" ]
+vp "-C$2" env use 20.18.0
+[ "$VP_NODE_VERSION" = "20.18.0" ]
+vp -C "$2" env
+vp
+"#,
+                    )
+                    .arg("test-posix-vp-wrapper")
+                    .arg(home.join("env").as_path())
+                    .arg(temp_dir.path())
+                    .env("HOME", temp_dir.path())
+                    .status()
+                    .unwrap();
+                assert!(status.success(), "generated POSIX vp wrapper should eval both -C forms");
+            },
+        )
+        .await;
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_posix_env_dedupes_path_with_readonly_ifs() {
+        use std::{os::unix::fs::PermissionsExt, process::Command};
+
+        let temp_dir = TempDir::new().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let bin_dir = home.join("bin");
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        let fake_vp = bin_dir.join("vp");
+        std::fs::write(&fake_vp, "#!/bin/sh\nexit 0\n").unwrap();
+        let mut permissions = std::fs::metadata(&fake_vp).unwrap().permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(&fake_vp, permissions).unwrap();
+
+        vp_shared::EnvConfig::with_vars(test_env_vars(temp_dir.path(), temp_dir.path()), |_| {
+            let env_file = home.join("env");
+            std::fs::write(
+                &env_file,
+                render_env_content(
+                    EnvShell::Posix,
+                    &vp_shared::EnvConfig::get(),
+                    NuSyntax::BuiltinSigil,
+                ),
+            )
+            .unwrap();
+
+            // The first source learns the bin and fallback dirs. The second runs with a
+            // read-only IFS and must still dedupe PATH, define `vp`, and leave globbing on.
+            let script = r#"PATH=/usr/bin:/bin
+. "$1"
+bin=${PATH%%:*}
+fallback=${PATH##*:}
+PATH="$fallback:/usr/bin:$bin:/bin:$bin"
+readonly IFS
+. "$1"
+[ "$PATH" = "$bin:/usr/bin:/bin:$fallback" ] || { echo "PATH=$PATH" >&2; exit 1; }
+set -- "$2"/*
+[ "$1" != "$2/*" ] || { echo "globbing left disabled" >&2; exit 1; }
+command -v vp >/dev/null || { echo "vp wrapper not defined" >&2; exit 1; }
+echo ok
+"#;
+            for shell in ["sh", "dash", "bash", "zsh"] {
+                if Command::new(shell).arg("-c").arg("exit 0").status().is_err() {
+                    continue;
+                }
+                let output = Command::new(shell)
+                    .arg("-c")
+                    .arg(script)
+                    .arg("test-readonly-ifs")
+                    .arg(env_file.as_path())
+                    .arg(temp_dir.path())
+                    .env("HOME", temp_dir.path())
+                    .output()
+                    .unwrap();
+                assert!(
+                    output.status.success() && output.stdout == b"ok\n" && output.stderr.is_empty(),
+                    "{shell}: sourcing env with a read-only IFS failed\nstdout: {}\nstderr: {}",
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+        });
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_zsh_vpr_completion_preserves_cursor_before_inserted_run() {
+        use std::{os::unix::fs::PermissionsExt, process::Command};
+
+        if Command::new("zsh").arg("-c").arg("exit 0").status().is_err() {
+            return;
+        }
+
+        let temp_dir = TempDir::new().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let bin_dir = home.join("bin");
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        let fake_vp = bin_dir.join("vp");
+        std::fs::write(
+            &fake_vp,
+            "#!/bin/sh\nif [ -n \"$VP_COMPLETE\" ]; then exit 0; fi\nexit 88\n",
+        )
+        .unwrap();
+        let mut permissions = std::fs::metadata(&fake_vp).unwrap().permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(&fake_vp, permissions).unwrap();
+
+        vp_shared::EnvConfig::with_vars(test_env_vars(temp_dir.path(), temp_dir.path()), |_| {
+            let env_file = home.join("env");
+            std::fs::write(
+                &env_file,
+                render_env_content(
+                    EnvShell::Posix,
+                    &vp_shared::EnvConfig::get(),
+                    NuSyntax::BuiltinSigil,
+                ),
+            )
+            .unwrap();
+
+            let output = Command::new("zsh")
+                .arg("-c")
+                .arg(
+                    r#"compdef() { : }
+typeset -A _comps
+capture() { print -r -- "$CURRENT|${words[1]}|${words[2]-}|${words[3]-}|${words[4]-}|${words[5]-}" }
+_comps[vp]=capture
+. "$1"
+words=(vpr -C "" build)
+CURRENT=3
+_vpr_complete
+words=(vpr -C dir build)
+CURRENT=4
+_vpr_complete
+words=(vpr -Cdir build)
+CURRENT=2
+_vpr_complete
+setopt no_unset
+words=(vpr)
+CURRENT=1
+_vpr_complete
+"#,
+                )
+                .arg("test-zsh-vpr-completion")
+                .arg(env_file.as_path())
+                .env("HOME", temp_dir.path())
+                .output()
+                .unwrap();
+            assert!(output.status.success(), "zsh completion script should run");
+            assert_eq!(
+                String::from_utf8(output.stdout).unwrap(),
+                "3|vp|-C||run|build\n5|vp|-C|dir|run|build\n2|vp|-Cdir|run|build|\n1|vp|run|||\n"
+            );
+        });
     }
 }

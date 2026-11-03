@@ -56,6 +56,10 @@ export default defineConfig({
 
 `cache: true` enables both task and script caching, `cache: false` disables both.
 
+::: warning
+This option can only be set in the workspace root's `vite.config.ts`. Setting it in a package's config will result in an error.
+:::
+
 ## `run.tasks`
 
 - **Type:** `Record<string, Task | string | string[]>`
@@ -80,13 +84,17 @@ tasks: {
 }
 ```
 
-Use the object form when a task needs other fields like `cache`, `dependsOn`, `env`, or `input`.
+Use the object form when a task needs other fields like `cache`, `dependsOn`, or `cwd`.
 
 ### `command`
 
 - **Type:** `string | string[]`
 
-Defines the shell command to run for the task. The string is interpreted by a shell, so spaces, quoting, `&&`, pipes, and redirects all work as written on the command line.
+Defines the command to run for the task.
+
+::: info
+Vite Task parses simple commands and `&&` chains itself instead of passing them to a shell, so they behave the same on every platform. Other shell syntax, such as pipes or redirects, may behave differently across platforms.
+:::
 
 ```ts [vite.config.ts]
 tasks: {
@@ -113,7 +121,7 @@ tasks: {
 
 Each task defined in `vite.config.ts` must include its own `command`. You cannot define a task in both `vite.config.ts` and `package.json` with the same task name.
 
-Commands joined with `&&` (or supplied as an array) are automatically split into independently cached sub-tasks. See [Compound Commands](/guide/run#compound-commands).
+Array entries, and `&&` chains without other shell syntax, are automatically split into independently cached sub-tasks. See [Compound Commands](/guide/run#compound-commands).
 
 ### `dependsOn`
 
@@ -156,10 +164,26 @@ See [Task Dependencies](/guide/run#task-dependencies) for details on how explici
 
 ### `cache`
 
-- **Type:** `boolean`
+- **Type:** `boolean | { env?: string[], untrackedEnv?: string[], input?: Array<...>, output?: Array<...> }`
 - **Default:** `true`
 
-Whether to cache this task's output. Set to `false` for tasks that should never be cached, like dev servers:
+Whether and how to cache this task. Caching is enabled with default settings when `cache` is omitted, `true`, or `{}`.
+
+Use an object to configure how the task is cached with [`cache.env`](#cache-env), [`cache.untrackedEnv`](#cache-untrackedenv), [`cache.input`](#cache-input), and [`cache.output`](#cache-output):
+
+```ts [vite.config.ts]
+tasks: {
+  build: {
+    command: 'node build.mjs',
+    cache: {
+      env: ['NODE_ENV'],
+      input: [{ auto: true }, '!dist/**'],
+    },
+  },
+}
+```
+
+Set `cache` to `false` for tasks that should never be cached, like dev servers:
 
 ```ts [vite.config.ts]
 tasks: {
@@ -170,7 +194,7 @@ tasks: {
 }
 ```
 
-### `env`
+### `cache.env`
 
 - **Type:** `string[]`
 - **Default:** `[]`
@@ -181,7 +205,9 @@ Environment variables included in the cache fingerprint. When any listed variabl
 tasks: {
   build: {
     command: 'node build.mjs',
-    env: ['NODE_ENV'],
+    cache: {
+      env: ['NODE_ENV'],
+    },
   },
 }
 ```
@@ -195,7 +221,7 @@ $ NODE_ENV=development vp run build    # first run
 $ NODE_ENV=production vp run build     # cache miss: env 'NODE_ENV' changed
 ```
 
-### `untrackedEnv`
+### `cache.untrackedEnv`
 
 - **Type:** `string[]`
 - **Default:** see below
@@ -206,23 +232,29 @@ Environment variables passed to the task process but **not** included in the cac
 tasks: {
   build: {
     command: 'node build.mjs',
-    untrackedEnv: ['CI', 'GITHUB_ACTIONS'],
+    cache: {
+      untrackedEnv: ['CI', 'GITHUB_ACTIONS'],
+    },
   },
 }
 ```
 
-`untrackedEnv` accepts the same wildcard and `!` exclusion patterns as [`env`](#env).
+`untrackedEnv` accepts the same wildcard and `!` exclusion patterns as [`env`](#cache-env).
 
 Do not put a variable in `untrackedEnv` if its value changes the task result. If a cache-reporting tool covers the variable through [automatic tracking](/guide/automatic-data-tracking#cooperative-tracking), leave it out of both `env` and `untrackedEnv`.
 
-Vite Task passes a set of common environment variables to all tasks:
+Vite Task includes default untracked patterns for system variables and common tools. Examples include:
 
-- **System:** `HOME`, `USER`, `PATH`, `SHELL`, `LANG`, `TZ`
-- **Node.js:** `NODE_OPTIONS`, `COREPACK_HOME`, `PNPM_HOME`
-- **CI/CD:** `CI`, `VERCEL_*`, `NEXT_*`
-- **Terminal:** Color variables (`FORCE_COLOR`, `NO_COLOR`, `COLORTERM`, `TERM`, `TERM_PROGRAM`) aren't passed to tasks unless you list them under `env` (the value gets fingerprinted, so changing it invalidates the cache) or `untrackedEnv` (passed without fingerprinting). If `FORCE_COLOR` isn't in either list, the child gets `FORCE_COLOR=1` so cached logs stay colored. Colors get stripped on display when the terminal can't render them.
+- **System:** `HOME`, `USER`, `PATH`, `SHELL`, `LANG`, `TZ`, `TMP`, `TEMP`
+- **Node.js and package managers:** `NODE_OPTIONS`, `NPM_CONFIG_STORE_DIR`, `PNPM_HOME`
+- **CI:** `CI`, `VERCEL_*`, `NEXT_*`, `GITHUB_*`, `RUNNER_*`, `ACTIONS_ID_TOKEN_REQUEST_URL`
+- **Windows:** `APPDATA`, `LOCALAPPDATA`, `SYSTEMROOT`, `USERPROFILE`
+- **Development tools:** `VSCODE_*`, `JB_IDE_*`, `DOCKER_*`, `BUILDKIT_*`, `COMPOSE_*`, `PLAYWRIGHT_*`
+- **Tokens:** `*_TOKEN`, including `ACTIONS_ID_TOKEN_REQUEST_TOKEN`
 
-### `input`
+Color variables such as `FORCE_COLOR`, `NO_COLOR`, `COLORTERM`, `TERM`, and `TERM_PROGRAM` require an explicit `env` or `untrackedEnv` entry. If `FORCE_COLOR` isn't listed, Vite Task sets `FORCE_COLOR=1` to keep cached logs colored. Colors are stripped on display when the terminal can't render them.
+
+### `cache.input`
 
 - **Type:** `Array<string | { auto: boolean } | { pattern: string, base: "workspace" | "package" }>`
 - **Default:** `[{ auto: true }]` (auto-inferred)
@@ -235,8 +267,10 @@ Vite Task automatically detects which files a command uses. See [Automatic Data 
 tasks: {
   build: {
     command: 'vp build',
-    // Use `{ auto: true }` to use automatic fingerprinting (default).
-    input: [{ auto: true }, '!**/*.tsbuildinfo', '!dist/**'],
+    cache: {
+      // Use `{ auto: true }` to use automatic fingerprinting (default).
+      input: [{ auto: true }, '!**/*.tsbuildinfo', '!dist/**'],
+    },
   },
 }
 ```
@@ -247,7 +281,9 @@ tasks: {
 tasks: {
   build: {
     command: 'vp build',
-    input: ['src/**/*.ts', 'vite.config.ts'],
+    cache: {
+      input: ['src/**/*.ts', 'vite.config.ts'],
+    },
   },
 }
 ```
@@ -258,10 +294,12 @@ tasks: {
 tasks: {
   build: {
     command: 'vp build',
-    input: [
-      { auto: true },
-      { pattern: 'shared-config/**', base: 'workspace' },
-    ],
+    cache: {
+      input: [
+        { auto: true },
+        { pattern: 'shared-config/**', base: 'workspace' },
+      ],
+    },
   },
 }
 ```
@@ -277,7 +315,9 @@ The `base` field is required and controls how the glob pattern is resolved:
 tasks: {
   greet: {
     command: 'node greet.mjs',
-    input: [],
+    cache: {
+      input: [],
+    },
   },
 }
 ```
@@ -286,7 +326,7 @@ tasks: {
 String glob patterns are resolved relative to the package directory by default. Use the object form with `base: "workspace"` to resolve relative to the workspace root.
 :::
 
-### `output`
+### `cache.output`
 
 - **Type:** `Array<string | { auto: boolean } | { pattern: string, base: "workspace" | "package" }>`
 - **Default:** automatic write tracking
@@ -299,7 +339,9 @@ If you omit `output`, Vite Task uses automatic write tracking to choose those fi
 tasks: {
   build: {
     command: 'node build.mjs',
-    output: ['dist/**', '!dist/cache/**'],
+    cache: {
+      output: ['dist/**', '!dist/cache/**'],
+    },
   },
 }
 ```
@@ -312,7 +354,9 @@ This is useful when a task writes files that should not be restored from the cac
 tasks: {
   typecheck: {
     command: 'tsc --build',
-    output: [{ auto: true }, '!*.tsbuildinfo'],
+    cache: {
+      output: [{ auto: true }, '!*.tsbuildinfo'],
+    },
   },
 }
 ```
@@ -323,10 +367,12 @@ If a task writes outside its own package, use the object form with `base: "works
 tasks: {
   build: {
     command: 'node build.mjs',
-    output: [
-      'dist/**',
-      { pattern: 'shared-artifacts/**', base: 'workspace' },
-    ],
+    cache: {
+      output: [
+        'dist/**',
+        { pattern: 'shared-artifacts/**', base: 'workspace' },
+      ],
+    },
   },
 }
 ```
@@ -337,7 +383,9 @@ Set `output: []` to disable output restoration for a cached task:
 tasks: {
   report: {
     command: 'node scripts/report.mjs',
-    output: [],
+    cache: {
+      output: [],
+    },
   },
 }
 ```

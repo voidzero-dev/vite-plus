@@ -22,6 +22,14 @@ sizes and hash suffixes are masked
 dist/assets/index-<hash>.js  <size> kB / gzip: <size> kB / total <size> MB
 ```
 
+## `vpt print 'info: installing vite-plus@9.8.7-rc.6...'`
+
+standalone installer versions are masked
+
+```
+info: installing vite-plus@<version>...
+```
+
 ## `vpt print 'keep vite-tsconfig.js and https://viteplus.dev/guide/ intact'`
 
 lowercase 8-letter stems and URLs survive redaction

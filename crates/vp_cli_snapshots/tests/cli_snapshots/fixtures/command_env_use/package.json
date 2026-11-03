@@ -1,5 +1,6 @@
 {
   "name": "command-env-use",
   "version": "1.0.0",
-  "private": true
+  "private": true,
+  "packageManager": "npm@10.9.4"
 }

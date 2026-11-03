@@ -1,0 +1,9 @@
+{
+  "name": "app",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@oxlint/plugins": "1.79.0",
+    "vite-plus": "^0.1.20"
+  }
+}

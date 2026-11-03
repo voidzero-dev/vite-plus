@@ -56,8 +56,9 @@ const restartAnimation = () => {
               visibleLineCount.value = lineIndex + 1;
               if (lineIndex === props.transcript.lines.length - 1) {
                 const completionTimer = window.setTimeout(
-                  () => emit('complete'),
+                  emit,
                   props.transcript.completionDelay ?? 900,
+                  'complete',
                 );
                 timers.push(completionTimer);
               }

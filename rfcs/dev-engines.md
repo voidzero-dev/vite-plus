@@ -172,13 +172,14 @@ Notes:
 | State of cwd                                                             | Write target                                                          |
 | ------------------------------------------------------------------------ | --------------------------------------------------------------------- |
 | `.node-version` exists                                                   | Update `.node-version` (unchanged behavior)                           |
+| `.nvmrc` is the effective Node source in cwd                             | Update its version token, preserving comments and other content       |
 | No `.node-version`; `package.json` has a `devEngines.runtime` node entry | Update that entry's `version` (preserve `onFail`, sibling entries)    |
 | No `.node-version`; `package.json` exists without a node runtime entry   | Add `devEngines.runtime` node entry with `onFail: "download"`         |
 | No `package.json` in cwd                                                 | Create `.node-version` (unchanged behavior; nothing else to write to) |
 
-- `engines.node` is **never** a pin target: it is a consumer-facing constraint, and rewriting it would change the published package contract. More broadly, no Vite+ write path (pin, unpin, auto-pin, create, migrate) ever deletes or modifies an existing `engines.node`; it is always kept unchanged.
+- `engines.node` is **never** a pin target: it is a consumer-facing constraint, and rewriting it would change the published package contract. More broadly, no Vite+ write path (pin, unpin, create, migrate) ever deletes or modifies an existing `engines.node`; it is always kept unchanged.
 - When updating an existing node entry in array form, only that entry's `version` changes; other runtimes and `onFail` values are preserved.
-- An explicit `--target` flag overrides the selection: `vp env pin 24 --target node-version` or `--target dev-engines`. The flag always wins: `--target dev-engines` writes `devEngines.runtime` even when `.node-version` exists, with a note that `.node-version` still takes resolution precedence until removed.
+- An explicit `--target` flag overrides the selection: `vp env pin 24 --target node-version`, `--target nvmrc`, or `--target dev-engines`. The flag always wins: `--target dev-engines` writes `devEngines.runtime` even when `.node-version` exists, with a note that `.node-version` still takes resolution precedence until removed. Likewise, an explicit `.nvmrc` target warns when a higher-priority source shadows it. The default `.nvmrc` selection uses local resolution only and does not change the priority of `.node-version`, `devEngines.runtime`, or `engines.node`.
 
 Value semantics (matching the implemented `vp env pin` behavior, which resolves
 every input to an exact version at pin time; identical for both targets):
@@ -206,8 +207,8 @@ When `.node-version` is the write target and a `devEngines.runtime` node entry a
 
 #### 2.5 `vp env pin` (show) and `vp env unpin`
 
-- `vp env pin` with no argument reports the active pin and its source, now including `devEngines.runtime` as a possible source (the `VersionSource::DevEnginesRuntime` display string already exists). Inherited pins from parent directories are reported for both sources, checking `.node-version` first and then the `devEngines.runtime` node entry per directory (matching the resolution order).
-- `vp env unpin` / `vp env pin --unpin` removes the pin from the same target that `vp env pin` would write: delete `.node-version` if present, otherwise remove the node entry from `devEngines.runtime` (removing the `devEngines.runtime` key entirely if it becomes empty, and `devEngines` if it becomes empty).
+- `vp env pin` with no argument reports the active pin and its source, including an effective `.nvmrc`. Inherited pins from parent directories are reported in the same order: `.node-version`, the `devEngines.runtime` node entry, then an effective `.nvmrc`. A nearer `engines.node` stops the search and is displayed as a runtime constraint rather than inheriting a more distant pin.
+- `vp env unpin` / `vp env pin --unpin` removes the pin from the same target that `vp env pin` would write: delete `.node-version` if present, delete an effective `.nvmrc` in cwd, or remove the node entry from `devEngines.runtime` (removing the `devEngines.runtime` key entirely if it becomes empty, and `devEngines` if it becomes empty). An explicit `--target nvmrc` removes that file even if another source shadows it. Parent-directory files are never removed.
 
 ### 3. Package manager
 
@@ -238,36 +239,13 @@ When **both** `packageManager` and `devEngines.packageManager` exist:
   - Prereleases are excluded from range resolution, except when the requirement itself contains a prerelease marker (e.g. `^12.0.0-0`) and no stable version satisfies it.
 - `onFail` (current PR): acted on **only when no array entry names a supported package manager** (the bullet above) - `ignore`/`warn` continue down the detection chain, `error`/`download` fail. Once a supported entry is selected, its `onFail` is **not yet** consulted: a later unresolved range or download/install failure surfaces as an error rather than falling back to the next entry. Per-entry fallback (try each supported entry in order, applying its effective `onFail` on failure) is tracked under [Deferred / Future Work](#deferred--future-work).
 
-#### 3.3 Auto-pin behavior changes
+#### 3.3 Non-mutating package-manager resolution
 
-Today: whenever the detected version was `latest` (lockfile/config/interactive detection), Vite+ writes the exact downloaded version into the `packageManager` field.
+Package-manager detection and download never rewrite `package.json`, regardless of whether selection came from a manifest field, lockfile, config file, or interactive choice. This avoids turning an environment lookup into an implicit project edit.
 
-Proposed:
+A `devEngines.packageManager` range stays as the user's source of truth. Lockfile, config, and interactive detection resolve a managed version for the current command without recording it in the manifest. Projects that need an explicit deterministic declaration use `vp env pin <package-manager>@<version>`.
 
-| Detection source                  | Auto-write behavior                                                                                                                                          |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `packageManager` field            | No write needed (already exact); unchanged                                                                                                                   |
-| `devEngines.packageManager` exact | No write needed                                                                                                                                              |
-| `devEngines.packageManager` range | **No write.** The range is the user's chosen source of truth; freezing it into `packageManager` would create a second, conflicting source (#864 review note) |
-| Lockfile / config / interactive   | Write the exact resolved version to **`devEngines.packageManager`** with `onFail: "download"` (new default target), instead of the `packageManager` field    |
-
-The last row is the "new projects default to devEngines" rule applied to the auto-pin path. Projects that already have a `packageManager` field never hit this row, so Corepack-pinned repos keep their current behavior. Decision: the auto-pin value is **exact** (preserving today's determinism guarantee); teams that prefer a range can edit the field afterwards, and Vite+ preserves it (range sources are never frozen).
-
-Auto-written shape:
-
-```json
-{
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "11.5.1",
-      "onFail": "download"
-    }
-  }
-}
-```
-
-Auto-pin never replaces entries it did not write: when `devEngines.packageManager` already declares entries Vite+ does not act on (e.g. another package manager with `onFail: "ignore"` whose detection fell through to a lockfile), the resolved entry is appended to an existing array, and an existing single entry is converted to array form with the original entry kept first. A single entry is only written when the field is absent or malformed.
+Dependency-mutating commands such as `vp install` and `vp add` require an existing `package.json`; they never create one as a side effect.
 
 #### 3.4 Surfacing the source
 
@@ -354,7 +332,7 @@ Writes to `package.json` must be surgical:
 - When adding `devEngines`, place it adjacent to `engines` when present, otherwise append at the end.
 - The TypeScript side reuses the existing `editJsonFile` helper.
 
-A small shared Rust helper (in `vp_shared`) will own "edit one field in package.json, preserving formatting", used by pin, auto-pin, and unpin.
+A small shared Rust helper (in `vp_shared`) will own "edit one field in package.json, preserving formatting", used by pin and unpin.
 
 ## Spec Compliance Matrix
 
@@ -373,7 +351,7 @@ A small shared Rust helper (in `vp_shared`) will own "edit one field in package.
 - Managing non-Node runtimes (`deno`, `bun` as a runtime) via `devEngines.runtime`.
 - Validating `devEngines.os` / `cpu` / `libc`.
 - Acting as a general enforcement layer for arbitrary package manager names beyond pnpm / yarn / npm / bun.
-- Changing session-override behavior (`vp env use`, `VP_NODE_VERSION`).
+- Node session override behavior remains compatible; unified environments additionally support `VP_PACKAGE_MANAGER` and `.session-package-manager`.
 
 ## Deferred / Future Work
 
@@ -398,7 +376,7 @@ Both are intentionally separated from this PR: the per-entry fallback threads `o
 | Project with `.node-version`                                           | `.node-version` wins; pin updates it                      | Unchanged                                                    |
 | Project with `packageManager` field                                    | Field wins; no auto-write                                 | Unchanged (plus consistency warning if devEngines conflicts) |
 | Project with `devEngines.packageManager` + lockfile                    | devEngines ignored; auto-pin **injects** `packageManager` | devEngines drives selection; no injected field               |
-| Project with lockfile only (neither field)                             | Auto-pin writes `packageManager` exact                    | Auto-pin writes `devEngines.packageManager` exact            |
+| Project with lockfile only (neither field)                             | Auto-pin writes `packageManager` exact                    | Detection does not modify `package.json`                     |
 | Project with both `engines.node` and `devEngines.runtime`, disagreeing | `engines.node` wins                                       | `devEngines.runtime` wins; doctor warns                      |
 | `vp env pin` in a dir with `package.json`, no `.node-version`          | Creates `.node-version`                                   | Writes `devEngines.runtime`                                  |
 | `vp migrate` of `.nvmrc` / Volta pins                                  | Creates `.node-version`                                   | Writes `devEngines.runtime` (aliases converted to semver)    |
@@ -414,7 +392,7 @@ Both are intentionally separated from this PR: the per-entry fallback threads `o
 
 1. Insert `devEngines.packageManager` into `get_package_manager_type_and_version()` (replacing the TODO at `crates/vp_pm_cli/src/package_manager.rs:288`); name validation; array handling; `onFail` handling.
 2. Range resolution against downloaded versions, with registry fallback via the npm abbreviated metadata document.
-3. Suppress auto-write when the source is `devEngines.packageManager`; retarget auto-pin to `devEngines.packageManager` when neither field exists.
+3. Remove implicit package-manager writes for every detection source; explicit `vp env pin` remains the package-manager pinning path.
 4. Consistency warning when `packageManager` and `devEngines.packageManager` disagree (warn-now, error-later transition messaging).
 5. Expose the new source through the NAPI binding and `vp env --current --json`.
 
@@ -432,7 +410,7 @@ Both are intentionally separated from this PR: the per-entry fallback threads `o
 
 ### Phase 5: Documentation and tests
 
-1. Update `docs/guide/env.md`, `docs/guide/install.md`, `docs/config/*` as applicable.
+1. Update `docs/guide/env.md`, `docs/guide/package-management.md`, `docs/config/*` as applicable.
 2. ~~Update [rfcs/package-manager-detection.md](./package-manager-detection.md) (move `devEngines.packageManager` from Future Enhancements into the algorithm) and [rfcs/env-command.md](./env-command.md) (resolution chain).~~ Done alongside this RFC, together with [rfcs/js-runtime.md](./js-runtime.md) and [rfcs/migration-command.md](./migration-command.md).
 3. Snap tests (local and global) covering: pin into devEngines, pin with existing `.node-version`, unpin from devEngines, install with `devEngines.packageManager` (exact, range, array, unsupported name, conflict with `packageManager` field), doctor conflict output, create/migrate output.
 4. Rust unit tests alongside the existing suites in `package_manager.rs` and `package_json.rs`.
@@ -446,7 +424,7 @@ Decisions from RFC review (2026-06-04):
 | #   | Question                                                          | Decision                                                                                                                                 |
 | --- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | 1   | `devEngines.runtime` vs `engines.node` read priority              | Move `devEngines.runtime` above `engines.node`, landing with this RFC; doctor flags the projects where behavior changes                  |
-| 2   | Auto-pin target and value when neither field exists               | Write `devEngines.packageManager` with the exact resolved version and `onFail: "download"`                                               |
+| 2   | Package-manager behavior when neither field exists                | Resolve without modifying `package.json`; write only through an explicit `vp env pin`                                                    |
 | 3   | Pin when both `.node-version` and `devEngines.runtime` exist      | Update `.node-version`; if the devEngines range is broken, prompt to sync in interactive terminals, warn in non-interactive environments |
 | 4   | Pin override flag                                                 | `--target node-version` / `--target dev-engines`; an explicit flag always wins, even when the other source exists                        |
 | 5   | Unsupported `devEngines.packageManager` names                     | `onFail`-driven: `ignore`/`warn` continue down the detection chain; `error` (the default) and `download` fail with a clear message       |

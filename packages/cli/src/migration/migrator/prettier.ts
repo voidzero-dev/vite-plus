@@ -6,11 +6,11 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
 import { rewritePrettier } from '../../../binding/index.js';
 import { type WorkspacePackage } from '../../types/index.ts';
-import { runCommandSilently } from '../../utils/command.ts';
+import { getVpCommand, runCommandSilently } from '../../utils/command.ts';
 import { editJsonFile, readJsonFile } from '../../utils/json.ts';
 import { displayRelative } from '../../utils/path.ts';
 import { cancelAndExit } from '../../utils/prompts.ts';
-import { getSpinner } from '../../utils/spinner.ts';
+import { getSilentSpinner, getSpinner } from '../../utils/spinner.ts';
 import { PRETTIER_CONFIG_FILES, PRETTIER_PACKAGE_JSON_CONFIG, detectConfigs } from '../detector.ts';
 import { rewriteToolLintStagedConfigFiles } from '../migrator.ts';
 import { type MigrationReport } from '../report.ts';
@@ -58,36 +58,45 @@ export function detectPrettierProject(
 
 /**
  * Run `vp fmt --migrate=prettier` step with graceful error handling.
- * Returns true on success, false on failure.
+ * Unsupported config formats are skipped; other errors still fail migration.
  */
 async function runPrettierMigrateStep(
-  vpBin: string,
   cwd: string,
   spinner: ReturnType<typeof getSpinner>,
   failMessage: string,
   manualHint: string,
-): Promise<boolean> {
+): Promise<'migrated' | 'skipped' | 'failed'> {
   try {
     const result = await runCommandSilently({
-      command: vpBin,
-      args: ['fmt', '--migrate=prettier'],
+      ...getVpCommand(['fmt', '--migrate=prettier']),
       cwd,
       envs: process.env,
     });
     if (result.exitCode !== 0) {
-      spinner.stop(failMessage);
       const stderr = result.stderr.toString().trim();
+      // Oxfmt owns config loading. Keep Prettier when its config format is unsupported.
+      const unsupportedConfig =
+        stderr.includes('Failed to load Prettier config at:') &&
+        (stderr.includes('YAML, JSON5 and TOML formats are not supported.') ||
+          stderr.includes('Only JSON format is supported for `.prettierrc`.'));
+      spinner.stop(unsupportedConfig ? 'Prettier migration skipped' : failMessage);
       if (stderr) {
         prompts.log.warn(`⚠ ${stderr}`);
       }
+      if (unsupportedConfig) {
+        prompts.log.info(
+          'Keeping Prettier. Convert its config to JSON or JS and run `vp migrate --full` to migrate it later.',
+        );
+        return 'skipped';
+      }
       prompts.log.info(manualHint);
-      return false;
+      return 'failed';
     }
-    return true;
+    return 'migrated';
   } catch {
     spinner.stop(failMessage);
     prompts.log.info(manualHint);
-    return false;
+    return 'failed';
   }
 }
 
@@ -97,21 +106,8 @@ export async function migratePrettierToOxfmt(
   prettierConfigFile?: string,
   packages?: WorkspacePackage[],
   options?: { silent?: boolean; report?: MigrationReport },
-): Promise<boolean> {
-  const vpBin = process.env.VP_CLI_BIN ?? 'vp';
-  const spinner = options?.silent
-    ? {
-        start: () => {},
-        stop: () => {},
-        pause: () => {},
-        resume: () => {},
-        cancel: () => {},
-        error: () => {},
-        clear: () => {},
-        message: () => {},
-        isCancelled: false,
-      }
-    : getSpinner(interactive);
+): Promise<'migrated' | 'skipped' | 'failed'> {
+  const spinner = options?.silent ? getSilentSpinner() : getSpinner(interactive);
 
   // Step 1: Generate .oxfmtrc.json from Prettier config
   if (prettierConfigFile) {
@@ -127,21 +123,20 @@ export async function migratePrettierToOxfmt(
         fs.writeFileSync(tempPrettierConfig, JSON.stringify(pkg.prettier, null, 2));
       } else {
         // Config disappeared between detection and migration — nothing to migrate
-        return true;
+        return 'skipped';
       }
     }
 
     try {
       spinner.start('Migrating Prettier config to Oxfmt...');
-      const migrateOk = await runPrettierMigrateStep(
-        vpBin,
+      const result = await runPrettierMigrateStep(
         projectPath,
         spinner,
         'Prettier migration failed',
         'You can run `vp fmt --migrate=prettier` manually later',
       );
-      if (!migrateOk) {
-        return false;
+      if (result !== 'migrated') {
+        return result;
       }
       spinner.stop('Prettier config migrated to .oxfmtrc.json');
     } finally {
@@ -182,7 +177,7 @@ export async function migratePrettierToOxfmt(
     );
   }
 
-  return true;
+  return 'migrated';
 }
 
 function deletePrettierConfigFiles(
@@ -325,14 +320,14 @@ export async function promptPrettierMigration(
   if (!confirmed) {
     return false;
   }
-  const ok = await migratePrettierToOxfmt(
+  const result = await migratePrettierToOxfmt(
     projectPath,
     interactive,
     prettierProject.configFile,
     packages,
   );
-  if (!ok) {
+  if (result === 'failed') {
     cancelAndExit('Prettier migration failed.', 1);
   }
-  return true;
+  return result === 'migrated';
 }

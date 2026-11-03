@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import { copyFile, cp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -19,6 +19,7 @@ import { glob } from 'tinyglobby';
 import { generateLicenseFile } from '../../scripts/generate-license.js';
 import viteRolldownConfig from '../../vite/packages/vite/rolldown.config.js';
 import cliPkgJson from '../cli/package.json' with { type: 'json' };
+import { assertViteConfigPatched } from '../tools/src/patch-vite-config.ts';
 import { buildCjsDeps } from './build-support/build-cjs-deps.js';
 import { replaceThirdPartyCjsRequires } from './build-support/find-create-require.js';
 import { RewriteImportsPlugin } from './build-support/rewrite-imports.js';
@@ -52,6 +53,17 @@ const rolldownViteSourceDir = resolve(projectDir, '..', '..', 'vite', 'packages'
 const tsdownSourceDir = resolve(projectDir, 'node_modules/tsdown');
 
 // Main build orchestration
+try {
+  assertViteConfigPatched(
+    await readFile(join(rolldownViteSourceDir, 'src/node/config.ts'), 'utf-8'),
+  );
+} catch (cause) {
+  throw new Error(
+    'Prepare the Vite source before building core. From the repository root, run ' +
+      '`pnpm exec tool brand-vite` and `pnpm --filter vite build-types`.',
+    { cause },
+  );
+}
 await bundleRolldownPluginutils();
 await bundleRolldown();
 await buildVite();
@@ -181,6 +193,13 @@ async function buildVite() {
                   `export const CLIENT_ENTRY = path.join(VITE_PACKAGE_DIR, 'dist/vite/client/client.mjs')`,
                 );
                 magicString.replace(
+                  `export const BUNDLED_DEV_CLIENT_ENTRY: string = resolve(
+  VITE_PACKAGE_DIR,
+  'dist/client/bundledDevClient.mjs',
+)`,
+                  `export const BUNDLED_DEV_CLIENT_ENTRY = path.join(VITE_PACKAGE_DIR, 'dist/vite/client/bundledDevClient.mjs')`,
+                );
+                magicString.replace(
                   `export const ENV_ENTRY: string = resolve(
   VITE_PACKAGE_DIR,
   'dist/client/env.mjs',
@@ -198,50 +217,19 @@ async function buildVite() {
                 };
               }
             }
-            return undefined;
-          },
-        },
-        {
-          name: 'suppress-vite-version-only-reporter-line',
-          transform(code, id) {
-            if (!id.endsWith(join('vite', 'src', 'node', 'plugins', 'reporter.ts'))) {
-              return undefined;
-            }
-
-            // Upstream native reporter can emit a redundant standalone "vite vX.Y.Z" line.
-            // Filter it at source so snapshots and CLI output remain stable.
-            if (code.includes('VITE_VERSION_ONLY_LINE_RE')) {
-              return undefined;
-            }
-
-            const constLine =
-              'const COMPRESSIBLE_ASSETS_RE = /\\.(?:html|json|svg|txt|xml|xhtml|wasm)$/';
-            const logInfoLine =
-              '        logInfo: shouldLogInfo ? (msg) => env.logger.info(msg) : undefined,';
-
-            if (!code.includes(constLine) || !code.includes(logInfoLine)) {
-              return undefined;
-            }
-
-            return {
-              code: code
-                .replace(
-                  constLine,
-                  `${constLine}\nconst VITE_VERSION_ONLY_LINE_RE = /^vite v\\S+$/`,
-                )
-                .replace(
-                  logInfoLine,
-                  `        logInfo: shouldLogInfo
-          ? (msg) => {
-              // Keep transformed/chunk/gzip logs but suppress redundant version-only line.
-              if (VITE_VERSION_ONLY_LINE_RE.test(msg.trim())) {
-                return
+            if (id.endsWith(join('vite', 'src', 'node', 'plugins', 'clientInjections.ts'))) {
+              const { magicString } = meta;
+              if (magicString) {
+                // Resolve the runtime bundled with core. Keep ROLLDOWN_DEV_RUNTIME_ENTRY
+                // unchanged: it also matches the import in bundledDevClient.mjs.
+                magicString.replace(
+                  'import.meta.resolve(ROLLDOWN_DEV_RUNTIME_ENTRY)',
+                  `import.meta.resolve('${pkgJson.name}/rolldown/experimental/runtime')`,
+                );
+                return { code: magicString };
               }
-              env.logger.info(msg)
             }
-          : undefined,`,
-                ),
-            };
+            return undefined;
           },
         },
         ...config.plugins.filter((plugin) => {
@@ -273,6 +261,22 @@ async function buildVite() {
   await cp(join(rolldownViteSourceDir, 'misc'), join(projectDir, 'dist/vite/misc'), {
     recursive: true,
   });
+
+  // `vp dev`, `vp build`, and `vp preview` start through Vite's bin script, as
+  // `vite` does (see BUNDLING.md). Point its CLI import at the `dist/vite` layout.
+  const viteBin = await readFile(join(rolldownViteSourceDir, 'bin', 'vite.js'), 'utf-8');
+  const viteBinCliImport = `import('../dist/node/cli.js')`;
+  if (!viteBin.includes(viteBinCliImport)) {
+    throw new Error(
+      `Expected vite bin/vite.js to contain \`${viteBinCliImport}\`; ` +
+        'update the bin/vite.js rewrite in packages/core/build.ts for the current upstream script.',
+    );
+  }
+  await mkdir(join(projectDir, 'dist/vite/bin'), { recursive: true });
+  await writeFile(
+    join(projectDir, 'dist/vite/bin/vite.js'),
+    viteBin.replaceAll(viteBinCliImport, `import('../node/cli.js')`),
+  );
 
   // Copy and rewrite .d.ts files
   // Normalize glob pattern to use forward slashes on Windows
@@ -356,6 +360,12 @@ async function bundleRolldownPluginutils() {
 async function bundleRolldown() {
   await mkdir(join(projectDir, 'dist/rolldown'), { recursive: true });
 
+  const { version: rolldownVersion }: { version: string } = JSON.parse(
+    await readFile(join(rolldownSourceDir, 'package.json'), 'utf-8'),
+  );
+  const webContainerVersionLookup =
+    'JSON.parse(fs.readFileSync(__require.resolve("rolldown/package.json"), "utf-8")).version';
+  let webContainerVersionRewrites = 0;
   const rolldownFiles = new Set<string>();
 
   await cp(join(rolldownSourceDir, 'dist'), join(projectDir, 'dist/rolldown'), {
@@ -393,6 +403,12 @@ async function bundleRolldown() {
       file.endsWith('.d.ts')
     ) {
       let source = await readFile(file, 'utf-8');
+      // WebContainer downloads the upstream WASM binding. Inline Rolldown's
+      // version so it needs neither an undeclared package nor Vite+'s version.
+      source = source.replaceAll(webContainerVersionLookup, () => {
+        webContainerVersionRewrites++;
+        return JSON.stringify(rolldownVersion);
+      });
       const rules: ReplacementRule[] = [...createRolldownRewriteRules(pkgJson.name)];
       if (vitePlusPlatformSuffixes) {
         const result = rewriteRolldownBindingRequires(source, {
@@ -410,6 +426,13 @@ async function bundleRolldown() {
       const newSource = rewriteModuleSpecifiers(source, file, { rules });
       await writeFile(file, newSource);
     }
+  }
+
+  if (webContainerVersionRewrites !== 1) {
+    throw new Error(
+      `bundleRolldown: expected one WebContainer version lookup, found ${webContainerVersionRewrites}; ` +
+        'review the upstream fallback and update or remove its version rewrite',
+    );
   }
 
   // Every published platform suffix must find its loader branch, and each
@@ -450,18 +473,15 @@ async function bundleTsdown() {
   // in and they cannot be bundled. Both are core `dependencies`, so they resolve
   // at runtime and CSS bundling works without users installing anything.
   //
-  // `yuku-codegen` and `yuku-parser` (pulled in by `rolldown-plugin-dts` for dts
-  // generation) are napi packages: their loaders `require` a per-platform
-  // `@yuku-*/binding-<platform>/*.node` relative to their own `__dirname`.
-  // Bundling their JS into a core chunk rebinds `__dirname` to `dist/tsdown/`,
-  // so the native binding no longer resolves. Keep them external and list them
-  // as core `dependencies` so each package's loader resolves its own binding
-  // (declared as optionalDependencies) at runtime.
+  // `yuku-parser` (used by `rolldown-plugin-dts`) loads native bindings through
+  // `yuku-core`. Keep it external and declare it as a core dependency so the
+  // native loader resolves its platform package at runtime. Pin its version
+  // to the one resolved by the bundled plugin. `yuku-ast` and
+  // `yuku-codegen` are pure JavaScript in Yuku 0.19 and are bundled into core.
   const tsdownExternal = [
     ...Object.keys(pkgJson.peerDependencies).filter((name) => !bundledTsdownPackages.has(name)),
     'lightningcss',
     'postcss',
-    'yuku-codegen',
     'yuku-parser',
   ];
   const isExternal = (id: string) => tsdownExternal.some((e) => id === e || id.startsWith(`${e}/`));
@@ -534,79 +554,6 @@ async function bundleTsdown() {
   await copyFile(join(tsdownSourceDir, 'client.d.ts'), join(projectDir, 'dist/tsdown/client.d.ts'));
 }
 
-// Ensure a bundled chunk imports the given ansis color helpers (e.g. `bold`,
-// `red`) from the shared `main-*.js` chunk. tsdown's logger module does not
-// import every color the Vite+ branding uses, so after the logger patches we
-// add any missing ones, resolving their (minified) export aliases from main's
-// own `export { ... }` map so the fix survives rolldown renaming them.
-async function ensureAnsisImports(
-  content: string,
-  names: string[],
-  distDir: string,
-): Promise<string> {
-  // Scan every relative chunk import in the branded logger chunk. Which shared
-  // chunk holds the ansis colors depends on rolldown's chunking and has moved
-  // between versions (e.g. `main-*.js` → `ansis-*.js`), so we don't assume a
-  // fixed chunk name: instead we append each missing color to whichever imported
-  // chunk actually re-exports it.
-  const importRe = /import \{([^}]*)\} from "(\.\/[^"]+\.js)";/g;
-  const imports = [...content.matchAll(importRe)];
-  if (imports.length === 0) {
-    throw new Error('ensureAnsisImports: no relative chunk import found in branded logger chunk');
-  }
-
-  // Every binding already in scope across all imports (its local name).
-  const localNames = new Set<string>();
-  for (const [, bindings] of imports) {
-    for (const binding of bindings.split(',')) {
-      const trimmed = binding.trim();
-      if (!trimmed) {
-        continue;
-      }
-      const aliased = trimmed.match(/\bas\s+([A-Za-z0-9_$]+)$/);
-      localNames.add(aliased ? aliased[1] : trimmed);
-    }
-  }
-  const missing = names.filter((name) => !localNames.has(name));
-  if (missing.length === 0) {
-    return content;
-  }
-
-  // Group missing colors by the imported chunk that re-exports them. Chunks
-  // re-export colors as `<local> as <alias>` (e.g. `bold as i`); the consumer
-  // side imports `<alias> as <local>`, so capture the alias here.
-  const additionsBySpecifier = new Map<string, string[]>();
-  for (const name of missing) {
-    let resolved = false;
-    for (const [, , specifier] of imports) {
-      const chunkContent = await readFile(join(distDir, specifier.slice(2)), 'utf-8');
-      const exportAlias = chunkContent.match(new RegExp(`\\b${name} as ([A-Za-z0-9_$]+)`));
-      if (!exportAlias) {
-        continue;
-      }
-      const additions = additionsBySpecifier.get(specifier) ?? [];
-      additions.push(`${exportAlias[1]} as ${name}`);
-      additionsBySpecifier.set(specifier, additions);
-      resolved = true;
-      break;
-    }
-    if (!resolved) {
-      throw new Error(`ensureAnsisImports: \`${name}\` is not re-exported from any imported chunk`);
-    }
-  }
-
-  let result = content;
-  for (const [fullImport, bindings, specifier] of imports) {
-    const additions = additionsBySpecifier.get(specifier);
-    if (!additions) {
-      continue;
-    }
-    const newImport = `import { ${bindings.trim().replace(/,$/, '')}, ${additions.join(', ')} } from "${specifier}";`;
-    result = result.replace(fullImport, newImport);
-  }
-  return result;
-}
-
 async function brandTsdown() {
   const tsdownDistDir = join(projectDir, 'dist/tsdown');
   const buildFiles = await glob(toPosixPath(join(tsdownDistDir, 'build-*.js')), { absolute: true });
@@ -670,29 +617,19 @@ async function brandTsdown() {
     throw new Error('brandTsdown: build error message patterns not found in any build chunk');
   }
 
+  // The styleText proxy is local to the logger chunk, but Rolldown may rename
+  // it to avoid a binding conflict. Capture and reuse its emitted name.
   const loggerPatches = [
     {
-      search: 'output("warn", `\\n${bgYellow` WARN `} ${message}\\n`);',
-      replacement: 'output("warn", `${bold(yellow`warn:`)} ${message}`);',
+      search:
+        /output\("warn", `\\n\$\{(styleText\$?\w*)\.bgYellow\(" WARN "\)\} \$\{message\}\\n`\);/g,
+      replacement: 'output("warn", `${$1.bold.yellow("warn:")} ${message}`);',
     },
     {
-      search: 'output("warn", `${bgYellow` WARN `} ${message}\\n`);',
-      replacement: 'output("warn", `${bold(yellow`warn:`)} ${message}`);',
-    },
-    {
-      search: 'output("error", `\\n${bgRed` ERROR `} ${format(msgs)}\\n`);',
+      search:
+        /output\("error", `\\n\$\{(styleText\$?\w*)\.bgRed\(" ERROR "\)\} \$\{format\(msgs\)\}\\n`\);/g,
       replacement:
-        'output("error", `${bold(red`error:`)} ${format(msgs).replace(/^([A-Za-z]*Error):\\s*/, "")}`);',
-    },
-    {
-      search: 'output("error", `${bgRed` ERROR `} ${format(msgs)}\\n`);',
-      replacement:
-        'output("error", `${bold(red`error:`)} ${format(msgs).replace(/^([A-Za-z]*Error):\\s*/, "")}`);',
-    },
-    {
-      search: 'output("error", `${bold(red`error:`)} ${format(msgs)}`);',
-      replacement:
-        'output("error", `${bold(red`error:`)} ${format(msgs).replace(/^([A-Za-z]*Error):\\s*/, "")}`);',
+        'output("error", `${$1.bold.red("error:")} ${format(msgs).replace(/^([A-Za-z]*Error):\\s*/, "")}`);',
     },
   ];
   let loggerPatched = false;
@@ -701,21 +638,15 @@ async function brandTsdown() {
     let content = await readFile(candidateFile, 'utf-8');
     let changed = false;
     for (const { search, replacement } of loggerPatches) {
-      if (content.includes(search)) {
-        content = content.replaceAll(search, replacement);
-        changed = true;
+      if (!search.test(content)) {
+        continue;
       }
+      content = content.replaceAll(search, replacement);
+      changed = true;
     }
     if (!changed) {
       continue;
     }
-    // The branded logger output uses `bold(...)` and `red` (see loggerPatches),
-    // but tsdown's logger module only imports the other ansis colors it needs
-    // (`bgRed`, `bgYellow`, `yellow`, ...). Those identifiers only happened to be
-    // in scope when rolldown co-located them in this chunk; newer chunking splits
-    // them out, leaving `bold`/`red` undefined at runtime. Ensure the branded
-    // chunk imports them from the same shared chunk it already pulls colors from.
-    content = await ensureAnsisImports(content, ['bold', 'red'], tsdownDistDir);
     await writeFile(candidateFile, content, 'utf-8');
     console.log(`Branded tsdown logger prefixes in ${candidateFile}`);
     loggerPatched = true;
@@ -816,18 +747,33 @@ async function mergePackageJson() {
   const rolldownPkg = JSON.parse(await readFile(rolldownPkgPath, 'utf-8'));
   const vitePkg = JSON.parse(await readFile(vitePkgPath, 'utf-8'));
   const destPkg = JSON.parse(await readFile(destPkgPath, 'utf-8'));
+  // Read the `rolldown-plugin-dts` that tsdown depends on, which is the copy
+  // bundled into `dist/tsdown/`, rather than core's own devDependency.
+  const dtsPkg = createRequire(join(realpathSync(tsdownSourceDir), 'package.json'))(
+    'rolldown-plugin-dts/package.json',
+  );
 
-  // Merge peerDependencies from tsdown and vite
+  // Merge peerDependencies from rolldown-plugin-dts, tsdown and vite. The bundled
+  // dts plugin still resolves `vue-tsc`, `@volar/typescript`,
+  // `@vue/language-core` and `@typescript/native-preview` from core at runtime,
+  // and its declarations import their types, so isolated installs need them
+  // declared here.
   destPkg.peerDependencies = {
+    ...dtsPkg.peerDependencies,
     ...tsdownPkg.peerDependencies,
     ...vitePkg.peerDependencies,
   };
 
-  // Merge peerDependenciesMeta from tsdown and vite
+  // Merge peerDependenciesMeta from rolldown-plugin-dts, tsdown and vite
   destPkg.peerDependenciesMeta = {
+    ...dtsPkg.peerDependenciesMeta,
     ...tsdownPkg.peerDependenciesMeta,
     ...vitePkg.peerDependenciesMeta,
   };
+
+  // `rolldown` is bundled into core (see bundleRolldown).
+  delete destPkg.peerDependencies.rolldown;
+  delete destPkg.peerDependenciesMeta.rolldown;
 
   // `@tsdown/exe` and `@tsdown/css` are bundled into core (see bundleTsdown), so
   // they must not be advertised as peers anymore. `lightningcss` (which the

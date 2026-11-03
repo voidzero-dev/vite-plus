@@ -22,7 +22,7 @@ Commands:
 Options:
   -h, --help  Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp pm stage publish --help`
@@ -52,7 +52,7 @@ Options:
   --registry <URL>    Registry URL
   -h, --help          Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp pm stage approve --help`
@@ -75,5 +75,16 @@ Options:
   --registry <URL>  Registry URL
   -h, --help        Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
+```
+
+## `vpt json-edit package.json packageManager pnpm@11.2.0`
+
+
+## `vp pm stage list`
+
+Before pnpm 11.3.0, warn and skip the unavailable stage command.
+
+```
+warn: pnpm stage requires pnpm >= 11.3.0. Skipping.
 ```

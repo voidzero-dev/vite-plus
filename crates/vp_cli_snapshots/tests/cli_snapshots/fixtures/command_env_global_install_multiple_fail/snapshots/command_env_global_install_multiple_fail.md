@@ -16,7 +16,7 @@ npm error 404
 npm error 404 Note that you can also install from a
 npm error 404 tarball, folder, http url, or git url.
 npm error A complete log of this run can be found in: <home>/.npm/_logs/<timestamp>-debug-0.log
-✓ Installed install-fail-local-package 0.0.0
+ Installed install-fail-local-package 0.0.0
   Bins: install-fail-local-package
 
 error: Failed to install voidzero-nonexistent-pkg-xyz-23456: npm install failed with exit status: 1

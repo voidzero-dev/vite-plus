@@ -9,7 +9,7 @@ VITE+ - The Unified Toolchain for the Web
 
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
-• 2 config updates applied
+• 2 config updates applied, 1 file had imports rewritten
 ```
 
 ## `vpt stat-file tsdown.config.json --assert-not file`
@@ -35,7 +35,15 @@ export default defineConfig({
     "entry": "src/index.ts",
     "outDir": "dist",
     "format": ["esm", "cjs"],
-    "dts": true,
+    "dts": { generator: 'oxc',  },
+    unbundle: true,
+    copy: "public",
+    css: { inject: true },
+    "deps": {
+      // tsdown <0.23 compatibility: resolve external dependency subpaths.
+      // Remove to preserve subpath imports as written (the new default).
+      // https://tsdown.dev/options/dependencies#deps-resolvedepsubpath
+      resolveDepSubpath: true, onlyBundle: false },
     "inputOptions": {
       "cwd": "./src"
     }
@@ -64,13 +72,6 @@ check package.json
   "devDependencies": {
     "vite": "catalog:",
     "vite-plus": "catalog:"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
   }
 }
 ```
@@ -84,7 +85,7 @@ catalog:
   vite: npm:@voidzero-dev/vite-plus-core@<version>
   vite-plus: <version>
 overrides:
-  vite: 'catalog:'
+  vite@*: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite
@@ -99,6 +100,7 @@ run migration again to check if it is idempotent
 ```
 VITE+ - The Unified Toolchain for the Web
 
+▲ No package manager is declared in package.json; using pnpm for this migration without adding a pin. Run `vp env pin` to declare it explicitly.
 This project is already using Vite+! Happy coding!
 ```
 
@@ -117,7 +119,15 @@ export default defineConfig({
     "entry": "src/index.ts",
     "outDir": "dist",
     "format": ["esm", "cjs"],
-    "dts": true,
+    "dts": { generator: 'oxc',  },
+    unbundle: true,
+    copy: "public",
+    css: { inject: true },
+    "deps": {
+      // tsdown <0.23 compatibility: resolve external dependency subpaths.
+      // Remove to preserve subpath imports as written (the new default).
+      // https://tsdown.dev/options/dependencies#deps-resolvedepsubpath
+      resolveDepSubpath: true, onlyBundle: false },
     "inputOptions": {
       "cwd": "./src"
     }
@@ -146,13 +156,6 @@ check package.json
   "devDependencies": {
     "vite": "catalog:",
     "vite-plus": "catalog:"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
   }
 }
 ```

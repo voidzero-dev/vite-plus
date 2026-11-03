@@ -1,0 +1,18 @@
+[[case]]
+name = "pnpm11_update_notifier"
+vp = "global"
+comment = "Managed pnpm 11 commands disable update notifications even when the project enables them."
+steps = [
+  ["vp", "pm", "config", "get", "updateNotifier"],
+  ["vp", "install"],
+]
+
+[[case]]
+name = "pnpm12_update_notifier"
+vp = "global"
+comment = "Managed pnpm 12 commands disable update notifications even when the project enables them."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "pnpm@12.3.4"], snapshot = false },
+  ["vp", "pm", "config", "get", "updateNotifier"],
+  ["vp", "install"],
+]

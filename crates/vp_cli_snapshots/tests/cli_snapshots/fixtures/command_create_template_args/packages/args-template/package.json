@@ -1,0 +1,7 @@
+{
+  "name": "args-template",
+  "version": "0.0.0",
+  "private": true,
+  "bin": "./bin/index.mjs",
+  "type": "module"
+}

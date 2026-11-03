@@ -1,0 +1,12 @@
+[[case]]
+name = "missing_local_cli_warning"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "write-file", "node_modules/vite-plus/package.json", '{"name":"vite-plus","version":"0.0.0"}'], snapshot = false },
+  { argv = ["vp", "lint", "src/index.js"], comment = "a project that does not declare vite-plus gets migration guidance" },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.vite-plus", "0.0.0"], snapshot = false },
+  { argv = ["vp", "lint", "src/index.js"], comment = "a project that declares vite-plus but has no local CLI gets installation guidance" },
+  { argv = ["vpt", "rm", "package.json"], snapshot = false },
+  { argv = ["node", "assert-silent-fallback.mjs"], comment = "outside a project, global fallback remains silent" },
+]

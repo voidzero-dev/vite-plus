@@ -1,0 +1,4 @@
+{
+  "compilerOptions": { "baseUrl": ".", "paths": { "@app/*": ["src/*"] } },
+  "include": ["src"]
+}

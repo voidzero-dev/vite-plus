@@ -4,7 +4,19 @@ vp = "global"
 env = { NODE_OPTIONS = "--no-deprecation" }
 steps = [
   { argv = ["vp", "pm", "config", "--help"], comment = "should show help", continue-on-failure = true },
-  { argv = ["vp", "pm", "config", "set", "vite-plus-pm-config-test-key", "test-value", "--location", "project"], comment = "should set config value in project scope (shows warning for yarn@1)", continue-on-failure = true },
-  { argv = ["vp", "pm", "config", "get", "vite-plus-pm-config-test-key", "--location", "project"], comment = "should get config value from project scope (shows warning for yarn@1)", continue-on-failure = true },
-  { argv = ["vp", "pm", "config", "delete", "vite-plus-pm-config-test-key", "--location", "project"], comment = "should delete config key from project scope (shows warning for yarn@1)", continue-on-failure = true },
+  { argv = ["vp", "pm", "config", "set", "vite-plus-pm-config-test-key", "test-value", "--location", "project"], comment = "reject project writes instead of changing the home config", continue-on-failure = true },
+  { argv = ["vp", "pm", "config", "get", "vite-plus-pm-config-test-key", "--location", "project"], comment = "reject unsupported project location", continue-on-failure = true },
+  { argv = ["vp", "pm", "config", "delete", "vite-plus-pm-config-test-key", "--location", "project"], comment = "reject project deletion instead of deleting from the home config", continue-on-failure = true },
+]
+
+[[case]]
+name = "classic_config_location_preserves_home"
+vp = "global"
+env = { NODE_OPTIONS = "--no-deprecation" }
+steps = [
+  { argv = ["vp", "pm", "config", "set", "vite-plus-pm-config-test-key", "user-value", "--location", "user"], comment = "Explicit user scope uses Yarn Classic's default home config without a warning." },
+  ["vp", "pm", "config", "get", "vite-plus-pm-config-test-key", "--location", "user"],
+  ["vpt", "stat-file", ".yarnrc", "--assert", "missing"],
+  ["vp", "pm", "config", "delete", "vite-plus-pm-config-test-key", "--location", "user"],
+  ["vp", "pm", "config", "get", "vite-plus-pm-config-test-key", "--location", "user"],
 ]

@@ -9,11 +9,62 @@
 //!
 //! Standard system variables (`PATH`, `HOME`, `CI`, etc.) are intentionally
 //! excluded — they're well-known and benefit less from constant definitions.
+//! The `XDG_*_HOME` base-directory variables are the exception: they
+//! participate in `VpDirs` path resolution, so they get constants too.
 
 // ── Config: read once at startup via EnvConfig ──────────────────────────
 
-/// Override for the vite-plus home directory (default: `~/.vite-plus`).
+/// Override pinning every category root under one directory.
+///
+/// This is the highest-priority layout rule. When set, `bin` uses
+/// `<root>/bin`, and `cache` uses `<root>/cache`. Data, config, and state use
+/// `<root>`. Old environment scripts and custom-location installs export this
+/// variable. Fresh installs do not set it. Prefer `VP_*_DIR` or `XDG_*`.
 pub const VP_HOME: &str = "VP_HOME";
+
+/// Override directory for executables and shims.
+///
+/// Applies only when `VP_DATA_DIR` and `VP_CACHE_DIR` are also absolute. A
+/// single-root install from `VP_HOME` or the existing-install check ignores
+/// the complete group.
+pub const VP_BIN_DIR: &str = "VP_BIN_DIR";
+
+/// Override directory for CLI versions, Node.js runtimes, and package managers.
+/// These files use most of the disk space. Applies only as part of the complete
+/// `VP_BIN_DIR`, `VP_DATA_DIR`, and `VP_CACHE_DIR` group.
+pub const VP_DATA_DIR: &str = "VP_DATA_DIR";
+
+/// Override directory for the disposable cache. Applies only as part of the
+/// complete `VP_BIN_DIR`, `VP_DATA_DIR`, and `VP_CACHE_DIR` group.
+pub const VP_CACHE_DIR: &str = "VP_CACHE_DIR";
+
+// ── XDG base directories: read by VpDirs resolution ────────────────────
+
+/// XDG base directory for user configuration.
+pub const XDG_CONFIG_HOME: &str = "XDG_CONFIG_HOME";
+
+/// XDG base directory for user data.
+pub const XDG_DATA_HOME: &str = "XDG_DATA_HOME";
+
+/// XDG base directory for user state.
+pub const XDG_STATE_HOME: &str = "XDG_STATE_HOME";
+
+/// XDG base directory for disposable caches.
+pub const XDG_CACHE_HOME: &str = "XDG_CACHE_HOME";
+
+/// All environment variables that the `VpDirs` resolution chain reads. Tests
+/// clear them to isolate resolution from the developer shell. The Vite+
+/// environment script usually exports `VP_HOME` in that shell.
+pub const LAYOUT_OVERRIDE_VARS: &[&str] = &[
+    VP_HOME,
+    VP_BIN_DIR,
+    VP_DATA_DIR,
+    VP_CACHE_DIR,
+    XDG_DATA_HOME,
+    XDG_CACHE_HOME,
+    XDG_CONFIG_HOME,
+    XDG_STATE_HOME,
+];
 
 /// Log filter string for `tracing_subscriber` (e.g. `"debug"`, `"vt=trace"`).
 pub const VP_LOG: &str = "VP_LOG";
@@ -34,6 +85,50 @@ pub const VP_NODE_SKIP_SIGNATURE_VERIFY: &str = "VP_NODE_SKIP_SIGNATURE_VERIFY";
 /// Override Node.js version (takes highest priority in version resolution).
 pub const VP_NODE_VERSION: &str = "VP_NODE_VERSION";
 
+/// Opt-in Node.js selector for first-start installation.
+/// Defaults to the pinned Node.js release when unset.
+pub const VP_SETUP_NODE_VERSION: &str = "VP_SETUP_NODE_VERSION";
+/// File used to return the exact project Node.js version to a CI installer.
+pub const VP_SETUP_NODE_VERSION_FILE: &str = "VP_SETUP_NODE_VERSION_FILE";
+
+/// Resolve global CLI dependencies without the installation lockfile when set to `1`.
+pub const VP_SETUP_SKIP_INSTALL_LOCKFILE: &str = "VP_SETUP_SKIP_INSTALL_LOCKFILE";
+
+/// Override package manager and version for vp commands (for example, `pnpm@10.18.0`).
+/// Direct package-manager shims use their own version overrides instead.
+pub const VP_PACKAGE_MANAGER: &str = "VP_PACKAGE_MANAGER";
+
+/// Override the npm and npx shim version.
+pub const VP_NPM_VERSION: &str = "VP_NPM_VERSION";
+
+/// Override the pnpm, pnpx, pn, and pnx shim version.
+pub const VP_PNPM_VERSION: &str = "VP_PNPM_VERSION";
+
+/// Override the yarn and yarnpkg shim version.
+pub const VP_YARN_VERSION: &str = "VP_YARN_VERSION";
+
+/// Override the bun and bunx shim version.
+pub const VP_BUN_VERSION: &str = "VP_BUN_VERSION";
+
+/// Node.js management preference (`yes` or `no`).
+pub const VP_NODE_MANAGER: &str = "VP_NODE_MANAGER";
+
+/// Package-manager management preference shared by every family.
+/// Family-specific variables take precedence over it.
+pub const VP_PM_MANAGER: &str = "VP_PM_MANAGER";
+
+/// npm management preference; takes precedence over `VP_PM_MANAGER`.
+pub const VP_NPM_MANAGER: &str = "VP_NPM_MANAGER";
+
+/// pnpm management preference; takes precedence over `VP_PM_MANAGER`.
+pub const VP_PNPM_MANAGER: &str = "VP_PNPM_MANAGER";
+
+/// Yarn management preference; takes precedence over `VP_PM_MANAGER`.
+pub const VP_YARN_MANAGER: &str = "VP_YARN_MANAGER";
+
+/// Bun management preference; takes precedence over `VP_PM_MANAGER`.
+pub const VP_BUN_MANAGER: &str = "VP_BUN_MANAGER";
+
 /// Enable debug output for shim dispatch.
 pub const VP_DEBUG_SHIM: &str = "VP_DEBUG_SHIM";
 
@@ -42,6 +137,11 @@ pub const VP_ENV_USE_EVAL_ENABLE: &str = "VP_ENV_USE_EVAL_ENABLE";
 
 /// Explicitly specify the current shell.
 pub const VP_SHELL: &str = "VP_SHELL";
+
+/// Nushell version that `vp env setup` uses to select the `env.nu` syntax,
+/// instead of running `nu`. Tests set it to make the output independent of
+/// the installed Nushell.
+pub const VP_NU_VERSION: &str = "VP_NU_VERSION";
 
 /// Filter for update task types.
 pub const VP_UPDATE_TASK_TYPES: &str = "VP_UPDATE_TASK_TYPES";
@@ -56,8 +156,11 @@ pub const VP_GLOBAL_CLI_JS_SCRIPTS_DIR: &str = "VP_GLOBAL_CLI_JS_SCRIPTS_DIR";
 /// Value is a `PATH`-style list of directories to bypass.
 pub const VP_BYPASS: &str = "VP_BYPASS";
 
-/// Recursion guard for `vp env exec` — prevents infinite shim loops.
-pub const VP_TOOL_RECURSION: &str = "VP_TOOL_RECURSION";
+/// Comma-separated tools whose real binary directories have been injected into PATH.
+pub const VP_PATH_INJECTED_TOOLS: &str = "VP_PATH_INJECTED_TOOLS";
+
+/// Explicit tsconfig for the `vpx <script>` loader hooks, set from `vpx --tsconfig`.
+pub const VP_SCRIPT_TSCONFIG: &str = "VP_SCRIPT_TSCONFIG";
 
 /// Set by shim dispatch to record the active Node.js version.
 pub const VP_ACTIVE_NODE: &str = "VP_ACTIVE_NODE";
@@ -89,13 +192,27 @@ pub const VP_SHIM_WRAPPER: &str = "VP_SHIM_WRAPPER";
 /// the spelling. This carries the original alongside it.
 pub const VP_RAW_SUBCOMMAND: &str = "VP_RAW_SUBCOMMAND";
 
+/// Set (to `1`) when the global CLI delegates a command that used `-C`.
+///
+/// The local CLI uses this marker to keep the explicit target after the global
+/// CLI changes the child process directory and removes `-C` from its arguments.
+pub const VP_EXPLICIT_CHDIR: &str = "VP_EXPLICIT_CHDIR";
+
 /// Path to the vp binary, passed to JS scripts so they can invoke CLI commands.
 pub const VP_CLI_BIN: &str = "VP_CLI_BIN";
 
 /// Global CLI version, passed from Rust binary to JS for --version display.
 pub const VP_GLOBAL_VERSION: &str = "VP_GLOBAL_VERSION";
 
-// ── HTTP client TLS / CA configuration ──────────────────────────────────
+// ── HTTP client configuration ───────────────────────────────────────────
+
+/// Override the per-request timeout (in seconds) for large file downloads
+/// (Node.js runtimes, package-manager tarballs).
+///
+/// Must be a positive integer number of seconds no larger than 86400
+/// (24 hours); an invalid value warns and is ignored. Default: 600
+/// (10 minutes). Duration formats like `10m` may be supported later.
+pub const VP_DOWNLOAD_TIMEOUT: &str = "VP_DOWNLOAD_TIMEOUT";
 
 /// Path to a PEM bundle of extra CA certificates to trust for HTTPS.
 ///
@@ -123,8 +240,38 @@ pub const VP_INSECURE_TLS: &str = "VP_INSECURE_TLS";
 
 // ── Testing / Development ───────────────────────────────────────────────
 
+/// When set to `1`, the global CLI prints the layout mode and the five category
+/// roots from [`crate::EnvConfig`], then exits. It prints one value on each
+/// line. Installers use this variable when they have a `vp` binary. Thus, they
+/// do not implement directory resolution again.
+pub const VP_DUMP_DIRS: &str = "VP_DUMP_DIRS";
+
+/// Bootstrap capability probe; presence requests only the self-setup contract.
+pub const VP_SELF_SETUP_SUPPORT_CHECK: &str = "VP_SELF_SETUP_SUPPORT_CHECK";
+
+/// Skip persistent shell/PATH changes during first-start installation.
+pub const VP_SELF_SETUP_NO_MODIFY_PATH: &str = "VP_SELF_SETUP_NO_MODIFY_PATH";
+
+/// Bootstrap consent to replace existing Vite+ entrypoints during unattended setup.
+pub const VP_SELF_SETUP_REPLACE_EXISTING: &str = "VP_SELF_SETUP_REPLACE_EXISTING";
+
+/// Keys in [`VP_DUMP_DIRS`] output. Each value uses one `<key>\t<value>` line.
+/// The `vp_global_cli` printer and `vp-setup` parser share these values.
+/// `install.sh` and `install.ps1` use the same keys.
+pub mod dump_dirs {
+    pub const LAYOUT: &str = "layout";
+    pub const DATA: &str = "data";
+    pub const BIN: &str = "bin";
+    pub const CACHE: &str = "cache";
+    pub const CONFIG: &str = "config";
+    pub const STATE: &str = "state";
+}
+
 /// Override the trampoline binary path for tests.
 ///
 /// When set, `get_trampoline_path()` uses this path instead of resolving
 /// relative to `current_exe()`. Only used in test environments.
 pub const VP_TRAMPOLINE_PATH: &str = "VP_TRAMPOLINE_PATH";
+
+/// Emit shell assignments after self-setup (sh or powershell).
+pub const VP_SELF_SETUP_SHELL: &str = "VP_SELF_SETUP_SHELL";

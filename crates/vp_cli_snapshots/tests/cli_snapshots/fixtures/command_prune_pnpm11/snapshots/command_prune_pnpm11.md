@@ -38,7 +38,7 @@ Options:
   --no-optional  Remove optional dependencies
   -h, --help     Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management
 ```
 
 ## `vp pm prune`
@@ -78,7 +78,7 @@ Packages: -1
 -
 
 devDependencies:
-- test-vite-plus-package 1.0.0
+- test-vite-plus-package
 ```
 
 ## `vpt print-file package.json`
@@ -110,7 +110,7 @@ Packages: -1
 -
 
 optionalDependencies:
-- test-vite-plus-package-optional 1.0.0
+- test-vite-plus-package-optional
 
 devDependencies:
  test-vite-plus-package 1.0.0
@@ -147,7 +147,7 @@ Packages: -1
 optionalDependencies: skipped
 
 devDependencies:
-- test-vite-plus-package 1.0.0
+- test-vite-plus-package
 ```
 
 ## `vpt print-file package.json`

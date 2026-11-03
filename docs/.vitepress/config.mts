@@ -7,46 +7,57 @@ import { groupIconMdPlugin, groupIconVitePlugin } from 'vitepress-plugin-group-i
 import llmstxt from 'vitepress-plugin-llms';
 import { withMermaid } from 'vitepress-plugin-mermaid';
 
-const taskRunnerGuideItems = [
-  {
-    text: 'Run',
-    link: '/guide/run',
-  },
-  {
-    text: 'Task Caching',
-    link: '/guide/cache',
-    items: [
-      { text: 'Automatic Data Tracking', link: '/guide/automatic-data-tracking' },
-      { text: 'GitHub Actions Cache', link: '/guide/github-actions-cache' },
-    ],
-  },
-  {
-    text: 'Running Binaries',
-    link: '/guide/vpx',
-  },
-];
+import { resolveDocsSiteOrigin } from './site-origin.ts';
+
+// Non-production deploys (the main preview, PR staging) serve their own
+// copies of the install scripts and llms dumps, so the https://vite.plus
+// installer shortcuts and absolute site URLs must point at the deploy's
+// origin instead of production. The deploy workflows set DOCS_SITE_ORIGIN via
+// the deploy-docs composite action; markdown content is rewritten through
+// markdown-it below, and Vue components read the __DOCS_*__ define constants.
+const siteOrigin = resolveDocsSiteOrigin();
+const docsOrigin = siteOrigin || 'https://viteplus.dev';
+const installShUrl = siteOrigin ? `${siteOrigin}/install.sh` : 'https://vite.plus';
+const installPs1Url = siteOrigin ? `${siteOrigin}/install.ps1` : 'https://vite.plus/ps1';
+
+function rewriteInstallUrls(text: string): string {
+  if (!siteOrigin) {
+    return text;
+  }
+  return text
+    .replaceAll('https://vite.plus/ps1', installPs1Url)
+    .replaceAll('https://vite.plus', installShUrl);
+}
 
 const guideSidebar = [
   {
     text: 'Introduction',
     items: [
       { text: 'Getting Started', link: '/guide/' },
-      { text: 'Creating a Project', link: '/guide/create' },
-      {
-        text: 'Migrate to Vite+',
-        link: '/guide/migrate',
-        items: [{ text: 'Migration Rules', link: '/guide/migrate-rules' }],
-      },
-      { text: 'Installing Dependencies', link: '/guide/install' },
-      { text: 'Environment', link: '/guide/env' },
-      { text: 'Installer Environment Variables', link: '/guide/installer-env-vars' },
+      { text: 'Global CLI', link: '/guide/global-cli' },
+      { text: 'Project-local CLI', link: '/guide/local-cli' },
       { text: 'Why Vite+', link: '/guide/why' },
     ],
   },
   {
-    text: 'Develop',
+    text: 'Set Up a Project',
     items: [
-      { text: 'Dev', link: '/guide/dev' },
+      { text: 'Creating a Project', link: '/guide/create' },
+      {
+        text: 'Migrate to Vite+',
+        link: '/guide/migrate',
+        items: [
+          { text: 'Migration Rules', link: '/guide/migrate-rules' },
+          { text: 'Upgrade to Vitest 5', link: '/guide/vitest-v5' },
+        ],
+      },
+      { text: 'Update Vite+', link: '/guide/upgrade-project' },
+      { text: 'Package Management', link: '/guide/package-management' },
+    ],
+  },
+  {
+    text: 'Project Toolchain',
+    items: [
       {
         text: 'Check',
         link: '/guide/check',
@@ -56,22 +67,34 @@ const guideSidebar = [
         ],
       },
       { text: 'Test', link: '/guide/test' },
-    ],
-  },
-  {
-    text: 'Execute',
-    items: taskRunnerGuideItems,
-  },
-  {
-    text: 'Build',
-    items: [
+      { text: 'Dev', link: '/guide/dev' },
       { text: 'Build', link: '/guide/build' },
       { text: 'Pack', link: '/guide/pack' },
+      {
+        text: 'Run',
+        link: '/guide/run',
+      },
+      {
+        text: 'Task Caching',
+        link: '/guide/cache',
+        items: [
+          { text: 'Automatic Data Tracking', link: '/guide/automatic-data-tracking' },
+          { text: 'GitHub Actions Cache', link: '/guide/github-actions-cache' },
+        ],
+      },
+      {
+        text: 'Running Binaries',
+        link: '/guide/vpx',
+      },
+      { text: 'Commit Hooks', link: '/guide/commit-hooks' },
+      { text: 'Monorepo Guide', link: '/guide/monorepo' },
     ],
   },
   {
-    text: 'Maintain',
+    text: 'Global CLI',
     items: [
+      { text: 'Homebrew', link: '/guide/homebrew' },
+      { text: 'Environment', link: '/guide/env' },
       { text: 'Upgrading Vite+', link: '/guide/upgrade' },
       { text: 'Removing Vite+', link: '/guide/implode' },
     ],
@@ -82,10 +105,11 @@ const guideSidebar = [
       { text: 'IDE Integration', link: '/guide/ide-integration' },
       { text: 'CI', link: '/guide/ci' },
       { text: 'Docker', link: '/guide/docker' },
-      { text: 'Commit Hooks', link: '/guide/commit-hooks' },
-      { text: 'Monorepo Guide', link: '/guide/monorepo' },
-      { text: 'Troubleshooting', link: '/guide/troubleshooting' },
     ],
+  },
+  {
+    text: 'Reference',
+    items: [{ text: 'Troubleshooting', link: '/guide/troubleshooting' }],
   },
 ];
 
@@ -113,6 +137,11 @@ export default extendConfig(
         ['meta', { name: 'twitter:site', content: '@voidzerodev' }],
       ],
       vite: {
+        define: {
+          __DOCS_ORIGIN__: JSON.stringify(docsOrigin),
+          __DOCS_INSTALL_SH_URL__: JSON.stringify(installShUrl),
+          __DOCS_INSTALL_PS1_URL__: JSON.stringify(installPs1Url),
+        },
         optimizeDeps: {
           include: ['mermaid > @braintree/sanitize-url'],
         },
@@ -158,8 +187,8 @@ export default extendConfig(
               { text: 'GitHub', link: 'https://github.com/voidzero-dev/vite-plus' },
               { text: 'Releases', link: 'https://github.com/voidzero-dev/vite-plus/releases' },
               {
-                text: 'Announcement',
-                link: 'https://voidzero.dev/posts/announcing-vite-plus-beta',
+                text: '1.0 Announcement',
+                link: 'https://voidzero.dev/posts/announcing-vite-plus-1-0',
               },
               {
                 text: 'Contributing',
@@ -258,6 +287,31 @@ export default extendConfig(
       markdown: {
         config(md) {
           md.use(groupIconMdPlugin);
+          if (siteOrigin) {
+            md.core.ruler.push('rewrite-install-urls', (state) => {
+              const walk = (tokens: typeof state.tokens) => {
+                for (const token of tokens) {
+                  if (
+                    token.type === 'fence' ||
+                    token.type === 'code_inline' ||
+                    token.type === 'text'
+                  ) {
+                    token.content = rewriteInstallUrls(token.content);
+                  }
+                  if (token.type === 'link_open') {
+                    const href = token.attrGet('href');
+                    if (href) {
+                      token.attrSet('href', rewriteInstallUrls(href));
+                    }
+                  }
+                  if (token.children) {
+                    walk(token.children);
+                  }
+                }
+              };
+              walk(state.tokens);
+            });
+          }
         },
       },
     }),

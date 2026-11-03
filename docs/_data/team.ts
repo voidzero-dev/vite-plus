@@ -126,6 +126,14 @@ export const core: DefaultTheme.TeamMember[] = [
       { icon: 'bluesky', link: 'https://bsky.app/profile/liangmi.dev' },
     ],
   },
+  {
+    avatar: 'https://github.com/forehalo.png',
+    name: 'Yii',
+    links: [
+      { icon: 'github', link: 'https://github.com/forehalo' },
+      { icon: 'x', link: 'https://x.com/forehalo' },
+    ],
+  },
 ];
 
 export const emeriti: DefaultTheme.TeamMember[] = [];

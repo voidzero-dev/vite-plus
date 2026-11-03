@@ -95,6 +95,12 @@ const COMMANDS: &[CommandEntry] = &[
         append_help: false,
     },
     CommandEntry {
+        label: "hooks",
+        command: "hooks",
+        summary: "Manage the Git hook dispatcher.",
+        append_help: false,
+    },
+    CommandEntry {
         label: "outdated",
         command: "outdated",
         summary: "Check for outdated packages.",
@@ -103,7 +109,13 @@ const COMMANDS: &[CommandEntry] = &[
     CommandEntry {
         label: "env",
         command: "env",
-        summary: "Manage Node.js versions.",
+        summary: "Manage Node.js and package managers.",
+        append_help: false,
+    },
+    CommandEntry {
+        label: "toolchain",
+        command: "toolchain",
+        summary: "Show Vite+ tool versions and relationships.",
         append_help: false,
     },
     CommandEntry {
@@ -638,16 +650,6 @@ mod tests {
         let (label, summary) = selected_command_parts("create", "Create a new project.", 4);
         assert_eq!(label, "cre…");
         assert_eq!(summary, None);
-    }
-
-    #[test]
-    fn help_entry_uses_static_inline_description() {
-        let help = COMMANDS
-            .iter()
-            .find(|entry| entry.command == "help")
-            .expect("help command should exist");
-        assert_eq!(help.label, "help");
-        assert_eq!(help.summary, "View all commands and details");
     }
 
     #[test]

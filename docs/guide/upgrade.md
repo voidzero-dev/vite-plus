@@ -1,17 +1,38 @@
 # Upgrading Vite+
 
-Use `vp upgrade` to update the global `vp` binary, and use Vite+'s package management commands to update the local `vite-plus` package in a project.
+Use `vp upgrade` to update the global `vp` binary, or [Homebrew](#homebrew) if it owns your installation. To update the local `vite-plus` package in a project, see [Update Vite+](/guide/upgrade-project).
 
 ## Overview
 
 There are two parts to upgrading Vite+:
 
 - The global `vp` command installed on your machine
-- The local `vite-plus` package used by an individual project
+- The [local `vite-plus` package](/guide/upgrade-project) used by an individual project
 
 You can upgrade both of them independently.
 
+## Show the Toolchain
+
+Run `vp toolchain` to show the components for the current directory:
+
+```bash
+vp toolchain
+vp toolchain vite
+vp toolchain vite rolldown oxc
+vp toolchain --json
+```
+
+The command uses the local `vite-plus` package when the project has one. Use `--global` or `-g` to show the release for the global `vp` command:
+
+```bash
+vp toolchain --global
+```
+
+`vp why <package>` shows the dependency graph from the package manager. It cannot show code bundled into `@voidzero-dev/vite-plus-core`. It also cannot show engines compiled into Vite+. Use `vp toolchain` to show those versions and relationships.
+
 ## Global `vp`
+
+Update the global CLI with:
 
 ```bash
 vp upgrade                        # upgrade to the latest version
@@ -19,6 +40,40 @@ vp upgrade --check                # check for updates without installing
 vp upgrade <version>              # install a specific version
 vp upgrade --registry <registry>  # use a custom npm registry
 ```
+
+### Automatic Update Checks
+
+The global CLI checks for updates in the background during normal terminal use, caching results for 24 hours. When a newer version is available, it prints a notice to stderr without installing it.
+
+Set `VP_NO_UPDATE_CHECK=1` to disable these checks and notices. They are also disabled in CI and for Homebrew installations.
+
+### Move an Existing Install to the Split Directory Layout
+
+Vite+ 0.3.0 is the first release that supports the split directory layout. Vite+ 0.2.x and earlier use the single-root layout for fresh installs and upgrades.
+
+`vp upgrade` keeps an existing default install in `~/.vite-plus` on Unix or `%USERPROFILE%\.vite-plus` on Windows. The command upgrades the CLI in that directory. It does not move the install to the split platform directories. You can continue to use the existing layout.
+
+To use the split layout now, remove the existing install. Then install Vite+ again. Run `vp implode` in a shell that uses the current install. The command removes the generated environment file and shell profile entries. It does not unset directory variables in the current shell. Unset all Vite+ directory variables before you run the installer. This can include values from an earlier preview environment file. Alternatively, start a new shell after `vp implode`. Then run the installer in the new shell.
+
+::: warning
+`vp implode` removes all Vite+-managed Node.js runtimes, global packages, configuration, and caches. Keep the existing layout if you do not want to recreate that data.
+:::
+
+```bash
+vp implode
+unset VP_HOME VP_DATA_DIR VP_BIN_DIR VP_CACHE_DIR
+curl -fsSL https://vite.plus | bash
+```
+
+On Windows:
+
+```powershell
+vp implode
+Remove-Item Env:\VP_HOME, Env:\VP_DATA_DIR, Env:\VP_BIN_DIR, Env:\VP_CACHE_DIR -ErrorAction SilentlyContinue
+irm https://vite.plus/ps1 | iex
+```
+
+Also remove persistent definitions of `VP_HOME`, `VP_DATA_DIR`, `VP_BIN_DIR`, and `VP_CACHE_DIR` from your shell profile or system environment. A fresh install uses `VP_HOME` or a complete `VP_*_DIR` group that remains set. `VP_HOME` selects the single-root layout. If you install Vite+ 0.2.x or earlier, the installer also uses this layout. The installer prints a notice.
 
 ### Rollback
 
@@ -30,33 +85,21 @@ vp upgrade --rollback
 
 Older versions are pruned automatically after each upgrade. The active version and the previous version are always kept, so a rollback target is never removed.
 
-## Local `vite-plus`
+### Homebrew
 
-The recommended way to upgrade an existing Vite+ project is `vp migrate`:
-
-```bash
-vp migrate
-```
-
-On a project that is already on Vite+, migrate does a toolchain version upgrade only: it re-pins `vite-plus`, the `vite` -> `@voidzero-dev/vite-plus-core` alias, and the `vitest` pin to the versions the global `vp` now bundles, across every workspace package. It skips the first-time setup steps (git hooks, editor and agent files, lint migration), so a version bump does not re-touch things you already configured. Pass `--full` to also run that setup.
-
-### Updating the Vitest Pin
-
-If you migrated with `vp migrate`, your project pins `vitest` to an exact version so the whole project shares a single Vitest copy with the bundled `vp test` runner. The pin lives in your package manager's override block:
-
-- **npm / Bun:** a `vitest` entry under `overrides` in `package.json`
-- **Yarn:** a `vitest` entry under `resolutions` in `package.json`
-- **pnpm:** a `vitest` entry under `overrides` in `pnpm-workspace.yaml` — unless your `package.json` already had a `pnpm` field, in which case it lives under `pnpm.overrides` in `package.json` instead (pnpm ignores `pnpm-workspace.yaml` overrides when `package.json` defines `pnpm.overrides`)
-
-A Vite+ release can bump the bundled Vitest. Because that pin also applies to `vite-plus`'s own `vitest` dependency, an out-of-date pin keeps installing the previous runner even after you upgrade `vite-plus` — splitting Vitest's internals (mocks, `expect`, runner state) between the pinned copy and the one `vp test` loads.
-
-After upgrading `vite-plus`, re-pin `vitest` to the version Vite+ now bundles. Check that version with:
+The [official Homebrew tap](/guide/homebrew) owns its installed binary. Update it with:
 
 ```bash
-vp --version
+brew upgrade voidzero-dev/vite-plus/vp
 ```
 
-Then set the `vitest` override to that exact version, or rerun `vp migrate` to update the pin for you.
+`vp upgrade` detects the installed formula and shows its Homebrew upgrade command without downloading or installing another version. This also applies to `--force`, a specific version, and `--rollback`. The script installer's rollback and automatic pruning do not apply to Homebrew installations.
+
+For the tap, run `vp` after upgrading to install the new version's dependencies in your user data directory. Setup preserves your management preferences.
+
+For the tap, `vp upgrade --check` directs you to `brew outdated voidzero-dev/vite-plus/vp`. Automatic npm update checks and notices are disabled for Homebrew installations.
+
+To switch to the tap, follow the [migration steps](/guide/homebrew#switch-an-existing-installation).
 
 ## Preview Builds
 
@@ -72,6 +115,8 @@ Preview builds are addressed by pull request number or commit SHA. They are not 
 
 ### Global `vp` Preview
 
+For a Homebrew installation, follow the [tap preview instructions](/guide/homebrew#test-a-preview-build).
+
 Install a preview build of the global CLI by passing `VP_PR_VERSION` to the installer. Pass a pull request number or a commit SHA:
 
 ```bash
@@ -86,16 +131,8 @@ irm https://vite.plus/ps1 | iex
 Remove-Item Env:\VP_PR_VERSION
 ```
 
-The installer resolves the ref to its `0.0.0-commit.<sha>` build through the registry bridge and installs it like any other version. Run `vp --version` afterward to confirm which build and bundled tool versions are active. When you are done testing, return to the published release with `vp upgrade --force` or by running the installer again without `VP_PR_VERSION`.
+The installer uses the registry bridge to resolve the ref to a `0.0.0-commit.<sha>` build. It installs this build like other versions. Run `vp toolchain --global` to show the active build and tool versions. After testing, run `vp upgrade --force` to restore the published release. You can also run the installer without `VP_PR_VERSION`.
 
 ### Local `vite-plus` Preview
 
-After installing the preview global CLI above, run migrate in the project to move its local `vite-plus` onto the same build:
-
-```bash
-vp migrate
-```
-
-Migrate points the project at the bridge registry (writing it to `.npmrc`, or `.yarnrc.yml` for Yarn Berry) and pins `vite-plus` and the `vite` -> `@voidzero-dev/vite-plus-core` alias to the matching `0.0.0-commit.<sha>` version. That registry line is what lets the same versions resolve in the project's own CI, so commit it if you want CI to test the preview too.
-
-After installing, check the bundled versions with `vp --version`. When testing is complete, restore the published release: set `vite-plus` back to `latest`, remove the bridge `registry` line from `.npmrc` (or `.yarnrc.yml`), and reinstall with `vp install`.
+To use the same preview in a project, follow [Update Vite+](/guide/upgrade-project#preview-builds).

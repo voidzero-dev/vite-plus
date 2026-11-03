@@ -56,12 +56,16 @@ Run each task twice:
 vp run build
 vp run build # should print "cache hit"
 vp run lint
-vp run lint # should print "cache hit"
+vp run lint  # should print "cache hit"
 ```
 
 ## 2. Restore The Cache After Install
 
-Restore `node_modules/.vite/task-cache` after `vp install`, because package installation can recreate or modify `node_modules`.
+Restore `node_modules/.vite/task-cache` after the `setup-vp` step, because package installation can recreate or modify `node_modules`.
+
+Set `<setup-vp-version>` below to an exact version from the [`setup-vp` releases page](https://github.com/voidzero-dev/setup-vp/releases). You can use a commit SHA instead.
+
+See [Automatic Version Updates](/guide/ci#automatic-version-updates) to configure Dependabot or Renovate.
 
 ```yaml [.github/workflows/ci.yml]
 name: CI
@@ -80,12 +84,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: voidzero-dev/setup-vp@v1
+      - uses: voidzero-dev/setup-vp@<setup-vp-version>
         with:
           node-version: '24'
           cache: true
-
-      - run: vp install
 
       - name: Restore Vite Task cache
         id: vite-task-cache

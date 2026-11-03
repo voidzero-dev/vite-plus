@@ -17,7 +17,7 @@ _clean_dist:
   Remove-Item -Path 'packages/*/dist' -Recurse -Force -ErrorAction SilentlyContinue
 
 init: _clean_dist _fix_symlinks
-  cargo binstall watchexec-cli cargo-insta typos-cli cargo-shear dprint taplo-cli -y
+  cargo binstall watchexec-cli cargo-insta typos-cli cargo-shear -y
   node packages/tools/src/index.ts sync-remote
   pnpm install
   pnpm -C docs install
@@ -59,6 +59,7 @@ watch *args='':
 fmt:
   cargo shear --fix
   cargo fmt --all
+  cargo fmt --manifest-path crates/vp_trampoline/Cargo.toml
   pnpm fmt
 
 check:
@@ -71,24 +72,46 @@ watch-check:
 # vite-plus-cli (lives outside crates/) to catch type sync issues.
 # vp_cli_snapshots is excluded: its suite needs a built global binary and
 # node, and runs via `just snapshot-test` instead.
+# vp_trampoline is not a workspace member.
+# On Unix, run its portable parser and layout tests separately.
+# The Windows CLI snapshot suite tests Windows shim behavior.
 # Single source of truth for cargo test, used by CI too.
 [unix]
 test:
-  RUST_MIN_STACK=8388608 cargo test $(for d in crates/*/; do n=$(basename $d); [ "$n" = "vp_cli_snapshots" ] || echo -n "-p $n "; done) -p vite-plus-cli
+  RUST_MIN_STACK=8388608 cargo test $(for d in crates/*/; do n=$(basename $d); [ "$n" = "vp_cli_snapshots" ] || [ "$n" = "vp_trampoline" ] || echo -n "-p $n "; done) -p vite-plus-cli
+  # Run from the repository root to avoid the shim's build-std configuration.
+  cargo test --manifest-path crates/vp_trampoline/Cargo.toml --target-dir "${CARGO_TARGET_DIR:-target}"
 
 [windows]
 test:
-  $packages = Get-ChildItem -Path crates -Directory | Where-Object { $_.Name -ne 'vp_cli_snapshots' } | ForEach-Object { '-p'; $_.Name }; $Env:RUST_MIN_STACK='8388608'; $Env:__COMPAT_LAYER='RunAsInvoker'; cargo test @packages -p vite-plus-cli
+  $packages = Get-ChildItem -Path crates -Directory | Where-Object { $_.Name -ne 'vp_cli_snapshots' -and $_.Name -ne 'vp_trampoline' } | ForEach-Object { '-p'; $_.Name }; $Env:RUST_MIN_STACK='8388608'; $Env:__COMPAT_LAYER='RunAsInvoker'; cargo test @packages -p vite-plus-cli
 
 # PTY-based CLI snapshot tests (crates/vp_cli_snapshots). Builds the global
-# binary and shim template first so the runner never tests a stale build.
+# binary and shim template first so the runner never tests a stale build, and
+# installs Playwright Chromium for the browser-mode cases (idempotent).
 # Filter by trial name substring: `just snapshot-test create`. Accept snapshot changes with
 # `UPDATE_SNAPSHOTS=1 just snapshot-test`. Local-flavor cases additionally
 # need a built packages/cli (`pnpm build`); the runner fails fast when dist
 # is missing or stale. Use snapshot-test-global on checkouts without one.
-snapshot-test *args='':
-  cargo build -p vp_global_cli -p vp_trampoline
+snapshot-test *args='': _install_chromium _build-trampoline
+  cargo build -p vp_global_cli
   cargo test -p vp_cli_snapshots -- {{args}}
+
+# The trampoline is not a workspace member.
+# The helper runs Cargo from the crate directory so the build-std config applies.
+# It resolves relative CARGO_TARGET_DIR values from the repository root.
+_build-trampoline *args='':
+  node packages/tools/src/build-trampoline.ts {{args}}
+
+# Browser-mode snapshot cases run with PLAYWRIGHT_BROWSERS_PATH=0, so the
+# browser must be installed into node_modules with the same setting.
+[unix]
+_install_chromium:
+  PLAYWRIGHT_BROWSERS_PATH=0 pnpm exec playwright install chromium
+
+[windows]
+_install_chromium:
+  $Env:PLAYWRIGHT_BROWSERS_PATH='0'; pnpm exec playwright install chromium
 
 # Global flavor + vpt cases only: needs no JS build, for Rust-side work on
 # a checkout that never ran `pnpm build`.
@@ -110,6 +133,7 @@ lint:
     -A clippy::redundant_else \
     -A clippy::unused_async_trait_impl \
     -A clippy::useless_borrows_in_formatting
+  cargo clippy --manifest-path crates/vp_trampoline/Cargo.toml --all-targets -- --deny warnings
 
 [unix]
 doc:

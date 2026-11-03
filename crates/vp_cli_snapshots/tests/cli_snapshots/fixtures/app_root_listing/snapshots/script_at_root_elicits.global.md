@@ -11,12 +11,13 @@ listing and the task fails instead of silently building the root.
 ```
 $ vp build ⊘ cache disabled
 
-[1m[31merror:[39m[0m `vp build` at the workspace root needs a target package.
+error: `vp build` at the workspace root needs a target package.
 
   Packages in this workspace:
-    admin  apps/admin
-    web    apps/web
-    ui     packages/ui
+    admin             apps/admin
+    web               apps/web
+    ui                packages/ui
+    app-root-listing  .
 
   Pass a directory:  vp -C apps/admin build
   Or run every package's build script:  vp run -r build

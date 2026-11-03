@@ -8,7 +8,7 @@ use crate::resolution::{
 #[derive(clap::Args, Clone, Debug, Default, PartialEq, Eq)]
 pub struct AuditArgs {
     /// Automatically fix vulnerabilities
-    #[arg(long)]
+    #[arg(long, not_supported(yarn, bun < "1.4"))]
     pub(crate) fix: bool,
 
     /// Output in JSON format
@@ -20,7 +20,9 @@ pub struct AuditArgs {
     pub(crate) level: Option<String>,
 
     /// Only audit production dependencies
-    #[arg(long, not_supported(bun))]
+    // Bun ignores the flag before 1.2.21, when `bun audit --prod` landed.
+    // https://bun.sh/blog/bun-v1.2.21
+    #[arg(long, not_supported(bun < "1.2.21"))]
     pub(crate) production: bool,
 
     /// Additional arguments
@@ -36,7 +38,10 @@ impl Resolve<AuditArgs> for Npm {
             cmd.arg("fix");
         }
         cmd.option("--audit-level", args.level.as_ref())
-            .arg_if("--omit=dev", args.production)
+            .arg_if(
+                if self.supports_v7_commands() { "--omit=dev" } else { "--production" },
+                args.production,
+            )
             .arg_if("--json", args.json)
             .extend(args.pass_through_args.iter());
         cmd.into()
@@ -59,14 +64,13 @@ impl Resolve<AuditArgs> for Pnpm {
 impl Resolve<AuditArgs> for Yarn {
     fn resolve(&self, args: &AuditArgs, diag: &mut Diagnostics) -> CommandResolution {
         if self.is_berry() {
-            if args.fix {
+            if !self.supports_v2_4_commands() {
                 diag.warn(
                     DiagnosticKind::UnsupportedCommandNoop,
-                    "yarn berry audit does not support --fix",
+                    "yarn npm audit requires yarn >= 2.4.0. Skipping.",
                 );
                 return CommandResolution::Noop;
             }
-
             let mut cmd = CommandBuilder::new("yarn");
             cmd.arg("npm")
                 .arg("audit")
@@ -77,14 +81,6 @@ impl Resolve<AuditArgs> for Yarn {
             }
             cmd.extend(args.pass_through_args.iter());
             return cmd.into();
-        }
-
-        if args.fix {
-            diag.warn(
-                DiagnosticKind::UnsupportedCommandNoop,
-                "yarn v1 audit does not support --fix",
-            );
-            return CommandResolution::Noop;
         }
 
         let mut cmd = CommandBuilder::new("yarn");
@@ -98,14 +94,12 @@ impl Resolve<AuditArgs> for Yarn {
 }
 
 impl Resolve<AuditArgs> for Bun {
-    fn resolve(&self, args: &AuditArgs, diag: &mut Diagnostics) -> CommandResolution {
+    fn resolve(&self, args: &AuditArgs, _diag: &mut Diagnostics) -> CommandResolution {
         let mut cmd = CommandBuilder::new("bun");
-        cmd.arg("audit");
-        if args.fix {
-            diag.warn(DiagnosticKind::UnsupportedCommandNoop, "bun audit does not support --fix");
-            return CommandResolution::Noop;
-        }
-        cmd.option("--audit-level", args.level.as_ref()).arg_if("--json", args.json);
+        cmd.arg("audit").arg_if("fix", args.fix);
+        cmd.option("--audit-level", args.level.as_ref())
+            .arg_if("--production", args.production)
+            .arg_if("--json", args.json);
         cmd.extend(args.pass_through_args.iter());
         cmd.into()
     }
@@ -115,8 +109,8 @@ impl Resolve<AuditArgs> for Bun {
 mod tests {
     use super::*;
     use crate::resolution::{
-        CommandResolution, resolve,
-        test_utils::{bun, npm, parse_args, pnpm, yarn},
+        resolve,
+        test_utils::{bun, expect_run, expect_unsupported, npm, parse_args, pnpm, yarn},
     };
 
     #[test]
@@ -142,9 +136,7 @@ mod tests {
     #[test]
     fn test_npm_audit() {
         let resolution = resolve(&npm("11.0.0"), AuditArgs::default());
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["audit"]);
@@ -153,9 +145,7 @@ mod tests {
     #[test]
     fn test_npm_audit_fix() {
         let resolution = resolve(&npm("11.0.0"), AuditArgs { fix: true, ..Default::default() });
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["audit", "fix"]);
@@ -164,9 +154,7 @@ mod tests {
     #[test]
     fn test_pnpm_audit_fix() {
         let resolution = resolve(&pnpm("10.0.0"), AuditArgs { fix: true, ..Default::default() });
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "pnpm");
         assert_eq!(command.args, vec!["audit", "--fix"]);
@@ -175,9 +163,7 @@ mod tests {
     #[test]
     fn test_yarn1_audit() {
         let resolution = resolve(&yarn("1.22.0"), AuditArgs::default());
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["audit"]);
@@ -187,16 +173,13 @@ mod tests {
     fn test_yarn1_audit_fix_not_supported() {
         let resolution = resolve(&yarn("1.22.0"), AuditArgs { fix: true, ..Default::default() });
 
-        assert_eq!(resolution.outcome, CommandResolution::Noop);
-        assert_eq!(resolution.diagnostics[0].message, "yarn v1 audit does not support --fix");
+        expect_unsupported(resolution, &["yarn does not support --fix."]);
     }
 
     #[test]
     fn test_yarn2_audit() {
         let resolution = resolve(&yarn("4.0.0"), AuditArgs::default());
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["npm", "audit"]);
@@ -204,10 +187,10 @@ mod tests {
 
     #[test]
     fn test_yarn2_audit_fix_not_supported() {
-        let resolution = resolve(&yarn("4.0.0"), AuditArgs { fix: true, ..Default::default() });
-
-        assert_eq!(resolution.outcome, CommandResolution::Noop);
-        assert_eq!(resolution.diagnostics[0].message, "yarn berry audit does not support --fix");
+        for version in ["2.4.2", "3.6.0", "4.18.0"] {
+            let resolution = resolve(&yarn(version), AuditArgs { fix: true, ..Default::default() });
+            expect_unsupported(resolution, &["yarn does not support --fix."]);
+        }
     }
 
     #[test]
@@ -216,9 +199,7 @@ mod tests {
             &npm("11.0.0"),
             AuditArgs { level: Some("high".to_string()), ..Default::default() },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["audit", "--audit-level", "high"]);
@@ -230,9 +211,7 @@ mod tests {
             &yarn("1.22.0"),
             AuditArgs { level: Some("high".to_string()), ..Default::default() },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["audit", "--level", "high"]);
@@ -241,9 +220,7 @@ mod tests {
     #[test]
     fn test_bun_audit_basic() {
         let resolution = resolve(&bun("1.3.11"), AuditArgs::default());
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, vec!["audit"]);
@@ -255,9 +232,7 @@ mod tests {
             &bun("1.3.11"),
             AuditArgs { level: Some("high".to_string()), ..Default::default() },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, vec!["audit", "--audit-level", "high"]);
@@ -265,18 +240,57 @@ mod tests {
 
     #[test]
     fn test_bun_audit_fix_not_supported() {
-        let resolution = resolve(&bun("1.3.11"), AuditArgs { fix: true, ..Default::default() });
+        for version in ["1.3.11", "1.3.14", "1.4.0-rc.0"] {
+            let resolution = resolve(&bun(version), AuditArgs { fix: true, ..Default::default() });
+            expect_unsupported(resolution, &["bun < 1.4 does not support --fix."]);
+        }
+    }
 
-        assert_eq!(resolution.outcome, CommandResolution::Noop);
-        assert_eq!(resolution.diagnostics[0].message, "bun audit does not support --fix");
+    #[test]
+    fn test_bun_audit_production_follows_native_support() {
+        let args = AuditArgs { production: true, ..Default::default() };
+        expect_unsupported(
+            resolve(&bun("1.2.20"), args.clone()),
+            &["bun < 1.2.21 does not support --production."],
+        );
+        let command = expect_run(resolve(&bun("1.2.21"), args).outcome);
+        assert_eq!(command.args, vec!["audit", "--production"]);
+    }
+
+    #[test]
+    fn test_bun_audit_rejects_fix_with_supported_production() {
+        let args = parse_args::<AuditArgs>(["--fix", "--production", "--", "--help"]).unwrap();
+        expect_unsupported(resolve(&bun("1.3.11"), args), &["bun < 1.4 does not support --fix."]);
+    }
+
+    #[test]
+    fn test_audit_preserves_raw_fix_args() {
+        let args = parse_args::<AuditArgs>(["--", "--fix"]).unwrap();
+        for (resolution, expected) in [
+            (resolve(&yarn("1.22.22"), args.clone()), vec!["audit", "--fix"]),
+            (resolve(&yarn("4.18.0"), args.clone()), vec!["npm", "audit", "--fix"]),
+            (resolve(&bun("1.3.11"), args), vec!["audit", "--fix"]),
+        ] {
+            assert_eq!(expect_run(resolution.outcome).args, expected);
+            assert!(resolution.diagnostics.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_bun_audit_fix() {
+        let resolution =
+            resolve(&bun("1.4.0"), AuditArgs { fix: true, production: true, ..Default::default() });
+        let command = expect_run(resolution.outcome);
+
+        assert_eq!(command.program, "bun");
+        assert_eq!(command.args, vec!["audit", "fix", "--production"]);
+        assert!(resolution.diagnostics.is_empty());
     }
 
     #[test]
     fn test_bun_audit_json() {
         let resolution = resolve(&bun("1.3.11"), AuditArgs { json: true, ..Default::default() });
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "bun");
         assert_eq!(command.args, vec!["audit", "--json"]);
@@ -288,12 +302,32 @@ mod tests {
             &yarn("4.0.0"),
             AuditArgs { level: Some("high".to_string()), ..Default::default() },
         );
-        let CommandResolution::Run(command) = resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let command = expect_run(resolution.outcome);
 
         assert_eq!(command.program, "yarn");
         assert_eq!(command.args, vec!["npm", "audit", "--severity", "high"]);
+    }
+
+    #[test]
+    fn npm_dependency_filter_version_boundaries() {
+        for (version, flag) in [("6.14.18", "--production"), ("7.0.0", "--omit=dev")] {
+            for fix in [false, true] {
+                let args = AuditArgs {
+                    production: true,
+                    fix,
+                    pass_through_args: vec!["--json".into()],
+                    ..Default::default()
+                };
+                let resolution = resolve(&npm(version), args);
+                assert!(resolution.diagnostics.is_empty());
+                let expected = if fix {
+                    vec!["audit", "fix", flag, "--json"]
+                } else {
+                    vec!["audit", flag, "--json"]
+                };
+                assert_eq!(expect_run(resolution.outcome).args, expected);
+            }
+        }
     }
 
     #[test]
@@ -308,21 +342,11 @@ mod tests {
             resolve(&yarn("4.0.0"), AuditArgs { production: true, ..Default::default() });
         let bun_resolution =
             resolve(&bun("1.3.11"), AuditArgs { production: true, ..Default::default() });
-        let CommandResolution::Run(npm_command) = npm_resolution.outcome else {
-            panic!("expected command resolution");
-        };
-        let CommandResolution::Run(pnpm_command) = pnpm_resolution.outcome else {
-            panic!("expected command resolution");
-        };
-        let CommandResolution::Run(yarn_command) = yarn_resolution.outcome else {
-            panic!("expected command resolution");
-        };
-        let CommandResolution::Run(yarn_berry_command) = yarn_berry_resolution.outcome else {
-            panic!("expected command resolution");
-        };
-        let CommandResolution::Run(bun_command) = bun_resolution.outcome else {
-            panic!("expected command resolution");
-        };
+        let npm_command = expect_run(npm_resolution.outcome);
+        let pnpm_command = expect_run(pnpm_resolution.outcome);
+        let yarn_command = expect_run(yarn_resolution.outcome);
+        let yarn_berry_command = expect_run(yarn_berry_resolution.outcome);
+        let bun_command = expect_run(bun_resolution.outcome);
 
         assert_eq!(npm_command.program, "npm");
         assert_eq!(npm_command.args, vec!["audit", "--omit=dev"]);
@@ -332,8 +356,6 @@ mod tests {
         assert_eq!(yarn_command.args, vec!["audit", "--groups", "dependencies"]);
         assert_eq!(yarn_berry_command.program, "yarn");
         assert_eq!(yarn_berry_command.args, vec!["npm", "audit", "--environment", "production"]);
-        assert_eq!(bun_command.program, "bun");
-        assert_eq!(bun_command.args, vec!["audit"]);
-        assert_eq!(bun_resolution.diagnostics[0].message, "bun does not support --production.");
+        assert_eq!(bun_command.args, vec!["audit", "--production"]);
     }
 }

@@ -13,6 +13,8 @@ import {
   parse as parseJsonc,
 } from 'jsonc-parser';
 
+import { getVpDirs } from '../../binding/index.js';
+import { PackageManager } from '../types/package.ts';
 import { detectFormattingOptions, writeJsonFile } from './json.ts';
 
 // Language-specific overrides because user-level [lang] settings beat the workspace default
@@ -26,7 +28,8 @@ const VSCODE_LANGUAGE_OVERRIDES = {
 const VSCODE_SETTINGS = {
   'editor.defaultFormatter': 'oxc.oxc-vscode',
   ...VSCODE_LANGUAGE_OVERRIDES,
-  'oxc.fmt.configPath': './vite.config.ts',
+  'oxc.disableNestedConfig': true,
+  'oxc.fmt.disableNestedConfig': true,
   'editor.formatOnSave': true,
   // Oxfmt does not support partial formatting
   'editor.formatOnSaveMode': 'file',
@@ -82,13 +85,57 @@ const ZED_SETTINGS = {
       {
         format_on_save: 'on',
         prettier: { allowed: false },
-        formatter: [{ language_server: { name: 'oxfmt' } }],
-        // Only the JavaScript entry runs the oxc fix-all code action on save
-        ...(language === 'JavaScript' ? { code_action: 'source.fixAll.oxc' } : {}),
+        formatter: [
+          { language_server: { name: 'oxfmt' } },
+          // Only the JavaScript entry runs the oxc fix-all code action on save.
+          ...(language === 'JavaScript' ? [{ code_action: 'source.fixAll.oxc' }] : []),
+        ],
       },
     ]),
   ),
 } as const;
+
+const JETBRAINS_EXTERNAL_DEPENDENCIES = `<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ExternalDependencies">
+    <plugin id="com.github.oxc.project.oxcintellijplugin" />
+  </component>
+</project>
+`;
+
+function jetbrainsNodeInterpreterPath(): string {
+  return path.join(getVpDirs().bin, process.platform === 'win32' ? 'node.exe' : 'node');
+}
+
+function jetbrainsWorkspaceConfig(packageManager: PackageManager): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="PropertiesComponent">
+    <![CDATA[${JSON.stringify(
+      {
+        keyToString: {
+          'javascript.preferred.runtime.type.id': 'node',
+          nodejs_interpreter_path: jetbrainsNodeInterpreterPath(),
+          nodejs_package_manager_path: packageManager,
+        },
+      },
+      null,
+      2,
+    )}]]>
+  </component>
+</project>
+`;
+}
+
+const JETBRAINS_OXFMT_SETTINGS = `<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="OxfmtSettings">
+    <option name="preferOxfmtCodeStyleSettings" value="true" />
+  </component>
+</project>
+`;
+
+type EditorConfigValue = Record<string, unknown> | string;
 
 export const EDITORS = [
   {
@@ -108,6 +155,23 @@ export const EDITORS = [
       'settings.json': ZED_SETTINGS as Record<string, unknown>,
     },
   },
+  {
+    id: 'jetbrains',
+    label: 'JetBrains (IntelliJ, WebStorm, etc)',
+    targetDir: '.idea',
+    files: {
+      'externalDependencies.xml': JETBRAINS_EXTERNAL_DEPENDENCIES,
+      // Placeholder; writeEditorConfig() regenerates this with the resolved package manager.
+      'workspace.xml': jetbrainsWorkspaceConfig(PackageManager.pnpm),
+      'OxfmtSettings.xml': JETBRAINS_OXFMT_SETTINGS,
+    },
+  },
+] as const;
+
+// Deprecated aliases kept for backwards-compatible `--editor` values; not shown as TUI options.
+const EDITOR_ALIASES = [
+  { id: 'intellij', alias: 'jetbrains' },
+  { id: 'webstorm', alias: 'jetbrains' },
 ] as const;
 
 export type EditorId = (typeof EDITORS)[number]['id'];
@@ -273,6 +337,7 @@ export async function writeEditorConfigs({
   conflictDecisions,
   silent = false,
   extraVsCodeSettings,
+  packageManager = PackageManager.pnpm,
 }: {
   projectRoot: string;
   editorId: EditorSelection;
@@ -280,6 +345,7 @@ export async function writeEditorConfigs({
   conflictDecisions?: Map<string, 'merge' | 'skip'>;
   silent?: boolean;
   extraVsCodeSettings?: Record<string, string>;
+  packageManager?: PackageManager;
 }) {
   const editorIds = normalizeEditorSelection(editorId);
   if (editorIds.length === 0) {
@@ -294,6 +360,7 @@ export async function writeEditorConfigs({
       conflictDecisions,
       silent,
       extraVsCodeSettings,
+      packageManager,
     });
   }
 }
@@ -305,6 +372,7 @@ async function writeEditorConfig({
   conflictDecisions,
   silent,
   extraVsCodeSettings,
+  packageManager,
 }: {
   projectRoot: string;
   editorId: EditorId;
@@ -312,6 +380,7 @@ async function writeEditorConfig({
   conflictDecisions?: Map<string, 'merge' | 'skip'>;
   silent: boolean;
   extraVsCodeSettings?: Record<string, string>;
+  packageManager: PackageManager;
 }) {
   const editorConfig = EDITORS.find((e) => e.id === editorId);
   if (!editorConfig) {
@@ -322,11 +391,14 @@ async function writeEditorConfig({
   await fsPromises.mkdir(targetDir, { recursive: true });
 
   for (const [fileName, baseIncoming] of Object.entries(editorConfig.files)) {
-    const incoming =
+    const incoming: EditorConfigValue =
       editorId === 'vscode' && fileName === 'settings.json' && extraVsCodeSettings
         ? { ...extraVsCodeSettings, ...baseIncoming }
-        : baseIncoming;
+        : editorId === 'jetbrains' && fileName === 'workspace.xml'
+          ? jetbrainsWorkspaceConfig(packageManager)
+          : baseIncoming;
     const filePath = path.join(targetDir, fileName);
+    const jsonFormat = isJsonLikeFile(fileName);
 
     if (fs.existsSync(filePath)) {
       const displayPath = `${editorConfig.targetDir}/${fileName}`;
@@ -342,13 +414,17 @@ async function writeEditorConfig({
             `${displayPath} already exists.\n  ` +
             styleText(
               'gray',
-              `Vite+ adds ${editorConfig.label} settings for the built-in linter and formatter. Merge adds new keys without overwriting existing ones.`,
+              jsonFormat
+                ? `Vite+ adds ${editorConfig.label} settings for the built-in linter and formatter. Merge adds new keys without overwriting existing ones.`
+                : `Vite+ adds ${editorConfig.label} settings for the built-in linter and formatter. Overwrite replaces the existing file with the generated config.`,
             ),
           options: [
             {
-              label: 'Merge',
+              label: jsonFormat ? 'Merge' : 'Overwrite',
               value: 'merge',
-              hint: 'Merge new settings into existing file',
+              hint: jsonFormat
+                ? 'Merge new settings into existing file'
+                : 'Replace existing file with generated config',
             },
             {
               label: 'Skip',
@@ -360,12 +436,21 @@ async function writeEditorConfig({
         });
         conflictAction = prompts.isCancel(action) || action === 'skip' ? 'skip' : 'merge';
       } else {
-        // Non-interactive: always merge (safe because existing keys are never overwritten)
-        conflictAction = 'merge';
+        // Non-interactive: merge JSON safely, skip non-JSON to avoid destructive overwrite.
+        conflictAction = jsonFormat ? 'merge' : 'skip';
       }
 
       if (conflictAction === 'merge') {
-        mergeAndWriteEditorConfig(filePath, incoming, fileName, displayPath, silent);
+        if (jsonFormat) {
+          if (!isPlainObject(incoming)) {
+            throw new Error(
+              `Cannot merge editor config: ${displayPath} incoming value is not JSON`,
+            );
+          }
+          mergeAndWriteEditorConfig(filePath, incoming, fileName, displayPath, silent);
+        } else {
+          writeTextEditorConfig(filePath, incoming, displayPath, silent);
+        }
       } else {
         if (!silent) {
           prompts.log.info(`Skipped writing ${displayPath}`);
@@ -374,11 +459,46 @@ async function writeEditorConfig({
       continue;
     }
 
-    writeJsonFile(filePath, incoming);
+    if (jsonFormat) {
+      if (!isPlainObject(incoming)) {
+        throw new Error(
+          `Cannot write editor config: ${editorConfig.targetDir}/${fileName} must be JSON`,
+        );
+      }
+      writeJsonFile(filePath, incoming);
+    } else {
+      writeTextEditorConfig(filePath, incoming, `${editorConfig.targetDir}/${fileName}`, silent);
+    }
     if (!silent) {
       prompts.log.success(`Wrote editor config to ${editorConfig.targetDir}/${fileName}`);
     }
   }
+}
+
+export function isJsonLikeFile(fileName: string): boolean {
+  const ext = path.extname(fileName).toLowerCase();
+  return ext === '.json' || ext === '.jsonc';
+}
+
+function writeTextEditorConfig(
+  filePath: string,
+  incoming: EditorConfigValue,
+  displayPath: string,
+  silent = false,
+) {
+  if (typeof incoming !== 'string') {
+    throw new Error(`Cannot write editor config: ${displayPath} must be text content`);
+  }
+
+  const existingText = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf-8') : undefined;
+  if (existingText === incoming) {
+    if (!silent) {
+      prompts.log.info(`No changes needed for ${displayPath}`);
+    }
+    return;
+  }
+
+  fs.writeFileSync(filePath, incoming, 'utf-8');
 }
 
 function normalizeEditorSelection(editorId: EditorSelection): EditorId[] {
@@ -518,7 +638,19 @@ function resolveEditorId(editor: string): EditorId | undefined {
   const match = EDITORS.find(
     (option) => option.id === normalized || option.label.toLowerCase() === normalized,
   );
-  return match?.id;
+  if (match) {
+    return match.id;
+  }
+
+  const aliasMatch = EDITOR_ALIASES.find((option) => option.id === normalized);
+  if (aliasMatch) {
+    prompts.log.warn(
+      `--editor ${aliasMatch.id} was passed; use --editor ${aliasMatch.alias} instead, as it's the canonical ID for that editor.`,
+    );
+    return aliasMatch.alias;
+  }
+
+  return undefined;
 }
 
 function resolveEditorIds(editors: readonly string[]): EditorId[] | undefined {

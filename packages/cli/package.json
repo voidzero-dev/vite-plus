@@ -1,6 +1,6 @@
 {
   "name": "vite-plus",
-  "version": "0.2.8",
+  "version": "1.4.0",
   "description": "The Unified Toolchain for the Web",
   "homepage": "https://viteplus.dev/guide",
   "bugs": {
@@ -14,10 +14,9 @@
     "directory": "packages/cli"
   },
   "bin": {
-    "oxfmt": "./bin/oxfmt",
-    "oxlint": "./bin/oxlint",
     "vp": "./bin/vp",
-    "vpr": "./bin/vpr"
+    "vpr": "./bin/vpr",
+    "vpx": "./bin/vpx"
   },
   "files": [
     "AGENTS.md",
@@ -28,7 +27,6 @@
     "binding/index.d.cts",
     "binding/index.d.ts",
     "binding/index.js",
-    "dist/test",
     "docs",
     "rules",
     "templates"
@@ -70,6 +68,15 @@
       "types": "./dist/lint.d.ts",
       "import": "./dist/lint.js"
     },
+    "./lint/plugins": {
+      "types": "./dist/lint-plugins.d.ts",
+      "import": "./dist/lint-plugins.js",
+      "require": "./dist/lint-plugins.cjs"
+    },
+    "./lint/plugins-dev": {
+      "types": "./dist/lint-plugins-dev.d.ts",
+      "default": "./dist/lint-plugins-dev.js"
+    },
     "./oxlint-plugin": {
       "module-sync": "./dist/oxlint-plugin.js",
       "node": "./dist/oxlint-plugin.js",
@@ -84,6 +91,10 @@
     },
     "./pack/client": {
       "types": "./dist/pack-client.d.ts"
+    },
+    "./toolchain": {
+      "types": "./dist/toolchain.d.ts",
+      "default": "./dist/toolchain.js"
     },
     "./versions": {
       "types": "./dist/versions.d.ts",
@@ -129,34 +140,13 @@
       "types": "./dist/test/internal/browser.d.ts",
       "default": "./dist/test/internal/browser.js"
     },
-    "./test/runners": {
-      "types": "./dist/test/runners.d.ts",
-      "default": "./dist/test/runners.js"
-    },
-    "./test/suite": {
-      "types": "./dist/test/suite.d.ts",
-      "default": "./dist/test/suite.js"
-    },
-    "./test/environments": {
-      "types": "./dist/test/environments.d.ts",
-      "default": "./dist/test/environments.js"
+    "./test/internal/traces": {
+      "default": "./dist/test/internal/traces.js"
     },
     "./test/config": {
       "types": "./dist/test/config.d.ts",
       "require": "./dist/test/config.cjs",
       "default": "./dist/test/config.js"
-    },
-    "./test/coverage": {
-      "types": "./dist/test/coverage.d.ts",
-      "default": "./dist/test/coverage.js"
-    },
-    "./test/reporters": {
-      "types": "./dist/test/reporters.d.ts",
-      "default": "./dist/test/reporters.js"
-    },
-    "./test/snapshot": {
-      "types": "./dist/test/snapshot.d.ts",
-      "default": "./dist/test/snapshot.js"
     },
     "./test/runtime": {
       "types": "./dist/test/runtime.d.ts",
@@ -165,6 +155,10 @@
     "./test/worker": {
       "types": "./dist/test/worker.d.ts",
       "default": "./dist/test/worker.js"
+    },
+    "./test/mocker": {
+      "types": "./dist/test/mocker.d.ts",
+      "default": "./dist/test/mocker.js"
     },
     "./test/browser-playwright": {
       "types": "./dist/test/browser-playwright.d.ts",
@@ -198,22 +192,6 @@
       "types": "./dist/test/browser/providers/preview/context.d.ts",
       "default": "./dist/test/browser/providers/preview/context.js"
     },
-    "./test/browser-webdriverio": {
-      "types": "./dist/test/browser-webdriverio.d.ts",
-      "default": "./dist/test/browser-webdriverio.js"
-    },
-    "./test/browser/providers/webdriverio": {
-      "types": "./dist/test/browser/providers/webdriverio.d.ts",
-      "default": "./dist/test/browser/providers/webdriverio.js"
-    },
-    "./test/browser-webdriverio/context": {
-      "types": "./dist/test/browser-webdriverio/context.d.ts",
-      "default": "./dist/test/browser-webdriverio/context.js"
-    },
-    "./test/browser/providers/webdriverio/context": {
-      "types": "./dist/test/browser/providers/webdriverio/context.d.ts",
-      "default": "./dist/test/browser/providers/webdriverio/context.js"
-    },
     "./test/browser/context": {
       "types": "./dist/test/browser/context.d.ts",
       "default": "./dist/test/browser/context.js"
@@ -240,109 +218,123 @@
       "types": "./dist/test/browser-compat.d.ts",
       "default": "./dist/test/browser-compat.js"
     },
-    "./test/plugins/runner": {
-      "default": "./dist/test/plugins/runner.js"
-    },
-    "./test/plugins/runner-utils": {
-      "default": "./dist/test/plugins/runner-utils.js"
-    },
-    "./test/plugins/runner-types": {
-      "default": "./dist/test/plugins/runner-types.js"
-    },
     "./test/plugins/utils": {
+      "types": "./dist/test/plugins/utils.d.ts",
       "default": "./dist/test/plugins/utils.js"
     },
     "./test/plugins/utils-source-map": {
+      "types": "./dist/test/plugins/utils-source-map.d.ts",
       "default": "./dist/test/plugins/utils-source-map.js"
     },
     "./test/plugins/utils-source-map-node": {
+      "types": "./dist/test/plugins/utils-source-map-node.d.ts",
       "default": "./dist/test/plugins/utils-source-map-node.js"
     },
     "./test/plugins/utils-error": {
+      "types": "./dist/test/plugins/utils-error.d.ts",
       "default": "./dist/test/plugins/utils-error.js"
     },
     "./test/plugins/utils-helpers": {
+      "types": "./dist/test/plugins/utils-helpers.d.ts",
       "default": "./dist/test/plugins/utils-helpers.js"
     },
     "./test/plugins/utils-display": {
+      "types": "./dist/test/plugins/utils-display.d.ts",
       "default": "./dist/test/plugins/utils-display.js"
     },
     "./test/plugins/utils-timers": {
+      "types": "./dist/test/plugins/utils-timers.d.ts",
       "default": "./dist/test/plugins/utils-timers.js"
     },
     "./test/plugins/utils-offset": {
+      "types": "./dist/test/plugins/utils-offset.d.ts",
       "default": "./dist/test/plugins/utils-offset.js"
     },
     "./test/plugins/utils-resolver": {
+      "types": "./dist/test/plugins/utils-resolver.d.ts",
       "default": "./dist/test/plugins/utils-resolver.js"
     },
     "./test/plugins/utils-serialize": {
+      "types": "./dist/test/plugins/utils-serialize.d.ts",
       "default": "./dist/test/plugins/utils-serialize.js"
     },
     "./test/plugins/utils-constants": {
+      "types": "./dist/test/plugins/utils-constants.d.ts",
       "default": "./dist/test/plugins/utils-constants.js"
     },
     "./test/plugins/utils-diff": {
+      "types": "./dist/test/plugins/utils-diff.d.ts",
       "default": "./dist/test/plugins/utils-diff.js"
     },
     "./test/plugins/spy": {
+      "types": "./dist/test/plugins/spy.d.ts",
       "default": "./dist/test/plugins/spy.js"
     },
-    "./test/plugins/expect": {
-      "default": "./dist/test/plugins/expect.js"
-    },
     "./test/plugins/snapshot": {
+      "types": "./dist/test/plugins/snapshot.d.ts",
       "default": "./dist/test/plugins/snapshot.js"
     },
     "./test/plugins/snapshot-environment": {
+      "types": "./dist/test/plugins/snapshot-environment.d.ts",
       "default": "./dist/test/plugins/snapshot-environment.js"
     },
     "./test/plugins/snapshot-manager": {
+      "types": "./dist/test/plugins/snapshot-manager.d.ts",
       "default": "./dist/test/plugins/snapshot-manager.js"
     },
     "./test/plugins/mocker": {
+      "types": "./dist/test/plugins/mocker.d.ts",
       "default": "./dist/test/plugins/mocker.js"
     },
     "./test/plugins/mocker-node": {
+      "types": "./dist/test/plugins/mocker-node.d.ts",
       "default": "./dist/test/plugins/mocker-node.js"
     },
     "./test/plugins/mocker-browser": {
+      "types": "./dist/test/plugins/mocker-browser.d.ts",
       "default": "./dist/test/plugins/mocker-browser.js"
     },
     "./test/plugins/mocker-redirect": {
+      "types": "./dist/test/plugins/mocker-redirect.d.ts",
       "default": "./dist/test/plugins/mocker-redirect.js"
     },
     "./test/plugins/mocker-transforms": {
+      "types": "./dist/test/plugins/mocker-transforms.d.ts",
       "default": "./dist/test/plugins/mocker-transforms.js"
     },
     "./test/plugins/mocker-automock": {
+      "types": "./dist/test/plugins/mocker-automock.d.ts",
       "default": "./dist/test/plugins/mocker-automock.js"
     },
     "./test/plugins/mocker-register": {
+      "types": "./dist/test/plugins/mocker-register.d.ts",
       "default": "./dist/test/plugins/mocker-register.js"
     },
     "./test/plugins/pretty-format": {
+      "types": "./dist/test/plugins/pretty-format.d.ts",
       "default": "./dist/test/plugins/pretty-format.js"
     },
     "./test/plugins/browser": {
+      "types": "./dist/test/plugins/browser.d.ts",
       "default": "./dist/test/plugins/browser.js"
     },
     "./test/plugins/browser-context": {
+      "types": "./dist/test/plugins/browser-context.d.ts",
       "default": "./dist/test/plugins/browser-context.js"
     },
     "./test/plugins/browser-client": {
       "default": "./dist/test/plugins/browser-client.js"
     },
     "./test/plugins/browser-locators": {
+      "types": "./dist/test/plugins/browser-locators.d.ts",
       "default": "./dist/test/plugins/browser-locators.js"
     },
     "./test/plugins/browser-playwright": {
+      "types": "./dist/test/plugins/browser-playwright.d.ts",
       "default": "./dist/test/plugins/browser-playwright.js"
     },
-    "./test/plugins/browser-webdriverio": {
-      "default": "./dist/test/plugins/browser-webdriverio.js"
-    },
     "./test/plugins/browser-preview": {
+      "types": "./dist/test/plugins/browser-preview.d.ts",
       "default": "./dist/test/plugins/browser-preview.js"
     }
   },
@@ -354,21 +346,20 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@oxc-project/runtime": "catalog:",
     "@oxc-project/types": "catalog:",
     "@oxlint/plugins": "catalog:",
     "@vitest/browser": "catalog:",
     "@vitest/browser-preview": "catalog:",
-    "@vitest/expect": "catalog:",
     "@vitest/mocker": "catalog:",
     "@vitest/pretty-format": "catalog:",
-    "@vitest/runner": "catalog:",
     "@vitest/snapshot": "catalog:",
     "@vitest/spy": "catalog:",
     "@vitest/utils": "catalog:",
-    "@voidzero-dev/vite-plus-core": "workspace:*",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "oxlint-tsgolint": "catalog:",
+    "vite": "workspace:@voidzero-dev/vite-plus-core@*",
     "vitest": "catalog:"
   },
   "devDependencies": {
@@ -377,39 +368,42 @@
     "@napi-rs/cli": "catalog:",
     "@nkzw/safe-word-list": "catalog:",
     "@types/cross-spawn": "catalog:",
-    "@types/semver": "catalog:",
     "@types/validate-npm-package-name": "catalog:",
     "@vitest/browser-playwright": "catalog:",
     "@vitest/browser-webdriverio": "catalog:",
     "@voidzero-dev/vite-plus-prompts": "workspace:*",
+    "@voidzero-dev/vite-task-client": "0.2.0",
     "bingo": "catalog:",
     "cac": "catalog:",
     "cross-spawn": "catalog:",
     "detect-indent": "catalog:",
     "detect-newline": "catalog:",
-    "glob": "catalog:",
     "jsonc-parser": "catalog:",
     "lint-staged": "catalog:",
     "minimatch": "catalog:",
-    "mri": "catalog:",
     "nanotar": "catalog:",
     "picocolors": "catalog:",
-    "semver": "catalog:",
+    "pirates": "catalog:",
+    "tinyglobby": "catalog:",
     "tsdown": "catalog:",
     "validate-npm-package-name": "catalog:",
-    "vite": "workspace:*",
+    "verkit": "catalog:",
     "yaml": "catalog:",
     "zod": "catalog:"
   },
   "peerDependencies": {
     "@vitest/browser-playwright": "catalog:",
-    "@vitest/browser-webdriverio": "catalog:"
+    "@vitest/browser-webdriverio": "^5.0.0-beta.5 || >=5.0.0",
+    "playwright": "*"
   },
   "peerDependenciesMeta": {
     "@vitest/browser-playwright": {
       "optional": true
     },
     "@vitest/browser-webdriverio": {
+      "optional": true
+    },
+    "playwright": {
       "optional": true
     }
   },
@@ -428,6 +422,6 @@
     ]
   },
   "engines": {
-    "node": "^20.19.0 || ^22.18.0 || >=24.11.0"
+    "node": "^22.18.0 || ^24.11.0 || >=26.0.0"
   }
 }

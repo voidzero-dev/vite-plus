@@ -8,7 +8,8 @@ steps = [
   { argv = ["vpt", "stat-file", "apps/website/tools/vite-plus-generator/package.json", "--assert-not", "file"], comment = "not created inside apps/website/", continue-on-failure = true },
   { argv = ["vp", "create", "--no-interactive", "vite:application"], cwd = "apps", comment = "from workspace parent dir", snapshot = false, continue-on-failure = true },
   { argv = ["vpt", "stat-file", "apps/vite-plus-application/package.json", "--assert", "file"], comment = "created at apps/vite-plus-application", continue-on-failure = true },
-  { argv = ["vp", "create", "--no-interactive", "vite:library"], cwd = "scripts/helper", comment = "from non-workspace dir", snapshot = false, continue-on-failure = true },
-  { argv = ["vpt", "stat-file", "packages/vite-plus-library/package.json", "--assert", "file"], comment = "created at packages/vite-plus-library", continue-on-failure = true },
+  { argv = ["vp", "create", "--no-interactive", "vite:library"], cwd = "scripts/helper", comment = "from a package that is not a workspace member", snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "scripts/helper/vite-plus-library/package.json", "--assert", "file"], comment = "scaffolded inside the non-member package", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "packages/vite-plus-library/package.json", "--assert-not", "file"], comment = "not added to the enclosing workspace", continue-on-failure = true },
   { argv = ["vpt", "print-file", "package.json"], comment = "verify workspaces object form preserved after workspace update", continue-on-failure = true },
 ]

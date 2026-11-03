@@ -4,4 +4,5 @@ vp = "global"
 steps = [
   { argv = ["vp", "pm", "publish", "--help"], comment = "should show help", continue-on-failure = true },
   { argv = ["vp", "pm", "publish", "--dry-run", "--", "--loglevel", "error"], comment = "should preview publish without actually publishing (uses pnpm publish --dry-run)", continue-on-failure = true },
+  { argv = ["vp", "pm", "publish", "--dry-run", "--json"], comment = "Reject pnpm 11.0.6, which silently omitted JSON output.", continue-on-failure = true },
 ]

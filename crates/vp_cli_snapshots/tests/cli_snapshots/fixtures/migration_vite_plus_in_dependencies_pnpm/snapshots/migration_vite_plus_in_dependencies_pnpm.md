@@ -31,9 +31,6 @@ vite-plus stays in dependencies (normalized to catalog:); no duplicate devDepend
       "version": "<version>",
       "onFail": "download"
     }
-  },
-  "devDependencies": {
-    "vite": "catalog:"
   }
 }
 ```
@@ -47,7 +44,7 @@ catalog:
   vite: npm:@voidzero-dev/vite-plus-core@<version>
   vite-plus: <version>
 overrides:
-  vite: 'catalog:'
+  vite@*: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite

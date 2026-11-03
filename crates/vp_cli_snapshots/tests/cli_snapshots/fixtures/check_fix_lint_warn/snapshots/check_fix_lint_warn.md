@@ -33,3 +33,13 @@ warn: Lint warnings found
 
 Found 0 errors and 1 warning in 2 files (<duration>, <n> threads)
 ```
+
+## `vp check --fix --quiet`
+
+quiet composes with the fix pipeline
+
+```
+
+Found 0 errors and 1 warning in 2 files (<duration>, <n> threads)
+pass: Formatting completed for checked files (<duration>)
+```
