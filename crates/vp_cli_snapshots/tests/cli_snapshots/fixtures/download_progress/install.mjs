@@ -103,6 +103,17 @@ async function handleRequest(request, response) {
     // A pinned default must not resolve the latest LTS alias.
     indexRequests++;
     response.writeHead(404).end();
+  } else if (request.url === '/pnpm/10.34.7') {
+    response.end(
+      JSON.stringify({
+        name: 'pnpm',
+        version: '10.34.7',
+        dist: {
+          tarball: `${mirror}/pnpm/-/pnpm-10.34.7.tgz`,
+          integrity: 'sha512-' + createHash('sha512').update(pnpmArchive).digest('base64'),
+        },
+      }),
+    );
   } else if (/^\/pnpm\/-\/pnpm-[\d.]+\.tgz$/.test(request.url)) {
     await checkpoint('download');
     response.setHeader('Content-Length', pnpmArchive.length);
@@ -218,9 +229,9 @@ try {
   if (failure) {
     assert.equal(stdout, '');
     const log = readFileSync(join(home, 'upgrade.log'), 'utf8');
-    assert.ok(log.includes('pnpm captured stdout'));
-    assert.ok(log.includes('pnpm captured stderr'));
-    console.log('Failure log preserves pnpm stdout and stderr.');
+    assert.ok(log.includes('exit code 17'));
+    assert.ok(!log.includes('pnpm captured'));
+    console.log('Failure log records the exit code without registry output.');
   } else if (upgradeHandoff) {
     assert.ok(stdout.includes('Usage:'));
     console.log('The first command runs after self-setup completes.');

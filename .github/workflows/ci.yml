@@ -44,6 +44,7 @@ jobs:
       # markdown exclusion would otherwise classify as docs-only.
       code-changed: ${{ steps.filter.outputs.code == 'true' || steps.filter.outputs.snapshots == 'true' }}
       node-version: ${{ steps.node-version.outputs.version }}
+      homebrew-published: ${{ steps.homebrew.outputs.required }}
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - name: Read Node.js version
@@ -67,6 +68,32 @@ jobs:
               - '!.github/workflows/deploy-docs.yml'
             snapshots:
               - 'crates/vp_cli_snapshots/**'
+            homebrew:
+              - 'HomebrewFormula/**'
+
+      - name: Check whether published Homebrew tests are required
+        id: homebrew
+        if: github.event_name == 'pull_request'
+        env:
+          RELEASE_PR: ${{ startsWith(github.head_ref, 'release/homebrew-v') }}
+          FORMULA_CHANGED: ${{ steps.filter.outputs.homebrew }}
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          const formula = fs.readFileSync('HomebrewFormula/vp.rb', 'utf8');
+          const enabled = !/^\s*disable!\s/m.test(formula);
+          const required = process.env.RELEASE_PR === 'true' ||
+            (process.env.FORMULA_CHANGED === 'true' && enabled);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `required=${required}\n`);
+          JS
+
+  homebrew-published:
+    name: Homebrew release
+    needs: detect-changes
+    if: needs.detect-changes.outputs.homebrew-published == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/test-homebrew-published.yml
 
   docs-fmt:
     name: Docs format check
@@ -1711,6 +1738,8 @@ jobs:
     timeout-minutes: 20
     if: always()
     needs:
+      - detect-changes
+      - homebrew-published
       - docs-fmt
       - test
       - build-windows-tests
@@ -1729,6 +1758,11 @@ jobs:
       - install-e2e-test
       - install-e2e-test-sfw
     steps:
+      - name: Require published Homebrew checks for formula PRs
+        if: >-
+          needs.detect-changes.outputs.homebrew-published == 'true' &&
+          needs.homebrew-published.result != 'success'
+        run: exit 1
       - run: exit 1
         # Thank you, next https://github.com/vercel/next.js/blob/canary/.github/workflows/build_and_test.yml#L379
         if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
