@@ -847,8 +847,21 @@ rule:
       $$$CONFIG
     }
   inside:
-    stopBy: end
-    pattern: defineConfig($$$ARGS)
+    stopBy:
+      any:
+        - kind: arrow_function
+        - kind: function_expression
+        - kind: function_declaration
+        - kind: generator_function
+        - kind: generator_function_declaration
+        - kind: method_definition
+    any:
+      - kind: arrow_function
+      - kind: function_expression
+    inside:
+      kind: arguments
+      inside:
+        pattern: defineConfig($$$ARGS)
 fix: |-
   return {
     __CONFIG_KEY__: __JSON_CONFIG__,
@@ -863,8 +876,21 @@ rule:
     pattern: $VAR
     kind: identifier
   inside:
-    stopBy: end
-    pattern: defineConfig($$$ARGS)
+    stopBy:
+      any:
+        - kind: arrow_function
+        - kind: function_expression
+        - kind: function_declaration
+        - kind: generator_function
+        - kind: generator_function_declaration
+        - kind: method_definition
+    any:
+      - kind: arrow_function
+      - kind: function_expression
+    inside:
+      kind: arguments
+      inside:
+        pattern: defineConfig($$$ARGS)
 fix: |-
   return {
     __CONFIG_KEY__: __JSON_CONFIG__,
@@ -1468,6 +1494,51 @@ export default defineConfig(async ({ command, mode }) => {
         // Now can be auto-migrated using return statement matching
         assert!(result.updated);
         assert!(result.content.contains("'no-console': 'warn'"));
+    }
+
+    #[test]
+    fn test_merge_json_config_content_preserves_nested_returns() {
+        for callback in [
+            "name(id) { const c = id.includes('node_modules') ? 'vendor' : null; return c; }",
+            "name: (id) => { const c = 'vendor'; return c; }",
+            "name: function(id) { const c = 'vendor'; return c; }",
+            "name(id) { function helper() { return { value: 1 }; } return 'vendor'; }",
+            "name: () => { return { value: 1 }; }",
+            "name: function() { return { value: 1 }; }",
+            "name(id) { function helper() { const c = 'vendor'; return c; } return helper(); }",
+            "name(id) { function* helper() { return { value: 1 }; } return 'vendor'; }",
+            "name: function*() { const c = 'vendor'; return c; }",
+            "*name() { return { value: 1 }; }",
+        ] {
+            let config = format!(
+                "{{ build: {{ rolldownOptions: {{ output: {{ codeSplitting: {{ groups: [{{ {callback} }}] }} }} }} }} }}"
+            );
+            for argument in [config.clone(), format!("() => {{ return {config}; }}")] {
+                let source = format!("export default defineConfig({argument});");
+                let result = merge_json_config_content(&source, "{}", "lint").unwrap();
+                assert!(result.updated);
+                assert!(result.content.contains(callback), "{}", result.content);
+                assert_eq!(result.content.matches("lint:").count(), 1, "{}", result.content);
+            }
+        }
+    }
+
+    #[test]
+    fn test_merge_json_config_content_direct_callback_returns() {
+        for callback in ["(env) =>", "async (env) =>", "function(env)", "async function(env)"] {
+            let source = format!(
+                "export default defineConfig({callback} {{
+  const config = {{ server: {{ port: 3000 }} }};
+  if (env.command === 'serve') {{ return config; }}
+  return {{ server: {{ port: 4000 }} }};
+}});"
+            );
+            let result = merge_json_config_content(&source, "{}", "lint").unwrap();
+            assert!(result.updated);
+            assert_eq!(result.content.matches("lint:").count(), 2, "{}", result.content);
+            assert!(result.content.contains("...config"));
+            assert!(result.content.contains("port: 4000"));
+        }
     }
 
     #[test]
