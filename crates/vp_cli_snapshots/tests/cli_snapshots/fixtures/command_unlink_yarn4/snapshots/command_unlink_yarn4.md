@@ -143,3 +143,14 @@ should work with -r short form
   "packageManager": "yarn@4.0.0"
 }
 ```
+
+## `vpt json-edit package.json packageManager yarn@2.4.2`
+
+
+## `vp unlink unlink-test-lib-yarn`
+
+Yarn 2 has no unlink command, so warn and skip execution.
+
+```
+warn: yarn unlink requires Yarn Classic or yarn >= 3.0.0. Skipping.
+```

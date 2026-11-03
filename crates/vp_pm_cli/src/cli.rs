@@ -600,6 +600,157 @@ mod tests {
     }
 
     #[test]
+    fn command_minimum_versions_warn_and_skip_unsupported_releases() {
+        use crate::resolution::CommandResolution;
+
+        for (client, versions, argv, expected, message) in [
+            (
+                PackageManagerType::Npm,
+                ["11.14.1", "11.15.0-beta.1", "11.15.0"],
+                vec!["pm", "stage", "list"],
+                vec!["stage", "list"],
+                "npm stage requires npm >= 11.15.0. Skipping.",
+            ),
+            (
+                PackageManagerType::Pnpm,
+                ["11.2.0", "11.3.0-beta.1", "11.3.0"],
+                vec!["pm", "stage", "list"],
+                vec!["stage", "list"],
+                "pnpm stage requires pnpm >= 11.3.0. Skipping.",
+            ),
+            (
+                PackageManagerType::Pnpm,
+                ["10.0.0", "10.1.0-beta.1", "10.1.0"],
+                vec!["pm", "approve-builds"],
+                vec!["approve-builds"],
+                "pnpm approve-builds requires pnpm >= 10.1.0. Skipping.",
+            ),
+            (
+                PackageManagerType::Yarn,
+                ["2.4.3", "3.0.0-rc.1", "3.0.0"],
+                vec!["unlink", "react", "--", "--recursive"],
+                vec!["unlink", "react", "--recursive"],
+                "yarn unlink requires Yarn Classic or yarn >= 3.0.0. Skipping.",
+            ),
+            (
+                PackageManagerType::Yarn,
+                ["2.4.3", "3.0.0-rc.1", "3.0.0"],
+                vec!["pm", "patch-commit", "patch-dir"],
+                vec!["patch-commit", "--save", "patch-dir"],
+                "yarn patch-commit --save requires yarn >= 3.0.0. Skipping.",
+            ),
+            (
+                PackageManagerType::Yarn,
+                ["2.3.1", "2.4.0-rc.1", "2.4.0"],
+                vec!["pm", "audit", "--json"],
+                vec!["npm", "audit", "--json"],
+                "yarn npm audit requires yarn >= 2.4.0. Skipping.",
+            ),
+            (
+                PackageManagerType::Pnpm,
+                ["7.3.0", "7.4.0-beta.1", "7.4.0"],
+                vec!["pm", "patch", "react"],
+                vec!["patch", "react"],
+                "pnpm patch requires pnpm >= 7.4.0. Skipping.",
+            ),
+            (
+                PackageManagerType::Pnpm,
+                ["7.3.0", "7.4.0-beta.1", "7.4.0"],
+                vec!["pm", "patch-commit", "patch-dir"],
+                vec!["patch-commit", "patch-dir"],
+                "pnpm patch-commit requires pnpm >= 7.4.0. Skipping.",
+            ),
+        ] {
+            for version in &versions[..2] {
+                let parsed = parse(&argv).unwrap();
+                assert!(parsed.should_render_diagnostics(), "{argv:?}");
+                let result = parsed.resolve_for_manager(&package_manager(client, version)).unwrap();
+                assert_eq!(result.outcome, CommandResolution::Noop, "{client}@{version}: {argv:?}");
+                assert_eq!(result.diagnostics.len(), 1);
+                assert_eq!(result.diagnostics[0].message, message);
+            }
+            let result = parse(&argv)
+                .unwrap()
+                .resolve_for_manager(&package_manager(client, versions[2]))
+                .unwrap();
+            assert!(result.diagnostics.is_empty());
+            let command = expect_run(result.outcome);
+            assert_eq!(command.program, client.to_string());
+            assert_eq!(command.args, expected);
+        }
+    }
+
+    #[test]
+    fn option_minimum_versions_preserve_the_base_command() {
+        use crate::resolution::test_utils::expect_unsupported;
+
+        for (versions, command, option, expected_option, message) in [
+            (
+                ["7.20.0", "7.21.0-beta.1", "7.21.0"],
+                vec!["dlx", "create-vue"],
+                vec!["--shell-mode"],
+                "-c",
+                "pnpm < 7.21.0 does not support --shell-mode.",
+            ),
+            (
+                ["9.15.9", "10.0.0-beta.1", "10.0.0"],
+                vec!["pm", "pack"],
+                vec!["--out", "package.tgz"],
+                "--out",
+                "pnpm < 10.0.0 does not support --out.",
+            ),
+            (
+                ["9.13.2", "9.14.0-beta.1", "9.14.0"],
+                vec!["pm", "pack"],
+                vec!["--json"],
+                "--json",
+                "pnpm < 9.14.0 does not support --json.",
+            ),
+            (
+                ["8.2.0", "8.3.0-beta.1", "8.3.0"],
+                vec!["pm", "pack"],
+                vec!["--pack-gzip-level", "0"],
+                "--pack-gzip-level",
+                "pnpm < 8.3.0 does not support --pack-gzip-level.",
+            ),
+        ] {
+            let mut argv = command.clone();
+            let option_index = if command[0] == "pm" { 2 } else { 1 };
+            argv.splice(option_index..option_index, option);
+            for version in &versions[..2] {
+                let manager = package_manager(PackageManagerType::Pnpm, version);
+                let base = parse(&command).unwrap().resolve_for_manager(&manager).unwrap();
+                assert!(base.diagnostics.is_empty());
+                expect_run(base.outcome);
+                let result = parse(&argv).unwrap().resolve_for_manager(&manager).unwrap();
+                expect_unsupported(result, &[message]);
+            }
+            let result = parse(&argv)
+                .unwrap()
+                .resolve_for_manager(&package_manager(PackageManagerType::Pnpm, versions[2]))
+                .unwrap();
+            assert!(result.diagnostics.is_empty());
+            assert!(expect_run(result.outcome).args.iter().any(|arg| arg == expected_option));
+        }
+    }
+
+    #[test]
+    fn command_minimum_versions_preserve_unknown_npm_and_yarn_classic() {
+        for (client, version, argv, expected) in [
+            (PackageManagerType::Npm, "latest", vec!["pm", "stage", "list"], vec!["stage", "list"]),
+            (PackageManagerType::Yarn, "1.22.22", vec!["unlink", "react"], vec!["unlink", "react"]),
+            (PackageManagerType::Yarn, "1.22.22", vec!["pm", "audit"], vec!["audit"]),
+        ] {
+            let result = parse(&argv)
+                .unwrap()
+                .resolve_for_manager(&package_manager(client, version))
+                .unwrap();
+            assert!(result.diagnostics.is_empty());
+            assert_eq!(expect_run(result.outcome).args, expected);
+        }
+    }
+
+    #[test]
     fn ci_parses_and_captures_pass_through_args() {
         assert!(matches!(
             parse(&["pm", "ci"]).unwrap(),
