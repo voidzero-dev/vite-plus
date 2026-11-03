@@ -478,7 +478,11 @@ fn find_latest_lts_version(versions: &[NodeVersionEntry]) -> Result<Str, Error> 
 ///
 /// Pre-release versions (e.g. `v27.0.0-alpha.0.0.0`) are excluded even when
 /// they appear first in the version index.
-fn find_absolute_latest_version(versions: &[NodeVersionEntry]) -> Result<Str, Error> {
+///
+/// # Errors
+///
+/// Returns an error if the list contains no stable version.
+pub fn find_absolute_latest_version(versions: &[NodeVersionEntry]) -> Result<Str, Error> {
     versions
         .iter()
         .filter_map(|entry| {
@@ -1437,7 +1441,10 @@ fedcba987654  node-v22.13.1-win-x64.zip";
 
         let versions = vec![
             NodeVersionEntry { version: "v27.0.0-alpha.0.0.0".into(), lts: LtsInfo::NotLts },
-            NodeVersionEntry { version: "v26.13.0".into(), lts: LtsInfo::Codename("Lithium".into()) },
+            NodeVersionEntry {
+                version: "v26.13.0".into(),
+                lts: LtsInfo::Codename("Lithium".into()),
+            },
             NodeVersionEntry { version: "v26.12.1".into(), lts: LtsInfo::NotLts },
         ];
 

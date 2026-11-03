@@ -41,6 +41,8 @@ To select the project's Node.js version, Vite+ checks the current directory firs
 
 If no directory declares a version, Vite+ uses the global default (`vp env default`) and then the latest LTS.
 
+The `lts` alias selects the newest LTS release. The `latest` alias selects the newest stable release, LTS or not, and skips pre-releases such as `27.0.0-alpha.0.0.0`. To use a pre-release, specify its exact version.
+
 `devEngines.runtime` ranks above `engines.node` because it declares the development-environment requirement, while `engines.node` is a consumer-facing support range. `vp env doctor` warns when declared sources conflict.
 
 ::: tip Using pnpm with Vite+ runtime management
