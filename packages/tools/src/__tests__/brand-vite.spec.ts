@@ -61,6 +61,15 @@ const upstreamSources = {
   ].join('\n'),
 };
 
+const upstreamDtsConfig = `export default defineConfig({
+  output: {
+    dir: './dist/node',
+    chunkFileNames: 'chunks/[name].d.ts',
+    format: 'esm',
+  },
+})
+`;
+
 function write(file: string, source: string) {
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, source);
@@ -84,6 +93,7 @@ function createUpstreamFixture(configSource = upstreamSources['config.ts']): {
   const lockfile = join(viteDir, 'pnpm-lock.yaml');
   const unrelatedSource = join(nodeDir, 'server.ts');
   write(manifest, '{"devDependencies":{"@vitest/utils":"4.1.10"}}\n');
+  write(join(viteDir, 'packages/vite/rolldown.dts.config.ts'), upstreamDtsConfig);
   write(lockfile, '# upstream lockfile\n');
   write(unrelatedSource, '// upstream source\n');
   git('init');
@@ -123,6 +133,12 @@ test('branding preserves aligned dependencies and unrelated changes across repea
       expect(readFileSync(unrelatedSource, 'utf8')).toBe('// unrelated local source change\n');
       expect(readFileSync(join(nodeDir, 'cli.ts'), 'utf8')).toContain("cac('vp')");
       expect(readFileSync(join(nodeDir, 'build.ts'), 'utf8')).not.toContain('logger.info(');
+      const dtsConfig = readFileSync(
+        join(root, 'vite/packages/vite/rolldown.dts.config.ts'),
+        'utf8',
+      );
+      expect(dtsConfig).toContain("chunk.name === 'rolldown-runtime'");
+      expect(dtsConfig).toContain("? 'chunks/[name].js'");
       const configSource = readFileSync(join(nodeDir, 'config.ts'), 'utf8');
       expect(() => assertViteConfigPatched(configSource)).not.toThrow();
       expect(configSource).toContain('false &&\n        createNativeConfigCompatPlugin');
@@ -132,6 +148,7 @@ test('branding preserves aligned dependencies and unrelated changes across repea
         expect(source).not.toBe(upstream);
         return source;
       });
+      sources.push(dtsConfig);
       if (brandedSources) {
         expect(sources).toEqual(brandedSources);
       }
