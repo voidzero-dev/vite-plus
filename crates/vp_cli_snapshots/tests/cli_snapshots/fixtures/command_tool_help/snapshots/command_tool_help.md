@@ -169,7 +169,7 @@ Options:
   --dangerouslyIgnoreUnhandledErrors  Ignore any unhandled errors that occur
   --shard <shards>                    Test suite shard to execute in a format of <index>/<count>
   --changed [since]                   Run tests that are affected by the changed files (default: false)
-  --since-last-run                    Run tests with dependencies modified since their last run, plus tests that failed (default: false)
+  --sinceLastRun                      Run tests with dependencies modified since their last run, plus tests that failed (default: false)
   --lastFailed                        Run only the tests that failed in the last run (default: false)
   --sequence <options>                Options for how tests should be sorted. Use '--help --sequence' for more info.
   --inspect [[host:]port]             Enable Node.js inspector (default: 127.0.0.1:9229)

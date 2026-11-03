@@ -312,7 +312,7 @@ const commandHelpDocs = {
             description: 'Run tests that are affected by the changed files (default: false)',
           },
           {
-            label: '--since-last-run',
+            label: '--sinceLastRun',
             description:
               'Run tests with dependencies modified since their last run, plus tests that failed (default: false)',
           },

@@ -428,9 +428,9 @@ workspace a test runs in.
 
 Test servers must request port `0` so the OS selects an available port at bind
 time. Fixed ports can be reserved on Windows, where `EACCES` does not trigger
-Vite's port-in-use fallback. Vitest 5.0.4 replaces a plain `test.api.port: 0`
-with its default, including when it comes from `--api.port=0`. Set the port in
-a post-configuration hook instead; see
+Vite's port-in-use fallback. Vitest 5.1.0 supports `test.api.port: 0` directly.
+Set it in the browser project's test configuration or in the UI's API options;
+leave the API disabled for Node projects that do not need a server. See
 [`test_v5_browser_defines/config.mjs`](fixtures/test_v5_browser_defines/config.mjs)
 for independent, inherited, referenced, and injected projects, and
 [`test_v5_optional_packages/verify-ui.mjs`](fixtures/test_v5_optional_packages/verify-ui.mjs)
