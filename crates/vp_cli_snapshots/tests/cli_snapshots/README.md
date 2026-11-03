@@ -144,14 +144,15 @@ Package-manager caches and installed packages remain isolated per case.
 
 CI generates a prewarm manifest while listing cases, then passes it to
 `local-npm-registry.ts --prewarm-manifest <file>` before starting test commands.
-The runner collects exact Bun and pnpm (before version 12) pins from each case's
-package ancestry (`packageManager` and `devEngines.packageManager`), case/step
-environment overrides,
-`vpt json-edit` of package-manager declarations, `vpt write-file` of package files,
-and `vp env default/use/exec` arguments. Versions are deduplicated. Bun archives
-match the runner platform, including the x64 baseline variant. Native pnpm 12+
-archives still use normal registry resolution. Changing these fixture pins
-automatically updates preparation; CI contains no separate version list.
+The runner collects exact Bun pins and exact pnpm pins below version 12 from each
+case's package ancestry (`packageManager` and `devEngines.packageManager`), case
+and step environment overrides, `vpt json-edit` of package-manager declarations,
+`vpt write-file` of package files, and `vp env default/use/exec` arguments.
+Changing these fixture pins automatically updates preparation; CI contains no
+separate version list.
+
+Versions are deduplicated. Bun archives match the runner platform, including the
+x64 baseline variant. Native pnpm 12+ archives still use normal registry resolution.
 
 Ignored and platform-excluded cases do not contribute pins. Set `prewarm-package-managers = false`
 for fake installations and configuration-only cases. Script-generated pins must use

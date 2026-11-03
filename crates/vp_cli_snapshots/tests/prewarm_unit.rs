@@ -78,8 +78,10 @@ fn changing_a_step_pin_changes_the_archive_to_prepare() {
 #[test]
 fn ignores_assertions_other_managers_and_floating_specs() {
     let mut manifest = PackageManagerPrewarm::default();
-    manifest
-        .package_json(&json!({"packageManager": "npm@1.0.0", "devDependencies": {"bun":"99.0.0"}}));
+    manifest.package_json(&json!({
+        "packageManager": "npm@1.0.0",
+        "devDependencies": {"bun": "99.0.0"}
+    }));
     manifest.env([("EXPECTED_BUN_VERSION", "99.0.0"), ("VP_BUN_VERSION", "latest")]);
     step(&mut manifest, &["vpt", "print", "bun@99.0.0"]);
     step(
@@ -96,8 +98,15 @@ fn ignores_assertions_other_managers_and_floating_specs() {
 #[test]
 fn supports_dev_engine_arrays_and_integrity_pins() {
     let mut manifest = PackageManagerPrewarm::default();
-    manifest.package_json(&json!({"devEngines":{"packageManager":[{"name":"pnpm","version":"99.0.0"},{"name":"bun","version":"1.2.3"}]}}));
-    manifest.package_json(&json!({"packageManager":"bun@v2.0.0-beta.1+sha512.deadbeef"}));
+    manifest.package_json(&json!({
+        "devEngines": {
+            "packageManager": [
+                {"name": "pnpm", "version": "99.0.0"},
+                {"name": "bun", "version": "1.2.3"}
+            ]
+        }
+    }));
+    manifest.package_json(&json!({"packageManager": "bun@v2.0.0-beta.1+sha512.deadbeef"}));
     let urls = manifest.urls("bun-windows-x64-baseline");
     assert_eq!(urls.len(), 2);
     assert!(urls[0].ends_with("bun-windows-x64-baseline-1.2.3.tgz"));
@@ -111,7 +120,11 @@ fn prepares_pnpm_project_pins_and_independent_session_overrides() {
     manifest.env([("VP_PACKAGE_MANAGER", "pnpm@10.19.0"), ("VP_PNPM_VERSION", "10.21.0")]);
     step(&mut manifest, &["vp", "env", "use", "pnpm@10.20.0"]);
     step(&mut manifest, &["vpt", "json-edit", "package.json", "packageManager", "pnpm@10.19.0"]);
-    manifest.package_json(&json!({"devEngines":{"packageManager":{"name":"pnpm","version":"11.0.6+sha512.deadbeef"}}}));
+    manifest.package_json(&json!({
+        "devEngines": {
+            "packageManager": {"name": "pnpm", "version": "11.0.6+sha512.deadbeef"}
+        }
+    }));
     assert_eq!(
         manifest.urls("bun-linux-x64"),
         ["10.18.0", "10.19.0", "10.20.0", "10.21.0", "11.0.6"]

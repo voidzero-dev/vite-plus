@@ -22,22 +22,24 @@ impl PackageManagerPrewarm {
         if !matches!(manager, "bun" | "pnpm") {
             return;
         }
-        if let Some(version) = EXACT_VERSION.captures(spec).and_then(|captures| captures.get(1)) {
-            // pnpm 12+ selects a native platform package through registry metadata.
-            // Its main tarball is not the archive installed by the CLI.
-            if manager == "pnpm"
-                && version.as_str().split('.').next().unwrap().parse::<u64>().unwrap_or(u64::MAX)
-                    >= 12
-            {
+        let Some(captures) = EXACT_VERSION.captures(spec) else {
+            return;
+        };
+        let version = &captures[1];
+        // pnpm 12+ selects a native platform package through registry metadata.
+        // Its main tarball is not the archive installed by the CLI.
+        if manager == "pnpm" {
+            let major = version.split('.').next().unwrap().parse::<u64>().unwrap_or(u64::MAX);
+            if major >= 12 {
                 return;
             }
-            self.versions.insert((manager.to_owned(), version.as_str().to_owned()));
         }
+        self.versions.insert((manager.to_owned(), version.to_owned()));
     }
 
-    fn package_manager(&mut self, value: &Value) {
-        if let Some((manager, spec)) = value.as_str().and_then(|value| value.split_once('@')) {
-            self.version(manager, spec);
+    fn package_manager(&mut self, spec: &str) {
+        if let Some((manager, version)) = spec.split_once('@') {
+            self.version(manager, version);
         }
     }
 
@@ -54,7 +56,9 @@ impl PackageManagerPrewarm {
     }
 
     pub fn package_json(&mut self, value: &Value) {
-        self.package_manager(&value["packageManager"]);
+        if let Some(spec) = value["packageManager"].as_str() {
+            self.package_manager(spec);
+        }
         self.dev_engine(&value["devEngines"]["packageManager"]);
     }
 
@@ -85,7 +89,7 @@ impl PackageManagerPrewarm {
             match key {
                 "VP_BUN_VERSION" => self.version("bun", value),
                 "VP_PNPM_VERSION" => self.version("pnpm", value),
-                "VP_PACKAGE_MANAGER" => self.package_manager(&Value::String(value.to_owned())),
+                "VP_PACKAGE_MANAGER" => self.package_manager(value),
                 _ => {}
             }
         }
@@ -101,7 +105,11 @@ impl PackageManagerPrewarm {
                 let value =
                     serde_json::from_str(raw).unwrap_or_else(|_| Value::String((*raw).into()));
                 match *key {
-                    "packageManager" => self.package_manager(&value),
+                    "packageManager" => {
+                        if let Some(spec) = value.as_str() {
+                            self.package_manager(spec);
+                        }
+                    }
                     "devEngines" => self.dev_engine(&value["packageManager"]),
                     "devEngines.packageManager" => self.dev_engine(&value),
                     _ => {}
@@ -116,19 +124,21 @@ impl PackageManagerPrewarm {
             }
             ["vp", "env", "default" | "use" | "exec", specs @ ..] => {
                 for spec in specs {
-                    self.package_manager(&Value::String((*spec).into()));
+                    self.package_manager(spec);
                 }
             }
             _ => {}
         }
     }
 
-    pub fn urls(&self, package: &str) -> Vec<String> {
+    pub fn urls(&self, bun_package: &str) -> Vec<String> {
         self.versions
             .iter()
             .map(|(manager, version)| {
                 if manager == "bun" {
-                    format!("https://registry.npmjs.org/@oven/{package}/-/{package}-{version}.tgz")
+                    format!(
+                        "https://registry.npmjs.org/@oven/{bun_package}/-/{bun_package}-{version}.tgz"
+                    )
                 } else {
                     format!("https://registry.npmjs.org/pnpm/-/pnpm-{version}.tgz")
                 }
