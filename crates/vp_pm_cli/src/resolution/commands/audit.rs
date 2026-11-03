@@ -1,7 +1,7 @@
 use vp_pm_cli_macros::pm_args;
 
 use crate::resolution::{
-    Bun, CommandBuilder, CommandResolution, Diagnostics, Npm, Pnpm, Resolve, Yarn,
+    Bun, CommandBuilder, CommandResolution, DiagnosticKind, Diagnostics, Npm, Pnpm, Resolve, Yarn,
 };
 
 #[pm_args]
@@ -62,8 +62,15 @@ impl Resolve<AuditArgs> for Pnpm {
 }
 
 impl Resolve<AuditArgs> for Yarn {
-    fn resolve(&self, args: &AuditArgs, _diag: &mut Diagnostics) -> CommandResolution {
+    fn resolve(&self, args: &AuditArgs, diag: &mut Diagnostics) -> CommandResolution {
         if self.is_berry() {
+            if !self.supports_v2_4_commands() {
+                diag.warn(
+                    DiagnosticKind::UnsupportedCommandNoop,
+                    "yarn npm audit requires yarn >= 2.4.0. Skipping.",
+                );
+                return CommandResolution::Noop;
+            }
             let mut cmd = CommandBuilder::new("yarn");
             cmd.arg("npm")
                 .arg("audit")
