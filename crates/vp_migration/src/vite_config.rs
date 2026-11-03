@@ -860,6 +860,12 @@ rule:
       - kind: function_expression
     inside:
       kind: arguments
+      stopBy:
+        not:
+          any:
+            - kind: parenthesized_expression
+            - kind: as_expression
+            - kind: satisfies_expression
       inside:
         pattern: defineConfig($$$ARGS)
 fix: |-
@@ -889,6 +895,12 @@ rule:
       - kind: function_expression
     inside:
       kind: arguments
+      stopBy:
+        not:
+          any:
+            - kind: parenthesized_expression
+            - kind: as_expression
+            - kind: satisfies_expression
       inside:
         pattern: defineConfig($$$ARGS)
 fix: |-
@@ -1513,7 +1525,11 @@ export default defineConfig(async ({ command, mode }) => {
             let config = format!(
                 "{{ build: {{ rolldownOptions: {{ output: {{ codeSplitting: {{ groups: [{{ {callback} }}] }} }} }} }} }}"
             );
-            for argument in [config.clone(), format!("() => {{ return {config}; }}")] {
+            for argument in [
+                config.clone(),
+                format!("() => {{ return {config}; }}"),
+                format!("((() => {{ return {config}; }}) as UserConfigFn) satisfies UserConfigFn"),
+            ] {
                 let source = format!("export default defineConfig({argument});");
                 let result = merge_json_config_content(&source, "{}", "lint").unwrap();
                 assert!(result.updated);
@@ -1526,18 +1542,43 @@ export default defineConfig(async ({ command, mode }) => {
     #[test]
     fn test_merge_json_config_content_direct_callback_returns() {
         for callback in ["(env) =>", "async (env) =>", "function(env)", "async function(env)"] {
-            let source = format!(
-                "export default defineConfig({callback} {{
+            let callback = format!(
+                "{callback} {{
   const config = {{ server: {{ port: 3000 }} }};
   if (env.command === 'serve') {{ return config; }}
   return {{ server: {{ port: 4000 }} }};
-}});"
+}}"
             );
+            for argument in [
+                callback.clone(),
+                format!("({callback})"),
+                format!("({callback}) as UserConfigFn"),
+                format!("({callback}) satisfies UserConfigFn"),
+                format!("((({callback}) as UserConfigFn) satisfies UserConfigFn)"),
+            ] {
+                let source = format!("export default defineConfig({argument});");
+                let result = merge_json_config_content(&source, "{}", "lint").unwrap();
+                assert!(result.updated, "{source}");
+                assert_eq!(result.content.matches("lint:").count(), 2, "{}", result.content);
+                assert!(result.content.contains("...config"));
+                assert!(result.content.contains("port: 4000"));
+            }
+        }
+    }
+
+    #[test]
+    fn test_merge_json_config_content_ignores_indirect_callbacks() {
+        let callback =
+            "(() => { const config = {}; if (condition) { return config; } return {}; })";
+        for argument in [
+            format!("wrap({callback})"),
+            format!("{callback}()"),
+            format!("condition ? {callback} : otherConfig"),
+        ] {
+            let source = format!("export default defineConfig({argument});");
             let result = merge_json_config_content(&source, "{}", "lint").unwrap();
-            assert!(result.updated);
-            assert_eq!(result.content.matches("lint:").count(), 2, "{}", result.content);
-            assert!(result.content.contains("...config"));
-            assert!(result.content.contains("port: 4000"));
+            assert!(!result.updated, "{}", result.content);
+            assert_eq!(result.content, source);
         }
     }
 

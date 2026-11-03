@@ -9,3 +9,16 @@ steps = [
   { argv = ["vpt", "print-file", "package.json"], comment = "check package.json", continue-on-failure = true },
   { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "check pnpm-workspace.yaml has overrides and catalog", continue-on-failure = true },
 ]
+
+[[case]]
+name = "migration_merge_wrapped_callback"
+vp = "global"
+comment = "Merge settings through parentheses and type wrappers while preserving nested function returns."
+steps = [
+  { argv = ["vpt", "replace-file-content", "vite.config.ts", "export default defineConfig({", "import type { UserConfigFn } from 'vite';\n\nexport default defineConfig(((() => {\n  return {"], snapshot = false },
+  { argv = ["vpt", "replace-file-content", "vite.config.ts", "});", "  };\n}) as UserConfigFn) satisfies UserConfigFn);"], snapshot = false },
+  ["vp", "migrate", "--no-interactive"],
+  ["vpt", "print-file", "vite.config.ts"],
+  ["vpt", "stat-file", ".oxlintrc.json", "--assert", "missing"],
+  ["vpt", "stat-file", ".oxfmtrc.json", "--assert", "missing"],
+]
