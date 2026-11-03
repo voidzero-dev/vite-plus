@@ -63,9 +63,7 @@ You can also manually set up the Zed config:
       "initialization_options": {
         "settings": {
           "run": "onType",
-          "fixKind": "safe_fix",
-          "typeAware": true,
-          "unusedDisableDirectives": "deny"
+          "fixKind": "safe_fix"
         }
       }
     },
@@ -112,6 +110,8 @@ You can also manually set up the Zed config:
 ```
 
 Setting `oxfmt.fmt.configPath` to `./vite.config.ts` keeps editor format-on-save aligned with the `fmt` block in your Vite+ config. The full generated config covers additional languages (CSS, HTML, JSON, Markdown, etc.) — run `vp create` or `vp migrate` to get the complete file written automatically.
+
+Leave the Oxlint language server's `typeAware` and `unusedDisableDirectives` settings unset to use `lint.options.typeAware` and `lint.options.reportUnusedDisableDirectives` from `vite.config.ts`. If an earlier Vite+ version added these settings to `.zed/settings.json`, remove them to follow the project config. Migration preserves existing editor settings.
 
 ## JetBrains (IntelliJ, WebStorm, etc...)
 
