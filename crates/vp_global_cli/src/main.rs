@@ -40,7 +40,7 @@ use vp_shared::{exit_code_from_status, output};
 
 pub use crate::cli::try_parse_args_from;
 use crate::cli::{
-    RenderOptions, command_with_help, raw_subcommand, run_command, run_command_with_options,
+    RenderOptions, command_for_completion, raw_subcommand, run_command, run_command_with_options,
     try_parse_args_from_with_options,
 };
 
@@ -414,7 +414,7 @@ async fn main() -> ExitCode {
         // Best-effort and silent: mid-typing values are often not (yet) dirs.
         let _ = apply_chdir(&current, &dir);
     }
-    CompleteEnv::with_factory(command_with_help).var("VP_COMPLETE").complete();
+    CompleteEnv::with_factory(command_for_completion).var("VP_COMPLETE").complete();
 
     // Check for shim mode (invoked as node, npm, or npx)
     let argv0 = args.first().map(|s| s.as_str()).unwrap_or("vp");

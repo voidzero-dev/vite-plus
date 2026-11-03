@@ -1283,6 +1283,25 @@ fn maybe_print_runtime_header(command: &str, args: &[String], show_header: bool)
     print_runtime_header(show_header);
 }
 
+fn sanitize_subcommand_aliases_for_completion(cmd: &mut clap::Command) {
+    for subcmd in cmd.get_subcommands_mut() {
+        if subcmd.get_visible_aliases().next().is_some() {
+            let aliases: Vec<String> = subcmd.get_all_aliases().map(str::to_string).collect();
+            // Clear aliases and re-add them as hidden.
+            *subcmd = std::mem::take(subcmd).alias(None::<&str>).aliases(aliases);
+        }
+        sanitize_subcommand_aliases_for_completion(subcmd);
+    }
+}
+
+/// Build a completion command with hidden aliases so clap_complete's ID-based
+/// deduplication preserves canonical names.
+pub fn command_for_completion() -> clap::Command {
+    let mut cmd = Args::command();
+    sanitize_subcommand_aliases_for_completion(&mut cmd);
+    cmd
+}
+
 /// Build a clap Command with custom help formatting matching the JS CLI output.
 pub fn command_with_help() -> clap::Command {
     command_with_help_with_options(RenderOptions::default())
@@ -1336,6 +1355,37 @@ mod tests {
 
     fn argv(args: &[&str]) -> Vec<String> {
         args.iter().map(|arg| (*arg).to_string()).collect()
+    }
+
+    #[test]
+    fn command_for_completion_preserves_canonical_subcommands() {
+        let mut cmd = super::command_for_completion();
+        for (parent, alias, name) in [
+            (None, "i", "install"),
+            (None, "up", "update"),
+            (None, "rm", "remove"),
+            (None, "un", "remove"),
+            (None, "uninstall", "remove"),
+            (Some("pm"), "ls", "list"),
+        ] {
+            let cmd = match parent {
+                Some(name) => cmd.find_subcommand_mut(name).unwrap(),
+                None => &mut cmd,
+            };
+            let candidates =
+                clap_complete::engine::complete(cmd, vec!["vp".into(), "".into()], 1, None)
+                    .unwrap();
+
+            assert!(
+                candidates.iter().any(|c| c.get_value() == name),
+                "missing {name}: {candidates:?}"
+            );
+            assert!(
+                !candidates.iter().any(|c| c.get_value() == alias),
+                "alias {alias} should be hidden from candidates: {candidates:?}"
+            );
+            assert_eq!(cmd.find_subcommand(alias).unwrap().get_name(), name);
+        }
     }
 
     #[test]
