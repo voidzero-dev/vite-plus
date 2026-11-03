@@ -1,0 +1,54 @@
+[[case]]
+name = "agent"
+vp = ["local", "global"]
+steps = [
+  { argv = ["vp", "check", "--format=agent", "clean.js"], comment = "The agent reporter is silent on success; fmt still runs." },
+  { argv = ["vp", "check", "--no-fmt", "--format", "agent", "clean.js"], comment = "A completely silent lint phase still succeeds." },
+  { argv = ["vp", "check", "--format=agent", "warning.js"], comment = "Warnings do not fail by default." },
+  { argv = ["vp", "check", "--format=agent", "--quiet", "warning.js"] },
+  { argv = ["vp", "check", "--format=agent", "--deny-warnings", "warning.js"], continue-on-failure = true },
+  { argv = ["vp", "check", "--no-fmt", "--format=agent", "--quiet", "--deny-warnings", "warning.js"], comment = "Silent output does not turn a failure into success.", continue-on-failure = true },
+  { argv = ["vp", "check", "--format=agent", "error.js"], continue-on-failure = true },
+]
+
+[[case]]
+name = "default"
+vp = "local"
+steps = [
+  ["vp", "check", "clean.js"],
+  ["vp", "check", "--format=default", "clean.js"],
+  { argv = ["vp", "check", "--format=default", "warning.js"], envs = [["GITHUB_ACTIONS", "true"]] },
+]
+
+[[case]]
+name = "github"
+vp = "local"
+env = { GITHUB_ACTIONS = "true" }
+steps = [
+  ["vp", "check", "--format=github", "clean.js"],
+  { argv = ["vp", "check", "--format=github", "error.js"], continue-on-failure = true },
+]
+
+[[case]]
+name = "format_failure"
+vp = "local"
+steps = [
+  { argv = ["vp", "check", "--format=agent", "unformatted.js", "error.js"], comment = "A format failure stops before lint diagnostics.", continue-on-failure = true },
+  { argv = ["vp", "check", "--fix", "--format=typo", "unformatted.js"], comment = "Invalid reporter names are rejected before formatting writes.", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "unformatted.js"], continue-on-failure = true },
+]
+
+[[case]]
+name = "json"
+vp = "local"
+steps = [
+  ["node", "verify-json.mjs"],
+]
+
+[[case]]
+name = "fix_failure"
+vp = "local"
+steps = [
+  { argv = ["vp", "check", "--fix", "--format=agent", "unformatted.js", "error.js"], comment = "A lint failure still reports formatting completion.", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "unformatted.js"], comment = "The first format pass changed the file before lint failed.", continue-on-failure = true },
+]

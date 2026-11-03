@@ -23,6 +23,7 @@ pub(crate) async fn execute_check(
     fix: bool,
     quiet: bool,
     deny_warnings: bool,
+    format: &str,
     no_fmt_flag: bool,
     no_lint_flag: bool,
     no_error_on_unmatched_pattern: bool,
@@ -179,12 +180,9 @@ pub(crate) async fn execute_check(
         if deny_warnings {
             args.push("--deny-warnings".to_string());
         }
-        // `vp check` parses oxlint's human-readable summary output to print
-        // unified pass/fail lines. When `GITHUB_ACTIONS=true`, oxlint auto-switches
-        // to the GitHub reporter, which omits that summary on success and makes the
-        // parser think linting never started. Force the default reporter here so the
-        // captured output is stable across local and CI environments.
-        args.push("--format=default".to_string());
+        // Keep the default summary stable across local and CI environments.
+        // Explicit reporters render their own output instead of that summary.
+        args.push(format!("--format={format}"));
         if !lint_enabled && type_check_enabled {
             args.push("--type-check-only".to_string());
         }
@@ -199,62 +197,69 @@ pub(crate) async fn execute_check(
             SynthesizableSubcommand::Lint { args },
             envs,
             cwd,
-            true,
+            format == "default",
         )
         .await?;
-        let (lint_status, combined_output) = combine_output(captured);
-        status = lint_status;
+        status = captured.status;
+        if format != "default" {
+            output::print_and_flush(&mut std::io::stdout().lock(), &captured.stdout);
+            output::print_and_flush(&mut std::io::stderr().lock(), &captured.stderr);
+        } else {
+            let (_, combined_output) = combine_output(captured);
 
-        match analyze_lint_output(&combined_output) {
-            Some(Ok(success)) => {
-                let message = format!(
-                    "{} in {}",
-                    lint_message_kind.success_label(quiet),
-                    format_count(success.summary.files, "file", "files"),
-                );
-                let detail =
-                    format!("({}, {} threads)", success.summary.duration, success.summary.threads);
+            match analyze_lint_output(&combined_output) {
+                Some(Ok(success)) => {
+                    let message = format!(
+                        "{} in {}",
+                        lint_message_kind.success_label(quiet),
+                        format_count(success.summary.files, "file", "files"),
+                    );
+                    let detail = format!(
+                        "({}, {} threads)",
+                        success.summary.duration, success.summary.threads
+                    );
 
-                if fix && !no_fmt {
-                    deferred_lint_pass = Some((message, detail));
-                } else {
-                    print_pass_line(&message, Some(&detail));
-                }
-            }
-            Some(Err(failure)) => {
-                // `--quiet` suppresses warning diagnostics, but oxlint still
-                // reports warning counts in its summary. Preserve those counts
-                // so `vp check --quiet` matches `vp lint --quiet` semantics.
-                let quiet_warning_only =
-                    quiet && failure.errors == 0 && status == ExitStatus::SUCCESS;
-                if !quiet_warning_only {
-                    if failure.errors == 0 && failure.warnings > 0 {
-                        output::warn(lint_message_kind.warning_heading());
+                    if fix && !no_fmt {
+                        deferred_lint_pass = Some((message, detail));
                     } else {
-                        output::error(lint_message_kind.issue_heading());
+                        print_pass_line(&message, Some(&detail));
                     }
                 }
-                print_stdout_block(&failure.diagnostics);
-                print_summary_line(&format!(
-                    "Found {} and {} in {} ({}, {} threads)",
-                    format_count(failure.errors, "error", "errors"),
-                    format_count(failure.warnings, "warning", "warnings"),
-                    format_count(failure.summary.files, "file", "files"),
-                    failure.summary.duration,
-                    failure.summary.threads
-                ));
-            }
-            None => {
-                // oxlint handles --no-error-on-unmatched-pattern natively and
-                // exits 0 when no files match, so we only need to guard
-                // against the edge case where output is unparsable but the
-                // process still succeeded.
-                if !(suppress_unmatched && status == ExitStatus::SUCCESS) {
-                    output::error("Linting could not start");
-                    if !combined_output.trim().is_empty() {
-                        print_stdout_block(&combined_output);
+                Some(Err(failure)) => {
+                    // `--quiet` suppresses warning diagnostics, but oxlint still
+                    // reports warning counts in its summary. Preserve those counts
+                    // so `vp check --quiet` matches `vp lint --quiet` semantics.
+                    let quiet_warning_only =
+                        quiet && failure.errors == 0 && status == ExitStatus::SUCCESS;
+                    if !quiet_warning_only {
+                        if failure.errors == 0 && failure.warnings > 0 {
+                            output::warn(lint_message_kind.warning_heading());
+                        } else {
+                            output::error(lint_message_kind.issue_heading());
+                        }
                     }
-                    print_summary_line("Linting failed before analysis started");
+                    print_stdout_block(&failure.diagnostics);
+                    print_summary_line(&format!(
+                        "Found {} and {} in {} ({}, {} threads)",
+                        format_count(failure.errors, "error", "errors"),
+                        format_count(failure.warnings, "warning", "warnings"),
+                        format_count(failure.summary.files, "file", "files"),
+                        failure.summary.duration,
+                        failure.summary.threads
+                    ));
+                }
+                None => {
+                    // oxlint handles --no-error-on-unmatched-pattern natively and
+                    // exits 0 when no files match, so we only need to guard
+                    // against the edge case where output is unparsable but the
+                    // process still succeeded.
+                    if !(suppress_unmatched && status == ExitStatus::SUCCESS) {
+                        output::error("Linting could not start");
+                        if !combined_output.trim().is_empty() {
+                            print_stdout_block(&combined_output);
+                        }
+                        print_summary_line("Linting failed before analysis started");
+                    }
                 }
             }
         }
