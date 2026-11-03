@@ -201,7 +201,8 @@ function clearTargetPath(targetPath: string, expectedStats: fs.Stats) {
     return;
   }
   if (!stats.isDirectory()) {
-    fs.rmSync(strippedTargetPath, { force: true });
+    // rmSync can follow directory symlinks or leave dangling links on Node.js 24.11/macOS.
+    fs.unlinkSync(strippedTargetPath);
     return;
   }
   const files = fs.readdirSync(strippedTargetPath);

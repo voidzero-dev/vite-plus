@@ -254,7 +254,7 @@ describe('target directory helpers', () => {
     fs.writeFileSync(path.join(replacementPath, 'keep.txt'), 'keep replacement');
     fs.symlinkSync(linkedDir, targetPath, process.platform === 'win32' ? 'junction' : 'dir');
     mockSelect.mockImplementation(() => {
-      fs.rmSync(targetPath, { force: true });
+      fs.unlinkSync(targetPath);
       fs.renameSync(replacementPath, targetPath);
       return Promise.resolve('yes');
     });
