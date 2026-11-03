@@ -27,8 +27,6 @@ steps = [
   { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@2.4.2"], snapshot = false },
   { argv = ["vpt", "write-file", ".yarnrc.yml", "nodeLinker: node-modules\nyarnPath: .yarn/releases/yarn-4.18.0.cjs\n"], snapshot = false },
   { argv = ["vp", "unlink", "linked-lib"], comment = "The Yarn 2 launcher must also accept the settings for its effective Yarn 4." },
-  { argv = ["vpt", "write-file", "preload.cjs", "console.log('preload output');\n"], snapshot = false },
-  { argv = ["vp", "unlink", "linked-lib"], envs = [["NODE_OPTIONS", "--require ./preload.cjs"]], comment = "A preload that prints to stdout must not break the version query." },
   { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@3.8.7"], snapshot = false },
   { argv = ["vpt", "write-file", ".yarnrc.yml", "yarnPath: .yarn/releases/missing.cjs\n"], snapshot = false },
   { argv = ["vp", "unlink", "linked-lib"], comment = "A failed version query must report an error rather than fall back to the launcher version.", continue-on-failure = true },

@@ -101,8 +101,6 @@ async fn effective_yarn_version(
         .args(prefix_args)
         .arg("--version")
         .envs(env.into_envs())
-        // User preloads can print to stdout; only the actual command should run them.
-        .env_remove("NODE_OPTIONS")
         .output()
         .await?;
     if !output.status.success() {

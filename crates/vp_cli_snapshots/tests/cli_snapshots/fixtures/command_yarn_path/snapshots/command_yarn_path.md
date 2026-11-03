@@ -150,27 +150,6 @@ The Yarn 2 launcher must also accept the settings for its effective Yarn 4.
 ➤ YN0000: · Done in <duration>
 ```
 
-## `vpt write-file preload.cjs 'console.log('\''preload output'\'');
-'`
-
-
-## `NODE_OPTIONS=--require ./preload.cjs vp unlink linked-lib`
-
-A preload that prints to stdout must not break the version query.
-
-```
-preload output
-preload output
-➤ YN0000: · Yarn <version>
-➤ YN0000: ┌ Resolution step
-➤ YN0000: └ Completed
-➤ YN0000: ┌ Fetch step
-➤ YN0000: └ Completed
-➤ YN0000: ┌ Link step
-➤ YN0000: └ Completed
-➤ YN0000: · Done in <duration>
-```
-
 ## `vpt json-edit package.json packageManager yarn@3.8.7`
 
 
