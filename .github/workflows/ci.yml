@@ -1166,9 +1166,17 @@ jobs:
           export VP_SNAP_ZSH_BIN="$(command -v zsh)"
           export VP_SNAP_GLOBAL_VP="$HOME/.vite-plus/bin/vp"
           export VP_SNAP_JS_RUNTIME_DIR="$HOME/.vite-plus/js_runtime"
-          VP_SNAP_FISH_BIN="$(command -v fish)"
-          VP_SNAP_NU_BIN="$(command -v nu)"
-          export VP_SNAP_FISH_BIN VP_SNAP_NU_BIN
+          # Missing optional shells must leave their overrides unset.
+          if VP_SNAP_FISH_BIN="$(command -v fish)"; then
+            export VP_SNAP_FISH_BIN
+          else
+            unset VP_SNAP_FISH_BIN
+          fi
+          if VP_SNAP_NU_BIN="$(command -v nu)"; then
+            export VP_SNAP_NU_BIN
+          else
+            unset VP_SNAP_NU_BIN
+          fi
           # Fetch pinned package-manager archives before command timers start.
           # Cases still download from the registry into their isolated homes.
           VP_SNAP_PREWARM_MANIFEST="$RUNNER_TEMP/snapshot-prewarm.json" \
