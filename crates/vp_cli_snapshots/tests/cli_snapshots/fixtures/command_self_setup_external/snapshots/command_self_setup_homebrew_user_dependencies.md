@@ -5,6 +5,7 @@
 ```
 First use copies the release lockfile and records a successful frozen install.
 Authenticated first use retries once, preserves preferences, and serializes concurrent setup.
+First launch after a tap reinstall restores shims and Zsh profiles.
 CLI, Node, npm, pn, and pnx shims survive Cellar replacement and removal.
 A failed frozen refresh invalidates completion and retries with saved preferences.
 Missing receipts, corrupt receipts, and changed companions trigger dependency repair.

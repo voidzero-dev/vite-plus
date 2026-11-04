@@ -182,6 +182,7 @@ function keg(version) {
     path.join(prefix, 'INSTALL_RECEIPT.json'),
     JSON.stringify({
       homebrew_version: '7.0.2',
+      time: 1,
       source: { tap: 'voidzero-dev/vite-plus', path: '/tap/HomebrewFormula/vp.rb' },
     }),
   );
@@ -295,6 +296,43 @@ try {
   console.log(
     'Authenticated first use retries once, preserves preferences, and serializes concurrent setup.',
   );
+
+  // Reinstalling the same archive keeps the binary's path, size, and modification time.
+  const lostShims = ['bin/vp', 'bin/pn', 'fallback-bin/npm'];
+  for (const shim of lostShims) fs.unlinkSync(path.join(env.VP_HOME, shim));
+  const zdotdir = path.join(env.HOME, 'zsh');
+  fs.mkdirSync(zdotdir);
+  const zshrc = path.join(zdotdir, '.zshrc');
+  fs.writeFileSync(zshrc, '# user settings\n');
+  // Setup discovers Zsh on PATH but does not execute it.
+  fs.symlinkSync('/bin/sh', path.join(zdotdir, 'zsh'));
+  const reinstallEnv = { ...env, ZDOTDIR: zdotdir, PATH: zdotdir + path.delimiter + env.PATH };
+  delete reinstallEnv.VP_SELF_SETUP_NO_MODIFY_PATH;
+  await run(publicVp, [], reinstallEnv);
+  for (const shim of lostShims) assert.ok(!fs.existsSync(path.join(env.VP_HOME, shim)));
+  assert.ok(!fs.existsSync(path.join(zdotdir, '.zshenv')));
+  assert.equal(fs.readFileSync(zshrc, 'utf8'), '# user settings\n');
+
+  const receiptPath = path.join(old, 'INSTALL_RECEIPT.json');
+  const receipt = JSON.parse(fs.readFileSync(receiptPath, 'utf8'));
+  fs.writeFileSync(receiptPath, JSON.stringify({ ...receipt, time: receipt.time + 1 }));
+  await run(publicVp, ['env', 'doctor'], reinstallEnv, root, 1);
+  await run(publicVp, [], reinstallEnv);
+  const doctorAfterReinstall = await run(publicVp, ['env', 'doctor'], reinstallEnv);
+  assert.match(doctorAfterReinstall.stdout, /CLI source\s+Vite\+ Homebrew tap/);
+  assert.match(doctorAfterReinstall.stdout, /Package Manager Resolution/);
+  for (const shim of lostShims) {
+    assert.equal(fs.readlinkSync(path.join(env.VP_HOME, shim)), publicVp);
+  }
+  const sourceLine = `. "${path.join(env.VP_HOME, 'env')}"`;
+  for (const profile of ['.zshenv', '.zshrc']) {
+    const lines = fs.readFileSync(path.join(zdotdir, profile), 'utf8').split('\n');
+    assert.equal(lines.filter((line) => line === sourceLine).length, 1);
+  }
+  assert.ok(fs.readFileSync(zshrc, 'utf8').startsWith('# user settings\n'));
+  assert.equal(fs.readFileSync(settingsFile, 'utf8'), preferences);
+  assert.equal(installs, 2, 'shim and profile setup must reuse the installed dependencies');
+  console.log('First launch after a tap reinstall restores shims and Zsh profiles.');
 
   const cli = await run(path.join(env.VP_HOME, 'bin/vp'), ['sync-versions', '--json'], env);
   assert.equal(cli.stdout.trim(), 'homebrew user CLI');

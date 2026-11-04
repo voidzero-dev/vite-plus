@@ -19,6 +19,9 @@ struct Source {
     version: String,
     modified: SystemTime,
     len: u64,
+    // A same-version brew reinstall can preserve all of the binary metadata above.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tap_install_time: Option<u64>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -63,6 +66,7 @@ impl SetupState {
                 version: local_version.unwrap_or(env!("CARGO_PKG_VERSION")).to_string(),
                 modified: metadata.modified()?,
                 len: metadata.len(),
+                tap_install_time: crate::homebrew::current().and_then(|brew| brew.tap_install_time),
             },
             path: EnvConfig::get()
                 .dirs

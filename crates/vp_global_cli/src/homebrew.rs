@@ -8,6 +8,7 @@ pub(crate) struct Installation {
     pub(crate) binary: AbsolutePathBuf,
     pub(crate) formula: String,
     pub(crate) source: Source,
+    pub(crate) tap_install_time: Option<u64>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -80,7 +81,11 @@ fn installation(binary: &Path) -> Option<Installation> {
         Some("voidzero-dev/vite-plus") if name == "vp" => Source::OfficialTap,
         _ => Source::Other,
     };
-    Some(Installation { binary: AbsolutePathBuf::new(binary)?, formula, source })
+    let tap_install_time = match source {
+        Source::OfficialTap => receipt.get("time").and_then(serde_json::Value::as_u64),
+        _ => None,
+    };
+    Some(Installation { binary: AbsolutePathBuf::new(binary)?, formula, source, tap_install_time })
 }
 
 fn valid_component(value: &str) -> bool {
@@ -147,7 +152,7 @@ mod tests {
             std::fs::write(
                 prefix.join("INSTALL_RECEIPT.json"),
                 serde_json::to_vec(&serde_json::json!({
-                    "homebrew_version": "7.0.2", "source": { "tap": tap, "path": path }
+                    "homebrew_version": "7.0.2", "time": 42, "source": { "tap": tap, "path": path }
                 }))
                 .unwrap(),
             )
@@ -155,6 +160,7 @@ mod tests {
             let install = installation(&binary).unwrap();
             assert_eq!(install.formula, expected);
             assert_eq!(install.source, source);
+            assert_eq!(install.tap_install_time, (source == Source::OfficialTap).then_some(42));
             assert_eq!(install.binary.as_path(), std::fs::canonicalize(&binary).unwrap());
         }
     }
