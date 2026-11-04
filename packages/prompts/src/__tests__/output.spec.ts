@@ -186,14 +186,50 @@ describe('spinner', () => {
     expect(c.text()).not.toContain('(13s)');
   });
 
-  it('cancels an already aborted signal without leaking hooks or a timer', () => {
+  it.each(['SIGINT', 'SIGTERM'] as const)('re-raises %s after cleaning up', (signal) => {
     const c = capture();
-    const signal = AbortSignal.abort();
-    const before = process.listenerCount('SIGINT');
-    const s = spinner({ output: c.output, signal });
-    s.start('Building');
-    expect(s.isCancelled).toBe(true);
-    expect(c.text()).toContain('■ Canceled');
-    expect(process.listenerCount('SIGINT')).toBe(before);
+    const before = process.listeners(signal);
+    const onCancel = vi.fn();
+    const s = spinner({ output: c.output, onCancel });
+    const kill = vi.spyOn(process, 'kill').mockImplementation(() => {
+      expect(process.listeners(signal)).toEqual(before);
+      expect(s.isCancelled).toBe(true);
+      expect(c.text()).toContain('■ Canceled');
+      expect(onCancel).toHaveBeenCalledOnce();
+      return true;
+    });
+    try {
+      s.start('Building');
+      process.emit(signal, signal);
+      expect(kill).toHaveBeenCalledExactlyOnceWith(process.pid, signal);
+    } finally {
+      s.clear();
+      kill.mockRestore();
+    }
   });
+
+  it.each([false, true])(
+    'cancels an AbortSignal without terminating, already aborted=%s',
+    (aborted) => {
+      const c = capture();
+      const controller = new AbortController();
+      if (aborted) {
+        controller.abort();
+      }
+      const before = process.listenerCount('SIGINT');
+      const s = spinner({ output: c.output, signal: controller.signal });
+      const kill = vi.spyOn(process, 'kill').mockReturnValue(true);
+      try {
+        s.start('Building');
+        controller.abort();
+        expect(s.isCancelled).toBe(true);
+        expect(c.text()).toContain('■ Canceled');
+        expect(process.listenerCount('SIGINT')).toBe(before);
+        expect(kill).not.toHaveBeenCalled();
+      } finally {
+        s.clear();
+        kill.mockRestore();
+      }
+    },
+  );
 });

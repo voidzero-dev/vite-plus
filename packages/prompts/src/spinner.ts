@@ -100,6 +100,10 @@ export const spinner = ({
 
   const errorEventHandler = () => handleExit(2);
   const signalEventHandler = () => handleExit(1);
+  const processSignalEventHandler = (signal: NodeJS.Signals) => {
+    handleExit(1);
+    process.kill(process.pid, signal);
+  };
 
   const registerHooks = () => {
     // Reference: https://nodejs.org/api/process.html#event-uncaughtexception
@@ -107,8 +111,8 @@ export const spinner = ({
     // Reference: https://nodejs.org/api/process.html#event-unhandledrejection
     process.on('unhandledRejection', errorEventHandler);
     // Reference Signal Events: https://nodejs.org/api/process.html#signal-events
-    process.on('SIGINT', signalEventHandler);
-    process.on('SIGTERM', signalEventHandler);
+    process.on('SIGINT', processSignalEventHandler);
+    process.on('SIGTERM', processSignalEventHandler);
     process.on('exit', handleExit);
 
     if (signal) {
@@ -119,8 +123,8 @@ export const spinner = ({
   const clearHooks = () => {
     process.removeListener('uncaughtExceptionMonitor', errorEventHandler);
     process.removeListener('unhandledRejection', errorEventHandler);
-    process.removeListener('SIGINT', signalEventHandler);
-    process.removeListener('SIGTERM', signalEventHandler);
+    process.removeListener('SIGINT', processSignalEventHandler);
+    process.removeListener('SIGTERM', processSignalEventHandler);
     process.removeListener('exit', handleExit);
 
     if (signal) {
