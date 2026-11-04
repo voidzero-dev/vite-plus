@@ -383,24 +383,30 @@ continues to skip setup. Without that marker, a binary outside the resolved
 `<DATA>` uses a per-user receipt under `<STATE>/self-setup/<source-hash>.json`.
 The source hash identifies the executable path. The receipt records that path,
 the CLI version, the file modification time and size, and the deployed binary.
+For the official Homebrew tap, it also records the installation time from
+`INSTALL_RECEIPT.json`. A new installation time triggers per-user setup even
+when Homebrew reinstalls the same executable. See the
+[tap installation flow](official-homebrew-tap.md#installation-flow).
 
 On Unix, setup reuses an external installation when its prefix contains both
 `node_modules/vite-plus/package.json` and `node_modules/vite-plus/dist/bin.js`
-beside the `bin` directory. This includes the Homebrew layout. Setup configures
+beside the `bin` directory. Homebrew Core uses this layout. Setup configures
 the user's shell, preferences, and shims without copying the CLI, installing
 its dependencies, changing `current`, or writing a marker in the external
 prefix. Later launches with a matching receipt use the external CLI directly.
 
 The Homebrew `INSTALL_RECEIPT.json` beside the resolved binary's `bin` directory
-identifies Homebrew ownership. `vp upgrade` rejects changes to these installations
-and directs users to `brew upgrade vite-plus`. Its `--check` option directs users
-to `brew outdated vite-plus`. Automatic npm update checks and notices are disabled.
+identifies Homebrew ownership. `vp upgrade` directs users to
+`brew upgrade <formula>`. Its `--check` option directs users to
+`brew outdated <formula>`. The formula name is `vite-plus` for Core and
+`voidzero-dev/vite-plus/vp` for the official tap. Homebrew installations skip
+automatic npm update checks and notices.
 This check does not depend on the Homebrew prefix or `brew` being on `PATH`.
 `vp env doctor` reports Homebrew ownership and the resolved CLI binary. It checks
 the public `vp` command and the user's shim directory on `PATH` separately.
 `vp implode` still removes Vite+-managed data and shell entries. Its confirmation
 distinguishes this cleanup from removal of the Homebrew package. After cleanup,
-it directs users to `brew uninstall vite-plus`. It also explains how to clear
+it directs users to `brew uninstall <formula>`. It also explains how to clear
 cached shell command paths before another `vp` invocation starts setup again.
 
 Unix shims use a public `vp` entrypoint that resolves to the same binary when
@@ -411,7 +417,9 @@ Thus, a package-manager upgrade can replace and remove the old prefix without
 breaking saved shim paths. JavaScript resolution still uses the real binary's
 prefix. With no public entrypoint, shims target the external binary directly.
 
-An external binary without this bundled CLI installs a managed copy under
+The official tap keeps the executable in the Cellar and installs the CLI
+dependencies under `<DATA>/cli-packages/<version>/<platform>`.
+A standalone binary without the bundled CLI installs a managed copy under
 `<DATA>`. Later launches use the receipt to execute that copy. The copy must
 still have its completion marker. Windows uses this managed layout even when
 the external prefix contains JavaScript, because its trampolines require it.

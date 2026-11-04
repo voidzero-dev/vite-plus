@@ -1,7 +1,7 @@
 # RFC: Official Homebrew tap
 
-Status: Proposed, with implementation in this PR. Stable installation stays
-disabled until maintainers publish a compatible release and merge its formula update.
+The official tap has supported stable installs since `1.5.0`.
+[First stable formula](https://github.com/voidzero-dev/vite-plus/pull/3346).
 
 ## Motivation
 
@@ -43,7 +43,7 @@ deprecate its formula.
 ## Proposal
 
 Keep [`HomebrewFormula/vp.rb`](../HomebrewFormula/vp.rb) in this repository.
-Once the tap is available, install it with:
+Install the tap and run `vp` to complete setup.
 
 ```sh
 brew tap voidzero-dev/vite-plus https://github.com/voidzero-dev/vite-plus
@@ -147,9 +147,15 @@ setup when needed. Explicit installer requests also run setup.
 
 ### 4. Complete user setup
 
-After installation succeeds, setup writes shell environment files, shims, and
-a setup receipt. Shims point through Homebrew's stable public command. This
-example uses managed Node.js and system-first npm:
+After dependency installation succeeds, `vp` creates the shims and records
+completion in a per-user setup receipt. The shims target Homebrew's stable
+public command. The example below uses managed Node.js and system-first npm.
+
+The tap uses the same shell setup as `install.sh`. When Zsh is available,
+setup adds a line that sources `<CONFIG>/env` to `.zshenv` and any existing
+`.zshrc`. It creates `.zshenv` if needed and skips entries already present.
+It uses an absolute `ZDOTDIR` when set and otherwise uses the user's home
+directory. Set `VP_SELF_SETUP_NO_MODIFY_PATH=1` to skip profile edits.
 
 ```text
 <CONFIG>/
@@ -176,12 +182,14 @@ The [JavaScript resolver](../crates/vp_global_cli/src/js_executor.rs) normally
 prefers project-local `vite-plus` and uses the matching `cli-packages` directory
 as its global fallback.
 
-Later invocations reuse setup while its completion checks remain valid. The
-checks compare the shared install receipt with the companion and working
-lockfiles, and check the CLI package version and entrypoint. Missing or
-inconsistent state triggers repair when the CLI runs. Setup writes only to user directories.
+For the official tap, the per-user setup receipt includes the `time` field from
+Homebrew's `INSTALL_RECEIPT.json`. Later invocations reuse completed setup.
+If a user removes a shim or edits a shell profile during the same installation,
+an ordinary launch leaves that edit in place. The separate dependency check
+compares the shared install receipt with the companion and working lockfiles
+and verifies the CLI package version and entrypoint.
 
-### 5. Upgrade through Homebrew
+### 5. Upgrade or reinstall through Homebrew
 
 `brew upgrade` installs version `B` and replaces its public links. User shims
 continue to point through those links, even after Homebrew removes version `A`.
@@ -201,6 +209,14 @@ continue to point through those links, even after Homebrew removes version `A`.
 Running `vp` after the upgrade prepares `B`'s dependency directory through the
 same first-use setup and records completion. It preserves management preferences
 and reuses cached tools where their versions match. Recovery commands still bypass setup.
+
+`brew reinstall voidzero-dev/vite-plus/vp` can preserve the executable's path,
+size, and modification time. The new Homebrew installation time tells `vp` to
+run first-use setup once for each account, even for the same CLI version.
+The first ordinary `vp` launch restores missing shims in the directories
+selected by the saved management settings and applies the shell setup above.
+It reuses matching CLI dependencies. Running `vp env doctor` first reports
+missing shims and leaves first-use setup pending.
 
 ```text
 <DATA>/cli-packages/B/<platform>/
@@ -290,10 +306,9 @@ leave an existing formula PR and its branch unchanged, preserving pushed fixes.
 
 Failures leave the previous formula available. Fix formula or test-script bugs in
 the same PR; retry transient failures without changing it. A bug in the published
-CLI or npm packages requires a new patch release. The first compatible release
-removes the disable gate through this process; older releases without the tap
-formula cannot enable it. Use a formula `revision` for recipe fixes to an enabled
-version; formula-only merges do not trigger product releases.
+CLI or npm packages requires a new patch release. The formula update for
+`1.5.0` removed the initial disable gate. Use a formula `revision` for recipe
+fixes to a published version. Formula-only merges do not trigger product releases.
 
 `HOMEBREW_VP_PR_VERSION` selects a published preview by PR number or full commit
 SHA. The formula downloads and verifies the native package from the registry bridge;
@@ -314,6 +329,8 @@ and synthetic credentials. In addition to the published-artifact checks, cover:
 - Concurrent setup, receipt and lockfile repair, preserved preferences, and
   recovery commands after failed setup, without writes to the Cellar.
 - Upgrade and old-keg removal with both shim directories, including `pn` and `pnx`.
+- Same-version reinstall with missing managed and fallback shims. Check both Zsh
+  profiles and run the full `vp env doctor` after the first ordinary launch.
 - Independent account data, migration, `vp implode`, and Homebrew uninstall.
 
 PR installation checks require the `test: install-e2e` label and cover macOS ARM64
