@@ -101,8 +101,9 @@ export const spinner = ({
   const errorEventHandler = () => handleExit(2);
   const signalEventHandler = () => handleExit(1);
   const processSignalEventHandler = (signal: NodeJS.Signals) => {
+    const hasOtherListeners = process.listenerCount(signal) > 1;
     handleExit(1);
-    if (process.listenerCount(signal) === 0) {
+    if (!hasOtherListeners) {
       process.kill(process.pid, signal);
     }
   };
@@ -113,8 +114,8 @@ export const spinner = ({
     // Reference: https://nodejs.org/api/process.html#event-unhandledrejection
     process.on('unhandledRejection', errorEventHandler);
     // Reference Signal Events: https://nodejs.org/api/process.html#signal-events
-    process.on('SIGINT', processSignalEventHandler);
-    process.on('SIGTERM', processSignalEventHandler);
+    process.prependListener('SIGINT', processSignalEventHandler);
+    process.prependListener('SIGTERM', processSignalEventHandler);
     process.on('exit', handleExit);
 
     if (signal) {
