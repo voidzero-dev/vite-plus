@@ -17,7 +17,7 @@ vp update
 
 ## Commands
 
-Dependency commands such as `vp add` run directly under `vp`, and other package-manager operations run under `vp pm`. Both forms are translated for the detected package manager in the same way. The `vp pm` prefix keeps names such as `pack` available for Vite+ commands. For example, `vp pm pack` creates a package tarball, but [`vp pack`](/guide/pack) builds a library.
+Core commands such as `vp add` run directly under `vp`. Forwarded Commands use `vp pm` to delegate operations to the detected package manager, translating commands and supported options just as core commands do. The `vp pm` prefix keeps names such as `pack` available for Vite+ commands. For example, `vp pm pack` creates a package tarball, but [`vp pack`](/guide/pack) builds a library.
 
 ## Native Arguments
 
