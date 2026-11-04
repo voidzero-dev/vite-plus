@@ -51,6 +51,17 @@ We recommend enabling both `typeAware` and `typeCheck` in the `lint` block:
 
 This path is powered by [tsgolint](https://github.com/oxc-project/tsgolint) on top of the TypeScript 7 (aka TypeScript Go) toolchain. It gives Oxlint access to type information and allows type checking directly via `vp lint` and `vp check`.
 
+### Try the experimental Rust backend
+
+To try the Rust backend, install `tsrs` in your project and point Oxlint at the `tsrs-lint` executable. Run these commands from the project root.
+
+```sh
+vp add -D tsrs
+OXLINT_TSGOLINT_PATH="$PWD/node_modules/.bin/tsrs-lint" vp lint --type-aware --type-check
+```
+
+The same environment variable works with `vp check` when type-aware linting is enabled. Omit it to use the bundled tsgolint again.
+
 ## JS Plugins
 
 If you are migrating from ESLint and still depend on a few critical JavaScript-based ESLint plugins, Oxlint has [JS plugin support](https://oxc.rs/docs/guide/usage/linter/js-plugins) that can help you keep those plugins running while you complete the migration.
