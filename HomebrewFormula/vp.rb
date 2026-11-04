@@ -76,29 +76,26 @@ class Vp < Formula
 
   preview_ref = ENV["HOMEBREW_VP_PR_VERSION"].presence
 
-  # The updater removes this gate after the first compatible release is published.
-  disable! date: "2026-09-22", because: "requires a release with per-user Homebrew setup" unless preview_ref
-
   # BEGIN RELEASE ASSETS
   on_macos do
     on_arm do
-      url "https://github.com/voidzero-dev/vite-plus/releases/download/v0.3.3/vp-aarch64-apple-darwin.tar.gz"
-      sha256 "856713a318f1cc3b33c9dface7ca2ef066f18ede8150f37b7f549060d4709834"
+      url "https://github.com/voidzero-dev/vite-plus/releases/download/v1.5.0/vp-aarch64-apple-darwin.tar.gz"
+      sha256 "a1b702d22ce2e7dff610d6293dbc47f72b17387cac29af785d75339ee7720426"
     end
     on_intel do
-      url "https://github.com/voidzero-dev/vite-plus/releases/download/v0.3.3/vp-x86_64-apple-darwin.tar.gz"
-      sha256 "75095001972a6974ea1943d25e28dc47bd7a7f77f8387055e70d86a499a778c2"
+      url "https://github.com/voidzero-dev/vite-plus/releases/download/v1.5.0/vp-x86_64-apple-darwin.tar.gz"
+      sha256 "b17c62a52421a03f3e0b72211f4f3ceca07fcdf156b2965e293c06c6b5747371"
     end
   end
 
   on_linux do
     on_arm do
-      url "https://github.com/voidzero-dev/vite-plus/releases/download/v0.3.3/vp-aarch64-unknown-linux-gnu.tar.gz"
-      sha256 "b3cafb9545623859910ce06a905da2d3d577fe4c15558795b8ddd09e1fbe9ed1"
+      url "https://github.com/voidzero-dev/vite-plus/releases/download/v1.5.0/vp-aarch64-unknown-linux-gnu.tar.gz"
+      sha256 "36387764b075539bada5acea8e1fc44d671a0ebcff667ba7866aee4067d46d3e"
     end
     on_intel do
-      url "https://github.com/voidzero-dev/vite-plus/releases/download/v0.3.3/vp-x86_64-unknown-linux-gnu.tar.gz"
-      sha256 "0acf34e3182d20f245b58fb0a4c611329b040f64d9d2b76b91bbd907bc9fc4f8"
+      url "https://github.com/voidzero-dev/vite-plus/releases/download/v1.5.0/vp-x86_64-unknown-linux-gnu.tar.gz"
+      sha256 "547ee61b5dbc556bb7d3d996c198334e3477fb245ab41d6faa6efcde106a8405"
     end
   end
   # END RELEASE ASSETS
