@@ -17,7 +17,7 @@ catalog:
   '@oxc-project/runtime': =0.157.0
   '@oxc-project/types': =0.157.0
   # Kept at the oxlint version by .github/scripts/upgrade-deps.ts
-  '@oxlint/plugins': =1.90.0
+  '@oxlint/plugins': =1.91.0
   '@rolldown/pluginutils': ^1.0.0
   '@tsdown/css': ^0.23.4
   '@tsdown/exe': ^0.23.4
@@ -52,7 +52,7 @@ catalog:
   nanotar: ^0.3.0
   oxc-parser: =0.157.0
   oxfmt: =0.76.0
-  oxlint: =1.90.0
+  oxlint: =1.91.0
   oxlint-tsgolint: =7.0.2005
   pathe: ^2.0.3
   picocolors: ^1.1.1
