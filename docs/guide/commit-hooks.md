@@ -76,6 +76,8 @@ Use `--no-hooks` when you want `vp config` to leave the Git hook dispatcher unch
 
 If `core.hooksPath` points to another hook directory, `vp config` skips dispatcher installation to preserve the existing setup. Run `vp hooks status` to inspect the current configuration.
 
+After migrating from Husky, existing clones can retain a local `core.hooksPath` of `.husky` or `.husky/_`. `vp config` and `vp hooks enable` automatically replace this stale setting when the Vite+ hooks directory contains a hook script, no hook scripts remain directly under `.husky/`, and the repository and ancestor package manifests no longer declare Husky dependencies, configuration, or scripts. The old Husky files are left unchanged. Global and worktree-scoped hook settings are preserved.
+
 You can also set `VP_GIT_HOOKS=0` to disable hook installation from lifecycle scripts such as `prepare` or `postinstall`.
 
 Project-owned hook scripts such as `.vite-hooks/pre-commit` should be committed to the repository. The generated dispatcher and shims under `.vite-hooks/_` are ignored and recreated by `vp config` or `vp hooks enable`. Neither command creates or modifies project hook scripts or staged-file configuration.

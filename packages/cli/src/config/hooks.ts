@@ -5,6 +5,7 @@ import {
   lstatSync,
   mkdirSync,
   readdirSync,
+  readFileSync,
   realpathSync,
   rmSync,
   writeFileSync,
@@ -507,6 +508,81 @@ function getScopedHooksPath(scope: 'local' | 'worktree'): string {
   return result.status === 0 ? result.stdout?.toString().trim() : '';
 }
 
+/** Only reclaim an abandoned, repository-local Husky setup after hooks were moved. */
+function canReplaceStaleHuskyPath(hooksPath: string, location: HooksLocation): boolean {
+  const normalized = normalizeHooksPath(hooksPath);
+  if (normalized !== '.husky' && normalized !== join('.husky', '_')) {
+    return false;
+  }
+  // Never override a global, worktree, or command-scoped hook policy.
+  const scoped = spawnSync('git', ['config', '--show-scope', '--get', 'core.hooksPath']);
+  if (scoped.status !== 0 || !scoped.stdout.toString().startsWith('local\t')) {
+    return false;
+  }
+  try {
+    const huskyDir = join(location.toplevel, '.husky');
+    const huskyStats = lstatSync(huskyDir, { throwIfNoEntry: false });
+    if (
+      (huskyStats && (!huskyStats.isDirectory() || huskyStats.isSymbolicLink())) ||
+      lstatSync(join(huskyDir, '_'), { throwIfNoEntry: false })?.isSymbolicLink() ||
+      SUPPORTED_GIT_HOOK_NAMES.some((hook) =>
+        lstatSync(join(huskyDir, hook), { throwIfNoEntry: false }),
+      )
+    ) {
+      return false;
+    }
+    // A dispatcher alone is not evidence of a completed migration.
+    if (
+      !SUPPORTED_GIT_HOOK_NAMES.some((hook) =>
+        lstatSync(join(location.baseDir, location.dir, hook), { throwIfNoEntry: false })?.isFile(),
+      ) ||
+      !existsSync(join(location.toplevel, 'package.json'))
+    ) {
+      return false;
+    }
+    // Include ancestor manifests when hooks are configured from a workspace package.
+    const relativeBase = relative(location.toplevel, location.baseDir);
+    const directories = [location.toplevel];
+    for (const segment of relativeBase.split(sep).filter(Boolean)) {
+      directories.push(join(directories.at(-1)!, segment));
+    }
+    for (const directory of directories) {
+      const manifest = join(directory, 'package.json');
+      if (!existsSync(manifest)) {
+        continue;
+      }
+      const pkg = JSON.parse(readFileSync(manifest, 'utf8')) as Record<string, unknown>;
+      if (!pkg || typeof pkg !== 'object' || Array.isArray(pkg) || 'husky' in pkg) {
+        return false;
+      }
+      for (const key of [
+        'dependencies',
+        'devDependencies',
+        'optionalDependencies',
+        'peerDependencies',
+      ]) {
+        const dependencies = pkg[key];
+        if (dependencies && typeof dependencies === 'object' && 'husky' in dependencies) {
+          return false;
+        }
+      }
+      if (
+        pkg.scripts &&
+        typeof pkg.scripts === 'object' &&
+        Object.values(pkg.scripts).some(
+          (script) => typeof script === 'string' && /\bhusky\b/.test(script),
+        )
+      ) {
+        return false;
+      }
+    }
+  } catch {
+    // Unreadable or invalid manifests are not evidence that Husky was removed.
+    return false;
+  }
+  return true;
+}
+
 function unsetScopedHooksPath(scope: 'local' | 'worktree'): InstallResult | null {
   const result = spawnSync('git', ['config', `--${scope}`, '--unset-all', 'core.hooksPath']);
   if (result.status == null) {
@@ -598,7 +674,8 @@ export function install(dir?: string, options: InstallOptions = {}): InstallResu
   const existingHooksPath = getEffectiveHooksPath();
   if (
     existingHooksPath &&
-    !hooksPathsEqual(existingHooksPath, location.target, location.toplevel)
+    !hooksPathsEqual(existingHooksPath, location.target, location.toplevel) &&
+    !canReplaceStaleHuskyPath(existingHooksPath, location)
   ) {
     return {
       message: `core.hooksPath is already set to "${existingHooksPath}", skipping`,
