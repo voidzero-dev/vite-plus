@@ -10,7 +10,7 @@ permissions: {}
 jobs:
   upgrade:
     if: github.event.repository.fork == false
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     permissions:
       actions: read
       id-token: write
@@ -497,7 +497,7 @@ jobs:
     # Also runs when the upgrade job fails or exceeds its own time limit. Kept
     # separate so the Kimi K3.1 Pro steps never receive a token that can write issues.
     if: always() && needs.upgrade.result != 'skipped'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     permissions:
       actions: read
       checks: read

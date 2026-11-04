@@ -33,7 +33,7 @@ jobs:
           github.event.comment.user.type != 'Bot' &&
           contains(join(github.event.issue.labels.*.name, ','), 'triage: '))
       )
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 90
     permissions:
       contents: read

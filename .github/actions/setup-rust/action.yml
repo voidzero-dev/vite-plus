@@ -50,10 +50,6 @@ runs:
         # This also applies to the action's post step, which creates the archive.
         ZSTD_CLEVEL: '9'
       with:
-        # Entries saved on ubuntu-26.04 hold C objects that link into a
-        # crashing binding with the napi-cross linker, and the key doesn't
-        # include the runner image. Start a new namespace so jobs pinned to
-        # ubuntu-24.04 don't restore them.
         prefix-key: v2-rust
         shared-key: ${{ inputs.cache-key }}
         save-if: ${{ inputs.save-cache == 'true' }}

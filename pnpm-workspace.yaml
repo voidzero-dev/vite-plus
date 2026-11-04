@@ -9,7 +9,7 @@ catalog:
   '@e18e/eslint-plugin': ^0.8.1
   '@emnapi/core': 2.0.0-beta.2
   '@emnapi/runtime': 2.0.0-beta.2
-  '@napi-rs/cli': ^3.10.0
+  '@napi-rs/cli': ^3.10.12
   '@napi-rs/wasm-runtime': 1.2.6
   '@nkzw/safe-word-list': ^3.1.0
   '@oxc-node/cli': ^1.0.1

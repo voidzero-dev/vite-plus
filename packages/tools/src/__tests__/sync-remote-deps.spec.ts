@@ -174,6 +174,17 @@ describe('mergePnpmWorkspaces() upstream catalog versions', () => {
     },
   );
 
+  test('keeps the napi-cross host compiler fix when Rolldown uses an older CLI', () => {
+    const merged = mergePnpmWorkspaces(
+      { catalog: { '@napi-rs/cli': '^3.10.12' } },
+      { catalog: { '@napi-rs/cli': '^3.10.0' } },
+      {},
+      VITE_PACKAGE,
+      verkit,
+    );
+    expect(merged.catalog?.['@napi-rs/cli']).toBe('^3.10.12');
+  });
+
   test('preserves the selected Oxc versions when upstream uses an older release', () => {
     const merged = mergePnpmWorkspaces(
       { catalog: { 'oxc-parser': '=0.155.0', '@oxc-project/runtime': '=0.155.0' } },
