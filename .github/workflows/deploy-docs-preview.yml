@@ -26,7 +26,7 @@ jobs:
     if: >-
       github.repository == 'voidzero-dev/vite-plus' &&
       github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write

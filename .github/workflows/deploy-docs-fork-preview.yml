@@ -43,7 +43,7 @@ jobs:
       github.event.workflow_run.event == 'pull_request' &&
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.path == '.github/workflows/build-docs-fork-preview.yml'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: read
@@ -71,7 +71,7 @@ jobs:
     name: 'Deploy PR #${{ needs.authorize.outputs.pr }} at ${{ github.event.workflow_run.head_sha }}'
     needs: authorize
     if: github.event_name == 'workflow_run' && needs.authorize.outputs.pr != ''
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     # Serialize uploads per PR and let the running deployment finish.
     # Keep only the last queued job; recheck the head before uploading.

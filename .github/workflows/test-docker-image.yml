@@ -34,7 +34,7 @@ env:
 jobs:
   build-and-smoke-test:
     name: Build and smoke-test the toolchain image
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       contents: read

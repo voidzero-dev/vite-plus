@@ -33,7 +33,7 @@ env:
 
 jobs:
   detect-changes:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       contents: read
@@ -138,7 +138,7 @@ jobs:
   download-previous-rolldown-binaries:
     needs: detect-changes
     if: needs.detect-changes.outputs.code-changed == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       contents: read
@@ -332,7 +332,7 @@ jobs:
       # dynamically anyway, so matching here is correct.
       # Must mirror `.cargo/config.toml` rustflags — RUSTFLAGS env overrides
       # both [build] and [target.*] levels.
-      RUSTFLAGS: --cfg tokio_unstable -C link-args=-Wl,--warn-unresolved-symbols -C target-feature=-crt-static
+      RUSTFLAGS: --cfg tokio_unstable -C target-feature=-crt-static
     steps:
       - name: Install Alpine dependencies
         shell: sh {0}
@@ -1637,11 +1637,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-24.04
+          - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             sfw_asset: sfw-free-linux-x86_64
             vp_bin: vp
-            # Only Linux needs the TLS-bypass: the ubuntu-24.04 runner
+            # Only Linux needs the TLS-bypass: the ubuntu-latest runner
             # doesn't preinstall Node 22.18 into vp's cache, so vp's HttpClient
             # (rustls) fetches `nodejs.org/.../SHASUMS256.txt` through sfw and
             # hits the upstream EKU bug. macOS/Windows runners ship Node in
@@ -1752,7 +1752,7 @@ jobs:
           sfw "${{ matrix.vp_bin }}" install --no-frozen-lockfile
 
   done:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     if: always()
     needs:
