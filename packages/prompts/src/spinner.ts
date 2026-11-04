@@ -102,7 +102,9 @@ export const spinner = ({
   const signalEventHandler = () => handleExit(1);
   const processSignalEventHandler = (signal: NodeJS.Signals) => {
     handleExit(1);
-    process.kill(process.pid, signal);
+    if (process.listenerCount(signal) === 0) {
+      process.kill(process.pid, signal);
+    }
   };
 
   const registerHooks = () => {

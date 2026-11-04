@@ -208,6 +208,27 @@ describe('spinner', () => {
     }
   });
 
+  it.each(['SIGINT', 'SIGTERM'] as const)('leaves %s to existing shutdown handlers', (signal) => {
+    const c = capture();
+    const s = spinner({ output: c.output });
+    const shutdown = vi.fn();
+    const before = process.listeners(signal);
+    const kill = vi.spyOn(process, 'kill').mockReturnValue(true);
+    process.on(signal, shutdown);
+    try {
+      s.start('Building');
+      process.emit(signal, signal);
+      expect(shutdown).toHaveBeenCalledExactlyOnceWith(signal);
+      expect(kill).not.toHaveBeenCalled();
+      expect(s.isCancelled).toBe(true);
+      expect(process.listeners(signal)).toEqual([...before, shutdown]);
+    } finally {
+      s.clear();
+      process.removeListener(signal, shutdown);
+      kill.mockRestore();
+    }
+  });
+
   it.each([false, true])(
     'cancels an AbortSignal without terminating, already aborted=%s',
     (aborted) => {
