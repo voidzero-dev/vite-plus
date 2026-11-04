@@ -48,6 +48,8 @@ gh workflow run prepare_release.yml --repo voidzero-dev/vite-plus -f version=X.Y
 
 The workflow bumps `packages/cli/package.json`, `packages/core/package.json`, `packages/prompts/package.json`, `packages/cli/binding/Cargo.toml`, and `crates/vp_global_cli/Cargo.toml`, refreshes `Cargo.lock`, and opens a PR titled `release: vX.Y.Z` from branch `release/vX.Y.Z`. The PR body ends with `Merging this PR will trigger the release workflow.` and that line must survive every later edit.
 
+`@voidzero-dev/vite-plus-core` does not use `X.Y.Z`. Its version encodes the bundled Vite version (for example, `8.3.500` for Vite `8.3.5`; see [Core Version](../../../packages/core/BUNDLING.md#core-version)). The workflow selects it from the registry and names it in the first line of the PR body. In the steps below, `<core>` is that version. Read it from the release branch with `node -p "require('./packages/core/package.json').version"`.
+
 ## 2. Sync release versions (required every release)
 
 ### NAPI binding
@@ -411,14 +413,15 @@ Auto-merge being enabled is not a completed merge. Confirm `mergedAt` and the me
 
 **When the `Release` job fails partway, fix the cause, then use "Re-run failed jobs", never "Re-run all jobs".** A full rerun repeats `check`, which now sees the new version on `unpkg.com/vite-plus@latest` and skips the whole release. A failed-jobs rerun reuses `check` and the build artifacts, and every npm publish step is idempotent: `.github/scripts/publish-npm-package.ts` skips versions the registry already serves (`<pkg>@X.Y.Z is already published; skipping upload.`), so only the unpublished packages upload. Confirm that from the rerun log. The rerun waits on the `release` environment again, and whoever started the rerun cannot approve it.
 
-**A successful publish command does not mean the packages are installable.** `pnpm publish` prints `✅ Published package <name>@X.Y.Z` as soon as the registry accepts the request, and the registry can then take tens of minutes to actually serve that version. This has shipped a broken release: `vite-plus@X.Y.Z` went live on `latest` with an exact dependency on `@voidzero-dev/vite-plus-core@X.Y.Z` that was invisible for about 35 minutes, so every `npm install vite-plus` failed with `ETARGET` and both `publish-docker` and `Deploy docs` failed on `ERR_PNPM_NO_MATCHING_VERSION`. The downstream job failures are the symptom, not the cause; do not re-run them until the registry has the package.
+**A successful publish command does not mean the packages are installable.** `pnpm publish` prints `✅ Published package <name>@X.Y.Z` as soon as the registry accepts the request, and the registry can then take tens of minutes to actually serve that version. This has shipped a broken release: `vite-plus@X.Y.Z` went live on `latest` with an exact dependency on its `@voidzero-dev/vite-plus-core` version that was invisible for about 35 minutes, so every `npm install vite-plus` failed with `ETARGET` and both `publish-docker` and `Deploy docs` failed on `ERR_PNPM_NO_MATCHING_VERSION`. The downstream job failures are the symptom, not the cause; do not re-run them until the registry has the package.
 
 Check visibility directly, not through `npm view`, which caches:
 
 ```bash
-for pkg in '@voidzero-dev%2Fvite-plus-core' 'vite-plus'; do
-  curl -s -H 'Cache-Control: no-cache' "https://registry.npmjs.org/$pkg?t=$(date +%s)" |
-    python3 -c "import json,sys;d=json.load(sys.stdin);print('$pkg', d['dist-tags'].get('latest'), 'X.Y.Z' in d['versions'])"
+for entry in '@voidzero-dev%2Fvite-plus-core <core>' 'vite-plus X.Y.Z'; do
+  set -- $entry
+  curl -s -H 'Cache-Control: no-cache' "https://registry.npmjs.org/$1?t=$(date +%s)" |
+    python3 -c "import json,sys;d=json.load(sys.stdin);print('$1', d['dist-tags'].get('latest'), '$2' in d['versions'])"
 done
 ```
 
@@ -484,7 +487,8 @@ Local clients can also mislead in the other direction. npm and pnpm cache a look
 
    ```bash
    npm view vite-plus version                       # X.Y.Z
-   npm view @voidzero-dev/vite-plus-core version    # X.Y.Z
+   npm view @voidzero-dev/vite-plus-core version    # <core>, which encodes the bundled Vite version
+   npm view vite-plus@X.Y.Z dependencies.vite       # npm:@voidzero-dev/vite-plus-core@<core>
    npm view create-vite-plus version                # X.Y.Z
    npm view @voidzero-dev/vite-plus-cli-darwin-arm64 version   # X.Y.Z, spot-check a native platform package
    npm view vite-plus dist-tags.latest              # X.Y.Z
@@ -511,7 +515,7 @@ Local clients can also mislead in the other direction. npm and pnpm cache a look
 
    Require the target version directory, the expected `current` link, and `vp --version` output; a success message alone is insufficient. `Already up to date` passes only when the selected installation is already on the target version.
 
-   The Docker check must run `vp --version` inside the image, not just pull it: the output must report `vp vX.Y.Z`. Outside a project that output lists no bundled tools, so inspect the installed image package tree under `~/.vite-plus/X.Y.Z/node_modules/.pnpm` and confirm the bundled tool packages and versions match the changelog's Bundled Versions table. `tsdown` will be absent from that tree because it is bundled into `@voidzero-dev/vite-plus-core`; verify it with `npm view @voidzero-dev/vite-plus-core@X.Y.Z bundledVersions --json` instead. If no local Docker runtime is available, confirm `publish-docker` succeeded and inspect the GHCR manifest for both `linux/amd64` and `linux/arm64`. For the current stable release, confirm the version tag and `latest` have the same digest. Record each architecture's `vp --version` output from the Docker build logs when available (`gh api --allow-escape-sequences repos/voidzero-dev/vite-plus/actions/jobs/<job-id>/logs`; without the flag, `gh` refuses logs containing terminal escape sequences), and distinguish that evidence from a local run:
+   The Docker check must run `vp --version` inside the image, not just pull it: the output must report `vp vX.Y.Z`. Outside a project that output lists no bundled tools, so inspect the installed image package tree under `~/.vite-plus/X.Y.Z/node_modules/.pnpm` and confirm the bundled tool packages and versions match the changelog's Bundled Versions table. `tsdown` will be absent from that tree because it is bundled into `@voidzero-dev/vite-plus-core`; verify it with `npm view @voidzero-dev/vite-plus-core@<core> bundledVersions --json` instead. If no local Docker runtime is available, confirm `publish-docker` succeeded and inspect the GHCR manifest for both `linux/amd64` and `linux/arm64`. For the current stable release, confirm the version tag and `latest` have the same digest. Record each architecture's `vp --version` output from the Docker build logs when available (`gh api --allow-escape-sequences repos/voidzero-dev/vite-plus/actions/jobs/<job-id>/logs`; without the flag, `gh` refuses logs containing terminal escape sequences), and distinguish that evidence from a local run:
 
    ```bash
    TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:voidzero-dev/vite-plus:pull" \

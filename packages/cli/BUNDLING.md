@@ -22,17 +22,23 @@ its subpaths. This gives the CLI and plugins the same dependency name and
 avoids separate core instances under the alias and canonical package name.
 
 `resolve-core.ts` resolves the alias from the selected CLI package and checks
-its core version. It also checks any Vite dependency declared by the command's
-target project. An incidental hoisted peer does not trigger project validation.
-These checks run before Vite or packaging commands start. Keep the canonical
-name in release metadata and alias targets to identify the published package.
+that the core version matches the exact alias in the CLI manifest. The core
+version encodes the bundled Vite version, so it differs from the CLI version
+(see [Core Version](../core/BUNDLING.md#core-version)). It also checks any Vite
+dependency declared by the command's target project. An incidental hoisted peer
+does not trigger project validation. These checks run before Vite or packaging
+commands start. Keep the canonical name in release metadata and alias targets
+to identify the published package.
 
 For npm projects without overrides, pin a declared `vite` alias to the exact
-installed `vite-plus` version. npm can replace a tagged alias such as
-`npm:@voidzero-dev/vite-plus-core@latest` with upstream Vite to satisfy Vitest's
-peer range. The CLI rejects that mismatch and directs users to `vp migrate`,
-which writes an exact alias and the package-manager overrides. The npm fixtures
-check shared core identity with an exact alias and rejection of the tagged layout.
+core version that the installed `vite-plus` uses. With a `1.x` core, npm
+replaced a tagged alias such as `npm:@voidzero-dev/vite-plus-core@latest` with
+upstream Vite to satisfy Vitest's peer range. The encoded core version
+satisfies that range, so npm now keeps the alias on the core. The CLI still
+rejects upstream Vite and a core version that differs from its alias, and
+directs users to `vp migrate`, which writes an exact alias and the
+package-manager overrides. The npm fixtures check shared core identity with an
+exact alias, a tagged alias, and no project alias.
 
 ## Build Steps
 

@@ -75,10 +75,8 @@ allowBuilds:
   geckodriver: true
 peerDependencyRules:
   allowAny:
-    - vite
     - vitest
   allowedVersions:
-    vite: '*'
     vitest: '*'
 ```
 

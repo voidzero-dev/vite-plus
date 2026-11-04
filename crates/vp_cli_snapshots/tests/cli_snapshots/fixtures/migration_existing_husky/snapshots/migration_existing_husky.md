@@ -44,11 +44,6 @@ catalog:
   vite-plus: <version>
 overrides:
   vite@*: 'catalog:'
-peerDependencyRules:
-  allowAny:
-    - vite
-  allowedVersions:
-    vite: '*'
 ```
 
 ## `vpt print-file .husky/pre-commit`

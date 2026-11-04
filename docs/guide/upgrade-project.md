@@ -18,7 +18,7 @@ On a project that is already on Vite+, migrate does a toolchain version upgrade 
 
 ## Manually Updating
 
-Update `vite-plus` and the `vite` alias to `@voidzero-dev/vite-plus-core` together, keeping the core version aligned with `vite-plus`. Update these entries wherever they are declared in your workspace, including overrides or catalogs, then install dependencies to refresh the lockfile. Also [update the Vitest pin](#updating-the-vitest-pin) to match the bundled version.
+Update `vite-plus` and the `vite` alias to `@voidzero-dev/vite-plus-core` together. The two packages have different versions: the core version encodes the bundled Vite version (for example, `8.3.500` for Vite `8.3.5`). After you update `vite-plus`, set the alias to the version that `vp toolchain vite-plus-core` shows. Update these entries wherever they are declared in your workspace, including overrides or catalogs, then install dependencies to refresh the lockfile. Also [update the Vitest pin](#updating-the-vitest-pin) to match the bundled version.
 
 Without the global CLI, run the `vp` commands on this page through your package manager, for example `pnpm exec vp toolchain vitest`.
 

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import corePkg from '../../../../core/package.json' with { type: 'json' };
 import cliPkg from '../../../package.json' with { type: 'json' };
 
 describe('Vite+ dependency versions', () => {
@@ -8,17 +9,59 @@ describe('Vite+ dependency versions', () => {
     vi.resetModules();
   });
 
-  it('uses the concrete CLI version for vite-plus and vite-plus-core by default', async () => {
+  it('uses the concrete CLI and core versions by default', async () => {
     vi.stubEnv('VP_VERSION', '');
+    vi.stubEnv('VP_CORE_VERSION', '');
     vi.stubEnv('VP_OVERRIDE_PACKAGES', '');
     vi.resetModules();
 
-    const { VITE_PLUS_OVERRIDE_PACKAGES, VITE_PLUS_VERSION } = await import('../constants.js');
+    const { VITE_PLUS_CORE_VERSION, VITE_PLUS_OVERRIDE_PACKAGES, VITE_PLUS_VERSION } =
+      await import('../constants.js');
 
     expect(VITE_PLUS_VERSION).toBe(cliPkg.version);
+    expect(VITE_PLUS_CORE_VERSION).toBe(corePkg.version);
     expect(VITE_PLUS_OVERRIDE_PACKAGES.vite).toBe(
-      `npm:@voidzero-dev/vite-plus-core@${cliPkg.version}`,
+      `npm:@voidzero-dev/vite-plus-core@${corePkg.version}`,
     );
+  });
+
+  it('keeps the core version for a release VP_VERSION', async () => {
+    vi.stubEnv('VP_VERSION', '1.0.1');
+    vi.stubEnv('VP_CORE_VERSION', '');
+    vi.stubEnv('VP_OVERRIDE_PACKAGES', '');
+    vi.resetModules();
+
+    const { VITE_PLUS_CORE_VERSION } = await import('../constants.js');
+
+    expect(VITE_PLUS_CORE_VERSION).toBe(corePkg.version);
+  });
+
+  it.each(['0.0.0', '0.0.0-commit.0c515e3'])(
+    'uses a preview VP_VERSION %s for the core too',
+    async (version) => {
+      vi.stubEnv('VP_VERSION', version);
+      vi.stubEnv('VP_CORE_VERSION', '');
+      vi.stubEnv('VP_OVERRIDE_PACKAGES', '');
+      vi.resetModules();
+
+      const { VITE_PLUS_OVERRIDE_PACKAGES } = await import('../constants.js');
+
+      expect(VITE_PLUS_OVERRIDE_PACKAGES.vite).toBe(`npm:@voidzero-dev/vite-plus-core@${version}`);
+    },
+  );
+
+  it('prefers VP_CORE_VERSION over a preview VP_VERSION', async () => {
+    vi.stubEnv('VP_VERSION', '0.0.0');
+    vi.stubEnv('VP_CORE_VERSION', '8.3.599');
+    vi.stubEnv('VP_OVERRIDE_PACKAGES', '');
+    vi.resetModules();
+
+    const { VITE_PLUS_CORE_VERSION, VITE_PLUS_OVERRIDE_PACKAGES, VITE_PLUS_VERSION } =
+      await import('../constants.js');
+
+    expect(VITE_PLUS_VERSION).toBe('0.0.0');
+    expect(VITE_PLUS_CORE_VERSION).toBe('8.3.599');
+    expect(VITE_PLUS_OVERRIDE_PACKAGES.vite).toBe('npm:@voidzero-dev/vite-plus-core@8.3.599');
   });
 
   it('preserves explicit prerelease overrides', async () => {

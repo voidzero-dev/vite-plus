@@ -20,11 +20,26 @@ export const tgzDir = join(projectDir, '..', 'tmp', 'tgz');
  * version on a local run.
  */
 export function vitePlusTgzVersion(): string {
+  return tgzVersion(/^vite-plus-(\d.*)\.tgz$/, 'vite-plus-<version>.tgz');
+}
+
+/**
+ * The version of the packed core tgz. It encodes the bundled Vite version, so
+ * it differs from {@link vitePlusTgzVersion} (rfcs/core-version-alignment.md).
+ */
+export function vitePlusCoreTgzVersion(): string {
+  return tgzVersion(
+    /^voidzero-dev-vite-plus-core-(\d.*)\.tgz$/,
+    'voidzero-dev-vite-plus-core-<version>.tgz',
+  );
+}
+
+function tgzVersion(pattern: RegExp, description: string): string {
   const version = readdirSync(tgzDir)
-    .map((entry) => /^vite-plus-(\d.*)\.tgz$/.exec(entry)?.[1])
+    .map((entry) => pattern.exec(entry)?.[1])
     .find(Boolean);
   if (!version) {
-    throw new Error(`No vite-plus-<version>.tgz found in ${tgzDir}`);
+    throw new Error(`No ${description} found in ${tgzDir}`);
   }
   return version;
 }
