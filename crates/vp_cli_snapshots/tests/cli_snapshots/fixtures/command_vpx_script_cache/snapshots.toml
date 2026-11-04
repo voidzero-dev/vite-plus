@@ -1,0 +1,34 @@
+[[case]]
+name = "vpx_script_cache_invalidation"
+vp = ["local", "global"]
+env = { VPX_CACHE = "1" }
+comment = "Persistent transform and compile caches keep ESM, CommonJS, JSX settings, and side effects current. Cache corruption is repaired."
+steps = [
+  { argv = ["node", "mutate.mjs", "stamp"], snapshot = false },
+  ["vpx", "./probe.tsx", "one", "h", "cold"],
+  ["vpx", "./probe.tsx", "one", "h", "warm"],
+  { argv = ["node", "mutate.mjs", "edit"], snapshot = false },
+  { argv = ["vpx", "./probe.tsx", "two", "h", "edited"], comment = "Source bytes change while file size and mtime stay identical" },
+  { argv = ["vpt", "json-edit", "tsconfig.json", "compilerOptions.jsxFactory", "\"j\""], snapshot = false },
+  { argv = ["vpx", "./probe.tsx", "two", "j", "configured"], comment = "The effective JSX configuration changes the generated code" },
+  { argv = ["node", "mutate.mjs", "corrupt"], snapshot = false },
+  ["vpx", "./probe.tsx", "two", "j", "repaired"],
+  ["vpx", "./probe.tsx", "two", "j", "warm"],
+  { argv = ["vpx", "./probe.tsx", "two", "j", "disabled"], envs = [["VPX_DISABLE_CACHE", "1"]], comment = "Disabling the managed caches still executes the same script" },
+]
+
+[[case]]
+name = "vpx_script_cache_async_hooks"
+vp = ["local", "global"]
+env = { VP_NODE_VERSION = "22.18.0", VPX_CACHE = "transform" }
+comment = "Off-thread ESM hooks inherit the cache policy; CommonJS hooks retain their own cache counters."
+steps = [
+  { argv = ["node", "mutate.mjs", "stamp"], snapshot = false },
+  ["vpx", "./probe.tsx", "one", "h", "cold"],
+  ["vpx", "./probe.tsx", "one", "h", "warm"],
+  { argv = ["node", "mutate.mjs", "edit"], snapshot = false },
+  ["vpx", "./probe.tsx", "two", "h", "edited"],
+  { argv = ["vpt", "json-edit", "tsconfig.json", "compilerOptions.jsxFactory", "\"j\""], snapshot = false },
+  ["vpx", "./probe.tsx", "two", "j", "configured"],
+  ["vpx", "./probe.tsx", "two", "j", "warm"],
+]

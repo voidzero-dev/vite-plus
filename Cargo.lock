@@ -4214,6 +4214,7 @@ dependencies = [
 name = "oxc-node"
 version = "0.0.0"
 dependencies = [
+ "base64-simd",
  "idna",
  "memchr",
  "napi",
@@ -8354,6 +8355,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "base64-simd",
+ "blake3",
  "clap",
  "console",
  "cow-utils",

@@ -372,7 +372,7 @@ Package mode through the global `vpx` is unchanged. What changes:
 
 - **`vp migrate` rules for other runners**: `esno` and `jiti` remain unsupported. Migration handles compatible `tsx`, `oxnode`, and transpile-only `ts-node` commands; see the [migration rules](../docs/guide/migrate-rules.md#package-script-rewrite-rules).
 - **TypeScript eval and REPL**, once oxc-node transforms eval input.
-- **Opt-in transform cache**, keyed like tsx's.
+- **Persistent compilation caches**: [warm-start cache RFC](./vpx-warm-start-cache.md), including Vite Task integration and the 10× startup target.
 - **Programmatic API**: a `tsImport()` equivalent exported from `vite-plus`.
 
 ## References

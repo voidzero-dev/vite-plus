@@ -4,6 +4,10 @@
 //! `enableWatchReport` and `takeWatchDependencies` feed watch mode the tsconfig files
 //! oxc-node read and the paths a failed resolve looked for.
 
+mod cache;
+
+use std::{cell::RefCell, sync::Arc};
+
 use ::oxc_node::{
     FrozenTsconfig, LoadContext, LoadFnOutput, OxcResolveOptions, ResolveContext, ResolveFnOutput,
 };
@@ -12,6 +16,56 @@ use napi::{
     bindgen_prelude::{FnArgs, Function, Object, PromiseRaw},
 };
 use napi_derive::napi;
+
+thread_local! {
+    static CACHE_STATS: RefCell<Option<Arc<cache::CacheStats>>> = const { RefCell::new(None) };
+}
+
+/// Initialize an opt-in cache for this loader thread. Storage is lazy: the JS
+/// loader reports the returned owned root to Vite Task before any artifact I/O.
+/// An explicit root carries the main thread's selection to off-thread ESM hooks.
+#[napi(namespace = "oxcNode")]
+pub fn initialize_cache(
+    enabled: bool,
+    runtime_version: String,
+    root: Option<String>,
+) -> Option<String> {
+    ::oxc_node::set_transform_cache(None);
+    CACHE_STATS.with(|slot| *slot.borrow_mut() = None);
+    let root = match root {
+        Some(root) => vt_path::AbsolutePathBuf::new(root.into())?,
+        None => vp_shared::EnvConfig::get().dirs.cache.join("vpx"),
+    };
+    let result = root.as_path().to_str()?.to_owned();
+    if enabled {
+        let store = cache::DiskTransformCache::new(root, &runtime_version);
+        CACHE_STATS.with(|slot| *slot.borrow_mut() = Some(Arc::clone(&store.stats)));
+        ::oxc_node::set_transform_cache(Some(Arc::new(store)));
+    }
+    Some(result)
+}
+
+/// Counters for opt-in diagnostics and cache equivalence tests. Reading them does
+/// not print anything or change cache behavior.
+#[napi(object, namespace = "oxcNode")]
+pub struct TransformCacheStats {
+    pub hits: u32,
+    pub misses: u32,
+    pub writes: u32,
+    pub errors: u32,
+}
+
+#[napi(namespace = "oxcNode")]
+pub fn cache_stats() -> TransformCacheStats {
+    CACHE_STATS.with(|slot| {
+        let stats = slot.borrow();
+        stats
+            .as_ref()
+            .map_or(TransformCacheStats { hits: 0, misses: 0, writes: 0, errors: 0 }, |stats| {
+                stats.snapshot()
+            })
+    })
+}
 
 /// What oxc-node's own module hooks do, which `default-features = false` leaves to the
 /// host: honor `OXC_LOG`, and keep `using` native on Node.js 24 and later.

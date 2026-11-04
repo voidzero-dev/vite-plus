@@ -15,6 +15,7 @@ rolldown = ["dep:rolldown_binding"]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 base64-simd = { workspace = true }
+blake3 = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 cow-utils = { workspace = true }
 rustc-hash = { workspace = true }
@@ -45,6 +46,7 @@ rolldown_binding = { workspace = true, optional = true, features = ["disable_pan
 oxc-node = { workspace = true, optional = true }
 
 [build-dependencies]
+blake3 = { workspace = true }
 napi-build = { workspace = true }
 
 [dev-dependencies]

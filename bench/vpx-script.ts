@@ -31,10 +31,11 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 
+import { generateVpxFixtures, vpxFixtures } from './vpx-fixtures.ts';
+
 const repo = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const fixtures = path.join(tmpdir(), 'vite-plus-bench-vpx-script');
 const dist = path.join(repo, 'packages/cli/dist');
-const modules = 300;
 
 const { values } = parseArgs({
   options: {
@@ -54,94 +55,18 @@ const tsxPackage = createRequire(path.join(repo, 'packages/core/package.json')).
 const tsxDir = path.dirname(tsxPackage);
 const tsxVersion = (JSON.parse(readFileSync(tsxPackage, 'utf8')) as { version: string }).version;
 
-function write(file: string, content: string): void {
-  mkdirSync(path.dirname(path.join(fixtures, file)), { recursive: true });
-  writeFileSync(path.join(fixtures, file), content);
-}
-
-function moduleSource(i: number): string {
-  return `export interface Item${i} {
-  id: number;
-  name: string;
-}
-
-export enum Kind${i} {
-  A = 'a${i}',
-  B = 'b${i}',
-}
-
-export class Store${i} {
-  items: Item${i}[] = [];
-
-  constructor(private readonly prefix: string) {}
-
-  add(id: number): Item${i} {
-    const item = { id, name: \`\${this.prefix}-\${id}\` };
-    this.items.push(item);
-    return item;
-  }
-}
-
-export function run${i}(): number {
-  return new Store${i}(Kind${i}.A).add(${i}).id;
-}
-`;
-}
-
 function generateFixtures(): void {
   rmSync(fixtures, { recursive: true, force: true });
-  // The global `vpx` resolves the loader from the project's `vite-plus` first.
   mkdirSync(path.join(fixtures, 'node_modules'), { recursive: true });
   symlinkSync(
     path.join(repo, 'packages/cli'),
     path.join(fixtures, 'node_modules/vite-plus'),
     'dir',
   );
-  // One erasable file, so Node.js type stripping can run it too.
-  write('hello/package.json', '{ "type": "module" }\n');
-  write('hello/hello.ts', "const message: string = 'hello';\nconsole.log(message);\n");
-
-  // Many modules with enums and parameter properties (not erasable), as an ES module
-  // package and as a package without `"type"`.
-  const index = [
-    ...Array.from({ length: modules }, (_, i) => `import { run${i} } from './mod${i}.ts';`),
-    'let total = 0;',
-    ...Array.from({ length: modules }, (_, i) => `total += run${i}();`),
-    "console.log('total', total);",
-  ].join('\n');
-  for (const [name, packageJson] of [
-    ['esm-app', '{ "type": "module" }\n'],
-    ['cjs-app', '{ "name": "cjs-app" }\n'],
-  ]) {
-    write(`${name}/package.json`, packageJson);
-    write(`${name}/index.ts`, `${index}\n`);
-    for (let i = 0; i < modules; i++) {
-      write(`${name}/mod${i}.ts`, moduleSource(i));
-    }
-  }
-
-  // One 1.8 MB file without import/export, as CommonJS and as an ES module.
-  let large = '';
-  for (let i = 0; i < 12000; i++) {
-    large +=
-      `interface Shape${i} { id: number; label: string }\n` +
-      `function make${i}(id: number): Shape${i} { return { id, label: 'shape-${i}-' + id.toString(16) }; }\n`;
-  }
-  large +=
-    "let total: number = 0;\nfor (let i = 0; i < 100; i++) total += make0(i).id;\nconsole.log('total', total);\n";
-  write('large-cjs/package.json', '{ "name": "large-cjs" }\n');
-  write('large-cjs/main.ts', large);
-  write('large-esm/package.json', '{ "type": "module" }\n');
-  write('large-esm/main.ts', large);
+  generateVpxFixtures(fixtures);
 }
 
-const scenarios = [
-  { name: 'hello', entry: 'hello.ts' },
-  { name: 'esm-app', entry: 'index.ts' },
-  { name: 'cjs-app', entry: 'index.ts' },
-  { name: 'large-cjs', entry: 'main.ts' },
-  { name: 'large-esm', entry: 'main.ts' },
-];
+const scenarios = vpxFixtures;
 
 interface Command {
   label: string;

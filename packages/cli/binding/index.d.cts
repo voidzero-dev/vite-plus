@@ -4252,6 +4252,7 @@ export declare namespace oxcNode {
     constructor(cwd?: string | undefined | null, helperModuleName?: string | undefined | null);
     transform(path: string, source: string | Uint8Array): oxcNode.TransformOutput;
   }
+  export function cacheStats(): oxcNode.TransformCacheStats;
   export function createResolve(
     specifier: string,
     context: ResolveContext,
@@ -4264,6 +4265,16 @@ export declare namespace oxcNode {
   export function freezeTransformDeps(): string;
   /** Freeze the effective config before registering the off-thread ESM hooks. */
   export function freezeTsconfig(cwd: string): FrozenTsconfig;
+  /**
+   * Initialize an opt-in cache for this loader thread. Storage is lazy: the JS
+   * loader reports the returned owned root to Vite Task before any artifact I/O.
+   * An explicit root carries the main thread's selection to off-thread ESM hooks.
+   */
+  export function initializeCache(
+    enabled: boolean,
+    runtimeVersion: string,
+    root?: string | undefined | null,
+  ): string | null;
   /** Apply a frozen selection, including discovery without the receiving thread's env. */
   export function initializeLoader(
     path?: string | undefined | null,
@@ -4281,6 +4292,16 @@ export declare namespace oxcNode {
   export function setTransformDeps(mode?: string | undefined | null): void;
   export function setTsconfigPath(path?: string | undefined | null): void;
   export function takeWatchDependencies(): Array<string>;
+  /**
+   * Counters for opt-in diagnostics and cache equivalence tests. Reading them does
+   * not print anything or change cache behavior.
+   */
+  export interface TransformCacheStats {
+    hits: number;
+    misses: number;
+    writes: number;
+    errors: number;
+  }
   /** A file transformed for the CommonJS loader. */
   export interface TransformOutput {
     source: string;

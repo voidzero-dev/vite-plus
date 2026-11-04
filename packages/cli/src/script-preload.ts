@@ -20,6 +20,7 @@ import { isMainThread } from 'node:worker_threads';
 import { addHook } from 'pirates';
 
 import { installSignalAck } from '../../../oxc-node/packages/core/signal-ack.mjs';
+import { initializeScriptCache } from './script-cache.ts';
 import {
   canRegisterSyncHooks,
   flush,
@@ -52,6 +53,7 @@ if (isMainThread) {
 // Loaded after the version check so the native addon never loads on an
 // unsupported Node.js.
 const oxcNode = loadOxcNode();
+initializeScriptCache(oxcNode);
 
 // Under `vpx --watch`, report what Node.js does not: the tsconfig files oxc-node read
 // and the paths a failed resolve looked for. Turned on before the first transform or
