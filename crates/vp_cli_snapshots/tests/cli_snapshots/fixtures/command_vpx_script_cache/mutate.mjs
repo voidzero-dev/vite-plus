@@ -31,7 +31,7 @@ if (action === 'stamp') {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
       const file = path.join(directory, entry.name);
       if (entry.isDirectory()) corrupt(file);
-      else if (/^[a-f0-9]{64}$/.test(entry.name)) {
+      else if (/^[a-f0-9]{64}(?:\.pack)?$/.test(entry.name)) {
         writeFileSync(file, 'broken cache record');
         records++;
       }

@@ -31,6 +31,7 @@ fn script_cache_build_id() {
         "packages/cli/binding/build.rs",
         "packages/cli/binding/src/oxc_node.rs",
         "packages/cli/binding/src/oxc_node/cache.rs",
+        "packages/cli/binding/src/oxc_node/cache/packed.rs",
     ] {
         let path = root.join(relative);
         println!("cargo:rerun-if-changed={}", path.display());

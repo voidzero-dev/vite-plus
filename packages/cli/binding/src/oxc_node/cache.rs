@@ -2,11 +2,13 @@
 //! current public client coordinates ignored paths; it has no artifact store.
 //! Keep this adapter independent so a future shared store can replace it.
 
+mod packed;
+
 use std::{
     fs::{self, File, OpenOptions},
     io::{self, Read, Write},
     sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicBool, AtomicU32, Ordering},
     },
 };
@@ -43,6 +45,7 @@ pub(super) struct DiskTransformCache {
     root: AbsolutePathBuf,
     directory: AbsolutePathBuf,
     namespace_ready: AtomicBool,
+    packs: Mutex<packed::SmallPacks>,
     pub(super) stats: Arc<CacheStats>,
 }
 
@@ -51,7 +54,13 @@ impl DiskTransformCache {
         let runtime = blake3::hash(runtime_version.as_bytes()).to_hex();
         let directory =
             root.join("transform").join(env!("VPX_CACHE_BUILD_ID")).join(runtime.as_str());
-        Self { root, directory, namespace_ready: AtomicBool::new(false), stats: Arc::default() }
+        Self {
+            root,
+            directory,
+            namespace_ready: AtomicBool::new(false),
+            packs: Mutex::default(),
+            stats: Arc::default(),
+        }
     }
 
     fn key(parts: &[&[u8]]) -> blake3::Hash {
@@ -68,7 +77,7 @@ impl DiskTransformCache {
         self.directory.join(&hex[..2]).join(hex.as_str())
     }
 
-    fn read(&self, key: &blake3::Hash) -> io::Result<Option<CachedTransform>> {
+    fn read(&self, parts: &[&[u8]], key: &blake3::Hash) -> io::Result<Option<CachedTransform>> {
         if !self.namespace_ready.load(Ordering::Relaxed) {
             for directory in self.directories() {
                 match fs::symlink_metadata(&directory) {
@@ -82,6 +91,25 @@ impl DiskTransformCache {
             // four ancestor stats for every imported module.
             self.namespace_ready.store(true, Ordering::Relaxed);
         }
+        if let Some(group) = packed::source_directory(parts) {
+            let result = self
+                .packs
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .open(&self.directory, group)
+                .and_then(|pack| pack.get(key));
+            match result {
+                Ok(Some(hit)) => return Ok(Some(hit)),
+                Ok(None) => {}
+                Err(error) => {
+                    return self.read_loose(key)?.map(Some).ok_or(error);
+                }
+            }
+        }
+        self.read_loose(key)
+    }
+
+    fn read_loose(&self, key: &blake3::Hash) -> io::Result<Option<CachedTransform>> {
         let path = self.path(key);
         match fs::symlink_metadata(path.parent().expect("artifact shard")) {
             Ok(metadata) if metadata.is_dir() && !metadata.file_type().is_symlink() => {}
@@ -105,15 +133,18 @@ impl DiskTransformCache {
         decode(&bytes, key).map(Some).ok_or_else(|| io::Error::from(io::ErrorKind::InvalidData))
     }
 
-    fn write(&self, key: &blake3::Hash, value: &CachedTransform) -> io::Result<()> {
+    fn write(
+        &self,
+        parts: &[&[u8]],
+        key: &blake3::Hash,
+        value: &CachedTransform,
+    ) -> io::Result<()> {
         let size =
             value.code.len().saturating_add(value.source_map.as_ref().map_or(0, String::len));
         if size.saturating_add(HEADER_BYTES + 17) as u64 > MAX_RECORD_BYTES {
             return Ok(());
         }
         let payload = encode(value);
-        let path = self.path(key);
-        let parent = path.parent().expect("artifact path has a shard parent");
         // Every directory below the owned root is ours. Refuse symlinks rather
         // than publishing through a cache path redirected outside that root.
         if !self.namespace_ready.load(Ordering::Relaxed) {
@@ -122,6 +153,29 @@ impl DiskTransformCache {
             }
             self.namespace_ready.store(true, Ordering::Relaxed);
         }
+        if payload.len() <= packed::MAX_PAYLOAD
+            && let Some(group) = packed::source_directory(parts)
+        {
+            let result = self
+                .packs
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .open(&self.directory, group)
+                .and_then(|pack| pack.put(key, &payload));
+            match result {
+                Ok(packed::Publication::Added) => {
+                    self.stats.writes.fetch_add(1, Ordering::Relaxed);
+                    return Ok(());
+                }
+                Ok(packed::Publication::Existing) => return Ok(()),
+                Ok(packed::Publication::Loose) => {}
+                Err(_) => {
+                    self.stats.errors.fetch_add(1, Ordering::Relaxed);
+                }
+            }
+        }
+        let path = self.path(key);
+        let parent = path.parent().expect("artifact path has a shard parent");
         create_private_directory(parent)?;
         let temporary = parent.join(vt_str::format!(".{}.tmp", uuid::Uuid::new_v4()).as_str());
         let result = (|| {
@@ -162,7 +216,7 @@ impl DiskTransformCache {
 
 impl TransformCache for DiskTransformCache {
     fn get(&self, parts: &[&[u8]]) -> Option<CachedTransform> {
-        match self.read(&Self::key(parts)) {
+        match self.read(parts, &Self::key(parts)) {
             Ok(Some(value)) => {
                 self.stats.hits.fetch_add(1, Ordering::Relaxed);
                 Some(value)
@@ -180,7 +234,7 @@ impl TransformCache for DiskTransformCache {
     }
 
     fn put(&self, parts: &[&[u8]], value: &CachedTransform) {
-        if self.write(&Self::key(parts), value).is_err() {
+        if self.write(parts, &Self::key(parts), value).is_err() {
             self.stats.errors.fetch_add(1, Ordering::Relaxed);
         }
     }
@@ -224,6 +278,10 @@ fn decode(bytes: &[u8], key: &blake3::Hash) -> Option<CachedTransform> {
     if bytes.get(40..HEADER_BYTES)? != blake3::hash(payload).as_bytes() {
         return None;
     }
+    decode_payload(payload)
+}
+
+fn decode_payload(payload: &[u8]) -> Option<CachedTransform> {
     let module = match *payload.first()? {
         0 => false,
         1 => true,

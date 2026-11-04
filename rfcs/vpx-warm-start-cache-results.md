@@ -4,7 +4,7 @@
 - Date: 2026-10-27
 - Design: [Warm-start cache RFC](./vpx-warm-start-cache.md)
 
-These measurements describe the original prototype from October 27. The branch was later rebased onto `0bea91491d9972987d266bbab713e34a2b8f5387`, which updates the loader and compiler dependencies. The performance measurements have not been repeated for that revision; the results below do not describe the rebased build.
+The October 27 benchmark tables describe the original prototype. After the rebase onto `0bea91491`, a [November 4 profile](#warm-transform-cache-hits-after-the-rebase) measured the two 300-module graphs on the updated loader and compiler. A [follow-up experiment](#packing-small-records-by-source-directory) compared packed storage with individual files and caching disabled.
 
 ## Outcome
 
@@ -142,11 +142,60 @@ The raw reports are local ignored artifacts, not checked-in files: `tmp/vpx-cach
 
 The global command path is `/Users/fengmk2/.vite-plus/bin/vpx`, resolving to `/Users/fengmk2/.vite-plus/1.3.0+force.70583.1792569205250812000/bin/vp`. Runtime executable paths are `/Users/fengmk2/.vite-plus/js_runtime/node/<version>/bin/node` for the exact versions above. Package roots are `/Users/fengmk2/git/worktrees/vp/vpx-cache-baseline/packages/cli` and `/Users/fengmk2/.codex/worktrees/d925/vp/packages/cli`.
 
+## Warm transform-cache hits after the rebase
+
+On November 4, both 300-module graphs spent about 77% of native cache-hit time accessing artifact files. The table shows median milliseconds per global `vpx` launch, summed over 304 hits. Each warm cache-enabled run recorded zero misses, writes, and errors.
+
+| Work inside a native hit                | ESM (ms) | CommonJS (ms) |
+| --------------------------------------- | -------: | ------------: |
+| Prepare key inputs, including options   |     0.65 |          0.66 |
+| Hash key inputs with BLAKE3             |     0.88 |          0.88 |
+| Check directory and file metadata       |     1.71 |          1.71 |
+| Allocate buffer, open, read, close      |     5.21 |          5.36 |
+| Verify payload checksum with BLAKE3     |     0.38 |          0.38 |
+| Complete native lookup, including above |     8.98 |          9.10 |
+
+Formatting the compiler options took about 0.63 ms per launch. The two BLAKE3 operations together took about 1.26 ms. The filesystem timings include warm OS cache access. The complete lookup also includes path construction, record decoding, and timer overhead. It starts at cache-request creation and ends when the store returns a hit.
+
+The uninstrumented release took 71.80 ms with caching disabled and 78.82 ms with transform caching on ESM (+7.02 ms). CommonJS rose from 72.06 to 78.53 ms (+6.47 ms). These startup differences include the transform work that hits skip. With timers enabled, startup medians were 78.56 and 78.37 ms, respectively. Bypassing the global launcher yielded the same 77% filesystem share on both graphs.
+
+The experiment used commit `19d7d80cb`, Node.js `24.22.2`, an Apple M4 Max, and the repository's optimized release profile for both bindings. Each fixture, launcher, and mode ran four priming processes and 50 measured processes in interleaved blocks. Node's compile cache was disabled. Temporary probes accumulated per-thread wall times and reported them after readiness. The local samples and probe script are in `tmp/vpx-profile-19d7d80cb/`.
+
+## Packing small records by source directory
+
+The [packed store](../packages/cli/binding/src/oxc_node/cache/packed.rs) loads related records together and indexes their full content keys in memory. Both fixtures put all 300 leaf modules in one source directory. Separate diagnostic launches traced file API calls under the transform-cache root on macOS. The counts below were identical for ESM and CommonJS across two warm processes each.
+
+| Per warm process     | Individual files | Packed |
+| -------------------- | ---------------: | -----: |
+| File metadata checks |              612 |      6 |
+| Open                 |              304 |      2 |
+| Read, including EOF  |              610 |      6 |
+| Close                |              304 |      2 |
+
+All 304 lookups hit in both layouts. The packed processes read about 496–498 kB of artifact data each, within 0.3% of the individual-file totals.
+
+The table shows warm global `vpx` launch-to-ready p50 in milliseconds.
+
+| Fixture  | Run | Cache disabled | Individual files | Packed | Packed minus disabled |
+| -------- | --: | -------------: | ---------------: | -----: | --------------------: |
+| ESM      |   1 |          80.33 |            89.93 |  80.01 |                 −0.32 |
+| ESM      |   2 |          73.84 |            81.74 |  72.71 |                 −1.13 |
+| CommonJS |   1 |          82.01 |            91.49 |  81.23 |                 −0.78 |
+| CommonJS |   2 |          74.70 |            81.12 |  73.83 |                 −0.87 |
+
+Each run used a fresh cache root, four priming processes, and 120 independently launched processes per mode. Each randomized block exercised all four modes, including cache-off controls for both binaries. The table compares packed storage with its own binary's cache-off control. Both release builds used Node.js `24.22.2` on the same M4 Max, with Node's compile cache disabled.
+
+Packing saved 7.3–10.3 ms versus individual files. Its advantage over cache-off was smaller. The 95% bootstrap intervals for each run's difference in p50 include zero. Comparing launches within the same block reduces the effect of changes in machine load. Across 240 blocks, the median paired saving was 1.02 ms for each graph (95% intervals of 0.72–1.36 ms for ESM and 0.56–1.49 ms for CommonJS). These intervals resample whole blocks within each run.
+
+Cold global p50 for the packed store was 101.71 ms on ESM and 96.54 ms on CommonJS. Cache-off took 81.00 and 81.46 ms, respectively, over five cold launches per mode. Warm p95 was faster with packed storage in run 1 and slower in run 2 for both graphs.
+
+The local timing samples are in `tmp/vpx-packed-bench/run1.json` and `tmp/vpx-packed-bench/repeat.json`. The file-operation traces are in `tmp/vpx-packed-io/`. The individual-file and packed native binding SHA256 digests start with `fadc32118c99` and `a4a69354de33`, respectively.
+
 ## Next measurements
 
-Profile normalized-option/key construction, artifact lookup/validation, source-map copies, and Node compile-cache work on the 300-module fixtures. Instrument exclusive phase times before attributing the regressions to any one of those operations. For cold starts, measure directory checks, publication, and per-record writes; transform-only timings show that this path already contains most of the observed graph penalty.
+Node compile-cache work on the 300-module fixtures still needs a separate profile. For cold starts, measure directory checks, publication, and per-record writes. Transform-only timings show that this path already contains most of the observed cold graph penalty.
 
-Possible follow-up experiments are lower-overhead storage, reuse of normalized option fingerprints, and an admission threshold that avoids persisting cheap transforms. A threshold needs measured break-even costs, not a file-size guess. Keep the unchanged fixture suite when evaluating any such change.
+Measure packed lookups on projects that import from many directories or have accumulated revisions. Other experiments include reusing normalized option fingerprints and skipping transforms that cost less to recompute than to retrieve.
 
 This is one macOS machine and synthetic workloads only. Real scripts, watch-restart timing, Windows/Linux runtime validation, and cache garbage collection remain outstanding. The results do not justify narrowing the 10× objective or enabling the prototype by default.
 
