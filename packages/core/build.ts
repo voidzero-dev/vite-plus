@@ -68,6 +68,7 @@ await bundleRolldownPluginutils();
 await bundleRolldown();
 await buildVite();
 await bundleTsdown();
+await patchTsdownCompatibility();
 await brandTsdown();
 await wireBundledTsdownExtensions();
 generateLicenseFile({
@@ -473,16 +474,15 @@ async function bundleTsdown() {
   // in and they cannot be bundled. Both are core `dependencies`, so they resolve
   // at runtime and CSS bundling works without users installing anything.
   //
-  // `yuku-parser` (used by `rolldown-plugin-dts`) loads native bindings through
-  // `yuku-core`. Keep it external and declare it as a core dependency so the
-  // native loader resolves its platform package at runtime. Pin its version
-  // to the one resolved by the bundled plugin. `yuku-ast` and
-  // `yuku-codegen` are pure JavaScript in Yuku 0.19 and are bundled into core.
+  // `yuku` (used by `rolldown-plugin-dts`) loads native bindings through
+  // optional platform packages. Keep it external and declare it as a core
+  // dependency so the native loader resolves its platform package at runtime.
+  // Pin its version to the one resolved by the bundled plugin.
   const tsdownExternal = [
     ...Object.keys(pkgJson.peerDependencies).filter((name) => !bundledTsdownPackages.has(name)),
     'lightningcss',
     'postcss',
-    'yuku-parser',
+    'yuku',
   ];
   const isExternal = (id: string) => tsdownExternal.some((e) => id === e || id.startsWith(`${e}/`));
 
@@ -552,6 +552,50 @@ async function bundleTsdown() {
   // Copy client.d.ts to dist/tsdown/ to expose it as the vite-plus/pack/client entry point,
   // equivalent to tsdown/client for registering bundler type features with TypeScript.
   await copyFile(join(tsdownSourceDir, 'client.d.ts'), join(projectDir, 'dist/tsdown/client.d.ts'));
+}
+
+// rolldown-plugin-dts 0.29 replaced the native-preview CLI backend with the
+// TypeScript 7.1 declaration API. Retain the existing explicit-tsgo behavior for
+// consumers that still pair TypeScript <=6 with @typescript/native-preview.
+async function patchTsdownCompatibility() {
+  const chunkFiles = await glob(toPosixPath(join(projectDir, 'dist/tsdown/*.js')), {
+    absolute: true,
+  });
+  const legacyDetection = {
+    search:
+      'return moduleUrl != null && moduleUrl === getDefaultTsgoModuleUrl() && !!getPackageInfo("typescript")?.version.startsWith("7.0.") && !tryLoadTsgoApi(moduleUrl);',
+    replacement:
+      'return moduleUrl != null && moduleUrl === getDefaultTsgoModuleUrl() && !tryLoadTsgoApi(moduleUrl) && (!!getPackageInfo("typescript")?.version.startsWith("7.0.") || !!tryResolve("@typescript/native-preview/package.json"));',
+  };
+  const executableResolution = {
+    search: `const pkgJsonPath = tryResolve("typescript/package.json");
+	if (!pkgJsonPath) throw new Error("TypeScript Go is not installed. Please install the \`typescript@7.0\` package to use the \`tsgo\` generator.");
+	const { version } = require(pkgJsonPath);
+	logger.info(\`Emit types with \${styleText("underline", \`typescript@\${version}\`)}\`);`,
+    replacement: `const pkgName = getPackageInfo("typescript")?.version.startsWith("7.0.") ? "typescript" : "@typescript/native-preview";
+	const pkgJsonPath = tryResolve(\`\${pkgName}/package.json\`);
+	if (!pkgJsonPath) throw new Error("TypeScript Go is not installed. Please install the \`typescript@7.0\` or \`@typescript/native-preview\` package to use the \`tsgo\` generator.");
+	const { version } = require(pkgJsonPath);
+	logger.info(\`Emit types with \${styleText("underline", \`\${pkgName}@\${version}\`)}\`);`,
+  };
+
+  for (const patch of [legacyDetection, executableResolution]) {
+    let patched = false;
+    for (const chunkFile of chunkFiles) {
+      const content = await readFile(chunkFile, 'utf8');
+      if (!content.includes(patch.search)) {
+        continue;
+      }
+      if (patched) {
+        throw new Error('patchTsdownCompatibility: duplicate tsgo compatibility patch site');
+      }
+      await writeFile(chunkFile, content.replace(patch.search, patch.replacement));
+      patched = true;
+    }
+    if (!patched) {
+      throw new Error(`patchTsdownCompatibility: pattern not found: ${patch.search}`);
+    }
+  }
 }
 
 async function brandTsdown() {
@@ -754,11 +798,11 @@ async function mergePackageJson() {
   );
 
   // Merge peerDependencies from rolldown-plugin-dts, tsdown and vite. The bundled
-  // dts plugin still resolves `vue-tsc`, `@volar/typescript`,
-  // `@vue/language-core` and `@typescript/native-preview` from core at runtime,
-  // and its declarations import their types, so isolated installs need them
-  // declared here.
+  // dts plugin resolves its optional compiler peers from core at runtime, and its
+  // declarations import their types, so isolated installs need them declared here.
+  // Keep native-preview for the legacy tsgo compatibility patch above.
   destPkg.peerDependencies = {
+    '@typescript/native-preview': '*',
     ...dtsPkg.peerDependencies,
     ...tsdownPkg.peerDependencies,
     ...vitePkg.peerDependencies,
@@ -766,6 +810,7 @@ async function mergePackageJson() {
 
   // Merge peerDependenciesMeta from rolldown-plugin-dts, tsdown and vite
   destPkg.peerDependenciesMeta = {
+    '@typescript/native-preview': { optional: true },
     ...dtsPkg.peerDependenciesMeta,
     ...tsdownPkg.peerDependenciesMeta,
     ...vitePkg.peerDependenciesMeta,

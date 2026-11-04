@@ -19,7 +19,7 @@ VITE+ - The Unified Toolchain for the Web
 ℹ entry: src/index.ts
 ℹ tsconfig: tsconfig.json
 ℹ Build start
-warn: TypeScript 7.0 does not yet have a stable API and is experimental. Some options will be unavailable.
+warn: The `tsgo` generator on TypeScript 7.0 is deprecated and will be removed in the next minor. Upgrade to TypeScript 7.1 or later.
 ℹ Emit types with @typescript/native-preview@7.0.0-dev.20260707.2
 ℹ dist/index.mjs    <size> kB │ gzip: <size> kB
 ℹ dist/index.d.mts  <size> kB │ gzip: <size> kB
