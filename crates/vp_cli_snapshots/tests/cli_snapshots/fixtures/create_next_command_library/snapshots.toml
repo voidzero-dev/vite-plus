@@ -3,4 +3,5 @@ name = "create_next_command_library"
 vp = "global"
 steps = [
   { argv = ["vp", "create", "vite:library", "--no-interactive"], comment = "verify next command suggests vp run", timeout = 120000, continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite-plus-library/pnpm-workspace.yaml"], comment = "standalone library workspace includes the root package", continue-on-failure = true },
 ]

@@ -53,6 +53,8 @@ peerDependencyRules:
     - vite
   allowedVersions:
     vite: '*'
+packages:
+  - .
 ```
 
 ## `vpt stat-file .husky --assert-not dir`
