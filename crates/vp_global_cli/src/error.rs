@@ -52,22 +52,22 @@ pub enum Error {
     #[error("Upgrade error: {0}")]
     Upgrade(Str),
 
-    /// A `VP_*_MANAGER=system-only` variable requires a system tool that PATH
-    /// lacks before the Vite+ shims.
+    /// `VP_NODE_MANAGER=system-only` requires a system tool that PATH lacks
+    /// before the Vite+ shims.
     #[error(
         "{variable}=system-only requires a system '{tool}' on PATH before the Vite+ shims, but none was found"
     )]
     SystemToolNotFound { tool: Str, variable: &'static str },
 
-    /// A `VP_*_MANAGER=system-only` tool reached the Vite+ shim at the front
-    /// of PATH, where managed `config.json` places it.
+    /// A tool under `VP_NODE_MANAGER=system-only` reached the Vite+ shim at
+    /// the front of PATH, where managed `config.json` places it.
     #[error(
         "{variable}=system-only requires a system '{tool}', but the Vite+ shim comes first on PATH; run `vp env off {component}` to move the shims after the system tools"
     )]
     SystemToolBehindShim { tool: Str, variable: &'static str, component: Str },
 
-    /// A `VP_*_MANAGER=system-only` lookup reached a Vite+ managed install,
-    /// which a process with other settings left on PATH.
+    /// A lookup under `VP_NODE_MANAGER=system-only` reached a Vite+ managed
+    /// install, which a process with other settings left on PATH.
     #[error(
         "{variable}=system-only rejects the Vite+ managed install at '{path}' that PATH selects for '{tool}'; run `vp env doctor` to check PATH"
     )]

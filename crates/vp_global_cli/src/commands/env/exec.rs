@@ -91,10 +91,6 @@ pub async fn execute(
                 == config::ShimMode::SystemFirst
             && let Some(path) = crate::shim::dispatch::find_system_tool(tool)
         {
-            // Npm on system-only Node.js must not be the npm bundled with a managed runtime.
-            if crate::shim::dispatch::requires_system_tool(tool) {
-                crate::shim::dispatch::reject_managed_runtime(tool, &path)?;
-            }
             return Ok(exit_status(crate::shim::exec::exec_tool(&path, &args, env)));
         }
         let exit_code = shim_dispatch(tool, &args, env).await;

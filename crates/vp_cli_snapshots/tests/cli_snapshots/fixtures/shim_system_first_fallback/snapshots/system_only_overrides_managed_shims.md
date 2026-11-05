@@ -1,6 +1,6 @@
 # system_only_overrides_managed_shims
 
-VP_*_MANAGER=system-only shims never search PATH or use managed installs. With managed config.json they fail and suggest `vp env off`; system tools still run when they come before the shims, as in a devShell, or after `vp env off`. Nothing is downloaded and the child PATH is unchanged.
+VP_NODE_MANAGER=system-only restricts the Node.js and package-manager shims alike: they never search PATH or use managed installs. With managed config.json they fail and suggest `vp env off`; system tools still run when they come before the shims, as in a devShell, or after `vp env off`. Nothing is downloaded and the child PATH is unchanged.
 
 ## `node setup-system-node.cjs`
 
@@ -41,24 +41,24 @@ VP_BYPASS does not make it search PATH either.
 vp: VP_NODE_MANAGER=system-only requires a system 'node', but the Vite+ shim comes first on PATH; run `vp env off node` to move the shims after the system tools
 ```
 
-## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} VP_PNPM_MANAGER=system-only VP_PM_MANAGER=yes NPM_CONFIG_REGISTRY=http://127.0.0.1:1 pnpm --version`
+## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} VP_NODE_MANAGER=system-only VP_NODE_DIST_MIRROR=http://127.0.0.1:1 NPM_CONFIG_REGISTRY=http://127.0.0.1:1 pnpm --version`
 
-VP_PNPM_MANAGER=system-only wins over VP_PM_MANAGER=yes and over the packageManager pin, so the pnpm shim fails the same way.
-
-**Exit code:** 1
-
-```
-vp: VP_PNPM_MANAGER=system-only requires a system 'pnpm', but the Vite+ shim comes first on PATH; run `vp env off pnpm` to move the shims after the system tools
-```
-
-## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} VP_PNPM_MANAGER=yes VP_PM_MANAGER=system-only NPM_CONFIG_REGISTRY=http://127.0.0.1:1 npm --version`
-
-VP_PM_MANAGER=system-only applies to families without their own value.
+The pnpm shim fails the same way, despite the packageManager pin, and suggests `vp env off pnpm`.
 
 **Exit code:** 1
 
 ```
-vp: VP_PM_MANAGER=system-only requires a system 'npm', but the Vite+ shim comes first on PATH; run `vp env off npm` to move the shims after the system tools
+vp: VP_NODE_MANAGER=system-only requires a system 'pnpm', but the Vite+ shim comes first on PATH; run `vp env off pnpm` to move the shims after the system tools
+```
+
+## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} VP_NODE_MANAGER=system-only VP_NODE_DIST_MIRROR=http://127.0.0.1:1 NPM_CONFIG_REGISTRY=http://127.0.0.1:1 npm --version`
+
+So does the npm shim, instead of running the npm bundled with a runtime.
+
+**Exit code:** 1
+
+```
+vp: VP_NODE_MANAGER=system-only requires a system 'npm', but the Vite+ shim comes first on PATH; run `vp env off npm` to move the shims after the system tools
 ```
 
 ## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} VP_NODE_MANAGER=System-Only node -p process.execPath.includes('system-bin')`
@@ -87,7 +87,7 @@ true
 
 ## `PATH=${workspace}/system-bin${PATH_SEPARATOR}${VP_HOME}/bin${PATH_SEPARATOR}${PATH} EXPECTED_PATH=${workspace}/system-bin${PATH_SEPARATOR}${VP_HOME}/bin${PATH_SEPARATOR}${PATH} VP_NODE_MANAGER=system-only VP_NODE_VERSION=24.0.0 VP_NODE_DIST_MIRROR=http://127.0.0.1:1 NPM_CONFIG_REGISTRY=http://127.0.0.1:1 vp env exec npm --version`
 
-npm follows its own (managed) mode: without an npm pin it is the npm beside the system Node.js, and the child PATH is unchanged.
+vp env exec runs the system npm first on PATH, and the child PATH is unchanged.
 
 ```
 system npm --version
@@ -104,15 +104,6 @@ VITE+ - The Unified Toolchain for the Web
 Selected commands and shims will now prefer system tools, falling back to managed tools.
 
 Run `vp env on` to always use Vite+ managed tools.
-```
-
-## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin${PATH_SEPARATOR}${PATH} EXPECTED_PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin${PATH_SEPARATOR}${PATH} VP_NODE_MANAGER=system-only VP_NODE_DIST_MIRROR=http://127.0.0.1:1 NPM_CONFIG_REGISTRY=http://127.0.0.1:1 npm --version`
-
-The managed npm shim still comes first, and runs the npm beside the first Node.js on PATH, the system one, with the child PATH unchanged.
-
-```
-system npm --version
-same PATH
 ```
 
 ## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin VP_NODE_MANAGER=system-only VP_NODE_DIST_MIRROR=http://127.0.0.1:1 NPM_CONFIG_REGISTRY=http://127.0.0.1:1 node --version`
@@ -133,13 +124,4 @@ The system-only steps downloaded nothing.
 managed Node.js (.node-version pin): true
 managed Node.js (VP_NODE_VERSION override): false
 package_manager: (empty)
-```
-
-## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} VP_PNPM_MANAGER=yes VP_PM_MANAGER=system-only node check-managed-pnpm.cjs`
-
-VP_PNPM_MANAGER=yes wins over VP_PM_MANAGER=system-only, so the shim selects the pinned managed pnpm instead of the system one.
-
-```
-system pnpm: false
-managed pnpm <version> installed: true
 ```

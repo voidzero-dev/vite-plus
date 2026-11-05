@@ -96,8 +96,8 @@ pub enum Error {
     #[error("Invalid argument: {0}")]
     InvalidArgument(Str),
 
-    /// A `VP_*_MANAGER=system-only` variable forbids downloading or using a
-    /// managed release of `tool`, and resolving one through the registry.
+    /// `VP_NODE_MANAGER=system-only` forbids downloading or using a managed
+    /// release of `tool`, and resolving one through the registry.
     #[error(
         "{variable}=system-only: Vite+ uses only the system {tool} and does not download or use a managed {tool}"
     )]

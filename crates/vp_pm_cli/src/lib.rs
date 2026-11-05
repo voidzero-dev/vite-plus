@@ -44,6 +44,4 @@ pub use resolution::{
     PublishArgs, RebuildArgs, RemoveArgs, SearchArgs, StageCommand, TeamCommand, TokenCommand,
     UnlinkArgs, UpdateArgs, VersionArgs, ViewArgs, WhoamiArgs, WhyArgs,
 };
-pub use system_only::{
-    ensure_managed_package_manager_allowed, package_manager_preference, system_only_variable,
-};
+pub use system_only::ensure_managed_package_manager_allowed;

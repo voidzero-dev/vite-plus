@@ -1,34 +1,15 @@
-//! Run-time `system-only` package-manager preference.
+//! Run-time `system-only` restriction of package managers.
 //!
-//! `VP_<FAMILY>_MANAGER=system-only` (or `VP_PM_MANAGER=system-only` without a
-//! family-specific value) restricts a family to its system installation. Vite+
-//! then neither downloads nor uses a managed release of that family, nor asks
-//! the registry which release to use.
+//! `VP_NODE_MANAGER=system-only` restricts Node.js and every package-manager
+//! family to their system installations. Vite+ then neither downloads nor uses
+//! a managed package manager, nor asks the registry which release to use.
 
 use vp_error::Error;
-use vp_shared::{EnvConfig, ManagerPreference};
+use vp_shared::{EnvConfig, env_vars};
 
 use crate::PackageManagerType;
 
-/// The explicit management preference for `package_manager_type`, with the
-/// variable that supplied it. See [`EnvConfig::package_manager_preference`].
-#[must_use]
-pub fn package_manager_preference(
-    package_manager_type: PackageManagerType,
-) -> Option<(ManagerPreference, &'static str)> {
-    EnvConfig::get().package_manager_preference(&package_manager_type.to_string())
-}
-
-/// The variable that restricts `package_manager_type` to the system, if any.
-#[must_use]
-pub fn system_only_variable(package_manager_type: PackageManagerType) -> Option<&'static str> {
-    match package_manager_preference(package_manager_type)? {
-        (ManagerPreference::SystemOnly, variable) => Some(variable),
-        _ => None,
-    }
-}
-
-/// Fail when `package_manager_type` is restricted to the system.
+/// Fail when package managers are restricted to the system.
 ///
 /// # Errors
 ///
@@ -36,11 +17,11 @@ pub fn system_only_variable(package_manager_type: PackageManagerType) -> Option<
 pub fn ensure_managed_package_manager_allowed(
     package_manager_type: PackageManagerType,
 ) -> Result<(), Error> {
-    match system_only_variable(package_manager_type) {
-        Some(variable) => Err(Error::DisabledBySystemOnly {
+    if EnvConfig::get().node_system_only() {
+        return Err(Error::DisabledBySystemOnly {
             tool: package_manager_type.to_string().into(),
-            variable,
-        }),
-        None => Ok(()),
+            variable: env_vars::VP_NODE_MANAGER,
+        });
     }
+    Ok(())
 }

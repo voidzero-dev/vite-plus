@@ -154,10 +154,10 @@ async fn do_install(opts: &cli::Options, dirs: &VpDirs) -> Result<(), Box<dyn st
 
     // 2. Match the script bootstrap protocol. Old binaries see --help instead of opening a picker.
     // A system-only setting must not reach a binary that would ignore it and download.
-    let system_only = vp_shared::EnvConfig::get().system_only_variables();
-    let support = support::probe_self_setup(&binary, !system_only.is_empty()).await?;
-    if !system_only.is_empty() && support != SelfSetupSupport::SystemOnly {
-        return Err(support::system_only_unsupported_message(&target_version, &system_only).into());
+    let system_only = vp_shared::EnvConfig::get().node_system_only();
+    let support = support::probe_self_setup(&binary, system_only).await?;
+    if system_only && support != SelfSetupSupport::SystemOnly {
+        return Err(support::system_only_unsupported_message(&target_version).into());
     }
     if support == SelfSetupSupport::Legacy {
         return legacy::install(opts, dirs, &target_version, &data).await;
@@ -236,14 +236,16 @@ fn resolve_node_manager(
 
 /// `VP_NODE_MANAGER` and `VP_PM_MANAGER` for the installed binary's self-setup.
 ///
-/// An explicit `VP_PM_MANAGER` value is kept. Otherwise the package managers
-/// follow the Node.js choice, except that `system-only` becomes `no`: only an
-/// explicit variable makes package managers system-only. Family-specific
-/// variables reach the child unchanged through the inherited environment.
+/// An explicit `VP_PM_MANAGER` value (`yes` or `no`) is kept. Otherwise the
+/// package managers follow the Node.js choice, except that `system-only`
+/// becomes `no`: `VP_NODE_MANAGER=system-only` already restricts every package
+/// manager at run time, and `no` places their shims after the system tools.
+/// Family-specific variables reach the child unchanged through the inherited
+/// environment.
 fn manager_envs(node_manager: cli::NodeManager) -> [(&'static str, String); 2] {
     let package_managers = std::env::var(vp_shared::env_vars::VP_PM_MANAGER)
         .ok()
-        .filter(|value| matches!(value.as_str(), "yes" | "no" | vp_shared::env_vars::SYSTEM_ONLY))
+        .filter(|value| matches!(value.as_str(), "yes" | "no"))
         .unwrap_or_else(|| {
             match node_manager {
                 cli::NodeManager::SystemOnly => cli::NodeManager::Disabled,
@@ -553,7 +555,7 @@ mod tests {
     }
 
     #[test]
-    fn manager_envs_pass_system_only_without_implying_it_for_package_managers() {
+    fn manager_envs_place_package_managers_after_system_tools_under_system_only() {
         let envs = |node, pm: Option<&str>| {
             EnvConfig::with_vars([(env_vars::VP_PM_MANAGER, pm)], |_| manager_envs(node))
         };
@@ -565,10 +567,8 @@ mod tests {
         };
         assert_eq!(envs(cli::NodeManager::SystemOnly, None), pair("system-only", "no"));
         assert_eq!(envs(cli::NodeManager::SystemOnly, Some("yes")), pair("system-only", "yes"));
-        assert_eq!(
-            envs(cli::NodeManager::Enabled, Some("system-only")),
-            pair("yes", "system-only")
-        );
+        // `system-only` is not an explicit package-manager choice.
+        assert_eq!(envs(cli::NodeManager::Enabled, Some("system-only")), pair("yes", "yes"));
         assert_eq!(envs(cli::NodeManager::Disabled, Some("System-Only")), pair("no", "no"));
         assert_eq!(envs(cli::NodeManager::Enabled, None), pair("yes", "yes"));
     }

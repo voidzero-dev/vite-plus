@@ -181,14 +181,6 @@ pub async fn execute_vpx(args: &[String], cwd: &AbsolutePath) -> i32 {
             }
             None => find_on_path(&cmd_name),
         };
-        // Npm on system-only Node.js must not be the npm bundled with a managed runtime.
-        if let Some(path_bin) = &path_bin
-            && dispatch::requires_system_tool(&cmd_name)
-            && let Err(e) = dispatch::reject_managed_runtime(&cmd_name, path_bin)
-        {
-            output::error(&format!("vpx: {e}"));
-            return 1;
-        }
         if let Some(path_bin) = path_bin {
             tracing::debug!("vpx: found on PATH at {}", path_bin.as_path().display());
             let child_env = match local_bin_env(cwd) {
@@ -248,8 +240,7 @@ async fn find_global_binary(cmd: &str) -> Option<GlobalBinary> {
 ///
 /// Ensures the required Node.js version is installed, prepends its bin dir
 /// and local node_modules/.bin dirs to PATH, then executes. The Node.js
-/// directory is not added when Node.js or npm is system-only (see
-/// [`dispatch::node_dir_joins_child_path`]).
+/// directory is not added in system-only mode, where Node.js comes from PATH.
 async fn execute_global_binary(bin: GlobalBinary, args: &[String], cwd: &AbsolutePath) -> i32 {
     // Ensure Node.js is installed and locate its binary
     let node_path = match dispatch::resolve_system_only_tool("node") {
@@ -269,7 +260,7 @@ async fn execute_global_binary(bin: GlobalBinary, args: &[String], cwd: &Absolut
 
     // Prepend Node.js bin dir to PATH
     let mut child_env = ToolPathEnv::from_env();
-    if dispatch::node_dir_joins_child_path() {
+    if !vp_shared::EnvConfig::get().node_system_only() {
         let node_bin_dir = node_path.parent().expect("Node has no parent directory");
         if let Err(error) = child_env.prepend(node_bin_dir, &["node"], PrependOptions::default()) {
             output::error(&format!("vpx: {error}"));

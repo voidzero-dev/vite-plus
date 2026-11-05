@@ -137,12 +137,6 @@ pub fn is_managed_install(path: &Path) -> bool {
     resolves_under_data(path, &[Path::new("js_runtime"), Path::new("package_manager")])
 }
 
-/// Whether `path` resolves into a Vite+-managed Node.js runtime, that is,
-/// under `<DATA>/js_runtime`. This includes the npm bundled with it.
-pub fn is_managed_runtime(path: &Path) -> bool {
-    resolves_under_data(path, &[Path::new("js_runtime")])
-}
-
 /// Whether `path` resolves into a `vp install -g` package, that is, under
 /// `<DATA>/packages` (the directory of `get_packages_dir` in
 /// `vp_global_cli`). An old `corepack enable` can leave links from the bin
@@ -235,8 +229,6 @@ mod tests {
                 first(&[&bin, &system], None, &cwd),
                 FirstPathMatch::System(absolute(&foreign_node))
             );
-            assert!(is_managed_runtime(&managed_node));
-            assert!(!is_managed_runtime(&pm_node));
             // Managed installs are reported, not skipped.
             assert_eq!(
                 first(&[&runtime, &system], None, &cwd),
@@ -314,20 +306,6 @@ mod tests {
                 first(&[&relative], Some(&canonical), &cwd),
                 FirstPathMatch::ViteShim(absolute(&node))
             );
-        });
-    }
-
-    #[test]
-    fn managed_runtime_excludes_package_managers() {
-        let temp = tempfile::tempdir().unwrap();
-        let home = temp.path().join("home");
-        let pnpm = fake_executable(
-            &home.join("package_manager").join("pnpm").join("10.0.0").join("pnpm").join("bin"),
-            "pnpm",
-        );
-        EnvConfig::with_vars([(env_vars::VP_HOME, home.as_path())], |_| {
-            assert!(is_managed_install(&pnpm));
-            assert!(!is_managed_runtime(&pnpm));
         });
     }
 }

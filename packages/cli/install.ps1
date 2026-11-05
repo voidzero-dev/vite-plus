@@ -420,11 +420,12 @@ function Get-PayloadAndHandoff {
             $binarySource = $LocalBinary
         }
         $binarySource = (Resolve-Path -LiteralPath $binarySource).Path
-        $systemOnly = @(Get-SystemOnlyVariables)
-        if ($systemOnly.Count -gt 0) {
+        # VP_NODE_MANAGER=system-only (exact, lowercase value only) restricts Node.js
+        # and every package manager to the system.
+        if ($env:VP_NODE_MANAGER -ceq 'system-only') {
             # Binaries without system-only support would ignore it and download managed tools.
             if (-not (Test-SystemOnlySupport -BinarySource $binarySource)) {
-                Write-Error-Exit "vite-plus $ViteVersion does not support $($systemOnly -join ', '). Choose a version that supports it, or unset those variables."
+                Write-Error-Exit "vite-plus $ViteVersion does not support VP_NODE_MANAGER=system-only. Choose a version that supports it, or unset VP_NODE_MANAGER."
             }
             Invoke-InstallHandoff -BinarySource $binarySource
         } elseif (Test-SelfSetupSupport -BinarySource $binarySource) {
@@ -451,15 +452,6 @@ function Test-SelfSetupSupport {
         return $false
     } finally {
         $env:VP_SELF_SETUP_SUPPORT_CHECK = $previous
-    }
-}
-
-# The VP_*_MANAGER=system-only settings (exact, lowercase value only).
-function Get-SystemOnlyVariables {
-    foreach ($name in 'VP_NODE_MANAGER', 'VP_PM_MANAGER', 'VP_NPM_MANAGER', 'VP_PNPM_MANAGER', 'VP_YARN_MANAGER', 'VP_BUN_MANAGER') {
-        if ([Environment]::GetEnvironmentVariable($name) -ceq 'system-only') {
-            "$name=system-only"
-        }
     }
 }
 

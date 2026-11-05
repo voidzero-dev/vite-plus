@@ -48,8 +48,9 @@ pub enum NodeManager {
     Enabled,
     /// Prefer the system Node.js (`VP_NODE_MANAGER=no`).
     Disabled,
-    /// Use only the system Node.js. Only `VP_NODE_MANAGER=system-only` selects
-    /// it, and the interactive menu cannot change it.
+    /// Use only the system Node.js and package managers. Only
+    /// `VP_NODE_MANAGER=system-only` selects it, and the interactive menu cannot
+    /// change it.
     SystemOnly,
 }
 

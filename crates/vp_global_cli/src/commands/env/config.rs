@@ -32,11 +32,13 @@ pub enum ShimMode {
     SystemFirst,
 }
 
-/// Run-time mode of a tool: the `config.json` shim mode, unless a
-/// `VP_*_MANAGER=system-only` variable restricts the tool to the system.
+/// Run-time mode of a tool: the `config.json` shim mode, unless
+/// `VP_NODE_MANAGER=system-only` restricts Node.js and every package manager
+/// to the system.
 ///
-/// `SystemOnly` comes only from the environment. Other `VP_*_MANAGER` values
-/// apply only at installation, so the configured mode stays in effect for them.
+/// `SystemOnly` comes only from `VP_NODE_MANAGER`. Its other values, and every
+/// value of the package-manager variables (including `system-only`), leave the
+/// configured mode in effect.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EffectiveMode {
     /// Vite+ manages the tool.

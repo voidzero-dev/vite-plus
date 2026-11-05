@@ -2719,8 +2719,10 @@ mod tests {
         assert_eq!(find_cached_pnpm(&vp_home), None);
     }
 
-    /// A system-only family resolves, downloads and reuses no managed release:
-    /// every entry point fails before the cache and before any registry request.
+    /// `VP_NODE_MANAGER=system-only` makes every package manager resolve,
+    /// download and reuse no managed release: every entry point fails before
+    /// the cache and before any registry request. The package-manager variables
+    /// alone do not restrict anything at run time.
     #[tokio::test(flavor = "current_thread")]
     async fn system_only_package_manager_uses_no_managed_release_or_registry() {
         use httpmock::prelude::*;
@@ -2732,18 +2734,19 @@ mod tests {
             then.status(500);
         });
         let registry = server.base_url();
-        let vars = |pnpm: Option<&'static str>, pm: Option<&'static str>| {
+        let vars = |node: Option<&'static str>, pm: Option<&'static str>| {
             [
                 (env_vars::VP_HOME, Some(temp_dir.path().as_os_str())),
                 (env_vars::NPM_CONFIG_REGISTRY, Some(std::ffi::OsStr::new(registry.as_str()))),
-                (env_vars::VP_PNPM_MANAGER, pnpm.map(std::ffi::OsStr::new)),
+                (env_vars::VP_NODE_MANAGER, node.map(std::ffi::OsStr::new)),
                 (env_vars::VP_PM_MANAGER, pm.map(std::ffi::OsStr::new)),
+                (env_vars::VP_PNPM_MANAGER, pm.map(std::ffi::OsStr::new)),
                 (env_vars::VP_NPM_MANAGER, None),
                 (env_vars::VP_YARN_MANAGER, None),
                 (env_vars::VP_BUN_MANAGER, None),
             ]
         };
-        let is_disabled = |error: &Error| matches!(error, Error::DisabledBySystemOnly { tool, variable: env_vars::VP_PNPM_MANAGER } if tool == "pnpm");
+        let is_disabled = |error: &Error, family: &str| matches!(error, Error::DisabledBySystemOnly { tool, variable: env_vars::VP_NODE_MANAGER } if tool == family);
 
         // A cached exact release is still returned without system-only.
         let cached = EnvConfig::with_vars_async(vars(None, None), |_| async {
@@ -2768,38 +2771,38 @@ mod tests {
                     ensure_package_manager_bin(PackageManagerType::Pnpm, version, None, "pnpm")
                         .await
                         .unwrap_err();
-                assert!(is_disabled(&error), "{version}: {error}");
+                assert!(is_disabled(&error, "pnpm"), "{version}: {error}");
                 assert!(!error.is_integrity_failure());
                 let error = download_package_manager(PackageManagerType::Pnpm, version, None)
                     .await
                     .unwrap_err();
-                assert!(is_disabled(&error), "{version}: {error}");
+                assert!(is_disabled(&error, "pnpm"), "{version}: {error}");
             }
             for version in ["^10.0.0", "latest"] {
                 let error = resolve_package_manager_version(PackageManagerType::Pnpm, version)
                     .await
                     .unwrap_err();
-                assert!(is_disabled(&error), "{version}: {error}");
+                assert!(is_disabled(&error, "pnpm"), "{version}: {error}");
             }
             let error = fetch_package_manager_versions(PackageManagerType::Pnpm).await.unwrap_err();
-            assert!(is_disabled(&error), "{error}");
+            assert!(is_disabled(&error, "pnpm"), "{error}");
+            // Every family is restricted, not only the pinned one.
+            let error = resolve_package_manager_version(PackageManagerType::Yarn, "latest")
+                .await
+                .unwrap_err();
+            assert!(is_disabled(&error, "yarn"), "{error}");
         })
         .await;
         requests.assert_hits(0);
 
-        // The family-specific value wins over VP_PM_MANAGER, and other families
-        // follow VP_PM_MANAGER.
-        EnvConfig::with_vars_async(vars(Some("yes"), Some("system-only")), |_| async {
-            ensure_package_manager_bin(PackageManagerType::Pnpm, "10.0.0", None, "pnpm")
-                .await
-                .unwrap();
-            let error = resolve_package_manager_version(PackageManagerType::Yarn, "latest")
-                .await
-                .unwrap_err();
-            assert!(matches!(
-                error,
-                Error::DisabledBySystemOnly { variable: env_vars::VP_PM_MANAGER, .. }
-            ));
+        // The package-manager variables alone do not restrict at run time.
+        EnvConfig::with_vars_async(vars(None, Some("system-only")), |_| async {
+            let resolved =
+                ensure_package_manager_bin(PackageManagerType::Pnpm, "10.0.0", None, "pnpm")
+                    .await
+                    .unwrap();
+            assert_eq!(resolved, cached);
+            ensure_managed_package_manager_allowed(PackageManagerType::Npm).unwrap();
         })
         .await;
         requests.assert_hits(0);

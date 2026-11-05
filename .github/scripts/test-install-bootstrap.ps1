@@ -89,8 +89,8 @@ if ($args.Count -eq 0) {
     Write-Output ("`$script:StateDir = '{0}'" -f "$testRoot/state")
     exit 0
 }
-# Only a system-only setting asks for the second response line.
-$expectedCheck = if ($scenario -like 'system-only*' -or $scenario -eq 'pm-system-only') { 'system-only' } else { '1' }
+# Only VP_NODE_MANAGER=system-only asks for the second response line.
+$expectedCheck = if ($scenario -like 'system-only*') { 'system-only' } else { '1' }
 if ($env:VP_SELF_SETUP_SUPPORT_CHECK -cne $expectedCheck) { exit 99 }
 New-Item -ItemType File -Path "$testRoot/binary-probed" | Out-Null
 if ($scenario -in @('legacy', 'legacy-remote', 'legacy-failure', 'pr', 'system-only-legacy')) { Write-Output 'Usage: vp [COMMAND]' }
@@ -238,6 +238,7 @@ try {
         foreach ($name in $managerVariables) { [Environment]::SetEnvironmentVariable($name, $null, 'Process') }
         switch ($scenario) {
             { $_ -like 'system-only*' } { $env:VP_NODE_MANAGER = 'system-only' }
+            # A package-manager variable alone is not system-only.
             'pm-system-only' { $env:VP_PNPM_MANAGER = 'system-only' }
             # Only the exact lowercase value is system-only.
             'mixed-case-system-only' { $env:VP_NODE_MANAGER = 'System-Only' }

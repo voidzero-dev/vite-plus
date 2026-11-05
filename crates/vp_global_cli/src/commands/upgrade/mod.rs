@@ -312,15 +312,14 @@ async fn extract_binary(
     Ok(binary_path)
 }
 
-/// Refuse a target without system-only support while a
-/// `VP_*_MANAGER=system-only` variable is set. The probe runs from a temporary
+/// Refuse a target without system-only support while
+/// `VP_NODE_MANAGER=system-only` is set. The probe runs from a temporary
 /// directory, so a refusal leaves every install directory unchanged.
 async fn ensure_staged_system_only_support(
     platform_data: &[u8],
     target: &str,
 ) -> Result<(), Error> {
-    let variables = vp_shared::EnvConfig::get().system_only_variables();
-    if variables.is_empty() {
+    if !vp_shared::EnvConfig::get().node_system_only() {
         return Ok(());
     }
     let staging = tempfile::tempdir().map_err(|e| {
@@ -339,32 +338,28 @@ async fn ensure_staged_system_only_support(
             .into(),
         )
     })?;
-    require_system_only_support(support, target, &variables)
+    require_system_only_support(support, target)
 }
 
-/// Refuse to switch to `binary` while a `VP_*_MANAGER=system-only` variable is
-/// set, unless the binary supports system-only mode.
+/// Refuse to switch to `binary` while `VP_NODE_MANAGER=system-only` is set,
+/// unless the binary supports system-only mode.
 async fn ensure_system_only_support(binary: &AbsolutePath, target: &str) -> Result<(), Error> {
-    let variables = vp_shared::EnvConfig::get().system_only_variables();
-    if variables.is_empty() {
+    if !vp_shared::EnvConfig::get().node_system_only() {
         return Ok(());
     }
     let support = vp_setup::support::probe_self_setup(binary, true).await?;
-    require_system_only_support(support, target, &variables)
+    require_system_only_support(support, target)
 }
 
 /// A target without system-only support would download managed tools.
 fn require_system_only_support(
     support: vp_setup::support::SelfSetupSupport,
     target: &str,
-    variables: &[&str],
 ) -> Result<(), Error> {
     if support == vp_setup::support::SelfSetupSupport::SystemOnly {
         return Ok(());
     }
-    Err(Error::Upgrade(
-        vp_setup::support::system_only_unsupported_message(target, variables).into(),
-    ))
+    Err(Error::Upgrade(vp_setup::support::system_only_unsupported_message(target).into()))
 }
 
 /// Execute rollback to the previous version.
@@ -438,21 +433,21 @@ mod tests {
         );
         let unsupported = script("unsupported", "echo vite-plus-self-setup-v1");
 
-        let managers = |node: Option<&'static str>| {
+        let managers = |node: Option<&'static str>, pm: Option<&'static str>| {
             [
                 (env_vars::VP_NODE_MANAGER, node),
-                (env_vars::VP_PM_MANAGER, None),
-                (env_vars::VP_NPM_MANAGER, None),
-                (env_vars::VP_PNPM_MANAGER, None),
-                (env_vars::VP_YARN_MANAGER, None),
-                (env_vars::VP_BUN_MANAGER, None),
+                (env_vars::VP_PM_MANAGER, pm),
+                (env_vars::VP_NPM_MANAGER, pm),
             ]
         };
-        EnvConfig::with_vars_async(managers(None), |_| async {
-            ensure_system_only_support(&unsupported, "0.1.0").await.unwrap();
-        })
-        .await;
-        EnvConfig::with_vars_async(managers(Some("system-only")), |_| async {
+        // The package-manager variables alone do not require support.
+        for pm in [None, Some("system-only")] {
+            EnvConfig::with_vars_async(managers(None, pm), |_| async {
+                ensure_system_only_support(&unsupported, "0.1.0").await.unwrap();
+            })
+            .await;
+        }
+        EnvConfig::with_vars_async(managers(Some("system-only"), None), |_| async {
             ensure_system_only_support(&supported, "9.0.0").await.unwrap();
             let error = ensure_system_only_support(&unsupported, "0.1.0").await.unwrap_err();
             assert!(
@@ -465,15 +460,8 @@ mod tests {
         .await;
     }
 
-    fn node_system_only() -> [(&'static str, Option<&'static str>); 6] {
-        [
-            (env_vars::VP_NODE_MANAGER, Some("system-only")),
-            (env_vars::VP_PM_MANAGER, None),
-            (env_vars::VP_NPM_MANAGER, None),
-            (env_vars::VP_PNPM_MANAGER, None),
-            (env_vars::VP_YARN_MANAGER, None),
-            (env_vars::VP_BUN_MANAGER, None),
-        ]
+    fn node_system_only() -> [(&'static str, Option<&'static str>); 1] {
+        [(env_vars::VP_NODE_MANAGER, Some("system-only"))]
     }
 
     /// A registry resolution of `version` without a Node.js pin.

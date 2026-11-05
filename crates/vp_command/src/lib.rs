@@ -24,7 +24,7 @@ mod ps1_shim;
 
 pub use external_tool::{
     ExternalToolQuery, FirstPathMatch, classify_first_path_match, find_external_tool,
-    is_managed_install, is_managed_runtime,
+    is_managed_install,
 };
 pub use ps1_shim::rewrite_cmd_to_powershell;
 

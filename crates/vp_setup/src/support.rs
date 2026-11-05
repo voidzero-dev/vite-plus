@@ -5,7 +5,7 @@
 //! supports first-start setup prints [`SELF_SETUP_SUPPORT_RESPONSE`]. That line
 //! never changes, because released installers compare it exactly. When the
 //! check value is `system-only`, a binary that also supports
-//! `VP_*_MANAGER=system-only` prints [`SYSTEM_ONLY_SUPPORT_RESPONSE`] on a
+//! `VP_NODE_MANAGER=system-only` prints [`SYSTEM_ONLY_SUPPORT_RESPONSE`] on a
 //! second line.
 
 use vp_shared::env_vars;
@@ -24,7 +24,7 @@ pub enum SelfSetupSupport {
     Legacy,
     /// First-start setup without `system-only` support.
     SelfSetup,
-    /// First-start setup and `VP_*_MANAGER=system-only`.
+    /// First-start setup and `VP_NODE_MANAGER=system-only`.
     SystemOnly,
 }
 
@@ -76,17 +76,13 @@ pub async fn probe_self_setup(
     Ok(parse_support_response(&output.stdout))
 }
 
-/// Error message for a target that cannot honor the `system-only` variables.
+/// Error message for a target that cannot honor `VP_NODE_MANAGER=system-only`.
 #[must_use]
-pub fn system_only_unsupported_message(target: &str, variables: &[&str]) -> String {
-    let settings = variables
-        .iter()
-        .map(|name| format!("{name}={}", env_vars::SYSTEM_ONLY))
-        .collect::<Vec<_>>();
+pub fn system_only_unsupported_message(target: &str) -> String {
+    let variable = env_vars::VP_NODE_MANAGER;
     format!(
-        "vite-plus {target} does not support {}. Choose a version that supports it, or unset {}.",
-        settings.join(", "),
-        variables.join(", ")
+        "vite-plus {target} does not support {variable}={}. Choose a version that supports it, or unset {variable}.",
+        env_vars::SYSTEM_ONLY
     )
 }
 

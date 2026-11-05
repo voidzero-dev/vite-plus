@@ -45,9 +45,9 @@ if [ "$#" -eq 0 ]; then
   printf 'STATE_DIR=%q\n' "$test_root/state"
   exit 0
 fi
-# Only a system-only setting asks for the second response line.
+# Only VP_NODE_MANAGER=system-only asks for the second response line.
 case "$scenario:${VP_SELF_SETUP_SUPPORT_CHECK:-}" in
-  system-only*:system-only|pm-system-only:system-only) ;;
+  system-only*:system-only) ;;
   *:1) ;;
   *) exit 99 ;;
 esac
@@ -172,6 +172,7 @@ for scenario in supported legacy legacy-failure piped-legacy piped-legacy-failur
     unset VP_NODE_MANAGER VP_PM_MANAGER VP_NPM_MANAGER VP_PNPM_MANAGER VP_YARN_MANAGER VP_BUN_MANAGER
     case "$scenario" in
       system-only*) export VP_NODE_MANAGER=system-only ;;
+      # A package-manager variable alone is not system-only.
       pm-system-only) export VP_PNPM_MANAGER=system-only ;;
       # Only the exact lowercase value is system-only.
       mixed-case-system-only) export VP_NODE_MANAGER=System-Only ;;
