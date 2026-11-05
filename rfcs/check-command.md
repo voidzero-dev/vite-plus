@@ -35,33 +35,42 @@ vp check
 
 # Auto-fix format and lint issues
 vp check --fix
-vp check --fix --no-lint    # Only fix formatting
+vp check --fix --no-lint    # Skip lint rules; configured type checks still run
 
 # Disable specific checks
 vp check --no-fmt
 vp check --no-lint
-vp check --no-type-aware
-vp check --no-type-check
 ```
 
 ### Options
 
-| Flag                               | Default | Description                                             |
-| ---------------------------------- | ------- | ------------------------------------------------------- |
-| `--fix`                            | OFF     | Auto-fix format and lint issues                         |
-| `--fmt` / `--no-fmt`               | ON      | Run format check (`vp fmt --check`)                     |
-| `--lint` / `--no-lint`             | ON      | Run lint check (`vp lint`)                              |
-| `--type-aware` / `--no-type-aware` | ON      | Enable type-aware lint rules (oxlint `--type-aware`)    |
-| `--type-check` / `--no-type-check` | ON      | Enable TypeScript type checking (oxlint `--type-check`) |
-| `--no-error-on-unmatched-pattern`  | OFF     | Do not exit with error when pattern is unmatched        |
+| Flag                              | Default | Description                                               |
+| --------------------------------- | ------- | --------------------------------------------------------- |
+| `--fix`                           | OFF     | Auto-fix formatting and lint issues                       |
+| `--no-fmt`                        | OFF     | Skip formatting                                           |
+| `--no-lint`                       | OFF     | Skip lint rules; retain configured TypeScript diagnostics |
+| `--quiet`                         | OFF     | Report errors without warnings                            |
+| `--deny-warnings`                 | OFF     | Treat lint warnings as errors                             |
+| `--no-error-on-unmatched-pattern` | OFF     | Do not fail when no files match                           |
 
-**Flag dependency:** `--type-check` requires `--type-aware` as a prerequisite.
+Type-aware rules and TypeScript diagnostics follow `lint.options` in
+`vite.config.ts`. `vp create` and `vp migrate` enable both settings by default:
 
-- `--type-aware` enables lint rules that use type information (e.g., `no-floating-promises`)
-- `--type-check` enables experimental TypeScript compiler-level type checking (requires type-aware)
-- If `--no-type-aware` is set, `--type-check` is also implicitly disabled
+```ts
+export default {
+  lint: {
+    options: {
+      typeAware: true,
+      typeCheck: true,
+    },
+  },
+};
+```
 
-Both are enabled by default in `vp check` to provide comprehensive static analysis.
+`typeAware` enables rules that need type information, such as
+`typescript/no-floating-promises`. `typeCheck` also enables TypeScript compiler
+diagnostics. Set either option to `false` in the config to disable it.
+`vp check` does not expose `--no-type-aware` or `--no-type-check` flags.
 
 ### File Path Arguments
 
@@ -94,7 +103,7 @@ Commands run **sequentially** with fail-fast semantics:
 
 ```
 1. vp fmt --check                          (verify formatting, don't auto-fix)
-2. vp lint --type-aware --type-check       (lint + type checking)
+2. vp lint                               (lint + configured type checking)
 ```
 
 If any step fails, `vp check` exits immediately with a non-zero exit code.
@@ -112,9 +121,9 @@ Output rules:
 
 - Do not print delegated commands such as `vp fmt --check` or `vp lint --type-aware --type-check`
 - Print one `pass:` line only after a phase completes successfully
-- Mention type checks in the lint success line only when `--type-check` is enabled
+- Mention type checks in the lint success line only when `lint.options.typeCheck` is enabled
 - On failure, print a human-readable `error:` line, then raw diagnostics, then a blank line and a final summary sentence
-- Treat `vp check --no-fmt --no-lint` as an error instead of silent success
+- With `--no-fmt --no-lint`, run only configured TypeScript diagnostics. Report an error if no checks remain enabled.
 
 Representative failure output:
 
@@ -180,21 +189,54 @@ Commands::Check { args } => commands::delegate::execute(cwd, "check", &args).awa
 
 ### NAPI Binding
 
-The `Check` variant is defined in `SynthesizableSubcommand` in `packages/cli/binding/src/cli.rs`. The check command's orchestration logic lives in its own module at `packages/cli/binding/src/check/`, following the same directory-per-command pattern as `exec/`:
+The `Check` variant is defined in `SynthesizableSubcommand` in `packages/cli/binding/src/cli/types.rs`. The check command's orchestration logic lives in its own module at `packages/cli/binding/src/check/`, following the same directory-per-command pattern as `exec/`:
 
 - `check/mod.rs` — `execute_check()` orchestration (runs fmt + lint sequentially, handles `--fix` re-formatting)
 - `check/analysis.rs` — Output analysis types (`CheckSummary`, `LintMessageKind`, etc.), parsers, and formatting helpers
 
-The check module reuses `SubcommandResolver` and `resolve_and_capture_output` from `cli.rs` to resolve and run the underlying fmt/lint commands.
+The check module reuses `SubcommandResolver` and `resolve_and_capture_output` from `cli/resolver.rs` and `cli/execution.rs` to resolve and run the underlying fmt/lint commands.
 
 ### TypeScript Side
 
-No new resolver needed — `vp check` reuses existing `resolve-lint.ts` and `resolve-fmt.ts`.
+`vp check` reuses `resolve-lint.ts` and `resolve-fmt.ts`.
+
+### Experimental type-aware backend
+
+This draft replaces the bundled Go backend with `tsrs@0.22.0-ts7.1.0-beta`,
+a Rust port of the TypeScript 7 compiler. `resolve-lint.ts` selects the bundled
+`tsrs` package and passes its `bin/tsrs-lint` launcher to Oxlint through
+`OXLINT_TSGOLINT_PATH`. The same resolver serves `vp lint` and `vp check`.
+Users do not need to set an environment variable for the default backend.
+
+An explicit `OXLINT_TSGOLINT_PATH` takes precedence over the resolver default.
+The environment variable keeps its existing name because Oxlint uses it to
+select the type-aware backend. A project can still select Go explicitly:
+
+```sh
+vp add -D oxlint-tsgolint
+OXLINT_TSGOLINT_PATH="$PWD/node_modules/.bin/tsgolint" vp check
+```
+
+`tsrs` is a production dependency. `oxlint-tsgolint` remains a development
+dependency for comparisons. The benchmark selects the Go executable explicitly,
+so a change to the default cannot make it compare tsrs against itself.
+See the [performance report](../bench/tsrs-lint.md) for elapsed time, peak memory,
+and measurement conditions.
+
+The pinned tsrs release has no Windows ARM64 binary. This draft adds no automatic
+Go fallback. A release for all supported Vite+ platforms needs an upstream
+Windows ARM64 binary or an explicit fallback. Runtime smoke tests currently
+cover macOS ARM64; other platforms still need runtime validation.
+
+The backend switch preserves the existing formatting phase, lint configuration,
+and failure handling. Smoke fixtures compare diagnostics, suppression comments,
+and automatic fixes against Go. These checks do not establish complete
+compiler parity.
 
 ### Key Files
 
 1. `crates/vp_global_cli/src/cli.rs` — `Check` command variant and routing
-2. `packages/cli/binding/src/cli.rs` — `SynthesizableSubcommand::Check` definition, delegates to `check` module
+2. `packages/cli/binding/src/cli/types.rs` — `SynthesizableSubcommand::Check` definition, delegates to `check` module
 3. `packages/cli/binding/src/check/mod.rs` — Check command orchestration (`execute_check`)
 4. `packages/cli/binding/src/check/analysis.rs` — Output parsing and analysis types
 
@@ -203,13 +245,14 @@ No new resolver needed — `vp check` reuses existing `resolve-lint.ts` and `res
 ```
 Run format, lint, and type checks
 
-Usage: vp check [OPTIONS]
+Usage: vp check [OPTIONS] [PATHS]...
 
 Options:
-      --fmt              Run format check [default: true]
-      --lint             Run lint check [default: true]
-      --type-aware       Enable type-aware linting [default: true]
-      --type-check       Enable TypeScript type checking [default: true]
+      --fix              Auto-fix format and lint issues
+      --quiet            Report errors without warnings
+      --deny-warnings    Treat lint warnings as errors
+      --no-fmt           Skip format check
+      --no-lint          Skip lint rules; retain configured type checks
       --no-error-on-unmatched-pattern  Do not exit with error when no files match
   -h, --help             Print help
 ```
@@ -261,16 +304,15 @@ pass: Found no warnings or lint errors in 2 files (452ms, 16 threads)
 
 The check command's cache fingerprint includes:
 
-- **Environment variable:** `OXLINT_TSGOLINT_PATH` (affects lint behavior)
+- **Environment variable:** `OXLINT_TSGOLINT_PATH` (an explicit Go or tsrs backend override affects lint behavior)
 - **Input files:** Auto-tracked via fspy, excluding:
-  - `node_modules/.vite-temp/**` — config compilation cache (read+written by the vp CLI subprocess)
   - `node_modules/.vite/task-cache/**` — task runner state files that change after each run
 
-These exclusions are defined by `check_cache_inputs()` in `cli.rs`.
+These exclusions are defined by `check_cache_inputs()` in `packages/cli/binding/src/cli/resolver.rs`.
 
 ### How it differs from `vp fmt` / `vp lint`
 
-When `vp fmt` or `vp lint` appear in task scripts, the command handler resolves them to their underlying binaries (e.g., `node path/to/oxfmt.mjs`). The `vp check` command is different — it runs as a full `vp check` subprocess because it's a composite command that orchestrates both fmt and lint internally. This means the `vp` CLI process itself is tracked by fspy, which is why the `.vite-temp` and `.vite/task-cache` exclusions are necessary.
+When `vp fmt` or `vp lint` appear in task scripts, the command handler resolves them to their underlying binaries (e.g., `node path/to/oxfmt.mjs`). The `vp check` command is different — it runs as a full `vp check` subprocess because it's a composite command that orchestrates both fmt and lint internally. This means the `vp` CLI process itself is tracked by fspy, which is why the `.vite/task-cache` exclusions are necessary.
 
 ## Comparison with Other Tools
 
@@ -281,30 +323,20 @@ When `vp fmt` or `vp lint` appear in task scripts, the command handler resolves 
 | **`biome check`** | **Format + lint (closest analog)** |
 | `deno check`      | Type checking only                 |
 
-## Snap Tests
+## Snapshot Tests
 
-```
-packages/cli/snap-tests/check-basic/
-  package.json
-  steps.json     # { "steps": [{ "command": "vp check" }] }
-  src/index.ts   # Clean file that passes all checks
-  snap.txt
+CLI cases live in `crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/`.
+Each case uses `snapshots.toml` and a recorded Markdown snapshot.
 
-packages/cli/snap-tests/check-fmt-fail/
-  package.json
-  steps.json     # { "steps": [{ "command": "vp check" }] }
-  src/index.ts   # Badly formatted file
-  snap.txt       # Shows fmt --check failure, lint doesn't run (fail-fast)
+| Fixture                   | Coverage                                               |
+| ------------------------- | ------------------------------------------------------ |
+| `check_pass_typecheck`    | Formatting, linting, and configured type checks        |
+| `check_fmt_fail`          | Formatting failure stops the command                   |
+| `check_no_fmt`            | Linting without formatting                             |
+| `check_no_lint_typecheck` | Type checks without lint rules                         |
+| `check_oxlint_env`        | An explicit backend path overrides the bundled default |
+| `check_cache_enabled`     | A second `vp run check` replays cached output          |
+| `oxlint_typeaware`        | Type-aware task caching tracks imported type files     |
 
-packages/cli/snap-tests/check-no-fmt/
-  package.json
-  steps.json     # { "steps": [{ "command": "vp check --no-fmt" }] }
-  snap.txt       # Only lint runs
-
-packages/cli/snap-tests/check-cache-enabled/
-  package.json   # { "scripts": { "check": "vp check" } }
-  vite.config.ts # { run: { cache: true } }
-  steps.json     # Runs vp run check twice, expects cache hit on second run
-  src/index.js
-  snap.txt
-```
+Use the [snapshot runner instructions](../crates/vp_cli_snapshots/tests/cli_snapshots/README.md)
+to run or update these cases.
