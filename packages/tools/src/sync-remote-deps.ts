@@ -442,20 +442,22 @@ const OXC_PACKAGE_PREFIXES = [
   '@oxfmt/',
   '@oxlint-tsgolint/',
 ];
-const OXC_PACKAGES = new Set([
+const SYNCED_PACKAGES = new Set([
+  '@napi-rs/cli',
   'oxc-minify',
   'oxc-parser',
   'oxc-transform',
   'oxfmt',
   'oxlint',
   'oxlint-tsgolint',
+  'tinybench',
 ]);
 // These packages should always use the highest version
 function syncedPackages(packageName: string): boolean {
-  if (OXC_PACKAGES.has(packageName) || packageName === 'tinybench') {
-    return true;
-  }
-  return OXC_PACKAGE_PREFIXES.some((prefix) => packageName.startsWith(prefix));
+  return (
+    SYNCED_PACKAGES.has(packageName) ||
+    OXC_PACKAGE_PREFIXES.some((prefix) => packageName.startsWith(prefix))
+  );
 }
 
 function mergeSemverVersions(
@@ -474,7 +476,7 @@ function mergeSemverVersions(
   const isExact2 = v2.startsWith('=');
   if (isExact1 || isExact2) {
     if (isExact1 && isExact2 && v1 !== v2) {
-      // For oxc-related packages, use the higher version
+      // For synced packages, use the higher version
       if (syncedPackages(packageName)) {
         const ver1 = v1.slice(1); // Remove '=' prefix
         const ver2 = v2.slice(1);

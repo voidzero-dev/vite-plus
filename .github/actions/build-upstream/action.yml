@@ -38,8 +38,6 @@ runs:
         profile: ${{ inputs.profile }}
 
     # Include the documentation origin so preview binaries cannot reuse release links.
-    # v4: drop bindings built on ubuntu-26.04, which crash; the key doesn't
-    # include the runner image.
     - name: Compute NAPI binding cache key
       id: cache-key
       shell: bash
