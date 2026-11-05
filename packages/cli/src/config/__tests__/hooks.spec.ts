@@ -216,10 +216,10 @@ describe('install', () => {
   it.each([
     ['.husky', 'reference-transaction'],
     ['.husky', 'post-index-change'],
-    ['.husky', 'custom-hook'],
+    ['.husky', 'pre-receive'],
     ['.husky/_', 'reference-transaction'],
     ['.husky/_', 'post-index-change'],
-    ['.husky/_', 'custom-hook'],
+    ['.husky/_', 'pre-receive'],
   ])('preserves an existing %s/%s hook outside the supported-name list', (hooksPath, hook) => {
     const tmp = mkdtempSync(join(tmpdir(), 'hooks-other-husky-hook-'));
     const originalCwd = process.cwd();
@@ -236,7 +236,9 @@ describe('install', () => {
       process.chdir(tmp);
 
       const runHook = () => spawnSync('git', ['hook', 'run', hook], { encoding: 'utf8' });
-      expect(runHook().status).toBe(1);
+      const before = runHook();
+      expect(before.status).toBe(1);
+      expect(before.stderr).toContain('original hook rejected');
       expect(install()).toEqual({
         message: `core.hooksPath is already set to "${hooksPath}", skipping`,
         isError: false,
