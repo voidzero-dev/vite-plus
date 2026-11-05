@@ -175,7 +175,9 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
         ));
     }
     let previous_install = if deploy { previous_install()? } else { None };
-    let node_override = shim_mode(env.node_manager);
+    // VP_ENV_FORBIDDEN=1 places every component after the system tools, whatever VP_*_MANAGER says.
+    let forbidden = env.env_forbidden.then_some(config::ShimMode::SystemFirst);
+    let node_override = forbidden.or_else(|| shim_mode(env.node_manager));
     // A package upgrade can change the executable path or expire its receipt.
     // Preferences belong to the user, not to that particular binary.
     let configured = bundled && config::get_config_path()?.as_path().is_file();
@@ -324,7 +326,7 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
             (PackageManagerType::Yarn, env.yarn_manager),
             (PackageManagerType::Bun, env.bun_manager),
         ] {
-            if let Some(mode) = shim_mode(preference).or(pm_mode) {
+            if let Some(mode) = forbidden.or_else(|| shim_mode(preference)).or(pm_mode) {
                 settings.set_package_manager_shim_mode(family, mode);
             }
         }

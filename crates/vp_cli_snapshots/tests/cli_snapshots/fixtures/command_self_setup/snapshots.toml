@@ -72,6 +72,20 @@ steps = [
 ]
 
 [[case]]
+name = "command_self_setup_env_forbidden_config"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "external", "forbidden", "not-forbidden"], snapshot = false },
+  { argv = ["vpt", "cp", "$VP_HOME/bin/vp", "external/vp"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "external/vp"], snapshot = false },
+  { argv = ["./external/vp"], tty = false, envs = [["VP_HOME", "${workspace}/forbidden"], ["VP_SKIP_DEPS_INSTALL", "1"], ["VP_VERSION", "forbidden-test"], ["VP_SELF_SETUP_NO_MODIFY_PATH", "1"], ["VP_ENV_FORBIDDEN", "1"], ["VP_NODE_MANAGER", "yes"], ["VP_PM_MANAGER", "yes"], ["VP_NPM_MANAGER", "yes"], ["VP_PNPM_MANAGER", "yes"], ["VP_YARN_MANAGER", "yes"], ["VP_BUN_MANAGER", "yes"]], comment = "VP_ENV_FORBIDDEN=1 saves every component as system_first, overriding explicit VP_*_MANAGER=yes", snapshot = false },
+  ["vpt", "print-file", "forbidden/config.json"],
+  { argv = ["./external/vp"], tty = false, envs = [["VP_HOME", "${workspace}/not-forbidden"], ["VP_SKIP_DEPS_INSTALL", "1"], ["VP_VERSION", "forbidden-test"], ["VP_SELF_SETUP_NO_MODIFY_PATH", "1"], ["VP_ENV_FORBIDDEN", "true"], ["VP_NODE_MANAGER", "yes"], ["VP_PM_MANAGER", "yes"], ["VP_NPM_MANAGER", "yes"], ["VP_PNPM_MANAGER", "yes"], ["VP_YARN_MANAGER", "yes"], ["VP_BUN_MANAGER", "yes"]], comment = "Only the exact value 1 enables VP_ENV_FORBIDDEN; other values keep the VP_*_MANAGER choices", snapshot = false },
+  ["vpt", "print-file", "not-forbidden/config.json"],
+]
+
+[[case]]
 name = "command_self_setup_combined_default"
 vp = "global"
 skip-platforms = ["windows"]
