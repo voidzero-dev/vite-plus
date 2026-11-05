@@ -15,7 +15,7 @@ The table shows the median of ten runs per backend after one warm-up each. The r
 
 ## Reproduce
 
-Start in a built Vite+ checkout. Install the experimental backend under the ignored `tmp` directory to keep it separate from workspace dependencies.
+Start in a built Vite+ checkout. The runner explicitly selects the `oxlint-tsgolint` development dependency for the Go baseline, even when the CLI defaults to tsrs. Install the candidate backend under the ignored `tmp` directory to compare a specific version.
 
 ```sh
 npm install --prefix ./tmp/tsrs-lint --no-save --package-lock=false tsrs@0.21.0-ts7.1.0-beta
