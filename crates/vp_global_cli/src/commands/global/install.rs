@@ -164,14 +164,6 @@ pub async fn install(
         return Ok(());
     }
 
-    // Global packages install with the npm bundled with the managed runtime;
-    // reject system-only npm before resolving or downloading that runtime.
-    if let Err(error) =
-        vp_pm_cli::ensure_managed_package_manager_allowed(vp_pm_cli::PackageManagerType::Npm)
-    {
-        return Err((None, Box::new(error.into())));
-    }
-
     // 2. Resolve Node.js version
     let node_version = if let Some(v) = node_version {
         let provider = NodeProvider::new();
@@ -1519,48 +1511,6 @@ touch "$npm_config_prefix/prepared"
             assert_eq!(installations.len(), 1);
             assert_eq!(installations[0].path(), installation.as_path());
         }).await;
-    }
-
-    #[tokio::test]
-    async fn test_install_rejects_system_only_npm_before_resolving_node() {
-        use std::ffi::OsStr;
-
-        let temp = tempfile::tempdir().unwrap();
-        for variable in [env_vars::VP_NPM_MANAGER, env_vars::VP_PM_MANAGER] {
-            let system_only = |name| (name == variable).then(|| OsStr::new("system-only"));
-            let vars = [
-                (env_vars::VP_HOME, Some(temp.path().as_os_str())),
-                // An unreachable mirror fails any Node.js resolution or download.
-                (env_vars::VP_NODE_DIST_MIRROR, Some(OsStr::new("http://127.0.0.1:1"))),
-                (env_vars::VP_NODE_MANAGER, None),
-                (env_vars::VP_NPM_MANAGER, system_only(env_vars::VP_NPM_MANAGER)),
-                (env_vars::VP_PM_MANAGER, system_only(env_vars::VP_PM_MANAGER)),
-            ];
-            vp_shared::EnvConfig::with_vars_async(vars, |env| async move {
-                for node_version in [None, Some("20.0.0")] {
-                    let options = InstallOptions {
-                        node_version,
-                        force: false,
-                        ignore_scripts: true,
-                        concurrency: 1,
-                        update: false,
-                    };
-                    let (package, error) =
-                        install(&["typescript".to_owned()], options).await.unwrap_err();
-                    assert_eq!(package, None);
-                    assert!(
-                        matches!(
-                            *error,
-                            Error::Install(vp_error::Error::DisabledBySystemOnly { ref tool, variable: v })
-                                if tool == "npm" && v == variable
-                        ),
-                        "{variable}: {error}"
-                    );
-                }
-                assert!(!env.dirs.data.join("js_runtime").as_path().exists());
-            })
-            .await;
-        }
     }
 
     #[test]
