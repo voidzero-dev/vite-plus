@@ -115,6 +115,8 @@ steps = [
 [[case]]
 name = "env_forbidden_overrides_managed_shims"
 vp = "global"
+# The pnpm pin must not be downloaded, so prewarming it would be wasted.
+prewarm-package-managers = false
 comment = "VP_ENV_FORBIDDEN=1 restricts the Node.js and package-manager shims alike: they never search PATH or use managed installs. With managed config.json they fail and suggest `vp env off`; system tools still run when they come before the shims, as in a devShell, or after `vp env off`. Nothing is downloaded and the child PATH is unchanged."
 steps = [
   { argv = ["node", "setup-system-node.cjs"], snapshot = false },
