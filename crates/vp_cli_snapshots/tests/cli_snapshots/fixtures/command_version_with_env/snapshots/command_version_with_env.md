@@ -11,13 +11,13 @@ Local vite-plus:
   vite-plus  <version>
 
 Tools:
-  vite             <version>
-  rolldown         <version>
-  vitest           <version>
-  oxfmt            <version>
-  oxlint           <version>
-  oxlint-tsgolint  <version>
-  tsdown           <version>
+  vite      <version>
+  rolldown  <version>
+  vitest    <version>
+  oxfmt     <version>
+  oxlint    <version>
+  tsrs      <version>
+  tsdown    <version>
 
 Environment:
   Package manager  pnpm <version>
