@@ -20,6 +20,8 @@ pub enum Os {
 pub enum Arch {
     X64,
     Arm64,
+    Ppc64,
+    Ppc64le,
 }
 
 impl Platform {
@@ -84,6 +86,8 @@ impl Arch {
     /// # Supported architectures
     /// - `x86_64` (`target_arch = "x86_64"`)
     /// - ARM64/AArch64 (`target_arch = "aarch64"`)
+    /// - PowerPC64 big-endian (`target_arch = "powerpc64"`, `target_endian = "big"`)
+    /// - PowerPC64 little-endian (`target_arch = "powerpc64"`, `target_endian = "little"`)
     ///
     /// Compilation will fail on unsupported architectures.
     #[must_use]
@@ -96,10 +100,22 @@ impl Arch {
         {
             Self::Arm64
         }
-        #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+        #[cfg(all(target_arch = "powerpc64", target_endian = "big"))]
+        {
+            Self::Ppc64
+        }
+        #[cfg(all(target_arch = "powerpc64", target_endian = "little"))]
+        {
+            Self::Ppc64le
+        }
+        #[cfg(not(any(
+            target_arch = "x86_64",
+            target_arch = "aarch64",
+            target_arch = "powerpc64"
+        )))]
         {
             compile_error!(
-                "Unsupported CPU architecture. vp_js_runtime only supports x86_64 and aarch64."
+                "Unsupported CPU architecture. vp_js_runtime only supports x86_64, aarch64, and powerpc64."
             )
         }
     }
@@ -110,6 +126,8 @@ impl fmt::Display for Arch {
         match self {
             Self::X64 => write!(f, "x64"),
             Self::Arm64 => write!(f, "arm64"),
+            Self::Ppc64 => write!(f, "ppc64"),
+            Self::Ppc64le => write!(f, "ppc64le"),
         }
     }
 }
@@ -136,6 +154,8 @@ mod tests {
         let cases = [
             (Platform { os: Os::Linux, arch: Arch::X64 }, "linux-x64"),
             (Platform { os: Os::Linux, arch: Arch::Arm64 }, "linux-arm64"),
+            (Platform { os: Os::Linux, arch: Arch::Ppc64 }, "linux-ppc64"),
+            (Platform { os: Os::Linux, arch: Arch::Ppc64le }, "linux-ppc64le"),
             (Platform { os: Os::Darwin, arch: Arch::X64 }, "darwin-x64"),
             (Platform { os: Os::Darwin, arch: Arch::Arm64 }, "darwin-arm64"),
             (Platform { os: Os::Windows, arch: Arch::X64 }, "windows-x64"),
