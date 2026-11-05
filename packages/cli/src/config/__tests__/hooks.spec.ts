@@ -213,6 +213,126 @@ describe('install', () => {
     }
   });
 
+  it.each([
+    ['.husky', 'reference-transaction'],
+    ['.husky', 'post-index-change'],
+    ['.husky', 'custom-hook'],
+    ['.husky/_', 'reference-transaction'],
+    ['.husky/_', 'post-index-change'],
+    ['.husky/_', 'custom-hook'],
+  ])('preserves an existing %s/%s hook outside the supported-name list', (hooksPath, hook) => {
+    const tmp = mkdtempSync(join(tmpdir(), 'hooks-other-husky-hook-'));
+    const originalCwd = process.cwd();
+    try {
+      execFileSync('git', ['init'], { cwd: tmp, stdio: 'ignore' });
+      execFileSync('git', ['config', 'core.hooksPath', hooksPath], { cwd: tmp });
+      writeFileSync(join(tmp, 'package.json'), '{}');
+      mkdirSync(join(tmp, '.vite-hooks'));
+      writeFileSync(join(tmp, '.vite-hooks', 'pre-commit'), 'exit 0\n');
+      mkdirSync(join(tmp, hooksPath), { recursive: true });
+      const oldHook = join(tmp, hooksPath, hook);
+      writeFileSync(oldHook, '#!/bin/sh\necho "original hook rejected" >&2\nexit 1\n');
+      chmodSync(oldHook, 0o755);
+      process.chdir(tmp);
+
+      const runHook = () => spawnSync('git', ['hook', 'run', hook], { encoding: 'utf8' });
+      expect(runHook().status).toBe(1);
+      expect(install()).toEqual({
+        message: `core.hooksPath is already set to "${hooksPath}", skipping`,
+        isError: false,
+      });
+      const after = runHook();
+      expect(after.status).toBe(1);
+      expect(after.stderr).toContain('original hook rejected');
+      expect(existsSync(join(tmp, '.vite-hooks', '_'))).toBe(false);
+    } finally {
+      process.chdir(originalCwd);
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it.each(['original', 'linked'])(
+    'does not replace shared Husky config from a migrated %s worktree',
+    (migratedWorktree) => {
+      const tmp = mkdtempSync(join(tmpdir(), 'hooks-husky-shared-config-'));
+      const original = join(tmp, 'original');
+      const linked = join(tmp, 'linked');
+      const originalCwd = process.cwd();
+      try {
+        mkdirSync(original);
+        execFileSync('git', ['init'], { cwd: original, stdio: 'ignore' });
+        execFileSync(
+          'git',
+          [
+            '-c',
+            'user.name=Test',
+            '-c',
+            'user.email=test@example.invalid',
+            '-c',
+            'commit.gpgsign=false',
+            'commit',
+            '--allow-empty',
+            '-m',
+            'initial',
+          ],
+          { cwd: original, stdio: 'ignore' },
+        );
+        execFileSync('git', ['worktree', 'add', '-b', 'linked', linked], {
+          cwd: original,
+          stdio: 'ignore',
+        });
+        const migrated = migratedWorktree === 'original' ? original : linked;
+        const unmigrated = migratedWorktree === 'original' ? linked : original;
+        execFileSync('git', ['config', '--local', 'core.hooksPath', '.husky'], { cwd: original });
+        writeFileSync(join(migrated, 'package.json'), '{}');
+        mkdirSync(join(migrated, '.vite-hooks'));
+        writeFileSync(join(migrated, '.vite-hooks', 'pre-commit'), 'exit 0\n');
+        writeFileSync(
+          join(unmigrated, 'package.json'),
+          JSON.stringify({ devDependencies: { husky: '*' } }),
+        );
+        mkdirSync(join(unmigrated, '.husky'));
+        const oldHook = join(unmigrated, '.husky', 'pre-commit');
+        writeFileSync(oldHook, '#!/bin/sh\necho "unmigrated hook rejected" >&2\nexit 1\n');
+        chmodSync(oldHook, 0o755);
+        const commit = () =>
+          spawnSync(
+            'git',
+            [
+              '-c',
+              'user.name=Test',
+              '-c',
+              'user.email=test@example.invalid',
+              '-c',
+              'commit.gpgsign=false',
+              'commit',
+              '--allow-empty',
+              '-m',
+              'rejected',
+            ],
+            { cwd: unmigrated, encoding: 'utf8' },
+          );
+        expect(commit().status).toBe(1);
+        process.chdir(migrated);
+
+        expect(install()).toEqual({
+          message: 'core.hooksPath is already set to ".husky", skipping',
+          isError: false,
+        });
+        expect(
+          execFileSync('git', ['config', '--local', 'core.hooksPath'], { encoding: 'utf8' }).trim(),
+        ).toBe('.husky');
+        const after = commit();
+        expect(after.status).toBe(1);
+        expect(after.stderr).toContain('unmigrated hook rejected');
+        expect(existsSync(join(migrated, '.vite-hooks', '_'))).toBe(false);
+      } finally {
+        process.chdir(originalCwd);
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    },
+  );
+
   it.skipIf(process.platform === 'win32').each(['.husky', '.husky/_'])(
     'preserves a symlinked Husky directory at %s',
     (linkedDir) => {

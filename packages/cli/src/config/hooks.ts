@@ -519,15 +519,35 @@ function canReplaceStaleHuskyPath(hooksPath: string, location: HooksLocation): b
   if (scoped.status !== 0 || !scoped.stdout.toString().startsWith('local\t')) {
     return false;
   }
+  // Local config is shared by linked worktrees. Inspecting only this checkout
+  // cannot establish whether the others have also migrated away from Husky.
+  const worktrees = spawnSync('git', ['worktree', 'list', '--porcelain', '-z']);
+  if (
+    worktrees.status !== 0 ||
+    worktrees.stdout
+      .toString()
+      .split('\0')
+      .filter((field) => field.startsWith('worktree ')).length !== 1
+  ) {
+    return false;
+  }
   try {
     const huskyDir = join(location.toplevel, '.husky');
     const huskyStats = lstatSync(huskyDir, { throwIfNoEntry: false });
+    const dispatcherDir = join(huskyDir, '_');
+    const dispatcherStats = lstatSync(dispatcherDir, { throwIfNoEntry: false });
     if (
       (huskyStats && (!huskyStats.isDirectory() || huskyStats.isSymbolicLink())) ||
-      lstatSync(join(huskyDir, '_'), { throwIfNoEntry: false })?.isSymbolicLink() ||
-      SUPPORTED_GIT_HOOK_NAMES.some((hook) =>
-        lstatSync(join(huskyDir, hook), { throwIfNoEntry: false }),
-      )
+      (dispatcherStats && (!dispatcherStats.isDirectory() || dispatcherStats.isSymbolicLink()))
+    ) {
+      return false;
+    }
+    // Git can execute hook names outside Vite+'s supported set (including
+    // arbitrary names through `git hook run`). Only ignore generated files.
+    const generatedFiles = new Set(['h', 'husky.sh', '.gitignore', ...SUPPORTED_GIT_HOOK_NAMES]);
+    if (
+      (huskyStats && readdirSync(huskyDir).some((name) => name !== '_')) ||
+      (dispatcherStats && readdirSync(dispatcherDir).some((name) => !generatedFiles.has(name)))
     ) {
       return false;
     }
