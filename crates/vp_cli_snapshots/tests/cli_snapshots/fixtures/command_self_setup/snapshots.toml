@@ -25,6 +25,22 @@ steps = [
 ]
 
 [[case]]
+name = "command_self_setup_env_forbidden_in_place"
+vp = "global"
+skip-platforms = ["windows"]
+env = { VP_SELF_SETUP_NO_MODIFY_PATH = "1", NPM_CONFIG_REGISTRY = "http://127.0.0.1:9" }
+steps = [
+  { argv = ["vpt", "rm", "$VP_HOME/current/bin/.vp-setup-complete"], comment = "An interrupted upgrade left the active installation unmarked", snapshot = false },
+  { argv = ["vpt", "write-file", "$VP_HOME/current/bin/vp-install-lock.yaml", "release lockfile\n"], comment = "The release lockfile is present, so setup would restore it into the installation", snapshot = false },
+  { argv = ["vpt", "write-file", "$VP_HOME/current/node_modules/.vp-install-complete", "stale receipt\n"], comment = "A stale receipt makes setup reinstall the dependencies", snapshot = false },
+  { argv = ["vpt", "write-file", "$VP_HOME/current/pnpm-lock.yaml", "existing lockfile\n"], snapshot = false },
+  { argv = ["vp", "--help"], envs = [["VP_ENV_FORBIDDEN", "1"], ["PATH", "${VP_HOME}/bin"]], comment = "With only the Vite+ shims on PATH, setup fails before it prepares the lockfile", continue-on-failure = true },
+  ["vpt", "print-file", "$VP_HOME/current/node_modules/.vp-install-complete"],
+  ["vpt", "print-file", "$VP_HOME/current/pnpm-lock.yaml"],
+  ["vpt", "stat-file", "$VP_HOME/current/bin/.vp-setup-complete", "--assert", "missing"],
+]
+
+[[case]]
 name = "command_self_setup_handoff"
 vp = "global"
 requires = ["bash"]

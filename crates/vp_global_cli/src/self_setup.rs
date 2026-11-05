@@ -256,6 +256,36 @@ async fn run(
         return Err(Error::Other("Invalid local installation version".into()));
     }
 
+    // VP_ENV_FORBIDDEN=1 installs with the system node and pnpm. Check them before
+    // changing anything: a same-version reinstall reuses the active directory, and
+    // Homebrew setup saves preferences and creates its package directory below.
+    let system_tools = if env.env_forbidden && !skip_deps && !bundled {
+        let source = AbsolutePathBuf::new(source.to_path_buf()).ok_or(Error::CliBinaryNotFound)?;
+        let installs = if let Some(package) = user_package {
+            !external::package_complete(&source, package).await?
+        } else if deploy {
+            true
+        } else {
+            // An in-place setup completes the version directory it runs from. Missing or
+            // stale installation receipts reinstall, as the lockfile preparation below decides.
+            let version_dir = source.parent().and_then(|bin| bin.parent());
+            match version_dir {
+                Some(version_dir) => {
+                    !version_dir.join("node_modules/vite-plus/package.json").as_path().is_file()
+                        || !vp_setup::lockfile::is_complete(&source, version_dir).await?
+                }
+                None => true,
+            }
+        };
+        if installs {
+            Some(install::system_install_tools(Some(&runtime::cli_node_range())).await?)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
     // 1. Prepare the payload before activating it. Upgrade has already done this in the in-place case.
     let previous_version = install::read_current_version(&dirs.data).await;
     let version_dir = if let Some(package) = user_package {
@@ -277,19 +307,6 @@ async fn run(
         AbsolutePathBuf::new(source.to_path_buf()).ok_or(Error::CliBinaryNotFound)?
     } else {
         version_dir.join("bin").join(VP_BINARY_NAME)
-    };
-    // VP_ENV_FORBIDDEN=1 installs with the system node and pnpm. Check them before
-    // touching the installation: a same-version reinstall reuses the active directory.
-    // Homebrew packages are checked before their dependency installation.
-    let system_tools = if env.env_forbidden
-        && !skip_deps
-        && !bundled
-        && user_package.is_none()
-        && (deploy || !version_dir.join("node_modules/vite-plus/package.json").as_path().is_file())
-    {
-        Some(install::system_install_tools(Some(&runtime::cli_node_range())).await?)
-    } else {
-        None
     };
     if deploy {
         tokio::fs::create_dir_all(version_dir.join("bin")).await?;
@@ -323,8 +340,7 @@ async fn run(
         output::info(&format!("installing vite-plus@{version}..."));
         install::generate_wrapper_package_json(&version_dir, version).await?;
         if !skip_deps && env.env_forbidden {
-            // Checked above unless the dependencies looked complete or Homebrew owns the
-            // package; check them now.
+            // Normally checked above, before any change; check now if that was skipped.
             let tools = match system_tools {
                 Some(tools) => tools,
                 None => install::system_install_tools(Some(&runtime::cli_node_range())).await?,
