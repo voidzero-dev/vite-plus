@@ -603,6 +603,42 @@ fn should_suppress_header_for_subcommand(command: &str, args: &[String]) -> bool
     }
 }
 
+fn is_valid_task_name(name: &str) -> bool {
+    let script = name.split_once('#').map_or(name, |(_, s)| s);
+    !name.starts_with('#')
+        && !script.is_empty()
+        && !script.starts_with('#')
+        && !script.starts_with("//")
+        && !name.contains(char::is_whitespace)
+}
+
+pub(crate) fn sanitize_task_current_prefix(current: &OsStr) -> String {
+    current
+        .to_string_lossy()
+        .replace("\\#", "#")
+        .replace("\\:", ":")
+        .trim_matches(|c| c == '"' || c == '\'')
+        .to_string()
+}
+
+pub(crate) fn parse_task_completion_lines(
+    stdout: &str,
+    current: &str,
+) -> Vec<clap_complete::CompletionCandidate> {
+    stdout
+        .lines()
+        .filter_map(|line| line.split_once(": "))
+        .map(|(name, desc)| (name.trim(), desc.trim()))
+        .filter(|(name, _)| {
+            is_valid_task_name(name) && (current.is_empty() || name.starts_with(current))
+        })
+        .map(|(name, desc)| {
+            clap_complete::CompletionCandidate::new(name.to_string())
+                .help((!desc.is_empty()).then(|| desc.to_string().into()))
+        })
+        .collect()
+}
+
 /// Get available tasks for shell completion.
 ///
 /// Delegates to the local vite-plus CLI to run `vp run` without arguments,
@@ -612,12 +648,7 @@ fn run_tasks_completions(current: &OsStr) -> Vec<clap_complete::CompletionCandid
         return vec![];
     };
 
-    // Unescape hashtag and trim quotes for better matching
-    let current = current
-        .to_string_lossy()
-        .replace("\\#", "#")
-        .trim_matches(|c| c == '"' || c == '\'')
-        .to_string();
+    let current = sanitize_task_current_prefix(current);
 
     let output = tokio::task::block_in_place(|| {
         Runtime::new().ok().and_then(|rt| {
@@ -628,13 +659,8 @@ fn run_tasks_completions(current: &OsStr) -> Vec<clap_complete::CompletionCandid
     output
         .filter(|o| o.status.success())
         .map(|output| {
-            String::from_utf8_lossy(&output.stdout)
-                .lines()
-                .filter_map(|line| line.split_once(": ").map(|(name, _)| name.trim()))
-                .filter(|name| !name.is_empty())
-                .filter(|name| name.starts_with(&current) || current.is_empty())
-                .map(|name| clap_complete::CompletionCandidate::new(name.to_string()))
-                .collect()
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            parse_task_completion_lines(&stdout, &current)
         })
         .unwrap_or_default()
 }
@@ -1386,6 +1412,54 @@ mod tests {
             );
             assert_eq!(cmd.find_subcommand(alias).unwrap().get_name(), name);
         }
+    }
+
+    #[test]
+    fn test_sanitize_task_current_prefix() {
+        use std::ffi::OsStr;
+        for (input, expected) in [
+            ("test\\:u", "test:u"),
+            ("pkg\\#test\\:u", "pkg#test:u"),
+            ("'test:unit'", "test:unit"),
+            ("\"pkg#build\"", "pkg#build"),
+        ] {
+            assert_eq!(super::sanitize_task_current_prefix(OsStr::new(input)), expected);
+        }
+    }
+
+    #[test]
+    fn test_parse_task_completion_lines() {
+        let stdout = concat!(
+            "  build: Run project build: vite build --mode:prod\n",
+            "  test:unit: Run unit tests\n",
+            "  pkg#test:unit: Workspace unit tests\n",
+            "  //: Root comment\n",
+            "  pkg#//: Workspace comment\n",
+            "  rolldown## Scrips for docs #: echo 1\n",
+            "# Global comment: echo 2\n",
+            "  invalid task with spaces: echo 3\n",
+            "  empty_desc: \n",
+        );
+
+        let complete = |cur| {
+            super::parse_task_completion_lines(stdout, cur)
+                .into_iter()
+                .map(|c| c.get_value().to_string_lossy().to_string())
+                .collect::<Vec<_>>()
+        };
+
+        // Comments and space-separated task names are filtered
+        assert_eq!(complete(""), vec!["build", "test:unit", "pkg#test:unit", "empty_desc"]);
+        assert_eq!(complete("test:"), vec!["test:unit"]);
+        assert!(complete("nonexistent").is_empty());
+
+        // Help descriptions: colons preserved and empty desc omitted
+        let all = super::parse_task_completion_lines(stdout, "");
+        assert_eq!(
+            all[0].get_help().map(|h| h.to_string()),
+            Some("Run project build: vite build --mode:prod".into())
+        );
+        assert_eq!(all[3].get_help(), None);
     }
 
     #[test]
