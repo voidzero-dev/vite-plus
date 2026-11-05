@@ -40,7 +40,7 @@ When transitioning to Vite+, projects typically use standalone tools like vite, 
 - ✅ **Configuration files**:
   - .oxlintrc → vite.config.ts (lint section)
   - .oxfmtrc → vite.config.ts (format section)
-- ✅ **tsconfig.json cleanup**: Removes deprecated `esModuleInterop: false` (causes oxlint tsgolint errors)
+- ✅ **tsconfig.json cleanup**: Removes deprecated `esModuleInterop: false` (causes Oxlint type-aware backend errors)
 
 **What this command optionally migrates** (prompted):
 
