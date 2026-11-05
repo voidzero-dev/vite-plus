@@ -283,6 +283,10 @@ where
             fspy::PathAccess::Write(path) => (path, AccessMode::WRITE),
             fspy::PathAccess::ReadWrite(path) => (path, AccessMode::READ | AccessMode::WRITE),
             fspy::PathAccess::ReadDir(path) => (path, AccessMode::READ_DIR),
+            // A rename's new path and a made folder are put there without being read.
+            fspy::PathAccess::RenameTarget(path) | fspy::PathAccess::Mkdir(path) => {
+                (path, AccessMode::WRITE)
+            }
         };
         let relative_path = ipc_path
             .strip_path_prefix(cwd, |strip_result| {
