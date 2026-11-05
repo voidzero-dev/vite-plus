@@ -49,18 +49,20 @@ We recommend enabling both `typeAware` and `typeCheck` in the `lint` block:
 - `typeAware: true` enables rules that require TypeScript type information
 - `typeCheck: true` enables full type checking during linting
 
-This path is powered by [tsgolint](https://github.com/oxc-project/tsgolint) on top of the TypeScript 7 (aka TypeScript Go) toolchain. It gives Oxlint access to type information and allows type checking directly via `vp lint` and `vp check`.
+This experimental build uses [tsrs](https://github.com/oxc-project/tsrs), a Rust port of the TypeScript 7 compiler. Its `tsrs-lint` executable gives Oxlint access to type information and allows type checking directly via `vp lint` and `vp check`.
 
-### Try the experimental Rust backend
+### Select another backend
 
-To try the Rust backend, install `tsrs` in your project and point Oxlint at the `tsrs-lint` executable. Run these commands from the project root.
+The bundled `tsrs-lint` runs by default. To compare it with [tsgolint](https://github.com/oxc-project/tsgolint), install the Go backend and set `OXLINT_TSGOLINT_PATH`. Run these commands from the project root.
 
 ```sh
-vp add -D tsrs
-OXLINT_TSGOLINT_PATH="$PWD/node_modules/.bin/tsrs-lint" vp lint --type-aware --type-check
+vp add -D oxlint-tsgolint
+OXLINT_TSGOLINT_PATH="$PWD/node_modules/.bin/tsgolint" vp lint --type-aware --type-check
 ```
 
-The same environment variable works with `vp check` when type-aware linting is enabled. Omit it to use the bundled tsgolint again.
+The same environment variable works with `vp check` when type-aware linting is enabled. Omit it to use the bundled tsrs again. You can also point it at another `tsrs-lint` installation.
+
+The pinned `tsrs` release does not provide a Windows ARM64 binary. This experimental replacement does not support that platform yet.
 
 ## JS Plugins
 
