@@ -67,6 +67,7 @@ catalog:
   source-map: 0.8.0
   tinyglobby: ^0.2.15
   tsdown: ^0.23.4
+  tsrs: =0.21.0-ts7.1.0-beta
   typescript: ~7.0.2
   valibot: 1.5.0
   validate-npm-package-name: ^8.0.0
@@ -94,6 +95,7 @@ minimumReleaseAgeExclude:
   - '@oxlint/*'
   - '@rolldown/*'
   - '@tsdown/*'
+  - '@tsrs/*'
   - '@types/*'
   - '@vitejs/*'
   - '@vitest/*'
@@ -119,6 +121,7 @@ minimumReleaseAgeExclude:
   - rolldown-plugin-dts
   - tinyexec
   - tsdown
+  - tsrs
   - tsx
   - unrun
   - verkit

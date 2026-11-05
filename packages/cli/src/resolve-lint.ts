@@ -13,10 +13,10 @@
 
 import { dirname, join } from 'node:path';
 
-import { CONFIG_METADATA_ENV, DEFAULT_ENVS, resolve } from './utils/constants.ts';
-import { resolveTsgolintExecutable } from './utils/tsgolint-path.ts';
+import { CONFIG_METADATA_ENV, DEFAULT_ENVS, resolve, resolveBundled } from './utils/constants.ts';
+import { resolveLintBackendExecutable } from './utils/lint-backend-path.ts';
 
-export { resolveWindowsTsgolintExecutable } from './utils/tsgolint-path.ts';
+export { resolveWindowsLintBackendExecutable } from './utils/lint-backend-path.ts';
 
 /**
  * Resolves the oxlint binary path and environment variables.
@@ -40,16 +40,17 @@ export async function lint(): Promise<{
   const oxlintMainPath = resolve('oxlint');
   const oxlintPackageRoot = dirname(dirname(oxlintMainPath));
   const binPath = join(oxlintPackageRoot, 'bin', 'oxlint');
-  const oxlintTsgolintPath = resolveTsgolintExecutable(
-    resolve('oxlint-tsgolint/bin/tsgolint'),
+  const tsrsLintPath = resolveLintBackendExecutable(
+    join(dirname(resolveBundled('tsrs/package.json')), 'bin', 'tsrs-lint'),
     import.meta.url,
+    'tsrs-lint',
   );
   const result = {
     binPath,
     // TODO: provide envs inference API
     envs: {
       ...DEFAULT_ENVS,
-      OXLINT_TSGOLINT_PATH: oxlintTsgolintPath,
+      OXLINT_TSGOLINT_PATH: tsrsLintPath,
       // oxlint loads vite.config.ts only to read the `lint` block, so skip the
       // user's Vite plugin factory (lazyPlugins) while it evaluates the config.
       [CONFIG_METADATA_ENV]: '1',
