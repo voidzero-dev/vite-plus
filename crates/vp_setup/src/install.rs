@@ -200,7 +200,17 @@ const INSTALL_FAILURE_DIAGNOSTICS: &[(&str, &str)] = &[
     ("EPERM", "Check permissions for the Vite+ data and cache directories."),
 ];
 
-fn install_failure_log(exit_code: i32, stdout: &[u8], stderr: &[u8]) -> String {
+/// Lockfile errors from the system pnpm (`VP_ENV_FORBIDDEN=1`) are not fixed by a
+/// newer Vite+ release: that pnpm may not read the pinned pnpm's lockfile.
+const SYSTEM_PNPM_LOCKFILE_DIAGNOSTICS: &[&str] =
+    &["ERR_PNPM_OUTDATED_LOCKFILE", "ERR_PNPM_LOCKFILE_BREAKING_CHANGE"];
+
+fn install_failure_log(
+    exit_code: i32,
+    lockfile_bypass: bool,
+    stdout: &[u8],
+    stderr: &[u8],
+) -> String {
     let mut content = format!(
         "Stage: production dependency installation.\npnpm install failed with exit code {exit_code}.\n"
     );
@@ -213,7 +223,14 @@ fn install_failure_log(exit_code: i32, stdout: &[u8], stderr: &[u8]) -> String {
         });
         if reported {
             recognized = true;
-            content.push_str(&format!("Reported error: {code}.\n{hint}\n"));
+            if lockfile_bypass && SYSTEM_PNPM_LOCKFILE_DIAGNOSTICS.contains(code) {
+                content.push_str(&format!(
+                    "Reported error: {code}.\nThe system pnpm cannot use the installation lockfile. Retry with {}=1.\n",
+                    vp_shared::env_vars::VP_SETUP_SKIP_INSTALL_LOCKFILE
+                ));
+            } else {
+                content.push_str(&format!("Reported error: {code}.\n{hint}\n"));
+            }
         }
     }
     if !recognized {
@@ -229,18 +246,21 @@ fn install_failure_log(exit_code: i32, stdout: &[u8], stderr: &[u8]) -> String {
 ///
 /// The log is written to the **parent** of `version_dir` (i.e. `<DATA>/upgrade.log`)
 /// so it survives the cleanup that removes `version_dir` on failure.
+/// `lockfile_bypass` points lockfile errors to `VP_SETUP_SKIP_INSTALL_LOCKFILE=1`,
+/// for the system pnpm with the installation lockfile.
 ///
 /// Returns the log file path on success, or `None` if writing failed.
 pub async fn write_upgrade_log(
     version_dir: &AbsolutePath,
     exit_code: i32,
+    lockfile_bypass: bool,
     stdout: &[u8],
     stderr: &[u8],
 ) -> Option<AbsolutePathBuf> {
     // Write to parent dir so the log survives version_dir cleanup on failure
     let parent = version_dir.as_path().parent()?;
     let log_path = AbsolutePathBuf::new(parent.join("upgrade.log"))?;
-    let content = install_failure_log(exit_code, stdout, stderr);
+    let content = install_failure_log(exit_code, lockfile_bypass, stdout, stderr);
     match tokio::fs::write(&log_path, &content).await {
         Ok(()) => Some(log_path),
         Err(e) => {
@@ -416,10 +436,18 @@ pub async fn install_production_deps(
 
     if !output.status.success() {
         let exit_code = vp_shared::exit_code_from_status(output.status);
-        let log_path =
-            write_upgrade_log(version_dir, exit_code, &output.stdout, &output.stderr).await;
+        // The system pnpm may not read the installation lockfile; the bypass resolves again.
+        let lockfile_bypass = system.is_some() && args.contains(&"--frozen-lockfile");
+        let log_path = write_upgrade_log(
+            version_dir,
+            exit_code,
+            lockfile_bypass,
+            &output.stdout,
+            &output.stderr,
+        )
+        .await;
         let mut message = format_install_failure_message(exit_code, log_path.as_ref());
-        if system.is_some() && args.contains(&"--frozen-lockfile") {
+        if lockfile_bypass {
             message.push_str(&format!(
                 ". If the system pnpm cannot use the installation lockfile, retry with {}=1",
                 vp_shared::env_vars::VP_SETUP_SKIP_INSTALL_LOCKFILE
@@ -1318,7 +1346,7 @@ mod tests {
         let version_dir = AbsolutePathBuf::new(temp.path().join("0.1.15").to_path_buf()).unwrap();
         tokio::fs::create_dir(&version_dir).await.unwrap();
 
-        let result = write_upgrade_log(&version_dir, 17, b"", b"ENOSPC: private path").await;
+        let result = write_upgrade_log(&version_dir, 17, false, b"", b"ENOSPC: private path").await;
         assert!(result.is_some(), "write_upgrade_log should return log path");
 
         let log_path = result.unwrap();
@@ -1353,7 +1381,7 @@ mod tests {
                 "{code}: https://private-user:private-password@registry.example.test/private-package?token=private-token\nAuthorization: Bearer private-bearer\n_authToken=private-config-token\n"
             );
             for (stdout, stderr) in [(output.as_bytes(), &[][..]), (&[][..], output.as_bytes())] {
-                let content = install_failure_log(1, stdout, stderr);
+                let content = install_failure_log(1, false, stdout, stderr);
                 assert!(content.contains("Stage: production dependency installation."));
                 assert!(content.contains("exit code 1"));
                 assert!(content.contains(&format!("Reported error: {code}.")));
@@ -1370,9 +1398,28 @@ mod tests {
     }
 
     #[test]
+    fn install_failure_log_points_the_system_pnpm_to_the_lockfile_bypass() {
+        for code in SYSTEM_PNPM_LOCKFILE_DIAGNOSTICS {
+            let output = format!("{code}: private detail");
+            let managed = install_failure_log(1, false, output.as_bytes(), b"");
+            assert!(managed.contains("Retry with an updated Vite+ release."), "{managed}");
+            assert!(!managed.contains("VP_SETUP_SKIP_INSTALL_LOCKFILE"), "{managed}");
+            let system = install_failure_log(1, true, output.as_bytes(), b"");
+            assert!(system.contains(&format!("Reported error: {code}.")), "{system}");
+            assert!(system.contains("Retry with VP_SETUP_SKIP_INSTALL_LOCKFILE=1."), "{system}");
+            assert!(!system.contains("updated Vite+ release"), "{system}");
+            assert!(!system.contains("private"), "{system}");
+        }
+        // Other hints do not depend on the pnpm.
+        let system = install_failure_log(1, true, b"ENOSPC", b"");
+        assert!(system.contains("Free disk space before retrying the command."), "{system}");
+    }
+
+    #[test]
     fn install_failure_log_deduplicates_known_codes_from_both_streams() {
         let content = install_failure_log(
             1,
+            false,
             b"ERR_PNPM_FETCH_401 Unauthorized\nERR_PNPM_FETCH_401 Unauthorized",
             b"ENOSPC: no space\nERR_PNPM_FETCH_401 Unauthorized",
         );
@@ -1388,7 +1435,7 @@ mod tests {
             b"PREFIX_ERR_PNPM_FETCH_401 ERR_PNPM_FETCH_401_PRIVATE ENOSPC_PRIVATE",
             b"\xff\xfeprivate-token",
         ] {
-            let content = install_failure_log(1, output, output);
+            let content = install_failure_log(1, false, output, output);
             assert!(content.contains("No recognized error identifier was reported."));
             assert!(!content.contains("Reported error:"));
             assert!(!content.contains("private"));
