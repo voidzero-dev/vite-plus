@@ -225,8 +225,9 @@ and measurement conditions.
 
 The pinned tsrs release has no Windows ARM64 binary. This draft adds no automatic
 Go fallback. A release for all supported Vite+ platforms needs an upstream
-Windows ARM64 binary or an explicit fallback. Runtime smoke tests currently
-cover macOS ARM64; other platforms still need runtime validation.
+Windows ARM64 binary or an explicit fallback. Runtime smoke tests cover macOS
+ARM64. The Codespaces comparison also validates both backends on Linux x64
+with Vite+ and vinext. Other platforms still need runtime validation.
 
 The backend switch preserves the existing formatting phase, lint configuration,
 and failure handling. Smoke fixtures compare diagnostics, suppression comments,

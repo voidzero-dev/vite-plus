@@ -1,0 +1,46 @@
+{
+  "stages": [
+    {
+      "name": "setup",
+      "script": "setup.sh",
+      "inputs": {
+        "workspace": [
+          "pnpm-lock.yaml",
+          "pnpm-workspace.yaml",
+          "packages/cli/package.json",
+          "packages/tools/.upstream-versions.json"
+        ],
+        "inputs": ["setup.py", "verify-setup.py", "rfcs.patch"]
+      },
+      "outputs": {
+        "env": ["setup-receipt.json", "bench-config.json"]
+      },
+      "verify": "verify-setup.sh"
+    },
+    {
+      "name": "docs",
+      "script": "docs.sh",
+      "inputs": {
+        "workspace": ["docs/package.json", "docs/pnpm-lock.yaml", "docs/pnpm-workspace.yaml"],
+        "inputs": ["docs.py"],
+        "env": ["setup-receipt.json"]
+      }
+    },
+    {
+      "name": "validate",
+      "script": "validate.sh",
+      "inputs": {
+        "inputs": ["bench.py"],
+        "env": ["setup-receipt.json", "bench-config.json"]
+      }
+    },
+    {
+      "name": "benchmark",
+      "script": "run.sh",
+      "inputs": {
+        "inputs": ["bench.py"],
+        "env": ["setup-receipt.json", "bench-config.json"]
+      }
+    }
+  ]
+}
