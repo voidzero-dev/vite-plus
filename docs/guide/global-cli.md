@@ -71,6 +71,8 @@ irm https://vite.plus/ps1 | iex
 
 On Windows, you can instead download and run [`vp-setup.exe`](https://setup.viteplus.dev).
 
+For macOS and Linux, see the [Homebrew tap guide](/guide/homebrew) for installation instructions.
+
 The installer uses the Node.js version pinned in the Vite+ repository's [`.node-version`](https://github.com/voidzero-dev/vite-plus/blob/main/.node-version) to install its JavaScript dependencies. Each Vite+ release embeds this version at build time. Development and CI use the same file, which the dependency-upgrade workflow keeps up to date. CI integrations can select another compatible version through [`VP_SETUP_NODE_VERSION`](#vp-setup-node-version).
 
 After installation, open a new shell and run:
@@ -426,7 +428,7 @@ For example, `VP_VERSION=1.0.0 vp-setup.exe --version 2.0.0` installs version 2.
 
 ### Homebrew
 
-For a Homebrew installation, the first `vp` command sets up your shell, shims, and environment-management preferences. It reuses Homebrew's binary and bundled JavaScript. Setup stores its completion state in your user directories and does not need write access to the Homebrew prefix.
+The [official Homebrew tap](/guide/homebrew) installs the native CLI. The first `vp` command installs matching JavaScript dependencies in your data directory and sets up your shell, shims, and environment-management preferences. Setup stores its state in your directories without writing to the Homebrew prefix.
 
 Later commands reuse that setup while the installed binary remains unchanged. Generated shims follow Homebrew's public `vp` entrypoint when Homebrew replaces a version. Setup preserves your saved management preferences during this replacement.
 
@@ -436,11 +438,13 @@ To prefer your existing Node.js and package managers during the first run, use:
 VP_NODE_MANAGER=no VP_PM_MANAGER=no vp help
 ```
 
-After setup, use `vp env off` to change this preference. Commands that need missing runtimes or project dependencies can still download them.
+After setup, use `vp env off` to change this preference. The tap still prepares its pinned Node.js and pnpm to install CLI dependencies. Commands that need missing runtimes or project dependencies can also download them.
 
 Use Homebrew to [upgrade](/guide/upgrade#homebrew) or [remove](/guide/implode#homebrew) its package.
 
-`vp env doctor` identifies the Homebrew installation and its binary path. It checks the `vp` command and the user shim directory on `PATH` separately. If only the shim directory is missing, follow its shell setup instructions to enable the shims.
+`vp env doctor` identifies the Homebrew source, formula name, and binary path. It checks the `vp` command and the user shim directory on `PATH` separately. If only the shim directory is missing, follow its shell setup instructions to enable the shims.
+
+See the [official tap guide](/guide/homebrew) for registry configuration and migration instructions.
 
 ## Use It Without a Local Package
 
@@ -481,7 +485,7 @@ To see which toolchain is selected for your current project, run `vp toolchain`.
 ## Next Steps
 
 - [Environment](/guide/env) covers Node.js and package-manager selection, pinning, shims, and managed installations.
-- [Package Management](/guide/package-management) covers pnpm, npm, Yarn, and Bun workflows.
+- [Package Management](/guide/package-management/) covers pnpm, npm, Yarn, and Bun workflows.
 - [Run](/guide/run) covers package scripts and cached workspace tasks.
 - [Upgrading Vite+](/guide/upgrade) explains global CLI upgrades. See [Update Vite+](/guide/upgrade-project) for project-local upgrades.
 - [Removing Vite+](/guide/implode) removes the global binary and its managed data.

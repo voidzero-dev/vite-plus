@@ -97,7 +97,7 @@ Environment overrides, mainly for CI:
 | `VP_SNAP_PACKAGES_DIR`        | Run-scoped directory for sharing packed packages across test processes                                  |
 | `VP_SNAP_ARTIFACTS_DIR`       | Directory for phase timings and failure diagnostics; unset disables artifacts                           |
 | `VP_SNAP_NEXTEST_CONFIG`      | With `--list`, write nextest overrides for the discovered isolated cases                                |
-| `VP_SNAP_PREWARM_MANIFEST`    | With `--list`, write a JSON array of Bun archive URLs derived from runnable cases                       |
+| `VP_SNAP_PREWARM_MANIFEST`    | With `--list`, write a JSON array of package-manager archive URLs derived from runnable cases           |
 | `VP_NODE_DIST_MIRROR`         | Node.js distribution mirror inherited by case commands; case and step overrides take precedence         |
 
 Windows CI generates its nextest configuration from the same case definitions.
@@ -142,16 +142,19 @@ including across nextest processes when `VP_SNAP_REGISTRY_CACHE_DIR` is set.
 Use a fresh directory per run; this is not a persistent dependency cache.
 Package-manager caches and installed packages remain isolated per case.
 
-Windows CI generates a prewarm manifest while listing cases, then passes it to
+CI generates a prewarm manifest while listing cases, then passes it to
 `local-npm-registry.ts --prewarm-manifest <file>` before starting test commands.
-The runner collects exact Bun pins from each case's package ancestry
-(`packageManager` and `devEngines.packageManager`), case/step environment overrides,
-`vpt json-edit` of package-manager declarations, `vpt write-file` of package files,
-and `vp env default/use/exec` arguments. Versions are deduplicated and archives
-match the runner platform, including the x64 baseline variant. Changing these
-fixture pins automatically updates preparation; CI contains no separate version list.
+The runner collects exact Bun pins and exact pnpm pins below version 12 from each
+case's package ancestry (`packageManager` and `devEngines.packageManager`), case
+and step environment overrides, `vpt json-edit` of package-manager declarations,
+`vpt write-file` of package files, and `vp env default/use/exec` arguments.
+Changing these fixture pins automatically updates preparation; CI contains no
+separate version list.
 
-Ignored and platform-excluded cases do not contribute pins. Set `prewarm-bun = false`
+Versions are deduplicated. Bun archives match the runner platform, including the
+x64 baseline variant. Native pnpm 12+ archives still use normal registry resolution.
+
+Ignored and platform-excluded cases do not contribute pins. Set `prewarm-package-managers = false`
 for fake installations and configuration-only cases. Script-generated pins must use
 declarative setup or environment overrides to participate; discovery does not execute
 scripts or scan assertions. Floating tags and version ranges retain normal registry
@@ -239,7 +242,7 @@ requires = ["bash"]           # "sh" | "bash" | "zsh" | "cmd" | "fish" | "nu" | 
 ignore = false                # true: only runs with `-- --ignored`
 serial = false                # true: run alone across cargo test/nextest workers
 seed-runtime = true           # false: start from an empty VP_HOME
-prewarm-bun = true            # false: fake install or configuration-only case
+prewarm-package-managers = true # false: fake install or configuration-only case
 link-node-modules = false     # true: expose the run-root node_modules as
                               #   the workspace's parent-dir node_modules,
                               #   for `../node_modules/vite-plus/...` paths
@@ -425,9 +428,9 @@ workspace a test runs in.
 
 Test servers must request port `0` so the OS selects an available port at bind
 time. Fixed ports can be reserved on Windows, where `EACCES` does not trigger
-Vite's port-in-use fallback. Vitest 5.0.4 replaces a plain `test.api.port: 0`
-with its default, including when it comes from `--api.port=0`. Set the port in
-a post-configuration hook instead; see
+Vite's port-in-use fallback. Vitest 5.1.0 supports `test.api.port: 0` directly.
+Set it in the browser project's test configuration or in the UI's API options;
+leave the API disabled for Node projects that do not need a server. See
 [`test_v5_browser_defines/config.mjs`](fixtures/test_v5_browser_defines/config.mjs)
 for independent, inherited, referenced, and injected projects, and
 [`test_v5_optional_packages/verify-ui.mjs`](fixtures/test_v5_optional_packages/verify-ui.mjs)

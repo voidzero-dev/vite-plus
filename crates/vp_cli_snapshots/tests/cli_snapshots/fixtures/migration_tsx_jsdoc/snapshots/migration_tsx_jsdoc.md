@@ -23,11 +23,11 @@ migration must not warn that use-editing.ts still uses tsx
 ```
 VITE+ - The Unified Toolchain for the Web
 
-● tsx scripts detected. Auto-migrating to vpx...
+● tsx scripts detected. Auto-migrating to Vite+...
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • 1 config update applied
-• tsx scripts migrated to `vpx`
+• tsx scripts migrated to Vite+
 ```
 
 ## `vpt print-file package.json`

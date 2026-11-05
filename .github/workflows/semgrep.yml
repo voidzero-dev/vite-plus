@@ -17,7 +17,7 @@ concurrency:
 jobs:
   semgrep:
     name: Semgrep
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     container:
       image: semgrep/semgrep:1.180.0
     steps:

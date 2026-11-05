@@ -1,6 +1,6 @@
 {
   "name": "vite-plus",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "The Unified Toolchain for the Web",
   "homepage": "https://viteplus.dev/guide",
   "bugs": {
@@ -32,7 +32,9 @@
     "templates"
   ],
   "type": "module",
-  "sideEffects": false,
+  "sideEffects": [
+    "./dist/register.js"
+  ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -85,6 +87,10 @@
       "types": "./dist/oxlint-plugin.d.ts"
     },
     "./package.json": "./package.json",
+    "./register": {
+      "types": "./dist/register.d.ts",
+      "default": "./dist/register.js"
+    },
     "./pack": {
       "types": "./dist/pack.d.ts",
       "import": "./dist/pack.js"

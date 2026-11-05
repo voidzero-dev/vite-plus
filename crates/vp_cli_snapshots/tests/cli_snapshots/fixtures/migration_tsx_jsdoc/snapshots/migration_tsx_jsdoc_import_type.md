@@ -12,11 +12,11 @@ a JSDoc import type still needs the tsx declarations
 ```
 VITE+ - The Unified Toolchain for the Web
 
-● tsx scripts detected. Auto-migrating to vpx...
+● tsx scripts detected. Auto-migrating to Vite+...
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • 1 config update applied
-• tsx scripts migrated to `vpx`
+• tsx scripts migrated to Vite+
 ! Warnings:
   - Kept the tsx devDependency in package.json: options.js still uses tsx.
 ```

@@ -40,13 +40,13 @@ jobs:
           - target: x86_64-apple-darwin
             os: macos-latest
           - target: aarch64-unknown-linux-gnu
-            os: ubuntu-24.04
+            os: ubuntu-latest
           - target: aarch64-unknown-linux-musl
-            os: ubuntu-24.04
+            os: ubuntu-latest
           - target: x86_64-unknown-linux-gnu
-            os: ubuntu-24.04
+            os: ubuntu-latest
           - target: x86_64-unknown-linux-musl
-            os: ubuntu-24.04
+            os: ubuntu-latest
           - target: x86_64-pc-windows-msvc
             os: namespace-profile-windows-4c-8g
           - target: aarch64-pc-windows-msvc
@@ -72,6 +72,8 @@ jobs:
           # the version that gets published/installed (the release version, or
           # 0.0.0-commit.<sha> for preview builds). Anchored to the line-start
           # `version = "..."` so crate dependency versions are never touched.
+          # Stable Homebrew formula updates run in release.yml after publication;
+          # preview stamps use HOMEBREW_VP_PR_VERSION without changing that formula.
           for f in crates/vp_global_cli/Cargo.toml packages/cli/binding/Cargo.toml; do
             # shellcheck disable=SC2016 # JavaScript expands process.env.VERSION.
             node -e 'const fs=require("fs"),f=process.argv[1];fs.writeFileSync(f,fs.readFileSync(f,"utf8").replace(/^version = "[^"]*"/m,`version = "${process.env.VERSION}"`))' "$f"

@@ -49,10 +49,8 @@ impl NpmConfig {
         if let Some(root) = project_root {
             load_npmrc(root.join(".npmrc"), &mut project_values);
         }
-        let user_config = env_value("userconfig")
-            .map(|path| expand_value(&path))
-            .or_else(|| project_values.get("userconfig").cloned())
-            .map(|path| config_path(&path, cwd))
+        let user_config = npm_user_config_path(cwd)
+            .or_else(|| project_values.get("userconfig").map(|path| config_path(path, cwd)))
             .unwrap_or_else(|| EnvConfig::get().user_home.join(".npmrc").into_path_buf());
         let mut user_values = HashMap::new();
         load_npmrc(user_config, &mut user_values);
@@ -91,6 +89,10 @@ impl NpmConfig {
             values.insert("registry".to_string(), expand_value(&registry));
         }
         Self { values }
+    }
+
+    pub(crate) fn set_registry(&mut self, registry: &str) {
+        self.values.insert("registry".to_string(), expand_value(registry));
     }
 
     pub(crate) fn registry_for_package(&self, package: &str) -> String {
@@ -372,6 +374,13 @@ fn parse_npmrc_value(value: &str) -> String {
 #[must_use]
 pub fn npm_registry_for_scope(cwd: &AbsolutePath, scope: Option<&str>) -> String {
     NpmConfig::load_for_cwd(cwd).registry_for_scope(scope)
+}
+
+/// Resolve an explicit `NPM_CONFIG_USERCONFIG` selector with npm variable and home expansion.
+/// When supplied, `cwd` anchors relative paths; otherwise they remain relative.
+#[must_use]
+pub fn npm_user_config_path(cwd: Option<&AbsolutePath>) -> Option<PathBuf> {
+    env_value("userconfig").map(|path| config_path(&expand_value(&path), cwd))
 }
 
 /// Resolve the `Authorization` header value npm would send to `url` from the npm config at `cwd`.

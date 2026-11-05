@@ -20,7 +20,7 @@ Options:
   -s, --silent          Suppress all output except the executed command's output
   -h, --help            Print help
 
-Documentation: https://viteplus.dev/guide/vpx
+Documentation: https://viteplus.dev/guide/package-management/dlx
 ```
 
 ## `TMPDIR=${workspace} vp dlx -s vp-test-echo hello`
