@@ -12,6 +12,8 @@
 #[cfg(unix)]
 mod backpressure_run;
 mod barrier;
+#[cfg(unix)]
+mod check_blocking;
 mod check_tty;
 mod chmod;
 mod cp;
@@ -65,7 +67,7 @@ fn main() {
     if args.len() < 2 {
         eprintln!("Usage: vpt <subcommand> [args...]");
         eprintln!(
-            "Subcommands: backpressure-run (Unix), barrier, check-tty, chmod, cp, exit, exit-on-ctrlc, grep-file, head-lines, json-edit, list-dir, mkdir, pipe-stdin, print, print-color, print-cwd, print-env, print-file, print-native-path, probe, read-stdin, replace-file-content, rm, stat-file, touch-file, write-file"
+            "Subcommands: backpressure-run (Unix), barrier, check-blocking (Unix), check-tty, chmod, cp, exit, exit-on-ctrlc, grep-file, head-lines, json-edit, list-dir, mkdir, pipe-stdin, print, print-color, print-cwd, print-env, print-file, print-native-path, probe, read-stdin, replace-file-content, rm, stat-file, touch-file, write-file"
         );
         std::process::exit(1);
     }
@@ -77,6 +79,8 @@ fn main() {
         #[cfg(unix)]
         "backpressure-run" => backpressure_run::run(&args[2..]),
         "barrier" => barrier::run(&args[2..]),
+        #[cfg(unix)]
+        "check-blocking" => check_blocking::run(),
         "check-tty" => {
             check_tty::run();
             Ok(())
