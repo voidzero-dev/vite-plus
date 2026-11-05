@@ -40,6 +40,6 @@ Vite+ toolchain (local)
 
 vite-plus@<version>
 ├── depends on @voidzero-dev/vite-plus-core@<version>
-├── depends on oxlint-tsgolint@<version>
+├── depends on tsrs@<version>
 └── compiles vite-task (built <build-time>, revision <revision>)
 ```
