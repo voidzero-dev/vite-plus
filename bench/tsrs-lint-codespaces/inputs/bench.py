@@ -186,7 +186,8 @@ def metadata():
             'platform': platform.platform(), 'cpu_affinity': psutil.Process().cpu_affinity(),
             'memory_bytes': psutil.virtual_memory().total, 'timing_pairs': TIMING_PAIRS,
             'memory_pairs': MEMORY_PAIRS, 'sample_sleep_ms': 20, 'projects': CONFIG['projects'],
-            'versions': json.loads((ENV / 'setup-receipt.json').read_text())['versions']}
+            'versions': json.loads((ENV / 'setup-receipt.json').read_text())['versions'],
+            'selection': vars(options)}
     for name, args in [('cpu', ['lscpu']), ('git_diff', ['git', 'diff', '--stat']), ('source', ['git', 'rev-parse', 'HEAD'])]:
         info[name] = subprocess.check_output(args, text=True)
     info['node_versions'] = {p['name']: subprocess.check_output([p['node'], '--version'], text=True).strip() for p in CONFIG['projects']}
@@ -196,16 +197,20 @@ def metadata():
 
 def summarize():
     rows = []
-    for project in CONFIG['projects']:
-        for scenario in SCENARIOS:
+    for project in selected_projects:
+        for scenario in selected_scenarios:
             row = {'project': project['name'], 'scenario': scenario}
             for backend in ('go', 'rust'):
                 for phase, metric in [('time', 'seconds'), ('memory', 'peak_rss')]:
+                    if phase not in phases:
+                        continue
                     values = [r[metric] for r in RECORDS if r['project'] == project['name'] and r['scenario'] == scenario and r['backend'] == backend and r['phase'] == phase and r['pair'] >= 0]
                     row[f'{backend}_{metric}'] = statistics.median(values)
                     row[f'{backend}_{metric}_range'] = [min(values), max(values)]
-            row['time_saved_percent'] = 100 * (1 - row['rust_seconds'] / row['go_seconds'])
-            row['rss_saved_percent'] = 100 * (1 - row['rust_peak_rss'] / row['go_peak_rss'])
+            if 'time' in phases:
+                row['time_saved_percent'] = 100 * (1 - row['rust_seconds'] / row['go_seconds'])
+            if 'memory' in phases:
+                row['rss_saved_percent'] = 100 * (1 - row['rust_peak_rss'] / row['go_peak_rss'])
             rows.append(row)
     (OUT / 'summary.json').write_text(json.dumps(rows, indent=2) + '\n')
     with (OUT / 'samples.csv').open('w') as file:
@@ -218,19 +223,27 @@ def summarize():
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--validate-only', action='store_true')
+parser.add_argument('--project', choices=[p['name'] for p in CONFIG['projects']])
+parser.add_argument('--scenario', choices=SCENARIOS)
+parser.add_argument('--phase', choices=('time', 'memory'))
 options = parser.parse_args()
+selected_projects = [p for p in CONFIG['projects'] if not options.project or p['name'] == options.project]
+selected_scenarios = (options.scenario,) if options.scenario else SCENARIOS
 metadata()
-phases = ('validate',) if options.validate_only else ('time', 'memory')
-total = len(phases) * len(CONFIG['projects']) * len(SCENARIOS)
+phases = ('validate',) if options.validate_only else (options.phase,) if options.phase else ('time', 'memory')
+total = len(phases) * len(selected_projects) * len(selected_scenarios)
 completed = 0
 for phase in phases:
-    for project in CONFIG['projects']:
-        for scenario in SCENARIOS:
+    for project in selected_projects:
+        for scenario in selected_scenarios:
             progress(phase, f"{project['name']}: {scenario}", completed, total)
             measure(project, scenario, phase)
             completed += 1
             progress(phase, f"Completed {project['name']}: {scenario}", completed, total)
 if not options.validate_only:
     summarize()
-assert len(RECORDS) == (12 if options.validate_only else 204), len(RECORDS)
+expected_runs = len(selected_projects) * len(selected_scenarios) * sum(
+    2 * (1 + (0 if phase == 'validate' else TIMING_PAIRS if phase == 'time' else MEMORY_PAIRS))
+    for phase in phases)
+assert len(RECORDS) == expected_runs, (len(RECORDS), expected_runs)
 progress('validated' if options.validate_only else 'measured', 'All output assertions passed', total, total)
