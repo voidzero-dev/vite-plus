@@ -1,26 +1,101 @@
 # Type-aware linting with tsrs-lint
 
-On the Vite+ workspace at `a32a8cec2` with the benchmark script added, the experimental backend saved 0.51 seconds per lint run with full type checking. Both backends analyzed 385 files with 174 rules, reported zero diagnostics, and exited successfully on every run.
+This comparison uses the default `tsrs@0.22.0-ts7.1.0-beta` integration and an explicit
+`oxlint-tsgolint@7.0.2005` override. Both use Oxlint `1.91.0` and the same built CLI.
 
-| `vp lint` workload                          | Bundled tsgolint | tsrs-lint | Wall time saved |
-| ------------------------------------------- | ---------------: | --------: | --------------: |
-| Type-aware rules                            |          1.089 s |   0.822 s |           24.5% |
-| Type-aware rules and TypeScript diagnostics |          1.340 s |   0.830 s |           38.1% |
+## Elapsed time
 
-For the full `vp check` command, the median fell from 1.852 s to 1.335 s (27.9%). This command also checked formatting on 632 files and used its default 16 threads.
+Each value is the median of ten fresh CLI processes after one warm-up per backend.
+The runner alternates the order between pairs. Timing runs do not sample memory.
 
-Measured on an Apple M4 Max with macOS 27.0.1, Node.js 24.22.2, Vite+ 1.5.0, Oxlint 1.91.0, oxlint-tsgolint 7.0.2005, and tsrs 0.21.0-ts7.1.0-beta. The benchmark used the published Vite+ 1.5.0 CLI artifacts and the workspace's locked dependencies. Each sample started a fresh local CLI process and included config loading, JS plugins, the backend launcher, and diagnostic reporting. The `vp lint` runs used four Oxlint threads. Both backends used their default settings.
+| Project  | Workload                         | Go (s) | tsrs (s) | Reduction |
+| -------- | -------------------------------- | -----: | -------: | --------: |
+| Vite+    | Type-aware rules                 |  3.712 |    2.212 |     40.4% |
+| Vite+    | Rules and TypeScript diagnostics |  4.612 |    2.382 |     48.4% |
+| Vite+    | Full `vp check`                  |  5.842 |    3.554 |     39.2% |
+| vinext   | Type-aware rules                 | 52.028 |   45.363 |     12.8% |
+| vinext † | Rules and TypeScript diagnostics | 54.192 |   44.794 |     17.3% |
+| vinext   | Full `vp check`                  | 62.325 |   50.355 |     19.2% |
 
-The table shows the median of ten runs per backend after one warm-up each. The runner reverses the backend order between pairs and compares the exit code, file and rule counts, and sorted JSON diagnostics for every run. In a separate failing fixture, both backends reported `typescript/no-floating-promises` and `TS2322` at the same locations through `vp lint` and `vp check`.
+† The clean timing repetition used an EPYC 7763 after a Codespace restart.
+All other timing rows used an EPYC 9V74. Both backends within each row used
+the same CPU. Compare backend values within a row; the CPU change prevents
+a strict comparison of absolute times across workloads.
 
-## Reproduce
+## Peak memory
 
-Start in a built Vite+ checkout. The runner explicitly selects the `oxlint-tsgolint` development dependency for the Go baseline, even when the CLI defaults to tsrs. Install the candidate backend under the ignored `tmp` directory to compare a specific version.
+Each value is the median of five separate runs after one warm-up per backend.
+Memory is the sampled peak of the simultaneous sum of RSS for the CLI and its
+descendants, including Node, Oxlint, and the native backend. One GiB is 1,073,741,824 bytes.
 
-```sh
-npm install --prefix ./tmp/tsrs-lint --no-save --package-lock=false tsrs@0.21.0-ts7.1.0-beta
-export OXLINT_TSGOLINT_PATH="$PWD/tmp/tsrs-lint/node_modules/.bin/tsrs-lint"
-node bench/tsrs-lint.ts --type-check
-```
+| Project | Workload                         | Go (GiB) | tsrs (GiB) | Reduction |
+| ------- | -------------------------------- | -------: | ---------: | --------: |
+| Vite+   | Type-aware rules                 |    1.175 |      0.930 |     20.9% |
+| Vite+   | Rules and TypeScript diagnostics |    1.345 |      0.984 |     26.8% |
+| Vite+   | Full `vp check`                  |    1.438 |      1.017 |     29.3% |
+| vinext  | Type-aware rules                 |    4.382 |      3.030 |     30.8% |
+| vinext  | Rules and TypeScript diagnostics |    4.903 |      3.166 |     35.4% |
+| vinext  | Full `vp check`                  |    5.413 |      3.292 |     39.2% |
 
-For the rules-only row, temporarily set `lint.options.typeCheck` to `false` in the root `vite.config.ts`, run `node bench/tsrs-lint.ts` without `--type-check`, then restore the setting. The benchmark always enables `--type-aware` and prints the individual samples in seconds.
+The sampler sleeps for 20 ms. The median observed interval across runs was
+21.8 ms. Shared pages can count more than once,
+and sampling can miss short peaks. These values are process-tree RSS, not total
+allocation or container memory. Per-case ranges are in the [summary](./tsrs-lint-codespaces/results/summary.json).
+
+## Conditions and interpretation
+
+The jobs used one GitHub Codespace with four vCPUs, 16 GB advertised RAM, and an
+AMD EPYC 9V74 processor for the main run. The focused timing repetition used an
+AMD EPYC 7763 after the instance restarted. Usable RAM was 15.62 GiB.
+The container used Ubuntu 22.04 on Linux x64 with glibc. Vite+ used Node.js
+`24.22.2`; vinext used Node.js `26.13.0`.
+
+The CLI JavaScript came from `22b07bd150aa57b3e04cc52e0b81d43294ffe982`.
+Its native binding, core, and prompts artifacts came from the published Vite+
+`1.5.0` packages. The measured Vite+ source also includes the RFC patch at
+`da260f86fce1d43810c62e4e6aad011066c88cb9`. Vinext is pinned to
+`249088af307c0a852fa6dc59c08fc6ec80e1620e`, from the requested upgrade branch.
+This is a comparison of backend routing in the built CLI, not a full native release build.
+
+Lint uses four threads. Vinext lint sets
+`OXLINT_TSGOLINT_CHECKER_SCHEDULING=sorted`; Vite+ lint uses default scheduling.
+Full checks use four threads and default backend scheduling. The rules-only
+configuration disables TypeScript diagnostics while retaining the project's
+original rules and plugins. Setup, builds, validation, and memory sampling are
+excluded from the elapsed-time table.
+
+Both backends passed all 12 validation commands and every benchmark invocation.
+Vite+ checked 385 source files with 174 rules and formatted 632 files. Vinext
+checked 1,828 source files with 151 rules and formatted 4,673 files. These clean
+corpora do not establish complete diagnostic or compiler parity.
+
+Vinext retains its original JS plugin rules, including
+`vinext-utils/prefer-shared-utils`. The backend switch leaves that shared work
+in place. This limits the elapsed-time improvement even though the memory
+reduction is larger. The measurements do not include that rule's separate optimization.
+
+## Evidence and reproduction
+
+Use the [Codespaces recipe](./tsrs-lint-codespaces/README.md) to recreate the pinned
+setup and all six comparisons. The recipe uses frozen lockfiles and retains
+verified dependencies between jobs.
+
+The [main samples](./tsrs-lint-codespaces/results/main-samples.csv) contain all 204
+invocations, including warm-ups. A browser connection used to diagnose an SSH
+outage started editor extension activity during vinext's type-checking timing
+set. That entire timing set is excluded. The table instead uses the 22 records
+from the [clean timing repetition](./tsrs-lint-codespaces/results/timing-rerun-samples.csv).
+The repetition uses the same retained build and dependencies, with their hashes
+checked before execution. All memory values come from the main job.
+
+Records with `pair=-1` are warm-ups and do not contribute to medians. For the
+vinext `full`/`time` group, select the repetition CSV; select the main CSV for
+all other groups. Take each backend's median `seconds` or `peak_rss` value and
+calculate the reduction as `100 * (1 - rust / go)`.
+
+The [main metadata](./tsrs-lint-codespaces/results/main-metadata.json) and
+[repetition metadata](./tsrs-lint-codespaces/results/timing-rerun-metadata.json)
+record versions, hardware, source revisions, and successful worker results.
+The main worker finished while the controller was disconnected; its complete
+artifacts were recovered from the stopped Codespace. The jobs are `job-3dbd90be3d4f4aa3` and
+`job-4685d3c6e32f48bf`.
