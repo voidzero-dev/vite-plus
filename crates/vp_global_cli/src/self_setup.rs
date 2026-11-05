@@ -229,6 +229,17 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
     } else {
         version_dir.join("bin").join(VP_BINARY_NAME)
     };
+    // VP_ENV_FORBIDDEN=1 installs with the system node and pnpm. Check them before
+    // touching the installation: a same-version reinstall reuses the active directory.
+    let system_tools = if env.env_forbidden
+        && !skip_deps
+        && !bundled
+        && (deploy || !version_dir.join("node_modules/vite-plus/package.json").as_path().is_file())
+    {
+        Some(install::system_install_tools(Some(&runtime::cli_node_range())).await?)
+    } else {
+        None
+    };
     crate::install_dirs::prepare(dirs)?;
     if deploy {
         tokio::fs::create_dir_all(version_dir.join("bin")).await?;
@@ -257,7 +268,20 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
     if needs_deps {
         output::info(&format!("installing vite-plus@{version}..."));
         install::generate_wrapper_package_json(&version_dir, version).await?;
-        if !skip_deps {
+        if !skip_deps && env.env_forbidden {
+            // Checked above unless the dependencies looked complete; check them now.
+            let tools = match system_tools {
+                Some(tools) => tools,
+                None => install::system_install_tools(Some(&runtime::cli_node_range())).await?,
+            };
+            install::install_production_deps(
+                &version_dir,
+                registry,
+                true,
+                Some(install::NodeVersion::System(&tools)),
+            )
+            .await?;
+        } else if !skip_deps {
             let preferred =
                 node_version.as_deref().filter(|version| runtime::supports_cli(version));
             if let Some(version) = node_version.as_deref().filter(|_| preferred.is_none()) {

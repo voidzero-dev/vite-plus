@@ -192,6 +192,12 @@ async fn install_version(
     // Refuse before touching the install directory: the target may be the
     // retained previous version, which failed-install cleanup would delete.
     ensure_staged_env_forbidden_support(platform_data, version).await?;
+    // Select the system node and pnpm before touching it for the same reason.
+    let system_tools = if vp_shared::EnvConfig::get().env_forbidden {
+        Some(install::system_install_tools(resolved.node_engines.as_deref()).await?)
+    } else {
+        None
+    };
 
     // Step 8: Create version directory.
     //
@@ -215,6 +221,7 @@ async fn install_version(
         current_version,
         silent,
         registry,
+        system_tools.as_ref(),
     )
     .await;
 
@@ -238,6 +245,7 @@ async fn install_platform_and_main(
     current_version: &str,
     silent: bool,
     registry: Option<&str>,
+    system_tools: Option<&install::SystemInstallTools>,
 ) -> Result<ExitStatus, Error> {
     let new_version = &resolved.version;
     extract_binary(platform_data, version_dir).await?;
@@ -246,7 +254,9 @@ async fn install_platform_and_main(
     install::generate_wrapper_package_json(version_dir, new_version).await?;
 
     // Install production dependencies (pnpm installs vite-plus + all transitive deps)
-    let node_version = resolved.node_version.as_deref().map(install::NodeVersion::Required);
+    let node_version = system_tools
+        .map(install::NodeVersion::System)
+        .or_else(|| resolved.node_version.as_deref().map(install::NodeVersion::Required));
     install::install_production_deps(version_dir, registry, !silent, node_version).await?;
 
     // Save previous version for rollback
@@ -472,6 +482,7 @@ mod tests {
             platform_integrity: String::new(),
             has_install_lockfile: false,
             node_version: None,
+            node_engines: None,
         }
     }
 
@@ -521,6 +532,52 @@ mod tests {
                 error
                     .to_string()
                     .contains(&vp_setup::support::env_forbidden_unsupported_message("0.1.0")),
+                "{error}"
+            );
+        })
+        .await;
+
+        assert!(retained.join("marker").as_path().exists(), "retained version was removed");
+        assert!(!retained.join("bin").as_path().exists(), "retained version was modified");
+        assert_eq!(
+            std::fs::read_to_string(install_dir.join(".previous-version")).unwrap(),
+            "0.1.0"
+        );
+    }
+
+    // The probe must succeed, which needs the shell-script binary.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn env_forbidden_system_tool_refusal_preserves_retained_version() {
+        let temp = tempfile::tempdir().unwrap();
+        let install_dir = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let retained = install_dir.join("0.1.0");
+        std::fs::create_dir_all(&retained).unwrap();
+        std::fs::write(retained.join("marker"), "").unwrap();
+        std::fs::write(install_dir.join(".previous-version"), "0.1.0").unwrap();
+        let tarball = platform_tarball(&format!(
+            "#!/bin/sh\necho {}\necho {}\n",
+            vp_setup::support::SELF_SETUP_SUPPORT_RESPONSE,
+            vp_setup::support::ENV_FORBIDDEN_SUPPORT_RESPONSE
+        ));
+        // No Node.js satisfies this range, so the check fails whatever PATH holds.
+        let resolved =
+            registry::ResolvedVersion { node_engines: Some("<0.0.1".into()), ..resolved("0.1.0") };
+
+        EnvConfig::with_vars_async(env_forbidden(), |_| async {
+            let error = Box::pin(install_version(
+                &tarball,
+                &install_dir,
+                &resolved,
+                "9.9.9",
+                false,
+                true,
+                None,
+            ))
+            .await
+            .unwrap_err();
+            assert!(
+                error.to_string().contains("Vite+ installs its dependencies with the system"),
                 "{error}"
             );
         })

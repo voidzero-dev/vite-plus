@@ -138,11 +138,13 @@ pub async fn clear_self_setup_marker(version_dir: &AbsolutePath) -> Result<(), E
 /// The `packageManager` field pins pnpm to a known-good version, ensuring
 /// consistent behavior regardless of the user's global pnpm version.
 /// pnpm will install `vite-plus` and all its transitive deps via `vp install`.
+/// Under `VP_ENV_FORBIDDEN=1` the field is omitted: the system pnpm installs,
+/// and a pin would make it download the pinned version.
 pub async fn generate_wrapper_package_json(
     version_dir: &AbsolutePath,
     version: &str,
 ) -> Result<(), Error> {
-    let json = serde_json::json!({
+    let mut json = serde_json::json!({
         "name": "vp-global",
         "version": version,
         "private": true,
@@ -151,6 +153,12 @@ pub async fn generate_wrapper_package_json(
             "vite-plus": version
         }
     });
+    // Remove after building: inserting would move the field in the default output.
+    if EnvConfig::get().env_forbidden
+        && let Some(fields) = json.as_object_mut()
+    {
+        fields.remove("packageManager");
+    }
     let content = serde_json::to_string_pretty(&json)? + "\n";
     tokio::fs::write(version_dir.join("package.json"), content).await?;
     Ok(())
@@ -203,12 +211,113 @@ pub enum NodeVersion<'a> {
     Preferred(&'a str),
     /// Use the target release's exact runtime or fail before activation.
     Required(&'a str),
+    /// Use the system `node` and `pnpm` that [`system_install_tools`] checked.
+    /// Required under `VP_ENV_FORBIDDEN=1`.
+    System(&'a SystemInstallTools),
+}
+
+/// The system `node` and `pnpm` that install Vite+ dependencies under
+/// `VP_ENV_FORBIDDEN=1`, and the PATH they were selected from.
+#[derive(Debug)]
+pub struct SystemInstallTools {
+    node: AbsolutePathBuf,
+    pnpm: AbsolutePathBuf,
+    /// The PATH used for the lookup, with relative entries made absolute.
+    /// pnpm runs with it, so its `#!/usr/bin/env node` finds the same `node`.
+    path: std::ffi::OsString,
+}
+
+/// Select the system `node` and `pnpm` for dependency installation under
+/// `VP_ENV_FORBIDDEN=1`.
+///
+/// Call this before touching the installation: it fails unless the first
+/// `node` and the first `pnpm` on PATH are system tools, or when `node` does
+/// not satisfy `node_range` (the target release's `engines.node`).
+///
+/// # Errors
+///
+/// Returns an error if a tool is missing, is not a system tool, or `node`
+/// is unsupported.
+pub async fn system_install_tools(node_range: Option<&str>) -> Result<SystemInstallTools, Error> {
+    let path = env::var_os("PATH").unwrap_or_default();
+    let cwd = vt_path::current_dir()?;
+    let self_exe = env::current_exe().ok().and_then(|exe| exe.canonicalize().ok());
+    find_system_install_tools(&path, &cwd, self_exe.as_deref(), node_range).await
+}
+
+async fn find_system_install_tools(
+    path: &std::ffi::OsStr,
+    cwd: &AbsolutePath,
+    self_exe: Option<&Path>,
+    node_range: Option<&str>,
+) -> Result<SystemInstallTools, Error> {
+    // pnpm runs in the version directory, so resolve relative entries here.
+    let path = env::join_paths(env::split_paths(path).map(|entry| {
+        if entry.is_absolute() || entry.starts_with("~") {
+            entry
+        } else {
+            cwd.as_path().join(entry)
+        }
+    }))
+    .map_err(|error| Error::Setup(format!("Failed to read PATH: {error}").into()))?;
+    let node = system_tool("node", &path, self_exe, cwd)?;
+    let pnpm = system_tool("pnpm", &path, self_exe, cwd)?;
+    if let Some(range) = node_range {
+        let output = tokio::process::Command::new(node.as_path()).arg("--version").output().await?;
+        let version = String::from_utf8_lossy(&output.stdout);
+        let version = version.trim().trim_start_matches('v');
+        let supported = output.status.success()
+            && js_semver::Range::parse(range).is_ok_and(|range| {
+                js_semver::Version::parse(version).is_ok_and(|version| range.satisfies(&version))
+            });
+        if !supported {
+            return Err(Error::Setup(
+                format!(
+                    "{}=1: Vite+ installs its dependencies with the system Node.js, but {} reports '{version}', which does not satisfy '{range}'",
+                    vp_shared::env_vars::VP_ENV_FORBIDDEN,
+                    node.as_path().display(),
+                )
+                .into(),
+            ));
+        }
+    }
+    Ok(SystemInstallTools { node, pnpm, path })
+}
+
+/// The first `tool` on `path` if it is a system tool. Later matches are never used.
+fn system_tool(
+    tool: &str,
+    path: &std::ffi::OsStr,
+    self_exe: Option<&Path>,
+    cwd: &AbsolutePath,
+) -> Result<AbsolutePathBuf, Error> {
+    let var = vp_shared::env_vars::VP_ENV_FORBIDDEN;
+    let reason = match vp_command::classify_first_path_match(tool, path, self_exe, cwd) {
+        vp_command::FirstPathMatch::System(found) => return Ok(found),
+        vp_command::FirstPathMatch::ViteShim(found) => format!(
+            "the Vite+ shim at '{}' comes first on PATH; run `vp env off {tool}` to move the shims after the system tools",
+            found.as_path().display()
+        ),
+        vp_command::FirstPathMatch::VpOwned(found) => format!(
+            "PATH selects the Vite+ managed install at '{}'; put the system '{tool}' first on PATH",
+            found.as_path().display()
+        ),
+        vp_command::FirstPathMatch::NotFound => {
+            format!("no '{tool}' is on PATH; install it with your system package manager")
+        }
+    };
+    Err(Error::Setup(
+        format!("{var}=1: Vite+ installs its dependencies with the system '{tool}', but {reason}")
+            .into(),
+    ))
 }
 
 /// Install production dependencies with a compatible managed Node.js and pinned pnpm.
 ///
 /// Spawns: `node <managed-pnpm>/bin/pnpm.cjs install --ignore-workspace [--registry <url>]`
-/// with `CI=true`. On failure, writes stdout+stderr to the parent directory's `upgrade.log`.
+/// with `CI=true`. With [`NodeVersion::System`], which `VP_ENV_FORBIDDEN=1`
+/// requires, runs the system pnpm instead and downloads no Node.js or pnpm.
+/// On failure, writes stdout+stderr to the parent directory's `upgrade.log`.
 pub async fn install_production_deps(
     version_dir: &AbsolutePath,
     registry: Option<&str>,
@@ -228,26 +337,51 @@ pub async fn install_production_deps(
 
     let args = dependency_install_args(version_dir, registry).await?;
 
-    let (node_runtime, pnpm_entry) = vp_shared::progress::with_spinner(
-        show_progress.then_some("Preparing Node.js and pnpm..."),
-        prepare_install_runtime(node_version),
-    )
-    .await?;
-    let output = vp_shared::progress::with_spinner(
-        show_progress.then_some("Installing dependencies..."),
-        run_pnpm_install(version_dir, &node_runtime, &pnpm_entry, &args, registry),
-    )
-    .await?;
+    let system = match &node_version {
+        Some(NodeVersion::System(tools)) => Some(*tools),
+        _ if EnvConfig::get().env_forbidden => {
+            return Err(Error::Setup(
+                format!(
+                    "{}=1: Vite+ installs its dependencies only with a checked system node and pnpm",
+                    vp_shared::env_vars::VP_ENV_FORBIDDEN
+                )
+                .into(),
+            ));
+        }
+        _ => None,
+    };
+    let output = if let Some(tools) = system {
+        vp_shared::progress::with_spinner(
+            show_progress.then_some("Installing dependencies..."),
+            run_system_pnpm_install(version_dir, tools, &args, registry),
+        )
+        .await?
+    } else {
+        let (node_runtime, pnpm_entry) = vp_shared::progress::with_spinner(
+            show_progress.then_some("Preparing Node.js and pnpm..."),
+            prepare_install_runtime(node_version),
+        )
+        .await?;
+        vp_shared::progress::with_spinner(
+            show_progress.then_some("Installing dependencies..."),
+            run_pnpm_install(version_dir, &node_runtime, &pnpm_entry, &args, registry),
+        )
+        .await?
+    };
 
     if !output.status.success() {
         let log_path = write_upgrade_log(version_dir, &output.stdout, &output.stderr).await;
-        return Err(Error::Setup(
-            format_install_failure_message(
-                vp_shared::exit_code_from_status(output.status),
-                log_path.as_ref(),
-            )
-            .into(),
-        ));
+        let mut message = format_install_failure_message(
+            vp_shared::exit_code_from_status(output.status),
+            log_path.as_ref(),
+        );
+        if system.is_some() && args.contains(&"--frozen-lockfile") {
+            message.push_str(&format!(
+                ". If the system pnpm cannot use the installation lockfile, retry with {}=1",
+                vp_shared::env_vars::VP_SETUP_SKIP_INSTALL_LOCKFILE
+            ));
+        }
+        return Err(Error::Setup(message.into()));
     }
 
     lockfile::record_install(version_dir).await?;
@@ -360,11 +494,41 @@ async fn run_pnpm_install(
         .map_err(|error| Error::Setup(format!("Failed to build PATH for pnpm: {error}").into()))?;
 
     let mut cmd = tokio::process::Command::new(node_runtime.get_binary_path().as_path());
-    cmd.arg(pnpm_entry.as_path())
-        .args(args)
-        .current_dir(version_dir)
-        .env("CI", "true")
-        .env("PATH", path);
+    cmd.arg(pnpm_entry.as_path()).args(args).env("PATH", path);
+    configure_pnpm_install(&mut cmd, version_dir, args, registry);
+    Ok(cmd.output().await?)
+}
+
+/// Run the system pnpm that [`system_install_tools`] selected, on its PATH.
+async fn run_system_pnpm_install(
+    version_dir: &AbsolutePath,
+    tools: &SystemInstallTools,
+    args: &[&str],
+    registry: Option<&str>,
+) -> Result<Output, Error> {
+    tracing::debug!(
+        "Installing with system node {} and pnpm {}",
+        tools.node.as_path().display(),
+        tools.pnpm.as_path().display()
+    );
+    let mut cmd = tokio::process::Command::new(tools.pnpm.as_path());
+    cmd.args(args)
+        // A different pnpm version must not download the version it would switch to.
+        .arg("--config.manage-package-manager-versions=false")
+        // Match the pinned pnpm, which does not run dependency build scripts.
+        .arg("--ignore-scripts")
+        .env("PATH", &tools.path);
+    configure_pnpm_install(&mut cmd, version_dir, args, registry);
+    Ok(cmd.output().await?)
+}
+
+fn configure_pnpm_install(
+    cmd: &mut tokio::process::Command,
+    version_dir: &AbsolutePath,
+    args: &[&str],
+    registry: Option<&str>,
+) {
+    cmd.current_dir(version_dir).env("CI", "true");
 
     if args.contains(&"--frozen-lockfile") {
         // --config leaves numbers as strings. Environment values get pnpm's numeric parsing.
@@ -376,9 +540,6 @@ async fn run_pnpm_install(
     if let Some(registry_url) = registry {
         cmd.env(vp_shared::env_vars::NPM_CONFIG_REGISTRY, registry_url);
     }
-
-    let output = cmd.output().await?;
-    Ok(output)
 }
 
 /// Save the current version before swapping, for rollback support.
@@ -1164,5 +1325,150 @@ mod tests {
 
         let registry = tokio::fs::read_to_string(version_dir.join("registry.txt")).await.unwrap();
         assert_eq!(registry, registry_url);
+    }
+
+    /// A bin directory with a system `node` that reports `node_version` and a
+    /// `#!/usr/bin/env node` pnpm (see `tests/fixtures/fake-system-node.sh`).
+    #[cfg(unix)]
+    async fn fake_system_bin(dir: &AbsolutePath, node_version: &str) -> AbsolutePathBuf {
+        let bin = dir.join("system-bin");
+        tokio::fs::create_dir_all(&bin).await.unwrap();
+        let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+        tokio::fs::symlink(fixtures.join("fake-system-node.sh"), bin.join("node")).await.unwrap();
+        tokio::fs::symlink(fixtures.join("fake-system-pnpm"), bin.join("pnpm")).await.unwrap();
+        tokio::fs::write(bin.join("node-version"), format!("v{node_version}\n")).await.unwrap();
+        bin
+    }
+
+    #[cfg(unix)]
+    fn join_path(entries: &[&AbsolutePath]) -> std::ffi::OsString {
+        env::join_paths(entries.iter().map(|entry| entry.as_path())).unwrap()
+    }
+
+    fn env_forbidden(home: &Path) -> [(&'static str, Option<&str>); 2] {
+        [
+            (vp_shared::env_vars::VP_HOME, home.to_str()),
+            (vp_shared::env_vars::VP_ENV_FORBIDDEN, Some("1")),
+        ]
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn env_forbidden_installs_with_the_system_node_and_pnpm() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let version_dir = root.join("version");
+        tokio::fs::create_dir_all(version_dir.join("bin")).await.unwrap();
+        let bin = fake_system_bin(&root, "24.22.1").await;
+        let home = root.join("home");
+
+        Box::pin(EnvConfig::with_vars_async(env_forbidden(home.as_path()), |env| async move {
+            let tools =
+                find_system_install_tools(&join_path(&[&bin]), &root, None, Some(">=22.18.0"))
+                    .await
+                    .unwrap();
+            install_production_deps(&version_dir, None, false, Some(NodeVersion::System(&tools)))
+                .await
+                .unwrap();
+
+            // pnpm's shebang ran the checked system node.
+            let invocation =
+                tokio::fs::read_to_string(version_dir.join("invocation.txt")).await.unwrap();
+            let lines = invocation.lines().collect::<Vec<_>>();
+            assert_eq!(lines[0], "SYSTEM_NODE");
+            assert_eq!(lines[1], bin.join("pnpm").as_path().to_str().unwrap());
+            assert_eq!(lines[2..4], ["install", "--ignore-workspace"]);
+            assert!(lines.contains(&"--config.manage-package-manager-versions=false"), "{lines:?}");
+            assert!(lines.contains(&"--ignore-scripts"), "{lines:?}");
+            let path = tokio::fs::read_to_string(version_dir.join("path.txt")).await.unwrap();
+            assert_eq!(path, bin.as_path().to_str().unwrap());
+            for managed in ["js_runtime", "package_manager"] {
+                assert!(!env.dirs.data.join(managed).as_path().exists(), "{managed} was created");
+            }
+        }))
+        .await;
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn env_forbidden_rejects_tools_other_than_the_first_system_match() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let bin = fake_system_bin(&root, "24.22.1").await;
+        let home = root.join("home");
+        let node_only = root.join("node-only");
+        tokio::fs::create_dir_all(&node_only).await.unwrap();
+        tokio::fs::symlink(bin.join("node"), node_only.join("node")).await.unwrap();
+        tokio::fs::copy(bin.join("node-version"), node_only.join("node-version")).await.unwrap();
+        // A Unix shim is a link to a file named `vp`.
+        let shims = root.join("shims");
+        tokio::fs::create_dir_all(&shims).await.unwrap();
+        tokio::fs::copy(bin.join("node"), shims.join("vp")).await.unwrap();
+        tokio::fs::symlink(shims.join("vp"), shims.join("node")).await.unwrap();
+        let managed = home.join("js_runtime/node/24.22.1/bin");
+        tokio::fs::create_dir_all(&managed).await.unwrap();
+        tokio::fs::copy(bin.join("node"), managed.join("node")).await.unwrap();
+
+        EnvConfig::with_vars_async(env_forbidden(home.as_path()), |_| async move {
+            let error = |path: std::ffi::OsString, range: Option<&'static str>| {
+                let root = root.clone();
+                async move {
+                    find_system_install_tools(&path, &root, None, range)
+                        .await
+                        .unwrap_err()
+                        .to_string()
+                }
+            };
+            let empty = root.join("empty");
+            assert!(error(join_path(&[&empty]), None).await.contains("no 'node' is on PATH"));
+            assert!(error(join_path(&[&node_only]), None).await.contains("no 'pnpm' is on PATH"));
+            // A later system match is never used.
+            let shim = error(join_path(&[&shims, &bin]), None).await;
+            assert!(shim.contains("run `vp env off node`"), "{shim}");
+            let owned = error(join_path(&[&managed, &bin]), None).await;
+            assert!(owned.contains("the Vite+ managed install"), "{owned}");
+            let old = error(join_path(&[&bin]), Some(">=26.0.0")).await;
+            assert!(old.contains("reports '24.22.1', which does not satisfy '>=26.0.0'"), "{old}");
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn env_forbidden_requires_checked_system_tools() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let home = root.join("home");
+        Box::pin(EnvConfig::with_vars_async(env_forbidden(home.as_path()), |env| async move {
+            for node_version in [None, Some(NodeVersion::Preferred("24.22.1"))] {
+                let error = install_production_deps(&root, None, false, node_version)
+                    .await
+                    .unwrap_err()
+                    .to_string();
+                assert!(error.contains("only with a checked system node and pnpm"), "{error}");
+            }
+            assert!(!env.dirs.data.join("package_manager").as_path().exists());
+        }))
+        .await;
+    }
+
+    #[tokio::test]
+    async fn wrapper_omits_the_pnpm_pin_only_under_env_forbidden() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        for (value, pinned) in [(Some("1"), false), (Some("true"), true), (None, true)] {
+            EnvConfig::with_vars_async(
+                [(vp_shared::env_vars::VP_ENV_FORBIDDEN, value)],
+                |_| async {
+                    generate_wrapper_package_json(&root, "1.2.3").await.unwrap();
+                },
+            )
+            .await;
+            let manifest: serde_json::Value =
+                serde_json::from_slice(&tokio::fs::read(root.join("package.json")).await.unwrap())
+                    .unwrap();
+            assert_eq!(manifest["dependencies"]["vite-plus"], "1.2.3");
+            let expected = pinned.then(|| format!("pnpm@{PINNED_PNPM_VERSION}"));
+            assert_eq!(manifest["packageManager"].as_str(), expected.as_deref(), "{value:?}");
+        }
     }
 }
