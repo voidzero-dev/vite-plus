@@ -49,7 +49,7 @@ end
 
 # The vp completion is out of scope: clap_complete registers it with bare `complete` and
 # `commandline`, so the user functions above replace it.
-set -l candidates (builtin complete -C "vpr b")
+set -l candidates (builtin complete -C "vpr b" | string split -f1 \t)
 if not builtin contains -- build $candidates
     echo "vpr completion did not suggest build, got: $candidates"
     exit 1
