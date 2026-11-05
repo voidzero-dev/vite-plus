@@ -8,6 +8,9 @@ Use the [codespaces-run skill](https://github.com/Dunqing/skills/tree/main/skill
 The recipe uses one `standardLinux32gb` instance with four CPUs and 16 GB of RAM.
 The skill retains the environment and stops the instance after artifact collection.
 Do not run other builds or benchmarks on the instance during measurement.
+The CPU model can change when the same Codespace restarts. Inspect each job's
+metadata before combining results. Keep both backends of a comparison in the
+same job, and identify any hardware change in the report.
 
 ## Source and setup
 
@@ -65,6 +68,19 @@ Use the returned job ID in the last command. Check the final receipt for
 memory traces, and results are retained under the skill's local job directory.
 If a later stage fails, use the skill's stage recovery procedure to retain a
 verified setup. Do not start another job while the previous job holds the lease.
+
+The runner also accepts `--project`, `--scenario`, and `--phase` filters. For a
+focused repetition, submit a continuation after the prior job stops. Its script
+can run the following commands with the recipe's input files:
+
+```sh
+python3 "$JOB_INPUT_DIR/verify-setup.py"
+"$JOB_ENV_DIR/venv/bin/python" "$JOB_INPUT_DIR/bench.py" \
+  --project vinext --scenario full --phase time
+```
+
+This selection produces 22 timing records: ten pairs and two warm-ups. Keep the
+new job's metadata and raw records when it replaces a previous timing set.
 
 ## Method
 
