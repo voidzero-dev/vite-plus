@@ -92,6 +92,9 @@ pub enum SynthesizableSubcommand {
         /// Treat lint warnings as errors
         #[arg(long = "deny-warnings")]
         deny_warnings: bool,
+        /// Output format for lint and type-check diagnostics
+        #[arg(long, default_value = "default", value_parser = ["default", "agent", "github", "gitlab", "json", "junit", "sarif", "stylish", "unix", "checkstyle"])]
+        format: String,
         /// Skip format check
         #[arg(long = "no-fmt")]
         no_fmt: bool,
@@ -209,4 +212,53 @@ pub(crate) struct CapturedCommandOutput {
 /// both types are foreign here.
 pub(crate) fn exit_status_from(status: std::process::ExitStatus) -> ExitStatus {
     ExitStatus(vp_shared::exit_code_from_status(status) as u8)
+}
+
+#[cfg(test)]
+mod tests {
+    use clap::Parser;
+
+    use super::{CLIArgs, SynthesizableSubcommand};
+
+    #[test]
+    fn check_parses_lint_format_before_paths() {
+        for args in [
+            vec!["vp", "check", "--format=agent", "src/index.ts"],
+            vec!["vp", "check", "--format", "agent", "src/index.ts"],
+        ] {
+            let CLIArgs::Synthesizable(SynthesizableSubcommand::Check { format, paths, .. }) =
+                CLIArgs::try_parse_from(args).unwrap()
+            else {
+                panic!("expected check command");
+            };
+            assert_eq!(format, "agent");
+            assert_eq!(paths, ["src/index.ts"]);
+        }
+    }
+
+    #[test]
+    fn check_preserves_trailing_args_and_delimited_paths() {
+        for (args, expected_paths) in [
+            (
+                vec!["vp", "check", "src/index.ts", "--format=agent"],
+                vec!["src/index.ts", "--format=agent"],
+            ),
+            (vec!["vp", "check", "--", "--format=agent"], vec!["--format=agent"]),
+        ] {
+            let CLIArgs::Synthesizable(SynthesizableSubcommand::Check { format, paths, .. }) =
+                CLIArgs::try_parse_from(args).unwrap()
+            else {
+                panic!("expected check command");
+            };
+            assert_eq!(format, "default");
+            assert_eq!(paths, expected_paths);
+        }
+    }
+
+    #[test]
+    fn check_rejects_invalid_lint_format_with_fix() {
+        let error = CLIArgs::try_parse_from(["vp", "check", "--fix", "--format=typo"])
+            .expect_err("invalid format must fail before running checks");
+        assert_eq!(error.kind(), clap::error::ErrorKind::InvalidValue);
+    }
 }
