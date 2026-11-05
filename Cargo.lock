@@ -8478,6 +8478,7 @@ dependencies = [
  "indicatif",
  "indoc",
  "js-semver",
+ "libc",
  "oxc_resolver",
  "pathdiff",
  "rustc-hash",

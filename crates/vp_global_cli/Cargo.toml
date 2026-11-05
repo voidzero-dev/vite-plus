@@ -38,6 +38,7 @@ indexmap = { workspace = true }
 indicatif = { workspace = true }
 indoc = { workspace = true }
 js-semver = { workspace = true }
+libc = { workspace = true }
 vp_error = { workspace = true }
 vp_js_runtime = { workspace = true }
 vp_pm_cli = { workspace = true }

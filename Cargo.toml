@@ -217,6 +217,7 @@ json-escape-simd = "3.1.1"
 json-strip-comments = "3"
 jsonschema = { version = "0.60.0", default-features = false }
 junction = "2.0.0"
+libc = "0.2"
 libtest-mimic = "0.8.2"
 memchr = "2.8.2"
 mimalloc-safe = "0.1.64"

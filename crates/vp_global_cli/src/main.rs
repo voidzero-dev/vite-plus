@@ -22,6 +22,7 @@ mod install_dirs;
 mod js_executor;
 mod self_setup;
 mod shim;
+mod stdin_echo;
 mod upgrade_check;
 
 use std::{

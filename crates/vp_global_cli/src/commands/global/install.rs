@@ -31,6 +31,7 @@ use crate::{
         },
     },
     error::Error,
+    stdin_echo::StdinEchoGuard,
 };
 
 struct Package<'a> {
@@ -223,6 +224,12 @@ pub async fn install(
     } else {
         progress.set_draw_target(ProgressDrawTarget::hidden());
     }
+
+    // Suppress terminal echo for the duration of the spinner. Without this,
+    // a user pressing Enter while the spinner is active causes the terminal
+    // driver to emit `\r\n`, which interleaves with indicatif's single-row
+    // cursor movement and leaves duplicate spinner lines on screen (#3359).
+    let _stdin_echo_guard = StdinEchoGuard::disable();
 
     // We have to clone it because we will modify `packages` to storage package names
     let package_names = packages.keys().cloned().collect::<Vec<_>>();
