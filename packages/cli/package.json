@@ -364,7 +364,7 @@
     "@vitest/utils": "catalog:",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
-    "oxlint-tsgolint": "catalog:",
+    "tsrs": "catalog:",
     "vite": "workspace:@voidzero-dev/vite-plus-core@*",
     "vitest": "catalog:"
   },
@@ -388,6 +388,7 @@
     "lint-staged": "catalog:",
     "minimatch": "catalog:",
     "nanotar": "catalog:",
+    "oxlint-tsgolint": "catalog:",
     "picocolors": "catalog:",
     "pirates": "catalog:",
     "tinyglobby": "catalog:",

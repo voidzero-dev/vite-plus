@@ -2,13 +2,29 @@
 // Additional arguments (e.g. --type-check or file paths) go to both vp lint runs.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
-const { OXLINT_TSGOLINT_PATH: tsrs, ...baselineEnv } = process.env;
+const { OXLINT_TSGOLINT_PATH: tsrs, ...env } = process.env;
 if (!tsrs) {
   throw new Error('Set OXLINT_TSGOLINT_PATH to the tsrs-lint executable.');
 }
 const vp = fileURLToPath(new URL('../packages/cli/bin/vp', import.meta.url));
+const require = createRequire(new URL('../packages/cli/package.json', import.meta.url));
+const tsgolint =
+  process.platform === 'win32'
+    ? ['tsgolint.exe', 'tsgolint.cmd']
+        .map((bin) =>
+          fileURLToPath(new URL(`../packages/cli/node_modules/.bin/${bin}`, import.meta.url)),
+        )
+        .find(existsSync)
+    : require.resolve('oxlint-tsgolint/bin/tsgolint');
+assert.ok(tsgolint, 'Install workspace development dependencies to get the Go baseline.');
+const baselineEnv = {
+  ...env,
+  OXLINT_TSGOLINT_PATH: tsgolint,
+};
 const args = [
   vp,
   'lint',

@@ -115,7 +115,7 @@ describe('versions export', () => {
       expect(versions.vitest).toBeTypeOf('string');
       expect(versions.oxlint).toBeTypeOf('string');
       expect(versions.oxfmt).toBeTypeOf('string');
-      expect(versions['oxlint-tsgolint']).toBeTypeOf('string');
+      expect(versions.tsrs).toBeTypeOf('string');
     });
   });
 });
