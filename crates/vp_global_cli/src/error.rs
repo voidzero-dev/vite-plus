@@ -52,26 +52,29 @@ pub enum Error {
     #[error("Upgrade error: {0}")]
     Upgrade(Str),
 
-    /// `VP_NODE_MANAGER=system-only` requires a system tool that PATH lacks
-    /// before the Vite+ shims.
+    /// `VP_ENV_FORBIDDEN=1` requires a system tool that PATH lacks before the
+    /// Vite+ shims.
     #[error(
-        "{variable}=system-only requires a system '{tool}' on PATH before the Vite+ shims, but none was found"
+        "{var}=1: Vite+ does not manage '{tool}', and no system '{tool}' comes before the Vite+ shims on PATH",
+        var = vp_shared::env_vars::VP_ENV_FORBIDDEN
     )]
-    SystemToolNotFound { tool: Str, variable: &'static str },
+    SystemToolNotFound { tool: Str },
 
-    /// A tool under `VP_NODE_MANAGER=system-only` reached the Vite+ shim at
-    /// the front of PATH, where managed `config.json` places it.
+    /// A tool under `VP_ENV_FORBIDDEN=1` reached the Vite+ shim at the front
+    /// of PATH, where managed `config.json` places it.
     #[error(
-        "{variable}=system-only requires a system '{tool}', but the Vite+ shim comes first on PATH; run `vp env off {component}` to move the shims after the system tools"
+        "{var}=1: Vite+ does not manage '{tool}', but the Vite+ shim comes first on PATH; run `vp env off {component}` to move the shims after the system tools",
+        var = vp_shared::env_vars::VP_ENV_FORBIDDEN
     )]
-    SystemToolBehindShim { tool: Str, variable: &'static str, component: Str },
+    SystemToolBehindShim { tool: Str, component: Str },
 
-    /// A lookup under `VP_NODE_MANAGER=system-only` reached a Vite+ managed
-    /// install, which a process with other settings left on PATH.
+    /// A lookup under `VP_ENV_FORBIDDEN=1` reached a Vite+ managed install,
+    /// which a process with other settings left on PATH.
     #[error(
-        "{variable}=system-only rejects the Vite+ managed install at '{path}' that PATH selects for '{tool}'; run `vp env doctor` to check PATH"
+        "{var}=1: Vite+ does not manage '{tool}', but PATH selects the Vite+ managed install at '{path}'; run `vp env doctor` to check PATH",
+        var = vp_shared::env_vars::VP_ENV_FORBIDDEN
     )]
-    SystemToolManagedInstall { tool: Str, variable: &'static str, path: Str },
+    SystemToolManagedInstall { tool: Str, path: Str },
 
     #[error("{0}")]
     Setup(#[from] vp_setup::error::Error),

@@ -32,43 +32,6 @@ pub enum ShimMode {
     SystemFirst,
 }
 
-/// Run-time mode of a tool: the `config.json` shim mode, unless
-/// `VP_NODE_MANAGER=system-only` restricts Node.js and every package manager
-/// to the system.
-///
-/// `SystemOnly` comes only from `VP_NODE_MANAGER`. Its other values, and every
-/// value of the package-manager variables (including `system-only`), leave the
-/// configured mode in effect.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum EffectiveMode {
-    /// Vite+ manages the tool.
-    Managed,
-    /// Prefer the system tool and fall back to the managed one.
-    SystemFirst,
-    /// Use only the system tool; never download or use a managed one.
-    SystemOnly,
-}
-
-impl EffectiveMode {
-    fn from_config(mode: ShimMode, system_only: bool) -> Self {
-        match (system_only, mode) {
-            (true, _) => Self::SystemOnly,
-            (false, ShimMode::Managed) => Self::Managed,
-            (false, ShimMode::SystemFirst) => Self::SystemFirst,
-        }
-    }
-}
-
-/// Effective Node.js mode: `SystemOnly` under `VP_NODE_MANAGER=system-only`,
-/// otherwise the configured shim mode.
-#[must_use]
-pub fn effective_node_mode(config: &Config) -> EffectiveMode {
-    EffectiveMode::from_config(
-        config.node_shim_mode,
-        vp_shared::EnvConfig::get().node_system_only(),
-    )
-}
-
 /// User configuration stored in `<CONFIG>/config.json`
 #[derive(Serialize, Deserialize, Default, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -674,28 +637,6 @@ mod tests {
     use vt_path::AbsolutePathBuf;
 
     use super::*;
-
-    #[test]
-    fn effective_node_mode_follows_config_unless_system_only() {
-        for (shim_mode, configured) in [
-            (ShimMode::Managed, EffectiveMode::Managed),
-            (ShimMode::SystemFirst, EffectiveMode::SystemFirst),
-        ] {
-            let config = Config { node_shim_mode: shim_mode, ..Config::default() };
-            // Unset, `yes`, `no` and unrecognized values keep the configured mode.
-            for (value, expected) in [
-                (None, configured),
-                (Some("yes"), configured),
-                (Some("no"), configured),
-                (Some("System-Only"), configured),
-                (Some("system-only"), EffectiveMode::SystemOnly),
-            ] {
-                vp_shared::EnvConfig::with_vars([(env_vars::VP_NODE_MANAGER, value)], |_| {
-                    assert_eq!(effective_node_mode(&config), expected, "{shim_mode:?} {value:?}");
-                });
-            }
-        }
-    }
 
     #[test]
     fn test_get_node_modules_dir_probes_unix_layout() {

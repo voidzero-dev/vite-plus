@@ -96,12 +96,13 @@ pub enum Error {
     #[error("Invalid argument: {0}")]
     InvalidArgument(Str),
 
-    /// `VP_NODE_MANAGER=system-only` forbids downloading or using a managed
-    /// release of `tool`, and resolving one through the registry.
+    /// `VP_ENV_FORBIDDEN=1` forbids downloading or using a managed release of
+    /// `tool`, and resolving one through the registry.
     #[error(
-        "{variable}=system-only: Vite+ uses only the system {tool} and does not download or use a managed {tool}"
+        "{var}=1: Vite+ does not manage {tool}; it neither downloads nor uses a managed {tool}",
+        var = vp_shared::env_vars::VP_ENV_FORBIDDEN
     )]
-    DisabledBySystemOnly { tool: Str, variable: &'static str },
+    DisabledByEnvForbidden { tool: Str },
 
     #[cfg(feature = "migration")]
     #[error(transparent)]

@@ -22,11 +22,11 @@ use vt_workspace::{WorkspaceFile, WorkspaceRoot, find_workspace_root};
 
 use crate::{
     config::NpmConfig,
+    env_forbidden::ensure_managed_package_manager_allowed,
     request::{
         HttpClient, download_and_extract_tgz_with_hash_and_config, is_not_found, verify_file_hash,
     },
     shim,
-    system_only::ensure_managed_package_manager_allowed,
 };
 
 #[derive(Serialize, Deserialize, Clone, Default)]
@@ -692,7 +692,7 @@ pub async fn ensure_package_manager_bin(
     expected_hash: Option<&str>,
     bin_name: &str,
 ) -> Result<AbsolutePathBuf, Error> {
-    // Checked before the version lookup and the cache: system-only forbids both.
+    // Checked before the version lookup and the cache: VP_ENV_FORBIDDEN forbids both.
     ensure_managed_package_manager_allowed(package_manager_type)?;
     let version = resolve_package_manager_version(package_manager_type, version_or_latest).await?;
 
@@ -1344,7 +1344,7 @@ async fn resolve_package_manager_range(
     range: &js_semver::Range,
     npm_config: &NpmConfig,
 ) -> Result<Str, Error> {
-    // Checked before the cached-version lookup: system-only uses no managed release.
+    // Checked before the cached-version lookup: VP_ENV_FORBIDDEN uses no managed release.
     ensure_managed_package_manager_allowed(package_manager_type)?;
     if let Some(cached) = find_cached_package_manager_version(package_manager_type, range)? {
         tracing::debug!("Found cached {package_manager_type} {cached} satisfying {version_req}");
@@ -2719,12 +2719,12 @@ mod tests {
         assert_eq!(find_cached_pnpm(&vp_home), None);
     }
 
-    /// `VP_NODE_MANAGER=system-only` makes every package manager resolve,
-    /// download and reuse no managed release: every entry point fails before
-    /// the cache and before any registry request. The package-manager variables
-    /// alone do not restrict anything at run time.
+    /// `VP_ENV_FORBIDDEN=1` makes every package manager resolve, download and
+    /// reuse no managed release: every entry point fails before the cache and
+    /// before any registry request, even with `VP_PM_MANAGER=yes`. Other values
+    /// of `VP_ENV_FORBIDDEN` restrict nothing.
     #[tokio::test(flavor = "current_thread")]
-    async fn system_only_package_manager_uses_no_managed_release_or_registry() {
+    async fn env_forbidden_package_manager_uses_no_managed_release_or_registry() {
         use httpmock::prelude::*;
 
         let temp_dir = create_temp_dir();
@@ -2734,21 +2734,17 @@ mod tests {
             then.status(500);
         });
         let registry = server.base_url();
-        let vars = |node: Option<&'static str>, pm: Option<&'static str>| {
+        let vars = |forbidden: Option<&'static str>, pm: Option<&'static str>| {
             [
                 (env_vars::VP_HOME, Some(temp_dir.path().as_os_str())),
                 (env_vars::NPM_CONFIG_REGISTRY, Some(std::ffi::OsStr::new(registry.as_str()))),
-                (env_vars::VP_NODE_MANAGER, node.map(std::ffi::OsStr::new)),
+                (env_vars::VP_ENV_FORBIDDEN, forbidden.map(std::ffi::OsStr::new)),
                 (env_vars::VP_PM_MANAGER, pm.map(std::ffi::OsStr::new)),
-                (env_vars::VP_PNPM_MANAGER, pm.map(std::ffi::OsStr::new)),
-                (env_vars::VP_NPM_MANAGER, None),
-                (env_vars::VP_YARN_MANAGER, None),
-                (env_vars::VP_BUN_MANAGER, None),
             ]
         };
-        let is_disabled = |error: &Error, family: &str| matches!(error, Error::DisabledBySystemOnly { tool, variable: env_vars::VP_NODE_MANAGER } if tool == family);
+        let is_disabled = |error: &Error, family: &str| matches!(error, Error::DisabledByEnvForbidden { tool } if tool == family);
 
-        // A cached exact release is still returned without system-only.
+        // A cached exact release is still returned without VP_ENV_FORBIDDEN.
         let cached = EnvConfig::with_vars_async(vars(None, None), |_| async {
             let install_dir =
                 package_manager_install_dir(PackageManagerType::Pnpm, "10.0.0").unwrap();
@@ -2765,7 +2761,7 @@ mod tests {
         .await;
         assert!(cached.as_path().exists());
 
-        EnvConfig::with_vars_async(vars(Some("system-only"), Some("yes")), |_| async {
+        EnvConfig::with_vars_async(vars(Some("1"), Some("yes")), |_| async {
             for version in ["10.0.0", "^10.0.0", "latest"] {
                 let error =
                     ensure_package_manager_bin(PackageManagerType::Pnpm, version, None, "pnpm")
@@ -2795,8 +2791,8 @@ mod tests {
         .await;
         requests.assert_hits(0);
 
-        // The package-manager variables alone do not restrict at run time.
-        EnvConfig::with_vars_async(vars(None, Some("system-only")), |_| async {
+        // Only the exact value `1` restricts.
+        EnvConfig::with_vars_async(vars(Some("true"), None), |_| async {
             let resolved =
                 ensure_package_manager_bin(PackageManagerType::Pnpm, "10.0.0", None, "pnpm")
                     .await

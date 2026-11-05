@@ -169,14 +169,14 @@ fn log_checksum_only(archive_filename: &str) {
     );
 }
 
-/// Fail when `VP_NODE_MANAGER=system-only` restricts Node.js to the system.
+/// Fail when `VP_ENV_FORBIDDEN=1` stops Vite+ from managing Node.js.
 ///
 /// # Errors
 ///
-/// Returns [`Error::DisabledBySystemOnly`] in system-only mode.
+/// Returns [`Error::DisabledByEnvForbidden`] when `VP_ENV_FORBIDDEN=1`.
 pub fn ensure_managed_node_allowed() -> Result<(), Error> {
-    if vp_shared::EnvConfig::get().node_system_only() {
-        return Err(Error::DisabledBySystemOnly { variable: vp_shared::env_vars::VP_NODE_MANAGER });
+    if vp_shared::EnvConfig::get().env_forbidden {
+        return Err(Error::DisabledByEnvForbidden);
     }
     Ok(())
 }
@@ -188,8 +188,8 @@ pub fn ensure_managed_node_allowed() -> Result<(), Error> {
 /// # Errors
 ///
 /// Returns an error if download, verification, or extraction fails, or
-/// [`Error::DisabledBySystemOnly`] for Node.js in system-only mode, even when the
-/// version is already cached.
+/// [`Error::DisabledByEnvForbidden`] for Node.js when `VP_ENV_FORBIDDEN=1`, even
+/// when the version is already cached.
 ///
 /// # Panics
 ///
@@ -199,7 +199,7 @@ pub async fn download_runtime_with_provider<P: JsRuntimeProvider>(
     runtime_type: JsRuntimeType,
     version: &str,
 ) -> Result<JsRuntime, Error> {
-    // Checked before the cache lookup: system-only also forbids cached installs.
+    // Checked before the cache lookup: VP_ENV_FORBIDDEN also forbids cached installs.
     match runtime_type {
         JsRuntimeType::Node => ensure_managed_node_allowed()?,
     }
@@ -1831,10 +1831,10 @@ mod tests {
         assert_eq!(resolution.source, VersionSource::NvmrcFile);
     }
 
-    /// System-only mode rejects a managed Node.js before the cache lookup, so
-    /// an already installed version is not used either.
+    /// `VP_ENV_FORBIDDEN=1` rejects a managed Node.js before the cache lookup,
+    /// so an already installed version is not used either.
     #[tokio::test]
-    async fn test_system_only_rejects_cached_runtime() {
+    async fn test_env_forbidden_rejects_cached_runtime() {
         let vp_home = TempDir::new().unwrap();
         let provider = NodeProvider::new();
         let install_dir = vp_home.path().join("js_runtime").join("node").join("24.0.0");
@@ -1842,24 +1842,18 @@ mod tests {
         std::fs::create_dir_all(binary.parent().unwrap()).unwrap();
         std::fs::write(&binary, "").unwrap();
 
-        for (manager, rejected) in [(None, false), (Some("no"), false), (Some("system-only"), true)]
-        {
+        for (forbidden, rejected) in [(None, false), (Some("true"), false), (Some("1"), true)] {
             vp_shared::EnvConfig::with_vars_async(
                 [
                     (env_vars::VP_HOME, Some(vp_home.path().as_os_str())),
-                    (env_vars::VP_NODE_MANAGER, manager.map(std::ffi::OsStr::new)),
+                    (env_vars::VP_ENV_FORBIDDEN, forbidden.map(std::ffi::OsStr::new)),
                 ],
                 |_| async {
                     let result =
                         download_runtime_with_provider(&provider, JsRuntimeType::Node, "24.0.0")
                             .await;
                     if rejected {
-                        assert!(matches!(
-                            result,
-                            Err(Error::DisabledBySystemOnly {
-                                variable: env_vars::VP_NODE_MANAGER
-                            })
-                        ));
+                        assert!(matches!(result, Err(Error::DisabledByEnvForbidden)));
                     } else {
                         assert_eq!(result.unwrap().get_binary_path().as_path(), binary);
                     }

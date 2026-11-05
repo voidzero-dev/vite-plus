@@ -1,4 +1,4 @@
-// Report the managed installs that the system-only steps could use or create.
+// Report the managed installs that the VP_ENV_FORBIDDEN steps could use or create.
 // The case's js_runtime links the runner's shared seed, whose versions differ
 // between machines, so only the relevant versions are checked.
 const { existsSync, readdirSync } = require('node:fs');

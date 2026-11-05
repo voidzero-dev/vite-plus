@@ -76,11 +76,12 @@ pub async fn execute(
         let args: Vec<String> = command[1..].to_vec();
         // stdout belongs to the dispatched tool; route vp's own output to stderr.
         vp_shared::output::route_user_output_to_stderr();
-        // A system-only tool comes from PATH here, not from dispatch: its shim
-        // fails without searching PATH, even when a system tool comes before it.
+        // Under VP_ENV_FORBIDDEN=1 a core tool comes from PATH here, not from
+        // dispatch: its shim fails without searching PATH, even when a system
+        // tool comes before it.
         if !from_wrapper
             && is_core_shim_tool(tool)
-            && let Some(path) = crate::shim::dispatch::resolve_system_only_tool(tool)
+            && let Some(path) = crate::shim::dispatch::resolve_env_forbidden_tool(tool)
         {
             return Ok(exit_status(crate::shim::exec::exec_tool(&path?, &args, env)));
         }

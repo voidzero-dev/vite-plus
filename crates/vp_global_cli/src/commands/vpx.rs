@@ -170,10 +170,10 @@ pub async fn execute_vpx(args: &[String], cwd: &AbsolutePath) -> i32 {
             return execute_global_binary(global_bin, &positional[1..], cwd).await;
         }
 
-        // 3. Try system PATH. A system-only tool is the first PATH match, shims
-        //    included, and fails instead of falling back to `dlx`, which would
-        //    download it. Other tools skip the vite-plus bin dir.
-        let path_bin = match dispatch::resolve_system_only_tool(&cmd_name) {
+        // 3. Try system PATH. Under VP_ENV_FORBIDDEN=1 a core tool is the first
+        //    PATH match, shims included, and fails instead of falling back to
+        //    `dlx`, which would download it. Other tools skip the vite-plus bin dir.
+        let path_bin = match dispatch::resolve_env_forbidden_tool(&cmd_name) {
             Some(Ok(path)) => Some(path),
             Some(Err(e)) => {
                 output::error(&format!("vpx: {e}"));
@@ -240,10 +240,10 @@ async fn find_global_binary(cmd: &str) -> Option<GlobalBinary> {
 ///
 /// Ensures the required Node.js version is installed, prepends its bin dir
 /// and local node_modules/.bin dirs to PATH, then executes. The Node.js
-/// directory is not added in system-only mode, where Node.js comes from PATH.
+/// directory is not added under `VP_ENV_FORBIDDEN=1`, where Node.js comes from PATH.
 async fn execute_global_binary(bin: GlobalBinary, args: &[String], cwd: &AbsolutePath) -> i32 {
     // Ensure Node.js is installed and locate its binary
-    let node_path = match dispatch::resolve_system_only_tool("node") {
+    let node_path = match dispatch::resolve_env_forbidden_tool("node") {
         Some(Ok(path)) => path,
         Some(Err(e)) => {
             output::error(&format!("vpx: {e}"));
@@ -260,7 +260,7 @@ async fn execute_global_binary(bin: GlobalBinary, args: &[String], cwd: &Absolut
 
     // Prepend Node.js bin dir to PATH
     let mut child_env = ToolPathEnv::from_env();
-    if !vp_shared::EnvConfig::get().node_system_only() {
+    if !vp_shared::EnvConfig::get().env_forbidden {
         let node_bin_dir = node_path.parent().expect("Node has no parent directory");
         if let Err(error) = child_env.prepend(node_bin_dir, &["node"], PrependOptions::default()) {
             output::error(&format!("vpx: {error}"));

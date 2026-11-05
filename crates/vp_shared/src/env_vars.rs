@@ -110,8 +110,7 @@ pub const VP_YARN_VERSION: &str = "VP_YARN_VERSION";
 /// Override the bun and bunx shim version.
 pub const VP_BUN_VERSION: &str = "VP_BUN_VERSION";
 
-/// Node.js management preference (`yes`, `no`, or [`SYSTEM_ONLY`], which
-/// also covers every package manager).
+/// Node.js management preference (`yes` or `no`).
 pub const VP_NODE_MANAGER: &str = "VP_NODE_MANAGER";
 
 /// Package-manager management preference shared by every family.
@@ -130,10 +129,10 @@ pub const VP_YARN_MANAGER: &str = "VP_YARN_MANAGER";
 /// Bun management preference; takes precedence over `VP_PM_MANAGER`.
 pub const VP_BUN_MANAGER: &str = "VP_BUN_MANAGER";
 
-/// `VP_NODE_MANAGER` value that restricts Node.js and every package manager to
-/// their system installations at run time; other `VP_*_MANAGER` variables
-/// ignore it at run time. Matched exactly (lowercase only).
-pub const SYSTEM_ONLY: &str = "system-only";
+/// `1` (exactly) stops Vite+ from managing Node.js and every package manager:
+/// at run time it neither downloads nor uses a managed installation,
+/// regardless of `config.json` and the `VP_*_MANAGER` variables.
+pub const VP_ENV_FORBIDDEN: &str = "VP_ENV_FORBIDDEN";
 
 /// Enable debug output for shim dispatch.
 pub const VP_DEBUG_SHIM: &str = "VP_DEBUG_SHIM";

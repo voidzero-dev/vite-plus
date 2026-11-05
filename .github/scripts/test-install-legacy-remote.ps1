@@ -41,25 +41,25 @@ try {
     # A child process also keeps installer exit calls from bypassing server cleanup.
     $powershell = (Get-Process -Id $PID).Path
 
-    # A legacy release cannot honor system-only, so the installer must stop before legacy setup.
+    # A legacy release cannot honor VP_ENV_FORBIDDEN, so the installer must stop before legacy setup.
     # Restore the workflow's value afterwards; the install below reproduces setup-vp with it.
-    $previousNodeManager = $env:VP_NODE_MANAGER
-    $env:VP_NODE_MANAGER = 'system-only'
+    $previousEnvForbidden = $env:VP_ENV_FORBIDDEN
+    $env:VP_ENV_FORBIDDEN = '1'
     try {
         # Windows PowerShell 5.1 turns redirected child stderr into errors, which 'Stop' would throw.
         $ErrorActionPreference = 'Continue'
         $output = & $powershell -NoProfile -Command '& ([scriptblock]::Create((irm -TimeoutSec 15 $env:VP_TEST_INSTALLER_URL)))' 2>&1 | Out-String
         $exitCode = $LASTEXITCODE
         $ErrorActionPreference = 'Stop'
-        if ($exitCode -eq 0) { throw 'The installer accepted system-only for a legacy release' }
-        if (-not $output.Contains('does not support VP_NODE_MANAGER=system-only')) { throw "Unexpected system-only failure: $output" }
+        if ($exitCode -eq 0) { throw 'The installer accepted VP_ENV_FORBIDDEN for a legacy release' }
+        if (-not $output.Contains('does not support VP_ENV_FORBIDDEN')) { throw "Unexpected VP_ENV_FORBIDDEN failure: $output" }
     } finally {
         $ErrorActionPreference = 'Stop'
-        $env:VP_NODE_MANAGER = $previousNodeManager
+        $env:VP_ENV_FORBIDDEN = $previousEnvForbidden
     }
-    if (Test-Path -LiteralPath (Join-Path $env:VP_HOME 'bin/vp.exe')) { throw 'The system-only attempt installed vp' }
+    if (Test-Path -LiteralPath (Join-Path $env:VP_HOME 'bin/vp.exe')) { throw 'The VP_ENV_FORBIDDEN attempt installed vp' }
     $requests = @(Select-String -LiteralPath $stderr -Pattern 'GET /install-legacy.bin ' -SimpleMatch)
-    if ($requests.Count -ne 1) { throw 'The system-only attempt fetched the legacy script' }
+    if ($requests.Count -ne 1) { throw 'The VP_ENV_FORBIDDEN attempt fetched the legacy script' }
 
     & $powershell -NoProfile -Command '& ([scriptblock]::Create((irm -TimeoutSec 15 $env:VP_TEST_INSTALLER_URL)))'
     if ($LASTEXITCODE -ne 0) { throw "Remote install failed with exit code $LASTEXITCODE" }

@@ -103,20 +103,14 @@ fn persisted_dir_envs() -> HashMap<&'static str, String> {
 
 /// Management preference from a `VP_*_MANAGER` variable.
 ///
-/// Only the exact values `yes`, `no`, and `system-only` are recognized. Any
-/// other value, including a differently cased or non-UTF-8 one, counts as unset.
+/// Only the exact values `yes` and `no` are recognized. Any other value,
+/// including a non-UTF-8 one, counts as unset.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ManagerPreference {
     /// `yes`: Vite+ manages the tool.
     Yes,
     /// `no`: prefer the system tool.
     No,
-    /// `system-only`: use only the system tools. Only `VP_NODE_MANAGER` takes
-    /// this value at run time: it then overrides `config.json` for Node.js and
-    /// every package manager, and Vite+ neither downloads nor uses a managed
-    /// installation of them. Other variables with this value have no run-time
-    /// effect.
-    SystemOnly,
 }
 
 impl ManagerPreference {
@@ -124,7 +118,6 @@ impl ManagerPreference {
         match std::env::var(name).as_deref() {
             Ok("yes") => Some(Self::Yes),
             Ok("no") => Some(Self::No),
-            Ok(env_vars::SYSTEM_ONLY) => Some(Self::SystemOnly),
             _ => None,
         }
     }
@@ -224,6 +217,13 @@ pub struct EnvConfig {
     pub yarn_manager: Option<ManagerPreference>,
     pub bun_manager: Option<ManagerPreference>,
 
+    /// Whether Vite+ manages no Node.js or package manager, enabled only by
+    /// `1`. At run time it takes precedence over `config.json` and every
+    /// `VP_*_MANAGER` variable.
+    ///
+    /// Env: `VP_ENV_FORBIDDEN`
+    pub env_forbidden: bool,
+
     /// User home directory.
     ///
     /// Resolved once from `HOME` or `USERPROFILE` in platform order. See
@@ -244,13 +244,6 @@ pub struct EnvConfig {
 }
 
 impl EnvConfig {
-    /// Whether `VP_NODE_MANAGER=system-only` restricts Node.js and every
-    /// package manager to the system.
-    #[must_use]
-    pub fn node_system_only(&self) -> bool {
-        self.node_manager == Some(ManagerPreference::SystemOnly)
-    }
-
     /// Read configuration from the real process environment.
     ///
     /// Non-test builds call this function on the first [`EnvConfig::get`] and
@@ -297,6 +290,7 @@ impl EnvConfig {
             pnpm_manager: ManagerPreference::from_var(env_vars::VP_PNPM_MANAGER),
             yarn_manager: ManagerPreference::from_var(env_vars::VP_YARN_MANAGER),
             bun_manager: ManagerPreference::from_var(env_vars::VP_BUN_MANAGER),
+            env_forbidden: std::env::var(env_vars::VP_ENV_FORBIDDEN).as_deref() == Ok("1"),
             user_home,
             vp_shell: std::env::var(env_vars::VP_SHELL).ok(),
             nu_version: std::env::var(env_vars::VP_NU_VERSION).ok(),
@@ -479,42 +473,34 @@ impl EnvConfig {
 mod tests {
     use super::*;
 
-    const MANAGER_VARS: [&str; 6] = [
-        env_vars::VP_NODE_MANAGER,
-        env_vars::VP_PM_MANAGER,
-        env_vars::VP_NPM_MANAGER,
-        env_vars::VP_PNPM_MANAGER,
-        env_vars::VP_YARN_MANAGER,
-        env_vars::VP_BUN_MANAGER,
-    ];
-
-    /// Unset every `VP_*_MANAGER` variable, then apply `vars`.
-    fn with_manager_vars<R>(
-        vars: &[(&'static str, &str)],
-        f: impl FnOnce(Arc<EnvConfig>) -> R,
-    ) -> R {
-        let pins = MANAGER_VARS
-            .into_iter()
-            .map(|name| (name, vars.iter().find(|(var, _)| *var == name).map(|(_, value)| *value)));
-        EnvConfig::with_vars(pins, f)
+    #[test]
+    fn env_forbidden_requires_exact_one() {
+        for value in [None, Some(""), Some("0"), Some("true"), Some("yes"), Some(" 1"), Some("1")] {
+            EnvConfig::with_vars([(env_vars::VP_ENV_FORBIDDEN, value)], |config| {
+                assert_eq!(config.env_forbidden, value == Some("1"), "{value:?}");
+            });
+        }
     }
 
+    /// `system-only`, a removed run-time value, is unrecognized like any other
+    /// value and does not stop management either.
     #[test]
-    fn system_only_requires_exact_lowercase_value() {
+    fn manager_preference_accepts_only_yes_and_no() {
         for (value, expected) in [
-            ("system-only", Some(ManagerPreference::SystemOnly)),
-            ("System-Only", None),
-            ("SYSTEM-ONLY", None),
-            ("system_only", None),
             ("yes", Some(ManagerPreference::Yes)),
             ("no", Some(ManagerPreference::No)),
+            ("Yes", None),
+            ("system-only", None),
         ] {
-            with_manager_vars(&[(env_vars::VP_NODE_MANAGER, value)], |config| {
+            let vars = [
+                (env_vars::VP_NODE_MANAGER, Some(value)),
+                (env_vars::VP_PM_MANAGER, Some(value)),
+                (env_vars::VP_ENV_FORBIDDEN, None),
+            ];
+            EnvConfig::with_vars(vars, |config| {
                 assert_eq!(config.node_manager, expected, "{value}");
-                assert_eq!(
-                    config.node_system_only(),
-                    expected == Some(ManagerPreference::SystemOnly)
-                );
+                assert_eq!(config.pm_manager, expected, "{value}");
+                assert!(!config.env_forbidden, "{value}");
             });
         }
     }

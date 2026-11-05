@@ -18,7 +18,7 @@ use crate::{
     commands::{
         env::{
             bin_config::{BinConfig, BinSource, validate_bin_name},
-            config::{self, EffectiveMode},
+            config::{self, ShimMode},
             package_manager,
             package_metadata::PackageMetadata,
         },
@@ -712,17 +712,17 @@ async fn resolve_package_manager_tool(
 
 /// Prepare the child PATH for a JS tool running on the selected Node.js.
 ///
-/// System-only mode adds no directories: a resolved system directory may be a
-/// canonical path missing from PATH, and adding it would reorder the user's
-/// PATH. Children reach the system tools through the PATH entries before the
-/// shims, where system-only shims fail. Directories inherited from a parent
-/// stay as they are.
+/// `VP_ENV_FORBIDDEN=1` adds no directories: a resolved system directory may
+/// be a canonical path missing from PATH, and adding it would reorder the
+/// user's PATH. Children reach the system tools through the PATH entries
+/// before the shims, where the shims fail under `VP_ENV_FORBIDDEN=1`.
+/// Directories inherited from a parent stay as they are.
 async fn prepare_js_child_path(
     cwd: &AbsolutePath,
     node_bin_dir: &AbsolutePath,
     mut env: ToolPathEnv,
 ) -> Result<ToolPathEnv, Error> {
-    if vp_shared::EnvConfig::get().node_system_only() {
+    if vp_shared::EnvConfig::get().env_forbidden {
         return Ok(env);
     }
     env.prepend(node_bin_dir, &["node"], PrependOptions::default())?;
@@ -746,19 +746,18 @@ async fn prepare_js_child_path(
     Ok(env)
 }
 
-/// The variable that restricts `tool` to the system, if any.
+/// Whether `VP_ENV_FORBIDDEN=1` restricts `tool` to the system.
 ///
-/// `VP_NODE_MANAGER=system-only` restricts every core tool: Node.js and every
-/// package-manager family. Package binaries have no such variable.
-pub(crate) fn system_only_variable_for_tool(tool: &str) -> Option<&'static str> {
-    (vp_shared::EnvConfig::get().node_system_only() && is_core_shim_tool(tool))
-        .then_some(env_vars::VP_NODE_MANAGER)
+/// It restricts every core tool: Node.js and every package-manager family.
+/// Package binaries are not restricted.
+pub(crate) fn is_env_forbidden_tool(tool: &str) -> bool {
+    vp_shared::EnvConfig::get().env_forbidden && is_core_shim_tool(tool)
 }
 
 /// Whether a managed executable selected by a parent process may be reused.
-/// System-only tools never reuse one.
-fn reuses_inherited_tool(tool: &str, path: &AbsolutePath) -> bool {
-    vp_command::is_managed_install(path.as_path()) && system_only_variable_for_tool(tool).is_none()
+/// Nothing managed is reused under `VP_ENV_FORBIDDEN=1`.
+fn reuses_inherited_tool(path: &AbsolutePath) -> bool {
+    vp_command::is_managed_install(path.as_path()) && !vp_shared::EnvConfig::get().env_forbidden
 }
 
 /// Node.js, the tool, and the child PATH selected for a core shim.
@@ -782,26 +781,18 @@ async fn select_core_tool(
     // Ensure Node.js is installed and locate its binary for PATH preparation.
     // Package-manager shims can use their own declared version, but JS-based
     // package managers still need the Node.js runtime selected by its mode.
-    // System-only Node.js ignores inherited and session selections.
-    let node_system_only = vp_shared::EnvConfig::get().node_system_only();
-    let inherited_node = (!node_system_only
-        && PackageManagerType::from_tool(tool).is_some()
-        && env.contains("node"))
-    .then(|| find_system_tool("node"))
-    .flatten();
+    // Under VP_ENV_FORBIDDEN=1, dispatch fails before reaching this function.
+    let inherited_node = (PackageManagerType::from_tool(tool).is_some() && env.contains("node"))
+        .then(|| find_system_tool("node"))
+        .flatten();
     let node_is_inherited = inherited_node.is_some();
     let system_node = if node_is_inherited {
         inherited_node
-    } else if node_system_only || PackageManagerType::from_tool(tool).is_some() {
-        let mode = if node_system_only {
-            EffectiveMode::SystemOnly
-        } else {
-            let config = config::load_config()
-                .await
-                .map_err(|error| vec![format!("Failed to load Node.js shim mode: {error}")])?;
-            config::effective_node_mode(&config)
-        };
-        resolve_effective_tool("node", mode).map_err(|e| vec![e.to_string()])?
+    } else if PackageManagerType::from_tool(tool).is_some() {
+        let config = config::load_config()
+            .await
+            .map_err(|error| vec![format!("Failed to load Node.js shim mode: {error}")])?;
+        (config.node_shim_mode == ShimMode::SystemFirst).then(|| find_system_tool("node")).flatten()
     } else {
         None
     };
@@ -893,9 +884,9 @@ pub async fn dispatch(tool: &str, args: &[String], env: ToolPathEnv) -> i32 {
         return crate::commands::vpr::execute_vpr(args, &cwd).await;
     }
 
-    // A system-only shim neither searches PATH nor forwards, even under
-    // VP_BYPASS, so a system tool that forwards back to it cannot loop.
-    if let Some(error) = system_only_shim_error(tool).await {
+    // Under VP_ENV_FORBIDDEN=1, a core shim neither searches PATH nor forwards,
+    // even under VP_BYPASS, so a system tool that forwards back to it cannot loop.
+    if let Some(error) = env_forbidden_shim_error(tool).await {
         eprintln!("vp: {error}");
         return 1;
     }
@@ -906,7 +897,7 @@ pub async fn dispatch(tool: &str, args: &[String], env: ToolPathEnv) -> i32 {
         PackageManagerType::from_tool(tool).map_or(tool, |kind| kind.bin_name_for_tool(tool));
     if env.contains(inherited_tool)
         && let Some(path) = find_system_tool(inherited_tool)
-        && reuses_inherited_tool(tool, &path)
+        && reuses_inherited_tool(&path)
     {
         return exec::exec_tool(&path, args, env);
     }
@@ -1071,7 +1062,7 @@ pub(crate) async fn package_binary_invocation(
     node_version: &str,
     mut env: ToolPathEnv,
 ) -> Result<(AbsolutePathBuf, Vec<String>, ToolPathEnv), String> {
-    let node_path = match resolve_system_only_tool("node") {
+    let node_path = match resolve_env_forbidden_tool("node") {
         Some(node) => node.map_err(|e| e.to_string())?,
         None => ensure_installed(node_version)
             .await
@@ -1088,8 +1079,8 @@ pub(crate) async fn package_binary_invocation(
     let child_env = if let Ok(cwd) = current_dir() {
         prepare_js_child_path(&cwd, node_bin_dir, env).await.map_err(|error| error.to_string())?
     } else {
-        // As in `prepare_js_child_path`, system-only mode adds no directories.
-        if !vp_shared::EnvConfig::get().node_system_only() {
+        // As in `prepare_js_child_path`, VP_ENV_FORBIDDEN adds no directories.
+        if !vp_shared::EnvConfig::get().env_forbidden {
             env.prepend(node_bin_dir, &["node"], PrependOptions::default())
                 .map_err(|error| error.to_string())?;
         }
@@ -1172,14 +1163,16 @@ fn bypass_to_system(tool: &str, args: &[String], env: ToolPathEnv) -> i32 {
     }
 }
 
-/// The error for the shim of a system-only `tool`, which never searches PATH.
+/// The error for the shim of `tool` under `VP_ENV_FORBIDDEN=1`, which never
+/// searches PATH.
 ///
 /// The shell's PATH lookup reached the shim, so no system tool comes before
 /// it. Managed `config.json` places the shims first on PATH, so `vp env off`
-/// moves them after the system tools. A tool without a system-only variable
-/// gets `None`.
-async fn system_only_shim_error(tool: &str) -> Option<Error> {
-    let variable = system_only_variable_for_tool(tool)?;
+/// moves them after the system tools. An unrestricted tool gets `None`.
+async fn env_forbidden_shim_error(tool: &str) -> Option<Error> {
+    if !is_env_forbidden_tool(tool) {
+        return None;
+    }
     let kind = PackageManagerType::from_tool(tool);
     let bin = kind.map_or(tool, |kind| kind.bin_name_for_tool(tool));
     // An unreadable config.json cannot show that the shims come first.
@@ -1187,9 +1180,9 @@ async fn system_only_shim_error(tool: &str) -> Option<Error> {
         .await
         .is_ok_and(|config| config.shim_mode_for_tool(tool) == config::ShimMode::Managed);
     Some(if shims_first {
-        system_tool_behind_shim(bin, variable)
+        system_tool_behind_shim(bin)
     } else {
-        Error::SystemToolNotFound { tool: bin.into(), variable }
+        Error::SystemToolNotFound { tool: bin.into() }
     })
 }
 
@@ -1303,8 +1296,8 @@ fn node_install_dir(version: &str) -> AbsolutePathBuf {
 
 /// Ensure Node.js is installed.
 ///
-/// Fails in system-only mode, even for a cached version. Callers that support
-/// system-only mode select the system Node.js before reaching this function.
+/// Fails under `VP_ENV_FORBIDDEN=1`, even for a cached version. Callers that
+/// support it select the system Node.js before reaching this function.
 pub(crate) async fn ensure_installed(version: &str) -> Result<AbsolutePathBuf, String> {
     vp_js_runtime::ensure_managed_node_allowed().map_err(|error| error.to_string())?;
     let home_dir = node_install_dir(version);
@@ -1409,36 +1402,16 @@ fn first_path_match(tool: &str, cwd: &AbsolutePath) -> FirstPathMatch {
     vp_command::classify_first_path_match(tool, &path, self_real.as_deref(), cwd)
 }
 
-/// Locate `tool` according to its effective mode.
-///
-/// - `SystemOnly`: [`resolve_system_only_tool`]. Pass it only for a tool with
-///   a system-only variable; any other tool gets `None`.
-/// - `SystemFirst`: [`find_system_tool`].
-/// - `Managed`: `None`; the caller resolves the managed tool.
-pub(crate) fn resolve_effective_tool(
-    tool: &str,
-    mode: EffectiveMode,
-) -> Result<Option<AbsolutePathBuf>, Error> {
-    match mode {
-        EffectiveMode::Managed => Ok(None),
-        EffectiveMode::SystemFirst => Ok(find_system_tool(tool)),
-        EffectiveMode::SystemOnly => {
-            debug_assert!(
-                system_only_variable_for_tool(tool).is_some(),
-                "{tool} has no system-only variable"
-            );
-            resolve_system_only_tool(tool).transpose()
-        }
-    }
-}
-
-/// Locate `tool` when it is system-only, or return `None` when it is not.
+/// Locate `tool` when `VP_ENV_FORBIDDEN=1` restricts it to the system, or
+/// return `None` when it is not restricted.
 ///
 /// The tool is the first PATH match, which must be a system tool. A Vite+
 /// shim or managed install there fails instead of searching further. Short
 /// aliases (`pn`, `pnx`) map to the binaries the family installs.
-pub(crate) fn resolve_system_only_tool(tool: &str) -> Option<Result<AbsolutePathBuf, Error>> {
-    let variable = system_only_variable_for_tool(tool)?;
+pub(crate) fn resolve_env_forbidden_tool(tool: &str) -> Option<Result<AbsolutePathBuf, Error>> {
+    if !is_env_forbidden_tool(tool) {
+        return None;
+    }
     let tool =
         PackageManagerType::from_tool(tool).map_or(tool, |kind| kind.bin_name_for_tool(tool));
     let cwd = match current_dir() {
@@ -1453,25 +1426,24 @@ pub(crate) fn resolve_system_only_tool(tool: &str) -> Option<Result<AbsolutePath
                 dir.as_path() == vp_shared::EnvConfig::get().dirs.bin.as_path()
             }) =>
         {
-            Err(system_tool_behind_shim(tool, variable))
+            Err(system_tool_behind_shim(tool))
         }
         FirstPathMatch::ViteShim(_) | FirstPathMatch::NotFound => {
-            Err(Error::SystemToolNotFound { tool: tool.into(), variable })
+            Err(Error::SystemToolNotFound { tool: tool.into() })
         }
         FirstPathMatch::VpOwned(path) => Err(Error::SystemToolManagedInstall {
             tool: tool.into(),
-            variable,
             path: path.as_path().display().to_string().into(),
         }),
     })
 }
 
-/// The error for system-only `tool` behind the shims of this installation;
+/// The error for restricted `tool` behind the shims of this installation;
 /// `tool` is the binary name, not an alias.
-fn system_tool_behind_shim(tool: &str, variable: &'static str) -> Error {
+fn system_tool_behind_shim(tool: &str) -> Error {
     let component = PackageManagerType::from_tool(tool)
         .map_or_else(|| "node".into(), |kind| kind.to_string().into());
-    Error::SystemToolBehindShim { tool: tool.into(), variable, component }
+    Error::SystemToolBehindShim { tool: tool.into(), component }
 }
 
 /// Process-dependent inputs for [`vp_command::find_external_tool`].
@@ -2575,9 +2547,9 @@ mod tests {
         assert!(!result.as_path().as_os_str().is_empty());
     }
 
-    /// Directories for system-only shim tests: a managed Node.js cached under
-    /// `VP_HOME` and a separate system directory.
-    struct SystemOnlyLayout {
+    /// Directories for `VP_ENV_FORBIDDEN` shim tests: a managed Node.js cached
+    /// under `VP_HOME` and a separate system directory.
+    struct ForbiddenLayout {
         _temp: TempDir,
         home: std::path::PathBuf,
         managed_bin: std::path::PathBuf,
@@ -2585,7 +2557,7 @@ mod tests {
         cwd: AbsolutePathBuf,
     }
 
-    impl SystemOnlyLayout {
+    impl ForbiddenLayout {
         fn new() -> Self {
             let temp = TempDir::new().unwrap();
             let home = temp.path().join("home");
@@ -2611,21 +2583,12 @@ mod tests {
         if cfg!(windows) { dir } else { dir.join("bin") }
     }
 
-    const MANAGER_VARS: [&str; 6] = [
-        env_vars::VP_NODE_MANAGER,
-        env_vars::VP_PM_MANAGER,
-        env_vars::VP_NPM_MANAGER,
-        env_vars::VP_PNPM_MANAGER,
-        env_vars::VP_YARN_MANAGER,
-        env_vars::VP_BUN_MANAGER,
-    ];
-
-    /// Pins `VP_HOME`, PATH and the manager variables; everything else in
-    /// `extra` is set as given.
-    fn system_only_vars(
-        layout: &SystemOnlyLayout,
+    /// Pins `VP_HOME`, PATH and `VP_ENV_FORBIDDEN`; everything else in `extra`
+    /// is set as given.
+    fn forbidden_vars(
+        layout: &ForbiddenLayout,
         path: &std::ffi::OsStr,
-        managers: &[(&'static str, &'static str)],
+        forbidden: Option<&'static str>,
         extra: &[(&'static str, std::ffi::OsString)],
     ) -> Vec<(&'static str, Option<std::ffi::OsString>)> {
         let mut vars = vec![
@@ -2633,10 +2596,8 @@ mod tests {
             ("PATH", Some(path.to_os_string())),
             (env_vars::VP_BYPASS, None),
             (env_vars::VP_PATH_INJECTED_TOOLS, None),
+            (env_vars::VP_ENV_FORBIDDEN, forbidden.map(Into::into)),
         ];
-        vars.extend(MANAGER_VARS.into_iter().map(|name| {
-            (name, managers.iter().find(|(var, _)| *var == name).map(|(_, value)| value.into()))
-        }));
         for (name, value) in extra {
             vars.retain(|(var, _)| var != name);
             vars.push((name, Some(value.clone())));
@@ -2647,7 +2608,7 @@ mod tests {
     /// Make `dir/<tool>` a Vite+ shim: a link to `vp` on Unix, a trampoline
     /// with a shim pointer on Windows.
     fn make_shim(
-        layout: &SystemOnlyLayout,
+        layout: &ForbiddenLayout,
         dir: &std::path::Path,
         tool: &str,
     ) -> std::path::PathBuf {
@@ -2664,7 +2625,7 @@ mod tests {
         #[cfg(windows)]
         {
             let shim = create_fake_executable(dir, tool);
-            EnvConfig::with_vars(system_only_vars(layout, &layout.path(), &[], &[]), |config| {
+            EnvConfig::with_vars(forbidden_vars(layout, &layout.path(), None, &[]), |config| {
                 config.dirs.write_shim_pointer_beside(&shim).unwrap();
             });
             shim
@@ -2677,7 +2638,7 @@ mod tests {
 
     #[test]
     fn test_find_system_tool_reuses_managed_installs_but_not_shims() {
-        let layout = SystemOnlyLayout::new();
+        let layout = ForbiddenLayout::new();
         let managed_node = layout.managed_bin.join(exe("node"));
         let system_node = create_fake_executable(&layout.system_bin, "node");
         let empty = layout.home.join("empty");
@@ -2691,7 +2652,7 @@ mod tests {
             (std::env::join_paths([&shim_dir, &layout.system_bin]).unwrap(), None),
         ];
         for (path, expected) in cases {
-            EnvConfig::with_vars(system_only_vars(&layout, &path, &[], &[]), |_| {
+            EnvConfig::with_vars(forbidden_vars(&layout, &path, None, &[]), |_| {
                 let found = find_system_tool_in("node", &layout.cwd);
                 assert_eq!(
                     found.as_ref().map(|path| path.as_path()),
@@ -2702,46 +2663,41 @@ mod tests {
         }
     }
 
-    /// A system-only shim fails without searching PATH. The message follows
-    /// where `config.json` places the shims. `VP_NODE_MANAGER=system-only`
-    /// covers every core tool; the package-manager variables alone do not.
+    /// Under `VP_ENV_FORBIDDEN=1`, a core shim fails without searching PATH.
+    /// The message follows where `config.json` places the shims. Other values
+    /// of `VP_ENV_FORBIDDEN` leave the shims to their own mode.
     #[tokio::test(flavor = "current_thread")]
-    async fn test_system_only_shim_error_follows_config_without_searching_path() {
-        let layout = SystemOnlyLayout::new();
+    async fn test_env_forbidden_shim_error_follows_config_without_searching_path() {
+        let layout = ForbiddenLayout::new();
         for tool in ["node", "npm", "pnpm"] {
             create_fake_executable(&layout.system_bin, tool);
         }
         let path = std::env::join_paths([&layout.system_bin]).unwrap();
-        let shim_error = |managers: &'static [(&'static str, &'static str)], tool: &'static str| {
-            let vars = system_only_vars(&layout, &path, managers, &[]);
+        let shim_error = |forbidden: Option<&'static str>, tool: &'static str| {
+            let vars = forbidden_vars(&layout, &path, forbidden, &[]);
             EnvConfig::with_vars_async(vars, move |_| async move {
-                system_only_shim_error(tool).await.map(|error| error.to_string())
+                env_forbidden_shim_error(tool).await.map(|error| error.to_string())
             })
         };
-        let node = &[(env_vars::VP_NODE_MANAGER, "system-only")];
+        let forbidden = Some("1");
         let behind_shim = |tool: &str, component: &str| {
-            Error::SystemToolBehindShim {
-                tool: tool.into(),
-                variable: env_vars::VP_NODE_MANAGER,
-                component: component.into(),
-            }
-            .to_string()
+            Error::SystemToolBehindShim { tool: tool.into(), component: component.into() }
+                .to_string()
         };
 
         // Without config.json, the shims are managed and come first on PATH.
-        assert_eq!(shim_error(node, "node").await, Some(behind_shim("node", "node")));
-        assert_eq!(shim_error(node, "npm").await, Some(behind_shim("npm", "npm")));
-        assert_eq!(shim_error(node, "npx").await, Some(behind_shim("npx", "npm")));
-        assert_eq!(shim_error(node, "pnx").await, Some(behind_shim("pnpx", "pnpm")));
-        // The package-manager variables alone leave the shims to their own mode.
-        let pm =
-            &[(env_vars::VP_PM_MANAGER, "system-only"), (env_vars::VP_PNPM_MANAGER, "system-only")];
-        assert_eq!(shim_error(pm, "pnpm").await, None);
-        assert_eq!(shim_error(pm, "npm").await, None);
-        assert_eq!(shim_error(&[], "node").await, None);
+        assert_eq!(shim_error(forbidden, "node").await, Some(behind_shim("node", "node")));
+        assert_eq!(shim_error(forbidden, "npm").await, Some(behind_shim("npm", "npm")));
+        assert_eq!(shim_error(forbidden, "npx").await, Some(behind_shim("npx", "npm")));
+        assert_eq!(shim_error(forbidden, "pnx").await, Some(behind_shim("pnpx", "pnpm")));
+        // Package binaries are not restricted.
+        assert_eq!(shim_error(forbidden, "tsc").await, None);
+        // Only the exact value `1` restricts the shims.
+        assert_eq!(shim_error(Some("true"), "pnpm").await, None);
+        assert_eq!(shim_error(None, "node").await, None);
 
         // System-first shims come last on PATH, so no system tool came before them.
-        let vars = system_only_vars(&layout, &path, node, &[]);
+        let vars = forbidden_vars(&layout, &path, forbidden, &[]);
         EnvConfig::with_vars_async(vars, |_| async {
             let config = config::Config {
                 node_shim_mode: config::ShimMode::SystemFirst,
@@ -2750,26 +2706,25 @@ mod tests {
             config::save_config(&config).await.unwrap();
         })
         .await;
-        let not_found =
-            Error::SystemToolNotFound { tool: "node".into(), variable: env_vars::VP_NODE_MANAGER };
-        assert_eq!(shim_error(node, "node").await, Some(not_found.to_string()));
+        let not_found = Error::SystemToolNotFound { tool: "node".into() };
+        assert_eq!(shim_error(forbidden, "node").await, Some(not_found.to_string()));
         // The pnpm shims stay managed.
-        assert_eq!(shim_error(node, "pnpm").await, Some(behind_shim("pnpm", "pnpm")));
+        assert_eq!(shim_error(forbidden, "pnpm").await, Some(behind_shim("pnpm", "pnpm")));
 
         // An unreadable config.json cannot show that the shims come first.
-        let vars = system_only_vars(&layout, &path, node, &[]);
+        let vars = forbidden_vars(&layout, &path, forbidden, &[]);
         EnvConfig::with_vars_async(vars, |_| async {
             std::fs::write(config::get_config_path().unwrap(), "{").unwrap();
         })
         .await;
-        assert_eq!(shim_error(node, "node").await, Some(not_found.to_string()));
+        assert_eq!(shim_error(forbidden, "node").await, Some(not_found.to_string()));
     }
 
-    /// A system-only lookup takes the first PATH match only: a Vite+ shim or a
-    /// managed install there fails instead of searching further.
+    /// A lookup under `VP_ENV_FORBIDDEN=1` takes the first PATH match only: a
+    /// Vite+ shim or a managed install there fails instead of searching further.
     #[test]
-    fn test_resolve_system_only_tool_classifies_the_first_match() {
-        let layout = SystemOnlyLayout::new();
+    fn test_resolve_env_forbidden_tool_classifies_the_first_match() {
+        let layout = ForbiddenLayout::new();
         let system_node = create_fake_executable(&layout.system_bin, "node");
         let managed_node = layout.managed_bin.join(exe("node"));
         let bin = layout.home.join("bin");
@@ -2779,22 +2734,16 @@ mod tests {
         make_shim(&layout, &fallback_bin, "node");
         let empty = layout.home.join("empty");
         std::fs::create_dir_all(&empty).unwrap();
-        let node = &[(env_vars::VP_NODE_MANAGER, "system-only")];
         let resolve = |dirs: &[&std::path::Path], tool: &str| {
             let path = std::env::join_paths(dirs).unwrap();
-            EnvConfig::with_vars(system_only_vars(&layout, &path, node, &[]), |_| {
-                resolve_system_only_tool(tool)
-                    .expect("the tool is system-only")
+            EnvConfig::with_vars(forbidden_vars(&layout, &path, Some("1"), &[]), |_| {
+                resolve_env_forbidden_tool(tool)
+                    .expect("the tool is restricted")
                     .map_err(|error| error.to_string())
             })
         };
-        let not_found = |tool: &str| {
-            Err(Error::SystemToolNotFound {
-                tool: tool.into(),
-                variable: env_vars::VP_NODE_MANAGER,
-            }
-            .to_string())
-        };
+        let not_found =
+            |tool: &str| Err(Error::SystemToolNotFound { tool: tool.into() }.to_string());
 
         let system = resolve(&[&layout.system_bin, &layout.managed_bin], "node");
         assert_eq!(system.unwrap().as_path(), system_node);
@@ -2803,19 +2752,14 @@ mod tests {
             resolve(&[&layout.managed_bin, &layout.system_bin], "node"),
             Err(Error::SystemToolManagedInstall {
                 tool: "node".into(),
-                variable: env_vars::VP_NODE_MANAGER,
                 path: managed_node.display().to_string().into(),
             }
             .to_string())
         );
         // The shims of this installation come first, so `vp env off` moves them.
         let behind_shim = |tool: &str, component: &str| {
-            Err(Error::SystemToolBehindShim {
-                tool: tool.into(),
-                variable: env_vars::VP_NODE_MANAGER,
-                component: component.into(),
-            }
-            .to_string())
+            Err(Error::SystemToolBehindShim { tool: tool.into(), component: component.into() }
+                .to_string())
         };
         assert_eq!(resolve(&[&bin, &layout.system_bin], "node"), behind_shim("node", "node"));
         assert_eq!(resolve(&[&bin, &layout.system_bin], "pnpm"), behind_shim("pnpm", "pnpm"));
@@ -2825,40 +2769,37 @@ mod tests {
         assert_eq!(resolve(&[&fallback_bin, &layout.system_bin], "node"), not_found("node"));
         assert_eq!(resolve(&[&empty], "node"), not_found("node"));
 
-        EnvConfig::with_vars(system_only_vars(&layout, &layout.path(), node, &[]), |_| {
-            assert!(resolve_effective_tool("node", EffectiveMode::Managed).unwrap().is_none());
+        // Package binaries and other values of VP_ENV_FORBIDDEN are not restricted.
+        EnvConfig::with_vars(forbidden_vars(&layout, &layout.path(), Some("1"), &[]), |_| {
+            assert!(resolve_env_forbidden_tool("tsc").is_none());
         });
-        // Without VP_NODE_MANAGER=system-only, every tool is left to its own mode.
-        let pm =
-            [(env_vars::VP_PM_MANAGER, "system-only"), (env_vars::VP_PNPM_MANAGER, "system-only")];
-        EnvConfig::with_vars(system_only_vars(&layout, &layout.path(), &pm, &[]), |_| {
-            assert!(resolve_system_only_tool("node").is_none());
-            assert!(resolve_system_only_tool("pnpm").is_none());
+        EnvConfig::with_vars(forbidden_vars(&layout, &layout.path(), Some("true"), &[]), |_| {
+            assert!(resolve_env_forbidden_tool("node").is_none());
+            assert!(resolve_env_forbidden_tool("pnpm").is_none());
         });
     }
 
     #[tokio::test]
-    async fn test_ensure_installed_rejects_cached_node_in_system_only_mode() {
-        let layout = SystemOnlyLayout::new();
+    async fn test_ensure_installed_rejects_cached_node_when_env_forbidden() {
+        let layout = ForbiddenLayout::new();
         let path = layout.path();
-        EnvConfig::with_vars_async(system_only_vars(&layout, &path, &[], &[]), |_| async {
+        EnvConfig::with_vars_async(forbidden_vars(&layout, &path, None, &[]), |_| async {
             assert!(ensure_installed("24.0.0").await.is_ok());
         })
         .await;
-        let managers = [(env_vars::VP_NODE_MANAGER, "system-only")];
-        EnvConfig::with_vars_async(system_only_vars(&layout, &path, &managers, &[]), |_| async {
+        EnvConfig::with_vars_async(forbidden_vars(&layout, &path, Some("1"), &[]), |_| async {
             let error = ensure_installed("24.0.0").await.unwrap_err();
-            assert!(error.contains("VP_NODE_MANAGER=system-only"), "{error}");
+            assert!(error.contains(&format!("{}=1", env_vars::VP_ENV_FORBIDDEN)), "{error}");
         })
         .await;
     }
 
-    /// A managed executable selected by a parent is reused, but never in
-    /// system-only mode: neither a managed package manager nor the managed
-    /// runtime and its bundled npm.
+    /// A managed executable selected by a parent is reused, but never under
+    /// `VP_ENV_FORBIDDEN=1`: neither a managed package manager, nor the managed
+    /// runtime and its bundled npm, nor a package binary bundled with it.
     #[test]
-    fn test_reuses_inherited_managed_tools_unless_system_only() {
-        let layout = SystemOnlyLayout::new();
+    fn test_reuses_inherited_managed_tools_unless_env_forbidden() {
+        let layout = ForbiddenLayout::new();
         let pnpm_bin = layout
             .home
             .join("package_manager")
@@ -2867,36 +2808,33 @@ mod tests {
             .join("pnpm")
             .join("bin");
         std::fs::create_dir_all(&pnpm_bin).unwrap();
-        let pnpm = AbsolutePathBuf::new(create_fake_executable(&pnpm_bin, "pnpm")).unwrap();
-        let npm = AbsolutePathBuf::new(layout.managed_bin.join(exe("npm"))).unwrap();
-        let node = AbsolutePathBuf::new(layout.managed_bin.join(exe("node"))).unwrap();
+        let pnpm = create_fake_executable(&pnpm_bin, "pnpm");
+        let npm = layout.managed_bin.join(exe("npm"));
+        let node = layout.managed_bin.join(exe("node"));
+        let corepack = create_fake_executable(&layout.managed_bin, "corepack");
+        let tools = [pnpm, npm, node, corepack].map(|path| AbsolutePathBuf::new(path).unwrap());
         let path = layout.path();
 
-        // The package-manager variables alone do not stop reuse.
-        for managers in [
-            &[][..],
-            &[(env_vars::VP_PM_MANAGER, "system-only"), (env_vars::VP_NPM_MANAGER, "system-only")],
-        ] {
-            EnvConfig::with_vars(system_only_vars(&layout, &path, managers, &[]), |_| {
-                assert!(reuses_inherited_tool("pnpm", &pnpm), "{managers:?}");
-                assert!(reuses_inherited_tool("npm", &npm), "{managers:?}");
-                assert!(reuses_inherited_tool("node", &node), "{managers:?}");
+        for forbidden in [None, Some("true")] {
+            EnvConfig::with_vars(forbidden_vars(&layout, &path, forbidden, &[]), |_| {
+                for tool in &tools {
+                    assert!(reuses_inherited_tool(tool), "{forbidden:?} {tool:?}");
+                }
             });
         }
-        let managers = [(env_vars::VP_NODE_MANAGER, "system-only")];
-        EnvConfig::with_vars(system_only_vars(&layout, &path, &managers, &[]), |_| {
-            assert!(!reuses_inherited_tool("pnpm", &pnpm));
-            assert!(!reuses_inherited_tool("npm", &npm));
-            assert!(!reuses_inherited_tool("node", &node));
+        EnvConfig::with_vars(forbidden_vars(&layout, &path, Some("1"), &[]), |_| {
+            for tool in &tools {
+                assert!(!reuses_inherited_tool(tool), "{tool:?}");
+            }
         });
     }
 
-    /// In system-only mode the child PATH gets no directory and records no
-    /// tool, so directories inherited from a parent stay in order. Otherwise
+    /// Under `VP_ENV_FORBIDDEN=1` the child PATH gets no directory and records
+    /// no tool, so directories inherited from a parent stay in order. Otherwise
     /// the runtime and its npm are added as before.
     #[tokio::test]
-    async fn test_prepare_js_child_path_adds_nothing_when_system_only() {
-        let layout = SystemOnlyLayout::new();
+    async fn test_prepare_js_child_path_adds_nothing_when_env_forbidden() {
+        let layout = ForbiddenLayout::new();
         let node_dir = node_install_dir_in(&layout.home, "22.0.0");
         std::fs::create_dir_all(&node_dir).unwrap();
         create_fake_executable(&node_dir, "node");
@@ -2909,8 +2847,8 @@ mod tests {
         let node_dir = AbsolutePathBuf::new(node_dir).unwrap();
         let other = layout.cwd.as_path().join("other-bin");
         let path = std::env::join_paths([&layout.managed_bin, &other, &layout.system_bin]).unwrap();
-        let prepare = |managers: &'static [(&'static str, &'static str)]| {
-            let vars = system_only_vars(&layout, &path, managers, &[]);
+        let prepare = |forbidden: Option<&'static str>| {
+            let vars = forbidden_vars(&layout, &path, forbidden, &[]);
             let (cwd, node_dir) = (layout.cwd.clone(), node_dir.clone());
             EnvConfig::with_vars_async(vars, move |_| async move {
                 prepare_js_child_path(&cwd, &node_dir, ToolPathEnv::from_env())
@@ -2920,17 +2858,13 @@ mod tests {
             })
         };
 
-        let [(_, child_path), (_, child_tools)] =
-            prepare(&[(env_vars::VP_NODE_MANAGER, "system-only")]).await;
+        let [(_, child_path), (_, child_tools)] = prepare(Some("1")).await;
         assert_eq!(child_path, path);
         assert_eq!(child_tools, "");
 
-        // The package-manager variables alone do not keep the runtime out.
-        for managers in [
-            &[][..],
-            &[(env_vars::VP_PM_MANAGER, "system-only"), (env_vars::VP_NPM_MANAGER, "system-only")],
-        ] {
-            let [(_, child_path), (_, child_tools)] = prepare(managers).await;
+        // Other values of VP_ENV_FORBIDDEN do not keep the runtime out.
+        for forbidden in [None, Some("true")] {
+            let [(_, child_path), (_, child_tools)] = prepare(forbidden).await;
             assert_eq!(
                 std::env::split_paths(&child_path).collect::<Vec<_>>(),
                 [
@@ -2939,9 +2873,9 @@ mod tests {
                     other.clone(),
                     layout.system_bin.clone()
                 ],
-                "{managers:?}"
+                "{forbidden:?}"
             );
-            assert_eq!(child_tools, "node,npm", "{managers:?}");
+            assert_eq!(child_tools, "node,npm", "{forbidden:?}");
         }
     }
 }

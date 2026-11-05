@@ -191,7 +191,7 @@ async fn install_version(
     let version = &resolved.version;
     // Refuse before touching the install directory: the target may be the
     // retained previous version, which failed-install cleanup would delete.
-    ensure_staged_system_only_support(platform_data, version).await?;
+    ensure_staged_env_forbidden_support(platform_data, version).await?;
 
     // Step 8: Create version directory.
     //
@@ -312,14 +312,14 @@ async fn extract_binary(
     Ok(binary_path)
 }
 
-/// Refuse a target without system-only support while
-/// `VP_NODE_MANAGER=system-only` is set. The probe runs from a temporary
+/// Refuse a target without `VP_ENV_FORBIDDEN` support while
+/// `VP_ENV_FORBIDDEN=1` is set. The probe runs from a temporary
 /// directory, so a refusal leaves every install directory unchanged.
-async fn ensure_staged_system_only_support(
+async fn ensure_staged_env_forbidden_support(
     platform_data: &[u8],
     target: &str,
 ) -> Result<(), Error> {
-    if !vp_shared::EnvConfig::get().node_system_only() {
+    if !vp_shared::EnvConfig::get().env_forbidden {
         return Ok(());
     }
     let staging = tempfile::tempdir().map_err(|e| {
@@ -338,28 +338,28 @@ async fn ensure_staged_system_only_support(
             .into(),
         )
     })?;
-    require_system_only_support(support, target)
+    require_env_forbidden_support(support, target)
 }
 
-/// Refuse to switch to `binary` while `VP_NODE_MANAGER=system-only` is set,
-/// unless the binary supports system-only mode.
-async fn ensure_system_only_support(binary: &AbsolutePath, target: &str) -> Result<(), Error> {
-    if !vp_shared::EnvConfig::get().node_system_only() {
+/// Refuse to switch to `binary` while `VP_ENV_FORBIDDEN=1` is set,
+/// unless the binary supports `VP_ENV_FORBIDDEN`.
+async fn ensure_env_forbidden_support(binary: &AbsolutePath, target: &str) -> Result<(), Error> {
+    if !vp_shared::EnvConfig::get().env_forbidden {
         return Ok(());
     }
     let support = vp_setup::support::probe_self_setup(binary, true).await?;
-    require_system_only_support(support, target)
+    require_env_forbidden_support(support, target)
 }
 
-/// A target without system-only support would download managed tools.
-fn require_system_only_support(
+/// A target without `VP_ENV_FORBIDDEN` support would download managed tools.
+fn require_env_forbidden_support(
     support: vp_setup::support::SelfSetupSupport,
     target: &str,
 ) -> Result<(), Error> {
-    if support == vp_setup::support::SelfSetupSupport::SystemOnly {
+    if support == vp_setup::support::SelfSetupSupport::EnvForbidden {
         return Ok(());
     }
-    Err(Error::Upgrade(vp_setup::support::system_only_unsupported_message(target).into()))
+    Err(Error::Upgrade(vp_setup::support::env_forbidden_unsupported_message(target).into()))
 }
 
 /// Execute rollback to the previous version.
@@ -387,7 +387,7 @@ async fn execute_rollback(
         output::info(&format!("switching from {} {} {}", current_version, output::ARROW, previous));
     }
 
-    ensure_system_only_support(&prev_dir.join("bin").join(vp_setup::VP_BINARY_NAME), &previous)
+    ensure_env_forbidden_support(&prev_dir.join("bin").join(vp_setup::VP_BINARY_NAME), &previous)
         .await?;
 
     // Save the current version as the new "previous" before swapping
@@ -417,8 +417,13 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn system_only_requires_target_support() {
+    async fn env_forbidden_requires_target_support() {
         use std::os::unix::fs::PermissionsExt;
+
+        use vp_setup::support::{
+            ENV_FORBIDDEN_SUPPORT_CHECK, ENV_FORBIDDEN_SUPPORT_RESPONSE,
+            SELF_SETUP_SUPPORT_RESPONSE,
+        };
 
         let temp = tempfile::tempdir().unwrap();
         let script = |name: &str, body: &str| {
@@ -429,39 +434,34 @@ mod tests {
         };
         let supported = script(
             "supported",
-            r#"echo vite-plus-self-setup-v1; [ "$VP_SELF_SETUP_SUPPORT_CHECK" = system-only ] && echo vite-plus-self-setup-system-only; exit 0"#,
+            &format!(
+                r#"echo {SELF_SETUP_SUPPORT_RESPONSE}; [ "$VP_SELF_SETUP_SUPPORT_CHECK" = {ENV_FORBIDDEN_SUPPORT_CHECK} ] && echo {ENV_FORBIDDEN_SUPPORT_RESPONSE}; exit 0"#
+            ),
         );
-        let unsupported = script("unsupported", "echo vite-plus-self-setup-v1");
+        let unsupported = script("unsupported", &format!("echo {SELF_SETUP_SUPPORT_RESPONSE}"));
 
-        let managers = |node: Option<&'static str>, pm: Option<&'static str>| {
-            [
-                (env_vars::VP_NODE_MANAGER, node),
-                (env_vars::VP_PM_MANAGER, pm),
-                (env_vars::VP_NPM_MANAGER, pm),
-            ]
-        };
-        // The package-manager variables alone do not require support.
-        for pm in [None, Some("system-only")] {
-            EnvConfig::with_vars_async(managers(None, pm), |_| async {
-                ensure_system_only_support(&unsupported, "0.1.0").await.unwrap();
+        // Only the exact value `1` requires support.
+        for value in [None, Some("true")] {
+            EnvConfig::with_vars_async([(env_vars::VP_ENV_FORBIDDEN, value)], |_| async {
+                ensure_env_forbidden_support(&unsupported, "0.1.0").await.unwrap();
             })
             .await;
         }
-        EnvConfig::with_vars_async(managers(Some("system-only"), None), |_| async {
-            ensure_system_only_support(&supported, "9.0.0").await.unwrap();
-            let error = ensure_system_only_support(&unsupported, "0.1.0").await.unwrap_err();
+        EnvConfig::with_vars_async(env_forbidden(), |_| async {
+            ensure_env_forbidden_support(&supported, "9.0.0").await.unwrap();
+            let error = ensure_env_forbidden_support(&unsupported, "0.1.0").await.unwrap_err();
             assert!(
                 error
                     .to_string()
-                    .contains("vite-plus 0.1.0 does not support VP_NODE_MANAGER=system-only"),
+                    .contains(&vp_setup::support::env_forbidden_unsupported_message("0.1.0")),
                 "{error}"
             );
         })
         .await;
     }
 
-    fn node_system_only() -> [(&'static str, Option<&'static str>); 1] {
-        [(env_vars::VP_NODE_MANAGER, Some("system-only"))]
+    fn env_forbidden() -> [(&'static str, Option<&'static str>); 1] {
+        [(env_vars::VP_ENV_FORBIDDEN, Some("1"))]
     }
 
     /// A registry resolution of `version` without a Node.js pin.
@@ -493,16 +493,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn system_only_refusal_preserves_retained_version() {
+    async fn env_forbidden_refusal_preserves_retained_version() {
         let temp = tempfile::tempdir().unwrap();
         let install_dir = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
         let retained = install_dir.join("0.1.0");
         std::fs::create_dir_all(&retained).unwrap();
         std::fs::write(retained.join("marker"), "").unwrap();
         std::fs::write(install_dir.join(".previous-version"), "0.1.0").unwrap();
-        let tarball = platform_tarball("#!/bin/sh\necho vite-plus-self-setup-v1\n");
+        let tarball = platform_tarball(&format!(
+            "#!/bin/sh\necho {}\n",
+            vp_setup::support::SELF_SETUP_SUPPORT_RESPONSE
+        ));
 
-        EnvConfig::with_vars_async(node_system_only(), |_| async {
+        EnvConfig::with_vars_async(env_forbidden(), |_| async {
             let error = Box::pin(install_version(
                 &tarball,
                 &install_dir,
@@ -517,7 +520,7 @@ mod tests {
             assert!(
                 error
                     .to_string()
-                    .contains("vite-plus 0.1.0 does not support VP_NODE_MANAGER=system-only"),
+                    .contains(&vp_setup::support::env_forbidden_unsupported_message("0.1.0")),
                 "{error}"
             );
         })
@@ -532,12 +535,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn system_only_probe_launch_failure_explains_temporary_directory() {
+    async fn env_forbidden_probe_launch_failure_explains_temporary_directory() {
         let temp = tempfile::tempdir().unwrap();
         let install_dir = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
         let tarball = platform_tarball("#!/nonexistent/sh\n");
 
-        EnvConfig::with_vars_async(node_system_only(), |_| async {
+        EnvConfig::with_vars_async(env_forbidden(), |_| async {
             let error = Box::pin(install_version(
                 &tarball,
                 &install_dir,

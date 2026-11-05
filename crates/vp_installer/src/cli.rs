@@ -48,10 +48,11 @@ pub enum NodeManager {
     Enabled,
     /// Prefer the system Node.js (`VP_NODE_MANAGER=no`).
     Disabled,
-    /// Use only the system Node.js and package managers. Only
-    /// `VP_NODE_MANAGER=system-only` selects it, and the interactive menu cannot
-    /// change it.
-    SystemOnly,
+    /// Vite+ manages no Node.js or package manager. Only `VP_ENV_FORBIDDEN=1`
+    /// selects it, and the interactive menu cannot change it. Self-setup
+    /// receives `VP_NODE_MANAGER=no`, which places the shims after the system
+    /// tools.
+    EnvForbidden,
 }
 
 impl NodeManager {
@@ -60,18 +61,19 @@ impl NodeManager {
     pub const fn env_value(self) -> &'static str {
         match self {
             Self::Enabled => "yes",
-            Self::Disabled => "no",
-            Self::SystemOnly => vp_shared::env_vars::SYSTEM_ONLY,
+            Self::Disabled | Self::EnvForbidden => "no",
         }
     }
 
     /// The menu label for this choice.
     #[must_use]
-    pub const fn label(self) -> &'static str {
+    pub fn label(self) -> String {
         match self {
-            Self::Enabled => "enabled",
-            Self::Disabled => "disabled",
-            Self::SystemOnly => "system-only (set by VP_NODE_MANAGER)",
+            Self::Enabled => "enabled".to_string(),
+            Self::Disabled => "disabled".to_string(),
+            Self::EnvForbidden => {
+                format!("disabled (set by {})", vp_shared::env_vars::VP_ENV_FORBIDDEN)
+            }
         }
     }
 }

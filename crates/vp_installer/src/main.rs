@@ -153,11 +153,11 @@ async fn do_install(opts: &cli::Options, dirs: &VpDirs) -> Result<(), Box<dyn st
     let binary = directory.join("bin").join(VP_BINARY_NAME);
 
     // 2. Match the script bootstrap protocol. Old binaries see --help instead of opening a picker.
-    // A system-only setting must not reach a binary that would ignore it and download.
-    let system_only = vp_shared::EnvConfig::get().node_system_only();
-    let support = support::probe_self_setup(&binary, system_only).await?;
-    if system_only && support != SelfSetupSupport::SystemOnly {
-        return Err(support::system_only_unsupported_message(&target_version).into());
+    // VP_ENV_FORBIDDEN must not reach a binary that would ignore it and download.
+    let env_forbidden = vp_shared::EnvConfig::get().env_forbidden;
+    let support = support::probe_self_setup(&binary, env_forbidden).await?;
+    if env_forbidden && support != SelfSetupSupport::EnvForbidden {
+        return Err(support::env_forbidden_unsupported_message(&target_version).into());
     }
     if support == SelfSetupSupport::Legacy {
         return legacy::install(opts, dirs, &target_version, &data).await;
@@ -217,16 +217,15 @@ async fn do_install(opts: &cli::Options, dirs: &VpDirs) -> Result<(), Box<dyn st
 
 /// Resolve the Node.js management choice.
 ///
-/// `VP_NODE_MANAGER=system-only` (exact) takes precedence over
-/// `--no-node-manager`: it is a stricter form of `no`, and passing `no` would
-/// let setup download Node.js. Otherwise the flag disables management, and
-/// `auto_detect` decides.
+/// `VP_ENV_FORBIDDEN=1` takes precedence over `--no-node-manager` and
+/// auto-detection. Otherwise the flag disables management, and `auto_detect`
+/// decides.
 fn resolve_node_manager(
     no_node_manager: bool,
     auto_detect: impl FnOnce() -> bool,
 ) -> cli::NodeManager {
-    if vp_shared::EnvConfig::get().node_system_only() {
-        cli::NodeManager::SystemOnly
+    if vp_shared::EnvConfig::get().env_forbidden {
+        cli::NodeManager::EnvForbidden
     } else if no_node_manager || !auto_detect() {
         cli::NodeManager::Disabled
     } else {
@@ -237,23 +236,15 @@ fn resolve_node_manager(
 /// `VP_NODE_MANAGER` and `VP_PM_MANAGER` for the installed binary's self-setup.
 ///
 /// An explicit `VP_PM_MANAGER` value (`yes` or `no`) is kept. Otherwise the
-/// package managers follow the Node.js choice, except that `system-only`
-/// becomes `no`: `VP_NODE_MANAGER=system-only` already restricts every package
-/// manager at run time, and `no` places their shims after the system tools.
-/// Family-specific variables reach the child unchanged through the inherited
-/// environment.
+/// package managers follow the Node.js choice; under `VP_ENV_FORBIDDEN=1` both
+/// are `no`, which places the shims after the system tools. Family-specific
+/// variables and `VP_ENV_FORBIDDEN` reach the child unchanged through the
+/// inherited environment.
 fn manager_envs(node_manager: cli::NodeManager) -> [(&'static str, String); 2] {
     let package_managers = std::env::var(vp_shared::env_vars::VP_PM_MANAGER)
         .ok()
         .filter(|value| matches!(value.as_str(), "yes" | "no"))
-        .unwrap_or_else(|| {
-            match node_manager {
-                cli::NodeManager::SystemOnly => cli::NodeManager::Disabled,
-                other => other,
-            }
-            .env_value()
-            .to_string()
-        });
+        .unwrap_or_else(|| node_manager.env_value().to_string());
     [
         (vp_shared::env_vars::VP_NODE_MANAGER, node_manager.env_value().to_string()),
         (vp_shared::env_vars::VP_PM_MANAGER, package_managers),
@@ -469,9 +460,12 @@ fn show_customize_menu(opts: &mut cli::Options) {
                 opts.node_manager = match opts.node_manager {
                     cli::NodeManager::Enabled => cli::NodeManager::Disabled,
                     cli::NodeManager::Disabled => cli::NodeManager::Enabled,
-                    cli::NodeManager::SystemOnly => {
-                        println!("  Unset VP_NODE_MANAGER=system-only to change this option.");
-                        cli::NodeManager::SystemOnly
+                    cli::NodeManager::EnvForbidden => {
+                        println!(
+                            "  Unset {} to change this option.",
+                            vp_shared::env_vars::VP_ENV_FORBIDDEN
+                        );
+                        cli::NodeManager::EnvForbidden
                     }
                 }
             }
@@ -537,17 +531,17 @@ mod tests {
     }
 
     #[test]
-    fn system_only_node_manager_overrides_flag_and_auto_detection() {
-        EnvConfig::with_vars([(env_vars::VP_NODE_MANAGER, Some("system-only"))], |_| {
+    fn env_forbidden_overrides_flag_and_auto_detection() {
+        EnvConfig::with_vars([(env_vars::VP_ENV_FORBIDDEN, Some("1"))], |_| {
             for flag in [false, true] {
                 assert_eq!(
                     resolve_node_manager(flag, || panic!("auto-detection must not run")),
-                    cli::NodeManager::SystemOnly
+                    cli::NodeManager::EnvForbidden
                 );
             }
         });
-        // Only the exact lowercase value selects system-only.
-        EnvConfig::with_vars([(env_vars::VP_NODE_MANAGER, Some("System-Only"))], |_| {
+        // Only the exact value `1` stops management.
+        EnvConfig::with_vars([(env_vars::VP_ENV_FORBIDDEN, Some("true"))], |_| {
             assert_eq!(resolve_node_manager(false, || true), cli::NodeManager::Enabled);
             assert_eq!(resolve_node_manager(false, || false), cli::NodeManager::Disabled);
             assert_eq!(resolve_node_manager(true, || true), cli::NodeManager::Disabled);
@@ -555,7 +549,7 @@ mod tests {
     }
 
     #[test]
-    fn manager_envs_place_package_managers_after_system_tools_under_system_only() {
+    fn manager_envs_place_package_managers_after_system_tools_under_env_forbidden() {
         let envs = |node, pm: Option<&str>| {
             EnvConfig::with_vars([(env_vars::VP_PM_MANAGER, pm)], |_| manager_envs(node))
         };
@@ -565,11 +559,12 @@ mod tests {
                 (env_vars::VP_PM_MANAGER, pm.to_string()),
             ]
         };
-        assert_eq!(envs(cli::NodeManager::SystemOnly, None), pair("system-only", "no"));
-        assert_eq!(envs(cli::NodeManager::SystemOnly, Some("yes")), pair("system-only", "yes"));
-        // `system-only` is not an explicit package-manager choice.
-        assert_eq!(envs(cli::NodeManager::Enabled, Some("system-only")), pair("yes", "yes"));
-        assert_eq!(envs(cli::NodeManager::Disabled, Some("System-Only")), pair("no", "no"));
+        assert_eq!(envs(cli::NodeManager::EnvForbidden, None), pair("no", "no"));
+        // An explicit choice is kept.
+        assert_eq!(envs(cli::NodeManager::EnvForbidden, Some("yes")), pair("no", "yes"));
+        // Only `yes` and `no` are explicit package-manager choices.
+        assert_eq!(envs(cli::NodeManager::Enabled, Some("Yes")), pair("yes", "yes"));
+        assert_eq!(envs(cli::NodeManager::Disabled, Some("")), pair("no", "no"));
         assert_eq!(envs(cli::NodeManager::Enabled, None), pair("yes", "yes"));
     }
 

@@ -10,13 +10,13 @@
 mod cli;
 mod config;
 mod dispatch;
+mod env_forbidden;
 mod error;
 mod lifecycle_env;
 mod package_manager;
 mod request;
 pub(crate) mod resolution;
 mod shim;
-mod system_only;
 
 pub use cli::{ManagedGlobalCommand, PackageManagerCommand, PmCommand};
 pub use config::{npm_authorization_for_url, npm_registry, npm_registry_for_scope};
@@ -24,6 +24,7 @@ pub use dispatch::{
     DispatchResult, dispatch, dispatch_with_metadata, dispatch_with_package_manager,
     dispatch_with_resolved_package_manager,
 };
+pub use env_forbidden::ensure_managed_package_manager_allowed;
 pub use error::Error;
 pub use lifecycle_env::LifecycleEnvContext;
 pub use package_manager::{
@@ -44,4 +45,3 @@ pub use resolution::{
     PublishArgs, RebuildArgs, RemoveArgs, SearchArgs, StageCommand, TeamCommand, TokenCommand,
     UnlinkArgs, UpdateArgs, VersionArgs, ViewArgs, WhoamiArgs, WhyArgs,
 };
-pub use system_only::ensure_managed_package_manager_allowed;

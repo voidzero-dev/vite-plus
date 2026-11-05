@@ -491,9 +491,9 @@ async fn run_node(args: Vec<String>, cwd: &AbsolutePath) -> i32 {
 
     // stdout belongs to the script; route vp's own output to stderr.
     output::route_user_output_to_stderr();
-    // As `vp node` does: system-only Node.js comes from PATH here, not from dispatch,
-    // since its shim fails without searching PATH.
-    if let Some(node) = crate::shim::dispatch::resolve_system_only_tool("node") {
+    // As `vp node` does: under VP_ENV_FORBIDDEN=1 Node.js comes from PATH here,
+    // not from dispatch, since its shim fails without searching PATH.
+    if let Some(node) = crate::shim::dispatch::resolve_env_forbidden_tool("node") {
         return match node {
             Ok(node) => crate::shim::exec::exec_tool(&node, &args, env),
             Err(error) => {
