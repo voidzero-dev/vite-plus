@@ -163,6 +163,19 @@ if (project === 'vinext') {
   );
   await writeFile(documentPath, patchedDocument, 'utf-8');
 
+  // Oxlint 1.91 flags this assignment in the async click handler, but each
+  // navigation event owns its cancellation flag.
+  const linkPath = join(repoRoot, 'packages/vinext/src/shims/link.tsx');
+  const linkSource = await readFile(linkPath, 'utf-8');
+  const patchedLink = linkSource.replace(
+    '            prevented = true;',
+    '            // oxlint-disable-next-line react/immutability\n$&',
+  );
+  if (patchedLink === linkSource) {
+    throw new Error(`vinext patch: navigation cancellation flag not found in ${linkPath}`);
+  }
+  await writeFile(linkPath, patchedLink, 'utf-8');
+
   // Oxlint 1.79 reports bare underscore parameters. Give this intentionally
   // unused parameter a descriptive underscore-prefixed name.
   const appRscHandlerTestPath = join(repoRoot, 'tests/app-rsc-handler.test.ts');

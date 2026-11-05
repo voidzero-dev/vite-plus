@@ -6,7 +6,9 @@
 use std::process::{ExitStatus, Output};
 
 use tokio::process::Command;
-use vp_js_runtime::{JsRuntime, JsRuntimeType, download_runtime, download_runtime_for_project};
+use vp_js_runtime::{
+    JsRuntime, JsRuntimeType, NodeProvider, download_runtime, download_runtime_for_project,
+};
 use vp_shared::{PrependOptions, ToolPathEnv, env_vars};
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
@@ -211,7 +213,7 @@ impl JsExecutor {
                 .map(|v| v.trim().to_string())
                 .filter(|v| !v.is_empty())
             {
-                Some(session_version)
+                Some(config::resolve_version_alias(&session_version, &NodeProvider::new()).await?)
             } else {
                 config::read_session_version().await
             };
@@ -689,6 +691,55 @@ mod tests {
             },
         )
         .await;
+    }
+
+    #[tokio::test]
+    async fn ensure_project_runtime_resolves_env_override() {
+        use std::ffi::OsStr;
+
+        use httpmock::prelude::*;
+
+        let server = MockServer::start_async().await;
+        server
+            .mock_async(|when, then| {
+                when.method(GET).path("/index.json");
+                then.status(200).body(
+                    r#"[
+                        {"version":"v24.11.0","lts":"Krypton"},
+                        {"version":"v22.21.0","lts":"Jod"},
+                        {"version":"v22.20.0","lts":"Jod"}
+                    ]"#,
+                );
+            })
+            .await;
+        let mirror = server.base_url();
+
+        for selector in ["22", " 22 ", "^22.0.0", "lts/jod", "v22.21.0", "22.21.0"] {
+            let temp = tempfile::TempDir::new().unwrap();
+            let project = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+            tokio::fs::write(project.join(".node-version"), "24.11.0\n").await.unwrap();
+            vp_shared::EnvConfig::with_vars_async(
+                [
+                    (env_vars::VP_HOME, temp.path().as_os_str()),
+                    (env_vars::VP_NODE_VERSION, OsStr::new(selector)),
+                    (env_vars::VP_NODE_DIST_MIRROR, OsStr::new(&mirror)),
+                ],
+                |env| async move {
+                    // Only the resolved release is cached, so raw selectors cannot succeed.
+                    let install_dir = env.dirs.data.join("js_runtime/node/22.21.0");
+                    let binary =
+                        install_dir.join(if cfg!(windows) { "node.exe" } else { "bin/node" });
+                    tokio::fs::create_dir_all(binary.parent().unwrap()).await.unwrap();
+                    tokio::fs::write(&binary, "").await.unwrap();
+
+                    let mut executor = JsExecutor::new(None);
+                    let runtime = executor.ensure_project_runtime(&project).await.unwrap();
+                    assert_eq!(runtime.version(), "22.21.0", "selector: {selector}");
+                    assert_eq!(runtime.get_binary_path(), binary);
+                },
+            )
+            .await;
+        }
     }
 
     /// Regression for reverting the Node.js version enforcement (#1360):
