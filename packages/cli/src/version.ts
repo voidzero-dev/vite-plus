@@ -15,7 +15,7 @@ const TOOL_DISPLAY_ORDER = [
   'vitest',
   'oxfmt',
   'oxlint',
-  'oxlint-tsgolint',
+  'tsrs',
   'tsdown',
 ] as const;
 
