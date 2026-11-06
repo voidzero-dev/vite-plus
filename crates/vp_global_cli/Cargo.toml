@@ -35,7 +35,6 @@ vt_pty_terminal_test_client = { workspace = true, features = ["testing"] }
 rustc-hash = { workspace = true }
 crossterm = { workspace = true }
 indexmap = { workspace = true }
-indicatif = { workspace = true }
 indoc = { workspace = true }
 js-semver = { workspace = true }
 vp_error = { workspace = true }
