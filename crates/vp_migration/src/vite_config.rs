@@ -95,6 +95,11 @@ fn merge_json_config_content(
     ts_config: &str,
     config_key: &str,
 ) -> Result<MergeResult, Error> {
+    // A branch the merge rules cannot rewrite would silently lose the merged config.
+    if has_unsupported_direct_return(vite_config_content) {
+        return Ok(MergeResult { content: vite_config_content.to_owned(), updated: false });
+    }
+
     // Strip "$schema" property — it's a JSON Schema annotation not valid in OxlintConfig
     let ts_config = strip_schema_property(ts_config);
 
@@ -693,6 +698,57 @@ fn is_direct_return_in_define_config_callback<D: Doc>(return_node: &Node<'_, D>)
     false
 }
 
+/// Whether a direct `defineConfig` callback returns something other than an
+/// object literal or an identifier, which the merge return rules cannot rewrite.
+fn has_unsupported_direct_return(content: &str) -> bool {
+    let grep = SupportLang::TypeScript.ast_grep(content);
+    grep.root().dfs().any(|node| {
+        node.kind() == "return_statement"
+            && is_merge_rule_direct_return(&node)
+            && !node
+                .children()
+                .find(|child| child.is_named() && child.kind() != "comment")
+                .is_some_and(|value| matches!(value.kind().as_ref(), "object" | "identifier"))
+    })
+}
+
+/// Mirrors the function boundary and wrapper rules of `merge-json-config-return`.
+fn is_merge_rule_direct_return<D: Doc>(return_node: &Node<'_, D>) -> bool {
+    let Some(function) = return_node.ancestors().find(|node| {
+        matches!(
+            node.kind().as_ref(),
+            "arrow_function"
+                | "function_expression"
+                | "function_declaration"
+                | "generator_function"
+                | "generator_function_declaration"
+                | "method_definition"
+        )
+    }) else {
+        return false;
+    };
+    if !matches!(function.kind().as_ref(), "arrow_function" | "function_expression") {
+        return false;
+    }
+    let mut current = function.parent();
+    while let Some(node) = current.as_ref().filter(|node| {
+        matches!(
+            node.kind().as_ref(),
+            "parenthesized_expression"
+                | "as_expression"
+                | "satisfies_expression"
+                | "type_assertion"
+                | "non_null_expression"
+        )
+    }) {
+        current = node.parent();
+    }
+    current
+        .filter(|node| node.kind() == "arguments")
+        .and_then(|node| node.parent())
+        .is_some_and(|call| is_define_config_call(&call))
+}
+
 fn node_has_descendant_kind<D: Doc>(node: &Node<'_, D>, kind: &str) -> bool {
     node.dfs().any(|child| child.kind() == kind)
 }
@@ -847,8 +903,29 @@ rule:
       $$$CONFIG
     }
   inside:
-    stopBy: end
-    pattern: defineConfig($$$ARGS)
+    stopBy:
+      any:
+        - kind: arrow_function
+        - kind: function_expression
+        - kind: function_declaration
+        - kind: generator_function
+        - kind: generator_function_declaration
+        - kind: method_definition
+    any:
+      - kind: arrow_function
+      - kind: function_expression
+    inside:
+      kind: arguments
+      stopBy:
+        not:
+          any:
+            - kind: parenthesized_expression
+            - kind: as_expression
+            - kind: satisfies_expression
+            - kind: type_assertion
+            - kind: non_null_expression
+      inside:
+        pattern: defineConfig($$$ARGS)
 fix: |-
   return {
     __CONFIG_KEY__: __JSON_CONFIG__,
@@ -863,8 +940,29 @@ rule:
     pattern: $VAR
     kind: identifier
   inside:
-    stopBy: end
-    pattern: defineConfig($$$ARGS)
+    stopBy:
+      any:
+        - kind: arrow_function
+        - kind: function_expression
+        - kind: function_declaration
+        - kind: generator_function
+        - kind: generator_function_declaration
+        - kind: method_definition
+    any:
+      - kind: arrow_function
+      - kind: function_expression
+    inside:
+      kind: arguments
+      stopBy:
+        not:
+          any:
+            - kind: parenthesized_expression
+            - kind: as_expression
+            - kind: satisfies_expression
+            - kind: type_assertion
+            - kind: non_null_expression
+      inside:
+        pattern: defineConfig($$$ARGS)
 fix: |-
   return {
     __CONFIG_KEY__: __JSON_CONFIG__,
@@ -1468,6 +1566,110 @@ export default defineConfig(async ({ command, mode }) => {
         // Now can be auto-migrated using return statement matching
         assert!(result.updated);
         assert!(result.content.contains("'no-console': 'warn'"));
+    }
+
+    #[test]
+    fn test_merge_json_config_content_preserves_nested_returns() {
+        for callback in [
+            "name(id) { const c = id.includes('node_modules') ? 'vendor' : null; return c; }",
+            "name: (id) => { const c = 'vendor'; return c; }",
+            "name: function(id) { const c = 'vendor'; return c; }",
+            "name(id) { function helper() { return { value: 1 }; } return 'vendor'; }",
+            "name: () => { return { value: 1 }; }",
+            "name: function() { return { value: 1 }; }",
+            "name(id) { function helper() { const c = 'vendor'; return c; } return helper(); }",
+            "name(id) { function* helper() { return { value: 1 }; } return 'vendor'; }",
+            "name: function*() { const c = 'vendor'; return c; }",
+            "*name() { return { value: 1 }; }",
+        ] {
+            let config = format!(
+                "{{ build: {{ rolldownOptions: {{ output: {{ codeSplitting: {{ groups: [{{ {callback} }}] }} }} }} }} }}"
+            );
+            for argument in [
+                config.clone(),
+                format!("() => {{ return {config}; }}"),
+                format!("((() => {{ return {config}; }}) as UserConfigFn) satisfies UserConfigFn"),
+                format!("<UserConfigFn>(() => {{ return {config}; }})!"),
+            ] {
+                let source = format!("export default defineConfig({argument});");
+                let result = merge_json_config_content(&source, "{}", "lint").unwrap();
+                assert!(result.updated);
+                assert!(result.content.contains(callback), "{}", result.content);
+                assert_eq!(result.content.matches("lint:").count(), 1, "{}", result.content);
+            }
+        }
+    }
+
+    #[test]
+    fn test_merge_json_config_content_direct_callback_returns() {
+        for callback in ["(env) =>", "async (env) =>", "function(env)", "async function(env)"] {
+            let callback = format!(
+                "{callback} {{
+  const config = {{ server: {{ port: 3000 }} }};
+  if (env.command === 'serve') {{ return config; }}
+  return {{ server: {{ port: 4000 }} }};
+}}"
+            );
+            for argument in [
+                callback.clone(),
+                format!("({callback})"),
+                format!("({callback}) as UserConfigFn"),
+                format!("({callback}) satisfies UserConfigFn"),
+                format!("<UserConfigFn>({callback})"),
+                format!("({callback})!"),
+                format!("<UserConfigFn>((({callback}) as UserConfigFn) satisfies UserConfigFn)!"),
+            ] {
+                let source = format!("export default defineConfig({argument});");
+                let result = merge_json_config_content(&source, "{}", "lint").unwrap();
+                assert!(result.updated, "{source}");
+                assert_eq!(result.content.matches("lint:").count(), 2, "{}", result.content);
+                assert!(result.content.contains("...config"));
+                assert!(result.content.contains("port: 4000"));
+            }
+        }
+    }
+
+    #[test]
+    fn test_merge_json_config_content_rejects_partial_direct_returns() {
+        for unsupported in ["devConfig()", "command === 'serve' ? a : b", "await load()"] {
+            let callback = format!(
+                "async ({{ command }}) => {{
+  function devConfig() {{
+    return {{ server: {{ port: 3000 }} }};
+  }}
+  if (command === 'serve') return {unsupported};
+  return {{ build: {{ sourcemap: true }} }};
+}}"
+            );
+            for argument in [
+                callback.clone(),
+                format!("({callback}) as UserConfigFn"),
+                format!("({callback}) satisfies UserConfigFn"),
+                format!("<UserConfigFn>({callback})!"),
+            ] {
+                let source = format!("export default defineConfig({argument});");
+                let result = merge_json_config_content(&source, "{}", "fmt").unwrap();
+                assert!(!result.updated, "{}", result.content);
+                assert_eq!(result.content, source);
+            }
+        }
+    }
+
+    #[test]
+    fn test_merge_json_config_content_ignores_indirect_callbacks() {
+        let callback =
+            "(() => { const config = {}; if (condition) { return config; } return {}; })";
+        for argument in [
+            format!("wrap({callback})"),
+            format!("{callback}()"),
+            format!("condition ? {callback} : otherConfig"),
+            format!("<UserConfigFn>wrap({callback})!"),
+        ] {
+            let source = format!("export default defineConfig({argument});");
+            let result = merge_json_config_content(&source, "{}", "lint").unwrap();
+            assert!(!result.updated, "{}", result.content);
+            assert_eq!(result.content, source);
+        }
     }
 
     #[test]
