@@ -1,0 +1,54 @@
+[[case]]
+name = "create_system_npm_install"
+vp = "global"
+skip-platforms = ["windows"]
+local-registry = true
+steps = [{ argv = ["node", "install.cjs"], timeout = 180000 }]
+
+[[case]]
+name = "create_system_npm"
+vp = ["local", "global"]
+skip-platforms = ["windows"]
+steps = [["node", "verify.cjs", "npm", "system"]]
+
+[[case]]
+name = "create_system_pnpm"
+vp = ["local", "global"]
+skip-platforms = ["windows"]
+steps = [["node", "verify.cjs", "pnpm", "system"]]
+
+[[case]]
+name = "create_system_yarn"
+vp = ["local", "global"]
+skip-platforms = ["windows"]
+steps = [["node", "verify.cjs", "yarn", "system"]]
+
+[[case]]
+name = "create_system_bun"
+vp = ["local", "global"]
+skip-platforms = ["windows"]
+steps = [["node", "verify.cjs", "bun", "system"]]
+
+[[case]]
+name = "create_managed_npm"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [["node", "verify.cjs", "npm", "managed"]]
+
+[[case]]
+name = "create_missing_system_pnpm"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [["node", "verify.cjs", "pnpm", "missing"]]
+
+[[case]]
+name = "create_system_yarn_classic_external"
+vp = ["local", "global"]
+skip-platforms = ["windows"]
+steps = [{ argv = ["node", "verify.cjs", "yarn", "system", "external"], timeout = 180000 }]
+
+[[case]]
+name = "create_system_yarn_classic"
+vp = ["local", "global"]
+skip-platforms = ["windows"]
+steps = [["node", "verify.cjs", "yarn", "system", "classic"]]

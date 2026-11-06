@@ -24,7 +24,7 @@ export interface WorkspaceInfo {
   parentDirs: string[];
   packageManager: PackageManager;
   packageManagerVersion: string;
-  downloadPackageManager: DownloadPackageManagerResult;
+  downloadPackageManager: Pick<DownloadPackageManagerResult, 'name' | 'version' | 'binPrefix'>;
   packages: WorkspacePackage[];
 }
 
