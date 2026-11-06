@@ -63,6 +63,12 @@ FROM debian:bookworm-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 
+# Official Node.js 25+ Linux builds need libatomic, which slim images do not
+# include (nodejs/node#60790). Node.js 24 and older do not need this step.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends libatomic1 \
+  && rm -rf /var/lib/apt/lists/*
+
 # The exact Node.js from .node-version (official, signature-verified build).
 COPY --from=build /tmp/node /usr/local/bin/node
 
@@ -83,6 +89,17 @@ Install production dependencies in their own `deps` stage as shown. Running `vp 
 
 ::: tip Smaller still
 For a shell-less, minimal-CVE runtime, swap the runtime base for distroless (`gcr.io/distroless/cc`) and keep an `ENTRYPOINT` in vector form. It is glibc based, so the copied Node.js binary remains compatible.
+
+Distroless has no package manager and does not include `libatomic`, which Node.js 25 and later need. Copy it from the build stage alongside Node.js:
+
+```dockerfile
+# build stage
+RUN cp /usr/lib/*-linux-gnu/libatomic.so.1 /tmp/libatomic.so.1
+
+# runtime stage
+COPY --from=build /tmp/libatomic.so.1 /usr/lib/
+```
+
 :::
 
 ## Production: static SPA / SSG
