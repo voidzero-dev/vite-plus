@@ -1,0 +1,25 @@
+[[case]]
+name = "dist_tag_rm_yarn4"
+vp = "global"
+comment = "Yarn 4 must reach its native latest-tag validation without changing registry data."
+steps = [
+  { argv = ["vp", "pm", "dist-tag", "rm", "@scope/pkg", "latest"], continue-on-failure = true },
+]
+
+[[case]]
+name = "dist_tag_rm_yarn3"
+vp = "global"
+comment = "Yarn 3 also requires remove rather than rm."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@3.0.0"], snapshot = false },
+  { argv = ["vp", "pm", "dist-tag", "rm", "@scope/pkg", "latest"], continue-on-failure = true },
+]
+
+[[case]]
+name = "dist_tag_rm_yarn2"
+vp = "global"
+comment = "Yarn 2 also requires remove rather than rm."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@2.4.2"], snapshot = false },
+  { argv = ["vp", "pm", "dist-tag", "rm", "@scope/pkg", "latest"], continue-on-failure = true },
+]
