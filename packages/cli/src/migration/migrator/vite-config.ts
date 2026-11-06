@@ -886,6 +886,235 @@ export function migrateTaskCacheConfigInViteConfig(
   return true;
 }
 
+// Minimal shapes for the serialized oxc AST returned by
+// analyzeMigrationSource. Unknown fields stay behind the index signature;
+// specific members are declared where this module relies on them.
+interface OxcSpan {
+  start: number;
+  end: number;
+}
+
+interface OxcNode extends OxcSpan {
+  type: string;
+  [key: string]: unknown;
+}
+
+interface OxcProperty {
+  key?: OxcNode;
+  value: OxcNode;
+  computed?: boolean;
+}
+
+interface OxcObjectNode extends OxcNode {
+  properties?: OxcProperty[];
+}
+
+// Key name for object properties: bare identifiers and quoted strings both
+// count (`minify:` and `'minify':` are the same option), and so do computed
+// string literals (`['minify']`). Computed identifiers must not: a bound
+// name that happens to equal an option name (`const build = 'plugin'` +
+// `[build]: {...}`) is not that option.
+function propertyName(prop: OxcProperty): string | undefined {
+  const { key } = prop;
+  if (!key) {
+    return undefined;
+  }
+  if (key.type === 'Identifier' && typeof key.name === 'string' && !prop.computed) {
+    return key.name;
+  }
+  if (key.type === 'Literal' && typeof key.value === 'string') {
+    return key.value;
+  }
+  return undefined;
+}
+
+// Unwrap a default-exported declaration into the config objects it
+// statically exposes: the object itself, defineConfig({...}) and
+// defineConfig([{...}, ...]) arguments, TS wrappers (as / satisfies), and
+// the objects that config factories (`defineConfig(() => ({...}))` and
+// function equivalents) build in their direct returns.
+function* staticConfigObjects(node: unknown): Generator<OxcObjectNode> {
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      yield* staticConfigObjects(item);
+    }
+    return;
+  }
+  if (!node || typeof node !== 'object') {
+    return;
+  }
+  const n = node as OxcNode;
+  switch (n.type) {
+    case 'ObjectExpression':
+      yield n;
+      return;
+    case 'CallExpression':
+    case 'NewExpression':
+      yield* staticConfigObjects(n.arguments);
+      return;
+    case 'ArrayExpression':
+      yield* staticConfigObjects(n.elements);
+      return;
+    case 'TSAsExpression':
+    case 'TSSatisfiesExpression':
+    case 'TSNonNullExpression':
+    case 'ParenthesizedExpression':
+      yield* staticConfigObjects(n.expression);
+      return;
+    case 'ArrowFunctionExpression':
+    case 'FunctionExpression':
+    case 'FunctionDeclaration':
+      yield* functionConfigObjects(n);
+      return;
+    default:
+      return;
+  }
+}
+
+// Config objects a function exposes: an expression body IS the return
+// value; a block body contributes only its DIRECT return statements.
+// Returns nested in conditionals stay with the raw-occurrence fallback
+// diagnostics instead of being rewritten blind.
+function* functionConfigObjects(fn: OxcNode): Generator<OxcObjectNode> {
+  const body = fn.body as OxcNode | undefined;
+  if (!body) {
+    return;
+  }
+  if (body.type !== 'BlockStatement') {
+    yield* staticConfigObjects(body);
+    return;
+  }
+  for (const statement of (body.body as unknown[] | undefined) ?? []) {
+    const node = statement as OxcNode;
+    if (node.type === 'ReturnStatement' && node.argument) {
+      yield* staticConfigObjects(node.argument);
+    }
+  }
+}
+
+// Every node in the serialized oxc AST, for name-level scans.
+function* walkAstNodes(node: unknown): Generator<OxcNode> {
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      yield* walkAstNodes(item);
+    }
+    return;
+  }
+  if (!node || typeof node !== 'object') {
+    return;
+  }
+  const n = node as OxcNode;
+  yield n;
+  for (const [key, value] of Object.entries(n)) {
+    if (key === 'start' || key === 'end' || key === 'type') {
+      continue;
+    }
+    yield* walkAstNodes(value);
+  }
+}
+
+/**
+ * esbuild-specific config fails under Vite 8 unless esbuild is installed
+ * separately. The static case — `build.minify: 'esbuild'` in a
+ * default-exported config, including objects directly returned from a
+ * `defineConfig` callback — is rewritten in place to `minify: true` (the
+ * oxc minifier); span replacement keeps comments and unrelated options
+ * intact, and the switch is reported. Dynamic values (e.g. a ternary
+ * picking `'esbuild'` per mode), `minify` outside `build`, computed
+ * identifier keys, and `transformWithEsbuild` usage keep their code and
+ * get a diagnostic covering both the keep-esbuild and migrate-to-oxc
+ * paths.
+ */
+export function migrateEsbuildConfigInViteConfig(
+  projectPath: string,
+  silent = false,
+  report?: MigrationReport,
+): boolean {
+  const configs = detectConfigs(projectPath);
+  if (!configs.viteConfig) {
+    return false;
+  }
+  const viteConfigPath = path.join(projectPath, configs.viteConfig);
+  const source = fs.readFileSync(viteConfigPath, 'utf8');
+  const { ast, comments } = JSON.parse(analyzeMigrationSource(viteConfigPath, source)) as {
+    ast: { node: Program };
+    comments: Array<{ start: number; end: number }>;
+  };
+
+  const minifyValueSpans: Array<OxcSpan> = [];
+  let hasDynamicMinify = false;
+  let referencesTransformWithEsbuild = false;
+  for (const statement of ast.node.body) {
+    if (statement.type !== 'ExportDefaultDeclaration') {
+      continue;
+    }
+    for (const configObject of staticConfigObjects(statement.declaration)) {
+      const buildProp = configObject.properties?.find((prop) => propertyName(prop) === 'build');
+      if (!buildProp || buildProp.value.type !== 'ObjectExpression') {
+        continue;
+      }
+      // Guarded by the ObjectExpression check above.
+      const buildObject = buildProp.value as OxcObjectNode;
+      const minifyProp = buildObject.properties?.find((prop) => propertyName(prop) === 'minify');
+      if (!minifyProp) {
+        continue;
+      }
+      const { value } = minifyProp;
+      if (value.type === 'Literal' && value.value === 'esbuild') {
+        minifyValueSpans.push({ start: value.start, end: value.end });
+      } else if (value.type !== 'Literal') {
+        // Dynamic (non-literal) values can't be migrated blind.
+        hasDynamicMinify = true;
+      }
+      // Static non-esbuild literals (`true`, `false`, `'terser'`, ...) are
+      // valid user choices and stay untouched.
+    }
+  }
+  for (const node of walkAstNodes(ast.node)) {
+    if (node.type === 'Identifier' && node.name === 'transformWithEsbuild') {
+      referencesTransformWithEsbuild = true;
+    }
+  }
+
+  // Raw occurrences outside comments that the static walk did not account
+  // for (spread configs, helper-built objects, non-default exports) are
+  // surfaced as diagnostics — never rewritten blind.
+  const rawOccurrences = [...source.matchAll(/\bminify\s*:\s*(['"])esbuild\1/g)].filter(
+    (match) =>
+      !comments.some((comment) => match.index >= comment.start && match.index < comment.end),
+  ).length;
+  const hasUnaccountedMinify = rawOccurrences > minifyValueSpans.length;
+
+  if (minifyValueSpans.length > 0) {
+    let content = source;
+    for (const span of minifyValueSpans.toSorted((first, second) => second.start - first.start)) {
+      content = content.slice(0, span.start) + 'true' + content.slice(span.end);
+    }
+    fs.writeFileSync(viteConfigPath, content);
+    if (report) {
+      report.esbuildMinifyMigrationCount += minifyValueSpans.length;
+    }
+    if (!silent) {
+      prompts.log.success(
+        `✔ Switched \`build.minify\` from \`esbuild\` to the oxc minifier (\`minify: true\`) in ${displayRelative(viteConfigPath)}`,
+      );
+    }
+  }
+  if (hasDynamicMinify || hasUnaccountedMinify) {
+    warnMigration(
+      `${displayRelative(viteConfigPath)}: \`minify: "esbuild"\` requires installing \`esbuild\` separately under Vite 8. If you rely on esbuild minification, install it and keep the config; otherwise prefer \`minify: true\` (the oxc minifier).`,
+      report,
+    );
+  }
+  if (referencesTransformWithEsbuild) {
+    warnMigration(
+      `${displayRelative(viteConfigPath)}: \`transformWithEsbuild\` requires installing \`esbuild\` separately under Vite 8. Migrate to \`transformWithOxc\` if you do not need exact esbuild behavior, or install \`esbuild\` to keep the current behavior.`,
+      report,
+    );
+  }
+  return minifyValueSpans.length > 0;
+}
+
 /**
  * Rewrite imports in all TypeScript/JavaScript files under a directory
  * This rewrites vite/vitest imports to @voidzero-dev/vite-plus
