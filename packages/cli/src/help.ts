@@ -830,7 +830,7 @@ const commandHelpDocs = {
         rows: [
           { label: '--fix', description: 'Auto-fix format and lint issues' },
           {
-            label: '--keep-going',
+            label: '--continue-on-error',
             description: 'Run remaining checks even if an earlier check fails',
           },
           {
@@ -856,7 +856,7 @@ const commandHelpDocs = {
         lines: [
           '  vp check',
           '  vp check --fix',
-          '  vp check --keep-going',
+          '  vp check --continue-on-error',
           '  vp check --no-lint src/index.ts',
         ],
       },

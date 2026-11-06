@@ -85,7 +85,7 @@ pub enum SynthesizableSubcommand {
     Check {
         /// Run remaining checks even if an earlier check fails
         #[arg(long)]
-        keep_going: bool,
+        continue_on_error: bool,
         /// Auto-fix format and lint issues
         #[arg(long)]
         fix: bool,

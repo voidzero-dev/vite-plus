@@ -20,7 +20,7 @@ use crate::cli::{
 /// Execute the `vp check` composite command (fmt + lint + optional type checks).
 pub(crate) async fn execute_check(
     resolver: &SubcommandResolver,
-    keep_going: bool,
+    continue_on_error: bool,
     fix: bool,
     quiet: bool,
     deny_warnings: bool,
@@ -166,7 +166,7 @@ pub(crate) async fn execute_check(
                 // A failed formatting pass must not later be reported as successful.
                 fmt_fix_started = None;
             }
-            if !keep_going {
+            if !continue_on_error {
                 return Ok(status);
             }
         }
@@ -269,7 +269,7 @@ pub(crate) async fn execute_check(
             first_failure.get_or_insert(status);
             // Surface fmt `--fix` completion before bailing so users can see
             // the working tree was mutated before the lint/type-check error.
-            if !keep_going {
+            if !continue_on_error {
                 if fix && !no_fmt {
                     flush_deferred_pass_lines(&mut fmt_fix_started, &mut deferred_lint_pass);
                 }
