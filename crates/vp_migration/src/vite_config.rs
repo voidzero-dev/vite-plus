@@ -95,6 +95,11 @@ fn merge_json_config_content(
     ts_config: &str,
     config_key: &str,
 ) -> Result<MergeResult, Error> {
+    // A branch the merge rules cannot rewrite would silently lose the merged config.
+    if has_unsupported_direct_return(vite_config_content) {
+        return Ok(MergeResult { content: vite_config_content.to_owned(), updated: false });
+    }
+
     // Strip "$schema" property — it's a JSON Schema annotation not valid in OxlintConfig
     let ts_config = strip_schema_property(ts_config);
 
@@ -691,6 +696,57 @@ fn is_direct_return_in_define_config_callback<D: Doc>(return_node: &Node<'_, D>)
         }
     }
     false
+}
+
+/// Whether a direct `defineConfig` callback returns something other than an
+/// object literal or an identifier, which the merge return rules cannot rewrite.
+fn has_unsupported_direct_return(content: &str) -> bool {
+    let grep = SupportLang::TypeScript.ast_grep(content);
+    grep.root().dfs().any(|node| {
+        node.kind() == "return_statement"
+            && is_merge_rule_direct_return(&node)
+            && !node
+                .children()
+                .find(|child| child.is_named() && child.kind() != "comment")
+                .is_some_and(|value| matches!(value.kind().as_ref(), "object" | "identifier"))
+    })
+}
+
+/// Mirrors the function boundary and wrapper rules of `merge-json-config-return`.
+fn is_merge_rule_direct_return<D: Doc>(return_node: &Node<'_, D>) -> bool {
+    let Some(function) = return_node.ancestors().find(|node| {
+        matches!(
+            node.kind().as_ref(),
+            "arrow_function"
+                | "function_expression"
+                | "function_declaration"
+                | "generator_function"
+                | "generator_function_declaration"
+                | "method_definition"
+        )
+    }) else {
+        return false;
+    };
+    if !matches!(function.kind().as_ref(), "arrow_function" | "function_expression") {
+        return false;
+    }
+    let mut current = function.parent();
+    while let Some(node) = current.as_ref().filter(|node| {
+        matches!(
+            node.kind().as_ref(),
+            "parenthesized_expression"
+                | "as_expression"
+                | "satisfies_expression"
+                | "type_assertion"
+                | "non_null_expression"
+        )
+    }) {
+        current = node.parent();
+    }
+    current
+        .filter(|node| node.kind() == "arguments")
+        .and_then(|node| node.parent())
+        .is_some_and(|call| is_define_config_call(&call))
 }
 
 fn node_has_descendant_kind<D: Doc>(node: &Node<'_, D>, kind: &str) -> bool {
@@ -1569,6 +1625,32 @@ export default defineConfig(async ({ command, mode }) => {
                 assert_eq!(result.content.matches("lint:").count(), 2, "{}", result.content);
                 assert!(result.content.contains("...config"));
                 assert!(result.content.contains("port: 4000"));
+            }
+        }
+    }
+
+    #[test]
+    fn test_merge_json_config_content_rejects_partial_direct_returns() {
+        for unsupported in ["devConfig()", "command === 'serve' ? a : b", "await load()"] {
+            let callback = format!(
+                "async ({{ command }}) => {{
+  function devConfig() {{
+    return {{ server: {{ port: 3000 }} }};
+  }}
+  if (command === 'serve') return {unsupported};
+  return {{ build: {{ sourcemap: true }} }};
+}}"
+            );
+            for argument in [
+                callback.clone(),
+                format!("({callback}) as UserConfigFn"),
+                format!("({callback}) satisfies UserConfigFn"),
+                format!("<UserConfigFn>({callback})!"),
+            ] {
+                let source = format!("export default defineConfig({argument});");
+                let result = merge_json_config_content(&source, "{}", "fmt").unwrap();
+                assert!(!result.updated, "{}", result.content);
+                assert_eq!(result.content, source);
             }
         }
     }
