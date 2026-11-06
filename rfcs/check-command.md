@@ -210,12 +210,7 @@ Users do not need to set an environment variable for the default backend.
 
 An explicit `OXLINT_TSGOLINT_PATH` takes precedence over the resolver default.
 The environment variable keeps its existing name because Oxlint uses it to
-select the type-aware backend. A project can still select Go explicitly:
-
-```sh
-vp add -D oxlint-tsgolint
-OXLINT_TSGOLINT_PATH="$PWD/node_modules/.bin/tsgolint" vp check
-```
+select the type-aware backend.
 
 `tsrs` is a production dependency. `oxlint-tsgolint` remains a development
 dependency for comparisons. The benchmark selects the Go executable explicitly,
