@@ -15,6 +15,8 @@ We recommend turning both `typeAware` and `typeCheck` on so `vp check` becomes t
 ```bash
 vp check
 vp check --fix              # Format and run autofixers.
+vp check --watch            # Re-run checks when workspace files change.
+vp check --watch --debounce 500 # Wait for 500ms of inactivity before checking.
 vp check --quiet            # Hide lint warnings; still report and fail on errors.
 vp check --deny-warnings    # Treat lint warnings as errors.
 vp check --no-fmt           # Skip format; run lint (and type-check if enabled).
@@ -25,6 +27,25 @@ vp check --no-fmt --no-lint # Type-check only (requires both `typeAware` and `ty
 If formatting fails, `vp check` stops before lint and type checks run. To fix formatting and apply available lint fixes, run `vp check --fix`. This command changes files. To skip formatting and run the remaining enabled checks, run `vp check --no-fmt`.
 
 Put `vp check` flags before file paths. For example, use `vp check --fix src/index.ts`. Arguments after the first path go to the format and lint tools instead of `vp check`.
+
+## Watch mode
+
+`vp check --watch` runs once on startup and then watches workspace files for changes.
+Changes are grouped until no further changes arrive for 300 milliseconds. Use
+`--debounce <ms>` with `--watch` to choose a different delay.
+
+Checks run one at a time. Changes made during a check trigger another run after
+the check completes and the debounce delay expires. Failed checks keep watching,
+so fixing an error triggers another check. Press Ctrl+C to stop.
+
+Watch mode ignores changes inside `node_modules`, `.git`, `dist`, `target`, `.vite`,
+`.cache`, and `.idea` directories, along with editor temporary and backup files.
+Repeated events for unchanged file contents do not trigger another check.
+File path arguments restrict what is checked; the watcher
+still observes the workspace so changes to configuration and shared files trigger checks.
+
+`--fix` cannot currently be combined with `--watch`. Run `vp check --fix` separately
+to apply fixes.
 
 ## Configuration
 

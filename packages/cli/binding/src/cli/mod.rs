@@ -97,6 +97,8 @@ async fn execute_direct_subcommand(
 
     let status = match subcommand {
         SynthesizableSubcommand::Check {
+            watch,
+            debounce,
             fix,
             quiet,
             deny_warnings,
@@ -105,6 +107,21 @@ async fn execute_direct_subcommand(
             no_error_on_unmatched_pattern,
             paths,
         } => {
+            if watch {
+                return crate::check::watch::execute_watch(
+                    &resolver,
+                    quiet,
+                    deny_warnings,
+                    no_fmt,
+                    no_lint,
+                    no_error_on_unmatched_pattern,
+                    paths,
+                    &envs,
+                    cwd,
+                    debounce.unwrap_or(300),
+                )
+                .await;
+            }
             return crate::check::execute_check(
                 &resolver,
                 fix,

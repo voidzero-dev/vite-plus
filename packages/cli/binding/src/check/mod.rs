@@ -1,4 +1,5 @@
 mod analysis;
+pub(crate) mod watch;
 
 use std::{sync::Arc, time::Instant};
 
