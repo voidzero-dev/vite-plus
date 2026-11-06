@@ -77,4 +77,37 @@ describe('detectMigrationWarnings', () => {
       'Jest configuration detected. Vitest is highly compatible with Jest, and so we recommend migrating. See the Vitest Jest migration guide: https://vitest.dev/guide/migration/jest, then re-run vp migrate.',
     ]);
   });
+
+  it('detects Turborepo at the workspace root', () => {
+    writeProject(tmpDir, { devDependencies: { turbo: '^2.0.0' } }, ['turbo.json']);
+
+    expect(detectMigrationWarnings(tmpDir)).toEqual([
+      'Turborepo detected (turbo.json). Task orchestration and caching were not migrated; see https://viteplus.dev/guide/run and https://viteplus.dev/guide/cache.',
+    ]);
+  });
+
+  it('detects per-package turbo.json with the dependency declared at the root', () => {
+    writeProject(tmpDir, { devDependencies: { turbo: '^2.0.0' } });
+    writeProject(path.join(tmpDir, 'packages/app'), {}, ['turbo.json']);
+
+    expect(detectMigrationWarnings(tmpDir, [{ name: 'app', path: 'packages/app' }])).toEqual([
+      'Turborepo detected (turbo.json). Task orchestration and caching were not migrated; see https://viteplus.dev/guide/run and https://viteplus.dev/guide/cache.',
+    ]);
+  });
+
+  it('detects Turborepo with the dependency declared in the workspace package', () => {
+    writeProject(path.join(tmpDir, 'packages/app'), { devDependencies: { turbo: '^2.0.0' } }, [
+      'turbo.json',
+    ]);
+
+    expect(detectMigrationWarnings(tmpDir, [{ name: 'app', path: 'packages/app' }])).toEqual([
+      'Turborepo detected (turbo.json). Task orchestration and caching were not migrated; see https://viteplus.dev/guide/run and https://viteplus.dev/guide/cache.',
+    ]);
+  });
+
+  it('does not warn about Turborepo when turbo.json and the turbo dependency are both absent', () => {
+    writeProject(tmpDir, { devDependencies: { somePkg: '^1.0.0' } }, ['rollup.config.js']);
+
+    expect(detectMigrationWarnings(tmpDir)).toEqual([]);
+  });
 });
