@@ -1,0 +1,23 @@
+[[case]]
+name = "pack_env_prefix_config"
+vp = ["local", "global"]
+steps = [
+  { argv = ["vp", "pack"], snapshot = false },
+  ["node", "verify.mjs"],
+]
+
+[[case]]
+name = "pack_env_prefix_override"
+vp = ["local", "global"]
+steps = [
+  { argv = ["vp", "pack", "--env-prefix", "CLI_"], snapshot = false },
+  ["node", "verify.mjs", "override"],
+]
+
+[[case]]
+name = "pack_env_prefix_no_config"
+vp = ["local", "global"]
+steps = [
+  { argv = ["vp", "pack", "--no-config", "entry.js", "--env-file", "build.env"], snapshot = false },
+  ["node", "verify.mjs", "no-config"],
+]
