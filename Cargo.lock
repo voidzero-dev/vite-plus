@@ -8634,6 +8634,7 @@ dependencies = [
  "thiserror 2.0.21",
  "tokio",
  "tracing",
+ "vp_command",
  "vp_js_runtime",
  "vp_pm_cli",
  "vp_shared",
