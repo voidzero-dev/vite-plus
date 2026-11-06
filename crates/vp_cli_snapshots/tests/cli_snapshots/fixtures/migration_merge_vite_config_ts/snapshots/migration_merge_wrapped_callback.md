@@ -19,7 +19,8 @@ VITE+ - The Unified Toolchain for the Web
 
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
-• 3 config updates applied, 1 file had imports rewritten
+• 4 config updates applied, 1 file had imports rewritten
+• Inline Vite plugins wrapped with lazyPlugins for check/lint/fmt
 ! Warnings:
   - Vitest v5: 1 review item
 
@@ -35,7 +36,7 @@ import { join } from 'node:path';
 
 import react from '@vitejs/plugin-react';
 import { playwright } from 'vite-plus/test/browser-playwright';
-import { defineConfig } from 'vite-plus';
+import { defineConfig, lazyPlugins } from 'vite-plus';
 
 import type { UserConfigFn } from 'vite-plus';
 
@@ -67,7 +68,7 @@ export default defineConfig(<UserConfigFn>(((() => {
         }
       ]
     },
-    plugins: [react()],
+    plugins: lazyPlugins(() => [react()]),
     test: {
       dir: join(import.meta.dirname, 'test'),
       browser: {
