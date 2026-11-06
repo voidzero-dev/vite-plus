@@ -835,7 +835,8 @@ const commandHelpDocs = {
           },
           {
             label: '--debounce <MS>',
-            description: 'Wait for changes to stop before checking (default: 300ms; requires --watch)',
+            description:
+              'Wait for changes to stop before checking (default: 300ms; requires --watch)',
           },
           {
             label: '--quiet',
