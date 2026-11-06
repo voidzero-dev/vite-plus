@@ -5,6 +5,7 @@
 
 mod app_target;
 mod execution;
+mod framework_note;
 mod handler;
 mod help;
 mod lifecycle_env;
@@ -45,7 +46,7 @@ use self::{
 /// Execute a synthesizable subcommand directly (not through vite-task Session).
 /// No caching, no task graph, no dependency resolution.
 async fn execute_direct_subcommand(
-    subcommand: SynthesizableSubcommand,
+    mut subcommand: SynthesizableSubcommand,
     cwd: &AbsolutePathBuf,
     options: Option<CliOptions>,
     explicit_chdir: bool,
@@ -61,6 +62,14 @@ async fn execute_direct_subcommand(
         app_target::AppTarget::Dir(dir) => dir,
         app_target::AppTarget::CurrentDir => cwd,
     };
+
+    if framework_note::print(&subcommand, cwd, retargeted || explicit_chdir)
+        && let SynthesizableSubcommand::Dev { args } = &mut subcommand
+    {
+        // Vite runs in a child process and cannot see the parent's output.
+        // Preserve the hint when its startup banner would clear the screen.
+        args.push("--clearScreen=false".into());
+    }
 
     // The resolver hands back the workspace root it already found whenever the
     // command runs in the unchanged cwd (never after a -C/elicitation
