@@ -42,6 +42,44 @@ The sampler sleeps for 20 ms. The median observed interval across runs was
 and sampling can miss short peaks. These values are process-tree RSS, not total
 allocation or container memory.
 
+## Installed disk footprint
+
+Clean production installations on Linux x64 with glibc compare published `1.5.0`
+with preview `0.0.0-commit.4fcf99edbe42fe3305dcd41dc884a4c4b7f5fd45`.
+The preview binary-size comment measures individual executables and native bindings;
+it does not measure the installed dependency tree.
+
+| Scope                            | Go (MiB) | tsrs (MiB) | Increase (MiB) | Increase |
+| -------------------------------- | -------: | ---------: | -------------: | -------: |
+| Complete `node_modules`, on disk |   132.93 |     150.87 |          17.94 |    13.5% |
+| Complete `node_modules`, files   |   123.39 |     139.27 |          15.88 |    12.9% |
+| Backend packages, on disk        |    21.63 |      39.69 |          18.06 |    83.5% |
+
+One MiB is 1,048,576 bytes. On-disk values use `du -s -B1 node_modules` and
+include directory allocation. File sizes sum regular-file lengths without following
+symlinks or counting an inode twice. The filesystem uses 4 KiB blocks.
+Stores, download caches, Node.js, pnpm, and the global `vp` executable are excluded.
+
+The job used Node.js `24.22.2`, pnpm `10.34.7`, and each version's published
+`vp-install-lock.yaml`. It reproduced the global installer's manifest and frozen
+installation flags. Separate stores and `--config.package-import-method=copy`
+prevent shared hard links from affecting the standalone footprint. Each installation
+contained 80 packages. Version output and type-aware linting with TypeScript
+diagnostics passed for both installations. The preview contained no `oxlint-tsgolint`.
+
+The backend totals include `oxlint-tsgolint` and `@oxlint-tsgolint/linux-x64`, or
+`tsrs` and `@tsrs/linux-x64-gnu`. The Rust distribution includes a larger executable,
+TypeScript library declarations, JavaScript APIs, and source maps. Its package
+footprint increases despite the runtime and memory improvements. The total
+installation comparison also includes other release-to-preview changes;
+the backend row separates the backend packages from those changes.
+
+The measurement ran on 2026-11-06 in Codespaces job `job-2a30c8ec3fb84524`.
+Scripts, raw package inventories, lockfiles, and logs remain outside the repository.
+The lockfile SHA256 values are
+`eb06955c3e76589da771286d3bfc6e6ea940c1a09ac64f597d2c72eb94403ad1` for `1.5.0`
+and `cf8fe673142ace0abaa362552bff78281f3b8f00e01bc13fa0eb93c5b1344683` for the preview.
+
 ## Conditions and interpretation
 
 The jobs used one GitHub Codespace with four vCPUs, 16 GB advertised RAM, and an
