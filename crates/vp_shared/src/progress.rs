@@ -1,12 +1,13 @@
 //! A single progress row for an operation and its sequential downloads.
 
+mod input;
 mod style;
 
 use std::{future::Future, time::Duration};
 
 use indicatif::{ProgressBar, ProgressStyle};
 
-use self::style::Style;
+use self::{input::InputBlock, style::Style};
 
 tokio::task_local! {
     static ACTIVE_PROGRESS: ProgressBar;
@@ -28,16 +29,16 @@ pub async fn with_spinner<F: Future>(message: Option<&str>, future: F) -> F::Out
         return future.await;
     }
 
-    let progress =
-        Progress::new(ProgressBar::new_spinner(), Style::Spinner.for_stderr(message), None);
-    progress.run(future).await
+    Progress::start(Style::Spinner.for_stderr(message)).run(future).await
 }
 
-/// Clears a download on completion or cancellation, or restores its enclosing
-/// operation's spinner. Keep this guard alive until the download finishes.
+/// A progress row, cleared on completion or cancellation. A download nested in a
+/// spinner restores that spinner instead. A row that is not nested blocks
+/// keyboard input until it is dropped. Keep this guard alive until the work finishes.
 pub struct Progress {
     bar: ProgressBar,
     restore: Option<(ProgressStyle, Duration)>,
+    _input: Option<InputBlock>,
 }
 
 impl Progress {
@@ -47,23 +48,29 @@ impl Progress {
         if !enabled() {
             return None;
         }
-        let progress =
-            Self::new(ProgressBar::new_spinner(), Style::Counter.for_stderr(message), None);
+        let progress = Self::start(Style::Counter.for_stderr(message));
         progress.bar.set_length(len);
         progress.bar.force_draw();
         Some(progress)
     }
 
     pub fn download(message: &str) -> Option<Self> {
-        let (bar, restore) = match ACTIVE_PROGRESS.try_with(Clone::clone) {
+        let style = Style::Download.for_stderr(message);
+        match ACTIVE_PROGRESS.try_with(Clone::clone) {
             Ok(bar) => {
                 let restore = Some((bar.style(), bar.elapsed()));
-                (bar, restore)
+                Some(Self::new(bar, style, restore))
             }
-            Err(_) if enabled() => (ProgressBar::new_spinner(), None),
-            Err(_) => return None,
-        };
-        Some(Self::new(bar, Style::Download.for_stderr(message), restore))
+            Err(_) if enabled() => Some(Self::start(style)),
+            Err(_) => None,
+        }
+    }
+
+    /// Show a new row and block keyboard input until it is cleared.
+    fn start(style: ProgressStyle) -> Self {
+        let mut progress = Self::new(ProgressBar::new_spinner(), style, None);
+        progress._input = input::block();
+        progress
     }
 
     fn new(
@@ -76,7 +83,7 @@ impl Progress {
         bar.unset_length();
         bar.enable_steady_tick(Duration::from_millis(100));
         bar.force_draw();
-        Self { bar, restore }
+        Self { bar, restore, _input: None }
     }
 
     pub fn bar(&self) -> &ProgressBar {
@@ -112,6 +119,12 @@ mod tests {
     use vt_str::Str;
 
     use super::*;
+
+    // napi futures hold `&Progress` across awaits, so it must stay `Send` and `Sync`.
+    const _: fn() = || {
+        fn assert_send_sync<T: Send + Sync>() {}
+        assert_send_sync::<Progress>();
+    };
 
     fn spinner(term: &InMemoryTerm) -> Progress {
         let draw_term = term.clone();
