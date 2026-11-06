@@ -40,7 +40,7 @@ descendants, including Node, Oxlint, and the native backend. One GiB is 1,073,74
 The sampler sleeps for 20 ms. The median observed interval across runs was
 21.8 ms. Shared pages can count more than once,
 and sampling can miss short peaks. These values are process-tree RSS, not total
-allocation or container memory. Per-case ranges are in the [summary](./tsrs-lint-codespaces/results/summary.json).
+allocation or container memory.
 
 ## Conditions and interpretation
 
@@ -74,28 +74,15 @@ Vinext retains its original JS plugin rules, including
 in place. This limits the elapsed-time improvement even though the memory
 reduction is larger. The measurements do not include that rule's separate optimization.
 
-## Evidence and reproduction
+## Run selection
 
-Use the [Codespaces recipe](./tsrs-lint-codespaces/README.md) to recreate the pinned
-setup and all six comparisons. The recipe uses frozen lockfiles and retains
-verified dependencies between jobs.
-
-The [main samples](./tsrs-lint-codespaces/results/main-samples.csv) contain all 204
-invocations, including warm-ups. A browser connection used to diagnose an SSH
+The main job completed 204 invocations, including warm-ups.
+A browser connection used to diagnose an SSH
 outage started editor extension activity during vinext's type-checking timing
 set. That entire timing set is excluded. The table instead uses the 22 records
-from the [clean timing repetition](./tsrs-lint-codespaces/results/timing-rerun-samples.csv).
+from a clean timing repetition.
 The repetition uses the same retained build and dependencies, with their hashes
 checked before execution. All memory values come from the main job.
 
-Records with `pair=-1` are warm-ups and do not contribute to medians. For the
-vinext `full`/`time` group, select the repetition CSV; select the main CSV for
-all other groups. Take each backend's median `seconds` or `peak_rss` value and
-calculate the reduction as `100 * (1 - rust / go)`.
-
-The [main metadata](./tsrs-lint-codespaces/results/main-metadata.json) and
-[repetition metadata](./tsrs-lint-codespaces/results/timing-rerun-metadata.json)
-record versions, hardware, source revisions, and successful worker results.
-The main worker finished while the controller was disconnected; its complete
-artifacts were recovered from the stopped Codespace. The jobs are `job-3dbd90be3d4f4aa3` and
-`job-4685d3c6e32f48bf`.
+Warm-up runs do not contribute to medians. Each reduction is calculated as
+`100 * (1 - rust / go)` from the corresponding backend medians.
