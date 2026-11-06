@@ -3,6 +3,10 @@
 This comparison uses the default `tsrs@0.22.0-ts7.1.0-beta` integration and an explicit
 `oxlint-tsgolint@7.0.2005` override. Both use Oxlint `1.91.0` and the same built CLI.
 
+The separate [ecosystem correctness comparison](./tsrs-lint-ecosystem.md) found
+compiler regressions and library differences in representative forks. The performance
+results below do not establish diagnostic equivalence.
+
 ## Elapsed time
 
 Each value is the median of ten fresh CLI processes after one warm-up per backend.
