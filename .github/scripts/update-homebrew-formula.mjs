@@ -137,6 +137,24 @@ export async function verifyRelease(version, release, fetchImpl = fetch) {
   return assets;
 }
 
+const CORE_ALIAS_PREFIX = 'npm:@voidzero-dev/vite-plus-core@';
+
+// The core version encodes the bundled Vite version, so it differs from the
+// vite-plus version (rfcs/core-version-alignment.md). Read it from the `vite`
+// alias of the published CLI. The release job publishes the CLI before this
+// script runs.
+export async function publishedCoreVersion(version, fetchImpl = fetch) {
+  const url = `https://registry.npmjs.org/vite-plus/${version}`;
+  const response = await fetchImpl(url, { signal: AbortSignal.timeout(120_000) });
+  assert.ok(response.ok, `Download failed: ${url} (HTTP ${response.status})`);
+  const spec = (await response.json()).dependencies?.vite;
+  assert.ok(
+    typeof spec === 'string' && spec.startsWith(CORE_ALIAS_PREFIX),
+    `vite-plus@${version} does not alias vite to @voidzero-dev/vite-plus-core: ${spec}`,
+  );
+  return spec.slice(CORE_ALIAS_PREFIX.length);
+}
+
 async function main() {
   const [version] = process.argv.slice(2);
   stableVersion(version ?? '');
@@ -146,13 +164,17 @@ async function main() {
     }),
   );
   const assets = await verifyRelease(version, release);
+  const coreVersion = await publishedCoreVersion(version);
   const packages = [
-    'vite-plus',
-    '@voidzero-dev/vite-plus-core',
-    '@voidzero-dev/vite-plus-prompts',
-    ...targets.map(([, , , platform]) => `@voidzero-dev/vite-plus-${platform}`),
+    { name: 'vite-plus', version },
+    { name: '@voidzero-dev/vite-plus-core', version: coreVersion },
+    { name: '@voidzero-dev/vite-plus-prompts', version },
+    ...targets.map(([, , , platform]) => ({
+      name: `@voidzero-dev/vite-plus-${platform}`,
+      version,
+    })),
   ];
-  await waitForNpmPackagesFromEnv(packages.map((name) => ({ name, version })));
+  await waitForNpmPackagesFromEnv(packages);
   const file = new URL('../../HomebrewFormula/vp.rb', import.meta.url);
   const source = await readFile(file, 'utf8');
   const result = updateFormula(source, version, assets);
