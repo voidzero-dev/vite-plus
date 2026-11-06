@@ -13,6 +13,18 @@ pub enum Error {
     #[error("Platform {platform} is not supported for {runtime}")]
     UnsupportedPlatform { platform: Str, runtime: Str },
 
+    /// The runtime version exists, but no archive is available for this platform.
+    #[error(
+        "{runtime} v{version} does not provide a {platform} archive ({filename}); \
+         this version may not be available for your platform"
+    )]
+    MissingPlatformArchive {
+        runtime: Str,
+        version: Str,
+        platform: Str,
+        filename: Str,
+    },
+
     /// Download failed after retries
     #[error("Failed to download from {url}: {reason}")]
     DownloadFailed { url: Str, reason: Str },
