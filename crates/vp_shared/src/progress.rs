@@ -41,6 +41,19 @@ pub struct Progress {
 }
 
 impl Progress {
+    /// Animate a status with a completed count and elapsed time. Advance it
+    /// through [`Self::bar`]. Returns `None` when progress is hidden.
+    pub fn counter(message: &str, len: u64) -> Option<Self> {
+        if !enabled() {
+            return None;
+        }
+        let progress =
+            Self::new(ProgressBar::new_spinner(), Style::Counter.for_stderr(message), None);
+        progress.bar.set_length(len);
+        progress.bar.force_draw();
+        Some(progress)
+    }
+
     pub fn download(message: &str) -> Option<Self> {
         let (bar, restore) = match ACTIVE_PROGRESS.try_with(Clone::clone) {
             Ok(bar) => {
