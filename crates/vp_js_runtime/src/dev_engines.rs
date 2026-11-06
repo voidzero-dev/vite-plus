@@ -109,43 +109,58 @@ mod tests {
 
     use super::*;
 
+    /// `.node-version` content and the version it parses to. Keep every row:
+    /// dropping the empty-content check or lowercasing `lts/<codename>` fails
+    /// only this test in the crate.
     #[test]
-    fn test_parse_node_version_content_three_part() {
-        assert_eq!(parse_node_version_content("20.5.0\n"), Some("20.5.0".into()));
-        assert_eq!(parse_node_version_content("20.5.0"), Some("20.5.0".into()));
-        assert_eq!(parse_node_version_content("22.13.1\n"), Some("22.13.1".into()));
-    }
-
-    #[test]
-    fn test_parse_node_version_content_with_v_prefix() {
-        assert_eq!(parse_node_version_content("v20.5.0\n"), Some("20.5.0".into()));
-        assert_eq!(parse_node_version_content("v20.5.0"), Some("20.5.0".into()));
-        assert_eq!(parse_node_version_content("v22.13.1\n"), Some("22.13.1".into()));
-    }
-
-    #[test]
-    fn test_parse_node_version_content_two_part() {
-        assert_eq!(parse_node_version_content("20.5\n"), Some("20.5".into()));
-        assert_eq!(parse_node_version_content("v20.5\n"), Some("20.5".into()));
-    }
-
-    #[test]
-    fn test_parse_node_version_content_single_part() {
-        assert_eq!(parse_node_version_content("20\n"), Some("20".into()));
-        assert_eq!(parse_node_version_content("v20\n"), Some("20".into()));
-    }
-
-    #[test]
-    fn test_parse_node_version_content_with_whitespace() {
-        assert_eq!(parse_node_version_content("  20.5.0  \n"), Some("20.5.0".into()));
-        assert_eq!(parse_node_version_content("\t20.5.0\t\n"), Some("20.5.0".into()));
-    }
-
-    #[test]
-    fn test_parse_node_version_content_empty() {
-        assert!(parse_node_version_content("").is_none());
-        assert!(parse_node_version_content("\n").is_none());
-        assert!(parse_node_version_content("   \n").is_none());
+    fn test_parse_node_version_content() {
+        let cases: &[(&str, Option<&str>)] = &[
+            // Three-part versions
+            ("20.5.0\n", Some("20.5.0")),
+            ("20.5.0", Some("20.5.0")),
+            ("22.13.1\n", Some("22.13.1")),
+            // With `v` prefix
+            ("v20.5.0\n", Some("20.5.0")),
+            ("v20.5.0", Some("20.5.0")),
+            ("v22.13.1\n", Some("22.13.1")),
+            // Two-part versions
+            ("20.5\n", Some("20.5")),
+            ("v20.5\n", Some("20.5")),
+            // Single-part versions
+            ("20\n", Some("20")),
+            ("v20\n", Some("20")),
+            // Surrounding whitespace
+            ("  20.5.0  \n", Some("20.5.0")),
+            ("\t20.5.0\t\n", Some("20.5.0")),
+            // Empty content
+            ("", None),
+            ("\n", None),
+            ("   \n", None),
+            // ================================================================
+            // LTS Alias Tests - These test support for lts/* syntax in .node-version
+            // ================================================================
+            // lts/* should be preserved as-is (not stripped of prefix)
+            ("lts/*\n", Some("lts/*")),
+            ("lts/*", Some("lts/*")),
+            ("  lts/*  \n", Some("lts/*")),
+            // lts/<codename> should be preserved as-is
+            ("lts/iron\n", Some("lts/iron")),
+            ("lts/jod\n", Some("lts/jod")),
+            ("lts/hydrogen\n", Some("lts/hydrogen")),
+            // Should preserve original case for codenames
+            ("lts/Iron\n", Some("lts/Iron")),
+            ("lts/Jod\n", Some("lts/Jod")),
+            // lts/-n should be preserved as-is
+            ("lts/-1\n", Some("lts/-1")),
+            ("lts/-2\n", Some("lts/-2")),
+        ];
+        for &(content, expected) in cases {
+            assert_eq!(
+                parse_node_version_content(content),
+                expected.map(Str::from),
+                "content: {content:?}"
+            );
+        }
     }
 
     #[tokio::test]
@@ -192,35 +207,5 @@ mod tests {
         let content = "# Node\r\n  v20.18.0  # keep\r\nkey=value\r\n\r\n22";
         let versions: Vec<_> = nvmrc_version_spans(content).map(|span| &content[span]).collect();
         assert_eq!(versions, ["v20.18.0", "22"]);
-    }
-
-    // ========================================================================
-    // LTS Alias Tests - These test support for lts/* syntax in .node-version
-    // ========================================================================
-
-    #[test]
-    fn test_parse_node_version_content_lts_latest() {
-        // lts/* should be preserved as-is (not stripped of prefix)
-        assert_eq!(parse_node_version_content("lts/*\n"), Some("lts/*".into()));
-        assert_eq!(parse_node_version_content("lts/*"), Some("lts/*".into()));
-        assert_eq!(parse_node_version_content("  lts/*  \n"), Some("lts/*".into()));
-    }
-
-    #[test]
-    fn test_parse_node_version_content_lts_codename() {
-        // lts/<codename> should be preserved as-is
-        assert_eq!(parse_node_version_content("lts/iron\n"), Some("lts/iron".into()));
-        assert_eq!(parse_node_version_content("lts/jod\n"), Some("lts/jod".into()));
-        assert_eq!(parse_node_version_content("lts/hydrogen\n"), Some("lts/hydrogen".into()));
-        // Should preserve original case for codenames
-        assert_eq!(parse_node_version_content("lts/Iron\n"), Some("lts/Iron".into()));
-        assert_eq!(parse_node_version_content("lts/Jod\n"), Some("lts/Jod".into()));
-    }
-
-    #[test]
-    fn test_parse_node_version_content_lts_offset() {
-        // lts/-n should be preserved as-is
-        assert_eq!(parse_node_version_content("lts/-1\n"), Some("lts/-1".into()));
-        assert_eq!(parse_node_version_content("lts/-2\n"), Some("lts/-2".into()));
     }
 }

@@ -10,7 +10,7 @@ pub(super) async fn resolve() -> Result<Option<String>, Error> {
     let env = EnvConfig::get();
     let Some(selector) = env.setup_node_version.as_deref().map(str::trim).filter(|v| !v.is_empty())
     else {
-        // Keep the installer on LTS unless a caller explicitly opts in.
+        // Keep the installer's pinned default unless a caller explicitly opts in.
         // Project discovery and normal Node overrides do not apply here.
         return Ok(None);
     };
@@ -69,7 +69,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn absent_or_empty_selector_keeps_the_lts_default() {
+    async fn absent_or_empty_selector_keeps_the_pinned_default() {
         for selector in [None, Some(""), Some("  ")] {
             assert_eq!(with_selector(selector).await, None);
         }

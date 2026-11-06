@@ -1,0 +1,11 @@
+{
+  "name": "migration-tsx-jsdoc",
+  "type": "module",
+  "scripts": {
+    "start": "tsx index.ts"
+  },
+  "devDependencies": {
+    "tsx": "file:.fixture/tsx"
+  },
+  "packageManager": "pnpm@10.33.2"
+}

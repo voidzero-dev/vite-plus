@@ -85,3 +85,22 @@ export function findLatestStableVersionForMajor(
   }
   return latest?.version;
 }
+
+export async function getLatestNodeVersion(major: number): Promise<string> {
+  const response = await fetch('https://nodejs.org/dist/index.json');
+  if (!response.ok) {
+    throw new Error(`Failed to fetch Node.js releases: ${response.status} ${response.statusText}`);
+  }
+  const releases: unknown = await response.json();
+  if (!Array.isArray(releases)) {
+    throw new Error('Invalid Node.js release index: expected an array');
+  }
+  const versions = releases.flatMap((release: { version?: unknown } | null) =>
+    typeof release?.version === 'string' ? [release.version.replace(/^v/, '')] : [],
+  );
+  const version = findLatestStableVersionForMajor(versions, major);
+  if (!version) {
+    throw new Error(`No stable ${major}.x version found for Node.js`);
+  }
+  return version;
+}

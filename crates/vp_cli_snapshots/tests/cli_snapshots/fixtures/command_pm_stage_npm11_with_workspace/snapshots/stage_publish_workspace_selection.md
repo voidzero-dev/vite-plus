@@ -41,3 +41,20 @@ An explicit folder without workspace options remains supported.
 ```
  vp-stage-workspace-a@1.0.0 (staged)
 ```
+
+## `vpt json-edit package.json packageManager npm@11.14.1`
+
+
+## `vp pm stage list --json`
+
+Before npm 11.15.0, warn and skip even with machine-readable output.
+
+```
+warn: npm stage requires npm >= 11.15.0. Skipping.
+```
+
+## `vp pm stage publish --dry-run`
+
+```
+warn: npm stage requires npm >= 11.15.0. Skipping.
+```

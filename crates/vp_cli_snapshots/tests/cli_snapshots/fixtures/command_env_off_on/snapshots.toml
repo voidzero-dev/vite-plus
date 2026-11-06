@@ -5,11 +5,11 @@ comment = "`vp env off` switches project scripts from the managed engines.node r
 skip-platforms = ["windows"]
 steps = [
   { argv = ["node", "src/setup-system-node.cjs"], comment = "Provide a system Node.js after the Vite+ bin on PATH, as in a user's shell.", snapshot = false },
-  { argv = ["vp", "run", "assert-managed"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "Managed mode: should use project's engines.node 22.18.0" },
+  { argv = ["vp", "run", "assert-managed"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "Managed mode: should use project's engines.node 22.23.4" },
   { argv = ["vp", "env", "off"], comment = "Switch to system-first mode" },
-  { argv = ["vp", "run", "assert-not-managed"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "System-first mode: must use the system Node.js, not 22.18.0" },
+  { argv = ["vp", "run", "assert-not-managed"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "System-first mode: must use Node.js from system-bin" },
   { argv = ["vp", "env", "on"], comment = "Switch back to managed mode" },
-  { argv = ["vp", "run", "assert-managed"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "Managed mode restored: should use 22.18.0 again" },
+  { argv = ["vp", "run", "assert-managed"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "Managed mode restored: should use 22.23.4 again" },
 ]
 after = [
   { argv = ["vp", "env", "on"], continue-on-failure = true },

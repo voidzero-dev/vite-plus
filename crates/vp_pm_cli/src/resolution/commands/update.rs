@@ -29,39 +29,39 @@ pub struct UpdateArgs {
     pub(crate) ignore_node_mismatch: bool,
 
     /// Update recursively in all workspace packages
-    #[arg(short = 'r', long, not_supported(npm < "8.1.0", yarn < "2", bun < "1.4"))]
+    #[arg(short = 'r', long, conflicts_with = "global", not_supported(npm < "8.1.0", yarn < "2", bun < "1.4"))]
     pub(crate) recursive: bool,
 
     /// Filter packages in monorepo (can be used multiple times)
-    #[arg(long, value_name = "PATTERN", not_supported(npm < "7.14.0", yarn >= "2", bun < "1.4"))]
+    #[arg(long, value_name = "PATTERN", conflicts_with = "global", not_supported(npm < "7.14.0", yarn >= "2", bun < "1.4"))]
     pub(crate) filter: Vec<String>,
 
     /// Include workspace root
-    #[arg(short = 'w', long, not_supported(npm < "8.1.0", yarn, bun))]
+    #[arg(short = 'w', long, conflicts_with = "global", not_supported(npm < "8.1.0", yarn, bun))]
     pub(crate) workspace_root: bool,
 
     /// Update devDependencies
-    #[arg(short = 'D', long, not_supported(yarn, bun < "1.4"))]
+    #[arg(short = 'D', long, conflicts_with = "global", not_supported(yarn, bun < "1.4"))]
     pub(crate) dev: bool,
 
     /// Update dependencies (production)
-    #[arg(short = 'P', long, not_supported(yarn >= "2", bun < "1.4"))]
+    #[arg(short = 'P', long, conflicts_with = "global", not_supported(npm < "7", yarn >= "2", bun < "1.4"))]
     pub(crate) prod: bool,
 
     /// Interactive mode
-    #[arg(short = 'i', long, not_supported(npm))]
+    #[arg(short = 'i', long, conflicts_with = "global", not_supported(npm))]
     pub(crate) interactive: bool,
 
     /// Exclude optionalDependencies
-    #[arg(long, not_supported(yarn >= "2", bun < "1.4"))]
+    #[arg(long, conflicts_with = "global", not_supported(yarn >= "2", bun < "1.4"))]
     pub(crate) no_optional: bool,
 
     /// Update lockfile only, don't modify package.json
-    #[arg(long)]
+    #[arg(long, conflicts_with = "global")]
     pub(crate) no_save: bool,
 
     /// Only update if package exists in workspace (pnpm-specific)
-    #[arg(long, not_supported(npm, yarn, bun))]
+    #[arg(long, conflicts_with = "global", not_supported(npm, yarn, bun))]
     pub(crate) workspace: bool,
 
     /// Packages to update (optional - updates all if omitted)
@@ -100,7 +100,10 @@ impl Resolve<UpdateArgs> for Npm {
             cmd.arg("--include-workspace-root");
         }
         cmd.arg_if("--workspaces", args.recursive)
-            .arg_if("--include=dev", args.dev)
+            .arg_if(
+                if self.supports_v7_commands() { "--include=dev" } else { "--also=dev" },
+                args.dev,
+            )
             .arg_if("--include=prod", args.prod)
             .arg_if("--no-optional", args.no_optional)
             .arg_if("--no-save", args.no_save)
@@ -605,6 +608,35 @@ mod tests {
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["update", "--include-workspace-root", "--workspaces"]);
+    }
+
+    #[test]
+    fn npm_dependency_filter_version_boundaries() {
+        for (version, flag) in [("6.14.18", "--also=dev"), ("7.0.0", "--include=dev")] {
+            let args = parse_args::<UpdateArgs>(["-D", "react", "--", "--no-audit"]).unwrap();
+            let resolution = resolve(&npm(version), args);
+            assert!(resolution.diagnostics.is_empty());
+            assert_eq!(
+                expect_run(resolution.outcome).args,
+                ["update", flag, "--no-audit", "react"]
+            );
+        }
+
+        for dialect in [npm("6.14.18"), npm("7.0.0"), Npm::unknown_version()] {
+            let args = parse_args::<UpdateArgs>(["--no-optional", "react"]).unwrap();
+            let resolution = resolve(&dialect, args);
+            assert!(resolution.diagnostics.is_empty());
+            assert_eq!(expect_run(resolution.outcome).args, ["update", "--no-optional", "react"]);
+        }
+
+        let args = parse_args::<UpdateArgs>(["-P", "react"]).unwrap();
+        expect_unsupported(resolve(&npm("6.14.18"), args), &["npm < 7 does not support --prod."]);
+        for dialect in [npm("7.0.0"), Npm::unknown_version()] {
+            let args = parse_args::<UpdateArgs>(["-P", "react"]).unwrap();
+            let resolution = resolve(&dialect, args);
+            assert!(resolution.diagnostics.is_empty());
+            assert_eq!(expect_run(resolution.outcome).args, ["update", "--include=prod", "react"]);
+        }
     }
 
     #[test]

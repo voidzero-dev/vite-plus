@@ -1,6 +1,6 @@
 # global_package_keeps_its_node_after_npx
 
-## `vp install -g --node 22.18.0 ./runtime-probe`
+## `vp install -g --node 22.23.4 ./runtime-probe`
 
 
 ## `npx --offline --call injected-runtime-probe`

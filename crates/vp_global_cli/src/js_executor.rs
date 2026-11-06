@@ -6,7 +6,9 @@
 use std::process::{ExitStatus, Output};
 
 use tokio::process::Command;
-use vp_js_runtime::{JsRuntime, JsRuntimeType, download_runtime, download_runtime_for_project};
+use vp_js_runtime::{
+    JsRuntime, JsRuntimeType, NodeProvider, download_runtime, download_runtime_for_project,
+};
 use vp_shared::{PrependOptions, ToolPathEnv, env_vars};
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
@@ -82,7 +84,8 @@ impl JsExecutor {
     /// Resolution order:
     /// 1. Explicitly provided `scripts_dir`
     /// 2. `VP_GLOBAL_CLI_JS_SCRIPTS_DIR` environment variable
-    /// 3. Auto-detect from binary location (../dist relative to binary)
+    /// 3. Per-user dependencies for a bare Homebrew installation
+    /// 4. Bundled dependencies relative to the binary
     pub fn get_scripts_dir(&self) -> Result<AbsolutePathBuf, Error> {
         // 1. Use explicitly provided scripts_dir
         if let Some(dir) = &self.scripts_dir {
@@ -94,7 +97,11 @@ impl JsExecutor {
             return AbsolutePathBuf::new(dir.into()).ok_or(Error::JsScriptsDirNotFound);
         }
 
-        // 3. Auto-detect from binary location
+        if let Some(package) = crate::homebrew::user_package_dir()? {
+            return Ok(package.join("node_modules/vite-plus/dist"));
+        }
+
+        // 4. Auto-detect from binary location
         // JS scripts are at ../node_modules/vite-plus/dist relative to the binary directory
         // e.g., <DATA>/<version>/bin/vp -> <DATA>/<version>/node_modules/vite-plus/dist/
         let exe_path = std::env::current_exe().map_err(|_| Error::JsScriptsDirNotFound)?;
@@ -114,6 +121,12 @@ impl JsExecutor {
     /// This is passed to JS scripts via `VP_CLI_BIN` environment variable
     /// so they can invoke vp commands when needed.
     fn get_bin_path() -> Result<AbsolutePathBuf, Error> {
+        #[cfg(unix)]
+        if let Some(public) = crate::homebrew::current().and_then(|install| install.public_binary())
+        {
+            // A running JS command can invoke vp after Homebrew removes its original keg.
+            return Ok(public);
+        }
         let exe_path = std::env::current_exe().map_err(|_| Error::CliBinaryNotFound)?;
         AbsolutePathBuf::new(exe_path).ok_or(Error::CliBinaryNotFound)
     }
@@ -200,7 +213,7 @@ impl JsExecutor {
                 .map(|v| v.trim().to_string())
                 .filter(|v| !v.is_empty())
             {
-                Some(session_version)
+                Some(config::resolve_version_alias(&session_version, &NodeProvider::new()).await?)
             } else {
                 config::read_session_version().await
             };
@@ -523,7 +536,7 @@ mod tests {
     /// isolates them from concurrent scopes, and one shared root keeps the
     /// download cache warm across tests and runs.
     fn shared_vp_home() -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join("vp-global-cli-tests-vp-home");
+        let dir = std::env::temp_dir().join("vp-node-runtime-tests-vp-home");
         std::fs::create_dir_all(&dir).unwrap();
         dir
     }
@@ -659,11 +672,13 @@ mod tests {
 
                 // Keep this delegation test independent of the moving latest-LTS alias.
                 // The unofficial musl index can advertise a release before its archive exists.
-                tokio::fs::write(temp_dir.path().join(".node-version"), "22.13.1\n").await.unwrap();
+                tokio::fs::write(temp_dir.path().join(".node-version"), "22.23.4\n").await.unwrap();
 
                 // Create a bin.js that prints process.version
                 let script_path = temp_dir.path().join("bin.js");
                 let mut file = std::fs::File::create(&script_path).unwrap();
+                writeln!(file, "require('node:assert/strict').equal(process.version, 'v22.23.4');")
+                    .unwrap();
                 writeln!(file, "console.log(process.version);").unwrap();
 
                 // Create executor with the temp scripts directory as global fallback
@@ -678,9 +693,58 @@ mod tests {
         .await;
     }
 
+    #[tokio::test]
+    async fn ensure_project_runtime_resolves_env_override() {
+        use std::ffi::OsStr;
+
+        use httpmock::prelude::*;
+
+        let server = MockServer::start_async().await;
+        server
+            .mock_async(|when, then| {
+                when.method(GET).path("/index.json");
+                then.status(200).body(
+                    r#"[
+                        {"version":"v24.11.0","lts":"Krypton"},
+                        {"version":"v22.21.0","lts":"Jod"},
+                        {"version":"v22.20.0","lts":"Jod"}
+                    ]"#,
+                );
+            })
+            .await;
+        let mirror = server.base_url();
+
+        for selector in ["22", " 22 ", "^22.0.0", "lts/jod", "v22.21.0", "22.21.0"] {
+            let temp = tempfile::TempDir::new().unwrap();
+            let project = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+            tokio::fs::write(project.join(".node-version"), "24.11.0\n").await.unwrap();
+            vp_shared::EnvConfig::with_vars_async(
+                [
+                    (env_vars::VP_HOME, temp.path().as_os_str()),
+                    (env_vars::VP_NODE_VERSION, OsStr::new(selector)),
+                    (env_vars::VP_NODE_DIST_MIRROR, OsStr::new(&mirror)),
+                ],
+                |env| async move {
+                    // Only the resolved release is cached, so raw selectors cannot succeed.
+                    let install_dir = env.dirs.data.join("js_runtime/node/22.21.0");
+                    let binary =
+                        install_dir.join(if cfg!(windows) { "node.exe" } else { "bin/node" });
+                    tokio::fs::create_dir_all(binary.parent().unwrap()).await.unwrap();
+                    tokio::fs::write(&binary, "").await.unwrap();
+
+                    let mut executor = JsExecutor::new(None);
+                    let runtime = executor.ensure_project_runtime(&project).await.unwrap();
+                    assert_eq!(runtime.version(), "22.21.0", "selector: {selector}");
+                    assert_eq!(runtime.get_binary_path(), binary);
+                },
+            )
+            .await;
+        }
+    }
+
     /// Regression for reverting the Node.js version enforcement (#1360):
     /// a project pinning an *older* Node that the declared `engines.node` range
-    /// no longer lists (20.0.0 was dropped in #1813) must still resolve,
+    /// no longer lists (Node 20 is below the supported floor) must still resolve,
     /// download, and run, instead of being blocked with an incompatibility error.
     #[tokio::test]
     async fn ensure_project_runtime_allows_older_unsupported_node() {
@@ -693,19 +757,19 @@ mod tests {
         vp_shared::EnvConfig::with_vars_async(
             [(env_vars::VP_HOME, vp_home.as_os_str())],
             |_| async {
-                // Pin Node 20.0.0 via `.node-version`: well below the declared floor and
-                // exactly the case the removed gate rejected.
+                // Node 20.20.2 remains below the declared floor and shares the
+                // runtime already used by the explicit-version execution test.
                 let project = TempDir::new().unwrap();
-                tokio::fs::write(project.path().join(".node-version"), "20.0.0\n").await.unwrap();
+                tokio::fs::write(project.path().join(".node-version"), "20.20.2\n").await.unwrap();
                 let project_path = AbsolutePathBuf::new(project.path().to_path_buf()).unwrap();
 
                 let mut executor = JsExecutor::new(None);
                 let runtime = executor
                     .ensure_project_runtime(&project_path)
                     .await
-                    .expect("older Node 20.0.0 must be usable, not blocked");
+                    .expect("older Node 20.20.2 must be usable, not blocked");
 
-                assert_eq!(runtime.version(), "20.0.0");
+                assert_eq!(runtime.version(), "20.20.2");
 
                 // The downloaded runtime must actually run.
                 let output = Command::new(runtime.get_binary_path().as_path())
@@ -715,7 +779,7 @@ mod tests {
                     .expect("node --version should run");
                 assert!(output.status.success(), "node --version failed: {output:?}");
                 let stdout = String::from_utf8_lossy(&output.stdout);
-                assert!(stdout.trim().starts_with("v20.0.0"), "unexpected node version: {stdout}");
+                assert_eq!(stdout.trim(), "v20.20.2");
             },
         )
         .await;

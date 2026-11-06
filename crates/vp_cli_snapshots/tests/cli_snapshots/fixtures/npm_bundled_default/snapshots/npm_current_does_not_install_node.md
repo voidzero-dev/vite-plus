@@ -7,7 +7,7 @@ An absent Node runtime and bundled npm are reported without downloading
 ```
 {
   "node": {
-    "version": "22.18.0",
+    "version": "22.23.4",
     "source": "VP_NODE_VERSION",
     "bin_path": "<home>/.vite-plus/js_runtime/node/<version>/bin/node",
     "installed": false,
@@ -48,7 +48,7 @@ The explicit npm scope also reports an unknown, uninstalled version
 }
 ```
 
-## `vpt stat-file $VP_HOME/js_runtime/node/22.18.0 --assert missing`
+## `vpt stat-file $VP_HOME/js_runtime/node/22.23.4 --assert missing`
 
 Reporting the environment leaves the runtime uninstalled
 

@@ -63,6 +63,18 @@ steps = [
 ]
 
 [[case]]
+name = "vpx_script_await_using"
+vp = ["local", "global"]
+env = { VP_NODE_VERSION = "22.18.0" }
+comment = "Node.js 22.18.0 exercises asynchronous loader hooks and lowered await using; Node.js 24 exercises synchronous hooks and native await using. Both reject require() of the asynchronous module."
+steps = [
+  { argv = ["vpx", "./src/await-using.mts"], comment = "Node.js 22 disposes the resource after the module body runs" },
+  { argv = ["vpx", "./src/require-await-using.cts"], comment = "Node.js 22 rejects require() of the lowered asynchronous module" },
+  { argv = ["vpx", "./src/await-using.mts"], envs = [["VP_NODE_VERSION", "24.22.1"]], comment = "Node.js 24 runs await using natively and produces the same disposal output" },
+  { argv = ["vpx", "./src/require-await-using.cts"], envs = [["VP_NODE_VERSION", "24.22.1"]], comment = "Node.js 24 rejects require() when the only top-level await is an await using declaration" },
+]
+
+[[case]]
 name = "vpx_script_ts_dependency"
 vp = ["local", "global"]
 comment = "TypeScript published in node_modules is transformed, which Node.js type stripping refuses."
@@ -201,6 +213,7 @@ name = "vpx_script_watch"
 vp = ["local", "global"]
 skip-platforms = ["windows"]
 cwd = "watch"
+env = { VP_NODE_VERSION = "22.18.0" }
 comment = "vpx --watch runs oxc-node's watcher, never Node.js' own watch mode, with the script loader. It reruns the script when an imported file or a tsconfig changes, when the file a failed import looked for is created, and when the tsconfig given by --tsconfig changes."
 steps = [
   ["node", "verify-watch.mjs", "dependency", "--watch"],
@@ -215,7 +228,7 @@ name = "vpx_script_watch_node24"
 vp = ["local", "global"]
 skip-platforms = ["windows"]
 cwd = "watch"
-env = { VP_NODE_VERSION = "24.12.0" }
+env = { VP_NODE_VERSION = "24.22.1" }
 comment = "On the in-thread module.registerHooks() path, the hooks report the tsconfig files they read too."
 steps = [["node", "verify-watch.mjs", "tsconfig", "--watch"]]
 
@@ -247,9 +260,9 @@ vp = ["local", "global"]
 # a Node.js download on Windows.
 skip-platforms = ["windows"]
 cwd = "config-file"
-# The first release where the project-local bin sees the bare flag: before 26.12, the
+# From 26.12, the project-local bin sees the bare flag. Before that, the
 # Node.js running the bin rewrites it to `--experimental-config-file=node.config.json`.
-env = { VP_NODE_VERSION = "26.12.0" }
+env = { VP_NODE_VERSION = "26.12.1" }
 comment = "From Node.js 24.19 and 26.1, a bare --experimental-config-file reads node.config.json and takes no value, so the arguments after it keep their meaning."
 steps = [
   { argv = ["vpx", "--experimental-config-file", "./main.ts", "--watch"], comment = "--watch after the script belongs to the script" },
@@ -262,7 +275,7 @@ name = "vpx_script_config_file_path"
 vp = ["local", "global"]
 skip-platforms = ["windows"]
 cwd = "config-file"
-# The fixture's Node.js, 22.18.0, takes the next argument as the config file. Node.js
+# The fixture's Node.js, 22.23.4, takes the next argument as the config file. Node.js
 # warns that the flag is experimental, with a PID, in the launcher too.
 env = { NODE_NO_WARNINGS = "1" }
 comment = "Before Node.js 24.19 and 26.1, --experimental-config-file takes a separate .json path, so --tsconfig, --watch, and a watcher option after it keep their meaning."

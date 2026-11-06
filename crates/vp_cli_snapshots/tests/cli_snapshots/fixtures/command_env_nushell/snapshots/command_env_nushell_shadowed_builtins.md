@@ -11,7 +11,7 @@
 env.nu loads and runs `vp env use` when user commands shadow the built-ins it calls (#3092)
 
 ```
-Using Node.js <version> (resolved from 20.18.0)
+Using Node.js <version> (resolved from 20.20.2)
 Reverted selected components to project environment resolution
 env.nu loads and works with shadowed built-ins
 ```

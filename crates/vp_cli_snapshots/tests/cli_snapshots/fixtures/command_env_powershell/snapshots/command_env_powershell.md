@@ -3,7 +3,7 @@
 ## `vp env setup --refresh`
 
 
-## `vpt write-file .node-version '22.18.0
+## `vpt write-file .node-version '22.23.4
 '`
 
 
@@ -12,7 +12,7 @@
 dot-sources env.ps1 and verifies PowerShell environment setup and wrapper behavior
 
 ```
-Using Node.js <version> (resolved from 20.18.0)
+Using Node.js <version> (resolved from 20.20.2)
 Reverted selected components to project environment resolution
 Using Node.js <version> (resolved from .node-version)
 PowerShell environment checks passed

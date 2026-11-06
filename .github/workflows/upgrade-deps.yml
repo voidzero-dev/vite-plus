@@ -14,6 +14,10 @@ jobs:
     permissions:
       actions: read
       id-token: write
+    env:
+      CHECK_UPGRADE_TIMEOUT_MINUTES: 180
+    outputs:
+      command-timeouts: ${{ steps.check-upgrade-result.outputs.report }}
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
@@ -46,6 +50,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node .github/scripts/upgrade-deps.ts
 
+      - name: Use the updated Node.js pin
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+
       - name: Build
         uses: ./.github/actions/build-upstream
         id: build-upstream
@@ -68,12 +78,19 @@ jobs:
             --output "${UPGRADE_DEPS_META_DIR}/cli-help-report.md" \
             --github-output "${GITHUB_OUTPUT}"
 
-      - name: Check upgrade dependencies with Kimi K3
+      - name: Record Kimi K3.1 Pro start time
+        run: echo "CHECK_UPGRADE_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: Check upgrade dependencies with Kimi K3.1 Pro
         id: check-upgrade-dependencies
-        timeout-minutes: 180
+        timeout-minutes: ${{ fromJSON(env.CHECK_UPGRADE_TIMEOUT_MINUTES) }}
+        # After a timeout, keep the partial fixes for a draft PR; the report-timeouts
+        # job opens an issue. The next step stops the job after any other failure.
+        continue-on-error: true
         uses: anthropics/claude-code-action@1d6de8cb0c237e7c15e9e1bdf973826ebae490cc # v1.0.248
         env:
           ANTHROPIC_BASE_URL: https://api.kimi.com/coding/
+          BASH_MAX_TIMEOUT_MS: '1800000'
           CLI_HELP_DIFF_CHANGED: ${{ steps.cli-help-diff.outputs.has-changes }}
           CLI_HELP_DIFF_REPORT: ${{ env.UPGRADE_DEPS_META_DIR }}/cli-help-report.md
           RELEASE_BUILD: 'true'
@@ -85,12 +102,12 @@ jobs:
             {
               "env": {
                 "ANTHROPIC_BASE_URL": "https://api.kimi.com/coding/",
-                "ANTHROPIC_MODEL": "k3[1m]",
-                "ANTHROPIC_DEFAULT_OPUS_MODEL": "k3[1m]",
+                "ANTHROPIC_MODEL": "k3.1-pro[1m]",
+                "ANTHROPIC_DEFAULT_OPUS_MODEL": "k3.1-pro[1m]",
                 "ANTHROPIC_DEFAULT_SONNET_MODEL": "kimi-for-coding",
                 "ANTHROPIC_DEFAULT_HAIKU_MODEL": "kimi-for-coding",
-                "ANTHROPIC_DEFAULT_FABLE_MODEL": "k3[1m]",
-                "CLAUDE_CODE_SUBAGENT_MODEL": "k3[1m]",
+                "ANTHROPIC_DEFAULT_FABLE_MODEL": "k3.1-pro[1m]",
+                "CLAUDE_CODE_SUBAGENT_MODEL": "k3.1-pro[1m]",
                 "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "1048576",
                 "CLAUDE_CODE_MAX_CONTEXT_TOKENS": "1048576",
                 "CLAUDE_CODE_EFFORT_LEVEL": "max"
@@ -107,6 +124,11 @@ jobs:
 
             ### Background
             - Upgrade script: `./.github/scripts/upgrade-deps.ts`
+            - Development, CI, and global CLI dependency installation use the
+              latest stable `24.x` release pinned in `.node-version`.
+              Keep the exact version selected by the upgrade script. Do not replace
+              it with a moving LTS alias or advance the major version.
+              Runtime commands keep their latest LTS fallback.
             - Vitest is capped at the latest stable `5.x` release. Keep the exact
               version selected by the upgrade script when merging upstream catalogs.
               Official Vitest packages must use that version. Do not bypass the cap.
@@ -145,8 +167,11 @@ jobs:
                upgrade operations: `pnpm dedupe`,
                `node .github/scripts/upgrade-deps.ts --sync-bundled-deps`, then
                `pnpm install --no-frozen-lockfile` before building or testing.
-            2. Re-run the steps in `./.github/actions/build-upstream/action.yml`; fix any
-               non-zero exits. If the Rust build fails inside a vendored `rolldown`
+            2. Reuse successful outputs from `./.github/actions/build-upstream/action.yml`.
+               If the action failed, fix the failure and complete its remaining build commands.
+               Rebuild affected packages after source or dependency changes. Preserve the
+               action's target, profile, compiler, and linker settings for native builds.
+               If the Rust build fails inside a vendored `rolldown`
                crate with an oxc API mismatch (e.g. `oxc_ast::template_element` taking
                a different number of arguments, or any `oxc_*` type/signature error),
                the root `Cargo.toml` oxc pins are out of sync with the bumped rolldown.
@@ -174,7 +199,9 @@ jobs:
                - `echo "$HOME/.vite-plus/bin" >> $GITHUB_PATH`
             8. If any Rust code or `Cargo.toml` was modified, run `cargo check
                --all-targets --all-features` and `cargo shear`; fix anything they report.
-            9. Run `pnpm run lint` (requires a prior `just build`); fix any errors.
+            9. Run `pnpm run lint`; fix any errors. Reuse the completed build outputs
+               from step 2 and rebuild packages affected by later changes first.
+               Do not run `just build` only to prepare for lint.
             10. Smoke-test the CLI: `vp -h`, `vp run -h`, `vp lint -h`, `vp test -h`,
                `vp build -h`, `vp fmt -h`, `vp pack -h`.
 
@@ -213,8 +240,11 @@ jobs:
             ### Running long commands (IMPORTANT)
             Run every long-running command (`just build`, `pnpm bootstrap-cli:ci`,
             `pnpm test:unit`, `cargo check`, etc.) in the FOREGROUND — a single Bash tool call
-            that blocks until the command exits. The Bash tool already gives you a 10-minute
-            timeout per call, which is enough for these builds.
+            that blocks until the command exits. Set `timeout: 1800000` explicitly on
+            each long-running Bash call. `BASH_MAX_TIMEOUT_MS` permits 30 minutes per call;
+            it does not change the default timeout or a shorter timeout you request.
+            Stream command output. If saving a log, use `set -o pipefail` with `tee`
+            so progress remains visible and command failures keep a non-zero exit code.
 
             Do NOT do any of the following:
             - Spawn a background process (`&`, `nohup`, `disown`, `setsid`, `screen`, `tmux`).
@@ -225,16 +255,32 @@ jobs:
               whether a build succeeded, just run it in the foreground and read its exit
               code and stdout/stderr in the single tool result.
 
-            If a foreground command legitimately hits the 10-minute Bash timeout, report
-            that and stop — do not start polling.
+            If a foreground command reaches the 30-minute Bash timeout, stop any task
+            the tool moved to the background. Report the command and its last build output,
+            then stop — do not start polling.
 
             ### Commit rule
             Do NOT run `git commit` or `git push`. A later workflow step commits every
             modified file for you.
           claude_args: |
-            --model "k3[1m]" --max-turns 400 --allowedTools "Bash,Edit,Replace,NotebookEditCell"
+            --model "k3.1-pro[1m]" --max-turns 400 --allowedTools "Bash,Edit,Replace,NotebookEditCell"
           additional_permissions: |
             actions: read
+
+      - name: Check Kimi K3.1 Pro result
+        id: check-upgrade-result
+        env:
+          EXECUTION_FILE: ${{ steps.check-upgrade-dependencies.outputs.execution_file }}
+          OUTCOME: ${{ steps.check-upgrade-dependencies.outcome }}
+        run: |
+          # Read the transcript now: the next Kimi K3.1 Pro step overwrites the execution file.
+          node .github/scripts/agent-command-timeouts.ts "${EXECUTION_FILE}" --github-output "${GITHUB_OUTPUT}" ||
+            echo '::warning::Could not read command timeouts from the Kimi K3.1 Pro execution file.'
+          elapsed=$(( $(date +%s) - CHECK_UPGRADE_STARTED_AT ))
+          if [ "${OUTCOME}" = failure ] && [ "${elapsed}" -lt $(( CHECK_UPGRADE_TIMEOUT_MINUTES * 60 )) ]; then
+            echo '::error::Kimi K3.1 Pro failed before reaching its timeout.'
+            exit 1
+          fi
 
       - name: Update lockfile
         # Dedupe runs in upgrade-deps.ts, before dependency sync and validation.
@@ -264,8 +310,10 @@ jobs:
           pnpm test:unit
           just snapshot-test
 
-      - name: Enhance PR description with Kimi K3
+      - name: Enhance PR description with Kimi K3.1 Pro
         id: enhance-pr-description
+        # Keep the job within its own time limit so the PR is still created.
+        timeout-minutes: 30
         continue-on-error: true
         uses: anthropics/claude-code-action@1d6de8cb0c237e7c15e9e1bdf973826ebae490cc # v1.0.248
         env:
@@ -278,12 +326,12 @@ jobs:
             {
               "env": {
                 "ANTHROPIC_BASE_URL": "https://api.kimi.com/coding/",
-                "ANTHROPIC_MODEL": "k3[1m]",
-                "ANTHROPIC_DEFAULT_OPUS_MODEL": "k3[1m]",
+                "ANTHROPIC_MODEL": "k3.1-pro[1m]",
+                "ANTHROPIC_DEFAULT_OPUS_MODEL": "k3.1-pro[1m]",
                 "ANTHROPIC_DEFAULT_SONNET_MODEL": "kimi-for-coding",
                 "ANTHROPIC_DEFAULT_HAIKU_MODEL": "kimi-for-coding",
-                "ANTHROPIC_DEFAULT_FABLE_MODEL": "k3[1m]",
-                "CLAUDE_CODE_SUBAGENT_MODEL": "k3[1m]",
+                "ANTHROPIC_DEFAULT_FABLE_MODEL": "k3.1-pro[1m]",
+                "CLAUDE_CODE_SUBAGENT_MODEL": "k3.1-pro[1m]",
                 "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "1048576",
                 "CLAUDE_CODE_MAX_CONTEXT_TOKENS": "1048576",
                 "CLAUDE_CODE_EFFORT_LEVEL": "max"
@@ -306,6 +354,7 @@ jobs:
             ### Build outcomes from earlier steps
             - Upgrade dependencies and sync upstream: ${{ steps.build.outcome }}
             - build-upstream action: ${{ steps.build-upstream.outcome }}
+            - Kimi K3.1 Pro fixups: ${{ steps.check-upgrade-dependencies.outcome == 'success' && 'success' || 'timed out' }}
 
             ### Output files to OVERWRITE (these live outside the repo and will NOT be committed)
             - `${{ env.UPGRADE_DEPS_META_DIR }}/commit-message.txt`
@@ -343,6 +392,7 @@ jobs:
             4. `## Build status` — bullet list:
                - `upgrade-and-sync`: ${{ steps.build.outcome }}
                - `build-upstream`: ${{ steps.build-upstream.outcome }}
+               - `kimi-fixups`: ${{ steps.check-upgrade-dependencies.outcome == 'success' && 'success' || 'timed out' }}
 
             ### Rules
             - Be factual. Only describe changes that are actually present in `git diff`. Do not
@@ -353,7 +403,7 @@ jobs:
               two output files. A later workflow step will consume them.
             - Do NOT modify any file inside the repository working tree.
           claude_args: |
-            --model "k3[1m]" --allowedTools "Bash,Read,Write,Edit"
+            --model "k3.1-pro[1m]" --allowedTools "Bash,Read,Write,Edit"
           additional_permissions: |
             actions: read
 
@@ -419,7 +469,9 @@ jobs:
           base: main
           branch: deps/upstream-update
           title: 'feat(deps): upgrade upstream dependencies'
-          draft: ${{ steps.final-validation.outcome != 'success' }}
+          # Final validation does not cover all Kimi K3.1 Pro fixups, such as documentation
+          # syncs, so a timed-out fixup run stays a draft even when validation passes.
+          draft: ${{ steps.final-validation.outcome != 'success' || steps.check-upgrade-dependencies.outcome != 'success' }}
           sign-commits: true
           token: ${{ steps.app-token.outputs.token }}
           body: ${{ steps.pr-content.outputs.body }}
@@ -438,3 +490,115 @@ jobs:
         run: |
           echo '::error::The upgraded dependencies did not pass final validation.'
           exit 1
+
+  report-timeouts:
+    name: Report timeouts
+    needs: upgrade
+    # Also runs when the upgrade job fails or exceeds its own time limit. Kept
+    # separate so the Kimi K3.1 Pro steps never receive a token that can write issues.
+    if: always() && needs.upgrade.result != 'skipped'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      checks: read
+      issues: write
+    steps:
+      - name: Create or update timeout issue
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          COMMAND_TIMEOUTS: ${{ needs.upgrade.outputs.command-timeouts }}
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt, {
+              owner,
+              repo,
+              run_id: context.runId,
+              attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+            });
+            const upgrade = jobs.find((job) => job.name === 'upgrade');
+            // The runner reports step and job timeouts as annotations on the job's check run.
+            const annotations = upgrade
+              ? await github.paginate(github.rest.checks.listAnnotations, {
+                  owner,
+                  repo,
+                  check_run_id: upgrade.id,
+                })
+              : [];
+            const messages = [...new Set(annotations.map(({ message }) => message))];
+            const timeouts = messages.filter((message) => /has exceeded the maximum execution time/.test(message));
+            const stepTimeouts = messages.filter((message) => /^The action .*has timed out/.test(message));
+            if (stepTimeouts.length > 0) {
+              // Hosted runners omit the step name from this message. It is logged as the step
+              // ends, in the second the next step starts, so the step that timed out is the
+              // last one that started in an earlier second.
+              const named = new Set();
+              try {
+                const { data: log } = await github.rest.actions.downloadJobLogsForWorkflowRun({
+                  owner,
+                  repo,
+                  job_id: upgrade.id,
+                });
+                const lines = String(log).matchAll(
+                  /^(\S{19})\S* ##\[error\](The action [^\r\n]*has timed out[^\r\n]*)/gm,
+                );
+                for (const [, second, message] of lines) {
+                  const loggedAt = new Date(`${second}Z`);
+                  const step = upgrade.steps
+                    .filter((step) => step.started_at && new Date(step.started_at) < loggedAt)
+                    .at(-1);
+                  named.add(step ? `\`${step.name}\`: ${message}` : message);
+                }
+              } catch (error) {
+                core.warning(`Could not read the upgrade job log: ${error.message}`);
+              }
+              timeouts.push(...(named.size > 0 ? named : stepTimeouts));
+            }
+            const commandTimeouts = process.env.COMMAND_TIMEOUTS.trim();
+            if (timeouts.length === 0 && !commandTimeouts) {
+              core.info('No timeouts found.');
+              return;
+            }
+
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+            const sections = [`The [${context.workflow}](${runUrl}) run hit a timeout.`];
+            if (timeouts.length > 0) {
+              sections.push(['### Step and job timeouts', ...timeouts.map((message) => `- ${message}`)].join('\n'));
+            }
+            if (commandTimeouts) {
+              sections.push(`### Kimi K3.1 Pro command timeouts\n${commandTimeouts}`);
+            }
+            const body = sections.join('\n\n');
+
+            const label = 'upgrade-deps-timeout';
+            try {
+              await github.rest.issues.createLabel({
+                owner,
+                repo,
+                name: label,
+                color: 'd73a4a',
+                description: 'Upgrade Upstream Dependencies workflow timeout',
+              });
+            } catch (error) {
+              if (error.status !== 422) throw error; // The label already exists.
+            }
+            const { data: openIssues } = await github.rest.issues.listForRepo({
+              owner,
+              repo,
+              labels: label,
+              state: 'open',
+              per_page: 1,
+            });
+            if (openIssues.length > 0) {
+              await github.rest.issues.createComment({ owner, repo, issue_number: openIssues[0].number, body });
+              core.info(`Commented on issue #${openIssues[0].number}`);
+            } else {
+              const { data: issue } = await github.rest.issues.create({
+                owner,
+                repo,
+                title: `${context.workflow} timed out`,
+                labels: [label],
+                body,
+              });
+              core.info(`Created issue #${issue.number}`);
+            }

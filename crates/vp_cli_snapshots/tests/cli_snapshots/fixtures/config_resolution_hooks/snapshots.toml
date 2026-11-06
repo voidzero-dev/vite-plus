@@ -1,0 +1,21 @@
+[[case]]
+name = "staged_preserves_config_hooks"
+vp = "local"
+unset-env = ["NODE_ENV"]
+steps = [
+  { argv = ["git", "init", "--quiet"], snapshot = false },
+  { argv = ["git", "add", "input.txt"], snapshot = false },
+  { argv = ["git", "commit", "--quiet", "-m", "initial"], snapshot = false },
+  { argv = ["vpt", "write-file", "input.txt", "changed\n"], snapshot = false },
+  { argv = ["git", "add", "input.txt"], snapshot = false },
+  { argv = ["vp", "staged", "--verbose", "--no-stash"], comment = "Run staged configuration supplied by a Vite plugin and print the matched files." },
+]
+
+[[case]]
+name = "pack_preserves_config_hooks"
+vp = "local"
+env = { NODE_ENV = "development" }
+steps = [
+  { argv = ["vp", "pack", "--logLevel", "silent"], comment = "Build with plugin-supplied pack options and configuration metadata available in configResolved." },
+  ["vpt", "print-file", "dist/index.mjs"],
+]

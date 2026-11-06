@@ -8,6 +8,6 @@
 VITE+ - The Unified Toolchain for the Web
 
 ℹ entry: src/index.ts
-ℹ target: node22.22.0
+ℹ target: node22.23.4
 error: Node.js version <version> does not support `exe` option. Please upgrade to Node.js <version> or later.
 ```
