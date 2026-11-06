@@ -8487,6 +8487,32 @@ export default defineConfig({
     expect(report.wrappedPluginConfigCount).toBe(1);
   });
 
+  it('rewrites vite imports before wrapping plugins in direct monorepo project rewrites', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'web', devDependencies: { vite: '^7.0.0' } }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'vite.config.ts'),
+      `import { defineConfig } from 'vite';
+
+export default defineConfig({
+  plugins: [react()],
+});
+`,
+    );
+    const report = createMigrationReport();
+
+    rewriteMonorepoProject(tmpDir, PackageManager.pnpm, true, true, report);
+
+    const viteConfig = fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8');
+    expect(viteConfig).toContain("import { defineConfig, lazyPlugins } from 'vite-plus'");
+    expect(viteConfig).not.toContain("from 'vite'");
+    expect(viteConfig).toContain('plugins: lazyPlugins(() => [react()])');
+    expect(report.wrappedPluginConfigCount).toBe(1);
+    expect(report.rewrittenImportFileCount).toBe(1);
+  });
+
   it('wraps package-level inline plugin arrays in monorepos', () => {
     const appDir = path.join(tmpDir, 'apps', 'web');
     fs.mkdirSync(appDir, { recursive: true });
