@@ -29,7 +29,7 @@ export default defineConfig({
 ℹ tsconfig: tsconfig.json
 ℹ Build start
 warn: TypeScript 7.0 does not yet have a stable API and is experimental. Some options will be unavailable.
-ℹ Emit types with @typescript/native-preview@7.0.0-dev.20260707.2
+ℹ Emit types with typescript@7.0.2
 ℹ dist/index.mjs    <size> kB │ gzip: <size> kB
 ℹ dist/index.d.mts  <size> kB │ gzip: <size> kB
 ℹ 2 files, total: <size> kB
