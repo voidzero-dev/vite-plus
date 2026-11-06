@@ -40,16 +40,31 @@ export async function lint(): Promise<{
   const oxlintMainPath = resolve('oxlint');
   const oxlintPackageRoot = dirname(dirname(oxlintMainPath));
   const binPath = join(oxlintPackageRoot, 'bin', 'oxlint');
-  const oxlintTsgolintPath = resolveTsgolintExecutable(
-    resolve('oxlint-tsgolint/bin/tsgolint'),
-    import.meta.url,
-  );
+
+  // Honour a user-provided tsgolint backend and only resolve the bundled
+  // oxlint-tsgolint package when none is supplied. If the bundled package has
+  // been overridden away, leave OXLINT_TSGOLINT_PATH unset so that non-type-aware
+  // runs continue to work; oxlint reports its own error when type-aware linting
+  // is requested and no backend is available.
+  let oxlintTsgolintPath: string | undefined = process.env.OXLINT_TSGOLINT_PATH;
+  if (!oxlintTsgolintPath) {
+    try {
+      oxlintTsgolintPath = resolveTsgolintExecutable(
+        resolve('oxlint-tsgolint/bin/tsgolint'),
+        import.meta.url,
+      );
+    } catch {
+      // Bundled package is not installed; oxlint will report its own error for
+      // type-aware runs.
+    }
+  }
+
   const result = {
     binPath,
     // TODO: provide envs inference API
     envs: {
       ...DEFAULT_ENVS,
-      OXLINT_TSGOLINT_PATH: oxlintTsgolintPath,
+      ...(oxlintTsgolintPath ? { OXLINT_TSGOLINT_PATH: oxlintTsgolintPath } : {}),
       // oxlint loads vite.config.ts only to read the `lint` block, so skip the
       // user's Vite plugin factory (lazyPlugins) while it evaluates the config.
       [CONFIG_METADATA_ENV]: '1',
