@@ -153,7 +153,7 @@ pub async fn execute_vpx(args: &[String], cwd: &AbsolutePath) -> i32 {
         // 1. Try local node_modules/.bin
         if let Some(local_bin) = find_local_binary(cwd, &cmd_name) {
             tracing::debug!("vpx: found local binary at {}", local_bin.as_path().display());
-            let child_env = match local_bin_env(cwd) {
+            let child_env = match tool_env(cwd) {
                 Ok(env) => env,
                 Err(error) => {
                     output::error(&format!("vpx: {error}"));
@@ -172,7 +172,9 @@ pub async fn execute_vpx(args: &[String], cwd: &AbsolutePath) -> i32 {
 
         // 3. Try system PATH. Under VP_ENV_FORBIDDEN=1 a core tool is the first
         //    PATH match, shims included, and fails instead of falling back to
-        //    `dlx`, which would download it. Other tools skip the vite-plus bin dir.
+        //    `dlx`, which would download it. Other tools skip the vite-plus bin dir;
+        //    under VP_ENV_FORBIDDEN=1 one in a managed install fails too.
+        //    As in step 1, `tool_env` checks the Node.js the tool would run on.
         let path_bin = match dispatch::resolve_env_forbidden_tool(&cmd_name) {
             Some(Ok(path)) => Some(path),
             Some(Err(e)) => {
@@ -181,9 +183,15 @@ pub async fn execute_vpx(args: &[String], cwd: &AbsolutePath) -> i32 {
             }
             None => find_on_path(&cmd_name),
         };
+        if let Some(path_bin) = &path_bin
+            && let Err(e) = dispatch::ensure_env_forbidden_not_managed(&cmd_name, path_bin)
+        {
+            output::error(&format!("vpx: {e}"));
+            return 1;
+        }
         if let Some(path_bin) = path_bin {
             tracing::debug!("vpx: found on PATH at {}", path_bin.as_path().display());
-            let child_env = match local_bin_env(cwd) {
+            let child_env = match tool_env(cwd) {
                 Ok(env) => env,
                 Err(error) => {
                     output::error(&format!("vpx: {error}"));
@@ -305,6 +313,16 @@ fn find_on_path(cmd: &str) -> Option<AbsolutePathBuf> {
     let filtered_path = std::env::join_paths(filtered_paths).ok()?;
     let cwd = vt_path::current_dir().ok()?;
     vp_command::resolve_bin(cmd, Some(&filtered_path), &cwd).ok()
+}
+
+/// The child environment for a tool that vpx found locally or on PATH.
+///
+/// Under `VP_ENV_FORBIDDEN=1` it fails when a managed Node.js comes first on
+/// the child PATH, where the tool's shebang and scripts would find it.
+fn tool_env(cwd: &AbsolutePath) -> Result<ToolPathEnv, String> {
+    let env = local_bin_env(cwd).map_err(|error| error.to_string())?;
+    dispatch::ensure_env_forbidden_child_node(&env).map_err(|error| error.to_string())?;
+    Ok(env)
 }
 
 /// Prepend all `node_modules/.bin` directories from cwd upward to PATH.

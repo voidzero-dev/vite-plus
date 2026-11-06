@@ -1372,20 +1372,36 @@ pub(crate) fn resolve_external_node_executable(
         .ok_or_else(|| format!("Invalid Node executable path: {}", executable.trim()))
 }
 
-/// Return the first PATH match only if it is external; a Vite+ shim selects managed resolution.
+/// Locate `tool` among the system tools on PATH, or return `None` to select
+/// managed resolution.
 ///
-/// Returns the absolute path to the tool if found, None otherwise.
+/// - Under `VP_ENV_FORBIDDEN=1`, a core tool is returned only when the first
+///   PATH match is a system tool, even under `VP_BYPASS`.
+/// - Otherwise `VP_BYPASS` searches past the Vite+ shims.
+/// - Otherwise the first PATH match is returned unless it is a Vite+ shim; a
+///   managed install there is a parent's selection, which system-first reuses.
 pub(crate) fn find_system_tool(tool: &str) -> Option<AbsolutePathBuf> {
     let cwd = current_dir().ok()?;
-    if std::env::var_os(env_vars::VP_BYPASS).is_some() {
-        return find_external_tool_in(tool, &cwd);
-    }
     find_system_tool_in(tool, &cwd)
 }
 
 /// `cwd` only resolves relative PATH entries; it is a parameter so tests can
 /// exercise them without mutating the process-wide working directory.
 fn find_system_tool_in(tool: &str, cwd: &AbsolutePath) -> Option<AbsolutePathBuf> {
+    // Under VP_ENV_FORBIDDEN=1 a core tool is the first PATH match, which must
+    // be a system tool. Nothing managed is reused, and VP_BYPASS does not
+    // search past the shims either.
+    if is_env_forbidden_tool(tool) {
+        return match first_path_match(tool, cwd) {
+            FirstPathMatch::System(path) => Some(path),
+            FirstPathMatch::VpOwned(_) | FirstPathMatch::ViteShim(_) | FirstPathMatch::NotFound => {
+                None
+            }
+        };
+    }
+    if std::env::var_os(env_vars::VP_BYPASS).is_some() {
+        return find_external_tool_in(tool, cwd);
+    }
     match first_path_match(tool, cwd) {
         // A managed install first on PATH is a parent's selection, which system-first reuses.
         FirstPathMatch::System(path) | FirstPathMatch::VpOwned(path) => Some(path),
@@ -1398,8 +1414,55 @@ fn first_path_match(tool: &str, cwd: &AbsolutePath) -> FirstPathMatch {
     let Some(path) = std::env::var_os("PATH") else {
         return FirstPathMatch::NotFound;
     };
+    first_path_match_in(tool, &path, cwd)
+}
+
+/// Classify the first match of `tool` on `path`.
+fn first_path_match_in(tool: &str, path: &std::ffi::OsStr, cwd: &AbsolutePath) -> FirstPathMatch {
     let self_real = std::env::current_exe().ok().and_then(|exe| exe.canonicalize().ok());
-    vp_command::classify_first_path_match(tool, &path, self_real.as_deref(), cwd)
+    vp_command::classify_first_path_match(tool, path, self_real.as_deref(), cwd)
+}
+
+/// Under `VP_ENV_FORBIDDEN=1`, fail when the first `node` on the child PATH is
+/// a Vite+ managed install.
+///
+/// Checking the selected executable is not enough: a `#!/usr/bin/env node`
+/// shebang and the scripts a tool runs resolve `node` from the child PATH, so a
+/// system tool would still run on a managed runtime that a parent left first
+/// there. The check applies to native tools too, since their scripts can run
+/// `node`. PATH is not reordered. The shim of this installation there fails on
+/// its own under `VP_ENV_FORBIDDEN=1`, and without `node` nothing managed runs.
+/// Shims and managed installs of other installations are outside this guarantee.
+pub(crate) fn ensure_env_forbidden_child_node(env: &ToolPathEnv) -> Result<(), Error> {
+    if !vp_shared::EnvConfig::get().env_forbidden {
+        return Ok(());
+    }
+    let cwd = current_dir()?;
+    match first_path_match_in("node", env.path(), &cwd) {
+        FirstPathMatch::VpOwned(path) => Err(Error::SystemToolManagedInstall {
+            tool: "node".into(),
+            path: path.as_path().display().to_string().into(),
+        }),
+        FirstPathMatch::System(_) | FirstPathMatch::ViteShim(_) | FirstPathMatch::NotFound => {
+            Ok(())
+        }
+    }
+}
+
+/// Under `VP_ENV_FORBIDDEN=1`, fail when `path`, a tool found on PATH, lies in
+/// a Vite+ managed runtime or package manager, such as the `corepack` bundled
+/// with a managed Node.js that a parent left on PATH.
+pub(crate) fn ensure_env_forbidden_not_managed(
+    tool: &str,
+    path: &AbsolutePath,
+) -> Result<(), Error> {
+    if vp_shared::EnvConfig::get().env_forbidden && vp_command::is_managed_install(path.as_path()) {
+        return Err(Error::SystemToolManagedInstall {
+            tool: tool.into(),
+            path: path.as_path().display().to_string().into(),
+        });
+    }
+    Ok(())
 }
 
 /// Locate `tool` when `VP_ENV_FORBIDDEN=1` restricts it to the system, or
@@ -2777,6 +2840,114 @@ mod tests {
             assert!(resolve_env_forbidden_tool("node").is_none());
             assert!(resolve_env_forbidden_tool("pnpm").is_none());
         });
+    }
+
+    /// Under `VP_ENV_FORBIDDEN=1` a core tool is reused only when the first
+    /// PATH match is a system tool, even under `VP_BYPASS`. Package binaries
+    /// are not restricted, so `VP_BYPASS` still searches past their shims.
+    #[test]
+    fn test_find_system_tool_skips_managed_installs_when_env_forbidden() {
+        let layout = ForbiddenLayout::new();
+        let system_node = create_fake_executable(&layout.system_bin, "node");
+        let system_pnpm = create_fake_executable(&layout.system_bin, "pnpm");
+        let system_tsc = create_fake_executable(&layout.system_bin, "tsc");
+        let managed_pnpm_bin = layout.home.join("package_manager/pnpm/10.0.0/bin");
+        std::fs::create_dir_all(&managed_pnpm_bin).unwrap();
+        create_fake_executable(&managed_pnpm_bin, "pnpm");
+        let shim_dir = layout.home.join("bin");
+        make_shim(&layout, &shim_dir, "node");
+        make_shim(&layout, &shim_dir, "tsc");
+        let find = |dirs: &[&std::path::Path], tool: &str, bypass: bool| {
+            let path = std::env::join_paths(dirs).unwrap();
+            let extra: &[(&'static str, std::ffi::OsString)] =
+                if bypass { &[(env_vars::VP_BYPASS, std::ffi::OsString::new())] } else { &[] };
+            EnvConfig::with_vars(forbidden_vars(&layout, &path, Some("1"), extra), |_| {
+                find_system_tool_in(tool, &layout.cwd).map(|path| path.as_path().to_path_buf())
+            })
+        };
+
+        for bypass in [false, true] {
+            assert_eq!(find(&[&layout.managed_bin, &layout.system_bin], "node", bypass), None);
+            assert_eq!(find(&[&managed_pnpm_bin, &layout.system_bin], "pnpm", bypass), None);
+            assert_eq!(find(&[&shim_dir, &layout.system_bin], "node", bypass), None);
+            assert_eq!(
+                find(&[&layout.system_bin, &layout.managed_bin], "node", bypass),
+                Some(system_node.clone())
+            );
+            assert_eq!(
+                find(&[&layout.system_bin, &managed_pnpm_bin], "pnpm", bypass),
+                Some(system_pnpm.clone())
+            );
+        }
+        assert_eq!(find(&[&shim_dir, &layout.system_bin], "tsc", true), Some(system_tsc));
+    }
+
+    /// Under `VP_ENV_FORBIDDEN=1` a tool does not start when the first `node`
+    /// on the child PATH, not the process PATH, is a managed install. A shim
+    /// there fails on its own, and no `node` at all runs nothing managed.
+    #[test]
+    fn test_ensure_env_forbidden_child_node_rejects_a_managed_node_first_on_path() {
+        let layout = ForbiddenLayout::new();
+        create_fake_executable(&layout.system_bin, "node");
+        let managed_node = layout.managed_bin.join(exe("node"));
+        let shim_dir = layout.home.join("bin");
+        make_shim(&layout, &shim_dir, "node");
+        let empty = layout.home.join("empty");
+        std::fs::create_dir_all(&empty).unwrap();
+        // The process PATH has the system Node.js first; only the child PATH varies.
+        let process_path = std::env::join_paths([&layout.system_bin, &layout.managed_bin]).unwrap();
+        let check = |dirs: &[&std::path::Path], forbidden: &'static str| {
+            let child = ToolPathEnv::new(std::env::join_paths(dirs).unwrap(), "");
+            EnvConfig::with_vars(
+                forbidden_vars(&layout, &process_path, Some(forbidden), &[]),
+                |_| ensure_env_forbidden_child_node(&child).map_err(|error| error.to_string()),
+            )
+        };
+
+        assert_eq!(
+            check(&[&layout.managed_bin, &layout.system_bin], "1"),
+            Err(Error::SystemToolManagedInstall {
+                tool: "node".into(),
+                path: managed_node.display().to_string().into(),
+            }
+            .to_string())
+        );
+        assert_eq!(check(&[&layout.system_bin, &layout.managed_bin], "1"), Ok(()));
+        assert_eq!(check(&[&shim_dir, &layout.managed_bin], "1"), Ok(()));
+        assert_eq!(check(&[&empty], "1"), Ok(()));
+        // Other values of VP_ENV_FORBIDDEN check nothing.
+        assert_eq!(check(&[&layout.managed_bin, &layout.system_bin], "true"), Ok(()));
+    }
+
+    /// Under `VP_ENV_FORBIDDEN=1` a tool found on PATH fails when it lies in a
+    /// managed runtime, such as the corepack bundled with managed Node.js.
+    #[test]
+    fn test_ensure_env_forbidden_not_managed_rejects_managed_installs() {
+        let layout = ForbiddenLayout::new();
+        let managed =
+            AbsolutePathBuf::new(create_fake_executable(&layout.managed_bin, "corepack")).unwrap();
+        let system =
+            AbsolutePathBuf::new(create_fake_executable(&layout.system_bin, "corepack")).unwrap();
+        let check = |path: &AbsolutePathBuf, forbidden: &'static str| {
+            EnvConfig::with_vars(
+                forbidden_vars(&layout, &layout.path(), Some(forbidden), &[]),
+                |_| {
+                    ensure_env_forbidden_not_managed("corepack", path)
+                        .map_err(|error| error.to_string())
+                },
+            )
+        };
+
+        assert_eq!(
+            check(&managed, "1"),
+            Err(Error::SystemToolManagedInstall {
+                tool: "corepack".into(),
+                path: managed.as_path().display().to_string().into(),
+            }
+            .to_string())
+        );
+        assert_eq!(check(&system, "1"), Ok(()));
+        assert_eq!(check(&managed, "true"), Ok(()));
     }
 
     #[tokio::test]
