@@ -18,13 +18,14 @@ base64-simd = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 cow-utils = { workspace = true }
 rustc-hash = { workspace = true }
+rolldown-notify = { workspace = true }
 napi = { workspace = true }
 napi-derive = { workspace = true }
 petgraph = { workspace = true }
 console = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-tokio = { workspace = true, features = ["fs"] }
+tokio = { workspace = true, features = ["fs", "signal", "sync", "time"] }
 tracing = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
 vp_command = { workspace = true }
@@ -48,6 +49,7 @@ oxc-node = { workspace = true, optional = true }
 napi-build = { workspace = true }
 
 [dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
 pretty_assertions = { workspace = true }
 tempfile = { workspace = true }
 vp_shared = { workspace = true, features = ["test-utils"] }

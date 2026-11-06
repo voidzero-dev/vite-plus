@@ -79,6 +79,12 @@ impl CommandHandler for VitePlusCommandHandler {
             Err(err) => return Err(err.into()),
         };
         match cli_args {
+            CLIArgs::Synthesizable(SynthesizableSubcommand::Check { watch: true, .. }) => {
+                // A persistent watcher must run even if an earlier session was cached.
+                Ok(HandledCommand::Synthesized(
+                    command.to_synthetic_plan_request(UserCacheConfig::disabled()),
+                ))
+            }
             CLIArgs::Synthesizable(SynthesizableSubcommand::Check { .. }) => {
                 // Check is a composite command (fmt + lint) — run as a subprocess in task scripts
                 Ok(HandledCommand::Synthesized(command.to_synthetic_plan_request(

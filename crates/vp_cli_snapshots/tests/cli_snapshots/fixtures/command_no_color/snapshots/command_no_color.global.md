@@ -14,6 +14,8 @@ Arguments:
 
 Options:
   --fix                            Auto-fix format and lint issues
+  --watch                          Re-run checks when workspace files change (cannot be used with --fix)
+  --debounce <MS>                  Wait for changes to stop before checking (default: <duration>; requires --watch)
   --quiet                          Disable reporting on warnings, only errors are reported
   --deny-warnings                  Treat lint warnings as errors
   --no-fmt                         Skip format check
@@ -24,6 +26,7 @@ Options:
 Examples:
   vp check
   vp check --fix
+  vp check --watch --debounce 500
   vp check --no-lint src/index.ts
 
 Documentation: https://viteplus.dev/guide/check
