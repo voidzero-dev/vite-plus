@@ -83,6 +83,9 @@ pub enum SynthesizableSubcommand {
     },
     /// Run format, lint, and type checks
     Check {
+        /// Run remaining checks even if an earlier check fails
+        #[arg(long)]
+        keep_going: bool,
         /// Auto-fix format and lint issues
         #[arg(long)]
         fix: bool,

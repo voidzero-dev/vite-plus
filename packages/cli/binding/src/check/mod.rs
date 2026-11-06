@@ -20,6 +20,7 @@ use crate::cli::{
 /// Execute the `vp check` composite command (fmt + lint + optional type checks).
 pub(crate) async fn execute_check(
     resolver: &SubcommandResolver,
+    keep_going: bool,
     fix: bool,
     quiet: bool,
     deny_warnings: bool,
@@ -31,6 +32,7 @@ pub(crate) async fn execute_check(
     cwd: &AbsolutePathBuf,
 ) -> Result<ExitStatus, Error> {
     let mut status = ExitStatus::SUCCESS;
+    let mut first_failure = None;
     let has_paths = !paths.is_empty();
     // In --fix mode with file paths (the lint-staged use case), implicitly suppress
     // "no matching files" errors. This is also available as an explicit flag for
@@ -154,14 +156,19 @@ pub(crate) async fn execute_check(
             );
         }
         if status != ExitStatus::SUCCESS {
+            first_failure.get_or_insert(status);
             if fix {
                 print_error_block(
                     "Formatting could not complete",
                     &combined_output,
                     "Formatting failed during fix",
                 );
+                // A failed formatting pass must not later be reported as successful.
+                fmt_fix_started = None;
             }
-            return Ok(status);
+            if !keep_going {
+                return Ok(status);
+            }
         }
     }
 
@@ -259,12 +266,15 @@ pub(crate) async fn execute_check(
             }
         }
         if status != ExitStatus::SUCCESS {
+            first_failure.get_or_insert(status);
             // Surface fmt `--fix` completion before bailing so users can see
             // the working tree was mutated before the lint/type-check error.
-            if fix && !no_fmt {
-                flush_deferred_pass_lines(&mut fmt_fix_started, &mut deferred_lint_pass);
+            if !keep_going {
+                if fix && !no_fmt {
+                    flush_deferred_pass_lines(&mut fmt_fix_started, &mut deferred_lint_pass);
+                }
+                return Ok(status);
             }
-            return Ok(status);
         }
     }
 
@@ -294,7 +304,7 @@ pub(crate) async fn execute_check(
                 &combined_output,
                 "Formatting failed after lint fixes were applied",
             );
-            return Ok(status);
+            return Ok(first_failure.unwrap_or(status));
         }
         flush_deferred_pass_lines(&mut fmt_fix_started, &mut deferred_lint_pass);
     }
@@ -305,7 +315,7 @@ pub(crate) async fn execute_check(
         flush_deferred_pass_lines(&mut fmt_fix_started, &mut deferred_lint_pass);
     }
 
-    Ok(status)
+    Ok(first_failure.unwrap_or(status))
 }
 
 fn flush_deferred_pass_lines(

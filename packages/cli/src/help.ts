@@ -830,6 +830,10 @@ const commandHelpDocs = {
         rows: [
           { label: '--fix', description: 'Auto-fix format and lint issues' },
           {
+            label: '--keep-going',
+            description: 'Run remaining checks even if an earlier check fails',
+          },
+          {
             label: '--quiet',
             description: 'Disable reporting on warnings, only errors are reported',
           },
@@ -849,7 +853,12 @@ const commandHelpDocs = {
       },
       {
         title: 'Examples',
-        lines: ['  vp check', '  vp check --fix', '  vp check --no-lint src/index.ts'],
+        lines: [
+          '  vp check',
+          '  vp check --fix',
+          '  vp check --keep-going',
+          '  vp check --no-lint src/index.ts',
+        ],
       },
     ],
     documentationUrl: documentationUrl('/guide/check'),
