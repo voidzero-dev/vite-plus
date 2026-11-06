@@ -391,8 +391,8 @@ struct Case {
     #[serde(default, rename = "isolated-registry")]
     isolated_registry: bool,
     /// Disable archive preparation for fake installations and configuration-only cases.
-    #[serde(default = "default_true", rename = "prewarm-bun")]
-    prewarm_bun: bool,
+    #[serde(default = "default_true", rename = "prewarm-package-managers")]
+    prewarm_package_managers: bool,
     /// Seed the case's `VP_HOME` with an already-provisioned managed JS
     /// runtime (see `flavor::js_runtime_seed_dir`). Default true; runtime
     /// provisioning tests set false to start from a genuinely empty home.
@@ -579,6 +579,8 @@ impl CaseHome {
         let this = Self { home: root.join("home") };
         let vp_home = this.vp_home();
         std::fs::create_dir_all(&vp_home).unwrap();
+        // Provisioning emulates a fresh install into this case-owned directory.
+        std::fs::write(vp_home.join(".vp-owned"), b"vite-plus-owned-directory\n").unwrap();
         std::fs::create_dir_all(root.join("npm-global/lib")).unwrap();
         // Best-effort: if linking fails, the case downloads the runtime.
         if seed_runtime && let Some(seed) = flavor::js_runtime_seed_dir() {
@@ -771,6 +773,9 @@ impl CaseHome {
 
     fn base_env(&self, path_env: OsString) -> BTreeMap<String, OsString> {
         let mut env = BTreeMap::new();
+        if let Some(mirror) = std::env::var_os("VP_NODE_DIST_MIRROR") {
+            env.insert("VP_NODE_DIST_MIRROR".into(), mirror);
+        }
         env.insert("PATH".into(), path_env);
         // xterm-256color keeps anstream from stripping the OSC 8 milestone
         // sequences used by test steps. It is harmless during env setup.
@@ -858,7 +863,7 @@ fn compose_path_env(tool_dirs: &[PathBuf]) -> OsString {
 }
 
 /// The environment every step starts from. Deliberately small and fully
-/// controlled: no ambient variables survive except through the composed PATH.
+/// controlled: only the configured Node mirror and the composed PATH survive.
 /// Notably absent: `CI` and `NO_COLOR`; the PTY makes real interactive
 /// behaviour the default, and grid rendering strips styling from snapshots.
 fn baseline_env(case_home: &CaseHome, install: &CaseInstall) -> BTreeMap<String, OsString> {
@@ -1978,7 +1983,7 @@ fn main() {
     let mut isolated_trials = BTreeSet::new();
     let prewarm_manifest =
         args.list.then(|| std::env::var_os("VP_SNAP_PREWARM_MANIFEST")).flatten();
-    let mut bun_prewarm = prewarm::BunPrewarm::default();
+    let mut archives = prewarm::PackageManagerPrewarm::default();
     for fixture_path in fixture_paths {
         let fixture_path: Arc<Path> = Arc::from(fixture_path.as_path());
         let fixture_name: Arc<str> = Arc::from(fixture_path.file_name().unwrap().to_str().unwrap());
@@ -2014,22 +2019,22 @@ fn main() {
                 let ignored = case.ignore
                     || required_tool_missing
                     || (case.local_registry && !local_build_present);
-                if prewarm_manifest.is_some() && !ignored && case.prewarm_bun {
-                    bun_prewarm
+                if prewarm_manifest.is_some() && !ignored && case.prewarm_package_managers {
+                    archives
                         .env(case.env.iter().map(|(key, value)| (key.as_str(), value.as_str())));
-                    bun_prewarm.workspace(&fixture_path, &case.cwd).unwrap_or_else(|error| {
+                    archives.workspace(&fixture_path, &case.cwd).unwrap_or_else(|error| {
                         panic!("failed to read prewarm inputs for {trial_name}: {error}")
                     });
                     for step in case.steps.iter().chain(&case.after) {
-                        bun_prewarm
+                        archives
                             .workspace(&fixture_path, step.cwd.as_deref().unwrap_or(&case.cwd))
                             .unwrap_or_else(|error| {
                                 panic!("failed to read prewarm inputs for {trial_name}: {error}")
                             });
-                        bun_prewarm.env(
+                        archives.env(
                             step.envs.iter().map(|(key, value)| (key.as_str(), value.as_str())),
                         );
-                        bun_prewarm.step(&step.argv);
+                        archives.step(&step.argv);
                     }
                 }
                 let isolated = case_needs_isolation(&case);
@@ -2112,7 +2117,7 @@ fn main() {
     }
 
     if let Some(path) = prewarm_manifest {
-        let urls = bun_prewarm.urls(&prewarm::platform_package());
+        let urls = archives.urls(&prewarm::platform_package());
         std::fs::write(&path, serde_json::to_vec_pretty(&urls).unwrap()).unwrap_or_else(|error| {
             panic!("failed to write prewarm manifest {}: {error}", Path::new(&path).display())
         });

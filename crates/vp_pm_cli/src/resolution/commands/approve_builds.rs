@@ -26,9 +26,16 @@ pub struct ApproveBuildsArgs {
 }
 
 impl Resolve<ApproveBuildsArgs> for Pnpm {
-    fn resolve(&self, args: &ApproveBuildsArgs, _diag: &mut Diagnostics) -> CommandResolution {
+    fn resolve(&self, args: &ApproveBuildsArgs, diag: &mut Diagnostics) -> CommandResolution {
         if let Some(error) = validate_all(args) {
             return error;
+        }
+        if !self.supports_v10_1_commands() {
+            diag.warn(
+                DiagnosticKind::UnsupportedCommandNoop,
+                "pnpm approve-builds requires pnpm >= 10.1.0. Skipping.",
+            );
+            return CommandResolution::Noop;
         }
         if args.packages.iter().any(|package| package.starts_with('!'))
             && !self.supports_v11_commands()

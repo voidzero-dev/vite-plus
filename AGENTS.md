@@ -32,6 +32,8 @@ Prefer local fixtures or mock servers for tests that depend on external services
 
 For behavior changes, find nearby tests before editing and add or update coverage in the same area. Choose checks for the changed layer:
 
+For local CLI installation, use a fresh absolute temporary `VP_HOME` and set `VP_SELF_SETUP_NO_MODIFY_PATH=1`. Keep installation, checks, and `PATH` changes inside one subshell; remove the temporary installation on exit. Follow the [isolated installation procedure](CONTRIBUTING.md#isolated-cli-installation). Test shell setup through the snapshot runner's isolated homes.
+
 | Change                         | Validation                                                                                                                         |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
 | Documentation / agent guidance | Verify referenced paths, commands, and links; `git diff --check -- <files>`                                                        |

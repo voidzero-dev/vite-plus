@@ -33,6 +33,7 @@ runs:
               'packages/tools/src/patch-oxc-node.ts',
               'packages/tools/src/cargo-toml.ts',
               'rust-toolchain.toml',
+              '.node-version',
               'Cargo.lock',
               'Cargo.toml',
               '.cargo/config.toml',

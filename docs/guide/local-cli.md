@@ -87,6 +87,27 @@ overrides:
 
 :::
 
+::: warning Existing direct dependencies with npm
+If your npm project already lists `vite` in `dependencies` or `devDependencies`, change that entry to the same alias as `overrides.vite`. npm requires a direct dependency and its override to use the [same dependency specification](https://docs.npmjs.com/cli/v11/configuring-npm/package-json/#overrides). Otherwise, `npm install` fails with `EOVERRIDE`.
+
+For example, update an existing `vite` development dependency as follows. Keep the other dependencies in your manifest:
+
+```json [package.json]
+{
+  "devDependencies": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@<vite-plus-version>",
+    "vite-plus": "<vite-plus-version>"
+  },
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@<vite-plus-version>",
+    "vitest": "<vitest-version>"
+  }
+}
+```
+
+If you also declare `vitest` directly, set its dependency entry to the exact version in `overrides.vitest`. Run `npm install` after these changes to update the lockfile and installed dependencies.
+:::
+
 ::: details Why are these settings needed?
 
 Dependencies and plugins can import `vite` or `vitest` directly, even when your own code imports from `vite-plus`. These overrides align their dependencies with the toolchain Vite+ uses:
@@ -127,7 +148,7 @@ The project-local CLI can be used independently for:
 - [`vp pack`](/guide/pack) with tsdown
 - [`vp toolchain`](/guide/upgrade#show-the-toolchain) for inspecting the versions bundled with the project-local package
 - [`vp run`](/guide/run) and task caching across workspaces
-- [package-manager commands](/guide/package-management) using the Node.js runtime already active in your shell
+- [package-manager commands](/guide/package-management/) using the Node.js runtime already active in your shell
 - [`vp create`](/guide/create), [`vp migrate`](/guide/migrate), and project configuration commands
 
 The local package cannot manage the machine-level Vite+ installation. The `vp env`, `vp upgrade`, and `vp implode` commands require the [global CLI](/guide/global-cli). Upgrade or remove a local-only installation through your package manager.

@@ -1,0 +1,24 @@
+[[case]]
+name = "command_pack_dts_typescript_7"
+vp = "global"
+local-registry = true
+comment = "The packed CLI generates inferred declarations with stable TypeScript 7.0.2 and automatic generator selection."
+steps = [
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  ["vp", "pack"],
+  ["vpt", "print-file", "dist/index.d.mts"],
+]
+
+[[case]]
+name = "command_pack_dts_native_preview"
+vp = "global"
+local-registry = true
+env = { PACK_DTS_GENERATOR = "tsgo" }
+comment = "An explicit tsgo generator uses native-preview with TypeScript 5.9.3. pnpm hoist:false also verifies core declares the optional native-preview peer."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.typescript", "5.9.3"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.@typescript/native-preview", "7.0.0-dev.20260707.2"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  ["vp", "pack"],
+  ["vpt", "print-file", "dist/index.d.mts"],
+]

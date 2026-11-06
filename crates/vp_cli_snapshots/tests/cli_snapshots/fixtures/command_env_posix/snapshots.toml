@@ -6,7 +6,7 @@ requires = ["sh"]
 steps = [
   { argv = ["vp", "env", "setup", "--refresh"], envs = [["VP_HOME", '${workspace}/vp "$project\with `spaces`"']], snapshot = false },
   { argv = ["vpt", "cp", "assert_posix.sh", 'vp "$project\with `spaces`"/assert_posix.sh'], snapshot = false },
-  { argv = ["vpt", "write-file", 'vp "$project\with `spaces`"/.node-version', "22.18.0\n"], snapshot = false },
+  { argv = ["vpt", "write-file", 'vp "$project\with `spaces`"/.node-version', "22.23.4\n"], snapshot = false },
   { argv = ["sh", "assert_posix.sh"], cwd = 'vp "$project\with `spaces`"', comment = "loads the generated env file in sh and verifies PATH, wrapper, and version switching", envs = [["EXPECTED_VP_HOME", "${workspace}"], ["SHELL_LABEL", "sh"], ["PATH", "${workspace}/bin:${workspace}/bin:${PATH}"]] },
 ]
 
@@ -18,7 +18,7 @@ requires = ["bash"]
 steps = [
   { argv = ["vp", "env", "setup", "--refresh"], envs = [["VP_HOME", '${workspace}/vp "$project\with `spaces`"']], snapshot = false },
   { argv = ["vpt", "cp", "assert_posix.sh", 'vp "$project\with `spaces`"/assert_posix.sh'], snapshot = false },
-  { argv = ["vpt", "write-file", 'vp "$project\with `spaces`"/.node-version', "22.18.0\n"], snapshot = false },
+  { argv = ["vpt", "write-file", 'vp "$project\with `spaces`"/.node-version', "22.23.4\n"], snapshot = false },
   { argv = ["bash", "--noprofile", "--norc", "assert_posix.sh"], cwd = 'vp "$project\with `spaces`"', comment = "loads the generated env file in Bash and verifies PATH, wrapper, completions, and version switching", envs = [["EXPECTED_VP_HOME", "${workspace}"], ["SHELL_LABEL", "bash"], ["PATH", "${workspace}/bin:${workspace}/bin:${PATH}"]] },
 ]
 
@@ -30,6 +30,6 @@ requires = ["zsh"]
 steps = [
   { argv = ["vp", "env", "setup", "--refresh"], envs = [["VP_HOME", '${workspace}/vp "$project\with `spaces`"']], snapshot = false },
   { argv = ["vpt", "cp", "assert_posix.sh", 'vp "$project\with `spaces`"/assert_posix.sh'], snapshot = false },
-  { argv = ["vpt", "write-file", 'vp "$project\with `spaces`"/.node-version', "22.18.0\n"], snapshot = false },
+  { argv = ["vpt", "write-file", 'vp "$project\with `spaces`"/.node-version', "22.23.4\n"], snapshot = false },
   { argv = ["zsh", "-f", "-c", 'autoload -Uz compinit; compinit -i -d "$HOME/.zcompdump"; . ./assert_posix.sh'], cwd = 'vp "$project\with `spaces`"', comment = "loads the generated env file in Zsh and verifies PATH, wrapper, completions, and version switching", envs = [["EXPECTED_VP_HOME", "${workspace}"], ["SHELL_LABEL", "zsh"], ["PATH", "${workspace}/bin:${workspace}/bin:${PATH}"]] },
 ]

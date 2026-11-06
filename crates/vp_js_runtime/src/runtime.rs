@@ -1037,14 +1037,13 @@ mod tests {
     /// signed checksums, top-level directory, and binary path match what the provider expects.
     #[tokio::test]
     async fn test_download_node_integration() {
-        // A fixed VP_HOME keeps the download cache warm across runs.
-        let vp_home = std::env::temp_dir().join("vp-js-runtime-tests-vp-home");
+        // Share immutable runtime installs with the global CLI integration tests.
+        let vp_home = std::env::temp_dir().join("vp-node-runtime-tests-vp-home");
         std::fs::create_dir_all(&vp_home).unwrap();
         vp_shared::EnvConfig::with_vars_async(
             [(env_vars::VP_HOME, vp_home.as_os_str())],
             |_| async {
-                // Use a small, old version for faster download
-                let version = "20.18.0";
+                let version = "20.20.2";
 
                 let runtime = download_runtime(JsRuntimeType::Node, version).await.unwrap();
 

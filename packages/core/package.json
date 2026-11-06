@@ -1,6 +1,6 @@
 {
   "name": "@voidzero-dev/vite-plus-core",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "The Unified Toolchain for the Web",
   "homepage": "https://viteplus.dev/guide",
   "bugs": {
@@ -240,7 +240,7 @@
   },
   "bundledVersions": {
     "vite": "8.3.5",
-    "rolldown": "1.2.15",
-    "tsdown": "0.23.1"
+    "rolldown": "1.2.16",
+    "tsdown": "0.23.4"
   }
 }

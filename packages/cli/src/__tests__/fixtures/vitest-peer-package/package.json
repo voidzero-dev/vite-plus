@@ -1,0 +1,7 @@
+{
+  "name": "vitest-helpers-example",
+  "private": true,
+  "peerDependencies": {
+    "vitest": "^5.0.0"
+  }
+}

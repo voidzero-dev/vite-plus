@@ -47,5 +47,5 @@ await test('passes the origin to native builds and includes it in the native cac
   assert.match(release, /default: 'https:\/\/viteplus\.dev'/);
   assert.match(release, /VITE_PLUS_DOCS_ORIGIN: \$\{\{ inputs\.docs-origin \}\}/);
   assert.match(build, /process\.env\.VITE_PLUS_DOCS_ORIGIN/);
-  assert.match(build, /napi-binding-v3-.*\$\{DOCS_ORIGIN_HASH\}/);
+  assert.match(build, /napi-binding-v4-.*\$\{DOCS_ORIGIN_HASH\}/);
 });

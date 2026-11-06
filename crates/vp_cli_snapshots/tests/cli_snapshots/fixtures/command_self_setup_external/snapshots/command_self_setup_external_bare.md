@@ -3,6 +3,12 @@
 ## `vpt mkdir -p external home/external-test/bin`
 
 
+## `vpt write-file home/.vp-owned 'vite-plus-owned-directory
+'`
+
+An interrupted fresh install already claimed its empty root
+
+
 ## `vpt cp $VP_HOME/bin/vp external/vp`
 
 

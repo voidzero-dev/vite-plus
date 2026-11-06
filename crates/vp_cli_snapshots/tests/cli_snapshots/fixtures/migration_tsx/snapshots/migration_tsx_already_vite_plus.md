@@ -29,12 +29,12 @@ VITE+ - The Unified Toolchain for the Web
 VITE+ - The Unified Toolchain for the Web
 
 ▲ No package manager is declared in package.json; using pnpm for this migration without adding a pin. Run `vp env pin` to declare it explicitly.
-● tsx scripts detected. Auto-migrating to vpx...
+● tsx scripts detected. Auto-migrating to Vite+...
 ◇ Updated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • Dependencies:
     vite   → <version>
-• tsx scripts migrated to `vpx`
+• tsx scripts migrated to Vite+
 ```
 
 ## `vpt print-file package.json`
@@ -49,7 +49,7 @@ scripts run vpx, and the tsx devDependency is gone
   },
   "name": "migration-tsx",
   "scripts": {
-    "bench": "vpx ./scripts/bench.ts",
+    "bench": "node --import vite-plus/register ./scripts/bench.ts",
     "dev": "vpx --watch --clear-screen=false src/server.ts",
     "seed": "cross-env NODE_ENV=development vpx scripts/seed.ts",
     "start": "concurrently \"vpx --watch src/server.ts\" \"vp dev\""

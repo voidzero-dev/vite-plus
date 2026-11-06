@@ -1,5 +1,5 @@
 /**
- * Apply Vite+ branding patches to vite source after sync.
+ * Apply Vite+ branding and config-resolution patches to vite source after sync.
  *
  * This script modifies user-visible branding strings in the vite
  * source to show "VITE+" instead of "VITE". It is called automatically
@@ -11,11 +11,15 @@
  * 3. build.ts: Remove startup build banner and change error prefix
  * 4. logger.ts: Change default prefix from '[vite]' to '[vite+]'
  * 5. plugins/reporter.ts: Suppress redundant "vite v<version>" native reporter line
+ * 6. config.ts: Suppress the native-loader notice and support an explicit root base
+ * 7. rolldown.dts.config.ts: Keep Rolldown's runtime chunk out of declaration output
  */
 
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+
+import { patchViteConfig } from './patch-vite-config.ts';
 
 const VITE_DIR = 'vite';
 const VITE_NODE_DIR = join(VITE_DIR, 'packages', 'vite', 'src', 'node');
@@ -36,15 +40,27 @@ function replaceInFile(
   replacement: string,
 ): 'patched' | 'already' {
   const content = readFileSync(filePath, 'utf-8');
+  const newContent = replaceInSource(filePath, content, search, replacement);
+  if (content === newContent) {
+    return 'already';
+  }
+  writeFileSync(filePath, newContent, 'utf-8');
+  return 'patched';
+}
+
+function replaceInSource(
+  filePath: string,
+  content: string,
+  search: string,
+  replacement: string,
+): string {
   // Check replacement first: the search string may be a substring of the replacement
   // (e.g. constants.ts where the replacement appends lines after the search string).
   if (content.includes(replacement)) {
-    return 'already';
+    return content;
   }
   if (content.includes(search)) {
-    const newContent = content.replace(search, replacement);
-    writeFileSync(filePath, newContent, 'utf-8');
-    return 'patched';
+    return content.replace(search, replacement);
   }
   throw new Error(
     `[brand-vite] Patch failed in ${filePath}:\n` +
@@ -86,7 +102,7 @@ function logPatch(file: string, desc: string, result: 'patched' | 'already') {
   }
 }
 
-export function brandVite(rootDir: string = process.cwd()) {
+export function brandVite(rootDir: string = process.cwd()): void {
   log('Applying Vite+ branding patches...');
 
   const nodeDir = join(rootDir, VITE_NODE_DIR);
@@ -199,13 +215,39 @@ export function brandVite(rootDir: string = process.cwd()) {
   // `nativeIncompatibilities` list empty and no warning is emitted. The `false`
   // guard keeps the import referenced so the type-check stays clean.
   const configFile = join(nodeDir, 'config.ts');
+  const configSource = readFileSync(configFile, 'utf-8');
+  // Validate both config patches in memory before writing either edit.
+  const configWithoutNotice = replaceInSource(
+    configFile,
+    configSource,
+    '      !process.env.VITE_CONFIG_NATIVE_IGNORE_WARNING &&\n        createNativeConfigCompatPlugin(nativeIncompatibilities),',
+    "      // Vite+ manages config loading, so Vite's native-config-loader\n      // migration notice is noise. Never register the compat-check plugin.\n      false &&\n        createNativeConfigCompatPlugin(nativeIncompatibilities),",
+  );
+  const patchedConfig = patchViteConfig(configWithoutNotice);
+  if (patchedConfig !== configSource) {
+    writeFileSync(configFile, patchedConfig, 'utf-8');
+  }
   logPatch(
     'config.ts',
-    'Suppressed native config loader migration notice',
+    'Suppressed native config loader notice and enabled an explicit root base',
+    patchedConfig === configSource ? 'already' : 'patched',
+  );
+
+  // 7. rolldown.dts.config.ts: Rolldown 1.2.16 can emit its JavaScript runtime
+  // as a separate chunk. The dts plugin removes non-declaration chunks after
+  // bundling, so don't give that runtime chunk a .d.ts filename.
+  const dtsConfigFile = join(rootDir, VITE_DIR, 'packages', 'vite', 'rolldown.dts.config.ts');
+  logPatch(
+    'rolldown.dts.config.ts',
+    "Kept Rolldown's runtime chunk out of declaration output",
     replaceInFile(
-      configFile,
-      '      !process.env.VITE_CONFIG_NATIVE_IGNORE_WARNING &&\n        createNativeConfigCompatPlugin(nativeIncompatibilities),',
-      "      // Vite+ manages config loading, so Vite's native-config-loader\n      // migration notice is noise. Never register the compat-check plugin.\n      false &&\n        createNativeConfigCompatPlugin(nativeIncompatibilities),",
+      dtsConfigFile,
+      "    chunkFileNames: 'chunks/[name].d.ts',",
+      `    chunkFileNames(chunk) {
+      return chunk.name === 'rolldown-runtime'
+        ? 'chunks/[name].js'
+        : 'chunks/[name].d.ts'
+    },`,
     ),
   );
 

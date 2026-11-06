@@ -1669,6 +1669,15 @@ export interface TypeScriptOptions {
   rewriteImportExtensions?: 'rewrite' | 'remove' | boolean;
 }
 
+/**
+ * The selected tsconfig and its original source, sent to an asynchronous loader.
+ * `None` selects discovery explicitly, without consulting the receiving thread's env.
+ */
+export interface FrozenTsconfig {
+  path?: string;
+  source?: string;
+}
+
 export interface LoadContext {
   /** Export conditions of the relevant `package.json` */
   conditions?: Array<string>;
@@ -2009,6 +2018,12 @@ export declare class BindingOutputChunk {
   getImports(): Array<string>;
   getDynamicImports(): Array<string>;
   getCode(): string;
+  /**
+   * Identity of the shared chunk data behind this object. Two `BindingOutputChunk` objects with the same
+   * identity share the same data, so a JavaScript string made from `getCode()` of one is valid for the other.
+   * The identity is the address of that data. It stays unique while a `BindingOutputChunk` keeps the data alive.
+   */
+  getCodeIdentity(): number;
   getMap(): string | null;
   getSourcemapFileName(): string | null;
   getPreliminaryFileName(): string;
@@ -2058,6 +2073,8 @@ export declare class BindingRenderedChunkMeta {
 
 export declare class BindingRenderedModule {
   get code(): string | null;
+  /** `code.length` without materializing `code`. */
+  get renderedLength(): number;
   get renderedExports(): Array<string>;
 }
 
@@ -2314,6 +2331,12 @@ export interface BindingDevOptions {
 
 export interface BindingDevtoolsOptions {
   sessionId?: string;
+  /**
+   * `"full"` (default): write JSON-lines devtools logs. `"report"`: aggregate the same
+   * event stream in-memory and emit an agent-readable report (`metrics.json` + markdown)
+   * under `node_modules/.rolldown/report/<output dir>` instead.
+   */
+  mode?: 'full' | 'report';
 }
 
 export interface BindingDevWatchOptions {
@@ -4238,6 +4261,14 @@ export declare namespace oxcNode {
     ) => ResolveFnOutput | Promise<ResolveFnOutput>,
   ): ResolveFnOutput | Promise<ResolveFnOutput>;
   export function enableWatchReport(): void;
+  export function freezeTransformDeps(): string;
+  /** Freeze the effective config before registering the off-thread ESM hooks. */
+  export function freezeTsconfig(cwd: string): FrozenTsconfig;
+  /** Apply a frozen selection, including discovery without the receiving thread's env. */
+  export function initializeLoader(
+    path?: string | undefined | null,
+    source?: string | undefined | null,
+  ): void;
   export function load(
     url: string,
     context: LoadContext,

@@ -1,0 +1,157 @@
+name: Issue Triage
+
+# Requires the VoidZero bot GitHub App to be installed with contents, issues,
+# and pull requests write permissions. Configure VOIDZERO_BOT_ID,
+# VOIDZERO_BOT_KEY, CLOUDFLARE_ACCOUNT_ID, and CLOUDFLARE_API_KEY as secrets.
+# The Cloudflare token needs Workers AI access.
+
+on:
+  issues:
+    types: [opened, reopened, closed]
+  issue_comment:
+    types: [created]
+
+permissions: {}
+
+concurrency:
+  group: issue-triage-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  triage:
+    if: >-
+      github.repository == 'voidzero-dev/vite-plus' &&
+      !github.event.issue.pull_request &&
+      (
+        (github.event_name == 'issues' &&
+          (github.event.action == 'closed' || github.event.issue.user.type != 'Bot')) ||
+        (github.event_name == 'issue_comment' &&
+          github.event.comment.user.type != 'Bot' &&
+          contains(join(github.event.issue.labels.*.name, ','), 'triage: '))
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      issues: read
+    env:
+      PREPARE_TRIAGE: >-
+        ${{
+          github.event.action == 'opened' ||
+          github.event.action == 'reopened' ||
+          (github.event_name == 'issue_comment' &&
+            !contains(github.event.issue.labels.*.name, 'triage: fix pending') &&
+            !contains(github.event.issue.labels.*.name, 'triage: fix verified') &&
+            !contains(github.event.issue.labels.*.name, 'triage: not actionable') &&
+            !contains(github.event.issue.labels.*.name, 'triage: skipped'))
+        }}
+    steps:
+      - name: Checkout
+        if: env.PREPARE_TRIAGE == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Clone upstream repositories
+        if: env.PREPARE_TRIAGE == 'true'
+        uses: ./.github/actions/clone
+
+      - name: Setup Rust
+        if: env.PREPARE_TRIAGE == 'true'
+        uses: ./.github/actions/setup-rust
+        with:
+          save-cache: false
+          cache-key: cli-snapshot-test-x86_64-unknown-linux-gnu-ci
+          tools: just
+
+      - name: Setup Node and pnpm
+        if: env.PREPARE_TRIAGE == 'true'
+        uses: ./.github/actions/setup-ci-node
+
+      - name: Build with upstream
+        if: env.PREPARE_TRIAGE == 'true'
+        uses: ./.github/actions/build-upstream
+        with:
+          profile: ci
+          target: x86_64-unknown-linux-gnu
+
+      - name: Ensure no unexpected file changes after build
+        if: env.PREPARE_TRIAGE == 'true'
+        run: |
+          if [[ -n "$(git status --porcelain)" ]]; then
+            echo "::error::Unexpected file changes detected after build"
+            git status
+            git diff
+            exit 1
+          fi
+
+      - name: Install Global CLI vp
+        if: env.PREPARE_TRIAGE == 'true'
+        run: |
+          pnpm bootstrap-cli:ci
+          . "$HOME/.vite-plus/env"
+          echo "PATH=$PATH" >> "$GITHUB_ENV"
+          vp --version
+
+      - name: Generate VoidZero bot token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.VOIDZERO_BOT_ID }}
+          private-key: ${{ secrets.VOIDZERO_BOT_KEY }}
+          permission-contents: write
+          permission-issues: write
+          permission-pull-requests: write
+
+      - name: Configure Git identity
+        if: env.PREPARE_TRIAGE == 'true'
+        env:
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          bot_login="${APP_SLUG}[bot]"
+          bot_id="$(gh api "users/${bot_login}" --jq .id)"
+          git config user.name "$bot_login"
+          git config user.email "${bot_id}+${bot_login}@users.noreply.github.com"
+
+      # triagebot requires at least one "- P*" label after a successful reproduction.
+      - name: Ensure priority labels
+        if: env.PREPARE_TRIAGE == 'true'
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          label_exists() {
+            gh label list --limit 1000 --json name --jq '.[].name' | grep -Fxq -- "$1"
+          }
+
+          while IFS='|' read -r name color description <&3; do
+            if ! label_exists "$name"; then
+              gh label create --color "$color" --description "$description" -- "$name" ||
+                label_exists "$name"
+            fi
+          done 3<<'EOF'
+          - P1: chore|fee4be|Does not change user-facing behavior (priority)
+          - P2: has workaround|fdd6a8|Affects specific usage and has a straightforward workaround (priority)
+          - P3: minor bug|fba16c|Edge case that affects specific usage (priority)
+          - P4: important|f77d4c|Violates documented behavior or significantly affects performance (priority)
+          - P5: urgent|f25c33|Breaks installs, builds, or core workflows for many users (priority)
+          EOF
+
+      - name: Run triagebot
+        uses: withastro/triagebot-action@51d30da13c0bd571a3822fc56882de40fead0086 # main
+        with:
+          read-token: ${{ github.token }}
+          write-token: ${{ steps.app-token.outputs.token }}
+          cloudflare-api-key: ${{ secrets.CLOUDFLARE_API_KEY }}
+          cloudflare-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          triage-skill: .agents/skills/triage
+          auto-pr-on-fix: true
+          bot-logins: ${{ steps.app-token.outputs.app-slug }}[bot]
+          triage-model: cloudflare-workers-ai/@cf/moonshotai/kimi-k2.7-code
+          verification-model: cloudflare-workers-ai/@cf/moonshotai/kimi-k2.6

@@ -1,5 +1,5 @@
 import { execSync, spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, globSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 
@@ -31,7 +31,9 @@ interface PnpmWorkspace {
 interface PackageJson {
   name?: string;
   version?: string;
+  dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
+  optionalDependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
   exports?: Record<string, unknown>;
   [key: string]: unknown;
@@ -43,6 +45,56 @@ const ROLLDOWN_DIR = 'rolldown';
 const VITE_DIR = 'vite';
 const CORE_PACKAGE_PATH = 'packages/core';
 const VITE_DEVTOOLS_PACKAGE = '@vitejs/devtools';
+
+function workspacePackages(packages: string[] = []): string[] {
+  // Keep upstream build roots and the packages we bundle. Broad globs also
+  // install upstream benchmarks, test servers, and unrelated published tools.
+  return [
+    ...packages.filter((pattern) => !/^!?(rolldown|vite)(\/|$)/.test(pattern)),
+    ROLLDOWN_DIR,
+    `${ROLLDOWN_DIR}/packages/rolldown`,
+    VITE_DIR,
+    `${VITE_DIR}/packages/vite`,
+  ];
+}
+
+export function collectWorkspaceCatalogReferences(
+  rootDir: string,
+  packages: string[],
+): Set<string> {
+  const patterns = workspacePackages(packages);
+  const files = globSync(
+    patterns
+      .filter((pattern) => !pattern.startsWith('!'))
+      .map((pattern) => `${pattern}/package.json`),
+    {
+      cwd: rootDir,
+      exclude: [
+        '**/node_modules/**',
+        ...patterns
+          .filter((pattern) => pattern.startsWith('!'))
+          .map((pattern) => `${pattern.slice(1)}/package.json`),
+      ],
+    },
+  );
+  const references = new Set<string>();
+  for (const file of new Set(['package.json', ...files])) {
+    const pkg: PackageJson = JSON.parse(readFileSync(join(rootDir, file), 'utf8'));
+    for (const field of [
+      'dependencies',
+      'devDependencies',
+      'optionalDependencies',
+      'peerDependencies',
+    ] as const) {
+      for (const [name, version] of Object.entries(pkg[field] ?? {})) {
+        if (version === 'catalog:' || version === 'catalog:default') {
+          references.add(name);
+        }
+      }
+    }
+  }
+  return references;
+}
 
 function log(message: string) {
   console.log(`[sync-rolldown] ${message}`);
@@ -73,7 +125,25 @@ function execCommand(command: string, cwd?: string): string {
   }
 }
 
-function cloneOrResetRepo(repoUrl: string, dir: string, branch: string = 'main', hash?: string) {
+function fetchPinnedCommit(dir: string, hash: string): void {
+  if (spawnSync('git', ['cat-file', '-e', `${hash}^{commit}`], { cwd: dir }).status === 0) {
+    return;
+  }
+  // A pin can name an unmerged pull request, which a branch/tag fetch omits.
+  const result = spawnSync('git', ['fetch', 'origin', hash], { cwd: dir, encoding: 'utf8' });
+  if (result.status !== 0) {
+    throw new Error(
+      `Failed to fetch pinned commit ${hash}: ${result.error?.message ?? result.stderr}`,
+    );
+  }
+}
+
+export function cloneOrResetRepo(
+  repoUrl: string,
+  dir: string,
+  branch: string = 'main',
+  hash?: string,
+) {
   log(`Processing ${dir}...`);
 
   if (existsSync(dir)) {
@@ -106,6 +176,7 @@ function cloneOrResetRepo(repoUrl: string, dir: string, branch: string = 'main',
 
       if (hash) {
         // Reset to specific hash
+        fetchPinnedCommit(dir, hash);
         log(`Resetting ${dir} to pinned hash ${hash.substring(0, 8)}...`);
         execCommand(`git checkout ${branch}`, dir);
         execCommand(`git reset --hard ${hash}`, dir);
@@ -146,6 +217,7 @@ function cloneRepo(repoUrl: string, dir: string, branch: string, hash?: string) 
   log(`Cloning ${repoUrl} (${branch}) into ${dir}...`);
   execCommand(`git clone --branch ${branch} ${repoUrl} ${dir}`);
   if (hash) {
+    fetchPinnedCommit(dir, hash);
     log(`Checking out pinned hash ${hash.substring(0, 8)}...`);
     execCommand(`git reset --hard ${hash}`, dir);
     log(`${dir} cloned and reset to ${hash.substring(0, 8)}`);
@@ -370,20 +442,22 @@ const OXC_PACKAGE_PREFIXES = [
   '@oxfmt/',
   '@oxlint-tsgolint/',
 ];
-const OXC_PACKAGES = new Set([
+const SYNCED_PACKAGES = new Set([
+  '@napi-rs/cli',
   'oxc-minify',
   'oxc-parser',
   'oxc-transform',
   'oxfmt',
   'oxlint',
   'oxlint-tsgolint',
+  'tinybench',
 ]);
 // These packages should always use the highest version
 function syncedPackages(packageName: string): boolean {
-  if (OXC_PACKAGES.has(packageName) || packageName === 'tinybench') {
-    return true;
-  }
-  return OXC_PACKAGE_PREFIXES.some((prefix) => packageName.startsWith(prefix));
+  return (
+    SYNCED_PACKAGES.has(packageName) ||
+    OXC_PACKAGE_PREFIXES.some((prefix) => packageName.startsWith(prefix))
+  );
 }
 
 function mergeSemverVersions(
@@ -402,7 +476,7 @@ function mergeSemverVersions(
   const isExact2 = v2.startsWith('=');
   if (isExact1 || isExact2) {
     if (isExact1 && isExact2 && v1 !== v2) {
-      // For oxc-related packages, use the higher version
+      // For synced packages, use the higher version
       if (syncedPackages(packageName)) {
         const ver1 = v1.slice(1); // Remove '=' prefix
         const ver2 = v2.slice(1);
@@ -525,18 +599,11 @@ export function mergePnpmWorkspaces(
   rolldownVite: PnpmWorkspace,
   vitePackage: PackageJson,
   verkit: typeof import('verkit'),
+  catalogReferences?: ReadonlySet<string>,
 ): PnpmWorkspace {
   const result: PnpmWorkspace = { ...main };
 
-  // Merge packages array
-  const packagesSet = new Set(main.packages || []);
-  // Add rolldown packages
-  packagesSet.add(ROLLDOWN_DIR);
-  packagesSet.add(`${ROLLDOWN_DIR}/packages/*`);
-  // Add vite packages
-  packagesSet.add(VITE_DIR);
-  packagesSet.add(`${VITE_DIR}/packages/*`);
-  result.packages = Array.from(packagesSet);
+  result.packages = workspacePackages(main.packages);
 
   // The upgrade script selects the latest supported Vitest release and updates
   // the runtime constant with it. Upstream catalogs must not replace that pin.
@@ -550,8 +617,12 @@ export function mergePnpmWorkspaces(
     throw new Error('Vite must declare a valid TypeScript devDependency range');
   }
   const catalog: Record<string, string> = { typescript: typescriptRange };
+  const upstreamCatalogPackages = new Set<string>();
   for (const workspace of [main, rolldown, rolldownVite]) {
     for (const [pkg, version] of Object.entries(workspace.catalog || {})) {
+      if (catalogReferences && !catalogReferences.has(pkg)) {
+        continue;
+      }
       if (pkg === 'typescript') {
         continue;
       }
@@ -573,9 +644,17 @@ export function mergePnpmWorkspaces(
         // This community provider does not share the official release schedule.
         catalog[pkg] = main.catalog[pkg];
       } else {
-        catalog[pkg] = catalog[pkg]
-          ? mergeSemverVersions(catalog[pkg], version, pkg, verkit)
-          : version;
+        // Upstream owns ordinary catalog entries, including downgrades. Merge
+        // only declarations from both upstreams or packages whose explicit
+        // policy keeps the higher version selected by this workspace.
+        const mergeExisting = syncedPackages(pkg) || upstreamCatalogPackages.has(pkg);
+        catalog[pkg] =
+          catalog[pkg] && mergeExisting
+            ? mergeSemverVersions(catalog[pkg], version, pkg, verkit)
+            : version;
+      }
+      if (workspace !== main) {
+        upstreamCatalogPackages.add(pkg);
       }
     }
   }
@@ -585,6 +664,7 @@ export function mergePnpmWorkspaces(
 
   // Sort catalog keys alphabetically
   result.catalog = Object.keys(catalog)
+    .filter((pkg) => !catalogReferences || catalogReferences.has(pkg))
     .toSorted()
     .reduce(
       (sorted, key) => {
@@ -713,6 +793,7 @@ export function mergeWorkspaceYaml(
   vitePackage: PackageJson,
   yaml: typeof import('yaml'),
   verkit: typeof import('verkit'),
+  catalogReferences?: ReadonlySet<string>,
 ): string {
   const mainDoc = yaml.parseDocument(mainSrc);
   const rolldown = yaml.parse(rolldownSrc) as PnpmWorkspace | null;
@@ -724,6 +805,7 @@ export function mergeWorkspaceYaml(
     rolldownVite ?? {},
     vitePackage,
     verkit,
+    catalogReferences,
   );
 
   const stringifyOptions = { lineWidth: -1, singleQuote: true } as const;
@@ -897,6 +979,11 @@ export async function syncRemote() {
   const viteRootPackage = JSON.parse(
     readFileSync(join(rootDir, VITE_DIR, 'package.json'), 'utf-8'),
   ) as PackageJson;
+  const mainWorkspace = yaml.parse(mainSrc) as PnpmWorkspace;
+  const catalogReferences = collectWorkspaceCatalogReferences(
+    rootDir,
+    mainWorkspace.packages ?? [],
+  );
 
   log('Merging pnpm-workspace.yaml files...');
 
@@ -908,6 +995,7 @@ export async function syncRemote() {
     viteRootPackage,
     yaml,
     verkit,
+    catalogReferences,
   );
 
   const vitestVersion = (yaml.parse(yamlContent) as PnpmWorkspace).catalog?.vitest;

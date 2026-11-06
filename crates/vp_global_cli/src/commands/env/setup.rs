@@ -185,7 +185,6 @@ pub(crate) async fn execute_for_binary(
     let (created, skipped) =
         refresh_shims(current_exe, &settings, refresh, refresh_entrypoints).await?;
 
-    #[cfg(windows)]
     if refresh {
         if let Err(e) = refresh_package_shims(current_exe, bin_dir).await {
             tracing::warn!("Failed to refresh package shims: {}", e);
@@ -466,6 +465,24 @@ async fn setup_vp_wrapper(
 pub(crate) async fn resolve_unix_vp_shim_target(
     current_exe: &std::path::Path,
 ) -> Result<std::path::PathBuf, Error> {
+    if let Some(homebrew) = crate::homebrew::current()
+        && same_file::is_same_file(current_exe, homebrew.binary.as_path()).unwrap_or(false)
+        && let Some(public) = homebrew.public_binary()
+    {
+        let dirs = &vp_shared::EnvConfig::get().dirs;
+        if unix::passes_through_shims(public.as_path(), dirs.bin.as_path())
+            || unix::passes_through_shims(public.as_path(), dirs.fallback_bin().as_path())
+        {
+            return Err(Error::ConfigError(
+                format!(
+                    "Vite+ shim directories must not contain the Homebrew entrypoint {}. Choose separate VP_BIN_DIR and VP_DATA_DIR paths.",
+                    public.as_path().display()
+                )
+                .into(),
+            ));
+        }
+        return Ok(public.as_path().to_path_buf());
+    }
     let current_exe_canon = tokio::fs::canonicalize(current_exe).await.ok();
     let current_vp = crate::commands::global::install::package_shim_target();
     if let Some(binary) = &current_exe_canon
@@ -636,6 +653,30 @@ async fn refresh_package_shims(
         tracing::debug!("Refreshed package trampoline shim {:?}", shim_path);
     }
 
+    Ok(())
+}
+
+/// Move existing managed package shims to the active installation during migration.
+#[cfg(unix)]
+async fn refresh_package_shims(
+    current_exe: &std::path::Path,
+    bin_dir: &vt_path::AbsolutePath,
+) -> Result<(), Error> {
+    let target = resolve_unix_vp_shim_target(current_exe).await?;
+    let _lock = crate::commands::global::bin_lock::acquire().await?;
+    for name in BinConfig::find_all_vp_source().await? {
+        if crate::commands::global::install::is_protected_shim(&name, true) {
+            continue;
+        }
+        let shim = bin_dir.join(&name);
+        // The saved Vp source and a link to vp identify an owned package shim even
+        // after its old installation is removed. Keep foreign files and direct package links.
+        let Ok(previous) = tokio::fs::read_link(&shim).await else { continue };
+        if previous.file_name().is_some_and(|name| name == "vp") && previous != target {
+            tokio::fs::remove_file(&shim).await?;
+            tokio::fs::symlink(&target, &shim).await?;
+        }
+    }
     Ok(())
 }
 
@@ -900,11 +941,16 @@ elif [ -n "${ZSH_VERSION-}" ] && type compdef >/dev/null 2>&1; then
 fi
 "#;
 
+// Fish env file with vp wrapper function.
+// Every built-in that a user function can shadow carries `builtin`: fish runs a function before
+// the built-in with the same name, so a user `count` function would otherwise make `vp env use`
+// report success without setting VP_NODE_VERSION (#3128). The `vp` completion that clap_complete
+// registers calls bare `commandline`, as fish's own completions do, so this file cannot protect it.
 const ENV_TEMPLATE_FISH: &str = r#"# Vite+ environment setup (https://viteplus.dev)
-__ENV_EXPORTS__while set -l __vp_idx (contains -i -- "__VP_BIN__" $PATH)
+__ENV_EXPORTS__while set -l __vp_idx (builtin contains -i -- "__VP_BIN__" $PATH)
     set -e PATH[$__vp_idx]
 end
-while set -l __vp_idx (contains -i -- "__VP_FALLBACK_BIN__" $PATH)
+while set -l __vp_idx (builtin contains -i -- "__VP_FALLBACK_BIN__" $PATH)
     set -e PATH[$__vp_idx]
 end
 set -gx PATH "__VP_BIN__" $PATH "__VP_FALLBACK_BIN__"
@@ -913,17 +959,17 @@ set -gx PATH "__VP_BIN__" $PATH "__VP_FALLBACK_BIN__"
 # which sets/unsets VP_NODE_VERSION in the current shell session.
 function vp
     set -l __vp_command_index 1
-    if test (count $argv) -ge 1
+    if test (builtin count $argv) -ge 1
         if test "$argv[1]" = "-C"
             set __vp_command_index 3
         else if string match -qr '^-C.+' -- "$argv[1]"
             set __vp_command_index 2
         end
     end
-    set -l __vp_next_index (math $__vp_command_index + 1)
+    set -l __vp_next_index (builtin math $__vp_command_index + 1)
 
-    if test (count $argv) -ge $__vp_next_index; and test "$argv[$__vp_command_index]" = "env"; and test "$argv[$__vp_next_index]" = "use"
-        if contains -- -h $argv; or contains -- --help $argv
+    if test (builtin count $argv) -ge $__vp_next_index; and test "$argv[$__vp_command_index]" = "env"; and test "$argv[$__vp_next_index]" = "use"
+        if builtin contains -- -h $argv; or builtin contains -- --help $argv
             command vp $argv; return
         end
         set -lx VP_ENV_USE_EVAL_ENABLE 1
@@ -939,28 +985,28 @@ function vp
 end
 
 # Dynamic shell completion for fish
-VP_COMPLETE=fish command vp | source
+VP_COMPLETE=fish command vp | builtin source
 
 function __vpr_complete
-    set -l tokens (commandline --current-process --tokenize --cut-at-cursor)
-    set -l current (commandline --current-token)
+    set -l tokens (builtin commandline --current-process --tokenize --cut-at-cursor)
+    set -l current (builtin commandline --current-token)
     set -l args $tokens[2..]
     set -l translated vp
-    if test (count $args) -eq 0; and string match -qr '^-C' -- "$current"
+    if test (builtin count $args) -eq 0; and string match -qr '^-C' -- "$current"
         # Keep completing the global -C option until its value is finished.
-    else if test (count $args) -ge 1; and test "$args[1]" = "-C"
+    else if test (builtin count $args) -ge 1; and test "$args[1]" = "-C"
         set -a translated -C
-        if test (count $args) -ge 2
+        if test (builtin count $args) -ge 2
             set -a translated "$args[2]" run $args[3..]
         end
-    else if test (count $args) -ge 1; and string match -qr '^-C.+' -- "$args[1]"
+    else if test (builtin count $args) -ge 1; and string match -qr '^-C.+' -- "$args[1]"
         set -a translated "$args[1]" run $args[2..]
     else
         set -a translated run $args
     end
     VP_COMPLETE=fish command vp -- $translated $current
 end
-complete -c vpr --keep-order --exclusive --arguments "(__vpr_complete)"
+builtin complete -c vpr --keep-order --exclusive --arguments "(__vpr_complete)"
 "#;
 
 // Nushell env file with vp wrapper function.
@@ -1009,9 +1055,22 @@ def --env --wrapped vp [...args: string@"nu-complete vp"] {
 }
 
 # Shell completion for nushell (delegates to fish completions dynamically)
-def "nu-complete vp" [context: string] {
-    let fish_cmd = $"VP_COMPLETE=fish command vp | source; complete '--do-complete=($context)'"
-    ^fish --command $fish_cmd | %from tsv --flexible --noheaders --no-infer | %rename value description | %update value {|row|
+# Nushell 0.116+ binds `buffer` and `place` by name: `buffer` is the whole line up to the cursor,
+# and `place.command` is the words of the current command up to the cursor. Older releases pass
+# the current command in `buffer` and the cursor position in `place`. See "Unified custom
+# completions" in https://www.nushell.sh/blog/2026-09-26-nushell_v0_116_0.html#unified-custom-completions
+# `place` is `any` because it is an int or a record. `oneof<int, record>` needs Nushell 0.105+,
+# and every Nushell release must parse the legacy env.nu.
+def "nu-complete vp current-command" [buffer: string, place: any] {
+    if (($place | %describe) starts-with "record") { $place.command | %str join ' ' } else { $buffer }
+}
+# Fish gets the command as an argument, so quotes in it cannot end a fish string.
+# Without fish, return null so Nushell falls back to file completion. Nushell 0.116+ shows no
+# suggestions when a parameter completer fails (#3272).
+def "nu-complete vp fish" [command: string] {
+    if (%which fish | %is-empty) { return null }
+    let fish_script = 'VP_COMPLETE=fish command vp | source; complete --do-complete=$argv[1]'
+    ^fish --command $fish_script $command | %from tsv --flexible --noheaders --no-infer | %rename value description | %update value {|row|
         let value = $row.value
         let need_quote = ['\' ',' '[' ']' '(' ')' ' ' '\t' "'" '"' "`"] | %any {$in in $value}
         if ($need_quote and ($value | %path exists)) {
@@ -1020,8 +1079,12 @@ def "nu-complete vp" [context: string] {
         } else {$value}
     }
 }
+def "nu-complete vp" [buffer: string, place: any] {
+    nu-complete vp fish (nu-complete vp current-command $buffer $place)
+}
 # Completion logic for vpr (translates context to 'vp run ...')
-def "nu-complete vpr" [context: string] {
+def "nu-complete vpr" [buffer: string, place: any] {
+    let context = nu-complete vp current-command $buffer $place
     let modified_context = if ($context =~ '^vpr(?<cwd>\s+-C\s+(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s') {
         $context | %str replace -r '^vpr(?<cwd>\s+-C\s+(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s' 'vp$cwd run '
     } else if ($context =~ '^vpr(?<cwd>\s+-C=?(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s') {
@@ -1031,15 +1094,7 @@ def "nu-complete vpr" [context: string] {
     } else {
         $context | %str replace -r '^vpr' 'vp run'
     }
-    let fish_cmd = $"VP_COMPLETE=fish command vp | source; complete '--do-complete=($modified_context)'"
-    ^fish --command $fish_cmd | %from tsv --flexible --noheaders --no-infer | %rename value description | %update value {|row|
-        let value = $row.value
-        let need_quote = ['\' ',' '[' ']' '(' ')' ' ' '\t' "'" '"' "`"] | %any {$in in $value}
-        if ($need_quote and ($value | %path exists)) {
-            let expanded_path = if ($value starts-with ~) {$value | %path expand --no-symlink} else {$value}
-            $'"($expanded_path | %str replace --all "\"" "\\\"")"'
-        } else {$value}
-    }
+    nu-complete vp fish $modified_context
 }
 export extern "vpr" [...args: string@"nu-complete vpr"]
 "#;
@@ -1188,7 +1243,7 @@ exit $LASTEXITCODE
 // cmd.exe wrapper for `vp env use` (cmd.exe cannot define shell functions).
 // Users run `vp-use 24` in cmd.exe instead of `vp env use 24`.
 #[cfg(windows)]
-fn vp_use_cmd_content(config: &vp_shared::EnvConfig) -> String {
+pub(crate) fn vp_use_cmd_content(config: &vp_shared::EnvConfig) -> String {
     let vp_exe = config.dirs.data.join("current").join("bin").join("vp.exe");
     let mut exports: Vec<_> = config.dir_envs.iter().collect();
     exports.sort_unstable_by_key(|(name, _)| *name);
@@ -1968,10 +2023,16 @@ mod tests {
                 assert!(sigil.contains("| %update value {|row|"), "got: {sigil}");
                 assert!(sigil.contains(r#"("/tmp/vp%home" | %path expand"#), "got: {sigil}");
                 assert!(sigil.contains("^fish --command"), "got: {sigil}");
+                // Completers must not cause the Nushell 0.116 positional-input warning (#3127).
+                assert!(sigil.contains(r#"def "nu-complete vp" [buffer: string, place: any]"#));
+                assert!(sigil.contains(r#"def "nu-complete vpr" [buffer: string, place: any]"#));
+                assert!(!sigil.contains("[context"), "got: {sigil}");
 
                 let legacy = render_env_content(EnvShell::Nu, &config, NuSyntax::Legacy);
                 assert!(legacy.contains("| update value {|row|"), "got: {legacy}");
                 assert!(legacy.contains("^fish --command"), "got: {legacy}");
+                // CI runs only a newer Nushell, so check the legacy fish guard here (#3272).
+                assert!(legacy.contains("if (which fish | is-empty) { return null }"));
                 assert_eq!(
                     legacy.replace("/tmp/vp%home", "").matches('%').count(),
                     0,
@@ -2532,6 +2593,66 @@ mod tests {
                         "legacy corepack shim should be removed"
                     );
                 }
+            },
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn test_unix_package_shim_refresh_waits_for_ownership_changes() {
+        use std::time::Duration;
+
+        let temp_dir = TempDir::new().unwrap();
+        let home = temp_dir.path().join(".vite-plus");
+        let external_vp = temp_dir.path().join("external-vp");
+        let previous = temp_dir.path().join("removed-keg/bin/vp");
+        tokio::fs::write(&external_vp, b"vp").await.unwrap();
+        let external_vp = tokio::fs::canonicalize(external_vp).await.unwrap();
+
+        vp_shared::EnvConfig::with_vars_async(
+            test_env_vars(&home, temp_dir.path()),
+            |env| async move {
+                let bin_dir = &env.dirs.bin;
+                tokio::fs::create_dir_all(bin_dir).await.unwrap();
+                for name in ["managed-tool", "reassigned-tool"] {
+                    BinConfig::new(name.into(), name.into(), "1.0.0".into(), "22.18.0".into())
+                        .save()
+                        .await
+                        .unwrap();
+                    tokio::fs::symlink(&previous, bin_dir.join(name)).await.unwrap();
+                }
+
+                let lock = crate::commands::global::bin_lock::acquire().await.unwrap();
+                let refresh = refresh_package_shims(&external_vp, bin_dir);
+                tokio::pin!(refresh);
+                assert!(
+                    tokio::time::timeout(Duration::from_millis(150), &mut refresh).await.is_err()
+                );
+                for name in ["managed-tool", "reassigned-tool"] {
+                    assert_eq!(tokio::fs::read_link(bin_dir.join(name)).await.unwrap(), previous);
+                }
+
+                // Another operation changes ownership before releasing the shared lock.
+                BinConfig::new_npm(
+                    "reassigned-tool".into(),
+                    "npm-package".into(),
+                    "22.18.0".into(),
+                )
+                .save()
+                .await
+                .unwrap();
+                drop(lock);
+                tokio::time::timeout(Duration::from_secs(5), refresh).await.unwrap().unwrap();
+
+                assert_eq!(
+                    tokio::fs::read_link(bin_dir.join("managed-tool")).await.unwrap(),
+                    external_vp
+                );
+                assert_eq!(
+                    tokio::fs::read_link(bin_dir.join("reassigned-tool")).await.unwrap(),
+                    previous
+                );
             },
         )
         .await;

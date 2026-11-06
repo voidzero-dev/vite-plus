@@ -2,7 +2,7 @@
 
 Upgrade the unsupported runtime pin before installation, then keep it on rerun.
 
-## `vpt write-file .node-version '20.19.0
+## `vpt write-file .node-version '20.20.2
 '`
 
 
