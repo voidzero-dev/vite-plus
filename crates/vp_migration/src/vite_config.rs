@@ -98,13 +98,30 @@ fn merge_json_config_content(
     // Strip "$schema" property — it's a JSON Schema annotation not valid in OxlintConfig
     let ts_config = strip_schema_property(ts_config);
 
-    // Generate the ast-grep rules with the actual config
-    let rule_yaml = generate_merge_rule(&ts_config, config_key);
+    // Config text is spliced in after the rules run so it never passes through
+    // YAML or a `fix` template, where `$NAME` is a metavariable.
+    let mut placeholder = String::from("__VITE_PLUS_CONFIG__");
+    while vite_config_content.contains(&placeholder) {
+        placeholder.push('_');
+    }
+    let rule_yaml = generate_merge_rule(&placeholder, config_key);
 
     // Apply the transformation
     let (content, updated) = ast_grep::apply_rules(vite_config_content, &rule_yaml)?;
 
-    Ok(MergeResult { content, updated })
+    Ok(MergeResult { content: splice_config(&content, &placeholder, &ts_config), updated })
+}
+
+fn splice_config(content: &str, placeholder: &str, ts_config: &str) -> String {
+    let mut parts = content.split(placeholder);
+    let mut out = parts.next().unwrap_or_default().to_owned();
+    for part in parts {
+        let line = &out[out.rfind('\n').map_or(0, |i| i + 1)..];
+        let indent = &line[..line.len() - line.trim_start().len()];
+        out.push_str(&indent_continuation_lines(ts_config, indent));
+        out.push_str(part);
+    }
+    out
 }
 
 /// Set the value of a top-level config key in vite.config.ts/js (upsert).
@@ -903,7 +920,10 @@ fix: |-
 
 /// Indent each line of a multiline string
 fn indent_multiline(s: &str, spaces: usize) -> String {
-    let indent = " ".repeat(spaces);
+    indent_continuation_lines(s, &" ".repeat(spaces))
+}
+
+fn indent_continuation_lines(s: &str, indent: &str) -> String {
     let lines: Vec<&str> = s.lines().collect();
 
     // First line doesn't get indented (it's on the same line as the key)
@@ -1849,6 +1869,19 @@ export default defineConfig({});"#;
         assert!(result.updated);
         assert!(!result.content.contains("$schema"));
         assert!(result.content.contains(r#""no-console": "warn""#));
+    }
+
+    #[test]
+    fn test_merge_json_config_content_inserts_config_verbatim() {
+        for value in ["$OUT_DIR $200 $$$CONFIG", "a\u{2028}b\u{2029}c\u{85}d"] {
+            let config = format!(r#"{{"a":"{value}"}}"#);
+            let result =
+                merge_json_config_content("export default defineConfig({});", &config, "fmt");
+            assert!(result.unwrap().content.contains(&config));
+        }
+        let vite_config = "export default defineConfig({ define: { X: '__VITE_PLUS_CONFIG__' } });";
+        let result = merge_json_config_content(vite_config, "{}", "fmt").unwrap();
+        assert!(result.content.contains("X: '__VITE_PLUS_CONFIG__'"));
     }
 
     #[test]
