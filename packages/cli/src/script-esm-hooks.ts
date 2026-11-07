@@ -8,6 +8,7 @@ import type { InitializeHook, LoadHook, ResolveHook } from 'node:module';
 import { isMainThread, type MessagePort, MessageChannel } from 'node:worker_threads';
 
 import type { FrozenTsconfig } from '../binding/index.js';
+import { initializeScriptCache, type ScriptCachePolicy } from './script-cache.ts';
 import { HELPER_MODULE_NAME, loadOxcNode, resolveWithOxcNode, withFlush } from './script-hooks.ts';
 
 const oxcNode = loadOxcNode();
@@ -35,12 +36,14 @@ let watchHooks: { resolve: ResolveHook; load: LoadHook } | undefined;
 export const initialize: InitializeHook<{
   tsconfig: FrozenTsconfig;
   transformDeps: string;
+  cache: ScriptCachePolicy;
   watchPort?: MessagePort;
 }> = (data) => {
   // An absent path explicitly selects discovery, without consulting a stale
   // environment snapshot in the hooks thread.
   oxcNode.initializeLoader(data.tsconfig.path, data.tsconfig.source);
   oxcNode.setTransformDeps(data.transformDeps);
+  initializeScriptCache(oxcNode, data.cache);
   const port = data.watchPort;
   if (port) {
     port.unref();

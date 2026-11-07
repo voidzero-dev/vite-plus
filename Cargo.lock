@@ -4214,6 +4214,7 @@ dependencies = [
 name = "oxc-node"
 version = "0.0.0"
 dependencies = [
+ "base64-simd",
  "idna",
  "memchr",
  "napi",
@@ -8354,12 +8355,14 @@ dependencies = [
  "anyhow",
  "async-trait",
  "base64-simd",
+ "blake3",
  "clap",
  "console",
  "cow-utils",
  "napi",
  "napi-build",
  "napi-derive",
+ "nix 0.31.3",
  "oxc-node",
  "petgraph",
  "pretty_assertions",
@@ -8385,6 +8388,7 @@ dependencies = [
  "vt_select",
  "vt_str",
  "vt_workspace",
+ "winapi-util",
 ]
 
 [[package]]

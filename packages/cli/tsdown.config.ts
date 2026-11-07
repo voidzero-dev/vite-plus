@@ -104,7 +104,11 @@ export default defineConfig([
     dts: true,
     clean: true,
     // NAPI binding uses a relative path that tsdown can't auto-detect from package.json
-    deps: { neverBundle: [/\.\.\/binding\/index\.(js|cjs)/] },
+    deps: {
+      neverBundle: [/\.\.\/binding\/index\.(js|cjs)/],
+      // Loader cache coordination must not add package loading to every startup.
+      alwaysBundle: ['@voidzero-dev/vite-task-client'],
+    },
     inputOptions: {
       resolve: {
         // Prefer ESM entry (module field) over CJS/UMD (main field) for bundled deps.
@@ -129,7 +133,10 @@ export default defineConfig([
     shims: true,
     dts: false,
     clean: false,
-    deps: { neverBundle: [/\.\.\/binding\/index\.(js|cjs)/] },
+    deps: {
+      neverBundle: [/\.\.\/binding\/index\.(js|cjs)/],
+      alwaysBundle: ['@voidzero-dev/vite-task-client'],
+    },
     outputOptions: {
       codeSplitting: false,
     },

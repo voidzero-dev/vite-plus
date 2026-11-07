@@ -1,0 +1,771 @@
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -46,6 +46,11 @@
+ };
+ use oxc_sourcemap::{SourceMap, Token};
+ use phf::Set;
++
++// Prototype host cache hook; maintained by Vite+ until the upstream API is agreed.
++mod transform_cache;
++use transform_cache::CacheRequest;
++pub use transform_cache::{CachedTransform, TransformCache, set_transform_cache};
+
+ #[cfg(all(
+     not(target_arch = "x86"),
+@@ -691,6 +696,7 @@
+ /// and can select different tsconfigs, even though they share this native library.
+ #[derive(Default)]
+ struct LoaderContext {
++    transform_cache: Mutex<Option<Arc<dyn TransformCache>>>,
+     resolver_and_tsconfig: OnceLock<(Resolver, TsconfigSource)>,
+     tsconfig_override: Mutex<TsconfigOverride>,
+     transform_deps: Mutex<TransformDeps>,
+@@ -1698,6 +1704,8 @@
+ pub struct Output {
+     code: String,
+     map: Option<SourceMap<'static>>,
++    // Warm cache hits keep maps serialized: decoding VLQ only to encode it again is wasted work.
++    cached_map_json: Option<String>,
+ }
+
+ #[cfg_attr(feature = "napi", napi)]
+@@ -1713,7 +1721,7 @@
+     /// Returns the source map as a JSON string
+     /// Cache the result of this function if you need to use it multiple times
+     pub fn source_map(&self) -> Option<String> {
+-        self.map.as_ref().map(|source_map| source_map.to_json_string())
++        self.cached_map_json.clone().or_else(|| self.map.as_ref().map(|map| map.to_json_string()))
+     }
+ }
+
+@@ -2262,7 +2270,6 @@
+     helper_module_name: Option<&str>,
+     module_runner: Option<&mut ModuleRunner>,
+ ) -> Result<(Output, bool)> {
+-    let allocator = Allocator::default();
+     // `.js`, `.jsx`, `.ts`, `.tsx` and extensionless files are ambiguous: oxc decides
+     // between a script and an ES module by looking for `import`/`export` syntax, so a
+     // file that has none is treated as a script and the helper loader emits `require()`
+@@ -2272,6 +2279,27 @@
+     let source_type = source_type_from_path(src_path).unwrap_or_default().with_module(is_es_module);
+     let source = code.to_source()?;
+     let source_str = strip_bom(&source);
++    // Module-runner transforms also mutate their caller's state, so leave that separate API uncached.
++    let cache = module_runner
++        .is_none()
++        .then(|| {
++            CacheRequest::new(
++                src_path,
++                source_str,
++                compiler_options,
++                module_target,
++                enable_top_level_await,
++                is_es_module,
++                helper_module_name,
++                b"transform",
++            )
++        })
++        .flatten();
++    if let Some(cached) = cache.as_ref().and_then(CacheRequest::get) {
++        let module = cached.module;
++        return Ok((cached.into_output(), module));
++    }
++    let allocator = Allocator::default();
+     let allow_module_retry = !is_es_module
+         && matches!(module_target, Some(Module::Preserve))
+         && source_type.is_unambiguous();
+@@ -2323,7 +2351,119 @@
+         helper_module_name,
+         module_runner,
+     )?;
++    if let Some(cache) = cache {
++        cache.put(&CachedTransform::from_output(&output, flip_to_module));
++    }
+     Ok((output, flip_to_module))
++}
++
++/// The same normalized compiler settings drive transformation and cache identity.
++fn transform_options(
++    compiler_options: Option<&CompilerOptions>,
++    module_target: Option<Module>,
++    enable_top_level_await: bool,
++    helper_module_name: Option<&str>,
++) -> TransformOptions {
++    let use_define_for_class_fields = use_define_for_class_fields(compiler_options);
++    // `useDefineForClassFields` selects `[[Define]]` semantics; oxc's `setPublicClassFields`
++    // assumption selects the opposite, `[[Set]]`, so it is the negation of it.
++    let set_public_class_fields = !use_define_for_class_fields;
++    let legacy_decorators =
++        compiler_options.and_then(|c| c.experimental_decorators).unwrap_or(false);
++    // Every Node.js release with `module.register()` runs class fields, `#private` members
++    // and static blocks natively, so they are only lowered where the emitted class has to
++    // differ from the source: `[[Set]]` field semantics, and legacy decorators, which are
++    // applied to the lowered class.
++    let lower_class_features = set_public_class_fields || legacy_decorators;
++    TransformOptions {
++        assumptions: CompilerAssumptions { set_public_class_fields, ..Default::default() },
++        decorator: DecoratorOptions {
++            legacy: legacy_decorators,
++            emit_decorator_metadata: compiler_options
++                .and_then(|c| c.emit_decorator_metadata)
++                .unwrap_or(false),
++            strict_null_checks: compiler_options
++                .and_then(|c| c.strict_null_checks)
++                .unwrap_or(false),
++        },
++        jsx: {
++            // `compilerOptions.jsx` holds `tsc`'s values (`react`, `react-jsx`,
++            // `react-jsxdev`, ...), not Babel's runtime names — mapping them is what
++            // `jsx_runtime` is for. `(JsxRuntime::Automatic, false)` is `Default`, so
++            // an unset option reproduces the automatic production runtime.
++            let (runtime, development) = compiler_options
++                .and_then(|c| c.jsx.as_deref())
++                .map(jsx_runtime)
++                .unwrap_or_default();
++            JsxOptions {
++                runtime,
++                development,
++                import_source: compiler_options.and_then(|c| c.jsx_import_source.clone()),
++                pragma: compiler_options.and_then(|c| c.jsx_factory.clone()),
++                pragma_frag: compiler_options.and_then(|c| c.jsx_fragment_factory.clone()),
++                ..Default::default()
++            }
++        },
++        typescript: TypeScriptOptions {
++            // `TypeScriptOptions` holds `Cow<'static, str>`, and the compiler
++            // options are now borrowed per file rather than from a `OnceLock`,
++            // so these have to be owned.
++            jsx_pragma: compiler_options
++                .and_then(|c| c.jsx_factory.clone())
++                .map(Cow::Owned)
++                .unwrap_or_default(),
++            jsx_pragma_frag: compiler_options
++                .and_then(|c| c.jsx_fragment_factory.clone())
++                .map(Cow::Owned)
++                .unwrap_or_default(),
++            rewrite_import_extensions: compiler_options
++                .and_then(|c| c.rewrite_relative_import_extensions)
++                .unwrap_or_default()
++                .then_some(RewriteExtensionsMode::Rewrite),
++            // `verbatimModuleSyntax` makes `tsc` (and Node's own type stripping)
++            // emit every non-`type` import verbatim, even when the binding is
++            // unused — the module's side effects still have to run. That is
++            // exactly oxc's "only remove type imports" mode.
++            only_remove_type_imports: compiler_options
++                .and_then(|c| c.verbatim_module_syntax)
++                .unwrap_or(false),
++            // With `[[Set]]` semantics, `tsc` also drops class fields that have no
++            // initializer instead of assigning `undefined` through the prototype chain
++            // (which would fire an inherited setter). oxc only does that when asked.
++            remove_class_fields_without_initializer: set_public_class_fields,
++            ..Default::default()
++        },
++        env: EnvOptions {
++            module: module_target.unwrap_or_default(),
++            es2022: ES2022Options {
++                class_static_block: lower_class_features,
++                // `loose` stays `false`: it would also lower `#private` fields to
++                // string-keyed properties, which `tsc` never does. The assumption
++                // above alone selects `[[Set]]` for public fields — the transformer
++                // ORs the two together.
++                class_properties: lower_class_features.then(ClassPropertiesOptions::default),
++                // Turn this on would throw error for all top-level awaits; the caller
++                // clears it for a file flipping to an ES module, which keeps them.
++                top_level_await: enable_top_level_await,
++            },
++            es2026: ES2026Options {
++                explicit_resource_management: !NATIVE_EXPLICIT_RESOURCE_MANAGEMENT
++                    .load(Ordering::Relaxed),
++            },
++            ..Default::default()
++        },
++        proposals: ProposalOptions {},
++        helper_loader: HelperLoaderOptions {
++            // The module name carries a tag for the loading copy when one was given —
++            // `@oxc-node/core@<tag>/helpers/x` — so several registered copies each get
++            // their own helpers back instead of racing on one shared specifier. The
++            // resolve side maps it to `@oxc-node/core`'s real `exports` subpath.
++            module_name: helper_module_name
++                .map_or(Cow::Borrowed("@oxc-node/core"), |name| Cow::Owned(name.to_owned())),
++            ..Default::default()
++        },
++        ..Default::default()
++    }
+ }
+
+ /// Semantic analysis, transform and codegen for an already-parsed program. Split from
+@@ -2370,109 +2510,15 @@
+     // JavaScript on its way out.
+     let cts = is_cts(program.source_type);
+
+-    let use_define_for_class_fields = use_define_for_class_fields(compiler_options);
+-    // `useDefineForClassFields` selects `[[Define]]` semantics; oxc's `setPublicClassFields`
+-    // assumption selects the opposite, `[[Set]]`, so it is the negation of it.
+-    let set_public_class_fields = !use_define_for_class_fields;
+-    let legacy_decorators =
+-        compiler_options.and_then(|c| c.experimental_decorators).unwrap_or(false);
+-    // Every Node.js release with `module.register()` runs class fields, `#private` members
+-    // and static blocks natively, so they are only lowered where the emitted class has to
+-    // differ from the source: `[[Set]]` field semantics, and legacy decorators, which are
+-    // applied to the lowered class.
+-    let lower_class_features = set_public_class_fields || legacy_decorators;
+     let TransformerReturn { diagnostics, .. } = Transformer::new(
+         allocator,
+         src_path,
+-        &TransformOptions {
+-            assumptions: CompilerAssumptions { set_public_class_fields, ..Default::default() },
+-            decorator: DecoratorOptions {
+-                legacy: legacy_decorators,
+-                emit_decorator_metadata: compiler_options
+-                    .and_then(|c| c.emit_decorator_metadata)
+-                    .unwrap_or(false),
+-                strict_null_checks: compiler_options
+-                    .and_then(|c| c.strict_null_checks)
+-                    .unwrap_or(false),
+-            },
+-            jsx: {
+-                // `compilerOptions.jsx` holds `tsc`'s values (`react`, `react-jsx`,
+-                // `react-jsxdev`, ...), not Babel's runtime names — mapping them is what
+-                // `jsx_runtime` is for. `(JsxRuntime::Automatic, false)` is `Default`, so
+-                // an unset option reproduces the automatic production runtime.
+-                let (runtime, development) = compiler_options
+-                    .and_then(|c| c.jsx.as_deref())
+-                    .map(jsx_runtime)
+-                    .unwrap_or_default();
+-                JsxOptions {
+-                    runtime,
+-                    development,
+-                    import_source: compiler_options.and_then(|c| c.jsx_import_source.clone()),
+-                    pragma: compiler_options.and_then(|c| c.jsx_factory.clone()),
+-                    pragma_frag: compiler_options.and_then(|c| c.jsx_fragment_factory.clone()),
+-                    ..Default::default()
+-                }
+-            },
+-            typescript: TypeScriptOptions {
+-                // `TypeScriptOptions` holds `Cow<'static, str>`, and the compiler
+-                // options are now borrowed per file rather than from a `OnceLock`,
+-                // so these have to be owned.
+-                jsx_pragma: compiler_options
+-                    .and_then(|c| c.jsx_factory.clone())
+-                    .map(Cow::Owned)
+-                    .unwrap_or_default(),
+-                jsx_pragma_frag: compiler_options
+-                    .and_then(|c| c.jsx_fragment_factory.clone())
+-                    .map(Cow::Owned)
+-                    .unwrap_or_default(),
+-                rewrite_import_extensions: compiler_options
+-                    .and_then(|c| c.rewrite_relative_import_extensions)
+-                    .unwrap_or_default()
+-                    .then_some(RewriteExtensionsMode::Rewrite),
+-                // `verbatimModuleSyntax` makes `tsc` (and Node's own type stripping)
+-                // emit every non-`type` import verbatim, even when the binding is
+-                // unused — the module's side effects still have to run. That is
+-                // exactly oxc's "only remove type imports" mode.
+-                only_remove_type_imports: compiler_options
+-                    .and_then(|c| c.verbatim_module_syntax)
+-                    .unwrap_or(false),
+-                // With `[[Set]]` semantics, `tsc` also drops class fields that have no
+-                // initializer instead of assigning `undefined` through the prototype chain
+-                // (which would fire an inherited setter). oxc only does that when asked.
+-                remove_class_fields_without_initializer: set_public_class_fields,
+-                ..Default::default()
+-            },
+-            env: EnvOptions {
+-                module: module_target.unwrap_or_default(),
+-                es2022: ES2022Options {
+-                    class_static_block: lower_class_features,
+-                    // `loose` stays `false`: it would also lower `#private` fields to
+-                    // string-keyed properties, which `tsc` never does. The assumption
+-                    // above alone selects `[[Set]]` for public fields — the transformer
+-                    // ORs the two together.
+-                    class_properties: lower_class_features.then(ClassPropertiesOptions::default),
+-                    // Turn this on would throw error for all top-level awaits; the caller
+-                    // clears it for a file flipping to an ES module, which keeps them.
+-                    top_level_await: enable_top_level_await,
+-                },
+-                es2026: ES2026Options {
+-                    explicit_resource_management: !NATIVE_EXPLICIT_RESOURCE_MANAGEMENT
+-                        .load(Ordering::Relaxed),
+-                },
+-                ..Default::default()
+-            },
+-            proposals: ProposalOptions {},
+-            helper_loader: HelperLoaderOptions {
+-                // The module name carries a tag for the loading copy when one was given —
+-                // `@oxc-node/core@<tag>/helpers/x` — so several registered copies each get
+-                // their own helpers back instead of racing on one shared specifier. The
+-                // resolve side maps it to `@oxc-node/core`'s real `exports` subpath.
+-                module_name: helper_module_name
+-                    .map_or(Cow::Borrowed("@oxc-node/core"), |name| Cow::Owned(name.to_owned())),
+-                ..Default::default()
+-            },
+-            ..Default::default()
+-        },
++        &transform_options(
++            compiler_options,
++            module_target,
++            enable_top_level_await,
++            helper_module_name,
++        ),
+     )
+     .build_with_scoping(scoping, program);
+
+@@ -2534,9 +2580,9 @@
+     let map = map.map(|source_map| source_map.into_owned());
+     if module_runner.is_some() {
+         let (code, map) = retain_lines(code, map, esm);
+-        return Ok(Output { code, map });
+-    }
+-    Ok(Output { code, map })
++        return Ok(Output { code, map, cached_map_json: None });
++    }
++    Ok(Output { code, map, cached_map_json: None })
+ }
+
+ /// What the module runner asks of [`transform_program`] on top of the normal
+@@ -3362,12 +3408,36 @@
+         }
+     };
+     let source = strip_bom(source);
++    let cache = CacheRequest::new(
++        &path,
++        source,
++        resolved_compiler_options,
++        Some(Module::Esm),
++        false,
++        false,
++        helper_module_name.as_deref(),
++        b"classify-ambiguous",
++    );
++    if let Some(cached) = cache.as_ref().and_then(CacheRequest::get) {
++        return Ok(cached.module.then(|| LoadFnOutput {
++            format: "module".to_owned(),
++            source: Some(Either4::B(Uint8Array::from_string(code_with_inline_map(
++                cached.into_output(),
++            )))),
++            response_url: Some(url.to_owned()),
++        }));
++    }
+     let allocator = Allocator::default();
+     // `only_module_parse` covers the shapes oxc cannot resolve on its own, such as a
+     // top-level `for await`; `parsed_as_esm` covers the rest, including top-level await.
+     let Parsed { mut program, diagnostics, module_record, only_module_parse } =
+         parse_source(&allocator, source, source_type, true);
+     if !(only_module_parse || parsed_as_esm(&program, &module_record)) {
++        if diagnostics.is_empty() {
++            if let Some(cache) = cache {
++                cache.put(&CachedTransform::classification());
++            }
++        }
+         return Ok(None);
+     }
+     // From here on the file is handed back as an ES module, so surface parse errors
+@@ -3394,6 +3464,9 @@
+         helper_module_name.as_deref(),
+         None,
+     )?;
++    if let Some(cache) = cache {
++        cache.put(&CachedTransform::from_output(&transformed, true));
++    }
+     tracing::debug!("loaded {} format: module", url);
+     Ok(Some(LoadFnOutput {
+         format: "module".to_owned(),
+@@ -3423,6 +3496,19 @@
+         }
+     };
+     let source = strip_bom(source);
++    let cache = CacheRequest::new(
++        path,
++        source,
++        resolved_compiler_options,
++        Some(Module::CommonJS),
++        true,
++        false,
++        None,
++        b"classify-cts",
++    );
++    if cache.as_ref().and_then(CacheRequest::get).is_some() {
++        return Ok(None);
++    }
+     // Only the transform knows which `import`/`export` declarations are type-only, so a
+     // file with any declaration runs through it — the same options the `require()` path
+     // uses — and only its verdict is kept.
+@@ -3437,10 +3523,13 @@
+         return Ok(None);
+     }
+     if !has_module_declaration(&program) {
++        if let Some(cache) = cache {
++            cache.put(&CachedTransform::classification());
++        }
+         return Ok(None);
+     }
+     // Any other error is the `require()` path's to report, with its own helper names.
+-    let _ = transform_program(
++    let transformed = transform_program(
+         &allocator,
+         path,
+         &mut program,
+@@ -3451,14 +3540,26 @@
+         None,
+         None,
+     );
+-    if has_cts_module_declaration(&program) { Err(cts_module_syntax_error(path)) } else { Ok(None) }
++    if has_cts_module_declaration(&program) {
++        Err(cts_module_syntax_error(path))
++    } else {
++        if transformed.is_ok() {
++            if let Some(cache) = cache {
++                cache.put(&CachedTransform::classification());
++            }
++        }
++        Ok(None)
++    }
+ }
+
+ /// The generated code with its source map appended as a data URL, if one was produced.
+ fn code_with_inline_map(output: Output) -> String {
+-    match output.map {
+-        Some(sm) => {
+-            let sm = sm.to_data_url();
++    match output.source_map() {
++        Some(map) => {
++            let sm = format!(
++                "data:application/json;charset=utf-8;base64,{}",
++                base64_simd::STANDARD.encode_to_string(map.as_bytes())
++            );
+             const SOURCEMAP_PREFIX: &str = "\n//# sourceMappingURL=";
+             let len = sm.len() + output.code.len() + 22;
+             let mut output_code = String::with_capacity(len);
+--- /dev/null
++++ b/src/transform_cache.rs
+@@ -0,0 +1,320 @@
++//! Synchronous embedder cache hook for the vpx prototype.
++//!
++//! The host owns persistence and build/runtime namespacing. The loader owns semantic
++//! identity and keeps configuration reads and CommonJS source-provenance checks live.
++
++use super::{
++    Arc, CompilerOptions, Module, Output, Path, PoisonError, loader_context, transform_options,
++};
++
++/// An Oxc result without an AST or decoded source map.
++///
++/// `module` means a format flip for a transform request, or ES module classification
++/// for a classification request. Classification-only CommonJS records have empty code
++/// and no map; they never authorize skipping the caller's live source/file comparison.
++#[derive(Clone, Debug)]
++pub struct CachedTransform {
++    pub code: String,
++    pub source_map: Option<String>,
++    pub module: bool,
++}
++
++impl CachedTransform {
++    pub(crate) fn from_output(output: &Output, module: bool) -> Self {
++        Self { code: output.code.clone(), source_map: output.source_map(), module }
++    }
++
++    pub(crate) fn classification() -> Self {
++        Self { code: String::new(), source_map: None, module: false }
++    }
++
++    pub(crate) fn into_output(self) -> Output {
++        Output { code: self.code, map: None, cached_map_json: self.source_map }
++    }
++}
++
++/// Optional host storage. Implementations must return `None` on invalid/unavailable
++/// records and must keep storage failures separate from compiler failures.
++///
++/// Hash every key part with its length, in order. Scope storage to the exact loader,
++/// compiler/helper build and runtime. There is no JS callback or asynchronous wait.
++pub trait TransformCache: Send + Sync {
++    fn get(&self, key: &[&[u8]]) -> Option<CachedTransform>;
++    fn put(&self, key: &[&[u8]], value: &CachedTransform);
++}
++
++/// Install a backend for this loader context. Captured contexts share it, while
++/// independent Node.js workers and off-thread ESM hooks initialize their own policy.
++pub fn set_transform_cache(cache: Option<Arc<dyn TransformCache>>) {
++    *loader_context().transform_cache.lock().unwrap_or_else(PoisonError::into_inner) = cache;
++}
++
++pub(crate) struct CacheRequest<'a> {
++    cache: Arc<dyn TransformCache>,
++    path: &'a Path,
++    source: &'a str,
++    options: String,
++    kind: &'static [u8],
++    is_es_module: [u8; 1],
++}
++
++impl<'a> CacheRequest<'a> {
++    #[allow(clippy::too_many_arguments)]
++    pub(crate) fn new(
++        path: &'a Path,
++        source: &'a str,
++        compiler_options: Option<&CompilerOptions>,
++        module: Option<Module>,
++        top_level_await: bool,
++        is_es_module: bool,
++        helper: Option<&str>,
++        kind: &'static [u8],
++    ) -> Option<Self> {
++        let cache = loader_context()
++            .transform_cache
++            .lock()
++            .unwrap_or_else(PoisonError::into_inner)
++            .clone()?;
++        // Use the same complete normalized options as the transformer. Debug is a
++        // build-scoped encoding, not a cross-version public wire format. These options
++        // contain values, not resolver state, addresses or unordered alias maps.
++        let options =
++            format!("{:?}", transform_options(compiler_options, module, top_level_await, helper));
++        Some(Self { cache, path, source, options, kind, is_es_module: [u8::from(is_es_module)] })
++    }
++
++    fn key(&self) -> [&[u8]; 6] {
++        [
++            b"oxc-node-transform-v1",
++            self.kind,
++            self.path.as_os_str().as_encoded_bytes(),
++            self.source.as_bytes(),
++            self.options.as_bytes(),
++            &self.is_es_module,
++        ]
++    }
++
++    pub(crate) fn get(&self) -> Option<CachedTransform> {
++        self.cache.get(&self.key())
++    }
++
++    pub(crate) fn put(&self, value: &CachedTransform) {
++        self.cache.put(&self.key(), value);
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use std::{
++        collections::HashMap,
++        sync::{
++            Mutex,
++            atomic::{AtomicUsize, Ordering},
++        },
++    };
++
++    use super::*;
++    use crate::{LoaderContext, LoaderContextGuard, oxc_transform};
++    use napi::Either;
++
++    #[derive(Default)]
++    struct MemoryCache {
++        entries: Mutex<HashMap<Vec<Vec<u8>>, CachedTransform>>,
++        hits: AtomicUsize,
++    }
++
++    impl TransformCache for MemoryCache {
++        fn get(&self, key: &[&[u8]]) -> Option<CachedTransform> {
++            let key: Vec<_> = key.iter().map(|part| part.to_vec()).collect();
++            let value = self.entries.lock().unwrap().get(&key).cloned();
++            if value.is_some() {
++                self.hits.fetch_add(1, Ordering::Relaxed);
++            }
++            value
++        }
++
++        fn put(&self, key: &[&[u8]], value: &CachedTransform) {
++            self.entries
++                .lock()
++                .unwrap()
++                .insert(key.iter().map(|part| part.to_vec()).collect(), value.clone());
++        }
++    }
++
++    fn transform(source: &str, options: &CompilerOptions, helper: &str) -> Output {
++        oxc_transform(
++            Path::new("cache.ts"),
++            &Either::<String, &[u8]>::B(source.as_bytes()),
++            Some(options),
++            Some(Module::Preserve),
++            false,
++            true,
++            Some(helper),
++            None,
++        )
++        .unwrap()
++        .0
++    }
++
++    #[test]
++    fn cached_transform_preserves_maps_and_invalidates_source_options_and_helpers() {
++        let _guard = LoaderContextGuard::enter(Arc::new(LoaderContext::default()));
++        let cache = Arc::new(MemoryCache::default());
++        set_transform_cache(Some(cache.clone()));
++        let source = "class Value { count: number = 1; } console.log(new Value().count);";
++        let mut options = CompilerOptions::default();
++        options.use_define_for_class_fields = Some(false);
++        let first = transform(source, &options, "helpers-a");
++        let cached = transform(source, &options, "helpers-a");
++        assert_eq!(cache.hits.load(Ordering::Relaxed), 1);
++        assert_eq!(first.source(), cached.source());
++        assert_eq!(first.source_map(), cached.source_map());
++        let changed = transform(&source.replace("= 1", "= 2"), &options, "helpers-a");
++        assert_ne!(first.source(), changed.source());
++        assert_eq!(cache.hits.load(Ordering::Relaxed), 1);
++        options.use_define_for_class_fields = Some(true);
++        let changed = transform(source, &options, "helpers-a");
++        assert_ne!(first.source(), changed.source());
++        assert_eq!(cache.hits.load(Ordering::Relaxed), 1);
++        transform(source, &options, "helpers-b");
++        assert_eq!(cache.hits.load(Ordering::Relaxed), 1);
++    }
++
++    #[test]
++    fn cache_policy_is_scoped_to_the_loader_context() {
++        let cache = Arc::new(MemoryCache::default());
++        let _outer = LoaderContextGuard::enter(Arc::new(LoaderContext::default()));
++        set_transform_cache(Some(cache.clone()));
++        let source = "console.log(1);";
++        let options = CompilerOptions::default();
++        transform(source, &options, "helpers");
++        {
++            let _inner = LoaderContextGuard::enter(Arc::new(LoaderContext::default()));
++            transform(source, &options, "helpers");
++            assert_eq!(cache.hits.load(Ordering::Relaxed), 0);
++        }
++        transform(source, &options, "helpers");
++        assert_eq!(cache.hits.load(Ordering::Relaxed), 1);
++    }
++
++    #[test]
++    fn esm_format_flip_is_preserved_on_a_hit() {
++        let _guard = LoaderContextGuard::enter(Arc::new(LoaderContext::default()));
++        let cache = Arc::new(MemoryCache::default());
++        set_transform_cache(Some(cache.clone()));
++        let source = "export const value: number = 1;";
++        let run = || {
++            oxc_transform(
++                Path::new("cache.ts"),
++                &Either::<String, &[u8]>::B(source.as_bytes()),
++                None,
++                Some(Module::Preserve),
++                true,
++                false,
++                Some("helpers"),
++                None,
++            )
++            .unwrap()
++        };
++        let (first, first_module) = run();
++        let (cached, cached_module) = run();
++        assert!(first_module && cached_module);
++        assert_eq!(cache.hits.load(Ordering::Relaxed), 1);
++        assert_eq!(first.source(), cached.source());
++        assert_eq!(first.source_map(), cached.source_map());
++    }
++
++    #[test]
++    fn cts_classification_hits_but_never_caches_a_module_syntax_error() {
++        let _guard = LoaderContextGuard::enter(Arc::new(LoaderContext::default()));
++        let cache = Arc::new(MemoryCache::default());
++        set_transform_cache(Some(cache.clone()));
++        let path = Path::new("cache.cts");
++        for _ in 0..2 {
++            assert!(
++                crate::reject_cts_module_syntax(path, Some("const value: number = 1;"), None)
++                    .unwrap()
++                    .is_none()
++            );
++        }
++        assert_eq!(cache.hits.load(Ordering::Relaxed), 1);
++        for _ in 0..2 {
++            assert!(
++                crate::reject_cts_module_syntax(
++                    path,
++                    Some("export const value: number = 1;"),
++                    None
++                )
++                .is_err()
++            );
++        }
++        assert_eq!(cache.hits.load(Ordering::Relaxed), 1);
++    }
++
++    #[test]
++    fn ambiguous_classification_reuses_esm_and_commonjs_results() {
++        use crate::{LoadFnOutput, TryAsStr, load_commonjs_esm};
++
++        let _guard = LoaderContextGuard::enter(Arc::new(LoaderContext::default()));
++        let cache = Arc::new(MemoryCache::default());
++        set_transform_cache(Some(cache.clone()));
++        let output =
++            LoadFnOutput { format: "commonjs".to_owned(), source: None, response_url: None };
++        let url = crate::path_to_file_url(&std::env::temp_dir().join("cache.ts").to_string_lossy());
++        for _ in 0..2 {
++            let result = load_commonjs_esm(
++                &url,
++                &output,
++                Some("export const value: number = 1;"),
++                None,
++                None,
++            )
++            .unwrap()
++            .unwrap();
++            assert_eq!(result.format, "module");
++            assert!(result.source.as_ref().unwrap().try_as_str().unwrap().contains("export"));
++        }
++        assert_eq!(cache.hits.load(Ordering::Relaxed), 1);
++        for _ in 0..2 {
++            assert!(
++                load_commonjs_esm(&url, &output, Some("const value: number = 1;"), None, None)
++                    .unwrap()
++                    .is_none()
++            );
++        }
++        assert_eq!(cache.hits.load(Ordering::Relaxed), 2);
++    }
++
++    #[test]
++    fn a_classification_hit_still_checks_the_current_disk_source() {
++        use crate::{Either4, LoadFnOutput, TryAsStr, transform_output};
++
++        struct FileGuard(std::path::PathBuf);
++        impl Drop for FileGuard {
++            fn drop(&mut self) {
++                let _ = std::fs::remove_file(&self.0);
++            }
++        }
++
++        let _guard = LoaderContextGuard::enter(Arc::new(LoaderContext::default()));
++        let cache = Arc::new(MemoryCache::default());
++        set_transform_cache(Some(cache.clone()));
++        let file = FileGuard(
++            std::env::temp_dir().join(format!("oxc-cache-provenance-{}.ts", std::process::id())),
++        );
++        let url = crate::path_to_file_url(&file.0.to_string_lossy());
++        let source = "module.exports = 1;";
++        let output = || LoadFnOutput {
++            format: "commonjs".to_owned(),
++            source: Some(Either4::A(source.to_owned())),
++            response_url: None,
++        };
++        std::fs::write(&file.0, source).unwrap();
++        let first = transform_output(url.clone(), output(), None, None).unwrap();
++        assert!(matches!(first.source, Some(Either4::D(_))));
++        std::fs::write(&file.0, "module.exports = 2;").unwrap();
++        let next = transform_output(url, output(), None, None).unwrap();
++        assert!(cache.hits.load(Ordering::Relaxed) > 0);
++        assert!(next.source.as_ref().unwrap().try_as_str().unwrap().contains("= 1"));
++    }
++}
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -68,6 +68,7 @@
+ yarn_pnp = ["oxc_resolver/yarn_pnp"]
+
+ [dependencies]
++base64-simd = "0.8.0"
+ memchr = "2"
+ napi = { version = "3.12.2", default-features = false, features = ["serde-json", "napi3"] }
+ napi-derive = { version = "3.6.3", default-features = false, features = ["type-def"] }

@@ -1,0 +1,8 @@
+{
+  "name": "command-vpx-script-cache",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "22.23.2"
+  }
+}

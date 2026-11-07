@@ -10,6 +10,7 @@
 
 import * as NodeModule from 'node:module';
 
+import { freezeScriptCache } from './script-cache.ts';
 import { canRegisterSyncHooks, createRelay, loadOxcNode, threadWatchSink } from './script-hooks.ts';
 
 // Look `register` up on the namespace: a named import would fail to link on every
@@ -28,6 +29,7 @@ if (!canRegisterSyncHooks(process.versions.node)) {
     data: {
       tsconfig: oxcNode.freezeTsconfig(process.cwd()),
       transformDeps: oxcNode.freezeTransformDeps(),
+      cache: freezeScriptCache(),
       watchPort,
     },
     transferList: watchPort ? [watchPort] : [],
