@@ -1,0 +1,26 @@
+diff --git a/dist/build-wv1dWHDH.mjs b/dist/build-wv1dWHDH.mjs
+index 82fc360..87edaa7 100644
+--- a/dist/build-wv1dWHDH.mjs
++++ b/dist/build-wv1dWHDH.mjs
+@@ -892,2 +892,5 @@ async function buildSingle(config, configDeps, isDualFormat, clean, restart, don
+ }
++export async function expandWorkspace(config, flags, watch, deps) {
++	return resolveWorkspace(config, flags, { ci: isInCI(), watch }, deps);
++}
+ export { buildWithConfigs as n, build_exports as r, build$1 as t };
+diff --git a/dist/index.d.mts b/dist/index.d.mts
+index 085b184..d2acbd4 100644
+--- a/dist/index.d.mts
++++ b/dist/index.d.mts
+@@ -3,2 +3,4 @@ import { n as mergeConfig, r as resolveUserConfig, t as defineConfig } from "./c
+ import * as Rolldown from "rolldown";
++/** @internal Expand a preloaded root configuration before resolving individual builds. */
++export declare function expandWorkspace(config: UserConfig, flags: InlineConfig, watch: TsdownHandle["watch"], deps: Set<string>): Promise<{ configs: UserConfig[]; deps: Set<string> }>;
+ /**
+diff --git a/dist/index.mjs b/dist/index.mjs
+index 3d16d6c..d8e6e04 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -1 +1,2 @@
++export { expandWorkspace } from "./build-wv1dWHDH.mjs";
+ import { n as buildWithConfigs, t as build } from "./build-wv1dWHDH.mjs";

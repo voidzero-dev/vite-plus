@@ -1,0 +1,11 @@
+[[case]]
+name = "command_pack_workspace"
+vp = "local"
+steps = [
+  { argv = ["vp", "pack"], comment = "use the workspace and exclusions from vite.config.ts", snapshot = false },
+  ["node", "verify.mjs", "a"],
+  { argv = ["vp", "pack", "--workspace", "packages/*"], comment = "build both members with their own entries", snapshot = false },
+  ["node", "verify.mjs", "a", "b"],
+  { argv = ["vp", "pack", "--workspace", "packages/*", "--filter", "b"], comment = "filter the expanded members by package name", snapshot = false },
+  ["node", "verify.mjs", "b"],
+]
