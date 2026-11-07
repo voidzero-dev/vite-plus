@@ -1481,6 +1481,7 @@ $ vp env pin 22.13.0
 .node-version already exists with version 20.18.0
 Overwrite with 22.13.0? (y/n): y
 ✓ Pinned Node.js version to 22.13.0
+  Updated .node-version in /Users/user/projects/my-app
 ```
 
 Use `--force` to skip confirmation:
@@ -1488,6 +1489,7 @@ Use `--force` to skip confirmation:
 ```bash
 $ vp env pin 22.13.0 --force
 ✓ Pinned Node.js version to 22.13.0
+  Updated .node-version in /Users/user/projects/my-app
 ```
 
 When the target is already pinned to the same version, the command no-ops (with or without `--force`):
