@@ -27,9 +27,14 @@ for (const shim of shims) {
   }
 }
 
-const actualShims = fs.readdirSync(path.join('home', 'bin')).sort();
-if (actualShims.join() !== [...shims].sort().join()) {
-  throw new Error(`unexpected shims: ${actualShims.join(', ')}`);
+const lockFile = '.vp-global-bin.lock';
+if (!fs.lstatSync(path.join('home', 'bin', lockFile)).isFile()) {
+  throw new Error('global bin lock must be a regular file');
+}
+
+const binEntries = fs.readdirSync(path.join('home', 'bin')).sort();
+if (binEntries.join() !== [...shims, lockFile].sort().join()) {
+  throw new Error(`unexpected bin entries: ${binEntries.join(', ')}`);
 }
 
 console.log('all shims point to external vp');

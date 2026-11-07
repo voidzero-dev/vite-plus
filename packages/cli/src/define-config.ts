@@ -1,13 +1,20 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { ignoreInput, ignoreOutput } from '@voidzero-dev/vite-task-client';
 import type { OxfmtConfig } from 'oxfmt';
 import type { OxlintConfig } from 'oxlint';
-import { searchForWorkspaceRoot } from 'vite';
-import type { Alias, Plugin, PluginOption, UserConfig } from 'vite';
+import { resolveConfig, searchForWorkspaceRoot } from 'vite';
+import type {
+  Alias,
+  InlineConfig as ViteInlineConfig,
+  Plugin,
+  PluginOption,
+  ResolvedConfig,
+  UserConfig,
+} from 'vite';
 import {
   defineConfig as viteDefineConfig,
   defineProject as viteDefineProject,
@@ -1047,6 +1054,71 @@ export async function withConfigMetadataResolution<T>(fn: () => Promise<T>): Pro
       configMetadataSavedValue = undefined;
     }
   }
+}
+
+// The bundled core's internal parameters are not part of its public type
+// contract. Keep this bridge private to the helper.
+type ResolveConfigWithInternalOptions = (
+  inlineConfig: ViteInlineConfig,
+  command: 'build' | 'serve',
+  defaultMode?: string,
+  defaultNodeEnv?: string,
+  isPreview?: boolean,
+  patchConfig?: (config: ResolvedConfig) => void,
+  patchPlugins?: (plugins: Plugin[]) => void,
+  internalOptions?: { rootBase?: string },
+) => Promise<ResolvedConfig>;
+
+const resolveConfigWithInternalOptions = resolveConfig as ResolveConfigWithInternalOptions;
+
+export interface ResolveConfigFromFileOptions {
+  /**
+   * Base directory for an unset or relative `root` in the config file.
+   * Defaults to the config file's parent directory.
+   * Relative paths resolve from `process.cwd()`. Does not change the process cwd.
+   */
+  rootBase?: string;
+}
+
+/**
+ * Resolve a Vite config file to read a non-plugin block (`lint`, `fmt`, `pack`, …) from it,
+ * for tools such as oxlint, oxfmt, and Vite+ itself.
+ *
+ * With an absolute `configFile`, default resolution of the initial `root` from the
+ * config file is independent of `process.cwd()`: an unset or relative `root`
+ * resolves from the config file's parent directory.
+ * Callers can supply `rootBase` to use a different project directory,
+ * such as when the config is in a subdirectory. Absolute roots are preserved.
+ * Plugin hooks can later change `root` using Vite's normal semantics. For example,
+ * a relative `root` returned by a `config` hook resolves from `process.cwd()`.
+ *
+ * Relative `configFile` and explicit `rootBase` paths still resolve from `process.cwd()`.
+ * The helper does not change the process cwd; config code and plugins can still read it.
+ * The resolver loads the config once, as a config-metadata resolution,
+ * so `lazyPlugins` skips its factory.
+ * Plugins outside `lazyPlugins` still run their hooks and side effects,
+ * e.g. TanStack Start's router generator scans `src/routes`.
+ */
+export async function resolveConfigFromFile(
+  configFile: string,
+  options: ResolveConfigFromFileOptions = {},
+): Promise<ResolvedConfig> {
+  if (configFile.length === 0) {
+    throw new Error('Config file path must not be empty.');
+  }
+  const rootBase = resolve(options.rootBase ?? dirname(resolve(configFile)));
+  return withConfigMetadataResolution(() =>
+    resolveConfigWithInternalOptions(
+      { configFile },
+      'build',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { rootBase },
+    ),
+  );
 }
 
 export function lazyPlugins(cb: () => PluginOption[]): PluginOption[] | undefined;

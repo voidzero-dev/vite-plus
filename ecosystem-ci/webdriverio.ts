@@ -45,6 +45,17 @@ export async function prepareWebdriverioProject(
       '{ timeout: 10000 }',
     );
 
+    // The memory, local, and session variants all use database.sqlite3 in OPFS.
+    // deleteDatabaseFile reopens the file, and the test never destroys its clients.
+    // A client from an earlier variant can still hold the file when a later
+    // variant removes it, which throws NoModificationAllowedError.
+    // Remove when upstream destroys these clients.
+    await replaceOnce(
+      join(root, 'test', 'get-database-file.test.ts'),
+      'await deleteDatabaseFile();',
+      'await deleteDatabaseFile(undefined, true);',
+    );
+
     // Deleting client3 broadcasts a reconnect to client2 without awaiting it.
     // Wait for client2 to recreate the OPFS file before checking its handle.
     // Remove when upstream waits for the other client's asynchronous reconnect.

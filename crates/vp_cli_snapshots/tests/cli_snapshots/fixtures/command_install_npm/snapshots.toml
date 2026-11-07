@@ -1,0 +1,46 @@
+[[case]]
+name = "npm_install_includes_dev"
+vp = "global"
+env = { npm_config_audit = "false", npm_config_fund = "false", NODE_ENV = "production" }
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "dependencies.prod-only-fixture", "file:./prod-dep"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.dev-only-fixture", "file:./dev-dep"], snapshot = false },
+  { argv = ["vp", "install", "--dev", "--ignore-scripts"], comment = "include dev dependencies despite NODE_ENV=production without excluding production dependencies" },
+  ["vpt", "stat-file", "node_modules/prod-only-fixture/package.json", "--assert", "file"],
+  ["vpt", "stat-file", "node_modules/dev-only-fixture/package.json", "--assert", "file"],
+  { argv = ["vpt", "write-file", "node_modules/preserved.txt", "keep"], snapshot = false },
+  { argv = ["vp", "install", "--dev", "--frozen-lockfile", "--ignore-scripts", "--silent"], comment = "npm ci also includes dev dependencies and performs its native cleanup" },
+  ["vpt", "stat-file", "node_modules/preserved.txt", "--assert", "missing"],
+  ["vpt", "stat-file", "node_modules/dev-only-fixture/package.json", "--assert", "file"],
+  ["vpt", "print-file", "package.json", "package-lock.json"],
+]
+
+[[case]]
+name = "npm6_dependency_filters_install"
+vp = "global"
+env = { npm_config_audit = "false", npm_config_fund = "false" }
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "npm@6.14.18"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "dependencies.prod-only-fixture", "file:./prod-dep"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.dev-only-fixture", "file:./dev-dep"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "optionalDependencies.is-number", "6.0.0"], snapshot = false },
+  { argv = ["vp", "install", "-P", "--ignore-scripts", "--silent"], comment = "npm 6 uses --production to omit dev dependencies" },
+  ["vpt", "stat-file", "node_modules/prod-only-fixture/package.json", "--assert", "file"],
+  ["vpt", "stat-file", "node_modules/dev-only-fixture/package.json", "--assert", "missing"],
+  ["vpt", "stat-file", "node_modules/is-number/package.json", "--assert", "file"],
+  { argv = ["vp", "install", "-D", "--frozen-lockfile", "--ignore-scripts", "--silent"], envs = [["NODE_ENV", "production"], ["npm_config_production", "true"]], comment = "npm 6 ci includes dev dependencies despite production settings" },
+  ["vpt", "stat-file", "node_modules/dev-only-fixture/package.json", "--assert", "file"],
+  { argv = ["vpt", "rm", "-rf", "node_modules"], snapshot = false },
+  ["vp", "install", "--no-optional", "--ignore-scripts", "--silent"],
+  ["vpt", "stat-file", "node_modules/is-number/package.json", "--assert", "missing"],
+  ["vpt", "stat-file", "node_modules/dev-only-fixture/package.json", "--assert", "file"],
+  ["vp", "install", "-P", "--no-optional", "--frozen-lockfile", "--ignore-scripts", "--silent"],
+  ["vpt", "stat-file", "node_modules/dev-only-fixture/package.json", "--assert", "missing"],
+  ["vpt", "stat-file", "node_modules/is-number/package.json", "--assert", "missing"],
+  { argv = ["vp", "install", "-P", "-D", "--ignore-scripts", "--silent"], envs = [["NODE_ENV", "production"]], comment = "explicit inclusion wins when both dependency flags are supplied" },
+  ["vpt", "stat-file", "node_modules/dev-only-fixture/package.json", "--assert", "file"],
+  { argv = ["vp", "install", "-P", "-D", "--no-optional", "--frozen-lockfile", "--ignore-scripts", "--silent"], envs = [["NODE_ENV", "production"]] },
+  ["vpt", "stat-file", "node_modules/prod-only-fixture/package.json", "--assert", "file"],
+  ["vpt", "stat-file", "node_modules/dev-only-fixture/package.json", "--assert", "file"],
+  ["vpt", "stat-file", "node_modules/is-number/package.json", "--assert", "missing"],
+]

@@ -30,6 +30,26 @@ void process.stdout;
 void process.stderr;
 ensureBlockingStdio();
 
+interface StdioStream {
+  _handle?: { setBlocking?: (blocking: boolean) => number };
+}
+
+/**
+ * Loading a config through Vite imports `node:process` as ESM, and building that
+ * namespace reads every `process` getter, so `process.stdin` is created and its
+ * descriptor becomes non-blocking, TTY or pipe. Tasks inherit that descriptor, and a
+ * blocking read there fails with EAGAIN. `ensureBlockingStdio()` leaves terminals
+ * alone, so restore blocking reads through the stream handle, as `vpx` does before
+ * exec.
+ */
+function restoreBlockingStdin(): void {
+  if (process.platform === 'win32') {
+    return;
+  }
+  /* oxlint-disable-next-line no-underscore-dangle -- Node.js has no public API for this */
+  (process.stdin as StdioStream)._handle?.setBlocking?.(true);
+}
+
 function getErrorMessage(err: unknown): string {
   if (err instanceof Error) {
     return err.message;
@@ -157,7 +177,10 @@ if (maybePrintCommandHelp(args)) {
       // the separate Vite process even starts.
       resolveUniversalViteConfig: async (err, cwd) => {
         const { resolveUniversalViteConfig } = await import('./resolve-vite-config.js');
-        return resolveUniversalViteConfig(err, cwd);
+        const config = await resolveUniversalViteConfig(err, cwd);
+        // Rust spawns tasks only after this promise settles.
+        restoreBlockingStdin();
+        return config;
       },
       nodeVersion: process.version,
       explicitChdir,

@@ -28,7 +28,8 @@ on:
     types: [labeled]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # Other label events skip this workflow and must not cancel a preview build.
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event.label.name }}
   cancel-in-progress: true
 
 jobs:

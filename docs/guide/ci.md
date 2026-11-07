@@ -14,11 +14,11 @@ Run `vp migrate` to replace exact `voidzero-dev/setup-vp@v1` references in GitHu
 
 ## Node.js During Installation
 
-The Vite+ installer uses the latest Node.js LTS by default. With versions that support [`VP_SETUP_NODE_VERSION`](/guide/global-cli#vp-setup-node-version), `setup-vp` can use the project's version for installation too. This avoids a second Node.js download when that version supports both the global CLI and its pinned `pnpm`.
+The Vite+ installer uses the Node.js version pinned in the repository's [`.node-version`](https://github.com/voidzero-dev/vite-plus/blob/main/.node-version) by default. Each Vite+ release embeds this version at build time. The dependency-upgrade workflow keeps this pin up to date. With versions that support [`VP_SETUP_NODE_VERSION`](/guide/global-cli#vp-setup-node-version), `setup-vp` can use the project's version for installation too. This avoids a second Node.js download when that version supports both the global CLI and its pinned `pnpm`.
 
 `setup-vp` selects the version before it starts the installer. An explicit Node.js version takes precedence over a version-file input. Without either input, it checks the working directory and its parents using the [project declaration order](/guide/env#node-js-selection). The integration passes the selection through `VP_SETUP_NODE_VERSION`; the installer itself does not read project declarations.
 
-Without a selection, with Node.js management disabled, or when the selected version is incompatible, installation uses LTS. Older installers keep their existing behavior. Automatic project discovery does not create a session override, so later commands retain normal directory-based version selection.
+Without a selection, with Node.js management disabled, or when the selected version is incompatible, installation uses the embedded default. Older installers keep their existing behavior. Automatic project discovery does not create a session override, so later commands retain normal directory-based version selection.
 
 The integration handles these installer variables automatically. Configure `node-version` or `node-version-file` in GitHub Actions and GitLab CI/CD, or `nodeVersion` or `nodeVersionFile` in Azure Pipelines. See the [`setup-vp` documentation](https://github.com/voidzero-dev/setup-vp#inputs) for the complete input reference.
 

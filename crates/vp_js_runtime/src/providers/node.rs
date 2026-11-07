@@ -315,11 +315,13 @@ impl NodeProvider {
         find_latest_lts_version(&versions)
     }
 
-    /// Get the absolute latest version, including non-LTS.
+    /// Get the absolute latest stable version, including non-LTS.
+    ///
+    /// Pre-release versions are excluded.
     ///
     /// # Errors
     ///
-    /// Returns an error if no version is found or the version index cannot be fetched.
+    /// Returns an error if no stable version is found or the version index cannot be fetched.
     pub async fn resolve_absolute_latest_version(&self) -> Result<Str, Error> {
         let versions = self.fetch_version_index().await?;
         find_absolute_latest_version(&versions)
@@ -472,18 +474,28 @@ fn find_latest_lts_version(versions: &[NodeVersionEntry]) -> Result<Str, Error> 
     })
 }
 
-/// Find the absolute latest version, regardless of LTS status.
+/// Find the absolute latest stable version, regardless of LTS status.
 ///
-/// The version index is sorted newest-first, so we take the first entry.
-fn find_absolute_latest_version(versions: &[NodeVersionEntry]) -> Result<Str, Error> {
+/// Pre-release versions (e.g. `v27.0.0-alpha.0.0.0`) are excluded even when
+/// they appear first in the version index.
+///
+/// # Errors
+///
+/// Returns an error if the list contains no stable version.
+pub fn find_absolute_latest_version(versions: &[NodeVersionEntry]) -> Result<Str, Error> {
     versions
-        .first()
-        .map(|entry| {
+        .iter()
+        .filter_map(|entry| {
             let version_str = entry.version.strip_prefix('v').unwrap_or(&entry.version);
-            version_str.into()
+            Version::parse(version_str)
+                .ok()
+                .filter(|version| version.pre_release.is_empty())
+                .map(|version| (version, version_str))
         })
+        .max_by(|(a, _), (b, _)| a.cmp(b))
+        .map(|(_, version_str)| version_str.into())
         .ok_or_else(|| Error::VersionIndexParseFailed {
-            reason: "No version found in version index".into(),
+            reason: "No stable Node.js version found in version index".into(),
         })
 }
 
@@ -758,12 +770,15 @@ mod tests {
         let provider = NodeProvider::new();
         let platform = Platform { os: Os::Linux, arch: Arch::X64 };
 
-        // VP_NODE_DIST_MIRROR is left unset, so this exercises the
+        // Clear VP_NODE_DIST_MIRROR so this exercises the
         // official (default) source where signature verification is required.
-        let info =
-            vp_shared::EnvConfig::with_vars([(env_vars::VP_HOME, std::env::temp_dir())], |_| {
-                provider.get_download_info("22.13.1", platform)
-            });
+        let info = vp_shared::EnvConfig::with_vars(
+            [
+                (env_vars::VP_HOME, Some(std::env::temp_dir().as_os_str())),
+                (env_vars::VP_NODE_DIST_MIRROR, None),
+            ],
+            |_| provider.get_download_info("22.13.1", platform),
+        );
 
         #[cfg(not(target_env = "musl"))]
         {
@@ -954,9 +969,13 @@ fedcba987654  node-v22.13.1-win-x64.zip";
 
     #[test]
     fn test_get_dist_url_default() {
-        vp_shared::EnvConfig::with_vars([(env_vars::VP_HOME, std::env::temp_dir())], |_| {
-            assert_eq!(get_dist_url(), DEFAULT_NODE_DIST_URL)
-        });
+        vp_shared::EnvConfig::with_vars(
+            [
+                (env_vars::VP_HOME, Some(std::env::temp_dir().as_os_str())),
+                (env_vars::VP_NODE_DIST_MIRROR, None),
+            ],
+            |_| assert_eq!(get_dist_url(), DEFAULT_NODE_DIST_URL),
+        );
     }
 
     #[test]
@@ -1412,6 +1431,37 @@ fedcba987654  node-v22.13.1-win-x64.zip";
         use super::find_absolute_latest_version;
 
         let versions: Vec<NodeVersionEntry> = vec![];
+        let result = find_absolute_latest_version(&versions);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_find_absolute_latest_version_skips_prerelease() {
+        use super::find_absolute_latest_version;
+
+        let versions = vec![
+            NodeVersionEntry { version: "v27.0.0-alpha.0.0.0".into(), lts: LtsInfo::NotLts },
+            NodeVersionEntry {
+                version: "v26.13.0".into(),
+                lts: LtsInfo::Codename("Lithium".into()),
+            },
+            NodeVersionEntry { version: "v26.12.1".into(), lts: LtsInfo::NotLts },
+        ];
+
+        // Should skip the pre-release at the top of the index.
+        let result = find_absolute_latest_version(&versions).unwrap();
+        assert_eq!(result, "26.13.0");
+    }
+
+    #[test]
+    fn test_find_absolute_latest_version_only_prerelease() {
+        use super::find_absolute_latest_version;
+
+        let versions = vec![
+            NodeVersionEntry { version: "v27.0.0-alpha.0.0.0".into(), lts: LtsInfo::NotLts },
+            NodeVersionEntry { version: "v27.0.0-nightly".into(), lts: LtsInfo::NotLts },
+        ];
+
         let result = find_absolute_latest_version(&versions);
         assert!(result.is_err());
     }

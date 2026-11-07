@@ -1,0 +1,10 @@
+[[case]]
+name = "command_env_doctor_warnings"
+vp = "global"
+skip-platforms = ["windows"]
+seed-runtime = false
+comment = "Warnings describe setups that still work, so doctor names them in the summary and exits with 0."
+steps = [
+  { argv = ["vpt", "write-file", "$HOME/.profile", ". \"$HOME/.vite-plus/env\""], snapshot = false, comment = "source the env file so the output has no platform-specific IDE guidance" },
+  { argv = ["vp", "env", "doctor", "node"], envs = [["VP_NODE_VERSION", "20.20.2"]] },
+]

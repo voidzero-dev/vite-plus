@@ -7,5 +7,7 @@ steps = [
   { argv = ["vp", "outdated", "testnpm2", "-w"], comment = "should outdated in workspace root", continue-on-failure = true },
   { argv = ["vp", "outdated", "testnpm2", "--filter", "app"], comment = "should outdated in specific package", continue-on-failure = true },
   { argv = ["vp", "outdated", "--filter", "*", "--format", "json"], comment = "should outdated in all packages", continue-on-failure = true },
-  { argv = ["vp", "outdated", "-r"], comment = "should outdated recursively", continue-on-failure = true },
+  { argv = ["vp", "outdated", "-r"], comment = "should check workspace dependencies without the root", continue-on-failure = true },
+  { argv = ["vp", "outdated", "-r", "-w"], comment = "should check root and workspace dependencies", continue-on-failure = true },
+  { argv = ["vp", "outdated", "-r", "--filter", "@vite-plus-test/utils"], comment = "should preserve workspace filtering", continue-on-failure = true },
 ]

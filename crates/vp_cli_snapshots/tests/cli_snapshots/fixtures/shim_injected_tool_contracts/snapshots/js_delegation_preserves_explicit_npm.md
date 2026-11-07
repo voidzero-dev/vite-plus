@@ -6,10 +6,10 @@
 ## `vpt cp -r js-cli node_modules/vite-plus`
 
 
-## `vp env exec --node 22.18.0 --npm 10.5.0 npm --version`
+## `vp env exec --node 22.23.4 --npm 10.5.0 npm --version`
 
 
-## `vp env exec --node 22.18.0 --npm 10.5.0 vp create`
+## `vp env exec --node 22.23.4 --npm 10.5.0 vp create`
 
 Entering the JS CLI must retain the explicitly selected npm ahead of bundled npm
 

@@ -20,7 +20,7 @@ Options:
   -s, --silent          Suppress all output except the executed command's output
   -h, --help            Print help
 
-Documentation: https://viteplus.dev/guide/vpx
+Documentation: https://viteplus.dev/guide/package-management/dlx
 ```
 
 ## `vp dlx -s vp-test-echo hello`
@@ -37,4 +37,17 @@ should run specific version
 
 ```
 hello
+```
+
+## `vpt json-edit package.json packageManager pnpm@7.20.0`
+
+
+## `vp dlx --shell-mode 'echo hello'`
+
+Reject shell mode before pnpm 7.21.0 without executing the package manager.
+
+**Exit code:** 1
+
+```
+pnpm < 7.21.0 does not support --shell-mode.
 ```

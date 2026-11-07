@@ -26,6 +26,10 @@ const cli = new NapiCli();
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(currentDir, '..', '..');
+const nodeVersion = readFileSync(join(repoRoot, '.node-version'), 'utf8').trim();
+if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(nodeVersion)) {
+  throw new Error('.node-version must contain an exact stable Node.js version');
+}
 
 const args = process.argv.slice(2);
 const modeIdx = args.indexOf('--mode');
@@ -225,6 +229,7 @@ async function prepareAndPublishCliPackage(napiTarget: string): Promise<void> {
     cpu: [arch],
     ...(abi ? { libc: [abi] } : {}),
     files,
+    vpNodeVersion: nodeVersion,
     ...(!skipNpmPublish ? { vpInstallLockfile: true } : {}),
     description: `Vite+ CLI binary for ${platformArchABI}`,
     repository: cliPackageJson.repository,

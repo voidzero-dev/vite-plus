@@ -7,4 +7,7 @@ steps = [
   { argv = ["vp", "pm", "stage", "publish", "--filter", "vp-stage-workspace-a", "--filter", "vp-stage-workspace-b", "--dry-run", "--registry", "http://127.0.0.1:9", "--", "--ignore-scripts", "--loglevel", "error", "--fetch-retries", "0"], comment = "Repeated filters select both workspaces.", continue-on-failure = true },
   { argv = ["vp", "pm", "stage", "publish", ".", "--recursive", "--filter", "vp-stage-workspace-b", "--dry-run", "--registry", "http://127.0.0.1:9", "--", "--ignore-scripts", "--loglevel", "error", "--fetch-retries", "0"], comment = "An explicit dot target preserves selection, and the filter narrows recursive to b.", continue-on-failure = true },
   { argv = ["vp", "pm", "stage", "publish", "./packages/a", "--dry-run", "--registry", "http://127.0.0.1:9", "--", "--ignore-scripts", "--loglevel", "error", "--fetch-retries", "0"], comment = "An explicit folder without workspace options remains supported.", continue-on-failure = true },
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "npm@11.14.1"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "pm", "stage", "list", "--json"], comment = "Before npm 11.15.0, warn and skip even with machine-readable output." },
+  ["vp", "pm", "stage", "publish", "--dry-run"],
 ]

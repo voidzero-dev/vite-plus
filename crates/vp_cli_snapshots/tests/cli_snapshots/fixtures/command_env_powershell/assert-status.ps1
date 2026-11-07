@@ -24,9 +24,9 @@ if ($? -or $LASTEXITCODE -eq 0) {
 
 $projectDir = Join-Path $PWD 'project with spaces'
 New-Item -ItemType Directory -Path $projectDir | Out-Null
-Set-Content -LiteralPath (Join-Path $projectDir '.node-version') -Value '22.18.0'
+Set-Content -LiteralPath (Join-Path $projectDir '.node-version') -Value '22.23.4'
 vp -C $projectDir env use --no-install *> $null
-if (-not $? -or $LASTEXITCODE -ne 0 -or $env:VP_NODE_VERSION -ne '22.18.0') {
+if (-not $? -or $LASTEXITCODE -ne 0 -or $env:VP_NODE_VERSION -ne '22.23.4') {
     throw "vp -C did not forward a directory containing spaces"
 }
 

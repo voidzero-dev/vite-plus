@@ -6,7 +6,7 @@
 VITE+ - The Unified Toolchain for the Web
 
 ℹ entry: src/index.ts
-ℹ target: node25.7.0
+ℹ target: node26.12.1
 ℹ `exe` option is experimental and may change in future releases.
 ℹ Build start
 ℹ dist/index.mjs  <size> kB │ gzip: <size> kB

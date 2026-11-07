@@ -4,12 +4,12 @@ setlocal
 set "VP_ENV_USE_EVAL_ENABLE=caller-value"
 set "VP_SHELL=caller-value"
 
-call vp-use 20.18.0 --no-install
+call vp-use 20.20.2 --no-install
 if errorlevel 1 (
   echo vp-use with an explicit version failed
   exit /b 1
 )
-if not "%VP_NODE_VERSION%"=="20.18.0" (
+if not "%VP_NODE_VERSION%"=="20.20.2" (
   echo explicit VP_NODE_VERSION mismatch: %VP_NODE_VERSION%
   exit /b 1
 )
@@ -37,7 +37,7 @@ if errorlevel 1 (
   echo vp-use without a version failed
   exit /b 1
 )
-if not "%VP_NODE_VERSION%"=="22.18.0" (
+if not "%VP_NODE_VERSION%"=="22.23.4" (
   echo file-based VP_NODE_VERSION mismatch: %VP_NODE_VERSION%
   exit /b 1
 )
@@ -51,7 +51,7 @@ if not errorlevel 1 (
   echo vp-use did not preserve a failing command status
   exit /b 1
 )
-if not "%VP_NODE_VERSION%"=="22.18.0" (
+if not "%VP_NODE_VERSION%"=="22.23.4" (
   echo failing vp-use changed VP_NODE_VERSION: %VP_NODE_VERSION%
   exit /b 1
 )
