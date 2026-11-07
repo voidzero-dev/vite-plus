@@ -5,12 +5,14 @@ import path from 'node:path';
 import { cac } from 'cac';
 import {
   buildWithConfigs,
+  expandWorkspace,
   resolveUserConfig,
   globalLogger,
   enableDebug,
   type InlineConfig,
   type ResolvedConfig,
   type TsdownHandle,
+  type UserConfig,
 } from 'vite/pack';
 
 import { resolveViteConfig } from './resolve-vite-config.ts';
@@ -157,23 +159,50 @@ cli
         configDeps.add(path.normalize(viteConfig.configFile));
       }
 
+      let handlePromise: Promise<TsdownHandle> | undefined;
+      async function getWatch() {
+        if (!handlePromise) {
+          throw new Error('Cannot control watch before pack config is resolved.');
+        }
+        return (await handlePromise).watch;
+      }
+      const watch: TsdownHandle['watch'] = {
+        restart: async () => (await getWatch()).restart(),
+        close: async () => (await getWatch()).close(),
+      };
       const configs: ResolvedConfig[] = [];
       const packConfigs = Array.isArray(viteConfig?.pack)
         ? viteConfig.pack
         : [viteConfig?.pack ?? {}];
+      let hasWorkspace = false;
       for (const packConfig of packConfigs) {
         const merged = { ...packConfig, ...flags };
-        // Keep postcss/lightningcss external to the dts bundle (see plugin doc)
-        if (merged.dts) {
-          const existingPlugins = Array.isArray(merged.plugins) ? merged.plugins : [];
-          merged.plugins = [...existingPlugins, externalDtsTypeOnlyPlugin()];
+        let buildConfigs: UserConfig[] = [merged];
+        if (merged.workspace) {
+          hasWorkspace = true;
+          const workspace = await expandWorkspace(packConfig, flags, watch, configDeps);
+          workspace.deps.forEach((dep) => configDeps.add(dep));
+          buildConfigs = workspace.configs.filter((config) => !config.workspace || config.entry);
         }
-        const resolvedConfig = await resolveUserConfig(merged, flags, configDeps);
-        resolvedConfig.forEach((config) => config.configDeps.forEach((dep) => configDeps.add(dep)));
-        configs.push(...resolvedConfig);
+        for (const config of buildConfigs) {
+          // Keep postcss/lightningcss external to the dts bundle (see plugin doc)
+          if (config.dts) {
+            const existingPlugins = Array.isArray(config.plugins) ? config.plugins : [];
+            config.plugins = [...existingPlugins, externalDtsTypeOnlyPlugin()];
+          }
+          const resolvedConfig = await resolveUserConfig(config, flags, configDeps);
+          resolvedConfig.forEach((config) =>
+            config.configDeps.forEach((dep) => configDeps.add(dep)),
+          );
+          configs.push(...resolvedConfig);
+        }
       }
 
-      return buildWithConfigs(configs, configDeps, runBuild);
+      if (hasWorkspace && configs.length === 0) {
+        throw new Error('No valid configuration found.');
+      }
+      handlePromise = buildWithConfigs(configs, configDeps, runBuild);
+      return handlePromise;
     }
 
     await runBuild();

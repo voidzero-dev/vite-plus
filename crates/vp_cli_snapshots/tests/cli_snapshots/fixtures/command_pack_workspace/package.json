@@ -1,0 +1,5 @@
+{
+  "name": "pack-workspace-root",
+  "private": true,
+  "type": "module"
+}
