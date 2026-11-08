@@ -258,8 +258,9 @@ rayon = "1.12.0"
 regex = "1.13.0"
 regress = "0.12.0"
 reqwest = { version = "0.13", default-features = false }
-rolldown-notify = "11.0.0"
-rolldown-notify-debouncer-full = "0.8.0"
+rolldown-notify = "11.0.1"
+rolldown-notify-debouncer-full = "0.8.1"
+rolldown-notify-napi = "0.0.3"
 rustc-hash = "2.1.3"
 rustls = { version = "0.23.46", default-features = false, features = ["ring", "std", "tls12"] }
 same-file = "1.0.6"
@@ -282,10 +283,10 @@ supports-color = "3"
 syn = { version = "2", default-features = false }
 tar = { version = "0.4.43", default-features = false }
 temp-env = "0.3.6"
-tempfile = "3.14.0"
+tempfile = "3.27.0"
 terminal_size = "0.4.4"
 test-log = { version = "0.2.18", features = ["trace"] }
-testing_macros = "1.0.1"
+testing_macros = "2.0.0"
 thiserror = "2"
 tokio = { version = "1.52.3", default-features = false }
 tokio-util = "0.7"
@@ -327,7 +328,7 @@ xxhash-rust = "0.8.16"
 zip = { version = "9.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 # oxc crates with the same version
-oxc = { version = "0.156.0", features = [
+oxc = { version = "0.157.0", features = [
   "ast_visit",
   "transformer",
   "minifier",
@@ -339,17 +340,17 @@ oxc = { version = "0.156.0", features = [
   "regular_expression",
   "cfg",
 ] }
-oxc_allocator = { version = "0.156.0", features = ["pool"] }
-oxc_ast = "0.156.0"
-oxc_ecmascript = "0.156.0"
-oxc_parser = "0.156.0"
-oxc_span = "0.156.0"
-oxc_napi = "0.156.0"
-oxc_str = "0.156.0"
-oxc_minify_napi = "0.156.0"
-oxc_parser_napi = "0.156.0"
-oxc_transform_napi = "0.156.0"
-oxc_traverse = "0.156.0"
+oxc_allocator = { version = "0.157.0", features = ["pool"] }
+oxc_ast = "0.157.0"
+oxc_ecmascript = "0.157.0"
+oxc_parser = "0.157.0"
+oxc_span = "0.157.0"
+oxc_napi = "0.157.0"
+oxc_str = "0.157.0"
+oxc_minify_napi = "0.157.0"
+oxc_parser_napi = "0.157.0"
+oxc_transform_napi = "0.157.0"
+oxc_traverse = "0.157.0"
 
 # oxc crates in their own repos
 oxc_index = { version = "5", features = ["rayon", "serde"] }

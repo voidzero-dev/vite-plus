@@ -144,7 +144,7 @@ jobs:
               follow the pinned upstream requirements.
             - After changing tsdown or rolldown-plugin-dts, run
               `node .github/scripts/upgrade-deps.ts --sync-bundled-deps`, then
-              `pnpm install --no-frozen-lockfile`. Core's external `yuku-parser` must
+              `pnpm install --no-frozen-lockfile`. Core's external `yuku` must
               use the exact installed version resolved by the plugin bundled through
               tsdown, so it stays aligned with the bundled Yuku code. Do not replace
               this pin with a version range. The sync command also
