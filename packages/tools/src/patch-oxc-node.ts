@@ -8,12 +8,10 @@
  *
  * This script points the `oxc` dependency at the workspace version, so the binding links
  * one copy of oxc, and adapts an AST predicate for the workspace's Oxc version.
- * It also applies the resolver filesystem optimization until upstream includes it.
  * It is idempotent. Keep it free of package imports: CI runs it right after checkout,
  * before dependencies are installed.
  */
 
-import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -42,30 +40,6 @@ export function setOxcVersion(cargoToml: string, version: string): string {
   return replaceCargoCrateVersion(cargoToml, 'oxc', version);
 }
 
-/** Apply once, and fail without changing source when the pinned upstream drifts. */
-export function applyResolvePatch(rootDir: string, patch: string): boolean {
-  const run = (args: string[]) =>
-    spawnSync('git', ['apply', '--directory=oxc-node', '--whitespace=error', ...args], {
-      cwd: rootDir,
-      input: patch,
-      encoding: 'utf8',
-    });
-  const check = run(['--check']);
-  if (check.status === 0) {
-    const applied = run([]);
-    if (applied.status !== 0) {
-      throw new Error(`[patch-oxc-node] Could not apply resolver patch: ${applied.stderr}`);
-    }
-    return true;
-  }
-  if (run(['--reverse', '--check']).status === 0) {
-    return false;
-  }
-  throw new Error(
-    `[patch-oxc-node] Resolver patch does not match the pinned upstream: ${check.stderr}`,
-  );
-}
-
 export function patchOxcNode(rootDir: string = process.cwd()): void {
   const version = oxcVersion(readFileSync(join(rootDir, 'Cargo.toml'), 'utf-8'), 'Cargo.toml');
   const cargoTomlPath = join(rootDir, OXC_NODE_DIR, 'Cargo.toml');
@@ -86,10 +60,6 @@ export function patchOxcNode(rootDir: string = process.cwd()): void {
   if (patchedSource !== source) {
     writeFileSync(libPath, patchedSource, 'utf-8');
     log('✓ lib.rs: compatible await-using detection');
-  }
-  const patch = readFileSync(new URL('../patches/oxc-node-resolve.patch', import.meta.url), 'utf8');
-  if (applyResolvePatch(rootDir, patch)) {
-    log('✓ resolver filesystem optimization');
   }
 }
 

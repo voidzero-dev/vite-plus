@@ -1,10 +1,6 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { describe, expect, test } from 'vitest';
 
-import { describe, expect, test } from 'vite-plus/test';
-
-import { applyResolvePatch, setOxcVersion } from '../patch-oxc-node.ts';
+import { setOxcVersion } from '../patch-oxc-node.ts';
 
 describe('setOxcVersion', () => {
   const cargoToml = `[dependencies]
@@ -23,41 +19,5 @@ oxc_resolver = { version = "11.24.3" }
 
   test('fails without an oxc dependency', () => {
     expect(() => setOxcVersion('[dependencies]\n', '0.152.0')).toThrow(/`oxc` dependency/);
-  });
-});
-
-describe('applyResolvePatch', () => {
-  const patch = `--- a/src/lib.rs
-+++ b/src/lib.rs
-@@ -1 +1 @@
--original
-+optimized
-`;
-
-  test('applies once to an archive checkout and accepts the already-patched state', () => {
-    const root = mkdtempSync(join(tmpdir(), 'vp-oxc-resolve-patch-'));
-    try {
-      mkdirSync(join(root, 'oxc-node', 'src'), { recursive: true });
-      const source = join(root, 'oxc-node', 'src', 'lib.rs');
-      writeFileSync(source, 'original\n');
-      expect(applyResolvePatch(root, patch)).toBe(true);
-      expect(readFileSync(source, 'utf8')).toBe('optimized\n');
-      expect(applyResolvePatch(root, patch)).toBe(false);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  test('rejects upstream drift without rewriting source', () => {
-    const root = mkdtempSync(join(tmpdir(), 'vp-oxc-resolve-patch-'));
-    try {
-      mkdirSync(join(root, 'oxc-node', 'src'), { recursive: true });
-      const source = join(root, 'oxc-node', 'src', 'lib.rs');
-      writeFileSync(source, 'upstream changed\n');
-      expect(() => applyResolvePatch(root, patch)).toThrow(/pinned upstream/);
-      expect(readFileSync(source, 'utf8')).toBe('upstream changed\n');
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
   });
 });

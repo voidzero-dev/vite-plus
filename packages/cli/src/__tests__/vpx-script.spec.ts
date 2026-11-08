@@ -1,18 +1,9 @@
-import { execFileSync, spawnSync } from 'node:child_process';
-import {
-  chmodSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync,
-} from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { satisfies } from 'verkit';
-import { afterEach, describe, expect, it } from 'vite-plus/test';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { oxcNode } from '../../binding/index.js';
 import {
@@ -281,92 +272,6 @@ describe('packageInvocation', () => {
 });
 
 describe('script hooks', () => {
-  it.each([
-    'missing',
-    'regular',
-    'directory',
-    'malformed',
-    // File symlinks require elevated privileges on Windows.
-    ...(process.platform === 'win32' ? [] : ['symlink', 'dangling']),
-    ...(process.platform !== 'win32' && process.getuid?.() !== 0 ? ['unreadable'] : []),
-  ])('preserves tsconfig discovery diagnostics for a %s entry', (kind) => {
-    const dir = project({
-      'tsconfig.json': '{}',
-      'src/dep.ts': '',
-      'probe.cjs': `
-          const path = require('node:path');
-          const { pathToFileURL } = require('node:url');
-          const { oxcNode } = require(process.argv[2]);
-          const context = {
-            conditions: ['node', 'import'], importAttributes: {},
-            parentURL: pathToFileURL(path.resolve('src/main.ts')).href,
-          };
-          const result = oxcNode.createResolve('./dep.ts', context, (url) => ({ url }));
-          console.log(new URL(result.url).pathname.endsWith('/src/dep.ts'));
-        `,
-    });
-    const config = path.join(dir, 'src/tsconfig.json');
-    if (kind === 'regular' || kind === 'unreadable') {
-      writeFileSync(config, '{}');
-      if (kind === 'unreadable') {
-        chmodSync(config, 0);
-      }
-    } else if (kind === 'malformed') {
-      writeFileSync(config, '{]');
-    } else if (kind === 'directory') {
-      mkdirSync(config);
-    } else if (kind === 'symlink' || kind === 'dangling') {
-      symlinkSync(kind === 'symlink' ? '../tsconfig.json' : 'missing.json', config);
-    }
-    const result = spawnSync(
-      process.execPath,
-      ['probe.cjs', path.join(import.meta.dirname, '../../binding/index.cjs')],
-      { cwd: dir, encoding: 'utf8' },
-    );
-    expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout.trim()).toBe('true');
-    if (kind === 'dangling' || kind === 'malformed' || kind === 'unreadable') {
-      expect(result.stderr.match(/oxc-node: warning:/g)).toHaveLength(1);
-      expect(result.stderr).toContain(kind === 'malformed' ? 'ignoring it' : 'skipping it');
-    } else {
-      expect(result.stderr).toBe('');
-    }
-  });
-
-  it('resolves parentless requests from the current directory after chdir', () => {
-    const dir = project({
-      'first/dep.ts': '',
-      'second/dep.ts': '',
-      'probe.cjs': `
-        const { realpathSync } = require('node:fs');
-        const path = require('node:path');
-        const { fileURLToPath, pathToFileURL } = require('node:url');
-        const { oxcNode } = require(process.argv[2]);
-        const root = realpathSync.native(process.cwd());
-        function resolve(parentURL) {
-          const context = { conditions: ['node', 'import'], importAttributes: {}, parentURL };
-          const result = oxcNode.createResolve('./dep.ts', context, (url) => ({ url }));
-          return path.relative(root, realpathSync.native(fileURLToPath(result.url)));
-        }
-        process.chdir('first');
-        const parent = pathToFileURL(path.resolve('entry.ts')).href;
-        const first = resolve();
-        process.chdir('../second');
-        console.log(JSON.stringify([first, resolve(), resolve(parent)]));
-      `,
-    });
-    const binding = path.join(import.meta.dirname, '../../binding/index.cjs');
-    const output = execFileSync(process.execPath, ['probe.cjs', binding], {
-      cwd: dir,
-      encoding: 'utf8',
-    });
-    expect(JSON.parse(output)).toEqual([
-      path.join('first', 'dep.ts'),
-      path.join('second', 'dep.ts'),
-      path.join('first', 'dep.ts'),
-    ]);
-  });
-
   it('keeps the supported Node.js range in sync with engines.node', () => {
     const pkg = JSON.parse(
       readFileSync(path.join(import.meta.dirname, '../../package.json'), 'utf8'),
