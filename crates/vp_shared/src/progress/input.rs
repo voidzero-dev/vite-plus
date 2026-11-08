@@ -171,18 +171,25 @@ mod sys {
         // ISIG stays on, so Ctrl+\ sends SIGQUIT as well as Ctrl+C sending SIGINT.
         [Signal::SIGINT, Signal::SIGQUIT, Signal::SIGTERM]
             .into_iter()
+            // Keep a disposition someone else chose, such as an ignored SIGINT.
+            .filter(|&signal| is_default(signal))
             .filter_map(|signal| {
                 // SAFETY: the handler only calls async-signal-safe functions.
                 let previous = unsafe { sigaction(signal, &action) }.ok()?;
-                if matches!(previous.handler(), SigHandler::SigDfl) {
-                    return Some((signal, previous));
-                }
-                // Keep a disposition someone else chose, such as an ignored SIGINT.
-                // SAFETY: reinstalls the disposition that was just replaced.
-                let _ = unsafe { sigaction(signal, &previous) };
-                None
+                Some((signal, previous))
             })
             .collect()
+    }
+
+    /// Reads the disposition without replacing it, so a signal arriving now
+    /// still gets the behavior its owner chose.
+    fn is_default(signal: Signal) -> bool {
+        let mut current = MaybeUninit::<libc::sigaction>::uninit();
+        // SAFETY: a null action only writes the current disposition to `current`.
+        unsafe {
+            libc::sigaction(signal as libc::c_int, std::ptr::null(), current.as_mut_ptr()) == 0
+                && current.assume_init().sa_sigaction == libc::SIG_DFL
+        }
     }
 
     extern "C" fn restore_and_reraise(signal: libc::c_int) {
@@ -263,14 +270,17 @@ mod sys {
         unsafe { GetStdHandle(STD_INPUT_HANDLE) }
     }
 
+    /// Clears `SAVED` only after restoring, so a Ctrl+C handler running on
+    /// another thread during release restores too instead of skipping.
     pub(super) fn restore_if_blocked() {
-        let mode = SAVED.swap(0, Ordering::SeqCst);
+        let mode = SAVED.load(Ordering::SeqCst);
         if mode != 0 {
             // SAFETY: plain Win32 calls on this process's stdin handle.
             unsafe {
                 FlushConsoleInputBuffer(stdin());
                 SetConsoleMode(stdin(), mode);
             }
+            let _ = SAVED.compare_exchange(mode, 0, Ordering::SeqCst, Ordering::SeqCst);
         }
     }
 
