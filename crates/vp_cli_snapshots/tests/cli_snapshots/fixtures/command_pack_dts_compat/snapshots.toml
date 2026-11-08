@@ -10,14 +10,13 @@ steps = [
 ]
 
 [[case]]
-name = "command_pack_dts_native_preview"
+name = "command_pack_dts_tsgo_beta"
 vp = "global"
 local-registry = true
 env = { PACK_DTS_GENERATOR = "tsgo" }
-comment = "An explicit tsgo generator uses native-preview with TypeScript 5.9.3. pnpm hoist:false also verifies core declares the optional native-preview peer."
+comment = "An explicit tsgo generator uses the TypeScript 7.1 beta API with pnpm hoist:false."
 steps = [
-  { argv = ["vpt", "json-edit", "package.json", "devDependencies.typescript", "5.9.3"], snapshot = false },
-  { argv = ["vpt", "json-edit", "package.json", "devDependencies.@typescript/native-preview", "7.0.0-dev.20260707.2"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.typescript", "7.1.0-beta"], snapshot = false },
   { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
   ["vp", "pack"],
   ["vpt", "print-file", "dist/index.d.mts"],
