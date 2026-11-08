@@ -14,6 +14,7 @@
  * 6. config.ts: Suppress the native-loader notice and support an explicit root base
  * 7. rolldown.dts.config.ts: Keep Rolldown's runtime chunk out of declaration output
  * 8. plugin.ts: Accept Rolldown's load hook options while preserving Vite's SSR calls
+ * 9. plugins/importAnalysisBuild.ts: Replace Rolldown's complete unique preload markers
  */
 
 import { execFileSync } from 'node:child_process';
@@ -122,6 +123,7 @@ export function brandVite(rootDir: string = process.cwd()): void {
       'plugins/reporter.ts',
       'config.ts',
       'plugin.ts',
+      'plugins/importAnalysisBuild.ts',
     ],
     { cwd: nodeDir },
   );
@@ -277,6 +279,30 @@ export function brandVite(rootDir: string = process.cwd()): void {
     'Accepted Rolldown load options alongside Vite SSR options',
     patchedPlugin === pluginSource ? 'already' : 'patched',
   );
+
+  // 9. Rolldown 1.3 appends a unique 32-character hash to each preload marker.
+  // Replace the whole identifier, while still accepting older unsuffixed markers.
+  const importAnalysisFile = join(nodeDir, 'plugins', 'importAnalysisBuild.ts');
+  const importAnalysisSource = readFileSync(importAnalysisFile, 'utf-8');
+  const markerEnd = 'markerStartPos + preloadMarker.length';
+  if (importAnalysisSource.split(markerEnd).length !== 5) {
+    throw new Error(
+      `[brand-vite] Patch failed in ${importAnalysisFile}: Expected four preload marker offsets.`,
+    );
+  }
+  const patchedImportAnalysis = replaceInSource(
+    importAnalysisFile,
+    importAnalysisSource,
+    "const preloadMarkerRE = new RegExp(preloadMarker, 'g')",
+    `const preloadMarkerRE = new RegExp(\`\${preloadMarker}(?:[a-f0-9]{32})?\`, 'g')
+
+function getPreloadMarkerEnd(code: string, pos: number): number {
+  preloadMarkerRE.lastIndex = pos
+  return pos + preloadMarkerRE.exec(code)![0].length
+}`,
+  ).replaceAll(markerEnd, 'getPreloadMarkerEnd(code, markerStartPos)');
+  writeFileSync(importAnalysisFile, patchedImportAnalysis, 'utf-8');
+  logPatch('plugins/importAnalysisBuild.ts', 'Replaced complete unique preload markers', 'patched');
 
   log('Done!');
 }

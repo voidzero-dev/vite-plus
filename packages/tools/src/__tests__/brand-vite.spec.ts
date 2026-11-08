@@ -77,6 +77,15 @@ const upstreamSources = {
     '}',
     '',
   ].join('\n'),
+  'plugins/importAnalysisBuild.ts': [
+    'export const preloadMarker = `__VITE_PRELOAD__`',
+    "const preloadMarkerRE = new RegExp(preloadMarker, 'g')",
+    'findPreloadMarker(code, markerStartPos + preloadMarker.length)',
+    "s.update(markerStartPos, markerStartPos + preloadMarker.length, '[]')",
+    "s.update(markerStartPos, markerStartPos + preloadMarker.length, 'void 0')",
+    'findPreloadMarker(code, markerStartPos + preloadMarker.length)',
+    '',
+  ].join('\n'),
 };
 
 const upstreamDtsConfig = `export default defineConfig({
@@ -164,6 +173,12 @@ test('branding preserves aligned dependencies and unrelated changes across repea
       const pluginSource = readFileSync(join(nodeDir, 'plugin.ts'), 'utf8');
       expect(pluginSource).toContain('  LoadExtraOptions,\n  LoadResult,');
       expect(pluginSource).toContain('options?: Partial<LoadExtraOptions> & {');
+      const importAnalysisSource = readFileSync(
+        join(nodeDir, 'plugins/importAnalysisBuild.ts'),
+        'utf8',
+      );
+      expect(importAnalysisSource).toContain('${preloadMarker}(?:[a-f0-9]{32})?');
+      expect(importAnalysisSource).not.toContain('markerStartPos + preloadMarker.length');
       const sources = Object.entries(upstreamSources).map(([file, upstream]) => {
         const source = readFileSync(join(nodeDir, file), 'utf8');
         expect(source).not.toBe(upstream);
@@ -197,6 +212,20 @@ test('branding rejects changed load hook options without partially patching plug
   try {
     expect(() => brandVite(root)).toThrow(/Patch failed in .*plugin\.ts/);
     expect(readFileSync(join(nodeDir, 'plugin.ts'), 'utf8')).toBe(source);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('branding rejects changed preload marker offsets without partially patching the file', () => {
+  const source = upstreamSources['plugins/importAnalysisBuild.ts'].replace(
+    'markerStartPos + preloadMarker.length',
+    'markerStartPos + changedMarkerLength',
+  );
+  const { root, nodeDir } = createUpstreamFixture({ 'plugins/importAnalysisBuild.ts': source });
+  try {
+    expect(() => brandVite(root)).toThrow(/Expected four preload marker offsets/);
+    expect(readFileSync(join(nodeDir, 'plugins/importAnalysisBuild.ts'), 'utf8')).toBe(source);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
