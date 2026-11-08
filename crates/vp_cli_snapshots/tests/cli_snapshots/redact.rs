@@ -71,7 +71,7 @@ static THREAD_RE: LazyLock<regex::Regex> =
 // thread counts.
 static CLEANING_COUNT_RE: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"Cleaning \d+ files").unwrap());
-const TS7_WARNING: &str = "warn: TypeScript 7.0 does not yet have a stable API and is experimental. Some options will be unavailable.";
+const TS7_WARNING: &str = "warn: The `tsgo` generator on TypeScript 7.0 is deprecated and will be removed in the next minor. Upgrade to TypeScript 7.1 or later.";
 // Task-cache replay merges stdout and stderr. Only the known compiler warning
 // can move within pack's startup messages; other diagnostics delimit the block.
 static PACK_STARTUP_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
