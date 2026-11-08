@@ -424,6 +424,8 @@ async fn run_pnpm_install(
     cmd.arg(pnpm_entry.as_path())
         .args(args)
         .current_dir(version_dir)
+        // The spinner's raw stdin would be restored by Node when pnpm exits.
+        .stdin(process::Stdio::null())
         .env("CI", "true")
         .env("PATH", path);
 

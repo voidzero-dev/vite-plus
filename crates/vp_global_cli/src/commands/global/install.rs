@@ -538,6 +538,8 @@ async fn install_one(
         .env("npm_config_prefix", install_dir.as_path())
         .env("npm_config_update_notifier", "false")
         .envs(env.into_envs())
+        // The spinner's raw stdin would be restored by Node when npm exits.
+        .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true)

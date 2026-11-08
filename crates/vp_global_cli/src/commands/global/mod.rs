@@ -65,6 +65,8 @@ async fn npm_view(
     let output = Command::new(npm_path.as_path())
         .args(["view", "-g", package_spec, field, "--json"])
         .envs(env.into_envs())
+        // The spinner's raw stdin would be restored by Node when npm exits.
+        .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
