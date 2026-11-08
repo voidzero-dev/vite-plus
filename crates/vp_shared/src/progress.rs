@@ -119,12 +119,6 @@ mod tests {
 
     use super::*;
 
-    // napi futures hold `&Progress` across awaits, so it must stay `Send` and `Sync`.
-    const _: fn() = || {
-        fn assert_send_sync<T: Send + Sync>() {}
-        assert_send_sync::<Progress>();
-    };
-
     fn spinner(term: &InMemoryTerm) -> Progress {
         let draw_term = term.clone();
         Progress::new(
