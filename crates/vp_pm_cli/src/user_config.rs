@@ -154,15 +154,25 @@ pub fn get_config_path() -> Result<AbsolutePathBuf, Error> {
 
 /// Load configuration from disk.
 pub async fn load_config() -> Result<Config, Error> {
-    let config_path = get_config_path()?;
+    Ok(load_config_if_present::<Error>().await?.unwrap_or_default())
+}
+
+/// Load configuration from disk, or `None` when no global install has written it.
+///
+/// Generic over the error so callers on `vp_error::Error` paths can use it too.
+pub(crate) async fn load_config_if_present<E>() -> Result<Option<Config>, E>
+where
+    E: From<std::io::Error> + From<serde_json::Error>,
+{
+    let config_path = vp_shared::EnvConfig::get().dirs.config.join(CONFIG_FILE);
 
     if !tokio::fs::try_exists(&config_path).await.unwrap_or(false) {
-        return Ok(Config::default());
+        return Ok(None);
     }
 
     let content = tokio::fs::read_to_string(&config_path).await?;
     let config: Config = serde_json::from_str(&content)?;
-    Ok(config)
+    Ok(Some(config))
 }
 
 /// Save configuration to disk.

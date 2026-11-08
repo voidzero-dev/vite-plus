@@ -55,6 +55,11 @@ pub enum Error {
     #[error("Package manager {name}@{version} not found on {url}")]
     PackageManagerVersionNotFound { name: Str, version: Str, url: Str },
 
+    #[error(
+        "No usable {0} was found on PATH. Install it, or install the global `vp` CLI so Vite+ can manage it."
+    )]
+    PackageManagerNotInstalled(Str),
+
     #[error(transparent)]
     Semver(#[from] semver::Error),
 

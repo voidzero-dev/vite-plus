@@ -3725,7 +3725,10 @@ export interface DetectWorkspaceResult {
 export declare function documentationUrl(path: string): string;
 
 /**
- * Download a package manager
+ * Download a package manager, or use the one on PATH when no global install manages it.
+ *
+ * See `vp_pm_cli::provide_for_local_cli` for when a download is allowed. The
+ * result describes the system installation when one is used.
  *
  * ## Parameters
  *
@@ -3733,7 +3736,7 @@ export declare function documentationUrl(path: string): string;
  *   - `name`: The name of the package manager
  *   - `version`: The version of the package manager
  *   - `expected_hash`: The expected hash of the package manager
- *   - `cwd`: An absolute directory used to load workspace npm configuration
+ *   - `cwd`: An absolute directory used to load workspace npm configuration and resolve relative PATH entries
  *
  * ## Returns
  *

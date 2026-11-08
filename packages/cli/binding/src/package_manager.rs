@@ -43,7 +43,10 @@ pub fn get_package_manager_override() -> Result<Option<PackageManagerOverride>> 
     ))
 }
 
-/// Download a package manager
+/// Download a package manager, or use the one on PATH when no global install manages it.
+///
+/// See `vp_pm_cli::provide_for_local_cli` for when a download is allowed. The
+/// result describes the system installation when one is used.
 ///
 /// ## Parameters
 ///
@@ -51,7 +54,7 @@ pub fn get_package_manager_override() -> Result<Option<PackageManagerOverride>> 
 ///   - `name`: The name of the package manager
 ///   - `version`: The version of the package manager
 ///   - `expected_hash`: The expected hash of the package manager
-///   - `cwd`: An absolute directory used to load workspace npm configuration
+///   - `cwd`: An absolute directory used to load workspace npm configuration and resolve relative PATH entries
 ///
 /// ## Returns
 ///
@@ -92,31 +95,28 @@ pub async fn download_package_manager(
         }
     };
 
-    let result = if let Some(cwd) = options.cwd {
-        let cwd = AbsolutePathBuf::new(cwd.into()).ok_or(Error::from_reason("invalid cwd"))?;
-        vp_pm_cli::download_package_manager_for_cwd(
-            &cwd,
-            package_manager_type,
-            &options.version,
-            options.expected_hash.as_deref(),
-        )
-        .await
-    } else {
-        vp_pm_cli::download_package_manager(
-            package_manager_type,
-            &options.version,
-            options.expected_hash.as_deref(),
-        )
-        .await
+    let cwd = match options.cwd {
+        Some(cwd) => AbsolutePathBuf::new(cwd.into()).ok_or(Error::from_reason("invalid cwd"))?,
+        None => vt_path::current_dir().map_err(anyhow::Error::from)?,
     };
-    let (install_dir, package_name, version) = result.map_err(anyhow::Error::from)?;
+    let manager = vp_pm_cli::provide_for_local_cli(
+        &cwd,
+        package_manager_type,
+        &options.version,
+        options.expected_hash.as_deref(),
+    )
+    .await
+    .map_err(anyhow::Error::from)?;
+    let bin_prefix = manager.get_bin_prefix();
+    let install_dir =
+        bin_prefix.parent().map_or_else(|| bin_prefix.clone(), |dir| dir.to_absolute_path_buf());
 
     Ok(DownloadPackageManagerResult {
+        package_name: options.name.clone(),
         name: options.name,
         install_dir: install_dir.as_path().to_string_lossy().to_string(),
-        bin_prefix: install_dir.join("bin").as_path().to_string_lossy().to_string(),
-        package_name: package_name.to_string(),
-        version: version.to_string(),
+        bin_prefix: bin_prefix.as_path().to_string_lossy().to_string(),
+        version: manager.get_version().to_owned(),
     })
 }
 
