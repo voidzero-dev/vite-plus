@@ -4,7 +4,8 @@ This comparison uses the default `tsrs@0.22.0-ts7.1.0-beta` integration and an e
 `oxlint-tsgolint@7.0.2005` override. Both use Oxlint `1.91.0` and the same built CLI.
 
 The separate [ecosystem correctness comparison](./tsrs-lint-ecosystem.md) found
-compiler regressions and library differences in representative forks. The performance
+upstream TypeScript `7.1` regressions and library differences in representative forks.
+The exact-version audit found no Rust-port divergence in the reduced cases. The performance
 results below do not establish diagnostic equivalence.
 
 ## Elapsed time
