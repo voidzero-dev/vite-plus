@@ -447,6 +447,7 @@ jobs:
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
           permission-contents: write
           permission-pull-requests: write
+          permission-workflows: write
 
       - name: Close and delete previous PR
         env:
