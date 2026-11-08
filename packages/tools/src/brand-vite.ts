@@ -13,6 +13,7 @@
  * 5. plugins/reporter.ts: Suppress redundant "vite v<version>" native reporter line
  * 6. config.ts: Suppress the native-loader notice and support an explicit root base
  * 7. rolldown.dts.config.ts: Keep Rolldown's runtime chunk out of declaration output
+ * 8. plugin.ts: Accept Rolldown's load hook options while preserving Vite's SSR calls
  */
 
 import { execFileSync } from 'node:child_process';
@@ -120,6 +121,7 @@ export function brandVite(rootDir: string = process.cwd()): void {
       'logger.ts',
       'plugins/reporter.ts',
       'config.ts',
+      'plugin.ts',
     ],
     { cwd: nodeDir },
   );
@@ -249,6 +251,31 @@ export function brandVite(rootDir: string = process.cwd()): void {
         : 'chunks/[name].d.ts'
     },`,
     ),
+  );
+
+  // 8. plugin.ts: Rolldown 1.3 passes rawId and import attributes to load hooks.
+  // Vite's dev server still passes only { ssr }, so the added fields are optional.
+  const pluginFile = join(nodeDir, 'plugin.ts');
+  const pluginSource = readFileSync(pluginFile, 'utf-8');
+  const pluginWithLoadOptions = replaceInSource(
+    pluginFile,
+    pluginSource,
+    '  LoadResult,',
+    '  LoadExtraOptions,\n  LoadResult,',
+  );
+  const patchedPlugin = replaceInSource(
+    pluginFile,
+    pluginWithLoadOptions,
+    '      options?: {\n        ssr?: boolean | undefined\n      },',
+    '      options?: Partial<LoadExtraOptions> & {\n        ssr?: boolean | undefined\n      },',
+  );
+  if (patchedPlugin !== pluginSource) {
+    writeFileSync(pluginFile, patchedPlugin, 'utf-8');
+  }
+  logPatch(
+    'plugin.ts',
+    'Accepted Rolldown load options alongside Vite SSR options',
+    patchedPlugin === pluginSource ? 'already' : 'patched',
   );
 
   log('Done!');

@@ -59,6 +59,24 @@ const upstreamSources = {
     '        createNativeConfigCompatPlugin(nativeIncompatibilities),',
     '',
   ].join('\n'),
+  'plugin.ts': [
+    'import type {',
+    '  LoadResult,',
+    "} from 'rolldown'",
+    'export interface Plugin {',
+    '  load?: ObjectHook<',
+    '    (',
+    '      this: PluginContext,',
+    '      id: string,',
+    '      options?: {',
+    '        ssr?: boolean | undefined',
+    '      },',
+    '    ) => Promise<LoadResult> | LoadResult,',
+    '    { filter?: { id?: StringFilter } }',
+    '  >',
+    '}',
+    '',
+  ].join('\n'),
 };
 
 const upstreamDtsConfig = `export default defineConfig({
@@ -75,7 +93,7 @@ function write(file: string, source: string) {
   writeFileSync(file, source);
 }
 
-function createUpstreamFixture(configSource = upstreamSources['config.ts']): {
+function createUpstreamFixture(sources: Partial<typeof upstreamSources> = {}): {
   root: string;
   nodeDir: string;
   manifest: string;
@@ -87,7 +105,7 @@ function createUpstreamFixture(configSource = upstreamSources['config.ts']): {
   const nodeDir = join(viteDir, 'packages/vite/src/node');
   const git = (...args: string[]) => execFileSync('git', args, { cwd: viteDir, stdio: 'pipe' });
   for (const [file, source] of Object.entries(upstreamSources)) {
-    write(join(nodeDir, file), file === 'config.ts' ? configSource : source);
+    write(join(nodeDir, file), sources[file as keyof typeof upstreamSources] ?? source);
   }
   const manifest = join(viteDir, 'packages/vite/package.json');
   const lockfile = join(viteDir, 'pnpm-lock.yaml');
@@ -143,6 +161,9 @@ test('branding preserves aligned dependencies and unrelated changes across repea
       expect(() => assertViteConfigPatched(configSource)).not.toThrow();
       expect(configSource).toContain('false &&\n        createNativeConfigCompatPlugin');
       expect(configSource).not.toContain('!process.env.VITE_CONFIG_NATIVE_IGNORE_WARNING');
+      const pluginSource = readFileSync(join(nodeDir, 'plugin.ts'), 'utf8');
+      expect(pluginSource).toContain('  LoadExtraOptions,\n  LoadResult,');
+      expect(pluginSource).toContain('options?: Partial<LoadExtraOptions> & {');
       const sources = Object.entries(upstreamSources).map(([file, upstream]) => {
         const source = readFileSync(join(nodeDir, file), 'utf8');
         expect(source).not.toBe(upstream);
@@ -161,10 +182,21 @@ test('branding preserves aligned dependencies and unrelated changes across repea
 
 test('branding validates both config patches before writing config.ts', () => {
   const source = upstreamSources['config.ts'].replace('defaultNodeEnv', 'changedUpstreamParameter');
-  const { root, nodeDir } = createUpstreamFixture(source);
+  const { root, nodeDir } = createUpstreamFixture({ 'config.ts': source });
   try {
     expect(() => brandVite(root)).toThrow(/changed, duplicate, or partial patch anchors/);
     expect(readFileSync(join(nodeDir, 'config.ts'), 'utf8')).toBe(source);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('branding rejects changed load hook options without partially patching plugin.ts', () => {
+  const source = upstreamSources['plugin.ts'].replace('options?: {', 'options: {');
+  const { root, nodeDir } = createUpstreamFixture({ 'plugin.ts': source });
+  try {
+    expect(() => brandVite(root)).toThrow(/Patch failed in .*plugin\.ts/);
+    expect(readFileSync(join(nodeDir, 'plugin.ts'), 'utf8')).toBe(source);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
