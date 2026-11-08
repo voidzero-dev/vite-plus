@@ -169,7 +169,8 @@ mod sys {
             SigSet::empty(),
         );
         // ISIG stays on, so Ctrl+\ sends SIGQUIT as well as Ctrl+C sending SIGINT.
-        [Signal::SIGINT, Signal::SIGQUIT, Signal::SIGTERM]
+        // SIGHUP can arrive from `kill -HUP` while the terminal is still open.
+        [Signal::SIGINT, Signal::SIGQUIT, Signal::SIGTERM, Signal::SIGHUP]
             .into_iter()
             // Keep a disposition someone else chose, such as an ignored SIGINT.
             .filter(|&signal| is_default(signal))
@@ -413,7 +414,7 @@ mod tests {
             unreachable!("signal {signal} did not end the process");
         }
 
-        for signal in [libc::SIGINT, libc::SIGQUIT, libc::SIGTERM] {
+        for signal in [libc::SIGINT, libc::SIGQUIT, libc::SIGTERM, libc::SIGHUP] {
             let pty = openpty(None, None).unwrap();
             let original = tcgetattr(&pty.slave).unwrap();
             let status = Command::new(std::env::current_exe().unwrap())
