@@ -7,6 +7,7 @@ import { expect, test } from 'vitest';
 
 import { brandVite } from '../brand-vite.ts';
 import { assertViteConfigPatched } from '../patch-vite-config.ts';
+import { patchViteImportAnalysis } from '../patch-vite-import-analysis.ts';
 import { alignVendoredVitestDependencies } from '../vendored-vitest.ts';
 
 const upstreamSources = {
@@ -49,6 +50,11 @@ const upstreamSources = {
   'plugins/reporter.ts': [
     "import path from 'node:path'",
     '      logInfo: shouldLogInfo ? (msg) => env.logger.info(msg) : undefined,',
+    '',
+  ].join('\n'),
+  'plugins/importAnalysisBuild.ts': [
+    "const preloadMarkerRE = new RegExp(preloadMarker, 'g')",
+    ...Array(4).fill('markerStartPos + preloadMarker.length,'),
     '',
   ].join('\n'),
   'config.ts': [
@@ -151,6 +157,9 @@ test('branding preserves aligned dependencies and unrelated changes across repea
       expect(pluginSource).toContain('  LoadExtraOptions,');
       expect(pluginSource).toContain('options?: Partial<LoadExtraOptions> & {');
       expect(pluginSource).toContain('ssr?: boolean | undefined');
+      const importAnalysis = readFileSync(join(nodeDir, 'plugins/importAnalysisBuild.ts'), 'utf8');
+      expect(importAnalysis).toContain('(?:[0-9a-f]{32})?');
+      expect(importAnalysis).not.toContain('markerStartPos + preloadMarker.length');
       const dtsConfig = readFileSync(
         join(root, 'vite/packages/vite/rolldown.dts.config.ts'),
         'utf8',
@@ -185,5 +194,16 @@ test('branding validates both config patches before writing config.ts', () => {
     expect(readFileSync(join(nodeDir, 'config.ts'), 'utf8')).toBe(source);
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('preload patch rejects changed upstream anchors', () => {
+  const source = upstreamSources['plugins/importAnalysisBuild.ts'];
+  for (const changed of [
+    source.replace('new RegExp(preloadMarker', 'new RegExp(otherMarker'),
+    source.replace('markerStartPos + preloadMarker.length,', ''),
+    source + 'markerStartPos + preloadMarker.length,',
+  ]) {
+    expect(() => patchViteImportAnalysis(changed)).toThrow('Vite preload marker anchors changed');
   }
 });

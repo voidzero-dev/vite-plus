@@ -14,6 +14,7 @@
  * 6. config.ts: Suppress the native-loader notice and support an explicit root base
  * 7. rolldown.dts.config.ts: Keep Rolldown's runtime chunk out of declaration output
  * 8. plugin.ts: Accept Rolldown's load options while retaining dev-server compatibility
+ * 9. plugins/importAnalysisBuild.ts: Replace complete hashed preload markers
  */
 
 import { execFileSync } from 'node:child_process';
@@ -21,6 +22,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { patchViteConfig } from './patch-vite-config.ts';
+import { patchViteImportAnalysis } from './patch-vite-import-analysis.ts';
 
 const VITE_DIR = 'vite';
 const VITE_NODE_DIR = join(VITE_DIR, 'packages', 'vite', 'src', 'node');
@@ -122,6 +124,7 @@ export function brandVite(rootDir: string = process.cwd()): void {
       'plugins/reporter.ts',
       'config.ts',
       'plugin.ts',
+      'plugins/importAnalysisBuild.ts',
     ],
     { cwd: nodeDir },
   );
@@ -277,6 +280,14 @@ export function brandVite(rootDir: string = process.cwd()): void {
     'Aligned load hook options with Rolldown',
     patchedPlugin === pluginSource ? 'already' : 'patched',
   );
+
+  const importAnalysisFile = join(nodeDir, 'plugins', 'importAnalysisBuild.ts');
+  writeFileSync(
+    importAnalysisFile,
+    patchViteImportAnalysis(readFileSync(importAnalysisFile, 'utf-8')),
+    'utf-8',
+  );
+  logPatch('plugins/importAnalysisBuild.ts', 'Consume complete preload markers', 'patched');
 
   log('Done!');
 }
