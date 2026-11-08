@@ -5,7 +5,7 @@ import path from 'node:path';
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
 import { removeConfigKey } from '../../../binding/index.js';
-import { rewriteMonorepoProject } from '../../migration/migrator.ts';
+import { rewriteMonorepoProject, supportsCatalog } from '../../migration/migrator.ts';
 import { PackageManager, type WorkspaceInfo } from '../../types/index.ts';
 import { editJsonFile } from '../../utils/json.ts';
 import { getScopeFromPackageName } from '../../utils/package.ts';
@@ -162,7 +162,13 @@ export async function executeMonorepoTemplate(
     options?.silent ?? false,
   );
 
-  alignMonorepoTypeScriptVersion(fullPath, appProjectPath, libraryProjectPath);
+  alignMonorepoTypeScriptVersion(
+    fullPath,
+    appProjectPath,
+    libraryProjectPath,
+    workspaceInfo.packageManager,
+    workspaceInfo.downloadPackageManager.version,
+  );
 
   return { exitCode: 0, projectDir: templateInfo.targetDir };
 }
@@ -190,62 +196,127 @@ export function removeNestedLibraryToolConfig(projectPath: string): void {
 }
 
 /**
- * Keep every scaffolded workspace member on the same TypeScript version.
+ * Keep every scaffolded workspace member on the same toolchain versions and,
+ * where supported, point those dependencies at the workspace catalog.
  *
- * The app and library come from independently updated remote templates. If
- * their TypeScript ranges resolve to different versions, `typescript` — an
- * optional peer of vite-plus — resolves differently per member, so package
- * managers either create separate vite-plus peer instances (pnpm) or hoist a
- * compiler the other workspace member did not ask for (npm/Yarn). The library
- * template is the compatibility baseline because its declaration build may
- * require a newer compiler, so the app adopts its TypeScript range instead of
- * silently downgrading the library. The workspace catalog entry follows the
- * same baseline so members that reference `typescript: "catalog:"` (e.g. a
- * later `vite:generator` scaffold) stay on the workspace's compiler.
+ * The app and library come from independently updated remote templates. The
+ * library is the compatibility baseline for TypeScript, and its Node types and
+ * compiler declarations become the catalog versions for catalog-capable PMs.
  */
 export function alignMonorepoTypeScriptVersion(
   workspaceRootPath: string,
   appProjectPath: string,
   libraryProjectPath: string,
+  packageManager = PackageManager.pnpm,
+  packageManagerVersion = '12.0.0',
 ): void {
-  const libraryPackage = JSON.parse(
-    fs.readFileSync(path.join(libraryProjectPath, 'package.json'), 'utf8'),
-  ) as {
+  const appPackagePath = path.join(appProjectPath, 'package.json');
+  const libraryPackagePath = path.join(libraryProjectPath, 'package.json');
+  const libraryPackage = JSON.parse(fs.readFileSync(libraryPackagePath, 'utf8')) as {
+    dependencies?: Record<string, string>;
     devDependencies?: Record<string, string>;
+    optionalDependencies?: Record<string, string>;
+    peerDependencies?: Record<string, string>;
   };
   const typescriptVersion = libraryPackage.devDependencies?.typescript;
-  if (!typescriptVersion) {
+  const catalogCapable = supportsCatalog(packageManager, packageManagerVersion, true);
+
+  let nodeTypesVersion: string | undefined;
+  for (const field of [
+    'devDependencies',
+    'dependencies',
+    'optionalDependencies',
+    'peerDependencies',
+  ] as const) {
+    const version = libraryPackage[field]?.['@types/node'];
+    if (version) {
+      nodeTypesVersion = version;
+      break;
+    }
+  }
+
+  if (typescriptVersion) {
+    editJsonFile<{ devDependencies?: Record<string, string> }>(appPackagePath, (pkg) => {
+      if (
+        pkg.devDependencies?.typescript &&
+        pkg.devDependencies.typescript !== typescriptVersion
+      ) {
+        pkg.devDependencies.typescript = typescriptVersion;
+        return pkg;
+      }
+      return undefined;
+    });
+  }
+
+  const catalogVersions: Record<string, string> = {};
+  if (typescriptVersion) {
+    catalogVersions.typescript = typescriptVersion;
+  }
+  if (nodeTypesVersion) {
+    catalogVersions['@types/node'] = nodeTypesVersion;
+  }
+
+  const catalogNames = new Set<string>();
+  const catalogFile =
+    packageManager === PackageManager.pnpm
+      ? 'pnpm-workspace.yaml'
+      : packageManager === PackageManager.yarn
+        ? '.yarnrc.yml'
+        : undefined;
+  if (catalogCapable && catalogFile) {
+    const catalogPath = path.join(workspaceRootPath, catalogFile);
+    if (fs.existsSync(catalogPath)) {
+      const workspaceConfig = readYamlFile(catalogPath) as {
+        catalog?: Record<string, unknown>;
+      } | null;
+      for (const [name, version] of Object.entries(catalogVersions)) {
+        if (workspaceConfig?.catalog?.[name] !== undefined) {
+          catalogNames.add(name);
+          editYamlFile(catalogPath, (doc) => {
+            doc.setIn(['catalog', name], version);
+          });
+        }
+      }
+      if (!typescriptVersion && workspaceConfig?.catalog?.typescript !== undefined) {
+        editYamlFile(catalogPath, (doc) => {
+          doc.deleteIn(['catalog', 'typescript']);
+        });
+      }
+      if (!nodeTypesVersion && workspaceConfig?.catalog?.['@types/node'] !== undefined) {
+        editYamlFile(catalogPath, (doc) => {
+          doc.deleteIn(['catalog', '@types/node']);
+        });
+      }
+    }
+  }
+
+  if (!catalogCapable) {
     return;
   }
 
-  editJsonFile<{ devDependencies?: Record<string, string> }>(
-    path.join(appProjectPath, 'package.json'),
-    (pkg) => {
-      if (
-        !pkg.devDependencies?.typescript ||
-        pkg.devDependencies.typescript === typescriptVersion
-      ) {
-        return undefined;
+  const packagePaths = [appPackagePath, libraryPackagePath];
+  for (const packagePath of packagePaths) {
+    editJsonFile<{
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+      optionalDependencies?: Record<string, string>;
+      peerDependencies?: Record<string, string>;
+    }>(packagePath, (pkg) => {
+      let changed = false;
+      for (const field of [
+        'dependencies',
+        'devDependencies',
+        'optionalDependencies',
+        'peerDependencies',
+      ] as const) {
+        for (const name of catalogNames) {
+          if (pkg[field]?.[name] !== undefined && pkg[field][name] !== 'catalog:') {
+            pkg[field][name] = 'catalog:';
+            changed = true;
+          }
+        }
       }
-      pkg.devDependencies.typescript = typescriptVersion;
-      return pkg;
-    },
-  );
-
-  for (const catalogFile of ['pnpm-workspace.yaml', '.yarnrc.yml']) {
-    const catalogPath = path.join(workspaceRootPath, catalogFile);
-    if (!fs.existsSync(catalogPath)) {
-      continue;
-    }
-    const workspaceConfig = readYamlFile(catalogPath) as {
-      catalog?: Record<string, unknown>;
-    } | null;
-    const catalogEntry = workspaceConfig?.catalog?.typescript;
-    if (catalogEntry === undefined || catalogEntry === typescriptVersion) {
-      continue;
-    }
-    editYamlFile(catalogPath, (doc) => {
-      doc.setIn(['catalog', 'typescript'], typescriptVersion);
+      return changed ? pkg : undefined;
     });
   }
 }
