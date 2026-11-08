@@ -32,7 +32,7 @@ pub use dispatch::{
 pub use env_forbidden::ensure_managed_package_manager_allowed;
 pub use error::Error;
 pub use lifecycle_env::LifecycleEnvContext;
-pub use local_cli::{managed_for_local_cli, provide_for_local_cli};
+pub use local_cli::{is_available_for_local_cli, managed_for_local_cli, provide_for_local_cli};
 pub use package_manager::{
     EnvironmentPackageManagerResolution, PackageManager, PackageManagerBuilder,
     PackageManagerResolution, PackageManagerSource, PackageManagerType, VERIFIED_NAMESPACE,
