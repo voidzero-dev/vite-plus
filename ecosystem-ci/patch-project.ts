@@ -106,6 +106,19 @@ if (project === 'rollipop') {
   );
 }
 
+if (project === 'vp-config') {
+  // This pinned fixture uses TypeScript 5.9 and an old native-preview package.
+  // The bundled declaration plugin now resolves tsgo from `typescript`, so use
+  // the installed TypeScript compiler to keep generating declarations.
+  const configPath = join(repoRoot, 'tsdown.config.ts');
+  const config = await readFile(configPath, 'utf-8');
+  const tsgoOption = '    tsgo: true';
+  if (config.split(tsgoOption).length !== 2) {
+    throw new Error(`vp-config patch: expected one \`tsgo: true\` in ${configPath}`);
+  }
+  await writeFile(configPath, config.replace(tsgoOption, "    generator: 'tsc'"), 'utf-8');
+}
+
 if (project === 'vinext') {
   // vinext sets `minimumReleaseAge` (24h) which blocks fresh upstream upgrades
   // (e.g. oxc 0.129.0 published <24h ago). Disable it for the ecosystem run so
