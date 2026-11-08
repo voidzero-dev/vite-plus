@@ -11,7 +11,10 @@ mod redact;
 
 use redact::{redact_output, redact_version_probe_output};
 
-const TS7_WARNING: &str = "warn: TypeScript 7.0 does not yet have a stable API and is experimental. Some options will be unavailable.";
+const TS7_WARNINGS: [&str; 2] = [
+    "warn: TypeScript 7.0 does not yet have a stable API and is experimental. Some options will be unavailable.",
+    "warn: The `tsgo` generator on TypeScript 7.0 is deprecated and will be removed in the next minor. Upgrade to TypeScript 7.1 or later.",
+];
 
 #[test]
 fn normalizes_pack_warning_interleavings_without_dropping_messages() {
@@ -21,17 +24,19 @@ fn normalizes_pack_warning_interleavings_without_dropping_messages() {
         "ℹ Build start",
         "ℹ Emit types with typescript@7.0.2",
     ];
-    for copies in [1, 2] {
-        for position in 0..=startup.len() {
-            for ending in ["", "\n"] {
-                let mut lines = startup.to_vec();
-                lines.splice(position..position, std::iter::repeat_n(TS7_WARNING, copies));
-                let mut expected = startup.to_vec();
-                expected.splice(3..3, std::iter::repeat_n(TS7_WARNING, copies));
-                let expected = format!("{}{}", expected.join("\n"), ending);
-                let input = format!("{}{}", lines.join("\n"), ending);
-                for input in [input.clone(), input.replace('\n', "\r\n")] {
-                    assert_eq!(redact_output(input, &[], true), expected);
+    for warning in TS7_WARNINGS {
+        for copies in [1, 2] {
+            for position in 0..=startup.len() {
+                for ending in ["", "\n"] {
+                    let mut lines = startup.to_vec();
+                    lines.splice(position..position, std::iter::repeat_n(warning, copies));
+                    let mut expected = startup.to_vec();
+                    expected.splice(3..3, std::iter::repeat_n(warning, copies));
+                    let expected = format!("{}{}", expected.join("\n"), ending);
+                    let input = format!("{}{}", lines.join("\n"), ending);
+                    for input in [input.clone(), input.replace('\n', "\r\n")] {
+                        assert_eq!(redact_output(input, &[], true), expected);
+                    }
                 }
             }
         }
@@ -40,17 +45,33 @@ fn normalizes_pack_warning_interleavings_without_dropping_messages() {
 
 #[test]
 fn keeps_pack_warnings_outside_a_complete_startup_block_in_place() {
-    for lines in [
-        vec![TS7_WARNING, "ℹ Emit types with typescript@7.0.2"],
-        vec!["ℹ entry: a.ts", TS7_WARNING, "warn: plugin failed", "ℹ Build start"],
-        vec!["ℹ entry: a.ts", TS7_WARNING, "", "ℹ Build start"],
-        vec!["ℹ entry: a.ts", TS7_WARNING, "$ vp pack", "ℹ Build start"],
-        vec!["ℹ entry: a.ts", TS7_WARNING, "ℹ Build start", "ℹ Build start"],
-        vec!["ℹ entry: a.ts", TS7_WARNING, "ℹ entry: b.ts", "ℹ Build start"],
-        vec!["ℹ entry: a.ts", "warn: another warning", "ℹ Build start"],
-    ] {
-        let input = lines.join("\n");
-        assert_eq!(redact_output(input.clone(), &[], true), input);
+    for warning in TS7_WARNINGS {
+        for lines in [
+            vec![warning, "ℹ Emit types with typescript@7.0.2"],
+            vec!["ℹ entry: a.ts", warning, "warn: plugin failed", "ℹ Build start"],
+            vec!["ℹ entry: a.ts", warning, "", "ℹ Build start"],
+            vec!["ℹ entry: a.ts", warning, "$ vp pack", "ℹ Build start"],
+            vec!["ℹ entry: a.ts", warning, "ℹ Build start", "ℹ Build start"],
+            vec!["ℹ entry: a.ts", warning, "ℹ entry: b.ts", "ℹ Build start"],
+            vec!["ℹ entry: a.ts", "warn: another warning", "ℹ Build start"],
+        ] {
+            let input = lines.join("\n");
+            assert_eq!(redact_output(input.clone(), &[], true), input);
+        }
+    }
+}
+
+#[test]
+fn preserves_distinct_pack_warnings_and_their_order() {
+    for warnings in [TS7_WARNINGS, [TS7_WARNINGS[1], TS7_WARNINGS[0]]] {
+        let [first, second] = warnings;
+        let input = format!(
+            "{first}\nℹ entry: a.ts\nℹ Build start\nℹ Emit types with typescript@7.0.2\n{second}\n"
+        );
+        let expected = format!(
+            "ℹ entry: a.ts\nℹ Build start\n{first}\n{second}\nℹ Emit types with typescript@7.0.2\n"
+        );
+        assert_eq!(redact_output(input, &[], true), expected);
     }
 }
 

@@ -71,13 +71,16 @@ static THREAD_RE: LazyLock<regex::Regex> =
 // thread counts.
 static CLEANING_COUNT_RE: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"Cleaning \d+ files").unwrap());
-const TS7_WARNING: &str = "warn: TypeScript 7.0 does not yet have a stable API and is experimental. Some options will be unavailable.";
-// Task-cache replay merges stdout and stderr. Only the known compiler warning
+const TS7_WARNINGS: [&str; 2] = [
+    "warn: TypeScript 7.0 does not yet have a stable API and is experimental. Some options will be unavailable.",
+    "warn: The `tsgo` generator on TypeScript 7.0 is deprecated and will be removed in the next minor. Upgrade to TypeScript 7.1 or later.",
+];
+// Task-cache replay merges stdout and stderr. Only these known compiler warnings
 // can move within pack's startup messages; other diagnostics delimit the block.
 static PACK_STARTUP_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(&format!(
         r"(?m)(?:^(?:ℹ (?:entry: [^\n]*|tsconfig: [^\n]*|Build start|Emit types with typescript@[^\n]*)|{})(?:\n|$))+",
-        regex::escape(TS7_WARNING)
+        TS7_WARNINGS.map(regex::escape).join("|")
     ))
     .unwrap()
 });
@@ -760,7 +763,7 @@ pub fn redact_output(
         output = sort_diagnostic_blocks(&output);
     }
 
-    if output.contains(TS7_WARNING) {
+    if TS7_WARNINGS.iter().any(|warning| output.contains(warning)) {
         output = PACK_STARTUP_RE
             .replace_all(&output, |caps: &regex::Captures| normalize_pack_startup(&caps[0]))
             .into_owned();
@@ -788,21 +791,22 @@ pub fn redact_version_probe_output(output: String) -> String {
 #[expect(clippy::disallowed_types, reason = "String return required by regex replace_all API")]
 fn normalize_pack_startup(block: &str) -> String {
     let lines: Vec<_> = block.split('\n').collect();
-    let warnings = lines.iter().filter(|&&line| line == TS7_WARNING).count();
+    let warnings: Vec<_> =
+        lines.iter().copied().filter(|line| TS7_WARNINGS.contains(line)).collect();
     let starts = lines.iter().filter(|&&line| line == "ℹ Build start").count();
     let entries = lines.iter().filter(|line| line.starts_with("ℹ entry: ")).count();
-    if warnings == 0 || starts != 1 || entries != 1 {
+    if warnings.is_empty() || starts != 1 || entries != 1 {
         return block.to_owned();
     }
 
     let mut ordered = Vec::with_capacity(lines.len());
     for line in lines {
-        if line == TS7_WARNING {
+        if TS7_WARNINGS.contains(&line) {
             continue;
         }
         ordered.push(line);
         if line == "ℹ Build start" {
-            ordered.extend(std::iter::repeat_n(TS7_WARNING, warnings));
+            ordered.extend(warnings.iter().copied());
         }
     }
     ordered.join("\n")
