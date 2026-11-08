@@ -1,0 +1,7 @@
+{
+  "name": "@example/vite-plugin-demo",
+  "private": true,
+  "devDependencies": {
+    "vite": "^8.0.0"
+  }
+}

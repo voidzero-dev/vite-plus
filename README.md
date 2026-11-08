@@ -1,10 +1,9 @@
 <p align="center">
-  <a href="https://viteplus.dev" target="_blank" rel="noopener noreferrer">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="./docs/public/logo-dark.svg">
-      <source media="(prefers-color-scheme: light)" srcset="./docs/public/logo.svg">
-      <img alt="Vite+" src="./docs/public/logo.svg" height="60">
-    </picture>
+  <a href="https://viteplus.dev/#gh-light-mode-only" target="_blank" rel="noopener noreferrer">
+    <img alt="Vite+" src="./docs/public/logo.svg" width="412">
+  </a>
+  <a href="https://viteplus.dev/#gh-dark-mode-only" target="_blank" rel="noopener noreferrer">
+    <img alt="Vite+" src="./docs/public/logo-dark.svg" width="412">
   </a>
 </p>
 

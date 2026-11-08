@@ -50,9 +50,7 @@ runs:
         # This also applies to the action's post step, which creates the archive.
         ZSTD_CLEVEL: '9'
       with:
-        # Existing entries are immutable and can lack dependencies removed
-        # by v2.9.1. Start a new namespace so the corrected action saves them.
-        prefix-key: v1-rust
+        prefix-key: v2-rust
         shared-key: ${{ inputs.cache-key }}
         save-if: ${{ inputs.save-cache == 'true' }}
         cache-workspace-crates: ${{ inputs.cache-workspace-crates }}

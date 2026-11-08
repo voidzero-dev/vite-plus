@@ -28,6 +28,9 @@ use crate::{
     shim,
 };
 
+mod bootstrap;
+pub use bootstrap::bootstrap_pnpm;
+
 #[derive(Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 struct PackageJson {
@@ -1401,6 +1404,7 @@ async fn download_package_manager_with_config(
         version_or_latest,
         expected_hash,
         npm_config,
+        None,
     )
     .await?;
     #[cfg(windows)]
@@ -1459,6 +1463,7 @@ async fn download_package_manager_inner(
     version_or_latest: &str,
     expected_hash: Option<&str>,
     npm_config: &NpmConfig,
+    tarball_url: Option<&str>,
 ) -> Result<(AbsolutePathBuf, Str, Str), Error> {
     let version = resolve_package_manager_version_with_config(
         cwd,
@@ -1507,7 +1512,9 @@ async fn download_package_manager_inner(
             .await;
     }
 
-    let tgz_url = npm_config.package_tgz_url(&package_name, &version);
+    let tgz_url = tarball_url
+        .map(Str::from)
+        .unwrap_or_else(|| npm_config.package_tgz_url(&package_name, &version));
     // <DATA>/package_manager/pnpm/10.0.0
     let target_dir = data_dir.join("package_manager").join(&bin_name).join(&version);
     let install_dir = target_dir.join(&bin_name);

@@ -1,0 +1,12 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": "..",
+    "paths": {
+      "@value": [
+        "./src/config-worker-one.ts"
+      ]
+    },
+    "useDefineForClassFields": false
+  }
+}

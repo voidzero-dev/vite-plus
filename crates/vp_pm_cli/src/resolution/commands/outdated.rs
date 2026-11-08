@@ -60,35 +60,35 @@ pub struct OutdatedArgs {
     pub(crate) format: Option<OutdatedFormat>,
 
     /// Check recursively across all workspaces
-    #[arg(short = 'r', long, not_supported(npm < "7.14.0", yarn))]
+    #[arg(short = 'r', long, conflicts_with = "global", not_supported(npm < "7.14.0", yarn))]
     pub(crate) recursive: bool,
 
     /// Filter packages in monorepo
-    #[arg(long, value_name = "PATTERN", not_supported(npm < "7.14.0", yarn))]
+    #[arg(long, value_name = "PATTERN", conflicts_with = "global", not_supported(npm < "7.14.0", yarn))]
     pub(crate) filter: Vec<String>,
 
     /// Include workspace root
-    #[arg(short = 'w', long, not_supported(npm < "8.1.0", yarn, bun))]
+    #[arg(short = 'w', long, conflicts_with = "global", not_supported(npm < "8.1.0", yarn, bun))]
     pub(crate) workspace_root: bool,
 
     /// Only production and optional dependencies
-    #[arg(short = 'P', long, not_supported(npm < "7", yarn))]
+    #[arg(short = 'P', long, conflicts_with = "global", not_supported(npm < "7", yarn))]
     pub(crate) prod: bool,
 
     /// Include dev dependencies
-    #[arg(short = 'D', long, not_supported(yarn, bun))]
+    #[arg(short = 'D', long, conflicts_with = "global", not_supported(yarn, bun))]
     pub(crate) dev: bool,
 
     /// Exclude optional dependencies
-    #[arg(long, not_supported(npm < "7", yarn))]
+    #[arg(long, conflicts_with = "global", not_supported(npm < "7", yarn))]
     pub(crate) no_optional: bool,
 
     /// Only show compatible versions
-    #[arg(long, not_supported(npm, yarn, bun))]
+    #[arg(long, conflicts_with = "global", not_supported(npm, yarn, bun))]
     pub(crate) compatible: bool,
 
     /// Sort results by field
-    #[arg(long, value_name = "FIELD", not_supported(npm, yarn, bun))]
+    #[arg(long, value_name = "FIELD", conflicts_with = "global", not_supported(npm, yarn, bun))]
     pub(crate) sort_by: Option<String>,
 
     /// Check globally installed packages

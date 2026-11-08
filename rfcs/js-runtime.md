@@ -20,7 +20,7 @@ The PackageManager implementation in `vp_pm_cli` successfully handles automatic 
 
 ## Non-Goals (Initial Version)
 
-- ~~Configuration auto-detection (no reading from package.json, .nvmrc, etc.)~~ **Now supported via `.node-version`, `devEngines.runtime`, and `engines.node`**
+- ~~Configuration auto-detection (no reading from package.json, .nvmrc, etc.)~~ **Now supported via `.node-version`, `devEngines.runtime`, `engines.node`, and `.nvmrc`**
 - Managing multiple runtime versions simultaneously
 - Providing a version manager CLI (like nvm/fnm)
 - Supporting custom/unofficial Node.js builds

@@ -18,11 +18,15 @@ def prepend [] { }
 def append [] { }
 def "str starts-with" [] { }
 def "str replace" [] { }
+def "str join" [] { }
+def describe [] { }
 def "path expand" [] { }
 def "path exists" [] { }
 def "from tsv" [] { }
 def rename [] { }
 def any [] { }
+def which [] { }
+def is-empty [] { }
 def fish [] { }
 
 source env.nu

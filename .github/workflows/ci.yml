@@ -43,8 +43,19 @@ jobs:
       # as .md files (fixtures/**/snapshots/*.md), which the code filter's
       # markdown exclusion would otherwise classify as docs-only.
       code-changed: ${{ steps.filter.outputs.code == 'true' || steps.filter.outputs.snapshots == 'true' }}
+      node-version: ${{ steps.node-version.outputs.version }}
+      homebrew-published: ${{ steps.homebrew.outputs.required }}
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - name: Read Node.js version
+        id: node-version
+        run: |
+          node_version=$(< .node-version)
+          if [[ ! "$node_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo '::error::.node-version must contain an exact Node.js version'
+            exit 1
+          fi
+          echo "version=$node_version" >> "$GITHUB_OUTPUT"
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
         with:
@@ -55,9 +66,34 @@ jobs:
               - '!docs/**'
               - '!.github/workflows/deploy-docs-preview.yml'
               - '!.github/workflows/deploy-docs.yml'
-              - '!netlify.toml'
             snapshots:
               - 'crates/vp_cli_snapshots/**'
+            homebrew:
+              - 'HomebrewFormula/**'
+
+      - name: Check whether published Homebrew tests are required
+        id: homebrew
+        if: github.event_name == 'pull_request'
+        env:
+          RELEASE_PR: ${{ startsWith(github.head_ref, 'release/homebrew-v') }}
+          FORMULA_CHANGED: ${{ steps.filter.outputs.homebrew }}
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          const formula = fs.readFileSync('HomebrewFormula/vp.rb', 'utf8');
+          const enabled = !/^\s*disable!\s/m.test(formula);
+          const required = process.env.RELEASE_PR === 'true' ||
+            (process.env.FORMULA_CHANGED === 'true' && enabled);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `required=${required}\n`);
+          JS
+
+  homebrew-published:
+    name: Homebrew release
+    needs: detect-changes
+    if: needs.detect-changes.outputs.homebrew-published == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/test-homebrew-published.yml
 
   docs-fmt:
     name: Docs format check
@@ -66,7 +102,7 @@ jobs:
     # them (code changes get `vp check` in cli-e2e-test). The required `done`
     # job waits for this check and propagates failures.
     if: needs.detect-changes.outputs.code-changed == 'false'
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-linux-x64-default
     timeout-minutes: 20
     permissions:
       contents: read
@@ -120,7 +156,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          - os: namespace-profile-linux-x64-default
             target: x86_64-unknown-linux-gnu
           - os: namespace-profile-mac-default
             target: aarch64-apple-darwin
@@ -152,7 +188,7 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.code-changed == 'true'
     name: Build Windows tests
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-linux-x64-default
     timeout-minutes: 20
     env:
       XWIN_ACCEPT_LICENSE: '1'
@@ -279,10 +315,10 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.code-changed == 'true'
     name: Test (Linux x64 musl)
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-linux-x64-default
     timeout-minutes: 20
     container:
-      image: node:26.12.1-alpine
+      image: node:${{ needs.detect-changes.outputs.node-version }}-alpine
     env:
       # Mirrors of official Node.js releases do not provide musl archives.
       VP_NODE_DIST_MIRROR: https://unofficial-builds.nodejs.org/download/release
@@ -296,7 +332,7 @@ jobs:
       # dynamically anyway, so matching here is correct.
       # Must mirror `.cargo/config.toml` rustflags — RUSTFLAGS env overrides
       # both [build] and [target.*] levels.
-      RUSTFLAGS: --cfg tokio_unstable -C link-args=-Wl,--warn-unresolved-symbols -C target-feature=-crt-static
+      RUSTFLAGS: --cfg tokio_unstable -C target-feature=-crt-static
     steps:
       - name: Install Alpine dependencies
         shell: sh {0}
@@ -338,7 +374,7 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.code-changed == 'true'
     name: Lint
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-linux-x64-default
     timeout-minutes: 20
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
@@ -391,7 +427,7 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.code-changed == 'true'
     name: Build Windows CLI binaries
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-linux-x64-default
     timeout-minutes: 20
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
@@ -411,7 +447,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          - os: namespace-profile-linux-x64-default
             target: x86_64-unknown-linux-gnu
             test-node: 22.18.0
           - os: namespace-profile-mac-default
@@ -970,7 +1006,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          - os: namespace-profile-linux-x64-default
             target: x86_64-unknown-linux-gnu
           - os: namespace-profile-mac-default
             target: aarch64-apple-darwin
@@ -1056,10 +1092,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, namespace-profile-mac-default]
+        os: [namespace-profile-linux-x64-default, namespace-profile-mac-default]
         shard: [1, 2, 3]
         include:
-          - os: ubuntu-latest
+          - os: namespace-profile-linux-x64-default
             target: x86_64-unknown-linux-gnu
           - os: namespace-profile-mac-default
             target: aarch64-apple-darwin
@@ -1121,7 +1157,7 @@ jobs:
       - name: Install Global CLI vp
         run: pnpm bootstrap-cli:ci
 
-      # Seed the repository pin, default LTS, and shared fixture versions before
+      # Seed the repository pin, aliases, and shared fixture selectors before
       # command timers start. Keep the version list shared across platforms.
       - name: Prewarm managed runtimes
         run: bash .github/scripts/prewarm-node.sh "$HOME/.vite-plus/bin/vp"
@@ -1135,10 +1171,27 @@ jobs:
           export VP_SNAP_SH_BIN="$(command -v sh)"
           export VP_SNAP_BASH_BIN="$(command -v bash)"
           export VP_SNAP_ZSH_BIN="$(command -v zsh)"
-          VP_SNAP_GLOBAL_VP="$HOME/.vite-plus/bin/vp" \
-          VP_SNAP_JS_RUNTIME_DIR="$HOME/.vite-plus/js_runtime" \
-          VP_SNAP_FISH_BIN="$(command -v fish)" \
-          VP_SNAP_NU_BIN="$(command -v nu)" \
+          export VP_SNAP_GLOBAL_VP="$HOME/.vite-plus/bin/vp"
+          export VP_SNAP_JS_RUNTIME_DIR="$HOME/.vite-plus/js_runtime"
+          # Missing optional shells must leave their overrides unset.
+          if VP_SNAP_FISH_BIN="$(command -v fish)"; then
+            export VP_SNAP_FISH_BIN
+          else
+            unset VP_SNAP_FISH_BIN
+          fi
+          if VP_SNAP_NU_BIN="$(command -v nu)"; then
+            export VP_SNAP_NU_BIN
+          else
+            unset VP_SNAP_NU_BIN
+          fi
+          # Fetch pinned package-manager archives before command timers start.
+          # Cases still download from the registry into their isolated homes.
+          VP_SNAP_PREWARM_MANIFEST="$RUNNER_TEMP/snapshot-prewarm.json" \
+            ./target/snapshot-tests/cli_snapshots --list > "$RUNNER_TEMP/snapshot-test-list.txt"
+          node packages/tools/src/local-npm-registry.ts \
+            --snapshot-cache "$VP_SNAP_REGISTRY_CACHE_DIR" \
+            --request-log "$VP_SNAP_ARTIFACTS_DIR/prewarm/registry.jsonl" \
+            --prewarm-manifest "$RUNNER_TEMP/snapshot-prewarm.json"
           ./target/snapshot-tests/cli_snapshots --test-threads 8
         env:
           RUST_BACKTRACE: '1'
@@ -1148,6 +1201,7 @@ jobs:
           CARGO_BIN_EXE_vpt: ${{ github.workspace }}/target/snapshot-tests/vpt
           VP_SNAP_SHARD: ${{ matrix.shard }}/3
           VP_SNAP_ARTIFACTS_DIR: ${{ runner.temp }}/snapshot-artifacts
+          VP_SNAP_REGISTRY_CACHE_DIR: ${{ runner.temp }}/snapshot-registry-cache
 
       - name: Upload snapshot diagnostics and timings
         if: ${{ !cancelled() }}
@@ -1243,7 +1297,7 @@ jobs:
         shell: bash
         run: pnpm bootstrap-cli:ci
 
-      # Seed the repository pin, default LTS, and shared fixture versions before
+      # Seed the repository pin, aliases, and shared fixture selectors before
       # command timers start. Keep the version list shared across platforms.
       - name: Prewarm managed runtimes
         shell: bash
@@ -1289,7 +1343,7 @@ jobs:
             VP_SNAP_PREWARM_MANIFEST="$RUNNER_TEMP/snapshot-prewarm.json" \
             cargo-nextest nextest list --archive-file windows-snapshot-tests.tar.zst --workspace-remap . \
             > "$RUNNER_TEMP/snapshot-test-list.txt"
-          # Derive Bun archives from the same fixtures as the test list, so
+          # Derive package-manager archives from the same fixtures as the test list, so
           # version changes need no matching CI edit. Only response bytes are shared.
           node packages/tools/src/local-npm-registry.ts \
             --snapshot-cache "$VP_SNAP_REGISTRY_CACHE_DIR" \
@@ -1355,7 +1409,7 @@ jobs:
     name: CLI E2E test (Linux x64 musl)
     needs:
       - download-previous-rolldown-binaries
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-linux-x64-default
     timeout-minutes: 20
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
@@ -1388,13 +1442,14 @@ jobs:
           # Mirrors of official Node.js releases do not provide musl archives.
           VP_NODE_DIST_MIRROR: https://unofficial-builds.nodejs.org/download/release
         run: |
+          node_version=$(< .node-version)
           docker run --rm \
             -e CI=true \
             -e GITHUB_ACTIONS=true \
             -e VP_NODE_DIST_MIRROR \
             -v "${{ github.workspace }}:/workspace" \
             -w /workspace \
-            node:22.23.4-alpine sh -ec "
+            "node:${node_version}-alpine" sh -ec "
               apk add --no-cache bash curl ca-certificates git zip unzip
 
               # Install pnpm and re-resolve optional dependencies for musl.
@@ -1443,7 +1498,7 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.code-changed == 'true'
     name: Cert-less image E2E test
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-linux-x64-default
     timeout-minutes: 30
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
@@ -1500,7 +1555,7 @@ jobs:
     name: Local CLI `vp install` E2E test
     needs:
       - build-cli-test-binaries
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-linux-x64-default
     timeout-minutes: 20
     # Run if: not a PR, OR PR has 'test: install-e2e' label
     if: >-
@@ -1708,6 +1763,8 @@ jobs:
     timeout-minutes: 20
     if: always()
     needs:
+      - detect-changes
+      - homebrew-published
       - docs-fmt
       - test
       - build-windows-tests
@@ -1726,6 +1783,11 @@ jobs:
       - install-e2e-test
       - install-e2e-test-sfw
     steps:
+      - name: Require published Homebrew checks for formula PRs
+        if: >-
+          needs.detect-changes.outputs.homebrew-published == 'true' &&
+          needs.homebrew-published.result != 'success'
+        run: exit 1
       - run: exit 1
         # Thank you, next https://github.com/vercel/next.js/blob/canary/.github/workflows/build_and_test.yml#L379
         if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}

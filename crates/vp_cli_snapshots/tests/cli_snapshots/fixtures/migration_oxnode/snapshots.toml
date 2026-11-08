@@ -1,0 +1,34 @@
+[[case]]
+name = "migration_oxnode_scripts"
+vp = "local"
+comment = "The oxc-node dependencies use local stub packages. Migrated scripts run the bundled loader."
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "oxnode commands and shebangs migrate to vpx; preloads keep Node.js" },
+  ["vpt", "print-file", "package.json"],
+  ["vpt", "print-file", "scripts/release.ts"],
+  { argv = ["vp", "run", "seed"], comment = "the migrated command runs TypeScript with Node conditions" },
+  { argv = ["vp", "run", "loader"], comment = "the migrated Node loader command runs without standalone oxc-node" },
+  { argv = ["vp", "run", "loader-eval"], comment = "the migrated preload keeps native Node.js eval behavior" },
+  ["vp", "run", "loader-test"],
+]
+
+[[case]]
+name = "migration_oxnode_kept"
+vp = "local"
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "scripts.node-watch", "oxnode --watch ./scripts/seed.ts"], snapshot = false },
+  { argv = ["vpt", "write-file", "scripts/importer.ts", "import '@oxc-node/core/register';\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "Node watch mode and remaining loader imports keep the dependencies" },
+  ["vpt", "print-file", "package.json"],
+]
+
+[[case]]
+name = "migration_oxnode_already_vite_plus"
+vp = "local"
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.vite-plus", "latest"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "a plain upgrade leaves oxnode migration to --full" },
+  { argv = ["vp", "migrate", "--no-interactive", "--full", "--no-hooks", "--no-agent", "--no-editor"], comment = "--full migrates oxnode on an existing Vite+ project" },
+  ["vpt", "print-file", "package.json"],
+  ["vp", "run", "seed"],
+]

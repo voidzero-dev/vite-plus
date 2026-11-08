@@ -12,6 +12,7 @@
  * 4. logger.ts: Change default prefix from '[vite]' to '[vite+]'
  * 5. plugins/reporter.ts: Suppress redundant "vite v<version>" native reporter line
  * 6. config.ts: Suppress the native-loader notice and support an explicit root base
+ * 7. rolldown.dts.config.ts: Keep Rolldown's runtime chunk out of declaration output
  */
 
 import { execFileSync } from 'node:child_process';
@@ -230,6 +231,24 @@ export function brandVite(rootDir: string = process.cwd()): void {
     'config.ts',
     'Suppressed native config loader notice and enabled an explicit root base',
     patchedConfig === configSource ? 'already' : 'patched',
+  );
+
+  // 7. rolldown.dts.config.ts: Rolldown 1.2.16 can emit its JavaScript runtime
+  // as a separate chunk. The dts plugin removes non-declaration chunks after
+  // bundling, so don't give that runtime chunk a .d.ts filename.
+  const dtsConfigFile = join(rootDir, VITE_DIR, 'packages', 'vite', 'rolldown.dts.config.ts');
+  logPatch(
+    'rolldown.dts.config.ts',
+    "Kept Rolldown's runtime chunk out of declaration output",
+    replaceInFile(
+      dtsConfigFile,
+      "    chunkFileNames: 'chunks/[name].d.ts',",
+      `    chunkFileNames(chunk) {
+      return chunk.name === 'rolldown-runtime'
+        ? 'chunks/[name].js'
+        : 'chunks/[name].d.ts'
+    },`,
+    ),
   );
 
   log('Done!');

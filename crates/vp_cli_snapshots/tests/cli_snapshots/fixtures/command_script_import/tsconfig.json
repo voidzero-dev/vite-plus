@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "experimentalDecorators": true,
+    "allowJs": true,
+    "jsx": "react",
+    "jsxFactory": "h",
+    "baseUrl": ".",
+    "paths": {
+      "@value": ["./src/value.ts"]
+    }
+  },
+  "include": ["src", "tests"]
+}

@@ -30,6 +30,7 @@ injected-hook: 2 projects; string, boolean, number, object, expression, and dott
 VITE+ - The Unified Toolchain for the Web
 
  RUN  <version> <workspace>
+      API started at http://localhost:<port>/
 
  ✓  raw (chromium)  defines.test.js (3 tests) <duration>
    ✓ string defines preserve quotes inside the value <duration>
