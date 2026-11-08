@@ -380,7 +380,7 @@ patchedDependencies:
   chokidar@3.6.0: e17269188c54412478078f7ac7877c1d5a475a2f2438328e3a7e725513ccbf1f
   dotenv-expand@13.0.0: 49330a663821151418e003e822a82a6a61d2f0f8a6e3cab00c1c94815a112889
   sirv@3.0.2: c07c56eb72faea34341d465cde2314e89db472106ed378181e3447893af6bf95
-  tsdown@0.23.4: 419b2465dd64ebfe085d98d0e00a710227dc082786882b8a0d5d7c84ef1041ae
+  tsdown@0.23.4: 738bb6308554d4f8a661909d1eb685b21b90d5e53548d999aab0fa9981ff01d4
 
 importers:
 
@@ -545,7 +545,7 @@ importers:
         version: 0.2.17
       tsdown:
         specifier: 'catalog:'
-        version: 0.23.4(patch_hash=419b2465dd64ebfe085d98d0e00a710227dc082786882b8a0d5d7c84ef1041ae)(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.4)(@tsdown/exe@0.23.4)(@typescript/native-preview@7.0.0-dev.20260707.2)(@vitejs/devtools@0.8.0(crossws@0.4.12(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2))
+        version: 0.23.4(patch_hash=738bb6308554d4f8a661909d1eb685b21b90d5e53548d999aab0fa9981ff01d4)(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.4)(@tsdown/exe@0.23.4)(@typescript/native-preview@7.0.0-dev.20260707.2)(@vitejs/devtools@0.8.0(crossws@0.4.12(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2))
       validate-npm-package-name:
         specifier: 'catalog:'
         version: 8.0.0
@@ -702,7 +702,7 @@ importers:
         version: 1.2.2
       tsdown:
         specifier: 'catalog:'
-        version: 0.23.4(patch_hash=419b2465dd64ebfe085d98d0e00a710227dc082786882b8a0d5d7c84ef1041ae)(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.4)(@tsdown/exe@0.23.4)(@typescript/native-preview@7.0.0-dev.20260707.2)(@vitejs/devtools@0.8.0(crossws@0.4.12(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2))
+        version: 0.23.4(patch_hash=738bb6308554d4f8a661909d1eb685b21b90d5e53548d999aab0fa9981ff01d4)(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.4)(@tsdown/exe@0.23.4)(@typescript/native-preview@7.0.0-dev.20260707.2)(@vitejs/devtools@0.8.0(crossws@0.4.12(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2))
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -743,7 +743,7 @@ importers:
         version: 2.1.0
       tsdown:
         specifier: 'catalog:'
-        version: 0.23.4(patch_hash=419b2465dd64ebfe085d98d0e00a710227dc082786882b8a0d5d7c84ef1041ae)(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.4)(@tsdown/exe@0.23.4)(@typescript/native-preview@7.0.0-dev.20260707.2)(@vitejs/devtools@0.8.0(crossws@0.4.12(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2))
+        version: 0.23.4(patch_hash=738bb6308554d4f8a661909d1eb685b21b90d5e53548d999aab0fa9981ff01d4)(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.4)(@tsdown/exe@0.23.4)(@typescript/native-preview@7.0.0-dev.20260707.2)(@vitejs/devtools@0.8.0(crossws@0.4.12(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2))
 
   packages/tools:
     devDependencies:
@@ -5130,6 +5130,7 @@ packages:
   image-size@0.5.5:
     resolution: {integrity: sha512-6TDAlDPZxUFCv+fuOkIoXT/V/f3Qbq8e37p+YOiYrUv3v9cc3/6x78VdfPgFVaB9dZYeLUfKgHRebpkm/oP2VQ==}
     engines: {node: '>=0.10.0'}
+    deprecated: Please migrate to image-size@2.x
     hasBin: true
 
   immediate@3.0.6:
@@ -8878,7 +8879,7 @@ snapshots:
       lightningcss: 1.33.0
       postcss-load-config: 6.0.1(jiti@2.7.0)(postcss@8.5.31)(tsx@4.23.15)(yaml@2.9.1)
       rolldown: link:rolldown/packages/rolldown
-      tsdown: 0.23.4(patch_hash=419b2465dd64ebfe085d98d0e00a710227dc082786882b8a0d5d7c84ef1041ae)(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.4)(@tsdown/exe@0.23.4)(@typescript/native-preview@7.0.0-dev.20260707.2)(@vitejs/devtools@0.8.0(crossws@0.4.12(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2))
+      tsdown: 0.23.4(patch_hash=738bb6308554d4f8a661909d1eb685b21b90d5e53548d999aab0fa9981ff01d4)(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.4)(@tsdown/exe@0.23.4)(@typescript/native-preview@7.0.0-dev.20260707.2)(@vitejs/devtools@0.8.0(crossws@0.4.12(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2))
     optionalDependencies:
       postcss: 8.5.31
       postcss-import: 16.2.0(postcss@8.5.31)
@@ -8894,7 +8895,7 @@ snapshots:
     dependencies:
       obug: 3.0.0
       tinyexec: 1.3.1
-      tsdown: 0.23.4(patch_hash=419b2465dd64ebfe085d98d0e00a710227dc082786882b8a0d5d7c84ef1041ae)(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.4)(@tsdown/exe@0.23.4)(@typescript/native-preview@7.0.0-dev.20260707.2)(@vitejs/devtools@0.8.0(crossws@0.4.12(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2))
+      tsdown: 0.23.4(patch_hash=738bb6308554d4f8a661909d1eb685b21b90d5e53548d999aab0fa9981ff01d4)(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.4)(@tsdown/exe@0.23.4)(@typescript/native-preview@7.0.0-dev.20260707.2)(@vitejs/devtools@0.8.0(crossws@0.4.12(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2))
       verkit: 0.5.0
 
   '@tybys/wasm-util@0.10.3':
@@ -12001,7 +12002,7 @@ snapshots:
       typescript: 7.0.2
     optional: true
 
-  tsdown@0.23.4(patch_hash=419b2465dd64ebfe085d98d0e00a710227dc082786882b8a0d5d7c84ef1041ae)(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.4)(@tsdown/exe@0.23.4)(@typescript/native-preview@7.0.0-dev.20260707.2)(@vitejs/devtools@0.8.0(crossws@0.4.12(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2)):
+  tsdown@0.23.4(patch_hash=738bb6308554d4f8a661909d1eb685b21b90d5e53548d999aab0fa9981ff01d4)(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.4)(@tsdown/exe@0.23.4)(@typescript/native-preview@7.0.0-dev.20260707.2)(@vitejs/devtools@0.8.0(crossws@0.4.12(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2)):
     dependencies:
       cac: 7.1.0
       defu: 6.1.7

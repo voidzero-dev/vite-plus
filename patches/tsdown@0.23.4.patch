@@ -1,26 +1,33 @@
 diff --git a/dist/build-wv1dWHDH.mjs b/dist/build-wv1dWHDH.mjs
-index 82fc360..87edaa7 100644
+index 82fc360..fa45a35 100644
 --- a/dist/build-wv1dWHDH.mjs
 +++ b/dist/build-wv1dWHDH.mjs
-@@ -892,2 +892,5 @@ async function buildSingle(config, configDeps, isDualFormat, clean, restart, don
+@@ -75,1 +75,2 @@ async function resolveWorkspace(config, inlineConfig, context, rootDeps) {
+-			debug$5("loading workspace config %s", cwd);
++			if (inlineConfig.config === false || workspaceConfig === false) return [mergeConfig(normalized, { cwd })];
++			debug$5("loading workspace config %s", cwd);
+@@ -892,2 +893,5 @@ async function buildSingle(config, configDeps, isDualFormat, clean, restart, don
  }
 +export async function expandWorkspace(config, flags, watch, deps) {
 +	return resolveWorkspace(config, flags, { ci: isInCI(), watch }, deps);
 +}
  export { buildWithConfigs as n, build_exports as r, build$1 as t };
 diff --git a/dist/index.d.mts b/dist/index.d.mts
-index 085b184..d2acbd4 100644
+index 085b184..190328d 100644
 --- a/dist/index.d.mts
 +++ b/dist/index.d.mts
-@@ -3,2 +3,4 @@ import { n as mergeConfig, r as resolveUserConfig, t as defineConfig } from "./c
+@@ -3,2 +3,6 @@ import { n as mergeConfig, r as resolveUserConfig, t as defineConfig } from "./c
  import * as Rolldown from "rolldown";
++/** @internal Share one build limit across resolved configurations. */
++export declare function createConcurrencyExecutor(concurrency?: number): ResolvedConfig["runBuild"];
 +/** @internal Expand a preloaded root configuration before resolving individual builds. */
 +export declare function expandWorkspace(config: UserConfig, flags: InlineConfig, watch: TsdownHandle["watch"], deps: Set<string>): Promise<{ configs: UserConfig[]; deps: Set<string> }>;
  /**
 diff --git a/dist/index.mjs b/dist/index.mjs
-index 3d16d6c..d8e6e04 100644
+index 3d16d6c..eea4767 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
-@@ -1 +1,2 @@
+@@ -1 +1,3 @@
++export { n as createConcurrencyExecutor } from "./style-BMCJFWa9.mjs";
 +export { expandWorkspace } from "./build-wv1dWHDH.mjs";
  import { n as buildWithConfigs, t as build } from "./build-wv1dWHDH.mjs";

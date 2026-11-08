@@ -5,7 +5,9 @@ import path from 'node:path';
 import { cac } from 'cac';
 import {
   buildWithConfigs,
+  createConcurrencyExecutor,
   expandWorkspace,
+  mergeConfig,
   resolveUserConfig,
   globalLogger,
   enableDebug,
@@ -143,9 +145,9 @@ cli
     if (input.length > 0) {
       flags.entry = input;
     }
-    if (flags.envPrefix === undefined) {
-      flags.envPrefix = DEFAULT_ENV_PREFIXES;
-    }
+    // Workspace discovery resolves cwd and workspace before applying member build options.
+    const { cwd: _cwd, workspace: _workspace, ...memberFlags } = flags;
+    const buildFlags = { ...flags, envPrefix: flags.envPrefix ?? DEFAULT_ENV_PREFIXES };
 
     async function runBuild(): Promise<TsdownHandle> {
       const viteConfig =
@@ -174,15 +176,18 @@ cli
       const packConfigs = Array.isArray(viteConfig?.pack)
         ? viteConfig.pack
         : [viteConfig?.pack ?? {}];
+      const runMemberBuild = createConcurrencyExecutor(flags.concurrency);
       let hasWorkspace = false;
       for (const packConfig of packConfigs) {
-        const merged = { ...packConfig, ...flags };
+        const merged = { ...packConfig, ...buildFlags };
         let buildConfigs: UserConfig[] = [merged];
         if (merged.workspace) {
           hasWorkspace = true;
-          const workspace = await expandWorkspace(packConfig, flags, watch, configDeps);
+          const workspace = await expandWorkspace(packConfig, buildFlags, watch, configDeps);
           workspace.deps.forEach((dep) => configDeps.add(dep));
-          buildConfigs = workspace.configs.filter((config) => !config.workspace || config.entry);
+          buildConfigs = workspace.configs
+            .map((config) => mergeConfig(config, memberFlags))
+            .filter((config) => !config.workspace || config.entry);
         }
         for (const config of buildConfigs) {
           // Keep postcss/lightningcss external to the dts bundle (see plugin doc)
@@ -190,7 +195,12 @@ cli
             const existingPlugins = Array.isArray(config.plugins) ? config.plugins : [];
             config.plugins = [...existingPlugins, externalDtsTypeOnlyPlugin()];
           }
-          const resolvedConfig = await resolveUserConfig(config, flags, configDeps);
+          const resolvedConfig = await resolveUserConfig(
+            config,
+            buildFlags,
+            configDeps,
+            runMemberBuild,
+          );
           resolvedConfig.forEach((config) =>
             config.configDeps.forEach((dep) => configDeps.add(dep)),
           );
