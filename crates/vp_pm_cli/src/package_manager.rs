@@ -531,6 +531,33 @@ impl PackageManager {
         Self { client, version: version.into(), bin_prefix }
     }
 
+    /// Describe a package manager found on PATH, or `None` when its version cannot be read.
+    pub async fn from_system_executable(
+        client: PackageManagerType,
+        executable: &AbsolutePath,
+    ) -> Option<Self> {
+        // Only npm skips `--version`; `npm_version_from_package_json` explains why.
+        let version = if client == PackageManagerType::Npm
+            && let Some(version) = npm_version_from_package_json(executable)
+        {
+            version.to_string()
+        } else {
+            let output = tokio::process::Command::new(executable.as_path())
+                .arg("--version")
+                .output()
+                .await
+                .ok()?;
+            if !output.status.success() {
+                return None;
+            }
+            let version = std::str::from_utf8(&output.stdout).ok()?.trim();
+            js_semver::Version::parse(version).ok()?;
+            version.to_owned()
+        };
+        let bin_prefix = executable.parent()?.to_absolute_path_buf();
+        Some(Self::from_bin_prefix(client, version, bin_prefix))
+    }
+
     /// Executables supplied by this installation, including any available aliases.
     /// A system installation need not provide every binary in the tool family.
     #[must_use]
@@ -5754,6 +5781,46 @@ mod tests {
         fs::write(yarn_dir.join("package.json"), "{}").unwrap();
 
         assert_eq!(find_extracted_package_dir(temp_dir.path()).unwrap(), yarn_dir);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn system_npm_version_is_read_from_its_package_without_running_it() {
+        use std::os::unix::fs::PermissionsExt;
+
+        // A Node.js install. Running npm-cli.js fails, so a spawned `npm --version` would
+        // return `None`.
+        //
+        // <root>/
+        // ├── bin/npm -> ../lib/node_modules/npm/bin/npm-cli.js
+        // └── lib/node_modules/npm/
+        //     ├── package.json      {"name":"npm","version":"10.9.2"}
+        //     └── bin/npm-cli.js    exit 1
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let package = root.join("lib/node_modules/npm");
+        std::fs::create_dir_all(package.join("bin")).unwrap();
+        std::fs::write(package.join("package.json"), r#"{"name":"npm","version":"10.9.2"}"#)
+            .unwrap();
+        let cli = package.join("bin/npm-cli.js");
+        std::fs::write(&cli, "#!/bin/sh\nexit 1\n").unwrap();
+        std::fs::set_permissions(&cli, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::create_dir_all(root.join("bin")).unwrap();
+        std::os::unix::fs::symlink("../lib/node_modules/npm/bin/npm-cli.js", root.join("bin/npm"))
+            .unwrap();
+        let npm = vt_path::AbsolutePathBuf::new(root.join("bin/npm")).unwrap();
+
+        let manager = PackageManager::from_system_executable(PackageManagerType::Npm, &npm)
+            .await
+            .expect("npm's version is read without running npm");
+        // Scripts see the version in the user agent.
+        let context = crate::LifecycleEnvContext { vp_version: "0.0.0".into(), node_version: None };
+        let user_agent = manager
+            .lifecycle_env_vars(&context)
+            .into_iter()
+            .find_map(|(name, value)| (name == "npm_config_user_agent").then_some(value))
+            .unwrap();
+        assert!(user_agent.to_string_lossy().starts_with("vp/0.0.0 npm/10.9.2 "), "{user_agent:?}");
     }
 
     /// A tarball with regular `files`, then symlink `links` (name -> target), the
