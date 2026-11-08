@@ -60,6 +60,8 @@ impl fmt::Display for PackageManagerType {
 }
 
 impl PackageManagerType {
+    pub const ALL: [Self; 4] = [Self::Npm, Self::Pnpm, Self::Yarn, Self::Bun];
+
     /// Map an invoked shim tool name (including aliases like `npx`, `pn`, `pnpx`, `pnx`,
     /// `yarnpkg`, `bunx`) to the package-manager family that provides it.
     #[must_use]

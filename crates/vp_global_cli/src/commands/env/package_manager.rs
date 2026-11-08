@@ -182,17 +182,10 @@ pub(crate) async fn warn_if_target_differs(cwd: &AbsolutePath, target: PackageMa
     }
 }
 
-pub(crate) const ALL_PACKAGE_MANAGERS: [PackageManagerType; 4] = [
-    PackageManagerType::Npm,
-    PackageManagerType::Pnpm,
-    PackageManagerType::Yarn,
-    PackageManagerType::Bun,
-];
-
 pub(crate) fn selected(scope: super::spec::EnvScope) -> Vec<PackageManagerType> {
     match scope {
         super::spec::EnvScope::All | super::spec::EnvScope::PackageManagers => {
-            ALL_PACKAGE_MANAGERS.to_vec()
+            PackageManagerType::ALL.to_vec()
         }
         super::spec::EnvScope::PackageManager(kind) => vec![kind],
         super::spec::EnvScope::Node => Vec::new(),

@@ -231,12 +231,12 @@ async fn initialize_package_manager_shim_modes(
     current_exe: &std::path::Path,
     settings: &mut super::config::Config,
 ) -> Result<(), Error> {
-    use super::{config::ShimMode, package_manager::ALL_PACKAGE_MANAGERS};
+    use super::config::ShimMode;
 
     let dirs = &vp_shared::EnvConfig::get().dirs;
     let fallback_bin = dirs.fallback_bin();
     let mut changed = false;
-    for kind in ALL_PACKAGE_MANAGERS {
+    for kind in vp_pm_cli::PackageManagerType::ALL {
         if settings.configured_package_manager_shim_mode_for(kind).is_some() {
             continue;
         }

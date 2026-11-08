@@ -18,6 +18,7 @@ mod request;
 pub(crate) mod resolution;
 mod shim;
 mod spec;
+mod user_config;
 
 pub use cli::{ManagedGlobalCommand, PackageManagerCommand, PmCommand};
 pub use config::{
@@ -51,3 +52,4 @@ pub use resolution::{
     UnlinkArgs, UpdateArgs, VersionArgs, ViewArgs, WhoamiArgs, WhyArgs,
 };
 pub use spec::{PackageManagerSpec, package_manager_override, parse_package_manager_spec};
+pub use user_config::{Config, ShimMode, get_config_path, load_config, save_config};
