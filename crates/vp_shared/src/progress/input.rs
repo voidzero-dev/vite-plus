@@ -75,17 +75,27 @@ mod sys {
     }
 
     impl Guard {
+        /// Arms restoration before the terminal changes, so a signal at any
+        /// point leaves the terminal in its saved state.
         pub(super) fn new() -> Option<Self> {
-            if !block(libc::STDIN_FILENO) {
+            let raw = save(libc::STDIN_FILENO)?;
+            BLOCKED.store(true, Ordering::SeqCst);
+            let mut guard = Self { previous: install_handlers() };
+            if !apply(libc::STDIN_FILENO, &raw) {
+                guard.disarm();
                 return None;
             }
-            BLOCKED.store(true, Ordering::SeqCst);
-            Some(Self { previous: install_handlers() })
+            Some(guard)
         }
 
+        /// Restores before disarming, so a signal in between still restores.
         pub(super) fn release(&mut self) {
-            BLOCKED.store(false, Ordering::SeqCst);
             restore(libc::STDIN_FILENO);
+            self.disarm();
+        }
+
+        fn disarm(&mut self) {
+            BLOCKED.store(false, Ordering::SeqCst);
             for (signal, previous) in self.previous.drain(..) {
                 // SAFETY: reinstalls the disposition captured by `install_handlers`.
                 let _ = unsafe { sigaction(signal, &previous) };
@@ -102,29 +112,34 @@ mod sys {
         foreground != -1 && foreground != own
     }
 
-    /// Switch `fd` to raw input with signals kept, saving its current state.
-    pub(super) fn block(fd: RawFd) -> bool {
+    /// Save the state of `fd` and return its raw input form with signals kept.
+    pub(super) fn save(fd: RawFd) -> Option<libc::termios> {
         if in_background(fd) {
-            return false;
+            return None;
         }
         let mut termios = MaybeUninit::<libc::termios>::uninit();
         // SAFETY: `tcgetattr` initializes `termios` when it succeeds, and the
         // caller owns `SAVED` through `ACTIVE`.
         unsafe {
             if libc::tcgetattr(fd, termios.as_mut_ptr()) != 0 {
-                return false;
+                return None;
             }
             let original = termios.assume_init();
             let line_mode = libc::ECHO | libc::ICANON;
             if original.c_lflag & line_mode != line_mode {
-                return false;
+                return None;
             }
             let mut raw = original;
             raw.c_lflag &= !(libc::ECHO | libc::ICANON | libc::IEXTEN);
             raw.c_iflag &= !(libc::IXON | libc::ICRNL | libc::BRKINT | libc::ISTRIP);
             (*SAVED.0.get()).write(original);
-            libc::tcsetattr(fd, libc::TCSANOW, &raw const raw) == 0
+            Some(raw)
         }
+    }
+
+    pub(super) fn apply(fd: RawFd, raw: &libc::termios) -> bool {
+        // SAFETY: `raw` is a complete termios returned by `save`.
+        unsafe { libc::tcsetattr(fd, libc::TCSANOW, raw) == 0 }
     }
 
     /// Discard pending input and restore the saved state. Only async-signal-safe
@@ -134,7 +149,7 @@ mod sys {
         if in_background(fd) {
             return;
         }
-        // SAFETY: callers only restore after `block` saved the state.
+        // SAFETY: callers only restore after `save` saved the state.
         unsafe {
             libc::tcflush(fd, libc::TCIFLUSH);
             libc::tcsetattr(fd, libc::TCSANOW, (*SAVED.0.get()).as_ptr());
@@ -171,7 +186,7 @@ mod sys {
     }
 
     extern "C" fn restore_and_reraise(signal: libc::c_int) {
-        restore(libc::STDIN_FILENO);
+        restore_if_blocked();
         // SAFETY: `signal` and `raise` are async-signal-safe. The signal stays
         // blocked until this handler returns, then the default action ends the
         // process with the usual status.
@@ -223,12 +238,14 @@ mod sys {
                 if GetConsoleMode(stdin(), &raw mut mode) == 0 || mode & LINE_MODE != LINE_MODE {
                     return None;
                 }
+                // Arm restoration before the console changes.
                 SAVED.store(mode, Ordering::SeqCst);
+                SetConsoleCtrlHandler(Some(restore_on_ctrl), 1);
                 if SetConsoleMode(stdin(), mode & !LINE_MODE) == 0 {
                     SAVED.store(0, Ordering::SeqCst);
+                    SetConsoleCtrlHandler(Some(restore_on_ctrl), 0);
                     return None;
                 }
-                SetConsoleCtrlHandler(Some(restore_on_ctrl), 1);
             }
             Some(Self(()))
         }
@@ -266,7 +283,7 @@ mod sys {
 
 #[cfg(all(test, unix))]
 mod tests {
-    use std::os::fd::{AsFd, AsRawFd};
+    use std::os::fd::{AsFd, AsRawFd, RawFd};
 
     use nix::{
         libc,
@@ -277,6 +294,10 @@ mod tests {
     };
 
     use super::sys;
+
+    fn block(fd: RawFd) -> bool {
+        sys::save(fd).is_some_and(|raw| sys::apply(fd, &raw))
+    }
 
     #[test]
     fn raw_input_keeps_signals_and_restores_the_terminal() {
@@ -289,11 +310,11 @@ mod tests {
         let original = tcgetattr(&pty.slave).unwrap();
 
         let not_a_terminal = std::fs::File::open("/dev/null").unwrap();
-        assert!(!sys::block(not_a_terminal.as_raw_fd()));
+        assert!(!block(not_a_terminal.as_raw_fd()));
 
-        assert!(sys::block(fd));
+        assert!(block(fd));
         // A terminal already in raw mode is left alone.
-        assert!(!sys::block(fd));
+        assert!(!block(fd));
         let raw = tcgetattr(&pty.slave).unwrap();
         assert!(
             !raw.local_flags.intersects(LocalFlags::ECHO | LocalFlags::ICANON | LocalFlags::IEXTEN)
@@ -334,7 +355,7 @@ mod tests {
                 if job == 0 {
                     // Another group in the session is a background job.
                     libc::setpgid(0, 0);
-                    let blocked = sys::block(fd);
+                    let blocked = block(fd);
                     sys::restore(fd);
                     libc::_exit(i32::from(blocked));
                 }
