@@ -2,14 +2,60 @@
 
 The default `tsrs@0.22.0-ts7.1.0-beta` switch is not diagnostically equivalent to
 `oxlint-tsgolint@7.0.2005`. The representative sweep found new type-check errors in
-Hono and Vue Core, and a DOM-library compatibility change in OneSignal. These
-findings prevent a regression-free release claim.
+Hono and Vue Core, and a DOM-library compatibility change in OneSignal. The
+exact-version audit below attributes all four reproduced categories to the pinned
+TypeScript `7.1.0-beta` behavior. It found no Rust-port defect in these cases.
+The default switch still changes diagnostics for projects that use the older backend.
 
 On 2026-11-06, a Linux x64/glibc Codespace ran 141 commands across 14 pinned forks
 from the [ecosystem catalog](https://github.com/vite-plus-ecosystem-ci/.github).
 The explicit type-check workload covered 2,289 files. No command timed out or
 terminated by a signal. Seven repositories had identical normalized diagnostics;
 seven had differences. This covers the selected repositories, not all 83 catalog entries.
+
+## Exact-upstream attribution (2026-11-08)
+
+The original `6.0.3`, `7.0.2`, and `oxlint-tsgolint@7.0.2005` controls establish
+upgrade compatibility, but cannot identify a Rust-port defect by themselves.
+The [tsrs compatibility contract](https://github.com/oxc-project/tsrs/blob/625f918c85a3e12824ede39cd127d0f866b8d9c8/docs/COMPATIBILITY.md#conformance)
+defines correctness against its exact upstream Go compiler, including upstream bugs.
+
+This audit compared the retained tsrs executable with published `typescript@7.1.0-beta`.
+Both target `microsoft/TypeScript@3e9236361fa97a9e6c685f4833ac457ae2d8c50a`.
+The reference wrapper and native package both identify that commit in `gitHead`.
+The Rust source audit used release tag `v0.22.0`, commit
+`625f918c85a3e12824ede39cd127d0f866b8d9c8`.
+
+All seven reduced cases produced identical diagnostic output and exit codes:
+
+| Reduced case                                    | TypeScript `7.1.0-beta`         | tsrs `0.22.0` |
+| ----------------------------------------------- | ------------------------------- | ------------- |
+| Hono default destructuring                      | Two `TS7031`, exit `2`          | Identical     |
+| Hono explicit parameter annotation              | No errors, exit `0`             | Identical     |
+| Vue mapped-parameter destructuring              | Three `TS7031`, exit `2`        | Identical     |
+| Vue selector iteration                          | `TS5115` and `TS7006`, exit `2` | Identical     |
+| Vue conditional return, reduced                 | `TS2322`, exit `2`              | Identical     |
+| Vue conditional return, original implementation | `TS2322`, exit `2`              | Identical     |
+| DOM `maxActions` probe                          | `TS2322`, exit `2`              | Identical     |
+
+The four categories require different interpretations:
+
+| Category                | Assessment                                                                               | Follow-up                                                                                      |
+| ----------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Default destructuring   | Upstream TypeScript `7.1` false positive; tsrs matches it                                | Follow TypeScript #64974; an explicit parameter annotation passes                              |
+| Conditional return type | Upstream `7.1` compatibility regression; no Rust divergence                              | Investigate the related conditional-type normalization fix in TypeScript #64307                |
+| Selector recursion      | Upstream `7.1` recursion restriction exposes the dependency's circular type construction | Rework or update the selector declarations; do not assume the older acceptance proves validity |
+| Notification mock       | Correct enforcement of the newer DOM declaration                                         | Add the missing static member to the mock                                                      |
+
+Matching the pinned compiler does not mean every upstream diagnostic is desirable.
+It means these reproductions do not justify changing the Rust port independently.
+The new default also adopts a newer TypeScript version, so its compatibility cost
+must be assessed separately from the implementation language.
+
+The 14 compiler invocations ran in Codespaces job `job-3aecfcc9bb6f49bb`.
+The input files and compiler options were unchanged from the earlier reductions.
+Raw output, executable/version evidence, package-lock hashes, and scripts remain
+outside this repository. This follow-up did not repeat the full 14-repository sweep.
 
 ## Controls and method
 
@@ -90,7 +136,7 @@ Formatting stopped five of them before lint: solid-services, anywidget,
 vue-clamp, Hono, and Vue Core. These failures do not demonstrate backend failure
 or backend coverage.
 
-## Confirmed contextual-typing regression
+## Upstream contextual-typing regression
 
 [Hono's `Style` implementation](https://github.com/vite-plus-ecosystem-ci/hono/blob/c91b60a251186fb024557c6d55a11d8e388f179c/src/helper/css/index.ts#L192)
 produces two new `TS7031` errors for `children` and `nonce` with tsrs. This reduced
@@ -107,12 +153,21 @@ TypeScript `6.0.3`, TypeScript `7.0.2`, and both Go lint controls accept this so
 The default preview and standalone tsrs report both errors. An explicit parameter
 type annotation makes all controls pass. Hono's production project also passes
 `tsc -p tsconfig.build.json --noEmit` but fails the same check with standalone tsrs.
-This confirms a compiler difference independent of Vite+ backend resolution.
+This confirms a compiler-version difference independent of Vite+ backend resolution.
 
 [Vue Core's `applyTextModel`](https://github.com/vite-plus-ecosystem-ci/vue-core/blob/747e8d668c4a64ae6bd9dcc74c173364f1c1490b/packages/runtime-vapor/src/directives/vModel.ts#L46)
 has the same default-destructuring pattern. Its `trim`, `number`, and `lazy` bindings
 produce three new `TS7031` errors. A four-line reduction with a mapped optional
-parameter passes both TypeScript versions and both Go controls, but fails both tsrs paths.
+parameter passes TypeScript `6.0.3`, TypeScript `7.0.2`, and both Go controls, but fails both tsrs paths.
+
+The exact `7.1.0-beta` reference reports the same errors. Its
+[`checkDeclarationInitializer` / `padObjectLiteralType`](https://github.com/microsoft/TypeScript/blob/3e9236361fa97a9e6c685f4833ac457ae2d8c50a/tsc/internal/checker/checker.go#L17205)
+pads missing properties of the `{}` initializer and calls
+`getTypeFromBindingElement` with `reportErrors: true`. The
+[Rust port follows the same path](https://github.com/oxc-project/tsrs/blob/625f918c85a3e12824ede39cd127d0f866b8d9c8/crates/tsrs_checker/src/checker_08.rs#L2980).
+That path can report implicit `any` despite an available contextual parameter type.
+TypeScript tracks this as [bug #64974](https://github.com/microsoft/TypeScript/issues/64974).
+The rejection is a false positive, while the tsrs implementation conforms to its reference.
 
 ## Vue Core selector types
 
@@ -133,9 +188,24 @@ export function inspect(selector: parser.Selector): void {
 }
 ```
 
-Both TypeScript versions and both Go controls accept the reduced source. The
+TypeScript `6.0.3`, TypeScript `7.0.2`, and both Go controls accept the reduced source. The
 default preview and standalone tsrs report `TS5115` and `TS7006`. The reduction
 uses strict mode, bundler module resolution, and `skipLibCheck: true`.
+
+The dependency declares `Selector = _Selector<Selector>`, where `_Selector<S>`
+extends `Container<string, Diff<Node, S>>`. `Node` itself includes `Selector`, and
+`Diff<T, U>` is a distributive conditional type. Resolving the base members can
+therefore require comparing the type whose base members are still being resolved.
+TypeScript [#64372](https://github.com/microsoft/TypeScript/pull/64372) deliberately
+stopped allowing base type arguments to depend on partially resolved members.
+
+Both the [upstream instantiation guard](https://github.com/microsoft/TypeScript/blob/3e9236361fa97a9e6c685f4833ac457ae2d8c50a/tsc/internal/checker/checker.go#L22601)
+and [Rust guard](https://github.com/oxc-project/tsrs/blob/625f918c85a3e12824ede39cd127d0f866b8d9c8/crates/tsrs_checker/src/checker_11.rs#L1319)
+stop at depth `100` or `5,000,000` instantiations and report the circular type names.
+The exact upstream compiler reports the same `Container` / `Diff` error and lost
+callback type. This is a dependency compatibility problem under the newer rules,
+not evidence of a Rust implementation error. The causal link to the stricter
+inheritance rule follows from the source review; this audit did not bisect that upstream change.
 
 ## Vue Core generic conditional return type
 
@@ -154,9 +224,23 @@ export const handler: <T extends string>(s: T) => T extends '' ? '' : `on${Capit
 );
 ```
 
-Both TypeScript versions and both Go controls accept both cases. The default
+TypeScript `6.0.3`, TypeScript `7.0.2`, and both Go controls accept both cases. The default
 preview and standalone tsrs reject both cases with `TS2322`. The reduction uses
 the same strict compiler options as the selector case.
+
+The exact `7.1.0-beta` compiler rejects both cases identically. The
+[upstream conditional-type comparison](https://github.com/microsoft/TypeScript/blob/3e9236361fa97a9e6c685f4833ac457ae2d8c50a/tsc/internal/checker/relater.go#L3758)
+and [Rust comparison](https://github.com/oxc-project/tsrs/blob/625f918c85a3e12824ede39cd127d0f866b8d9c8/crates/tsrs_checker/src/relater_2.rs#L2541)
+compare the conditional types without normalizing both distributed type parameters.
+This is consistent with the upstream asymmetry described in
+[#64673](https://github.com/microsoft/TypeScript/issues/64673): instantiation can
+normalize one side while the other retains a distributed parameter.
+
+The open [fix #64307](https://github.com/microsoft/TypeScript/pull/64307) normalizes
+both sides and is relevant to this failure. That root-cause connection is an
+inference from the source and diagnostic chain. The patch was not applied or
+validated against this case here. The exact-reference failure is sufficient to
+rule out a Rust-only divergence for this reproduction.
 
 ## OneSignal DOM-library difference
 
@@ -170,10 +254,19 @@ type HasMaxActions = 'maxActions' extends keyof typeof Notification ? true : fal
 export const hasMaxActions: HasMaxActions = false;
 ```
 
-The TypeScript and Go controls accept this probe. Both tsrs paths report `TS2322`.
+The TypeScript `6.0.3` / `7.0.2` and Go lint controls accept this probe. Both tsrs paths report `TS2322`.
 This establishes a library-contract difference; it does not establish that the
 new DOM declaration is incorrect. The difference affects OneSignal's existing
 configuration because it already enables TypeScript diagnostics.
+
+The tsrs and TypeScript `7.1.0-beta` `lib.dom.d.ts` files are byte-identical:
+SHA256 `2f8c8d9e23d03e00c353412f5b2be3b1fd893290fc0976ad2229681bb7d46a35`.
+The [Notifications standard](https://notifications.spec.whatwg.org/#dom-notification-maxactions)
+also defines a static read-only `maxActions` member. Assigning `MockNotification`
+to the constructor type now correctly requires that static member. Adding an
+instance property would not satisfy it. A mock that supports no actions can
+supply `static readonly maxActions = 0`. This is a mock adaptation to the updated
+standard library, not a compiler false positive.
 
 ## Other differences and limits
 
@@ -203,7 +296,9 @@ all three controls. No task compiler was replaced by the default lint backend.
 This method isolates the backend while preserving application dependencies. It
 does not reproduce each repository's full build pipeline or a complete dependency
 upgrade. Shared setup and source errors must not be counted as new tsrs regressions.
-The reduced cases provide independent evidence for the new compiler failures.
+The reduced cases provide independent evidence for the compiler-version differences.
+The exact-reference audit attributes the four reproduced categories; it does not
+establish exact-upstream parity for every diagnostic in the full sweep.
 
 The primary sweep used Codespaces job `job-d8ac88c64fc64b11`. Final anywidget,
 React Data Grid, and Vue Core results came from `job-f5f12efe4b514e83`, which also
