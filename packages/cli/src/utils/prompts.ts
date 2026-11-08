@@ -2,6 +2,7 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { coerce, isGreaterThanOrEqual } from 'verkit';
 
 import {
+  availablePackageManagers,
   downloadPackageManager as downloadPackageManagerBinding,
   type DownloadPackageManagerResult,
 } from '../../binding/index.js';
@@ -51,17 +52,41 @@ export function cancelAndExit(message = 'Operation cancelled', exitCode = 0): ne
   process.exit(exitCode);
 }
 
+// npm comes before yarn: it ships with Node.js, while a yarn on PATH is often Yarn Classic.
+const DEFAULT_PACKAGE_MANAGER_ORDER = [
+  PackageManager.pnpm,
+  PackageManager.npm,
+  PackageManager.yarn,
+  PackageManager.bun,
+];
+
 export async function selectPackageManager(interactive?: boolean, silent = false) {
+  // Without a global install, Vite+ cannot download package managers, so only those on PATH work.
+  const available = new Set(await availablePackageManagers());
+  const defaultPackageManager = DEFAULT_PACKAGE_MANAGER_ORDER.find((packageManager) =>
+    available.has(packageManager),
+  );
+  if (!defaultPackageManager) {
+    cancelAndExit(
+      'No supported package manager found. Install pnpm, npm, yarn, or bun, or install the global `vp` CLI so Vite+ can manage one.',
+      1,
+    );
+  }
+
   if (interactive) {
     const selected = await prompts.select({
       message: 'Which package manager would you like to use?',
       options: [
-        { value: PackageManager.pnpm, hint: 'recommended' },
-        { value: PackageManager.yarn },
-        { value: PackageManager.npm },
-        { value: PackageManager.bun },
-      ],
-      initialValue: PackageManager.pnpm,
+        PackageManager.pnpm,
+        PackageManager.yarn,
+        PackageManager.npm,
+        PackageManager.bun,
+      ].map((value) =>
+        available.has(value)
+          ? { value, hint: value === PackageManager.pnpm ? 'recommended' : undefined }
+          : { value, hint: 'not installed', disabled: true },
+      ),
+      initialValue: defaultPackageManager,
     });
 
     if (prompts.isCancel(selected)) {
@@ -70,11 +95,14 @@ export async function selectPackageManager(interactive?: boolean, silent = false
 
     return selected;
   } else {
-    // --no-interactive: use pnpm as default
     if (!silent) {
-      prompts.log.info(`Using default package manager: ${accent(PackageManager.pnpm)}`);
+      prompts.log.info(
+        defaultPackageManager === PackageManager.pnpm
+          ? `Using default package manager: ${accent(PackageManager.pnpm)}`
+          : `${accent(PackageManager.pnpm)} is not installed, using ${accent(defaultPackageManager)}`,
+      );
     }
-    return PackageManager.pnpm;
+    return defaultPackageManager;
   }
 }
 

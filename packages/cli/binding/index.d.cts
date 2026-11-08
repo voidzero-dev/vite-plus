@@ -3613,6 +3613,13 @@ export interface ViteImportGlobMeta {
 /** Parse source and resolve lexical bindings for the TypeScript migration rules. */
 export declare function analyzeMigrationSource(filename: string, source: string): string;
 
+/**
+ * List the package managers `downloadPackageManager` can provide.
+ *
+ * Without a global install, only the package managers on PATH are available.
+ */
+export declare function availablePackageManagers(): Promise<Array<string>>;
+
 /** Error from batch import rewriting */
 export interface BatchRewriteError {
   /** The file path that had an error */

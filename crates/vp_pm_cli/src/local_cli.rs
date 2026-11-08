@@ -95,6 +95,18 @@ pub async fn managed_for_local_cli(
     }
 }
 
+/// Whether [`provide_for_local_cli`] can provide `kind`: it is on PATH, or the global install allows a download.
+pub async fn is_available_for_local_cli(
+    cwd: &AbsolutePath,
+    kind: PackageManagerType,
+) -> Result<bool, Error> {
+    match Source::resolve(cwd, kind).await {
+        Ok(_) => Ok(true),
+        Err(Error::PackageManagerNotInstalled(_)) => Ok(false),
+        Err(error) => Err(error),
+    }
+}
+
 async fn download(
     cwd: &AbsolutePath,
     kind: PackageManagerType,
