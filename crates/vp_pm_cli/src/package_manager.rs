@@ -383,11 +383,19 @@ pub struct PackageManager {
 pub struct PackageManagerBuilder {
     client_override: Option<PackageManagerType>,
     cwd: AbsolutePathBuf,
+    local_cli: bool,
 }
 
 impl PackageManagerBuilder {
     pub fn new(cwd: impl AsRef<AbsolutePath>) -> Self {
-        Self { client_override: None, cwd: cwd.as_ref().to_absolute_path_buf() }
+        Self { client_override: None, cwd: cwd.as_ref().to_absolute_path_buf(), local_cli: false }
+    }
+
+    /// Provide the package manager through [`crate::provide_for_local_cli`] instead of always downloading it.
+    #[must_use]
+    pub const fn for_local_cli(mut self) -> Self {
+        self.local_cli = true;
+        self
     }
 
     #[must_use]
@@ -419,6 +427,23 @@ impl PackageManagerBuilder {
             )
         {
             return resolve_npm_from_path(&self.cwd).await;
+        }
+
+        if self.local_cli {
+            let result = crate::provide_for_local_cli(
+                &self.cwd,
+                package_manager_type,
+                &version_or_req,
+                hash.as_deref(),
+            )
+            .await;
+            // Nothing selected this family, so the npm that ships with Node.js will do.
+            if source == PackageManagerSource::Default
+                && matches!(result, Err(Error::PackageManagerNotInstalled(_)))
+            {
+                return resolve_npm_from_path(&self.cwd).await;
+            }
+            return result;
         }
 
         let npm_config = NpmConfig::load_for_cwd(&self.cwd);
@@ -584,6 +609,17 @@ impl PackageManager {
     #[must_use]
     pub fn get_bin_prefix(&self) -> AbsolutePathBuf {
         self.bin_prefix.clone()
+    }
+
+    #[must_use]
+    pub fn get_version(&self) -> &str {
+        &self.version
+    }
+
+    /// Whether Vite+ downloaded this installation rather than finding it on PATH.
+    #[must_use]
+    pub fn is_managed(&self) -> bool {
+        vp_command::is_managed_install(self.bin_prefix.as_path())
     }
 }
 

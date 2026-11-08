@@ -1,0 +1,13 @@
+[[case]]
+name = "local_package_manager_without_global"
+vp = "local"
+comment = "Without a global install's config, the local CLI must use the package manager on PATH and never download one into Vite+ directories."
+skip-platforms = ["windows"]
+prewarm-package-managers = false # The system pnpm is a fake; nothing may be downloaded.
+steps = [
+  { argv = ["vpt", "rm", "../home/.vite-plus/config.json"], snapshot = false, comment = "the global install's config is the local CLI's only sign of a global install" },
+  { argv = ["vpt", "chmod", "+x", "system-bin/pnpm"], snapshot = false },
+  { argv = ["vp", "install"], continue-on-failure = true, comment = "no pnpm on PATH: fail instead of downloading" },
+  { argv = ["vp", "install"], envs = [["PATH", "${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "the system pnpm runs the install" },
+  { argv = ["vpt", "stat-file", "../home/.vite-plus/package_manager"], comment = "no package manager was downloaded" },
+]
