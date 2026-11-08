@@ -32,6 +32,20 @@ const upstreamSources = {
     '',
   ].join('\n'),
   'logger.ts': "prefix = '[vite]'\n",
+  'plugin.ts': [
+    'import type {',
+    '  LoadResult,',
+    "} from 'rolldown'",
+    'export interface Plugin {',
+    '  load?: (',
+    '      id: string,',
+    '      options?: {',
+    '        ssr?: boolean | undefined',
+    '      },',
+    '  ) => LoadResult',
+    '}',
+    '',
+  ].join('\n'),
   'plugins/reporter.ts': [
     "import path from 'node:path'",
     '      logInfo: shouldLogInfo ? (msg) => env.logger.info(msg) : undefined,',
@@ -133,6 +147,10 @@ test('branding preserves aligned dependencies and unrelated changes across repea
       expect(readFileSync(unrelatedSource, 'utf8')).toBe('// unrelated local source change\n');
       expect(readFileSync(join(nodeDir, 'cli.ts'), 'utf8')).toContain("cac('vp')");
       expect(readFileSync(join(nodeDir, 'build.ts'), 'utf8')).not.toContain('logger.info(');
+      const pluginSource = readFileSync(join(nodeDir, 'plugin.ts'), 'utf8');
+      expect(pluginSource).toContain('  LoadExtraOptions,');
+      expect(pluginSource).toContain('options?: Partial<LoadExtraOptions> & {');
+      expect(pluginSource).toContain('ssr?: boolean | undefined');
       const dtsConfig = readFileSync(
         join(root, 'vite/packages/vite/rolldown.dts.config.ts'),
         'utf8',
