@@ -29,7 +29,9 @@ pub async fn with_spinner<F: Future>(message: Option<&str>, future: F) -> F::Out
         return future.await;
     }
 
-    Progress::start(Style::Spinner.for_stderr(message)).run(future).await
+    Progress::start(ProgressBar::new_spinner(), Style::Spinner.for_stderr(message))
+        .run(future)
+        .await
 }
 
 /// A progress row, cleared on completion or cancellation. A download nested in a
@@ -48,27 +50,25 @@ impl Progress {
         if !enabled() {
             return None;
         }
-        let progress = Self::start(Style::Counter.for_stderr(message));
-        progress.bar.set_length(len);
-        progress.bar.force_draw();
-        Some(progress)
+        Some(Self::start(ProgressBar::new(len), Style::Counter.for_stderr(message)))
     }
 
     pub fn download(message: &str) -> Option<Self> {
         let style = Style::Download.for_stderr(message);
         match ACTIVE_PROGRESS.try_with(Clone::clone) {
             Ok(bar) => {
+                bar.unset_length();
                 let restore = Some((bar.style(), bar.elapsed()));
                 Some(Self::new(bar, style, restore))
             }
-            Err(_) if enabled() => Some(Self::start(style)),
+            Err(_) if enabled() => Some(Self::start(ProgressBar::new_spinner(), style)),
             Err(_) => None,
         }
     }
 
     /// Show a new row and block keyboard input until it is cleared.
-    fn start(style: ProgressStyle) -> Self {
-        let mut progress = Self::new(ProgressBar::new_spinner(), style, None);
+    fn start(bar: ProgressBar, style: ProgressStyle) -> Self {
+        let mut progress = Self::new(bar, style, None);
         progress._input = input::block();
         progress
     }
@@ -80,7 +80,6 @@ impl Progress {
     ) -> Self {
         bar.set_style(style.tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏ "));
         bar.reset();
-        bar.unset_length();
         bar.enable_steady_tick(Duration::from_millis(100));
         bar.force_draw();
         Self { bar, restore, _input: None }
@@ -152,6 +151,21 @@ mod tests {
         assert_eq!(lines.len(), 2, "{screen}");
         assert_eq!(lines[0], "A");
         assert!(measure_text_width(lines[1]) <= usize::from(term.width()));
+    }
+
+    #[test]
+    fn counter_draws_its_total_from_the_first_frame() {
+        let term = InMemoryTerm::new(10, 80);
+        let draw_term = term.clone();
+        let progress = Progress::new(
+            ProgressBar::with_draw_target(
+                Some(3),
+                ProgressDrawTarget::term_like(Box::new(term.clone())),
+            ),
+            Style::Counter.with_width("Installing global packages", move || draw_term.width()),
+            None,
+        );
+        assert!(contents(&progress.bar, &term).contains("(0/3)"));
     }
 
     #[tokio::test]
