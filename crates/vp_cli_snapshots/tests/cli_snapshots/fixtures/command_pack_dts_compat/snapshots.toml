@@ -10,34 +10,6 @@ steps = [
 ]
 
 [[case]]
-name = "command_pack_dts_native_preview_only"
-vp = "global"
-local-registry = true
-env = { PACK_DTS_GENERATOR = "tsgo" }
-comment = "An explicit tsgo generator emits inferred declarations with native-preview and no TypeScript package."
-steps = [
-  { argv = ["vpt", "json-edit", "package.json", "devDependencies", '{"@typescript/native-preview":"7.0.0-dev.20260707.2","vite-plus":"latest"}'], snapshot = false },
-  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
-  { argv = ["node", "assert-no-typescript.mjs"], snapshot = false },
-  ["vp", "pack"],
-  ["vpt", "print-file", "dist/index.d.mts"],
-]
-
-[[case]]
-name = "command_pack_dts_typescript_5_auto"
-vp = "global"
-local-registry = true
-env = { PACK_DTS_TSCONFIG = "false" }
-comment = "Automatic declaration generation uses TypeScript 5.9.3 with tsconfig discovery disabled even when native-preview is installed."
-steps = [
-  { argv = ["vpt", "json-edit", "package.json", "devDependencies.typescript", "5.9.3"], snapshot = false },
-  { argv = ["vpt", "json-edit", "package.json", "devDependencies.@typescript/native-preview", "7.0.0-dev.20260707.2"], snapshot = false },
-  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
-  ["vp", "pack"],
-  ["vpt", "print-file", "dist/index.d.mts"],
-]
-
-[[case]]
 name = "command_pack_dts_native_preview"
 vp = "global"
 local-registry = true

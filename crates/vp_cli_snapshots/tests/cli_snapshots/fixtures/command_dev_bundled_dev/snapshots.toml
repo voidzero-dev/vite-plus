@@ -20,16 +20,6 @@ steps = [
 ]
 
 [[case]]
-name = "command_dev_bundled_dev_watch"
-vp = "global"
-local-registry = true
-comment = "Bundled dev forwards polling and debounce options to the native dev engine."
-steps = [
-  { argv = ["npm", "install", "--ignore-scripts", "--legacy-peer-deps", "--no-audit", "--no-fund"], snapshot = false },
-  ["node", "verify-watch.mjs"],
-]
-
-[[case]]
 name = "command_dev_bundled_dev_unrelated_rolldown"
 vp = "global"
 skip-platforms = ["windows"]

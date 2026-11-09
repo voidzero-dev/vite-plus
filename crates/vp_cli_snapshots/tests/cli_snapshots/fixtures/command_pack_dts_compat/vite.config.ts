@@ -4,6 +4,5 @@ export default defineConfig({
   pack: {
     entry: ['src/index.ts'],
     dts: process.env.PACK_DTS_GENERATOR === 'tsgo' ? { generator: 'tsgo' } : true,
-    tsconfig: process.env.PACK_DTS_TSCONFIG === 'false' ? false : undefined,
   },
 });
