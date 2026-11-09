@@ -141,7 +141,6 @@
     "tinyglobby": "^0.2.15",
     "tree-kill": "^1.2.2",
     "tsdown": "catalog:",
-    "tsrs": "catalog:",
     "typescript": "catalog:",
     "vite": "workspace:*"
   },
@@ -241,7 +240,7 @@
   },
   "bundledVersions": {
     "vite": "8.3.6",
-    "rolldown": "1.2.17",
+    "rolldown": "1.2.16",
     "tsdown": "0.23.4"
   }
 }
