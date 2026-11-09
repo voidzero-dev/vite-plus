@@ -18,6 +18,7 @@ import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
+  HOOK_STUB_SCRIPT,
   disable,
   enable,
   hookScript,
@@ -26,6 +27,9 @@ import {
   resolveHooksDir,
   status,
 } from '../hooks.js';
+
+// Unmodified upstream dispatcher; retained to verify safe migration against real Husky output.
+const HUSKY_DISPATCHER = readFileSync(new URL('./fixtures/husky-9.1.7/h', import.meta.url), 'utf8');
 
 function countDirnameCalls(script: string): number {
   // Count nested dirname calls in the `d=...` line
@@ -138,54 +142,144 @@ describe('install', () => {
     ['.husky', '.vite-hooks'],
     ['.husky/_', '.vite-hooks'],
     ['./.husky/_/', '.vite-hooks'],
+    ['.husky/_', '.vite-hooks', '\r\n'],
     ['.husky/_', '.custom-hooks'],
     ['.husky/_', 'packages/app/.vite-hooks'],
-  ])('takes over a stale local Husky path %s after migration to %s', (hooksPath, hooksDir) => {
-    const tmp = mkdtempSync(join(tmpdir(), 'hooks-husky-migration-'));
-    const originalCwd = process.cwd();
-    try {
-      execFileSync('git', ['init'], { cwd: tmp, stdio: 'ignore' });
-      execFileSync('git', ['config', 'core.hooksPath', hooksPath], { cwd: tmp });
-      writeFileSync(
-        join(tmp, 'package.json'),
-        JSON.stringify({ scripts: { prepare: 'vp config' } }),
-      );
-      mkdirSync(join(tmp, '.husky', '_'), { recursive: true });
-      const oldDispatcher = join(tmp, '.husky', '_', 'h');
-      writeFileSync(oldDispatcher, 'old husky dispatcher\n');
-      mkdirSync(join(tmp, hooksDir), { recursive: true });
-      writeFileSync(join(tmp, hooksDir, 'commit-msg'), 'exit 1\n');
-      process.chdir(tmp);
+  ])(
+    'takes over a stale local Husky path %s after migration to %s',
+    (hooksPath, hooksDir, newline = '\n') => {
+      const tmp = mkdtempSync(join(tmpdir(), 'hooks-husky-migration-'));
+      const originalCwd = process.cwd();
+      try {
+        execFileSync('git', ['init'], { cwd: tmp, stdio: 'ignore' });
+        execFileSync('git', ['config', 'core.hooksPath', hooksPath], { cwd: tmp });
+        writeFileSync(
+          join(tmp, 'package.json'),
+          JSON.stringify({ scripts: { prepare: 'vp config' } }),
+        );
+        mkdirSync(join(tmp, '.husky', '_'), { recursive: true });
+        const oldDispatcher = join(tmp, '.husky', '_', 'h');
+        const oldContents = HUSKY_DISPATCHER.replaceAll('\n', newline);
+        writeFileSync(oldDispatcher, oldContents);
+        writeFileSync(
+          join(tmp, '.husky', '_', 'pre-commit'),
+          HOOK_STUB_SCRIPT.replaceAll('\n', newline),
+        );
+        writeFileSync(join(tmp, '.husky', '_', '.gitignore'), '*');
+        writeFileSync(
+          join(tmp, '.husky', '_', 'husky.sh'),
+          readFileSync(
+            new URL('./fixtures/husky-9.1.7/husky.sh', import.meta.url),
+            'utf8',
+          ).replaceAll('\n', newline),
+        );
+        mkdirSync(join(tmp, hooksDir), { recursive: true });
+        writeFileSync(join(tmp, hooksDir, 'commit-msg'), 'exit 1\n');
+        process.chdir(tmp);
 
-      expect(install(hooksDir)).toEqual({ message: '', isError: false });
-      expect(
-        execFileSync('git', ['config', '--get', 'core.hooksPath'], { encoding: 'utf8' }).trim(),
-      ).toBe(`${hooksDir}/_`);
-      expect(readFileSync(oldDispatcher, 'utf8')).toBe('old husky dispatcher\n');
-      // A real commit must invoke the migrated hook, even in the old clone.
-      const commit = spawnSync(
-        'git',
-        [
-          '-c',
-          'user.name=Test',
-          '-c',
-          'user.email=test@example.invalid',
-          'commit',
-          '--allow-empty',
-          '-m',
-          'bad message',
-        ],
-        { encoding: 'utf8' },
-      );
-      expect(commit.status).toBe(1);
-      expect(commit.stdout + commit.stderr).toContain('commit-msg script failed');
-      expect(enable().isError).toBe(false);
-      expect(install()).toEqual({ message: '', isError: false });
-    } finally {
-      process.chdir(originalCwd);
-      rmSync(tmp, { recursive: true, force: true });
-    }
-  });
+        expect(install(hooksDir)).toEqual({ message: '', isError: false });
+        expect(
+          execFileSync('git', ['config', '--get', 'core.hooksPath'], { encoding: 'utf8' }).trim(),
+        ).toBe(`${hooksDir}/_`);
+        expect(readFileSync(oldDispatcher, 'utf8')).toBe(oldContents);
+        // A real commit must invoke the migrated hook, even in the old clone.
+        const commit = spawnSync(
+          'git',
+          [
+            '-c',
+            'user.name=Test',
+            '-c',
+            'user.email=test@example.invalid',
+            'commit',
+            '--allow-empty',
+            '-m',
+            'bad message',
+          ],
+          { encoding: 'utf8' },
+        );
+        expect(commit.status).toBe(1);
+        expect(commit.stdout + commit.stderr).toContain('commit-msg script failed');
+        expect(enable().isError).toBe(false);
+        expect(install()).toEqual({ message: '', isError: false });
+      } finally {
+        process.chdir(originalCwd);
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it
+    .skipIf(process.platform === 'win32')
+    .each(['custom supported hook', 'symlinked hook', 'custom dispatcher'])(
+    'preserves a rejecting %s during install and enable',
+    (kind) => {
+      const tmp = mkdtempSync(join(tmpdir(), 'hooks-custom-husky-'));
+      const originalCwd = process.cwd();
+      try {
+        execFileSync('git', ['init'], { cwd: tmp, stdio: 'ignore' });
+        execFileSync('git', ['config', 'core.hooksPath', '.husky/_'], { cwd: tmp });
+        writeFileSync(
+          join(tmp, 'package.json'),
+          JSON.stringify({ scripts: { prepare: 'vp config' } }),
+        );
+        const internal = join(tmp, '.husky', '_');
+        mkdirSync(internal, { recursive: true });
+        const rejectingScript = '#!/bin/sh\necho "original hook rejected" >&2\nexit 1\n';
+        writeFileSync(join(internal, 'h'), HUSKY_DISPATCHER);
+        const hook = join(internal, 'pre-commit');
+        if (kind === 'symlinked hook') {
+          const external = join(tmp, 'reject-commit');
+          writeFileSync(external, rejectingScript, { mode: 0o755 });
+          symlinkSync(external, hook);
+        } else if (kind === 'custom dispatcher') {
+          writeFileSync(hook, HOOK_STUB_SCRIPT, { mode: 0o755 });
+          writeFileSync(join(internal, 'h'), rejectingScript);
+        } else {
+          writeFileSync(hook, rejectingScript, { mode: 0o755 });
+        }
+        mkdirSync(join(tmp, '.vite-hooks'));
+        writeFileSync(join(tmp, '.vite-hooks', 'commit-msg'), 'exit 0\n');
+        process.chdir(tmp);
+        const assertCommitRejected = () => {
+          const result = spawnSync(
+            'git',
+            [
+              '-c',
+              'user.name=Test',
+              '-c',
+              'user.email=test@example.invalid',
+              '-c',
+              'commit.gpgsign=false',
+              'commit',
+              '--allow-empty',
+              '-m',
+              'test',
+            ],
+            { cwd: tmp, encoding: 'utf8' },
+          );
+          expect(result.status).toBe(1);
+          expect(result.stderr).toContain('original hook rejected');
+        };
+        assertCommitRejected();
+        for (const setup of [install, enable]) {
+          expect(setup()).toEqual({
+            message: 'core.hooksPath is already set to ".husky/_", skipping',
+            isError: false,
+          });
+          expect(
+            execFileSync('git', ['config', '--get', 'core.hooksPath'], {
+              encoding: 'utf8',
+            }).trim(),
+          ).toBe('.husky/_');
+          expect(existsSync(join(tmp, '.vite-hooks', '_'))).toBe(false);
+          assertCommitRejected();
+        }
+      } finally {
+        process.chdir(originalCwd);
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    },
+  );
 
   it.each([
     ['production Husky dependency', { dependencies: { husky: '^9.0.0' } }],
