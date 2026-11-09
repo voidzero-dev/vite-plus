@@ -983,13 +983,12 @@ function rewriteYamlCatalogAtPath(
     catalog.set(scalarString(VITE_PLUS_NAME), scalarString(VITE_PLUS_VERSION));
   }
   if (addMissing && VITEST_IS_MANAGED_OVERRIDE) {
-    // Injected providers, plus — when the toolchain is catalog-managed (the
-    // catalog now owns `vitest`) — every declared alignable @vitest/* so its
+    // Injected providers, plus every declared alignable @vitest/* so its
     // `catalog:` reference (written by getAlignedVitestEcosystemDependencySpec)
-    // resolves instead of dangling. #2005
-    const additions = catalog.has('vitest')
-      ? new Set<string>([...catalogAdditions, ...vitestEcosystemPackages])
-      : catalogAdditions;
+    // resolves instead of dangling. That writer does not require `vitest` in
+    // the catalog, so neither does this one: a project may declare only an
+    // excluded utility such as `@vitest/utils`. #2005
+    const additions = new Set<string>([...catalogAdditions, ...vitestEcosystemPackages]);
     for (const name of additions) {
       if (isAlignableVitestEcosystemPackage(name)) {
         catalog.set(scalarString(name), scalarString(VITEST_VERSION));
@@ -1048,12 +1047,11 @@ function rewriteCatalogObject(
     delete catalog[name];
   }
   if (VITEST_IS_MANAGED_OVERRIDE) {
-    // Like the pnpm catalog, add every declared alignable @vitest/* when the
-    // catalog owns `vitest`, so its new `catalog:` reference resolves. #2005
-    const names =
-      addMissing && 'vitest' in catalog
-        ? new Set([...Object.keys(catalog), ...vitestEcosystemPackages])
-        : Object.keys(catalog);
+    // Like the pnpm catalog, add every declared alignable @vitest/* so its new
+    // `catalog:` reference resolves. #2005
+    const names = addMissing
+      ? new Set([...Object.keys(catalog), ...vitestEcosystemPackages])
+      : Object.keys(catalog);
     for (const name of names) {
       if (vitestEcosystemPackages.has(name) && isAlignableVitestEcosystemPackage(name)) {
         catalog[name] = VITEST_VERSION;

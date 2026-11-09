@@ -2165,6 +2165,59 @@ describe('ensureVitePlusBootstrap', () => {
     expect(pkg.workspaces.catalog['@vitest/coverage-v8']).toBe(VITEST_VERSION);
   });
 
+  it('adds an excluded @vitest/* utility to the bun catalog without a vitest entry', () => {
+    // `@vitest/utils` does not count as direct Vitest usage, so the catalog gets
+    // no `vitest` entry, but the dependency still becomes `catalog:`.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'bun-utils',
+        devDependencies: { '@vitest/utils': '4.1.9', vite: 'catalog:', 'vite-plus': 'catalog:' },
+        overrides: { vite: 'catalog:' },
+        workspaces: {
+          packages: [],
+          catalog: { vite: VITE_PLUS_OVERRIDE_PACKAGES.vite, 'vite-plus': '0.1.20' },
+        },
+      }),
+    );
+
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.bun, '1.2.20'));
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      workspaces: { catalog: Record<string, string> };
+    };
+    expect(pkg.devDependencies['@vitest/utils']).toBe('catalog:');
+    expect(pkg.workspaces.catalog.vitest).toBeUndefined();
+    expect(pkg.workspaces.catalog['@vitest/utils']).toBe(VITEST_VERSION);
+  });
+
+  it('adds an excluded @vitest/* utility to the pnpm catalog without a vitest entry', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'pnpm-utils',
+        devDependencies: { '@vitest/utils': '4.1.9', vite: 'catalog:', 'vite-plus': 'catalog:' },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      `catalog:\n  vite: '${VITE_PLUS_OVERRIDE_PACKAGES.vite}'\n  vite-plus: 0.1.20\noverrides:\n  vite: 'catalog:'\n`,
+    );
+
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm, '10.33.0'));
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    const workspace = parseYaml(
+      fs.readFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'utf8'),
+    ) as { catalog: Record<string, string> };
+    expect(pkg.devDependencies['@vitest/utils']).toBe('catalog:');
+    expect(workspace.catalog.vitest).toBeUndefined();
+    expect(workspace.catalog['@vitest/utils']).toBe(VITEST_VERSION);
+  });
+
   it('adds vite-plus to the named bun catalog its new reference points at', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
