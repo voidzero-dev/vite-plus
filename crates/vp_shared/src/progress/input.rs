@@ -1,8 +1,9 @@
 //! Block keyboard input while a progress row is visible, like clack's `block()`.
 //! The terminal switches to Node's raw mode except that Ctrl+C and Ctrl+Z keep
-//! sending signals, so no reader thread is needed. Pending input is discarded
-//! on release so it does not reach the shell. Signal handlers and a panic hook
-//! restore the terminal on paths where `Drop` never runs.
+//! sending signals, so no reader thread is needed. The cursor is hidden like
+//! clack's, and pending input is discarded on release so it does not reach the
+//! shell. Signal handlers and a panic hook restore the terminal on paths where
+//! `Drop` never runs.
 
 use std::sync::{
     Once,
@@ -70,6 +71,9 @@ mod sys {
     static SAVED: Saved = Saved(UnsafeCell::new(MaybeUninit::uninit()));
     static BLOCKED: AtomicBool = AtomicBool::new(false);
 
+    const HIDE_CURSOR: &[u8] = b"\x1b[?25l";
+    const SHOW_CURSOR: &[u8] = b"\x1b[?25h";
+
     pub(super) struct Guard {
         previous: Vec<(Signal, SigAction)>,
     }
@@ -85,12 +89,14 @@ mod sys {
                 guard.disarm();
                 return None;
             }
+            write_cursor(HIDE_CURSOR);
             Some(guard)
         }
 
         /// Restores before disarming, so a signal in between still restores.
         pub(super) fn release(&mut self) {
             restore(libc::STDIN_FILENO);
+            write_cursor(SHOW_CURSOR);
             self.disarm();
         }
 
@@ -159,27 +165,44 @@ mod sys {
     pub(super) fn restore_if_blocked() {
         if BLOCKED.load(Ordering::SeqCst) {
             restore(libc::STDIN_FILENO);
+            write_cursor(SHOW_CURSOR);
         }
     }
 
+    /// Writes to stderr, where the progress row is drawn. Only async-signal-safe
+    /// calls, and like `restore` it leaves the terminal alone in the background.
+    fn write_cursor(sequence: &[u8]) {
+        if in_background(libc::STDIN_FILENO) {
+            return;
+        }
+        // SAFETY: `write` is async-signal-safe and only reads `sequence`.
+        unsafe { libc::write(libc::STDERR_FILENO, sequence.as_ptr().cast(), sequence.len()) };
+    }
+
     fn install_handlers() -> Vec<(Signal, SigAction)> {
-        let action = SigAction::new(
-            SigHandler::Handler(restore_and_reraise),
-            SaFlags::empty(),
-            SigSet::empty(),
-        );
-        // ISIG stays on, so Ctrl+\ sends SIGQUIT as well as Ctrl+C sending SIGINT.
-        // SIGHUP can arrive from `kill -HUP` while the terminal is still open.
-        [Signal::SIGINT, Signal::SIGQUIT, Signal::SIGTERM, Signal::SIGHUP]
-            .into_iter()
-            // Keep a disposition someone else chose, such as an ignored SIGINT.
-            .filter(|&signal| is_default(signal))
-            .filter_map(|signal| {
-                // SAFETY: the handler only calls async-signal-safe functions.
-                let previous = unsafe { sigaction(signal, &action) }.ok()?;
-                Some((signal, previous))
-            })
-            .collect()
+        type Handler = extern "C" fn(libc::c_int);
+        // ISIG stays on, so Ctrl+\ sends SIGQUIT as well as Ctrl+C sending SIGINT,
+        // and Ctrl+Z sends SIGTSTP. SIGHUP can arrive from `kill -HUP` while the
+        // terminal is still open.
+        [
+            (Signal::SIGINT, restore_and_reraise as Handler),
+            (Signal::SIGQUIT, restore_and_reraise),
+            (Signal::SIGTERM, restore_and_reraise),
+            (Signal::SIGHUP, restore_and_reraise),
+            (Signal::SIGTSTP, show_cursor_and_stop),
+        ]
+        .into_iter()
+        // Keep a disposition someone else chose, such as an ignored SIGINT.
+        .filter(|&(signal, _)| is_default(signal))
+        .filter_map(|(signal, handler)| {
+            // A stopped and continued process resumes interrupted calls.
+            let action =
+                SigAction::new(SigHandler::Handler(handler), SaFlags::SA_RESTART, SigSet::empty());
+            // SAFETY: the handlers only call async-signal-safe functions.
+            let previous = unsafe { sigaction(signal, &action) }.ok()?;
+            Some((signal, previous))
+        })
+        .collect()
     }
 
     /// Reads the disposition without replacing it, so a signal arriving now
@@ -201,6 +224,27 @@ mod sys {
         unsafe {
             libc::signal(signal, libc::SIG_DFL);
             libc::raise(signal);
+        }
+    }
+
+    /// The shell keeps a stopped job's terminal modes, but not its cursor, so
+    /// show the cursor while stopped and hide it again once continued.
+    extern "C" fn show_cursor_and_stop(signal: libc::c_int) {
+        write_cursor(SHOW_CURSOR);
+        // SAFETY: only async-signal-safe calls. Unblocking the raised signal runs
+        // its default action, which stops the process, or discards the signal in
+        // an orphaned process group. Execution continues here after SIGCONT.
+        unsafe {
+            let handler = libc::signal(signal, libc::SIG_DFL);
+            let mut set = MaybeUninit::<libc::sigset_t>::uninit();
+            libc::sigemptyset(set.as_mut_ptr());
+            libc::sigaddset(set.as_mut_ptr(), signal);
+            libc::raise(signal);
+            libc::pthread_sigmask(libc::SIG_UNBLOCK, set.as_ptr(), std::ptr::null_mut());
+            if BLOCKED.load(Ordering::SeqCst) {
+                libc::signal(signal, handler);
+                write_cursor(HIDE_CURSOR);
+            }
         }
     }
 }
@@ -254,6 +298,7 @@ mod sys {
                     return None;
                 }
             }
+            let _ = console::Term::stderr().hide_cursor();
             Some(Self(()))
         }
 
@@ -280,6 +325,7 @@ mod sys {
                 FlushConsoleInputBuffer(stdin());
                 SetConsoleMode(stdin(), mode);
             }
+            let _ = console::Term::stderr().show_cursor();
             let _ = SAVED.compare_exchange(mode, 0, Ordering::SeqCst, Ordering::SeqCst);
         }
     }
@@ -293,20 +339,45 @@ mod sys {
 
 #[cfg(all(test, unix))]
 mod tests {
-    use std::os::fd::{AsFd, AsRawFd, RawFd};
+    use std::os::fd::{AsFd, AsRawFd, OwnedFd, RawFd};
 
     use nix::{
         libc,
         poll::{PollFd, PollFlags, PollTimeout, poll},
         pty::openpty,
         sys::termios::{InputFlags, LocalFlags, tcgetattr},
-        unistd::write,
+        unistd::{read, write},
     };
 
     use super::sys;
 
     fn block(fd: RawFd) -> bool {
         sys::save(fd).is_some_and(|raw| sys::apply(fd, &raw))
+    }
+
+    /// The cursor changes written to the pty since the last call, `l` for each
+    /// hide and `h` for each show.
+    fn cursor_changes(master: &OwnedFd) -> String {
+        let mut output = Vec::new();
+        let mut buf = [0; 1024];
+        loop {
+            let mut fds = [PollFd::new(master.as_fd(), PollFlags::POLLIN)];
+            if poll(&mut fds, PollTimeout::from(100u16)).unwrap() == 0 {
+                break;
+            }
+            match read(master, &mut buf) {
+                Ok(0) | Err(_) => break,
+                Ok(n) => output.extend_from_slice(&buf[..n]),
+            }
+        }
+        output
+            .windows(6)
+            .filter_map(|sequence| match sequence {
+                b"\x1b[?25l" => Some('l'),
+                b"\x1b[?25h" => Some('h'),
+                _ => None,
+            })
+            .collect()
     }
 
     #[test]
@@ -421,7 +492,7 @@ mod tests {
                 .env(SIGNAL_CHILD, signal.to_string())
                 .stdin(pty.slave.try_clone().unwrap())
                 .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
+                .stderr(pty.slave.try_clone().unwrap())
                 .status()
                 .unwrap();
 
@@ -429,7 +500,48 @@ mod tests {
             let restored = tcgetattr(&pty.slave).unwrap();
             assert_eq!(restored.local_flags - LocalFlags::PENDIN, original.local_flags);
             assert_eq!(restored.input_flags, original.input_flags);
+            assert_eq!(cursor_changes(&pty.master), "lh", "{signal}");
         }
+    }
+
+    const STOP_CHILD: &str = "VP_SHARED_INPUT_STOP_CHILD";
+
+    /// Stops a process holding the input guard with SIGTSTP, as Ctrl+Z does, and
+    /// checks that the cursor is shown while stopped and hidden once continued.
+    #[test]
+    fn stop_shows_the_cursor_until_continued() {
+        use std::{os::unix::process::CommandExt, process::Command};
+
+        if std::env::var_os(STOP_CHILD).is_some() {
+            let mut guard = sys::Guard::new().expect("stdin is a terminal in line mode");
+            // SAFETY: the handler stops this process until the parent continues it.
+            unsafe { libc::raise(libc::SIGTSTP) };
+            guard.release();
+            return;
+        }
+
+        let pty = openpty(None, None).unwrap();
+        let mut child = Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "progress::input::tests::stop_shows_the_cursor_until_continued"])
+            .env(STOP_CHILD, "1")
+            .stdin(pty.slave.try_clone().unwrap())
+            .stdout(std::process::Stdio::null())
+            .stderr(pty.slave.try_clone().unwrap())
+            // A group of its own is not orphaned, so SIGTSTP stops it.
+            .process_group(0)
+            .spawn()
+            .unwrap();
+        let pid = i32::try_from(child.id()).unwrap();
+        let mut status = 0;
+        // SAFETY: waits for the child above and leaves a stopped child unreaped.
+        unsafe { libc::waitpid(pid, &raw mut status, libc::WUNTRACED) };
+        assert!(libc::WIFSTOPPED(status), "{status:#x}");
+        assert_eq!(cursor_changes(&pty.master), "lh");
+
+        // SAFETY: continues the stopped child above.
+        unsafe { libc::kill(pid, libc::SIGCONT) };
+        assert!(child.wait().unwrap().success());
+        assert_eq!(cursor_changes(&pty.master), "lh");
     }
 
     const LIFECYCLE_CHILD: &str = "VP_SHARED_INPUT_LIFECYCLE_CHILD";
@@ -466,7 +578,7 @@ mod tests {
                 .env(LIFECYCLE_CHILD, case)
                 .stdin(pty.slave.try_clone().unwrap())
                 .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
+                .stderr(pty.slave.try_clone().unwrap())
                 .status()
                 .unwrap();
 
@@ -474,6 +586,8 @@ mod tests {
             let restored = tcgetattr(&pty.slave).unwrap();
             assert_eq!(restored.local_flags - LocalFlags::PENDIN, original.local_flags, "{case}");
             assert_eq!(restored.input_flags, original.input_flags, "{case}");
+            let expected = if case == "drop" { "lhlh" } else { "lh" };
+            assert_eq!(cursor_changes(&pty.master), expected, "{case}");
         }
     }
 }

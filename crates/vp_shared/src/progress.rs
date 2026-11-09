@@ -36,7 +36,8 @@ pub async fn with_spinner<F: Future>(message: Option<&str>, future: F) -> F::Out
 
 /// A progress row, cleared on completion or cancellation. A download nested in a
 /// spinner restores that spinner instead. A row that is not nested blocks
-/// keyboard input until it is dropped. Keep this guard alive until the work finishes.
+/// keyboard input and hides the cursor until it is dropped. Keep this guard alive
+/// until the work finishes.
 pub struct Progress {
     bar: ProgressBar,
     restore: Option<(ProgressStyle, Duration)>,
@@ -66,7 +67,7 @@ impl Progress {
         }
     }
 
-    /// Show a new row and block keyboard input until it is cleared.
+    /// Show a new row, blocking keyboard input and hiding the cursor until it is cleared.
     fn start(bar: ProgressBar, style: ProgressStyle) -> Self {
         let mut progress = Self::new(bar, style, None);
         progress._input = input::block();
