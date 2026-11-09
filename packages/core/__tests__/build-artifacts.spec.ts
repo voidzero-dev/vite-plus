@@ -170,6 +170,7 @@ describe('build artifacts', () => {
 
     // `rolldown` is bundled into core, so it must not be a peer.
     expect(pkg.peerDependencies).not.toHaveProperty('rolldown');
+    expect(pkg.peerDependencies.tsrs).toBe(dtsPkg.peerDependencies.tsrs);
     const peers = Object.keys(dtsPkg.peerDependencies).filter((name) => name !== 'rolldown');
     expect(peers).toContain('vue-tsc');
     for (const name of peers) {

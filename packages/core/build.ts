@@ -826,12 +826,6 @@ async function mergePackageJson() {
     ...tsdownPkg.peerDependencies,
     ...vitePkg.peerDependencies,
   };
-  // tsrs currently publishes prereleases only. pnpm's lockfile verification
-  // does not match those releases against `*`, so spell out the equivalent
-  // prerelease-compatible range instead of leaving every frozen install broken.
-  if (destPkg.peerDependencies.tsrs === '*') {
-    destPkg.peerDependencies.tsrs = '>=0.0.0-0';
-  }
 
   // Merge peerDependenciesMeta from rolldown-plugin-dts, tsdown and vite
   destPkg.peerDependenciesMeta = {

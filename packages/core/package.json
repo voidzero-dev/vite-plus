@@ -141,6 +141,7 @@
     "tinyglobby": "^0.2.15",
     "tree-kill": "^1.2.2",
     "tsdown": "catalog:",
+    "tsrs": "0.23.0-ts7.1.0-beta",
     "typescript": "catalog:",
     "vite": "workspace:*"
   },
@@ -160,7 +161,7 @@
     "stylus": ">=0.54.8",
     "sugarss": "^5.0.0",
     "terser": "^5.16.0",
-    "tsrs": ">=0.0.0-0",
+    "tsrs": "*",
     "tsx": "^4.8.1",
     "typescript": "^5.0.0 || ^6.0.0 || ^7.0.0",
     "unplugin-unused": ">=0.5.0",
