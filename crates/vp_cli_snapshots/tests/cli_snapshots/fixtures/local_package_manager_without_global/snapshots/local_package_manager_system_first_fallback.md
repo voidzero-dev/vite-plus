@@ -9,9 +9,9 @@ With a global install in system-first mode, the local CLI downloads the package 
 ## `vpt chmod +x broken-bin/pnpm`
 
 
-## `PATH=${workspace}/broken-bin${PATH_SEPARATOR}${PATH} vp install`
+## `PATH=${workspace}/broken-bin${PATH_SEPARATOR}${PATH} npm_config_update_notifier=false vp install`
 
-the broken system pnpm falls back to a download
+the broken system pnpm falls back to a download; the real pnpm's update banner would race its output
 
 ```
 Already up to date

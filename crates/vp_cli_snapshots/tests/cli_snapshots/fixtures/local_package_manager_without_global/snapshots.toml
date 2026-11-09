@@ -22,6 +22,6 @@ skip-platforms = ["windows"]
 steps = [
   { argv = ["vpt", "write-file", "../home/.vite-plus/config.json", "{\"packageManagerShimModes\":{\"pnpm\":\"system_first\"}}\n"], snapshot = false },
   { argv = ["vpt", "chmod", "+x", "broken-bin/pnpm"], snapshot = false },
-  { argv = ["vp", "install"], envs = [["PATH", "${workspace}/broken-bin${PATH_SEPARATOR}${PATH}"]], comment = "the broken system pnpm falls back to a download" },
+  { argv = ["vp", "install"], envs = [["PATH", "${workspace}/broken-bin${PATH_SEPARATOR}${PATH}"], ["npm_config_update_notifier", "false"]], comment = "the broken system pnpm falls back to a download; the real pnpm's update banner would race its output" },
   { argv = ["vpt", "stat-file", "../home/.vite-plus/package_manager/pnpm/10.18.0"], comment = "the pinned pnpm was downloaded" },
 ]
