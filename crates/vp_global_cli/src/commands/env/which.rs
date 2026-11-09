@@ -11,7 +11,7 @@ use std::process::ExitStatus;
 use chrono::Local;
 use console::style;
 use vp_pm_cli::{
-    PackageManagerType, package_manager_bin_path, package_manager_install_dir,
+    PackageManagerType, package_manager_bin_path, resolve_package_manager_install_dir,
     resolve_package_manager_version_for_cwd,
 };
 use vp_shared::output;
@@ -160,13 +160,14 @@ async fn execute_package_manager_tool(
         return Ok(None);
     };
     let resolution = package_manager::resolve_shim_for(cwd, expected_type).await?;
-    let (version, source) = match &resolution {
+    let (version, source, expected_hash) = match &resolution {
         Some(resolution) => (
             resolution.version.to_string(),
             resolution.source_path.as_ref().map_or_else(
                 || resolution.source.to_string(),
                 |path| path.as_path().display().to_string(),
             ),
+            resolution.hash.clone(),
         ),
         None if expected_type == PackageManagerType::Npm => return Ok(None),
         None => (
@@ -174,12 +175,15 @@ async fn execute_package_manager_tool(
                 .await?
                 .to_string(),
             "registry fallback".into(),
+            None,
         ),
     };
 
-    let Some(install_dir) = package_manager_install_dir(expected_type, &version) else {
-        return Ok(None);
-    };
+    // The directory the shim selects for this pin (an unpinned manager uses the
+    // version-directory root); the existence check below reports whether it is
+    // actually present.
+    let install_dir =
+        resolve_package_manager_install_dir(expected_type, &version, expected_hash.as_deref())?;
     let bin_name = expected_type.bin_name_for_tool(tool);
     let tool_path = package_manager_bin_path(&install_dir, bin_name);
 
