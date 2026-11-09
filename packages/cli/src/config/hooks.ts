@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import {
   chmodSync,
   existsSync,
@@ -508,6 +509,36 @@ function getScopedHooksPath(scope: 'local' | 'worktree'): string {
   return result.status === 0 ? result.stdout?.toString().trim() : '';
 }
 
+// Exact Husky 9.1.7 generated contents, with CRLF and a final newline normalized.
+// https://github.com/typicode/husky/blob/v9.1.7/husky
+// https://github.com/typicode/husky/blob/v9.1.7/index.js
+// Unknown versions are deliberately preserved rather than guessing that their
+// dispatcher is safe to abandon.
+const HUSKY_GENERATED_SCRIPT_HASHES: Readonly<Record<string, string>> = {
+  h: 'd80994934f440d579303d6590fa1ce7bc0d31c650179d2089dea5191d1ab10d1',
+  'husky.sh': '21122903fca7209a13c991e5be68780636e28f1b8f0ae7ea07ed0065dfe37268',
+};
+
+function isUnmodifiedHuskyFile(directory: string, name: string): boolean {
+  const path = join(directory, name);
+  const stats = lstatSync(path);
+  if (!stats.isFile() || stats.isSymbolicLink() || stats.nlink !== 1) {
+    return false;
+  }
+  const contents = readFileSync(path, 'utf8').replace(/\r\n/g, '\n').replace(/\n$/, '');
+  if (name === '.gitignore') {
+    return contents === '*';
+  }
+  if (SUPPORTED_GIT_HOOK_NAMES.includes(name)) {
+    return contents === HOOK_STUB_SCRIPT;
+  }
+  const expectedHash = HUSKY_GENERATED_SCRIPT_HASHES[name];
+  return (
+    expectedHash !== undefined &&
+    createHash('sha256').update(contents).digest('hex') === expectedHash
+  );
+}
+
 /** Only reclaim an abandoned, repository-local Husky setup after hooks were moved. */
 function canReplaceStaleHuskyPath(hooksPath: string, location: HooksLocation): boolean {
   const normalized = normalizeHooksPath(hooksPath);
@@ -544,10 +575,10 @@ function canReplaceStaleHuskyPath(hooksPath: string, location: HooksLocation): b
     }
     // Git can execute hook names outside Vite+'s supported set (including
     // arbitrary names through `git hook run`). Only ignore generated files.
-    const generatedFiles = new Set(['h', 'husky.sh', '.gitignore', ...SUPPORTED_GIT_HOOK_NAMES]);
     if (
       (huskyStats && readdirSync(huskyDir).some((name) => name !== '_')) ||
-      (dispatcherStats && readdirSync(dispatcherDir).some((name) => !generatedFiles.has(name)))
+      (dispatcherStats &&
+        readdirSync(dispatcherDir).some((name) => !isUnmodifiedHuskyFile(dispatcherDir, name)))
     ) {
       return false;
     }
