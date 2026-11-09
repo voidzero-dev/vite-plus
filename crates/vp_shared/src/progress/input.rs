@@ -214,8 +214,7 @@ mod sys {
 
     type Handle = *mut c_void;
 
-    // `(DWORD)-10`
-    const STD_INPUT_HANDLE: u32 = 0xFFFF_FFF6;
+    const STD_INPUT_HANDLE: u32 = -10i32 as u32;
     const ENABLE_LINE_INPUT: u32 = 0x0002;
     const ENABLE_ECHO_INPUT: u32 = 0x0004;
     const LINE_MODE: u32 = ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT;
