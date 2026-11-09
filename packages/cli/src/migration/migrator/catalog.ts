@@ -126,10 +126,29 @@ export function yarnSupportsCatalog(version: string): boolean {
 
 const BUN_TOP_LEVEL_CATALOG_MIN_VERSION = '1.2.21';
 
-// Bun before 1.2.21 reads only `workspaces.catalog`, so a top-level `catalog`
-// fails with "catalog: failed to resolve" there (verified on 1.2.14 to 1.2.20).
-export function bunSupportsTopLevelCatalog(version: string): boolean {
-  return versionAtLeast(version, BUN_TOP_LEVEL_CATALOG_MIN_VERSION, ['latest', 'canary']);
+// Bun resolves `catalog:` references ONLY inside a workspace: a root
+// package.json with a `workspaces` field. An empty one (`[]` or
+// `{ packages: [] }`) is enough (#3375). Bun before 1.2.21 also ignores a
+// top-level `catalog` or `catalogs` (verified on 1.2.14 to 1.2.20), so it
+// needs the nested location that `rewriteBunCatalog` keeps in place. Otherwise
+// `catalog:` edges make `bun install` abort with "vite@catalog: failed to
+// resolve", so the toolchain edges must stay concrete.
+export function bunSupportsCatalog(
+  pkg: { workspaces?: NpmWorkspaces; catalog?: Record<string, string> },
+  version: string,
+): boolean {
+  const { workspaces } = pkg;
+  if (workspaces == null) {
+    return false;
+  }
+  // Mirrors `useWorkspacesCatalog` in rewriteBunCatalog.
+  const writesNestedCatalog =
+    !Array.isArray(workspaces) &&
+    (workspaces.catalog != null || (pkg.catalog == null && workspaces.catalogs != null));
+  return (
+    writesNestedCatalog ||
+    versionAtLeast(version, BUN_TOP_LEVEL_CATALOG_MIN_VERSION, ['latest', 'canary'])
+  );
 }
 
 // Whether a `catalog:` reference resolves for this package manager and version:
@@ -1210,18 +1229,20 @@ export function rewriteRootWorkspacePackageJson(
       };
     } else if (packageManager === PackageManager.bun) {
       // bun overrides are handled in rewriteBunCatalog() with catalog: references
+      // when the workspace supports a catalog. Otherwise they stay concrete.
       // The browser override has no catalog entry and was pruned above with
       // stale bundled-package pins. Restore its current concrete version.
-      if (managed['@vitest/browser']) {
+      if (!supportCatalog) {
+        pkg.overrides = { ...pkg.overrides, ...managed };
+      } else if (managed['@vitest/browser']) {
         pkg.overrides = { ...pkg.overrides, '@vitest/browser': managed['@vitest/browser'] };
       }
       // Bun walks transitive peer-deps before resolving overrides; vitest 4.1.9
       // declares peer `vite ^6 || ^7 || ^8` and aborts unless `vite` is a direct
       // dep at the workspace root. Mirror the override as a devDep; the override
-      // configured in rewriteBunCatalog still redirects it to vite-plus-core. A
-      // bun workspace root always manages a catalog, so the direct edge resolves
-      // to a `catalog:` reference. See https://github.com/oven-sh/bun/issues/8406.
-      setDirectViteEdge(pkg, true, catalogDependencyResolver);
+      // configured in rewriteBunCatalog still redirects it to vite-plus-core.
+      // See https://github.com/oven-sh/bun/issues/8406.
+      setDirectViteEdge(pkg, supportCatalog, catalogDependencyResolver);
     } else if (packageManager === PackageManager.pnpm) {
       const overrideKeys = Object.keys(managedOverridePackages(workspaceUsesVitest));
       const usePnpmWorkspaceSettings = pnpmSupportsWorkspaceSettings(pnpmVersion ?? '');

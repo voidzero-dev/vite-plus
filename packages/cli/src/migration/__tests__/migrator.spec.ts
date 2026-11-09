@@ -8021,6 +8021,29 @@ describe('rewriteMonorepo bun catalog', () => {
     expect(overrides.vite).toBe('catalog:');
   });
 
+  it('keeps concrete specs and writes no top-level catalog on bun < 1.2.21', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'bun-monorepo',
+        workspaces: [],
+        devDependencies: { vite: '^7.0.0' },
+        packageManager: 'bun@1.2.20',
+      }),
+    );
+    rewriteMonorepo(makeWorkspaceInfo(tmpDir, PackageManager.bun, '1.2.20'), true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      overrides: Record<string, string>;
+      catalog?: Record<string, string>;
+    };
+    expect(pkg.catalog).toBeUndefined();
+    expect(pkg.devDependencies.vite).toBe(VITE_PLUS_OVERRIDE_PACKAGES.vite);
+    expect(pkg.devDependencies['vite-plus']).toBe('latest');
+    expect(pkg.overrides.vite).toBe(VITE_PLUS_OVERRIDE_PACKAGES.vite);
+  });
+
   it('writes catalog to workspaces.catalog when workspaces is an object with existing catalog', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
