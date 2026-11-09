@@ -24,7 +24,7 @@ test.each([false, true])(
   'runs the upgrade pipeline and retains metadata (install fails: %s)',
   async (failInstall) => {
     const root = resolve(import.meta.dirname, '../../..');
-    const { root: tempDir, metaDir, corePath, pluginPath, yukuPath } = createSyncFixture();
+    const { root: tempDir, metaDir, corePath, pluginPath, parserPath } = createSyncFixture();
     onTestFinished(() => {
       vi.mocked(childProcess.execFileSync).mockReset();
       vi.restoreAllMocks();
@@ -114,12 +114,12 @@ test.each([false, true])(
       if (args?.[0] === 'dedupe') {
         // The actual bundled plugin can change during dependency deduplication.
         writeJson(pluginPath, {
-          dependencies: { yuku: '^0.11.0' },
+          dependencies: { 'yuku-codegen': '^0.11.0', 'yuku-parser': '^0.11.0' },
         });
-        writeJson(yukuPath, { version: '0.11.2' });
+        writeJson(parserPath, { version: '0.11.2' });
       }
       if (commands.length === 4) {
-        expect(readJson(corePath).dependencies['yuku']).toBe('0.11.2');
+        expect(readJson(corePath).dependencies['yuku-parser']).toBe('0.11.2');
       }
       return Buffer.from('');
     });
@@ -128,7 +128,7 @@ test.each([false, true])(
     if (failInstall) {
       await expect(import('../upgrade-deps.ts')).rejects.toThrow('Installation failed');
       expect(commands).toEqual([['install', '--no-frozen-lockfile']]);
-      expect(readJson(corePath).dependencies['yuku']).toBe('^0.9.3');
+      expect(readJson(corePath).dependencies['yuku-parser']).toBe('^0.9.3');
     } else {
       await import('../upgrade-deps.ts');
       expect(commands).toEqual([
@@ -158,7 +158,7 @@ test.each([false, true])(
         : { old: pinnedOxcNode, new: 'a'.repeat(40), tag: 'v1.2.3' },
     );
     if (!failInstall) {
-      expect(versions['yuku']).toEqual({ old: '^0.9.3', new: '0.11.2' });
+      expect(versions['yuku-parser']).toEqual({ old: '^0.9.3', new: '0.11.2' });
     }
     expect(readFileSync(join(metaDir, 'commit-message.txt'), 'utf8')).toContain(
       '- lint-staged: 16.2.6 -> 17.5.1',
@@ -183,22 +183,26 @@ function createSyncFixture() {
   onTestFinished(() => rmSync(root, { recursive: true, force: true }));
   const corePath = join(root, 'packages/core/package.json');
   const pluginPath = join(root, 'store/tsdown/node_modules/rolldown-plugin-dts/package.json');
-  const yukuPath = join(dirname(pluginPath), 'node_modules/yuku/package.json');
+  const parserPath = join(dirname(pluginPath), 'node_modules/yuku-parser/package.json');
   const vitePath = join(root, 'vite/packages/vite/package.json');
   const metaDir = join(root, 'meta');
   const versionsPath = join(metaDir, 'versions.json');
   writeJson(corePath, {
-    dependencies: { yuku: '^0.9.3', postcss: '^8.5.6' },
+    dependencies: { 'yuku-parser': '^0.9.3', postcss: '^8.5.6' },
     optionalDependencies: { fsevents: '~2.3.3' },
     devDependencies: { 'rolldown-plugin-dts': '^0.28.0' },
   });
   writeJson(join(root, 'store/tsdown/package.json'), { name: 'tsdown', version: '0.23.0' });
   writeJson(pluginPath, {
-    dependencies: { yuku: '~0.10.2' },
+    dependencies: {
+      'yuku-ast': '^0.10.1',
+      'yuku-codegen': '^0.10.1',
+      'yuku-parser': '~0.10.2',
+    },
   });
-  writeJson(yukuPath, { version: '0.10.3' });
+  writeJson(parserPath, { version: '0.10.3' });
   // Core's existing parser is not the version used by the bundled plugin.
-  writeJson(join(root, 'packages/core/node_modules/yuku/package.json'), {
+  writeJson(join(root, 'packages/core/node_modules/yuku-parser/package.json'), {
     version: '0.9.3',
   });
   // A pnpm-style symlink ensures resolution starts at the real tsdown package.
@@ -209,7 +213,7 @@ function createSyncFixture() {
     'junction',
   );
   writeJson(join(root, 'packages/core/node_modules/rolldown-plugin-dts/package.json'), {
-    dependencies: { yuku: '^0.8.1' },
+    dependencies: { 'yuku-codegen': '^0.8.1', 'yuku-parser': '^0.8.1' },
   });
   writeJson(vitePath, {
     dependencies: { postcss: '^8.5.28' },
@@ -227,60 +231,60 @@ function createSyncFixture() {
         stdio: 'pipe',
       },
     );
-  return { root, corePath, pluginPath, yukuPath, vitePath, metaDir, versionsPath, run };
+  return { root, corePath, pluginPath, parserPath, vitePath, metaDir, versionsPath, run };
 }
 
-test('pins bundled Yuku, syncs Vite ranges, and preserves upgrade metadata', () => {
+test('pins the bundled parser, syncs Vite ranges, and preserves upgrade metadata', () => {
   const fixture = createSyncFixture();
   const { corePath, versionsPath, metaDir, run } = fixture;
   run();
   expect(readJson(corePath)).toEqual({
-    dependencies: { yuku: '0.10.3', postcss: '^8.5.28' },
+    dependencies: { 'yuku-parser': '0.10.3', postcss: '^8.5.28' },
     optionalDependencies: { fsevents: '~2.4.0' },
     devDependencies: { 'rolldown-plugin-dts': '^0.28.0' },
   });
   expect(readJson(versionsPath)).toEqual({
     oxlint: { old: '1.86.0', new: '1.87.0' },
-    yuku: { old: '^0.9.3', new: '0.10.3' },
+    'yuku-parser': { old: '^0.9.3', new: '0.10.3' },
     postcss: { old: '^8.5.6', new: '^8.5.28' },
     fsevents: { old: '~2.3.3', new: '~2.4.0' },
   });
   expect(readFileSync(join(metaDir, 'pr-body.md'), 'utf8')).toContain(
-    '| `yuku` | `^0.9.3` | `0.10.3` |',
+    '| `yuku-parser` | `^0.9.3` | `0.10.3` |',
   );
 
   // A second pass after lockfile deduplication must retain the original ranges.
   writeJson(fixture.pluginPath, {
-    dependencies: { yuku: '^0.11.0' },
+    dependencies: { 'yuku-codegen': '^0.11.0', 'yuku-parser': '^0.11.0' },
   });
-  writeJson(fixture.yukuPath, { version: '0.11.2' });
+  writeJson(fixture.parserPath, { version: '0.11.2' });
   run();
   expect(readJson(corePath).dependencies).not.toHaveProperty('yuku-ast');
   expect(readJson(corePath).dependencies).not.toHaveProperty('yuku-codegen');
-  expect(readJson(corePath).dependencies['yuku']).toBe('0.11.2');
-  expect(readJson(versionsPath)['yuku']).toEqual({ old: '^0.9.3', new: '0.11.2' });
+  expect(readJson(corePath).dependencies['yuku-parser']).toBe('0.11.2');
+  expect(readJson(versionsPath)['yuku-parser']).toEqual({ old: '^0.9.3', new: '0.11.2' });
   expect(readFileSync(join(metaDir, 'commit-message.txt'), 'utf8')).toContain(
-    '- yuku: ^0.9.3 -> 0.11.2',
+    '- yuku-parser: ^0.9.3 -> 0.11.2',
   );
   const before = readFileSync(corePath, 'utf8');
   run();
   expect(readFileSync(corePath, 'utf8')).toBe(before);
 });
 
-test('updates the Yuku pin when its installed version changes within the same range', () => {
-  const { corePath, yukuPath, versionsPath, run } = createSyncFixture();
+test('updates the parser pin when its installed version changes within the same range', () => {
+  const { corePath, parserPath, versionsPath, run } = createSyncFixture();
   run();
-  writeJson(yukuPath, { version: '0.10.4' });
+  writeJson(parserPath, { version: '0.10.4' });
   run();
-  expect(readJson(corePath).dependencies['yuku']).toBe('0.10.4');
-  expect(readJson(versionsPath)['yuku']).toEqual({ old: '^0.9.3', new: '0.10.4' });
+  expect(readJson(corePath).dependencies['yuku-parser']).toBe('0.10.4');
+  expect(readJson(versionsPath)['yuku-parser']).toEqual({ old: '^0.9.3', new: '0.10.4' });
 });
 
 test.each([undefined, '', ' '])(
-  'fails without writing core for an invalid Yuku version: %s',
+  'fails without writing core for an invalid parser version: %s',
   (version) => {
-    const { corePath, yukuPath, versionsPath, run } = createSyncFixture();
-    writeJson(yukuPath, { version });
+    const { corePath, parserPath, versionsPath, run } = createSyncFixture();
+    writeJson(parserPath, { version });
     const before = readFileSync(corePath, 'utf8');
     expect(run).toThrow('Missing version');
     expect(readFileSync(corePath, 'utf8')).toBe(before);
@@ -291,7 +295,7 @@ test.each([undefined, '', ' '])(
 );
 
 test.each([
-  { source: 'pluginPath', field: 'dependencies', name: 'yuku' },
+  { source: 'pluginPath', field: 'dependencies', name: 'yuku-parser' },
   { source: 'vitePath', field: 'dependencies', name: 'postcss' },
   { source: 'vitePath', field: 'optionalDependencies', name: 'fsevents' },
 ] as const)('fails without writing core when upstream removes $name', ({ source, field, name }) => {

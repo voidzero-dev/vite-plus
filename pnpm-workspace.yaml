@@ -19,8 +19,8 @@ catalog:
   # Kept at the oxlint version by .github/scripts/upgrade-deps.ts
   '@oxlint/plugins': =1.92.0
   '@rolldown/pluginutils': ^1.0.0
-  '@tsdown/css': ^0.23.7
-  '@tsdown/exe': ^0.23.7
+  '@tsdown/css': ^0.23.4
+  '@tsdown/exe': ^0.23.4
   '@types/cross-spawn': ^6.0.6
   '@types/node': 24.10.3
   '@types/validate-npm-package-name': ^4.0.2
@@ -66,7 +66,7 @@ catalog:
   signal-exit: 4.1.0
   source-map: 0.8.0
   tinyglobby: ^0.2.15
-  tsdown: ^0.23.7
+  tsdown: ^0.23.4
   tsrs: 0.23.0-ts7.1.0-beta
   typescript: ~7.0.2
   valibot: 1.5.0

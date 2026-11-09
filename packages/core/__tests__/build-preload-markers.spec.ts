@@ -15,7 +15,7 @@ it.each([false, true])(
     onTestFinished(() => rm(root, { recursive: true, force: true, maxRetries: 5 }));
     writeFileSync(
       path.join(root, 'entry.js'),
-      "globalThis.load = flag => flag ? import('./lazy.js') : import('./other.js');\n",
+      "globalThis.load = () => import('./lazy.js');\nglobalThis.other = () => import('./other.js');\n",
     );
     writeFileSync(path.join(root, 'lazy.js'), "import './lazy.css'; export default 'lazy';\n");
     writeFileSync(path.join(root, 'other.js'), "export default 'other';\n");

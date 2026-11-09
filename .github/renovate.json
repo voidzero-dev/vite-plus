@@ -99,7 +99,7 @@
         "vite",
         "vitest",
         "vitest-dev",
-        "yuku"
+        "yuku-parser"
       ],
       "enabled": false
     },
@@ -212,7 +212,6 @@
         "rolldown-ariadne",
         "rolldown-notify",
         "rolldown-notify-debouncer-full",
-        "rolldown-notify-napi",
         "rustc-hash",
         "saphyr",
         "schemars",

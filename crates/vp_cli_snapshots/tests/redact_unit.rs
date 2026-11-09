@@ -11,7 +11,7 @@ mod redact;
 
 use redact::{redact_output, redact_version_probe_output};
 
-const TS7_WARNING: &str = "warn: The `tsgo` generator on TypeScript 7.0 is deprecated and will be removed in the next minor. Upgrade to TypeScript 7.1 or later.";
+const TS7_WARNING: &str = "warn: TypeScript 7.0 does not yet have a stable API and is experimental. Some options will be unavailable.";
 
 #[test]
 fn normalizes_pack_warning_interleavings_without_dropping_messages() {

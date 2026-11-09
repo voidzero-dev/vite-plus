@@ -132,7 +132,7 @@ describe('build artifacts', () => {
     expect(fs.existsSync(path.resolve(path.dirname(binPath), '../node/cli.js'))).toBe(true);
   });
 
-  it('keeps Yuku and its native loader external', async () => {
+  it('bundles JavaScript Yuku packages and keeps the native parser external', async () => {
     await init();
     const tsdownDir = path.join(distDir, 'tsdown');
     const imports = fs.readdirSync(tsdownDir).flatMap((file) => {
@@ -142,20 +142,23 @@ describe('build artifacts', () => {
       const [imports] = parse(fs.readFileSync(path.join(tsdownDir, file), 'utf8'));
       return imports.map((entry) => entry.specifier);
     });
-    expect(imports).toContain('yuku');
-    expect(imports).toContain('yuku/utils');
-    expect(imports).not.toContain('yuku-parser');
+    expect(imports).toContain('yuku-parser');
+    expect(imports).not.toContain('yuku-ast');
+    expect(imports).not.toContain('yuku-codegen');
   });
 
-  it('pins external Yuku to the version used by the bundled dts plugin', () => {
+  it('pins the external parser to the Yuku versions used by the bundled dts plugin', () => {
     const coreRequire = createRequire(path.join(coreDir, 'package.json'));
     const pkg = coreRequire('./package.json');
     const tsdownRequire = createRequire(coreRequire.resolve('tsdown/package.json'));
     const pluginRequire = createRequire(tsdownRequire.resolve('rolldown-plugin-dts/package.json'));
-    const yukuVersion = pluginRequire('yuku/package.json').version;
+    const parserVersion = pluginRequire('yuku-parser/package.json').version;
 
-    expect(pkg.dependencies.yuku).toBe(yukuVersion);
-    expect(coreRequire('yuku/package.json').version).toBe(yukuVersion);
+    expect(pkg.dependencies['yuku-parser']).toBe(parserVersion);
+    expect(coreRequire('yuku-parser/package.json').version).toBe(parserVersion);
+    for (const name of ['yuku-ast', 'yuku-codegen']) {
+      expect(pluginRequire(`${name}/package.json`).version, name).toBe(parserVersion);
+    }
   });
 
   // The bundled dts plugin resolves `vue-tsc`, `@volar/typescript`,
@@ -170,7 +173,6 @@ describe('build artifacts', () => {
 
     // `rolldown` is bundled into core, so it must not be a peer.
     expect(pkg.peerDependencies).not.toHaveProperty('rolldown');
-    expect(pkg.peerDependencies.tsrs).toBe(dtsPkg.peerDependencies.tsrs);
     const peers = Object.keys(dtsPkg.peerDependencies).filter((name) => name !== 'rolldown');
     expect(peers).toContain('vue-tsc');
     for (const name of peers) {

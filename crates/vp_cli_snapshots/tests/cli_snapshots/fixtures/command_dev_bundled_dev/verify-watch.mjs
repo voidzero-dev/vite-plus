@@ -62,14 +62,22 @@ try {
 
   for (const nativeWatch of nativeWatchOptions) {
     assert.equal(nativeWatch.skipWrite, true);
+    // Rolldown 1.2 receives these settings directly on watch.
     assert.deepEqual(
-      nativeWatch.watcher,
+      {
+        usePolling: nativeWatch.usePolling,
+        pollInterval: nativeWatch.pollInterval,
+        compareContentsForPolling: nativeWatch.compareContentsForPolling,
+        useDebounce: nativeWatch.useDebounce,
+        debounceDuration: nativeWatch.debounceDuration,
+        debounceTickRate: nativeWatch.debounceTickRate,
+      },
       {
         usePolling: true,
         pollInterval: 1234,
         compareContentsForPolling: true,
         useDebounce: true,
-        debounceDelay: 250,
+        debounceDuration: 250,
         debounceTickRate: 50,
       },
       'bundled dev must forward polling and debounce options to the native watcher',

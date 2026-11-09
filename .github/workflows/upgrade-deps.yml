@@ -132,6 +132,17 @@ jobs:
             - Vitest is capped at the latest stable `5.x` release. Keep the exact
               version selected by the upgrade script when merging upstream catalogs.
               Official Vitest packages must use that version. Do not bypass the cap.
+            - Rolldown must use the same major.minor release line required by both
+              the pinned Vite and the installed tsdown. Read their original
+              `dependencies.rolldown` ranges from `vite/packages/vite/package.json`
+              and `packages/core/node_modules/tsdown/package.json`; the workspace
+              override can hide incompatible requirements. Select a published
+              Rolldown patch version that satisfies both ranges. Patch differences
+              are allowed; mixing `1.2.x` and `1.3.x` requirements is not.
+              If the latest releases require different Rolldown minor versions,
+              defer the incompatible upgrades and keep a compatible combination.
+              Keep `@tsdown/css` and `@tsdown/exe` at the selected tsdown version.
+              Do not add compatibility patches or overrides to bypass this rule.
             - Sync-remote tool: `pnpm tool sync-remote` (source in
               `packages/tools/src/sync-remote-deps.ts`) — clones rolldown/vite into the
               working tree, imports only their build roots and bundled packages,
@@ -144,7 +155,7 @@ jobs:
               follow the pinned upstream requirements.
             - After changing tsdown or rolldown-plugin-dts, run
               `node .github/scripts/upgrade-deps.ts --sync-bundled-deps`, then
-              `pnpm install --no-frozen-lockfile`. Core's external `yuku` must
+              `pnpm install --no-frozen-lockfile`. Core's external `yuku-parser` must
               use the exact installed version resolved by the plugin bundled through
               tsdown, so it stays aligned with the bundled Yuku code. Do not replace
               this pin with a version range. The sync command also
@@ -157,7 +168,11 @@ jobs:
             - build-upstream action: ${{ steps.build-upstream.outcome }}
 
             ### Fixups to perform (in order)
-            1. If the `Upgrade dependencies and sync upstream` outcome above is `failure`,
+            1. Check the Rolldown compatibility policy even if the earlier steps succeeded.
+               Correct incompatible version selections before other fixes. Keep the
+               upstream branch and commit, catalog, lockfiles, bundled versions,
+               and upgrade metadata consistent with the selected versions.
+               If the `Upgrade dependencies and sync upstream` outcome above is `failure`,
                fix it FIRST — nothing else will work until the merged workspace is correct.
                Read the failed command in the upgrade log and re-run it. Resolve
                catalog conflicts against the pinned Rolldown and Vite sources.
@@ -167,6 +182,9 @@ jobs:
                upgrade operations: `pnpm dedupe`,
                `node .github/scripts/upgrade-deps.ts --sync-bundled-deps`, then
                `pnpm install --no-frozen-lockfile` before building or testing.
+               Check the original Vite and tsdown Rolldown requirements again after
+               synchronization and deduplication; successful installation is not proof
+               of compatibility because Rolldown resolves through a workspace override.
             2. Reuse successful outputs from `./.github/actions/build-upstream/action.yml`.
                If the action failed, fix the failure and complete its remaining build commands.
                Rebuild affected packages after source or dependency changes. Preserve the
