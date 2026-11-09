@@ -1048,7 +1048,13 @@ function rewriteCatalogObject(
     delete catalog[name];
   }
   if (VITEST_IS_MANAGED_OVERRIDE) {
-    for (const name of Object.keys(catalog)) {
+    // Like the pnpm catalog, add every declared alignable @vitest/* when the
+    // catalog owns `vitest`, so its new `catalog:` reference resolves. #2005
+    const names =
+      addMissing && 'vitest' in catalog
+        ? new Set([...Object.keys(catalog), ...vitestEcosystemPackages])
+        : Object.keys(catalog);
+    for (const name of names) {
       if (vitestEcosystemPackages.has(name) && isAlignableVitestEcosystemPackage(name)) {
         catalog[name] = VITEST_VERSION;
       }

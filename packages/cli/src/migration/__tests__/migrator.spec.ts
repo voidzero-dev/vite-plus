@@ -2137,6 +2137,34 @@ describe('ensureVitePlusBootstrap', () => {
     expect(pkg.overrides).toEqual({ vite: 'catalog:' });
   });
 
+  it('adds a missing @vitest/* entry to the bun catalog it now references', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'bun-coverage',
+        devDependencies: {
+          '@vitest/coverage-v8': '4.1.9',
+          vite: 'catalog:',
+          'vite-plus': 'catalog:',
+        },
+        overrides: { vite: 'catalog:' },
+        workspaces: {
+          packages: [],
+          catalog: { vite: VITE_PLUS_OVERRIDE_PACKAGES.vite, 'vite-plus': '0.1.20' },
+        },
+      }),
+    );
+
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.bun, '1.4.4'));
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      workspaces: { catalog: Record<string, string> };
+    };
+    expect(pkg.devDependencies['@vitest/coverage-v8']).toBe('catalog:');
+    expect(pkg.workspaces.catalog['@vitest/coverage-v8']).toBe(VITEST_VERSION);
+  });
+
   it('reports a stale bun catalog vite-plus value as pending', () => {
     // The `catalog:` spec itself looks current, so only the catalog value shows
     // that vite-plus still needs the upgrade.
