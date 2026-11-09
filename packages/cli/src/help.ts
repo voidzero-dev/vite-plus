@@ -830,6 +830,15 @@ const commandHelpDocs = {
         rows: [
           { label: '--fix', description: 'Auto-fix format and lint issues' },
           {
+            label: '--watch',
+            description: 'Re-run checks when workspace files change (cannot be used with --fix)',
+          },
+          {
+            label: '--debounce <MS>',
+            description:
+              'Wait for changes to stop before checking (default: 300ms; requires --watch)',
+          },
+          {
             label: '--quiet',
             description: 'Disable reporting on warnings, only errors are reported',
           },
@@ -849,7 +858,12 @@ const commandHelpDocs = {
       },
       {
         title: 'Examples',
-        lines: ['  vp check', '  vp check --fix', '  vp check --no-lint src/index.ts'],
+        lines: [
+          '  vp check',
+          '  vp check --fix',
+          '  vp check --watch --debounce 500',
+          '  vp check --no-lint src/index.ts',
+        ],
       },
     ],
     documentationUrl: documentationUrl('/guide/check'),

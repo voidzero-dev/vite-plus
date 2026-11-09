@@ -83,6 +83,12 @@ pub enum SynthesizableSubcommand {
     },
     /// Run format, lint, and type checks
     Check {
+        /// Re-run checks when project files change
+        #[arg(long, conflicts_with = "fix")]
+        watch: bool,
+        /// Wait for this many milliseconds of inactivity before re-running checks
+        #[arg(long, value_name = "MS", requires = "watch")]
+        debounce: Option<u64>,
         /// Auto-fix format and lint issues
         #[arg(long)]
         fix: bool,

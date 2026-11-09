@@ -8363,6 +8363,7 @@ dependencies = [
  "oxc-node",
  "petgraph",
  "pretty_assertions",
+ "rolldown-notify",
  "rolldown_binding",
  "rustc-hash",
  "serde",
