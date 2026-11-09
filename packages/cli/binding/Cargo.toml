@@ -48,7 +48,10 @@ oxc-node = { workspace = true, optional = true }
 napi-build = { workspace = true }
 
 [dev-dependencies]
+flate2 = { workspace = true }
+httpmock = { workspace = true }
 pretty_assertions = { workspace = true }
+tar = { workspace = true }
 tempfile = { workspace = true }
 vp_shared = { workspace = true, features = ["test-utils"] }
 
