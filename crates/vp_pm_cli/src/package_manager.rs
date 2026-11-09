@@ -1066,7 +1066,22 @@ async fn fetch_dist_tag_version(
     let client = HttpClient::with_npm_config(3, 500, npm_config.clone());
     for url in urls {
         match client.get_json::<PackageJson>(url).await {
-            Ok(package_json) => return Ok(package_json.version),
+            Ok(package_json) => {
+                let version = package_json.version;
+                // The registry controls this reply, and a dist tag must resolve
+                // to an exact version. Require strict semver on the raw value,
+                // as the installer does, so the returned version has no
+                // surrounding whitespace or other characters.
+                if Version::parse(&version).is_err() {
+                    return Err(Error::InvalidArgument(
+                        format!(
+                            "registry returned an invalid {package_manager_type} version {version:?} for dist-tag {tag:?}"
+                        )
+                        .into(),
+                    ));
+                }
+                return Ok(version);
+            }
             Err(error) if is_not_found(&error) => {}
             Err(error) => return Err(error),
         }
@@ -2927,6 +2942,39 @@ mod tests {
             },
         )
         .await;
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn dist_tag_resolution_rejects_a_non_semver_version() {
+        use httpmock::prelude::*;
+
+        // A raw value that is not an exact version, including one that is semver
+        // only after trimming, must be rejected rather than returned unchanged.
+        for payload in ["1.0.0 not a version", "\n1.0.0", " 1.0.0", "1.0.0\n", "1.0.0 "]
+        {
+            let server = MockServer::start();
+            server.mock(|when, then| {
+                when.method(GET).path("/pnpm/latest");
+                then.status(200).json_body(serde_json::json!({ "version": payload }));
+            });
+            let registry = server.base_url();
+            let vp_home = create_temp_dir();
+            EnvConfig::with_vars_async(
+                [
+                    (env_vars::VP_HOME, vp_home.path().as_os_str()),
+                    (env_vars::NPM_CONFIG_REGISTRY, std::ffi::OsStr::new(&registry)),
+                ],
+                |_| async {
+                    let result =
+                        resolve_package_manager_version(PackageManagerType::Pnpm, "latest").await;
+                    assert!(
+                        matches!(result, Err(Error::InvalidArgument(_))),
+                        "a dist-tag reply {payload:?} that is not strict semver must be rejected: {result:?}"
+                    );
+                },
+            )
+            .await;
+        }
     }
 
     #[tokio::test(flavor = "current_thread")]
