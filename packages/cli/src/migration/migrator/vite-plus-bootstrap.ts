@@ -726,12 +726,18 @@ export function detectVitePlusBootstrapPending(
     // `catalog:` references, so the catalog resolver must NOT be consulted —
     // otherwise a dangling `catalog:` override resolves through the dead catalog
     // field and is mistaken for satisfied, masking the pending rewrite.
-    return !overridesSatisfyVitePlus(
-      pkg.overrides,
-      usesVitest,
-      supportCatalog ? readBunCatalogDependencyResolver(pkg) : undefined,
-      'bare',
-      usesWebdriverio,
+    const bunCatalogResolver = supportCatalog ? readBunCatalogDependencyResolver(pkg) : undefined;
+    // A `catalog:` vite-plus spec looks current, so judge its catalog value too.
+    return (
+      (supportCatalog &&
+        workspaceCatalogVitePlusDependencyPending(projectPath, packages, bunCatalogResolver)) ||
+      !overridesSatisfyVitePlus(
+        pkg.overrides,
+        usesVitest,
+        bunCatalogResolver,
+        'bare',
+        usesWebdriverio,
+      )
     );
   }
   if (packageManager === PackageManager.pnpm) {

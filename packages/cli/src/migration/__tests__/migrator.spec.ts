@@ -2137,6 +2137,35 @@ describe('ensureVitePlusBootstrap', () => {
     expect(pkg.overrides).toEqual({ vite: 'catalog:' });
   });
 
+  it('reports a stale bun catalog vite-plus value as pending', () => {
+    // The `catalog:` spec itself looks current, so only the catalog value shows
+    // that vite-plus still needs the upgrade.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'bun-stale-catalog',
+        devDependencies: { vite: 'catalog:', 'vite-plus': 'catalog:' },
+        overrides: { vite: 'catalog:' },
+        workspaces: {
+          packages: [],
+          catalog: { vite: VITE_PLUS_OVERRIDE_PACKAGES.vite, 'vite-plus': '0.1.20' },
+        },
+        devEngines: {
+          packageManager: { name: 'bun', version: '1.4.4', onFail: 'download' },
+        },
+      }),
+    );
+
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.bun)).toBe(true);
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.bun, '1.4.4'));
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      workspaces: { catalog: Record<string, string> };
+    };
+    expect(pkg.workspaces.catalog['vite-plus']).not.toBe('0.1.20');
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.bun)).toBe(false);
+  });
+
   it('keeps concrete specs on bun < 1.2.21, which ignores a top-level catalog', () => {
     // Without an existing `workspaces.catalog`, rewriteBunCatalog would write a
     // top-level `catalog`, which bun 1.2.14 to 1.2.20 cannot resolve.
