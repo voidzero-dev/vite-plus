@@ -16,7 +16,7 @@ seven had differences. This covers the selected repositories, not all 83 catalog
 ## Version 0.23 upgrade check (2026-11-09)
 
 The current integration pins `tsrs@0.23.0-ts7.1.0-beta`. The full ecosystem sweep
-and performance measurements below remain results for `0.22.0`.
+and performance measurements remain results for `0.22.0`.
 
 On macOS ARM64, all seven reduced cases retained identical diagnostics and exit
 codes between `0.22.0` and `0.23.0`, both through `vp lint` and the standalone
@@ -30,9 +30,9 @@ a clean file now reports `TS2322` in an ignored file from the same program.
 Type-aware linting without `--type-check` still passes that fixture. A separate
 invalid declaration remains suppressed by `skipLibCheck: true`.
 
-The rebuilt CLI passed 3,403 unit tests, with one skipped. However, the full
-repository `vp check` now fails with seven diagnostics. With the same source and
-dependencies, `0.22.0` and `oxlint-tsgolint@7.0.2005` pass the lint/type-check phase:
+Whole-program checking initially exposed seven errors in three nested project
+configs. With those original configs, `0.22.0` and `oxlint-tsgolint@7.0.2005` pass
+the lint/type-check phase because they do not report these dependency errors:
 
 | Dependency                                            | New diagnostics                                                |
 | ----------------------------------------------------- | -------------------------------------------------------------- |
@@ -40,10 +40,23 @@ dependencies, `0.22.0` and `oxlint-tsgolint@7.0.2005` pass the lint/type-check p
 | `zod@4.6.5`                                           | One `TS5115` for recursive JSON schema types                   |
 | `webpack-virtual-modules@0.6.2` and `unplugin@2.3.11` | Five `TS2307` errors for missing optional bundler declarations |
 
-Standalone `typescript@7.1.0-beta -p tsconfig.json --pretty false` passes the
-repository root configuration. These new whole-program diagnostics need a separate
-scope and compiler-options investigation; the earlier seven-case parity result
-does not establish their correctness.
+Standalone `typescript@7.1.0-beta` reproduces all seven errors when invoked against
+the same nested configs: `packages/cli/templates/generator/tsconfig.json`,
+`packages/cli/templates/monorepo/tsconfig.json`, and `docs/.vitepress/tsconfig.json`.
+The root-only compiler check uses different file selection and compiler options;
+its success did not establish a tsrs defect.
+
+Both starter templates now set `skipLibCheck: true`, consistent with the repository
+root, so they do not check third-party declarations. The docs shim now declares
+the named `Sponsors` type exported by `VPSponsors.vue`. It reuses the theme's
+`SponsorTier` fields with an optional `tier`, matching the component's interface.
+
+After these corrections, `vp check` and all three nested TypeScript checks pass.
+Negative probes still reject source type errors and invalid sponsor fields, and
+unrelated Vue components do not acquire the named export. The rebuilt CLI's
+3,403 unit tests also pass, with one skipped. These seven errors required project
+configuration and Vue declaration fixes; the four earlier compiler-version
+compatibility follow-ups remain open.
 
 This check used the rebased branch on `main` at `92edd550c`, Node.js `24.22.2`,
 Oxlint `1.91.0`, and fresh CLI JavaScript. The native binding and core artifacts
