@@ -10,6 +10,9 @@ the global install's config is the local CLI's only sign of a global install
 ## `vpt chmod +x system-bin/pnpm`
 
 
+## `vpt chmod +x broken-bin/pnpm`
+
+
 ## `vp install`
 
 no pnpm on PATH: fail instead of downloading
@@ -18,6 +21,16 @@ no pnpm on PATH: fail instead of downloading
 
 ```
 error: No usable pnpm was found on PATH. Install it, or install the global `vp` CLI so Vite+ can manage it.
+```
+
+## `PATH=${workspace}/broken-bin${PATH_SEPARATOR}${PATH} vp install`
+
+a pnpm on PATH that fails to run: fail instead of downloading
+
+**Exit code:** 1
+
+```
+error: pnpm at <workspace>/broken-bin/pnpm failed to report its version. Fix or reinstall it, or install the global `vp` CLI so Vite+ can manage it.
 ```
 
 ## `PATH=${workspace}/system-bin${PATH_SEPARATOR}${PATH} vp install`

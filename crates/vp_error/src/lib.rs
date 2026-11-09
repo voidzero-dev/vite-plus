@@ -60,6 +60,12 @@ pub enum Error {
     )]
     PackageManagerNotInstalled(Str),
 
+    #[error(
+        "{name} at {} failed to report its version. Fix or reinstall it, or install the global `vp` CLI so Vite+ can manage it.",
+        .executable.as_path().display()
+    )]
+    PackageManagerNotRunnable { name: Str, executable: AbsolutePathBuf },
+
     #[error(transparent)]
     Semver(#[from] semver::Error),
 

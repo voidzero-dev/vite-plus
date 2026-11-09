@@ -439,7 +439,11 @@ impl PackageManagerBuilder {
             .await;
             // Nothing selected this family, so the npm that ships with Node.js will do.
             if source == PackageManagerSource::Default
-                && matches!(result, Err(Error::PackageManagerNotInstalled(_)))
+                && matches!(
+                    result,
+                    Err(Error::PackageManagerNotInstalled(_)
+                        | Error::PackageManagerNotRunnable { .. })
+                )
             {
                 return resolve_npm_from_path(&self.cwd).await;
             }

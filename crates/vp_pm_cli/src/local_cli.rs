@@ -37,7 +37,7 @@ impl Provision {
 }
 
 enum Source {
-    System(AbsolutePathBuf),
+    System { executable: AbsolutePathBuf, provision: Provision },
     Download,
 }
 
@@ -47,7 +47,7 @@ impl Source {
         if provision != Provision::Managed
             && let Some(executable) = find_system_executable(cwd, kind)
         {
-            return Ok(Self::System(executable));
+            return Ok(Self::System { executable, provision });
         }
         if provision == Provision::SystemOnly {
             return Err(Error::PackageManagerNotInstalled(kind.to_string().into()));
@@ -64,9 +64,19 @@ pub async fn provide_for_local_cli(
     expected_hash: Option<&str>,
 ) -> Result<PackageManager, Error> {
     match Source::resolve(cwd, kind).await? {
-        Source::System(executable) => PackageManager::from_system_executable(kind, &executable)
-            .await
-            .ok_or_else(|| Error::PackageManagerNotInstalled(kind.to_string().into())),
+        Source::System { executable, provision } => {
+            match PackageManager::from_system_executable(kind, &executable).await {
+                Some(package_manager) => Ok(package_manager),
+                // Like the global CLI, system-first falls back to a download when the system one fails.
+                None if provision == Provision::SystemFirst => {
+                    download(cwd, kind, version_or_latest, expected_hash).await
+                }
+                None => Err(Error::PackageManagerNotRunnable {
+                    name: kind.to_string().into(),
+                    executable,
+                }),
+            }
+        }
         Source::Download => download(cwd, kind, version_or_latest, expected_hash).await,
     }
 }
@@ -80,7 +90,7 @@ pub async fn managed_for_local_cli(
     expected_hash: Option<&str>,
 ) -> Result<Option<PackageManager>, Error> {
     match Source::resolve(cwd, kind).await? {
-        Source::System(_) => Ok(None),
+        Source::System { .. } => Ok(None),
         Source::Download => download(cwd, kind, version_or_latest, expected_hash).await.map(Some),
     }
 }
