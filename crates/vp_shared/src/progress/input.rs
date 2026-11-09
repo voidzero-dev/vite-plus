@@ -432,4 +432,49 @@ mod tests {
             assert_eq!(restored.input_flags, original.input_flags);
         }
     }
+
+    const LIFECYCLE_CHILD: &str = "VP_SHARED_INPUT_LIFECYCLE_CHILD";
+
+    /// Checks that only one row blocks input at a time, that a later row blocks
+    /// again after the first is dropped, and that a panic restores the terminal.
+    /// A separate process runs this same test, because `block()` reads stdin and
+    /// keeps process-wide state.
+    #[test]
+    fn block_is_exclusive_and_restores_on_drop_and_panic() {
+        use std::process::Command;
+
+        if let Ok(case) = std::env::var(LIFECYCLE_CHILD) {
+            let first = super::block().expect("stdin is a terminal in line mode");
+            assert!(super::block().is_none());
+            if case == "panic" {
+                // Release builds abort on panic, so skip the unwinding `Drop` too.
+                std::mem::forget(first);
+                panic!("the panic hook restores the terminal");
+            }
+            drop(first);
+            assert!(super::block().is_some());
+            return;
+        }
+
+        for case in ["drop", "panic"] {
+            let pty = openpty(None, None).unwrap();
+            let original = tcgetattr(&pty.slave).unwrap();
+            let status = Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "progress::input::tests::block_is_exclusive_and_restores_on_drop_and_panic",
+                ])
+                .env(LIFECYCLE_CHILD, case)
+                .stdin(pty.slave.try_clone().unwrap())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status()
+                .unwrap();
+
+            assert_eq!(status.success(), case == "drop", "{case}: {status}");
+            let restored = tcgetattr(&pty.slave).unwrap();
+            assert_eq!(restored.local_flags - LocalFlags::PENDIN, original.local_flags, "{case}");
+            assert_eq!(restored.input_flags, original.input_flags, "{case}");
+        }
+    }
 }
