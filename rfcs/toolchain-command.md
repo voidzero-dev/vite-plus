@@ -164,7 +164,7 @@ vite-plus@0.2.4
 │   └── bundles tsdown@0.22.3
 ├── depends on vitest@4.1.10
 ├── depends on oxlint@1.72.0
-├── depends on tsrs@0.22.0-ts7.1.0-beta
+├── depends on tsrs@0.23.0-ts7.1.0-beta
 ├── depends on oxfmt@0.57.0
 └── compiles vite-task (built 2026-08-06T09:30:00Z, revision <revision>)
 ```
