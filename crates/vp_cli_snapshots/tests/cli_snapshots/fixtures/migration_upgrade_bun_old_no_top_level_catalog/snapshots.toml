@@ -1,0 +1,9 @@
+[[case]]
+name = "migration_upgrade_bun_old_no_top_level_catalog"
+vp = "global"
+comment = "Bun before 1.2.21 reads only `workspaces.catalog`, so a top-level `catalog` would fail to resolve."
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "an empty-workspaces bun 1.2.20 project without a catalog upgrades", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "toolchain specs stay concrete and no top-level catalog is written", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "a second run converges to the already-migrated fast exit", continue-on-failure = true },
+]
