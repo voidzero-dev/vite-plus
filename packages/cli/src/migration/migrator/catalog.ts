@@ -1066,9 +1066,10 @@ function rewriteCatalogsObject(
   catalogs: Record<string, Record<string, string>>,
   usesVitest: boolean,
   vitestEcosystemPackages: ReadonlySet<string>,
+  targetCatalog?: Record<string, string>,
 ): void {
   for (const catalog of Object.values(catalogs)) {
-    rewriteCatalogObject(catalog, false, usesVitest, vitestEcosystemPackages);
+    rewriteCatalogObject(catalog, catalog === targetCatalog, usesVitest, vitestEcosystemPackages);
   }
 }
 
@@ -1102,14 +1103,23 @@ export function rewriteBunCatalog(
       pkg.workspaces && !Array.isArray(pkg.workspaces) ? pkg.workspaces : undefined;
     const useWorkspacesCatalog =
       workspacesObj?.catalog != null || (pkg.catalog == null && workspacesObj?.catalogs != null);
-    const catalog: Record<string, string> = {
-      ...(useWorkspacesCatalog ? workspacesObj?.catalog : pkg.catalog),
-    };
+    // Like the pnpm catalog, add missing entries to the catalog the new
+    // `catalog:` references point at. A named one such as `catalogs.build`
+    // takes them instead of a newly created default catalog.
+    const { preferredCatalogSpec } = readBunCatalogDependencyResolver(pkg);
+    const preferredName = preferredCatalogSpec.slice('catalog:'.length);
+    const namedTarget = preferredName
+      ? (workspacesObj?.catalogs?.[preferredName] ?? pkg.catalogs?.[preferredName])
+      : undefined;
+    const defaultCatalog = useWorkspacesCatalog ? workspacesObj?.catalog : pkg.catalog;
+    const catalog: Record<string, string> = { ...defaultCatalog };
 
-    rewriteCatalogObject(catalog, true, usesVitest, vitestEcosystemPackages);
+    rewriteCatalogObject(catalog, !namedTarget, usesVitest, vitestEcosystemPackages);
     pruneLegacyWrapperAliases(catalog);
 
-    if (useWorkspacesCatalog) {
+    if (namedTarget && !defaultCatalog) {
+      // No default catalog to update, and none is needed.
+    } else if (useWorkspacesCatalog) {
       workspacesObj.catalog = catalog;
       if (pkg.catalog) {
         rewriteCatalogObject(pkg.catalog, false, usesVitest, vitestEcosystemPackages);
@@ -1123,13 +1133,18 @@ export function rewriteBunCatalog(
       }
     }
     if (workspacesObj?.catalogs) {
-      rewriteCatalogsObject(workspacesObj.catalogs, usesVitest, vitestEcosystemPackages);
+      rewriteCatalogsObject(
+        workspacesObj.catalogs,
+        usesVitest,
+        vitestEcosystemPackages,
+        namedTarget,
+      );
       for (const named of Object.values(workspacesObj.catalogs)) {
         pruneLegacyWrapperAliases(named);
       }
     }
     if (pkg.catalogs) {
-      rewriteCatalogsObject(pkg.catalogs, usesVitest, vitestEcosystemPackages);
+      rewriteCatalogsObject(pkg.catalogs, usesVitest, vitestEcosystemPackages, namedTarget);
       for (const named of Object.values(pkg.catalogs)) {
         pruneLegacyWrapperAliases(named);
       }
@@ -1153,7 +1168,9 @@ export function rewriteBunCatalog(
         continue;
       }
       overrides[key] =
-        key === '@vitest/browser' ? value : getCatalogDependencySpec(current, value, true);
+        key === '@vitest/browser'
+          ? value
+          : getCatalogDependencySpec(current, value, true, { preferredCatalogSpec });
     }
     pkg.overrides = overrides;
 

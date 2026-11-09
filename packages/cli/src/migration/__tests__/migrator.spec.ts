@@ -2165,6 +2165,34 @@ describe('ensureVitePlusBootstrap', () => {
     expect(pkg.workspaces.catalog['@vitest/coverage-v8']).toBe(VITEST_VERSION);
   });
 
+  it('adds vite-plus to the named bun catalog its new reference points at', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'bun-named-catalog',
+        devDependencies: { vite: 'catalog:build', 'vite-plus': '^0.1.20' },
+        overrides: { vite: 'catalog:build' },
+        workspaces: {
+          packages: [],
+          catalogs: { build: { vite: VITE_PLUS_OVERRIDE_PACKAGES.vite } },
+        },
+      }),
+    );
+
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.bun, '1.4.4'));
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      workspaces: {
+        catalog?: Record<string, string>;
+        catalogs: Record<string, Record<string, string>>;
+      };
+    };
+    expect(pkg.devDependencies['vite-plus']).toBe('catalog:build');
+    expect(pkg.workspaces.catalogs.build['vite-plus']).toBe('latest');
+    expect(pkg.workspaces.catalog).toBeUndefined();
+  });
+
   it('reports a stale bun catalog vite-plus value as pending', () => {
     // The `catalog:` spec itself looks current, so only the catalog value shows
     // that vite-plus still needs the upgrade.
@@ -8215,8 +8243,11 @@ describe('rewriteMonorepo bun catalog', () => {
       devDependencies: Record<string, string>;
       peerDependencies: Record<string, string>;
     };
-    expect(pkg.catalog.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    // Like pnpm, the managed `build` catalog takes the Vite+ entries, so no
+    // default catalog is created beside it.
+    expect(pkg.catalog).toBeUndefined();
     expect(pkg.catalogs.build.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(pkg.catalogs.build['vite-plus']).toBe('latest');
     expect(pkg.catalogs.build.react).toBe('^19.0.0');
     expect(pkg.catalogs.build.tsdown).toBeUndefined();
     // Common case (no @vitest/* dep, no vitest source): `vitest` is not managed,
@@ -8226,11 +8257,12 @@ describe('rewriteMonorepo bun catalog', () => {
     expect(pkg.overrides.vite).toBe('catalog:build');
     expect(pkg.overrides.vitest).toBeUndefined();
     expect(pkg.devDependencies.vite).toBe('catalog:build');
+    expect(pkg.devDependencies['vite-plus']).toBe('catalog:build');
     expect(pkg.peerDependencies.vite).toBe('^7.0.0');
     expect(pkg.peerDependencies.vitest).toBe('^4.0.0');
   });
 
-  it('rewrites workspaces named catalogs and writes default catalog beside them', () => {
+  it('rewrites workspaces named catalogs and adds Vite+ entries to the managed one', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -8258,15 +8290,15 @@ describe('rewriteMonorepo bun catalog', () => {
       overrides: Record<string, string>;
     };
     expect(pkg.catalog).toBeUndefined();
-    expect(pkg.workspaces.catalog.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
-    expect(pkg.workspaces.catalog['vite-plus']).toBe('latest');
+    expect(pkg.workspaces.catalog).toBeUndefined();
     expect(pkg.workspaces.catalogs.build.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(pkg.workspaces.catalogs.build['vite-plus']).toBe('latest');
     expect(pkg.workspaces.catalogs.build.oxlint).toBeUndefined();
     // Common case (no @vitest/* dep, no vitest source): `vitest` is not managed,
     // so the pre-existing named-catalog `vitest` entry is REMOVED.
     expect(pkg.workspaces.catalogs.test.vitest).toBeUndefined();
     expect(pkg.workspaces.catalogs.test.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
-    expect(pkg.overrides.vite).toBe('catalog:');
+    expect(pkg.overrides.vite).toBe('catalog:build');
   });
 
   it('keeps an existing top-level default catalog when workspaces named catalogs exist', () => {
@@ -8295,10 +8327,10 @@ describe('rewriteMonorepo bun catalog', () => {
         catalogs: Record<string, Record<string, string>>;
       };
     };
-    expect(pkg.catalog.react).toBe('^19.0.0');
-    expect(pkg.catalog.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(pkg.catalog).toEqual({ react: '^19.0.0' });
     expect(pkg.workspaces.catalog).toBeUndefined();
     expect(pkg.workspaces.catalogs.build.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(pkg.workspaces.catalogs.build['vite-plus']).toBe('latest');
   });
 });
 
