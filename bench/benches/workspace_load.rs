@@ -62,23 +62,21 @@ fn bench_workspace_load(c: &mut Criterion) {
 
     let runtime = Runtime::new().unwrap();
 
-    // Session::ensure_task_graph_loaded benchmark
+    // Session::task_graph benchmark
     let mut session_group = c.benchmark_group("session_task_graph_load");
     session_group.measurement_time(std::time::Duration::from_secs(10));
 
-    session_group.bench_function("ensure_task_graph_loaded", |b| {
+    session_group.bench_function("task_graph", |b| {
         b.iter(|| {
             runtime.block_on(async {
                 let mut owned_callbacks = BenchSessionConfig::default();
-                let mut session = Session::init_with(
+                let session = Session::init_with(
                     FxHashMap::default(),
                     fixture_path.clone().into(),
                     owned_callbacks.as_callbacks(),
                 )
                 .expect("Failed to create session");
-                black_box(
-                    session.ensure_task_graph_loaded().await.expect("Failed to load task graph"),
-                );
+                black_box(session.task_graph().await.expect("Failed to load task graph"));
             });
         });
     });
@@ -87,15 +85,13 @@ fn bench_workspace_load(c: &mut Criterion) {
         b.iter(|| {
             runtime.block_on(async {
                 let mut owned_callbacks = BenchSessionConfig::default();
-                let mut session = Session::init_with(
+                let session = Session::init_with(
                     FxHashMap::default(),
                     path.clone().into(),
                     owned_callbacks.as_callbacks(),
                 )
                 .expect("Failed to create session");
-                black_box(
-                    session.ensure_task_graph_loaded().await.expect("Failed to load task graph"),
-                );
+                black_box(session.task_graph().await.expect("Failed to load task graph"));
             });
         });
     });
