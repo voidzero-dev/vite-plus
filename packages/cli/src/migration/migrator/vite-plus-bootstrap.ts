@@ -32,6 +32,7 @@ import {
   pnpmPackageJsonSettingsPending,
   pnpmSupportsWorkspaceSettings,
   supportsCatalog,
+  bunSupportsTopLevelCatalog,
   pnpmWorkspaceMinimumReleaseAgeExemptionsPending,
   projectUsesVitestDirectly,
   pruneLegacyWrapperAliases,
@@ -69,15 +70,22 @@ import {
 
 // Bun resolves `catalog:` references (and a top-level `catalog` field) ONLY
 // inside a workspace: a root package.json with a `workspaces` field. An empty
-// one (`[]` or `{ packages: [] }`) is enough (verified on bun 1.4.4, #3375). A
-// standalone bun project has nowhere to resolve a catalog from, so converting
-// its edges to `catalog:` makes `bun install` abort with "vite@catalog: failed
-// to resolve".
+// one (`[]` or `{ packages: [] }`) is enough (#3375). A standalone bun project
+// has nowhere to resolve a catalog from, so converting its edges to `catalog:`
+// makes `bun install` abort with "vite@catalog: failed to resolve". Bun before
+// 1.2.21 also ignores a top-level `catalog`, so it needs an existing
+// `workspaces.catalog`, which `rewriteBunCatalog` keeps in place.
 // The upgrade path must keep standalone bun on concrete specs, mirroring the
 // fresh path: `supportCatalog` is false for standalone bun (orchestrators.ts)
 // and `rewriteBunCatalog` runs only on monorepo roots (orchestrators.ts).
-function bunHasWorkspacesField(workspaces: NpmWorkspaces | undefined): boolean {
-  return workspaces != null;
+function bunSupportsCatalog(workspaces: NpmWorkspaces | undefined, version: string): boolean {
+  if (workspaces == null) {
+    return false;
+  }
+  return (
+    (!Array.isArray(workspaces) && workspaces.catalog != null) ||
+    bunSupportsTopLevelCatalog(version)
+  );
 }
 
 export type BootstrapPackageJson = {
@@ -671,7 +679,8 @@ export function detectVitePlusBootstrapPending(
     supportsCatalog(
       packageManager,
       resolvedPackageManagerVersion,
-      packageManager === PackageManager.bun && bunHasWorkspacesField(pkg.workspaces),
+      packageManager === PackageManager.bun &&
+        bunSupportsCatalog(pkg.workspaces, resolvedPackageManagerVersion),
     );
   const catalogDependencyResolver = createCatalogDependencyResolver(projectPath, packageManager);
   const canonicalVitePlusSpec = supportCatalog
@@ -980,8 +989,9 @@ export function ensureVitePlusBootstrap(
   // with "vite@catalog: failed to resolve".
   const isBunWorkspace =
     workspaceInfo.packageManager === PackageManager.bun &&
-    bunHasWorkspacesField(
+    bunSupportsCatalog(
       (readJsonFile(packageJsonPath) as { workspaces?: NpmWorkspaces }).workspaces,
+      workspaceInfo.downloadPackageManager.version,
     );
   const supportCatalog =
     !VITE_PLUS_VERSION.startsWith('file:') &&

@@ -2108,7 +2108,8 @@ describe('ensureVitePlusBootstrap', () => {
 
   it('keeps `catalog:` specs in a bun project whose `workspaces.packages` is empty (#3375)', () => {
     // Bun resolves catalogs whenever the root has a `workspaces` field, even an
-    // empty one, so a single-package project may keep its toolchain there.
+    // empty one, so a single-package project may keep its toolchain there. A
+    // `workspaces.catalog` resolves on every catalog-capable bun, including 1.2.14.
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -2120,13 +2121,13 @@ describe('ensureVitePlusBootstrap', () => {
           catalog: { vite: VITE_PLUS_OVERRIDE_PACKAGES.vite, 'vite-plus': 'latest' },
         },
         devEngines: {
-          packageManager: { name: 'bun', version: '1.4.4', onFail: 'download' },
+          packageManager: { name: 'bun', version: '1.2.14', onFail: 'download' },
         },
       }),
     );
 
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.bun)).toBe(false);
-    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.bun));
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.bun, '1.2.14'));
 
     const pkg = readJson(path.join(tmpDir, 'package.json')) as {
       devDependencies: Record<string, string>;
@@ -2134,6 +2135,35 @@ describe('ensureVitePlusBootstrap', () => {
     };
     expect(pkg.devDependencies).toEqual({ vite: 'catalog:', 'vite-plus': 'catalog:' });
     expect(pkg.overrides).toEqual({ vite: 'catalog:' });
+  });
+
+  it('keeps concrete specs on bun < 1.2.21, which ignores a top-level catalog', () => {
+    // Without an existing `workspaces.catalog`, rewriteBunCatalog would write a
+    // top-level `catalog`, which bun 1.2.14 to 1.2.20 cannot resolve.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'old-bun',
+        workspaces: [],
+        devDependencies: { vite: VITE_PLUS_OVERRIDE_PACKAGES.vite, 'vite-plus': 'latest' },
+        devEngines: {
+          packageManager: { name: 'bun', version: '1.2.20', onFail: 'download' },
+        },
+      }),
+    );
+
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.bun, '1.2.20'));
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      catalog?: Record<string, string>;
+    };
+    expect(pkg.devDependencies).toEqual({
+      vite: VITE_PLUS_OVERRIDE_PACKAGES.vite,
+      'vite-plus': 'latest',
+    });
+    expect(pkg.catalog).toBeUndefined();
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.bun)).toBe(false);
   });
 
   it('rewrites a STANDALONE bun `catalog:` override to the concrete core alias (catalogs unsupported)', () => {

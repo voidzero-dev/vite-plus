@@ -124,6 +124,14 @@ export function yarnSupportsCatalog(version: string): boolean {
   return versionAtLeast(version, YARN_CATALOG_MIN_VERSION, ['latest', 'next', 'stable']);
 }
 
+const BUN_TOP_LEVEL_CATALOG_MIN_VERSION = '1.2.21';
+
+// Bun before 1.2.21 reads only `workspaces.catalog`, so a top-level `catalog`
+// fails with "catalog: failed to resolve" there (verified on 1.2.14 to 1.2.20).
+export function bunSupportsTopLevelCatalog(version: string): boolean {
+  return versionAtLeast(version, BUN_TOP_LEVEL_CATALOG_MIN_VERSION, ['latest', 'canary']);
+}
+
 // Whether a `catalog:` reference resolves for this package manager and version:
 // pnpm >= 9.5.0, Yarn >= 4.10.0, bun only inside a workspace, npm never. The
 // force-override `file:` guard is layered on by the bootstrap callers.
