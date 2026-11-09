@@ -239,8 +239,8 @@ export default extendConfig(
         },
         resolve: {
           alias: [
-            { find: '@local-assets', replacement: resolve(__dirname, 'theme/assets') },
-            { find: '@layouts', replacement: resolve(__dirname, 'theme/layouts') },
+            { find: '@local-assets', replacement: resolve(import.meta.dirname, 'theme/assets') },
+            { find: '@layouts', replacement: resolve(import.meta.dirname, 'theme/layouts') },
             // dayjs ships CJS by default; redirect to its ESM build so
             // mermaid (imported via vitepress-plugin-mermaid) works in dev
             { find: /^dayjs$/, replacement: 'dayjs/esm' },

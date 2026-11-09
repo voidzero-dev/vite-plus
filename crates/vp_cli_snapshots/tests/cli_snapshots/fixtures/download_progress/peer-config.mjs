@@ -30,6 +30,11 @@ const { generateInstallLockfile, installManifest, INSTALL_PNPM_VERSION } = await
   pathToFileURL(join(cli, 'generate-install-lockfile.ts')).href
 );
 const version = JSON.parse(readFileSync(join(cli, 'package.json'), 'utf8')).version;
+// Setup installs the pinned pnpm under a content key derived from its integrity:
+// short_fingerprint(PINNED_PNPM_INTEGRITY) in crates/vp_setup/src/install.rs (the
+// first 32 hex of its SHA-256). Seed the install there so the pinned bootstrap
+// reuses it instead of downloading.
+const SETUP_PNPM_KEY = '2f9ea5a98bd92b2d1d6694aedb029783';
 
 // Only the pinned pnpm distribution uses the runner's cached registry. Real pnpm
 // is necessary to exercise configuration precedence and frozen-lockfile checks.
@@ -201,7 +206,11 @@ function createInstallation(name, settings = []) {
       join(installNodeBin, 'node'),
     );
   }
-  cpSync(pnpmRoot, join(home, 'package_manager/pnpm', INSTALL_PNPM_VERSION), { recursive: true });
+  cpSync(
+    join(pnpmRoot, 'pnpm'),
+    join(home, 'package_manager/pnpm/.verified-v1', INSTALL_PNPM_VERSION, SETUP_PNPM_KEY, 'pnpm'),
+    { recursive: true },
+  );
   return { directory, home, ...user };
 }
 

@@ -562,18 +562,13 @@ mod tests {
 
     #[tokio::test]
     async fn stops_when_the_pinned_package_manager_fails_its_integrity_check() {
+        use httpmock::prelude::*;
+
         let suffix =
             SystemTime::now().duration_since(UNIX_EPOCH).expect("time should be valid").as_nanos();
         let temp_dir = std::env::temp_dir().join(format!("vite-plus-bad-hash-{suffix}"));
         let vp_home = temp_dir.join("vp-home");
-        // VP_HOME pins <DATA> to the root, so the cached install lands here.
-        let bin_dir =
-            vp_home.join("package_manager").join("yarn").join("4.17.1").join("yarn").join("bin");
-        fs::create_dir_all(&bin_dir).expect("cached package manager should be created");
-        for shim in ["yarn", "yarn.cmd", "yarn.ps1"] {
-            fs::write(bin_dir.join(shim), "shim").expect("shim should be written");
-        }
-        fs::write(bin_dir.join("yarn.js"), "corrupt").expect("CLI should be written");
+        fs::create_dir_all(&temp_dir).expect("temp dir should be created");
 
         let expected_hash = format!("sha512.{}", "0".repeat(128));
         fs::write(
@@ -581,20 +576,60 @@ mod tests {
             format!(r#"{{"name":"fixture","packageManager":"yarn@4.17.1+{expected_hash}"}}"#),
         )
         .expect("package.json should be written");
+
+        // A Yarn 2+ pin covers the CLI binary, verified when it is downloaded. Serve
+        // the `@yarnpkg/cli-dist` tarball from a local registry so the check runs
+        // offline; its CLI bytes cannot match the all-zeros pin, so the download must
+        // fail and the error must reach the caller instead of a missing command.
+        let server = MockServer::start();
+        let tarball = cli_dist_tgz(b"console.log('yarn');\n");
+        server.mock(|when, then| {
+            when.method(GET).path("/@yarnpkg/cli-dist/-/cli-dist-4.17.1.tgz");
+            then.status(200).body(tarball);
+        });
+        let registry = server.base_url();
+
         let cwd = AbsolutePathBuf::new(temp_dir.clone()).expect("temp dir should be absolute");
         let original_path = std::env::join_paths([temp_dir.join("old-bin")]).expect("valid PATH");
         let envs = envs_with_path(original_path.as_os_str());
 
-        vp_shared::EnvConfig::with_vars_async([(vp_shared::env_vars::VP_HOME, &vp_home)], |_| async {
-            let result = envs_with_explicit_package_manager_path(&cwd, envs).await;
+        vp_shared::EnvConfig::with_vars_async(
+            [
+                (vp_shared::env_vars::VP_HOME, vp_home.as_os_str()),
+                ("NPM_CONFIG_REGISTRY", std::ffi::OsStr::new(&registry)),
+            ],
+            |_| async {
+                let result = envs_with_explicit_package_manager_path(&cwd, envs).await;
 
-        assert!(
-            matches!(result, Err(Error::PackageManagerHashMismatch(_))),
-            "an integrity failure must reach the user instead of a missing command: {result:?}"
-        );
-        fs::remove_dir_all(temp_dir).expect("temp dir should be removed");
-            })
+                assert!(
+                    matches!(result, Err(Error::PackageManagerHashMismatch(_))),
+                    "an integrity failure must reach the user instead of a missing command: {result:?}"
+                );
+                fs::remove_dir_all(temp_dir).expect("temp dir should be removed");
+            },
+        )
         .await;
+    }
+
+    /// Build an `@yarnpkg/cli-dist` style gzip tarball holding `package/bin/yarn.js`.
+    fn cli_dist_tgz(yarn_js: &[u8]) -> Vec<u8> {
+        let mut builder = tar::Builder::new(Vec::new());
+        let mut header = tar::Header::new_gnu();
+        header.set_size(yarn_js.len() as u64);
+        header.set_mode(0o755);
+        header.set_cksum();
+        builder
+            .append_data(&mut header, "package/bin/yarn.js", std::io::Cursor::new(yarn_js))
+            .unwrap();
+        let tar_data = builder.into_inner().unwrap();
+        let mut gz = Vec::new();
+        {
+            let mut encoder =
+                flate2::write::GzEncoder::new(&mut gz, flate2::Compression::default());
+            std::io::Write::write_all(&mut encoder, &tar_data).unwrap();
+            encoder.finish().unwrap();
+        }
+        gz
     }
 
     #[tokio::test]
