@@ -1,6 +1,6 @@
 # Ecosystem correctness comparison
 
-The default `tsrs@0.22.0-ts7.1.0-beta` switch is not diagnostically equivalent to
+The `tsrs@0.22.0-ts7.1.0-beta` experiment is not diagnostically equivalent to
 `oxlint-tsgolint@7.0.2005`. The representative sweep found new type-check errors in
 Hono and Vue Core, and a DOM-library compatibility change in OneSignal. The
 exact-version audit below attributes all four reproduced categories to the pinned
@@ -12,6 +12,44 @@ from the [ecosystem catalog](https://github.com/vite-plus-ecosystem-ci/.github).
 The explicit type-check workload covered 2,289 files. No command timed out or
 terminated by a signal. Seven repositories had identical normalized diagnostics;
 seven had differences. This covers the selected repositories, not all 83 catalog entries.
+
+## Version 0.23 upgrade check (2026-11-09)
+
+The current integration pins `tsrs@0.23.0-ts7.1.0-beta`. The full ecosystem sweep
+and performance measurements below remain results for `0.22.0`.
+
+On macOS ARM64, all seven reduced cases retained identical diagnostics and exit
+codes between `0.22.0` and `0.23.0`, both through `vp lint` and the standalone
+compiler. The standalone results also matched `typescript@7.1.0-beta`.
+The TypeScript source pin remains `3e9236361fa97a9e6c685f4833ac457ae2d8c50a`.
+The four existing compatibility follow-ups remain open.
+
+The [0.23 release](https://github.com/oxc-project/tsrs/blob/v0.23.0/docs/releases/0.23.0.md)
+expands `--type-check` to whole programs. A smoke fixture confirmed that selecting
+a clean file now reports `TS2322` in an ignored file from the same program.
+Type-aware linting without `--type-check` still passes that fixture. A separate
+invalid declaration remains suppressed by `skipLibCheck: true`.
+
+The rebuilt CLI passed 3,403 unit tests, with one skipped. However, the full
+repository `vp check` now fails with seven diagnostics. With the same source and
+dependencies, `0.22.0` and `oxlint-tsgolint@7.0.2005` pass the lint/type-check phase:
+
+| Dependency                                            | New diagnostics                                                |
+| ----------------------------------------------------- | -------------------------------------------------------------- |
+| `@voidzero-dev/vitepress-theme@5.0.7`                 | One `TS2614` for the `Sponsors` export from a Vue file         |
+| `zod@4.6.5`                                           | One `TS5115` for recursive JSON schema types                   |
+| `webpack-virtual-modules@0.6.2` and `unplugin@2.3.11` | Five `TS2307` errors for missing optional bundler declarations |
+
+Standalone `typescript@7.1.0-beta -p tsconfig.json --pretty false` passes the
+repository root configuration. These new whole-program diagnostics need a separate
+scope and compiler-options investigation; the earlier seven-case parity result
+does not establish their correctness.
+
+This check used the rebased branch on `main` at `92edd550c`, Node.js `24.22.2`,
+Oxlint `1.91.0`, and fresh CLI JavaScript. The native binding and core artifacts
+remain from published `1.5.0`; the JS build used published Rolldown `1.2.16`.
+This is not a full native release build or a repeat of the 14-repository sweep.
+Scripts, fixtures, and raw logs remain outside the repository.
 
 ## Exact-upstream attribution (2026-11-08)
 
