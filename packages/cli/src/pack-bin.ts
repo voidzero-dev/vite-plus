@@ -149,6 +149,17 @@ cli
     const { cwd: _cwd, workspace: _workspace, ...memberFlags } = flags;
     const buildFlags = { ...flags, envPrefix: flags.envPrefix ?? DEFAULT_ENV_PREFIXES };
 
+    // --no-config also disables member config loading during workspace discovery.
+    if (flags.config === false && flags.workspace) {
+      buildFlags.workspace = {
+        include:
+          typeof flags.workspace === 'string' || Array.isArray(flags.workspace)
+            ? flags.workspace
+            : undefined,
+        config: false,
+      };
+    }
+
     async function runBuild(): Promise<TsdownHandle> {
       const viteConfig =
         flags.config === false
@@ -176,13 +187,18 @@ cli
       const packConfigs = Array.isArray(viteConfig?.pack)
         ? viteConfig.pack
         : [viteConfig?.pack ?? {}];
-      const runMemberBuild = createConcurrencyExecutor(flags.concurrency);
+      const inheritedConfig =
+        viteConfig?.configFile &&
+        path.relative(process.cwd(), path.dirname(viteConfig.configFile)) !== '';
+      let runMemberBuild: ResolvedConfig['runBuild'] | undefined;
       let hasWorkspace = false;
       for (const packConfig of packConfigs) {
         const merged = { ...packConfig, ...buildFlags };
         let buildConfigs: UserConfig[] = [merged];
-        if (merged.workspace) {
+        const expand = merged.workspace && (flags.workspace || !inheritedConfig);
+        if (expand) {
           hasWorkspace = true;
+          runMemberBuild ??= createConcurrencyExecutor(flags.concurrency);
           const workspace = await expandWorkspace(packConfig, buildFlags, watch, configDeps);
           workspace.deps.forEach((dep) => configDeps.add(dep));
           buildConfigs = workspace.configs
@@ -199,7 +215,7 @@ cli
             config,
             buildFlags,
             configDeps,
-            runMemberBuild,
+            expand ? runMemberBuild : undefined,
           );
           resolvedConfig.forEach((config) =>
             config.configDeps.forEach((dep) => configDeps.add(dep)),
@@ -210,6 +226,9 @@ cli
 
       if (hasWorkspace && configs.length === 0) {
         throw new Error('No valid configuration found.');
+      }
+      if (hasWorkspace && flags.concurrency != null && configs.some((config) => config.watch)) {
+        globalLogger.warn('`--concurrency` is not supported in watch mode and will be ignored.');
       }
       handlePromise = buildWithConfigs(configs, configDeps, runBuild);
       return handlePromise;

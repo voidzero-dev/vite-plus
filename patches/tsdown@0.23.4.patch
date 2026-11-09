@@ -1,12 +1,7 @@
 diff --git a/dist/build-wv1dWHDH.mjs b/dist/build-wv1dWHDH.mjs
-index 82fc360..fa45a35 100644
 --- a/dist/build-wv1dWHDH.mjs
 +++ b/dist/build-wv1dWHDH.mjs
-@@ -75,1 +75,2 @@ async function resolveWorkspace(config, inlineConfig, context, rootDeps) {
--			debug$5("loading workspace config %s", cwd);
-+			if (inlineConfig.config === false || workspaceConfig === false) return [mergeConfig(normalized, { cwd })];
-+			debug$5("loading workspace config %s", cwd);
-@@ -892,2 +893,5 @@ async function buildSingle(config, configDeps, isDualFormat, clean, restart, don
+@@ -892,2 +892,5 @@ async function buildSingle(config, configDeps, isDualFormat, clean, restart, don
  }
 +export async function expandWorkspace(config, flags, watch, deps) {
 +	return resolveWorkspace(config, flags, { ci: isInCI(), watch }, deps);

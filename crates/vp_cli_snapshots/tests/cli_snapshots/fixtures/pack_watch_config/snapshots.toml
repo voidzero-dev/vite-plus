@@ -3,3 +3,13 @@ name = "pack_watch_reloads_config"
 vp = "local"
 comment = "Changing pack.minify while watching applies the new configuration, including on Windows."
 steps = [["node", "verify.mjs"]]
+
+[[case]]
+name = "pack_watch_reloads_member_config"
+vp = "local"
+steps = [
+  ["vpt", "mkdir", "-p", "packages/a"],
+  ["vpt", "cp", "index.ts", "packages/a/index.ts"],
+  ["vpt", "write-file", "packages/a/tsdown.config.mjs", "export default { minify: false }"],
+  ["node", "verify.mjs", "member"],
+]

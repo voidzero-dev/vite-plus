@@ -31,3 +31,13 @@ steps = [
   ["vpt", "stat-file", "dist/index.mjs", "--assert", "missing"],
   ["node", "verify.mjs", "packages/a/dist/index.mjs", "packages/b/dist/index.mjs"],
 ]
+
+[[case]]
+name = "pack_from_workspace_member"
+vp = "local"
+steps = [
+  ["vpt", "cp", "serial.config.ts", "vite.config.ts"],
+  { argv = ["vp", "pack"], cwd = "packages/a", snapshot = false },
+  ["node", "verify.mjs", "packages/a/dist/index.mjs"],
+  ["vpt", "stat-file", "dist/index.mjs", "packages/b/dist/index.mjs", "--assert", "missing"],
+]
