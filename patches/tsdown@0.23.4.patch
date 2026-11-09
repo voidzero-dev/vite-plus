@@ -1,0 +1,7 @@
+diff --git a/dist/build-wv1dWHDH.mjs b/dist/build-wv1dWHDH.mjs
+--- a/dist/build-wv1dWHDH.mjs
++++ b/dist/build-wv1dWHDH.mjs
+@@ -75,1 +75,2 @@ async function resolveWorkspace(config, inlineConfig, context, rootDeps) {
+-			debug$5("loading workspace config %s", cwd);
++			if (workspaceConfig === false) return [mergeConfig(normalized, { cwd })];
++			debug$5("loading workspace config %s", cwd);

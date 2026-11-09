@@ -174,6 +174,7 @@ packageExtensions:
     dependencies:
       typescript: ~6.0.3
 patchedDependencies:
+  tsdown@0.23.4: patches/tsdown@0.23.4.patch
   chokidar@3.6.0: vite/patches/chokidar@3.6.0.patch
   dotenv-expand@13.0.0: vite/patches/dotenv-expand@13.0.0.patch
   sirv@3.0.2: vite/patches/sirv@3.0.2.patch
