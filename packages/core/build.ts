@@ -555,8 +555,8 @@ async function bundleTsdown() {
 }
 
 // rolldown-plugin-dts 0.30 removed the native-preview fallback from its legacy
-// tsgo CLI backend. Keep supporting existing projects that pair TypeScript 5.x
-// with @typescript/native-preview; TypeScript 7.1+ continues to use the API backend.
+// tsgo CLI backend. Keep native-preview for explicit tsgo requests, including
+// projects without TypeScript. Preserve automatic selection and the API backend.
 async function restoreNativePreviewTsgo() {
   const tsdownDistDir = join(projectDir, 'dist/tsdown');
   const chunkFiles = await glob(toPosixPath(join(tsdownDistDir, '*.js')), { absolute: true });
@@ -565,9 +565,20 @@ async function restoreNativePreviewTsgo() {
       search: `function isLegacyTsgo(moduleUrl) {
 	return moduleUrl != null && moduleUrl === getDefaultTsgoModuleUrl() && !!getPackageInfo("typescript")?.version.startsWith("7.0.") && !tryLoadTsgoApi(moduleUrl);
 }`,
-      replacement: `function isLegacyTsgo(moduleUrl) {
-	return moduleUrl != null && moduleUrl === getDefaultTsgoModuleUrl() && (getPackageInfo("typescript")?.version.startsWith("7.0.") || !!getPackageInfo("@typescript/native-preview")) && !tryLoadTsgoApi(moduleUrl);
+      replacement: `function isLegacyTsgo(moduleUrl, allowNativePreview = false) {
+	if (moduleUrl !== getDefaultTsgoModuleUrl() || tryLoadTsgoApi(moduleUrl)) return false;
+	return (moduleUrl != null && !!getPackageInfo("typescript")?.version.startsWith("7.0.")) || (allowNativePreview && !!getPackageInfo("@typescript/native-preview"));
 }`,
+    },
+    {
+      search:
+        'if (generator === "tsgo" && isLegacyTsgo(tsgo.moduleUrl)) return new TsgoCliGenerator(',
+      replacement:
+        'if (generator === "tsgo" && isLegacyTsgo(tsgo.moduleUrl, true)) return new TsgoCliGenerator(',
+    },
+    {
+      search: 'const legacyTsgo = generator === "tsgo" && isLegacyTsgo(tsgo.moduleUrl);',
+      replacement: 'const legacyTsgo = generator === "tsgo" && isLegacyTsgo(tsgo.moduleUrl, true);',
     },
     {
       search: `function resolveTsgoPath(logger) {
