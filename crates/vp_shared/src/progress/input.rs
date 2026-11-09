@@ -70,6 +70,8 @@ mod sys {
 
     static SAVED: Saved = Saved(UnsafeCell::new(MaybeUninit::uninit()));
     static BLOCKED: AtomicBool = AtomicBool::new(false);
+    /// Whether this guard hid the cursor, so only it writes cursor changes.
+    static CURSOR_HIDDEN: AtomicBool = AtomicBool::new(false);
 
     const HIDE_CURSOR: &[u8] = b"\x1b[?25l";
     const SHOW_CURSOR: &[u8] = b"\x1b[?25h";
@@ -89,7 +91,15 @@ mod sys {
                 guard.disarm();
                 return None;
             }
-            write_cursor(HIDE_CURSOR);
+            // A host such as Node that owns SIGINT or SIGTERM exits without this
+            // guard showing the cursor again, so keep the cursor visible there.
+            let restores_on_exit = [Signal::SIGINT, Signal::SIGTERM]
+                .iter()
+                .all(|signal| guard.previous.iter().any(|(handled, _)| handled == signal));
+            if restores_on_exit {
+                CURSOR_HIDDEN.store(true, Ordering::SeqCst);
+                write_cursor(HIDE_CURSOR);
+            }
             Some(guard)
         }
 
@@ -102,6 +112,7 @@ mod sys {
 
         fn disarm(&mut self) {
             BLOCKED.store(false, Ordering::SeqCst);
+            CURSOR_HIDDEN.store(false, Ordering::SeqCst);
             for (signal, previous) in self.previous.drain(..) {
                 // SAFETY: reinstalls the disposition captured by `install_handlers`.
                 let _ = unsafe { sigaction(signal, &previous) };
@@ -172,7 +183,7 @@ mod sys {
     /// Writes to stderr, where the progress row is drawn. Only async-signal-safe
     /// calls, and like `restore` it leaves the terminal alone in the background.
     fn write_cursor(sequence: &[u8]) {
-        if in_background(libc::STDIN_FILENO) {
+        if !CURSOR_HIDDEN.load(Ordering::SeqCst) || in_background(libc::STDIN_FILENO) {
             return;
         }
         // SAFETY: `write` is async-signal-safe and only reads `sequence`.
@@ -542,6 +553,40 @@ mod tests {
         unsafe { libc::kill(pid, libc::SIGCONT) };
         assert!(child.wait().unwrap().success());
         assert_eq!(cursor_changes(&pty.master), "lh");
+    }
+
+    const HOST_CHILD: &str = "VP_SHARED_INPUT_HOST_CHILD";
+
+    /// A host that owns SIGINT, as Node does, exits through its own handler, so
+    /// the guard blocks input but leaves the cursor visible.
+    #[test]
+    fn host_owned_sigint_keeps_the_cursor_visible() {
+        use std::process::Command;
+
+        if std::env::var_os(HOST_CHILD).is_some() {
+            // SAFETY: ignoring SIGINT stands in for a host's own handler.
+            unsafe { libc::signal(libc::SIGINT, libc::SIG_IGN) };
+            let mut guard = sys::Guard::new().expect("stdin is a terminal in line mode");
+            guard.release();
+            return;
+        }
+
+        let pty = openpty(None, None).unwrap();
+        let original = tcgetattr(&pty.slave).unwrap();
+        let status = Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "progress::input::tests::host_owned_sigint_keeps_the_cursor_visible"])
+            .env(HOST_CHILD, "1")
+            .stdin(pty.slave.try_clone().unwrap())
+            .stdout(std::process::Stdio::null())
+            .stderr(pty.slave.try_clone().unwrap())
+            .status()
+            .unwrap();
+
+        assert!(status.success(), "{status}");
+        let restored = tcgetattr(&pty.slave).unwrap();
+        assert_eq!(restored.local_flags - LocalFlags::PENDIN, original.local_flags);
+        assert_eq!(restored.input_flags, original.input_flags);
+        assert_eq!(cursor_changes(&pty.master), "");
     }
 
     const LIFECYCLE_CHILD: &str = "VP_SHARED_INPUT_LIFECYCLE_CHILD";
