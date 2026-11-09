@@ -2048,7 +2048,7 @@ describe('ensureVitePlusBootstrap', () => {
     // Regression for the OneSignal-Website-SDK upgrade: a standalone
     // (non-workspace) bun project already on Vite+ with concrete specs. Bun
     // resolves `catalog:` references ONLY inside a workspace (a root
-    // package.json with a non-empty `workspaces`), so converting these edges to
+    // package.json with a `workspaces` field), so converting these edges to
     // `catalog:` and writing a top-level `catalog` field makes `bun install`
     // abort with "vite@catalog: failed to resolve". The upgrade path must keep
     // every managed spec concrete and write NO catalog field, mirroring the
@@ -2104,6 +2104,36 @@ describe('ensureVitePlusBootstrap', () => {
     }
     // A second pass is a no-op: the standalone project is already settled.
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.bun)).toBe(false);
+  });
+
+  it('keeps `catalog:` specs in a bun project whose `workspaces.packages` is empty (#3375)', () => {
+    // Bun resolves catalogs whenever the root has a `workspaces` field, even an
+    // empty one, so a single-package project may keep its toolchain there.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'bun-root-catalog',
+        devDependencies: { vite: 'catalog:', 'vite-plus': 'catalog:' },
+        overrides: { vite: 'catalog:' },
+        workspaces: {
+          packages: [],
+          catalog: { vite: VITE_PLUS_OVERRIDE_PACKAGES.vite, 'vite-plus': 'latest' },
+        },
+        devEngines: {
+          packageManager: { name: 'bun', version: '1.4.4', onFail: 'download' },
+        },
+      }),
+    );
+
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.bun)).toBe(false);
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.bun));
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      overrides: Record<string, string>;
+    };
+    expect(pkg.devDependencies).toEqual({ vite: 'catalog:', 'vite-plus': 'catalog:' });
+    expect(pkg.overrides).toEqual({ vite: 'catalog:' });
   });
 
   it('rewrites a STANDALONE bun `catalog:` override to the concrete core alias (catalogs unsupported)', () => {
