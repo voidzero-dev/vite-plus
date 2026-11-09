@@ -2950,8 +2950,7 @@ mod tests {
 
         // A raw value that is not an exact version, including one that is semver
         // only after trimming, must be rejected rather than returned unchanged.
-        for payload in ["1.0.0 not a version", "\n1.0.0", " 1.0.0", "1.0.0\n", "1.0.0 "]
-        {
+        for payload in ["1.0.0 not a version", "\n1.0.0", " 1.0.0", "1.0.0\n", "1.0.0 "] {
             let server = MockServer::start();
             server.mock(|when, then| {
                 when.method(GET).path("/pnpm/latest");
