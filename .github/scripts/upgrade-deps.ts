@@ -2,7 +2,11 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { decodeCoreVersion, encodeCoreVersion } from '../../packages/tools/src/core-version.ts';
+import {
+  CORE_PACKAGE_NAME,
+  encodeCoreVersion,
+  tryDecodeCoreVersion,
+} from '../../packages/tools/src/core-version.ts';
 import {
   findLatestStableVersionForMajor,
   getBundledDependencyRanges,
@@ -564,18 +568,11 @@ function syncCoreVersion(pkg: { version?: unknown; bundledVersions?: Record<stri
   }
   pkg.bundledVersions = { ...pkg.bundledVersions, vite: viteVersion };
   const current = typeof pkg.version === 'string' ? pkg.version : undefined;
-  let currentVite: string | undefined;
-  try {
-    currentVite = current === undefined ? undefined : decodeCoreVersion(current).vite;
-  } catch {
-    currentVite = undefined;
-  }
-  if (currentVite === viteVersion) {
+  if (current !== undefined && tryDecodeCoreVersion(current)?.vite === viteVersion) {
     return;
   }
-  const name = '@voidzero-dev/vite-plus-core';
   const next = encodeCoreVersion(viteVersion, 0);
-  recordChange(name, changes.get(name)?.old ?? current, next);
+  recordChange(CORE_PACKAGE_NAME, changes.get(CORE_PACKAGE_NAME)?.old ?? current, next);
   pkg.version = next;
 }
 

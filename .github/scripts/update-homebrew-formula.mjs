@@ -5,7 +5,8 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { waitForNpmPackagesFromEnv } from './wait-for-npm-packages.ts';
+import { CORE_ALIAS_PREFIX } from '../../packages/tools/src/core-version.ts';
+import { DEFAULT_NPM_REGISTRY, waitForNpmPackagesFromEnv } from './wait-for-npm-packages.ts';
 
 export const targets = [
   ['macos', 'arm', 'aarch64-apple-darwin', 'darwin-arm64'],
@@ -105,15 +106,17 @@ export function updateFormula(source, version, assets) {
   return updated;
 }
 
+async function download(url, fetchImpl) {
+  const response = await fetchImpl(url, { signal: AbortSignal.timeout(120_000) });
+  assert.ok(response.ok, `Download failed: ${url} (HTTP ${response.status})`);
+  return response;
+}
+
 export async function verifyRelease(version, release, fetchImpl = fetch) {
   stableVersion(version);
   assert.equal(release.tag_name, `v${version}`);
   assert.ok(!release.draft && !release.prerelease, 'Release must be published and stable');
-  const get = async (url) => {
-    const response = await fetchImpl(url, { signal: AbortSignal.timeout(120_000) });
-    assert.ok(response.ok, `Download failed: ${url} (HTTP ${response.status})`);
-    return response;
-  };
+  const get = (url) => download(url, fetchImpl);
   // The formula is added with the per-user Homebrew runtime. Check the release
   // tag, never main, before enabling installation.
   await get(`https://raw.githubusercontent.com/${repository}/v${version}/HomebrewFormula/vp.rb`);
@@ -137,17 +140,17 @@ export async function verifyRelease(version, release, fetchImpl = fetch) {
   return assets;
 }
 
-const CORE_ALIAS_PREFIX = 'npm:@voidzero-dev/vite-plus-core@';
-
 // The core version encodes the bundled Vite version, so it differs from the
 // vite-plus version (rfcs/core-version-alignment.md). Read it from the `vite`
 // alias of the published CLI. The release job publishes the CLI before this
 // script runs.
-export async function publishedCoreVersion(version, fetchImpl = fetch) {
-  const url = `https://registry.npmjs.org/vite-plus/${version}`;
-  const response = await fetchImpl(url, { signal: AbortSignal.timeout(120_000) });
-  assert.ok(response.ok, `Download failed: ${url} (HTTP ${response.status})`);
-  const spec = (await response.json()).dependencies?.vite;
+export async function publishedCoreVersion(
+  version,
+  fetchImpl = fetch,
+  registry = process.env.PUBLISH_REGISTRY ?? DEFAULT_NPM_REGISTRY,
+) {
+  const url = `${registry.replace(/\/+$/, '')}/vite-plus/${version}`;
+  const spec = (await (await download(url, fetchImpl)).json()).dependencies?.vite;
   assert.ok(
     typeof spec === 'string' && spec.startsWith(CORE_ALIAS_PREFIX),
     `vite-plus@${version} does not alias vite to @voidzero-dev/vite-plus-core: ${spec}`,
@@ -163,8 +166,10 @@ async function main() {
       encoding: 'utf8',
     }),
   );
-  const assets = await verifyRelease(version, release);
-  const coreVersion = await publishedCoreVersion(version);
+  const [assets, coreVersion] = await Promise.all([
+    verifyRelease(version, release),
+    publishedCoreVersion(version),
+  ]);
   const packages = [
     { name: 'vite-plus', version },
     { name: '@voidzero-dev/vite-plus-core', version: coreVersion },

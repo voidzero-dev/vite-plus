@@ -25,32 +25,21 @@ describe('Vite+ dependency versions', () => {
     );
   });
 
-  it('keeps the core version for a release VP_VERSION', async () => {
-    vi.stubEnv('VP_VERSION', '1.0.1');
-    vi.stubEnv('VP_CORE_VERSION', '');
-    vi.stubEnv('VP_OVERRIDE_PACKAGES', '');
-    vi.resetModules();
-
-    const { VITE_PLUS_CORE_VERSION } = await import('../constants.js');
-
-    expect(VITE_PLUS_CORE_VERSION).toBe(corePkg.version);
-  });
-
-  it.each(['0.0.0', '0.0.0-commit.0c515e3'])(
-    'uses a preview VP_VERSION %s for the core too',
+  it.each(['1.0.1', '0.0.0', '0.0.0-commit.0c515e3'])(
+    'keeps the core manifest version for VP_VERSION %s',
     async (version) => {
       vi.stubEnv('VP_VERSION', version);
       vi.stubEnv('VP_CORE_VERSION', '');
       vi.stubEnv('VP_OVERRIDE_PACKAGES', '');
       vi.resetModules();
 
-      const { VITE_PLUS_OVERRIDE_PACKAGES } = await import('../constants.js');
+      const { VITE_PLUS_CORE_VERSION } = await import('../constants.js');
 
-      expect(VITE_PLUS_OVERRIDE_PACKAGES.vite).toBe(`npm:@voidzero-dev/vite-plus-core@${version}`);
+      expect(VITE_PLUS_CORE_VERSION).toBe(corePkg.version);
     },
   );
 
-  it('prefers VP_CORE_VERSION over a preview VP_VERSION', async () => {
+  it('uses VP_CORE_VERSION for the core alias', async () => {
     vi.stubEnv('VP_VERSION', '0.0.0');
     vi.stubEnv('VP_CORE_VERSION', '8.3.599');
     vi.stubEnv('VP_OVERRIDE_PACKAGES', '');

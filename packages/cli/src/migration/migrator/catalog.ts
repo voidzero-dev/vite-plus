@@ -25,11 +25,13 @@ import {
   managedOverridePackages,
   managedPeerDependencyRuleKeys,
   mergeManagedPnpmPeerDependencyRules,
+  peerDependencyRulesHaveKey,
   pruneLegacyWrapperAliases,
   removeManagedVitestEntry,
   removeYamlMapVitestEntry,
   rewriteMonorepoProject,
   shouldDropProviderOverrideKey,
+  stalePeerDependencyRuleKeys,
   workspaceUsesWebdriverioProvider,
 } from '../migrator.ts';
 import { type MigrationReport } from '../report.ts';
@@ -41,6 +43,7 @@ import {
   VITEST_IS_MANAGED_OVERRIDE,
   isPlainRecord,
   pnpmOverrideKey,
+  readPackageJsonIfExists,
   vitePeerDependencyRuleRequired,
   type CatalogDependencyResolver,
   type PackageJsonDependencyField,
@@ -419,15 +422,9 @@ export function rewritePnpmWorkspaceYaml(
         allowAny.add(scalarString(allowAnyNode));
       }
     }
-    // Common case: drop any lingering managed `vitest` allowAny entry.
-    if (!usesVitest && VITEST_IS_MANAGED_OVERRIDE) {
-      allowAny.items = allowAny.items.filter((n) => n.value !== 'vitest');
-    }
-    // A `vite` entry only hides real incompatibilities once the core alias
-    // satisfies `vite` peer ranges (see `vitePeerDependencyRuleRequired`).
-    if (!vitePeerDependencyRuleRequired()) {
-      allowAny.items = allowAny.items.filter((n) => n.value !== 'vite');
-    }
+    // Drop lingering managed `vitest` and stale `vite` entries.
+    const stalePeerRuleKeys = stalePeerDependencyRuleKeys(usesVitest);
+    allowAny.items = allowAny.items.filter((n) => !stalePeerRuleKeys.includes(n.value));
     const peerRuleKeys = managedPeerDependencyRuleKeys(usesVitest);
     const existing = new Set(allowAny.items.map((n) => n.value));
     for (const key of peerRuleKeys) {
@@ -447,12 +444,8 @@ export function rewritePnpmWorkspaceYaml(
     } else {
       allowedVersions = new YAMLMap<Scalar<string>, Scalar<string>>();
     }
-    // Common case: drop any lingering managed `vitest` allowedVersions entry.
-    if (!usesVitest) {
-      removeYamlMapVitestEntry(allowedVersions);
-    }
-    if (!vitePeerDependencyRuleRequired()) {
-      allowedVersions.delete('vite');
+    for (const key of stalePeerRuleKeys) {
+      allowedVersions.delete(key);
     }
     for (const key of peerRuleKeys) {
       // - vite: '*'
@@ -1297,7 +1290,6 @@ export function rewriteRootWorkspacePackageJson(
       // See https://github.com/oven-sh/bun/issues/8406.
       setDirectViteEdge(pkg, supportCatalog, catalogDependencyResolver);
     } else if (packageManager === PackageManager.pnpm) {
-      const overrideKeys = Object.keys(managedOverridePackages(workspaceUsesVitest));
       const usePnpmWorkspaceSettings = pnpmSupportsWorkspaceSettings(pnpmVersion ?? '');
       if (!usePnpmWorkspaceSettings) {
         // Strip selector-shaped overrides (e.g. `parent>@vitest/browser-playwright`)
@@ -1318,6 +1310,7 @@ export function rewriteRootWorkspacePackageJson(
           ),
         };
       } else {
+        const overrideKeys = Object.keys(managedOverridePackages(workspaceUsesVitest));
         for (const key of [...overrideKeys, ...PROVIDER_OVERRIDE_DROP_NAMES]) {
           if (pkg.resolutions?.[key]) {
             delete pkg.resolutions[key];
@@ -1456,27 +1449,16 @@ export function readPnpmWorkspacePeerDependencyRules(
   return doc?.peerDependencyRules;
 }
 
-function rulesHaveVite(
-  rules: { allowAny?: unknown; allowedVersions?: unknown } | null | undefined,
-): boolean {
-  return (
-    (Array.isArray(rules?.allowAny) && rules.allowAny.includes('vite')) ||
-    (isPlainRecord(rules?.allowedVersions) && rules.allowedVersions.vite !== undefined)
-  );
-}
-
 // Whether the root pnpm config (the package.json `pnpm` field or
 // pnpm-workspace.yaml) holds a `vite` peer rule.
 export function hasVitePeerDependencyRule(projectPath: string): boolean {
-  if (rulesHaveVite(readPnpmWorkspacePeerDependencyRules(projectPath))) {
+  if (peerDependencyRulesHaveKey(readPnpmWorkspacePeerDependencyRules(projectPath), ['vite'])) {
     return true;
   }
-  const packageJsonPath = path.join(projectPath, 'package.json');
-  if (!fs.existsSync(packageJsonPath)) {
-    return false;
-  }
-  const pkg = readJsonFile(packageJsonPath) as { pnpm?: PnpmPackageJsonSettings };
-  return rulesHaveVite(pkg.pnpm?.peerDependencyRules);
+  const pkg = readPackageJsonIfExists(path.join(projectPath, 'package.json')) as
+    | { pnpm?: PnpmPackageJsonSettings }
+    | undefined;
+  return peerDependencyRulesHaveKey(pkg?.pnpm?.peerDependencyRules, ['vite']);
 }
 
 // Capture the `vite` peer rule before a migration step. Call the returned

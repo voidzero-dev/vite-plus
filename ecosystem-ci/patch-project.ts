@@ -324,9 +324,8 @@ const migrateEnv: NodeJS.ProcessEnv = {
     ...vitestOverrides,
   }),
   // The vp binary was built before the pack step pinned the package versions,
-  // so align the versions migrate pins with the tgz files the registry serves.
+  // so align the version migrate pins with the tgz the registry serves.
   VP_VERSION: vitePlusVersion,
-  VP_CORE_VERSION: vitePlusCoreVersion,
   ...releaseAgeEnv,
 };
 

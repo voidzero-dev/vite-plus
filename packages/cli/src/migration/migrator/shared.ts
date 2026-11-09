@@ -5,7 +5,11 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import type { OxlintConfig } from 'oxlint';
 import { coerce, satisfies, tryParse } from 'verkit';
 
-import { VITEST_VERSION, VITE_PLUS_OVERRIDE_PACKAGES } from '../../utils/constants.ts';
+import {
+  VITEST_VERSION,
+  VITE_PLUS_CORE_ALIAS_PREFIX,
+  VITE_PLUS_OVERRIDE_PACKAGES,
+} from '../../utils/constants.ts';
 import { readJsonFile } from '../../utils/json.ts';
 import { detectPackageMetadata } from '../../utils/package.ts';
 import { displayRelative } from '../../utils/path.ts';
@@ -211,8 +215,6 @@ export const VITEST_BROWSER_DEP_NAMES = [
 // and must be left untouched.
 export const VITEST_IS_MANAGED_OVERRIDE = 'vitest' in VITE_PLUS_OVERRIDE_PACKAGES;
 
-const CORE_ALIAS_PREFIX = 'npm:@voidzero-dev/vite-plus-core@';
-
 /**
  * Whether pnpm still needs the managed `vite` peer rule (`allowAny: [vite]`,
  * `allowedVersions: { vite: '*' }`) for the given core alias.
@@ -228,10 +230,10 @@ const CORE_ALIAS_PREFIX = 'npm:@voidzero-dev/vite-plus-core@';
 export function vitePeerDependencyRuleRequired(
   viteSpec: string | undefined = VITE_PLUS_OVERRIDE_PACKAGES.vite,
 ): boolean {
-  if (!viteSpec?.startsWith(CORE_ALIAS_PREFIX)) {
+  if (!viteSpec?.startsWith(VITE_PLUS_CORE_ALIAS_PREFIX)) {
     return true;
   }
-  const version = tryParse(viteSpec.slice(CORE_ALIAS_PREFIX.length));
+  const version = tryParse(viteSpec.slice(VITE_PLUS_CORE_ALIAS_PREFIX.length));
   return (
     !version ||
     version.major < 8 ||

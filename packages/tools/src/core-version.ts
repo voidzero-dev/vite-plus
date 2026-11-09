@@ -24,8 +24,10 @@ import { readFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 
 export const CORE_PACKAGE_NAME = '@voidzero-dev/vite-plus-core';
-export const MAX_RELEASE_COUNTER = 98;
-export const LOCAL_BUILD_COUNTER = 99;
+/** The `vite` alias to the core: `npm:@voidzero-dev/vite-plus-core@<version>`. */
+export const CORE_ALIAS_PREFIX = `npm:${CORE_PACKAGE_NAME}@`;
+const MAX_RELEASE_COUNTER = 98;
+const LOCAL_BUILD_COUNTER = 99;
 
 const PRERELEASE_TAG = 'vp';
 const VERSION_RE =
@@ -60,7 +62,7 @@ function parseVersion(version: string): ParsedVersion {
   };
 }
 
-export function isPrereleaseVersion(version: string): boolean {
+function isPrereleaseVersion(version: string): boolean {
   return parseVersion(version).prerelease.length > 0;
 }
 
@@ -96,7 +98,7 @@ export function decodeCoreVersion(core: string): DecodedCoreVersion {
   };
 }
 
-function tryDecodeCoreVersion(core: string): DecodedCoreVersion | undefined {
+export function tryDecodeCoreVersion(core: string): DecodedCoreVersion | undefined {
   try {
     return decodeCoreVersion(core);
   } catch {
@@ -117,8 +119,9 @@ function nextCounter(values: Iterable<number>): number {
  *
  * @param vite - The bundled Vite version.
  * @param vitePlus - The `vite-plus` version of the release.
- * @param published - Every published core version. Versions that do not decode
- *   (the `0.x` and `1.x` lines) are ignored.
+ * @param published - Every published core version. Versions from before the
+ *   alignment (the `0.x` and `1.x` lines) never match a bundled Vite version,
+ *   so they do not affect the counters.
  */
 export function nextCoreVersion({
   vite,
@@ -165,12 +168,9 @@ export function nextCoreVersion({
     return base;
   }
   const k = nextCounter(
-    published.flatMap((version) => {
-      const match = version.startsWith(`${base}-${PRERELEASE_TAG}.`)
-        ? tryDecodeCoreVersion(version)
-        : undefined;
-      return match?.k === undefined ? [] : [match.k];
-    }),
+    decoded.flatMap((entry) =>
+      entry.vite === vite && entry.n === n && entry.k !== undefined ? [entry.k] : [],
+    ),
   );
   return `${base}-${PRERELEASE_TAG}.${k}`;
 }

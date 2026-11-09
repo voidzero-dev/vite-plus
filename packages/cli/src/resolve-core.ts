@@ -2,53 +2,51 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 
+import { VITE_PLUS_CORE_ALIAS_PREFIX, VITE_PLUS_CORE_NAME } from './utils/constants.ts';
 import { readNearestPackageJson } from './utils/package.ts';
 
-const CORE_PACKAGE_NAME = '@voidzero-dev/vite-plus-core';
-const CORE_ALIAS_PREFIX = `npm:${CORE_PACKAGE_NAME}@`;
-
-function checkCoreVersion(packageJsonPath: string, expectedVersion: string | undefined): void {
+/**
+ * Check that a resolved `vite` is the core package, at `expectedVersion` when
+ * one is given. Returns the core version.
+ */
+function checkCoreVersion(
+  packageJsonPath: string,
+  expectedVersion: string | undefined,
+): string | undefined {
   const pkg = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as {
     name?: string;
     version?: string;
   };
   if (
-    pkg.name !== CORE_PACKAGE_NAME ||
+    pkg.name !== VITE_PLUS_CORE_NAME ||
     (expectedVersion !== undefined && pkg.version !== expectedVersion)
   ) {
     const expected =
-      expectedVersion === undefined ? CORE_PACKAGE_NAME : `${CORE_PACKAGE_NAME}@${expectedVersion}`;
+      expectedVersion === undefined
+        ? VITE_PLUS_CORE_NAME
+        : `${VITE_PLUS_CORE_NAME}@${expectedVersion}`;
     throw new Error(
       `Expected ${expected}, but found ${pkg.name}@${pkg.version} at ${packageJsonPath}. ` +
         'Run `vp migrate` to align the Vite alias, then run `vp install`.',
     );
   }
+  return pkg.version;
 }
 
 /**
  * Read the core version that the selected CLI pins through its `vite` alias.
  * The core version encodes the bundled Vite version, so it differs from the
  * CLI version (rfcs/core-version-alignment.md). Packing turns the repository's
- * `workspace:` spec into the exact alias. A spec without an exact version
- * falls back to the version of the core that the CLI resolves, so a stale
- * project core still fails in the repository layout.
+ * `workspace:` spec into the exact alias. Any other spec pins no version.
  */
-function readExpectedCoreVersion(
-  cliPackageJsonPath: string,
-  corePackageJsonPath: string,
-): string | undefined {
+function readAliasCoreVersion(cliPackageJsonPath: string): string | undefined {
   const { dependencies } = JSON.parse(readFileSync(cliPackageJsonPath, 'utf8')) as {
     dependencies?: Record<string, string>;
   };
   const spec = dependencies?.vite;
-  if (spec?.startsWith(CORE_ALIAS_PREFIX)) {
-    return spec.slice(CORE_ALIAS_PREFIX.length);
-  }
-  const core = JSON.parse(readFileSync(corePackageJsonPath, 'utf8')) as {
-    name?: string;
-    version?: string;
-  };
-  return core.name === CORE_PACKAGE_NAME ? core.version : undefined;
+  return spec?.startsWith(VITE_PLUS_CORE_ALIAS_PREFIX)
+    ? spec.slice(VITE_PLUS_CORE_ALIAS_PREFIX.length)
+    : undefined;
 }
 
 function checkProjectCoreVersion(
@@ -98,12 +96,13 @@ export function resolveCore(
   }
   // Read the selected CLI's installed manifest. A static JSON import is inlined
   // during the build, before CI and preview packers can stamp a new version.
-  const expectedVersion = readExpectedCoreVersion(
-    cliRequire.resolve('vite-plus/package.json'),
+  // The project's core must match the core that the CLI resolves, so a stale
+  // project core also fails when the CLI alias pins no version.
+  const coreVersion = checkCoreVersion(
     corePackageJsonPath,
+    readAliasCoreVersion(cliRequire.resolve('vite-plus/package.json')),
   );
-  checkCoreVersion(corePackageJsonPath, expectedVersion);
-  checkProjectCoreVersion(cwd, corePackageJsonPath, expectedVersion);
+  checkProjectCoreVersion(cwd, corePackageJsonPath, coreVersion);
 
   return cliRequire.resolve(`vite${subpath}`);
 }

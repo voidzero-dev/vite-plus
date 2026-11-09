@@ -29,6 +29,7 @@ import {
   managedOverridePackages,
   managedPeerDependencyRuleKeys,
   mergeManagedPnpmPeerDependencyRules,
+  peerDependencyRulesHaveKey,
   migratePnpmSettingsToWorkspaceYaml,
   normalizeVitestPeerCatalogSpec,
   pnpmPackageJsonSettingsPending,
@@ -47,6 +48,7 @@ import {
   rewritePnpmWorkspaceYaml,
   rewriteYarnrcYml,
   setDirectViteEdge,
+  stalePeerDependencyRuleKeys,
   takePnpmWorkspaceSettings,
   trackVitePeerDependencyRuleRemoval,
   vitestEcosystemCatalogReferencesPending,
@@ -67,7 +69,6 @@ import {
   managedOverrideKey,
   pnpmMajor,
   pnpmOverrideKey,
-  vitePeerDependencyRuleRequired,
   type CatalogDependencyResolver,
   type ManagedOverrideKeyStyle,
   type PnpmPackageJsonSettings,
@@ -219,24 +220,12 @@ function pnpmPeerDependencyRulesSatisfyVitePlus(
     | undefined,
   usesVitest: boolean,
 ): boolean {
+  // A lingering managed `vitest` rule or a stale `vite` rule is NOT satisfied.
+  if (peerDependencyRulesHaveKey(peerDependencyRules, stalePeerDependencyRuleKeys(usesVitest))) {
+    return false;
+  }
   const allowAny = new Set(peerDependencyRules?.allowAny ?? []);
   const allowedVersions = peerDependencyRules?.allowedVersions ?? {};
-  // Common case: a lingering managed `vitest` peer rule is NOT satisfied.
-  if (
-    !usesVitest &&
-    VITEST_IS_MANAGED_OVERRIDE &&
-    (allowAny.has('vitest') || allowedVersions.vitest !== undefined)
-  ) {
-    return false;
-  }
-  // A stale `vite` peer rule is not satisfied once the core alias satisfies
-  // `vite` peer ranges. It must be removed (see `vitePeerDependencyRuleRequired`).
-  if (
-    !vitePeerDependencyRuleRequired() &&
-    (allowAny.has('vite') || allowedVersions.vite !== undefined)
-  ) {
-    return false;
-  }
   const ruleKeys = managedPeerDependencyRuleKeys(usesVitest);
   return ruleKeys.every((key) => allowAny.has(key) && allowedVersions[key] === '*');
 }

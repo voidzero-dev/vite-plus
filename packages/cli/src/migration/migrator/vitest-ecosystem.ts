@@ -27,6 +27,7 @@ import {
   REMOVE_PACKAGES,
   VITEST_BROWSER_DEP_NAMES,
   VITEST_IS_MANAGED_OVERRIDE,
+  isPlainRecord,
   pnpmOverrideKey,
   vitePeerDependencyRuleRequired,
   type CatalogDependencyResolver,
@@ -540,40 +541,36 @@ function managedVitestOverrideKeys(keyStyle: ManagedOverrideKeyStyle): string[] 
   return keyStyle === 'pnpm-ranged' ? ['vitest', pnpmOverrideKey('vitest')] : ['vitest'];
 }
 
-// Remove the managed `vitest` entry from pnpm peerDependencyRules (its
-// `allowAny` array entry and `allowedVersions.vitest`), in place. Works on both
-// the package.json `pnpm.peerDependencyRules` JSON shape and the same shape read
-// back from pnpm-workspace.yaml.
-export function removeVitestPeerDependencyRule(peerDependencyRules: {
-  allowAny?: string[];
-  allowedVersions?: Record<string, string>;
-}): void {
-  if (!VITEST_IS_MANAGED_OVERRIDE) {
-    return;
+// The pnpm peerDependencyRules keys that migration removes:
+// - `vitest`, a lingering managed rule, when the workspace does not use Vitest.
+// - `vite`, once its core alias satisfies `vite` peer ranges (see
+//   `vitePeerDependencyRuleRequired`). Then the rule only hides real
+//   incompatibilities. Migration cannot tell whether an earlier migration or the
+//   user wrote the entry; its only purpose was to accept the `1.x` alias, so
+//   both go.
+export function stalePeerDependencyRuleKeys(usesVitest: boolean): string[] {
+  const keys: string[] = [];
+  if (!usesVitest && VITEST_IS_MANAGED_OVERRIDE) {
+    keys.push('vitest');
   }
-  if (Array.isArray(peerDependencyRules.allowAny)) {
-    peerDependencyRules.allowAny = peerDependencyRules.allowAny.filter((key) => key !== 'vitest');
+  if (!vitePeerDependencyRuleRequired()) {
+    keys.push('vite');
   }
-  if (peerDependencyRules.allowedVersions) {
-    delete peerDependencyRules.allowedVersions.vitest;
-  }
+  return keys;
 }
 
-// Remove every `vite` entry from pnpm peerDependencyRules, in place. Once the
-// core version encodes the bundled Vite (see `vitePeerDependencyRuleRequired`),
-// the rule only hides real incompatibilities. Migration cannot tell whether an
-// earlier migration or the user wrote the entry; its only purpose was to accept
-// the `1.x` alias, so both go.
-export function removeVitePeerDependencyRule(peerDependencyRules: {
-  allowAny?: string[];
-  allowedVersions?: Record<string, string>;
-}): void {
-  if (Array.isArray(peerDependencyRules.allowAny)) {
-    peerDependencyRules.allowAny = peerDependencyRules.allowAny.filter((key) => key !== 'vite');
-  }
-  if (peerDependencyRules.allowedVersions) {
-    delete peerDependencyRules.allowedVersions.vite;
-  }
+// Whether pnpm peerDependencyRules hold an `allowAny` or `allowedVersions` entry
+// for one of `keys`. Works on both the package.json `pnpm.peerDependencyRules`
+// JSON shape and the same shape read back from pnpm-workspace.yaml.
+export function peerDependencyRulesHaveKey(
+  rules: { allowAny?: unknown; allowedVersions?: unknown } | null | undefined,
+  keys: readonly string[],
+): boolean {
+  return keys.some(
+    (key) =>
+      (Array.isArray(rules?.allowAny) && rules.allowAny.includes(key)) ||
+      (isPlainRecord(rules?.allowedVersions) && rules.allowedVersions[key] !== undefined),
+  );
 }
 
 // The pnpm peerDependencyRules keys vite-plus manages: the managed override
@@ -590,33 +587,25 @@ export function mergeManagedPnpmPeerDependencyRules(
   rules: PnpmPeerDependencyRules | undefined,
   usesVitest: boolean,
 ): PnpmPeerDependencyRules | undefined {
-  const seed: PnpmPeerDependencyRules = { ...rules };
-  if (Array.isArray(seed.allowAny)) {
-    seed.allowAny = [...seed.allowAny];
-  }
-  if (seed.allowedVersions) {
-    seed.allowedVersions = { ...seed.allowedVersions };
-  }
-  // Common case: drop a lingering managed `vitest` peer rule.
-  if (!usesVitest) {
-    removeVitestPeerDependencyRule(seed);
-  }
-  if (!vitePeerDependencyRuleRequired()) {
-    removeVitePeerDependencyRule(seed);
-  }
+  const stale = new Set(stalePeerDependencyRuleKeys(usesVitest));
   const keys = managedPeerDependencyRuleKeys(usesVitest);
-  const next: PnpmPeerDependencyRules = {
-    ...seed,
-    allowAny: [...new Set([...(seed.allowAny ?? []), ...keys])],
-    allowedVersions: {
-      ...seed.allowedVersions,
-      ...Object.fromEntries(keys.map((key) => [key, '*'])),
-    },
+  const allowAny = [
+    ...new Set([
+      ...(Array.isArray(rules?.allowAny) ? rules.allowAny : []).filter((key) => !stale.has(key)),
+      ...keys,
+    ]),
+  ];
+  const allowedVersions = {
+    ...Object.fromEntries(
+      Object.entries(rules?.allowedVersions ?? {}).filter(([key]) => !stale.has(key)),
+    ),
+    ...Object.fromEntries(keys.map((key) => [key, '*'])),
   };
-  if (next.allowAny?.length === 0) {
+  const next: PnpmPeerDependencyRules = { ...rules, allowAny, allowedVersions };
+  if (allowAny.length === 0) {
     delete next.allowAny;
   }
-  if (next.allowedVersions && Object.keys(next.allowedVersions).length === 0) {
+  if (Object.keys(allowedVersions).length === 0) {
     delete next.allowedVersions;
   }
   return Object.keys(next).length > 0 ? next : undefined;
