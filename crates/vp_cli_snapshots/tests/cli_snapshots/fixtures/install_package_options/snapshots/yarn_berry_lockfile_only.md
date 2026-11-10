@@ -3,6 +3,11 @@
 ## `vpt json-edit package.json packageManager yarn@4.10.3`
 
 
+## `yarn --version`
+
+Prepare the pinned Yarn before checking install option output
+
+
 ## `vp install ./dep --lockfile-only --ignore-scripts`
 
 use update-lockfile rather than skip-build when both options are supplied

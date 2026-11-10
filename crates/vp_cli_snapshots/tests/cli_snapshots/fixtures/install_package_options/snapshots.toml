@@ -65,6 +65,7 @@ vp = "global"
 env = { YARN_ENABLE_TELEMETRY = "0", YARN_ENABLE_GLOBAL_CACHE = "0" }
 steps = [
   { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@4.10.3"], snapshot = false },
+  { argv = ["yarn", "--version"], comment = "Prepare the pinned Yarn before checking install option output", snapshot = false },
   { argv = ["vp", "install", "./dep", "--lockfile-only", "--ignore-scripts"], comment = "use update-lockfile rather than skip-build when both options are supplied" },
   ["vpt", "stat-file", "yarn.lock", "--assert", "file"],
   ["vpt", "stat-file", "node_modules", "--assert", "missing"],
