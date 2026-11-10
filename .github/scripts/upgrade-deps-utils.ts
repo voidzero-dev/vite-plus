@@ -149,6 +149,14 @@ export function updatePnpmInstallerPins(
       path: 'crates/vp_pm_cli/tests/package_manager_pin_verification.rs',
       pattern: /const PINNED_PNPM_VERSION: &str = "([^"]+)";/g,
     },
+    {
+      path: 'packages/cli/install-legacy.sh',
+      pattern: /"packageManager": "pnpm@([^"]+)"/g,
+    },
+    {
+      path: 'packages/cli/install-legacy.ps1',
+      pattern: /packageManager = "pnpm@([^"]+)"/g,
+    },
   ].map(({ path, pattern }) => {
     const filePath = join(root, path);
     const content = readFileSync(filePath, 'utf8');
@@ -167,9 +175,7 @@ export function updatePnpmInstallerPins(
   });
   const installer = files[0];
   if (files.some((file) => file.oldVersion !== installer.oldVersion)) {
-    throw new Error(
-      'pnpm installer version pins are out of sync; update all three copies together',
-    );
+    throw new Error('pnpm installer version pins are out of sync; update all copies together');
   }
   const integrityPattern = /const PINNED_PNPM_INTEGRITY: &str = "(sha512\.[a-f0-9]{128})";/g;
   const integrityMatches = [...installer.content.matchAll(integrityPattern)];

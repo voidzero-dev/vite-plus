@@ -40,6 +40,8 @@ test.each([false, true])(
       'crates/vp_setup/src/install.rs',
       'packages/cli/generate-install-lockfile.ts',
       'crates/vp_pm_cli/tests/package_manager_pin_verification.rs',
+      'packages/cli/install-legacy.sh',
+      'packages/cli/install-legacy.ps1',
     ]) {
       mkdirSync(dirname(join(tempDir, file)), { recursive: true });
       copyFileSync(join(root, file), join(tempDir, file));
