@@ -219,7 +219,7 @@ jsonschema = { version = "0.60.0", default-features = false }
 junction = "2.0.0"
 libtest-mimic = "0.8.2"
 memchr = "2.8.2"
-mimalloc-safe = "0.1.64"
+mimalloc-safe = "0.1.70"
 mime = "0.3.17"
 napi = { version = "3.12.2", default-features = false, features = [
   "async",

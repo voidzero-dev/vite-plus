@@ -22,9 +22,7 @@ use vt_workspace::{WorkspaceFile, WorkspaceRoot, find_workspace_root};
 
 use crate::{
     config::NpmConfig,
-    request::{
-        HttpClient, download_and_extract_tgz_with_hash_and_config, is_not_found, verify_file_hash,
-    },
+    request::{HttpClient, download_and_extract_tgz_with_hash_and_config, is_not_found},
     shim,
 };
 
@@ -120,6 +118,19 @@ impl PackageManagerType {
         matches!(self, Self::Yarn) && is_yarn_berry(version)
     }
 
+    /// Whether this version's executable comes from a platform package, so a
+    /// `packageManager` hash covers the main npm tarball rather than the binary
+    /// that runs. The binary is authenticated against its registry's integrity,
+    /// so a cached copy is bound to that registry's origin as well as the pin.
+    #[must_use]
+    pub fn uses_platform_binary(self, version: &str) -> bool {
+        match self {
+            Self::Bun => true,
+            Self::Pnpm => Version::parse(version).is_ok_and(|version| version.major >= 12),
+            _ => false,
+        }
+    }
+
     #[must_use]
     pub const fn bin_names(self) -> &'static [&'static str] {
         match self {
@@ -131,9 +142,168 @@ impl PackageManagerType {
     }
 }
 
-/// Name of the file that records the pin vp verified when it installed a
-/// package manager, relative to the version directory.
-const VERIFIED_PIN_RECORD: &str = ".verified-pin";
+/// A short, opaque fingerprint (first 32 hex of SHA-256) for a cache key.
+fn short_fingerprint(input: &str) -> Str {
+    Str::from(&hex::encode(Sha256::digest(input.as_bytes()))[..32])
+}
+
+/// The cache-key directory segment that binds a *verified* install to what it was
+/// verified against, so a different pin or origin resolves to a different,
+/// immutable directory instead of sharing one.
+///
+/// - No pin: `None`. An unpinned install has no integrity reference, so it stays
+///   on the shared version directory with no key segment.
+/// - Pinned tarball manager: keyed by the pin, which covers the executed files.
+/// - Platform-binary manager (bun, pnpm >= 12): keyed by pin and origin, because
+///   the pin covers the main tarball, not the executed platform binary.
+#[must_use]
+pub fn install_cache_key(
+    expected_hash: Option<&str>,
+    platform_origin: Option<&str>,
+) -> Option<Str> {
+    match (expected_hash, platform_origin) {
+        (None, _) => None,
+        (Some(pin), None) => Some(short_fingerprint(pin)),
+        (Some(pin), Some(origin)) => Some(short_fingerprint(&format!("{pin}\n{origin}"))),
+    }
+}
+
+/// Resolve the cache key for a manager. Returns `None` for an unpinned install.
+/// Only a platform-binary manager folds the registry origin into the key, so the
+/// npm config is loaded lazily in that branch and never on the common warm path.
+fn resolve_cache_key(
+    package_manager_type: PackageManagerType,
+    version: &str,
+    expected_hash: Option<&str>,
+) -> Result<Option<Str>, Error> {
+    let platform_origin = if package_manager_type.uses_platform_binary(version) {
+        let platform_package = match package_manager_type {
+            PackageManagerType::Bun => get_bun_platform_package_name()?,
+            PackageManagerType::Pnpm => get_pnpm_platform_package_name()?.to_string(),
+            other => {
+                return Err(Error::UnsupportedPackageManager(
+                    format!("{other} has no platform package").into(),
+                ));
+            }
+        };
+        let npm_config = NpmConfig::load();
+        Some(origin_fingerprint(&npm_config.registry_for_package(&platform_package)))
+    } else {
+        None
+    };
+    Ok(install_cache_key(expected_hash, platform_origin.as_deref()))
+}
+
+/// The directory for one package-manager version's unpinned install. Pinned
+/// installs live in the verified namespace instead; see
+/// [`package_manager_verified_version_dir`].
+fn package_manager_version_dir(
+    package_manager_type: PackageManagerType,
+    version: &str,
+) -> AbsolutePathBuf {
+    let bin_name = package_manager_type.to_string();
+    vp_shared::EnvConfig::get().dirs.data.join("package_manager").join(&bin_name).join(version)
+}
+
+/// The hidden namespace that holds verified, pinned installs, kept out of the
+/// version directories that unpinned installs and earlier layouts write to. Only
+/// a download verified against its pin creates a directory here, so a reuse check
+/// can trust a complete entry without re-reading the pin. The `-v1` suffix lets
+/// the layout change later without reusing an older directory.
+pub const VERIFIED_NAMESPACE: &str = ".verified-v1";
+
+/// The directory holding every pinned install of one package-manager version, one
+/// immutable subdirectory per [`install_cache_key`], under the verified namespace.
+fn package_manager_verified_version_dir(
+    package_manager_type: PackageManagerType,
+    version: &str,
+) -> AbsolutePathBuf {
+    package_manager_verified_namespace_dir(package_manager_type).join(version)
+}
+
+/// The hidden directory holding a package manager's pinned installs, one
+/// subdirectory per version, keyed by [`VERIFIED_NAMESPACE`].
+fn package_manager_verified_namespace_dir(
+    package_manager_type: PackageManagerType,
+) -> AbsolutePathBuf {
+    let bin_name = package_manager_type.to_string();
+    vp_shared::EnvConfig::get()
+        .dirs
+        .data
+        .join("package_manager")
+        .join(&bin_name)
+        .join(VERIFIED_NAMESPACE)
+}
+
+/// Find a complete cached install of a version for callers that only report
+/// whether it is installed and hold no pin to select a key. Prefers the unpinned
+/// install at the version-directory root, then the first complete pinned install.
+#[must_use]
+pub fn installed_package_manager_dir(
+    package_manager_type: PackageManagerType,
+    version: &str,
+) -> Option<AbsolutePathBuf> {
+    let bin_name = package_manager_type.to_string();
+    // An unpinned install lives at the version-directory root.
+    let unpinned = package_manager_version_dir(package_manager_type, version).join(&bin_name);
+    if is_package_manager_install_complete(&unpinned, &bin_name).unwrap_or(false) {
+        return Some(unpinned);
+    }
+    // A pinned install lives under its content-key subdirectory in the verified
+    // namespace.
+    let verified_dir = package_manager_verified_version_dir(package_manager_type, version);
+    for entry in fs::read_dir(verified_dir.as_path()).ok()?.flatten() {
+        let Some(install_dir) =
+            AbsolutePathBuf::new(entry.path()).map(|key_dir| key_dir.join(&bin_name))
+        else {
+            continue;
+        };
+        if is_package_manager_install_complete(&install_dir, &bin_name).unwrap_or(false) {
+            return Some(install_dir);
+        }
+    }
+    None
+}
+
+/// An opaque, irreversible fingerprint of a registry origin, for the cache key.
+///
+/// The raw origin can embed credentials (`https://user:pass@host`), so the cache
+/// key folds in this hash rather than the URL. It is deterministic, so the same
+/// origin fingerprints the same way for a later reuse check, and it keeps scoped
+/// registries and paths distinct because the whole URL feeds the hash.
+fn origin_fingerprint(origin: &str) -> String {
+    format!("sha256.{}", hex::encode(Sha256::digest(origin.as_bytes())))
+}
+
+/// Publish a freshly downloaded install into `install_dir`. Call this holding the
+/// install lock, with the install staged at `target_dir_tmp/<bin_name>`.
+///
+/// A complete install is never replaced: a pinned directory binds its verified
+/// content, and an unpinned one is already current, so if another process
+/// published it first, reuse it and drop the staged copy. Only a partial leftover
+/// from an interrupted install, which no caller uses, is cleared before the staged
+/// copy is moved into place. Replacing only `install_dir` leaves sibling installs
+/// of the same version (other keys, or the unpinned install) untouched.
+async fn publish_install(
+    install_dir: AbsolutePathBuf,
+    target_dir_tmp: &Path,
+    bin_name: &str,
+    package_name: Str,
+    version: Str,
+) -> Result<(AbsolutePathBuf, Str, Str), Error> {
+    if is_package_manager_install_complete(&install_dir, bin_name)? {
+        tracing::debug!("{bin_name} install already complete after lock, reuse it");
+        return Ok((install_dir, package_name, version));
+    }
+    // Create the install's parent now, so a failed install never leaves an empty
+    // version directory behind. The staged copy is moved in as the final step.
+    if let Some(parent) = install_dir.parent() {
+        tokio::fs::create_dir_all(parent).await?;
+    }
+    remove_dir_all_force(&install_dir).await?;
+    tokio::fs::rename(target_dir_tmp.join(bin_name), install_dir.as_path()).await?;
+    Ok((install_dir, package_name, version))
+}
 
 /// Path of the Yarn CLI inside `@yarnpkg/cli-dist`, relative to the package root.
 ///
@@ -658,15 +828,42 @@ pub async fn resolve_environment_package_manager(
     Ok(Some(resolution))
 }
 
-/// Return the managed install directory for a package manager version.
+/// Return the managed install directory for a package manager version. A pinned
+/// install (`cache_key = Some`) lives under its content-key subdirectory; an
+/// unpinned install (`None`) lives at the version-directory root.
 #[must_use]
 pub fn package_manager_install_dir(
     package_manager_type: PackageManagerType,
     version: &str,
-) -> Option<AbsolutePathBuf> {
+    cache_key: Option<&str>,
+) -> AbsolutePathBuf {
     let bin_name = package_manager_type.to_string();
-    let data_dir = &vp_shared::EnvConfig::get().dirs.data;
-    Some(data_dir.join("package_manager").join(&bin_name).join(version).join(&bin_name))
+    match cache_key {
+        // A pinned install lives under its content key in the verified namespace,
+        // outside the version directory that unpinned installs and earlier layouts
+        // write to.
+        Some(key) => package_manager_verified_version_dir(package_manager_type, version)
+            .join(key)
+            .join(&bin_name),
+        // An unpinned install stays at the version-directory root.
+        None => package_manager_version_dir(package_manager_type, version).join(&bin_name),
+    }
+}
+
+/// The install directory the shim selects for a pin, without downloading.
+///
+/// Mirrors the key selection in [`ensure_package_manager_bin`] so a report of the
+/// executable (`vp env which` / `current` / `doctor`) names the directory the shim
+/// runs, not a different cached install under the same version. A pinned request
+/// resolves to its verified, key-addressed directory; an unpinned one to the
+/// version-directory root.
+pub fn resolve_package_manager_install_dir(
+    package_manager_type: PackageManagerType,
+    version: &str,
+    expected_hash: Option<&str>,
+) -> Result<AbsolutePathBuf, Error> {
+    let cache_key = resolve_cache_key(package_manager_type, version, expected_hash)?;
+    Ok(package_manager_install_dir(package_manager_type, version, cache_key.as_deref()))
 }
 
 /// Return the executable shim path for a package manager binary inside an install directory.
@@ -683,11 +880,13 @@ pub fn package_manager_bin_path(install_dir: &AbsolutePath, bin_name: &str) -> A
 
 /// Return a managed package-manager binary, downloading its release when needed.
 ///
-/// This function returns the cached path when the shim already exists. A pin
-/// that covers a file inside the install is the exception: it goes through
-/// [`verify_cached_cli_hash`], which compares the pin against the record vp
-/// wrote at install time. The rule stays here, so the shim hot path holds no
-/// package-manager specifics.
+/// The install directory is key-addressed by the content it was verified against,
+/// so a complete directory holds exactly the files that match `expected_hash` (and
+/// the platform origin, for bun and native pnpm). The shim passes the project's
+/// declared `packageManager` hash, so a request with a different pin resolves to a
+/// different directory and falls through to `download_package_manager` instead of
+/// running cached content it was not verified against. The key rule stays in
+/// `resolve_cache_key`, so the shim hot path holds no package-manager specifics.
 pub async fn ensure_package_manager_bin(
     package_manager_type: PackageManagerType,
     version_or_latest: &str,
@@ -695,18 +894,16 @@ pub async fn ensure_package_manager_bin(
     bin_name: &str,
 ) -> Result<AbsolutePathBuf, Error> {
     let version = resolve_package_manager_version(package_manager_type, version_or_latest).await?;
-
-    let verifies_cached_cli =
-        expected_hash.is_some() && package_manager_type.uses_cli_binary_hash(&version);
-    if !verifies_cached_cli
-        && let Some(install_dir) = package_manager_install_dir(package_manager_type, &version)
-    {
-        let bin_path = package_manager_bin_path(&install_dir, bin_name);
-        if bin_path.as_path().exists() {
-            #[cfg(windows)]
-            ensure_native_windows_bins(package_manager_type, &install_dir).await?;
-            return Ok(package_manager_bin_path(&install_dir, bin_name));
-        }
+    let install_dir =
+        resolve_package_manager_install_dir(package_manager_type, &version, expected_hash)?;
+    // The directory is keyed by the pin (and platform origin), so only a download
+    // for this exact key publishes into it; an unpinned one is the version's
+    // current install. Check only the launcher the caller runs: requiring every
+    // sibling would drop the Windows `.cmd` fallback when the `.ps1` is missing.
+    if package_manager_bin_path(&install_dir, bin_name).as_path().is_file() {
+        #[cfg(windows)]
+        ensure_native_windows_bins(package_manager_type, &install_dir).await?;
+        return Ok(package_manager_bin_path(&install_dir, bin_name));
     }
 
     let (install_dir, _, _) =
@@ -1066,7 +1263,22 @@ async fn fetch_dist_tag_version(
     let client = HttpClient::with_npm_config(3, 500, npm_config.clone());
     for url in urls {
         match client.get_json::<PackageJson>(url).await {
-            Ok(package_json) => return Ok(package_json.version),
+            Ok(package_json) => {
+                let version = package_json.version;
+                // The registry controls this reply, and a dist tag must resolve
+                // to an exact version. Require strict semver on the raw value,
+                // as the installer does, so the returned version has no
+                // surrounding whitespace or other characters.
+                if Version::parse(&version).is_err() {
+                    return Err(Error::InvalidArgument(
+                        format!(
+                            "registry returned an invalid {package_manager_type} version {version:?} for dist-tag {tag:?}"
+                        )
+                        .into(),
+                    ));
+                }
+                return Ok(version);
+            }
             Err(error) if is_not_found(&error) => {}
             Err(error) => return Err(error),
         }
@@ -1319,11 +1531,13 @@ fn find_cached_package_manager_version(
         if best.as_ref().is_some_and(|b| version <= *b) {
             continue;
         }
-        // Only consider completed installs, using the same completeness check as
-        // the download fast-path so range resolution never selects a partially
-        // written install (e.g. plain bin present but `.cmd`/`.ps1` missing).
-        let install_dir = versions_dir.join(name).join(&bin_name);
-        if !is_package_manager_install_complete(&install_dir, &bin_name)? {
+        // A range request carries no pin, so it can only reuse an unpinned
+        // install; a pinned-only cached version lives in the verified namespace and
+        // would force a fresh download. Use the same completeness check as the
+        // download fast path so resolution never selects a partially written
+        // install (e.g. plain bin present but `.cmd`/`.ps1` missing).
+        let unpinned = package_manager_install_dir(package_manager_type, name, None);
+        if !is_package_manager_install_complete(&unpinned, &bin_name).unwrap_or(false) {
             continue;
         }
         best = Some(version);
@@ -1494,13 +1708,11 @@ async fn download_package_manager_inner(
         package_name = "@yarnpkg/cli-dist".into();
     }
 
-    let config = vp_shared::EnvConfig::get();
-    let data_dir = &config.dirs.data;
     let bin_name = package_manager_type.to_string();
 
     // Bun pins cover the main tarball, so verify its platform binary separately.
     if matches!(package_manager_type, PackageManagerType::Bun) {
-        return download_bun_package_manager(&version, data_dir, expected_hash, npm_config).await;
+        return download_bun_package_manager(&version, expected_hash, npm_config).await;
     }
 
     // pnpm >= 12 is a native binary; download the @pnpm/exe.* platform package
@@ -1508,37 +1720,38 @@ async fn download_package_manager_inner(
     // A declared hash names the main tarball and is verified against it; the
     // platform tarball is verified against the registry's `dist.integrity`.
     if matches!(package_manager_type, PackageManagerType::Pnpm) && parsed_version.major >= 12 {
-        return download_pnpm_native_package_manager(&version, data_dir, expected_hash, npm_config)
-            .await;
+        return download_pnpm_native_package_manager(&version, expected_hash, npm_config).await;
     }
 
     let tgz_url = tarball_url
         .map(Str::from)
         .unwrap_or_else(|| npm_config.package_tgz_url(&package_name, &version));
-    // <DATA>/package_manager/pnpm/10.0.0
-    let target_dir = data_dir.join("package_manager").join(&bin_name).join(&version);
-    let install_dir = target_dir.join(&bin_name);
+    // A pinned install is key-addressed so a different pin resolves to a
+    // different, immutable directory; an unpinned install stays on the version
+    // directory. The generic path serves managers whose pin covers the executed
+    // files, so it has no platform origin.
+    // <DATA>/package_manager/pnpm/10.0.0/[{key}/]pnpm/bin/(pnpm|pnpm.cmd|pnpm.ps1)
+    let cache_key = install_cache_key(expected_hash, None);
+    let version_dir = package_manager_version_dir(package_manager_type, &version);
+    let install_dir =
+        package_manager_install_dir(package_manager_type, &version, cache_key.as_deref());
 
-    // If all shims already exist, return the target directory
-    // <DATA>/package_manager/pnpm/10.0.0/pnpm/bin/(pnpm|pnpm.cmd|pnpm.ps1)
+    // A complete install holds the content for this pin (or the current unpinned
+    // install); reuse it.
     if is_package_manager_install_complete(&install_dir, &bin_name)? {
-        verify_cached_cli_hash(
-            package_manager_type,
-            &target_dir,
-            &install_dir,
-            expected_hash,
-            &version,
-        )
-        .await?;
         return Ok((install_dir, package_name, version));
     }
 
+    // Stage the download in a temp directory beside the version directory, not
+    // inside it. A reader that scans the version directory for key subdirectories
+    // then never sees the half-written staging copy. Only create the manager
+    // directory now, so a failed install leaves no empty version directory; the
+    // version directory is created when the staged copy is published.
     // <DATA>/package_manager/pnpm/{tmp_name}
-    // Use tempfile::TempDir for robust temporary directory creation
-    let parent_dir = target_dir.parent().unwrap();
-    tokio::fs::create_dir_all(parent_dir).await?;
+    let manager_dir = version_dir.parent().expect("a version directory has a parent");
+    tokio::fs::create_dir_all(manager_dir).await?;
     // Keep the TempDir guard alive so a failure path cleans up the temp dir.
-    let tmp_dir = tempfile::tempdir_in(parent_dir)?;
+    let tmp_dir = tempfile::tempdir_in(manager_dir)?;
     let target_dir_tmp = tmp_dir.path().to_path_buf();
 
     let download_message = format!("Downloading {package_manager_type} v{version}...");
@@ -1586,85 +1799,16 @@ async fn download_package_manager_inner(
     // This prevents DirectoryNotEmpty error when multiple processes/threads
     // try to install the same package manager version concurrently.
     // The lock is automatically skipped on NFS filesystems where locking is unreliable.
-    let lock_path = parent_dir.join(format!("{version}.lock"));
+    let lock_path = manager_dir.join(format!("{version}.lock"));
     tracing::debug!("Acquire lock file: {:?}", lock_path);
     let lock_file = open_lock_file(lock_path.as_path())?;
     // Acquire exclusive lock (blocks until available)
     lock_file.lock()?;
     tracing::debug!("Lock acquired: {:?}", lock_path);
 
-    // Check again after acquiring the lock, in case another thread completed
-    // the installation while we were preparing it in the temporary directory.
-    if is_package_manager_install_complete(&install_dir, &bin_name)? {
-        tracing::debug!("install already complete after lock acquisition, skip rename");
-        verify_cached_cli_hash(
-            package_manager_type,
-            &target_dir,
-            &install_dir,
-            expected_hash,
-            &version,
-        )
-        .await?;
-        return Ok((install_dir, package_name, version));
-    }
-
-    // Record the pin this install was verified against. The record moves into
-    // place with the install, so a later command can trust the cache after one
-    // string comparison.
-    if let Some(expected_hash) = expected_hash
-        && is_modern_yarn
-    {
-        tokio::fs::write(target_dir_tmp.join(VERIFIED_PIN_RECORD), expected_hash).await?;
-    }
-
-    // rename $target_dir_tmp to $target_dir
-    tracing::debug!("Rename {:?} to {:?}", target_dir_tmp, target_dir);
-    remove_dir_all_force(&target_dir).await?;
-    tokio::fs::rename(&target_dir_tmp, &target_dir).await?;
-
-    Ok((install_dir, package_name, version))
-}
-
-/// Verify a cached CLI against a pin that covers it.
-///
-/// vp records the verified pin when installing Yarn 2+. A matching record avoids
-/// rehashing the cached CLI. If the record is missing or the pin changes, vp
-/// hashes the CLI and updates the record.
-///
-/// A matching record does not detect a CLI modified after installation. The
-/// record sits beside the file, so a writer that can replace one can replace
-/// the other. Write access to the managed install directory is the trust boundary.
-///
-/// Only Yarn 2+ pins cover a retained CLI file. Other pins cover tarballs that
-/// vp discards after extraction and are not rechecked here.
-async fn verify_cached_cli_hash(
-    package_manager_type: PackageManagerType,
-    target_dir: &AbsolutePath,
-    install_dir: &AbsolutePath,
-    expected_hash: Option<&str>,
-    version: &str,
-) -> Result<(), Error> {
-    let Some(expected_hash) = expected_hash else {
-        return Ok(());
-    };
-    if !package_manager_type.uses_cli_binary_hash(version) {
-        return Ok(());
-    }
-
-    let record_path = target_dir.join(VERIFIED_PIN_RECORD);
-    if let Ok(recorded_pin) = tokio::fs::read_to_string(&record_path).await
-        && recorded_pin.trim() == expected_hash
-    {
-        tracing::debug!("cached {package_manager_type} matches the recorded pin");
-        return Ok(());
-    }
-
-    verify_file_hash(install_dir.join(YARN_CLI_ENTRY), expected_hash)
-        .await
-        .map_err(|error| name_hashed_artifact(error, package_manager_type, version))?;
-    // Best effort: a read-only cache still verifies, it just hashes every time.
-    let _ = tokio::fs::write(&record_path, expected_hash).await;
-    Ok(())
+    // Publish the staged install, or reuse the directory if another process won
+    // the race and filled it first.
+    publish_install(install_dir, &target_dir_tmp, &bin_name, package_name, version).await
 }
 
 /// Name the artifact that a `packageManager` hash covers in an integrity
@@ -1746,18 +1890,29 @@ fn bun_requires_baseline() -> bool {
 /// Layout: `<DATA>/package_manager/bun/{version}/bun/bin/bun.native`
 async fn download_bun_package_manager(
     version: &Str,
-    home_dir: &AbsolutePath,
     expected_hash: Option<&str>,
     npm_config: &NpmConfig,
 ) -> Result<(AbsolutePathBuf, Str, Str), Error> {
     let package_name: Str = "bun".into();
 
-    // <DATA>/package_manager/bun/{version}
-    let target_dir = home_dir.join("package_manager").join("bun").join(version.as_str());
-    let install_dir = target_dir.join("bun");
+    // The executed binary comes from the platform package, so bind cache reuse
+    // to the registry that serves it, not only to the main-tarball pin. Store a
+    // fingerprint of the origin, never the raw URL, which can carry credentials.
+    let platform_package_name = get_bun_platform_package_name()?;
+    let platform_origin =
+        origin_fingerprint(&npm_config.registry_for_package(&platform_package_name));
 
-    // If shims already exist, return early (same completeness check as the cache
-    // and the tgz download path)
+    // Key-address a pinned install by the pin and the platform origin, so a
+    // different pin or origin resolves to a different, immutable directory. An
+    // unpinned install has no out-of-band anchor and stays on the version dir.
+    // <DATA>/package_manager/bun/{version}/[{key}/]bun/bin/bun.native
+    let cache_key = install_cache_key(expected_hash, Some(platform_origin.as_str()));
+    let version_dir = package_manager_version_dir(PackageManagerType::Bun, version);
+    let install_dir =
+        package_manager_install_dir(PackageManagerType::Bun, version, cache_key.as_deref());
+
+    // A complete install holds the content for this pin and origin (or the current
+    // unpinned install); reuse it.
     if is_package_manager_install_complete(&install_dir, "bun")? {
         return Ok((install_dir, package_name, version.clone()));
     }
@@ -1779,20 +1934,22 @@ async fn download_bun_package_manager(
         .map_err(|error| name_hashed_artifact(error, PackageManagerType::Bun, version))?;
     }
 
-    // Temporary by design: select a CPU-compatible package for new downloads without replacing existing installs.
-    let platform_package_name = get_bun_platform_package_name()?;
     // The declared hash never covers the platform tarball, so verify it
     // against the registry's `dist.integrity` for the platform package.
     let platform_hash =
         fetch_platform_integrity("bun", &platform_package_name, version, npm_config).await?;
 
-    let parent_dir = target_dir.parent().unwrap();
-    tokio::fs::create_dir_all(parent_dir).await?;
+    // Stage the download in a temp directory beside the version directory, not
+    // inside it, so a reader scanning key subdirectories never sees the staging
+    // copy. Only create the manager directory now, so a failed install leaves no
+    // empty version directory; the version directory is created at publish time.
+    let manager_dir = version_dir.parent().expect("a version directory has a parent");
+    tokio::fs::create_dir_all(manager_dir).await?;
 
     // Download the platform-specific package directly
     let platform_tgz_url = npm_config.package_tgz_url(&platform_package_name, version);
     // Keep the TempDir guard alive so a failure path cleans up the temp dir.
-    let tmp_dir = tempfile::tempdir_in(parent_dir)?;
+    let tmp_dir = tempfile::tempdir_in(manager_dir)?;
     let target_dir_tmp = tmp_dir.path().to_path_buf();
 
     let download_message = format!("Downloading bun v{version}...");
@@ -1855,23 +2012,13 @@ async fn download_bun_package_manager(
     create_shim_files(PackageManagerType::Bun, AbsolutePath::new(&tmp_bin_dir).unwrap()).await?;
 
     // Acquire lock for atomic rename
-    let lock_path = parent_dir.join(format!("{version}.lock"));
+    let lock_path = manager_dir.join(format!("{version}.lock"));
     tracing::debug!("Acquire lock file: {:?}", lock_path);
     let lock_file = open_lock_file(lock_path.as_path())?;
     lock_file.lock()?;
     tracing::debug!("Lock acquired: {:?}", lock_path);
 
-    if is_package_manager_install_complete(&install_dir, "bun")? {
-        tracing::debug!("bun install already complete after lock acquisition, skip rename");
-        return Ok((install_dir, package_name, version.clone()));
-    }
-
-    // Rename temp dir to final location
-    tracing::debug!("Rename {:?} to {:?}", target_dir_tmp, target_dir);
-    remove_dir_all_force(&target_dir).await?;
-    tokio::fs::rename(&target_dir_tmp, &target_dir).await?;
-
-    Ok((install_dir, package_name, version.clone()))
+    publish_install(install_dir, &target_dir_tmp, "bun", package_name, version.clone()).await
 }
 
 /// Platform-specific `@pnpm/exe.{os}-{arch}` package name for pnpm >= 12.
@@ -1952,19 +2099,29 @@ async fn fetch_platform_integrity(
 /// Layout: `<DATA>/package_manager/pnpm/{version}/pnpm/bin/pnpm.native`
 async fn download_pnpm_native_package_manager(
     version: &Str,
-    home_dir: &AbsolutePath,
     expected_hash: Option<&str>,
     npm_config: &NpmConfig,
 ) -> Result<(AbsolutePathBuf, Str, Str), Error> {
     let package_name: Str = "pnpm".into();
     let platform_package_name = get_pnpm_platform_package_name()?;
 
-    // <DATA>/package_manager/pnpm/{version}
-    let target_dir = home_dir.join("package_manager").join("pnpm").join(version.as_str());
-    let install_dir = target_dir.join("pnpm");
+    // The executed binary comes from the platform package, so bind cache reuse
+    // to the registry that serves it, not only to the main-tarball pin. Store a
+    // fingerprint of the origin, never the raw URL, which can carry credentials.
+    let platform_origin =
+        origin_fingerprint(&npm_config.registry_for_package(platform_package_name));
 
-    // If shims already exist, return early (same completeness check as the cache
-    // and the tgz download path)
+    // Key-address a pinned install by the pin and the platform origin, so a
+    // different pin or origin resolves to a different, immutable directory. An
+    // unpinned install has no out-of-band anchor and stays on the version dir.
+    // <DATA>/package_manager/pnpm/{version}/[{key}/]pnpm/bin/pnpm.native
+    let cache_key = install_cache_key(expected_hash, Some(platform_origin.as_str()));
+    let version_dir = package_manager_version_dir(PackageManagerType::Pnpm, version);
+    let install_dir =
+        package_manager_install_dir(PackageManagerType::Pnpm, version, cache_key.as_deref());
+
+    // A complete install holds the content for this pin and origin (or the current
+    // unpinned install); reuse it.
     if is_package_manager_install_complete(&install_dir, "pnpm")? {
         return Ok((install_dir, package_name, version.clone()));
     }
@@ -1993,13 +2150,17 @@ async fn download_pnpm_native_package_manager(
     let platform_hash =
         fetch_platform_integrity("pnpm", platform_package_name, version, npm_config).await?;
 
-    let parent_dir = target_dir.parent().unwrap();
-    tokio::fs::create_dir_all(parent_dir).await?;
+    // Stage the download in a temp directory beside the version directory, not
+    // inside it, so a reader scanning key subdirectories never sees the staging
+    // copy. Only create the manager directory now, so a failed install leaves no
+    // empty version directory; the version directory is created at publish time.
+    let manager_dir = version_dir.parent().expect("a version directory has a parent");
+    tokio::fs::create_dir_all(manager_dir).await?;
 
     // Download the platform-specific package directly
     let platform_tgz_url = npm_config.package_tgz_url(platform_package_name, version);
     // Keep the TempDir guard alive so a failure path cleans up the temp dir.
-    let tmp_dir = tempfile::tempdir_in(parent_dir)?;
+    let tmp_dir = tempfile::tempdir_in(manager_dir)?;
     let target_dir_tmp = tmp_dir.path().to_path_buf();
 
     let download_message = format!("Downloading pnpm v{version}...");
@@ -2059,23 +2220,13 @@ async fn download_pnpm_native_package_manager(
     create_pnpm_native_shim_files(AbsolutePath::new(&tmp_bin_dir).unwrap()).await?;
 
     // Acquire lock for atomic rename
-    let lock_path = parent_dir.join(format!("{version}.lock"));
+    let lock_path = manager_dir.join(format!("{version}.lock"));
     tracing::debug!("Acquire lock file: {:?}", lock_path);
     let lock_file = open_lock_file(lock_path.as_path())?;
     lock_file.lock()?;
     tracing::debug!("Lock acquired: {:?}", lock_path);
 
-    if is_package_manager_install_complete(&install_dir, "pnpm")? {
-        tracing::debug!("pnpm install already complete after lock acquisition, skip rename");
-        return Ok((install_dir, package_name, version.clone()));
-    }
-
-    // Rename temp dir to final location
-    tracing::debug!("Rename {:?} to {:?}", target_dir_tmp, target_dir);
-    remove_dir_all_force(&target_dir).await?;
-    tokio::fs::rename(&target_dir_tmp, &target_dir).await?;
-
-    Ok((install_dir, package_name, version.clone()))
+    publish_install(install_dir, &target_dir_tmp, "pnpm", package_name, version.clone()).await
 }
 
 /// Create shims for pnpm's native binary (pnpm >= 12): `pnpm` execs it
@@ -2363,6 +2514,42 @@ mod tests {
         archive.into_inner().unwrap().finish().unwrap()
     }
 
+    /// Mount the three requests a native (platform-binary) manager makes on
+    /// `server`: the main tarball, the platform package metadata (its
+    /// `dist.integrity`), and the platform tarball.
+    fn mount_platform_registry(
+        server: &httpmock::MockServer,
+        package_manager_type: PackageManagerType,
+        version: &str,
+        main_tgz: Vec<u8>,
+        platform_tgz: Vec<u8>,
+        platform_integrity: &str,
+    ) {
+        use httpmock::prelude::*;
+        let bin = package_manager_type.to_string();
+        let (platform_package, prefix) = match package_manager_type {
+            PackageManagerType::Bun => (get_bun_platform_package_name().unwrap(), "@oven/"),
+            PackageManagerType::Pnpm => {
+                (get_pnpm_platform_package_name().unwrap().to_string(), "@pnpm/")
+            }
+            other => panic!("{other} is not a platform-binary manager"),
+        };
+        let basename = platform_package.strip_prefix(prefix).unwrap();
+        server.mock(|when, then| {
+            when.method(GET).path(format!("/{bin}/-/{bin}-{version}.tgz"));
+            then.status(200).body(main_tgz);
+        });
+        server.mock(|when, then| {
+            when.method(GET).path(format!("/{platform_package}/{version}"));
+            then.status(200)
+                .json_body(serde_json::json!({"dist": {"integrity": platform_integrity}}));
+        });
+        server.mock(|when, then| {
+            when.method(GET).path(format!("/{platform_package}/-/{basename}-{version}.tgz"));
+            then.status(200).body(platform_tgz);
+        });
+    }
+
     /// A JavaScript CLI that prints `version`, standing in for a package manager entry point.
     fn version_cli(version: &str) -> Vec<u8> {
         format!("console.log('{version}');\n").into_bytes()
@@ -2624,7 +2811,8 @@ mod tests {
     }
 
     /// Create a fake managed package manager install under
-    /// `<data>/package_manager/<name>/<version>/<name>/bin/`.
+    /// `<data>/package_manager/<name>/<version>/<name>/bin/`, the unpinned install
+    /// layout the detection paths request.
     fn write_pm_install(data_dir: &AbsolutePath, name: &str, version: &str, state: InstallState) {
         let bin_dir =
             data_dir.join("package_manager").join(name).join(version).join(name).join("bin");
@@ -2927,6 +3115,38 @@ mod tests {
             },
         )
         .await;
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn dist_tag_resolution_rejects_a_non_semver_version() {
+        use httpmock::prelude::*;
+
+        // A raw value that is not an exact version, including one that is semver
+        // only after trimming, must be rejected rather than returned unchanged.
+        for payload in ["1.0.0 not a version", "\n1.0.0", " 1.0.0", "1.0.0\n", "1.0.0 "] {
+            let server = MockServer::start();
+            server.mock(|when, then| {
+                when.method(GET).path("/pnpm/latest");
+                then.status(200).json_body(serde_json::json!({ "version": payload }));
+            });
+            let registry = server.base_url();
+            let vp_home = create_temp_dir();
+            EnvConfig::with_vars_async(
+                [
+                    (env_vars::VP_HOME, vp_home.path().as_os_str()),
+                    (env_vars::NPM_CONFIG_REGISTRY, std::ffi::OsStr::new(&registry)),
+                ],
+                |_| async {
+                    let result =
+                        resolve_package_manager_version(PackageManagerType::Pnpm, "latest").await;
+                    assert!(
+                        matches!(result, Err(Error::InvalidArgument(_))),
+                        "a dist-tag reply {payload:?} that is not strict semver must be rejected: {result:?}"
+                    );
+                },
+            )
+            .await;
+        }
     }
 
     #[tokio::test(flavor = "current_thread")]
@@ -4285,14 +4505,15 @@ mod tests {
                     (env_vars::NPM_CONFIG_REGISTRY, std::ffi::OsStr::new(&server.base_url())),
                 ],
                 |_| async {
-                    let install_dir = package_manager_install_dir(kind, version).unwrap();
-                    let target_dir = install_dir.parent().unwrap();
+                    let install_dir = package_manager_install_dir(kind, version, None);
                     let mut install = Box::pin(download_package_manager(kind, version, None));
                     let mut incomplete = Vec::new();
                     // Inspect at async suspension points, as a lock-free cache reader could.
+                    // The install directory is renamed into place atomically, so if it
+                    // exists at all its shims must be complete.
                     std::future::poll_fn(|cx| {
                         let result = install.as_mut().poll(cx);
-                        if target_dir.as_path().exists() {
+                        if install_dir.as_path().exists() {
                             for name in kind.bin_names() {
                                 for extension in ["", ".cmd", ".ps1"] {
                                     let path =
@@ -4382,6 +4603,91 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn native_pnpm_cache_from_a_different_registry_is_not_reused_for_the_same_pin() {
+        use httpmock::prelude::*;
+        use sha2::Sha512;
+
+        let main_tgz = create_tgz(&[(
+            "package/package.json",
+            br#"{"name":"pnpm","version":"12.0.0-beta.0"}"#,
+        )]);
+        let main_pin = format!("sha512.{}", hex::encode(Sha512::digest(&main_tgz)));
+        let binary_path = if cfg!(windows) { "package/pnpm.exe" } else { "package/pnpm" };
+        let genuine_binary = b"genuine pnpm binary".to_vec();
+        let other_binary = b"other pnpm binary".to_vec();
+        let genuine_platform = create_tgz(&[(binary_path, genuine_binary.as_slice())]);
+        let other_platform = create_tgz(&[(binary_path, other_binary.as_slice())]);
+        let genuine_integrity = format!(
+            "sha512-{}",
+            base64_simd::STANDARD.encode_to_string(Sha512::digest(&genuine_platform))
+        );
+        let other_integrity = format!(
+            "sha512-{}",
+            base64_simd::STANDARD.encode_to_string(Sha512::digest(&other_platform))
+        );
+        let other_registry = MockServer::start();
+        mount_platform_registry(
+            &other_registry,
+            PackageManagerType::Pnpm,
+            "12.0.0-beta.0",
+            main_tgz.clone(),
+            other_platform,
+            &other_integrity,
+        );
+        let trusted = MockServer::start();
+        mount_platform_registry(
+            &trusted,
+            PackageManagerType::Pnpm,
+            "12.0.0-beta.0",
+            main_tgz,
+            genuine_platform,
+            &genuine_integrity,
+        );
+
+        let vp_home = create_temp_dir();
+        EnvConfig::with_vars_async(
+            [
+                (env_vars::VP_HOME, vp_home.path().as_os_str()),
+                (env_vars::NPM_CONFIG_REGISTRY, std::ffi::OsStr::new(&other_registry.base_url())),
+            ],
+            |_| async {
+                download_package_manager(
+                    PackageManagerType::Pnpm,
+                    "12.0.0-beta.0",
+                    Some(main_pin.as_str()),
+                )
+                .await
+                .expect("seed the other registry's cache");
+            },
+        )
+        .await;
+
+        EnvConfig::with_vars_async(
+            [
+                (env_vars::VP_HOME, vp_home.path().as_os_str()),
+                (env_vars::NPM_CONFIG_REGISTRY, std::ffi::OsStr::new(&trusted.base_url())),
+            ],
+            |_| async {
+                let (install_dir, _, _) = download_package_manager(
+                    PackageManagerType::Pnpm,
+                    "12.0.0-beta.0",
+                    Some(main_pin.as_str()),
+                )
+                .await
+                .expect("resolve from the trusted registry");
+                let native_bin =
+                    if cfg!(windows) { "bin/pnpm.native.exe" } else { "bin/pnpm.native" };
+                assert_eq!(
+                    fs::read(install_dir.join(native_bin)).unwrap(),
+                    genuine_binary,
+                    "a cache from another registry must not be reused for the same pin"
+                );
+            },
+        )
+        .await;
+    }
+
+    #[tokio::test]
     async fn test_download_modern_yarn_verifies_corepack_binary_hash() {
         use httpmock::prelude::*;
         use sha2::{Digest, Sha512};
@@ -4410,79 +4716,31 @@ mod tests {
                 .await
                 .expect("Corepack's Yarn binary hash should be accepted");
                 assert_eq!(mock.hits(), 1);
-                assert_eq!(
-                    fs::read_to_string(install_dir.parent().unwrap().join(VERIFIED_PIN_RECORD))
-                        .unwrap(),
-                    expected_hash,
-                    "the install must record the pin it verified"
+                assert!(
+                    is_package_manager_install_complete(&install_dir, "yarn").unwrap(),
+                    "the verified CLI must be installed"
                 );
 
-                // The same pin on a warm cache reads the record instead of the CLI.
+                // The same pin resolves to the same keyed install and reuses it.
                 download_package_manager(PackageManagerType::Yarn, "4.17.1", Some(&expected_hash))
                     .await
-                    .expect("a recorded pin should be accepted from the cache");
+                    .expect("the matching pin should be reused from the cache");
                 assert_eq!(mock.hits(), 1, "a cached install must not download again");
 
-                // A different pin does not match the record, so vp hashes the cached
-                // CLI and reports the mismatch.
+                // A different pin resolves to a different key, so vp downloads
+                // again and verifies the extracted CLI against the new pin, which
+                // the genuine CLI does not match.
                 let other_hash = format!("sha512.{}", hex::encode(Sha512::digest(b"other")));
                 let result =
                     download_package_manager(PackageManagerType::Yarn, "4.17.1", Some(&other_hash))
                         .await;
                 let Err(error @ Error::PackageManagerHashMismatch { .. }) = result else {
-                    panic!("a pin the cached CLI does not match must fail: {result:?}");
+                    panic!("a pin the downloaded CLI does not match must fail: {result:?}");
                 };
                 let message = error.to_string();
                 assert!(message.contains("yarn@4.17.1"), "{message}");
                 assert!(message.contains("bin/yarn.js"), "{message}");
-                assert_eq!(mock.hits(), 1, "a cached install must be checked without downloading");
-            },
-        )
-        .await;
-    }
-
-    #[tokio::test]
-    async fn test_download_modern_yarn_hashes_a_cache_without_a_record() {
-        use httpmock::prelude::*;
-        use sha2::{Digest, Sha512};
-
-        let vp_home = create_temp_dir();
-        let server = MockServer::start();
-        let yarn_js = b"#!/usr/bin/env node\nconsole.log('mock yarn');\n";
-        let mock_tgz = create_yarn_package_tgz(yarn_js, None);
-        server.mock(|when, then| {
-            when.method(GET).path("/@yarnpkg/cli-dist/-/cli-dist-4.17.1.tgz");
-            then.status(200).header("content-type", "application/octet-stream").body(mock_tgz);
-        });
-        let expected_hash = format!("sha512.{}", hex::encode(Sha512::digest(yarn_js)));
-
-        vp_shared::EnvConfig::with_vars_async(
-            [
-                (env_vars::VP_HOME, vp_home.path().as_os_str()),
-                (env_vars::NPM_CONFIG_REGISTRY, std::ffi::OsStr::new(&server.base_url())),
-            ],
-            |_| async {
-                let (install_dir, _, _) = download_package_manager(
-                    PackageManagerType::Yarn,
-                    "4.17.1",
-                    Some(&expected_hash),
-                )
-                .await
-                .expect("Corepack's Yarn binary hash should be accepted");
-
-                // An install by an older vp has no record. vp falls back to the CLI.
-                fs::remove_file(install_dir.parent().unwrap().join(VERIFIED_PIN_RECORD)).unwrap();
-                fs::write(install_dir.join("bin/yarn.js"), "corrupt").unwrap();
-                let result = download_package_manager(
-                    PackageManagerType::Yarn,
-                    "4.17.1",
-                    Some(&expected_hash),
-                )
-                .await;
-                assert!(
-                    matches!(result, Err(Error::PackageManagerHashMismatch { .. })),
-                    "a cache without a record must be hashed: {result:?}"
-                );
+                assert!(mock.hits() > 1, "a different pin re-downloads to verify");
             },
         )
         .await;
@@ -4956,15 +5214,215 @@ mod tests {
                         platform_tarball.assert_hits(1);
                         return;
                     }
-                    let install_dir =
-                        package_manager_install_dir(PackageManagerType::Bun, "1.2.0").unwrap();
                     assert!(
-                        !install_dir.as_path().exists(),
+                        installed_package_manager_dir(PackageManagerType::Bun, "1.2.0").is_none(),
                         "a failed verification must not install Bun"
                     );
                 },
             )
             .await;
+        }
+    }
+
+    #[tokio::test]
+    async fn bun_cache_from_a_different_pin_is_rejected() {
+        use httpmock::prelude::*;
+        use sha2::Sha512;
+
+        let main_tgz =
+            create_tgz(&[("package/package.json", br#"{"name":"bun","version":"1.2.0"}"#)]);
+        let binary = b"mock bun executable";
+        let binary_path = if cfg!(windows) { "package/bin/bun.exe" } else { "package/bin/bun" };
+        let platform_tgz = create_tgz(&[(binary_path, binary)]);
+        let wrong_hash = format!("sha512.{}", hex::encode(Sha512::digest(b"other")));
+        let platform_integrity = format!(
+            "sha512-{}",
+            base64_simd::STANDARD.encode_to_string(Sha512::digest(&platform_tgz))
+        );
+
+        let server = MockServer::start();
+        mount_platform_registry(
+            &server,
+            PackageManagerType::Bun,
+            "1.2.0",
+            main_tgz,
+            platform_tgz,
+            &platform_integrity,
+        );
+
+        let vp_home = create_temp_dir();
+        EnvConfig::with_vars_async(
+            [
+                (env_vars::VP_HOME, vp_home.path().as_os_str()),
+                (env_vars::NPM_CONFIG_REGISTRY, std::ffi::OsStr::new(&server.base_url())),
+            ],
+            |_| async {
+                // An unpinned install fills the cache under the no-pin key.
+                download_package_manager(PackageManagerType::Bun, "1.2.0", None)
+                    .await
+                    .expect("seed an unpinned bun into the cache");
+                // A later declared pin resolves to a different key, so it does not
+                // reuse that cache: the install re-downloads, re-verifies, and the
+                // mismatch fails.
+                let result = download_package_manager(
+                    PackageManagerType::Bun,
+                    "1.2.0",
+                    Some(wrong_hash.as_str()),
+                )
+                .await;
+                assert!(
+                    matches!(result, Err(Error::PackageManagerHashMismatch(_))),
+                    "an unpinned bun cache must not satisfy a later declared pin: {result:?}"
+                );
+            },
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn bun_cache_from_a_different_registry_is_not_reused_for_the_same_pin() {
+        use httpmock::prelude::*;
+        use sha2::Sha512;
+
+        let main_tgz =
+            create_tgz(&[("package/package.json", br#"{"name":"bun","version":"1.2.0"}"#)]);
+        let main_pin = format!("sha512.{}", hex::encode(Sha512::digest(&main_tgz)));
+        let binary_path = if cfg!(windows) { "package/bin/bun.exe" } else { "package/bin/bun" };
+        let genuine_binary = b"genuine bun binary".to_vec();
+        let other_binary = b"other bun binary".to_vec();
+        let genuine_platform = create_tgz(&[(binary_path, genuine_binary.as_slice())]);
+        let other_platform = create_tgz(&[(binary_path, other_binary.as_slice())]);
+        let genuine_integrity = format!(
+            "sha512-{}",
+            base64_simd::STANDARD.encode_to_string(Sha512::digest(&genuine_platform))
+        );
+        let other_integrity = format!(
+            "sha512-{}",
+            base64_simd::STANDARD.encode_to_string(Sha512::digest(&other_platform))
+        );
+        // Both registries serve the same main tarball, so the same main pin
+        // matches both. They differ only in the platform binary they serve.
+        let other_registry = MockServer::start();
+        mount_platform_registry(
+            &other_registry,
+            PackageManagerType::Bun,
+            "1.2.0",
+            main_tgz.clone(),
+            other_platform,
+            &other_integrity,
+        );
+        let trusted = MockServer::start();
+        mount_platform_registry(
+            &trusted,
+            PackageManagerType::Bun,
+            "1.2.0",
+            main_tgz,
+            genuine_platform,
+            &genuine_integrity,
+        );
+
+        let vp_home = create_temp_dir();
+        // A project on another registry seeds the cache under the real, public main pin.
+        EnvConfig::with_vars_async(
+            [
+                (env_vars::VP_HOME, vp_home.path().as_os_str()),
+                (env_vars::NPM_CONFIG_REGISTRY, std::ffi::OsStr::new(&other_registry.base_url())),
+            ],
+            |_| async {
+                download_package_manager(PackageManagerType::Bun, "1.2.0", Some(main_pin.as_str()))
+                    .await
+                    .expect("seed the other registry's cache");
+            },
+        )
+        .await;
+
+        // A trusted project declares the same main pin from its own registry. The
+        // origin in the cache key differs, so the other cache is not reused: the
+        // install re-downloads from the trusted registry and runs the genuine
+        // binary.
+        EnvConfig::with_vars_async(
+            [
+                (env_vars::VP_HOME, vp_home.path().as_os_str()),
+                (env_vars::NPM_CONFIG_REGISTRY, std::ffi::OsStr::new(&trusted.base_url())),
+            ],
+            |_| async {
+                let (install_dir, _, _) = download_package_manager(
+                    PackageManagerType::Bun,
+                    "1.2.0",
+                    Some(main_pin.as_str()),
+                )
+                .await
+                .expect("resolve from the trusted registry");
+                let native_bin =
+                    if cfg!(windows) { "bin/bun.native.exe" } else { "bin/bun.native" };
+                assert_eq!(
+                    fs::read(install_dir.join(native_bin)).unwrap(),
+                    genuine_binary,
+                    "a cache from another registry must not be reused for the same pin"
+                );
+            },
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn platform_origin_in_the_cache_key_does_not_leak_registry_credentials() {
+        use httpmock::prelude::*;
+        use sha2::Sha512;
+
+        let main_tgz =
+            create_tgz(&[("package/package.json", br#"{"name":"bun","version":"1.2.0"}"#)]);
+        let main_pin = format!("sha512.{}", hex::encode(Sha512::digest(&main_tgz)));
+        let binary_path = if cfg!(windows) { "package/bin/bun.exe" } else { "package/bin/bun" };
+        let platform_tgz = create_tgz(&[(binary_path, b"bun binary")]);
+        let integrity = format!(
+            "sha512-{}",
+            base64_simd::STANDARD.encode_to_string(Sha512::digest(&platform_tgz))
+        );
+
+        let server = MockServer::start();
+        mount_platform_registry(
+            &server,
+            PackageManagerType::Bun,
+            "1.2.0",
+            main_tgz,
+            platform_tgz,
+            &integrity,
+        );
+
+        // A registry URL may embed credentials, which `registry_for_package`
+        // returns verbatim. The cache key must not persist them.
+        let base = server.base_url();
+        let registry_with_credentials = format!("http://user:s3cr3t@{}", &base["http://".len()..]);
+        let vp_home = create_temp_dir();
+        let install = EnvConfig::with_vars_async(
+            [
+                (env_vars::VP_HOME, vp_home.path().as_os_str()),
+                (env_vars::NPM_CONFIG_REGISTRY, std::ffi::OsStr::new(&registry_with_credentials)),
+            ],
+            |_| async {
+                let (install, _, _) = download_package_manager(
+                    PackageManagerType::Bun,
+                    "1.2.0",
+                    Some(main_pin.as_str()),
+                )
+                .await
+                .expect("install bun from a credentialed registry");
+                install
+            },
+        )
+        .await;
+
+        // The platform origin is folded into the cache key as an opaque
+        // fingerprint, so no directory name in the managed tree carries the
+        // registry password.
+        let version_dir = install.parent().unwrap().parent().unwrap();
+        for entry in fs::read_dir(version_dir.as_path()).unwrap().flatten() {
+            let name = entry.file_name().into_string().unwrap();
+            assert!(
+                !name.contains("s3cr3t"),
+                "a cache key directory leaked the registry password: {name:?}"
+            );
         }
     }
 
@@ -4985,7 +5443,10 @@ mod tests {
         let config =
             NpmConfig { values: HashMap::from([("registry".to_string(), registry.base_url())]) };
 
-        download_bun_package_manager(&version, &vp_home, None, &config).await.unwrap();
+        EnvConfig::with_vars_async([(env_vars::VP_HOME, vp_home.as_path())], |_| async {
+            download_bun_package_manager(&version, None, &config).await.unwrap();
+        })
+        .await;
 
         assert_eq!(fs::read_to_string(native_bin).unwrap(), "existing bun");
     }
@@ -5016,7 +5477,7 @@ mod tests {
                 [(PackageManagerType::Bun, "1.4.2"), (PackageManagerType::Pnpm, "12.8.1")]
             {
                 write_pm_install(&vp_home, &kind.to_string(), version, InstallState::Complete);
-                let install = package_manager_install_dir(kind, version).unwrap();
+                let install = package_manager_install_dir(kind, version, None);
                 let bin = install.join("bin");
                 let native = bin.join(format!("{kind}.native.exe"));
                 fs::write(&native, "cached native executable").unwrap();
@@ -5198,5 +5659,177 @@ mod tests {
         fs::write(yarn_dir.join("package.json"), "{}").unwrap();
 
         assert_eq!(find_extracted_package_dir(temp_dir.path()).unwrap(), yarn_dir);
+    }
+
+    /// A tarball with regular `files`, then symlink `links` (name -> target), the
+    /// shape a registry archive can contain for an unpinned or platform download.
+    fn tgz_with_symlinks(files: &[(&str, &[u8])], links: &[(&str, &str)]) -> Vec<u8> {
+        let mut tar_builder = tar::Builder::new(Vec::new());
+        for (path, content) in files {
+            let mut header = tar::Header::new_gnu();
+            header.set_size(content.len() as u64);
+            header.set_mode(0o755);
+            tar_builder.append_data(&mut header, path, *content).unwrap();
+        }
+        for (name, target) in links {
+            let mut header = tar::Header::new_gnu();
+            header.set_entry_type(tar::EntryType::Symlink);
+            header.set_size(0);
+            header.set_mode(0o777);
+            tar_builder.append_link(&mut header, name, target).unwrap();
+        }
+        let tar_data = tar_builder.into_inner().unwrap();
+        let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        std::io::Write::write_all(&mut gz, &tar_data).unwrap();
+        gz.finish().unwrap()
+    }
+
+    /// Install a verified, pinned pnpm 10.34.7 and return its key directory install,
+    /// its pin, and the genuine `bin/pnpm.cjs` bytes.
+    async fn install_pinned_pnpm(vp_home: &Path) -> (AbsolutePathBuf, String, Vec<u8>) {
+        use httpmock::prelude::*;
+        use sha2::Sha512;
+        let cli = b"#!/usr/bin/env node\nconsole.log('genuine pnpm 10.34.7');\n".to_vec();
+        let tgz = tgz_with_symlinks(
+            &[
+                (
+                    "package/package.json",
+                    br#"{"name":"pnpm","version":"10.34.7","bin":{"pnpm":"bin/pnpm.cjs"}}"#,
+                ),
+                ("package/bin/pnpm.cjs", cli.as_slice()),
+            ],
+            &[],
+        );
+        let pin = format!("sha512.{}", hex::encode(Sha512::digest(&tgz)));
+        let registry = MockServer::start();
+        registry.mock(move |when, then| {
+            when.method(GET).path("/pnpm/-/pnpm-10.34.7.tgz");
+            then.status(200).body(tgz);
+        });
+        let install_dir = EnvConfig::with_vars_async(
+            [
+                (env_vars::VP_HOME, vp_home.as_os_str()),
+                (env_vars::NPM_CONFIG_REGISTRY, std::ffi::OsStr::new(&registry.base_url())),
+            ],
+            |_| async {
+                download_package_manager(PackageManagerType::Pnpm, "10.34.7", Some(pin.as_str()))
+                    .await
+                    .expect("install the pinned pnpm")
+                    .0
+            },
+        )
+        .await;
+        (install_dir, pin, cli)
+    }
+
+    /// The `<key>` directory name of a pinned install at `.../<version>/<key>/<bin>`.
+    fn cache_key_of(install_dir: &AbsolutePathBuf) -> String {
+        install_dir.as_path().parent().unwrap().file_name().unwrap().to_string_lossy().into_owned()
+    }
+
+    #[tokio::test]
+    async fn platform_archive_symlink_cannot_write_into_another_pins_install() {
+        use sha2::Sha512;
+        let vp_home = create_temp_dir();
+        let (pinned, _, _) = install_pinned_pnpm(vp_home.path()).await;
+        let shim_before = fs::read(pinned.as_path().join("bin/pnpm")).unwrap();
+
+        // An unpinned pnpm 12 whose platform tarball links its top-level `pnpm`
+        // entry at the pinned install. The registry serves a matching integrity.
+        let link = format!("../10.34.7/{}/pnpm", cache_key_of(&pinned));
+        let binary_path = if cfg!(windows) { "package/pnpm.exe" } else { "package/pnpm" };
+        let platform_tgz = tgz_with_symlinks(
+            &[(binary_path, b"#!/bin/sh\necho planted\n")],
+            &[("pnpm", link.as_str())],
+        );
+        let platform_integrity = format!(
+            "sha512-{}",
+            base64_simd::STANDARD.encode_to_string(Sha512::digest(&platform_tgz))
+        );
+        let main_tgz = create_tgz(&[(
+            "package/package.json",
+            br#"{"name":"pnpm","version":"12.0.0-beta.0"}"#,
+        )]);
+        let registry = httpmock::MockServer::start();
+        mount_platform_registry(
+            &registry,
+            PackageManagerType::Pnpm,
+            "12.0.0-beta.0",
+            main_tgz,
+            platform_tgz,
+            &platform_integrity,
+        );
+        let (installed, _, _) = EnvConfig::with_vars_async(
+            [
+                (env_vars::VP_HOME, vp_home.path().as_os_str()),
+                (env_vars::NPM_CONFIG_REGISTRY, std::ffi::OsStr::new(&registry.base_url())),
+            ],
+            |_| async {
+                download_package_manager(PackageManagerType::Pnpm, "12.0.0-beta.0", None).await
+            },
+        )
+        .await
+        .expect("the link entry is skipped and the download installs");
+
+        let native_bin = if cfg!(windows) { "bin/pnpm.native.exe" } else { "bin/pnpm.native" };
+        assert_eq!(
+            fs::read(installed.as_path().join(native_bin)).unwrap(),
+            b"#!/bin/sh\necho planted\n",
+            "the download installs into its own directory"
+        );
+        assert!(
+            !pinned.as_path().join("bin/pnpm.native").exists(),
+            "another download wrote an executable into a verified install"
+        );
+        assert_eq!(
+            fs::read(pinned.as_path().join("bin/pnpm")).unwrap(),
+            shim_before,
+            "another download rewrote a verified install's shim"
+        );
+    }
+
+    #[tokio::test]
+    async fn archive_symlink_cannot_redirect_shim_writes_into_another_install() {
+        use httpmock::prelude::*;
+        let vp_home = create_temp_dir();
+        let (pinned, _, cli) = install_pinned_pnpm(vp_home.path()).await;
+
+        // An unpinned pnpm 10.99.0 whose `bin/pnpm` is a link at the pinned
+        // install's `pnpm.cjs`, so writing the `pnpm` shim would follow it.
+        let link = format!("../../../10.34.7/{}/pnpm/bin/pnpm.cjs", cache_key_of(&pinned));
+        let tgz = tgz_with_symlinks(
+            &[
+                (
+                    "package/package.json",
+                    br#"{"name":"pnpm","version":"10.99.0","bin":{"pnpm":"bin/pnpm.cjs"}}"#,
+                ),
+                ("package/bin/pnpm.cjs", b"console.log('other');\n"),
+            ],
+            &[("package/bin/pnpm", link.as_str())],
+        );
+        let registry = MockServer::start();
+        registry.mock(move |when, then| {
+            when.method(GET).path("/pnpm/-/pnpm-10.99.0.tgz");
+            then.status(200).body(tgz);
+        });
+        let (installed, _, _) = EnvConfig::with_vars_async(
+            [
+                (env_vars::VP_HOME, vp_home.path().as_os_str()),
+                (env_vars::NPM_CONFIG_REGISTRY, std::ffi::OsStr::new(&registry.base_url())),
+            ],
+            |_| async { download_package_manager(PackageManagerType::Pnpm, "10.99.0", None).await },
+        )
+        .await
+        .expect("the link entry is skipped and the download installs");
+
+        assert!(
+            fs::symlink_metadata(installed.as_path().join("bin/pnpm")).unwrap().is_file(),
+            "the shim is written as a regular file in the download's own directory"
+        );
+        assert_eq!(
+            fs::read(pinned.as_path().join("bin/pnpm.cjs")).unwrap(),
+            cli,
+            "another download rewrote a verified install's entry point"
+        );
     }
 }

@@ -2,16 +2,6 @@
 
 ## `node install.mjs interactive`
 
-**→ expect-milestone:** `install:download:ready`
-
-```
-Before installation: preserve this output.
-info: installing vite-plus@<version>...
-⠿ Downloading pnpm <version>... <size> B (<size> B/s)
-```
-
-**← write-key:** `enter`
-
 **→ expect-milestone:** `install:prepare:ready`
 
 ```

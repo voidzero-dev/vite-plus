@@ -8,7 +8,10 @@ steps = [["node", "verify-refresh.mjs", "homebrew-sources"]]
 name = "command_self_setup_homebrew_user_dependencies"
 vp = "global"
 skip-platforms = ["windows"]
-steps = [{ argv = ["node", "homebrew.mjs"], timeout = 120000 }]
+# The heaviest external case: it drives ~15 full self-setup scenarios in one
+# `node homebrew.mjs` run, so it needs a wider timeout than the 120s default,
+# especially under parallel load.
+steps = [{ argv = ["node", "homebrew.mjs"], timeout = 300000 }]
 
 [[case]]
 name = "command_self_setup_homebrew_collision"

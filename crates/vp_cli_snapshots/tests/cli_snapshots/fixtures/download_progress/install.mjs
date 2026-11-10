@@ -43,13 +43,12 @@ let runtimeDownloads = 0;
 let checksumRequests = 0;
 let indexRequests = 0;
 
-const pnpmArchive = createArchive({
-  'package/package.json': JSON.stringify({
-    name: 'pnpm',
-    version: '10.34.7',
-    bin: { pnpm: 'bin/pnpm.cjs' },
-  }),
-  'package/bin/pnpm.cjs': `
+const pnpmManifest = JSON.stringify({
+  name: 'pnpm',
+  version: '10.34.7',
+  bin: { pnpm: 'bin/pnpm.cjs' },
+});
+const pnpmCjs = `
     const fs = require('node:fs');
     const assert = require('node:assert/strict');
     assert.ok(process.argv.includes('--frozen-lockfile'));
@@ -61,8 +60,25 @@ const pnpmArchive = createArchive({
       fs.writeFileSync('node_modules/vite-plus/package.json', '{"name":"vite-plus"}');
       if (!response.ok) process.exit(17);
     });
-  `,
+  `;
+const pnpmArchive = createArchive({
+  'package/package.json': pnpmManifest,
+  'package/bin/pnpm.cjs': pnpmCjs,
 });
+
+// The bundled pnpm is pinned, so setup verifies its download against the bundled
+// integrity. A fake tarball cannot match that pin, so seed the stub at the pinned
+// install's content key instead; the bootstrap reuses it and skips the download.
+// Key = short_fingerprint(PINNED_PNPM_INTEGRITY) in crates/vp_setup/src/install.rs
+// (the first 32 hex of its SHA-256).
+const SETUP_PNPM_KEY = '2f9ea5a98bd92b2d1d6694aedb029783';
+const seededPnpm = join(home, 'package_manager/pnpm/.verified-v1/10.34.7', SETUP_PNPM_KEY, 'pnpm');
+mkdirSync(join(seededPnpm, 'bin'), { recursive: true });
+writeFileSync(join(seededPnpm, 'package.json'), pnpmManifest);
+writeFileSync(join(seededPnpm, 'bin/pnpm.cjs'), pnpmCjs);
+for (const shim of ['pnpm', 'pnpm.cmd', 'pnpm.ps1']) {
+  writeFileSync(join(seededPnpm, 'bin', shim), 'unused');
+}
 
 // The request is made after the CLI draws each phase. Hold its response until
 // the runner captures the milestone, without sleeps or polling terminal text.
@@ -182,7 +198,7 @@ try {
     assert.equal(existsSync(marker), false);
     assert.equal(existsSync(receipt), resolutionRetry);
     assert.equal(existsSync(resolutionFile), false);
-    assert.deepEqual(phases, ['download', 'prepare', 'dependencies']);
+    assert.deepEqual(phases, ['prepare', 'dependencies']);
     console.log(
       resolutionRetry
         ? 'A failed resolution-file write leaves dependencies installed and setup incomplete.'
@@ -220,8 +236,8 @@ try {
   assert.deepEqual(
     phases,
     dependencyRetry
-      ? ['download', 'prepare', 'dependencies', 'dependencies']
-      : ['download', 'prepare', 'dependencies'],
+      ? ['prepare', 'dependencies', 'dependencies']
+      : ['prepare', 'dependencies'],
   );
   assert.equal(indexRequests, 0);
   assert.equal(checksumRequests, 1);
