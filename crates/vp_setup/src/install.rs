@@ -628,7 +628,10 @@ fn configure_pnpm_install(
     args: &[&str],
     registry: Option<&str>,
 ) -> Result<(), Error> {
-    cmd.current_dir(version_dir).env("CI", "true");
+    cmd.current_dir(version_dir)
+        // The spinner's raw stdin would be restored by Node when pnpm exits.
+        .stdin(process::Stdio::null())
+        .env("CI", "true");
 
     if args.contains(&"--frozen-lockfile") {
         // --config leaves numbers as strings. Environment values get pnpm's numeric parsing.
