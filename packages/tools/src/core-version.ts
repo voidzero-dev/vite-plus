@@ -269,13 +269,41 @@ function readManifest(url: URL): CoreManifest {
 
 const DEFAULT_NPM_REGISTRY = 'https://registry.npmjs.org';
 
+interface CorePackument {
+  versions?: Record<string, { vitePlusVersion?: string }>;
+  time?: Record<string, unknown> & { unpublished?: { versions?: unknown } };
+}
+
 /**
- * Reads the published core manifests by version from the full packument.
- * `prepare` uses the version list, and `check --release` uses the
- * `vitePlusVersion` field of one manifest. Returns an empty map when the
- * package is not published.
+ * Returns every version number that npm has used for the package. npm never
+ * accepts a version number again after an unpublish, but it removes that
+ * version from `versions` and keeps it in `time` (or in `time.unpublished`
+ * when every version is unpublished).
  */
-async function readPublishedCoreManifests(): Promise<Record<string, { vitePlusVersion?: string }>> {
+export function usedVersionNumbers(packument: CorePackument): string[] {
+  const used = new Set(Object.keys(packument.versions ?? {}));
+  for (const key of Object.keys(packument.time ?? {})) {
+    if (key !== 'created' && key !== 'modified' && key !== 'unpublished') {
+      used.add(key);
+    }
+  }
+  const unpublished = packument.time?.unpublished?.versions;
+  if (Array.isArray(unpublished)) {
+    for (const version of unpublished) {
+      if (typeof version === 'string') {
+        used.add(version);
+      }
+    }
+  }
+  return [...used];
+}
+
+/**
+ * Reads the full packument of the core package. `prepare` uses the version
+ * numbers, and `check --release` uses the `vitePlusVersion` field of one
+ * manifest. Returns an empty packument when the package is not published.
+ */
+async function readCorePackument(): Promise<CorePackument> {
   const registry = (process.env.PUBLISH_REGISTRY ?? DEFAULT_NPM_REGISTRY).replace(/\/+$/, '');
   const url = `${registry}/${CORE_PACKAGE_NAME.replace('/', '%2f')}`;
   const response = await fetch(url, {
@@ -288,10 +316,7 @@ async function readPublishedCoreManifests(): Promise<Record<string, { vitePlusVe
   if (!response.ok) {
     throw new Error(`Registry returned HTTP ${response.status} for ${url}`);
   }
-  const packument = (await response.json()) as {
-    versions?: Record<string, { vitePlusVersion?: string }>;
-  };
-  return packument.versions ?? {};
+  return (await response.json()) as CorePackument;
 }
 
 async function main(argv: string[]): Promise<void> {
@@ -318,7 +343,7 @@ async function main(argv: string[]): Promise<void> {
       core.version = nextCoreVersion({
         vite,
         vitePlus,
-        published: Object.keys(await readPublishedCoreManifests()),
+        published: usedVersionNumbers(await readCorePackument()),
       });
       core.vitePlusVersion = vitePlus;
       writeFileSync(CORE_MANIFEST_URL, `${JSON.stringify(core, null, 2)}\n`);
@@ -333,7 +358,7 @@ async function main(argv: string[]): Promise<void> {
       assertCoreVersionMatchesVite(core, cli.version, { release: values.release });
       if (values.release) {
         assertCoreVersionUnclaimed(
-          (await readPublishedCoreManifests())[core.version],
+          (await readCorePackument()).versions?.[core.version],
           core.version,
           cli.version,
         );

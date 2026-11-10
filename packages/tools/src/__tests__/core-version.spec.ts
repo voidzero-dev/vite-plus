@@ -7,6 +7,7 @@ import {
   encodeCoreVersion,
   initialCoreVersion,
   nextCoreVersion,
+  usedVersionNumbers,
 } from '../core-version.ts';
 
 const PUBLISHED_BEFORE_ALIGNMENT = ['0.1.21-alpha.7', '0.0.2-test.1', '1.0.0-rc.0', '1.4.0'];
@@ -221,5 +222,33 @@ describe('assertCoreVersionUnclaimed', () => {
     expect(() => assertCoreVersionUnclaimed({}, '8.3.5000', '1.6.0')).toThrow(
       'already published for vite-plus (unknown)',
     );
+  });
+});
+
+describe('usedVersionNumbers', () => {
+  test('includes versions that npm removed after an unpublish', () => {
+    const packument = {
+      versions: { '8.3.7000': {} },
+      time: { created: '', modified: '', '8.3.7000': '', '8.3.7001': '' },
+    };
+    expect(usedVersionNumbers(packument).toSorted()).toEqual(['8.3.7000', '8.3.7001']);
+    expect(
+      nextCoreVersion({
+        vite: '8.3.7',
+        vitePlus: '1.7.0',
+        published: usedVersionNumbers(packument),
+      }),
+    ).toBe('8.3.7002');
+  });
+
+  test('includes versions of a fully unpublished package', () => {
+    const packument = {
+      time: { created: '', modified: '', unpublished: { versions: ['8.3.7000'] } },
+    };
+    expect(usedVersionNumbers(packument)).toEqual(['8.3.7000']);
+  });
+
+  test('returns no versions for an unpublished package name', () => {
+    expect(usedVersionNumbers({})).toEqual([]);
   });
 });

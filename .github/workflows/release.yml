@@ -8,6 +8,17 @@ on:
 
 permissions: {}
 
+# Run releases one at a time. Each release selects its core version from the
+# registry (rfcs/core-version-alignment.md). A second run that overlaps the
+# first could check the same core version while npm still hides the first
+# publish, pass, and then pin its CLI to the first run's core. Queue runs
+# instead of cancelling them, because a release must not stop halfway. GitHub
+# keeps one pending run per group, so a third run replaces the pending one;
+# run the replaced release again by hand.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 env:
   RELEASE_BUILD: 'true'
   DEBUG: 'napi:*'

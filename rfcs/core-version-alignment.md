@@ -390,6 +390,19 @@ core version and fails unless the version is unpublished or was published for
 the same `vite-plus` version. The field also maps a published core back to
 its `vite-plus` release.
 
+Two more rules close the remaining gaps:
+
+- The counters count every version number that npm has used, including
+  unpublished ones. npm never accepts an unpublished version number again, but
+  it removes the number from the packument `versions` and keeps it in `time`.
+- `release.yml` runs one release at a time (`concurrency: release`, without
+  cancelling). npm can hide a new version for some minutes while it scans the
+  upload. Without the queue, a second release could check the same core
+  version during that time, see it as unpublished, and then pin its CLI to the
+  first release's core, because the publish step treats "already published"
+  as success. GitHub keeps one pending run per group, so a third run replaces
+  the pending one, which then needs a manual rerun.
+
 A unit test in `packages/core/__tests__/` runs `assertCoreVersionMatchesVite`
 against the committed manifest. It skips the check when the version starts
 with `0.0.0-commit.`, which the preview flow stamps. `packages/core/build.ts`
