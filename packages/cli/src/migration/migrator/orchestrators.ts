@@ -89,6 +89,7 @@ export function rewriteStandaloneProject(
     projectPath,
     packageManager,
     report,
+    workspaceInfo.downloadPackageManager.version,
   );
   const catalogDependencyResolver = createCatalogDependencyResolver(projectPath, packageManager);
   const vitestEcosystemPackages = collectVitestEcosystemInstallDependencyNames(projectPath);
@@ -217,6 +218,7 @@ export function rewriteStandaloneProject(
           peerDependencyRules: mergeManagedPnpmPeerDependencyRules(
             pkg.pnpm?.peerDependencyRules,
             usesVitest,
+            workspaceInfo.downloadPackageManager.version,
           ),
         };
       } else {
@@ -301,6 +303,7 @@ export function rewriteStandaloneProject(
       usePnpmWorkspaceYaml,
       providerCatalogAdditions,
       usesWebdriverio,
+      workspaceInfo.downloadPackageManager.version,
     );
   }
 
@@ -369,6 +372,7 @@ export function rewriteMonorepo(
     workspaceInfo.rootDir,
     workspaceInfo.packageManager,
     report,
+    workspaceInfo.downloadPackageManager.version,
   );
   const catalogDependencyResolver = createCatalogDependencyResolver(
     workspaceInfo.rootDir,
@@ -468,6 +472,7 @@ export function rewriteMonorepo(
       usePnpmWorkspaceSettings,
       providerCatalogAdditions,
       usesWebdriverio,
+      workspaceInfo.downloadPackageManager.version,
     );
     ensurePnpmWorkspacePackages(workspaceInfo.rootDir, workspaceInfo.workspacePatterns);
     if (usePnpmWorkspaceSettings && isForceOverrideMode()) {

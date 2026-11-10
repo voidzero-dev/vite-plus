@@ -543,17 +543,17 @@ function managedVitestOverrideKeys(keyStyle: ManagedOverrideKeyStyle): string[] 
 
 // The pnpm peerDependencyRules keys that migration removes:
 // - `vitest`, a lingering managed rule, when the workspace does not use Vitest.
-// - `vite`, once its core alias satisfies `vite` peer ranges (see
-//   `vitePeerDependencyRuleRequired`). Then the rule only hides real
-//   incompatibilities. Migration cannot tell whether an earlier migration or the
-//   user wrote the entry; its only purpose was to accept the `1.x` alias, so
-//   both go.
-export function stalePeerDependencyRuleKeys(usesVitest: boolean): string[] {
+// - `vite`, once its core alias satisfies `vite` peer ranges and pnpm is 10.2.0
+//   or later (see `vitePeerDependencyRuleRequired`). Then the rule only hides
+//   real incompatibilities. Migration cannot tell whether an earlier migration
+//   or the user wrote the entry; its only purpose was to accept the `1.x` alias,
+//   so both go.
+export function stalePeerDependencyRuleKeys(usesVitest: boolean, pnpmVersion?: string): string[] {
   const keys: string[] = [];
   if (!usesVitest && VITEST_IS_MANAGED_OVERRIDE) {
     keys.push('vitest');
   }
-  if (!vitePeerDependencyRuleRequired()) {
+  if (!vitePeerDependencyRuleRequired(undefined, pnpmVersion)) {
     keys.push('vite');
   }
   return keys;
@@ -588,9 +588,11 @@ export function peerDependencyRulesHaveStaleEntry(
 
 // The pnpm peerDependencyRules keys vite-plus manages: the managed override
 // keys, minus `vite` once its core alias satisfies `vite` peer ranges.
-export function managedPeerDependencyRuleKeys(usesVitest: boolean): string[] {
+export function managedPeerDependencyRuleKeys(usesVitest: boolean, pnpmVersion?: string): string[] {
   const keys = Object.keys(managedOverridePackages(usesVitest));
-  return vitePeerDependencyRuleRequired() ? keys : keys.filter((key) => key !== 'vite');
+  return vitePeerDependencyRuleRequired(undefined, pnpmVersion)
+    ? keys
+    : keys.filter((key) => key !== 'vite');
 }
 
 // Re-derive the managed pnpm peerDependencyRules on top of the package.json
@@ -599,9 +601,10 @@ export function managedPeerDependencyRuleKeys(usesVitest: boolean): string[] {
 export function mergeManagedPnpmPeerDependencyRules(
   rules: PnpmPeerDependencyRules | undefined,
   usesVitest: boolean,
+  pnpmVersion?: string,
 ): PnpmPeerDependencyRules | undefined {
-  const stale = stalePeerDependencyRuleKeys(usesVitest);
-  const keys = managedPeerDependencyRuleKeys(usesVitest);
+  const stale = stalePeerDependencyRuleKeys(usesVitest, pnpmVersion);
+  const keys = managedPeerDependencyRuleKeys(usesVitest, pnpmVersion);
   const allowAny = [
     ...new Set([
       ...(Array.isArray(rules?.allowAny) ? rules.allowAny : []).filter(

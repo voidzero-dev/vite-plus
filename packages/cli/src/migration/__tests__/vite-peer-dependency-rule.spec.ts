@@ -112,6 +112,22 @@ describe('vitePeerDependencyRuleRequired', () => {
   });
 });
 
+describe('vitePeerDependencyRuleRequired with a pnpm version', () => {
+  // pnpm before 10.2.0 applies the `vite@*` alias override to peer ranges, so
+  // every `vite` peer fails without the rule, whatever the core version.
+  it.each([
+    ['9.15.9', true],
+    ['10.0.0', true],
+    ['10.1.0', true],
+    ['10.2.0', false],
+    ['10.33.0', false],
+    ['12.11.2', false],
+    [undefined, false],
+  ])('pnpm %s requires the rule for a stable core: %s', (pnpmVersion, required) => {
+    expect(vitePeerDependencyRuleRequired(STABLE_CORE, pnpmVersion)).toBe(required);
+  });
+});
+
 describe('pnpm vite peer rule', () => {
   let tmpDir: string;
   const savedViteOverride = VITE_PLUS_OVERRIDE_PACKAGES.vite;
@@ -179,6 +195,29 @@ describe('pnpm vite peer rule', () => {
       ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir), report);
 
       expect(readWorkspaceRules(tmpDir)).toBeUndefined();
+      expect(report.vitePeerDependencyRuleRemoved).toBe(false);
+    });
+
+    it('keeps the vite rule on pnpm before 10.2.0', () => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({
+          name: 'test',
+          devDependencies: { 'vite-plus': 'latest' },
+          pnpm: {
+            overrides: { react: '18.3.1' },
+            peerDependencyRules: { allowAny: ['vite'], allowedVersions: { vite: '*' } },
+          },
+        }),
+      );
+      const report = createMigrationReport();
+
+      ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, '9.15.9'), report);
+
+      expect(readPackageJsonRules(tmpDir)).toEqual({
+        allowAny: ['vite'],
+        allowedVersions: { vite: '*' },
+      });
       expect(report.vitePeerDependencyRuleRemoved).toBe(false);
     });
 

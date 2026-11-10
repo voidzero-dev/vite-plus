@@ -319,6 +319,7 @@ export function rewritePnpmWorkspaceYaml(
   writeWorkspaceSettings = true,
   catalogAdditions: ReadonlySet<string> = new Set(),
   usesWebdriverioProvider = false,
+  pnpmVersion?: string,
 ): void {
   const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
   if (!fs.existsSync(pnpmWorkspaceYamlPath)) {
@@ -424,9 +425,9 @@ export function rewritePnpmWorkspaceYaml(
       }
     }
     // Drop lingering managed `vitest` and stale `vite` entries.
-    const stalePeerRuleKeys = stalePeerDependencyRuleKeys(usesVitest);
+    const stalePeerRuleKeys = stalePeerDependencyRuleKeys(usesVitest, pnpmVersion);
     allowAny.items = allowAny.items.filter((n) => !stalePeerRuleKeys.includes(n.value));
-    const peerRuleKeys = managedPeerDependencyRuleKeys(usesVitest);
+    const peerRuleKeys = managedPeerDependencyRuleKeys(usesVitest, pnpmVersion);
     const existing = new Set(allowAny.items.map((n) => n.value));
     for (const key of peerRuleKeys) {
       if (!existing.has(key)) {
@@ -1310,6 +1311,7 @@ export function rewriteRootWorkspacePackageJson(
           peerDependencyRules: mergeManagedPnpmPeerDependencyRules(
             pkg.pnpm?.peerDependencyRules,
             workspaceUsesVitest,
+            pnpmVersion,
           ),
         };
       } else {
@@ -1473,11 +1475,12 @@ export function trackVitePeerDependencyRuleRemoval(
   projectPath: string,
   packageManager: PackageManager,
   report: MigrationReport | undefined,
+  pnpmVersion?: string,
 ): () => void {
   if (
     !report ||
     packageManager !== PackageManager.pnpm ||
-    vitePeerDependencyRuleRequired() ||
+    vitePeerDependencyRuleRequired(undefined, pnpmVersion) ||
     !hasVitePeerDependencyRule(projectPath)
   ) {
     return () => {};

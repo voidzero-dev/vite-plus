@@ -451,20 +451,30 @@ Peer rules change only for pnpm:
   delete an empty `peerDependencyRules` object or YAML map. Other entries
   stay, including `vitest`.
 - The writers cannot tell whether an earlier migration or the user wrote
-  `allowAny: [vite]` or `allowedVersions.vite: '*'`, so they remove both. The
-  only purpose of those entries is to accept the `1.x` alias. Migration only
-  ever wrote `'*'`, so another `allowedVersions.vite` range is the user's own
-  constraint and stays. `vp migrate` prints one line that names the removed
+  `allowAny: [vite]` or `allowedVersions.vite: '*'`, so they remove both. On
+  pnpm 10.2.0 and later, the only purpose of those entries is to accept the
+  `1.x` alias. Migration only ever wrote `'*'`, so another
+  `allowedVersions.vite` range is the user's own constraint and stays. `vp migrate` prints one line that names the removed
   rule, and `docs/guide/migrate-rules.md` describes the removal.
 - When the target core version is not a stable encoded version (a preview
   `0.0.0-commit.<sha>` or a Vite+ prerelease such as `8.4.0-vp.0`), the
   writers keep the current behavior and write the `vite` rule.
+- On pnpm before 10.2.0, the writers also keep the `vite` rule. These versions
+  apply the `vite@*` alias override to peer ranges: every `vite` peer reads
+  `vite@npm:@voidzero-dev/vite-plus-core@<version>` and fails against the
+  installed core, also for `vitest` and `@vitest/mocker`. pnpm 10.2.0 and
+  later check peers against the alias target version.
 - `pnpmPeerDependencyRulesSatisfyVitePlus` reports a project as pending when
   a `vite` entry exists and the target core is a stable encoded version, or
   when the entry is missing and the target core is not.
 
-npm, Yarn, and Bun have no peer suppression to remove. Their alias handling
-is unchanged: npm keeps the direct dependency and `overrides.vite` on the same
+npm, Yarn, and Bun have no peer suppression to remove. On npm, the
+`overrides.vite` entry also rewrites peer edges, so a migrated npm project does
+not report an incompatible `vite` peer: the third clause of the goal ("an
+incompatible plugin still fails") holds on pnpm and Yarn, not on npm. Bun
+reports no peer problems in any layout. The override stays on every package
+manager, because it keeps one core instance for direct, transitive, and peer
+`vite` dependencies. Their alias handling is unchanged: npm keeps the direct dependency and `overrides.vite` on the same
 spec (`EOVERRIDE` rule), `npm-reinstall.ts` keeps moving stale `vite`
 installs aside by package name, Yarn keeps `resolutions.vite`, and Bun keeps
 the mirrored direct `vite` dependency.

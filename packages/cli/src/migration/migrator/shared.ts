@@ -216,6 +216,21 @@ export const VITEST_BROWSER_DEP_NAMES = [
 export const VITEST_IS_MANAGED_OVERRIDE = 'vitest' in VITE_PLUS_OVERRIDE_PACKAGES;
 
 /**
+ * pnpm before 10.2.0 applies the `vite@*` alias override to peer ranges too, so
+ * every `vite` peer reads `vite@npm:@voidzero-dev/vite-plus-core@<version>` and
+ * fails against the installed core. Those versions need the `vite` peer rule
+ * whatever the core version. An unknown version counts as a current pnpm.
+ */
+function pnpmAppliesAliasOverrideToPeers(pnpmVersion: string | undefined): boolean {
+  const version = pnpmVersion ? coerce(pnpmVersion) : undefined;
+  return (
+    version !== undefined &&
+    version !== null &&
+    (version.major < 10 || (version.major === 10 && version.minor < 2))
+  );
+}
+
+/**
  * Whether pnpm still needs the managed `vite` peer rule (`allowAny: [vite]`,
  * `allowedVersions: { vite: '*' }`) for the given core alias.
  *
@@ -232,7 +247,11 @@ export const VITEST_IS_MANAGED_OVERRIDE = 'vitest' in VITE_PLUS_OVERRIDE_PACKAGE
  */
 export function vitePeerDependencyRuleRequired(
   viteSpec: string | undefined = VITE_PLUS_OVERRIDE_PACKAGES.vite,
+  pnpmVersion?: string,
 ): boolean {
+  if (pnpmAppliesAliasOverrideToPeers(pnpmVersion)) {
+    return true;
+  }
   if (!viteSpec?.startsWith(VITE_PLUS_CORE_ALIAS_PREFIX)) {
     return true;
   }
