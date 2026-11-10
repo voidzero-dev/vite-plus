@@ -5,3 +5,37 @@ skip-platforms = ["windows"]
 steps = [
   { argv = ["vp", "upgrade", "--rollback"], comment = "should fail with no previous version", continue-on-failure = true },
 ]
+
+[[case]]
+name = "command_upgrade_rollback_deployed"
+vp = "global"
+skip-platforms = ["windows"]
+comment = "A rollback holds the installation lock while an unmarked target completes in-place setup, so the child must not take that lock."
+env = { VP_SKIP_DEPS_INSTALL = "1", VP_NODE_MANAGER = "no", VP_SELF_SETUP_NO_MODIFY_PATH = "1" }
+steps = [
+  { argv = ["vpt", "mkdir", "external"], snapshot = false },
+  { argv = ["vpt", "cp", "$VP_HOME/bin/vp", "external/vp"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "external/vp"], snapshot = false },
+  { argv = ["./external/vp"], tty = false, envs = [["VP_HOME", "${workspace}/home"], ["VP_VERSION", "rollback-a"]], comment = "Deploy the first version", snapshot = false },
+  { argv = ["./external/vp"], tty = false, envs = [["VP_HOME", "${workspace}/home"], ["VP_VERSION", "rollback-b"]], comment = "Deploy the second version, which records the first as the rollback target", snapshot = false },
+  ["vpt", "print-file", "home/.previous-version"],
+  { argv = ["vpt", "rm", "home/rollback-a/bin/.vp-setup-complete"], comment = "The rollback target must run in-place setup during the shim refresh", snapshot = false },
+  # The progress line prints the running CLI version, which changes on every release.
+  { argv = ["vp", "upgrade", "--rollback"], envs = [["VP_HOME", "${workspace}/home"]], comment = "A deadlock fails this step by timeout", timeout = 60000, snapshot = false },
+  ["vpt", "print-file", "home/.previous-version"],
+  ["vpt", "stat-file", "home/rollback-a/bin/.vp-setup-complete", "--assert", "file"],
+]
+
+[[case]]
+name = "command_upgrade_failed_reinstall_keeps_existing_version"
+vp = "global"
+skip-platforms = ["windows"]
+comment = "A failed upgrade into an existing version directory keeps that directory, which can be the rollback target."
+steps = [
+  { argv = ["vpt", "write-file", "$VP_HOME/0.3.1/keep.txt", "rollback target\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "$VP_HOME/0.3.1/bin", "not a directory\n"], comment = "Make extraction fail after the download is verified", snapshot = false },
+  # Pin the released payload so the test also runs when the checkout version is unpublished.
+  # `--silent` keeps the platform suffix and running CLI version out of the snapshot.
+  { argv = ["vp", "upgrade", "0.3.1", "--silent"], timeout = 120000, continue-on-failure = true },
+  ["vpt", "print-file", "$VP_HOME/0.3.1/keep.txt"],
+]
