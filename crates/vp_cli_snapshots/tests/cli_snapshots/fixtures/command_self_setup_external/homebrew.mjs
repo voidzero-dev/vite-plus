@@ -33,12 +33,14 @@ const originalEnv = Object.fromEntries(
   Object.entries(process.env).filter(([key]) => !/^(VP_|XDG_|npm_|NPM_|PNPM_)/.test(key)),
 );
 const token = 'synthetic-homebrew-token';
-const pin = '10.34.7';
+const installer = fs.readFileSync(path.join(checkout, 'crates/vp_setup/src/install.rs'), 'utf8');
+const pin = /const PINNED_PNPM_VERSION: &str = "([^"]+)";/.exec(installer)[1];
 // short_fingerprint(PINNED_PNPM_INTEGRITY) in crates/vp_setup/src/install.rs (the
 // first 32 hex of its SHA-256). The bundled pnpm is pinned, so setup verifies its
 // download against that integrity; a fake tarball cannot match it, so tests seed
 // the stub at the pinned install's content key instead.
-const SETUP_PNPM_KEY = '2f9ea5a98bd92b2d1d6694aedb029783';
+const pnpmIntegrity = /const PINNED_PNPM_INTEGRITY: &str = "([^"]+)";/.exec(installer)[1];
+const SETUP_PNPM_KEY = createHash('sha256').update(pnpmIntegrity).digest('hex').slice(0, 32);
 const lockfile = "lockfileVersion: '9.0'\n";
 fs.writeFileSync(
   path.join(root, 'package.json'),
