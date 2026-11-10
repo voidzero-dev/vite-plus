@@ -1,0 +1,10 @@
+[[case]]
+name = "lint_vite_plus_imports_overrides"
+vp = "local"
+comment = "Existing lint.overrides can disable only the import rule in templates and examples, with no migrate configuration. Other lint rules remain active."
+steps = [
+  { argv = ["vp", "lint", "--threads=1", "--fix", "app.test.ts", "templates/starter.test.ts", "examples/vite.config.ts"], continue-on-failure = true },
+  { argv = ["vpt", "print-file", "app.test.ts"], continue-on-failure = true },
+  { argv = ["vpt", "print-file", "templates/starter.test.ts"] },
+  { argv = ["vpt", "print-file", "examples/vite.config.ts"] },
+]

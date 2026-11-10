@@ -1,0 +1,12 @@
+packages:
+  - packages/*
+  - templates/*
+catalog:
+  vite-plus: latest
+  vite: ^8.0.0
+catalogs:
+  legacy:
+    vitest: ^4.1.11
+    '@vitest/coverage-v8': ^4.1.11
+overrides:
+  unrelated-package: 1.0.0

@@ -1,4 +1,3 @@
-import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { styleText } from 'node:util';
@@ -10,14 +9,16 @@ import { compareReversed, isLessThanOrEqual, normalize } from 'verkit';
 import { ResolverFactory, rewriteEslint } from '../../../binding/index.js';
 import { type WorkspacePackage } from '../../types/index.ts';
 import { getVpCommand, runCommandSilently } from '../../utils/command.ts';
-import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
 import { fetchNpmResource, getNpmRegistry } from '../../utils/npm-config.ts';
 import { displayRelative } from '../../utils/path.ts';
 import { cancelAndExit } from '../../utils/prompts.ts';
 import { getSilentSpinner, getSpinner } from '../../utils/spinner.ts';
 import { hasBaseUrlInTsconfig } from '../../utils/tsconfig.ts';
 import { detectConfigs } from '../detector.ts';
+import fs from '../files.ts';
+import { editJsonFile, isJsonFile, readJsonFile } from '../files.ts';
 import { type MigrationReport } from '../report.ts';
+import { isMigrationIgnored, migrationScope } from '../scope.ts';
 import {
   LINT_STAGED_JSON_CONFIG_FILES,
   LINT_STAGED_OTHER_CONFIG_FILES,
@@ -217,6 +218,13 @@ export async function migrateEslintToOxlint(
   packages?: WorkspacePackage[],
   options?: { silent?: boolean; report?: MigrationReport },
 ): Promise<boolean> {
+  if (
+    [eslintConfigFile, '.oxlintrc.json', '.oxlintrc.json.bak'].some(
+      (file) => file && isMigrationIgnored(path.join(projectPath, file)),
+    )
+  ) {
+    return false;
+  }
   const spinner = options?.silent ? getSilentSpinner() : getSpinner(interactive);
 
   // Steps 1-2: Only run @oxlint/migrate if there's an eslint config at root
@@ -252,18 +260,22 @@ export async function migrateEslintToOxlint(
       warnMigration(migrateResult.skippedRules, options?.report);
     }
 
-    // Step 2: Replace eslint-disable comments with oxlint-disable
-    spinner.start('Replacing ESLint comments with Oxlint equivalents...');
-    const replaceResult = await runOxlintMigrateStep(
-      projectPath,
-      migratePackage,
-      ['--replace-eslint-comments'],
-      spinner,
-      'ESLint comment replacement failed',
-      `You can run \`vp dlx ${migratePackage} --replace-eslint-comments\` manually later`,
-    );
-    if (replaceResult.ok) {
-      spinner.stop('ESLint comments replaced');
+    // The upstream comment renamer scans the whole tree and cannot consume our
+    // exclusions. Existing ESLint disable comments already work with Oxlint.
+    if (!migrationScope()?.patterns.length) {
+      // Step 2: Replace eslint-disable comments with oxlint-disable
+      spinner.start('Replacing ESLint comments with Oxlint equivalents...');
+      const replaceResult = await runOxlintMigrateStep(
+        projectPath,
+        migratePackage,
+        ['--replace-eslint-comments'],
+        spinner,
+        'ESLint comment replacement failed',
+        `You can run \`vp dlx ${migratePackage} --replace-eslint-comments\` manually later`,
+      );
+      if (replaceResult.ok) {
+        spinner.stop('ESLint comments replaced');
+      }
     }
     // Continue with cleanup regardless — .oxlintrc.json was generated successfully
   }
@@ -285,10 +297,7 @@ export async function migrateEslintToOxlint(
   // package — delete eslint config files, scrub ESLint-ecosystem deps from
   // package.json, and rewrite eslint references in any local lint-staged
   // config. A monorepo running `vp migrate` is treated as adopted as a
-  // whole; there's no per-package opt-out today. If a workspace package
-  // publishes a shared ESLint preset that you want to keep intact, exclude
-  // it from your `pnpm-workspace.yaml` / `workspaces` before running
-  // `vp migrate`, then add it back afterwards.
+  // whole, with migration-ignored packages removed from this target list.
   const cleanupTargets = [
     projectPath,
     ...(packages ?? []).map((p) => path.join(projectPath, p.path)),

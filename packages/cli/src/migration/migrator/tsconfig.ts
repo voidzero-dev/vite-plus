@@ -8,6 +8,7 @@ import {
   rewriteTypesInTsconfig,
 } from '../../utils/tsconfig.ts';
 import { type MigrationReport } from '../report.ts';
+import { isMigrationIgnored } from '../scope.ts';
 import { warnMigration } from './shared.ts';
 
 export function cleanupDeprecatedTsconfigOptions(
@@ -16,7 +17,7 @@ export function cleanupDeprecatedTsconfigOptions(
   report?: MigrationReport,
 ): void {
   const deprecatedOptions = ['esModuleInterop', 'allowSyntheticDefaultImports'];
-  const files = findTsconfigFiles(projectPath);
+  const files = findTsconfigFiles(projectPath).filter((file) => !isMigrationIgnored(file));
   for (const filePath of files) {
     for (const name of deprecatedOptions) {
       if (removeDeprecatedTsconfigFalseOption(filePath, name)) {
@@ -41,7 +42,7 @@ export function rewriteTsconfigTypes(
   report?: MigrationReport,
 ): boolean {
   let changed = false;
-  const files = findTsconfigFiles(projectPath);
+  const files = findTsconfigFiles(projectPath).filter((file) => !isMigrationIgnored(file));
   for (const filePath of files) {
     if (rewriteTypesInTsconfig(filePath)) {
       changed = true;
@@ -57,5 +58,7 @@ export function rewriteTsconfigTypes(
 }
 
 export function hasTsconfigTypesToRewrite(projectPath: string): boolean {
-  return findTsconfigFiles(projectPath).some((filePath) => hasTypesToRewriteInTsconfig(filePath));
+  return findTsconfigFiles(projectPath)
+    .filter((file) => !isMigrationIgnored(file))
+    .some((filePath) => hasTypesToRewriteInTsconfig(filePath));
 }

@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto';
-import fs from 'node:fs';
 import path from 'node:path';
 
 import type { Program } from '@oxc-project/types';
@@ -8,6 +7,7 @@ import type { OxlintConfig } from 'oxlint';
 
 import { analyzeMigrationSource, ResolverFactory } from '../../../binding/index.js';
 import { detectConfigs } from '../detector.ts';
+import fs from '../files.ts';
 import { ensureSvelteRuneGlobals } from '../migrator.ts';
 import {
   OXLINT_OWNER_CONFIG_KEYS,

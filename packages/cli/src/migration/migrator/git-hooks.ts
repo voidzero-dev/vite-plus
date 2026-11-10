@@ -1,4 +1,3 @@
-import fs from 'node:fs';
 import path from 'node:path';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
@@ -20,7 +19,8 @@ import type { PackageManager, WorkspacePackage } from '../../types/index.ts';
 import { getVpCommand } from '../../utils/command.ts';
 import { documentationUrl } from '../../utils/documentation.ts';
 import { findGitRoot } from '../../utils/git.ts';
-import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
+import fs from '../files.ts';
+import { editJsonFile, isJsonFile, readJsonFile } from '../files.ts';
 import {
   hasStagedConfigInViteConfig,
   mergeStagedConfigToViteConfig,
@@ -28,6 +28,7 @@ import {
   removeLintStagedFromPackageJson,
 } from '../migrator.ts';
 import { type MigrationReport } from '../report.ts';
+import { isMigrationIgnored } from '../scope.ts';
 import {
   getCommandStartIndex,
   LINT_STAGED_ALL_CONFIG_FILES,
@@ -462,6 +463,9 @@ export function installGitHooks(
   }
 
   // Install git hooks via vp config (--no-agent to skip agent setup, handled by migration)
+  if (isMigrationIgnored(path.join(projectPath, hooksDir, 'pre-commit'))) {
+    return false;
+  }
   const { command, args } = getVpCommand(['config', '--no-agent']);
   const configResult = spawn.sync(command, args, {
     cwd: projectPath,
@@ -521,8 +525,11 @@ const DEFAULT_STAGED_CONFIG: Record<string, string> = { '*': 'vp check --fix' };
 
 export function createPreCommitHook(projectPath: string, dir = '.vite-hooks'): void {
   const huskyDir = path.join(projectPath, dir);
-  fs.mkdirSync(huskyDir, { recursive: true });
   const hookPath = path.join(huskyDir, 'pre-commit');
+  if (isMigrationIgnored(hookPath)) {
+    return;
+  }
+  fs.mkdirSync(huskyDir, { recursive: true });
   if (fs.existsSync(hookPath)) {
     return;
   }

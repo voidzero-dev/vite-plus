@@ -1,14 +1,14 @@
-import fs from 'node:fs';
 import path from 'node:path';
 
 import { parse as parseJsonc } from 'jsonc-parser';
 
 import { type LiteralCommandToken, parseLiteralCommands } from '../../../binding/index.js';
 import { type WorkspacePackage } from '../../types/index.ts';
-import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
 import { readNearestPackageJson } from '../../utils/package.ts';
 import { displayRelative } from '../../utils/path.ts';
 import { NODE_OPTIONS_WITH_VALUE, SCRIPT_EXTENSIONS } from '../../vpx-script.ts';
+import fs from '../files.ts';
+import { editJsonFile, isJsonFile, readJsonFile } from '../files.ts';
 import { sourceTreeMatches } from '../migrator.ts';
 import { type MigrationReport } from '../report.ts';
 import {

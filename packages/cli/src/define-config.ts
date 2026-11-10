@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { ignoreInput, ignoreOutput } from '@voidzero-dev/vite-task-client';
 import type { OxfmtConfig } from 'oxfmt';
 import type { OxlintConfig } from 'oxlint';
-import { resolveConfig, searchForWorkspaceRoot } from 'vite';
+import { resolveConfig as viteResolveConfig, searchForWorkspaceRoot } from 'vite';
 import type {
   Alias,
   InlineConfig as ViteInlineConfig,
@@ -27,6 +27,7 @@ import {
 import type { InlineConfig as VitestInlineConfig } from 'vitest/node';
 
 import type { CreateTemplateEntry } from './create/org-manifest.ts';
+import { migrationIgnorePatterns, type MigrateConfig } from './migrate-config.ts';
 import type { PackUserConfig } from './pack.ts';
 import type { RunConfig } from './run-config.ts';
 import type { StagedConfig } from './staged-config.ts';
@@ -41,6 +42,8 @@ declare module 'vite' {
     lint?: OxlintConfig;
 
     fmt?: OxfmtConfig;
+
+    migrate?: MigrateConfig;
 
     /**
      * Defaults for the `vp check` composite command. Each flag mirrors the
@@ -111,6 +114,26 @@ declare module 'vite' {
     test?: VitestInlineConfig;
   }
 }
+
+// Oxlint loads the lint block through this public resolver, including configs
+// which export a plain object instead of calling our defineConfig helper.
+export const resolveConfig: typeof viteResolveConfig = async (...args) => {
+  const config = await viteResolveConfig(...args);
+  const patterns = migrationIgnorePatterns(config.migrate);
+  if (config.lint && patterns.length > 0) {
+    Object.assign(config.lint, {
+      ...config.lint,
+      settings: {
+        ...config.lint.settings,
+        'vite-plus/migrate': {
+          root: config.configFile ? dirname(config.configFile) : config.root,
+          ignorePatterns: patterns,
+        },
+      },
+    });
+  }
+  return config;
+};
 
 type ViteUserConfigFnObject = (env: ConfigEnv) => UserConfig;
 type ViteUserConfigFnPromise = (env: ConfigEnv) => Promise<UserConfig>;

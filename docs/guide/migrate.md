@@ -45,6 +45,67 @@ vp migrate my-app
 
 ## Migration Flow
 
+### Excluding templates and examples
+
+Use `migrate.ignorePatterns` in the workspace-root `vite.config.ts` to keep
+independently reusable projects on Vite or Vitest:
+
+```ts
+import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  migrate: {
+    ignorePatterns: ['templates/', 'examples/'],
+  },
+});
+```
+
+Patterns use `.gitignore` syntax and are relative to the root config directory.
+They support comments, anchored paths, directory patterns, and ordered `!`
+negation. To include one template, use `['templates/*', '!templates/managed/']`.
+As with Git, a negation cannot include a file whose parent directory is excluded.
+
+The policy is read before migration makes edits. Literal config blocks can be
+read without loading plugins. Dynamic configs require the dependencies needed
+to load the config to be installed first.
+
+Excluded files keep their dependencies, scripts, configs, and imports, and are
+omitted from automatic formatting. The same policy applies to initial migration,
+upgrades, and `--full`. Workspace membership stays unchanged. Migration reads
+excluded package manifests to identify shared dependency settings.
+
+Automatic ESLint comment renaming and `baseUrl` removal are skipped when
+exclusions are configured because those external tools cannot honor the patterns.
+ESLint disable comments continue to work. Remove `baseUrl` manually in migrated
+projects to enable type-aware linting.
+
+When excluded packages are present, migration preserves existing catalogs and
+overrides and uses explicit dependency versions in migrated packages. It does not
+add global toolchain overrides. Existing overrides still apply during installation;
+an incompatible toolchain override must be resolved before migration can proceed.
+Catalog references in an excluded template still require its original workspace.
+
+The `vite-plus/prefer-vite-plus-imports` lint rule also respects these exclusions,
+including during `vp lint --fix` and `vp check --fix`. Other lint rules and normal
+formatting remain enabled. To disable only the import rule with existing lint
+configuration, use:
+
+```ts
+lint: {
+  overrides: [
+    {
+      files: ['templates/**', 'examples/**'],
+      rules: { 'vite-plus/prefer-vite-plus-imports': 'off' },
+    },
+  ],
+},
+```
+
+This lint override disables both diagnostics and autofix for that rule. It does
+not exclude files from `vp migrate`.
+
+### Steps
+
 The `migrate` command is designed to move existing projects onto Vite+ quickly. Here is what the command does:
 
 - Updates project dependencies

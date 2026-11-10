@@ -3,8 +3,8 @@ import path from 'node:path';
 
 import { rewriteScripts } from '../../../binding/index.js';
 import { type WorkspacePackage } from '../../types/index.ts';
-import { editJsonFile, readJsonFile } from '../../utils/json.ts';
 import { rulesDir } from '../../utils/path.ts';
+import { editJsonFile, readJsonFile } from '../files.ts';
 import {
   dropDeadOxlintPluginsDependency,
   hasTsconfigTypesToRewrite,
