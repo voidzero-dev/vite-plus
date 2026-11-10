@@ -559,17 +559,30 @@ export function stalePeerDependencyRuleKeys(usesVitest: boolean): string[] {
   return keys;
 }
 
-// Whether pnpm peerDependencyRules hold an `allowAny` or `allowedVersions` entry
-// for one of `keys`. Works on both the package.json `pnpm.peerDependencyRules`
-// JSON shape and the same shape read back from pnpm-workspace.yaml.
-export function peerDependencyRulesHaveKey(
+// Whether an `allowedVersions` entry is stale. Migration only ever wrote `'*'`
+// for `vite`, so another `vite` range is the user's own constraint and stays.
+export function isStaleAllowedVersion(
+  key: string,
+  value: unknown,
+  staleKeys: readonly string[],
+): boolean {
+  return staleKeys.includes(key) && (key !== 'vite' || value === '*');
+}
+
+// Whether pnpm peerDependencyRules hold a stale `allowAny` or `allowedVersions`
+// entry for one of `keys`. Works on both the package.json
+// `pnpm.peerDependencyRules` JSON shape and the same shape read back from
+// pnpm-workspace.yaml.
+export function peerDependencyRulesHaveStaleEntry(
   rules: { allowAny?: unknown; allowedVersions?: unknown } | null | undefined,
   keys: readonly string[],
 ): boolean {
-  return keys.some(
-    (key) =>
-      (Array.isArray(rules?.allowAny) && rules.allowAny.includes(key)) ||
-      (isPlainRecord(rules?.allowedVersions) && rules.allowedVersions[key] !== undefined),
+  return (
+    (Array.isArray(rules?.allowAny) && rules.allowAny.some((key) => keys.includes(key))) ||
+    (isPlainRecord(rules?.allowedVersions) &&
+      Object.entries(rules.allowedVersions).some(([key, value]) =>
+        isStaleAllowedVersion(key, value, keys),
+      ))
   );
 }
 
@@ -587,17 +600,21 @@ export function mergeManagedPnpmPeerDependencyRules(
   rules: PnpmPeerDependencyRules | undefined,
   usesVitest: boolean,
 ): PnpmPeerDependencyRules | undefined {
-  const stale = new Set(stalePeerDependencyRuleKeys(usesVitest));
+  const stale = stalePeerDependencyRuleKeys(usesVitest);
   const keys = managedPeerDependencyRuleKeys(usesVitest);
   const allowAny = [
     ...new Set([
-      ...(Array.isArray(rules?.allowAny) ? rules.allowAny : []).filter((key) => !stale.has(key)),
+      ...(Array.isArray(rules?.allowAny) ? rules.allowAny : []).filter(
+        (key) => !stale.includes(key),
+      ),
       ...keys,
     ]),
   ];
   const allowedVersions = {
     ...Object.fromEntries(
-      Object.entries(rules?.allowedVersions ?? {}).filter(([key]) => !stale.has(key)),
+      Object.entries(rules?.allowedVersions ?? {}).filter(
+        ([key, value]) => !isStaleAllowedVersion(key, value, stale),
+      ),
     ),
     ...Object.fromEntries(keys.map((key) => [key, '*'])),
   };

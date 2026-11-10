@@ -13,14 +13,18 @@
  * is reserved for local and CI builds, so they never collide with a published
  * version. `k` counts the Vite+ prereleases on one base.
  *
+ * A release records its `vite-plus` version in the core manifest
+ * (`vitePlusVersion`). The release check uses it to tell a retry of the same
+ * release from a core version that another release already published.
+ *
  * Usage:
- *   node packages/tools/src/core-version.ts next --vite-plus <version>
+ *   node packages/tools/src/core-version.ts prepare --vite-plus <version>
  *   node packages/tools/src/core-version.ts local
  *   node packages/tools/src/core-version.ts check [--release]
  */
 
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 
 export const CORE_PACKAGE_NAME = '@voidzero-dev/vite-plus-core';
@@ -76,6 +80,14 @@ export function encodeCoreVersion(vite: string, n: number): string {
     throw new Error(`The release counter must be an integer from 0 to ${LOCAL_BUILD_COUNTER}`);
   }
   return `${major}.${minor}.${patch * 100 + n}`;
+}
+
+/**
+ * Returns the first core version for a bundled Vite version: counter 0 on a
+ * stable Vite, `<vite>.vp.0` on a Vite prerelease.
+ */
+export function initialCoreVersion(vite: string): string {
+  return isPrereleaseVersion(vite) ? `${vite}.${PRERELEASE_TAG}.0` : encodeCoreVersion(vite, 0);
 }
 
 /** Decodes a core version into the bundled Vite version and its counters. */
@@ -175,13 +187,23 @@ export function nextCoreVersion({
   return `${base}-${PRERELEASE_TAG}.${k}`;
 }
 
+interface CoreManifest {
+  version: string;
+  bundledVersions?: { vite?: string };
+  vitePlusVersion?: string;
+}
+
 /**
- * Asserts that a core manifest encodes its bundled Vite version, and that the
- * core version is a prerelease exactly when the `vite-plus` version is one.
- * With `release`, also rejects the local build counter.
+ * Asserts that a core manifest encodes its bundled Vite version. With
+ * `release`, also asserts that:
+ * - the core version is a prerelease exactly when the `vite-plus` version is
+ *   one. Between releases, main can bundle a Vite prerelease with a stable
+ *   `vite-plus`.
+ * - the core version does not use the local build counter.
+ * - the manifest records this `vite-plus` version. `prepare` writes it.
  */
 export function assertCoreVersionMatchesVite(
-  pkg: { version: string; bundledVersions?: { vite?: string } },
+  pkg: CoreManifest,
   vitePlus: string,
   { release = false }: { release?: boolean } = {},
 ): void {
@@ -193,8 +215,11 @@ export function assertCoreVersionMatchesVite(
   if (decoded.vite !== vite) {
     throw new Error(
       `${CORE_PACKAGE_NAME}@${pkg.version} encodes Vite ${decoded.vite}, but it bundles Vite ${vite}. ` +
-        `Set its version to ${isPrereleaseVersion(vite) ? `${vite}.${PRERELEASE_TAG}.0` : encodeCoreVersion(vite, 0)}.`,
+        `Set its version to ${initialCoreVersion(vite)}.`,
     );
+  }
+  if (!release) {
+    return;
   }
   const isCorePrerelease = decoded.k !== undefined;
   if (isCorePrerelease !== isPrereleaseVersion(vitePlus)) {
@@ -202,18 +227,41 @@ export function assertCoreVersionMatchesVite(
       `${CORE_PACKAGE_NAME}@${pkg.version} and vite-plus@${vitePlus} must both be prereleases or both be stable`,
     );
   }
-  if (release && decoded.n === LOCAL_BUILD_COUNTER) {
+  if (decoded.n === LOCAL_BUILD_COUNTER) {
     throw new Error(
       `${CORE_PACKAGE_NAME}@${pkg.version} uses the counter ${LOCAL_BUILD_COUNTER}, which is reserved for local builds`,
     );
   }
+  if (pkg.vitePlusVersion !== vitePlus) {
+    throw new Error(
+      `${CORE_PACKAGE_NAME}@${pkg.version} records vite-plus ${pkg.vitePlusVersion ?? '(none)'}, but the release is vite-plus ${vitePlus}. ` +
+        'Run the Prepare Release workflow to select the core version.',
+    );
+  }
 }
 
-function readManifest(relativePath: string): {
-  version: string;
-  bundledVersions?: { vite?: string };
-} {
-  return JSON.parse(readFileSync(new URL(relativePath, import.meta.url), 'utf8'));
+/**
+ * Asserts that the registry does not already hold the core version for a
+ * different release. `published` is the published manifest of that version, or
+ * `undefined` when it is not published. A retry of the same release passes.
+ */
+export function assertCoreVersionUnclaimed(
+  published: { vitePlusVersion?: string } | undefined,
+  core: string,
+  vitePlus: string,
+): void {
+  if (published && published.vitePlusVersion !== vitePlus) {
+    throw new Error(
+      `${CORE_PACKAGE_NAME}@${core} is already published for vite-plus ${published.vitePlusVersion ?? '(unknown)'}. ` +
+        'Run the Prepare Release workflow again to select an unpublished core version.',
+    );
+  }
+}
+
+const CORE_MANIFEST_URL = new URL('../../core/package.json', import.meta.url);
+
+function readManifest(url: URL): CoreManifest {
+  return JSON.parse(readFileSync(url, 'utf8'));
 }
 
 function readPublishedCoreVersions(): string[] {
@@ -230,7 +278,25 @@ function readPublishedCoreVersions(): string[] {
   return versions;
 }
 
-function main(argv: string[]): void {
+async function readPublishedCoreManifest(
+  core: string,
+): Promise<{ vitePlusVersion?: string } | undefined> {
+  const registry = (process.env.PUBLISH_REGISTRY ?? 'https://registry.npmjs.org').replace(
+    /\/+$/,
+    '',
+  );
+  const url = `${registry}/${CORE_PACKAGE_NAME.replace('/', '%2f')}/${core}`;
+  const response = await fetch(url, { signal: AbortSignal.timeout(60_000) });
+  if (response.status === 404) {
+    return undefined;
+  }
+  if (!response.ok) {
+    throw new Error(`Registry returned HTTP ${response.status} for ${url}`);
+  }
+  return (await response.json()) as { vitePlusVersion?: string };
+}
+
+async function main(argv: string[]): Promise<void> {
   const { positionals, values } = parseArgs({
     args: argv,
     allowPositionals: true,
@@ -239,38 +305,48 @@ function main(argv: string[]): void {
       release: { type: 'boolean', default: false },
     },
   });
-  const core = readManifest('../../core/package.json');
+  const core = readManifest(CORE_MANIFEST_URL);
   const vite = core.bundledVersions?.vite;
   if (!vite) {
     throw new Error(`packages/core/package.json has no bundledVersions.vite`);
   }
 
   switch (positionals[0]) {
-    case 'next': {
+    case 'prepare': {
       const vitePlus = values['vite-plus'];
       if (!vitePlus) {
-        throw new Error('next requires --vite-plus <version>');
+        throw new Error('prepare requires --vite-plus <version>');
       }
-      console.log(nextCoreVersion({ vite, vitePlus, published: readPublishedCoreVersions() }));
+      core.version = nextCoreVersion({ vite, vitePlus, published: readPublishedCoreVersions() });
+      core.vitePlusVersion = vitePlus;
+      writeFileSync(CORE_MANIFEST_URL, `${JSON.stringify(core, null, 2)}\n`);
+      console.log(core.version);
       break;
     }
     case 'local':
       console.log(encodeCoreVersion(vite, LOCAL_BUILD_COUNTER));
       break;
     case 'check': {
-      const cli = readManifest('../../cli/package.json');
+      const cli = readManifest(new URL('../../cli/package.json', import.meta.url));
       assertCoreVersionMatchesVite(core, cli.version, { release: values.release });
+      if (values.release) {
+        assertCoreVersionUnclaimed(
+          await readPublishedCoreManifest(core.version),
+          core.version,
+          cli.version,
+        );
+      }
       console.log(`${CORE_PACKAGE_NAME}@${core.version} encodes Vite ${vite}`);
       break;
     }
     default:
-      throw new Error(`Unknown command: ${positionals[0] ?? ''}. Use next, local, or check.`);
+      throw new Error(`Unknown command: ${positionals[0] ?? ''}. Use prepare, local, or check.`);
   }
 }
 
 if (import.meta.main) {
   try {
-    main(process.argv.slice(2));
+    await main(process.argv.slice(2));
   } catch (error) {
     console.error(`[core-version] ${(error as Error).message}`);
     process.exit(1);

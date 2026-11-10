@@ -420,6 +420,7 @@ The core version encodes `bundledVersions.vite`, so it differs from the `vite-pl
 
 `n` counts the stable releases on one Vite version, from 0 to 98. `k` counts the prereleases on one base. [`packages/tools/src/core-version.ts`](../tools/src/core-version.ts) implements the scheme:
 
-- `prepare_release.yml` runs `core-version.ts next` to select the next unpublished version from the registry.
+- `prepare_release.yml` runs `core-version.ts prepare` to select the next unpublished version from the registry. It writes that version and the `vite-plus` version (`vitePlusVersion`) to `package.json`.
+- `release.yml` runs `core-version.ts check --release`. It fails when the registry already holds the core version for a different `vite-plus` release.
 - `.github/scripts/upgrade-deps.ts` resets `version` to `n = 0` when the bundled Vite changes.
 - `__tests__/core-version.spec.ts` checks that the committed `version` encodes `bundledVersions.vite`.

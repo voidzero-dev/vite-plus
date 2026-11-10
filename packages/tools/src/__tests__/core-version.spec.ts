@@ -2,8 +2,10 @@ import { describe, expect, test } from 'vitest';
 
 import {
   assertCoreVersionMatchesVite,
+  assertCoreVersionUnclaimed,
   decodeCoreVersion,
   encodeCoreVersion,
+  initialCoreVersion,
   nextCoreVersion,
 } from '../core-version.ts';
 
@@ -104,8 +106,15 @@ describe('nextCoreVersion', () => {
   });
 });
 
-function manifest(version: string, vite = '8.3.5') {
-  return { version, bundledVersions: { vite } };
+describe('initialCoreVersion', () => {
+  test('starts the counter for a stable and a prerelease Vite', () => {
+    expect(initialCoreVersion('8.4.2')).toBe('8.4.200');
+    expect(initialCoreVersion('9.0.0-beta.3')).toBe('9.0.0-beta.3.vp.0');
+  });
+});
+
+function manifest(version: string, vite = '8.3.5', vitePlusVersion?: string) {
+  return { version, bundledVersions: { vite }, vitePlusVersion };
 }
 
 describe('assertCoreVersionMatchesVite', () => {
@@ -129,21 +138,64 @@ describe('assertCoreVersionMatchesVite', () => {
     );
   });
 
-  test('rejects mixed prerelease and stable versions', () => {
-    expect(() => assertCoreVersionMatchesVite(manifest('8.3.500'), '1.5.0-rc.0')).toThrow(
-      'both be prereleases',
-    );
-    expect(() => assertCoreVersionMatchesVite(manifest('8.3.500-vp.0'), '1.5.0')).toThrow(
-      'both be prereleases',
-    );
+  test('allows a Vite prerelease with a stable vite-plus between releases', () => {
+    expect(() =>
+      assertCoreVersionMatchesVite(manifest('9.0.0-beta.3.vp.0', '9.0.0-beta.3'), '1.9.0'),
+    ).not.toThrow();
+  });
+
+  test('rejects mixed prerelease and stable versions for a release', () => {
+    expect(() =>
+      assertCoreVersionMatchesVite(manifest('8.3.500', '8.3.5', '1.5.0-rc.0'), '1.5.0-rc.0', {
+        release: true,
+      }),
+    ).toThrow('both be prereleases');
+    expect(() =>
+      assertCoreVersionMatchesVite(manifest('8.3.500-vp.0', '8.3.5', '1.5.0'), '1.5.0', {
+        release: true,
+      }),
+    ).toThrow('both be prereleases');
   });
 
   test('rejects the local build counter for a release', () => {
     expect(() =>
-      assertCoreVersionMatchesVite(manifest('8.3.599'), '1.5.0', { release: true }),
+      assertCoreVersionMatchesVite(manifest('8.3.599', '8.3.5', '1.5.0'), '1.5.0', {
+        release: true,
+      }),
     ).toThrow('reserved for local builds');
     expect(() =>
-      assertCoreVersionMatchesVite(manifest('8.3.598'), '1.5.0', { release: true }),
+      assertCoreVersionMatchesVite(manifest('8.3.598', '8.3.5', '1.5.0'), '1.5.0', {
+        release: true,
+      }),
     ).not.toThrow();
+  });
+
+  test('requires the manifest to record the released vite-plus version', () => {
+    expect(() =>
+      assertCoreVersionMatchesVite(manifest('8.3.500'), '1.5.0', { release: true }),
+    ).toThrow('records vite-plus (none)');
+    expect(() =>
+      assertCoreVersionMatchesVite(manifest('8.3.500', '8.3.5', '1.4.0'), '1.5.0', {
+        release: true,
+      }),
+    ).toThrow('records vite-plus 1.4.0, but the release is vite-plus 1.5.0');
+  });
+});
+
+describe('assertCoreVersionUnclaimed', () => {
+  test('accepts an unpublished core version and a retry of the same release', () => {
+    expect(() => assertCoreVersionUnclaimed(undefined, '8.3.501', '1.5.1')).not.toThrow();
+    expect(() =>
+      assertCoreVersionUnclaimed({ vitePlusVersion: '1.5.1' }, '8.3.501', '1.5.1'),
+    ).not.toThrow();
+  });
+
+  test('rejects a core version that another release published', () => {
+    expect(() =>
+      assertCoreVersionUnclaimed({ vitePlusVersion: '1.5.1' }, '8.3.501', '1.6.0'),
+    ).toThrow('already published for vite-plus 1.5.1');
+    expect(() => assertCoreVersionUnclaimed({}, '8.3.500', '1.6.0')).toThrow(
+      'already published for vite-plus (unknown)',
+    );
   });
 });

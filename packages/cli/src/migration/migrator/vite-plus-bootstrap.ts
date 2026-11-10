@@ -29,7 +29,7 @@ import {
   managedOverridePackages,
   managedPeerDependencyRuleKeys,
   mergeManagedPnpmPeerDependencyRules,
-  peerDependencyRulesHaveKey,
+  peerDependencyRulesHaveStaleEntry,
   migratePnpmSettingsToWorkspaceYaml,
   normalizeVitestPeerCatalogSpec,
   pnpmPackageJsonSettingsPending,
@@ -221,7 +221,9 @@ function pnpmPeerDependencyRulesSatisfyVitePlus(
   usesVitest: boolean,
 ): boolean {
   // A lingering managed `vitest` rule or a stale `vite` rule is NOT satisfied.
-  if (peerDependencyRulesHaveKey(peerDependencyRules, stalePeerDependencyRuleKeys(usesVitest))) {
+  if (
+    peerDependencyRulesHaveStaleEntry(peerDependencyRules, stalePeerDependencyRuleKeys(usesVitest))
+  ) {
     return false;
   }
   const allowAny = new Set(peerDependencyRules?.allowAny ?? []);

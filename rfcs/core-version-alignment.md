@@ -224,9 +224,11 @@ accepts the warnings for that period. Migration keeps the pnpm peer rule for
 prerelease core versions (see Migration).
 
 A Vite+ stable release bundles a stable Vite. Only a Vite+ prerelease may
-bundle a Vite prerelease. CI rejects a core prerelease on a `vite-plus`
-version without a prerelease identifier, and a stable core on a `vite-plus`
-prerelease.
+bundle a Vite prerelease. The release check rejects a core prerelease on a
+`vite-plus` version without a prerelease identifier, and a stable core on a
+`vite-plus` prerelease. Between releases, main can bundle a Vite prerelease
+with a stable `vite-plus` version (for example core `9.0.0-beta.3.vp.0` with
+`vite-plus` `1.9.0`), so this pairing check runs only for a release.
 
 Since `v1.0.0`, Vite+ published no prereleases. The last ones are
 `v1.0.0-rc.0` and `v1.0.0-rc.1`. The prerelease rule matters mostly for the
@@ -265,18 +267,24 @@ lockfile. It does not read the core version.
 
 ### Where the version is computed and checked
 
-Add a small module, `packages/tools/src/core-version.ts`, with four pure
+Add a small module, `packages/tools/src/core-version.ts`, with pure
 functions and a CLI entry:
 
 - `encodeCoreVersion(vite, n)` returns the stable core version.
+- `initialCoreVersion(vite)` returns the first core version for a bundled
+  Vite: `n = 0` on a stable Vite, `<vite>.vp.0` on a Vite prerelease.
 - `decodeCoreVersion(core)` returns `{ vite, n, k }` or an error.
 - `nextCoreVersion({ vite, vitePlus, published })` returns the core version
   for a release. Its inputs are the bundled Vite version, the `vite-plus`
   version, and the published core versions. It applies the counter rules
   below.
-- `assertCoreVersionMatchesVite(pkg, vitePlus)` asserts that `pkg.version`
-  decodes to `pkg.bundledVersions.vite`. It also asserts that the core
-  version is a prerelease only when the `vite-plus` version is a prerelease.
+- `assertCoreVersionMatchesVite(pkg, vitePlus, { release })` asserts that
+  `pkg.version` decodes to `pkg.bundledVersions.vite`. With `release`, it also
+  asserts the prerelease pairing, rejects `n = 99`, and requires
+  `pkg.vitePlusVersion` to equal the released `vite-plus` version.
+- `assertCoreVersionUnclaimed(published, core, vitePlus)` rejects a core
+  version that the registry already holds for a different `vite-plus`
+  version. A retry of the same release passes.
 
 The name `checkCoreVersion` is not used, because
 `packages/cli/src/resolve-core.ts` already defines a function with that name
@@ -298,15 +306,26 @@ The committed `packages/core/package.json` must always encode the committed
 
 1. `.github/scripts/upgrade-deps.ts` already reads
    `packages/core/package.json` to sync `postcss` and `fsevents`. After a
-   bundled Vite change it sets `version` to `encodeCoreVersion(vite, 0)`.
+   bundled Vite change it sets `version` to `initialCoreVersion(vite)`.
    Renovate ignores `vite` (`.github/renovate.json`), so this script is the
    only automated path that changes the bundled Vite.
-2. `prepare_release.yml` computes the release version. It reads the
+2. `prepare_release.yml` runs `core-version.ts prepare`. It reads the
    published core versions
-   (`npm view @voidzero-dev/vite-plus-core versions --json`) and calls
-   `nextCoreVersion` with the input `vite-plus` version. It then writes the
-   result with the existing `update_json` helper and prints both versions in
-   the release PR body.
+   (`npm view @voidzero-dev/vite-plus-core versions --json`), calls
+   `nextCoreVersion` with the input `vite-plus` version, and writes the
+   result and `vitePlusVersion` to the core manifest. The workflow prints
+   both versions in the release PR body.
+
+The counter comes from the registry when the release PR is prepared, so it
+can be stale at publish time. Two release PRs prepared before either
+publishes get the same core version, and a manual `vite-plus` bump skips the
+selection. The publish step skips a version that is already published, so
+the CLI could then pin a core tarball from another commit. The
+`vitePlusVersion` field closes this gap: `release.yml` runs
+`core-version.ts check --release`, which reads the published manifest of the
+core version and fails unless the version is unpublished or was published for
+the same `vite-plus` version. The field also maps a published core back to
+its `vite-plus` release.
 
 A unit test in `packages/core/__tests__/` runs `assertCoreVersionMatchesVite`
 against the committed manifest. It skips the check when the version starts
@@ -418,13 +437,16 @@ Peer rules change only for pnpm:
   `rewritePnpmWorkspaceYaml` in `catalog.ts`, and the writers in
   `orchestrators.ts` and `catalog.ts` stop adding `vite` to `allowAny` and
   `allowedVersions` when the target core version is a stable encoded version
-  (major 8 or higher, no prerelease identifier). They remove an existing
-  `vite` entry from both maps. They delete an empty `peerDependencyRules`
-  object or YAML map. Other entries stay, including `vitest`.
-- The writers cannot tell whether an earlier migration or the user wrote a
-  `vite` entry, so they remove every `vite` entry. The only purpose of that
-  entry is to accept the `1.x` alias. `vp migrate` prints one line that names
-  the removed rule, and `docs/guide/migrate-rules.md` describes the removal.
+  (major 8 or higher, no prerelease identifier). They remove `vite` from
+  `allowAny` and remove `allowedVersions.vite` when its value is `'*'`. They
+  delete an empty `peerDependencyRules` object or YAML map. Other entries
+  stay, including `vitest`.
+- The writers cannot tell whether an earlier migration or the user wrote
+  `allowAny: [vite]` or `allowedVersions.vite: '*'`, so they remove both. The
+  only purpose of those entries is to accept the `1.x` alias. Migration only
+  ever wrote `'*'`, so another `allowedVersions.vite` range is the user's own
+  constraint and stays. `vp migrate` prints one line that names the removed
+  rule, and `docs/guide/migrate-rules.md` describes the removal.
 - When the target core version is not a stable encoded version (a preview
   `0.0.0-commit.<sha>` or a Vite+ prerelease such as `8.4.0-vp.0`), the
   writers keep the current behavior and write the `vite` rule.

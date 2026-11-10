@@ -25,7 +25,8 @@ import {
   managedOverridePackages,
   managedPeerDependencyRuleKeys,
   mergeManagedPnpmPeerDependencyRules,
-  peerDependencyRulesHaveKey,
+  isStaleAllowedVersion,
+  peerDependencyRulesHaveStaleEntry,
   pruneLegacyWrapperAliases,
   removeManagedVitestEntry,
   removeYamlMapVitestEntry,
@@ -445,7 +446,9 @@ export function rewritePnpmWorkspaceYaml(
       allowedVersions = new YAMLMap<Scalar<string>, Scalar<string>>();
     }
     for (const key of stalePeerRuleKeys) {
-      allowedVersions.delete(key);
+      if (isStaleAllowedVersion(key, allowedVersions.get(key), stalePeerRuleKeys)) {
+        allowedVersions.delete(key);
+      }
     }
     for (const key of peerRuleKeys) {
       // - vite: '*'
@@ -1452,13 +1455,15 @@ export function readPnpmWorkspacePeerDependencyRules(
 // Whether the root pnpm config (the package.json `pnpm` field or
 // pnpm-workspace.yaml) holds a `vite` peer rule.
 export function hasVitePeerDependencyRule(projectPath: string): boolean {
-  if (peerDependencyRulesHaveKey(readPnpmWorkspacePeerDependencyRules(projectPath), ['vite'])) {
+  if (
+    peerDependencyRulesHaveStaleEntry(readPnpmWorkspacePeerDependencyRules(projectPath), ['vite'])
+  ) {
     return true;
   }
   const pkg = readPackageJsonIfExists(path.join(projectPath, 'package.json')) as
     | { pnpm?: PnpmPackageJsonSettings }
     | undefined;
-  return peerDependencyRulesHaveKey(pkg?.pnpm?.peerDependencyRules, ['vite']);
+  return peerDependencyRulesHaveStaleEntry(pkg?.pnpm?.peerDependencyRules, ['vite']);
 }
 
 // Capture the `vite` peer rule before a migration step. Call the returned

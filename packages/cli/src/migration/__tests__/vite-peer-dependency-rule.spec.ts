@@ -182,6 +182,43 @@ describe('pnpm vite peer rule', () => {
       expect(report.vitePeerDependencyRuleRemoved).toBe(false);
     });
 
+    it('keeps a user vite range in pnpm-workspace.yaml', () => {
+      writeVitePlusProject(tmpDir, [
+        'peerDependencyRules:',
+        '  allowAny:',
+        '    - vite',
+        '  allowedVersions:',
+        "    vite: '7 || 8'",
+      ]);
+      const report = createMigrationReport();
+
+      ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir), report);
+
+      expect(readWorkspaceRules(tmpDir)).toEqual({ allowedVersions: { vite: '7 || 8' } });
+      expect(report.vitePeerDependencyRuleRemoved).toBe(true);
+      expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+    });
+
+    it('keeps a user vite range in package.json before pnpm 10.6.2', () => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({
+          name: 'test',
+          devDependencies: { 'vite-plus': 'latest' },
+          pnpm: {
+            overrides: { react: '18.3.1' },
+            peerDependencyRules: { allowedVersions: { vite: '^8.0.0' } },
+          },
+        }),
+      );
+      const report = createMigrationReport();
+
+      ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, '10.6.1'), report);
+
+      expect(readPackageJsonRules(tmpDir)).toEqual({ allowedVersions: { vite: '^8.0.0' } });
+      expect(report.vitePeerDependencyRuleRemoved).toBe(false);
+    });
+
     it('removes the vite rule from package.json before pnpm 10.6.2', () => {
       fs.writeFileSync(
         path.join(tmpDir, 'package.json'),

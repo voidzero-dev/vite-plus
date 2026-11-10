@@ -355,6 +355,14 @@ test('restarts the core version counter when the bundled Vite changes', () => {
   });
 });
 
+test('starts the vp counter when the bundled Vite is a prerelease', () => {
+  const fixture = createSyncFixture();
+  writeJson(fixture.vitePath, { ...readJson(fixture.vitePath), version: '9.0.0-beta.3' });
+  fixture.run();
+  expect(readJson(fixture.corePath).version).toBe('9.0.0-beta.3.vp.0');
+  expect(readJson(fixture.corePath).bundledVersions).toEqual({ vite: '9.0.0-beta.3' });
+});
+
 test('fails without writing core when the Vite source has no version', () => {
   const fixture = createSyncFixture();
   const { version: _, ...vite } = readJson(fixture.vitePath);

@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import {
   CORE_PACKAGE_NAME,
-  encodeCoreVersion,
+  initialCoreVersion,
   tryDecodeCoreVersion,
 } from '../../packages/tools/src/core-version.ts';
 import {
@@ -571,7 +571,7 @@ function syncCoreVersion(pkg: { version?: unknown; bundledVersions?: Record<stri
   if (current !== undefined && tryDecodeCoreVersion(current)?.vite === viteVersion) {
     return;
   }
-  const next = encodeCoreVersion(viteVersion, 0);
+  const next = initialCoreVersion(viteVersion);
   recordChange(CORE_PACKAGE_NAME, changes.get(CORE_PACKAGE_NAME)?.old ?? current, next);
   pkg.version = next;
 }
