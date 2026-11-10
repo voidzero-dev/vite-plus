@@ -48,8 +48,6 @@ peerDependencyRules:
     - vite
   allowedVersions:
     vite: '*'
-packages:
-  - .
 ```
 
 ## `git config --local core.hooksPath`

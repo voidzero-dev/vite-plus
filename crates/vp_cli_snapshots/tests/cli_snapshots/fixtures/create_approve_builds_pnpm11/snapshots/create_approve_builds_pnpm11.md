@@ -16,8 +16,6 @@
 approval recorded under allowBuilds
 
 ```
-packages:
-  - .
 allowBuilds:
   core-js: true
 catalog:
@@ -50,8 +48,6 @@ default run surfaces the gated build with guidance, leaving it unapproved
 no allowBuilds, the build was not run
 
 ```
-packages:
-  - .
 allowBuilds:
   core-js: set this to true or false
 catalog:
@@ -79,8 +75,6 @@ node_modules/.pnpm/core-js@3.39.0/node_modules/core-js: Running postinstall scri
 core-js is now allowed under allowBuilds
 
 ```
-packages:
-  - .
 allowBuilds:
   core-js: true
 catalog:

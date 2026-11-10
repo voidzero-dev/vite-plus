@@ -13,7 +13,7 @@ verify next command suggests vp run
 
 ## `vpt print-file vite-plus-library/pnpm-workspace.yaml`
 
-standalone library workspace includes the root package
+standalone library workspace settings on modern pnpm
 
 ```
 catalog:
@@ -26,6 +26,4 @@ peerDependencyRules:
     - vite
   allowedVersions:
     vite: "*"
-packages:
-  - .
 ```

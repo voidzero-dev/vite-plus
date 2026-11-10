@@ -47,8 +47,6 @@ peerDependencyRules:
     - vite
   allowedVersions:
     vite: '*'
-packages:
-  - .
 ```
 
 ## `vp migrate --no-interactive`

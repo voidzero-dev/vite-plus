@@ -49,8 +49,6 @@ peerDependencyRules:
     - vite
   allowedVersions:
     vite: '*'
-packages:
-  - .
 ```
 
 ## `vpt stat-file .lintstagedrc.json --assert file`

@@ -51,8 +51,6 @@ peerDependencyRules:
     - vite
   allowedVersions:
     vite: '*'
-packages:
-  - .
 ```
 
 ## `vpt stat-file eslint.config.mjs --assert-not file`

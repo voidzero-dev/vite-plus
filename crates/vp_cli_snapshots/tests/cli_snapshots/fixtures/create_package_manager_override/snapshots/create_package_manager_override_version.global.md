@@ -82,8 +82,6 @@ package manager recorded by the install lifecycle script
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@<version>
   vite-plus: <version>
-packages:
-  - .
 ```
 
 ## `vpt stat-file demo/pnpm-lock.yaml`

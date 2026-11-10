@@ -57,8 +57,6 @@ peerDependencyRules:
   allowedVersions:
     vite: '*'
     vitest: '*'
-packages:
-  - .
 ```
 
 ## `vpt print-file test/hello.ts`

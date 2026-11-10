@@ -32,8 +32,6 @@ peerDependencyRules:
     - vite
   allowedVersions:
     vite: "*"
-packages:
-  - .
 ```
 
 ## `vp up`

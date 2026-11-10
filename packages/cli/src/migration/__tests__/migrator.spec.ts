@@ -4837,7 +4837,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(yaml).toContain('overrides:');
     expect(yaml).toContain('peerDependencyRules:');
     expect(yaml).toContain('catalog:');
-    expect(readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')).packages).toEqual(['.']);
+    expect(readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')).packages).toBeUndefined();
 
     // package.json should not have pnpm section
     const pkg = readJson(path.join(tmpDir, 'package.json'));
@@ -4850,6 +4850,57 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
 
     rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
     expect(readYaml(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(yaml);
+  });
+
+  it.each<[string, string[] | undefined]>([
+    ['9.15.9', ['.']],
+    ['10.4.1', ['.']],
+    ['10.5.0', undefined],
+    ['10.6.1', undefined],
+    ['12.15.0', undefined],
+  ])(
+    'uses resolved pnpm %s to decide whether the root package is required',
+    (version, packages) => {
+      fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify({ name: 'test' }));
+      const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm, 'latest');
+      workspaceInfo.downloadPackageManager.version = version;
+
+      rewriteStandaloneProject(tmpDir, workspaceInfo, true, true);
+      const workspacePath = path.join(tmpDir, 'pnpm-workspace.yaml');
+      expect(readYamlObject(workspacePath).packages).toEqual(packages);
+
+      const firstMigration = readYaml(workspacePath);
+      rewriteStandaloneProject(tmpDir, workspaceInfo, true, true);
+      expect(readYaml(workspacePath)).toBe(firstMigration);
+    },
+  );
+
+  it.each(['10.4.1', '12.15.0'])('preserves existing workspace patterns on pnpm %s', (version) => {
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify({ name: 'test' }));
+    const workspacePath = path.join(tmpDir, 'pnpm-workspace.yaml');
+    fs.writeFileSync(workspacePath, 'packages:\n  - packages/*\n');
+
+    rewriteStandaloneProject(
+      tmpDir,
+      makeWorkspaceInfo(tmpDir, PackageManager.pnpm, version),
+      true,
+      true,
+    );
+
+    expect(readYamlObject(workspacePath).packages).toEqual(['packages/*']);
+  });
+
+  it('does not create a workspace file solely to declare an older pnpm root package', () => {
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify({ name: 'test' }));
+
+    rewriteStandaloneProject(
+      tmpDir,
+      makeWorkspaceInfo(tmpDir, PackageManager.pnpm, '8.15.9'),
+      true,
+      true,
+    );
+
+    expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(false);
   });
 
   // PR #1891 review (P1): pnpm 9.5.0-10.6.1 supports catalogs (>= 9.5.0) but not

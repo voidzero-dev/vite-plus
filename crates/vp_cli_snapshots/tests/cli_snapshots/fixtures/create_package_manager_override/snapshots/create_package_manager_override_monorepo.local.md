@@ -21,7 +21,7 @@ the exact package-manager version reported in the summary
 ```
 {
   "packageManager": "pnpm",
-  "version": "10.6.1"
+  "version": "10.4.1"
 }
 ```
 
@@ -55,7 +55,7 @@ the install uses the session override
 ```
 {
   "packageManager": "pnpm",
-  "version": "10.6.1"
+  "version": "10.4.1"
 }
 ```
 
