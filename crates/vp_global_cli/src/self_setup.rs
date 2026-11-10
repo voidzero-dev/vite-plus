@@ -219,7 +219,9 @@ async fn run(
         ));
     }
     let previous_install = if deploy { previous_install()? } else { None };
-    let node_override = shim_mode(env.node_manager);
+    // VP_ENV_FORBIDDEN=1 places every component after the system tools, whatever VP_*_MANAGER says.
+    let forbidden = env.env_forbidden.then_some(config::ShimMode::SystemFirst);
+    let node_override = forbidden.or_else(|| shim_mode(env.node_manager));
     // A package upgrade can change the executable path or expire its receipt.
     // Preferences belong to the user, not to that particular binary.
     let configured = externally_owned && config::get_config_path()?.as_path().is_file();
@@ -253,6 +255,36 @@ async fn run(
     {
         return Err(Error::Other("Invalid local installation version".into()));
     }
+
+    // VP_ENV_FORBIDDEN=1 installs with the system node and pnpm. Check them before
+    // changing anything: a same-version reinstall reuses the active directory, and
+    // Homebrew setup saves preferences and creates its package directory below.
+    let system_tools = if env.env_forbidden && !skip_deps && !bundled {
+        let source = AbsolutePathBuf::new(source.to_path_buf()).ok_or(Error::CliBinaryNotFound)?;
+        let installs = if let Some(package) = user_package {
+            !external::package_complete(&source, package).await?
+        } else if deploy {
+            true
+        } else {
+            // An in-place setup completes the version directory it runs from. Missing or
+            // stale installation receipts reinstall, as the lockfile preparation below decides.
+            let version_dir = source.parent().and_then(|bin| bin.parent());
+            match version_dir {
+                Some(version_dir) => {
+                    !version_dir.join("node_modules/vite-plus/package.json").as_path().is_file()
+                        || !vp_setup::lockfile::is_complete(&source, version_dir).await?
+                }
+                None => true,
+            }
+        };
+        if installs {
+            Some(install::system_install_tools(Some(&runtime::cli_node_range())).await?)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
 
     // A deployment changes `current`, `.previous-version`, and old versions like
     // `vp upgrade`. In-place setup is the child of an upgrade that holds the lock.
@@ -312,7 +344,20 @@ async fn run(
     if needs_deps {
         output::info(&format!("installing vite-plus@{version}..."));
         install::generate_wrapper_package_json(&version_dir, version).await?;
-        if !skip_deps {
+        if !skip_deps && env.env_forbidden {
+            // Normally checked above, before any change; check now if that was skipped.
+            let tools = match system_tools {
+                Some(tools) => tools,
+                None => install::system_install_tools(Some(&runtime::cli_node_range())).await?,
+            };
+            install::install_production_deps(
+                &version_dir,
+                registry,
+                true,
+                Some(install::NodeVersion::System(&tools)),
+            )
+            .await?;
+        } else if !skip_deps {
             let preferred =
                 node_version.as_deref().filter(|version| runtime::supports_cli(version));
             if let Some(version) = node_version.as_deref().filter(|_| preferred.is_none()) {
@@ -442,6 +487,8 @@ async fn save_management_preferences(
     if let Some(mode) = node_override.or(default_mode) {
         settings.node_shim_mode = mode;
     }
+    // VP_ENV_FORBIDDEN=1 places every package manager after the system tools too.
+    let forbidden = env.env_forbidden.then_some(config::ShimMode::SystemFirst);
     let pm_mode = shim_mode(env.pm_manager).or(default_mode);
     for (family, preference) in [
         (PackageManagerType::Npm, env.npm_manager),
@@ -449,7 +496,7 @@ async fn save_management_preferences(
         (PackageManagerType::Yarn, env.yarn_manager),
         (PackageManagerType::Bun, env.bun_manager),
     ] {
-        if let Some(mode) = shim_mode(preference).or(pm_mode) {
+        if let Some(mode) = forbidden.or_else(|| shim_mode(preference)).or(pm_mode) {
             settings.set_package_manager_shim_mode(family, mode);
         }
     }

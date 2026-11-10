@@ -491,8 +491,19 @@ async fn run_node(args: Vec<String>, cwd: &AbsolutePath) -> i32 {
 
     // stdout belongs to the script; route vp's own output to stderr.
     output::route_user_output_to_stderr();
-    // As `vp node` does: dispatch assumes the shell's PATH lookup already preferred a
-    // system-first Node.js, so repeat that lookup here.
+    // As `vp node` does: under VP_ENV_FORBIDDEN=1 Node.js comes from PATH here,
+    // not from dispatch, since its shim fails without searching PATH.
+    if let Some(node) = crate::shim::dispatch::resolve_env_forbidden_tool("node") {
+        return match node {
+            Ok(node) => crate::shim::exec::exec_tool(&node, &args, env),
+            Err(error) => {
+                output::error(&format!("vpx: {error}"));
+                1
+            }
+        };
+    }
+    // Dispatch assumes the shell's PATH lookup already preferred a system-first Node.js,
+    // so repeat that lookup here.
     if let Ok(config) = super::env::config::load_config().await
         && config.shim_mode_for_tool("node") == super::env::config::ShimMode::SystemFirst
         && let Some(node) = crate::shim::dispatch::find_system_tool("node")

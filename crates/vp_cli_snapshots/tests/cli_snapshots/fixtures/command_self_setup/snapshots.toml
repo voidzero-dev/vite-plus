@@ -14,6 +14,33 @@ steps = [
 ]
 
 [[case]]
+name = "command_self_setup_env_forbidden_probe"
+vp = "global"
+env = { VP_SKIP_DEPS_INSTALL = "1" }
+steps = [
+  { argv = ["vpt", "rm", "$VP_HOME/current/bin/.vp-setup-complete"], snapshot = false },
+  { argv = ["vp", "--help"], envs = [["VP_SELF_SETUP_SUPPORT_CHECK", "env-forbidden"]], comment = "The env-forbidden check value adds a second line after the unchanged v1 response" },
+  { argv = ["vp", "--help"], envs = [["VP_SELF_SETUP_SUPPORT_CHECK", "Env-Forbidden"]], comment = "Only the exact lowercase value asks for VP_ENV_FORBIDDEN support" },
+  ["vpt", "stat-file", "$VP_HOME/current/bin/.vp-setup-complete", "--assert", "missing"],
+]
+
+[[case]]
+name = "command_self_setup_env_forbidden_in_place"
+vp = "global"
+skip-platforms = ["windows"]
+env = { VP_SELF_SETUP_NO_MODIFY_PATH = "1", NPM_CONFIG_REGISTRY = "http://127.0.0.1:9" }
+steps = [
+  { argv = ["vpt", "rm", "$VP_HOME/current/bin/.vp-setup-complete"], comment = "An interrupted upgrade left the active installation unmarked", snapshot = false },
+  { argv = ["vpt", "write-file", "$VP_HOME/current/bin/vp-install-lock.yaml", "release lockfile\n"], comment = "The release lockfile is present, so setup would restore it into the installation", snapshot = false },
+  { argv = ["vpt", "write-file", "$VP_HOME/current/node_modules/.vp-install-complete", "stale receipt\n"], comment = "A stale receipt makes setup reinstall the dependencies", snapshot = false },
+  { argv = ["vpt", "write-file", "$VP_HOME/current/pnpm-lock.yaml", "existing lockfile\n"], snapshot = false },
+  { argv = ["vp", "--help"], envs = [["VP_ENV_FORBIDDEN", "1"], ["PATH", "${VP_HOME}/bin"]], comment = "With only the Vite+ shims on PATH, setup fails before it prepares the lockfile", continue-on-failure = true },
+  ["vpt", "print-file", "$VP_HOME/current/node_modules/.vp-install-complete"],
+  ["vpt", "print-file", "$VP_HOME/current/pnpm-lock.yaml"],
+  ["vpt", "stat-file", "$VP_HOME/current/bin/.vp-setup-complete", "--assert", "missing"],
+]
+
+[[case]]
 name = "command_self_setup_handoff"
 vp = "global"
 requires = ["bash"]
@@ -58,6 +85,20 @@ steps = [
   ["vpt", "stat-file", "user/.zshenv", "--assert", "missing"],
   ["vpt", "stat-file", "home/.vp-owned", "--assert", "file"],
   ["vpt", "stat-file", "home/cache/.vp-owned", "--assert", "file"],
+]
+
+[[case]]
+name = "command_self_setup_env_forbidden_config"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "external", "forbidden", "not-forbidden"], snapshot = false },
+  { argv = ["vpt", "cp", "$VP_HOME/bin/vp", "external/vp"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "external/vp"], snapshot = false },
+  { argv = ["./external/vp"], tty = false, envs = [["VP_HOME", "${workspace}/forbidden"], ["VP_SKIP_DEPS_INSTALL", "1"], ["VP_VERSION", "forbidden-test"], ["VP_SELF_SETUP_NO_MODIFY_PATH", "1"], ["VP_ENV_FORBIDDEN", "1"], ["VP_NODE_MANAGER", "yes"], ["VP_PM_MANAGER", "yes"], ["VP_NPM_MANAGER", "yes"], ["VP_PNPM_MANAGER", "yes"], ["VP_YARN_MANAGER", "yes"], ["VP_BUN_MANAGER", "yes"]], comment = "VP_ENV_FORBIDDEN=1 saves every component as system_first, overriding explicit VP_*_MANAGER=yes", snapshot = false },
+  ["vpt", "print-file", "forbidden/config.json"],
+  { argv = ["./external/vp"], tty = false, envs = [["VP_HOME", "${workspace}/not-forbidden"], ["VP_SKIP_DEPS_INSTALL", "1"], ["VP_VERSION", "forbidden-test"], ["VP_SELF_SETUP_NO_MODIFY_PATH", "1"], ["VP_ENV_FORBIDDEN", "true"], ["VP_NODE_MANAGER", "yes"], ["VP_PM_MANAGER", "yes"], ["VP_NPM_MANAGER", "yes"], ["VP_PNPM_MANAGER", "yes"], ["VP_YARN_MANAGER", "yes"], ["VP_BUN_MANAGER", "yes"]], comment = "Only the exact value 1 enables VP_ENV_FORBIDDEN; other values keep the VP_*_MANAGER choices", snapshot = false },
+  ["vpt", "print-file", "not-forbidden/config.json"],
 ]
 
 [[case]]
