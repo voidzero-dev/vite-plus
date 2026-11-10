@@ -17,6 +17,7 @@ mod package_manager;
 mod request;
 pub(crate) mod resolution;
 mod shim;
+mod spec;
 
 pub use cli::{ManagedGlobalCommand, PackageManagerCommand, PmCommand};
 pub use config::{
@@ -49,3 +50,4 @@ pub use resolution::{
     PublishArgs, RebuildArgs, RemoveArgs, SearchArgs, StageCommand, TeamCommand, TokenCommand,
     UnlinkArgs, UpdateArgs, VersionArgs, ViewArgs, WhoamiArgs, WhyArgs,
 };
+pub use spec::{PackageManagerSpec, package_manager_override, parse_package_manager_spec};
