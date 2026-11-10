@@ -366,9 +366,7 @@ mod tests {
         sys::save(fd).is_some_and(|raw| sys::apply(fd, &raw))
     }
 
-    /// The cursor changes written to the pty since the last call, `l` for each
-    /// hide and `h` for each show.
-    fn cursor_changes(master: &OwnedFd) -> String {
+    fn terminal_output(master: &OwnedFd) -> Vec<u8> {
         let mut output = Vec::new();
         let mut buf = [0; 1024];
         loop {
@@ -382,6 +380,12 @@ mod tests {
             }
         }
         output
+    }
+
+    /// The cursor changes written to the pty since the last call, `l` for each
+    /// hide and `h` for each show.
+    fn cursor_changes(master: &OwnedFd) -> String {
+        terminal_output(master)
             .windows(6)
             .filter_map(|sequence| match sequence {
                 b"\x1b[?25l" => Some('l'),
@@ -389,6 +393,41 @@ mod tests {
                 _ => None,
             })
             .collect()
+    }
+
+    const PROGRESS_CHILD: &str = "VP_SHARED_INPUT_PROGRESS_CHILD";
+
+    #[test]
+    fn progress_hides_cursor_before_first_frame() {
+        use std::process::Command;
+
+        if std::env::var_os(PROGRESS_CHILD).is_some() {
+            crate::EnvConfig::with_vars([("CI", None::<&str>)], |_| {
+                let _progress = crate::progress::Progress::counter("Preparing fixture", 1)
+                    .expect("stderr is a terminal");
+            });
+            return;
+        }
+
+        let size = nix::pty::Winsize { ws_row: 24, ws_col: 80, ws_xpixel: 0, ws_ypixel: 0 };
+        let pty = openpty(Some(&size), None).unwrap();
+        let status = Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "progress::input::tests::progress_hides_cursor_before_first_frame"])
+            .env("TERM", "xterm-256color")
+            .env(PROGRESS_CHILD, "1")
+            .stdin(pty.slave.try_clone().unwrap())
+            .stdout(std::process::Stdio::null())
+            .stderr(pty.slave.try_clone().unwrap())
+            .status()
+            .unwrap();
+
+        assert!(status.success(), "{status}");
+        let output = terminal_output(&pty.master);
+        assert!(output.starts_with(b"\x1b[?25l"), "{output:?}");
+        assert!(
+            output.windows(b"Preparing fixture".len()).any(|part| part == b"Preparing fixture"),
+            "{output:?}"
+        );
     }
 
     #[test]
