@@ -93,6 +93,15 @@ jobs:
           path: ./rolldown/packages/rolldown/src
           merge-multiple: true
 
+      # Stamp the local core version (release counter 999, for example
+      # 8.3.5999) before the build, so the CLI build, its toolchain manifest,
+      # and the packed `vite` alias all read it from packages/core/package.json
+      # (rfcs/core-version-alignment.md). The native build cache key does not
+      # include that file. The local version still encodes the bundled Vite,
+      # so peer checks run as they do for a release.
+      - name: Set local core version
+        run: (cd packages/core && npm pkg set version="$(node ../tools/src/core-version.ts local)")
+
       - name: Build with upstream
         uses: ./.github/actions/build-upstream
         with:
@@ -107,15 +116,11 @@ jobs:
           # and installs them like a real release, with every package manager
           # (including bun) resolving the standard
           # `vite -> npm:@voidzero-dev/vite-plus-core@<version>` alias. Pin
-          # the CLI to 0.0.0 and core to its local version (release counter
-          # 999, for example 8.3.5999) so a correctly installed local build is
+          # the CLI to 0.0.0 (core already has its local version, see "Set
+          # local core version") so a correctly installed local build is
           # always distinguishable from any published version, even on a
           # release commit that leaves packages/{core,cli} at a published
-          # version. The local core version still encodes the bundled Vite,
-          # so peer checks run as they do for a release
-          # (rfcs/core-version-alignment.md).
-          CORE_VERSION=$(node packages/tools/src/core-version.ts local)
-          (cd packages/core && npm pkg set version="$CORE_VERSION")
+          # version.
           (cd packages/cli && npm pkg set version=0.0.0)
           cd packages/core && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
           cd packages/cli && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
@@ -184,8 +189,7 @@ jobs:
     env:
       # The local registry serves the packed 0.0.0 build, so create pins the
       # exact version like a real release. The vp binary was built before the
-      # pack step pinned the package versions, so align the version explicitly.
-      # The "Set local core version" step sets VP_CORE_VERSION the same way.
+      # pack step pinned the CLI version, so align the version explicitly.
       VP_VERSION: '0.0.0'
       # Force full dependency rewriting so the library template's existing
       # vite-plus dep gets overridden with the local build
@@ -208,9 +212,6 @@ jobs:
         with:
           name: vite-plus-packages
           path: tmp/tgz
-
-      - name: Set local core version
-        run: echo "VP_CORE_VERSION=$(node packages/tools/src/core-version.ts local)" >> "$GITHUB_ENV"
 
       - name: Install vp CLI
         run: |
@@ -246,8 +247,8 @@ jobs:
           echo "$handshake"
           echo "$handshake" | node -e 'const { env } = JSON.parse(require("node:fs").readFileSync(0, "utf8")); for (const [k, v] of Object.entries(env)) console.log(`${k}=${v}`)' >> "$GITHUB_ENV"
 
-      # No VP_OVERRIDE_PACKAGES: with VP_CORE_VERSION set, the product default
-      # override map already pins `vite` to npm:@voidzero-dev/vite-plus-core@<local>
+      # No VP_OVERRIDE_PACKAGES: the build read the local core version, so the
+      # product default override map already pins `vite` to npm:@voidzero-dev/vite-plus-core@<local>
       # and `vitest` to the bundled version (see VITE_PLUS_OVERRIDE_PACKAGES in
       # packages/cli/src/utils/constants.ts), and stays correct across vitest
       # bumps without editing this workflow.

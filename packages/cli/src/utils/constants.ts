@@ -10,9 +10,9 @@ export const VITE_PLUS_CORE_NAME = '@voidzero-dev/vite-plus-core';
 export const VITE_PLUS_CORE_ALIAS_PREFIX = `npm:${VITE_PLUS_CORE_NAME}@`;
 
 // The core version encodes the bundled Vite version (rfcs/core-version-alignment.md),
-// so it differs from the vite-plus version. Preview builds stamp the core manifest
-// before the build, so `corePkg.version` is already the preview version.
-export const VITE_PLUS_CORE_VERSION = process.env.VP_CORE_VERSION || corePkg.version;
+// so it differs from the vite-plus version. Release, preview, and local CI builds
+// set the core manifest version before the build, so this is the packed version.
+export const VITE_PLUS_CORE_VERSION = corePkg.version;
 
 // Mirrors Vite's DEFAULT_CONFIG_FILES order so readers and writers target the same file.
 export const VITE_CONFIG_FILES = [
