@@ -1,12 +1,13 @@
 //! A single progress row for an operation and its sequential downloads.
 
+mod input;
 mod style;
 
 use std::{future::Future, time::Duration};
 
 use indicatif::{ProgressBar, ProgressStyle};
 
-use self::style::Style;
+use self::{input::InputBlock, style::Style};
 
 tokio::task_local! {
     static ACTIVE_PROGRESS: ProgressBar;
@@ -28,29 +29,49 @@ pub async fn with_spinner<F: Future>(message: Option<&str>, future: F) -> F::Out
         return future.await;
     }
 
-    let progress =
-        Progress::new(ProgressBar::new_spinner(), Style::Spinner.for_stderr(message), None);
-    progress.run(future).await
+    Progress::start(ProgressBar::new_spinner(), Style::Spinner.for_stderr(message))
+        .run(future)
+        .await
 }
 
-/// Clears a download on completion or cancellation, or restores its enclosing
-/// operation's spinner. Keep this guard alive until the download finishes.
+/// A progress row, cleared on completion or cancellation. A download nested in a
+/// spinner restores that spinner instead. A row that is not nested blocks
+/// keyboard input and hides the cursor until it is dropped. Keep this guard alive
+/// until the work finishes.
 pub struct Progress {
     bar: ProgressBar,
     restore: Option<(ProgressStyle, Duration)>,
+    _input: Option<InputBlock>,
 }
 
 impl Progress {
+    /// Animate a status with a completed count and elapsed time. Advance it
+    /// through [`Self::bar`]. Returns `None` when progress is hidden.
+    pub fn counter(message: &str, len: u64) -> Option<Self> {
+        if !enabled() {
+            return None;
+        }
+        Some(Self::start(ProgressBar::new(len), Style::Counter.for_stderr(message)))
+    }
+
     pub fn download(message: &str) -> Option<Self> {
-        let (bar, restore) = match ACTIVE_PROGRESS.try_with(Clone::clone) {
+        let style = Style::Download.for_stderr(message);
+        match ACTIVE_PROGRESS.try_with(Clone::clone) {
             Ok(bar) => {
+                bar.unset_length();
                 let restore = Some((bar.style(), bar.elapsed()));
-                (bar, restore)
+                Some(Self::new(bar, style, restore))
             }
-            Err(_) if enabled() => (ProgressBar::new_spinner(), None),
-            Err(_) => return None,
-        };
-        Some(Self::new(bar, Style::Download.for_stderr(message), restore))
+            Err(_) if enabled() => Some(Self::start(ProgressBar::new_spinner(), style)),
+            Err(_) => None,
+        }
+    }
+
+    /// Show a new row, blocking keyboard input and hiding the cursor until it is cleared.
+    fn start(bar: ProgressBar, style: ProgressStyle) -> Self {
+        let mut progress = Self::new(bar, style, None);
+        progress._input = input::block();
+        progress
     }
 
     fn new(
@@ -60,10 +81,9 @@ impl Progress {
     ) -> Self {
         bar.set_style(style.tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏ "));
         bar.reset();
-        bar.unset_length();
         bar.enable_steady_tick(Duration::from_millis(100));
         bar.force_draw();
-        Self { bar, restore }
+        Self { bar, restore, _input: None }
     }
 
     pub fn bar(&self) -> &ProgressBar {
@@ -126,6 +146,21 @@ mod tests {
         assert_eq!(lines.len(), 2, "{screen}");
         assert_eq!(lines[0], "A");
         assert!(measure_text_width(lines[1]) <= usize::from(term.width()));
+    }
+
+    #[test]
+    fn counter_draws_its_total_from_the_first_frame() {
+        let term = InMemoryTerm::new(10, 80);
+        let draw_term = term.clone();
+        let progress = Progress::new(
+            ProgressBar::with_draw_target(
+                Some(3),
+                ProgressDrawTarget::term_like(Box::new(term.clone())),
+            ),
+            Style::Counter.with_width("Installing global packages", move || draw_term.width()),
+            None,
+        );
+        assert!(contents(&progress.bar, &term).contains("(0/3)"));
     }
 
     #[tokio::test]

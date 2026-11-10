@@ -9,6 +9,7 @@ use vt_str::{Str, format};
 #[derive(Clone, Copy)]
 pub(super) enum Style {
     Spinner,
+    Counter,
     Download,
 }
 
@@ -32,6 +33,11 @@ impl Style {
                 let available = usize::from(width()).saturating_sub(1);
                 let row = match self {
                     Self::Spinner => spinner_row(state, &message, available),
+                    Self::Counter => {
+                        let count =
+                            format!("{} ({}/{})", message, state.pos(), state.len().unwrap_or(0));
+                        spinner_row(state, &count, available)
+                    }
                     Self::Download => download_row(state, &message, available),
                 };
                 write!(output, "{}", truncate_str(&row, available, "")).unwrap();
@@ -109,7 +115,7 @@ mod tests {
 
     #[test]
     fn redraws_stay_on_one_row_and_preserve_earlier_output() {
-        for style in [Style::Download, Style::Spinner] {
+        for style in [Style::Download, Style::Spinner, Style::Counter] {
             for width in [1, 2, 3, 10, 20, 40, 60, 80, 138] {
                 for message in [
                     "Downloading node v26.8.0...",
@@ -195,7 +201,7 @@ mod tests {
 
     #[test]
     fn layout_reads_the_current_width_on_each_draw() {
-        for style in [Style::Download, Style::Spinner] {
+        for style in [Style::Download, Style::Spinner, Style::Counter] {
             let width = Arc::new(AtomicU16::new(138));
             let term = InMemoryTerm::new(5, 138);
             let progress = ProgressBar::with_draw_target(
