@@ -96,6 +96,14 @@ pub enum Error {
     #[error("Invalid argument: {0}")]
     InvalidArgument(Str),
 
+    /// `VP_ENV_FORBIDDEN=1` forbids downloading or using a managed release of
+    /// `tool`, and resolving one through the registry.
+    #[error(
+        "{var}=1: Vite+ does not manage {tool}; it neither downloads nor uses a managed {tool}",
+        var = vp_shared::env_vars::VP_ENV_FORBIDDEN
+    )]
+    DisabledByEnvForbidden { tool: Str },
+
     #[cfg(feature = "migration")]
     #[error(transparent)]
     AstGrepConfigError(#[from] ast_grep_config::RuleConfigError),

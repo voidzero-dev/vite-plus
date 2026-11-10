@@ -326,6 +326,14 @@ jobs:
         run: |
           set -euo pipefail
           node packages/tools/src/check-rolldown-compat.ts
+          # Earlier native builds or restored caches can use a different C compiler.
+          # CMake can drop its install prefix when that compiler changes. Clear its
+          # configuration before rebuilding, while keeping compiled Rust dependencies.
+          target_dir="${CARGO_TARGET_DIR:-target}"
+          if [[ -d "$target_dir" ]]; then
+            find "$target_dir" -type f -name CMakeCache.txt -delete
+            find "$target_dir" -type d -name CMakeFiles -prune -exec rm -rf -- {} +
+          fi
           pnpm bootstrap-cli
           export PATH="$HOME/.vite-plus/bin:$PATH"
           pnpm test:unit
@@ -406,6 +414,8 @@ jobs:
                Include the version and a short 7-char SHA in both `From` and `To` for `rolldown`
                and `vite`. Link each SHA label to the full commit in the official repository.
                Omit packages whose old and new values are equal.
+               Report the pnpm installer version only; omit its integrity hash from this table
+               and the unchanged dependency list.
                Keep the baseline list of unchanged dependencies after the table.
             3. `## Code changes` — bullet list of the actual non-version edits, each naming
                the file(s) touched. If the only changes are version bumps + lockfile + generated

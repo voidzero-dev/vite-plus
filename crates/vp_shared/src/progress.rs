@@ -69,8 +69,10 @@ impl Progress {
 
     /// Show a new row, blocking keyboard input and hiding the cursor until it is cleared.
     fn start(bar: ProgressBar, style: ProgressStyle) -> Self {
+        // Write cursor controls before the redraw thread can emit a progress frame.
+        let input = input::block();
         let mut progress = Self::new(bar, style, None);
-        progress._input = input::block();
+        progress._input = input;
         progress
     }
 
