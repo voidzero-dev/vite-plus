@@ -27,6 +27,7 @@ import {
   managedOverridePackages,
   mergeManagedPnpmOverrides,
   mergeManagedPnpmPeerDependencyRules,
+  pnpmPeerDependencyRuleKeys,
   mergeStagedConfigToViteConfig,
   mergeTsdownConfigFile,
   mergeViteConfigFiles,
@@ -217,8 +218,7 @@ export function rewriteStandaloneProject(
           overrides: mergeManagedPnpmOverrides(pkg.pnpm?.overrides, managed),
           peerDependencyRules: mergeManagedPnpmPeerDependencyRules(
             pkg.pnpm?.peerDependencyRules,
-            usesVitest,
-            workspaceInfo.downloadPackageManager.version,
+            pnpmPeerDependencyRuleKeys(usesVitest, workspaceInfo.downloadPackageManager.version),
           ),
         };
       } else {

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 
-import { VITE_PLUS_CORE_ALIAS_PREFIX, VITE_PLUS_CORE_NAME } from './utils/constants.ts';
+import { VITE_PLUS_CORE_NAME, coreAliasVersion } from './utils/constants.ts';
 import { readNearestPackageJson } from './utils/package.ts';
 
 /**
@@ -43,10 +43,7 @@ function readAliasCoreVersion(cliPackageJsonPath: string): string | undefined {
   const { dependencies } = JSON.parse(readFileSync(cliPackageJsonPath, 'utf8')) as {
     dependencies?: Record<string, string>;
   };
-  const spec = dependencies?.vite;
-  return spec?.startsWith(VITE_PLUS_CORE_ALIAS_PREFIX)
-    ? spec.slice(VITE_PLUS_CORE_ALIAS_PREFIX.length)
-    : undefined;
+  return coreAliasVersion(dependencies?.vite);
 }
 
 function checkProjectCoreVersion(

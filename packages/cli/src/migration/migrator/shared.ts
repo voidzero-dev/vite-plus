@@ -3,12 +3,12 @@ import path from 'node:path';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import type { OxlintConfig } from 'oxlint';
-import { coerce, satisfies, tryParse } from 'verkit';
+import { coerce, isLessThan, satisfies, tryParse } from 'verkit';
 
 import {
   VITEST_VERSION,
-  VITE_PLUS_CORE_ALIAS_PREFIX,
   VITE_PLUS_OVERRIDE_PACKAGES,
+  coreAliasVersion,
 } from '../../utils/constants.ts';
 import { readJsonFile } from '../../utils/json.ts';
 import { detectPackageMetadata } from '../../utils/package.ts';
@@ -221,13 +221,11 @@ export const VITEST_IS_MANAGED_OVERRIDE = 'vitest' in VITE_PLUS_OVERRIDE_PACKAGE
  * fails against the installed core. Those versions need the `vite` peer rule
  * whatever the core version. An unknown version counts as a current pnpm.
  */
+const PNPM_PEERS_USE_ALIAS_TARGET_VERSION = '10.2.0';
+
 function pnpmAppliesAliasOverrideToPeers(pnpmVersion: string | undefined): boolean {
-  const version = pnpmVersion ? coerce(pnpmVersion) : undefined;
-  return (
-    version !== undefined &&
-    version !== null &&
-    (version.major < 10 || (version.major === 10 && version.minor < 2))
-  );
+  const version = pnpmVersion ? coerce(pnpmVersion) : null;
+  return version !== null && isLessThan(version, PNPM_PEERS_USE_ALIAS_TARGET_VERSION);
 }
 
 /**
@@ -246,16 +244,17 @@ function pnpmAppliesAliasOverrideToPeers(pnpmVersion: string | undefined): boole
  * owns the version scheme; the CLI cannot import it, so keep the two in sync.
  */
 export function vitePeerDependencyRuleRequired(
-  viteSpec: string | undefined = VITE_PLUS_OVERRIDE_PACKAGES.vite,
-  pnpmVersion?: string,
+  viteSpec: string | undefined,
+  pnpmVersion: string | undefined,
 ): boolean {
   if (pnpmAppliesAliasOverrideToPeers(pnpmVersion)) {
     return true;
   }
-  if (!viteSpec?.startsWith(VITE_PLUS_CORE_ALIAS_PREFIX)) {
+  const aliasVersion = coreAliasVersion(viteSpec);
+  if (aliasVersion === undefined) {
     return true;
   }
-  const version = tryParse(viteSpec.slice(VITE_PLUS_CORE_ALIAS_PREFIX.length));
+  const version = tryParse(aliasVersion);
   return (
     !version ||
     version.major < 8 ||

@@ -7,6 +7,7 @@ import { parse as parseYaml } from 'yaml';
 
 import { PackageManager, type WorkspaceInfo } from '../../types/index.js';
 import { VITE_PLUS_OVERRIDE_PACKAGES } from '../../utils/constants.js';
+import type { PnpmPeerDependencyRules as PeerDependencyRules } from '../migrator/shared.js';
 import { createMigrationReport } from '../report.js';
 
 // Keep the vite-plus spec stable; each test selects the core alias it needs.
@@ -28,8 +29,6 @@ const {
 
 const STABLE_CORE = 'npm:@voidzero-dev/vite-plus-core@8.3.5000';
 const PREVIEW_CORE = 'npm:@voidzero-dev/vite-plus-core@0.0.0-commit.0c515e3';
-
-type PeerDependencyRules = { allowAny?: string[]; allowedVersions?: Record<string, string> };
 
 function makeWorkspaceInfo(rootDir: string, version = '10.33.0'): WorkspaceInfo {
   return {
@@ -108,7 +107,7 @@ describe('vitePeerDependencyRuleRequired', () => {
     ['file:../voidzero-dev-vite-plus-core-8.3.5999.tgz', true],
     ['https://pkg.pr.new/voidzero-dev/vite-plus/@voidzero-dev/vite-plus-core@1891', true],
   ])('%s requires the rule: %s', (spec, required) => {
-    expect(vitePeerDependencyRuleRequired(spec)).toBe(required);
+    expect(vitePeerDependencyRuleRequired(spec, undefined)).toBe(required);
   });
 });
 

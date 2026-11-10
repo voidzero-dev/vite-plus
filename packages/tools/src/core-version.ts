@@ -23,7 +23,6 @@
  *   node packages/tools/src/core-version.ts check [--release]
  */
 
-import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 
@@ -268,36 +267,31 @@ function readManifest(url: URL): CoreManifest {
   return JSON.parse(readFileSync(url, 'utf8'));
 }
 
-function readPublishedCoreVersions(): string[] {
-  const output = execFileSync('npm', ['view', CORE_PACKAGE_NAME, 'versions', '--json'], {
-    encoding: 'utf8',
-  });
-  const versions: unknown = JSON.parse(output);
-  if (typeof versions === 'string') {
-    return [versions];
-  }
-  if (!Array.isArray(versions) || versions.some((version) => typeof version !== 'string')) {
-    throw new Error(`Unexpected output from npm view ${CORE_PACKAGE_NAME} versions`);
-  }
-  return versions;
-}
+const DEFAULT_NPM_REGISTRY = 'https://registry.npmjs.org';
 
-async function readPublishedCoreManifest(
-  core: string,
-): Promise<{ vitePlusVersion?: string } | undefined> {
-  const registry = (process.env.PUBLISH_REGISTRY ?? 'https://registry.npmjs.org').replace(
-    /\/+$/,
-    '',
-  );
-  const url = `${registry}/${CORE_PACKAGE_NAME.replace('/', '%2f')}/${core}`;
-  const response = await fetch(url, { signal: AbortSignal.timeout(60_000) });
+/**
+ * Reads the published core manifests by version from the full packument.
+ * `prepare` uses the version list, and `check --release` uses the
+ * `vitePlusVersion` field of one manifest. Returns an empty map when the
+ * package is not published.
+ */
+async function readPublishedCoreManifests(): Promise<Record<string, { vitePlusVersion?: string }>> {
+  const registry = (process.env.PUBLISH_REGISTRY ?? DEFAULT_NPM_REGISTRY).replace(/\/+$/, '');
+  const url = `${registry}/${CORE_PACKAGE_NAME.replace('/', '%2f')}`;
+  const response = await fetch(url, {
+    headers: { accept: 'application/json' },
+    signal: AbortSignal.timeout(60_000),
+  });
   if (response.status === 404) {
-    return undefined;
+    return {};
   }
   if (!response.ok) {
     throw new Error(`Registry returned HTTP ${response.status} for ${url}`);
   }
-  return (await response.json()) as { vitePlusVersion?: string };
+  const packument = (await response.json()) as {
+    versions?: Record<string, { vitePlusVersion?: string }>;
+  };
+  return packument.versions ?? {};
 }
 
 async function main(argv: string[]): Promise<void> {
@@ -321,7 +315,11 @@ async function main(argv: string[]): Promise<void> {
       if (!vitePlus) {
         throw new Error('prepare requires --vite-plus <version>');
       }
-      core.version = nextCoreVersion({ vite, vitePlus, published: readPublishedCoreVersions() });
+      core.version = nextCoreVersion({
+        vite,
+        vitePlus,
+        published: Object.keys(await readPublishedCoreManifests()),
+      });
       core.vitePlusVersion = vitePlus;
       writeFileSync(CORE_MANIFEST_URL, `${JSON.stringify(core, null, 2)}\n`);
       console.log(core.version);
@@ -335,7 +333,7 @@ async function main(argv: string[]): Promise<void> {
       assertCoreVersionMatchesVite(core, cli.version, { release: values.release });
       if (values.release) {
         assertCoreVersionUnclaimed(
-          await readPublishedCoreManifest(core.version),
+          (await readPublishedCoreManifests())[core.version],
           core.version,
           cli.version,
         );

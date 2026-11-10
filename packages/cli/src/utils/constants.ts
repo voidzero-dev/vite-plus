@@ -9,6 +9,13 @@ export const VITE_PLUS_CORE_NAME = '@voidzero-dev/vite-plus-core';
 // Projects and the CLI alias `vite` to the core: `vite: npm:@voidzero-dev/vite-plus-core@<version>`.
 export const VITE_PLUS_CORE_ALIAS_PREFIX = `npm:${VITE_PLUS_CORE_NAME}@`;
 
+/** Returns the version of a core alias spec, or `undefined` for any other spec. */
+export function coreAliasVersion(spec: string | undefined): string | undefined {
+  return spec?.startsWith(VITE_PLUS_CORE_ALIAS_PREFIX)
+    ? spec.slice(VITE_PLUS_CORE_ALIAS_PREFIX.length)
+    : undefined;
+}
+
 // The core version encodes the bundled Vite version (rfcs/core-version-alignment.md),
 // so it differs from the vite-plus version. Release, preview, and local CI builds
 // set the core manifest version before the build, so this is the packed version.

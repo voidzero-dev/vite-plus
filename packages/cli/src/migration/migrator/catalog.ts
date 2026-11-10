@@ -23,16 +23,15 @@ import {
   isAlignableVitestEcosystemPackage,
   isLegacyWrapperSpec,
   managedOverridePackages,
-  managedPeerDependencyRuleKeys,
   mergeManagedPnpmPeerDependencyRules,
-  isStaleAllowedVersion,
+  isManagedAllowedVersion,
   peerDependencyRulesHaveStaleEntry,
   pruneLegacyWrapperAliases,
   removeManagedVitestEntry,
   removeYamlMapVitestEntry,
   rewriteMonorepoProject,
   shouldDropProviderOverrideKey,
-  stalePeerDependencyRuleKeys,
+  pnpmPeerDependencyRuleKeys,
   workspaceUsesWebdriverioProvider,
 } from '../migrator.ts';
 import { type MigrationReport } from '../report.ts';
@@ -319,7 +318,7 @@ export function rewritePnpmWorkspaceYaml(
   writeWorkspaceSettings = true,
   catalogAdditions: ReadonlySet<string> = new Set(),
   usesWebdriverioProvider = false,
-  pnpmVersion?: string,
+  pnpmVersion: string | undefined,
 ): void {
   const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
   if (!fs.existsSync(pnpmWorkspaceYamlPath)) {
@@ -425,11 +424,11 @@ export function rewritePnpmWorkspaceYaml(
       }
     }
     // Drop lingering managed `vitest` and stale `vite` entries.
-    const stalePeerRuleKeys = stalePeerDependencyRuleKeys(usesVitest, pnpmVersion);
+    const peerRuleKeys = pnpmPeerDependencyRuleKeys(usesVitest, pnpmVersion);
+    const stalePeerRuleKeys = peerRuleKeys.stale;
     allowAny.items = allowAny.items.filter((n) => !stalePeerRuleKeys.includes(n.value));
-    const peerRuleKeys = managedPeerDependencyRuleKeys(usesVitest, pnpmVersion);
     const existing = new Set(allowAny.items.map((n) => n.value));
-    for (const key of peerRuleKeys) {
+    for (const key of peerRuleKeys.managed) {
       if (!existing.has(key)) {
         allowAny.add(scalarString(key));
       }
@@ -447,11 +446,11 @@ export function rewritePnpmWorkspaceYaml(
       allowedVersions = new YAMLMap<Scalar<string>, Scalar<string>>();
     }
     for (const key of stalePeerRuleKeys) {
-      if (isStaleAllowedVersion(key, allowedVersions.get(key), stalePeerRuleKeys)) {
+      if (isManagedAllowedVersion(key, allowedVersions.get(key))) {
         allowedVersions.delete(key);
       }
     }
-    for (const key of peerRuleKeys) {
+    for (const key of peerRuleKeys.managed) {
       // - vite: '*'
       allowedVersions.set(scalarString(key), scalarString('*'));
     }
@@ -1310,8 +1309,7 @@ export function rewriteRootWorkspacePackageJson(
           overrides: mergeManagedPnpmOverrides(pkg.pnpm?.overrides, managed),
           peerDependencyRules: mergeManagedPnpmPeerDependencyRules(
             pkg.pnpm?.peerDependencyRules,
-            workspaceUsesVitest,
-            pnpmVersion,
+            pnpmPeerDependencyRuleKeys(workspaceUsesVitest, pnpmVersion),
           ),
         };
       } else {
@@ -1456,7 +1454,7 @@ export function readPnpmWorkspacePeerDependencyRules(
 
 // Whether the root pnpm config (the package.json `pnpm` field or
 // pnpm-workspace.yaml) holds a `vite` peer rule.
-export function hasVitePeerDependencyRule(projectPath: string): boolean {
+function hasVitePeerDependencyRule(projectPath: string): boolean {
   if (
     peerDependencyRulesHaveStaleEntry(readPnpmWorkspacePeerDependencyRules(projectPath), ['vite'])
   ) {
@@ -1475,12 +1473,12 @@ export function trackVitePeerDependencyRuleRemoval(
   projectPath: string,
   packageManager: PackageManager,
   report: MigrationReport | undefined,
-  pnpmVersion?: string,
+  pnpmVersion: string | undefined,
 ): () => void {
   if (
     !report ||
     packageManager !== PackageManager.pnpm ||
-    vitePeerDependencyRuleRequired(undefined, pnpmVersion) ||
+    vitePeerDependencyRuleRequired(VITE_PLUS_OVERRIDE_PACKAGES.vite, pnpmVersion) ||
     !hasVitePeerDependencyRule(projectPath)
   ) {
     return () => {};

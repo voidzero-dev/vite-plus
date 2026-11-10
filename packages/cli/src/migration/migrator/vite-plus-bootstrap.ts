@@ -27,8 +27,8 @@ import {
   isLegacyWrapperSpec,
   isProtocolPinnedSpec,
   managedOverridePackages,
-  managedPeerDependencyRuleKeys,
   mergeManagedPnpmPeerDependencyRules,
+  type PnpmPeerDependencyRuleKeys,
   peerDependencyRulesHaveStaleEntry,
   migratePnpmSettingsToWorkspaceYaml,
   normalizeVitestPeerCatalogSpec,
@@ -48,7 +48,7 @@ import {
   rewritePnpmWorkspaceYaml,
   rewriteYarnrcYml,
   setDirectViteEdge,
-  stalePeerDependencyRuleKeys,
+  pnpmPeerDependencyRuleKeys,
   takePnpmWorkspaceSettings,
   trackVitePeerDependencyRuleRemoval,
   vitestEcosystemCatalogReferencesPending,
@@ -218,22 +218,15 @@ function pnpmPeerDependencyRulesSatisfyVitePlus(
   peerDependencyRules:
     | { allowAny?: string[]; allowedVersions?: Record<string, string> }
     | undefined,
-  usesVitest: boolean,
-  pnpmVersion: string | undefined,
+  { managed, stale }: PnpmPeerDependencyRuleKeys,
 ): boolean {
   // A lingering managed `vitest` rule or a stale `vite` rule is NOT satisfied.
-  if (
-    peerDependencyRulesHaveStaleEntry(
-      peerDependencyRules,
-      stalePeerDependencyRuleKeys(usesVitest, pnpmVersion),
-    )
-  ) {
+  if (peerDependencyRulesHaveStaleEntry(peerDependencyRules, stale)) {
     return false;
   }
   const allowAny = new Set(peerDependencyRules?.allowAny ?? []);
   const allowedVersions = peerDependencyRules?.allowedVersions ?? {};
-  const ruleKeys = managedPeerDependencyRuleKeys(usesVitest, pnpmVersion);
-  return ruleKeys.every((key) => allowAny.has(key) && allowedVersions[key] === '*');
+  return managed.every((key) => allowAny.has(key) && allowedVersions[key] === '*');
 }
 
 function npmVitePlusManagedDependenciesPending(
@@ -775,8 +768,7 @@ export function detectVitePlusBootstrapPending(
           ) ||
           !pnpmPeerDependencyRulesSatisfyVitePlus(
             pkg.pnpm?.peerDependencyRules,
-            usesVitest,
-            detectedPackageManagerVersion,
+            pnpmPeerDependencyRuleKeys(usesVitest, detectedPackageManagerVersion),
           )
         );
       }
@@ -791,8 +783,7 @@ export function detectVitePlusBootstrapPending(
         ) ||
         !pnpmPeerDependencyRulesSatisfyVitePlus(
           pkg.pnpm?.peerDependencyRules,
-          usesVitest,
-          detectedPackageManagerVersion,
+          pnpmPeerDependencyRuleKeys(usesVitest, detectedPackageManagerVersion),
         )
       );
     }
@@ -808,8 +799,7 @@ export function detectVitePlusBootstrapPending(
       ) ||
       !pnpmPeerDependencyRulesSatisfyVitePlus(
         readPnpmWorkspacePeerDependencyRules(projectPath),
-        usesVitest,
-        detectedPackageManagerVersion,
+        pnpmPeerDependencyRuleKeys(usesVitest, detectedPackageManagerVersion),
       ) ||
       pnpmWorkspaceMinimumReleaseAgeExemptionsPending(projectPath)
     );
@@ -934,14 +924,12 @@ function ensureOverrideEntries(
 
 function ensurePnpmPeerDependencyRules(
   pkg: BootstrapPackageJson,
-  usesVitest: boolean,
-  pnpmVersion: string | undefined,
+  peerRuleKeys: PnpmPeerDependencyRuleKeys,
 ): boolean {
   pkg.pnpm ??= {};
   const peerDependencyRules = mergeManagedPnpmPeerDependencyRules(
     pkg.pnpm.peerDependencyRules,
-    usesVitest,
-    pnpmVersion,
+    peerRuleKeys,
   );
   const changed =
     JSON.stringify(pkg.pnpm.peerDependencyRules ?? {}) !==
@@ -1131,8 +1119,7 @@ export function ensureVitePlusBootstrap(
       packageJsonChanged =
         ensurePnpmPeerDependencyRules(
           pkg,
-          usesVitest,
-          workspaceInfo.downloadPackageManager.version,
+          pnpmPeerDependencyRuleKeys(usesVitest, workspaceInfo.downloadPackageManager.version),
         ) || packageJsonChanged;
       if (pnpmMajorVersion !== undefined && pkg.pnpm) {
         const beforePnpm = JSON.stringify(pkg.pnpm);
@@ -1232,8 +1219,7 @@ export function ensureVitePlusBootstrap(
         ) ||
         !pnpmPeerDependencyRulesSatisfyVitePlus(
           readPnpmWorkspacePeerDependencyRules(projectPath),
-          usesVitest,
-          workspaceInfo.downloadPackageManager.version,
+          pnpmPeerDependencyRuleKeys(usesVitest, workspaceInfo.downloadPackageManager.version),
         )
       ) {
         rewritePnpmWorkspaceYaml(
