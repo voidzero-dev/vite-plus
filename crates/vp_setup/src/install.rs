@@ -122,7 +122,7 @@ pub async fn extract_platform_package(
 
 /// The pnpm version pinned in the wrapper package.json for global installs.
 /// This ensures consistent install behavior regardless of the user's global pnpm version.
-const PINNED_PNPM_VERSION: &str = "10.34.7";
+const PINNED_PNPM_VERSION: &str = "10.34.9";
 
 /// Integrity of the pinned pnpm npm tarball, in the `packageManager` hash
 /// format (`sha512.<hex>`). Setup verifies the downloaded pnpm against this
@@ -134,7 +134,7 @@ const PINNED_PNPM_VERSION: &str = "10.34.7";
 /// `PINNED_PNPM_VERSION`. A genuine registry or mirror serves identical bytes
 /// and still matches it, so private registries keep working. Update this value
 /// together with `PINNED_PNPM_VERSION`.
-const PINNED_PNPM_INTEGRITY: &str = "sha512.ba98abc585539933375b5971f4bc6d6c73a1b4b7edc4a879e7d102fe5423d1e02309d67c60a11f04955093a96e521ad9c3b138cdd654ca5be563f378b3ae48bd";
+const PINNED_PNPM_INTEGRITY: &str = "sha512.f49b5a8ea0fdedb44bb3c0c1d6575092a53c2950d95b7ad15df11f17974877a2de3a01c07e934e9b28ce716e51c09a94962c7306d09be2e1e4b18a8c8762fd32";
 
 /// A reused target version must run its own setup again before accepting commands.
 pub async fn clear_self_setup_marker(version_dir: &AbsolutePath) -> Result<(), Error> {
