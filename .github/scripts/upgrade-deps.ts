@@ -477,8 +477,12 @@ function writeMetaFiles(): void {
     JSON.stringify(versionsObj, null, 2) + '\n',
   );
 
-  const changed = [...changes.entries()].filter(([, v]) => v.old !== v.new);
-  const unchanged = [...changes.entries()].filter(([, v]) => v.old === v.new);
+  // Keep the integrity in versions.json, but report the installer as one dependency.
+  const dependencies = [...changes.entries()].filter(
+    ([name]) => name !== 'pnpm installer integrity',
+  );
+  const changed = dependencies.filter(([, v]) => v.old !== v.new);
+  const unchanged = dependencies.filter(([, v]) => v.old === v.new);
 
   const commitLines = ['feat(deps): upgrade upstream dependencies', ''];
   if (changed.length) {

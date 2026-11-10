@@ -406,6 +406,8 @@ jobs:
                Include the version and a short 7-char SHA in both `From` and `To` for `rolldown`
                and `vite`. Link each SHA label to the full commit in the official repository.
                Omit packages whose old and new values are equal.
+               Report the pnpm installer version only; omit its integrity hash from this table
+               and the unchanged dependency list.
                Keep the baseline list of unchanged dependencies after the table.
             3. `## Code changes` — bullet list of the actual non-version edits, each naming
                the file(s) touched. If the only changes are version bumps + lockfile + generated
