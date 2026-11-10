@@ -8478,7 +8478,6 @@ dependencies = [
  "futures",
  "httpmock",
  "indexmap",
- "indicatif",
  "indoc",
  "js-semver",
  "oxc_resolver",
