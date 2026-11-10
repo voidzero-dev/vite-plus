@@ -50,6 +50,122 @@ Projects keep the same alias in their manifests, overrides, catalogs, and
 resolutions. `vp migrate` stops adding `vite` to pnpm `peerDependencyRules`
 and removes the entry that earlier migrations wrote.
 
+## Before and after
+
+This section shows the effect for users. The "before" output comes from
+issue #2806. The "after" output comes from the `core_peer_dependency_checks`
+snapshot cases, the recorded migration snapshots, and the review experiments
+against the packed checkout (`vite-plus` `1.5.1`, core `8.3.7000`, Vitest
+`5.1.0`; pnpm 12.11.2, npm 11.19.1, Yarn 4.18.1, Bun 1.4.4).
+
+### Versions
+
+| Release           | Bundled Vite | Core version before | Core version after |
+| ----------------- | ------------ | ------------------- | ------------------ |
+| `vite-plus@1.5.1` | `8.3.7`      | `1.5.1`             | `8.3.7000`         |
+
+Before, the core version said nothing about Vite. After, `8.3.7000` reads as
+Vite `8.3.7`, release counter 0.
+
+### pnpm with `strictPeerDependencies`, compatible plugins
+
+Before (#2806, core `1.0.0-rc.0`), the install failed on Vitest's own peer:
+
+```text
+[ERR_PNPM_PEER_DEP_ISSUES] Unmet peer dependencies
+
+✕ unmet peer vite
+  Installed: 1.0.0-rc.0
+  Wanted:
+    "^6.0.0 || ^7.0.0 || ^8.0.0":
+      @vitest/mocker@5.0.1
+    "^6.4.0 || ^7.0.0 || ^8.0.0":
+      vitest@5.0.1
+```
+
+The only fix was the broad rule `allowAny: [vite]` and `allowedVersions: { vite: '*' }`.
+
+After, the same install succeeds with no peer rule, both with and without the
+`vite@*` alias override that `vp migrate` writes. A plugin with the peer range
+`^8.0.0` also installs.
+
+### pnpm, a plugin that does not support the bundled Vite
+
+Before, the broad rule hid it: a plugin with the peer range `^7.0.0` installed
+with no message.
+
+After, pnpm reports it, and the install fails under `strictPeerDependencies`:
+
+```text
+[ERR_PNPM_PEER_DEP_ISSUES] Unmet peer dependencies
+
+✕ unmet peer vite
+  Installed: 8.3.7000
+  Wanted:
+    ^7.0.0:
+      vite-plugin-legacy@1.0.0
+```
+
+Yarn reports the same plugin:
+
+```text
+➤ YN0060: │ vite is listed by your project with version 8.3.7000 (p6facb0), which doesn't satisfy what vite-plugin-legacy requests (^7.0.0).
+```
+
+### What `vp migrate` changes in `pnpm-workspace.yaml`
+
+For a project on pnpm 10.2.0 or later, migration removes the rule that it wrote
+earlier and names the change in its summary:
+
+```diff
+ overrides:
+   vite@*: 'catalog:'
+-peerDependencyRules:
+-  allowAny:
+-    - vite
+-  allowedVersions:
+-    vite: '*'
+ catalog:
+   vite: npm:@voidzero-dev/vite-plus-core@<version>
+```
+
+```text
+• Package manager settings configured
+• Removed `vite` from pnpm peerDependencyRules: the core version now matches the bundled Vite
+```
+
+On pnpm before 10.2.0, and for preview and prerelease cores, the rule stays.
+
+### npm
+
+Before (#2806), every `npm install` of a project with `vite-plus` printed
+warnings from the `vite-plus` dependency tree itself, and npm had no
+per-package way to silence them:
+
+```text
+npm warn While resolving: vitest@5.0.1
+npm warn Found: vite@1.0.0
+npm warn Could not resolve dependency:
+npm warn peer vite@"^6.4.0 || ^7.0.0 || ^8.0.0" from vitest@5.0.1
+```
+
+After, the same projects install with no `ERESOLVE` output. This holds for a
+project that declares only `vite-plus`, and for one with the `vite` alias.
+
+### Summary by package manager
+
+| Package manager    | Compatible plugin                               | Incompatible plugin (`^7.0.0`)                       | `vite` peer rule |
+| ------------------ | ----------------------------------------------- | ---------------------------------------------------- | ---------------- |
+| pnpm 10.2.0+       | Before: warning or failure. After: passes       | Before: hidden. After: warning, failure under strict | Removed          |
+| pnpm before 10.2.0 | Unchanged: passes with the rule                 | Unchanged: hidden by the rule                        | Kept             |
+| npm                | Before: `ERESOLVE` warnings. After: no warnings | Not reported with `overrides.vite`, before and after | Not used         |
+| Yarn               | Before: `YN0060`. After: passes                 | After: `YN0060`                                      | Not used         |
+| Bun                | No peer messages, before and after              | Not reported, before and after                       | Not used         |
+
+The `vite` and `vitest` overrides and resolutions stay on every package
+manager. They keep one core instance and one Vitest instance, which the version
+scheme does not replace (see Migration).
+
 ## Problem
 
 A migrated project aliases `vite` to the core package:
