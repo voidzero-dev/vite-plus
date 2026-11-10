@@ -1,7 +1,10 @@
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { coerce, isGreaterThanOrEqual } from 'verkit';
 
-import { downloadPackageManager as downloadPackageManagerBinding } from '../../binding/index.js';
+import {
+  downloadPackageManager as downloadPackageManagerBinding,
+  type DownloadPackageManagerResult,
+} from '../../binding/index.js';
 import { PackageManager } from '../types/index.ts';
 import { isPnpmIgnoredBuildsError, parseInstallGatedBuilds } from './approve-builds.ts';
 import { getVpCommand, runCommandSilently } from './command.ts';
@@ -81,13 +84,15 @@ export async function downloadPackageManager(
   interactive?: boolean,
   silent = false,
   cwd?: string,
-) {
+  expectedHash?: string,
+): Promise<DownloadPackageManagerResult> {
   const spinner = silent ? getSilentSpinner() : getSpinner(interactive);
   spinner.start(`${packageManager}@${version} installing...`);
   const downloadResult = await downloadPackageManagerBinding({
     name: packageManager,
     version,
     cwd,
+    expectedHash,
   });
   spinner.stop(`${packageManager}@${downloadResult.version} installed`);
   return downloadResult;
@@ -101,6 +106,8 @@ export async function runViteInstall(
     silent?: boolean;
     packageManager?: PackageManager;
     packageManagerVersion?: string;
+    /** Keep creation's resolved version when installation runs in the generated project. */
+    packageManagerOverride?: string;
     /**
      * Surface the package manager's gated build scripts instead of suppressing
      * them. When set, the auto `--ignore-scripts` workaround is skipped (so
@@ -111,7 +118,7 @@ export async function runViteInstall(
      */
     detectIgnoredBuilds?: boolean;
   },
-) {
+): Promise<CommandRunSummary> {
   // Reconcile the project's registry with this build before installing: a
   // preview/test build points it at the registry bridge so the
   // `0.0.0-commit.<sha>` versions migrate/create just pinned resolve (npmjs has
@@ -147,7 +154,9 @@ export async function runViteInstall(
   const { exitCode, stderr, stdout } = await runCommandSilently({
     ...getVpCommand(['install', ...installArgs]),
     cwd,
-    envs: process.env,
+    envs: options?.packageManagerOverride
+      ? { ...process.env, VP_PACKAGE_MANAGER: options.packageManagerOverride }
+      : process.env,
   });
   const combinedOutput = `${stdout.toString()}\n${stderr.toString()}`;
   const pendingBuilds = detectIgnoredBuilds

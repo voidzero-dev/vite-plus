@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { coerce, isGreaterThanOrEqual } from 'verkit';
+import { coerce, isGreaterThanOrEqual, isLessThan } from 'verkit';
 import { Scalar, YAMLMap, YAMLSeq } from 'yaml';
 
 import { PackageManager, type WorkspacePackage } from '../../types/index.ts';
@@ -83,6 +83,13 @@ function versionAtLeast(version: string, minVersion: string, tags: string[]): bo
     return isGreaterThanOrEqual(coerced, minVersion);
   }
   return tags.includes(version);
+}
+
+// The packages field became optional in pnpm 10.5.0.
+// https://github.com/pnpm/pnpm/releases/tag/v10.5.0
+export function pnpmRequiresWorkspacePackages(version: string): boolean {
+  const coerced = coerce(version);
+  return coerced ? isLessThan(coerced, '10.5.0') : false;
 }
 
 const PNPM_WORKSPACE_SETTINGS_MIN_VERSION = '10.6.2';

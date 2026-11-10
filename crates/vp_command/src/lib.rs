@@ -283,6 +283,10 @@ where
             fspy::PathAccess::Write(path) => (path, AccessMode::WRITE),
             fspy::PathAccess::ReadWrite(path) => (path, AccessMode::READ | AccessMode::WRITE),
             fspy::PathAccess::ReadDir(path) => (path, AccessMode::READ_DIR),
+            // fspy records rename destinations and `mkdir` calls for vite-task's
+            // cache. They aren't reads or writes of the path itself, so they stay
+            // out of this map, as before fspy reported them.
+            fspy::PathAccess::RenameTarget(_) | fspy::PathAccess::Mkdir(_) => continue,
         };
         let relative_path = ipc_path
             .strip_path_prefix(cwd, |strip_result| {
