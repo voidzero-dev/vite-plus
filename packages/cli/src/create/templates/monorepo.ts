@@ -14,6 +14,7 @@ import { editYamlFile, readYamlFile } from '../../utils/yaml.ts';
 import type { ExecutionWithProjectDir } from '../command.ts';
 import { discoverTemplate } from '../discovery.ts';
 import { copyDir, formatDisplayTargetDir, renameFiles, setPackageName } from '../utils.ts';
+import { prepareLibraryPackage } from './library.ts';
 import { runRemoteTemplateCommand } from './remote.ts';
 import { type BuiltinTemplateInfo, LibraryTemplateRepo } from './types.ts';
 
@@ -152,7 +153,7 @@ export async function executeMonorepoTemplate(
     ? `${workspaceInfo.monorepoScope}/utils`
     : 'utils';
   const libraryProjectPath = path.join(fullPath, libraryDir);
-  setPackageName(libraryProjectPath, libraryPackageName);
+  prepareLibraryPackage(libraryProjectPath, libraryPackageName);
   removeNestedLibraryToolConfig(libraryProjectPath);
   // Perform auto-migration on the created library
   rewriteMonorepoProject(
