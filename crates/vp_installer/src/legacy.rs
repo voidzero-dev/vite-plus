@@ -40,7 +40,7 @@ pub(super) async fn install(
     if !same_version {
         let install_dir = &dirs.data;
         let version_dir = install_dir.join(target_version);
-        tokio::fs::create_dir_all(&version_dir).await?;
+        let created = install::create_version_dir(&version_dir).await?;
 
         let result = install_new_version(
             opts,
@@ -52,9 +52,8 @@ pub(super) async fn install(
         )
         .await;
 
-        // On failure, clean up the partial version directory (matches vp upgrade behavior)
         if result.is_err() {
-            let _ = tokio::fs::remove_dir_all(&version_dir).await;
+            install::discard_failed_version_dir(&version_dir, created).await;
         }
 
         result?;

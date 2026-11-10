@@ -196,7 +196,7 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
         options.force,
     );
     let version_dir = install_dir.join(&install_dir_name);
-    tokio::fs::create_dir_all(&version_dir).await?;
+    let created = install::create_version_dir(&version_dir).await?;
 
     // Step 9: Extract platform binary and install via npm
     let result = install_platform_and_main(
@@ -211,10 +211,8 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
     )
     .await;
 
-    // On failure, clean up the version directory
     if result.is_err() {
-        tracing::debug!("Cleaning up failed install at {}", version_dir.as_path().display());
-        let _ = tokio::fs::remove_dir_all(&version_dir).await;
+        install::discard_failed_version_dir(&version_dir, created).await;
     }
 
     result
