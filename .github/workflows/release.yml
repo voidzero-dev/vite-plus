@@ -40,6 +40,19 @@ jobs:
         id: core-version
         run: echo "version=$(node -p "require('./packages/core/package.json').version")" >> "$GITHUB_OUTPUT"
 
+      # Fail before the build and the approval wait when the core version is
+      # stale or another release already published it. The Release job checks
+      # again before it publishes.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: steps.version.outputs.changed == 'true'
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+
+      - name: Check core version
+        if: steps.version.outputs.changed == 'true'
+        run: node packages/tools/src/core-version.ts check --release
+
   build-rust:
     name: Build bindings and binaries
     needs: check

@@ -226,6 +226,9 @@ export const VITEST_IS_MANAGED_OVERRIDE = 'vitest' in VITE_PLUS_OVERRIDE_PACKAGE
  * (`0.0.0-commit.<sha>`), a Vite+ prerelease (`8.4.0-vp.0` fails `^8.0.0`), a
  * `1.x` core from before the alignment, a dist-tag, or a `file:` or URL spec
  * whose version is unknown.
+ *
+ * Major 8 is the first aligned core major. `packages/tools/src/core-version.ts`
+ * owns the version scheme; the CLI cannot import it, so keep the two in sync.
  */
 export function vitePeerDependencyRuleRequired(
   viteSpec: string | undefined = VITE_PLUS_OVERRIDE_PACKAGES.vite,

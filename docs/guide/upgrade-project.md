@@ -18,7 +18,18 @@ On a project that is already on Vite+, migrate does a toolchain version upgrade 
 
 ## Manually Updating
 
-Update `vite-plus` and the `vite` alias to `@voidzero-dev/vite-plus-core` together. The two packages have different versions: the core version encodes the bundled Vite version (for example, `8.3.500` for Vite `8.3.5`). After you update `vite-plus`, set the alias to the version that `vp toolchain vite-plus-core` shows. Update these entries wherever they are declared in your workspace, including overrides or catalogs, then install dependencies to refresh the lockfile. Also [update the Vitest pin](#updating-the-vitest-pin) to match the bundled version.
+Update `vite-plus` and the `vite` alias to `@voidzero-dev/vite-plus-core` together. The two packages have different versions: the core version encodes the bundled Vite version (for example, `8.3.500` for Vite `8.3.5`). Read the alias that a `vite-plus` version uses before you install it:
+
+```bash
+npm view vite-plus@<version> dependencies.vite
+# npm:@voidzero-dev/vite-plus-core@<core-version>
+```
+
+Set the `vite` alias to that value. Update these entries wherever they are declared in your workspace, including overrides or catalogs, then install dependencies to refresh the lockfile. Also [update the Vitest pin](#updating-the-vitest-pin) to match the bundled version. After the install, `vp toolchain vite-plus-core` shows the same core version.
+
+### Dependency Bots
+
+Dependabot and Renovate see `vite-plus` and the `vite` alias as two separate dependencies with different versions. A bot can update one without the other. Vite+ then stops before it runs a Vite command and asks you to run `vp migrate`. Before you merge a bot update, check that the `vite` alias matches the output of `npm view vite-plus@<version> dependencies.vite`. If it does not match, run `vp migrate` on the bot's branch. Migrate pins the matching alias, the overrides, and the Vitest version.
 
 Without the global CLI, run the `vp` commands on this page through your package manager, for example `pnpm exec vp toolchain vitest`.
 
