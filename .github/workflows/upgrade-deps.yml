@@ -326,6 +326,14 @@ jobs:
         run: |
           set -euo pipefail
           node packages/tools/src/check-rolldown-compat.ts
+          # Earlier native builds or restored caches can use a different C compiler.
+          # CMake can drop its install prefix when that compiler changes. Clear its
+          # configuration before rebuilding, while keeping compiled Rust dependencies.
+          target_dir="${CARGO_TARGET_DIR:-target}"
+          if [[ -d "$target_dir" ]]; then
+            find "$target_dir" -type f -name CMakeCache.txt -delete
+            find "$target_dir" -type d -name CMakeFiles -prune -exec rm -rf -- {} +
+          fi
           pnpm bootstrap-cli
           export PATH="$HOME/.vite-plus/bin:$PATH"
           pnpm test:unit
