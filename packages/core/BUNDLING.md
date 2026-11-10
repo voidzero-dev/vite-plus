@@ -316,7 +316,7 @@ dist/
 1. Update the Vite pin in [`packages/tools/.upstream-versions.json`](../tools/.upstream-versions.json) and review the resolver patch against the new source
 2. Follow the [upstream sync and build instructions](../../CONTRIBUTING.md#pull-upstream-dependencies) to prepare the source, regenerate Vite types, and rebuild the packages
 3. Verify `bundledVersions.vite` in `package.json` is updated
-4. Set `version` in `package.json` to the encoded version for the new Vite version, for example `8.4.200` for Vite `8.4.2` (see [Core Version](#core-version)). The upgrade-deps workflow does this step automatically
+4. Set `version` in `package.json` to the encoded version for the new Vite version, for example `8.4.2000` for Vite `8.4.2` (see [Core Version](#core-version)). The upgrade-deps workflow does this step automatically
 5. Test with `pnpm test`
 
 ### Updating Rolldown
@@ -411,14 +411,14 @@ This is automatically updated by `mergePackageJson()` during each build.
 
 The core version encodes `bundledVersions.vite`, so it differs from the `vite-plus` version. Package managers compare the version of the `vite` alias target with the `vite` peer ranges of plugins, so the encoded version makes those checks match the bundled Vite. See [the RFC](../../rfcs/core-version-alignment.md) for the design.
 
-| Release                                 | Core version                                       | Example                          |
-| --------------------------------------- | -------------------------------------------------- | -------------------------------- |
-| Stable `vite-plus`                      | `<vite major>.<vite minor>.<vite patch * 100 + n>` | Vite `8.3.5`, `n = 1`: `8.3.501` |
-| `vite-plus` prerelease, stable Vite     | `<next stable core version>-vp.<k>`                | `8.4.0-vp.0`                     |
-| `vite-plus` prerelease, Vite prerelease | `<vite version>.vp.<k>`                            | `9.0.0-beta.3.vp.0`              |
-| Local and CI builds                     | `n = 99`                                           | `8.3.599`                        |
+| Release                                 | Core version                                        | Example                           |
+| --------------------------------------- | --------------------------------------------------- | --------------------------------- |
+| Stable `vite-plus`                      | `<vite major>.<vite minor>.<vite patch * 1000 + n>` | Vite `8.3.5`, `n = 1`: `8.3.5001` |
+| `vite-plus` prerelease, stable Vite     | `<next stable core version>-vp.<k>`                 | `8.4.0-vp.0`                      |
+| `vite-plus` prerelease, Vite prerelease | `<vite version>.vp.<k>`                             | `9.0.0-beta.3.vp.0`               |
+| Local and CI builds                     | `n = 999`                                           | `8.3.5999`                        |
 
-`n` counts the stable releases on one Vite version, from 0 to 98. `k` counts the prereleases on one base. [`packages/tools/src/core-version.ts`](../tools/src/core-version.ts) implements the scheme:
+`n` counts the stable releases on one Vite version, from 0 to 998. `k` counts the prereleases on one base. This follows the [`oxlint-tsgolint` versioning](https://github.com/oxc-project/tsgolint#versioning), where `7.0.2000` is the first release on TypeScript `7.0.2`. [`packages/tools/src/core-version.ts`](../tools/src/core-version.ts) implements the scheme:
 
 - `prepare_release.yml` runs `core-version.ts prepare` to select the next unpublished version from the registry. It writes that version and the `vite-plus` version (`vitePlusVersion`) to `package.json`.
 - `release.yml` runs `core-version.ts check --release`. It fails when the registry already holds the core version for a different `vite-plus` release.

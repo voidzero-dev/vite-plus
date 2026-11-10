@@ -99,7 +99,7 @@ describe('resolveCore', () => {
   });
 
   it.each([
-    ['0.0.0', '8.3.599'],
+    ['0.0.0', '8.3.5999'],
     ['0.0.0-commit.1234567', '0.0.0-commit.1234567'],
   ])('uses the installed CLI manifest after repacking as %s', (version, coreVersion) => {
     writeCli(join(root, 'cli'), version, `npm:@voidzero-dev/vite-plus-core@${coreVersion}`);
@@ -112,11 +112,11 @@ describe('resolveCore', () => {
   it.each(['project', 'bundled'])(
     'still rejects a mismatched %s core after repacking the CLI',
     (location) => {
-      writeCli(join(root, 'cli'), '0.0.0', 'npm:@voidzero-dev/vite-plus-core@8.3.599');
-      writeCore(bundled, '@voidzero-dev/vite-plus-core', '8.3.599');
+      writeCli(join(root, 'cli'), '0.0.0', 'npm:@voidzero-dev/vite-plus-core@8.3.5999');
+      writeCore(bundled, '@voidzero-dev/vite-plus-core', '8.3.5999');
       writeCore(location === 'project' ? projectCore : bundled);
       expect(() => resolveCore('', project, cliModule)).toThrow(
-        `Expected @voidzero-dev/vite-plus-core@8.3.599, but found @voidzero-dev/vite-plus-core@${CORE_VERSION}`,
+        `Expected @voidzero-dev/vite-plus-core@8.3.5999, but found @voidzero-dev/vite-plus-core@${CORE_VERSION}`,
       );
     },
   );

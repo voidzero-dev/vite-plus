@@ -5,11 +5,11 @@
  * `vite` peer ranges against the alias `vite: npm:@voidzero-dev/vite-plus-core@...`
  * correctly:
  *
- *   stable Vite+ release:          <vite major>.<vite minor>.<vite patch * 100 + n>
+ *   stable Vite+ release:          <vite major>.<vite minor>.<vite patch * 1000 + n>
  *   Vite+ prerelease, stable Vite: <next stable core version>-vp.<k>
  *   Vite+ prerelease, Vite pre:    <vite version>.vp.<k>
  *
- * `n` counts the stable Vite+ releases on one Vite version (0 to 98). `n = 99`
+ * `n` counts the stable Vite+ releases on one Vite version (0 to 998). `n = 999`
  * is reserved for local and CI builds, so they never collide with a published
  * version. `k` counts the Vite+ prereleases on one base.
  *
@@ -30,8 +30,12 @@ import { parseArgs } from 'node:util';
 export const CORE_PACKAGE_NAME = '@voidzero-dev/vite-plus-core';
 /** The `vite` alias to the core: `npm:@voidzero-dev/vite-plus-core@<version>`. */
 export const CORE_ALIAS_PREFIX = `npm:${CORE_PACKAGE_NAME}@`;
-const MAX_RELEASE_COUNTER = 98;
-const LOCAL_BUILD_COUNTER = 99;
+// Same convention as oxlint-tsgolint, which Vite+ bundles: `7.0.2000` is its
+// first release on TypeScript `7.0.2`, and `7.0.2001` the next one
+// (https://github.com/oxc-project/tsgolint#versioning).
+const PATCH_FACTOR = 1000;
+const MAX_RELEASE_COUNTER = 998;
+const LOCAL_BUILD_COUNTER = 999;
 
 const PRERELEASE_TAG = 'vp';
 const VERSION_RE =
@@ -79,7 +83,7 @@ export function encodeCoreVersion(vite: string, n: number): string {
   if (!Number.isInteger(n) || n < 0 || n > LOCAL_BUILD_COUNTER) {
     throw new Error(`The release counter must be an integer from 0 to ${LOCAL_BUILD_COUNTER}`);
   }
-  return `${major}.${minor}.${patch * 100 + n}`;
+  return `${major}.${minor}.${patch * PATCH_FACTOR + n}`;
 }
 
 /**
@@ -93,16 +97,16 @@ export function initialCoreVersion(vite: string): string {
 /** Decodes a core version into the bundled Vite version and its counters. */
 export function decodeCoreVersion(core: string): DecodedCoreVersion {
   const { major, minor, patch, prerelease } = parseVersion(core);
-  const stableVite = `${major}.${minor}.${Math.floor(patch / 100)}`;
+  const stableVite = `${major}.${minor}.${Math.floor(patch / PATCH_FACTOR)}`;
   if (prerelease.length === 0) {
-    return { vite: stableVite, n: patch % 100 };
+    return { vite: stableVite, n: patch % PATCH_FACTOR };
   }
   const k = prerelease.at(-1)!;
   if (prerelease.at(-2) !== PRERELEASE_TAG || !/^(?:0|[1-9]\d*)$/.test(k)) {
     throw new Error(`${core} is not an encoded core version`);
   }
   if (prerelease.length === 2) {
-    return { vite: stableVite, n: patch % 100, k: Number(k) };
+    return { vite: stableVite, n: patch % PATCH_FACTOR, k: Number(k) };
   }
   return {
     vite: `${major}.${minor}.${patch}-${prerelease.slice(0, -2).join('.')}`,

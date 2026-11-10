@@ -108,7 +108,7 @@ jobs:
           # (including bun) resolving the standard
           # `vite -> npm:@voidzero-dev/vite-plus-core@<version>` alias. Pin
           # the CLI to 0.0.0 and core to its local version (release counter
-          # 99, for example 8.3.599) so a correctly installed local build is
+          # 999, for example 8.3.5999) so a correctly installed local build is
           # always distinguishable from any published version, even on a
           # release commit that leaves packages/{core,cli} at a published
           # version. The local core version still encodes the bundled Vite,

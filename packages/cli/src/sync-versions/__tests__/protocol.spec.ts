@@ -6,7 +6,7 @@ const manifest = {
   schemaVersion: 1,
   nodes: [
     { id: 'vite-plus', version: '0.4.0' },
-    { id: 'vite-plus-core', version: '8.3.500' },
+    { id: 'vite-plus-core', version: '8.3.5000' },
     { id: 'vitest', version: '5.0.0' },
   ],
 };
@@ -53,7 +53,7 @@ describe('toolchainFromManifest', () => {
   it('reads the exact Vite+, core, and Vitest versions', () => {
     expect(toolchainFromManifest(manifest)).toEqual({
       vitePlus: '0.4.0',
-      vitePlusCore: '8.3.500',
+      vitePlusCore: '8.3.5000',
       vitest: '5.0.0',
     });
   });
@@ -73,7 +73,7 @@ describe('toolchainFromManifest', () => {
       schemaVersion: 1,
       nodes: [
         { id: 'vite-plus', version: '0.4.0' },
-        { id: 'vite-plus-core', version: '8.3.500' },
+        { id: 'vite-plus-core', version: '8.3.5000' },
         { id: 'vitest', version: '' },
       ],
     },

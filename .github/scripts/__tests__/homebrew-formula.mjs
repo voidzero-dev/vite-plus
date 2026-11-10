@@ -153,9 +153,9 @@ await test('reads the core version from the published CLI alias', async () => {
   assert.equal(
     await publishedCoreVersion(
       version,
-      manifest({ vite: 'npm:@voidzero-dev/vite-plus-core@8.3.501' }),
+      manifest({ vite: 'npm:@voidzero-dev/vite-plus-core@8.3.5001' }),
     ),
-    '8.3.501',
+    '8.3.5001',
   );
   await assert.rejects(
     publishedCoreVersion(version, manifest({ vite: '^8.0.0' })),

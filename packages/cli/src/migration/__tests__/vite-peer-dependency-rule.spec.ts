@@ -26,7 +26,7 @@ const {
   vitePeerDependencyRuleRequired,
 } = await import('../migrator.js');
 
-const STABLE_CORE = 'npm:@voidzero-dev/vite-plus-core@8.3.500';
+const STABLE_CORE = 'npm:@voidzero-dev/vite-plus-core@8.3.5000';
 const PREVIEW_CORE = 'npm:@voidzero-dev/vite-plus-core@0.0.0-commit.0c515e3';
 
 type PeerDependencyRules = { allowAny?: string[]; allowedVersions?: Record<string, string> };
@@ -103,9 +103,9 @@ describe('vitePeerDependencyRuleRequired', () => {
     ['npm:@voidzero-dev/vite-plus-core@0.0.0', true],
     [PREVIEW_CORE, true],
     ['npm:@voidzero-dev/vite-plus-core@1.4.0', true],
-    ['npm:@voidzero-dev/vite-plus-core@8.3.500+build.1', true],
+    ['npm:@voidzero-dev/vite-plus-core@8.3.5000+build.1', true],
     ['npm:@voidzero-dev/vite-plus-core@latest', true],
-    ['file:../voidzero-dev-vite-plus-core-8.3.599.tgz', true],
+    ['file:../voidzero-dev-vite-plus-core-8.3.5999.tgz', true],
     ['https://pkg.pr.new/voidzero-dev/vite-plus/@voidzero-dev/vite-plus-core@1891', true],
   ])('%s requires the rule: %s', (spec, required) => {
     expect(vitePeerDependencyRuleRequired(spec)).toBe(required);

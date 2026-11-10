@@ -13,24 +13,24 @@ const PUBLISHED_BEFORE_ALIGNMENT = ['0.1.21-alpha.7', '0.0.2-test.1', '1.0.0-rc.
 
 describe('encodeCoreVersion', () => {
   test('encodes the Vite patch and the release counter in the patch', () => {
-    expect(encodeCoreVersion('8.3.5', 0)).toBe('8.3.500');
-    expect(encodeCoreVersion('8.3.5', 1)).toBe('8.3.501');
+    expect(encodeCoreVersion('8.3.5', 0)).toBe('8.3.5000');
+    expect(encodeCoreVersion('8.3.5', 1)).toBe('8.3.5001');
     expect(encodeCoreVersion('8.4.0', 0)).toBe('8.4.0');
-    expect(encodeCoreVersion('8.4.1', 0)).toBe('8.4.100');
-    expect(encodeCoreVersion('8.3.5', 99)).toBe('8.3.599');
+    expect(encodeCoreVersion('8.4.1', 0)).toBe('8.4.1000');
+    expect(encodeCoreVersion('8.3.5', 999)).toBe('8.3.5999');
   });
 
   test('rejects a Vite prerelease and an out-of-range counter', () => {
     expect(() => encodeCoreVersion('9.0.0-beta.3', 0)).toThrow('Vite prerelease');
-    expect(() => encodeCoreVersion('8.3.5', 100)).toThrow('from 0 to 99');
-    expect(() => encodeCoreVersion('8.3.5', -1)).toThrow('from 0 to 99');
+    expect(() => encodeCoreVersion('8.3.5', 1000)).toThrow('from 0 to 999');
+    expect(() => encodeCoreVersion('8.3.5', -1)).toThrow('from 0 to 999');
   });
 });
 
 describe('decodeCoreVersion', () => {
   test('decodes stable and prerelease core versions', () => {
-    expect(decodeCoreVersion('8.3.500')).toEqual({ vite: '8.3.5', n: 0 });
-    expect(decodeCoreVersion('8.3.501')).toEqual({ vite: '8.3.5', n: 1 });
+    expect(decodeCoreVersion('8.3.5000')).toEqual({ vite: '8.3.5', n: 0 });
+    expect(decodeCoreVersion('8.3.5001')).toEqual({ vite: '8.3.5', n: 1 });
     expect(decodeCoreVersion('8.4.1')).toEqual({ vite: '8.4.0', n: 1 });
     expect(decodeCoreVersion('8.4.0-vp.2')).toEqual({ vite: '8.4.0', n: 0, k: 2 });
     expect(decodeCoreVersion('9.0.0-beta.3.vp.1')).toEqual({ vite: '9.0.0-beta.3', k: 1 });
@@ -48,18 +48,18 @@ describe('nextCoreVersion', () => {
   test('starts the counter at 0 for a new Vite version', () => {
     expect(
       nextCoreVersion({ vite: '8.3.5', vitePlus: '1.5.0', published: PUBLISHED_BEFORE_ALIGNMENT }),
-    ).toBe('8.3.500');
+    ).toBe('8.3.5000');
   });
 
   test('increments the counter for each stable release on one Vite version', () => {
-    const published = [...PUBLISHED_BEFORE_ALIGNMENT, '8.3.500', '8.3.501', '8.3.600'];
-    expect(nextCoreVersion({ vite: '8.3.5', vitePlus: '1.5.2', published })).toBe('8.3.502');
-    expect(nextCoreVersion({ vite: '8.3.6', vitePlus: '1.6.1', published })).toBe('8.3.601');
+    const published = [...PUBLISHED_BEFORE_ALIGNMENT, '8.3.5000', '8.3.5001', '8.3.6000'];
+    expect(nextCoreVersion({ vite: '8.3.5', vitePlus: '1.5.2', published })).toBe('8.3.5002');
+    expect(nextCoreVersion({ vite: '8.3.6', vitePlus: '1.6.1', published })).toBe('8.3.6001');
     expect(nextCoreVersion({ vite: '8.4.0', vitePlus: '1.7.0', published })).toBe('8.4.0');
   });
 
   test('ignores prereleases and local versions for the stable counter', () => {
-    const published = ['8.4.0-vp.0', '8.4.0-vp.1', '8.4.99'];
+    const published = ['8.4.0-vp.0', '8.4.0-vp.1', '8.4.999'];
     expect(nextCoreVersion({ vite: '8.4.0', vitePlus: '1.7.0', published })).toBe('8.4.0');
   });
 
@@ -99,7 +99,7 @@ describe('nextCoreVersion', () => {
   });
 
   test('fails when the release counter is exhausted', () => {
-    const published = Array.from({ length: 99 }, (_, n) => encodeCoreVersion('8.3.5', n));
+    const published = Array.from({ length: 999 }, (_, n) => encodeCoreVersion('8.3.5', n));
     expect(() => nextCoreVersion({ vite: '8.3.5', vitePlus: '1.9.0', published })).toThrow(
       'the maximum',
     );
@@ -108,7 +108,7 @@ describe('nextCoreVersion', () => {
 
 describe('initialCoreVersion', () => {
   test('starts the counter for a stable and a prerelease Vite', () => {
-    expect(initialCoreVersion('8.4.2')).toBe('8.4.200');
+    expect(initialCoreVersion('8.4.2')).toBe('8.4.2000');
     expect(initialCoreVersion('9.0.0-beta.3')).toBe('9.0.0-beta.3.vp.0');
   });
 });
@@ -119,8 +119,8 @@ function manifest(version: string, vite = '8.3.5', vitePlusVersion?: string) {
 
 describe('assertCoreVersionMatchesVite', () => {
   test('accepts a core version that encodes the bundled Vite', () => {
-    expect(() => assertCoreVersionMatchesVite(manifest('8.3.500'), '1.5.0')).not.toThrow();
-    expect(() => assertCoreVersionMatchesVite(manifest('8.3.599'), '0.0.0')).not.toThrow();
+    expect(() => assertCoreVersionMatchesVite(manifest('8.3.5000'), '1.5.0')).not.toThrow();
+    expect(() => assertCoreVersionMatchesVite(manifest('8.3.5999'), '0.0.0')).not.toThrow();
     expect(() =>
       assertCoreVersionMatchesVite(manifest('8.4.0-vp.1', '8.4.0'), '1.7.0-rc.1'),
     ).not.toThrow();
@@ -130,8 +130,8 @@ describe('assertCoreVersionMatchesVite', () => {
   });
 
   test('rejects a core version that encodes another Vite version', () => {
-    expect(() => assertCoreVersionMatchesVite(manifest('8.3.400'), '1.5.0')).toThrow(
-      'Set its version to 8.3.500',
+    expect(() => assertCoreVersionMatchesVite(manifest('8.3.4000'), '1.5.0')).toThrow(
+      'Set its version to 8.3.5000',
     );
     expect(() => assertCoreVersionMatchesVite(manifest('1.4.0'), '1.4.0')).toThrow(
       'encodes Vite 1.4.0',
@@ -146,12 +146,12 @@ describe('assertCoreVersionMatchesVite', () => {
 
   test('rejects mixed prerelease and stable versions for a release', () => {
     expect(() =>
-      assertCoreVersionMatchesVite(manifest('8.3.500', '8.3.5', '1.5.0-rc.0'), '1.5.0-rc.0', {
+      assertCoreVersionMatchesVite(manifest('8.3.5000', '8.3.5', '1.5.0-rc.0'), '1.5.0-rc.0', {
         release: true,
       }),
     ).toThrow('both be prereleases');
     expect(() =>
-      assertCoreVersionMatchesVite(manifest('8.3.500-vp.0', '8.3.5', '1.5.0'), '1.5.0', {
+      assertCoreVersionMatchesVite(manifest('8.3.5000-vp.0', '8.3.5', '1.5.0'), '1.5.0', {
         release: true,
       }),
     ).toThrow('both be prereleases');
@@ -159,12 +159,12 @@ describe('assertCoreVersionMatchesVite', () => {
 
   test('rejects the local build counter for a release', () => {
     expect(() =>
-      assertCoreVersionMatchesVite(manifest('8.3.599', '8.3.5', '1.5.0'), '1.5.0', {
+      assertCoreVersionMatchesVite(manifest('8.3.5999', '8.3.5', '1.5.0'), '1.5.0', {
         release: true,
       }),
     ).toThrow('reserved for local builds');
     expect(() =>
-      assertCoreVersionMatchesVite(manifest('8.3.598', '8.3.5', '1.5.0'), '1.5.0', {
+      assertCoreVersionMatchesVite(manifest('8.3.5998', '8.3.5', '1.5.0'), '1.5.0', {
         release: true,
       }),
     ).not.toThrow();
@@ -172,10 +172,10 @@ describe('assertCoreVersionMatchesVite', () => {
 
   test('requires the manifest to record the released vite-plus version', () => {
     expect(() =>
-      assertCoreVersionMatchesVite(manifest('8.3.500'), '1.5.0', { release: true }),
+      assertCoreVersionMatchesVite(manifest('8.3.5000'), '1.5.0', { release: true }),
     ).toThrow('records vite-plus (none)');
     expect(() =>
-      assertCoreVersionMatchesVite(manifest('8.3.500', '8.3.5', '1.4.0'), '1.5.0', {
+      assertCoreVersionMatchesVite(manifest('8.3.5000', '8.3.5', '1.4.0'), '1.5.0', {
         release: true,
       }),
     ).toThrow('records vite-plus 1.4.0, but the release is vite-plus 1.5.0');
@@ -184,17 +184,17 @@ describe('assertCoreVersionMatchesVite', () => {
 
 describe('assertCoreVersionUnclaimed', () => {
   test('accepts an unpublished core version and a retry of the same release', () => {
-    expect(() => assertCoreVersionUnclaimed(undefined, '8.3.501', '1.5.1')).not.toThrow();
+    expect(() => assertCoreVersionUnclaimed(undefined, '8.3.5001', '1.5.1')).not.toThrow();
     expect(() =>
-      assertCoreVersionUnclaimed({ vitePlusVersion: '1.5.1' }, '8.3.501', '1.5.1'),
+      assertCoreVersionUnclaimed({ vitePlusVersion: '1.5.1' }, '8.3.5001', '1.5.1'),
     ).not.toThrow();
   });
 
   test('rejects a core version that another release published', () => {
     expect(() =>
-      assertCoreVersionUnclaimed({ vitePlusVersion: '1.5.1' }, '8.3.501', '1.6.0'),
+      assertCoreVersionUnclaimed({ vitePlusVersion: '1.5.1' }, '8.3.5001', '1.6.0'),
     ).toThrow('already published for vite-plus 1.5.1');
-    expect(() => assertCoreVersionUnclaimed({}, '8.3.500', '1.6.0')).toThrow(
+    expect(() => assertCoreVersionUnclaimed({}, '8.3.5000', '1.6.0')).toThrow(
       'already published for vite-plus (unknown)',
     );
   });

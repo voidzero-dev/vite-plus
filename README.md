@@ -203,7 +203,7 @@ If you are manually migrating a project to Vite+, install these dev dependencies
 vp install -D vite-plus
 ```
 
-Add package-manager overrides so that other packages use the Vite+ versions. Alias `vite` to `@voidzero-dev/vite-plus-core`, setting `<core-version>` to the core version that the installed `vite-plus` uses, shown by `vp toolchain vite-plus-core`. The core version encodes the bundled Vite version (for example, `8.3.500` for Vite `8.3.5`), so package managers check `vite` peer ranges against the bundled Vite. Pin `vitest` to `<vitest-version>`, using the bundled version shown by `vp toolchain vitest`. The project and `vp test` then use the same Vitest copy. Without the pin, a dependency or workspace package can install a different Vitest version. The two versions can use separate mocks, `expect` functions, and runner states:
+Add package-manager overrides so that other packages use the Vite+ versions. Alias `vite` to `@voidzero-dev/vite-plus-core`, setting `<core-version>` to the core version that the installed `vite-plus` uses, shown by `vp toolchain vite-plus-core`. The core version encodes the bundled Vite version (for example, `8.3.5000` for Vite `8.3.5`), so package managers check `vite` peer ranges against the bundled Vite. Pin `vitest` to `<vitest-version>`, using the bundled version shown by `vp toolchain vitest`. The project and `vp test` then use the same Vitest copy. Without the pin, a dependency or workspace package can install a different Vitest version. The two versions can use separate mocks, `expect` functions, and runner states:
 
 ```json
 "overrides": {

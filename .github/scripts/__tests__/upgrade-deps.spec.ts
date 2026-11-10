@@ -242,7 +242,7 @@ function createSyncFixture() {
   const metaDir = join(root, 'meta');
   const versionsPath = join(metaDir, 'versions.json');
   writeJson(corePath, {
-    version: '8.3.501',
+    version: '8.3.5001',
     dependencies: { 'yuku-parser': '^0.9.3', postcss: '^8.5.6' },
     optionalDependencies: { fsevents: '~2.3.3' },
     devDependencies: { 'rolldown-plugin-dts': '^0.28.0' },
@@ -297,7 +297,7 @@ test('pins the bundled parser, syncs Vite ranges, and preserves upgrade metadata
   run();
   expect(readJson(corePath)).toEqual({
     // The bundled Vite did not change, so the release counter stays.
-    version: '8.3.501',
+    version: '8.3.5001',
     dependencies: { 'yuku-parser': '0.10.3', postcss: '^8.5.28' },
     optionalDependencies: { fsevents: '~2.4.0' },
     devDependencies: { 'rolldown-plugin-dts': '^0.28.0' },
@@ -336,22 +336,22 @@ test('restarts the core version counter when the bundled Vite changes', () => {
   const { corePath, versionsPath, metaDir, run } = fixture;
   writeJson(fixture.vitePath, { ...readJson(fixture.vitePath), version: '8.4.2' });
   run();
-  expect(readJson(corePath).version).toBe('8.4.200');
+  expect(readJson(corePath).version).toBe('8.4.2000');
   expect(readJson(corePath).bundledVersions).toEqual({ vite: '8.4.2' });
   expect(readJson(versionsPath)['@voidzero-dev/vite-plus-core']).toEqual({
-    old: '8.3.501',
-    new: '8.4.200',
+    old: '8.3.5001',
+    new: '8.4.2000',
   });
   expect(readFileSync(join(metaDir, 'pr-body.md'), 'utf8')).toContain(
-    '| `@voidzero-dev/vite-plus-core` | `8.3.501` | `8.4.200` |',
+    '| `@voidzero-dev/vite-plus-core` | `8.3.5001` | `8.4.2000` |',
   );
 
   // A second pass keeps the recorded old version and the encoded version.
   run();
-  expect(readJson(corePath).version).toBe('8.4.200');
+  expect(readJson(corePath).version).toBe('8.4.2000');
   expect(readJson(versionsPath)['@voidzero-dev/vite-plus-core']).toEqual({
-    old: '8.3.501',
-    new: '8.4.200',
+    old: '8.3.5001',
+    new: '8.4.2000',
   });
 });
 

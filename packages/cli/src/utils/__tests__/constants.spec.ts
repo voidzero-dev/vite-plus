@@ -41,7 +41,7 @@ describe('Vite+ dependency versions', () => {
 
   it('uses VP_CORE_VERSION for the core alias', async () => {
     vi.stubEnv('VP_VERSION', '0.0.0');
-    vi.stubEnv('VP_CORE_VERSION', '8.3.599');
+    vi.stubEnv('VP_CORE_VERSION', '8.3.5999');
     vi.stubEnv('VP_OVERRIDE_PACKAGES', '');
     vi.resetModules();
 
@@ -49,8 +49,8 @@ describe('Vite+ dependency versions', () => {
       await import('../constants.js');
 
     expect(VITE_PLUS_VERSION).toBe('0.0.0');
-    expect(VITE_PLUS_CORE_VERSION).toBe('8.3.599');
-    expect(VITE_PLUS_OVERRIDE_PACKAGES.vite).toBe('npm:@voidzero-dev/vite-plus-core@8.3.599');
+    expect(VITE_PLUS_CORE_VERSION).toBe('8.3.5999');
+    expect(VITE_PLUS_OVERRIDE_PACKAGES.vite).toBe('npm:@voidzero-dev/vite-plus-core@8.3.5999');
   });
 
   it('preserves explicit prerelease overrides', async () => {

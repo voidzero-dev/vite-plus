@@ -18,7 +18,7 @@ On a project that is already on Vite+, migrate does a toolchain version upgrade 
 
 ## Manually Updating
 
-Update `vite-plus` and the `vite` alias to `@voidzero-dev/vite-plus-core` together. The two packages have different versions: the core version encodes the bundled Vite version (for example, `8.3.500` for Vite `8.3.5`). Read the alias that a `vite-plus` version uses before you install it:
+Update `vite-plus` and the `vite` alias to `@voidzero-dev/vite-plus-core` together. The two packages have different versions: the core version encodes the bundled Vite version (for example, `8.3.5000` for Vite `8.3.5`). Read the alias that a `vite-plus` version uses before you install it:
 
 ```bash
 npm view vite-plus@<version> dependencies.vite

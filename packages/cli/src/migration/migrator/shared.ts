@@ -219,7 +219,7 @@ export const VITEST_IS_MANAGED_OVERRIDE = 'vitest' in VITE_PLUS_OVERRIDE_PACKAGE
  * Whether pnpm still needs the managed `vite` peer rule (`allowAny: [vite]`,
  * `allowedVersions: { vite: '*' }`) for the given core alias.
  *
- * A stable core version encodes the bundled Vite version (`8.3.500` bundles
+ * A stable core version encodes the bundled Vite version (`8.3.5000` bundles
  * Vite `8.3.5`, see rfcs/core-version-alignment.md). Package managers check
  * `vite` peer ranges against it correctly, so the rule would only hide real
  * incompatibilities. Every other spec still needs the rule: a preview
