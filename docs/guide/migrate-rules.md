@@ -385,7 +385,11 @@ Migration converts the Volta `volta.node` pin to `.node-version`, because Vite+ 
 - Migration removes `vite` from `allowAny` and removes `allowedVersions.vite` when its value is `'*'`, also when you wrote the entry. Those entries accepted the `1.x` core alias. Another `allowedVersions.vite` range, such as `'7 || 8'`, stays. Migration removes a field, or `peerDependencyRules`, when no entry remains. Other entries stay. The migrate summary names the removed rule.
 - For a preview build (`0.0.0-commit.<sha>`) or a Vite+ prerelease core (such as `8.4.0-vp.0`), migration keeps writing the `vite` rule. Package managers do not accept these versions for ranges such as `^8.0.0`.
 - On pnpm before 10.2.0, migration also keeps writing the `vite` rule. These versions apply the `vite@*` alias override to peer ranges, so every `vite` peer fails against the core without the rule.
-- After migration, a plugin whose `vite` peer range excludes the bundled Vite (for example `^7.0.0`) produces a peer warning. With `strictPeerDependencies`, the install fails. Update the plugin, or add a rule scoped to that plugin, such as `allowedVersions: { 'vite-plugin-foo>vite': '*' }`. Migration removes only the plain `vite` key.
+- After migration, a plugin whose `vite` peer range excludes the bundled Vite (for example `^7.0.0`) produces a peer warning. With `strictPeerDependencies`, the install fails. Update the plugin, or widen the peer range of that plugin only:
+  - pnpm 12.17.0 and later: add the override `'vite-plugin-foo>vite:peer': '*'`. pnpm deprecated `peerDependencyRules` in this version.
+  - Earlier pnpm versions: add the rule `allowedVersions: { 'vite-plugin-foo>vite': '*' }`.
+
+  Migration removes only the plain `vite` key, so both forms stay.
 
 **Other rules.**
 

@@ -723,7 +723,19 @@ manifest `version` takes part in the check.
 - Peer warnings appear for real incompatibilities after migration. Projects
   that relied on the broad rule to hide a `^7.0.0` plugin see a warning or,
   with `strict-peer-dependencies`, an install failure. The migrate output
-  should name the change.
+  should name the change. For one plugin, the migrate rules document
+  recommends the pnpm override `'vite-plugin-foo>vite:peer': '*'` on pnpm
+  12.17.0 and later, and a scoped `allowedVersions` entry on earlier pnpm.
+- pnpm 12.17.0 deprecates `peerDependencyRules` (pnpm/pnpm#17457). The setting
+  still works for backward compatibility. Migration still writes it in three
+  cases: the `vite` rule for preview and prerelease cores and for pnpm before
+  10.2.0, and the `vitest` rule. The `:peer` override is not a drop-in
+  replacement, because it rewrites the declared peer ranges instead of only
+  hiding the report, and pnpm before 12.17.0 does not support it. The `vitest`
+  rule is redundant (the `vitest` override already sets the version that peer
+  checks see), so the follow-up that removes it also removes one of the three
+  cases. The data in #2806 confirms that a workspace on `vite-plus` 1.5.0 with
+  Vitest 5.1.0 needs no `vitest` rule.
 - Vite+ prereleases still warn in npm: `8.4.0-vp.0` does not satisfy
   `^8.0.0`. Accepted; see Prereleases.
 - Preview builds still warn in npm. The bridge forces `0.0.0-commit.<sha>`,
