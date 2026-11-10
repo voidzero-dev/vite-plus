@@ -38,11 +38,13 @@ import {
   resolveApproveBuildTargets,
 } from '../utils/approve-builds.ts';
 import { unwrapCliParseOutcome } from '../utils/cli-parse.ts';
+import { isForceOverrideMode } from '../utils/constants.ts';
 import { documentationUrl } from '../utils/documentation.ts';
 import { detectExistingEditors, selectEditors, writeEditorConfigs } from '../utils/editor.ts';
 import { findGitRoot, initGitRepository } from '../utils/git.ts';
 import { renderCliDoc } from '../utils/help.ts';
 import { readJsonFile } from '../utils/json.ts';
+import { hasVitePlusDependency } from '../utils/package.ts';
 import { displayRelative } from '../utils/path.ts';
 import {
   cancelAndExit,
@@ -1149,6 +1151,18 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     resumeCreateProgress();
   }
 
+  // A `create-xxx` CLI that already generates a Vite+ project made its own
+  // toolchain choices (e.g. keeping ESLint), so skip migration like `vp migrate`
+  // does for Vite+ projects. Monorepo packages still need the rewrite to align
+  // with the workspace catalog.
+  const packageJsonPath = path.join(fullPath, 'package.json');
+  const isVitePlusTemplate =
+    !isMonorepo &&
+    templateInfo.type === TemplateType.remote &&
+    !isForceOverrideMode() &&
+    fs.existsSync(packageJsonPath) &&
+    hasVitePlusDependency(readJsonFile(packageJsonPath));
+
   // The migrate-before-rewrite reorder is only needed when the template
   // actually ships ESLint or Prettier (e.g. `create-vite --template
   // react-ts`). Builtin templates (vite:library, vite:application,
@@ -1156,9 +1170,10 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   // and relies on `rewrite*Project` to add tarball overrides BEFORE the
   // first install, so install-first would break CI's local-tarball resolve.
   const shouldMigrateLintFmtTools =
-    detectEslintProject(fullPath).hasDependency ||
-    detectPrettierProject(fullPath).hasDependency ||
-    detectTsupProject(fullPath).hasDependency;
+    !isVitePlusTemplate &&
+    (detectEslintProject(fullPath).hasDependency ||
+      detectPrettierProject(fullPath).hasDependency ||
+      detectTsupProject(fullPath).hasDependency);
 
   let installSummary: CommandRunSummary | undefined;
 
@@ -1338,12 +1353,14 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       await installAndMigrate(fullPath);
     }
     updateCreateProgress('Applying Vite+ project setup');
-    const skipStagedMigration = shouldSkipStagedMigrationForHooks(
-      fullPath,
-      shouldSetupHooks,
-      workspaceInfo.packageManager,
-    );
-    rewriteStandaloneProject(fullPath, workspaceInfo, skipStagedMigration, compactOutput);
+    if (!isVitePlusTemplate) {
+      const skipStagedMigration = shouldSkipStagedMigrationForHooks(
+        fullPath,
+        shouldSetupHooks,
+        workspaceInfo.packageManager,
+      );
+      rewriteStandaloneProject(fullPath, workspaceInfo, skipStagedMigration, compactOutput);
+    }
     setPackageManager(fullPath, workspaceInfo.downloadPackageManager);
     for (const framework of detectFramework(fullPath)) {
       if (!hasFrameworkShim(fullPath, framework)) {
