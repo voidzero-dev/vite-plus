@@ -14,6 +14,7 @@ Arguments:
 
 Options:
   --fix                            Auto-fix format and lint issues
+  --fix-dangerously                Auto-fix format and lint issues, including dangerous fixes and suggestions
   --continue-on-error              Run remaining checks even if an earlier check fails
   --quiet                          Disable reporting on warnings, only errors are reported
   --deny-warnings                  Treat lint warnings as errors
@@ -45,6 +46,7 @@ Arguments:
 
 Options:
   --fix                            Auto-fix format and lint issues
+  --fix-dangerously                Auto-fix format and lint issues, including dangerous fixes and suggestions
   --continue-on-error              Run remaining checks even if an earlier check fails
   --quiet                          Disable reporting on warnings, only errors are reported
   --deny-warnings                  Treat lint warnings as errors
@@ -76,6 +78,7 @@ Arguments:
 
 Options:
   --fix                            Auto-fix format and lint issues
+  --fix-dangerously                Auto-fix format and lint issues, including dangerous fixes and suggestions
   --continue-on-error              Run remaining checks even if an earlier check fails
   --quiet                          Disable reporting on warnings, only errors are reported
   --deny-warnings                  Treat lint warnings as errors

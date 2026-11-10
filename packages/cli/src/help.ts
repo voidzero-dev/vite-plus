@@ -830,6 +830,11 @@ const commandHelpDocs = {
         rows: [
           { label: '--fix', description: 'Auto-fix format and lint issues' },
           {
+            label: '--fix-dangerously',
+            description:
+              'Auto-fix format and lint issues, including dangerous fixes and suggestions',
+          },
+          {
             label: '--continue-on-error',
             description: 'Run remaining checks even if an earlier check fails',
           },
