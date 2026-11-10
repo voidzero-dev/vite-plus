@@ -209,6 +209,14 @@ pub const VP_CLI_BIN: &str = "VP_CLI_BIN";
 /// Global CLI version, passed from Rust binary to JS for --version display.
 pub const VP_GLOBAL_VERSION: &str = "VP_GLOBAL_VERSION";
 
+/// Advertises that the process tree is running under Vite+ (value: `vp/<version>`).
+///
+/// Each global or local `vp`, `vpr`, or `vpx` invocation sets its own version.
+/// Ordinary tool shims preserve an inherited value without creating one.
+/// Tools we invoke (e.g. `vp dlx create-vite`) use this instead of
+/// `npm_config_user_agent`, which the underlying package manager overwrites.
+pub const VP_USER_AGENT: &str = "VP_USER_AGENT";
+
 // ── HTTP client configuration ───────────────────────────────────────────
 
 /// Override the per-request timeout (in seconds) for large file downloads
