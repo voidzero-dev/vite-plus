@@ -45,6 +45,8 @@ steps = [
   { argv = ["node", "--version"], tty = false, envs = [["PATH", "${workspace}/foreign-bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin${PATH_SEPARATOR}${PATH}"]], comment = "The external manager forwards to the managed fallback without re-entering itself." },
   { argv = ["node", "--version"], tty = false, envs = [["PATH", "${workspace}/foreign-bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin${PATH_SEPARATOR}${PATH}"], ["VP_PATH_INJECTED_TOOLS", "node"]], comment = "An inherited injection marker must not cause recursion either." },
   { argv = ["vp", "env", "exec", "node", "--version"], envs = [["PATH", "${workspace}/foreign-bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin${PATH_SEPARATOR}${PATH}"]], comment = "env exec still runs managed Node when the inherited PATH contains the external manager." },
+  # Under VP_ENV_FORBIDDEN=1 the external manager forwards to the fallback shim, which fails at once.
+  { argv = ["node", "--version"], tty = false, timeout = 20000, envs = [["PATH", "${workspace}/foreign-bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin${PATH_SEPARATOR}${PATH}"], ["VP_ENV_FORBIDDEN", "1"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "With VP_ENV_FORBIDDEN=1, Node.js fails in the fallback shim instead of forwarding back to the external manager or using the managed runtime.", continue-on-failure = true },
 ]
 
 [[case]]
@@ -64,6 +66,7 @@ steps = [
   { argv = ["node", "list-shims.cjs", "shared-bin", "data/fallback-bin"], comment = "Setup preserves the existing executable in the shared bin." },
   { argv = ["sh", "split.sh"], envs = [["HOME", "${workspace}/user"], ["VP_HOME", ""], ["VP_BIN_DIR", "${workspace}/shared-bin"], ["VP_DATA_DIR", "${workspace}/data"], ["VP_CACHE_DIR", "${workspace}/cache"], ["XDG_CONFIG_HOME", "${workspace}/config"]], comment = "The generated shell script puts shared bin first and data-root fallback last." },
   { argv = ["node", "-p", "process.execPath.includes('shared-bin')"], envs = [["PATH", "${workspace}/shared-bin${PATH_SEPARATOR}${PATH}"]], comment = "The foreign Node remains executable." },
+  { argv = ["vpx", "node", "-p", "process.execPath.includes('shared-bin')"], envs = [["HOME", "${workspace}/user"], ["VP_HOME", ""], ["VP_BIN_DIR", "${workspace}/shared-bin"], ["VP_DATA_DIR", "${workspace}/data"], ["VP_CACHE_DIR", "${workspace}/cache"], ["XDG_CONFIG_HOME", "${workspace}/config"], ["PATH", "${workspace}/shared-bin${PATH_SEPARATOR}${PATH}"], ["VP_ENV_FORBIDDEN", "1"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "With VP_ENV_FORBIDDEN=1, the foreign Node first on PATH in the shared bin is selected." },
 
   # System-first adds a fallback under data while keeping the foreign Node intact.
   { argv = ["vp", "env", "off", "node"], envs = [["HOME", "${workspace}/user"], ["VP_HOME", ""], ["VP_BIN_DIR", "${workspace}/shared-bin"], ["VP_DATA_DIR", "${workspace}/data"], ["VP_CACHE_DIR", "${workspace}/cache"], ["XDG_CONFIG_HOME", "${workspace}/config"], ["PATH", "${workspace}/data/current/bin${PATH_SEPARATOR}${PATH}"]], snapshot = false },
@@ -96,7 +99,7 @@ steps = [
 name = "vpx_script_follows_vp_node"
 vp = "global"
 cwd = "vpx-project"
-comment = "vpx script mode runs on the Node.js that vp node selects, including system-first mode."
+comment = "vpx script mode runs on the Node.js that vp node selects, including system-first mode and VP_ENV_FORBIDDEN=1."
 steps = [
   { argv = ["node", "../setup-system-node.cjs"], snapshot = false },
   { argv = ["vp", "env", "on"], snapshot = false },
@@ -105,4 +108,89 @@ steps = [
   { argv = ["vpx", "--print", "process.execPath.includes('system-bin')"], envs = [["PATH", "${VP_HOME}/fallback-bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "A Vite+ shim before system Node.js selects managed Node.js." },
   ["vp", "env", "on", "node"],
   { argv = ["vpx", "--print", "process.execPath.includes('system-bin')"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "Managed mode ignores system Node.js." },
+  { argv = ["vpx", "--print", "process.execPath.includes('system-bin')"], envs = [["PATH", "${workspace}/system-bin${PATH_SEPARATOR}${VP_HOME}/bin${PATH_SEPARATOR}${PATH}"], ["VP_ENV_FORBIDDEN", "1"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "VP_ENV_FORBIDDEN=1: the system Node.js first on PATH, as vp node selects, even with managed config.json." },
+  { argv = ["vpx", "--print", "process.execPath.includes('system-bin')"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["VP_ENV_FORBIDDEN", "1"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "VP_ENV_FORBIDDEN=1 with the node shim first on PATH fails and suggests `vp env off node`, as vp node does.", continue-on-failure = true },
+]
+
+[[case]]
+name = "env_forbidden_overrides_managed_shims"
+vp = "global"
+# The pnpm pin must not be downloaded, so prewarming it would be wasted.
+prewarm-package-managers = false
+comment = "VP_ENV_FORBIDDEN=1 restricts the Node.js and package-manager shims alike: they never search PATH or use managed installs. With managed config.json they fail and suggest `vp env off`; system tools still run when they come before the shims, as in a devShell, or after `vp env off`. Nothing is downloaded and the child PATH is unchanged."
+steps = [
+  { argv = ["node", "setup-system-node.cjs"], snapshot = false },
+  { argv = ["node", "setup-system-tools.cjs"], snapshot = false },
+  { argv = ["vpt", "write-file", "package.json", '{"packageManager":"pnpm@10.18.0"}'], snapshot = false },
+  { argv = ["node", "list-managed.cjs"], comment = "Managed installs before the VP_ENV_FORBIDDEN steps: the pinned runtime is cached, and the override is not." },
+
+  # Managed config.json puts the shims first; the unreachable mirror and registry fail any request.
+  { argv = ["node", "--version"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["VP_ENV_FORBIDDEN", "1"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "The node shim fails without searching PATH for the system Node.js after it, and suggests `vp env off node`.", continue-on-failure = true },
+  { argv = ["node", "--version"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["VP_ENV_FORBIDDEN", "1"], ["VP_BYPASS", "1"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "VP_BYPASS does not make it search PATH either.", continue-on-failure = true },
+  { argv = ["pnpm", "--version"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["VP_ENV_FORBIDDEN", "1"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "The pnpm shim fails the same way, despite the packageManager pin, and suggests `vp env off pnpm`.", continue-on-failure = true },
+  { argv = ["npm", "--version"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["VP_ENV_FORBIDDEN", "1"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "So does the npm shim, instead of running the npm bundled with a runtime.", continue-on-failure = true },
+  { argv = ["node", "-p", "process.execPath.includes('system-bin')"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["VP_ENV_FORBIDDEN", "true"]], comment = "Only the exact value 1 stops management; managed config.json stays in effect." },
+
+  # A devShell puts the system tools before the shims; VP_NODE_VERSION would select a managed version.
+  { argv = ["vp", "node", "-p", "process.execPath.includes('system-bin')"], envs = [["PATH", "${workspace}/system-bin${PATH_SEPARATOR}${VP_HOME}/bin${PATH_SEPARATOR}${PATH}"], ["VP_ENV_FORBIDDEN", "1"], ["VP_NODE_VERSION", "24.0.0"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "vp node runs the system Node.js first on PATH, ignoring the session override." },
+  { argv = ["vpx", "node", "-p", "process.execPath.includes('system-bin')"], envs = [["PATH", "${workspace}/system-bin${PATH_SEPARATOR}${VP_HOME}/bin${PATH_SEPARATOR}${PATH}"], ["VP_ENV_FORBIDDEN", "1"], ["VP_NODE_VERSION", "24.0.0"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "vpx node does the same." },
+  { argv = ["vp", "env", "exec", "npm", "--version"], envs = [["PATH", "${workspace}/system-bin${PATH_SEPARATOR}${VP_HOME}/bin${PATH_SEPARATOR}${PATH}"], ["EXPECTED_PATH", "${workspace}/system-bin${PATH_SEPARATOR}${VP_HOME}/bin${PATH_SEPARATOR}${PATH}"], ["VP_ENV_FORBIDDEN", "1"], ["VP_NODE_VERSION", "24.0.0"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "vp env exec runs the system npm first on PATH, and the child PATH is unchanged." },
+
+  # After `vp env off node`, the node shim moves after the system tools.
+  ["vp", "env", "off", "node"],
+  { argv = ["node", "--version"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin"], ["VP_ENV_FORBIDDEN", "1"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "Without a system Node.js before the fallback shim, the shim fails instead of using the managed runtime.", continue-on-failure = true },
+  # Without node in bin, the default PATH would resolve the host Node.js, which the runner rejects.
+  { argv = ["node", "list-managed.cjs"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "The VP_ENV_FORBIDDEN steps downloaded nothing." },
+]
+
+[[case]]
+name = "env_forbidden_child_processes"
+vp = "global"
+comment = "VP_ENV_FORBIDDEN=1 holds for what the selected tools run: a `#!/usr/bin/env node` shebang and a nested `npm` resolve from the child PATH. The shims add no directory to it and leave directories inherited from a parent in place; where Vite+ selects a tool from PATH, a managed install there fails. A nested managed npm would print its version instead of the system marker."
+# The fake npm is a shebang script, and run-shim.cjs starts shims without the `.exe` suffix.
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["node", "setup-system-node.cjs"], snapshot = false },
+  { argv = ["node", "setup-child-tools.cjs"], snapshot = false },
+
+  # The seeded runtime for the .node-version pin plays the managed runtime. It is only read:
+  # it links the shared seed, so the case cannot plant fake managed tools there.
+  # Its npm prints a version where the system npm prints a marker.
+  # run-shim.cjs starts the shim by path while the managed runtime is first on PATH.
+  # The unreachable mirror and registry fail any request.
+  { argv = ["node", "run-shim.cjs", "npm", "nested"], envs = [["PATH", "${VP_HOME}/js_runtime/node/20.20.2/bin${PATH_SEPARATOR}${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["VP_PATH_INJECTED_TOOLS", "node,npm,npx"], ["VP_ENV_FORBIDDEN", "1"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "The npm shim fails before it would reuse the managed npm that a parent selected, and suggests `vp env off npm`.", continue-on-failure = true },
+  { argv = ["node", "run-shim.cjs", "npm", "--version"], envs = [["PATH", "${VP_HOME}/js_runtime/node/20.20.2/bin${PATH_SEPARATOR}${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["VP_ENV_FORBIDDEN", "1"], ["VP_BYPASS", "1"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "VP_BYPASS does not hand the npm shim to the first npm on PATH outside the shims either.", continue-on-failure = true },
+  { argv = ["vpx", "node", "-p", "process.execPath.includes('system-bin')"], envs = [["PATH", "${VP_HOME}/js_runtime/node/20.20.2/bin${PATH_SEPARATOR}${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["VP_ENV_FORBIDDEN", "1"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "vpx takes Node.js from the first PATH match, the inherited managed runtime, and fails instead of skipping it.", continue-on-failure = true },
+  { argv = ["vpx", "npm", "nested"], envs = [["PATH", "${VP_HOME}/js_runtime/node/20.20.2/bin${PATH_SEPARATOR}${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["VP_ENV_FORBIDDEN", "1"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "vpx fails the same way for npm when the first match is the npm bundled with the inherited managed runtime.", continue-on-failure = true },
+  { argv = ["vpx", "npm", "--version"], envs = [["PATH", "${VP_HOME}/js_runtime/node/20.20.2/bin${PATH_SEPARATOR}${VP_HOME}/bin"], ["VP_ENV_FORBIDDEN", "1"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "Without a system npm either, the first match is the npm bundled with the inherited managed runtime, so vpx fails with a pointer to `vp env doctor` instead of running it or downloading one through dlx.", continue-on-failure = true },
+
+  # run-shim.cjs starts shims from the bin directory, so the steps above come before the shims move.
+  ["vp", "env", "off", "npm"],
+  # The npm shim lives in fallback-bin from here on; the node shim stays in bin.
+  { argv = ["npm", "nested"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin"], ["VP_ENV_FORBIDDEN", "1"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "The shell runs system npm, whose shebang reaches the node shim still first on PATH. The shim fails and suggests `vp env off node` instead of running the managed runtime.", continue-on-failure = true },
+  # Both shims live in fallback-bin from here on, after the system tools.
+  ["vp", "env", "off", "node"],
+  { argv = ["npm", "nested"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin"], ["VP_ENV_FORBIDDEN", "1"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "With the shims after the system tools, the shell runs system npm on system Node.js, and so does its nested npm, without Vite+." },
+  { argv = ["vpx", "npm", "nested"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin"], ["VP_ENV_FORBIDDEN", "1"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "vpx selects the same system npm as the first PATH match." },
+  { argv = ["vp", "env", "exec", "npm", "nested"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin"], ["VP_ENV_FORBIDDEN", "1"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "So does vp env exec." },
+  { argv = ["vp", "env", "exec", "npm", "--version"], envs = [["PATH", "${VP_HOME}/js_runtime/node/20.20.2/bin${PATH_SEPARATOR}${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin"], ["VP_ENV_FORBIDDEN", "1"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "vp env exec rejects the npm bundled with an inherited managed runtime, the first PATH match, instead of running it.", continue-on-failure = true },
+
+  # The inherited managed runtime has no pnpm, so the first pnpm on PATH is the system one.
+  # Its shebang would still run the managed Node.js first on PATH.
+  { argv = ["vp", "env", "exec", "pnpm", "--version"], envs = [["PATH", "${VP_HOME}/js_runtime/node/20.20.2/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["VP_ENV_FORBIDDEN", "1"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "vp env exec rejects a system pnpm when the first Node.js on the child PATH is the inherited managed runtime, as vp node does.", continue-on-failure = true },
+  { argv = ["vpx", "pnpm", "--version"], envs = [["PATH", "${VP_HOME}/js_runtime/node/20.20.2/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["VP_ENV_FORBIDDEN", "1"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "So does vpx for a tool it finds on PATH.", continue-on-failure = true },
+  { argv = ["vpx", "local-tool"], envs = [["PATH", "${VP_HOME}/js_runtime/node/20.20.2/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["VP_ENV_FORBIDDEN", "1"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "And for a tool in node_modules/.bin.", continue-on-failure = true },
+  { argv = ["vpx", "path-tool"], envs = [["PATH", "${VP_HOME}/js_runtime/node/20.20.2/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["VP_ENV_FORBIDDEN", "1"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "And for a tool it finds through its own PATH search.", continue-on-failure = true },
+  { argv = ["vp", "env", "exec", "pnpm", "--version"], envs = [["PATH", "${VP_HOME}/js_runtime/node/20.20.2/bin${PATH_SEPARATOR}${VP_HOME}/bin"], ["VP_ENV_FORBIDDEN", "1"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "When the pnpm shim is the first pnpm on PATH, its error comes before the Node.js check.", continue-on-failure = true },
+  { argv = ["vp", "env", "exec", "pnpm", "--version"], envs = [["PATH", "${workspace}/system-bin${PATH_SEPARATOR}${VP_HOME}/js_runtime/node/20.20.2/bin${PATH_SEPARATOR}${PATH}"], ["VP_ENV_FORBIDDEN", "1"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "With the system Node.js first, the system pnpm runs on it." },
+  { argv = ["vpx", "pnpm", "--version"], envs = [["PATH", "${workspace}/system-bin${PATH_SEPARATOR}${VP_HOME}/js_runtime/node/20.20.2/bin${PATH_SEPARATOR}${PATH}"], ["VP_ENV_FORBIDDEN", "1"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "So does vpx." },
+  { argv = ["vpx", "local-tool"], envs = [["PATH", "${workspace}/system-bin${PATH_SEPARATOR}${VP_HOME}/js_runtime/node/20.20.2/bin${PATH_SEPARATOR}${PATH}"], ["VP_ENV_FORBIDDEN", "1"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "And the local tool." },
+  { argv = ["vpx", "path-tool"], envs = [["PATH", "${workspace}/system-bin${PATH_SEPARATOR}${VP_HOME}/js_runtime/node/20.20.2/bin${PATH_SEPARATOR}${PATH}"], ["VP_ENV_FORBIDDEN", "1"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "And the system path tool." },
+  { argv = ["vpx", "corepack", "--version"], envs = [["PATH", "${workspace}/system-bin${PATH_SEPARATOR}${VP_HOME}/js_runtime/node/20.20.2/bin${PATH_SEPARATOR}${PATH}"], ["VP_ENV_FORBIDDEN", "1"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "With the system Node.js first, vpx still rejects the corepack bundled with the managed runtime, the first corepack on PATH, instead of running it.", continue-on-failure = true },
+
+  # With node system-first, as VP_ENV_FORBIDDEN=1 installs it, a managed runtime first on PATH
+  # is not reused as the system Node.js.
+  { argv = ["vp", "env", "which", "node"], envs = [["PATH", "${VP_HOME}/js_runtime/node/20.20.2/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["VP_ENV_FORBIDDEN", "1"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "vp env which does not take the managed runtime first on PATH for the system Node.js. It still resolves the pinned managed version, which it does not run." },
+  { argv = ["vp", "env", "current"], envs = [["PATH", "${VP_HOME}/js_runtime/node/20.20.2/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["VP_ENV_FORBIDDEN", "1"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "Neither does vp env current." },
+  { argv = ["vp", "install"], envs = [["PATH", "${VP_HOME}/js_runtime/node/20.20.2/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH}"], ["VP_ENV_FORBIDDEN", "1"], ["VP_NODE_DIST_MIRROR", "http://127.0.0.1:1"], ["NPM_CONFIG_REGISTRY", "http://127.0.0.1:1"]], comment = "A delegated command does not take the managed runtime for the system Node.js either. It stops at the safety net instead of running on it or downloading one.", continue-on-failure = true },
 ]

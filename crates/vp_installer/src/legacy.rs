@@ -71,7 +71,7 @@ pub(super) async fn install(
         print_warn(&format!("Shim setup failed (non-fatal): {e}"));
     }
 
-    if !opts.no_node_manager {
+    if opts.node_manager == cli::NodeManager::Enabled {
         if !opts.quiet {
             print_info("setting up Node.js and package-manager version management...");
         }
