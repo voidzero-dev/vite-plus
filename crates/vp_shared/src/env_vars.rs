@@ -211,9 +211,10 @@ pub const VP_GLOBAL_VERSION: &str = "VP_GLOBAL_VERSION";
 
 /// Advertises that the process tree is running under Vite+ (value: `vp/<version>`).
 ///
-/// Set once at startup and inherited by every child process. Tools we invoke
-/// (e.g. `vp dlx create-vite`) read it to detect vp as the package manager,
-/// since the underlying package manager overwrites `npm_config_user_agent`.
+/// Each global or local `vp`, `vpr`, or `vpx` invocation sets its own version.
+/// Ordinary tool shims preserve an inherited value without creating one.
+/// Tools we invoke (e.g. `vp dlx create-vite`) use this instead of
+/// `npm_config_user_agent`, which the underlying package manager overwrites.
 pub const VP_USER_AGENT: &str = "VP_USER_AGENT";
 
 // ── HTTP client configuration ───────────────────────────────────────────

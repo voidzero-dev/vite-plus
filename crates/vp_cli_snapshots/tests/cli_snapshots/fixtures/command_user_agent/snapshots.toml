@@ -1,0 +1,39 @@
+[[case]]
+name = "entrypoints"
+vp = ["local", "global"]
+env = { VP_USER_AGENT = "vp/0.0.0-parent" }
+comment = "Each explicit vp, vpr, or vpx invocation replaces an inherited user agent with its own version."
+steps = [
+  ["vp", "exec", "node", "check-agent.cjs", "current"],
+  ["vp", "run", "check-agent"],
+  ["vpr", "check-agent"],
+  ["vpx", "./check-agent.cjs", "current"],
+  { argv = ["vp", "dlx", "-s", "-p", "vp-test-echo", "-c", "node check-agent.cjs current pnpm"], comment = "The package manager replaces its own user agent but preserves VP_USER_AGENT." },
+  ["vpx", "-s", "-p", "vp-test-echo", "-c", "node check-agent.cjs current pnpm"],
+  { argv = ["vpt", "rm", "package.json"], snapshot = false },
+  { argv = ["vp", "dlx", "-s", "-p", "vp-test-echo", "-c", "node check-agent.cjs current pnpm"], comment = "The marker also reaches dlx children outside a project." },
+]
+
+[[case]]
+name = "local_without_global"
+vp = "local"
+steps = [
+  { argv = ["node", "local-only.mjs"], timeout = 240000 },
+]
+
+[[case]]
+name = "tool_shims"
+vp = "global"
+comment = "Ordinary tool shims do not create a user agent and do not erase an inherited one."
+steps = [
+  ["node", "check-agent.cjs", "unset"],
+  ["pnpm", "--package", "vp-test-echo", "dlx", "--silent", "-c", "node check-agent.cjs unset pnpm"],
+  ["npm", "exec", "--yes", "--package", "vp-test-echo", "--", "node", "check-agent.cjs", "unset", "npm"],
+  ["npx", "--yes", "--package", "vp-test-echo", "node", "check-agent.cjs", "unset", "npm"],
+  { argv = ["node", "check-agent.cjs", "vp/0.0.0-parent"], envs = [["VP_USER_AGENT", "vp/0.0.0-parent"]] },
+  { argv = ["pnpm", "--package", "vp-test-echo", "dlx", "--silent", "-c", "node check-agent.cjs vp/0.0.0-parent pnpm"], envs = [["VP_USER_AGENT", "vp/0.0.0-parent"]] },
+  { argv = ["npx", "--yes", "--package", "vp-test-echo", "node", "check-agent.cjs", "vp/0.0.0-parent", "npm"], envs = [["VP_USER_AGENT", "vp/0.0.0-parent"]] },
+  { argv = ["vp", "check-agent.cjs", "unset"], envs = [["VP_SHIM_TOOL", "node"]], comment = "Windows trampoline-style shim dispatch must also leave the marker unset." },
+  { argv = ["vp", "check-agent"], envs = [["VP_SHIM_TOOL", "vpr"]] },
+  { argv = ["vp", "./check-agent.cjs", "current"], envs = [["VP_SHIM_TOOL", "vpx"]] },
+]

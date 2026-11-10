@@ -337,19 +337,15 @@ fn main() -> ExitCode {
     let argv0 = args.first().map(|s| s.as_str()).unwrap_or("vp");
     let shim_tool = shim::peek_shim_tool(argv0);
 
-    // Advertise that this process tree is running under Vite+ so the tools we
-    // invoke (e.g. `vp dlx create-vite`) can detect vp as the package manager.
-    // The underlying package managers overwrite `npm_config_user_agent` with
-    // their own value, so we expose a dedicated variable that is passed through
-    // untouched and inherited by every child process (including the `npx`
-    // fallback used when there is no local `package.json`).
+    // Identify Vite+ to child tools independently of `npm_config_user_agent`,
+    // which package managers replace with their own value.
     //
-    // Only set it for a real `vp` invocation, not when vp is acting as a shim:
-    // there the user is invoking the wrapped tool (e.g. `npm`/`npx`), not vp.
+    // `vpr` and `vpx` are Vite+ entry points too. Ordinary tool shims (such as
+    // `npm`/`npx`/`node`) only inherit an existing marker from their parent.
     //
     // SAFETY: `set_var` must run while the process is still single-threaded.
     // This runs before the async runtime (and its worker threads) are created.
-    if shim_tool.is_none() {
+    if matches!(shim_tool.as_deref(), None | Some("vpr" | "vpx")) {
         unsafe {
             std::env::set_var(
                 vp_shared::env_vars::VP_USER_AGENT,
