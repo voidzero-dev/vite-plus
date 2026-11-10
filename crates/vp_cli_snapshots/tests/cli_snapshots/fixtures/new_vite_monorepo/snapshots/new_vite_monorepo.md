@@ -238,8 +238,8 @@ check utils normalizes vite-plus to catalog:
     "prepublishOnly": "vp run build"
   },
   "devDependencies": {
-    "@types/node": "^26.1.1",
-    "bumpp": "^11.1.0",
+    "@types/node": "^26.6.5",
+    "bumpp": "^12.3.0",
     "typescript": "^7.0.2",
     "vite-plus": "catalog:"
   }
@@ -364,8 +364,8 @@ check vite-plus-generator package.json
     "dev": "node bin/index.ts"
   },
   "dependencies": {
-    "bingo": "^0.9.3",
-    "zod": "^3.25.76"
+    "bingo": "^0.13.2",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "catalog:",

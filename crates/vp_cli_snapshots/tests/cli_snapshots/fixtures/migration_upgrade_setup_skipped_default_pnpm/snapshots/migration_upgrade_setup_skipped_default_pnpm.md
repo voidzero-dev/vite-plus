@@ -33,6 +33,9 @@ vite-plus version upgrade is applied
       "version": "<version>",
       "onFail": "download"
     }
+  },
+  "volta": {
+    "node": "24.11.0"
   }
 }
 ```
@@ -54,17 +57,9 @@ catalog:
   vite-plus: <version>
 ```
 
-## `vpt stat-file .nvmrc --assert file`
-
-.nvmrc is left untouched without --full
-
-```
-.nvmrc: file
-```
-
 ## `vpt stat-file .node-version --assert-not file`
 
-no .node-version is written
+volta.node is not migrated without --full
 
 ```
 .node-version: missing

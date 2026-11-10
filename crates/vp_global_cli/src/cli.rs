@@ -220,7 +220,7 @@ pub enum Commands {
         json: bool,
 
         /// Use the global Vite+ toolchain
-        #[arg(long)]
+        #[arg(short = 'g', long)]
         global: bool,
     },
 
@@ -366,7 +366,7 @@ Examples:
         tool: String,
     },
 
-    /// Pin Node.js and package-manager versions in the current directory
+    /// Pin Node.js locally and package-manager versions at the workspace root
     #[command(after_long_help = "\
 Examples:
   vp env pin lts                  # Pin Node.js to latest LTS
@@ -376,15 +376,21 @@ Examples:
   vp env pin \"^20.0.0\" --force    # Overwrite existing pin
   vp env pin 24 --target node-version   # Force the .node-version file
 
-The write target follows the compatibility-first rule: an existing .node-version
-keeps being updated, as does an effective .nvmrc in the current directory.
+Node.js pins use the current directory. Package-manager pins use the workspace
+root package.json, or the current project package.json outside a workspace.
+Pinning both components can update two different files. --target selects a pin
+source, not a project directory.
+
+The Node.js write target follows the compatibility-first rule: an existing
+.node-version keeps being updated, as does an effective .nvmrc in the current
+directory.
 Otherwise the pin is written to package.json#devEngines.runtime, or .node-version
 when the directory has no package.json.")]
     Pin {
         /// Versions to pin. Bare versions select Node.js; package managers use name@version.
         specs: Vec<String>,
 
-        /// Remove the pin from the current directory
+        /// Remove Node.js pins locally and package-manager pins at the workspace root
         #[arg(long)]
         unpin: bool,
 
@@ -401,7 +407,12 @@ when the directory has no package.json.")]
         target: Option<PinTarget>,
     },
 
-    /// Remove environment pins from the current directory (alias for `pin --unpin`)
+    /// Remove Node.js pins locally and package-manager pins at the workspace root
+    #[command(after_long_help = "\
+Alias for pin --unpin. Node.js pins use the current directory. Package-manager
+pins use the workspace root package.json, or the current project package.json
+outside a workspace. Removing both components can update two different files.
+--target selects a pin source, not a project directory.")]
     Unpin {
         /// Limit removal to node, pm, or a package-manager family
         scope: Option<String>,
@@ -537,7 +548,7 @@ pub enum PinTarget {
     NodeVersion,
     /// Pin via the .nvmrc file
     Nvmrc,
-    /// Pin via package.json#devEngines.runtime
+    /// Pin via package.json#devEngines (runtime or packageManager)
     DevEngines,
     /// Pin via the top-level packageManager field
     PackageManager,
@@ -592,6 +603,42 @@ fn should_suppress_header_for_subcommand(command: &str, args: &[String]) -> bool
     }
 }
 
+fn is_valid_task_name(name: &str) -> bool {
+    let script = name.split_once('#').map_or(name, |(_, s)| s);
+    !name.starts_with('#')
+        && !script.is_empty()
+        && !script.starts_with('#')
+        && !script.starts_with("//")
+        && !name.contains(char::is_whitespace)
+}
+
+pub(crate) fn sanitize_task_current_prefix(current: &OsStr) -> String {
+    current
+        .to_string_lossy()
+        .replace("\\#", "#")
+        .replace("\\:", ":")
+        .trim_matches(|c| c == '"' || c == '\'')
+        .to_string()
+}
+
+pub(crate) fn parse_task_completion_lines(
+    stdout: &str,
+    current: &str,
+) -> Vec<clap_complete::CompletionCandidate> {
+    stdout
+        .lines()
+        .filter_map(|line| line.split_once(": "))
+        .map(|(name, desc)| (name.trim(), desc.trim()))
+        .filter(|(name, _)| {
+            is_valid_task_name(name) && (current.is_empty() || name.starts_with(current))
+        })
+        .map(|(name, desc)| {
+            clap_complete::CompletionCandidate::new(name.to_string())
+                .help((!desc.is_empty()).then(|| desc.to_string().into()))
+        })
+        .collect()
+}
+
 /// Get available tasks for shell completion.
 ///
 /// Delegates to the local vite-plus CLI to run `vp run` without arguments,
@@ -601,12 +648,7 @@ fn run_tasks_completions(current: &OsStr) -> Vec<clap_complete::CompletionCandid
         return vec![];
     };
 
-    // Unescape hashtag and trim quotes for better matching
-    let current = current
-        .to_string_lossy()
-        .replace("\\#", "#")
-        .trim_matches(|c| c == '"' || c == '\'')
-        .to_string();
+    let current = sanitize_task_current_prefix(current);
 
     let output = tokio::task::block_in_place(|| {
         Runtime::new().ok().and_then(|rt| {
@@ -617,13 +659,8 @@ fn run_tasks_completions(current: &OsStr) -> Vec<clap_complete::CompletionCandid
     output
         .filter(|o| o.status.success())
         .map(|output| {
-            String::from_utf8_lossy(&output.stdout)
-                .lines()
-                .filter_map(|line| line.split_once(": ").map(|(name, _)| name.trim()))
-                .filter(|name| !name.is_empty())
-                .filter(|name| name.starts_with(&current) || current.is_empty())
-                .map(|name| clap_complete::CompletionCandidate::new(name.to_string()))
-                .collect()
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            parse_task_completion_lines(&stdout, &current)
         })
         .unwrap_or_default()
 }
@@ -745,13 +782,24 @@ async fn system_package_manager(
     kind: vp_pm_cli::PackageManagerType,
     executable: &vt_path::AbsolutePath,
 ) -> Option<vp_pm_cli::PackageManager> {
-    let output =
-        tokio::process::Command::new(executable.as_path()).arg("--version").output().await.ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let version = std::str::from_utf8(&output.stdout).ok()?.trim();
-    node_semver::Version::parse(version).ok()?;
+    // Only npm skips `--version`; `npm_version_from_package_json` explains why.
+    let version = if kind == vp_pm_cli::PackageManagerType::Npm
+        && let Some(version) = vp_pm_cli::npm_version_from_package_json(executable)
+    {
+        version.to_string()
+    } else {
+        let output = tokio::process::Command::new(executable.as_path())
+            .arg("--version")
+            .output()
+            .await
+            .ok()?;
+        if !output.status.success() {
+            return None;
+        }
+        let version = std::str::from_utf8(&output.stdout).ok()?.trim();
+        js_semver::Version::parse(version).ok()?;
+        version.to_owned()
+    };
     let bin_prefix = executable.parent()?.to_absolute_path_buf();
     Some(vp_pm_cli::PackageManager::from_bin_prefix(kind, version, bin_prefix))
 }
@@ -1261,6 +1309,25 @@ fn maybe_print_runtime_header(command: &str, args: &[String], show_header: bool)
     print_runtime_header(show_header);
 }
 
+fn sanitize_subcommand_aliases_for_completion(cmd: &mut clap::Command) {
+    for subcmd in cmd.get_subcommands_mut() {
+        if subcmd.get_visible_aliases().next().is_some() {
+            let aliases: Vec<String> = subcmd.get_all_aliases().map(str::to_string).collect();
+            // Clear aliases and re-add them as hidden.
+            *subcmd = std::mem::take(subcmd).alias(None::<&str>).aliases(aliases);
+        }
+        sanitize_subcommand_aliases_for_completion(subcmd);
+    }
+}
+
+/// Build a completion command with hidden aliases so clap_complete's ID-based
+/// deduplication preserves canonical names.
+pub fn command_for_completion() -> clap::Command {
+    let mut cmd = Args::command();
+    sanitize_subcommand_aliases_for_completion(&mut cmd);
+    cmd
+}
+
 /// Build a clap Command with custom help formatting matching the JS CLI output.
 pub fn command_with_help() -> clap::Command {
     command_with_help_with_options(RenderOptions::default())
@@ -1317,6 +1384,85 @@ mod tests {
     }
 
     #[test]
+    fn command_for_completion_preserves_canonical_subcommands() {
+        let mut cmd = super::command_for_completion();
+        for (parent, alias, name) in [
+            (None, "i", "install"),
+            (None, "up", "update"),
+            (None, "rm", "remove"),
+            (None, "un", "remove"),
+            (None, "uninstall", "remove"),
+            (Some("pm"), "ls", "list"),
+        ] {
+            let cmd = match parent {
+                Some(name) => cmd.find_subcommand_mut(name).unwrap(),
+                None => &mut cmd,
+            };
+            let candidates =
+                clap_complete::engine::complete(cmd, vec!["vp".into(), "".into()], 1, None)
+                    .unwrap();
+
+            assert!(
+                candidates.iter().any(|c| c.get_value() == name),
+                "missing {name}: {candidates:?}"
+            );
+            assert!(
+                !candidates.iter().any(|c| c.get_value() == alias),
+                "alias {alias} should be hidden from candidates: {candidates:?}"
+            );
+            assert_eq!(cmd.find_subcommand(alias).unwrap().get_name(), name);
+        }
+    }
+
+    #[test]
+    fn test_sanitize_task_current_prefix() {
+        use std::ffi::OsStr;
+        for (input, expected) in [
+            ("test\\:u", "test:u"),
+            ("pkg\\#test\\:u", "pkg#test:u"),
+            ("'test:unit'", "test:unit"),
+            ("\"pkg#build\"", "pkg#build"),
+        ] {
+            assert_eq!(super::sanitize_task_current_prefix(OsStr::new(input)), expected);
+        }
+    }
+
+    #[test]
+    fn test_parse_task_completion_lines() {
+        let stdout = concat!(
+            "  build: Run project build: vite build --mode:prod\n",
+            "  test:unit: Run unit tests\n",
+            "  pkg#test:unit: Workspace unit tests\n",
+            "  //: Root comment\n",
+            "  pkg#//: Workspace comment\n",
+            "  rolldown## Scrips for docs #: echo 1\n",
+            "# Global comment: echo 2\n",
+            "  invalid task with spaces: echo 3\n",
+            "  empty_desc: \n",
+        );
+
+        let complete = |cur| {
+            super::parse_task_completion_lines(stdout, cur)
+                .into_iter()
+                .map(|c| c.get_value().to_string_lossy().to_string())
+                .collect::<Vec<_>>()
+        };
+
+        // Comments and space-separated task names are filtered
+        assert_eq!(complete(""), vec!["build", "test:unit", "pkg#test:unit", "empty_desc"]);
+        assert_eq!(complete("test:"), vec!["test:unit"]);
+        assert!(complete("nonexistent").is_empty());
+
+        // Help descriptions: colons preserved and empty desc omitted
+        let all = super::parse_task_completion_lines(stdout, "");
+        assert_eq!(
+            all[0].get_help().map(|h| h.to_string()),
+            Some("Run project build: vite build --mode:prod".into())
+        );
+        assert_eq!(all[3].get_help(), None);
+    }
+
+    #[test]
     fn raw_subcommand_is_the_token_as_written() {
         assert_eq!(raw_subcommand(&argv(&["vp", "fmt", "src/"])), Some("fmt"));
         assert_eq!(raw_subcommand(&argv(&["vp", "format", "src/"])), Some("format"));
@@ -1331,6 +1477,20 @@ mod tests {
     fn raw_subcommand_is_none_without_a_subcommand() {
         assert_eq!(raw_subcommand(&argv(&["vp"])), None);
         assert_eq!(raw_subcommand(&argv(&["vp", "--version"])), None);
+    }
+
+    #[test]
+    fn parses_toolchain_global_flags() {
+        for flag in ["--global", "-g"] {
+            let parsed = try_parse_args_from(argv(&["vp", "toolchain", "vite", "--json", flag]))
+                .expect("toolchain global flag should parse");
+            let Some(Commands::Toolchain { tools, json, global }) = parsed.command else {
+                panic!("expected toolchain command");
+            };
+            assert_eq!(tools, vec!["vite"]);
+            assert!(json);
+            assert!(global);
+        }
     }
 
     #[test]
@@ -1435,5 +1595,48 @@ mod tests {
     #[test]
     fn unknown_subcommand_does_not_suppress_header() {
         assert!(!should_suppress_header_for_subcommand("test", &["--lsp".to_string()]));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn system_npm_version_is_read_from_its_package_without_running_it() {
+        use std::os::unix::fs::PermissionsExt;
+
+        use super::system_package_manager;
+
+        // A Node.js install. Running npm-cli.js fails, so a spawned `npm --version` would
+        // return `None`.
+        //
+        // <root>/
+        // ├── bin/npm -> ../lib/node_modules/npm/bin/npm-cli.js
+        // └── lib/node_modules/npm/
+        //     ├── package.json      {"name":"npm","version":"10.9.2"}
+        //     └── bin/npm-cli.js    exit 1
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let package = root.join("lib/node_modules/npm");
+        std::fs::create_dir_all(package.join("bin")).unwrap();
+        std::fs::write(package.join("package.json"), r#"{"name":"npm","version":"10.9.2"}"#)
+            .unwrap();
+        let cli = package.join("bin/npm-cli.js");
+        std::fs::write(&cli, "#!/bin/sh\nexit 1\n").unwrap();
+        std::fs::set_permissions(&cli, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::create_dir_all(root.join("bin")).unwrap();
+        std::os::unix::fs::symlink("../lib/node_modules/npm/bin/npm-cli.js", root.join("bin/npm"))
+            .unwrap();
+        let npm = vt_path::AbsolutePathBuf::new(root.join("bin/npm")).unwrap();
+
+        let manager = system_package_manager(vp_pm_cli::PackageManagerType::Npm, &npm)
+            .await
+            .expect("npm's version is read without running npm");
+        // Scripts see the version in the user agent.
+        let context =
+            vp_pm_cli::LifecycleEnvContext { vp_version: "0.0.0".into(), node_version: None };
+        let user_agent = manager
+            .lifecycle_env_vars(&context)
+            .into_iter()
+            .find_map(|(name, value)| (name == "npm_config_user_agent").then_some(value))
+            .unwrap();
+        assert!(user_agent.to_string_lossy().starts_with("vp/0.0.0 npm/10.9.2 "), "{user_agent:?}");
     }
 }

@@ -6,6 +6,7 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
+      - '.node-version'
       - 'packages/cli/install.sh'
       - 'packages/cli/install.ps1'
       - 'packages/cli/tests/fixtures/provenance-registry.mjs'
@@ -24,6 +25,7 @@ on:
       - '.github/scripts/test-install-bootstrap.ps1'
       - '.github/scripts/test-install-provenance.sh'
       - '.github/scripts/test-install-provenance.ps1'
+      - '.github/scripts/pin-install-node.sh'
       - '.github/workflows/test-standalone-install.yml'
 
 concurrency:
@@ -33,6 +35,11 @@ concurrency:
 defaults:
   run:
     shell: bash
+
+env:
+  VP_NODE_DIST_MIRROR: ${{ vars.VP_NODE_DIST_MIRROR || 'https://nodejs.org/dist' }}
+  # New Node.js releases can appear before both musl archives are available.
+  MUSL_NODE_VERSION: '24.22.1'
 
 jobs:
   test-install-sh:
@@ -91,7 +98,10 @@ jobs:
           vp --help
           # test create command
           vp create vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
-          cd hello && vp run build && vp --version
+          test -f hello/package.json
+          cd hello
+          vp run build
+          vp --version
 
       - name: Set PATH
         shell: bash
@@ -162,7 +172,7 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+      - uses: ./.github/actions/setup-rust
 
       - name: Test shared provenance resolver
         run: cargo test -p vp_setup registry
@@ -261,7 +271,7 @@ jobs:
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
-      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+      - uses: ./.github/actions/setup-rust
 
       - name: Shell config paths preserve metacharacters
         run: |
@@ -527,6 +537,7 @@ jobs:
           VP_LOCAL_TGZ="$FAKE_TGZ" VP_VERSION=local-test bash packages/cli/install.sh
 
           test -f "$GRAND/.vite-plus/.keep"
+          test ! -e "$GRAND/.vite-plus/.vp-owned"
           test -e "$GRAND/.vite-plus/current"
           test -e "$GRAND/.vite-plus/bin/vp"
           test ! -d "$GRAND/.local/share/vite-plus"
@@ -761,14 +772,18 @@ jobs:
         uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
         with:
           platforms: arm64
+          # Pull the small image directly instead of storing one copy per PR.
+          cache-image: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Run install.sh in ARM64 container
         run: |
           docker run --rm --platform linux/arm64 \
+            -e VP_NODE_DIST_MIRROR \
             -v "${{ github.workspace }}:/workspace" \
             ubuntu:20.04 bash -c "
               ls -al ~/
-              apt-get update && apt-get install -y curl ca-certificates
+              # The ARM64 Node.js runtime requires libatomic.so.1.
+              apt-get update && apt-get install -y curl ca-certificates libatomic1
               export VP_HOME=\"\$HOME/.vite-plus\"
               cat /workspace/packages/cli/install.sh | VP_LEGACY_INSTALLER_URL=file:///workspace/packages/cli/install-legacy.sh bash
               if [ -f ~/.profile ]; then
@@ -816,6 +831,9 @@ jobs:
   test-install-sh-musl-x64:
     name: Test install.sh (Linux x64 musl)
     runs-on: ubuntu-latest
+    env:
+      # Mirrors of official Node.js releases do not provide musl archives.
+      VP_NODE_DIST_MIRROR: https://unofficial-builds.nodejs.org/download/release
     permissions:
       contents: read
     steps:
@@ -826,12 +844,15 @@ jobs:
           docker run --rm \
             -v "${{ github.workspace }}:/workspace" \
             -e CI=true \
-            alpine:3.21 sh -c "
+            -e VP_NODE_VERSION=${{ env.MUSL_NODE_VERSION }} \
+            -e VP_NODE_DIST_MIRROR \
+            alpine:3.21 sh -ec "
               # libstdc++: required by unofficial-builds Node.js musl binary
               apk add --no-cache bash curl ca-certificates libstdc++
               export VP_HOME=\"\$HOME/.vite-plus\"
+              sh /workspace/.github/scripts/pin-install-node.sh
               cat /workspace/packages/cli/install.sh | VP_LEGACY_INSTALLER_URL=file:///workspace/packages/cli/install-legacy.sh bash
-              export PATH=\"\$HOME/.vite-plus/bin:\$PATH\"
+              . \"\$HOME/.vite-plus/env\"
 
               vp --version
               vp --help
@@ -851,11 +872,14 @@ jobs:
                 echo \"Found shim: \$BIN_PATH/\$shim\"
               done
               vp env doctor
-              vp env run --node 24 -- node -p \"process.versions\"
+              vp env run --node \"\$VP_NODE_VERSION\" -- node -p \"process.versions\"
 
               # Test create command
               vp create vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
-              cd hello && vp run build && vp --version
+              test -f hello/package.json
+              cd hello
+              vp run build
+              vp --version
               cd ..
 
               # Verify upgrade
@@ -869,6 +893,9 @@ jobs:
   test-install-sh-musl-arm64:
     name: Test install.sh (Linux ARM64 musl via QEMU)
     runs-on: ubuntu-latest
+    env:
+      # Mirrors of official Node.js releases do not provide musl archives.
+      VP_NODE_DIST_MIRROR: https://unofficial-builds.nodejs.org/download/release
     permissions:
       contents: read
     steps:
@@ -878,16 +905,20 @@ jobs:
         uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
         with:
           platforms: arm64
+          cache-image: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Run install.sh in ARM64 Alpine container
         run: |
           docker run --rm --platform linux/arm64 \
             -v "${{ github.workspace }}:/workspace" \
             -e CI=true \
+            -e VP_NODE_VERSION=${{ env.MUSL_NODE_VERSION }} \
+            -e VP_NODE_DIST_MIRROR \
             alpine:3.21 sh -c "
               # libstdc++ is needed by unofficial-builds Node.js musl binary
               apk add --no-cache bash curl ca-certificates libstdc++
               export VP_HOME=\"\$HOME/.vite-plus\"
+              sh /workspace/.github/scripts/pin-install-node.sh
               cat /workspace/packages/cli/install.sh | VP_LEGACY_INSTALLER_URL=file:///workspace/packages/cli/install-legacy.sh bash
               export PATH=\"\$HOME/.vite-plus/bin:\$PATH\"
 
@@ -911,7 +942,7 @@ jobs:
               vp env doctor
 
               export VP_LOG=trace
-              vp env run --node 24 -- node -p \"process.versions\"
+              vp env run --node \"\$VP_NODE_VERSION\" -- node -p \"process.versions\"
 
               # FIXME: QEMU doesn't support all syscalls needed by rolldown/tsdown
               # vp create vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
@@ -952,20 +983,24 @@ jobs:
 
       - name: Check bootstrap handoff
         shell: powershell
-        run: ./.github/scripts/test-install-bootstrap.ps1
+        run: |
+          foreach ($mode in @('Off', '2.0', 'Latest')) {
+            ./.github/scripts/test-install-bootstrap.ps1 -CallerStrictMode $mode
+          }
 
       - name: Run install.ps1
         shell: powershell
         run: |
           & ./packages/cli/install.ps1
 
-      - name: Run install.ps1 via irm simulation (catches BOM issues)
+      - name: Run install.ps1 via irm simulation under StrictMode (catches BOM issues)
         shell: powershell
         # Piped installers cannot locate a sibling script; use this PR's legacy implementation.
         env:
           VP_LEGACY_INSTALLER_URL: https://raw.githubusercontent.com/${{ github.event.pull_request.head.repo.full_name || github.repository }}/${{ github.event.pull_request.head.sha || github.sha }}/packages/cli/install-legacy.ps1
         run: |
           $ErrorActionPreference = "Stop"
+          Set-StrictMode -Version Latest
           Get-Content ./packages/cli/install.ps1 -Raw | Invoke-Expression
 
       - name: Set PATH
@@ -981,8 +1016,11 @@ jobs:
           vp --version
           vp --help
           vp create vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path hello/package.json)) { throw 'create-vite did not generate package.json' }
           cd hello
           vp run build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           vp --version
 
       - name: Verify bin setup
@@ -1052,8 +1090,11 @@ jobs:
           vp --version
           vp --help
           vp create vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path hello/package.json)) { throw 'create-vite did not generate package.json' }
           cd hello
           vp run build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           vp --version
 
       - name: Verify bin setup
@@ -1125,13 +1166,21 @@ jobs:
             exit 1
           }
 
-      - name: Run install.ps1 via iex under PowerShell 7.6
+      - name: Check bootstrap handoff under PowerShell 7.6
+        shell: pwsh
+        run: |
+          foreach ($mode in @('Off', '2.0', 'Latest')) {
+            & $env:PWSH76 -NoProfile -File ./.github/scripts/test-install-bootstrap.ps1 -CallerStrictMode $mode
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+      - name: Run install.ps1 via iex under PowerShell 7.6 StrictMode
         shell: pwsh
         # Piped installers cannot locate a sibling script; use this PR's legacy implementation.
         env:
           VP_LEGACY_INSTALLER_URL: https://raw.githubusercontent.com/${{ github.event.pull_request.head.repo.full_name || github.repository }}/${{ github.event.pull_request.head.sha || github.sha }}/packages/cli/install-legacy.ps1
         run: |
-          & $env:PWSH76 -NoProfile -Command "Get-Content ./packages/cli/install.ps1 -Raw | Invoke-Expression"
+          & $env:PWSH76 -NoProfile -Command "Set-StrictMode -Version Latest; Get-Content ./packages/cli/install.ps1 -Raw | Invoke-Expression"
 
       - name: Set PATH
         shell: bash
@@ -1146,8 +1195,11 @@ jobs:
           vp --version
           vp --help
           vp create vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path hello/package.json)) { throw 'create-vite did not generate package.json' }
           cd hello
           vp run build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           vp --version
 
       - name: Verify bin setup
@@ -1339,7 +1391,12 @@ jobs:
           # $env:VP_LOG = "trace"
           # test create command
           vp create vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
-          cd hello && vp run build && vp --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path hello/package.json)) { throw 'create-vite did not generate package.json' }
+          cd hello
+          vp run build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          vp --version
 
       - name: Verify bin setup on powershell
         shell: pwsh
@@ -1382,6 +1439,8 @@ jobs:
 
           REM test create command
           vp create vite --no-interactive --no-agent -- hello-cmd --no-interactive -t vanilla
+          if errorlevel 1 exit /b %errorlevel%
+          if not exist hello-cmd\package.json exit /b 1
           cd hello-cmd && vp run build && vp --version
 
       - name: Verify bin setup on cmd
@@ -1421,7 +1480,10 @@ jobs:
           vp --help
           # test create command
           vp create vite --no-interactive --no-agent -- hello-bash --no-interactive -t vanilla
-          cd hello-bash && vp run build && vp --version
+          test -f hello-bash/package.json
+          cd hello-bash
+          vp run build
+          vp --version
 
       - name: Verify bin setup on bash
         shell: bash
@@ -1465,9 +1527,9 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 24
+          node-version-file: .node-version
 
       - name: Pin VP_HOME to USERPROFILE
         # Namespace's Windows runners run jobs under a service account whose real
@@ -1486,7 +1548,7 @@ jobs:
             CARGO_HOME,{{ DEV_DRIVE }}/.cargo
             RUSTUP_HOME,{{ DEV_DRIVE }}/.rustup
 
-      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+      - uses: ./.github/actions/setup-rust
         with:
           target-dir: ${{ format('{0}/target', env.DEV_DRIVE) }}
 
@@ -1908,7 +1970,7 @@ jobs:
           $env:VP_NODE_MANAGER = "yes"
           # The path assertions require managed npm, regardless of the runner's system tools.
           $env:VP_PM_MANAGER = "yes"
-          $env:VP_NODE_VERSION = "22.13.1"
+          $env:VP_NODE_VERSION = "22.23.4"
           $env:CI = "true"
           Remove-Item Env:VP_BIN_DIR -ErrorAction SilentlyContinue
           Remove-Item Env:VP_DATA_DIR -ErrorAction SilentlyContinue
@@ -2143,6 +2205,9 @@ jobs:
           }
           if (-not (Test-Path (Join-Path $env:VP_HOME "current/bin/.vp-setup-complete"))) {
             throw "vp-setup.exe did not complete the binary's self-setup"
+          }
+          if (Test-Path (Join-Path $env:VP_HOME ".vp-owned")) {
+            throw "Repair claimed ownership of an unmarked installation root"
           }
           if ([Environment]::GetEnvironmentVariable("Path", "User") -cne $pathBefore) {
             throw "--no-modify-path changed User PATH"

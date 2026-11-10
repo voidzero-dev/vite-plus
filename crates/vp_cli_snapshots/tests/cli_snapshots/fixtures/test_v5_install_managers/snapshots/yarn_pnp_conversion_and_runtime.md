@@ -23,13 +23,10 @@ Vite+ does not support PnP; validate the documented conversion to node-modules b
 ```
 VITE+ - The Unified Toolchain for the Web
 
-⚠ Vite+ does not currently support Yarn Plug'n'Play (PnP).
-
-✔ Switched Yarn to node-modules mode
-
-Formatting code...
-
-Code formatted
+▲ ⚠ Vite+ does not currently support Yarn Plug'n'Play (PnP).
+◆ ✔ Switched Yarn to node-modules mode
+● Formatting code...
+● Code formatted
 ◇ Updated . to Vite+ <version>
 • Node <version>  yarn <version>
 • Dependencies:

@@ -1,14 +1,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { styleText } from 'node:util';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { type OxlintConfig } from 'oxlint';
-import semver from 'semver';
+import { compareReversed, isLessThanOrEqual, normalize } from 'verkit';
 
-import { rewriteEslint } from '../../../binding/index.js';
+import { ResolverFactory, rewriteEslint } from '../../../binding/index.js';
 import { type WorkspacePackage } from '../../types/index.ts';
-import { runCommandSilently } from '../../utils/command.ts';
+import { getVpCommand, runCommandSilently } from '../../utils/command.ts';
 import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
 import { fetchNpmResource, getNpmRegistry } from '../../utils/npm-config.ts';
 import { displayRelative } from '../../utils/path.ts';
@@ -44,6 +45,45 @@ const OXLINT_NATIVE_PLUGINS = new Set<string>([
   'promise',
   'node',
   'vue',
+]);
+
+const OXLINT_SCHEMA_PATH = fileURLToPath(
+  new URL('configuration_schema.json', import.meta.resolve('oxlint/package.json')),
+);
+
+const OXLINT_SCHEMA = readJsonFile(OXLINT_SCHEMA_PATH) as {
+  definitions: { DummyRuleMap: { properties: Record<string, unknown> } };
+};
+
+// Oxlint generates `DummyRuleMap.properties` from its built-in `RULES` table.
+// Defined in `oxc_linter/src/generated/rules_enum.rs`;
+// schema generation is in `oxc_linter/src/config/rules.rs`.
+const OXLINT_BUILTIN_RULES = new Set<string>(
+  Object.keys(OXLINT_SCHEMA.definitions.DummyRuleMap.properties),
+);
+
+// Oxlint accepts these TypeScript rule names as aliases for the corresponding
+// built-in ESLint rules. Keep this list aligned with
+// `TYPESCRIPT_COMPATIBLE_ESLINT_RULES` in `oxc_linter/src/utils/mod.rs`.
+const TYPESCRIPT_COMPATIBLE_ESLINT_RULES = new Set([
+  'class-methods-use-this',
+  'default-param-last',
+  'init-declarations',
+  'max-params',
+  'no-array-constructor',
+  'no-dupe-class-members',
+  'no-empty-function',
+  'no-invalid-this',
+  'no-loop-func',
+  'no-loss-of-precision',
+  'no-magic-numbers',
+  'no-redeclare',
+  'no-restricted-imports',
+  'no-shadow',
+  'no-unused-expressions',
+  'no-unused-vars',
+  'no-use-before-define',
+  'no-useless-constructor',
 ]);
 
 export function detectEslintProject(
@@ -127,9 +167,9 @@ export async function resolveOxlintMigrateVersion(oxlintVersion: string): Promis
       return oxlintVersion;
     }
     const candidates = Object.keys(packument.versions ?? {}).filter(
-      (version) => semver.valid(version) && semver.lte(version, oxlintVersion),
+      (version) => normalize(version) && isLessThanOrEqual(version, oxlintVersion),
     );
-    return candidates.length > 0 ? candidates.toSorted(semver.rcompare)[0] : oxlintVersion;
+    return candidates.length > 0 ? candidates.toSorted(compareReversed)[0] : oxlintVersion;
   } catch {
     return oxlintVersion;
   }
@@ -140,7 +180,6 @@ export async function resolveOxlintMigrateVersion(oxlintVersion: string): Promis
  * Returns true on success, false on failure (spawn error or non-zero exit).
  */
 async function runOxlintMigrateStep(
-  vpBin: string,
   cwd: string,
   migratePackage: string,
   args: string[],
@@ -150,8 +189,7 @@ async function runOxlintMigrateStep(
 ): Promise<{ ok: boolean; skippedRules?: string }> {
   try {
     const result = await runCommandSilently({
-      command: vpBin,
-      args: ['dlx', migratePackage, ...args],
+      ...getVpCommand(['dlx', migratePackage, ...args]),
       cwd,
       envs: process.env,
     });
@@ -179,7 +217,6 @@ export async function migrateEslintToOxlint(
   packages?: WorkspacePackage[],
   options?: { silent?: boolean; report?: MigrationReport },
 ): Promise<boolean> {
-  const vpBin = process.env.VP_CLI_BIN ?? 'vp';
   const spinner = options?.silent ? getSilentSpinner() : getSpinner(interactive);
 
   // Steps 1-2: Only run @oxlint/migrate if there's an eslint config at root
@@ -200,7 +237,6 @@ export async function migrateEslintToOxlint(
     // Step 1: Generate .oxlintrc.json from ESLint config
     spinner.start('Migrating ESLint config to Oxlint...');
     const migrateResult = await runOxlintMigrateStep(
-      vpBin,
       projectPath,
       migratePackage,
       migrateArgs,
@@ -219,7 +255,6 @@ export async function migrateEslintToOxlint(
     // Step 2: Replace eslint-disable comments with oxlint-disable
     spinner.start('Replacing ESLint comments with Oxlint equivalents...');
     const replaceResult = await runOxlintMigrateStep(
-      vpBin,
       projectPath,
       migratePackage,
       ['--replace-eslint-comments'],
@@ -583,7 +618,7 @@ export function collectInstalledPackageNames(
  */
 function ruleKeyMatchesNamespace(key: string, namespaces: Set<string>): boolean {
   if (!key.includes('/')) {
-    return true;
+    return false;
   }
   let idx = key.indexOf('/');
   while (idx !== -1) {
@@ -595,15 +630,77 @@ function ruleKeyMatchesNamespace(key: string, namespaces: Set<string>): boolean 
   return false;
 }
 
-/** Filter a rules object to only entries whose namespace is recognized. */
+// Mirror the native aliases accepted by the Oxlint version bundled with Vite+.
+const OXLINT_PLUGIN_ALIASES = new Map([
+  ['@typescript-eslint', 'typescript'],
+  ['typescript-eslint', 'typescript'],
+  ['typescript_eslint', 'typescript'],
+  ['react-hooks', 'react'],
+  ['react_hooks', 'react'],
+  ['deepscan', 'oxc'],
+  ['import-x', 'import'],
+  ['jsx-a11y-x', 'jsx-a11y'],
+  ['jsx_a11y-x', 'jsx-a11y'],
+  ['jsx_a11y', 'jsx-a11y'],
+  ['react_perf', 'react-perf'],
+  ['@next', 'nextjs'],
+  ['@next/next', 'nextjs'],
+]);
+
+function normalizeOxlintRuleNamespace(key: string): string {
+  const separator = key.startsWith('@') ? key.lastIndexOf('/') : key.indexOf('/');
+  if (separator < 0) {
+    return key;
+  }
+  const plugin = deriveJsPluginNamespace(key.slice(0, separator));
+  const namespace = OXLINT_PLUGIN_ALIASES.get(plugin) ?? plugin;
+  return `${namespace}${key.slice(separator)}`;
+}
+
+function isBuiltinOxlintRule(key: string): boolean {
+  const normalizedKey = normalizeOxlintRuleNamespace(key);
+  const firstSlash = normalizedKey.indexOf('/');
+  if (firstSlash === -1) {
+    return (
+      OXLINT_BUILTIN_RULES.has(normalizedKey) ||
+      [...OXLINT_BUILTIN_RULES].some((rule) => rule.endsWith(`/${normalizedKey}`))
+    );
+  }
+  const separator = normalizedKey.startsWith('@') ? normalizedKey.lastIndexOf('/') : firstSlash;
+  const plugin = normalizedKey.slice(0, separator);
+  const rule = normalizedKey.slice(separator + 1);
+  if (
+    plugin === 'eslint' ||
+    (plugin === 'typescript' && TYPESCRIPT_COMPATIBLE_ESLINT_RULES.has(rule))
+  ) {
+    return OXLINT_BUILTIN_RULES.has(rule);
+  }
+  return OXLINT_BUILTIN_RULES.has(`${plugin}/${rule}`);
+}
+
+function hasBuiltinOxlintNamespace(key: string): boolean {
+  if (!key.includes('/')) {
+    return true;
+  }
+  return ruleKeyMatchesNamespace(normalizeOxlintRuleNamespace(key), OXLINT_NATIVE_PLUGINS);
+}
+
+/** Filter a rules object to Oxlint rules or rules under a configured JS plugin namespace. */
 function filterRulesAgainstNamespaces(
   rules: Record<string, unknown>,
-  namespaces: Set<string>,
+  jsPluginNamespaces: Set<string>,
+  droppedRules: Set<string>,
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(rules)) {
-    if (ruleKeyMatchesNamespace(key, namespaces)) {
+    if (
+      isBuiltinOxlintRule(key) ||
+      ruleKeyMatchesNamespace(key, jsPluginNamespaces) ||
+      ruleKeyMatchesNamespace(normalizeOxlintRuleNamespace(key), jsPluginNamespaces)
+    ) {
       out[key] = value;
+    } else if (hasBuiltinOxlintNamespace(key)) {
+      droppedRules.add(key);
     }
   }
   return out;
@@ -662,25 +759,79 @@ function jsPluginsToNamespaces(entries: NonNullable<OxlintConfig['jsPlugins']>):
   return ns;
 }
 
-function stripUnsupportedReactRefreshOption(rules: OxlintConfig['rules']): boolean {
-  const rule = rules?.['react/only-export-components'];
-  if (!Array.isArray(rule)) {
-    return false;
+function warnMissingJsPlugins(plugins: Set<string>, report?: MigrationReport): void {
+  if (plugins.size > 0) {
+    warnMigration(
+      `Stripped JS plugin reference(s) from the generated lint config: ${[...plugins].join(', ')}. ` +
+        'No matching package is present in this workspace, so loading them at lint time would fail. ' +
+        'If you want their Oxlint coverage back, install each package (e.g. `vp install <name>`) and add its name back to `lint.jsPlugins` in vite.config.ts.',
+      report,
+    );
   }
-  const options = rule[1];
-  if (
-    !options ||
-    typeof options !== 'object' ||
-    Array.isArray(options) ||
-    !('allowCompoundComponents' in options)
-  ) {
-    return false;
+}
+
+/** Only remove known missing references: inherited plugins can supply other namespaces at runtime. */
+export function sanitizeInheritedJsPlugins(
+  config: OxlintConfig,
+  availablePackages: Set<string>,
+  configDir: string,
+  report?: MigrationReport,
+): void {
+  const availableSpecifiers = new Set(availablePackages);
+  let resolver: ResolverFactory | undefined;
+  for (const layer of [config, ...(config.overrides ?? [])]) {
+    for (const entry of layer.jsPlugins ?? []) {
+      if (typeof entry !== 'string' || availableSpecifiers.has(entry)) {
+        continue;
+      }
+      const packageName = entry
+        .split('/')
+        .slice(0, entry.startsWith('@') ? 2 : 1)
+        .join('/');
+      if (
+        availablePackages.has(packageName) ||
+        /^\.{1,2}[/\\]/.test(entry) ||
+        path.win32.isAbsolute(entry)
+      ) {
+        availableSpecifiers.add(entry);
+        continue;
+      }
+      resolver ??= new ResolverFactory({ conditionNames: ['module-sync', 'node', 'import'] });
+      if (resolver.sync(configDir, entry).path) {
+        availableSpecifiers.add(entry);
+      }
+    }
   }
-  // eslint-plugin-react-refresh 0.5.7 enables this in its Vite preset, but
-  // @oxlint/migrate copies it into a native rule that rejects the option.
-  // Remove this workaround when the bundled Oxlint supports the option.
-  delete options.allowCompoundComponents;
-  return true;
+  const droppedPlugins = new Set<string>();
+  function sanitizeLayer(layer: OxlintConfig, inheritedDropped = new Set<string>()): Set<string> {
+    const { kept, dropped } = partitionJsPlugins(layer.jsPlugins ?? [], availableSpecifiers);
+    if (dropped.length > 0) {
+      layer.jsPlugins = kept;
+      for (const plugin of dropped) {
+        droppedPlugins.add(plugin);
+      }
+    }
+    const droppedNamespaces = new Set([...inheritedDropped, ...jsPluginsToNamespaces(dropped)]);
+    for (const namespace of jsPluginsToNamespaces(kept)) {
+      droppedNamespaces.delete(namespace);
+    }
+    if (layer.plugins) {
+      layer.plugins = layer.plugins.filter(
+        (plugin) => !droppedNamespaces.has(plugin) || OXLINT_NATIVE_PLUGINS.has(plugin),
+      );
+    }
+    for (const rule of Object.keys(layer.rules ?? {})) {
+      if (ruleKeyMatchesNamespace(rule, droppedNamespaces) && !isBuiltinOxlintRule(rule)) {
+        delete layer.rules![rule];
+      }
+    }
+    return droppedNamespaces;
+  }
+  const droppedNamespaces = sanitizeLayer(config);
+  for (const override of config.overrides ?? []) {
+    sanitizeLayer(override, droppedNamespaces);
+  }
+  warnMissingJsPlugins(droppedPlugins, report);
 }
 
 /**
@@ -709,7 +860,7 @@ export function sanitizeMigratedOxlintConfig(
   // Track everything we strip so we can warn the user.
   const allDroppedJsPlugins = new Set<string>();
   const allDroppedPlugins = new Set<string>();
-  let droppedReactRefreshOption = stripUnsupportedReactRefreshOption(config.rules);
+  const allDroppedRules = new Set<string>();
 
   // 1. Sanitize base-level jsPlugins.
   const baseSplit = partitionJsPlugins(config.jsPlugins ?? [], availablePackages);
@@ -721,8 +872,9 @@ export function sanitizeMigratedOxlintConfig(
   }
 
   // 2. Base namespaces = native plugins + surviving jsPlugins' namespaces.
+  const jsPluginNamespaces = jsPluginsToNamespaces(baseSplit.kept);
   const baseNamespaces = new Set<string>(OXLINT_NATIVE_PLUGINS);
-  for (const ns of jsPluginsToNamespaces(baseSplit.kept)) {
+  for (const ns of jsPluginNamespaces) {
     baseNamespaces.add(ns);
   }
 
@@ -746,7 +898,11 @@ export function sanitizeMigratedOxlintConfig(
   // `rules: undefined` property that would shift downstream key
   // emission in the merged vite.config.ts.
   if (config.rules) {
-    const filtered = filterRulesAgainstNamespaces(config.rules, baseNamespaces);
+    const filtered = filterRulesAgainstNamespaces(
+      config.rules,
+      jsPluginNamespaces,
+      allDroppedRules,
+    );
     if (Object.keys(filtered).length !== Object.keys(config.rules).length) {
       config.rules = filtered as typeof config.rules;
     }
@@ -761,9 +917,6 @@ export function sanitizeMigratedOxlintConfig(
   // namespace are still valid inside the override).
   if (Array.isArray(config.overrides)) {
     for (const override of config.overrides) {
-      if (stripUnsupportedReactRefreshOption(override.rules)) {
-        droppedReactRefreshOption = true;
-      }
       // Override jsPlugins.
       let overrideSurvivors: NonNullable<OxlintConfig['jsPlugins']> = [];
       if (override.jsPlugins) {
@@ -776,10 +929,14 @@ export function sanitizeMigratedOxlintConfig(
         }
         overrideSurvivors = split.kept;
       }
-      const overrideNamespaces = new Set<string>(baseNamespaces);
+      const overrideJsPluginNamespaces = new Set<string>(jsPluginNamespaces);
       for (const ns of jsPluginsToNamespaces(overrideSurvivors)) {
-        overrideNamespaces.add(ns);
+        overrideJsPluginNamespaces.add(ns);
       }
+      const overrideNamespaces = new Set<string>([
+        ...OXLINT_NATIVE_PLUGINS,
+        ...overrideJsPluginNamespaces,
+      ]);
 
       // Override plugins[].
       if (override.plugins) {
@@ -799,7 +956,11 @@ export function sanitizeMigratedOxlintConfig(
 
       // Override rules.
       if (override.rules) {
-        const filtered = filterRulesAgainstNamespaces(override.rules, overrideNamespaces);
+        const filtered = filterRulesAgainstNamespaces(
+          override.rules,
+          overrideJsPluginNamespaces,
+          allDroppedRules,
+        );
         if (Object.keys(filtered).length !== Object.keys(override.rules).length) {
           override.rules = filtered as typeof override.rules;
         }
@@ -808,13 +969,6 @@ export function sanitizeMigratedOxlintConfig(
   }
 
   // 6. Warn.
-  if (droppedReactRefreshOption) {
-    warnMigration(
-      'The bundled Oxlint does not support react/only-export-components.allowCompoundComponents. ' +
-        'Removed this option from the migrated config; compound component exports may now report lint errors.',
-      report,
-    );
-  }
   //
   // We deliberately don't try to distinguish "we just removed this
   // package as part of the ESLint-ecosystem cleanup" from "the user
@@ -824,18 +978,18 @@ export function sanitizeMigratedOxlintConfig(
   // phantom-reference case (e.g. `@unocss/eslint-config` translating
   // into `eslint-plugin-unocss` even though the user never had it).
   // A single accurate message covers both paths.
-  if (allDroppedJsPlugins.size > 0) {
-    warnMigration(
-      `Stripped JS plugin reference(s) from the generated lint config: ${[...allDroppedJsPlugins].join(', ')}. ` +
-        'No matching package is present in this workspace, so loading them at lint time would fail. ' +
-        'If you want their Oxlint coverage back, install each package (e.g. `vp install <name>`) and add its name back to `lint.jsPlugins` in vite.config.ts.',
-      report,
-    );
-  }
+  warnMissingJsPlugins(allDroppedJsPlugins, report);
   if (allDroppedPlugins.size > 0) {
     warnMigration(
       `Stripped unknown plugin reference(s) from the generated lint config: ${[...allDroppedPlugins].join(', ')}. ` +
         "These aren't native Oxlint plugins and no surviving JS plugin contributes them.",
+      report,
+    );
+  }
+  if (allDroppedRules.size > 0) {
+    warnMigration(
+      `Stripped unsupported Oxlint rule(s) from the generated lint config: ${[...allDroppedRules].join(', ')}. ` +
+        'These rule(s) are not available in Oxlint.',
       report,
     );
   }

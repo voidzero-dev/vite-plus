@@ -24,6 +24,7 @@ export function project(name, browser = true) {
       slowTestThreshold: 60000,
       include: ['defines.test.js'],
       ...(browser ? {
+        api: { port: 0 },
         browser: {
           enabled: true,
           headless: true,
@@ -48,7 +49,12 @@ export function configFor(name) {
         configureVitest: {
           order: 'pre',
           async handler({ injectTestProjects }) {
-            await injectTestProjects({ extends: false, ...project('hook-injected') });
+            // Vitest 5.0.4 rejects projects that share sequence.groupOrder but
+            // resolve different maxWorkers, and runtime-injected projects
+            // resolve maxWorkers differently from the root project.
+            const injected = project('hook-injected');
+            injected.test.sequence = { groupOrder: 1 };
+            await injectTestProjects({ extends: false, ...injected });
           },
         },
       }];
@@ -81,7 +87,10 @@ export function configFor(name) {
     case 'separate': {
       const config = project('root');
       config.test.sharedViteServer = false;
-      config.test.projects = [{ test: project('first').test }, { test: project('second').test }];
+      config.test.projects = [
+        { test: project('first').test },
+        { test: project('second').test },
+      ];
       return config;
     }
     case 'independent': return {

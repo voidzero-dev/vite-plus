@@ -5,5 +5,83 @@
       "tarball": "unused",
       "integrity": "sha512-unused"
     }
+  },
+  "@voidzero-dev/vite-plus-cli-darwin-arm64/999.0.0": {
+    "name": "@voidzero-dev/vite-plus-cli-darwin-arm64",
+    "version": "999.0.0",
+    "dist": {
+      "tarball": "unused",
+      "integrity": "sha512-unused",
+      "attestations": {
+        "provenance": {
+          "predicateType": "https://slsa.dev/provenance/v1"
+        }
+      }
+    }
+  },
+  "@voidzero-dev/vite-plus-cli-darwin-x64/999.0.0": {
+    "name": "@voidzero-dev/vite-plus-cli-darwin-x64",
+    "version": "999.0.0",
+    "dist": {
+      "tarball": "unused",
+      "integrity": "sha512-unused",
+      "attestations": {
+        "provenance": {
+          "predicateType": "https://slsa.dev/provenance/v1"
+        }
+      }
+    }
+  },
+  "@voidzero-dev/vite-plus-cli-linux-arm64-gnu/999.0.0": {
+    "name": "@voidzero-dev/vite-plus-cli-linux-arm64-gnu",
+    "version": "999.0.0",
+    "dist": {
+      "tarball": "unused",
+      "integrity": "sha512-unused",
+      "attestations": {
+        "provenance": {
+          "predicateType": "https://slsa.dev/provenance/v1"
+        }
+      }
+    }
+  },
+  "@voidzero-dev/vite-plus-cli-linux-x64-gnu/999.0.0": {
+    "name": "@voidzero-dev/vite-plus-cli-linux-x64-gnu",
+    "version": "999.0.0",
+    "dist": {
+      "tarball": "unused",
+      "integrity": "sha512-unused",
+      "attestations": {
+        "provenance": {
+          "predicateType": "https://slsa.dev/provenance/v1"
+        }
+      }
+    }
+  },
+  "@voidzero-dev/vite-plus-cli-linux-arm64-musl/999.0.0": {
+    "name": "@voidzero-dev/vite-plus-cli-linux-arm64-musl",
+    "version": "999.0.0",
+    "dist": {
+      "tarball": "unused",
+      "integrity": "sha512-unused",
+      "attestations": {
+        "provenance": {
+          "predicateType": "https://slsa.dev/provenance/v1"
+        }
+      }
+    }
+  },
+  "@voidzero-dev/vite-plus-cli-linux-x64-musl/999.0.0": {
+    "name": "@voidzero-dev/vite-plus-cli-linux-x64-musl",
+    "version": "999.0.0",
+    "dist": {
+      "tarball": "unused",
+      "integrity": "sha512-unused",
+      "attestations": {
+        "provenance": {
+          "predicateType": "https://slsa.dev/provenance/v1"
+        }
+      }
+    }
   }
 }

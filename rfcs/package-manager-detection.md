@@ -136,12 +136,14 @@ Projects that require a deterministic declaration can pin it explicitly with `vp
 
 A `packageManager` field can carry an integrity hash: `yarn@4.17.1+sha512.ccbf…`. `corepack use` writes that suffix. Vite+ hashes the same artifact as Corepack, so one pin works under both tools.
 
-| Package manager              | What the declared hash covers                       | What Vite+ also verifies                                   |
-| ---------------------------- | --------------------------------------------------- | ---------------------------------------------------------- |
-| Yarn 2 and later             | the extracted CLI, `bin/yarn.js`                    | —                                                          |
-| npm, pnpm ≤ 11, Yarn Classic | the npm package tarball                             | —                                                          |
-| pnpm ≥ 12                    | the main `pnpm` tarball                             | the platform package against the registry `dist.integrity` |
-| bun                          | the main `bun` tarball, which Vite+ never downloads | the platform package against the registry `dist.integrity` |
+| Package manager              | What the declared hash covers    | What Vite+ also verifies                                   |
+| ---------------------------- | -------------------------------- | ---------------------------------------------------------- |
+| Yarn 2 and later             | the extracted CLI, `bin/yarn.js` | —                                                          |
+| npm, pnpm ≤ 11, Yarn Classic | the npm package tarball          | —                                                          |
+| pnpm ≥ 12                    | the main `pnpm` tarball          | the platform package against the registry `dist.integrity` |
+| bun                          | the main `bun` tarball           | the platform package against the registry `dist.integrity` |
+
+For a fresh Bun install, Vite+ downloads the main `bun` tarball only when a declared hash needs verification. It still installs the platform-specific binary and verifies that package against the registry's `dist.integrity` when present.
 
 Yarn 2 and later is the exception because Corepack installs Berry from a single file, `repo.yarnpkg.com/<version>/packages/yarnpkg-cli/bin/yarn.js`, and hashes that file. Vite+ downloads the `@yarnpkg/cli-dist` tarball instead, so it extracts `bin/yarn.js` and hashes that entry. The bytes are the same; only the basis differs. Vite+ hashed the tarball before, which made a pin written by `corepack use` fail (issue #2209).
 
@@ -149,13 +151,15 @@ That pin covers one file inside an otherwise unauthenticated archive, so Vite+ w
 
 ### When Vite+ verifies a pin
 
-Vite+ hashes the artifact when it downloads it, and records the verified pin beside the install in `<version>/.verified-pin`. A later command compares its own pin against that record:
+Vite+ hashes the artifact when it downloads it, then stores the verified install in a content-addressed directory under a hidden `.verified-v1` namespace, separate from the unpinned version directories: `<DATA>/package_manager/<name>/.verified-v1/<version>/<key>/`, where `<key>` is a fingerprint of the pin (and, for a platform-binary manager, the registry origin). A later command resolves that same directory only when its pin, and origin, match:
 
-- The pins match. The command uses the cache and reads no further.
-- The pins differ, or the record is missing. Vite+ hashes the cached CLI once, then rewrites the record.
+- The pins match. The command finds the complete keyed directory and reuses it, without re-reading the install.
+- The pins differ. The request resolves to a different key directory, which does not exist, so Vite+ downloads and verifies again.
 - The hash disagrees with the pin. The command stops with `Hash mismatch for <name>@<version>`, and the message names the artifact the hash covers.
 
-Vite+ does not read the CLI again on every command. Corepack gives the same guarantee: it reads its own `.corepack` record and returns. The trust boundary is write access to `$VP_HOME`, which also holds the `vp` binary, the generated shims, and the managed Node.js runtime.
+A complete keyed directory is never replaced, so a verified install stays stable while a command runs it. An install with no pin has no integrity reference, so it stays on the shared `<version>/` directory outside the verified namespace, with no key segment; a pinned request never reuses it.
+
+Vite+ does not read the CLI again on every command. The trust boundary is write access to `$VP_HOME`, which also holds the `vp` binary, the generated shims, and the managed Node.js runtime.
 
 An integrity failure stops the command that needs the package manager, including `vp run` and `vp exec`. Those commands otherwise continue when the managed package manager is missing, for example with no network or an unknown version. A swallowed integrity failure would surface later as "command not found".
 
@@ -205,9 +209,9 @@ Each package manager has specific files that trigger cache invalidation when cha
 
 - **File**: `crates/vp_pm_cli/src/package_manager.rs`
 - **Function**: `get_package_manager_type_and_version()` — priority-ordered detection
-- **Function**: `download_package_manager()` — download, hash, and record the verified pin
+- **Function**: `download_package_manager()` — download, hash, and store the verified install under its content key
 - **Function**: `ensure_package_manager_bin()` — resolve the executable, shared with the global shim
-- **Function**: `verify_cached_cli_hash()` — compare a pin against the recorded pin
+- **Function**: `install_cache_key()` — derive a pinned install's content-key directory from the pin and, for a platform-binary manager, the registry origin
 - **Enum**: `PackageManagerType` — `Pnpm`, `Yarn`, `Npm`, `Bun`
 
 ### TypeScript (CLI integration)

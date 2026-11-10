@@ -7,6 +7,7 @@ mod app_target;
 mod execution;
 mod handler;
 mod help;
+mod lifecycle_env;
 mod resolver;
 mod script_note;
 mod types;
@@ -96,8 +97,10 @@ async fn execute_direct_subcommand(
 
     let status = match subcommand {
         SynthesizableSubcommand::Check {
+            continue_on_error,
             fix,
             quiet,
+            deny_warnings,
             no_fmt,
             no_lint,
             no_error_on_unmatched_pattern,
@@ -105,8 +108,10 @@ async fn execute_direct_subcommand(
         } => {
             return crate::check::execute_check(
                 &resolver,
+                continue_on_error,
                 fix,
                 quiet,
+                deny_warnings,
                 no_fmt,
                 no_lint,
                 no_error_on_unmatched_pattern,
@@ -203,7 +208,8 @@ async fn envs_with_explicit_package_manager_path(
         return Ok(envs);
     };
 
-    let (install_dir, _, _) = match vp_pm_cli::download_package_manager(
+    let (install_dir, _, _) = match vp_pm_cli::download_package_manager_for_cwd(
+        cwd,
         resolution.package_manager_type,
         &resolution.version,
         resolution.hash.as_deref(),
@@ -237,6 +243,8 @@ async fn execute_vite_task_command(
     let (workspace_root, _) = vt_workspace::find_workspace_root(&cwd)?;
     let workspace_path: Arc<AbsolutePath> = workspace_root.path.into();
 
+    let node_version = options.as_ref().and_then(|o| o.node_version.clone());
+
     let resolve_vite_config_fn = options
         .as_ref()
         .map(|o| Arc::clone(&o.resolve_universal_vite_config))
@@ -260,6 +268,13 @@ async fn execute_vite_task_command(
         Ok(pm) => {
             let bin_prefix = pm.get_bin_prefix();
             prepend_tools_to_path_env(&bin_prefix, &pm.bin_names(), PrependOptions::default())?;
+
+            // Stamp the package-manager lifecycle env (`npm_execpath`,
+            // `npm_config_user_agent`) like pnpm/npm/yarn would, so child
+            // runners inside scripts can detect the package manager (#2317).
+            // Session::init snapshots the process env, so this must also happen
+            // before it.
+            lifecycle_env::stamp_package_manager_lifecycle_env(&pm, node_version.as_deref());
         }
         Err(error) if error.is_integrity_failure() => return Err(error),
         Err(error) => {
@@ -547,18 +562,13 @@ mod tests {
 
     #[tokio::test]
     async fn stops_when_the_pinned_package_manager_fails_its_integrity_check() {
+        use httpmock::prelude::*;
+
         let suffix =
             SystemTime::now().duration_since(UNIX_EPOCH).expect("time should be valid").as_nanos();
         let temp_dir = std::env::temp_dir().join(format!("vite-plus-bad-hash-{suffix}"));
         let vp_home = temp_dir.join("vp-home");
-        // VP_HOME pins <DATA> to the root, so the cached install lands here.
-        let bin_dir =
-            vp_home.join("package_manager").join("yarn").join("4.17.1").join("yarn").join("bin");
-        fs::create_dir_all(&bin_dir).expect("cached package manager should be created");
-        for shim in ["yarn", "yarn.cmd", "yarn.ps1"] {
-            fs::write(bin_dir.join(shim), "shim").expect("shim should be written");
-        }
-        fs::write(bin_dir.join("yarn.js"), "corrupt").expect("CLI should be written");
+        fs::create_dir_all(&temp_dir).expect("temp dir should be created");
 
         let expected_hash = format!("sha512.{}", "0".repeat(128));
         fs::write(
@@ -566,20 +576,60 @@ mod tests {
             format!(r#"{{"name":"fixture","packageManager":"yarn@4.17.1+{expected_hash}"}}"#),
         )
         .expect("package.json should be written");
+
+        // A Yarn 2+ pin covers the CLI binary, verified when it is downloaded. Serve
+        // the `@yarnpkg/cli-dist` tarball from a local registry so the check runs
+        // offline; its CLI bytes cannot match the all-zeros pin, so the download must
+        // fail and the error must reach the caller instead of a missing command.
+        let server = MockServer::start();
+        let tarball = cli_dist_tgz(b"console.log('yarn');\n");
+        server.mock(|when, then| {
+            when.method(GET).path("/@yarnpkg/cli-dist/-/cli-dist-4.17.1.tgz");
+            then.status(200).body(tarball);
+        });
+        let registry = server.base_url();
+
         let cwd = AbsolutePathBuf::new(temp_dir.clone()).expect("temp dir should be absolute");
         let original_path = std::env::join_paths([temp_dir.join("old-bin")]).expect("valid PATH");
         let envs = envs_with_path(original_path.as_os_str());
 
-        vp_shared::EnvConfig::with_vars_async([(vp_shared::env_vars::VP_HOME, &vp_home)], |_| async {
-            let result = envs_with_explicit_package_manager_path(&cwd, envs).await;
+        vp_shared::EnvConfig::with_vars_async(
+            [
+                (vp_shared::env_vars::VP_HOME, vp_home.as_os_str()),
+                ("NPM_CONFIG_REGISTRY", std::ffi::OsStr::new(&registry)),
+            ],
+            |_| async {
+                let result = envs_with_explicit_package_manager_path(&cwd, envs).await;
 
-        assert!(
-            matches!(result, Err(Error::PackageManagerHashMismatch(_))),
-            "an integrity failure must reach the user instead of a missing command: {result:?}"
-        );
-        fs::remove_dir_all(temp_dir).expect("temp dir should be removed");
-            })
+                assert!(
+                    matches!(result, Err(Error::PackageManagerHashMismatch(_))),
+                    "an integrity failure must reach the user instead of a missing command: {result:?}"
+                );
+                fs::remove_dir_all(temp_dir).expect("temp dir should be removed");
+            },
+        )
         .await;
+    }
+
+    /// Build an `@yarnpkg/cli-dist` style gzip tarball holding `package/bin/yarn.js`.
+    fn cli_dist_tgz(yarn_js: &[u8]) -> Vec<u8> {
+        let mut builder = tar::Builder::new(Vec::new());
+        let mut header = tar::Header::new_gnu();
+        header.set_size(yarn_js.len() as u64);
+        header.set_mode(0o755);
+        header.set_cksum();
+        builder
+            .append_data(&mut header, "package/bin/yarn.js", std::io::Cursor::new(yarn_js))
+            .unwrap();
+        let tar_data = builder.into_inner().unwrap();
+        let mut gz = Vec::new();
+        {
+            let mut encoder =
+                flate2::write::GzEncoder::new(&mut gz, flate2::Compression::default());
+            std::io::Write::write_all(&mut encoder, &tar_data).unwrap();
+            encoder.finish().unwrap();
+        }
+        gz
     }
 
     #[tokio::test]

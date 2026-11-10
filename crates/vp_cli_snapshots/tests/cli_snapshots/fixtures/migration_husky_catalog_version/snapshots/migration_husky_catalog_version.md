@@ -10,7 +10,8 @@ catalog dependencies should still be recognized as a Husky setup
 ```
 VITE+ - The Unified Toolchain for the Web
 
-⚠ Detected Husky — leaving its hooks, configuration, and dependencies unchanged. Migrate Husky manually before enabling Vite+ hooks.
+▲ No package manager is declared in package.json; using pnpm for this migration without adding a pin. Run `vp env pin` to declare it explicitly.
+▲ ⚠ Detected Husky — leaving its hooks, configuration, and dependencies unchanged. Migrate Husky manually before enabling Vite+ hooks.
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • 1 config update applied
@@ -34,13 +35,6 @@ Husky and lint-staged metadata should remain
   },
   "lint-staged": {
     "*.js": "oxlint --fix"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
   }
 }
 ```

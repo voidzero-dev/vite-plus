@@ -13,11 +13,14 @@ ast-grep-core = { workspace = true }
 ast-grep-language = { workspace = true }
 brush-parser = { workspace = true }
 ignore = { workspace = true }
+js-semver = { workspace = true }
 oxc = { workspace = true }
 rayon = { workspace = true }
 regex = { workspace = true }
 serde_json = { workspace = true, features = ["preserve_order"] }
 vp_error = { workspace = true, features = ["migration"] }
+vp_toolchain = { workspace = true }
+vt_path = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

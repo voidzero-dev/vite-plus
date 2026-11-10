@@ -1,8 +1,9 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { styleText } from 'node:util';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
-import semver from 'semver';
+import { satisfies } from 'verkit';
 
 import { parseMigrateArgs } from '../../binding/index.js';
 import {
@@ -15,18 +16,21 @@ import { writeAgentInstructions } from '../utils/agent.ts';
 import { unwrapCliParseOutcome } from '../utils/cli-parse.ts';
 import { isForceOverrideMode, SETUP_VP_VERSION, VITE_PLUS_VERSION } from '../utils/constants.ts';
 import { writeEditorConfigs } from '../utils/editor.ts';
-import { hasVitePlusDependency, readNearestPackageJson } from '../utils/package.ts';
+import {
+  hasPackageManagerDeclaration,
+  hasVitePlusDependency,
+  readNearestPackageJson,
+} from '../utils/package.ts';
 import { displayRelative } from '../utils/path.ts';
 import {
   cancelAndExit,
-  type CommandRunSummary,
   defaultInteractive,
   downloadPackageManager,
   runViteInstall,
   selectPackageManager,
   upgradeYarn,
 } from '../utils/prompts.ts';
-import { accent, formatDuration, log, muted, printHeader, warnMsg } from '../utils/terminal.ts';
+import { accent, formatDuration, log, muted, printHeader } from '../utils/terminal.ts';
 import {
   confirmBaseUrlFix,
   fixBaseUrlInTsconfig,
@@ -35,7 +39,9 @@ import {
 import type { PackageDependencies } from '../utils/types.ts';
 import { detectWorkspace } from '../utils/workspace.ts';
 import { checkRolldownCompatibility } from './compat/runner.ts';
+import { detectMigrationWarnings } from './detector.ts';
 import { canFormatWithOxfmt, collectChangedFormatPaths, formatMigratedProject } from './format.ts';
+import { handleInstallResult } from './install-result.ts';
 import {
   addFrameworkShim,
   applyVitestV5Migration,
@@ -44,12 +50,18 @@ import {
   checkViteVersion,
   collectToolchainVersionChanges,
   confirmPrettierMigration,
+  confirmTsxMigration,
+  confirmOxnodeMigration,
+  confirmTsNodeMigration,
   detectEslintProject,
   detectFramework,
   detectNodeVersionManagerFile,
   detectPendingCoreMigration,
   detectPrettierProject,
   detectTsupProject,
+  detectTsxProject,
+  detectOxnodeProject,
+  detectTsNodeProject,
   detectVitePlusBootstrapPending,
   detectYarnPnpMode,
   ensureVitePlusBootstrap,
@@ -67,11 +79,17 @@ import {
   migratePrettierToOxfmt,
   migrateSetupVpVersion,
   migrateTsupToTsdown,
+  migrateTsxToVpx,
+  migrateOxnodeToVpx,
+  migrateTsNodeToVpx,
   configureYarnNodeModulesMode,
   rewriteMonorepo,
   rewriteStandaloneProject,
   planVitestV5Migration,
   refreshVitestV5Migration,
+  retryPreservedOxlintConfigs,
+  prepareOxlintConfigs,
+  removeMigratedOxlintConfigs,
   shouldSkipStagedMigrationForHooks,
   warnPackageLevelPrettier,
   vitestV5NeedsMigration,
@@ -94,7 +112,6 @@ async function confirmNodeVersionFileMigration(
 ): Promise<boolean> {
   const confirmMessageByFile = {
     'package.json': 'Migrate Volta node version (package.json) to .node-version?',
-    '.nvmrc': 'Migrate .nvmrc to .node-version?',
   } as const satisfies Record<NodeVersionManagerDetection['file'], string>;
 
   const message = confirmMessageByFile[detection.file];
@@ -274,6 +291,9 @@ interface MigrationPlan extends MigrationSetupPlan {
   prettierConfigFile?: string;
   migrateTsup: boolean;
   tsupConfigFile?: string;
+  migrateTsx: boolean;
+  migrateOxnode: boolean;
+  migrateTsNode: boolean;
   fixBaseUrl: boolean;
   migrateNodeVersionFile: boolean;
   nodeVersionDetection?: NodeVersionManagerDetection;
@@ -370,6 +390,9 @@ function hasExistingVitePlusMigrationCandidates(
     eslintProject.hasDependency ||
     prettierProject.hasDependency ||
     tsupProject.hasDependency ||
+    detectTsxProject(workspaceInfo.rootDir, workspaceInfo.packages) ||
+    detectOxnodeProject(workspaceInfo.rootDir, workspaceInfo.packages) ||
+    detectTsNodeProject(workspaceInfo.rootDir, workspaceInfo.packages) ||
     detectNodeVersionManagerFile(workspaceInfo.rootDir) !== undefined ||
     getFrameworkShimCandidates(workspaceInfo.rootDir, workspaceInfo.packages).length > 0
   );
@@ -429,6 +452,14 @@ async function collectMigrationPlan(
     packages,
   );
 
+  // 3c. tsx detection + prompt
+  const migrateTsx =
+    detectTsxProject(rootDir, packages) && (await confirmTsxMigration(options.interactive));
+  const migrateOxnode =
+    detectOxnodeProject(rootDir, packages) && (await confirmOxnodeMigration(options.interactive));
+  const migrateTsNode =
+    detectTsNodeProject(rootDir, packages) && (await confirmTsNodeMigration(options.interactive));
+
   // 9. tsconfig baseUrl prompt
   const fixBaseUrl = hasBaseUrlInWorkspace({ rootDir, packages })
     ? await confirmBaseUrlFix(options.interactive)
@@ -456,6 +487,9 @@ async function collectMigrationPlan(
     prettierConfigFile: prettierProject.configFile,
     migrateTsup,
     tsupConfigFile,
+    migrateTsx,
+    migrateOxnode,
+    migrateTsNode,
     fixBaseUrl,
     migrateNodeVersionFile,
     nodeVersionDetection,
@@ -463,43 +497,6 @@ async function collectMigrationPlan(
   };
 
   return plan;
-}
-
-/**
- * Reconcile a CommandRunSummary from `runViteInstall` with the migration's
- * duration counter and exit-code state. `runViteInstall` returns
- * `{ status: 'failed', exitCode }` without throwing; treating that as a success
- * (incrementing duration unconditionally) would let the migration claim
- * "Dependencies installed" while node_modules is desynced from the just-mutated
- * package.json. This helper centralizes the right handling: credit duration on
- * success, warn + flip exitCode on failure, stay silent on skip.
- */
-function handleInstallResult(
-  installSummary: CommandRunSummary,
-  rootDir: string,
-  report: MigrationReport,
-  // The pre-migration "initial" install is best-effort: the migration proceeds
-  // regardless of its outcome, and a post-migration "final" install runs with
-  // `--force` / `--no-frozen-lockfile` as the authoritative recovery. Only that
-  // final install's failure should flip `process.exitCode` so a successful
-  // recovery yields exit 0; the initial failure is still surfaced via
-  // `report.warnings` + the warn message.
-  options?: { propagateExitCode?: boolean },
-): number {
-  if (installSummary.status === 'installed') {
-    return installSummary.durationMs;
-  }
-  if (installSummary.status === 'failed') {
-    const exitCode = installSummary.exitCode ?? 1;
-    const message = `Dependency installation failed (exit code ${exitCode}). Run \`vp install\` manually in ${rootDir} to resync node_modules.`;
-    warnMsg(message);
-    report.warnings.push(message);
-    if (options?.propagateExitCode !== false) {
-      process.exitCode = exitCode;
-    }
-    return 0;
-  }
-  return 0;
 }
 
 // Shown on a bare existing-Vite+ upgrade that skipped the setup bucket, on both
@@ -601,6 +598,15 @@ function showMigrationSummary(options: {
   if (report.tsupMigrated) {
     log(`${styleText('gray', '•')} tsup config migrated to tsdown (\`vp pack\`)`);
   }
+  if (report.tsxMigrated) {
+    log(`${styleText('gray', '•')} tsx scripts migrated to Vite+`);
+  }
+  if (report.oxnodeMigrated) {
+    log(`${styleText('gray', '•')} oxnode scripts migrated to Vite+`);
+  }
+  if (report.tsNodeMigrated) {
+    log(`${styleText('gray', '•')} ts-node scripts migrated to Vite+`);
+  }
   if (report.nodeVersionFileMigrated) {
     log(`${styleText('gray', '•')} Node version manager file migrated to .node-version`);
   }
@@ -631,17 +637,22 @@ function showMigrationSummary(options: {
   if (suggestFullMigration) {
     log(FULL_MIGRATION_HINT);
   }
-  if (report.warnings.length > 0) {
-    log(`${styleText('yellow', '!')} Warnings:`);
-    for (const warning of report.warnings) {
-      log(`  - ${warning}`);
-    }
-  }
+  showMigrationWarnings(report.warnings);
   if (report.manualSteps.length > 0) {
     log(`${styleText('blue', '→')} Manual follow-up:`);
     for (const step of report.manualSteps) {
       log(`  - ${step}`);
     }
+  }
+}
+
+function showMigrationWarnings(warnings: readonly string[]): void {
+  if (warnings.length === 0) {
+    return;
+  }
+  log(`${styleText('yellow', '!')} Warnings:`);
+  for (const warning of warnings) {
+    log(`  - ${warning}`);
   }
 }
 
@@ -668,17 +679,18 @@ async function downloadSupportedPackageManager(options: {
     packageManagerVersion,
     interactive,
     true,
+    rootDir,
   );
 
   if (
     packageManager === PackageManager.yarn &&
-    semver.satisfies(downloadResult.version, '>=4.0.0 <4.10.0')
+    satisfies(downloadResult.version, '>=4.0.0 <4.10.0')
   ) {
     updateMigrationProgress('Upgrading Yarn');
     await upgradeYarn(rootDir, interactive, true);
   } else if (
     packageManager === PackageManager.pnpm &&
-    semver.satisfies(downloadResult.version, '< 9.5.0')
+    satisfies(downloadResult.version, '< 9.5.0')
   ) {
     failMigrationProgress('Migration failed');
     prompts.log.error(
@@ -687,7 +699,7 @@ async function downloadSupportedPackageManager(options: {
     cancelAndExit('Vite+ cannot automatically migrate this project yet.', 1);
   } else if (
     packageManager === PackageManager.npm &&
-    semver.satisfies(downloadResult.version, '< 8.3.0')
+    satisfies(downloadResult.version, '< 8.3.0')
   ) {
     failMigrationProgress('Migration failed');
     prompts.log.error(
@@ -734,6 +746,9 @@ async function executeMigrationPlan(
   report: MigrationReport;
 }> {
   const report = createMigrationReport();
+  report.warnings.push(
+    ...detectMigrationWarnings(workspaceInfoOptional.rootDir, workspaceInfoOptional.packages),
+  );
   const migrationProgress = interactive ? prompts.spinner({ indicator: 'timer' }) : undefined;
   let migrationProgressStarted = false;
   const updateMigrationProgress = (message: string) => {
@@ -845,14 +860,14 @@ async function executeMigrationPlan(
   // 5b. Prettier → Oxfmt migration (before main rewrite so .oxfmtrc.json gets picked up)
   if (plan.migratePrettier) {
     updateMigrationProgress('Migrating Prettier');
-    const prettierOk = await migratePrettierToOxfmt(
+    const prettierResult = await migratePrettierToOxfmt(
       workspaceInfo.rootDir,
       interactive,
       plan.prettierConfigFile,
       workspaceInfo.packages,
       { silent: true, report },
     );
-    if (!prettierOk) {
+    if (prettierResult === 'failed') {
       failMigrationProgress('Migration failed');
       cancelAndExit('Prettier migration failed. Fix the issue and re-run `vp migrate`.', 1);
     }
@@ -873,6 +888,20 @@ async function executeMigrationPlan(
       failMigrationProgress('Migration failed');
       cancelAndExit('Complete the tsup migration manually, then re-run `vp migrate`.', 1);
     }
+  }
+
+  // 6c. tsx → vpx (before main rewrite so rewritten lint-staged tasks get merged)
+  if (plan.migrateTsx) {
+    updateMigrationProgress('Migrating tsx scripts');
+    migrateTsxToVpx(workspaceInfo.rootDir, workspaceInfo.packages, report);
+  }
+  if (plan.migrateOxnode) {
+    updateMigrationProgress('Migrating oxnode scripts');
+    migrateOxnodeToVpx(workspaceInfo.rootDir, workspaceInfo.packages, report);
+  }
+  if (plan.migrateTsNode) {
+    updateMigrationProgress('Migrating ts-node scripts');
+    migrateTsNodeToVpx(workspaceInfo.rootDir, workspaceInfo.packages, report);
   }
 
   // Earlier setup and tool migrations can abort or change the preflight inputs.
@@ -995,7 +1024,7 @@ async function executeMigrationPlan(
   );
   if (
     finalInstallSummary.status === 'installed' &&
-    canFormatWithOxfmt(plan.hasPrettierDependency, plan.migratePrettier)
+    canFormatWithOxfmt(plan.hasPrettierDependency, report.prettierMigrated)
   ) {
     await formatMigratedProject(workspaceInfo.rootDir, interactive, report, {
       excludedPaths: preExistingChangedPaths,
@@ -1013,6 +1042,14 @@ async function main() {
   const { projectPath, options } = parseArgs();
 
   printHeader();
+
+  if (!fs.existsSync(path.join(projectPath, 'package.json'))) {
+    const target = displayRelative(projectPath) || '.';
+    cancelAndExit(
+      `Cannot migrate ${target}: no package.json found. Run vp migrate from a project root or pass its path explicitly.`,
+      1,
+    );
+  }
 
   const workspaceInfoOptional = await detectWorkspace(projectPath);
   if (
@@ -1039,9 +1076,14 @@ async function main() {
 
   // Early return if already using Vite+ (only finalization/setup migrations may be needed)
   // In force-override mode (file: tgz overrides), skip this check and run full migration
-  const rootPkg = readNearestPackageJson(
-    workspaceInfoOptional.rootDir,
-  ) as PackageDependencies | null;
+  const rootPkg = readNearestPackageJson(workspaceInfoOptional.rootDir) as
+    | (PackageDependencies & { packageManager?: unknown; devEngines?: unknown })
+    | null;
+  if (workspaceInfoOptional.packageManager && !hasPackageManagerDeclaration(rootPkg)) {
+    prompts.log.warn(
+      `No package manager is declared in package.json; using ${workspaceInfoOptional.packageManager} for this migration without adding a pin. Run \`vp env pin\` to declare it explicitly.`,
+    );
+  }
   if (hasVitePlusDependency(rootPkg) && !isForceOverrideMode()) {
     // Runs with the detected package manager, which may be undefined for an
     // existing Vite+ project that has no lockfile/`packageManager` pin. In that
@@ -1059,6 +1101,10 @@ async function main() {
     let finalInstallOk = true;
     let canFormatMigratedProject = !process.env.VP_SKIP_INSTALL;
     const report = createMigrationReport();
+    // Only --full opts existing projects into tool migration advice.
+    const migrationWarnings = options.full
+      ? detectMigrationWarnings(workspaceInfoOptional.rootDir, workspaceInfoOptional.packages)
+      : [];
     // Report reviews at the end with updated locations. Keep them out of the
     // report until then so review-only items do not force an up-to-date project
     // through dependency reconciliation on every run.
@@ -1184,6 +1230,17 @@ async function main() {
       didMigrate = true;
     }
 
+    if (
+      retryPreservedOxlintConfigs(
+        workspaceInfoOptional.rootDir,
+        true,
+        report,
+        workspaceInfoOptional.packages,
+      )
+    ) {
+      didMigrate = true;
+    }
+
     // finalizeCore has finished; stop the spinner before the interactive setup
     // prompts below (collectMigrationSetupPlan / framework shims, in --full mode)
     // so they don't render on top of the still-running progress line.
@@ -1213,6 +1270,7 @@ async function main() {
         ? hasExistingVitePlusMigrationCandidates(workspaceInfoOptional, options)
         : hasExplicitExistingVitePlusSetupRequest(options))
     ) {
+      showMigrationWarnings(migrationWarnings);
       if (vitestV5Preflight) {
         prompts.log.warn(vitestV5Preflight);
       }
@@ -1225,6 +1283,7 @@ async function main() {
       prompts.outro(`This project is already using Vite+! ${accent('Happy coding!')}`);
       return;
     }
+    report.warnings.push(...migrationWarnings);
     for (const warning of coreMigrationResult.taskCacheWarnings) {
       addMigrationWarning(report, warning);
     }
@@ -1329,18 +1388,18 @@ async function main() {
         if (migratePrettier) {
           await ensureExistingPackageManager();
           updateMigrationProgress('Migrating Prettier');
-          const prettierOk = await migratePrettierToOxfmt(
+          const prettierResult = await migratePrettierToOxfmt(
             workspaceInfoOptional.rootDir,
             options.interactive,
             prettierProject.configFile,
             workspaceInfoOptional.packages,
             { silent: true, report },
           );
-          if (!prettierOk) {
+          if (prettierResult === 'failed') {
             clearMigrationProgress();
             cancelAndExit('Prettier migration failed. Fix the issue and re-run `vp migrate`.', 1);
           }
-          prettierMigrated = true;
+          prettierMigrated = prettierResult === 'migrated';
         }
       } else if (prettierProject.hasDependency) {
         warnPackageLevelPrettier();
@@ -1375,6 +1434,65 @@ async function main() {
           cancelAndExit('Complete the tsup migration manually, then re-run `vp migrate`.', 1);
         }
         tsupMigrated = true;
+      }
+    }
+
+    if (
+      fullSetup &&
+      detectTsxProject(workspaceInfoOptional.rootDir, workspaceInfoOptional.packages)
+    ) {
+      // Interactive only: stop any active spinner so it does not animate beneath
+      // the confirm prompt.
+      if (options.interactive) {
+        clearMigrationProgress();
+      }
+      if (await confirmTsxMigration(options.interactive)) {
+        updateMigrationProgress('Migrating tsx scripts');
+        const tsxResult = migrateTsxToVpx(
+          workspaceInfoOptional.rootDir,
+          workspaceInfoOptional.packages,
+          report,
+        );
+        didMigrate ||= tsxResult.changed;
+        needsInstall ||= tsxResult.dependencyRemoved;
+      }
+    }
+
+    if (
+      fullSetup &&
+      detectOxnodeProject(workspaceInfoOptional.rootDir, workspaceInfoOptional.packages)
+    ) {
+      if (options.interactive) {
+        clearMigrationProgress();
+      }
+      if (await confirmOxnodeMigration(options.interactive)) {
+        updateMigrationProgress('Migrating oxnode scripts');
+        const oxnodeResult = migrateOxnodeToVpx(
+          workspaceInfoOptional.rootDir,
+          workspaceInfoOptional.packages,
+          report,
+        );
+        didMigrate ||= oxnodeResult.changed;
+        needsInstall ||= oxnodeResult.dependencyRemoved;
+      }
+    }
+
+    if (
+      fullSetup &&
+      detectTsNodeProject(workspaceInfoOptional.rootDir, workspaceInfoOptional.packages)
+    ) {
+      if (options.interactive) {
+        clearMigrationProgress();
+      }
+      if (await confirmTsNodeMigration(options.interactive)) {
+        updateMigrationProgress('Migrating ts-node scripts');
+        const tsNodeResult = migrateTsNodeToVpx(
+          workspaceInfoOptional.rootDir,
+          workspaceInfoOptional.packages,
+          report,
+        );
+        didMigrate ||= tsNodeResult.changed;
+        needsInstall ||= tsNodeResult.dependencyRemoved;
       }
     }
 
@@ -1434,12 +1552,25 @@ async function main() {
     // Merge configs and reinstall once if any tool or bootstrap migration happened
     if (eslintMigrated || prettierMigrated || tsupMigrated) {
       updateMigrationProgress('Rewriting configs');
+      const rootDir = workspaceInfoOptional.rootDir;
+      // Full setup only merges the root here; untouched packages still need their JSON dependencies.
+      const oxlintConfigs = workspaceInfoOptional.isMonorepo
+        ? prepareOxlintConfigs([
+            rootDir,
+            ...workspaceInfoOptional.packages.map((pkg) => path.join(rootDir, pkg.path)),
+          ])
+        : undefined;
       mergeViteConfigFiles(
-        workspaceInfoOptional.rootDir,
+        rootDir,
         true,
         report,
         workspaceInfoOptional.packages,
+        rootDir,
+        oxlintConfigs,
       );
+      if (oxlintConfigs) {
+        removeMigratedOxlintConfigs(oxlintConfigs);
+      }
       if (tsupMigrated) {
         mergeTsdownConfigFile(workspaceInfoOptional.rootDir, true, report);
         for (const pkg of workspaceInfoOptional.packages ?? []) {

@@ -3,5 +3,7 @@ name = "migration_eslint_legacy_already_vite_plus"
 vp = "global"
 skip-platforms = [{ os = "linux", libc = "musl" }]
 steps = [
-  { argv = ["vp", "migrate", "--no-interactive"], comment = "should show legacy config warning and already using Vite+", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--full", "--no-interactive"], comment = "full migration of an existing Vite+ project should warn about the legacy ESLint config and skip ESLint migration", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "check eslint and its lint script are kept", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".eslintrc", "--assert", "file"], comment = "check legacy config is kept", continue-on-failure = true },
 ]

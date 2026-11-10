@@ -110,6 +110,99 @@ pub fn rewrite_scripts(scripts_json: &str, rules_yaml: &str) -> Result<Option<St
 mod tests {
     use super::*;
 
+    fn assert_bash_syntax(script: &str) {
+        #[cfg(unix)]
+        {
+            let output = std::process::Command::new("bash")
+                .args(["-n", "-c", script])
+                .output()
+                .expect("bash is required to check migrated script syntax");
+            assert!(
+                output.status.success(),
+                "invalid Bash script: {script}\n{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+        #[cfg(not(unix))]
+        let _ = script;
+    }
+
+    fn assert_conditional_redirects(
+        rewrite: impl Fn(&str) -> Result<Option<String>, vp_error::Error>,
+        command: &str,
+        replacement: &str,
+    ) {
+        for (input, expected) in [
+            ("[[ -d src ]] 2>/dev/null && COMMAND", "[[ -d src ]] 2> /dev/null && REPLACEMENT"),
+            (
+                "[[ -d src ]] 2>/dev/null 1>&2 && COMMAND",
+                "[[ -d src ]] 2> /dev/null 1>& 2 && REPLACEMENT",
+            ),
+            ("[[ -d src ]] >/dev/null && COMMAND", "[[ -d src ]] > /dev/null && REPLACEMENT"),
+            (
+                "if [[ -d src ]] 2>/dev/null; then COMMAND; fi",
+                "if [[ -d src ]] 2> /dev/null; then REPLACEMENT; fi",
+            ),
+            (
+                "([[ -d src ]] 2>/dev/null && COMMAND)",
+                "( [[ -d src ]] 2> /dev/null && REPLACEMENT )",
+            ),
+            (
+                "[[ -d src ]] 2>/dev/null && bunx COMMAND",
+                "[[ -d src ]] 2> /dev/null && bunx REPLACEMENT",
+            ),
+            (
+                "echo '[[ -d src ]]2>/dev/null' && [[ -d src ]] 2>/dev/null && COMMAND",
+                "echo '[[ -d src ]]2>/dev/null' && [[ -d src ]] 2> /dev/null && REPLACEMENT",
+            ),
+            (
+                "[[ -n ']]2>' ]] 2>/dev/null && COMMAND",
+                "[[ -n ']]2>' ]] 2> /dev/null && REPLACEMENT",
+            ),
+            ("echo \"literal ]]2>\" && COMMAND", "echo \"literal ]]2>\" && REPLACEMENT"),
+        ] {
+            let input = input.replace("COMMAND", command);
+            let expected = expected.replace("REPLACEMENT", replacement);
+            assert_bash_syntax(&input);
+            let scripts = serde_json::json!({ "check": input }).to_string();
+            let rewritten = rewrite(&scripts).unwrap().expect("script should be migrated");
+            let value: Value = serde_json::from_str(&rewritten).unwrap();
+            let actual = value["check"].as_str().unwrap();
+            assert_eq!(actual, expected, "input: {input}");
+            assert_bash_syntax(actual);
+            assert!(rewrite(&rewritten).unwrap().is_none(), "migration should be idempotent");
+        }
+
+        let unchanged =
+            serde_json::json!({ "check": "[[ -d src ]] 2>/dev/null && echo  unchanged" })
+                .to_string();
+        assert!(rewrite(&unchanged).unwrap().is_none());
+    }
+
+    #[test]
+    fn eslint_preserves_conditional_redirects() {
+        assert_conditional_redirects(crate::rewrite_eslint, "eslint --cache .", "vp lint .");
+    }
+
+    #[test]
+    fn prettier_preserves_conditional_redirects() {
+        assert_conditional_redirects(crate::rewrite_prettier, "prettier --write .", "vp fmt .");
+    }
+
+    #[test]
+    fn pack_preserves_conditional_redirects() {
+        assert_conditional_redirects(
+            |scripts| {
+                crate::rewrite_scripts(
+                    scripts,
+                    include_str!("../../../packages/cli/rules/vite-tools.yml"),
+                )
+            },
+            "vp pack --public-dir public",
+            "vp pack --copy public",
+        );
+    }
+
     #[test]
     fn migrate_pack_copy_flag() {
         let rules =

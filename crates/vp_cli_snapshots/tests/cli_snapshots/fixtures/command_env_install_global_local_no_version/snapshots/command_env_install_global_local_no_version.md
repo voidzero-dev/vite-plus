@@ -6,7 +6,7 @@
 VITE+ - The Unified Toolchain for the Web
 
 info: Installing 1 global package with Node.js <version>
-✓ Installed global-local-no-version (no version)
+ Installed global-local-no-version (no version)
   Bins: global-local-no-version
 ```
 

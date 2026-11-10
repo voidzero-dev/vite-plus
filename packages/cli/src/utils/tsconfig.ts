@@ -6,7 +6,7 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { applyEdits, modify, parse as parseJsonc } from 'jsonc-parser';
 
 import vitestV5EntryPoints from '../vitest-v5-entry-points.json' with { type: 'json' };
-import { runCommandSilently } from './command.ts';
+import { getVpCommand, runCommandSilently } from './command.ts';
 import { BASEURL_TSCONFIG_FIX_PACKAGE, createBaseUrlTsconfigFixArgs } from './constants.ts';
 import { cancelAndExit } from './prompts.ts';
 
@@ -103,8 +103,7 @@ export async function fixBaseUrlInTsconfig(
         prompts.log.info(`Running vp dlx ${BASEURL_TSCONFIG_FIX_PACKAGE} ${fixArgs.join(' ')}`);
       }
       const result = await runCommandSilently({
-        command: process.env.VP_CLI_BIN ?? 'vp',
-        args: ['dlx', BASEURL_TSCONFIG_FIX_PACKAGE, ...fixArgs],
+        ...getVpCommand(['dlx', BASEURL_TSCONFIG_FIX_PACKAGE, ...fixArgs]),
         cwd: projectPath,
         envs: process.env,
       });

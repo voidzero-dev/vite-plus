@@ -77,8 +77,8 @@ Options:
   --from-vite [vitest]          Reuse config from Vite or Vitest
   --report                      Size report (default: true)
   --env.* <value>               Define compile-time env variables
-  --env-file <file>             Load environment variables from a file, when used together with --env, variables in --env take precedence
-  --env-prefix <prefix>         Prefix for env variables to inject into the bundle (default: TSDOWN_)
+  --env-file <file>             Load environment variables from a file, can be repeated
+  --env-prefix <prefix>         Prefix for env variables to inject into the bundle (default: VITE_PACK_, TSDOWN_)
   --on-success <command>        Command to run on success
   --copy <dir>                  Copy files to output dir
   --tsconfig <tsconfig>         Set tsconfig path
@@ -311,7 +311,7 @@ Options:
   --dir <path>                        Base directory to scan for the test files
   --ui                                Enable UI
   --open                              Open UI automatically (default: !process.env.CI)
-  --api [port]                        Specify server port. Note if the port is already being used, Vite will automatically try the next available port so this may not be the actual port the server ends up listening on. If true will be set to 51204 or 63315 in browser mode. Use '--help --api' for more info.
+  --api [port]                        Specify server port. Note if the port is already being used, Vite will automatically try the next available port so this may not be the actual port the server ends up listening on. If true will be set to 51204 or 23315 in browser mode. Use '--help --api' for more info.
   --silent [value]                    Silent console output from tests. Use 'passed-only' to see logs from failing tests only.
   --hideSkippedTests                  Hide logs for skipped tests
   --reporter <name>                   Specify reporters (default, agent, minimal, blob, verbose, dot, json, tap, tap-flat, junit, tree, hanging-process, github-actions)
@@ -336,6 +336,8 @@ Options:
   --dangerouslyIgnoreUnhandledErrors  Ignore any unhandled errors that occur
   --shard <shards>                    Test suite shard to execute in a format of <index>/<count>
   --changed [since]                   Run tests that are affected by the changed files (default: false)
+  --sinceLastRun                      Run tests with dependencies modified since their last run, plus tests that failed (default: false)
+  --lastFailed                        Run only the tests that failed in the last run (default: false)
   --sequence <options>                Options for how tests should be sorted. Use '--help --sequence' for more info.
   --inspect [[host:]port]             Enable Node.js inspector (default: 127.0.0.1:9229)
   --inspectBrk [[host:]port]          Enable Node.js inspector and break before the test starts
@@ -352,9 +354,9 @@ Options:
   -p, --project <name>                The name of the project to run if you are using Vitest workspace feature. This can be repeated for multiple projects: --project=1 --project=2. You can also filter projects using wildcards like --project=packages*, and exclude projects with --project=!pattern. A project runs if it matches no negated pattern and, when regular patterns are also given, matches at least one of them.
   --slowTestThreshold <threshold>     Threshold in milliseconds for a test or suite to be considered slow (default: 300)
   --teardownTimeout <timeout>         Default timeout of a teardown function in milliseconds (default: 10000)
-  --cache                             Enable cache. Use '--help --cache' for more info.
+  --cache                             Store the results of test runs to run failed and longer test files first (default: true)
   --maxConcurrency <number>           Maximum number of concurrent tests and suites during test file execution (default: 5)
-  --fsModuleCache                     Cache transformed modules on the file system and reuse them between reruns (default: false)
+  --fsModuleCache                     Cache transformed modules on the file system and reuse them between reruns (default: true)
   --fsModuleCachePath <path>          Directory where the fsModuleCache is stored (default: node_modules/.vitest-cache)
   --expect                            Configuration options for expect() matches. Use '--help --expect' for more info.
   --printConsoleTrace                 Always print console stack traces

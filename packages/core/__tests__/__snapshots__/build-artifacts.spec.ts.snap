@@ -1,0 +1,42 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`build artifacts > snapshots remaining Rolldown package names and their uses in all built code 1`] = `
+[
+  {
+    "code": "cac("rolldown")",
+    "file": "rolldown/cli.mjs",
+  },
+  {
+    "code": "name: "rolldown"",
+    "file": "rolldown/shared/bindingify-input-options-[hash].mjs",
+  },
+  {
+    "code": "keywords: [ "bundler", "esbuild", "parcel", "rolldown", "rollup", "webpack" ]",
+    "file": "rolldown/shared/bindingify-input-options-[hash].mjs",
+  },
+  {
+    "code": ""rolldown": "./bin/cli.mjs"",
+    "file": "rolldown/shared/bindingify-input-options-[hash].mjs",
+  },
+  {
+    "code": ""@rolldown/pluginutils": "catalog:"",
+    "file": "rolldown/shared/bindingify-input-options-[hash].mjs",
+  },
+  {
+    "code": ""rolldown": "workspace:*"",
+    "file": "rolldown/shared/bindingify-input-options-[hash].mjs",
+  },
+  {
+    "code": "import { DevRuntime } from "rolldown/experimental/runtime";",
+    "file": "vite/client/bundledDevClient.mjs",
+  },
+  {
+    "code": "ROLLDOWN_DEV_RUNTIME_ENTRY = "rolldown/experimental/runtime"",
+    "file": "vite/node/chunks/node.js",
+  },
+  {
+    "code": "new RegExp(\`(from\\\\s*['"])\${ROLLDOWN_DEV_RUNTIME_ENTRY}(['"])\`)",
+    "file": "vite/node/chunks/node.js",
+  },
+]
+`;

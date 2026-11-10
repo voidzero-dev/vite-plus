@@ -91,5 +91,5 @@ pub enum Error {
 
     /// Semver range parsing error
     #[error(transparent)]
-    SemverRange(#[from] node_semver::SemverError),
+    SemverRange(#[from] js_semver::SemverError),
 }

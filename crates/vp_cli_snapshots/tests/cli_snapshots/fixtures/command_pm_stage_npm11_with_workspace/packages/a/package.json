@@ -1,0 +1,7 @@
+{
+  "name": "vp-stage-workspace-a",
+  "version": "1.0.0",
+  "scripts": {
+    "prepublishOnly": "node -e \"require('node:fs').writeFileSync('../../prepublish-ran', 'a')\""
+  }
+}

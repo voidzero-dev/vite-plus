@@ -171,8 +171,8 @@ fn run_package_picker(command: &str, rows: &[PackageRow]) -> Result<Option<usize
 
 /// Emits a render-milestone as a window-title update for the PTY snapshot
 /// runner, mirroring packages/prompts/src/milestone.ts:
-/// `OSC 2 ; pty-terminal-test:<32-hex-id>:<base64url(name)> ST`. The protocol
-/// is shared with vite-task's `pty_terminal_test_client`, whose emitting API
+/// `OSC 2 ; vt-pty-terminal-test:<32-hex-id>:<base64url(name)> ST`. The protocol
+/// is shared with vite-task's `vt_pty_terminal_test_client`, whose emitting API
 /// compiles to a no-op outside its `testing` feature (enabling that feature
 /// here would also un-gate vt's own task-picker milestones in
 /// production), so the sequence is written by hand. A fresh random id per
@@ -183,7 +183,7 @@ fn emit_milestone_title(name: &str) {
     let id = uuid::Uuid::new_v4();
     let encoded_name = base64_simd::URL_SAFE_NO_PAD.encode_to_string(name.as_bytes());
     let mut out = std::io::stdout().lock();
-    let _ = write!(out, "\x1b]2;pty-terminal-test:{}:{encoded_name}\x1b\\", id.simple());
+    let _ = write!(out, "\x1b]2;vt-pty-terminal-test:{}:{encoded_name}\x1b\\", id.simple());
     let _ = out.flush();
 }
 

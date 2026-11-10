@@ -70,13 +70,6 @@ check package.json
     "@vitejs/plugin-react": "^4.2.0",
     "vite": "catalog:",
     "vite-plus": "catalog:"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
   }
 }
 ```

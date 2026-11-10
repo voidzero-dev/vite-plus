@@ -20,8 +20,10 @@ use crate::cli::{
 /// Execute the `vp check` composite command (fmt + lint + optional type checks).
 pub(crate) async fn execute_check(
     resolver: &SubcommandResolver,
+    continue_on_error: bool,
     fix: bool,
     quiet: bool,
+    deny_warnings: bool,
     no_fmt_flag: bool,
     no_lint_flag: bool,
     no_error_on_unmatched_pattern: bool,
@@ -30,6 +32,7 @@ pub(crate) async fn execute_check(
     cwd: &AbsolutePathBuf,
 ) -> Result<ExitStatus, Error> {
     let mut status = ExitStatus::SUCCESS;
+    let mut first_failure = None;
     let has_paths = !paths.is_empty();
     // In --fix mode with file paths (the lint-staged use case), implicitly suppress
     // "no matching files" errors. This is also available as an explicit flag for
@@ -153,14 +156,19 @@ pub(crate) async fn execute_check(
             );
         }
         if status != ExitStatus::SUCCESS {
+            first_failure.get_or_insert(status);
             if fix {
                 print_error_block(
                     "Formatting could not complete",
                     &combined_output,
                     "Formatting failed during fix",
                 );
+                // A failed formatting pass must not later be reported as successful.
+                fmt_fix_started = None;
             }
-            return Ok(status);
+            if !continue_on_error {
+                return Ok(status);
+            }
         }
     }
 
@@ -174,6 +182,9 @@ pub(crate) async fn execute_check(
         }
         if quiet {
             args.push("--quiet".to_string());
+        }
+        if deny_warnings {
+            args.push("--deny-warnings".to_string());
         }
         // `vp check` parses oxlint's human-readable summary output to print
         // unified pass/fail lines. When `GITHUB_ACTIONS=true`, oxlint auto-switches
@@ -255,12 +266,15 @@ pub(crate) async fn execute_check(
             }
         }
         if status != ExitStatus::SUCCESS {
+            first_failure.get_or_insert(status);
             // Surface fmt `--fix` completion before bailing so users can see
             // the working tree was mutated before the lint/type-check error.
-            if fix && !no_fmt {
-                flush_deferred_pass_lines(&mut fmt_fix_started, &mut deferred_lint_pass);
+            if !continue_on_error {
+                if fix && !no_fmt {
+                    flush_deferred_pass_lines(&mut fmt_fix_started, &mut deferred_lint_pass);
+                }
+                return Ok(status);
             }
-            return Ok(status);
         }
     }
 
@@ -290,7 +304,7 @@ pub(crate) async fn execute_check(
                 &combined_output,
                 "Formatting failed after lint fixes were applied",
             );
-            return Ok(status);
+            return Ok(first_failure.unwrap_or(status));
         }
         flush_deferred_pass_lines(&mut fmt_fix_started, &mut deferred_lint_pass);
     }
@@ -301,7 +315,7 @@ pub(crate) async fn execute_check(
         flush_deferred_pass_lines(&mut fmt_fix_started, &mut deferred_lint_pass);
     }
 
-    Ok(status)
+    Ok(first_failure.unwrap_or(status))
 }
 
 fn flush_deferred_pass_lines(

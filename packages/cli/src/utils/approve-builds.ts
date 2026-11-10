@@ -4,7 +4,7 @@ import { stripVTControlCharacters } from 'node:util';
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
 import { PackageManager } from '../types/index.ts';
-import { runCommandSilently } from './command.ts';
+import { getVpCommand, runCommandSilently } from './command.ts';
 import { readJsonFile, writeJsonFile } from './json.ts';
 import { getSilentSpinner, getSpinner } from './spinner.ts';
 import { accent } from './terminal.ts';
@@ -360,8 +360,7 @@ export async function detectGatedBuilds(
   }
   if (packageManager === PackageManager.bun) {
     const { exitCode, stdout, stderr } = await runCommandSilently({
-      command: process.env.VP_CLI_BIN ?? 'vp',
-      args: ['exec', 'bun', 'pm', 'untrusted'],
+      ...getVpCommand(['exec', 'bun', 'pm', 'untrusted']),
       cwd: installCwd,
       envs: process.env,
     });
@@ -425,8 +424,7 @@ async function runBuildAndReport(
   const spinner = silent ? getSilentSpinner() : getSpinner(interactive);
   spinner.start(`Building ${packages.join(', ')}...`);
   const { exitCode, stdout, stderr } = await runCommandSilently({
-    command: process.env.VP_CLI_BIN ?? 'vp',
-    args,
+    ...getVpCommand(args),
     cwd,
     envs: extraEnv ? { ...process.env, ...extraEnv } : process.env,
   });
@@ -462,8 +460,7 @@ async function approveNpmScripts(
 ): Promise<boolean> {
   const approveCommand = `vp pm approve-builds ${packages.join(' ')}`;
   const { exitCode, stdout, stderr } = await runCommandSilently({
-    command: process.env.VP_CLI_BIN ?? 'vp',
-    args: ['pm', 'approve-builds', ...packages],
+    ...getVpCommand(['pm', 'approve-builds', ...packages]),
     cwd: installCwd,
     envs: process.env,
   });

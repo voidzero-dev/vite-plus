@@ -9,7 +9,7 @@ The same root intent signal applies to `vp dev`.
 ```
 VITE+ - The Unified Toolchain for the Web
 
-  VITE+ <version>
+  VITE+ <version>  ready in <duration>
 
   ➜  Local:   http://127.0.0.1:<port>/
   ➜  press h + enter to show help
@@ -20,7 +20,7 @@ VITE+ - The Unified Toolchain for the Web
 ```
 VITE+ - The Unified Toolchain for the Web
 
-  VITE+ <version>
+  VITE+ <version>  ready in <duration>
 
   ➜  Local:   http://127.0.0.1:<port>/
   ➜  press h + enter to show help

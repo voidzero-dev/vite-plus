@@ -475,7 +475,7 @@ impl JsExecutor {
 ```toml
 [dependencies]
 vp_js_runtime = { path = "../vp_js_runtime" }
-vp_shared = { path = "../vp_shared" }  # For cache dir, etc.
+vp_shared = { path = "../vp_shared" } # For cache dir, etc.
 vt_path = { path = "../vt_path" }
 
 clap = { version = "4", features = ["derive"] }
@@ -640,8 +640,8 @@ The `bin/vite` script needs to be refactored to find and execute the Rust binary
 
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { dirname, join } from 'node:path';
 import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

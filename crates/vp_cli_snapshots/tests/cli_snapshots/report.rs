@@ -30,6 +30,17 @@ impl Report {
         }
     }
 
+    pub fn artifact_path(&self, name: &str) -> Result<Option<PathBuf>, String> {
+        self.directory
+            .as_ref()
+            .map(|directory| {
+                std::fs::create_dir_all(directory)
+                    .map_err(|error| format!("failed to create artifact directory: {error}"))?;
+                Ok(directory.join(name))
+            })
+            .transpose()
+    }
+
     pub fn phase(&self, name: impl Into<String>) -> Phase<'_> {
         Phase { report: self, name: name.into(), started: Instant::now() }
     }

@@ -1,0 +1,5 @@
+{
+  "name": "pm-pkg-npm",
+  "version": "1.0.0",
+  "packageManager": "npm@11.11.1"
+}

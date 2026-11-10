@@ -23,4 +23,6 @@ extend-exclude = [
   "packages/cli/src/oxfmt-config.ts",
   # Vendored PGP key/signature blobs: base64 armor trips the spell checker.
   "crates/vp_js_runtime/src/assets/**/*.asc",
+  # Registry recordings contain upstream signatures and integrity hashes.
+  "crates/vp_cli_snapshots/tests/cli_snapshots/registry/**/manifest.json",
 ]

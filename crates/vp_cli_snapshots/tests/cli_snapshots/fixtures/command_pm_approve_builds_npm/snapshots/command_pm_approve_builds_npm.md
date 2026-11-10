@@ -36,8 +36,10 @@ warn: npm runs lifecycle scripts by default. Upgrade to npm >= 11.16.0 for `npm 
 
 ## `vp pm approve-builds --all`
 
-warn and exit 0 (no-op on npm)
+reject the unsupported named option instead of succeeding through a Noop
+
+**Exit code:** 1
 
 ```
-warn: npm runs lifecycle scripts by default. Upgrade to npm >= 11.16.0 for `npm approve-scripts`/`deny-scripts`, or set `ignore-scripts=true` in .npmrc and rebuild approved packages with `vp pm rebuild <package>`.
+npm < 11.16.0 does not support --all.
 ```

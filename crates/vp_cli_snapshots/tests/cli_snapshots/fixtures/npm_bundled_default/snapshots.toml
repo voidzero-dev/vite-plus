@@ -17,11 +17,11 @@ steps = [
 name = "npm_current_does_not_install_node"
 vp = "global"
 seed-runtime = false
-env = { VP_NODE_VERSION = "22.18.0", VP_NODE_DIST_MIRROR = "http://127.0.0.1:9" }
+env = { VP_NODE_VERSION = "22.23.4", VP_NODE_DIST_MIRROR = "http://127.0.0.1:9" }
 steps = [
   { argv = ["vp", "env", "current", "--json"], comment = "An absent Node runtime and bundled npm are reported without downloading" },
   { argv = ["vp", "env", "current", "npm", "--json"], comment = "The explicit npm scope also reports an unknown, uninstalled version" },
-  { argv = ["vpt", "stat-file", "$VP_HOME/js_runtime/node/22.18.0", "--assert", "missing"], comment = "Reporting the environment leaves the runtime uninstalled" },
+  { argv = ["vpt", "stat-file", "$VP_HOME/js_runtime/node/22.23.4", "--assert", "missing"], comment = "Reporting the environment leaves the runtime uninstalled" },
 ]
 
 [[case]]

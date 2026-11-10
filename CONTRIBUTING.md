@@ -11,6 +11,9 @@ You'll need the following tools installed on your system:
 - Rust and Cargo
 - cargo-binstall
 
+The root `.node-version` also supplies the Node.js version used to install the global CLI's JavaScript dependencies.
+The dependency-upgrade workflow keeps this shared development, CI, and installer pin on Node.js 24.
+
 If you haven't installed Node.js and pnpm, we recommend using Vite+ to manage them. See [environment management](https://viteplus.dev/guide/env) for details.
 
 ### macOS / Linux
@@ -41,6 +44,17 @@ Initial setup to install dependencies for Vite+:
 ```bash
 just init
 ```
+
+### Nix (optional)
+
+If you use [Nix](https://nixos.org/) with flakes enabled, you can use the dev shell defined in [`flake.nix`](flake.nix) instead of installing the tools above manually:
+
+```bash
+nix develop
+just init
+```
+
+Known limitation: on NixOS, the browser-mode cases of `just snapshot-test` do not run because the Chromium binary downloaded by `playwright install` cannot start without its system libraries. These cases are covered by CI; every other check works in the dev shell.
 
 ### Windows
 
@@ -99,6 +113,26 @@ To switch back to a release version, use `vp upgrade --force` (`current` points 
 
 ```bash
 vp upgrade --force
+```
+
+### Isolated CLI installation
+
+For temporary local validation, use a separate installation and disable persistent shell/PATH changes. This applies to `pnpm bootstrap-cli`, `pnpm bootstrap-cli:ci`, and `pnpm install-global-cli`. `VP_HOME` alone and `CI=true` do not prevent shell profile changes.
+
+Apply the required build environment first. Run the installation and its checks in one subshell:
+
+```sh
+(
+  set -e
+  test_vp_home="$(mktemp -d)"
+  trap 'rm -rf -- "$test_vp_home"' EXIT
+  export VP_HOME="$test_vp_home"
+  export VP_SELF_SETUP_NO_MODIFY_PATH=1
+  pnpm bootstrap-cli
+  export PATH="$VP_HOME/bin:$PATH"
+  vp --version
+  # Run further checks that use this installation here.
+)
 ```
 
 ## Validate the local build against a real project

@@ -23,4 +23,5 @@ See the [contributing guide](../../CONTRIBUTING.md#test-vp-migrate--vp-create-th
 
 - Served versions use an old publish time so package-manager minimum-release-age checks allow local builds immediately.
 - Wrapped commands use temporary Yarn Berry and bun caches to avoid reusing stale local builds with the same package version.
-- The server also backs [PTY snapshot cases](../../crates/vp_cli_snapshots/tests/cli_snapshots/README.md) with `local-registry = true` and [ecosystem e2e tests](../../ecosystem-ci/patch-project.ts).
+- The server also backs [PTY snapshot cases](../../crates/vp_cli_snapshots/tests/cli_snapshots/README.md) and [ecosystem e2e tests](../../ecosystem-ci/patch-project.ts). Snapshots use recorded test packages and a run-scoped response cache. `local-registry = true` additionally serves the packed checkout; ecosystem and standalone runs retain upstream version merging.
+- Refresh the small snapshot registry fixtures explicitly with `node packages/tools/src/record-snapshot-registry.ts`. See the [fixture documentation](../../crates/vp_cli_snapshots/tests/cli_snapshots/registry/README.md).

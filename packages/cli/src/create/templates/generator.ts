@@ -3,7 +3,7 @@ import path from 'node:path';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
-import { supportsCatalog } from '../../migration/migrator.ts';
+import { createCatalogDependencyResolver, supportsCatalog } from '../../migration/migrator.ts';
 import type { WorkspaceInfo } from '../../types/index.ts';
 import { editJsonFile } from '../../utils/json.ts';
 import { templatesDir } from '../../utils/path.ts';
@@ -40,25 +40,24 @@ export async function executeGeneratorScaffold(
   const templateDir = path.join(templatesDir, 'generator');
   copyDir(templateDir, fullPath);
   fs.chmodSync(path.join(fullPath, 'bin/index.ts'), '755');
+  const catalogResolver = supportsCatalog(
+    workspaceInfo.packageManager,
+    workspaceInfo.downloadPackageManager.version,
+    workspaceInfo.isMonorepo,
+  )
+    ? createCatalogDependencyResolver(workspaceInfo.rootDir, workspaceInfo.packageManager)
+    : undefined;
+  const { catalog } = readYamlFile(path.join(templatesDir, 'monorepo/pnpm-workspace.yaml')) as {
+    catalog: Record<string, string>;
+  };
   editJsonFile(path.join(fullPath, 'package.json'), (pkg) => {
     pkg.name = templateInfo.packageName;
-    if (
-      !supportsCatalog(
-        workspaceInfo.packageManager,
-        workspaceInfo.downloadPackageManager.version,
-        workspaceInfo.isMonorepo,
-      )
-    ) {
-      // The bundled generator uses the monorepo template's catalog. Managers
-      // without catalog support need the same dependency ranges inlined.
-      const { catalog } = readYamlFile(path.join(templatesDir, 'monorepo/pnpm-workspace.yaml')) as {
-        catalog: Record<string, string>;
-      };
-      const devDependencies = pkg.devDependencies as Record<string, string>;
-      for (const [name, spec] of Object.entries(devDependencies)) {
-        if (spec === 'catalog:' && catalog[name]) {
-          devDependencies[name] = catalog[name];
-        }
+    // Keep catalog references only when the target workspace can resolve them.
+    // Missing entries use the same ranges as the bundled monorepo template.
+    const devDependencies = pkg.devDependencies as Record<string, string>;
+    for (const [name, spec] of Object.entries(devDependencies)) {
+      if (spec === 'catalog:' && catalogResolver?.(spec, name) === undefined && catalog[name]) {
+        devDependencies[name] = catalog[name];
       }
     }
     if (description) {

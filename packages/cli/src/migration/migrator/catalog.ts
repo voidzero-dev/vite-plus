@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import semver from 'semver';
+import { coerce, isGreaterThanOrEqual, isLessThan } from 'verkit';
 import { Scalar, YAMLMap, YAMLSeq } from 'yaml';
 
 import { PackageManager, type WorkspacePackage } from '../../types/index.ts';
@@ -32,6 +32,7 @@ import {
   workspaceUsesWebdriverioProvider,
 } from '../migrator.ts';
 import {
+  type PreparedOxlintConfigs,
   LEGACY_WRAPPER_FALLBACK_VERSIONS,
   PROVIDER_OVERRIDE_DROP_NAMES,
   REMOVE_PACKAGES,
@@ -77,11 +78,18 @@ const PNPM_MINIMUM_RELEASE_AGE_EXCLUDES = [
 // only when it is one of the given dist-tags, which always point at a current
 // (feature-capable) release.
 function versionAtLeast(version: string, minVersion: string, tags: string[]): boolean {
-  const coerced = semver.coerce(version);
+  const coerced = coerce(version);
   if (coerced) {
-    return semver.gte(coerced, minVersion);
+    return isGreaterThanOrEqual(coerced, minVersion);
   }
   return tags.includes(version);
+}
+
+// The packages field became optional in pnpm 10.5.0.
+// https://github.com/pnpm/pnpm/releases/tag/v10.5.0
+export function pnpmRequiresWorkspacePackages(version: string): boolean {
+  const coerced = coerce(version);
+  return coerced ? isLessThan(coerced, '10.5.0') : false;
 }
 
 const PNPM_WORKSPACE_SETTINGS_MIN_VERSION = '10.6.2';
@@ -348,7 +356,7 @@ export function rewritePnpmWorkspaceYaml(
     for (const key of updatedOverrideKeys) {
       if (key.value.includes('>')) {
         const splits = key.value.split('>');
-        if (splits[splits.length - 1].trim() === 'vite') {
+        if (splits.at(-1)!.trim() === 'vite') {
           updatedOverrides.delete(key);
         }
       }
@@ -1151,6 +1159,7 @@ export function rewriteRootWorkspacePackageJson(
   // catalogs require Yarn >= 4.10.0; pnpm/bun monorepos always manage a catalog.
   // When false, the root `vite-plus` edge and the direct `vite` edge are concrete.
   supportCatalog = true,
+  preparedOxlintConfigs?: PreparedOxlintConfigs,
 ): void {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
@@ -1253,7 +1262,7 @@ export function rewriteRootWorkspacePackageJson(
       for (const key in pkg.pnpm?.overrides) {
         if (key.includes('>')) {
           const splits = key.split('>');
-          if (splits[splits.length - 1].trim() === 'vite') {
+          if (splits.at(-1)!.trim() === 'vite') {
             delete pkg.pnpm.overrides[key];
           }
         }
@@ -1291,7 +1300,7 @@ export function rewriteRootWorkspacePackageJson(
     undefined,
     undefined,
     catalogDependencyResolver,
-    packages ? { rootDir: projectPath, packages } : undefined,
+    packages ? { rootDir: projectPath, packages, oxlintConfigs: preparedOxlintConfigs } : undefined,
     true,
     supportCatalog,
   );

@@ -4,9 +4,20 @@ import path from 'node:path';
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import spawn from 'cross-spawn';
 
-import { rewriteScripts } from '../../../binding/index.js';
-import { findUnsafeHookInstallPath, SUPPORTED_GIT_HOOK_NAMES } from '../../config/hooks.ts';
+import {
+  type LiteralCommandToken,
+  parseConfigArgs,
+  parseLiteralCommands,
+  rewriteScripts,
+} from '../../../binding/index.js';
+import {
+  findUnsafeHookInstallPath,
+  HOOK_STUB_SCRIPT,
+  hookScript,
+  SUPPORTED_GIT_HOOK_NAMES,
+} from '../../config/hooks.ts';
 import type { PackageManager, WorkspacePackage } from '../../types/index.ts';
+import { getVpCommand } from '../../utils/command.ts';
 import { documentationUrl } from '../../utils/documentation.ts';
 import { findGitRoot } from '../../utils/git.ts';
 import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
@@ -18,8 +29,10 @@ import {
 } from '../migrator.ts';
 import { type MigrationReport } from '../report.ts';
 import {
+  getCommandStartIndex,
   LINT_STAGED_ALL_CONFIG_FILES,
   LINT_STAGED_OTHER_CONFIG_FILES,
+  SHELL_STATE_COMMANDS,
   warnMigration,
 } from './shared.ts';
 
@@ -86,6 +99,137 @@ export function hasExistingViteHooksPolicy(projectPath: string): boolean {
     .some((entry) => entry.isFile() && SUPPORTED_GIT_HOOK_NAME_SET.has(entry.name));
 }
 
+/**
+ * List the supported hook files present in `.vite-hooks/`, in canonical order.
+ */
+export function listExistingViteHookNames(projectPath: string): string[] {
+  const hooksDir = path.join(projectPath, '.vite-hooks');
+  return SUPPORTED_GIT_HOOK_NAMES.filter((hookName) =>
+    fs.lstatSync(path.join(hooksDir, hookName), { throwIfNoEntry: false })?.isFile(),
+  );
+}
+
+/** Full setup requires project hooks, a refresh lifecycle, and a current,
+ * executable dispatcher selected by core.hooksPath at the repository root. */
+export function isViteHooksSetupComplete(projectPath: string): boolean {
+  if (!hasExistingViteHooksPolicy(projectPath)) {
+    return false;
+  }
+  const packageJsonPath = path.join(projectPath, 'package.json');
+  if (!fs.existsSync(packageJsonPath)) {
+    return false;
+  }
+  const pkg = readJsonFile(packageJsonPath) as { scripts?: Record<string, string> };
+  if (!hasVpConfigLifecycleScript(pkg.scripts)) {
+    return false;
+  }
+  const gitRoot = findGitRoot(projectPath);
+  if (!gitRoot || path.resolve(projectPath) !== path.resolve(gitRoot)) {
+    return false;
+  }
+  if (normalizeGitHooksPath(getConfiguredHooksPath(projectPath)) !== '.vite-hooks/_') {
+    return false;
+  }
+  if (findUnsafeHookInstallPath(projectPath, '.vite-hooks')) {
+    return false;
+  }
+  const dispatcherDir = path.join(projectPath, '.vite-hooks', '_');
+  for (const name of ['h', ...listExistingViteHookNames(projectPath)]) {
+    const filePath = path.join(dispatcherDir, name);
+    const stats = fs.lstatSync(filePath, { throwIfNoEntry: false });
+    if (!stats?.isFile()) {
+      return false;
+    }
+    // `vp config` chmods the dispatcher files to 0755; git ignores hooks that
+    // are not executable. Windows has no POSIX execute bits to check.
+    if (process.platform !== 'win32' && (stats.mode & 0o111) === 0) {
+      return false;
+    }
+    const expectedContent = name === 'h' ? hookScript('.vite-hooks') : HOOK_STUB_SCRIPT;
+    if (fs.readFileSync(filePath, 'utf8') !== expectedContent) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function hasVpConfigLifecycleScript(scripts: Record<string, string> | undefined): boolean {
+  return [scripts?.prepare, scripts?.postinstall].some((script) =>
+    vpConfigHookCommands(script).some((command) => command.hooksEnabled),
+  );
+}
+
+interface VpConfigHookCommand {
+  args: LiteralCommandToken[];
+  hooksEnabled: boolean;
+}
+
+/** Only recognize literal invocations in the project directory. Text passed
+ * to echo, node, or another command must not count as a dispatcher refresh. */
+function vpConfigHookCommands(script: string | undefined): VpConfigHookCommand[] {
+  if (!script) {
+    return [];
+  }
+  let commands = parseLiteralCommands(script, true);
+  // Preserve a leading refresh even when later commands need shell evaluation.
+  // installGitHooks prepends this form when it cannot rewrite an existing script.
+  const separator = script.indexOf('&&');
+  if (!commands && separator !== -1) {
+    const first = parseLiteralCommands(script.slice(0, separator), false)?.[0];
+    commands = first?.length ? [first] : null;
+  }
+  if (!commands) {
+    return [];
+  }
+  const result: VpConfigHookCommand[] = [];
+  for (const tokens of commands) {
+    const values = tokens.map(({ value }) => value);
+    if (/^[A-Za-z_]\w*=/.test(values[0] ?? '')) {
+      // Environment overrides can disable hooks or redirect Git operations.
+      return result;
+    }
+    if (SHELL_STATE_COMMANDS.includes(values[0])) {
+      return result;
+    }
+    const start = getCommandStartIndex(values);
+    if (values[start] !== 'vp' || values[start + 1] !== 'config') {
+      continue;
+    }
+    const args = tokens.slice(start + 2);
+    // The native parser prints help; do not invoke it for help-only scripts.
+    if (args.some(({ value }) => value === '--help' || value === '-h')) {
+      continue;
+    }
+    const parsed = parseConfigArgs(args.map(({ value }) => value));
+    if (
+      parsed.status === 'ok' &&
+      (parsed.value.hooksDir === undefined ||
+        normalizeGitHooksPath(parsed.value.hooksDir) === '.vite-hooks')
+    ) {
+      result.push({ args, hooksEnabled: parsed.value.hooks !== false });
+    }
+  }
+  return result;
+}
+
+/**
+ * Drop `--no-hooks` from every `vp config` invocation in a script, keeping
+ * other commands and flags intact. Returns null when the script has no
+ * `vp config` invocation to rewrite.
+ */
+function enableVpConfigHooks(script: string): string | null {
+  const flags = vpConfigHookCommands(script).flatMap(({ args }) =>
+    args.filter(({ value }) => value === '--no-hooks'),
+  );
+  if (!flags.length) {
+    return null;
+  }
+  for (const flag of flags.toReversed()) {
+    script = script.slice(0, flag.start).trimEnd() + script.slice(flag.end);
+  }
+  return script;
+}
+
 function findNonRegularViteHookPath(projectPath: string): string | null {
   for (const hookName of SUPPORTED_GIT_HOOK_NAMES) {
     const hookPath = path.join(projectPath, '.vite-hooks', hookName);
@@ -144,20 +288,6 @@ function getConfiguredHooksPath(projectPath: string): string {
 
 function normalizeGitHooksPath(hooksPath: string): string {
   return path.posix.normalize(hooksPath.replaceAll('\\', '/')).replace(/\/$/, '');
-}
-
-/**
- * High-level helper that sets up Vite+ hooks when no other hook tool owns the
- * project. Husky setups are deliberately preserved for a dedicated migration.
- */
-export function installGitHooks(
-  projectPath: string,
-  silent = false,
-  report?: MigrationReport,
-  packageManager?: PackageManager,
-  packages: readonly WorkspacePackage[] = [],
-): boolean {
-  return setupGitHooks(projectPath, silent, report, packageManager, packages);
 }
 
 /**
@@ -246,11 +376,11 @@ export function shouldSkipStagedMigrationForHooks(
 }
 
 /**
- * Set up git hooks with husky + lint-staged via vp commands.
- * Skips if another hook tool is detected (warns user).
+ * Set up Vite+ hooks when no other hook tool owns the project.
+ * Husky setups are deliberately preserved for a dedicated migration.
  * Returns true if hooks were successfully set up, false if skipped.
  */
-export function setupGitHooks(
+export function installGitHooks(
   projectPath: string,
   silent = false,
   report?: MigrationReport,
@@ -282,10 +412,13 @@ export function setupGitHooks(
     if (!pkg.scripts) {
       pkg.scripts = {};
     }
-    if (!pkg.scripts.prepare) {
-      pkg.scripts.prepare = 'vp config';
-    } else if (!pkg.scripts.prepare.includes('vp config')) {
-      pkg.scripts.prepare = `vp config && ${pkg.scripts.prepare}`;
+    if (!hasVpConfigLifecycleScript(pkg.scripts)) {
+      const prepare = pkg.scripts.prepare;
+      if (prepare) {
+        pkg.scripts.prepare = enableVpConfigHooks(prepare) ?? `vp config && ${prepare}`;
+      } else {
+        pkg.scripts.prepare = 'vp config';
+      }
     }
 
     return pkg;
@@ -328,10 +461,9 @@ export function setupGitHooks(
     return true;
   }
 
-  const vpBin = process.env.VP_CLI_BIN ?? 'vp';
-
   // Install git hooks via vp config (--no-agent to skip agent setup, handled by migration)
-  const configResult = spawn.sync(vpBin, ['config', '--no-agent'], {
+  const { command, args } = getVpCommand(['config', '--no-agent']);
+  const configResult = spawn.sync(command, args, {
     cwd: projectPath,
     stdio: 'pipe',
   });

@@ -71,25 +71,34 @@ the execution gate. Scheduling happens after partitioning and does not change
 shard membership or test listing order.
 The existing gate still protects `serial = true` and Ctrl-C cases, including
 against other runner processes.
+Npm command cases use local registry fixtures and shared downloads, so they no
+longer need serialization to limit concurrent connections to npm. Signal-sensitive
+and explicitly isolated cases retain the execution gate.
 
 Environment overrides, mainly for CI:
 
-| Variable                    | Effect                                                                        |
-| --------------------------- | ----------------------------------------------------------------------------- |
-| `VP_SNAP_GLOBAL_VP`         | Path to a prebuilt global `vp` binary (skips the target-dir lookup)           |
-| `VP_SNAP_LOCAL_CLI_BIN_DIR` | Local CLI bin dir (default `<repo>/packages/cli/bin`)                         |
-| `VP_SNAP_JS_RUNTIME_DIR`    | Provisioned managed runtime to seed case homes with                           |
-| `VP_SNAP_SH_BIN`            | POSIX `sh` binary for cases that execute the generated `env` file             |
-| `VP_SNAP_BASH_BIN`          | Bash binary for cases that execute the generated `env` file                   |
-| `VP_SNAP_ZSH_BIN`           | Zsh binary for cases that execute the generated `env` file                    |
-| `VP_SNAP_CMD_BIN`           | System cmd.exe for cases that execute generated batch files                   |
-| `VP_SNAP_FISH_BIN`          | Fish binary for cases that execute generated `env.fish` files                 |
-| `VP_SNAP_NU_BIN`            | Nushell binary for cases that execute generated `env.nu` files                |
-| `VP_SNAP_PWSH_BIN`          | PowerShell binary for cases that execute generated `env.ps1` files            |
-| `VP_SNAP_SKIP_FLAVORS`      | Comma-separated flavors to skip registering (e.g. `local`)                    |
-| `VP_SNAP_PACKAGES_DIR`      | Run-scoped directory for sharing packed packages across test processes        |
-| `VP_SNAP_ARTIFACTS_DIR`     | Directory for phase timings and failure diagnostics; unset disables artifacts |
-| `VP_SNAP_NEXTEST_CONFIG`    | With `--list`, write nextest overrides for the discovered isolated cases      |
+| Variable                      | Effect                                                                                                  |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `VP_SNAP_GLOBAL_VP`           | Path to a prebuilt global `vp` binary (skips the target-dir lookup)                                     |
+| `VP_SNAP_LOCAL_CLI_BIN_DIR`   | Local CLI bin dir (default `<repo>/packages/cli/bin`)                                                   |
+| `VP_SNAP_JS_RUNTIME_DIR`      | Provisioned managed runtime to seed case homes with                                                     |
+| `VP_SNAP_SH_BIN`              | POSIX `sh` binary for cases that execute the generated `env` file                                       |
+| `VP_SNAP_BASH_BIN`            | Bash binary for cases that execute the generated `env` file                                             |
+| `VP_SNAP_ZSH_BIN`             | Zsh binary for cases that execute the generated `env` file                                              |
+| `VP_SNAP_CMD_BIN`             | System cmd.exe for cases that execute generated batch files                                             |
+| `VP_SNAP_FISH_BIN`            | Fish binary for cases that execute generated `env.fish` files                                           |
+| `VP_SNAP_NU_BIN`              | Nushell binary for cases that execute generated `env.nu` files                                          |
+| `VP_SNAP_PWSH_BIN`            | PowerShell binary for cases that execute generated `env.ps1` files                                      |
+| `VP_SNAP_SKIP_FLAVORS`        | Comma-separated flavors to skip registering (e.g. `local`)                                              |
+| `VP_SNAP_REGISTRY_CACHE_DIR`  | Fresh run-scoped response directory shared across nextest processes                                     |
+| `VP_SNAP_REGISTRY_MODE`       | `live`: count upstream requests without caching or shared fixtures; `direct`: original registry routing |
+| `VP_SNAP_SHARED_REGISTRY_ENV` | Registry environment JSON from the `--snapshot-runner` wrapper, shared across runner processes          |
+| `VP_SNAP_PACKED_REGISTRY_ENV` | Registry environment JSON for the wrapper that serves packed checkout packages                          |
+| `VP_SNAP_PACKAGES_DIR`        | Run-scoped directory for sharing packed packages across test processes                                  |
+| `VP_SNAP_ARTIFACTS_DIR`       | Directory for phase timings and failure diagnostics; unset disables artifacts                           |
+| `VP_SNAP_NEXTEST_CONFIG`      | With `--list`, write nextest overrides for the discovered isolated cases                                |
+| `VP_SNAP_PREWARM_MANIFEST`    | With `--list`, write a JSON array of package-manager archive URLs derived from runnable cases           |
+| `VP_NODE_DIST_MIRROR`         | Node.js distribution mirror inherited by case commands; case and step overrides take precedence         |
 
 Windows CI generates its nextest configuration from the same case definitions.
 Exact nextest runs read only the selected fixture; listing and native shard
@@ -110,8 +119,88 @@ directory for each test run and keep the build unchanged while tests run. The
 runner checks the checkout path and input/tarball file sizes and modification
 times; a changed build fails instead of silently testing stale packages. This
 is a per-run preparation directory, not a persistent content-addressed cache.
-Each case still has its own registry server, overlays, and mutable caches.
 Windows CI uses this to avoid repacking in every nextest process.
+Cases without fixture overlays share two servers per runner: one for published
+packages and one that also serves the packed checkout. Cases with a
+`mock-manifest.json`, `tarballs/`, or `.npmrc` retain a dedicated server.
+Use `isolated-registry = true` when a test needs private registry state, such as
+the request counter used to verify metadata caching. All package-manager caches
+remain isolated per case.
+
+Windows CI wraps nextest with `local-npm-registry.ts --snapshot-runner` so the
+two servers also survive across test processes. The wrapper passes registry
+environments to the Rust runner without changing its package-manager settings.
+The packed server loads archives on its first request, after the runner prepares
+and validates them under the existing package lock. Both servers exit when the
+wrapped command finishes, and the wrapper preserves its exit code.
+
+All cases use a local registry by default. The small test packages in
+[`registry/`](registry/README.md) are served from checked-in metadata and tarballs.
+Other successful registry GET responses are cached for the duration of the run,
+including package-manager downloads. Concurrent requests share one download,
+including across nextest processes when `VP_SNAP_REGISTRY_CACHE_DIR` is set.
+Use a fresh directory per run; this is not a persistent dependency cache.
+Package-manager caches and installed packages remain isolated per case.
+
+CI generates a prewarm manifest while listing cases, then passes it to
+`local-npm-registry.ts --prewarm-manifest <file>` before starting test commands.
+The runner collects exact Bun pins and exact pnpm pins below version 12 from each
+case's package ancestry (`packageManager` and `devEngines.packageManager`), case
+and step environment overrides, `vpt json-edit` of package-manager declarations,
+`vpt write-file` of package files, and `vp env default/use/exec` arguments.
+Changing these fixture pins automatically updates preparation; CI contains no
+separate version list.
+
+Versions are deduplicated. Bun archives match the runner platform, including the
+x64 baseline variant. Native pnpm 12+ archives still use normal registry resolution.
+
+Ignored and platform-excluded cases do not contribute pins. Set `prewarm-package-managers = false`
+for fake installations and configuration-only cases. Script-generated pins must use
+declarative setup or environment overrides to participate; discovery does not execute
+scripts or scan assertions. Floating tags and version ranges retain normal registry
+resolution and are not prewarmed. The manifest includes all runnable cases before
+nextest partitions them, so each shard can reuse the same preparation logic.
+
+Preparation retries
+failed downloads and permits up to 180 seconds per attempt. Tests reuse the
+cached response with their existing deadlines and isolated installations.
+Preparation requests are logged in `prewarm/registry.jsonl` under the artifact root.
+
+`local-registry = true` additionally serves the packed checkout packages.
+Published versions remain available for cases that deliberately install an older
+release. Their upstream metadata is fetched once per run and merged with the
+local version. The standalone registry tool and ecosystem tests retain the same
+upstream version merging without the snapshot response cache. Fixture
+`mock-manifest.json` entries override shared metadata, and fixture tarballs
+override shared tarballs. Explicit case and step registry settings still take
+precedence over runner defaults.
+
+With artifacts enabled, the shared server writes `registry.jsonl` in the run
+artifact directory. Windows wrappers write separate `shared-registry/registry.jsonl`
+and `packed-registry/registry.jsonl` files in the artifact root.
+Per-case servers write the same file in their case artifact
+directory. Combine both locations when counting requests: `fixture` events
+identify locally served data, `request` events count proxy requests, `hit` events
+identify reused responses, and `upstream` events count actual upstream HTTP
+requests (including redirects). Non-GET requests are forwarded without caching.
+`upstream-stalled` identifies requests with no response progress for 15 seconds,
+including connection setup. These requests release their cache locks so clients
+can retry. Each upstream request also has a 60-second total deadline.
+These counts cover the registry; requests to other services, such as Node.js
+release downloads or Git hosts, are outside this log.
+
+For a network comparison, run the same cases with eight workers first with
+`VP_SNAP_REGISTRY_MODE=live`, then with the variable unset. Both runs route
+registry traffic through the logger; `live` disables published recordings and
+response cache. `VP_SNAP_REGISTRY_MODE=direct` restores the original routing for
+an independent wall-time baseline, but cannot log traffic that bypasses the
+local registry. Keep builds unchanged and use fresh response directories.
+Local tarball URLs can cause snapshot differences in comparison modes.
+Fixture overlays remain active in both comparison modes. Cases with a
+`mock-manifest.json` or `tarballs/` start a private registry even in `direct`
+mode, so fixed templates remain the same test inputs. Cases that use shared
+locally authored packages must set `local-registry = true` so `direct` mode
+also starts their registry; these packages have no published version.
 
 With `VP_SNAP_ARTIFACTS_DIR` set, each runner process creates a unique `run-*`
 directory. `runner/timing.json` records discovery, test execution, and final
@@ -134,7 +223,9 @@ any case files left by a panic or an unsuccessful earlier cleanup attempt.
 Failed cases also write `error.txt`, `expected.md` (when present), `actual.md`
 (when a complete or partial snapshot was rendered), and `output.txt`. The output
 contains the last 1 MiB of unredacted rendered step output, including successful
-hidden steps; it is not the raw PTY byte stream. Artifacts survive temporary
+hidden steps; it is not the raw PTY byte stream. After a PTY timeout, the runner kills the
+child and waits up to two seconds for the reader to save the final screen,
+including when a milestone wait ends at EOF. Artifacts survive temporary
 workspace cleanup. CI uploads these files and timings on successful and failed
 runs. Listing tests with `--list` neither packs packages nor creates artifacts.
 
@@ -151,6 +242,7 @@ requires = ["bash"]           # "sh" | "bash" | "zsh" | "cmd" | "fish" | "nu" | 
 ignore = false                # true: only runs with `-- --ignored`
 serial = false                # true: run alone across cargo test/nextest workers
 seed-runtime = true           # false: start from an empty VP_HOME
+prewarm-package-managers = true # false: fake install or configuration-only case
 link-node-modules = false     # true: expose the run-root node_modules as
                               #   the workspace's parent-dir node_modules,
                               #   for `../node_modules/vite-plus/...` paths
@@ -178,7 +270,10 @@ preference inference or an empty installation must create a separate home, as th
 `shim_package_manager_setup` fixture does.
 The preparation command sets `VP_SELF_SETUP_NO_MODIFY_PATH=1` so Windows
 self-setup does not add temporary case homes to the user's persistent `PATH`.
-This override applies only to runner preparation, not to fixture commands.
+It also sets `VP_SKIP_DEPS_INSTALL=1`: the case home already has the checkout
+package, and setup would otherwise look up the build's version on npm, which
+is unpublished on a release branch.
+These overrides apply only to runner preparation, not to fixture commands.
 
 A step is a bare argv array or a table:
 
@@ -192,7 +287,7 @@ A step is a bare argv array or a table:
                               #   any other name resolves from the case env
                               #   (`PATH = "${workspace}/bin${PATH_SEPARATOR}${PATH}"`
                               #   is the shell's `PATH="$(pwd)/bin:$PATH"`)
-  timeout = 120000,           # ms, default 50s
+  timeout = 120000,           # ms, default 120s (includes cold package-manager downloads)
   snapshot = false,           # omit the screen while the step succeeds
                               #   (failures always keep their output)
   continue-on-failure = true, # a failing step skips the rest of its line,
@@ -220,7 +315,8 @@ lines), plus task payloads for `vp run` tests:
 `vpt print`, `vpt print-color`, `vpt print-env`, `vpt print-cwd`,
 `vpt print-native-path` (prints OS-native separators, for redaction
 self-tests), `vpt check-tty`, `vpt read-stdin`, `vpt exit <code>`,
-`vpt exit-on-ctrlc`, `vpt barrier`, and the Unix-only
+`vpt exit-on-ctrlc`, `vpt barrier`, and the Unix-only `vpt check-blocking`
+(prints whether the inherited stdin is non-blocking) and
 `vpt backpressure-run [--digest <head>,<tail>] -- <argv...>`
 for running a command with deliberately backpressured, non-blocking stdout.
 
@@ -238,7 +334,7 @@ name = "picker_selects_second_entry"
 vp = "local"
 steps = [
   { argv = ["vp", "create"], interactions = [
-    { "expect-milestone" = "select:template:0" },  # wait, then capture screen
+    { "expect-milestone" = "select:template:0" }, # wait, then capture screen
     { "write-key" = "down" },
     { "expect-milestone" = "select:template:1" },
     { "write-key" = "enter" },
@@ -277,8 +373,34 @@ can load files installed beside `pwsh.exe`. `cmd.exe` also runs from its
 canonical system path. `CI` and `NO_COLOR` are deliberately NOT
 set: with a PTY attached, the CLI behaves interactively by default, which is
 the point.
+`VP_NODE_DIST_MIRROR` is inherited when configured so case downloads use the same
+source as CI preparation. Case `env` and step `envs` override it; case `unset-env`
+can remove it to exercise the default source.
 `seed-runtime = true` (default) symlinks a provisioned managed Node runtime
 into the case `VP_HOME` so commands do not download ~50MB per case.
+
+Use the latest published patch release for each Node major as its default fixed
+runtime. Keep exact pins so snapshots are reproducible, and add an older version
+only when a fixture tests a compatibility boundary. Use `22.23.4` for ordinary
+cases that do not need a different major.
+
+| Node major | Default fixed runtime | Required exceptions                                                                                                                   |
+| ---------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| 20         | `20.20.2`             | None; unsupported-runtime and migration cases share this version.                                                                     |
+| 22         | `22.23.4`             | `22.18.0` tests asynchronous loader and watcher hooks and the exact supported migration target. Synchronous hooks start at `22.22.3`. |
+| 24         | `24.22.1`             | `24.3.0` is the unsupported migration input; `24.11.0` is the exact supported upgrade target.                                         |
+| 26         | `26.12.1`             | None; script, bare config-file argument, and executable packaging cases share this version.                                           |
+
+CI prepares the exact versions and selectors in [`node-versions.txt`](node-versions.txt),
+the repository's `.node-version`, and both `lts` and `latest` before snapshot
+command timers start. The selectors `20`, `22`, `22.23`, and `24.22` cover cases
+that intentionally resolve a major or minor version instead of an exact pin.
+When updating the defaults, check the [Node.js release index](https://nodejs.org/dist/index.json)
+and update the fixture pins and shared list together. Document the test reason
+when adding an exception. Version strings in configuration-only tests do not
+require runtime downloads.
+Major-version and LTS/latest alias cases retain their selectors. Cases with
+`seed-runtime = false` still test installation into an empty runtime directory.
 
 Fixture configs may import bare `vite-plus` and
 `@voidzero-dev/vite-plus-core`: the runner links the checkout packages
@@ -297,10 +419,21 @@ a milestone, or a redaction rule; never rerun until green. Set
 For registry fallback tests, use `local-registry = true` and a fixture
 `mock-manifest.json` entry such as `"npm/latest"` to control the resolved version.
 Keep the CLI input unpinned so the fallback is still tested, and keep exact
-version assertions. Unmocked registry requests go upstream, so
-`local-registry = true` alone does not freeze dist-tags.
+version assertions. Unmocked registry responses are fetched upstream once per run, so
+`local-registry = true` alone does not freeze dist-tags across runs.
 
 Fixture trees are excluded from repo-wide fmt, lint, typecheck, and vitest
 (`vite.config.ts`, `tsconfig.json`); recorded snapshots and
 `snapshots.toml` are runner metadata and never appear inside the staged
 workspace a test runs in.
+
+Test servers must request port `0` so the OS selects an available port at bind
+time. Fixed ports can be reserved on Windows, where `EACCES` does not trigger
+Vite's port-in-use fallback. Vitest 5.1.0 supports `test.api.port: 0` directly.
+Set it in the browser project's test configuration or in the UI's API options;
+leave the API disabled for Node projects that do not need a server. See
+[`test_v5_browser_defines/config.mjs`](fixtures/test_v5_browser_defines/config.mjs)
+for independent, inherited, referenced, and injected projects, and
+[`test_v5_optional_packages/verify-ui.mjs`](fixtures/test_v5_optional_packages/verify-ui.mjs)
+for the UI server. Assert that each resolved API port is `0` so regressions fail
+on every platform, even when the default port is available.

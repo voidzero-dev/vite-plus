@@ -36,7 +36,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
     })?;
 
-    pty_terminal_test_client::mark_milestone("ready");
+    vt_pty_terminal_test_client::mark_milestone("ready");
 
     ctrlc_once_lock.wait();
     println!("ctrl-c received");

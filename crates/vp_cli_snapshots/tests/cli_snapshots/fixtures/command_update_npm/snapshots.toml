@@ -1,0 +1,35 @@
+[[case]]
+name = "command_update_npm10"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "update", "testnpm2", "--", "--no-audit"], comment = "should update package within semver range" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "up", "testnpm2", "--latest", "--", "--no-audit"], comment = "reject unsupported --latest without updating dependencies", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "update", "-D", "--", "--no-audit"], comment = "preserve npm's native inclusion of dev dependencies" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "update", "-P", "--no-save", "--", "--no-audit"], comment = "preserve npm's production inclusion and no-save options" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "rm", "testnpm2"], comment = "prepare an optional dependency" },
+  ["vp", "add", "testnpm2@1.0.0", "-O", "--", "--no-audit"],
+  { argv = ["vp", "update", "--no-optional", "--", "--no-audit"], comment = "preserve npm's native optional dependency exclusion" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vp", "update", "--", "--no-audit"], comment = "should update all packages but won't change the package.json" },
+  { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+]
+
+[[case]]
+name = "npm6_dependency_filters_update"
+vp = "global"
+env = { npm_config_audit = "false", npm_config_fund = "false" }
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "npm@6.14.18"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies", '{"yocto-queue":"1.0.0"}'], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts", "--silent"], snapshot = false },
+  ["vpt", "grep-file", "node_modules/yocto-queue/package.json", '"version": "1.0.0"'],
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.yocto-queue", "^1.0.0"], snapshot = false },
+  { argv = ["vp", "update", "-D", "--", "--ignore-scripts", "--silent"], envs = [["NODE_ENV", "production"]], comment = "npm 6 uses --also=dev to include development updates" },
+  ["vpt", "grep-file", "node_modules/yocto-queue/package.json", '"version": "1.2.2"'],
+  { argv = ["vp", "update", "-P"], comment = "reject --prod because npm 6 selects updates through outdated, whose --production still reports installed devDependencies" },
+]

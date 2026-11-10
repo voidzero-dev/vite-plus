@@ -7,7 +7,7 @@ migration should work with bun object-form workspaces
 ```
 VITE+ - The Unified Toolchain for the Web
 
-✔ Merged .oxlintrc.json into vite.config.ts
+◆ ✔ Merged .oxlintrc.json into vite.config.ts
 ◇ Migrated . to Vite+ <version>
 • Node <version>  bun <version>
 • 2 config updates applied, 1 file had imports rewritten
@@ -19,6 +19,7 @@ VITE+ - The Unified Toolchain for the Web
 check vite.config.ts
 
 ```
+// vp migrate: merged .oxlintrc.json (aba19784a1d2c46ab69279abb5cab90f).
 import react from '@vitejs/plugin-react';
 import { defineConfig, lazyPlugins } from 'vite-plus';
 

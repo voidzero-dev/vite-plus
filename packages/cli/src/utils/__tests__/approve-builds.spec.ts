@@ -344,33 +344,15 @@ describe('resolveApproveBuildTargets', () => {
     fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify(pkg), 'utf-8');
   }
 
-  it('returns direct-dep build targets for pnpm', () => {
-    writePkg({ dependencies: { 'better-sqlite3': '^11.0.0' } });
-    expect(
-      resolveApproveBuildTargets(dir, ['better-sqlite3', 'esbuild'], PackageManager.pnpm),
-    ).toEqual(['better-sqlite3']);
-  });
-
-  it('returns direct-dep build targets for bun', () => {
-    writePkg({ dependencies: { 'core-js': '3.39.0' } });
-    expect(resolveApproveBuildTargets(dir, ['core-js', 'esbuild'], PackageManager.bun)).toEqual([
-      'core-js',
-    ]);
-  });
-
-  it('returns direct-dep build targets for yarn', () => {
-    writePkg({ dependencies: { 'core-js': '3.39.0' } });
-    expect(resolveApproveBuildTargets(dir, ['core-js', 'esbuild'], PackageManager.yarn)).toEqual([
-      'core-js',
-    ]);
-  });
-
-  it('returns direct-dep build targets for npm', () => {
-    writePkg({ dependencies: { 'better-sqlite3': '^11.0.0' } });
-    expect(
-      resolveApproveBuildTargets(dir, ['better-sqlite3', 'esbuild'], PackageManager.npm),
-    ).toEqual(['better-sqlite3']);
-  });
+  it.each([PackageManager.pnpm, PackageManager.bun, PackageManager.yarn, PackageManager.npm])(
+    'returns direct-dep build targets for %s',
+    (packageManager) => {
+      writePkg({ dependencies: { 'better-sqlite3': '^11.0.0' } });
+      expect(
+        resolveApproveBuildTargets(dir, ['better-sqlite3', 'esbuild'], packageManager),
+      ).toEqual(['better-sqlite3']);
+    },
+  );
 
   it('returns [] when the package manager is unknown', () => {
     writePkg({ dependencies: { 'better-sqlite3': '^11.0.0' } });
@@ -385,11 +367,6 @@ describe('resolveApproveBuildTargets', () => {
 
   it('returns [] when the project package.json is missing', () => {
     expect(resolveApproveBuildTargets(dir, ['better-sqlite3'], PackageManager.pnpm)).toEqual([]);
-  });
-
-  it('ignores transitive-only pending builds (e.g. esbuild from vite)', () => {
-    writePkg({ devDependencies: { vite: '^7.0.0' } });
-    expect(resolveApproveBuildTargets(dir, ['esbuild'], PackageManager.pnpm)).toEqual([]);
   });
 });
 

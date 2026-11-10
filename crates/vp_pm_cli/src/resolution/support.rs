@@ -2,12 +2,8 @@ use semver::Version;
 
 use crate::resolution::{Diagnostics, PackageManagerDialect};
 
-pub(crate) trait Diagnosis: Sized {
-    fn diagnose<Dialect: PackageManagerDialect>(
-        self,
-        dialect: &Dialect,
-        diag: &mut Diagnostics,
-    ) -> Self;
+pub(crate) trait Diagnosis {
+    fn diagnose<Dialect: PackageManagerDialect>(&self, dialect: &Dialect, diag: &mut Diagnostics);
 }
 
 pub(crate) trait ArgActivation {
@@ -86,24 +82,22 @@ impl VersionRule {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PmSupportRule {
     name: &'static str,
-    version: Option<VersionRule>,
+    versions: Vec<VersionRule>,
 }
 
 impl PmSupportRule {
     pub(crate) fn manager(name: &'static str) -> Self {
-        Self { name, version: None }
+        Self { name, versions: Vec::new() }
     }
 
-    pub(crate) fn version(
-        name: &'static str,
+    pub(crate) fn with_version(
+        mut self,
         operator: VersionOperator,
         original: &str,
         normalized: Version,
     ) -> Self {
-        Self {
-            name,
-            version: Some(VersionRule { operator, original: original.to_string(), normalized }),
-        }
+        self.versions.push(VersionRule { operator, original: original.to_string(), normalized });
+        self
     }
 
     pub(crate) fn first_matching<'a, Dialect: PackageManagerDialect>(
@@ -117,15 +111,15 @@ impl PmSupportRule {
         self.name
     }
 
-    pub(crate) fn version_rule(&self) -> Option<&VersionRule> {
-        self.version.as_ref()
+    pub(crate) fn version_rules(&self) -> &[VersionRule] {
+        &self.versions
     }
 
     fn matches<Dialect: PackageManagerDialect>(&self, dialect: &Dialect) -> bool {
         if self.name != Dialect::COMMAND_NAME {
             return false;
         }
-        self.version.as_ref().is_none_or(|version| {
+        self.versions.iter().all(|version| {
             dialect
                 .version()
                 .is_some_and(|current| version.operator.matches(current, &version.normalized))
@@ -141,7 +135,7 @@ mod tests {
     use crate::resolution::{Diagnosis, Npm, test_utils::bun};
 
     #[test]
-    fn active_detection_filters_bool_option_vec_and_option_vec() {
+    fn active_detection_reports_bool_option_vec_and_option_vec_without_mutating() {
         #[pm_args]
         #[derive(clap::Args, Clone, Debug, Default)]
         struct ShapeArgs {
@@ -166,16 +160,16 @@ mod tests {
             option_vec_field: Some(vec!["two".to_string()]),
         };
         let mut diagnostics = Diagnostics::default();
-        let shape = shape.diagnose(&resolver, &mut diagnostics);
-        assert!(!shape.bool_field);
-        assert_eq!(shape.option_field, None);
-        assert!(shape.vec_field.is_empty());
-        assert_eq!(shape.option_vec_field, None);
+        shape.diagnose(&resolver, &mut diagnostics);
+        assert!(shape.bool_field);
+        assert_eq!(shape.option_field.as_deref(), Some("value"));
+        assert_eq!(shape.vec_field, vec!["one"]);
+        assert_eq!(shape.option_vec_field, Some(vec!["two".to_string()]));
         assert_eq!(diagnostics.len(), 4);
     }
 
     #[test]
-    fn enum_diagnosis_filters_inline_variant_fields() {
+    fn enum_diagnosis_reports_inline_variant_fields_without_mutating() {
         #[pm_args]
         #[derive(clap::Subcommand, Clone, Debug, PartialEq, Eq)]
         enum ShapeArgs {
@@ -187,9 +181,10 @@ mod tests {
         }
 
         let mut diagnostics = Diagnostics::default();
-        let shape = ShapeArgs::List { json: true }.diagnose(&bun("1.3.0"), &mut diagnostics);
+        let shape = ShapeArgs::List { json: true };
+        shape.diagnose(&bun("1.3.0"), &mut diagnostics);
 
-        assert_eq!(shape, ShapeArgs::List { json: false });
+        assert_eq!(shape, ShapeArgs::List { json: true });
         assert_eq!(diagnostics.len(), 1);
     }
 
@@ -209,10 +204,10 @@ mod tests {
         }
 
         let mut diagnostics = Diagnostics::default();
-        let args = ShadowingArgs::Check { diag: true, dialect: true, rules: true }
-            .diagnose(&bun("1.3.0"), &mut diagnostics);
+        let args = ShadowingArgs::Check { diag: true, dialect: true, rules: true };
+        args.diagnose(&bun("1.3.0"), &mut diagnostics);
 
-        assert_eq!(args, ShadowingArgs::Check { diag: false, dialect: false, rules: false });
+        assert_eq!(args, ShadowingArgs::Check { diag: true, dialect: true, rules: true });
         assert_eq!(diagnostics.len(), 3);
     }
 
@@ -238,10 +233,10 @@ mod tests {
 
         let mut diagnostics = Diagnostics::default();
         let dialect = bun("1.3.0");
-        let args =
-            GenericStruct { value: "value".to_string() }.diagnose(&dialect, &mut diagnostics);
-        let command =
-            GenericEnum::Value { value: "value".to_string() }.diagnose(&dialect, &mut diagnostics);
+        let args = GenericStruct { value: "value".to_string() };
+        let command = GenericEnum::Value { value: "value".to_string() };
+        args.diagnose(&dialect, &mut diagnostics);
+        command.diagnose(&dialect, &mut diagnostics);
 
         assert_eq!(args, GenericStruct { value: "value".to_string() });
         assert_eq!(command, GenericEnum::Value { value: "value".to_string() });
@@ -281,12 +276,13 @@ mod tests {
 
         let mut diagnostics = Diagnostics::default();
         let dialect = bun("1.3.0");
-        let args = ConditionalStruct { visible: true }.diagnose(&dialect, &mut diagnostics);
-        let command =
-            ConditionalEnum::Visible { visible: true }.diagnose(&dialect, &mut diagnostics);
+        let args = ConditionalStruct { visible: true };
+        let command = ConditionalEnum::Visible { visible: true };
+        args.diagnose(&dialect, &mut diagnostics);
+        command.diagnose(&dialect, &mut diagnostics);
 
-        assert_eq!(args, ConditionalStruct { visible: false });
-        assert_eq!(command, ConditionalEnum::Visible { visible: false });
+        assert_eq!(args, ConditionalStruct { visible: true });
+        assert_eq!(command, ConditionalEnum::Visible { visible: true });
         assert_eq!(diagnostics.len(), 2);
     }
 
@@ -297,10 +293,13 @@ mod tests {
         struct ShapeArgs {
             #[arg(long, not_supported(npm < "99"))]
             future: bool,
+            #[arg(long, not_supported(npm >= "2" && < "99"))]
+            bounded: bool,
         }
 
         let mut diagnostics = Diagnostics::default();
-        let shape = ShapeArgs { future: true }.diagnose(&Npm::unknown_version(), &mut diagnostics);
+        let shape = ShapeArgs { future: true, bounded: true };
+        shape.diagnose(&Npm::unknown_version(), &mut diagnostics);
 
         assert!(shape.future);
         assert!(diagnostics.is_empty());

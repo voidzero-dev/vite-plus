@@ -18,4 +18,5 @@ steps = [
   { argv = ["vpt", "print-file", "package.json", "packages/app/package.json", "packages/utils/package.json", "pnpm-workspace.yaml"], continue-on-failure = true },
   { argv = ["vp", "add", "--filter", "app", "test-vite-plus-package-optional", "--save-catalog-name", "v1"], comment = "should error because save-catalog-name is not supported at pnpm@9", continue-on-failure = true },
   { argv = ["vp", "add", "--filter=./packages/utils", "test-vite-plus-package-optional", "-O", "--save-catalog", "v2"], comment = "should error because save-catalog is not supported at pnpm@9", continue-on-failure = true },
+  { argv = ["vp", "install", "testnpm2", "--save-catalog"], comment = "The install alias must apply the add catalog version guard.", continue-on-failure = true },
 ]

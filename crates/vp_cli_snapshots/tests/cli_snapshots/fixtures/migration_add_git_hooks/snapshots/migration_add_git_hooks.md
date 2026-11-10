@@ -27,13 +27,6 @@ check package.json has prepare script and lint-staged config
     "vite": "catalog:",
     "vite-plus": "catalog:"
   },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
-  },
   "scripts": {
     "prepare": "vp config"
   }
@@ -110,15 +103,6 @@ i="${XDG_CONFIG_HOME:-$HOME/.config}/vite-plus/hooks-init.sh"
 d="$(dirname "$(dirname "$(dirname "$0")")")"
 __vp_shell=/bin/sh
 [ -x "$__vp_shell" ] || __vp_shell=$(command -v sh)
-
-if [ -n "${VP_HOME-}" ]; then
-  __vp_bin="$VP_HOME/bin"
-elif [ -n "${HOME-}" ]; then
-  __vp_bin="$HOME/.vite-plus/bin"
-else
-  __vp_bin=""
-fi
-[ -n "$__vp_bin" ] && [ -d "$__vp_bin" ] && export PATH="$PATH:$__vp_bin"
 
 export PATH="$d/node_modules/.bin:$PATH"
 "$__vp_shell" -e "$s" "$@"

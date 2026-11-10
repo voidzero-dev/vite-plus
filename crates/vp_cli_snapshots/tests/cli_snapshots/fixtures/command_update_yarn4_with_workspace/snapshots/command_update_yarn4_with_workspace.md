@@ -7,7 +7,7 @@ Berry filtered update fails instead of updating every workspace
 **Exit code:** 1
 
 ```
-Invalid argument: `--filter` is not supported by Yarn Berry `update`.
+yarn >= 2 does not support --filter.
 ```
 
 ## `vp up -D --filter app`
@@ -17,7 +17,8 @@ the up alias rejects filters without a package argument
 **Exit code:** 1
 
 ```
-Invalid argument: `--filter` is not supported by Yarn Berry `update`.
+yarn >= 2 does not support --filter.
+yarn does not support --dev.
 ```
 
 ## `vp update --filter *`
@@ -27,7 +28,7 @@ wildcard filters are also unsupported
 **Exit code:** 1
 
 ```
-Invalid argument: `--filter` is not supported by Yarn Berry `update`.
+yarn >= 2 does not support --filter.
 ```
 
 ## `vp update --workspace --filter app @vite-plus-test/utils`
@@ -37,7 +38,8 @@ workspace dependency updates reject filters
 **Exit code:** 1
 
 ```
-Invalid argument: `--filter` is not supported by Yarn Berry `update`.
+yarn >= 2 does not support --filter.
+yarn does not support --workspace.
 ```
 
 ## `vp update testnpm2 --filter app --filter @vite-plus-test/utils --recursive`
@@ -47,7 +49,7 @@ recursive update must not silently discard workspace filters
 **Exit code:** 1
 
 ```
-Invalid argument: `--filter` is not supported by Yarn Berry `update`.
+yarn >= 2 does not support --filter.
 ```
 
 ## `vpt print-file package.json packages/app/package.json packages/utils/package.json`
@@ -157,10 +159,9 @@ unfiltered update still updates all testnpm2 versions
 
 ## `vp update -r --no-save`
 
-warn that --no-save is unsupported while preserving recursive update
+recursive no-save updates resolutions without changing workspace manifests
 
 ```
-warn: yarn does not support --no-save.
 ➤ YN0000: · Yarn <version>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0000: └ Completed

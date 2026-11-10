@@ -1,0 +1,9 @@
+[[case]]
+name = "lint_react_compound_components"
+vp = "local"
+steps = [
+  { argv = ["vp", "lint", "components.tsx"], comment = "allowCompoundComponents: true accepts an object containing only React components", continue-on-failure = true },
+  { argv = ["vp", "lint", "mixed.tsx"], comment = "the enabled option still rejects an object with a non-component property", continue-on-failure = true },
+  { argv = ["vpt", "replace-file-content", "vite.config.ts", "allowCompoundComponents: true", "allowCompoundComponents: false"], snapshot = false },
+  { argv = ["vp", "lint", "components.tsx"], comment = "allowCompoundComponents: false rejects the same compound component export", continue-on-failure = true },
+]

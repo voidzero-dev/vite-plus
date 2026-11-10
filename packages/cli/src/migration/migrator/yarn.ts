@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import semver from 'semver';
+import { coerce } from 'verkit';
 import { Scalar, YAMLSeq } from 'yaml';
 
 import { type WorkspacePackage } from '../../types/index.ts';
@@ -187,7 +187,7 @@ export function detectYarnPnpMode(
   projectPath: string,
   yarnVersion: string,
 ): YarnPnpDetection | undefined {
-  const coercedVersion = semver.coerce(yarnVersion);
+  const coercedVersion = coerce(yarnVersion);
   if (coercedVersion?.major === 1) {
     return undefined;
   }

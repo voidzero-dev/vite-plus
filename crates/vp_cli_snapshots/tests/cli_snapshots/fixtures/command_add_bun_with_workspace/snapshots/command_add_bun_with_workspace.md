@@ -41,3 +41,33 @@ should add package to the default catalog
   }
 }
 ```
+
+## `vp add testnpm2 --save-catalog-name testing -- --silent`
+
+should add package to a named catalog
+
+```
+```
+
+## `vpt print-file package.json`
+
+```
+{
+  "name": "command-add-bun-with-workspace",
+  "version": "1.0.0",
+  "workspaces": ["packages/*"],
+  "packageManager": "bun@1.4.0",
+  "dependencies": {
+    "test-vite-plus-package": "catalog:",
+    "testnpm2": "catalog:testing"
+  },
+  "catalog": {
+    "test-vite-plus-package": "^1.0.0"
+  },
+  "catalogs": {
+    "testing": {
+      "testnpm2": "^1.0.1"
+    }
+  }
+}
+```

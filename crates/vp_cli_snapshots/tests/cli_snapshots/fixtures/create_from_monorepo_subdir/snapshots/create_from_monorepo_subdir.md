@@ -76,36 +76,44 @@ apps/vite-plus-application/package.json: file
 
 ## `cd scripts/helper && vp create --no-interactive vite:library`
 
-from non-workspace dir
+from a package that is not a workspace member
 
 
-## `vpt stat-file packages/vite-plus-library/package.json --assert file`
+## `vpt stat-file scripts/helper/vite-plus-library/package.json --assert file`
 
-created at packages/vite-plus-library
-
-```
-packages/vite-plus-library/package.json: file
-```
-
-## `vpt stat-file scripts/helper/packages/vite-plus-library/package.json --assert-not file`
-
-not created inside scripts/helper/
+scaffolded inside the non-member package
 
 ```
-scripts/helper/packages/vite-plus-library/package.json: missing
+scripts/helper/vite-plus-library/package.json: file
+```
+
+## `vpt stat-file packages/vite-plus-library/package.json --assert-not file`
+
+not added to the enclosing workspace
+
+```
+packages/vite-plus-library/package.json: missing
 ```
 
 ## `cd scripts/helper && vp create --no-interactive vite:application --directory apps/custom-app`
 
---directory from non-workspace dir
+--directory is relative to the non-member package
 
 
-## `vpt stat-file apps/custom-app/package.json --assert file`
+## `vpt stat-file scripts/helper/apps/custom-app/package.json --assert file`
 
-created at apps/custom-app with --directory
+created under the non-member package
 
 ```
-apps/custom-app/package.json: file
+scripts/helper/apps/custom-app/package.json: file
+```
+
+## `vpt stat-file apps/custom-app/package.json --assert-not file`
+
+not created in the enclosing workspace
+
+```
+apps/custom-app/package.json: missing
 ```
 
 ## `vpt mkdir -p apps/dot-test`

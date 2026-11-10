@@ -1,7 +1,12 @@
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { findLatestStableVersionForMajor } from './upgrade-deps-utils.ts';
+import {
+  findLatestStableVersionForMajor,
+  getBundledDependencyRanges,
+  getLatestNodeVersion,
+} from './upgrade-deps-utils.ts';
 
 const ROOT = process.cwd();
 const META_DIR = process.env.UPGRADE_DEPS_META_DIR;
@@ -44,6 +49,9 @@ type UpstreamVersions = {
   vite: {
     hash: string;
   };
+  'oxc-node': {
+    hash: string;
+  };
 };
 
 type PnpmWorkspaceVersions = {
@@ -58,9 +66,7 @@ type PnpmWorkspaceVersions = {
   oxlintTsgolint: string;
   oxcProjectRuntime: string;
   oxcProjectTypes: string;
-  oxcMinify: string;
   oxcParser: string;
-  oxcTransform: string;
 };
 
 type PnpmWorkspaceEntry = {
@@ -74,6 +80,8 @@ const STABLE_SEMVER_TAG_RE = /^v?\d+\.\d+\.\d+$/;
 // Vitest major upgrades can change the bundled API, export shims, and CLI
 // behavior. Advance this only after Vite+ has adapted to the new major.
 const SUPPORTED_VITEST_MAJOR = 5;
+// Review compatibility before advancing the shared development, CI, and installation pin.
+const SUPPORTED_NODE_MAJOR = 24;
 
 const isFullSha = (s: string): boolean => /^[0-9a-f]{40}$/.test(s);
 
@@ -102,21 +110,22 @@ function recordChange(
 }
 
 // ============ GitHub API ============
+function fetchGitHubRepo(owner: string, repo: string, endpoint: string): Promise<Response> {
+  return fetch(`https://api.github.com/repos/${owner}/${repo}/${endpoint}`, {
+    headers: {
+      Authorization: `token ${process.env.GITHUB_TOKEN}`,
+      Accept: 'application/vnd.github.v3+json',
+    },
+  });
+}
+
 async function getLatestTag(
   owner: string,
   repo: string,
   options: LatestTagOptions = {},
 ): Promise<LatestTag> {
   const perPage = options.stableOnly ? 100 : 1;
-  const res = await fetch(
-    `https://api.github.com/repos/${owner}/${repo}/tags?per_page=${perPage}`,
-    {
-      headers: {
-        Authorization: `token ${process.env.GITHUB_TOKEN}`,
-        Accept: 'application/vnd.github.v3+json',
-      },
-    },
-  );
+  const res = await fetchGitHubRepo(owner, repo, `tags?per_page=${perPage}`);
   if (!res.ok) {
     throw new Error(`Failed to fetch tags for ${owner}/${repo}: ${res.status} ${res.statusText}`);
   }
@@ -135,6 +144,25 @@ async function getLatestTag(
   }
   console.log(`${repo} -> ${latest.name} (${latest.commit.sha.slice(0, 7)})`);
   return { sha: latest.commit.sha, tag: latest.name };
+}
+
+// Whether `head` contains every commit of `base`, so moving a pin from `base` to `head`
+// drops nothing.
+async function containsCommit(
+  owner: string,
+  repo: string,
+  base: string,
+  head: string,
+): Promise<boolean> {
+  if (base === head) {
+    return true;
+  }
+  const res = await fetchGitHubRepo(owner, repo, `compare/${base}...${head}`);
+  if (!res.ok) {
+    throw new Error(`Failed to compare ${owner}/${repo} ${base}...${head}: ${res.status}`);
+  }
+  const { status } = (await res.json()) as { status?: unknown };
+  return status === 'ahead' || status === 'identical';
 }
 
 // ============ npm Registry ============
@@ -193,14 +221,24 @@ async function updateUpstreamVersions(): Promise<void> {
 
   const oldRolldownHash = data.rolldown.hash;
   const oldViteHash = data.vite.hash;
-  const [rolldown, vite] = await Promise.all([
+  const oldOxcNodeHash = data['oxc-node'].hash;
+  const [rolldown, vite, oxcNode] = await Promise.all([
     getLatestTag('rolldown', 'rolldown'),
     getLatestTag('vitejs', 'vite', { stableOnly: true }),
+    // Vendored into the native binding; `sync-remote` re-applies its patch.
+    getLatestTag('oxc-project', 'oxc-node', { stableOnly: true }),
   ]);
   data.rolldown.hash = rolldown.sha;
   data.vite.hash = vite.sha;
   recordChange('rolldown', oldRolldownHash, rolldown.sha, rolldown.tag);
   recordChange('vite', oldViteHash, vite.sha, vite.tag);
+  // A pin to an unreleased fix on oxc-node's main stays until a release contains it.
+  if (await containsCommit('oxc-project', 'oxc-node', oldOxcNodeHash, oxcNode.sha)) {
+    data['oxc-node'].hash = oxcNode.sha;
+    recordChange('oxc-node', oldOxcNodeHash, oxcNode.sha, oxcNode.tag);
+  } else {
+    recordChange('oxc-node', oldOxcNodeHash, oldOxcNodeHash);
+  }
 
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2) + '\n');
   console.log('Updated .upstream-versions.json');
@@ -307,6 +345,15 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
       newVersion: versions.oxlint,
     },
     {
+      // Oxc versions this package in the same release group as oxlint.
+      // See https://github.com/oxc-project/oxc/blob/main/oxc_release.toml
+      name: '@oxlint/plugins',
+      pattern: /'@oxlint\/plugins': =([\d.]+(?:-[\w.]+)?)/,
+      replacement: `'@oxlint/plugins': =${versions.oxlint}`,
+      newVersion: versions.oxlint,
+    },
+    {
+      // Tsgolint has its own release schedule and version series.
       name: 'oxlint-tsgolint',
       pattern: /oxlint-tsgolint: =([\d.]+(?:-[\w.]+)?)/,
       replacement: `oxlint-tsgolint: =${versions.oxlintTsgolint}`,
@@ -325,22 +372,10 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
       newVersion: versions.oxcProjectTypes,
     },
     {
-      name: 'oxc-minify',
-      pattern: /oxc-minify: =([\d.]+(?:-[\w.]+)?)/,
-      replacement: `oxc-minify: =${versions.oxcMinify}`,
-      newVersion: versions.oxcMinify,
-    },
-    {
       name: 'oxc-parser',
       pattern: /oxc-parser: =([\d.]+(?:-[\w.]+)?)/,
       replacement: `oxc-parser: =${versions.oxcParser}`,
       newVersion: versions.oxcParser,
-    },
-    {
-      name: 'oxc-transform',
-      pattern: /oxc-transform: =([\d.]+(?:-[\w.]+)?)/,
-      replacement: `oxc-transform: =${versions.oxcTransform}`,
-      newVersion: versions.oxcTransform,
     },
   ];
 
@@ -388,62 +423,15 @@ async function updateVitestVersionConstant(vitestVersion: string): Promise<void>
   console.log('Updated packages/cli/src/utils/constants.ts');
 }
 
-// ============ Update README.md manual-migration vitest pins ============
-// The manual-migration guide pins `vitest` to an exact version in three places —
-// the npm/Bun `overrides` block, the pnpm-workspace `overrides` block, and the
-// Yarn `resolutions` block — so a hand-migrated project shares one Vitest copy
-// with the bundled `vp test`. Those literals are NOT interpolated from
-// VITEST_VERSION, so a daily bump must rewrite them or the guide drifts behind the
-// bundled version. The packages/cli/README.md mirror (refreshed from the root
-// README's suffix at build time) is kept in sync here too so the daily PR stays
-// self-consistent without depending on a build step running first.
-async function updateReadmeVitestPins(vitestVersion: string): Promise<void> {
-  const readmePaths = [path.join(ROOT, 'README.md'), path.join(ROOT, 'packages/cli/README.md')];
-  // JSON form: `"vitest": "4.1.9"` — npm/Bun `overrides` + Yarn `resolutions` (2 blocks)
-  const jsonPattern = /("vitest": ")[\d.]+(?:-[\w.]+)?(")/g;
-  // YAML form: `  vitest: 4.1.9` — pnpm-workspace `overrides` (1 block)
-  const yamlPattern = /(\n\s*vitest: )[\d.]+(?:-[\w.]+)?(\n)/g;
-  // Both READMEs carry the same three manual-migration pins (the cli copy mirrors the
-  // root's suffix). Assert the exact shape so a daily run fails loudly — like every
-  // other updater here — if a block is reworded or removed, instead of silently
-  // shipping a README where only some pins were bumped.
-  const EXPECTED_JSON = 2;
-  const EXPECTED_YAML = 1;
-  let oldVersion: string | undefined;
-  const capture = (match: string): void => {
-    const found = /(\d[\d.]*(?:-[\w.]+)?)/.exec(match)?.[1];
-    if (found && oldVersion === undefined) {
-      oldVersion = found;
-    }
-  };
-  for (const filePath of readmePaths) {
-    if (!fs.existsSync(filePath)) {
-      continue;
-    }
-    const content = fs.readFileSync(filePath, 'utf8');
-    let jsonMatched = 0;
-    let yamlMatched = 0;
-    let updated = content.replace(jsonPattern, (match: string, pre: string, post: string) => {
-      jsonMatched++;
-      capture(match);
-      return `${pre}${vitestVersion}${post}`;
-    });
-    updated = updated.replace(yamlPattern, (match: string, pre: string, post: string) => {
-      yamlMatched++;
-      capture(match);
-      return `${pre}${vitestVersion}${post}`;
-    });
-    if (jsonMatched !== EXPECTED_JSON || yamlMatched !== EXPECTED_YAML) {
-      throw new Error(
-        `Expected ${EXPECTED_JSON} JSON + ${EXPECTED_YAML} YAML vitest pins in ${filePath}, ` +
-          `found ${jsonMatched} + ${yamlMatched} — the manual-migration section changed, ` +
-          `please update updateReadmeVitestPins in .github/scripts/upgrade-deps.ts`,
-      );
-    }
-    fs.writeFileSync(filePath, updated);
-    console.log(`Updated ${path.relative(ROOT, filePath)}`);
+// Update the shared Node.js pin for development, CI, and installation.
+function updateNodeVersionFile(nodeVersion: string): void {
+  const filePath = path.join(ROOT, '.node-version');
+  const oldVersion = fs.readFileSync(filePath, 'utf8').trim();
+  if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(oldVersion)) {
+    throw new Error(`Expected an exact stable Node.js version in ${filePath}`);
   }
-  recordChange('README vitest pins', oldVersion ?? null, vitestVersion);
+  fs.writeFileSync(filePath, `${nodeVersion}\n`);
+  recordChange('Node.js', oldVersion, nodeVersion);
 }
 
 // ============ Write metadata files for PR description ============
@@ -522,75 +510,115 @@ function writeMetaFiles(): void {
   console.log(`Wrote metadata files to ${META_DIR}`);
 }
 
-console.log('Fetching latest versions…');
+// Run after installation so Yuku follows the plugin actually bundled with
+// tsdown, including transitive updates made by pnpm dedupe.
+function syncBundledDependencies(): void {
+  if (META_DIR) {
+    const versionsPath = path.join(META_DIR, 'versions.json');
+    const previous = readJsonFile(versionsPath) as Record<string, Change>;
+    for (const [name, change] of Object.entries(previous)) {
+      changes.set(name, change);
+    }
+  }
 
-const [
-  vitestVersion,
-  tsdownVersion,
-  lightningcssVersion,
-  lintStagedVersion,
-  oxcNodeCliVersion,
-  oxcNodeCoreVersion,
-  oxfmtVersion,
-  oxlintVersion,
-  oxlintTsgolintVersion,
-  oxcProjectRuntimeVersion,
-  oxcProjectTypesVersion,
-  oxcMinifyVersion,
-  oxcParserVersion,
-  oxcTransformVersion,
-] = await Promise.all([
-  getLatestNpmVersionForMajor('vitest', SUPPORTED_VITEST_MAJOR),
-  getLatestNpmVersion('tsdown'),
-  // Mirror exactly what the bundled @tsdown/css depends on.
-  getNpmDependencyRange('@tsdown/css', 'lightningcss'),
-  getLatestNpmVersion('lint-staged'),
-  getLatestNpmVersion('@oxc-node/cli'),
-  getLatestNpmVersion('@oxc-node/core'),
-  getLatestNpmVersion('oxfmt'),
-  getLatestNpmVersion('oxlint'),
-  getLatestNpmVersion('oxlint-tsgolint'),
-  getLatestNpmVersion('@oxc-project/runtime'),
-  getLatestNpmVersion('@oxc-project/types'),
-  getLatestNpmVersion('oxc-minify'),
-  getLatestNpmVersion('oxc-parser'),
-  getLatestNpmVersion('oxc-transform'),
-]);
+  const ranges = getBundledDependencyRanges(ROOT);
+  const filePath = path.join(ROOT, 'packages/core/package.json');
+  const pkg = readJsonFile(filePath);
+  for (const { name, field, range } of ranges) {
+    const oldRange = pkg[field]?.[name];
+    if (typeof oldRange !== 'string') {
+      throw new Error(`Missing ${field}.${name} in ${filePath}`);
+    }
+    // Preserve the original version if synchronization runs again after fixups.
+    recordChange(name, changes.get(name)?.old ?? oldRange, range);
+    pkg[field][name] = range;
+  }
+  fs.writeFileSync(filePath, JSON.stringify(pkg, null, 2) + '\n');
+  writeMetaFiles();
+}
 
-console.log(`vitest: ${vitestVersion}`);
-console.log(`tsdown: ${tsdownVersion}`);
-console.log(`lightningcss (from @tsdown/css): ${lightningcssVersion}`);
-console.log(`lint-staged: ${lintStagedVersion}`);
-console.log(`@oxc-node/cli: ${oxcNodeCliVersion}`);
-console.log(`@oxc-node/core: ${oxcNodeCoreVersion}`);
-console.log(`oxfmt: ${oxfmtVersion}`);
-console.log(`oxlint: ${oxlintVersion}`);
-console.log(`oxlint-tsgolint: ${oxlintTsgolintVersion}`);
-console.log(`@oxc-project/runtime: ${oxcProjectRuntimeVersion}`);
-console.log(`@oxc-project/types: ${oxcProjectTypesVersion}`);
-console.log(`oxc-minify: ${oxcMinifyVersion}`);
-console.log(`oxc-parser: ${oxcParserVersion}`);
-console.log(`oxc-transform: ${oxcTransformVersion}`);
+async function upgradeDependencies(): Promise<void> {
+  console.log('Fetching latest versions…');
 
-await updateUpstreamVersions();
-await updatePnpmWorkspace({
-  vitest: vitestVersion,
-  tsdown: tsdownVersion,
-  lightningcss: lightningcssVersion,
-  lintStaged: lintStagedVersion,
-  oxcNodeCli: oxcNodeCliVersion,
-  oxcNodeCore: oxcNodeCoreVersion,
-  oxfmt: oxfmtVersion,
-  oxlint: oxlintVersion,
-  oxlintTsgolint: oxlintTsgolintVersion,
-  oxcProjectRuntime: oxcProjectRuntimeVersion,
-  oxcProjectTypes: oxcProjectTypesVersion,
-  oxcMinify: oxcMinifyVersion,
-  oxcParser: oxcParserVersion,
-  oxcTransform: oxcTransformVersion,
-});
-await updateVitestVersionConstant(vitestVersion);
-await updateReadmeVitestPins(vitestVersion);
-writeMetaFiles();
+  const [
+    nodeVersion,
+    vitestVersion,
+    tsdownVersion,
+    lightningcssVersion,
+    lintStagedVersion,
+    oxcNodeCliVersion,
+    oxcNodeCoreVersion,
+    oxfmtVersion,
+    oxlintVersion,
+    oxlintTsgolintVersion,
+    oxcProjectRuntimeVersion,
+    oxcProjectTypesVersion,
+    oxcParserVersion,
+  ] = await Promise.all([
+    getLatestNodeVersion(SUPPORTED_NODE_MAJOR),
+    getLatestNpmVersionForMajor('vitest', SUPPORTED_VITEST_MAJOR),
+    getLatestNpmVersion('tsdown'),
+    // Mirror exactly what the bundled @tsdown/css depends on.
+    getNpmDependencyRange('@tsdown/css', 'lightningcss'),
+    getLatestNpmVersion('lint-staged'),
+    getLatestNpmVersion('@oxc-node/cli'),
+    getLatestNpmVersion('@oxc-node/core'),
+    getLatestNpmVersion('oxfmt'),
+    getLatestNpmVersion('oxlint'),
+    getLatestNpmVersion('oxlint-tsgolint'),
+    getLatestNpmVersion('@oxc-project/runtime'),
+    getLatestNpmVersion('@oxc-project/types'),
+    getLatestNpmVersion('oxc-parser'),
+  ]);
 
-console.log('Done!');
+  console.log(`Node.js: ${nodeVersion}`);
+  console.log(`vitest: ${vitestVersion}`);
+  console.log(`tsdown: ${tsdownVersion}`);
+  console.log(`lightningcss (from @tsdown/css): ${lightningcssVersion}`);
+  console.log(`lint-staged: ${lintStagedVersion}`);
+  console.log(`@oxc-node/cli: ${oxcNodeCliVersion}`);
+  console.log(`@oxc-node/core: ${oxcNodeCoreVersion}`);
+  console.log(`oxfmt: ${oxfmtVersion}`);
+  console.log(`oxlint: ${oxlintVersion}`);
+  console.log(`@oxlint/plugins (from oxlint): ${oxlintVersion}`);
+  console.log(`oxlint-tsgolint: ${oxlintTsgolintVersion}`);
+  console.log(`@oxc-project/runtime: ${oxcProjectRuntimeVersion}`);
+  console.log(`@oxc-project/types: ${oxcProjectTypesVersion}`);
+  console.log(`oxc-parser: ${oxcParserVersion}`);
+
+  await updateUpstreamVersions();
+  await updatePnpmWorkspace({
+    vitest: vitestVersion,
+    tsdown: tsdownVersion,
+    lightningcss: lightningcssVersion,
+    lintStaged: lintStagedVersion,
+    oxcNodeCli: oxcNodeCliVersion,
+    oxcNodeCore: oxcNodeCoreVersion,
+    oxfmt: oxfmtVersion,
+    oxlint: oxlintVersion,
+    oxlintTsgolint: oxlintTsgolintVersion,
+    oxcProjectRuntime: oxcProjectRuntimeVersion,
+    oxcProjectTypes: oxcProjectTypesVersion,
+    oxcParser: oxcParserVersion,
+  });
+  await updateVitestVersionConstant(vitestVersion);
+  updateNodeVersionFile(nodeVersion);
+  // Keep the selected versions available if installation or upstream sync fails.
+  writeMetaFiles();
+
+  for (const args of [['install', '--no-frozen-lockfile'], ['tool', 'sync-remote'], ['dedupe']]) {
+    execFileSync('pnpm', args, { cwd: ROOT, stdio: 'inherit' });
+  }
+  // sync-remote installs the merged workspace. Dedupe can select a newer dts
+  // plugin, so sync its external dependencies only after both operations finish.
+  syncBundledDependencies();
+  execFileSync('pnpm', ['install', '--no-frozen-lockfile'], { cwd: ROOT, stdio: 'inherit' });
+
+  console.log('Done!');
+}
+
+if (process.argv.includes('--sync-bundled-deps')) {
+  syncBundledDependencies();
+} else {
+  await upgradeDependencies();
+}

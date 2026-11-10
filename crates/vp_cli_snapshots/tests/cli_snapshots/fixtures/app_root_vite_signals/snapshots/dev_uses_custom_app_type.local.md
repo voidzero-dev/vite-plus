@@ -11,7 +11,7 @@ A declared Vite `appType` field is a root intent signal for `vp dev`.
 
 ```
 
-  VITE+ <version>
+  VITE+ <version>  ready in <duration>
 
   ➜  Local:   http://127.0.0.1:<port>/
   ➜  press h + enter to show help
@@ -21,7 +21,7 @@ A declared Vite `appType` field is a root intent signal for `vp dev`.
 
 ```
 
-  VITE+ <version>
+  VITE+ <version>  ready in <duration>
 
   ➜  Local:   http://127.0.0.1:<port>/
   ➜  press h + enter to show help

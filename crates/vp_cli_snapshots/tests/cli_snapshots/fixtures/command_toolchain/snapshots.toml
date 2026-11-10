@@ -24,6 +24,7 @@ name = "toolchain_json"
 vp = "global"
 steps = [
   { argv = ["vp", "toolchain", "vite", "--json", "--global"], tty = false, comment = "JSON contains one node per ID and no CLI header" },
+  { argv = ["vp", "toolchain", "vite", "--json", "-g"], tty = false, comment = "the short global flag supports filters and JSON output" },
 ]
 
 [[case]]

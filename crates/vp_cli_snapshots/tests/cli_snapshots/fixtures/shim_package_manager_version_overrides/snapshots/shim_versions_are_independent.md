@@ -30,7 +30,7 @@ yarn uses the expected version
 yarnpkg uses the expected version
 ```
 
-## `node check.cjs bun 1.2.0`
+## `node check.cjs bun 1.3.11`
 
 ```
 bun uses the expected version

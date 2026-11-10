@@ -20,6 +20,40 @@ vp create <template>
 vp create <template> -- <template-options>
 ```
 
+### Without the Global CLI
+
+If you haven't installed [the global `vp`](/guide/global-cli) yet. Vite+ provides `create-vite-plus` package running `vp create` through your package manager.
+
+::: code-group
+
+```bash [pnpm]
+pnpm create vite-plus
+```
+
+```bash [npm]
+npm create vite-plus@latest
+```
+
+```bash [Yarn]
+yarn create vite-plus
+```
+
+```bash [Bun]
+bun create vite-plus
+```
+
+:::
+
+The new project uses the package manager that ran the command, unless you pass `--package-manager` or create it inside an existing workspace. Arguments are forwarded to `vp create` unchanged, so the first argument is the template, not the target directory:
+
+```bash
+pnpm create vite-plus vite:application --directory my-app
+```
+
+If you are using npm, there is a `--` needed before options meant for `vp create`, for example `npm create vite-plus@latest -- vite:application --directory my-app`.
+
+After creating the project, run `vp` through your package manager, for example `pnpm exec vp run`.
+
 ## Built-in Templates
 
 Vite+ ships with these built-in templates:
@@ -42,12 +76,12 @@ Run `vp create --list` to see the built-in templates and the common shorthand te
 
 ## Options
 
-- `--directory <dir>` writes the generated project into a specific target directory
+- `--directory <dir>` writes the generated project into a specific target directory. Only built-in templates and bundled `@org` templates support this option.
 - `--agent <name>` creates agent instructions files during scaffolding
 - `--no-agent` skips agent instruction setup
 - `--editor <name>` writes editor config files
 - `--no-editor` skips editor config setup
-- `--git` initialize a git repository
+- `--git` initializes a git repository
 - `--no-git` skips git repository initialization
 - `--package-manager <name>` uses a specified package manager (`pnpm`, `npm`, `yarn`, or `bun`)
 - `--approve-builds` approves and runs gated dependency build scripts without prompting
@@ -57,7 +91,11 @@ Run `vp create --list` to see the built-in templates and the common shorthand te
 - `--hooks` enables pre-commit hook setup (dispatcher + `.vite-hooks` + `staged` config)
 - `--no-hooks` skips hook setup
 
-After create, manage the dispatcher with `vp hooks status`, `vp hooks disable`, and `vp hooks enable`. See the [Commit hooks guide](/guide/commit-hooks).
+::: info
+`--git` and `--no-git` are not available when adding a package to an existing monorepo.
+:::
+
+After create, manage the dispatcher with `vp hooks status`, `vp hooks disable`, and `vp hooks enable`. See the [Commit Hooks](/guide/commit-hooks).
 
 ### Dependency build scripts
 
@@ -130,7 +168,9 @@ If the monorepo has a parent directory matching `generators` or `tools`, the new
 
 Local generators are declared in [`create.templates`](/config/create#create-templates) in the monorepo's `vite.config.ts`. This is the source of truth: only registered templates appear in the `vp create` picker.
 
-`vp create vite:generator` registers the generator for you, adding an entry to `create.templates` in the root `vite.config.ts`:
+`vp create vite:generator` registers the generator for you, adding an entry to `create.templates` in the root `vite.config.ts`.
+
+For example, a generator named `my-generator` created in `generators/my-generator` is registered as follows:
 
 ```ts
 import { defineConfig } from 'vite-plus';
@@ -138,7 +178,11 @@ import { defineConfig } from 'vite-plus';
 export default defineConfig({
   create: {
     templates: [
-      { name: 'my-generator', description: 'Generate new components', template: 'my-generator' },
+      {
+        name: 'my-generator',
+        description: 'A starter for creating a Vite+ code generator.',
+        template: './generators/my-generator',
+      },
     ],
   },
 });

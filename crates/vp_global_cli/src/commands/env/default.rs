@@ -1,6 +1,6 @@
 use std::process::ExitStatus;
 
-use vp_pm_cli::resolve_package_manager_version;
+use vp_pm_cli::{is_package_manager_dist_tag, resolve_package_manager_version};
 
 use super::{
     config::{get_config_path, load_config, save_config},
@@ -53,7 +53,8 @@ pub async fn execute(values: Vec<String>, unset: bool) -> Result<ExitStatus, Err
         updates.push(format!("Default Node.js version set to {display}"));
     }
     if let Some((package_manager, version, hash)) = specs.package_manager {
-        let stored = if version == "latest" {
+        // Dist-tags such as `latest` stay unresolved so the default follows the tag.
+        let stored = if is_package_manager_dist_tag(&version) {
             version
         } else {
             resolve_package_manager_version(package_manager, &version).await?.to_string()

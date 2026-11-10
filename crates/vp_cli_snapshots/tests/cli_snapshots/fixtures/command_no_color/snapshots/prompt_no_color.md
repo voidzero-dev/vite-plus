@@ -10,8 +10,9 @@ The picocolors-backed picker remains interactive without color
 VITE+ - The Unified Toolchain for the Web
 
   › Vite+ Monorepo: Create a new Vite+ monorepo project
-    Vite+ Application: Create vite applications
-    Vite+ Library: Create vite libraries
+    Vite+ Application
+    Vite+ Library
+  ↑/↓ navigate · Enter confirm
 ```
 
 **← write-key:** `ctrl-c`

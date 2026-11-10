@@ -11,19 +11,19 @@ For most of use cases, we recommend to use Vite+ cli to install in a project or 
 ::: code-group
 
 ```bash [pnpm]
-pnpm dlx --package=vite-plus vp create
+pnpm create vite-plus
 ```
 
 ```bash [npm]
-npx --package=vite-plus vp create
+npm create vite-plus@latest
 ```
 
 ```bash [Yarn]
-yarn dlx --package vite-plus vp create
+yarn create vite-plus
 ```
 
 ```bash [Bun]
-bunx --package vite-plus vp create
+bun create vite-plus
 ```
 
 :::
@@ -39,36 +39,73 @@ The documentation uses bare `vp` commands for readability. Without the global CL
 
 ### Manual Installation
 
-If you are manually migrating a project to Vite+, install these dev dependencies first:
+If you are manually migrating a project to Vite+, install `vite-plus` as a development dependency:
 
-```bash
-vp install -D vite-plus
+::: code-group
+
+```bash [npm]
+npm install -D vite-plus
 ```
 
-You need to add overrides to your package manager so that other packages resolve the Vite+ versions: alias `vite` to `@voidzero-dev/vite-plus-core`, and pin `vitest` to the version Vite+ bundles (run `vp --version`) so the whole project shares a single Vitest copy with `vp test`. Without the `vitest` pin, a dependency or workspace package can pull a different Vitest than the bundled runner, splitting Vitest's internals (mocks, `expect`, runner state):
+```bash [Yarn]
+yarn add -D vite-plus
+```
+
+```bash [pnpm]
+pnpm add -D vite-plus
+```
+
+```bash [Bun]
+bun add -D vite-plus
+```
+
+:::
+
+Add overrides to your package manager so that other packages resolve the Vite+ versions. Alias `vite` to `@voidzero-dev/vite-plus-core`, setting `<vite-plus-version>` to the installed `vite-plus` version. Pin `vitest` to `<vitest-version>`, using the bundled version shown by `vp toolchain vitest` so the whole project shares a single Vitest copy with `vp test`. Without the `vitest` pin, a dependency or workspace package can pull a different Vitest than the bundled runner, splitting Vitest's internals (mocks, `expect`, runner state):
 
 ::: code-group
 
 ```yaml [pnpm-workspace.yaml]
 overrides:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: 5.0.1
+  vite@*: npm:@voidzero-dev/vite-plus-core@<vite-plus-version> # Match the installed vite-plus version
+  vitest@*: <vitest-version> # Match the version from vp toolchain vitest
 ```
 
 ```json [npm / Bun package.json]
 "overrides": {
-  "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-  "vitest": "5.0.1"
+  "vite": "npm:@voidzero-dev/vite-plus-core@<vite-plus-version>",
+  "vitest": "<vitest-version>"
 }
 ```
 
 ```json [Yarn package.json]
 "resolutions": {
-  "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-  "vitest": "5.0.1"
+  "vite": "npm:@voidzero-dev/vite-plus-core@<vite-plus-version>",
+  "vitest": "<vitest-version>"
 }
 ```
 
+:::
+
+::: warning Existing direct dependencies with npm
+If your npm project already lists `vite` in `dependencies` or `devDependencies`, change that entry to the same alias as `overrides.vite`. npm requires a direct dependency and its override to use the [same dependency specification](https://docs.npmjs.com/cli/v11/configuring-npm/package-json/#overrides). Otherwise, `npm install` fails with `EOVERRIDE`.
+
+For example, update an existing `vite` development dependency as follows. Keep the other dependencies in your manifest:
+
+```json [package.json]
+{
+  "devDependencies": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@<vite-plus-version>",
+    "vite-plus": "<vite-plus-version>"
+  },
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@<vite-plus-version>",
+    "vitest": "<vitest-version>"
+  }
+}
+```
+
+If you also declare `vitest` directly, set its dependency entry to the exact version in `overrides.vitest`. Run `npm install` after these changes to update the lockfile and installed dependencies.
 :::
 
 ::: details Why are these settings needed?
@@ -111,7 +148,7 @@ The project-local CLI can be used independently for:
 - [`vp pack`](/guide/pack) with tsdown
 - [`vp toolchain`](/guide/upgrade#show-the-toolchain) for inspecting the versions bundled with the project-local package
 - [`vp run`](/guide/run) and task caching across workspaces
-- [package-manager commands](/guide/install) using the Node.js runtime already active in your shell
+- [package-manager commands](/guide/package-management/) using the Node.js runtime already active in your shell
 - [`vp create`](/guide/create), [`vp migrate`](/guide/migrate), and project configuration commands
 
 The local package cannot manage the machine-level Vite+ installation. The `vp env`, `vp upgrade`, and `vp implode` commands require the [global CLI](/guide/global-cli). Upgrade or remove a local-only installation through your package manager.

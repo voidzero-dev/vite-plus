@@ -11,6 +11,112 @@ mod redact;
 
 use redact::{redact_output, redact_version_probe_output};
 
+const TS7_WARNING: &str = "warn: TypeScript 7.0 does not yet have a stable API and is experimental. Some options will be unavailable.";
+
+#[test]
+fn normalizes_pack_warning_interleavings_without_dropping_messages() {
+    let startup = [
+        "ℹ entry: ./src/index.ts",
+        "ℹ tsconfig: tsconfig.json",
+        "ℹ Build start",
+        "ℹ Emit types with typescript@7.0.2",
+    ];
+    for copies in [1, 2] {
+        for position in 0..=startup.len() {
+            for ending in ["", "\n"] {
+                let mut lines = startup.to_vec();
+                lines.splice(position..position, std::iter::repeat_n(TS7_WARNING, copies));
+                let mut expected = startup.to_vec();
+                expected.splice(3..3, std::iter::repeat_n(TS7_WARNING, copies));
+                let expected = format!("{}{}", expected.join("\n"), ending);
+                let input = format!("{}{}", lines.join("\n"), ending);
+                for input in [input.clone(), input.replace('\n', "\r\n")] {
+                    assert_eq!(redact_output(input, &[], true), expected);
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn keeps_pack_warnings_outside_a_complete_startup_block_in_place() {
+    for lines in [
+        vec![TS7_WARNING, "ℹ Emit types with typescript@7.0.2"],
+        vec!["ℹ entry: a.ts", TS7_WARNING, "warn: plugin failed", "ℹ Build start"],
+        vec!["ℹ entry: a.ts", TS7_WARNING, "", "ℹ Build start"],
+        vec!["ℹ entry: a.ts", TS7_WARNING, "$ vp pack", "ℹ Build start"],
+        vec!["ℹ entry: a.ts", TS7_WARNING, "ℹ Build start", "ℹ Build start"],
+        vec!["ℹ entry: a.ts", TS7_WARNING, "ℹ entry: b.ts", "ℹ Build start"],
+        vec!["ℹ entry: a.ts", "warn: another warning", "ℹ Build start"],
+    ] {
+        let input = lines.join("\n");
+        assert_eq!(redact_output(input.clone(), &[], true), input);
+    }
+}
+
+#[test]
+fn normalizes_concurrent_tsup_workers_without_changing_each_workers_order() {
+    let js =
+        ["CJS Build start", "CJS dist/index.cjs <size> B", "CJS ⚡️ Build success in <duration>"];
+    let dts =
+        ["DTS Build start", "DTS ⚡️ Build success in <duration>", "DTS dist/index.d.cts <size> B"];
+    // Enumerate every interleaving while preserving each worker's own order.
+    for mask in (0u32..64).filter(|mask| mask.count_ones() == 3) {
+        let mut js_lines = js.iter();
+        let mut dts_lines = dts.iter();
+        let lines: Vec<_> = (0..6)
+            .map(|bit| {
+                if mask & (1 << bit) == 0 {
+                    *js_lines.next().unwrap()
+                } else {
+                    *dts_lines.next().unwrap()
+                }
+            })
+            .collect();
+        for ending in ["", "\n"] {
+            let input = format!("{}{}", lines.join("\n"), ending);
+            let expected = format!("{}{}", [js, dts].concat().join("\n"), ending);
+            for input in [input.clone(), input.replace('\n', "\r\n")] {
+                assert_eq!(redact_output(input, &[], true), expected);
+            }
+        }
+    }
+}
+
+#[test]
+fn preserves_tsup_artifacts_and_separate_builds() {
+    let input = concat!(
+        "ESM Build start\nDTS Build start\nCJS Build start\n",
+        "ESM dist/index.mjs 10 B\nCJS dist/z.cjs 20 B\nCJS dist/a.cjs 30 B\n",
+        "CJS dist/a.cjs 30 B\nDTS ⚡️ Build success in 1.5s\n",
+        "DTS dist/index.d.ts 15 B\nCJS ⚡️ Build success in 20ms\n",
+        "ESM ⚡️ Build success in 30ms\n",
+    );
+    let expected = concat!(
+        "CJS Build start\nCJS dist/z.cjs <size> B\nCJS dist/a.cjs <size> B\n",
+        "CJS dist/a.cjs <size> B\nCJS ⚡️ Build success in <duration>\n",
+        "ESM Build start\nESM dist/index.mjs <size> B\nESM ⚡️ Build success in <duration>\n",
+        "DTS Build start\nDTS ⚡️ Build success in <duration>\nDTS dist/index.d.ts <size> B\n",
+    );
+    assert_eq!(
+        redact_output(format!("$ vp run build a\n{input}$ vp run build b\n{input}"), &[], true),
+        format!("$ vp run build a\n{expected}$ vp run build b\n{expected}")
+    );
+}
+
+#[test]
+fn preserves_incomplete_or_failed_tsup_builds() {
+    for input in [
+        "DTS Build start\nCJS Build start\nCJS ⚡️ Build success in <duration>\n",
+        "DTS Build start\nCJS Build start\nCJS Build start\nCJS ⚡️ Build success in <duration>\nDTS ⚡️ Build success in <duration>\n",
+        "DTS Build start\nCJS Build start\nCJS ⚡️ Build success in <duration>\nCJS ⚡️ Build success in <duration>\nDTS ⚡️ Build success in <duration>\n",
+        "DTS Build start\nCJS Build start\nError: build failed\nCJS ⚡️ Build success in <duration>\nDTS ⚡️ Build success in <duration>\n",
+        "DTS Build start\nCJS Build start\nwarn: plugin warning\nCJS ⚡️ Build success in <duration>\nDTS ⚡️ Build success in <duration>\n",
+    ] {
+        assert_eq!(redact_output(input.into(), &[], true), input);
+    }
+}
+
 #[test]
 fn masks_yarn_compound_elapsed_times_as_one_duration() {
     for elapsed in ["999ms", "1s", "1s 0ms", "1m 2s", "1h 2m 3s 4ms"] {
@@ -33,6 +139,14 @@ fn masks_yarn_compound_elapsed_times_as_one_duration() {
     assert_eq!(
         redact_output("timings: 1s 200ms\ntransform 1s, tests 200ms\n".to_owned(), &[], true),
         "timings: <duration> <duration>\ntransform <duration>, tests <duration>\n"
+    );
+}
+
+#[test]
+fn masks_durations_with_a_space_before_the_unit() {
+    assert_eq!(
+        redact_output("  VITE+ v1.2.0  ready in 123 ms\n".to_owned(), &[], true),
+        "  VITE+ <version>  ready in <duration>\n"
     );
 }
 
@@ -76,6 +190,50 @@ fn masks_vitest_v5_timing_but_preserves_coverage_percentages() {
         redact_output(input.to_owned(), &[], true),
         " Duration  <duration> (<timing>)\nCoverage 90%\n"
     );
+}
+
+#[test]
+fn omits_optional_vitest_transform_cache_hint() {
+    let summary = " Tests  1 passed (1)\n Duration  3.4s (transform 84%, tests 16%)\n";
+    for project in ["", "[unit] "] {
+        for ci_hint in [
+            "",
+            "           on CI this only helps when the cache directory is persisted between runs\n",
+        ] {
+            let hint = format!(
+                "\n Transform {project}transforming modules took 2.8s · 84% of tracked time, re-done on every run\n\
+                 {}persist transforms across runs with fsModuleCache: true\n\
+                 {ci_hint}{}learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns\n",
+                "           ", "           "
+            );
+            let expected = redact_output(summary.to_owned(), &[], true);
+            assert_eq!(redact_output(format!("{summary}{hint}"), &[], true), expected);
+            assert_eq!(
+                redact_output(format!("{summary}{}", hint.trim_end_matches('\n')), &[], true),
+                expected
+            );
+            assert_eq!(
+                redact_output(format!("{summary}{hint}").replace('\n', "\r\n"), &[], true),
+                expected
+            );
+            assert_eq!(
+                redact_output(format!("{summary}{hint}\nnext command\n"), &[], true),
+                format!("{expected}\nnext command\n")
+            );
+        }
+    }
+}
+
+#[test]
+fn preserves_transform_errors_and_incomplete_cache_hints() {
+    for input in [
+        "Transform failed: cannot load module\n",
+        "\n Transform transforming modules took 2.8s · 84% of tracked time, re-done on every run\n",
+        "persist transforms across runs with fsModuleCache: true\n",
+        "learn more: https://example.com/improving-performance\n",
+    ] {
+        assert_eq!(redact_output(input.to_owned(), &[], true), input.replace("2.8s", "<duration>"));
+    }
 }
 
 #[test]
@@ -185,6 +343,39 @@ fn masks_bun_build_hash_only_in_bun_banners() {
     // Parenthesized hex without a preceding masked version stays verbatim.
     let unrelated = "commit (deadbeef1) applied\n".to_owned();
     assert_eq!(redact_output(unrelated.clone(), &[], true), unrelated);
+}
+
+#[test]
+fn drops_bun_slow_filesystem_warning_with_optional_progress() {
+    let result = concat!(
+        "\n./node_modules/core-js @3.39.0\n",
+        " ✓ [postinstall]: node -e \"try{require('./postinstall')}catch(e){}\"\n",
+        "\n 1 script ran across 1 package [12ms]\n",
+    );
+    let expected = redact_output(format!("bun pm trust v1.4.0 (34cbb9a40)\n{result}"), &[], true);
+    for prefix in ["", "  ⚙️  core-js [1/1] ", "  ⚙ @scope/pkg [12/34] ", "  🔍 Resolving [1/1] "]
+    {
+        for cache in ["/private/tmp/vp-local-registry-bun-PXkDcD", "C:/cache with spaces/bun"] {
+            let input = format!(
+                "bun pm trust v1.4.0 (34cbb9a40)\n\
+                 {prefix}warn: Slow filesystem detected. If {cache} is a network drive, consider setting $BUN_INSTALL_CACHE_DIR to a local folder.\n\
+                 {result}"
+            );
+            assert_eq!(redact_output(input, &[], true), expected);
+        }
+    }
+}
+
+#[test]
+fn preserves_other_bun_warnings_and_script_failures() {
+    let input = concat!(
+        "warn: install failed for core-js\n",
+        "  ⚙️  core-js [1/1] warn: postinstall failed\n",
+        "  🔍 Resolving [1/1] warn: package not found\n",
+        "warn: Slow filesystem detected. Custom diagnostic.\n",
+        "error: postinstall script from \"core-js\" exited with 1\n",
+    );
+    assert_eq!(redact_output(input.to_owned(), &[], true), input);
 }
 
 #[test]
@@ -506,6 +697,26 @@ fn masks_vitest_ecosystem_versions_but_not_unrelated_deps() {
 }
 
 #[test]
+fn masks_vitest_wildcard_override_versions_but_preserves_selectors_and_ranges() {
+    for version in ["5.0.3", "5.1.0", "6.0.0-beta.1"] {
+        let input = format!("  '@vitest/browser@*': {version}\n  \"vitest@*\": \"{version}\"\n");
+        assert_eq!(
+            redact_output(input, &[], true),
+            "  '@vitest/browser@*': <version>\n  \"vitest@*\": \"<version>\"\n"
+        );
+    }
+    let input = concat!(
+        "  '@vitest/browser@*': 'catalog:'\n",
+        "  '@vitest/browser@4.0.0': 4.0.13\n",
+        "  '@vitest/browser@^4': 4.0.13\n",
+        "  '@vitest/browser@*': ^5.0.0\n",
+        "  '@vitest/browser-webdriverio': ^5.0.0\n",
+        "  'typescript@*': 5.4.0\n",
+    );
+    assert_eq!(redact_output(input.to_owned(), &[], true), input);
+}
+
+#[test]
 fn replaces_paths_with_labels() {
     let input = "built /tmp/stage-1/dist in 3ms\n".to_owned();
     assert_eq!(
@@ -569,8 +780,30 @@ fn redacts_forward_slash_windows_path_variants() {
     let input = "at file:///E:/Temp/ws/src/main.ts\n".to_owned();
     assert_eq!(
         redact_output(input, &[("E:\\Temp\\ws", "<workspace>")], true),
-        "at file:///<workspace>/src/main.ts\n"
+        "at file://<workspace>/src/main.ts\n"
     );
+}
+
+#[test]
+fn file_urls_redact_to_one_spelling_on_every_platform() {
+    // The slash before a Windows drive letter is part of the URL, not the path.
+    let windows = "Failed to transform file:///D:/a/ws/main.ts\n".to_owned();
+    let unix = "Failed to transform file:///tmp/ws/main.ts\n".to_owned();
+    let expected = "Failed to transform file://<workspace>/main.ts\n";
+    assert_eq!(redact_output(windows, &[("D:\\a\\ws", "<workspace>")], true), expected);
+    assert_eq!(redact_output(unix, &[("/tmp/ws", "<workspace>")], true), expected);
+}
+
+#[test]
+fn file_urls_with_percent_encoded_paths_redact() {
+    let windows = "at file:///C:/Users/First%20Last/ws/main.ts\n".to_owned();
+    let unix = "at file:///home/first%20last/ws/main.ts\n".to_owned();
+    let expected = "at file://<workspace>/main.ts\n";
+    assert_eq!(
+        redact_output(windows, &[("C:\\Users\\First Last\\ws", "<workspace>")], true),
+        expected
+    );
+    assert_eq!(redact_output(unix, &[("/home/first last/ws", "<workspace>")], true), expected);
 }
 
 #[cfg(windows)]
@@ -599,4 +832,23 @@ fn collapses_debug_escaped_separators_and_preserves_urls() {
         redact_output(input, &[("E:\\Temp\\ws", "<workspace>")], true),
         "at \"<workspace>/src\" see https://viteplus.dev/guide/\n"
     );
+}
+
+#[test]
+fn strips_pnpm_slow_request_warning_but_preserves_request_errors() {
+    let input = concat!(
+        "devDependencies:\n test-vite-plus-package 1.0.0\n\n",
+        "\u{2009}WARN\u{2009} Request took 12675ms: https://registry.npmjs.org/pnpm\n\n",
+        " WARN Request took 10.5s: https://registry.npmjs.org/@scope%2Fpkg\n",
+        "\u{2009}WARN\u{2009} GET https://registry.npmjs.org/pkg error (ETIMEDOUT). Will retry in 10 seconds.\n",
+        "\u{2009}WARN\u{2009} deprecated example@1.0.0: use another package\n",
+        "Done in 13s using pnpm 10.18.0\n",
+    );
+    let expected = concat!(
+        "devDependencies:\n test-vite-plus-package 1.0.0\n\n",
+        "\u{2009}WARN\u{2009} GET https://registry.npmjs.org/pkg error (ETIMEDOUT). Will retry in 10 seconds.\n",
+        "\u{2009}WARN\u{2009} deprecated example@1.0.0: use another package\n\n",
+        "Done in <duration> using pnpm <version>\n",
+    );
+    assert_eq!(redact_output(input.into(), &[], true), expected);
 }

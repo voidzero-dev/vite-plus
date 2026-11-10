@@ -46,8 +46,5 @@ vp = ["local", "global"]
 comment = "A declared Vite `build` field is a root intent signal for `vp preview`."
 steps = [
   { argv = ["vpt", "cp", "configs/preview-output.ts", "vite.config.ts"], snapshot = false },
-  { argv = ["vp", "preview"], interactions = [
-    { "expect-milestone" = "preview-server:ready" },
-    { "write-line" = "q" },
-  ] },
+  ["vp", "preview"],
 ]

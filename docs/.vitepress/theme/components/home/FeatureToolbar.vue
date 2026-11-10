@@ -124,7 +124,7 @@ const determineActiveSection = () => {
 
   // If no section found above, check if we're at the very bottom
   if (activeId === activeSection.value) {
-    const lastSection = sections[sections.length - 1];
+    const lastSection = sections.at(-1);
     if (
       lastSection &&
       window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 100

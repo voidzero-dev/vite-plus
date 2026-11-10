@@ -11,11 +11,12 @@ use crate::{
     Error, PackageManager, PackageManagerType,
     resolution::{
         AddArgs, ApproveBuildsArgs, AuditArgs, CacheArgs, CiArgs, ConfigCommand, DedupeArgs,
-        DeprecateArgs, DistTagCommand, DlxArgs, FundArgs, InstallArgs, LinkArgs, ListArgs,
-        LoginArgs, LogoutArgs, OutdatedArgs, OutdatedFormat, OwnerCommand, PackArgs, PatchArgs,
-        PatchCommitArgs, PingArgs, PruneArgs, PublishArgs, RebuildArgs, RemoveArgs, Resolution,
-        SearchArgs, StageCommand, TokenCommand, UnlinkArgs, UpdateArgs, VersionArgs, ViewArgs,
-        WhoamiArgs, WhyArgs, resolve_for_manager as resolve_args_for_manager,
+        DeprecateArgs, DistTagCommand, DlxArgs, FundArgs, InstallArgs, LicensesCommand, LinkArgs,
+        ListArgs, LoginArgs, LogoutArgs, OutdatedArgs, OutdatedFormat, OwnerCommand, PackArgs,
+        PatchArgs, PatchCommitArgs, PingArgs, PkgCommand, PruneArgs, PublishArgs, RebuildArgs,
+        RemoveArgs, Resolution, SearchArgs, StageCommand, TeamCommand, TokenCommand, UnlinkArgs,
+        UpdateArgs, VersionArgs, ViewArgs, WhoamiArgs, WhyArgs,
+        resolve_for_manager as resolve_args_for_manager,
     },
 };
 
@@ -96,12 +97,20 @@ pub enum PmCommand {
     #[command(visible_alias = "ls")]
     List(ListArgs),
 
+    /// Inspect licenses of installed dependencies
+    #[command(subcommand)]
+    Licenses(LicensesCommand),
+
     /// View package information from the registry
     #[command(visible_alias = "info", visible_alias = "show")]
     View(ViewArgs),
 
     /// Forward the native package version command
     Version(VersionArgs),
+
+    /// Manage package.json fields
+    #[command(subcommand)]
+    Pkg(PkgCommand),
 
     /// Publish package to registry
     Publish(PublishArgs),
@@ -113,6 +122,10 @@ pub enum PmCommand {
     /// Manage package owners
     #[command(subcommand, visible_alias = "author")]
     Owner(OwnerCommand),
+
+    /// Manage organization teams and memberships
+    #[command(subcommand)]
+    Team(TeamCommand),
 
     /// Manage package cache
     Cache(CacheArgs),
@@ -345,11 +358,14 @@ impl PmCommand {
             Self::PatchCommit(args) => resolve_args_for_manager(manager, args),
             Self::Pack(args) => resolve_args_for_manager(manager, args),
             Self::List(args) => resolve_args_for_manager(manager, args),
+            Self::Licenses(args) => resolve_args_for_manager(manager, args),
             Self::View(args) => resolve_args_for_manager(manager, args),
             Self::Version(args) => resolve_args_for_manager(manager, args),
+            Self::Pkg(args) => resolve_args_for_manager(manager, args),
             Self::Publish(args) => resolve_args_for_manager(manager, args),
             Self::Stage(args) => resolve_args_for_manager(manager, args),
             Self::Owner(args) => resolve_args_for_manager(manager, args),
+            Self::Team(args) => resolve_args_for_manager(manager, args),
             Self::Cache(args) => resolve_args_for_manager(manager, args),
             Self::Config(args) => resolve_args_for_manager(manager, args),
             Self::Login(args) => resolve_args_for_manager(manager, args),
@@ -369,9 +385,11 @@ impl PmCommand {
     fn is_quiet_or_machine_readable(&self) -> bool {
         match self {
             Self::List(args) => args.json || args.parseable,
+            Self::Licenses(LicensesCommand::List { json, .. }) => *json,
             Self::Pack(args) => args.json,
             Self::View(args) => args.json,
             Self::Version(args) => args.json,
+            Self::Pkg(args) => matches!(args, PkgCommand::Get { .. }),
             Self::Publish(args) => args.json,
             Self::Audit(args) => args.json,
             Self::Search(args) => args.json,
@@ -381,6 +399,13 @@ impl PmCommand {
                 | ConfigCommand::Get { json, .. }
                 | ConfigCommand::Set { json, .. } => *json,
                 ConfigCommand::Delete { .. } => false,
+            },
+            Self::Team(args) => match args {
+                TeamCommand::Create { json, .. }
+                | TeamCommand::Destroy { json, .. }
+                | TeamCommand::Add { json, .. }
+                | TeamCommand::Rm { json, .. }
+                | TeamCommand::List { json, .. } => *json,
             },
             Self::Token(args) => match args {
                 TokenCommand::List { json, .. } | TokenCommand::Create { json, .. } => *json,
@@ -404,7 +429,7 @@ mod tests {
     use clap::{FromArgMatches, Subcommand};
 
     use super::*;
-    use crate::{PackageManagerType, resolution::CommandResolution};
+    use crate::{PackageManagerType, resolution::test_utils::expect_run};
 
     fn parse(args: &[&str]) -> Result<PackageManagerCommand, clap::Error> {
         let command = PackageManagerCommand::augment_subcommands(clap::Command::new("vp"));
@@ -479,6 +504,253 @@ mod tests {
     }
 
     #[test]
+    fn team_list_routes_native_commands_and_npm_fallbacks() {
+        for (client, version, program, subcommand, scope, fallback) in [
+            (PackageManagerType::Npm, "11.12.0", "npm", "ls", "@org:team", false),
+            (PackageManagerType::Pnpm, "11.13.0", "pnpm", "ls", "@org:team", false),
+            (PackageManagerType::Pnpm, "11.12.0", "npm", "ls", "@org:team", true),
+            (PackageManagerType::Yarn, "1.22.22", "yarn", "list", "@org:team", false),
+            (PackageManagerType::Bun, "1.4.0", "npm", "ls", "@org:team", true),
+        ] {
+            for alias in ["ls", "list"] {
+                let command = parse(&["pm", "team", alias, "@org:team", "--json"]).unwrap();
+                assert!(command.is_quiet_or_machine_readable());
+                assert!(command.should_render_diagnostics());
+                let result =
+                    command.resolve_for_manager(&package_manager(client, version)).unwrap();
+                assert_eq!(!result.diagnostics.is_empty(), fallback);
+                let resolved = expect_run(result.outcome);
+                assert_eq!(resolved.program, program);
+                assert_eq!(resolved.args, vec!["team", subcommand, scope, "--json"]);
+            }
+        }
+    }
+
+    #[test]
+    fn team_list_warns_and_noops_for_yarn_modern() {
+        for alias in ["ls", "list"] {
+            let command = parse(&["pm", "team", alias, "@org:team", "--json"]).unwrap();
+            assert!(command.is_quiet_or_machine_readable());
+            assert!(command.should_render_diagnostics());
+            let result = command
+                .resolve_for_manager(&package_manager(PackageManagerType::Yarn, "4.18.0"))
+                .unwrap();
+            assert_eq!(result.outcome, crate::resolution::CommandResolution::Noop);
+            assert_eq!(result.diagnostics.len(), 1);
+        }
+    }
+
+    #[test]
+    fn licenses_list_parses_and_resolves_for_supported_managers() {
+        for (client, version, program, prefix) in [
+            (PackageManagerType::Pnpm, "7.17.0", "pnpm", vec!["licenses", "list"]),
+            (PackageManagerType::Yarn, "1.22.22", "yarn", vec!["licenses", "list"]),
+            (PackageManagerType::Bun, "1.4.0", "bun", vec!["pm", "licenses"]),
+        ] {
+            for subcommand in ["list", "ls"] {
+                for json in [false, true] {
+                    let mut argv = vec!["pm", "licenses", subcommand];
+                    let mut expected = prefix.clone();
+                    if json {
+                        argv.push("--json");
+                        expected.push("--json");
+                    }
+                    let command = parse(&argv).unwrap();
+                    assert_eq!(command.is_quiet_or_machine_readable(), json);
+                    assert!(command.should_render_diagnostics());
+                    let result =
+                        command.resolve_for_manager(&package_manager(client, version)).unwrap();
+                    assert!(result.diagnostics.is_empty());
+                    let resolved = expect_run(result.outcome);
+                    assert_eq!(resolved.program, program);
+                    assert_eq!(resolved.args, expected);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn pkg_parses_and_resolves_nested_commands() {
+        for (client, version, program, prefix) in [
+            (PackageManagerType::Npm, "11.0.0", "npm", vec!["pkg"]),
+            (PackageManagerType::Pnpm, "11.3.0", "pnpm", vec!["pkg"]),
+            (PackageManagerType::Bun, "1.2.19", "bun", vec!["pm", "pkg"]),
+        ] {
+            for args in [
+                vec!["get"],
+                vec!["get", "name", "scripts.build"],
+                vec!["set", "scripts.build=vite build", "private=true", "--json"],
+                vec!["delete", "scripts.build", "description"],
+                vec!["fix"],
+            ] {
+                let mut argv = vec!["pm", "pkg"];
+                argv.extend(&args);
+                let parsed = parse(&argv).unwrap();
+                assert_eq!(parsed.is_quiet_or_machine_readable(), args[0] == "get");
+                let resolution =
+                    parsed.resolve_for_manager(&package_manager(client, version)).unwrap();
+                assert!(resolution.diagnostics.is_empty());
+                let command = expect_run(resolution.outcome);
+                assert_eq!(command.program, program);
+                let mut expected = prefix.clone();
+                expected.extend(args);
+                assert_eq!(command.args, expected);
+            }
+        }
+    }
+
+    #[test]
+    fn command_minimum_versions_warn_and_skip_unsupported_releases() {
+        use crate::resolution::CommandResolution;
+
+        for (client, versions, argv, expected, message) in [
+            (
+                PackageManagerType::Npm,
+                ["11.14.1", "11.15.0-beta.1", "11.15.0"],
+                vec!["pm", "stage", "list"],
+                vec!["stage", "list"],
+                "npm stage requires npm >= 11.15.0. Skipping.",
+            ),
+            (
+                PackageManagerType::Pnpm,
+                ["11.2.0", "11.3.0-beta.1", "11.3.0"],
+                vec!["pm", "stage", "list"],
+                vec!["stage", "list"],
+                "pnpm stage requires pnpm >= 11.3.0. Skipping.",
+            ),
+            (
+                PackageManagerType::Pnpm,
+                ["10.0.0", "10.1.0-beta.1", "10.1.0"],
+                vec!["pm", "approve-builds"],
+                vec!["approve-builds"],
+                "pnpm approve-builds requires pnpm >= 10.1.0. Skipping.",
+            ),
+            (
+                PackageManagerType::Yarn,
+                ["2.4.3", "3.0.0-rc.1", "3.0.0"],
+                vec!["unlink", "react", "--", "--recursive"],
+                vec!["unlink", "react", "--recursive"],
+                "yarn unlink requires Yarn Classic or yarn >= 3.0.0. Skipping.",
+            ),
+            (
+                PackageManagerType::Yarn,
+                ["2.4.3", "3.0.0-rc.1", "3.0.0"],
+                vec!["pm", "patch-commit", "patch-dir"],
+                vec!["patch-commit", "--save", "patch-dir"],
+                "yarn patch-commit --save requires yarn >= 3.0.0. Skipping.",
+            ),
+            (
+                PackageManagerType::Yarn,
+                ["2.3.1", "2.4.0-rc.1", "2.4.0"],
+                vec!["pm", "audit", "--json"],
+                vec!["npm", "audit", "--json"],
+                "yarn npm audit requires yarn >= 2.4.0. Skipping.",
+            ),
+            (
+                PackageManagerType::Pnpm,
+                ["7.3.0", "7.4.0-beta.1", "7.4.0"],
+                vec!["pm", "patch", "react"],
+                vec!["patch", "react"],
+                "pnpm patch requires pnpm >= 7.4.0. Skipping.",
+            ),
+            (
+                PackageManagerType::Pnpm,
+                ["7.3.0", "7.4.0-beta.1", "7.4.0"],
+                vec!["pm", "patch-commit", "patch-dir"],
+                vec!["patch-commit", "patch-dir"],
+                "pnpm patch-commit requires pnpm >= 7.4.0. Skipping.",
+            ),
+        ] {
+            for version in &versions[..2] {
+                let parsed = parse(&argv).unwrap();
+                assert!(parsed.should_render_diagnostics(), "{argv:?}");
+                let result = parsed.resolve_for_manager(&package_manager(client, version)).unwrap();
+                assert_eq!(result.outcome, CommandResolution::Noop, "{client}@{version}: {argv:?}");
+                assert_eq!(result.diagnostics.len(), 1);
+                assert_eq!(result.diagnostics[0].message, message);
+            }
+            let result = parse(&argv)
+                .unwrap()
+                .resolve_for_manager(&package_manager(client, versions[2]))
+                .unwrap();
+            assert!(result.diagnostics.is_empty());
+            let command = expect_run(result.outcome);
+            assert_eq!(command.program, client.to_string());
+            assert_eq!(command.args, expected);
+        }
+    }
+
+    #[test]
+    fn option_minimum_versions_preserve_the_base_command() {
+        use crate::resolution::test_utils::expect_unsupported;
+
+        for (versions, command, option, expected_option, message) in [
+            (
+                ["7.20.0", "7.21.0-beta.1", "7.21.0"],
+                vec!["dlx", "create-vue"],
+                vec!["--shell-mode"],
+                "-c",
+                "pnpm < 7.21.0 does not support --shell-mode.",
+            ),
+            (
+                ["9.15.9", "10.0.0-beta.1", "10.0.0"],
+                vec!["pm", "pack"],
+                vec!["--out", "package.tgz"],
+                "--out",
+                "pnpm < 10.0.0 does not support --out.",
+            ),
+            (
+                ["9.13.2", "9.14.0-beta.1", "9.14.0"],
+                vec!["pm", "pack"],
+                vec!["--json"],
+                "--json",
+                "pnpm < 9.14.0 does not support --json.",
+            ),
+            (
+                ["8.2.0", "8.3.0-beta.1", "8.3.0"],
+                vec!["pm", "pack"],
+                vec!["--pack-gzip-level", "0"],
+                "--pack-gzip-level",
+                "pnpm < 8.3.0 does not support --pack-gzip-level.",
+            ),
+        ] {
+            let mut argv = command.clone();
+            let option_index = if command[0] == "pm" { 2 } else { 1 };
+            argv.splice(option_index..option_index, option);
+            for version in &versions[..2] {
+                let manager = package_manager(PackageManagerType::Pnpm, version);
+                let base = parse(&command).unwrap().resolve_for_manager(&manager).unwrap();
+                assert!(base.diagnostics.is_empty());
+                expect_run(base.outcome);
+                let result = parse(&argv).unwrap().resolve_for_manager(&manager).unwrap();
+                expect_unsupported(result, &[message]);
+            }
+            let result = parse(&argv)
+                .unwrap()
+                .resolve_for_manager(&package_manager(PackageManagerType::Pnpm, versions[2]))
+                .unwrap();
+            assert!(result.diagnostics.is_empty());
+            assert!(expect_run(result.outcome).args.iter().any(|arg| arg == expected_option));
+        }
+    }
+
+    #[test]
+    fn command_minimum_versions_preserve_unknown_npm_and_yarn_classic() {
+        for (client, version, argv, expected) in [
+            (PackageManagerType::Npm, "latest", vec!["pm", "stage", "list"], vec!["stage", "list"]),
+            (PackageManagerType::Yarn, "1.22.22", vec!["unlink", "react"], vec!["unlink", "react"]),
+            (PackageManagerType::Yarn, "1.22.22", vec!["pm", "audit"], vec!["audit"]),
+        ] {
+            let result = parse(&argv)
+                .unwrap()
+                .resolve_for_manager(&package_manager(client, version))
+                .unwrap();
+            assert!(result.diagnostics.is_empty());
+            assert_eq!(expect_run(result.outcome).args, expected);
+        }
+    }
+
+    #[test]
     fn ci_parses_and_captures_pass_through_args() {
         assert!(matches!(
             parse(&["pm", "ci"]).unwrap(),
@@ -495,25 +767,52 @@ mod tests {
 
     #[test]
     fn install_uses_install_or_add_resolver_from_packages() {
-        let manager = package_manager(PackageManagerType::Pnpm, "10.0.0");
-        let install = parse(&["install", "--frozen-lockfile"]).unwrap();
-        let add = parse(&["install", "-D", "react"]).unwrap();
+        for (client, version, install_args, add_args) in [
+            (
+                PackageManagerType::Pnpm,
+                "10.0.0",
+                vec!["install", "--frozen-lockfile"],
+                vec!["add", "--save-dev", "react"],
+            ),
+            (
+                PackageManagerType::Npm,
+                "11.16.0",
+                vec!["ci"],
+                vec!["install", "--save-dev", "react"],
+            ),
+            (
+                PackageManagerType::Bun,
+                "1.4.0",
+                vec!["install", "--frozen-lockfile"],
+                vec!["add", "--dev", "react"],
+            ),
+            (
+                PackageManagerType::Yarn,
+                "1.22.22",
+                vec!["install", "--frozen-lockfile"],
+                vec!["add", "--dev", "react"],
+            ),
+            (
+                PackageManagerType::Yarn,
+                "4.16.0",
+                vec!["install", "--immutable"],
+                vec!["add", "--dev", "react"],
+            ),
+        ] {
+            let manager = package_manager(client, version);
+            let install = parse(&["install", "--frozen-lockfile"]).unwrap();
+            let add = parse(&["install", "-D", "react"]).unwrap();
 
-        let CommandResolution::Run(install) =
-            install.resolve_for_manager(&manager).unwrap().outcome
-        else {
-            panic!("expected install command");
-        };
-        let CommandResolution::Run(add) = add.resolve_for_manager(&manager).unwrap().outcome else {
-            panic!("expected add command");
-        };
+            let install = expect_run(install.resolve_for_manager(&manager).unwrap().outcome);
+            let add = expect_run(add.resolve_for_manager(&manager).unwrap().outcome);
 
-        assert_eq!(install.args, vec!["install", "--frozen-lockfile"]);
-        assert_eq!(add.args, vec!["add", "--save-dev", "react"]);
+            assert_eq!(install.args, install_args);
+            assert_eq!(add.args, add_args);
+        }
     }
 
     #[test]
-    fn yarn_before_3_drops_lockfile_only_when_adding_packages() {
+    fn yarn_before_3_rejects_lockfile_only_when_adding_packages() {
         for version in ["2.4.2", "2.0.0", "1.22.22"] {
             let manager = package_manager(PackageManagerType::Yarn, version);
             for command in ["add", "install", "i"] {
@@ -521,13 +820,9 @@ mod tests {
                     .unwrap()
                     .resolve_for_manager(&manager)
                     .unwrap();
-                let resolved = crate::resolution::test_utils::expect_run(resolution.outcome);
-
-                assert_eq!(resolved.args, ["add", "./dep"], "yarn@{version}: {command}");
-                assert_eq!(resolution.diagnostics.len(), 1);
-                assert_eq!(
-                    resolution.diagnostics[0].message,
-                    "yarn <3 does not support --lockfile-only."
+                crate::resolution::test_utils::expect_unsupported(
+                    resolution,
+                    &["yarn < 3 does not support --lockfile-only."],
                 );
             }
         }
@@ -640,10 +935,133 @@ mod tests {
     }
 
     #[test]
+    fn managed_global_rejects_project_only_options() {
+        let cases: &[(&[&str], &[&[&str]])] = &[
+            (
+                &["install"],
+                &[
+                    &["--prod"],
+                    &["--dev"],
+                    &["--no-optional"],
+                    &["--frozen-lockfile"],
+                    &["--no-frozen-lockfile"],
+                    &["--lockfile-only"],
+                    &["--prefer-offline"],
+                    &["--offline"],
+                    &["--no-lockfile"],
+                    &["--fix-lockfile"],
+                    &["--shamefully-hoist"],
+                    &["--resolution-only"],
+                    &["--filter", "app"],
+                    &["--workspace-root"],
+                    &["--save-exact"],
+                    &["--save-peer"],
+                    &["--save-optional"],
+                    &["--save-catalog"],
+                ],
+            ),
+            (
+                &["add"],
+                &[
+                    &["--save-prod"],
+                    &["--save-dev"],
+                    &["--save-peer"],
+                    &["--save-optional"],
+                    &["--save-exact"],
+                    &["--save-catalog-name", "default"],
+                    &["--save-catalog"],
+                    &["--allow-build", "react"],
+                    &["--filter", "app"],
+                    &["--workspace-root"],
+                    &["--workspace"],
+                ],
+            ),
+            (
+                &["remove"],
+                &[
+                    &["--save-dev"],
+                    &["--save-optional"],
+                    &["--save-prod"],
+                    &["--filter", "app"],
+                    &["--workspace-root"],
+                    &["--recursive"],
+                ],
+            ),
+            (
+                &["update"],
+                &[
+                    &["--recursive"],
+                    &["--filter", "app"],
+                    &["--workspace-root"],
+                    &["--dev"],
+                    &["--prod"],
+                    &["--interactive"],
+                    &["--no-optional"],
+                    &["--no-save"],
+                    &["--workspace"],
+                ],
+            ),
+            (
+                &["outdated"],
+                &[
+                    &["--recursive"],
+                    &["--filter", "app"],
+                    &["--workspace-root"],
+                    &["--prod"],
+                    &["--dev"],
+                    &["--no-optional"],
+                    &["--compatible"],
+                    &["--sort-by", "name"],
+                ],
+            ),
+            (
+                &["pm", "list"],
+                &[
+                    &["--depth", "0"],
+                    &["--long"],
+                    &["--parseable"],
+                    &["--prod"],
+                    &["--dev"],
+                    &["--no-optional"],
+                    &["--exclude-peers"],
+                    &["--only-projects"],
+                    &["--find-by", "finder"],
+                    &["--recursive"],
+                    &["--filter", "app"],
+                ],
+            ),
+        ];
+        for &(command, options) in cases {
+            for option in options {
+                let mut argv = command.to_vec();
+                argv.extend_from_slice(option);
+                argv.push("react");
+                assert!(parse(&argv).is_ok(), "{argv:?}");
+                for global in ["-g", "--global"] {
+                    let mut argv = argv.clone();
+                    argv.push(global);
+                    let error = parse(&argv).unwrap_err();
+                    assert_eq!(error.kind(), clap::error::ErrorKind::ArgumentConflict, "{argv:?}");
+                    assert!(error.to_string().contains("--global"), "{error}");
+                }
+            }
+        }
+    }
+
+    #[test]
     fn projects_managed_global_commands() {
-        let install =
-            parse(&["install", "-g", "--node", "22", "--force", "--concurrency", "2", "tsx"])
-                .unwrap();
+        let install = parse(&[
+            "install",
+            "-g",
+            "--node",
+            "22",
+            "--force",
+            "--silent",
+            "--concurrency",
+            "2",
+            "tsx",
+        ])
+        .unwrap();
         let Some(ManagedGlobalCommand::Install { packages, node, force, concurrency, .. }) =
             install.managed_global_command()
         else {

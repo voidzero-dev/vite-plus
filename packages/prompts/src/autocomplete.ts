@@ -1,15 +1,21 @@
-import { AutocompletePrompt } from '@clack/core';
+import type { Writable } from 'node:stream';
+
+import type { CANCEL_SYMBOL, Validate } from '@clack/core';
+import { AutocompletePrompt, runValidation } from '@clack/core';
 import color from 'picocolors';
 
 import {
   type CommonOptions,
+  getGuide,
+  promptTitle,
+  optionText,
+  wrapTextWithPrefix,
   S_BAR,
   S_BAR_END,
   S_CHECKBOX_INACTIVE,
   S_CHECKBOX_SELECTED,
   S_POINTER_ACTIVE,
   S_POINTER_INACTIVE,
-  symbol,
 } from './common.js';
 import { limitOptions } from './limit-options.js';
 import type { Option } from './select.js';
@@ -43,41 +49,21 @@ function getSelectedOptions<T>(values: T[], options: Option<T>[]): Option<T>[] {
 }
 
 const withMarker = (
+  output: Writable | undefined,
   marker: string,
   label: string,
   format: (text: string) => string,
-  firstLineSuffix = '',
-) => {
-  const lines = label.split('\n');
-  if (lines.length === 1) {
-    return `${marker} ${format(lines[0])}${firstLineSuffix}`;
-  }
-  const [firstLine, ...rest] = lines;
-  return [
-    `${marker} ${format(firstLine)}${firstLineSuffix}`,
-    ...rest.map((line) => `${S_POINTER_INACTIVE} ${format(line)}`),
-  ].join('\n');
-};
-
+  suffix = '',
+) => optionText(output, `${marker} `, label, format, suffix);
 const withMarkerAndIndicator = (
+  output: Writable | undefined,
   marker: string,
   indicator: string,
-  indicatorWidth: number,
+  _width: number,
   label: string,
   format: (text: string) => string,
-  firstLineSuffix = '',
-) => {
-  const lines = label.split('\n');
-  const continuationPrefix = `${S_POINTER_INACTIVE} ${' '.repeat(indicatorWidth)} `;
-  if (lines.length === 1) {
-    return `${marker} ${indicator} ${format(lines[0])}${firstLineSuffix}`;
-  }
-  const [firstLine, ...rest] = lines;
-  return [
-    `${marker} ${indicator} ${format(firstLine)}${firstLineSuffix}`,
-    ...rest.map((line) => `${continuationPrefix}${format(line)}`),
-  ].join('\n');
-};
+  suffix = '',
+) => optionText(output, `${marker} ${indicator} `, label, format, suffix);
 
 interface AutocompleteSharedOptions<Value> extends CommonOptions {
   /**
@@ -99,7 +85,7 @@ interface AutocompleteSharedOptions<Value> extends CommonOptions {
   /**
    * Validates the value
    */
-  validate?: (value: Value | Value[] | undefined) => string | Error | undefined;
+  validate?: Validate<Value | Value[]>;
   /**
    * Custom filter function to match options against search input.
    * If not provided, a default filter that matches label, hint, and value is used.
@@ -116,13 +102,17 @@ export interface AutocompleteOptions<Value> extends AutocompleteSharedOptions<Va
    * The initial user input
    */
   initialUserInput?: string;
+  /** Complete the focused suggestion on Tab (enabled by path). */
+  completeOnTab?: boolean;
 }
 
 export const autocomplete = <Value>(opts: AutocompleteOptions<Value>) => {
   const prompt = new AutocompletePrompt({
     options: opts.options,
-    initialValue: opts.initialValue ? [opts.initialValue] : undefined,
+    initialValue: opts.initialValue !== undefined ? [opts.initialValue] : undefined,
     initialUserInput: opts.initialUserInput,
+    placeholder: opts.placeholder,
+    completeOnTab: opts.completeOnTab,
     filter:
       opts.filter ??
       ((search: string, opt: Option<Value>) => {
@@ -130,15 +120,14 @@ export const autocomplete = <Value>(opts: AutocompleteOptions<Value>) => {
       }),
     signal: opts.signal,
     input: opts.input,
+    accessible: opts.accessible,
     output: opts.output,
     validate: opts.validate,
     render() {
-      const hasGuide = opts.withGuide ?? false;
+      const hasGuide = getGuide(opts);
       const nestedPrefix = '  ';
       // Title and message display
-      const headings = hasGuide
-        ? [color.gray(S_BAR), `${symbol(this.state)} ${opts.message}`]
-        : [`${symbol(this.state)} ${opts.message}`];
+      const headings = promptTitle(opts.message, this.state, opts).trimEnd().split('\n');
       const userInput = this.userInput;
       const options = this.options;
       const placeholder = opts.placeholder;
@@ -151,13 +140,13 @@ export const autocomplete = <Value>(opts: AutocompleteOptions<Value>) => {
           const selected = getSelectedOptions(this.selectedValues, options);
           const label = selected.length > 0 ? color.dim(selected.map(getLabel).join(', ')) : '';
           const submitPrefix = hasGuide ? `${color.gray(S_BAR)} ` : nestedPrefix;
-          return `${headings.join('\n')}\n${submitPrefix}${label}\n\n`;
+          return `${headings.join('\n')}\n${submitPrefix}${label}\n`;
         }
 
         case 'cancel': {
           const userInputText = userInput ? color.strikethrough(color.dim(userInput)) : '';
           const cancelPrefix = hasGuide ? `${color.gray(S_BAR)} ` : nestedPrefix;
-          return `${headings.join('\n')}\n${cancelPrefix}${userInputText}\n\n`;
+          return `${headings.join('\n')}\n${cancelPrefix}${userInputText}\n`;
         }
 
         default: {
@@ -188,25 +177,39 @@ export const autocomplete = <Value>(opts: AutocompleteOptions<Value>) => {
               : [];
 
           const validationError =
-            this.state === 'error' ? [`${guidePrefix}${color.yellow(this.error)}`] : [];
+            this.state === 'error'
+              ? [wrapTextWithPrefix(opts.output, color.yellow(this.error), guidePrefix)]
+              : [];
 
           if (hasGuide) {
             headings.push(guidePrefix.trimEnd());
           }
           headings.push(
-            `${guidePrefix}${color.dim('Search:')}${searchText}${matches}`,
+            wrapTextWithPrefix(
+              opts.output,
+              `${color.dim('Search:')}${searchText}${matches}`,
+              guidePrefix,
+            ),
             ...noResults,
             ...validationError,
           );
 
           // Show instructions
           const instructions = [
-            `${color.dim('↑/↓')} to select`,
-            `${color.dim('Enter:')} confirm`,
-            `${color.dim('Type:')} to search`,
+            `${color.dim('↑/↓')} navigate`,
+            ...(opts.completeOnTab ? [`${color.dim('Tab')} complete`] : []),
+            `${color.dim('Enter')} confirm`,
+            `${color.dim('Type')} to search`,
           ];
 
-          const footers = [`${guidePrefix}${instructions.join(' • ')}`, guidePrefixEnd];
+          const footers = wrapTextWithPrefix(
+            opts.output,
+            color.dim(instructions.join(' · ')),
+            guidePrefix,
+          ).split('\n');
+          if (hasGuide) {
+            footers.push(guidePrefixEnd);
+          }
 
           // Render options with selection
           const displayOptions =
@@ -216,7 +219,7 @@ export const autocomplete = <Value>(opts: AutocompleteOptions<Value>) => {
                   cursor: this.cursor,
                   options: this.filteredOptions,
                   columnPadding: hasGuide ? 2 : 2,
-                  rowPadding: headings.length + footers.length,
+                  rowPadding: headings.flatMap((line) => line.split('\n')).length + footers.length,
                   style: (option, active) => {
                     const label = getLabel(option);
                     const hint =
@@ -224,14 +227,29 @@ export const autocomplete = <Value>(opts: AutocompleteOptions<Value>) => {
                         ? color.gray(` (${option.hint})`)
                         : '';
 
+                    if (option.disabled) {
+                      return withMarker(
+                        opts.output,
+                        color.gray(S_POINTER_INACTIVE),
+                        label,
+                        (text) => color.strikethrough(color.gray(text)),
+                      );
+                    }
                     return active
                       ? withMarker(
+                          opts.output,
                           color.blue(S_POINTER_ACTIVE),
                           label,
                           (text) => color.blue(color.bold(text)),
                           hint,
                         )
-                      : withMarker(color.dim(S_POINTER_INACTIVE), label, color.dim, hint);
+                      : withMarker(
+                          opts.output,
+                          color.dim(S_POINTER_INACTIVE),
+                          label,
+                          color.dim,
+                          hint,
+                        );
                   },
                   maxItems: opts.maxItems,
                   output: opts.output,
@@ -249,7 +267,7 @@ export const autocomplete = <Value>(opts: AutocompleteOptions<Value>) => {
   });
 
   // Return the result or cancel symbol
-  return prompt.prompt() as Promise<Value | symbol>;
+  return prompt.prompt() as Promise<Value | typeof CANCEL_SYMBOL>;
 };
 
 // Type definition for the autocompleteMultiselect component
@@ -274,6 +292,14 @@ export const autocompleteMultiselect = <Value>(opts: AutocompleteMultiSelectOpti
     selectedValues: Value[],
     focusedValue: Value | undefined,
   ) => {
+    if (option.disabled) {
+      return optionText(
+        opts.output,
+        `${color.gray(S_POINTER_INACTIVE)} ${color.gray(S_CHECKBOX_INACTIVE)} `,
+        option.label ?? String(option.value ?? ''),
+        (text) => color.strikethrough(color.gray(text)),
+      );
+    }
     const isSelected = selectedValues.includes(option.value);
     const label = option.label ?? String(option.value ?? '');
     const hint =
@@ -284,6 +310,7 @@ export const autocompleteMultiselect = <Value>(opts: AutocompleteMultiSelectOpti
     const checkbox = isSelected ? color.blue(checkboxRaw) : color.dim(checkboxRaw);
     const marker = active ? color.blue(S_POINTER_ACTIVE) : color.dim(S_POINTER_INACTIVE);
     return withMarkerAndIndicator(
+      opts.output,
       marker,
       checkbox,
       checkboxRaw.length,
@@ -297,26 +324,28 @@ export const autocompleteMultiselect = <Value>(opts: AutocompleteMultiSelectOpti
   const prompt = new AutocompletePrompt<Option<Value>>({
     options: opts.options,
     multiple: true,
+    placeholder: opts.placeholder,
     filter:
       opts.filter ??
       ((search, opt) => {
         return getFilteredOption(search, opt);
       }),
-    validate: () => {
-      if (opts.required && prompt.selectedValues.length === 0) {
+    validate: (value) => {
+      if (opts.required && (!Array.isArray(value) || value.length === 0)) {
         return 'Please select at least one item';
       }
-      return undefined;
+      return opts.validate ? runValidation(opts.validate, value) : undefined;
     },
     initialValue: opts.initialValues,
     signal: opts.signal,
     input: opts.input,
+    accessible: opts.accessible,
     output: opts.output,
     render() {
-      const hasGuide = opts.withGuide ?? false;
+      const hasGuide = getGuide(opts);
       const nestedPrefix = '  ';
       // Title and symbol
-      const title = `${hasGuide ? `${color.gray(S_BAR)}\n` : ''}${symbol(this.state)} ${opts.message}\n`;
+      const title = promptTitle(opts.message, this.state, opts);
 
       // Selection counter
       const userInput = this.userInput;
@@ -343,12 +372,12 @@ export const autocompleteMultiselect = <Value>(opts: AutocompleteMultiSelectOpti
         case 'submit': {
           const submitPrefix = hasGuide ? `${color.gray(S_BAR)} ` : '';
           const finalPrefix = hasGuide ? submitPrefix : nestedPrefix;
-          return `${title}${finalPrefix}${color.dim(`${this.selectedValues.length} items selected`)}\n\n`;
+          return `${title}${finalPrefix}${color.dim(`${this.selectedValues.length} items selected`)}\n`;
         }
         case 'cancel': {
           const cancelPrefix = hasGuide ? `${color.gray(S_BAR)} ` : '';
           const finalPrefix = hasGuide ? cancelPrefix : nestedPrefix;
-          return `${title}${finalPrefix}${color.strikethrough(color.dim(userInput))}\n\n`;
+          return `${title}${finalPrefix}${color.strikethrough(color.dim(userInput))}\n`;
         }
         default: {
           const barColor = this.state === 'error' ? color.yellow : color.blue;
@@ -356,10 +385,10 @@ export const autocompleteMultiselect = <Value>(opts: AutocompleteMultiSelectOpti
           const footerEnd = hasGuide ? [barColor(S_BAR_END)] : [];
           // Instructions
           const instructions = [
-            `${color.dim('↑/↓')} to navigate`,
-            `${color.dim(this.isNavigating ? 'Space/Tab:' : 'Tab:')} select`,
-            `${color.dim('Enter:')} confirm`,
-            `${color.dim('Type:')} to search`,
+            `${color.dim('↑/↓')} navigate`,
+            `${color.dim(this.isNavigating ? 'Space/Tab' : 'Tab')} select`,
+            `${color.dim('Enter')} confirm`,
+            `${color.dim('Type')} to search`,
           ];
 
           // No results message
@@ -369,16 +398,27 @@ export const autocompleteMultiselect = <Value>(opts: AutocompleteMultiSelectOpti
               : [];
 
           const errorMessage =
-            this.state === 'error' ? [`${prefix}${color.yellow(this.error)}`] : [];
+            this.state === 'error'
+              ? [wrapTextWithPrefix(opts.output, color.yellow(this.error), prefix)]
+              : [];
 
           // Calculate header and footer line counts for rowPadding
           const headerLines = [
             ...title.trimEnd().split('\n'),
-            `${prefix}${color.dim('Search:')} ${searchText}${matches}`,
+            wrapTextWithPrefix(
+              opts.output,
+              `${color.dim('Search:')} ${searchText}${matches}`,
+              prefix,
+            ),
             ...noResults,
             ...errorMessage,
           ];
-          const footerLines = [`${prefix}${instructions.join(' • ')}`, ...footerEnd];
+          const footerLines = [
+            ...wrapTextWithPrefix(opts.output, color.dim(instructions.join(' · ')), prefix).split(
+              '\n',
+            ),
+            ...footerEnd,
+          ];
 
           // Get limited options for display
           const displayOptions = limitOptions({
@@ -388,7 +428,8 @@ export const autocompleteMultiselect = <Value>(opts: AutocompleteMultiSelectOpti
               formatOption(option, active, this.selectedValues, this.focusedValue),
             maxItems: opts.maxItems,
             output: opts.output,
-            rowPadding: headerLines.length + footerLines.length,
+            columnPadding: 2,
+            rowPadding: headerLines.flatMap((line) => line.split('\n')).length + footerLines.length,
           });
 
           // Build the prompt display
@@ -403,5 +444,5 @@ export const autocompleteMultiselect = <Value>(opts: AutocompleteMultiSelectOpti
   });
 
   // Return the result or cancel symbol
-  return prompt.prompt() as Promise<Value[] | symbol>;
+  return prompt.prompt() as Promise<Value[] | typeof CANCEL_SYMBOL>;
 };

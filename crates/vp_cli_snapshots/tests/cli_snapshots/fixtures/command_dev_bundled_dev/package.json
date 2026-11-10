@@ -1,4 +1,9 @@
 {
   "name": "command-dev-bundled-dev-test",
-  "private": true
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vite-plus": "latest"
+  }
 }

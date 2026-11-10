@@ -1,7 +1,7 @@
 use vp_pm_cli_macros::pm_args;
 
 use crate::resolution::{
-    Bun, CommandBuilder, CommandResolution, Diagnostics, Npm, Pnpm, Resolve, Yarn,
+    Bun, CommandBuilder, CommandResolution, DiagnosticKind, Diagnostics, Npm, Pnpm, Resolve, Yarn,
 };
 
 #[pm_args]
@@ -12,7 +12,9 @@ pub struct UnlinkArgs {
     pub(crate) package: Option<String>,
 
     /// Unlink in every workspace package
-    #[arg(short = 'r', long, not_supported(npm, bun))]
+    // Berry added unlink, including --all, in Yarn 3. Classic has no recursive unlink.
+    // https://github.com/yarnpkg/berry/blob/01586a88806a2bebd7edb28d1bee3581b1fd3762/CHANGELOG.md#300
+    #[arg(short = 'r', long, not_supported(npm < "8.1.0", yarn < "3", bun))]
     pub(crate) recursive: bool,
 
     /// Arguments to pass to package manager
@@ -23,7 +25,9 @@ pub struct UnlinkArgs {
 impl Resolve<UnlinkArgs> for Npm {
     fn resolve(&self, args: &UnlinkArgs, _diag: &mut Diagnostics) -> CommandResolution {
         let mut cmd = CommandBuilder::new("npm");
-        cmd.arg("unlink");
+        cmd.arg("unlink")
+            .arg_if("--workspaces", args.recursive)
+            .arg_if("--include-workspace-root", args.recursive);
         push_unlink_package_and_args(&mut cmd, args);
         cmd.into()
     }
@@ -39,7 +43,14 @@ impl Resolve<UnlinkArgs> for Pnpm {
 }
 
 impl Resolve<UnlinkArgs> for Yarn {
-    fn resolve(&self, args: &UnlinkArgs, _diag: &mut Diagnostics) -> CommandResolution {
+    fn resolve(&self, args: &UnlinkArgs, diag: &mut Diagnostics) -> CommandResolution {
+        if self.is_berry() && !self.supports_v3_commands() {
+            diag.warn(
+                DiagnosticKind::UnsupportedCommandNoop,
+                "yarn unlink requires Yarn Classic or yarn >= 3.0.0. Skipping.",
+            );
+            return CommandResolution::Noop;
+        }
         let mut cmd = CommandBuilder::new("yarn");
         cmd.arg("unlink").arg_if("--all", args.recursive);
         push_unlink_package_and_args(&mut cmd, args);
@@ -68,7 +79,7 @@ mod tests {
     use super::*;
     use crate::resolution::{
         resolve,
-        test_utils::{bun, expect_run, npm, parse_args, pnpm, yarn},
+        test_utils::{bun, expect_run, expect_unsupported, npm, parse_args, pnpm, yarn},
     };
 
     #[test]
@@ -144,27 +155,40 @@ mod tests {
     }
 
     #[test]
-    fn test_yarn_classic_unlink_package() {
-        let command = expect_run(
-            resolve(
-                &yarn("1.22.0"),
-                UnlinkArgs { package: Some("react".to_string()), ..Default::default() },
-            )
-            .outcome,
-        );
-
-        assert_eq!(command.program, "yarn");
-        assert_eq!(command.args, vec!["unlink", "react"]);
+    fn test_yarn_unlink_recursive() {
+        for version in ["3.0.0", "3.6.0", "4.18.0"] {
+            let resolution =
+                resolve(&yarn(version), UnlinkArgs { recursive: true, ..Default::default() });
+            let command = expect_run(resolution.outcome);
+            assert_eq!(command.program, "yarn");
+            assert_eq!(command.args, vec!["unlink", "--all"]);
+            assert!(resolution.diagnostics.is_empty());
+        }
     }
 
     #[test]
-    fn test_yarn_unlink_recursive() {
-        let command = expect_run(
-            resolve(&yarn("4.0.0"), UnlinkArgs { recursive: true, ..Default::default() }).outcome,
-        );
+    fn test_yarn_before_3_rejects_recursive_unlink() {
+        for version in ["1.22.22", "2.4.2", "3.0.0-rc.0"] {
+            for argv in [vec!["--recursive"], vec!["-r", "react"], vec!["react", "--recursive"]] {
+                let args = parse_args::<UnlinkArgs>(argv).unwrap();
+                assert!(args.recursive);
+                expect_unsupported(
+                    resolve(&yarn(version), args),
+                    &["yarn < 3 does not support --recursive."],
+                );
+            }
+        }
+    }
 
-        assert_eq!(command.program, "yarn");
-        assert_eq!(command.args, vec!["unlink", "--all"]);
+    #[test]
+    fn test_yarn_unlink_preserves_raw_recursive() {
+        for version in ["1.22.22", "3.0.0", "4.18.0"] {
+            let args = parse_args::<UnlinkArgs>(["react", "--", "--recursive"]).unwrap();
+            assert!(!args.recursive);
+            let resolution = resolve(&yarn(version), args);
+            assert!(resolution.diagnostics.is_empty());
+            assert_eq!(expect_run(resolution.outcome).args, vec!["unlink", "react", "--recursive"]);
+        }
     }
 
     #[test]
@@ -190,13 +214,24 @@ mod tests {
     }
 
     #[test]
-    fn test_npm_unlink_recursive_warns_and_drops_flag() {
-        let result = resolve(&npm("11.0.0"), UnlinkArgs { recursive: true, ..Default::default() });
-        let command = expect_run(result.outcome);
-
-        assert_eq!(command.program, "npm");
-        assert_eq!(command.args, vec!["unlink"]);
-        assert_eq!(result.diagnostics.len(), 1);
+    fn test_npm_unlink_recursive() {
+        for version in ["10.9.4", "11.16.0", "12.0.2"] {
+            let result = resolve(
+                &npm(version),
+                UnlinkArgs {
+                    package: Some("react".to_string()),
+                    recursive: true,
+                    ..Default::default()
+                },
+            );
+            assert!(result.diagnostics.is_empty());
+            let command = expect_run(result.outcome);
+            assert_eq!(command.program, "npm");
+            assert_eq!(
+                command.args,
+                vec!["unlink", "--workspaces", "--include-workspace-root", "react"]
+            );
+        }
     }
 
     #[test]
@@ -214,13 +249,9 @@ mod tests {
     }
 
     #[test]
-    fn test_bun_unlink_recursive_warns_and_drops_flag() {
+    fn test_bun_unlink_rejects_recursive() {
         let result = resolve(&bun("1.3.11"), UnlinkArgs { recursive: true, ..Default::default() });
-        let command = expect_run(result.outcome);
-
-        assert_eq!(command.program, "bun");
-        assert_eq!(command.args, vec!["unlink"]);
-        assert_eq!(result.diagnostics.len(), 1);
+        expect_unsupported(result, &["bun does not support --recursive."]);
     }
 
     #[test]

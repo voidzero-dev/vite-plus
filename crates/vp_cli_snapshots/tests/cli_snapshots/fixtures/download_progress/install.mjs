@@ -1,41 +1,84 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { once } from 'node:events';
-import { copyFileSync, mkdirSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { createServer } from 'node:http';
 import { join, resolve } from 'node:path';
+
 import { createArchive } from './archive.mjs';
 
 const interactive = process.argv.includes('interactive');
 const failure = process.argv.includes('failure');
+const resolutionRetry = process.argv.includes('resolution-retry');
+const dependencyRetry = process.argv.includes('dependency-retry');
+const upgradeHandoff = process.argv.includes('upgrade-handoff');
+const captureStderr = resolutionRetry || dependencyRetry || upgradeHandoff;
 if (interactive) process.stdin.setRawMode(true);
 const home = resolve('home');
 const user = resolve('user');
 const external = resolve('external');
-const nodeBin = join(home, 'js_runtime/node/99.0.0/bin');
-for (const directory of [nodeBin, user, external]) mkdirSync(directory, { recursive: true });
-// Use the runner's real Node for the mock pnpm program, without a network download.
+const resolutionDir = resolve('resolution');
+const resolutionFile = join(resolutionDir, 'node-version');
+const nodeBin = join(external, 'node-bin');
+for (const directory of [home, user, nodeBin]) mkdirSync(directory, { recursive: true });
+// Expose only Node so the host's npm and npx do not change shim preferences.
 symlinkSync(process.execPath, join(nodeBin, 'node'));
 copyFileSync(join(process.env.VP_HOME, 'bin/vp'), join(external, 'vp'));
+const lockfile = "lockfileVersion: '9.0'\n";
+writeFileSync(join(external, 'vp-install-lock.yaml'), lockfile);
+const musl = process.platform === 'linux' && !process.report.getReport().header.glibcVersionRuntime;
+const platform = `${process.platform}-${process.arch}${musl ? '-musl' : ''}`;
+const nodeArchives = new Map();
+let runtimeDownloads = 0;
+let checksumRequests = 0;
+let indexRequests = 0;
 
-const pnpmArchive = createArchive({
-  'package/package.json': JSON.stringify({
-    name: 'pnpm',
-    version: '10.33.0',
-    bin: { pnpm: 'bin/pnpm.cjs' },
-  }),
-  'package/bin/pnpm.cjs': `
+const pnpmManifest = JSON.stringify({
+  name: 'pnpm',
+  version: '10.34.7',
+  bin: { pnpm: 'bin/pnpm.cjs' },
+});
+const pnpmCjs = `
     const fs = require('node:fs');
+    const assert = require('node:assert/strict');
+    assert.ok(process.argv.includes('--frozen-lockfile'));
+    assert.equal(fs.readFileSync('pnpm-lock.yaml', 'utf8'), ${JSON.stringify(lockfile)});
     console.log('pnpm captured stdout');
     console.error('pnpm captured stderr');
     fetch(process.env.npm_config_registry + '/install').then(response => {
-      if (!response.ok) process.exit(17);
       fs.mkdirSync('node_modules/vite-plus', { recursive: true });
       fs.writeFileSync('node_modules/vite-plus/package.json', '{"name":"vite-plus"}');
+      if (!response.ok) process.exit(17);
     });
-  `,
+  `;
+const pnpmArchive = createArchive({
+  'package/package.json': pnpmManifest,
+  'package/bin/pnpm.cjs': pnpmCjs,
 });
+
+// The bundled pnpm is pinned, so setup verifies its download against the bundled
+// integrity. A fake tarball cannot match that pin, so seed the stub at the pinned
+// install's content key instead; the bootstrap reuses it and skips the download.
+// Key = short_fingerprint(PINNED_PNPM_INTEGRITY) in crates/vp_setup/src/install.rs
+// (the first 32 hex of its SHA-256).
+const SETUP_PNPM_KEY = '2f9ea5a98bd92b2d1d6694aedb029783';
+const seededPnpm = join(home, 'package_manager/pnpm/.verified-v1/10.34.7', SETUP_PNPM_KEY, 'pnpm');
+mkdirSync(join(seededPnpm, 'bin'), { recursive: true });
+writeFileSync(join(seededPnpm, 'package.json'), pnpmManifest);
+writeFileSync(join(seededPnpm, 'bin/pnpm.cjs'), pnpmCjs);
+for (const shim of ['pnpm', 'pnpm.cmd', 'pnpm.ps1']) {
+  writeFileSync(join(seededPnpm, 'bin', shim), 'unused');
+}
 
 // The request is made after the CLI draws each phase. Hold its response until
 // the runner captures the milestone, without sleeps or polling terminal text.
@@ -48,23 +91,55 @@ async function checkpoint(phase) {
   process.stdin.resume();
   const id = randomBytes(16).toString('hex');
   const name = Buffer.from(`install:${phase}:ready`).toString('base64url');
-  process.stderr.write(`\x1b]2;pty-terminal-test:${id}:${name}\x1b\\`);
+  process.stderr.write(`\x1b]2;vt-pty-terminal-test:${id}:${name}\x1b\\`);
   await nextInput;
   process.stdin.pause();
 }
 
 /** @returns {Promise<void>} */
 async function handleRequest(request, response) {
-  if (request.url === '/index.json') {
+  const checksum = /^\/v(\d+\.\d+\.\d+)\/SHASUMS256\.txt$/.exec(request.url);
+  if (checksum) {
+    checksumRequests++;
+    const version = checksum[1];
+    const nodeRoot = `node-v${version}-${platform}`;
+    // Serve the exact default selected by the installer. The tiny Unix wrapper
+    // runs the mock pnpm with the runner's real Node, without an external download.
+    const executable = `'${process.execPath.replaceAll("'", "'\\''")}'`;
+    const archive = createArchive({
+      [`${nodeRoot}/bin/node`]: `#!/bin/sh\nexec ${executable} "$@"\n`,
+    });
+    nodeArchives.set(`/v${version}/${nodeRoot}.tar.gz`, archive);
     await checkpoint('prepare');
-    response.end(JSON.stringify([{ version: 'v99.0.0', lts: 'Fixture' }]));
+    response.end(`${createHash('sha256').update(archive).digest('hex')}  ${nodeRoot}.tar.gz\n`);
+  } else if (nodeArchives.has(request.url)) {
+    runtimeDownloads++;
+    response.end(nodeArchives.get(request.url));
+  } else if (request.url === '/index.json') {
+    // A pinned default must not resolve the latest LTS alias.
+    indexRequests++;
+    response.writeHead(404).end();
+  } else if (request.url === '/pnpm/10.34.7') {
+    response.end(
+      JSON.stringify({
+        name: 'pnpm',
+        version: '10.34.7',
+        dist: {
+          tarball: `${mirror}/pnpm/-/pnpm-10.34.7.tgz`,
+          integrity: 'sha512-' + createHash('sha512').update(pnpmArchive).digest('base64'),
+        },
+      }),
+    );
   } else if (/^\/pnpm\/-\/pnpm-[\d.]+\.tgz$/.test(request.url)) {
     await checkpoint('download');
     response.setHeader('Content-Length', pnpmArchive.length);
     response.end(pnpmArchive);
   } else if (request.url === '/install') {
     await checkpoint('dependencies');
-    response.writeHead(failure ? 500 : 200).end();
+    const fail =
+      failure ||
+      (dependencyRetry && phases.filter((phase) => phase === 'dependencies').length === 1);
+    response.writeHead(fail ? 500 : 200).end();
   } else {
     response.writeHead(404).end();
   }
@@ -75,10 +150,9 @@ server.listen(0, '127.0.0.1');
 await once(server, 'listening');
 const mirror = `http://127.0.0.1:${server.address().port}`;
 
-try {
-  console.log('Before installation: preserve this output.');
-  const child = spawn(join(external, 'vp'), [], {
-    stdio: ['ignore', 'pipe', 'inherit'],
+async function runInstaller(binary = join(external, 'vp'), args = []) {
+  const child = spawn(binary, args, {
+    stdio: ['ignore', 'pipe', captureStderr ? 'pipe' : 'inherit'],
     env: {
       ...process.env,
       HOME: user,
@@ -87,27 +161,96 @@ try {
       VP_NODE_DIST_MIRROR: mirror,
       npm_config_registry: mirror,
       NPM_CONFIG_REGISTRY: mirror,
-      VP_SELF_SETUP_SHELL: 'sh',
+      VP_SELF_SETUP_SHELL: args.length === 0 ? 'sh' : undefined,
       VP_SELF_SETUP_NO_MODIFY_PATH: '1',
       VP_NODE_MANAGER: 'no',
       VP_SHELL: 'zsh',
       VP_SKIP_DEPS_INSTALL: '',
+      VP_SETUP_NODE_VERSION: resolutionRetry ? '20.18.0' : '',
+      VP_SETUP_NODE_VERSION_FILE: resolutionRetry ? resolutionFile : '',
     },
   });
   let stdout = '';
+  let stderr = '';
   child.stdout.setEncoding('utf8').on('data', (chunk) => {
     stdout += chunk;
   });
+  child.stderr?.setEncoding('utf8').on('data', (chunk) => {
+    stderr += chunk;
+  });
   const [code, signal] = await once(child, 'exit');
   assert.equal(signal, null);
-  assert.equal(code, failure ? 1 : 0);
-  assert.deepEqual(phases, ['prepare', 'download', 'dependencies']);
+  return { code, stdout, stderr };
+}
+
+try {
+  console.log('Before installation: preserve this output.');
+  let result = await runInstaller();
+  if (resolutionRetry || dependencyRetry) {
+    assert.equal(result.code, 1, result.stderr);
+    assert.equal(result.stdout, '');
+    const installed = readdirSync(home)
+      .map((name) => join(home, name))
+      .filter((directory) => existsSync(join(directory, 'node_modules/vite-plus/package.json')));
+    assert.equal(installed.length, 1);
+    const marker = join(installed[0], 'bin/.vp-setup-complete');
+    const receipt = join(installed[0], 'node_modules/.vp-install-complete');
+    assert.equal(existsSync(marker), false);
+    assert.equal(existsSync(receipt), resolutionRetry);
+    assert.equal(existsSync(resolutionFile), false);
+    assert.deepEqual(phases, ['prepare', 'dependencies']);
+    console.log(
+      resolutionRetry
+        ? 'A failed resolution-file write leaves dependencies installed and setup incomplete.'
+        : 'A failed dependency install leaves package.json present, without a completion receipt.',
+    );
+
+    if (resolutionRetry) mkdirSync(resolutionDir);
+    result = await runInstaller();
+    assert.equal(result.code, 0, result.stderr);
+    if (resolutionRetry) assert.equal(readFileSync(resolutionFile, 'utf8'), '20.18.0');
+    assert.equal(existsSync(marker), true);
+    assert.equal(existsSync(receipt), true);
+    console.log(
+      resolutionRetry
+        ? 'Retry reuses the completed frozen install and returns the requested Node version.'
+        : 'Retry completes the frozen dependency install before marking setup complete.',
+    );
+  }
+  if (upgradeHandoff) {
+    assert.equal(result.code, 0, result.stderr);
+    const current = join(home, 'current');
+    const marker = join(current, 'bin/.vp-setup-complete');
+    assert.equal(existsSync(join(current, 'node_modules/.vp-install-complete')), true);
+    // Upgrade completes the shared dependency installer, then clears only the setup marker.
+    rmSync(marker);
+    result = await runInstaller(join(current, 'bin/vp'), ['--help']);
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(existsSync(marker), true);
+    console.log(
+      'Upgrade handoff completes self-setup without another runtime lookup or dependency install.',
+    );
+  }
+  const { code, stdout, stderr } = result;
+  assert.equal(code, failure ? 1 : 0, stderr);
+  assert.deepEqual(
+    phases,
+    dependencyRetry
+      ? ['prepare', 'dependencies', 'dependencies']
+      : ['prepare', 'dependencies'],
+  );
+  assert.equal(indexRequests, 0);
+  assert.equal(checksumRequests, 1);
+  assert.equal(runtimeDownloads, 1);
   if (failure) {
     assert.equal(stdout, '');
     const log = readFileSync(join(home, 'upgrade.log'), 'utf8');
-    assert.ok(log.includes('pnpm captured stdout'));
-    assert.ok(log.includes('pnpm captured stderr'));
-    console.log('Failure log preserves pnpm stdout and stderr.');
+    assert.ok(log.includes('exit code 17'));
+    assert.ok(!log.includes('pnpm captured'));
+    console.log('Failure log records the exit code without registry output.');
+  } else if (upgradeHandoff) {
+    assert.ok(stdout.includes('Usage:'));
+    console.log('The first command runs after self-setup completes.');
   } else {
     assert.deepEqual(
       stdout
@@ -123,6 +266,6 @@ try {
   if (interactive) process.stdin.setRawMode(false);
   server.close();
   server.closeAllConnections();
-  for (const directory of [home, user, external])
+  for (const directory of [home, user, external, resolutionDir])
     rmSync(directory, { recursive: true, force: true });
 }

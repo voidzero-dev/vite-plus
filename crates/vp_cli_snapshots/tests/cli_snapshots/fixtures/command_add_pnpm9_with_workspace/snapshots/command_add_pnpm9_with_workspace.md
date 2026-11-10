@@ -203,9 +203,7 @@ should error because save-catalog-name is not supported at pnpm@9
 **Exit code:** 1
 
 ```
- ERROR  Unknown option: 'save-catalog-name'
-Did you mean 'save-optional'? Use "--config.unknown=value" to force an unknown option.
-For help, run: pnpm help add
+pnpm < 10.12.0 does not support --save-catalog-name.
 ```
 
 ## `vp add --filter=./packages/utils test-vite-plus-package-optional -O --save-catalog v2`
@@ -215,7 +213,17 @@ should error because save-catalog is not supported at pnpm@9
 **Exit code:** 1
 
 ```
- ERROR  Unknown option: 'save-catalog'
-Did you mean 'save-exact', or 'save-prod'? Use "--config.unknown=value" to force an unknown option.
-For help, run: pnpm help add
+pnpm < 10.12.0 does not support --save-catalog.
+```
+
+## `vp install testnpm2 --save-catalog`
+
+The install alias must apply the add catalog version guard.
+
+**Exit code:** 1
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+pnpm < 10.12.0 does not support --save-catalog.
 ```

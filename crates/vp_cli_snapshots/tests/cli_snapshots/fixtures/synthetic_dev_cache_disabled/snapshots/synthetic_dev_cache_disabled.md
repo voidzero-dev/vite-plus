@@ -11,7 +11,7 @@ synthetic dev (vp dev) should have cache disabled even with cacheScripts
 ```
 $ vp dev --host 127.0.0.1 --port 0 ⊘ cache disabled
 
-  VITE+ <version>
+  VITE+ <version>  ready in <duration>
 
   ➜  Local:   http://127.0.0.1:<port>/
   ➜  press h + enter to show help
@@ -22,7 +22,7 @@ $ vp dev --host 127.0.0.1 --port 0 ⊘ cache disabled
 ```
 $ vp dev --host 127.0.0.1 --port 0 ⊘ cache disabled
 
-  VITE+ <version>
+  VITE+ <version>  ready in <duration>
 
   ➜  Local:   http://127.0.0.1:<port>/
   ➜  press h + enter to show help

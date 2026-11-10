@@ -12,8 +12,10 @@ use std::{borrow::Cow, sync::LazyLock};
 static UUID_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}").unwrap()
 });
+// One optional space covers units printed apart from the number, as in
+// Vite's dev banner (`ready in 123 ms`).
 static DURATION_RE: LazyLock<regex::Regex> =
-    LazyLock::new(|| regex::Regex::new(r"\b\d+(\.\d+)?(ns|µs|ms|s)\b").unwrap());
+    LazyLock::new(|| regex::Regex::new(r"\b\d+(\.\d+)? ?(ns|µs|ms|s)\b").unwrap());
 // Yarn prints elapsed times as one or several units (999ms vs 1s 0ms).
 // Match the entire elapsed field, not adjacent values in timing tables.
 static YARN_ELAPSED_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
@@ -30,6 +32,17 @@ static YARN_STEP_TIMING_RE: LazyLock<regex::Regex> =
 // zero-cost phases vary between runs, so redact the complete timing detail.
 static VITEST_TIMING_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r"(?m)(Duration\s+<duration>) \((?:[a-z]+ \d+%(?:, )?)+\)").unwrap()
+});
+// Vitest conditionally prints this advisory based on measured transform time.
+// Remove the complete known block, not arbitrary Transform lines or failures.
+static VITEST_TRANSFORM_CACHE_HINT_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(concat!(
+        r"(?m)\n[ \t]*Transform [^\n]*transforming modules took <duration> · \d+% of tracked time, re-done on every run\n",
+        r"[ \t]*persist transforms across runs with fsModuleCache: true\n",
+        r"(?:[ \t]*on CI this only helps when the cache directory is persisted between runs\n)?",
+        r"[ \t]*learn more: https://vitest\.dev/guide/improving-performance#caching-between-reruns(?:\n|$)",
+    ))
+    .unwrap()
 });
 // Only v-prefixed versions are masked: tool and runtime banners all print
 // that form (`vite v7.3.2`, `vp v0.2.2`, `Node.js v24.18.0`) and churn on
@@ -58,6 +71,24 @@ static THREAD_RE: LazyLock<regex::Regex> =
 // thread counts.
 static CLEANING_COUNT_RE: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"Cleaning \d+ files").unwrap());
+const TS7_WARNING: &str = "warn: TypeScript 7.0 does not yet have a stable API and is experimental. Some options will be unavailable.";
+// Task-cache replay merges stdout and stderr. Only the known compiler warning
+// can move within pack's startup messages; other diagnostics delimit the block.
+static PACK_STARTUP_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(&format!(
+        r"(?m)(?:^(?:ℹ (?:entry: [^\n]*|tsconfig: [^\n]*|Build start|Emit types with typescript@[^\n]*)|{})(?:\n|$))+",
+        regex::escape(TS7_WARNING)
+    ))
+    .unwrap()
+});
+// tsup's JS and declaration workers report progress concurrently. Recognize
+// only progress lines, after duration/size redaction, and keep diagnostics out.
+static TSUP_PROGRESS_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        r"(?m)(?:^(?:CJS|ESM|DTS) (?:Build start|⚡️ Build success in <duration>|[^\n]+ <size> (?:B|kB|KB|KiB|MB|MiB|GB|GiB))(?:\n|$))+",
+    )
+    .unwrap()
+});
 // Oxlint's summary line prints its active rule count ("with 95 rules"), which
 // grows with every bundled oxlint upgrade; mask it like thread counts so lint
 // baselines survive routine dep bumps.
@@ -99,6 +130,29 @@ static WINDOWS_MANAGED_NODE_PATH_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
 static WINDOWS_MANAGED_PM_BIN_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r#"(<home>/.vite-plus/package_manager/[^"\r\n]+/bin/[A-Za-z0-9._-]+)\.cmd\b"#)
         .unwrap()
+});
+// A pinned managed install is addressed by a content key under the verified
+// namespace: `.verified-v1/<version>/<32-hex>`. The fingerprint folds in the
+// verified pin (and, for a platform-binary manager, the registry origin, whose
+// ephemeral port varies per run), so normalize the key segment to <key>. An
+// unpinned install has no verified namespace and no key segment. The version
+// before the key is already masked to <version> by the path redactions, but also
+// accept a bare semver so ordering stays robust.
+static PM_INSTALL_KEY_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        r"(/package_manager/[^/]+/\.verified-v1/(?:<version>|\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)/)[0-9a-f]{32}(/)",
+    )
+    .unwrap()
+});
+// The verified namespace places the version after `.verified-v1/`, where the
+// tool-name version mask does not reach it. Mask it to <version> so a pinned
+// install path reads like the unpinned one. In output the version is followed by
+// `/` (the key segment) or `:` (a stat result).
+static PM_VERIFIED_VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        r"(/package_manager/[^/]+/\.verified-v1/)\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?([/:])",
+    )
+    .unwrap()
 });
 static COMMAND_NOT_FOUND_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(
@@ -184,11 +238,11 @@ static VP_UPGRADE_TARGET_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
 // (`vitest: 4.1.10` in a pnpm catalog, `"@vitest/coverage-v8": "4.1.10"` in a
 // resolutions block), which bumps whenever the bundle refreshes. Mask it by
 // key context like the vite-plus version, matching the YAML (`key: ver`) and
-// JSON (`"key": "ver"`) spellings; the `\d` anchor keeps `vitest: catalog:`
-// verbatim.
+// JSON (`"key": "ver"`) spellings, including wildcard override keys such as
+// `'@vitest/browser@*'`. The `\d` anchor keeps `vitest: catalog:` verbatim.
 static MANAGED_TEST_VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(
-        r#"(?m)^(\s*['"]?(?:vitest|@vitest/[a-z0-9-]+)['"]?\s*:\s*['"]?)\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?"#,
+        r#"(?m)^(\s*['"]?(?:vitest|@vitest/[a-z0-9-]+)(?:@\*)?['"]?\s*:\s*['"]?)\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?"#,
     )
     .unwrap()
 });
@@ -242,12 +296,28 @@ static SPINNER_FRAME_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
 static PNPM_PROGRESS_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r"(?m)^(Progress: resolved .*|Packages: \+\d+|\++)\n?").unwrap()
 });
+// Successful registry requests can emit a warning solely because of network
+// latency. Keep request errors and other warnings in the snapshot.
+static PNPM_SLOW_REQUEST_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        r"(?m)^[ \t\u{2009}]*WARN[ \t\u{2009}]+Request took <duration>: https?://\S+[ \t]*(?:\n|$)",
+    )
+    .unwrap()
+});
 // pnpm conditionally explains whether packages were cloned or hard-linked and
 // prints platform-specific store paths. The block depends on store state and
 // filesystem capabilities rather than fixture behavior, so strip it.
 static PNPM_STORE_INFO_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(
         r"(?m)^Packages are (?:cloned|copied|hard linked) from the content-addressable store to the virtual store\.\n  Content-addressable store is at: .*\n  Virtual store is at:\s+.*\n?",
+    )
+    .unwrap()
+});
+// Bun emits this warning based on filesystem timing, sometimes after a
+// same-line lifecycle or resolution progress indicator. Neither is part of the result.
+static BUN_SLOW_FILESYSTEM_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        r"(?m)^[ \t]*(?:[⚙🔍]\u{FE0F}?[ \t]+\S+[ \t]+\[\d+/\d+\][ \t]+)?warn: Slow filesystem detected\. If [^\n]+ is a network drive, consider setting \$BUN_INSTALL_CACHE_DIR to a local folder\.(?:\n|$)",
     )
     .unwrap()
 });
@@ -454,11 +524,19 @@ fn path_variants(path: &str, label: &'static str) -> Vec<(String, &'static str)>
         .into_iter()
         .flatten()
         .flat_map(|p| {
-            [
-                p.to_owned(),
-                p.cow_replace('\\', r"\\").into_owned(),
-                p.cow_replace('\\', "/").into_owned(),
-            ]
+            let forward = p.cow_replace('\\', "/").into_owned();
+            // A file URL keeps the slash before a drive letter (`file:///D:/ws`) and
+            // percent-encodes its path, so also redact that spelling: the URL becomes
+            // `file://<label>` on every platform. Set as a string, so Windows-style paths
+            // work on Unix too; the setter encodes `#` and `?`, and `%` is encoded first,
+            // as `pathToFileURL` does.
+            let url_path = url::Url::parse("file:///").ok().map(|mut url| {
+                url.set_path(&forward.cow_replace('%', "%25"));
+                url.path().to_owned()
+            });
+            [p.to_owned(), p.cow_replace('\\', r"\\").into_owned(), forward]
+                .into_iter()
+                .chain(url_path)
         })
         .collect();
     variants.sort_by_key(|v| std::cmp::Reverse(v.len()));
@@ -511,6 +589,11 @@ pub fn redact_output(
     output = WINDOWS_MANAGED_NODE_BIN_RE.replace_all(&output, "${1}/bin/${2}").into_owned();
     output = WINDOWS_MANAGED_NODE_PATH_RE.replace_all(&output, "${1}/bin${2}").into_owned();
     output = WINDOWS_MANAGED_PM_BIN_RE.replace_all(&output, "${1}").into_owned();
+    // Normalize the managed install's content-key directory segment to <key>.
+    output = PM_INSTALL_KEY_RE.replace_all(&output, "${1}<key>${2}").into_owned();
+    // The verified namespace's version segment is not reached by the tool-name
+    // version mask; normalize it to <version> here.
+    output = PM_VERIFIED_VERSION_RE.replace_all(&output, "${1}<version>${2}").into_owned();
     output = COMMAND_NOT_FOUND_RE.replace_all(&output, "${1}program not found").into_owned();
 
     // Redact UUIDs to "<uuid>"
@@ -521,6 +604,7 @@ pub fn redact_output(
     output = YARN_ELAPSED_RE.replace_all(&output, "${1}<duration>").into_owned();
     output = DURATION_RE.replace_all(&output, "<duration>").into_owned();
     output = VITEST_TIMING_RE.replace_all(&output, "$1 (<timing>)").into_owned();
+    output = VITEST_TRANSFORM_CACHE_HINT_RE.replace_all(&output, "").into_owned();
 
     // Redact semver-shaped versions (bundled tool versions, Node versions).
     output = VERSION_RE.replace_all(&output, "<version>").into_owned();
@@ -646,13 +730,15 @@ pub fn redact_output(
     output = STASH_HASH_RE.replace_all(&output, "${1}<hash>${2}").into_owned();
 
     // Mask the local-registry proxy's ephemeral port, npm's timestamped debug
-    // log name, live spinner frames, and pnpm's nondeterministic progress lines
+    // log name, live spinner frames, and timing-dependent pnpm/Bun diagnostics
     output = LOCAL_REGISTRY_URL_RE.replace_all(&output, "http://127.0.0.1:<port>").into_owned();
     output = VITEST_API_PORT_RE.replace_all(&output, "${1}<port>").into_owned();
     output = NPM_LOG_NAME_RE.replace_all(&output, "<timestamp>${1}").into_owned();
     output = SPINNER_FRAME_RE.replace_all(&output, "\u{283F}").into_owned();
     output = PNPM_PROGRESS_RE.replace_all(&output, "").into_owned();
+    output = PNPM_SLOW_REQUEST_RE.replace_all(&output, "").into_owned();
     output = PNPM_STORE_INFO_RE.replace_all(&output, "").into_owned();
+    output = BUN_SLOW_FILESYSTEM_RE.replace_all(&output, "").into_owned();
 
     if output.contains("Done in <duration> using pnpm <version>")
         || PNPM_REMOVAL_COUNT_RE.is_match(&output)
@@ -702,6 +788,18 @@ pub fn redact_output(
         output = sort_diagnostic_blocks(&output);
     }
 
+    if output.contains(TS7_WARNING) {
+        output = PACK_STARTUP_RE
+            .replace_all(&output, |caps: &regex::Captures| normalize_pack_startup(&caps[0]))
+            .into_owned();
+    }
+
+    if output.contains("DTS Build start") {
+        output = TSUP_PROGRESS_RE
+            .replace_all(&output, |caps: &regex::Captures| normalize_tsup_progress(&caps[0]))
+            .into_owned();
+    }
+
     output
 }
 
@@ -713,6 +811,54 @@ pub fn redact_output(
 #[expect(clippy::disallowed_types, reason = "String required by regex replace_all API")]
 pub fn redact_version_probe_output(output: String) -> String {
     BARE_VERSION_BLOCK_RE.replace_all(&output, "${1}<version>${2}").into_owned()
+}
+
+#[expect(clippy::disallowed_types, reason = "String return required by regex replace_all API")]
+fn normalize_pack_startup(block: &str) -> String {
+    let lines: Vec<_> = block.split('\n').collect();
+    let warnings = lines.iter().filter(|&&line| line == TS7_WARNING).count();
+    let starts = lines.iter().filter(|&&line| line == "ℹ Build start").count();
+    let entries = lines.iter().filter(|line| line.starts_with("ℹ entry: ")).count();
+    if warnings == 0 || starts != 1 || entries != 1 {
+        return block.to_owned();
+    }
+
+    let mut ordered = Vec::with_capacity(lines.len());
+    for line in lines {
+        if line == TS7_WARNING {
+            continue;
+        }
+        ordered.push(line);
+        if line == "ℹ Build start" {
+            ordered.extend(std::iter::repeat_n(TS7_WARNING, warnings));
+        }
+    }
+    ordered.join("\n")
+}
+
+#[expect(clippy::disallowed_types, reason = "String return required by regex replace_all API")]
+fn normalize_tsup_progress(block: &str) -> String {
+    const PHASES: [&str; 3] = ["CJS ", "ESM ", "DTS "];
+    let mut lines: Vec<_> = block.split('\n').collect();
+    for phase in PHASES {
+        let progress: Vec<_> = lines.iter().filter_map(|line| line.strip_prefix(phase)).collect();
+        if progress.is_empty() {
+            continue;
+        }
+        let starts = progress.iter().filter(|&&line| line == "Build start").count();
+        let successes =
+            progress.iter().filter(|&&line| line == "⚡️ Build success in <duration>").count();
+        if starts != 1 || successes != 1 {
+            return block.to_owned();
+        }
+    }
+
+    // Stable sorting preserves every line and each worker's order.
+    // An empty final element preserves the original trailing newline.
+    lines.sort_by_key(|line| {
+        PHASES.iter().position(|phase| line.starts_with(phase)).unwrap_or(PHASES.len())
+    });
+    lines.join("\n")
 }
 
 #[expect(

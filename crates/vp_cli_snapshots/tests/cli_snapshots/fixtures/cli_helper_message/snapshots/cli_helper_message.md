@@ -28,7 +28,7 @@ Develop:
 Execute:
   run    Run tasks (also available as standalone `vpr`)
   exec   Execute a command from local node_modules/.bin
-  node   Run a Node.js script (shorthand for `env exec node`)
+  node   Run plain Node.js (`env exec node`); `vpx <file>` runs TypeScript
   dlx    Execute a package binary without installing it as a dependency
   cache  Manage the task cache
 
@@ -107,7 +107,7 @@ Arguments:
 
 Options:
   -P, --prod                   Do not install devDependencies
-  -D, --dev                    Only install devDependencies (install) / Save to devDependencies (add)
+  -D, --dev                    Install devDependencies (install) / Save to devDependencies (add)
   --no-optional                Do not install optionalDependencies
   --frozen-lockfile            Fail if lockfile needs to be updated (CI mode)
   --no-frozen-lockfile         Allow lockfile updates (opposite of --frozen-lockfile)
@@ -117,7 +117,7 @@ Options:
   -f, --force                  Force reinstall all dependencies
   --ignore-scripts             Do not run lifecycle scripts
   --no-lockfile                Don't read or generate lockfile
-  --fix-lockfile               Fix broken lockfile entries (pnpm and yarn@2+ only)
+  --fix-lockfile               Fix broken lockfile entries (pnpm and yarn@4+ only)
   --shamefully-hoist           Create flat `node_modules` (pnpm only)
   --resolution-only            Re-run resolution for peer dependency analysis (pnpm only)
   --silent                     Suppress output (silent mode)
@@ -132,7 +132,7 @@ Options:
   --concurrency <CONCURRENCY>  Number of global package installs to run in parallel (only with -g)
   -h, --help                   Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management/
 ```
 
 ## `vp add -h`
@@ -161,7 +161,7 @@ Options:
   --allow-build <NAMES>               A list of package names allowed to run postinstall
   --ignore-scripts                    Do not run lifecycle scripts
   --no-optional                       Do not install optionalDependencies
-  --frozen-lockfile                   Fail if lockfile needs to be updated
+  --frozen-lockfile                   Don't update lockfile
   --no-frozen-lockfile                Allow lockfile updates
   --lockfile-only                     Only update lockfile, don't install
   --prefer-offline                    Use cached packages when available
@@ -178,7 +178,7 @@ Options:
   --concurrency <CONCURRENCY>         Number of global package installs to run in parallel (only with -g)
   -h, --help                          Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management/
 ```
 
 ## `vp remove -h`
@@ -207,7 +207,7 @@ Options:
   --dry-run             Preview what would be removed without actually removing (only with -g)
   -h, --help            Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management/
 ```
 
 ## `vp update -h`
@@ -234,15 +234,15 @@ Options:
   -r, --recursive              Update recursively in all workspace packages
   --filter <PATTERN>           Filter packages in monorepo (can be used multiple times)
   -w, --workspace-root         Include workspace root
-  -D, --dev                    Update only devDependencies
-  -P, --prod                   Update only dependencies (production)
+  -D, --dev                    Update devDependencies
+  -P, --prod                   Update dependencies (production)
   -i, --interactive            Interactive mode
-  --no-optional                Don't update optionalDependencies
+  --no-optional                Exclude optionalDependencies
   --no-save                    Update lockfile only, don't modify package.json
   --workspace                  Only update if package exists in workspace (pnpm-specific)
   -h, --help                   Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management/
 ```
 
 ## `vp link -h`
@@ -263,7 +263,7 @@ Arguments:
 Options:
   -h, --help  Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management/
 ```
 
 ## `vp unlink -h`
@@ -285,7 +285,7 @@ Options:
   -r, --recursive  Unlink in every workspace package
   -h, --help       Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management/
 ```
 
 ## `vp dedupe -h`
@@ -306,7 +306,7 @@ Options:
   --check     Check if deduplication would make changes
   -h, --help  Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management/
 ```
 
 ## `vp outdated -h`
@@ -331,7 +331,7 @@ Options:
   --filter <PATTERN>           Filter packages in monorepo
   -w, --workspace-root         Include workspace root
   -P, --prod                   Only production and optional dependencies
-  -D, --dev                    Only dev dependencies
+  -D, --dev                    Include dev dependencies
   --no-optional                Exclude optional dependencies
   --compatible                 Only show compatible versions
   --sort-by <FIELD>            Sort results by field
@@ -339,7 +339,7 @@ Options:
   --concurrency <CONCURRENCY>  Number of global package checks to run in parallel (only with -g)
   -h, --help                   Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management/
 ```
 
 ## `vp why -h`
@@ -372,7 +372,7 @@ Options:
   --find-by <FINDER_NAME>  Use a finder function defined in .pnpmfile.cjs
   -h, --help               Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management/
 ```
 
 ## `vp info -h`
@@ -395,7 +395,7 @@ Options:
   --json      Output in JSON format
   -h, --help  Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management/
 ```
 
 ## `vp pm -h`
@@ -417,11 +417,14 @@ Commands:
   patch-commit      Commit a prepared package patch
   pack              Create a tarball of the package
   list              List installed packages [alias: ls]
+  licenses          Inspect licenses of installed dependencies
   view, info, show  View package information from the registry
   version           Forward the native package version command
+  pkg               Manage package.json fields
   publish           Publish package to registry
   stage             Stage a package for publishing (npm staged publishing workflow)
   owner             Manage package owners [alias: author]
+  team              Manage organization teams and memberships
   cache             Manage package cache
   config            Manage package manager configuration [alias: c]
   login             Log in to a registry [alias: adduser]
@@ -439,7 +442,7 @@ Commands:
 Options:
   -h, --help  Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management/
 ```
 
 ## `vp pm ci -h`
@@ -459,7 +462,7 @@ Arguments:
 Options:
   -h, --help  Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management/
 ```
 
 ## `vp env`

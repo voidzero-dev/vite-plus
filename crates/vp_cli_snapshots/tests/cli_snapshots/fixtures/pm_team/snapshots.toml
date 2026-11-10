@@ -1,0 +1,59 @@
+[[case]]
+name = "pm_team_npm"
+vp = ["local", "global"]
+steps = [
+  { argv = ["vp", "pm", "team", "--help"] },
+  { argv = ["vp", "pm", "team", "add", "--help"] },
+  { argv = ["vp", "pm", "team", "ls", "@org", "--", "--version"], snapshot = false },
+  { argv = ["node", "registry.mjs"], comment = "all team operations use a loopback registry with fake credentials", timeout = 120000 },
+]
+
+[[case]]
+name = "pm_team_pnpm"
+vp = ["local", "global"]
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "pnpm@11.13.0"], snapshot = false },
+  { argv = ["vp", "pm", "team", "ls", "@org", "--", "--version"], snapshot = false },
+  { argv = ["node", "registry.mjs"], comment = "pnpm uses its native team command at the minimum supported version", timeout = 120000 },
+]
+
+[[case]]
+name = "pm_team_yarn_classic"
+vp = ["local", "global"]
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@1.22.22"], snapshot = false },
+  { argv = ["vp", "pm", "team", "ls", "@org", "--", "--version"], snapshot = false },
+  { argv = ["node", "registry.mjs"], comment = "Yarn Classic uses its native team command without correcting scope or username values", timeout = 120000 },
+]
+
+[[case]]
+name = "pm_team_old_pnpm"
+vp = ["local", "global"]
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "pnpm@11.12.0"], snapshot = false },
+  { argv = ["vp", "pm", "team", "ls", "@org", "--", "--version"], snapshot = false },
+  { argv = ["node", "registry.mjs"], comment = "older pnpm versions warn and execute npm team without dropping mutations", timeout = 120000 },
+]
+
+[[case]]
+name = "pm_team_yarn_modern"
+vp = ["local", "global"]
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@4.18.0"], snapshot = false },
+  { argv = ["vp", "pm", "team", "create", "@org:developers"], comment = "Yarn Modern warns and succeeds without running any team command" },
+  { argv = ["vp", "pm", "team", "add", "@org:developers", "alice", "--json", "--registry", "http://127.0.0.1:1", "--otp", "123456"] },
+  { argv = ["vp", "pm", "team", "ls", "@org"] },
+  { argv = ["vp", "pm", "team", "list", "@org:developers", "--json", "--", "--help"] },
+  { argv = ["vp", "pm", "team", "rm", "@org:developers", "alice"] },
+  { argv = ["vp", "pm", "team", "remove", "@org:developers", "alice"] },
+  { argv = ["vp", "pm", "team", "destroy", "@org:developers"] },
+]
+
+[[case]]
+name = "pm_team_bun"
+vp = ["local", "global"]
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "bun@1.4.0"], snapshot = false },
+  { argv = ["vp", "pm", "team", "ls", "@org", "--", "--version"], snapshot = false },
+  { argv = ["node", "registry.mjs"], comment = "Bun warns and executes npm team while preserving registry failures", timeout = 120000 },
+]

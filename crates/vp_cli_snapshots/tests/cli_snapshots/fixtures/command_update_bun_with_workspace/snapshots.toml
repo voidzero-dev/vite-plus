@@ -7,3 +7,35 @@ steps = [
   { argv = ["vp", "update", "testnpm2", "--filter", "app", "--", "--silent"], comment = "should update package in packages/app" },
   { argv = ["vpt", "print-file", "packages/app/package.json"], continue-on-failure = true },
 ]
+
+[[case]]
+name = "bun_recursive_update_from_child"
+vp = "global"
+local-registry = true
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "write-file", "package.json", '{"name":"root","private":true,"packageManager":"bun@1.4.0","workspaces":["packages/*"],"dependencies":{"is-number":"6.0.0"}}'], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/app/package.json", '{"name":"app","version":"1.0.0","dependencies":{"is-number":"6.0.0"}}'], snapshot = false },
+  { argv = ["vpt", "mkdir", "packages/utils"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/utils/package.json", '{"name":"utils","version":"1.0.0","dependencies":{"is-number":"6.0.0"}}'], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "update", "--recursive", "is-number@7.0.0", "--", "--ignore-scripts"], cwd = "packages/app", comment = "Bun 1.4 updates the root and both workspaces even when invoked from a child" },
+  ["vpt", "print-file", "package.json", "packages/app/package.json", "packages/utils/package.json"],
+  ["vpt", "print-file", "bun.lock"],
+]
+
+[[case]]
+name = "bun_recursive_update_respects_filter"
+vp = "global"
+local-registry = true
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "write-file", "package.json", '{"name":"root","private":true,"packageManager":"bun@1.4.0","workspaces":["packages/*"],"dependencies":{"is-number":"6.0.0"}}'], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/app/package.json", '{"name":"app","version":"1.0.0","dependencies":{"is-number":"6.0.0"}}'], snapshot = false },
+  { argv = ["vpt", "mkdir", "packages/utils"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/utils/package.json", '{"name":"utils","version":"1.0.0","dependencies":{"is-number":"6.0.0"}}'], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "update", "--recursive", "--filter", "utils", "is-number@7.0.0", "--", "--ignore-scripts"], cwd = "packages/app", comment = "an explicit filter limits recursive updates to the selected workspace" },
+  ["vpt", "print-file", "package.json", "packages/app/package.json", "packages/utils/package.json"],
+  ["vpt", "print-file", "bun.lock"],
+]

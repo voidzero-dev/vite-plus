@@ -1,0 +1,11 @@
+{
+  "name": "standalone-tsdown-library",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsdown"
+  },
+  "devDependencies": {
+    "tsdown": "0.23.0"
+  }
+}

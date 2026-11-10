@@ -93,7 +93,7 @@ function propagationTimeoutError(
   pending: ReadonlyMap<string, string>,
   timeoutSeconds: number,
 ): Error {
-  const packageList = [...pending].map(([name, version]) => `${name}@${version}`).join(', ');
+  const packageList = Array.from(pending, ([name, version]) => `${name}@${version}`).join(', ');
   return new Error(
     `Timed out after ${timeoutSeconds}s waiting for npm propagation: ${packageList}`,
   );

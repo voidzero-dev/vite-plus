@@ -17,9 +17,13 @@ export default {
     {
       name: 'dev-ready-milestone',
       configureServer(server) {
-        server.httpServer?.once('listening', () => {
+        // The listening event precedes CLI shortcut registration. Wait until
+        // the input handler is attached before the runner sends `q`.
+        const bindCLIShortcuts = server.bindCLIShortcuts.bind(server);
+        server.bindCLIShortcuts = (options) => {
+          bindCLIShortcuts(options);
           emitMilestone('dev-server:ready');
-        });
+        };
       },
     },
   ],

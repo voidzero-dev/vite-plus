@@ -11,8 +11,8 @@ use std::process::ExitStatus;
 use chrono::Local;
 use console::style;
 use vp_pm_cli::{
-    PackageManagerType, package_manager_bin_path, package_manager_install_dir,
-    resolve_package_manager_version,
+    PackageManagerType, package_manager_bin_path, resolve_package_manager_install_dir,
+    resolve_package_manager_version_for_cwd,
 };
 use vp_shared::output;
 use vt_path::{AbsolutePath, AbsolutePathBuf};
@@ -23,7 +23,7 @@ use super::{
     package_manager,
     package_metadata::PackageMetadata,
 };
-use crate::{cli::exit_status, error::Error, shim};
+use crate::{cli::exit_status, commands::global::install::extract_binaries, error::Error, shim};
 
 /// Core tools (node, npm, npx)
 const CORE_TOOLS: &[&str] = &["node", "npm", "npx"];
@@ -160,24 +160,30 @@ async fn execute_package_manager_tool(
         return Ok(None);
     };
     let resolution = package_manager::resolve_shim_for(cwd, expected_type).await?;
-    let (version, source) = match &resolution {
+    let (version, source, expected_hash) = match &resolution {
         Some(resolution) => (
             resolution.version.to_string(),
             resolution.source_path.as_ref().map_or_else(
                 || resolution.source.to_string(),
                 |path| path.as_path().display().to_string(),
             ),
+            resolution.hash.clone(),
         ),
         None if expected_type == PackageManagerType::Npm => return Ok(None),
         None => (
-            resolve_package_manager_version(expected_type, "latest").await?.to_string(),
+            resolve_package_manager_version_for_cwd(cwd, expected_type, "latest")
+                .await?
+                .to_string(),
             "registry fallback".into(),
+            None,
         ),
     };
 
-    let Some(install_dir) = package_manager_install_dir(expected_type, &version) else {
-        return Ok(None);
-    };
+    // The directory the shim selects for this pin (an unpinned manager uses the
+    // version-directory root); the existence check below reports whether it is
+    // actually present.
+    let install_dir =
+        resolve_package_manager_install_dir(expected_type, &version, expected_hash.as_deref())?;
     let bin_name = expected_type.bin_name_for_tool(tool);
     let tool_path = package_manager_bin_path(&install_dir, bin_name);
 
@@ -346,35 +352,11 @@ fn locate_package_binary(
     let package_json: serde_json::Value = serde_json::from_str(&content)
         .map_err(|e| Error::Other(format!("Failed to parse package.json: {e}").into()))?;
 
-    let binary_path = match package_json.get("bin") {
-        Some(serde_json::Value::String(path)) => {
-            // Single binary - check if it matches the name
-            let pkg_name = package_json["name"].as_str().unwrap_or("");
-            let expected_name = pkg_name.split('/').last().unwrap_or(pkg_name);
-            if expected_name == binary_name {
-                node_modules_dir.join(path)
-            } else {
-                return Err(Error::Other(
-                    format!("Binary {} not found in package", binary_name).into(),
-                ));
-            }
-        }
-        Some(serde_json::Value::Object(map)) => {
-            // Multiple binaries - find the one we need
-            if let Some(serde_json::Value::String(path)) = map.get(binary_name) {
-                node_modules_dir.join(path)
-            } else {
-                return Err(Error::Other(
-                    format!("Binary {} not found in package", binary_name).into(),
-                ));
-            }
-        }
-        _ => {
-            return Err(Error::Other(
-                format!("No bin field in package.json for {}", package_name).into(),
-            ));
-        }
-    };
-
-    Ok(binary_path)
+    let bin = extract_binaries(&package_json, &node_modules_dir)
+        .into_iter()
+        .find(|bin| bin.name == binary_name)
+        .ok_or_else(|| {
+            Error::Other(format!("Binary {} not found in package", binary_name).into())
+        })?;
+    Ok(node_modules_dir.join(&bin.path))
 }

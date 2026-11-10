@@ -31,13 +31,6 @@ check package.json
     "vite": "catalog:",
     "vite-plus": "catalog:"
   },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
-  },
   "scripts": {
     "prepare": "vp config"
   }

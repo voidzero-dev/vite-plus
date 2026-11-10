@@ -11,7 +11,7 @@ A declared Vite `root` field is a root intent signal without `index.html`.
 
 ```
 
-  VITE+ <version>
+  VITE+ <version>  ready in <duration>
 
   ➜  Local:   http://127.0.0.1:<port>/
   ➜  press h + enter to show help
@@ -21,7 +21,7 @@ A declared Vite `root` field is a root intent signal without `index.html`.
 
 ```
 
-  VITE+ <version>
+  VITE+ <version>  ready in <duration>
 
   ➜  Local:   http://127.0.0.1:<port>/
   ➜  press h + enter to show help

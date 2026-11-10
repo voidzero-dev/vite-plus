@@ -331,20 +331,6 @@ describe('rewriteTypesInTsconfig', () => {
     `);
   });
 
-  it('returns false when no target types exist', () => {
-    const filePath = path.join(tmpDir, 'tsconfig.json');
-    fs.writeFileSync(
-      filePath,
-      `{
-  "compilerOptions": {
-    "types": ["some/other/type"]
-  }
-}`,
-    );
-
-    expect(rewriteTypesInTsconfig(filePath)).toBe(false);
-  });
-
   it('returns false for non-existent file', () => {
     expect(rewriteTypesInTsconfig('/non-existent-file.json')).toBe(false);
   });

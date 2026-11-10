@@ -19,9 +19,6 @@ Saved bun.lock (2 packages) [<duration>]
 node_modules: missing
 ```
 
-## `vpt cp bun.lock before.lock`
-
-
 ## `vp install ./dep-v2 --frozen-lockfile`
 
 a named-package install must not rewrite a frozen lockfile
@@ -36,10 +33,24 @@ error: lockfile had changes, but lockfile is frozen
 note: try re-running without --frozen-lockfile and commit the updated lockfile
 ```
 
-## `node assert-lockfile-unchanged.mjs bun.lock`
+## `vpt print-file bun.lock`
 
 ```
-lockfile unchanged
+{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "install-package-options",
+      "dependencies": {
+        "install-option-dep": "./dep",
+      },
+    },
+  },
+  "packages": {
+    "install-option-dep": ["install-option-dep@file:dep", {}],
+  }
+}
 ```
 
 ## `vpt stat-file node_modules --assert missing`

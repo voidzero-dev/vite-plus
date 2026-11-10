@@ -3,10 +3,10 @@ name = "install_yarn_corepack_hash"
 vp = "global"
 env = { YARN_ENABLE_TELEMETRY = "0" }
 steps = [
-  { argv = ["vpt", "rm", "-rf", "$VP_HOME/package_manager/yarn/4.17.1", "$VP_HOME/package_manager/yarn/4.17.1.lock"], comment = "Ensure the Corepack-pinned Yarn version is not cached", snapshot = false },
-  { argv = ["vpt", "stat-file", "$VP_HOME/package_manager/yarn/4.17.1", "--assert", "missing"], comment = "Yarn 4.17.1 is not in the cache" },
+  { argv = ["vpt", "rm", "-rf", "$VP_HOME/package_manager/yarn/4.17.1", "$VP_HOME/package_manager/yarn/.verified-v1/4.17.1", "$VP_HOME/package_manager/yarn/4.17.1.lock"], comment = "Ensure the Corepack-pinned Yarn version is not cached", snapshot = false },
+  { argv = ["vpt", "stat-file", "$VP_HOME/package_manager/yarn/.verified-v1/4.17.1", "--assert", "missing"], comment = "Yarn 4.17.1 is not in the cache" },
   { argv = ["vp", "install"], comment = "A first install accepts the hash that Corepack wrote", timeout = 120000 },
-  { argv = ["vpt", "stat-file", "$VP_HOME/package_manager/yarn/4.17.1/yarn/bin/yarn.js", "--assert", "file"], comment = "The cache holds the Yarn CLI that vp verified" },
+  { argv = ["vpt", "stat-file", "$VP_HOME/package_manager/yarn/.verified-v1/4.17.1/3156b767c366db0f2c765c40a66f4ace/yarn/bin/yarn.js", "--assert", "file"], comment = "The cache holds the Yarn CLI that vp verified, under the content key of the pinned hash (short_fingerprint of the packageManager hash)" },
 ]
 
 [[case]]
@@ -15,7 +15,7 @@ vp = "global"
 comment = "Every environment entry point must preserve and verify the same Corepack integrity suffix without repeating the expensive cache setup in separate cases."
 env = { YARN_ENABLE_TELEMETRY = "0" }
 steps = [
-  { argv = ["vpt", "rm", "-rf", "$VP_HOME/package_manager/yarn/4.17.1", "$VP_HOME/package_manager/yarn/4.17.1.lock"], comment = "Ensure the Corepack-pinned Yarn version is not cached", snapshot = false },
+  { argv = ["vpt", "rm", "-rf", "$VP_HOME/package_manager/yarn/4.17.1", "$VP_HOME/package_manager/yarn/.verified-v1/4.17.1", "$VP_HOME/package_manager/yarn/4.17.1.lock"], comment = "Ensure the Corepack-pinned Yarn version is not cached", snapshot = false },
   { argv = ["vp", "install"], comment = "Cache the verified Yarn CLI", timeout = 120000, snapshot = false },
   { argv = ["vp", "env", "install", "pm"], comment = "The explicit environment install accepts the verified project hash" },
   { argv = ["vpt", "replace-file-content", "package.json", "b7ad4697", "b7ad4698"], comment = "Change the pin to a hash that the cached CLI does not match", snapshot = false },
@@ -30,10 +30,10 @@ name = "run_yarn_corepack_hash"
 vp = "global"
 env = { YARN_ENABLE_TELEMETRY = "0" }
 steps = [
-  { argv = ["vpt", "rm", "-rf", "$VP_HOME/package_manager/yarn/4.17.1", "$VP_HOME/package_manager/yarn/4.17.1.lock"], comment = "Ensure the Corepack-pinned Yarn version is not cached", snapshot = false },
-  { argv = ["vpt", "stat-file", "$VP_HOME/package_manager/yarn/4.17.1", "--assert", "missing"], comment = "Yarn 4.17.1 is not in the cache" },
+  { argv = ["vpt", "rm", "-rf", "$VP_HOME/package_manager/yarn/4.17.1", "$VP_HOME/package_manager/yarn/.verified-v1/4.17.1", "$VP_HOME/package_manager/yarn/4.17.1.lock"], comment = "Ensure the Corepack-pinned Yarn version is not cached", snapshot = false },
+  { argv = ["vpt", "stat-file", "$VP_HOME/package_manager/yarn/.verified-v1/4.17.1", "--assert", "missing"], comment = "Yarn 4.17.1 is not in the cache" },
   { argv = ["vp", "run", "smoke"], comment = "A first vp run accepts the hash and runs the task", timeout = 120000 },
-  { argv = ["vpt", "stat-file", "$VP_HOME/package_manager/yarn/4.17.1/yarn/bin/yarn.js", "--assert", "file"], comment = "vp run wrote the verified Yarn CLI to the cache" },
+  { argv = ["vpt", "stat-file", "$VP_HOME/package_manager/yarn/.verified-v1/4.17.1/3156b767c366db0f2c765c40a66f4ace/yarn/bin/yarn.js", "--assert", "file"], comment = "vp run wrote the verified Yarn CLI to the cache, under the content key of the pinned hash" },
   { argv = ["vp", "run", "smoke"], comment = "A second vp run uses the cached Yarn CLI" },
 ]
 
@@ -42,7 +42,7 @@ name = "run_yarn_corepack_hash_mismatch"
 vp = "global"
 env = { YARN_ENABLE_TELEMETRY = "0" }
 steps = [
-  { argv = ["vpt", "rm", "-rf", "$VP_HOME/package_manager/yarn/4.17.1", "$VP_HOME/package_manager/yarn/4.17.1.lock"], comment = "Ensure the Corepack-pinned Yarn version is not cached", snapshot = false },
+  { argv = ["vpt", "rm", "-rf", "$VP_HOME/package_manager/yarn/4.17.1", "$VP_HOME/package_manager/yarn/.verified-v1/4.17.1", "$VP_HOME/package_manager/yarn/4.17.1.lock"], comment = "Ensure the Corepack-pinned Yarn version is not cached", snapshot = false },
   { argv = ["vp", "install"], comment = "Cache the verified Yarn CLI", timeout = 120000, snapshot = false },
   { argv = ["vpt", "replace-file-content", "package.json", "b7ad4697", "b7ad4698"], comment = "Change the pin to a hash that the cached CLI does not match", snapshot = false },
   { argv = ["vp", "run", "smoke"], comment = "vp run reports the integrity failure. It does not start the task", continue-on-failure = true },

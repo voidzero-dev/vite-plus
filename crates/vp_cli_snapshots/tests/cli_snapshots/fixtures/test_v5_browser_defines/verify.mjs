@@ -25,12 +25,25 @@ try {
     const runner = await createVitest({ config: false, watch: false, reporters: [] }, configFor(name));
     try {
       if (name === 'injected') {
+        // Vitest 5.0.4 rejects projects that share sequence.groupOrder but
+        // resolve different maxWorkers, and runtime-injected projects resolve
+        // maxWorkers differently from the root project. Give each injected
+        // project its own group.
+        const browserProject = project('injected-browser');
+        const nodeProject = project('injected-node', false);
+        browserProject.test.sequence = { groupOrder: 1 };
+        nodeProject.test.sequence = { groupOrder: 2 };
         await runner.injectTestProject([
-          { extends: false, ...project('injected-browser') },
-          { extends: false, ...project('injected-node', false) },
+          { extends: false, ...browserProject },
+          { extends: false, ...nodeProject },
         ]);
       }
       assert.equal(runner.projects.length, count, name);
+      for (const project of runner.projects) {
+        if (project.config.browser.enabled) {
+          assert.equal(project.config.api.port, 0, `${name}: ${project.name} must use an OS-assigned port`);
+        }
+      }
       const servers = new Set(runner.projects.map((project) => project.vite));
       if (name === 'shared' || name === 'shared-node') assert.equal(servers.size, 1);
       if (name === 'separate') assert.equal(servers.size, 2);

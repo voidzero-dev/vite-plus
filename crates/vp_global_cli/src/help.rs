@@ -25,8 +25,8 @@ fn documentation_url_for_command_path(command_path: &[&str]) -> Option<String> {
             "install" | "add" | "remove" | "update" | "dedupe" | "outdated" | "list" | "ls" | "why"
             | "info" | "view" | "show" | "link" | "unlink" | "rebuild" | "pm",
             ..,
-        ] => "/guide/install",
-        ["dlx"] => "/guide/vpx",
+        ] => "/guide/package-management/",
+        ["dlx"] => "/guide/package-management/dlx",
         ["env", ..] => "/guide/env",
         ["toolchain" | "upgrade"] => "/guide/upgrade",
         ["implode"] => "/guide/implode",
@@ -284,7 +284,10 @@ pub fn top_level_help_doc() -> HelpDoc {
                 vec![
                     row("run", "Run tasks (also available as standalone `vpr`)"),
                     row("exec", "Execute a command from local node_modules/.bin"),
-                    row("node", "Run a Node.js script (shorthand for `env exec node`)"),
+                    row(
+                        "node",
+                        "Run plain Node.js (`env exec node`); `vpx <file>` runs TypeScript",
+                    ),
                     row("dlx", "Execute a package binary without installing it as a dependency"),
                     row("cache", "Manage the task cache"),
                 ],
@@ -725,7 +728,11 @@ Options:
     fn docs_url_is_mapped_for_grouped_commands() {
         assert_eq!(
             documentation_url_for_command_path(&["add"]),
-            Some(vp_shared::documentation_url("/guide/install"))
+            Some(vp_shared::documentation_url("/guide/package-management/"))
+        );
+        assert_eq!(
+            documentation_url_for_command_path(&["dlx"]),
+            Some(vp_shared::documentation_url("/guide/package-management/dlx"))
         );
         assert_eq!(
             documentation_url_for_command_path(&["env", "list"]),

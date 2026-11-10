@@ -27,13 +27,6 @@ check prepare script added, lint-staged removed from devDeps
     "vite": "catalog:",
     "vite-plus": "catalog:"
   },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
-  },
   "scripts": {
     "prepare": "vp config"
   }

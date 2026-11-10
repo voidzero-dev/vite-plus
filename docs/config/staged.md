@@ -1,6 +1,6 @@
 # Staged Config
 
-`vp staged` reads staged-file rules from the `staged` block in `vite.config.ts`. See the [Commit hooks guide](/guide/commit-hooks).
+`vp staged` reads staged-file rules from the `staged` block in `vite.config.ts`. See the [Commit Hooks](/guide/commit-hooks).
 
 ## Example
 
@@ -9,7 +9,7 @@ import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   staged: {
-    '*.{js,ts,tsx,vue,svelte}': 'vp check --fix',
+    '*': 'vp check --fix',
   },
 });
 ```

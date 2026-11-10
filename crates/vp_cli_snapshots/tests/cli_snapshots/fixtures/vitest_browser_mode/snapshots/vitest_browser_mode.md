@@ -4,10 +4,8 @@
 
 ```
 $ vp test
-Plugin "vitest:mocks:interceptor" defines Vite-specific hooks (configureServer) in a plugin returned from applyToEnvironment. These hooks will be ignored.
 
  RUN  <version> <workspace>
-      API started at http://localhost:<port>/
 
  ✓  chromium  src/foo.test.js (1 test) <duration>
 
@@ -26,10 +24,8 @@ Plugin "vitest:mocks:interceptor" defines Vite-specific hooks (configureServer) 
 
 ```
 $ vp test ○ cache miss: 'src/foo.js' modified, executing
-Plugin "vitest:mocks:interceptor" defines Vite-specific hooks (configureServer) in a plugin returned from applyToEnvironment. These hooks will be ignored.
 
  RUN  <version> <workspace>
-      API started at http://localhost:<port>/
 
  ✓  chromium  src/foo.test.js (1 test) <duration>
 
@@ -48,10 +44,8 @@ Plugin "vitest:mocks:interceptor" defines Vite-specific hooks (configureServer) 
 
 ```
 $ vp test ◉ cache hit, replaying
-Plugin "vitest:mocks:interceptor" defines Vite-specific hooks (configureServer) in a plugin returned from applyToEnvironment. These hooks will be ignored.
 
  RUN  <version> <workspace>
-      API started at http://localhost:<port>/
 
  ✓  chromium  src/foo.test.js (1 test) <duration>
 

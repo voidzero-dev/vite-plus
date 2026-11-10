@@ -38,14 +38,14 @@ export function progress({
     switch (state) {
       case 'initial':
       case 'active':
-        return color.magenta;
+        return color.blue;
       case 'error':
       case 'cancel':
         return color.red;
       case 'submit':
         return completeColor;
       default:
-        return color.magenta;
+        return color.blue;
     }
   };
   const drawProgress = (state: State, msg: string) => {

@@ -1,7 +1,63 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
+import { downloadPackageManager as downloadPackageManagerBinding } from '../../../binding/index.js';
 import { PackageManager } from '../../types/index.ts';
-import { resolveGitInit, shouldIgnoreScriptsForAutoInstall } from '../prompts.ts';
+import {
+  downloadPackageManager,
+  resolveGitInit,
+  shouldIgnoreScriptsForAutoInstall,
+} from '../prompts.ts';
+
+vi.mock('../../../binding/index.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../binding/index.js')>()),
+  downloadPackageManager: vi.fn(),
+}));
+
+describe('downloadPackageManager', () => {
+  it('forwards the target workspace directory to the native binding', async () => {
+    const result = {
+      name: 'pnpm',
+      version: '11.24.0',
+      installDir: '/cache/pnpm',
+      binPrefix: '/cache/pnpm/bin',
+      packageName: 'pnpm',
+    };
+    vi.mocked(downloadPackageManagerBinding).mockResolvedValueOnce(result);
+    expect(
+      await downloadPackageManager(PackageManager.pnpm, 'latest', false, true, '/target/workspace'),
+    ).toBe(result);
+    expect(downloadPackageManagerBinding).toHaveBeenLastCalledWith({
+      name: 'pnpm',
+      version: 'latest',
+      cwd: '/target/workspace',
+      expectedHash: undefined,
+    });
+  });
+
+  it('preserves the integrity hash from a package manager override', async () => {
+    vi.mocked(downloadPackageManagerBinding).mockResolvedValueOnce({
+      name: 'pnpm',
+      version: '10.6.1',
+      installDir: '/cache/pnpm',
+      binPrefix: '/cache/pnpm/bin',
+      packageName: 'pnpm',
+    });
+    await downloadPackageManager(
+      PackageManager.pnpm,
+      '10.6.1',
+      false,
+      true,
+      '/target/workspace',
+      'sha512.0123456789abcdef',
+    );
+    expect(downloadPackageManagerBinding).toHaveBeenLastCalledWith({
+      name: 'pnpm',
+      version: '10.6.1',
+      cwd: '/target/workspace',
+      expectedHash: 'sha512.0123456789abcdef',
+    });
+  });
+});
 
 describe('resolveGitInit', () => {
   it('never initializes git when adding a package to an existing monorepo', async () => {

@@ -1,0 +1,7 @@
+{
+  "name": "test-cache-paths-workspace",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ]
+}

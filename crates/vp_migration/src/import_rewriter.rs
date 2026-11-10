@@ -10,7 +10,7 @@ use rayon::prelude::*;
 use regex::Regex;
 use vp_error::Error;
 
-use crate::{ast_grep, file_walker};
+use crate::{ast_grep, file_walker, pack_config};
 
 /// ast-grep rules for rewriting vite imports and declare module statements
 ///
@@ -112,6 +112,8 @@ rule:
   pattern: $STR
   kind: string
   regex: ^['"]vite/.+['"]$
+  not:
+    regex: ^['"]vite/rolldown(/.*)?['"]$
   inside:
     kind: import_statement
 transform:
@@ -128,6 +130,8 @@ rule:
   pattern: $STR
   kind: string
   regex: ^['"]vite/.+['"]$
+  not:
+    regex: ^['"]vite/rolldown(/.*)?['"]$
   inside:
     kind: export_statement
 transform:
@@ -144,6 +148,8 @@ rule:
   pattern: $STR
   kind: string
   regex: ^['"]vite/.+['"]$
+  not:
+    regex: ^['"]vite/rolldown(/.*)?['"]$
   inside:
     kind: arguments
     inside:
@@ -165,6 +171,8 @@ rule:
   pattern: $STR
   kind: string
   regex: ^['"]vite/.+['"]$
+  not:
+    regex: ^['"]vite/rolldown(/.*)?['"]$
   inside:
     kind: arguments
     inside:
@@ -202,6 +210,8 @@ rule:
   pattern: $STR
   kind: string
   regex: ^['\"]vite/.+['\"]$
+  not:
+    regex: ^['"]vite/rolldown(/.*)?['"]$
   inside:
     kind: module
 transform:
@@ -1738,6 +1748,11 @@ static RE_REF_VITE_SUBPATH: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"^(\s*///\s*<reference\s+types\s*=\s*["'])vite/(.+?)(["']\s*/>)"#).unwrap()
 });
 
+/// `vite/rolldown[/...]` is not re-exported by `vite-plus`, so it stays untouched.
+static RE_REF_VITE_ROLLDOWN: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"^\s*///\s*<reference\s+types\s*=\s*["']vite/rolldown(/[^"']*)?["']"#).unwrap()
+});
+
 /// bare `tsdown` → `vite-plus/pack`
 static RE_REF_TSDOWN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"^(\s*///\s*<reference\s+types\s*=\s*["'])tsdown(["']\s*/>)"#).unwrap()
@@ -1986,7 +2001,9 @@ fn rewrite_reference_types(
             }
         }
         if !skip_packages.skip_vite {
-            if apply_regex_replace(line, &RE_REF_VITE_SUBPATH, "${1}vite-plus/${2}${3}") {
+            if !RE_REF_VITE_ROLLDOWN.is_match(line)
+                && apply_regex_replace(line, &RE_REF_VITE_SUBPATH, "${1}vite-plus/${2}${3}")
+            {
                 changed = true;
                 continue;
             }
@@ -2307,6 +2324,7 @@ pub fn rewrite_imports_in_directory_with_options(
 
             match rewrite_import(
                 &file_path,
+                root,
                 &skip_packages,
                 options.preserve_vitest_in_nuxt_packages && package_context.uses_nuxt_test_utils,
             ) {
@@ -2380,11 +2398,18 @@ pub fn rewrite_imports_in_directory_with_options(
 /// - `updated`: Whether any changes were made
 fn rewrite_import(
     file_path: &Path,
+    root: &Path,
     skip_packages: &SkipPackages,
     preserve_vitest_in_nuxt_package: bool,
 ) -> Result<RewriteResult, Error> {
-    // Read the file
     let content = std::fs::read_to_string(file_path)?;
+    let is_tsdown_config = file_path.file_stem().is_some_and(|stem| stem == "tsdown.config");
+    let is_vite_config = is_vite_config_file(file_path);
+    let preserve_defaults = if !skip_packages.skip_tsdown && (is_tsdown_config || is_vite_config) {
+        Some(pack_config::preserve_legacy_defaults(file_path, root, is_tsdown_config, &content))
+    } else {
+        None
+    };
 
     // Issue #2004: `vite` specifiers are rewritten only in config entry files;
     // everything else keeps its `vite` imports (they still resolve through the
@@ -2398,14 +2423,14 @@ fn rewrite_import(
         &content,
         skip_packages,
         preserve_vitest_in_nuxt_package,
-        is_vite_config_file(file_path),
+        is_vite_config,
     )?;
-    let standalone = file_path.file_stem().is_some_and(|stem| stem == "tsdown.config");
-    if !skip_packages.skip_tsdown && (standalone || is_vite_config_file(file_path)) {
-        let rewritten = crate::pack_config::rewrite_pack_config(&result.content, standalone);
+    if let Some(preserve_defaults) = preserve_defaults {
+        let rewritten =
+            pack_config::rewrite_pack_config(&result.content, is_tsdown_config, preserve_defaults);
         result.updated |= rewritten != result.content;
         result.content = rewritten;
-        result.warnings = crate::pack_config::pack_config_warnings(&result.content, standalone);
+        result.warnings = pack_config::pack_config_warnings(&result.content, is_tsdown_config);
     }
     Ok(result)
 }
@@ -2546,6 +2571,267 @@ mod tests {
 
     use super::*;
 
+    fn write_pack_fixture(root: &Path, relative: &str, content: &str) {
+        let file = root.join(relative);
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(file, content).unwrap();
+    }
+
+    fn write_tsdown_fixture(root: &Path, version: &str) {
+        write_pack_fixture(
+            root,
+            "node_modules/tsdown/package.json",
+            &serde_json::json!({ "name": "tsdown", "version": version }).to_string(),
+        );
+    }
+
+    fn write_toolchain_fixture(root: &Path, version: &str) {
+        write_pack_fixture(root, "node_modules/vite-plus/package.json", r#"{"version":"1.0.0"}"#);
+        write_pack_fixture(
+            root,
+            "node_modules/vite-plus/dist/toolchain.json",
+            &serde_json::json!({
+                "schemaVersion": 1,
+                "nodes": [{
+                    "id": "tsdown", "name": "tsdown", "version": version,
+                    "kind": "tool", "delivery": ["bundled"]
+                }],
+                "edges": []
+            })
+            .to_string(),
+        );
+    }
+
+    #[test]
+    fn pack_defaults_prefer_the_installed_toolchain_manifest() {
+        for (version, legacy) in [("0.22.0", true), ("0.23.0", false), ("invalid", true)] {
+            let temp = tempdir().unwrap();
+            let root = temp.path();
+            write_pack_fixture(root, ".gitignore", "node_modules/\n");
+            write_toolchain_fixture(root, version);
+            // A direct tsdown installation must not override the CLI's manifest.
+            let standalone_version = if legacy { "0.23.0" } else { "0.22.0" };
+            write_tsdown_fixture(root, standalone_version);
+            write_pack_fixture(root, "apps/server-v2/package.json", "{}");
+            write_pack_fixture(
+                root,
+                "apps/server-v2/vite.config.ts",
+                "export default { pack: { entry: ['src/main.ts'], attw: true } };",
+            );
+            assert!(rewrite_imports_in_directory(root).unwrap().errors.is_empty());
+            let actual =
+                std::fs::read_to_string(root.join("apps/server-v2/vite.config.ts")).unwrap();
+            assert_eq!(actual.contains("resolveDepSubpath: true"), legacy, "{actual}");
+            assert_eq!(actual.contains("profile: 'strict'"), legacy, "{actual}");
+        }
+    }
+
+    #[test]
+    fn pack_defaults_do_not_inherit_a_manifest_past_a_local_cli() {
+        for local_manifest in [false, true] {
+            let temp = tempdir().unwrap();
+            let root = temp.path();
+            let package = root.join("packages/legacy");
+            write_pack_fixture(root, ".gitignore", "node_modules/\n");
+            write_toolchain_fixture(root, "0.23.0");
+            write_pack_fixture(&package, "package.json", "{}");
+            if local_manifest {
+                write_toolchain_fixture(&package, "0.22.0");
+            } else {
+                write_pack_fixture(
+                    &package,
+                    "node_modules/vite-plus/package.json",
+                    r#"{"version":"0.2.0"}"#,
+                );
+            }
+            write_tsdown_fixture(&package, "0.23.0");
+            write_pack_fixture(&package, "vite.config.ts", "export default { pack: {} };");
+            assert!(rewrite_imports_in_directory(root).unwrap().errors.is_empty());
+            let actual = std::fs::read_to_string(package.join("vite.config.ts")).unwrap();
+            assert!(actual.contains("resolveDepSubpath: true"), "{actual}");
+        }
+    }
+
+    #[test]
+    fn pack_defaults_follow_the_original_config_toolchain() {
+        for (extension, bundled_import, standalone_import) in [
+            (
+                "ts",
+                "import { defineConfig } from 'vite-plus/pack';",
+                "import { defineConfig } from 'tsdown';",
+            ),
+            (
+                "cts",
+                "const { defineConfig } = require('vite-plus/pack');",
+                "const { defineConfig } = require('tsdown');",
+            ),
+            (
+                "mts",
+                "const { defineConfig } = await import('vite-plus/pack');",
+                "const { defineConfig } = await import('tsdown');",
+            ),
+        ] {
+            let temp = tempdir().unwrap();
+            let root = temp.path();
+            write_pack_fixture(root, ".gitignore", "node_modules/\n");
+            write_pack_fixture(
+                root,
+                "package.json",
+                r#"{"scripts":{"build":"vp pack"},"devDependencies":{"vite-plus":"0.2.0"}}"#,
+            );
+            write_pack_fixture(
+                root,
+                "node_modules/vite-plus/package.json",
+                r#"{"name":"vite-plus","version":"0.2.0"}"#,
+            );
+            write_pack_fixture(
+                root,
+                "node_modules/vite/package.json",
+                r#"{"name":"@voidzero-dev/vite-plus-core","version":"0.2.0"}"#,
+            );
+            write_tsdown_fixture(root, "0.23.0");
+            write_pack_fixture(
+                root,
+                "packages/standalone/package.json",
+                r#"{"scripts":{"build":"tsdown"},"devDependencies":{"tsdown":"0.23.0"}}"#,
+            );
+            let body =
+                "export default defineConfig({ entry: ['src/index.ts'], dts: true, attw: true });";
+            let filename = format!("tsdown.config.{extension}");
+            write_pack_fixture(root, &filename, &format!("{bundled_import}\n{body}"));
+            write_pack_fixture(
+                root,
+                "vite.config.ts",
+                &format!(
+                    "import config from './{filename}';\nimport {{ defineConfig }} from 'vite-plus';\nexport default defineConfig({{ pack: config }});"
+                ),
+            );
+            let standalone_file = format!("packages/standalone/{filename}");
+            write_pack_fixture(
+                root,
+                &standalone_file,
+                &format!(
+                    "// Migration will rewrite imports to 'vite-plus/pack'.\n{standalone_import}\n{body}"
+                ),
+            );
+
+            assert!(rewrite_imports_in_directory(root).unwrap().errors.is_empty());
+            for (file, legacy) in [(&filename, true), (&standalone_file, false)] {
+                let actual = std::fs::read_to_string(root.join(file)).unwrap();
+                assert!(actual.contains("vite-plus/pack"), "{file}: {actual}");
+                assert_eq!(actual.contains("resolveDepSubpath: true"), legacy, "{file}: {actual}");
+                assert_eq!(actual.contains("profile: 'strict'"), legacy, "{file}: {actual}");
+            }
+
+            // The final install upgrades the bundled toolchain before another migration.
+            write_toolchain_fixture(root, "0.23.0");
+            assert!(rewrite_imports_in_directory(root).unwrap().modified_files.is_empty());
+        }
+    }
+
+    #[test]
+    fn pack_defaults_follow_the_installed_tsdown_version() {
+        for (version, legacy) in [
+            ("0.22.9", true),
+            ("0.23.0", false),
+            ("v0.23.0", false),
+            ("0.23.0+build.1", false),
+            ("0.23.0-beta.1", true),
+            ("0.24.0", false),
+            ("1.0.0", false),
+            ("invalid", true),
+        ] {
+            for package in ["vite-plus", "tsdown"] {
+                let temp = tempdir().unwrap();
+                let root = temp.path();
+                write_pack_fixture(root, ".gitignore", "node_modules/\n");
+                write_pack_fixture(root, "package.json", "{}");
+                if package == "tsdown" {
+                    write_tsdown_fixture(root, version);
+                } else {
+                    write_toolchain_fixture(root, version);
+                }
+                // Cover catalog dependencies with packages installed at the workspace root.
+                write_pack_fixture(
+                    root,
+                    "apps/server-v2/package.json",
+                    r#"{"devDependencies":{"vite-plus":"catalog:"}}"#,
+                );
+                let config = "import { defineConfig } from 'vite-plus';\nexport default defineConfig({ pack: { entry: ['src/main.ts'], format: ['esm'], attw: true } });\n";
+                write_pack_fixture(root, "apps/server-v2/vite.config.ts", config);
+                write_pack_fixture(
+                    root,
+                    "apps/server-v2/tsdown.config.ts",
+                    "export default { entry: ['src/main.ts'], attw: {} };",
+                );
+                let result = rewrite_imports_in_directory(root).unwrap();
+                assert!(result.errors.is_empty());
+                let actual =
+                    std::fs::read_to_string(root.join("apps/server-v2/vite.config.ts")).unwrap();
+                assert_eq!(
+                    actual.contains("resolveDepSubpath: true"),
+                    legacy,
+                    "{package}@{version}: {actual}"
+                );
+                assert_eq!(actual.contains("profile: 'strict'"), legacy, "{actual}");
+                let standalone =
+                    std::fs::read_to_string(root.join("apps/server-v2/tsdown.config.ts")).unwrap();
+                assert_eq!(standalone.contains("resolveDepSubpath: true"), legacy, "{standalone}");
+                assert_eq!(standalone.contains("profile: 'strict'"), legacy, "{standalone}");
+                if !legacy {
+                    assert_eq!(actual, config);
+                    assert!(result.modified_files.is_empty());
+                }
+                assert!(rewrite_imports_in_directory(root).unwrap().modified_files.is_empty());
+            }
+        }
+    }
+
+    #[test]
+    fn pack_defaults_use_workspace_local_versions_and_config_tool() {
+        let temp = tempdir().unwrap();
+        let root = temp.path();
+        write_pack_fixture(root, ".gitignore", "node_modules/\n");
+        write_pack_fixture(root, "package.json", "{}");
+        write_toolchain_fixture(root, "0.23.0");
+        write_toolchain_fixture(&root.join("packages/legacy"), "0.22.0");
+        write_tsdown_fixture(root, "0.22.0");
+        for package in ["modern", "legacy"] {
+            write_pack_fixture(root, &format!("packages/{package}/package.json"), "{}");
+            write_pack_fixture(
+                root,
+                &format!("packages/{package}/vite.config.ts"),
+                "export default { pack: { entry: ['src/index.ts'] } };",
+            );
+        }
+        write_pack_fixture(root, "tsdown.config.ts", "export default { entry: ['src/index.ts'] };");
+        assert!(rewrite_imports_in_directory(root).unwrap().errors.is_empty());
+        for (file, legacy) in [
+            ("packages/modern/vite.config.ts", false),
+            ("packages/legacy/vite.config.ts", true),
+            ("tsdown.config.ts", true),
+        ] {
+            let actual = std::fs::read_to_string(root.join(file)).unwrap();
+            assert_eq!(actual.contains("resolveDepSubpath: true"), legacy, "{file}: {actual}");
+        }
+    }
+
+    #[test]
+    fn pack_defaults_do_not_read_installs_outside_the_migration_root() {
+        let temp = tempdir().unwrap();
+        write_toolchain_fixture(temp.path(), "0.23.0");
+        write_pack_fixture(temp.path(), "project/package.json", "{}");
+        write_pack_fixture(
+            temp.path(),
+            "project/vite.config.ts",
+            "export default { pack: { entry: ['src/index.ts'] } };",
+        );
+        let root = temp.path().join("project");
+        assert!(rewrite_imports_in_directory(&root).unwrap().errors.is_empty());
+        let actual = std::fs::read_to_string(root.join("vite.config.ts")).unwrap();
+        assert!(actual.contains("resolveDepSubpath: true"));
+    }
+
     #[test]
     fn reports_unchanged_pack_configs_that_need_manual_migration() {
         let temp = tempfile::tempdir().unwrap();
@@ -2590,26 +2876,6 @@ mod tests {
         assert!(std::fs::read_to_string(tsdown_config).unwrap().contains("copy: 'public'"));
         assert_eq!(std::fs::read_to_string(source_file).unwrap(), example);
         assert!(rewrite_imports_in_directory(temp.path()).unwrap().modified_files.is_empty());
-    }
-
-    #[test]
-    fn test_rewrite_import_content_vite() {
-        let vite_config = r#"import { defineConfig } from 'vite'
-
-export default defineConfig({
-  plugins: [],
-});"#;
-
-        let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"import { defineConfig } from 'vite-plus'
-
-export default defineConfig({
-  plugins: [],
-});"#
-        );
     }
 
     #[test]
@@ -2711,7 +2977,9 @@ export default defineConfig({{
         .unwrap();
 
         // Run the rewrite
-        let result = rewrite_import(&vite_config_path, &SkipPackages::default(), false).unwrap();
+        let result =
+            rewrite_import(&vite_config_path, temp_dir.path(), &SkipPackages::default(), false)
+                .unwrap();
 
         assert!(result.updated);
         assert_eq!(
@@ -3031,6 +3299,26 @@ export default ModuleRunner;"#;
             r#"import { ModuleRunner } from 'vite-plus/module-runner';
 
 export default ModuleRunner;"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vite_rolldown_subpath_is_kept() {
+        let vite_config = r#"/// <reference types="vite/rolldown/plugins" />
+import "vite/rolldown/plugins";
+import { viteAliasPlugin } from 'vite/rolldown/plugins';
+import 'vite/rolldown';
+export * from "vite/rolldown/utils";
+const a = require('vite/rolldown/plugins');
+const b = await import('vite/rolldown/plugins');
+declare module 'vite/rolldown/plugins' {}
+import { ModuleRunner } from 'vite/module-runner';"#;
+
+        let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            vite_config.replace("'vite/module-runner'", "'vite-plus/module-runner'")
         );
     }
 
@@ -5300,14 +5588,6 @@ const { defineConfig } = require('vite-plus');"#
     // ====================================
 
     #[test]
-    fn test_rewrite_reference_types_vite_client() {
-        let content = r#"/// <reference types="vite/client" />"#;
-        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(result.content, r#"/// <reference types="vite-plus/client" />"#);
-    }
-
-    #[test]
     fn test_rewrite_reference_types_vite_client_single_quotes() {
         let content = r#"/// <reference types='vite/client' />"#;
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
@@ -5318,30 +5598,6 @@ const { defineConfig } = require('vite-plus');"#
     #[test]
     fn test_rewrite_reference_types_bare_vite() {
         let content = r#"/// <reference types="vite" />"#;
-        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(result.content, r#"/// <reference types="vite-plus" />"#);
-    }
-
-    #[test]
-    fn test_rewrite_reference_types_bare_vitest() {
-        let content = r#"/// <reference types="vitest" />"#;
-        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(result.content, r#"/// <reference types="vite-plus/test" />"#);
-    }
-
-    #[test]
-    fn test_rewrite_reference_types_vitest_globals() {
-        let content = r#"/// <reference types="vitest/globals" />"#;
-        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(result.content, r#"/// <reference types="vite-plus/test/globals" />"#);
-    }
-
-    #[test]
-    fn test_rewrite_reference_types_vitest_config() {
-        let content = r#"/// <reference types="vitest/config" />"#;
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(result.content, r#"/// <reference types="vite-plus" />"#);
@@ -5370,14 +5626,6 @@ const { defineConfig } = require('vite-plus');"#
             assert!(result.updated, "@vitest/browser/{sub} reference should be rewritten");
             assert_eq!(result.content, format!(r#"/// <reference types="{expected}" />"#));
         }
-    }
-
-    #[test]
-    fn test_rewrite_reference_types_vitest_scoped_browser_context() {
-        let content = r#"/// <reference types="@vitest/browser/context" />"#;
-        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(result.content, r#"/// <reference types="vite-plus/test/browser/context" />"#);
     }
 
     #[test]

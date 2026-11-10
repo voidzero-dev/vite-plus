@@ -120,13 +120,14 @@ function normalizeOutput(output: string, version: string): string {
     .trimEnd();
 }
 
-function captureToolHelp(tool: Tool, version: string): string {
+function captureToolHelp(tool: Tool, version: string, cwd: string): string {
   return tool.commands
     .map((command) => {
       const result = spawnSync(
         'pnpm',
         ['--silent', 'dlx', `${tool.packageName}@${version}`, ...command],
         {
+          cwd,
           encoding: 'utf8',
           env: {
             ...process.env,
@@ -151,13 +152,19 @@ function captureToolHelp(tool: Tool, version: string): string {
 function captureSnapshot(outputPath: string, versionsPath?: string): void {
   const versions = versionsPath ? (readJson(versionsPath) as VersionMetadata) : undefined;
   const tools = {} as Record<ToolName, ToolSnapshot>;
-  for (const tool of TOOLS) {
-    const version = readToolVersion(tool, versions);
-    console.log(`Capturing ${tool.title} ${version} help...`);
-    tools[tool.name] = {
-      help: captureToolHelp(tool, version),
-      version,
-    };
+  // Run outside the repository so pnpm dlx does not inherit workspace overrides or patches.
+  const cwd = mkdtempSync(join(tmpdir(), 'vite-plus-cli-help-capture-'));
+  try {
+    for (const tool of TOOLS) {
+      const version = readToolVersion(tool, versions);
+      console.log(`Capturing ${tool.title} ${version} help...`);
+      tools[tool.name] = {
+        help: captureToolHelp(tool, version, cwd),
+        version,
+      };
+    }
+  } finally {
+    rmSync(cwd, { force: true, recursive: true });
   }
 
   mkdirSync(dirname(outputPath), { recursive: true });

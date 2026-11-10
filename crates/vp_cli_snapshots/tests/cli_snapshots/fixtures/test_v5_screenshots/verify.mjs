@@ -15,16 +15,20 @@ const dimensions = (file) => {
 for (const phase of ['record', 'compare', 'failure']) {
   const runner = await createVitest({
     config: false, watch: false, reporters: [], update: phase === 'record',
-  }, defineConfig({ test: {
-    include: [phase === 'failure' ? 'failure.test.js' : 'browser.test.js'],
-    browser: {
-      enabled: true, provider: playwright(), headless: !headed, ui: false,
-      instances: [{ browser: 'chromium' }], viewport: { width: 800, height: 600 },
-      screenshotFailures: true, screenshotDirectory: 'manual-images',
-      expect: { toMatchScreenshot: { screenshotDirectory: 'reference-images' } },
+  }, defineConfig({
+    test: {
+      api: { port: 0 },
+      include: [phase === 'failure' ? 'failure.test.js' : 'browser.test.js'],
+      browser: {
+        enabled: true, provider: playwright(), headless: !headed, ui: false,
+        instances: [{ browser: 'chromium' }], viewport: { width: 800, height: 600 },
+        screenshotFailures: true, screenshotDirectory: 'manual-images',
+        expect: { toMatchScreenshot: { screenshotDirectory: 'reference-images' } },
+      },
     },
-  } }));
+  }));
   try {
+    assert.equal(runner.projects[0].config.api.port, 0);
     const result = await runner.start();
     assert.equal(result.unhandledErrors.length, 0, JSON.stringify(result.unhandledErrors));
     assert.equal(runner.state.getFiles().length, 1);

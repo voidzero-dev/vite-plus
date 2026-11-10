@@ -2,13 +2,85 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
-import semver from 'semver';
+import type { OxlintConfig } from 'oxlint';
+import { coerce, satisfies } from 'verkit';
 
 import { VITEST_VERSION, VITE_PLUS_OVERRIDE_PACKAGES } from '../../utils/constants.ts';
 import { readJsonFile } from '../../utils/json.ts';
 import { detectPackageMetadata } from '../../utils/package.ts';
 import { displayRelative } from '../../utils/path.ts';
 import { addManualStep, addMigrationWarning, type MigrationReport } from '../report.ts';
+
+// Commands whose effects prevent literal analysis of later invocations.
+export const SHELL_STATE_COMMANDS: readonly string[] = [
+  'cd',
+  'pushd',
+  'popd',
+  '.',
+  'source',
+  'eval',
+  'export',
+  'set',
+  'unset',
+];
+
+/** Locate the executable after a supported package-manager wrapper. */
+export function getCommandStartIndex(argv: readonly string[]): number {
+  if (!['pnpm', 'npm', 'yarn', 'bun', 'npx', 'bunx'].includes(argv[0])) {
+    return 0;
+  }
+  let start = 1;
+  if (argv[start] === 'exec' || argv[start] === 'x' || argv[start] === 'dlx') {
+    start++;
+  }
+  // `npx --yes tsx`: skip the install prompt flag.
+  if (argv[start] === '-y' || argv[start] === '--yes') {
+    start++;
+  }
+  if (argv[start] === '--') {
+    start++;
+  }
+  return start;
+}
+
+// Scans that decide whether a removed tool is still used. Built output can still load
+// it after migration, so skip only installed source and VCS metadata.
+export const RETENTION_SCAN_SKIP_DIRS: ReadonlySet<string> = new Set([
+  'node_modules',
+  '.git',
+  '.hg',
+  '.svn',
+]);
+
+// Oxlint does not inherit these fields through `extends`.
+export const OXLINT_OWNER_CONFIG_KEYS = new Set(['env', 'globals', 'settings', 'ignorePatterns']);
+
+export interface OxlintConfigFile {
+  filename: string;
+  config: OxlintConfig;
+  extends: OxlintConfigFile[];
+  // Keep declared paths as well as canonical sources for JSON fallback cleanup.
+  extendsPaths: string[];
+  // A dependency must use the same generated module in its owning workspace.
+  shared?: boolean;
+  // A committed or previously generated module that workspace consumers can reuse.
+  modulePath?: string;
+}
+
+export interface OxlintConfigMigration {
+  file: OxlintConfigFile;
+  // Completion belongs to each workspace path, even when symlinks share a source.
+  migrated?: boolean;
+}
+
+export type PreparedOxlintConfigs = Map<string, OxlintConfigMigration | Error>;
+
+export interface OxlintModulePlan {
+  configContent: string;
+  imports: string[];
+  completionMarker?: string;
+  modules: Map<string, { file: OxlintConfigFile; content: string }>;
+}
 
 // All known lint-staged config file names.
 // JSON-parseable ones come first so rewriteLintStagedConfigFile can rewrite them.
@@ -251,7 +323,7 @@ function checkPackageVersion(projectPath: string, name: string, minVersion: stri
   if (!metadata || metadata.name !== name) {
     return true;
   }
-  if (semver.satisfies(metadata.version, `<${minVersion}`)) {
+  if (satisfies(metadata.version, `<${minVersion}`)) {
     const packageJsonFilePath = path.join(projectPath, 'package.json');
     prompts.log.error(
       `✘ ${name}@${metadata.version} in ${displayRelative(packageJsonFilePath)} is not supported by auto migration`,
@@ -304,8 +376,7 @@ export function readPackageJsonIfExists(packageJsonPath: string): DependencyBag 
 // `package.json`'s `pnpm` field — vp migrate writes to whichever sink the
 // rest of the migration is already touching.
 export function pnpmMajor(version: string | undefined): number | undefined {
-  const coerced = version ? semver.coerce(version)?.version : undefined;
-  return coerced ? semver.major(coerced) : undefined;
+  return version ? coerce(version)?.major : undefined;
 }
 
 // Packages that own the Oxlint JS-plugin authoring API as a published contract.

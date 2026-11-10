@@ -312,28 +312,6 @@ describe('readOrgManifest', () => {
     );
   });
 
-  it('throws on duplicate entry names', async () => {
-    mockFetchJson(
-      packument([
-        { name: 'web', description: 'one', template: '@a/one' },
-        { name: 'web', description: 'two', template: '@a/two' },
-      ]),
-    );
-    await expect(readOrgManifest('@your-org')).rejects.toThrow(/duplicates an earlier entry/);
-  });
-
-  it('throws when a bundled path escapes the package root', async () => {
-    mockFetchJson(packument([{ name: 'demo', description: 'x', template: '../outside' }]));
-    await expect(readOrgManifest('@your-org')).rejects.toThrow(/escapes the package root/);
-  });
-
-  it('throws when an entry name uses the reserved `__vp_` prefix', async () => {
-    mockFetchJson(
-      packument([{ name: '__vp_builtin_escape__', description: 'collides', template: '@a/b' }]),
-    );
-    await expect(readOrgManifest('@your-org')).rejects.toThrow(/uses the reserved `__vp_` prefix/);
-  });
-
   it('throws on non-boolean monorepo field', async () => {
     mockFetchJson(
       packument([

@@ -28,13 +28,15 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/clone
 
-      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+      - uses: ./.github/actions/setup-rust
         with:
           save-cache: false
           cache-key: lint
 
       - uses: oxc-project/setup-node@1f1a5b4450c8905bd1830c3a908d22b960c4559a # main (Node before pnpm; unreleased)
 
+      # release.yml updates HomebrewFormula/vp.rb after the release archives and
+      # their checksums are published. Do not point the tap at unpublished assets.
       - name: Bump versions
         env:
           VERSION: ${{ inputs.version }}
@@ -55,6 +57,7 @@ jobs:
           update_json packages/cli/package.json
           update_json packages/core/package.json
           update_json packages/prompts/package.json
+          update_json packages/create-vite-plus/package.json
           update_toml packages/cli/binding/Cargo.toml
           update_toml crates/vp_global_cli/Cargo.toml
 
@@ -66,6 +69,8 @@ jobs:
         with:
           client-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
 
       - uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
@@ -77,6 +82,8 @@ jobs:
           sign-commits: true
           body: |
             Release vite-plus v${{ inputs.version }}.
+
+            For a stable release, complete the `HomebrewFormula/vp.rb` update after publication by merging the generated `release/homebrew-v${{ inputs.version }}` PR.
 
             Merging this PR will trigger the release workflow.
           assignees: ${{ github.actor }}

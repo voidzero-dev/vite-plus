@@ -30,6 +30,26 @@ void process.stdout;
 void process.stderr;
 ensureBlockingStdio();
 
+interface StdioStream {
+  _handle?: { setBlocking?: (blocking: boolean) => number };
+}
+
+/**
+ * Loading a config through Vite imports `node:process` as ESM, and building that
+ * namespace reads every `process` getter, so `process.stdin` is created and its
+ * descriptor becomes non-blocking, TTY or pipe. Tasks inherit that descriptor, and a
+ * blocking read there fails with EAGAIN. `ensureBlockingStdio()` leaves terminals
+ * alone, so restore blocking reads through the stream handle, as `vpx` does before
+ * exec.
+ */
+function restoreBlockingStdin(): void {
+  if (process.platform === 'win32') {
+    return;
+  }
+  /* oxlint-disable-next-line no-underscore-dangle -- Node.js has no public API for this */
+  (process.stdin as StdioStream)._handle?.setBlocking?.(true);
+}
+
 function getErrorMessage(err: unknown): string {
   if (err instanceof Error) {
     return err.message;
@@ -129,9 +149,6 @@ if (maybePrintCommandHelp(args)) {
 } else {
   // All other commands — delegate to Rust core via NAPI binding
   try {
-    // This module imports `vitest/config` through define-config. Load it here
-    // so `migrate` and `config` can handle stale aliases before Vitest loads.
-    const { resolveUniversalViteConfig } = await import('./resolve-vite-config.js');
     const initInspection = inspectInitCommand(command, args.slice(1));
     if (
       initInspection.handled &&
@@ -155,7 +172,17 @@ if (maybePrintCommandHelp(args)) {
       doc,
       toolchainManifestPath: path.join(cliDistDir, 'toolchain.json'),
       vitePlusPackagePath,
-      resolveUniversalViteConfig,
+      // Only task/config-metadata commands need this resolver. Importing it
+      // eagerly also loads Vitest and Vite in the parent of `vp dev`, before
+      // the separate Vite process even starts.
+      resolveUniversalViteConfig: async (err, cwd) => {
+        const { resolveUniversalViteConfig } = await import('./resolve-vite-config.js');
+        const config = await resolveUniversalViteConfig(err, cwd);
+        // Rust spawns tasks only after this promise settles.
+        restoreBlockingStdin();
+        return config;
+      },
+      nodeVersion: process.version,
       explicitChdir,
       args: rustCliArgs,
     });

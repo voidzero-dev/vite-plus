@@ -56,6 +56,10 @@ export default defineConfig({
 
 `cache: true` enables both task and script caching, `cache: false` disables both.
 
+::: warning
+This option can only be set in the workspace root's `vite.config.ts`. Setting it in a package's config will result in an error.
+:::
+
 ## `run.tasks`
 
 - **Type:** `Record<string, Task | string | string[]>`
@@ -86,7 +90,11 @@ Use the object form when a task needs other fields like `cache`, `dependsOn`, or
 
 - **Type:** `string | string[]`
 
-Defines the shell command to run for the task. The string is interpreted by a shell, so spaces, quoting, `&&`, pipes, and redirects all work as written on the command line.
+Defines the command to run for the task.
+
+::: info
+Vite Task parses simple commands and `&&` chains itself instead of passing them to a shell, so they behave the same on every platform. Other shell syntax, such as pipes or redirects, may behave differently across platforms.
+:::
 
 ```ts [vite.config.ts]
 tasks: {
@@ -113,7 +121,7 @@ tasks: {
 
 Each task defined in `vite.config.ts` must include its own `command`. You cannot define a task in both `vite.config.ts` and `package.json` with the same task name.
 
-Commands joined with `&&` (or supplied as an array) are automatically split into independently cached sub-tasks. See [Compound Commands](/guide/run#compound-commands).
+Array entries, and `&&` chains without other shell syntax, are automatically split into independently cached sub-tasks. See [Compound Commands](/guide/run#compound-commands).
 
 ### `dependsOn`
 
@@ -235,12 +243,16 @@ tasks: {
 
 Do not put a variable in `untrackedEnv` if its value changes the task result. If a cache-reporting tool covers the variable through [automatic tracking](/guide/automatic-data-tracking#cooperative-tracking), leave it out of both `env` and `untrackedEnv`.
 
-Vite Task passes a set of common environment variables to all tasks:
+Vite Task includes default untracked patterns for system variables and common tools. Examples include:
 
-- **System:** `HOME`, `USER`, `PATH`, `SHELL`, `LANG`, `TZ`
-- **Node.js:** `NODE_OPTIONS`, `COREPACK_HOME`, `PNPM_HOME`
-- **CI/CD:** `CI`, `VERCEL_*`, `NEXT_*`, `GITHUB_*`, `RUNNER_*`, `ACTIONS_ID_TOKEN_REQUEST_URL`, `ACTIONS_ID_TOKEN_REQUEST_TOKEN`
-- **Terminal:** Color variables (`FORCE_COLOR`, `NO_COLOR`, `COLORTERM`, `TERM`, `TERM_PROGRAM`) aren't passed to tasks unless you list them under `env` (the value gets fingerprinted, so changing it invalidates the cache) or `untrackedEnv` (passed without fingerprinting). If `FORCE_COLOR` isn't in either list, the child gets `FORCE_COLOR=1` so cached logs stay colored. Colors get stripped on display when the terminal can't render them.
+- **System:** `HOME`, `USER`, `PATH`, `SHELL`, `LANG`, `TZ`, `TMP`, `TEMP`
+- **Node.js and package managers:** `NODE_OPTIONS`, `NPM_CONFIG_STORE_DIR`, `PNPM_HOME`
+- **CI:** `CI`, `VERCEL_*`, `NEXT_*`, `GITHUB_*`, `RUNNER_*`, `ACTIONS_ID_TOKEN_REQUEST_URL`
+- **Windows:** `APPDATA`, `LOCALAPPDATA`, `SYSTEMROOT`, `USERPROFILE`
+- **Development tools:** `VSCODE_*`, `JB_IDE_*`, `DOCKER_*`, `BUILDKIT_*`, `COMPOSE_*`, `PLAYWRIGHT_*`
+- **Tokens:** `*_TOKEN`, including `ACTIONS_ID_TOKEN_REQUEST_TOKEN`
+
+Color variables such as `FORCE_COLOR`, `NO_COLOR`, `COLORTERM`, `TERM`, and `TERM_PROGRAM` require an explicit `env` or `untrackedEnv` entry. If `FORCE_COLOR` isn't listed, Vite Task sets `FORCE_COLOR=1` to keep cached logs colored. Colors are stripped on display when the terminal can't render them.
 
 ### `cache.input`
 
@@ -253,11 +265,12 @@ Vite Task automatically detects which files a command uses. See [Automatic Data 
 
 ```ts [vite.config.ts]
 tasks: {
-  build: {
-    command: 'vp build',
+  lint: {
+    command: 'vp lint',
     cache: {
       // Use `{ auto: true }` to use automatic fingerprinting (default).
-      input: [{ auto: true }, '!**/*.tsbuildinfo', '!dist/**'],
+      // Keep the build task's `dist` folder from affecting this task.
+      input: [{ auto: true }, '!dist/**'],
     },
   },
 }
@@ -336,14 +349,14 @@ tasks: {
 
 Use `{ auto: true }` to keep automatic write tracking while adding explicit output globs.
 
-This is useful when a task writes files that should not be restored from the cache. For example, exclude TypeScript `.tsbuildinfo` files:
+This is useful when a task writes files that should not be restored from the cache, such as a debug log:
 
 ```ts [vite.config.ts]
 tasks: {
-  typecheck: {
-    command: 'tsc --build',
+  build: {
+    command: 'node build.mjs',
     cache: {
-      output: [{ auto: true }, '!*.tsbuildinfo'],
+      output: [{ auto: true }, '!build.log'],
     },
   },
 }

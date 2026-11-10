@@ -45,6 +45,6 @@ export default defineConfig({
 ```
 VITE+ - The Unified Toolchain for the Web
 
-vite.config.ts: Move `env`, `untrackedEnv`, `input`, and `output` under `cache` manually in tasks `build`, `dev`; they were left unchanged. See https://viteplus.dev/config/run#cache
+▲ vite.config.ts: Move `env`, `untrackedEnv`, `input`, and `output` under `cache` manually in tasks `build`, `dev`; they were left unchanged. See https://viteplus.dev/config/run#cache
 This project is already using Vite+! Happy coding!
 ```

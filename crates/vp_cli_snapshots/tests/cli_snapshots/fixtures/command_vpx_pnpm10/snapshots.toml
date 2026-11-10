@@ -4,7 +4,7 @@ vp = "global"
 local-registry = true
 steps = [
   { argv = ["vpx", "--help"], comment = "should show vpx help message", continue-on-failure = true },
-  { argv = ["vpx", "-s", "cowsay", "hello"], comment = "should run cowsay via dlx fallback", continue-on-failure = true },
+  { argv = ["vpx", "-s", "vp-test-echo", "hello"], comment = "should run vp-test-echo via dlx fallback", continue-on-failure = true },
 ]
 
 [[case]]

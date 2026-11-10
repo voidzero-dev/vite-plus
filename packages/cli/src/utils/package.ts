@@ -160,6 +160,23 @@ export function hasVitePlusDependency(
   return Boolean(pkg?.dependencies?.[VITE_PLUS_NAME] || pkg?.devDependencies?.[VITE_PLUS_NAME]);
 }
 
+export function hasPackageManagerDeclaration(
+  pkg?: { packageManager?: unknown; devEngines?: unknown } | null,
+): boolean {
+  if (!pkg) {
+    return false;
+  }
+  if (Object.hasOwn(pkg, 'packageManager')) {
+    return true;
+  }
+  return (
+    typeof pkg.devEngines === 'object' &&
+    pkg.devEngines !== null &&
+    !Array.isArray(pkg.devEngines) &&
+    Object.hasOwn(pkg.devEngines, 'packageManager')
+  );
+}
+
 /**
  * Check if an npm package exists on its resolved registry.
  * Returns true if the package exists or if the check could not be performed (network error, timeout).

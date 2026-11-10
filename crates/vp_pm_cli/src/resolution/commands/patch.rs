@@ -16,7 +16,14 @@ pub struct PatchArgs {
 }
 
 impl Resolve<PatchArgs> for Pnpm {
-    fn resolve(&self, args: &PatchArgs, _diag: &mut Diagnostics) -> CommandResolution {
+    fn resolve(&self, args: &PatchArgs, diag: &mut Diagnostics) -> CommandResolution {
+        if !self.supports_v7_4_commands() {
+            diag.warn(
+                DiagnosticKind::UnsupportedCommandNoop,
+                "pnpm patch requires pnpm >= 7.4.0. Skipping.",
+            );
+            return CommandResolution::Noop;
+        }
         let mut cmd = CommandBuilder::new("pnpm");
         cmd.arg("patch").arg(&args.package).extend(args.pass_through_args.iter());
         cmd.into()
@@ -25,7 +32,7 @@ impl Resolve<PatchArgs> for Pnpm {
 
 impl Resolve<PatchArgs> for Npm {
     fn resolve(&self, args: &PatchArgs, diag: &mut Diagnostics) -> CommandResolution {
-        if !self.is_npm_12_or_newer() {
+        if !self.supports_v12_commands() {
             diag.warn(
                 DiagnosticKind::UnsupportedCommandNoop,
                 "npm does not have a 'patch' command.",

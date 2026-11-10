@@ -16,7 +16,7 @@ Core tool - shows resolved Node.js binary path
 VITE+ - The Unified Toolchain for the Web
 
 <home>/.vite-plus/js_runtime/node/<version>/bin/node
-  Version:    20.18.0
+  Version:    20.20.2
   Source:     <workspace>/.node-version
 ```
 
@@ -28,7 +28,7 @@ Core tool - shows resolved npm binary path
 VITE+ - The Unified Toolchain for the Web
 
 <home>/.vite-plus/js_runtime/node/<version>/bin/npm
-  Version:    20.18.0
+  Version:    20.20.2
   Source:     <workspace>/.node-version
 ```
 
@@ -40,11 +40,11 @@ Core tool - shows resolved npx binary path
 VITE+ - The Unified Toolchain for the Web
 
 <home>/.vite-plus/js_runtime/node/<version>/bin/npx
-  Version:    20.18.0
+  Version:    20.20.2
   Source:     <workspace>/.node-version
 ```
 
-## `vp install -g cowsay@1.6.0`
+## `vp install -g vp-test-echo@1.0.0`
 
 Install a global package via vp
 
@@ -52,30 +52,30 @@ Install a global package via vp
 VITE+ - The Unified Toolchain for the Web
 
 info: Installing 1 global package with Node.js <version>
-✓ Installed cowsay 1.6.0
-  Bins: cowsay, cowthink
+ Installed vp-test-echo 1.0.0
+  Bins: vp-test-echo, vp-test-echo-alias
 ```
 
-## `vp env which cowsay`
+## `vp env which vp-test-echo`
 
 Global package - shows binary path with metadata
 
 ```
 VITE+ - The Unified Toolchain for the Web
 
-<home>/.vite-plus/packages/cowsay/<uuid>/lib/node_modules/cowsay/./cli.js
-  Package:    cowsay@1.6.0
-  Binaries:   cowsay, cowthink
+<home>/.vite-plus/packages/vp-test-echo/<uuid>/lib/node_modules/vp-test-echo/cli.cjs
+  Package:    vp-test-echo@1.0.0
+  Binaries:   vp-test-echo, vp-test-echo-alias
   Node:       <version>
   Installed:  <date>
 ```
 
-## `vp remove -g cowsay`
+## `vp remove -g vp-test-echo`
 
 Cleanup
 
 ```
-Uninstalled cowsay
+- Uninstalled vp-test-echo
 ```
 
 ## `vp env which unknown-tool`

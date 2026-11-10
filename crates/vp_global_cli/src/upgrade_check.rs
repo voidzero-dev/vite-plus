@@ -166,7 +166,7 @@ fn status_for_versions(current: &str, latest: &str) -> UpgradeCheckStatus {
         return UpgradeCheckStatus::Current;
     }
 
-    match (node_semver::Version::parse(current), node_semver::Version::parse(latest)) {
+    match (js_semver::Version::parse(current), js_semver::Version::parse(latest)) {
         (Ok(current), Ok(latest)) if latest > current => UpgradeCheckStatus::Available,
         (Ok(_), Ok(_)) => UpgradeCheckStatus::Current,
         _ => UpgradeCheckStatus::Unknown,
@@ -588,53 +588,26 @@ mod tests {
     }
 
     #[test]
-    fn is_newer_version_detects_upgrade() {
-        assert!(is_newer_version("0.1.0", "0.2.0"));
-        assert!(is_newer_version("0.1.0", "1.0.0"));
-        assert!(is_newer_version("1.0.0", "1.0.1"));
-    }
-
-    #[test]
-    fn is_newer_version_rejects_same() {
-        assert!(!is_newer_version("0.2.0", "0.2.0"));
-    }
-
-    #[test]
-    fn is_newer_version_rejects_downgrade() {
-        assert!(!is_newer_version("0.2.0", "0.1.0"));
-    }
-
-    #[test]
-    fn is_newer_version_rejects_prerelease_downgrade_to_stable() {
-        // User on alpha, latest stable is older — don't prompt
-        assert!(!is_newer_version("0.3.0-alpha.1", "0.2.0"));
-    }
-
-    #[test]
-    fn is_newer_version_prompts_prerelease_to_newer_stable() {
-        assert!(is_newer_version("0.1.0-alpha.1", "0.2.0"));
-    }
-
-    #[test]
-    fn is_newer_version_prompts_prerelease_to_same_base_release() {
-        // 1.0.0 is newer than 1.0.0-alpha.1 per semver
-        assert!(is_newer_version("1.0.0-alpha.1", "1.0.0"));
-    }
-
-    #[test]
-    fn is_newer_version_rejects_empty_latest() {
-        assert!(!is_newer_version("0.1.0", ""));
-    }
-
-    #[test]
-    fn is_newer_version_skips_dev_build() {
-        assert!(!is_newer_version("0.0.0", "0.2.0"));
-    }
-
-    #[test]
-    fn is_newer_version_rejects_invalid_versions() {
-        assert!(!is_newer_version("not-a-version", "0.2.0"));
-        assert!(!is_newer_version("0.1.0", "not-a-version"));
+    fn is_newer_version_compares_semver() {
+        for (current, latest, expected) in [
+            ("0.1.0", "0.2.0", true),
+            ("0.1.0", "1.0.0", true),
+            ("1.0.0", "1.0.1", true),
+            ("0.2.0", "0.2.0", false),
+            ("0.2.0", "0.1.0", false),
+            // User on alpha, latest stable is older — don't prompt
+            ("0.3.0-alpha.1", "0.2.0", false),
+            ("0.1.0-alpha.1", "0.2.0", true),
+            // 1.0.0 is newer than 1.0.0-alpha.1 per semver
+            ("1.0.0-alpha.1", "1.0.0", true),
+            ("0.1.0", "", false),
+            // Dev builds (0.0.0) are never prompted
+            ("0.0.0", "0.2.0", false),
+            ("not-a-version", "0.2.0", false),
+            ("0.1.0", "not-a-version", false),
+        ] {
+            assert_eq!(is_newer_version(current, latest), expected, "{current} -> {latest}");
+        }
     }
 
     fn parse_args(args: &[&str]) -> crate::cli::Args {
@@ -644,58 +617,27 @@ mod tests {
     }
 
     #[test]
-    fn should_run_for_normal_command() {
-        assert!(should_run_for_command(&parse_args(&["build"])));
-    }
-
-    #[test]
-    fn should_not_run_for_upgrade() {
-        assert!(!should_run_for_command(&parse_args(&["upgrade"])));
-    }
-
-    #[test]
-    fn should_not_run_for_install_silent() {
-        assert!(!should_run_for_command(&parse_args(&["install", "--silent"])));
-    }
-
-    #[test]
-    fn should_not_run_for_dlx_short_silent() {
-        assert!(!should_run_for_command(&parse_args(&["dlx", "-s", "pkg"])));
-    }
-
-    #[test]
-    fn should_not_run_for_why_json() {
-        assert!(!should_run_for_command(&parse_args(&["why", "lodash", "--json"])));
-    }
-
-    #[test]
-    fn should_not_run_for_why_parseable() {
-        assert!(!should_run_for_command(&parse_args(&["why", "lodash", "--parseable"])));
-    }
-
-    #[test]
-    fn should_not_run_for_outdated_format_json() {
-        assert!(!should_run_for_command(&parse_args(&["outdated", "--format", "json"])));
-    }
-
-    #[test]
-    fn should_not_run_for_pm_list_parseable() {
-        assert!(!should_run_for_command(&parse_args(&["pm", "list", "--parseable"])));
-    }
-
-    #[test]
-    fn should_not_run_for_pm_list_json() {
-        assert!(!should_run_for_command(&parse_args(&["pm", "list", "--json"])));
-    }
-
-    #[test]
-    fn should_not_run_for_env_current_json() {
-        assert!(!should_run_for_command(&parse_args(&["env", "current", "--json"])));
-    }
-
-    #[test]
-    fn should_run_for_outdated_without_format() {
-        assert!(should_run_for_command(&parse_args(&["outdated"])));
+    fn should_run_for_command_skips_excluded_and_machine_readable_commands() {
+        for (args, expected) in [
+            (&["build"][..], true),
+            (&["upgrade"], false),
+            (&["install", "--silent"], false),
+            (&["dlx", "-s", "pkg"], false),
+            (&["why", "lodash", "--json"], false),
+            (&["why", "lodash", "--parseable"], false),
+            (&["outdated", "--format", "json"], false),
+            (&["pm", "list", "--parseable"], false),
+            (&["pm", "list", "--json"], false),
+            (&["env", "current", "--json"], false),
+            (&["outdated"], true),
+        ] {
+            assert_eq!(
+                should_run_for_command(&parse_args(args)),
+                expected,
+                "vp {}",
+                args.join(" ")
+            );
+        }
     }
 
     #[tokio::test(flavor = "current_thread")]
@@ -733,14 +675,23 @@ mod tests {
             })
             .await
             .expect("at least one registry request should start");
-            tokio::time::sleep(Duration::from_millis(200)).await;
+            // The server never responds, so a check that sent a request cannot finish here.
+            tokio::time::timeout(Duration::from_secs(2), async {
+                while checks.iter().filter(|check| check.is_finished()).count() < checks.len() - 1 {
+                    tokio::task::yield_now().await;
+                }
+            })
+            .await
+            .expect("the other checks must back off while the first request is in flight");
 
+            let in_flight = checks.iter().filter(|check| !check.is_finished()).count();
             let observed_requests = request_count.load(Ordering::SeqCst);
             let cache_exists = home.path().join("cache").join(CACHE_FILE_NAME).exists();
             for check in checks {
                 check.abort();
             }
 
+            assert_eq!(in_flight, 1, "the first registry request must still be in flight");
             assert_eq!(observed_requests, 1, "concurrent checks must share one registry request");
             assert!(
                 cache_exists,

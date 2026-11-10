@@ -10,10 +10,10 @@ Use this page when you need to understand why a task hits or misses the cache, o
 
 Automatic data tracking has two tiers:
 
-| Tier                 | Applies to                               | Records                                                                                                                                                         |
-| -------------------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| File system tracking | All tasks with cache enabled             | <ul><li>Files read by the command</li><li>Missing-file probes</li><li>Directory listings</li><li>Written output files</li></ul>                                 |
-| Cooperative tracking | Cache-reporting tools (`vp build` today) | <ul><li>Environment variables reported by the tool</li><li>Tool-managed paths that should not be inputs or outputs, such as `node_modules/.vite-temp`</li></ul> |
+| Tier                 | Applies to                                    | Records                                                                                                                                                         |
+| -------------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| File system tracking | All tasks with cache enabled                  | <ul><li>Files read by the command</li><li>Missing-file probes</li><li>Directory listings</li><li>Written output files</li></ul>                                 |
+| Cooperative tracking | Cache-reporting tools (`vp build`, `vp test`) | <ul><li>Environment variables reported by the tool</li><li>Tool-managed paths that should not be inputs or outputs, such as `node_modules/.vite-temp`</li></ul> |
 
 Vite Task starts with file system tracking for any command. A cache-reporting tool can add information that only the tool knows while it runs.
 
@@ -38,6 +38,144 @@ export default defineConfig({
 For this task, Vite Task records source files, config files, missing files the command checked, and directories the command scanned. Subsequent runs re-run the task when one of those tracked inputs changes.
 
 File system tracking also tracks outputs. If you omit [`cache.output`](/config/run#cache-output), Vite Task archives files the command writes after a successful run and restores them on a cache hit.
+
+### Rebuildable Inputs
+
+Some tools read files they also write:
+
+- With [`exports`](https://tsdown.dev/options/package-exports) enabled, tsdown reads `package.json` and writes the generated `exports` field back into it.
+- Many build tools list `dist` to delete the old build before they write a new one there.
+- Tools with their own cache read it and write it back, as `tsc --incremental` does with `tsconfig.tsbuildinfo`.
+
+This section explains how Vite Task handles files and folders that a task both reads and writes.
+
+Vite Task calls these files and folders **rebuildable**: the task produces them itself, so they don't have to exist before it runs. A task can rebuild:
+
+- Files it writes, such as `dist/index.mjs` or the `package.json` that tsdown updates.
+- Folders where the task wrote everything inside, such as `dist`.
+
+::: warning
+Rebuildable inputs assume that a task doesn't keep changing its outputs when its inputs stay the same.
+
+For example, a script that appends data to a file on every run breaks this assumption, and Vite Task can't detect it. Vite Task caches the file as the script left it, so the next run is a cache hit that restores the file without appending anything.
+:::
+
+After the task finishes, Vite Task fingerprints its inputs as the task left them. On the next run:
+
+- A rebuildable input may be missing, as on a fresh clone or after you delete it. The cache still hits and restores it with the task's outputs.
+- A rebuildable file that exists must match what the task left. If something else changed it, the cache misses.
+- Inputs that aren't rebuildable, such as your source files, are still checked strictly. Deleting or editing one causes a cache miss.
+
+#### Example: A Task Rewriting Sources
+
+```ts [vite.config.ts]
+tasks: {
+  build: {
+    // `--exports` makes tsdown write the generated `exports` field into package.json.
+    command: 'tsdown --exports',
+  },
+}
+```
+
+```
+my-lib/
+├── src/
+│   └── index.ts             # input: tsdown reads it
+└── package.json             # rebuildable: tsdown reads it, then writes "exports" into it
+```
+
+On the next run, Vite Task compares `package.json` with the file tsdown wrote, so the `exports` field that tsdown added doesn't cause a cache miss:
+
+```bash
+$ vp run build               # first run: tsdown adds "exports" to package.json
+$ vp run build               # cache hit
+```
+
+Editing `package.json` yourself still causes a cache miss, as it should, because tsdown has to run again with your changes:
+
+```bash
+$ vp pm pkg set version=1.1.0
+$ vp run build               # cache miss: 'package.json' modified
+```
+
+#### Example: A Task Listing Its Output Folder For Deletion
+
+```ts [vite.config.ts]
+tasks: {
+  build: {
+    // `--clean` deletes the old build in `dist` before tsdown writes a new one.
+    command: 'tsdown --clean',
+  },
+}
+```
+
+```
+my-lib/
+├── src/
+│   └── index.ts             # input
+├── package.json             # input
+└── dist/                    # rebuildable: the task wrote everything inside
+    └── index.mjs            # rebuildable: the task writes it
+```
+
+Listing `dist` makes it an input. Since the task wrote everything inside `dist`, the whole folder is rebuildable:
+
+```bash
+$ vp run build               # first run: tsdown writes dist/
+$ rm -rf dist                # as on a fresh clone
+$ vp run build               # cache hit: dist/ is restored
+```
+
+You don't need `'!dist/**'` in `cache.input` to keep `dist` out of the task's inputs, even though the task lists `dist` to delete the old build and then writes a new one.
+
+#### Example: A Task Reading And Writing Its Own Cache
+
+```ts [vite.config.ts]
+tasks: {
+  typecheck: {
+    command: 'tsc --incremental --noEmit',
+  },
+}
+```
+
+```
+my-app/
+├── src/
+│   └── main.ts              # input: tsc reads it
+├── tsconfig.json            # input: tsc reads it
+└── tsconfig.tsbuildinfo     # rebuildable: tsc reads its cache from it, then writes it back
+```
+
+Vite Task compares `tsconfig.tsbuildinfo` with the file tsc wrote, so tsc's updates to it don't cause a cache miss. If the file is missing, as on a fresh clone, a cache hit restores it:
+
+```bash
+$ vp run typecheck           # first run: tsc writes tsconfig.tsbuildinfo
+$ vp run typecheck           # cache hit
+$ rm tsconfig.tsbuildinfo    # as on a fresh clone
+$ vp run typecheck           # cache hit: tsconfig.tsbuildinfo is restored
+```
+
+#### Avoid Caching Tasks That Modify Files In Place
+
+A task that rewrites your source files makes them rebuildable. If a cached `vp fmt` rewrites every file in `src/utils`, the whole folder becomes rebuildable:
+
+```
+src/
+└── utils/                   # rebuildable: vp fmt rewrote everything inside
+    ├── a.ts                 # rebuildable: vp fmt rewrote it
+    └── b.ts                 # rebuildable: vp fmt rewrote it
+```
+
+Deleting `src/utils` is then a cache hit that writes the folder back.
+
+Turn off auto-fix in the lint and format tasks you cache:
+
+```ts [vite.config.ts]
+tasks: {
+  lint: 'vp lint', // instead of `vp lint --fix`
+  format: 'vp fmt --check', // instead of `vp fmt`
+}
+```
 
 ### Limitations
 
@@ -114,8 +252,9 @@ File system tracking records access. It cannot know why a tool used each path.
 For a standard Vite build, you do not need to add these entries yourself because Vite reports them automatically at runtime:
 
 - `env: ['VITE_*']` or `env: ['NODE_ENV']`
-- `output: ['dist/**']`
 - input or output exclusions for temporary paths like `node_modules/.vite-temp`
+
+Build outputs such as `dist` are captured by automatic file-write tracking and restored on cache hits.
 
 You only need to define the task with `vp build`:
 
@@ -135,7 +274,7 @@ Run this task with `vpr frontendBuild` or `vp run frontendBuild`.
 
 Manual config overrides reported metadata. Add `cache.input`, `cache.output`, `cache.env`, or `cache.untrackedEnv` when your project has behavior that Vite cannot report.
 
-Vite+ supports cooperative tracking for `vp build` today. It will extend this support to more first-party tools in the future. Third-party tools can report cache metadata with [`@voidzero-dev/vite-task-client`](https://npmx.dev/package/@voidzero-dev/vite-task-client).
+Vite+ supports cooperative tracking for `vp build` and `vp test`. `vp test` reports Vitest's on-disk cache paths (`node_modules/.vitest-cache` and the results cache under the Vite cache directory) so they neither invalidate the task nor get restored into it. It will extend this support to more first-party tools in the future. Third-party tools can report cache metadata with [`@voidzero-dev/vite-task-client`](https://npmx.dev/package/@voidzero-dev/vite-task-client).
 
 ## When To Add Manual Config
 

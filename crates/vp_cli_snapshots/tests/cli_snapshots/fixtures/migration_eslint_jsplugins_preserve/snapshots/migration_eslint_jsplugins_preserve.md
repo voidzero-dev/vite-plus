@@ -28,13 +28,6 @@ eslint-plugin-survives stays in devDependencies (eslint itself is removed)
     "eslint-plugin-survives": "^1.0.0",
     "vite": "catalog:",
     "vite-plus": "catalog:"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
   }
 }
 ```

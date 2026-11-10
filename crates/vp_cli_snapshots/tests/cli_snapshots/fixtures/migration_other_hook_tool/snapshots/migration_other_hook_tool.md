@@ -7,7 +7,7 @@ hooks should be skipped due to simple-git-hooks
 ```
 VITE+ - The Unified Toolchain for the Web
 
-⚠ Detected simple-git-hooks — skipping git hooks setup. Please configure git hooks manually, see https://viteplus.dev/guide/migrate#git-hook-tools
+▲ ⚠ Detected simple-git-hooks — skipping git hooks setup. Please configure git hooks manually, see https://viteplus.dev/guide/migrate#git-hook-tools
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • 1 config update applied
@@ -34,13 +34,6 @@ lint-staged config, scripts, and simple-git-hooks config should all be preserved
   },
   "lint-staged": {
     "*.ts": "eslint --fix"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
   }
 }
 ```

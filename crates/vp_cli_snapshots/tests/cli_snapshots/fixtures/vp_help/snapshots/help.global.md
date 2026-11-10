@@ -28,7 +28,7 @@ Develop:
 Execute:
   run    Run tasks (also available as standalone `vpr`)
   exec   Execute a command from local node_modules/.bin
-  node   Run a Node.js script (shorthand for `env exec node`)
+  node   Run plain Node.js (`env exec node`); `vpx <file>` runs TypeScript
   dlx    Execute a package binary without installing it as a dependency
   cache  Manage the task cache
 

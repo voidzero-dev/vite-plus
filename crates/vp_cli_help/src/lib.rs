@@ -4,12 +4,14 @@
     reason = "help rendering needs large, mutable, owned text buffers"
 )]
 
-//! Shared help documents and rendering for Vite+ command-line interfaces.
+//! Shared help documents and diagnostics for Vite+ command-line interfaces.
+
+pub mod error;
 
 use std::{borrow::Cow, fmt::Write as _, io::Write as _};
 
 use clap::{Arg, Command};
-use console::style;
+use console::StyledObject;
 use terminal_size::{Width, terminal_size_of};
 
 const HELP_RIGHT_MARGIN: usize = 4;
@@ -157,7 +159,17 @@ pub fn accent_command(command: &str) -> String {
 }
 
 pub fn should_style_help() -> bool {
-    console::colors_enabled()
+    if vp_shared::output::user_output_to_stderr() {
+        console::colors_enabled_stderr()
+    } else {
+        console::colors_enabled()
+    }
+}
+
+// Self-setup captures stdout for shell assignments and routes its diagnostics to stderr.
+fn style<D>(value: D) -> StyledObject<D> {
+    let styled = console::style(value);
+    if vp_shared::output::user_output_to_stderr() { styled.for_stderr() } else { styled }
 }
 
 fn terminal_content_width() -> usize {
@@ -481,7 +493,7 @@ mod tests {
         };
 
         assert_eq!(
-            render_help_doc_with_width(&doc, 36),
+            console::strip_ansi_codes(&render_help_doc_with_width(&doc, 36)),
             concat!(
                 "Usage: vp example\n",
                 "\n",

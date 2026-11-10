@@ -2,12 +2,12 @@
 
 ## `vp pm approve-builds --all`
 
-pnpm 10.31.0 < 10.32.0 → rejected with friendly UserMessage (no `error:` prefix)
+reject --all before execution on pnpm older than 10.32.0
 
 **Exit code:** 1
 
 ```
-`--all` requires pnpm >= 10.32.0. Upgrade pnpm or pass package names explicitly.
+pnpm < 10.32.0 does not support --all.
 ```
 
 ## `vp pm approve-builds esbuild !core-js`
@@ -26,4 +26,15 @@ plain positional still works on old pnpm
 
 ```
 There are no packages awaiting approval
+```
+
+## `vpt json-edit package.json packageManager pnpm@10.0.0`
+
+
+## `vp pm approve-builds`
+
+Before pnpm 10.1.0, the base command warns and skips execution.
+
+```
+warn: pnpm approve-builds requires pnpm >= 10.1.0. Skipping.
 ```

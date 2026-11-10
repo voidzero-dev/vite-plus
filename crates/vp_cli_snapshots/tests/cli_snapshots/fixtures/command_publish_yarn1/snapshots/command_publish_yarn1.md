@@ -30,13 +30,55 @@ Options:
   --filter <PATTERN>         Filter packages in monorepo
   -h, --help                 Print help
 
-Documentation: https://viteplus.dev/guide/install
+Documentation: https://viteplus.dev/guide/package-management/
 ```
 
-## `vp pm publish --dry-run -- --loglevel error`
+## `vp pm publish --dry-run`
 
-should preview publish without actually publishing (uses npm publish --dry-run)
+should reject dry-run before Yarn Classic can publish
+
+**Exit code:** 1
 
 ```
- command-publish-yarn1@1.0.0
+yarn < 4.9.3 does not support --dry-run.
+```
+
+## `vp pm publish --provenance`
+
+should reject provenance before Yarn Classic publishes without an attestation
+
+**Exit code:** 1
+
+```
+yarn < 4.9.0 does not support --provenance.
+```
+
+## `vp pm publish --force -- --help`
+
+should reject force rather than silently ignore it
+
+**Exit code:** 1
+
+```
+yarn does not support --force.
+```
+
+## `vp pm publish --recursive`
+
+should reject workspace publishing rather than use npm
+
+**Exit code:** 1
+
+```
+yarn does not support --recursive.
+```
+
+## `vp pm publish --filter app`
+
+should reject workspace selection rather than publish the current package
+
+**Exit code:** 1
+
+```
+yarn does not support --filter.
 ```

@@ -42,6 +42,7 @@ export default createTemplate({
               module: 'NodeNext',
               moduleResolution: 'NodeNext',
               outDir: 'lib',
+              rootDir: 'src',
               skipLibCheck: true,
               strict: true,
               target: 'ES2022',

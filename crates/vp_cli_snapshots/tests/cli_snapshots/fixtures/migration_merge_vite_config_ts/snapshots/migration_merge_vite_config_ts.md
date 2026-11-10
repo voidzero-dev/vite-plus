@@ -21,7 +21,7 @@ vite.config.ts
 
 ## `vpt print-file vite.config.ts`
 
-check vite.config.ts
+check merged config preserves the Rolldown chunk name callback
 
 ```
 import { join } from 'node:path';
@@ -80,6 +80,22 @@ export default defineConfig({
       instances: [{ browser: 'chromium' }],
     },
   },
+  build: {
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            {
+              name(id) {
+                const c = id.includes('node_modules') ? 'vendor' : null;
+                return c;
+              },
+            },
+          ],
+        },
+      },
+    },
+  },
 });
 ```
 
@@ -129,13 +145,6 @@ check package.json
     "vitest": "catalog:",
     "playwright": "*",
     "vite-plus": "catalog:"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
   }
 }
 ```

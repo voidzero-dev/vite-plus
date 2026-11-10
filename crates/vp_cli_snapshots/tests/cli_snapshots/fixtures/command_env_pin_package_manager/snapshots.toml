@@ -48,3 +48,93 @@ steps = [
   { argv = ["vp", "env", "pin", "pnpm@11.0.0", "--target", "dev-engines", "--no-install", "--force"], comment = "pinning a shadowed same-family devEngines version explains which declaration remains effective" },
   { argv = ["vpt", "print-file", "package.json"], comment = "both explicitly targeted declarations remain unchanged except for the new devEngines pin" },
 ]
+
+[[case]]
+name = "env_unpin_package_manager_from_nested_workspace"
+vp = "global"
+seed-runtime = false
+cwd = "packages/app"
+steps = [
+  { argv = ["vp", "env", "unpin", "pm"] },
+  { argv = ["vpt", "print-file", "../../package.json", "package.json"], comment = "remove the root manager and preserve the member manifest and sibling manager" },
+]
+
+[[case]]
+name = "env_pin_mixed_components_from_nested_workspace"
+vp = "global"
+seed-runtime = false
+cwd = "packages/app"
+steps = [
+  { argv = ["vp", "env", "pin", "22.13.0", "yarn@4.12.0", "--no-install", "--force"] },
+  { argv = ["vpt", "print-file", "../../package.json", "package.json"], comment = "Node is local while the package manager belongs to the workspace" },
+  { argv = ["vp", "env", "pin", "--unpin"] },
+  { argv = ["vpt", "print-file", "../../package.json", "package.json"], comment = "mixed removal uses the same separate targets" },
+]
+
+[[case]]
+name = "env_unpin_scoped_manager_falls_back_to_dev_engines"
+vp = "global"
+seed-runtime = false
+steps = [
+  { argv = ["vpt", "write-file", "package.json", "{\"packageManager\": \"pnpm@10.18.0\", \"devEngines\": {\"packageManager\": [{\"name\": \"npm\", \"version\": \"11.0.0\"}, {\"name\": \"yarn\", \"version\": \"4.12.0\"}]}}\n"], snapshot = false },
+  { argv = ["vp", "env", "unpin", "yarn"] },
+  { argv = ["vpt", "print-file", "package.json"], comment = "only the matching devEngines entry was removed" },
+  { argv = ["vp", "env", "unpin", "yarn"], comment = "a miss reports both searched fields and the explicit scope" },
+  { argv = ["vp", "env", "unpin", "yarn", "--target", "package-manager"], comment = "an explicit top-level target checks only that field" },
+]
+
+[[case]]
+name = "env_pin_top_level_no_op_and_overwrite"
+vp = "global"
+seed-runtime = false
+steps = [
+  { argv = ["vpt", "write-file", "package.json", "{\"packageManager\": \"pnpm@10.18.0+sha512.keep\"}\n"], snapshot = false },
+  { argv = ["vp", "env", "pin", "pnpm@10.18.0", "--no-install"], comment = "same-value pin preserves the integrity suffix and reports no changes" },
+  { argv = ["vpt", "print-file", "package.json"], comment = "the no-op preserves the original declaration" },
+  { argv = ["vpt", "pipe-stdin", "y\n", "--", "vp", "env", "pin", "pnpm@10.19.0", "--no-install"], comment = "the target precedes confirmation and follows success" },
+  { argv = ["vpt", "print-file", "package.json"] },
+]
+
+[[case]]
+name = "env_pin_same_version_dev_engines_keeps_write_behavior"
+vp = "global"
+seed-runtime = false
+steps = [
+  { argv = ["vpt", "write-file", "package.json", "{\"devEngines\": {\"packageManager\": [{\"name\": \"pnpm\", \"version\": \"10.18.0\", \"onFail\": \"error\"}, {\"name\": \"yarn\", \"version\": \"4.12.0\"}]}}\n"], snapshot = false },
+  { argv = ["vp", "env", "pin", "pnpm@10.18.0", "--no-install"], comment = "equal versions retain the existing write path rather than reporting a no-op" },
+  { argv = ["vpt", "print-file", "package.json"] },
+]
+
+[[case]]
+name = "env_unpin_reports_empty_and_missing_manifest"
+vp = "global"
+seed-runtime = false
+steps = [
+  { argv = ["vpt", "write-file", "package.json", "{\"name\": \"empty\"}\n"], snapshot = false },
+  { argv = ["vp", "env", "unpin", "pm"] },
+  { argv = ["vp", "env", "unpin", "yarn", "--target", "dev-engines"] },
+  { argv = ["vp", "env", "unpin", "pm", "--target", "package-manager"] },
+  { argv = ["vpt", "rm", "package.json"] },
+  { argv = ["vp", "env", "unpin", "pm"], comment = "a missing file is distinct from a readable manifest with no matching pin" },
+]
+
+[[case]]
+name = "env_pin_scope_help"
+vp = "global"
+seed-runtime = false
+steps = [
+  { argv = ["vp", "env", "pin", "--help"] },
+  { argv = ["vp", "env", "unpin", "--help"] },
+]
+
+[[case]]
+name = "env_pin_standalone_package_manager_target"
+vp = "global"
+seed-runtime = false
+steps = [
+  { argv = ["vpt", "write-file", "package.json", "{\"name\": \"standalone\"}\n"], snapshot = false },
+  { argv = ["vp", "env", "pin", "yarn@4.12.0", "--no-install"], comment = "first write uses this project manifest without a confirmation" },
+  { argv = ["vpt", "print-file", "package.json"] },
+  { argv = ["vp", "env", "unpin", "pm"] },
+  { argv = ["vpt", "print-file", "package.json"] },
+]

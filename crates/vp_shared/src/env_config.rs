@@ -101,6 +101,28 @@ fn persisted_dir_envs() -> HashMap<&'static str, String> {
     HashMap::default()
 }
 
+/// Management preference from a `VP_*_MANAGER` variable.
+///
+/// Only the exact values `yes` and `no` are recognized. Any other value,
+/// including a non-UTF-8 one, counts as unset.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ManagerPreference {
+    /// `yes`: Vite+ manages the tool.
+    Yes,
+    /// `no`: prefer the system tool.
+    No,
+}
+
+impl ManagerPreference {
+    fn from_var(name: &str) -> Option<Self> {
+        match std::env::var(name).as_deref() {
+            Ok("yes") => Some(Self::Yes),
+            Ok("no") => Some(Self::No),
+            _ => None,
+        }
+    }
+}
+
 /// Centralized configuration read from environment variables.
 ///
 /// Construction reads all known Vite+ environment variables, including the
@@ -157,6 +179,14 @@ pub struct EnvConfig {
     /// Env: `VP_NODE_VERSION`
     pub node_version: Option<String>,
 
+    /// Bootstrap-only Node selector supplied by a CI integration.
+    pub setup_node_version: Option<String>,
+    /// Optional file for returning the resolved project Node version.
+    pub setup_node_version_file: Option<String>,
+
+    /// Emergency bypass of the global CLI installation lockfile, enabled only by `1`.
+    pub setup_skip_install_lockfile: bool,
+
     /// Override package manager and version.
     ///
     /// Env: `VP_PACKAGE_MANAGER`
@@ -167,6 +197,25 @@ pub struct EnvConfig {
     pub pnpm_version: Option<String>,
     pub yarn_version: Option<String>,
     pub bun_version: Option<String>,
+
+    /// Node.js management preference.
+    ///
+    /// Env: `VP_NODE_MANAGER`
+    pub node_manager: Option<ManagerPreference>,
+
+    /// Package-manager management preference shared by every family.
+    ///
+    /// Env: `VP_PM_MANAGER`
+    pub pm_manager: Option<ManagerPreference>,
+
+    /// Family-specific package-manager management preferences. Each one takes
+    /// precedence over [`Self::pm_manager`].
+    ///
+    /// Env: `VP_NPM_MANAGER`, `VP_PNPM_MANAGER`, `VP_YARN_MANAGER`, `VP_BUN_MANAGER`
+    pub npm_manager: Option<ManagerPreference>,
+    pub pnpm_manager: Option<ManagerPreference>,
+    pub yarn_manager: Option<ManagerPreference>,
+    pub bun_manager: Option<ManagerPreference>,
 
     /// User home directory.
     ///
@@ -180,6 +229,11 @@ pub struct EnvConfig {
     ///
     /// Env: `VP_SHELL`
     pub vp_shell: Option<String>,
+
+    /// Nushell version for `vp env setup`, used instead of running `nu`.
+    ///
+    /// Env: `VP_NU_VERSION`
+    pub nu_version: Option<String>,
 }
 
 impl EnvConfig {
@@ -213,13 +267,25 @@ impl EnvConfig {
             is_ci: std::env::var("CI").is_ok(),
             env_use_eval_enable: std::env::var(env_vars::VP_ENV_USE_EVAL_ENABLE).is_ok(),
             node_version: std::env::var(env_vars::VP_NODE_VERSION).ok(),
+            setup_node_version: std::env::var(env_vars::VP_SETUP_NODE_VERSION).ok(),
+            setup_node_version_file: std::env::var(env_vars::VP_SETUP_NODE_VERSION_FILE).ok(),
+            setup_skip_install_lockfile: std::env::var(env_vars::VP_SETUP_SKIP_INSTALL_LOCKFILE)
+                .as_deref()
+                == Ok("1"),
             package_manager: std::env::var(env_vars::VP_PACKAGE_MANAGER).ok(),
             npm_version: std::env::var(env_vars::VP_NPM_VERSION).ok(),
             pnpm_version: std::env::var(env_vars::VP_PNPM_VERSION).ok(),
             yarn_version: std::env::var(env_vars::VP_YARN_VERSION).ok(),
             bun_version: std::env::var(env_vars::VP_BUN_VERSION).ok(),
+            node_manager: ManagerPreference::from_var(env_vars::VP_NODE_MANAGER),
+            pm_manager: ManagerPreference::from_var(env_vars::VP_PM_MANAGER),
+            npm_manager: ManagerPreference::from_var(env_vars::VP_NPM_MANAGER),
+            pnpm_manager: ManagerPreference::from_var(env_vars::VP_PNPM_MANAGER),
+            yarn_manager: ManagerPreference::from_var(env_vars::VP_YARN_MANAGER),
+            bun_manager: ManagerPreference::from_var(env_vars::VP_BUN_MANAGER),
             user_home,
             vp_shell: std::env::var(env_vars::VP_SHELL).ok(),
+            nu_version: std::env::var(env_vars::VP_NU_VERSION).ok(),
         })
     }
 
@@ -398,6 +464,16 @@ impl EnvConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn installation_lockfile_bypass_requires_explicit_opt_in() {
+        for value in [None, Some(""), Some("0"), Some("true"), Some("1")] {
+            EnvConfig::with_vars([(env_vars::VP_SETUP_SKIP_INSTALL_LOCKFILE, value)], |config| {
+                assert_eq!(config.setup_skip_install_lockfile, value == Some("1"));
+                assert!(!config.dir_envs.contains_key(env_vars::VP_SETUP_SKIP_INSTALL_LOCKFILE));
+            });
+        }
+    }
 
     /// `VP_HOME` pins every category to the single-root mapping.
     #[test]

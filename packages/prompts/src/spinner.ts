@@ -1,10 +1,12 @@
-import { block, getColumns, settings } from '@clack/core';
+import { block, getColumns, isAccessible, settings } from '@clack/core';
 import { wrapAnsi } from 'fast-wrap-ansi';
 import color from 'picocolors';
 import { cursor, erase } from 'sisteransi';
 
 import {
   type CommonOptions,
+  getGuide,
+  isTTY,
   completeColor,
   isCI as isCIFn,
   S_BAR,
@@ -36,7 +38,7 @@ export interface SpinnerResult {
   readonly isCancelled: boolean;
 }
 
-const defaultStyleFn: SpinnerOptions['styleFrame'] = color.magenta;
+const defaultStyleFn: SpinnerOptions['styleFrame'] = color.blue;
 
 const removeTrailingDots = (msg: string): string => {
   return msg.replace(/\.+$/, '');
@@ -60,9 +62,9 @@ export const spinner = ({
   signal,
   ...opts
 }: SpinnerOptions = {}): SpinnerResult => {
-  const isCI = isCIFn();
+  const isCI = isCIFn() || !isTTY(output) || isAccessible(opts.accessible);
 
-  let unblock: () => void;
+  let unblock: (() => void) | undefined;
   let loop: NodeJS.Timeout;
   let isSpinnerActive = false;
   let isCancelled = false;
@@ -131,7 +133,7 @@ export const spinner = ({
       return;
     }
     if (isCI) {
-      output.write('\n');
+      return;
     }
     const wrapped = wrapAnsi(_prevMessage, columns, {
       hard: true,
@@ -145,11 +147,11 @@ export const spinner = ({
     output.write(erase.down());
   };
 
-  const hasGuide = opts.withGuide ?? false;
+  const hasGuide = getGuide(opts);
 
   const startLoop = (): void => {
     isSpinnerActive = true;
-    unblock = block({ output });
+    unblock = isCI ? () => {} : block({ output });
     _origin = performance.now();
     _prevMessage = undefined;
     if (hasGuide) {
@@ -159,28 +161,29 @@ export const spinner = ({
     let indicatorTimer = 0;
     registerHooks();
     const renderFrame = (): void => {
-      if (isCI && _message === _prevMessage) {
+      if (isCI && _prevMessage !== undefined) {
         return;
       }
       clearPrevMessage();
-      _prevMessage = _message;
-      const frame = styleFn(frames[frameIndex]);
+
+      const frame = styleFn(frames[frameIndex] ?? (unicode ? '◒' : 'o'));
       let outputMessage: string;
 
       if (isCI) {
-        outputMessage = `${frame}  ${_message}...`;
+        outputMessage = `${frame} ${_message}...`;
       } else if (indicator === 'timer') {
-        outputMessage = `${frame}  ${_message} ${formatTimer(getElapsedMs())}`;
+        outputMessage = `${frame} ${_message} ${formatTimer(getElapsedMs())}`;
       } else {
         const loadingDots = '.'.repeat(Math.floor(indicatorTimer)).slice(0, 3);
-        outputMessage = `${frame}  ${_message}${loadingDots}`;
+        outputMessage = `${frame} ${_message}${loadingDots}`;
       }
 
       const wrapped = wrapAnsi(outputMessage, columns, {
         hard: true,
         trim: false,
       });
-      output.write(wrapped);
+      output.write(isCI ? `${wrapped}\n` : wrapped);
+      _prevMessage = wrapped;
 
       frameIndex = frameIndex + 1 < frames.length ? frameIndex + 1 : 0;
       // indicator increase by 1 every 8 frames
@@ -192,10 +195,19 @@ export const spinner = ({
     // operation that would otherwise starve the interval. The interval then
     // drives the ongoing animation.
     renderFrame();
-    loop = setInterval(renderFrame, delay);
+    if (!isCI) {
+      loop = setInterval(renderFrame, delay);
+    }
+    if (signal?.aborted) {
+      signalEventHandler();
+    }
   };
 
   const start = (msg = ''): void => {
+    if (isSpinnerActive) {
+      return;
+    }
+    isCancelled = false;
     _elapsedMs = 0;
     _message = removeTrailingDots(msg);
     startLoop();
@@ -206,10 +218,11 @@ export const spinner = ({
     if (!isSpinnerActive) {
       return;
     }
+    const elapsedMs = getElapsedMs();
     isSpinnerActive = false;
+    isCancelled = code === 1;
     clearInterval(loop);
     clearPrevMessage();
-    const elapsedMs = getElapsedMs();
     const step =
       code === 0
         ? completeColor(S_STEP_SUBMIT)
@@ -219,9 +232,9 @@ export const spinner = ({
     _message = msg ?? _message;
     if (!silent) {
       if (indicator === 'timer') {
-        output.write(`${step} ${_message} ${formatTimer(elapsedMs)}\n\n`);
+        output.write(`${step} ${_message} ${formatTimer(elapsedMs)}\n`);
       } else {
-        output.write(`${step} ${_message}\n\n`);
+        output.write(`${step} ${_message}\n`);
       }
     }
     if (!preserveElapsed) {
@@ -229,7 +242,7 @@ export const spinner = ({
     }
     _prevMessage = undefined;
     clearHooks();
-    unblock();
+    unblock?.();
   };
 
   const pause = (): void => {

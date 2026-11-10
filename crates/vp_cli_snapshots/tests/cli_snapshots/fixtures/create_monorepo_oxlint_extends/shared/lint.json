@@ -1,0 +1,4 @@
+{
+  "rules": { "no-debugger": "error" },
+  "options": { "typeAware": false, "typeCheck": false }
+}

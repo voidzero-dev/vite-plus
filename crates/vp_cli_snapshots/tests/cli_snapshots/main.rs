@@ -17,6 +17,7 @@
 #[path = "../../src/bin/vpt/exit_code.rs"]
 mod exit_code;
 mod flavor;
+mod prewarm;
 mod redact;
 mod registry_pack;
 mod report;
@@ -36,13 +37,14 @@ use std::{
 
 use cp_r::CopyOptions;
 use flavor::{Flavor, FlavorRuntime};
-use pty_terminal_test::{CommandBuilder, ScreenSize, TestTerminal};
 use redact::redact_output;
+use vt_pty_terminal_test::{CommandBuilder, ScreenSize, TestTerminal};
 
-/// Default per-step timeout. Windows CI needs longer due to process startup
-/// overhead and slower I/O. Individual steps override via `timeout` (ms).
-const STEP_TIMEOUT: Duration =
-    if cfg!(windows) { Duration::from_secs(60) } else { Duration::from_secs(50) };
+/// Cases have isolated package-manager installs. Downloading a native Bun or
+/// pnpm binary can exceed a minute on CI, before the command itself starts.
+/// Keep the same allowance as registry-backed installs on every platform.
+/// Individual steps override this via `timeout` (ms).
+const STEP_TIMEOUT: Duration = Duration::from_secs(120);
 
 /// Screen size for the PTY terminal. Large enough to avoid line wrapping.
 const SCREEN_SIZE: ScreenSize = ScreenSize { rows: 500, cols: 500 };
@@ -154,12 +156,14 @@ impl Step {
     /// Shell-escaped command line including any env-var prefix and non-default
     /// cwd, without the comment (e.g. `cd packages/a && MY_ENV=1 vp check`).
     fn display_command_line(&self, default_cwd: &str) -> String {
+        // Headings are display-only: keep them identical across platforms and
+        // shells instead of letting shell_escape::escape inspect MSYSTEM.
         let argv_str = self
             .argv
             .iter()
             .map(|s| {
                 if s.contains(|c: char| c.is_whitespace() || c == '"') {
-                    shell_escape::escape(s.as_str().into()).into_owned()
+                    shell_escape::unix::escape(s.as_str().into()).into_owned()
                 } else {
                     s.clone()
                 }
@@ -178,7 +182,7 @@ impl Step {
             command
         } else {
             let cwd = if cwd.is_empty() { "." } else { cwd };
-            format!("cd {} && {command}", shell_escape::escape(cwd.into()))
+            format!("cd {} && {command}", shell_escape::unix::escape(cwd.into()))
         }
     }
 
@@ -383,6 +387,12 @@ struct Case {
     /// Serve the packed checkout packages through the local npm registry.
     #[serde(default, rename = "local-registry")]
     local_registry: bool,
+    /// Keep registry request counters private for tests of metadata caching.
+    #[serde(default, rename = "isolated-registry")]
+    isolated_registry: bool,
+    /// Disable archive preparation for fake installations and configuration-only cases.
+    #[serde(default = "default_true", rename = "prewarm-package-managers")]
+    prewarm_package_managers: bool,
     /// Seed the case's `VP_HOME` with an already-provisioned managed JS
     /// runtime (see `flavor::js_runtime_seed_dir`). Default true; runtime
     /// provisioning tests set false to start from a genuinely empty home.
@@ -569,6 +579,8 @@ impl CaseHome {
         let this = Self { home: root.join("home") };
         let vp_home = this.vp_home();
         std::fs::create_dir_all(&vp_home).unwrap();
+        // Provisioning emulates a fresh install into this case-owned directory.
+        std::fs::write(vp_home.join(".vp-owned"), b"vite-plus-owned-directory\n").unwrap();
         std::fs::create_dir_all(root.join("npm-global/lib")).unwrap();
         // Best-effort: if linking fails, the case downloads the runtime.
         if seed_runtime && let Some(seed) = flavor::js_runtime_seed_dir() {
@@ -686,8 +698,15 @@ impl CaseHome {
         let bin_dir = package_dir.join("bin");
         std::fs::create_dir_all(shim_dir)
             .map_err(|e| format!("failed to create local package shim dir: {e}"))?;
-        for name in ["vp", "vpr", "oxfmt", "oxlint"] {
-            let script = bin_dir.join(name);
+        // One shim per file in `bin/`, as Unix flavors put the whole directory on PATH.
+        let entries = std::fs::read_dir(&bin_dir)
+            .map_err(|e| format!("failed to read local package bin dir: {e}"))?;
+        for entry in entries {
+            let script =
+                entry.map_err(|e| format!("failed to read local package bin dir: {e}"))?.path();
+            let Some(name) = script.file_name().and_then(|name| name.to_str()) else {
+                continue;
+            };
             if !script.is_file() {
                 continue;
             }
@@ -733,6 +752,12 @@ impl CaseHome {
             // to the real user's persistent PATH. Case commands do not
             // inherit this override, so self-setup fixtures retain coverage.
             .env("VP_SELF_SETUP_NO_MODIFY_PATH", "1")
+            // The checkout package is already installed in this home. Without
+            // this, a build with no `vp-install-lock.yaml` beside it looks up
+            // its own version's platform package on npm, which does not exist
+            // on a release branch before publishing. Case commands do not
+            // inherit this override either.
+            .env("VP_SKIP_DEPS_INSTALL", "1")
             .output()
             .map_err(|e| format!("failed to run first-start setup: {e}"))?;
         if output.status.success() {
@@ -748,6 +773,9 @@ impl CaseHome {
 
     fn base_env(&self, path_env: OsString) -> BTreeMap<String, OsString> {
         let mut env = BTreeMap::new();
+        if let Some(mirror) = std::env::var_os("VP_NODE_DIST_MIRROR") {
+            env.insert("VP_NODE_DIST_MIRROR".into(), mirror);
+        }
         env.insert("PATH".into(), path_env);
         // xterm-256color keeps anstream from stripping the OSC 8 milestone
         // sequences used by test steps. It is harmless during env setup.
@@ -835,7 +863,7 @@ fn compose_path_env(tool_dirs: &[PathBuf]) -> OsString {
 }
 
 /// The environment every step starts from. Deliberately small and fully
-/// controlled: no ambient variables survive except through the composed PATH.
+/// controlled: only the configured Node mirror and the composed PATH survive.
 /// Notably absent: `CI` and `NO_COLOR`; the PTY makes real interactive
 /// behaviour the default, and grid rendering strips styling from snapshots.
 fn baseline_env(case_home: &CaseHome, install: &CaseInstall) -> BTreeMap<String, OsString> {
@@ -984,6 +1012,16 @@ fn expand_env_value(value: &str, cwd: &Path, case_env: &BTreeMap<String, OsStrin
     out
 }
 
+fn registry_env_alias(key: &str) -> Option<&'static str> {
+    match key {
+        "npm_config_registry" => Some("NPM_CONFIG_REGISTRY"),
+        "NPM_CONFIG_REGISTRY" => Some("npm_config_registry"),
+        "pnpm_config_registry" => Some("PNPM_CONFIG_REGISTRY"),
+        "PNPM_CONFIG_REGISTRY" => Some("pnpm_config_registry"),
+        _ => None,
+    }
+}
+
 fn step_context<'a>(
     step: &Step,
     case_env: &'a BTreeMap<String, OsString>,
@@ -1005,6 +1043,13 @@ fn step_context<'a>(
     } else {
         let mut env = case_env.clone();
         for (k, v) in &step.envs {
+            // Do not let a runner-provided lowercase alias mask an explicit
+            // uppercase registry override (or vice versa).
+            if let Some(alias) = registry_env_alias(k)
+                && !step.envs.iter().any(|(key, _)| key == alias)
+            {
+                env.remove(alias);
+            }
             // References resolve against the case env, never a sibling step
             // env, so the entries stay order-independent.
             env.insert(k.clone(), expand_env_value(v, &cwd, case_env));
@@ -1044,6 +1089,11 @@ struct RegistryHandle {
     /// them here keeps yarn/bun install cases from leaking caches on every
     /// platform.
     cache_dirs: Vec<PathBuf>,
+}
+
+struct SharedRegistry {
+    env: BTreeMap<String, OsString>,
+    _handle: Option<RegistryHandle>,
 }
 
 impl Drop for RegistryHandle {
@@ -1097,7 +1147,9 @@ impl Drop for RegistryHandle {
 fn start_local_registry(
     node: &Path,
     stage: &Path,
-    pack_dir: &Path,
+    pack_dir: Option<&Path>,
+    cache_dir: &Path,
+    request_log: Option<&Path>,
     case_env: &BTreeMap<String, OsString>,
 ) -> Result<(BTreeMap<String, OsString>, RegistryHandle), String> {
     use std::io::{BufRead as _, Read as _};
@@ -1111,10 +1163,30 @@ fn start_local_registry(
         .current_dir(stage)
         .env_clear()
         .envs(case_env)
-        .env("SNAP_LOCAL_VP_PACKAGES_DIR", pack_dir)
+        // Fixture preloads are inputs to the CLI under test, not this helper.
+        .env_remove("NODE_OPTIONS")
+        .env_remove("NODE_PATH")
+        .env_remove("SNAP_LOCAL_VP_PACKAGES_DIR")
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
+    if let Some(pack_dir) = pack_dir {
+        cmd.env("SNAP_LOCAL_VP_PACKAGES_DIR", pack_dir);
+    }
+    cmd.arg("--snapshot-fixtures").arg(flavor::manifest_dir().join("tests/cli_snapshots/registry"));
+    if std::env::var("VP_SNAP_REGISTRY_MODE").as_deref() != Ok("direct") {
+        cmd.arg("--snapshot-cache").arg(cache_dir);
+        if std::env::var("VP_SNAP_REGISTRY_MODE").as_deref() == Ok("live") {
+            cmd.arg("--live");
+        }
+        if let Some(log) = request_log {
+            cmd.arg("--request-log").arg(log);
+        }
+    } else {
+        // Direct routing still needs locally authored packages, which have no
+        // public-registry counterpart. Do not enable published recordings.
+        cmd.arg("--live");
+    }
     // The server proxies to the developer's configured upstream (an internal
     // npm mirror in `~/.npmrc`); it must read the REAL user home to find it,
     // not the isolated case HOME from `baseline_env`, or mirror-only
@@ -1210,9 +1282,10 @@ fn run_case(
     runtime: &FlavorRuntime,
     snapshot_name: &str,
     local_registry_pack: Option<&Path>,
+    shared_registry_env: Option<&BTreeMap<String, OsString>>,
     report: &report::Report,
 ) -> Result<(), String> {
-    let snapshots = snapshot_test::Snapshots::new(fixture_path.join("snapshots"));
+    let snapshots = vt_snapshot_test::Snapshots::new(fixture_path.join("snapshots"));
 
     // Copy the fixture to a per-case staging directory so the test runs in
     // isolation and workspace-root discovery doesn't walk past the fixture.
@@ -1250,38 +1323,72 @@ fn run_case(
     let case_path: OsString =
         case_env.get("PATH").cloned().unwrap_or_else(|| case_install.path_env.clone());
 
-    // local-registry cases: stand up a per-case npm registry (serving the
-    // packed checkout packages plus this fixture's mock-manifest/tarballs) and
-    // fold its registry env into every step. Held to the end of the case so
-    // its teardown removes the throwaway package-manager caches. Registry env
-    // never sets PATH, so folding it in after `case_path` is derived is safe.
+    // Cases without overlays share the HTTP server, but keep package-manager
+    // caches isolated. Fixture overlays retain a per-case server in every
+    // mode, including direct mode. Neither registry environment changes PATH.
     let registry_phase = report.phase("registry-startup");
-    let registry = if case.local_registry {
-        let pack_dir = local_registry_pack
-            .ok_or("internal error: local-registry case reached run_case without a packed dir")?;
+    let mut shared_bun_cache = None;
+    let (registry_env, registry) = if let Some(env) = shared_registry_env {
+        let mut env = env.clone();
+        // Bun cache/temp renames cannot cross filesystems. Windows CI places
+        // the run tree on ReFS, so retain the standalone helper's NTFS choice.
+        // Keep Unix temp paths outside the case tree: long fixture names can
+        // exceed the socket path limit used by the task runner and Chromium.
+        let cache_root = if cfg!(windows) && std::env::var_os("CI").is_some() {
+            std::env::var_os("USERPROFILE").map_or_else(std::env::temp_dir, PathBuf::from)
+        } else {
+            std::env::temp_dir()
+        };
+        let cache = tempfile::Builder::new()
+            .prefix("vp-local-registry-bun-")
+            .tempdir_in(cache_root)
+            .map_err(|error| format!("failed to create Bun cache: {error}"))?;
+        let temporary = cache.path().join(".tmp");
+        std::fs::create_dir(&temporary).map_err(|error| error.to_string())?;
+        env.insert("YARN_GLOBAL_FOLDER".into(), case_root.join("yarn-cache").into_os_string());
+        env.insert("BUN_INSTALL_CACHE_DIR".into(), cache.path().as_os_str().into());
+        env.insert("BUN_TMPDIR".into(), temporary.clone().into_os_string());
+        env.insert("TMPDIR".into(), temporary.into_os_string());
+        shared_bun_cache = Some(cache);
+        (env, None)
+    } else if case.local_registry
+        || stage.join("mock-manifest.json").exists()
+        || stage.join("tarballs").exists()
+        || std::env::var("VP_SNAP_REGISTRY_MODE").as_deref() != Ok("direct")
+    {
+        let cache_dir = std::env::var_os("VP_SNAP_REGISTRY_CACHE_DIR")
+            .map_or_else(|| tmpdir.join("registry-cache"), PathBuf::from);
+        let request_log = report.artifact_path("registry.jsonl")?;
         // Prefer the seed runtime's real node binary over the case's node
         // shim: the shim resolves the project's pinned runtime from its cwd,
         // and a fixture pinning an older Node (a `.node-version` under test)
         // must not pick the runtime executing this TypeScript helper.
         let registry_node = flavor::seed_runtime_node()
             .map_or_else(|| case_install.resolve_program("node", &case_path, &stage), Ok)?;
-        let (registry_env, handle) =
-            start_local_registry(&registry_node, &stage, pack_dir, &case_env)?;
-        for (key, value) in registry_env {
+        let (registry_env, handle) = start_local_registry(
+            &registry_node,
+            &stage,
+            local_registry_pack,
+            &cache_dir,
+            request_log.as_deref(),
+            &case_env,
+        )?;
+        (registry_env, Some(handle))
+    } else {
+        (BTreeMap::new(), None)
+    };
+    for (key, value) in registry_env {
+        // Explicit fixture settings (including intentionally unreachable
+        // registries) still win over the runner's defaults.
+        let overridden = |key: &str| {
+            case.env.contains_key(key) || case.unset_env.iter().any(|unset| unset == key)
+        };
+        if !overridden(&key) && !registry_env_alias(&key).is_some_and(overridden) {
             case_env.insert(key, value);
         }
-        Some(handle)
-    } else {
-        None
-    };
+    }
 
     drop(registry_phase);
-
-    // Installs through the local registry are slower than pure vp commands, so
-    // local-registry steps get a 120s default (still overridable per step);
-    // everything else keeps the standard per-step default.
-    let step_default_timeout =
-        if case.local_registry { Duration::from_secs(120) } else { STEP_TIMEOUT };
 
     let stage_str = stage.to_str().unwrap().to_owned();
     let case_dirs = case_home.redaction_paths();
@@ -1316,7 +1423,7 @@ fn run_case(
         let (step_env, step_cwd, program) =
             step_context(step, &case_env, &case_path, &stage, &case.cwd, &case_install)?;
         let step_env: &BTreeMap<String, OsString> = &step_env;
-        let timeout = step.timeout(step_default_timeout);
+        let timeout = step.timeout(STEP_TIMEOUT);
 
         let command_line = step.display_command_line(&case.cwd);
         let execution_phase = report.phase(format!("step-{}: {command_line}", step_index + 1));
@@ -1374,50 +1481,54 @@ fn run_case(
                 std::thread::spawn(move || {
                     let mut terminal = terminal;
 
-                    for interaction in interactions {
-                        match interaction {
-                            Interaction::ExpectMilestone(expect) => {
-                                output_for_thread.lock().unwrap().push_str(&format!(
-                                    "**→ expect-milestone:** `{}`\n\n",
-                                    expect.expect_milestone
-                                ));
-                                let milestone_screen =
-                                    terminal.reader.expect_milestone(&expect.expect_milestone);
-                                let mut output = output_for_thread.lock().unwrap();
-                                push_fenced_block(&mut output, &milestone_screen);
-                                output.push('\n');
-                            }
-                            Interaction::Write(write) => {
-                                output_for_thread
-                                    .lock()
-                                    .unwrap()
-                                    .push_str(&format!("**← write:** `{}`\n\n", write.write));
-                                terminal.writer.write_all(write.write.as_bytes()).unwrap();
-                                terminal.writer.flush().unwrap();
-                            }
-                            Interaction::WriteLine(write_line) => {
-                                output_for_thread.lock().unwrap().push_str(&format!(
-                                    "**← write-line:** `{}`\n\n",
-                                    write_line.write_line
-                                ));
-                                terminal
-                                    .writer
-                                    .write_line(write_line.write_line.as_bytes())
-                                    .unwrap();
-                            }
-                            Interaction::WriteKey(write_key) => {
-                                let key_name = write_key.write_key.as_str();
-                                output_for_thread
-                                    .lock()
-                                    .unwrap()
-                                    .push_str(&format!("**← write-key:** `{key_name}`\n\n"));
-                                terminal.writer.write_all(write_key.write_key.bytes()).unwrap();
-                                terminal.writer.flush().unwrap();
+                    // Killing a timed-out child can make a milestone wait panic.
+                    // Capture its final screen before propagating that panic.
+                    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        for interaction in interactions {
+                            match interaction {
+                                Interaction::ExpectMilestone(expect) => {
+                                    output_for_thread.lock().unwrap().push_str(&format!(
+                                        "**→ expect-milestone:** `{}`\n\n",
+                                        expect.expect_milestone
+                                    ));
+                                    let milestone_screen =
+                                        terminal.reader.expect_milestone(&expect.expect_milestone);
+                                    let mut output = output_for_thread.lock().unwrap();
+                                    push_fenced_block(&mut output, &milestone_screen);
+                                    output.push('\n');
+                                }
+                                Interaction::Write(write) => {
+                                    output_for_thread
+                                        .lock()
+                                        .unwrap()
+                                        .push_str(&format!("**← write:** `{}`\n\n", write.write));
+                                    terminal.writer.write_all(write.write.as_bytes()).unwrap();
+                                    terminal.writer.flush().unwrap();
+                                }
+                                Interaction::WriteLine(write_line) => {
+                                    output_for_thread.lock().unwrap().push_str(&format!(
+                                        "**← write-line:** `{}`\n\n",
+                                        write_line.write_line
+                                    ));
+                                    terminal
+                                        .writer
+                                        .write_line(write_line.write_line.as_bytes())
+                                        .unwrap();
+                                }
+                                Interaction::WriteKey(write_key) => {
+                                    let key_name = write_key.write_key.as_str();
+                                    output_for_thread
+                                        .lock()
+                                        .unwrap()
+                                        .push_str(&format!("**← write-key:** `{key_name}`\n\n"));
+                                    terminal.writer.write_all(write_key.write_key.bytes()).unwrap();
+                                    terminal.writer.flush().unwrap();
+                                }
                             }
                         }
-                    }
 
-                    let status = terminal.reader.wait_for_exit().unwrap();
+                        terminal.reader.wait_for_exit().unwrap()
+                    }));
                     let screen = if formatted_snapshot {
                         render_formatted_screen(&terminal.reader.screen_contents_formatted())
                     } else {
@@ -1429,16 +1540,21 @@ fn run_case(
                         push_fenced_block(&mut output, &screen);
                     }
 
-                    let _ = tx.send(i64::from(status.exit_code()));
+                    let _ = tx.send(result);
                 });
 
                 match rx.recv_timeout(timeout) {
-                    Ok(exit_code) => {
+                    Ok(result) => {
+                        let status =
+                            result.unwrap_or_else(|panic| std::panic::resume_unwind(panic));
                         let output = output.lock().unwrap().clone();
-                        (TerminationState::Exited(exit_code), output)
+                        (TerminationState::Exited(i64::from(status.exit_code())), output)
                     }
                     Err(mpsc::RecvTimeoutError::Timeout) => {
                         let _ = killer.kill();
+                        // Let the reader drain the PTY and save its screen. Bound
+                        // this wait because descendants may still hold the PTY.
+                        let _ = rx.recv_timeout(Duration::from_secs(2));
                         let output = output.lock().unwrap().clone();
                         (TerminationState::TimedOut, output)
                     }
@@ -1560,11 +1676,12 @@ fn run_case(
         // Cleanup honors the step timeout (output is discarded either way),
         // so a hung teardown can never wedge the whole suite.
         if let Ok(mut child) = cmd.spawn() {
-            let _ = wait_with_deadline(&mut child, step.timeout(step_default_timeout));
+            let _ = wait_with_deadline(&mut child, step.timeout(STEP_TIMEOUT));
         }
     }
 
     drop(registry);
+    drop(shared_bun_cache);
     drop(cleanup_phase);
 
     // Deferred so the cleanup above always runs, even for hung steps.
@@ -1741,6 +1858,9 @@ fn main() {
         /// VP_SNAP_PACKAGES_DIR also shares them across nextest processes;
         /// this cell avoids revalidating the directory for each local trial.
         local_registry_pack: std::sync::OnceLock<Result<Arc<Path>, String>>,
+        shared_registry: std::sync::OnceLock<Result<SharedRegistry, String>>,
+        packed_registry: std::sync::OnceLock<Result<SharedRegistry, String>>,
+        registry_log: Option<PathBuf>,
     }
     impl LazyRuntimes {
         fn get(&self, flavor: Flavor) -> &Result<FlavorRuntime, String> {
@@ -1749,6 +1869,54 @@ fn main() {
                 Flavor::Local => &self.local,
             };
             cell.get_or_init(|| flavor::provision(flavor, &self.run_root))
+        }
+
+        fn shared_registry(
+            &self,
+            pack_dir: Option<&Path>,
+        ) -> Result<&BTreeMap<String, OsString>, String> {
+            let (cell, name) = if pack_dir.is_some() {
+                (&self.packed_registry, "packed-registry")
+            } else {
+                (&self.shared_registry, "shared-registry")
+            };
+            cell.get_or_init(|| {
+                let external_env = if pack_dir.is_some() {
+                    "VP_SNAP_PACKED_REGISTRY_ENV"
+                } else {
+                    "VP_SNAP_SHARED_REGISTRY_ENV"
+                };
+                if let Ok(value) = std::env::var(external_env) {
+                    let env: BTreeMap<String, String> = serde_json::from_str(&value)
+                        .map_err(|error| format!("invalid shared registry environment: {error}"))?;
+                    return Ok(SharedRegistry {
+                        env: env.into_iter().map(|(key, value)| (key, value.into())).collect(),
+                        _handle: None,
+                    });
+                }
+                let stage = self.run_root.join(name);
+                std::fs::create_dir_all(&stage).map_err(|error| error.to_string())?;
+                let node = flavor::seed_runtime_node()
+                    .map_or_else(|| which::which("node").map_err(|error| error.to_string()), Ok)?;
+                let cache_dir = std::env::var_os("VP_SNAP_REGISTRY_CACHE_DIR")
+                    .map_or_else(|| self.run_root.join("registry-cache"), PathBuf::from);
+                let helper_env = ["TEMP", "TMP", "TMPDIR", "SYSTEMROOT", "WINDIR"]
+                    .into_iter()
+                    .filter_map(|key| std::env::var_os(key).map(|value| (key.to_string(), value)))
+                    .collect();
+                let (env, handle) = start_local_registry(
+                    &node,
+                    &stage,
+                    pack_dir,
+                    &cache_dir,
+                    self.registry_log.as_deref(),
+                    &helper_env,
+                )?;
+                Ok(SharedRegistry { env, _handle: Some(handle) })
+            })
+            .as_ref()
+            .map(|registry| &registry.env)
+            .map_err(Clone::clone)
         }
 
         /// Packs the checkout packages once and returns the shared dir. Reuses
@@ -1794,6 +1962,9 @@ fn main() {
         global: std::sync::OnceLock::new(),
         local: std::sync::OnceLock::new(),
         local_registry_pack: std::sync::OnceLock::new(),
+        shared_registry: std::sync::OnceLock::new(),
+        packed_registry: std::sync::OnceLock::new(),
+        registry_log: artifacts.as_ref().map(|dir| dir.join("registry.jsonl")),
     });
 
     // Per-case wall times, printed slowest-first after the run. libtest-mimic
@@ -1810,6 +1981,9 @@ fn main() {
 
     let mut tests: Vec<libtest_mimic::Trial> = Vec::new();
     let mut isolated_trials = BTreeSet::new();
+    let prewarm_manifest =
+        args.list.then(|| std::env::var_os("VP_SNAP_PREWARM_MANIFEST")).flatten();
+    let mut archives = prewarm::PackageManagerPrewarm::default();
     for fixture_path in fixture_paths {
         let fixture_path: Arc<Path> = Arc::from(fixture_path.as_path());
         let fixture_name: Arc<str> = Arc::from(fixture_path.file_name().unwrap().to_str().unwrap());
@@ -1845,6 +2019,24 @@ fn main() {
                 let ignored = case.ignore
                     || required_tool_missing
                     || (case.local_registry && !local_build_present);
+                if prewarm_manifest.is_some() && !ignored && case.prewarm_package_managers {
+                    archives
+                        .env(case.env.iter().map(|(key, value)| (key.as_str(), value.as_str())));
+                    archives.workspace(&fixture_path, &case.cwd).unwrap_or_else(|error| {
+                        panic!("failed to read prewarm inputs for {trial_name}: {error}")
+                    });
+                    for step in case.steps.iter().chain(&case.after) {
+                        archives
+                            .workspace(&fixture_path, step.cwd.as_deref().unwrap_or(&case.cwd))
+                            .unwrap_or_else(|error| {
+                                panic!("failed to read prewarm inputs for {trial_name}: {error}")
+                            });
+                        archives.env(
+                            step.envs.iter().map(|(key, value)| (key.as_str(), value.as_str())),
+                        );
+                        archives.step(&step.argv);
+                    }
+                }
                 let isolated = case_needs_isolation(&case);
                 if isolated {
                     isolated_trials.insert(trial_name.clone());
@@ -1878,6 +2070,18 @@ fn main() {
                                 "{fixture_name}_case_{case_index}_{}",
                                 flavor.as_str()
                             ));
+                            let shared_registry_phase = report.phase("shared-registry-startup");
+                            let shared_registry_env = if !case.isolated_registry
+                                && !fixture_path.join("mock-manifest.json").exists()
+                                && !fixture_path.join("tarballs").exists()
+                                && !fixture_path.join(".npmrc").exists()
+                                && std::env::var("VP_SNAP_REGISTRY_MODE").as_deref() != Ok("direct")
+                            {
+                                Some(runtimes.shared_registry(local_registry_pack.as_deref())?)
+                            } else {
+                                None
+                            };
+                            drop(shared_registry_phase);
                             let result = run_case(
                                 &tmp_dir_path,
                                 &case_root,
@@ -1887,6 +2091,7 @@ fn main() {
                                 runtime,
                                 &snapshot_name,
                                 local_registry_pack.as_deref(),
+                                shared_registry_env,
                                 &report,
                             );
                             // Reclaim each workspace while other workers can
@@ -1909,6 +2114,13 @@ fn main() {
                 );
             }
         }
+    }
+
+    if let Some(path) = prewarm_manifest {
+        let urls = archives.urls(&prewarm::platform_package());
+        std::fs::write(&path, serde_json::to_vec_pretty(&urls).unwrap()).unwrap_or_else(|error| {
+            panic!("failed to write prewarm manifest {}: {error}", Path::new(&path).display())
+        });
     }
 
     if args.list
@@ -1953,6 +2165,7 @@ fn main() {
     // exit() never returns, so the staged run tree must be dropped first or
     // every run would leave its full tempdir behind.
     let cleanup_phase = run_report.phase("run-cleanup");
+    drop(runtimes);
     drop(tmp_dir);
     drop(cleanup_phase);
     run_report

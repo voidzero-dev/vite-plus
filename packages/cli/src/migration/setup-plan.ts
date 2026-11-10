@@ -15,12 +15,15 @@ import {
   selectEditor,
 } from '../utils/editor.ts';
 import { cancelAndExit, promptGitHooks } from '../utils/prompts.ts';
+import { log, muted } from '../utils/terminal.ts';
 import {
   confirmEslintMigration,
   confirmTsupMigration,
   detectEslintProject,
   detectIncompatibleEslintIntegration,
   detectTsupProject,
+  hasExistingViteHooksPolicy,
+  isViteHooksSetupComplete,
   preflightGitHooksSetup,
   warnIncompatibleEslintIntegration,
   warnLegacyEslintConfig,
@@ -45,15 +48,22 @@ async function collectGitHooksDecision(
   options: MigrationOptions,
   packages: readonly WorkspacePackage[] = [],
 ): Promise<boolean> {
-  let shouldSetupHooks = await promptGitHooks(options);
-  if (shouldSetupHooks) {
-    const reason = preflightGitHooksSetup(rootDir, packageManager, packages);
-    if (reason) {
-      prompts.log.warn(`⚠ ${reason}`);
-      shouldSetupHooks = false;
-    }
+  const hasExistingHooks = options.hooks === undefined && hasExistingViteHooksPolicy(rootDir);
+  if (hasExistingHooks && isViteHooksSetupComplete(rootDir)) {
+    log(`${muted('•')} Git hooks already configured, skipping`);
+    return false;
   }
-  return shouldSetupHooks;
+
+  // Existing hook files opt into setup; preflight still protects their policy.
+  if (!hasExistingHooks && !(await promptGitHooks(options))) {
+    return false;
+  }
+  const reason = preflightGitHooksSetup(rootDir, packageManager, packages);
+  if (reason) {
+    prompts.log.warn(`⚠ ${reason}`);
+    return false;
+  }
+  return true;
 }
 
 async function collectAgentInstructionPlan(

@@ -5,23 +5,20 @@
 
 ## `vp install ./dep --lockfile-only --frozen-lockfile`
 
-warn for frozen-lockfile that pnpm add cannot accept, but preserve lockfile-only
+reject frozen-lockfile before pnpm add can modify the project
+
+**Exit code:** 1
 
 ```
 VITE+ - The Unified Toolchain for the Web
 
-warn: pnpm does not support --frozen-lockfile.
-
-dependencies:
- install-option-dep link:dep
-
-Done in <duration> using pnpm <version>
+pnpm does not support --frozen-lockfile.
 ```
 
-## `vpt stat-file pnpm-lock.yaml --assert file`
+## `vpt stat-file pnpm-lock.yaml --assert missing`
 
 ```
-pnpm-lock.yaml: file
+pnpm-lock.yaml: missing
 ```
 
 ## `vpt stat-file node_modules --assert missing`

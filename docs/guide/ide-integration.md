@@ -1,6 +1,6 @@
 # IDE Integration
 
-Vite+ supports VS Code and Zed through editor-specific settings that `vp create` and `vp migrate` can automatically write into your project.
+Vite+ supports VS Code, Zed, and JetBrains IDEs through editor-specific settings that `vp create` and `vp migrate` can automatically write into your project.
 
 ## VS Code
 
@@ -63,9 +63,7 @@ You can also manually set up the Zed config:
       "initialization_options": {
         "settings": {
           "run": "onType",
-          "fixKind": "safe_fix",
-          "typeAware": true,
-          "unusedDisableDirectives": "deny"
+          "fixKind": "safe_fix"
         }
       }
     },
@@ -145,13 +143,15 @@ You can also manually set up the IDE configuration to match your Vite+ setup:
         "javascript.nodejs.core.library.configured.version": "24.18.0", // Replace with your selected Node.js version
         "javascript.nodejs.core.library.typings.version": "24.13.3", // Replace with the version of @types/node that corresponds to your runtime (or omit if you don't want it)
         "javascript.preferred.runtime.type.id": "node",
-        "nodejs_interpreter_path": "$USER_HOME$/.vite-plus/bin/node",
+        "nodejs_interpreter_path": "$USER_HOME$/.local/share/vite-plus/bin/node",
         "nodejs_package_manager_path": "pnpm" // Replace with your package manager of choice
       }
     }]]>
   </component>
 </project>
 ```
+
+This path assumes a new Unix installation using the default XDG directories. On Windows, use `%LOCALAPPDATA%\vite-plus\bin\node.exe`. Run `vp env current node` to check the resolved Node.js version and binary path. If you use a custom `VP_HOME` or XDG directories, or an older Vite+ installation, update `nodejs_interpreter_path` to the path of your Node.js shim.
 
 ```xml [.idea/OxfmtSettings.xml]
 <?xml version="1.0" encoding="UTF-8"?>

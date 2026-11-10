@@ -949,6 +949,39 @@ export interface TsconfigOptions {
   references?: 'auto';
 }
 
+/** See <https://tc39.es/ecma426/#sec-source-map-format>. */
+export interface JSONSourceMap {
+  /** The version field, must be 3. */
+  version: number;
+  /** An optional name of the generated code that this source map is associated with. */
+  file?: string;
+  /** A string with the encoded mapping data. */
+  mappings: string;
+  /**
+   * An optional source root, useful for relocating source files on a server or removing repeated values in the "sources" entry.
+   * This value is prepended to the individual entries in the "source" field.
+   */
+  sourceRoot?: string;
+  /** A list of original sources used by the "mappings" entry. */
+  sources: Array<string>;
+  /**
+   * An optional list of source content, useful when the "source" can't be hosted.
+   * The contents are listed in the same order as the sources in line 5. "null" may be used if some original sources should be retrieved by name.
+   */
+  sourcesContent?: Array<string | undefined | null>;
+  /** A list of symbol names used by the "mappings" entry. */
+  names: Array<string>;
+  /** An optional field containing the debugId for this sourcemap. */
+  debugId?: string;
+  /**
+   * Identifies third-party sources (such as framework code or bundler-generated code), allowing developers to avoid code that they don't want to see or step through, without having to configure this beforehand.
+   * The `ignoreList` field refers to the `sources` array, and lists the indices of all the known third-party sources in that source map.
+   * When parsing the source map, developer tools can use this to determine sections of the code that the browser loads and runs that could be automatically ignore-listed.
+   * JSON input falls back to the deprecated `x_google_ignoreList` when `ignoreList` is missing or null.
+   */
+  ignoreList?: Array<number>;
+}
+
 export interface SourceMap {
   file?: string;
   mappings: string;
@@ -957,7 +990,7 @@ export interface SourceMap {
   sources: Array<string>;
   sourcesContent?: Array<string>;
   version: number;
-  x_google_ignoreList?: Array<number>;
+  ignoreList?: Array<number>;
 }
 
 export interface ArrowFunctionsOptions {
@@ -1245,8 +1278,8 @@ export interface ModuleRunnerTransformResult {
    * This will be set if {@link TransformOptions#sourcemap} is `true`.
    */
   map?: SourceMap;
-  deps: Array<string>;
-  dynamicDeps: Array<string>;
+  deps: string[];
+  dynamicDeps: string[];
   /**
    * Parse and transformation errors.
    *
@@ -1636,6 +1669,73 @@ export interface TypeScriptOptions {
   rewriteImportExtensions?: 'rewrite' | 'remove' | boolean;
 }
 
+/**
+ * The selected tsconfig and its original source, sent to an asynchronous loader.
+ * `None` selects discovery explicitly, without consulting the receiving thread's env.
+ */
+export interface FrozenTsconfig {
+  path?: string;
+  source?: string;
+}
+
+export interface LoadContext {
+  /** Export conditions of the relevant `package.json` */
+  conditions?: Array<string>;
+  /**
+   * The format optionally supplied by the `resolve` hook chain. Node.js passes it as
+   * `undefined`, not `null`, when the chain reported none — a `.node` or `.wasm` file
+   * resolved without its flag, any extension Node.js does not know — and a required
+   * field would reject the whole context with "Missing field `format`" instead of
+   * letting Node.js raise its own `ERR_UNKNOWN_FILE_EXTENSION`.
+   */
+  format?: string | null;
+  /** An object whose key-value pairs represent the assertions for the module to import */
+  importAttributes: Record<string, string>;
+}
+
+export interface LoadFnOutput {
+  format: string;
+  source?: string | Uint8Array | Buffer | null;
+  responseURL?: string;
+}
+
+/** The code `transformModuleRunner` hands to `@oxc-node/core/importer`. */
+export interface ModuleRunnerOutput {
+  code: string;
+  /** The source map as a JSON string */
+  map?: string;
+  /**
+   * The file is an ES module. Its imports, exports and `import.meta` are calls into
+   * the runner (`__vite_ssr_import__` and friends); a CommonJS file keeps `require`,
+   * `module` and `exports`, and only its `import()` calls into the runner.
+   */
+  esm: boolean;
+  /**
+   * The ES module awaits at its top level, so `require()` of it is
+   * `ERR_REQUIRE_ASYNC_MODULE`.
+   */
+  topLevelAwait: boolean;
+}
+
+export interface OxcResolveOptions {
+  getCurrentDirectory?: () => string;
+}
+
+export interface ResolveContext {
+  /** Export conditions of the relevant `package.json` */
+  conditions: Array<string>;
+  /** An object whose key-value pairs represent the assertions for the module to import */
+  importAttributes: Record<string, string>;
+  parentURL?: string;
+}
+
+export interface ResolveFnOutput {
+  format?: string | null;
+  shortCircuit?: boolean;
+  url: string;
+  importAttributes?: Record<string, string> | null;
+}
+
 export declare class BindingBundleEndEventData {
   output: string;
   duration: number;
@@ -1864,6 +1964,7 @@ export declare class BindingNormalizedOptions {
   get assetFilenames(): string | undefined;
   get dir(): string | null;
   get file(): string | null;
+  get charset(): 'ascii' | 'utf8';
   get format(): 'es' | 'cjs' | 'iife' | 'umd';
   get exports(): 'default' | 'named' | 'none' | 'auto';
   get esModule(): boolean | 'if-default-prop';
@@ -1917,6 +2018,12 @@ export declare class BindingOutputChunk {
   getImports(): Array<string>;
   getDynamicImports(): Array<string>;
   getCode(): string;
+  /**
+   * Identity of the shared chunk data behind this object. Two `BindingOutputChunk` objects with the same
+   * identity share the same data, so a JavaScript string made from `getCode()` of one is valid for the other.
+   * The identity is the address of that data. It stays unique while a `BindingOutputChunk` keeps the data alive.
+   */
+  getCodeIdentity(): number;
   getMap(): string | null;
   getSourcemapFileName(): string | null;
   getPreliminaryFileName(): string;
@@ -1966,6 +2073,8 @@ export declare class BindingRenderedChunkMeta {
 
 export declare class BindingRenderedModule {
   get code(): string | null;
+  /** `code.length` without materializing `code`. */
+  get renderedLength(): number;
   get renderedExports(): Array<string>;
 }
 
@@ -2052,13 +2161,6 @@ export declare class TsconfigCache {
   /** Get the number of cached entries. */
   size(): number;
 }
-
-/**
- * Panics on purpose. CI calls this to check that a published binding can produce a
- * symbolicated backtrace from its separately published debug info.
- * See `scripts/misc/verify-debuginfo.mjs` and internal-docs/panic-symbolication/implementation.md
- */
-export declare function __internalForcePanic(): void;
 
 export interface AliasItem {
   find: string;
@@ -2156,6 +2258,7 @@ export interface BindingChecksOptions {
   largeBarrelModules?: boolean;
   sourcemapBroken?: boolean;
   namespaceConflict?: boolean;
+  shimmedExport?: boolean;
 }
 
 export interface BindingChunkImportMap {
@@ -2228,6 +2331,12 @@ export interface BindingDevOptions {
 
 export interface BindingDevtoolsOptions {
   sessionId?: string;
+  /**
+   * `"full"` (default): write JSON-lines devtools logs. `"report"`: aggregate the same
+   * event stream in-memory and emit an agent-readable report (`metrics.json` + markdown)
+   * under `node_modules/.rolldown/report/<output dir>` instead.
+   */
+  mode?: 'full' | 'report';
 }
 
 export interface BindingDevWatchOptions {
@@ -2432,6 +2541,7 @@ export interface BindingExperimentalDevModeOptions {
   /** @deprecated Common runtime injection will be disabled by default in the future. */
   skipCommonRuntimeInjection?: boolean;
   lazy?: boolean;
+  hotUpdate?: boolean;
 }
 
 export interface BindingExperimentalOptions {
@@ -2621,6 +2731,15 @@ export interface BindingInjectImportNamespace {
   from: string;
 }
 
+/**
+ * `output.codeSplitting.experimentalInlineCommonChunks`. `exclude` entries use the same shape
+ * as `BindingMatchGroup.test`, including the batched function shim.
+ */
+export interface BindingInlineCommonChunksOptions {
+  maxSize?: number;
+  exclude?: Array<string | RegExp | ((ids: Array<string>) => Uint8Array)>;
+}
+
 export interface BindingInlineConstConfig {
   mode?: string;
   pass?: number;
@@ -2678,6 +2797,7 @@ export interface BindingJsonSourcemap {
   sourcesContent?: Array<string | undefined | null>;
   names?: Array<string>;
   debugId?: string;
+  ignoreList?: Array<number>;
   x_google_ignoreList?: Array<number>;
 }
 
@@ -2706,6 +2826,7 @@ export interface BindingLog {
   id?: string;
   code?: string;
   exporter?: string;
+  binding?: string;
   plugin?: string;
   /** Location information (line, column, file) */
   loc?: BindingLogLocation;
@@ -2749,6 +2870,7 @@ export interface BindingManualCodeSplittingOptions {
   maxSize?: number;
   minModuleSize?: number;
   maxModuleSize?: number;
+  experimentalInlineCommonChunks?: BindingInlineCommonChunksOptions;
   internalInvalidateModuleInfoCache?: () => void;
 }
 
@@ -2811,6 +2933,7 @@ export interface BindingOutputOptions {
   postFooter?: string | ((chunk: BindingRenderedChunk) => MaybePromise<VoidNullable<string>>);
   dir?: string;
   file?: string;
+  charset?: 'ascii' | 'utf8';
   esModule?: boolean | 'if-default-prop';
   exports?: 'default' | 'named' | 'none' | 'auto';
   extend?: boolean;
@@ -3274,6 +3397,7 @@ export interface BindingViteResolvePluginConfig {
   tsconfig?: string;
   environmentConsumer: string;
   environmentName: string;
+  convertExternalRequire?: boolean;
   builtins: Array<BindingStringOrRegex>;
   external: true | string[];
   noExternal: true | Array<string | RegExp>;
@@ -3299,6 +3423,8 @@ export interface BindingViteResolvePluginConfig {
 
 export interface BindingViteResolvePluginResolveOptions {
   isBuild: boolean;
+  /** Defaults to `isBuild`. */
+  isBundled?: boolean;
   isProduction: boolean;
   asSrc: boolean;
   preferRelative: boolean;
@@ -3522,6 +3648,11 @@ export interface CliOptions {
   explicitChdir?: boolean;
   /** CLI arguments (should be process.argv.slice(2) from JavaScript) */
   args?: Array<string>;
+  /**
+   * Host Node.js version (`process.version`), used for the package-manager
+   * lifecycle env user agent.
+   */
+  nodeVersion?: string;
   /** Generated toolchain manifest shipped with this vite-plus package. */
   toolchainManifestPath: string;
   /** Root directory of this vite-plus package. */
@@ -3602,6 +3733,7 @@ export declare function documentationUrl(path: string): string;
  *   - `name`: The name of the package manager
  *   - `version`: The version of the package manager
  *   - `expected_hash`: The expected hash of the package manager
+ *   - `cwd`: An absolute directory used to load workspace npm configuration
  *
  * ## Returns
  *
@@ -3634,6 +3766,7 @@ export interface DownloadPackageManagerOptions {
   name: string;
   version: string;
   expectedHash?: string;
+  cwd?: string;
 }
 
 export interface DownloadPackageManagerResult {
@@ -3646,6 +3779,16 @@ export interface DownloadPackageManagerResult {
 
 /** Re-enable blocking stdio after Node.js has initialized its lazy standard streams. */
 export declare function ensureBlockingStdio(): void;
+
+/**
+ * Find the monorepo root containing `cwd` with the same rules as `vp run` and `vp install`.
+ *
+ * Returns `null` when `cwd` is not inside a pnpm or `package.json` workspace.
+ */
+export declare function findMonorepoRoot(cwd: string): string | null;
+
+/** Read the same `VP_PACKAGE_MANAGER` override used by `vp install`. */
+export declare function getPackageManagerOverride(): PackageManagerOverride | null;
 
 /**
  * Resolved on-disk category roots from [`vp_shared::EnvConfig`].
@@ -3685,6 +3828,13 @@ export interface JsCommandResolvedResult {
   envs: Record<string, string>;
 }
 
+/** A literal argument with its original JavaScript UTF-16 source range. */
+export interface LiteralCommandToken {
+  value: string;
+  start: number;
+  end: number;
+}
+
 /**
  * Merge JSON configuration file into vite config file
  *
@@ -3702,7 +3852,6 @@ export interface JsCommandResolvedResult {
  * Returns a `MergeJsonConfigResult` containing:
  * - `content`: The updated vite config content
  * - `updated`: Whether any changes were made
- * - `usesFunctionCallback`: Whether the config uses a function callback
  *
  * # Example
  *
@@ -3725,8 +3874,6 @@ export interface MergeJsonConfigResult {
   content: string;
   /** Whether any changes were made */
   updated: boolean;
-  /** Whether the config uses a function callback */
-  usesFunctionCallback: boolean;
 }
 
 /**
@@ -3745,7 +3892,6 @@ export interface MergeJsonConfigResult {
  * Returns a `MergeJsonConfigResult` containing:
  * - `content`: The updated vite config content
  * - `updated`: Whether any changes were made
- * - `usesFunctionCallback`: Whether the config uses a function callback
  *
  * # Example
  *
@@ -3776,6 +3922,12 @@ export interface MigrateArgs {
  */
 export declare function migrateTaskCacheConfig(viteConfigPath: string): TaskCacheConfigResult;
 
+export interface PackageManagerOverride {
+  name: string;
+  version: string;
+  expectedHash?: string;
+}
+
 export declare function parseConfigArgs(argv: Array<string>): ParseConfigArgsOutcome;
 
 export type ParseConfigArgsOutcome =
@@ -3796,6 +3948,16 @@ export type ParseHooksArgsOutcome =
   | { status: 'ok'; value: HooksArgs }
   | { status: 'exit'; code: number }
   | { status: 'error'; error: CliParseError };
+
+/**
+ * Read simple literal commands, optionally separated by `&&`, `||`, or `;`.
+ * Returns null for unsupported syntax. Assignments and wrappers stay in argv;
+ * callers must decide whether a command is safe to rewrite.
+ */
+export declare function parseLiteralCommands(
+  source: string,
+  allowLists: boolean,
+): Array<Array<LiteralCommandToken>> | null;
 
 export declare function parseMigrateArgs(argv: Array<string>): ParseMigrateArgsOutcome;
 
@@ -3826,6 +3988,12 @@ export declare function removeConfigKey(
   viteConfigPath: string,
   configKey: string,
 ): MergeJsonConfigResult;
+
+/** Resolve the `Authorization` header value npm would send to `url` from the npm config at `cwd`. */
+export declare function resolveNpmAuthorization(cwd: string, url: string): string | null;
+
+/** Resolve the npm registry for packages in `scope` (without `@`) from the npm config at `cwd`. */
+export declare function resolveNpmRegistry(cwd: string, scope?: string | undefined | null): string;
 
 /**
  * Rewrite ESLint scripts: rename `eslint` → `vp lint` and strip ESLint-only flags.
@@ -4087,3 +4255,46 @@ export interface VpDirsJs {
  * `vite-plus` when needed.
  */
 export declare function wrapLazyPlugins(viteConfigPath: string): MergeJsonConfigResult;
+
+export declare namespace oxcNode {
+  export class OxcTransformer {
+    constructor(cwd?: string | undefined | null, helperModuleName?: string | undefined | null);
+    transform(path: string, source: string | Uint8Array): oxcNode.TransformOutput;
+  }
+  export function createResolve(
+    specifier: string,
+    context: ResolveContext,
+    nextResolve: (
+      arg0: string,
+      arg1?: ResolveContext | undefined | null,
+    ) => ResolveFnOutput | Promise<ResolveFnOutput>,
+  ): ResolveFnOutput | Promise<ResolveFnOutput>;
+  export function enableWatchReport(): void;
+  export function freezeTransformDeps(): string;
+  /** Freeze the effective config before registering the off-thread ESM hooks. */
+  export function freezeTsconfig(cwd: string): FrozenTsconfig;
+  /** Apply a frozen selection, including discovery without the receiving thread's env. */
+  export function initializeLoader(
+    path?: string | undefined | null,
+    source?: string | undefined | null,
+  ): void;
+  export function load(
+    url: string,
+    context: LoadContext,
+    nextLoad: (
+      arg0: string,
+      arg1?: LoadContext | undefined | null,
+    ) => LoadFnOutput | Promise<LoadFnOutput>,
+    helperModuleName?: string | undefined | null,
+  ): LoadFnOutput | Promise<LoadFnOutput>;
+  export function setTransformDeps(mode?: string | undefined | null): void;
+  export function setTsconfigPath(path?: string | undefined | null): void;
+  export function takeWatchDependencies(): Array<string>;
+  /** A file transformed for the CommonJS loader. */
+  export interface TransformOutput {
+    source: string;
+    /** The source map as a JSON string. */
+    sourceMap?: string;
+  }
+  export function transformsDep(path: string): boolean;
+}

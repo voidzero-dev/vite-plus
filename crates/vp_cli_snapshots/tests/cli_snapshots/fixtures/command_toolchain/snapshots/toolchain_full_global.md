@@ -21,5 +21,8 @@ vite-plus@<version>
 ├── depends on oxlint@<version>
 ├── depends on oxlint-tsgolint@<version>
 ├── depends on oxfmt@<version>
-└── compiles vite-task (built <build-time>, revision <revision>)
+├── compiles vite-task (built <build-time>, revision <revision>)
+└── compiles oxc-node@<version> (<revision>)
+    ├── compiles oxc@<version>
+    └── compiles oxc-resolver@<version>
 ```

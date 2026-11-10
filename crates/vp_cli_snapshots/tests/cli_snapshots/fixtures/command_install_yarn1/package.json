@@ -1,0 +1,9 @@
+{
+  "name": "command-install-yarn1",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "prod-only-fixture": "file:prod-dep"
+  },
+  "packageManager": "yarn@1.22.22"
+}

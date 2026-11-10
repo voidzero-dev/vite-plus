@@ -1,11 +1,14 @@
 import type { Writable } from 'node:stream';
+import { stripVTControlCharacters } from 'node:util';
 
 import { getColumns } from '@clack/core';
 import stringWidth from 'fast-string-width';
 import { wrapAnsi } from 'fast-wrap-ansi';
+import color from 'picocolors';
 
 import {
   type CommonOptions,
+  getGuide,
   S_BAR,
   S_BAR_END,
   S_BAR_END_RIGHT,
@@ -59,26 +62,27 @@ function getPaddingForLine(
   return [leftPadding, rightPadding];
 }
 
-const defaultFormatBorder = (text: string) => text;
+const defaultFormatBorder = color.gray;
 
 export const box = (message = '', title = '', opts?: BoxOptions) => {
   const output: Writable = opts?.output ?? process.stdout;
   const columns = getColumns(output);
   const borderWidth = 1;
   const borderTotalWidth = borderWidth * 2;
-  const titlePadding = opts?.titlePadding ?? 1;
-  const contentPadding = opts?.contentPadding ?? 2;
-  const width = opts?.width === undefined || opts.width === 'auto' ? 1 : Math.min(1, opts.width);
-  const hasGuide = opts?.withGuide ?? false;
-  const linePrefix = !hasGuide ? '' : `${S_BAR} `;
+  let titlePadding = Math.max(0, opts?.titlePadding ?? 1);
+  let contentPadding = Math.max(0, opts?.contentPadding ?? 2);
+  const width =
+    opts?.width === undefined || opts.width === 'auto' ? 1 : Math.max(0, Math.min(1, opts.width));
+  const hasGuide = getGuide(opts);
+  const linePrefix = !hasGuide ? '' : `${color.gray(S_BAR)} `;
   const formatBorder = opts?.formatBorder ?? defaultFormatBorder;
-  const symbols = (opts?.rounded ? roundedSymbols : squareSymbols).map(formatBorder);
+  const symbols = (opts?.rounded !== false ? roundedSymbols : squareSymbols).map(formatBorder);
   const hSymbol = formatBorder(S_BAR_H);
   const vSymbol = formatBorder(S_BAR);
   const linePrefixWidth = stringWidth(linePrefix);
   const titleWidth = stringWidth(title);
   const maxBoxWidth = columns - linePrefixWidth;
-  let boxWidth = Math.floor(columns * width) - linePrefixWidth;
+  let boxWidth = Math.max(Math.min(8, maxBoxWidth), Math.floor(columns * width) - linePrefixWidth);
   if (opts?.width === 'auto') {
     const lines = message.split('\n');
     let longestLine = titleWidth + titlePadding * 2;
@@ -100,17 +104,29 @@ export const box = (message = '', title = '', opts?: BoxOptions) => {
       boxWidth--;
     }
   }
-  const innerWidth = boxWidth - borderTotalWidth;
+  const innerWidth = Math.max(0, boxWidth - borderTotalWidth);
+  titlePadding = Math.min(titlePadding, Math.floor(innerWidth / 2));
+  contentPadding = Math.min(contentPadding, Math.max(0, Math.floor((innerWidth - 1) / 2)));
   const maxTitleLength = innerWidth - titlePadding * 2;
-  const truncatedTitle =
-    titleWidth > maxTitleLength ? `${title.slice(0, maxTitleLength - 3)}...` : title;
+  let truncatedTitle = title;
+  if (titleWidth > maxTitleLength) {
+    truncatedTitle = '';
+    const suffix = maxTitleLength > 0 ? '…' : '';
+    for (const { segment } of new Intl.Segmenter().segment(stripVTControlCharacters(title))) {
+      if (stringWidth(truncatedTitle + segment + suffix) > maxTitleLength) {
+        break;
+      }
+      truncatedTitle += segment;
+    }
+    truncatedTitle += suffix;
+  }
   const [titlePaddingLeft, titlePaddingRight] = getPaddingForLine(
     stringWidth(truncatedTitle),
     innerWidth,
     titlePadding,
     opts?.titleAlign,
   );
-  const wrappedMessage = wrapAnsi(message, innerWidth - contentPadding * 2, {
+  const wrappedMessage = wrapAnsi(message, Math.max(1, innerWidth - contentPadding * 2), {
     hard: true,
     trim: false,
   });

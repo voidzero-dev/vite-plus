@@ -2,7 +2,19 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { applyEdits, findNodeAtLocation, parse as parseJsonc, parseTree } from 'jsonc-parser';
-import semver from 'semver';
+import {
+  type SemVer,
+  compare,
+  findMinimumForRange,
+  getMajor,
+  isGreaterThanOrEqual,
+  isRangeSubset,
+  normalize,
+  normalizeRange,
+  rangeToComparators,
+  rangesIntersect,
+  satisfies,
+} from 'verkit';
 import { isScalar, parseDocument, visit } from 'yaml';
 
 import { isDirectoryGitignored } from '../../../binding/index.js';
@@ -19,7 +31,11 @@ import {
   migrateVitestV5Config,
 } from '../vitest-v5/config.ts';
 import { vitestV5Documentation } from '../vitest-v5/documentation.ts';
-import { lockedVitestVersion } from '../vitest-v5/lockfile.ts';
+import {
+  createLockfileReader,
+  lockedVitestVersion,
+  type LockfileReader,
+} from '../vitest-v5/lockfile.ts';
 import {
   findVitestV5ConfigEntries,
   resolveVitestV5TestModes,
@@ -168,25 +184,21 @@ function lockedSourceVersion(
   directory: string,
   root: string,
   pkg: Record<string, unknown>,
+  readLockfile: LockfileReader,
   manager?: PackageManager,
   expectedRunnerPackage?: string,
 ): string | undefined {
   if (manager !== undefined && manager !== PackageManager.pnpm) {
     const spec = dependency(pkg, 'vitest');
     return spec && !expectedRunnerPackage
-      ? lockedVitestVersion(root, directory, manager, spec)
+      ? lockedVitestVersion(root, directory, manager, spec, readLockfile)
       : undefined;
   }
-  const lockfile = path.join(root, 'pnpm-lock.yaml');
-  if (!fs.existsSync(lockfile)) {
-    return undefined;
-  }
   try {
-    const document = parseDocument(fs.readFileSync(lockfile, 'utf8'));
-    if (document.errors.length) {
-      return undefined;
-    }
-    const lock = record(document.toJS());
+    const lock = readLockfile(path.join(root, 'pnpm-lock.yaml'), (source) => {
+      const document = parseDocument(source);
+      return document.errors.length ? undefined : record(document.toJS());
+    });
     const importer = record(
       record(lock?.importers)?.[path.relative(root, directory).replaceAll('\\', '/') || '.'],
     );
@@ -221,7 +233,7 @@ function lockedSourceVersion(
         return follow(LEGACY_RUNNER, reference.slice(LEGACY_RUNNER.length + 1), depth + 1);
       }
       const version = reference.split('(')[0];
-      if (!semver.valid(version)) {
+      if (!normalize(version)) {
         return undefined;
       }
       if (name === 'vitest') {
@@ -233,7 +245,7 @@ function lockedSourceVersion(
         const legacy = record(record(lock?.packages)?.[`${name}@${version}`]);
         const runnerVersion = record(legacy?.peerDependencies)?.['@vitest/ui'];
         return typeof runnerVersion === 'string'
-          ? (semver.valid(runnerVersion) ?? undefined)
+          ? (normalize(runnerVersion) ?? undefined)
           : undefined;
       }
       const snapshot = record(record(lock?.snapshots)?.[`${name}@${reference}`]);
@@ -252,15 +264,17 @@ function lockedSourceVersion(
 
 function unambiguousRunnerVersion(range: string): string | undefined {
   if (
-    !semver.validRange(range) ||
-    (!semver.subset(range, '<5.0.0-0', { includePrerelease: true }) &&
-      !semver.subset(range, '>=5.0.0-0', { includePrerelease: true }))
+    !normalizeRange(range) ||
+    (!isRangeSubset(range, '<5.0.0-0', { includePrerelease: true }) &&
+      !isRangeSubset(range, '>=5.0.0-0', { includePrerelease: true }))
   ) {
     // A range that crosses the v4/v5 boundary cannot establish which defaults
     // the project used. Require its installed runner or an exact lockfile edge.
     return undefined;
   }
-  return semver.minVersion(range)?.version;
+  // Parsed versions are plain records; normalize them before returning a version string.
+  const minimum = findMinimumForRange(range);
+  return minimum ? (normalize(minimum) ?? undefined) : undefined;
 }
 
 function installedSourceVersion(
@@ -275,18 +289,18 @@ function installedSourceVersion(
   }
   if (
     expectedRange &&
-    semver.validRange(expectedRange) &&
-    !semver.satisfies(installed.version, expectedRange, { includePrerelease: true })
+    normalizeRange(expectedRange) &&
+    !satisfies(installed.version, expectedRange, { includePrerelease: true })
   ) {
     return undefined;
   }
   if (installed.name === 'vitest') {
-    return semver.valid(installed.version) ?? undefined;
+    return normalize(installed.version) ?? undefined;
   }
   const pkg = readJson(path.join(installed.path, 'package.json'));
   if (installed.name === LEGACY_RUNNER) {
     const version = record(pkg.peerDependencies)?.['@vitest/ui'];
-    return typeof version === 'string' ? (semver.valid(version) ?? undefined) : undefined;
+    return typeof version === 'string' ? (normalize(version) ?? undefined) : undefined;
   }
   if (installed.name !== 'vite-plus') {
     return undefined;
@@ -298,9 +312,9 @@ function installedSourceVersion(
     // or the CLI version: repeat runs must identify v5 without saved metadata.
     return installedSourceVersion(installed.path, 'vitest');
   }
-  if (bundled && semver.validRange(bundled)) {
+  if (bundled && normalizeRange(bundled)) {
     const version = installedSourceVersion(installed.path, 'vitest');
-    return version && semver.satisfies(version, bundled, { includePrerelease: true })
+    return version && satisfies(version, bundled, { includePrerelease: true })
       ? version
       : unambiguousRunnerVersion(bundled);
   }
@@ -313,6 +327,7 @@ function sourceVersion(
   directory: string,
   root: string,
   pkg: Record<string, unknown>,
+  readLockfile: LockfileReader,
   manager?: PackageManager,
 ): string | undefined {
   const catalog = createCatalogDependencyResolver(root, manager ?? PackageManager.pnpm);
@@ -343,20 +358,27 @@ function sourceVersion(
   // A stale install or catalog lock entry can still resolve upstream Vitest
   // under this name. Its version is not evidence for the declared wrapper.
   const expectedRunnerPackage = legacyAlias ? LEGACY_RUNNER : undefined;
-  const locked = lockedSourceVersion(directory, root, pkg, manager, expectedRunnerPackage);
+  const locked = lockedSourceVersion(
+    directory,
+    root,
+    pkg,
+    readLockfile,
+    manager,
+    expectedRunnerPackage,
+  );
   if (
     locked &&
     (!spec ||
       legacyAlias ||
-      !semver.validRange(spec) ||
-      semver.satisfies(locked, spec, { includePrerelease: true }))
+      !normalizeRange(spec) ||
+      satisfies(locked, spec, { includePrerelease: true }))
   ) {
     return locked;
   }
   const installed = installedSourceVersion(directory, 'vitest', expectedRunnerPackage);
   if (
     installed &&
-    (!spec || legacyAlias || semver.satisfies(installed, spec, { includePrerelease: true }))
+    (!spec || legacyAlias || satisfies(installed, spec, { includePrerelease: true }))
   ) {
     return installed;
   }
@@ -365,7 +387,7 @@ function sourceVersion(
     // version from the original install or lockfile when one is available.
     return '4.0.0';
   }
-  if (spec && semver.validRange(spec)) {
+  if (spec && normalizeRange(spec)) {
     return unambiguousRunnerVersion(spec);
   }
   if (vitePlus) {
@@ -376,7 +398,13 @@ function sourceVersion(
   }
   // A workspace member commonly uses the root's test command and dependencies.
   if (directory !== root) {
-    return sourceVersion(root, root, readJson(path.join(root, 'package.json')), manager);
+    return sourceVersion(
+      root,
+      root,
+      readJson(path.join(root, 'package.json')),
+      readLockfile,
+      manager,
+    );
   }
   return undefined;
 }
@@ -395,41 +423,41 @@ function checkNodeRange(
   if (!publicContract && ['lts/*', 'lts', 'latest', 'current', 'node', 'stable'].includes(value)) {
     return undefined;
   }
-  const range = semver.validRange(value);
+  const range = normalizeRange(value);
   if (publicContract && range) {
     // A public engine contract is not a runtime pin. A supported minimum
     // is sufficient; open ranges need not exclude every unsupported major.
-    const minimum = semver.minVersion(range);
+    const minimum = findMinimumForRange(range);
     if (minimum) {
       // A whole-major range such as 24.x also permits a supported release.
       // Do not mistake its implicit 24.0.0 minimum for an exact runtime pin.
       const majorRange = `${minimum.major}.x`;
       if (
-        semver.satisfies(minimum, cliPackage.engines.node) ||
-        (semver.subset(majorRange, range) && semver.intersects(majorRange, cliPackage.engines.node))
+        satisfies(minimum, cliPackage.engines.node) ||
+        (isRangeSubset(majorRange, range) && rangesIntersect(majorRange, cliPackage.engines.node))
       ) {
         return undefined;
       }
     }
   }
   let message = `Resolve ${label} (${value}) and select Node ${cliPackage.engines.node}.`;
-  if (range && !publicContract && !semver.intersects(range, cliPackage.engines.node)) {
-    const current = semver.minVersion(range);
+  if (range && !publicContract && !rangesIntersect(range, cliPackage.engines.node)) {
+    const current = findMinimumForRange(range);
     const upgrade =
       current &&
-      new semver.Range(cliPackage.engines.node).set
-        .map((comparators) => semver.minVersion(comparators.map(({ value }) => value).join(' ')))
-        .filter((version): version is semver.SemVer => version !== null)
-        .toSorted(semver.compare)
-        .find((version) => semver.gte(version, current));
+      rangeToComparators(cliPackage.engines.node)
+        .map((comparators) => findMinimumForRange(comparators.join(' ')))
+        .filter((version): version is SemVer => version !== null)
+        .toSorted(compare)
+        .find((version) => isGreaterThanOrEqual(version, current));
     if (upgrade) {
       // Choose the first supported minimum at or above the requested version.
       // For example, 20 -> 22.18.0, 24.10 -> 24.11.0, and 25 -> 26.0.0.
-      return upgrade.version;
+      return normalize(upgrade) ?? undefined;
     }
   } else if (range) {
     if (
-      semver.subset(range, cliPackage.engines.node) ||
+      isRangeSubset(range, cliPackage.engines.node) ||
       (!publicContract && !/[<>|*]/.test(value))
     ) {
       return undefined;
@@ -671,6 +699,7 @@ export function planVitestV5Migration(
   workspace: MigrationWorkspace,
   originalProjects?: ReadonlyMap<string, ProjectPlan>,
 ): VitestV5MigrationPlan {
+  const readLockfile = createLockfileReader();
   const findings: VitestV5Finding[] = [];
   const directories = [
     workspace.rootDir,
@@ -678,7 +707,7 @@ export function planVitestV5Migration(
   ];
   const projects: ProjectPlan[] = [];
   const projectSources = new Map(
-    [...new Set(directories)].map((directory) => [
+    Array.from(new Set(directories), (directory) => [
       directory,
       new Map(filesInProject(directory).map((file) => [file, fs.readFileSync(file, 'utf8')])),
     ]),
@@ -712,7 +741,7 @@ export function planVitestV5Migration(
     const original = originalProjects?.get(directory);
     const version = original
       ? original.sourceVersion
-      : sourceVersion(directory, workspace.rootDir, pkg, workspace.packageManager);
+      : sourceVersion(directory, workspace.rootDir, pkg, readLockfile, workspace.packageManager);
     const active =
       original?.active ??
       (!!dependency(pkg, 'vitest') ||
@@ -727,8 +756,8 @@ export function planVitestV5Migration(
     const options: SourceOptions = {
       // Only the resolved source runner authorizes v4 compatibility edits.
       // The final scan disables edits while retaining this run's review context.
-      preserveV4: original?.options.preserveV4 ?? (!!version && semver.major(version) < 5),
-      reviewV4: !!version && semver.major(version) < 5,
+      preserveV4: original?.options.preserveV4 ?? (!!version && getMajor(version) < 5),
+      reviewV4: !!version && getMajor(version) < 5,
       browser: [...sources.values()].some((source) => BROWSER_SIGNAL.test(source)),
       browserPossible,
       temporalPolyfill: [...sources.values()].some((source) =>
@@ -747,7 +776,7 @@ export function planVitestV5Migration(
         ),
       );
     }
-    if (active && version && semver.major(version) < 4) {
+    if (active && version && getMajor(version) < 4) {
       findings.push(
         finding(
           path.join(directory, 'package.json'),
@@ -917,7 +946,7 @@ function currentProjectConfigs(plan: VitestV5MigrationPlan): Map<string, string[
     entries.flatMap((entry) => (entry.file ? [entry.file] : [])),
   );
   return new Map(
-    [...filesByProject].map(([directory, files]) => [
+    Array.from(filesByProject, ([directory, files]) => [
       directory,
       files.filter((file) => configs.has(file)),
     ]),

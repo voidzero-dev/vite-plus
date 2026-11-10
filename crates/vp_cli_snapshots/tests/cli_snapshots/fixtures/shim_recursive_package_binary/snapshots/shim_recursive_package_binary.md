@@ -8,7 +8,7 @@ Install test package
 VITE+ - The Unified Toolchain for the Web
 
 info: Installing 1 global package with Node.js <version>
-✓ Installed recursive-cli-pkg 1.0.0
+ Installed recursive-cli-pkg 1.0.0
   Bins: recursive-cli
 ```
 
@@ -26,5 +26,5 @@ inner call succeeded
 Cleanup
 
 ```
-Uninstalled recursive-cli-pkg
+- Uninstalled recursive-cli-pkg
 ```

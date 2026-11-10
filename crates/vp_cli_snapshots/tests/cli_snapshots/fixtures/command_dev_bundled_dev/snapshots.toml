@@ -2,13 +2,34 @@
 # ENV_ENTRY to dist/vite/client/, but it left BUNDLED_DEV_CLIENT_ENTRY at
 # dist/client/. With `experimental.bundledDev` enabled, Vite reads that
 # path with fs.readFileSync, so `vp dev` fails at startup with ENOENT.
+# Install packed packages for #3110: linking core to the checkout exposes its
+# rolldown devDependency and hides missing runtime rewrites. Disable automatic
+# peer installation so npm cannot add another rolldown through upstream Vite.
 [[case]]
 name = "command_dev_bundled_dev"
-vp = "local"
+vp = "global"
 skip-platforms = ["windows"]
+local-registry = true
+env = { ROLLDOWN_PACKAGE = "missing" }
 steps = [
-  { argv = ["vp", "dev", "--host", "127.0.0.1", "--port", "0"], comment = "dev server with experimental.bundledDev enabled starts and serves the bundled dev client", continue-on-failure = true, interactions = [
-    { "expect-milestone" = "dev-server:ready" },
+  { argv = ["npm", "install", "--ignore-scripts", "--legacy-peer-deps", "--no-audit", "--no-fund"], snapshot = false },
+  { argv = ["vp", "dev", "--host", "127.0.0.1", "--port", "0"], comment = "Bundled dev serves core's runtime without a separate rolldown package.", interactions = [
+    { "expect-milestone" = "dev-server:runtime-verified" },
+    { "write-key" = "ctrl-c" },
+  ] },
+]
+
+[[case]]
+name = "command_dev_bundled_dev_unrelated_rolldown"
+vp = "global"
+skip-platforms = ["windows"]
+local-registry = true
+env = { ROLLDOWN_PACKAGE = "unrelated" }
+steps = [
+  { argv = ["npm", "install", "--ignore-scripts", "--legacy-peer-deps", "--no-audit", "--no-fund"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "unrelated-rolldown", "node_modules/rolldown"], snapshot = false },
+  { argv = ["vp", "dev", "--host", "127.0.0.1", "--port", "0"], comment = "An unrelated rolldown package must not replace core's bundled runtime.", interactions = [
+    { "expect-milestone" = "dev-server:runtime-verified" },
     { "write-key" = "ctrl-c" },
   ] },
 ]

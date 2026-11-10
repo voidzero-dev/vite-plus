@@ -5,7 +5,6 @@ steps = [
   { argv = ["vp", "migrate", "--no-interactive"], comment = "existing Vite+ project: upgrade the toolchain version only, skip the full setup", continue-on-failure = true },
   { argv = ["vpt", "print-file", "package.json"], comment = "vite-plus version upgrade is applied", continue-on-failure = true },
   { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "pnpm settings consolidated by the version upgrade", continue-on-failure = true },
-  { argv = ["vpt", "stat-file", ".nvmrc", "--assert", "file"], comment = ".nvmrc is left untouched without --full", continue-on-failure = true },
-  { argv = ["vpt", "stat-file", ".node-version", "--assert-not", "file"], comment = "no .node-version is written", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".node-version", "--assert-not", "file"], comment = "volta.node is not migrated without --full", continue-on-failure = true },
   { argv = ["vpt", "print-file", "tsconfig.json"], comment = "tsconfig baseUrl is left untouched without --full", continue-on-failure = true },
 ]

@@ -34,13 +34,6 @@ lint-staged config should be preserved when merge fails
   "lint-staged": {
     "*.css": "stylelint --fix"
   },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
-  },
   "scripts": {
     "prepare": "vp config"
   }

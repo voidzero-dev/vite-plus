@@ -1,6 +1,6 @@
 ---
 name: bump-vite-task
-description: Bump vite-task git dependency to the latest main commit. Use when you need to update the vite-task git-dependency crates (vt, fspy, pty_terminal_test, and friends; the authoritative set lives in Cargo.toml) in vite-plus.
+description: Bump vite-task git dependency to the latest main commit. Use when you need to update the vite-task git-dependency crates (vt, fspy, vt_pty_terminal_test, and friends; the authoritative set lives in Cargo.toml) in vite-plus.
 allowed-tools: Read, Grep, Glob, Edit, Bash, Agent, WebFetch
 ---
 
@@ -53,7 +53,7 @@ vite-task changes often affect CLI output, which means snapshot tests need updat
 
 **PTY snapshot suite (`crates/vp_cli_snapshots`):**
 
-- A bump can break it two ways: runner compilation (it consumes vite-task's `pty_terminal_test`, `pty_terminal_test_client`, and `snapshot_test` crates directly, so their API changes surface here; fix in the runner) and recorded CLI output.
+- A bump can break it two ways: runner compilation (it consumes vite-task's `vt_pty_terminal_test`, `vt_pty_terminal_test_client`, and `vt_snapshot_test` crates directly, so their API changes surface here; fix in the runner) and recorded CLI output.
 - Update output locally with real assertions: `UPDATE_SNAPSHOTS=1 just snapshot-test`, then review the `.md` diffs like code. Without a built `packages/cli/dist`, run the global flavor only: `VP_SNAP_SKIP_FLAVORS=local UPDATE_SNAPSHOTS=1 just snapshot-test`.
 - Windows runs in the `CLI snapshot test (Windows)` CI job via a cross-compiled nextest archive; snapshots are OS-shared, so a Windows-only diff there means a redaction gap, not a re-record.
 - Reference: `crates/vp_cli_snapshots/tests/cli_snapshots/README.md`.
@@ -73,6 +73,7 @@ vite-task changes often affect CLI output, which means snapshot tests need updat
   - **Changed defaults or behavior**: Update any docs that describe the old behavior
   - **Removed/deprecated options**: Remove or mark as deprecated in the relevant docs
 - If no user-facing changes are found, skip this step.
+- Docs also link to files in the vite-task repo, such as the JSON Schemas for `vp run --json`, by permalinks that carry the full vite-task commit hash. Find them with `grep -rn 'github.com/voidzero-dev/vite-task/blob/' docs/`, replace the old hash with the new full hash, and check that each linked path still exists at the new commit (for example `gh api "repos/voidzero-dev/vite-task/contents/<path>?ref=<new-hash>" --silent`). If a file moved or its content changed in a way the docs describe, update the link target or the surrounding text too.
 
 ### 8. Create the PR
 
@@ -91,9 +92,9 @@ After creating the PR, automatically watch CI without asking the user first. Ens
 - **Test** (Linux, Mac, Windows): Rust unit tests
 - **CLI snapshot test** (Linux, Mac, Windows): the PTY snapshot suite - most likely to fail on a vite-task bump (runner compiles against vite-task crates AND asserts CLI output)
 - **Run task**: Task runner integration tests
-- **Cargo Deny**: License/advisory checks (may have pre-existing failures unrelated to bump)
+- **Security Analysis**: Fix any `cargo deny` advisories. It runs only when `Cargo.lock` changes, so a green `main` does not mean the lockfile is clean.
 
-The only **required** status check for merging is `done`, which aggregates the other checks (excluding Cargo Deny).
+The only **required** status check for merging is `done`, which aggregates the other checks (excluding Security Analysis).
 
 ## Notes
 

@@ -1,10 +1,10 @@
 # command_update_node_mismatch
 
-## `vp install -g --node 20 testnpm2`
+## `vp install -g --node 20.20.2 testnpm2`
 
 ```
 info: Installing 1 global package with Node.js <version>
-✓ Installed testnpm2 1.0.1
+ Installed testnpm2 1.0.1
 ```
 
 ## `vp update -g testnpm2`
@@ -28,5 +28,5 @@ All global packages are up to date.
 
 ```
 info: Updating 1 global package with Node.js <version>
-✓ Updated testnpm2 to 1.0.1
+ Updated testnpm2 to 1.0.1
 ```

@@ -85,6 +85,30 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn unsupported_options_do_not_run_preparation_even_when_silent() {
+        use crate::resolution::{PackArgs, resolve, test_utils::npm};
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let cwd = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        for render_diagnostics in [true, false] {
+            let resolution = resolve(
+                &npm("11.16.0"),
+                PackArgs {
+                    out: Some("package.tgz".to_string()),
+                    pack_destination: Some("output".to_string()),
+                    ..Default::default()
+                },
+            );
+            let error = run_resolution(&cwd, resolution, render_diagnostics).await.unwrap_err();
+            assert!(
+                matches!(error, Error::UserMessage(message) if message.contains("npm does not support --out."))
+            );
+            assert!(!cwd.join("output").as_path().exists());
+            assert!(!cwd.join("package.tgz").as_path().exists());
+        }
+    }
+
+    #[tokio::test]
     async fn create_dir_is_relative_to_caller_cwd() {
         let temp_dir = tempfile::tempdir().unwrap();
         let cwd = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();

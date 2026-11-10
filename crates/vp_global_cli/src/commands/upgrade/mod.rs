@@ -41,18 +41,35 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
         return Ok(ExitStatus::default());
     }
 
-    if crate::homebrew::owns_current_exe() {
-        if options.check && !options.rollback {
+    if let Some(homebrew) = crate::homebrew::current() {
+        let check = options.check && !options.rollback;
+        let action = if check { "outdated" } else { "upgrade" };
+        let purpose = if check { "check for updates" } else { "update it" };
+        let mut message = format!(
+            "{} manages this installation. Run `brew {action} {}` to {purpose}.",
+            homebrew.source_label(),
+            homebrew.formula,
+        );
+        if homebrew.source == crate::homebrew::Source::Core && !options.silent {
+            message.push_str(&format!(
+                concat!(
+                    "\n\nTo switch to the official Vite+ tap while keeping your settings:\n\n",
+                    "  brew uninstall {}\n",
+                    "  brew tap voidzero-dev/vite-plus https://github.com/voidzero-dev/vite-plus\n",
+                    "  brew install voidzero-dev/vite-plus/vp\n",
+                    "  \"$(brew --prefix)/bin/vp\" env setup --refresh\n",
+                    "  hash -r",
+                ),
+                homebrew.formula,
+            ));
+        }
+        if check {
             if !options.silent {
-                output::info(
-                    "Homebrew manages this installation. Run `brew outdated vite-plus` to check for updates.",
-                );
+                output::info(&message);
             }
             return Ok(ExitStatus::default());
         }
-        return Err(Error::Upgrade(
-            "Homebrew manages this installation. Run `brew upgrade vite-plus` to update it.".into(),
-        ));
+        return Err(Error::Upgrade(message.into()));
     }
 
     let config = vp_shared::EnvConfig::get();
@@ -147,10 +164,17 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
     // Step 6: Download platform tarball (main package is installed via npm)
     let client = HttpClient::new();
 
-    let platform_data = client
-        .get_bytes(&resolved.platform_tarball_url)
-        .await
-        .map_err(|e| Error::Upgrade(format!("Failed to download platform package: {e}").into()))?;
+    let platform_data = if options.silent {
+        client.get_bytes(&resolved.platform_tarball_url).await
+    } else {
+        client
+            .download_bytes(
+                &resolved.platform_tarball_url,
+                &format!("Downloading vite-plus@{}...", resolved.version),
+            )
+            .await
+    }
+    .map_err(|e| Error::Upgrade(format!("Failed to download platform package: {e}").into()))?;
 
     // Step 7: Verify integrity
     integrity::verify_integrity(&platform_data, &resolved.platform_integrity)?;
@@ -180,7 +204,7 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
         &version_dir,
         install_dir,
         &install_dir_name,
-        &resolved.version,
+        &resolved,
         current_version,
         options.silent,
         options.registry.as_deref(),
@@ -203,11 +227,12 @@ async fn install_platform_and_main(
     version_dir: &AbsolutePathBuf,
     install_dir: &AbsolutePathBuf,
     install_dir_name: &str,
-    new_version: &str,
+    resolved: &registry::ResolvedVersion,
     current_version: &str,
     silent: bool,
     registry: Option<&str>,
 ) -> Result<ExitStatus, Error> {
+    let new_version = &resolved.version;
     // Extract platform package (binary only; .node files installed via npm optionalDeps)
     install::extract_platform_package(platform_data, version_dir).await?;
 
@@ -224,7 +249,8 @@ async fn install_platform_and_main(
     install::generate_wrapper_package_json(version_dir, new_version).await?;
 
     // Install production dependencies (pnpm installs vite-plus + all transitive deps)
-    install::install_production_deps(version_dir, registry, !silent).await?;
+    let node_version = resolved.node_version.as_deref().map(install::NodeVersion::Required);
+    install::install_production_deps(version_dir, registry, !silent, node_version).await?;
 
     // Save previous version for rollback
     let previous_version = install::save_previous_version(install_dir).await?;
@@ -256,6 +282,10 @@ async fn install_platform_and_main(
             style(output::CHECK).green(),
             current_version,
             output::ARROW,
+            new_version
+        ));
+        vp_shared::output::print_stdout_line(format_args!(
+            "\n  Run `vp migrate` in any Vite+ project using a version under {} to upgrade that project's Vite+ version.",
             new_version
         ));
         vp_shared::output::print_stdout_line(format_args!(

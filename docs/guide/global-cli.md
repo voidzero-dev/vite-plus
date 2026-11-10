@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { getScrollOffset } from 'vitepress';
 import { nextTick, onMounted, onUnmounted } from 'vue';
 
 function openTarget() {
@@ -18,9 +17,7 @@ function openTarget() {
   // VitePress cannot measure a heading inside closed details. Correct the scroll after revealing it.
   requestAnimationFrame(() => {
     if (!target.isConnected) return;
-    const top = window.scrollY + target.getBoundingClientRect().top - getScrollOffset()
-      + Number.parseInt(window.getComputedStyle(target).paddingTop, 10);
-    window.scrollTo(0, top);
+    target.scrollIntoView({ block: 'start' });
   });
 }
 
@@ -74,6 +71,10 @@ irm https://vite.plus/ps1 | iex
 
 On Windows, you can instead download and run [`vp-setup.exe`](https://setup.viteplus.dev).
 
+For macOS and Linux, see the [Homebrew tap guide](/guide/homebrew) for installation instructions.
+
+The installer uses the Node.js version pinned in the Vite+ repository's [`.node-version`](https://github.com/voidzero-dev/vite-plus/blob/main/.node-version) to install its JavaScript dependencies. Each Vite+ release embeds this version at build time. Development and CI use the same file, which the dependency-upgrade workflow keeps up to date. CI integrations can select another compatible version through [`VP_SETUP_NODE_VERSION`](#vp-setup-node-version).
+
 After installation, open a new shell and run:
 
 ```bash
@@ -108,10 +109,51 @@ These variables control the installer scripts and the standalone Windows install
   $env:VP_VERSION = "1.2.3"; irm https://vite.plus/ps1 | iex
   ```
 
+#### `VP_SETUP_NODE_VERSION`
+
+- **Purpose**: Select the Node.js version used to install the global CLI's JavaScript dependencies. CI integrations such as [`setup-vp`](/guide/ci#node-js-during-installation) set this variable to reuse the project's runtime.
+- **Values**: An exact version, a version range, or an alias such as `22.23.1`, `22`, `^22.18.0`, `lts`, or `latest`. The installer resolves the value once to an exact version.
+- **Default**: Unset or empty (use the embedded Node.js default). Project files, `VP_NODE_VERSION`, session overrides, and the user-level default do not change this default.
+- **Compatibility**: The resolved version must meet the Node.js requirements of both the global CLI and its pinned `pnpm`. Otherwise, the installer uses the embedded default. An invalid or unresolvable value causes an error.
+- **Scope**: Initial dependency installation only. This variable does not set a project pin, session override, or global default. [`vp upgrade`](/guide/upgrade#global-vp) does not use this variable.
+
+#### `VP_SETUP_NODE_VERSION_FILE`
+
+- **Purpose**: Optional output file for integrations that need the exact version resolved from `VP_SETUP_NODE_VERSION`.
+- **Contents**: The resolved version, such as `22.23.1`, written after successful dependency installation. If compatibility requires the embedded default for installation, the file still contains the requested version's resolution.
+- **Default**: Unset (write no file). The installer also writes no file when `VP_SETUP_NODE_VERSION` is unset or empty, or when dependency installation is skipped.
+
+`setup-vp` manages this file automatically. Use its Node.js inputs to configure CI jobs.
+
+#### `VP_SETUP_SKIP_INSTALL_LOCKFILE`
+
+Set this variable to `1` to recover from a lockfile-related error during global CLI installation or `vp upgrade`. All other values, including unset or empty, keep the published installation lockfile enabled.
+
+The installer prints a warning and resolves dependencies without reading or recovering the installation lockfile. The requested CLI version stays pinned, but its dependency versions can differ from the release lockfile. Registry, authentication, and proxy settings remain in effect. This option does not affect project installations such as `vp install`.
+
+```bash
+# Retry installation without the bundled lockfile.
+curl -fsSL https://vite.plus | VP_SETUP_SKIP_INSTALL_LOCKFILE=1 bash
+
+# Or retry an upgrade, including the currently installed version.
+VP_SETUP_SKIP_INSTALL_LOCKFILE=1 vp upgrade --force
+```
+
+```powershell
+$env:VP_SETUP_SKIP_INSTALL_LOCKFILE = "1"
+try {
+  irm https://vite.plus/ps1 | iex
+} finally {
+  Remove-Item Env:VP_SETUP_SKIP_INSTALL_LOCKFILE
+}
+```
+
+Keep this override temporary. Later installations and upgrades use the published lockfile again when the variable is unset. To reinstall an affected version with its lockfile, unset the variable and run `vp upgrade <version> --force`.
+
 #### `VP_HOME`
 
 - **Purpose**: Optional pin for the single-root layout. Set it to an absolute path. Vite+ then puts bin, data, cache, config, and state under that directory. The installed CLI reads the same variable. See [Environment](/guide/env).
-- **Default**: unset. Vite+ reuses an existing install in `~/.vite-plus` on Unix or `%USERPROFILE%\.vite-plus` on Windows. The directory must contain a `current` link. Otherwise, a fresh install uses the split platform layout. On Unix, it uses `~/.local/share/vite-plus` and its Vite+-owned `bin` subdirectory. On Windows, it uses `%LOCALAPPDATA%\vite-plus\data` and `%LOCALAPPDATA%\vite-plus\bin`.
+- **Default**: unset. Vite+ reuses an existing install in `~/.vite-plus` on Unix or `%USERPROFILE%\.vite-plus` on Windows. The directory must contain a `current` link. Otherwise, a fresh install uses the split platform layout shown below.
 - **Example**:
 
   ```bash
@@ -123,6 +165,20 @@ These variables control the installer scripts and the standalone Windows install
   # PowerShell
   $env:VP_HOME = "D:\vite-plus"; irm https://vite.plus/ps1 | iex
   ```
+
+Fresh split-layout installations use these defaults:
+
+| Directory | macOS and Linux            | Windows                          |
+| --------- | -------------------------- | -------------------------------- |
+| Data      | `~/.local/share/vite-plus` | `%LOCALAPPDATA%\vite-plus\data`  |
+| Bin       | `<DATA>/bin`               | `%LOCALAPPDATA%\vite-plus\bin`   |
+| Cache     | `~/.cache/vite-plus`       | `%LOCALAPPDATA%\vite-plus\cache` |
+| Config    | `~/.config/vite-plus`      | `%APPDATA%\vite-plus`            |
+| State     | `~/.local/state/vite-plus` | `%LOCALAPPDATA%\vite-plus\state` |
+
+On macOS and Linux, absolute `XDG_DATA_HOME`, `XDG_CACHE_HOME`, `XDG_CONFIG_HOME`, and `XDG_STATE_HOME` values override the corresponding base directories. The bin directory follows the data directory.
+
+Low-priority managed shims live in `<DATA>/fallback-bin`, where `<DATA>` is the resolved data directory.
 
 #### `VP_BIN_DIR` / `VP_DATA_DIR` / `VP_CACHE_DIR`
 
@@ -143,6 +199,17 @@ These variables control the installer scripts and the standalone Windows install
 - **Purpose**: Custom npm registry URL
 - **Default**: `https://registry.npmjs.org`
 - **CLI equivalent**: `--registry`
+- **Managed package managers**: When Vite+ downloads a pinned npm, pnpm,
+  Yarn, or Bun version, it also reads the workspace-root and user `.npmrc`.
+  Package-scoped registries and registry-scoped `_authToken`, `_auth`, or
+  `username`/`_password` credentials are honored. Keep secrets in environment
+  variables and reference them from `.npmrc`, for example:
+
+  ```ini
+  registry=https://npm.corp.example/repository/npm/
+  //npm.corp.example/repository/npm/:_authToken=${NPM_TOKEN}
+  ```
+
 - **Example**:
   ```bash
   curl -fsSL https://vite.plus | NPM_CONFIG_REGISTRY=https://registry.npmmirror.com bash
@@ -189,7 +256,7 @@ These management variables are installation choices, saved in Vite+'s config. Th
 
 #### Development variables
 
-Use `VP_LOCAL_TGZ` and `VP_LOCAL_BINARY` when you develop Vite+ itself. `VP_LOCAL_TGZ` specifies a local `vite-plus.tgz` file. `VP_LOCAL_BINARY` specifies a local `vp` binary. The installers use these files for the local build. They use `VP_DUMP_DIRS=1` to get the layout mode and all five `EnvConfig` category roots from the selected binary. They do not resolve the directory variables. The installers set `VP_INSTALL_STOP`; do not set it manually.
+Use `VP_LOCAL_TGZ` and `VP_LOCAL_BINARY` when you develop Vite+ itself. `VP_LOCAL_TGZ` specifies a local `vite-plus.tgz` file. `VP_LOCAL_BINARY` specifies a local `vp` binary. The installers use these files for the local build.
 
 ### Runtime Variables
 
@@ -205,6 +272,7 @@ These variables configure the installed Vite+ CLI. `VP_HOME` (above) also applie
 
 - **Purpose**: Override Node.js version
 - **Default**: None (auto-detected)
+- **Scope**: Runtime commands. For the installer's dependency installation, use [`VP_SETUP_NODE_VERSION`](#vp-setup-node-version).
 - **Example**:
   ```bash
   # Run a command with a specific Node.js version
@@ -251,10 +319,11 @@ These variables configure the installed Vite+ CLI. `VP_HOME` (above) also applie
 #### `VP_BYPASS`
 
 - **Purpose**: Bypass the Vite+ shim and use the system tool
-- **Values**: `PATH`-style list of directories to bypass
-- **Default**: None
+- **Values**: Setting this variable, including to an empty string, enables bypass mode. Its value is a `PATH`-style list of additional directories to exclude from the search. The Vite+ bin directory and Vite+ shims are skipped automatically.
+- **Default**: Unset
 - **Example**:
   ```bash
+  # Find a system Node.js on PATH, excluding /usr/local/bin.
   VP_BYPASS=/usr/local/bin node -v
   ```
 
@@ -289,7 +358,6 @@ Vite+ sets additional `VP_*` variables during shim dispatch and shell integratio
 #### `VP_LOG`
 
 - **Purpose**: Log filter string for `tracing_subscriber`
-- **Installer behavior**: When `CI=true`, `install.sh` hides shell file errors. Set `VP_LOG=trace` to show these errors.
 - **Default**: None
 - **Example**:
   ```bash
@@ -325,6 +393,14 @@ source ~/.config/vite-plus/env.nu
 
 For a custom `XDG_CONFIG_HOME`, use the absolute path to `<XDG_CONFIG_HOME>/vite-plus/env.nu` as resolved during installation. For an installation under `VP_HOME` or an existing `~/.vite-plus` installation, use `<VP_HOME>/env.nu` or `~/.vite-plus/env.nu` instead. Replace placeholders with actual paths and quote paths containing spaces. Open a new Nushell session and run `vp help` to verify the configuration.
 
+#### Nushell version
+
+Use Nushell 0.112.1 or later. In Nushell, a custom command or alias can have the same name as a built-in command, for example `def update []`. Nushell reads the Vite+ `env.nu` after your configuration. Thus, `env.nu` must call the built-in commands with the [`%` sigil](https://www.nushell.sh/lang-guide/chapters/custom_commands.html#calling-custom-commands), which Nushell 0.112.1 added.
+
+`vp env setup` checks the `nu` on `PATH`. With an earlier Nushell, it writes `env.nu` without the sigil. That `env.nu` still works, but a custom command with the name of a built-in command can stop Nushell at startup with `nu::parser::extra_positional` or a similar parse error. After you upgrade Nushell, run `vp env setup` again.
+
+If you have more than one Nushell installation, make sure that the `nu` on `PATH` during `vp env setup` is the Nushell that you start. A Nushell earlier than 0.112.1 cannot parse an `env.nu` that `vp env setup` wrote for a later version.
+
 #### `CI`
 
 - **Purpose**: Indicates running in CI environment
@@ -352,7 +428,7 @@ For example, `VP_VERSION=1.0.0 vp-setup.exe --version 2.0.0` installs version 2.
 
 ### Homebrew
 
-For a Homebrew installation, the first `vp` command sets up your shell, shims, and environment-management preferences. It reuses Homebrew's binary and bundled JavaScript. Setup stores its completion state in your user directories and does not need write access to the Homebrew prefix.
+The [official Homebrew tap](/guide/homebrew) installs the native CLI. The first `vp` command installs matching JavaScript dependencies in your data directory and sets up your shell, shims, and environment-management preferences. Setup stores its state in your directories without writing to the Homebrew prefix.
 
 Later commands reuse that setup while the installed binary remains unchanged. Generated shims follow Homebrew's public `vp` entrypoint when Homebrew replaces a version. Setup preserves your saved management preferences during this replacement.
 
@@ -362,11 +438,13 @@ To prefer your existing Node.js and package managers during the first run, use:
 VP_NODE_MANAGER=no VP_PM_MANAGER=no vp help
 ```
 
-After setup, use `vp env off` to change this preference. Commands that need missing runtimes or project dependencies can still download them.
+After setup, use `vp env off` to change this preference. The tap still prepares its pinned Node.js and pnpm to install CLI dependencies. Commands that need missing runtimes or project dependencies can also download them.
 
 Use Homebrew to [upgrade](/guide/upgrade#homebrew) or [remove](/guide/implode#homebrew) its package.
 
-`vp env doctor` identifies the Homebrew installation and its binary path. It checks the `vp` command and the user shim directory on `PATH` separately. If only the shim directory is missing, follow its shell setup instructions to enable the shims.
+`vp env doctor` identifies the Homebrew source, formula name, and binary path. It checks the `vp` command and the user shim directory on `PATH` separately. If only the shim directory is missing, follow its shell setup instructions to enable the shims.
+
+See the [official tap guide](/guide/homebrew) for registry configuration and migration instructions.
 
 ## Use It Without a Local Package
 
@@ -380,6 +458,10 @@ vp dlx create-vite   # Download and run a package binary
 ```
 
 You do not need a local `vite-plus` dependency to run existing `package.json` scripts. Add the [project-local CLI](/guide/local-cli) when you want the frontend toolchain version recorded in the project's manifest and lockfile.
+
+## Run a Command in Another Directory
+
+Use `vp -C <dir> <command>` to run any `vp` command from another working directory. See [Targeting a package with `-C`](/guide/monorepo#targeting-a-package-with-c) for examples and details.
 
 ## Use Both CLIs Together
 
@@ -403,7 +485,7 @@ To see which toolchain is selected for your current project, run `vp toolchain`.
 ## Next Steps
 
 - [Environment](/guide/env) covers Node.js and package-manager selection, pinning, shims, and managed installations.
-- [Package Management](/guide/install) covers pnpm, npm, Yarn, and Bun workflows.
+- [Package Management](/guide/package-management/) covers pnpm, npm, Yarn, and Bun workflows.
 - [Run](/guide/run) covers package scripts and cached workspace tasks.
 - [Upgrading Vite+](/guide/upgrade) explains global CLI upgrades. See [Update Vite+](/guide/upgrade-project) for project-local upgrades.
 - [Removing Vite+](/guide/implode) removes the global binary and its managed data.

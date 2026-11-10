@@ -3,7 +3,6 @@ name = "command_config_npm10"
 # Exceeded 20 seconds on Windows in CI run 35299447671.
 skip-platforms = ["windows"]
 vp = "global"
-serial = true
 steps = [
   { argv = ["vp", "pm", "config", "--help"], comment = "should show help", continue-on-failure = true },
   { argv = ["vp", "pm", "config", "get", "vite-plus-pm-config-test-key", "--location", "project"], comment = "should get config value from project scope", continue-on-failure = true },

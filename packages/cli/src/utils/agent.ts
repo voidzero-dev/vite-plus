@@ -16,7 +16,7 @@ export const AGENTS = [
     id: 'agents',
     label: 'AGENTS.md',
     targetPath: 'AGENTS.md',
-    hint: 'Codex, Amp, OpenCode, and similar agents',
+    hint: 'Claude Code, Codex, Amp, OpenCode, and similar agents',
     aliases: [
       'agents.md',
       'chatgpt',
@@ -132,7 +132,8 @@ export async function selectAgentTargets({
   if (interactive && !agent) {
     const selectedAgentIds = await prompts.multiselect({
       message: 'Which coding agent instruction files should Vite+ create?',
-      options: AGENTS.map((option) => ({
+      // Keep CLAUDE.md available for explicit --agent values and existing projects.
+      options: AGENTS.filter((option) => option.id !== 'claude').map((option) => ({
         label: option.label,
         value: option.id,
         hint: option.hint,

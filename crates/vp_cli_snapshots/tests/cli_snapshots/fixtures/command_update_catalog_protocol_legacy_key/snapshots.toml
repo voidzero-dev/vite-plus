@@ -27,7 +27,7 @@ steps = [
   { argv = [
     "vp",
     "up",
-  ], comment = "nothing to update, yet the bare key still resolves the catalog reference away", continue-on-failure = true },
+  ], comment = "nothing to update, yet the bare key still resolves the catalog reference away", snapshot = false, continue-on-failure = true },
   { argv = [
     "vpt",
     "print-file",
@@ -47,7 +47,7 @@ steps = [
   { argv = [
     "vp",
     "up",
-  ], comment = "update is now a no-op on the catalog reference", continue-on-failure = true },
+  ], comment = "update is now a no-op on the catalog reference", snapshot = false, continue-on-failure = true },
   { argv = [
     "vpt",
     "print-file",

@@ -61,5 +61,5 @@ $ vite --version ⊘ cache disabled
 vite --version
 
 ---
-vp run: 0/2 cache hit (0%). (Run `vp run --last-details` for full details)
+vp run: 2/2 successful. (Run `vp run --last-details` for full details)
 ```

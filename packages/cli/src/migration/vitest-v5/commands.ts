@@ -1,131 +1,30 @@
+import { parseLiteralCommands } from '../../../binding/index.js';
+import { getCommandStartIndex, SHELL_STATE_COMMANDS } from '../migrator/shared.ts';
 import type { RewriteResult, VitestV5Finding } from './ast.ts';
 
-interface CommandToken {
-  value: string;
-  start: number;
-  end: number;
-}
-
-/** Parse only a single literal argv command. Shell expansion, pipelines, and
- * compound commands need review; treating them as argv could change behavior. */
-export function literalArgv(command: string): CommandToken[] | undefined {
-  const tokens: CommandToken[] = [];
-  let value = '';
-  let start = 0;
-  let quote = '';
-  let active = false;
-  for (let i = 0; i < command.length; i++) {
-    const character = command[i];
-    if (quote) {
-      if (character === quote) {
-        quote = '';
-      } else if (
-        character === '\\' ||
-        (quote === '"' && (character === '$' || character === '`'))
-      ) {
-        return undefined;
-      } else {
-        value += character;
-      }
-    } else if (character === "'" || character === '"') {
-      if (!active) {
-        start = i;
-      }
-      quote = character;
-      active = true;
-    } else if (character === '\n' || character === '\r') {
-      return undefined;
-    } else if (/\s/.test(character)) {
-      if (active) {
-        tokens.push({ value, start, end: i });
-      }
-      active = false;
-      value = '';
-    } else if (/[|&;<>($`\\)]/.test(character)) {
-      return undefined;
-    } else {
-      if (!active) {
-        start = i;
-      }
-      value += character;
-      active = true;
-    }
-  }
-  if (quote) {
+/** Read test commands without evaluating shell state or directory changes. */
+export function literalTestCommands(command: string): string[][] | undefined {
+  const commands = parseLiteralCommands(command, true);
+  if (!commands) {
     return undefined;
   }
-  if (active) {
-    tokens.push({ value, start, end: command.length });
-  }
-  return tokens;
-}
-
-/** Read command lists without executing a shell. Directory-changing builtins,
- * expansions, pipelines, and shell programs remain unresolved. */
-export function literalTestCommands(command: string): string[][] | undefined {
-  const commands: string[][] = [];
-  let quote = '';
-  let start = 0;
-  const append = (end: number) => {
-    const tokens = literalArgv(command.slice(start, end));
-    if (!tokens?.length) {
-      return false;
-    }
+  const result: string[][] = [];
+  for (const tokens of commands) {
     const values = tokens.map(({ value }) => value);
     while (/^[A-Za-z_]\w*=/.test(values[0] ?? '')) {
       values.shift();
     }
-    if (
-      !values.length ||
-      ['cd', 'pushd', 'popd', '.', 'source', 'eval', 'export', 'set', 'unset'].includes(values[0])
-    ) {
-      return false;
-    }
-    commands.push(values);
-    return true;
-  };
-  for (let index = 0; index < command.length; index++) {
-    const char = command[index];
-    if (char === '\\') {
+    if (!values.length || SHELL_STATE_COMMANDS.includes(values[0])) {
       return undefined;
     }
-    if (quote) {
-      if (char === quote) {
-        quote = '';
-      }
-    } else if (char === '"' || char === "'") {
-      quote = char;
-    } else if (char === '#') {
-      return undefined;
-    } else if (
-      char === ';' ||
-      command.slice(index, index + 2) === '&&' ||
-      command.slice(index, index + 2) === '||'
-    ) {
-      if (!append(index)) {
-        return undefined;
-      }
-      if (char !== ';') {
-        index++;
-      }
-      start = index + 1;
-    }
+    result.push(values);
   }
-  return !quote && append(command.length) ? commands : undefined;
+  return result;
 }
 
 /** Locate the runner's arguments after a supported package-manager wrapper. */
 export function vitestCommandArgsStart(values: readonly string[]): number {
-  let start = 0;
-  if (['pnpm', 'npm', 'yarn', 'bun', 'npx', 'bunx'].includes(values[0])) {
-    start = 1;
-    if (values[start] === 'exec' || values[start] === 'x') {
-      start++;
-    }
-    if (values[start] === '--') {
-      start++;
-    }
-  }
+  const start = getCommandStartIndex(values);
   if (values[start] === 'vitest') {
     return start + 1;
   }
@@ -136,7 +35,7 @@ export function vitestCommandArgsStart(values: readonly string[]): number {
 }
 
 function migrateBenchmarkOutput(command: string): string {
-  const argv = literalArgv(command);
+  const argv = parseLiteralCommands(command, false)?.[0];
   if (!argv) {
     return command;
   }
@@ -238,7 +137,7 @@ export function migrateVitestV5Command(
   command = migrateBenchmarkOutput(command);
   // The bench subcommand still exists in v5. Only its removed flags block
   // migration; benchmark source changes are handled by the source pass.
-  const argv = literalArgv(command);
+  const argv = parseLiteralCommands(command, false)?.[0];
   const values = argv?.map(({ value }) => value);
   const runner = values ? vitestCommandArgsStart(values) : -1;
   let removedFlag = /(?:^|\s)(?:--compare|--outputJson)(?:\s|=|$)/.test(command);

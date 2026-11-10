@@ -53,13 +53,18 @@ mod provider;
 mod providers;
 mod runtime;
 
-pub use dev_engines::{parse_node_version_content, read_node_version_file, read_nvmrc_file};
+pub use dev_engines::{
+    nvmrc_version_spans, parse_node_version_content, read_node_version_file, read_nvmrc_file,
+};
 pub use error::Error;
 pub use platform::{Arch, Os, Platform};
 pub use provider::{
     ArchiveFormat, DownloadInfo, HashVerification, JsRuntimeProvider, ShasumsSignature,
 };
-pub use providers::{LtsInfo, NodeProvider, NodeVersionEntry, resolve_version_from_list};
+pub use providers::{
+    LtsInfo, NodeProvider, NodeVersionEntry, find_absolute_latest_version,
+    resolve_version_from_list,
+};
 pub use runtime::{
     JsRuntime, JsRuntimeType, VersionResolution, VersionSource, download_runtime,
     download_runtime_for_project, download_runtime_with_provider, is_valid_version,

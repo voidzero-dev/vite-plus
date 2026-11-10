@@ -8,10 +8,10 @@ Vite+ 1.0 is available. We continue to improve it and welcome community feedback
 
 ## Supported Tool Versions
 
-Vite+ expects modern upstream tool versions.
+Automatic migration requires these minimum versions for existing Vite and Vitest dependencies:
 
-- Vite 8 or newer
-- Vitest 4.1 or newer
+- Vite 7 or newer
+- Vitest 4 or newer
 
 If you are migrating an existing project and it still depends on older Vite or Vitest versions, upgrade those first before adopting Vite+.
 
@@ -22,7 +22,7 @@ Run `vp toolchain` to show the versions from the local Vite+ package. Run `vp to
 - Confirm that `lint.options.typeAware` and `lint.options.typeCheck` are enabled in `vite.config.ts`
 - Check whether your `tsconfig.json` still uses `compilerOptions.baseUrl`
 
-The Oxlint type checker path powered by `tsgolint` does not support `baseUrl`. `vp migrate` and `vp lint --init` try to run the `vp dlx @andrewbranch/ts5to6 --fixBaseUrl .` fix before enabling type-aware linting. If that fix fails or is declined, Vite+ skips `typeAware` and `typeCheck`.
+The Oxlint type checker path powered by `tsgolint` does not support `baseUrl`. `vp migrate` and `vp lint --init` try to run the `vp dlx @andrewbranch/ts5to6 --fixBaseUrl <tsconfig path>` fix before enabling type-aware linting. If that fix fails or is declined, Vite+ skips `typeAware` and `typeCheck`.
 
 ## Nested lint or format config is not applied
 
@@ -30,7 +30,7 @@ When running `vp lint`, `vp fmt`, or `vp check`, configs in subdirectories do no
 
 Keep lint and format settings in the root `vite.config.ts`. Use [`lint.overrides`](/guide/monorepo#root-config-with-overrides) and [`fmt.overrides`](/guide/monorepo#format-overrides) for file- or package-specific settings. You can also [import configuration objects](/guide/monorepo#composing-configuration-files) into the root config to keep settings in separate files.
 
-For IDE integration, `disableNestedConfig` and `fmt.disableNestedConfig` disable per-file nested lint and format configs. See [IDE Integration](/guide/ide-integration) for setup instructions for your editor.
+Configure your editor's linting and formatting to use the workspace-root `vite.config.ts`. See [IDE Integration](/guide/ide-integration) for editor-specific setup instructions.
 
 We're holding off on applying nested configs to individual files for now. Some of the factors we're considering are how implicit config discovery affects the predictability of linting and formatting, what context AI agents need to understand the settings that apply, and the potential performance cost of finding and loading multiple configs. At the same time, we recognize that keeping package-specific context close to the code may have benefits. The use cases we've heard so far haven't given us a strong enough reason to commit to those semantics. Waiting leaves room to add support later, and we'd like to hear why your project needs nested configs, especially where root-level overrides fall short.
 
@@ -72,7 +72,7 @@ If `vp staged` fails or your pre-commit hook does not run:
 - if status shows `Preference: disabled (local)`, re-enable with `vp hooks enable`
 - check whether hooks were skipped intentionally through `VP_GIT_HOOKS=0`
 
-To stop hooks in this clone without deleting project policy files, run `vp hooks disable`. See the [Commit hooks guide](/guide/commit-hooks) for the full workflow.
+To stop hooks in this clone without deleting project policy files, run `vp hooks disable`. See the [Commit Hooks](/guide/commit-hooks) for the full workflow.
 
 A minimal staged config looks like this:
 
@@ -93,8 +93,8 @@ When `vite.config.ts` imports plugins at the top level, they are evaluated for e
 Use `lazyPlugins` to skip the plugin factory when vite-plus loads your config only to read a metadata block (`lint`, `fmt`, `check`, `staged`, `pack`, `create`, the `run`/`cache` task lookup, and editor tooling). The plugins still load whenever Vite actually runs, `dev`, `build`, `test`, `preview`, and any build your own scripts spawn (a `vp run` task, `vp exec`):
 
 ```ts [vite.config.ts]
-import { defineConfig, lazyPlugins } from 'vite-plus';
 import myPlugin from 'vite-plugin-foo';
+import { defineConfig, lazyPlugins } from 'vite-plus';
 
 export default defineConfig({
   plugins: lazyPlugins(() => [myPlugin()]),
@@ -113,6 +113,8 @@ export default defineConfig({
   }),
 });
 ```
+
+Import the plugin packages directly inside the callback. A dynamic `import()` of a local module, such as `await import('./vite.plugins.ts')`, does not avoid the cost: Vite bundles the config before loading it and follows dynamic imports of local files, so that module and the packages it imports are still processed on every command, even though the callback never runs.
 
 ## Asking for Help
 

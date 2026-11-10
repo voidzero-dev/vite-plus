@@ -23,13 +23,6 @@ check package.json has prepare script and lint-staged config
     "vite": "catalog:",
     "vite-plus": "catalog:"
   },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
-  },
   "scripts": {
     "prepare": "vp config"
   }

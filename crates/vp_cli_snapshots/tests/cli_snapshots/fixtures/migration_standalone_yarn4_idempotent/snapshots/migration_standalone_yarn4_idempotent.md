@@ -7,9 +7,8 @@ implicit Yarn Berry PnP converts before the first pass
 ```
 VITE+ - The Unified Toolchain for the Web
 
-⚠ Vite+ does not currently support Yarn Plug'n'Play (PnP).
-
-✔ Switched Yarn to node-modules mode
+▲ ⚠ Vite+ does not currently support Yarn Plug'n'Play (PnP).
+◆ ✔ Switched Yarn to node-modules mode
 ◇ Migrated . to Vite+ <version>
 • Node <version>  yarn <version>
 • 2 config updates applied, 1 file had imports rewritten

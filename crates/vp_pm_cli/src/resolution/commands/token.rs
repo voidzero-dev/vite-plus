@@ -64,36 +64,45 @@ pub enum TokenCommand {
 
 impl Npm {
     fn resolve_token(args: &TokenCommand) -> CommandResolution {
-        let mut cmd = CommandBuilder::new("npm");
-        cmd.arg("token");
-        match args {
-            TokenCommand::List { json, registry, pass_through_args } => {
-                cmd.arg("list")
-                    .arg_if("--json", *json)
-                    .option("--registry", registry.as_ref())
-                    .extend(pass_through_args.iter());
-            }
-            TokenCommand::Create { json, registry, cidr, readonly, pass_through_args } => {
-                cmd.arg("create").arg_if("--json", *json).option("--registry", registry.as_ref());
-                if let Some(cidr) = cidr {
-                    cmd.repeated("--cidr", cidr.iter());
-                }
-                cmd.arg_if("--readonly", *readonly).extend(pass_through_args.iter());
-            }
-            TokenCommand::Revoke { token, registry, pass_through_args } => {
-                cmd.arg("revoke")
-                    .arg(token)
-                    .option("--registry", registry.as_ref())
-                    .extend(pass_through_args.iter());
-            }
-        }
-        cmd.into()
+        resolve_token("npm", args)
     }
+}
+
+fn resolve_token(program: &str, args: &TokenCommand) -> CommandResolution {
+    let mut cmd = CommandBuilder::new(program);
+    cmd.arg("token");
+    match args {
+        TokenCommand::List { json, registry, pass_through_args } => {
+            cmd.arg("list")
+                .arg_if("--json", *json)
+                .option("--registry", registry.as_ref())
+                .extend(pass_through_args.iter());
+        }
+        TokenCommand::Create { json, registry, cidr, readonly, pass_through_args } => {
+            cmd.arg("create").arg_if("--json", *json).option("--registry", registry.as_ref());
+            if let Some(cidr) = cidr {
+                cmd.repeated("--cidr", cidr.iter());
+            }
+            let readonly_flag = if program == "pnpm" { "--read-only" } else { "--readonly" };
+            cmd.arg_if(readonly_flag, *readonly).extend(pass_through_args.iter());
+        }
+        TokenCommand::Revoke { token, registry, pass_through_args } => {
+            cmd.arg("revoke")
+                .arg(token)
+                .option("--registry", registry.as_ref())
+                .extend(pass_through_args.iter());
+        }
+    }
+    cmd.into()
 }
 
 impl Resolve<TokenCommand> for Pnpm {
     fn resolve(&self, args: &TokenCommand, _diag: &mut Diagnostics) -> CommandResolution {
-        Npm::resolve_token(args)
+        if self.supports_v12_13_commands() {
+            resolve_token("pnpm", args)
+        } else {
+            Npm::resolve_token(args)
+        }
     }
 }
 
@@ -122,6 +131,57 @@ mod tests {
         Resolution, resolve,
         test_utils::{bun, expect_run, npm, parse_subcommand, pnpm, yarn},
     };
+
+    #[test]
+    fn test_pnpm_native_version_boundary_and_readonly_spelling() {
+        for argv in [
+            vec!["list", "--json", "--registry", "https://registry.example.com", "--", "--help"],
+            vec![
+                "create",
+                "--json",
+                "--registry",
+                "https://registry.example.com",
+                "--cidr",
+                "192.168.1.0/24",
+                "--cidr",
+                "10.0.0.0/8",
+                "--readonly",
+                "--",
+                "--help",
+            ],
+            vec![
+                "revoke",
+                "abc123",
+                "--registry",
+                "https://registry.example.com",
+                "--",
+                "--otp",
+                "123456",
+            ],
+        ] {
+            let args = parse_subcommand::<TokenCommand>(argv.clone()).unwrap();
+            for (version, program) in [
+                ("10.0.0", "npm"),
+                ("11.25.0", "npm"),
+                ("12.12.0", "npm"),
+                ("12.13.0-rc.1", "npm"),
+                ("12.13.0", "pnpm"),
+                ("13.0.0", "pnpm"),
+            ] {
+                let resolution = resolve(&pnpm(version), args.clone());
+                assert!(resolution.diagnostics.is_empty());
+                let command = expect_run(resolution.outcome);
+                let expected = argv.iter().copied().filter(|arg| *arg != "--").map(|arg| {
+                    if program == "pnpm" && arg == "--readonly" { "--read-only" } else { arg }
+                });
+                assert_eq!(command.program, program, "{version}");
+                assert_eq!(
+                    command.args,
+                    std::iter::once("token").chain(expected).collect::<Vec<_>>()
+                );
+            }
+        }
+    }
 
     #[test]
     fn test_parser_accepts_list_alias_and_pass_through_args() {

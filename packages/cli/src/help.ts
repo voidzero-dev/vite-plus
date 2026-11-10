@@ -213,7 +213,7 @@ const commandHelpDocs = {
           {
             label: '--api [port]',
             description:
-              "Specify server port. Note if the port is already being used, Vite will automatically try the next available port so this may not be the actual port the server ends up listening on. If true will be set to 51204 or 63315 in browser mode. Use '--help --api' for more info.",
+              "Specify server port. Note if the port is already being used, Vite will automatically try the next available port so this may not be the actual port the server ends up listening on. If true will be set to 51204 or 23315 in browser mode. Use '--help --api' for more info.",
           },
           {
             label: '--silent [value]',
@@ -312,6 +312,15 @@ const commandHelpDocs = {
             description: 'Run tests that are affected by the changed files (default: false)',
           },
           {
+            label: '--sinceLastRun',
+            description:
+              'Run tests with dependencies modified since their last run, plus tests that failed (default: false)',
+          },
+          {
+            label: '--lastFailed',
+            description: 'Run only the tests that failed in the last run (default: false)',
+          },
+          {
             label: '--sequence <options>',
             description:
               "Options for how tests should be sorted. Use '--help --sequence' for more info.",
@@ -386,7 +395,8 @@ const commandHelpDocs = {
           },
           {
             label: '--cache',
-            description: "Enable cache. Use '--help --cache' for more info.",
+            description:
+              'Store the results of test runs to run failed and longer test files first (default: true)',
           },
           {
             label: '--maxConcurrency <number>',
@@ -396,7 +406,7 @@ const commandHelpDocs = {
           {
             label: '--fsModuleCache',
             description:
-              'Cache transformed modules on the file system and reuse them between reruns (default: false)',
+              'Cache transformed modules on the file system and reuse them between reruns (default: true)',
           },
           {
             label: '--fsModuleCachePath <path>',
@@ -820,9 +830,14 @@ const commandHelpDocs = {
         rows: [
           { label: '--fix', description: 'Auto-fix format and lint issues' },
           {
+            label: '--continue-on-error',
+            description: 'Run remaining checks even if an earlier check fails',
+          },
+          {
             label: '--quiet',
             description: 'Disable reporting on warnings, only errors are reported',
           },
+          { label: '--deny-warnings', description: 'Treat lint warnings as errors' },
           { label: '--no-fmt', description: 'Skip format check' },
           {
             label: '--no-lint',
@@ -838,7 +853,12 @@ const commandHelpDocs = {
       },
       {
         title: 'Examples',
-        lines: ['  vp check', '  vp check --fix', '  vp check --no-lint src/index.ts'],
+        lines: [
+          '  vp check',
+          '  vp check --fix',
+          '  vp check --continue-on-error',
+          '  vp check --no-lint src/index.ts',
+        ],
       },
     ],
     documentationUrl: documentationUrl('/guide/check'),
@@ -906,12 +926,12 @@ const commandHelpDocs = {
           },
           {
             label: '--env-file <file>',
-            description:
-              'Load environment variables from a file, when used together with --env, variables in --env take precedence',
+            description: 'Load environment variables from a file, can be repeated',
           },
           {
             label: '--env-prefix <prefix>',
-            description: 'Prefix for env variables to inject into the bundle (default: TSDOWN_)',
+            description:
+              'Prefix for env variables to inject into the bundle (default: VITE_PACK_, TSDOWN_)',
           },
           { label: '--on-success <command>', description: 'Command to run on success' },
           { label: '--copy <dir>', description: 'Copy files to output dir' },
@@ -981,7 +1001,11 @@ const commandHelpDocs = {
             label: '--ignore-depends-on',
             description: 'Do not run dependencies specified in `dependsOn` fields',
           },
-          { label: '-v, --verbose', description: 'Show the full detailed summary after execution' },
+          {
+            label: '-v, --verbose',
+            description:
+              'Show the full detailed summary after execution; `-vv` also lists the inputs and outputs of each cached run',
+          },
           { label: '--cache', description: 'Force caching on for all tasks and scripts' },
           { label: '--no-cache', description: 'Force caching off for all tasks and scripts' },
           {
@@ -996,6 +1020,16 @@ const commandHelpDocs = {
             label: '--parallel',
             description:
               'Run tasks without dependency ordering; concurrency is unlimited unless `--concurrency-limit` is specified',
+          },
+          {
+            label: '--dry-run',
+            description:
+              'Show what the run would do and whether each command would hit the cache, without running anything',
+          },
+          {
+            label: '--json',
+            description:
+              'Print JSON: every package and task without a task, or the run plan with `--dry-run`',
           },
           { label: '--last-details', description: 'Display the detailed summary of the last run' },
           { label: '-h, --help', description: 'Print help' },

@@ -1,4 +1,5 @@
-import { execSync } from 'node:child_process';
+import { execSync, spawn } from 'node:child_process';
+import { once } from 'node:events';
 import {
   chmodSync,
   existsSync,
@@ -140,6 +141,88 @@ describe('install', () => {
 
       expect(install('./.custom-hooks')).toEqual({ message: '', isError: false });
       expect(existsSync(join(tmp, '.custom-hooks', '_', 'pre-commit'))).toBe(true);
+    } finally {
+      process.chdir(originalCwd);
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it('does not take the git config lock when nothing changes', () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'hooks-config-lock-test-'));
+    const originalCwd = process.cwd();
+    try {
+      execSync('git init', { cwd: tmp, stdio: 'ignore' });
+      process.chdir(tmp);
+
+      expect(install()).toEqual({ message: '', isError: false });
+      const configPath = join(tmp, '.git', 'config');
+      const configBefore = readFileSync(configPath, 'utf8');
+
+      // Another worktree's `vp config` holds the shared lock.
+      writeFileSync(`${configPath}.lock`, '');
+      expect(install()).toEqual({ message: '', isError: false });
+      expect(readFileSync(configPath, 'utf8')).toBe(configBefore);
+
+      // A different spelling is a real write, so it still needs the lock.
+      expect(install('./.vite-hooks').isError).toBe(true);
+    } finally {
+      process.chdir(originalCwd);
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it('waits for a concurrent first run to release the git config lock', async () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'hooks-config-lock-wait-test-'));
+    const originalCwd = process.cwd();
+    try {
+      execSync('git init', { cwd: tmp, stdio: 'ignore' });
+      process.chdir(tmp);
+      const lockPath = join(tmp, '.git', 'config.lock');
+      writeFileSync(lockPath, '');
+
+      // Another worktree's first `vp config` releases the shared lock soon.
+      const holder = spawn(process.execPath, [
+        '-e',
+        `setTimeout(() => require('node:fs').rmSync(${JSON.stringify(lockPath)}), 200)`,
+      ]);
+      expect(install()).toEqual({ message: '', isError: false });
+      await once(holder, 'exit');
+
+      expect(execSync('git config --local core.hooksPath', { cwd: tmp }).toString().trim()).toBe(
+        '.vite-hooks/_',
+      );
+      expect(execSync('git config --local vp.hooks.prefix', { cwd: tmp }).toString().trim()).toBe(
+        '.',
+      );
+    } finally {
+      process.chdir(originalCwd);
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it('accepts values that a concurrent first run wrote while it held the lock', async () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'hooks-config-lock-reread-test-'));
+    const originalCwd = process.cwd();
+    try {
+      execSync('git init', { cwd: tmp, stdio: 'ignore' });
+      process.chdir(tmp);
+      const configPath = join(tmp, '.git', 'config');
+      writeFileSync(`${configPath}.lock`, '');
+
+      // The other run stores the same values but still holds the lock afterwards.
+      const sameValues =
+        '[core]\n\thooksPath = .vite-hooks/_\n[vp "hooks"]\n\tdir = .vite-hooks\n\tprefix = .\n';
+      const writer = spawn(process.execPath, [
+        '-e',
+        `setTimeout(() => require('node:fs').appendFileSync(${JSON.stringify(configPath)}, ${JSON.stringify(sameValues)}), 100)`,
+      ]);
+      expect(install()).toEqual({ message: '', isError: false });
+      await once(writer, 'exit');
+
+      expect(existsSync(`${configPath}.lock`)).toBe(true);
+      expect(execSync('git config --local core.hooksPath', { cwd: tmp }).toString().trim()).toBe(
+        '.vite-hooks/_',
+      );
     } finally {
       process.chdir(originalCwd);
       rmSync(tmp, { recursive: true, force: true });
@@ -693,18 +776,6 @@ describe('hookScript env gates', () => {
 });
 
 describe('hookScript', () => {
-  it('should compute correct depth for simple dir', () => {
-    // ".vite-hooks" → 1 segment → depth 3
-    const script = hookScript('.vite-hooks');
-    expect(countDirnameCalls(script)).toBe(3);
-  });
-
-  it('should compute correct depth for nested dir', () => {
-    // ".config/husky" → 2 segments → depth 4
-    const script = hookScript('.config/husky');
-    expect(countDirnameCalls(script)).toBe(4);
-  });
-
   it('should handle ./ prefix correctly (bug case)', () => {
     // "./.config/husky" should produce same depth as ".config/husky"
     // Before fix: filter(Boolean) kept "." → 3 segments → depth 5 (wrong)
@@ -734,21 +805,22 @@ describe('hookScript', () => {
     expect(countDirnameCalls(hookScript('.config\\husky'))).toBe(3);
   });
 
-  it.skipIf(process.platform === 'win32')(
-    'should add Vite+ managed bin to PATH as a fallback before running user hook',
-    () => {
+  it.skipIf(process.platform === 'win32').each([undefined, 'vp-home'])(
+    'preserves inherited PATH with project binaries first when VP_HOME is %s',
+    (vpHome) => {
       const tmp = mkdtempSync(join(tmpdir(), 'hooks-path-test-'));
       try {
         const hooksDir = join(tmp, '.vite-hooks');
         const internalHooksDir = join(hooksDir, '_');
         const nodeModulesBin = join(tmp, 'node_modules', '.bin');
-        const vpHomeBin = join(tmp, 'vp-home', 'bin');
-        const systemBin = join(tmp, 'system-bin');
+        const home = join(tmp, 'home');
+        const inheritedPath = '/usr/bin:/bin';
 
         mkdirSync(internalHooksDir, { recursive: true });
         mkdirSync(nodeModulesBin, { recursive: true });
-        mkdirSync(vpHomeBin, { recursive: true });
-        mkdirSync(systemBin, { recursive: true });
+        // Both legacy directories exist so either fallback would change the hook's PATH.
+        mkdirSync(join(tmp, 'vp-home', 'bin'), { recursive: true });
+        mkdirSync(join(home, '.vite-plus', 'bin'), { recursive: true });
 
         writeFileSync(join(internalHooksDir, 'h'), hookScript('.vite-hooks'), { mode: 0o755 });
         writeFileSync(
@@ -756,63 +828,25 @@ describe('hookScript', () => {
           '#!/usr/bin/env sh\n. "$(dirname "$0")/h"',
           { mode: 0o755 },
         );
-        writeFileSync(join(hooksDir, 'pre-commit'), 'vp staged\n');
-
-        writeFileSync(
-          join(nodeModulesBin, 'vp'),
-          '#!/bin/sh\nbasedir=$(dirname "$0")\nexec node "$basedir/../vite-plus/bin/vp" "$@"\n',
-          { mode: 0o755 },
-        );
-        writeFileSync(
-          join(vpHomeBin, 'node'),
-          '#!/bin/sh\necho "fake-node $*" > "$VP_HOME/node-used"\n',
-          { mode: 0o755 },
-        );
-        writeFileSync(
-          join(vpHomeBin, 'dirname'),
-          '#!/bin/sh\necho "wrong dirname" > "$VP_HOME/dirname-used"\nexit 1\n',
-          { mode: 0o755 },
-        );
-        writeFileSync(
-          join(vpHomeBin, 'sh'),
-          '#!/bin/sh\necho "wrong sh" > "$VP_HOME/sh-used"\nexit 1\n',
-          { mode: 0o755 },
-        );
-
-        writeFileSync(join(systemBin, 'sh'), '#!/bin/sh\nexec /bin/sh "$@"\n', {
-          mode: 0o755,
-        });
-        writeFileSync(join(systemBin, 'dirname'), '#!/bin/sh\nexec /usr/bin/dirname "$@"\n', {
-          mode: 0o755,
-        });
-        writeFileSync(join(systemBin, 'basename'), '#!/bin/sh\nexec /usr/bin/basename "$@"\n', {
+        writeFileSync(join(hooksDir, 'pre-commit'), 'hook-command\n');
+        writeFileSync(join(nodeModulesBin, 'hook-command'), '#!/bin/sh\nprintf "%s" "$PATH"\n', {
           mode: 0o755,
         });
 
-        execSync('sh .vite-hooks/_/pre-commit', {
+        const output = execSync('sh .vite-hooks/_/pre-commit', {
           cwd: tmp,
           env: {
-            HOME: join(tmp, 'home'),
-            PATH: systemBin,
-            VP_HOME: join(tmp, 'vp-home'),
+            HOME: home,
+            PATH: inheritedPath,
+            VP_HOME: vpHome && join(tmp, vpHome),
           },
+          encoding: 'utf8',
         });
 
-        expect(existsSync(join(tmp, 'vp-home', 'node-used'))).toBe(true);
-        expect(existsSync(join(tmp, 'vp-home', 'dirname-used'))).toBe(false);
-        expect(existsSync(join(tmp, 'vp-home', 'sh-used'))).toBe(false);
+        expect(output).toBe(`./node_modules/.bin:${inheritedPath}`);
       } finally {
         rmSync(tmp, { recursive: true, force: true });
       }
     },
   );
-
-  it('should compute root and shell before appending Vite+ managed bin', () => {
-    const script = hookScript('.vite-hooks');
-    expect(script.indexOf('d=')).toBeLessThan(script.indexOf('export PATH="$PATH:$__vp_bin"'));
-    expect(script.indexOf('__vp_shell=')).toBeLessThan(
-      script.indexOf('export PATH="$PATH:$__vp_bin"'),
-    );
-    expect(script).toContain('"$__vp_shell" -e "$s" "$@"');
-  });
 });

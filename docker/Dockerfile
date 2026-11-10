@@ -25,6 +25,9 @@ ARG VP_VERSION=latest
 #   docker build --build-arg VP_PR_VERSION=1569 .
 ARG VP_PR_VERSION=
 
+# Optional download source for Node.js during installation; not kept in the image.
+ARG VP_NODE_DIST_MIRROR=https://nodejs.org/dist
+
 # Toolchain image: include git (+ openssh-client for git+ssh dependencies) and a
 # C/C++ build toolchain so native addons (for example better-sqlite3 or sharp)
 # can compile during `vp install`. `sudo` provides the non-root vp user an
@@ -72,7 +75,7 @@ ENV VP_HOME=/home/vp/.vite-plus \
 # downloads its own pinned Node.js at build time, so the default is dead weight in a
 # builder image. The node/npm/npx shims remain and fetch the right version on
 # first use.
-RUN curl -fsSL https://vite.plus | VP_VERSION="${VP_VERSION}" VP_PR_VERSION="${VP_PR_VERSION}" bash \
+RUN curl -fsSL https://vite.plus | VP_VERSION="${VP_VERSION}" VP_PR_VERSION="${VP_PR_VERSION}" VP_NODE_DIST_MIRROR="${VP_NODE_DIST_MIRROR}" bash \
  && vp --version \
  && rm -rf "$VP_HOME/js_runtime"
 

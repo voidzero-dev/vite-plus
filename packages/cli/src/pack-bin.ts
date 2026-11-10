@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import module from 'node:module';
+import path from 'node:path';
 
 import { cac } from 'cac';
 import {
@@ -120,10 +121,7 @@ cli
   .option('--from-vite [vitest]', 'Reuse config from Vite or Vitest')
   .option('--report', 'Size report', { default: true })
   .option('--env.* <value>', 'Define compile-time env variables')
-  .option(
-    '--env-file <file>',
-    'Load environment variables from a file, when used together with --env, variables in --env take precedence',
-  )
+  .option('--env-file <file>', 'Load environment variables from a file, can be repeated')
   .option('--env-prefix <prefix>', 'Prefix for env variables to inject into the bundle', {
     default: DEFAULT_ENV_PREFIXES,
   })
@@ -155,7 +153,8 @@ cli
 
       const configDeps = new Set<string>();
       if (viteConfig?.configFile) {
-        configDeps.add(viteConfig.configFile);
+        // Vite uses forward slashes, but watcher events use native path separators.
+        configDeps.add(path.normalize(viteConfig.configFile));
       }
 
       const configs: ResolvedConfig[] = [];

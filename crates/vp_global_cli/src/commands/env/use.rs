@@ -10,7 +10,9 @@
 
 use std::process::ExitStatus;
 
-use vp_pm_cli::{PackageManagerType, download_package_manager, resolve_package_manager_version};
+use vp_pm_cli::{
+    PackageManagerType, download_package_manager_for_cwd, resolve_package_manager_version_for_cwd,
+};
 use vt_path::AbsolutePathBuf;
 
 use super::{
@@ -147,7 +149,8 @@ pub async fn execute(
 
     let package_manager = if scope.includes_package_managers() {
         if let Some((kind, selector, hash)) = specs.package_manager {
-            let version = resolve_package_manager_version(kind, &selector).await?.to_string();
+            let version =
+                resolve_package_manager_version_for_cwd(&cwd, kind, &selector).await?.to_string();
             package_manager::warn_if_target_differs(&cwd, kind).await;
             Some((kind, version, selector, hash))
         } else if let EnvScope::PackageManager(kind) = scope {
@@ -233,7 +236,7 @@ pub async fn execute(
     }
 
     if !no_install {
-        ensure_components_installed(&node, &package_manager).await?;
+        ensure_components_installed(&cwd, &node, &package_manager).await?;
     }
 
     if has_eval_wrapper() {
@@ -295,6 +298,7 @@ pub async fn execute(
 }
 
 async fn ensure_components_installed(
+    cwd: &AbsolutePathBuf,
     node: &Option<(String, String)>,
     package_manager: &Option<(PackageManagerType, String, String, Option<String>)>,
 ) -> Result<(), Error> {
@@ -318,7 +322,7 @@ async fn ensure_components_installed(
         }
     }
     if let Some((kind, version, _, hash)) = package_manager {
-        download_package_manager(*kind, version, hash.as_deref()).await?;
+        download_package_manager_for_cwd(cwd, *kind, version, hash.as_deref()).await?;
     }
     Ok(())
 }
@@ -329,23 +333,10 @@ fn current_override(session: Option<String>, environment: Option<String>) -> Opt
 
 #[cfg(test)]
 mod tests {
+    #[cfg(windows)]
     use vp_shared::env_vars;
 
     use super::*;
-
-    #[test]
-    fn test_detect_shell_vp_shell_powershell() {
-        vp_shared::EnvConfig::with_vars(
-            [
-                (env_vars::VP_HOME, std::env::temp_dir().as_os_str()),
-                (env_vars::VP_SHELL, std::ffi::OsStr::new("powershell")),
-            ],
-            |_| {
-                let shell = detect_shell();
-                assert_eq!(shell, Shell::PowerShell);
-            },
-        );
-    }
 
     #[test]
     fn empty_environment_override_falls_back_to_session() {
@@ -353,45 +344,6 @@ mod tests {
             current_override(Some("pnpm@10.18.0".into()), Some("   ".into())).as_deref(),
             Some("pnpm@10.18.0")
         );
-    }
-
-    #[test]
-    fn test_detect_shell_vp_shell_fish() {
-        vp_shared::EnvConfig::with_vars(
-            [
-                (env_vars::VP_HOME, std::env::temp_dir().as_os_str()),
-                (env_vars::VP_SHELL, std::ffi::OsStr::new("fish")),
-            ],
-            |_| {
-                let shell = detect_shell();
-                assert_eq!(shell, Shell::Fish);
-            },
-        );
-    }
-
-    #[test]
-    fn test_detect_shell_vp_shell_nu() {
-        vp_shared::EnvConfig::with_vars(
-            [
-                (env_vars::VP_HOME, std::env::temp_dir().as_os_str()),
-                (env_vars::VP_SHELL, std::ffi::OsStr::new("nu")),
-            ],
-            |_| {
-                let shell = detect_shell();
-                assert_eq!(shell, Shell::NuShell);
-            },
-        );
-    }
-
-    #[test]
-    fn test_detect_shell_posix_default() {
-        vp_shared::EnvConfig::with_vars([(env_vars::VP_HOME, std::env::temp_dir())], |_| {
-            let shell = detect_shell();
-            #[cfg(not(windows))]
-            assert_eq!(shell, Shell::Posix);
-            #[cfg(windows)]
-            assert_eq!(shell, Shell::Cmd);
-        });
     }
 
     #[test]

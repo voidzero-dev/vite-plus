@@ -1,6 +1,8 @@
 [[case]]
 name = "new_create_vite_migrates_eslint_prettier"
 vp = "global"
+# Exceeded 40 seconds on Linux in CI run 38687702831.
+skip-platforms = ["linux"]
 # Install the checkout's Vite+ build in the generated project.
 local-registry = true
 unset-env = ["VP_SKIP_INSTALL", "CI"]

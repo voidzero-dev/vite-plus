@@ -1,11 +1,20 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { ignoreInput, ignoreOutput } from '@voidzero-dev/vite-task-client';
 import type { OxfmtConfig } from 'oxfmt';
 import type { OxlintConfig } from 'oxlint';
-import type { Alias, Plugin, PluginOption, UserConfig } from 'vite';
+import { resolveConfig, searchForWorkspaceRoot } from 'vite';
+import type {
+  Alias,
+  InlineConfig as ViteInlineConfig,
+  Plugin,
+  PluginOption,
+  ResolvedConfig,
+  UserConfig,
+} from 'vite';
 import {
   defineConfig as viteDefineConfig,
   defineProject as viteDefineProject,
@@ -748,8 +757,90 @@ function vitePlusCoverageVersionGuardPlugin(): PluginOption {
 }
 
 /**
- * Inject the vitest resolver plugin, the auto-inline matcher plugin, and the
- * coverage version guard into a single inline project config. Used both for
+ * The `configureVitest` plugin hook context, narrowed to the fields the cache
+ * path plugin reads: the shared runner's resolved Vite config (`cacheDir`,
+ * `root`), the resolved `fsModuleCachePath` overrides, and the attached
+ * projects (each carrying its own resolved `fsModuleCachePath`).
+ */
+interface VitestCachePathContext {
+  vitest: {
+    viteConfig: { cacheDir: string; root: string };
+    config: { fsModuleCachePath?: string };
+    projects: Array<{ config: { fsModuleCachePath?: string } }>;
+  };
+}
+
+/**
+ * Vitest 5.0.4 enables its on-disk caches by default: the results cache
+ * (`<cacheDir>/results.json`, written atomically through `.tmp-*` siblings)
+ * and the fs module cache (`<workspaceRoot>/node_modules/.vitest-cache`, or
+ * `fsModuleCachePath` when overridden). Under `vp run`, file-system tracking
+ * would record those cache reads/writes as task inputs the run itself
+ * modifies, so every `vp test` task would stay permanently uncacheable
+ * ("not cached because it modified its input"). Tell the runner these
+ * tool-managed paths are neither inputs nor outputs, mirroring what Vite
+ * does for `.vite-temp` and the optimizer cache dir.
+ *
+ * Runtime project injection appends to `vitest.projects` without calling
+ * `configureVitest` again. Observe those attachments as well as the initial
+ * list. Both ignore calls are no-ops outside `vp run`.
+ */
+function vitePlusVitestCachePathsPlugin(): PluginOption {
+  const observedProjectLists = new WeakSet<object>();
+  return {
+    name: 'vite-plus:vitest-cache-paths',
+    configureVitest(context: VitestCachePathContext) {
+      const { vitest } = context;
+      const { projects } = vitest;
+      if (observedProjectLists.has(projects)) {
+        return;
+      }
+      observedProjectLists.add(projects);
+
+      const ignoredPaths = new Set<string>();
+      const ignoreCachePath = (path: string) => {
+        if (!path || ignoredPaths.has(path)) {
+          return;
+        }
+        ignoredPaths.add(path);
+        ignoreInput(path);
+        ignoreOutput(path);
+      };
+
+      // Results and dependency-record caches live under the resolved Vite
+      // cacheDir, which Vitest points at its own subdirectory.
+      ignoreCachePath(vitest.viteConfig.cacheDir);
+
+      // Mirror Vitest's fs module cache layout: the shared root cache plus
+      // any per-project override.
+      const rootCache =
+        vitest.config.fsModuleCachePath ||
+        join(searchForWorkspaceRoot(vitest.viteConfig.root), 'node_modules', '.vitest-cache');
+      ignoreCachePath(rootCache);
+      for (const project of projects) {
+        ignoreCachePath(project.config.fsModuleCachePath || rootCache);
+      }
+
+      // Vitest's injectTestProjects resolves and attaches projects before
+      // pushing them here, even when an async `order: 'pre'` hook started
+      // injection before this hook. A restart replaces the array, so each
+      // new list gets its own observer and resolved root cache.
+      const push = projects.push;
+      projects.push = function (...addedProjects) {
+        const length = push.apply(this, addedProjects);
+        for (const project of addedProjects) {
+          ignoreCachePath(project.config.fsModuleCachePath || rootCache);
+        }
+        return length;
+      };
+    },
+  } as PluginOption;
+}
+
+/**
+ * Inject the vitest resolver plugin, the auto-inline matcher plugin, the
+ * coverage version guard, and the cache-paths plugin into a single inline
+ * project config. Used both for
  * root configs and for object-shaped entries inside `test.projects`.
  *
  * The shapes overlap (both have an optional top-level `plugins` array and
@@ -760,14 +851,16 @@ const VITE_PLUS_TEST_PLUGIN_NAMES: ReadonlySet<string> = new Set([
   'vite-plus:vitest-resolver',
   'vite-plus:auto-inline-matcher-deps',
   'vite-plus:coverage-version-guard',
+  'vite-plus:vitest-cache-paths',
 ]);
 
 function withoutVitePlusTestPlugins(plugin: PluginOption): PluginOption {
   if (Array.isArray(plugin)) {
     return plugin.filter(keepUserPlugin).map(withoutVitePlusTestPlugins);
   }
+  // Injected plugins are never async, and re-wrapping with `.then` drops own props that tools like Vike look up.
   if (plugin instanceof Promise) {
-    return plugin.then(withoutVitePlusTestPlugins);
+    return plugin;
   }
   return plugin && VITE_PLUS_TEST_PLUGIN_NAMES.has(plugin.name) ? false : plugin;
 }
@@ -788,6 +881,7 @@ function injectPluginIntoInlineConfig<
       vitePlusVitestResolverPlugin(),
       vitePlusAutoInlineMatcherPlugin(),
       vitePlusCoverageVersionGuardPlugin(),
+      vitePlusVitestCachePathsPlugin(),
       ...(config.plugins ?? []).filter(keepUserPlugin).map(withoutVitePlusTestPlugins),
     ],
   };
@@ -960,6 +1054,71 @@ export async function withConfigMetadataResolution<T>(fn: () => Promise<T>): Pro
       configMetadataSavedValue = undefined;
     }
   }
+}
+
+// The bundled core's internal parameters are not part of its public type
+// contract. Keep this bridge private to the helper.
+type ResolveConfigWithInternalOptions = (
+  inlineConfig: ViteInlineConfig,
+  command: 'build' | 'serve',
+  defaultMode?: string,
+  defaultNodeEnv?: string,
+  isPreview?: boolean,
+  patchConfig?: (config: ResolvedConfig) => void,
+  patchPlugins?: (plugins: Plugin[]) => void,
+  internalOptions?: { rootBase?: string },
+) => Promise<ResolvedConfig>;
+
+const resolveConfigWithInternalOptions = resolveConfig as ResolveConfigWithInternalOptions;
+
+export interface ResolveConfigFromFileOptions {
+  /**
+   * Base directory for an unset or relative `root` in the config file.
+   * Defaults to the config file's parent directory.
+   * Relative paths resolve from `process.cwd()`. Does not change the process cwd.
+   */
+  rootBase?: string;
+}
+
+/**
+ * Resolve a Vite config file to read a non-plugin block (`lint`, `fmt`, `pack`, …) from it,
+ * for tools such as oxlint, oxfmt, and Vite+ itself.
+ *
+ * With an absolute `configFile`, default resolution of the initial `root` from the
+ * config file is independent of `process.cwd()`: an unset or relative `root`
+ * resolves from the config file's parent directory.
+ * Callers can supply `rootBase` to use a different project directory,
+ * such as when the config is in a subdirectory. Absolute roots are preserved.
+ * Plugin hooks can later change `root` using Vite's normal semantics. For example,
+ * a relative `root` returned by a `config` hook resolves from `process.cwd()`.
+ *
+ * Relative `configFile` and explicit `rootBase` paths still resolve from `process.cwd()`.
+ * The helper does not change the process cwd; config code and plugins can still read it.
+ * The resolver loads the config once, as a config-metadata resolution,
+ * so `lazyPlugins` skips its factory.
+ * Plugins outside `lazyPlugins` still run their hooks and side effects,
+ * e.g. TanStack Start's router generator scans `src/routes`.
+ */
+export async function resolveConfigFromFile(
+  configFile: string,
+  options: ResolveConfigFromFileOptions = {},
+): Promise<ResolvedConfig> {
+  if (configFile.length === 0) {
+    throw new Error('Config file path must not be empty.');
+  }
+  const rootBase = resolve(options.rootBase ?? dirname(resolve(configFile)));
+  return withConfigMetadataResolution(() =>
+    resolveConfigWithInternalOptions(
+      { configFile },
+      'build',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { rootBase },
+    ),
+  );
 }
 
 export function lazyPlugins(cb: () => PluginOption[]): PluginOption[] | undefined;

@@ -1,6 +1,6 @@
 {
   "name": "vite-plus",
-  "version": "1.0.0",
+  "version": "1.5.1",
   "description": "The Unified Toolchain for the Web",
   "homepage": "https://viteplus.dev/guide",
   "bugs": {
@@ -15,7 +15,8 @@
   },
   "bin": {
     "vp": "./bin/vp",
-    "vpr": "./bin/vpr"
+    "vpr": "./bin/vpr",
+    "vpx": "./bin/vpx"
   },
   "files": [
     "AGENTS.md",
@@ -31,7 +32,9 @@
     "templates"
   ],
   "type": "module",
-  "sideEffects": false,
+  "sideEffects": [
+    "./dist/register.js"
+  ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -84,6 +87,10 @@
       "types": "./dist/oxlint-plugin.d.ts"
     },
     "./package.json": "./package.json",
+    "./register": {
+      "types": "./dist/register.d.ts",
+      "default": "./dist/register.js"
+    },
     "./pack": {
       "types": "./dist/pack.d.ts",
       "import": "./dist/pack.js"
@@ -345,6 +352,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@oxc-project/runtime": "catalog:",
     "@oxc-project/types": "catalog:",
     "@oxlint/plugins": "catalog:",
     "@vitest/browser": "catalog:",
@@ -366,37 +374,42 @@
     "@napi-rs/cli": "catalog:",
     "@nkzw/safe-word-list": "catalog:",
     "@types/cross-spawn": "catalog:",
-    "@types/semver": "catalog:",
     "@types/validate-npm-package-name": "catalog:",
     "@vitest/browser-playwright": "catalog:",
     "@vitest/browser-webdriverio": "catalog:",
     "@voidzero-dev/vite-plus-prompts": "workspace:*",
+    "@voidzero-dev/vite-task-client": "0.2.0",
     "bingo": "catalog:",
     "cac": "catalog:",
     "cross-spawn": "catalog:",
     "detect-indent": "catalog:",
     "detect-newline": "catalog:",
-    "glob": "catalog:",
     "jsonc-parser": "catalog:",
     "lint-staged": "catalog:",
     "minimatch": "catalog:",
     "nanotar": "catalog:",
     "picocolors": "catalog:",
-    "semver": "catalog:",
+    "pirates": "catalog:",
+    "tinyglobby": "catalog:",
     "tsdown": "catalog:",
     "validate-npm-package-name": "catalog:",
+    "verkit": "catalog:",
     "yaml": "catalog:",
     "zod": "catalog:"
   },
   "peerDependencies": {
     "@vitest/browser-playwright": "catalog:",
-    "@vitest/browser-webdriverio": "^5.0.0-beta.5 || >=5.0.0"
+    "@vitest/browser-webdriverio": "^5.0.0-beta.5 || >=5.0.0",
+    "playwright": "*"
   },
   "peerDependenciesMeta": {
     "@vitest/browser-playwright": {
       "optional": true
     },
     "@vitest/browser-webdriverio": {
+      "optional": true
+    },
+    "playwright": {
       "optional": true
     }
   },

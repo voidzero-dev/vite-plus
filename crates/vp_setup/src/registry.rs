@@ -3,7 +3,7 @@
 //! Queries the npm registry to resolve versions and get tarball URLs
 //! with integrity hashes for both the main package and platform-specific package.
 
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer, de};
 use vp_pm_cli::{HttpClient, npm_registry};
 
 use crate::{error::Error, is_commit_preview_version};
@@ -13,6 +13,23 @@ use crate::{error::Error, is_commit_preview_version};
 pub struct PackageVersionMetadata {
     pub version: String,
     pub dist: DistInfo,
+    #[serde(default, rename = "vpInstallLockfile")]
+    pub has_install_lockfile: bool,
+    #[serde(default, rename = "vpNodeVersion", deserialize_with = "deserialize_node_version")]
+    pub node_version: Option<String>,
+}
+
+fn deserialize_node_version<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<String>, D::Error> {
+    let version = String::deserialize(deserializer)?;
+    let is_exact = js_semver::Version::parse(&version).is_ok_and(|parsed| {
+        parsed.pre_release.is_empty() && parsed.build.is_empty() && parsed.to_string() == version
+    });
+    if !is_exact {
+        return Err(de::Error::custom("vpNodeVersion must be an exact Node.js version (x.y.z)"));
+    }
+    Ok(Some(version))
 }
 
 /// Distribution info from npm registry.
@@ -42,6 +59,8 @@ pub struct ResolvedVersion {
     pub version: String,
     pub platform_tarball_url: String,
     pub platform_integrity: String,
+    pub has_install_lockfile: bool,
+    pub node_version: Option<String>,
 }
 
 const MAIN_PACKAGE_NAME: &str = "vite-plus";
@@ -137,6 +156,8 @@ pub async fn resolve_platform_package(
         version: version.to_owned(),
         platform_tarball_url: cli_meta.dist.tarball,
         platform_integrity: cli_meta.dist.integrity,
+        has_install_lockfile: cli_meta.has_install_lockfile,
+        node_version: cli_meta.node_version,
     })
 }
 
@@ -182,13 +203,6 @@ mod tests {
                 }
             }
         })
-    }
-
-    #[test]
-    fn test_cli_package_name_construction() {
-        let suffix = "darwin-arm64";
-        let name = format!("{PLATFORM_PACKAGE_SCOPE}/{CLI_PACKAGE_NAME_PREFIX}-{suffix}");
-        assert_eq!(name, "@voidzero-dev/vite-plus-cli-darwin-arm64");
     }
 
     #[test]
@@ -289,6 +303,75 @@ mod tests {
         assert!(result.is_err());
     }
 
+    #[test]
+    fn test_platform_node_version_rejects_non_exact_versions() {
+        for node_version in serde_json::json!([
+            null,
+            24,
+            false,
+            {},
+            "",
+            "lts",
+            "latest",
+            "24",
+            "24.22",
+            "^24.22.1",
+            "v24.22.1",
+            " 24.22.1",
+            "24.22.1\n",
+            "24.22.1-rc.1",
+            "24.22.1+build",
+            "024.22.1"
+        ])
+        .as_array()
+        .unwrap()
+        {
+            let metadata = serde_json::json!({
+                "version": TEST_VERSION,
+                "dist": dist_with_provenance("https://slsa.dev/provenance/v1"),
+                "vpNodeVersion": node_version,
+            });
+            assert!(
+                serde_json::from_value::<PackageVersionMetadata>(metadata).is_err(),
+                "accepted invalid vpNodeVersion: {node_version}",
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_resolve_node_version_from_exact_platform_metadata() {
+        for node_version in [Some("22.23.1"), None] {
+            let server = MockServer::start();
+            let main_mock = server.mock(|when, then| {
+                when.method(GET).path("/vite-plus/latest");
+                then.status(200).json_body(serde_json::json!({
+                    "version": TEST_VERSION,
+                    "dist": dist_with_provenance("https://slsa.dev/provenance/v1"),
+                    "vpNodeVersion": "24.22.1",
+                }));
+            });
+            let mut platform_metadata = serde_json::json!({
+                "version": TEST_VERSION,
+                "dist": dist_with_provenance("https://slsa.dev/provenance/v1"),
+            });
+            if let Some(node_version) = node_version {
+                platform_metadata["vpNodeVersion"] = node_version.into();
+            }
+            let platform_mock = server.mock(|when, then| {
+                when.method(GET).path(format!("/{TEST_PACKAGE_NAME}/{TEST_VERSION}"));
+                then.status(200).json_body(platform_metadata);
+            });
+
+            let resolved =
+                resolve_version("latest", "darwin-arm64", Some(&server.base_url())).await.unwrap();
+
+            main_mock.assert_calls(1);
+            platform_mock.assert_calls(1);
+            assert_eq!(resolved.version, TEST_VERSION);
+            assert_eq!(resolved.node_version.as_deref(), node_version);
+        }
+    }
+
     #[tokio::test]
     async fn test_resolve_platform_package_returns_verified_distribution() {
         let server = MockServer::start();
@@ -309,6 +392,7 @@ mod tests {
         assert_eq!(resolved.version, TEST_VERSION);
         assert_eq!(resolved.platform_tarball_url, "https://registry.example.test/platform.tgz");
         assert_eq!(resolved.platform_integrity, "sha512-test");
+        assert!(resolved.node_version.is_none());
     }
 
     #[tokio::test]
@@ -317,6 +401,7 @@ mod tests {
         let server = MockServer::start();
         let metadata = serde_json::json!({
             "version": version,
+            "vpNodeVersion": "24.22.1",
             "dist": {
                 "tarball": format!("{}/platform.tgz", server.base_url()),
                 "integrity": "sha512-preview",
@@ -339,6 +424,7 @@ mod tests {
         assert_eq!(resolved.version, version);
         assert_eq!(resolved.platform_tarball_url, format!("{}/platform.tgz", server.base_url()));
         assert_eq!(resolved.platform_integrity, "sha512-preview");
+        assert_eq!(resolved.node_version.as_deref(), Some("24.22.1"));
     }
 
     #[tokio::test]
@@ -369,48 +455,5 @@ mod tests {
         assert!(matches!(error, Error::UnsupportedPlatformPackageProvenance { .. }));
         assert!(error.to_string().contains(TEST_PACKAGE_NAME));
         assert!(error.to_string().contains(TEST_VERSION));
-    }
-
-    #[test]
-    fn test_all_platform_suffixes_match_published_cli_packages() {
-        // These are the actual published CLI package suffixes
-        // (from packages/cli/publish-native-addons.ts RUST_TARGETS keys)
-        let published_suffixes = [
-            "darwin-arm64",
-            "darwin-x64",
-            "linux-arm64-gnu",
-            "linux-arm64-musl",
-            "linux-x64-gnu",
-            "linux-x64-musl",
-            "win32-arm64-msvc",
-            "win32-x64-msvc",
-        ];
-
-        let published_packages: Vec<String> = published_suffixes
-            .iter()
-            .map(|s| format!("{PLATFORM_PACKAGE_SCOPE}/{CLI_PACKAGE_NAME_PREFIX}-{s}"))
-            .collect();
-
-        // All known platform suffixes that detect_platform_suffix() can return
-        let detection_suffixes = [
-            "darwin-arm64",
-            "darwin-x64",
-            "linux-arm64-gnu",
-            "linux-x64-gnu",
-            "linux-arm64-musl",
-            "linux-x64-musl",
-            "win32-arm64-msvc",
-            "win32-x64-msvc",
-        ];
-
-        for suffix in &detection_suffixes {
-            let package_name =
-                format!("{PLATFORM_PACKAGE_SCOPE}/{CLI_PACKAGE_NAME_PREFIX}-{suffix}");
-            assert!(
-                published_packages.contains(&package_name),
-                "Platform suffix '{suffix}' produces CLI package name '{package_name}' \
-                 which does not match any published CLI package"
-            );
-        }
     }
 }

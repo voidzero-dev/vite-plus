@@ -1,5 +1,10 @@
 # change_passthrough_env_config
 
+## `node check-temp-socket.mjs`
+
+The isolated temporary directory must support Unix sockets even for long fixture names
+
+
 ## `MY_ENV=1 vp run hello`
 
 ```
@@ -9,7 +14,7 @@ $ node -p process.env.MY_ENV
 
 ## `MY_ENV=2 vp run hello`
 
-MY_ENV is pass-through. should hit the cache created in step 1
+MY_ENV is pass-through. should hit the cache created by the first run
 
 ```
 $ node -p process.env.MY_ENV ◉ cache hit, replaying

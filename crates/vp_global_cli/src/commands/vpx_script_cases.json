@@ -1,0 +1,633 @@
+{
+  "$comment": "Script detection cases shared by crates/vp_global_cli/src/commands/vpx_script.rs and packages/cli/src/__tests__/vpx-script.spec.ts, so the global vpx and the project-local bin decide the same way. `files` are created in a temporary project directory that is the cwd; `{cwd}` in `args` and `script` stands for that directory. `expect` is \"package\", { \"error\": message }, or { \"script\": arguments, \"tsconfig\": path, \"watch\": true }, where `watch` runs the arguments with the watcher instead of Node.js. `scriptExtensions`, `nodeOptionsWithValue`, `nodeOptionsWithoutEntry`, and `watchOptionsWithValue` are the lists both implementations must declare. `packageSpecs` gives, for a package spec, whether it names a version and which binary it runs. `explicitPrograms` checks an explicit path that package mode runs as a program: `executable` lists the files made executable, `expect` is \"ok\" or { \"error\", \"note\" }, and `unixOnly` cases depend on mode bits.",
+  "scriptExtensions": [".ts", ".mts", ".cts", ".tsx", ".js", ".mjs", ".cjs", ".jsx"],
+  "nodeOptionsWithValue": [
+    "-C",
+    "-e",
+    "-p",
+    "-pe",
+    "-r",
+    "--allow-fs-read",
+    "--allow-fs-write",
+    "--build-sea",
+    "--build-snapshot-config",
+    "--conditions",
+    "--cpu-prof-dir",
+    "--cpu-prof-interval",
+    "--cpu-prof-name",
+    "--debug-port",
+    "--diagnostic-dir",
+    "--disable-proto",
+    "--disable-warning",
+    "--dns-result-order",
+    "--env-file",
+    "--env-file-if-exists",
+    "--eval",
+    "--experimental-config-file",
+    "--experimental-default-type",
+    "--experimental-loader",
+    "--experimental-package-map",
+    "--experimental-sea-config",
+    "--experimental-test-isolation",
+    "--experimental-test-tag-filter",
+    "--heap-prof-dir",
+    "--heap-prof-interval",
+    "--heap-prof-name",
+    "--heapsnapshot-near-heap-limit",
+    "--heapsnapshot-signal",
+    "--icu-data-dir",
+    "--import",
+    "--input-type",
+    "--inspect-port",
+    "--inspect-publish-uid",
+    "--loader",
+    "--localstorage-file",
+    "--max-http-header-size",
+    "--max-old-space-size-percentage",
+    "--network-family-autoselection-attempt-timeout",
+    "--openssl-config",
+    "--print",
+    "--redirect-warnings",
+    "--report-dir",
+    "--report-directory",
+    "--report-filename",
+    "--report-signal",
+    "--require",
+    "--run",
+    "--secure-heap",
+    "--secure-heap-min",
+    "--snapshot-blob",
+    "--test-concurrency",
+    "--test-coverage-branches",
+    "--test-coverage-exclude",
+    "--test-coverage-functions",
+    "--test-coverage-include",
+    "--test-coverage-lines",
+    "--test-global-setup",
+    "--test-isolation",
+    "--test-name-pattern",
+    "--test-random-seed",
+    "--test-reporter",
+    "--test-reporter-destination",
+    "--test-rerun-failures",
+    "--test-shard",
+    "--test-skip-pattern",
+    "--test-timeout",
+    "--title",
+    "--tls-cipher-list",
+    "--tls-keylog",
+    "--trace-event-categories",
+    "--trace-event-file-pattern",
+    "--trace-require-module",
+    "--unhandled-rejections",
+    "--use-largepages",
+    "--v8-pool-size",
+    "--watch-kill-signal",
+    "--watch-path"
+  ],
+  "nodeOptionsWithoutEntry": ["-e", "--eval", "-p", "-pe", "--print", "--run", "--test"],
+  "watchOptionsWithValue": [
+    "--exclude",
+    "--ignore",
+    "--include",
+    "--kill-signal",
+    "--kill-timeout"
+  ],
+  "packageSpecs": [
+    { "spec": "eslint", "versioned": false, "command": "eslint" },
+    { "spec": "eslint@9", "versioned": true, "command": "eslint" },
+    { "spec": "eslint@", "versioned": true, "command": "eslint" },
+    { "spec": "create-vue@latest", "versioned": true, "command": "create-vue" },
+    { "spec": "@vue/cli", "versioned": false, "command": "cli" },
+    { "spec": "@vue/cli@5.0.0", "versioned": true, "command": "cli" },
+    { "spec": "@scope", "versioned": false, "command": "@scope" }
+  ],
+  "explicitPrograms": [
+    {
+      "name": "an executable file",
+      "files": { "deploy.sh": "#!/bin/sh\n" },
+      "executable": ["deploy.sh"],
+      "token": "./deploy.sh",
+      "expect": "ok"
+    },
+    {
+      "name": "a file that is not executable",
+      "files": { "notes.txt": "hi\n" },
+      "token": "./notes.txt",
+      "unixOnly": true,
+      "expect": {
+        "error": "'./notes.txt' is not executable",
+        "note": "Make it executable with `chmod +x ./notes.txt`."
+      }
+    },
+    {
+      "name": "a package directory",
+      "files": { "tools/package.json": "{}" },
+      "token": "./tools",
+      "expect": "ok"
+    },
+    {
+      "name": "a directory without a package.json",
+      "files": { "empty/.keep": "" },
+      "token": "./empty",
+      "expect": { "error": "'./empty' is a directory without a package.json" }
+    },
+    {
+      "name": "a bare name is not a path",
+      "token": "eslint",
+      "expect": "ok"
+    }
+  ],
+  "cases": [
+    {
+      "name": "explicit path with a script extension",
+      "files": {
+        "scripts/seed.ts": ""
+      },
+      "args": ["./scripts/seed.ts", "--dry-run"],
+      "expect": {
+        "script": ["./scripts/seed.ts", "--dry-run"]
+      }
+    },
+    {
+      "name": "bare relative path to an existing file",
+      "files": {
+        "scripts/seed.ts": ""
+      },
+      "args": ["scripts/seed.ts"],
+      "expect": {
+        "script": ["scripts/seed.ts"]
+      }
+    },
+    {
+      "name": "missing bare TypeScript file",
+      "args": ["seed.ts"],
+      "expect": {
+        "error": "Script not found: seed.ts"
+      }
+    },
+    {
+      "name": "missing explicit path",
+      "args": ["./missing.js"],
+      "expect": {
+        "error": "Script not found: ./missing.js"
+      }
+    },
+    {
+      "name": "missing explicit path without an extension",
+      "args": ["./bin/missing"],
+      "expect": {
+        "error": "Script not found: ./bin/missing"
+      }
+    },
+    {
+      "name": "explicit path to a directory",
+      "files": {
+        "tools/package.json": "{}"
+      },
+      "args": ["./tools"],
+      "expect": "package"
+    },
+    {
+      "name": "script extension on a directory",
+      "files": {
+        "tools.ts/index.ts": ""
+      },
+      "args": ["./tools.ts"],
+      "expect": {
+        "error": "Script is a directory: ./tools.ts"
+      }
+    },
+    {
+      "name": "script extension on a directory after Node.js options",
+      "files": {
+        "tools.ts/index.ts": ""
+      },
+      "args": ["--watch", "./tools.ts"],
+      "expect": {
+        "error": "Script is a directory: ./tools.ts"
+      }
+    },
+    {
+      "name": "bare name with a JavaScript extension and no file",
+      "args": ["highlight.js"],
+      "expect": "package"
+    },
+    {
+      "name": "scoped path, not a version spec",
+      "files": {
+        "@scope/tool.ts": ""
+      },
+      "args": ["./@scope/tool.ts"],
+      "expect": {
+        "script": ["./@scope/tool.ts"]
+      }
+    },
+    {
+      "name": "package name",
+      "args": ["eslint", "."],
+      "expect": "package"
+    },
+    {
+      "name": "package with a version",
+      "args": ["oxlint@1.85.0", "--version"],
+      "expect": "package"
+    },
+    {
+      "name": "scoped package with a version",
+      "args": ["@vue/cli@5.0.0"],
+      "expect": "package"
+    },
+    {
+      "name": "shell script without a vpx shebang",
+      "files": {
+        "deploy.sh": "#!/bin/sh\necho hi\n"
+      },
+      "args": ["./deploy.sh"],
+      "expect": "package"
+    },
+    {
+      "name": "extensionless file with a vpx shebang",
+      "files": {
+        "bin/tool": "#!/usr/bin/env vpx\nconsole.log(1)\n"
+      },
+      "args": ["{cwd}/bin/tool"],
+      "expect": {
+        "script": ["{cwd}/bin/tool"]
+      }
+    },
+    {
+      "name": "extensionless file with a vpx shebang that passes options",
+      "files": {
+        "bin/tool": "#!/usr/bin/env -S vpx --tsconfig x.json\n"
+      },
+      "args": ["{cwd}/bin/tool"],
+      "expect": {
+        "script": ["{cwd}/bin/tool"]
+      }
+    },
+    {
+      "name": "leading Node.js options stay before the script",
+      "files": {
+        "server.ts": ""
+      },
+      "args": ["--inspect", "./server.ts", "--port", "3000"],
+      "expect": {
+        "script": ["--inspect", "./server.ts", "--port", "3000"]
+      }
+    },
+    {
+      "name": "--watch runs the watcher and is removed",
+      "files": {
+        "server.ts": ""
+      },
+      "args": ["--watch", "./server.ts", "--port", "3000", "--watch"],
+      "expect": {
+        "script": ["./server.ts", "--port", "3000", "--watch"],
+        "watch": true
+      }
+    },
+    {
+      "name": "--watch-path also runs the watcher, which reports it",
+      "files": {
+        "server.ts": ""
+      },
+      "args": ["--watch-path", "src", "./server.ts"],
+      "expect": {
+        "script": ["--watch-path", "src", "./server.ts"],
+        "watch": true
+      }
+    },
+    {
+      "name": "the value of a watcher option is not the script",
+      "files": {
+        "main.ts": ""
+      },
+      "args": ["--watch", "--exclude", "./gen.ts", "--kill-timeout", "100", "./main.ts"],
+      "expect": {
+        "script": ["--exclude", "./gen.ts", "--kill-timeout", "100", "./main.ts"],
+        "watch": true
+      }
+    },
+    {
+      "name": "--watch after the script belongs to the script",
+      "files": {
+        "main.ts": ""
+      },
+      "args": ["./main.ts", "--watch"],
+      "expect": {
+        "script": ["./main.ts", "--watch"]
+      }
+    },
+    {
+      "name": "--watch without a script still runs the watcher, which reports the missing entry",
+      "args": ["--watch"],
+      "expect": {
+        "script": [],
+        "watch": true
+      }
+    },
+    {
+      "name": "a bare --experimental-config-file takes no value, so a --watch after the script belongs to the script",
+      "files": {
+        "main.ts": ""
+      },
+      "args": ["--experimental-config-file", "main.ts", "--watch"],
+      "expect": {
+        "script": ["--experimental-config-file", "main.ts", "--watch"]
+      }
+    },
+    {
+      "name": "a bare --experimental-config-file does not take --watch or a watcher option",
+      "files": {
+        "main.ts": ""
+      },
+      "args": ["--experimental-config-file", "--watch", "--include", "extra.json", "main.ts"],
+      "expect": {
+        "script": ["--experimental-config-file", "--include", "extra.json", "main.ts"],
+        "watch": true
+      }
+    },
+    {
+      "name": "a bare --experimental-config-file does not take --tsconfig",
+      "files": {
+        "main.ts": ""
+      },
+      "args": [
+        "--watch",
+        "--experimental-config-file",
+        "--tsconfig",
+        "cli.json",
+        "--env-file=.env",
+        "main.ts"
+      ],
+      "expect": {
+        "script": ["--experimental-config-file", "--env-file=.env", "main.ts"],
+        "tsconfig": "cli.json",
+        "watch": true
+      }
+    },
+    {
+      "name": "--experimental-config-file= names a config file on every Node.js",
+      "files": {
+        "main.ts": ""
+      },
+      "args": ["--experimental-config-file=custom.json", "--watch", "main.ts", "--watch"],
+      "expect": {
+        "script": ["--experimental-config-file=custom.json", "main.ts", "--watch"],
+        "watch": true
+      }
+    },
+    {
+      "name": "a separate .json path after --experimental-config-file is its value, as older Node.js reads it",
+      "files": {
+        "main.ts": ""
+      },
+      "args": [
+        "--watch",
+        "--experimental-config-file",
+        "custom.json",
+        "--tsconfig",
+        "cli.json",
+        "--env-file=.env",
+        "main.ts"
+      ],
+      "expect": {
+        "script": ["--experimental-config-file", "custom.json", "--env-file=.env", "main.ts"],
+        "tsconfig": "cli.json",
+        "watch": true
+      }
+    },
+    {
+      "name": "--watch and a watcher option after a separate .json config path keep their meaning",
+      "files": {
+        "main.ts": ""
+      },
+      "args": [
+        "--experimental-config-file",
+        "custom.json",
+        "--watch",
+        "--include",
+        "extra.json",
+        "main.ts"
+      ],
+      "expect": {
+        "script": [
+          "--experimental-config-file",
+          "custom.json",
+          "--include",
+          "extra.json",
+          "main.ts"
+        ],
+        "watch": true
+      }
+    },
+    {
+      "name": "the value of --import is not the script",
+      "files": {
+        "main.ts": ""
+      },
+      "args": ["--import", "./setup.ts", "./main.ts"],
+      "expect": {
+        "script": ["--import", "./setup.ts", "./main.ts"]
+      }
+    },
+    {
+      "name": "the value of --env-file is not the script",
+      "files": {
+        "main.ts": "",
+        ".env": ""
+      },
+      "args": ["--env-file", ".env", "./main.ts"],
+      "expect": {
+        "script": ["--env-file", ".env", "./main.ts"]
+      }
+    },
+    {
+      "name": "missing script after Node.js options",
+      "args": ["--watch", "./missing.ts"],
+      "expect": {
+        "error": "Script not found: ./missing.ts"
+      }
+    },
+    {
+      "name": "the value of a listed option is not the script, even as a glob",
+      "files": {
+        "a.test.ts": ""
+      },
+      "args": ["--test", "--test-coverage-include", "src/**/*.ts", "./a.test.ts"],
+      "expect": {
+        "script": ["--test", "--test-coverage-include", "src/**/*.ts", "./a.test.ts"]
+      }
+    },
+    {
+      "name": "the value of an unlisted option is left to Node.js",
+      "files": {
+        "a.test.ts": ""
+      },
+      "args": ["--unlisted-option", "src/**/*.ts", "./a.test.ts"],
+      "expect": {
+        "script": ["--unlisted-option", "src/**/*.ts", "./a.test.ts"]
+      }
+    },
+    {
+      "name": "a missing bare name after Node.js options is left to Node.js",
+      "args": ["--no-warnings", "seed.ts"],
+      "expect": {
+        "script": ["--no-warnings", "seed.ts"]
+      }
+    },
+    {
+      "name": "--eval without a script runs Node.js",
+      "args": ["--eval", "console.log(1)"],
+      "expect": {
+        "script": ["--eval", "console.log(1)"]
+      }
+    },
+    {
+      "name": "arguments after --eval code are not an entry file",
+      "args": ["--eval", "console.log(process.argv)", "./missing.ts"],
+      "expect": {
+        "script": ["--eval", "console.log(process.argv)", "./missing.ts"]
+      }
+    },
+    {
+      "name": "arguments after -e code are not an entry file",
+      "args": ["-e", "1", "./missing.ts"],
+      "expect": {
+        "script": ["-e", "1", "./missing.ts"]
+      }
+    },
+    {
+      "name": "arguments after -p code and -- are not an entry file",
+      "args": ["--no-warnings", "-p", "1", "--", "./missing.ts"],
+      "expect": {
+        "script": ["--no-warnings", "-p", "1", "--", "./missing.ts"]
+      }
+    },
+    {
+      "name": "-pe takes code like --print",
+      "args": ["-pe", "./missing.ts", "./other.ts"],
+      "expect": {
+        "script": ["-pe", "./missing.ts", "./other.ts"]
+      }
+    },
+    {
+      "name": "arguments after --print= code are not an entry file",
+      "args": ["--print=process.argv.length", "./missing.ts"],
+      "expect": {
+        "script": ["--print=process.argv.length", "./missing.ts"]
+      }
+    },
+    {
+      "name": "arguments after a --run package script are not an entry file",
+      "args": ["--run", "build", "./missing.ts"],
+      "expect": {
+        "script": ["--run", "build", "./missing.ts"]
+      }
+    },
+    {
+      "name": "--test files and globs are not an entry file",
+      "args": ["--test", "./tests/**/*.test.ts"],
+      "expect": {
+        "script": ["--test", "./tests/**/*.test.ts"]
+      }
+    },
+    {
+      "name": "an underscore spelling of an option takes its value",
+      "files": { "main.ts": "" },
+      "args": ["--redirect_warnings", "./warnings.ts", "./main.ts"],
+      "expect": {
+        "script": ["--redirect_warnings", "./warnings.ts", "./main.ts"]
+      }
+    },
+    {
+      "name": "an underscore spelling of an option with = takes no value",
+      "args": ["--redirect_warnings=w.log", "./missing.ts"],
+      "expect": {
+        "error": "Script not found: ./missing.ts"
+      }
+    },
+    {
+      "name": "--check still checks its entry file",
+      "args": ["--check", "./missing.ts"],
+      "expect": {
+        "error": "Script not found: ./missing.ts"
+      }
+    },
+    {
+      "name": "--inspect without a script runs Node.js",
+      "args": ["--inspect"],
+      "expect": {
+        "script": ["--inspect"]
+      }
+    },
+    {
+      "name": "stdin runs Node.js",
+      "args": ["-"],
+      "expect": {
+        "script": ["-"]
+      }
+    },
+    {
+      "name": "stdin with a value-taking option runs Node.js",
+      "args": ["--input-type", "module", "-"],
+      "expect": {
+        "script": ["--input-type", "module", "-"]
+      }
+    },
+    {
+      "name": "--tsconfig among the Node.js options is extracted",
+      "files": {
+        "a.ts": ""
+      },
+      "args": ["--watch", "--tsconfig", "tsconfig.scripts.json", "./a.ts"],
+      "expect": {
+        "script": ["./a.ts"],
+        "tsconfig": "tsconfig.scripts.json",
+        "watch": true
+      }
+    },
+    {
+      "name": "--tsconfig= is extracted, and one after the script belongs to the script",
+      "files": {
+        "a.ts": ""
+      },
+      "args": ["--no-warnings", "--tsconfig=x.json", "./a.ts", "--tsconfig", "y"],
+      "expect": {
+        "script": ["--no-warnings", "./a.ts", "--tsconfig", "y"],
+        "tsconfig": "x.json"
+      }
+    },
+    {
+      "name": "--tsconfig without a value",
+      "files": {
+        "a.ts": ""
+      },
+      "args": ["--watch", "--tsconfig"],
+      "expect": {
+        "error": "--tsconfig requires a path"
+      }
+    },
+    {
+      "name": "arguments after the script belong to the script",
+      "files": {
+        "a.ts": ""
+      },
+      "args": ["./a.ts", "--", "--watch", "b.ts"],
+      "expect": {
+        "script": ["./a.ts", "--", "--watch", "b.ts"]
+      }
+    },
+    {
+      "name": "-- before the script is passed through",
+      "files": {
+        "a.ts": ""
+      },
+      "args": ["--", "./a.ts", "x"],
+      "expect": {
+        "script": ["--", "./a.ts", "x"]
+      }
+    }
+  ]
+}

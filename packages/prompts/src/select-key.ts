@@ -1,13 +1,17 @@
-import { SelectKeyPrompt, wrapTextWithPrefix } from '@clack/core';
+import type { CANCEL_SYMBOL } from '@clack/core';
+import { SelectKeyPrompt } from '@clack/core';
 import color from 'picocolors';
 
 import {
   type CommonOptions,
+  getGuide,
+  promptTitle,
+  optionText,
+  wrapTextWithPrefix,
   S_BAR,
   S_BAR_END,
   S_POINTER_ACTIVE,
   S_POINTER_INACTIVE,
-  symbol,
 } from './common.js';
 import type { Option } from './select.js';
 
@@ -19,22 +23,16 @@ export interface SelectKeyOptions<Value extends string> extends CommonOptions {
 }
 
 export const selectKey = <Value extends string>(opts: SelectKeyOptions<Value>) => {
-  // eslint-disable-next-line unicorn/consistent-function-scoping -- kept inline for readability
-  const withMarker = (marker: string, value: string) => {
-    const lines = value.split('\n');
-    if (lines.length === 1) {
-      return `${marker} ${lines[0]}`;
-    }
-    const [firstLine, ...rest] = lines;
-    return [`${marker} ${firstLine}`, ...rest.map((line) => `${S_POINTER_INACTIVE} ${line}`)].join(
-      '\n',
-    );
-  };
+  const withMarker = (marker: string, value: string) =>
+    optionText(opts.output, `${marker} `, value, (text) => text);
 
   const opt = (
-    option: Option<Value>,
+    option: Option<Value> | undefined,
     state: 'inactive' | 'active' | 'selected' | 'cancelled' = 'inactive',
   ) => {
+    if (!option) {
+      return '';
+    }
     const label = option.label ?? option.value;
     if (state === 'selected') {
       return color.dim(label);
@@ -45,30 +43,26 @@ export const selectKey = <Value extends string>(opts: SelectKeyOptions<Value>) =
     if (state === 'active') {
       return withMarker(
         color.blue(S_POINTER_ACTIVE),
-        `${color.bgBlue(color.white(` ${option.value} `))} ${color.bold(label)}${
+        `${color.blue(`[${option.value}]`)} ${color.blue(color.bold(label))}${
           option.hint ? ` ${color.dim(`(${option.hint})`)}` : ''
         }`,
       );
     }
-    return withMarker(
-      color.dim(S_POINTER_INACTIVE),
-      `${color.gray(color.bgWhite(color.inverse(` ${option.value} `)))} ${color.dim(label)}${
-        option.hint ? ` ${color.dim(`(${option.hint})`)}` : ''
-      }`,
-    );
+    return withMarker(color.dim(S_POINTER_INACTIVE), color.dim(`[${option.value}] ${label}`));
   };
 
   return new SelectKeyPrompt({
     options: opts.options,
     signal: opts.signal,
     input: opts.input,
+    accessible: opts.accessible,
     output: opts.output,
     initialValue: opts.initialValue,
     caseSensitive: opts.caseSensitive,
     render() {
-      const hasGuide = opts.withGuide ?? false;
+      const hasGuide = getGuide(opts);
       const nestedPrefix = '  ';
-      const title = `${hasGuide ? `${color.gray(S_BAR)}\n` : ''}${symbol(this.state)} ${opts.message}\n`;
+      const title = promptTitle(opts.message, this.state, opts);
 
       switch (this.state) {
         case 'submit': {
@@ -103,9 +97,9 @@ export const selectKey = <Value extends string>(opts: SelectKeyOptions<Value>) =
               ),
             )
             .join('\n');
-          return `${title}${wrapped}\n${defaultPrefixEnd}\n`;
+          return `${title}${wrapped}${hasGuide ? `\n${defaultPrefixEnd}` : ''}\n`;
         }
       }
     },
-  }).prompt() as Promise<Value | symbol>;
+  }).prompt() as Promise<Value | typeof CANCEL_SYMBOL>;
 };

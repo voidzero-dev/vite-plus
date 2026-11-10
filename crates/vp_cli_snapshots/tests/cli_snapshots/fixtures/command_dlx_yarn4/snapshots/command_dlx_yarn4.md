@@ -20,35 +20,21 @@ Options:
   -s, --silent          Suppress all output except the executed command's output
   -h, --help            Print help
 
-Documentation: https://viteplus.dev/guide/vpx
+Documentation: https://viteplus.dev/guide/package-management/dlx
 ```
 
-## `vp dlx -s cowsay hello`
+## `vp dlx -s vp-test-echo hello`
 
-should run cowsay with yarn dlx
+should run vp-test-echo with yarn dlx
 
 ```
- _______
-< hello >
- -------
-        \   ^__^
-         \  (oo)\_______
-            (__)\       )\/\
-                ||----w |
-                ||     ||
+hello
 ```
 
-## `vp dlx -s cowsay@1.6.0 hello`
+## `vp dlx -s vp-test-echo@1.0.0 hello`
 
 should run specific version
 
 ```
- _______
-< hello >
- -------
-        \   ^__^
-         \  (oo)\_______
-            (__)\       )\/\
-                ||----w |
-                ||     ||
+hello
 ```

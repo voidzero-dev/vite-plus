@@ -19,6 +19,20 @@ This approach enables users to access Vite, Rolldown, and related tools through 
 
 ## Build Steps
 
+### Vite Source Preparation
+
+Before core bundling, [`brand-vite.ts`](../tools/src/brand-vite.ts) applies branding and the [`patch-vite-config.ts`](../tools/src/patch-vite-config.ts) resolver patch to the vendored Vite source. `sync-remote` runs this preparation. [CI](../../.github/actions/build-upstream/action.yml) also applies it after checking out upstream sources.
+
+Regular `pnpm build` runs use the prepared sources. If the patch code changes after synchronization, run `pnpm exec tool brand-vite` once, then `pnpm build` to regenerate Vite types and rebuild the packages.
+
+The resolver patch adds an optional internal eighth argument to `resolveConfig`. The `resolveConfigFromFile(configFile, options?)` helper exported by `vite-plus` passes a base directory through a private type bridge. By default, this base is the config file's parent directory. With an absolute `configFile`, default resolution of the initial `root` from the config file is independent of `process.cwd()`. Callers can pass `{ rootBase: projectRoot }` to use a different project directory, including when the config is in a subdirectory. Relative `configFile` and explicit `rootBase` paths resolve from `process.cwd()`; the helper does not change the process cwd.
+
+After a config file loads, an unset or relative `root` resolves from the selected base, before plugin `apply` and `config` hooks. Absolute roots are preserved, and an inline `root` retains priority. Plugin hooks can later change `root` using Vite's normal semantics. For example, a relative `root` returned by a `config` hook resolves from `process.cwd()`. Vite still handles config loading, environment initialization, configuration metadata, and plugin hooks.
+
+The helper's default does not change ordinary `resolveConfig` calls, which retain Vite's cwd-based root resolution. Existing CLI callers keep their inline `root: cwd`, including when `vp pack` finds a parent config. Adopting the new helper is a separate integration choice for callers such as Oxlint and Oxfmt; it is not restricted to LSP.
+
+[`build.ts`](build.ts) calls `assertViteConfigPatched()` before any bundling starts. It rejects missing, changed, duplicate, or partially applied patch anchors. When the Vite pin changes, review the patch against the new source. The guard validates `src/node/config.ts`; it does not check whether generated type declarations are current.
+
 The build process executes 5 steps in sequence:
 
 ### Step 1: Bundle Rolldown Pluginutils (`bundleRolldownPluginutils`)
@@ -42,6 +56,7 @@ await cp(join(rolldownPluginUtilsDir, 'dist'), join(projectDir, 'dist', 'pluginu
 
 - `@rolldown/pluginutils` → `@voidzero-dev/vite-plus-core/rolldown/pluginutils`
 - `rolldown/*` → `@voidzero-dev/vite-plus-core/rolldown/*`
+- Replace the WebContainer fallback's `rolldown/package.json` lookup with the bundled Rolldown version. The WASM download must use that version, not the core package version.
 - In release builds: supported `@rolldown/binding-*` → `@voidzero-dev/vite-plus-*`
 
 **Input**: `rolldown/packages/rolldown/dist/`
@@ -57,6 +72,7 @@ This is the most complex step, using the upstream `vite-rolldown.config` with mo
 2. **Add RewriteImportsPlugin** - Rewrites vite/rolldown imports at build time
 3. **Rewrite static paths** - Fixes `VITE_PACKAGE_DIR`, `CLIENT_ENTRY`, `BUNDLED_DEV_CLIENT_ENTRY`, `ENV_ENTRY` constants
 4. **Copy additional files** - `misc/`, `.d.ts` files, `types/`, `client.d.ts`
+5. **Copy the bin script** - `bin/vite.js`, with its CLI import pointed at `../node/cli.js`. `vp dev`, `vp build`, and `vp preview` start through it, as `vite` does, so the startup time (`ready in N ms`), `--debug`, `--filter`, `--profile`, and Node's compile cache work
 
 **Input**: `vite/packages/vite/`
 **Output**: `dist/vite/`
@@ -81,8 +97,8 @@ This is the most complex step, using the upstream `vite-rolldown.config` with mo
 
 **Updates**:
 
-- `peerDependencies` - Merged from tsdown and vite
-- `peerDependenciesMeta` - Merged from tsdown and vite
+- `peerDependencies` - Merged from rolldown-plugin-dts, tsdown and vite (minus bundled packages)
+- `peerDependenciesMeta` - Merged from rolldown-plugin-dts, tsdown and vite (minus bundled packages)
 - `bundledVersions` - Records vite, rolldown, and tsdown versions
 
 ---
@@ -127,6 +143,16 @@ Located in `build-support/rewrite-module-specifiers.ts`, this utility rewrites s
 | `rolldown/*`              | `@voidzero-dev/vite-plus-core/rolldown/*`             |
 | `@rolldown/pluginutils`   | `@voidzero-dev/vite-plus-core/rolldown/pluginutils`   |
 | `@rolldown/pluginutils/*` | `@voidzero-dev/vite-plus-core/rolldown/pluginutils/*` |
+
+### Detecting Missed Rewrites
+
+`__tests__/build-artifacts.spec.ts` snapshots the remaining bare `rolldown` and `@rolldown/pluginutils` names in all built JavaScript and declarations. It parses string literals and template literals, then records references to constants and their aliases. This includes package names passed to `require.resolve()` or `import.meta.resolve()`, which import-only checks miss.
+
+The snapshot allows CLI branding, embedded package metadata, and the browser runtime import that Vite rewrites before serving. Review new entries when upstream code changes; do not accept unresolved Node package lookups. Dynamically constructed names can escape static checks, so the installed-package bundled dev snapshots also verify runtime resolution without a separate Rolldown installation.
+
+Native `@rolldown/binding-*` references have separate rewrite checks, described below.
+
+The `rolldown_webcontainer_fallback` CLI snapshot executes the packed binding loader in a simulated WebContainer. It checks fresh and cached WASM bindings without a standalone `rolldown` package. The fixture uses real Node metadata resolution and a fake installer, and asserts that both paths use the bundled Rolldown version.
 
 ### Release Build: Native Binding Rewriting
 
@@ -212,6 +238,8 @@ dist/
 │   ├── plugins-index.mjs
 │   └── ...
 ├── vite/                  # Vite
+│   ├── bin/
+│   │   └── vite.js        # Entry for vp dev/build/preview
 │   ├── node/
 │   │   ├── index.js
 │   │   ├── index.d.ts
@@ -285,8 +313,8 @@ dist/
 
 ### Updating Vite
 
-1. Update the `vite` git submodule to the new version
-2. Run `pnpm -C packages/core build`
+1. Update the Vite pin in [`packages/tools/.upstream-versions.json`](../tools/.upstream-versions.json) and review the resolver patch against the new source
+2. Follow the [upstream sync and build instructions](../../CONTRIBUTING.md#pull-upstream-dependencies) to prepare the source, regenerate Vite types, and rebuild the packages
 3. Verify `bundledVersions.vite` in `package.json` is updated
 4. Test with `pnpm test`
 
@@ -310,6 +338,8 @@ dist/
 
 ## Build Commands
 
+These direct core builds require [prepared Vite sources](#vite-source-preparation) and current Vite types. The [standard repository build](../../CONTRIBUTING.md#build-vite-and-upstream-dependencies) regenerates Vite types before building core. For a direct core build after source changes, run `pnpm --filter vite build-types` first.
+
 ```bash
 # Build the core package
 pnpm -C packages/core build
@@ -325,6 +355,7 @@ RELEASE_BUILD=1 pnpm -C packages/core build
 ### Build Flow
 
 ```
+   assertViteConfigPatched()      Validate prepared Vite source before bundling
 1. bundleRolldownPluginutils()    Copy pre-built dist
 2. bundleRolldown()               Copy + rewrite module specifiers
 3. buildVite()                    Full Rolldown build with transforms

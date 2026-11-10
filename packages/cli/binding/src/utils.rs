@@ -1,9 +1,8 @@
 use std::{collections::HashMap, path::PathBuf};
 
-use fspy::AccessMode;
 use napi::{anyhow, bindgen_prelude::*};
 use napi_derive::napi;
-use vp_command::run_command_with_fspy;
+use vp_command::{AccessMode, run_command_with_fspy};
 use vt_path::AbsolutePathBuf;
 
 /// Build documentation links with the same compiled origin as the native CLI.

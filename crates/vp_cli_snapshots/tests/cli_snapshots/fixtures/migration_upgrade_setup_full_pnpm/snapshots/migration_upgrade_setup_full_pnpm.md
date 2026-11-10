@@ -22,6 +22,8 @@ VITE+ - The Unified Toolchain for the Web
 • 2 config updates applied
 • Node version manager file migrated to .node-version
 • Package manager settings configured
+→ Manual follow-up:
+  - Remove the "volta" field from package.json
 ```
 
 ## `vpt print-file package.json`
@@ -42,6 +44,9 @@ vite-plus version upgrade is applied
       "onFail": "download"
     }
   },
+  "volta": {
+    "node": "24.11.0"
+  },
   "scripts": {
     "prepare": "vp config"
   }
@@ -50,18 +55,10 @@ vite-plus version upgrade is applied
 
 ## `vpt print-file .node-version`
 
-.nvmrc is migrated to .node-version by the full setup
+volta.node is migrated to .node-version by the full setup
 
 ```
 24.11.0
-```
-
-## `vpt stat-file .nvmrc --assert-not file`
-
-the original .nvmrc is removed
-
-```
-.nvmrc: missing
 ```
 
 ## `vpt print-file tsconfig.json`

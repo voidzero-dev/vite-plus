@@ -8,7 +8,7 @@ Install via vp (creates managed shim)
 VITE+ - The Unified Toolchain for the Web
 
 info: Installing 1 global package with Node.js <version>
-✓ Installed npm-global-vp-managed-pkg 1.0.0
+ Installed npm-global-vp-managed-pkg 1.0.0
   Bins: npm-global-vp-managed-cli
 ```
 
@@ -52,5 +52,5 @@ npm-global-vp-managed-cli works
 Cleanup
 
 ```
-Uninstalled npm-global-vp-managed-pkg
+- Uninstalled npm-global-vp-managed-pkg
 ```

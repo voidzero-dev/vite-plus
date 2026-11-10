@@ -35,7 +35,7 @@ Options:
       --no-optional
           Do not install optionalDependencies
       --frozen-lockfile
-          Fail if lockfile needs to be updated
+          Don't update lockfile
       --no-frozen-lockfile
           Allow lockfile updates
       --lockfile-only

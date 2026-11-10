@@ -9,7 +9,8 @@ use vt_path::AbsolutePath;
 
 use crate::{
     EnvironmentPackageManagerResolution, PackageManager, PackageManagerType,
-    cli::PackageManagerCommand, download_package_manager, error::Error, resolution::run_resolution,
+    cli::PackageManagerCommand, download_package_manager_for_cwd, error::Error,
+    package_manager_override, resolution::run_resolution,
 };
 
 #[derive(Debug)]
@@ -62,13 +63,23 @@ async fn dispatch_with_manager(
     let render_diagnostics = command.should_render_diagnostics();
     let manager = match source {
         ManagerSource::Detect => {
-            PackageManager::builder(cwd)
-                .package_manager_type(PackageManagerType::Pnpm)
-                .build()
-                .await?
+            if let Some((kind, version, hash)) = package_manager_override()? {
+                build_selected_package_manager(cwd, kind, &version, hash.as_deref()).await?
+            } else {
+                PackageManager::builder(cwd)
+                    .package_manager_type(PackageManagerType::Pnpm)
+                    .build()
+                    .await?
+            }
         }
         ManagerSource::Environment(package_manager) => {
-            build_selected_package_manager(package_manager).await?
+            build_selected_package_manager(
+                cwd,
+                package_manager.package_manager_type,
+                &package_manager.version,
+                package_manager.hash.as_deref(),
+            )
+            .await?
         }
         ManagerSource::Resolved(manager) => manager,
     };
@@ -80,14 +91,12 @@ async fn dispatch_with_manager(
 }
 
 async fn build_selected_package_manager(
-    package_manager: &EnvironmentPackageManagerResolution,
+    cwd: &AbsolutePath,
+    kind: PackageManagerType,
+    version: &str,
+    hash: Option<&str>,
 ) -> Result<PackageManager, Error> {
-    let (install_dir, _, version) = download_package_manager(
-        package_manager.package_manager_type,
-        &package_manager.version,
-        package_manager.hash.as_deref(),
-    )
-    .await
-    .map_err(Error::Install)?;
-    Ok(PackageManager::from_install_dir(package_manager.package_manager_type, version, install_dir))
+    let (install_dir, _, version) =
+        download_package_manager_for_cwd(cwd, kind, version, hash).await.map_err(Error::Install)?;
+    Ok(PackageManager::from_install_dir(kind, version, install_dir))
 }

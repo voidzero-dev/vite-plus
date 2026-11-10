@@ -38,13 +38,6 @@ volta field is preserved in package.json (not removed)
     "node": "24.11.0",
     "npm": "10.2.5"
   },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
-  },
   "scripts": {
     "prepare": "vp config"
   }

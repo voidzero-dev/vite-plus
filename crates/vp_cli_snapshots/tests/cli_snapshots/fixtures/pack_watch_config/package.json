@@ -1,0 +1,5 @@
+{
+  "name": "pack-watch-config",
+  "private": true,
+  "type": "module"
+}

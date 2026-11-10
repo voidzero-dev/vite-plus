@@ -45,6 +45,70 @@ enum EnvShell {
 
 const UTF8_BOM: char = '\u{feff}';
 
+/// First Nushell release with the `%` sigil, which calls a built-in even when a
+/// user command or alias has the same name. See "No more shadows, call internals
+/// with %" in <https://www.nushell.sh/blog/2026-04-11-nushell_v0_112_1.html>.
+const NU_BUILTIN_SIGIL_VERSION: &str = "0.112.1";
+
+/// Maximum time to wait for `nu` to print its version.
+const NU_VERSION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Nushell syntax that the generated `env.nu` uses.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum NuSyntax {
+    /// Prefix built-ins with `%`, so user commands cannot shadow them.
+    BuiltinSigil,
+    /// Use plain built-in names. Nushell before 0.112.1 reads `%update` as an
+    /// external command, and the rest of the line then fails to parse.
+    Legacy,
+}
+
+impl NuSyntax {
+    /// Choose the syntax for a `nu` version string. Unknown versions get
+    /// `Legacy`, because every Nushell version can parse it.
+    fn for_version(version: &str) -> Self {
+        let minimum = js_semver::Version::parse(NU_BUILTIN_SIGIL_VERSION);
+        match (js_semver::Version::parse(version.trim()), minimum) {
+            (Ok(version), Ok(minimum)) if version >= minimum => Self::BuiltinSigil,
+            _ => Self::Legacy,
+        }
+    }
+
+    /// Detect the syntax from `VP_NU_VERSION`, or else from the `nu` on `PATH`.
+    /// When `nu` is not installed, fails, or does not answer in time, use `Legacy`.
+    async fn detect(config: &vp_shared::EnvConfig) -> Self {
+        if let Some(version) = &config.nu_version {
+            return Self::for_version(version);
+        }
+        let Ok(cwd) = vt_path::current_dir() else { return Self::Legacy };
+        let Ok(nu) = vp_command::resolve_bin("nu", None, &cwd) else { return Self::Legacy };
+        let mut command = vp_command::build_command(&nu, &cwd);
+        // `--version` exits before the engine starts, so the user's config,
+        // autoload files, and plugins cannot affect the result.
+        command
+            .arg("--version")
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
+            .kill_on_drop(true);
+        // A `nu` that does not answer must not stop `vp env setup`.
+        match tokio::time::timeout(NU_VERSION_TIMEOUT, command.output()).await {
+            Ok(Ok(result)) if result.status.success() => {
+                Self::for_version(&String::from_utf8_lossy(&result.stdout))
+            }
+            _ => Self::Legacy,
+        }
+    }
+
+    /// The prefix for a built-in command name.
+    const fn builtin_prefix(self) -> &'static str {
+        match self {
+            Self::BuiltinSigil => "%",
+            Self::Legacy => "",
+        }
+    }
+}
+
 impl EnvShell {
     /// File name written under `<CONFIG>/` for this shell's setup script.
     const fn env_file_name(self) -> &'static str {
@@ -121,7 +185,6 @@ pub(crate) async fn execute_for_binary(
     let (created, skipped) =
         refresh_shims(current_exe, &settings, refresh, refresh_entrypoints).await?;
 
-    #[cfg(windows)]
     if refresh {
         if let Err(e) = refresh_package_shims(current_exe, bin_dir).await {
             tracing::warn!("Failed to refresh package shims: {}", e);
@@ -217,14 +280,7 @@ fn is_owned_shim(path: &vt_path::AbsolutePath, current_exe: &std::path::Path) ->
 /// Resolve placement independently for Node.js and each package-manager family.
 pub(super) fn shim_dir(settings: &super::config::Config, tool: &str) -> vt_path::AbsolutePathBuf {
     let dirs = &vp_shared::EnvConfig::get().dirs;
-    let mode = if tool == "node" {
-        settings.node_shim_mode
-    } else if let Some(kind) = vp_pm_cli::PackageManagerType::from_tool(tool) {
-        settings.package_manager_shim_mode_for(kind)
-    } else {
-        super::config::ShimMode::Managed
-    };
-    match mode {
+    match settings.shim_mode_for_tool(tool) {
         super::config::ShimMode::Managed => dirs.bin.clone(),
         super::config::ShimMode::SystemFirst => dirs.fallback_bin(),
     }
@@ -409,6 +465,24 @@ async fn setup_vp_wrapper(
 pub(crate) async fn resolve_unix_vp_shim_target(
     current_exe: &std::path::Path,
 ) -> Result<std::path::PathBuf, Error> {
+    if let Some(homebrew) = crate::homebrew::current()
+        && same_file::is_same_file(current_exe, homebrew.binary.as_path()).unwrap_or(false)
+        && let Some(public) = homebrew.public_binary()
+    {
+        let dirs = &vp_shared::EnvConfig::get().dirs;
+        if unix::passes_through_shims(public.as_path(), dirs.bin.as_path())
+            || unix::passes_through_shims(public.as_path(), dirs.fallback_bin().as_path())
+        {
+            return Err(Error::ConfigError(
+                format!(
+                    "Vite+ shim directories must not contain the Homebrew entrypoint {}. Choose separate VP_BIN_DIR and VP_DATA_DIR paths.",
+                    public.as_path().display()
+                )
+                .into(),
+            ));
+        }
+        return Ok(public.as_path().to_path_buf());
+    }
     let current_exe_canon = tokio::fs::canonicalize(current_exe).await.ok();
     let current_vp = crate::commands::global::install::package_shim_target();
     if let Some(binary) = &current_exe_canon
@@ -582,6 +656,30 @@ async fn refresh_package_shims(
     Ok(())
 }
 
+/// Move existing managed package shims to the active installation during migration.
+#[cfg(unix)]
+async fn refresh_package_shims(
+    current_exe: &std::path::Path,
+    bin_dir: &vt_path::AbsolutePath,
+) -> Result<(), Error> {
+    let target = resolve_unix_vp_shim_target(current_exe).await?;
+    let _lock = crate::commands::global::bin_lock::acquire().await?;
+    for name in BinConfig::find_all_vp_source().await? {
+        if crate::commands::global::install::is_protected_shim(&name, true) {
+            continue;
+        }
+        let shim = bin_dir.join(&name);
+        // The saved Vp source and a link to vp identify an owned package shim even
+        // after its old installation is removed. Keep foreign files and direct package links.
+        let Ok(previous) = tokio::fs::read_link(&shim).await else { continue };
+        if previous.file_name().is_some_and(|name| name == "vp") && previous != target {
+            tokio::fs::remove_file(&shim).await?;
+            tokio::fs::symlink(&target, &shim).await?;
+        }
+    }
+    Ok(())
+}
+
 /// Write `<name>.shim` next to a trampoline copy, with the resolved layout.
 #[cfg(windows)]
 fn write_shim_pointer_beside(exe_path: &std::path::Path) {
@@ -725,18 +823,52 @@ const ENV_TEMPLATE_POSIX: &str = r#"#!/bin/sh
 # Vite+ environment setup (https://viteplus.dev)
 __ENV_EXPORTS____vp_bin="__VP_BIN__"
 __vp_fallback="__VP_FALLBACK_BIN__"
-for __vp_dir in "$__vp_bin" "$__vp_fallback"; do
-    while case ":${PATH}:" in *":${__vp_dir}:"*) true ;; *) false ;; esac; do
-        __vp_tmp=":${PATH}:"
-        __vp_before="${__vp_tmp%%":${__vp_dir}:"*}"
-        __vp_before="${__vp_before#:}"
-        __vp_after="${__vp_tmp#*":${__vp_dir}:"}"
-        __vp_after="${__vp_after%:}"
-        PATH="${__vp_before}${__vp_before:+${__vp_after:+:}}${__vp_after}"
+# Split PATH on ':' once; repeated `${PATH#*pattern}` stripping is super-linear on long PATHs.
+# A function scopes zsh's option changes; other shells restore noglob and IFS explicitly.
+__vp_dedupe_path() {
+    __vp_ifs_set=${IFS+1}
+    __vp_ifs=${IFS-}
+    IFS=:
+    __vp_glob=
+    if [ -n "${ZSH_VERSION-}" ]; then
+        setopt localoptions shwordsplit noglob
+    else
+        case $- in *f*) ;; *) set -f; __vp_glob=1 ;; esac
+    fi
+    __vp_new=
+    # A non-empty sentinel last field keeps trailing empty entries consistent across shells.
+    __vp_path="${PATH}:."
+    for __vp_dir in $__vp_path; do
+        case "$__vp_dir" in
+            "$__vp_bin"|"$__vp_fallback") ;;
+            *) __vp_new="${__vp_new}:${__vp_dir}" ;;
+        esac
     done
-done
+    if [ -n "$__vp_ifs_set" ]; then IFS=$__vp_ifs; else unset IFS; fi
+    [ -z "$__vp_glob" ] || set +f
+    __vp_new="${__vp_new%:*}"
+    PATH="${__vp_new#:}"
+}
+# Assigning a read-only IFS aborts dash and zsh, so probe it in a subshell first and fall back
+# to stripping each copy with parameter expansion, which leaves IFS and shell options alone.
+if (IFS=:) 2>/dev/null; then
+    __vp_dedupe_path
+else
+    for __vp_dir in "$__vp_bin" "$__vp_fallback"; do
+        while case ":${PATH}:" in *":${__vp_dir}:"*) true ;; *) false ;; esac; do
+            __vp_tmp=":${PATH}:"
+            __vp_before="${__vp_tmp%%":${__vp_dir}:"*}"
+            __vp_before="${__vp_before#:}"
+            __vp_after="${__vp_tmp#*":${__vp_dir}:"}"
+            __vp_after="${__vp_after%:}"
+            PATH="${__vp_before}${__vp_before:+${__vp_after:+:}}${__vp_after}"
+        done
+    done
+fi
+unset -f __vp_dedupe_path
 export PATH="${__vp_bin}${PATH:+:${PATH}}:${__vp_fallback}"
-unset __vp_bin __vp_fallback __vp_dir __vp_tmp __vp_before __vp_after
+unset __vp_bin __vp_fallback __vp_dir __vp_path __vp_new __vp_ifs __vp_ifs_set __vp_glob \
+    __vp_tmp __vp_before __vp_after
 hash -r 2>/dev/null || true
 
 # Shell function wrapper: intercepts `vp env use` to eval its stdout,
@@ -809,11 +941,16 @@ elif [ -n "${ZSH_VERSION-}" ] && type compdef >/dev/null 2>&1; then
 fi
 "#;
 
+// Fish env file with vp wrapper function.
+// Every built-in that a user function can shadow carries `builtin`: fish runs a function before
+// the built-in with the same name, so a user `count` function would otherwise make `vp env use`
+// report success without setting VP_NODE_VERSION (#3128). The `vp` completion that clap_complete
+// registers calls bare `commandline`, as fish's own completions do, so this file cannot protect it.
 const ENV_TEMPLATE_FISH: &str = r#"# Vite+ environment setup (https://viteplus.dev)
-__ENV_EXPORTS__while set -l __vp_idx (contains -i -- "__VP_BIN__" $PATH)
+__ENV_EXPORTS__while set -l __vp_idx (builtin contains -i -- "__VP_BIN__" $PATH)
     set -e PATH[$__vp_idx]
 end
-while set -l __vp_idx (contains -i -- "__VP_FALLBACK_BIN__" $PATH)
+while set -l __vp_idx (builtin contains -i -- "__VP_FALLBACK_BIN__" $PATH)
     set -e PATH[$__vp_idx]
 end
 set -gx PATH "__VP_BIN__" $PATH "__VP_FALLBACK_BIN__"
@@ -822,17 +959,17 @@ set -gx PATH "__VP_BIN__" $PATH "__VP_FALLBACK_BIN__"
 # which sets/unsets VP_NODE_VERSION in the current shell session.
 function vp
     set -l __vp_command_index 1
-    if test (count $argv) -ge 1
+    if test (builtin count $argv) -ge 1
         if test "$argv[1]" = "-C"
             set __vp_command_index 3
         else if string match -qr '^-C.+' -- "$argv[1]"
             set __vp_command_index 2
         end
     end
-    set -l __vp_next_index (math $__vp_command_index + 1)
+    set -l __vp_next_index (builtin math $__vp_command_index + 1)
 
-    if test (count $argv) -ge $__vp_next_index; and test "$argv[$__vp_command_index]" = "env"; and test "$argv[$__vp_next_index]" = "use"
-        if contains -- -h $argv; or contains -- --help $argv
+    if test (builtin count $argv) -ge $__vp_next_index; and test "$argv[$__vp_command_index]" = "env"; and test "$argv[$__vp_next_index]" = "use"
+        if builtin contains -- -h $argv; or builtin contains -- --help $argv
             command vp $argv; return
         end
         set -lx VP_ENV_USE_EVAL_ENABLE 1
@@ -848,66 +985,69 @@ function vp
 end
 
 # Dynamic shell completion for fish
-VP_COMPLETE=fish command vp | source
+VP_COMPLETE=fish command vp | builtin source
 
 function __vpr_complete
-    set -l tokens (commandline --current-process --tokenize --cut-at-cursor)
-    set -l current (commandline --current-token)
+    set -l tokens (builtin commandline --current-process --tokenize --cut-at-cursor)
+    set -l current (builtin commandline --current-token)
     set -l args $tokens[2..]
     set -l translated vp
-    if test (count $args) -eq 0; and string match -qr '^-C' -- "$current"
+    if test (builtin count $args) -eq 0; and string match -qr '^-C' -- "$current"
         # Keep completing the global -C option until its value is finished.
-    else if test (count $args) -ge 1; and test "$args[1]" = "-C"
+    else if test (builtin count $args) -ge 1; and test "$args[1]" = "-C"
         set -a translated -C
-        if test (count $args) -ge 2
+        if test (builtin count $args) -ge 2
             set -a translated "$args[2]" run $args[3..]
         end
-    else if test (count $args) -ge 1; and string match -qr '^-C.+' -- "$args[1]"
+    else if test (builtin count $args) -ge 1; and string match -qr '^-C.+' -- "$args[1]"
         set -a translated "$args[1]" run $args[2..]
     else
         set -a translated run $args
     end
     VP_COMPLETE=fish command vp -- $translated $current
 end
-complete -c vpr --keep-order --exclusive --arguments "(__vpr_complete)"
+builtin complete -c vpr --keep-order --exclusive --arguments "(__vpr_complete)"
 "#;
 
 // Nushell env file with vp wrapper function.
 // Completions delegate to Fish dynamically (VP_COMPLETE=fish) because clap_complete_nushell
 // generates multiple rest params (e.g. for `vp install`), which Nushell does not support.
+// Every shadowable built-in carries the `%` sigil: Nushell resolves names at parse time, and
+// env.nu is parsed after the user's config, so a user `def update []` would otherwise replace
+// the built-in and stop Nushell at startup. `NuSyntax::Legacy` strips the sigils.
 const ENV_TEMPLATE_NU: &str = r#"# Vite+ environment setup (https://viteplus.dev)
-__ENV_EXPORTS__$env.PATH = ($env.PATH | where { $in != "__VP_BIN__" and $in != "__VP_FALLBACK_BIN__" } | prepend "__VP_BIN__" | append "__VP_FALLBACK_BIN__")
+__ENV_EXPORTS__$env.PATH = ($env.PATH | where { $in != "__VP_BIN__" and $in != "__VP_FALLBACK_BIN__" } | %prepend "__VP_BIN__" | %append "__VP_FALLBACK_BIN__")
 
 # Shell function wrapper: intercepts `vp env use` to parse its stdout,
 # which sets/unsets VP_NODE_VERSION in the current shell session.
 def --env --wrapped vp [...args: string@"nu-complete vp"] {
-    let command_args = if ($args | length) >= 2 and $args.0 == "-C" {
-        $args | skip 2
-    } else if ($args | length) >= 1 and ($args.0 | str starts-with "-C") and $args.0 != "-C" {
-        $args | skip 1
+    let command_args = if ($args | %length) >= 2 and $args.0 == "-C" {
+        $args | %skip 2
+    } else if ($args | %length) >= 1 and ($args.0 | %str starts-with "-C") and $args.0 != "-C" {
+        $args | %skip 1
     } else {
         $args
     }
-    if ($command_args | length) >= 2 and $command_args.0 == "env" and $command_args.1 == "use" {
+    if ($command_args | %length) >= 2 and $command_args.0 == "env" and $command_args.1 == "use" {
         if ("-h" in $args) or ("--help" in $args) {
             ^vp ...$args
             return
         }
-        let out = (with-env { VP_ENV_USE_EVAL_ENABLE: "1", VP_SHELL: "nu" } {
+        let out = (%with-env { VP_ENV_USE_EVAL_ENABLE: "1", VP_SHELL: "nu" } {
             ^vp ...$args
         })
-        let lines = ($out | lines)
-        let exports = ($lines | where { $in =~ '^\$env\.' } | parse '$env.{key} = "{value}"')
-        let export_keys = ($exports | get key? | default [])
+        let lines = ($out | %lines)
+        let exports = ($lines | where { $in =~ '^\$env\.' } | %parse '$env.{key} = "{value}"')
+        let export_keys = ($exports | %get key? | %default [])
         # Exclude keys that also appear in exports: when vp emits `hide-env X` then
         # `$env.X = "v"` (e.g. `vp env use` with no args resolving from .node-version),
         # the set should win.
-        let unsets = ($lines | where { $in =~ '^hide-env ' } | parse 'hide-env {key}' | get key? | default [] | where { $in not-in $export_keys })
-        if ($exports | is-not-empty) {
-            load-env ($exports | reduce -f {} {|it, acc| $acc | insert $it.key $it.value})
+        let unsets = ($lines | where { $in =~ '^hide-env ' } | %parse 'hide-env {key}' | %get key? | %default [] | where { $in not-in $export_keys })
+        if ($exports | %is-not-empty) {
+            %load-env ($exports | %reduce -f {} {|it, acc| $acc | %insert $it.key $it.value})
         }
         for key in $unsets {
-            if ($key in $env) { hide-env $key }
+            if ($key in $env) { %hide-env $key }
         }
     } else {
         ^vp ...$args
@@ -915,37 +1055,46 @@ def --env --wrapped vp [...args: string@"nu-complete vp"] {
 }
 
 # Shell completion for nushell (delegates to fish completions dynamically)
-def "nu-complete vp" [context: string] {
-    let fish_cmd = $"VP_COMPLETE=fish command vp | source; complete '--do-complete=($context)'"
-    fish --command $fish_cmd | from tsv --flexible --noheaders --no-infer | rename value description | update value {|row|
+# Nushell 0.116+ binds `buffer` and `place` by name: `buffer` is the whole line up to the cursor,
+# and `place.command` is the words of the current command up to the cursor. Older releases pass
+# the current command in `buffer` and the cursor position in `place`. See "Unified custom
+# completions" in https://www.nushell.sh/blog/2026-09-26-nushell_v0_116_0.html#unified-custom-completions
+# `place` is `any` because it is an int or a record. `oneof<int, record>` needs Nushell 0.105+,
+# and every Nushell release must parse the legacy env.nu.
+def "nu-complete vp current-command" [buffer: string, place: any] {
+    if (($place | %describe) starts-with "record") { $place.command | %str join ' ' } else { $buffer }
+}
+# Fish gets the command as an argument, so quotes in it cannot end a fish string.
+# Without fish, return null so Nushell falls back to file completion. Nushell 0.116+ shows no
+# suggestions when a parameter completer fails (#3272).
+def "nu-complete vp fish" [command: string] {
+    if (%which fish | %is-empty) { return null }
+    let fish_script = 'VP_COMPLETE=fish command vp | source; complete --do-complete=$argv[1]'
+    ^fish --command $fish_script $command | %from tsv --flexible --noheaders --no-infer | %rename value description | %update value {|row|
         let value = $row.value
-        let need_quote = ['\' ',' '[' ']' '(' ')' ' ' '\t' "'" '"' "`"] | any {$in in $value}
-        if ($need_quote and ($value | path exists)) {
-            let expanded_path = if ($value starts-with ~) {$value | path expand --no-symlink} else {$value}
-            $'"($expanded_path | str replace --all "\"" "\\\"")"'
+        let need_quote = ['\' ',' '[' ']' '(' ')' ' ' '\t' "'" '"' "`"] | %any {$in in $value}
+        if ($need_quote and ($value | %path exists)) {
+            let expanded_path = if ($value starts-with ~) {$value | %path expand --no-symlink} else {$value}
+            $'"($expanded_path | %str replace --all "\"" "\\\"")"'
         } else {$value}
     }
 }
+def "nu-complete vp" [buffer: string, place: any] {
+    nu-complete vp fish (nu-complete vp current-command $buffer $place)
+}
 # Completion logic for vpr (translates context to 'vp run ...')
-def "nu-complete vpr" [context: string] {
+def "nu-complete vpr" [buffer: string, place: any] {
+    let context = nu-complete vp current-command $buffer $place
     let modified_context = if ($context =~ '^vpr(?<cwd>\s+-C\s+(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s') {
-        $context | str replace -r '^vpr(?<cwd>\s+-C\s+(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s' 'vp$cwd run '
+        $context | %str replace -r '^vpr(?<cwd>\s+-C\s+(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s' 'vp$cwd run '
     } else if ($context =~ '^vpr(?<cwd>\s+-C=?(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s') {
-        $context | str replace -r '^vpr(?<cwd>\s+-C=?(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s' 'vp$cwd run '
+        $context | %str replace -r '^vpr(?<cwd>\s+-C=?(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s' 'vp$cwd run '
     } else if ($context =~ '^vpr\s+-C') {
-        $context | str replace -r '^vpr' 'vp'
+        $context | %str replace -r '^vpr' 'vp'
     } else {
-        $context | str replace -r '^vpr' 'vp run'
+        $context | %str replace -r '^vpr' 'vp run'
     }
-    let fish_cmd = $"VP_COMPLETE=fish command vp | source; complete '--do-complete=($modified_context)'"
-    fish --command $fish_cmd | from tsv --flexible --noheaders --no-infer | rename value description | update value {|row|
-        let value = $row.value
-        let need_quote = ['\' ',' '[' ']' '(' ')' ' ' '\t' "'" '"' "`"] | any {$in in $value}
-        if ($need_quote and ($value | path exists)) {
-            let expanded_path = if ($value starts-with ~) {$value | path expand --no-symlink} else {$value}
-            $'"($expanded_path | str replace --all "\"" "\\\"")"'
-        } else {$value}
-    }
+    nu-complete vp fish $modified_context
 }
 export extern "vpr" [...args: string@"nu-complete vpr"]
 "#;
@@ -959,48 +1108,9 @@ $env:PATH = @(
     $__vp_fallback
 ) -join [IO.Path]::PathSeparator
 
-# Shell function wrapper: intercepts `vp env use` to eval its stdout,
-# which sets/unsets VP_NODE_VERSION in the current shell session.
-function vp {
-    $__vp_command_index = 0
-    if ($args.Count -ge 1) {
-        if ($args[0] -eq "-C") {
-            $__vp_command_index = 2
-        } elseif ("$($args[0])" -like "-C?*") {
-            $__vp_command_index = 1
-        }
-    }
-    if ($args.Count -ge ($__vp_command_index + 2) -and $args[$__vp_command_index] -eq "env" -and $args[$__vp_command_index + 1] -eq "use") {
-        if ($args -contains "-h" -or $args -contains "--help") {
-            & (Join-Path $__vp_bin "vp") @args; return
-        }
-        $previousEvalEnable = $env:VP_ENV_USE_EVAL_ENABLE
-        $previousShell = $env:VP_SHELL
-        $previousErrorActionPreference = $ErrorActionPreference
-        try {
-            $env:VP_ENV_USE_EVAL_ENABLE = "1"
-            $env:VP_SHELL = "pwsh"
-            # Windows PowerShell 5.1 treats native stderr as an error when redirected.
-            $ErrorActionPreference = "Continue"
-            $output = & (Join-Path $__vp_bin "vp") @args 2>&1 | ForEach-Object {
-                if ($_ -is [System.Management.Automation.ErrorRecord]) {
-                    Write-Host $_.Exception.Message
-                } else {
-                    $_
-                }
-            }
-        } finally {
-            $ErrorActionPreference = $previousErrorActionPreference
-            $env:VP_ENV_USE_EVAL_ENABLE = $previousEvalEnable
-            $env:VP_SHELL = $previousShell
-        }
-        if ($LASTEXITCODE -eq 0 -and $output) {
-            Invoke-Expression ($output -join "`n")
-        }
-    } else {
-        & (Join-Path $__vp_bin "vp") @args
-    }
-}
+# A script can propagate native failure through both $? and $LASTEXITCODE.
+# A plain function returns $? = $true even when its native command fails.
+Set-Alias vp (Join-Path $PSScriptRoot "vp.ps1")
 
 # Dynamic shell completion for PowerShell
 $env:VP_COMPLETE = "powershell"
@@ -1037,10 +1147,103 @@ $__vpr_comp = {
 Register-ArgumentCompleter -Native -CommandName vpr -ScriptBlock $__vpr_comp
 "#;
 
+// Keep the wrapper outside bin so it cannot shadow the native executable.
+// Unlike an advanced function, this script forwards all arguments without
+// PowerShell consuming common parameters such as -Verbose or its -V alias.
+// Bare -- recovery is inspired by mise's __mise_restore_double_dash:
+// https://github.com/jdx/mise/blob/34ec0439c868379be87a28591f50d41f84fb8d02/src/shell/pwsh.rs#L45-L103
+const VP_WRAPPER_PS1: &str = r#"# Vite+ PowerShell wrapper (https://viteplus.dev)
+$__vp_bin = '__VP_BIN_WIN__'
+# PowerShell consumes the first bare -- when calling a script. Recover its
+# position from the caller's AST, without evaluating argument expressions again.
+# The call stack also works on Windows PowerShell 5.1, which has no Statement.
+$__vp_stack = @(Get-PSCallStack)
+$__vp_command = $null
+if ($__vp_stack.Count -gt 1) {
+    $__vp_ast = $__vp_stack[1].InvocationInfo.MyCommand.ScriptBlock.Ast
+    $__vp_line = $MyInvocation.ScriptLineNumber
+    $__vp_column = $MyInvocation.OffsetInLine
+    if ($__vp_ast) {
+        $__vp_command = $__vp_ast.Find({ param($node)
+            $node -is [System.Management.Automation.Language.CommandAst] -and
+            $node.Extent.StartLineNumber -eq $__vp_line -and $node.Extent.StartColumnNumber -eq $__vp_column
+        }, $true)
+    }
+}
+if ($__vp_command) {
+    $__vp_index = 0
+    $__vp_elements = $__vp_command.CommandElements
+    for ($__vp_i = 1; $__vp_i -lt $__vp_elements.Count; $__vp_i++) {
+        $__vp_element = $__vp_elements[$__vp_i]
+        # A preceding splat has an unknown length. Leave $args unchanged rather
+        # than reading caller variables, which may have changed or belong to another scope.
+        if ($__vp_element -is [System.Management.Automation.Language.VariableExpressionAst] -and $__vp_element.Splatted) {
+            break
+        }
+        # Only a parameter AST can be consumed. After --%, the separator is literal.
+        if ($__vp_element -is [System.Management.Automation.Language.CommandParameterAst] -and $__vp_element.Extent.Text -ceq '--') {
+            if ($__vp_index -le $args.Count) {
+                $__vp_arguments = [System.Collections.Generic.List[object]]::new()
+                $__vp_arguments.AddRange($args)
+                $__vp_arguments.Insert($__vp_index, '--')
+                $args = $__vp_arguments.ToArray()
+            }
+            break
+        }
+        $__vp_index++
+        if ($__vp_element -is [System.Management.Automation.Language.CommandParameterAst] -and $__vp_element.Argument) {
+            $__vp_index++
+        }
+    }
+}
+$__vp_command_index = 0
+if ($args.Count -ge 1) {
+    if ($args[0] -eq "-C") {
+        $__vp_command_index = 2
+    } elseif ("$($args[0])" -like "-C?*") {
+        $__vp_command_index = 1
+    }
+}
+# Intercept `vp env use` to set/unset VP_NODE_VERSION in the current session.
+if ($args.Count -ge ($__vp_command_index + 2) -and $args[$__vp_command_index] -eq "env" -and $args[$__vp_command_index + 1] -eq "use") {
+    if ($args -contains "-h" -or $args -contains "--help") {
+        & (Join-Path $__vp_bin "vp") @args
+        exit $LASTEXITCODE
+    }
+    $previousEvalEnable = $env:VP_ENV_USE_EVAL_ENABLE
+    $previousShell = $env:VP_SHELL
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $env:VP_ENV_USE_EVAL_ENABLE = "1"
+        $env:VP_SHELL = "pwsh"
+        # Windows PowerShell 5.1 treats native stderr as an error when redirected.
+        $ErrorActionPreference = "Continue"
+        $output = & (Join-Path $__vp_bin "vp") @args 2>&1 | ForEach-Object {
+            if ($_ -is [System.Management.Automation.ErrorRecord]) {
+                Write-Host $_.Exception.Message
+            } else {
+                $_
+            }
+        }
+    } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+        $env:VP_ENV_USE_EVAL_ENABLE = $previousEvalEnable
+        $env:VP_SHELL = $previousShell
+    }
+    if ($LASTEXITCODE -eq 0 -and $output) {
+        Invoke-Expression ($output -join "`n")
+    }
+} else {
+    & (Join-Path $__vp_bin "vp") @args
+}
+# Exits only this script, preserving the caller's session and native exit code.
+exit $LASTEXITCODE
+"#;
+
 // cmd.exe wrapper for `vp env use` (cmd.exe cannot define shell functions).
 // Users run `vp-use 24` in cmd.exe instead of `vp env use 24`.
 #[cfg(windows)]
-fn vp_use_cmd_content(config: &vp_shared::EnvConfig) -> String {
+pub(crate) fn vp_use_cmd_content(config: &vp_shared::EnvConfig) -> String {
     let vp_exe = config.dirs.data.join("current").join("bin").join("vp.exe");
     let mut exports: Vec<_> = config.dir_envs.iter().collect();
     exports.sort_unstable_by_key(|(name, _)| *name);
@@ -1133,7 +1336,7 @@ pub(crate) fn escape_powershell_single_quoted_string(value: &str) -> String {
 /// Render export lines for the persisted layout values in
 /// [`EnvConfig::dir_envs`]. The map contains only an explicit absolute
 /// `VP_HOME`. Sort the lines to keep the output stable.
-fn render_dir_envs(shell: EnvShell, config: &vp_shared::EnvConfig) -> String {
+fn render_dir_envs(shell: EnvShell, config: &vp_shared::EnvConfig, nu_syntax: NuSyntax) -> String {
     let home_dir = config.user_home.as_path();
     let mut exports: Vec<_> = config.dir_envs.iter().collect();
     exports.sort_unstable_by_key(|(name, _)| *name);
@@ -1162,8 +1365,9 @@ fn render_dir_envs(shell: EnvShell, config: &vp_shared::EnvConfig) -> String {
                     home_dir,
                 ));
                 format!(
-                    "$env.{name} = (\"{}\" | path expand --no-symlink)\n",
-                    escape_nu_double_quoted_string(&path_ref)
+                    "$env.{name} = (\"{}\" | {}path expand --no-symlink)\n",
+                    escape_nu_double_quoted_string(&path_ref),
+                    nu_syntax.builtin_prefix()
                 )
             }
             // PowerShell uses the actual absolute path (not $HOME-relative)
@@ -1179,12 +1383,16 @@ fn render_dir_envs(shell: EnvShell, config: &vp_shared::EnvConfig) -> String {
 ///
 /// Put the resolved bin directory on `PATH`. Persist an explicit `VP_HOME`, but
 /// do not export the internal split-directory group.
-fn render_env_content(shell: EnvShell, config: &vp_shared::EnvConfig) -> String {
+fn render_env_content(
+    shell: EnvShell,
+    config: &vp_shared::EnvConfig,
+    nu_syntax: NuSyntax,
+) -> String {
     let dirs = &config.dirs;
     let home_dir = config.user_home.as_path();
     let bin_path_ref = render_home_relative_path(dirs.bin.as_path(), home_dir);
     let fallback_path_ref = render_home_relative_path(dirs.fallback_bin().as_path(), home_dir);
-    let dir_envs = render_dir_envs(shell, config);
+    let dir_envs = render_dir_envs(shell, config, nu_syntax);
 
     match shell {
         EnvShell::Posix => {
@@ -1220,7 +1428,9 @@ fn render_env_content(shell: EnvShell, config: &vp_shared::EnvConfig) -> String 
             // expanded at parse time, so PATH entries would contain a literal "$HOME/...".
             let bin_path_ref_nu =
                 escape_nu_double_quoted_string(&render_nu_path_ref(&bin_path_ref));
+            // Strip the sigils before substitution: paths can contain `%`.
             ENV_TEMPLATE_NU
+                .replace('%', nu_syntax.builtin_prefix())
                 .replace(
                     "__VP_FALLBACK_BIN__",
                     &escape_nu_double_quoted_string(&render_nu_path_ref(&fallback_path_ref)),
@@ -1250,11 +1460,18 @@ fn render_env_content(shell: EnvShell, config: &vp_shared::EnvConfig) -> String 
 /// - `env` (POSIX shell — bash/zsh) with `vp()` wrapper function
 /// - `env.fish` (fish shell) with `vp` wrapper function
 /// - `env.nu` (Nushell) with `vp env use` wrapper function
-/// - `env.ps1` (PowerShell) with PATH setup + `vp` function
+/// - `env.ps1` (PowerShell) with PATH setup + alias to the `vp.ps1` wrapper
 async fn create_env_files() -> Result<(), Error> {
     let config = vp_shared::EnvConfig::get();
+    let ps1_wrapper = VP_WRAPPER_PS1.replace(
+        "__VP_BIN_WIN__",
+        &escape_powershell_single_quoted_string(&config.dirs.bin.to_string()),
+    );
+    // Like env.ps1, the wrapper needs a BOM for non-ASCII paths on PowerShell 5.1.
+    tokio::fs::write(config.dirs.config.join("vp.ps1"), format!("{UTF8_BOM}{ps1_wrapper}")).await?;
+    let nu_syntax = NuSyntax::detect(&config).await;
     for shell in [EnvShell::Posix, EnvShell::Fish, EnvShell::Nu, EnvShell::Powershell] {
-        let mut content = render_env_content(shell, &config);
+        let mut content = render_env_content(shell, &config, nu_syntax);
         if matches!(shell, EnvShell::Powershell) {
             // Windows PowerShell 5.1 uses the active ANSI code page for a
             // UTF-8 script without a BOM. The BOM preserves non-ASCII paths.
@@ -1466,11 +1683,13 @@ mod tests {
     fn test_env_vars<'a>(
         root: &'a std::path::Path,
         user_home: &'a std::path::Path,
-    ) -> [(&'static str, &'a std::ffi::OsStr); 3] {
+    ) -> [(&'static str, &'a std::ffi::OsStr); 4] {
         [
             (vp_shared::env_vars::VP_HOME, root.as_os_str()),
             ("HOME", user_home.as_os_str()),
             ("USERPROFILE", user_home.as_os_str()),
+            // Keep env.nu independent of the developer's installed Nushell.
+            (vp_shared::env_vars::VP_NU_VERSION, std::ffi::OsStr::new(NU_BUILTIN_SIGIL_VERSION)),
         ]
     }
 
@@ -1572,7 +1791,7 @@ mod tests {
             ],
             |_| {
                 let config = vp_shared::EnvConfig::get();
-                let content = render_env_content(EnvShell::Posix, &config);
+                let content = render_env_content(EnvShell::Posix, &config, NuSyntax::BuiltinSigil);
                 assert!(!content.contains("VP_BIN_DIR"));
                 assert!(!content.contains("VP_DATA_DIR"));
                 assert!(!content.contains("VP_CACHE_DIR"));
@@ -1596,7 +1815,7 @@ mod tests {
             |_| {
                 let config = vp_shared::EnvConfig::get();
                 for shell in [EnvShell::Posix, EnvShell::Fish, EnvShell::Nu, EnvShell::Powershell] {
-                    let content = render_env_content(shell, &config);
+                    let content = render_env_content(shell, &config, NuSyntax::BuiltinSigil);
                     assert!(
                         !content.contains("VP_HOME="),
                         "{shell:?} env file should not pin VP_HOME when unset, got: {content}"
@@ -1614,28 +1833,6 @@ mod tests {
                 }
             },
         );
-    }
-
-    #[tokio::test]
-    async fn test_create_env_files_creates_all_files() {
-        let temp_dir = TempDir::new().unwrap();
-        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        vp_shared::EnvConfig::with_vars_async(
-            test_env_vars(temp_dir.path(), temp_dir.path()),
-            |_| async {
-                create_env_files().await.unwrap();
-
-                let env_path = home.join("env");
-                let env_fish_path = home.join("env.fish");
-                let env_nu_path = home.join("env.nu");
-                let env_ps1_path = home.join("env.ps1");
-                assert!(env_path.as_path().exists(), "env file should be created");
-                assert!(env_fish_path.as_path().exists(), "env.fish file should be created");
-                assert!(env_nu_path.as_path().exists(), "env.nu file should be created");
-                assert!(env_ps1_path.as_path().exists(), "env.ps1 file should be created");
-            },
-        )
-        .await;
     }
 
     #[tokio::test]
@@ -1728,10 +1925,13 @@ mod tests {
                 let ps_bin_ref = escape_powershell_single_quoted_string(
                     &custom_bin.as_path().display().to_string(),
                 );
-                let posix_content = render_env_content(EnvShell::Posix, &config);
-                let fish_content = render_env_content(EnvShell::Fish, &config);
-                let nu_content = render_env_content(EnvShell::Nu, &config);
-                let ps_content = render_env_content(EnvShell::Powershell, &config);
+                let posix_content =
+                    render_env_content(EnvShell::Posix, &config, NuSyntax::BuiltinSigil);
+                let fish_content =
+                    render_env_content(EnvShell::Fish, &config, NuSyntax::BuiltinSigil);
+                let nu_content = render_env_content(EnvShell::Nu, &config, NuSyntax::BuiltinSigil);
+                let ps_content =
+                    render_env_content(EnvShell::Powershell, &config, NuSyntax::BuiltinSigil);
                 assert!(posix_content.contains(&format!("__vp_bin=\"{posix_bin_ref}\"")));
                 assert!(fish_content.contains(&format!("contains -i -- \"{fish_bin_ref}\"")));
                 assert!(nu_content.contains(&format!("prepend \"{nu_bin_ref}\"")));
@@ -1784,12 +1984,61 @@ mod tests {
             ],
             |_| {
                 let config = vp_shared::EnvConfig::get();
-                let content = render_env_content(EnvShell::Nu, &config);
+                let content = render_env_content(EnvShell::Nu, &config, NuSyntax::BuiltinSigil);
 
                 assert!(
                     content.contains(r#"prepend "/tmp/vp \"home\\with spaces\"/bin""#),
                     "env.nu should escape the bin path for a Nushell string literal, got: {content}"
                 );
+            },
+        );
+    }
+
+    #[test]
+    fn test_nu_syntax_for_version() {
+        assert_eq!(NuSyntax::for_version("0.112.1"), NuSyntax::BuiltinSigil);
+        assert_eq!(NuSyntax::for_version("0.116.1\n"), NuSyntax::BuiltinSigil);
+        assert_eq!(NuSyntax::for_version("1.0.0"), NuSyntax::BuiltinSigil);
+        // 0.112.0 was never released; its pre-release builds may lack `%`.
+        assert_eq!(NuSyntax::for_version("0.112.0"), NuSyntax::Legacy);
+        assert_eq!(NuSyntax::for_version("0.111.0"), NuSyntax::Legacy);
+        assert_eq!(NuSyntax::for_version(""), NuSyntax::Legacy);
+        assert_eq!(NuSyntax::for_version("not a version"), NuSyntax::Legacy);
+    }
+
+    // A user `def update []` must not stop Nushell at startup (#3092).
+    #[cfg(unix)]
+    #[test]
+    fn test_render_env_content_nu_syntax() {
+        let home = std::path::PathBuf::from("/tmp/vp%home");
+        vp_shared::EnvConfig::with_vars(
+            [
+                (vp_shared::env_vars::VP_HOME, home.as_os_str()),
+                ("HOME", std::ffi::OsStr::new("/nonexistent-home-dir")),
+                ("USERPROFILE", std::ffi::OsStr::new("/nonexistent-home-dir")),
+            ],
+            |_| {
+                let config = vp_shared::EnvConfig::get();
+                let sigil = render_env_content(EnvShell::Nu, &config, NuSyntax::BuiltinSigil);
+                assert!(sigil.contains("| %update value {|row|"), "got: {sigil}");
+                assert!(sigil.contains(r#"("/tmp/vp%home" | %path expand"#), "got: {sigil}");
+                assert!(sigil.contains("^fish --command"), "got: {sigil}");
+                // Completers must not cause the Nushell 0.116 positional-input warning (#3127).
+                assert!(sigil.contains(r#"def "nu-complete vp" [buffer: string, place: any]"#));
+                assert!(sigil.contains(r#"def "nu-complete vpr" [buffer: string, place: any]"#));
+                assert!(!sigil.contains("[context"), "got: {sigil}");
+
+                let legacy = render_env_content(EnvShell::Nu, &config, NuSyntax::Legacy);
+                assert!(legacy.contains("| update value {|row|"), "got: {legacy}");
+                assert!(legacy.contains("^fish --command"), "got: {legacy}");
+                // CI runs only a newer Nushell, so check the legacy fish guard here (#3272).
+                assert!(legacy.contains("if (which fish | is-empty) { return null }"));
+                assert_eq!(
+                    legacy.replace("/tmp/vp%home", "").matches('%').count(),
+                    0,
+                    "Nushell before 0.112.1 cannot parse the `%` sigil, got: {legacy}"
+                );
+                assert!(legacy.contains(r#"$env.VP_HOME = ("/tmp/vp%home" | path expand"#));
             },
         );
     }
@@ -1928,13 +2177,13 @@ mod tests {
 
                 let env_content = tokio::fs::read_to_string(home.join("env")).await.unwrap();
 
-                // Verify PATH guard structure: loop removes every duplicate.
+                // Verify PATH guard structure: a single split pass drops every duplicate.
                 assert!(
-                    env_content.contains("while case \":${PATH}:\" in"),
+                    env_content.contains("for __vp_dir in $__vp_path; do"),
                     "env file should contain a PATH cleanup loop"
                 );
                 assert!(
-                    env_content.contains("*\":${__vp_dir}:\"*)"),
+                    env_content.contains("\"$__vp_bin\"|\"$__vp_fallback\") ;;"),
                     "env file should check for existing bin in PATH"
                 );
                 // Verify it re-prepends exactly once after cleanup.
@@ -2076,7 +2325,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_create_env_files_ps1_contains_vp_function() {
+    async fn test_create_env_files_ps1_contains_vp_alias() {
         let temp_dir = TempDir::new().unwrap();
         let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
         vp_shared::EnvConfig::with_vars_async(
@@ -2086,19 +2335,22 @@ mod tests {
 
                 let ps1_content = tokio::fs::read_to_string(home.join("env.ps1")).await.unwrap();
 
-                // Verify PowerShell function is present
+                let wrapper = tokio::fs::read_to_string(home.join("vp.ps1")).await.unwrap();
+
                 assert!(
-                    ps1_content.contains("function vp {"),
-                    "env.ps1 should contain vp function"
+                    ps1_content.contains("Set-Alias vp (Join-Path $PSScriptRoot \"vp.ps1\")"),
+                    "env.ps1 should alias vp to the script wrapper"
                 );
                 assert!(
-                    ps1_content.contains("Invoke-Expression"),
-                    "env.ps1 should use Invoke-Expression"
+                    wrapper.contains("Invoke-Expression"),
+                    "vp.ps1 should evaluate environment exports"
                 );
+                assert!(wrapper.starts_with(UTF8_BOM), "vp.ps1 should preserve non-ASCII paths");
+                assert!(wrapper.contains("exit $LASTEXITCODE"));
                 // Should not contain placeholders
                 assert!(
-                    !ps1_content.contains("__VP_BIN_WIN__"),
-                    "env.ps1 should not contain __VP_BIN_WIN__ placeholder"
+                    !ps1_content.contains("__VP_BIN_WIN__") && !wrapper.contains("__VP_BIN_WIN__"),
+                    "PowerShell scripts should not contain __VP_BIN_WIN__ placeholders"
                 );
             },
         )
@@ -2341,6 +2593,66 @@ mod tests {
                         "legacy corepack shim should be removed"
                     );
                 }
+            },
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn test_unix_package_shim_refresh_waits_for_ownership_changes() {
+        use std::time::Duration;
+
+        let temp_dir = TempDir::new().unwrap();
+        let home = temp_dir.path().join(".vite-plus");
+        let external_vp = temp_dir.path().join("external-vp");
+        let previous = temp_dir.path().join("removed-keg/bin/vp");
+        tokio::fs::write(&external_vp, b"vp").await.unwrap();
+        let external_vp = tokio::fs::canonicalize(external_vp).await.unwrap();
+
+        vp_shared::EnvConfig::with_vars_async(
+            test_env_vars(&home, temp_dir.path()),
+            |env| async move {
+                let bin_dir = &env.dirs.bin;
+                tokio::fs::create_dir_all(bin_dir).await.unwrap();
+                for name in ["managed-tool", "reassigned-tool"] {
+                    BinConfig::new(name.into(), name.into(), "1.0.0".into(), "22.18.0".into())
+                        .save()
+                        .await
+                        .unwrap();
+                    tokio::fs::symlink(&previous, bin_dir.join(name)).await.unwrap();
+                }
+
+                let lock = crate::commands::global::bin_lock::acquire().await.unwrap();
+                let refresh = refresh_package_shims(&external_vp, bin_dir);
+                tokio::pin!(refresh);
+                assert!(
+                    tokio::time::timeout(Duration::from_millis(150), &mut refresh).await.is_err()
+                );
+                for name in ["managed-tool", "reassigned-tool"] {
+                    assert_eq!(tokio::fs::read_link(bin_dir.join(name)).await.unwrap(), previous);
+                }
+
+                // Another operation changes ownership before releasing the shared lock.
+                BinConfig::new_npm(
+                    "reassigned-tool".into(),
+                    "npm-package".into(),
+                    "22.18.0".into(),
+                )
+                .save()
+                .await
+                .unwrap();
+                drop(lock);
+                tokio::time::timeout(Duration::from_secs(5), refresh).await.unwrap().unwrap();
+
+                assert_eq!(
+                    tokio::fs::read_link(bin_dir.join("managed-tool")).await.unwrap(),
+                    external_vp
+                );
+                assert_eq!(
+                    tokio::fs::read_link(bin_dir.join("reassigned-tool")).await.unwrap(),
+                    previous
+                );
             },
         )
         .await;
@@ -2604,15 +2916,17 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         vp_shared::EnvConfig::with_vars(test_env_vars(temp_dir.path(), temp_dir.path()), |_| {
             let config = vp_shared::EnvConfig::get();
-            let posix_content = render_env_content(EnvShell::Posix, &config);
-            let nu_content = render_env_content(EnvShell::Nu, &config);
-            let ps1_content = render_env_content(EnvShell::Powershell, &config);
+            let posix_content =
+                render_env_content(EnvShell::Posix, &config, NuSyntax::BuiltinSigil);
+            let nu_content = render_env_content(EnvShell::Nu, &config, NuSyntax::BuiltinSigil);
+            let ps1_content =
+                render_env_content(EnvShell::Powershell, &config, NuSyntax::BuiltinSigil);
 
             assert!(posix_content.contains("if (( CURRENT >= 4 )); then"));
             assert!(posix_content.contains("if (( CURRENT >= 3 )); then"));
             assert!(nu_content.contains(r#"-C=?(?:"[^"]*"|\x27[^\x27]*\x27|\S+)"#));
-            assert!(ps1_content.contains(r#""$($args[0])" -like "-C?*""#));
-            assert!(!ps1_content.contains("$args[0].StartsWith"));
+            assert!(VP_WRAPPER_PS1.contains(r#""$($args[0])" -like "-C?*""#));
+            assert!(!VP_WRAPPER_PS1.contains("$args[0].StartsWith"));
             assert!(ps1_content.contains(r#"-C=?(?:"[^"]*"|''[^'']*''|\S+)"#));
         });
     }
@@ -2682,6 +2996,71 @@ vp
 
     #[test]
     #[cfg(unix)]
+    fn test_posix_env_dedupes_path_with_readonly_ifs() {
+        use std::{os::unix::fs::PermissionsExt, process::Command};
+
+        let temp_dir = TempDir::new().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let bin_dir = home.join("bin");
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        let fake_vp = bin_dir.join("vp");
+        std::fs::write(&fake_vp, "#!/bin/sh\nexit 0\n").unwrap();
+        let mut permissions = std::fs::metadata(&fake_vp).unwrap().permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(&fake_vp, permissions).unwrap();
+
+        vp_shared::EnvConfig::with_vars(test_env_vars(temp_dir.path(), temp_dir.path()), |_| {
+            let env_file = home.join("env");
+            std::fs::write(
+                &env_file,
+                render_env_content(
+                    EnvShell::Posix,
+                    &vp_shared::EnvConfig::get(),
+                    NuSyntax::BuiltinSigil,
+                ),
+            )
+            .unwrap();
+
+            // The first source learns the bin and fallback dirs. The second runs with a
+            // read-only IFS and must still dedupe PATH, define `vp`, and leave globbing on.
+            let script = r#"PATH=/usr/bin:/bin
+. "$1"
+bin=${PATH%%:*}
+fallback=${PATH##*:}
+PATH="$fallback:/usr/bin:$bin:/bin:$bin"
+readonly IFS
+. "$1"
+[ "$PATH" = "$bin:/usr/bin:/bin:$fallback" ] || { echo "PATH=$PATH" >&2; exit 1; }
+set -- "$2"/*
+[ "$1" != "$2/*" ] || { echo "globbing left disabled" >&2; exit 1; }
+command -v vp >/dev/null || { echo "vp wrapper not defined" >&2; exit 1; }
+echo ok
+"#;
+            for shell in ["sh", "dash", "bash", "zsh"] {
+                if Command::new(shell).arg("-c").arg("exit 0").status().is_err() {
+                    continue;
+                }
+                let output = Command::new(shell)
+                    .arg("-c")
+                    .arg(script)
+                    .arg("test-readonly-ifs")
+                    .arg(env_file.as_path())
+                    .arg(temp_dir.path())
+                    .env("HOME", temp_dir.path())
+                    .output()
+                    .unwrap();
+                assert!(
+                    output.status.success() && output.stdout == b"ok\n" && output.stderr.is_empty(),
+                    "{shell}: sourcing env with a read-only IFS failed\nstdout: {}\nstderr: {}",
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+        });
+    }
+
+    #[test]
+    #[cfg(unix)]
     fn test_zsh_vpr_completion_preserves_cursor_before_inserted_run() {
         use std::{os::unix::fs::PermissionsExt, process::Command};
 
@@ -2707,7 +3086,11 @@ vp
             let env_file = home.join("env");
             std::fs::write(
                 &env_file,
-                render_env_content(EnvShell::Posix, &vp_shared::EnvConfig::get()),
+                render_env_content(
+                    EnvShell::Posix,
+                    &vp_shared::EnvConfig::get(),
+                    NuSyntax::BuiltinSigil,
+                ),
             )
             .unwrap();
 

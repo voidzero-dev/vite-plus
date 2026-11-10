@@ -10,7 +10,7 @@ should warn about uncoercible husky version
 ```
 VITE+ - The Unified Toolchain for the Web
 
-⚠ Detected Husky — leaving its hooks, configuration, and dependencies unchanged. Migrate Husky manually before enabling Vite+ hooks.
+▲ ⚠ Detected Husky — leaving its hooks, configuration, and dependencies unchanged. Migrate Husky manually before enabling Vite+ hooks.
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • 1 config update applied
@@ -30,13 +30,6 @@ husky should still be in devDeps
     "husky": "latest",
     "vite": "catalog:",
     "vite-plus": "catalog:"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
   }
 }
 ```

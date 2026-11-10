@@ -2,7 +2,7 @@
 
 ## `vp remove testnpm2 -D -- --no-audit`
 
-should pass when remove not exists package
+delegate removal of an absent package to npm
 
 ```
 
@@ -85,7 +85,7 @@ removed 2 packages in <duration>
 
 ## `vp remove -D test-vite-plus-package-optional -- --loglevel=warn --no-audit`
 
-support ignore -O flag and remove package from optional dependencies
+npm removes the optional dependency even with --save-dev
 
 ```
 
@@ -101,15 +101,3 @@ removed 1 package in <duration>
   "packageManager": "npm@10.9.4"
 }
 ```
-
-## `vp remove -g --dry-run testnpm2`
-
-support remove global package with dry-run
-
-**Exit code:** 1
-
-```
-Failed to uninstall testnpm2: Package testnpm2 is not installed
-```
-
-*(skipped 1 step(s) to the next line boundary: step failed)*

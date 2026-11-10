@@ -28,10 +28,10 @@ example.test.ts
 ```
 VITE+ - The Unified Toolchain for the Web
 
-Vitest v5: 1 review item
+▲ Vitest v5: 1 review item
 
-example.test.ts
-  2:32 REVIEW [ui-token] Use the authenticated UI URL printed by Vitest, including its token.
-    Docs: https://vitest.dev/guide/migration/#vitest-ui-requires-an-authenticated-url
+  example.test.ts
+    2:32 REVIEW [ui-token] Use the authenticated UI URL printed by Vitest, including its token.
+      Docs: https://vitest.dev/guide/migration/#vitest-ui-requires-an-authenticated-url
 This project is already using Vite+! Happy coding!
 ```

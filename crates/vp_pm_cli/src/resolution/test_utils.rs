@@ -2,7 +2,9 @@ use std::ffi::OsString;
 
 use semver::Version;
 
-use crate::resolution::{Bun, CommandResolution, Npm, Pnpm, Yarn, command::ResolvedCommand};
+use crate::resolution::{
+    Bun, CommandResolution, Npm, Pnpm, Resolution, Yarn, command::ResolvedCommand,
+};
 
 #[track_caller]
 pub(crate) fn expect_run(outcome: CommandResolution) -> ResolvedCommand {
@@ -10,6 +12,13 @@ pub(crate) fn expect_run(outcome: CommandResolution) -> ResolvedCommand {
         CommandResolution::Run(command) => command,
         other => panic!("expected command resolution, got {other:?}"),
     }
+}
+
+#[track_caller]
+pub(crate) fn expect_unsupported(resolution: Resolution, messages: &[&str]) {
+    let expected = messages.join("\n");
+    assert_eq!(resolution.outcome, CommandResolution::InvalidArgument(expected));
+    assert!(resolution.diagnostics.is_empty());
 }
 
 pub(crate) fn npm(version: &str) -> Npm {
@@ -58,34 +67,4 @@ fn test_argv(
     args: impl IntoIterator<Item = impl Into<OsString>>,
 ) -> impl Iterator<Item = OsString> {
     std::iter::once(OsString::from("test")).chain(args.into_iter().map(Into::into))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[derive(clap::Args, Debug, PartialEq, Eq)]
-    struct TestArgs {
-        #[arg(long)]
-        value: String,
-    }
-
-    #[derive(clap::Subcommand, Debug, PartialEq, Eq)]
-    enum TestSubcommand {
-        Get { key: String },
-    }
-
-    #[test]
-    fn parses_args_without_a_program_name() {
-        let args = parse_args::<TestArgs>(["--value", "hello"]).unwrap();
-
-        assert_eq!(args, TestArgs { value: "hello".to_string() });
-    }
-
-    #[test]
-    fn parses_subcommands_without_a_program_name() {
-        let args = parse_subcommand::<TestSubcommand>(["get", "registry"]).unwrap();
-
-        assert_eq!(args, TestSubcommand::Get { key: "registry".to_string() });
-    }
 }

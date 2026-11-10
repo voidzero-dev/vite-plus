@@ -9,8 +9,7 @@
   "type": "module",
   "devDependencies": {
     "@oxc-node/core": "catalog:",
-    "@types/semver": "catalog:",
-    "semver": "catalog:",
+    "verkit": "catalog:",
     "vitest": "catalog:",
     "yaml": "catalog:"
   }

@@ -30,13 +30,10 @@ a shared root tsup config should be preserved with a warning
 ```
 VITE+ - The Unified Toolchain for the Web
 
-tsup configuration detected. Auto-migrating to tsdown...
-
-✔ Created vite.config.ts in vite.config.ts
-
-✔ Added import for tsdown.config.ts in vite.config.ts
-
-Please manually merge tsdown.config.ts into vite.config.ts, see https://viteplus.dev/guide/migrate#tsdown
+● tsup configuration detected. Auto-migrating to tsdown...
+◆ ✔ Created vite.config.ts in vite.config.ts
+◆ ✔ Added import for tsdown.config.ts in vite.config.ts
+● Please manually merge tsdown.config.ts into vite.config.ts, see https://viteplus.dev/guide/migrate#tsdown
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • 1 file had imports rewritten
@@ -124,6 +121,7 @@ package a shared-config build remains usable
 ```
 ~/packages/a$ tsup --config ../../tsup.config.ts ⊘ cache disabled
 CLI Building entry: src/index.ts
+CLI Using tsconfig: ../../tsconfig.json
 CLI tsup <version>
 CLI Using tsup config: <workspace>/tsup.config.ts
 CLI Target: node16
@@ -151,6 +149,7 @@ package b shared-config build remains usable
 ```
 ~/packages/b$ tsup --config ../../tsup.config.ts ⊘ cache disabled
 CLI Building entry: src/index.ts
+CLI Using tsconfig: ../../tsconfig.json
 CLI tsup <version>
 CLI Using tsup config: <workspace>/tsup.config.ts
 CLI Target: node16

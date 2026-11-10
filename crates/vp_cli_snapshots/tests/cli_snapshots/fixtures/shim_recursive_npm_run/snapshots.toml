@@ -2,5 +2,6 @@
 name = "shim_recursive_npm_run"
 vp = "global"
 steps = [
+  { argv = ["node", "--version"], snapshot = false, timeout = 120000, comment = "Prepare the pinned runtime before checking recursive npm execution" },
   { argv = ["npm", "run", "outer"], comment = "Outer script calls npm run inner recursively", continue-on-failure = true },
 ]

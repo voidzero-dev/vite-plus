@@ -20,35 +20,34 @@ Options:
   -s, --silent          Suppress all output except the executed command's output
   -h, --help            Print help
 
-Documentation: https://viteplus.dev/guide/vpx
+Documentation: https://viteplus.dev/guide/package-management/dlx
 ```
 
-## `vp dlx -s cowsay hello`
+## `vp dlx -s vp-test-echo hello`
 
-should run cowsay with pnpm dlx
+should run vp-test-echo with pnpm dlx
 
 ```
- _______
-< hello >
- -------
-        \   ^__^
-         \  (oo)\_______
-            (__)\       )\/\
-                ||----w |
-                ||     ||
+hello
 ```
 
-## `vp dlx -s cowsay@1.6.0 hello`
+## `vp dlx -s vp-test-echo@1.0.0 hello`
 
 should run specific version
 
 ```
- _______
-< hello >
- -------
-        \   ^__^
-         \  (oo)\_______
-            (__)\       )\/\
-                ||----w |
-                ||     ||
+hello
+```
+
+## `vpt json-edit package.json packageManager pnpm@7.20.0`
+
+
+## `vp dlx --shell-mode 'echo hello'`
+
+Reject shell mode before pnpm 7.21.0 without executing the package manager.
+
+**Exit code:** 1
+
+```
+pnpm < 7.21.0 does not support --shell-mode.
 ```

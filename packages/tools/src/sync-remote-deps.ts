@@ -1,9 +1,11 @@
 import { execSync, spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, globSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 
 import upstreamVersions from '../.upstream-versions.json' with { type: 'json' };
+import { parseCargoOxcVersions, replaceCargoCrateVersion } from './cargo-toml.ts';
+import { OXC_NODE_DIR, patchOxcNode } from './patch-oxc-node.ts';
 import {
   alignVendoredVitestDependencies,
   REMOVED_VITEST_PACKAGES,
@@ -29,7 +31,9 @@ interface PnpmWorkspace {
 interface PackageJson {
   name?: string;
   version?: string;
+  dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
+  optionalDependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
   exports?: Record<string, unknown>;
   [key: string]: unknown;
@@ -41,6 +45,56 @@ const ROLLDOWN_DIR = 'rolldown';
 const VITE_DIR = 'vite';
 const CORE_PACKAGE_PATH = 'packages/core';
 const VITE_DEVTOOLS_PACKAGE = '@vitejs/devtools';
+
+function workspacePackages(packages: string[] = []): string[] {
+  // Keep upstream build roots and the packages we bundle. Broad globs also
+  // install upstream benchmarks, test servers, and unrelated published tools.
+  return [
+    ...packages.filter((pattern) => !/^!?(rolldown|vite)(\/|$)/.test(pattern)),
+    ROLLDOWN_DIR,
+    `${ROLLDOWN_DIR}/packages/rolldown`,
+    VITE_DIR,
+    `${VITE_DIR}/packages/vite`,
+  ];
+}
+
+export function collectWorkspaceCatalogReferences(
+  rootDir: string,
+  packages: string[],
+): Set<string> {
+  const patterns = workspacePackages(packages);
+  const files = globSync(
+    patterns
+      .filter((pattern) => !pattern.startsWith('!'))
+      .map((pattern) => `${pattern}/package.json`),
+    {
+      cwd: rootDir,
+      exclude: [
+        '**/node_modules/**',
+        ...patterns
+          .filter((pattern) => pattern.startsWith('!'))
+          .map((pattern) => `${pattern.slice(1)}/package.json`),
+      ],
+    },
+  );
+  const references = new Set<string>();
+  for (const file of new Set(['package.json', ...files])) {
+    const pkg: PackageJson = JSON.parse(readFileSync(join(rootDir, file), 'utf8'));
+    for (const field of [
+      'dependencies',
+      'devDependencies',
+      'optionalDependencies',
+      'peerDependencies',
+    ] as const) {
+      for (const [name, version] of Object.entries(pkg[field] ?? {})) {
+        if (version === 'catalog:' || version === 'catalog:default') {
+          references.add(name);
+        }
+      }
+    }
+  }
+  return references;
+}
 
 function log(message: string) {
   console.log(`[sync-rolldown] ${message}`);
@@ -71,7 +125,25 @@ function execCommand(command: string, cwd?: string): string {
   }
 }
 
-function cloneOrResetRepo(repoUrl: string, dir: string, branch: string = 'main', hash?: string) {
+function fetchPinnedCommit(dir: string, hash: string): void {
+  if (spawnSync('git', ['cat-file', '-e', `${hash}^{commit}`], { cwd: dir }).status === 0) {
+    return;
+  }
+  // A pin can name an unmerged pull request, which a branch/tag fetch omits.
+  const result = spawnSync('git', ['fetch', 'origin', hash], { cwd: dir, encoding: 'utf8' });
+  if (result.status !== 0) {
+    throw new Error(
+      `Failed to fetch pinned commit ${hash}: ${result.error?.message ?? result.stderr}`,
+    );
+  }
+}
+
+export function cloneOrResetRepo(
+  repoUrl: string,
+  dir: string,
+  branch: string = 'main',
+  hash?: string,
+) {
   log(`Processing ${dir}...`);
 
   if (existsSync(dir)) {
@@ -104,6 +176,7 @@ function cloneOrResetRepo(repoUrl: string, dir: string, branch: string = 'main',
 
       if (hash) {
         // Reset to specific hash
+        fetchPinnedCommit(dir, hash);
         log(`Resetting ${dir} to pinned hash ${hash.substring(0, 8)}...`);
         execCommand(`git checkout ${branch}`, dir);
         execCommand(`git reset --hard ${hash}`, dir);
@@ -144,6 +217,7 @@ function cloneRepo(repoUrl: string, dir: string, branch: string, hash?: string) 
   log(`Cloning ${repoUrl} (${branch}) into ${dir}...`);
   execCommand(`git clone --branch ${branch} ${repoUrl} ${dir}`);
   if (hash) {
+    fetchPinnedCommit(dir, hash);
     log(`Checking out pinned hash ${hash.substring(0, 8)}...`);
     execCommand(`git reset --hard ${hash}`, dir);
     log(`${dir} cloned and reset to ${hash.substring(0, 8)}`);
@@ -358,6 +432,7 @@ export function syncViteDevtoolsDependencies(corePkg: PackageJson, vitePkg: Pack
 
 // Oxc-related packages that should use the higher version on conflict
 const OXC_PACKAGE_PREFIXES = [
+  '@oxc-node/',
   '@oxc-project/',
   '@oxlint/',
   '@oxc-minify/',
@@ -367,27 +442,29 @@ const OXC_PACKAGE_PREFIXES = [
   '@oxfmt/',
   '@oxlint-tsgolint/',
 ];
-const OXC_PACKAGES = new Set([
+const SYNCED_PACKAGES = new Set([
+  '@napi-rs/cli',
   'oxc-minify',
   'oxc-parser',
   'oxc-transform',
   'oxfmt',
   'oxlint',
   'oxlint-tsgolint',
+  'tinybench',
 ]);
 // These packages should always use the highest version
 function syncedPackages(packageName: string): boolean {
-  if (OXC_PACKAGES.has(packageName) || packageName === 'tinybench') {
-    return true;
-  }
-  return OXC_PACKAGE_PREFIXES.some((prefix) => packageName.startsWith(prefix));
+  return (
+    SYNCED_PACKAGES.has(packageName) ||
+    OXC_PACKAGE_PREFIXES.some((prefix) => packageName.startsWith(prefix))
+  );
 }
 
 function mergeSemverVersions(
   v1: string,
   v2: string,
   packageName: string,
-  semver: typeof import('semver'),
+  verkit: typeof import('verkit'),
 ): string {
   // Handle special cases
   if (v1 === v2) {
@@ -399,12 +476,12 @@ function mergeSemverVersions(
   const isExact2 = v2.startsWith('=');
   if (isExact1 || isExact2) {
     if (isExact1 && isExact2 && v1 !== v2) {
-      // For oxc-related packages, use the higher version
+      // For synced packages, use the higher version
       if (syncedPackages(packageName)) {
         const ver1 = v1.slice(1); // Remove '=' prefix
         const ver2 = v2.slice(1);
-        if (semver.valid(ver1) && semver.valid(ver2)) {
-          const higher = semver.gt(ver1, ver2) ? v1 : v2;
+        if (verkit.normalize(ver1) && verkit.normalize(ver2)) {
+          const higher = verkit.isGreaterThan(ver1, ver2) ? v1 : v2;
           log(`Resolving ${packageName} version conflict: ${v1} vs ${v2} -> ${higher}`);
           return higher;
         }
@@ -424,8 +501,8 @@ function mergeSemverVersions(
     return v1;
   }
 
-  const range1 = semver.validRange(v1);
-  const range2 = semver.validRange(v2);
+  const range1 = verkit.normalizeRange(v1);
+  const range2 = verkit.normalizeRange(v2);
 
   if (!range1 || !range2) {
     log(`Warning: Could not parse semver for ${packageName}: ${v1}, ${v2}. Using ${v1}`);
@@ -454,13 +531,13 @@ function mergeSemverVersions(
 
   // Both have same major version, return the higher one
   // Compare the minimum versions
-  const minVersion1 = semver.minVersion(range1);
-  const minVersion2 = semver.minVersion(range2);
+  const minVersion1 = verkit.findMinimumForRange(range1);
+  const minVersion2 = verkit.findMinimumForRange(range2);
 
   if (minVersion1 && minVersion2) {
-    if (semver.gt(minVersion1, minVersion2)) {
+    if (verkit.isGreaterThan(minVersion1, minVersion2)) {
       return v1;
-    } else if (semver.gt(minVersion2, minVersion1)) {
+    } else if (verkit.isGreaterThan(minVersion2, minVersion1)) {
       return v2;
     }
   }
@@ -483,7 +560,7 @@ function parseExcludeEntry(entry: string): { name: string; version?: string } {
 // Build a matcher for a version-less name pattern. The exclude list only ever
 // uses the `*` wildcard, so a tiny *-only glob (escape regex specials, `*` ->
 // `.*`, anchored) is enough and keeps `minimatch` out of this module: it is
-// loaded via dynamic import before the yaml/semver install fallback runs, so a
+// loaded via dynamic import before the yaml/verkit install fallback runs, so a
 // top-level dependency import could fail on a clean clone.
 function globToRegExp(pattern: string): RegExp {
   const escaped = pattern.replaceAll(/[.+?^${}()|[\]\\]/g, '\\$&').replaceAll('*', '.*');
@@ -499,7 +576,7 @@ function globToRegExp(pattern: string): RegExp {
 function mergeMinimumReleaseAgeExclude(entries: string[]): string[] {
   // Dedupe exact-string duplicates (Set preserves insertion order) and parse
   // each entry once.
-  const parsed = [...new Set(entries)].map((entry) => {
+  const parsed = Array.from(new Set(entries), (entry) => {
     const { name, version } = parseExcludeEntry(entry);
     return { entry, name, version };
   });
@@ -520,26 +597,35 @@ export function mergePnpmWorkspaces(
   main: PnpmWorkspace,
   rolldown: PnpmWorkspace,
   rolldownVite: PnpmWorkspace,
-  semver: typeof import('semver'),
+  vitePackage: PackageJson,
+  verkit: typeof import('verkit'),
+  catalogReferences?: ReadonlySet<string>,
 ): PnpmWorkspace {
   const result: PnpmWorkspace = { ...main };
 
-  // Merge packages array
-  const packagesSet = new Set(main.packages || []);
-  // Add rolldown packages
-  packagesSet.add(ROLLDOWN_DIR);
-  packagesSet.add(`${ROLLDOWN_DIR}/packages/*`);
-  // Add vite packages
-  packagesSet.add(VITE_DIR);
-  packagesSet.add(`${VITE_DIR}/packages/*`);
-  result.packages = Array.from(packagesSet);
+  result.packages = workspacePackages(main.packages);
 
   // The upgrade script selects the latest supported Vitest release and updates
   // the runtime constant with it. Upstream catalogs must not replace that pin.
   const vitestVersion = main.catalog?.vitest;
-  const catalog: Record<string, string> = {};
+  // Vite declares its compiler in the root package.json, outside its catalog.
+  // Follow that range exactly, even when Rolldown still uses an older major.
+  const typescriptSpecifier = vitePackage.devDependencies?.typescript;
+  const typescriptRange =
+    typescriptSpecifier === 'catalog:' ? rolldownVite.catalog?.typescript : typescriptSpecifier;
+  if (!typescriptRange || !verkit.normalizeRange(typescriptRange)) {
+    throw new Error('Vite must declare a valid TypeScript devDependency range');
+  }
+  const catalog: Record<string, string> = { typescript: typescriptRange };
+  const upstreamCatalogPackages = new Set<string>();
   for (const workspace of [main, rolldown, rolldownVite]) {
     for (const [pkg, version] of Object.entries(workspace.catalog || {})) {
+      if (catalogReferences && !catalogReferences.has(pkg)) {
+        continue;
+      }
+      if (pkg === 'typescript') {
+        continue;
+      }
       if (REMOVED_VITEST_PACKAGES.has(pkg)) {
         // Unused upstream entries are harmless; actual dependency uses fail in
         // alignVendoredVitestDependencies instead of reinstalling removed packages.
@@ -549,7 +635,7 @@ export function mergePnpmWorkspaces(
         if (
           !vitestVersion ||
           !/^5\.\d+\.\d+$/.test(vitestVersion) ||
-          semver.valid(vitestVersion) !== vitestVersion
+          verkit.normalize(vitestVersion) !== vitestVersion
         ) {
           throw new Error('The root Vitest catalog entry must be an exact stable v5 version');
         }
@@ -558,9 +644,17 @@ export function mergePnpmWorkspaces(
         // This community provider does not share the official release schedule.
         catalog[pkg] = main.catalog[pkg];
       } else {
-        catalog[pkg] = catalog[pkg]
-          ? mergeSemverVersions(catalog[pkg], version, pkg, semver)
-          : version;
+        // Upstream owns ordinary catalog entries, including downgrades. Merge
+        // only declarations from both upstreams or packages whose explicit
+        // policy keeps the higher version selected by this workspace.
+        const mergeExisting = syncedPackages(pkg) || upstreamCatalogPackages.has(pkg);
+        catalog[pkg] =
+          catalog[pkg] && mergeExisting
+            ? mergeSemverVersions(catalog[pkg], version, pkg, verkit)
+            : version;
+      }
+      if (workspace !== main) {
+        upstreamCatalogPackages.add(pkg);
       }
     }
   }
@@ -570,6 +664,7 @@ export function mergePnpmWorkspaces(
 
   // Sort catalog keys alphabetically
   result.catalog = Object.keys(catalog)
+    .filter((pkg) => !catalogReferences || catalogReferences.has(pkg))
     .toSorted()
     .reduce(
       (sorted, key) => {
@@ -578,6 +673,22 @@ export function mergePnpmWorkspaces(
       },
       {} as Record<string, string>,
     );
+
+  // Vite's language-tooling overrides keep legacy compiler API consumers working.
+  const typescriptOverrides = Object.fromEntries(
+    Object.entries(rolldownVite.overrides ?? {}).filter(([selector]) =>
+      />typescript(?:@|$)/.test(selector),
+    ),
+  );
+
+  // Rolldown's build uses the compiler API from its own TypeScript range.
+  // Its catalog reference must not pick up Vite's compiler after the merge.
+  if (rolldown.catalog?.typescript) {
+    typescriptOverrides['rolldown>typescript'] = rolldown.catalog.typescript;
+  }
+  if (Object.keys(typescriptOverrides).length > 0) {
+    result.overrides = { ...result.overrides, ...typescriptOverrides };
+  }
 
   // Merge minimumReleaseAgeExclude
   result.minimumReleaseAgeExclude = mergeMinimumReleaseAgeExclude([
@@ -679,8 +790,10 @@ export function mergeWorkspaceYaml(
   mainSrc: string,
   rolldownSrc: string,
   rolldownViteSrc: string,
+  vitePackage: PackageJson,
   yaml: typeof import('yaml'),
-  semver: typeof import('semver'),
+  verkit: typeof import('verkit'),
+  catalogReferences?: ReadonlySet<string>,
 ): string {
   const mainDoc = yaml.parseDocument(mainSrc);
   const rolldown = yaml.parse(rolldownSrc) as PnpmWorkspace | null;
@@ -690,7 +803,9 @@ export function mergeWorkspaceYaml(
     (mainDoc.toJSON() as PnpmWorkspace) ?? {},
     rolldown ?? {},
     rolldownVite ?? {},
-    semver,
+    vitePackage,
+    verkit,
+    catalogReferences,
   );
 
   const stringifyOptions = { lineWidth: -1, singleQuote: true } as const;
@@ -703,43 +818,6 @@ export function mergeWorkspaceYaml(
   reconcileMap(mainDoc.contents, merged, yaml);
 
   return mainDoc.toString(stringifyOptions);
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-// Parse every `oxc*` crate version from a Cargo.toml in a single pass, keyed by
-// crate name. Handles both the bare `oxc_x = "X"` form and the inline-table
-// `oxc = { version = "X", features = [...] }` form (which may span lines, but
-// always lists `version` before its `[...]` feature array, so `[^}]*?` reaches
-// it without crossing the closing `}`).
-function parseCargoOxcVersions(src: string): Map<string, string> {
-  const versions = new Map<string, string>();
-  const re = /^\s*(oxc[\w-]*)\s*=\s*(?:"([^"]+)"|\{[^}]*?version\s*=\s*"([^"]+)")/gm;
-  for (let m = re.exec(src); m; m = re.exec(src)) {
-    versions.set(m[1], m[2] ?? m[3]);
-  }
-  return versions;
-}
-
-// Replace the version of a single crate entry in-place, preserving features,
-// formatting, and surrounding text. Only the first matching entry is rewritten.
-function replaceCargoCrateVersion(src: string, key: string, newVersion: string): string {
-  const escaped = escapeRegExp(key);
-  const bareRe = new RegExp(`^(\\s*${escaped}\\s*=\\s*")[^"]+(")`, 'm');
-  if (bareRe.test(src)) {
-    return src.replace(bareRe, `$1${newVersion}$2`);
-  }
-  const tableStart = new RegExp(`^\\s*${escaped}\\s*=\\s*\\{`, 'm').exec(src);
-  if (!tableStart) {
-    return src;
-  }
-  const start = tableStart.index;
-  const close = src.indexOf('}', start);
-  const end = close >= 0 ? close : src.length;
-  const table = src.slice(start, end).replace(/(version\s*=\s*")[^"]+(")/, `$1${newVersion}$2`);
-  return src.slice(0, start) + table + src.slice(end);
 }
 
 export interface CargoOxcChange {
@@ -846,19 +924,20 @@ export async function syncRemote() {
 
   // Get the root directory (assuming script is run from root)
   const rootDir = process.cwd();
+  // Each upstream checkout and its pin in `.upstream-versions.json`.
+  const upstreamRepos = [
+    [ROLLDOWN_DIR, upstreamVersions.rolldown],
+    [VITE_DIR, upstreamVersions.vite],
+    [OXC_NODE_DIR, upstreamVersions['oxc-node']],
+  ] as const;
 
   if (values.clean) {
     log('Cleaning existing repositories...');
-    if (existsSync(join(rootDir, ROLLDOWN_DIR))) {
-      rmSync(join(rootDir, ROLLDOWN_DIR), { recursive: true, force: true });
-      log(`Removed ${ROLLDOWN_DIR}`);
-    }
-    if (existsSync(join(rootDir, VITE_DIR))) {
-      rmSync(join(rootDir, VITE_DIR), {
-        recursive: true,
-        force: true,
-      });
-      log(`Removed ${VITE_DIR}`);
+    for (const [dir] of upstreamRepos) {
+      if (existsSync(join(rootDir, dir))) {
+        rmSync(join(rootDir, dir), { recursive: true, force: true });
+        log(`Removed ${dir}`);
+      }
     }
     // Clean up legacy 'rolldown-vite' directory (renamed to 'vite')
     const legacyViteDir = join(rootDir, 'rolldown-vite');
@@ -868,34 +947,24 @@ export async function syncRemote() {
     }
   }
 
-  // Clone or reset repos
-  cloneOrResetRepo(
-    upstreamVersions.rolldown.repo,
-    join(rootDir, ROLLDOWN_DIR),
-    upstreamVersions.rolldown.branch,
-    upstreamVersions.rolldown.hash,
-  );
-  cloneOrResetRepo(
-    upstreamVersions['vite'].repo,
-    join(rootDir, VITE_DIR),
-    upstreamVersions['vite'].branch,
-    upstreamVersions['vite'].hash,
-  );
+  for (const [dir, { repo, branch, hash }] of upstreamRepos) {
+    cloneOrResetRepo(repo, join(rootDir, dir), branch, hash);
+  }
 
   // Dynamically import dependencies after git clone. Capture the whole `yaml`
   // module (we need `yaml.parseDocument` to preserve comments).
   let yaml: typeof import('yaml');
-  let semver: typeof import('semver');
+  let verkit: typeof import('verkit');
 
   try {
     yaml = await import('yaml');
-    semver = await import('semver');
+    verkit = await import('verkit');
   } catch {
     log('Dependencies not found, running pnpm install...');
     execCommand('pnpm install --no-frozen-lockfile', rootDir);
     log('Retrying imports...');
     yaml = await import('yaml');
-    semver = await import('semver');
+    verkit = await import('verkit');
   }
 
   log('Reading pnpm-workspace.yaml files...');
@@ -907,14 +976,30 @@ export async function syncRemote() {
   const mainSrc = readFileSync(mainWorkspacePath, 'utf-8');
   const rolldownSrc = readFileSync(rolldownWorkspacePath, 'utf-8');
   const rolldownViteSrc = readFileSync(rolldownViteWorkspacePath, 'utf-8');
+  const viteRootPackage = JSON.parse(
+    readFileSync(join(rootDir, VITE_DIR, 'package.json'), 'utf-8'),
+  ) as PackageJson;
+  const mainWorkspace = yaml.parse(mainSrc) as PnpmWorkspace;
+  const catalogReferences = collectWorkspaceCatalogReferences(
+    rootDir,
+    mainWorkspace.packages ?? [],
+  );
 
   log('Merging pnpm-workspace.yaml files...');
 
   // Merge upstream catalogs into the main workspace while preserving its comments.
-  const yamlContent = mergeWorkspaceYaml(mainSrc, rolldownSrc, rolldownViteSrc, yaml, semver);
+  const yamlContent = mergeWorkspaceYaml(
+    mainSrc,
+    rolldownSrc,
+    rolldownViteSrc,
+    viteRootPackage,
+    yaml,
+    verkit,
+    catalogReferences,
+  );
 
   const vitestVersion = (yaml.parse(yamlContent) as PnpmWorkspace).catalog?.vitest;
-  if (!vitestVersion || !semver.valid(vitestVersion)) {
+  if (!vitestVersion || !verkit.normalize(vitestVersion)) {
     throw new Error('The Vitest catalog entry must be an exact version');
   }
   writeFileSync(mainWorkspacePath, yamlContent, 'utf-8');
@@ -938,6 +1023,10 @@ export async function syncRemote() {
   // Keep the root Cargo.toml oxc pins in lockstep with the vendored rolldown.
   log('Syncing Cargo.toml oxc versions with rolldown...');
   syncCargoOxcWithRolldown(rootDir);
+
+  // oxc-node compiles into the native binding; it follows the oxc pins above.
+  log('Patching vendored oxc-node...');
+  patchOxcNode(rootDir);
 
   // Merge package.json exports
   log('Merging package.json exports...');

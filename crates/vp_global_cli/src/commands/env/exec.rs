@@ -4,13 +4,13 @@
 //! 1. Explicit version: `vp env exec --node <version> [--npm <version>] <command>`
 //! 2. Shim mode: `vp env exec <tool> [args...]` where tool is node/npm/npx or a global package binary
 //!
-//! Direct invocations resolve a fresh tool selection through shim dispatch.
+//! Direct invocations prefer system-first tools from PATH, then resolve a fresh selection through shim dispatch.
 //! Windows .cmd wrappers and Git Bash shell scripts inherit tools like Unix shims.
 
 use std::process::ExitStatus;
 
 use vp_js_runtime::NodeProvider;
-use vp_pm_cli::{download_package_manager, resolve_package_manager_version};
+use vp_pm_cli::{download_package_manager_for_cwd, resolve_package_manager_version_for_cwd};
 use vp_shared::{PrependOptions, ToolPathEnv, env_vars};
 use vt_path::AbsolutePath;
 
@@ -21,7 +21,7 @@ use super::{
 use crate::{
     cli::exit_status,
     error::Error,
-    shim::{dispatch as shim_dispatch, is_shim_tool},
+    shim::{dispatch as shim_dispatch, is_core_shim_tool, is_shim_tool},
 };
 
 /// Execute the exec command.
@@ -67,7 +67,6 @@ pub async fn execute(
         // - Core tools: Version resolved from .node-version/package.json/default
         // - Package binaries: Uses Node.js version from package metadata
         // - Automatic Node.js download if needed
-        // - Shim mode checking (managed vs system-first)
         // Explicit env exec starts a new selection; wrappers inherit like shims.
         let env = if from_wrapper {
             ToolPathEnv::from_env()
@@ -77,6 +76,15 @@ pub async fn execute(
         let args: Vec<String> = command[1..].to_vec();
         // stdout belongs to the dispatched tool; route vp's own output to stderr.
         vp_shared::output::route_user_output_to_stderr();
+        // Dispatch assumes the shell's PATH lookup already preferred system-first tools, so repeat it here.
+        if !from_wrapper
+            && is_core_shim_tool(tool)
+            && config::load_config().await?.shim_mode_for_tool(tool)
+                == config::ShimMode::SystemFirst
+            && let Some(path) = crate::shim::dispatch::find_system_tool(tool)
+        {
+            return Ok(exit_status(crate::shim::exec::exec_tool(&path, &args, env)));
+        }
         let exit_code = shim_dispatch(tool, &args, env).await;
         return Ok(exit_status(exit_code));
     }
@@ -153,7 +161,8 @@ async fn execute_with_version(
     let mut system_package_manager = None;
     let selected_package_manager = if let Some(package_manager) = package_manager {
         let (kind, selector, hash) = parse_package_manager_spec_with_hash(package_manager)?;
-        let version = resolve_package_manager_version(kind, &selector).await?.to_string();
+        let version =
+            resolve_package_manager_version_for_cwd(cwd, kind, &selector).await?.to_string();
         Some((kind, version, hash))
     } else {
         let selected = package_manager_resolution::resolve_current_spec(cwd).await?;
@@ -206,7 +215,7 @@ async fn execute_with_version(
             Some(format!("{kind}@{system_version}"))
         } else {
             let (install_dir, _, _) =
-                download_package_manager(kind, &version, hash.as_deref()).await?;
+                download_package_manager_for_cwd(cwd, kind, &version, hash.as_deref()).await?;
             path_prefixes
                 .insert(0, (install_dir.join("bin").into_path_buf(), kind.bin_names().to_vec()));
             Some(format!("{kind}@{version}"))
@@ -299,9 +308,9 @@ mod tests {
 
     /// Shared VP_HOME for tests that download a real Node.js runtime: pinning
     /// isolates them from concurrent scopes, and one shared root keeps the
-    /// download cache warm across tests and runs.
+    /// download cache warm across crates and runs.
     fn shared_vp_home() -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join("vp-global-cli-tests-vp-home");
+        let dir = std::env::temp_dir().join("vp-node-runtime-tests-vp-home");
         std::fs::create_dir_all(&dir).unwrap();
         dir
     }
@@ -317,18 +326,24 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_node_version() {
-        // Shared root keeps the downloaded Node 20.18.0 warm across runs.
+        // Shared root keeps the downloaded Node 20.20.2 warm across runs.
         let vp_home = shared_vp_home();
         vp_shared::EnvConfig::with_vars_async(
             [(env_vars::VP_HOME, vp_home.as_os_str())],
             |_| async {
-                // Run 'node --version' with a specific Node.js version
-                let command = vec!["node".to_string(), "--version".to_string()];
-                let cwd = vt_path::current_dir().unwrap();
-                let result = execute(&cwd, Some("20.18.0"), None, None, &command).await;
-                assert!(result.is_ok());
-                let status = result.unwrap();
-                assert!(status.success());
+                // Keep package-manager selection outside the repository so this
+                // Node-only test does not download the workspace's pnpm version.
+                let project = tempfile::tempdir().unwrap();
+                let cwd = vt_path::AbsolutePathBuf::new(project.path().to_path_buf()).unwrap();
+                tokio::fs::write(cwd.join("package.json"), "{}").await.unwrap();
+                let command = vec![
+                    "node".to_string(),
+                    "-e".to_string(),
+                    "require('node:assert/strict').equal(process.version, 'v20.20.2');".to_string(),
+                ];
+                let result = execute(&cwd, Some("20.20.2"), None, None, &command).await;
+                let status = result.expect("Node execution should succeed");
+                assert!(status.success(), "Node should run with the requested version");
             },
         )
         .await;

@@ -51,13 +51,6 @@ the `oxlint` peer entry survives. It is a consumer contract, not a tool this pac
   "devDependencies": {
     "vite": "catalog:",
     "vite-plus": "catalog:"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "<version>",
-      "onFail": "download"
-    }
   }
 }
 ```

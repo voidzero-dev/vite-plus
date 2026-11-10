@@ -1,0 +1,167 @@
+use std::{
+    collections::BTreeSet,
+    path::{Path, PathBuf},
+    sync::LazyLock,
+};
+
+use serde_json::Value;
+
+/// Exact fixture pins only. Floating versions keep their normal registry resolution.
+static EXACT_VERSION: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"^v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)(?:\+[0-9A-Za-z.-]+)?$").unwrap()
+});
+
+#[derive(Default)]
+pub struct PackageManagerPrewarm {
+    versions: BTreeSet<(String, String)>,
+    packages: BTreeSet<PathBuf>,
+}
+
+impl PackageManagerPrewarm {
+    fn version(&mut self, manager: &str, spec: &str) {
+        if !matches!(manager, "bun" | "pnpm") {
+            return;
+        }
+        let Some(captures) = EXACT_VERSION.captures(spec) else {
+            return;
+        };
+        let version = &captures[1];
+        // pnpm 12+ selects a native platform package through registry metadata.
+        // Its main tarball is not the archive installed by the CLI.
+        if manager == "pnpm" {
+            let major = version.split('.').next().unwrap().parse::<u64>().unwrap_or(u64::MAX);
+            if major >= 12 {
+                return;
+            }
+        }
+        self.versions.insert((manager.to_owned(), version.to_owned()));
+    }
+
+    fn package_manager(&mut self, spec: &str) {
+        if let Some((manager, version)) = spec.split_once('@') {
+            self.version(manager, version);
+        }
+    }
+
+    fn dev_engine(&mut self, value: &Value) {
+        if let Some(entries) = value.as_array() {
+            for entry in entries {
+                self.dev_engine(entry);
+            }
+        } else if let Some(manager) = value["name"].as_str()
+            && let Some(version) = value["version"].as_str()
+        {
+            self.version(manager, version);
+        }
+    }
+
+    pub fn package_json(&mut self, value: &Value) {
+        if let Some(spec) = value["packageManager"].as_str() {
+            self.package_manager(spec);
+        }
+        self.dev_engine(&value["devEngines"]["packageManager"]);
+    }
+
+    /// Read the same package ancestry a step sees, without scanning unrelated subprojects.
+    pub fn workspace(&mut self, fixture: &Path, cwd: &str) -> std::io::Result<()> {
+        let directory = fixture.join(cwd);
+        for ancestor in directory.ancestors().take_while(|path| path.starts_with(fixture)) {
+            let package = ancestor.join("package.json");
+            if !self.packages.insert(package.clone()) {
+                continue;
+            }
+            match std::fs::read_to_string(package) {
+                Ok(text) => {
+                    // Malformed package files are deliberate inputs in validation cases.
+                    if let Ok(value) = serde_json::from_str(&text) {
+                        self.package_json(&value);
+                    }
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error),
+            }
+        }
+        Ok(())
+    }
+
+    pub fn env<'a>(&mut self, entries: impl IntoIterator<Item = (&'a str, &'a str)>) {
+        for (key, value) in entries {
+            match key {
+                "VP_BUN_VERSION" => self.version("bun", value),
+                "VP_PNPM_VERSION" => self.version("pnpm", value),
+                "VP_PACKAGE_MANAGER" => self.package_manager(value),
+                _ => {}
+            }
+        }
+    }
+
+    /// Inspect declarative setup, not comments, assertions, or arbitrary script source.
+    pub fn step(&mut self, argv: &[String]) {
+        let args: Vec<&str> = argv.iter().map(String::as_str).collect();
+        match args.as_slice() {
+            ["vpt", "json-edit", file, key, raw]
+                if Path::new(file).file_name().is_some_and(|name| name == "package.json") =>
+            {
+                let value =
+                    serde_json::from_str(raw).unwrap_or_else(|_| Value::String((*raw).into()));
+                match *key {
+                    "packageManager" => {
+                        if let Some(spec) = value.as_str() {
+                            self.package_manager(spec);
+                        }
+                    }
+                    "devEngines" => self.dev_engine(&value["packageManager"]),
+                    "devEngines.packageManager" => self.dev_engine(&value),
+                    _ => {}
+                }
+            }
+            ["vpt", "write-file", file, text]
+                if Path::new(file).file_name().is_some_and(|name| name == "package.json") =>
+            {
+                if let Ok(value) = serde_json::from_str(text) {
+                    self.package_json(&value);
+                }
+            }
+            ["vp", "env", "default" | "use" | "exec", specs @ ..] => {
+                for spec in specs {
+                    self.package_manager(spec);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    pub fn urls(&self, bun_package: &str) -> Vec<String> {
+        self.versions
+            .iter()
+            .map(|(manager, version)| {
+                if manager == "bun" {
+                    format!(
+                        "https://registry.npmjs.org/@oven/{bun_package}/-/{bun_package}-{version}.tgz"
+                    )
+                } else {
+                    format!("https://registry.npmjs.org/pnpm/-/pnpm-{version}.tgz")
+                }
+            })
+            .collect()
+    }
+}
+
+/// Match the native Bun archive selected by vp_pm_cli, including older x64 CPUs.
+pub fn platform_package() -> String {
+    let platform = match (std::env::consts::OS, std::env::consts::ARCH) {
+        ("windows", "x86_64") => "windows-x64",
+        ("windows", "aarch64") => "windows-aarch64",
+        ("macos", "x86_64") => "darwin-x64",
+        ("macos", "aarch64") => "darwin-aarch64",
+        ("linux", "x86_64") => "linux-x64",
+        ("linux", "aarch64") => "linux-aarch64",
+        (os, arch) => panic!("unsupported Bun prewarm platform: {os}-{arch}"),
+    };
+    let libc = if cfg!(all(target_os = "linux", target_env = "musl")) { "-musl" } else { "" };
+    #[cfg(target_arch = "x86_64")]
+    let baseline = if std::arch::is_x86_feature_detected!("avx2") { "" } else { "-baseline" };
+    #[cfg(not(target_arch = "x86_64"))]
+    let baseline = "";
+    format!("bun-{platform}{libc}{baseline}")
+}

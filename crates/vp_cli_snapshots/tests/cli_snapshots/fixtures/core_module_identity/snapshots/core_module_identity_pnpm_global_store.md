@@ -23,7 +23,7 @@ Packed alias, ESM, CommonJS, and module-runner identity passed
 
 ```
 
-  VITE+ <version>
+  VITE+ <version>  ready in <duration>
 
   ➜  Local:   http://127.0.0.1:<port>/
   ➜  press h + enter to show help

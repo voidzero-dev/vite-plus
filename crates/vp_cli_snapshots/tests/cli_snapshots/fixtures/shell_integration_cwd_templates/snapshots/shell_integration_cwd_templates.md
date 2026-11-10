@@ -1,6 +1,8 @@
 # shell_integration_cwd_templates
 
-## `VP_HOME=${workspace}/home vp env setup --refresh`
+## `VP_HOME=${workspace}/home VP_NU_VERSION=0.112.1 vp env setup --refresh`
+
+VP_NU_VERSION keeps env.nu independent of the installed Nushell
 
 
 ## `vpt print-file home/env`
@@ -13,18 +15,52 @@ POSIX wrapper and zsh vpr completion keep global -C before env use/run
 export VP_HOME="<workspace>/home"
 __vp_bin="<workspace>/home/bin"
 __vp_fallback="<workspace>/home/fallback-bin"
-for __vp_dir in "$__vp_bin" "$__vp_fallback"; do
-    while case ":${PATH}:" in *":${__vp_dir}:"*) true ;; *) false ;; esac; do
-        __vp_tmp=":${PATH}:"
-        __vp_before="${__vp_tmp%%":${__vp_dir}:"*}"
-        __vp_before="${__vp_before#:}"
-        __vp_after="${__vp_tmp#*":${__vp_dir}:"}"
-        __vp_after="${__vp_after%:}"
-        PATH="${__vp_before}${__vp_before:+${__vp_after:+:}}${__vp_after}"
+# Split PATH on ':' once; repeated `${PATH#*pattern}` stripping is super-linear on long PATHs.
+# A function scopes zsh's option changes; other shells restore noglob and IFS explicitly.
+__vp_dedupe_path() {
+    __vp_ifs_set=${IFS+1}
+    __vp_ifs=${IFS-}
+    IFS=:
+    __vp_glob=
+    if [ -n "${ZSH_VERSION-}" ]; then
+        setopt localoptions shwordsplit noglob
+    else
+        case $- in *f*) ;; *) set -f; __vp_glob=1 ;; esac
+    fi
+    __vp_new=
+    # A non-empty sentinel last field keeps trailing empty entries consistent across shells.
+    __vp_path="${PATH}:."
+    for __vp_dir in $__vp_path; do
+        case "$__vp_dir" in
+            "$__vp_bin"|"$__vp_fallback") ;;
+            *) __vp_new="${__vp_new}:${__vp_dir}" ;;
+        esac
     done
-done
+    if [ -n "$__vp_ifs_set" ]; then IFS=$__vp_ifs; else unset IFS; fi
+    [ -z "$__vp_glob" ] || set +f
+    __vp_new="${__vp_new%:*}"
+    PATH="${__vp_new#:}"
+}
+# Assigning a read-only IFS aborts dash and zsh, so probe it in a subshell first and fall back
+# to stripping each copy with parameter expansion, which leaves IFS and shell options alone.
+if (IFS=:) 2>/dev/null; then
+    __vp_dedupe_path
+else
+    for __vp_dir in "$__vp_bin" "$__vp_fallback"; do
+        while case ":${PATH}:" in *":${__vp_dir}:"*) true ;; *) false ;; esac; do
+            __vp_tmp=":${PATH}:"
+            __vp_before="${__vp_tmp%%":${__vp_dir}:"*}"
+            __vp_before="${__vp_before#:}"
+            __vp_after="${__vp_tmp#*":${__vp_dir}:"}"
+            __vp_after="${__vp_after%:}"
+            PATH="${__vp_before}${__vp_before:+${__vp_after:+:}}${__vp_after}"
+        done
+    done
+fi
+unset -f __vp_dedupe_path
 export PATH="${__vp_bin}${PATH:+:${PATH}}:${__vp_fallback}"
-unset __vp_bin __vp_fallback __vp_dir __vp_tmp __vp_before __vp_after
+unset __vp_bin __vp_fallback __vp_dir __vp_path __vp_new __vp_ifs __vp_ifs_set __vp_glob \
+    __vp_tmp __vp_before __vp_after
 hash -r 2>/dev/null || true
 
 # Shell function wrapper: intercepts `vp env use` to eval its stdout,
@@ -104,10 +140,10 @@ fish wrapper and vpr completion keep global -C before env use/run
 ```
 # Vite+ environment setup (https://viteplus.dev)
 set -gx VP_HOME "<workspace>/home"
-while set -l __vp_idx (contains -i -- "<workspace>/home/bin" $PATH)
+while set -l __vp_idx (builtin contains -i -- "<workspace>/home/bin" $PATH)
     set -e PATH[$__vp_idx]
 end
-while set -l __vp_idx (contains -i -- "<workspace>/home/fallback-bin" $PATH)
+while set -l __vp_idx (builtin contains -i -- "<workspace>/home/fallback-bin" $PATH)
     set -e PATH[$__vp_idx]
 end
 set -gx PATH "<workspace>/home/bin" $PATH "<workspace>/home/fallback-bin"
@@ -116,17 +152,17 @@ set -gx PATH "<workspace>/home/bin" $PATH "<workspace>/home/fallback-bin"
 # which sets/unsets VP_NODE_VERSION in the current shell session.
 function vp
     set -l __vp_command_index 1
-    if test (count $argv) -ge 1
+    if test (builtin count $argv) -ge 1
         if test "$argv[1]" = "-C"
             set __vp_command_index 3
         else if string match -qr '^-C.+' -- "$argv[1]"
             set __vp_command_index 2
         end
     end
-    set -l __vp_next_index (math $__vp_command_index + 1)
+    set -l __vp_next_index (builtin math $__vp_command_index + 1)
 
-    if test (count $argv) -ge $__vp_next_index; and test "$argv[$__vp_command_index]" = "env"; and test "$argv[$__vp_next_index]" = "use"
-        if contains -- -h $argv; or contains -- --help $argv
+    if test (builtin count $argv) -ge $__vp_next_index; and test "$argv[$__vp_command_index]" = "env"; and test "$argv[$__vp_next_index]" = "use"
+        if builtin contains -- -h $argv; or builtin contains -- --help $argv
             command vp $argv; return
         end
         set -lx VP_ENV_USE_EVAL_ENABLE 1
@@ -142,28 +178,28 @@ function vp
 end
 
 # Dynamic shell completion for fish
-VP_COMPLETE=fish command vp | source
+VP_COMPLETE=fish command vp | builtin source
 
 function __vpr_complete
-    set -l tokens (commandline --current-process --tokenize --cut-at-cursor)
-    set -l current (commandline --current-token)
+    set -l tokens (builtin commandline --current-process --tokenize --cut-at-cursor)
+    set -l current (builtin commandline --current-token)
     set -l args $tokens[2..]
     set -l translated vp
-    if test (count $args) -eq 0; and string match -qr '^-C' -- "$current"
+    if test (builtin count $args) -eq 0; and string match -qr '^-C' -- "$current"
         # Keep completing the global -C option until its value is finished.
-    else if test (count $args) -ge 1; and test "$args[1]" = "-C"
+    else if test (builtin count $args) -ge 1; and test "$args[1]" = "-C"
         set -a translated -C
-        if test (count $args) -ge 2
+        if test (builtin count $args) -ge 2
             set -a translated "$args[2]" run $args[3..]
         end
-    else if test (count $args) -ge 1; and string match -qr '^-C.+' -- "$args[1]"
+    else if test (builtin count $args) -ge 1; and string match -qr '^-C.+' -- "$args[1]"
         set -a translated "$args[1]" run $args[2..]
     else
         set -a translated run $args
     end
     VP_COMPLETE=fish command vp -- $translated $current
 end
-complete -c vpr --keep-order --exclusive --arguments "(__vpr_complete)"
+builtin complete -c vpr --keep-order --exclusive --arguments "(__vpr_complete)"
 ```
 
 ## `vpt print-file home/env.nu`
@@ -172,39 +208,39 @@ Nushell wrapper and vpr completion keep global -C before env use/run
 
 ```
 # Vite+ environment setup (https://viteplus.dev)
-$env.VP_HOME = ("<workspace>/home" | path expand --no-symlink)
-$env.PATH = ($env.PATH | where { $in != "<workspace>/home/bin" and $in != "<workspace>/home/fallback-bin" } | prepend "<workspace>/home/bin" | append "<workspace>/home/fallback-bin")
+$env.VP_HOME = ("<workspace>/home" | %path expand --no-symlink)
+$env.PATH = ($env.PATH | where { $in != "<workspace>/home/bin" and $in != "<workspace>/home/fallback-bin" } | %prepend "<workspace>/home/bin" | %append "<workspace>/home/fallback-bin")
 
 # Shell function wrapper: intercepts `vp env use` to parse its stdout,
 # which sets/unsets VP_NODE_VERSION in the current shell session.
 def --env --wrapped vp [...args: string@"nu-complete vp"] {
-    let command_args = if ($args | length) >= 2 and $args.0 == "-C" {
-        $args | skip 2
-    } else if ($args | length) >= 1 and ($args.0 | str starts-with "-C") and $args.0 != "-C" {
-        $args | skip 1
+    let command_args = if ($args | %length) >= 2 and $args.0 == "-C" {
+        $args | %skip 2
+    } else if ($args | %length) >= 1 and ($args.0 | %str starts-with "-C") and $args.0 != "-C" {
+        $args | %skip 1
     } else {
         $args
     }
-    if ($command_args | length) >= 2 and $command_args.0 == "env" and $command_args.1 == "use" {
+    if ($command_args | %length) >= 2 and $command_args.0 == "env" and $command_args.1 == "use" {
         if ("-h" in $args) or ("--help" in $args) {
             ^vp ...$args
             return
         }
-        let out = (with-env { VP_ENV_USE_EVAL_ENABLE: "1", VP_SHELL: "nu" } {
+        let out = (%with-env { VP_ENV_USE_EVAL_ENABLE: "1", VP_SHELL: "nu" } {
             ^vp ...$args
         })
-        let lines = ($out | lines)
-        let exports = ($lines | where { $in =~ '^\$env\.' } | parse '$env.{key} = "{value}"')
-        let export_keys = ($exports | get key? | default [])
+        let lines = ($out | %lines)
+        let exports = ($lines | where { $in =~ '^\$env\.' } | %parse '$env.{key} = "{value}"')
+        let export_keys = ($exports | %get key? | %default [])
         # Exclude keys that also appear in exports: when vp emits `hide-env X` then
         # `$env.X = "v"` (e.g. `vp env use` with no args resolving from .node-version),
         # the set should win.
-        let unsets = ($lines | where { $in =~ '^hide-env ' } | parse 'hide-env {key}' | get key? | default [] | where { $in not-in $export_keys })
-        if ($exports | is-not-empty) {
-            load-env ($exports | reduce -f {} {|it, acc| $acc | insert $it.key $it.value})
+        let unsets = ($lines | where { $in =~ '^hide-env ' } | %parse 'hide-env {key}' | %get key? | %default [] | where { $in not-in $export_keys })
+        if ($exports | %is-not-empty) {
+            %load-env ($exports | %reduce -f {} {|it, acc| $acc | %insert $it.key $it.value})
         }
         for key in $unsets {
-            if ($key in $env) { hide-env $key }
+            if ($key in $env) { %hide-env $key }
         }
     } else {
         ^vp ...$args
@@ -212,44 +248,53 @@ def --env --wrapped vp [...args: string@"nu-complete vp"] {
 }
 
 # Shell completion for nushell (delegates to fish completions dynamically)
-def "nu-complete vp" [context: string] {
-    let fish_cmd = $"VP_COMPLETE=fish command vp | source; complete '--do-complete=($context)'"
-    fish --command $fish_cmd | from tsv --flexible --noheaders --no-infer | rename value description | update value {|row|
+# Nushell 0.116+ binds `buffer` and `place` by name: `buffer` is the whole line up to the cursor,
+# and `place.command` is the words of the current command up to the cursor. Older releases pass
+# the current command in `buffer` and the cursor position in `place`. See "Unified custom
+# completions" in https://www.nushell.sh/blog/2026-09-26-nushell_v0_116_0.html#unified-custom-completions
+# `place` is `any` because it is an int or a record. `oneof<int, record>` needs Nushell 0.105+,
+# and every Nushell release must parse the legacy env.nu.
+def "nu-complete vp current-command" [buffer: string, place: any] {
+    if (($place | %describe) starts-with "record") { $place.command | %str join ' ' } else { $buffer }
+}
+# Fish gets the command as an argument, so quotes in it cannot end a fish string.
+# Without fish, return null so Nushell falls back to file completion. Nushell 0.116+ shows no
+# suggestions when a parameter completer fails (#3272).
+def "nu-complete vp fish" [command: string] {
+    if (%which fish | %is-empty) { return null }
+    let fish_script = 'VP_COMPLETE=fish command vp | source; complete --do-complete=$argv[1]'
+    ^fish --command $fish_script $command | %from tsv --flexible --noheaders --no-infer | %rename value description | %update value {|row|
         let value = $row.value
-        let need_quote = ['\' ',' '[' ']' '(' ')' ' ' '\t' "'" '"' "`"] | any {$in in $value}
-        if ($need_quote and ($value | path exists)) {
-            let expanded_path = if ($value starts-with ~) {$value | path expand --no-symlink} else {$value}
-            $'"($expanded_path | str replace --all "\"" "\\\"")"'
+        let need_quote = ['\' ',' '[' ']' '(' ')' ' ' '\t' "'" '"' "`"] | %any {$in in $value}
+        if ($need_quote and ($value | %path exists)) {
+            let expanded_path = if ($value starts-with ~) {$value | %path expand --no-symlink} else {$value}
+            $'"($expanded_path | %str replace --all "\"" "\\\"")"'
         } else {$value}
     }
 }
+def "nu-complete vp" [buffer: string, place: any] {
+    nu-complete vp fish (nu-complete vp current-command $buffer $place)
+}
 # Completion logic for vpr (translates context to 'vp run ...')
-def "nu-complete vpr" [context: string] {
+def "nu-complete vpr" [buffer: string, place: any] {
+    let context = nu-complete vp current-command $buffer $place
     let modified_context = if ($context =~ '^vpr(?<cwd>\s+-C\s+(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s') {
-        $context | str replace -r '^vpr(?<cwd>\s+-C\s+(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s' 'vp$cwd run '
+        $context | %str replace -r '^vpr(?<cwd>\s+-C\s+(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s' 'vp$cwd run '
     } else if ($context =~ '^vpr(?<cwd>\s+-C=?(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s') {
-        $context | str replace -r '^vpr(?<cwd>\s+-C=?(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s' 'vp$cwd run '
+        $context | %str replace -r '^vpr(?<cwd>\s+-C=?(?:"[^"]*"|\x27[^\x27]*\x27|\S+))\s' 'vp$cwd run '
     } else if ($context =~ '^vpr\s+-C') {
-        $context | str replace -r '^vpr' 'vp'
+        $context | %str replace -r '^vpr' 'vp'
     } else {
-        $context | str replace -r '^vpr' 'vp run'
+        $context | %str replace -r '^vpr' 'vp run'
     }
-    let fish_cmd = $"VP_COMPLETE=fish command vp | source; complete '--do-complete=($modified_context)'"
-    fish --command $fish_cmd | from tsv --flexible --noheaders --no-infer | rename value description | update value {|row|
-        let value = $row.value
-        let need_quote = ['\' ',' '[' ']' '(' ')' ' ' '\t' "'" '"' "`"] | any {$in in $value}
-        if ($need_quote and ($value | path exists)) {
-            let expanded_path = if ($value starts-with ~) {$value | path expand --no-symlink} else {$value}
-            $'"($expanded_path | str replace --all "\"" "\\\"")"'
-        } else {$value}
-    }
+    nu-complete vp fish $modified_context
 }
 export extern "vpr" [...args: string@"nu-complete vpr"]
 ```
 
 ## `vpt print-file home/env.ps1`
 
-PowerShell wrapper and vpr completion keep global -C before env use/run
+PowerShell activation aliases the wrapper and keeps global -C in vpr completion
 
 ```
 # Vite+ environment setup (https://viteplus.dev)
@@ -262,48 +307,9 @@ $env:PATH = @(
     $__vp_fallback
 ) -join [IO.Path]::PathSeparator
 
-# Shell function wrapper: intercepts `vp env use` to eval its stdout,
-# which sets/unsets VP_NODE_VERSION in the current shell session.
-function vp {
-    $__vp_command_index = 0
-    if ($args.Count -ge 1) {
-        if ($args[0] -eq "-C") {
-            $__vp_command_index = 2
-        } elseif ("$($args[0])" -like "-C?*") {
-            $__vp_command_index = 1
-        }
-    }
-    if ($args.Count -ge ($__vp_command_index + 2) -and $args[$__vp_command_index] -eq "env" -and $args[$__vp_command_index + 1] -eq "use") {
-        if ($args -contains "-h" -or $args -contains "--help") {
-            & (Join-Path $__vp_bin "vp") @args; return
-        }
-        $previousEvalEnable = $env:VP_ENV_USE_EVAL_ENABLE
-        $previousShell = $env:VP_SHELL
-        $previousErrorActionPreference = $ErrorActionPreference
-        try {
-            $env:VP_ENV_USE_EVAL_ENABLE = "1"
-            $env:VP_SHELL = "pwsh"
-            # Windows PowerShell 5.1 treats native stderr as an error when redirected.
-            $ErrorActionPreference = "Continue"
-            $output = & (Join-Path $__vp_bin "vp") @args 2>&1 | ForEach-Object {
-                if ($_ -is [System.Management.Automation.ErrorRecord]) {
-                    Write-Host $_.Exception.Message
-                } else {
-                    $_
-                }
-            }
-        } finally {
-            $ErrorActionPreference = $previousErrorActionPreference
-            $env:VP_ENV_USE_EVAL_ENABLE = $previousEvalEnable
-            $env:VP_SHELL = $previousShell
-        }
-        if ($LASTEXITCODE -eq 0 -and $output) {
-            Invoke-Expression ($output -join "`n")
-        }
-    } else {
-        & (Join-Path $__vp_bin "vp") @args
-    }
-}
+# A script can propagate native failure through both $? and $LASTEXITCODE.
+# A plain function returns $? = $true even when its native command fails.
+Set-Alias vp (Join-Path $PSScriptRoot "vp.ps1")
 
 # Dynamic shell completion for PowerShell
 $env:VP_COMPLETE = "powershell"
@@ -338,4 +344,97 @@ $__vpr_comp = {
     }
 }
 Register-ArgumentCompleter -Native -CommandName vpr -ScriptBlock $__vpr_comp
+```
+
+## `vpt print-file home/vp.ps1`
+
+PowerShell wrapper keeps global -C before env use and propagates the native exit code
+
+```
+# Vite+ PowerShell wrapper (https://viteplus.dev)
+$__vp_bin = '<workspace>/home/bin'
+# PowerShell consumes the first bare -- when calling a script. Recover its
+# position from the caller's AST, without evaluating argument expressions again.
+# The call stack also works on Windows PowerShell 5.1, which has no Statement.
+$__vp_stack = @(Get-PSCallStack)
+$__vp_command = $null
+if ($__vp_stack.Count -gt 1) {
+    $__vp_ast = $__vp_stack[1].InvocationInfo.MyCommand.ScriptBlock.Ast
+    $__vp_line = $MyInvocation.ScriptLineNumber
+    $__vp_column = $MyInvocation.OffsetInLine
+    if ($__vp_ast) {
+        $__vp_command = $__vp_ast.Find({ param($node)
+            $node -is [System.Management.Automation.Language.CommandAst] -and
+            $node.Extent.StartLineNumber -eq $__vp_line -and $node.Extent.StartColumnNumber -eq $__vp_column
+        }, $true)
+    }
+}
+if ($__vp_command) {
+    $__vp_index = 0
+    $__vp_elements = $__vp_command.CommandElements
+    for ($__vp_i = 1; $__vp_i -lt $__vp_elements.Count; $__vp_i++) {
+        $__vp_element = $__vp_elements[$__vp_i]
+        # A preceding splat has an unknown length. Leave $args unchanged rather
+        # than reading caller variables, which may have changed or belong to another scope.
+        if ($__vp_element -is [System.Management.Automation.Language.VariableExpressionAst] -and $__vp_element.Splatted) {
+            break
+        }
+        # Only a parameter AST can be consumed. After --%, the separator is literal.
+        if ($__vp_element -is [System.Management.Automation.Language.CommandParameterAst] -and $__vp_element.Extent.Text -ceq '--') {
+            if ($__vp_index -le $args.Count) {
+                $__vp_arguments = [System.Collections.Generic.List[object]]::new()
+                $__vp_arguments.AddRange($args)
+                $__vp_arguments.Insert($__vp_index, '--')
+                $args = $__vp_arguments.ToArray()
+            }
+            break
+        }
+        $__vp_index++
+        if ($__vp_element -is [System.Management.Automation.Language.CommandParameterAst] -and $__vp_element.Argument) {
+            $__vp_index++
+        }
+    }
+}
+$__vp_command_index = 0
+if ($args.Count -ge 1) {
+    if ($args[0] -eq "-C") {
+        $__vp_command_index = 2
+    } elseif ("$($args[0])" -like "-C?*") {
+        $__vp_command_index = 1
+    }
+}
+# Intercept `vp env use` to set/unset VP_NODE_VERSION in the current session.
+if ($args.Count -ge ($__vp_command_index + 2) -and $args[$__vp_command_index] -eq "env" -and $args[$__vp_command_index + 1] -eq "use") {
+    if ($args -contains "-h" -or $args -contains "--help") {
+        & (Join-Path $__vp_bin "vp") @args
+        exit $LASTEXITCODE
+    }
+    $previousEvalEnable = $env:VP_ENV_USE_EVAL_ENABLE
+    $previousShell = $env:VP_SHELL
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $env:VP_ENV_USE_EVAL_ENABLE = "1"
+        $env:VP_SHELL = "pwsh"
+        # Windows PowerShell 5.1 treats native stderr as an error when redirected.
+        $ErrorActionPreference = "Continue"
+        $output = & (Join-Path $__vp_bin "vp") @args 2>&1 | ForEach-Object {
+            if ($_ -is [System.Management.Automation.ErrorRecord]) {
+                Write-Host $_.Exception.Message
+            } else {
+                $_
+            }
+        }
+    } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+        $env:VP_ENV_USE_EVAL_ENABLE = $previousEvalEnable
+        $env:VP_SHELL = $previousShell
+    }
+    if ($LASTEXITCODE -eq 0 -and $output) {
+        Invoke-Expression ($output -join "`n")
+    }
+} else {
+    & (Join-Path $__vp_bin "vp") @args
+}
+# Exits only this script, preserving the caller's session and native exit code.
+exit $LASTEXITCODE
 ```

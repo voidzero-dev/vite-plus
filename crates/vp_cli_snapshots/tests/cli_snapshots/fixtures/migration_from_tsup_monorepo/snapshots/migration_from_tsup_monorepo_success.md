@@ -7,14 +7,14 @@ the real tsdown-migrate package should migrate all workspace-only tsup configs
 ```
 VITE+ - The Unified Toolchain for the Web
 
-tsup configuration detected. Auto-migrating to tsdown...
+● tsup configuration detected. Auto-migrating to tsdown...
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
 • 5 config updates applied, 2 files had imports rewritten
 • tsup config migrated to tsdown (`vp pack`)
 → Manual follow-up:
-  - Please manually merge packages/b/tsdown.config.ts into packages/b/vite.config.ts, see https://viteplus.dev/guide/migrate#tsdown
   - Please manually merge packages/a/tsdown.config.ts into packages/a/vite.config.ts, see https://viteplus.dev/guide/migrate#tsdown
+  - Please manually merge packages/b/tsdown.config.ts into packages/b/vite.config.ts, see https://viteplus.dev/guide/migrate#tsdown
 ```
 
 ## `vpt stat-file packages/a/tsup.config.ts --assert-not file`

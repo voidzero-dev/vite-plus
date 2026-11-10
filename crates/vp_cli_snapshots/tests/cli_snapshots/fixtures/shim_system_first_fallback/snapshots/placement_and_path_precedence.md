@@ -52,6 +52,14 @@ Internal Node resolution agrees with PATH.
 env which selects the same Node as PATH
 ```
 
+## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} vp node -p process.execPath.includes('system-bin')`
+
+vp node (env exec node) selects system Node like the shell.
+
+```
+true
+```
+
 ## `vp env off pnpm`
 
 ```
@@ -99,6 +107,14 @@ Internal resolution must also stop at the first Vite+ shim.
 
 ```
 env which selects the same Node as PATH
+```
+
+## `PATH=${VP_HOME}/fallback-bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} vp node -p process.execPath.includes('system-bin')`
+
+vp node also stops at the first Vite+ shim.
+
+```
+false
 ```
 
 ## `vp env on node`

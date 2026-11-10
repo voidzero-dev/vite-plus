@@ -83,12 +83,18 @@ pub enum SynthesizableSubcommand {
     },
     /// Run format, lint, and type checks
     Check {
+        /// Run remaining checks even if an earlier check fails
+        #[arg(long)]
+        continue_on_error: bool,
         /// Auto-fix format and lint issues
         #[arg(long)]
         fix: bool,
         /// Disable reporting on warnings, only errors are reported
         #[arg(long)]
         quiet: bool,
+        /// Treat lint warnings as errors
+        #[arg(long = "deny-warnings")]
+        deny_warnings: bool,
         /// Skip format check
         #[arg(long = "no-fmt")]
         no_fmt: bool,
@@ -115,7 +121,7 @@ pub struct ToolchainArgs {
     pub json: bool,
 
     /// Use the global Vite+ toolchain
-    #[arg(long)]
+    #[arg(short = 'g', long)]
     pub global: bool,
 }
 
@@ -171,6 +177,9 @@ pub struct CliOptions {
     pub toolchain_manifest_path: String,
     pub vite_plus_package_path: String,
     pub resolve_universal_vite_config: ViteConfigResolverFn,
+    /// Host Node.js version (`process.version`), used for the package-manager
+    /// lifecycle env user agent.
+    pub node_version: Option<String>,
 }
 
 /// A resolved subcommand ready for execution.

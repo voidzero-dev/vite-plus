@@ -1,0 +1,10 @@
+packages:
+  - apps/*
+  - packages/*
+
+catalog:
+  vite: npm:@voidzero-dev/vite-plus-core@1.0.0
+  vite-plus: 1.0.0
+
+overrides:
+  vite@*: "catalog:"
