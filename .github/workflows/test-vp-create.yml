@@ -374,8 +374,9 @@ jobs:
           PACKAGE_MANAGER: ${{ matrix.package-manager }}
         run: |
           # Issue 1: packages/utils inherits `vite-plus: ^x.y.z` from the
-          # library template. In catalog-supporting monorepos (pnpm/yarn/bun)
-          # the migrator must normalize it so siblings don't drift.
+          # library template. The migrator must normalize it so siblings don't
+          # drift: to `catalog:` with catalogs, and to the concrete version
+          # without them (npm).
           # Issue 2: apps/website is scaffolded by create-vite which ships
           # `vite` (and sometimes `vitest`) in devDependencies. After
           # migration the scripts are rewritten to `vp ...` and `vite-plus`
@@ -425,7 +426,7 @@ jobs:
               process.exit(1);
             }
 
-            if (pm !== 'npm' && appDev['vite-plus'] !== utilsDev['vite-plus']) {
+            if (appDev['vite-plus'] !== utilsDev['vite-plus']) {
               console.error('✗ vite-plus spec drift: apps/website=' + appDev['vite-plus'] + ' packages/utils=' + utilsDev['vite-plus']);
               process.exit(1);
             }
