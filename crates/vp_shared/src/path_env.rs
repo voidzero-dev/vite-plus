@@ -3,7 +3,13 @@
 //! This module provides functions for prepending directories to the PATH
 //! environment variable with various deduplication strategies.
 
-use std::{collections::BTreeSet, env, ffi::OsString, io, path::Path};
+use std::{
+    collections::BTreeSet,
+    env,
+    ffi::{OsStr, OsString},
+    io,
+    path::Path,
+};
 
 use vt_path::AbsolutePath;
 
@@ -72,6 +78,11 @@ impl ToolPathEnv {
 
     pub fn contains(&self, tool: &str) -> bool {
         self.tools.contains(tool)
+    }
+
+    /// The PATH that a child process receives.
+    pub fn path(&self) -> &OsStr {
+        &self.path
     }
 
     /// Only pass tools supplied by this directory, never the names of vp shims.
