@@ -354,7 +354,7 @@ Task Details:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
-When a task misses the cache, the summary lists every change that caused the miss. Use `-vv` (or `--verbose --verbose`) to also list what each cached run depends on, under `Unchanged:`, and the files a cache hit restores, under `Outputs:`. This helps when a run hits the cache and you expected a miss: it shows whether the file you edited is an input at all.
+When a task misses the cache, the summary lists every change that caused the miss. Use `-vv` (or `--verbose --verbose`) to also list each cached run's unchanged inputs, under `Unchanged:`, and the files a cache hit restores, under `Outputs:`. This helps when a run hits the cache and you expected a miss: it shows whether the file you edited is an input at all.
 
 Use `--last-details` to show the summary from the last run without running tasks again:
 
@@ -370,17 +370,15 @@ vp run --last-details
 vp run --dry-run -r build
 ```
 
-`--json` prints JSON instead of text, for scripts and CI:
+`--json` prints JSON instead of text, for scripts and agents:
 
-- `vp run --json` prints every package and task in the workspace, with each task's `dependsOn` resolved, and runs nothing. See the [task graph schema](https://github.com/voidzero-dev/vite-task/blob/cb1ea8d214b26a0f3ca2b2ef3b6bc471b18ffacb/crates/vt/schemas/task-graph.json).
-- `vp run --dry-run --json build` prints the plan for a run: each task it would run, the tasks each one waits for, each step's command, and whether each step would hit the cache. See the [run plan schema](https://github.com/voidzero-dev/vite-task/blob/cb1ea8d214b26a0f3ca2b2ef3b6bc471b18ffacb/crates/vt/schemas/run-plan.json).
+- `vp run --json`, with no task or other flags, prints every package and task in the workspace, with each task's `dependsOn` resolved, and runs nothing. See the [task graph schema](https://github.com/voidzero-dev/vite-task/blob/cb1ea8d214b26a0f3ca2b2ef3b6bc471b18ffacb/crates/vt/schemas/task-graph.json).
+- `vp run --dry-run --json build` prints the plan for a run: each task it would run, the tasks each one waits for, each step's command, and whether each step would hit the cache. With a task, `--json` only works together with `--dry-run`. See the [run plan schema](https://github.com/voidzero-dev/vite-task/blob/cb1ea8d214b26a0f3ca2b2ef3b6bc471b18ffacb/crates/vt/schemas/run-plan.json).
 
 The flags combine like this:
 
-- `-v` with `--dry-run` shows why each command would miss the cache.
-- `-vv` with `--dry-run --json` adds each step's `baseline.fingerprint` and `baseline.outputs`: what its cached run depends on, and the outputs a hit would restore.
-- `--json` with a task requires `--dry-run`. Without a task, `vp run --json` takes no other flags.
-- `--last-details` can't be combined with other flags.
+- Each `--dry-run` command line shows the first change it finds behind a miss. Add `-v` to list every change in the summary.
+- `-vv` with `--dry-run --json` adds each step's `baseline.fingerprint` and `baseline.outputs`: the inputs its cached run recorded, and the outputs a hit would restore.
 
 Put these flags before the task name. Anything after the task name is passed to the task.
 
