@@ -1,4 +1,9 @@
-import { describe, expect, test } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
+import { describe, expect, onTestFinished, test } from 'vitest';
 
 import {
   assertCoreVersionMatchesVite,
@@ -6,6 +11,7 @@ import {
   decodeCoreVersion,
   encodeCoreVersion,
   initialCoreVersion,
+  localCoreVersion,
   nextCoreVersion,
   usedVersionNumbers,
 } from '../core-version.ts';
@@ -250,5 +256,66 @@ describe('usedVersionNumbers', () => {
 
   test('returns no versions for an unpublished package name', () => {
     expect(usedVersionNumbers({})).toEqual([]);
+  });
+});
+
+describe('localCoreVersion', () => {
+  test('reserves counter 999 on a stable and a prerelease Vite', () => {
+    expect(localCoreVersion('8.3.7')).toBe('8.3.7999');
+    expect(localCoreVersion('9.0.0-beta.3')).toBe('9.0.0-beta.3.vp.999');
+    expect(decodeCoreVersion(localCoreVersion('9.0.0-beta.3'))).toEqual({
+      vite: '9.0.0-beta.3',
+      k: 999,
+    });
+  });
+
+  test('is never selected or accepted for a release', () => {
+    expect(
+      nextCoreVersion({
+        vite: '9.0.0-beta.3',
+        vitePlus: '2.0.0-beta.1',
+        published: ['9.0.0-beta.3.vp.0', localCoreVersion('9.0.0-beta.3')],
+      }),
+    ).toBe('9.0.0-beta.3.vp.1');
+    expect(() =>
+      assertCoreVersionMatchesVite(
+        manifest('9.0.0-beta.3.vp.999', '9.0.0-beta.3', '2.0.0-beta.1'),
+        '2.0.0-beta.1',
+        { release: true },
+      ),
+    ).toThrow('reserved for local builds');
+  });
+});
+
+// The CI workflows run `node ../tools/src/core-version.ts local` from
+// packages/core before the build. Run the script the same way in a copy of
+// that layout with the given bundled Vite version.
+function runLocal(vite: string): string {
+  const root = mkdtempSync(path.join(tmpdir(), 'vp-core-version-local-'));
+  onTestFinished(() => rmSync(root, { recursive: true, force: true }));
+  const toolsDir = path.join(root, 'packages/tools/src');
+  const coreDir = path.join(root, 'packages/core');
+  mkdirSync(toolsDir, { recursive: true });
+  mkdirSync(coreDir, { recursive: true });
+  copyFileSync(
+    path.join(import.meta.dirname, '../core-version.ts'),
+    path.join(toolsDir, 'core-version.ts'),
+  );
+  writeFileSync(
+    path.join(coreDir, 'package.json'),
+    JSON.stringify({ version: initialCoreVersion(vite), bundledVersions: { vite } }),
+  );
+  return execFileSync(process.execPath, ['../tools/src/core-version.ts', 'local'], {
+    cwd: coreDir,
+    encoding: 'utf8',
+  }).trim();
+}
+
+describe('core-version.ts local', () => {
+  test.each([
+    ['8.3.7', '8.3.7999'],
+    ['9.0.0-beta.3', '9.0.0-beta.3.vp.999'],
+  ])('prints the local version for Vite %s', (vite, expected) => {
+    expect(runLocal(vite)).toBe(expected);
   });
 });

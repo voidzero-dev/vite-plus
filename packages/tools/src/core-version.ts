@@ -9,9 +9,11 @@
  *   Vite+ prerelease, stable Vite: <next stable core version>-vp.<k>
  *   Vite+ prerelease, Vite pre:    <vite version>.vp.<k>
  *
- * `n` counts the stable Vite+ releases on one Vite version (0 to 998). `n = 999`
+ * `n` counts the stable Vite+ releases on one Vite version (0 to 998). `k`
+ * counts the Vite+ prereleases on one base (0 to 998). The counter value 999
  * is reserved for local and CI builds, so they never collide with a published
- * version. `k` counts the Vite+ prereleases on one base.
+ * version: `<vite patch * 1000 + 999>` on a stable Vite, `<vite version>.vp.999`
+ * on a Vite prerelease.
  *
  * A release records its `vite-plus` version in the core manifest
  * (`vitePlusVersion`). The release check uses it to tell a retry of the same
@@ -121,12 +123,29 @@ export function tryDecodeCoreVersion(core: string): DecodedCoreVersion | undefin
   }
 }
 
-function nextCounter(values: Iterable<number>): number {
+// Returns the next release counter. The local build counter is ignored, and a
+// counter above the release maximum fails.
+function nextCounter(values: Iterable<number>, what: string): number {
   let next = 0;
   for (const value of values) {
-    next = Math.max(next, value + 1);
+    if (value <= MAX_RELEASE_COUNTER) {
+      next = Math.max(next, value + 1);
+    }
+  }
+  if (next > MAX_RELEASE_COUNTER) {
+    throw new Error(`${what} already has ${MAX_RELEASE_COUNTER + 1} core releases, the maximum`);
   }
   return next;
+}
+
+/**
+ * Returns the reserved core version for a local or CI build: counter 999 on a
+ * stable Vite, `<vite>.vp.999` on a Vite prerelease. Releases never use it.
+ */
+export function localCoreVersion(vite: string): string {
+  return isPrereleaseVersion(vite)
+    ? `${vite}.${PRERELEASE_TAG}.${LOCAL_BUILD_COUNTER}`
+    : encodeCoreVersion(vite, LOCAL_BUILD_COUNTER);
 }
 
 /**
@@ -159,25 +178,17 @@ export function nextCoreVersion({
     }
     const k = nextCounter(
       decoded.flatMap((entry) => (entry.vite === vite && entry.k !== undefined ? [entry.k] : [])),
+      `Vite ${vite}`,
     );
     return `${vite}.${PRERELEASE_TAG}.${k}`;
   }
 
   const n = nextCounter(
     decoded.flatMap((entry) =>
-      entry.vite === vite &&
-      entry.k === undefined &&
-      entry.n !== undefined &&
-      entry.n <= MAX_RELEASE_COUNTER
-        ? [entry.n]
-        : [],
+      entry.vite === vite && entry.k === undefined && entry.n !== undefined ? [entry.n] : [],
     ),
+    `Vite ${vite}`,
   );
-  if (n > MAX_RELEASE_COUNTER) {
-    throw new Error(
-      `Vite ${vite} already has ${MAX_RELEASE_COUNTER + 1} core releases, the maximum`,
-    );
-  }
   const base = encodeCoreVersion(vite, n);
   if (!isVitePlusPrerelease) {
     return base;
@@ -186,6 +197,7 @@ export function nextCoreVersion({
     decoded.flatMap((entry) =>
       entry.vite === vite && entry.n === n && entry.k !== undefined ? [entry.k] : [],
     ),
+    `Core ${base}`,
   );
   return `${base}-${PRERELEASE_TAG}.${k}`;
 }
@@ -230,7 +242,7 @@ export function assertCoreVersionMatchesVite(
       `${CORE_PACKAGE_NAME}@${pkg.version} and vite-plus@${vitePlus} must both be prereleases or both be stable`,
     );
   }
-  if (decoded.n === LOCAL_BUILD_COUNTER) {
+  if (decoded.n === LOCAL_BUILD_COUNTER || decoded.k === LOCAL_BUILD_COUNTER) {
     throw new Error(
       `${CORE_PACKAGE_NAME}@${pkg.version} uses the counter ${LOCAL_BUILD_COUNTER}, which is reserved for local builds`,
     );
@@ -351,7 +363,7 @@ async function main(argv: string[]): Promise<void> {
       break;
     }
     case 'local':
-      console.log(encodeCoreVersion(vite, LOCAL_BUILD_COUNTER));
+      console.log(localCoreVersion(vite));
       break;
     case 'check': {
       const cli = readManifest(new URL('../../cli/package.json', import.meta.url));

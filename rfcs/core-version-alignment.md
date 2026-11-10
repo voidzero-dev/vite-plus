@@ -21,8 +21,8 @@ Vite+ prerelease, Vite pre:    <vite version>.vp.<k>
 ```
 
 `n` counts the stable Vite+ releases that bundle the same Vite patch, from 0
-to 998. `n = 999` is reserved for local and CI builds. `k` counts the Vite+
-prereleases on the same base, from 0. Decoding is exact: the bundled Vite
+to 998. `k` counts the Vite+ prereleases on the same base, from 0 to 998. The
+counter value 999 is reserved for local and CI builds in both forms. Decoding is exact: the bundled Vite
 patch is `floor(core patch / 1000)`.
 
 This is the convention of `oxlint-tsgolint`, which Vite+ bundles. Its first
@@ -31,18 +31,19 @@ release on TypeScript `7.0.2` is `7.0.2000`, and the next ones are `7.0.2001`,
 ([tsgolint versioning](https://github.com/oxc-project/tsgolint#versioning)).
 One rule then applies to the versions that `vp --version` shows.
 
-| Vite+ release     | Bundled Vite   | Core version        |
-| ----------------- | -------------- | ------------------- |
-| `1.5.0` (first)   | `8.3.5`        | `8.3.5000`          |
-| `1.5.1`           | `8.3.5`        | `8.3.5001`          |
-| `1.6.0`           | `8.3.6`        | `8.3.6000`          |
-| `1.7.0-rc.0`      | `8.4.0`        | `8.4.0-vp.0`        |
-| `1.7.0-rc.1`      | `8.4.0`        | `8.4.0-vp.1`        |
-| `1.7.0`           | `8.4.0`        | `8.4.0`             |
-| `1.7.1`           | `8.4.1`        | `8.4.1000`          |
-| `2.0.0-beta.0`    | `9.0.0-beta.3` | `9.0.0-beta.3.vp.0` |
-| `2.0.0-beta.1`    | `9.0.0-beta.3` | `9.0.0-beta.3.vp.1` |
-| Local or CI build | `8.3.5`        | `8.3.5999`          |
+| Vite+ release     | Bundled Vite   | Core version          |
+| ----------------- | -------------- | --------------------- |
+| `1.5.0` (first)   | `8.3.5`        | `8.3.5000`            |
+| `1.5.1`           | `8.3.5`        | `8.3.5001`            |
+| `1.6.0`           | `8.3.6`        | `8.3.6000`            |
+| `1.7.0-rc.0`      | `8.4.0`        | `8.4.0-vp.0`          |
+| `1.7.0-rc.1`      | `8.4.0`        | `8.4.0-vp.1`          |
+| `1.7.0`           | `8.4.0`        | `8.4.0`               |
+| `1.7.1`           | `8.4.1`        | `8.4.1000`            |
+| `2.0.0-beta.0`    | `9.0.0-beta.3` | `9.0.0-beta.3.vp.0`   |
+| `2.0.0-beta.1`    | `9.0.0-beta.3` | `9.0.0-beta.3.vp.1`   |
+| Local or CI build | `8.3.5`        | `8.3.5999`            |
+| Local or CI build | `9.0.0-beta.3` | `9.0.0-beta.3.vp.999` |
 
 `vite-plus` keeps its own version line (`1.x` today). The CLI keeps its exact
 alias dependency `vite: npm:@voidzero-dev/vite-plus-core@<core version>`.
@@ -198,7 +199,8 @@ are rare in `vite` peer ranges. Vite+ follows Vite patch releases within days,
 so the window for the first case is short.
 
 The counter supports 999 stable Vite+ releases per Vite patch (`n` from 0 to
-998). `n = 999` is reserved for local and CI builds (see Local and CI builds).
+998), and 999 Vite+ prereleases per base (`k` from 0 to 998). The value 999 is
+reserved for local and CI builds (see Local and CI builds).
 Vite+ shipped five minor releases between 2026-09-28 and 2026-10-23 while Vite
 moved from `8.3.1` to `8.3.5`. Two releases on one Vite patch happened once
 (`v1.2.0` and `v1.3.0` on `8.3.4`).
@@ -343,7 +345,7 @@ functions and a CLI entry:
   below.
 - `assertCoreVersionMatchesVite(pkg, vitePlus, { release })` asserts that
   `pkg.version` decodes to `pkg.bundledVersions.vite`. With `release`, it also
-  asserts the prerelease pairing, rejects `n = 999`, and requires
+  asserts the prerelease pairing, rejects `n = 999` and `k = 999`, and requires
   `pkg.vitePlusVersion` to equal the released `vite-plus` version.
 - `assertCoreVersionUnclaimed(published, core, vitePlus)` rejects a core
   version that the registry already holds for a different `vite-plus`
@@ -417,8 +419,9 @@ local build is easy to detect. Core `0.0.0` does not encode a Vite version,
 and peer checks fail against it. These flows would not test the path without a
 `vite` peer rule that users get.
 
-These flows will set core to `encodeCoreVersion(vite, 999)`, for example
-`8.3.5999` for Vite `8.3.5`. They keep `0.0.0` for the CLI, which
+These flows will set core to the output of `core-version.ts local`: counter
+999 on a stable Vite (`8.3.5999` for Vite `8.3.5`), and `<vite>.vp.999` on a
+Vite prerelease (`9.0.0-beta.3.vp.999` for Vite `9.0.0-beta.3`). They keep `0.0.0` for the CLI, which
 `ecosystem-ci/verify-install.ts` and `test-vp-create.yml` assert. They set the
 core version before the build, so the CLI build, its toolchain manifest, and
 the packed `vite` alias all read it from `packages/core/package.json`. The
@@ -427,7 +430,8 @@ native build cache key does not include that file. `vp create` and
 peer rule. No environment variable overrides the core version: the core
 manifest is the only source.
 
-`nextCoreVersion` never returns `n = 999`, and `release.yml` rejects it.
+`nextCoreVersion` never returns `n = 999` or `k = 999`, and `release.yml`
+rejects both.
 Thus a local version never reaches the registry, and the local registry
 cannot mix it up with a published version.
 

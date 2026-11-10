@@ -416,9 +416,10 @@ The core version encodes `bundledVersions.vite`, so it differs from the `vite-pl
 | Stable `vite-plus`                      | `<vite major>.<vite minor>.<vite patch * 1000 + n>` | Vite `8.3.5`, `n = 1`: `8.3.5001` |
 | `vite-plus` prerelease, stable Vite     | `<next stable core version>-vp.<k>`                 | `8.4.0-vp.0`                      |
 | `vite-plus` prerelease, Vite prerelease | `<vite version>.vp.<k>`                             | `9.0.0-beta.3.vp.0`               |
-| Local and CI builds                     | `n = 999`                                           | `8.3.5999`                        |
+| Local and CI builds, stable Vite        | `n = 999`                                           | `8.3.5999`                        |
+| Local and CI builds, Vite prerelease    | `<vite version>.vp.999`                             | `9.0.0-beta.3.vp.999`             |
 
-`n` counts the stable releases on one Vite version, from 0 to 998. `k` counts the prereleases on one base. This follows the [`oxlint-tsgolint` versioning](https://github.com/oxc-project/tsgolint#versioning), where `7.0.2000` is the first release on TypeScript `7.0.2`. [`packages/tools/src/core-version.ts`](../tools/src/core-version.ts) implements the scheme:
+`n` counts the stable releases on one Vite version, from 0 to 998. `k` counts the prereleases on one base, from 0 to 998. This follows the [`oxlint-tsgolint` versioning](https://github.com/oxc-project/tsgolint#versioning), where `7.0.2000` is the first release on TypeScript `7.0.2`. [`packages/tools/src/core-version.ts`](../tools/src/core-version.ts) implements the scheme:
 
 - `prepare_release.yml` runs `core-version.ts prepare` to select the next unpublished version from the registry. It writes that version and the `vite-plus` version (`vitePlusVersion`) to `package.json`.
 - `release.yml` runs `core-version.ts check --release`. It fails when the registry already holds the core version for a different `vite-plus` release.
