@@ -76,6 +76,17 @@ pub async fn execute(
         let args: Vec<String> = command[1..].to_vec();
         // stdout belongs to the dispatched tool; route vp's own output to stderr.
         vp_shared::output::route_user_output_to_stderr();
+        // Under VP_ENV_FORBIDDEN=1 a core tool comes from PATH here, not from
+        // dispatch: its shim fails without searching PATH, even when a system
+        // tool comes before it. The Node.js it runs on comes from the child PATH.
+        if !from_wrapper
+            && is_core_shim_tool(tool)
+            && let Some(path) = crate::shim::dispatch::resolve_env_forbidden_tool(tool)
+        {
+            let path = path?;
+            crate::shim::dispatch::ensure_env_forbidden_child_node(&env)?;
+            return Ok(exit_status(crate::shim::exec::exec_tool(&path, &args, env)));
+        }
         // Dispatch assumes the shell's PATH lookup already preferred system-first tools, so repeat it here.
         if !from_wrapper
             && is_core_shim_tool(tool)
