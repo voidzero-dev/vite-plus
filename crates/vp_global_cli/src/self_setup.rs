@@ -254,6 +254,11 @@ async fn run(
         return Err(Error::Other("Invalid local installation version".into()));
     }
 
+    // A deployment changes `current`, `.previous-version`, and old versions like
+    // `vp upgrade`. In-place setup is the child of an upgrade that holds the lock.
+    let _install_lock =
+        if deploy { Some(install::lock_install_dir(&dirs.data).await?) } else { None };
+
     // 1. Prepare the payload before activating it. Upgrade has already done this in the in-place case.
     let previous_version = install::read_current_version(&dirs.data).await;
     let version_dir = if let Some(package) = user_package {

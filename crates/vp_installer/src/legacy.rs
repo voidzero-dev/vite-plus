@@ -14,6 +14,8 @@ pub(super) async fn install(
     target_version: &str,
     platform_data: &[u8],
 ) -> Result<(), Box<dyn std::error::Error>> {
+    // Serialize activation with `vp upgrade` and standalone deployment.
+    let install_lock = install::lock_install_dir(&dirs.data).await?;
     let current_version = install::read_current_version(&dirs.data).await;
 
     // Same version only if the binary is intact — a corrupted install needs a full reinstall.
@@ -58,6 +60,7 @@ pub(super) async fn install(
 
         result?;
     }
+    drop(install_lock);
 
     // --- Post-activation setup (always runs, even for same-version repair) ---
     // All steps below are best-effort: the core install succeeded once `current`

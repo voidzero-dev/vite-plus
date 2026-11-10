@@ -58,6 +58,7 @@ Only the newly owned cache is removed; the unmarked parent is preserved
 
 ✓ Vite+ removed its verified files and shell entries from your system.
 note: Some paths were preserved to protect unverified data. Inspect them before removing anything:
+  <home>/Documents/.install.lock
   <home>/Documents/0.0.0-test
   <home>/Documents/bin
   <home>/Documents/config.json
