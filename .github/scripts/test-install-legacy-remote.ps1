@@ -40,6 +40,27 @@ try {
     # setup-vp evaluates downloaded text in a script block, with no sibling legacy file.
     # A child process also keeps installer exit calls from bypassing server cleanup.
     $powershell = (Get-Process -Id $PID).Path
+
+    # A legacy release cannot honor VP_ENV_FORBIDDEN, so the installer must stop before legacy setup.
+    # Restore the workflow's value afterwards; the install below reproduces setup-vp with it.
+    $previousEnvForbidden = $env:VP_ENV_FORBIDDEN
+    $env:VP_ENV_FORBIDDEN = '1'
+    try {
+        # Windows PowerShell 5.1 turns redirected child stderr into errors, which 'Stop' would throw.
+        $ErrorActionPreference = 'Continue'
+        $output = & $powershell -NoProfile -Command '& ([scriptblock]::Create((irm -TimeoutSec 15 $env:VP_TEST_INSTALLER_URL)))' 2>&1 | Out-String
+        $exitCode = $LASTEXITCODE
+        $ErrorActionPreference = 'Stop'
+        if ($exitCode -eq 0) { throw 'The installer accepted VP_ENV_FORBIDDEN for a legacy release' }
+        if (-not $output.Contains('does not support VP_ENV_FORBIDDEN')) { throw "Unexpected VP_ENV_FORBIDDEN failure: $output" }
+    } finally {
+        $ErrorActionPreference = 'Stop'
+        $env:VP_ENV_FORBIDDEN = $previousEnvForbidden
+    }
+    if (Test-Path -LiteralPath (Join-Path $env:VP_HOME 'bin/vp.exe')) { throw 'The VP_ENV_FORBIDDEN attempt installed vp' }
+    $requests = @(Select-String -LiteralPath $stderr -Pattern 'GET /install-legacy.bin ' -SimpleMatch)
+    if ($requests.Count -ne 1) { throw 'The VP_ENV_FORBIDDEN attempt fetched the legacy script' }
+
     & $powershell -NoProfile -Command '& ([scriptblock]::Create((irm -TimeoutSec 15 $env:VP_TEST_INSTALLER_URL)))'
     if ($LASTEXITCODE -ne 0) { throw "Remote install failed with exit code $LASTEXITCODE" }
 

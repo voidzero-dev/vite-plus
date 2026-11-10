@@ -217,6 +217,13 @@ pub struct EnvConfig {
     pub yarn_manager: Option<ManagerPreference>,
     pub bun_manager: Option<ManagerPreference>,
 
+    /// Whether Vite+ manages no Node.js or package manager, enabled only by
+    /// `1`. At run time it takes precedence over `config.json` and every
+    /// `VP_*_MANAGER` variable.
+    ///
+    /// Env: `VP_ENV_FORBIDDEN`
+    pub env_forbidden: bool,
+
     /// User home directory.
     ///
     /// Resolved once from `HOME` or `USERPROFILE` in platform order. See
@@ -283,6 +290,7 @@ impl EnvConfig {
             pnpm_manager: ManagerPreference::from_var(env_vars::VP_PNPM_MANAGER),
             yarn_manager: ManagerPreference::from_var(env_vars::VP_YARN_MANAGER),
             bun_manager: ManagerPreference::from_var(env_vars::VP_BUN_MANAGER),
+            env_forbidden: std::env::var(env_vars::VP_ENV_FORBIDDEN).as_deref() == Ok("1"),
             user_home,
             vp_shell: std::env::var(env_vars::VP_SHELL).ok(),
             nu_version: std::env::var(env_vars::VP_NU_VERSION).ok(),
@@ -464,6 +472,38 @@ impl EnvConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn env_forbidden_requires_exact_one() {
+        for value in [None, Some(""), Some("0"), Some("true"), Some("yes"), Some(" 1"), Some("1")] {
+            EnvConfig::with_vars([(env_vars::VP_ENV_FORBIDDEN, value)], |config| {
+                assert_eq!(config.env_forbidden, value == Some("1"), "{value:?}");
+            });
+        }
+    }
+
+    /// `system-only`, a removed run-time value, is unrecognized like any other
+    /// value and does not stop management either.
+    #[test]
+    fn manager_preference_accepts_only_yes_and_no() {
+        for (value, expected) in [
+            ("yes", Some(ManagerPreference::Yes)),
+            ("no", Some(ManagerPreference::No)),
+            ("Yes", None),
+            ("system-only", None),
+        ] {
+            let vars = [
+                (env_vars::VP_NODE_MANAGER, Some(value)),
+                (env_vars::VP_PM_MANAGER, Some(value)),
+                (env_vars::VP_ENV_FORBIDDEN, None),
+            ];
+            EnvConfig::with_vars(vars, |config| {
+                assert_eq!(config.node_manager, expected, "{value}");
+                assert_eq!(config.pm_manager, expected, "{value}");
+                assert!(!config.env_forbidden, "{value}");
+            });
+        }
+    }
 
     #[test]
     fn installation_lockfile_bypass_requires_explicit_opt_in() {

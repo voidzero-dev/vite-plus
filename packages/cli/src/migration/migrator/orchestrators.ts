@@ -3,10 +3,11 @@ import path from 'node:path';
 
 import { PackageManager, type WorkspaceInfo, type WorkspacePackage } from '../../types/index.ts';
 import { VITE_PLUS_NAME, VITE_PLUS_VERSION, isForceOverrideMode } from '../../utils/constants.ts';
-import { editJsonFile } from '../../utils/json.ts';
+import { editJsonFile, readJsonFile } from '../../utils/json.ts';
 import {
   applyBuildAllowanceToPackageJsonPnpm,
   applyYarnWorkspaceHoistingFix,
+  bunSupportsCatalog,
   cleanupDeprecatedTsconfigOptions,
   collectInjectedProviderNames,
   collectOxlintDependencyNames,
@@ -31,6 +32,7 @@ import {
   migratePnpmOverridesToWorkspaceYaml,
   migratePnpmSettingsToWorkspaceYaml,
   migrateTaskCacheConfigInViteConfig,
+  pnpmRequiresWorkspacePackages,
   pnpmSupportsWorkspaceSettings,
   prepareOxlintConfigs,
   supportsCatalog,
@@ -312,6 +314,12 @@ export function rewriteStandaloneProject(
 
   if (packageManager === PackageManager.pnpm) {
     ensurePnpmWorkspaceExoticSubdepsSetting(projectPath);
+    if (
+      pnpmRequiresWorkspacePackages(workspaceInfo.downloadPackageManager.version) &&
+      fs.existsSync(path.join(projectPath, 'pnpm-workspace.yaml'))
+    ) {
+      ensurePnpmWorkspacePackages(projectPath, ['.']);
+    }
   }
 
   if (packageManager === PackageManager.yarn) {
@@ -395,12 +403,16 @@ export function rewriteMonorepo(
     workspaceInfo.rootDir,
     workspaceInfo.packages,
   );
-  // Catalog support: pnpm >= 9.5.0, Yarn >= 4.10.0, bun in a workspace (always
-  // true here — this is the monorepo path). An older PM falls back to concrete.
+  // Catalog support: pnpm >= 9.5.0, Yarn >= 4.10.0, bun per `bunSupportsCatalog`.
+  // An older PM falls back to concrete.
   const supportCatalog = supportsCatalog(
     workspaceInfo.packageManager,
     workspaceInfo.downloadPackageManager.version,
-    true,
+    workspaceInfo.packageManager === PackageManager.bun &&
+      bunSupportsCatalog(
+        readJsonFile(path.join(workspaceInfo.rootDir, 'package.json')),
+        workspaceInfo.downloadPackageManager.version,
+      ),
   );
   const workspaceContext = {
     rootDir: workspaceInfo.rootDir,
@@ -419,7 +431,7 @@ export function rewriteMonorepo(
       providerCatalogAdditions,
       supportCatalog,
     );
-  } else if (workspaceInfo.packageManager === PackageManager.bun) {
+  } else if (workspaceInfo.packageManager === PackageManager.bun && supportCatalog) {
     rewriteBunCatalog(
       workspaceInfo.rootDir,
       workspaceUsesVitest,
