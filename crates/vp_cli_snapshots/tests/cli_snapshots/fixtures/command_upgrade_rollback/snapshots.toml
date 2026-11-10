@@ -31,11 +31,11 @@ name = "command_upgrade_failed_reinstall_keeps_existing_version"
 vp = "global"
 skip-platforms = ["windows"]
 comment = "A failed upgrade into an existing version directory keeps that directory, which can be the rollback target."
+# mock-manifest.json and tarballs/ serve a local 999.0.1 payload with a valid integrity.
 steps = [
-  { argv = ["vpt", "write-file", "$VP_HOME/0.3.1/keep.txt", "rollback target\n"], snapshot = false },
-  { argv = ["vpt", "write-file", "$VP_HOME/0.3.1/bin", "not a directory\n"], comment = "Make extraction fail after the download is verified", snapshot = false },
-  # Pin the released payload so the test also runs when the checkout version is unpublished.
-  # `--silent` keeps the platform suffix and running CLI version out of the snapshot.
-  { argv = ["vp", "upgrade", "0.3.1", "--silent"], timeout = 120000, continue-on-failure = true },
-  ["vpt", "print-file", "$VP_HOME/0.3.1/keep.txt"],
+  { argv = ["vpt", "write-file", "$VP_HOME/999.0.1/keep.txt", "rollback target\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "$VP_HOME/999.0.1/bin", "not a directory\n"], comment = "Make extraction fail after the download is verified", snapshot = false },
+  # `--silent` keeps the platform suffix out of the snapshot.
+  { argv = ["vp", "upgrade", "999.0.1", "--silent"], continue-on-failure = true },
+  ["vpt", "print-file", "$VP_HOME/999.0.1/keep.txt"],
 ]
