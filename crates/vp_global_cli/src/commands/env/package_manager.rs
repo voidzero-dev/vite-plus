@@ -1,6 +1,7 @@
 use vp_pm_cli::{
-    EnvironmentPackageManagerResolution, PackageManagerType, resolve_environment_package_manager,
-    resolve_environment_package_manager_spec, resolve_package_manager_version_for_cwd,
+    EnvironmentPackageManagerResolution, PackageManagerSpec, PackageManagerType,
+    resolve_environment_package_manager, resolve_environment_package_manager_spec,
+    resolve_package_manager_version_for_cwd,
 };
 use vt_path::AbsolutePath;
 
@@ -103,8 +104,6 @@ pub(crate) async fn resolve_current_spec(
     }
     Ok(resolution)
 }
-
-pub(crate) type PackageManagerSpec = (PackageManagerType, String, Option<String>);
 
 /// Both entry points select a family before looking up its default version.
 async fn resolve_selection(

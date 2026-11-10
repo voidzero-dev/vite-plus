@@ -4848,9 +4848,8 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(devDeps.vite).toBe('catalog:');
     expect(devDeps['vite-plus']).toBe('catalog:');
 
-    const firstMigration = fs.readFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'utf8');
     rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
-    expect(fs.readFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'utf8')).toBe(firstMigration);
+    expect(readYaml(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(yaml);
   });
 
   // PR #1891 review (P1): pnpm 9.5.0-10.6.1 supports catalogs (>= 9.5.0) but not

@@ -1,7 +1,10 @@
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { coerce, isGreaterThanOrEqual } from 'verkit';
 
-import { downloadPackageManager as downloadPackageManagerBinding } from '../../binding/index.js';
+import {
+  downloadPackageManager as downloadPackageManagerBinding,
+  type DownloadPackageManagerResult,
+} from '../../binding/index.js';
 import { PackageManager } from '../types/index.ts';
 import { isPnpmIgnoredBuildsError, parseInstallGatedBuilds } from './approve-builds.ts';
 import { getVpCommand, runCommandSilently } from './command.ts';
@@ -82,7 +85,7 @@ export async function downloadPackageManager(
   silent = false,
   cwd?: string,
   expectedHash?: string,
-) {
+): Promise<DownloadPackageManagerResult> {
   const spinner = silent ? getSilentSpinner() : getSpinner(interactive);
   spinner.start(`${packageManager}@${version} installing...`);
   const downloadResult = await downloadPackageManagerBinding({
@@ -115,7 +118,7 @@ export async function runViteInstall(
      */
     detectIgnoredBuilds?: boolean;
   },
-) {
+): Promise<CommandRunSummary> {
   // Reconcile the project's registry with this build before installing: a
   // preview/test build points it at the registry bridge so the
   // `0.0.0-commit.<sha>` versions migrate/create just pinned resolve (npmjs has

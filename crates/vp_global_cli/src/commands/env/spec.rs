@@ -1,4 +1,4 @@
-use vp_pm_cli::PackageManagerType;
+use vp_pm_cli::{PackageManagerSpec, PackageManagerType};
 
 use crate::error::Error;
 
@@ -43,7 +43,7 @@ impl EnvScope {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct EnvSpecs {
     pub(crate) node: Option<String>,
-    pub(crate) package_manager: Option<(PackageManagerType, String, Option<String>)>,
+    pub(crate) package_manager: Option<PackageManagerSpec>,
 }
 
 impl EnvSpecs {
@@ -94,7 +94,7 @@ impl EnvSpecs {
 
 pub(crate) fn parse_package_manager_spec_with_hash(
     value: &str,
-) -> Result<(PackageManagerType, String, Option<String>), Error> {
+) -> Result<PackageManagerSpec, Error> {
     vp_pm_cli::parse_package_manager_spec(value).map_err(|_| invalid_spec(value))
 }
 
