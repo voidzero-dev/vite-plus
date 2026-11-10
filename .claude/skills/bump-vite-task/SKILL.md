@@ -73,6 +73,7 @@ vite-task changes often affect CLI output, which means snapshot tests need updat
   - **Changed defaults or behavior**: Update any docs that describe the old behavior
   - **Removed/deprecated options**: Remove or mark as deprecated in the relevant docs
 - If no user-facing changes are found, skip this step.
+- Docs also link to files in the vite-task repo, such as the JSON Schemas for `vp run --json`, by permalinks that carry the full vite-task commit hash. Find them with `grep -rn 'github.com/voidzero-dev/vite-task/blob/' docs/`, replace the old hash with the new full hash, and check that each linked path still exists at the new commit (for example `gh api "repos/voidzero-dev/vite-task/contents/<path>?ref=<new-hash>" --silent`). If a file moved or its content changed in a way the docs describe, update the link target or the surrounding text too.
 
 ### 8. Create the PR
 
