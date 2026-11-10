@@ -103,27 +103,9 @@ add global toolchain overrides. Existing overrides still apply during installati
 an incompatible toolchain override must be resolved before migration can proceed.
 Catalog references in an excluded template still require its original workspace.
 
-The `vite-plus/prefer-vite-plus-imports` lint rule also respects these exclusions,
-including during `vp lint --fix` and `vp check --fix`. No additional lint override
-is needed when `migrate.ignorePatterns` is set. Other lint rules and normal
-formatting remain enabled.
-
-For lint-only exclusions, or as a workaround in versions without
-`migrate.ignorePatterns`, use the existing lint configuration:
-
-```ts
-lint: {
-  overrides: [
-    {
-      files: ['templates/**', 'examples/**'],
-      rules: { 'vite-plus/prefer-vite-plus-imports': 'off' },
-    },
-  ],
-},
-```
-
-This lint override disables both diagnostics and autofix for that rule. It does
-not exclude files from `vp migrate`.
+`migrate.ignorePatterns` also applies to the `vite-plus/prefer-vite-plus-imports`
+lint rule, including during `vp lint --fix` and `vp check --fix`. Other lint rules
+and normal formatting remain enabled.
 
 ## Recommended Workflow
 
