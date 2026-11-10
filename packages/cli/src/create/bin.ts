@@ -4,7 +4,7 @@ import { styleText } from 'node:util';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
-import { parseCreateArgs, vitePlusHeader } from '../../binding/index.js';
+import { getPackageManagerOverride, parseCreateArgs, vitePlusHeader } from '../../binding/index.js';
 import {
   addFrameworkShim,
   createCatalogDependencyResolver,
@@ -675,20 +675,24 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     }
   }
 
-  // Resolve package manager: existing monorepo > CLI flag > ambient detection > launcher > prompt/default
+  // The installer applies VP_PACKAGE_MANAGER before project pins or the create CLI flag.
+  const packageManagerOverride = getPackageManagerOverride();
+  // Otherwise: existing monorepo > CLI flag > ambient detection > launcher > prompt/default.
   const requestedPackageManager = options.packageManager;
   const detectedPackageManager = workspaceInfoOptional.packageManager;
   const launcherPackageManager = detectLauncherPackageManager();
   const packageManager =
+    (packageManagerOverride?.name as PackageManager | undefined) ??
     (isMonorepo
       ? (detectedPackageManager ?? requestedPackageManager)
       : (requestedPackageManager ?? detectedPackageManager)) ??
     launcherPackageManager ??
     (await selectPackageManager(options.interactive, compactOutput));
   const packageManagerVersion =
-    packageManager === detectedPackageManager
+    packageManagerOverride?.version ??
+    (packageManager === detectedPackageManager
       ? workspaceInfoOptional.packageManagerVersion
-      : 'latest';
+      : 'latest');
   const shouldSilencePackageManagerInstallLog =
     compactOutput || (isMonorepo && workspaceInfoOptional.packageManager !== undefined);
   // ensure the package manager is installed by vite-plus
@@ -698,10 +702,15 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     options.interactive,
     shouldSilencePackageManagerInstallLog,
     workspaceInfoOptional.rootDir,
+    packageManagerOverride?.expectedHash ?? undefined,
   );
+  const resolvedPackageManagerOverride = packageManagerOverride
+    ? `${packageManager}@${downloadResult.version}${packageManagerOverride.expectedHash ? `+${packageManagerOverride.expectedHash}` : ''}`
+    : undefined;
   const workspaceInfo: WorkspaceInfo = {
     ...workspaceInfoOptional,
     packageManager,
+    packageManagerVersion: downloadResult.version,
     downloadPackageManager: downloadResult,
   };
   // Only the global CLI puts `vp` on PATH; launches through a package manager reach it through the project's package manager.
@@ -974,6 +983,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       silent: compactOutput,
       packageManager: workspaceInfo.packageManager,
       packageManagerVersion: workspaceInfo.downloadPackageManager.version,
+      packageManagerOverride: resolvedPackageManagerOverride,
       detectIgnoredBuilds: true,
     });
     await handleIgnoredBuilds(fullPath, fullPath, installSummary);
@@ -1167,6 +1177,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       silent: compactOutput,
       packageManager: workspaceInfo.packageManager,
       packageManagerVersion: workspaceInfo.downloadPackageManager.version,
+      packageManagerOverride: resolvedPackageManagerOverride,
       detectIgnoredBuilds: true,
     });
     if (installSummary.status !== 'installed') {
@@ -1288,6 +1299,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       silent: compactOutput,
       packageManager: workspaceInfo.packageManager,
       packageManagerVersion: workspaceInfo.downloadPackageManager.version,
+      packageManagerOverride: resolvedPackageManagerOverride,
       detectIgnoredBuilds: true,
     });
     await handleIgnoredBuilds(fullPath, workspaceInfo.rootDir, installSummary);
@@ -1337,6 +1349,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       silent: compactOutput,
       packageManager: workspaceInfo.packageManager,
       packageManagerVersion: workspaceInfo.downloadPackageManager.version,
+      packageManagerOverride: resolvedPackageManagerOverride,
       detectIgnoredBuilds: true,
     });
     await handleIgnoredBuilds(fullPath, fullPath, installSummary);

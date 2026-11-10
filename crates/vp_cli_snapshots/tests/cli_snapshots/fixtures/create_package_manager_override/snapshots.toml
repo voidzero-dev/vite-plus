@@ -1,0 +1,30 @@
+[[case]]
+name = "create_package_manager_override_version"
+vp = ["global", "local"]
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL", "CI"]
+env = { VP_PACKAGE_MANAGER = "pnpm@10.6.1" }
+steps = [
+  { argv = ["node", "verify-create.mjs", "pnpm", "10.6.1"], timeout = 180000 },
+]
+
+[[case]]
+name = "create_package_manager_override_family"
+vp = ["global", "local"]
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL", "CI"]
+env = { VP_PACKAGE_MANAGER = "npm@10.9.2" }
+steps = [
+  { argv = ["node", "verify-create.mjs", "npm", "10.9.2"], timeout = 180000 },
+]
+
+[[case]]
+name = "create_package_manager_override_monorepo"
+vp = ["global", "local"]
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL", "CI"]
+env = { VP_PACKAGE_MANAGER = "pnpm@10.6.1" }
+steps = [
+  { argv = ["vpt", "write-file", "pnpm-workspace.yaml", "packages:\n  - packages/*\n"], snapshot = false },
+  { argv = ["node", "verify-create.mjs", "pnpm", "10.6.1", "monorepo"], timeout = 180000 },
+]

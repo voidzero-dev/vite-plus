@@ -91,14 +91,7 @@ pub(crate) async fn resolve_current_or_fallback_for(
 pub(crate) async fn resolve_current_spec(
     cwd: &AbsolutePath,
 ) -> Result<Option<EnvironmentPackageManagerResolution>, Error> {
-    let env = vp_shared::EnvConfig::get();
-    let selected = env
-        .package_manager
-        .as_deref()
-        .map(str::trim)
-        .filter(|spec| !spec.is_empty())
-        .map(parse_package_manager_spec_with_hash)
-        .transpose()?;
+    let selected = vp_pm_cli::package_manager_override()?;
     let mut resolution = resolve_environment_package_manager_spec(
         cwd,
         selected.as_ref().map(|(kind, version, hash)| (*kind, version.as_str(), hash.as_deref())),

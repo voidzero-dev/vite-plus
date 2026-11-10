@@ -1,0 +1,27 @@
+{
+  "@override/create": {
+    "name": "@override/create",
+    "dist-tags": {
+      "latest": "1.0.0"
+    },
+    "versions": {
+      "1.0.0": {
+        "name": "@override/create",
+        "version": "1.0.0",
+        "createConfig": {
+          "templates": [
+            {
+              "name": "demo",
+              "description": "Package manager override fixture",
+              "template": "./template"
+            }
+          ]
+        },
+        "dist": {
+          "tarball": "{REGISTRY}/@override/create/-/create-1.0.0.tgz",
+          "integrity": "sha512-lm2dmUGQCijrsmtG2bfY3GmTbonpnUU7Ioz3ykIqS6ifRrP2hiRr/IxRlyy9WTGIv97SEJXCHWxo1C3K6IxZ3A=="
+        }
+      }
+    }
+  }
+}
