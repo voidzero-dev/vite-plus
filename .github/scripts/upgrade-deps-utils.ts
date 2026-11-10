@@ -15,7 +15,7 @@ export function getBundledDependencyRanges(
   // These packages stay external in packages/core/build.ts. Follow their
   // bundled consumers rather than independently selecting the latest releases.
   const sources: { path: string; field: DependencyField; names: string[] }[] = [
-    { path: pluginPath, field: 'dependencies', names: ['yuku-parser'] },
+    { path: pluginPath, field: 'dependencies', names: ['yuku'] },
     { path: vitePath, field: 'dependencies', names: ['postcss'] },
     { path: vitePath, field: 'optionalDependencies', names: ['fsevents'] },
   ];
@@ -28,13 +28,13 @@ export function getBundledDependencyRanges(
       if (typeof range !== 'string' || range.trim() === '') {
         throw new Error(`Missing ${field}.${name} in ${path}; review core's externals`);
       }
-      if (name === 'yuku-parser') {
-        // The AST helpers and codegen are bundled. Pin the runtime parser to
-        // the exact version resolved by the same plugin so it cannot drift.
-        const parserPath = createRequire(path).resolve('yuku-parser/package.json');
-        const { version } = JSON.parse(readFileSync(parserPath, 'utf8')) as { version?: unknown };
+      if (name === 'yuku') {
+        // Pin the consolidated native runtime to the exact version resolved by
+        // the bundled plugin so it cannot drift.
+        const yukuPath = createRequire(path).resolve('yuku/package.json');
+        const { version } = JSON.parse(readFileSync(yukuPath, 'utf8')) as { version?: unknown };
         if (typeof version !== 'string' || version.trim() === '') {
-          throw new Error(`Missing version in ${parserPath}; review core's externals`);
+          throw new Error(`Missing version in ${yukuPath}; review core's externals`);
         }
         range = version;
       }
