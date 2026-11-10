@@ -37,12 +37,26 @@ test.each([false, true])(
       'pnpm-workspace.yaml',
       'packages/tools/.upstream-versions.json',
       'packages/cli/src/utils/constants.ts',
+      'crates/vp_setup/src/install.rs',
+      'packages/cli/generate-install-lockfile.ts',
+      'crates/vp_pm_cli/tests/package_manager_pin_verification.rs',
     ]) {
       mkdirSync(dirname(join(tempDir, file)), { recursive: true });
       copyFileSync(join(root, file), join(tempDir, file));
     }
     const nodeVersionPath = join(tempDir, '.node-version');
     writeFileSync(nodeVersionPath, '24.9.0\n');
+    const packageJsonPath = join(tempDir, 'package.json');
+    writeJson(packageJsonPath, { packageManager: 'pnpm@12.11.2' });
+    const packageJsonBefore = readFileSync(packageJsonPath, 'utf8');
+    const installerPath = join(tempDir, 'crates/vp_setup/src/install.rs');
+    const oldPnpmVersion = /const PINNED_PNPM_VERSION: &str = "([^"]+)";/.exec(
+      readFileSync(installerPath, 'utf8'),
+    )![1];
+    const oldPnpmIntegrity = /const PINNED_PNPM_INTEGRITY: &str = "([^"]+)";/.exec(
+      readFileSync(installerPath, 'utf8'),
+    )![1];
+    const pnpmDigest = Buffer.alloc(64, 0xab);
     const workspacePath = join(tempDir, 'pnpm-workspace.yaml');
     writeFileSync(
       workspacePath,
@@ -77,6 +91,18 @@ test.each([false, true])(
       }
       if (url === 'https://registry.npmjs.org/vitest') {
         return Response.json({ versions: { '4.1.11': {}, '5.0.0': {} } });
+      }
+      if (url === 'https://registry.npmjs.org/pnpm') {
+        return Response.json({
+          'dist-tags': { latest: '12.11.2' },
+          versions: { '12.11.2': {}, '10.99.0-beta.1': {}, '10.40.2': {}, '10.9.0': {} },
+        });
+      }
+      if (url === 'https://registry.npmjs.org/pnpm/10.40.2') {
+        return Response.json({
+          version: '10.40.2',
+          dist: { integrity: `sha512-${pnpmDigest.toString('base64')}` },
+        });
       }
       if (url === 'https://registry.npmjs.org/@tsdown/css/latest') {
         return Response.json({ dependencies: { lightningcss: '^1.33.0' } });
@@ -144,8 +170,29 @@ test.each([false, true])(
     expect(readFileSync(workspacePath, 'utf8')).toContain('\n  oxlint: =1.88.0\n');
     expect(readFileSync(workspacePath, 'utf8')).toContain('\n  oxlint-tsgolint: =7.0.2004\n');
     expect(readFileSync(nodeVersionPath, 'utf8')).toBe('24.10.2\n');
+    expect(readFileSync(installerPath, 'utf8')).toContain(
+      'const PINNED_PNPM_VERSION: &str = "10.40.2";',
+    );
+    expect(readFileSync(installerPath, 'utf8')).toContain(
+      `const PINNED_PNPM_INTEGRITY: &str = "sha512.${pnpmDigest.toString('hex')}";`,
+    );
+    expect(
+      readFileSync(join(tempDir, 'packages/cli/generate-install-lockfile.ts'), 'utf8'),
+    ).toContain("export const INSTALL_PNPM_VERSION = '10.40.2';");
+    expect(
+      readFileSync(
+        join(tempDir, 'crates/vp_pm_cli/tests/package_manager_pin_verification.rs'),
+        'utf8',
+      ),
+    ).toContain('const PINNED_PNPM_VERSION: &str = "10.40.2";');
+    expect(readFileSync(packageJsonPath, 'utf8')).toBe(packageJsonBefore);
     const versions = JSON.parse(readFileSync(join(metaDir, 'versions.json'), 'utf8'));
     expect(versions['Node.js']).toEqual({ old: '24.9.0', new: '24.10.2' });
+    expect(versions['pnpm (installer)']).toEqual({ old: oldPnpmVersion, new: '10.40.2' });
+    expect(versions['pnpm installer integrity']).toEqual({
+      old: oldPnpmIntegrity,
+      new: `sha512.${pnpmDigest.toString('hex')}`,
+    });
     expect(versions['lint-staged']).toEqual({ old: '16.2.6', new: '17.5.1' });
     expect(versions['@oxlint/plugins'].new).toBe('1.88.0');
     expect(versions['@oxlint/plugins'].new).toBe(versions.oxlint.new);
@@ -165,6 +212,9 @@ test.each([false, true])(
     );
     expect(readFileSync(join(metaDir, 'pr-body.md'), 'utf8')).toContain(
       '| `lint-staged` | `16.2.6` | `17.5.1` |',
+    );
+    expect(readFileSync(join(metaDir, 'pr-body.md'), 'utf8')).toContain(
+      `| \`pnpm (installer)\` | \`${oldPnpmVersion}\` | \`10.40.2\` |`,
     );
   },
 );

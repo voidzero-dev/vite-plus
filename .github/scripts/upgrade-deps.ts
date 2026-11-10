@@ -6,6 +6,8 @@ import {
   findLatestStableVersionForMajor,
   getBundledDependencyRanges,
   getLatestNodeVersion,
+  getPnpmInstallerIntegrity,
+  updatePnpmInstallerPins,
 } from './upgrade-deps-utils.ts';
 
 const ROOT = process.cwd();
@@ -82,6 +84,9 @@ const STABLE_SEMVER_TAG_RE = /^v?\d+\.\d+\.\d+$/;
 const SUPPORTED_VITEST_MAJOR = 5;
 // Review compatibility before advancing the shared development, CI, and installation pin.
 const SUPPORTED_NODE_MAJOR = 24;
+// Installer pnpm is independent of package.json's development package manager.
+// Review install behavior and lockfile compatibility before advancing this major.
+const SUPPORTED_PNPM_INSTALLER_MAJOR = 10;
 
 const isFullSha = (s: string): boolean => /^[0-9a-f]{40}$/.test(s);
 
@@ -199,6 +204,11 @@ async function getLatestNpmVersionForMajor(packageName: string, major: number): 
     throw new Error(`No stable ${major}.x version found for ${packageName}`);
   }
   return version;
+}
+
+async function getLatestPnpmInstaller(): Promise<{ version: string; integrity: string }> {
+  const version = await getLatestNpmVersionForMajor('pnpm', SUPPORTED_PNPM_INSTALLER_MAJOR);
+  return { version, integrity: await getPnpmInstallerIntegrity(version) };
 }
 
 // Read a dependency range from the latest published version of `packageName`,
@@ -542,6 +552,7 @@ async function upgradeDependencies(): Promise<void> {
 
   const [
     nodeVersion,
+    pnpmInstaller,
     vitestVersion,
     tsdownVersion,
     lightningcssVersion,
@@ -556,6 +567,7 @@ async function upgradeDependencies(): Promise<void> {
     oxcParserVersion,
   ] = await Promise.all([
     getLatestNodeVersion(SUPPORTED_NODE_MAJOR),
+    getLatestPnpmInstaller(),
     getLatestNpmVersionForMajor('vitest', SUPPORTED_VITEST_MAJOR),
     getLatestNpmVersion('tsdown'),
     // Mirror exactly what the bundled @tsdown/css depends on.
@@ -572,6 +584,7 @@ async function upgradeDependencies(): Promise<void> {
   ]);
 
   console.log(`Node.js: ${nodeVersion}`);
+  console.log(`pnpm (installer): ${pnpmInstaller.version}`);
   console.log(`vitest: ${vitestVersion}`);
   console.log(`tsdown: ${tsdownVersion}`);
   console.log(`lightningcss (from @tsdown/css): ${lightningcssVersion}`);
@@ -586,6 +599,13 @@ async function upgradeDependencies(): Promise<void> {
   console.log(`@oxc-project/types: ${oxcProjectTypesVersion}`);
   console.log(`oxc-parser: ${oxcParserVersion}`);
 
+  const { oldVersion, oldIntegrity } = updatePnpmInstallerPins(
+    ROOT,
+    pnpmInstaller.version,
+    pnpmInstaller.integrity,
+  );
+  recordChange('pnpm (installer)', oldVersion, pnpmInstaller.version);
+  recordChange('pnpm installer integrity', oldIntegrity, pnpmInstaller.integrity);
   await updateUpstreamVersions();
   await updatePnpmWorkspace({
     vitest: vitestVersion,
