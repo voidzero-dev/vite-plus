@@ -5,7 +5,13 @@ local-registry = true
 unset-env = ["VP_SKIP_INSTALL", "CI"]
 env = { VP_PACKAGE_MANAGER = "pnpm@10.6.1" }
 steps = [
-  { argv = ["node", "verify-create.mjs", "pnpm", "10.6.1"], timeout = 180000 },
+  { argv = ["node", "capture-create.mjs", "@override:demo", "--directory", "demo", "--package-manager", "pnpm", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"], timeout = 180000 },
+  { argv = ["vpt", "print-file", "create-summary.json"], comment = "the exact package-manager version reported in the summary" },
+  { argv = ["vpt", "print-file", "demo/package.json"], comment = "pnpm 10.6.1 reads settings from package.json" },
+  { argv = ["node", "-p", "require('./demo/package.json').devEngines.packageManager.version"], comment = "record the exact pin separately from manifest version redaction" },
+  { argv = ["vpt", "print-file", "demo/installed-with.json"], comment = "package manager recorded by the install lifecycle script" },
+  { argv = ["vpt", "print-file", "demo/pnpm-workspace.yaml"] },
+  { argv = ["vpt", "stat-file", "demo/pnpm-lock.yaml"] },
 ]
 
 [[case]]
@@ -15,7 +21,12 @@ local-registry = true
 unset-env = ["VP_SKIP_INSTALL", "CI"]
 env = { VP_PACKAGE_MANAGER = "npm@10.9.2" }
 steps = [
-  { argv = ["node", "verify-create.mjs", "npm", "10.9.2"], timeout = 180000 },
+  { argv = ["node", "capture-create.mjs", "@override:demo", "--directory", "demo", "--package-manager", "pnpm", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"], timeout = 180000 },
+  { argv = ["vpt", "print-file", "create-summary.json"], comment = "the exact package-manager version reported in the summary" },
+  { argv = ["vpt", "print-file", "demo/package.json"], comment = "the npm override takes precedence over the pnpm selection" },
+  { argv = ["node", "-p", "require('./demo/package.json').devEngines.packageManager.version"], comment = "record the exact pin separately from manifest version redaction" },
+  { argv = ["vpt", "print-file", "demo/installed-with.json"], comment = "package manager recorded by the install lifecycle script" },
+  { argv = ["vpt", "stat-file", "demo/package-lock.json", "demo/pnpm-workspace.yaml"] },
 ]
 
 [[case]]
@@ -26,5 +37,11 @@ unset-env = ["VP_SKIP_INSTALL", "CI"]
 env = { VP_PACKAGE_MANAGER = "pnpm@10.6.1" }
 steps = [
   { argv = ["vpt", "write-file", "pnpm-workspace.yaml", "packages:\n  - packages/*\n"], snapshot = false },
-  { argv = ["node", "verify-create.mjs", "pnpm", "10.6.1", "monorepo"], timeout = 180000 },
+  { argv = ["node", "capture-create.mjs", "@override:demo", "--directory", "packages/demo", "--package-manager", "pnpm", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"], timeout = 180000 },
+  { argv = ["vpt", "print-file", "create-summary.json"], comment = "the exact package-manager version reported in the summary" },
+  { argv = ["vpt", "print-file", "package.json"], comment = "the session override preserves the existing project pin" },
+  { argv = ["node", "-p", "require('./package.json').devEngines.packageManager.version"], comment = "record the exact existing pin separately from manifest version redaction" },
+  { argv = ["vpt", "print-file", "installed-with.json"], comment = "the install uses the session override" },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "preserve the workspace patterns without adding a standalone root" },
+  { argv = ["vpt", "stat-file", "pnpm-lock.yaml"] },
 ]
