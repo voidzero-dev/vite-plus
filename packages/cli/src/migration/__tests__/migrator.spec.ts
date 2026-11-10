@@ -285,7 +285,9 @@ describe('rewritePackageJson', () => {
     expect(pkg.devDependencies['vite-plus']).toBe('catalog:');
   });
 
-  it('leaves a pre-existing pinned vite-plus alone on npm monorepo projects', async () => {
+  it('re-pins a pre-existing plain vite-plus on npm monorepo projects', async () => {
+    // Without catalogs, siblings stay aligned through the concrete version, as
+    // the upgrade path already does.
     const pkg = {
       devDependencies: {
         'vite-plus': '^0.1.20',
@@ -294,7 +296,7 @@ describe('rewritePackageJson', () => {
 
     rewritePackageJson(pkg, PackageManager.npm, true);
 
-    expect(pkg.devDependencies['vite-plus']).toBe('^0.1.20');
+    expect(pkg.devDependencies['vite-plus']).toBe('latest');
   });
 
   it('normalizes a pre-existing pinned vite-plus on yarn/bun monorepo projects', async () => {
@@ -8158,6 +8160,51 @@ describe('rewriteMonorepo bun catalog', () => {
     const overrides = pkg.overrides as Record<string, string>;
     expect(overrides.vite).toBe('catalog:');
   });
+
+  it.each([
+    [PackageManager.bun, '1.2.20'],
+    [PackageManager.npm, '11.0.0'],
+  ])(
+    're-pins an existing child vite-plus without catalogs when the root lacks Vite+ (%s %s)',
+    (packageManager, version) => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({
+          name: 'monorepo',
+          private: true,
+          workspaces: ['packages/*'],
+          devDependencies: { vite: '^7.0.0' },
+        }),
+      );
+      for (const [name, spec] of [
+        ['app', '0.1.20'],
+        ['linked', 'workspace:*'],
+      ]) {
+        fs.mkdirSync(path.join(tmpDir, 'packages', name), { recursive: true });
+        fs.writeFileSync(
+          path.join(tmpDir, 'packages', name, 'package.json'),
+          JSON.stringify({ name, devDependencies: { 'vite-plus': spec } }),
+        );
+      }
+      const workspaceInfo = makeWorkspaceInfo(tmpDir, packageManager, version);
+      workspaceInfo.packages = ['app', 'linked'].map((name) => ({
+        name,
+        path: `packages/${name}`,
+      }));
+
+      rewriteMonorepo(workspaceInfo, true);
+
+      const vitePlusSpec = (name: string) =>
+        (
+          readJson(path.join(tmpDir, 'packages', name, 'package.json')) as {
+            devDependencies: Record<string, string>;
+          }
+        ).devDependencies['vite-plus'];
+      expect(vitePlusSpec('app')).toBe('latest');
+      // A protocol pin is a deliberate user choice and survives.
+      expect(vitePlusSpec('linked')).toBe('workspace:*');
+    },
+  );
 
   it('keeps concrete specs and writes no top-level catalog on bun < 1.2.21', () => {
     fs.writeFileSync(
