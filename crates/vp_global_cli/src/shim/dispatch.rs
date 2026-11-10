@@ -1404,7 +1404,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_hash_pinned_modern_yarn_rechecks_cached_cli() {
+    async fn test_hash_pinned_modern_yarn_rejects_mismatched_download() {
+        use httpmock::prelude::*;
+
         let temp = TempDir::new().unwrap();
         let vp_home = AbsolutePathBuf::new(temp.path().join("vp-home")).unwrap();
         let cwd = AbsolutePathBuf::new(temp.path().join("project")).unwrap();
@@ -1417,17 +1419,23 @@ mod tests {
         )
         .unwrap();
 
-        // VP_HOME pins <DATA> to the root, so the cached install lands here.
-        let bin_dir =
-            vp_home.join("package_manager").join("yarn").join("4.17.1").join("yarn").join("bin");
-        std::fs::create_dir_all(&bin_dir).unwrap();
-        std::fs::write(bin_dir.join("yarn"), "shim").unwrap();
-        std::fs::write(bin_dir.join("yarn.cmd"), "shim").unwrap();
-        std::fs::write(bin_dir.join("yarn.ps1"), "shim").unwrap();
-        std::fs::write(bin_dir.join("yarn.js"), "corrupt").unwrap();
+        // A Yarn 2+ pin covers the CLI binary, verified when it is downloaded. Serve
+        // the `@yarnpkg/cli-dist` tarball from a local registry so the check runs
+        // offline; its CLI bytes cannot match the all-zeros pin, so the download must
+        // be rejected and the error must reach the shim caller.
+        let server = MockServer::start();
+        let tarball = cli_dist_tgz(b"console.log('yarn');\n");
+        server.mock(|when, then| {
+            when.method(GET).path("/@yarnpkg/cli-dist/-/cli-dist-4.17.1.tgz");
+            then.status(200).body(tarball);
+        });
+        let registry = server.base_url();
 
         vp_shared::EnvConfig::with_vars_async(
-            [(env_vars::VP_HOME, vp_home.as_path())],
+            [
+                (env_vars::VP_HOME, vp_home.as_path().as_os_str()),
+                ("NPM_CONFIG_REGISTRY", std::ffi::OsStr::new(&registry)),
+            ],
             |_| async {
                 let result = resolve_package_manager_tool(&cwd, "yarn").await;
                 assert!(
@@ -1435,11 +1443,32 @@ mod tests {
                         result,
                         Err(Error::Install(vp_error::Error::PackageManagerHashMismatch { .. }))
                     ),
-                    "the global Yarn shim must reject a corrupted pinned cache: {result:?}"
+                    "the global Yarn shim must reject a pinned download whose CLI fails the pin: {result:?}"
                 );
             },
         )
         .await;
+    }
+
+    /// Build an `@yarnpkg/cli-dist` style gzip tarball holding `package/bin/yarn.js`.
+    fn cli_dist_tgz(yarn_js: &[u8]) -> Vec<u8> {
+        let mut builder = tar::Builder::new(Vec::new());
+        let mut header = tar::Header::new_gnu();
+        header.set_size(yarn_js.len() as u64);
+        header.set_mode(0o755);
+        header.set_cksum();
+        builder
+            .append_data(&mut header, "package/bin/yarn.js", std::io::Cursor::new(yarn_js))
+            .unwrap();
+        let tar_data = builder.into_inner().unwrap();
+        let mut gz = Vec::new();
+        {
+            let mut encoder =
+                flate2::write::GzEncoder::new(&mut gz, flate2::Compression::default());
+            std::io::Write::write_all(&mut encoder, &tar_data).unwrap();
+            encoder.finish().unwrap();
+        }
+        gz
     }
 
     #[tokio::test]

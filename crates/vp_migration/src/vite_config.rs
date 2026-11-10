@@ -619,26 +619,55 @@ static RE_NAMESPACE_LAZY_PLUGINS_IMPORT: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r#"^\s*import\s+\*\s+as\s+lazyPlugins\b"#).unwrap());
 
 /// A **direct** config object: the object literal that *is* the config —
-/// `defineConfig({...})`'s argument, an `export default {...}` (with or
-/// without `satisfies`), a `defineConfig` arrow body, or a direct `return`
-/// in a `defineConfig` callback. Unlike [`is_recognized_config_object`],
-/// returns inside nested functions (e.g. an inline plugin's `config()` hook)
-/// do NOT match, so destructive edits never touch them. Used by transforms
-/// that rewrite in place (`wrap_lazy_plugins`, `upsert_json_config`).
+/// `defineConfig({...})`'s argument, an `export default {...}`, a
+/// `defineConfig` arrow body, or a direct `return` in a `defineConfig`
+/// callback. Parentheses and type wrappers around the object and the callback
+/// are transparent. Unlike [`is_recognized_config_object`], returns inside
+/// nested functions (e.g. an inline plugin's `config()` hook) do NOT match, so
+/// destructive edits never touch them. Used by transforms that rewrite in
+/// place (`wrap_lazy_plugins`, `upsert_json_config`).
 pub(crate) fn is_direct_recognized_config_object<D: Doc>(object_node: &Node<'_, D>) -> bool {
-    let Some(parent) = object_node.parent() else { return false };
+    let outer = outermost_wrapper(object_node);
+    let Some(parent) = outer.parent() else { return false };
     match parent.kind().as_ref() {
         "export_statement" => true,
-        "satisfies_expression" => parent.parent().is_some_and(|p| {
-            p.kind() == "export_statement"
-                || (p.kind() == "arguments"
-                    && p.parent().is_some_and(|c| is_define_config_call(&c)))
-        }),
         "arguments" => parent.parent().is_some_and(|c| is_define_config_call(&c)),
-        "parenthesized_expression" => is_define_config_arrow_body(&parent),
+        "arrow_function" => {
+            parent.field("body").is_some_and(|body| body.range() == outer.range())
+                && is_define_config_callback(&parent)
+        }
         "return_statement" => is_direct_return_in_define_config_callback(&parent),
         _ => false,
     }
+}
+
+/// The outermost parenthesized or type-asserted expression around `node`.
+pub(crate) fn outermost_wrapper<'a, D: Doc>(node: &Node<'a, D>) -> Node<'a, D> {
+    let mut outer = node.clone();
+    while let Some(parent) = outer.parent().filter(|parent| {
+        matches!(
+            parent.kind().as_ref(),
+            "parenthesized_expression"
+                | "as_expression"
+                | "satisfies_expression"
+                | "type_assertion"
+                | "non_null_expression"
+        )
+    }) {
+        outer = parent;
+    }
+    outer
+}
+
+/// Whether `function` is a callback passed to `defineConfig`, looking through
+/// parentheses and type wrappers.
+fn is_define_config_callback<D: Doc>(function: &Node<'_, D>) -> bool {
+    matches!(function.kind().as_ref(), "arrow_function" | "function_expression")
+        && outermost_wrapper(function)
+            .parent()
+            .filter(|node| node.kind() == "arguments")
+            .and_then(|node| node.parent())
+            .is_some_and(|call| is_define_config_call(&call))
 }
 
 fn is_recognized_config_object<D: Doc>(object_node: &Node<'_, D>) -> bool {
@@ -680,31 +709,13 @@ fn is_inside_define_config_callback<D: Doc>(node: &Node<'_, D>) -> bool {
     false
 }
 
-fn is_direct_return_in_define_config_callback<D: Doc>(return_node: &Node<'_, D>) -> bool {
-    let mut current = return_node.parent();
-    while let Some(node) = current {
-        match node.kind().as_ref() {
-            "arrow_function" | "function_expression" => {
-                return node
-                    .parent()
-                    .filter(|parent| parent.kind() == "arguments")
-                    .and_then(|parent| parent.parent())
-                    .is_some_and(|call| is_define_config_call(&call));
-            }
-            "function_declaration" | "method_definition" => return false,
-            _ => current = node.parent(),
-        }
-    }
-    false
-}
-
 /// Whether a direct `defineConfig` callback returns something other than an
 /// object literal or an identifier, which the merge return rules cannot rewrite.
 fn has_unsupported_direct_return(content: &str) -> bool {
     let grep = SupportLang::TypeScript.ast_grep(content);
     grep.root().dfs().any(|node| {
         node.kind() == "return_statement"
-            && is_merge_rule_direct_return(&node)
+            && is_direct_return_in_define_config_callback(&node)
             && !node
                 .children()
                 .find(|child| child.is_named() && child.kind() != "comment")
@@ -712,41 +723,24 @@ fn has_unsupported_direct_return(content: &str) -> bool {
     })
 }
 
-/// Mirrors the function boundary and wrapper rules of `merge-json-config-return`.
-fn is_merge_rule_direct_return<D: Doc>(return_node: &Node<'_, D>) -> bool {
-    let Some(function) = return_node.ancestors().find(|node| {
-        matches!(
-            node.kind().as_ref(),
-            "arrow_function"
-                | "function_expression"
-                | "function_declaration"
-                | "generator_function"
-                | "generator_function_declaration"
-                | "method_definition"
-        )
-    }) else {
-        return false;
-    };
-    if !matches!(function.kind().as_ref(), "arrow_function" | "function_expression") {
-        return false;
-    }
-    let mut current = function.parent();
-    while let Some(node) = current.as_ref().filter(|node| {
-        matches!(
-            node.kind().as_ref(),
-            "parenthesized_expression"
-                | "as_expression"
-                | "satisfies_expression"
-                | "type_assertion"
-                | "non_null_expression"
-        )
-    }) {
-        current = node.parent();
-    }
-    current
-        .filter(|node| node.kind() == "arguments")
-        .and_then(|node| node.parent())
-        .is_some_and(|call| is_define_config_call(&call))
+/// Whether the nearest enclosing function of `return_node` is a `defineConfig`
+/// callback. Mirrors the function boundary and wrapper rules of
+/// `merge-json-config-return`.
+fn is_direct_return_in_define_config_callback<D: Doc>(return_node: &Node<'_, D>) -> bool {
+    return_node
+        .ancestors()
+        .find(|node| {
+            matches!(
+                node.kind().as_ref(),
+                "arrow_function"
+                    | "function_expression"
+                    | "function_declaration"
+                    | "generator_function"
+                    | "generator_function_declaration"
+                    | "method_definition"
+            )
+        })
+        .is_some_and(|function| is_define_config_callback(&function))
 }
 
 fn node_has_descendant_kind<D: Doc>(node: &Node<'_, D>, kind: &str) -> bool {
@@ -2907,6 +2901,29 @@ export default defineConfig({
         // The top-level value is replaced.
         assert!(result.content.contains(r#"create: { defaultTemplate: "@b" }"#));
         assert!(!result.content.contains(r#""@a""#));
+    }
+
+    #[test]
+    fn test_upsert_json_config_content_through_wrappers() {
+        for argument in [
+            "{ base: '/' } as UserConfig",
+            "<UserConfig>{ base: '/' }",
+            "({ base: '/' })!",
+            "() => ({ base: '/' }) as UserConfig",
+            "(() => ({ base: '/' })) as UserConfigFn",
+            "<UserConfigFn>(() => { return { base: '/' }; })",
+            "(function () { return { base: '/' } satisfies UserConfig; })!",
+        ] {
+            let source = format!("export default defineConfig({argument});");
+            let result = upsert_json_config_content(&source, "{}", "create").unwrap();
+            assert!(result.updated, "{source}");
+            assert_eq!(result.content.matches("create: {}").count(), 1, "{}", result.content);
+        }
+
+        // A generator nested in the callback is a function boundary.
+        let source = "export default defineConfig(() => { function* g() { return { base: '/' }; } return g().next().value; });";
+        let result = upsert_json_config_content(source, "{}", "create").unwrap();
+        assert!(!result.updated, "{}", result.content);
     }
 
     #[test]

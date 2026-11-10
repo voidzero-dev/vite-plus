@@ -124,6 +124,18 @@ pub async fn extract_platform_package(
 /// This ensures consistent install behavior regardless of the user's global pnpm version.
 const PINNED_PNPM_VERSION: &str = "10.34.7";
 
+/// Integrity of the pinned pnpm npm tarball, in the `packageManager` hash
+/// format (`sha512.<hex>`). Setup verifies the downloaded pnpm against this
+/// value, which the binary carries.
+///
+/// A project `.npmrc` may point the registry at any host, so setup must not
+/// trust an integrity value that the download source reports for its own
+/// tarball. This pin is the `sha512` of the official npm tarball for
+/// `PINNED_PNPM_VERSION`. A genuine registry or mirror serves identical bytes
+/// and still matches it, so private registries keep working. Update this value
+/// together with `PINNED_PNPM_VERSION`.
+const PINNED_PNPM_INTEGRITY: &str = "sha512.ba98abc585539933375b5971f4bc6d6c73a1b4b7edc4a879e7d102fe5423d1e02309d67c60a11f04955093a96e521ad9c3b138cdd654ca5be563f378b3ae48bd";
+
 /// A reused target version must run its own setup again before accepting commands.
 pub async fn clear_self_setup_marker(version_dir: &AbsolutePath) -> Result<(), Error> {
     match tokio::fs::remove_file(version_dir.join("bin").join(crate::SELF_SETUP_MARKER)).await {
@@ -146,7 +158,7 @@ pub async fn generate_wrapper_package_json(
         "name": "vp-global",
         "version": version,
         "private": true,
-        "packageManager": format!("pnpm@{PINNED_PNPM_VERSION}"),
+        "packageManager": format!("pnpm@{PINNED_PNPM_VERSION}+{PINNED_PNPM_INTEGRITY}"),
         "dependencies": {
             "vite-plus": version
         }
@@ -338,9 +350,11 @@ async fn prepare_install_runtime(
     node_version: Option<NodeVersion<'_>>,
     registry: Option<&str>,
 ) -> Result<(vp_js_runtime::JsRuntime, AbsolutePathBuf), Error> {
-    let pnpm_dir = bootstrap_pnpm(PINNED_PNPM_VERSION, registry).await.map_err(|error| {
-        Error::Setup(format!("Failed to install pnpm {PINNED_PNPM_VERSION}: {error}").into())
-    })?;
+    let pnpm_dir = bootstrap_pnpm(PINNED_PNPM_VERSION, PINNED_PNPM_INTEGRITY, registry)
+        .await
+        .map_err(|error| {
+            Error::Setup(format!("Failed to install pnpm {PINNED_PNPM_VERSION}: {error}").into())
+        })?;
     let pnpm_entry = pnpm_dir.join("bin").join("pnpm.cjs");
     if !tokio::fs::try_exists(&pnpm_entry).await.unwrap_or(false) {
         return Err(Error::Setup(
@@ -424,6 +438,8 @@ async fn run_pnpm_install(
     cmd.arg(pnpm_entry.as_path())
         .args(args)
         .current_dir(version_dir)
+        // The spinner's raw stdin would be restored by Node when pnpm exits.
+        .stdin(process::Stdio::null())
         .env("CI", "true")
         .env("PATH", path);
 
@@ -829,12 +845,14 @@ mod tests {
                 (env_vars::VP_NODE_DIST_MIRROR, server.base_url().as_str()),
             ],
             |env| async move {
-                let pnpm = env
-                    .dirs
-                    .data
-                    .join("package_manager/pnpm")
-                    .join(PINNED_PNPM_VERSION)
-                    .join("pnpm");
+                // Key-address the seeded pnpm by its pin, so setup reuses it from
+                // the cache instead of fetching it from a registry.
+                let cache_key = vp_pm_cli::install_cache_key(Some(PINNED_PNPM_INTEGRITY), None);
+                let pnpm = vp_pm_cli::package_manager_install_dir(
+                    vp_pm_cli::PackageManagerType::Pnpm,
+                    PINNED_PNPM_VERSION,
+                    cache_key.as_deref(),
+                );
                 tokio::fs::create_dir_all(pnpm.join("bin")).await.unwrap();
                 for name in ["pnpm", "pnpm.cmd", "pnpm.ps1", "pnpm.cjs"] {
                     tokio::fs::write(pnpm.join("bin").join(name), "").await.unwrap();
