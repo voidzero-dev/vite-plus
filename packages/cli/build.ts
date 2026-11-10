@@ -212,9 +212,6 @@ function buildWithTsdown() {
  * - ./dist/client/* - Re-exports client runtime files (.mjs, .cjs)
  * - ./types/* - Type-only re-exports using `export type *`
  *
- * Note: In package.json exports, ./types/internal/* must come BEFORE ./types/*
- * for correct precedence (more specific patterns must precede wildcards).
- *
  * @throws Error if core package is not built (missing dist directories)
  */
 async function syncCorePackageExports(): Promise<void> {
