@@ -48,6 +48,13 @@ Pick the file by what a function _does_, not by where it happens to be called.
 
 ## Rules for adding / changing code
 
+Migration file writes use `../files.ts`, which applies the active exclusion
+scope from `../scope.ts`. Keep reads available for shared dependency analysis.
+For operations that consume one file to create another, check both paths before
+the operation. External tools must receive filtered targets or skip a step whose
+writes cannot respect the scope. `vp create` and callers without a migration
+scope retain the normal write behavior.
+
 1. **Add a function to the module that matches its category.** Keep it
    `export`ed so the barrel surfaces it. If nothing fits, prefer extending an
    existing module over creating a new one; if you do add a module, add a line

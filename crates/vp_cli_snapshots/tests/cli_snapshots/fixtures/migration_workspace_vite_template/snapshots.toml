@@ -1,0 +1,14 @@
+[[case]]
+name = "migration_workspace_vite_template"
+vp = "local"
+comment = "Reproduce #3406: an existing Vite+ workspace converts an independently reusable Vite/Vitest template. This records the current behavior, not the desired exclusion behavior."
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "ordinary upgrade without --full also migrates the template" },
+  { argv = ["vpt", "print-file", "examples/starter/vite.config.ts"], comment = "the template's Vite import is converted to vite-plus" },
+  { argv = ["vpt", "print-file", "examples/starter/src/example.test.ts"], comment = "the template's Vitest import is converted to vite-plus/test" },
+  { argv = ["vpt", "print-file", "examples/starter/package.json"], comment = "record dependency and script changes that also affect standalone use" },
+  { argv = ["vpt", "print-file", "examples/starter/tsconfig.json"], comment = "record related type-reference changes" },
+  { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "the template remains a workspace member and shares toolchain overrides" },
+  { argv = ["vpt", "print-file", "packages/app/package.json"], comment = "control: the application continues to use Vite+" },
+  { argv = ["vpt", "print-file", "packages/app/vite.config.ts"] },
+]

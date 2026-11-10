@@ -2062,6 +2062,9 @@ struct PackageRewriteContext {
 /// Options controlling directory-wide import rewriting.
 #[derive(Debug, Clone, Default)]
 pub struct RewriteImportsOptions {
+    /// Config-relative exclusions, also applied when the scan starts below the config root.
+    pub ignore_root: Option<PathBuf>,
+    pub ignore_patterns: Vec<String>,
     /// Preserve `vitest` and `vitest/*` module specifiers throughout packages
     /// whose nearest package.json declares `@nuxt/test-utils`.
     pub preserve_vitest_in_nuxt_packages: bool,
@@ -2285,7 +2288,11 @@ pub fn rewrite_imports_in_directory_with_options(
     root: &Path,
     options: RewriteImportsOptions,
 ) -> Result<BatchRewriteResult, Error> {
-    let walk_result = file_walker::find_ts_files(root)?;
+    let ignore = file_walker::MigrationIgnoreMatcher::new(
+        options.ignore_root.as_deref().unwrap_or(root),
+        &options.ignore_patterns,
+    )?;
+    let walk_result = file_walker::find_ts_files_with_ignore(root, Some(ignore))?;
 
     // Pre-compute package context for each file (requires mutable cache, done sequentially).
     let mut package_context_cache: HashMap<PathBuf, PackageRewriteContext> = HashMap::new();

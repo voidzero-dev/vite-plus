@@ -1,0 +1,14 @@
+{
+  "name": "vite-starter",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "vite": "^8.0.0",
+    "vitest": "^4.1.11"
+  }
+}

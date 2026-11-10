@@ -1,4 +1,3 @@
-import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -11,8 +10,9 @@ import {
   VITE_PLUS_NAME,
   VITE_PLUS_VERSION,
 } from '../../utils/constants.ts';
-import { readJsonFile } from '../../utils/json.ts';
-import { editYamlFile, readYamlFile, scalarString } from '../../utils/yaml.ts';
+import fs from '../files.ts';
+import { readJsonFile } from '../files.ts';
+import { editYamlFile, readYamlFile, scalarString } from '../files.ts';
 import {
   createCatalogDependencyResolverFromCatalogs,
   overridesSatisfyVitePlus,

@@ -3,7 +3,7 @@ import path from 'node:path';
 
 import { PackageManager, type WorkspaceInfo, type WorkspacePackage } from '../../types/index.ts';
 import { VITE_PLUS_NAME, VITE_PLUS_VERSION, isForceOverrideMode } from '../../utils/constants.ts';
-import { editJsonFile, readJsonFile } from '../../utils/json.ts';
+import { editJsonFile, readJsonFile } from '../files.ts';
 import {
   applyBuildAllowanceToPackageJsonPnpm,
   applyYarnWorkspaceHoistingFix,

@@ -3,10 +3,11 @@ import path from 'node:path';
 
 import { type WorkspacePackage } from '../../types/index.ts';
 import { VITE_PLUS_NAME } from '../../utils/constants.ts';
-import { editJsonFile, readJsonFile } from '../../utils/json.ts';
 import { detectPackageMetadata } from '../../utils/package.ts';
 import { hasVitestTypesInTsconfig } from '../../utils/tsconfig.ts';
+import { editJsonFile, readJsonFile } from '../files.ts';
 import { projectUsesVitestDirectly } from '../migrator.ts';
+import { isMigrationIgnored } from '../scope.ts';
 import {
   OPT_IN_BROWSER_PROVIDERS,
   OXLINT_PLUGINS_PACKAGE,
@@ -229,6 +230,9 @@ export function sourceTreeMatches(
     }
     for (const entry of entries) {
       const entryPath = path.join(dir, entry.name);
+      if (isMigrationIgnored(entryPath, entry.isDirectory())) {
+        continue;
+      }
       if (entry.isDirectory()) {
         if (skipDirs.has(entry.name)) {
           continue;
@@ -290,6 +294,9 @@ function findPackageTsconfigFiles(projectPath: string): string[] {
     }
     for (const entry of entries) {
       const entryPath = path.join(dir, entry.name);
+      if (isMigrationIgnored(entryPath, entry.isDirectory())) {
+        continue;
+      }
       if (entry.isDirectory()) {
         if (!VITEST_SCAN_SKIP_DIRS.has(entry.name)) {
           scanDir(entryPath, false);

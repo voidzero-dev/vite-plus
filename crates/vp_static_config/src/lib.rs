@@ -18,7 +18,8 @@ use rustc_hash::FxHashMap;
 use vt_path::AbsolutePath;
 
 /// Packages whose `defineConfig` helpers preserve top-level config fields.
-const TRUSTED_DEFINE_CONFIG_PACKAGES: &[&str] = &["vite-plus", "vite"];
+const TRUSTED_DEFINE_CONFIG_PACKAGES: &[&str] =
+    &["vite-plus", "vite", "vitest/config", "vite-plus/test/config"];
 /// The name of the config helper static extraction trusts.
 const DEFINE_CONFIG: &str = "defineConfig";
 
@@ -174,6 +175,13 @@ fn extract_config_fields(program: &Program<'_>) -> FieldMap {
         // ESM: export default ...
         if let Statement::ExportDefaultDeclaration(decl) = stmt {
             if let Some(expr) = decl.declaration.as_expression() {
+                if let Expression::Identifier(id) = expr.get_inner_expression() {
+                    return extract_exported_const(
+                        program,
+                        id.name.as_str(),
+                        has_trusted_define_config_binding,
+                    );
+                }
                 return extract_config_from_expr(expr, has_trusted_define_config_binding);
             }
             // export default class/function — not analyzable
@@ -193,6 +201,36 @@ fn extract_config_fields(program: &Program<'_>) -> FieldMap {
     }
 
     FieldMap::unanalyzable()
+}
+
+// A config can be assigned to a const before exporting it. Only accept the
+// imports/declaration/export shape: other statements could mutate that object
+// or pass it to code that does, so those require normal runtime resolution.
+fn extract_exported_const(
+    program: &Program<'_>,
+    name: &str,
+    has_trusted_define_config_binding: bool,
+) -> FieldMap {
+    let mut initializer = None;
+    for stmt in &program.body {
+        match stmt {
+            Statement::ImportDeclaration(_) | Statement::ExportDefaultDeclaration(_) => {}
+            Statement::VariableDeclaration(decl)
+                if decl.kind == VariableDeclarationKind::Const && decl.declarations.len() == 1 =>
+            {
+                let declarator = &decl.declarations[0];
+                if !matches!(&declarator.id, BindingPattern::BindingIdentifier(id) if id.name == name)
+                {
+                    return FieldMap::unanalyzable();
+                }
+                initializer = declarator.init.as_ref();
+            }
+            _ => return FieldMap::unanalyzable(),
+        }
+    }
+    initializer.map_or_else(FieldMap::unanalyzable, |expr| {
+        extract_config_from_expr(expr, has_trusted_define_config_binding)
+    })
 }
 
 /// Extract the config object from an expression that is either:
@@ -750,6 +788,48 @@ mod tests {
             ",
         );
         assert_non_static(&result, "run");
+    }
+
+    #[test]
+    fn vitest_config_preserves_migration_fields_without_evaluating_plugins() {
+        for import in [
+            "import { defineConfig } from 'vitest/config';",
+            "import { defineConfig } from 'vite-plus/test/config';",
+        ] {
+            let source = [
+                import,
+                "export default defineConfig({
+                     plugins: [plugin()],
+                     migrate: { ignorePatterns: ['templates/'] },
+                 });",
+            ]
+            .join("\n");
+            let result = parse(&source);
+            assert_json(
+                &result,
+                "migrate",
+                serde_json::json!({ "ignorePatterns": ["templates/"] }),
+            );
+            assert!(result.get("run").is_none());
+        }
+    }
+
+    #[test]
+    fn exported_const_config_is_static_only_without_possible_mutations() {
+        let source = "import { defineConfig } from 'vitest/config';
+                      const config = defineConfig({ migrate: { ignorePatterns: ['templates/'] } });";
+        let result = parse(&[source, "export default config;"].join("\n"));
+        assert_json(&result, "migrate", serde_json::json!({ "ignorePatterns": ["templates/"] }));
+        assert!(result.get("run").is_none());
+        for mutation in [
+            "config.migrate = { ignorePatterns: [] };",
+            "Object.assign(config, other);",
+            "const changed = mutate(config);",
+        ] {
+            let result = parse(&[source, mutation, "export default config;"].join("\n"));
+            assert_non_static(&result, "migrate");
+        }
+        assert_non_static(&parse("let config = {}; export default config;"), "migrate");
     }
 
     #[test]

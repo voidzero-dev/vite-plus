@@ -2,9 +2,11 @@ export {
   defineConfig,
   defineProject,
   lazyPlugins,
+  resolveConfig,
   resolveConfigFromFile,
 } from './define-config.ts';
 export type { ResolveConfigFromFileOptions } from './define-config.ts';
+export type { MigrateConfig } from './migrate-config.ts';
 
 export * from 'vite';
 

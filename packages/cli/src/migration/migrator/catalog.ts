@@ -1,4 +1,3 @@
-import fs from 'node:fs';
 import path from 'node:path';
 
 import { coerce, isGreaterThanOrEqual, isLessThan } from 'verkit';
@@ -13,9 +12,10 @@ import {
   VITE_PLUS_VERSION,
   isForceOverrideMode,
 } from '../../utils/constants.ts';
-import { editJsonFile, readJsonFile } from '../../utils/json.ts';
 import { type NpmWorkspaces } from '../../utils/workspace.ts';
-import { editYamlFile, readYamlFile, scalarString, type YamlDocument } from '../../utils/yaml.ts';
+import fs from '../files.ts';
+import { editJsonFile, readJsonFile } from '../files.ts';
+import { editYamlFile, readYamlFile, scalarString, type YamlDocument } from '../files.ts';
 import {
   dropRemovePackageOverrideKeys,
   ensurePnpmExoticSubdepsSetting,
@@ -31,6 +31,7 @@ import {
   shouldDropProviderOverrideKey,
   workspaceUsesWebdriverioProvider,
 } from '../migrator.ts';
+import { preserveSharedDependencies } from '../scope.ts';
 import {
   type PreparedOxlintConfigs,
   LEGACY_WRAPPER_FALLBACK_VERSIONS,
@@ -166,6 +167,9 @@ export function supportsCatalog(
   version: string,
   isBunWorkspace = false,
 ): boolean {
+  if (preserveSharedDependencies()) {
+    return false;
+  }
   switch (packageManager) {
     case PackageManager.pnpm:
       return pnpmSupportsCatalog(version);
@@ -619,7 +623,7 @@ export function getCatalogDependencySpec(
   ) {
     return version;
   }
-  if (!supportCatalog || version.startsWith('file:')) {
+  if (!supportCatalog || preserveSharedDependencies() || version.startsWith('file:')) {
     return version;
   }
   return currentValue?.startsWith('catalog:')
@@ -901,6 +905,9 @@ export function rewriteCatalog(
     catalogs?: Record<string, Record<string, string>>;
   } | null;
   const preferredCatalogSpec = selectPreferredCatalogSpec(parsed?.catalog, parsed?.catalogs);
+  if (preserveSharedDependencies()) {
+    return preferredCatalogSpec;
+  }
   const preferredCatalogName = preferredCatalogSpec.slice('catalog:'.length);
   const targetPath: readonly string[] =
     preferredCatalogName && preferredCatalogName !== 'default'
@@ -1090,6 +1097,9 @@ export function rewriteBunCatalog(
   vitestEcosystemPackages: ReadonlySet<string>,
   usesWebdriverioProvider = false,
 ): void {
+  if (preserveSharedDependencies()) {
+    return;
+  }
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
     return;

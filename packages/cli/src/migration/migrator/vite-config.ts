@@ -1,4 +1,3 @@
-import fs from 'node:fs';
 import path from 'node:path';
 
 import type { Program } from '@oxc-project/types';
@@ -24,10 +23,11 @@ import {
 import { type WorkspacePackage } from '../../types/index.ts';
 import { BASEURL_TSCONFIG_WARNING, VITE_PLUS_NAME } from '../../utils/constants.ts';
 import { documentationUrl } from '../../utils/documentation.ts';
-import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
 import { displayRelative } from '../../utils/path.ts';
 import { hasBaseUrlInTsconfig } from '../../utils/tsconfig.ts';
 import { detectConfigs, type ConfigFiles } from '../detector.ts';
+import fs from '../files.ts';
+import { editJsonFile, isJsonFile, readJsonFile } from '../files.ts';
 import {
   collectInstalledPackageNames,
   oxlintMigrationMarker,
@@ -40,6 +40,7 @@ import {
   sanitizeInheritedJsPlugins,
 } from '../migrator.ts';
 import { type MigrationReport } from '../report.ts';
+import { isMigrationIgnored, migrationScope } from '../scope.ts';
 import {
   type OxlintConfigMigration,
   type OxlintModulePlan,
@@ -195,6 +196,9 @@ export function mergeTsdownConfigFile(
   report?: MigrationReport,
 ): boolean {
   const configs = detectConfigs(projectPath);
+  if (isMigrationIgnored(path.join(projectPath, configs.viteConfig ?? 'vite.config.ts'))) {
+    return false;
+  }
   if (!configs.tsdownConfig) {
     return false;
   }
@@ -203,6 +207,9 @@ export function mergeTsdownConfigFile(
 
   const fullViteConfigPath = path.join(projectPath, viteConfig);
   const fullTsdownConfigPath = path.join(projectPath, configs.tsdownConfig);
+  if (isMigrationIgnored(fullViteConfigPath) || isMigrationIgnored(fullTsdownConfigPath)) {
+    return false;
+  }
 
   // For JSON files, merge content directly and delete the file
   if (configs.tsdownConfig.endsWith('.json')) {
@@ -271,6 +278,9 @@ export function mergeViteConfigFiles(
   preparedOxlintConfigs?: PreparedOxlintConfigs,
 ): void {
   const configs = detectConfigs(projectPath);
+  if (isMigrationIgnored(path.join(projectPath, configs.viteConfig ?? 'vite.config.ts'))) {
+    return;
+  }
   if (!configs.oxfmtConfig && !configs.oxlintConfig) {
     return;
   }
@@ -587,6 +597,9 @@ function injectConfigDefaults(
   report?: MigrationReport,
 ): void {
   const configs = detectConfigs(projectPath);
+  if (isMigrationIgnored(path.join(projectPath, configs.viteConfig ?? 'vite.config.ts'))) {
+    return;
+  }
   if (configs.viteConfig && hasConfigKey(path.join(projectPath, configs.viteConfig), configKey)) {
     return;
   }
@@ -647,6 +660,13 @@ function mergeAndRemoveJsonConfig(
 ): boolean {
   const fullViteConfigPath = path.join(projectPath, viteConfigPath);
   const fullJsonConfigPath = path.join(projectPath, jsonConfigPath);
+  if (
+    isMigrationIgnored(fullViteConfigPath) ||
+    isMigrationIgnored(fullJsonConfigPath) ||
+    [...(modulePlan?.modules.keys() ?? [])].some((file) => isMigrationIgnored(file))
+  ) {
+    return false;
+  }
   // Skip merge when the key is already present in vite.config.ts — the Rust
   // merge step always prepends, so without this guard a template that ships
   // both an inline `${configKey}:` block and a standalone JSON file (e.g.
@@ -760,6 +780,9 @@ export function mergeStagedConfigToViteConfig(
   report?: MigrationReport,
 ): boolean {
   const configs = detectConfigs(projectPath);
+  if (isMigrationIgnored(path.join(projectPath, configs.viteConfig ?? 'vite.config.ts'))) {
+    return false;
+  }
   const viteConfig = ensureViteConfig(projectPath, configs, silent, report);
   const fullViteConfigPath = path.join(projectPath, viteConfig);
 
@@ -901,7 +924,13 @@ export function rewriteAllImports(
   // `collectOxlintOwnerDirs`.
   oxlintOwnerDirs: string[] = [],
 ): boolean {
-  const result = rewriteImportsInDirectory(projectPath, preserveNuxtVitestImports, oxlintOwnerDirs);
+  const result = rewriteImportsInDirectory(
+    projectPath,
+    preserveNuxtVitestImports,
+    oxlintOwnerDirs,
+    migrationScope()?.root,
+    migrationScope()?.patterns,
+  );
   const modified = result.modifiedFiles.length;
   const preserved = result.preservedVitestFiles.length;
   const errors = result.errors.length;

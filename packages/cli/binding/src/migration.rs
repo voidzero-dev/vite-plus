@@ -3,6 +3,37 @@ use std::path::Path;
 use napi::{anyhow, bindgen_prelude::*};
 use napi_derive::napi;
 
+#[napi]
+pub struct MigrationIgnoreMatcher(vp_migration::MigrationIgnoreMatcher);
+
+#[napi]
+impl MigrationIgnoreMatcher {
+    #[napi(constructor)]
+    pub fn new(root: String, patterns: Vec<String>) -> Result<Self> {
+        Ok(Self(
+            vp_migration::MigrationIgnoreMatcher::new(Path::new(&root), &patterns)
+                .map_err(anyhow::Error::from)?,
+        ))
+    }
+
+    #[napi]
+    pub fn is_ignored(&self, path: String, is_dir: bool) -> bool {
+        self.0.is_ignored(Path::new(&path), is_dir)
+    }
+}
+
+/// JSON for a static migrate block; undefined requests normal config resolution.
+#[napi]
+pub fn read_static_migration_config(root: String) -> Result<Option<String>> {
+    let root = vt_path::AbsolutePathBuf::new(root.into())
+        .ok_or_else(|| Error::from_reason("Migration root must be absolute"))?;
+    Ok(match vp_static_config::resolve_static_config(&root).get("migrate") {
+        Some(vp_static_config::FieldValue::Json(value)) => Some(value.to_string()),
+        Some(vp_static_config::FieldValue::NonStatic) => None,
+        None => Some("{}".to_string()),
+    })
+}
+
 /// A literal argument with its original JavaScript UTF-16 source range.
 #[napi(object)]
 pub struct LiteralCommandToken {
@@ -367,10 +398,14 @@ pub fn rewrite_imports_in_directory(
     root: String,
     preserve_vitest_in_nuxt_packages: Option<bool>,
     oxlint_owner_dirs: Option<Vec<String>>,
+    ignore_root: Option<String>,
+    ignore_patterns: Option<Vec<String>>,
 ) -> Result<BatchRewriteResult> {
     let result = vp_migration::rewrite_imports_in_directory_with_options(
         Path::new(&root),
         vp_migration::RewriteImportsOptions {
+            ignore_root: ignore_root.map(std::path::PathBuf::from),
+            ignore_patterns: ignore_patterns.unwrap_or_default(),
             preserve_vitest_in_nuxt_packages: preserve_vitest_in_nuxt_packages.unwrap_or(false),
             oxlint_owner_dirs: oxlint_owner_dirs
                 .unwrap_or_default()

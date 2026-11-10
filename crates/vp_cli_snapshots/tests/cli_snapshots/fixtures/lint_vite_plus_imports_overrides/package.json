@@ -1,0 +1,1 @@
+{ "name": "lint-import-overrides", "private": true, "type": "module", "devDependencies": { "vite-plus": "latest" } }

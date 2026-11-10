@@ -1,4 +1,3 @@
-import fs from 'node:fs';
 import path from 'node:path';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
@@ -8,8 +7,9 @@ import { parse as parseYaml } from 'yaml';
 
 import { type DownloadPackageManagerResult } from '../../../binding/index.js';
 import { SETUP_VP_VERSION } from '../../utils/constants.ts';
-import { editJsonFile } from '../../utils/json.ts';
 import { detectConfigs } from '../detector.ts';
+import fs from '../files.ts';
+import { editJsonFile } from '../files.ts';
 import { type MigrationReport } from '../report.ts';
 import { isPlainRecord, warnMigration } from './shared.ts';
 

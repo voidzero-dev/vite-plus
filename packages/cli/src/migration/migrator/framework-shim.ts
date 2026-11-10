@@ -1,8 +1,9 @@
-import fs from 'node:fs';
 import path from 'node:path';
 
-import { readJsonFile } from '../../utils/json.ts';
+import fs from '../files.ts';
+import { readJsonFile } from '../files.ts';
 import { type MigrationReport } from '../report.ts';
+import { isMigrationIgnored } from '../scope.ts';
 
 // .svelte files are handled by @sveltejs/vite-plugin-svelte (transpilation)
 // and svelte-check / Svelte Language Server (type checking).
@@ -87,6 +88,9 @@ export function addFrameworkShim(
   report?: MigrationReport,
 ): void {
   const envDtsPath = getEnvDtsPath(projectPath);
+  if (isMigrationIgnored(envDtsPath)) {
+    return;
+  }
   const shim = FRAMEWORK_SHIMS[framework];
   if (fs.existsSync(envDtsPath)) {
     const existing = fs.readFileSync(envDtsPath, 'utf-8');
