@@ -17,6 +17,8 @@ template ships Prettier, so create installs+migrates before the main install; th
 approval recorded under allowBuilds despite the migration pre-install
 
 ```
+packages:
+  - .
 allowBuilds:
   core-js: true
 catalog:
@@ -62,6 +64,8 @@ peerDependencyRules:
     - vite
   allowedVersions:
     vite: "*"
+packages:
+  - .
 ```
 
 ## `cd default-app && vp pm approve-builds core-js`
@@ -77,6 +81,8 @@ node_modules/.pnpm/core-js@3.39.0/node_modules/core-js: Running postinstall scri
 core-js is now allowed under allowBuilds
 
 ```
+packages:
+  - .
 allowBuilds:
   core-js: true
 catalog:
