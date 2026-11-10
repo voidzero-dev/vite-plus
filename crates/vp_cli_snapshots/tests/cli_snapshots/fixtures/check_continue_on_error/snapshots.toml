@@ -1,0 +1,40 @@
+[[case]]
+name = "check_continue_on_error_reports_all_failures"
+vp = "local"
+steps = [
+  { argv = ["vp", "check", "src/index.ts"], comment = "default behavior stops at formatting failures", continue-on-failure = true },
+  { argv = ["vp", "check", "--continue-on-error", "src/index.ts"], comment = "format, lint, and type diagnostics are all reported", continue-on-failure = true },
+  { argv = ["vp", "check", "--continue-on-error", "--no-fmt", "src/index.ts"], comment = "formatting can still be skipped", continue-on-failure = true },
+  { argv = ["vp", "check", "--continue-on-error", "--no-lint", "src/index.ts"], comment = "skip lint rules while retaining format and type errors", continue-on-failure = true },
+]
+
+[[case]]
+name = "check_continue_on_error_preserves_format_failure"
+vp = "local"
+steps = [
+  ["vpt", "write-file", "src/index.ts", "export const value = 42;\n"],
+  { argv = ["vp", "check", "--continue-on-error", "src/clean-lint.ts"], comment = "successful lint and type checks must not hide a formatting failure", continue-on-failure = true },
+  { argv = ["vp", "check", "--continue-on-error", "--no-lint", "--no-fmt", "src/clean-lint.ts"], comment = "type-check-only still succeeds" },
+]
+
+[[case]]
+name = "check_continue_on_error_preserves_lint_failure"
+vp = "local"
+steps = [
+  ["vpt", "write-file", "src/index.ts", "export const value: string = 42;\neval(\"value\");\n"],
+  { argv = ["vp", "check", "--continue-on-error", "src/index.ts"], comment = "formatting passes but lint and type failures still produce a nonzero exit", continue-on-failure = true },
+]
+
+[[case]]
+name = "check_continue_on_error_fix_reformats_after_lint_failure"
+vp = "local"
+steps = [
+  ["vpt", "write-file", "src/index.ts", "export const value: string = 42;\nif (value) eval(\"value\");\n"],
+  { argv = ["vp", "check", "--fix", "src/index.ts"], comment = "default fail-fast skips the final format pass after curly fixes and remaining lint/type failures", continue-on-failure = true },
+  ["vpt", "print-file", "src/index.ts"],
+  { argv = ["vp", "fmt", "--check", "src/index.ts"], comment = "lint fixes left the source unformatted", continue-on-failure = true },
+  ["vpt", "write-file", "src/index.ts", "export const value: string = 42;\nif (value) eval(\"value\");\n"],
+  { argv = ["vp", "check", "--continue-on-error", "--fix", "src/index.ts"], comment = "curly is fixed and the final format pass runs, but remaining lint/type errors keep the exit nonzero", continue-on-failure = true },
+  ["vpt", "print-file", "src/index.ts"],
+  { argv = ["vp", "fmt", "--check", "src/index.ts"], comment = "the final formatting pass succeeded even though the overall check failed" },
+]
