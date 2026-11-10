@@ -39,6 +39,14 @@ The foreign Node remains executable.
 true
 ```
 
+## `HOME=${workspace}/user VP_HOME= VP_BIN_DIR=${workspace}/shared-bin VP_DATA_DIR=${workspace}/data VP_CACHE_DIR=${workspace}/cache XDG_CONFIG_HOME=${workspace}/config PATH=${workspace}/shared-bin${PATH_SEPARATOR}${PATH} VP_ENV_FORBIDDEN=1 VP_NODE_DIST_MIRROR=http://127.0.0.1:1 NPM_CONFIG_REGISTRY=http://127.0.0.1:1 vpx node -p process.execPath.includes('shared-bin')`
+
+With VP_ENV_FORBIDDEN=1, the foreign Node first on PATH in the shared bin is selected.
+
+```
+true
+```
+
 ## `HOME=${workspace}/user VP_HOME= VP_BIN_DIR=${workspace}/shared-bin VP_DATA_DIR=${workspace}/data VP_CACHE_DIR=${workspace}/cache XDG_CONFIG_HOME=${workspace}/config PATH=${workspace}/data/current/bin${PATH_SEPARATOR}${PATH} vp env off node`
 
 

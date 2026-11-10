@@ -4,7 +4,7 @@ import { styleText } from 'node:util';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
-import { parseCreateArgs, vitePlusHeader } from '../../binding/index.js';
+import { getPackageManagerOverride, parseCreateArgs, vitePlusHeader } from '../../binding/index.js';
 import {
   addFrameworkShim,
   createCatalogDependencyResolver,
@@ -675,20 +675,25 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     }
   }
 
-  // Resolve package manager: existing monorepo > CLI flag > ambient detection > launcher > prompt/default
+  // The installer applies VP_PACKAGE_MANAGER before project pins or the create CLI flag.
+  const packageManagerOverride = getPackageManagerOverride();
+  // Otherwise: existing monorepo > CLI flag > ambient detection > launcher > prompt/default.
   const requestedPackageManager = options.packageManager;
   const detectedPackageManager = workspaceInfoOptional.packageManager;
+  const preferredPackageManager = isMonorepo
+    ? (detectedPackageManager ?? requestedPackageManager)
+    : (requestedPackageManager ?? detectedPackageManager);
   const launcherPackageManager = detectLauncherPackageManager();
   const packageManager =
-    (isMonorepo
-      ? (detectedPackageManager ?? requestedPackageManager)
-      : (requestedPackageManager ?? detectedPackageManager)) ??
+    (packageManagerOverride?.name as PackageManager | undefined) ??
+    preferredPackageManager ??
     launcherPackageManager ??
     (await selectPackageManager(options.interactive, compactOutput));
   const packageManagerVersion =
-    packageManager === detectedPackageManager
+    packageManagerOverride?.version ??
+    (packageManager === detectedPackageManager
       ? workspaceInfoOptional.packageManagerVersion
-      : 'latest';
+      : 'latest');
   const shouldSilencePackageManagerInstallLog =
     compactOutput || (isMonorepo && workspaceInfoOptional.packageManager !== undefined);
   // ensure the package manager is installed by vite-plus
@@ -698,11 +703,27 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     options.interactive,
     shouldSilencePackageManagerInstallLog,
     workspaceInfoOptional.rootDir,
+    packageManagerOverride?.expectedHash ?? undefined,
   );
+  let resolvedPackageManagerOverride: string | undefined;
+  if (packageManagerOverride) {
+    resolvedPackageManagerOverride = `${packageManager}@${downloadResult.version}`;
+    if (packageManagerOverride.expectedHash) {
+      resolvedPackageManagerOverride += `+${packageManagerOverride.expectedHash}`;
+    }
+  }
   const workspaceInfo: WorkspaceInfo = {
     ...workspaceInfoOptional,
     packageManager,
+    packageManagerVersion: downloadResult.version,
     downloadPackageManager: downloadResult,
+  };
+  const installOptions = {
+    silent: compactOutput,
+    packageManager,
+    packageManagerVersion: downloadResult.version,
+    packageManagerOverride: resolvedPackageManagerOverride,
+    detectIgnoredBuilds: true,
   };
   // Only the global CLI puts `vp` on PATH; launches through a package manager reach it through the project's package manager.
   const vpRunCommand = launcherPackageManager
@@ -970,12 +991,12 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       );
     }
     updateCreateProgress('Installing dependencies');
-    const installSummary = await runViteInstall(fullPath, options.interactive, installArgs, {
-      silent: compactOutput,
-      packageManager: workspaceInfo.packageManager,
-      packageManagerVersion: workspaceInfo.downloadPackageManager.version,
-      detectIgnoredBuilds: true,
-    });
+    const installSummary = await runViteInstall(
+      fullPath,
+      options.interactive,
+      installArgs,
+      installOptions,
+    );
     await handleIgnoredBuilds(fullPath, fullPath, installSummary);
     updateCreateProgress('Formatting code');
     await runViteFmt(fullPath, options.interactive, undefined, { silent: compactOutput });
@@ -1163,12 +1184,12 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     // re-detects and approves, so we only need this pre-install to skip
     // `--ignore-scripts` (detectIgnoredBuilds treats the gated-build error as
     // installed, so migration still proceeds).
-    installSummary = await runViteInstall(installCwd, options.interactive, installArgs, {
-      silent: compactOutput,
-      packageManager: workspaceInfo.packageManager,
-      packageManagerVersion: workspaceInfo.downloadPackageManager.version,
-      detectIgnoredBuilds: true,
-    });
+    installSummary = await runViteInstall(
+      installCwd,
+      options.interactive,
+      installArgs,
+      installOptions,
+    );
     if (installSummary.status !== 'installed') {
       return;
     }
@@ -1284,12 +1305,12 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       }
     }
     updateCreateProgress('Installing dependencies');
-    installSummary = await runViteInstall(workspaceInfo.rootDir, options.interactive, installArgs, {
-      silent: compactOutput,
-      packageManager: workspaceInfo.packageManager,
-      packageManagerVersion: workspaceInfo.downloadPackageManager.version,
-      detectIgnoredBuilds: true,
-    });
+    installSummary = await runViteInstall(
+      workspaceInfo.rootDir,
+      options.interactive,
+      installArgs,
+      installOptions,
+    );
     await handleIgnoredBuilds(fullPath, workspaceInfo.rootDir, installSummary);
     updateCreateProgress('Formatting code');
     // Also format the root config when generator registration rewrote it (the
@@ -1333,12 +1354,12 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       installGitHooks(fullPath, compactOutput, undefined, workspaceInfo.packageManager);
     }
     updateCreateProgress('Installing dependencies');
-    installSummary = await runViteInstall(fullPath, options.interactive, installArgs, {
-      silent: compactOutput,
-      packageManager: workspaceInfo.packageManager,
-      packageManagerVersion: workspaceInfo.downloadPackageManager.version,
-      detectIgnoredBuilds: true,
-    });
+    installSummary = await runViteInstall(
+      fullPath,
+      options.interactive,
+      installArgs,
+      installOptions,
+    );
     await handleIgnoredBuilds(fullPath, fullPath, installSummary);
     updateCreateProgress('Formatting code');
     await runViteFmt(fullPath, options.interactive, undefined, { silent: compactOutput });

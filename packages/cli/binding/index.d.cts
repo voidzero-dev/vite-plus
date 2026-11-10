@@ -3787,6 +3787,9 @@ export declare function ensureBlockingStdio(): void;
  */
 export declare function findMonorepoRoot(cwd: string): string | null;
 
+/** Read the same `VP_PACKAGE_MANAGER` override used by `vp install`. */
+export declare function getPackageManagerOverride(): PackageManagerOverride | null;
+
 /**
  * Resolved on-disk category roots from [`vp_shared::EnvConfig`].
  *
@@ -3918,6 +3921,12 @@ export interface MigrateArgs {
  * each static `run.tasks` entry into its `cache` object.
  */
 export declare function migrateTaskCacheConfig(viteConfigPath: string): TaskCacheConfigResult;
+
+export interface PackageManagerOverride {
+  name: string;
+  version: string;
+  expectedHash?: string;
+}
 
 export declare function parseConfigArgs(argv: Array<string>): ParseConfigArgsOutcome;
 
