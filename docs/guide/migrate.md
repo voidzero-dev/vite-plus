@@ -45,6 +45,24 @@ vp migrate my-app
 
 ## Migration Flow
 
+### Steps
+
+The `migrate` command is designed to move existing projects onto Vite+ quickly. Here is what the command does:
+
+- Updates project dependencies
+- Rewrites imports where needed
+- Merges tool-specific config into `vite.config.ts`
+- Updates scripts to the Vite+ command surface
+- Can set up commit hooks
+- Can write agent and editor configuration files
+- Formats the migrated project
+
+See [Migration Rules](./migrate-rules.md) for the exact dependency, source rewrite, and package-manager behavior.
+
+Most projects will require further manual adjustments after running `vp migrate`.
+
+For the Vitest v5 upgrade, read the [compatibility settings and review checklist](./vitest-v5.md) and the [upstream Vitest migration guide](https://vitest.dev/guide/migration/). The preflight checks your original runner version and Node runtime before dependency updates. Keep the original lockfile available and resolve blocking findings before retrying.
+
 ### Excluding templates and examples
 
 Use `migrate.ignorePatterns` in the workspace-root `vite.config.ts` to keep
@@ -86,9 +104,12 @@ an incompatible toolchain override must be resolved before migration can proceed
 Catalog references in an excluded template still require its original workspace.
 
 The `vite-plus/prefer-vite-plus-imports` lint rule also respects these exclusions,
-including during `vp lint --fix` and `vp check --fix`. Other lint rules and normal
-formatting remain enabled. To disable only the import rule with existing lint
-configuration, use:
+including during `vp lint --fix` and `vp check --fix`. No additional lint override
+is needed when `migrate.ignorePatterns` is set. Other lint rules and normal
+formatting remain enabled.
+
+For lint-only exclusions, or as a workaround in versions without
+`migrate.ignorePatterns`, use the existing lint configuration:
 
 ```ts
 lint: {
@@ -103,24 +124,6 @@ lint: {
 
 This lint override disables both diagnostics and autofix for that rule. It does
 not exclude files from `vp migrate`.
-
-### Steps
-
-The `migrate` command is designed to move existing projects onto Vite+ quickly. Here is what the command does:
-
-- Updates project dependencies
-- Rewrites imports where needed
-- Merges tool-specific config into `vite.config.ts`
-- Updates scripts to the Vite+ command surface
-- Can set up commit hooks
-- Can write agent and editor configuration files
-- Formats the migrated project
-
-See [Migration Rules](./migrate-rules.md) for the exact dependency, source rewrite, and package-manager behavior.
-
-Most projects will require further manual adjustments after running `vp migrate`.
-
-For the Vitest v5 upgrade, read the [compatibility settings and review checklist](./vitest-v5.md) and the [upstream Vitest migration guide](https://vitest.dev/guide/migration/). The preflight checks your original runner version and Node runtime before dependency updates. Keep the original lockfile available and resolve blocking findings before retrying.
 
 ## Recommended Workflow
 
