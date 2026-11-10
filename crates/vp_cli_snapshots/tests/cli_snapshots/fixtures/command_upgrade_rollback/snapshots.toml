@@ -39,3 +39,19 @@ steps = [
   { argv = ["vp", "upgrade", "999.0.1", "--silent"], continue-on-failure = true },
   ["vpt", "print-file", "$VP_HOME/999.0.1/keep.txt"],
 ]
+
+[[case]]
+name = "command_upgrade_repairs_broken_active_version"
+vp = "global"
+skip-platforms = ["windows"]
+comment = "An upgrade to the version that `current` names still installs it when the active binary is missing."
+env = { VP_SKIP_DEPS_INSTALL = "1", VP_NODE_MANAGER = "no", VP_SELF_SETUP_NO_MODIFY_PATH = "1" }
+steps = [
+  { argv = ["vpt", "mkdir", "external"], snapshot = false },
+  { argv = ["vpt", "cp", "$VP_HOME/bin/vp", "external/vp"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "external/vp"], snapshot = false },
+  { argv = ["./external/vp"], tty = false, envs = [["VP_HOME", "${workspace}/home"], ["VP_VERSION", "999.0.1"]], comment = "Activate a 999.0.1 directory", snapshot = false },
+  { argv = ["vpt", "rm", "-r", "home/999.0.1/bin"], comment = "Break the active installation", snapshot = false },
+  # The fixture payload has no `vp` binary, so this error proves that the upgrade ran instead of reporting that it is up to date.
+  { argv = ["vp", "upgrade", "999.0.1", "--silent"], envs = [["VP_HOME", "${workspace}/home"]], continue-on-failure = true },
+]

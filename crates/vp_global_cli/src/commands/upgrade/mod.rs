@@ -180,13 +180,19 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
     integrity::verify_integrity(&platform_data, &resolved.platform_integrity)?;
 
     // Hold the lock until cleanup finishes. Another process may have activated
-    // the target version while this one waited.
+    // the target version while this one waited. A `current` link whose binary
+    // is missing still needs this install to repair it.
     let _install_lock = install::lock_install_dir(install_dir).await?;
     let active_install_dir = install::read_current_version(install_dir).await;
     if !options.force
         && active_install_dir
             .as_deref()
             .is_some_and(|active| install::is_install_dir_for_version(active, &resolved.version))
+        && tokio::fs::try_exists(
+            install_dir.join("current").join("bin").join(vp_setup::VP_BINARY_NAME),
+        )
+        .await
+        .unwrap_or(false)
     {
         if !options.silent {
             vp_shared::output::print_stdout_line(format_args!(
