@@ -232,6 +232,21 @@ Every Vite+ prerelease uses the identifier `vp` and a counter `k` instead:
   Vite prerelease. Vite `9.0.0-beta.3` gives `9.0.0-beta.3.vp.0`, then
   `9.0.0-beta.3.vp.1`.
 
+Example: Vite+ betas on the stable Vite `8.3.7`, after a stable release on the
+same Vite. `nextCoreVersion` gives:
+
+| `vite-plus`    | Bundled Vite | Core version    | Reason                                  |
+| -------------- | ------------ | --------------- | --------------------------------------- |
+| `1.6.0`        | `8.3.7`      | `8.3.7000`      | First stable release on Vite `8.3.7`    |
+| `1.7.0-beta.0` | `8.3.7`      | `8.3.7001-vp.0` | Base `8.3.7001` is the next stable core |
+| `1.7.0-beta.1` | `8.3.7`      | `8.3.7001-vp.1` | Same base, next `k`                     |
+| `1.7.0`        | `8.3.7`      | `8.3.7001`      | The stable release takes the base       |
+| `1.8.0-beta.0` | `8.3.7`      | `8.3.7002-vp.0` | The next stable core is now `8.3.7002`  |
+
+The `beta` or `rc` identifier of `vite-plus` does not change the core
+version. A beta core such as `8.3.7001-vp.0` does not satisfy `^8.0.0` in npm,
+so migration keeps the pnpm `vite` rule for it (see Migration).
+
 The `vite-plus` prerelease identifiers do not appear in the core version. The
 exact alias in the published CLI manifest links the two versions, as it does
 for stable releases (see Relation to the `vite-plus` version).
