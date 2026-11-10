@@ -24,6 +24,25 @@ pub struct DownloadPackageManagerResult {
     pub version: String,
 }
 
+#[napi(object)]
+pub struct PackageManagerOverride {
+    pub name: String,
+    pub version: String,
+    pub expected_hash: Option<String>,
+}
+
+/// Read the same `VP_PACKAGE_MANAGER` override used by `vp install`.
+#[napi]
+pub fn get_package_manager_override() -> Result<Option<PackageManagerOverride>> {
+    Ok(vp_pm_cli::package_manager_override().map_err(anyhow::Error::from)?.map(
+        |(name, version, expected_hash)| PackageManagerOverride {
+            name: name.to_string(),
+            version,
+            expected_hash,
+        },
+    ))
+}
+
 /// Download a package manager
 ///
 /// ## Parameters

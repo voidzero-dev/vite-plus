@@ -64,6 +64,9 @@ $originalCheck = $env:VP_SELF_SETUP_SUPPORT_CHECK
 $originalPath = $env:Path
 $originalRegistry = $env:NPM_CONFIG_REGISTRY
 $originalVpShell = $env:VP_SHELL
+$managementVariables = @('VP_ENV_FORBIDDEN', 'VP_NODE_MANAGER', 'VP_PM_MANAGER', 'VP_NPM_MANAGER', 'VP_PNPM_MANAGER', 'VP_YARN_MANAGER', 'VP_BUN_MANAGER')
+$originalManagement = @{}
+foreach ($name in $managementVariables) { $originalManagement[$name] = [Environment]::GetEnvironmentVariable($name) }
 $fixtureSha = '0123456789012345678901234567890123456789'
 New-Item -ItemType Directory -Path "$testRoot/package", "$testRoot/tmp", "$testRoot/scripts" | Out-Null
 Set-Content -LiteralPath "$testRoot/package/vp.exe" -Value 'Payload fixture'
@@ -78,6 +81,7 @@ if ($args.Count -eq 0) {
     $expectedVpShell = if ($scenario -eq 'supported-pr') { 'fish' } else { 'powershell' }
     if ($env:VP_SHELL -ne $expectedVpShell) { exit 96 }
     if ($scenario -eq 'supported-pr' -and $env:NPM_CONFIG_REGISTRY -ne 'https://registry-bridge.viteplus.dev/') { exit 97 }
+    if ($scenario -like 'env-forbidden*' -and $env:VP_ENV_FORBIDDEN -cne '1') { exit 94 }
     Write-Output ("`$script:InstallDir = '{0}'" -f "$testRoot/data")
     Write-Output ("`$script:ShimDir = '{0}'" -f "$testRoot/installed bin")
     Write-Output ("`$script:CacheDir = '{0}'" -f "$testRoot/cache")
@@ -85,10 +89,15 @@ if ($args.Count -eq 0) {
     Write-Output ("`$script:StateDir = '{0}'" -f "$testRoot/state")
     exit 0
 }
-if ($env:VP_SELF_SETUP_SUPPORT_CHECK -ne '1') { exit 99 }
+# Only VP_ENV_FORBIDDEN=1 asks for the second response line.
+$expectedCheck = if ($scenario -like 'env-forbidden*') { 'env-forbidden' } else { '1' }
+if ($env:VP_SELF_SETUP_SUPPORT_CHECK -cne $expectedCheck) { exit 99 }
 New-Item -ItemType File -Path "$testRoot/binary-probed" | Out-Null
-if ($scenario -in @('legacy', 'legacy-remote', 'legacy-failure', 'pr')) { Write-Output 'Usage: vp [COMMAND]' }
-else { Write-Output 'vite-plus-self-setup-v1' }
+if ($scenario -in @('legacy', 'legacy-remote', 'legacy-failure', 'pr', 'env-forbidden-legacy')) { Write-Output 'Usage: vp [COMMAND]' }
+else {
+    Write-Output 'vite-plus-self-setup-v1'
+    if ($expectedCheck -eq 'env-forbidden' -and $scenario -ne 'env-forbidden-v1') { Write-Output 'vite-plus-self-setup-env-forbidden' }
+}
 exit 0
 '@ | Set-Content -LiteralPath "$testRoot/package/binary.ps1"
 @'
@@ -196,6 +205,11 @@ function Test-SelfSetupSupport {
     param($BinarySource)
     & $probe -BinarySource (Join-Path (Split-Path $BinarySource) 'binary.ps1')
 }
+$envForbiddenProbe = ${function:Test-EnvForbiddenSupport}
+function Test-EnvForbiddenSupport {
+    param($BinarySource)
+    & $envForbiddenProbe -BinarySource (Join-Path (Split-Path $BinarySource) 'binary.ps1')
+}
 $handoff = ${function:Invoke-InstallHandoff}
 function Invoke-InstallHandoff {
     param($BinarySource)
@@ -205,6 +219,7 @@ function Invoke-InstallHandoff {
 try {
     foreach ($scenario in @(
         'supported', 'legacy', 'legacy-remote', 'legacy-failure', 'failure', 'pr', 'supported-pr',
+        'env-forbidden', 'env-forbidden-v1', 'env-forbidden-legacy', 'forbidden-value-true',
         'metadata-error', 'metadata-missing-version', 'metadata-network-error', 'platform-error', 'platform-network-error',
         'provenance-missing', 'provenance-malformed', 'provenance-dotted-key', 'tarball-missing',
         'integrity-missing', 'integrity-malformed', 'integrity-unsupported', 'integrity-noncanonical',
@@ -220,9 +235,16 @@ try {
         $script:PackageMetadata = $null
         Remove-Item -LiteralPath "$testRoot/legacy", "$testRoot/binary-invoked", "$testRoot/binary-probed" -ErrorAction SilentlyContinue
         $env:VP_SELF_SETUP_SUPPORT_CHECK = if ($scenario -eq 'supported') { 'original' } else { $null }
+        foreach ($name in $managementVariables) { [Environment]::SetEnvironmentVariable($name, $null, 'Process') }
+        switch ($scenario) {
+            { $_ -like 'env-forbidden*' } { $env:VP_ENV_FORBIDDEN = '1' }
+            # Only the exact value 1 stops management.
+            'forbidden-value-true' { $env:VP_ENV_FORBIDDEN = 'true' }
+        }
+        $isEnvForbiddenFailure = $scenario -in @('env-forbidden-v1', 'env-forbidden-legacy')
         $isIntegrityFailure = $scenario -like 'integrity-*'
         $isMetadataFailure = $scenario -match '^(metadata-|platform-|provenance-|tarball-missing$)'
-        $expectedExit = if ($isIntegrityFailure -or $isMetadataFailure) {
+        $expectedExit = if ($isIntegrityFailure -or $isMetadataFailure -or $isEnvForbiddenFailure) {
             1
         } elseif ($scenario -in @('failure', 'legacy-failure')) {
             42
@@ -260,13 +282,20 @@ try {
             Write-Host "PASS: $scenario"
             continue
         }
+        if ($isEnvForbiddenFailure) {
+            Assert (Test-Path -LiteralPath "$testRoot/binary-probed") 'VP_ENV_FORBIDDEN support was not probed'
+            Assert (-not (Test-Path -LiteralPath "$testRoot/binary-invoked")) 'An unsupported binary was invoked with VP_ENV_FORBIDDEN'
+            Assert (-not (Test-Path -LiteralPath "$testRoot/legacy")) 'VP_ENV_FORBIDDEN reached legacy setup'
+            Write-Host "PASS: $scenario"
+            continue
+        }
         Assert ($env:VP_SHELL -eq $initialVpShell) 'Setup changed the caller shell'
         if ($scenario -eq 'supported') {
             Assert (($env:Path -split ';')[0] -eq "$testRoot/installed bin") 'Installed bin directory was not added to the current PATH'
         } elseif ($scenario -eq 'failure') {
             Assert ($env:Path -eq $originalPath) 'Failed setup changed the current PATH'
         }
-        $usesBinary = $scenario -in @('supported', 'supported-pr', 'failure')
+        $usesBinary = $scenario -in @('supported', 'supported-pr', 'failure', 'env-forbidden', 'forbidden-value-true')
         Assert ((Test-Path -LiteralPath "$testRoot/binary-invoked") -eq $usesBinary) 'Incorrect binary invocation'
         Assert ((Test-Path -LiteralPath "$testRoot/legacy") -eq (-not $usesBinary)) 'Incorrect legacy invocation'
         if ($scenario -eq 'pr') {
@@ -325,6 +354,7 @@ try {
     $env:Path = $originalPath
     $env:NPM_CONFIG_REGISTRY = $originalRegistry
     $env:VP_SHELL = $originalVpShell
+    foreach ($name in $managementVariables) { [Environment]::SetEnvironmentVariable($name, $originalManagement[$name], 'Process') }
     $env:TEMP = $originalTemp
     Remove-Item -LiteralPath $testRoot -Recurse -Force
     $global:LASTEXITCODE = 0

@@ -5,17 +5,15 @@ use std::{
     fs::{File, OpenOptions, TryLockError},
     io::{Read, Write},
     process::Stdio,
-    time::Duration,
 };
 
 use console::style;
 use futures::{StreamExt, stream::FuturesUnordered};
 use indexmap::IndexMap;
-use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use tokio::process::Command;
 use uuid::Uuid;
 use vp_js_runtime::NodeProvider;
-use vp_shared::{PrependOptions, ToolPathEnv, output};
+use vp_shared::{PrependOptions, ToolPathEnv, output, progress::Progress};
 use vt_path::{AbsolutePath, AbsolutePathBuf, current_dir};
 
 use crate::{
@@ -212,17 +210,10 @@ pub async fn install(
         node_version
     ));
 
-    let progress = ProgressBar::new(packages_count as u64);
-    if vp_shared::is_stderr_terminal() && std::env::var_os("CI").is_none() {
-        let style = ProgressStyle::with_template("{spinner:.cyan} {msg} ({pos}/{len})")
-            .unwrap_or_else(|_| ProgressStyle::default_spinner())
-            .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]);
-        progress.set_style(style);
-        progress.set_message(format!("{} global packages", operation_progress));
-        progress.enable_steady_tick(Duration::from_millis(80));
-    } else {
-        progress.set_draw_target(ProgressDrawTarget::hidden());
-    }
+    let progress = Progress::counter(
+        &format!("{} global packages", operation_progress),
+        packages_count as u64,
+    );
 
     // We have to clone it because we will modify `packages` to storage package names
     let package_names = packages.keys().cloned().collect::<Vec<_>>();
@@ -258,7 +249,9 @@ pub async fn install(
 
         match installs.next().await {
             Some((package_name, Ok((installed_package, lock_file)))) => {
-                progress.inc(1);
+                if let Some(progress) = &progress {
+                    progress.bar().inc(1);
+                }
                 packages.get_mut(&package_name).unwrap().install = Some(installed_package);
                 install_locks.insert(package_name, lock_file);
             }
@@ -271,7 +264,7 @@ pub async fn install(
             None => break,
         }
     }
-    progress.finish_and_clear();
+    drop(progress);
 
     // 5. Finalize installed packages.
     for (index, (package_name, Package { spec, install })) in packages.into_iter().enumerate() {
@@ -545,6 +538,8 @@ async fn install_one(
         .env("npm_config_prefix", install_dir.as_path())
         .env("npm_config_update_notifier", "false")
         .envs(env.into_envs())
+        // The spinner's raw stdin would be restored by Node when npm exits.
+        .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true)
@@ -1396,6 +1391,8 @@ async fn remove_package_shim(bin_dir: &vt_path::AbsolutePath, bin_name: &str) ->
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use vp_shared::env_vars;
 
     use super::*;
