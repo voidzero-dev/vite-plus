@@ -354,11 +354,35 @@ Task Details:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
+When a task misses the cache, the summary lists every change that caused the miss. Use `-vv` (or `--verbose --verbose`) to also list what each cached run depends on, under `Unchanged:`, and the files a cache hit restores, under `Outputs:`. This helps when a run hits the cache and you expected a miss: it shows whether the file you edited is an input at all.
+
 Use `--last-details` to show the summary from the last run without running tasks again:
 
 ```bash
 vp run --last-details
 ```
+
+## Dry Runs And JSON Output
+
+`--dry-run` shows what a run would do without running anything. Each command is printed with its cache status, followed by the summary. Vite Task checks the cache as a real run would, but writes nothing:
+
+```bash
+vp run --dry-run -r build
+```
+
+`--json` prints JSON instead of text, for scripts and CI:
+
+- `vp run --json` prints every package and task in the workspace, with each task's `dependsOn` resolved, and runs nothing. See the [task graph schema](https://github.com/voidzero-dev/vite-task/blob/cb1ea8d214b26a0f3ca2b2ef3b6bc471b18ffacb/crates/vt/schemas/task-graph.json).
+- `vp run --dry-run --json build` prints the plan for a run: each task it would run, the tasks each one waits for, each step's command, and whether each step would hit the cache. See the [run plan schema](https://github.com/voidzero-dev/vite-task/blob/cb1ea8d214b26a0f3ca2b2ef3b6bc471b18ffacb/crates/vt/schemas/run-plan.json).
+
+The flags combine like this:
+
+- `-v` with `--dry-run` shows why each command would miss the cache.
+- `-vv` with `--dry-run --json` adds each step's `baseline.fingerprint` and `baseline.outputs`: what its cached run depends on, and the outputs a hit would restore.
+- `--json` with a task requires `--dry-run`. Without a task, `vp run --json` takes no other flags.
+- `--last-details` can't be combined with other flags.
+
+Put these flags before the task name. Anything after the task name is passed to the task.
 
 ## Concurrency
 
