@@ -31,6 +31,7 @@ import {
   migratePnpmOverridesToWorkspaceYaml,
   migratePnpmSettingsToWorkspaceYaml,
   migrateTaskCacheConfigInViteConfig,
+  pnpmRequiresWorkspacePackages,
   pnpmSupportsWorkspaceSettings,
   prepareOxlintConfigs,
   supportsCatalog,
@@ -312,6 +313,12 @@ export function rewriteStandaloneProject(
 
   if (packageManager === PackageManager.pnpm) {
     ensurePnpmWorkspaceExoticSubdepsSetting(projectPath);
+    if (
+      pnpmRequiresWorkspacePackages(workspaceInfo.downloadPackageManager.version) &&
+      fs.existsSync(path.join(projectPath, 'pnpm-workspace.yaml'))
+    ) {
+      ensurePnpmWorkspacePackages(projectPath, ['.']);
+    }
   }
 
   if (packageManager === PackageManager.yarn) {
