@@ -641,6 +641,32 @@ fn forced_reinstall_dir_name(version: &str) -> String {
     format!("{version}+force.{}.{}", process::id(), nanos)
 }
 
+const INSTALL_LOCK_FILE: &str = ".install.lock";
+
+/// Serialize installation changes in `install_dir` across processes.
+///
+/// Hold the returned file while changing version directories, `current`,
+/// `.previous-version`, or old-version cleanup. A child that only refreshes
+/// shims runs in place and must not take this lock, or its parent deadlocks.
+pub async fn lock_install_dir(install_dir: &AbsolutePath) -> Result<std::fs::File, Error> {
+    tokio::fs::create_dir_all(install_dir).await?;
+    let path = install_dir.join(INSTALL_LOCK_FILE);
+    tokio::task::spawn_blocking(move || {
+        // Keep the file in place so every process locks the same inode.
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(path.as_path())?;
+        file.lock()?;
+        Ok::<_, std::io::Error>(file)
+    })
+    .await
+    .map_err(|error| Error::Setup(format!("Task join error: {error}").into()))?
+    .map_err(Into::into)
+}
+
 /// Create `version_dir` and return whether this call created it.
 ///
 /// The directory can already exist because a kept version or the rollback
@@ -1199,6 +1225,27 @@ mod tests {
                 .unwrap();
         let result = cleanup_old_versions(&non_existent, 5, &[]).await;
         assert!(result.is_err(), "cleanup_old_versions should error on non-existent dir");
+    }
+
+    #[tokio::test]
+    async fn install_lock_waits_for_its_owner() {
+        let temp = tempfile::tempdir().unwrap();
+        let data = AbsolutePathBuf::new(temp.path().join("data")).unwrap();
+
+        let first = lock_install_dir(&data).await.unwrap();
+        let second = lock_install_dir(&data);
+        tokio::pin!(second);
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_millis(150), &mut second).await.is_err()
+        );
+        drop(first);
+        let second =
+            tokio::time::timeout(std::time::Duration::from_secs(5), second).await.unwrap().unwrap();
+
+        let contender = std::fs::File::open(data.join(INSTALL_LOCK_FILE)).unwrap();
+        assert!(matches!(contender.try_lock(), Err(std::fs::TryLockError::WouldBlock)));
+        drop(second);
+        assert!(contender.try_lock().is_ok());
     }
 
     #[tokio::test]

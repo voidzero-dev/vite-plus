@@ -179,6 +179,25 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
     // Step 7: Verify integrity
     integrity::verify_integrity(&platform_data, &resolved.platform_integrity)?;
 
+    // Hold the lock until cleanup finishes. Another process may have activated
+    // the target version while this one waited.
+    let _install_lock = install::lock_install_dir(install_dir).await?;
+    let active_install_dir = install::read_current_version(install_dir).await;
+    if !options.force
+        && active_install_dir
+            .as_deref()
+            .is_some_and(|active| install::is_install_dir_for_version(active, &resolved.version))
+    {
+        if !options.silent {
+            vp_shared::output::print_stdout_line(format_args!(
+                "\n{} Already up to date ({})",
+                style(output::CHECK).green(),
+                resolved.version
+            ));
+        }
+        return Ok(ExitStatus::default());
+    }
+
     if !options.silent {
         output::info("installing...");
     }
@@ -189,7 +208,6 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
     // version directory on Windows because the running `vp.exe` is locked.
     // Install into a unique semver build-metadata directory instead, then
     // repoint `current` after the install has completed.
-    let active_install_dir = install::read_current_version(install_dir).await;
     let install_dir_name = install::target_install_dir_name(
         &resolved.version,
         active_install_dir.as_deref(),
@@ -301,6 +319,7 @@ async fn execute_rollback(
     install_dir: &AbsolutePathBuf,
     silent: bool,
 ) -> Result<ExitStatus, Error> {
+    let _install_lock = install::lock_install_dir(install_dir).await?;
     let previous = install::read_previous_version(install_dir)
         .await?
         .ok_or_else(|| Error::Upgrade("No previous version found. Cannot rollback.".into()))?;
