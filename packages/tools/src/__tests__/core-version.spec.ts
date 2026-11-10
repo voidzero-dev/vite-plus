@@ -44,6 +44,15 @@ describe('decodeCoreVersion', () => {
   });
 });
 
+// Each release publishes its core version before the next one is prepared.
+function releaseSequence(vite: string, vitePlusVersions: string[]): string[] {
+  const published: string[] = [];
+  for (const vitePlus of vitePlusVersions) {
+    published.push(nextCoreVersion({ vite, vitePlus, published }));
+  }
+  return published;
+}
+
 describe('nextCoreVersion', () => {
   test('starts the counter at 0 for a new Vite version', () => {
     expect(
@@ -103,6 +112,21 @@ describe('nextCoreVersion', () => {
     expect(() => nextCoreVersion({ vite: '8.3.5', vitePlus: '1.9.0', published })).toThrow(
       'the maximum',
     );
+  });
+
+  test('changes only the counter for minor and major releases on one Vite version', () => {
+    expect(releaseSequence('8.3.7', ['1.6.0', '1.7.0', '1.8.0', '2.0.0'])).toEqual([
+      '8.3.7000',
+      '8.3.7001',
+      '8.3.7002',
+      '8.3.7003',
+    ]);
+  });
+
+  test('gives betas on a stable Vite the base of the next stable release', () => {
+    expect(
+      releaseSequence('8.3.7', ['1.6.0', '1.7.0-beta.0', '1.7.0-beta.1', '1.7.0', '1.8.0-beta.0']),
+    ).toEqual(['8.3.7000', '8.3.7001-vp.0', '8.3.7001-vp.1', '8.3.7001', '8.3.7002-vp.0']);
   });
 });
 
