@@ -206,6 +206,23 @@ moved from `8.3.1` to `8.3.5`. Two releases on one Vite patch happened once
 Core versions keep sorting correctly:
 `8.3.5001 < 8.3.5002-vp.0 < 8.3.5002 < 8.3.6000`.
 
+Example: three `vite-plus` minor releases and one major release that all
+bundle Vite `8.3.7`. Only the release counter changes, because the core major
+and minor follow Vite, not `vite-plus`. `nextCoreVersion` gives:
+
+| `vite-plus` | Bundled Vite | Core version |
+| ----------- | ------------ | ------------ |
+| `1.6.0`     | `8.3.7`      | `8.3.7000`   |
+| `1.7.0`     | `8.3.7`      | `8.3.7001`   |
+| `1.8.0`     | `8.3.7`      | `8.3.7002`   |
+| `2.0.0`     | `8.3.7`      | `8.3.7003`   |
+
+All four core versions decode to Vite `8.3.7`, so peer checks give the same
+result for each release. A `vite-plus` major release can be only a patch bump
+of the core, so the core version does not signal a `vite-plus` breaking
+change. The CLI and `vp migrate` pin the exact core version, so no project
+receives a new core through a semver range (see Risks).
+
 ### Prereleases and new Vite majors
 
 A Vite+ prerelease does not copy its own prerelease identifiers into the core
@@ -644,6 +661,13 @@ manifest `version` takes part in the check.
   `latest` moves forward as usual and a range on core would jump majors.
   Vite+ documents exact pins only. The stale `alpha` and `test` dist-tags
   point at `0.x` versions and can be removed or left alone.
+- Ranges on the core package. The core version follows Vite, so a
+  `vite-plus` breaking change can ship as a core patch bump (for example
+  `8.3.7002` to `8.3.7003` for `vite-plus` `1.8.0` to `2.0.0`). A dependency
+  such as `"@voidzero-dev/vite-plus-core": "^8.3.7000"` would then receive a
+  breaking change as a patch. Vite+ does not support ranges on the core: the
+  `vite` alias, overrides, and catalogs that `vp migrate` writes use the exact
+  version.
 - Peer warnings appear for real incompatibilities after migration. Projects
   that relied on the broad rule to hide a `^7.0.0` plugin see a warning or,
   with `strict-peer-dependencies`, an install failure. The migrate output
