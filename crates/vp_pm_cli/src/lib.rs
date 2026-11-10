@@ -10,6 +10,7 @@
 mod cli;
 mod config;
 mod dispatch;
+mod env_forbidden;
 mod error;
 mod lifecycle_env;
 mod package_manager;
@@ -26,6 +27,7 @@ pub use dispatch::{
     DispatchResult, dispatch, dispatch_with_metadata, dispatch_with_package_manager,
     dispatch_with_resolved_package_manager,
 };
+pub use env_forbidden::ensure_managed_package_manager_allowed;
 pub use error::Error;
 pub use lifecycle_env::LifecycleEnvContext;
 pub use package_manager::{

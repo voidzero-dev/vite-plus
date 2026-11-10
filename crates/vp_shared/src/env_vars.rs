@@ -129,6 +129,11 @@ pub const VP_YARN_MANAGER: &str = "VP_YARN_MANAGER";
 /// Bun management preference; takes precedence over `VP_PM_MANAGER`.
 pub const VP_BUN_MANAGER: &str = "VP_BUN_MANAGER";
 
+/// `1` (exactly) stops Vite+ from managing Node.js and every package manager:
+/// at run time it neither downloads nor uses a managed installation,
+/// regardless of `config.json` and the `VP_*_MANAGER` variables.
+pub const VP_ENV_FORBIDDEN: &str = "VP_ENV_FORBIDDEN";
+
 /// Enable debug output for shim dispatch.
 pub const VP_DEBUG_SHIM: &str = "VP_DEBUG_SHIM";
 
