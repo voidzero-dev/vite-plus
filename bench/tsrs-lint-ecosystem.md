@@ -13,9 +13,32 @@ The explicit type-check workload covered 2,289 files. No command timed out or
 terminated by a signal. Seven repositories had identical normalized diagnostics;
 seven had differences. This covers the selected repositories, not all 83 catalog entries.
 
+## Version 0.24 upgrade check (2026-11-11)
+
+The current integration pins `tsrs@0.24.0-ts7.1.0-beta`. The full ecosystem sweep
+and performance measurements remain results for `0.22.0`.
+
+On macOS ARM64, all seven reduced cases retained identical diagnostics and exit
+codes between `0.23.0` and `0.24.0`, both through `vp lint` and the standalone
+compiler. The standalone results also matched `typescript@7.1.0-beta`.
+The TypeScript source pin is unchanged, and the four compatibility follow-ups
+remain open.
+
+The [0.24 release](https://github.com/oxc-project/tsrs/blob/v0.24.0/docs/releases/0.24.0.md)
+checks whole programs before running lint rules. The existing smoke fixture still
+reports the ignored program file's `TS2322` only when type checking is enabled.
+Its invalid declaration remains suppressed by `skipLibCheck: true`.
+
+After rebasing onto `main` at `9f44ce760`, `vp check` passes, and the unit suite
+passes 3,422 tests with one skipped. This check used Node.js `24.22.2`, Oxlint
+`1.93.0`, and fresh CLI JavaScript built with published Rolldown `1.2.18`.
+The native binding and core artifacts remain from published `1.5.0`.
+This is not a full native release build or a repeat of the 14-repository sweep.
+Scripts, fixtures, and raw logs remain outside the repository.
+
 ## Version 0.23 upgrade check (2026-11-09)
 
-The current integration pins `tsrs@0.23.0-ts7.1.0-beta`. The full ecosystem sweep
+This upgrade pinned `tsrs@0.23.0-ts7.1.0-beta`. The full ecosystem sweep
 and performance measurements remain results for `0.22.0`.
 
 On macOS ARM64, all seven reduced cases retained identical diagnostics and exit

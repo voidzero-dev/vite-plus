@@ -9,12 +9,12 @@ Use `tsrs-lint`, the Rust implementation of the type-aware backend, to reduce
 lint time and peak memory. The [Codespaces comparison](../bench/tsrs-lint.md)
 shows improvements with `tsrs@0.22.0-ts7.1.0-beta`, at the cost of a larger
 installed dependency tree. Those measurements do not describe the current
-`0.23.0` integration and must be repeated before release.
+`0.24.0` integration and must be repeated before release.
 
 ## Design
 
 Replace the production dependency on `oxlint-tsgolint` with an exact `tsrs` pin,
-currently `0.23.0-ts7.1.0-beta`. Keep the Go package as a development dependency
+currently `0.24.0-ts7.1.0-beta`. Keep the Go package as a development dependency
 for comparisons. Oxlint remains the linter frontend and delegates type-aware
 rules and optional TypeScript diagnostics to the bundled `tsrs-lint` executable.
 
@@ -37,10 +37,11 @@ The [ecosystem report](../bench/tsrs-lint-ecosystem.md) records the four known
 compatibility categories and their upstream attribution. Matching the pinned
 TypeScript compiler does not make every new diagnostic desirable.
 
-With type checking enabled, `0.23.0` checks whole programs for the selected
-tsconfigs. Unselected and ignored program files can report type errors; lint
-ignore patterns still control lint rules. Files outside discovered configs use
-an inferred program. This broader scope can increase the work per invocation.
+With type checking enabled, `0.24.0` checks whole programs for the selected
+tsconfigs before running lint rules. Unselected and ignored program files can
+report type errors; lint ignore patterns still control lint rules. Files outside
+discovered configs use an inferred program. This broader scope can increase the
+work per invocation.
 
 The backend respects each project's compiler options. `skipLibCheck` controls
 declaration checking; it is not a requirement for using tsrs. This draft aligns

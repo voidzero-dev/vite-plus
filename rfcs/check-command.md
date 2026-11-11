@@ -205,7 +205,7 @@ The check module reuses `SubcommandResolver` and `resolve_and_capture_output` fr
 See the [backend replacement RFC](./tsrs-lint-backend.md) for the rationale,
 compatibility considerations, and release conditions.
 
-This draft replaces the bundled Go backend with `tsrs@0.23.0-ts7.1.0-beta`,
+This draft replaces the bundled Go backend with `tsrs@0.24.0-ts7.1.0-beta`,
 a Rust port of the TypeScript 7 compiler. `resolve-lint.ts` selects the bundled
 `tsrs` package and passes its `bin/tsrs-lint` launcher to Oxlint through
 `OXLINT_TSGOLINT_PATH`. The same resolver serves `vp lint` and `vp check`.
