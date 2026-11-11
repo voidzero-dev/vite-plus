@@ -374,8 +374,9 @@ jobs:
           PACKAGE_MANAGER: ${{ matrix.package-manager }}
         run: |
           # Issue 1: packages/utils inherits `vite-plus: ^x.y.z` from the
-          # library template. In catalog-supporting monorepos (pnpm/yarn/bun)
-          # the migrator must normalize it so siblings don't drift.
+          # library template. The migrator must normalize it so siblings don't
+          # drift: to `catalog:` with catalogs, and to the concrete version
+          # without them (npm).
           # Issue 2: apps/website is scaffolded by create-vite which ships
           # `vite` (and sometimes `vitest`) in devDependencies. After
           # migration the scripts are rewritten to `vp ...` and `vite-plus`
@@ -425,7 +426,7 @@ jobs:
               process.exit(1);
             }
 
-            if (pm !== 'npm' && appDev['vite-plus'] !== utilsDev['vite-plus']) {
+            if (appDev['vite-plus'] !== utilsDev['vite-plus']) {
               console.error('✗ vite-plus spec drift: apps/website=' + appDev['vite-plus'] + ' packages/utils=' + utilsDev['vite-plus']);
               process.exit(1);
             }
@@ -479,23 +480,20 @@ jobs:
         if: matrix.template.name == 'monorepo'
         working-directory: ${{ runner.temp }}/test-project
         run: |
-          # Under npm and yarn, `vp run ready` reaches 100% cache hit only on
-          # the third invocation (#1638): vite-task's directory-listing
-          # fingerprint and fspy read/write tracking surface false-positive
-          # misses on run #2 because `packages/utils/node_modules/` is born
-          # during run #1. pnpm and bun pre-create per-package
-          # `node_modules/` at install time and reach 100% on run #2; Yarn
-          # Berry did too under the old file: overrides (per-package copies),
-          # but with registry-resolved semver specs it hoists the workspace
-          # deps like a real install, so it now behaves like npm here.
+          # `vp run ready` reaches 100% cache hit only on the third
+          # invocation. vite-task fingerprints the folders a task lists, and
+          # entries born during run #1 surface as misses on run #2:
+          # - `dist/` under every package manager: `vp check`, `vp test`, and
+          #   `tsc` list `packages/utils/` and `apps/website/` before
+          #   `vp pack` and `vp build` create `dist/` there. vite-task stopped
+          #   skipping `dist` entries in listings (voidzero-dev/vite-task#919).
+          # - `packages/utils/node_modules/` under npm and yarn (#1638): they
+          #   hoist workspace deps, so the folder only appears during run #1.
+          #   pnpm and bun create it at install time.
           # The preceding `Verify project builds` step already invoked
           # `vp run ready` once (verify-command for monorepo), so one
           # extra warm-up here is enough.
-          case "${{ matrix.package-manager }}" in
-            npm|yarn)
-              vp run ready >/dev/null 2>&1
-              ;;
-          esac
+          vp run ready >/dev/null 2>&1
           output=$(vp run ready 2>&1)
           echo "$output"
           if ! echo "$output" | grep -q 'cache hit (100%)'; then

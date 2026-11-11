@@ -329,8 +329,35 @@ fn is_homebrew_recovery_command(args: &[String]) -> bool {
         )
 }
 
-#[tokio::main]
-async fn main() -> ExitCode {
+fn main() -> ExitCode {
+    let args: Vec<String> = std::env::args().collect();
+
+    // Inspect shim mode without clearing its environment markers: Homebrew
+    // setup still needs them before the normal shim dispatch.
+    let argv0 = args.first().map(|s| s.as_str()).unwrap_or("vp");
+    let shim_tool = shim::peek_shim_tool(argv0);
+
+    // Identify Vite+ to child tools independently of `npm_config_user_agent`,
+    // which package managers replace with their own value.
+    //
+    // `vpr` and `vpx` are Vite+ entry points too. Ordinary tool shims (such as
+    // `npm`/`npx`/`node`) only inherit an existing marker from their parent.
+    //
+    // SAFETY: `set_var` must run while the process is still single-threaded.
+    // This runs before the async runtime (and its worker threads) are created.
+    if matches!(shim_tool.as_deref(), None | Some("vpr" | "vpx")) {
+        unsafe {
+            std::env::set_var(
+                vp_shared::env_vars::VP_USER_AGENT,
+                concat!("vp/", env!("CARGO_PKG_VERSION")),
+            );
+        }
+    }
+
+    tokio::runtime::Runtime::new().expect("failed to build tokio runtime").block_on(run())
+}
+
+async fn run() -> ExitCode {
     // Probe before tracing, directory resolution, or argument dispatch can emit output.
     if let Some(check) = env::var_os(vp_shared::env_vars::VP_SELF_SETUP_SUPPORT_CHECK) {
         for line in vp_setup::support::support_response(&check) {
@@ -346,6 +373,7 @@ async fn main() -> ExitCode {
 
     vp_shared::ensure_blocking_stdio();
     vp_shared::ensure_windows_pathext();
+    vp_shared::set_user_agent_version(env!("CARGO_PKG_VERSION"));
 
     // Initialize tracing
     vp_shared::init_tracing();
