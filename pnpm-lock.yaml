@@ -204,10 +204,10 @@ catalogs:
       specifier: ^1.0.0
       version: 1.0.1
     '@tsdown/css':
-      specifier: ^0.23.4
+      specifier: 0.23.4
       version: 0.23.4
     '@tsdown/exe':
-      specifier: ^0.23.4
+      specifier: 0.23.4
       version: 0.23.4
     '@types/cross-spawn':
       specifier: ^6.0.6
@@ -342,7 +342,7 @@ catalogs:
       specifier: ^0.2.15
       version: 0.2.17
     tsdown:
-      specifier: ^0.23.4
+      specifier: 0.23.4
       version: 0.23.4
     typescript:
       specifier: ~7.0.2
