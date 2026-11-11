@@ -1,4 +1,7 @@
-import { block, getColumns, isAccessible, settings } from '@clack/core';
+import readline from 'node:readline';
+import type { Writable } from 'node:stream';
+
+import { getColumns, isAccessible, settings } from '@clack/core';
 import { wrapAnsi } from 'fast-wrap-ansi';
 import color from 'picocolors';
 import { cursor, erase } from 'sisteransi';
@@ -51,6 +54,58 @@ const formatTimer = (durationMs: number): string => {
   return color.gray(min > 0 ? `(${min}m ${secs}s)` : `(${secs}s)`);
 };
 
+// Windows has no signals, so exit there with the status a shell reports for one.
+const endBySignal = (signal: 'SIGINT' | 'SIGTERM', pid: number): void => {
+  if (process.platform === 'win32') {
+    process.exit(signal === 'SIGINT' ? 130 : 143);
+  } else {
+    process.kill(pid, signal);
+  }
+};
+
+// clack's block() calls process.exit(0) on Ctrl+C and Escape, which reports an
+// interrupted command as successful. This copy reports Ctrl+C to the caller and
+// ignores every other key, as the Rust progress row does.
+const blockInput = (output: Writable, onInterrupt: () => void): (() => void) => {
+  const input = process.stdin;
+  const rl = readline.createInterface({ input, output, prompt: '', tabSize: 1 });
+  readline.emitKeypressEvents(input, rl);
+  if (input.isTTY) {
+    input.setRawMode(true);
+  }
+  let released = false;
+  const onKeypress = (_char: string | undefined, { name, sequence }: readline.Key): void => {
+    if (sequence === '\x03') {
+      onInterrupt();
+      return;
+    }
+    // Erase the echoed key, then wait for the next one.
+    const [dx, dy] = name === 'return' ? [0, -1] : [-1, 0];
+    readline.moveCursor(output, dx, dy, () => {
+      readline.clearLine(output, 1, () => {
+        // The spinner can stop before these writes finish.
+        if (!released) {
+          input.once('keypress', onKeypress);
+        }
+      });
+    });
+  };
+  output.write(cursor.hide);
+  input.once('keypress', onKeypress);
+  return () => {
+    released = true;
+    input.off('keypress', onKeypress);
+    output.write(cursor.show);
+    // Windows keeps raw mode: https://github.com/bombshell-dev/clack/issues/176
+    if (input.isTTY && process.platform !== 'win32') {
+      input.setRawMode(false);
+    }
+    // @ts-expect-error https://github.com/nodejs/node/issues/31762#issuecomment-1441223907
+    rl.terminal = false;
+    rl.close();
+  };
+};
+
 export const spinner = ({
   indicator = 'dots',
   onCancel,
@@ -100,6 +155,12 @@ export const spinner = ({
 
   const errorEventHandler = () => handleExit(2);
   const signalEventHandler = () => handleExit(1);
+  // Raw mode turns Ctrl+C into a key press. Send SIGINT to the foreground process
+  // group, as the terminal does outside raw mode, so that child processes stop too.
+  const interrupt = () => {
+    handleExit(1);
+    endBySignal('SIGINT', 0);
+  };
 
   const registerHooks = () => {
     // Reference: https://nodejs.org/api/process.html#event-uncaughtexception
@@ -151,7 +212,7 @@ export const spinner = ({
 
   const startLoop = (): void => {
     isSpinnerActive = true;
-    unblock = isCI ? () => {} : block({ output });
+    unblock = isCI ? () => {} : blockInput(output, interrupt);
     _origin = performance.now();
     _prevMessage = undefined;
     if (hasGuide) {

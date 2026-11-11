@@ -30,6 +30,21 @@ function capture(columns = 52, isTTY = false) {
   return { output, raw: () => content, text: () => stripVTControlCharacters(content) };
 }
 
+function press(name: string, sequence: string, ctrl = false) {
+  process.stdin.emit('keypress', sequence, { name, sequence, ctrl });
+}
+
+/** Starts a spinner that blocks keys, with process termination stubbed out. */
+function spinInTerminal() {
+  vi.stubEnv('CI', '');
+  const kill = vi.spyOn(process, 'kill').mockReturnValue(true);
+  const exit = vi.spyOn(process, 'exit').mockReturnValue(undefined as never);
+  const c = capture(52, true);
+  const s = spinner({ output: c.output });
+  s.start('Building');
+  return { c, s, kill, exit };
+}
+
 function expectNoTerminalControls(output: string) {
   // Forced colors are valid in CI and pipes; cursor movement and erasure are not.
   // oxlint-disable-next-line no-control-regex
@@ -42,6 +57,7 @@ afterEach(() => {
   updateSettings({ withGuide: false });
   vi.useRealTimers();
   vi.unstubAllEnvs();
+  vi.restoreAllMocks();
 });
 
 describe('output identity', () => {
@@ -195,5 +211,53 @@ describe('spinner', () => {
     expect(s.isCancelled).toBe(true);
     expect(c.text()).toContain('■ Canceled');
     expect(process.listenerCount('SIGINT')).toBe(before);
+  });
+
+  describe('keys while spinning in a terminal', () => {
+    const platform = process.platform;
+
+    afterEach(() => {
+      Object.defineProperty(process, 'platform', { value: platform });
+    });
+
+    it('interrupts the foreground process group on Ctrl+C instead of exiting with 0', () => {
+      const { c, s, kill, exit } = spinInTerminal();
+      press('c', '\x03', true);
+      expect(s.isCancelled).toBe(true);
+      expect(c.text()).toContain('■ Canceled');
+      expect(kill).toHaveBeenCalledWith(0, 'SIGINT');
+      expect(exit).not.toHaveBeenCalled();
+    });
+
+    it('exits with 130 on Ctrl+C on Windows, which has no signals', () => {
+      Object.defineProperty(process, 'platform', { value: 'win32' });
+      const { c, kill, exit } = spinInTerminal();
+      press('c', '\x03', true);
+      expect(c.text()).toContain('■ Canceled');
+      expect(exit).toHaveBeenCalledWith(130);
+      expect(kill).not.toHaveBeenCalled();
+    });
+
+    it('ignores Escape and keeps waiting for Ctrl+C', async () => {
+      const { c, s, kill, exit } = spinInTerminal();
+      press('escape', '\x1b');
+      expect(s.isCancelled).toBe(false);
+      expect(c.text()).not.toContain('Canceled');
+      expect(kill).not.toHaveBeenCalled();
+      expect(exit).not.toHaveBeenCalled();
+      // The next key is awaited once the echoed one is erased.
+      await new Promise((resolve) => setImmediate(resolve));
+      press('c', '\x03', true);
+      expect(kill).toHaveBeenCalledWith(0, 'SIGINT');
+    });
+
+    it('stops listening for keys once the spinner stops', async () => {
+      const { s, kill } = spinInTerminal();
+      press('a', 'a');
+      s.stop('Built');
+      await new Promise((resolve) => setImmediate(resolve));
+      press('c', '\x03', true);
+      expect(kill).not.toHaveBeenCalled();
+    });
   });
 });
