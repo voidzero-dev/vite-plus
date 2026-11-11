@@ -43,7 +43,7 @@ for invocation in vp vpr /path/vpr; do
         [[ ${COMPREPLY[*]} == prod ]] || exit 1
     done
 done
-mkdir -p 'apps web' 'apps/web'
+vpt mkdir -p 'apps web' 'apps/web'
 printf '{"name":"app","scripts":{"unique-task":"exit 0"}}\n' > 'apps web/package.json'
 printf '{"name":"app","scripts":{"unique-task":"exit 0"}}\n' > 'apps/web/package.json'
 for shell in bash zsh; do
@@ -52,10 +52,10 @@ for shell in bash zsh; do
         [[ $result == unique-task* ]] || exit 1
     done
 done
-mkdir -p "$HOME/home-project"
+vpt mkdir -p "$HOME/home-project"
 printf '{"name":"home-app","scripts":{"home-task":"exit 0"}}\n' > "$HOME/home-project/package.json"
 result=$(VP_COMPLETE=bash _CLAP_COMPLETE_INDEX=4 "$vp_bin" -- vp -C '~/home-project' run home)
 [[ $result == home-task* ]] || exit 1
-rm -rf "$HOME/home-project"
-rm -rf 'apps web' 'apps' completion.bash
+vpt rm -rf "$HOME/home-project"
+vpt rm -rf 'apps web' 'apps' completion.bash
 printf 'completion argv, colon trimming, and escaped cwd: ok\n'

@@ -69,15 +69,22 @@ fn decode_shell_dir(s: &str) -> String {
     }
 }
 
-fn resolve_chdir(cwd: &vt_path::AbsolutePath, dir: &str) -> vt_path::AbsolutePathBuf {
-    if dir == "~" {
+/// Resolve `-C <dir>` for shell completion peek, expanding unquoted tilde paths.
+fn resolve_completion_chdir(
+    cwd: &vt_path::AbsolutePath,
+    raw_dir: &str,
+    is_posix_shell: bool,
+) -> vt_path::AbsolutePathBuf {
+    if raw_dir == "~" {
         vp_shared::EnvConfig::get().user_home.clone()
     } else if let Some(rest) =
-        dir.strip_prefix("~/").or_else(|| dir.strip_prefix(r"~\").filter(|_| cfg!(windows)))
+        raw_dir.strip_prefix("~/").or_else(|| raw_dir.strip_prefix(r"~\").filter(|_| cfg!(windows)))
     {
-        vp_shared::EnvConfig::get().user_home.join(rest).clean()
+        let rest = if is_posix_shell { decode_shell_dir(rest) } else { rest.to_string() };
+        vp_shared::EnvConfig::get().user_home.join(&rest).clean()
     } else {
-        cwd.join(dir).clean()
+        let dir = if is_posix_shell { decode_shell_dir(raw_dir) } else { raw_dir.to_string() };
+        cwd.join(&dir).clean()
     }
 }
 
@@ -94,7 +101,7 @@ pub(crate) fn apply_chdir(
     cwd: &vt_path::AbsolutePath,
     dir: &str,
 ) -> Result<vt_path::AbsolutePathBuf, String> {
-    let target = resolve_chdir(cwd, dir);
+    let target = cwd.join(dir).clean();
     if !target.as_path().is_dir() {
         return Err(format!("directory not found: {dir}"));
     }
@@ -431,7 +438,7 @@ async fn main() -> ExitCode {
     if let Some(shell) = env::var_os("VP_COMPLETE")
         && let Some(sep) = args.iter().position(|a| a == "--")
         && let Some(user_args) = args.get(sep + 2..)
-        && let Some((mut dir, consumed)) = parse_leading_chdir(user_args)
+        && let Some((dir, consumed)) = parse_leading_chdir(user_args)
         // Only change directory once the cursor has moved past the `-C` value.
         && env::var("_CLAP_COMPLETE_INDEX")
             .ok()
@@ -440,11 +447,10 @@ async fn main() -> ExitCode {
             > consumed
         && let Ok(current) = vt_path::current_dir()
     {
-        if shell == "bash" || shell == "zsh" {
-            dir = decode_shell_dir(&dir);
-        }
+        let is_posix_shell = shell == "bash" || shell == "zsh";
+        let target = resolve_completion_chdir(&current, &dir, is_posix_shell);
         // Best-effort and silent: mid-typing values are often not (yet) dirs.
-        let _ = apply_chdir(&current, &dir);
+        let _ = std::env::set_current_dir(target.as_path());
     }
     CompleteEnv::with_factory(command_for_completion).var("VP_COMPLETE").complete();
 
@@ -615,9 +621,9 @@ mod tests {
     use clap::error::ErrorKind;
 
     use super::{
-        decode_shell_dir, extract_unknown_argument, has_pass_as_value_suggestion,
+        apply_chdir, decode_shell_dir, extract_unknown_argument, has_pass_as_value_suggestion,
         is_affirmative_response, is_homebrew_recovery_command, normalize_args, parse_leading_chdir,
-        replace_top_level_typoed_subcommand, resolve_chdir, try_parse_args_from,
+        replace_top_level_typoed_subcommand, resolve_completion_chdir, try_parse_args_from,
     };
 
     fn s(v: &[&str]) -> Vec<String> {
@@ -788,13 +794,25 @@ mod tests {
     }
 
     #[test]
-    fn resolve_chdir_expands_leading_tilde() {
+    fn resolve_completion_chdir_expands_leading_tilde() {
         let cwd = vt_path::current_dir().unwrap();
         let home = &vp_shared::EnvConfig::get().user_home;
-        assert_eq!(&resolve_chdir(&cwd, "~"), home);
-        assert_eq!(resolve_chdir(&cwd, "~/code"), home.join("code").clean());
-        assert_eq!(resolve_chdir(&cwd, "~other"), cwd.join("~other").clean());
+        assert_eq!(&resolve_completion_chdir(&cwd, "~", true), home);
+        assert_eq!(resolve_completion_chdir(&cwd, "~/code", true), home.join("code").clean());
+        assert_eq!(
+            resolve_completion_chdir(&cwd, "~/apps\\ web", true),
+            home.join("apps web").clean()
+        );
+        assert_eq!(resolve_completion_chdir(&cwd, "'~'", true), cwd.join("~").clean());
+        assert_eq!(resolve_completion_chdir(&cwd, "~other", true), cwd.join("~other").clean());
         #[cfg(windows)]
-        assert_eq!(resolve_chdir(&cwd, r"~\code"), home.join("code").clean());
+        assert_eq!(resolve_completion_chdir(&cwd, r"~\code", true), home.join("code").clean());
+    }
+
+    #[test]
+    fn apply_chdir_preserves_literal_relative_paths() {
+        let cwd = vt_path::current_dir().unwrap();
+        // apply_chdir must not expand ~ during runtime execution (against cd '~' and path.resolve).
+        assert!(apply_chdir(&cwd, "~").is_err() || !cwd.join("~").as_path().is_dir());
     }
 }
