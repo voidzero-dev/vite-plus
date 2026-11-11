@@ -1,12 +1,12 @@
 _clap_reassemble_words() {
-    if [[ "$COMP_WORDBREAKS" != *:* ]]; then
+    if [[ "$COMP_WORDBREAKS" != *:* && "$COMP_WORDBREAKS" != *=* ]]; then
         return
     fi
     local i j=0 line=$COMP_LINE
     words=()
     _CLAP_COMPLETE_INDEX=0
     for ((i = 0; i < ${#COMP_WORDS[@]}; i++)); do
-        if ((i > 0 && j > 0)) && [[ "${COMP_WORDS[i]}" == :* || "${words[j-1]}" == *: ]] && [[ "$line" != [[:blank:]]* ]]; then
+        if ((i > 0 && j > 0)) && [[ "${COMP_WORDS[i]}" == [:=]* || "${words[j-1]}" == *[:=] ]] && [[ "$line" != [[:blank:]]* ]]; then
             words[j-1]="${words[j-1]}${COMP_WORDS[i]}"
         else
             words[j]="${COMP_WORDS[i]}"
@@ -21,13 +21,14 @@ _clap_reassemble_words() {
 
 _clap_trim_completions() {
     local cur="${words[_CLAP_COMPLETE_INDEX]}"
-    if [[ "$cur" != *:* || "$COMP_WORDBREAKS" != *:* ]]; then
+    local breaks=${COMP_WORDBREAKS//[^:=]}
+    if [[ ! $breaks || "$cur" != *["$breaks"]* ]]; then
         return
     fi
-    local colon_word=${cur%"${cur##*:}"}
+    local prefix=${cur%"${cur##*["$breaks"]}"}
     local i=${#COMPREPLY[*]}
     while [[ $((--i)) -ge 0 ]]; do
-        COMPREPLY[$i]=${COMPREPLY[$i]#"$colon_word"}
+        COMPREPLY[$i]=${COMPREPLY[$i]#"$prefix"}
     done
 }
 
@@ -42,6 +43,17 @@ _clap_complete_vp() {
     fi
     local words=("${COMP_WORDS[@]}")
     _clap_reassemble_words
+    local i insert=1
+    if [[ ${words[0]##*/} == vpr || ${words[0]##*/} == vpr.exe ]]; then
+        if [[ ${words[1]-} == -C ]]; then insert=3
+        elif [[ ${words[1]-} == -C?* ]]; then insert=2
+        fi
+        if (( _CLAP_COMPLETE_INDEX >= insert )); then
+            for ((i = ${#words[@]}; i > insert; i--)); do words[i]=${words[i-1]}; done
+            words[insert]=run
+            ((_CLAP_COMPLETE_INDEX++))
+        fi
+    fi
     COMPREPLY=( $( \
         _CLAP_IFS="$IFS" \
         _CLAP_COMPLETE_INDEX="$_CLAP_COMPLETE_INDEX" \
@@ -58,17 +70,10 @@ _clap_complete_vp() {
     _clap_trim_completions
 }
 
-_clap_complete_vpr() {
-    local COMP_WORDS=("vp" "run" "${COMP_WORDS[@]:1}")
-    local COMP_CWORD=$((COMP_CWORD + 1))
-    local COMP_LINE="vp run ${COMP_LINE#vpr}"
-    _clap_complete_vp
-}
-
 if [[ "${BASH_VERSINFO[0]}" -eq 4 && "${BASH_VERSINFO[1]}" -ge 4 || "${BASH_VERSINFO[0]}" -gt 4 ]]; then
     complete -o nospace -o bashdefault -o nosort -F _clap_complete_vp vp
-    complete -o nospace -o bashdefault -o nosort -F _clap_complete_vpr vpr
+    complete -o nospace -o bashdefault -o nosort -F _clap_complete_vp vpr
 else
     complete -o nospace -o bashdefault -F _clap_complete_vp vp
-    complete -o nospace -o bashdefault -F _clap_complete_vpr vpr
+    complete -o nospace -o bashdefault -F _clap_complete_vp vpr
 fi

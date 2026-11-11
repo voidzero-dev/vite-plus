@@ -62,6 +62,25 @@ pub(crate) fn parse_leading_chdir(user_args: &[String]) -> Option<(String, usize
     None
 }
 
+fn decode_shell_dir(s: &str) -> String {
+    match shlex::split(s).as_deref() {
+        Some([word]) => word.clone(),
+        _ => s.to_string(),
+    }
+}
+
+fn resolve_chdir(cwd: &vt_path::AbsolutePath, dir: &str) -> vt_path::AbsolutePathBuf {
+    if dir == "~" {
+        vp_shared::EnvConfig::get().user_home.clone()
+    } else if let Some(rest) =
+        dir.strip_prefix("~/").or_else(|| dir.strip_prefix(r"~\").filter(|_| cfg!(windows)))
+    {
+        vp_shared::EnvConfig::get().user_home.join(rest).clean()
+    } else {
+        cwd.join(dir).clean()
+    }
+}
+
 /// Apply `-C <dir>`: resolve against `cwd`, validate, and change the process
 /// cwd. Returns the resolved cwd, or the user-facing error message (not
 /// printed here: the completion peek must stay silent, and clap-path callers
@@ -75,7 +94,7 @@ pub(crate) fn apply_chdir(
     cwd: &vt_path::AbsolutePath,
     dir: &str,
 ) -> Result<vt_path::AbsolutePathBuf, String> {
-    let target = cwd.join(dir).clean();
+    let target = resolve_chdir(cwd, dir);
     if !target.as_path().is_dir() {
         return Err(format!("directory not found: {dir}"));
     }
@@ -409,10 +428,21 @@ async fn main() -> ExitCode {
     // `complete()` exits before the normal `-C` handling below runs, so apply
     // the target directory here too: cwd-sensitive completers (run tasks)
     // should suggest from <dir>, where the completed command will run.
-    if env::var_os("VP_COMPLETE").is_some()
-        && let Some((dir, _)) = parse_leading_chdir(&args[1..])
+    if let Some(shell) = env::var_os("VP_COMPLETE")
+        && let Some(sep) = args.iter().position(|a| a == "--")
+        && let Some(user_args) = args.get(sep + 2..)
+        && let Some((mut dir, consumed)) = parse_leading_chdir(user_args)
+        // Only change directory once the cursor has moved past the `-C` value.
+        && env::var("_CLAP_COMPLETE_INDEX")
+            .ok()
+            .and_then(|s| s.parse::<usize>().ok())
+            .unwrap_or(user_args.len())
+            > consumed
         && let Ok(current) = vt_path::current_dir()
     {
+        if shell == "bash" || shell == "zsh" {
+            dir = decode_shell_dir(&dir);
+        }
         // Best-effort and silent: mid-typing values are often not (yet) dirs.
         let _ = apply_chdir(&current, &dir);
     }
@@ -585,9 +615,9 @@ mod tests {
     use clap::error::ErrorKind;
 
     use super::{
-        extract_unknown_argument, has_pass_as_value_suggestion, is_affirmative_response,
-        is_homebrew_recovery_command, normalize_args, parse_leading_chdir,
-        replace_top_level_typoed_subcommand, try_parse_args_from,
+        decode_shell_dir, extract_unknown_argument, has_pass_as_value_suggestion,
+        is_affirmative_response, is_homebrew_recovery_command, normalize_args, parse_leading_chdir,
+        replace_top_level_typoed_subcommand, resolve_chdir, try_parse_args_from,
     };
 
     fn s(v: &[&str]) -> Vec<String> {
@@ -739,5 +769,32 @@ mod tests {
         let raw_args = vec!["env".to_string(), "typo".to_string()];
         let corrected = replace_top_level_typoed_subcommand(&raw_args, "typo", "on");
         assert!(corrected.is_none());
+    }
+
+    #[test]
+    fn decode_shell_dir_strips_posix_quotes_and_escapes() {
+        for (raw, expected) in [
+            ("apps/web", "apps/web"),
+            ("apps web", "apps web"),
+            ("'apps web'", "apps web"),
+            ("\"apps web\"", "apps web"),
+            (r"apps\ web", "apps web"),
+            (r#"apps/"web app""#, "apps/web app"),
+            (r#""apps\"web""#, "apps\"web"),
+            ("'~/code'", "~/code"),
+        ] {
+            assert_eq!(decode_shell_dir(raw), expected, "{raw}");
+        }
+    }
+
+    #[test]
+    fn resolve_chdir_expands_leading_tilde() {
+        let cwd = vt_path::current_dir().unwrap();
+        let home = &vp_shared::EnvConfig::get().user_home;
+        assert_eq!(&resolve_chdir(&cwd, "~"), home);
+        assert_eq!(resolve_chdir(&cwd, "~/code"), home.join("code").clean());
+        assert_eq!(resolve_chdir(&cwd, "~other"), cwd.join("~other").clean());
+        #[cfg(windows)]
+        assert_eq!(resolve_chdir(&cwd, r"~\code"), home.join("code").clean());
     }
 }

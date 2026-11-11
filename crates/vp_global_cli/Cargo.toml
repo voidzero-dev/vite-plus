@@ -29,6 +29,7 @@ tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
 console = { workspace = true }
 same-file = { workspace = true }
+shlex = { workspace = true }
 oxc_resolver = { workspace = true }
 pathdiff = { workspace = true }
 vt_pty_terminal_test_client = { workspace = true, features = ["testing"] }

@@ -273,6 +273,7 @@ serial_test = "4.0.0"
 sha1 = "0.11.0"
 sha2 = "0.11.0"
 shell-escape = "0.1.5"
+shlex = "2.0.1"
 simd-utf16-len = "0.3.0"
 simdutf8 = "0.1.5"
 smallvec = { version = "1.16.0", features = ["union"] }

@@ -54,7 +54,7 @@ pub struct Args {
     pub version: bool,
 
     /// Run as if vp was started in <DIR> instead of the current working directory
-    #[arg(short = 'C', value_name = "DIR")]
+    #[arg(short = 'C', value_name = "DIR", value_hint = clap::ValueHint::DirPath)]
     pub chdir: Option<String>,
 
     #[clap(subcommand)]
