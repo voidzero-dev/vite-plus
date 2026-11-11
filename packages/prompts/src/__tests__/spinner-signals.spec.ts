@@ -1,6 +1,6 @@
 import { type ChildProcess, spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -8,12 +8,23 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'tsdown';
 import { afterAll, beforeAll, describe, expect, it } from 'vite-plus/test';
 
-function isAlive(pid: number) {
+/**
+ * Whether `pid` is still executing. An orphan that has ended stays in the
+ * process table as a zombie where nothing reaps it, as in some containers.
+ */
+function isRunning(pid: number) {
   try {
     process.kill(pid, 0);
-    return true;
   } catch {
     return false;
+  }
+  try {
+    const stat = readFileSync(`/proc/${pid}/stat`, 'utf8');
+    // The state follows the command name, which can contain spaces and parentheses.
+    return stat[stat.lastIndexOf(')') + 2] !== 'Z';
+  } catch {
+    // No procfs, as on macOS, where launchd reaps orphans.
+    return true;
   }
 }
 
@@ -98,9 +109,9 @@ describe.skipIf(process.platform === 'win32')('spinner interrupts', () => {
       expect(result).toMatchObject({ code: null, signal: 'SIGINT', stderr: '' });
       expect(result.stdout).toContain('Canceled');
       // A running package manager must not outlive the interrupted command.
-      await expect.poll(() => isAlive(worker), { timeout: 2000 }).toBe(false);
+      await expect.poll(() => isRunning(worker), { timeout: 2000 }).toBe(false);
     } finally {
-      if (worker && isAlive(worker)) {
+      if (worker && isRunning(worker)) {
         process.kill(worker, 'SIGKILL');
       }
     }
