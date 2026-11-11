@@ -69,10 +69,18 @@ const endBySignal = (signal: ProcessSignal, pid: number): void => {
   }
 };
 
+// Only one spinner blocks input at a time, as the Rust progress row does, so
+// that one Ctrl+C reaches the process group once.
+let inputBlocked = false;
+
 // clack's block() calls process.exit(0) on Ctrl+C and Escape, which reports an
 // interrupted command as successful. This copy reports Ctrl+C to the caller and
 // ignores every other key, as the Rust progress row does.
 const blockInput = (output: Writable, onInterrupt: () => void): (() => void) => {
+  if (inputBlocked) {
+    return () => {};
+  }
+  inputBlocked = true;
   const input = process.stdin;
   const rl = readline.createInterface({ input, output, prompt: '', tabSize: 1 });
   readline.emitKeypressEvents(input, rl);
@@ -100,6 +108,7 @@ const blockInput = (output: Writable, onInterrupt: () => void): (() => void) => 
   input.once('keypress', onKeypress);
   return () => {
     released = true;
+    inputBlocked = false;
     input.off('keypress', onKeypress);
     output.write(cursor.show);
     // Windows keeps raw mode: https://github.com/bombshell-dev/clack/issues/176

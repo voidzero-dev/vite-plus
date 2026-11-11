@@ -106,6 +106,27 @@ describe.skipIf(process.platform === 'win32')('spinner interrupts', () => {
     }
   });
 
+  it('forwards one Ctrl+C once while two spinners are active', async () => {
+    const result = await run(
+      `
+        import { setTimeout as delay } from 'node:timers/promises';
+        let calls = 0;
+        process.on('SIGINT', async () => {
+          if (++calls > 1) process.exit(42);
+          await delay(50);
+          writeSync(1, 'cleanup complete\\n');
+          process.exit(0);
+        });
+        spinner({ output: output(true) }).start('First');
+        spinner({ output: output(true) }).start('Second');
+        process.send('ready');
+      `,
+      (child) => child.stdin!.write('\x03'),
+    );
+    expect(result).toMatchObject({ code: 0, signal: null, stderr: '' });
+    expect(result.stdout).toContain('cleanup complete');
+  });
+
   describe.each(['SIGINT', 'SIGTERM'] as const)('%s', (signal) => {
     it.each([1, 2])('ends the process by the signal with %i active spinners', async (count) => {
       const result = await run(
