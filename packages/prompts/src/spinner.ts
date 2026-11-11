@@ -170,21 +170,27 @@ export const spinner = ({
 
   const errorEventHandler = () => handleExit(2);
   const signalEventHandler = () => handleExit(1);
-  // Events another listener handles: one registered before this spinner started
-  // or added while it spins. For a signal, that owner decides how the process ends.
-  const ownedByOthers = new Set<string | symbol>();
-  const trackListener = (event: string | symbol, listener: unknown) => {
+  // Node removes a one-shot listener just before it calls it, so a listener that
+  // is handling the current signal can already be gone when this spinner's own
+  // listener runs. Remember a removal until the current callback returns.
+  const removedInDelivery = new Set<string | symbol>();
+  const trackRemoval = (event: string | symbol, listener: unknown) => {
     if (!spinnerSignalListeners.has(listener)) {
-      ownedByOthers.add(event);
+      removedInDelivery.add(event);
+      process.nextTick(() => removedInDelivery.delete(event));
     }
   };
+  // Another listener that handles the signal decides how the process ends.
+  const ownedByAnother = (signal: ProcessSignal) =>
+    removedInDelivery.has(signal) ||
+    process.listeners(signal).some((listener) => !spinnerSignalListeners.has(listener));
   // A listener replaces the default action, so a spinner that is the only owner
   // raises the signal again once its hooks are cleared. The process then ends
   // with the signal status, as the Rust progress row does. An emit without the
   // signal name did not come from the system and only stops the spinner.
   const processSignalHandlers = PROCESS_SIGNALS.map((signal) => {
     const handler = (received?: NodeJS.Signals) => {
-      const raise = received === signal && !ownedByOthers.has(signal);
+      const raise = received === signal && !ownedByAnother(signal);
       handleExit(1);
       if (raise) {
         endBySignal(signal, process.pid);
@@ -205,16 +211,12 @@ export const spinner = ({
     // Reference: https://nodejs.org/api/process.html#event-unhandledrejection
     process.on('unhandledRejection', errorEventHandler);
     // Reference Signal Events: https://nodejs.org/api/process.html#signal-events
-    ownedByOthers.clear();
     for (const [signal, handler] of processSignalHandlers) {
-      if (process.listeners(signal).some((listener) => !spinnerSignalListeners.has(listener))) {
-        ownedByOthers.add(signal);
-      }
       spinnerSignalListeners.add(handler);
       process.on(signal, handler);
     }
     process.on('exit', handleExit);
-    process.on('newListener', trackListener);
+    process.on('removeListener', trackRemoval);
 
     if (signal) {
       signal.addEventListener('abort', signalEventHandler);
@@ -224,7 +226,7 @@ export const spinner = ({
   const clearHooks = () => {
     process.removeListener('uncaughtExceptionMonitor', errorEventHandler);
     process.removeListener('unhandledRejection', errorEventHandler);
-    process.removeListener('newListener', trackListener);
+    process.removeListener('removeListener', trackRemoval);
     for (const [signal, handler] of processSignalHandlers) {
       process.removeListener(signal, handler);
       spinnerSignalListeners.delete(handler);

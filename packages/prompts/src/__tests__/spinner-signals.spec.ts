@@ -153,6 +153,21 @@ describe.skipIf(process.platform === 'win32')('spinner interrupts', () => {
       expect(result.stdout).toContain('Canceled');
     });
 
+    it('ends the process by the signal after another listener came and went', async () => {
+      const result = await run(
+        `
+          const signal = ${JSON.stringify(signal)};
+          const other = () => {};
+          spinner({ output: output(false) }).start('Working');
+          process.on(signal, other);
+          process.off(signal, other);
+          process.send('ready');
+        `,
+        (child) => child.kill(signal),
+      );
+      expect(result).toMatchObject({ code: null, signal, stderr: '' });
+    });
+
     // The shutdown exits with 42 when the signal reaches it twice, and a signal
     // raised again during its cleanup ends the process before it reports.
     it.each([
