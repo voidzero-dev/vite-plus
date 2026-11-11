@@ -34,8 +34,12 @@ function press(name: string, sequence: string, ctrl = false) {
   process.stdin.emit('keypress', sequence, { name, sequence, ctrl });
 }
 
-/** Starts a spinner that blocks keys, with process termination stubbed out. */
-function spinInTerminal() {
+/**
+ * Starts a spinner that blocks keys, with process termination stubbed out. The
+ * platform is pinned, because it selects how the spinner ends the process.
+ */
+function spinInTerminal(platform: NodeJS.Platform = 'linux') {
+  Object.defineProperty(process, 'platform', { value: platform });
   vi.stubEnv('CI', '');
   const kill = vi.spyOn(process, 'kill').mockReturnValue(true);
   const exit = vi.spyOn(process, 'exit').mockReturnValue(undefined as never);
@@ -230,8 +234,7 @@ describe('spinner', () => {
     });
 
     it('exits with 130 on Ctrl+C on Windows, which has no signals', () => {
-      Object.defineProperty(process, 'platform', { value: 'win32' });
-      const { c, kill, exit } = spinInTerminal();
+      const { c, kill, exit } = spinInTerminal('win32');
       press('c', '\x03', true);
       expect(c.text()).toContain('■ Canceled');
       expect(exit).toHaveBeenCalledWith(130);
