@@ -54,8 +54,14 @@ const formatTimer = (durationMs: number): string => {
   return color.gray(min > 0 ? `(${min}m ${secs}s)` : `(${secs}s)`);
 };
 
+const PROCESS_SIGNALS = ['SIGINT', 'SIGTERM'] as const;
+type ProcessSignal = (typeof PROCESS_SIGNALS)[number];
+
+// Signal listeners of active spinners, which are not another owner of a signal.
+const spinnerSignalListeners = new Set<unknown>();
+
 // Windows has no signals, so exit there with the status a shell reports for one.
-const endBySignal = (signal: 'SIGINT' | 'SIGTERM', pid: number): void => {
+const endBySignal = (signal: ProcessSignal, pid: number): void => {
   if (process.platform === 'win32') {
     process.exit(signal === 'SIGINT' ? 130 : 143);
   } else {
@@ -155,6 +161,28 @@ export const spinner = ({
 
   const errorEventHandler = () => handleExit(2);
   const signalEventHandler = () => handleExit(1);
+  // Events another listener handles: one registered before this spinner started
+  // or added while it spins. For a signal, that owner decides how the process ends.
+  const ownedByOthers = new Set<string | symbol>();
+  const trackListener = (event: string | symbol, listener: unknown) => {
+    if (!spinnerSignalListeners.has(listener)) {
+      ownedByOthers.add(event);
+    }
+  };
+  // A listener replaces the default action, so a spinner that is the only owner
+  // raises the signal again once its hooks are cleared. The process then ends
+  // with the signal status, as the Rust progress row does. An emit without the
+  // signal name did not come from the system and only stops the spinner.
+  const processSignalHandlers = PROCESS_SIGNALS.map((signal) => {
+    const handler = (received?: NodeJS.Signals) => {
+      const raise = received === signal && !ownedByOthers.has(signal);
+      handleExit(1);
+      if (raise) {
+        endBySignal(signal, process.pid);
+      }
+    };
+    return [signal, handler] as const;
+  });
   // Raw mode turns Ctrl+C into a key press. Send SIGINT to the foreground process
   // group, as the terminal does outside raw mode, so that child processes stop too.
   const interrupt = () => {
@@ -168,9 +196,16 @@ export const spinner = ({
     // Reference: https://nodejs.org/api/process.html#event-unhandledrejection
     process.on('unhandledRejection', errorEventHandler);
     // Reference Signal Events: https://nodejs.org/api/process.html#signal-events
-    process.on('SIGINT', signalEventHandler);
-    process.on('SIGTERM', signalEventHandler);
+    ownedByOthers.clear();
+    for (const [signal, handler] of processSignalHandlers) {
+      if (process.listeners(signal).some((listener) => !spinnerSignalListeners.has(listener))) {
+        ownedByOthers.add(signal);
+      }
+      spinnerSignalListeners.add(handler);
+      process.on(signal, handler);
+    }
     process.on('exit', handleExit);
+    process.on('newListener', trackListener);
 
     if (signal) {
       signal.addEventListener('abort', signalEventHandler);
@@ -180,8 +215,11 @@ export const spinner = ({
   const clearHooks = () => {
     process.removeListener('uncaughtExceptionMonitor', errorEventHandler);
     process.removeListener('unhandledRejection', errorEventHandler);
-    process.removeListener('SIGINT', signalEventHandler);
-    process.removeListener('SIGTERM', signalEventHandler);
+    process.removeListener('newListener', trackListener);
+    for (const [signal, handler] of processSignalHandlers) {
+      process.removeListener(signal, handler);
+      spinnerSignalListeners.delete(handler);
+    }
     process.removeListener('exit', handleExit);
 
     if (signal) {

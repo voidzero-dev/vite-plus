@@ -105,4 +105,73 @@ describe.skipIf(process.platform === 'win32')('spinner interrupts', () => {
       }
     }
   });
+
+  describe.each(['SIGINT', 'SIGTERM'] as const)('%s', (signal) => {
+    it.each([1, 2])('ends the process by the signal with %i active spinners', async (count) => {
+      const result = await run(
+        `
+          for (let i = 0; i < ${count}; i++) {
+            spinner({ output: output(false) }).start('Working');
+          }
+          process.send('ready');
+        `,
+        (child) => child.kill(signal),
+      );
+      expect(result).toMatchObject({ code: null, signal, stderr: '' });
+      expect(result.stdout).toContain('Canceled');
+    });
+
+    // The shutdown exits with 42 when the signal reaches it twice, and a signal
+    // raised again during its cleanup ends the process before it reports.
+    it.each([
+      ['a listener registered before the spinner', 'process.on(signal, shutdown); start();'],
+      ['a one-shot listener registered before it', 'process.once(signal, shutdown); start();'],
+      [
+        'a one-shot listener prepended while spinning',
+        'start(); process.prependOnceListener(signal, shutdown);',
+      ],
+    ])('leaves the shutdown to %s', async (_, setup) => {
+      const result = await run(
+        `
+          import { setTimeout as delay } from 'node:timers/promises';
+          const signal = ${JSON.stringify(signal)};
+          let active;
+          let calls = 0;
+          const start = () => {
+            active = spinner({ output: output(false) });
+            active.start('Working');
+          };
+          const shutdown = async () => {
+            if (++calls > 1) process.exit(42);
+            await delay(50);
+            writeSync(1, 'cleanup complete, cancelled=' + active.isCancelled + '\\n');
+            process.exit(0);
+          };
+          ${setup}
+          process.send('ready');
+        `,
+        (child) => child.kill(signal),
+      );
+      expect(result).toMatchObject({ code: 0, signal: null, stderr: '' });
+      expect(result.stdout).toContain('cleanup complete, cancelled=true');
+    });
+  });
+
+  it('only stops the spinner on an emit without the signal name', async () => {
+    const result = await run(
+      `
+        const active = spinner({ output: output(false) });
+        active.start('Working');
+        process.emit('SIGINT');
+        setTimeout(() => {
+          writeSync(1, 'still alive, cancelled=' + active.isCancelled + '\\n');
+          process.exit(0);
+        }, 50);
+        process.send('ready');
+      `,
+      () => {},
+    );
+    expect(result).toMatchObject({ code: 0, signal: null, stderr: '' });
+    expect(result.stdout).toContain('still alive, cancelled=true');
+  });
 });
