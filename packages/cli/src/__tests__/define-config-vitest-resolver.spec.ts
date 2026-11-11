@@ -1,7 +1,14 @@
 import { fileURLToPath } from 'node:url';
 
 import { preview } from '@vitest/browser-preview';
-import { resolveConfig, type Alias, type ConfigEnv, type Plugin, type UserConfig } from 'vite';
+import {
+  build,
+  resolveConfig,
+  type Alias,
+  type ConfigEnv,
+  type Plugin,
+  type UserConfig,
+} from 'vite';
 import { describe, expect, it } from 'vitest';
 
 import { defineConfig, defineProject, isVitestFamilySpecifier } from '../define-config.ts';
@@ -86,6 +93,49 @@ describe('isVitestFamilySpecifier', () => {
 });
 
 describe('vitePlusVitestResolverPlugin', () => {
+  it.each([
+    ['react', 'resolved-by-project'],
+    ['vitest', 'resolved-by-vitest'],
+    ['vitest/internal/browser', 'resolved-by-vitest'],
+    ['@vitest/mocker', 'resolved-by-vitest'],
+    ['vite-plus/test', 'resolved-by-vitest'],
+  ])('dispatches %s through the native hook filter', async (specifier, expected) => {
+    const plugin = findPlugin(defineConfig({}).plugins, RESOLVER_PLUGIN_NAME) as Plugin;
+    const resolver = {
+      ...plugin,
+      resolveId: {
+        ...plugin.resolveId,
+        // The emitted import identifies which resolver actually ran, including
+        // when Rolldown's report counts native filter rejects as no-op calls.
+        handler() {
+          return { id: 'resolved-by-vitest', external: true };
+        },
+      },
+    };
+    const result = await build({
+      configFile: false,
+      logLevel: 'silent',
+      plugins: [
+        resolver,
+        {
+          name: 'fixture',
+          resolveId(id) {
+            return id === 'virtual:entry'
+              ? '\0entry'
+              : { id: 'resolved-by-project', external: true };
+          },
+          load(id) {
+            if (id === '\0entry') {
+              return `export { default } from ${JSON.stringify(specifier)};`;
+            }
+          },
+        },
+      ],
+      build: { write: false, rolldownOptions: { input: 'virtual:entry' } },
+    });
+    expect(result).toMatchObject({ output: [{ imports: [expected] }] });
+  });
+
   it.each(['serve', 'build'] as const)(
     'leaves application dependencies unchanged during %s with browser tests configured',
     async (command) => {
@@ -213,7 +263,7 @@ describe('vitePlusVitestResolverPlugin', () => {
       const plugin = findPlugin(plugins, RESOLVER_PLUGIN_NAME);
       expect(plugin).toBeDefined();
       expect(plugin?.enforce).toBe('pre');
-      expect(typeof plugin?.resolveId).toBe('function');
+      expect(plugin?.resolveId).toMatchObject({ handler: expect.any(Function) });
     }
   });
 
@@ -225,7 +275,7 @@ describe('vitePlusVitestResolverPlugin', () => {
 
     expect(plugin).toBeDefined();
     expect(plugin?.enforce).toBe('pre');
-    expect(typeof plugin?.resolveId).toBe('function');
+    expect(plugin?.resolveId).toMatchObject({ handler: expect.any(Function) });
   });
 });
 
@@ -255,8 +305,10 @@ interface ResolveCall {
 function getResolveId(): ResolveId {
   const result = defineConfig({}) as { plugins: unknown[] };
   const plugin = findPlugin(result.plugins, RESOLVER_PLUGIN_NAME);
-  expect(plugin).toBeDefined();
-  return plugin?.resolveId as ResolveId;
+  if (!plugin) {
+    throw new Error(`${RESOLVER_PLUGIN_NAME} is not injected`);
+  }
+  return (plugin.resolveId as { handler: ResolveId }).handler;
 }
 
 // The resolver re-resolves through `this.resolve` rooted at vite-plus's own
@@ -282,7 +334,7 @@ function resolver(command: 'serve' | 'build', vitestServer: boolean): ResolveId 
   const plugin = findPlugin(defineConfig({}).plugins, RESOLVER_PLUGIN_NAME)!;
   const hook = (plugin.config as { handler: (config: UserConfig, env: ConfigEnv) => void }).handler;
   hook(vitestServer ? { environments: { __vitest__: {} } } : {}, { command, mode: 'test' });
-  return plugin.resolveId as ResolveId;
+  return (plugin.resolveId as { handler: ResolveId }).handler;
 }
 
 describe('workspace test API identity', () => {
