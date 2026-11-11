@@ -12,6 +12,7 @@ import {
 import { describe, expect, it } from 'vitest';
 
 import { defineConfig, defineProject, isVitestFamilySpecifier } from '../define-config.ts';
+import { VITEST_RESOLVER_PACKAGES } from '../utils/vitest-ecosystem.ts';
 
 const RESOLVER_PLUGIN_NAME = 'vite-plus:vitest-resolver';
 
@@ -93,6 +94,17 @@ describe('isVitestFamilySpecifier', () => {
 });
 
 describe('vitePlusVitestResolverPlugin', () => {
+  it('lets every resolver package through the hook filter', () => {
+    const plugin = findPlugin(defineConfig({}).plugins, RESOLVER_PLUGIN_NAME) as Plugin;
+    const { filter } = plugin.resolveId as { filter: { id: RegExp } };
+    for (const name of [...VITEST_RESOLVER_PACKAGES, 'vite-plus/test']) {
+      expect(name).toMatch(filter.id);
+    }
+    for (const name of VITEST_RESOLVER_PACKAGES) {
+      expect(`${name}/subpath`).toMatch(filter.id);
+    }
+  });
+
   it.each([
     ['react', 'resolved-by-project'],
     ['vitest', 'resolved-by-vitest'],
@@ -119,6 +131,8 @@ describe('vitePlusVitestResolverPlugin', () => {
         resolver,
         {
           name: 'fixture',
+          // Ahead of Vite's own resolver, so an installed package can't answer first.
+          enforce: 'pre',
           resolveId(id) {
             return id === 'virtual:entry'
               ? '\0entry'
