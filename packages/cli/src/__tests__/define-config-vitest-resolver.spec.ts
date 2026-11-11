@@ -117,8 +117,7 @@ describe('vitePlusVitestResolverPlugin', () => {
       ...plugin,
       resolveId: {
         ...plugin.resolveId,
-        // The emitted import identifies which resolver actually ran, including
-        // when Rolldown's report counts native filter rejects as no-op calls.
+        // The stub's external id shows which resolver answered.
         handler() {
           return { id: 'resolved-by-vitest', external: true };
         },

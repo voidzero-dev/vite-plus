@@ -361,7 +361,7 @@ function vitePlusVitestResolverPlugin(): PluginOption {
       plugins.splice(0, plugins.length, ...unique);
     },
     resolveId: {
-      // Keep the allowlist in the handler; skip unrelated ids before entering JS.
+      // Keep the allowlist in the handler; skip unrelated ids before the handler runs.
       filter: { id: /^(?:vitest(?:\/|$)|@vitest\/|vite-plus\/test$)/ },
       async handler(id, importer, options) {
         if (isVitestServer && id === 'vite-plus/test') {
