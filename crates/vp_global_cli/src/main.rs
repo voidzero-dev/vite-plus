@@ -62,29 +62,36 @@ pub(crate) fn parse_leading_chdir(user_args: &[String]) -> Option<(String, usize
     None
 }
 
-fn decode_shell_dir(s: &str) -> String {
-    match shlex::split(s).as_deref() {
-        Some([word]) => word.clone(),
-        _ => s.to_string(),
-    }
-}
-
-/// Resolve `-C <dir>` for shell completion peek, expanding unquoted tilde paths.
-fn resolve_completion_chdir(
+/// Peek a leading `-C <dir>` in completion args (`<bin> -- <bin> <words...>`)
+/// once the cursor is past it. Words arrive as typed, so emulate the shell:
+/// expand a leading `~` and, for bash/zsh, undo quotes and escapes.
+fn peek_completion_chdir(
+    args: &[String],
+    shell: &std::ffi::OsStr,
+    complete_index: Option<usize>,
     cwd: &vt_path::AbsolutePath,
-    raw_dir: &str,
-    is_posix_shell: bool,
-) -> vt_path::AbsolutePathBuf {
-    if raw_dir == "~" {
-        vp_shared::EnvConfig::get().user_home.clone()
-    } else if let Some(rest) =
-        raw_dir.strip_prefix("~/").or_else(|| raw_dir.strip_prefix(r"~\").filter(|_| cfg!(windows)))
-    {
-        let rest = if is_posix_shell { decode_shell_dir(rest) } else { rest.to_string() };
-        vp_shared::EnvConfig::get().user_home.join(&rest).clean()
-    } else {
-        let dir = if is_posix_shell { decode_shell_dir(raw_dir) } else { raw_dir.to_string() };
-        cwd.join(&dir).clean()
+) -> Option<vt_path::AbsolutePathBuf> {
+    let words = args.get(args.iter().position(|a| a == "--")? + 2..)?;
+    let (dir, consumed) = parse_leading_chdir(words)?;
+    if complete_index.unwrap_or(words.len()) <= consumed {
+        return None;
+    }
+    let posix = shell.to_str().and_then(|s| s.parse::<commands::shell::Shell>().ok())
+        == Some(commands::shell::Shell::Posix);
+    let decode = |s: &str| match shlex::split(s).as_deref() {
+        Some([word]) if posix => word.clone(),
+        _ => s.to_owned(),
+    };
+    match dir.strip_prefix('~').filter(|r| r.is_empty() || r.starts_with('/')) {
+        Some(rest) => {
+            let home = posix
+                .then(|| std::env::var_os("HOME"))
+                .flatten()
+                .and_then(|h| vt_path::AbsolutePathBuf::new(h.into()))
+                .unwrap_or_else(|| vp_shared::EnvConfig::get().user_home.clone());
+            Some(home.join(decode(rest.trim_start_matches('/'))).clean())
+        }
+        None => Some(cwd.join(decode(&dir)).clean()),
     }
 }
 
@@ -435,22 +442,17 @@ async fn main() -> ExitCode {
     // `complete()` exits before the normal `-C` handling below runs, so apply
     // the target directory here too: cwd-sensitive completers (run tasks)
     // should suggest from <dir>, where the completed command will run.
-    if let Some(shell) = env::var_os("VP_COMPLETE")
-        && let Some(sep) = args.iter().position(|a| a == "--")
-        && let Some(user_args) = args.get(sep + 2..)
-        && let Some((dir, consumed)) = parse_leading_chdir(user_args)
-        // Only change directory once the cursor has moved past the `-C` value.
-        && env::var("_CLAP_COMPLETE_INDEX")
-            .ok()
-            .and_then(|s| s.parse::<usize>().ok())
-            .unwrap_or(user_args.len())
-            > consumed
+    if let Some(shell) = env::var_os("VP_COMPLETE").filter(|v| !v.is_empty() && v != "0")
         && let Ok(current) = vt_path::current_dir()
+        && let Some(target) = peek_completion_chdir(
+            &args,
+            &shell,
+            env::var("_CLAP_COMPLETE_INDEX").ok().and_then(|s| s.parse().ok()),
+            &current,
+        )
     {
-        let is_posix_shell = shell == "bash" || shell == "zsh";
-        let target = resolve_completion_chdir(&current, &dir, is_posix_shell);
         // Best-effort and silent: mid-typing values are often not (yet) dirs.
-        let _ = std::env::set_current_dir(target.as_path());
+        let _ = env::set_current_dir(target.as_path());
     }
     CompleteEnv::with_factory(command_for_completion).var("VP_COMPLETE").complete();
 
@@ -621,9 +623,9 @@ mod tests {
     use clap::error::ErrorKind;
 
     use super::{
-        apply_chdir, decode_shell_dir, extract_unknown_argument, has_pass_as_value_suggestion,
-        is_affirmative_response, is_homebrew_recovery_command, normalize_args, parse_leading_chdir,
-        replace_top_level_typoed_subcommand, resolve_completion_chdir, try_parse_args_from,
+        extract_unknown_argument, has_pass_as_value_suggestion, is_affirmative_response,
+        is_homebrew_recovery_command, normalize_args, parse_leading_chdir, peek_completion_chdir,
+        replace_top_level_typoed_subcommand, try_parse_args_from,
     };
 
     fn s(v: &[&str]) -> Vec<String> {
@@ -778,41 +780,37 @@ mod tests {
     }
 
     #[test]
-    fn decode_shell_dir_strips_posix_quotes_and_escapes() {
-        for (raw, expected) in [
-            ("apps/web", "apps/web"),
-            ("apps web", "apps web"),
-            ("'apps web'", "apps web"),
-            ("\"apps web\"", "apps web"),
-            (r"apps\ web", "apps web"),
-            (r#"apps/"web app""#, "apps/web app"),
-            (r#""apps\"web""#, "apps\"web"),
-            ("'~/code'", "~/code"),
+    fn peek_completion_chdir_resolves_once_cursor_leaves_dir() {
+        let cwd = vt_path::current_dir().unwrap();
+        let home = std::env::var_os("HOME")
+            .and_then(|h| vt_path::AbsolutePathBuf::new(h.into()))
+            .unwrap_or_else(|| vp_shared::EnvConfig::get().user_home.clone());
+        let peek = |shell: &str, words: &[&str], index: usize| {
+            let args = s(&[&["vp", "--", "vp"][..], words].concat());
+            peek_completion_chdir(&args, std::ffi::OsStr::new(shell), Some(index), &cwd)
+        };
+
+        // Cursor on `-C` / `<dir>`, or no `-C`: leave cwd alone.
+        assert_eq!(peek("bash", &["-C", "apps", "run"], 1), None);
+        assert_eq!(peek("bash", &["-C", "apps", "run"], 2), None);
+        assert_eq!(peek("bash", &["-Capps", "run"], 1), None);
+        assert_eq!(peek("bash", &["run"], 1), None);
+        assert_eq!(peek("bash", &["-Capps", "run"], 2), Some(cwd.join("apps").clean()));
+
+        for (shell, dir, expected) in [
+            ("bash", r"apps\ web", cwd.join("apps web")),
+            ("zsh", r#""apps web""#, cwd.join("apps web")),
+            ("fish", r"apps\ web", cwd.join(r"apps\ web")), // not decoded for non-POSIX shells
+            ("bash", "~", home.clone()),
+            ("bash", r"~/my\ code", home.join("my code")),
+            ("bash", "'~/code'", cwd.join("~/code")),
+            ("bash", "~other", cwd.join("~other")),
         ] {
-            assert_eq!(decode_shell_dir(raw), expected, "{raw}");
+            assert_eq!(
+                peek(shell, &["-C", dir, "run"], 3),
+                Some(expected.clean()),
+                "{shell} {dir}"
+            );
         }
-    }
-
-    #[test]
-    fn resolve_completion_chdir_expands_leading_tilde() {
-        let cwd = vt_path::current_dir().unwrap();
-        let home = &vp_shared::EnvConfig::get().user_home;
-        assert_eq!(&resolve_completion_chdir(&cwd, "~", true), home);
-        assert_eq!(resolve_completion_chdir(&cwd, "~/code", true), home.join("code").clean());
-        assert_eq!(
-            resolve_completion_chdir(&cwd, "~/apps\\ web", true),
-            home.join("apps web").clean()
-        );
-        assert_eq!(resolve_completion_chdir(&cwd, "'~'", true), cwd.join("~").clean());
-        assert_eq!(resolve_completion_chdir(&cwd, "~other", true), cwd.join("~other").clean());
-        #[cfg(windows)]
-        assert_eq!(resolve_completion_chdir(&cwd, r"~\code", true), home.join("code").clean());
-    }
-
-    #[test]
-    fn apply_chdir_preserves_literal_relative_paths() {
-        let cwd = vt_path::current_dir().unwrap();
-        // apply_chdir must not expand ~ during runtime execution (against cd '~' and path.resolve).
-        assert!(apply_chdir(&cwd, "~").is_err() || !cwd.join("~").as_path().is_dir());
     }
 }

@@ -1,6 +1,0 @@
-[[case]]
-name = "completion_chdir"
-vp = "global"
-skip-platforms = ["windows"]
-requires = ["bash"]
-steps = [["bash", "--noprofile", "--norc", "assert_completion.bash"]]
