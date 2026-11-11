@@ -3,6 +3,16 @@
 - Status: Proposed; experimental default in this draft
 - Related: [check command](./check-command.md), [toolchain metadata](./toolchain-command.md)
 
+## User experience
+
+Once this change ships, users get tsrs by upgrading `vite-plus`. Existing
+`vp lint` and `vp check` commands automatically use the bundled backend for
+type-aware linting and type checking. Projects that enable these checks can
+benefit from tsrs performance improvements without additional setup.
+
+Users keep their existing commands and configuration. No separate installation
+of `tsrs` is required.
+
 ## Design
 
 Replace the production dependency on `oxlint-tsgolint` with an exact `tsrs` pin,
