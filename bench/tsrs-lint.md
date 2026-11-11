@@ -1,7 +1,7 @@
 # Type-aware linting with tsrs-lint
 
-The current integration pins `tsrs@0.23.0-ts7.1.0-beta`. The measurements below
-remain results for `0.22.0`; they have not been repeated for `0.23.0`.
+The current integration pins `tsrs@0.24.0-ts7.1.0-beta`. The measurements below
+remain results for `0.22.0`; they have not been repeated for `0.24.0`.
 
 This comparison uses the default `tsrs@0.22.0-ts7.1.0-beta` integration and an explicit
 `oxlint-tsgolint@7.0.2005` override. Both use Oxlint `1.91.0` and the same built CLI.
