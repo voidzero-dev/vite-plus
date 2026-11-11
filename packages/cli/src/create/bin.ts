@@ -732,45 +732,64 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     ? formatLocalVpCommand(packageManager, 'vp run')
     : 'vp run';
 
-  const existingAgentTargetPaths =
-    options.agent !== undefined || !options.interactive
-      ? undefined
-      : detectExistingAgentTargetPaths(workspaceInfoOptional.rootDir);
-  if (existingAgentTargetPaths !== undefined) {
-    selectedAgentTargetPaths = existingAgentTargetPaths;
-  } else {
-    const agentSelection = await selectAgentTargets({
-      interactive: options.interactive,
-      agent: options.agent,
-      onCancel: () => cancelAndExit(),
-    });
-    selectedAgentTargetPaths = agentSelection.targetPaths;
-    shouldWriteCopilotSetupWorkflow = agentSelection.selectedAgents.some(
-      (agent) => agent.id === COPILOT_AGENT_ID,
-    );
-  }
-
   const shouldConfigureEditors = shouldConfigureEditorsForCreate({
     editor: options.editor,
     isMonorepo,
   });
-  if (shouldConfigureEditors) {
-    const existingEditors =
-      options.editor || !options.interactive
-        ? undefined
-        : detectExistingEditors(workspaceInfoOptional.rootDir);
-    selectedEditors =
-      existingEditors ??
-      (await selectEditors({
-        interactive: options.interactive,
-        editor: options.editor,
-        onCancel: () => cancelAndExit(),
-      }));
-  }
 
-  const shouldSetupGit = await resolveGitInit(options, isMonorepo);
-  if (!isMonorepo && (!options.interactive || shouldSetupGit || options.hooks === true)) {
-    shouldSetupHooks = await promptGitHooks(options);
+  // Agent, editor, git and hook choices. Direct scaffolds ask up front. A
+  // `create-xxx` CLI asks after it ran (`generatedProjectPath`), so its own
+  // prompts come first and the answers reflect the files it generated.
+  let shouldSetupGit = false;
+  const resolveProjectSetup = async (generatedProjectPath?: string) => {
+    const agentInstructionsRoot =
+      generatedProjectPath && !isMonorepo ? generatedProjectPath : workspaceInfoOptional.rootDir;
+    const existingAgentTargetPaths =
+      options.agent !== undefined || !options.interactive
+        ? undefined
+        : detectExistingAgentTargetPaths(agentInstructionsRoot);
+    if (existingAgentTargetPaths !== undefined) {
+      selectedAgentTargetPaths = existingAgentTargetPaths;
+    } else {
+      const agentSelection = await selectAgentTargets({
+        interactive: options.interactive,
+        agent: options.agent,
+        onCancel: () => cancelAndExit(),
+      });
+      selectedAgentTargetPaths = agentSelection.targetPaths;
+      shouldWriteCopilotSetupWorkflow = agentSelection.selectedAgents.some(
+        (agent) => agent.id === COPILOT_AGENT_ID,
+      );
+    }
+
+    if (shouldConfigureEditors) {
+      const existingEditors =
+        options.editor || !options.interactive
+          ? undefined
+          : detectExistingEditors(generatedProjectPath ?? workspaceInfoOptional.rootDir);
+      selectedEditors =
+        existingEditors ??
+        (await selectEditors({
+          interactive: options.interactive,
+          editor: options.editor,
+          onCancel: () => cancelAndExit(),
+        }));
+    }
+
+    // A `create-xxx` CLI may have initialized the repository itself.
+    const hasGitRepository =
+      generatedProjectPath !== undefined && fs.existsSync(path.join(generatedProjectPath, '.git'));
+    shouldSetupGit = !hasGitRepository && (await resolveGitInit(options, isMonorepo));
+    if (
+      !isMonorepo &&
+      (!options.interactive || hasGitRepository || shouldSetupGit || options.hooks === true)
+    ) {
+      shouldSetupHooks = await promptGitHooks(options);
+    }
+  };
+
+  if (isDirectScaffoldTemplate) {
+    await resolveProjectSetup();
   }
 
   const createProgress =
@@ -1079,6 +1098,9 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   }
 
   const fullPath = path.join(workspaceInfo.rootDir, projectDir);
+  if (!isDirectScaffoldTemplate) {
+    await resolveProjectSetup(fullPath);
+  }
 
   // Register a scaffolded generator in `create.templates` so it appears in the
   // `vp create` picker (and resolves by name) without a manual config edit.
@@ -1140,7 +1162,8 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     await writeEditorConfigs({
       projectRoot: fullPath,
       editorId: selectedEditors,
-      interactive: options.interactive,
+      // Editor configs a `create-xxx` CLI generated are merged without asking per file.
+      interactive: options.interactive && isDirectScaffoldTemplate,
       silent: compactOutput,
       extraVsCodeSettings: { 'npm.scriptRunner': 'vp' },
       packageManager,

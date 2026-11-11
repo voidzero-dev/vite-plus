@@ -74,6 +74,8 @@ Vite+ ships with these built-in templates:
 
 Run `vp create --list` to see the built-in templates and the common shorthand templates Vite+ recognizes.
 
+A third-party template runs right after the package manager is chosen. `vp create` asks about agent instructions, editor configs, git, and commit hooks once the template finishes, based on the files it generated: an existing agent instructions file can be appended to or kept, existing editor configs are merged, and an existing git repository is reused.
+
 After a third-party template runs, `vp create` migrates the generated project to Vite+. When a standalone project already depends on `vite-plus`, `vp create` skips this migration and keeps the template's tooling choices.
 
 ## Options
