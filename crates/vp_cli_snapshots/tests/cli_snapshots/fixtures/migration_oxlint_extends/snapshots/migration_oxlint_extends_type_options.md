@@ -37,7 +37,7 @@ Finished in <duration> on 1 file with <n> rules using <n> threads.
 
 ## `vp lint --threads=1 -c .oxlintrc.json type-aware.ts`
 
-Inherited typeAware enables no-floating-promises
+Inherited options enable no-floating-promises and report type errors outside the lint input
 
 **Exit code:** 1
 
@@ -51,7 +51,13 @@ Inherited typeAware enables no-floating-promises
    ╰────
   help: The promise must end with a call to .catch, or end with a call to .then with a rejection handler, or be explicitly marked as ignored with the `void` operator.
 
-Found 0 warnings and 1 error.
+  × typescript(TS2322): Type 'number' is not assignable to type 'string'.
+   ╭─[type-error.ts:1:14]
+ 1 │ export const value: string = 1;
+   ·              ─────
+   ╰────
+
+Found 0 warnings and 2 errors.
 Finished in <duration> on 1 file with <n> rules using <n> threads.
 ```
 
@@ -114,7 +120,7 @@ Finished in <duration> on 1 file with <n> rules using <n> threads.
 
 ## `vp lint --threads=1 type-aware.ts`
 
-Imported typeAware produces the same diagnostic and exit code
+Imported options preserve both diagnostics and the exit code
 
 **Exit code:** 1
 
@@ -128,7 +134,13 @@ Imported typeAware produces the same diagnostic and exit code
    ╰────
   help: The promise must end with a call to .catch, or end with a call to .then with a rejection handler, or be explicitly marked as ignored with the `void` operator.
 
-Found 0 warnings and 1 error.
+  × typescript(TS2322): Type 'number' is not assignable to type 'string'.
+   ╭─[type-error.ts:1:14]
+ 1 │ export const value: string = 1;
+   ·              ─────
+   ╰────
+
+Found 0 warnings and 2 errors.
 Finished in <duration> on 1 file with <n> rules using <n> threads.
 ```
 
