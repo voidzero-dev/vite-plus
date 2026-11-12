@@ -125,7 +125,7 @@
     "@tsdown/css": "catalog:",
     "@tsdown/exe": "catalog:",
     "@typescript/native-preview": "catalog:",
-    "@vitejs/devtools": "^0.8.0",
+    "@vitejs/devtools": "^0.8.2",
     "es-module-lexer": "^3.0.0",
     "hookable": "^6.0.1",
     "oxc-parser": "catalog:",
@@ -239,8 +239,8 @@
     "node": "^20.19.0 || ^22.18.0 || >=24.11.0"
   },
   "bundledVersions": {
-    "vite": "8.3.7",
-    "rolldown": "1.2.18",
+    "vite": "8.3.8",
+    "rolldown": "1.2.19",
     "tsdown": "0.23.4"
   }
 }

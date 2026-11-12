@@ -15,6 +15,7 @@ We recommend turning both `typeAware` and `typeCheck` on so `vp check` becomes t
 ```bash
 vp check
 vp check --fix              # Format and run autofixers.
+vp check --fix-dangerously  # Format and apply lint fixes, including dangerous fixes and suggestions.
 vp check --continue-on-error # Report all enabled checks, even if formatting fails.
 vp check --quiet            # Hide lint warnings; still report and fail on errors.
 vp check --deny-warnings    # Treat lint warnings as errors.
@@ -24,6 +25,14 @@ vp check --no-fmt --no-lint # Type-check only (requires both `typeAware` and `ty
 ```
 
 If formatting fails, `vp check` stops before lint and type checks run. To fix formatting and apply available lint fixes, run `vp check --fix`. This command changes files. To skip formatting and run the remaining enabled checks, run `vp check --no-fmt`.
+
+Use `vp check --fix-dangerously` to also apply dangerous lint fixes and suggestions.
+This option enables formatting fixes without requiring `--fix`. Dangerous lint fixes
+may change program behavior, so review the changes before committing them. When both
+flags are passed, `--fix-dangerously` takes precedence for lint fixes.
+Like `--fix`, it supports `--no-fmt` and `--continue-on-error`; lint fixes are skipped
+when lint rules are disabled with `--no-lint` or `check.lint: false`. Type diagnostics
+are not automatically fixed.
 
 Use `vp check --continue-on-error` to run all enabled checks and report formatting, lint,
 and type errors in one invocation without modifying files. Type checks still

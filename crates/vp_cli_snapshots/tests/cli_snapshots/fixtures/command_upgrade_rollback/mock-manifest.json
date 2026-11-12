@@ -1,0 +1,88 @@
+{
+  "vite-plus/999.0.1": {
+    "name": "vite-plus",
+    "version": "999.0.1",
+    "dist": {
+      "tarball": "unused",
+      "integrity": "sha512-unused"
+    }
+  },
+  "@voidzero-dev/vite-plus-cli-darwin-arm64/999.0.1": {
+    "name": "@voidzero-dev/vite-plus-cli-darwin-arm64",
+    "version": "999.0.1",
+    "dist": {
+      "tarball": "{REGISTRY}/@voidzero-dev/vite-plus-cli-darwin-arm64/-/vite-plus-cli-999.0.1.tgz",
+      "integrity": "sha512-up15UEnVySULq4e34BEg8s9e2A6VLyjwUZrD++6PWXpfwFwkkysfTM21sIsx5mKwwHlfpRRO43C9zySvPMMTCQ==",
+      "attestations": {
+        "provenance": {
+          "predicateType": "https://slsa.dev/provenance/v1"
+        }
+      }
+    }
+  },
+  "@voidzero-dev/vite-plus-cli-darwin-x64/999.0.1": {
+    "name": "@voidzero-dev/vite-plus-cli-darwin-x64",
+    "version": "999.0.1",
+    "dist": {
+      "tarball": "{REGISTRY}/@voidzero-dev/vite-plus-cli-darwin-x64/-/vite-plus-cli-999.0.1.tgz",
+      "integrity": "sha512-up15UEnVySULq4e34BEg8s9e2A6VLyjwUZrD++6PWXpfwFwkkysfTM21sIsx5mKwwHlfpRRO43C9zySvPMMTCQ==",
+      "attestations": {
+        "provenance": {
+          "predicateType": "https://slsa.dev/provenance/v1"
+        }
+      }
+    }
+  },
+  "@voidzero-dev/vite-plus-cli-linux-arm64-gnu/999.0.1": {
+    "name": "@voidzero-dev/vite-plus-cli-linux-arm64-gnu",
+    "version": "999.0.1",
+    "dist": {
+      "tarball": "{REGISTRY}/@voidzero-dev/vite-plus-cli-linux-arm64-gnu/-/vite-plus-cli-999.0.1.tgz",
+      "integrity": "sha512-up15UEnVySULq4e34BEg8s9e2A6VLyjwUZrD++6PWXpfwFwkkysfTM21sIsx5mKwwHlfpRRO43C9zySvPMMTCQ==",
+      "attestations": {
+        "provenance": {
+          "predicateType": "https://slsa.dev/provenance/v1"
+        }
+      }
+    }
+  },
+  "@voidzero-dev/vite-plus-cli-linux-x64-gnu/999.0.1": {
+    "name": "@voidzero-dev/vite-plus-cli-linux-x64-gnu",
+    "version": "999.0.1",
+    "dist": {
+      "tarball": "{REGISTRY}/@voidzero-dev/vite-plus-cli-linux-x64-gnu/-/vite-plus-cli-999.0.1.tgz",
+      "integrity": "sha512-up15UEnVySULq4e34BEg8s9e2A6VLyjwUZrD++6PWXpfwFwkkysfTM21sIsx5mKwwHlfpRRO43C9zySvPMMTCQ==",
+      "attestations": {
+        "provenance": {
+          "predicateType": "https://slsa.dev/provenance/v1"
+        }
+      }
+    }
+  },
+  "@voidzero-dev/vite-plus-cli-linux-arm64-musl/999.0.1": {
+    "name": "@voidzero-dev/vite-plus-cli-linux-arm64-musl",
+    "version": "999.0.1",
+    "dist": {
+      "tarball": "{REGISTRY}/@voidzero-dev/vite-plus-cli-linux-arm64-musl/-/vite-plus-cli-999.0.1.tgz",
+      "integrity": "sha512-up15UEnVySULq4e34BEg8s9e2A6VLyjwUZrD++6PWXpfwFwkkysfTM21sIsx5mKwwHlfpRRO43C9zySvPMMTCQ==",
+      "attestations": {
+        "provenance": {
+          "predicateType": "https://slsa.dev/provenance/v1"
+        }
+      }
+    }
+  },
+  "@voidzero-dev/vite-plus-cli-linux-x64-musl/999.0.1": {
+    "name": "@voidzero-dev/vite-plus-cli-linux-x64-musl",
+    "version": "999.0.1",
+    "dist": {
+      "tarball": "{REGISTRY}/@voidzero-dev/vite-plus-cli-linux-x64-musl/-/vite-plus-cli-999.0.1.tgz",
+      "integrity": "sha512-up15UEnVySULq4e34BEg8s9e2A6VLyjwUZrD++6PWXpfwFwkkysfTM21sIsx5mKwwHlfpRRO43C9zySvPMMTCQ==",
+      "attestations": {
+        "provenance": {
+          "predicateType": "https://slsa.dev/provenance/v1"
+        }
+      }
+    }
+  }
+}

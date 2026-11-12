@@ -9,6 +9,7 @@ mod documentation;
 mod env_config;
 pub mod env_vars;
 mod error;
+pub mod file_lock;
 pub mod header;
 mod http;
 mod interactivity;
