@@ -125,9 +125,12 @@ jobs:
             ### Background
             - Upgrade script: `./.github/scripts/upgrade-deps.ts`
             - Development, CI, and global CLI dependency installation use the
-              latest stable `24.x` release pinned in `.node-version`.
-              Keep the exact version selected by the upgrade script. Do not replace
-              it with a moving LTS alias or advance the major version.
+              latest stable `24.x` release published at least 24 hours ago,
+              pinned in `.node-version`. The upgrade script checks `published_at`
+              from the official `nodejs/node` GitHub release; the download index's
+              date alone does not establish a full 24 hours.
+              Keep the exact version selected by the upgrade script. Do not bypass
+              the release-age check, use a moving LTS alias, or advance the major version.
               Runtime commands keep their latest LTS fallback.
             - Vitest is capped at the latest stable `5.x` release. Keep the exact
               version selected by the upgrade script when merging upstream catalogs.
