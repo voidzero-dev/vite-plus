@@ -828,6 +828,49 @@ fn forced_reinstall_dir_name(version: &str) -> String {
     format!("{version}+force.{}.{}", process::id(), nanos)
 }
 
+const INSTALL_LOCK_FILE: &str = ".install.lock";
+
+/// Serialize installation changes in `install_dir` across processes.
+///
+/// Hold the returned file while changing version directories, `current`,
+/// `.previous-version`, or cleaning up old versions. In-place self-setup must
+/// not reacquire its parent's installation lock.
+pub async fn lock_install_dir(install_dir: &AbsolutePath) -> Result<std::fs::File, Error> {
+    tokio::fs::create_dir_all(install_dir).await?;
+    let path = install_dir.join(INSTALL_LOCK_FILE);
+    Ok(vp_shared::file_lock::lock_exclusive(&path).await?)
+}
+
+/// Create `version_dir` and return whether this call created it.
+///
+/// The directory can already exist because a kept version or the rollback
+/// target is being installed again. Pass the result to
+/// [`discard_failed_version_dir`] so a failed install keeps that directory.
+pub async fn create_version_dir(version_dir: &AbsolutePath) -> Result<bool, Error> {
+    if let Some(parent) = version_dir.parent() {
+        tokio::fs::create_dir_all(parent).await?;
+    }
+    match tokio::fs::create_dir(version_dir).await {
+        Ok(()) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Ok(false),
+        Err(error) => Err(error.into()),
+    }
+}
+
+/// Remove a failed install only when [`create_version_dir`] created it.
+pub async fn discard_failed_version_dir(version_dir: &AbsolutePath, created: bool) {
+    if !created {
+        tracing::debug!("Keeping existing version directory {}", version_dir.as_path().display());
+        return;
+    }
+    tracing::debug!("Cleaning up failed install at {}", version_dir.as_path().display());
+    if let Err(error) = tokio::fs::remove_dir_all(version_dir).await
+        && error.kind() != std::io::ErrorKind::NotFound
+    {
+        tracing::warn!("Failed to remove {}: {error}", version_dir.as_path().display());
+    }
+}
+
 /// Clean up old version directories, keeping at most `max_keep` versions.
 ///
 /// Sorts by creation time (newest first, matching install.sh behavior) and removes
@@ -1356,6 +1399,39 @@ mod tests {
                 .unwrap();
         let result = cleanup_old_versions(&non_existent, 5, &[]).await;
         assert!(result.is_err(), "cleanup_old_versions should error on non-existent dir");
+    }
+
+    #[tokio::test]
+    async fn install_lock_creates_data_dir_and_locks_expected_file() {
+        let temp = tempfile::tempdir().unwrap();
+        let data = AbsolutePathBuf::new(temp.path().join("data")).unwrap();
+
+        let lock = lock_install_dir(&data).await.unwrap();
+        let contender = std::fs::File::open(data.join(INSTALL_LOCK_FILE)).unwrap();
+        assert!(matches!(contender.try_lock(), Err(std::fs::TryLockError::WouldBlock)));
+        drop(lock);
+        assert!(contender.try_lock().is_ok());
+    }
+
+    #[tokio::test]
+    async fn failed_install_removes_only_a_directory_it_created() {
+        let temp = tempfile::tempdir().unwrap();
+        let data = AbsolutePathBuf::new(temp.path().join("data")).unwrap();
+
+        let fresh = data.join("1.2.0");
+        let created = create_version_dir(&fresh).await.unwrap();
+        assert!(created);
+        discard_failed_version_dir(&fresh, created).await;
+        assert!(!fresh.as_path().exists());
+
+        // A kept version or rollback target survives a failed reinstall.
+        let existing = data.join("1.1.0");
+        std::fs::create_dir_all(existing.join("bin")).unwrap();
+        std::fs::write(existing.join("bin").join("vp"), "kept").unwrap();
+        let created = create_version_dir(&existing).await.unwrap();
+        assert!(!created);
+        discard_failed_version_dir(&existing, created).await;
+        assert_eq!(std::fs::read_to_string(existing.join("bin").join("vp")).unwrap(), "kept");
     }
 
     #[tokio::test]

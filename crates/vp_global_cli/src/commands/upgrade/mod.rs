@@ -108,11 +108,7 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
     // Step 4: Handle --check (report and exit)
     if options.check {
         if resolved.version == current_version {
-            vp_shared::output::print_stdout_line(format_args!(
-                "\n{} Already up to date ({})",
-                style(output::CHECK).green(),
-                current_version
-            ));
+            print_up_to_date(current_version);
         } else {
             vp_shared::output::print_stdout_line(format_args!(
                 "Update available: {} \u{2192} {}",
@@ -126,11 +122,7 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
     // Step 5: Handle already up-to-date
     if resolved.version == current_version && !options.force {
         if !options.silent {
-            vp_shared::output::print_stdout_line(format_args!(
-                "\n{} Already up to date ({})",
-                style(output::CHECK).green(),
-                current_version
-            ));
+            print_up_to_date(current_version);
         }
         return Ok(ExitStatus::default());
     }
@@ -179,6 +171,27 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
     // Step 7: Verify integrity
     integrity::verify_integrity(&platform_data, &resolved.platform_integrity)?;
 
+    // Hold the lock until cleanup finishes. Another process may have activated
+    // the target version while this one waited. A `current` link whose binary
+    // is missing still needs this install to repair it.
+    let _install_lock = install::lock_install_dir(install_dir).await?;
+    let active_install_dir = install::read_current_version(install_dir).await;
+    if !options.force
+        && active_install_dir
+            .as_deref()
+            .is_some_and(|active| install::is_install_dir_for_version(active, &resolved.version))
+        && tokio::fs::try_exists(
+            install_dir.join("current").join("bin").join(vp_setup::VP_BINARY_NAME),
+        )
+        .await
+        .unwrap_or(false)
+    {
+        if !options.silent {
+            print_up_to_date(&resolved.version);
+        }
+        return Ok(ExitStatus::default());
+    }
+
     if !options.silent {
         output::info("installing...");
     }
@@ -193,6 +206,14 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
         options.registry.as_deref(),
     )
     .await
+}
+
+fn print_up_to_date(version: &str) {
+    output::print_stdout_line(format_args!(
+        "\n{} Already up to date ({})",
+        style(output::CHECK).green(),
+        version
+    ));
 }
 
 /// Install `resolved` from its platform tarball and switch to it.
@@ -226,7 +247,7 @@ async fn install_version(
     let install_dir_name =
         install::target_install_dir_name(version, active_install_dir.as_deref(), force);
     let version_dir = install_dir.join(&install_dir_name);
-    tokio::fs::create_dir_all(&version_dir).await?;
+    let created = install::create_version_dir(&version_dir).await?;
 
     // Step 9: Extract platform binary and install via npm
     let result = install_platform_and_main(
@@ -242,10 +263,8 @@ async fn install_version(
     )
     .await;
 
-    // On failure, clean up the version directory
     if result.is_err() {
-        tracing::debug!("Cleaning up failed install at {}", version_dir.as_path().display());
-        let _ = tokio::fs::remove_dir_all(&version_dir).await;
+        install::discard_failed_version_dir(&version_dir, created).await;
     }
 
     result
@@ -395,6 +414,7 @@ async fn execute_rollback(
     install_dir: &AbsolutePathBuf,
     silent: bool,
 ) -> Result<ExitStatus, Error> {
+    let _install_lock = install::lock_install_dir(install_dir).await?;
     let previous = install::read_previous_version(install_dir)
         .await?
         .ok_or_else(|| Error::Upgrade("No previous version found. Cannot rollback.".into()))?;
