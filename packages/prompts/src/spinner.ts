@@ -57,7 +57,6 @@ const formatTimer = (durationMs: number): string => {
 const PROCESS_SIGNALS = ['SIGINT', 'SIGTERM'] as const;
 type ProcessSignal = (typeof PROCESS_SIGNALS)[number];
 
-// Signal listeners of active spinners. They do not count as another owner.
 const spinnerSignalListeners = new Set<unknown>();
 
 // Windows has no signals, so exit with the matching status there.
@@ -69,7 +68,6 @@ const endBySignal = (signal: ProcessSignal, pid: number): void => {
   }
 };
 
-// One spinner blocks input at a time, so one Ctrl+C is forwarded once.
 let inputBlocked = false;
 
 // clack's block() exits with 0 on Ctrl+C. This copy reports Ctrl+C and ignores other keys.
@@ -167,20 +165,20 @@ export const spinner = ({
       process.nextTick(() => removedInDelivery.delete(event));
     }
   };
-  const ownedByAnother = (signal: ProcessSignal) =>
-    removedInDelivery.has(signal) ||
-    process.listeners(signal).some((listener) => !spinnerSignalListeners.has(listener));
+  const ownedByAnother = (processSignal: ProcessSignal) =>
+    removedInDelivery.has(processSignal) ||
+    process.listeners(processSignal).some((listener) => !spinnerSignalListeners.has(listener));
   // A listener replaces the default action, so the only owner raises the signal again.
   // An emit without the signal name only stops the spinner.
-  const processSignalHandlers = PROCESS_SIGNALS.map((signal) => {
+  const processSignalHandlers = PROCESS_SIGNALS.map((processSignal) => {
     const handler = (received?: NodeJS.Signals) => {
-      const raise = received === signal && !ownedByAnother(signal);
+      const raise = received === processSignal && !ownedByAnother(processSignal);
       handleExit(1);
       if (raise) {
-        endBySignal(signal, process.pid);
+        endBySignal(processSignal, process.pid);
       }
     };
-    return [signal, handler] as const;
+    return [processSignal, handler] as const;
   });
   // Raw mode turns Ctrl+C into a key, so send SIGINT to the process group as the terminal would.
   const interrupt = () => {
@@ -194,10 +192,10 @@ export const spinner = ({
     // Reference: https://nodejs.org/api/process.html#event-unhandledrejection
     process.on('unhandledRejection', errorEventHandler);
     // Reference Signal Events: https://nodejs.org/api/process.html#signal-events
-    for (const [signal, handler] of processSignalHandlers) {
+    for (const [processSignal, handler] of processSignalHandlers) {
       spinnerSignalListeners.add(handler);
       // Run first, so that an observer such as signal-exit finds no spinner listener left.
-      process.prependListener(signal, handler);
+      process.prependListener(processSignal, handler);
     }
     process.on('exit', handleExit);
     process.on('removeListener', trackRemoval);
@@ -211,8 +209,8 @@ export const spinner = ({
     process.removeListener('uncaughtExceptionMonitor', errorEventHandler);
     process.removeListener('unhandledRejection', errorEventHandler);
     process.removeListener('removeListener', trackRemoval);
-    for (const [signal, handler] of processSignalHandlers) {
-      process.removeListener(signal, handler);
+    for (const [processSignal, handler] of processSignalHandlers) {
+      process.removeListener(processSignal, handler);
       spinnerSignalListeners.delete(handler);
     }
     process.removeListener('exit', handleExit);
