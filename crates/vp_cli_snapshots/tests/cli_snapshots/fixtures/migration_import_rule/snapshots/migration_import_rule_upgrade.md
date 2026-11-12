@@ -1,6 +1,6 @@
-# migration_ignore_patterns_upgrade
+# migration_import_rule_upgrade
 
-Preserve templates and their shared catalogs and overrides, re-include one template, and leave non-workspace examples alone.
+Existing Vite+ migration honors ordered lint overrides while still migrating scripts, dependencies, catalogs and overrides.
 
 ## `vp migrate --no-interactive --no-hooks --no-agent --no-editor`
 
@@ -16,21 +16,17 @@ VITE+ - The Unified Toolchain for the Web
 • Package manager settings configured
 ```
 
-## `vpt print-file templates/starter/package.json`
-
-```
-{
-  "name": "starter", "private": true, "type": "module",
-  "scripts": { "build": "vite build", "test": "vitest run" },
-  "devDependencies": { "vite": "catalog:", "vitest": "catalog:legacy", "@vitest/coverage-v8": "catalog:legacy" }
-}
-```
-
 ## `vpt print-file templates/starter/vite.config.ts`
 
 ```
 import { defineConfig } from 'vite';
-export default defineConfig({test: {poolOptions: {threads: {singleThread: true}}}});
+export default defineConfig({test: {
+    // Vitest v4 compatibility: preserve mock call history.
+    // Remove after tests no longer rely on calls from setup or earlier tests.
+    // https://viteplus.dev/guide/vitest-v5#remove-unneeded-compatibility-settings
+    // https://vitest.dev/guide/migration/#clearmocks-is-enabled-by-default
+    clearMocks: false,
+    poolOptions: {threads: {singleThread: true}}}});
 ```
 
 ## `vpt print-file templates/starter/unit.test.ts`
@@ -41,10 +37,11 @@ debugger;
 test('template', () => expect(1).toBe(1));
 ```
 
-## `vpt print-file templates/starter/tsconfig.json`
+## `vpt print-file templates/managed/unit.test.ts`
 
 ```
-{ "compilerOptions": { "types": ["vite/client", "vitest/globals"], "esModuleInterop": false } }
+import { expect, test } from 'vite-plus/test';
+test('included', () => expect(1).toBe(1));
 ```
 
 ## `vpt print-file examples/standalone/unit.test.ts`
@@ -54,25 +51,6 @@ import { expect, test } from 'vitest';
 test('outside-workspace', () => expect(1).toBe(1));
 ```
 
-## `vpt print-file packages/app/package.json`
-
-```
-{
-  "name": "app",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "build": "vp build",
-    "test": "vp test run"
-  },
-  "devDependencies": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@<version>",
-    "vitest": "<version>",
-    "@vitest/coverage-v8": "<version>"
-  }
-}
-```
-
 ## `vpt print-file packages/app/unit.test.ts`
 
 ```
@@ -80,11 +58,23 @@ import { expect, test } from 'vite-plus/test';
 test('application', () => expect(1).toBe(1));
 ```
 
-## `vpt print-file templates/managed/unit.test.ts`
+## `vpt print-file templates/starter/package.json`
 
 ```
-import { expect, test } from 'vite-plus/test';
-test('included', () => expect(1).toBe(1));
+{
+  "name": "starter",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vp build",
+    "test": "vp test run"
+  },
+  "devDependencies": {
+    "vite": "catalog:",
+    "vitest": "catalog:legacy",
+    "@vitest/coverage-v8": "catalog:legacy"
+  }
+}
 ```
 
 ## `vpt print-file pnpm-workspace.yaml`
@@ -94,14 +84,18 @@ packages:
   - packages/*
   - templates/*
 catalog:
-  vite-plus: latest
-  vite: ^8.0.0
+  vite-plus: <version>
+  vite: npm:@voidzero-dev/vite-plus-core@<version>
+  vitest: <version>
+  '@vitest/coverage-v8': <version>
 catalogs:
   legacy:
-    vitest: ^4.1.11
-    '@vitest/coverage-v8': ^4.1.11
+    vitest: <version>
+    '@vitest/coverage-v8': <version>
 overrides:
   unrelated-package: 1.0.0
+  vite@*: 'catalog:'
+  vitest@*: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite
@@ -112,8 +106,6 @@ peerDependencyRules:
 ```
 
 ## `vp migrate --no-interactive --no-hooks --no-agent --no-editor`
-
-Rerunning uses the same policy and explicit managed dependency specs.
 
 ```
 VITE+ - The Unified Toolchain for the Web
@@ -129,8 +121,6 @@ test('\''autofix'\'', () => {});
 ```
 
 ## `vp lint --threads=1 --fix templates/starter/unit.test.ts packages/app/unit.test.ts`
-
-Ignored imports remain upstream; other rules still report the template's debugger statement.
 
 **Exit code:** 1
 

@@ -1,10 +1,10 @@
 # migration_workspace_vite_template
 
-Reproduce #3406: an existing Vite+ workspace converts an independently reusable Vite/Vitest template. This records the current behavior, not the desired exclusion behavior.
+Without a lint override, migration rewrites template imports along with other workspace files.
 
 ## `vp migrate --no-interactive --no-hooks --no-agent --no-editor`
 
-ordinary upgrade without --full also migrates the template
+an ordinary upgrade rewrites template imports by default
 
 ```
 VITE+ - The Unified Toolchain for the Web

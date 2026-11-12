@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { styleText } from 'node:util';
 
@@ -6,15 +7,13 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { rewritePrettier } from '../../../binding/index.js';
 import { type WorkspacePackage } from '../../types/index.ts';
 import { getVpCommand, runCommandSilently } from '../../utils/command.ts';
+import { editJsonFile, readJsonFile } from '../../utils/json.ts';
 import { displayRelative } from '../../utils/path.ts';
 import { cancelAndExit } from '../../utils/prompts.ts';
 import { getSilentSpinner, getSpinner } from '../../utils/spinner.ts';
 import { PRETTIER_CONFIG_FILES, PRETTIER_PACKAGE_JSON_CONFIG, detectConfigs } from '../detector.ts';
-import fs from '../files.ts';
-import { editJsonFile, readJsonFile } from '../files.ts';
 import { rewriteToolLintStagedConfigFiles } from '../migrator.ts';
 import { type MigrationReport } from '../report.ts';
-import { isMigrationIgnored } from '../scope.ts';
 import { warnMigration } from './shared.ts';
 
 export function detectPrettierProject(
@@ -108,13 +107,6 @@ export async function migratePrettierToOxfmt(
   packages?: WorkspacePackage[],
   options?: { silent?: boolean; report?: MigrationReport },
 ): Promise<'migrated' | 'skipped' | 'failed'> {
-  if (
-    [prettierConfigFile, '.oxfmtrc.json'].some(
-      (file) => file && isMigrationIgnored(path.join(projectPath, file)),
-    )
-  ) {
-    return 'skipped';
-  }
   const spinner = options?.silent ? getSilentSpinner() : getSpinner(interactive);
 
   // Step 1: Generate .oxfmtrc.json from Prettier config

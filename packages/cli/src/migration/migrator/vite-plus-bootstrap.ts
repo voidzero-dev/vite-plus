@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 
 import { PackageManager, type WorkspaceInfo, type WorkspacePackage } from '../../types/index.ts';
@@ -8,10 +9,9 @@ import {
   VITE_PLUS_VERSION,
   isForceOverrideMode,
 } from '../../utils/constants.ts';
+import { editJsonFile, readJsonFile } from '../../utils/json.ts';
 import { type NpmWorkspaces } from '../../utils/workspace.ts';
-import fs from '../files.ts';
-import { editJsonFile, readJsonFile } from '../files.ts';
-import { editYamlFile, readYamlFile, type YamlDocument } from '../files.ts';
+import { editYamlFile, readYamlFile, type YamlDocument } from '../../utils/yaml.ts';
 import {
   alignVitestEcosystemPackages,
   applyBuildAllowanceToPackageJsonPnpm,
@@ -53,7 +53,6 @@ import {
   yarnrcSatisfiesVitePlus,
 } from '../migrator.ts';
 import { type DependencyVersionChange, type MigrationReport } from '../report.ts';
-import { preserveSharedDependencies } from '../scope.ts';
 import {
   BROWSER_PROVIDER_PEER_DEPS,
   hasProviderPeerDependency,
@@ -136,9 +135,6 @@ export function overridesSatisfyVitePlus(
   keyStyle: ManagedOverrideKeyStyle = 'bare',
   usesWebdriverioProvider = false,
 ): boolean {
-  if (preserveSharedDependencies()) {
-    return true;
-  }
   const managed = managedOverridePackages(usesVitest, usesWebdriverioProvider);
   // Common case: a lingering managed `vitest` override is not satisfied. It
   // must be removed, so the bootstrap stays pending until then. Both key
@@ -885,9 +881,6 @@ function ensureOverrideEntries(
   keyStyle: ManagedOverrideKeyStyle = 'bare',
   usesWebdriverioProvider = false,
 ): { overrides: Record<string, string>; changed: boolean } {
-  if (preserveSharedDependencies()) {
-    return { overrides: overrides ?? {}, changed: false };
-  }
   const next = { ...overrides };
   let changed = false;
   // Common case: drop a lingering managed `vitest` override.

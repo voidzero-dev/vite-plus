@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { styleText } from 'node:util';
 
@@ -7,15 +8,12 @@ import corePkg from 'vite/package.json' with { type: 'json' };
 import { PackageManager, type WorkspacePackage } from '../../types/index.ts';
 import { getVpCommand, runCommandSilently } from '../../utils/command.ts';
 import { TSDOWN_MIGRATION_SKILL_URL } from '../../utils/constants.ts';
+import { editJsonFile, readJsonFile } from '../../utils/json.ts';
 import { displayRelative } from '../../utils/path.ts';
 import { cancelAndExit } from '../../utils/prompts.ts';
 import { getSilentSpinner, getSpinner } from '../../utils/spinner.ts';
 import { detectConfigs, TSUP_CONFIG_FILES, TSUP_PACKAGE_JSON_CONFIG } from '../detector.ts';
-import fs from '../files.ts';
-import { editJsonFile, readJsonFile } from '../files.ts';
 import { addMigrationWarning, type MigrationReport } from '../report.ts';
-import { isMigrationIgnored } from '../scope.ts';
-import { warnMigration } from './shared.ts';
 
 function showTsdownMigrationOptions(
   targetLabel = 'the project root',
@@ -430,17 +428,6 @@ export async function migrateTsupToTsdown(
   const tsupTargets = targets.filter((target) =>
     target === rootPath ? !!tsupConfigFile : !!detectConfigs(target).tsupConfig,
   );
-  if (
-    tsupTargets.some((target) =>
-      TSDOWN_MIGRATION_FILES.some((file) => isMigrationIgnored(path.join(target, file))),
-    )
-  ) {
-    warnMigration(
-      'Skipped tsup migration because migrate.ignorePatterns excludes one of its input or output files.',
-      options?.report,
-    );
-    return false;
-  }
   const configCollisions = collectTsupConfigCollisions(tsupTargets);
   if (configCollisions.length > 0) {
     prompts.log.warn(

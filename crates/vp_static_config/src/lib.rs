@@ -791,7 +791,7 @@ mod tests {
     }
 
     #[test]
-    fn vitest_config_preserves_migration_fields_without_evaluating_plugins() {
+    fn vitest_config_preserves_lint_fields_without_evaluating_plugins() {
         for import in [
             "import { defineConfig } from 'vitest/config';",
             "import { defineConfig } from 'vite-plus/test/config';",
@@ -800,15 +800,15 @@ mod tests {
                 import,
                 "export default defineConfig({
                      plugins: [plugin()],
-                     migrate: { ignorePatterns: ['templates/'] },
+                     lint: { rules: { 'vite-plus/prefer-vite-plus-imports': 'off' } },
                  });",
             ]
             .join("\n");
             let result = parse(&source);
             assert_json(
                 &result,
-                "migrate",
-                serde_json::json!({ "ignorePatterns": ["templates/"] }),
+                "lint",
+                serde_json::json!({ "rules": { "vite-plus/prefer-vite-plus-imports": "off" } }),
             );
             assert!(result.get("run").is_none());
         }
@@ -817,19 +817,23 @@ mod tests {
     #[test]
     fn exported_const_config_is_static_only_without_possible_mutations() {
         let source = "import { defineConfig } from 'vitest/config';
-                      const config = defineConfig({ migrate: { ignorePatterns: ['templates/'] } });";
+                      const config = defineConfig({ lint: { rules: { 'vite-plus/prefer-vite-plus-imports': 'off' } } });";
         let result = parse(&[source, "export default config;"].join("\n"));
-        assert_json(&result, "migrate", serde_json::json!({ "ignorePatterns": ["templates/"] }));
+        assert_json(
+            &result,
+            "lint",
+            serde_json::json!({ "rules": { "vite-plus/prefer-vite-plus-imports": "off" } }),
+        );
         assert!(result.get("run").is_none());
         for mutation in [
-            "config.migrate = { ignorePatterns: [] };",
+            "config.lint = {};",
             "Object.assign(config, other);",
             "const changed = mutate(config);",
         ] {
             let result = parse(&[source, mutation, "export default config;"].join("\n"));
-            assert_non_static(&result, "migrate");
+            assert_non_static(&result, "lint");
         }
-        assert_non_static(&parse("let config = {}; export default config;"), "migrate");
+        assert_non_static(&parse("let config = {}; export default config;"), "lint");
     }
 
     #[test]

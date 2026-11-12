@@ -3,37 +3,6 @@ use std::path::{Path, PathBuf};
 use ignore::{WalkBuilder, gitignore::GitignoreBuilder};
 use vp_error::Error;
 
-/// Config-relative gitignore rules shared by migration and its lint autofix.
-#[derive(Clone)]
-pub struct MigrationIgnoreMatcher {
-    root: PathBuf,
-    matcher: ignore::gitignore::Gitignore,
-}
-
-impl MigrationIgnoreMatcher {
-    pub fn new(root: &Path, patterns: &[String]) -> Result<Self, Error> {
-        let mut builder = GitignoreBuilder::new(root);
-        for pattern in patterns {
-            builder.add_line(None, pattern)?;
-        }
-        Ok(Self { root: root.to_path_buf(), matcher: builder.build()? })
-    }
-
-    pub fn is_ignored(&self, path: &Path, is_dir: bool) -> bool {
-        let Ok(relative) = path.strip_prefix(&self.root) else { return false };
-        let mut current = self.root.clone();
-        let mut components = relative.components().peekable();
-        while let Some(component) = components.next() {
-            current.push(component);
-            // Git cannot re-include a child of an excluded directory.
-            if self.matcher.matched(&current, components.peek().is_some() || is_dir).is_ignore() {
-                return true;
-            }
-        }
-        false
-    }
-}
-
 /// File extensions to process for import rewriting.
 ///
 /// Includes CommonJS (`.cjs`/`.cts`) variants in addition to ESM, because
@@ -113,13 +82,6 @@ pub fn is_directory_gitignored(root: &Path, directory: &Path) -> Result<bool, Er
 /// }
 /// ```
 pub fn find_ts_files(root: &Path) -> Result<WalkResult, Error> {
-    find_ts_files_with_ignore(root, None)
-}
-
-pub fn find_ts_files_with_ignore(
-    root: &Path,
-    ignore: Option<MigrationIgnoreMatcher>,
-) -> Result<WalkResult, Error> {
     let mut files = Vec::new();
 
     let walker = WalkBuilder::new(root)
@@ -128,12 +90,6 @@ pub fn find_ts_files_with_ignore(
         .git_global(true) // Respect global gitignore
         .git_exclude(true) // Respect .git/info/exclude
         .require_git(false) // Work even if not a git repo
-        .filter_entry(move |entry| {
-            !ignore.as_ref().is_some_and(|matcher| {
-                matcher
-                    .is_ignored(entry.path(), entry.file_type().is_some_and(|kind| kind.is_dir()))
-            })
-        })
         .build();
 
     for entry in walker {
@@ -163,30 +119,6 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
-
-    #[test]
-    fn migration_patterns_follow_gitignore_semantics() {
-        let temp = tempdir().unwrap();
-        for (patterns, file, is_dir, expected) in [
-            (vec!["/templates/"], "templates/app/vite.config.ts", false, true),
-            (vec!["/templates/"], "nested/templates/a.ts", false, false),
-            (vec!["templates/"], "nested/templates/a.ts", false, true),
-            (vec!["templates/*", "!templates/app/"], "templates/app/a.ts", false, false),
-            (vec!["templates/", "!templates/app/a.ts"], "templates/app/a.ts", false, true),
-            (vec!["**/*.test.ts", "!app.test.ts"], "app.test.ts", false, false),
-            (vec!["# comment", "\\!literal/"], "!literal/a.ts", false, true),
-            (vec!["templates/"], "templates", false, false),
-            (vec!["templates/"], "templates", true, true),
-        ] {
-            let patterns = patterns.into_iter().map(String::from).collect::<Vec<_>>();
-            let matcher = MigrationIgnoreMatcher::new(temp.path(), &patterns).unwrap();
-            assert_eq!(
-                matcher.is_ignored(&temp.path().join(file), is_dir),
-                expected,
-                "{patterns:?}: {file}"
-            );
-        }
-    }
 
     #[test]
     fn test_inherited_directory_gitignore() {

@@ -85,6 +85,7 @@ import {
   configureYarnNodeModulesMode,
   rewriteMonorepo,
   rewriteStandaloneProject,
+  resolveImportRuleConfig,
   planVitestV5Migration,
   refreshVitestV5Migration,
   retryPreservedOxlintConfigs,
@@ -100,13 +101,6 @@ import {
 import { prepareNpmViteAliasReinstall } from './npm-reinstall.ts';
 import type { MigrationOptions } from './options.ts';
 import { addMigrationWarning, createMigrationReport, type MigrationReport } from './report.ts';
-import {
-  checkEnclosingMigrationPolicy,
-  isMigrationIgnored,
-  loadMigrationScope,
-  migrationScope,
-  withMigrationScope,
-} from './scope.ts';
 import {
   collectMigrationSetupPlan,
   collectTsupMigrationDecision,
@@ -202,15 +196,6 @@ async function fixBaseUrlForWorkspace(
   report?: MigrationReport,
 ): Promise<string[]> {
   if (!fixBaseUrl) {
-    return [];
-  }
-  // ts5to6 follows references and extends outside its input config, but does
-  // not accept exclusions. Filtering input paths alone cannot protect them.
-  if (migrationScope()?.patterns.length) {
-    addMigrationWarning(
-      report,
-      'Skipped automatic tsconfig baseUrl removal because its external fixer cannot honor migrate.ignorePatterns. Remove baseUrl manually in migrated projects to enable type-aware linting.',
-    );
     return [];
   }
 
@@ -843,6 +828,8 @@ async function executeMigrationPlan(
     },
   );
 
+  const importRuleConfig = await resolveImportRuleConfig(workspaceInfo.rootDir);
+
   // 4. Check vite and vitest version is supported by migration
   updateMigrationProgress('Validating toolchain');
   const isViteSupported = checkViteVersion(workspaceInfo.rootDir);
@@ -936,7 +923,7 @@ async function executeMigrationPlan(
   // 7. Rewrite configs
   updateMigrationProgress('Rewriting configs');
   if (workspaceInfo.isMonorepo) {
-    rewriteMonorepo(workspaceInfo, skipStagedMigration, true, report);
+    rewriteMonorepo(workspaceInfo, skipStagedMigration, true, report, importRuleConfig);
   } else {
     rewriteStandaloneProject(
       workspaceInfo.rootDir,
@@ -944,6 +931,7 @@ async function executeMigrationPlan(
       skipStagedMigration,
       true,
       report,
+      importRuleConfig,
     );
   }
 
@@ -965,7 +953,6 @@ async function executeMigrationPlan(
   // 9. Write agent instructions (using pre-resolved decisions)
   updateMigrationProgress('Writing agent instructions');
   await writeAgentInstructions({
-    shouldWriteFile: (file) => !isMigrationIgnored(file),
     projectRoot: workspaceInfo.rootDir,
     targetPaths: plan.selectedAgentTargetPaths,
     interactive,
@@ -976,7 +963,6 @@ async function executeMigrationPlan(
   // 10. Write editor configs (using pre-resolved decisions)
   updateMigrationProgress('Writing editor configs');
   await writeEditorConfigs({
-    shouldWriteFile: (file) => !isMigrationIgnored(file),
     projectRoot: workspaceInfo.rootDir,
     editorId: plan.selectedEditor,
     interactive,
@@ -1079,21 +1065,6 @@ async function main() {
       1,
     );
   }
-  await checkEnclosingMigrationPolicy(workspaceInfoOptional.rootDir);
-  const scope = await loadMigrationScope(
-    workspaceInfoOptional.rootDir,
-    workspaceInfoOptional.packageManager,
-  );
-  workspaceInfoOptional.packages = workspaceInfoOptional.packages?.filter(
-    (pkg) => !scope.ignores(path.join(workspaceInfoOptional.rootDir, pkg.path), true),
-  );
-  return withMigrationScope(scope, () => migrateWorkspace(workspaceInfoOptional, options));
-}
-
-async function migrateWorkspace(
-  workspaceInfoOptional: WorkspaceInfoOptional,
-  options: MigrationOptions,
-) {
   const initialChangedPaths = await collectChangedFormatPaths(workspaceInfoOptional.rootDir);
   const preExistingChangedPaths = initialChangedPaths ? new Set(initialChangedPaths) : undefined;
   const resolvedPackageManager = workspaceInfoOptional.packageManager ?? 'unknown';
@@ -1246,11 +1217,13 @@ async function migrateWorkspace(
     // so surface it first instead of leaving the spinner silent. The spinner paints
     // this message synchronously on start(), before the walk begins.
     updateMigrationProgress('Rewriting toolchain imports across the workspace');
+    const importRuleConfig = await resolveImportRuleConfig(workspaceInfoOptional.rootDir);
     const coreMigrationResult = finalizeCoreMigrationForExistingVitePlus(
       workspaceInfoOptional,
       true,
       report,
       pendingCoreMigration,
+      importRuleConfig,
     );
     if (
       coreMigrationResult.dependencies ||
@@ -1687,7 +1660,6 @@ async function migrateWorkspace(
     if (plan.selectedAgentTargetPaths && plan.selectedAgentTargetPaths.length > 0) {
       updateMigrationProgress('Writing agent instructions');
       await writeAgentInstructions({
-        shouldWriteFile: (file) => !isMigrationIgnored(file),
         projectRoot: workspaceInfoOptional.rootDir,
         targetPaths: plan.selectedAgentTargetPaths,
         interactive: options.interactive,
@@ -1700,7 +1672,6 @@ async function migrateWorkspace(
     if (plan.selectedEditor) {
       updateMigrationProgress('Writing editor configs');
       await writeEditorConfigs({
-        shouldWriteFile: (file) => !isMigrationIgnored(file),
         projectRoot: workspaceInfoOptional.rootDir,
         editorId: plan.selectedEditor,
         interactive: options.interactive,

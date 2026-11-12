@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 
 import type { Program } from '@oxc-project/types';
@@ -11,6 +12,7 @@ import {
   mergeJsonConfig,
   mergeTsdownConfig,
   migrateTaskCacheConfig,
+  readStaticLintConfig,
   rewriteImportsInDirectory,
   rewriteScripts,
   wrapLazyPlugins,
@@ -23,11 +25,10 @@ import {
 import { type WorkspacePackage } from '../../types/index.ts';
 import { BASEURL_TSCONFIG_WARNING, VITE_PLUS_NAME } from '../../utils/constants.ts';
 import { documentationUrl } from '../../utils/documentation.ts';
+import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
 import { displayRelative } from '../../utils/path.ts';
 import { hasBaseUrlInTsconfig } from '../../utils/tsconfig.ts';
 import { detectConfigs, type ConfigFiles } from '../detector.ts';
-import fs from '../files.ts';
-import { editJsonFile, isJsonFile, readJsonFile } from '../files.ts';
 import {
   collectInstalledPackageNames,
   oxlintMigrationMarker,
@@ -40,7 +41,6 @@ import {
   sanitizeInheritedJsPlugins,
 } from '../migrator.ts';
 import { type MigrationReport } from '../report.ts';
-import { isMigrationIgnored, migrationScope } from '../scope.ts';
 import {
   type OxlintConfigMigration,
   type OxlintModulePlan,
@@ -196,9 +196,6 @@ export function mergeTsdownConfigFile(
   report?: MigrationReport,
 ): boolean {
   const configs = detectConfigs(projectPath);
-  if (isMigrationIgnored(path.join(projectPath, configs.viteConfig ?? 'vite.config.ts'))) {
-    return false;
-  }
   if (!configs.tsdownConfig) {
     return false;
   }
@@ -207,9 +204,6 @@ export function mergeTsdownConfigFile(
 
   const fullViteConfigPath = path.join(projectPath, viteConfig);
   const fullTsdownConfigPath = path.join(projectPath, configs.tsdownConfig);
-  if (isMigrationIgnored(fullViteConfigPath) || isMigrationIgnored(fullTsdownConfigPath)) {
-    return false;
-  }
 
   // For JSON files, merge content directly and delete the file
   if (configs.tsdownConfig.endsWith('.json')) {
@@ -278,9 +272,6 @@ export function mergeViteConfigFiles(
   preparedOxlintConfigs?: PreparedOxlintConfigs,
 ): void {
   const configs = detectConfigs(projectPath);
-  if (isMigrationIgnored(path.join(projectPath, configs.viteConfig ?? 'vite.config.ts'))) {
-    return;
-  }
   if (!configs.oxfmtConfig && !configs.oxlintConfig) {
     return;
   }
@@ -597,9 +588,6 @@ function injectConfigDefaults(
   report?: MigrationReport,
 ): void {
   const configs = detectConfigs(projectPath);
-  if (isMigrationIgnored(path.join(projectPath, configs.viteConfig ?? 'vite.config.ts'))) {
-    return;
-  }
   if (configs.viteConfig && hasConfigKey(path.join(projectPath, configs.viteConfig), configKey)) {
     return;
   }
@@ -660,13 +648,6 @@ function mergeAndRemoveJsonConfig(
 ): boolean {
   const fullViteConfigPath = path.join(projectPath, viteConfigPath);
   const fullJsonConfigPath = path.join(projectPath, jsonConfigPath);
-  if (
-    isMigrationIgnored(fullViteConfigPath) ||
-    isMigrationIgnored(fullJsonConfigPath) ||
-    [...(modulePlan?.modules.keys() ?? [])].some((file) => isMigrationIgnored(file))
-  ) {
-    return false;
-  }
   // Skip merge when the key is already present in vite.config.ts — the Rust
   // merge step always prepends, so without this guard a template that ships
   // both an inline `${configKey}:` block and a standalone JSON file (e.g.
@@ -780,9 +761,6 @@ export function mergeStagedConfigToViteConfig(
   report?: MigrationReport,
 ): boolean {
   const configs = detectConfigs(projectPath);
-  if (isMigrationIgnored(path.join(projectPath, configs.viteConfig ?? 'vite.config.ts'))) {
-    return false;
-  }
   const viteConfig = ensureViteConfig(projectPath, configs, silent, report);
   const fullViteConfigPath = path.join(projectPath, viteConfig);
 
@@ -909,6 +887,65 @@ export function migrateTaskCacheConfigInViteConfig(
   return true;
 }
 
+function importRuleEnabled(rule: unknown): boolean | undefined {
+  const severity = Array.isArray(rule) ? rule[0] : rule;
+  if (severity === undefined) {
+    return undefined;
+  }
+  if (severity === 'off' || severity === 'allow' || severity === 0) {
+    return false;
+  }
+  if (
+    severity === 1 ||
+    severity === 2 ||
+    severity === 'warn' ||
+    severity === 'error' ||
+    severity === 'deny'
+  ) {
+    return true;
+  }
+  throw new Error(`Invalid severity for ${PREFER_VITE_PLUS_IMPORTS_RULE}: ${JSON.stringify(rule)}`);
+}
+
+/** Read the import rule before migration merges or removes lint configs. */
+export async function resolveImportRuleConfig(projectPath: string): Promise<string> {
+  const extracted = readStaticLintConfig(projectPath);
+  let lint: OxlintConfig | undefined;
+  if (extracted == null) {
+    const { resolveViteConfig } = await import('../../resolve-vite-config.ts');
+    lint = (await resolveViteConfig(projectPath)).lint;
+  } else {
+    lint = JSON.parse(extracted);
+  }
+  if (!lint) {
+    const filename = detectConfigs(projectPath).oxlintConfig;
+    if (filename) {
+      try {
+        lint = resolveOxlintConfigExtends(path.join(projectPath, filename)).config;
+      } catch {
+        // The config migration reports and preserves unresolved JSON configs.
+        // Keep its existing error handling instead of aborting unrelated steps.
+      }
+    }
+  }
+
+  const layers = lint ? oxlintConfigLayers(lint) : [];
+  const enabled = layers.reduce(
+    (previous, layer) =>
+      importRuleEnabled(layer.rules?.[PREFER_VITE_PLUS_IMPORTS_RULE]) ?? previous,
+    true,
+  );
+  const overrides = layers.flatMap((layer) =>
+    (layer.overrides ?? []).flatMap((override) => {
+      const enabled = importRuleEnabled(override.rules?.[PREFER_VITE_PLUS_IMPORTS_RULE]);
+      return enabled === undefined
+        ? []
+        : [{ files: override.files, excludeFiles: override.excludeFiles ?? [], enabled }];
+    }),
+  );
+  return JSON.stringify({ enabled, overrides });
+}
+
 /**
  * Rewrite imports in all TypeScript/JavaScript files under a directory
  * This rewrites vite/vitest imports to @voidzero-dev/vite-plus
@@ -923,13 +960,13 @@ export function rewriteAllImports(
   // `rewritePackageJson` stripped `oxlint` from their manifests. See
   // `collectOxlintOwnerDirs`.
   oxlintOwnerDirs: string[] = [],
+  importRuleConfig?: string,
 ): boolean {
   const result = rewriteImportsInDirectory(
     projectPath,
     preserveNuxtVitestImports,
     oxlintOwnerDirs,
-    migrationScope()?.root,
-    migrationScope()?.patterns,
+    importRuleConfig,
   );
   const modified = result.modifiedFiles.length;
   const preserved = result.preservedVitestFiles.length;

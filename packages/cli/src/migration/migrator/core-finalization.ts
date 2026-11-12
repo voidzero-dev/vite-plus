@@ -3,8 +3,8 @@ import path from 'node:path';
 
 import { rewriteScripts } from '../../../binding/index.js';
 import { type WorkspacePackage } from '../../types/index.ts';
+import { editJsonFile, readJsonFile } from '../../utils/json.ts';
 import { rulesDir } from '../../utils/path.ts';
-import { editJsonFile, readJsonFile } from '../files.ts';
 import {
   dropDeadOxlintPluginsDependency,
   hasTsconfigTypesToRewrite,
@@ -147,6 +147,7 @@ export function finalizeCoreMigrationForExistingVitePlus(
   silent = false,
   report?: MigrationReport,
   pending = detectPendingCoreMigration(workspaceInfo),
+  importRuleConfig?: string,
 ): CoreMigrationFinalizationResult {
   const projectPaths = getCoreMigrationProjectPaths(workspaceInfo);
   const result: CoreMigrationFinalizationResult = {
@@ -172,7 +173,14 @@ export function finalizeCoreMigrationForExistingVitePlus(
     }
   }
 
-  result.imports = rewriteAllImports(workspaceInfo.rootDir, silent, report, true);
+  result.imports = rewriteAllImports(
+    workspaceInfo.rootDir,
+    silent,
+    report,
+    true,
+    [],
+    importRuleConfig,
+  );
   result.dependencies = dropDeadOxlintPluginsDependency(
     workspaceInfo.rootDir,
     workspaceInfo.packages,

@@ -5,7 +5,6 @@ import { definePlugin, defineRule } from '@oxlint/plugins';
 import type { Context, ESTree } from '@oxlint/plugins';
 
 import cliPackage from '../package.json' with { type: 'json' };
-import { createMigrationIgnoreMatcher } from './migration-ignore.ts';
 import {
   PREFER_VITE_PLUS_IMPORTS_RULE_NAME,
   VITE_PLUS_OXLINT_PLUGIN_NAME,
@@ -439,8 +438,6 @@ export const preferVitePlusImportsRule = defineRule({
     },
   },
   createOnce(context: Context) {
-    const matchers = new Map<string, ReturnType<typeof createMigrationIgnoreMatcher>>();
-    let ignored = false;
     const options: ImportRewriteOptions = {
       preserveUpstreamVitest: false,
       fileIsViteConfig: false,
@@ -450,22 +447,6 @@ export const preferVitePlusImportsRule = defineRule({
     };
     return {
       Program() {
-        const policy = context.settings['vite-plus/migrate'] as
-          | { root: string; ignorePatterns: string[] }
-          | undefined;
-        let ignore: ReturnType<typeof createMigrationIgnoreMatcher> | undefined;
-        if (policy) {
-          const key = JSON.stringify(policy);
-          ignore = matchers.get(key);
-          if (!ignore) {
-            ignore = createMigrationIgnoreMatcher(policy.root, policy.ignorePatterns);
-            matchers.set(key, ignore);
-          }
-        }
-        ignored = ignore?.isIgnored(path.resolve(context.filename), false) ?? false;
-        if (ignored) {
-          return;
-        }
         options.preserveUpstreamVitest = nearestPackageUsesNuxtTestUtils(context.filename);
         options.fileIsViteConfig = isViteConfigFile(context.filename);
         options.ownsOxlintApi = nearestPackageOwnsOxlintApi(context.filename);
@@ -473,41 +454,23 @@ export const preferVitePlusImportsRule = defineRule({
         options.keepsVitest = nearestPackageKeepsVitest(context.filename);
       },
       ImportDeclaration(node) {
-        if (ignored) {
-          return;
-        }
         maybeReportLiteral(context, node.source, options);
         reportLegacyOxlintPluginApiImport(context, node, options.ownsOxlintApi);
       },
       ExportAllDeclaration(node) {
-        if (ignored) {
-          return;
-        }
         maybeReportLiteral(context, node.source, options);
       },
       ExportNamedDeclaration(node) {
-        if (ignored) {
-          return;
-        }
         maybeReportLiteral(context, node.source, options);
         reportLegacyOxlintPluginApiExport(context, node, options.ownsOxlintApi);
       },
       ImportExpression(node) {
-        if (ignored) {
-          return;
-        }
         maybeReportLiteral(context, node.source, options);
       },
       TSImportType(node) {
-        if (ignored) {
-          return;
-        }
         maybeReportLiteral(context, node.source, options);
       },
       TSExternalModuleReference(node) {
-        if (ignored) {
-          return;
-        }
         // Keep import-equals declarations unchanged, matching the migrator's
         // treatment of require calls.
         if (
@@ -520,9 +483,6 @@ export const preferVitePlusImportsRule = defineRule({
         maybeReportLiteral(context, node.expression, options);
       },
       TSModuleDeclaration(node) {
-        if (ignored) {
-          return;
-        }
         if (node.global) {
           return;
         }

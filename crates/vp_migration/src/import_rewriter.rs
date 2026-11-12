@@ -10,7 +10,7 @@ use rayon::prelude::*;
 use regex::Regex;
 use vp_error::Error;
 
-use crate::{ast_grep, file_walker, import_merge, pack_config};
+use crate::{ImportRuleConfig, ast_grep, file_walker, import_merge, pack_config};
 
 /// ast-grep rules for rewriting vite imports and declare module statements
 ///
@@ -2062,9 +2062,8 @@ struct PackageRewriteContext {
 /// Options controlling directory-wide import rewriting.
 #[derive(Debug, Clone, Default)]
 pub struct RewriteImportsOptions {
-    /// Config-relative exclusions, also applied when the scan starts below the config root.
-    pub ignore_root: Option<PathBuf>,
-    pub ignore_patterns: Vec<String>,
+    /// Effective settings for `vite-plus/prefer-vite-plus-imports` from the root lint config.
+    pub import_rule: ImportRuleConfig,
     /// Preserve `vitest` and `vitest/*` module specifiers throughout packages
     /// whose nearest package.json declares `@nuxt/test-utils`.
     pub preserve_vitest_in_nuxt_packages: bool,
@@ -2288,11 +2287,7 @@ pub fn rewrite_imports_in_directory_with_options(
     root: &Path,
     options: RewriteImportsOptions,
 ) -> Result<BatchRewriteResult, Error> {
-    let ignore = file_walker::MigrationIgnoreMatcher::new(
-        options.ignore_root.as_deref().unwrap_or(root),
-        &options.ignore_patterns,
-    )?;
-    let walk_result = file_walker::find_ts_files_with_ignore(root, Some(ignore))?;
+    let walk_result = file_walker::find_ts_files(root)?;
 
     // Pre-compute package context for each file (requires mutable cache, done sequentially).
     let mut package_context_cache: HashMap<PathBuf, PackageRewriteContext> = HashMap::new();
@@ -2333,6 +2328,7 @@ pub fn rewrite_imports_in_directory_with_options(
                 &file_path,
                 root,
                 &skip_packages,
+                options.import_rule.is_enabled(file_path.strip_prefix(root).unwrap_or(&file_path)),
                 options.preserve_vitest_in_nuxt_packages && package_context.uses_nuxt_test_utils,
             ) {
                 Ok(rewrite_result) => {
@@ -2407,6 +2403,7 @@ fn rewrite_import(
     file_path: &Path,
     root: &Path,
     skip_packages: &SkipPackages,
+    rewrite_imports: bool,
     preserve_vitest_in_nuxt_package: bool,
 ) -> Result<RewriteResult, Error> {
     let content = std::fs::read_to_string(file_path)?;
@@ -2426,13 +2423,17 @@ fn rewrite_import(
     // whereas `vite-plus` re-exports no `UserConfig` symbol for a rewritten
     // augmentation to merge with. This is layered ON TOP of the package-level
     // skip (a skipped package stays skipped).
-    let mut result = rewrite_import_content_full(
-        &content,
-        skip_packages,
-        preserve_vitest_in_nuxt_package,
-        is_vite_config,
-        file_path.to_str(),
-    )?;
+    let mut result = if rewrite_imports {
+        rewrite_import_content_full(
+            &content,
+            skip_packages,
+            preserve_vitest_in_nuxt_package,
+            is_vite_config,
+            file_path.to_str(),
+        )?
+    } else {
+        RewriteResult { content, updated: false, preserved_vitest: false, warnings: Vec::new() }
+    };
     if let Some(preserve_defaults) = preserve_defaults {
         let rewritten =
             pack_config::rewrite_pack_config(&result.content, is_tsdown_config, preserve_defaults);
@@ -3036,9 +3037,14 @@ export default defineConfig({{
         .unwrap();
 
         // Run the rewrite
-        let result =
-            rewrite_import(&vite_config_path, temp_dir.path(), &SkipPackages::default(), false)
-                .unwrap();
+        let result = rewrite_import(
+            &vite_config_path,
+            temp_dir.path(),
+            &SkipPackages::default(),
+            true,
+            false,
+        )
+        .unwrap();
 
         assert!(result.updated);
         assert_eq!(

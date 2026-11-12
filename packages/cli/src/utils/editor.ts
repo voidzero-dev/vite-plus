@@ -338,7 +338,6 @@ export async function writeEditorConfigs({
   silent = false,
   extraVsCodeSettings,
   packageManager = PackageManager.pnpm,
-  shouldWriteFile = () => true,
 }: {
   projectRoot: string;
   editorId: EditorSelection;
@@ -347,7 +346,6 @@ export async function writeEditorConfigs({
   silent?: boolean;
   extraVsCodeSettings?: Record<string, string>;
   packageManager?: PackageManager;
-  shouldWriteFile?: (file: string) => boolean;
 }) {
   const editorIds = normalizeEditorSelection(editorId);
   if (editorIds.length === 0) {
@@ -363,7 +361,6 @@ export async function writeEditorConfigs({
       silent,
       extraVsCodeSettings,
       packageManager,
-      shouldWriteFile,
     });
   }
 }
@@ -376,7 +373,6 @@ async function writeEditorConfig({
   silent,
   extraVsCodeSettings,
   packageManager,
-  shouldWriteFile,
 }: {
   projectRoot: string;
   editorId: EditorId;
@@ -385,7 +381,6 @@ async function writeEditorConfig({
   silent: boolean;
   extraVsCodeSettings?: Record<string, string>;
   packageManager: PackageManager;
-  shouldWriteFile: (file: string) => boolean;
 }) {
   const editorConfig = EDITORS.find((e) => e.id === editorId);
   if (!editorConfig) {
@@ -393,6 +388,7 @@ async function writeEditorConfig({
   }
 
   const targetDir = path.join(projectRoot, editorConfig.targetDir);
+  await fsPromises.mkdir(targetDir, { recursive: true });
 
   for (const [fileName, baseIncoming] of Object.entries(editorConfig.files)) {
     const incoming: EditorConfigValue =
@@ -402,10 +398,6 @@ async function writeEditorConfig({
           ? jetbrainsWorkspaceConfig(packageManager)
           : baseIncoming;
     const filePath = path.join(targetDir, fileName);
-    if (!shouldWriteFile(filePath)) {
-      continue;
-    }
-    await fsPromises.mkdir(targetDir, { recursive: true });
     const jsonFormat = isJsonLikeFile(fileName);
 
     if (fs.existsSync(filePath)) {
