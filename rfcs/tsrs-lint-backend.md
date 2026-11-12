@@ -22,11 +22,12 @@ and toolchain metadata identify `tsrs`.
 | Dependency                | Before                                      | After                                      |
 | ------------------------- | ------------------------------------------- | ------------------------------------------ |
 | Linter frontend           | `oxlint@1.93.0`                             | Unchanged                                  |
-| Production backend        | `oxlint-tsgolint@7.0.2006`                  | `tsrs@0.25.0-ts7.1.0-beta`                 |
-| Development-only backend  | None                                        | `oxlint-tsgolint@7.0.2006` for comparisons |
+| Production backend        | `oxlint-tsgolint@7.0.2007`                  | `tsrs@0.25.0-ts7.1.0-beta`                 |
+| Development-only backend  | None                                        | `oxlint-tsgolint@7.0.2007` for comparisons |
 | Backend platform packages | `@oxlint-tsgolint/*`: six optional packages | `@tsrs/*`: eight optional packages         |
 
-Production installs use tsrs; repository development retains Go for comparisons.
+Production installs use tsrs. The root `package.json` retains `oxlint-tsgolint`
+as a development dependency for `bench/tsrs-lint.ts`.
 The project's `typescript` dependency and standalone `tsc` tasks are unchanged.
 
 ## Compatibility and release considerations

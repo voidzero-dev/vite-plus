@@ -412,6 +412,9 @@ importers:
       '@voidzero-dev/vite-plus-tools':
         specifier: workspace:*
         version: link:packages/tools
+      oxlint-tsgolint:
+        specifier: 'catalog:'
+        version: 7.0.2007
       playwright:
         specifier: 'catalog:'
         version: 1.62.1
@@ -536,9 +539,6 @@ importers:
       nanotar:
         specifier: 'catalog:'
         version: 0.3.0
-      oxlint-tsgolint:
-        specifier: 'catalog:'
-        version: 7.0.2006
       picocolors:
         specifier: 'catalog:'
         version: 1.1.1
