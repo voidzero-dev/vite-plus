@@ -69,6 +69,8 @@ const PNPM_MINIMUM_RELEASE_AGE_EXCLUDES = [
   '@oxlint/*',
   'oxlint-tsgolint',
   '@oxlint-tsgolint/*',
+  'tsrs',
+  '@tsrs/*',
   'oxfmt',
   '@oxfmt/*',
   ...VITEST_AGE_GATE_EXEMPT_PACKAGES,

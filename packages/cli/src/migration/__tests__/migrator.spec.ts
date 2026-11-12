@@ -4480,6 +4480,8 @@ describe('ensureVitePlusBootstrap', () => {
     // Vite+ pins a possibly-fresh vitest; its family must bypass the gate.
     expect(workspace.minimumReleaseAgeExclude).toContain('vitest');
     expect(workspace.minimumReleaseAgeExclude).toContain('@vitest/*');
+    expect(workspace.minimumReleaseAgeExclude).toContain('tsrs');
+    expect(workspace.minimumReleaseAgeExclude).toContain('@tsrs/*');
     // The user's own entry and the vite-plus/ox families are preserved.
     expect(workspace.minimumReleaseAgeExclude).toContain('my-internal-pkg');
     expect(workspace.minimumReleaseAgeExclude).toContain('vite-plus');

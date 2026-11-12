@@ -200,12 +200,12 @@ The check module reuses `SubcommandResolver` and `resolve_and_capture_output` fr
 
 `vp check` reuses `resolve-lint.ts` and `resolve-fmt.ts`.
 
-### Experimental type-aware backend
+### Type-aware backend
 
 See the [backend replacement RFC](./tsrs-lint-backend.md) for the rationale,
-compatibility considerations, and release conditions.
+dependency changes and compatibility considerations.
 
-This draft replaces the bundled Go backend with `tsrs@0.24.0-ts7.1.0-beta`,
+Vite+ replaces the bundled Go backend with `tsrs@0.25.0-ts7.1.0-beta`,
 a Rust port of the TypeScript 7 compiler. `resolve-lint.ts` selects the bundled
 `tsrs` package and passes its `bin/tsrs-lint` launcher to Oxlint through
 `OXLINT_TSGOLINT_PATH`. The same resolver serves `vp lint` and `vp check`.
@@ -228,11 +228,8 @@ so a change to the default cannot make it compare tsrs against itself.
 See the [performance report](../bench/tsrs-lint.md) for elapsed time, peak memory,
 and measurement conditions.
 
-The pinned tsrs release has no Windows ARM64 binary. This draft adds no automatic
-Go fallback. A release for all supported Vite+ platforms needs an upstream
-Windows ARM64 binary or an explicit fallback. Runtime smoke tests cover macOS
-ARM64. The Codespaces comparison also validates both backends on Linux x64
-with Vite+ and vinext. Other platforms still need runtime validation.
+The pinned tsrs release provides native packages for all supported Vite+
+platforms, including Windows ARM64. No platform uses a Go fallback.
 
 The backend switch preserves the existing formatting phase, lint configuration,
 and failure handling. Smoke fixtures compare diagnostics, suppression comments,

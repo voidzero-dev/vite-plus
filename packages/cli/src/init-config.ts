@@ -224,7 +224,7 @@ export async function applyToolInitConfigToViteConfig(
     const lintInitConfigPath = path.join(projectPath, '.vite-plus-lint-init.oxlintrc.json');
     const { fixBaseUrlInTsconfig, hasBaseUrlInTsconfig } = await import('./utils/tsconfig.ts');
     await fixBaseUrlInTsconfig(projectPath);
-    // Skip typeAware/typeCheck when tsconfig still has baseUrl (unsupported by tsgolint)
+    // Skip typeAware/typeCheck when tsconfig still has baseUrl (unsupported by TypeScript 7)
     const hasBaseUrl = hasBaseUrlInTsconfig(projectPath);
     const initConfig = createDefaultVitePlusLintConfig({
       includeTypeAwareDefaults: !hasBaseUrl,
