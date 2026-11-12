@@ -1,7 +1,10 @@
-import { execFileSync } from 'node:child_process';
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { execFile } from 'node:child_process';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { promisify } from 'node:util';
 
 import { describe, expect, onTestFinished, test } from 'vitest';
 
@@ -15,6 +18,8 @@ import {
   nextCoreVersion,
   usedVersionNumbers,
 } from '../core-version.ts';
+
+const execFileAsync = promisify(execFile);
 
 const PUBLISHED_BEFORE_ALIGNMENT = ['0.1.21-alpha.7', '0.0.2-test.1', '1.0.0-rc.0', '1.4.0'];
 
@@ -213,21 +218,51 @@ describe('assertCoreVersionMatchesVite', () => {
   });
 });
 
+// A packument where core 8.3.7001 is published with the given manifest fields.
+function publishedPackument(fields: { vitePlusVersion?: string }) {
+  return { versions: { '8.3.7001': fields } };
+}
+
 describe('assertCoreVersionUnclaimed', () => {
-  test('accepts an unpublished core version and a retry of the same release', () => {
-    expect(() => assertCoreVersionUnclaimed(undefined, '8.3.5001', '1.5.1')).not.toThrow();
+  test('accepts an unused core version and a retry of the same release', () => {
+    expect(() => assertCoreVersionUnclaimed({}, '8.3.7001', '1.7.1')).not.toThrow();
     expect(() =>
-      assertCoreVersionUnclaimed({ vitePlusVersion: '1.5.1' }, '8.3.5001', '1.5.1'),
+      assertCoreVersionUnclaimed(
+        publishedPackument({ vitePlusVersion: '1.7.1' }),
+        '8.3.7001',
+        '1.7.1',
+      ),
     ).not.toThrow();
   });
 
   test('rejects a core version that another release published', () => {
     expect(() =>
-      assertCoreVersionUnclaimed({ vitePlusVersion: '1.5.1' }, '8.3.5001', '1.6.0'),
-    ).toThrow('already published for vite-plus 1.5.1');
-    expect(() => assertCoreVersionUnclaimed({}, '8.3.5000', '1.6.0')).toThrow(
+      assertCoreVersionUnclaimed(
+        publishedPackument({ vitePlusVersion: '1.7.1' }),
+        '8.3.7001',
+        '1.8.0',
+      ),
+    ).toThrow('already published for vite-plus 1.7.1');
+    expect(() => assertCoreVersionUnclaimed(publishedPackument({}), '8.3.7001', '1.8.0')).toThrow(
       'already published for vite-plus (unknown)',
     );
+  });
+
+  test('rejects an unpublished core version', () => {
+    const unpublished = {
+      versions: { '8.3.7000': {} },
+      time: { created: '', modified: '', '8.3.7000': '', '8.3.7001': '' },
+    };
+    expect(() => assertCoreVersionUnclaimed(unpublished, '8.3.7001', '1.7.1')).toThrow(
+      'was unpublished',
+    );
+    expect(() =>
+      assertCoreVersionUnclaimed(
+        { time: { created: '', modified: '', unpublished: { versions: ['8.3.7000'] } } },
+        '8.3.7000',
+        '1.7.0',
+      ),
+    ).toThrow('was unpublished');
   });
 });
 
@@ -287,35 +322,157 @@ describe('localCoreVersion', () => {
   });
 });
 
-// The CI workflows run `node ../tools/src/core-version.ts local` from
-// packages/core before the build. Run the script the same way in a copy of
-// that layout with the given bundled Vite version.
-function runLocal(vite: string): string {
-  const root = mkdtempSync(path.join(tmpdir(), 'vp-core-version-local-'));
+// The workflows run `core-version.ts` from the repository root (`prepare`,
+// `check`) or from packages/core (`local`). Make a temporary copy of that
+// layout with the given core manifest and CLI version.
+function repoLayout(core: object, cliVersion = '0.0.0'): string {
+  const root = mkdtempSync(path.join(tmpdir(), 'vp-core-version-'));
   onTestFinished(() => rmSync(root, { recursive: true, force: true }));
   const toolsDir = path.join(root, 'packages/tools/src');
-  const coreDir = path.join(root, 'packages/core');
   mkdirSync(toolsDir, { recursive: true });
-  mkdirSync(coreDir, { recursive: true });
+  mkdirSync(path.join(root, 'packages/core'));
+  mkdirSync(path.join(root, 'packages/cli'));
   copyFileSync(
     path.join(import.meta.dirname, '../core-version.ts'),
     path.join(toolsDir, 'core-version.ts'),
   );
+  writeFileSync(path.join(root, 'packages/core/package.json'), JSON.stringify(core, null, 2));
   writeFileSync(
-    path.join(coreDir, 'package.json'),
-    JSON.stringify({ version: initialCoreVersion(vite), bundledVersions: { vite } }),
+    path.join(root, 'packages/cli/package.json'),
+    JSON.stringify({ version: cliVersion }),
   );
-  return execFileSync(process.execPath, ['../tools/src/core-version.ts', 'local'], {
-    cwd: coreDir,
-    encoding: 'utf8',
-  }).trim();
+  return root;
+}
+
+function readCoreManifest(root: string): Record<string, unknown> {
+  return JSON.parse(readFileSync(path.join(root, 'packages/core/package.json'), 'utf8'));
+}
+
+interface ScriptResult {
+  code: number;
+  stdout: string;
+  stderr: string;
+}
+
+// Runs the script without blocking, so the mock registry in this process can
+// answer its request.
+async function runScript(
+  root: string,
+  args: string[],
+  { cwd = root, registry }: { cwd?: string; registry?: string } = {},
+): Promise<ScriptResult> {
+  const script = path.relative(cwd, path.join(root, 'packages/tools/src/core-version.ts'));
+  try {
+    const { stdout, stderr } = await execFileAsync(process.execPath, [script, ...args], {
+      cwd,
+      env: { ...process.env, PUBLISH_REGISTRY: registry },
+      encoding: 'utf8',
+    });
+    return { code: 0, stdout: stdout.trim(), stderr };
+  } catch (error) {
+    const failure = error as { code: number; stdout: string; stderr: string };
+    return { code: failure.code, stdout: failure.stdout.trim(), stderr: failure.stderr };
+  }
+}
+
+// Serves the core packument with the given status and body, and 404 for every
+// other path.
+async function startRegistry(status: number, body: unknown = {}): Promise<string> {
+  const server = createServer((request, response) => {
+    if (request.url !== '/@voidzero-dev%2fvite-plus-core') {
+      response.writeHead(404).end();
+      return;
+    }
+    response.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(body));
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  onTestFinished(() => new Promise<void>((resolve) => server.close(() => resolve())));
+  return `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 }
 
 describe('core-version.ts local', () => {
   test.each([
     ['8.3.7', '8.3.7999'],
     ['9.0.0-beta.3', '9.0.0-beta.3.vp.999'],
-  ])('prints the local version for Vite %s', (vite, expected) => {
-    expect(runLocal(vite)).toBe(expected);
+  ])('prints the local version for Vite %s', async (vite, expected) => {
+    const root = repoLayout({ version: initialCoreVersion(vite), bundledVersions: { vite } });
+    const result = await runScript(root, ['local'], { cwd: path.join(root, 'packages/core') });
+    expect(result).toEqual({ code: 0, stdout: expected, stderr: '' });
+  });
+});
+
+describe('core-version.ts prepare', () => {
+  const core = {
+    name: '@voidzero-dev/vite-plus-core',
+    version: '8.3.7000',
+    bundledVersions: { vite: '8.3.7' },
+  };
+
+  test('writes the next unused version and the vite-plus version', async () => {
+    const root = repoLayout(core);
+    const registry = await startRegistry(200, {
+      versions: { '8.3.7000': { vitePlusVersion: '1.7.0' } },
+      time: { created: '', modified: '', '8.3.7000': '', '8.3.7001': '' },
+    });
+    const result = await runScript(root, ['prepare', '--vite-plus', '1.8.0'], { registry });
+    expect(result).toMatchObject({ code: 0, stdout: '8.3.7002' });
+    expect(readCoreManifest(root)).toEqual({
+      ...core,
+      version: '8.3.7002',
+      vitePlusVersion: '1.8.0',
+    });
+  });
+
+  test('starts the counter when the package is not published', async () => {
+    const root = repoLayout(core);
+    const registry = await startRegistry(404);
+    const result = await runScript(root, ['prepare', '--vite-plus', '1.7.0'], { registry });
+    expect(result).toMatchObject({ code: 0, stdout: '8.3.7000' });
+  });
+
+  test('fails without a change when the registry fails', async () => {
+    const root = repoLayout(core);
+    const registry = await startRegistry(500);
+    const result = await runScript(root, ['prepare', '--vite-plus', '1.7.0'], { registry });
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain('Registry returned HTTP 500');
+    expect(readCoreManifest(root)).toEqual(core);
+  });
+});
+
+describe('core-version.ts check --release', () => {
+  const core = {
+    version: '8.3.7001',
+    bundledVersions: { vite: '8.3.7' },
+    vitePlusVersion: '1.8.0',
+  };
+
+  test('passes for an unused version and for a retry of the same release', async () => {
+    const root = repoLayout(core, '1.8.0');
+    for (const registry of [
+      await startRegistry(404),
+      await startRegistry(200, { versions: { '8.3.7001': { vitePlusVersion: '1.8.0' } } }),
+    ]) {
+      const result = await runScript(root, ['check', '--release'], { registry });
+      expect(result).toMatchObject({ code: 0 });
+    }
+  });
+
+  test('fails when another release published the version', async () => {
+    const root = repoLayout(core, '1.8.0');
+    const registry = await startRegistry(200, {
+      versions: { '8.3.7001': { vitePlusVersion: '1.7.1' } },
+    });
+    const result = await runScript(root, ['check', '--release'], { registry });
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain('already published for vite-plus 1.7.1');
+  });
+
+  test('fails when the manifest names another vite-plus version', async () => {
+    const root = repoLayout(core, '1.8.1');
+    const registry = await startRegistry(404);
+    const result = await runScript(root, ['check', '--release'], { registry });
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain('but the release is vite-plus 1.8.1');
   });
 });

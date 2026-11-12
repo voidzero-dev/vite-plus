@@ -256,19 +256,30 @@ export function assertCoreVersionMatchesVite(
 }
 
 /**
- * Asserts that the registry does not already hold the core version for a
- * different release. `published` is the published manifest of that version, or
- * `undefined` when it is not published. A retry of the same release passes.
+ * Asserts that npm still accepts the core version for this release. It fails
+ * when another release published the version, and when the version was
+ * unpublished: npm never accepts that number again, and the publish script
+ * would take npm's rejection for an earlier upload. A retry of the same
+ * release passes.
  */
 export function assertCoreVersionUnclaimed(
-  published: { vitePlusVersion?: string } | undefined,
+  packument: CorePackument,
   core: string,
   vitePlus: string,
 ): void {
-  if (published && published.vitePlusVersion !== vitePlus) {
+  const published = packument.versions?.[core];
+  const rerun = 'Run the Prepare Release workflow again to select an unused core version.';
+  if (published) {
+    if (published.vitePlusVersion !== vitePlus) {
+      throw new Error(
+        `${CORE_PACKAGE_NAME}@${core} is already published for vite-plus ${published.vitePlusVersion ?? '(unknown)'}. ${rerun}`,
+      );
+    }
+    return;
+  }
+  if (usedVersionNumbers(packument).includes(core)) {
     throw new Error(
-      `${CORE_PACKAGE_NAME}@${core} is already published for vite-plus ${published.vitePlusVersion ?? '(unknown)'}. ` +
-        'Run the Prepare Release workflow again to select an unpublished core version.',
+      `${CORE_PACKAGE_NAME}@${core} was unpublished, and npm does not accept it again. ${rerun}`,
     );
   }
 }
@@ -281,7 +292,7 @@ function readManifest(url: URL): CoreManifest {
 
 const DEFAULT_NPM_REGISTRY = 'https://registry.npmjs.org';
 
-interface CorePackument {
+export interface CorePackument {
   versions?: Record<string, { vitePlusVersion?: string }>;
   time?: Record<string, unknown> & { unpublished?: { versions?: unknown } };
 }
@@ -312,8 +323,9 @@ export function usedVersionNumbers(packument: CorePackument): string[] {
 
 /**
  * Reads the full packument of the core package. `prepare` uses the version
- * numbers, and `check --release` uses the `vitePlusVersion` field of one
- * manifest. Returns an empty packument when the package is not published.
+ * numbers, and `check --release` uses the version numbers and the
+ * `vitePlusVersion` field of one manifest. Returns an empty packument when the
+ * package is not published.
  */
 async function readCorePackument(): Promise<CorePackument> {
   const registry = (process.env.PUBLISH_REGISTRY ?? DEFAULT_NPM_REGISTRY).replace(/\/+$/, '');
@@ -369,11 +381,7 @@ async function main(argv: string[]): Promise<void> {
       const cli = readManifest(new URL('../../cli/package.json', import.meta.url));
       assertCoreVersionMatchesVite(core, cli.version, { release: values.release });
       if (values.release) {
-        assertCoreVersionUnclaimed(
-          (await readCorePackument()).versions?.[core.version],
-          core.version,
-          cli.version,
-        );
+        assertCoreVersionUnclaimed(await readCorePackument(), core.version, cli.version);
       }
       console.log(`${CORE_PACKAGE_NAME}@${core.version} encodes Vite ${vite}`);
       break;

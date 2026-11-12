@@ -33,16 +33,16 @@ One rule then applies to the versions that `vp --version` shows.
 
 | Vite+ release     | Bundled Vite   | Core version          |
 | ----------------- | -------------- | --------------------- |
-| `1.5.0` (first)   | `8.3.5`        | `8.3.5000`            |
-| `1.5.1`           | `8.3.5`        | `8.3.5001`            |
-| `1.6.0`           | `8.3.6`        | `8.3.6000`            |
-| `1.7.0-rc.0`      | `8.4.0`        | `8.4.0-vp.0`          |
-| `1.7.0-rc.1`      | `8.4.0`        | `8.4.0-vp.1`          |
-| `1.7.0`           | `8.4.0`        | `8.4.0`               |
-| `1.7.1`           | `8.4.1`        | `8.4.1000`            |
+| `1.7.0` (first)   | `8.3.7`        | `8.3.7000`            |
+| `1.7.1`           | `8.3.7`        | `8.3.7001`            |
+| `1.8.0`           | `8.3.8`        | `8.3.8000`            |
+| `1.9.0-rc.0`      | `8.4.0`        | `8.4.0-vp.0`          |
+| `1.9.0-rc.1`      | `8.4.0`        | `8.4.0-vp.1`          |
+| `1.9.0`           | `8.4.0`        | `8.4.0`               |
+| `1.9.1`           | `8.4.1`        | `8.4.1000`            |
 | `2.0.0-beta.0`    | `9.0.0-beta.3` | `9.0.0-beta.3.vp.0`   |
 | `2.0.0-beta.1`    | `9.0.0-beta.3` | `9.0.0-beta.3.vp.1`   |
-| Local or CI build | `8.3.5`        | `8.3.5999`            |
+| Local or CI build | `8.3.7`        | `8.3.7999`            |
 | Local or CI build | `9.0.0-beta.3` | `9.0.0-beta.3.vp.999` |
 
 `vite-plus` keeps its own version line (`1.x` today). The CLI keeps its exact
@@ -194,8 +194,9 @@ same Vite patch cannot publish. `v1.2.0` and `v1.3.0` both bundled Vite
 
 Option B+ is the selected scheme. Its residual false results are limited to
 patch floors above the bundled patch inside the same minor (`>=8.3.6` passes
-against `8.3.5000`) and to exact pins (`8.3.5` fails against `8.3.5000`). Both
-are rare in `vite` peer ranges. Vite+ follows Vite patch releases within days,
+against `8.3.5000`), patch ceilings inside the same minor (`<8.3.10` fails
+against `8.3.5000`), and exact pins (`8.3.5` fails against `8.3.5000`). All
+three are rare in `vite` peer ranges. Vite+ follows Vite patch releases within days,
 so the window for the first case is short.
 
 The counter supports 999 stable Vite+ releases per Vite patch (`n` from 0 to
@@ -231,7 +232,7 @@ A Vite+ prerelease does not copy its own prerelease identifiers into the core
 version. A copied suffix has two problems:
 
 - Two Vite+ prereleases can have the same identifiers, for example
-  `1.7.0-rc.0` and `1.8.0-rc.0`. If no stable release ships between them on
+  `1.9.0-rc.0` and `1.10.0-rc.0`. If no stable release ships between them on
   the same Vite, both map to `8.4.0-rc.0`, and the second publish fails.
 - On a stable Vite, a copied suffix looks like a Vite prerelease and can sort
   out of order. A Vite+ RC on Vite `9.0.0` would publish `9.0.0-rc.0`, which
@@ -242,8 +243,8 @@ Every Vite+ prerelease uses the identifier `vp` and a counter `k` instead:
 - On a stable Vite `X.Y.Z`, the base is the next stable core version, which
   is the version that the next stable release on that Vite would get. The core
   version is that base with `-vp.<k>` appended. `k` counts the published core
-  prereleases with the same base, from 0. Vite+ `1.7.0-rc.0` and `1.7.0-rc.1`
-  on Vite `8.4.0` publish `8.4.0-vp.0` and `8.4.0-vp.1`. A later `1.8.0-rc.0`
+  prereleases with the same base, from 0. Vite+ `1.9.0-rc.0` and `1.9.0-rc.1`
+  on Vite `8.4.0` publish `8.4.0-vp.0` and `8.4.0-vp.1`. A later `1.10.0-rc.0`
   on the same Vite, with no stable release between them, publishes
   `8.4.0-vp.2`. The next stable release publishes `8.4.0`.
 - On a Vite prerelease `X.Y.Z-<pre>`, the core version is the Vite version
@@ -347,9 +348,10 @@ functions and a CLI entry:
   `pkg.version` decodes to `pkg.bundledVersions.vite`. With `release`, it also
   asserts the prerelease pairing, rejects `n = 999` and `k = 999`, and requires
   `pkg.vitePlusVersion` to equal the released `vite-plus` version.
-- `assertCoreVersionUnclaimed(published, core, vitePlus)` rejects a core
+- `assertCoreVersionUnclaimed(packument, core, vitePlus)` rejects a core
   version that the registry already holds for a different `vite-plus`
-  version. A retry of the same release passes.
+  version, and a version number that was unpublished. A retry of the same
+  release passes.
 
 The name `checkCoreVersion` is not used, because
 `packages/cli/src/resolve-core.ts` already defines a function with that name
@@ -374,10 +376,10 @@ The committed `packages/core/package.json` must always encode the committed
    bundled Vite change it sets `version` to `initialCoreVersion(vite)`.
    Renovate ignores `vite` (`.github/renovate.json`), so this script is the
    only automated path that changes the bundled Vite.
-2. `prepare_release.yml` runs `core-version.ts prepare`. It reads the
-   published core versions
-   (`npm view @voidzero-dev/vite-plus-core versions --json`), calls
-   `nextCoreVersion` with the input `vite-plus` version, and writes the
+2. `prepare_release.yml` runs `core-version.ts prepare`. It fetches the full
+   core packument from the registry (`PUBLISH_REGISTRY`, default
+   `https://registry.npmjs.org`), collects every used version number (see the
+   rules below), calls `nextCoreVersion` with the input `vite-plus` version, and writes the
    result and `vitePlusVersion` to the core manifest. The workflow prints
    both versions in the release PR body.
 
@@ -387,16 +389,24 @@ publishes get the same core version, and a manual `vite-plus` bump skips the
 selection. The publish step skips a version that is already published, so
 the CLI could then pin a core tarball from another commit. The
 `vitePlusVersion` field closes this gap: `release.yml` runs
-`core-version.ts check --release`, which reads the published manifest of the
-core version and fails unless the version is unpublished or was published for
-the same `vite-plus` version. The field also maps a published core back to
-its `vite-plus` release.
+`core-version.ts check --release`, which reads the core packument. It fails
+when the version was published for another `vite-plus` version. The field
+also maps a published core back to its `vite-plus` release.
+
+When the check fails after the merge, a new Prepare Release run for the same
+`vite-plus` version selects a new core version. Its PR changes only
+`packages/core/package.json`. That file is a `release.yml` trigger with
+`packages/cli/package.json`, so the merge starts the release again. The
+`check` job still skips the release when the CLI version is already
+published.
 
 Two more rules close the remaining gaps:
 
 - The counters count every version number that npm has used, including
   unpublished ones. npm never accepts an unpublished version number again, but
   it removes the number from the packument `versions` and keeps it in `time`.
+  `check --release` also rejects such a number. Otherwise the publish script
+  would take npm's rejection for an earlier upload of the same release.
 - `release.yml` runs one release at a time (`concurrency: release`, without
   cancelling). npm can hide a new version for some minutes while it scans the
   upload. Without the queue, a second release could check the same core
@@ -420,20 +430,24 @@ and peer checks fail against it. These flows would not test the path without a
 `vite` peer rule that users get.
 
 These flows will set core to the output of `core-version.ts local`: counter
-999 on a stable Vite (`8.3.5999` for Vite `8.3.5`), and `<vite>.vp.999` on a
-Vite prerelease (`9.0.0-beta.3.vp.999` for Vite `9.0.0-beta.3`). They keep `0.0.0` for the CLI, which
+999 on a stable Vite (`8.3.7999` for Vite `8.3.7`), and `<vite>.vp.999` on a
+Vite prerelease (`9.0.0-beta.3.vp.999` for Vite `9.0.0-beta.3`). They keep
+`0.0.0` for the CLI, which
 `ecosystem-ci/verify-install.ts` and `test-vp-create.yml` assert. They set the
 core version before the build, so the CLI build, its toolchain manifest, and
 the packed `vite` alias all read it from `packages/core/package.json`. The
 native build cache key does not include that file. `vp create` and
-`vp migrate` in these flows write the `8.3.5999` alias and remove the `vite`
+`vp migrate` in these flows write the `8.3.7999` alias and remove the `vite`
 peer rule. No environment variable overrides the core version: the core
 manifest is the only source.
 
 `nextCoreVersion` never returns `n = 999` or `k = 999`, and `release.yml`
-rejects both.
-Thus a local version never reaches the registry, and the local registry
-cannot mix it up with a published version.
+rejects both. Thus a local version never reaches the registry, and in these
+two flows the local registry cannot mix it up with a published version.
+Other local builds (`pnpm bootstrap-cli`, the CLI snapshot runner, and
+`ci.yml`) pack the committed core version, which is a published version
+after a release. This was also true before this RFC, when core used the CLI
+version.
 
 ### Release pipeline changes
 
@@ -445,7 +459,7 @@ cannot mix it up with a published version.
 | `packages/core/build.ts`                                                                                                         | Pass `cliPkgJson.version` instead of `pkgJson.version` to `rewriteRolldownBindingRequires`. The platform packages publish at the CLI version, and the guard must compare against that version (`packages/core/build-support/rewrite-rolldown-binding.ts`)                                                                                                                      |
 | `packages/cli/publish-native-addons.ts`                                                                                          | No change: it mirrors the CLI's platform pins into core by name and does not use the core version                                                                                                                                                                                                                                                                              |
 | `.github/workflows/publish-preview.yml`, `publish-preview-register.yml`                                                          | No change: the bridge serves every workspace package as `0.0.0-commit.<sha>`, and the stamp before `pnpm pack` keeps the alias on that version. The sticky comment keeps printing one version for both packages                                                                                                                                                                |
-| `.github/workflows/test-vp-create.yml`, `reusable-ecosystem-ci.yml`                                                              | Keep `0.0.0` for the CLI. Set core to `encodeCoreVersion(vite, 999)` before the build (see Local and CI builds)                                                                                                                                                                                                                                                                |
+| `.github/workflows/test-vp-create.yml`, `reusable-ecosystem-ci.yml`                                                              | Keep `0.0.0` for the CLI. Set core to the output of `core-version.ts local` before the build (see Local and CI builds)                                                                                                                                                                                                                                                         |
 | `packages/tools/src/local-npm-registry.ts`, `pack-local-vite-plus.ts`                                                            | No change: both serve the packed tarball's own version                                                                                                                                                                                                                                                                                                                         |
 | `.github/scripts/upgrade-deps.ts`                                                                                                | Reset the core version after a bundled Vite change                                                                                                                                                                                                                                                                                                                             |
 | `.github/renovate.json`                                                                                                          | No change                                                                                                                                                                                                                                                                                                                                                                      |
@@ -713,8 +727,9 @@ manifest `version` takes part in the check.
 - Tools that read the `vite` version. Vite's `version` export is rewritten in
   `packages/core/build.ts` to import `../../package.json` relative to Vite's
   `src/node/constants.ts`, which is Vite's own manifest, so the export keeps
-  the real Vite version. This was checked by reading the build script; the
-  built output was not inspected in this worktree. Code that reads
+  the real Vite version. Importing the built
+  `packages/core/dist/vite/node/index.js` confirms this: `version` is the
+  bundled Vite version, not the core version. Code that reads
   `node_modules/vite/package.json` directly, such as
   `readInstalledRawViteVersion` in `vite-plus-bootstrap.ts`, keys on
   `name === '@voidzero-dev/vite-plus-core'` and reads `bundledVersions.vite`.
@@ -725,6 +740,12 @@ manifest `version` takes part in the check.
   platform package version with a baked version. Today it bakes the core
   version, which equals the CLI version. The build must bake the CLI version
   after this change, or every release build fails the guard.
+- Migration snapshots follow the kind of bundled Vite. Migration keeps the
+  pnpm `vite` rule for a prerelease core, so when the bundled Vite moves to a
+  prerelease (expected for Vite 9), the committed core becomes
+  `<vite>.vp.0`, and the CLI snapshots that print pnpm settings show the rule
+  again. They change back on the next stable Vite. The upgrade-deps PR that
+  makes either move must record those snapshots again.
 - Counter lookup needs the registry. `prepare_release.yml` already needs the
   network for `cargo check`. A registry failure must stop the job with a
   clear error rather than guess `n = 0`.

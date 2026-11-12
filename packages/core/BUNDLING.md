@@ -422,6 +422,6 @@ The core version encodes `bundledVersions.vite`, so it differs from the `vite-pl
 `n` counts the stable releases on one Vite version, from 0 to 998. `k` counts the prereleases on one base, from 0 to 998. This follows the [`oxlint-tsgolint` versioning](https://github.com/oxc-project/tsgolint#versioning), where `7.0.2000` is the first release on TypeScript `7.0.2`. [`packages/tools/src/core-version.ts`](../tools/src/core-version.ts) implements the scheme:
 
 - `prepare_release.yml` runs `core-version.ts prepare` to select the next unpublished version from the registry. It writes that version and the `vite-plus` version (`vitePlusVersion`) to `package.json`.
-- `release.yml` runs `core-version.ts check --release`. It fails when the registry already holds the core version for a different `vite-plus` release.
+- `release.yml` runs `core-version.ts check --release`. It fails when the registry already holds the core version for a different `vite-plus` release, or when the version number was unpublished.
 - `.github/scripts/upgrade-deps.ts` resets `version` to `n = 0` when the bundled Vite changes.
 - `__tests__/core-version.spec.ts` checks that the committed `version` encodes `bundledVersions.vite`.

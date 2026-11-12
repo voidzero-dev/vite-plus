@@ -3,8 +3,13 @@ name: Release
 on:
   push:
     branches: [main]
+    # The core manifest is a trigger too: when `check --release` rejects the
+    # core version after the merge, the fix PR from a new Prepare Release run
+    # changes only that file. The `check` job skips the release when the CLI
+    # version is already published.
     paths:
       - 'packages/cli/package.json'
+      - 'packages/core/package.json'
 
 permissions: {}
 

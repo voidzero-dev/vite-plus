@@ -386,6 +386,8 @@ git checkout release/vX.Y.Z && git merge origin/main --no-edit && git push origi
 
 Do not assume the merge brought in only the fix PR: `main` may have accumulated several. Before merging, list everything that will come in with `git log origin/release/vX.Y.Z..origin/main --oneline`, then add a changelog entry for **every** newly included PR and rerun the step 3 validation (its missing/extra diff against `generate-notes` catches any entry you missed). When the merged commits change bundled tool versions or `vp migrate` behavior, rebuild the preview (step 4) and repeat the smoke test on the new build: start each fork from its current test branch so earlier fixes carry over, open new fork PRs, close the superseded ones, and report results per build.
 
+When the merged commits change `bundledVersions.vite` in `packages/core/package.json`, the core version on the release branch no longer encodes the bundled Vite, and the merge usually conflicts on that `version` line. Take either side, then select a new core version on the release branch: run `node packages/tools/src/core-version.ts prepare --vite-plus X.Y.Z` (it reads the registry and writes `version` and `vitePlusVersion`), commit `packages/core/package.json`, and change the core version in the first line of the PR body. `node packages/tools/src/core-version.ts check --release` must pass before the merge.
+
 When several fix PRs merge back to back, the required `done` check must pass again on each later PR after `main` moves: update that PR's branch and let CI rerun before merging it.
 
 Known release-branch-only failure modes:
@@ -404,9 +406,9 @@ Auto-merge being enabled is not a completed merge. Confirm `mergedAt` and the me
 
 ## 7. Automated release pipeline (what happens after merge)
 
-`release.yml` runs on the `main` push because `packages/cli/package.json` changed:
+`release.yml` runs on the `main` push because `packages/cli/package.json` or `packages/core/package.json` changed:
 
-1. `check`: compares the local version against `unpkg.com/vite-plus@latest`; everything below is skipped unless it changed.
+1. `check`: compares the local version against `unpkg.com/vite-plus@latest`; everything below is skipped unless it changed. Then `Check core version` runs `core-version.ts check --release`, which fails when the core version does not encode the bundled Vite, names another `vite-plus` version, or is already used on npm by another release.
 2. `build-rust`: full multi-platform build.
 3. `request-approval`: posts an approval request to the releases Discord channel, and the `Release` job waits on the `release` GitHub environment. **A person with environment approval rights must approve the run in the Actions UI.** The environment sets `prevent_self_review: true`, so whoever merged the release PR triggered the run and cannot approve it: a _different_ reviewer must. Check who can, and tell the release manager rather than leaving them waiting on themselves:
 
@@ -420,6 +422,8 @@ Auto-merge being enabled is not a completed merge. Confirm `mergedAt` and the me
 6. `deploy-docs`: deploys the production docs after a stable release is published. It is skipped for prereleases. When a prerelease is published to `latest` and its notes or CLI messages link to docs that production does not serve yet, ask the release manager whether to run `gh workflow run deploy-docs.yml --ref <ref>` once the `Release` job is publishing. Use the `vX.Y.Z` tag, or `main` while it still points at the release commit, and confirm the run's head SHA. The `vp` version that builds the docs does not need to match the release: the site and its install scripts come from the checked-out commit. The job authenticates with the `VOID_TOKEN` repository secret. When that token has expired, the job fails with `` `VOID_TOKEN` is invalid or expired `` and `discord-notify` is skipped. Ask someone with access to rotate the secret, then run `gh run rerun <run-id> --failed` to rerun the docs deployment and the Discord notification.
 7. `discord-notify`: announces to Discord after Docker publishing and docs deployment succeed (docs are skipped for prereleases).
 8. `update-homebrew`: after a stable release is published, verifies its archives and npm packages, then opens the Homebrew formula update PR. Published-artifact installation tests run on that PR on all four supported platforms before maintainer review and merge.
+
+**When `Check core version` fails, select a new core version through a PR.** The usual cause is a second release PR that was prepared before the first one published the same core version. Run the Prepare Release workflow again with the same version. Its PR changes only `packages/core/package.json`, and merging it starts `release.yml` again, because that file is a trigger and the CLI version is still unpublished. Do not rerun the failed run: it checks the same commit and fails again.
 
 **When the `Release` job fails partway, fix the cause, then use "Re-run failed jobs", never "Re-run all jobs".** A full rerun repeats `check`, which now sees the new version on `unpkg.com/vite-plus@latest` and skips the whole release. A failed-jobs rerun reuses `check` and the build artifacts, and every npm publish step is idempotent: `.github/scripts/publish-npm-package.ts` skips versions the registry already serves (`<pkg>@X.Y.Z is already published; skipping upload.`), so only the unpublished packages upload. Confirm that from the rerun log. The rerun waits on the `release` environment again, and whoever started the rerun cannot approve it.
 
