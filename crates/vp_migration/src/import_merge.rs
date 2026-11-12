@@ -1,290 +1,161 @@
-use std::collections::HashSet;
-
 use oxc::{
     allocator::Allocator,
     ast::ast::{
-        BindingIdentifier, ImportDeclaration, ImportDeclarationSpecifier, ImportDefaultSpecifier,
-        ImportOrExportKind, ImportSpecifier, ModuleDeclaration, ModuleExportName,
+        ImportDeclaration, ImportDeclarationSpecifier, ImportOrExportKind, Program, Statement,
     },
-    parser::{ParseOptions, Parser},
-    span::{GetSpan, SourceType, Span},
+    parser::Parser,
+    span::{GetSpan, SourceType},
 };
 
-/// Information extracted from one import declaration.
-#[derive(Debug, Clone)]
-struct ImportInfo {
-    span: Span,
-    source: String,
-    import_kind: ImportOrExportKind,
-    default_name: Option<String>,
-    named: Vec<NamedImport>,
-    has_namespace: bool,
-    has_attributes: bool,
-    phase: bool,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-struct NamedImport {
-    /// Exported name being imported.
-    imported: String,
-    /// Local binding name.
-    local: String,
-    /// Whether this specific specifier is type-only.
-    import_kind: ImportOrExportKind,
-}
-
-/// Merge adjacent import declarations that import from the same module specifier.
-///
-/// This is a post-processing pass for the migration import rewriter. ast-grep
-/// rules only rewrite one import source at a time, so a file that already
-/// contains a `vite-plus` import and a `vite` import that becomes `vite-plus`
-/// ends up with two import statements from the same module. This helper
-/// collapses such groups into a single import declaration.
-///
-/// Only simple groups are merged:
-/// - At most one default import per group.
-/// - No namespace (`import * as ...`) imports.
-/// - No import attributes (`with` clause) and no non-standard import phases.
-/// - Skip if a type-only declaration contains a default import (cannot be
-///   represented without `import { type default as ... }` syntax).
-///
-/// A group containing both value and type-only named imports is emitted as a
-/// value import with inline `type` specifiers, matching TypeScript's standard
-/// form and the expected output in the reported issue.
-pub fn merge_duplicate_imports(content: &str, filename: Option<&str>) -> Option<String> {
+/// Merge adjacent imports when migration changed at least one of their sources.
+/// Keep unsupported declarations and comments intact rather than reconstructing them.
+pub fn merge_duplicate_imports(
+    original: &str,
+    content: &str,
+    filename: Option<&str>,
+) -> Option<String> {
     let allocator = Allocator::default();
     let source_type = filename
         .and_then(|name| SourceType::from_path(name).ok())
         .unwrap_or_else(SourceType::ts)
         .with_module(true);
-    let parsed = Parser::new(&allocator, content, source_type)
-        .with_options(ParseOptions { preserve_parens: false, ..ParseOptions::default() })
-        .parse();
-
-    if !parsed.diagnostics.is_empty() {
+    let before = Parser::new(&allocator, original, source_type).parse();
+    let after = Parser::new(&allocator, content, source_type).parse();
+    if !before.diagnostics.is_empty() || !after.diagnostics.is_empty() {
         return None;
     }
 
-    let program = parsed.program;
-    let mut imports: Vec<ImportInfo> = Vec::new();
-    for stmt in &program.body {
-        if let Some(ModuleDeclaration::ImportDeclaration(import_decl)) =
-            stmt.as_module_declaration()
-        {
-            if let Some(info) = extract_import_info(import_decl.as_ref()) {
-                imports.push(info);
-            }
-        }
-    }
-
-    if imports.len() < 2 {
+    let original_imports = imports(&before.program);
+    let rewritten_imports = imports(&after.program);
+    // Source rewrites must not add or remove declarations. If they do, we
+    // cannot reliably identify which imports changed.
+    if original_imports.len() != rewritten_imports.len() {
         return None;
     }
 
-    // Build groups of adjacent imports that share the same source specifier.
-    // We preserve source order, which is also program.body order.
-    let mut groups: Vec<Vec<ImportInfo>> = Vec::new();
-    for info in imports {
-        if let Some(last_group) = groups.last_mut() {
-            if last_group.last().expect("non-empty group").source == info.source {
-                last_group.push(info);
+    let mut groups: Vec<Vec<(&ImportDeclaration<'_>, bool)>> = Vec::new();
+    for (original_import, import) in original_imports.iter().zip(rewritten_imports) {
+        let changed = original_import.source.value != import.source.value;
+        if let Some(group) = groups.last_mut() {
+            let previous = group.last().expect("non-empty group").0;
+            if previous.source.value == import.source.value
+                && content[previous.span.end as usize..import.span.start as usize]
+                    .chars()
+                    .all(char::is_whitespace)
+            {
+                group.push((import, changed));
                 continue;
             }
         }
-        groups.push(vec![info]);
+        groups.push(vec![(import, changed)]);
     }
-
-    let mut replacements: Vec<(Span, String)> = Vec::new();
-    for group in groups {
-        if group.len() < 2 {
-            continue;
-        }
-        if let Some(merged) = try_merge_import_group(&group) {
-            let start = group.first().expect("group non-empty").span.start;
-            let end = group.last().expect("group non-empty").span.end;
-            replacements.push((Span::new(start, end), merged));
-        }
-    }
-
-    if replacements.is_empty() {
-        return None;
-    }
-
-    // Apply replacements from end to start so byte offsets stay valid.
-    replacements.sort_by_key(|(span, _)| std::cmp::Reverse(span.end));
 
     let mut result = content.to_string();
-    for (span, replacement) in replacements {
-        let start = usize::try_from(span.start).expect("u32 span start fits in usize");
-        let end = usize::try_from(span.end).expect("u32 span end fits in usize");
-        if start <= result.len() && end <= result.len() && start <= end {
-            result.replace_range(start..end, &replacement);
+    let mut updated = false;
+    // Apply edits backwards so all spans still refer to the input text.
+    for group in groups.into_iter().rev() {
+        if group.len() < 2 || !group.iter().any(|(_, changed)| *changed) {
+            continue;
+        }
+        let start = group[0].0.span.start;
+        let end = group.last().expect("non-empty group").0.span.end;
+        if after
+            .program
+            .comments
+            .iter()
+            .any(|comment| comment.span.start < end && comment.span.end > start)
+        {
+            continue;
+        }
+        if let Some(merged) = merge_group(&group, content) {
+            result.replace_range(start as usize..end as usize, &merged);
+            updated = true;
         }
     }
-
-    Some(result)
+    updated.then_some(result)
 }
 
-fn extract_import_info(import_decl: &ImportDeclaration) -> Option<ImportInfo> {
-    let source = import_decl.source.value.as_str()?.to_string();
-    let mut default_name: Option<String> = None;
-    let mut named: Vec<NamedImport> = Vec::new();
-    let mut has_namespace = false;
-
-    let specifiers = import_decl.specifiers.as_deref()?;
-    for spec in specifiers {
-        match spec {
-            ImportDeclarationSpecifier::ImportSpecifier(spec) => {
-                named.push(extract_named_import(spec.as_ref(), import_decl.import_kind));
-            }
-            ImportDeclarationSpecifier::ImportDefaultSpecifier(spec) => {
-                default_name = Some(default_specifier_name(spec.as_ref()));
-            }
-            ImportDeclarationSpecifier::ImportNamespaceSpecifier(_) => {
-                has_namespace = true;
-            }
-        }
-    }
-
-    Some(ImportInfo {
-        span: import_decl.span(),
-        source,
-        import_kind: import_decl.import_kind,
-        default_name,
-        named,
-        has_namespace,
-        has_attributes: import_decl.with_clause.is_some(),
-        phase: import_decl.phase.is_some(),
-    })
+fn imports<'a>(program: &'a Program<'a>) -> Vec<&'a ImportDeclaration<'a>> {
+    program
+        .body
+        .iter()
+        .filter_map(|stmt| match stmt {
+            Statement::ImportDeclaration(import) => Some(import.as_ref()),
+            _ => None,
+        })
+        .collect()
 }
 
-fn default_specifier_name(spec: &ImportDefaultSpecifier) -> String {
-    binding_name(&spec.local).to_string()
-}
-
-fn extract_named_import(spec: &ImportSpecifier, decl_kind: ImportOrExportKind) -> NamedImport {
-    let imported = export_name(&spec.imported).to_string();
-    let local = binding_name(&spec.local).to_string();
-    let import_kind = if decl_kind == ImportOrExportKind::Type {
-        ImportOrExportKind::Type
-    } else {
-        spec.import_kind
-    };
-    NamedImport { imported, local, import_kind }
-}
-
-fn binding_name<'a>(ident: &'a BindingIdentifier<'a>) -> &'a str {
-    ident.name.as_str()
-}
-
-fn export_name<'a>(name: &'a ModuleExportName<'a>) -> &'a str {
-    match name {
-        ModuleExportName::IdentifierName(ident) => ident.name.as_str(),
-        ModuleExportName::StringLiteral(lit) => lit.value.as_str().unwrap_or(""),
-        // The local side of an ImportSpecifier is never an IdentifierReference.
-        ModuleExportName::IdentifierReference(_) => "",
-    }
-}
-
-fn try_merge_import_group(group: &[ImportInfo]) -> Option<String> {
-    let source = &group[0].source;
-
-    // Validation: all imports must be mergeable.
-    let mut total_default_count = 0usize;
-    let mut has_type_decl_default = false;
-    for info in group {
-        if &info.source != source {
+fn merge_group(group: &[(&ImportDeclaration<'_>, bool)], content: &str) -> Option<String> {
+    let type_only = group.iter().all(|(import, _)| import.import_kind == ImportOrExportKind::Type);
+    let mut default = None;
+    let mut locals = Vec::new();
+    let mut named = Vec::new();
+    for &(import, _) in group {
+        if import.with_clause.is_some() || import.phase.is_some() {
             return None;
         }
-        if info.has_namespace || info.has_attributes || info.phase {
+        let specifiers = import.specifiers.as_deref()?;
+        // Empty and side-effect imports can force module evaluation.
+        if specifiers.is_empty() {
             return None;
         }
-        if info.default_name.is_some() {
-            total_default_count += 1;
-            if info.import_kind == ImportOrExportKind::Type {
-                has_type_decl_default = true;
-            }
-        }
-        if total_default_count > 1 || has_type_decl_default {
-            return None;
-        }
-    }
-
-    // Collect default import name. If a default import appeared in a value
-    // declaration, its local name is stored there; otherwise there is none.
-    let default_name = group.iter().find_map(|info| info.default_name.clone());
-
-    // Merge named imports, detecting irreconcilable conflicts (same local
-    // bound to different imported names, or same imported name bound to
-    // different locals).
-    let mut seen: HashSet<(String, String)> = HashSet::new();
-    let mut named: Vec<NamedImport> = Vec::new();
-    for info in group {
-        for item in &info.named {
-            // Detect conflicts. A duplicate (same imported + same local + same
-            // kind) is harmless and can be de-duplicated.
-            for existing in &named {
-                if existing.local == item.local && existing.imported != item.imported {
-                    return None;
+        for specifier in specifiers {
+            let local = match specifier {
+                ImportDeclarationSpecifier::ImportSpecifier(specifier) => {
+                    let is_type = import.import_kind == ImportOrExportKind::Type
+                        || specifier.import_kind == ImportOrExportKind::Type;
+                    let text = specifier.span.source_text(content);
+                    // Reuse the original specifier, including quoted export
+                    // names, aliases, escapes, and existing inline `type`.
+                    let text = if !type_only && import.import_kind == ImportOrExportKind::Type {
+                        format!("type {text}")
+                    } else {
+                        text.to_string()
+                    };
+                    named.push((is_type, text));
+                    &specifier.local
                 }
-                if existing.imported == item.imported && existing.local != item.local {
-                    return None;
+                ImportDeclarationSpecifier::ImportDefaultSpecifier(specifier) => {
+                    if default.is_some() || import.import_kind == ImportOrExportKind::Type {
+                        return None;
+                    }
+                    default = Some(specifier.local.span.source_text(content));
+                    &specifier.local
                 }
+                ImportDeclarationSpecifier::ImportNamespaceSpecifier(_) => return None,
+            };
+            // Different aliases for the same export are valid. Repeated
+            // locals, including a default/named collision, are not.
+            if locals.contains(&local.name) {
+                return None;
             }
-            let key = (item.imported.clone(), item.local.clone());
-            if seen.insert(key) {
-                named.push(item.clone());
-            }
+            locals.push(local.name);
         }
     }
 
-    if default_name.is_none() && named.is_empty() {
-        return None;
-    }
-
-    let specifier_parts = build_specifier_parts(default_name.as_deref(), &named);
-    Some(format!("import {} from '{}';", specifier_parts, source))
-}
-
-fn build_specifier_parts(default_name: Option<&str>, named: &[NamedImport]) -> String {
     let mut parts = Vec::new();
-    if let Some(name) = default_name {
-        parts.push(name.to_string());
+    if let Some(default) = default {
+        parts.push(default.to_string());
     }
     if !named.is_empty() {
-        // Emit value imports before type-only imports while preserving the
-        // original relative order within each group. This matches the common
-        // TypeScript style expected by the reported issue.
-        let value_named: Vec<_> =
-            named.iter().filter(|item| item.import_kind == ImportOrExportKind::Value).collect();
-        let type_named: Vec<_> =
-            named.iter().filter(|item| item.import_kind == ImportOrExportKind::Type).collect();
-        let render = |item: &&NamedImport| {
-            let import = if item.imported == item.local {
-                item.imported.clone()
-            } else {
-                format!("{} as {}", item.imported, item.local)
-            };
-            if item.import_kind == ImportOrExportKind::Type {
-                format!("type {import}")
-            } else {
-                import
-            }
-        };
-        let named_str = value_named
-            .iter()
-            .map(render)
-            .chain(type_named.iter().map(render))
-            .collect::<Vec<_>>()
-            .join(", ");
-        parts.push(format!("{{ {named_str} }}"));
+        named.sort_by_key(|(is_type, _)| *is_type);
+        let named = named.into_iter().map(|(_, text)| text).collect::<Vec<_>>().join(", ");
+        parts.push(format!("{{ {named} }}"));
     }
-    parts.join(", ")
+    let kind = if type_only { " type" } else { "" };
+    let source = group[0].0.source.span().source_text(content);
+    Some(format!("import{kind} {} from {source};", parts.join(", ")))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn merge(content: &str) -> Option<String> {
+        let original = content.replace("vite-plus", "vite");
+        merge_duplicate_imports(&original, content, Some("file.ts"))
+    }
 
     #[test]
     fn merges_value_and_type_only_vite_plus_imports() {
@@ -294,7 +165,7 @@ mod tests {
 import { defineConfig } from 'vite-plus'
 "#;
         let expected = "import { defineConfig, type Plugin } from 'vite-plus';\n";
-        assert_eq!(merge_duplicate_imports(input, Some("file.ts")).as_deref(), Some(expected));
+        assert_eq!(merge(input).as_deref(), Some(expected));
     }
 
     #[test]
@@ -303,7 +174,7 @@ import { defineConfig } from 'vite-plus'
 import { Plugin } from 'vite-plus'
 "#;
         let expected = "import { defineConfig, Plugin } from 'vite-plus';\n";
-        assert_eq!(merge_duplicate_imports(input, Some("file.ts")).as_deref(), Some(expected));
+        assert_eq!(merge(input).as_deref(), Some(expected));
     }
 
     #[test]
@@ -311,8 +182,8 @@ import { Plugin } from 'vite-plus'
         let input = r#"import type { Plugin } from 'vite-plus'
 import type { UserConfig } from 'vite-plus'
 "#;
-        let expected = "import { type Plugin, type UserConfig } from 'vite-plus';\n";
-        assert_eq!(merge_duplicate_imports(input, Some("file.ts")).as_deref(), Some(expected));
+        let expected = "import type { Plugin, UserConfig } from 'vite-plus';\n";
+        assert_eq!(merge(input).as_deref(), Some(expected));
     }
 
     #[test]
@@ -320,7 +191,7 @@ import type { UserConfig } from 'vite-plus'
         let input = r#"import * as Vite from 'vite-plus'
 import { defineConfig } from 'vite-plus'
 "#;
-        assert_eq!(merge_duplicate_imports(input, Some("file.ts")), None);
+        assert_eq!(merge(input), None);
     }
 
     #[test]
@@ -328,7 +199,7 @@ import { defineConfig } from 'vite-plus'
         let input = r#"import type Default from 'vite-plus'
 import { a } from 'vite-plus'
 "#;
-        assert_eq!(merge_duplicate_imports(input, Some("file.ts")), None);
+        assert_eq!(merge(input), None);
     }
 
     #[test]
@@ -336,7 +207,7 @@ import { a } from 'vite-plus'
         let input = r#"import { a } from 'x'
 import { b } from 'y'
 "#;
-        assert_eq!(merge_duplicate_imports(input, Some("file.ts")), None);
+        assert_eq!(merge(input), None);
     }
 
     #[test]
@@ -344,6 +215,108 @@ import { b } from 'y'
         let input = r#"import { a } from 'vite-plus'
 import { b as a } from 'vite-plus'
 "#;
-        assert_eq!(merge_duplicate_imports(input, Some("file.ts")), None);
+        assert_eq!(merge(input), None);
+    }
+
+    #[test]
+    fn preserves_statements_and_comments_between_imports() {
+        for separator in [
+            "const keep = 1;",
+            "run();",
+            "export const keep = 1;",
+            "import './setup';",
+            "import 'vite-plus';",
+            "import {} from 'vite-plus';",
+            "// Keep this comment",
+            "/* Keep this comment */",
+            "// @ts-expect-error: upstream type mismatch",
+        ] {
+            let input = format!(
+                "import {{ a }} from 'vite-plus';\n{separator}\nimport {{ b }} from 'vite-plus';"
+            );
+            assert_eq!(merge(&input), None, "separator: {separator}");
+        }
+    }
+
+    #[test]
+    fn preserves_unsupported_imports_and_binding_conflicts() {
+        for input in [
+            "import { /* keep */ a } from 'vite-plus';\nimport { b } from 'vite-plus';",
+            "import { a } from 'vite-plus' with { type: 'json' };\nimport { b } from 'vite-plus';",
+            "import a from 'vite-plus';\nimport b from 'vite-plus';",
+            "import a from 'vite-plus';\nimport { b as a } from 'vite-plus';",
+            "import { a } from 'vite-plus';\nimport { a } from 'vite-plus';",
+            "import type { a } from 'vite-plus';\nimport { a } from 'vite-plus';",
+            "import type { a } from 'vite-plus';\nimport {} from 'vite-plus';",
+            "import { a } from 'vite-plus';\nimport { b } from 'vite-plus';\nconst = ;",
+        ] {
+            assert_eq!(merge(input), None, "input: {input}");
+        }
+    }
+
+    #[test]
+    fn preserves_quoted_names_escapes_and_aliases() {
+        let input = r#"import { "a-b" as a, "say\"hi" as hi } from "vite-plus";
+import { "a-b" as b, \u0063 as c } from 'vite-plus';"#;
+        assert_eq!(
+            merge(input).as_deref(),
+            Some(
+                r#"import { "a-b" as a, "say\"hi" as hi, "a-b" as b, \u0063 as c } from "vite-plus";"#
+            )
+        );
+    }
+
+    #[test]
+    fn merges_default_and_inline_type_imports() {
+        let input = "import vite, { type Plugin } from 'vite-plus';\nimport { defineConfig } from 'vite-plus';";
+        assert_eq!(
+            merge(input).as_deref(),
+            Some("import vite, { defineConfig, type Plugin } from 'vite-plus';")
+        );
+    }
+
+    #[test]
+    fn preserves_inline_type_import_evaluation() {
+        let input = "import { type Plugin } from 'vite-plus';\nimport type { UserConfig } from 'vite-plus';";
+        assert_eq!(
+            merge(input).as_deref(),
+            Some("import { type Plugin, type UserConfig } from 'vite-plus';")
+        );
+    }
+
+    #[test]
+    fn preserves_unchanged_import_groups() {
+        let input = "import { a } from 'vite-plus';\nimport { b } from 'vite-plus';\nconst x = import('vite');";
+        let rewritten = input.replace("import('vite')", "import('vite-plus')");
+        assert_eq!(merge_duplicate_imports(input, &rewritten, Some("file.ts")), None);
+    }
+
+    #[test]
+    fn merges_multiple_groups_without_changing_surrounding_code() {
+        let input = "// leading\nimport { a } from 'vite-plus';\nimport { b } from 'vite-plus'; // trailing\nconst keep = '你好';\nimport type { C } from 'vite-plus';\nimport type { D } from 'vite-plus';\n";
+        assert_eq!(
+            merge(input).as_deref(),
+            Some(
+                "// leading\nimport { a, b } from 'vite-plus'; // trailing\nconst keep = '你好';\nimport type { C, D } from 'vite-plus';\n"
+            )
+        );
+    }
+
+    #[test]
+    fn supports_jsx_and_typescript_extensions() {
+        for filename in
+            ["config.tsx", "config.jsx", "config.mts", "config.cts", "config.mjs", "config.cjs"]
+        {
+            let tail = if filename.ends_with("x") { "\nconst view = <div />;" } else { "" };
+            let input =
+                format!("import {{ a }} from 'vite';\nimport {{ b }} from 'vite-plus';{tail}");
+            let rewritten = input.replace("'vite'", "'vite-plus'");
+            let expected = format!("import {{ a, b }} from 'vite-plus';{tail}");
+            assert_eq!(
+                merge_duplicate_imports(&input, &rewritten, Some(filename)),
+                Some(expected),
+                "filename: {filename}"
+            );
+        }
     }
 }

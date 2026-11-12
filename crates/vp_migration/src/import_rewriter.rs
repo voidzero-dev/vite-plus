@@ -2466,17 +2466,7 @@ fn rewrite_import_content(
     content: &str,
     skip_packages: &SkipPackages,
 ) -> Result<RewriteResult, Error> {
-    rewrite_import_content_with_options(content, skip_packages, false, None)
-}
-
-#[cfg(test)]
-fn rewrite_import_content_with_options(
-    content: &str,
-    skip_packages: &SkipPackages,
-    preserve_unscoped_vitest: bool,
-    filename: Option<&str>,
-) -> Result<RewriteResult, Error> {
-    rewrite_import_content_full(content, skip_packages, preserve_unscoped_vitest, true, filename)
+    rewrite_import_content_full(content, skip_packages, false, true, None)
 }
 
 fn rewrite_import_content_full(
@@ -2567,13 +2557,10 @@ fn rewrite_import_content_full(
     // above create when two imports end up referencing the same module. Only
     // run when the rules actually changed something, so files that merely
     // already happen to have duplicate imports are left untouched.
-    if updated {
-        if let Some(merged) = import_merge::merge_duplicate_imports(&new_content, filename) {
-            if merged != new_content {
-                new_content = merged;
-                updated = true;
-            }
-        }
+    if updated
+        && let Some(merged) = import_merge::merge_duplicate_imports(content, &new_content, filename)
+    {
+        new_content = merged;
     }
 
     Ok(RewriteResult { content: new_content, updated, preserved_vitest, warnings: Vec::new() })
@@ -2998,6 +2985,28 @@ export default defineConfig({
 });
 "#
         );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_duplicate_merge_preserves_other_content() {
+        let input = "import { defineConfig } from 'vite';\nconst keep = 1;\nimport type { Plugin } from 'vite-plus';\nimport { a } from 'other';\nimport { b } from 'other';";
+        let result = rewrite_import_content(input, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, input.replace("'vite'", "'vite-plus'"));
+    }
+
+    #[test]
+    fn test_rewrite_import_content_preserves_existing_duplicate_imports() {
+        let imports =
+            "import { defineConfig } from 'vite-plus';\nimport type { Plugin } from 'vite-plus';";
+        let result = rewrite_import_content(imports, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, imports);
+
+        let input = format!("{imports}\nconst test = import('vitest');");
+        let result = rewrite_import_content(&input, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, input.replace("'vitest'", "'vite-plus/test'"));
     }
 
     #[test]
@@ -4230,7 +4239,7 @@ import type { Context, ESTree } from '@oxlint/plugins';"#;
         assert!(result.updated);
         assert_eq!(
             result.content,
-            "import { definePlugin, defineRule, type Context, type ESTree } from 'vite-plus/lint/plugins';"
+            r#"import { definePlugin, defineRule, type Context, type ESTree } from "vite-plus/lint/plugins";"#
         );
     }
 
