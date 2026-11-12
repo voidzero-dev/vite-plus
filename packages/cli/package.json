@@ -388,7 +388,6 @@
     "lint-staged": "catalog:",
     "minimatch": "catalog:",
     "nanotar": "catalog:",
-    "oxlint-tsgolint": "catalog:",
     "picocolors": "catalog:",
     "pirates": "catalog:",
     "tinyglobby": "catalog:",
