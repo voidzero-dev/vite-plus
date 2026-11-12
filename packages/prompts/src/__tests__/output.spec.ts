@@ -253,11 +253,10 @@ describe('spinner', () => {
       expect(kill).toHaveBeenCalledWith(0, 'SIGINT');
     });
 
-    it('stops listening for keys once the spinner stops', async () => {
+    it('stops listening for keys once the spinner stops', () => {
       const { s, kill } = spinInTerminal();
       press('a', 'a');
       s.stop('Built');
-      await new Promise((resolve) => setImmediate(resolve));
       press('c', '\x03', true);
       expect(kill).not.toHaveBeenCalled();
     });

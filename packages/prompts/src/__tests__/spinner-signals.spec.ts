@@ -40,7 +40,6 @@ describe.skipIf(process.platform === 'win32')('spinner interrupts', () => {
       config: false,
       entry: [fileURLToPath(new URL('../spinner.ts', import.meta.url))],
       outDir: directory,
-      outExtensions: () => ({ js: '.mjs' }),
       deps: { alwaysBundle: [/.*/], onlyBundle: false },
       dts: false,
       logLevel: 'silent',
