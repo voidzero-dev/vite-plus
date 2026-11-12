@@ -35,7 +35,7 @@ function press(name: string, sequence: string, ctrl = false) {
 }
 
 function spinInTerminal(platform: NodeJS.Platform = 'linux') {
-  Object.defineProperty(process, 'platform', { value: platform });
+  vi.spyOn(process, 'platform', 'get').mockReturnValue(platform);
   vi.stubEnv('CI', '');
   const kill = vi.spyOn(process, 'kill').mockReturnValue(true);
   const exit = vi.spyOn(process, 'exit').mockReturnValue(undefined as never);
@@ -214,12 +214,6 @@ describe('spinner', () => {
   });
 
   describe('keys while spinning in a terminal', () => {
-    const platform = process.platform;
-
-    afterEach(() => {
-      Object.defineProperty(process, 'platform', { value: platform });
-    });
-
     it('interrupts the foreground process group on Ctrl+C instead of exiting with 0', () => {
       const { c, s, kill, exit } = spinInTerminal();
       press('c', '\x03', true);
