@@ -27,6 +27,16 @@ steps = [
 ]
 
 [[case]]
+name = "vpx_script_bundle_cache_commonjs_globals"
+vp = ["local", "global"]
+env = { VPX_BUNDLE_CACHE = "1", VPX_BUNDLE_CACHE_DEBUG = "1" }
+comment = "An ES module that uses `require` without declaring it stays out of the bundle: Rolldown would give it a working `require()`, which Node.js does not."
+steps = [
+  { argv = ["vpx", "./globals-main.ts"], comment = "The recorded run; the build leaves the dependency out" },
+  { argv = ["vpx", "./globals-main.ts"], comment = "The bundled run takes the same path" },
+]
+
+[[case]]
 name = "vpx_script_bundle_cache_order"
 vp = ["local", "global"]
 env = { VPX_BUNDLE_CACHE = "1", VPX_BUNDLE_CACHE_DEBUG = "1" }

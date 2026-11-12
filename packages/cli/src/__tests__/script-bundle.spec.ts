@@ -95,6 +95,23 @@ describe('analyzeModule', () => {
   });
 
   it.each([
+    ["try { require('node:process'); } catch {}", 'require'],
+    ['export const kind = typeof module;', 'module'],
+    ['exports.value = 1;', 'exports'],
+  ])('leaves out a module that uses CommonJS globals: %s', (code, name) => {
+    expect(analyze(code).unsafe).toBe(`it uses ${name}, which an ES module does not have`);
+  });
+
+  it.each([
+    "import { createRequire } from 'node:module';\nconst require = createRequire(import.meta.url);\nrequire('./x.json');",
+    'function load(require) { return require("x"); }',
+    'const { exports } = pkg;\nconsole.log(exports);',
+    'const options = { require: true, module: 1 };\nconsole.log(options.require, pkg.exports);',
+  ])('keeps a module whose CommonJS names are its own: %s', (code) => {
+    expect(analyze(code).unsafe).toBeUndefined();
+  });
+
+  it.each([
     ['await ready;', true],
     ['for await (const x of xs) {}', true],
     ['await using handle = open();', true],

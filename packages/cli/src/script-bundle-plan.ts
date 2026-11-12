@@ -82,8 +82,9 @@ function isImportMeta(node: unknown): node is AstNode {
  * Read what bundling one ES module depends on. A module is unsafe to bundle when its
  * behavior depends on its own location in a way the bundle cannot keep: a use of
  * `import.meta` other than reading `url`, `filename`, `dirname`, or `main`, or calling
- * `resolve()`; and a direct `eval`, which sees the renamed bindings of a scope-hoisted
- * bundle.
+ * `resolve()`; a direct `eval`, which sees the renamed bindings of a scope-hoisted bundle;
+ * and `require`, `module`, or `exports` without a declaration of its own. Node.js runs an
+ * ES module without these, while Rolldown gives such a module working CommonJS ones.
  */
 export function analyzeModule(program: AstNode): ModuleAnalysis {
   const staticSpecifiers: string[] = [];
@@ -92,12 +93,43 @@ export function analyzeModule(program: AstNode): ModuleAnalysis {
   const resolveEdits: ResolveEdit[] = [];
   /** `import.meta` nodes already handled as the object of `import.meta.resolve()`. */
   const handled = new WeakSet<AstNode>();
+  /** CommonJS globals the module refers to, and the names it declares anywhere. */
+  const referenced = new Set<string>();
+  const declared = new Set<string>();
   let unsafe: string | undefined;
   let topLevelAwait = false;
   let functionDepth = 0;
 
   const visit = (node: AstNode, parent: AstNode | undefined): void => {
     switch (node.type) {
+      case 'Identifier':
+        if (COMMONJS_GLOBALS.has(node.name as string) && isReference(node, parent)) {
+          referenced.add(node.name as string);
+        }
+        break;
+      case 'VariableDeclarator':
+        addBindings(node.id, declared);
+        break;
+      case 'FunctionDeclaration':
+      case 'FunctionExpression':
+      case 'ArrowFunctionExpression':
+        addBindings(node.id, declared);
+        for (const param of node.params as unknown[]) {
+          addBindings(param, declared);
+        }
+        break;
+      case 'ClassDeclaration':
+      case 'ClassExpression':
+        addBindings(node.id, declared);
+        break;
+      case 'CatchClause':
+        addBindings(node.param, declared);
+        break;
+      case 'ImportSpecifier':
+      case 'ImportDefaultSpecifier':
+      case 'ImportNamespaceSpecifier':
+        addBindings(node.local, declared);
+        break;
       case 'ImportDeclaration':
       case 'ExportAllDeclaration':
       case 'ExportNamedDeclaration': {
@@ -188,10 +220,70 @@ export function analyzeModule(program: AstNode): ModuleAnalysis {
     }
   };
   visit(program, undefined);
+  for (const name of referenced) {
+    if (!declared.has(name)) {
+      unsafe ??= `it uses ${name}, which an ES module does not have`;
+    }
+  }
   return { staticSpecifiers, dynamicImports, metaEdits, resolveEdits, topLevelAwait, unsafe };
 }
 
 const FUNCTIONS = new Set(['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression']);
+const COMMONJS_GLOBALS = new Set(['require', 'module', 'exports']);
+
+/** Add the names a binding pattern declares. */
+function addBindings(pattern: unknown, names: Set<string>): void {
+  if (!isNode(pattern)) {
+    return;
+  }
+  switch (pattern.type) {
+    case 'Identifier':
+      names.add(pattern.name as string);
+      break;
+    case 'ObjectPattern':
+      for (const property of pattern.properties as AstNode[]) {
+        addBindings(property.type === 'RestElement' ? property.argument : property.value, names);
+      }
+      break;
+    case 'ArrayPattern':
+      for (const element of pattern.elements as unknown[]) {
+        addBindings(element, names);
+      }
+      break;
+    case 'RestElement':
+      addBindings(pattern.argument, names);
+      break;
+    case 'AssignmentPattern':
+      addBindings(pattern.left, names);
+      break;
+    case 'TSParameterProperty':
+      addBindings(pattern.parameter, names);
+      break;
+  }
+}
+
+/** Whether an identifier refers to a variable, not a property name or a label. */
+function isReference(node: AstNode, parent: AstNode | undefined): boolean {
+  switch (parent?.type) {
+    case 'MemberExpression':
+      return parent.property !== node || parent.computed === true;
+    case 'Property':
+      return parent.key !== node || parent.computed === true || parent.shorthand === true;
+    case 'MethodDefinition':
+    case 'PropertyDefinition':
+      return parent.key !== node || parent.computed === true;
+    case 'LabeledStatement':
+    case 'BreakStatement':
+    case 'ContinueStatement':
+      return false;
+    case 'ImportSpecifier':
+      return false;
+    case 'ExportSpecifier':
+      return parent.local === node;
+    default:
+      return true;
+  }
+}
 
 /** The replacement for one `import.meta.<property>` read in the module at `url`. */
 export function metaReplacement(
