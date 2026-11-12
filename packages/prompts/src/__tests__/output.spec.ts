@@ -241,15 +241,14 @@ describe('spinner', () => {
       expect(kill).not.toHaveBeenCalled();
     });
 
-    it('ignores Escape and keeps waiting for Ctrl+C', async () => {
+    it('ignores Escape and handles a Ctrl+C that follows in the same chunk', () => {
       const { c, s, kill, exit } = spinInTerminal();
       press('escape', '\x1b');
       expect(s.isCancelled).toBe(false);
       expect(c.text()).not.toContain('Canceled');
       expect(kill).not.toHaveBeenCalled();
       expect(exit).not.toHaveBeenCalled();
-      // The next key is awaited once the echoed one is erased.
-      await new Promise((resolve) => setImmediate(resolve));
+      // Keys of one chunk arrive without a tick in between.
       press('c', '\x03', true);
       expect(kill).toHaveBeenCalledWith(0, 'SIGINT');
     });

@@ -84,27 +84,20 @@ const blockInput = (output: Writable, onInterrupt: () => void): (() => void) => 
   if (input.isTTY) {
     input.setRawMode(true);
   }
-  let released = false;
+  // One chunk can carry several keys, so the listener stays registered between them.
   const onKeypress = (_char: string | undefined, { name, sequence }: readline.Key): void => {
     if (sequence === '\x03') {
       onInterrupt();
       return;
     }
-    // Erase the echoed key, then wait for the next one.
+    // Erase the echoed key.
     const [dx, dy] = name === 'return' ? [0, -1] : [-1, 0];
-    readline.moveCursor(output, dx, dy, () => {
-      readline.clearLine(output, 1, () => {
-        // The spinner can stop before these writes finish.
-        if (!released) {
-          input.once('keypress', onKeypress);
-        }
-      });
-    });
+    readline.moveCursor(output, dx, dy);
+    readline.clearLine(output, 1);
   };
   output.write(cursor.hide);
-  input.once('keypress', onKeypress);
+  input.on('keypress', onKeypress);
   return () => {
-    released = true;
     inputBlocked = false;
     input.off('keypress', onKeypress);
     output.write(cursor.show);
