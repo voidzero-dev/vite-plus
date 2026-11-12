@@ -21,8 +21,7 @@ function findPlugin(plugins: unknown, name: string): Plugin | undefined {
     return undefined;
   }
   return plugins.find(
-    (p): p is Plugin =>
-      !!p && typeof p === 'object' && (p as { name?: unknown }).name === name,
+    (p): p is Plugin => !!p && typeof p === 'object' && (p as { name?: unknown }).name === name,
   );
 }
 
