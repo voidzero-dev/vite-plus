@@ -168,7 +168,7 @@ Set `VPX_BUNDLE_CACHE=1` to start a script that imports many modules faster. The
 VPX_BUNDLE_CACHE=1 vpx ./scripts/report.ts
 ```
 
-Stack traces, `import.meta.url`, `import.meta.dirname`, and `process.argv` show the source files, as without the cache. The cache is off in watch mode, under coverage (`NODE_V8_COVERAGE`), with another `--require` or `--import` preload, and on Node.js releases before 22.22.3 and 24.11.1. Set `VPX_BUNDLE_CACHE_DEBUG=1` to print why each run uses the bundle or not. See the [RFC](https://github.com/voidzero-dev/vite-plus/blob/main/rfcs/vpx-bundle-cache.md) for the design and the known limitations.
+Stack traces, `import.meta.url`, `import.meta.dirname`, and `process.argv` show the source files, as without the cache. The cache is off in watch mode, under coverage (`NODE_V8_COVERAGE`), with another `--require` or `--import` preload, for a script whose dependencies await at their top level, and on Node.js releases before 22.22.3 and 24.11.1. Set `VPX_BUNDLE_CACHE_DEBUG=1` to print why each run uses the bundle or not. See the [RFC](https://github.com/voidzero-dev/vite-plus/blob/main/rfcs/vpx-bundle-cache.md) for the design and the known limitations.
 
 ### tsconfig
 

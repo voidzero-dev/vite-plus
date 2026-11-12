@@ -29,6 +29,17 @@ export function loadOxcNode(): OxcNodeBinding {
 const WATCH_SINK = Symbol.for('vite-plus:script-watch-sink');
 const SCRIPT_CONFIG = Symbol.for('vite-plus:script-config');
 
+/** The variables that select a tsconfig, in order of precedence. */
+export const SCRIPT_TSCONFIG_ENV = [
+  'VP_SCRIPT_TSCONFIG',
+  'TSX_TSCONFIG_PATH',
+  'TS_NODE_PROJECT',
+  'OXC_TSCONFIG_PATH',
+] as const;
+
+/** The dependency files that `setTransformDeps('typescript')` transforms. */
+export const TYPESCRIPT_DEPENDENCY = /\.(?:[cm]?ts|tsx)$/;
+
 /**
  * Capture this JavaScript thread's configuration before its first resolve. Worker
  * environments can differ from the native process environment, including clearing
@@ -37,12 +48,7 @@ const SCRIPT_CONFIG = Symbol.for('vite-plus:script-config');
 export function threadScriptConfig(): FrozenTsconfig {
   const holder = globalThis as { [SCRIPT_CONFIG]?: FrozenTsconfig };
   if (holder[SCRIPT_CONFIG] === undefined) {
-    const source = [
-      'VP_SCRIPT_TSCONFIG',
-      'TSX_TSCONFIG_PATH',
-      'TS_NODE_PROJECT',
-      'OXC_TSCONFIG_PATH',
-    ].find((name) => process.env[name]);
+    const source = SCRIPT_TSCONFIG_ENV.find((name) => process.env[name]);
     holder[SCRIPT_CONFIG] = {
       path: source ? process.env[source] : undefined,
       source: source === 'TS_NODE_PROJECT' || source === 'OXC_TSCONFIG_PATH' ? source : undefined,

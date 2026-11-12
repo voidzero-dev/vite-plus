@@ -25,6 +25,8 @@ import { isBuiltin } from 'node:module';
 import path from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 
+import { SCRIPT_TSCONFIG_ENV, TYPESCRIPT_DEPENDENCY } from './script-hooks.ts';
+
 /** Bump when the manifest, the trace, or the bundle layout changes. */
 export const BUNDLE_CACHE_VERSION = 1;
 
@@ -66,6 +68,8 @@ export interface BundleManifest {
   out?: string;
   /** The entry chunk, relative to `out`. */
   entry?: string;
+  /** Every chunk, relative to `out`. */
+  chunks?: string[];
   /** The `file:` URLs of the source modules in the bundle. */
   modules?: string[];
   inputs: Input[];
@@ -102,14 +106,6 @@ export interface BundleCacheContext {
   /** This entry's directory in `root`. */
   dir: string;
 }
-
-const SCRIPT_CONFIG_ENV = [
-  'VP_SCRIPT_TSCONFIG',
-  'TSX_TSCONFIG_PATH',
-  'TS_NODE_PROJECT',
-  'OXC_TSCONFIG_PATH',
-  'OXC_TRANSFORM_ALL',
-] as const;
 
 /** Node.js options that load code or hooks the bundle would bypass. */
 const LOADER_OPTION = /^--(?:require|import|loader|experimental-loader)(?:=|$)|^-r$/;
@@ -228,7 +224,7 @@ export function bundleKey(
     cwd,
     execArgv,
     nodeOptions: env.NODE_OPTIONS ?? null,
-    env: SCRIPT_CONFIG_ENV.map((name) => env[name] ?? null),
+    env: SCRIPT_TSCONFIG_ENV.map((name) => env[name] ?? null),
   });
 }
 
@@ -321,6 +317,13 @@ export function checkManifest(context: BundleCacheContext): ManifestState {
   if (manifest.out === undefined || manifest.entry === undefined) {
     return { kind: 'miss', reason: 'incomplete manifest' };
   }
+  // A missing chunk would fail the run, not just the cache.
+  const out = path.join(context.dir, manifest.out);
+  for (const chunk of manifest.chunks ?? [manifest.entry]) {
+    if (statSync(path.join(out, chunk), { throwIfNoEntry: false }) === undefined) {
+      return { kind: 'miss', reason: `${path.join(out, chunk)} is missing` };
+    }
+  }
   return { kind: 'hit', manifest };
 }
 
@@ -362,8 +365,6 @@ export function excludeModule(dir: string, url: string): void {
   rmSync(path.join(dir, MANIFEST), { force: true });
 }
 
-const TS_EXTENSION = /\.(?:[cm]?ts|tsx)$/;
-
 /**
  * Whether Node.js' own resolution and load answer a `file:` URL exactly as the loader
  * does: a JavaScript file in `node_modules`. The loader leaves those to Node.js, while
@@ -374,7 +375,7 @@ export function isPlainDependency(url: string): boolean {
   return (
     url.startsWith('file:') &&
     url.includes('/node_modules/') &&
-    !TS_EXTENSION.test(url) &&
+    !TYPESCRIPT_DEPENDENCY.test(url) &&
     !url.endsWith('.json')
   );
 }

@@ -10,7 +10,7 @@ import {
   analyzeModule,
   bundledSet,
   metaReplacement,
-  staticallyReachable,
+  startupLayout,
 } from '../script-bundle-plan.ts';
 import {
   BUNDLE_CACHE_VERSION,
@@ -63,15 +63,8 @@ describe('analyzeModule', () => {
         'const d = await import(`./d.js`);',
       ].join('\n'),
     );
-    expect(analysis.specifiers).toEqual([
-      './a.js',
-      './side-effect.js',
-      './b.js',
-      'dep',
-      './c.js',
-      './d.js',
-    ]);
-    expect(analysis.dynamicSpecifiers).toEqual(['./c.js', './d.js']);
+    expect(analysis.staticSpecifiers).toEqual(['./a.js', './side-effect.js', './b.js', 'dep']);
+    expect(analysis.dynamicImports.map((entry) => entry.specifier)).toEqual(['./c.js', './d.js']);
     expect(analysis.unsafe).toBeUndefined();
     expect(analysis.resolveEdits).toEqual([]);
   });
@@ -180,17 +173,29 @@ describe('bundledSet', () => {
   });
 });
 
-describe('staticallyReachable', () => {
-  it('keeps the modules only import() reaches out of the startup chunk', () => {
+describe('startupLayout', () => {
+  it('keeps the modules only import() reaches out of the startup code', () => {
     const staticImports = new Map([
       ['entry', ['shared']],
       ['lazy', ['shared', 'lazy-only']],
     ]);
     const bundled = new Set(['entry', 'shared', 'lazy', 'lazy-only']);
-    expect(staticallyReachable('entry', staticImports, bundled)).toEqual(
-      new Set(['entry', 'shared']),
-    );
-    expect(staticallyReachable('missing', staticImports, bundled).size).toBe(0);
+    const layout = startupLayout('entry', staticImports, bundled);
+    expect(layout.modules).toEqual(new Set(['shared', 'entry']));
+    expect(layout.segments).toEqual([['shared']]);
+    expect(layout.externals).toEqual([]);
+    expect(startupLayout('missing', staticImports, bundled).modules.size).toBe(0);
+  });
+
+  it('splits the startup code at each external module, in the order Node.js runs it', () => {
+    // entry: a, cjs1, b, esm1, c; c: cjs2, a; built-ins have no place in the order.
+    const staticImports = new Map([
+      ['entry', ['a', 'file:///cjs1', 'b', 'file:///esm1', 'c', 'node:fs']],
+      ['c', ['file:///cjs2', 'a']],
+    ]);
+    const layout = startupLayout('entry', staticImports, new Set(['entry', 'a', 'b', 'c']));
+    expect(layout.externals).toEqual(['file:///cjs1', 'file:///esm1', 'file:///cjs2']);
+    expect(layout.segments).toEqual([['a'], ['b'], ['c']]);
   });
 });
 
@@ -269,7 +274,15 @@ describe('cache files', () => {
         ...manifest,
       });
     expect(checkManifest(context)).toEqual({ kind: 'miss', reason: 'no bundle' });
-    write({ out: 'out-1', entry: 'entry.mjs', modules: [] });
+    write({ out: 'out-1', entry: 'entry.mjs', chunks: ['entry.mjs', 'chunk-a.mjs'], modules: [] });
+    const out = path.join(context.dir, 'out-1');
+    mkdirSync(out, { recursive: true });
+    writeFileSync(path.join(out, 'entry.mjs'), '');
+    expect(checkManifest(context)).toEqual({
+      kind: 'miss',
+      reason: `${path.join(out, 'chunk-a.mjs')} is missing`,
+    });
+    writeFileSync(path.join(out, 'chunk-a.mjs'), '');
     expect(checkManifest(context).kind).toBe('hit');
     write({ disabled: 'the entry is not an ES module' });
     expect(checkManifest(context)).toEqual({

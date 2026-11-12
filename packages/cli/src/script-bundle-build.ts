@@ -13,7 +13,7 @@
  * 4. Write the chunks and a manifest of every input, stamped before it was read.
  */
 
-import { readdirSync, readFileSync, renameSync, rmSync } from 'node:fs';
+import { readdirSync, readFileSync, renameSync, rmSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -29,7 +29,7 @@ import {
   type GraphModule,
   type MetaEdit,
   metaReplacement,
-  staticallyReachable,
+  startupLayout,
   type ResolveEdit,
 } from './script-bundle-plan.ts';
 import {
@@ -40,6 +40,7 @@ import {
   EXCLUDED,
   hash,
   isBuiltinSpecifier,
+  isPlainDependency,
   MANIFEST,
   readJson,
   releaseBuildLock,
@@ -78,6 +79,10 @@ interface ModuleRecord extends GraphModule {
 const dir = process.argv[2];
 const started = performance.now();
 const inputs = new Map<string, string>();
+/** Every file the build read, stamped before, for a build that fails partway. */
+const attempted: [string, string][] = [];
+/** The tsconfig files the loader read, once the binding is set up. */
+let takeLoaderInputs: (() => string[]) | undefined;
 
 /** Record `file` as an input, stamped the first time it is seen. */
 function addInput(file: string, fileStamp?: string): void {
@@ -100,6 +105,7 @@ async function buildBundle(trace: BundleTrace): Promise<void> {
   const oxcNode = loadOxcNode();
   // Report the tsconfig files the transforms read, which are inputs too.
   oxcNode.enableWatchReport();
+  takeLoaderInputs = () => oxcNode.takeWatchDependencies();
   const tsconfig = threadScriptConfig();
   oxcNode.initializeLoader(tsconfig.path, tsconfig.source);
   oxcNode.setTransformDeps('typescript');
@@ -186,7 +192,8 @@ async function buildBundle(trace: BundleTrace): Promise<void> {
     }
     const file = fileURLToPath(url);
     const stamps: [string, string][] = [[file, stamp(file)]];
-    if (url.includes('/node_modules/') && !/\.(?:[cm]?ts|tsx|json)$/.test(url)) {
+    attempted.push(stamps[0]);
+    if (isPlainDependency(url)) {
       // Dependencies run as published; only their format needs deciding.
       const format = loadedFormat.get(url) ?? dependencyFormat(file);
       if (format !== 'module') {
@@ -227,7 +234,14 @@ async function buildBundle(trace: BundleTrace): Promise<void> {
       continue;
     }
     visited.add(url);
-    const loaded = loadModule(url);
+    let loaded;
+    try {
+      loaded = loadModule(url);
+    } catch (error) {
+      // The loader would fail on it too: an `import()` the run did not reach, which the
+      // bundle leaves to the run.
+      loaded = { code: '', format: 'module', map: null, stamps: [], error: describeError(error) };
+    }
     if (loaded === undefined) {
       continue;
     }
@@ -245,6 +259,10 @@ async function buildBundle(trace: BundleTrace): Promise<void> {
       stamps: loaded.stamps,
     };
     modules.set(url, record);
+    if ('error' in loaded) {
+      record.unsafe = `it does not load: ${loaded.error}`;
+      continue;
+    }
     if (json) {
       continue;
     }
@@ -261,32 +279,35 @@ async function buildBundle(trace: BundleTrace): Promise<void> {
     record.metaEdits = analysis.metaEdits;
     record.resolveEdits = analysis.resolveEdits;
     record.topLevelAwait = analysis.topLevelAwait;
-    for (const specifier of analysis.specifiers) {
-      const target = observed.get(`${url}\n${specifier}`) ?? resolveUnobserved(url, specifier);
+    const resolve = (specifier: string): Target | undefined =>
+      observed.get(`${url}\n${specifier}`) ?? resolveUnobserved(url, specifier);
+    for (const specifier of analysis.staticSpecifiers) {
+      const target = resolve(specifier);
       if (target === undefined) {
+        // The module would fail to link, so the run cannot have loaded it like this.
         record.unsafe ??= `it imports ${specifier}, which does not resolve`;
         continue;
       }
       record.targets.set(specifier, target);
-      if (record.unsafe === undefined && target.url.startsWith('file:')) {
-        queue.push(target.url);
+      record.staticImports.push(target.url);
+    }
+    for (const { specifier, start, end } of analysis.dynamicImports) {
+      const target = resolve(specifier);
+      if (target === undefined) {
+        // An optional `import()` that fails today may work later: the run resolves it.
+        record.resolveEdits.push({ start, end });
+      } else {
+        record.targets.set(specifier, target);
+      }
+    }
+    if (record.unsafe === undefined) {
+      for (const target of record.targets.values()) {
+        if (target.url.startsWith('file:')) {
+          queue.push(target.url);
+        }
       }
     }
     record.imports = Array.from(record.targets.values(), (target) => target.url);
-    // A specifier is a static import when the code names it more often than in `import()`.
-    const dynamicCount = new Map<string, number>();
-    for (const specifier of analysis.dynamicSpecifiers) {
-      dynamicCount.set(specifier, (dynamicCount.get(specifier) ?? 0) + 1);
-    }
-    for (const specifier of analysis.specifiers) {
-      const count = dynamicCount.get(specifier) ?? 0;
-      const target = record.targets.get(specifier);
-      if (count > 0) {
-        dynamicCount.set(specifier, count - 1);
-      } else if (target !== undefined) {
-        record.staticImports.push(target.url);
-      }
-    }
   }
 
   // The run's own edges. A `require()`, and an import whose specifier is not in the code
@@ -329,11 +350,13 @@ async function buildBundle(trace: BundleTrace): Promise<void> {
       if (specifier.startsWith('.') || specifier.startsWith('/')) {
         // A new file beside the target can take its place (`x.ts` for `./x.js`). An
         // installed package changes only through an install, which the package's own
-        // files and the `node_modules` lookups below record.
+        // files and the `node_modules` lookups record.
         if (!dependency) {
           addInput(path.dirname(targetFile));
         }
-      } else if (dependency) {
+      } else if (isBareSpecifier(specifier)) {
+        // Also when it resolved outside `node_modules`, through a workspace link or a
+        // tsconfig `paths` alias: an install can put a package in that place.
         addPackageLookup(path.dirname(file), specifier);
       }
     }
@@ -348,22 +371,38 @@ async function buildBundle(trace: BundleTrace): Promise<void> {
   // The manifest lists the bundled modules in this order; rewritten specifiers refer to it.
   const order = [...bundled];
   const moduleIndex = new Map(order.map((url, index) => [url, index]));
-  const startup = staticallyReachable(
+  const layout = startupLayout(
     trace.entry,
     new Map(Array.from(modules, ([url, record]) => [url, record.staticImports])),
     bundled,
   );
-  // The startup chunk holds the entry's static dependencies, which finish before the
-  // entry runs, so an `import()` the entry awaits can import from it. A dependency that
-  // awaits at its top level would hold that chunk open while its own `import()` waits for
-  // it; one file with a wrapper per lazy module avoids that.
-  const startupFiles = new Set(
-    Array.from(startup, (url) => fileURLToPath(url)).filter((file) => file !== entryFile),
+  // A startup module that awaits holds its chunk open, and an `import()` it awaits can
+  // need that chunk, or a later one that imports it: the bundle would wait for itself.
+  // The entry has a chunk of its own, and every other startup chunk runs before it.
+  for (const url of layout.modules) {
+    if (url !== trace.entry && modules.get(url)!.topLevelAwait) {
+      throw new Error(`${fileURLToPath(url)} awaits at its top level`);
+    }
+  }
+  // Each external module that startup code imports goes through a bundled proxy in a
+  // chunk of its own, so it runs between the chunks of the modules around it. A proxy id
+  // ends in `.mjs`, so Rolldown parses it as an ES module whatever its target is.
+  const proxyId = new Map(
+    layout.externals.map((url, index) => [url, `${PROXY_PREFIX}${index}.mjs`]),
   );
-  const split =
-    startup.size < bundled.size &&
-    [...startup].every((url) => url === trace.entry || !modules.get(url)!.topLevelAwait);
-  await build({
+  const proxyURL = new Map(Array.from(proxyId, ([url, id]) => [id, url]));
+  const groupOf = new Map<string, string>();
+  layout.segments.forEach((segment, index) => {
+    for (const url of segment) {
+      groupOf.set(fileURLToPath(url), `startup-${index}`);
+    }
+  });
+  layout.externals.forEach((url, index) => groupOf.set(proxyId.get(url)!, `external-${index}`));
+  const groupNames = [...new Set(groupOf.values())];
+  const formatOf = (url: string) =>
+    loadedFormat.get(url) ?? importFormat.get(url) ?? requireFormat.get(url) ?? null;
+
+  const result = await build({
     input: { entry: entryFile },
     cwd: trace.cwd,
     platform: 'node',
@@ -377,8 +416,9 @@ async function buildBundle(trace: BundleTrace): Promise<void> {
           if (importer === undefined) {
             return specifier === entryFile ? { id: entryFile, moduleSideEffects: true } : null;
           }
-          if (specifier.startsWith(RESOLVE_FROM_PREFIX)) {
-            // A rewritten specifier that Rolldown folded to a constant: still the run's.
+          if (specifier.startsWith(RESOLVE_FROM_PREFIX) || importer.startsWith(PROXY_PREFIX)) {
+            // A rewritten specifier that Rolldown folded to a constant is still the run's,
+            // and a proxy imports its module by URL.
             return { id: specifier, external: true };
           }
           const record = modules.get(pathToFileURL(importer).href);
@@ -393,9 +433,15 @@ async function buildBundle(trace: BundleTrace): Promise<void> {
           if (bundled.has(target.url)) {
             return { id: fileURLToPath(target.url), moduleSideEffects: true };
           }
+          if (proxyId.has(target.url)) {
+            return { id: proxyId.get(target.url)!, moduleSideEffects: true };
+          }
           return { id: target.url, external: true };
         },
         load(id) {
+          if (id.startsWith(PROXY_PREFIX)) {
+            return proxyModule(proxyURL.get(id)!, formatOf);
+          }
           const record = modules.get(pathToFileURL(id).href);
           if (record === undefined) {
             return null;
@@ -448,26 +494,61 @@ async function buildBundle(trace: BundleTrace): Promise<void> {
       format: 'esm',
       entryFileNames: 'entry.mjs',
       chunkFileNames: 'chunk-[hash].mjs',
-      // What runs at startup stays in source order without a wrapper per module; a module
-      // only `import()` reaches goes to a chunk that loads when the `import()` runs.
-      codeSplitting: split
-        ? { groups: [{ name: 'startup', test: (id) => startupFiles.has(id) }] }
-        : false,
+      // Startup code stays in source order without a wrapper per module: its segments and
+      // proxies are chunks that the entry imports in that order. A module only `import()`
+      // reaches goes to a chunk that loads when the `import()` runs. One file is enough
+      // when there is neither.
+      codeSplitting:
+        layout.externals.length === 0 && layout.modules.size === bundled.size
+          ? false
+          : {
+              groups: groupNames.map((name) => ({
+                name,
+                test: (id: string) => groupOf.get(id) === name,
+              })),
+            },
       sourcemap: true,
       sourcemapExcludeSources: true,
       keepNames: true,
     },
   });
   renameSync(temp, path.join(dir, out));
-  writeManifest({ key: trace.key, out, entry: 'entry.mjs', modules: order });
-  for (const name of readdirSync(dir)) {
-    if (name.startsWith('out-') && name !== out) {
-      rmSync(path.join(dir, name), { recursive: true, force: true });
-    }
-  }
+  const chunks = result.output.flatMap((file) => (file.type === 'chunk' ? [file.fileName] : []));
+  writeManifest({ key: trace.key, out, entry: 'entry.mjs', chunks, modules: order });
+  removeOldOutputs(out);
   debug(
     `bundled ${bundled.size} of ${modules.size} ES modules in ${Math.round(performance.now() - started)} ms`,
   );
+}
+
+/** The bundled stand-in for an external module that startup code imports. */
+const PROXY_PREFIX = '\0vpx-external/';
+
+/**
+ * A module that imports `url` and passes on its exports. A JSON module keeps its import
+ * attribute and has only a default export. A module without a default export gets
+ * `undefined` for one, where an import of it would fail to link without the bundle.
+ */
+function proxyModule(url: string, formatOf: (url: string) => string | null): string {
+  const target = JSON.stringify(url);
+  if (formatOf(url) === 'json') {
+    return `import * as ns from ${target} with { type: 'json' };\nexport default ns.default;\n`;
+  }
+  return `export * from ${target};\nimport * as ns from ${target};\nexport default ns.default;\n`;
+}
+
+/**
+ * Remove older outputs, but keep the three newest of them: a run that started from one
+ * still loads its `import()` chunks from it.
+ */
+function removeOldOutputs(current: string): void {
+  const older = readdirSync(dir)
+    .filter((name) => name.startsWith('out-') && name !== current)
+    .map((name) => ({ name, time: statSync(path.join(dir, name)).mtimeMs }))
+    .toSorted((a, b) => b.time - a.time);
+  for (const { name } of older.slice(3)) {
+    rmSync(path.join(dir, name), { recursive: true, force: true });
+  }
 }
 
 /** The format Node.js gives a dependency file it runs as published. */
@@ -569,6 +650,17 @@ function addPackageScope(file: string): void {
   }
 }
 
+/** A package name, with or without a subpath: not relative, a URL, `#imports`, or a built-in. */
+function isBareSpecifier(specifier: string): boolean {
+  return (
+    !specifier.startsWith('.') &&
+    !specifier.startsWith('/') &&
+    !specifier.startsWith('#') &&
+    !/^[a-z][a-z0-9+.-]*:/i.test(specifier) &&
+    !isBuiltinSpecifier(specifier)
+  );
+}
+
 /**
  * The `node_modules` lookup for a bare specifier from `directory`: the package directory
  * it found, which a reinstall replaces, and each closer location that must stay empty.
@@ -618,6 +710,16 @@ try {
   debug(reason);
   if (trace !== undefined) {
     addInput(fileURLToPath(trace.entry));
+    // A fix to any file the build read, or a new file beside one, can make it succeed.
+    for (const [file, fileStamp] of attempted) {
+      addInput(file, fileStamp);
+      if (!file.includes(`${path.sep}node_modules${path.sep}`)) {
+        addInput(path.dirname(file));
+      }
+    }
+    for (const file of takeLoaderInputs?.() ?? []) {
+      addInput(file);
+    }
     writeManifest({ key: trace.key, disabled: reason });
   }
 } finally {

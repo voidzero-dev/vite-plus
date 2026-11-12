@@ -28,14 +28,21 @@ export interface ResolveEdit {
   end: number;
 }
 
+/** A literal `import()`, with the range of its specifier. */
+export interface DynamicImport {
+  specifier: string;
+  start: number;
+  end: number;
+}
+
 export interface ModuleAnalysis {
-  /** Every specifier the module imports: static imports, re-exports, literal `import()`. */
-  specifiers: string[];
-  /** The specifiers of literal `import()` calls, which a static import may also name. */
-  dynamicSpecifiers: string[];
+  /** The specifiers of static imports and re-exports, in source order. */
+  staticSpecifiers: string[];
+  /** Literal `import()` calls, which may name a module a static import also names. */
+  dynamicImports: DynamicImport[];
   metaEdits: MetaEdit[];
   resolveEdits: ResolveEdit[];
-  /** Whether the module awaits at its top level, which a shared chunk cannot do. */
+  /** Whether the module awaits at its top level. */
   topLevelAwait: boolean;
   /** Why the module cannot be bundled, or `undefined`. */
   unsafe?: string;
@@ -79,8 +86,8 @@ function isImportMeta(node: unknown): node is AstNode {
  * bundle.
  */
 export function analyzeModule(program: AstNode): ModuleAnalysis {
-  const specifiers: string[] = [];
-  const dynamicSpecifiers: string[] = [];
+  const staticSpecifiers: string[] = [];
+  const dynamicImports: DynamicImport[] = [];
   const metaEdits: MetaEdit[] = [];
   const resolveEdits: ResolveEdit[] = [];
   /** `import.meta` nodes already handled as the object of `import.meta.resolve()`. */
@@ -96,18 +103,17 @@ export function analyzeModule(program: AstNode): ModuleAnalysis {
       case 'ExportNamedDeclaration': {
         const source = staticString(node.source);
         if (source !== undefined) {
-          specifiers.push(source);
+          staticSpecifiers.push(source);
         }
         break;
       }
       case 'ImportExpression': {
-        const source = staticString(node.source);
+        const expression = node.source as AstNode;
+        const source = staticString(expression);
         if (source === undefined) {
-          const expression = node.source as AstNode;
           resolveEdits.push({ start: expression.start, end: expression.end });
         } else {
-          specifiers.push(source);
-          dynamicSpecifiers.push(source);
+          dynamicImports.push({ specifier: source, start: expression.start, end: expression.end });
         }
         break;
       }
@@ -182,7 +188,7 @@ export function analyzeModule(program: AstNode): ModuleAnalysis {
     }
   };
   visit(program, undefined);
-  return { specifiers, dynamicSpecifiers, metaEdits, resolveEdits, topLevelAwait, unsafe };
+  return { staticSpecifiers, dynamicImports, metaEdits, resolveEdits, topLevelAwait, unsafe };
 }
 
 const FUNCTIONS = new Set(['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression']);
@@ -290,29 +296,57 @@ export function bundledSet(
   return set;
 }
 
+/** How the startup code of a bundle runs, in the order Node.js runs the source. */
+export interface StartupLayout {
+  /** The bundled modules that run at startup, the entry included. */
+  modules: Set<string>;
+  /**
+   * The bundled startup modules other than the entry, split at each external module they
+   * import: each segment runs after the externals before it and before the ones after it.
+   */
+  segments: string[][];
+  /** The `file:` modules outside the bundle that startup code imports, in run order. */
+  externals: string[];
+}
+
 /**
- * The bundled modules that `entry` reaches through static imports alone. They all run at
- * startup, so the bundle keeps them in one chunk, in their source order; a module that
- * only `import()` reaches goes to a chunk of its own and runs when the `import()` does.
+ * Node.js runs a module's static imports depth-first in source order, then the module
+ * itself. A chunk runs all its imports before any of its code, so the bundle keeps that
+ * order by giving each external module a chunk of its own, between chunks of the bundled
+ * modules that run before and after it. `staticImports` maps a module to the resolved
+ * URLs of its static imports and re-exports, in source order.
  */
-export function staticallyReachable(
+export function startupLayout(
   entry: string,
   staticImports: ReadonlyMap<string, readonly string[]>,
   bundled: ReadonlySet<string>,
-): Set<string> {
-  const reached = new Set<string>();
+): StartupLayout {
+  const layout: StartupLayout = { modules: new Set(), segments: [[]], externals: [] };
   if (!bundled.has(entry)) {
-    return reached;
+    return layout;
   }
-  const queue = [entry];
-  reached.add(entry);
-  while (queue.length > 0) {
-    for (const target of staticImports.get(queue.pop()!) ?? []) {
-      if (bundled.has(target) && !reached.has(target)) {
-        reached.add(target);
-        queue.push(target);
-      }
+  const visited = new Set<string>();
+  const visit = (url: string): void => {
+    if (visited.has(url)) {
+      return;
     }
-  }
-  return reached;
+    visited.add(url);
+    if (!bundled.has(url)) {
+      if (url.startsWith('file:')) {
+        layout.externals.push(url);
+        layout.segments.push([]);
+      }
+      return;
+    }
+    for (const target of staticImports.get(url) ?? []) {
+      visit(target);
+    }
+    layout.modules.add(url);
+    if (url !== entry) {
+      layout.segments.at(-1)!.push(url);
+    }
+  };
+  visit(entry);
+  layout.segments = layout.segments.filter((segment) => segment.length > 0);
+  return layout;
 }

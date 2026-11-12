@@ -89,10 +89,6 @@ export function startBundleCache(dist: string): BundleCacheRun | undefined {
     debug(`off (${state.reason})`);
     return undefined;
   }
-  if (!acquireBuildLock(context.dir)) {
-    debug(`miss (${state.reason}); another run is building the bundle`);
-    return undefined;
-  }
   debug(`miss (${state.reason}); recording`);
   return recordRun(context, dist);
 }
@@ -217,8 +213,10 @@ function isOwnRegister(specifier: string, distURL: string): boolean {
 
 /**
  * Run the script through the loader's hooks and record how every import resolved and
- * every module loaded. At exit, write the trace and start the builder: detached, so the
- * script's exit does not wait for it, or in this process under `VPX_BUNDLE_CACHE_DEBUG=1`.
+ * every module loaded. At exit, take the build lock, write the trace, and start the
+ * builder: detached, so the script's exit does not wait for it, or in this process under
+ * `VPX_BUNDLE_CACHE_DEBUG=1`. The lock covers only the build, which is short; the run
+ * itself can last any time. A run that finds the lock taken leaves the build to its holder.
  */
 function recordRun(context: BundleCacheContext, dist: string): BundleCacheRun {
   const env = { ...process.env };
@@ -228,6 +226,10 @@ function recordRun(context: BundleCacheContext, dist: string): BundleCacheRun {
   const loads: BundleTrace['loads'] = [];
 
   process.once('exit', () => {
+    if (!acquireBuildLock(context.dir)) {
+      debug('another run is building the bundle', env);
+      return;
+    }
     try {
       const trace: BundleTrace = {
         version: BUNDLE_CACHE_VERSION,

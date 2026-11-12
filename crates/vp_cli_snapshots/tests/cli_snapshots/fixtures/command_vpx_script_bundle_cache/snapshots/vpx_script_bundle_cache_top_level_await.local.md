@@ -1,23 +1,22 @@
 # vpx_script_bundle_cache_top_level_await
 
-A dependency that awaits an import() at its top level, whose target imports a module it shares with the startup code, does not wait for itself in the bundle.
+A dependency that awaits at its top level keeps the script off the bundle, where its chunk could wait for itself. The script runs as without the cache.
 
 ## `vpx ./tla-main.ts`
 
-The recorded run
+The recorded run; the build reports why it does not bundle
 
 ```
 vpx bundle cache: miss (no bundle); recording
 early=loaded:1
-vpx bundle cache: bundled 4 of 4 ES modules in <duration>
+vpx bundle cache: the bundle could not be built: <workspace>/tla.ts awaits at its top level
 ```
 
 ## `vpx ./tla-main.ts`
 
-The bundled run gives the same result
+Later runs load each module, with the same result
 
 ```
-vpx bundle cache: hit (4 modules)
+vpx bundle cache: off (the bundle could not be built: <workspace>/tla.ts awaits at its top level)
 early=loaded:1
-vpx bundle cache: the native loader did not load
 ```

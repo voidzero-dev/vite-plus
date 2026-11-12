@@ -27,13 +27,23 @@ steps = [
 ]
 
 [[case]]
+name = "vpx_script_bundle_cache_order"
+vp = ["local", "global"]
+env = { VPX_BUNDLE_CACHE = "1", VPX_BUNDLE_CACHE_DEBUG = "1" }
+comment = "Modules outside the bundle run where they ran without it: a CommonJS dependency that reads the environment while it loads sees what a bundled module before it set."
+steps = [
+  { argv = ["vpx", "./env-main.ts"], comment = "The recorded run" },
+  { argv = ["vpx", "./env-main.ts"], comment = "The bundled run keeps the order" },
+]
+
+[[case]]
 name = "vpx_script_bundle_cache_top_level_await"
 vp = ["local", "global"]
 env = { VPX_BUNDLE_CACHE = "1", VPX_BUNDLE_CACHE_DEBUG = "1" }
-comment = "A dependency that awaits an import() at its top level, whose target imports a module it shares with the startup code, does not wait for itself in the bundle."
+comment = "A dependency that awaits at its top level keeps the script off the bundle, where its chunk could wait for itself. The script runs as without the cache."
 steps = [
-  { argv = ["vpx", "./tla-main.ts"], comment = "The recorded run" },
-  { argv = ["vpx", "./tla-main.ts"], comment = "The bundled run gives the same result" },
+  { argv = ["vpx", "./tla-main.ts"], comment = "The recorded run; the build reports why it does not bundle" },
+  { argv = ["vpx", "./tla-main.ts"], comment = "Later runs load each module, with the same result" },
 ]
 
 [[case]]

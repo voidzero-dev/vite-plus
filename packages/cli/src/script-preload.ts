@@ -37,6 +37,7 @@ import {
   SUPPORTED_NODE_RANGE,
   threadScriptConfig,
   threadWatchSink,
+  TYPESCRIPT_DEPENDENCY,
   withFlush,
   withRequireAsyncModuleCode,
 } from './script-hooks.ts';
@@ -114,8 +115,6 @@ routeHelperRequires(Module as never);
 
 const EXTENSIONS = ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.mts', '.cjs', '.cts', '.es6', '.es'];
 const NODE_MODULES = `${path.sep}node_modules${path.sep}`;
-/** The dependencies `setTransformDeps('typescript')` transforms. */
-const TYPESCRIPT_DEPENDENCY = /\.(?:[cm]?ts|tsx)$/;
 const SOURCEMAP_PREFIX = '\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,';
 
 let transformer: InstanceType<OxcNodeBinding['OxcTransformer']> | undefined;
