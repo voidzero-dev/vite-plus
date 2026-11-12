@@ -22,6 +22,7 @@ pub(crate) async fn execute_check(
     resolver: &SubcommandResolver,
     continue_on_error: bool,
     fix: bool,
+    fix_dangerously: bool,
     quiet: bool,
     deny_warnings: bool,
     no_fmt_flag: bool,
@@ -31,6 +32,7 @@ pub(crate) async fn execute_check(
     envs: &Arc<EnvMap>,
     cwd: &AbsolutePathBuf,
 ) -> Result<ExitStatus, Error> {
+    let fix = fix || fix_dangerously;
     let mut status = ExitStatus::SUCCESS;
     let mut first_failure = None;
     let has_paths = !paths.is_empty();
@@ -175,10 +177,10 @@ pub(crate) async fn execute_check(
     if run_lint_phase {
         let lint_message_kind = LintMessageKind::from_flags(lint_enabled, type_check_enabled);
         let mut args = config_args(resolved_vite_config.lint.is_some());
-        // oxlint cannot auto-fix type diagnostics, so `--fix` is dropped on the
+        // oxlint cannot auto-fix type diagnostics, so fix flags are dropped on the
         // type-check-only path.
         if fix && lint_enabled {
-            args.push("--fix".to_string());
+            args.push(if fix_dangerously { "--fix-dangerously" } else { "--fix" }.to_string());
         }
         if quiet {
             args.push("--quiet".to_string());

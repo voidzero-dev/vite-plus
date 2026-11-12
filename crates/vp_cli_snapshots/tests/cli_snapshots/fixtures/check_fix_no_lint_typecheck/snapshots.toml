@@ -4,3 +4,11 @@ vp = "local"
 steps = [
   { argv = ["vp", "check", "--fix", "--no-lint"], continue-on-failure = true },
 ]
+
+[[case]]
+name = "check_fix_dangerously_no_lint_typecheck"
+vp = "local"
+steps = [
+  ["vp", "check", "--fix-dangerously", "--no-lint"],
+  ["vpt", "print-file", "src/index.ts"],
+]
