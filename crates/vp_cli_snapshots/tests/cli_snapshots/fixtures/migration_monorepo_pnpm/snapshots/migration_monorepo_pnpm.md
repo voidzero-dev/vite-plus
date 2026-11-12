@@ -145,6 +145,8 @@ minimumReleaseAgeExclude:
   - '@oxlint/*'
   - oxlint-tsgolint
   - '@oxlint-tsgolint/*'
+  - tsrs
+  - '@tsrs/*'
   - oxfmt
   - '@oxfmt/*'
   - vitest

@@ -71,6 +71,7 @@ type PnpmWorkspaceVersions = {
   oxfmt: string;
   oxlint: string;
   oxlintTsgolint: string;
+  tsrs: string;
   oxcProjectRuntime: string;
   oxcProjectTypes: string;
   oxcParser: string;
@@ -375,6 +376,12 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
       newVersion: versions.oxlintTsgolint,
     },
     {
+      name: 'tsrs',
+      pattern: /tsrs: =([\d.]+(?:-[\w.-]+)?)/,
+      replacement: `tsrs: =${versions.tsrs}`,
+      newVersion: versions.tsrs,
+    },
+    {
       name: '@oxc-project/runtime',
       pattern: /'@oxc-project\/runtime': =([\d.]+(?:-[\w.]+)?)/,
       replacement: `'@oxc-project/runtime': =${versions.oxcProjectRuntime}`,
@@ -591,6 +598,7 @@ async function upgradeDependencies(): Promise<void> {
     oxfmtVersion,
     oxlintVersion,
     oxlintTsgolintVersion,
+    tsrsVersion,
     oxcProjectRuntimeVersion,
     oxcProjectTypesVersion,
     oxcParserVersion,
@@ -607,6 +615,7 @@ async function upgradeDependencies(): Promise<void> {
     getLatestNpmVersion('oxfmt'),
     getLatestNpmVersion('oxlint'),
     getLatestNpmVersion('oxlint-tsgolint'),
+    getLatestNpmVersion('tsrs'),
     getLatestNpmVersion('@oxc-project/runtime'),
     getLatestNpmVersion('@oxc-project/types'),
     getLatestNpmVersion('oxc-parser'),
@@ -624,6 +633,7 @@ async function upgradeDependencies(): Promise<void> {
   console.log(`oxlint: ${oxlintVersion}`);
   console.log(`@oxlint/plugins (from oxlint): ${oxlintVersion}`);
   console.log(`oxlint-tsgolint: ${oxlintTsgolintVersion}`);
+  console.log(`tsrs: ${tsrsVersion}`);
   console.log(`@oxc-project/runtime: ${oxcProjectRuntimeVersion}`);
   console.log(`@oxc-project/types: ${oxcProjectTypesVersion}`);
   console.log(`oxc-parser: ${oxcParserVersion}`);
@@ -646,6 +656,7 @@ async function upgradeDependencies(): Promise<void> {
     oxfmt: oxfmtVersion,
     oxlint: oxlintVersion,
     oxlintTsgolint: oxlintTsgolintVersion,
+    tsrs: tsrsVersion,
     oxcProjectRuntime: oxcProjectRuntimeVersion,
     oxcProjectTypes: oxcProjectTypesVersion,
     oxcParser: oxcParserVersion,

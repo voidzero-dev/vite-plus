@@ -164,13 +164,13 @@ vite-plus@0.2.4
 │   └── bundles tsdown@0.22.3
 ├── depends on vitest@4.1.10
 ├── depends on oxlint@1.72.0
-├── depends on tsrs@0.24.0-ts7.1.0-beta
+├── depends on tsrs@0.25.0-ts7.1.0-beta
 ├── depends on oxfmt@0.57.0
 └── compiles vite-task (built 2026-08-06T09:30:00Z, revision <revision>)
 ```
 
 These versions illustrate the output format. They are not part of the command
-contract. The tsrs row reflects the experimental default backend.
+contract. The tsrs row identifies the default backend.
 
 The readable tree can repeat a shared node to show two relationships. JSON has
 one entry for each node ID.
@@ -218,7 +218,7 @@ Initial aliases include:
 | `vite-task`       | Vite Task                      |
 | `oxc-resolver`    | Oxc Resolver                   |
 
-The experimental manifest uses `tsrs` as the backend node ID and package name.
+The manifest uses `tsrs` as the backend node ID and package name.
 It retains `tsgolint` and `oxlint-tsgolint` as aliases for existing queries.
 These aliases select the bundled tsrs node; they do not report a separate Go
 dependency. Older manifests retain their original `oxlint-tsgolint` node.
@@ -419,15 +419,14 @@ the local Vite+ release to use the command. To show the global release, run
 It reads tool rows from the manifest. Use `vp toolchain` to select tools and show
 relationships or engine details.
 
-For this experimental backend, the local version output and `vite-plus/versions`
+The local version output and `vite-plus/versions`
 report the `tsrs` version. The generated export uses the `tsrs` key in place of
 `oxlint-tsgolint`. The global version command selects the tsrs row when the local
 manifest contains it. It retains the Go row for older local manifests.
 
 The manifest describes the bundled backend. An `OXLINT_TSGOLINT_PATH` override
-does not change its nodes or the version exports. The manifest also does not
-certify platform support: the pinned tsrs release lacks a Windows ARM64 binary.
-See the [backend design](./check-command.md#experimental-type-aware-backend).
+does not change its nodes or the version exports.
+See the [backend design](./check-command.md#type-aware-backend).
 
 ## Relationship to `vp why`
 
