@@ -838,20 +838,7 @@ const INSTALL_LOCK_FILE: &str = ".install.lock";
 pub async fn lock_install_dir(install_dir: &AbsolutePath) -> Result<std::fs::File, Error> {
     tokio::fs::create_dir_all(install_dir).await?;
     let path = install_dir.join(INSTALL_LOCK_FILE);
-    tokio::task::spawn_blocking(move || {
-        // Keep the file in place so every process locks the same inode.
-        let file = std::fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .open(path.as_path())?;
-        file.lock()?;
-        Ok::<_, std::io::Error>(file)
-    })
-    .await
-    .map_err(|error| Error::Setup(format!("Task join error: {error}").into()))?
-    .map_err(Into::into)
+    Ok(vp_shared::file_lock::lock_exclusive(&path).await?)
 }
 
 /// Create `version_dir` and return whether this call created it.

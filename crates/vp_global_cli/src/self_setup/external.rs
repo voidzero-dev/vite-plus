@@ -38,19 +38,7 @@ impl SetupState {
         let parent = self.path.parent().expect("setup state has a parent");
         tokio::fs::create_dir_all(parent).await?;
         let path = parent.join("setup.lock");
-        tokio::task::spawn_blocking(move || {
-            let file = std::fs::OpenOptions::new()
-                .read(true)
-                .write(true)
-                .create(true)
-                .truncate(false)
-                .open(path)?;
-            file.lock()?;
-            Ok::<_, std::io::Error>(file)
-        })
-        .await
-        .map_err(|error| Error::Other(error.to_string().into()))?
-        .map_err(Into::into)
+        Ok(vp_shared::file_lock::lock_exclusive(&path).await?)
     }
 
     pub(super) fn new(binary: &Path, local_version: Option<&str>) -> Result<Self, Error> {
