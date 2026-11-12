@@ -1,0 +1,6 @@
+{
+  "name": "library-template",
+  "private": true,
+  "type": "module",
+  "bin": "./index.mjs"
+}
