@@ -286,6 +286,11 @@ async fn run(
         None
     };
 
+    // Standalone deployment shares the upgrade lock. In-place setup may run
+    // inside an upgrade child, so it must not reacquire the parent's lock.
+    let _install_lock =
+        if deploy { Some(install::lock_install_dir(&dirs.data).await?) } else { None };
+
     // 1. Prepare the payload before activating it. Upgrade has already done this in the in-place case.
     let previous_version = install::read_current_version(&dirs.data).await;
     let version_dir = if let Some(package) = user_package {

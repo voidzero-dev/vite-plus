@@ -14,6 +14,8 @@ pub(super) async fn install(
     target_version: &str,
     platform_data: &[u8],
 ) -> Result<(), Box<dyn std::error::Error>> {
+    // Serialize activation with `vp upgrade` and standalone deployment.
+    let install_lock = install::lock_install_dir(&dirs.data).await?;
     let current_version = install::read_current_version(&dirs.data).await;
 
     // Same version only if the binary is intact — a corrupted install needs a full reinstall.
@@ -40,7 +42,7 @@ pub(super) async fn install(
     if !same_version {
         let install_dir = &dirs.data;
         let version_dir = install_dir.join(target_version);
-        tokio::fs::create_dir_all(&version_dir).await?;
+        let created = install::create_version_dir(&version_dir).await?;
 
         let result = install_new_version(
             opts,
@@ -52,13 +54,13 @@ pub(super) async fn install(
         )
         .await;
 
-        // On failure, clean up the partial version directory (matches vp upgrade behavior)
         if result.is_err() {
-            let _ = tokio::fs::remove_dir_all(&version_dir).await;
+            install::discard_failed_version_dir(&version_dir, created).await;
         }
 
         result?;
     }
+    drop(install_lock);
 
     // --- Post-activation setup (always runs, even for same-version repair) ---
     // All steps below are best-effort: the core install succeeded once `current`
