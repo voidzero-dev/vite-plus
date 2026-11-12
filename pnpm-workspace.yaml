@@ -139,6 +139,7 @@ minimumReleaseAgeExclude:
   - '@vitejs/devtools'
   - '@vitejs/devtools-*'
   - resolve.exports@2.0.4
+  - vitepress-plugin-group-icons@1.8.2
 overrides:
   rolldown: workspace:rolldown@*
   vite: workspace:@voidzero-dev/vite-plus-core@*
