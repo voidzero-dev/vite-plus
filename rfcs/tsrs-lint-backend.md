@@ -37,6 +37,11 @@ The project's `typescript` dependency and standalone `tsc` tasks are unchanged.
   report additional errors. Projects control compiler scope through `tsconfig.json`.
 - tsrs `0.25.0` provides native packages for all Vite+ targets, including Windows ARM64.
   The same backend runs on every supported platform.
+- pnpm's `trustPolicy: no-downgrade` rejects tsrs because its bootstrap release
+  used staged publishing ([upstream issue](https://github.com/oxc-project/tsrs/issues/945)).
+  `vp migrate` adds the reviewed `tsrs@0.25.0-ts7.1.0-beta` to `trustPolicyExclude`
+  when that policy is enabled in `pnpm-workspace.yaml`. Other packages and future
+  tsrs versions remain subject to the policy. New versions require a separate review.
 
 The [benchmark report](../bench/tsrs-lint.md) contains historical timing, memory,
 and disk-usage measurements. Refresh them for the release candidate.

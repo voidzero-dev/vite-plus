@@ -381,6 +381,12 @@ Migration converts the Volta `volta.node` pin to `.node-version`, because Vite+ 
 
 **Other rules.**
 
+- If `pnpm-workspace.yaml` enables `trustPolicy: no-downgrade`, migration adds
+  `tsrs@0.25.0-ts7.1.0-beta` to `trustPolicyExclude`. This reviewed release uses
+  trusted publishing with provenance, but pnpm ranks its staged bootstrap
+  release higher ([upstream issue](https://github.com/oxc-project/tsrs/issues/945)).
+  Existing exceptions are preserved. Other packages and future tsrs versions
+  remain subject to the policy. Run `vp migrate` if this policy blocks an upgrade.
 - Packages that use `vite-plus` without a direct `vite` declaration keep that layout (see [Vite and Overrides](#vite-and-overrides)).
 - Unrelated selector-shaped and object-valued overrides are preserved.
 

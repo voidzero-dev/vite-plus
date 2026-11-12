@@ -11,3 +11,7 @@ catalog:
   oxlint-tsgolint: ^1.0.0
 
 minimumReleaseAge: 1440
+trustPolicy: no-downgrade
+trustPolicyExclude:
+  # Keep the project's existing exception.
+  - testnpm2@1.0.0
