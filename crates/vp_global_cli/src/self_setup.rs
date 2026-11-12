@@ -286,8 +286,8 @@ async fn run(
         None
     };
 
-    // A deployment changes `current`, `.previous-version`, and old versions like
-    // `vp upgrade`. In-place setup is the child of an upgrade that holds the lock.
+    // Standalone deployment shares the upgrade lock. In-place setup may run
+    // inside an upgrade child, so it must not reacquire the parent's lock.
     let _install_lock =
         if deploy { Some(install::lock_install_dir(&dirs.data).await?) } else { None };
 

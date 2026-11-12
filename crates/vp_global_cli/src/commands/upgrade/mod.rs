@@ -108,11 +108,7 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
     // Step 4: Handle --check (report and exit)
     if options.check {
         if resolved.version == current_version {
-            vp_shared::output::print_stdout_line(format_args!(
-                "\n{} Already up to date ({})",
-                style(output::CHECK).green(),
-                current_version
-            ));
+            print_up_to_date(current_version);
         } else {
             vp_shared::output::print_stdout_line(format_args!(
                 "Update available: {} \u{2192} {}",
@@ -126,11 +122,7 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
     // Step 5: Handle already up-to-date
     if resolved.version == current_version && !options.force {
         if !options.silent {
-            vp_shared::output::print_stdout_line(format_args!(
-                "\n{} Already up to date ({})",
-                style(output::CHECK).green(),
-                current_version
-            ));
+            print_up_to_date(current_version);
         }
         return Ok(ExitStatus::default());
     }
@@ -195,11 +187,7 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
         .unwrap_or(false)
     {
         if !options.silent {
-            vp_shared::output::print_stdout_line(format_args!(
-                "\n{} Already up to date ({})",
-                style(output::CHECK).green(),
-                resolved.version
-            ));
+            print_up_to_date(&resolved.version);
         }
         return Ok(ExitStatus::default());
     }
@@ -218,6 +206,14 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
         options.registry.as_deref(),
     )
     .await
+}
+
+fn print_up_to_date(version: &str) {
+    output::print_stdout_line(format_args!(
+        "\n{} Already up to date ({})",
+        style(output::CHECK).green(),
+        version
+    ));
 }
 
 /// Install `resolved` from its platform tarball and switch to it.

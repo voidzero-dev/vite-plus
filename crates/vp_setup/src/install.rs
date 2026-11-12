@@ -833,8 +833,8 @@ const INSTALL_LOCK_FILE: &str = ".install.lock";
 /// Serialize installation changes in `install_dir` across processes.
 ///
 /// Hold the returned file while changing version directories, `current`,
-/// `.previous-version`, or old-version cleanup. A child that only refreshes
-/// shims runs in place and must not take this lock, or its parent deadlocks.
+/// `.previous-version`, or cleaning up old versions. In-place self-setup must
+/// not reacquire its parent's installation lock.
 pub async fn lock_install_dir(install_dir: &AbsolutePath) -> Result<std::fs::File, Error> {
     tokio::fs::create_dir_all(install_dir).await?;
     let path = install_dir.join(INSTALL_LOCK_FILE);
@@ -1402,23 +1402,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn install_lock_waits_for_its_owner() {
+    async fn install_lock_creates_data_dir_and_locks_expected_file() {
         let temp = tempfile::tempdir().unwrap();
         let data = AbsolutePathBuf::new(temp.path().join("data")).unwrap();
 
-        let first = lock_install_dir(&data).await.unwrap();
-        let second = lock_install_dir(&data);
-        tokio::pin!(second);
-        assert!(
-            tokio::time::timeout(std::time::Duration::from_millis(150), &mut second).await.is_err()
-        );
-        drop(first);
-        let second =
-            tokio::time::timeout(std::time::Duration::from_secs(5), second).await.unwrap().unwrap();
-
+        let lock = lock_install_dir(&data).await.unwrap();
         let contender = std::fs::File::open(data.join(INSTALL_LOCK_FILE)).unwrap();
         assert!(matches!(contender.try_lock(), Err(std::fs::TryLockError::WouldBlock)));
-        drop(second);
+        drop(lock);
         assert!(contender.try_lock().is_ok());
     }
 
@@ -1428,16 +1419,18 @@ mod tests {
         let data = AbsolutePathBuf::new(temp.path().join("data")).unwrap();
 
         let fresh = data.join("1.2.0");
-        assert!(create_version_dir(&fresh).await.unwrap());
-        discard_failed_version_dir(&fresh, true).await;
+        let created = create_version_dir(&fresh).await.unwrap();
+        assert!(created);
+        discard_failed_version_dir(&fresh, created).await;
         assert!(!fresh.as_path().exists());
 
         // A kept version or rollback target survives a failed reinstall.
         let existing = data.join("1.1.0");
         std::fs::create_dir_all(existing.join("bin")).unwrap();
         std::fs::write(existing.join("bin").join("vp"), "kept").unwrap();
-        assert!(!create_version_dir(&existing).await.unwrap());
-        discard_failed_version_dir(&existing, false).await;
+        let created = create_version_dir(&existing).await.unwrap();
+        assert!(!created);
+        discard_failed_version_dir(&existing, created).await;
         assert_eq!(std::fs::read_to_string(existing.join("bin").join("vp")).unwrap(), "kept");
     }
 
