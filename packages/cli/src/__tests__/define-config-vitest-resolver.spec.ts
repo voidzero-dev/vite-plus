@@ -112,10 +112,14 @@ describe('vitePlusVitestResolverPlugin', () => {
     ['vite-plus/test', 'resolved-by-vitest'],
   ])('dispatches %s through the native hook filter', async (specifier, expected) => {
     const plugin = findPlugin(defineConfig({}).plugins, RESOLVER_PLUGIN_NAME)!;
+    const hook = plugin.resolveId;
+    if (typeof hook !== 'object') {
+      throw new Error('The resolver plugin declares resolveId as an object hook.');
+    }
     const resolver = {
       ...plugin,
       resolveId: {
-        ...plugin.resolveId,
+        ...hook,
         // The stub's external id shows which resolver answered.
         handler() {
           return { id: 'resolved-by-vitest', external: true };
@@ -140,6 +144,7 @@ describe('vitePlusVitestResolverPlugin', () => {
             if (id === '\0entry') {
               return `export { default } from ${JSON.stringify(specifier)};`;
             }
+            return null;
           },
         },
       ],
