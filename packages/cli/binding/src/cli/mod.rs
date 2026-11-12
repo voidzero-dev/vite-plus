@@ -99,6 +99,7 @@ async fn execute_direct_subcommand(
         SynthesizableSubcommand::Check {
             continue_on_error,
             fix,
+            fix_dangerously,
             quiet,
             deny_warnings,
             no_fmt,
@@ -110,6 +111,7 @@ async fn execute_direct_subcommand(
                 &resolver,
                 continue_on_error,
                 fix,
+                fix_dangerously,
                 quiet,
                 deny_warnings,
                 no_fmt,
