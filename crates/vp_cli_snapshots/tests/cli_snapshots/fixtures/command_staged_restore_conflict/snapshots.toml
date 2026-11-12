@@ -1,0 +1,18 @@
+[[case]]
+name = "command_staged_restore_conflict"
+vp = ["local", "global"]
+comment = "A restore conflict in a linked worktree reports successful rollback without naming a deleted patch."
+steps = [
+  { argv = ["git", "init"], snapshot = false },
+  { argv = ["git", "add", "-A"], snapshot = false },
+  { argv = ["git", "-c", "user.name=Vite Plus", "-c", "user.email=vite-plus@example.com", "commit", "-m", "init"], snapshot = false },
+  { argv = ["git", "worktree", "add", "--detach", "linked", "HEAD"], snapshot = false },
+  { argv = ["vpt", "write-file", "linked/file.txt", "a\nstaged\nc\n"], snapshot = false },
+  { argv = ["git", "-C", "linked", "add", "file.txt"], snapshot = false },
+  { argv = ["vpt", "write-file", "linked/file.txt", "a\nunstaged\nc\n"], snapshot = false },
+  { argv = ["vp", "staged", "--cwd", "linked"], continue-on-failure = true },
+  { argv = ["vpt", "print-file", "linked/file.txt"], comment = "The working tree retains the unstaged change." },
+  { argv = ["git", "-C", "linked", "show", ":file.txt"], comment = "The index retains the staged change." },
+  { argv = ["vpt", "list-dir", ".git/worktrees/linked/lint-staged"], comment = "The temporary recovery directory is empty." },
+  { argv = ["git", "stash", "list"], comment = "The backup stash was cleaned up after successful rollback." },
+]
