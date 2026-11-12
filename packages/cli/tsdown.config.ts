@@ -94,6 +94,8 @@ export default defineConfig([
       register: './src/register.ts',
       // `vpx --watch`: oxc-node's watcher with that loader.
       'script-watch': './src/script-watch.ts',
+      // `VPX_BUNDLE_CACHE=1`: the builder the preload starts after a recorded run.
+      'script-bundle-build': './src/script-bundle-build.ts',
       // Project-local `vpx` bin; kept apart from bin.js so it loads no binding.
       'vpx-bin': './src/vpx-bin.ts',
     },
@@ -130,6 +132,23 @@ export default defineConfig([
     dts: false,
     clean: false,
     deps: { neverBundle: [/\.\.\/binding\/index\.(js|cjs)/] },
+    outputOptions: {
+      codeSplitting: false,
+    },
+  },
+
+  // `VPX_BUNDLE_CACHE=1`: the preload requires it only then, so other runs do not read it.
+  {
+    name: 'script-bundle-hooks',
+    entry: {
+      'script-bundle-hooks': './src/script-bundle-hooks.ts',
+    },
+    outDir: 'dist',
+    format: 'cjs',
+    fixedExtension: true,
+    shims: true,
+    dts: false,
+    clean: false,
     outputOptions: {
       codeSplitting: false,
     },
