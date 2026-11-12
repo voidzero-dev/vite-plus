@@ -125,10 +125,10 @@ jobs:
             ### Background
             - Upgrade script: `./.github/scripts/upgrade-deps.ts`
             - Development, CI, and global CLI dependency installation use the
-              latest stable `24.x` release published at least 24 hours ago,
-              pinned in `.node-version`. The upgrade script checks `published_at`
-              from the official `nodejs/node` GitHub release; the download index's
-              date alone does not establish a full 24 hours.
+              latest stable `24.x` release whose `date` in
+              `https://nodejs.org/dist/index.json` is at least two days ago,
+              pinned in `.node-version`. The upgrade script counts from midnight
+              UTC on that date, so even late-day releases are at least 24 hours old.
               Keep the exact version selected by the upgrade script. Do not bypass
               the release-age check, use a moving LTS alias, or advance the major version.
               Runtime commands keep their latest LTS fallback.

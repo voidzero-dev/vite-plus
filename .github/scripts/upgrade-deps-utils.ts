@@ -87,7 +87,9 @@ export function findLatestStableVersionForMajor(
 }
 
 export async function getLatestNodeVersion(major: number): Promise<string> {
-  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+  // The index gives a UTC date without a time. Wait two days from midnight
+  // so even releases published late that day are at least 24 hours old.
+  const cutoff = Date.now() - 2 * 24 * 60 * 60 * 1000;
   const response = await fetch('https://nodejs.org/dist/index.json');
   if (!response.ok) {
     throw new Error(`Failed to fetch Node.js releases: ${response.status} ${response.statusText}`);
@@ -96,57 +98,31 @@ export async function getLatestNodeVersion(major: number): Promise<string> {
   if (!Array.isArray(releases)) {
     throw new Error('Invalid Node.js release index: expected an array');
   }
-  const versions = new Set(
-    releases.flatMap((release: { version?: unknown } | null) =>
-      typeof release?.version === 'string' ? [release.version.replace(/^v/, '')] : [],
-    ),
-  );
-  for (
-    let version = findLatestStableVersionForMajor(versions, major);
-    version;
-    version = findLatestStableVersionForMajor(versions, major)
-  ) {
-    versions.delete(version);
-    // The download index has only a date. Use the publication timestamp to
-    // require a full 24 hours, including for releases published late in the day.
-    const response = await fetch(
-      `https://api.github.com/repos/nodejs/node/releases/tags/v${version}`,
-      {
-        headers: {
-          Accept: 'application/vnd.github+json',
-          ...(process.env.GITHUB_TOKEN
-            ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` }
-            : {}),
-        },
-      },
-    );
-    if (response.status === 404) {
-      continue;
-    }
-    if (!response.ok) {
-      throw new Error(
-        `Failed to fetch Node.js ${version} release: ${response.status} ${response.statusText}`,
-      );
-    }
-    const release = (await response.json()) as {
-      tag_name?: unknown;
-      draft?: unknown;
-      prerelease?: unknown;
-      published_at?: unknown;
-    } | null;
+  const versions = releases.flatMap((release: { version?: unknown; date?: unknown } | null) => {
     if (
-      release?.tag_name === `v${version}` &&
-      release.draft === false &&
-      release.prerelease === false &&
-      typeof release.published_at === 'string' &&
-      Date.parse(release.published_at) <= cutoff
+      typeof release?.version !== 'string' ||
+      typeof release.date !== 'string' ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(release.date)
     ) {
-      return version;
+      return [];
     }
+    const releasedAt = Date.parse(release.date);
+    if (
+      !Number.isFinite(releasedAt) ||
+      new Date(releasedAt).toISOString().slice(0, 10) !== release.date ||
+      releasedAt > cutoff
+    ) {
+      return [];
+    }
+    return [release.version.replace(/^v/, '')];
+  });
+  const version = findLatestStableVersionForMajor(versions, major);
+  if (!version) {
+    throw new Error(
+      `No stable ${major}.x version found for Node.js with a release date at least 2 days ago`,
+    );
   }
-  throw new Error(
-    `No stable ${major}.x version found for Node.js with a release age of at least 24 hours`,
-  );
+  return version;
 }
 
 export async function getPnpmInstallerIntegrity(version: string): Promise<string> {

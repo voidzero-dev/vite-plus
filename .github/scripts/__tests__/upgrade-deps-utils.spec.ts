@@ -22,31 +22,21 @@ test('selects the latest eligible stable Node.js 24 release independently of the
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
-  vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-11-12T12:00:00Z'));
-  const fetchMock = vi.fn(async (url: string) => {
-    if (url === 'https://nodejs.org/dist/index.json') {
-      return Response.json([
-        { version: 'v26.13.0', lts: 'Lithium' },
-        { version: 'v24.9.0', lts: 'Krypton' },
-        { version: 'v24.11.0-rc.1', lts: false },
-        { version: 'v24.10.2', lts: 'Krypton' },
-        { version: 'v24.10.3', lts: 'Krypton' },
-        { version: 'v24.10.1', lts: 'Krypton' },
-      ]);
-    }
-    const tag = url.split('/').at(-1);
-    expect(['v24.10.3', 'v24.10.2']).toContain(tag);
-    return Response.json({
-      tag_name: tag,
-      draft: false,
-      prerelease: false,
-      published_at: tag === 'v24.10.3' ? '2026-11-11T12:00:01Z' : '2026-11-11T12:00:00Z',
-    });
-  });
+  vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-11-12T00:00:00Z'));
+  const fetchMock = vi.fn().mockResolvedValue(
+    Response.json([
+      { version: 'v26.13.0', date: '2026-11-01', lts: 'Lithium' },
+      { version: 'v24.9.0', date: '2026-11-01', lts: 'Krypton' },
+      { version: 'v24.11.0-rc.1', date: '2026-11-01', lts: false },
+      { version: 'v24.10.2', date: '2026-11-10', lts: 'Krypton' },
+      { version: 'v24.10.3', date: '2026-11-11', lts: 'Krypton' },
+      { version: 'v24.10.1', date: '2026-11-01', lts: 'Krypton' },
+    ]),
+  );
   vi.stubGlobal('fetch', fetchMock);
   await expect(getLatestNodeVersion(24)).resolves.toBe('24.10.2');
   expect(fetchMock).toHaveBeenCalledWith('https://nodejs.org/dist/index.json');
-  expect(fetchMock).toHaveBeenCalledTimes(3);
+  expect(fetchMock).toHaveBeenCalledTimes(1);
 });
 
 test.each([
@@ -59,7 +49,11 @@ test.each([
     error: 'Invalid Node.js release index: expected an array',
   },
   {
-    response: () => Response.json([{ version: 'v26.13.0' }, { version: 'v24.10.0-rc.1' }]),
+    response: () =>
+      Response.json([
+        { version: 'v26.13.0', date: '2026-01-01' },
+        { version: 'v24.10.0-rc.1', date: '2026-01-01' },
+      ]),
     error: 'No stable 24.x version found for Node.js',
   },
 ])('rejects an unusable Node.js release index: $error', async ({ response, error }) => {

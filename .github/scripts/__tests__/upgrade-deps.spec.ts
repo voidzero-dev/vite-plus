@@ -79,21 +79,12 @@ test.each([false, true])(
     vi.stubGlobal('fetch', async (url: string) => {
       if (url === 'https://nodejs.org/dist/index.json') {
         return Response.json([
-          { version: 'v26.13.0', lts: 'Lithium' },
-          { version: 'v24.9.0', lts: 'Krypton' },
-          { version: 'v24.11.0-rc.1', lts: false },
-          { version: 'v24.10.2', lts: 'Krypton' },
-          { version: 'v24.10.3', lts: 'Krypton' },
+          { version: 'v26.13.0', date: '2026-11-01', lts: 'Lithium' },
+          { version: 'v24.9.0', date: '2026-11-01', lts: 'Krypton' },
+          { version: 'v24.11.0-rc.1', date: '2026-11-01', lts: false },
+          { version: 'v24.10.2', date: '2026-11-10', lts: 'Krypton' },
+          { version: 'v24.10.3', date: '2026-11-11', lts: 'Krypton' },
         ]);
-      }
-      if (url.startsWith('https://api.github.com/repos/nodejs/node/releases/tags/')) {
-        const tag = url.split('/').at(-1);
-        return Response.json({
-          tag_name: tag,
-          draft: false,
-          prerelease: false,
-          published_at: tag === 'v24.10.3' ? '2026-11-12T00:00:00Z' : '2026-11-10T00:00:00Z',
-        });
       }
       if (url.startsWith('https://api.github.com/repos/oxc-project/oxc-node/compare/')) {
         expect(url).toContain(`/compare/${pinnedOxcNode}...`);
