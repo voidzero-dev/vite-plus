@@ -18,7 +18,7 @@ jobs:
   prepare:
     if: github.repository == 'voidzero-dev/vite-plus'
     name: Prepare Release
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:

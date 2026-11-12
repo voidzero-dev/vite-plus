@@ -33,7 +33,7 @@ env:
 
 jobs:
   detect-changes:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       contents: read
@@ -135,19 +135,6 @@ jobs:
       - name: Run vp fmt --check
         run: pnpm vp fmt --check
 
-  download-previous-rolldown-binaries:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.code-changed == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    permissions:
-      contents: read
-      packages: read
-    steps:
-      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
-      - uses: ./.github/actions/download-rolldown-binaries
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
   test:
     needs: detect-changes
     if: needs.detect-changes.outputs.code-changed == 'true'
@@ -332,7 +319,7 @@ jobs:
       # dynamically anyway, so matching here is correct.
       # Must mirror `.cargo/config.toml` rustflags — RUSTFLAGS env overrides
       # both [build] and [target.*] levels.
-      RUSTFLAGS: --cfg tokio_unstable -C link-args=-Wl,--warn-unresolved-symbols -C target-feature=-crt-static
+      RUSTFLAGS: --cfg tokio_unstable -C target-feature=-crt-static
     steps:
       - name: Install Alpine dependencies
         shell: sh {0}
@@ -440,7 +427,6 @@ jobs:
   cli-e2e-test:
     name: CLI E2E test
     needs:
-      - download-previous-rolldown-binaries
       - build-windows-cli
       - build-cli-test-binaries
     strategy:
@@ -466,12 +452,6 @@ jobs:
 
       - name: Install docs dependencies
         run: pnpm -C docs install --frozen-lockfile
-
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: rolldown-binaries
-          path: ./rolldown/packages/rolldown/src
-          merge-multiple: true
 
       # Prebuilt by build-windows-cli (Linux + cargo-xwin); the artifact
       # paths are workspace-relative, so this places the binding into
@@ -993,8 +973,8 @@ jobs:
   # them across the E2E job and snapshot shards. Tar preserves permissions.
   build-cli-test-binaries:
     name: Build CLI test binaries (${{ matrix.target }})
-    needs:
-      - download-previous-rolldown-binaries
+    needs: detect-changes
+    if: needs.detect-changes.outputs.code-changed == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -1015,12 +995,6 @@ jobs:
           cache-key: cli-snapshot-test-${{ matrix.target }}-ci
 
       - uses: ./.github/actions/setup-ci-node
-
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: rolldown-binaries
-          path: ./rolldown/packages/rolldown/src
-          merge-multiple: true
 
       - name: Build with upstream
         uses: ./.github/actions/build-upstream
@@ -1124,12 +1098,6 @@ jobs:
 
       - uses: ./.github/actions/setup-ci-node
 
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: rolldown-binaries
-          path: ./rolldown/packages/rolldown/src
-          merge-multiple: true
-
       - uses: ./.github/actions/download-cli-test-binaries
         with:
           target: ${{ matrix.target }}
@@ -1213,7 +1181,6 @@ jobs:
   cli-snapshot-test-windows:
     name: CLI snapshot test (Windows, shard ${{ matrix.shard }}/3)
     needs:
-      - download-previous-rolldown-binaries
       - build-windows-cli
       - build-windows-tests
     strategy:
@@ -1260,12 +1227,6 @@ jobs:
           tool: cargo-nextest
 
       - uses: ./.github/actions/setup-ci-node
-
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: rolldown-binaries
-          path: ./rolldown/packages/rolldown/src
-          merge-multiple: true
 
       # See the cli-e2e-test job for details on the prebuilt binaries.
       - name: Download prebuilt Windows binaries
@@ -1400,8 +1361,8 @@ jobs:
 
   cli-e2e-test-musl:
     name: CLI E2E test (Linux x64 musl)
-    needs:
-      - download-previous-rolldown-binaries
+    needs: detect-changes
+    if: needs.detect-changes.outputs.code-changed == 'true'
     runs-on: namespace-profile-linux-x64-default
     timeout-minutes: 20
     steps:
@@ -1414,12 +1375,6 @@ jobs:
           cache-key: cli-e2e-test-musl-ci
 
       - uses: ./.github/actions/setup-ci-node
-
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: rolldown-binaries
-          path: ./rolldown/packages/rolldown/src
-          merge-multiple: true
 
       # Cross-compile for musl on the glibc host
       - name: Build with upstream (musl)
@@ -1560,12 +1515,6 @@ jobs:
 
       - uses: ./.github/actions/setup-ci-node
 
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: rolldown-binaries
-          path: ./rolldown/packages/rolldown/src
-          merge-multiple: true
-
       - uses: ./.github/actions/download-cli-test-binaries
         with:
           target: x86_64-unknown-linux-gnu
@@ -1637,11 +1586,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-24.04
+          - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             sfw_asset: sfw-free-linux-x86_64
             vp_bin: vp
-            # Only Linux needs the TLS-bypass: the ubuntu-24.04 runner
+            # Only Linux needs the TLS-bypass: the ubuntu-latest runner
             # doesn't preinstall Node 22.18 into vp's cache, so vp's HttpClient
             # (rustls) fetches `nodejs.org/.../SHASUMS256.txt` through sfw and
             # hits the upstream EKU bug. macOS/Windows runners ship Node in
@@ -1671,12 +1620,6 @@ jobs:
       - uses: ./.github/actions/clone
 
       - uses: ./.github/actions/setup-ci-node
-
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: rolldown-binaries
-          path: ./rolldown/packages/rolldown/src
-          merge-multiple: true
 
       - uses: ./.github/actions/download-cli-test-binaries
         with:
@@ -1752,7 +1695,7 @@ jobs:
           sfw "${{ matrix.vp_bin }}" install --no-frozen-lockfile
 
   done:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     if: always()
     needs:

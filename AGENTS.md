@@ -2,7 +2,7 @@
 
 Vite+ is the web toolchain behind `vp`: Vite, Rolldown, Vitest, tsdown, Oxlint, Oxfmt, Vite Task, runtime and package-manager workflows, and project creation/migration.
 
-This guide applies to this repository; `CLAUDE.md` points here. For changes to the guidance shipped to user projects, use `packages/cli/AGENTS.md` and `packages/cli/src/utils/agent.ts`. Leave those files unchanged for root-guide tasks.
+For changes to the guidance shipped to user projects, use `packages/cli/AGENTS.md` and `packages/cli/src/utils/agent.ts`. Leave those files unchanged for root-guide tasks.
 
 ## Context by Task
 
@@ -17,6 +17,7 @@ This guide applies to this repository; `CLAUDE.md` points here. For changes to t
 
 ## Repository Constraints
 
+- The `vite-plus` package (`packages/cli`) and the global `vp` CLI (`crates/vp_global_cli`) work independently: projects can install `vite-plus` without the global CLI, and the global CLI can run without a local `vite-plus`. Before fixing an issue, identify which part owns the behavior and keep the fix inside that boundary. When developing `vite-plus`, do not assume the global `vp` is installed.
 - Distinguish built-ins from tasks: `vp test` executes upstream Vitest; `vp run test` executes a script or configured task named `test`. `vpr` is shorthand for `vp run`. Inspect command surfaces with `vp help` / `vp <command> --help`, and bundled versions with `vp --version`.
 - Keep task configuration under `run` in `vite.config.ts`; do not introduce `vite-task.json`. Existing `package.json` scripts are `vp run` targets without caching by default. Use `run.tasks` for explicit command configuration, default caching, dependencies, or input/environment tracking. A task name must occur in only one of these files. See the [run guide](docs/guide/run.md) and [run configuration](docs/config/run.md).
 - Keep public test imports on `vite-plus/test*`, which wraps upstream `vitest` and `@vitest/browser*`. Do not recreate `packages/test` or `@voidzero-dev/vite-plus-test`.
@@ -30,7 +31,11 @@ This guide applies to this repository; `CLAUDE.md` points here. For changes to t
 
 Prefer local fixtures or mock servers for tests that depend on external services. Use real network requests only when they are necessary to verify the behavior under test, and explain that need in the test. Reuse existing test infrastructure, preserve behavioral coverage, and keep mutable state isolated between cases.
 
-For behavior changes, find nearby tests before editing and add or update coverage in the same area. Choose checks for the changed layer:
+For product behavior changes, find nearby tests before editing and add or update coverage in the same area.
+
+For repository automation and test-support scripts (for example, `.github/scripts/`), do not add unit tests unless the user explicitly requests them. Validate changes with focused script runs and existing checks instead.
+
+Choose checks for the changed layer:
 
 For local CLI installation, use a fresh absolute temporary `VP_HOME` and set `VP_SELF_SETUP_NO_MODIFY_PATH=1`. Keep installation, checks, and `PATH` changes inside one subshell; remove the temporary installation on exit. Follow the [isolated installation procedure](CONTRIBUTING.md#isolated-cli-installation). Test shell setup through the snapshot runner's isolated homes.
 

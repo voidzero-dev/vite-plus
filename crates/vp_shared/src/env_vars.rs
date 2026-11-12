@@ -129,6 +129,11 @@ pub const VP_YARN_MANAGER: &str = "VP_YARN_MANAGER";
 /// Bun management preference; takes precedence over `VP_PM_MANAGER`.
 pub const VP_BUN_MANAGER: &str = "VP_BUN_MANAGER";
 
+/// `1` (exactly) stops Vite+ from managing Node.js and every package manager:
+/// at run time it neither downloads nor uses a managed installation,
+/// regardless of `config.json` and the `VP_*_MANAGER` variables.
+pub const VP_ENV_FORBIDDEN: &str = "VP_ENV_FORBIDDEN";
+
 /// Enable debug output for shim dispatch.
 pub const VP_DEBUG_SHIM: &str = "VP_DEBUG_SHIM";
 
@@ -203,6 +208,14 @@ pub const VP_CLI_BIN: &str = "VP_CLI_BIN";
 
 /// Global CLI version, passed from Rust binary to JS for --version display.
 pub const VP_GLOBAL_VERSION: &str = "VP_GLOBAL_VERSION";
+
+/// Advertises that the process tree is running under Vite+ (value: `vp/<version>`).
+///
+/// Each global or local `vp`, `vpr`, or `vpx` invocation sets its own version.
+/// Ordinary tool shims preserve an inherited value without creating one.
+/// Tools we invoke (e.g. `vp dlx create-vite`) use this instead of
+/// `npm_config_user_agent`, which the underlying package manager overwrites.
+pub const VP_USER_AGENT: &str = "VP_USER_AGENT";
 
 // ── HTTP client configuration ───────────────────────────────────────────
 

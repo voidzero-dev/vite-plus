@@ -1,4 +1,4 @@
-use vp_pm_cli::PackageManagerType;
+use vp_pm_cli::{PackageManagerSpec, PackageManagerType};
 
 use crate::error::Error;
 
@@ -43,7 +43,7 @@ impl EnvScope {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct EnvSpecs {
     pub(crate) node: Option<String>,
-    pub(crate) package_manager: Option<(PackageManagerType, String, Option<String>)>,
+    pub(crate) package_manager: Option<PackageManagerSpec>,
 }
 
 impl EnvSpecs {
@@ -94,21 +94,8 @@ impl EnvSpecs {
 
 pub(crate) fn parse_package_manager_spec_with_hash(
     value: &str,
-) -> Result<(PackageManagerType, String, Option<String>), Error> {
-    let Some((name, version)) = value.split_once('@') else {
-        return Err(invalid_spec(value));
-    };
-    let package_manager = PackageManagerType::from_name(name).ok_or_else(|| invalid_spec(value))?;
-    if version.is_empty() {
-        return Err(invalid_spec(value));
-    }
-    let (version, hash) = version
-        .split_once('+')
-        .map_or((version, None), |(version, hash)| (version, Some(hash.to_string())));
-    if version.is_empty() || hash.as_deref() == Some("") {
-        return Err(invalid_spec(value));
-    }
-    Ok((package_manager, version.to_string(), hash))
+) -> Result<PackageManagerSpec, Error> {
+    vp_pm_cli::parse_package_manager_spec(value).map_err(|_| invalid_spec(value))
 }
 
 fn invalid_scope(value: &str) -> Error {

@@ -225,6 +225,8 @@ pub(crate) async fn execute_for_binary(
 
 /// Complete preferences once, while the pre-upgrade shim layout is still available.
 /// Existing main-bin shims must stay there: a parent shell can have cached them.
+/// `VP_ENV_FORBIDDEN=1` is the exception: every package manager becomes
+/// system-first, and a cached main-bin shim fails without running anything.
 async fn initialize_package_manager_shim_modes(
     current_exe: &std::path::Path,
     settings: &mut super::config::Config,
@@ -236,6 +238,12 @@ async fn initialize_package_manager_shim_modes(
     let mut changed = false;
     for kind in ALL_PACKAGE_MANAGERS {
         if settings.configured_package_manager_shim_mode_for(kind).is_some() {
+            continue;
+        }
+        // VP_ENV_FORBIDDEN=1 places every package manager after the system tools, as self-setup does.
+        if vp_shared::EnvConfig::get().env_forbidden {
+            settings.set_package_manager_shim_mode(kind, ShimMode::SystemFirst);
+            changed = true;
             continue;
         }
 
@@ -941,11 +949,16 @@ elif [ -n "${ZSH_VERSION-}" ] && type compdef >/dev/null 2>&1; then
 fi
 "#;
 
+// Fish env file with vp wrapper function.
+// Every built-in that a user function can shadow carries `builtin`: fish runs a function before
+// the built-in with the same name, so a user `count` function would otherwise make `vp env use`
+// report success without setting VP_NODE_VERSION (#3128). The `vp` completion that clap_complete
+// registers calls bare `commandline`, as fish's own completions do, so this file cannot protect it.
 const ENV_TEMPLATE_FISH: &str = r#"# Vite+ environment setup (https://viteplus.dev)
-__ENV_EXPORTS__while set -l __vp_idx (contains -i -- "__VP_BIN__" $PATH)
+__ENV_EXPORTS__while set -l __vp_idx (builtin contains -i -- "__VP_BIN__" $PATH)
     set -e PATH[$__vp_idx]
 end
-while set -l __vp_idx (contains -i -- "__VP_FALLBACK_BIN__" $PATH)
+while set -l __vp_idx (builtin contains -i -- "__VP_FALLBACK_BIN__" $PATH)
     set -e PATH[$__vp_idx]
 end
 set -gx PATH "__VP_BIN__" $PATH "__VP_FALLBACK_BIN__"
@@ -954,17 +967,17 @@ set -gx PATH "__VP_BIN__" $PATH "__VP_FALLBACK_BIN__"
 # which sets/unsets VP_NODE_VERSION in the current shell session.
 function vp
     set -l __vp_command_index 1
-    if test (count $argv) -ge 1
+    if test (builtin count $argv) -ge 1
         if test "$argv[1]" = "-C"
             set __vp_command_index 3
         else if string match -qr '^-C.+' -- "$argv[1]"
             set __vp_command_index 2
         end
     end
-    set -l __vp_next_index (math $__vp_command_index + 1)
+    set -l __vp_next_index (builtin math $__vp_command_index + 1)
 
-    if test (count $argv) -ge $__vp_next_index; and test "$argv[$__vp_command_index]" = "env"; and test "$argv[$__vp_next_index]" = "use"
-        if contains -- -h $argv; or contains -- --help $argv
+    if test (builtin count $argv) -ge $__vp_next_index; and test "$argv[$__vp_command_index]" = "env"; and test "$argv[$__vp_next_index]" = "use"
+        if builtin contains -- -h $argv; or builtin contains -- --help $argv
             command vp $argv; return
         end
         set -lx VP_ENV_USE_EVAL_ENABLE 1
@@ -980,28 +993,28 @@ function vp
 end
 
 # Dynamic shell completion for fish
-VP_COMPLETE=fish command vp | source
+VP_COMPLETE=fish command vp | builtin source
 
 function __vpr_complete
-    set -l tokens (commandline --current-process --tokenize --cut-at-cursor)
-    set -l current (commandline --current-token)
+    set -l tokens (builtin commandline --current-process --tokenize --cut-at-cursor)
+    set -l current (builtin commandline --current-token)
     set -l args $tokens[2..]
     set -l translated vp
-    if test (count $args) -eq 0; and string match -qr '^-C' -- "$current"
+    if test (builtin count $args) -eq 0; and string match -qr '^-C' -- "$current"
         # Keep completing the global -C option until its value is finished.
-    else if test (count $args) -ge 1; and test "$args[1]" = "-C"
+    else if test (builtin count $args) -ge 1; and test "$args[1]" = "-C"
         set -a translated -C
-        if test (count $args) -ge 2
+        if test (builtin count $args) -ge 2
             set -a translated "$args[2]" run $args[3..]
         end
-    else if test (count $args) -ge 1; and string match -qr '^-C.+' -- "$args[1]"
+    else if test (builtin count $args) -ge 1; and string match -qr '^-C.+' -- "$args[1]"
         set -a translated "$args[1]" run $args[2..]
     else
         set -a translated run $args
     end
     VP_COMPLETE=fish command vp -- $translated $current
 end
-complete -c vpr --keep-order --exclusive --arguments "(__vpr_complete)"
+builtin complete -c vpr --keep-order --exclusive --arguments "(__vpr_complete)"
 "#;
 
 // Nushell env file with vp wrapper function.
@@ -1686,6 +1699,43 @@ mod tests {
             // Keep env.nu independent of the developer's installed Nushell.
             (vp_shared::env_vars::VP_NU_VERSION, std::ffi::OsStr::new(NU_BUILTIN_SIGIL_VERSION)),
         ]
+    }
+
+    /// Under `VP_ENV_FORBIDDEN=1` an unset package-manager mode becomes
+    /// system-first, as self-setup saves it, instead of following PATH.
+    #[tokio::test]
+    async fn test_initialize_package_manager_shim_modes_follows_env_forbidden() {
+        use super::super::{config::ShimMode, package_manager::ALL_PACKAGE_MANAGERS};
+
+        for (forbidden, expected) in
+            [(Some("1"), ShimMode::SystemFirst), (Some("true"), ShimMode::Managed)]
+        {
+            let temp_dir = TempDir::new().unwrap();
+            let empty = temp_dir.path().join("empty");
+            std::fs::create_dir_all(&empty).unwrap();
+            let vars = [
+                (vp_shared::env_vars::VP_HOME, Some(temp_dir.path().as_os_str().to_owned())),
+                ("PATH", Some(empty.into_os_string())),
+                (vp_shared::env_vars::VP_ENV_FORBIDDEN, forbidden.map(Into::into)),
+            ];
+            vp_shared::EnvConfig::with_vars_async(vars, |_| async {
+                let mut settings = super::super::config::Config::default();
+                initialize_package_manager_shim_modes(
+                    std::path::Path::new("/nonexistent/vp"),
+                    &mut settings,
+                )
+                .await
+                .unwrap();
+                for kind in ALL_PACKAGE_MANAGERS {
+                    assert_eq!(
+                        settings.configured_package_manager_shim_mode_for(kind),
+                        Some(expected),
+                        "{forbidden:?} {kind}"
+                    );
+                }
+            })
+            .await;
+        }
     }
 
     #[cfg(windows)]

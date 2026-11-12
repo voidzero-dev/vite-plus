@@ -1,0 +1,9 @@
+[[case]]
+name = "command_run_dynamic_config_stdin"
+vp = "local"
+skip-platforms = ["windows"]
+comment = "Loading a non-static run config through the JS resolver leaves the stdin that tasks inherit in blocking mode (#3155)."
+steps = [
+  { argv = ["vp", "run", "probe"], comment = "terminal stdin" },
+  { argv = ["vpt", "pipe-stdin", "x", "--", "vp", "run", "probe"], comment = "piped stdin" },
+]

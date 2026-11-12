@@ -1,6 +1,6 @@
 {
   "name": "@voidzero-dev/vite-plus-core",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "The Unified Toolchain for the Web",
   "homepage": "https://viteplus.dev/guide",
   "bugs": {
@@ -113,7 +113,7 @@
     "@oxc-project/runtime": "catalog:",
     "@oxc-project/types": "catalog:",
     "lightningcss": "catalog:",
-    "postcss": "^8.5.30",
+    "postcss": "^8.5.32",
     "yuku-parser": "0.19.0"
   },
   "devDependencies": {
@@ -239,8 +239,8 @@
     "node": "^20.19.0 || ^22.18.0 || >=24.11.0"
   },
   "bundledVersions": {
-    "vite": "8.3.5",
-    "rolldown": "1.2.16",
+    "vite": "8.3.7",
+    "rolldown": "1.2.18",
     "tsdown": "0.23.4"
   }
 }

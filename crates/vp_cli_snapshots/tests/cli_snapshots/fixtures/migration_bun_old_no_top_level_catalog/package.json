@@ -1,0 +1,14 @@
+{
+  "name": "migration-bun-old-no-top-level-catalog",
+  "workspaces": [],
+  "devDependencies": {
+    "vite": "^7.0.0"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "bun",
+      "version": "1.2.20",
+      "onFail": "download"
+    }
+  }
+}

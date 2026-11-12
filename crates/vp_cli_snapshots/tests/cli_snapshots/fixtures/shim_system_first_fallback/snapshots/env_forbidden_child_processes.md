@@ -1,0 +1,261 @@
+# env_forbidden_child_processes
+
+VP_ENV_FORBIDDEN=1 holds for what the selected tools run: a `#!/usr/bin/env node` shebang and a nested `npm` resolve from the child PATH. The shims add no directory to it and leave directories inherited from a parent in place; where Vite+ selects a tool from PATH, a managed install there fails. A nested managed npm would print its version instead of the system marker.
+
+## `node setup-system-node.cjs`
+
+
+## `node setup-child-tools.cjs`
+
+
+## `PATH=${VP_HOME}/js_runtime/node/20.20.2/bin${PATH_SEPARATOR}${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} VP_PATH_INJECTED_TOOLS=node,npm,npx VP_ENV_FORBIDDEN=1 VP_NODE_DIST_MIRROR=http://127.0.0.1:1 NPM_CONFIG_REGISTRY=http://127.0.0.1:1 node run-shim.cjs npm nested`
+
+The npm shim fails before it would reuse the managed npm that a parent selected, and suggests `vp env off npm`.
+
+**Exit code:** 1
+
+```
+vp: VP_ENV_FORBIDDEN=1: Vite+ does not manage 'npm', but the Vite+ shim comes first on PATH; run `vp env off npm` to move the shims after the system tools
+```
+
+## `PATH=${VP_HOME}/js_runtime/node/20.20.2/bin${PATH_SEPARATOR}${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} VP_ENV_FORBIDDEN=1 VP_BYPASS=1 VP_NODE_DIST_MIRROR=http://127.0.0.1:1 NPM_CONFIG_REGISTRY=http://127.0.0.1:1 node run-shim.cjs npm --version`
+
+VP_BYPASS does not hand the npm shim to the first npm on PATH outside the shims either.
+
+**Exit code:** 1
+
+```
+vp: VP_ENV_FORBIDDEN=1: Vite+ does not manage 'npm', but the Vite+ shim comes first on PATH; run `vp env off npm` to move the shims after the system tools
+```
+
+## `PATH=${VP_HOME}/js_runtime/node/20.20.2/bin${PATH_SEPARATOR}${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} VP_ENV_FORBIDDEN=1 VP_NODE_DIST_MIRROR=http://127.0.0.1:1 NPM_CONFIG_REGISTRY=http://127.0.0.1:1 vpx node -p process.execPath.includes('system-bin')`
+
+vpx takes Node.js from the first PATH match, the inherited managed runtime, and fails instead of skipping it.
+
+**Exit code:** 1
+
+```
+error: vpx: VP_ENV_FORBIDDEN=1: Vite+ does not manage 'node', but PATH selects the Vite+ managed install at '<home>/.vite-plus/js_runtime/node/<version>/bin/node'; run `vp env doctor` to check PATH
+```
+
+## `PATH=${VP_HOME}/js_runtime/node/20.20.2/bin${PATH_SEPARATOR}${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} VP_ENV_FORBIDDEN=1 VP_NODE_DIST_MIRROR=http://127.0.0.1:1 NPM_CONFIG_REGISTRY=http://127.0.0.1:1 vpx npm nested`
+
+vpx fails the same way for npm when the first match is the npm bundled with the inherited managed runtime.
+
+**Exit code:** 1
+
+```
+error: vpx: VP_ENV_FORBIDDEN=1: Vite+ does not manage 'npm', but PATH selects the Vite+ managed install at '<home>/.vite-plus/js_runtime/node/<version>/bin/npm'; run `vp env doctor` to check PATH
+```
+
+## `PATH=${VP_HOME}/js_runtime/node/20.20.2/bin${PATH_SEPARATOR}${VP_HOME}/bin VP_ENV_FORBIDDEN=1 VP_NODE_DIST_MIRROR=http://127.0.0.1:1 NPM_CONFIG_REGISTRY=http://127.0.0.1:1 vpx npm --version`
+
+Without a system npm either, the first match is the npm bundled with the inherited managed runtime, so vpx fails with a pointer to `vp env doctor` instead of running it or downloading one through dlx.
+
+**Exit code:** 1
+
+```
+error: vpx: VP_ENV_FORBIDDEN=1: Vite+ does not manage 'npm', but PATH selects the Vite+ managed install at '<home>/.vite-plus/js_runtime/node/<version>/bin/npm'; run `vp env doctor` to check PATH
+```
+
+## `vp env off npm`
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+✓ npm management set to system-first.
+
+Selected commands and shims will now prefer system tools, falling back to managed tools.
+
+Run `vp env on` to always use Vite+ managed tools.
+```
+
+## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin VP_ENV_FORBIDDEN=1 VP_NODE_DIST_MIRROR=http://127.0.0.1:1 NPM_CONFIG_REGISTRY=http://127.0.0.1:1 npm nested`
+
+The shell runs system npm, whose shebang reaches the node shim still first on PATH. The shim fails and suggests `vp env off node` instead of running the managed runtime.
+
+**Exit code:** 1
+
+```
+vp: VP_ENV_FORBIDDEN=1: Vite+ does not manage 'node', but the Vite+ shim comes first on PATH; run `vp env off node` to move the shims after the system tools
+```
+
+## `vp env off node`
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+✓ Node.js management set to system-first.
+
+Selected commands and shims will now prefer system tools, falling back to managed tools.
+
+Run `vp env on` to always use Vite+ managed tools.
+```
+
+## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin VP_ENV_FORBIDDEN=1 VP_NODE_DIST_MIRROR=http://127.0.0.1:1 NPM_CONFIG_REGISTRY=http://127.0.0.1:1 npm nested`
+
+With the shims after the system tools, the shell runs system npm on system Node.js, and so does its nested npm, without Vite+.
+
+```
+system npm on system Node.js
+system npm child on system Node.js
+```
+
+## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin VP_ENV_FORBIDDEN=1 VP_NODE_DIST_MIRROR=http://127.0.0.1:1 NPM_CONFIG_REGISTRY=http://127.0.0.1:1 vpx npm nested`
+
+vpx selects the same system npm as the first PATH match.
+
+```
+system npm on system Node.js
+system npm child on system Node.js
+```
+
+## `PATH=${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin VP_ENV_FORBIDDEN=1 VP_NODE_DIST_MIRROR=http://127.0.0.1:1 NPM_CONFIG_REGISTRY=http://127.0.0.1:1 vp env exec npm nested`
+
+So does vp env exec.
+
+```
+system npm on system Node.js
+system npm child on system Node.js
+```
+
+## `PATH=${VP_HOME}/js_runtime/node/20.20.2/bin${PATH_SEPARATOR}${VP_HOME}/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin VP_ENV_FORBIDDEN=1 VP_NODE_DIST_MIRROR=http://127.0.0.1:1 NPM_CONFIG_REGISTRY=http://127.0.0.1:1 vp env exec npm --version`
+
+vp env exec rejects the npm bundled with an inherited managed runtime, the first PATH match, instead of running it.
+
+**Exit code:** 1
+
+```
+error: VP_ENV_FORBIDDEN=1: Vite+ does not manage 'npm', but PATH selects the Vite+ managed install at '<home>/.vite-plus/js_runtime/node/<version>/bin/npm'; run `vp env doctor` to check PATH
+```
+
+## `PATH=${VP_HOME}/js_runtime/node/20.20.2/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} VP_ENV_FORBIDDEN=1 VP_NODE_DIST_MIRROR=http://127.0.0.1:1 NPM_CONFIG_REGISTRY=http://127.0.0.1:1 vp env exec pnpm --version`
+
+vp env exec rejects a system pnpm when the first Node.js on the child PATH is the inherited managed runtime, as vp node does.
+
+**Exit code:** 1
+
+```
+error: VP_ENV_FORBIDDEN=1: Vite+ does not manage 'node', but PATH selects the Vite+ managed install at '<home>/.vite-plus/js_runtime/node/<version>/bin/node'; run `vp env doctor` to check PATH
+```
+
+## `PATH=${VP_HOME}/js_runtime/node/20.20.2/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} VP_ENV_FORBIDDEN=1 VP_NODE_DIST_MIRROR=http://127.0.0.1:1 NPM_CONFIG_REGISTRY=http://127.0.0.1:1 vpx pnpm --version`
+
+So does vpx for a tool it finds on PATH.
+
+**Exit code:** 1
+
+```
+error: vpx: VP_ENV_FORBIDDEN=1: Vite+ does not manage 'node', but PATH selects the Vite+ managed install at '<home>/.vite-plus/js_runtime/node/<version>/bin/node'; run `vp env doctor` to check PATH
+```
+
+## `PATH=${VP_HOME}/js_runtime/node/20.20.2/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} VP_ENV_FORBIDDEN=1 VP_NODE_DIST_MIRROR=http://127.0.0.1:1 NPM_CONFIG_REGISTRY=http://127.0.0.1:1 vpx local-tool`
+
+And for a tool in node_modules/.bin.
+
+**Exit code:** 1
+
+```
+error: vpx: VP_ENV_FORBIDDEN=1: Vite+ does not manage 'node', but PATH selects the Vite+ managed install at '<home>/.vite-plus/js_runtime/node/<version>/bin/node'; run `vp env doctor` to check PATH
+```
+
+## `PATH=${VP_HOME}/js_runtime/node/20.20.2/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} VP_ENV_FORBIDDEN=1 VP_NODE_DIST_MIRROR=http://127.0.0.1:1 NPM_CONFIG_REGISTRY=http://127.0.0.1:1 vpx path-tool`
+
+And for a tool it finds through its own PATH search.
+
+**Exit code:** 1
+
+```
+error: vpx: VP_ENV_FORBIDDEN=1: Vite+ does not manage 'node', but PATH selects the Vite+ managed install at '<home>/.vite-plus/js_runtime/node/<version>/bin/node'; run `vp env doctor` to check PATH
+```
+
+## `PATH=${VP_HOME}/js_runtime/node/20.20.2/bin${PATH_SEPARATOR}${VP_HOME}/bin VP_ENV_FORBIDDEN=1 VP_NODE_DIST_MIRROR=http://127.0.0.1:1 NPM_CONFIG_REGISTRY=http://127.0.0.1:1 vp env exec pnpm --version`
+
+When the pnpm shim is the first pnpm on PATH, its error comes before the Node.js check.
+
+**Exit code:** 1
+
+```
+error: VP_ENV_FORBIDDEN=1: Vite+ does not manage 'pnpm', but the Vite+ shim comes first on PATH; run `vp env off pnpm` to move the shims after the system tools
+```
+
+## `PATH=${workspace}/system-bin${PATH_SEPARATOR}${VP_HOME}/js_runtime/node/20.20.2/bin${PATH_SEPARATOR}${PATH} VP_ENV_FORBIDDEN=1 VP_NODE_DIST_MIRROR=http://127.0.0.1:1 NPM_CONFIG_REGISTRY=http://127.0.0.1:1 vp env exec pnpm --version`
+
+With the system Node.js first, the system pnpm runs on it.
+
+```
+system pnpm on system Node.js
+```
+
+## `PATH=${workspace}/system-bin${PATH_SEPARATOR}${VP_HOME}/js_runtime/node/20.20.2/bin${PATH_SEPARATOR}${PATH} VP_ENV_FORBIDDEN=1 VP_NODE_DIST_MIRROR=http://127.0.0.1:1 NPM_CONFIG_REGISTRY=http://127.0.0.1:1 vpx pnpm --version`
+
+So does vpx.
+
+```
+system pnpm on system Node.js
+```
+
+## `PATH=${workspace}/system-bin${PATH_SEPARATOR}${VP_HOME}/js_runtime/node/20.20.2/bin${PATH_SEPARATOR}${PATH} VP_ENV_FORBIDDEN=1 VP_NODE_DIST_MIRROR=http://127.0.0.1:1 NPM_CONFIG_REGISTRY=http://127.0.0.1:1 vpx local-tool`
+
+And the local tool.
+
+```
+local tool on system Node.js
+```
+
+## `PATH=${workspace}/system-bin${PATH_SEPARATOR}${VP_HOME}/js_runtime/node/20.20.2/bin${PATH_SEPARATOR}${PATH} VP_ENV_FORBIDDEN=1 VP_NODE_DIST_MIRROR=http://127.0.0.1:1 NPM_CONFIG_REGISTRY=http://127.0.0.1:1 vpx path-tool`
+
+And the system path tool.
+
+```
+system path tool on system Node.js
+```
+
+## `PATH=${workspace}/system-bin${PATH_SEPARATOR}${VP_HOME}/js_runtime/node/20.20.2/bin${PATH_SEPARATOR}${PATH} VP_ENV_FORBIDDEN=1 VP_NODE_DIST_MIRROR=http://127.0.0.1:1 NPM_CONFIG_REGISTRY=http://127.0.0.1:1 vpx corepack --version`
+
+With the system Node.js first, vpx still rejects the corepack bundled with the managed runtime, the first corepack on PATH, instead of running it.
+
+**Exit code:** 1
+
+```
+error: vpx: VP_ENV_FORBIDDEN=1: Vite+ does not manage 'corepack', but PATH selects the Vite+ managed install at '<home>/.vite-plus/js_runtime/node/<version>/bin/corepack'; run `vp env doctor` to check PATH
+```
+
+## `PATH=${VP_HOME}/js_runtime/node/20.20.2/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} VP_ENV_FORBIDDEN=1 VP_NODE_DIST_MIRROR=http://127.0.0.1:1 NPM_CONFIG_REGISTRY=http://127.0.0.1:1 vp env which node`
+
+vp env which does not take the managed runtime first on PATH for the system Node.js. It still resolves the pinned managed version, which it does not run.
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+<home>/.vite-plus/js_runtime/node/<version>/bin/node
+  Version:    20.20.2
+  Source:     <workspace>/.node-version
+```
+
+## `PATH=${VP_HOME}/js_runtime/node/20.20.2/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} VP_ENV_FORBIDDEN=1 VP_NODE_DIST_MIRROR=http://127.0.0.1:1 NPM_CONFIG_REGISTRY=http://127.0.0.1:1 vp env current`
+
+Neither does vp env current.
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+Node.js:
+  Version    20.20.2
+  Source     .node-version
+  Bin Path   <home>/.vite-plus/js_runtime/node/<version>/bin/node
+  Installed  true
+  Mode       system_first
+```
+
+## `PATH=${VP_HOME}/js_runtime/node/20.20.2/bin${PATH_SEPARATOR}${workspace}/system-bin${PATH_SEPARATOR}${PATH} VP_ENV_FORBIDDEN=1 VP_NODE_DIST_MIRROR=http://127.0.0.1:1 NPM_CONFIG_REGISTRY=http://127.0.0.1:1 vp install`
+
+A delegated command does not take the managed runtime for the system Node.js either. It stops at the safety net instead of running on it or downloading one.
+
+**Exit code:** 1
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+error: Failed to download Node.js runtime: VP_ENV_FORBIDDEN=1: Vite+ does not manage Node.js; it neither downloads nor uses a managed Node.js
+```

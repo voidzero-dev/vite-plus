@@ -29,7 +29,7 @@ defaults:
 jobs:
   deploy:
     if: github.repository == 'voidzero-dev/vite-plus'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write # authenticate remote cache uploads

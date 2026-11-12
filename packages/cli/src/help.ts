@@ -830,6 +830,10 @@ const commandHelpDocs = {
         rows: [
           { label: '--fix', description: 'Auto-fix format and lint issues' },
           {
+            label: '--continue-on-error',
+            description: 'Run remaining checks even if an earlier check fails',
+          },
+          {
             label: '--quiet',
             description: 'Disable reporting on warnings, only errors are reported',
           },
@@ -849,7 +853,12 @@ const commandHelpDocs = {
       },
       {
         title: 'Examples',
-        lines: ['  vp check', '  vp check --fix', '  vp check --no-lint src/index.ts'],
+        lines: [
+          '  vp check',
+          '  vp check --fix',
+          '  vp check --continue-on-error',
+          '  vp check --no-lint src/index.ts',
+        ],
       },
     ],
     documentationUrl: documentationUrl('/guide/check'),
@@ -992,7 +1001,11 @@ const commandHelpDocs = {
             label: '--ignore-depends-on',
             description: 'Do not run dependencies specified in `dependsOn` fields',
           },
-          { label: '-v, --verbose', description: 'Show the full detailed summary after execution' },
+          {
+            label: '-v, --verbose',
+            description:
+              'Show the full detailed summary after execution; `-vv` also lists the inputs and outputs of each cached run',
+          },
           { label: '--cache', description: 'Force caching on for all tasks and scripts' },
           { label: '--no-cache', description: 'Force caching off for all tasks and scripts' },
           {
@@ -1007,6 +1020,16 @@ const commandHelpDocs = {
             label: '--parallel',
             description:
               'Run tasks without dependency ordering; concurrency is unlimited unless `--concurrency-limit` is specified',
+          },
+          {
+            label: '--dry-run',
+            description:
+              'Show what the run would do and whether each command would hit the cache, without running anything',
+          },
+          {
+            label: '--json',
+            description:
+              'Print JSON: every package and task without a task, or the run plan with `--dry-run`',
           },
           { label: '--last-details', description: 'Display the detailed summary of the last run' },
           { label: '-h, --help', description: 'Print help' },

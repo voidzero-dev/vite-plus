@@ -25,7 +25,7 @@ jobs:
   update-lockfiles:
     # Skip the retriggered run for this workflow's own lockfile commit.
     if: github.event.repository.fork == false && github.actor != 'voidzero-guard[bot]'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:

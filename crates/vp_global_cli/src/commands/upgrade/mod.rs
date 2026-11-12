@@ -9,7 +9,7 @@ use console::style;
 use vp_pm_cli::HttpClient;
 use vp_setup::{install, integrity, platform, registry};
 use vp_shared::output;
-use vt_path::AbsolutePathBuf;
+use vt_path::{AbsolutePath, AbsolutePathBuf};
 
 use crate::error::Error;
 
@@ -183,6 +183,39 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
         output::info("installing...");
     }
 
+    install_version(
+        &platform_data,
+        install_dir,
+        &resolved,
+        current_version,
+        options.force,
+        options.silent,
+        options.registry.as_deref(),
+    )
+    .await
+}
+
+/// Install `resolved` from its platform tarball and switch to it.
+async fn install_version(
+    platform_data: &[u8],
+    install_dir: &AbsolutePathBuf,
+    resolved: &registry::ResolvedVersion,
+    current_version: &str,
+    force: bool,
+    silent: bool,
+    registry: Option<&str>,
+) -> Result<ExitStatus, Error> {
+    let version = &resolved.version;
+    // Refuse before touching the install directory: the target may be the
+    // retained previous version, which failed-install cleanup would delete.
+    ensure_staged_env_forbidden_support(platform_data, version).await?;
+    // Select the system node and pnpm before touching it for the same reason.
+    let system_tools = if vp_shared::EnvConfig::get().env_forbidden {
+        Some(install::system_install_tools(resolved.node_engines.as_deref()).await?)
+    } else {
+        None
+    };
+
     // Step 8: Create version directory.
     //
     // A forced reinstall of the active version cannot write into the active
@@ -190,24 +223,22 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
     // Install into a unique semver build-metadata directory instead, then
     // repoint `current` after the install has completed.
     let active_install_dir = install::read_current_version(install_dir).await;
-    let install_dir_name = install::target_install_dir_name(
-        &resolved.version,
-        active_install_dir.as_deref(),
-        options.force,
-    );
+    let install_dir_name =
+        install::target_install_dir_name(version, active_install_dir.as_deref(), force);
     let version_dir = install_dir.join(&install_dir_name);
     tokio::fs::create_dir_all(&version_dir).await?;
 
     // Step 9: Extract platform binary and install via npm
     let result = install_platform_and_main(
-        &platform_data,
+        platform_data,
         &version_dir,
         install_dir,
         &install_dir_name,
-        &resolved,
+        resolved,
         current_version,
-        options.silent,
-        options.registry.as_deref(),
+        silent,
+        registry,
+        system_tools.as_ref(),
     )
     .await;
 
@@ -231,25 +262,18 @@ async fn install_platform_and_main(
     current_version: &str,
     silent: bool,
     registry: Option<&str>,
+    system_tools: Option<&install::SystemInstallTools>,
 ) -> Result<ExitStatus, Error> {
     let new_version = &resolved.version;
-    // Extract platform package (binary only; .node files installed via npm optionalDeps)
-    install::extract_platform_package(platform_data, version_dir).await?;
-
-    // Verify binary was extracted
-    let binary_name = vp_setup::VP_BINARY_NAME;
-    let binary_path = version_dir.join("bin").join(binary_name);
-    if !tokio::fs::try_exists(&binary_path).await.unwrap_or(false) {
-        return Err(Error::Upgrade(
-            "Binary not found after extraction. The download may be corrupted.".into(),
-        ));
-    }
+    extract_binary(platform_data, version_dir).await?;
 
     // Generate wrapper package.json that declares vite-plus as a dependency
     install::generate_wrapper_package_json(version_dir, new_version).await?;
 
     // Install production dependencies (pnpm installs vite-plus + all transitive deps)
-    let node_version = resolved.node_version.as_deref().map(install::NodeVersion::Required);
+    let node_version = system_tools
+        .map(install::NodeVersion::System)
+        .or_else(|| resolved.node_version.as_deref().map(install::NodeVersion::Required));
     install::install_production_deps(version_dir, registry, !silent, node_version).await?;
 
     // Save previous version for rollback
@@ -297,6 +321,74 @@ async fn install_platform_and_main(
     Ok(ExitStatus::default())
 }
 
+/// Extract the platform package into `dir` and return the path of its binary.
+async fn extract_binary(
+    platform_data: &[u8],
+    dir: &AbsolutePath,
+) -> Result<AbsolutePathBuf, Error> {
+    // Extract platform package (binary only; .node files installed via npm optionalDeps)
+    install::extract_platform_package(platform_data, dir).await?;
+
+    // Verify binary was extracted
+    let binary_path = dir.join("bin").join(vp_setup::VP_BINARY_NAME);
+    if !tokio::fs::try_exists(&binary_path).await.unwrap_or(false) {
+        return Err(Error::Upgrade(
+            "Binary not found after extraction. The download may be corrupted.".into(),
+        ));
+    }
+    Ok(binary_path)
+}
+
+/// Refuse a target without `VP_ENV_FORBIDDEN` support while
+/// `VP_ENV_FORBIDDEN=1` is set. The probe runs from a temporary
+/// directory, so a refusal leaves every install directory unchanged.
+async fn ensure_staged_env_forbidden_support(
+    platform_data: &[u8],
+    target: &str,
+) -> Result<(), Error> {
+    if !vp_shared::EnvConfig::get().env_forbidden {
+        return Ok(());
+    }
+    let staging = tempfile::tempdir().map_err(|e| {
+        Error::Upgrade(format!("Failed to create a temporary directory: {e}").into())
+    })?;
+    let dir = AbsolutePathBuf::new(staging.path().to_path_buf())
+        .ok_or_else(|| Error::Upgrade("Temporary directory must be absolute".into()))?;
+    let binary = extract_binary(platform_data, &dir).await?;
+    let support = vp_setup::support::probe_self_setup(&binary, true).await.map_err(|e| {
+        Error::Upgrade(
+            format!(
+                "Failed to run the downloaded vp binary from a temporary directory ({}): {e}. \
+                 Set TMPDIR (TMP or TEMP on Windows) to a directory that allows running programs.",
+                dir.as_path().display()
+            )
+            .into(),
+        )
+    })?;
+    require_env_forbidden_support(support, target)
+}
+
+/// Refuse to switch to `binary` while `VP_ENV_FORBIDDEN=1` is set,
+/// unless the binary supports `VP_ENV_FORBIDDEN`.
+async fn ensure_env_forbidden_support(binary: &AbsolutePath, target: &str) -> Result<(), Error> {
+    if !vp_shared::EnvConfig::get().env_forbidden {
+        return Ok(());
+    }
+    let support = vp_setup::support::probe_self_setup(binary, true).await?;
+    require_env_forbidden_support(support, target)
+}
+
+/// A target without `VP_ENV_FORBIDDEN` support would download managed tools.
+fn require_env_forbidden_support(
+    support: vp_setup::support::SelfSetupSupport,
+    target: &str,
+) -> Result<(), Error> {
+    if support == vp_setup::support::SelfSetupSupport::EnvForbidden {
+        return Ok(());
+    }
+    Err(Error::Upgrade(vp_setup::support::env_forbidden_unsupported_message(target).into()))
+}
+
 /// Execute rollback to the previous version.
 #[allow(clippy::print_stderr)]
 async fn execute_rollback(
@@ -322,6 +414,9 @@ async fn execute_rollback(
         output::info(&format!("switching from {} {} {}", current_version, output::ARROW, previous));
     }
 
+    ensure_env_forbidden_support(&prev_dir.join("bin").join(vp_setup::VP_BINARY_NAME), &previous)
+        .await?;
+
     // Save the current version as the new "previous" before swapping
     install::save_previous_version(install_dir).await?;
 
@@ -340,4 +435,206 @@ async fn execute_rollback(
     }
 
     Ok(ExitStatus::default())
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use vp_shared::{EnvConfig, env_vars};
+
+    use super::*;
+
+    #[tokio::test]
+    async fn env_forbidden_requires_target_support() {
+        use std::os::unix::fs::PermissionsExt;
+
+        use vp_setup::support::{
+            ENV_FORBIDDEN_SUPPORT_CHECK, ENV_FORBIDDEN_SUPPORT_RESPONSE,
+            SELF_SETUP_SUPPORT_RESPONSE,
+        };
+
+        let temp = tempfile::tempdir().unwrap();
+        let script = |name: &str, body: &str| {
+            let path = temp.path().join(name);
+            std::fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+            AbsolutePathBuf::new(path).unwrap()
+        };
+        let supported = script(
+            "supported",
+            &format!(
+                r#"echo {SELF_SETUP_SUPPORT_RESPONSE}; [ "$VP_SELF_SETUP_SUPPORT_CHECK" = {ENV_FORBIDDEN_SUPPORT_CHECK} ] && echo {ENV_FORBIDDEN_SUPPORT_RESPONSE}; exit 0"#
+            ),
+        );
+        let unsupported = script("unsupported", &format!("echo {SELF_SETUP_SUPPORT_RESPONSE}"));
+
+        // Only the exact value `1` requires support.
+        for value in [None, Some("true")] {
+            EnvConfig::with_vars_async([(env_vars::VP_ENV_FORBIDDEN, value)], |_| async {
+                ensure_env_forbidden_support(&unsupported, "0.1.0").await.unwrap();
+            })
+            .await;
+        }
+        EnvConfig::with_vars_async(env_forbidden(), |_| async {
+            ensure_env_forbidden_support(&supported, "9.0.0").await.unwrap();
+            let error = ensure_env_forbidden_support(&unsupported, "0.1.0").await.unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains(&vp_setup::support::env_forbidden_unsupported_message("0.1.0")),
+                "{error}"
+            );
+        })
+        .await;
+    }
+
+    fn env_forbidden() -> [(&'static str, Option<&'static str>); 1] {
+        [(env_vars::VP_ENV_FORBIDDEN, Some("1"))]
+    }
+
+    /// A registry resolution of `version` without a Node.js pin.
+    fn resolved(version: &str) -> registry::ResolvedVersion {
+        registry::ResolvedVersion {
+            version: version.into(),
+            platform_tarball_url: String::new(),
+            platform_integrity: String::new(),
+            has_install_lockfile: false,
+            node_version: None,
+            node_engines: None,
+        }
+    }
+
+    /// A platform tarball whose `vp` binary is the shell script `vp_script`.
+    fn platform_tarball(vp_script: &str) -> Vec<u8> {
+        use flate2::{Compression, write::GzEncoder};
+
+        let mut archive = tar::Builder::new(GzEncoder::new(Vec::new(), Compression::default()));
+        for (path, data, mode) in
+            [("package/package.json", "{}", 0o644), ("package/vp", vp_script, 0o755)]
+        {
+            let mut header = tar::Header::new_gnu();
+            header.set_size(data.len() as u64);
+            header.set_mode(mode);
+            header.set_cksum();
+            archive.append_data(&mut header, path, data.as_bytes()).unwrap();
+        }
+        archive.into_inner().unwrap().finish().unwrap()
+    }
+
+    #[tokio::test]
+    async fn env_forbidden_refusal_preserves_retained_version() {
+        let temp = tempfile::tempdir().unwrap();
+        let install_dir = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let retained = install_dir.join("0.1.0");
+        std::fs::create_dir_all(&retained).unwrap();
+        std::fs::write(retained.join("marker"), "").unwrap();
+        std::fs::write(install_dir.join(".previous-version"), "0.1.0").unwrap();
+        let tarball = platform_tarball(&format!(
+            "#!/bin/sh\necho {}\n",
+            vp_setup::support::SELF_SETUP_SUPPORT_RESPONSE
+        ));
+
+        EnvConfig::with_vars_async(env_forbidden(), |_| async {
+            let error = Box::pin(install_version(
+                &tarball,
+                &install_dir,
+                &resolved("0.1.0"),
+                "9.9.9",
+                false,
+                true,
+                None,
+            ))
+            .await
+            .unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains(&vp_setup::support::env_forbidden_unsupported_message("0.1.0")),
+                "{error}"
+            );
+        })
+        .await;
+
+        assert!(retained.join("marker").as_path().exists(), "retained version was removed");
+        assert!(!retained.join("bin").as_path().exists(), "retained version was modified");
+        assert_eq!(
+            std::fs::read_to_string(install_dir.join(".previous-version")).unwrap(),
+            "0.1.0"
+        );
+    }
+
+    // The probe must succeed, which needs the shell-script binary.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn env_forbidden_system_tool_refusal_preserves_retained_version() {
+        let temp = tempfile::tempdir().unwrap();
+        let install_dir = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let retained = install_dir.join("0.1.0");
+        std::fs::create_dir_all(&retained).unwrap();
+        std::fs::write(retained.join("marker"), "").unwrap();
+        std::fs::write(install_dir.join(".previous-version"), "0.1.0").unwrap();
+        let tarball = platform_tarball(&format!(
+            "#!/bin/sh\necho {}\necho {}\n",
+            vp_setup::support::SELF_SETUP_SUPPORT_RESPONSE,
+            vp_setup::support::ENV_FORBIDDEN_SUPPORT_RESPONSE
+        ));
+        // No Node.js satisfies this range, so the check fails whatever PATH holds.
+        let resolved =
+            registry::ResolvedVersion { node_engines: Some("<0.0.1".into()), ..resolved("0.1.0") };
+
+        EnvConfig::with_vars_async(env_forbidden(), |_| async {
+            let error = Box::pin(install_version(
+                &tarball,
+                &install_dir,
+                &resolved,
+                "9.9.9",
+                false,
+                true,
+                None,
+            ))
+            .await
+            .unwrap_err();
+            assert!(
+                error.to_string().contains("Vite+ installs its dependencies with the system"),
+                "{error}"
+            );
+        })
+        .await;
+
+        assert!(retained.join("marker").as_path().exists(), "retained version was removed");
+        assert!(!retained.join("bin").as_path().exists(), "retained version was modified");
+        assert_eq!(
+            std::fs::read_to_string(install_dir.join(".previous-version")).unwrap(),
+            "0.1.0"
+        );
+    }
+
+    #[tokio::test]
+    async fn env_forbidden_probe_launch_failure_explains_temporary_directory() {
+        let temp = tempfile::tempdir().unwrap();
+        let install_dir = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let tarball = platform_tarball("#!/nonexistent/sh\n");
+
+        EnvConfig::with_vars_async(env_forbidden(), |_| async {
+            let error = Box::pin(install_version(
+                &tarball,
+                &install_dir,
+                &resolved("9.0.0"),
+                "0.1.0",
+                false,
+                true,
+                None,
+            ))
+            .await
+            .unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains("Failed to run the downloaded vp binary from a temporary directory"),
+                "{error}"
+            );
+        })
+        .await;
+
+        assert!(!install_dir.join("9.0.0").as_path().exists(), "version directory was created");
+    }
 }

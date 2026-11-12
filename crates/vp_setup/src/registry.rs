@@ -17,6 +17,14 @@ pub struct PackageVersionMetadata {
     pub has_install_lockfile: bool,
     #[serde(default, rename = "vpNodeVersion", deserialize_with = "deserialize_node_version")]
     pub node_version: Option<String>,
+    #[serde(default)]
+    pub engines: Option<Engines>,
+}
+
+/// The `engines` field of a package version.
+#[derive(Debug, Deserialize)]
+pub struct Engines {
+    pub node: Option<String>,
 }
 
 fn deserialize_node_version<'de, D: Deserializer<'de>>(
@@ -61,6 +69,9 @@ pub struct ResolvedVersion {
     pub platform_integrity: String,
     pub has_install_lockfile: bool,
     pub node_version: Option<String>,
+    /// `engines.node` of the main `vite-plus` package. Only [`resolve_version`]
+    /// sets it; the platform package declares a looser range.
+    pub node_engines: Option<String>,
 }
 
 const MAIN_PACKAGE_NAME: &str = "vite-plus";
@@ -105,6 +116,13 @@ pub async fn resolve_version_string(
     version_or_tag: &str,
     registry_override: Option<&str>,
 ) -> Result<String, Error> {
+    Ok(fetch_main_metadata(version_or_tag, registry_override).await?.version)
+}
+
+async fn fetch_main_metadata(
+    version_or_tag: &str,
+    registry_override: Option<&str>,
+) -> Result<PackageVersionMetadata, Error> {
     let default_registry = npm_registry();
     let registry_raw = registry_override.unwrap_or(&default_registry);
     let registry = registry_raw.trim_end_matches('/');
@@ -117,7 +135,7 @@ pub async fn resolve_version_string(
         Error::Setup(format!("Failed to fetch package metadata from {main_url}: {e}").into())
     })?;
 
-    Ok(main_meta.version)
+    Ok(main_meta)
 }
 
 /// Resolve the platform-specific package metadata for a given version.
@@ -158,6 +176,7 @@ pub async fn resolve_platform_package(
         platform_integrity: cli_meta.dist.integrity,
         has_install_lockfile: cli_meta.has_install_lockfile,
         node_version: cli_meta.node_version,
+        node_engines: None,
     })
 }
 
@@ -171,8 +190,11 @@ pub async fn resolve_version(
     platform_suffix: &str,
     registry_override: Option<&str>,
 ) -> Result<ResolvedVersion, Error> {
-    let version = resolve_version_string(version_or_tag, registry_override).await?;
-    resolve_platform_package(&version, platform_suffix, registry_override).await
+    let main = fetch_main_metadata(version_or_tag, registry_override).await?;
+    let mut resolved =
+        resolve_platform_package(&main.version, platform_suffix, registry_override).await?;
+    resolved.node_engines = main.engines.and_then(|engines| engines.node);
+    Ok(resolved)
 }
 
 #[cfg(test)]
@@ -425,6 +447,39 @@ mod tests {
         assert_eq!(resolved.platform_tarball_url, format!("{}/platform.tgz", server.base_url()));
         assert_eq!(resolved.platform_integrity, "sha512-preview");
         assert_eq!(resolved.node_version.as_deref(), Some("24.22.1"));
+        assert!(resolved.node_engines.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_resolve_version_reads_node_engines_from_the_main_package() {
+        let version = "0.0.0-commit.0123456789abcdef0123456789abcdef01234567";
+        let server = MockServer::start();
+        let dist = serde_json::json!({
+            "tarball": format!("{}/platform.tgz", server.base_url()),
+            "integrity": "sha512-preview",
+        });
+        server.mock(|when, then| {
+            when.method(GET).path("/vite-plus/preview");
+            then.status(200).json_body(serde_json::json!({
+                "version": version,
+                "engines": { "node": "^22.18.0 || >=24.11.0" },
+                "dist": dist,
+            }));
+        });
+        // The platform package declares a looser range, which must not be used.
+        server.mock(|when, then| {
+            when.method(GET).path(format!("/{TEST_PACKAGE_NAME}/{version}"));
+            then.status(200).json_body(serde_json::json!({
+                "version": version,
+                "engines": { "node": ">=20.0.0" },
+                "dist": dist,
+            }));
+        });
+
+        let resolved =
+            resolve_version("preview", "darwin-arm64", Some(&server.base_url())).await.unwrap();
+
+        assert_eq!(resolved.node_engines.as_deref(), Some("^22.18.0 || >=24.11.0"));
     }
 
     #[tokio::test]
