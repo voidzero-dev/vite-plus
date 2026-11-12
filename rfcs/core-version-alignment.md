@@ -56,7 +56,7 @@ and removes the entry that earlier migrations wrote.
 For a pnpm project, `vp migrate` removes the broad `vite` peer rule from
 `pnpm-workspace.yaml`. Plugins that support the bundled Vite pass the peer
 check without it, and incompatible plugins are reported again. Example: an
-upgrade from `vite-plus` `1.5.1` to a release that bundles Vite `8.3.7`:
+upgrade from `vite-plus` `1.6.0` to a release that bundles Vite `8.3.7`:
 
 ```diff
  overrides:
@@ -67,10 +67,10 @@ upgrade from `vite-plus` `1.5.1` to a release that bundles Vite `8.3.7`:
 -  allowedVersions:
 -    vite: '*'
  catalog:
--  vite: npm:@voidzero-dev/vite-plus-core@1.5.1
+-  vite: npm:@voidzero-dev/vite-plus-core@1.6.0
 +  vite: npm:@voidzero-dev/vite-plus-core@8.3.7000
--  vite-plus: 1.5.1
-+  vite-plus: 1.6.0
+-  vite-plus: 1.6.0
++  vite-plus: 1.7.0
 ```
 
 The rule stays on pnpm before 10.2.0, and for preview and prerelease cores
@@ -214,9 +214,9 @@ and minor follow Vite, not `vite-plus`. `nextCoreVersion` gives:
 
 | `vite-plus` | Bundled Vite | Core version |
 | ----------- | ------------ | ------------ |
-| `1.6.0`     | `8.3.7`      | `8.3.7000`   |
-| `1.7.0`     | `8.3.7`      | `8.3.7001`   |
-| `1.8.0`     | `8.3.7`      | `8.3.7002`   |
+| `1.7.0`     | `8.3.7`      | `8.3.7000`   |
+| `1.8.0`     | `8.3.7`      | `8.3.7001`   |
+| `1.9.0`     | `8.3.7`      | `8.3.7002`   |
 | `2.0.0`     | `8.3.7`      | `8.3.7003`   |
 
 All four core versions decode to Vite `8.3.7`, so peer checks give the same
@@ -256,11 +256,11 @@ same Vite. `nextCoreVersion` gives:
 
 | `vite-plus`    | Bundled Vite | Core version    | Reason                                  |
 | -------------- | ------------ | --------------- | --------------------------------------- |
-| `1.6.0`        | `8.3.7`      | `8.3.7000`      | First stable release on Vite `8.3.7`    |
-| `1.7.0-beta.0` | `8.3.7`      | `8.3.7001-vp.0` | Base `8.3.7001` is the next stable core |
-| `1.7.0-beta.1` | `8.3.7`      | `8.3.7001-vp.1` | Same base, next `k`                     |
-| `1.7.0`        | `8.3.7`      | `8.3.7001`      | The stable release takes the base       |
-| `1.8.0-beta.0` | `8.3.7`      | `8.3.7002-vp.0` | The next stable core is now `8.3.7002`  |
+| `1.7.0`        | `8.3.7`      | `8.3.7000`      | First stable release on Vite `8.3.7`    |
+| `1.8.0-beta.0` | `8.3.7`      | `8.3.7001-vp.0` | Base `8.3.7001` is the next stable core |
+| `1.8.0-beta.1` | `8.3.7`      | `8.3.7001-vp.1` | Same base, next `k`                     |
+| `1.8.0`        | `8.3.7`      | `8.3.7001`      | The stable release takes the base       |
+| `1.9.0-beta.0` | `8.3.7`      | `8.3.7002-vp.0` | The next stable core is now `8.3.7002`  |
 
 The `beta` or `rc` identifier of `vite-plus` does not change the core
 version. A beta core such as `8.3.7001-vp.0` does not satisfy `^8.0.0` in npm,

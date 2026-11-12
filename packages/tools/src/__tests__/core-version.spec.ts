@@ -122,7 +122,7 @@ describe('nextCoreVersion', () => {
   });
 
   test('changes only the counter for minor and major releases on one Vite version', () => {
-    expect(releaseSequence('8.3.7', ['1.6.0', '1.7.0', '1.8.0', '2.0.0'])).toEqual([
+    expect(releaseSequence('8.3.7', ['1.7.0', '1.8.0', '1.9.0', '2.0.0'])).toEqual([
       '8.3.7000',
       '8.3.7001',
       '8.3.7002',
@@ -132,7 +132,7 @@ describe('nextCoreVersion', () => {
 
   test('gives betas on a stable Vite the base of the next stable release', () => {
     expect(
-      releaseSequence('8.3.7', ['1.6.0', '1.7.0-beta.0', '1.7.0-beta.1', '1.7.0', '1.8.0-beta.0']),
+      releaseSequence('8.3.7', ['1.7.0', '1.8.0-beta.0', '1.8.0-beta.1', '1.8.0', '1.9.0-beta.0']),
     ).toEqual(['8.3.7000', '8.3.7001-vp.0', '8.3.7001-vp.1', '8.3.7001', '8.3.7002-vp.0']);
   });
 });
