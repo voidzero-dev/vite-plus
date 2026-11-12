@@ -57,10 +57,10 @@ const formatTimer = (durationMs: number): string => {
 const PROCESS_SIGNALS = ['SIGINT', 'SIGTERM'] as const;
 type ProcessSignal = (typeof PROCESS_SIGNALS)[number];
 
-// Signal listeners of active spinners, which are not another owner of a signal.
+// Signal listeners of active spinners. They do not count as another owner.
 const spinnerSignalListeners = new Set<unknown>();
 
-// Windows has no signals, so exit there with the status a shell reports for one.
+// Windows has no signals, so exit with the matching status there.
 const endBySignal = (signal: ProcessSignal, pid: number): void => {
   if (process.platform === 'win32') {
     process.exit(signal === 'SIGINT' ? 130 : 143);
@@ -69,13 +69,10 @@ const endBySignal = (signal: ProcessSignal, pid: number): void => {
   }
 };
 
-// Only one spinner blocks input at a time, as the Rust progress row does, so
-// that one Ctrl+C reaches the process group once.
+// One spinner blocks input at a time, so one Ctrl+C is forwarded once.
 let inputBlocked = false;
 
-// clack's block() calls process.exit(0) on Ctrl+C and Escape, which reports an
-// interrupted command as successful. This copy reports Ctrl+C to the caller and
-// ignores every other key, as the Rust progress row does.
+// clack's block() exits with 0 on Ctrl+C. This copy reports Ctrl+C and ignores other keys.
 const blockInput = (output: Writable, onInterrupt: () => void): (() => void) => {
   if (inputBlocked) {
     return () => {};
@@ -170,9 +167,7 @@ export const spinner = ({
 
   const errorEventHandler = () => handleExit(2);
   const signalEventHandler = () => handleExit(1);
-  // Node removes a one-shot listener just before it calls it, so a listener that
-  // is handling the current signal can already be gone when this spinner's own
-  // listener runs. Remember a removal until the current callback returns.
+  // A one-shot listener is removed before it runs, so keep a removal until this callback returns.
   const removedInDelivery = new Set<string | symbol>();
   const trackRemoval = (event: string | symbol, listener: unknown) => {
     if (!spinnerSignalListeners.has(listener)) {
@@ -180,14 +175,12 @@ export const spinner = ({
       process.nextTick(() => removedInDelivery.delete(event));
     }
   };
-  // Another listener that handles the signal decides how the process ends.
+  // Another listener of the signal decides how the process ends.
   const ownedByAnother = (signal: ProcessSignal) =>
     removedInDelivery.has(signal) ||
     process.listeners(signal).some((listener) => !spinnerSignalListeners.has(listener));
-  // A listener replaces the default action, so a spinner that is the only owner
-  // raises the signal again once its hooks are cleared. The process then ends
-  // with the signal status, as the Rust progress row does. An emit without the
-  // signal name did not come from the system and only stops the spinner.
+  // A listener replaces the default action, so the only owner raises the signal again.
+  // An emit without the signal name only stops the spinner.
   const processSignalHandlers = PROCESS_SIGNALS.map((signal) => {
     const handler = (received?: NodeJS.Signals) => {
       const raise = received === signal && !ownedByAnother(signal);
@@ -198,8 +191,7 @@ export const spinner = ({
     };
     return [signal, handler] as const;
   });
-  // Raw mode turns Ctrl+C into a key press. Send SIGINT to the foreground process
-  // group, as the terminal does outside raw mode, so that child processes stop too.
+  // Raw mode turns Ctrl+C into a key, so send SIGINT to the process group as the terminal would.
   const interrupt = () => {
     handleExit(1);
     endBySignal('SIGINT', 0);
