@@ -68,6 +68,7 @@ test.each([false, true])(
     );
 
     vi.spyOn(process, 'cwd').mockReturnValue(tempDir);
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-11-12T12:00:00Z'));
     vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.stubEnv('UPGRADE_DEPS_META_DIR', metaDir);
     // Each run also covers one side of the oxc-node pin guard: a release that does not
@@ -78,10 +79,11 @@ test.each([false, true])(
     vi.stubGlobal('fetch', async (url: string) => {
       if (url === 'https://nodejs.org/dist/index.json') {
         return Response.json([
-          { version: 'v26.13.0', lts: 'Lithium' },
-          { version: 'v24.9.0', lts: 'Krypton' },
-          { version: 'v24.11.0-rc.1', lts: false },
-          { version: 'v24.10.2', lts: 'Krypton' },
+          { version: 'v26.13.0', date: '2026-11-01', lts: 'Lithium' },
+          { version: 'v24.9.0', date: '2026-11-01', lts: 'Krypton' },
+          { version: 'v24.11.0-rc.1', date: '2026-11-01', lts: false },
+          { version: 'v24.10.2', date: '2026-11-10', lts: 'Krypton' },
+          { version: 'v24.10.3', date: '2026-11-11', lts: 'Krypton' },
         ]);
       }
       if (url.startsWith('https://api.github.com/repos/oxc-project/oxc-node/compare/')) {
