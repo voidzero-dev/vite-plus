@@ -37,6 +37,7 @@ import {
   supportsCatalog,
   bunSupportsCatalog,
   pnpmWorkspaceMinimumReleaseAgeExemptionsPending,
+  pnpmWorkspaceTsrsTrustPolicyExceptionPending,
   projectUsesVitestDirectly,
   pruneLegacyWrapperAliases,
   readBunCatalogDependencyResolver,
@@ -823,7 +824,8 @@ export function detectVitePlusBootstrapPending(
         readPnpmWorkspacePeerDependencyRules(projectPath),
         pnpmPeerDependencyRuleKeys(usesVitest, detectedPackageManagerVersion),
       ) ||
-      pnpmWorkspaceMinimumReleaseAgeExemptionsPending(projectPath)
+      pnpmWorkspaceMinimumReleaseAgeExemptionsPending(projectPath) ||
+      pnpmWorkspaceTsrsTrustPolicyExceptionPending(projectPath)
     );
   }
 
@@ -1227,6 +1229,7 @@ export function ensureVitePlusBootstrap(
         ecosystemCatalogReferencesPending ||
         !pnpmWorkspaceExoticSubdepsSettingSatisfied(projectPath) ||
         pnpmWorkspaceMinimumReleaseAgeExemptionsPending(projectPath) ||
+        pnpmWorkspaceTsrsTrustPolicyExceptionPending(projectPath) ||
         workspaceCatalogVitePlusDependencyPending(
           projectPath,
           workspaceInfo.packages,
