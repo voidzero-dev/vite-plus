@@ -91,7 +91,7 @@ fn resolve_dist_tag(program: &str, base_args: &[&str], args: &DistTagCommand) ->
             cmd.arg("add").arg(package_at_version).arg(tag);
         }
         DistTagCommand::Rm { package, tag } => {
-            cmd.arg("rm").arg(package).arg(tag);
+            cmd.arg(if program == "yarn" { "remove" } else { "rm" }).arg(package).arg(tag);
         }
     }
     cmd.into()
@@ -200,6 +200,24 @@ mod tests {
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["dist-tag", "add", "my-package@1.0.0", "beta"]);
+    }
+
+    #[test]
+    fn test_yarn_dist_tag_rm_uses_remove() {
+        for (version, expected_args) in [
+            ("1.22.22", vec!["tag", "remove", "@scope/pkg", "beta"]),
+            ("2.4.3", vec!["npm", "tag", "remove", "@scope/pkg", "beta"]),
+            ("3.0.0", vec!["npm", "tag", "remove", "@scope/pkg", "beta"]),
+            ("4.0.0", vec!["npm", "tag", "remove", "@scope/pkg", "beta"]),
+        ] {
+            let args = parse_subcommand::<DistTagCommand>(["rm", "@scope/pkg", "beta"]).unwrap();
+            let resolution = resolve(&yarn(version), args);
+            assert!(resolution.diagnostics.is_empty());
+            let command = expect_run(resolution.outcome);
+
+            assert_eq!(command.program, "yarn", "{version}");
+            assert_eq!(command.args, expected_args, "{version}");
+        }
     }
 
     #[test]

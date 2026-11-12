@@ -104,7 +104,10 @@ export async function runRemoteTemplateCommand(
   return await runCommand({ command, args, cwd, envs });
 }
 
-function autoFixRemoteTemplateCommand(templateInfo: TemplateInfo, workspaceInfo: WorkspaceInfo) {
+export function autoFixRemoteTemplateCommand(
+  templateInfo: TemplateInfo,
+  workspaceInfo: WorkspaceInfo,
+) {
   // @tanstack/cli@latest, create-vite@latest
   let packageName = templateInfo.command;
   const indexOfAt = packageName.indexOf('@', 2);
@@ -133,6 +136,11 @@ function autoFixRemoteTemplateCommand(templateInfo: TemplateInfo, workspaceInfo:
     }
     // don't run npm install after project creation
     templateInfo.args.push('--no-install');
+  } else if (packageName === 'create-react-router') {
+    // Vite+ owns repository initialization and hooks. create-react-router also
+    // creates an initial commit, which can fail when Git identity is unset and
+    // abort the rest of the Vite+ integration.
+    templateInfo.args.push('--no-git-init');
   }
 
   if (workspaceInfo.isMonorepo) {

@@ -4,7 +4,7 @@ import { styleText } from 'node:util';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
-import { parseCreateArgs, vitePlusHeader } from '../../binding/index.js';
+import { getPackageManagerOverride, parseCreateArgs, vitePlusHeader } from '../../binding/index.js';
 import {
   addFrameworkShim,
   createCatalogDependencyResolver,
@@ -38,11 +38,13 @@ import {
   resolveApproveBuildTargets,
 } from '../utils/approve-builds.ts';
 import { unwrapCliParseOutcome } from '../utils/cli-parse.ts';
+import { isForceOverrideMode } from '../utils/constants.ts';
 import { documentationUrl } from '../utils/documentation.ts';
 import { detectExistingEditors, selectEditors, writeEditorConfigs } from '../utils/editor.ts';
 import { findGitRoot, initGitRepository } from '../utils/git.ts';
 import { renderCliDoc } from '../utils/help.ts';
 import { readJsonFile } from '../utils/json.ts';
+import { hasVitePlusDependency } from '../utils/package.ts';
 import { displayRelative } from '../utils/path.ts';
 import {
   cancelAndExit,
@@ -675,20 +677,25 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     }
   }
 
-  // Resolve package manager: existing monorepo > CLI flag > ambient detection > launcher > prompt/default
+  // The installer applies VP_PACKAGE_MANAGER before project pins or the create CLI flag.
+  const packageManagerOverride = getPackageManagerOverride();
+  // Otherwise: existing monorepo > CLI flag > ambient detection > launcher > prompt/default.
   const requestedPackageManager = options.packageManager;
   const detectedPackageManager = workspaceInfoOptional.packageManager;
+  const preferredPackageManager = isMonorepo
+    ? (detectedPackageManager ?? requestedPackageManager)
+    : (requestedPackageManager ?? detectedPackageManager);
   const launcherPackageManager = detectLauncherPackageManager();
   const packageManager =
-    (isMonorepo
-      ? (detectedPackageManager ?? requestedPackageManager)
-      : (requestedPackageManager ?? detectedPackageManager)) ??
+    (packageManagerOverride?.name as PackageManager | undefined) ??
+    preferredPackageManager ??
     launcherPackageManager ??
     (await selectPackageManager(options.interactive, compactOutput));
   const packageManagerVersion =
-    packageManager === detectedPackageManager
+    packageManagerOverride?.version ??
+    (packageManager === detectedPackageManager
       ? workspaceInfoOptional.packageManagerVersion
-      : 'latest';
+      : 'latest');
   const shouldSilencePackageManagerInstallLog =
     compactOutput || (isMonorepo && workspaceInfoOptional.packageManager !== undefined);
   // ensure the package manager is installed by vite-plus
@@ -698,11 +705,27 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     options.interactive,
     shouldSilencePackageManagerInstallLog,
     workspaceInfoOptional.rootDir,
+    packageManagerOverride?.expectedHash ?? undefined,
   );
+  let resolvedPackageManagerOverride: string | undefined;
+  if (packageManagerOverride) {
+    resolvedPackageManagerOverride = `${packageManager}@${downloadResult.version}`;
+    if (packageManagerOverride.expectedHash) {
+      resolvedPackageManagerOverride += `+${packageManagerOverride.expectedHash}`;
+    }
+  }
   const workspaceInfo: WorkspaceInfo = {
     ...workspaceInfoOptional,
     packageManager,
+    packageManagerVersion: downloadResult.version,
     downloadPackageManager: downloadResult,
+  };
+  const installOptions = {
+    silent: compactOutput,
+    packageManager,
+    packageManagerVersion: downloadResult.version,
+    packageManagerOverride: resolvedPackageManagerOverride,
+    detectIgnoredBuilds: true,
   };
   // Only the global CLI puts `vp` on PATH; launches through a package manager reach it through the project's package manager.
   const vpRunCommand = launcherPackageManager
@@ -970,12 +993,12 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       );
     }
     updateCreateProgress('Installing dependencies');
-    const installSummary = await runViteInstall(fullPath, options.interactive, installArgs, {
-      silent: compactOutput,
-      packageManager: workspaceInfo.packageManager,
-      packageManagerVersion: workspaceInfo.downloadPackageManager.version,
-      detectIgnoredBuilds: true,
-    });
+    const installSummary = await runViteInstall(
+      fullPath,
+      options.interactive,
+      installArgs,
+      installOptions,
+    );
     await handleIgnoredBuilds(fullPath, fullPath, installSummary);
     updateCreateProgress('Formatting code');
     await runViteFmt(fullPath, options.interactive, undefined, { silent: compactOutput });
@@ -1128,6 +1151,18 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     resumeCreateProgress();
   }
 
+  // A `create-xxx` CLI that already generates a Vite+ project made its own
+  // toolchain choices (e.g. keeping ESLint), so skip migration like `vp migrate`
+  // does for Vite+ projects. Monorepo packages still need the rewrite to align
+  // with the workspace catalog.
+  const packageJsonPath = path.join(fullPath, 'package.json');
+  const isVitePlusTemplate =
+    !isMonorepo &&
+    templateInfo.type === TemplateType.remote &&
+    !isForceOverrideMode() &&
+    fs.existsSync(packageJsonPath) &&
+    hasVitePlusDependency(readJsonFile(packageJsonPath));
+
   // The migrate-before-rewrite reorder is only needed when the template
   // actually ships ESLint or Prettier (e.g. `create-vite --template
   // react-ts`). Builtin templates (vite:library, vite:application,
@@ -1135,9 +1170,10 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   // and relies on `rewrite*Project` to add tarball overrides BEFORE the
   // first install, so install-first would break CI's local-tarball resolve.
   const shouldMigrateLintFmtTools =
-    detectEslintProject(fullPath).hasDependency ||
-    detectPrettierProject(fullPath).hasDependency ||
-    detectTsupProject(fullPath).hasDependency;
+    !isVitePlusTemplate &&
+    (detectEslintProject(fullPath).hasDependency ||
+      detectPrettierProject(fullPath).hasDependency ||
+      detectTsupProject(fullPath).hasDependency);
 
   let installSummary: CommandRunSummary | undefined;
 
@@ -1163,12 +1199,12 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     // re-detects and approves, so we only need this pre-install to skip
     // `--ignore-scripts` (detectIgnoredBuilds treats the gated-build error as
     // installed, so migration still proceeds).
-    installSummary = await runViteInstall(installCwd, options.interactive, installArgs, {
-      silent: compactOutput,
-      packageManager: workspaceInfo.packageManager,
-      packageManagerVersion: workspaceInfo.downloadPackageManager.version,
-      detectIgnoredBuilds: true,
-    });
+    installSummary = await runViteInstall(
+      installCwd,
+      options.interactive,
+      installArgs,
+      installOptions,
+    );
     if (installSummary.status !== 'installed') {
       return;
     }
@@ -1284,12 +1320,12 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       }
     }
     updateCreateProgress('Installing dependencies');
-    installSummary = await runViteInstall(workspaceInfo.rootDir, options.interactive, installArgs, {
-      silent: compactOutput,
-      packageManager: workspaceInfo.packageManager,
-      packageManagerVersion: workspaceInfo.downloadPackageManager.version,
-      detectIgnoredBuilds: true,
-    });
+    installSummary = await runViteInstall(
+      workspaceInfo.rootDir,
+      options.interactive,
+      installArgs,
+      installOptions,
+    );
     await handleIgnoredBuilds(fullPath, workspaceInfo.rootDir, installSummary);
     updateCreateProgress('Formatting code');
     // Also format the root config when generator registration rewrote it (the
@@ -1317,12 +1353,14 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       await installAndMigrate(fullPath);
     }
     updateCreateProgress('Applying Vite+ project setup');
-    const skipStagedMigration = shouldSkipStagedMigrationForHooks(
-      fullPath,
-      shouldSetupHooks,
-      workspaceInfo.packageManager,
-    );
-    rewriteStandaloneProject(fullPath, workspaceInfo, skipStagedMigration, compactOutput);
+    if (!isVitePlusTemplate) {
+      const skipStagedMigration = shouldSkipStagedMigrationForHooks(
+        fullPath,
+        shouldSetupHooks,
+        workspaceInfo.packageManager,
+      );
+      rewriteStandaloneProject(fullPath, workspaceInfo, skipStagedMigration, compactOutput);
+    }
     setPackageManager(fullPath, workspaceInfo.downloadPackageManager);
     for (const framework of detectFramework(fullPath)) {
       if (!hasFrameworkShim(fullPath, framework)) {
@@ -1333,12 +1371,12 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       installGitHooks(fullPath, compactOutput, undefined, workspaceInfo.packageManager);
     }
     updateCreateProgress('Installing dependencies');
-    installSummary = await runViteInstall(fullPath, options.interactive, installArgs, {
-      silent: compactOutput,
-      packageManager: workspaceInfo.packageManager,
-      packageManagerVersion: workspaceInfo.downloadPackageManager.version,
-      detectIgnoredBuilds: true,
-    });
+    installSummary = await runViteInstall(
+      fullPath,
+      options.interactive,
+      installArgs,
+      installOptions,
+    );
     await handleIgnoredBuilds(fullPath, fullPath, installSummary);
     updateCreateProgress('Formatting code');
     await runViteFmt(fullPath, options.interactive, undefined, { silent: compactOutput });

@@ -736,7 +736,14 @@ acquire_and_handoff() (
     binary_source="$(cd "$(dirname "$LOCAL_BINARY")" && pwd -P)/$(basename "$LOCAL_BINARY")"
   fi
 
-  if supports_self_setup "$binary_source"; then
+  # VP_ENV_FORBIDDEN=1 (exact value only) stops Vite+ from managing Node.js
+  # and every package manager.
+  if [ "${VP_ENV_FORBIDDEN-}" = 1 ]; then
+    # Binaries without VP_ENV_FORBIDDEN support would ignore it and download managed tools.
+    supports_env_forbidden "$binary_source" ||
+      error "vite-plus $VP_VERSION does not support VP_ENV_FORBIDDEN. Choose a version that supports it, or unset VP_ENV_FORBIDDEN."
+    handoff_install "$binary_source"
+  elif supports_self_setup "$binary_source"; then
     handoff_install "$binary_source"
   else
     run_legacy_installer "$binary_source"
@@ -748,6 +755,12 @@ supports_self_setup() {
   # Old binaries must exit with help rather than opening an interactive picker.
   response=$(VP_SELF_SETUP_SUPPORT_CHECK=1 "$1" --help 2>/dev/null && printf '.') || return 1
   [ "$response" = $'vite-plus-self-setup-v1\n.' ]
+}
+
+supports_env_forbidden() {
+  local response
+  response=$(VP_SELF_SETUP_SUPPORT_CHECK=env-forbidden "$1" --help 2>/dev/null && printf '.') || return 1
+  [ "$response" = $'vite-plus-self-setup-v1\nvite-plus-self-setup-env-forbidden\n.' ]
 }
 
 run_legacy_installer() (

@@ -1,0 +1,56 @@
+[[case]]
+name = "check_fix_dangerously"
+vp = "local"
+steps = [
+  { argv = ["vp", "check", "--fix"], comment = "safe fixes leave the unused variable diagnostic", continue-on-failure = true },
+  { argv = ["vp", "check", "--fix-dangerously"], comment = "dangerous fixes do not require --fix" },
+  ["vpt", "print-file", "src/index.js"],
+  ["vp", "check"],
+]
+
+[[case]]
+name = "check_fix_dangerously_with_fix"
+vp = "local"
+steps = [
+  ["vp", "check", "--fix", "--fix-dangerously"],
+  ["vpt", "print-file", "src/index.js"],
+  ["vp", "check"],
+]
+
+[[case]]
+name = "check_fix_dangerously_no_fmt"
+vp = "local"
+steps = [
+  ["vp", "check", "--fix-dangerously", "--no-fmt", "src/index.js"],
+  ["vpt", "print-file", "src/index.js"],
+  { argv = ["vp", "fmt", "--check", "src/index.js"], comment = "formatting remains skipped after lint fixes", continue-on-failure = true },
+]
+
+[[case]]
+name = "check_fix_dangerously_no_lint"
+vp = "local"
+steps = [
+  ["vp", "check", "--fix-dangerously", "--no-lint", "src/index.js"],
+  ["vpt", "print-file", "src/index.js"],
+  { argv = ["vp", "check", "--no-fmt", "src/index.js"], comment = "lint was skipped, so the unused variable remains", continue-on-failure = true },
+]
+
+[[case]]
+name = "check_fix_dangerously_continue_on_error"
+vp = "local"
+steps = [
+  ["vpt", "write-file", "src/error.js", "eval('value');\n"],
+  ["vpt", "write-file", "vite.config.ts", "export default { lint: { categories: { correctness: 'off' }, rules: { 'no-unused-vars': 'error', curly: 'error', 'no-eval': 'error' } } };\n"],
+  { argv = ["vp", "check", "--fix-dangerously", "--continue-on-error"], comment = "remaining lint errors preserve a nonzero exit while the final format pass runs", continue-on-failure = true },
+  ["vpt", "print-file", "src/index.js"],
+  ["vp", "fmt", "--check", "src/index.js"],
+]
+
+[[case]]
+name = "check_fix_dangerously_config_no_lint"
+vp = "local"
+steps = [
+  ["vpt", "write-file", "vite.config.ts", "export default { check: { lint: false }, lint: { rules: { 'no-unused-vars': 'error' } } };\n"],
+  ["vp", "check", "--fix-dangerously", "src/index.js"],
+  ["vpt", "print-file", "src/index.js"],
+]

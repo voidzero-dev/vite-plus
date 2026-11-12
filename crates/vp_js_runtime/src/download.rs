@@ -446,15 +446,8 @@ pub async fn lock_installation(target: &AbsolutePath, version: &str) -> Result<F
     let lock_path = parent.join(vt_str::format!("{version}.lock"));
     tracing::debug!("Acquiring lock file: {lock_path:?}");
 
-    // Wait for the file lock without blocking the async runtime.
-    let lock_guard = tokio::task::spawn_blocking(move || {
-        let lock_file =
-            File::options().write(true).create(true).truncate(false).open(lock_path.as_path())?;
-        lock_file.lock()?;
-        tracing::debug!("Lock acquired: {lock_path:?}");
-        Ok::<_, std::io::Error>(lock_file)
-    })
-    .await??;
+    let lock_guard = vp_shared::file_lock::lock_exclusive(&lock_path).await?;
+    tracing::debug!("Lock acquired: {lock_path:?}");
     Ok(lock_guard)
 }
 

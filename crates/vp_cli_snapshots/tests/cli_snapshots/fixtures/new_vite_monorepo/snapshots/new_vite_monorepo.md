@@ -364,7 +364,7 @@ check vite-plus-generator package.json
     "dev": "node bin/index.ts"
   },
   "dependencies": {
-    "bingo": "^0.13.2",
+    "bingo": "^0.16.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

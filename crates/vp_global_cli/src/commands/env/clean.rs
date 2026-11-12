@@ -9,7 +9,14 @@ use vp_pm_cli::{PackageManagerType, resolve_package_manager_version_for_cwd};
 use vp_shared::output;
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
-use super::{config, list::list_installed_versions, package_manager, spec::EnvScope};
+use super::{
+    config,
+    list::{
+        list_installed_versions, merged_package_manager_versions, package_manager_version_dirs,
+    },
+    package_manager,
+    spec::EnvScope,
+};
 use crate::error::Error;
 
 /// Execute the clean command.
@@ -112,11 +119,17 @@ async fn clean_package_managers(
             .find(|(protected_kind, _)| protected_kind == kind)
             .map(|(_, versions)| versions.as_slice())
             .unwrap_or_default();
-        for version in list_installed_versions(&family) {
+        for version in merged_package_manager_versions(&family) {
             if protected_versions.contains(&version) {
                 continue;
             }
-            if remove_dir_all_if_exists(&family.join(version)).await? {
+            // Remove the unpinned and pinned locations for the version, counting the
+            // version once.
+            let mut version_removed = false;
+            for dir in package_manager_version_dirs(&family, &version) {
+                version_removed |= remove_dir_all_if_exists(&dir).await?;
+            }
+            if version_removed {
                 removed += 1;
             }
         }

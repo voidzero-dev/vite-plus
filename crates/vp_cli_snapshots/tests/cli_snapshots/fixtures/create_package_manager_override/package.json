@@ -1,0 +1,8 @@
+{
+  "name": "create-override-parent",
+  "private": true,
+  "devEngines": {
+    "packageManager": { "name": "pnpm", "version": "12.11.2", "onFail": "download" }
+  },
+  "scripts": { "postinstall": "node record-install.cjs" }
+}

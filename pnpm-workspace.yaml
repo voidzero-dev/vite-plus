@@ -14,10 +14,10 @@ catalog:
   '@nkzw/safe-word-list': ^3.1.0
   '@oxc-node/cli': ^1.0.1
   '@oxc-node/core': ^1.0.1
-  '@oxc-project/runtime': =0.157.0
-  '@oxc-project/types': =0.157.0
+  '@oxc-project/runtime': =0.158.0
+  '@oxc-project/types': =0.158.0
   # Kept at the oxlint version by .github/scripts/upgrade-deps.ts
-  '@oxlint/plugins': =1.91.0
+  '@oxlint/plugins': =1.93.0
   '@rolldown/pluginutils': ^1.0.0
   '@tsdown/css': ^0.23.4
   '@tsdown/exe': ^0.23.4
@@ -34,7 +34,7 @@ catalog:
   '@vitest/snapshot': 5.1.0
   '@vitest/spy': 5.1.0
   '@vitest/utils': 5.1.0
-  bingo: ^0.13.2
+  bingo: ^0.16.0
   cac: ^7.1.0
   consola: ^3.4.2
   cross-spawn: ^7.0.5
@@ -50,10 +50,10 @@ catalog:
   lint-staged: ^17.6.0
   minimatch: ^11.0.0
   nanotar: ^0.3.0
-  oxc-parser: =0.157.0
-  oxfmt: =0.76.0
-  oxlint: =1.91.0
-  oxlint-tsgolint: =7.0.2005
+  oxc-parser: =0.158.0
+  oxfmt: =0.78.0
+  oxlint: =1.93.0
+  oxlint-tsgolint: =7.0.2006
   pathe: ^2.0.3
   picocolors: ^1.1.1
   picomatch: ^4.0.2
@@ -139,6 +139,7 @@ minimumReleaseAgeExclude:
   - '@vitejs/devtools'
   - '@vitejs/devtools-*'
   - resolve.exports@2.0.4
+  - vitepress-plugin-group-icons@1.8.2
 overrides:
   rolldown: workspace:rolldown@*
   vite: workspace:@voidzero-dev/vite-plus-core@*
