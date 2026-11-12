@@ -18,7 +18,7 @@ use vp_shared::output;
 use vt_path::AbsolutePathBuf;
 
 use super::{
-    config::{get_config_path, load_config},
+    config::{get_config_path, load_config, resolve_version_alias},
     package_manager,
     spec::{EnvScope, EnvSpecs},
 };
@@ -689,34 +689,18 @@ async fn remove_dev_engines_runtime_node(cwd: &AbsolutePathBuf) -> Result<bool, 
 
 /// Resolve version for pinning.
 ///
-/// Aliases (lts, latest) are resolved to exact versions.
+/// Aliases (lts, latest, lts/*, lts/iron) and ranges are resolved to exact versions.
 /// Returns (resolved_version, was_alias).
 async fn resolve_version_for_pin(
     version: &str,
     provider: &NodeProvider,
 ) -> Result<(String, bool), Error> {
-    match version.to_lowercase().as_str() {
-        "lts" => {
-            let resolved = provider.resolve_latest_version().await?;
-            Ok((resolved.to_string(), true))
-        }
-        "latest" => {
-            let resolved = provider.resolve_absolute_latest_version().await?;
-            Ok((resolved.to_string(), true))
-        }
-        _ => {
-            // For exact versions, validate they exist
-            if NodeProvider::is_exact_version(version) {
-                // Validate the version exists by trying to resolve it
-                provider.resolve_version(version).await?;
-                Ok((version.to_string(), false))
-            } else {
-                // For ranges/partial versions, resolve to exact version
-                let resolved = provider.resolve_version(version).await?;
-                Ok((resolved.to_string(), true))
-            }
-        }
+    if NodeProvider::is_exact_version(version) {
+        // Validate the version exists by trying to resolve it
+        provider.resolve_version(version).await?;
+        return Ok((version.to_string(), false));
     }
+    Ok((resolve_version_alias(version, provider).await?, true))
 }
 
 /// Remove the Node.js pin from the current directory.
@@ -1826,6 +1810,22 @@ mod tests {
             let (resolved, was_alias) = resolve_version_for_pin("20", &provider).await.unwrap();
             assert!(was_alias, "partial version should be treated as alias");
             assert_eq!(resolved, "20.19.0");
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn test_resolve_version_for_pin_lts_aliases() {
+        let vp_home = TempDir::new().unwrap();
+        with_mock_node_index([(env_vars::VP_HOME, vp_home.path().as_os_str())], || async {
+            let provider = NodeProvider::new();
+
+            for (alias, expected) in [("lts/*", "24.11.0"), ("lts/iron", "20.19.0")] {
+                let (resolved, was_alias) =
+                    resolve_version_for_pin(alias, &provider).await.unwrap();
+                assert!(was_alias, "{alias} should be treated as alias");
+                assert_eq!(resolved, expected);
+            }
         })
         .await;
     }
