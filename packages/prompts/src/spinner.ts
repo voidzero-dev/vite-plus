@@ -84,7 +84,6 @@ const blockInput = (output: Writable, onInterrupt: () => void): (() => void) => 
   if (input.isTTY) {
     input.setRawMode(true);
   }
-  // One chunk can carry several keys, so the listener stays registered between them.
   const onKeypress = (_char: string | undefined, { name, sequence }: readline.Key): void => {
     if (sequence === '\x03') {
       onInterrupt();
@@ -168,7 +167,6 @@ export const spinner = ({
       process.nextTick(() => removedInDelivery.delete(event));
     }
   };
-  // Another listener of the signal decides how the process ends.
   const ownedByAnother = (signal: ProcessSignal) =>
     removedInDelivery.has(signal) ||
     process.listeners(signal).some((listener) => !spinnerSignalListeners.has(listener));

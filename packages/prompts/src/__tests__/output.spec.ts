@@ -34,10 +34,6 @@ function press(name: string, sequence: string, ctrl = false) {
   process.stdin.emit('keypress', sequence, { name, sequence, ctrl });
 }
 
-/**
- * Starts a spinner that blocks keys, with process termination stubbed out. The
- * platform is pinned, because it selects how the spinner ends the process.
- */
 function spinInTerminal(platform: NodeJS.Platform = 'linux') {
   Object.defineProperty(process, 'platform', { value: platform });
   vi.stubEnv('CI', '');
@@ -248,7 +244,6 @@ describe('spinner', () => {
       expect(c.text()).not.toContain('Canceled');
       expect(kill).not.toHaveBeenCalled();
       expect(exit).not.toHaveBeenCalled();
-      // Keys of one chunk arrive without a tick in between.
       press('c', '\x03', true);
       expect(kill).toHaveBeenCalledWith(0, 'SIGINT');
     });

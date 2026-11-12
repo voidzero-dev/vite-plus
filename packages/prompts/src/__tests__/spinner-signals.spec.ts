@@ -107,7 +107,6 @@ describe.skipIf(process.platform === 'win32')('spinner interrupts', () => {
       );
       expect(result).toMatchObject({ code: null, signal: 'SIGINT', stderr: '' });
       expect(result.stdout).toContain('Canceled');
-      // A running package manager must not outlive the interrupted command.
       await expect.poll(() => isRunning(worker), { timeout: 2000 }).toBe(false);
     } finally {
       if (worker && isRunning(worker)) {
