@@ -45,8 +45,6 @@ vp migrate my-app
 
 ## Migration Flow
 
-### Steps
-
 The `migrate` command is designed to move existing projects onto Vite+ quickly. Here is what the command does:
 
 - Updates project dependencies
@@ -63,49 +61,36 @@ Most projects will require further manual adjustments after running `vp migrate`
 
 For the Vitest v5 upgrade, read the [compatibility settings and review checklist](./vitest-v5.md) and the [upstream Vitest migration guide](https://vitest.dev/guide/migration/). The preflight checks your original runner version and Node runtime before dependency updates. Keep the original lockfile available and resolve blocking findings before retrying.
 
-### Excluding templates and examples
+### Keeping upstream imports in templates and examples
 
-Use `migrate.ignorePatterns` in the workspace-root `vite.config.ts` to keep
-independently reusable projects on Vite or Vitest:
+Disable `vite-plus/prefer-vite-plus-imports` for selected files in the root
+`vite.config.ts`:
 
 ```ts
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
-  migrate: {
-    ignorePatterns: ['templates/', 'examples/'],
+  lint: {
+    overrides: [
+      {
+        files: ['templates/**', 'examples/**'],
+        rules: {
+          'vite-plus/prefer-vite-plus-imports': 'off',
+        },
+      },
+    ],
   },
 });
 ```
 
-Patterns use `.gitignore` syntax and are relative to the root config directory.
-They support comments, anchored paths, directory patterns, and ordered `!`
-negation. To include one template, use `['templates/*', '!templates/managed/']`.
-As with Git, a negation cannot include a file whose parent directory is excluded.
+`vp migrate` uses the same rule settings for its import rewrite step. The override
+also applies to `vp lint --fix` and `vp check --fix`. Patterns use Oxlint's glob
+syntax, relative to the root config directory. Later matching overrides can
+re-enable the rule.
 
-The policy is read before migration makes edits. Literal config blocks can be
-read without loading plugins. Dynamic configs require the dependencies needed
-to load the config to be installed first.
-
-Excluded files keep their dependencies, scripts, configs, and imports, and are
-omitted from automatic formatting. The same policy applies to initial migration,
-upgrades, and `--full`. Workspace membership stays unchanged. Migration reads
-excluded package manifests to identify shared dependency settings.
-
-Automatic ESLint comment renaming and `baseUrl` removal are skipped when
-exclusions are configured because those external tools cannot honor the patterns.
-ESLint disable comments continue to work. Remove `baseUrl` manually in migrated
-projects to enable type-aware linting.
-
-When excluded packages are present, migration preserves existing catalogs and
-overrides and uses explicit dependency versions in migrated packages. It does not
-add global toolchain overrides. Existing overrides still apply during installation;
-an incompatible toolchain override must be resolved before migration can proceed.
-Catalog references in an excluded template still require its original workspace.
-
-`migrate.ignorePatterns` also applies to the `vite-plus/prefer-vite-plus-imports`
-lint rule, including during `vp lint --fix` and `vp check --fix`. Other lint rules
-and normal formatting remain enabled.
+This controls import rewrites only. Migration still updates dependencies, scripts,
+configs, shared catalogs, and package-manager overrides. Other lint rules remain
+enabled. There is no separate migration exclusion setting.
 
 ## Recommended Workflow
 

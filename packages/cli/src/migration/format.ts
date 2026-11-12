@@ -4,7 +4,6 @@ import path from 'node:path';
 import { runCommandSilently } from '../utils/command.ts';
 import { type CommandRunSummary, runViteFmt } from '../utils/prompts.ts';
 import { addMigrationWarning, type MigrationReport } from './report.ts';
-import { isMigrationIgnored, migrationScope } from './scope.ts';
 
 type FormatRunner = (
   cwd: string,
@@ -164,29 +163,7 @@ export async function formatMigratedProject(
 ): Promise<boolean> {
   const { format = runViteFmt, collectPaths = collectChangedFormatPaths, excludedPaths } = options;
   try {
-    let paths = await collectPaths(projectRoot, excludedPaths);
-    if (migrationScope()?.patterns.length) {
-      // Outside Git, enumerate files rather than handing an excluded directory
-      // to the formatter. Do not follow dependency trees or symlinks.
-      if (paths === undefined) {
-        paths = [];
-        const walk = (dir: string) => {
-          for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-            const file = path.join(dir, entry.name);
-            if (isMigrationIgnored(file, entry.isDirectory())) {
-              continue;
-            }
-            if (entry.isDirectory() && !['node_modules', '.git', '.yarn'].includes(entry.name)) {
-              walk(file);
-            } else if (entry.isFile()) {
-              paths!.push(path.relative(projectRoot, file));
-            }
-          }
-        };
-        walk(projectRoot);
-      }
-      paths = paths.filter((file) => !isMigrationIgnored(path.resolve(projectRoot, file)));
-    }
+    const paths = await collectPaths(projectRoot, excludedPaths);
     if (paths?.length === 0) {
       return true;
     }

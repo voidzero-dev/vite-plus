@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 
 import tsrsPkg from 'tsrs/package.json' with { type: 'json' };
@@ -23,10 +24,9 @@ import {
   VITE_PLUS_VERSION,
   isForceOverrideMode,
 } from '../../utils/constants.ts';
+import { editJsonFile, readJsonFile } from '../../utils/json.ts';
 import { type NpmWorkspaces } from '../../utils/workspace.ts';
-import fs from '../files.ts';
-import { editJsonFile, readJsonFile } from '../files.ts';
-import { editYamlFile, readYamlFile, scalarString, type YamlDocument } from '../files.ts';
+import { editYamlFile, readYamlFile, scalarString, type YamlDocument } from '../../utils/yaml.ts';
 import {
   dropRemovePackageOverrideKeys,
   ensurePnpmExoticSubdepsSetting,
@@ -46,7 +46,6 @@ import {
   workspaceUsesWebdriverioProvider,
 } from '../migrator.ts';
 import { type MigrationReport } from '../report.ts';
-import { preserveSharedDependencies } from '../scope.ts';
 import {
   type PreparedOxlintConfigs,
   LEGACY_WRAPPER_FALLBACK_VERSIONS,
@@ -193,9 +192,6 @@ export function supportsCatalog(
   version: string,
   isBunWorkspace = false,
 ): boolean {
-  if (preserveSharedDependencies()) {
-    return false;
-  }
   switch (packageManager) {
     case PackageManager.pnpm:
       return pnpmSupportsCatalog(version);
@@ -678,7 +674,7 @@ export function getCatalogDependencySpec(
   ) {
     return version;
   }
-  if (!supportCatalog || preserveSharedDependencies() || version.startsWith('file:')) {
+  if (!supportCatalog || version.startsWith('file:')) {
     return version;
   }
   return currentValue?.startsWith('catalog:')
@@ -905,9 +901,6 @@ export function rewriteCatalog(
     parsed?.catalogs,
     packageManager,
   );
-  if (preserveSharedDependencies()) {
-    return preferredCatalogSpec;
-  }
   const targetPath = getYamlCatalogPath(doc, preferredCatalogSpec, packageManager);
 
   rewriteYamlCatalogAtPath(
@@ -1120,9 +1113,6 @@ export function rewriteBunCatalog(
   usesWebdriverioProvider = false,
   packageManagerVersion = 'latest',
 ): void {
-  if (preserveSharedDependencies()) {
-    return;
-  }
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
     return;

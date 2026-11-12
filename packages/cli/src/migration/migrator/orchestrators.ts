@@ -4,7 +4,7 @@ import path from 'node:path';
 import { PackageManager, type WorkspaceInfo, type WorkspacePackage } from '../../types/index.ts';
 import type { CatalogDependencyResolver } from '../../utils/catalog.ts';
 import { VITE_PLUS_NAME, VITE_PLUS_VERSION, isForceOverrideMode } from '../../utils/constants.ts';
-import { editJsonFile } from '../files.ts';
+import { editJsonFile } from '../../utils/json.ts';
 import {
   applyBuildAllowanceToPackageJsonPnpm,
   applyYarnWorkspaceHoistingFix,
@@ -79,6 +79,7 @@ export function rewriteStandaloneProject(
   skipStagedMigration?: boolean,
   silent = false,
   report?: MigrationReport,
+  importRuleConfig?: string,
 ): void {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
@@ -355,7 +356,7 @@ export function rewriteStandaloneProject(
   injectFmtDefaults(projectPath, silent, report);
   mergeTsdownConfigFile(projectPath, silent, report);
   // rewrite imports in all TypeScript/JavaScript files before lazy plugin import merging
-  rewriteAllImports(projectPath, silent, report, true, oxlintOwnerDirs);
+  rewriteAllImports(projectPath, silent, report, true, oxlintOwnerDirs, importRuleConfig);
   dropDeadOxlintPluginsDependency(projectPath, workspaceInfo.packages, originalOxlintDependencies);
   wrapLazyPluginsInViteConfig(projectPath, silent, report);
   migrateTaskCacheConfigInViteConfig(projectPath, silent, report);
@@ -371,6 +372,7 @@ export function rewriteMonorepo(
   skipStagedMigration?: boolean,
   silent = false,
   report?: MigrationReport,
+  importRuleConfig?: string,
 ): void {
   const reportVitePeerDependencyRuleRemoval = trackVitePeerDependencyRuleRemoval(
     workspaceInfo.rootDir,
@@ -527,7 +529,7 @@ export function rewriteMonorepo(
   injectFmtDefaults(workspaceInfo.rootDir, silent, report);
   mergeTsdownConfigFile(workspaceInfo.rootDir, silent, report);
   // rewrite imports in all TypeScript/JavaScript files before lazy plugin import merging
-  rewriteAllImports(workspaceInfo.rootDir, silent, report, true, oxlintOwnerDirs);
+  rewriteAllImports(workspaceInfo.rootDir, silent, report, true, oxlintOwnerDirs, importRuleConfig);
   dropDeadOxlintPluginsDependency(
     workspaceInfo.rootDir,
     workspaceInfo.packages,

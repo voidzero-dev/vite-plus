@@ -1,5 +1,5 @@
 {
-  "name": "migration-ignore-patterns",
+  "name": "migration-import-rule",
   "private": true,
   "type": "module",
   "devDependencies": { "vite-plus": "catalog:" },

@@ -418,7 +418,6 @@ export async function writeAgentInstructions({
   interactive,
   conflictDecisions,
   silent = false,
-  shouldWriteFile = () => true,
 }: {
   projectRoot: string;
   targetPath?: string;
@@ -426,7 +425,6 @@ export async function writeAgentInstructions({
   interactive: boolean;
   conflictDecisions?: Map<string, 'append' | 'skip'>;
   silent?: boolean;
-  shouldWriteFile?: (file: string) => boolean;
 }) {
   const paths = [...(targetPaths ?? []), ...(targetPath ? [targetPath] : [])];
   if (paths.length === 0) {
@@ -447,9 +445,6 @@ export async function writeAgentInstructions({
 
   for (const targetPathToWrite of orderAgentTargetPaths(projectRoot, paths)) {
     const destinationPath = path.join(projectRoot, targetPathToWrite);
-    if (!shouldWriteFile(destinationPath)) {
-      continue;
-    }
 
     await fsPromises.mkdir(path.dirname(destinationPath), { recursive: true });
 

@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 
 import { applyEdits, findNodeAtLocation, parse as parseJsonc, parseTree } from 'jsonc-parser';
@@ -21,9 +22,7 @@ import cliPackage from '../../../package.json' with { type: 'json' };
 import { PackageManager, type WorkspaceInfoOptional } from '../../types/index.ts';
 import { findGitRoot } from '../../utils/git.ts';
 import { detectPackageMetadata } from '../../utils/package.ts';
-import fs from '../files.ts';
 import { createCatalogDependencyResolver } from '../migrator.ts';
-import { isMigrationIgnored } from '../scope.ts';
 import type { RewriteResult, SourceOptions, VitestV5Finding } from '../vitest-v5/ast.ts';
 import { migrateVitestV5Command } from '../vitest-v5/commands.ts';
 import {
@@ -142,9 +141,6 @@ function filesInProject(directory: string): string[] {
     }
     for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
       const file = path.join(current, entry.name);
-      if (isMigrationIgnored(file, entry.isDirectory())) {
-        continue;
-      }
       // Never follow symlinks into another package or outside the workspace.
       if (entry.isDirectory() && !SKIP_DIRS.has(entry.name)) {
         walk(file);

@@ -3610,11 +3610,6 @@ export interface ViteImportGlobMeta {
   isSubImportsPattern?: boolean;
 }
 
-export declare class MigrationIgnoreMatcher {
-  constructor(root: string, patterns: Array<string>);
-  isIgnored(path: string, isDir: boolean): boolean;
-}
-
 /** Parse source and resolve lexical bindings for the TypeScript migration rules. */
 export declare function analyzeMigrationSource(filename: string, source: string): string;
 
@@ -4015,8 +4010,8 @@ export interface PathAccess {
   readDir: boolean;
 }
 
-/** JSON for a static migrate block; undefined requests normal config resolution. */
-export declare function readStaticMigrationConfig(root: string): string | null;
+/** JSON for a static lint block; undefined requests normal config resolution. */
+export declare function readStaticLintConfig(root: string): string | null;
 
 /** Remove a top-level key from a recognized Vite config object. */
 export declare function removeConfigKey(
@@ -4079,8 +4074,7 @@ export declare function rewriteImportsInDirectory(
   root: string,
   preserveVitestInNuxtPackages?: boolean | undefined | null,
   oxlintOwnerDirs?: Array<string> | undefined | null,
-  ignoreRoot?: string | undefined | null,
-  ignorePatterns?: Array<string> | undefined | null,
+  importRuleConfig?: string | undefined | null,
 ): BatchRewriteResult;
 
 /**
