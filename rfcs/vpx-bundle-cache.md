@@ -33,7 +33,105 @@ later runs   node + loader ──► check inputs ──► entry.mjs (+ chunks)
 
 Thus only a change to the shape of the module graph can reach 2x. The bundle removes the per-module work for every module it contains.
 
-## Design
+## How the cache works
+
+### Files
+
+The cache is in the nearest `node_modules` directory above the script. It has one directory for each entry and key (see [the key](#the-key-which-cache-a-run-uses)), and one shared compile cache:
+
+```
+<project>/node_modules/.vite-plus/vpx-bundle/
+├── cli.ts-1q17scsmimr/       one entry and key: the file name and a hash of the key
+│   ├── trace.json            what the last recorded run resolved and loaded
+│   ├── manifest.json         the result of the last build: inputs, output, or why there is none
+│   ├── excluded.json         modules that later builds must leave out (from the duplicate check)
+│   ├── build.lock/           exists while a builder runs
+│   └── out-<id>/             the bundle: entry.mjs, chunk-*.mjs, and their source maps
+└── v8/                       Node.js' compile cache for the chunks
+```
+
+`manifest.json` holds the full key, the name of the output directory, its chunk files, the URLs of the bundled modules, and the list of inputs. An input is a path and its stamp. A manifest without an output has a `disabled` reason instead.
+
+### The key: which cache a run uses
+
+The key selects the entry's directory. It holds everything outside the files that changes how the script loads:
+
+- The Node.js version, the platform, and the architecture.
+- The entry's real path and the working directory, where tsconfig discovery starts.
+- `execArgv`, for example `--conditions`, and `NODE_OPTIONS`.
+- The variables that select a tsconfig (`VP_SCRIPT_TSCONFIG`, `TSX_TSCONFIG_PATH`, `TS_NODE_PROJECT`, `OXC_TSCONFIG_PATH`).
+
+The directory name has a hash of the key, and the manifest stores the full key. The script's own arguments are not in the key: `vpx ./cli.ts lint` and `vpx ./cli.ts build` use the same bundle.
+
+### Each run: hit, off, or miss
+
+At startup, before any module loads, the preload decides from `manifest.json`:
+
+```
+VPX_BUNDLE_CACHE=1, and no unsupported option? ── no ──► normal run
+        │ yes
+manifest exists, same version and key? ─────────── no ──► miss
+        │ yes
+every input has its stamp? ─────────────────────── no ──► miss ("<first changed file> changed")
+        │ yes
+manifest has a `disabled` reason? ──────────────── yes ─► off: normal run, nothing recorded
+        │ no
+every chunk exists? ────────────────────────────── no ──► miss
+        │ yes
+        ▼
+       hit: run the bundle
+```
+
+- **Hit.** The run loads `entry.mjs` and its chunks with Node.js' compile cache (see [the warm run](#the-warm-run)).
+- **Off.** The last build found a reason not to bundle the script, and no input changed since then. The run loads each module as without the cache.
+- **Miss.** The run loads each module as without the cache and records the run. At exit, it starts a build, which replaces the manifest.
+
+### How a bundle is made
+
+A bundle comes from two processes:
+
+1. **The recorded run** (a miss) runs the script with the normal hooks. A thin wrapper records, for each resolve, the parent, the specifier, `import` or `require()`, the conditions, the URL, and the format, and for each load, the final format. At exit, the run takes the build lock, writes `trace.json`, and starts the builder, detached.
+2. **The builder** (`dist/script-bundle-build.js`) starts at the entry. For each ES module, it uses oxc-node's own transform, finds the module's imports, and resolves them from the trace, or with oxc-node's resolver for an import that the run did not make. It selects the modules that the bundle can contain, bundles them with Rolldown into a new `out-<id>/`, and writes `manifest.json` with every input that it read. It then releases the lock.
+
+A module stays out of the bundle and loads from its own file at run time when:
+
+- It is not an ES module: a CommonJS file, a native addon, or a dependency `.js` file in a package without `"type": "module"`, which Node.js can run either way.
+- It uses `import.meta` other than `url`, `filename`, `dirname`, `main`, and `resolve()`.
+- It uses `require`, `module`, or `exports` without its own declaration. Node.js runs an ES module without them, but Rolldown would give the module working CommonJS ones.
+- It uses a direct `eval`, which would see the renamed bindings of the bundle.
+- It fails to load or to parse, or one of its static imports does not resolve.
+- Code outside the bundle imports or requires it, or it is in `excluded.json`. Its own imports then stay out too, so no module can load twice.
+
+If the builder fails, or if the entry itself must stay out, the manifest gets a `disabled` reason, and later runs are off until an input changes.
+
+### What makes a bundle expire
+
+Every input in the manifest has a stamp: the inode, the size, the modification time, and the change time, or an empty stamp for a path that must not exist. A run compares each stamp exactly. The change time catches an edit that restores the modification time, and the inode catches a file that a rename replaced.
+
+| Input                                                                                                           | Changes that it catches                                                                          |
+| --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Each bundled module, stamped before the builder read it                                                         | An edit to any bundled file, also one made during the build                                      |
+| Each import target, also outside the bundle                                                                     | A target that moved or was replaced                                                              |
+| The directory of each relative import target outside `node_modules`                                             | A new file that can take the target's place, for example `x.ts` next to an import of `./x.js`    |
+| The nearest `package.json` of each module and target, and the project directories between                       | A change to `type`, `exports`, `imports`, or `main`, or a new `package.json` closer to the file  |
+| `node_modules/<name>` for each bare specifier, from the importer up to the package found                        | An install, an upgrade, a relink of a workspace package, or a new package closer to the importer |
+| The tsconfig files that oxc-node read                                                                           | A change to compiler options or `paths`                                                          |
+| `vite-plus`'s `package.json`, the preload, the hooks module, the builder, and the core package's `package.json` | An upgrade or a reinstall of Vite+                                                               |
+
+A change of the key selects another directory, so it never uses a stale bundle. A data file that the script reads at run time is not an input: the bundle contains code, not the script's data.
+
+The run itself can also make a bundle expire. If a module of the bundle also loads from its own file, the run warns, adds the module to `excluded.json`, and removes `manifest.json`. The next run is a miss, and the new build leaves the module out.
+
+A failed build records every file that it read, the project directories of those files, and the tsconfig files. Thus a fix to the file that failed makes the next run a miss, and the build runs again.
+
+### When a bundle is reused
+
+- **Same entry, key, and inputs.** Every run is a hit, with any script arguments. An `import()` that the recorded run did not reach is in the bundle when it resolves at build time, or resolves at run time from its own module (`vpx-from:`).
+- **After a change.** One input change makes the whole bundle expire. There is no partial reuse: the next run is a miss at the speed without the cache, and its build bundles all modules again. The run after the build is a hit, but its chunks have new paths, so V8 compiles them again. Later hits also use the compile cache. On Knip, after an edit to one source file, the three runs took 291.3 ms, 218.5 ms, and 139.1 ms.
+- **Concurrent runs.** Two recorded runs can end at the same time. The first takes the lock and builds, and the second leaves the build to it. A lock older than 60 seconds belongs to a builder that died, and the next run takes it.
+- **Older outputs.** A build keeps the three newest older `out-*` directories of its entry, so a run that started from one of them can still load its `import()` chunks. It removes the rest.
+
+## Design details
 
 ### When the cache applies
 
@@ -44,11 +142,11 @@ The preload (`script-preload.ts`) requires `dist/script-bundle-hooks.cjs` only w
 - `NODE_V8_COVERAGE`, `--test`, `--eval`, `--check`, the REPL, `--preserve-symlinks`, `NODE_PRESERVE_SYMLINKS`, and a Node.js config file.
 - A script with no `node_modules` directory above it.
 
-### Cache location and key
+### Cache location
 
-The cache is in the nearest `node_modules/.vite-plus/vpx-bundle/` above the script, one directory for each entry and key. The warm path must find it without the 45 MB native binding, so it does not use `VpDirs`. The key holds the Node.js version, platform, architecture, the entry's real path, the working directory, `execArgv`, `NODE_OPTIONS`, and the loader's tsconfig variables. The manifest stores the full key, and a different key is a miss.
+The warm path must find the cache without the 45 MB native binding, so the cache is in the project's `node_modules`, not in a `VpDirs` root. A script with no `node_modules` directory above it runs without the cache.
 
-Under `vp run`, the loader calls `ignoreInput` and `ignoreOutput` for the cache root. Vite Task records each `stat` as a read, so the input check below keeps the source files as task inputs.
+Under `vp run`, the loader calls `ignoreInput` and `ignoreOutput` for the cache root. Vite Task records each `stat` as a read, so the input check keeps the source files as task inputs.
 
 ### The recorded run
 
@@ -59,7 +157,7 @@ On a miss, the run loads the script with the normal hooks. A thin wrapper record
 The builder loads the native binding and selects the same tsconfig as the run. Then:
 
 1. **Analyze.** Starting at the entry, it loads each ES module with oxc-node's own `load` (the same transform as the run), or reads a dependency file as published. It parses the code with Rolldown's `parseAst`, and it resolves each specifier from the trace, or with oxc-node's resolver for an import that the run did not make (for example, an `import()` that the run did not reach). A module that fails to load or parse stays out of the bundle.
-2. **Select** (`bundledSet`). The bundle may contain the ES modules that the entry reaches through safe modules. Every module that code outside the bundle imports stays out, and so do its own imports, until no edge enters the set from outside. Edges from outside are the analyzed imports of unsafe modules, every recorded `require()`, every recorded `import()` with a specifier that is not in the code, and the modules in `excluded.json`.
+2. **Select** (`bundledSet`). The bundle may contain the ES modules that the entry reaches through modules that [can be bundled](#how-a-bundle-is-made). Every module that code outside the bundle imports stays out, and so do its own imports, until no edge enters the set from outside. Edges from outside are the analyzed imports of unsafe modules, every recorded `require()`, every recorded `import()` with a specifier that is not in the code, and the modules in `excluded.json`.
 3. **Bundle** with Rolldown, through a plugin that serves the analyzed code:
    - Each module keeps its own `import.meta.url`, `filename`, and `dirname` (replaced with literals). `import.meta.main` stays only in the entry.
    - A computed `import(x)`, `import.meta.resolve(x)`, and a literal `import()` that does not resolve at build time become `import("vpx-from:<i>:" + (x))`. The warm hooks resolve `x` from module `<i>`'s own URL.
@@ -69,9 +167,7 @@ The builder loads the native binding and selects the same tsconfig as the run. T
 5. **Refuse what the layout cannot keep.** A startup module other than the entry with a top-level `await` holds its chunk open, and an `import()` that it awaits can need that chunk, or a later one: the bundle would wait for itself. Such a script runs without a bundle.
 6. **Record the inputs.** The manifest lists each bundled module, stamped before the builder read it, and what resolution depended on: each import target, the directory of each relative target outside `node_modules`, the nearest `package.json` and the directories in between, the `node_modules` lookups for every bare specifier (the package found and each closer location that must stay empty, also when the specifier resolved outside `node_modules` through a workspace link or a tsconfig `paths` alias), the tsconfig files that oxc-node read, and the loader's own files. A stamp is the inode, size, modification time, and change time. The change time catches an edit that restores the modification time.
 
-If any step fails, the manifest records the reason, and the script runs without a bundle until an input changes. The inputs of a failed build are every file the builder read, the project directories of those files, and the tsconfig files, so a fix to the file that failed brings the bundle back.
-
-A build keeps the three newest older outputs of its entry, so a run that started from one of them can still load its `import()` chunks, and removes the rest.
+If any step fails, the manifest records the reason and the inputs that [a failed build](#what-makes-a-bundle-expire) records.
 
 ### The warm run
 
@@ -118,6 +214,31 @@ The fixtures of `bench/vpx-script.ts`, through the loader without the global `vp
 | `large-cjs` (CommonJS, not bundled) |   88.1 ms |              89.9 ms | 1.8 ms slower |
 
 A script that the cache cannot bundle pays for the hooks module and the manifest check on each run.
+
+### More projects
+
+Commands from other projects (taze at `ab44082`, tsdown at `e2e174d`, and installed ecosystem-CI clones of dify and evcc), through the loader without the global `vpx` routing, on Node.js 24.22.2, median of 20 interleaved runs. Every command gave the same output with and without the cache (for the `tsdown` build, the same output file).
+
+| Command                                     | What it is                                                                | Modules bundled | Cache off | `VPX_BUNDLE_CACHE=1` |       Speedup |
+| ------------------------------------------- | ------------------------------------------------------------------------- | --------------: | --------: | -------------------: | ------------: |
+| `scripts/report.ts`                         | A script that imports `@aws-sdk/client-s3`, `rxjs`, `date-fns`, and `zod` |      400 of 400 |  542.0 ms |             100.1 ms |         5.41x |
+| Knip, `src/cli.ts`                          | The workload above                                                        |      577 of 579 |  305.0 ms |             149.2 ms |         2.04x |
+| taze 21.3.0, `src/cli.ts --help`            | Dependency update CLI, from source                                        |      122 of 124 |  127.7 ms |              82.3 ms |         1.55x |
+| tsdown 0.23.7, `src/run.ts --help`          | Library bundler CLI, from source (`-C dev`)                               |      124 of 127 |   59.1 ms |              48.4 ms |         1.22x |
+| tsdown 0.23.7, build of a one-file library  | The same CLI, doing a small build                                         |       69 of 127 |   96.2 ms |              80.4 ms |         1.20x |
+| Vite+ CLI, `packages/cli/src/bin.ts help`   | This repository's CLI, from source                                        |      296 of 297 |   52.4 ms |              46.8 ms |         1.12x |
+| Vite+ CLI, `bin.ts --version`               | The same bundle                                                           |      296 of 297 |   53.9 ms |              49.4 ms |         1.09x |
+| dify, `scripts/check-icon-dimensions.ts`    | A one-file check script                                                   |          1 of 1 |   42.0 ms |              37.4 ms |         1.12x |
+| evcc, `i18n/check.ts`                       | A one-file check script that reads many JSON files                        |          1 of 1 |   88.4 ms |              84.7 ms |         1.04x |
+| Prettier 3.9.10, `bin/prettier.cjs --check` | A CommonJS CLI, not bundled                                               |               — |   95.0 ms |              95.7 ms | 0.7 ms slower |
+
+The gain depends on how many modules the script loads at startup, not on how many the bundle contains:
+
+- The library script loads about 650 modules from many packages. Plain Node.js takes 536.2 ms for it too, and 501.7 ms with its compile cache, so the time comes from loading the modules one at a time.
+- The Vite+ CLI's bundle has 296 modules, but `help` loads only about 40 of them. The other modules are in chunks that only other commands import. Most of its time is Node.js startup and its own native binding.
+- A one-file script saves only the native loader's startup, about 4–7 ms.
+- A script that spends its time on its own work (evcc reads and compares JSON files) gains little.
+- A CommonJS entry is never bundled.
 
 ## Next steps
 
