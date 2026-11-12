@@ -196,7 +196,8 @@ export const spinner = ({
     // Reference Signal Events: https://nodejs.org/api/process.html#signal-events
     for (const [signal, handler] of processSignalHandlers) {
       spinnerSignalListeners.add(handler);
-      process.on(signal, handler);
+      // Run first, so that an observer such as signal-exit finds no spinner listener left.
+      process.prependListener(signal, handler);
     }
     process.on('exit', handleExit);
     process.on('removeListener', trackRemoval);

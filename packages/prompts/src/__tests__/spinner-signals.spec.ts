@@ -69,6 +69,8 @@ describe.skipIf(process.platform === 'win32')('spinner interrupts', () => {
    */
   async function run(script: string, act: (child: ChildProcess, message: unknown) => void) {
     const child = spawn(process.execPath, ['--input-type=module', '--eval', prelude + script], {
+      // The scripts resolve signal-exit from this package.
+      cwd: join(import.meta.dirname, '../..'),
       detached: true,
       env: { ...process.env, CI: '' },
       stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
@@ -136,7 +138,36 @@ describe.skipIf(process.platform === 'win32')('spinner interrupts', () => {
     expect(result.stdout).toContain('cleanup complete');
   });
 
+  it('ends by SIGINT on Ctrl+C when signal-exit was registered before two spinners', async () => {
+    const result = await run(
+      `
+        import { onExit } from 'signal-exit';
+        onExit(() => writeSync(1, 'cleanup hook ran\\n'));
+        spinner({ output: output(true) }).start('First');
+        spinner({ output: output(true) }).start('Second');
+        process.send('ready');
+      `,
+      (child) => child.stdin!.write('\x03'),
+    );
+    expect(result).toMatchObject({ code: null, signal: 'SIGINT', stderr: '' });
+    expect(result.stdout).toContain('cleanup hook ran');
+  });
+
   describe.each(['SIGINT', 'SIGTERM'] as const)('%s', (signal) => {
+    it('ends the process by the signal when signal-exit was registered first', async () => {
+      const result = await run(
+        `
+          import { onExit } from 'signal-exit';
+          onExit(() => writeSync(1, 'cleanup hook ran\\n'));
+          spinner({ output: output(false) }).start('Working');
+          process.send('ready');
+        `,
+        (child) => child.kill(signal),
+      );
+      expect(result).toMatchObject({ code: null, signal, stderr: '' });
+      expect(result.stdout).toContain('cleanup hook ran');
+    });
+
     it.each([1, 2])('ends the process by the signal with %i active spinners', async (count) => {
       const result = await run(
         `
