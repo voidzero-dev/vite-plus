@@ -360,41 +360,45 @@ function vitePlusVitestResolverPlugin(): PluginOption {
       });
       plugins.splice(0, plugins.length, ...unique);
     },
-    async resolveId(id, importer, options) {
-      if (isVitestServer && id === 'vite-plus/test') {
-        // pnpm can install separate vite-plus/Vitest peer instances for a
-        // workspace's root and children. Externalizing the child wrapper lets
-        // Node load its uninitialized runner state, bypassing Vite's hooks.
-        // Resolve the API before externalization through Vitest's own resolver:
-        // it selects the active runner (or the browser's optimized instance),
-        // not the Vitest copy next to this config's vite-plus installation.
-        return this.resolve('vitest', importer, { ...options, skipSelf: true });
-      }
-      if (!isVitestFamilySpecifier(id)) {
-        return null;
-      }
-      // The redirected imports are all clean bare specifiers; a queried id is
-      // outside the scope of this resolver — let the default resolver handle it.
-      if (id.includes('?')) {
-        return null;
-      }
-      // Re-resolve from vite-plus's own (pinned) tree via Vite's resolver so the
-      // runner and every imported Vitest module are a single physical instance.
-      // `skipSelf` avoids infinite recursion back into this plugin.
-      const vitestAnchorPath = getVitestAnchor();
-      const bundledAnchors = vitestAnchorPath
-        ? [vitePlusModuleFile, vitestAnchorPath]
-        : [vitePlusModuleFile];
-      for (const anchor of bundledAnchors) {
-        const resolved = await this.resolve(id, anchor, { ...options, skipSelf: true });
-        if (resolved) {
-          return resolved;
+    resolveId: {
+      // Keep the allowlist in the handler; skip unrelated ids before the handler runs.
+      filter: { id: /^(?:vitest(?:\/|$)|@vitest\/|vite-plus\/test$)/ },
+      async handler(id, importer, options) {
+        if (isVitestServer && id === 'vite-plus/test') {
+          // pnpm can install separate vite-plus/Vitest peer instances for a
+          // workspace's root and children. Externalizing the child wrapper lets
+          // Node load its uninitialized runner state, bypassing Vite's hooks.
+          // Resolve the API before externalization through Vitest's own resolver:
+          // it selects the active runner (or the browser's optimized instance),
+          // not the Vitest copy next to this config's vite-plus installation.
+          return this.resolve('vitest', importer, { ...options, skipSelf: true });
         }
-      }
-      // Last resort: default project-rooted resolution for any family id the
-      // bundled tree cannot resolve (e.g. coverage providers not shipped with
-      // vite-plus).
-      return this.resolve(id, importer, { ...options, skipSelf: true });
+        if (!isVitestFamilySpecifier(id)) {
+          return null;
+        }
+        // The redirected imports are all clean bare specifiers; a queried id is
+        // outside the scope of this resolver — let the default resolver handle it.
+        if (id.includes('?')) {
+          return null;
+        }
+        // Re-resolve from vite-plus's own (pinned) tree via Vite's resolver so the
+        // runner and every imported Vitest module are a single physical instance.
+        // `skipSelf` avoids infinite recursion back into this plugin.
+        const vitestAnchorPath = getVitestAnchor();
+        const bundledAnchors = vitestAnchorPath
+          ? [vitePlusModuleFile, vitestAnchorPath]
+          : [vitePlusModuleFile];
+        for (const anchor of bundledAnchors) {
+          const resolved = await this.resolve(id, anchor, { ...options, skipSelf: true });
+          if (resolved) {
+            return resolved;
+          }
+        }
+        // Last resort: default project-rooted resolution for any family id the
+        // bundled tree cannot resolve (e.g. coverage providers not shipped with
+        // vite-plus).
+        return this.resolve(id, importer, { ...options, skipSelf: true });
+      },
     },
   };
 }
