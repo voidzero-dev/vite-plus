@@ -16,12 +16,12 @@ import { VITEST_RESOLVER_PACKAGES } from '../utils/vitest-ecosystem.ts';
 
 const RESOLVER_PLUGIN_NAME = 'vite-plus:vitest-resolver';
 
-function findPlugin(plugins: unknown, name: string): Record<string, unknown> | undefined {
+function findPlugin(plugins: unknown, name: string): Plugin | undefined {
   if (!Array.isArray(plugins)) {
     return undefined;
   }
   return plugins.find(
-    (p): p is Record<string, unknown> =>
+    (p): p is Plugin =>
       !!p && typeof p === 'object' && (p as { name?: unknown }).name === name,
   );
 }
@@ -95,7 +95,7 @@ describe('isVitestFamilySpecifier', () => {
 
 describe('vitePlusVitestResolverPlugin', () => {
   it('lets every resolver package through the hook filter', () => {
-    const plugin = findPlugin(defineConfig({}).plugins, RESOLVER_PLUGIN_NAME) as Plugin;
+    const plugin = findPlugin(defineConfig({}).plugins, RESOLVER_PLUGIN_NAME)!;
     const { filter } = plugin.resolveId as { filter: { id: RegExp } };
     for (const name of [...VITEST_RESOLVER_PACKAGES, 'vite-plus/test']) {
       expect(name).toMatch(filter.id);
@@ -112,7 +112,7 @@ describe('vitePlusVitestResolverPlugin', () => {
     ['@vitest/mocker', 'resolved-by-vitest'],
     ['vite-plus/test', 'resolved-by-vitest'],
   ])('dispatches %s through the native hook filter', async (specifier, expected) => {
-    const plugin = findPlugin(defineConfig({}).plugins, RESOLVER_PLUGIN_NAME) as Plugin;
+    const plugin = findPlugin(defineConfig({}).plugins, RESOLVER_PLUGIN_NAME)!;
     const resolver = {
       ...plugin,
       resolveId: {
