@@ -1,134 +1,127 @@
 # Type-aware linting with tsrs-lint
 
-The current integration pins `tsrs@0.25.0-ts7.1.0-beta`. The measurements below
-remain results for `0.22.0`; they have not been repeated for `0.25.0`.
+The timing and memory results below were measured locally on **2026-11-13** with
+the latest published [PR #3352 preview](https://github.com/voidzero-dev/vite-plus/actions/runs/43194215156),
+`0.0.0-commit.25a7c006af2db834bfc66f9689b02de1060f580f`.
+Both controls use the same published CLI and Oxlint `1.93.0`: the Go control uses
+`oxlint-tsgolint@7.0.2006`, and the default preview uses `tsrs@0.25.0-ts7.1.0-beta`.
+The subsequent source commit `68eb84008` changes only reports.
 
-This comparison uses the default `tsrs@0.22.0-ts7.1.0-beta` integration and an explicit
-`oxlint-tsgolint@7.0.2005` override. Both use Oxlint `1.91.0` and the same built CLI.
-
-The separate [ecosystem correctness comparison](./tsrs-lint-ecosystem.md) covers
-the full fork catalog with the `0.25.0` preview and links the earlier reduced-case
-audits. The examined cases match the pinned compiler but expose compiler-version
-and library differences. The performance results below do not establish diagnostic equivalence.
+All 12 validation commands and 204 benchmark invocations pass. The backends have
+matching checked-file counts and no diagnostics on these two inputs. The separate
+[full ecosystem comparison](./tsrs-lint-ecosystem.md) documents compatibility
+differences on other projects; these performance results do not establish compiler parity.
 
 ## Elapsed time
 
-Each value is the median of ten fresh CLI processes after one warm-up per backend.
-The runner alternates the order between pairs. Timing runs do not sample memory.
+Each cell shows the median of **10 runs**, followed by the interquartile range
+(25th–75th percentile) in brackets. One warm-up per backend is excluded.
+Each run starts a fresh CLI process. Backend order alternates between pairs.
+Timing runs do not sample memory, and all benchmark commands run sequentially.
 
-| Project  | Workload                         | Go (s) | tsrs (s) | Reduction |
-| -------- | -------------------------------- | -----: | -------: | --------: |
-| Vite+    | Type-aware rules                 |  3.712 |    2.212 |     40.4% |
-| Vite+    | Rules and TypeScript diagnostics |  4.612 |    2.382 |     48.4% |
-| Vite+    | Full `vp check`                  |  5.842 |    3.554 |     39.2% |
-| vinext   | Type-aware rules                 | 52.028 |   45.363 |     12.8% |
-| vinext † | Rules and TypeScript diagnostics | 54.192 |   44.794 |     17.3% |
-| vinext   | Full `vp check`                  | 62.325 |   50.355 |     19.2% |
-
-† The clean timing repetition used an EPYC 7763 after a Codespace restart.
-All other timing rows used an EPYC 9V74. Both backends within each row used
-the same CPU. Compare backend values within a row; the CPU change prevents
-a strict comparison of absolute times across workloads.
+| Project | Workload                         |              Go (s) |            tsrs (s) | Reduction |
+| ------- | -------------------------------- | ------------------: | ------------------: | --------: |
+| Vite+   | Type-aware rules                 | 1.518 [1.489–1.654] | 1.371 [1.255–1.399] |      9.7% |
+| Vite+   | Rules and TypeScript diagnostics | 1.861 [1.820–1.928] | 1.410 [1.316–1.504] |     24.2% |
+| Vite+   | Full `vp check`                  | 2.112 [2.102–2.243] | 1.674 [1.646–1.795] |     20.8% |
+| vinext  | Type-aware rules                 | 2.677 [2.616–2.791] | 1.572 [1.533–1.656] |     41.3% |
+| vinext  | Rules and TypeScript diagnostics | 3.364 [3.296–3.454] | 1.695 [1.635–1.728] |     49.6% |
+| vinext  | Full `vp check`                  | 4.680 [4.563–4.731] | 2.178 [2.095–2.184] |     53.4% |
 
 ## Peak memory
 
-Each value is the median of five separate runs after one warm-up per backend.
-Memory is the sampled peak of the simultaneous sum of RSS for the CLI and its
-descendants, including Node, Oxlint, and the native backend. One GiB is 1,073,741,824 bytes.
+Each cell shows the median of **5 separate runs** and its interquartile range.
+One warm-up per backend is excluded. Memory is the sampled peak of the simultaneous
+sum of RSS for the CLI and its descendants, including Node, Oxlint, and the native
+backend. The sampler itself is excluded. One GiB is 1,073,741,824 bytes.
 
-| Project | Workload                         | Go (GiB) | tsrs (GiB) | Reduction |
-| ------- | -------------------------------- | -------: | ---------: | --------: |
-| Vite+   | Type-aware rules                 |    1.175 |      0.930 |     20.9% |
-| Vite+   | Rules and TypeScript diagnostics |    1.345 |      0.984 |     26.8% |
-| Vite+   | Full `vp check`                  |    1.438 |      1.017 |     29.3% |
-| vinext  | Type-aware rules                 |    4.382 |      3.030 |     30.8% |
-| vinext  | Rules and TypeScript diagnostics |    4.903 |      3.166 |     35.4% |
-| vinext  | Full `vp check`                  |    5.413 |      3.292 |     39.2% |
+| Project | Workload                         |            Go (GiB) |          tsrs (GiB) | Reduction |
+| ------- | -------------------------------- | ------------------: | ------------------: | --------: |
+| Vite+   | Type-aware rules                 | 1.103 [1.047–1.153] | 0.633 [0.601–0.647] |     42.6% |
+| Vite+   | Rules and TypeScript diagnostics | 1.276 [1.258–1.462] | 0.651 [0.644–0.670] |     49.0% |
+| Vite+   | Full `vp check`                  | 1.325 [1.269–1.332] | 0.706 [0.687–0.715] |     46.7% |
+| vinext  | Type-aware rules                 | 3.427 [3.407–3.632] | 1.852 [1.836–1.889] |     46.0% |
+| vinext  | Rules and TypeScript diagnostics | 3.694 [3.662–3.904] | 1.967 [1.956–1.977] |     46.8% |
+| vinext  | Full `vp check`                  | 5.014 [4.756–5.391] | 2.102 [2.090–2.102] |     58.1% |
 
-The sampler sleeps for 20 ms. The median observed interval across runs was
-21.8 ms. Shared pages can count more than once,
-and sampling can miss short peaks. These values are process-tree RSS, not total
-allocation or container memory.
+The sampler sleeps for 20 ms; the median observed interval is 38.8 ms
+(the median of the measured runs' sampling intervals). Shared pages can count more
+than once, and sampling can miss short peaks. These are process-tree RSS values,
+not total allocations or macOS physical-footprint measurements.
 
-## Installed disk footprint
+## Inputs and method
 
-Clean production installations on Linux x64 with glibc compare published `1.5.0`
-with preview `0.0.0-commit.4fcf99edbe42fe3305dcd41dc884a4c4b7f5fd45`.
-The preview binary-size comment measures individual executables and native bindings;
-it does not measure the installed dependency tree.
+| Input                                    | Pin / condition                                                                                                           |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Machine                                  | Apple M4 Max, 16 CPU cores, 48 GiB RAM, macOS `27.0.1`, ARM64                                                             |
+| Vite+ source                             | [`68eb84008`](https://github.com/voidzero-dev/vite-plus/tree/68eb84008fd27a72a5e9426ad64636432385b0e1), Node.js `24.22.2` |
+| vinext source                            | [`7f1feb134`](https://github.com/fengmk2/vinext/tree/7f1feb134255f9e816e1b03760b97c10148eed3c), Node.js `26.13.0`         |
+| Lint threads                             | `4` for both lint workloads                                                                                               |
+| Full check threads                       | Default `16`, confirmed in format and lint output                                                                         |
+| Repetitions per project/workload/backend | 10 timing runs, 5 memory runs, and one warm-up before each set                                                            |
 
-| Scope                            | Go (MiB) | tsrs (MiB) | Increase (MiB) | Increase |
-| -------------------------------- | -------: | ---------: | -------------: | -------: |
-| Complete `node_modules`, on disk |   132.93 |     150.87 |          17.94 |    13.5% |
-| Complete `node_modules`, files   |   123.39 |     139.27 |          15.88 |    12.9% |
-| Backend packages, on disk        |    21.63 |      39.69 |          18.06 |    83.5% |
+The three workloads are:
 
-One MiB is 1,048,576 bytes. On-disk values use `du -s -B1 node_modules` and
-include directory allocation. File sizes sum regular-file lengths without following
-symlinks or counting an inode twice. The filesystem uses 4 KiB blocks.
-Stores, download caches, Node.js, pnpm, and the global `vp` executable are excluded.
+```sh
+vp lint --type-aware --threads 4 --format json -c <rules-only-config>
+vp lint --type-aware --type-check --threads 4 --format json
+vp check
+```
 
-The job used Node.js `24.22.2`, pnpm `10.34.7`, and each version's published
-`vp-install-lock.yaml`. It reproduced the global installer's manifest and frozen
-installation flags. Separate stores and `--config.package-import-method=copy`
-prevent shared hard links from affecting the standalone footprint. Each installation
-contained 80 packages. Version output and type-aware linting with TypeScript
-diagnostics passed for both installations. The preview contained no `oxlint-tsgolint`.
+The temporary rules-only JSON contains the project's `lint` section with
+`options.typeCheck` set to `false`; all rules, plugins, and ignore patterns
+are retained. Vinext lint uses sorted checker scheduling under both controls.
+Full checks and Vite+ lint use default checker scheduling.
 
-The backend totals include `oxlint-tsgolint` and `@oxlint-tsgolint/linux-x64`, or
-`tsrs` and `@tsrs/linux-x64-gnu`. The Rust distribution includes a larger executable,
-TypeScript library declarations, JavaScript APIs, and source maps. Its package
-footprint increases despite the runtime and memory improvements. The total
-installation comparison also includes other release-to-preview changes;
-the backend row separates the backend packages from those changes.
+Both controls use the same source and installed dependencies. Vite+ retains its
+own workspace dependency links; the measured CLI, Oxlint, and native backends
+come from the published preview. Vinext links the preview CLI and core into its
+workspace and pnpm peer importers. These temporary links are restored afterwards.
+All commands use isolated temporary `VP_HOME` directories and disable the Node
+compile cache. Setup, configuration extraction, and output validation are excluded
+from the timed intervals; CLI startup and command execution are included.
 
-The measurement ran on 2026-11-06 in Codespaces job `job-2a30c8ec3fb84524`.
-Scripts, raw package inventories, lockfiles, and logs remain outside the repository.
-The lockfile SHA256 values are
-`eb06955c3e76589da771286d3bfc6e6ea940c1a09ac64f597d2c72eb94403ad1` for `1.5.0`
-and `cf8fe673142ace0abaa362552bff78281f3b8f00e01bc13fa0eb93c5b1344683` for the preview.
+Native executable paths are verified in every validation and memory run. Package
+versions, executable hashes, source commits, and lockfile hashes are recorded.
+Tracked project sources and lockfiles are unchanged after measurement.
 
-## Conditions and interpretation
+| Project | Linted files | Rules | Formatted files in `vp check` |
+| ------- | -----------: | ----: | ----------------------------: |
+| Vite+   |          387 |   174 |                           675 |
+| vinext  |        1,842 |   151 |                         4,755 |
 
-The jobs used one GitHub Codespace with four vCPUs, 16 GB advertised RAM, and an
-AMD EPYC 9V74 processor for the main run. The focused timing repetition used an
-AMD EPYC 7763 after the instance restarted. Usable RAM was 15.62 GiB.
-The container used Ubuntu 22.04 on Linux x64 with glibc. Vite+ used Node.js
-`24.22.2`; vinext used Node.js `26.13.0`.
+## Interpretation and reproducibility
 
-The CLI JavaScript came from `22b07bd150aa57b3e04cc52e0b81d43294ffe982`.
-Its native binding, core, and prompts artifacts came from the published Vite+
-`1.5.0` packages. The measured Vite+ source also includes the RFC patch at
-`da260f86fce1d43810c62e4e6aad011066c88cb9`. Vinext is pinned to
-`249088af307c0a852fa6dc59c08fc6ec80e1620e`, from the requested upgrade branch.
-This is a comparison of backend routing in the built CLI, not a full native release build.
+This is a local desktop measurement with warm filesystem caches, not a cold-cache
+or isolated-server result. CPU use measured for 0.5 seconds before each timed run
+has a median of 12.4% across the machine (range 7.2%–23.9%).
+The CPU frequency is not fixed. Compare the paired backends within each row;
+the interquartile ranges describe sample spread, not confidence intervals.
 
-Lint uses four threads. Vinext lint sets
-`OXLINT_TSGOLINT_CHECKER_SCHEDULING=sorted`; Vite+ lint uses default scheduling.
-Full checks use four threads and default backend scheduling. The rules-only
-configuration disables TypeScript diagnostics while retaining the project's
-original rules and plugins. Setup, builds, validation, and memory sampling are
-excluded from the elapsed-time table.
+The vinext input contains both the Sentry fixture exclusion from its draft PR
+and the upstream [`prefer-shared-utils` optimization](https://github.com/cloudflare/vinext/commit/5a6cc15f39ca7e93bb1892efdcf2d3d01aa1b562).
+Its original plugin rules remain enabled. These source inputs, the hardware,
+thread counts, and tool versions differ from the earlier Codespaces measurements.
+Changes in absolute times or reduction percentages cannot be attributed solely
+to the tsrs version update.
 
-Both backends passed all 12 validation commands and every benchmark invocation.
-Vite+ checked 385 source files with 174 rules and formatted 632 files. Vinext
-checked 1,828 source files with 151 rules and formatted 4,673 files. These clean
-corpora do not establish complete diagnostic or compiler parity.
+All measured samples are retained; there is no outlier filtering. Reductions use
+`100 * (1 - tsrs median / Go median)`. Raw samples, commands, memory traces,
+dependency receipts, and the local runner remain outside the repository.
 
-Vinext retains its original JS plugin rules, including
-`vinext-utils/prefer-shared-utils`. The backend switch leaves that shared work
-in place. This limits the elapsed-time improvement even though the memory
-reduction is larger. The measurements do not include that rule's separate optimization.
+## Historical installed disk footprint
 
-## Run selection
+The following disk measurements retain the **2026-11-06 Linux x64** comparison
+of published `1.5.0` and the `0.22.0` preview. They are not measurements of the
+current macOS preview. The [original report](https://github.com/voidzero-dev/vite-plus/blob/68eb84008fd27a72a5e9426ad64636432385b0e1/bench/tsrs-lint.md#installed-disk-footprint)
+contains the installation method, package inventory scope, and lockfile hashes.
 
-The main job completed 204 invocations, including warm-ups.
-A browser connection used to diagnose an SSH
-outage started editor extension activity during vinext's type-checking timing
-set. That entire timing set is excluded. The table instead uses the 22 records
-from a clean timing repetition.
-The repetition uses the same retained build and dependencies, with their hashes
-checked before execution. All memory values come from the main job.
+| Scope                                         | Go (MiB) | tsrs (MiB) | Increase |
+| --------------------------------------------- | -------: | ---------: | -------: |
+| Complete `node_modules`, on disk              |   132.93 |     150.87 |    13.5% |
+| Complete `node_modules`, regular-file lengths |   123.39 |     139.27 |    12.9% |
+| Backend packages, on disk                     |    21.63 |      39.69 |    83.5% |
 
-Warm-up runs do not contribute to medians. Each reduction is calculated as
-`100 * (1 - rust / go)` from the corresponding backend medians.
+One MiB is 1,048,576 bytes. The total installation comparison includes other
+release-to-preview dependency changes; the backend row isolates the backend
+packages. These disk figures do not describe runtime memory use.
