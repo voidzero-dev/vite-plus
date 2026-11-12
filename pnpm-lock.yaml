@@ -249,8 +249,8 @@ catalogs:
       specifier: 5.1.0
       version: 5.1.0
     bingo:
-      specifier: ^0.13.2
-      version: 0.13.2
+      specifier: ^0.16.0
+      version: 0.16.0
     cac:
       specifier: ^7.1.0
       version: 7.1.0
@@ -508,7 +508,7 @@ importers:
         version: 0.2.0
       bingo:
         specifier: 'catalog:'
-        version: 0.13.2
+        version: 0.16.0(zod@4.6.7)
       cac:
         specifier: 'catalog:'
         version: 7.1.0
@@ -2313,6 +2313,9 @@ packages:
 
   '@octokit/openapi-types@27.0.0':
     resolution: {integrity: sha512-whrdktVs1h6gtR+09+QsNk2+FO+49j6ga1c55YZudfEG+oKJVvJLQi3zkOm5JjiUXAagWK2tI2kTGKJ2Ys7MGA==}
+
+  '@octokit/openapi-types@29.0.1':
+    resolution: {integrity: sha512-9qWOMFNxxLokERcms42rU0PTLqQmVs7g5E41TI4mCOxmpFayD1rfC7XxOL55cG9MBZLFlC31BrR37myMKardwg==}
 
   '@octokit/openapi-webhooks-types@12.1.0':
     resolution: {integrity: sha512-WiuzhOsiOvb7W3Pvmhf8d2C6qaLHXrWiLBP4nJ/4kydu+wpagV5Fkz9RfQwV2afYzv3PB+3xYgp4mAdNGjDprA==}
@@ -4253,22 +4256,27 @@ packages:
     resolution: {integrity: sha512-Ceh+7ox5qe7LJuLHoY0feh3pHuUDHAcRUeyL2VYghZwfpkNIy/+8Ocg0a3UuSoYzavmylwuLWQOf3hl0jjMMIw==}
     engines: {node: '>=8'}
 
-  bingo-fs@0.6.0:
-    resolution: {integrity: sha512-vKEkj1R0jPIjEAUWJB/F3sDgn+mtelbkRs+mmU5CoMZpKQ04WavA4DWWO/Jq88jY840PrqEJInuC9ue4RvUV0g==}
-    engines: {node: '>=18'}
+  bingo-fs@0.8.0:
+    resolution: {integrity: sha512-BD599QRKnwHCKw09HFIEeQI6/V8UJoC/HkVvokYcAm4QDJxKxjuuPdECEKpVcaQA1b8r1DKv+ji7Yw7TUZZsRQ==}
+    engines: {node: ^22.22.2 || ^24.15.0 || >=26.0.0}
 
-  bingo-requests@0.5.6:
-    resolution: {integrity: sha512-cpvNWqMlFkbynxJzyKJ4B/R57zR2MsPkJSldNJRxSTN6LlgB9uzQ8jAeDZy2ENoUHNlH5nApv2JyHxVqFxcjSg==}
-    engines: {node: '>=18'}
+  bingo-requests@0.7.0:
+    resolution: {integrity: sha512-bHxA0c0rsaaA0xGxH0uSAR6W+/JaJia1f+FjVDnTqaAgiB6vUSF7H5X1f1pIkBdXV7yAAjM+6O1tDDP6vP5B6Q==}
+    engines: {node: ^22.22.2 || ^24.15.0 || >=26.0.0}
 
-  bingo-systems@0.7.0:
-    resolution: {integrity: sha512-Aw5dokVSssSagrVcib9dfVYobp0h/pJKb5m+PhCkAjYkzgGiEN4E56uBVeB42rMAedg7/hxvhFsCsH6wthrDFw==}
-    engines: {node: '>=22'}
+  bingo-systems@0.9.0:
+    resolution: {integrity: sha512-iyfk4it7qFE9neRJFp5/qpuf2KWw1Bppke9oevECXQGquGVIJhwmKt28cLyru5avd7OLO4gVD2T/m+q1IGEBlQ==}
+    engines: {node: ^22.22.2 || ^24.15.0 || >=26.0.0}
 
-  bingo@0.13.2:
-    resolution: {integrity: sha512-sgSZOjlD2c8Lrsgn1NBvcxNoH1tzVL+Nu3QKfg8Y9ciBP5qvXskadH7u0zpRIdtCXzOqviHyubYcInYPnqqR3Q==}
-    engines: {node: '>=22'}
+  bingo@0.16.0:
+    resolution: {integrity: sha512-JGWvr+cEA9g3F11Oubmmuot9kwkzMHqNJd6Wh3wiEWgIbRy1/X3FOWqEnF0mLf45mjeqIkKlUpiKDdZtgRhPnQ==}
+    engines: {node: ^22.22.2 || ^24.15.0 || >=26.0.0}
     hasBin: true
+    peerDependencies:
+      zod: ^4.4.3
+    peerDependenciesMeta:
+      zod:
+        optional: true
 
   boolbase@1.0.0:
     resolution: {integrity: sha512-JZOSA7Mo9sNGB8+UjSgzdLtokWAky1zbztM3WRLCbZ70/3cTANmQmOdR7y2g+J0e2WXywy1yS468tY+IruqEww==}
@@ -4851,6 +4859,10 @@ packages:
     resolution: {integrity: sha512-CRT1WTyuQoD771GW56XEZFQ/ZoSfWid1alKGDYMmkt2yl8UXrVR4pspqWNEcqKvVIzg6PAltWjxcSSPrboA4iA==}
     engines: {node: '>=18.0.0'}
 
+  execa@10.2.1:
+    resolution: {integrity: sha512-/Bofl3ZBh2Q4/PG0W63qFzP5vDAypi8Zc90UWTBzaDNIYiX7apPOd0N6L8hG8CojUdq4V51adu8BObP+iVsSTw==}
+    engines: {node: '>=22'}
+
   execa@9.6.1:
     resolution: {integrity: sha512-9Be3ZoN4LmYR90tUoVu2te2BsbzHfhJyfEiAVfz7N5/zv+jduIfLrV2xdQXOHbaD6KgpGdO9PRPM1Y4Q9QkPkA==}
     engines: {node: ^18.19.0 || >=20.5.0}
@@ -5006,6 +5018,10 @@ packages:
     resolution: {integrity: sha512-vcGCRhKNOOynlxi7j3dOrkCkxG1rxt/IbmZY9A+xXMhRAUMeIA5T4Fn0LTaPXfQWdUkOcc3DBWDvcc6dmnxmYw==}
     engines: {node: '>=18'}
 
+  get-github-auth-token@0.2.0:
+    resolution: {integrity: sha512-3Kbqg9jhyylj/qyumXOhhbXaV23UUIkTQ2TVXQGlGswuciQ09U7hSAt89lusAAj1hu0rRYSdADVqceKqVgiKBQ==}
+    engines: {node: '>=18'}
+
   get-port@7.1.0:
     resolution: {integrity: sha512-QB9NKEeDg3xxVwCCwJQ9+xycaz6pBB6iQ76wiWMl1927n0Kir6alPiP+yuiICLLU4jpMe08dXfpebuQppFA2zw==}
     engines: {node: '>=16'}
@@ -5090,8 +5106,8 @@ packages:
     resolution: {integrity: sha512-EykJT/Q1KjTWctppgIAgfSO0tKVuZUjhgMr17kqTumMl6Afv3EISleU7qZUzoXDFTAHTDC4NOoG/ZxU3EvlMPQ==}
     engines: {node: '>=8'}
 
-  hash-object@5.0.1:
-    resolution: {integrity: sha512-iaRY4jYOow1caHkXW7wotYRjZDQk2nq4U7904anGJj8l4x1SLId+vuR8RpGoywZz9puD769hNFVFLFH9t+baJw==}
+  hash-object@5.1.0:
+    resolution: {integrity: sha512-YknwTK27nKKtqXMcfx0dVC0NEb68nSnMbmkQXJ6AzL53dPo5FHMpyWvr7TJwMDvE+cpyzrWhASMftcqXXgJcKQ==}
     engines: {node: '>=18'}
 
   hasown@2.0.2:
@@ -5104,6 +5120,10 @@ packages:
   host-validation-middleware@0.1.4:
     resolution: {integrity: sha512-VW5VMj09+ZwwMmr+B6WvYl0M/G1x7JFyh2hP9DC2IEOm4BcT6+2/Zc5AILM/MBcfw5Zge8b0ogF7avAkXYwbxg==}
     engines: {node: ^18.0.0 || >=20.0.0}
+
+  hosted-git-info@10.1.1:
+    resolution: {integrity: sha512-DeOnSPAvOndYKfw075gt8yZzQ7S2hNztw34zBTfhIzLhmBTswIBg5/y+pqu/VD5cYWm5goAFTusDmUEmKZ0PEQ==}
+    engines: {node: ^22.22.2 || ^24.15.0 || >=26.0.0}
 
   hosted-git-info@9.0.2:
     resolution: {integrity: sha512-M422h7o/BR3rmCQ8UHi7cyyMqKltdP9Uo+J2fXK+RSAY+wTcKOIRyhTuKv4qn+DJf3g+PL890AzId5KZpX+CBg==}
@@ -5601,8 +5621,8 @@ packages:
     resolution: {integrity: sha512-dBpDMdxv9Irdq66304OLfEmQ9tbNRFnFTuZiLo+bD+r332bBmMJ8GBLXklIXXgxd3+v9+KUnZaUR5PJMa75Gsg==}
     engines: {node: '>= 0.4.0'}
 
-  new-github-repository@0.2.4:
-    resolution: {integrity: sha512-LHHrk3SdPrjSKsqeCsesqmsp3mdD2uUfmY0+5L8D+Cmw6Ts4p8Ss1AaUsEgxeAaQBVR+O0f5GJgrm7oi3DS3Zw==}
+  new-github-repository@0.2.5:
+    resolution: {integrity: sha512-fisCiZGjLn8LwivoYKZInqZZcJAeWrpV3e5ySEJ7OKFefDtct9OmpjVpPlVyCrXF12Z6+BCcaukB7v80jxAmww==}
     engines: {node: '>=18.3.0'}
 
   node-addon-api@7.1.1:
@@ -5972,8 +5992,8 @@ packages:
     resolution: {integrity: sha512-Qb1gy5OrP5+zDf2Bvnzdl3jsTf1qXVMazbvCoKhtKqVs4/YK4ozX4gKQJJVyNe+cajNPn0KoC0MC3FUmaHWEmQ==}
     engines: {node: ^10.13.0 || ^12.13.0 || ^14.15.0 || >=15.0.0}
 
-  pretty-ms@9.3.0:
-    resolution: {integrity: sha512-gjVS5hOP+M3wMm5nmNOucbIrqudzs9v/57bWRHQWLYklXqoXKrVfYW2W9+glfGsqtPgpiz5WwyEEB+ksXIx3gQ==}
+  pretty-ms@9.3.1:
+    resolution: {integrity: sha512-HzMy3Geq23nVALD/M2LliU+F+M+gVNsvkQWWqeBZ8HDiCgzo6YPJ/Omrmtq24EFrIsk0a3EkQGEd7bDOo+IhGA==}
     engines: {node: '>=18'}
 
   process-nextick-args@2.0.1:
@@ -6032,8 +6052,8 @@ packages:
     resolution: {integrity: sha512-Q5hMVBYur/eQNWDdbF4/Wqqr9Bjvtrw2kjGxxBbKLbx8bVCL8gcArjTy8zDUuLGQicftpMuU0riQNcAsbtOVsw==}
     engines: {node: '>=20'}
 
-  read-pkg@10.0.0:
-    resolution: {integrity: sha512-A70UlgfNdKI5NSvTTfHzLQj7NJRpJ4mT5tGafkllJ4wh71oYuGm/pzphHcmW4s35iox56KSK721AihodoXSc/A==}
+  read-pkg@10.1.0:
+    resolution: {integrity: sha512-I8g2lArQiP78ll51UeMZojewtYgIRCKCWqZEgOO8c/uefTI+XDXvCSXu3+YNUaTNvZzobrL5+SqHjBrByRRTdg==}
     engines: {node: '>=20'}
 
   readable-stream@2.3.8:
@@ -6683,8 +6703,8 @@ packages:
     resolution: {integrity: sha512-TeTSQ6H5YHvpqVwBRcnLDCBnDOHWYu7IvGbHT6N8AOymcr9PJGjc1GTtiWZTYg0NCgYwvnYWEkVChQAr9bjfwA==}
     engines: {node: '>=16'}
 
-  type-fest@5.4.1:
-    resolution: {integrity: sha512-xygQcmneDyzsEuKZrFbRMne5HDqMs++aFzefrJTgEIKjQ3rekM+RPfFCVq2Gp1VIDqddoYeppCj4Pcb+RZW0GQ==}
+  type-fest@5.10.0:
+    resolution: {integrity: sha512-NoSdpq/WEiAg5sjmBkmV/hfxv6HJH4NqPNrqjtSO5CwRmpsDfaf4begxW34KdJykH/l1yHtwBWQkCRdoXO8mPA==}
     engines: {node: '>=20'}
 
   typescript@5.6.1-rc:
@@ -6732,6 +6752,10 @@ packages:
   unicorn-magic@0.3.0:
     resolution: {integrity: sha512-+QBBXBCvifc56fsbuxZQ6Sic3wqqc3WWaqxs58gvJrcOuN83HGTCwz3oS5phzU9LthRNE9VrJCFCLUgHeeFnfA==}
     engines: {node: '>=18'}
+
+  unicorn-magic@0.4.1:
+    resolution: {integrity: sha512-lzlXPoVB0Uy/FvTaUgX39RbixYiSKoc3JSoSf01+0c2B6FR3qdYIPN7Qjo/AV7n6sqLCk0509cT3LRj1oSZ1+A==}
+    engines: {node: '>=20'}
 
   universal-github-app-jwt@2.2.2:
     resolution: {integrity: sha512-dcmbeSrOdTnsjGjUfAlqNDJrhxXizjAz94ija9Qw8YkZ1uu0d+GoZzyH+Jb9tIIqvGsadUfwg+22k5aDqqwzbw==}
@@ -6929,6 +6953,11 @@ packages:
     resolution: {integrity: sha512-2ytDk0kiEj/yu90JOAp44PVPUkO9+jVhyf+SybKlRHSDlvOOZhdPIrr7xTH64l4WixO2cP+wQIcgujkGBPPz6g==}
     engines: {node: '>=20'}
 
+  which-command@0.1.0:
+    resolution: {integrity: sha512-XZyoF5/5hZtXitIwzrU4NKK+Wtbb9aB9CezUEw2Q0wlYK8NUYQxC1rRXgNueYLtBAJwXIb+/tFVk4dozciNJMA==}
+    engines: {node: '>=22'}
+    hasBin: true
+
   which@2.0.2:
     resolution: {integrity: sha512-BLI3Tl1TW3Pvl70l3yq3Y64i+awpwXqsGBYWkkqMtnbXgrMD+yj7rhW0kuEDxzJaYXGjEW5ogapKNMEKNMjibA==}
     engines: {node: '>= 8'}
@@ -7015,8 +7044,8 @@ packages:
     resolution: {integrity: sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==}
     engines: {node: '>=10'}
 
-  yoctocolors@2.1.2:
-    resolution: {integrity: sha512-CzhO+pFNo8ajLM2d2IW/R93ipy99LWjtwblvC1RsoSUMZgyLbYFr221TnSNT7GjGdYui6P459mw9JH/g/zW2ug==}
+  yoctocolors@2.2.0:
+    resolution: {integrity: sha512-xYqdZFUK/VYazNl/oCDYN+3WloWQwMfZxBoiNt6qNyk+xfOdi598muWE42rNZFp1kNOiqW936q5RhUdnpqElSg==}
     engines: {node: '>=18'}
 
   yuku-ast@0.19.0:
@@ -8189,6 +8218,8 @@ snapshots:
       '@octokit/types': 16.0.0
 
   '@octokit/openapi-types@27.0.0': {}
+
+  '@octokit/openapi-types@29.0.1': {}
 
   '@octokit/openapi-webhooks-types@12.1.0': {}
 
@@ -9625,37 +9656,38 @@ snapshots:
 
   binary-extensions@2.3.0: {}
 
-  bingo-fs@0.6.0: {}
+  bingo-fs@0.8.0: {}
 
-  bingo-requests@0.5.6:
+  bingo-requests@0.7.0:
     dependencies:
       '@octokit/types': 16.0.0
 
-  bingo-systems@0.7.0:
+  bingo-systems@0.9.0:
     dependencies:
-      bingo-fs: 0.6.0
-      execa: 9.6.1
-      get-github-auth-token: 0.1.2
+      bingo-fs: 0.8.0
+      execa: 10.2.1
+      get-github-auth-token: 0.2.0
       octokit: 5.0.5
 
-  bingo@0.13.2:
+  bingo@0.16.0(zod@4.6.7):
     dependencies:
       '@clack/prompts': 0.11.0
       all-properties-lazy: 0.1.0
-      bingo-fs: 0.6.0
-      bingo-requests: 0.5.6
-      bingo-systems: 0.7.0
+      bingo-fs: 0.8.0
+      bingo-requests: 0.7.0
+      bingo-systems: 0.9.0
       cached-factory: 0.3.0
       call-id: 0.1.0
-      get-github-auth-token: 0.1.2
+      get-github-auth-token: 0.2.0
       git-url-parse: 16.1.0
-      hash-object: 5.0.1
-      hosted-git-info: 9.0.2
-      new-github-repository: 0.2.4
+      hash-object: 5.1.0
+      hosted-git-info: 10.1.1
+      new-github-repository: 0.2.5
       read-package-up: 12.0.0
-      read-pkg: 10.0.0
+      read-pkg: 10.1.0
       slugify: 1.6.9
       without-undefined-properties: 0.1.2
+    optionalDependencies:
       zod: 4.6.7
 
   boolbase@1.0.0: {}
@@ -10254,6 +10286,21 @@ snapshots:
     dependencies:
       eventsource-parser: 3.1.1
 
+  execa@10.2.1:
+    dependencies:
+      '@sindresorhus/merge-streams': 4.0.0
+      figures: 6.1.0
+      get-stream: 9.0.1
+      human-signals: 8.0.1
+      is-plain-obj: 4.1.0
+      is-stream: 4.0.1
+      npm-run-path: 6.0.0
+      pretty-ms: 9.3.1
+      signal-exit: 4.1.0
+      strip-final-newline: 4.0.0
+      which-command: 0.1.0
+      yoctocolors: 2.2.0
+
   execa@9.6.1:
     dependencies:
       '@sindresorhus/merge-streams': 4.0.0
@@ -10264,10 +10311,10 @@ snapshots:
       is-plain-obj: 4.1.0
       is-stream: 4.0.1
       npm-run-path: 6.0.0
-      pretty-ms: 9.3.0
+      pretty-ms: 9.3.1
       signal-exit: 4.1.0
       strip-final-newline: 4.0.0
-      yoctocolors: 2.1.2
+      yoctocolors: 2.2.0
 
   expect-type@1.4.0: {}
 
@@ -10418,6 +10465,8 @@ snapshots:
 
   get-github-auth-token@0.1.2: {}
 
+  get-github-auth-token@0.2.0: {}
+
   get-port@7.1.0: {}
 
   get-stream@5.2.0:
@@ -10503,7 +10552,7 @@ snapshots:
 
   has-flag@4.0.0: {}
 
-  hash-object@5.0.1:
+  hash-object@5.1.0:
     dependencies:
       decircular: 0.1.1
       is-obj: 3.0.0
@@ -10517,6 +10566,10 @@ snapshots:
   hookable@6.1.2: {}
 
   host-validation-middleware@0.1.4: {}
+
+  hosted-git-info@10.1.1:
+    dependencies:
+      lru-cache: 11.2.7
 
   hosted-git-info@9.0.2:
     dependencies:
@@ -10973,9 +11026,9 @@ snapshots:
 
   netmask@2.0.2: {}
 
-  new-github-repository@0.2.4:
+  new-github-repository@0.2.5:
     dependencies:
-      '@octokit/openapi-types': 27.0.0
+      '@octokit/openapi-types': 29.0.1
       octokit: 5.0.5
       octokit-from-auth: 0.3.2
 
@@ -11434,7 +11487,7 @@ snapshots:
       ansi-styles: 5.2.0
       react-is: 17.0.2
 
-  pretty-ms@9.3.0:
+  pretty-ms@9.3.1:
     dependencies:
       parse-ms: 4.0.0
 
@@ -11496,16 +11549,16 @@ snapshots:
   read-package-up@12.0.0:
     dependencies:
       find-up-simple: 1.0.1
-      read-pkg: 10.0.0
-      type-fest: 5.4.1
+      read-pkg: 10.1.0
+      type-fest: 5.10.0
 
-  read-pkg@10.0.0:
+  read-pkg@10.1.0:
     dependencies:
       '@types/normalize-package-data': 2.4.4
       normalize-package-data: 8.0.0
       parse-json: 8.3.0
-      type-fest: 5.4.1
-      unicorn-magic: 0.3.0
+      type-fest: 5.10.0
+      unicorn-magic: 0.4.1
 
   readable-stream@2.3.8:
     dependencies:
@@ -12141,7 +12194,7 @@ snapshots:
 
   type-fest@4.41.0: {}
 
-  type-fest@5.4.1:
+  type-fest@5.10.0:
     dependencies:
       tagged-tag: 1.0.0
 
@@ -12192,6 +12245,8 @@ snapshots:
   undici@7.16.0: {}
 
   unicorn-magic@0.3.0: {}
+
+  unicorn-magic@0.4.1: {}
 
   universal-github-app-jwt@2.2.2: {}
 
@@ -12427,6 +12482,8 @@ snapshots:
       webidl-conversions: 8.0.0
     optional: true
 
+  which-command@0.1.0: {}
+
   which@2.0.2:
     dependencies:
       isexe: 2.0.0
@@ -12494,7 +12551,7 @@ snapshots:
 
   yocto-queue@0.1.0: {}
 
-  yoctocolors@2.1.2: {}
+  yoctocolors@2.2.0: {}
 
   yuku-ast@0.19.0:
     dependencies:
