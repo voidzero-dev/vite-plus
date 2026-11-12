@@ -1,4 +1,7 @@
-import { block, getColumns, isAccessible, settings } from '@clack/core';
+import readline from 'node:readline';
+import type { Writable } from 'node:stream';
+
+import { getColumns, isAccessible, settings } from '@clack/core';
 import { wrapAnsi } from 'fast-wrap-ansi';
 import color from 'picocolors';
 import { cursor, erase } from 'sisteransi';
@@ -51,6 +54,60 @@ const formatTimer = (durationMs: number): string => {
   return color.gray(min > 0 ? `(${min}m ${secs}s)` : `(${secs}s)`);
 };
 
+const PROCESS_SIGNALS = ['SIGINT', 'SIGTERM'] as const;
+type ProcessSignal = (typeof PROCESS_SIGNALS)[number];
+
+const spinnerSignalListeners = new Set<unknown>();
+
+// Windows has no signals, so exit with the matching status there.
+const endBySignal = (signal: ProcessSignal, pid: number): void => {
+  if (process.platform === 'win32') {
+    process.exit(signal === 'SIGINT' ? 130 : 143);
+  } else {
+    process.kill(pid, signal);
+  }
+};
+
+let inputBlocked = false;
+
+// clack's block() exits with 0 on Ctrl+C. This copy reports Ctrl+C and ignores other keys.
+const blockInput = (output: Writable, onInterrupt: () => void): (() => void) => {
+  if (inputBlocked) {
+    return () => {};
+  }
+  inputBlocked = true;
+  const input = process.stdin;
+  const rl = readline.createInterface({ input, output, prompt: '', tabSize: 1 });
+  readline.emitKeypressEvents(input, rl);
+  if (input.isTTY) {
+    input.setRawMode(true);
+  }
+  const onKeypress = (_char: string | undefined, { name, sequence }: readline.Key): void => {
+    if (sequence === '\x03') {
+      onInterrupt();
+      return;
+    }
+    // Erase the echoed key.
+    const [dx, dy] = name === 'return' ? [0, -1] : [-1, 0];
+    readline.moveCursor(output, dx, dy);
+    readline.clearLine(output, 1);
+  };
+  output.write(cursor.hide);
+  input.on('keypress', onKeypress);
+  return () => {
+    inputBlocked = false;
+    input.off('keypress', onKeypress);
+    output.write(cursor.show);
+    // Windows keeps raw mode: https://github.com/bombshell-dev/clack/issues/176
+    if (input.isTTY && process.platform !== 'win32') {
+      input.setRawMode(false);
+    }
+    // @ts-expect-error https://github.com/nodejs/node/issues/31762#issuecomment-1441223907
+    rl.terminal = false;
+    rl.close();
+  };
+};
+
 export const spinner = ({
   indicator = 'dots',
   onCancel,
@@ -100,6 +157,34 @@ export const spinner = ({
 
   const errorEventHandler = () => handleExit(2);
   const signalEventHandler = () => handleExit(1);
+  // A one-shot listener is removed before it runs, so keep a removal until this callback returns.
+  const removedInDelivery = new Set<string | symbol>();
+  const trackRemoval = (event: string | symbol, listener: unknown) => {
+    if (!spinnerSignalListeners.has(listener)) {
+      removedInDelivery.add(event);
+      process.nextTick(() => removedInDelivery.delete(event));
+    }
+  };
+  const ownedByAnother = (processSignal: ProcessSignal) =>
+    removedInDelivery.has(processSignal) ||
+    process.listeners(processSignal).some((listener) => !spinnerSignalListeners.has(listener));
+  // A listener replaces the default action, so the only owner raises the signal again.
+  // An emit without the signal name only stops the spinner.
+  const processSignalHandlers = PROCESS_SIGNALS.map((processSignal) => {
+    const handler = (received?: NodeJS.Signals) => {
+      const raise = received === processSignal && !ownedByAnother(processSignal);
+      handleExit(1);
+      if (raise) {
+        endBySignal(processSignal, process.pid);
+      }
+    };
+    return [processSignal, handler] as const;
+  });
+  // Raw mode turns Ctrl+C into a key, so send SIGINT to the process group as the terminal would.
+  const interrupt = () => {
+    handleExit(1);
+    endBySignal('SIGINT', 0);
+  };
 
   const registerHooks = () => {
     // Reference: https://nodejs.org/api/process.html#event-uncaughtexception
@@ -107,9 +192,13 @@ export const spinner = ({
     // Reference: https://nodejs.org/api/process.html#event-unhandledrejection
     process.on('unhandledRejection', errorEventHandler);
     // Reference Signal Events: https://nodejs.org/api/process.html#signal-events
-    process.on('SIGINT', signalEventHandler);
-    process.on('SIGTERM', signalEventHandler);
+    for (const [processSignal, handler] of processSignalHandlers) {
+      spinnerSignalListeners.add(handler);
+      // Run first, so that an observer such as signal-exit finds no spinner listener left.
+      process.prependListener(processSignal, handler);
+    }
     process.on('exit', handleExit);
+    process.on('removeListener', trackRemoval);
 
     if (signal) {
       signal.addEventListener('abort', signalEventHandler);
@@ -119,8 +208,11 @@ export const spinner = ({
   const clearHooks = () => {
     process.removeListener('uncaughtExceptionMonitor', errorEventHandler);
     process.removeListener('unhandledRejection', errorEventHandler);
-    process.removeListener('SIGINT', signalEventHandler);
-    process.removeListener('SIGTERM', signalEventHandler);
+    process.removeListener('removeListener', trackRemoval);
+    for (const [processSignal, handler] of processSignalHandlers) {
+      process.removeListener(processSignal, handler);
+      spinnerSignalListeners.delete(handler);
+    }
     process.removeListener('exit', handleExit);
 
     if (signal) {
@@ -151,7 +243,7 @@ export const spinner = ({
 
   const startLoop = (): void => {
     isSpinnerActive = true;
-    unblock = isCI ? () => {} : block({ output });
+    unblock = isCI ? () => {} : blockInput(output, interrupt);
     _origin = performance.now();
     _prevMessage = undefined;
     if (hasGuide) {
