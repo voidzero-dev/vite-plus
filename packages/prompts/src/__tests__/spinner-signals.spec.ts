@@ -3,7 +3,7 @@ import { once } from 'node:events';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pathToFileURL } from 'node:url';
 
 import { build } from 'tsdown';
 import { afterAll, beforeAll, describe, expect, it } from 'vite-plus/test';
@@ -38,7 +38,7 @@ describe.skipIf(process.platform === 'win32')('spinner interrupts', () => {
     // Build current source rather than relying on potentially stale package output.
     await build({
       config: false,
-      entry: [fileURLToPath(new URL('../spinner.ts', import.meta.url))],
+      entry: [join(import.meta.dirname, '../spinner.ts')],
       outDir: directory,
       deps: { alwaysBundle: [/.*/], onlyBundle: false },
       dts: false,
