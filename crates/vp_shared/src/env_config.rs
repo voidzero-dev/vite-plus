@@ -94,6 +94,10 @@ fn user_home_path() -> Option<AbsolutePathBuf> {
 /// Keep an explicit absolute `VP_HOME` because an arbitrary monolithic root
 /// cannot be resolved again. Do not write resolved `VP_*_DIR` or `XDG_*`
 /// values. Split layouts resolve them from each process environment.
+fn non_empty_var(name: &str) -> Option<String> {
+    std::env::var(name).ok().filter(|value| !value.is_empty())
+}
+
 fn persisted_dir_envs() -> HashMap<&'static str, String> {
     if let Some(home) = crate::dirs::vp_home_override() {
         return HashMap::from([(env_vars::VP_HOME, home.as_path().to_string_lossy().into_owned())]);
@@ -263,14 +267,14 @@ impl EnvConfig {
         Arc::new(Self {
             dir_envs: persisted_dir_envs(),
             dirs,
-            npm_registry: std::env::var(env_vars::NPM_CONFIG_REGISTRY)
-                .or_else(|_| std::env::var(env_vars::NPM_CONFIG_REGISTRY_UPPER))
-                .unwrap_or_else(|_| "https://registry.npmjs.org".into())
+            npm_registry: non_empty_var(env_vars::NPM_CONFIG_REGISTRY)
+                .or_else(|| non_empty_var(env_vars::NPM_CONFIG_REGISTRY_UPPER))
+                .unwrap_or_else(|| "https://registry.npmjs.org".into())
                 .trim_end_matches('/')
                 .to_string(),
-            node_dist_mirror: std::env::var(env_vars::VP_NODE_DIST_MIRROR).ok(),
-            node_skip_signature_verify: std::env::var(env_vars::VP_NODE_SKIP_SIGNATURE_VERIFY)
-                .is_ok(),
+            node_dist_mirror: non_empty_var(env_vars::VP_NODE_DIST_MIRROR),
+            node_skip_signature_verify: non_empty_var(env_vars::VP_NODE_SKIP_SIGNATURE_VERIFY)
+                .is_some(),
             is_ci: std::env::var("CI").is_ok(),
             env_use_eval_enable: std::env::var(env_vars::VP_ENV_USE_EVAL_ENABLE).is_ok(),
             node_version: std::env::var(env_vars::VP_NODE_VERSION).ok(),
@@ -501,6 +505,38 @@ mod tests {
                 assert_eq!(config.node_manager, expected, "{value}");
                 assert_eq!(config.pm_manager, expected, "{value}");
                 assert!(!config.env_forbidden, "{value}");
+            });
+        }
+    }
+
+    #[test]
+    fn empty_node_download_vars_are_unset() {
+        for value in [None, Some(""), Some("1")] {
+            let vars = [
+                (env_vars::VP_NODE_DIST_MIRROR, value),
+                (env_vars::VP_NODE_SKIP_SIGNATURE_VERIFY, value),
+            ];
+            EnvConfig::with_vars(vars, |config| {
+                assert_eq!(config.node_dist_mirror.as_deref(), value.filter(|v| !v.is_empty()));
+                assert_eq!(config.node_skip_signature_verify, value == Some("1"), "{value:?}");
+            });
+        }
+    }
+
+    #[test]
+    fn empty_npm_registry_vars_are_unset() {
+        for (lower, upper, expected) in [
+            (None, None, "https://registry.npmjs.org"),
+            (Some(""), None, "https://registry.npmjs.org"),
+            (Some(""), Some(""), "https://registry.npmjs.org"),
+            (Some(""), Some("https://upper.test/"), "https://upper.test"),
+        ] {
+            let vars = [
+                (env_vars::NPM_CONFIG_REGISTRY, lower),
+                (env_vars::NPM_CONFIG_REGISTRY_UPPER, upper),
+            ];
+            EnvConfig::with_vars(vars, |config| {
+                assert_eq!(config.npm_registry, expected, "{lower:?} {upper:?}");
             });
         }
     }
