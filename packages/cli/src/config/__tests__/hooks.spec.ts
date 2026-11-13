@@ -843,8 +843,50 @@ describe('hookScript', () => {
           encoding: 'utf8',
         });
 
-        expect(output).toBe(`./node_modules/.bin:${inheritedPath}`);
+        expect(output).toBe(`${resolve(tmp, 'node_modules', '.bin')}:${inheritedPath}`);
       } finally {
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'keeps project binaries on PATH when the hook changes directory in a subdirectory install',
+    () => {
+      const tmp = mkdtempSync(join(tmpdir(), 'hooks-subdir-cd-test-'));
+      const originalCwd = process.cwd();
+      try {
+        execSync('git init', { cwd: tmp, stdio: 'ignore' });
+        const pkgDir = join(tmp, 'pkg');
+        const hooksDir = join(pkgDir, '.vite-hooks');
+        const internalHooksDir = join(hooksDir, '_');
+        const nodeModulesBin = join(pkgDir, 'node_modules', '.bin');
+        mkdirSync(internalHooksDir, { recursive: true });
+        mkdirSync(nodeModulesBin, { recursive: true });
+
+        // The dispatcher is generated relative to the package root, just like
+        // install() does for a subdirectory hooks tree.
+        writeFileSync(join(internalHooksDir, 'h'), hookScript('.vite-hooks'), { mode: 0o755 });
+        writeFileSync(
+          join(internalHooksDir, 'pre-commit'),
+          '#!/usr/bin/env sh\n. "$(dirname "$0")/h"',
+          { mode: 0o755 },
+        );
+        writeFileSync(join(hooksDir, 'pre-commit'), 'cd pkg\nhook-command\n');
+        writeFileSync(join(nodeModulesBin, 'hook-command'), '#!/bin/sh\nprintf "%s" "$PATH"\n', {
+          mode: 0o755,
+        });
+
+        // Git invokes the hook via the relative core.hooksPath from the repo root.
+        const output = execSync('sh pkg/.vite-hooks/_/pre-commit', {
+          cwd: tmp,
+          env: { PATH: '/usr/bin:/bin' },
+          encoding: 'utf8',
+        });
+
+        expect(output).toBe(`${resolve(nodeModulesBin)}:/usr/bin:/bin`);
+      } finally {
+        process.chdir(originalCwd);
         rmSync(tmp, { recursive: true, force: true });
       }
     },
