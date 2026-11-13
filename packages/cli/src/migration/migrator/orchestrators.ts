@@ -590,14 +590,6 @@ export function rewriteMonorepoProject(
       ? findYarnWorkspaceHoisting(workspaceContext?.rootDir ?? projectPath)
       : undefined;
 
-  // Capture Oxlint plugin owner directories before `rewritePackageJson` strips
-  // `oxlint` from the package manifest. The import rewriter needs these signals
-  // to preserve legitimate plugin imports.
-  const oxlintOwnerDirs = collectOxlintOwnerDirs(
-    workspaceContext?.rootDir ?? projectPath,
-    workspaceContext?.packages,
-  );
-
   let extractedStagedConfig: Record<string, string | string[]> | null = null;
   editJsonFile<{
     devDependencies?: Record<string, string>;
@@ -663,7 +655,7 @@ export function rewriteMonorepoProject(
 
   if (!deferLazyPluginWrapping) {
     // rewrite imports in all TypeScript/JavaScript files before lazy plugin import merging
-    rewriteAllImports(projectPath, silent, report, true, oxlintOwnerDirs);
+    rewriteAllImports(projectPath, silent, report);
     wrapLazyPluginsInViteConfig(projectPath, silent, report);
     migrateTaskCacheConfigInViteConfig(projectPath, silent, report);
   }

@@ -8859,6 +8859,91 @@ export default defineConfig({
     expect(report.rewrittenImportFileCount).toBe(1);
   });
 
+  it('rewrites only the added package when workspace context is provided', () => {
+    const appDir = path.join(tmpDir, 'apps', 'web');
+    const siblingDir = path.join(tmpDir, 'apps', 'existing');
+    const source = "export { describe } from 'vitest';\n";
+    for (const dir of [tmpDir, appDir, siblingDir]) {
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(
+        path.join(dir, 'package.json'),
+        JSON.stringify({ name: path.basename(dir), devDependencies: { vitest: '^5.0.0' } }),
+      );
+      fs.writeFileSync(path.join(dir, 'test-utils.ts'), source);
+    }
+    const report = createMigrationReport();
+
+    rewriteMonorepoProject(appDir, PackageManager.pnpm, true, true, report, undefined, {
+      rootDir: tmpDir,
+      packages: [
+        { name: 'web', path: 'apps/web' },
+        { name: 'existing', path: 'apps/existing' },
+      ],
+    });
+
+    expect(fs.readFileSync(path.join(appDir, 'test-utils.ts'), 'utf8')).toBe(
+      "export { describe } from 'vite-plus/test';\n",
+    );
+    for (const dir of [tmpDir, siblingDir]) {
+      expect(fs.readFileSync(path.join(dir, 'test-utils.ts'), 'utf8')).toBe(source);
+    }
+    expect(report.rewrittenImportFileCount).toBe(1);
+  });
+
+  it.each([
+    ['dependencies', 'oxlint'],
+    ['peerDependencies', 'oxlint'],
+    ['dependencies', '@oxlint/plugins'],
+    ['peerDependencies', '@oxlint/plugins'],
+    ['optionalDependencies', '@oxlint/plugins'],
+  ])('preserves Oxlint plugin imports owned through %s.%s', (field, dependency) => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'published-plugin',
+        [field]: { [dependency]: '^1.0.0' },
+        devDependencies: { vite: '^7.0.0' },
+      }),
+    );
+    const source = "export { defineRule } from '@oxlint/plugins';\n";
+    fs.writeFileSync(path.join(tmpDir, 'plugin.ts'), source);
+    fs.writeFileSync(path.join(tmpDir, 'vite.config.ts'), "export { defineConfig } from 'vite';\n");
+    const report = createMigrationReport();
+
+    rewriteMonorepoProject(tmpDir, PackageManager.pnpm, true, true, report);
+
+    expect(fs.readFileSync(path.join(tmpDir, 'plugin.ts'), 'utf8')).toBe(source);
+    expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).toContain(
+      "from 'vite-plus'",
+    );
+    const pkg = JSON.parse(fs.readFileSync(path.join(tmpDir, 'package.json'), 'utf8'));
+    expect(pkg[field][dependency]).toBe('^1.0.0');
+    expect(report.rewrittenImportFileCount).toBe(1);
+  });
+
+  it('defers import rewriting and plugin wrapping during full workspace migration', () => {
+    const source = `import { defineConfig } from 'vite';
+export default defineConfig({ plugins: [react()] });
+`;
+    fs.writeFileSync(path.join(tmpDir, 'vite.config.ts'), source);
+    const report = createMigrationReport();
+
+    rewriteMonorepoProject(
+      tmpDir,
+      PackageManager.pnpm,
+      true,
+      true,
+      report,
+      undefined,
+      undefined,
+      true,
+    );
+
+    expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).toBe(source);
+    expect(report.rewrittenImportFileCount).toBe(0);
+    expect(report.wrappedPluginConfigCount).toBe(0);
+  });
+
   it('wraps package-level inline plugin arrays in monorepos', () => {
     const appDir = path.join(tmpDir, 'apps', 'web');
     fs.mkdirSync(appDir, { recursive: true });
