@@ -131,6 +131,19 @@ export function yarnSupportsCatalog(version: string): boolean {
   return versionAtLeast(version, YARN_CATALOG_MIN_VERSION, ['latest', 'next', 'stable']);
 }
 
+const YARN_PREAPPROVED_PACKAGES_MIN_VERSION = '4.10.0';
+
+// `npmPreapprovedPackages` shipped in Yarn 4.10.0, and an older Yarn refuses to
+// run at all with an rc key it does not know. Like `yarnSupportsCatalog`, this
+// receives the recorded (pre-upgrade) version.
+export function yarnSupportsPreapprovedPackages(version: string): boolean {
+  return versionAtLeast(version, YARN_PREAPPROVED_PACKAGES_MIN_VERSION, [
+    'latest',
+    'next',
+    'stable',
+  ]);
+}
+
 const BUN_TOP_LEVEL_CATALOG_MIN_VERSION = '1.2.21';
 
 // Bun resolves `catalog:` references ONLY inside a workspace: a root
