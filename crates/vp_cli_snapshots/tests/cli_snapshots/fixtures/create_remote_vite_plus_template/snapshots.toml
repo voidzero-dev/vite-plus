@@ -1,0 +1,10 @@
+# The fake `create-vp-test-vite-plus` CLI writes a project that already uses
+# Vite+, so `vp create` must leave its setup unchanged.
+[[case]]
+name = "create_remote_vite_plus_template"
+vp = "local"
+steps = [
+  { argv = ["vp", "create", "vp-test-vite-plus", "--no-interactive", "--no-agent", "--no-editor", "--no-git", "--no-hooks", "--", "my-app"], comment = "create from a template that already generates a Vite+ project", snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "print-file", "my-app/package.json"], comment = "dependencies and scripts are not rewritten", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "my-app/pnpm-workspace.yaml", "--assert-not", "file"], comment = "no Vite+ overrides are added", continue-on-failure = true },
+]
