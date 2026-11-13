@@ -279,7 +279,7 @@ smallvec = { version = "1.16.0", features = ["union"] }
 string_cache = "0.11.0"
 sugar_path = { version = "3", features = ["cached_current_dir"] }
 supports-color = "3"
-syn = { version = "2", default-features = false }
+syn = { version = "3", default-features = false }
 tar = { version = "0.4.43", default-features = false }
 temp-env = "0.3.6"
 tempfile = "3.14.0"
