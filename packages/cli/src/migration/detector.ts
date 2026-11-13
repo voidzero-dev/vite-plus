@@ -65,18 +65,21 @@ const CONFIG_SCRIPT_EXTENSIONS = ['js', 'mjs', 'cjs', 'ts', 'mts', 'cts'] as con
 const MIGRATION_WARNING_DETECTIONS = [
   {
     packageName: 'rollup',
+    match: 'all',
     configFiles: CONFIG_SCRIPT_EXTENSIONS.map((extension) => `rollup.config.${extension}`),
     warning:
       'Rollup configuration detected. Rollup is API-compatible with Rolldown and can be migrated first before migrating further to tsdown or Vite. Once migrated to tsdown or Vite, re-run vp migrate.',
   },
   {
     packageName: 'rolldown',
+    match: 'all',
     configFiles: CONFIG_SCRIPT_EXTENSIONS.map((extension) => `rolldown.config.${extension}`),
     warning:
       'Rolldown configuration detected. Rolldown can be migrated to tsdown or Vite, and it is recommended to do so. Once migrated, re-run vp migrate.',
   },
   {
     packageName: 'jest',
+    match: 'all',
     configFiles: [
       ...CONFIG_SCRIPT_EXTENSIONS.map((extension) => `jest.config.${extension}`),
       'jest.config.json',
@@ -84,6 +87,13 @@ const MIGRATION_WARNING_DETECTIONS = [
     packageJsonField: 'jest',
     warning:
       'Jest configuration detected. Vitest is highly compatible with Jest, and so we recommend migrating. See the Vitest Jest migration guide: https://vitest.dev/guide/migration/jest, then re-run vp migrate.',
+  },
+  {
+    packageName: 'turbo',
+    match: 'any',
+    configFiles: ['turbo.json', 'turbo.jsonc'],
+    warning:
+      'Turborepo detected. Task orchestration and caching were not migrated. vp run does not read Turborepo configuration. See https://viteplus.dev/guide/run and https://viteplus.dev/guide/cache.',
   },
 ] as const;
 
@@ -95,8 +105,7 @@ function hasDependency(packageJson: Record<string, unknown>, packageName: string
 }
 
 /**
- * Detect tools that have a direct migration path worth showing before the
- * regular Vite+ migration steps run.
+ * Detect tools that need manual migration advice.
  */
 export function detectMigrationWarnings(
   projectPath: string,
@@ -126,17 +135,21 @@ export function detectMigrationWarnings(
     }
 
     for (const detection of MIGRATION_WARNING_DETECTIONS) {
-      if (
-        (hasDependency(packageJson, detection.packageName) ||
-          (currentPath !== projectPath &&
-            rootPackageJson !== undefined &&
-            hasDependency(rootPackageJson, detection.packageName))) &&
-        (detection.configFiles.some((configFile) =>
+      const hasPackage =
+        hasDependency(packageJson, detection.packageName) ||
+        (currentPath !== projectPath &&
+          rootPackageJson !== undefined &&
+          hasDependency(rootPackageJson, detection.packageName));
+      if (detection.match === 'all' && !hasPackage) {
+        continue;
+      }
+      const hasConfig =
+        detection.configFiles.some((configFile) =>
           fs.existsSync(path.join(currentPath, configFile)),
         ) ||
-          ('packageJsonField' in detection &&
-            Object.hasOwn(packageJson, detection.packageJsonField)))
-      ) {
+        ('packageJsonField' in detection && Object.hasOwn(packageJson, detection.packageJsonField));
+
+      if (detection.match === 'any' ? hasPackage || hasConfig : hasPackage && hasConfig) {
         detected.add(detection.warning);
       }
     }
