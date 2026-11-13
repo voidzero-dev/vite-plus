@@ -86,6 +86,7 @@ pub(crate) fn apply_chdir(
 }
 
 /// Normalize CLI arguments:
+/// - `vp audit ...` → `vp pm audit ...`
 /// - `vp list ...` / `vp ls ...` → `vp pm list ...`
 /// - `vp rebuild ...` → `vp pm rebuild ...`
 /// - `vp help [command] [args...]` → `vp [command] [args...] --help`
@@ -94,6 +95,15 @@ fn normalize_args(args: Vec<String>) -> Vec<String> {
     let mut normalized = args;
     loop {
         let next = match normalized.get(1).map(String::as_str) {
+            // `vp audit ...` → `vp pm audit ...`
+            Some("audit") => {
+                let mut next = Vec::with_capacity(normalized.len() + 1);
+                next.push(normalized[0].clone());
+                next.push("pm".to_string());
+                next.push("audit".to_string());
+                next.extend(normalized[2..].iter().cloned());
+                next
+            }
             // `vp list ...` → `vp pm list ...`
             // `vp ls ...` → `vp pm list ...`
             Some("list" | "ls") => {
@@ -698,6 +708,30 @@ mod tests {
         let input = s(&["vp", "help", "rebuild"]);
         let normalized = normalize_args(input);
         assert_eq!(normalized, s(&["vp", "pm", "rebuild", "--help"]));
+    }
+
+    #[test]
+    fn normalize_args_rewrites_bare_vp_audit() {
+        let input = s(&["vp", "audit"]);
+        let normalized = normalize_args(input);
+        assert_eq!(normalized, s(&["vp", "pm", "audit"]));
+    }
+
+    #[test]
+    fn normalize_args_rewrites_vp_audit_with_args() {
+        let input = s(&["vp", "audit", "--json", "--", "--registry", "https://registry.npmjs.org"]);
+        let normalized = normalize_args(input);
+        assert_eq!(
+            normalized,
+            s(&["vp", "pm", "audit", "--json", "--", "--registry", "https://registry.npmjs.org"])
+        );
+    }
+
+    #[test]
+    fn normalize_args_rewrites_vp_help_audit() {
+        let input = s(&["vp", "help", "audit"]);
+        let normalized = normalize_args(input);
+        assert_eq!(normalized, s(&["vp", "pm", "audit", "--help"]));
     }
 
     #[test]
