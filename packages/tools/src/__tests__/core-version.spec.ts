@@ -126,19 +126,18 @@ describe('nextCoreVersion', () => {
     );
   });
 
-  test('changes only the counter for minor and major releases on one Vite version', () => {
-    expect(releaseSequence('8.3.7', ['1.7.0', '1.8.0', '1.9.0', '2.0.0'])).toEqual([
-      '8.3.7000',
-      '8.3.7001',
-      '8.3.7002',
-      '8.3.7003',
-    ]);
-  });
-
-  test('gives betas on a stable Vite the base of the next stable release', () => {
+  // The release sequence table in rfcs/core-version-alignment.md.
+  test('changes only the counter for releases on one Vite version', () => {
     expect(
-      releaseSequence('8.3.7', ['1.7.0', '1.8.0-beta.0', '1.8.0-beta.1', '1.8.0', '1.9.0-beta.0']),
-    ).toEqual(['8.3.7000', '8.3.7001-vp.0', '8.3.7001-vp.1', '8.3.7001', '8.3.7002-vp.0']);
+      releaseSequence('8.3.8', [
+        '1.7.0',
+        '1.8.0-beta.0',
+        '1.8.0-beta.1',
+        '1.8.0',
+        '1.9.0',
+        '2.0.0',
+      ]),
+    ).toEqual(['8.3.8000', '8.3.8001-vp.0', '8.3.8001-vp.1', '8.3.8001', '8.3.8002', '8.3.8003']);
   });
 });
 
