@@ -19,6 +19,7 @@ vp check --fix-dangerously  # Format and apply lint fixes, including dangerous f
 vp check --continue-on-error # Report all enabled checks, even if formatting fails.
 vp check --quiet            # Hide lint warnings; still report and fail on errors.
 vp check --deny-warnings    # Treat lint warnings as errors.
+vp check --format=agent     # Use compact lint and type-check diagnostics for agents.
 vp check --no-fmt           # Skip format; run lint (and type-check if enabled).
 vp check --no-lint          # Skip lint rules; keep type-check when enabled.
 vp check --no-fmt --no-lint # Type-check only (requires both `typeAware` and `typeCheck` enabled).
@@ -47,6 +48,8 @@ is preserved. Options such as `--no-fmt`, `--no-lint`, `--quiet`, and
 startup errors still abort the command.
 
 Put `vp check` flags before file paths. For example, use `vp check --fix src/index.ts`. Arguments after the first path go to the format and lint tools instead of `vp check`.
+
+Use `--format <FORMAT>` to choose the output format for lint and type-check diagnostics. Supported formats are `default`, `agent`, `github`, `gitlab`, `json`, `junit`, `sarif`, `stylish`, `unix`, and `checkstyle`. The default keeps the combined check summary, including in CI. Other formats print the selected reporter's output instead of the lint summary; a clean `agent` run produces no lint output. Formatting output is unchanged, so the combined output is not a single machine-readable report. Use `vp lint --format <FORMAT>` when you need a standalone lint report.
 
 ## Configuration
 

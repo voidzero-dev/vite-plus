@@ -843,6 +843,10 @@ const commandHelpDocs = {
             description: 'Disable reporting on warnings, only errors are reported',
           },
           { label: '--deny-warnings', description: 'Treat lint warnings as errors' },
+          {
+            label: '--format <FORMAT>',
+            description: 'Output format for lint and type-check diagnostics (default: default)',
+          },
           { label: '--no-fmt', description: 'Skip format check' },
           {
             label: '--no-lint',
