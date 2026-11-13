@@ -48,7 +48,7 @@ gh workflow run prepare_release.yml --repo voidzero-dev/vite-plus -f version=X.Y
 
 The workflow bumps `packages/cli/package.json`, `packages/core/package.json`, `packages/prompts/package.json`, `packages/cli/binding/Cargo.toml`, and `crates/vp_global_cli/Cargo.toml`, refreshes `Cargo.lock`, and opens a PR titled `release: vX.Y.Z` from branch `release/vX.Y.Z`. The PR body ends with `Merging this PR will trigger the release workflow.` and that line must survive every later edit.
 
-`@voidzero-dev/vite-plus-core` does not use `X.Y.Z`. Its version encodes the bundled Vite version (for example, `8.3.5000` for Vite `8.3.5`; see [Core Version](../../../packages/core/BUNDLING.md#core-version)). The workflow selects it from the registry and names it in the first line of the PR body. In the steps below, `<core>` is that version. Read it from the release branch with `node -p "require('./packages/core/package.json').version"`.
+`@voidzero-dev/vite-plus-core` does not use `X.Y.Z`. Its version encodes the bundled Vite version (for example, `8.3.5000` for Vite `8.3.5`; see [Core Version](../../../packages/core/BUNDLING.md#core-version)). The workflow selects it from the registry and names it in the first line of the PR body. In the steps below, `<core>` is that version. Read it from the release branch with `node -p "require('./packages/core/package.json').version"`. When the bundled Vite has a new major (the core major changes), the `vite-plus` version must have a new major too. This also applies to prereleases on a Vite prerelease, such as `2.0.0-beta.0` on Vite `9.0.0-beta.3`.
 
 ## 2. Sync release versions (required every release)
 

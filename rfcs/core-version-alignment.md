@@ -84,8 +84,8 @@ peer range. Core `1.6.0` fails every current range: `^8.0.0`
   `bundledVersions.vite`.
 
 Out of scope: the `vitest` peer rule (`vitest` is pinned to its real version,
-so a follow-up removes the rule), the `vite-plus` version policy, and the
-preview registry bridge, which serves every package as `0.0.0-commit.<sha>`.
+so a follow-up removes the rule) and the preview registry bridge, which
+serves every package as `0.0.0-commit.<sha>`.
 
 ## Design
 
@@ -122,14 +122,14 @@ On Vite patch 0, the core patch is `n` alone, so core `8.4.1` looks like Vite
 The core major and minor follow Vite, not `vite-plus`. Releases on one Vite
 version change only the counter:
 
-| `vite-plus`    | Bundled Vite | Core version    | Reason                                |
-| -------------- | ------------ | --------------- | ------------------------------------- |
-| `1.7.0`        | `8.3.8`      | `8.3.8000`      | First stable release on Vite `8.3.8`  |
-| `1.8.0-beta.0` | `8.3.8`      | `8.3.8001-vp.0` | The base is the next stable core      |
-| `1.8.0-beta.1` | `8.3.8`      | `8.3.8001-vp.1` | Same base, next `k`                   |
-| `1.8.0`        | `8.3.8`      | `8.3.8001`      | The stable release takes the base     |
-| `1.9.0`        | `8.3.8`      | `8.3.8002`      | Next counter                          |
-| `2.0.0`        | `8.3.8`      | `8.3.8003`      | A `vite-plus` major is a counter step |
+| `vite-plus`    | Bundled Vite | Core version    | Reason                                   |
+| -------------- | ------------ | --------------- | ---------------------------------------- |
+| `1.7.0`        | `8.3.8`      | `8.3.8000`      | First stable release on Vite `8.3.8`     |
+| `1.8.0-beta.0` | `8.3.8`      | `8.3.8001-vp.0` | The base is the next stable core         |
+| `1.8.0-beta.1` | `8.3.8`      | `8.3.8001-vp.1` | Same base, next `k`                      |
+| `1.8.0`        | `8.3.8`      | `8.3.8001`      | The stable release takes the base        |
+| `1.9.0`        | `8.3.8`      | `8.3.8002`      | Next counter                             |
+| `2.0.0`        | `8.3.8`      | `8.3.8003`      | A `vite-plus` major without a Vite major |
 
 So the core version does not signal a `vite-plus` breaking change. The CLI and
 `vp migrate` use exact versions only, so no project gets a new core through a
@@ -156,9 +156,13 @@ releases, main can bundle a Vite prerelease with a stable `vite-plus` version.
 
 A core prerelease on a stable Vite (`8.4.0-vp.0`) does not satisfy `^8.0.0` in
 npm. Prereleases are opt-in, so this RFC accepts the warnings, and migration
-keeps the pnpm `vite` rule for prerelease cores. A new Vite major gives a new
-core major. Whether it is also a `vite-plus` major is a release policy
-decision.
+keeps the pnpm `vite` rule for prerelease cores.
+
+A new Vite major gives a new core major, and the `vite-plus` release that
+first bundles it is a major release too, because a Vite major can break user
+plugins and configuration. Its prereleases on a Vite major prerelease, such
+as Vite `9.0.0-beta.3`, already use the new `vite-plus` major. A `vite-plus`
+major without a Vite major stays possible.
 
 ### Release pipeline
 
@@ -321,8 +325,3 @@ their own core.
   a prerelease (expected for Vite 9), the committed core becomes
   `<vite>.vp.0`, migration keeps the pnpm rule, and the snapshots that print
   pnpm settings change. The upgrade-deps PR must record them again.
-
-## Open questions
-
-1. Whether a Vite major upgrade is a `vite-plus` major release.
-   Recommendation: yes, decided in the release policy, not here.
