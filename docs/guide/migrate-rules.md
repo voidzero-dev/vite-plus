@@ -398,7 +398,9 @@ Migration converts the Volta `volta.node` pin to `.node-version`, because Vite+ 
 
 ### Bun
 
-- Bun catalogs only resolve inside a workspace (a root `package.json` with a non-empty `workspaces`). In a bun workspace, existing top-level or workspace catalog locations and named catalog references are preserved. A standalone (single-package) bun project keeps concrete specs and gets no catalog field, because `bun install` cannot resolve `catalog:` outside a workspace.
+- Bun catalogs only resolve inside a workspace, which is a root `package.json` with a `workspaces` field. An empty `workspaces` field also counts. In a bun workspace, existing top-level or workspace catalog locations and named catalog references are preserved. A standalone bun project without `workspaces` keeps concrete specs and gets no catalog field, because `bun install` cannot resolve `catalog:` outside a workspace.
+- Bun before 1.2.21 reads only catalogs under `workspaces`. On those versions, migration uses catalogs only when the project already has one under `workspaces`, and keeps concrete specs otherwise.
+- When an existing named catalog already owns `vite-plus`, `vite`, or `vitest`, migration adds missing toolchain entries to that catalog instead of creating a default catalog beside it.
 - The core alias is mirrored as a direct `vite` dependency so Bun sees the peer provider before applying overrides.
 
 ## After the Migration

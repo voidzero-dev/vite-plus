@@ -30,9 +30,52 @@ pub struct Options {
     #[arg(long = "no-node-manager")]
     pub no_node_manager: bool,
 
+    /// Resolved Node.js and package-manager management choice. `run` derives
+    /// it from `--no-node-manager`, `VP_NODE_MANAGER` and auto-detection.
+    #[arg(skip)]
+    pub node_manager: NodeManager,
+
     /// Do not modify the User PATH
     #[arg(long = "no-modify-path")]
     pub no_modify_path: bool,
+}
+
+/// Node.js management choice passed to the installed binary's self-setup.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum NodeManager {
+    /// Vite+ manages Node.js (`VP_NODE_MANAGER=yes`).
+    #[default]
+    Enabled,
+    /// Prefer the system Node.js (`VP_NODE_MANAGER=no`).
+    Disabled,
+    /// Vite+ manages no Node.js or package manager. Only `VP_ENV_FORBIDDEN=1`
+    /// selects it, and the interactive menu cannot change it. Self-setup
+    /// receives `VP_NODE_MANAGER=no`, which places the shims after the system
+    /// tools.
+    EnvForbidden,
+}
+
+impl NodeManager {
+    /// The `VP_NODE_MANAGER` value for this choice.
+    #[must_use]
+    pub const fn env_value(self) -> &'static str {
+        match self {
+            Self::Enabled => "yes",
+            Self::Disabled | Self::EnvForbidden => "no",
+        }
+    }
+
+    /// The menu label for this choice.
+    #[must_use]
+    pub fn label(self) -> String {
+        match self {
+            Self::Enabled => "enabled".to_string(),
+            Self::Disabled => "disabled".to_string(),
+            Self::EnvForbidden => {
+                format!("disabled (set by {})", vp_shared::env_vars::VP_ENV_FORBIDDEN)
+            }
+        }
+    }
 }
 
 /// Parse CLI arguments, merging with environment variables.
@@ -46,7 +89,7 @@ pub fn parse() -> Options {
     }
     // `VP_HOME` / `VP_*_DIR` / `XDG_*` are owned by [`vp_shared::EnvConfig`].
     if opts.registry.is_none() {
-        opts.registry = std::env::var("NPM_CONFIG_REGISTRY").ok();
+        opts.registry = std::env::var("NPM_CONFIG_REGISTRY").ok().filter(|r| !r.is_empty());
     }
     // CI and quiet both imply non-interactive (no prompts)
     if opts.quiet || std::env::var_os("CI").is_some() {

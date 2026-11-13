@@ -83,9 +83,9 @@ vp help
 
 When you enable environment management during installation, Vite+ records managed mode for Node.js and the npm, pnpm, Yarn, and Bun shims. Run `vp env off` to prefer system tools, or scope the change with `vp env off node` or `vp env off pm`.
 
-::: details Installer Environment Variables & Options
+::: details Environment Variables & Options
 
-The Vite+ installers (`vp-setup.exe`, `install.ps1`, and `install.sh`) and the installed `vp` CLI read the environment variables below.
+The Vite+ installers (`vp-setup.exe`, `install.ps1`, and `install.sh`) and the CLI use the environment variables below for installation, runtime configuration, and child tools.
 
 ### Installation Variables
 
@@ -330,6 +330,16 @@ These variables configure the installed Vite+ CLI. `VP_HOME` (above) also applie
 #### Internal variables
 
 Vite+ sets additional `VP_*` variables during shim dispatch and shell integration (recursion guards, active-version records, wrapper flags); do not set them manually.
+
+### Child Process Variables
+
+These variables are set by Vite+ for tools it starts.
+
+#### `VP_USER_AGENT`
+
+`vp`, `vpr`, and `vpx` set `VP_USER_AGENT=vp/<version>` for their child processes. This works with both the global CLI and the project-local `vite-plus` package. Each invocation reports its own version; when the global CLI delegates to a local CLI, the local version takes over.
+
+Use this variable to detect Vite+ even when an underlying package manager replaces `npm_config_user_agent`. Read the first space-separated product token (`vp/<version>`) so consumers can tolerate additional fields in future versions. The value identifies the CLI, not the command or its arguments. Ordinary tool shims, such as `node`, `npm`, and `npx`, preserve an inherited value without creating one.
 
 ### TLS/CA Configuration
 

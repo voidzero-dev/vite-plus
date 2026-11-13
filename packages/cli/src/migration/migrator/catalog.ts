@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { coerce, isGreaterThanOrEqual } from 'verkit';
+import { coerce, isGreaterThanOrEqual, isLessThan } from 'verkit';
 import { Scalar, YAMLMap, YAMLSeq } from 'yaml';
 
 import { PackageManager, type WorkspacePackage } from '../../types/index.ts';
@@ -85,6 +85,13 @@ function versionAtLeast(version: string, minVersion: string, tags: string[]): bo
   return tags.includes(version);
 }
 
+// The packages field became optional in pnpm 10.5.0.
+// https://github.com/pnpm/pnpm/releases/tag/v10.5.0
+export function pnpmRequiresWorkspacePackages(version: string): boolean {
+  const coerced = coerce(version);
+  return coerced ? isLessThan(coerced, '10.5.0') : false;
+}
+
 const PNPM_WORKSPACE_SETTINGS_MIN_VERSION = '10.6.2';
 
 // pnpm 10.5 started reading package.json#pnpm settings from
@@ -122,6 +129,46 @@ const YARN_CATALOG_MIN_VERSION = '4.10.0';
 // `catalog:` references it cannot resolve. Mirrors `pnpmSupportsWorkspaceSettings`.
 export function yarnSupportsCatalog(version: string): boolean {
   return versionAtLeast(version, YARN_CATALOG_MIN_VERSION, ['latest', 'next', 'stable']);
+}
+
+const YARN_PREAPPROVED_PACKAGES_MIN_VERSION = '4.10.0';
+
+// `npmPreapprovedPackages` shipped in Yarn 4.10.0, and an older Yarn refuses to
+// run at all with an rc key it does not know. Like `yarnSupportsCatalog`, this
+// receives the recorded (pre-upgrade) version.
+export function yarnSupportsPreapprovedPackages(version: string): boolean {
+  return versionAtLeast(version, YARN_PREAPPROVED_PACKAGES_MIN_VERSION, [
+    'latest',
+    'next',
+    'stable',
+  ]);
+}
+
+const BUN_TOP_LEVEL_CATALOG_MIN_VERSION = '1.2.21';
+
+// Bun resolves `catalog:` references ONLY inside a workspace: a root
+// package.json with a `workspaces` field. An empty one (`[]` or
+// `{ packages: [] }`) is enough (#3375). Bun before 1.2.21 also ignores a
+// top-level `catalog` or `catalogs` (verified on 1.2.14 to 1.2.20), so it
+// needs the nested location that `rewriteBunCatalog` keeps in place. Otherwise
+// `catalog:` edges make `bun install` abort with "vite@catalog: failed to
+// resolve", so the toolchain edges must stay concrete.
+export function bunSupportsCatalog(
+  pkg: { workspaces?: NpmWorkspaces; catalog?: Record<string, string> },
+  version: string,
+): boolean {
+  const { workspaces } = pkg;
+  if (workspaces == null) {
+    return false;
+  }
+  // Mirrors `useWorkspacesCatalog` in rewriteBunCatalog.
+  const writesNestedCatalog =
+    !Array.isArray(workspaces) &&
+    (workspaces.catalog != null || (pkg.catalog == null && workspaces.catalogs != null));
+  return (
+    writesNestedCatalog ||
+    versionAtLeast(version, BUN_TOP_LEVEL_CATALOG_MIN_VERSION, ['latest', 'canary'])
+  );
 }
 
 // Whether a `catalog:` reference resolves for this package manager and version:
@@ -956,13 +1003,12 @@ function rewriteYamlCatalogAtPath(
     catalog.set(scalarString(VITE_PLUS_NAME), scalarString(VITE_PLUS_VERSION));
   }
   if (addMissing && VITEST_IS_MANAGED_OVERRIDE) {
-    // Injected providers, plus — when the toolchain is catalog-managed (the
-    // catalog now owns `vitest`) — every declared alignable @vitest/* so its
+    // Injected providers, plus every declared alignable @vitest/* so its
     // `catalog:` reference (written by getAlignedVitestEcosystemDependencySpec)
-    // resolves instead of dangling. #2005
-    const additions = catalog.has('vitest')
-      ? new Set<string>([...catalogAdditions, ...vitestEcosystemPackages])
-      : catalogAdditions;
+    // resolves instead of dangling. That writer does not require `vitest` in
+    // the catalog, so neither does this one: a project may declare only an
+    // excluded utility such as `@vitest/utils`. #2005
+    const additions = new Set<string>([...catalogAdditions, ...vitestEcosystemPackages]);
     for (const name of additions) {
       if (isAlignableVitestEcosystemPackage(name)) {
         catalog.set(scalarString(name), scalarString(VITEST_VERSION));
@@ -1021,7 +1067,12 @@ function rewriteCatalogObject(
     delete catalog[name];
   }
   if (VITEST_IS_MANAGED_OVERRIDE) {
-    for (const name of Object.keys(catalog)) {
+    // Like the pnpm catalog, add every declared alignable @vitest/* so its new
+    // `catalog:` reference resolves. #2005
+    const names = addMissing
+      ? new Set([...Object.keys(catalog), ...vitestEcosystemPackages])
+      : Object.keys(catalog);
+    for (const name of names) {
       if (vitestEcosystemPackages.has(name) && isAlignableVitestEcosystemPackage(name)) {
         catalog[name] = VITEST_VERSION;
       }
@@ -1033,9 +1084,10 @@ function rewriteCatalogsObject(
   catalogs: Record<string, Record<string, string>>,
   usesVitest: boolean,
   vitestEcosystemPackages: ReadonlySet<string>,
+  targetCatalog?: Record<string, string>,
 ): void {
   for (const catalog of Object.values(catalogs)) {
-    rewriteCatalogObject(catalog, false, usesVitest, vitestEcosystemPackages);
+    rewriteCatalogObject(catalog, catalog === targetCatalog, usesVitest, vitestEcosystemPackages);
   }
 }
 
@@ -1069,14 +1121,23 @@ export function rewriteBunCatalog(
       pkg.workspaces && !Array.isArray(pkg.workspaces) ? pkg.workspaces : undefined;
     const useWorkspacesCatalog =
       workspacesObj?.catalog != null || (pkg.catalog == null && workspacesObj?.catalogs != null);
-    const catalog: Record<string, string> = {
-      ...(useWorkspacesCatalog ? workspacesObj?.catalog : pkg.catalog),
-    };
+    // Like the pnpm catalog, add missing entries to the catalog the new
+    // `catalog:` references point at. A named one such as `catalogs.build`
+    // takes them instead of a newly created default catalog.
+    const { preferredCatalogSpec } = readBunCatalogDependencyResolver(pkg);
+    const preferredName = preferredCatalogSpec.slice('catalog:'.length);
+    const namedTarget = preferredName
+      ? (workspacesObj?.catalogs?.[preferredName] ?? pkg.catalogs?.[preferredName])
+      : undefined;
+    const defaultCatalog = useWorkspacesCatalog ? workspacesObj?.catalog : pkg.catalog;
+    const catalog: Record<string, string> = { ...defaultCatalog };
 
-    rewriteCatalogObject(catalog, true, usesVitest, vitestEcosystemPackages);
+    rewriteCatalogObject(catalog, !namedTarget, usesVitest, vitestEcosystemPackages);
     pruneLegacyWrapperAliases(catalog);
 
-    if (useWorkspacesCatalog) {
+    if (namedTarget && !defaultCatalog) {
+      // No default catalog to update, and none is needed.
+    } else if (useWorkspacesCatalog) {
       workspacesObj.catalog = catalog;
       if (pkg.catalog) {
         rewriteCatalogObject(pkg.catalog, false, usesVitest, vitestEcosystemPackages);
@@ -1090,13 +1151,18 @@ export function rewriteBunCatalog(
       }
     }
     if (workspacesObj?.catalogs) {
-      rewriteCatalogsObject(workspacesObj.catalogs, usesVitest, vitestEcosystemPackages);
+      rewriteCatalogsObject(
+        workspacesObj.catalogs,
+        usesVitest,
+        vitestEcosystemPackages,
+        namedTarget,
+      );
       for (const named of Object.values(workspacesObj.catalogs)) {
         pruneLegacyWrapperAliases(named);
       }
     }
     if (pkg.catalogs) {
-      rewriteCatalogsObject(pkg.catalogs, usesVitest, vitestEcosystemPackages);
+      rewriteCatalogsObject(pkg.catalogs, usesVitest, vitestEcosystemPackages, namedTarget);
       for (const named of Object.values(pkg.catalogs)) {
         pruneLegacyWrapperAliases(named);
       }
@@ -1120,7 +1186,9 @@ export function rewriteBunCatalog(
         continue;
       }
       overrides[key] =
-        key === '@vitest/browser' ? value : getCatalogDependencySpec(current, value, true);
+        key === '@vitest/browser'
+          ? value
+          : getCatalogDependencySpec(current, value, true, { preferredCatalogSpec });
     }
     pkg.overrides = overrides;
 
@@ -1202,18 +1270,20 @@ export function rewriteRootWorkspacePackageJson(
       };
     } else if (packageManager === PackageManager.bun) {
       // bun overrides are handled in rewriteBunCatalog() with catalog: references
+      // when the workspace supports a catalog. Otherwise they stay concrete.
       // The browser override has no catalog entry and was pruned above with
       // stale bundled-package pins. Restore its current concrete version.
-      if (managed['@vitest/browser']) {
+      if (!supportCatalog) {
+        pkg.overrides = { ...pkg.overrides, ...managed };
+      } else if (managed['@vitest/browser']) {
         pkg.overrides = { ...pkg.overrides, '@vitest/browser': managed['@vitest/browser'] };
       }
       // Bun walks transitive peer-deps before resolving overrides; vitest 4.1.9
       // declares peer `vite ^6 || ^7 || ^8` and aborts unless `vite` is a direct
       // dep at the workspace root. Mirror the override as a devDep; the override
-      // configured in rewriteBunCatalog still redirects it to vite-plus-core. A
-      // bun workspace root always manages a catalog, so the direct edge resolves
-      // to a `catalog:` reference. See https://github.com/oven-sh/bun/issues/8406.
-      setDirectViteEdge(pkg, true, catalogDependencyResolver);
+      // configured in rewriteBunCatalog still redirects it to vite-plus-core.
+      // See https://github.com/oven-sh/bun/issues/8406.
+      setDirectViteEdge(pkg, supportCatalog, catalogDependencyResolver);
     } else if (packageManager === PackageManager.pnpm) {
       const overrideKeys = Object.keys(managedOverridePackages(workspaceUsesVitest));
       const usePnpmWorkspaceSettings = pnpmSupportsWorkspaceSettings(pnpmVersion ?? '');

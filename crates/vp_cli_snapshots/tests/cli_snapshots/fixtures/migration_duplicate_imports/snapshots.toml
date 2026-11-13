@@ -1,0 +1,17 @@
+[[case]]
+name = "migration_duplicate_imports"
+vp = "global"
+steps = [
+  ["vp", "migrate", "--no-interactive", "--no-hooks"],
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "Merge the rewritten type import into the existing value import (issue #3430)." },
+]
+
+[[case]]
+name = "migration_duplicate_imports_preserve_code"
+vp = "global"
+steps = [
+  { argv = ["vpt", "replace-file-content", "vite.config.ts", "import { defineConfig }", "const keep = 'keep';\nimport './setup';\nimport { defineConfig }"], snapshot = false },
+  { argv = ["vpt", "write-file", "setup.ts", "export {};\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks"],
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "Keep statements and side-effect imports between matching imports." },
+]

@@ -1,0 +1,9 @@
+[[case]]
+name = "migration_upgrade_bun_empty_workspaces_catalog"
+vp = "global"
+comment = "Bun resolves catalogs whenever the root package.json has a `workspaces` field, even with an empty package list (#3375)."
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "a single-package bun project with an empty workspaces.packages keeps its catalog", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "toolchain specs stay catalog: and the workspaces.catalog is rewritten in place", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "a second run converges to the already-migrated fast exit", continue-on-failure = true },
+]

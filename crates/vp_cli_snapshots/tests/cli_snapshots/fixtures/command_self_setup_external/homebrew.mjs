@@ -33,7 +33,14 @@ const originalEnv = Object.fromEntries(
   Object.entries(process.env).filter(([key]) => !/^(VP_|XDG_|npm_|NPM_|PNPM_)/.test(key)),
 );
 const token = 'synthetic-homebrew-token';
-const pin = '10.34.7';
+const installer = fs.readFileSync(path.join(checkout, 'crates/vp_setup/src/install.rs'), 'utf8');
+const pin = /const PINNED_PNPM_VERSION: &str = "([^"]+)";/.exec(installer)[1];
+// short_fingerprint(PINNED_PNPM_INTEGRITY) in crates/vp_setup/src/install.rs (the
+// first 32 hex of its SHA-256). The bundled pnpm is pinned, so setup verifies its
+// download against that integrity; a fake tarball cannot match it, so tests seed
+// the stub at the pinned install's content key instead.
+const pnpmIntegrity = /const PINNED_PNPM_INTEGRITY: &str = "([^"]+)";/.exec(installer)[1];
+const SETUP_PNPM_KEY = createHash('sha256').update(pnpmIntegrity).digest('hex').slice(0, 32);
 const lockfile = "lockfileVersion: '9.0'\n";
 fs.writeFileSync(
   path.join(root, 'package.json'),
@@ -191,7 +198,47 @@ function keg(version) {
   return prefix;
 }
 
-function environment(name, auth = true, seedRuntime = true, seedInstallRuntime = seedRuntime) {
+// Write a runnable stub pnpm install under `dataDir`, at both the pinned install's
+// content key and the version-directory root (for the unpinned `pn`/`pnx` shim),
+// so neither the setup bootstrap nor the shim downloads it.
+function seedStubPnpm(dataDir) {
+  for (const key of [SETUP_PNPM_KEY, null]) {
+    // A pinned install lives under the hidden verified namespace; the unpinned
+    // install stays at the version-directory root.
+    const install = key
+      ? path.join(dataDir, 'package_manager/pnpm/.verified-v1', pin, key, 'pnpm')
+      : path.join(dataDir, 'package_manager/pnpm', pin, 'pnpm');
+    const bin = path.join(install, 'bin');
+    fs.mkdirSync(bin, { recursive: true });
+    fs.writeFileSync(
+      path.join(install, 'package.json'),
+      JSON.stringify({
+        name: 'pnpm',
+        version: pin,
+        engines: { node: '>=18.12' },
+        bin: { pnpm: 'bin/pnpm.cjs', pnpx: 'bin/pnpx.cjs' },
+      }),
+    );
+    for (const tool of ['pnpm', 'pnpx']) {
+      fs.writeFileSync(path.join(bin, `${tool}.cjs`), pnpmCode);
+      fs.writeFileSync(path.join(bin, tool), `#!/bin/sh\nexec node "$(dirname "$0")/${tool}.cjs" "$@"\n`, {
+        mode: 0o755,
+      });
+    }
+  }
+}
+
+function environment(
+  name,
+  auth = true,
+  seedRuntime = true,
+  seedInstallRuntime = seedRuntime,
+  // Default to `auth`: an unauthenticated scenario's failure is at the
+  // auth-protected pnpm download, so it must download (and 401) rather than reuse
+  // a seed. Authenticated scenarios seed so setup reuses pnpm instead of failing
+  // the integrity pin on a fake download.
+  seedPnpm = auth,
+) {
   const home = path.join(root, name);
   const vpHome = path.join(home, '.vite-plus');
   fs.mkdirSync(home, { recursive: true });
@@ -212,6 +259,7 @@ function environment(name, auth = true, seedRuntime = true, seedInstallRuntime =
     // Existing installations already have their tool and dependency-install runtimes.
     fs.writeFileSync(path.join(vpHome, '.vp-owned'), 'vite-plus-owned-directory\n');
   }
+  if (seedPnpm) seedStubPnpm(vpHome);
   fs.writeFileSync(
     path.join(home, '.npmrc'),
     `registry=${url}/registry/\n${auth ? `//127.0.0.1:${server.address().port}/registry/:_authToken=\${NPM_TOKEN}\n` : ''}`,
@@ -273,7 +321,7 @@ try {
   rejectInstall = false;
   const retry = await Promise.all([run(publicVp, ['--help'], env), run(publicVp, ['--help'], env)]);
   assert.equal(installs, 2, 'retry must install once across concurrent launches');
-  assert.equal(downloads, 1, 'the retry must reuse bootstrapped pnpm');
+  assert.equal(downloads, 0, 'setup and retry must reuse the provisioned pnpm, never downloading it');
   assert.equal(indexRequests, 0, 'dependency retries must also use the release pin');
   assert.ok(retry.every((result) => !result.stderr.includes('manage Node')));
   assert.equal(fs.readFileSync(settingsFile, 'utf8'), preferences);
@@ -584,7 +632,9 @@ try {
   }
 
   for (const split of [false, true]) {
-    const fresh = environment(`fresh-${split ? 'split' : 'single'}`, true, false);
+    // seedPnpm = false: the fresh-root assertions below require an empty start, so
+    // the stub pnpm is seeded inside the loop, after that check, instead.
+    const fresh = environment(`fresh-${split ? 'split' : 'single'}`, true, false, false, false);
     const data = split ? path.join(fresh.HOME, 'data') : fresh.VP_HOME;
     const cache = split ? path.join(fresh.HOME, 'cache') : path.join(data, 'cache');
     const bin = split ? path.join(fresh.HOME, 'bin') : path.join(data, 'bin');
@@ -607,6 +657,11 @@ try {
     const npmrc = fs.readFileSync(path.join(fresh.HOME, '.npmrc'), 'utf8');
     for (let attempt = 0; attempt < 2; attempt++) {
       for (const directory of roots) assert.ok(!fs.existsSync(directory), directory);
+      // Seed the stub pnpm now that the empty-start check has passed, so fresh
+      // setup reuses it instead of downloading a fake tarball that fails the pin.
+      // Mark the data root vp-owned so setup accepts the pre-seeded directory.
+      seedStubPnpm(data);
+      fs.writeFileSync(path.join(data, '.vp-owned'), 'vite-plus-owned-directory\n');
       const before = {
         installs,
         indexRequests,
@@ -642,7 +697,11 @@ try {
     ['direct', `${url}/registry/`],
     ['interpolated', '${TEST_REGISTRY}/registry/'],
   ]) {
-    const override = environment(`${name}-registry-override`);
+    // seedPnpm = false: the override must carry the pnpm download to the
+    // configured registry, so assert the protected request happens instead of
+    // letting a seeded cache hide a broken override. The fixture's stub tarball
+    // then fails the integrity pin, so setup stops with a nonzero status.
+    const override = environment(`${name}-registry-override`, true, true, true, false);
     const config = path.join(override.HOME, '.npmrc');
     fs.writeFileSync(
       config,
@@ -651,7 +710,12 @@ try {
         .replace(`${url}/registry/`, 'http://127.0.0.1:1/unavailable/'),
     );
     override.NPM_CONFIG_REGISTRY = registry;
-    await run(publicVp, ['--help'], override);
+    const before = downloads;
+    await run(publicVp, ['--help'], override, root, 1);
+    assert.ok(
+      downloads > before,
+      `${name} registry override must carry the pnpm download to the configured registry`,
+    );
   }
 
   for (const [name, selector] of [
@@ -670,16 +734,22 @@ try {
     'Relative, tilde, and environment-variable selectors reach pnpm as the same absolute user config.',
   );
 
-  const basic = environment('basic-auth');
+  // seedPnpm = false: the Basic-auth credential must carry the pnpm download, so
+  // assert the protected request happens instead of letting a seeded cache pass
+  // even when the credential is wrong. The fixture's stub tarball then fails the
+  // integrity pin, so setup stops with a nonzero status.
+  const basic = environment('basic-auth', true, true, true, false);
   const encoded = Buffer.from('fixture:synthetic-password').toString('base64');
   fs.writeFileSync(
     path.join(basic.HOME, '.npmrc'),
     `registry=${url}/registry/\n//127.0.0.1:${server.address().port}/registry/:_auth=${encoded}\n`,
   );
   authorization = `Basic ${encoded}`;
-  await run(publicVp, ['--help'], basic);
+  const beforeBasic = downloads;
+  await run(publicVp, ['--help'], basic, root, 1);
+  assert.ok(downloads > beforeBasic, 'basic authentication must carry the protected pnpm download');
   authorization = `Bearer ${token}`;
-  console.log('Registry overrides and basic authentication work with the shared downloader.');
+  console.log('Registry overrides and basic authentication reach the shared downloader.');
 
   const unauthenticated = environment('unauthenticated', false);
   await run(publicVp, ['--help'], unauthenticated, root, 1);
@@ -729,7 +799,9 @@ try {
   assert.ok(registryRequests > requestsBeforeAlias, 'shim arguments must not bypass setup');
 
   corrupt = true;
-  await run(publicVp, ['--help'], environment('corrupt'), root, 1);
+  // seedPnpm = false: this scenario needs a real (corrupt) pnpm download to verify
+  // that a tarball failing verification stops setup.
+  await run(publicVp, ['--help'], environment('corrupt', true, true, true, false), root, 1);
   console.log('Missing authentication and corrupted pnpm tarballs stop setup.');
   unlock(replacement);
 } finally {
