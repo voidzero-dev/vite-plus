@@ -167,7 +167,8 @@ three commands:
 
 - `prepare --vite-plus <version>` runs in `prepare_release.yml`. It fetches
   the core packument, selects the next counter, and writes the core version
-  and `vitePlusVersion` to `packages/core/package.json`.
+  and `vitePlusVersion` to `packages/core/package.json`. A registry
+  failure stops it. It does not select counter 0.
 - `check --release` runs in `release.yml`, in the `check` job and again before
   publishing. It requires the version to encode `bundledVersions.vite`,
   `vitePlusVersion` to equal the CLI version, and the prerelease pairing to
@@ -312,14 +313,6 @@ their own core.
   supports exact versions only.
 - **Peer warnings for real incompatibilities.** Projects that relied on the
   broad rule see warnings, or install failures with strict peer checks.
-- **pnpm 12.17.0 deprecates `peerDependencyRules`** (pnpm/pnpm#17457). It
-  still works. Migration still writes it for preview and prerelease cores, for
-  pnpm before 10.2.0, and for `vitest`. The `:peer` override is not a drop-in
-  replacement, because it rewrites peer ranges and older pnpm does not
-  support it.
-- **Preview builds and Vite+ prereleases still warn in npm.** Preview builds
-  cannot show the new peer behavior. Checks before a release use the local
-  registry with the local version.
 - **Tools that read the Vite version.** Vite's `version` export keeps the real
   Vite version: importing the built core gives the bundled Vite version.
   Third-party code that reads `node_modules/vite/package.json` sees `8.3.8000`
@@ -328,8 +321,6 @@ their own core.
   a prerelease (expected for Vite 9), the committed core becomes
   `<vite>.vp.0`, migration keeps the pnpm rule, and the snapshots that print
   pnpm settings change. The upgrade-deps PR must record them again.
-- **The counter needs the registry.** A registry failure stops `prepare` with
-  an error. It does not select counter 0.
 
 ## Open questions
 
