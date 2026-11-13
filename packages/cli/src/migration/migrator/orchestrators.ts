@@ -59,6 +59,7 @@ import {
   workspaceUsesVitestDirectly,
   workspaceUsesWebdriverio,
   workspaceUsesWebdriverioProvider,
+  yarnSupportsPreapprovedPackages,
   wrapLazyPluginsInViteConfig,
 } from '../migrator.ts';
 import { type MigrationReport } from '../report.ts';
@@ -329,6 +330,7 @@ export function rewriteStandaloneProject(
       vitestEcosystemPackages,
       providerCatalogAdditions,
       supportCatalog,
+      yarnSupportsPreapprovedPackages(workspaceInfo.downloadPackageManager.version),
     );
   }
 
@@ -430,6 +432,7 @@ export function rewriteMonorepo(
       vitestEcosystemPackages,
       providerCatalogAdditions,
       supportCatalog,
+      yarnSupportsPreapprovedPackages(workspaceInfo.downloadPackageManager.version),
     );
   } else if (workspaceInfo.packageManager === PackageManager.bun && supportCatalog) {
     rewriteBunCatalog(
