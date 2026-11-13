@@ -109,19 +109,63 @@ All measured samples are retained; there is no outlier filtering. Reductions use
 `100 * (1 - tsrs median / Go median)`. Raw samples, commands, memory traces,
 dependency receipts, and the local runner remain outside the repository.
 
-## Historical installed disk footprint
+## Installed disk footprint
 
-The following disk measurements retain the **2026-11-06 Linux x64** comparison
-of published `1.5.0` and the `0.22.0` preview. They are not measurements of the
-current macOS preview. The [original report](https://github.com/voidzero-dev/vite-plus/blob/68eb84008fd27a72a5e9426ad64636432385b0e1/bench/tsrs-lint.md#installed-disk-footprint)
-contains the installation method, package inventory scope, and lockfile hashes.
+This comparison was rerun locally on **2026-11-13**, using macOS ARM64 and APFS
+with 4 KiB allocation blocks. It measures clean standalone production installations
+of published `vite-plus@1.5.0` and the same latest `25a7c006a` preview used above.
 
-| Scope                                         | Go (MiB) | tsrs (MiB) | Increase |
-| --------------------------------------------- | -------: | ---------: | -------: |
-| Complete `node_modules`, on disk              |   132.93 |     150.87 |    13.5% |
-| Complete `node_modules`, regular-file lengths |   123.39 |     139.27 |    12.9% |
-| Backend packages, on disk                     |    21.63 |      39.69 |    83.5% |
+| Scope                                         | Go release (MiB) | tsrs preview (MiB) | Increase (MiB) | Increase |
+| --------------------------------------------- | ---------------: | -----------------: | -------------: | -------: |
+| Complete `node_modules`, allocated on disk    |           130.09 |             138.31 |           8.21 |     6.3% |
+| Complete `node_modules`, regular-file lengths |           123.01 |             129.25 |           6.25 |     5.1% |
+| Backend packages, allocated on disk           |            21.22 |              28.68 |           7.46 |    35.1% |
 
-One MiB is 1,048,576 bytes. The total installation comparison includes other
-release-to-preview dependency changes; the backend row isolates the backend
-packages. These disk figures do not describe runtime memory use.
+One MiB is 1,048,576 bytes. Allocated sizes come from `du -sk node_modules`,
+converted from KiB to bytes and cross-checked against filesystem block counts.
+Regular-file sizes sum file lengths. Symlinks are not followed, and each inode
+is counted once. The disk figure measures the installed tree's allocated blocks,
+not a change in free space across the APFS volume.
+
+The backend packages are `oxlint-tsgolint@7.0.2005` plus
+`@oxlint-tsgolint/darwin-arm64`, or `tsrs@0.25.0-ts7.1.0-beta` plus
+`@tsrs/darwin-arm64`. The preview contains no `oxlint-tsgolint`; the repository's
+benchmark development dependency is not part of this production installation.
+
+Backend packages account for **7.46 MiB** of the **8.21 MiB** total increase.
+The Rust distribution includes compiler library declarations, JavaScript APIs,
+and source maps in addition to its native executable. Its wrapper package occupies
+5.60 MiB and its platform package occupies 23.08 MiB, compared with 0.03 MiB and
+21.20 MiB for the Go packages.
+
+This is a release-to-preview installation comparison. The Go release uses Oxlint
+`1.91.0`, Oxfmt `0.76.0`, and tsgolint `7.0.2005`; the preview uses Oxlint `1.93.0`,
+Oxfmt `0.78.0`, and tsrs `0.25.0`. Other package and installation-metadata changes
+account for the remaining **0.76 MiB**. The timing and memory tables instead isolate
+the backend within one preview and use tsgolint `7.0.2006` as their Go control.
+
+### Installation and validation
+
+Both installs use Node.js `24.22.2`, pnpm `10.34.9`, and their own published
+`vp-install-lock.yaml`, extracted from the corresponding
+`@voidzero-dev/vite-plus-cli-darwin-arm64` archive after integrity verification.
+The wrapper manifest declares only `vite-plus` as a dependency. Installation uses
+`--ignore-workspace --frozen-lockfile`, the installer's peer-resolution settings,
+and `--ignore-scripts`. Each install has a separate store and cache, with
+`--config.package-import-method=copy`; no installed regular file has multiple hard links.
+
+Both trees contain **81 packages**. Package stores, download caches, Node.js, pnpm,
+and the global `vp` executable outside `node_modules` are excluded. The reported
+size includes pnpm's tree metadata, bin shims, and the installer completion receipt.
+
+Both installations report the expected versions, accept the valid type-check probe,
+and reject the invalid probe with `TS2322`. Process traces confirm the default
+native backend in each installation. Smoke checks leave the measured tree sizes
+and lockfile bytes unchanged. Temporary installations and isolated `VP_HOME`
+directories are removed after measurement; raw inventories and logs remain outside
+the repository.
+
+The published lockfile SHA256 values are:
+
+- Go release: `eb06955c3e76589da771286d3bfc6e6ea940c1a09ac64f597d2c72eb94403ad1`.
+- tsrs preview: `f5da575abe98ba3a1b85ef099404a73e73c088ddd4aeb6a516b4325c040c327f`.
