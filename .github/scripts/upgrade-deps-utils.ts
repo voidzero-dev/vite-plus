@@ -87,6 +87,9 @@ export function findLatestStableVersionForMajor(
 }
 
 export async function getLatestNodeVersion(major: number): Promise<string> {
+  // The index gives a UTC date without a time. Wait two days from midnight
+  // so even releases published late that day are at least 24 hours old.
+  const cutoff = Date.now() - 2 * 24 * 60 * 60 * 1000;
   const response = await fetch('https://nodejs.org/dist/index.json');
   if (!response.ok) {
     throw new Error(`Failed to fetch Node.js releases: ${response.status} ${response.statusText}`);
@@ -95,12 +98,29 @@ export async function getLatestNodeVersion(major: number): Promise<string> {
   if (!Array.isArray(releases)) {
     throw new Error('Invalid Node.js release index: expected an array');
   }
-  const versions = releases.flatMap((release: { version?: unknown } | null) =>
-    typeof release?.version === 'string' ? [release.version.replace(/^v/, '')] : [],
-  );
+  const versions = releases.flatMap((release: { version?: unknown; date?: unknown } | null) => {
+    if (
+      typeof release?.version !== 'string' ||
+      typeof release.date !== 'string' ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(release.date)
+    ) {
+      return [];
+    }
+    const releasedAt = Date.parse(release.date);
+    if (
+      !Number.isFinite(releasedAt) ||
+      new Date(releasedAt).toISOString().slice(0, 10) !== release.date ||
+      releasedAt > cutoff
+    ) {
+      return [];
+    }
+    return [release.version.replace(/^v/, '')];
+  });
   const version = findLatestStableVersionForMajor(versions, major);
   if (!version) {
-    throw new Error(`No stable ${major}.x version found for Node.js`);
+    throw new Error(
+      `No stable ${major}.x version found for Node.js with a release date at least 2 days ago`,
+    );
   }
   return version;
 }

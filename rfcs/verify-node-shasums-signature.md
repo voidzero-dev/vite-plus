@@ -179,7 +179,7 @@ the existing SHASUMS fetch/parse: signature failures are permanent, and
 
 ### Escape hatch: skipping signature verification
 
-Setting `VP_NODE_SKIP_SIGNATURE_VERIFY` (to any value) skips PGP verification
+Setting `VP_NODE_SKIP_SIGNATURE_VERIFY` (to any non-empty value) skips PGP verification
 entirely and uses the plain `SHASUMS256.txt`, regardless of `required`. This is
 a deliberate opt-out for the case where a future keyring or certificate problem
 would otherwise block installs, mirroring asdf's `NODEJS_CHECK_SIGNATURES=no`

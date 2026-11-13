@@ -34,7 +34,7 @@ catalog:
   '@vitest/snapshot': 5.1.0
   '@vitest/spy': 5.1.0
   '@vitest/utils': 5.1.0
-  bingo: ^0.13.2
+  bingo: ^0.16.0
   cac: ^7.1.0
   consola: ^3.4.2
   cross-spawn: ^7.0.5
@@ -139,6 +139,7 @@ minimumReleaseAgeExclude:
   - '@vitejs/devtools'
   - '@vitejs/devtools-*'
   - resolve.exports@2.0.4
+  - vitepress-plugin-group-icons@1.8.2
 overrides:
   rolldown: workspace:rolldown@*
   vite: workspace:@voidzero-dev/vite-plus-core@*

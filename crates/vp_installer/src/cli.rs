@@ -89,7 +89,7 @@ pub fn parse() -> Options {
     }
     // `VP_HOME` / `VP_*_DIR` / `XDG_*` are owned by [`vp_shared::EnvConfig`].
     if opts.registry.is_none() {
-        opts.registry = std::env::var("NPM_CONFIG_REGISTRY").ok();
+        opts.registry = std::env::var("NPM_CONFIG_REGISTRY").ok().filter(|r| !r.is_empty());
     }
     // CI and quiet both imply non-interactive (no prompts)
     if opts.quiet || std::env::var_os("CI").is_some() {

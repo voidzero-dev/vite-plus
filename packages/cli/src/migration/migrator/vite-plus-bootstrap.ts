@@ -51,6 +51,7 @@ import {
   workspaceUsesWebdriverio,
   workspaceUsesWebdriverioProvider,
   yarnrcSatisfiesVitePlus,
+  yarnSupportsPreapprovedPackages,
 } from '../migrator.ts';
 import { type DependencyVersionChange, type MigrationReport } from '../report.ts';
 import {
@@ -710,7 +711,12 @@ export function detectVitePlusBootstrapPending(
   if (packageManager === PackageManager.yarn) {
     return (
       !overridesSatisfyVitePlus(pkg.resolutions, usesVitest, undefined, 'bare', usesWebdriverio) ||
-      !yarnrcSatisfiesVitePlus(projectPath, usesVitest, supportCatalog) ||
+      !yarnrcSatisfiesVitePlus(
+        projectPath,
+        usesVitest,
+        supportCatalog,
+        yarnSupportsPreapprovedPackages(resolvedPackageManagerVersion),
+      ) ||
       yarnWorkspaceHoistingOptOutPending(projectPath, packageManager, packages)
     );
   }
@@ -1247,6 +1253,7 @@ export function ensureVitePlusBootstrap(
       vitestEcosystemPackages,
       providerCatalogAdditions,
       supportCatalog,
+      yarnSupportsPreapprovedPackages(workspaceInfo.downloadPackageManager.version),
     );
     const after = fs.readFileSync(yarnrcYmlPath, 'utf-8');
     result.packageManagerConfig = before !== after;

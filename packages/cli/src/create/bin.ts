@@ -38,11 +38,13 @@ import {
   resolveApproveBuildTargets,
 } from '../utils/approve-builds.ts';
 import { unwrapCliParseOutcome } from '../utils/cli-parse.ts';
+import { isForceOverrideMode } from '../utils/constants.ts';
 import { documentationUrl } from '../utils/documentation.ts';
 import { detectExistingEditors, selectEditors, writeEditorConfigs } from '../utils/editor.ts';
 import { findGitRoot, initGitRepository } from '../utils/git.ts';
 import { renderCliDoc } from '../utils/help.ts';
 import { readJsonFile } from '../utils/json.ts';
+import { hasVitePlusDependency } from '../utils/package.ts';
 import { displayRelative } from '../utils/path.ts';
 import {
   cancelAndExit,
@@ -730,45 +732,64 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     ? formatLocalVpCommand(packageManager, 'vp run')
     : 'vp run';
 
-  const existingAgentTargetPaths =
-    options.agent !== undefined || !options.interactive
-      ? undefined
-      : detectExistingAgentTargetPaths(workspaceInfoOptional.rootDir);
-  if (existingAgentTargetPaths !== undefined) {
-    selectedAgentTargetPaths = existingAgentTargetPaths;
-  } else {
-    const agentSelection = await selectAgentTargets({
-      interactive: options.interactive,
-      agent: options.agent,
-      onCancel: () => cancelAndExit(),
-    });
-    selectedAgentTargetPaths = agentSelection.targetPaths;
-    shouldWriteCopilotSetupWorkflow = agentSelection.selectedAgents.some(
-      (agent) => agent.id === COPILOT_AGENT_ID,
-    );
-  }
-
   const shouldConfigureEditors = shouldConfigureEditorsForCreate({
     editor: options.editor,
     isMonorepo,
   });
-  if (shouldConfigureEditors) {
-    const existingEditors =
-      options.editor || !options.interactive
-        ? undefined
-        : detectExistingEditors(workspaceInfoOptional.rootDir);
-    selectedEditors =
-      existingEditors ??
-      (await selectEditors({
-        interactive: options.interactive,
-        editor: options.editor,
-        onCancel: () => cancelAndExit(),
-      }));
-  }
 
-  const shouldSetupGit = await resolveGitInit(options, isMonorepo);
-  if (!isMonorepo && (!options.interactive || shouldSetupGit || options.hooks === true)) {
-    shouldSetupHooks = await promptGitHooks(options);
+  // Agent, editor, git and hook choices. Direct scaffolds ask up front. A
+  // `create-xxx` CLI asks after it ran (`generatedProjectPath`), so its own
+  // prompts come first and the answers reflect the files it generated.
+  let shouldSetupGit = false;
+  const resolveProjectSetup = async (generatedProjectPath?: string) => {
+    const agentInstructionsRoot =
+      generatedProjectPath && !isMonorepo ? generatedProjectPath : workspaceInfoOptional.rootDir;
+    const existingAgentTargetPaths =
+      options.agent !== undefined || !options.interactive
+        ? undefined
+        : detectExistingAgentTargetPaths(agentInstructionsRoot);
+    if (existingAgentTargetPaths !== undefined) {
+      selectedAgentTargetPaths = existingAgentTargetPaths;
+    } else {
+      const agentSelection = await selectAgentTargets({
+        interactive: options.interactive,
+        agent: options.agent,
+        onCancel: () => cancelAndExit(),
+      });
+      selectedAgentTargetPaths = agentSelection.targetPaths;
+      shouldWriteCopilotSetupWorkflow = agentSelection.selectedAgents.some(
+        (agent) => agent.id === COPILOT_AGENT_ID,
+      );
+    }
+
+    if (shouldConfigureEditors) {
+      const existingEditors =
+        options.editor || !options.interactive
+          ? undefined
+          : detectExistingEditors(generatedProjectPath ?? workspaceInfoOptional.rootDir);
+      selectedEditors =
+        existingEditors ??
+        (await selectEditors({
+          interactive: options.interactive,
+          editor: options.editor,
+          onCancel: () => cancelAndExit(),
+        }));
+    }
+
+    // A `create-xxx` CLI may have initialized the repository itself.
+    const hasGitRepository =
+      generatedProjectPath !== undefined && fs.existsSync(path.join(generatedProjectPath, '.git'));
+    shouldSetupGit = !hasGitRepository && (await resolveGitInit(options, isMonorepo));
+    if (
+      !isMonorepo &&
+      (!options.interactive || hasGitRepository || shouldSetupGit || options.hooks === true)
+    ) {
+      shouldSetupHooks = await promptGitHooks(options);
+    }
+  };
+
+  if (isDirectScaffoldTemplate) {
+    await resolveProjectSetup();
   }
 
   const createProgress =
@@ -1077,6 +1098,9 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   }
 
   const fullPath = path.join(workspaceInfo.rootDir, projectDir);
+  if (!isDirectScaffoldTemplate) {
+    await resolveProjectSetup(fullPath);
+  }
 
   // Register a scaffolded generator in `create.templates` so it appears in the
   // `vp create` picker (and resolves by name) without a manual config edit.
@@ -1138,7 +1162,8 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     await writeEditorConfigs({
       projectRoot: fullPath,
       editorId: selectedEditors,
-      interactive: options.interactive,
+      // Editor configs a `create-xxx` CLI generated are merged without asking per file.
+      interactive: options.interactive && isDirectScaffoldTemplate,
       silent: compactOutput,
       extraVsCodeSettings: { 'npm.scriptRunner': 'vp' },
       packageManager,
@@ -1149,6 +1174,18 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     resumeCreateProgress();
   }
 
+  // A `create-xxx` CLI that already generates a Vite+ project made its own
+  // toolchain choices (e.g. keeping ESLint), so skip migration like `vp migrate`
+  // does for Vite+ projects. Monorepo packages still need the rewrite to align
+  // with the workspace catalog.
+  const packageJsonPath = path.join(fullPath, 'package.json');
+  const isVitePlusTemplate =
+    !isMonorepo &&
+    templateInfo.type === TemplateType.remote &&
+    !isForceOverrideMode() &&
+    fs.existsSync(packageJsonPath) &&
+    hasVitePlusDependency(readJsonFile(packageJsonPath));
+
   // The migrate-before-rewrite reorder is only needed when the template
   // actually ships ESLint or Prettier (e.g. `create-vite --template
   // react-ts`). Builtin templates (vite:library, vite:application,
@@ -1156,9 +1193,10 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   // and relies on `rewrite*Project` to add tarball overrides BEFORE the
   // first install, so install-first would break CI's local-tarball resolve.
   const shouldMigrateLintFmtTools =
-    detectEslintProject(fullPath).hasDependency ||
-    detectPrettierProject(fullPath).hasDependency ||
-    detectTsupProject(fullPath).hasDependency;
+    !isVitePlusTemplate &&
+    (detectEslintProject(fullPath).hasDependency ||
+      detectPrettierProject(fullPath).hasDependency ||
+      detectTsupProject(fullPath).hasDependency);
 
   let installSummary: CommandRunSummary | undefined;
 
@@ -1338,12 +1376,14 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       await installAndMigrate(fullPath);
     }
     updateCreateProgress('Applying Vite+ project setup');
-    const skipStagedMigration = shouldSkipStagedMigrationForHooks(
-      fullPath,
-      shouldSetupHooks,
-      workspaceInfo.packageManager,
-    );
-    rewriteStandaloneProject(fullPath, workspaceInfo, skipStagedMigration, compactOutput);
+    if (!isVitePlusTemplate) {
+      const skipStagedMigration = shouldSkipStagedMigrationForHooks(
+        fullPath,
+        shouldSetupHooks,
+        workspaceInfo.packageManager,
+      );
+      rewriteStandaloneProject(fullPath, workspaceInfo, skipStagedMigration, compactOutput);
+    }
     setPackageManager(fullPath, workspaceInfo.downloadPackageManager);
     for (const framework of detectFramework(fullPath)) {
       if (!hasFrameworkShim(fullPath, framework)) {

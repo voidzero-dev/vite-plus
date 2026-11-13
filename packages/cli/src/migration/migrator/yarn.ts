@@ -357,8 +357,8 @@ export function rewriteYarnrcYml(
   // Yarn catalogs require Yarn >= 4.10.0 (`yarnSupportsCatalog`). When the
   // project resolves to an older Yarn the managed packages live in package.json
   // `resolutions` instead, so no `catalog`/`catalogs` field is written here.
-  // `nodeLinker`/`npmPreapprovedPackages` are still configured regardless.
   supportCatalog: boolean,
+  supportPreapproved: boolean,
 ): void {
   const yarnrcYmlPath = path.join(projectPath, '.yarnrc.yml');
   if (!fs.existsSync(yarnrcYmlPath)) {
@@ -378,17 +378,19 @@ export function rewriteYarnrcYml(
     // are not in the override set. MERGE into any existing list (e.g. a project
     // that already preapproves private packages) instead of skipping when set,
     // otherwise the gate could still reject the freshly pinned vitest.
-    let npmPreapprovedPackages = doc.getIn(['npmPreapprovedPackages']) as YAMLSeq<Scalar<string>>;
-    if (!npmPreapprovedPackages) {
-      npmPreapprovedPackages = new YAMLSeq();
-    }
-    const existingPreapproved = new Set(npmPreapprovedPackages.items.map((n) => n.value));
-    for (const pkg of VITEST_AGE_GATE_EXEMPT_PACKAGES) {
-      if (!existingPreapproved.has(pkg)) {
-        npmPreapprovedPackages.add(scalarString(pkg));
+    if (supportPreapproved) {
+      let npmPreapprovedPackages = doc.getIn(['npmPreapprovedPackages']) as YAMLSeq<Scalar<string>>;
+      if (!npmPreapprovedPackages) {
+        npmPreapprovedPackages = new YAMLSeq();
       }
+      const existingPreapproved = new Set(npmPreapprovedPackages.items.map((n) => n.value));
+      for (const pkg of VITEST_AGE_GATE_EXEMPT_PACKAGES) {
+        if (!existingPreapproved.has(pkg)) {
+          npmPreapprovedPackages.add(scalarString(pkg));
+        }
+      }
+      doc.setIn(['npmPreapprovedPackages'], npmPreapprovedPackages);
     }
-    doc.setIn(['npmPreapprovedPackages'], npmPreapprovedPackages);
     // catalog (Yarn >= 4.10.0 only)
     if (supportCatalog) {
       rewriteCatalog(doc, usesVitest, vitestEcosystemPackages, catalogAdditions);
@@ -403,6 +405,7 @@ export function yarnrcSatisfiesVitePlus(
   // package.json `resolutions` rather than a `.yarnrc.yml` catalog, so only the
   // `nodeLinker` setup is required here (a catalog is neither expected nor checked).
   supportCatalog: boolean,
+  supportPreapproved: boolean,
 ): boolean {
   const yarnrcYmlPath = path.join(projectPath, '.yarnrc.yml');
   if (!fs.existsSync(yarnrcYmlPath)) {
@@ -417,17 +420,17 @@ export function yarnrcSatisfiesVitePlus(
   if (!doc) {
     return false;
   }
-  // `rewriteYarnrcYml` ALWAYS preapproves the vitest age-gate family (regardless
-  // of catalog support or vitest usage) so Yarn hardened mode does not quarantine
-  // the freshly pinned vitest. Mirror it: the rc is not satisfied until every
-  // exempt entry is present, otherwise an otherwise-current project takes the
-  // early "already Vite+" path and never writes the exemptions.
+  // On a Yarn that supports the key, `rewriteYarnrcYml` preapproves the vitest
+  // age-gate family (regardless of catalog support or vitest usage) so Yarn
+  // hardened mode does not quarantine the freshly pinned vitest. Mirror it: the
+  // rc is not satisfied until every exempt entry is present, otherwise an
+  // otherwise-current project takes the early "already Vite+" path and never
+  // writes the exemptions.
   const preapproved = new Set(
     Array.isArray(doc.npmPreapprovedPackages) ? doc.npmPreapprovedPackages : [],
   );
-  const npmPreapprovedSatisfied = VITEST_AGE_GATE_EXEMPT_PACKAGES.every((pkg) =>
-    preapproved.has(pkg),
-  );
+  const npmPreapprovedSatisfied =
+    !supportPreapproved || VITEST_AGE_GATE_EXEMPT_PACKAGES.every((pkg) => preapproved.has(pkg));
   if (!supportCatalog) {
     return Object.hasOwn(doc, 'nodeLinker') && npmPreapprovedSatisfied;
   }
