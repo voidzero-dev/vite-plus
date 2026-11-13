@@ -1,0 +1,43 @@
+diff --git a/lib/gitWorkflow.js b/lib/gitWorkflow.js
+index 0d0fad3e894dd4dc0574168deff118928da0c957..de869658c27a64ff3bc543ba037970fb50fd6b9a 100644
+--- a/lib/gitWorkflow.js
++++ b/lib/gitWorkflow.js
+@@ -535,6 +535,7 @@ export class GitWorkflow {
+       await this.execGit(['stash', 'apply', '--quiet', '--index', ctx.backupHash])
+       await this.restoreMergeStatus(ctx)
+       await removeDir(this.hiddenPath)
++      ctx.originalStateRestored = true
+       this.logger.log(`${figures.done()} Done reverting to original state!`)
+     } catch (error) {
+       ctx.errors.add(GitError)
+diff --git a/lib/index.js b/lib/index.js
+index 9256d5cdf57ec59605215b998097a50e49c0ab9e..f9b3135cb6a8f99ea6ad7a15b2d2383cdff6ae68 100644
+--- a/lib/index.js
++++ b/lib/index.js
+@@ -109,8 +109,12 @@ const lintStaged = async (options = {}, logger = console) => {
+         logger.warn(preventedTaskModifications() + '\n')
+         logger.warn(restoreStashExample(ctx.backupHash))
+       } else if (ctx.errors.has(RestoreUnstagedChangesError)) {
+-        logger.warn(unstagedChangesBackupStashLocation())
+-        logger.warn(ctx.unstagedPatch)
++        if (ctx.originalStateRestored) {
++          logger.warn('Original state was restored from the backup stash.')
++        } else {
++          logger.warn(unstagedChangesBackupStashLocation())
++          logger.warn(ctx.unstagedPatch)
++        }
+       } else if (ctx.errors.has(GitError) || cleanupSkipped(ctx)) {
+         logger.error(gitError())
+         if (ctx.shouldBackup) {
+diff --git a/lib/state.js b/lib/state.js
+index 3ae30ff4a882a52c87c698b59704f6ef8fdf5064..b76620e400b17a0ea552c3674eb52b4a47a2e393 100644
+--- a/lib/state.js
++++ b/lib/state.js
+@@ -23,6 +23,7 @@ export const getInitialState = ({
+     shouldFailOnChanges: failOnChanges,
+     hasFilesToHide: null,
+     output: [],
++    originalStateRestored: false,
+     quiet,
+     runId: crypto.randomBytes(4).toString('hex'),
+     shouldBackup: null,
