@@ -16,6 +16,7 @@
     "test": "vp test && just snapshot-test",
     "snapshot-test": "just snapshot-test",
     "test:unit": "vp test",
+    "test:completion": "node packages/tools/src/test-completion.ts",
     "fmt": "vp fmt",
     "docs:dev": "pnpm -C docs dev",
     "docs:build": "pnpm -C docs build",

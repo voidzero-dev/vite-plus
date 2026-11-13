@@ -15,6 +15,7 @@
 mod cli;
 mod command_picker;
 mod commands;
+mod completion;
 mod error;
 mod help;
 mod homebrew;
@@ -383,7 +384,66 @@ async fn run() -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
+    if env::var_os("VP_COMPLETE").is_some_and(|shell| !shell.is_empty() && shell != "0")
+        && let Some(code) = self_setup::complete_from_existing_install().await
+    {
+        return code;
+    }
+
     let mut args: Vec<String> = std::env::args().collect();
+
+    // Replace bash completion script to fix completion for items containing ':'
+    if env::var_os("VP_COMPLETE").is_some_and(|shell| shell == "bash") && args.len() == 1 {
+        vp_shared::output::print_stdout(format_args!(
+            "{}",
+            include_str!("../completion-register.bash")
+        ));
+        return ExitCode::SUCCESS;
+    }
+
+    // Handle shell completion
+    // `complete()` exits before the normal `-C` handling below runs, so apply
+    // the target directory here too: cwd-sensitive completers (run tasks)
+    // should suggest from <dir>, where the completed command will run.
+    let completion_words = completion::request_words(
+        &args,
+        env::var("_CLAP_COMPLETE_INDEX").ok().and_then(|index| index.parse().ok()),
+    );
+    let mut completion_directory_valid = true;
+    if env::var_os("VP_COMPLETE").is_some()
+        && let Some(words) = &completion_words
+        && let Some((dir, _)) = parse_leading_chdir(&words[1..])
+        && let Ok(current) = vt_path::current_dir()
+    {
+        // Best-effort and silent: mid-typing values are often not (yet) dirs.
+        completion_directory_valid = apply_chdir(&current, &dir).is_ok();
+    }
+    CompleteEnv::with_factory(|| {
+        let root = command_for_completion();
+        if !completion_directory_valid {
+            return root;
+        }
+        let Some(words) = &completion_words else {
+            return root;
+        };
+        if completion::command_words(words).and_then(|words| words.first()).map(String::as_str)
+            != Some("test")
+        {
+            return root;
+        }
+        let Ok(cwd) = vt_path::current_dir() else {
+            return root;
+        };
+        let Ok(scripts) = js_executor::JsExecutor::new(None).resolve_project_scripts_dir(&cwd)
+        else {
+            return root;
+        };
+        completion::with_test_completion(root, words, cwd.as_path(), scripts.as_path())
+    })
+    .var("VP_COMPLETE")
+    .complete();
+
+    // Completion requests must not trigger first-start installation or execute JavaScript.
     // Homebrew owns the executable independently of the user's npm payload. Diagnostics and
     // configured tool shims must remain available after interrupted CLI dependency setup.
     let homebrew = homebrew::owns_current_exe();
@@ -423,28 +483,6 @@ async fn run() -> ExitCode {
             }
         }
     }
-
-    // Replace bash completion script to fix completion for items containing ':'
-    if env::var_os("VP_COMPLETE").is_some_and(|shell| shell == "bash") && args.len() == 1 {
-        vp_shared::output::print_stdout(format_args!(
-            "{}",
-            include_str!("../completion-register.bash")
-        ));
-        return ExitCode::SUCCESS;
-    }
-
-    // Handle shell completion
-    // `complete()` exits before the normal `-C` handling below runs, so apply
-    // the target directory here too: cwd-sensitive completers (run tasks)
-    // should suggest from <dir>, where the completed command will run.
-    if env::var_os("VP_COMPLETE").is_some()
-        && let Some((dir, _)) = parse_leading_chdir(&args[1..])
-        && let Ok(current) = vt_path::current_dir()
-    {
-        // Best-effort and silent: mid-typing values are often not (yet) dirs.
-        let _ = apply_chdir(&current, &dir);
-    }
-    CompleteEnv::with_factory(command_for_completion).var("VP_COMPLETE").complete();
 
     // Check for shim mode (invoked as node, npm, or npx)
     let argv0 = args.first().map(|s| s.as_str()).unwrap_or("vp");
