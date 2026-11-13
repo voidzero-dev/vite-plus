@@ -1225,9 +1225,26 @@ fn dist_tag_packages(package_manager_type: PackageManagerType) -> &'static [&'st
 }
 
 fn dist_tag_cache_path(package_manager_type: PackageManagerType, urls: &[Str]) -> AbsolutePathBuf {
+    dist_tag_cache_path_with_auth(package_manager_type, urls, None)
+}
+
+fn dist_tag_cache_path_with_auth(
+    package_manager_type: PackageManagerType,
+    urls: &[Str],
+    auth_salt: Option<&str>,
+) -> AbsolutePathBuf {
     // Every lookup URL scopes the entry, since a fallback package can use another
     // registry. Hashing them keeps tag characters such as `*` out of file names.
-    let key = hex::encode(Sha256::digest(urls.join("\n").as_bytes()));
+    // When the registry origin is authenticated, an additional salt scopes the
+    // cache to the credential identity so one user's private registry response
+    // is not reused by another user of the same URL.
+    let mut hasher = Sha256::new();
+    hasher.update(urls.join("\n").as_bytes());
+    if let Some(salt) = auth_salt {
+        hasher.update(b"\nauth:");
+        hasher.update(salt.as_bytes());
+    }
+    let key = hex::encode(hasher.finalize());
     vp_shared::EnvConfig::get()
         .dirs
         .cache
@@ -1306,13 +1323,20 @@ async fn resolve_dist_tag(
         .collect::<Vec<_>>();
 
     // A persisted response authenticated as one user must not be reused by
-    // another user of the same registry URL. Avoid storing credential-derived
-    // cache keys and query authenticated registries directly instead.
-    if urls.iter().any(|url| npm_config.has_auth_for_origin(url)) {
-        return fetch_dist_tag_version(package_manager_type, tag, &urls, npm_config).await;
-    }
-
-    let cache_path = dist_tag_cache_path(package_manager_type, &urls);
+    // another user of the same registry URL. When the origin has credentials,
+    // add a stable hash of those credentials to the cache key so responses stay
+    // scoped to the credential identity, while still honoring the documented
+    // one-hour TTL and stale-cache fallback for offline use.
+    let auth_salt = urls
+        .iter()
+        .filter_map(|url| npm_config.auth_origin_identity_hash(url))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let cache_path = dist_tag_cache_path_with_auth(
+        package_manager_type,
+        &urls,
+        if auth_salt.is_empty() { None } else { Some(&auth_salt) },
+    );
     let cached = read_dist_tag_cache(&cache_path);
     if let Some((version, true)) = &cached {
         return Ok(version.clone());
@@ -1323,11 +1347,24 @@ async fn resolve_dist_tag(
             Ok(version)
         }
         Err(error) => {
-            let Some((version, _)) = cached else { return Err(error) };
-            tracing::warn!(
-                "Failed to refresh {package_manager_type}@{tag}: {error}; using cached {version}"
-            );
-            Ok(version)
+            if let Some((version, _)) = cached {
+                tracing::warn!(
+                    "Failed to refresh {package_manager_type}@{tag}: {error}; using cached {version}"
+                );
+                return Ok(version);
+            }
+            // If there is no credential-scoped cache, fall back to the
+            // unauthenticated cache so that a pre-existing cached value is
+            // still usable offline. The response came from the same URL, and
+            // this fallback runs only after a fetch failure.
+            let unauth_cache_path = dist_tag_cache_path(package_manager_type, &urls);
+            if let Some((version, _)) = read_dist_tag_cache(&unauth_cache_path) {
+                tracing::warn!(
+                    "Failed to refresh {package_manager_type}@{tag}: {error}; using cached {version}"
+                );
+                return Ok(version);
+            }
+            Err(error)
         }
     }
 }
@@ -3398,14 +3435,17 @@ mod tests {
                     .unwrap(),
                 "10.1.0"
             );
-            first_request.assert_hits(2);
+            // The FIRST and SECOND credentials have separate cache entries, so
+            // switching credentials hits the registry again, but reusing the
+            // same credential must read its own cached entry.
+            first_request.assert_hits(1);
             second_request.assert_hits(1);
         })
         .await;
     }
 
     #[tokio::test(flavor = "current_thread")]
-    async fn redirected_authenticated_latest_versions_are_not_cached() {
+    async fn redirected_authenticated_latest_versions_are_not_shared_across_credentials() {
         use httpmock::prelude::*;
 
         let registry = MockServer::start();
@@ -3444,9 +3484,110 @@ mod tests {
                     .unwrap(),
                 "10.2.0"
             );
+            assert_eq!(
+                resolve_dist_tag(PackageManagerType::Pnpm, "latest", &config("FIRST"))
+                    .await
+                    .unwrap(),
+                "10.1.0"
+            );
+            // Redirects that eventually authenticate are still scoped to the
+            // credential identity, so FIRST and SECOND do not share a cache
+            // entry, but reusing FIRST reads its own cached entry.
             redirect.assert_hits(2);
             first.assert_hits(1);
             second.assert_hits(1);
+        })
+        .await;
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn authenticated_dist_tag_fetch_uses_scoped_cache_and_falls_back() {
+        use httpmock::prelude::*;
+
+        let registry = MockServer::start();
+        let registry_url = registry.base_url();
+        let authority = registry_url.strip_prefix("http:").unwrap();
+        let mut request = registry.mock(|when, then| {
+            when.method(GET).path("/pnpm/latest").header("authorization", "Bearer TOKEN");
+            then.status(200).json_body(serde_json::json!({ "version": "10.1.0" }));
+        });
+        let config = |token: &str| NpmConfig {
+            values: HashMap::from([
+                ("registry".to_string(), registry_url.clone()),
+                (vt_str::format!("{authority}/:_authtoken").to_string(), token.to_string()),
+            ]),
+        };
+
+        let vp_home = create_temp_dir();
+        EnvConfig::with_vars_async([(env_vars::VP_HOME, vp_home.path().as_os_str())], |_| async {
+            // First fetch with auth writes a credential-scoped cache entry.
+            assert_eq!(
+                resolve_dist_tag(PackageManagerType::Pnpm, "latest", &config("TOKEN"))
+                    .await
+                    .unwrap(),
+                "10.1.0"
+            );
+            request.assert_hits(1);
+
+            // Reusing the same credential reads the cache.
+            assert_eq!(
+                resolve_dist_tag(PackageManagerType::Pnpm, "latest", &config("TOKEN"))
+                    .await
+                    .unwrap(),
+                "10.1.0"
+            );
+            request.assert_hits(1);
+
+            // When the registry becomes unreachable, fall back to the scoped cache.
+            request.delete();
+            assert_eq!(
+                resolve_dist_tag(PackageManagerType::Pnpm, "latest", &config("TOKEN"))
+                    .await
+                    .unwrap(),
+                "10.1.0"
+            );
+        })
+        .await;
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn authenticated_dist_tag_fetch_falls_back_to_unauthenticated_cache() {
+        use httpmock::prelude::*;
+
+        let registry = MockServer::start();
+        let registry_url = registry.base_url();
+        let authority = registry_url.strip_prefix("http:").unwrap();
+        let mut request = registry.mock(|when, then| {
+            when.method(GET).path("/pnpm/latest");
+            then.status(200).json_body(serde_json::json!({ "version": "10.1.0" }));
+        });
+        let no_auth_config =
+            NpmConfig { values: HashMap::from([("registry".to_string(), registry_url.clone())]) };
+        let auth_config = NpmConfig {
+            values: HashMap::from([
+                ("registry".to_string(), registry_url.clone()),
+                (vt_str::format!("{authority}/:_authtoken").to_string(), "TOKEN".to_string()),
+            ]),
+        };
+
+        let vp_home = create_temp_dir();
+        EnvConfig::with_vars_async([(env_vars::VP_HOME, vp_home.path().as_os_str())], |_| async {
+            // Populate the unauthenticated cache.
+            assert_eq!(
+                resolve_dist_tag(PackageManagerType::Pnpm, "latest", &no_auth_config)
+                    .await
+                    .unwrap(),
+                "10.1.0"
+            );
+            request.assert_hits(1);
+
+            // With auth and the registry unreachable, fall back to the pre-existing
+            // unauthenticated cache because no credential-scoped cache exists yet.
+            request.delete();
+            assert_eq!(
+                resolve_dist_tag(PackageManagerType::Pnpm, "latest", &auth_config).await.unwrap(),
+                "10.1.0"
+            );
         })
         .await;
     }

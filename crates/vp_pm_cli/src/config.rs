@@ -2,6 +2,7 @@ use std::{collections::HashMap, env, ffi::OsString, fs, path::PathBuf};
 
 use cow_utils::CowUtils;
 use reqwest::{RequestBuilder, Url};
+use sha2::{Digest, Sha256};
 use vp_shared::EnvConfig;
 use vt_path::AbsolutePath;
 use vt_workspace::find_workspace_root;
@@ -154,24 +155,51 @@ impl NpmConfig {
         })
     }
 
-    /// A same-origin redirect may reach a more specific authenticated path.
-    /// Such responses must not use the registry-wide latest-version cache.
-    pub(crate) fn has_auth_for_origin(&self, url: &str) -> bool {
-        let Ok(url) = Url::parse(url) else { return false };
-        let Some(host) = url.host_str() else { return false };
+    /// Returns a stable, non-reversible hash of all `.npmrc` authentication
+    /// entries scoped to the origin of `url`. Callers can use this value as a
+    /// cache salt so that responses obtained with one credential are not
+    /// reused by another credential for the same registry URL, while still
+    /// allowing the dist-tag cache to operate when credentials are present.
+    ///
+    /// Returns `None` when the origin has no authentication entries.
+    pub(crate) fn auth_origin_identity_hash(&self, url: &str) -> Option<String> {
+        let entries = self.auth_origin_entries(url)?;
+        let mut hasher = Sha256::new();
+        for (key, value) in entries {
+            hasher.update(key.as_bytes());
+            hasher.update(b"=");
+            hasher.update(value.as_bytes());
+            hasher.update(b"\n");
+        }
+        Some(hex::encode(hasher.finalize()))
+    }
+
+    fn auth_origin_entries(&self, url: &str) -> Option<Vec<(String, String)>> {
+        let Ok(url) = Url::parse(url) else { return None };
+        let host = url.host_str()?;
         let authority = url
             .port()
             .map_or_else(|| host.to_string(), |port| vt_str::format!("{host}:{port}").to_string());
         let prefix = vt_str::format!("//{}", authority.cow_to_ascii_lowercase());
-        self.values.iter().any(|(key, value)| {
-            key.strip_prefix(prefix.as_str()).is_some_and(|rest| {
-                (rest.starts_with('/') || rest.starts_with(':'))
-                    && [":_authtoken", ":_auth", ":username", ":_password"]
-                        .iter()
-                        .any(|suffix| rest.ends_with(suffix))
-                    && !value.is_empty()
+        let mut entries: Vec<(String, String)> = self
+            .values
+            .iter()
+            .filter(|(key, value)| {
+                key.strip_prefix(prefix.as_str()).is_some_and(|rest| {
+                    (rest.starts_with('/') || rest.starts_with(':'))
+                        && [":_authtoken", ":_auth", ":username", ":_password"]
+                            .iter()
+                            .any(|suffix| rest.ends_with(suffix))
+                        && !value.is_empty()
+                })
             })
-        })
+            .map(|(key, value)| (key.cow_to_ascii_lowercase().into_owned(), value.clone()))
+            .collect();
+        if entries.is_empty() {
+            return None;
+        }
+        entries.sort_by(|a, b| a.0.cmp(&b.0));
+        Some(entries)
     }
 
     fn auth_for_url(&self, url: &str) -> Option<NpmAuth<'_>> {
