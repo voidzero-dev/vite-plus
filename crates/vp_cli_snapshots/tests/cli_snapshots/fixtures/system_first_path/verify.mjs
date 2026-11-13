@@ -38,7 +38,12 @@ assert.match(execFileSync('node', ['--version'], { encoding: 'utf8' }), /^v/);
 console.log('selected Node and original PATH precedence preserved');
 `,
 );
-const env = { ...process.env, PATH: [first, nodeBin, pmBin, process.env.PATH].join(delimiter) };
+const env = {
+  ...process.env,
+  PATH: [first, nodeBin, pmBin, process.env.PATH].join(delimiter),
+  // Start a fresh shell selection instead of inheriting the runner's Node selection.
+  VP_PATH_INJECTED_TOOLS: '',
+};
 function run(args) {
   const result = spawnSync('vp', args, { env, encoding: 'utf8' });
   assert.equal(result.status, 0, `${args.join(' ')}\n${result.stdout}\n${result.stderr}`);
