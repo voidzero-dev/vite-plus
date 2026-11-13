@@ -4480,6 +4480,8 @@ describe('ensureVitePlusBootstrap', () => {
     // Vite+ pins a possibly-fresh vitest; its family must bypass the gate.
     expect(workspace.minimumReleaseAgeExclude).toContain('vitest');
     expect(workspace.minimumReleaseAgeExclude).toContain('@vitest/*');
+    expect(workspace.minimumReleaseAgeExclude).toContain('tsrs');
+    expect(workspace.minimumReleaseAgeExclude).toContain('@tsrs/*');
     // The user's own entry and the vite-plus/ox families are preserved.
     expect(workspace.minimumReleaseAgeExclude).toContain('my-internal-pkg');
     expect(workspace.minimumReleaseAgeExclude).toContain('vite-plus');
@@ -4514,6 +4516,77 @@ describe('ensureVitePlusBootstrap', () => {
     // No gate present → we never introduce the exclude list.
     expect(workspace.minimumReleaseAgeExclude).toBeUndefined();
   });
+
+  it('reconciles the reviewed tsrs exception without disabling pnpm trust checks', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { 'vite-plus': 'latest' },
+        packageManager: 'pnpm@11.22.0',
+      }),
+    );
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+    ensureVitePlusBootstrap(workspaceInfo);
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+
+    const workspacePath = path.join(tmpDir, 'pnpm-workspace.yaml');
+    fs.appendFileSync(
+      workspacePath,
+      '\ntrustPolicy: no-downgrade\ntrustPolicyExclude:\n  # Keep the project exception.\n  - example@1.0.0\n',
+    );
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(true);
+    expect(ensureVitePlusBootstrap(workspaceInfo).changed).toBe(true);
+
+    const workspace = readYamlObject(workspacePath);
+    expect(workspace.trustPolicy).toBe('no-downgrade');
+    expect(workspace.trustPolicyExclude).toEqual(['example@1.0.0', 'tsrs@0.25.0-ts7.1.0-beta']);
+    expect(workspace.trustLockfile).toBeUndefined();
+    const after = fs.readFileSync(workspacePath, 'utf-8');
+    expect(after).toContain('# Keep the project exception.');
+    expect(after).toContain('https://github.com/oxc-project/tsrs/issues/945');
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+    expect(ensureVitePlusBootstrap(workspaceInfo).changed).toBe(false);
+    expect(fs.readFileSync(workspacePath, 'utf-8')).toBe(after);
+  });
+
+  it.each(['', 'trustPolicy: off\n'])(
+    'leaves trust exceptions unchanged without no-downgrade: %j',
+    (policy) => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({ name: 'test', devDependencies: { 'vite-plus': 'latest' } }),
+      );
+      const workspacePath = path.join(tmpDir, 'pnpm-workspace.yaml');
+      fs.writeFileSync(workspacePath, `${policy}trustPolicyExclude:\n  - example@1.0.0\n`);
+
+      ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
+
+      const workspace = readYamlObject(workspacePath);
+      expect(workspace.trustPolicyExclude).toEqual(['example@1.0.0']);
+      expect(workspace.trustPolicy).toBe(policy ? 'off' : undefined);
+    },
+  );
+
+  it.each(['tsrs', 'tsrs@0.25.0-ts7.1.0-beta'])(
+    'preserves an existing tsrs trust exception: %s',
+    (exception) => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({ name: 'test', devDependencies: { 'vite-plus': 'latest' } }),
+      );
+      const workspacePath = path.join(tmpDir, 'pnpm-workspace.yaml');
+      fs.writeFileSync(
+        workspacePath,
+        `trustPolicy: no-downgrade\ntrustPolicyExclude:\n  - ${exception}\n`,
+      );
+
+      ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
+
+      expect(readYamlObject(workspacePath).trustPolicyExclude).toEqual([exception]);
+      expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+    },
+  );
 
   it('merges the vitest family into an existing yarn npmPreapprovedPackages list', () => {
     fs.writeFileSync(

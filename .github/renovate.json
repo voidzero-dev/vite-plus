@@ -96,6 +96,7 @@
         "oxlint",
         "oxlint-tsgolint",
         "tsdown",
+        "tsrs",
         "vite",
         "vitest",
         "vitest-dev",

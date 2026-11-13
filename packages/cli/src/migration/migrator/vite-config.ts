@@ -418,7 +418,7 @@ function mergeOxlintConfigFile(
     Object.assign(inheritedOptions, layer.options);
   }
   oxlintJson.options ||= {};
-  // Skip typeAware/typeCheck when tsconfig.json has baseUrl (unsupported by tsgolint)
+  // Skip typeAware/typeCheck when tsconfig.json has baseUrl (unsupported by TypeScript 7)
   if (!hasBaseUrlInTsconfig(projectPath)) {
     if (inheritedOptions.typeAware === undefined) {
       oxlintJson.options.typeAware = true;

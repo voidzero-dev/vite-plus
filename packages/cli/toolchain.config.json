@@ -1,14 +1,6 @@
 {
   "schemaVersion": 1,
-  "versionExportIds": [
-    "vite",
-    "rolldown",
-    "vitest",
-    "oxfmt",
-    "oxlint",
-    "oxlint-tsgolint",
-    "tsdown"
-  ],
+  "versionExportIds": ["vite", "rolldown", "vitest", "oxfmt", "oxlint", "tsrs", "tsdown"],
   "nodes": [
     {
       "id": "vite-plus",
@@ -86,14 +78,14 @@
       }
     },
     {
-      "id": "oxlint-tsgolint",
-      "name": "oxlint-tsgolint",
+      "id": "tsrs",
+      "name": "tsrs",
       "kind": "tool",
       "delivery": ["dependency"],
-      "aliases": ["tsgolint"],
+      "aliases": ["tsrs-lint", "tsgolint", "oxlint-tsgolint"],
       "versionSource": {
         "type": "npm-dependency",
-        "package": "oxlint-tsgolint"
+        "package": "tsrs"
       }
     },
     {
@@ -203,7 +195,7 @@
     },
     {
       "from": "vite-plus",
-      "to": "oxlint-tsgolint",
+      "to": "tsrs",
       "relationship": "depends-on"
     },
     {
