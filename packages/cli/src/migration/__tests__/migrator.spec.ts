@@ -4639,6 +4639,24 @@ describe('ensureVitePlusBootstrap', () => {
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.yarn)).toBe(false);
   });
 
+  it('keeps npmPreapprovedPackages out of a yarn project below 4.10.0', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        packageManager: 'yarn@3.6.0',
+        devDependencies: { 'vite-plus': 'latest' },
+      }),
+    );
+
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.yarn, '3.6.0'));
+
+    expect(readYamlObject(path.join(tmpDir, '.yarnrc.yml'))).toEqual({
+      nodeLinker: 'node-modules',
+    });
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.yarn)).toBe(false);
+  });
+
   // Finding 2: rewritePnpmWorkspaceYaml adds the Vite+/vitest exemptions to
   // minimumReleaseAgeExclude when minimumReleaseAge is configured, but the pnpm
   // workspace pending check never inspected minimumReleaseAgeExclude, so an
