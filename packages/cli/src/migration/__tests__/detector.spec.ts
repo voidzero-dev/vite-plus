@@ -42,7 +42,7 @@ describe('detectMigrationWarnings', () => {
     ]);
   });
 
-  it('does not warn when the package and config are not both present', () => {
+  it('requires both a dependency and config for build and test tools', () => {
     writeProject(tmpDir, { devDependencies: { rollup: '^4.0.0' } }, ['jest.config.ts']);
 
     expect(detectMigrationWarnings(tmpDir)).toEqual([]);
@@ -78,36 +78,56 @@ describe('detectMigrationWarnings', () => {
     ]);
   });
 
-  it('detects Turborepo at the workspace root', () => {
-    writeProject(tmpDir, { devDependencies: { turbo: '^2.0.0' } }, ['turbo.json']);
+  describe('Turborepo', () => {
+    const warning =
+      'Turborepo detected. Task orchestration and caching were not migrated. vp run does not read Turborepo configuration. See https://viteplus.dev/guide/run and https://viteplus.dev/guide/cache.';
 
-    expect(detectMigrationWarnings(tmpDir)).toEqual([
-      'Turborepo detected (turbo.json). Task orchestration and caching were not migrated; see https://viteplus.dev/guide/run and https://viteplus.dev/guide/cache.',
-    ]);
-  });
+    describe.each(['.', 'packages/app'])('in %s', (packagePath) => {
+      const packages = [{ name: 'app', path: 'packages/app' }];
 
-  it('detects per-package turbo.json with the dependency declared at the root', () => {
-    writeProject(tmpDir, { devDependencies: { turbo: '^2.0.0' } });
-    writeProject(path.join(tmpDir, 'packages/app'), {}, ['turbo.json']);
+      it.each(['turbo.json', 'turbo.jsonc'])(
+        'detects %s without a turbo dependency',
+        (configFile) => {
+          writeProject(tmpDir, {});
+          writeProject(path.join(tmpDir, packagePath), {}, [configFile]);
 
-    expect(detectMigrationWarnings(tmpDir, [{ name: 'app', path: 'packages/app' }])).toEqual([
-      'Turborepo detected (turbo.json). Task orchestration and caching were not migrated; see https://viteplus.dev/guide/run and https://viteplus.dev/guide/cache.',
-    ]);
-  });
+          expect(detectMigrationWarnings(tmpDir, packages)).toEqual([warning]);
+        },
+      );
 
-  it('detects Turborepo with the dependency declared in the workspace package', () => {
-    writeProject(path.join(tmpDir, 'packages/app'), { devDependencies: { turbo: '^2.0.0' } }, [
-      'turbo.json',
-    ]);
+      it.each(['dependencies', 'devDependencies', 'optionalDependencies'])(
+        'detects a turbo dependency in %s without a config file',
+        (field) => {
+          writeProject(tmpDir, {});
+          writeProject(path.join(tmpDir, packagePath), { [field]: { turbo: '^2.0.0' } });
 
-    expect(detectMigrationWarnings(tmpDir, [{ name: 'app', path: 'packages/app' }])).toEqual([
-      'Turborepo detected (turbo.json). Task orchestration and caching were not migrated; see https://viteplus.dev/guide/run and https://viteplus.dev/guide/cache.',
-    ]);
-  });
+          expect(detectMigrationWarnings(tmpDir, packages)).toEqual([warning]);
+        },
+      );
+    });
 
-  it('does not warn about Turborepo when turbo.json and the turbo dependency are both absent', () => {
-    writeProject(tmpDir, { devDependencies: { somePkg: '^1.0.0' } }, ['rollup.config.js']);
+    it('warns once when the root and multiple packages use Turborepo', () => {
+      writeProject(tmpDir, { devDependencies: { turbo: '^2.0.0' } }, ['turbo.json']);
+      writeProject(path.join(tmpDir, 'packages/app'), {}, ['turbo.json']);
+      writeProject(path.join(tmpDir, 'packages/lib'), { dependencies: { turbo: '^2.0.0' } }, [
+        'turbo.jsonc',
+      ]);
 
-    expect(detectMigrationWarnings(tmpDir)).toEqual([]);
+      expect(
+        detectMigrationWarnings(tmpDir, [
+          { name: 'app', path: 'packages/app' },
+          { name: 'lib', path: 'packages/lib' },
+        ]),
+      ).toEqual([warning]);
+    });
+
+    it('does not warn for related packages without turbo or its config', () => {
+      writeProject(tmpDir, { devDependencies: { 'eslint-config-turbo': '^2.0.0' } });
+      writeProject(path.join(tmpDir, 'packages/app'), {
+        devDependencies: { 'eslint-plugin-turbo': '^2.0.0' },
+      });
+
+      expect(detectMigrationWarnings(tmpDir, [{ name: 'app', path: 'packages/app' }])).toEqual([]);
+    });
   });
 });
