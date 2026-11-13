@@ -80,26 +80,131 @@ describe('alignMonorepoTypeScriptVersion', () => {
     expect(readDevDependencies(appDir).typescript).toBe('~6.0.2');
   });
 
-  it('updates the typescript entry of workspace catalogs to the library range', () => {
+  it('removes missing toolchain entries from the active catalog', () => {
     writePackageJson(appDir, { typescript: '~6.0.2', 'vite-plus': 'catalog:' });
-    writePackageJson(libraryDir, { typescript: '^7.0.2', 'vite-plus': 'catalog:' });
+    writePackageJson(libraryDir, { 'vite-plus': 'catalog:' });
     fs.writeFileSync(
       path.join(tmpDir, 'pnpm-workspace.yaml'),
-      'packages:\n  - apps/*\n\ncatalogMode: prefer\n\ncatalog:\n  typescript: ^5\n',
-    );
-    fs.writeFileSync(
-      path.join(tmpDir, '.yarnrc.yml'),
-      'nodeLinker: node-modules\ncatalog:\n  typescript: ^5\n',
+      'packages:\n  - apps/*\n\ncatalog:\n  "@types/node": ^24\n  typescript: ^5\n',
     );
 
     alignMonorepoTypeScriptVersion(tmpDir, appDir, libraryDir);
 
-    expect(fs.readFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'utf8')).toContain(
-      'typescript: ^7.0.2',
+    expect(fs.readFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'utf8')).not.toContain(
+      '@types/node',
     );
+    expect(fs.readFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'utf8')).not.toContain(
+      'typescript:',
+    );
+    expect(readDevDependencies(appDir).typescript).toBe('~6.0.2');
+  });
+
+  it('handles a library that has Node types but no TypeScript dependency', () => {
+    writePackageJson(appDir, { typescript: '~6.0.2', 'vite-plus': 'catalog:' });
+    writePackageJson(libraryDir, {
+      '@types/node': '^26.6.5',
+      'vite-plus': 'catalog:',
+    });
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      'packages:\n  - apps/*\n\ncatalog:\n  "@types/node": ^24\n  typescript: ^5\n',
+    );
+
+    alignMonorepoTypeScriptVersion(tmpDir, appDir, libraryDir);
+
+    const workspace = fs.readFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'utf8');
+    expect(workspace).toContain('@types/node": ^26.6.5');
+    expect(workspace).not.toContain('typescript:');
+    expect(readDevDependencies(appDir).typescript).toBe('~6.0.2');
+    expect(readDevDependencies(libraryDir)['@types/node']).toBe('catalog:');
+  });
+
+  it('updates pnpm catalog entries and package references to catalog:', () => {
+    writePackageJson(appDir, { typescript: '~6.0.2', 'vite-plus': 'catalog:' });
+    writePackageJson(libraryDir, {
+      typescript: '^7.0.2',
+      '@types/node': '^26.6.5',
+      'vite-plus': 'catalog:',
+    });
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      'packages:\n  - apps/*\n\ncatalogMode: prefer\n\ncatalog:\n  "@types/node": ^24\n  typescript: ^5\n',
+    );
+
+    alignMonorepoTypeScriptVersion(tmpDir, appDir, libraryDir);
+
+    const workspace = fs.readFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'utf8');
+    expect(workspace).toContain('"@types/node": ^26.6.5');
+    expect(workspace).toContain('typescript: ^7.0.2');
+    expect(readDevDependencies(appDir).typescript).toBe('catalog:');
+    expect(readDevDependencies(libraryDir)).toEqual({
+      typescript: 'catalog:',
+      '@types/node': 'catalog:',
+      'vite-plus': 'catalog:',
+    });
+  });
+
+  it('updates Yarn catalog entries and package references to catalog:', () => {
+    writePackageJson(appDir, { typescript: '~6.0.2', 'vite-plus': 'catalog:' });
+    writePackageJson(libraryDir, {
+      typescript: '^7.0.2',
+      '@types/node': '^26.6.5',
+      'vite-plus': 'catalog:',
+    });
+    fs.writeFileSync(
+      path.join(tmpDir, '.yarnrc.yml'),
+      'nodeLinker: node-modules\ncatalog:\n  "@types/node": ^24\n  typescript: ^5\n',
+    );
+
+    alignMonorepoTypeScriptVersion(
+      tmpDir,
+      appDir,
+      libraryDir,
+      PackageManager.yarn,
+      '4.10.0',
+    );
+
+    const workspace = fs.readFileSync(path.join(tmpDir, '.yarnrc.yml'), 'utf8');
+    expect(workspace).toContain('"@types/node": ^26.6.5');
+    expect(workspace).toContain('typescript: ^7.0.2');
+    expect(readDevDependencies(appDir).typescript).toBe('catalog:');
+    expect(readDevDependencies(libraryDir)).toEqual({
+      typescript: 'catalog:',
+      '@types/node': 'catalog:',
+      'vite-plus': 'catalog:',
+    });
+  });
+
+  it('keeps direct ranges for npm and unsupported Yarn versions', () => {
+    writePackageJson(appDir, { typescript: '~6.0.2', 'vite-plus': 'latest' });
+    writePackageJson(libraryDir, {
+      typescript: '^7.0.2',
+      '@types/node': '^26.6.5',
+      'vite-plus': 'latest',
+    });
+    fs.writeFileSync(
+      path.join(tmpDir, '.yarnrc.yml'),
+      'nodeLinker: node-modules\ncatalog:\n  "@types/node": ^24\n  typescript: ^5\n',
+    );
+
+    alignMonorepoTypeScriptVersion(
+      tmpDir,
+      appDir,
+      libraryDir,
+      PackageManager.yarn,
+      '4.9.0',
+    );
+
+    expect(readDevDependencies(appDir).typescript).toBe('^7.0.2');
+    expect(readDevDependencies(libraryDir).typescript).toBe('^7.0.2');
+    expect(readDevDependencies(libraryDir)['@types/node']).toBe('^26.6.5');
     expect(fs.readFileSync(path.join(tmpDir, '.yarnrc.yml'), 'utf8')).toContain(
-      'typescript: ^7.0.2',
+      '@types/node\": ^24',
     );
+
+    alignMonorepoTypeScriptVersion(tmpDir, appDir, libraryDir, PackageManager.npm, '12.0.0');
+    expect(readDevDependencies(appDir).typescript).toBe('^7.0.2');
+    expect(readDevDependencies(libraryDir)['@types/node']).toBe('^26.6.5');
   });
 
   it('leaves catalogs without a typescript entry untouched', () => {

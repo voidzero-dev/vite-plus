@@ -87,7 +87,7 @@ packages:
 catalogMode: prefer
 
 catalog:
-  "@types/node": ^24
+  "@types/node": ^26.6.5
   typescript: ^7.0.2
   vite: npm:@voidzero-dev/vite-plus-core@<version>
   vite-plus: <version>
@@ -193,7 +193,7 @@ check website keeps aliased vite for pnpm (workspace override stays effective)
     "preview": "vp preview"
   },
   "devDependencies": {
-    "typescript": "^7.0.2",
+    "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plus": "catalog:"
   }
@@ -238,9 +238,9 @@ check utils normalizes vite-plus to catalog:
     "prepublishOnly": "vp run build"
   },
   "devDependencies": {
-    "@types/node": "^26.6.5",
+    "@types/node": "catalog:",
     "bumpp": "^12.3.0",
-    "typescript": "^7.0.2",
+    "typescript": "catalog:",
     "vite-plus": "catalog:"
   }
 }
