@@ -3613,6 +3613,13 @@ export interface ViteImportGlobMeta {
 /** Parse source and resolve lexical bindings for the TypeScript migration rules. */
 export declare function analyzeMigrationSource(filename: string, source: string): string;
 
+/**
+ * List the package managers `downloadPackageManager` can provide.
+ *
+ * Without a global install, only the package managers on PATH are available.
+ */
+export declare function availablePackageManagers(): Promise<Array<string>>;
+
 /** Error from batch import rewriting */
 export interface BatchRewriteError {
   /** The file path that had an error */
@@ -3725,7 +3732,10 @@ export interface DetectWorkspaceResult {
 export declare function documentationUrl(path: string): string;
 
 /**
- * Download a package manager
+ * Download a package manager, or use the one on PATH when no global install manages it.
+ *
+ * See `vp_pm_cli::provide_for_local_cli` for when a download is allowed. The
+ * result describes the system installation when one is used.
  *
  * ## Parameters
  *
@@ -3733,7 +3743,7 @@ export declare function documentationUrl(path: string): string;
  *   - `name`: The name of the package manager
  *   - `version`: The version of the package manager
  *   - `expected_hash`: The expected hash of the package manager
- *   - `cwd`: An absolute directory used to load workspace npm configuration
+ *   - `cwd`: An absolute directory used to load workspace npm configuration and resolve relative PATH entries
  *
  * ## Returns
  *

@@ -114,10 +114,12 @@ pub(super) async fn execute_exec_workspace(
     }
     // An unverified package manager stops the run; other resolution failures
     // leave the inherited tools available.
-    match vp_pm_cli::PackageManager::builder(&*workspace_root.path).build().await {
-        Ok(pm) => {
-            base_env.prepend(pm.get_bin_prefix(), &pm.bin_names(), PrependOptions::default())?
-        }
+    match vp_pm_cli::PackageManager::builder(&*workspace_root.path).for_local_cli().build().await {
+        Ok(pm) => base_env.prepend(
+            pm.get_bin_prefix(),
+            &pm.bin_names(),
+            crate::cli::package_manager_prepend(&pm),
+        )?,
         Err(error) if error.is_integrity_failure() => return Err(error),
         Err(error) => {
             tracing::debug!(?error, "failed to resolve package manager for exec PATH setup");
