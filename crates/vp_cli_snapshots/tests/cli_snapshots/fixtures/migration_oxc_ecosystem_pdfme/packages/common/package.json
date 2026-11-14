@@ -1,0 +1,9 @@
+{
+  "name": "@pdfme/common",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lint": "vp lint -c ../../.oxlintrc.json src",
+    "fmt": "vp fmt -c ../../.oxfmtrc.json src --write"
+  }
+}

@@ -70,18 +70,18 @@ export default defineConfig({
 });
 ```
 
-## `vpt stat-file .oxfmtrc.jsonc --assert-not file`
+## `vpt stat-file .oxfmtrc.jsonc --assert file`
 
-redundant standalone file removed
-
-```
-.oxfmtrc.jsonc: missing
-```
-
-## `vpt stat-file .oxlintrc.json --assert-not file`
-
-redundant standalone file removed
+standalone config preserved
 
 ```
-.oxlintrc.json: missing
+.oxfmtrc.jsonc: file
+```
+
+## `vpt stat-file .oxlintrc.json --assert file`
+
+standalone config preserved
+
+```
+.oxlintrc.json: file
 ```

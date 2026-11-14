@@ -1229,6 +1229,7 @@ export function rewriteRootWorkspacePackageJson(
   // When false, the root `vite-plus` edge and the direct `vite` edge are concrete.
   supportCatalog = true,
   preparedOxlintConfigs?: PreparedOxlintConfigs,
+  preparedReferences?: ReadonlySet<string>,
 ): void {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
@@ -1363,7 +1364,14 @@ export function rewriteRootWorkspacePackageJson(
     undefined,
     undefined,
     catalogDependencyResolver,
-    packages ? { rootDir: projectPath, packages, oxlintConfigs: preparedOxlintConfigs } : undefined,
+    packages
+      ? {
+          rootDir: projectPath,
+          packages,
+          oxlintConfigs: preparedOxlintConfigs,
+          oxcReferences: preparedReferences,
+        }
+      : undefined,
     true,
     supportCatalog,
   );

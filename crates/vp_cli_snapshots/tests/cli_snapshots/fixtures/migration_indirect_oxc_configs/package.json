@@ -1,0 +1,9 @@
+{
+  "name": "migration-indirect-oxc-configs",
+  "devDependencies": {
+    "vite-plus": "latest"
+  },
+  "scripts": {
+    "lint:custom": "vp lint --config config/lint.json src"
+  }
+}

@@ -1,0 +1,211 @@
+[[case]]
+name = "migration_workspace_oxc_script_directory"
+vp = ["global", "local"]
+local-registry = true
+steps = [
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  ["vp", "run", "format"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "packages/app/.oxfmtrc.json"],
+  { argv = ["vpt", "stat-file", "packages/other/.oxfmtrc.json", "--assert", "missing"], comment = "the unrelated workspace config still migrates" },
+  ["vpt", "print-file", "packages/other/vite.config.ts"],
+  { argv = ["vp", "run", "format"], comment = "the script still loads its explicit config after changing directories" },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vp", "run", "format"],
+]
+
+[[case]]
+name = "migration_workspace_oxc_bare_import"
+vp = ["global", "local"]
+local-registry = true
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "scripts.format", "vp fmt --check packages/app/src/index.js"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "import fmt from '@repo/config';\nexport default { fmt };\n"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  ["vp", "run", "format"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "packages/app/.oxfmtrc.json"],
+  { argv = ["vpt", "stat-file", "packages/other/.oxfmtrc.json", "--assert", "missing"], comment = "a bare workspace import does not preserve unrelated configs" },
+  ["vpt", "print-file", "packages/other/vite.config.ts"],
+  { argv = ["vp", "run", "format"], comment = "the workspace package still imports its JSON config after migration" },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vp", "run", "format"],
+]
+
+[[case]]
+name = "migration_workspace_oxc_filesystem_cwd"
+vp = ["global", "local"]
+local-registry = true
+steps = [
+  { argv = ["vpt", "write-file", "packages/app/vite.config.ts", "export default {};\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/other/vite.config.ts", "export default {};\n"], snapshot = false },
+  { argv = ["vpt", "write-file", ".oxfmtrc.json", "{\"singleQuote\":true,\"semi\":false}\n"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "scripts.format", "node inspect-config.mjs"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/app/helper.mjs", "import { readFileSync } from 'node:fs';\nconst fmt = JSON.parse(readFileSync('./.oxfmtrc.json', 'utf8'));\nexport default { define: { FORMAT_STYLE: fmt.singleQuote } };\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "import config from './packages/app/helper.mjs';\nexport default { ...config };\n"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "run", "format"] },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"] },
+  { argv = ["vpt", "print-file", ".oxfmtrc.json"] },
+  { argv = ["vpt", "stat-file", "packages/app/.oxfmtrc.json", "--assert", "missing"], comment = "the helper reads from its consumer cwd, not its own directory" },
+  { argv = ["vpt", "stat-file", "packages/other/.oxfmtrc.json", "--assert", "missing"], comment = "the unrelated workspace config still migrates" },
+  { argv = ["vp", "run", "format"] },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"] },
+  { argv = ["vp", "run", "format"] },
+]
+
+[[case]]
+name = "migration_workspace_oxc_dynamic_import"
+vp = ["global", "local"]
+local-registry = true
+steps = [
+  { argv = ["vpt", "write-file", "packages/app/vite.config.ts", "export default {};\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/other/vite.config.ts", "export default {};\n"], snapshot = false },
+  { argv = ["vpt", "write-file", ".oxfmtrc.json", "{\"singleQuote\":true,\"semi\":false}\n"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "scripts.format", "node inspect-config.mjs"], snapshot = false },
+  { argv = ["vpt", "write-file", "helper.mjs", "import fmt from './.oxfmtrc.json' with { type: 'json' };\nexport default { define: { FORMAT_STYLE: fmt.singleQuote } };\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "const variant = 'helper';\nconst { default: config } = await import(`./${variant}.mjs`);\nexport default { ...config };\n"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["node", "inspect-config.mjs"] },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"] },
+  { argv = ["vpt", "print-file", ".oxfmtrc.json"] },
+  { argv = ["vpt", "stat-file", "packages/other/.oxfmtrc.json", "--assert", "file"], comment = "an unresolved module graph can reach other workspace packages" },
+  { argv = ["node", "inspect-config.mjs"] },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"] },
+  { argv = ["node", "inspect-config.mjs"] },
+]
+
+[[case]]
+name = "migration_workspace_oxc_script_module"
+vp = ["global", "local"]
+local-registry = true
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "scripts.format", "node scripts/print-lint-rules.mjs"], snapshot = false },
+  { argv = ["vpt", "write-file", ".oxlintrc.json", "{\"rules\":{\"no-console\":\"error\"}}\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "scripts/print-lint-rules.mjs", "import lint from '../.oxlintrc.json' with { type: 'json' };\nconsole.log(lint.rules['no-console']);\n"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "run", "format"] },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"] },
+  { argv = ["vpt", "print-file", ".oxlintrc.json"] },
+  { argv = ["vpt", "stat-file", "packages/other/.oxfmtrc.json", "--assert", "missing"], comment = "the unrelated workspace config still migrates" },
+  { argv = ["vp", "run", "format"] },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"] },
+  { argv = ["vp", "run", "format"] },
+]
+
+[[case]]
+name = "migration_workspace_oxc_package_manager_directory"
+vp = ["global", "local"]
+local-registry = true
+env = { PNPM_CONFIG_UPDATE_NOTIFIER = "false" }
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "scripts.format", "pnpm --dir packages/app exec vp fmt --check -c .oxfmtrc.json src/index.js"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "run", "format"] },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"] },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vpt", "print-file", "packages/app/.oxfmtrc.json"] },
+  { argv = ["vpt", "stat-file", "packages/other/.oxfmtrc.json", "--assert", "missing"], comment = "the unrelated workspace config still migrates" },
+  { argv = ["vp", "run", "format"] },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"] },
+  { argv = ["vp", "run", "format"] },
+]
+
+[[case]]
+name = "migration_workspace_oxc_npm_prefix_exec"
+vp = ["global", "local"]
+local-registry = true
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "scripts.format", "npm --offline --yes=false --prefix packages/app exec -- node scripts/read.mjs -c .oxfmtrc.json"], snapshot = false },
+  { argv = ["vpt", "write-file", ".oxfmtrc.json", "{\"singleQuote\":false}\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "scripts/read.mjs", "import { readFileSync } from 'node:fs';\nimport path from 'node:path';\nimport { fileURLToPath } from 'node:url';\nconst root = fileURLToPath(new URL('../', import.meta.url));\nconsole.log(`cwd=${path.relative(root, process.cwd()) || '.'}`);\nconsole.log(JSON.parse(readFileSync(process.argv.at(-1), 'utf8')).singleQuote);\n"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["node", "prepare-node-bin.mjs"], snapshot = false },
+  { argv = ["vp", "run", "format"] },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"] },
+  { argv = ["vpt", "stat-file", ".oxfmtrc.json", "--assert", "file"] },
+  { argv = ["vp", "run", "format"] },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"] },
+  { argv = ["vp", "run", "format"] },
+]
+
+[[case]]
+name = "migration_workspace_oxc_dynamic_workspace"
+vp = ["global", "local"]
+local-registry = true
+steps = [
+  { argv = ["vpt", "write-file", "packages/app/vite.config.ts", "export default {};\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/other/vite.config.ts", "export default {};\n"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "scripts.format", "node inspect-config.mjs native vite.config.mjs"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/app/helper.mjs", "import fmt from './.oxfmtrc.json' with { type: 'json' };\nexport default { FORMAT_STYLE: fmt.singleQuote };\n"], snapshot = false },
+  { argv = ["vpt", "rm", "vite.config.ts"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.mjs", "const app = 'app';\nconst { default: define } = await import(`./packages/${app}/helper.mjs`);\nexport default { define };\n"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["node", "inspect-config.mjs", "native", "vite.config.mjs"] },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"] },
+  { argv = ["vpt", "stat-file", "packages/app/.oxfmtrc.json", "--assert", "file"] },
+  { argv = ["node", "inspect-config.mjs", "native", "vite.config.mjs"] },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"] },
+  { argv = ["node", "inspect-config.mjs", "native", "vite.config.mjs"] },
+]
+
+[[case]]
+name = "migration_workspace_oxc_package_import_workspace"
+vp = ["global", "local"]
+local-registry = true
+steps = [
+  { argv = ["vpt", "write-file", "packages/app/vite.config.ts", "export default {};\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/other/vite.config.ts", "export default {};\n"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "scripts.format", "node inspect-config.mjs bundle"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/app/helper.mjs", "import fmt from './.oxfmtrc.json' with { type: 'json' };\nexport default { FORMAT_STYLE: fmt.singleQuote };\n"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "imports.#config", "./packages/app/helper.mjs"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "import define from '#config';\nexport default { define };\n"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["node", "inspect-config.mjs", "bundle"] },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"] },
+  { argv = ["vpt", "stat-file", "packages/app/.oxfmtrc.json", "--assert", "file"] },
+  { argv = ["node", "inspect-config.mjs", "bundle"] },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"] },
+  { argv = ["node", "inspect-config.mjs", "bundle"] },
+]
+
+[[case]]
+name = "migration_workspace_oxc_env_script_module"
+vp = ["global", "local"]
+local-registry = true
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "scripts.format", "env NODE_ENV=production node scripts/print-lint-rules.mjs"], snapshot = false },
+  { argv = ["vpt", "write-file", ".oxlintrc.json", "{\"rules\":{\"no-console\":\"error\"}}\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "scripts/print-lint-rules.mjs", "import lint from '../.oxlintrc.json' with { type: 'json' };\nconsole.log(process.env.NODE_ENV, lint.rules['no-console']);\n"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "run", "format"] },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"] },
+  { argv = ["vpt", "stat-file", ".oxlintrc.json", "--assert", "file"] },
+  { argv = ["vpt", "stat-file", "packages/other/.oxfmtrc.json", "--assert", "missing"] },
+  { argv = ["vp", "run", "format"] },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"] },
+  { argv = ["vp", "run", "format"] },
+]
+
+[[case]]
+name = "migration_workspace_oxc_imported_chdir"
+vp = ["global", "local"]
+local-registry = true
+steps = [
+  { argv = ["vpt", "write-file", "packages/app/vite.config.ts", "export default {};\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/other/vite.config.ts", "export default {};\n"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "scripts.format", "node inspect-config.mjs bundle"], snapshot = false },
+  { argv = ["vpt", "write-file", ".oxfmtrc.json", "{\"singleQuote\":false}\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "change-cwd.mjs", "process.chdir('packages/app');\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "setup.mjs", "import './change-cwd.mjs';\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "import './setup.mjs';\nimport { readFileSync } from 'node:fs';\nconst fmt = JSON.parse(readFileSync('./.oxfmtrc.json', 'utf8'));\nexport default { define: { FORMAT_STYLE: fmt.singleQuote } };\n"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["node", "inspect-config.mjs", "bundle"] },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"] },
+  { argv = ["vpt", "stat-file", "packages/app/.oxfmtrc.json", "--assert", "file"] },
+  { argv = ["vpt", "stat-file", ".oxfmtrc.json", "--assert", "file"] },
+  { argv = ["node", "inspect-config.mjs", "bundle"] },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"] },
+  { argv = ["node", "inspect-config.mjs", "bundle"] },
+]

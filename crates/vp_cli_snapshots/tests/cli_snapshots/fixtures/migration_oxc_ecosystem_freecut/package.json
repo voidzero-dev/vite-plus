@@ -1,0 +1,14 @@
+{
+  "name": "migration-oxc-ecosystem-freecut",
+  "private": true,
+  "type": "module",
+  "packageManager": "npm@11.16.0",
+  "devDependencies": {
+    "vite-plus": "latest"
+  },
+  "scripts": {
+    "lint": "vp lint src",
+    "format": "vp fmt src .oxlintrc.json .oxfmtrc.json",
+    "format:check": "vp fmt src .oxlintrc.json .oxfmtrc.json --check"
+  }
+}

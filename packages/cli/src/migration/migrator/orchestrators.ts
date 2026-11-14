@@ -37,6 +37,7 @@ import {
   pnpmRequiresWorkspacePackages,
   pnpmSupportsWorkspaceSettings,
   prepareOxlintConfigs,
+  findReferencedOxcConfigs,
   supportsCatalog,
   projectListsRequiredVitestPeer,
   projectUsesVitestDirectly,
@@ -423,13 +424,15 @@ export function rewriteMonorepo(
         workspaceInfo.downloadPackageManager.version,
       ),
   );
+  const projectPaths = [
+    workspaceInfo.rootDir,
+    ...workspaceInfo.packages.map((pkg) => path.join(workspaceInfo.rootDir, pkg.path)),
+  ];
   const workspaceContext = {
     rootDir: workspaceInfo.rootDir,
     packages: workspaceInfo.packages,
-    oxlintConfigs: prepareOxlintConfigs([
-      workspaceInfo.rootDir,
-      ...workspaceInfo.packages.map((pkg) => path.join(workspaceInfo.rootDir, pkg.path)),
-    ]),
+    oxlintConfigs: prepareOxlintConfigs(projectPaths),
+    oxcReferences: findReferencedOxcConfigs(projectPaths),
   };
   // rewrite root workspace
   if (workspaceInfo.packageManager === PackageManager.yarn) {
@@ -461,6 +464,7 @@ export function rewriteMonorepo(
     workspaceUsesVitest,
     supportCatalog,
     workspaceContext.oxlintConfigs,
+    workspaceContext.oxcReferences,
   );
   if (workspaceInfo.packageManager === PackageManager.pnpm) {
     rewritePnpmWorkspaceYaml(
@@ -519,6 +523,7 @@ export function rewriteMonorepo(
     workspaceInfo.packages,
     workspaceInfo.rootDir,
     workspaceContext.oxlintConfigs,
+    workspaceContext.oxcReferences,
   );
   removeMigratedOxlintConfigs(workspaceContext.oxlintConfigs);
   injectLintTypeCheckDefaults(workspaceInfo.rootDir, silent, report);
@@ -561,6 +566,7 @@ export function rewriteMonorepoProject(
     rootDir: string;
     packages: WorkspacePackage[];
     oxlintConfigs?: PreparedOxlintConfigs;
+    oxcReferences?: ReadonlySet<string>;
   },
   deferLazyPluginWrapping = false,
   // Whether this workspace's edges use catalog references. Yarn catalogs require
@@ -581,6 +587,7 @@ export function rewriteMonorepoProject(
     workspaceContext?.packages,
     workspaceContext?.rootDir,
     workspaceContext?.oxlintConfigs,
+    workspaceContext?.oxcReferences,
   );
   mergeTsdownConfigFile(projectPath, silent, report);
 
