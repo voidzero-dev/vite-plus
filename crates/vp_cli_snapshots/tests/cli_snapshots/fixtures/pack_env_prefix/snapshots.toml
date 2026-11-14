@@ -1,0 +1,16 @@
+[[case]]
+name = "pack_env_prefix"
+vp = "local"
+comment = """
+The env prefix comes from the --env-prefix flag first, then pack.envPrefix in
+the config file, then the VITE_PACK_ and TSDOWN_ defaults.
+"""
+env = { APP_FOO = "from-app", VITE_PACK_BAR = "from-vite-pack" }
+steps = [
+  { argv = ["vp", "pack", "--logLevel", "silent"], comment = "pack.envPrefix from the config file replaces the defaults" },
+  ["vpt", "print-file", "dist/index.mjs"],
+  { argv = ["vp", "pack", "--logLevel", "silent", "--env-prefix", "VITE_PACK_"], comment = "the flag overrides the config file" },
+  ["vpt", "print-file", "dist/index.mjs"],
+  { argv = ["vp", "pack", "--logLevel", "silent", "--no-config"], comment = "without a config file the defaults apply" },
+  ["vpt", "print-file", "dist/index.mjs"],
+]
