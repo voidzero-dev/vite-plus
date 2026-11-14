@@ -3,6 +3,18 @@ use std::path::Path;
 use napi::{anyhow, bindgen_prelude::*};
 use napi_derive::napi;
 
+/// JSON for a static lint block; undefined requests normal config resolution.
+#[napi]
+pub fn read_static_lint_config(root: String) -> Result<Option<String>> {
+    let root = vt_path::AbsolutePathBuf::new(root.into())
+        .ok_or_else(|| Error::from_reason("Migration root must be absolute"))?;
+    Ok(match vp_static_config::resolve_static_config(&root).get("lint") {
+        Some(vp_static_config::FieldValue::Json(value)) => Some(value.to_string()),
+        Some(vp_static_config::FieldValue::NonStatic) => None,
+        None => Some("null".to_string()),
+    })
+}
+
 /// A literal argument with its original JavaScript UTF-16 source range.
 #[napi(object)]
 pub struct LiteralCommandToken {
@@ -367,10 +379,16 @@ pub fn rewrite_imports_in_directory(
     root: String,
     preserve_vitest_in_nuxt_packages: Option<bool>,
     oxlint_owner_dirs: Option<Vec<String>>,
+    import_rule_config: Option<String>,
 ) -> Result<BatchRewriteResult> {
     let result = vp_migration::rewrite_imports_in_directory_with_options(
         Path::new(&root),
         vp_migration::RewriteImportsOptions {
+            import_rule: import_rule_config
+                .map(|json| vp_migration::ImportRuleConfig::from_json(&json))
+                .transpose()
+                .map_err(anyhow::Error::from)?
+                .unwrap_or_default(),
             preserve_vitest_in_nuxt_packages: preserve_vitest_in_nuxt_packages.unwrap_or(false),
             oxlint_owner_dirs: oxlint_owner_dirs
                 .unwrap_or_default()

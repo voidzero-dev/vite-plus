@@ -85,6 +85,7 @@ import {
   configureYarnNodeModulesMode,
   rewriteMonorepo,
   rewriteStandaloneProject,
+  resolveImportRuleConfig,
   planVitestV5Migration,
   refreshVitestV5Migration,
   retryPreservedOxlintConfigs,
@@ -832,6 +833,8 @@ async function executeMigrationPlan(
     },
   );
 
+  const importRuleConfig = await resolveImportRuleConfig(workspaceInfo.rootDir);
+
   // 4. Check vite and vitest version is supported by migration
   updateMigrationProgress('Validating toolchain');
   const isViteSupported = checkViteVersion(workspaceInfo.rootDir);
@@ -925,7 +928,7 @@ async function executeMigrationPlan(
   // 7. Rewrite configs
   updateMigrationProgress('Rewriting configs');
   if (workspaceInfo.isMonorepo) {
-    rewriteMonorepo(workspaceInfo, skipStagedMigration, true, report);
+    rewriteMonorepo(workspaceInfo, skipStagedMigration, true, report, importRuleConfig);
   } else {
     rewriteStandaloneProject(
       workspaceInfo.rootDir,
@@ -933,6 +936,7 @@ async function executeMigrationPlan(
       skipStagedMigration,
       true,
       report,
+      importRuleConfig,
     );
   }
 
@@ -1218,11 +1222,13 @@ async function main() {
     // so surface it first instead of leaving the spinner silent. The spinner paints
     // this message synchronously on start(), before the walk begins.
     updateMigrationProgress('Rewriting toolchain imports across the workspace');
+    const importRuleConfig = await resolveImportRuleConfig(workspaceInfoOptional.rootDir);
     const coreMigrationResult = finalizeCoreMigrationForExistingVitePlus(
       workspaceInfoOptional,
       true,
       report,
       pendingCoreMigration,
+      importRuleConfig,
     );
     if (
       coreMigrationResult.dependencies ||

@@ -1,0 +1,11 @@
+{
+  "name": "app",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vp build"
+  },
+  "devDependencies": {
+    "vite-plus": "catalog:"
+  }
+}

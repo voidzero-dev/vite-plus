@@ -1,0 +1,1 @@
+{ "compilerOptions": { "types": ["vite/client", "vitest/globals"], "esModuleInterop": false } }

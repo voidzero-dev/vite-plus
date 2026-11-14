@@ -3983,6 +3983,9 @@ export interface PathAccess {
   readDir: boolean;
 }
 
+/** JSON for a static lint block; undefined requests normal config resolution. */
+export declare function readStaticLintConfig(root: string): string | null;
+
 /** Remove a top-level key from a recognized Vite config object. */
 export declare function removeConfigKey(
   viteConfigPath: string,
@@ -4044,6 +4047,7 @@ export declare function rewriteImportsInDirectory(
   root: string,
   preserveVitestInNuxtPackages?: boolean | undefined | null,
   oxlintOwnerDirs?: Array<string> | undefined | null,
+  importRuleConfig?: string | undefined | null,
 ): BatchRewriteResult;
 
 /**

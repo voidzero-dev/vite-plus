@@ -61,6 +61,37 @@ Most projects will require further manual adjustments after running `vp migrate`
 
 For the Vitest v5 upgrade, read the [compatibility settings and review checklist](./vitest-v5.md) and the [upstream Vitest migration guide](https://vitest.dev/guide/migration/). The preflight checks your original runner version and Node runtime before dependency updates. Keep the original lockfile available and resolve blocking findings before retrying.
 
+### Keeping upstream imports in templates and examples
+
+Disable `vite-plus/prefer-vite-plus-imports` for selected files in the root
+`vite.config.ts`:
+
+```ts
+import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  lint: {
+    overrides: [
+      {
+        files: ['templates/**', 'examples/**'],
+        rules: {
+          'vite-plus/prefer-vite-plus-imports': 'off',
+        },
+      },
+    ],
+  },
+});
+```
+
+`vp migrate` uses the same rule settings for its import rewrite step. The override
+also applies to `vp lint --fix` and `vp check --fix`. Patterns use Oxlint's glob
+syntax, relative to the root config directory. Later matching overrides can
+re-enable the rule.
+
+This controls import rewrites only. Migration still updates dependencies, scripts,
+configs, shared catalogs, and package-manager overrides. Other lint rules remain
+enabled. There is no separate migration exclusion setting.
+
 ## Recommended Workflow
 
 Before running the migration:

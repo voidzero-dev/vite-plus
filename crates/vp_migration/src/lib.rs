@@ -11,6 +11,7 @@ mod eslint;
 mod file_walker;
 mod import_merge;
 mod import_rewriter;
+mod import_rule;
 mod pack_config;
 mod package;
 mod prettier;
@@ -25,6 +26,7 @@ pub use import_rewriter::{
     BatchRewriteResult, RewriteImportsOptions, rewrite_imports_in_directory,
     rewrite_imports_in_directory_with_options,
 };
+pub use import_rule::ImportRuleConfig;
 pub use package::{rewrite_eslint, rewrite_prettier, rewrite_scripts};
 pub use shell_command::{LiteralCommandToken, parse_literal_commands};
 pub use source_analysis::analyze_migration_source;
