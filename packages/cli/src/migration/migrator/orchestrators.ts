@@ -663,6 +663,8 @@ export function rewriteMonorepoProject(
   }
 
   if (!deferLazyPluginWrapping) {
+    // rewrite imports in all TypeScript/JavaScript files before lazy plugin import merging
+    rewriteAllImports(projectPath, silent, report);
     wrapLazyPluginsInViteConfig(projectPath, silent, report);
     migrateTaskCacheConfigInViteConfig(projectPath, silent, report);
   }

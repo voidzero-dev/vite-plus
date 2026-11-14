@@ -299,8 +299,8 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
     ...vitestExactVersionEntries,
     {
       name: 'tsdown',
-      pattern: /tsdown: \^([\d.]+(?:-[\w.]+)?)/,
-      replacement: `tsdown: ^${versions.tsdown}`,
+      pattern: /tsdown: =([\d.]+(?:-[\w.]+)?)/,
+      replacement: `tsdown: =${versions.tsdown}`,
       newVersion: versions.tsdown,
     },
     // `@tsdown/css` and `@tsdown/exe` are bundled into core and published in
@@ -308,14 +308,14 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
     // so pin both catalog entries to the tsdown version to avoid drift.
     {
       name: '@tsdown/css',
-      pattern: /'@tsdown\/css': \^([\d.]+(?:-[\w.]+)?)/,
-      replacement: `'@tsdown/css': ^${versions.tsdown}`,
+      pattern: /'@tsdown\/css': =([\d.]+(?:-[\w.]+)?)/,
+      replacement: `'@tsdown/css': =${versions.tsdown}`,
       newVersion: versions.tsdown,
     },
     {
       name: '@tsdown/exe',
-      pattern: /'@tsdown\/exe': \^([\d.]+(?:-[\w.]+)?)/,
-      replacement: `'@tsdown/exe': ^${versions.tsdown}`,
+      pattern: /'@tsdown\/exe': =([\d.]+(?:-[\w.]+)?)/,
+      replacement: `'@tsdown/exe': =${versions.tsdown}`,
       newVersion: versions.tsdown,
     },
     // `lightningcss` is a core dependency consumed by the bundled `@tsdown/css`.
