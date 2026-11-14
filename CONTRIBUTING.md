@@ -184,6 +184,8 @@ pnpm local-registry --pack --serve
 
 `pnpm local-registry:ps` lists any registry processes still running; `pnpm local-registry:kill` stops them all and removes their leftover temp caches. See the [tool documentation](packages/tools/README.md#local-npm-registry) for implementation details and test integration.
 
+The core package has its own version, which encodes the bundled Vite version (see [Core Version](packages/core/BUNDLING.md#core-version)). Between releases, `packages/core/package.json` can hold a version that npm does not have yet, for example after a bundled Vite upgrade. A locally built `vp create` or `vp migrate` without the local registry then writes a `vite` alias that npm cannot install. Use the local registry, which serves the packed core at that version.
+
 ### Global CLI (Rust) changes
 
 `pnpm link` only swaps the JS side; the `vp` binary on `PATH` (and the Rust-backed commands it handles directly, such as package-manager commands) is still the installed binary. For changes to the Rust global CLI (`crates/`), follow [the source installation steps](#install-the-vite-global-cli-from-source-code), and combine with `pnpm link` when the change spans both layers.

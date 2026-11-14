@@ -414,7 +414,9 @@ async function bundleRolldown() {
         const result = rewriteRolldownBindingRequires(source, {
           packageName: cliPkgJson.napi.packageName,
           platformSuffixes: vitePlusPlatformSuffixes,
-          version: pkgJson.version,
+          // The platform packages publish at the CLI version. The core version
+          // encodes the bundled Vite version instead (rfcs/core-version-alignment.md).
+          version: cliPkgJson.version,
         });
         source = result.source;
         for (const suffix of result.rewrittenSuffixes) {

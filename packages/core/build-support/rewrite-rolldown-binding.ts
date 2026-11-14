@@ -21,7 +21,7 @@ export interface RewriteRolldownBindingOptions {
    * are left on `@rolldown/binding-*` and keep their upstream version guards.
    */
   platformSuffixes: ReadonlySet<string>;
-  /** Version the platform packages are published as (core's own version). */
+  /** Version the platform packages are published as (the CLI version). */
   version: string;
 }
 
