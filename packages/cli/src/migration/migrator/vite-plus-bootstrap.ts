@@ -27,6 +27,9 @@ import {
   isLegacyWrapperSpec,
   isProtocolPinnedSpec,
   managedOverridePackages,
+  mergeManagedPnpmPeerDependencyRules,
+  type PnpmPeerDependencyRuleKeys,
+  peerDependencyRulesHaveStaleEntry,
   migratePnpmSettingsToWorkspaceYaml,
   normalizeVitestPeerCatalogSpec,
   pnpmPackageJsonSettingsPending,
@@ -45,7 +48,9 @@ import {
   rewritePnpmWorkspaceYaml,
   rewriteYarnrcYml,
   setDirectViteEdge,
+  pnpmPeerDependencyRuleKeys,
   takePnpmWorkspaceSettings,
+  trackVitePeerDependencyRuleRemoval,
   vitestEcosystemCatalogReferencesPending,
   workspaceUsesVitestDirectly,
   workspaceUsesWebdriverio,
@@ -213,20 +218,15 @@ function pnpmPeerDependencyRulesSatisfyVitePlus(
   peerDependencyRules:
     | { allowAny?: string[]; allowedVersions?: Record<string, string> }
     | undefined,
-  usesVitest: boolean,
+  { managed, stale }: PnpmPeerDependencyRuleKeys,
 ): boolean {
-  const allowAny = new Set(peerDependencyRules?.allowAny ?? []);
-  const allowedVersions = peerDependencyRules?.allowedVersions ?? {};
-  // Common case: a lingering managed `vitest` peer rule is NOT satisfied.
-  if (
-    !usesVitest &&
-    VITEST_IS_MANAGED_OVERRIDE &&
-    (allowAny.has('vitest') || allowedVersions.vitest !== undefined)
-  ) {
+  // A lingering managed `vitest` rule or a stale `vite` rule is NOT satisfied.
+  if (peerDependencyRulesHaveStaleEntry(peerDependencyRules, stale)) {
     return false;
   }
-  const overrideKeys = Object.keys(managedOverridePackages(usesVitest));
-  return overrideKeys.every((key) => allowAny.has(key) && allowedVersions[key] === '*');
+  const allowAny = new Set(peerDependencyRules?.allowAny ?? []);
+  const allowedVersions = peerDependencyRules?.allowedVersions ?? {};
+  return managed.every((key) => allowAny.has(key) && allowedVersions[key] === '*');
 }
 
 function npmVitePlusManagedDependenciesPending(
@@ -766,7 +766,10 @@ export function detectVitePlusBootstrapPending(
             'pnpm-ranged',
             usesWebdriverio,
           ) ||
-          !pnpmPeerDependencyRulesSatisfyVitePlus(pkg.pnpm?.peerDependencyRules, usesVitest)
+          !pnpmPeerDependencyRulesSatisfyVitePlus(
+            pkg.pnpm?.peerDependencyRules,
+            pnpmPeerDependencyRuleKeys(usesVitest, detectedPackageManagerVersion),
+          )
         );
       }
       return (
@@ -778,7 +781,10 @@ export function detectVitePlusBootstrapPending(
           'pnpm-ranged',
           usesWebdriverio,
         ) ||
-        !pnpmPeerDependencyRulesSatisfyVitePlus(pkg.pnpm?.peerDependencyRules, usesVitest)
+        !pnpmPeerDependencyRulesSatisfyVitePlus(
+          pkg.pnpm?.peerDependencyRules,
+          pnpmPeerDependencyRuleKeys(usesVitest, detectedPackageManagerVersion),
+        )
       );
     }
     const resolver = readPnpmWorkspaceCatalogDependencyResolver(projectPath);
@@ -793,7 +799,7 @@ export function detectVitePlusBootstrapPending(
       ) ||
       !pnpmPeerDependencyRulesSatisfyVitePlus(
         readPnpmWorkspacePeerDependencyRules(projectPath),
-        usesVitest,
+        pnpmPeerDependencyRuleKeys(usesVitest, detectedPackageManagerVersion),
       ) ||
       pnpmWorkspaceMinimumReleaseAgeExemptionsPending(projectPath)
     );
@@ -916,35 +922,23 @@ function ensureOverrideEntries(
   return { overrides: next, changed };
 }
 
-function ensurePnpmPeerDependencyRules(pkg: BootstrapPackageJson, usesVitest: boolean): boolean {
-  const overrideKeys = Object.keys(managedOverridePackages(usesVitest));
+function ensurePnpmPeerDependencyRules(
+  pkg: BootstrapPackageJson,
+  peerRuleKeys: PnpmPeerDependencyRuleKeys,
+): boolean {
   pkg.pnpm ??= {};
-  // Common case: drop a lingering managed `vitest` peer rule from the source
-  // shape before re-deriving the managed rules.
-  const seed = { ...pkg.pnpm.peerDependencyRules } as {
-    allowAny?: string[];
-    allowedVersions?: Record<string, string>;
-  };
-  if (!usesVitest && VITEST_IS_MANAGED_OVERRIDE) {
-    if (Array.isArray(seed.allowAny)) {
-      seed.allowAny = seed.allowAny.filter((key) => key !== 'vitest');
-    }
-    if (seed.allowedVersions) {
-      seed.allowedVersions = { ...seed.allowedVersions };
-      delete seed.allowedVersions.vitest;
-    }
-  }
-  const peerDependencyRules = {
-    ...seed,
-    allowAny: [...new Set([...(seed.allowAny ?? []), ...overrideKeys])],
-    allowedVersions: {
-      ...seed.allowedVersions,
-      ...Object.fromEntries(overrideKeys.map((key) => [key, '*'])),
-    },
-  };
+  const peerDependencyRules = mergeManagedPnpmPeerDependencyRules(
+    pkg.pnpm.peerDependencyRules,
+    peerRuleKeys,
+  );
   const changed =
-    JSON.stringify(pkg.pnpm.peerDependencyRules ?? {}) !== JSON.stringify(peerDependencyRules);
-  pkg.pnpm.peerDependencyRules = peerDependencyRules;
+    JSON.stringify(pkg.pnpm.peerDependencyRules ?? {}) !==
+    JSON.stringify(peerDependencyRules ?? {});
+  if (peerDependencyRules) {
+    pkg.pnpm.peerDependencyRules = peerDependencyRules;
+  } else {
+    delete pkg.pnpm.peerDependencyRules;
+  }
   return changed;
 }
 
@@ -963,6 +957,12 @@ export function ensureVitePlusBootstrap(
   if (!fs.existsSync(packageJsonPath)) {
     return result;
   }
+  const reportVitePeerDependencyRuleRemoval = trackVitePeerDependencyRuleRemoval(
+    projectPath,
+    workspaceInfo.packageManager,
+    report,
+    workspaceInfo.downloadPackageManager.version,
+  );
 
   // Shared override/catalog sinks are workspace-wide, so keep vitest managed
   // when any package needs it. Each package's direct vitest dependency is
@@ -1037,6 +1037,7 @@ export function ensureVitePlusBootstrap(
         false,
         providerCatalogAdditions,
         usesWebdriverio,
+        workspaceInfo.downloadPackageManager.version,
       );
     }
   }
@@ -1115,7 +1116,11 @@ export function ensureVitePlusBootstrap(
         pkg.pnpm.overrides = ensured.overrides;
         packageJsonChanged = true;
       }
-      packageJsonChanged = ensurePnpmPeerDependencyRules(pkg, usesVitest) || packageJsonChanged;
+      packageJsonChanged =
+        ensurePnpmPeerDependencyRules(
+          pkg,
+          pnpmPeerDependencyRuleKeys(usesVitest, workspaceInfo.downloadPackageManager.version),
+        ) || packageJsonChanged;
       if (pnpmMajorVersion !== undefined && pkg.pnpm) {
         const beforePnpm = JSON.stringify(pkg.pnpm);
         applyBuildAllowanceToPackageJsonPnpm(pkg.pnpm, pnpmMajorVersion, shouldAllowBrowserBuilds);
@@ -1214,7 +1219,7 @@ export function ensureVitePlusBootstrap(
         ) ||
         !pnpmPeerDependencyRulesSatisfyVitePlus(
           readPnpmWorkspacePeerDependencyRules(projectPath),
-          usesVitest,
+          pnpmPeerDependencyRuleKeys(usesVitest, workspaceInfo.downloadPackageManager.version),
         )
       ) {
         rewritePnpmWorkspaceYaml(
@@ -1226,6 +1231,7 @@ export function ensureVitePlusBootstrap(
           true,
           providerCatalogAdditions,
           usesWebdriverio,
+          workspaceInfo.downloadPackageManager.version,
         );
       }
       if (fs.existsSync(pnpmWorkspaceYamlPath)) {
@@ -1271,6 +1277,7 @@ export function ensureVitePlusBootstrap(
   if (result.changed && report) {
     report.packageManagerBootstrapConfigured = true;
   }
+  reportVitePeerDependencyRuleRemoval();
   return result;
 }
 

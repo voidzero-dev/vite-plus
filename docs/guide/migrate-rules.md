@@ -379,6 +379,18 @@ Migration converts the Volta `volta.node` pin to `.node-version`, because Vite+ 
 - pnpm accepts the logical default catalog as either top-level `catalog` or `catalogs.default`, but not both. Migration preserves the existing form and never creates the other form beside it.
 - When an existing named catalog already owns `vite-plus`, `vite`, or `vitest`, migration reuses that managed toolchain catalog for newly added dependencies and overrides. It creates a top-level default catalog only when no managed or default catalog can be reused.
 
+**Peer rules.** The core version encodes the bundled Vite version: core `8.3.5000` bundles Vite `8.3.5` (see the [RFC](https://github.com/voidzero-dev/vite-plus/blob/main/rfcs/core-version-alignment.md)). pnpm checks `vite` peer ranges against the `vite` alias, so a plugin that supports the bundled Vite passes, and a plugin that does not support it fails.
+
+- Migration does not add `vite` to `peerDependencyRules.allowAny` or `peerDependencyRules.allowedVersions`.
+- Migration removes `vite` from `allowAny` and removes `allowedVersions.vite` when its value is `'*'`, also when you wrote the entry. Those entries accepted the `1.x` core alias. Another `allowedVersions.vite` range, such as `'7 || 8'`, stays. Migration removes a field, or `peerDependencyRules`, when no entry remains. Other entries stay. The migrate summary names the removed rule.
+- For a preview build (`0.0.0-commit.<sha>`) or a Vite+ prerelease core (such as `8.4.0-vp.0`), migration keeps writing the `vite` rule. Package managers do not accept these versions for ranges such as `^8.0.0`.
+- On pnpm before 10.2.0, migration also keeps writing the `vite` rule. These versions apply the `vite@*` alias override to peer ranges, so every `vite` peer fails against the core without the rule.
+- After migration, a plugin whose `vite` peer range excludes the bundled Vite (for example `^7.0.0`) produces a peer warning. With `strictPeerDependencies`, the install fails. Update the plugin, or widen the peer range of that plugin only:
+  - pnpm 12.17.0 and later: add the override `'vite-plugin-foo>vite:peer': '*'`. pnpm deprecated `peerDependencyRules` in this version.
+  - Earlier pnpm versions: add the rule `allowedVersions: { 'vite-plugin-foo>vite': '*' }`.
+
+  Migration removes only the plain `vite` key, so both forms stay.
+
 **Other rules.**
 
 - Packages that use `vite-plus` without a direct `vite` declaration keep that layout (see [Vite and Overrides](#vite-and-overrides)).

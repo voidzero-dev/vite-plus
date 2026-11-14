@@ -24,6 +24,8 @@ pnpm add vite-plus@0.0.0-commit.<sha>
 
 The [release workflow](.github/workflows/release.yml) publishes platform packages before `@voidzero-dev/vite-plus-core`, then publishes `vite-plus`. It checks that the required package versions and tarballs are available before continuing to dependent steps.
 
+`@voidzero-dev/vite-plus-core` has its own version, which encodes the bundled Vite version (for example, `8.3.5000` for Vite `8.3.5`). The [prepare release workflow](.github/workflows/prepare_release.yml) selects it from the registry and prints both versions in the release PR. The platform packages, `vite-plus`, and `create-vite-plus` use the `vite-plus` version. See [Core Version](packages/core/BUNDLING.md#core-version).
+
 The [propagation helper](.github/scripts/wait-for-npm-packages.ts) defaults to a 10-minute timeout and an additional 60-second wait for CDN propagation after availability checks pass.
 
 ### Recovering from a propagation timeout

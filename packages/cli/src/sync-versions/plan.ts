@@ -88,6 +88,8 @@ export type SyncVersionsManifestSnapshot = SyncVersionsRequestV1['manifests'][nu
 
 export interface SyncVersionsToolchain {
   vitePlus: string;
+  /** Encodes the bundled Vite version, so it differs from `vitePlus`. */
+  vitePlusCore: string;
   vitest: string;
 }
 
@@ -141,8 +143,11 @@ function parsePackageJson(contents: string): Record<string, unknown> {
 }
 
 function targetVersion(name: string, toolchain: SyncVersionsToolchain): string | undefined {
-  if (name === 'vite-plus' || name === '@voidzero-dev/vite-plus-core') {
+  if (name === 'vite-plus') {
     return toolchain.vitePlus;
+  }
+  if (name === '@voidzero-dev/vite-plus-core') {
+    return toolchain.vitePlusCore;
   }
   if (name === 'vitest' || isAlignableVitestEcosystemPackage(name)) {
     return toolchain.vitest;

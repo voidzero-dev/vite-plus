@@ -68,11 +68,6 @@ overrides:
   supertest>superagent: 9.0.2
   react-click-away-listener>react: 0.0.0-experimental-7dc903cd-20251203
   vite@*: 'catalog:'
-peerDependencyRules:
-  allowAny:
-    - vite
-  allowedVersions:
-    vite: '*'
 ```
 
 ## `vpt print-file packages/app/package.json`

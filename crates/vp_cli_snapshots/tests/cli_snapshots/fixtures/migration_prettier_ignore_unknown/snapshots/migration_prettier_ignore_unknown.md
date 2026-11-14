@@ -45,11 +45,6 @@ catalog:
   vite-plus: <version>
 overrides:
   vite@*: 'catalog:'
-peerDependencyRules:
-  allowAny:
-    - vite
-  allowedVersions:
-    vite: '*'
 ```
 
 ## `vpt stat-file .prettierrc.json --assert-not file`

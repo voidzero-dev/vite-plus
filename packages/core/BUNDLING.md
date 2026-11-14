@@ -156,7 +156,7 @@ The `rolldown_webcontainer_fallback` CLI snapshot executes the packed binding lo
 
 ### Release Build: Native Binding Rewriting
 
-During release builds (`RELEASE_BUILD=1`), `bundleRolldown()` rewrites Rolldown's native binding requires through `build-support/rewrite-rolldown-binding.ts`. For every platform in the CLI's `napi.targets` (mapped to napi platform suffixes with `parseTriple`), the loader's `@rolldown/binding-<suffix>` requires become `@voidzero-dev/vite-plus-<suffix>`, and that branch's version guard switches from the Rolldown version to core's version, which is what the Vite+ platform packages are published as.
+During release builds (`RELEASE_BUILD=1`), `bundleRolldown()` rewrites Rolldown's native binding requires through `build-support/rewrite-rolldown-binding.ts`. For every platform in the CLI's `napi.targets` (mapped to napi platform suffixes with `parseTriple`), the loader's `@rolldown/binding-<suffix>` requires become `@voidzero-dev/vite-plus-<suffix>`, and that branch's version guard switches from the Rolldown version to the CLI version, which is what the Vite+ platform packages are published as.
 
 **Platform-specific binding rewrites**, one per `napi.targets` entry in `packages/cli/package.json` (see the target table in [CLI Package Bundling](../cli/BUNDLING.md#napi-targets)), for example:
 
@@ -171,7 +171,7 @@ Specifiers for platforms Vite+ does not ship (android, freebsd, the `wasm32-wasi
 
 1. **Self-contained distribution** - Users don't need to install separate `@rolldown/binding-*` packages
 2. **Declared dependency graph** - Core resolves the binding through its own `optionalDependencies` (injected during publish by `packages/cli/publish-native-addons.ts`), so pnpm's global virtual store and Yarn PnP work without hidden hoisting, and core no longer requires back into `vite-plus`
-3. **Version alignment** - Each rewritten branch's guard checks the platform package version against core's version; both are published lockstep
+3. **Version alignment** - Each rewritten branch's guard checks the platform package version against the CLI version, which the platform packages use. The core version differs (see [Core Version](#core-version))
 
 **Resolution chain**:
 
@@ -316,7 +316,8 @@ dist/
 1. Update the Vite pin in [`packages/tools/.upstream-versions.json`](../tools/.upstream-versions.json) and review the resolver patch against the new source
 2. Follow the [upstream sync and build instructions](../../CONTRIBUTING.md#pull-upstream-dependencies) to prepare the source, regenerate Vite types, and rebuild the packages
 3. Verify `bundledVersions.vite` in `package.json` is updated
-4. Test with `pnpm test`
+4. Set `version` in `package.json` to the encoded version for the new Vite version, for example `8.4.2000` for Vite `8.4.2` (see [Core Version](#core-version)). The upgrade-deps workflow does this step automatically
+5. Test with `pnpm test`
 
 ### Updating Rolldown
 
@@ -405,3 +406,22 @@ The `bundledVersions` field in `package.json` records the exact versions of bund
 ```
 
 This is automatically updated by `mergePackageJson()` during each build.
+
+### Core Version
+
+The core version encodes `bundledVersions.vite`, so it differs from the `vite-plus` version. Package managers compare the version of the `vite` alias target with the `vite` peer ranges of plugins, so the encoded version makes those checks match the bundled Vite. See [the RFC](../../rfcs/core-version-alignment.md) for the design.
+
+| Release                                 | Core version                                        | Example                           |
+| --------------------------------------- | --------------------------------------------------- | --------------------------------- |
+| Stable `vite-plus`                      | `<vite major>.<vite minor>.<vite patch * 1000 + n>` | Vite `8.3.5`, `n = 1`: `8.3.5001` |
+| `vite-plus` prerelease, stable Vite     | `<next stable core version>-vp.<k>`                 | `8.4.0-vp.0`                      |
+| `vite-plus` prerelease, Vite prerelease | `<vite version>.vp.<k>`                             | `9.0.0-beta.3.vp.0`               |
+| Local and CI builds, stable Vite        | `n = 999`                                           | `8.3.5999`                        |
+| Local and CI builds, Vite prerelease    | `<vite version>.vp.999`                             | `9.0.0-beta.3.vp.999`             |
+
+`n` counts the stable releases on one Vite version, from 0 to 998. `k` counts the prereleases on one base, from 0 to 998. This follows the [`oxlint-tsgolint` versioning](https://github.com/oxc-project/tsgolint#versioning), where `7.0.2000` is the first release on TypeScript `7.0.2`. [`packages/tools/src/core-version.ts`](../tools/src/core-version.ts) implements the scheme:
+
+- `prepare_release.yml` runs `core-version.ts prepare` to select the next unpublished version from the registry. It writes that version and the `vite-plus` version (`vitePlusVersion`) to `package.json`.
+- `release.yml` runs `core-version.ts check --release`. It fails when the registry already holds the core version for a different `vite-plus` release, or when the version number was unpublished.
+- `.github/scripts/upgrade-deps.ts` resets `version` to `n = 0` when the bundled Vite changes.
+- `__tests__/core-version.spec.ts` checks that the committed `version` encodes `bundledVersions.vite`.

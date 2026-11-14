@@ -6,6 +6,7 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import {
+  publishedCoreVersion,
   publishedFormulaVersion,
   releaseAssets,
   targets,
@@ -141,5 +142,27 @@ await test('updates preserve recipe changes and reset only a previous version re
         ...assets.slice(1),
       ]),
     /Unsafe formula URL/,
+  );
+});
+
+await test('reads the core version from the published CLI alias', async () => {
+  const manifest = (dependencies) => async (url) => {
+    assert.equal(url, `https://registry.npmjs.org/vite-plus/${version}`);
+    return Response.json({ dependencies });
+  };
+  assert.equal(
+    await publishedCoreVersion(
+      version,
+      manifest({ vite: 'npm:@voidzero-dev/vite-plus-core@8.3.5001' }),
+    ),
+    '8.3.5001',
+  );
+  await assert.rejects(
+    publishedCoreVersion(version, manifest({ vite: '^8.0.0' })),
+    /does not alias vite to @voidzero-dev\/vite-plus-core/,
+  );
+  await assert.rejects(
+    publishedCoreVersion(version, async () => new Response('', { status: 404 })),
+    /HTTP 404/,
   );
 });

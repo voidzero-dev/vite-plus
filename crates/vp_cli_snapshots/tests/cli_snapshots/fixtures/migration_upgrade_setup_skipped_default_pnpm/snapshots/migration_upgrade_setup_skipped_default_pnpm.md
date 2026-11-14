@@ -13,6 +13,7 @@ VITE+ - The Unified Toolchain for the Web
     vite-plus  0.1.21 → <version>
     vite              → <version>
 • Package manager settings configured
+• Removed `vite` from pnpm peerDependencyRules: the core version now matches the bundled Vite
 • Skipped editor, hooks, and lint setup. Run `vp migrate --full` to apply them.
 ```
 
@@ -47,11 +48,6 @@ pnpm settings consolidated by the version upgrade
 ```
 overrides:
   vite@*: 'catalog:'
-peerDependencyRules:
-  allowAny:
-    - vite
-  allowedVersions:
-    vite: '*'
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@<version>
   vite-plus: <version>
