@@ -1103,6 +1103,7 @@ module.exports.resolveTsconfig = nativeBinding.resolveTsconfig;
 module.exports.shutdownAsyncRuntime = nativeBinding.shutdownAsyncRuntime;
 module.exports.startAsyncRuntime = nativeBinding.startAsyncRuntime;
 module.exports.analyzeMigrationSource = nativeBinding.analyzeMigrationSource;
+module.exports.availablePackageManagers = nativeBinding.availablePackageManagers;
 module.exports.detectWorkspace = nativeBinding.detectWorkspace;
 module.exports.documentationUrl = nativeBinding.documentationUrl;
 module.exports.downloadPackageManager = nativeBinding.downloadPackageManager;

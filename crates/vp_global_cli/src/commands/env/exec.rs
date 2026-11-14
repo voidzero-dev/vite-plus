@@ -160,13 +160,16 @@ async fn execute_with_version(
         (config::resolve_version(cwd).await?.version, None)
     };
     if let Some(bin_dir) = system_node_bin {
-        path_prefixes.push((bin_dir.into_path_buf(), vec!["node"]));
+        path_prefixes.push((bin_dir.into_path_buf(), vec!["node"], true));
     } else {
         let runtime =
             vp_js_runtime::download_runtime(vp_js_runtime::JsRuntimeType::Node, &resolved_node)
                 .await?;
-        path_prefixes
-            .push((runtime.get_bin_prefix().as_path().to_path_buf(), vec!["node", "npm", "npx"]));
+        path_prefixes.push((
+            runtime.get_bin_prefix().as_path().to_path_buf(),
+            vec!["node", "npm", "npx"],
+            false,
+        ));
     }
     let explicit_package_manager = package_manager.is_some();
     let mut system_package_manager = None;
@@ -195,6 +198,7 @@ async fn execute_with_version(
                             .package_manager_type
                             .bin_name_for_tool(&selected.package_manager_type.to_string()),
                     ],
+                    true,
                 ),
             );
             system_package_manager =
@@ -221,14 +225,20 @@ async fn execute_with_version(
             let system_version = read_tool_version(&path).await.unwrap_or(version);
             path_prefixes.insert(
                 0,
-                (bin_dir.as_path().to_path_buf(), vec![kind.bin_name_for_tool(&kind.to_string())]),
+                (
+                    bin_dir.as_path().to_path_buf(),
+                    vec![kind.bin_name_for_tool(&kind.to_string())],
+                    true,
+                ),
             );
             Some(format!("{kind}@{system_version}"))
         } else {
             let (install_dir, _, _) =
                 download_package_manager_for_cwd(cwd, kind, &version, hash.as_deref()).await?;
-            path_prefixes
-                .insert(0, (install_dir.join("bin").into_path_buf(), kind.bin_names().to_vec()));
+            path_prefixes.insert(
+                0,
+                (install_dir.join("bin").into_path_buf(), kind.bin_names().to_vec(), false),
+            );
             Some(format!("{kind}@{version}"))
         }
     } else {
@@ -236,8 +246,12 @@ async fn execute_with_version(
     };
 
     let mut child_env = ToolPathEnv::from_env();
-    for (dir, tools) in path_prefixes.into_iter().rev() {
-        child_env.prepend(dir, &tools, PrependOptions::default())?;
+    for (dir, tools, system) in path_prefixes.into_iter().rev() {
+        // Preserve system PATH order unless another selected component shadows this tool.
+        let already_selected = system
+            && vp_command::resolve_bin(tools[0], Some(child_env.path()), cwd)
+                .is_ok_and(|path| path.parent().is_some_and(|parent| parent.as_path() == dir));
+        child_env.prepend(dir, &tools, PrependOptions { dedupe_anywhere: already_selected })?;
     }
 
     // 5. Execute command

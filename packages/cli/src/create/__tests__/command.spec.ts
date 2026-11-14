@@ -4,6 +4,8 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { WorkspaceInfo } from '../../types/index.ts';
+
 const { mockRunCommand } = vi.hoisted(() => ({
   mockRunCommand: vi.fn(),
 }));
@@ -12,7 +14,7 @@ vi.mock('../../../binding/index.js', () => ({
   runCommand: mockRunCommand,
 }));
 
-const { runCommandAndDetectProjectDir } = await import('../command.js');
+const { formatDlxCommand, runCommandAndDetectProjectDir } = await import('../command.js');
 
 const tempDirs: string[] = [];
 
@@ -95,6 +97,24 @@ describe('runCommandAndDetectProjectDir', () => {
       args: ['create.js'],
       envs: {},
       cwd: path.join(cwd, 'apps'),
+    });
+  });
+});
+
+describe('formatDlxCommand', () => {
+  // A system Yarn can be Yarn Classic, which has no `dlx` command.
+  it.each([
+    ['1.22.22', 'npx', ['--yes']],
+    ['4.9.2', 'yarn', ['dlx']],
+  ])('runs templates with Yarn %s through %s', (version, command, runnerArgs) => {
+    const workspaceInfo = {
+      packageManager: 'yarn',
+      downloadPackageManager: { version },
+    } as WorkspaceInfo;
+
+    expect(formatDlxCommand('create-app@1.0.0', ['app'], workspaceInfo)).toEqual({
+      command,
+      args: [...runnerArgs, 'create-app@1.0.0', 'app'],
     });
   });
 });

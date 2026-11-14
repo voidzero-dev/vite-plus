@@ -720,12 +720,15 @@ async fn resolve_package_manager_tool(
 async fn prepare_js_child_path(
     cwd: &AbsolutePath,
     node_bin_dir: &AbsolutePath,
+    system_node: bool,
     mut env: ToolPathEnv,
 ) -> Result<ToolPathEnv, Error> {
     if vp_shared::EnvConfig::get().env_forbidden {
         return Ok(env);
     }
-    env.prepend(node_bin_dir, &["node"], PrependOptions::default())?;
+    // System Node is already reachable; promoting its directory also promotes unrelated tools.
+    let node_options = PrependOptions { dedupe_anywhere: system_node };
+    env.prepend(node_bin_dir, &["node"], node_options)?;
     if let Some(npm_path) = resolve_package_manager_tool(cwd, "npm").await? {
         if let Some(bin_dir) = npm_path.parent() {
             env.prepend(bin_dir, PackageManagerType::Npm.bin_names(), PrependOptions::default())?;
@@ -741,7 +744,7 @@ async fn prepare_js_child_path(
                 node_bin_dir.join(name).as_path().is_file()
             })
             .collect();
-        env.prepend(node_bin_dir, &tools, PrependOptions::default())?;
+        env.prepend(node_bin_dir, &tools, node_options)?;
     }
     Ok(env)
 }
@@ -837,7 +840,7 @@ async fn select_core_tool(
         // Adding a missing tool must retain the parent's Node and npm precedence.
         env
     } else {
-        prepare_js_child_path(cwd, node_bin_dir, env)
+        prepare_js_child_path(cwd, node_bin_dir, resolution.is_none(), env)
             .await
             .map_err(|error| vec![format!("Failed to prepare child process PATH: {error}")])?
     };
@@ -1077,7 +1080,9 @@ pub(crate) async fn package_binary_invocation(
     let node_bin_dir =
         node_path.parent().ok_or_else(|| "Node has no parent directory".to_string())?;
     let child_env = if let Ok(cwd) = current_dir() {
-        prepare_js_child_path(&cwd, node_bin_dir, env).await.map_err(|error| error.to_string())?
+        prepare_js_child_path(&cwd, node_bin_dir, false, env)
+            .await
+            .map_err(|error| error.to_string())?
     } else {
         // As in `prepare_js_child_path`, VP_ENV_FORBIDDEN adds no directories.
         if !vp_shared::EnvConfig::get().env_forbidden {
@@ -3051,7 +3056,7 @@ mod tests {
             let vars = forbidden_vars(&layout, &path, forbidden, &[]);
             let (cwd, node_dir) = (layout.cwd.clone(), node_dir.clone());
             EnvConfig::with_vars_async(vars, move |_| async move {
-                prepare_js_child_path(&cwd, &node_dir, ToolPathEnv::from_env())
+                prepare_js_child_path(&cwd, &node_dir, true, ToolPathEnv::from_env())
                     .await
                     .unwrap()
                     .into_envs()

@@ -1,0 +1,6 @@
+#!/bin/sh
+if [ "$1" = "--version" ]; then
+  printf '11.6.0\n'
+else
+  printf 'system npm %s\n' "$*"
+fi
