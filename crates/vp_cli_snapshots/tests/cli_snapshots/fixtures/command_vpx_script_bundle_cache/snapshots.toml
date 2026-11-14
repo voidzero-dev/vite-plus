@@ -1,0 +1,67 @@
+[[case]]
+name = "vpx_script_bundle_cache"
+vp = ["local", "global"]
+env = { VPX_BUNDLE_CACHE = "1", VPX_BUNDLE_CACHE_DEBUG = "1" }
+comment = "VPX_BUNDLE_CACHE=1 records a run, bundles the script's ES modules, and runs the bundle until an input changes. The debug lines show each decision; the builder runs before exit under VPX_BUNDLE_CACHE_DEBUG=1."
+steps = [
+  { argv = ["vpx", "./main.ts"], comment = "The first run loads each module and records the run; the builder then bundles its ES modules" },
+  { argv = ["vpx", "./main.ts"], comment = "Later runs load the bundle without the native loader; import.meta, CommonJS and ES module dependencies, and JSON behave as before" },
+  { argv = ["vpx", "./main.ts", "lazy"], comment = "A literal import() the recorded run did not reach runs from the bundle, with one instance of shared.ts" },
+  { argv = ["vpx", "./main.ts", "throw"], comment = "Stack traces map to the source files", continue-on-failure = true },
+  { argv = ["vpt", "replace-file-content", "lib.ts", "Red = 'red'", "Red = 'crimson'"], snapshot = false },
+  { argv = ["vpx", "./main.ts"], comment = "An edited source file drops the bundle" },
+  { argv = ["vpx", "./main.ts"], comment = "The rebuilt bundle has the edit" },
+  { argv = ["vpx", "./main.ts"], envs = [["VPX_BUNDLE_CACHE", "0"]], comment = "Without VPX_BUNDLE_CACHE=1, the script runs as before" },
+]
+
+[[case]]
+name = "vpx_script_bundle_cache_computed_import"
+vp = ["local", "global"]
+env = { VPX_BUNDLE_CACHE = "1", VPX_BUNDLE_CACHE_DEBUG = "1" }
+comment = "A computed import() resolves from its own module. A module that only it loads, and that imports a bundled module, makes a second instance once; the run warns, and the next build leaves the bundled module out."
+steps = [
+  { argv = ["vpx", "./main.ts"], comment = "The recorded run does not reach the computed import()" },
+  { argv = ["vpx", "./main.ts", "computed"], comment = "computed.ts loads from its own file and imports shared.ts from its file too: two instances, so counter=1" },
+  { argv = ["vpx", "./main.ts", "computed"], comment = "The next run records again, and the build leaves shared.ts out" },
+  { argv = ["vpx", "./main.ts", "computed"], comment = "From then on, shared.ts has one instance" },
+]
+
+[[case]]
+name = "vpx_script_bundle_cache_commonjs_globals"
+vp = ["local", "global"]
+env = { VPX_BUNDLE_CACHE = "1", VPX_BUNDLE_CACHE_DEBUG = "1" }
+comment = "An ES module that uses `require` without declaring it stays out of the bundle: Rolldown would give it a working `require()`, which Node.js does not."
+steps = [
+  { argv = ["vpx", "./globals-main.ts"], comment = "The recorded run; the build leaves the dependency out" },
+  { argv = ["vpx", "./globals-main.ts"], comment = "The bundled run takes the same path" },
+]
+
+[[case]]
+name = "vpx_script_bundle_cache_order"
+vp = ["local", "global"]
+env = { VPX_BUNDLE_CACHE = "1", VPX_BUNDLE_CACHE_DEBUG = "1" }
+comment = "Modules outside the bundle run where they ran without it: a CommonJS dependency that reads the environment while it loads sees what a bundled module before it set."
+steps = [
+  { argv = ["vpx", "./env-main.ts"], comment = "The recorded run" },
+  { argv = ["vpx", "./env-main.ts"], comment = "The bundled run keeps the order" },
+]
+
+[[case]]
+name = "vpx_script_bundle_cache_top_level_await"
+vp = ["local", "global"]
+env = { VPX_BUNDLE_CACHE = "1", VPX_BUNDLE_CACHE_DEBUG = "1" }
+comment = "A dependency that awaits at its top level keeps the script off the bundle, where its chunk could wait for itself. The script runs as without the cache."
+steps = [
+  { argv = ["vpx", "./tla-main.ts"], comment = "The recorded run; the build reports why it does not bundle" },
+  { argv = ["vpx", "./tla-main.ts"], comment = "Later runs load each module, with the same result" },
+]
+
+[[case]]
+name = "vpx_script_bundle_cache_unsupported"
+vp = "local"
+env = { VPX_BUNDLE_CACHE = "1", VPX_BUNDLE_CACHE_DEBUG = "1" }
+comment = "Options that load other modules or hooks, or change how the script runs, turn the cache off."
+steps = [
+  { argv = ["vpx", "--import", "./shared.ts", "./main.ts"], comment = "Another --import preload could register hooks that the bundle would bypass" },
+  { argv = ["vpx", "./main.ts"], envs = [["NODE_V8_COVERAGE", "${workspace}/coverage"]], comment = "Coverage reports source files, not a bundle" },
+]
