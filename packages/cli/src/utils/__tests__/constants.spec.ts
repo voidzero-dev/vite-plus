@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import corePkg from '../../../../core/package.json' with { type: 'json' };
 import cliPkg from '../../../package.json' with { type: 'json' };
 
 describe('Vite+ dependency versions', () => {
@@ -8,18 +9,33 @@ describe('Vite+ dependency versions', () => {
     vi.resetModules();
   });
 
-  it('uses the concrete CLI version for vite-plus and vite-plus-core by default', async () => {
+  it('uses the concrete CLI and core versions by default', async () => {
     vi.stubEnv('VP_VERSION', '');
     vi.stubEnv('VP_OVERRIDE_PACKAGES', '');
     vi.resetModules();
 
-    const { VITE_PLUS_OVERRIDE_PACKAGES, VITE_PLUS_VERSION } = await import('../constants.js');
+    const { VITE_PLUS_CORE_VERSION, VITE_PLUS_OVERRIDE_PACKAGES, VITE_PLUS_VERSION } =
+      await import('../constants.js');
 
     expect(VITE_PLUS_VERSION).toBe(cliPkg.version);
+    expect(VITE_PLUS_CORE_VERSION).toBe(corePkg.version);
     expect(VITE_PLUS_OVERRIDE_PACKAGES.vite).toBe(
-      `npm:@voidzero-dev/vite-plus-core@${cliPkg.version}`,
+      `npm:@voidzero-dev/vite-plus-core@${corePkg.version}`,
     );
   });
+
+  it.each(['1.0.1', '0.0.0', '0.0.0-commit.0c515e3'])(
+    'keeps the core manifest version for VP_VERSION %s',
+    async (version) => {
+      vi.stubEnv('VP_VERSION', version);
+      vi.stubEnv('VP_OVERRIDE_PACKAGES', '');
+      vi.resetModules();
+
+      const { VITE_PLUS_CORE_VERSION } = await import('../constants.js');
+
+      expect(VITE_PLUS_CORE_VERSION).toBe(corePkg.version);
+    },
+  );
 
   it('preserves explicit prerelease overrides', async () => {
     const vitePlusUrl = 'https://pkg.pr.new/voidzero-dev/vite-plus@1891';

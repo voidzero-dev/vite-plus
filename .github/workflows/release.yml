@@ -3,10 +3,26 @@ name: Release
 on:
   push:
     branches: [main]
+    # The core manifest is a trigger too: when `check --release` rejects the
+    # core version after the merge, the fix PR from a new Prepare Release run
+    # changes only that file. The `check` job skips the release when the CLI
+    # version is already published.
     paths:
       - 'packages/cli/package.json'
+      - 'packages/core/package.json'
 
 permissions: {}
+
+# Run releases one at a time. Each release selects its core version from the
+# registry (rfcs/core-version-alignment.md). A second run that overlaps the
+# first could check the same core version while npm still hides the first
+# publish, pass, and then pin its CLI to the first run's core. Queue runs
+# instead of cancelling them, because a release must not stop halfway. GitHub
+# keeps one pending run per group, so a third run replaces the pending one;
+# run the replaced release again by hand.
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 env:
   RELEASE_BUILD: 'true'
@@ -22,6 +38,7 @@ jobs:
     outputs:
       version_changed: ${{ steps.version.outputs.changed }}
       version: ${{ steps.version.outputs.version }}
+      core_version: ${{ steps.core-version.outputs.version }}
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
@@ -32,6 +49,25 @@ jobs:
           static-checking: localIsNew
           file-url: https://unpkg.com/vite-plus@latest/package.json
           file-name: packages/cli/package.json
+
+      # The core version encodes the bundled Vite version, so it differs from
+      # the CLI version (rfcs/core-version-alignment.md).
+      - name: Read core version
+        id: core-version
+        run: echo "version=$(node -p "require('./packages/core/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      # Fail before the build and the approval wait when the core version is
+      # stale or another release already published it. The Release job checks
+      # again before it publishes.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: steps.version.outputs.changed == 'true'
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+
+      - name: Check core version
+        if: steps.version.outputs.changed == 'true'
+        run: node packages/tools/src/core-version.ts check --release
 
   build-rust:
     name: Build bindings and binaries
@@ -66,6 +102,7 @@ jobs:
       id-token: write # Required for OIDC
     env:
       VERSION: ${{ needs.check.outputs.version }}
+      CORE_VERSION: ${{ needs.check.outputs.core_version }}
       # npm publish-time scanning makes a successful upload temporarily
       # unavailable to installs. After each dependency tier becomes visible on
       # this runner's registry edge, allow time for other CDN edges to settle.
@@ -90,6 +127,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install
+
+      - name: Check core version
+        run: node packages/tools/src/core-version.ts check --release
 
       - name: Download cli dist
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -182,7 +222,7 @@ jobs:
       - name: Publish core dependency tier
         run: >-
           node ./.github/scripts/publish-npm-package.ts
-          "@voidzero-dev/vite-plus-core@${VERSION}"
+          "@voidzero-dev/vite-plus-core@${CORE_VERSION}"
           --
           pnpm publish --filter=./packages/core --tag latest --access public --no-git-checks
 
@@ -191,7 +231,18 @@ jobs:
       - name: Wait for core to propagate
         run: >-
           node ./.github/scripts/wait-for-npm-packages.ts
-          "@voidzero-dev/vite-plus-core@${VERSION}"
+          "@voidzero-dev/vite-plus-core@${CORE_VERSION}"
+
+      # A bundled Vite downgrade publishes a core version below the current
+      # latest. Show a wrong dist-tag without stopping the release.
+      - name: Check the core latest dist-tag
+        continue-on-error: true
+        run: |
+          LATEST=$(npm view @voidzero-dev/vite-plus-core dist-tags.latest)
+          if [ "$LATEST" != "$CORE_VERSION" ]; then
+            echo "::error::@voidzero-dev/vite-plus-core latest is $LATEST, expected $CORE_VERSION. Run: npm dist-tag add @voidzero-dev/vite-plus-core@$CORE_VERSION latest"
+            exit 1
+          fi
 
       # Make the exact local CLI version installable without moving latest.
       # Bootstrap keeps selecting the previous release until its matching global
@@ -288,7 +339,7 @@ jobs:
 
           ### Published Packages
 
-          - \`@voidzero-dev/vite-plus-core@${VERSION}\`
+          - \`@voidzero-dev/vite-plus-core@${CORE_VERSION}\`
           - \`vite-plus@${VERSION}\`
           - \`create-vite-plus@${VERSION}\`
 
@@ -515,6 +566,7 @@ jobs:
       (needs.deploy-docs.result == 'success' || needs.deploy-docs.result == 'skipped')
     env:
       VERSION: ${{ needs.check.outputs.version }}
+      CORE_VERSION: ${{ needs.check.outputs.core_version }}
       IMAGE: ghcr.io/voidzero-dev/vite-plus
     steps:
       # Non-blocking: a webhook failure must not mark the release run as failed
@@ -529,7 +581,7 @@ jobs:
             A new release is available!
 
             **Published Packages:**
-            • @voidzero-dev/vite-plus-core@${{ env.VERSION }}
+            • @voidzero-dev/vite-plus-core@${{ env.CORE_VERSION }}
             • vite-plus@${{ env.VERSION }}
             • create-vite-plus@${{ env.VERSION }}
 
