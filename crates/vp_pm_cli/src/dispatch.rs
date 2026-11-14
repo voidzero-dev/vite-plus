@@ -20,7 +20,7 @@ pub struct DispatchResult {
 }
 
 enum ManagerSource<'a> {
-    Detect,
+    Detect { local_cli: bool },
     Environment(&'a EnvironmentPackageManagerResolution),
     Resolved(PackageManager),
 }
@@ -36,7 +36,15 @@ pub async fn dispatch_with_metadata(
     cwd: &AbsolutePath,
     command: PackageManagerCommand,
 ) -> Result<DispatchResult, Error> {
-    dispatch_with_manager(cwd, command, ManagerSource::Detect).await
+    dispatch_with_manager(cwd, command, ManagerSource::Detect { local_cli: false }).await
+}
+
+/// Like [`dispatch_with_metadata`], with the package manager provided as the local CLI may.
+pub async fn dispatch_for_local_cli(
+    cwd: &AbsolutePath,
+    command: PackageManagerCommand,
+) -> Result<DispatchResult, Error> {
+    dispatch_with_manager(cwd, command, ManagerSource::Detect { local_cli: true }).await
 }
 
 pub async fn dispatch_with_package_manager(
@@ -62,14 +70,17 @@ async fn dispatch_with_manager(
 ) -> Result<DispatchResult, Error> {
     let render_diagnostics = command.should_render_diagnostics();
     let manager = match source {
-        ManagerSource::Detect => {
+        ManagerSource::Detect { local_cli } => {
             if let Some((kind, version, hash)) = package_manager_override()? {
-                build_selected_package_manager(cwd, kind, &version, hash.as_deref()).await?
+                if local_cli {
+                    crate::provide_for_local_cli(cwd, kind, &version, hash.as_deref()).await?
+                } else {
+                    build_selected_package_manager(cwd, kind, &version, hash.as_deref()).await?
+                }
             } else {
-                PackageManager::builder(cwd)
-                    .package_manager_type(PackageManagerType::Pnpm)
-                    .build()
-                    .await?
+                let builder =
+                    PackageManager::builder(cwd).package_manager_type(PackageManagerType::Pnpm);
+                if local_cli { builder.for_local_cli() } else { builder }.build().await?
             }
         }
         ManagerSource::Environment(package_manager) => {

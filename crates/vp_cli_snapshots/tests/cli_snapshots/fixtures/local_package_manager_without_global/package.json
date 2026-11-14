@@ -1,0 +1,5 @@
+{
+  "name": "local-package-manager-without-global",
+  "private": true,
+  "packageManager": "pnpm@10.18.0"
+}

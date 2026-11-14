@@ -1,0 +1,16 @@
+[[case]]
+name = "create_package_manager_without_global"
+vp = "local"
+comment = "Without a global install, `vp create` defaults to and only offers the package managers on PATH."
+skip-platforms = ["windows"]
+prewarm-package-managers = false # The system npm is a fake; nothing may be downloaded.
+steps = [
+  { argv = ["vpt", "rm", "../home/.vite-plus/config.json"], snapshot = false, comment = "the global install's config is the local CLI's only sign of a global install" },
+  { argv = ["vpt", "chmod", "+x", "system-bin/npm"], snapshot = false },
+  { argv = ["vp", "create", "vite:monorepo", "--no-interactive", "--directory", "default-monorepo"], envs = [["PATH", "${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "pnpm is missing, so the default falls back to npm" },
+  { argv = ["vp", "create", "vite:monorepo", "--directory", "selected-monorepo", "--no-agent", "--no-editor", "--no-git"], envs = [["PATH", "${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "missing package managers are shown but cannot be selected", interactions = [
+    { "expect-milestone" = "select:select:2" },
+    { "write-key" = "enter" },
+  ] },
+  { argv = ["vpt", "stat-file", "../home/.vite-plus/package_manager"], comment = "no package manager was downloaded" },
+]
