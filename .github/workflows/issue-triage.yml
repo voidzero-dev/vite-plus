@@ -151,7 +151,8 @@ jobs:
           cloudflare-api-key: ${{ secrets.CLOUDFLARE_API_KEY }}
           cloudflare-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           triage-skill: .agents/skills/triage
-          auto-pr-on-fix: true
+          # Assigned issues belong to their assignees; fix.md also skips the fix so no PR opens after reporter confirmation.
+          auto-pr-on-fix: ${{ !github.event.issue.assignees[0] }}
           bot-logins: ${{ steps.app-token.outputs.app-slug }}[bot]
           triage-model: cloudflare-workers-ai/@cf/moonshotai/kimi-k2.7-code
           verification-model: cloudflare-workers-ai/@cf/moonshotai/kimi-k2.6
