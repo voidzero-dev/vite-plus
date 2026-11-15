@@ -141,9 +141,6 @@ cli
     if (input.length > 0) {
       flags.entry = input;
     }
-    if (flags.envPrefix === undefined) {
-      flags.envPrefix = DEFAULT_ENV_PREFIXES;
-    }
 
     async function runBuild(): Promise<TsdownHandle> {
       const viteConfig =
@@ -163,6 +160,7 @@ cli
         : [viteConfig?.pack ?? {}];
       for (const packConfig of packConfigs) {
         const merged = { ...packConfig, ...flags };
+        merged.envPrefix ??= DEFAULT_ENV_PREFIXES;
         // Keep postcss/lightningcss external to the dts bundle (see plugin doc)
         if (merged.dts) {
           const existingPlugins = Array.isArray(merged.plugins) ? merged.plugins : [];
