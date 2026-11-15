@@ -121,13 +121,17 @@ fn print_invalid_subcommand_error(error: &clap::Error) -> bool {
         } else {
             "curl -fsSL https://vite.plus | bash"
         };
+        let install_command = style(install_command).for_stderr().blue().bright();
         output::error(&format!(
             "The {command} command is only available in the global `vp` CLI.\n\n\
-             Install it with:\n  {install_command}\n\n\
+             {}\n  {install_command}\n\n\
              Then open a new terminal and run the command again.\n\
-             If already installed, run `vp {invalid_subcommand}` directly in your terminal instead of through a package manager or package.json script.\n\n\
-             Installation guide: {}",
-            vp_shared::documentation_url("/guide/")
+             If already installed, run `vp {invalid_subcommand}` {} instead of through a package manager or package.json script.\n\n\
+             {} {}",
+            style("Install it with:").for_stderr().bold(),
+            style("directly in your terminal").for_stderr().bold(),
+            style("Installation Guide:").for_stderr().bold(),
+            style(vp_shared::documentation_url("/guide/")).for_stderr().underlined()
         ));
         return true;
     }
