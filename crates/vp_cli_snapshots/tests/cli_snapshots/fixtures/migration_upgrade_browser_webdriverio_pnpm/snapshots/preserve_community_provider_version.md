@@ -18,6 +18,7 @@ VITE+ - The Unified Toolchain for the Web
     vite              → <version>
 • 1 file had imports rewritten
 • Package manager settings configured
+• Removed `vite` from pnpm peerDependencyRules: the core version now matches the bundled Vite
 ```
 
 ## `vpt print-file package.json`

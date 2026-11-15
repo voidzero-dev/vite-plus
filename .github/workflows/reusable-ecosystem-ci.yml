@@ -68,6 +68,15 @@ jobs:
         with:
           name: windows-cli-binaries
 
+      # Stamp the local core version (release counter 999, for example
+      # 8.3.5999) before the build, so the CLI build, its toolchain manifest,
+      # and the packed `vite` alias all read it from packages/core/package.json
+      # (rfcs/core-version-alignment.md). The native build cache key does not
+      # include that file. The local version still encodes the bundled Vite,
+      # so peer checks run as they do for a release.
+      - name: Set local core version
+        run: (cd packages/core && npm pkg set version="$(node ../tools/src/core-version.ts local)")
+
       - name: Build with upstream
         uses: ./.github/actions/build-upstream
         with:
@@ -85,11 +94,11 @@ jobs:
           # and installs them like a real release, with every package manager
           # (including bun) resolving the standard
           # `vite -> npm:@voidzero-dev/vite-plus-core@<version>` alias. Pin
-          # both packages to 0.0.0 so a correctly installed local build is
+          # the CLI to 0.0.0 (core already has its local version, see "Set
+          # local core version") so a correctly installed local build is
           # always distinguishable from any published version
           # (verify-install.ts asserts it), even on a release commit that
           # leaves packages/{core,cli} at a published version.
-          (cd packages/core && npm pkg set version=0.0.0)
           (cd packages/cli && npm pkg set version=0.0.0)
           cd packages/core && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
           cd packages/cli && pnpm pack --pack-destination ../../tmp/tgz && cd ../..

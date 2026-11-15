@@ -1,9 +1,25 @@
 import { createRequire } from 'node:module';
 
+import corePkg from '../../../core/package.json' with { type: 'json' };
 import cliPkg from '../../package.json' with { type: 'json' };
 
 export const VITE_PLUS_NAME = 'vite-plus';
 export const VITE_PLUS_VERSION = process.env.VP_VERSION || cliPkg.version;
+export const VITE_PLUS_CORE_NAME = '@voidzero-dev/vite-plus-core';
+// Projects and the CLI alias `vite` to the core: `vite: npm:@voidzero-dev/vite-plus-core@<version>`.
+export const VITE_PLUS_CORE_ALIAS_PREFIX = `npm:${VITE_PLUS_CORE_NAME}@`;
+
+/** Returns the version of a core alias spec, or `undefined` for any other spec. */
+export function coreAliasVersion(spec: string | undefined): string | undefined {
+  return spec?.startsWith(VITE_PLUS_CORE_ALIAS_PREFIX)
+    ? spec.slice(VITE_PLUS_CORE_ALIAS_PREFIX.length)
+    : undefined;
+}
+
+// The core version encodes the bundled Vite version (rfcs/core-version-alignment.md),
+// so it differs from the vite-plus version. Release, preview, and local CI builds
+// set the core manifest version before the build, so this is the packed version.
+export const VITE_PLUS_CORE_VERSION = corePkg.version;
 
 // Mirrors Vite's DEFAULT_CONFIG_FILES order so readers and writers target the same file.
 export const VITE_CONFIG_FILES = [
@@ -27,7 +43,7 @@ export const TSDOWN_MIGRATION_SKILL_URL =
 export const VITE_PLUS_OVERRIDE_PACKAGES: Record<string, string> = process.env.VP_OVERRIDE_PACKAGES
   ? JSON.parse(process.env.VP_OVERRIDE_PACKAGES)
   : {
-      vite: `npm:@voidzero-dev/vite-plus-core@${VITE_PLUS_VERSION}`,
+      vite: `${VITE_PLUS_CORE_ALIAS_PREFIX}${VITE_PLUS_CORE_VERSION}`,
       // The runner inlines its assertion and runner state. Its remaining
       // official dependencies use exact versions; community providers and
       // Istanbul internals have their own version ranges.

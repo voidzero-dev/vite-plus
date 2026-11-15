@@ -634,6 +634,11 @@ function showMigrationSummary(options: {
   if (report.packageManagerBootstrapConfigured) {
     log(`${styleText('gray', '•')} Package manager settings configured`);
   }
+  if (report.vitePeerDependencyRuleRemoved) {
+    log(
+      `${styleText('gray', '•')} Removed \`vite\` from pnpm peerDependencyRules: the core version now matches the bundled Vite`,
+    );
+  }
   if (suggestFullMigration) {
     log(FULL_MIGRATION_HINT);
   }

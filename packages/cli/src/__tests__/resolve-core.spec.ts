@@ -5,8 +5,13 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import corePkg from '../../../core/package.json' with { type: 'json' };
 import cliPkg from '../../package.json' with { type: 'json' };
 import { resolveCore } from '../resolve-core.ts';
+
+// The core version encodes the bundled Vite version, so it differs from the
+// CLI version (rfcs/core-version-alignment.md).
+const CORE_VERSION = corePkg.version;
 
 function writePackageJson(directory: string, manifest: Record<string, unknown>): void {
   mkdirSync(directory, { recursive: true });
@@ -16,7 +21,7 @@ function writePackageJson(directory: string, manifest: Record<string, unknown>):
 function writeCore(
   directory: string,
   name = '@voidzero-dev/vite-plus-core',
-  version = cliPkg.version,
+  version = CORE_VERSION,
 ): void {
   writePackageJson(directory, {
     name,
@@ -27,10 +32,15 @@ function writeCore(
   writeFileSync(join(directory, 'pack.js'), '');
 }
 
-function writeCli(directory: string, version = cliPkg.version): void {
+function writeCli(
+  directory: string,
+  version = cliPkg.version,
+  viteSpec = `npm:@voidzero-dev/vite-plus-core@${CORE_VERSION}`,
+): void {
   writePackageJson(directory, {
     name: 'vite-plus',
     version,
+    dependencies: { vite: viteSpec },
     exports: { './package.json': './package.json' },
   });
 }
@@ -46,7 +56,7 @@ describe('resolveCore', () => {
     root = realpathSync(mkdtempSync(join(tmpdir(), 'vp-core-resolver-')));
     project = join(root, 'project');
     writePackageJson(project, {
-      devDependencies: { vite: `npm:@voidzero-dev/vite-plus-core@${cliPkg.version}` },
+      devDependencies: { vite: `npm:@voidzero-dev/vite-plus-core@${CORE_VERSION}` },
     });
     cliModule = join(root, 'cli', 'dist', 'bin.js');
     bundled = join(root, 'cli', 'node_modules', 'vite');
@@ -88,28 +98,61 @@ describe('resolveCore', () => {
     expect(resolveCore('', project, cliModule)).toBe(join(bundled, 'index.js'));
   });
 
-  it.each(['0.0.0', '0.0.0-commit.1234567'])(
-    'uses the installed CLI manifest after repacking as %s',
-    (version) => {
-      writeCli(join(root, 'cli'), version);
-      writeCore(bundled, '@voidzero-dev/vite-plus-core', version);
-      writeCore(projectCore, '@voidzero-dev/vite-plus-core', version);
-      expect(resolveCore('', project, cliModule)).toBe(join(bundled, 'index.js'));
-      expect(resolveCore('/pack', project, cliModule)).toBe(join(bundled, 'pack.js'));
-    },
-  );
+  it.each([
+    ['0.0.0', '8.3.5999'],
+    ['0.0.0-commit.1234567', '0.0.0-commit.1234567'],
+  ])('uses the installed CLI manifest after repacking as %s', (version, coreVersion) => {
+    writeCli(join(root, 'cli'), version, `npm:@voidzero-dev/vite-plus-core@${coreVersion}`);
+    writeCore(bundled, '@voidzero-dev/vite-plus-core', coreVersion);
+    writeCore(projectCore, '@voidzero-dev/vite-plus-core', coreVersion);
+    expect(resolveCore('', project, cliModule)).toBe(join(bundled, 'index.js'));
+    expect(resolveCore('/pack', project, cliModule)).toBe(join(bundled, 'pack.js'));
+  });
 
   it.each(['project', 'bundled'])(
     'still rejects a mismatched %s core after repacking the CLI',
     (location) => {
-      writeCli(join(root, 'cli'), '0.0.0');
-      writeCore(bundled, '@voidzero-dev/vite-plus-core', '0.0.0');
+      writeCli(join(root, 'cli'), '0.0.0', 'npm:@voidzero-dev/vite-plus-core@8.3.5999');
+      writeCore(bundled, '@voidzero-dev/vite-plus-core', '8.3.5999');
       writeCore(location === 'project' ? projectCore : bundled);
       expect(() => resolveCore('', project, cliModule)).toThrow(
-        `Expected @voidzero-dev/vite-plus-core@0.0.0, but found @voidzero-dev/vite-plus-core@${cliPkg.version}`,
+        `Expected @voidzero-dev/vite-plus-core@8.3.5999, but found @voidzero-dev/vite-plus-core@${CORE_VERSION}`,
       );
     },
   );
+
+  it('rejects a core that matches the CLI version instead of its alias', () => {
+    writeCore(bundled, '@voidzero-dev/vite-plus-core', cliPkg.version);
+    expect(() => resolveCore('', project, cliModule)).toThrow(
+      `Expected @voidzero-dev/vite-plus-core@${CORE_VERSION}, but found @voidzero-dev/vite-plus-core@${cliPkg.version}`,
+    );
+  });
+
+  describe('with the repository workspace spec', () => {
+    beforeEach(() => {
+      writeCli(join(root, 'cli'), cliPkg.version, 'workspace:@voidzero-dev/vite-plus-core@*');
+      writeCore(bundled, '@voidzero-dev/vite-plus-core', '0.0.0-any');
+    });
+
+    it('compares the project core with the core that the CLI resolves', () => {
+      writeCore(projectCore, '@voidzero-dev/vite-plus-core', '0.0.0-any');
+      expect(resolveCore('', project, cliModule)).toBe(join(bundled, 'index.js'));
+    });
+
+    it('rejects a stale project core', () => {
+      writeCore(projectCore, '@voidzero-dev/vite-plus-core', '0.0.0-stale');
+      expect(() => resolveCore('', project, cliModule)).toThrow(
+        'Expected @voidzero-dev/vite-plus-core@0.0.0-any, but found @voidzero-dev/vite-plus-core@0.0.0-stale',
+      );
+    });
+
+    it('rejects upstream Vite in the CLI dependency', () => {
+      writeCore(bundled, 'vite', '8.2.2');
+      expect(() => resolveCore('', project, cliModule)).toThrow(
+        'Expected @voidzero-dev/vite-plus-core, but found vite@8.2.2',
+      );
+    });
+  });
 
   it('does not fall back to the project when the CLI dependency is missing', () => {
     writeCore(projectCore);

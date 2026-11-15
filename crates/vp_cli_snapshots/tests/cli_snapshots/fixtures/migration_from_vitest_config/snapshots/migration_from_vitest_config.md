@@ -108,9 +108,7 @@ overrides:
   '@vitest/browser@*': <version>
 peerDependencyRules:
   allowAny:
-    - vite
     - vitest
   allowedVersions:
-    vite: '*'
     vitest: '*'
 ```

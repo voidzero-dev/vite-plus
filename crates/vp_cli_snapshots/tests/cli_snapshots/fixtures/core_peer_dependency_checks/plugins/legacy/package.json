@@ -1,0 +1,7 @@
+{
+  "name": "vite-plugin-legacy",
+  "version": "1.0.0",
+  "peerDependencies": {
+    "vite": "^7.0.0"
+  }
+}

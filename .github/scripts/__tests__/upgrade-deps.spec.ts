@@ -242,9 +242,11 @@ function createSyncFixture() {
   const metaDir = join(root, 'meta');
   const versionsPath = join(metaDir, 'versions.json');
   writeJson(corePath, {
+    version: '8.3.5001',
     dependencies: { 'yuku-parser': '^0.9.3', postcss: '^8.5.6' },
     optionalDependencies: { fsevents: '~2.3.3' },
     devDependencies: { 'rolldown-plugin-dts': '^0.28.0' },
+    bundledVersions: { vite: '8.3.5' },
   });
   writeJson(join(root, 'store/tsdown/package.json'), { name: 'tsdown', version: '0.23.0' });
   writeJson(pluginPath, {
@@ -270,6 +272,7 @@ function createSyncFixture() {
     dependencies: { 'yuku-codegen': '^0.8.1', 'yuku-parser': '^0.8.1' },
   });
   writeJson(vitePath, {
+    version: '8.3.5',
     dependencies: { postcss: '^8.5.28' },
     optionalDependencies: { fsevents: '~2.4.0' },
   });
@@ -293,9 +296,12 @@ test('pins the bundled parser, syncs Vite ranges, and preserves upgrade metadata
   const { corePath, versionsPath, metaDir, run } = fixture;
   run();
   expect(readJson(corePath)).toEqual({
+    // The bundled Vite did not change, so the release counter stays.
+    version: '8.3.5001',
     dependencies: { 'yuku-parser': '0.10.3', postcss: '^8.5.28' },
     optionalDependencies: { fsevents: '~2.4.0' },
     devDependencies: { 'rolldown-plugin-dts': '^0.28.0' },
+    bundledVersions: { vite: '8.3.5' },
   });
   expect(readJson(versionsPath)).toEqual({
     oxlint: { old: '1.86.0', new: '1.87.0' },
@@ -323,6 +329,47 @@ test('pins the bundled parser, syncs Vite ranges, and preserves upgrade metadata
   const before = readFileSync(corePath, 'utf8');
   run();
   expect(readFileSync(corePath, 'utf8')).toBe(before);
+});
+
+test('restarts the core version counter when the bundled Vite changes', () => {
+  const fixture = createSyncFixture();
+  const { corePath, versionsPath, metaDir, run } = fixture;
+  writeJson(fixture.vitePath, { ...readJson(fixture.vitePath), version: '8.4.2' });
+  run();
+  expect(readJson(corePath).version).toBe('8.4.2000');
+  expect(readJson(corePath).bundledVersions).toEqual({ vite: '8.4.2' });
+  expect(readJson(versionsPath)['@voidzero-dev/vite-plus-core']).toEqual({
+    old: '8.3.5001',
+    new: '8.4.2000',
+  });
+  expect(readFileSync(join(metaDir, 'pr-body.md'), 'utf8')).toContain(
+    '| `@voidzero-dev/vite-plus-core` | `8.3.5001` | `8.4.2000` |',
+  );
+
+  // A second pass keeps the recorded old version and the encoded version.
+  run();
+  expect(readJson(corePath).version).toBe('8.4.2000');
+  expect(readJson(versionsPath)['@voidzero-dev/vite-plus-core']).toEqual({
+    old: '8.3.5001',
+    new: '8.4.2000',
+  });
+});
+
+test('starts the vp counter when the bundled Vite is a prerelease', () => {
+  const fixture = createSyncFixture();
+  writeJson(fixture.vitePath, { ...readJson(fixture.vitePath), version: '9.0.0-beta.3' });
+  fixture.run();
+  expect(readJson(fixture.corePath).version).toBe('9.0.0-beta.3.vp.0');
+  expect(readJson(fixture.corePath).bundledVersions).toEqual({ vite: '9.0.0-beta.3' });
+});
+
+test('fails without writing core when the Vite source has no version', () => {
+  const fixture = createSyncFixture();
+  const { version: _, ...vite } = readJson(fixture.vitePath);
+  writeJson(fixture.vitePath, vite);
+  const before = readFileSync(fixture.corePath, 'utf8');
+  expect(fixture.run).toThrow('Missing version');
+  expect(readFileSync(fixture.corePath, 'utf8')).toBe(before);
 });
 
 test('updates the parser pin when its installed version changes within the same range', () => {

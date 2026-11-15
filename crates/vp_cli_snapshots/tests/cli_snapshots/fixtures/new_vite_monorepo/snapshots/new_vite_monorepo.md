@@ -93,11 +93,6 @@ catalog:
   vite-plus: <version>
 overrides:
   vite@*: "catalog:"
-peerDependencyRules:
-  allowAny:
-    - vite
-  allowedVersions:
-    vite: "*"
 ```
 
 ## `vpt stat-file vite-plus-monorepo/.gitignore --assert file`
