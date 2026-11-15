@@ -564,6 +564,7 @@ impl PackageManager {
     pub async fn from_system_executable(
         client: PackageManagerType,
         executable: &AbsolutePath,
+        cwd: &AbsolutePath,
     ) -> Option<Self> {
         // Only npm skips `--version`; `npm_version_from_package_json` explains why.
         let version = if client == PackageManagerType::Npm
@@ -571,8 +572,10 @@ impl PackageManager {
         {
             version.to_string()
         } else {
+            // Corepack rejects a manager that the current project does not pin.
             let output = tokio::process::Command::new(executable.as_path())
                 .arg("--version")
+                .current_dir(cwd)
                 .output()
                 .await
                 .ok()?;
@@ -5851,6 +5854,31 @@ mod tests {
 
     #[cfg(unix)]
     #[tokio::test]
+    async fn system_version_probe_runs_in_the_requested_project() {
+        use std::os::unix::fs::PermissionsExt;
+
+        // Like Corepack, the fake yarn reports its version only in a project that pins it.
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let yarn = root.join("bin/yarn");
+        std::fs::create_dir_all(yarn.parent().unwrap()).unwrap();
+        std::fs::write(&yarn, "#!/bin/sh\n[ -f yarn-project ] && echo 4.9.0\n").unwrap();
+        std::fs::set_permissions(&yarn, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let project = root.join("project");
+        std::fs::create_dir(&project).unwrap();
+        std::fs::write(project.join("yarn-project"), "").unwrap();
+        let yarn = vt_path::AbsolutePathBuf::new(yarn).unwrap();
+        let project = vt_path::AbsolutePathBuf::new(project).unwrap();
+
+        let manager =
+            PackageManager::from_system_executable(PackageManagerType::Yarn, &yarn, &project)
+                .await
+                .expect("the probe runs in the project that pins yarn");
+        assert_eq!(manager.get_version(), "4.9.0");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
     async fn system_npm_version_is_read_from_its_package_without_running_it() {
         use std::os::unix::fs::PermissionsExt;
 
@@ -5876,7 +5904,8 @@ mod tests {
             .unwrap();
         let npm = vt_path::AbsolutePathBuf::new(root.join("bin/npm")).unwrap();
 
-        let manager = PackageManager::from_system_executable(PackageManagerType::Npm, &npm)
+        let cwd = vt_path::AbsolutePathBuf::new(root.to_path_buf()).unwrap();
+        let manager = PackageManager::from_system_executable(PackageManagerType::Npm, &npm, &cwd)
             .await
             .expect("npm's version is read without running npm");
         // Scripts see the version in the user agent.

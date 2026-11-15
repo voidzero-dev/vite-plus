@@ -739,6 +739,7 @@ async fn run_package_manager_command(
         && let Some(manager) = vp_pm_cli::PackageManager::from_system_executable(
             selected.package_manager_type,
             &system_path,
+            &cwd,
         )
         .await
     {

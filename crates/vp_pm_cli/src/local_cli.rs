@@ -11,7 +11,7 @@ use vt_path::{AbsolutePath, AbsolutePathBuf};
 
 use crate::{
     PackageManager, PackageManagerType, ShimMode, download_package_manager_for_cwd,
-    user_config::load_config_if_present,
+    ensure_managed_package_manager_allowed, user_config::load_config_if_present,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -47,6 +47,10 @@ impl Source {
         if provision != Provision::Managed
             && let Some(executable) = find_system_executable(cwd, kind)
         {
+            // A parent process may have put a managed install on PATH.
+            if vp_command::is_managed_install(executable.as_path()) {
+                ensure_managed_package_manager_allowed(kind)?;
+            }
             return Ok(Self::System { executable, provision });
         }
         if provision == Provision::SystemOnly {
@@ -65,7 +69,7 @@ pub async fn provide_for_local_cli(
 ) -> Result<PackageManager, Error> {
     match Source::resolve(cwd, kind).await? {
         Source::System { executable, provision } => {
-            match PackageManager::from_system_executable(kind, &executable).await {
+            match PackageManager::from_system_executable(kind, &executable, cwd).await {
                 Some(package_manager) => Ok(package_manager),
                 // Like the global CLI, system-first falls back to a download when the system one fails.
                 None if provision == Provision::SystemFirst => {
@@ -111,4 +115,47 @@ fn find_system_executable(cwd: &AbsolutePath, kind: PackageManagerType) -> Optio
     // Skip Vite+ shims so the result is the system installation itself.
     let query = vp_command::ExternalToolQuery { path: &path, bypass: &[], self_exe: None };
     vp_command::find_external_tool(&kind.to_string(), &query, cwd)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::ffi::OsStr;
+
+    use vp_shared::{EnvConfig, env_vars};
+
+    use super::*;
+
+    /// Under `VP_ENV_FORBIDDEN=1`, a managed pnpm that a parent put on PATH is
+    /// rejected; otherwise it is reused like a system one.
+    #[cfg(unix)]
+    #[tokio::test(flavor = "current_thread")]
+    async fn managed_install_on_path_is_rejected_when_env_forbidden() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let home = tempfile::tempdir().unwrap();
+        let bin = home.path().join("package_manager/pnpm/10.0.0/bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        let pnpm = bin.join("pnpm");
+        std::fs::write(&pnpm, "#!/bin/sh\n").unwrap();
+        std::fs::set_permissions(&pnpm, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let cwd = AbsolutePathBuf::new(home.path().to_path_buf()).unwrap();
+        let resolve = |forbidden: Option<&'static str>| {
+            let vars = [
+                (env_vars::VP_HOME, Some(home.path().as_os_str())),
+                ("PATH", Some(bin.as_os_str())),
+                (env_vars::VP_ENV_FORBIDDEN, forbidden.map(OsStr::new)),
+            ];
+            EnvConfig::with_vars_async(vars, |_| Source::resolve(&cwd, PackageManagerType::Pnpm))
+        };
+
+        let error = resolve(Some("1")).await.err().expect("the managed pnpm is rejected");
+        assert!(
+            matches!(&error, Error::DisabledByEnvForbidden { tool } if tool == "pnpm"),
+            "{error:?}"
+        );
+        let source = resolve(None).await.expect("the managed pnpm is reused");
+        assert!(
+            matches!(source, Source::System { executable, .. } if executable.as_path() == pnpm)
+        );
+    }
 }
