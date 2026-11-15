@@ -156,13 +156,7 @@ describe('alignMonorepoTypeScriptVersion', () => {
       'nodeLinker: node-modules\ncatalog:\n  "@types/node": ^24\n  typescript: ^5\n',
     );
 
-    alignMonorepoTypeScriptVersion(
-      tmpDir,
-      appDir,
-      libraryDir,
-      PackageManager.yarn,
-      '4.10.0',
-    );
+    alignMonorepoTypeScriptVersion(tmpDir, appDir, libraryDir, PackageManager.yarn, '4.10.0');
 
     const workspace = fs.readFileSync(path.join(tmpDir, '.yarnrc.yml'), 'utf8');
     expect(workspace).toContain('"@types/node": ^26.6.5');
@@ -187,19 +181,13 @@ describe('alignMonorepoTypeScriptVersion', () => {
       'nodeLinker: node-modules\ncatalog:\n  "@types/node": ^24\n  typescript: ^5\n',
     );
 
-    alignMonorepoTypeScriptVersion(
-      tmpDir,
-      appDir,
-      libraryDir,
-      PackageManager.yarn,
-      '4.9.0',
-    );
+    alignMonorepoTypeScriptVersion(tmpDir, appDir, libraryDir, PackageManager.yarn, '4.9.0');
 
     expect(readDevDependencies(appDir).typescript).toBe('^7.0.2');
     expect(readDevDependencies(libraryDir).typescript).toBe('^7.0.2');
     expect(readDevDependencies(libraryDir)['@types/node']).toBe('^26.6.5');
     expect(fs.readFileSync(path.join(tmpDir, '.yarnrc.yml'), 'utf8')).toContain(
-      '@types/node\": ^24',
+      '@types/node": ^24',
     );
 
     alignMonorepoTypeScriptVersion(tmpDir, appDir, libraryDir, PackageManager.npm, '12.0.0');

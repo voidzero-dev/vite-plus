@@ -207,7 +207,7 @@ export function alignMonorepoTypeScriptVersion(
   workspaceRootPath: string,
   appProjectPath: string,
   libraryProjectPath: string,
-  packageManager = PackageManager.pnpm,
+  packageManager: PackageManager = PackageManager.pnpm,
   packageManagerVersion = '12.0.0',
 ): void {
   const appPackagePath = path.join(appProjectPath, 'package.json');
@@ -237,10 +237,7 @@ export function alignMonorepoTypeScriptVersion(
 
   if (typescriptVersion) {
     editJsonFile<{ devDependencies?: Record<string, string> }>(appPackagePath, (pkg) => {
-      if (
-        pkg.devDependencies?.typescript &&
-        pkg.devDependencies.typescript !== typescriptVersion
-      ) {
+      if (pkg.devDependencies?.typescript && pkg.devDependencies.typescript !== typescriptVersion) {
         pkg.devDependencies.typescript = typescriptVersion;
         return pkg;
       }
