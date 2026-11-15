@@ -10,7 +10,7 @@ Install non-existent package
 VITE+ - The Unified Toolchain for the Web
 
 info: Installing 1 global package with Node.js <version>
-⠿ Installing global packages (<n>/1)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  npm error code E404
+⠿ Installing global packages (<n>/1) <duration>                                                                                                                                                                                                                                                                                                                                                                                                                                                                               npm error code E404
 npm error 404 Not Found - GET http://127.0.0.1:<port>/voidzero-nonexistent-pkg-xyz-12345 - <message>
 npm error 404
 npm error 404  The requested resource 'voidzero-nonexistent-pkg-xyz-12345@*' could not be found or you do not have permission to access it.

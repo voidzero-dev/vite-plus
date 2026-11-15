@@ -31,7 +31,11 @@ For changes to the guidance shipped to user projects, use `packages/cli/AGENTS.m
 
 Prefer local fixtures or mock servers for tests that depend on external services. Use real network requests only when they are necessary to verify the behavior under test, and explain that need in the test. Reuse existing test infrastructure, preserve behavioral coverage, and keep mutable state isolated between cases.
 
-For behavior changes, find nearby tests before editing and add or update coverage in the same area. Choose checks for the changed layer:
+For product behavior changes, find nearby tests before editing and add or update coverage in the same area.
+
+For repository automation and test-support scripts (for example, `.github/scripts/`), do not add unit tests unless the user explicitly requests them. Validate changes with focused script runs and existing checks instead.
+
+Choose checks for the changed layer:
 
 For local CLI installation, use a fresh absolute temporary `VP_HOME` and set `VP_SELF_SETUP_NO_MODIFY_PATH=1`. Keep installation, checks, and `PATH` changes inside one subshell; remove the temporary installation on exit. Follow the [isolated installation procedure](CONTRIBUTING.md#isolated-cli-installation). Test shell setup through the snapshot runner's isolated homes.
 

@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { coerce, isGreaterThanOrEqual } from 'verkit';
+import { coerce, isGreaterThanOrEqual, isLessThan } from 'verkit';
 import { Scalar, YAMLMap, YAMLSeq } from 'yaml';
 
 import { PackageManager, type WorkspacePackage } from '../../types/index.ts';
@@ -23,14 +23,18 @@ import {
   isAlignableVitestEcosystemPackage,
   isLegacyWrapperSpec,
   managedOverridePackages,
+  mergeManagedPnpmPeerDependencyRules,
+  isManagedAllowedVersion,
+  peerDependencyRulesHaveStaleEntry,
   pruneLegacyWrapperAliases,
   removeManagedVitestEntry,
-  removeVitestPeerDependencyRule,
   removeYamlMapVitestEntry,
   rewriteMonorepoProject,
   shouldDropProviderOverrideKey,
+  pnpmPeerDependencyRuleKeys,
   workspaceUsesWebdriverioProvider,
 } from '../migrator.ts';
+import { type MigrationReport } from '../report.ts';
 import {
   type PreparedOxlintConfigs,
   LEGACY_WRAPPER_FALLBACK_VERSIONS,
@@ -39,6 +43,8 @@ import {
   VITEST_IS_MANAGED_OVERRIDE,
   isPlainRecord,
   pnpmOverrideKey,
+  readPackageJsonIfExists,
+  vitePeerDependencyRuleRequired,
   type CatalogDependencyResolver,
   type PackageJsonDependencyField,
   type PnpmPackageJsonSettings,
@@ -85,6 +91,13 @@ function versionAtLeast(version: string, minVersion: string, tags: string[]): bo
   return tags.includes(version);
 }
 
+// The packages field became optional in pnpm 10.5.0.
+// https://github.com/pnpm/pnpm/releases/tag/v10.5.0
+export function pnpmRequiresWorkspacePackages(version: string): boolean {
+  const coerced = coerce(version);
+  return coerced ? isLessThan(coerced, '10.5.0') : false;
+}
+
 const PNPM_WORKSPACE_SETTINGS_MIN_VERSION = '10.6.2';
 
 // pnpm 10.5 started reading package.json#pnpm settings from
@@ -122,6 +135,46 @@ const YARN_CATALOG_MIN_VERSION = '4.10.0';
 // `catalog:` references it cannot resolve. Mirrors `pnpmSupportsWorkspaceSettings`.
 export function yarnSupportsCatalog(version: string): boolean {
   return versionAtLeast(version, YARN_CATALOG_MIN_VERSION, ['latest', 'next', 'stable']);
+}
+
+const YARN_PREAPPROVED_PACKAGES_MIN_VERSION = '4.10.0';
+
+// `npmPreapprovedPackages` shipped in Yarn 4.10.0, and an older Yarn refuses to
+// run at all with an rc key it does not know. Like `yarnSupportsCatalog`, this
+// receives the recorded (pre-upgrade) version.
+export function yarnSupportsPreapprovedPackages(version: string): boolean {
+  return versionAtLeast(version, YARN_PREAPPROVED_PACKAGES_MIN_VERSION, [
+    'latest',
+    'next',
+    'stable',
+  ]);
+}
+
+const BUN_TOP_LEVEL_CATALOG_MIN_VERSION = '1.2.21';
+
+// Bun resolves `catalog:` references ONLY inside a workspace: a root
+// package.json with a `workspaces` field. An empty one (`[]` or
+// `{ packages: [] }`) is enough (#3375). Bun before 1.2.21 also ignores a
+// top-level `catalog` or `catalogs` (verified on 1.2.14 to 1.2.20), so it
+// needs the nested location that `rewriteBunCatalog` keeps in place. Otherwise
+// `catalog:` edges make `bun install` abort with "vite@catalog: failed to
+// resolve", so the toolchain edges must stay concrete.
+export function bunSupportsCatalog(
+  pkg: { workspaces?: NpmWorkspaces; catalog?: Record<string, string> },
+  version: string,
+): boolean {
+  const { workspaces } = pkg;
+  if (workspaces == null) {
+    return false;
+  }
+  // Mirrors `useWorkspacesCatalog` in rewriteBunCatalog.
+  const writesNestedCatalog =
+    !Array.isArray(workspaces) &&
+    (workspaces.catalog != null || (pkg.catalog == null && workspaces.catalogs != null));
+  return (
+    writesNestedCatalog ||
+    versionAtLeast(version, BUN_TOP_LEVEL_CATALOG_MIN_VERSION, ['latest', 'canary'])
+  );
 }
 
 // Whether a `catalog:` reference resolves for this package manager and version:
@@ -265,6 +318,7 @@ export function rewritePnpmWorkspaceYaml(
   writeWorkspaceSettings = true,
   catalogAdditions: ReadonlySet<string> = new Set(),
   usesWebdriverioProvider = false,
+  pnpmVersion: string | undefined,
 ): void {
   const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
   if (!fs.existsSync(pnpmWorkspaceYamlPath)) {
@@ -369,17 +423,17 @@ export function rewritePnpmWorkspaceYaml(
         allowAny.add(scalarString(allowAnyNode));
       }
     }
-    // Common case: drop any lingering managed `vitest` allowAny entry.
-    if (!usesVitest && VITEST_IS_MANAGED_OVERRIDE) {
-      allowAny.items = allowAny.items.filter((n) => n.value !== 'vitest');
-    }
+    // Drop lingering managed `vitest` and stale `vite` entries.
+    const peerRuleKeys = pnpmPeerDependencyRuleKeys(usesVitest, pnpmVersion);
+    const stalePeerRuleKeys = peerRuleKeys.stale;
+    allowAny.items = allowAny.items.filter((n) => !stalePeerRuleKeys.includes(n.value));
     const existing = new Set(allowAny.items.map((n) => n.value));
-    for (const key of Object.keys(managedOverridePackages(usesVitest))) {
+    for (const key of peerRuleKeys.managed) {
       if (!existing.has(key)) {
         allowAny.add(scalarString(key));
       }
     }
-    doc.setIn(['peerDependencyRules', 'allowAny'], allowAny);
+    setPeerDependencyRulesField(doc, 'allowAny', allowAny);
 
     // peerDependencyRules.allowedVersions
     // Same guard as above: a malformed non-map `allowedVersions:` value (pnpm
@@ -391,15 +445,16 @@ export function rewritePnpmWorkspaceYaml(
     } else {
       allowedVersions = new YAMLMap<Scalar<string>, Scalar<string>>();
     }
-    // Common case: drop any lingering managed `vitest` allowedVersions entry.
-    if (!usesVitest) {
-      removeYamlMapVitestEntry(allowedVersions);
+    for (const key of stalePeerRuleKeys) {
+      if (isManagedAllowedVersion(key, allowedVersions.get(key))) {
+        allowedVersions.delete(key);
+      }
     }
-    for (const key of Object.keys(managedOverridePackages(usesVitest))) {
+    for (const key of peerRuleKeys.managed) {
       // - vite: '*'
       allowedVersions.set(scalarString(key), scalarString('*'));
     }
-    doc.setIn(['peerDependencyRules', 'allowedVersions'], allowedVersions);
+    setPeerDependencyRulesField(doc, 'allowedVersions', allowedVersions);
 
     // minimumReleaseAgeExclude: exempt the Vite+-managed packages (vite-plus,
     // @voidzero-dev/*, the ox* family, and the vitest family) from the age gate.
@@ -956,13 +1011,12 @@ function rewriteYamlCatalogAtPath(
     catalog.set(scalarString(VITE_PLUS_NAME), scalarString(VITE_PLUS_VERSION));
   }
   if (addMissing && VITEST_IS_MANAGED_OVERRIDE) {
-    // Injected providers, plus — when the toolchain is catalog-managed (the
-    // catalog now owns `vitest`) — every declared alignable @vitest/* so its
+    // Injected providers, plus every declared alignable @vitest/* so its
     // `catalog:` reference (written by getAlignedVitestEcosystemDependencySpec)
-    // resolves instead of dangling. #2005
-    const additions = catalog.has('vitest')
-      ? new Set<string>([...catalogAdditions, ...vitestEcosystemPackages])
-      : catalogAdditions;
+    // resolves instead of dangling. That writer does not require `vitest` in
+    // the catalog, so neither does this one: a project may declare only an
+    // excluded utility such as `@vitest/utils`. #2005
+    const additions = new Set<string>([...catalogAdditions, ...vitestEcosystemPackages]);
     for (const name of additions) {
       if (isAlignableVitestEcosystemPackage(name)) {
         catalog.set(scalarString(name), scalarString(VITEST_VERSION));
@@ -1021,7 +1075,12 @@ function rewriteCatalogObject(
     delete catalog[name];
   }
   if (VITEST_IS_MANAGED_OVERRIDE) {
-    for (const name of Object.keys(catalog)) {
+    // Like the pnpm catalog, add every declared alignable @vitest/* so its new
+    // `catalog:` reference resolves. #2005
+    const names = addMissing
+      ? new Set([...Object.keys(catalog), ...vitestEcosystemPackages])
+      : Object.keys(catalog);
+    for (const name of names) {
       if (vitestEcosystemPackages.has(name) && isAlignableVitestEcosystemPackage(name)) {
         catalog[name] = VITEST_VERSION;
       }
@@ -1033,9 +1092,10 @@ function rewriteCatalogsObject(
   catalogs: Record<string, Record<string, string>>,
   usesVitest: boolean,
   vitestEcosystemPackages: ReadonlySet<string>,
+  targetCatalog?: Record<string, string>,
 ): void {
   for (const catalog of Object.values(catalogs)) {
-    rewriteCatalogObject(catalog, false, usesVitest, vitestEcosystemPackages);
+    rewriteCatalogObject(catalog, catalog === targetCatalog, usesVitest, vitestEcosystemPackages);
   }
 }
 
@@ -1069,14 +1129,23 @@ export function rewriteBunCatalog(
       pkg.workspaces && !Array.isArray(pkg.workspaces) ? pkg.workspaces : undefined;
     const useWorkspacesCatalog =
       workspacesObj?.catalog != null || (pkg.catalog == null && workspacesObj?.catalogs != null);
-    const catalog: Record<string, string> = {
-      ...(useWorkspacesCatalog ? workspacesObj?.catalog : pkg.catalog),
-    };
+    // Like the pnpm catalog, add missing entries to the catalog the new
+    // `catalog:` references point at. A named one such as `catalogs.build`
+    // takes them instead of a newly created default catalog.
+    const { preferredCatalogSpec } = readBunCatalogDependencyResolver(pkg);
+    const preferredName = preferredCatalogSpec.slice('catalog:'.length);
+    const namedTarget = preferredName
+      ? (workspacesObj?.catalogs?.[preferredName] ?? pkg.catalogs?.[preferredName])
+      : undefined;
+    const defaultCatalog = useWorkspacesCatalog ? workspacesObj?.catalog : pkg.catalog;
+    const catalog: Record<string, string> = { ...defaultCatalog };
 
-    rewriteCatalogObject(catalog, true, usesVitest, vitestEcosystemPackages);
+    rewriteCatalogObject(catalog, !namedTarget, usesVitest, vitestEcosystemPackages);
     pruneLegacyWrapperAliases(catalog);
 
-    if (useWorkspacesCatalog) {
+    if (namedTarget && !defaultCatalog) {
+      // No default catalog to update, and none is needed.
+    } else if (useWorkspacesCatalog) {
       workspacesObj.catalog = catalog;
       if (pkg.catalog) {
         rewriteCatalogObject(pkg.catalog, false, usesVitest, vitestEcosystemPackages);
@@ -1090,13 +1159,18 @@ export function rewriteBunCatalog(
       }
     }
     if (workspacesObj?.catalogs) {
-      rewriteCatalogsObject(workspacesObj.catalogs, usesVitest, vitestEcosystemPackages);
+      rewriteCatalogsObject(
+        workspacesObj.catalogs,
+        usesVitest,
+        vitestEcosystemPackages,
+        namedTarget,
+      );
       for (const named of Object.values(workspacesObj.catalogs)) {
         pruneLegacyWrapperAliases(named);
       }
     }
     if (pkg.catalogs) {
-      rewriteCatalogsObject(pkg.catalogs, usesVitest, vitestEcosystemPackages);
+      rewriteCatalogsObject(pkg.catalogs, usesVitest, vitestEcosystemPackages, namedTarget);
       for (const named of Object.values(pkg.catalogs)) {
         pruneLegacyWrapperAliases(named);
       }
@@ -1120,7 +1194,9 @@ export function rewriteBunCatalog(
         continue;
       }
       overrides[key] =
-        key === '@vitest/browser' ? value : getCatalogDependencySpec(current, value, true);
+        key === '@vitest/browser'
+          ? value
+          : getCatalogDependencySpec(current, value, true, { preferredCatalogSpec });
     }
     pkg.overrides = overrides;
 
@@ -1202,20 +1278,21 @@ export function rewriteRootWorkspacePackageJson(
       };
     } else if (packageManager === PackageManager.bun) {
       // bun overrides are handled in rewriteBunCatalog() with catalog: references
+      // when the workspace supports a catalog. Otherwise they stay concrete.
       // The browser override has no catalog entry and was pruned above with
       // stale bundled-package pins. Restore its current concrete version.
-      if (managed['@vitest/browser']) {
+      if (!supportCatalog) {
+        pkg.overrides = { ...pkg.overrides, ...managed };
+      } else if (managed['@vitest/browser']) {
         pkg.overrides = { ...pkg.overrides, '@vitest/browser': managed['@vitest/browser'] };
       }
       // Bun walks transitive peer-deps before resolving overrides; vitest 4.1.9
       // declares peer `vite ^6 || ^7 || ^8` and aborts unless `vite` is a direct
       // dep at the workspace root. Mirror the override as a devDep; the override
-      // configured in rewriteBunCatalog still redirects it to vite-plus-core. A
-      // bun workspace root always manages a catalog, so the direct edge resolves
-      // to a `catalog:` reference. See https://github.com/oven-sh/bun/issues/8406.
-      setDirectViteEdge(pkg, true, catalogDependencyResolver);
+      // configured in rewriteBunCatalog still redirects it to vite-plus-core.
+      // See https://github.com/oven-sh/bun/issues/8406.
+      setDirectViteEdge(pkg, supportCatalog, catalogDependencyResolver);
     } else if (packageManager === PackageManager.pnpm) {
-      const overrideKeys = Object.keys(managedOverridePackages(workspaceUsesVitest));
       const usePnpmWorkspaceSettings = pnpmSupportsWorkspaceSettings(pnpmVersion ?? '');
       if (!usePnpmWorkspaceSettings) {
         // Strip selector-shaped overrides (e.g. `parent>@vitest/browser-playwright`)
@@ -1223,27 +1300,20 @@ export function rewriteRootWorkspacePackageJson(
         // overrides into the new pnpm config.
         dropRemovePackageOverrideKeys(pkg.pnpm?.overrides);
         // Common case: drop a lingering managed `vitest` override before merging.
+        // `mergeManagedPnpmPeerDependencyRules` drops its peer rule.
         if (!workspaceUsesVitest) {
           removeManagedVitestEntry(pkg.pnpm?.overrides, 'pnpm-ranged');
-        }
-        if (!workspaceUsesVitest && pkg.pnpm?.peerDependencyRules) {
-          removeVitestPeerDependencyRule(pkg.pnpm.peerDependencyRules);
         }
         pkg.pnpm = {
           ...pkg.pnpm,
           overrides: mergeManagedPnpmOverrides(pkg.pnpm?.overrides, managed),
-          peerDependencyRules: {
-            ...pkg.pnpm?.peerDependencyRules,
-            allowAny: [
-              ...new Set([...(pkg.pnpm?.peerDependencyRules?.allowAny ?? []), ...overrideKeys]),
-            ],
-            allowedVersions: {
-              ...pkg.pnpm?.peerDependencyRules?.allowedVersions,
-              ...Object.fromEntries(overrideKeys.map((key) => [key, '*'])),
-            },
-          },
+          peerDependencyRules: mergeManagedPnpmPeerDependencyRules(
+            pkg.pnpm?.peerDependencyRules,
+            pnpmPeerDependencyRuleKeys(workspaceUsesVitest, pnpmVersion),
+          ),
         };
       } else {
+        const overrideKeys = Object.keys(managedOverridePackages(workspaceUsesVitest));
         for (const key of [...overrideKeys, ...PROVIDER_OVERRIDE_DROP_NAMES]) {
           if (pkg.resolutions?.[key]) {
             delete pkg.resolutions[key];
@@ -1349,6 +1419,26 @@ export function pnpmWorkspaceMinimumReleaseAgeExemptionsPending(projectPath: str
   return PNPM_MINIMUM_RELEASE_AGE_EXCLUDES.some((exclude) => !existing.has(exclude));
 }
 
+// Write one pnpm-workspace.yaml `peerDependencyRules` field, or delete it when
+// no entry remains. An emptied `peerDependencyRules` map is deleted too.
+function setPeerDependencyRulesField(
+  doc: YamlDocument,
+  field: 'allowAny' | 'allowedVersions',
+  node: YAMLSeq | YAMLMap,
+): void {
+  if (node.items.length > 0) {
+    doc.setIn(['peerDependencyRules', field], node);
+    return;
+  }
+  if (doc.hasIn(['peerDependencyRules', field])) {
+    doc.deleteIn(['peerDependencyRules', field]);
+  }
+  const rules = doc.get('peerDependencyRules');
+  if (rules instanceof YAMLMap && rules.items.length === 0) {
+    doc.delete('peerDependencyRules');
+  }
+}
+
 export function readPnpmWorkspacePeerDependencyRules(
   projectPath: string,
 ): { allowAny?: string[]; allowedVersions?: Record<string, string> } | undefined {
@@ -1360,6 +1450,44 @@ export function readPnpmWorkspacePeerDependencyRules(
     peerDependencyRules?: { allowAny?: string[]; allowedVersions?: Record<string, string> };
   } | null;
   return doc?.peerDependencyRules;
+}
+
+// Whether the root pnpm config (the package.json `pnpm` field or
+// pnpm-workspace.yaml) holds a `vite` peer rule.
+function hasVitePeerDependencyRule(projectPath: string): boolean {
+  if (
+    peerDependencyRulesHaveStaleEntry(readPnpmWorkspacePeerDependencyRules(projectPath), ['vite'])
+  ) {
+    return true;
+  }
+  const pkg = readPackageJsonIfExists(path.join(projectPath, 'package.json')) as
+    | { pnpm?: PnpmPackageJsonSettings }
+    | undefined;
+  return peerDependencyRulesHaveStaleEntry(pkg?.pnpm?.peerDependencyRules, ['vite']);
+}
+
+// Capture the `vite` peer rule before a migration step. Call the returned
+// function after the step: it records the rule's removal in the report, so the
+// migrate summary names it (see `vitePeerDependencyRuleRequired`).
+export function trackVitePeerDependencyRuleRemoval(
+  projectPath: string,
+  packageManager: PackageManager,
+  report: MigrationReport | undefined,
+  pnpmVersion: string | undefined,
+): () => void {
+  if (
+    !report ||
+    packageManager !== PackageManager.pnpm ||
+    vitePeerDependencyRuleRequired(VITE_PLUS_OVERRIDE_PACKAGES.vite, pnpmVersion) ||
+    !hasVitePeerDependencyRule(projectPath)
+  ) {
+    return () => {};
+  }
+  return () => {
+    if (!hasVitePeerDependencyRule(projectPath)) {
+      report.vitePeerDependencyRuleRemoved = true;
+    }
+  };
 }
 
 export function ensurePnpmWorkspacePackages(

@@ -1,0 +1,25 @@
+{
+  "name": "migration-upgrade-bun-empty-workspaces-catalog",
+  "devDependencies": {
+    "vite-plus": "catalog:",
+    "vitest": "catalog:"
+  },
+  "overrides": {
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "bun",
+      "version": "1.4.0",
+      "onFail": "download"
+    }
+  },
+  "workspaces": {
+    "packages": [],
+    "catalog": {
+      "vite-plus": "^0.1.20",
+      "vitest": "4.1.9"
+    }
+  }
+}

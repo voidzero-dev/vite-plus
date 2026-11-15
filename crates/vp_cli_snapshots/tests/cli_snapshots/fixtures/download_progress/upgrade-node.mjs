@@ -36,6 +36,13 @@ const version = JSON.parse(readFileSync(join(cli, 'package.json'), 'utf8')).vers
 const pnpmVersion = /export const INSTALL_PNPM_VERSION = '([^']+)';/.exec(
   readFileSync(join(cli, 'generate-install-lockfile.ts'), 'utf8'),
 )[1];
+// Setup installs the pinned pnpm under a content key derived from its integrity:
+// short_fingerprint(PINNED_PNPM_INTEGRITY) in crates/vp_setup/src/install.rs (the
+// first 32 hex of its SHA-256). Seed the stub there so the pinned bootstrap reuses
+// it instead of downloading.
+const installer = readFileSync(resolve(cli, '../../crates/vp_setup/src/install.rs'), 'utf8');
+const pnpmIntegrity = /const PINNED_PNPM_INTEGRITY: &str = "([^"]+)";/.exec(installer)[1];
+const SETUP_PNPM_KEY = createHash('sha256').update(pnpmIntegrity).digest('hex').slice(0, 32);
 const home = resolve('upgrade-home');
 const user = resolve('upgrade-user');
 const current = join(home, 'current');
@@ -109,7 +116,7 @@ for (const nodeVersion of [installNode, targetNode]) {
   mkdirSync(dirname(destination), { recursive: true });
   copyFileSync(join(runnerHome, 'js_runtime/node', nodeVersion, nodePath), destination);
 }
-const pnpm = join(home, 'package_manager/pnpm', pnpmVersion, 'pnpm');
+const pnpm = join(home, 'package_manager/pnpm/.verified-v1', pnpmVersion, SETUP_PNPM_KEY, 'pnpm');
 write(join(pnpm, 'package.json'), JSON.stringify({
   version: pnpmVersion,
   engines: { node: incompatible ? `>=${installNode}` : '*' },

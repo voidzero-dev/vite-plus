@@ -1050,7 +1050,7 @@ main() {
   "name": "vp-global",
   "version": "$VP_VERSION",
   "private": true,
-  "packageManager": "pnpm@10.34.7",
+  "packageManager": "pnpm@10.34.9",
   "dependencies": {
     "vite-plus": "$vite_plus_spec"
   }

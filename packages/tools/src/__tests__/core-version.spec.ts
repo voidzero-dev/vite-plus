@@ -1,0 +1,477 @@
+import { execFile } from 'node:child_process';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { promisify } from 'node:util';
+
+import { describe, expect, onTestFinished, test } from 'vitest';
+
+import {
+  assertCoreVersionMatchesVite,
+  assertCoreVersionUnclaimed,
+  decodeCoreVersion,
+  encodeCoreVersion,
+  initialCoreVersion,
+  localCoreVersion,
+  nextCoreVersion,
+  usedVersionNumbers,
+} from '../core-version.ts';
+
+const execFileAsync = promisify(execFile);
+
+const PUBLISHED_BEFORE_ALIGNMENT = ['0.1.21-alpha.7', '0.0.2-test.1', '1.0.0-rc.0', '1.4.0'];
+
+describe('encodeCoreVersion', () => {
+  test('encodes the Vite patch and the release counter in the patch', () => {
+    expect(encodeCoreVersion('8.3.5', 0)).toBe('8.3.5000');
+    expect(encodeCoreVersion('8.3.5', 1)).toBe('8.3.5001');
+    expect(encodeCoreVersion('8.4.0', 0)).toBe('8.4.0');
+    expect(encodeCoreVersion('8.4.1', 0)).toBe('8.4.1000');
+    expect(encodeCoreVersion('8.3.5', 999)).toBe('8.3.5999');
+  });
+
+  test('rejects a Vite prerelease and an out-of-range counter', () => {
+    expect(() => encodeCoreVersion('9.0.0-beta.3', 0)).toThrow('Vite prerelease');
+    expect(() => encodeCoreVersion('8.3.5', 1000)).toThrow('from 0 to 999');
+    expect(() => encodeCoreVersion('8.3.5', -1)).toThrow('from 0 to 999');
+  });
+});
+
+describe('decodeCoreVersion', () => {
+  test('decodes stable and prerelease core versions', () => {
+    expect(decodeCoreVersion('8.3.5000')).toEqual({ vite: '8.3.5', n: 0 });
+    expect(decodeCoreVersion('8.3.5001')).toEqual({ vite: '8.3.5', n: 1 });
+    expect(decodeCoreVersion('8.4.1')).toEqual({ vite: '8.4.0', n: 1 });
+    expect(decodeCoreVersion('8.4.0-vp.2')).toEqual({ vite: '8.4.0', n: 0, k: 2 });
+    expect(decodeCoreVersion('9.0.0-beta.3.vp.1')).toEqual({ vite: '9.0.0-beta.3', k: 1 });
+  });
+
+  test('rejects prereleases without the vp counter', () => {
+    expect(() => decodeCoreVersion('0.0.0-commit.0c515e3')).toThrow('not an encoded');
+    expect(() => decodeCoreVersion('8.4.0-rc.0')).toThrow('not an encoded');
+    expect(() => decodeCoreVersion('8.4.0-vp.x')).toThrow('not an encoded');
+    expect(() => decodeCoreVersion('latest')).toThrow('Invalid version');
+  });
+});
+
+// Each release publishes its core version before the next one is prepared.
+function releaseSequence(vite: string, vitePlusVersions: string[]): string[] {
+  const published: string[] = [];
+  for (const vitePlus of vitePlusVersions) {
+    published.push(nextCoreVersion({ vite, vitePlus, published }));
+  }
+  return published;
+}
+
+describe('nextCoreVersion', () => {
+  test('starts the counter at 0 for a new Vite version', () => {
+    expect(
+      nextCoreVersion({ vite: '8.3.5', vitePlus: '1.5.0', published: PUBLISHED_BEFORE_ALIGNMENT }),
+    ).toBe('8.3.5000');
+  });
+
+  test('increments the counter for each stable release on one Vite version', () => {
+    const published = [...PUBLISHED_BEFORE_ALIGNMENT, '8.3.5000', '8.3.5001', '8.3.6000'];
+    expect(nextCoreVersion({ vite: '8.3.5', vitePlus: '1.5.2', published })).toBe('8.3.5002');
+    expect(nextCoreVersion({ vite: '8.3.6', vitePlus: '1.6.1', published })).toBe('8.3.6001');
+    expect(nextCoreVersion({ vite: '8.4.0', vitePlus: '1.7.0', published })).toBe('8.4.0');
+  });
+
+  test('ignores prereleases and local versions for the stable counter', () => {
+    const published = ['8.4.0-vp.0', '8.4.0-vp.1', '8.4.999'];
+    expect(nextCoreVersion({ vite: '8.4.0', vitePlus: '1.7.0', published })).toBe('8.4.0');
+  });
+
+  test('gives each Vite+ prerelease on a stable Vite a unique vp counter', () => {
+    expect(nextCoreVersion({ vite: '8.4.0', vitePlus: '1.7.0-rc.0', published: [] })).toBe(
+      '8.4.0-vp.0',
+    );
+    expect(
+      nextCoreVersion({ vite: '8.4.0', vitePlus: '1.8.0-rc.0', published: ['8.4.0-vp.0'] }),
+    ).toBe('8.4.0-vp.1');
+    expect(
+      nextCoreVersion({
+        vite: '8.4.0',
+        vitePlus: '1.8.0-rc.0',
+        published: ['8.4.0', '8.4.0-vp.0', '8.4.0-vp.1'],
+      }),
+    ).toBe('8.4.1-vp.0');
+  });
+
+  test('appends the vp counter to a bundled Vite prerelease', () => {
+    expect(nextCoreVersion({ vite: '9.0.0-beta.3', vitePlus: '2.0.0-beta.0', published: [] })).toBe(
+      '9.0.0-beta.3.vp.0',
+    );
+    expect(
+      nextCoreVersion({
+        vite: '9.0.0-beta.3',
+        vitePlus: '2.0.0-beta.1',
+        published: ['9.0.0-beta.2.vp.4', '9.0.0-beta.3.vp.0'],
+      }),
+    ).toBe('9.0.0-beta.3.vp.1');
+  });
+
+  test('rejects a stable vite-plus release on a Vite prerelease', () => {
+    expect(() =>
+      nextCoreVersion({ vite: '9.0.0-beta.3', vitePlus: '2.0.0', published: [] }),
+    ).toThrow('cannot bundle the Vite prerelease');
+  });
+
+  test('fails when the release counter is exhausted', () => {
+    const published = Array.from({ length: 999 }, (_, n) => encodeCoreVersion('8.3.5', n));
+    expect(() => nextCoreVersion({ vite: '8.3.5', vitePlus: '1.9.0', published })).toThrow(
+      'the maximum',
+    );
+  });
+
+  // The release sequence table in rfcs/core-version-alignment.md.
+  test('changes only the counter for releases on one Vite version', () => {
+    expect(
+      releaseSequence('8.3.8', [
+        '1.7.0',
+        '1.8.0-beta.0',
+        '1.8.0-beta.1',
+        '1.8.0',
+        '1.9.0',
+        '2.0.0',
+      ]),
+    ).toEqual(['8.3.8000', '8.3.8001-vp.0', '8.3.8001-vp.1', '8.3.8001', '8.3.8002', '8.3.8003']);
+  });
+});
+
+describe('initialCoreVersion', () => {
+  test('starts the counter for a stable and a prerelease Vite', () => {
+    expect(initialCoreVersion('8.4.2')).toBe('8.4.2000');
+    expect(initialCoreVersion('9.0.0-beta.3')).toBe('9.0.0-beta.3.vp.0');
+  });
+});
+
+function manifest(version: string, vite = '8.3.5', vitePlusVersion?: string) {
+  return { version, bundledVersions: { vite }, vitePlusVersion };
+}
+
+describe('assertCoreVersionMatchesVite', () => {
+  test('accepts a core version that encodes the bundled Vite', () => {
+    expect(() => assertCoreVersionMatchesVite(manifest('8.3.5000'), '1.5.0')).not.toThrow();
+    expect(() => assertCoreVersionMatchesVite(manifest('8.3.5999'), '0.0.0')).not.toThrow();
+    expect(() =>
+      assertCoreVersionMatchesVite(manifest('8.4.0-vp.1', '8.4.0'), '1.7.0-rc.1'),
+    ).not.toThrow();
+    expect(() =>
+      assertCoreVersionMatchesVite(manifest('9.0.0-beta.3.vp.0', '9.0.0-beta.3'), '2.0.0-beta.0'),
+    ).not.toThrow();
+  });
+
+  test('rejects a core version that encodes another Vite version', () => {
+    expect(() => assertCoreVersionMatchesVite(manifest('8.3.4000'), '1.5.0')).toThrow(
+      'Set its version to 8.3.5000',
+    );
+    expect(() => assertCoreVersionMatchesVite(manifest('1.4.0'), '1.4.0')).toThrow(
+      'encodes Vite 1.4.0',
+    );
+  });
+
+  test('allows a Vite prerelease with a stable vite-plus between releases', () => {
+    expect(() =>
+      assertCoreVersionMatchesVite(manifest('9.0.0-beta.3.vp.0', '9.0.0-beta.3'), '1.9.0'),
+    ).not.toThrow();
+  });
+
+  test('rejects mixed prerelease and stable versions for a release', () => {
+    expect(() =>
+      assertCoreVersionMatchesVite(manifest('8.3.5000', '8.3.5', '1.5.0-rc.0'), '1.5.0-rc.0', {
+        release: true,
+      }),
+    ).toThrow('both be prereleases');
+    expect(() =>
+      assertCoreVersionMatchesVite(manifest('8.3.5000-vp.0', '8.3.5', '1.5.0'), '1.5.0', {
+        release: true,
+      }),
+    ).toThrow('both be prereleases');
+  });
+
+  test('rejects the local build counter for a release', () => {
+    expect(() =>
+      assertCoreVersionMatchesVite(manifest('8.3.5999', '8.3.5', '1.5.0'), '1.5.0', {
+        release: true,
+      }),
+    ).toThrow('reserved for local builds');
+    expect(() =>
+      assertCoreVersionMatchesVite(manifest('8.3.5998', '8.3.5', '1.5.0'), '1.5.0', {
+        release: true,
+      }),
+    ).not.toThrow();
+  });
+
+  test('requires the manifest to record the released vite-plus version', () => {
+    expect(() =>
+      assertCoreVersionMatchesVite(manifest('8.3.5000'), '1.5.0', { release: true }),
+    ).toThrow('records vite-plus (none)');
+    expect(() =>
+      assertCoreVersionMatchesVite(manifest('8.3.5000', '8.3.5', '1.4.0'), '1.5.0', {
+        release: true,
+      }),
+    ).toThrow('records vite-plus 1.4.0, but the release is vite-plus 1.5.0');
+  });
+});
+
+// A packument where core 8.3.7001 is published with the given manifest fields.
+function publishedPackument(fields: { vitePlusVersion?: string }) {
+  return { versions: { '8.3.7001': fields } };
+}
+
+describe('assertCoreVersionUnclaimed', () => {
+  test('accepts an unused core version and a retry of the same release', () => {
+    expect(() => assertCoreVersionUnclaimed({}, '8.3.7001', '1.7.1')).not.toThrow();
+    expect(() =>
+      assertCoreVersionUnclaimed(
+        publishedPackument({ vitePlusVersion: '1.7.1' }),
+        '8.3.7001',
+        '1.7.1',
+      ),
+    ).not.toThrow();
+  });
+
+  test('rejects a core version that another release published', () => {
+    expect(() =>
+      assertCoreVersionUnclaimed(
+        publishedPackument({ vitePlusVersion: '1.7.1' }),
+        '8.3.7001',
+        '1.8.0',
+      ),
+    ).toThrow('already published for vite-plus 1.7.1');
+    expect(() => assertCoreVersionUnclaimed(publishedPackument({}), '8.3.7001', '1.8.0')).toThrow(
+      'already published for vite-plus (unknown)',
+    );
+  });
+
+  test('rejects an unpublished core version', () => {
+    const unpublished = {
+      versions: { '8.3.7000': {} },
+      time: { created: '', modified: '', '8.3.7000': '', '8.3.7001': '' },
+    };
+    expect(() => assertCoreVersionUnclaimed(unpublished, '8.3.7001', '1.7.1')).toThrow(
+      'was unpublished',
+    );
+    expect(() =>
+      assertCoreVersionUnclaimed(
+        { time: { created: '', modified: '', unpublished: { versions: ['8.3.7000'] } } },
+        '8.3.7000',
+        '1.7.0',
+      ),
+    ).toThrow('was unpublished');
+  });
+});
+
+describe('usedVersionNumbers', () => {
+  test('includes versions that npm removed after an unpublish', () => {
+    const packument = {
+      versions: { '8.3.7000': {} },
+      time: { created: '', modified: '', '8.3.7000': '', '8.3.7001': '' },
+    };
+    expect(usedVersionNumbers(packument).toSorted()).toEqual(['8.3.7000', '8.3.7001']);
+    expect(
+      nextCoreVersion({
+        vite: '8.3.7',
+        vitePlus: '1.7.0',
+        published: usedVersionNumbers(packument),
+      }),
+    ).toBe('8.3.7002');
+  });
+
+  test('includes versions of a fully unpublished package', () => {
+    const packument = {
+      time: { created: '', modified: '', unpublished: { versions: ['8.3.7000'] } },
+    };
+    expect(usedVersionNumbers(packument)).toEqual(['8.3.7000']);
+  });
+
+  test('returns no versions for an unpublished package name', () => {
+    expect(usedVersionNumbers({})).toEqual([]);
+  });
+});
+
+describe('localCoreVersion', () => {
+  test('reserves counter 999 on a stable and a prerelease Vite', () => {
+    expect(localCoreVersion('8.3.7')).toBe('8.3.7999');
+    expect(localCoreVersion('9.0.0-beta.3')).toBe('9.0.0-beta.3.vp.999');
+    expect(decodeCoreVersion(localCoreVersion('9.0.0-beta.3'))).toEqual({
+      vite: '9.0.0-beta.3',
+      k: 999,
+    });
+  });
+
+  test('is never selected or accepted for a release', () => {
+    expect(
+      nextCoreVersion({
+        vite: '9.0.0-beta.3',
+        vitePlus: '2.0.0-beta.1',
+        published: ['9.0.0-beta.3.vp.0', localCoreVersion('9.0.0-beta.3')],
+      }),
+    ).toBe('9.0.0-beta.3.vp.1');
+    expect(() =>
+      assertCoreVersionMatchesVite(
+        manifest('9.0.0-beta.3.vp.999', '9.0.0-beta.3', '2.0.0-beta.1'),
+        '2.0.0-beta.1',
+        { release: true },
+      ),
+    ).toThrow('reserved for local builds');
+  });
+});
+
+// The workflows run `core-version.ts` from the repository root (`prepare`,
+// `check`) or from packages/core (`local`). Make a temporary copy of that
+// layout with the given core manifest and CLI version.
+function repoLayout(core: object, cliVersion = '0.0.0'): string {
+  const root = mkdtempSync(path.join(tmpdir(), 'vp-core-version-'));
+  onTestFinished(() => rmSync(root, { recursive: true, force: true }));
+  const toolsDir = path.join(root, 'packages/tools/src');
+  mkdirSync(toolsDir, { recursive: true });
+  mkdirSync(path.join(root, 'packages/core'));
+  mkdirSync(path.join(root, 'packages/cli'));
+  copyFileSync(
+    path.join(import.meta.dirname, '../core-version.ts'),
+    path.join(toolsDir, 'core-version.ts'),
+  );
+  writeFileSync(path.join(root, 'packages/core/package.json'), JSON.stringify(core, null, 2));
+  writeFileSync(
+    path.join(root, 'packages/cli/package.json'),
+    JSON.stringify({ version: cliVersion }),
+  );
+  return root;
+}
+
+function readCoreManifest(root: string): Record<string, unknown> {
+  return JSON.parse(readFileSync(path.join(root, 'packages/core/package.json'), 'utf8'));
+}
+
+interface ScriptResult {
+  code: number;
+  stdout: string;
+  stderr: string;
+}
+
+// Runs the script without blocking, so the mock registry in this process can
+// answer its request.
+async function runScript(
+  root: string,
+  args: string[],
+  { cwd = root, registry }: { cwd?: string; registry?: string } = {},
+): Promise<ScriptResult> {
+  const script = path.relative(cwd, path.join(root, 'packages/tools/src/core-version.ts'));
+  try {
+    const { stdout, stderr } = await execFileAsync(process.execPath, [script, ...args], {
+      cwd,
+      env: { ...process.env, PUBLISH_REGISTRY: registry },
+      encoding: 'utf8',
+    });
+    return { code: 0, stdout: stdout.trim(), stderr };
+  } catch (error) {
+    const failure = error as { code: number; stdout: string; stderr: string };
+    return { code: failure.code, stdout: failure.stdout.trim(), stderr: failure.stderr };
+  }
+}
+
+// Serves the core packument with the given status and body, and 404 for every
+// other path.
+async function startRegistry(status: number, body: unknown = {}): Promise<string> {
+  const server = createServer((request, response) => {
+    if (request.url !== '/@voidzero-dev%2fvite-plus-core') {
+      response.writeHead(404).end();
+      return;
+    }
+    response.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(body));
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  onTestFinished(() => new Promise<void>((resolve) => server.close(() => resolve())));
+  return `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+}
+
+describe('core-version.ts local', () => {
+  test.each([
+    ['8.3.7', '8.3.7999'],
+    ['9.0.0-beta.3', '9.0.0-beta.3.vp.999'],
+  ])('prints the local version for Vite %s', async (vite, expected) => {
+    const root = repoLayout({ version: initialCoreVersion(vite), bundledVersions: { vite } });
+    const result = await runScript(root, ['local'], { cwd: path.join(root, 'packages/core') });
+    expect(result).toEqual({ code: 0, stdout: expected, stderr: '' });
+  });
+});
+
+describe('core-version.ts prepare', () => {
+  const core = {
+    name: '@voidzero-dev/vite-plus-core',
+    version: '8.3.7000',
+    bundledVersions: { vite: '8.3.7' },
+  };
+
+  test('writes the next unused version and the vite-plus version', async () => {
+    const root = repoLayout(core);
+    const registry = await startRegistry(200, {
+      versions: { '8.3.7000': { vitePlusVersion: '1.7.0' } },
+      time: { created: '', modified: '', '8.3.7000': '', '8.3.7001': '' },
+    });
+    const result = await runScript(root, ['prepare', '--vite-plus', '1.8.0'], { registry });
+    expect(result).toMatchObject({ code: 0, stdout: '8.3.7002' });
+    expect(readCoreManifest(root)).toEqual({
+      ...core,
+      version: '8.3.7002',
+      vitePlusVersion: '1.8.0',
+    });
+  });
+
+  test('starts the counter when the package is not published', async () => {
+    const root = repoLayout(core);
+    const registry = await startRegistry(404);
+    const result = await runScript(root, ['prepare', '--vite-plus', '1.7.0'], { registry });
+    expect(result).toMatchObject({ code: 0, stdout: '8.3.7000' });
+  });
+
+  test('fails without a change when the registry fails', async () => {
+    const root = repoLayout(core);
+    const registry = await startRegistry(500);
+    const result = await runScript(root, ['prepare', '--vite-plus', '1.7.0'], { registry });
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain('Registry returned HTTP 500');
+    expect(readCoreManifest(root)).toEqual(core);
+  });
+});
+
+describe('core-version.ts check --release', () => {
+  const core = {
+    version: '8.3.7001',
+    bundledVersions: { vite: '8.3.7' },
+    vitePlusVersion: '1.8.0',
+  };
+
+  test('passes for an unused version and for a retry of the same release', async () => {
+    const root = repoLayout(core, '1.8.0');
+    for (const registry of [
+      await startRegistry(404),
+      await startRegistry(200, { versions: { '8.3.7001': { vitePlusVersion: '1.8.0' } } }),
+    ]) {
+      const result = await runScript(root, ['check', '--release'], { registry });
+      expect(result).toMatchObject({ code: 0 });
+    }
+  });
+
+  test('fails when another release published the version', async () => {
+    const root = repoLayout(core, '1.8.0');
+    const registry = await startRegistry(200, {
+      versions: { '8.3.7001': { vitePlusVersion: '1.7.1' } },
+    });
+    const result = await runScript(root, ['check', '--release'], { registry });
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain('already published for vite-plus 1.7.1');
+  });
+
+  test('fails when the manifest names another vite-plus version', async () => {
+    const root = repoLayout(core, '1.8.1');
+    const registry = await startRegistry(404);
+    const result = await runScript(root, ['check', '--release'], { registry });
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain('but the release is vite-plus 1.8.1');
+  });
+});

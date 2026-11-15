@@ -76,6 +76,17 @@ pub async fn execute(
         let args: Vec<String> = command[1..].to_vec();
         // stdout belongs to the dispatched tool; route vp's own output to stderr.
         vp_shared::output::route_user_output_to_stderr();
+        // Under VP_ENV_FORBIDDEN=1 a core tool comes from PATH here, not from
+        // dispatch: its shim fails without searching PATH, even when a system
+        // tool comes before it. The Node.js it runs on comes from the child PATH.
+        if !from_wrapper
+            && is_core_shim_tool(tool)
+            && let Some(path) = crate::shim::dispatch::resolve_env_forbidden_tool(tool)
+        {
+            let path = path?;
+            crate::shim::dispatch::ensure_env_forbidden_child_node(&env)?;
+            return Ok(exit_status(crate::shim::exec::exec_tool(&path, &args, env)));
+        }
         // Dispatch assumes the shell's PATH lookup already preferred system-first tools, so repeat it here.
         if !from_wrapper
             && is_core_shim_tool(tool)
@@ -137,7 +148,7 @@ async fn execute_with_version(
     let mut path_prefixes = Vec::new();
     let modes = config::load_config().await?;
     let (resolved_node, system_node_bin) = if let Some(node_version) = node_version {
-        (resolve_version(node_version, &NodeProvider::new()).await?, None)
+        (config::resolve_version_alias(node_version, &NodeProvider::new()).await?, None)
     } else if modes.node_shim_mode == config::ShimMode::SystemFirst
         && let Some(path) = crate::shim::dispatch::find_system_tool("node")
     {
@@ -261,47 +272,6 @@ async fn read_tool_version(path: &AbsolutePath) -> Option<String> {
         .then(|| String::from_utf8_lossy(&output.stdout).trim().trim_start_matches('v').to_string())
 }
 
-/// Resolve version to an exact version.
-///
-/// Handles aliases (lts, latest) and version ranges.
-async fn resolve_version(version: &str, provider: &NodeProvider) -> Result<String, Error> {
-    match classify_version(version) {
-        VersionSelector::LatestLts => {
-            let resolved = provider.resolve_latest_version().await?;
-            Ok(resolved.to_string())
-        }
-        VersionSelector::AbsoluteLatest => {
-            let resolved = provider.resolve_absolute_latest_version().await?;
-            Ok(resolved.to_string())
-        }
-        VersionSelector::Exact(version) => Ok(version.to_string()),
-        VersionSelector::Range(version) => {
-            let resolved = provider.resolve_version(version).await?;
-            Ok(resolved.to_string())
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq)]
-enum VersionSelector<'a> {
-    LatestLts,
-    AbsoluteLatest,
-    Exact(&'a str),
-    Range(&'a str),
-}
-
-fn classify_version(version: &str) -> VersionSelector<'_> {
-    if version.eq_ignore_ascii_case("lts") {
-        VersionSelector::LatestLts
-    } else if version.eq_ignore_ascii_case("latest") {
-        VersionSelector::AbsoluteLatest
-    } else if NodeProvider::is_exact_version(version) {
-        VersionSelector::Exact(version.strip_prefix('v').unwrap_or(version))
-    } else {
-        VersionSelector::Range(version)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -347,37 +317,6 @@ mod tests {
             },
         )
         .await;
-    }
-
-    #[tokio::test]
-    async fn test_resolve_version_exact() {
-        let provider = NodeProvider::new();
-        let version = resolve_version("20.18.0", &provider).await.unwrap();
-        assert_eq!(version, "20.18.0");
-    }
-
-    #[tokio::test]
-    async fn test_resolve_version_with_v_prefix() {
-        let provider = NodeProvider::new();
-        let version = resolve_version("v20.18.0", &provider).await.unwrap();
-        assert_eq!(version, "20.18.0");
-    }
-
-    #[test]
-    fn test_classify_version_partial() {
-        assert_eq!(classify_version("20"), VersionSelector::Range("20"));
-    }
-
-    #[test]
-    fn test_classify_version_range() {
-        assert_eq!(classify_version("^20.0.0"), VersionSelector::Range("^20.0.0"));
-    }
-
-    #[test]
-    fn test_classify_version_aliases() {
-        assert_eq!(classify_version("lts"), VersionSelector::LatestLts);
-        assert_eq!(classify_version("LTS"), VersionSelector::LatestLts);
-        assert_eq!(classify_version("latest"), VersionSelector::AbsoluteLatest);
     }
 
     #[test]

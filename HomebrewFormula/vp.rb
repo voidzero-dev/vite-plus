@@ -79,23 +79,23 @@ class Vp < Formula
   # BEGIN RELEASE ASSETS
   on_macos do
     on_arm do
-      url "https://github.com/voidzero-dev/vite-plus/releases/download/v1.5.0/vp-aarch64-apple-darwin.tar.gz"
-      sha256 "a1b702d22ce2e7dff610d6293dbc47f72b17387cac29af785d75339ee7720426"
+      url "https://github.com/voidzero-dev/vite-plus/releases/download/v1.6.0/vp-aarch64-apple-darwin.tar.gz"
+      sha256 "d081c4ec265bba5862bea9ad3eb9a9becc1b46c88f44f10b334f651508f9aa86"
     end
     on_intel do
-      url "https://github.com/voidzero-dev/vite-plus/releases/download/v1.5.0/vp-x86_64-apple-darwin.tar.gz"
-      sha256 "b17c62a52421a03f3e0b72211f4f3ceca07fcdf156b2965e293c06c6b5747371"
+      url "https://github.com/voidzero-dev/vite-plus/releases/download/v1.6.0/vp-x86_64-apple-darwin.tar.gz"
+      sha256 "d9e3c7fda95880bf36b59890f3076b09fec238147867701b9b0980ffa45b1c1d"
     end
   end
 
   on_linux do
     on_arm do
-      url "https://github.com/voidzero-dev/vite-plus/releases/download/v1.5.0/vp-aarch64-unknown-linux-gnu.tar.gz"
-      sha256 "36387764b075539bada5acea8e1fc44d671a0ebcff667ba7866aee4067d46d3e"
+      url "https://github.com/voidzero-dev/vite-plus/releases/download/v1.6.0/vp-aarch64-unknown-linux-gnu.tar.gz"
+      sha256 "730ab94da0d57ebc579015d28611b0850389ff45b66a57a6e7d71589bdfb2458"
     end
     on_intel do
-      url "https://github.com/voidzero-dev/vite-plus/releases/download/v1.5.0/vp-x86_64-unknown-linux-gnu.tar.gz"
-      sha256 "547ee61b5dbc556bb7d3d996c198334e3477fb245ab41d6faa6efcde106a8405"
+      url "https://github.com/voidzero-dev/vite-plus/releases/download/v1.6.0/vp-x86_64-unknown-linux-gnu.tar.gz"
+      sha256 "5716772c289e6b5d814cbeb2824fc3ccbb7c1ce38ca164b2df1b2b07fe8c83cf"
     end
   end
   # END RELEASE ASSETS

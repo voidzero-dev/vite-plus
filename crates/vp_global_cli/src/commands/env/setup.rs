@@ -225,6 +225,8 @@ pub(crate) async fn execute_for_binary(
 
 /// Complete preferences once, while the pre-upgrade shim layout is still available.
 /// Existing main-bin shims must stay there: a parent shell can have cached them.
+/// `VP_ENV_FORBIDDEN=1` is the exception: every package manager becomes
+/// system-first, and a cached main-bin shim fails without running anything.
 async fn initialize_package_manager_shim_modes(
     current_exe: &std::path::Path,
     settings: &mut super::config::Config,
@@ -236,6 +238,12 @@ async fn initialize_package_manager_shim_modes(
     let mut changed = false;
     for kind in ALL_PACKAGE_MANAGERS {
         if settings.configured_package_manager_shim_mode_for(kind).is_some() {
+            continue;
+        }
+        // VP_ENV_FORBIDDEN=1 places every package manager after the system tools, as self-setup does.
+        if vp_shared::EnvConfig::get().env_forbidden {
+            settings.set_package_manager_shim_mode(kind, ShimMode::SystemFirst);
+            changed = true;
             continue;
         }
 
@@ -1691,6 +1699,43 @@ mod tests {
             // Keep env.nu independent of the developer's installed Nushell.
             (vp_shared::env_vars::VP_NU_VERSION, std::ffi::OsStr::new(NU_BUILTIN_SIGIL_VERSION)),
         ]
+    }
+
+    /// Under `VP_ENV_FORBIDDEN=1` an unset package-manager mode becomes
+    /// system-first, as self-setup saves it, instead of following PATH.
+    #[tokio::test]
+    async fn test_initialize_package_manager_shim_modes_follows_env_forbidden() {
+        use super::super::{config::ShimMode, package_manager::ALL_PACKAGE_MANAGERS};
+
+        for (forbidden, expected) in
+            [(Some("1"), ShimMode::SystemFirst), (Some("true"), ShimMode::Managed)]
+        {
+            let temp_dir = TempDir::new().unwrap();
+            let empty = temp_dir.path().join("empty");
+            std::fs::create_dir_all(&empty).unwrap();
+            let vars = [
+                (vp_shared::env_vars::VP_HOME, Some(temp_dir.path().as_os_str().to_owned())),
+                ("PATH", Some(empty.into_os_string())),
+                (vp_shared::env_vars::VP_ENV_FORBIDDEN, forbidden.map(Into::into)),
+            ];
+            vp_shared::EnvConfig::with_vars_async(vars, |_| async {
+                let mut settings = super::super::config::Config::default();
+                initialize_package_manager_shim_modes(
+                    std::path::Path::new("/nonexistent/vp"),
+                    &mut settings,
+                )
+                .await
+                .unwrap();
+                for kind in ALL_PACKAGE_MANAGERS {
+                    assert_eq!(
+                        settings.configured_package_manager_shim_mode_for(kind),
+                        Some(expected),
+                        "{forbidden:?} {kind}"
+                    );
+                }
+            })
+            .await;
+        }
     }
 
     #[cfg(windows)]

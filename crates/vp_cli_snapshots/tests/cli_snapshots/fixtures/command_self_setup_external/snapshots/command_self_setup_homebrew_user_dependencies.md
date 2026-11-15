@@ -14,7 +14,7 @@ Cached Node, package managers, and global tools run without CLI dependency repai
 CLI aliases, explicit installers, and unconfigured shims still prepare CLI dependencies.
 User installations and cleanup stay independent.
 Relative, tilde, and environment-variable selectors reach pnpm as the same absolute user config.
-Registry overrides and basic authentication work with the shared downloader.
+Registry overrides and basic authentication reach the shared downloader.
 After authentication failure, diagnostics, upgrade guidance, and cleanup remain available.
 Missing authentication and corrupted pnpm tarballs stop setup.
 ```

@@ -1,8 +1,14 @@
-use std::{collections::BTreeMap, process::ExitStatus};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+    process::ExitStatus,
+};
 
 use console::style;
 use serde::Serialize;
-use vp_pm_cli::{PackageManagerType, package_manager_bin_path, package_manager_install_dir};
+use vp_pm_cli::{
+    PackageManagerType, VERIFIED_NAMESPACE, installed_package_manager_dir, package_manager_bin_path,
+};
 use vt_path::AbsolutePathBuf;
 
 use super::{config, package_manager, spec::EnvScope};
@@ -148,19 +154,40 @@ pub(super) fn list_complete_package_manager_versions(
     home: &AbsolutePathBuf,
     package_manager: PackageManagerType,
 ) -> Vec<String> {
-    list_installed_versions(
-        home.join("package_manager").join(package_manager.to_string()).as_path(),
-    )
-    .into_iter()
-    .filter(|version| {
-        package_manager_install_dir(package_manager, version).is_some_and(|directory| {
-            package_manager
-                .bin_names()
-                .iter()
-                .all(|name| package_manager_bin_path(&directory, name).as_path().exists())
+    let family = home.join("package_manager").join(package_manager.to_string());
+    merged_package_manager_versions(family.as_path())
+        .into_iter()
+        .filter(|version| {
+            installed_package_manager_dir(package_manager, version).is_some_and(|directory| {
+                package_manager
+                    .bin_names()
+                    .iter()
+                    .all(|name| package_manager_bin_path(&directory, name).as_path().exists())
+            })
         })
-    })
-    .collect()
+        .collect()
+}
+
+/// Version directory names with any cached install for one package manager,
+/// merging the unpinned version-directory root with the verified namespace.
+/// `family_dir` is `<data>/package_manager/<name>`. Shared by `list` and `clean`.
+pub(super) fn merged_package_manager_versions(family_dir: &Path) -> Vec<String> {
+    let mut versions = list_installed_versions(family_dir);
+    for version in list_installed_versions(&family_dir.join(VERIFIED_NAMESPACE)) {
+        if !versions.contains(&version) {
+            versions.push(version);
+        }
+    }
+    versions.sort_by_cached_key(|version| js_semver::Version::parse(version).ok());
+    versions
+}
+
+/// The directories that back one package-manager version: the unpinned install at
+/// the version-directory root and the pinned installs under the verified
+/// namespace. `family_dir` is `<data>/package_manager/<name>`. Shared by `clean`
+/// and `uninstall` so the layout lives in one place.
+pub(super) fn package_manager_version_dirs(family_dir: &Path, version: &str) -> Vec<PathBuf> {
+    vec![family_dir.join(version), family_dir.join(VERIFIED_NAMESPACE).join(version)]
 }
 
 fn print_section(title: &str, versions: &[InstalledVersionJson], node: bool) {

@@ -21,6 +21,7 @@ pub mod integrity;
 pub mod lockfile;
 pub mod platform;
 pub mod registry;
+pub mod support;
 
 /// Node.js version used to install the global CLI's dependencies by default.
 pub const DEFAULT_INSTALL_NODE_VERSION: &str = include_str!("../../../.node-version").trim_ascii();

@@ -43,11 +43,6 @@ catalog:
   vite-plus: <version>
 overrides:
   vite@*: 'catalog:'
-peerDependencyRules:
-  allowAny:
-    - vite
-  allowedVersions:
-    vite: '*'
 ```
 
 ## `vpt print-file .vite-hooks/pre-commit`

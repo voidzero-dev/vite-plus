@@ -265,11 +265,12 @@ Vite Task automatically detects which files a command uses. See [Automatic Data 
 
 ```ts [vite.config.ts]
 tasks: {
-  build: {
-    command: 'vp build',
+  lint: {
+    command: 'vp lint',
     cache: {
       // Use `{ auto: true }` to use automatic fingerprinting (default).
-      input: [{ auto: true }, '!**/*.tsbuildinfo', '!dist/**'],
+      // Keep the build task's `dist` folder from affecting this task.
+      input: [{ auto: true }, '!dist/**'],
     },
   },
 }
@@ -348,14 +349,14 @@ tasks: {
 
 Use `{ auto: true }` to keep automatic write tracking while adding explicit output globs.
 
-This is useful when a task writes files that should not be restored from the cache. For example, exclude TypeScript `.tsbuildinfo` files:
+This is useful when a task writes files that should not be restored from the cache, such as a debug log:
 
 ```ts [vite.config.ts]
 tasks: {
-  typecheck: {
-    command: 'tsc --build',
+  build: {
+    command: 'node build.mjs',
     cache: {
-      output: [{ auto: true }, '!*.tsbuildinfo'],
+      output: [{ auto: true }, '!build.log'],
     },
   },
 }

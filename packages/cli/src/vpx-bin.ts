@@ -22,6 +22,7 @@ import { styleText } from 'node:util';
 import spawn from 'cross-spawn';
 
 import { exitCodeFromClose } from './utils/command.ts';
+import { setUserAgent } from './utils/user-agent.ts';
 import {
   canExecDirectly,
   detectScript,
@@ -31,6 +32,8 @@ import {
   parseVpxArgs,
   ScriptError,
 } from './vpx-script.ts';
+
+setUserAgent();
 
 function errorMsg(message: string) {
   /* oxlint-disable-next-line no-console */

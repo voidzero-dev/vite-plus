@@ -25,7 +25,7 @@ VITE+ - The Unified Toolchain for the Web
   - Vitest v5: 1 review item
 
 vite.config.ts
-  9:29 REVIEW [dynamic-config] Review this dynamic config; explicit v4 compatibility settings need manual insertion.
+  7:29 REVIEW [dynamic-config] Review this dynamic config; explicit v4 compatibility settings need manual insertion.
     Docs: https://viteplus.dev/guide/vitest-v5#resolve-migration-findings
 ```
 
@@ -36,9 +36,7 @@ import { join } from 'node:path';
 
 import react from '@vitejs/plugin-react';
 import { playwright } from 'vite-plus/test/browser-playwright';
-import { defineConfig, lazyPlugins } from 'vite-plus';
-
-import type { UserConfigFn } from 'vite-plus';
+import { defineConfig, type UserConfigFn, lazyPlugins } from 'vite-plus';
 
 export default defineConfig(<UserConfigFn>(((() => {
   return {

@@ -840,7 +840,7 @@ function Main {
         name = "vp-global"
         version = $ViteVersion
         private = $true
-        packageManager = "pnpm@10.34.7"
+        packageManager = "pnpm@10.34.9"
         dependencies = @{
             "vite-plus" = $vitePlusSpec
         }

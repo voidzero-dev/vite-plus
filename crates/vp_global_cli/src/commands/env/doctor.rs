@@ -6,7 +6,7 @@ use std::{
 };
 
 use console::style;
-use vp_pm_cli::{package_manager_bin_path, package_manager_install_dir};
+use vp_pm_cli::{package_manager_bin_path, resolve_package_manager_install_dir};
 use vp_shared::{env_vars, output};
 use vt_path::{AbsolutePathBuf, current_dir};
 
@@ -463,13 +463,20 @@ async fn check_package_manager_resolution(
                     .bright()
                     .to_string(),
             );
-            let installed =
-                package_manager_install_dir(resolution.package_manager_type, &resolution.version)
-                    .is_some_and(|directory| {
-                        resolution.package_manager_type.bin_names().iter().all(|name| {
-                            package_manager_bin_path(&directory, name).as_path().exists()
-                        })
-                    });
+            // Report the directory the shim selects for this pin, so the check
+            // matches the executable the shim runs rather than another cached install.
+            let installed = resolve_package_manager_install_dir(
+                resolution.package_manager_type,
+                &resolution.version,
+                resolution.hash.as_deref(),
+            )
+            .is_ok_and(|directory| {
+                resolution
+                    .package_manager_type
+                    .bin_names()
+                    .iter()
+                    .all(|name| package_manager_bin_path(&directory, name).as_path().exists())
+            });
             if installed {
                 print_check(&style(output::CHECK).green().to_string(), "PM binaries", "installed");
             } else {

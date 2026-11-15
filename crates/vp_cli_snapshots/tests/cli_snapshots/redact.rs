@@ -131,6 +131,29 @@ static WINDOWS_MANAGED_PM_BIN_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r#"(<home>/.vite-plus/package_manager/[^"\r\n]+/bin/[A-Za-z0-9._-]+)\.cmd\b"#)
         .unwrap()
 });
+// A pinned managed install is addressed by a content key under the verified
+// namespace: `.verified-v1/<version>/<32-hex>`. The fingerprint folds in the
+// verified pin (and, for a platform-binary manager, the registry origin, whose
+// ephemeral port varies per run), so normalize the key segment to <key>. An
+// unpinned install has no verified namespace and no key segment. The version
+// before the key is already masked to <version> by the path redactions, but also
+// accept a bare semver so ordering stays robust.
+static PM_INSTALL_KEY_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        r"(/package_manager/[^/]+/\.verified-v1/(?:<version>|\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)/)[0-9a-f]{32}(/)",
+    )
+    .unwrap()
+});
+// The verified namespace places the version after `.verified-v1/`, where the
+// tool-name version mask does not reach it. Mask it to <version> so a pinned
+// install path reads like the unpinned one. In output the version is followed by
+// `/` (the key segment) or `:` (a stat result).
+static PM_VERIFIED_VERSION_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        r"(/package_manager/[^/]+/\.verified-v1/)\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?([/:])",
+    )
+    .unwrap()
+});
 static COMMAND_NOT_FOUND_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(
         r"(Command execution failed: )(?:No such file or directory \(os error 2\)|program not found)",
@@ -566,6 +589,11 @@ pub fn redact_output(
     output = WINDOWS_MANAGED_NODE_BIN_RE.replace_all(&output, "${1}/bin/${2}").into_owned();
     output = WINDOWS_MANAGED_NODE_PATH_RE.replace_all(&output, "${1}/bin${2}").into_owned();
     output = WINDOWS_MANAGED_PM_BIN_RE.replace_all(&output, "${1}").into_owned();
+    // Normalize the managed install's content-key directory segment to <key>.
+    output = PM_INSTALL_KEY_RE.replace_all(&output, "${1}<key>${2}").into_owned();
+    // The verified namespace's version segment is not reached by the tool-name
+    // version mask; normalize it to <version> here.
+    output = PM_VERIFIED_VERSION_RE.replace_all(&output, "${1}<version>${2}").into_owned();
     output = COMMAND_NOT_FOUND_RE.replace_all(&output, "${1}program not found").into_owned();
 
     // Redact UUIDs to "<uuid>"
