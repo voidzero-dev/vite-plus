@@ -27,8 +27,8 @@ A generator in a workspace without catalog entries installs, runs, and emits a p
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/node": "^24",
-    "typescript": "^7.0.0"
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2"
   },
   "engines": {
     "node": ">=22.18.0"

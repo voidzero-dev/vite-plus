@@ -1,0 +1,9 @@
+[[case]]
+name = "create_yarn1_npx_fallback"
+vp = "local"
+comment = "Yarn 1 has no dlx command, so create runs the template through npx."
+steps = [
+  { argv = ["vp", "create", "vite:application", "--directory", "app", "--no-interactive", "--no-git", "--no-agent", "--no-editor", "--no-hooks"], snapshot = false, timeout = 180000 },
+  { argv = ["vpt", "stat-file", "app/package.json", "--assert", "file"], comment = "the application was scaffolded" },
+  { argv = ["vpt", "grep-file", "app/package.json", "\"version\": \"1.22.22\""], comment = "the project keeps the Yarn 1 pin" },
+]

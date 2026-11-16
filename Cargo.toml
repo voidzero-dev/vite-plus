@@ -234,7 +234,7 @@ napi-derive = { version = "3.6.3", default-features = false, features = [
   "strict",
   "tracing",
 ] }
-nix = { version = "0.31.0", features = ["dir"] }
+nix = { version = "0.32.0", features = ["dir"] }
 nodejs-built-in-modules = "1.0.0"
 nom = "8.0.0"
 num-bigint = "0.5.1"

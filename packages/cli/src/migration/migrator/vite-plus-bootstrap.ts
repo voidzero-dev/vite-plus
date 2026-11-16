@@ -64,6 +64,8 @@ import {
   hasProviderPeerDependency,
   resolveProviderPeerSpec,
   OPT_IN_BROWSER_PROVIDERS,
+  OXLINT_PLUGIN_API_PACKAGES,
+  packageOwnsOxlintApi,
   REMOVE_PACKAGES,
   VITEST_IS_MANAGED_OVERRIDE,
   managedOverrideKey,
@@ -405,11 +407,31 @@ function reconcileVitePlusBootstrapPackage(
   // catalog removal (catalog.ts) and the fresh path (package-json.ts). Leaving
   // any of them behind keeps a `catalog:` reference whose catalog entry the
   // catalog rewrite just deleted, dangling the next `pnpm install`. A plain
-  // delete is correct here: none of these carry a project-owned peer (the
+  // delete is correct for everything except the published-plugin dependency
+  // kept below: none of the others carry a project-owned peer (the
   // browser-provider peer logic is for the opt-in `@vitest/browser-*`
   // providers, which are deliberately NOT in REMOVE_PACKAGES).
+  const ownsOxlintApi = packageOwnsOxlintApi(pkg);
   for (const bundledPackage of REMOVE_PACKAGES) {
     for (const dependencies of installGroups) {
+      if (
+        ownsOxlintApi &&
+        dependencies !== undefined &&
+        dependencies === pkg.dependencies &&
+        (OXLINT_PLUGIN_API_PACKAGES as readonly string[]).includes(bundledPackage)
+      ) {
+        // A published plugin keeps the runtime dependency that supplies its
+        // upstream imports, as the fresh path does. Its `catalog:` reference
+        // becomes the concrete range because the catalog entry is deleted.
+        const current = dependencies[bundledPackage];
+        if (current?.startsWith('catalog:')) {
+          const resolved = catalogDependencyResolver?.(current, bundledPackage);
+          if (resolved) {
+            dependencies[bundledPackage] = resolved;
+          }
+        }
+        continue;
+      }
       if (dependencies?.[bundledPackage] !== undefined) {
         delete dependencies[bundledPackage];
       }
