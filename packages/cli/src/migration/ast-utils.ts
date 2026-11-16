@@ -18,6 +18,14 @@ export function isString(node: t.Node | null | undefined): node is t.StringLiter
   return node?.type === 'Literal' && typeof node.value === 'string';
 }
 
+export function isBoolean(node: t.Node | null | undefined): node is t.BooleanLiteral {
+  return node?.type === 'Literal' && typeof node.value === 'boolean';
+}
+
+export function isRegExp(node: t.Node | null | undefined): node is t.RegExpLiteral {
+  return node?.type === 'Literal' && 'regex' in node;
+}
+
 export function propertyName(node: t.Node | null | undefined): string | undefined {
   if (node?.type === 'Identifier') {
     return node.name;
@@ -26,6 +34,16 @@ export function propertyName(node: t.Node | null | undefined): string | undefine
     return node.value;
   }
   return undefined;
+}
+
+export function memberName(node: t.Node | null | undefined): string | undefined {
+  if (node?.type !== 'MemberExpression') {
+    return undefined;
+  }
+  if (node.computed && !isString(node.property)) {
+    return undefined;
+  }
+  return propertyName(node.property);
 }
 
 export function objectProperty(

@@ -30,7 +30,7 @@ import { documentationUrl } from '../../utils/documentation.ts';
 import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
 import { displayRelative } from '../../utils/path.ts';
 import { hasBaseUrlInTsconfig } from '../../utils/tsconfig.ts';
-import { parseSource, sameStaticValue } from '../ast.ts';
+import { parseSource, sameStaticValue } from '../ast-utils.ts';
 import { detectConfigs, type ConfigFiles } from '../detector.ts';
 import {
   collectInstalledPackageNames,

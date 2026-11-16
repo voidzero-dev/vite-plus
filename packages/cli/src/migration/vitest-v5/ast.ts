@@ -1,16 +1,6 @@
 import type * as t from '@oxc-project/types';
 
-import { isString, objectProperty, parseSource, propertyName } from '../ast.ts';
-
-// Generic helpers live in `../ast.ts`; this module keeps its existing surface.
-export {
-  isString,
-  objectProperty,
-  parseSource,
-  propertyName,
-  sameStaticValue,
-  staticObject,
-} from '../ast.ts';
+import { isString, memberName, objectProperty, parseSource, propertyName } from '../ast-utils.ts';
 
 interface Binding {
   declaration: t.Node;
@@ -24,14 +14,6 @@ type Visitors = {
 
 function isNode(value: unknown): value is t.Node {
   return typeof value === 'object' && value !== null && 'type' in value && 'start' in value;
-}
-
-export function isBoolean(node: t.Node | null | undefined): node is t.BooleanLiteral {
-  return node?.type === 'Literal' && typeof node.value === 'boolean';
-}
-
-export function isRegExp(node: t.Node | null | undefined): node is t.RegExpLiteral {
-  return node?.type === 'Literal' && 'regex' in node;
 }
 
 export interface VitestV5Finding {
@@ -57,16 +39,6 @@ export interface SourceOptions {
   reviewGlobals?: boolean;
   ownershipReason?: string;
   temporalPolyfill?: boolean;
-}
-
-export function memberName(node: t.Node | null | undefined): string | undefined {
-  if (node?.type !== 'MemberExpression') {
-    return undefined;
-  }
-  if (node.computed && !isString(node.property)) {
-    return undefined;
-  }
-  return propertyName(node.property);
 }
 
 export function isModuleExports(editor: SourceEditor, node: t.Node): boolean {
