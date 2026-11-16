@@ -731,8 +731,7 @@ const commandHelpDocs = {
           { label: '--type-aware', description: 'Enable rules that require type information' },
           {
             label: '--type-check',
-            description:
-              'Enable experimental type checking (includes TypeScript compiler diagnostics)',
+            description: 'Enable type checking (includes TypeScript compiler diagnostics)',
           },
           { label: '-h, --help', description: 'Prints help information' },
         ],
