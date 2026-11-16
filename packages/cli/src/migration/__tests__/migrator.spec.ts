@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import tsrsPkg from 'tsrs/package.json' with { type: 'json' };
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseAllDocuments, parse as parseYaml } from 'yaml';
 
@@ -14,6 +15,9 @@ import {
   VITEST_VERSION,
 } from '../../utils/constants.js';
 import { createMigrationReport } from '../report.js';
+
+// A different bundled version verifies that migration follows dependency updates.
+vi.mock('tsrs/package.json', () => ({ default: { version: '99.0.0-test' } }));
 
 // Mock VITE_PLUS_VERSION to a stable value for snapshot tests.
 // When tests run via `vp test`, the env var is injected with the actual version,
@@ -4480,6 +4484,8 @@ describe('ensureVitePlusBootstrap', () => {
     // Vite+ pins a possibly-fresh vitest; its family must bypass the gate.
     expect(workspace.minimumReleaseAgeExclude).toContain('vitest');
     expect(workspace.minimumReleaseAgeExclude).toContain('@vitest/*');
+    expect(workspace.minimumReleaseAgeExclude).toContain('tsrs');
+    expect(workspace.minimumReleaseAgeExclude).toContain('@tsrs/*');
     // The user's own entry and the vite-plus/ox families are preserved.
     expect(workspace.minimumReleaseAgeExclude).toContain('my-internal-pkg');
     expect(workspace.minimumReleaseAgeExclude).toContain('vite-plus');
@@ -4514,6 +4520,79 @@ describe('ensureVitePlusBootstrap', () => {
     // No gate present → we never introduce the exclude list.
     expect(workspace.minimumReleaseAgeExclude).toBeUndefined();
   });
+
+  it.each(['example@1.0.0', 'tsrs@0.25.0-ts7.1.0-beta'])(
+    'reconciles the bundled tsrs exception while preserving %s and pnpm trust checks',
+    (existingException) => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({
+          name: 'test',
+          devDependencies: { 'vite-plus': 'latest' },
+          packageManager: 'pnpm@11.22.0',
+        }),
+      );
+      const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+      ensureVitePlusBootstrap(workspaceInfo);
+      expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+
+      const workspacePath = path.join(tmpDir, 'pnpm-workspace.yaml');
+      fs.appendFileSync(
+        workspacePath,
+        `\ntrustPolicy: no-downgrade\ntrustPolicyExclude:\n  # Keep the project exception.\n  - ${existingException}\n`,
+      );
+      expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(true);
+      expect(ensureVitePlusBootstrap(workspaceInfo).changed).toBe(true);
+
+      const workspace = readYamlObject(workspacePath);
+      expect(workspace.trustPolicy).toBe('no-downgrade');
+      expect(workspace.trustPolicyExclude).toEqual([existingException, `tsrs@${tsrsPkg.version}`]);
+      expect(workspace.trustLockfile).toBeUndefined();
+      const after = fs.readFileSync(workspacePath, 'utf-8');
+      expect(after).toContain('# Keep the project exception.');
+      expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+      expect(ensureVitePlusBootstrap(workspaceInfo).changed).toBe(false);
+      expect(fs.readFileSync(workspacePath, 'utf-8')).toBe(after);
+    },
+  );
+
+  it.each(['', 'trustPolicy: off\n'])(
+    'leaves trust exceptions unchanged without no-downgrade: %j',
+    (policy) => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({ name: 'test', devDependencies: { 'vite-plus': 'latest' } }),
+      );
+      const workspacePath = path.join(tmpDir, 'pnpm-workspace.yaml');
+      fs.writeFileSync(workspacePath, `${policy}trustPolicyExclude:\n  - example@1.0.0\n`);
+
+      ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
+
+      const workspace = readYamlObject(workspacePath);
+      expect(workspace.trustPolicyExclude).toEqual(['example@1.0.0']);
+      expect(workspace.trustPolicy).toBe(policy ? 'off' : undefined);
+    },
+  );
+
+  it.each(['tsrs', `tsrs@${tsrsPkg.version}`])(
+    'preserves an existing tsrs trust exception: %s',
+    (exception) => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({ name: 'test', devDependencies: { 'vite-plus': 'latest' } }),
+      );
+      const workspacePath = path.join(tmpDir, 'pnpm-workspace.yaml');
+      fs.writeFileSync(
+        workspacePath,
+        `trustPolicy: no-downgrade\ntrustPolicyExclude:\n  - ${exception}\n`,
+      );
+
+      ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
+
+      expect(readYamlObject(workspacePath).trustPolicyExclude).toEqual([exception]);
+      expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+    },
+  );
 
   it('merges the vitest family into an existing yarn npmPreapprovedPackages list', () => {
     fs.writeFileSync(

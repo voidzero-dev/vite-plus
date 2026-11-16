@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import tsrsPkg from 'tsrs/package.json' with { type: 'json' };
 import { coerce, isGreaterThanOrEqual, isLessThan } from 'verkit';
 import { Scalar, YAMLMap, YAMLSeq } from 'yaml';
 
@@ -75,10 +76,23 @@ const PNPM_MINIMUM_RELEASE_AGE_EXCLUDES = [
   '@oxlint/*',
   'oxlint-tsgolint',
   '@oxlint-tsgolint/*',
+  'tsrs',
+  '@tsrs/*',
   'oxfmt',
   '@oxfmt/*',
   ...VITEST_AGE_GATE_EXEMPT_PACKAGES,
 ] as const;
+
+// The bootstrap placeholder used staged publishing; the real release uses
+// GitHub trusted publishing with provenance. pnpm ranks the former higher.
+// Use the same dependency metadata as vp toolchain. Exempt only the bundled
+// version, not other releases or the @tsrs/* platform packages.
+// https://github.com/oxc-project/tsrs/issues/945
+const PNPM_TSRS_TRUST_POLICY_EXCLUDE = `tsrs@${tsrsPkg.version}`;
+
+function hasTsrsTrustPolicyException(excludes: readonly unknown[]): boolean {
+  return excludes.includes('tsrs') || excludes.includes(PNPM_TSRS_TRUST_POLICY_EXCLUDE);
+}
 
 // Whether `version` is at least `minVersion`. A non-coercible version passes
 // only when it is one of the given dist-tags, which always point at a current
@@ -472,6 +486,18 @@ export function rewritePnpmWorkspaceYaml(
         }
       }
       doc.setIn(['minimumReleaseAgeExclude'], minimumReleaseAgeExclude);
+    }
+
+    if (doc.get('trustPolicy') === 'no-downgrade') {
+      const node = doc.get('trustPolicyExclude');
+      if (node != null && !(node instanceof YAMLSeq)) {
+        throw new Error('pnpm-workspace.yaml: trustPolicyExclude must be a sequence');
+      }
+      const excludes = node ?? new YAMLSeq<Scalar<string>>();
+      if (!hasTsrsTrustPolicyException(excludes.toJSON())) {
+        excludes.add(scalarString(PNPM_TSRS_TRUST_POLICY_EXCLUDE));
+        doc.set('trustPolicyExclude', excludes);
+      }
     }
   });
 }
@@ -1417,6 +1443,24 @@ export function pnpmWorkspaceMinimumReleaseAgeExemptionsPending(projectPath: str
     Array.isArray(doc.minimumReleaseAgeExclude) ? doc.minimumReleaseAgeExclude : [],
   );
   return PNPM_MINIMUM_RELEASE_AGE_EXCLUDES.some((exclude) => !existing.has(exclude));
+}
+
+// Reconcile the exception even when the project already uses Vite+ and its
+// other migration settings are current. Mirror the writer's policy gate.
+export function pnpmWorkspaceTsrsTrustPolicyExceptionPending(projectPath: string): boolean {
+  const workspacePath = path.join(projectPath, 'pnpm-workspace.yaml');
+  if (!fs.existsSync(workspacePath)) {
+    return false;
+  }
+  const doc = readYamlFile(workspacePath) as {
+    trustPolicy?: unknown;
+    trustPolicyExclude?: unknown;
+  } | null;
+  if (doc?.trustPolicy !== 'no-downgrade') {
+    return false;
+  }
+  const excludes = Array.isArray(doc.trustPolicyExclude) ? doc.trustPolicyExclude : [];
+  return !hasTsrsTrustPolicyException(excludes);
 }
 
 // Write one pnpm-workspace.yaml `peerDependencyRules` field, or delete it when
