@@ -1,6 +1,8 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
+import { coerce } from 'verkit';
+
 import { runCommand as runCommandWithFspy } from '../../binding/index.js';
 import type { WorkspaceInfo } from '../types/index.ts';
 import type { ExecutionResult, RunCommandOptions } from '../utils/command.ts';
@@ -96,6 +98,10 @@ export function getPackageRunner(workspaceInfo: WorkspaceInfo) {
         args: ['dlx'],
       };
     case 'yarn':
+      // Yarn 1 has no `dlx`; same npx fallback as `vp dlx` in vp_pm_cli.
+      if (coerce(workspaceInfo.packageManagerVersion)?.major === 1) {
+        return { command: 'npx', args: ['--yes'] };
+      }
       return {
         command: 'yarn',
         args: ['dlx'],
