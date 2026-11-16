@@ -5,21 +5,14 @@
 
 use console::style;
 use vp_shared::output;
+use vp_static_config::{FieldMap, FieldValue};
 use vt_path::AbsolutePath;
 
-use super::{app_target, script_note, types::SynthesizableSubcommand};
+use super::{app_target, script_note};
 
 /// Returns whether the hint was printed, so the caller can keep it visible.
-pub(super) fn print(
-    subcommand: &SynthesizableSubcommand,
-    cwd: &AbsolutePath,
-    show_directory: bool,
-) -> bool {
-    // Explicit Vite arguments can select another root or config. Keep this
-    // hint scoped to bare dev, after defaultPackage / package selection.
-    if !matches!(subcommand, SynthesizableSubcommand::Dev { args } if args.is_empty())
-        || script_note::spawned_from_script()
-    {
+pub(super) fn print(cwd: &AbsolutePath, show_directory: bool) -> bool {
+    if script_note::spawned_from_script() {
         return false;
     }
     let Some((name, command, package_dir)) = detect(cwd) else { return false };
@@ -56,7 +49,7 @@ fn detect(cwd: &AbsolutePath) -> Option<(&'static str, &'static str, &AbsolutePa
     }
     // These frameworks use their own dev commands. Do not include frameworks
     // such as SvelteKit that start their dev server through the Vite CLI.
-    let (name, dependency, mut command) = [
+    let (name, dependency, command) = [
         ("Astro", "astro", "astro dev"),
         ("Nuxt", "nuxt", "nuxt dev"),
         ("VitePress", "vitepress", "vitepress dev"),
@@ -72,31 +65,37 @@ fn detect(cwd: &AbsolutePath) -> Option<(&'static str, &'static str, &AbsolutePa
     })?;
     let config = vp_static_config::resolve_static_config(package.path);
     match config.get("run") {
-        Some(vp_static_config::FieldValue::Json(run)) => {
-            if run.get("tasks").and_then(|tasks| tasks.get("dev")).is_some() {
-                return None;
-            }
+        Some(FieldValue::Json(run))
+            if run.get("tasks").and_then(|tasks| tasks.get("dev")).is_some() =>
+        {
+            return None;
         }
         // A dynamic config could define a dev task. Do not suggest a command
         // that bypasses it, or execute the config just to produce a hint.
-        Some(vp_static_config::FieldValue::NonStatic) => return None,
-        None => {}
+        Some(FieldValue::NonStatic) => return None,
+        _ => {}
     }
-    if dependency == "vitepress" {
-        // A Vite app can also depend on VitePress for its documentation. Avoid
-        // a docs hint for that app, and only suggest a known documentation root.
-        if app_target::root_has_intent_signal(&config, package.path, "dev") {
-            return None;
-        }
-        command = if package.path.join(".vitepress").as_path().is_dir() {
-            "vitepress dev"
-        } else if package.path.join("docs/.vitepress").as_path().is_dir() {
-            "vitepress dev docs"
-        } else {
-            return None;
-        };
-    }
+    let command = if dependency == "vitepress" {
+        vitepress_dev_command(&config, package.path)?
+    } else {
+        command
+    };
     Some((name, command, package.path))
+}
+
+fn vitepress_dev_command(config: &FieldMap, dir: &AbsolutePath) -> Option<&'static str> {
+    // A Vite app can also depend on VitePress for its documentation. Avoid
+    // a docs hint for that app, and only suggest a known documentation root.
+    if app_target::root_has_intent_signal(config, dir, "dev") {
+        return None;
+    }
+    if dir.join(".vitepress").as_path().is_dir() {
+        Some("vitepress dev")
+    } else if dir.join("docs/.vitepress").as_path().is_dir() {
+        Some("vitepress dev docs")
+    } else {
+        None
+    }
 }
 
 #[cfg(test)]

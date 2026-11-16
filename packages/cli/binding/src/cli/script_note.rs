@@ -20,9 +20,6 @@ const NPM_LIFECYCLE_EVENT_ENV_NAME: &str = "npm_lifecycle_event";
 /// invocation takes the first argument before help normalization.
 pub(super) fn print(command: Option<&str>, cwd: &AbsolutePath) {
     let Some(command) = command else { return };
-    // A task spawned this command, so the user is already on a script-running
-    // path. npm-compatible runners set `npm_lifecycle_event`; Vite Task uses
-    // its own marker.
     if spawned_from_script() {
         return;
     }
@@ -38,6 +35,7 @@ pub(super) fn print(command: Option<&str>, cwd: &AbsolutePath) {
     ));
 }
 
+/// npm-compatible runners set `npm_lifecycle_event`; Vite Task uses its own marker.
 pub(super) fn spawned_from_script() -> bool {
     std::env::var_os(MARKER_ENV_NAME).is_some()
         || std::env::var_os(NPM_LIFECYCLE_EVENT_ENV_NAME).is_some_and(|event| !event.is_empty())

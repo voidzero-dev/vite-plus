@@ -63,8 +63,11 @@ async fn execute_direct_subcommand(
         app_target::AppTarget::CurrentDir => cwd,
     };
 
-    if framework_note::print(&subcommand, cwd, retargeted || explicit_chdir)
-        && let SynthesizableSubcommand::Dev { args } = &mut subcommand
+    // Explicit Vite arguments can select another root or config. Only hint
+    // for bare dev, after defaultPackage / package selection.
+    if let SynthesizableSubcommand::Dev { args } = &mut subcommand
+        && args.is_empty()
+        && framework_note::print(cwd, retargeted || explicit_chdir)
     {
         // Vite runs in a child process and cannot see the parent's output.
         // Preserve the hint when its startup banner would clear the screen.
