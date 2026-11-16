@@ -13,6 +13,7 @@ Return `fixed: false` without changing the repository when any of these apply:
 - The verdict is `intended-behavior`.
 - The root cause is only in an upstream clone.
 - The fix needs a product decision, dependency upgrade, release, or broad refactor.
+- The issue has assignees in `issue.assignees` of the JSON event payload at `$GITHUB_EVENT_PATH`, or the payload cannot be read. The assignees own the fix; record in `report.md` that implementation was left to them.
 
 ## 2. Implement
 

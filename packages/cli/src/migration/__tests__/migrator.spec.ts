@@ -9486,6 +9486,96 @@ export default defineConfig({
     // Redundant standalone file removed.
     expect(fs.existsSync(path.join(tmpDir, '.oxfmtrc.jsonc'))).toBe(false);
   });
+
+  // The first `vp migrate` injects default blocks even when ESLint stays. A
+  // later `--full` run converts its rules, and the result must replace the
+  // defaults instead of being dropped as a second copy.
+  it.each(['as injected', 'after formatting'])(
+    'replaces injected fmt and lint defaults with a standalone config (%s)',
+    (shape) => {
+      const viteConfigPath = path.join(tmpDir, 'vite.config.ts');
+      if (shape === 'as injected') {
+        injectLintTypeCheckDefaults(tmpDir, true);
+        injectFmtDefaults(tmpDir, true);
+      } else {
+        fs.writeFileSync(
+          viteConfigPath,
+          `import { defineConfig } from "vite-plus";
+
+export default defineConfig({
+  fmt: {},
+  lint: {
+    options: { typeCheck: true, typeAware: true },
+    jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
+    rules: { "vite-plus/prefer-vite-plus-imports": "error" },
+  },
+});
+`,
+        );
+      }
+      fs.writeFileSync(
+        path.join(tmpDir, '.oxlintrc.json'),
+        JSON.stringify({ rules: { eqeqeq: 'error' } }),
+      );
+      fs.writeFileSync(path.join(tmpDir, '.oxfmtrc.json'), JSON.stringify({ semi: false }));
+      const report = createMigrationReport();
+
+      mergeViteConfigFiles(tmpDir, true, report);
+
+      const viteConfig = fs.readFileSync(viteConfigPath, 'utf8');
+      expect(viteConfig.match(/^\s*(fmt|lint)\s*:/gm)).toHaveLength(2);
+      expect(viteConfig).toContain('"eqeqeq": "error"');
+      expect(viteConfig).toContain('"vite-plus/prefer-vite-plus-imports": "error"');
+      expect(viteConfig).toContain('"semi":false');
+      expect(fs.existsSync(path.join(tmpDir, '.oxlintrc.json'))).toBe(false);
+      expect(fs.existsSync(path.join(tmpDir, '.oxfmtrc.json'))).toBe(false);
+      expect(report.warnings).toEqual([]);
+      expect(report.mergedConfigCount).toBe(2);
+    },
+  );
+
+  it('preserves converted ESLint rules when the lint block has user settings', () => {
+    const viteConfigPath = path.join(tmpDir, 'vite.config.ts');
+    fs.writeFileSync(
+      viteConfigPath,
+      `import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  lint: { rules: { 'no-console': 'error' } },
+});
+`,
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.oxlintrc.json'),
+      JSON.stringify({ rules: { eqeqeq: 'error' } }),
+    );
+    const report = createMigrationReport();
+    report.eslintMigrated = true;
+
+    mergeViteConfigFiles(tmpDir, true, report);
+
+    // The rules were not merged, so the JSON file remains their only copy.
+    const viteConfig = fs.readFileSync(viteConfigPath, 'utf8');
+    expect(viteConfig).toContain("'no-console': 'error'");
+    expect(viteConfig).not.toContain('eqeqeq');
+    expect(fs.existsSync(path.join(tmpDir, '.oxlintrc.json'))).toBe(true);
+    expect(report.warnings).toEqual([
+      expect.stringMatching(
+        /^Preserved .*\.oxlintrc\.json because vite\.config\.ts already has a lint config\. Merge it manually\.$/,
+      ),
+    ]);
+
+    // A later run that converts another tool merges again without having
+    // converted ESLint. The pending marker must still protect the file.
+    const laterReport = createMigrationReport();
+    mergeViteConfigFiles(tmpDir, true, laterReport);
+
+    expect(fs.existsSync(path.join(tmpDir, '.oxlintrc.json'))).toBe(true);
+    expect(laterReport.warnings).toHaveLength(1);
+    expect(
+      fs.readFileSync(viteConfigPath, 'utf8').match(/^\/\/ vp migrate: pending /gm),
+    ).toHaveLength(1);
+  });
 });
 
 describe('detectLegacyGitHooksMigrationCandidate', () => {

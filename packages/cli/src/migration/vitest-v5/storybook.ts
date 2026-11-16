@@ -2,14 +2,8 @@ import path from 'node:path';
 
 import type * as t from '@oxc-project/types';
 
-import {
-  SourceEditor,
-  importedName,
-  isString,
-  memberName,
-  objectProperty,
-  staticObject,
-} from './ast.ts';
+import { isString, objectProperty, staticObject, memberName } from '../ast-utils.ts';
+import { SourceEditor, importedName } from './ast.ts';
 import { resolveConfigObject } from './config-object.ts';
 
 const STORYBOOK_PLUGIN = new Set(['@storybook/addon-vitest/vitest-plugin']);
