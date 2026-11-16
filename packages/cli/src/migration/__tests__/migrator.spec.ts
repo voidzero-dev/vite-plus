@@ -4550,7 +4550,6 @@ describe('ensureVitePlusBootstrap', () => {
       expect(workspace.trustLockfile).toBeUndefined();
       const after = fs.readFileSync(workspacePath, 'utf-8');
       expect(after).toContain('# Keep the project exception.');
-      expect(after).toContain('https://github.com/oxc-project/tsrs/issues/945');
       expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
       expect(ensureVitePlusBootstrap(workspaceInfo).changed).toBe(false);
       expect(fs.readFileSync(workspacePath, 'utf-8')).toBe(after);

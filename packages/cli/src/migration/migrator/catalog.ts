@@ -495,11 +495,7 @@ export function rewritePnpmWorkspaceYaml(
       }
       const excludes = node ?? new YAMLSeq<Scalar<string>>();
       if (!hasTsrsTrustPolicyException(excludes.toJSON())) {
-        const entry = scalarString(PNPM_TSRS_TRUST_POLICY_EXCLUDE);
-        entry.commentBefore =
-          ' Reviewed OIDC release; the bootstrap placeholder used staged publishing.\n' +
-          ' https://github.com/oxc-project/tsrs/issues/945';
-        excludes.add(entry);
+        excludes.add(scalarString(PNPM_TSRS_TRUST_POLICY_EXCLUDE));
         doc.set('trustPolicyExclude', excludes);
       }
     }

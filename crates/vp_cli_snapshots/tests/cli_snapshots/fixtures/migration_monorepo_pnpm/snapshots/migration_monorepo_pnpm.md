@@ -134,8 +134,6 @@ trustPolicy: no-downgrade
 trustPolicyExclude:
   # Keep the project's existing exception.
   - testnpm2@1.0.0
-  # Reviewed OIDC release; the bootstrap placeholder used staged publishing.
-  # https://github.com/oxc-project/tsrs/issues/945
   - tsrs@7.1.0-beta.tsrs2
 overrides:
   vite@*: 'catalog:'
