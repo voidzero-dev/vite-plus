@@ -650,16 +650,14 @@ function staticValue(source: string) {
  * so it can replace such a block without losing anything the user wrote.
  */
 export function hasOnlyInjectedDefaults(viteConfigPath: string, configKey: string): boolean {
-  const defaults: object[] =
+  // The blocks `injectFmtDefaults` and `injectLintTypeCheckDefaults` write.
+  const injected =
     configKey === 'fmt'
-      ? [{}]
+      ? {}
       : configKey === 'lint'
-        ? [
-            createDefaultVitePlusLintConfig(),
-            createDefaultVitePlusLintConfig({ includeTypeAwareDefaults: true }),
-          ]
-        : [];
-  if (defaults.length === 0) {
+        ? createDefaultVitePlusLintConfig({ includeTypeAwareDefaults: true })
+        : undefined;
+  if (!injected) {
     return false;
   }
   // shortcut: a placeholder upsert marks the range of the existing value, so
@@ -690,10 +688,8 @@ export function hasOnlyInjectedDefaults(viteConfigPath: string, configKey: strin
   }
   try {
     const existing = staticValue(source.slice(before.length, source.length - after.length));
-    return defaults.some((value) => {
-      const expected = staticValue(JSON.stringify(value));
-      return !!existing && !!expected && sameStaticValue(existing, expected);
-    });
+    const expected = staticValue(JSON.stringify(injected));
+    return !!existing && !!expected && sameStaticValue(existing, expected);
   } catch {
     return false;
   }
