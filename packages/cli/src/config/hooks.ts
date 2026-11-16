@@ -71,7 +71,8 @@ i="\${XDG_CONFIG_HOME:-$HOME/.config}/vite-plus/hooks-init.sh"
 
 { [ "\${HUSKY-}" = "0" ] || [ "\${VP_GIT_HOOKS-}" = "0" ] || [ "\${VITE_GIT_HOOKS-}" = "0" ]; } && exit 0
 
-d="$(cd ${rootExpr} && pwd)"
+# Keep the project bin path valid after hooks change directory, independent of CDPATH.
+d="$(CDPATH= cd ${rootExpr} && pwd)" || exit 1
 __vp_shell=/bin/sh
 [ -x "$__vp_shell" ] || __vp_shell=$(command -v sh)
 

@@ -8,6 +8,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   statSync,
@@ -1371,48 +1372,89 @@ describe('hookScript', () => {
           encoding: 'utf8',
         });
 
-        expect(output).toBe(`${resolve(tmp, 'node_modules', '.bin')}:${inheritedPath}`);
+        expect(output).toBe(`${join(realpathSync(tmp), 'node_modules', '.bin')}:${inheritedPath}`);
       } finally {
         rmSync(tmp, { recursive: true, force: true });
       }
     },
   );
 
-  it.skipIf(process.platform === 'win32')(
-    'keeps project binaries on PATH when the hook changes directory in a subdirectory install',
-    () => {
-      const tmp = mkdtempSync(join(tmpdir(), 'hooks-subdir-cd-test-'));
+  it.skipIf(process.platform === 'win32').each([
+    { pkg: 'pkg', dir: '.vite-hooks', cdpath: undefined, linked: false },
+    { pkg: 'pkg', dir: '.vite-hooks', cdpath: '.', linked: false },
+    { pkg: 'pkg', dir: '.vite-hooks', cdpath: 'shadow', linked: false },
+    { pkg: 'packages/my pkg', dir: '.config/hooks', cdpath: 'shadow', linked: false },
+    { pkg: 'pkg', dir: '.vite-hooks', cdpath: 'shadow', linked: true },
+  ])(
+    'keeps project binaries after cd: $pkg, $dir, CDPATH=$cdpath, linked=$linked',
+    ({ pkg, dir, cdpath, linked }) => {
+      const tmp = realpathSync(mkdtempSync(join(tmpdir(), 'hooks-subdir-cd-test-')));
       const originalCwd = process.cwd();
       try {
         execSync('git init', { cwd: tmp, stdio: 'ignore' });
-        const pkgDir = join(tmp, 'pkg');
-        const hooksDir = join(pkgDir, '.vite-hooks');
-        const internalHooksDir = join(hooksDir, '_');
-        const nodeModulesBin = join(pkgDir, 'node_modules', '.bin');
-        mkdirSync(internalHooksDir, { recursive: true });
-        mkdirSync(nodeModulesBin, { recursive: true });
+        const roots = [tmp];
+        if (linked) {
+          execFileSync(
+            'git',
+            [
+              '-c',
+              'user.name=Test',
+              '-c',
+              'user.email=test@example.com',
+              '-c',
+              'commit.gpgsign=false',
+              '-c',
+              'core.hooksPath=/dev/null',
+              'commit',
+              '--allow-empty',
+              '-m',
+              'init',
+            ],
+            { cwd: tmp, stdio: 'ignore' },
+          );
+          const worktree = join(tmp, 'linked');
+          execFileSync('git', ['worktree', 'add', '--detach', worktree], {
+            cwd: tmp,
+            stdio: 'ignore',
+          });
+          roots.push(worktree);
+        }
 
-        // The dispatcher is generated relative to the package root, just like
-        // install() does for a subdirectory hooks tree.
-        writeFileSync(join(internalHooksDir, 'h'), hookScript('.vite-hooks'), { mode: 0o755 });
-        writeFileSync(
-          join(internalHooksDir, 'pre-commit'),
-          '#!/usr/bin/env sh\n. "$(dirname "$0")/h"',
-          { mode: 0o755 },
-        );
-        writeFileSync(join(hooksDir, 'pre-commit'), 'cd pkg\nhook-command\n');
-        writeFileSync(join(nodeModulesBin, 'hook-command'), '#!/bin/sh\nprintf "%s" "$PATH"\n', {
-          mode: 0o755,
-        });
+        for (const root of roots) {
+          const pkgDir = join(root, pkg);
+          const nodeModulesBin = join(pkgDir, 'node_modules', '.bin');
+          mkdirSync(nodeModulesBin, { recursive: true });
+          process.chdir(pkgDir);
+          expect(install(dir).isError).toBe(false);
+          expect(
+            execFileSync('git', ['config', '--get', 'core.hooksPath'], {
+              cwd: root,
+              encoding: 'utf8',
+            }).trim(),
+          ).toBe(`${pkg}/${dir}/_`);
+          writeFileSync(join(pkgDir, dir, 'pre-commit'), `cd './${pkg}'\nhook-command\n`);
+          writeFileSync(join(nodeModulesBin, 'hook-command'), '#!/bin/sh\nprintf "%s" "$0"\n', {
+            mode: 0o755,
+          });
+          // A competing package must not redirect the dispatcher's cd through CDPATH.
+          mkdirSync(join(root, 'shadow', pkg), { recursive: true });
+        }
 
-        // Git invokes the hook via the relative core.hooksPath from the repo root.
-        const output = execSync('sh pkg/.vite-hooks/_/pre-commit', {
-          cwd: tmp,
-          env: { PATH: '/usr/bin:/bin' },
-          encoding: 'utf8',
-        });
-
-        expect(output).toBe(`${resolve(nodeModulesBin)}:/usr/bin:/bin`);
+        // Run both after the last install, since linked worktrees share core.hooksPath.
+        for (const root of roots) {
+          const result = spawnSync('git', ['hook', 'run', 'pre-commit'], {
+            cwd: root,
+            env: {
+              HOME: join(tmp, 'home'),
+              PATH: '/usr/bin:/bin',
+              CDPATH: cdpath === 'shadow' ? join(root, 'shadow') : cdpath,
+            },
+            encoding: 'utf8',
+          });
+          expect(result.status, result.stderr).toBe(0);
+          // Git forwards hook stdout to stderr.
+          expect(result.stderr).toBe(join(root, pkg, 'node_modules', '.bin', 'hook-command'));
+        }
       } finally {
         process.chdir(originalCwd);
         rmSync(tmp, { recursive: true, force: true });
