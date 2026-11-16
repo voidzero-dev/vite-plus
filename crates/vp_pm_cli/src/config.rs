@@ -219,6 +219,13 @@ impl NpmConfig {
     }
 }
 
+pub(crate) fn is_default_registry(url: &str) -> bool {
+    let (Ok(url), Ok(default)) = (Url::parse(url), Url::parse(DEFAULT_NPM_REGISTRY)) else {
+        return false;
+    };
+    url.origin() == default.origin()
+}
+
 fn env_value(name: &str) -> Option<String> {
     let lower = vt_str::format!("npm_config_{name}");
     let upper = vt_str::format!("NPM_CONFIG_{}", name.cow_to_ascii_uppercase());
