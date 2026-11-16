@@ -28,7 +28,13 @@ export const tasks = async (tasks: Task[], opts?: CommonOptions) => {
 
     const s = spinner(opts);
     s.start(task.title);
-    const result = await task.task(s.message.bind(s));
+    let result: string | void;
+    try {
+      result = await task.task(s.message.bind(s));
+    } catch (error) {
+      s.error(task.title);
+      throw error;
+    }
     s.stop(result || task.title);
   }
 };

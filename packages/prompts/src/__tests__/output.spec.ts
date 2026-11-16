@@ -12,6 +12,7 @@ import { note } from '../note.js';
 import { spinner } from '../spinner.js';
 import { stream } from '../stream.js';
 import { taskLog } from '../task-log.js';
+import { tasks } from '../task.js';
 
 // common.ts selects symbols at module load, before test hooks run.
 vi.mock('is-unicode-supported', () => ({ default: () => true }));
@@ -93,6 +94,25 @@ describe('output identity', () => {
     log.message('override', { output: c.output, withGuide: false });
     expect(settings.withGuide).toBe(true);
     expect(c.text()).toBe('plain\n\n! custom\n  continued\n● guided\n│ continued\noverride\n');
+  });
+
+  it('stops the failed task spinner before propagating the rejection', async () => {
+    const c = capture();
+    const error = new Error('compile failed');
+    const next = vi.fn();
+    const listeners = process.listenerCount('exit');
+    await expect(
+      tasks(
+        [
+          { title: 'Compile', task: () => Promise.reject<void>(error) },
+          { title: 'Package', task: next },
+        ],
+        { output: c.output },
+      ),
+    ).rejects.toBe(error);
+    expect(c.text()).toContain('▲ Compile');
+    expect(process.listenerCount('exit')).toBe(listeners);
+    expect(next).not.toHaveBeenCalled();
   });
 
   it('uses one space in streamed messages and aligns continuation lines', async () => {
