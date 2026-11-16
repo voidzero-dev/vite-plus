@@ -49,9 +49,7 @@ We recommend enabling both `typeAware` and `typeCheck` in the `lint` block:
 - `typeAware: true` enables rules that require TypeScript type information
 - `typeCheck: true` enables full type checking during linting
 
-Vite+ uses [tsrs](https://github.com/oxc-project/tsrs), a Rust port of the TypeScript 7 compiler. Its `tsrs-lint` executable gives Oxlint access to type information and allows type checking directly via `vp lint` and `vp check`. Upgrading Vite+ enables this backend without a separate installation or configuration change.
-
-With `typeCheck: true`, compiler diagnostics are reported only for files selected by the lint command, after applying paths and ignore patterns. Other files in the TypeScript program still provide type information.
+Vite+ uses [tsrs](https://github.com/oxc-project/tsrs), a Rust port of the TypeScript 7 compiler. Its `tsrs-lint` executable gives Oxlint access to type information and allows type checking directly via `vp lint` and `vp check`.
 
 ## JS Plugins
 
