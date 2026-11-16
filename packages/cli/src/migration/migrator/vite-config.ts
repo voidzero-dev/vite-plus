@@ -725,8 +725,16 @@ function mergeAndRemoveJsonConfig(
   const replaceDefaults = keyExists && hasOnlyInjectedDefaults(fullViteConfigPath, configKey);
   if (keyExists && !replaceDefaults) {
     // This run converted the JSON from ESLint and already removed the ESLint
-    // config, so the JSON is the only copy of those rules.
-    if (configKey === 'lint' && report?.eslintMigrated) {
+    // config, so the JSON is the only copy of those rules. The pending marker
+    // keeps that true for later runs, until the user merges the rules.
+    if (
+      configKey === 'lint' &&
+      (report?.eslintMigrated ||
+        fs
+          .readFileSync(fullViteConfigPath, 'utf8')
+          .split(/\r?\n/)
+          .includes(pendingOxlintMigrationMarker(jsonConfigPath)))
+    ) {
       warnMigration(
         `Preserved ${displayRelative(fullJsonConfigPath)} because ${viteConfigPath} already has a ${configKey} config. Merge it manually.`,
         report,

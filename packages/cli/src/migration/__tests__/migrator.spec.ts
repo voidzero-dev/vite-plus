@@ -9564,6 +9564,17 @@ export default defineConfig({
         /^Preserved .*\.oxlintrc\.json because vite\.config\.ts already has a lint config\. Merge it manually\.$/,
       ),
     ]);
+
+    // A later run that converts another tool merges again without having
+    // converted ESLint. The pending marker must still protect the file.
+    const laterReport = createMigrationReport();
+    mergeViteConfigFiles(tmpDir, true, laterReport);
+
+    expect(fs.existsSync(path.join(tmpDir, '.oxlintrc.json'))).toBe(true);
+    expect(laterReport.warnings).toHaveLength(1);
+    expect(
+      fs.readFileSync(viteConfigPath, 'utf8').match(/^\/\/ vp migrate: pending /gm),
+    ).toHaveLength(1);
   });
 });
 
