@@ -115,6 +115,14 @@ describe('output identity', () => {
     }
   });
 
+  it('writes the whole streamed message using the selected output and its width', async () => {
+    const c = capture(10);
+    const write = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
+    await stream.message(['first', 'second'], { output: c.output, symbol: '!' });
+    expect(c.text()).toBe('! first\n  second\n');
+    expect(write).not.toHaveBeenCalled();
+  });
+
   it('uses one space in animated spinner frames', () => {
     vi.stubEnv('CI', '');
     vi.useFakeTimers();
