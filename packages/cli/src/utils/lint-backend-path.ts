@@ -1,5 +1,5 @@
 import { existsSync, realpathSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export function resolveWindowsLintBackendExecutable(
@@ -9,33 +9,33 @@ export function resolveWindowsLintBackendExecutable(
     getRealpathCandidates?: () => string[];
   },
 ): string {
-  let backendPath = pathCandidates.find((p) => options.exists(p)) ?? '';
-  if (!backendPath && options.getRealpathCandidates) {
+  const backendPath = pathCandidates.find((path) => options.exists(path));
+  if (backendPath) {
+    return backendPath;
+  }
+  if (options.getRealpathCandidates) {
     try {
-      backendPath = options.getRealpathCandidates().find((p) => options.exists(p)) ?? '';
+      const realPath = options.getRealpathCandidates().find((path) => options.exists(path));
+      if (realPath) {
+        return realPath;
+      }
     } catch {
-      // realpath failed, fall through to default
+      // Report the original candidates if Bun's realpath fallback fails.
     }
   }
-  if (!backendPath) {
-    throw new Error(
-      'Unable to resolve type-aware lint executable, tried:\n' +
-        pathCandidates.map((path) => `- ${path}`).join('\n'),
-    );
-  }
-  return backendPath;
+  throw new Error(
+    'Unable to resolve type-aware lint executable, tried:\n' +
+      pathCandidates.map((path) => `- ${path}`).join('\n'),
+  );
 }
 
-export function resolveLintBackendExecutable(
-  backendBinPath: string,
-  scriptUrl: string,
-  executableName: string,
-): string {
+export function resolveLintBackendExecutable(backendBinPath: string, scriptUrl: string): string {
   if (process.platform !== 'win32') {
     return backendBinPath;
   }
 
   // On Windows, try .exe first (bun creates .exe), then .cmd (npm/pnpm/yarn create .cmd)
+  const executableName = basename(backendBinPath);
   const scriptDir = dirname(fileURLToPath(scriptUrl));
   const localBinDir = join(scriptDir, '..', 'node_modules', '.bin');
   const backendPackagePath = dirname(dirname(backendBinPath));

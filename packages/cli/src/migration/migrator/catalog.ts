@@ -1456,12 +1456,11 @@ export function pnpmWorkspaceTsrsTrustPolicyExceptionPending(projectPath: string
     trustPolicy?: unknown;
     trustPolicyExclude?: unknown;
   } | null;
-  return (
-    doc?.trustPolicy === 'no-downgrade' &&
-    !hasTsrsTrustPolicyException(
-      Array.isArray(doc.trustPolicyExclude) ? doc.trustPolicyExclude : [],
-    )
-  );
+  if (doc?.trustPolicy !== 'no-downgrade') {
+    return false;
+  }
+  const excludes = Array.isArray(doc.trustPolicyExclude) ? doc.trustPolicyExclude : [];
+  return !hasTsrsTrustPolicyException(excludes);
 }
 
 // Write one pnpm-workspace.yaml `peerDependencyRules` field, or delete it when

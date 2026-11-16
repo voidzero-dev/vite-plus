@@ -21,7 +21,7 @@ and toolchain metadata identify `tsrs`.
 
 | Dependency                | Before                                      | After                                      |
 | ------------------------- | ------------------------------------------- | ------------------------------------------ |
-| Linter frontend           | `oxlint@1.93.0`                             | Unchanged                                  |
+| Linter frontend           | `oxlint`                                    | Unchanged                                  |
 | Production backend        | `oxlint-tsgolint@7.0.2007`                  | `tsrs@7.1.0-beta.tsrs2`                    |
 | Development-only backend  | None                                        | `oxlint-tsgolint@7.0.2007` for comparisons |
 | Backend platform packages | `@oxlint-tsgolint/*`: six optional packages | `@tsrs/*`: eight optional packages         |
@@ -40,9 +40,9 @@ The project's `typescript` dependency and standalone `tsc` tasks are unchanged.
   The same backend runs on every supported platform.
 - pnpm's `trustPolicy: no-downgrade` rejects tsrs because its bootstrap release
   used staged publishing ([upstream issue](https://github.com/oxc-project/tsrs/issues/945)).
-  `vp migrate` adds the reviewed `tsrs@7.1.0-beta.tsrs2` to `trustPolicyExclude`
-  when that policy is enabled in `pnpm-workspace.yaml`. Other packages and future
-  tsrs versions remain subject to the policy. New versions require a separate review.
+  `vp migrate` adds an exception for the exact bundled `tsrs` version to
+  `trustPolicyExclude` when that policy is enabled in `pnpm-workspace.yaml`.
+  Other packages and versions remain subject to the policy.
 
-The [benchmark report](../bench/tsrs-lint.md) contains historical timing, memory,
-and disk-usage measurements. Refresh them for the release candidate.
+The [benchmark report](../bench/tsrs-lint.md) records timing, memory, and disk usage.
+The [ecosystem report](../bench/tsrs-lint-ecosystem.md) records compatibility results.

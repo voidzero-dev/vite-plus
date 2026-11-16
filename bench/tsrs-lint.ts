@@ -6,22 +6,22 @@ import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
-const { OXLINT_TSGOLINT_PATH: tsrs, ...env } = process.env;
-if (!tsrs) {
+const tsrsPath = process.env.OXLINT_TSGOLINT_PATH;
+if (!tsrsPath) {
   throw new Error('Set OXLINT_TSGOLINT_PATH to the tsrs-lint executable.');
 }
 const vp = fileURLToPath(new URL('../packages/cli/bin/vp', import.meta.url));
 const require = createRequire(import.meta.url);
-const tsgolint =
+const tsgolintPath =
   process.platform === 'win32'
     ? ['tsgolint.exe', 'tsgolint.cmd']
         .map((bin) => fileURLToPath(new URL(`../node_modules/.bin/${bin}`, import.meta.url)))
         .find(existsSync)
     : require.resolve('oxlint-tsgolint/bin/tsgolint');
-assert.ok(tsgolint, 'Install workspace development dependencies to get the Go baseline.');
+assert.ok(tsgolintPath, 'Install workspace development dependencies to get the Go baseline.');
 const baselineEnv = {
-  ...env,
-  OXLINT_TSGOLINT_PATH: tsgolint,
+  ...process.env,
+  OXLINT_TSGOLINT_PATH: tsgolintPath,
 };
 const args = [
   vp,
@@ -34,7 +34,10 @@ const args = [
   ...process.argv.slice(2),
 ];
 
-function run(env: NodeJS.ProcessEnv) {
+function runLint(env: NodeJS.ProcessEnv): {
+  seconds: number;
+  result: { status: number; files: number; rules: number; diagnostics: string[] };
+} {
   const start = performance.now();
   const { status, stdout, stderr, error } = spawnSync(process.execPath, args, {
     env,
@@ -69,16 +72,16 @@ const backends = [
   { name: 'tsgolint', env: baselineEnv, samples: [] as number[] },
   {
     name: 'tsrs-lint',
-    env: { ...baselineEnv, OXLINT_TSGOLINT_PATH: tsrs },
+    env: { ...baselineEnv, OXLINT_TSGOLINT_PATH: tsrsPath },
     samples: [] as number[],
   },
 ];
-const [expected, candidate] = backends.map(({ env }) => run(env).result);
+const [expected, candidate] = backends.map(({ env }) => runLint(env).result);
 assert.deepEqual(candidate, expected);
 const pairs = 10;
 for (let pair = 0; pair < pairs; pair++) {
   for (const backend of pair % 2 === 0 ? backends : backends.toReversed()) {
-    const { result, seconds } = run(backend.env);
+    const { result, seconds } = runLint(backend.env);
     assert.deepEqual(result, expected);
     backend.samples.push(seconds);
   }

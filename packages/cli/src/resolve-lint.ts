@@ -43,9 +43,8 @@ export async function lint(): Promise<{
   const tsrsLintPath = resolveLintBackendExecutable(
     join(dirname(resolveBundled('tsrs/package.json')), 'bin', 'tsrs-lint'),
     import.meta.url,
-    'tsrs-lint',
   );
-  const result = {
+  return {
     binPath,
     // TODO: provide envs inference API
     envs: {
@@ -56,5 +55,4 @@ export async function lint(): Promise<{
       [CONFIG_METADATA_ENV]: '1',
     },
   };
-  return result;
 }

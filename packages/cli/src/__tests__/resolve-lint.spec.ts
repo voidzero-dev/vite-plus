@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { lint, resolveWindowsLintBackendExecutable } from '../resolve-lint.js';
 
@@ -38,5 +38,51 @@ describe('resolve-lint', () => {
 
     expect(result).toBe(backendPath);
     expect(result).not.toMatch(/^\.\\/);
+  });
+
+  it('prefers the executable wrapper without resolving Bun paths', () => {
+    const candidates = ['C:\\repo\\.bin\\tsrs-lint.exe', 'C:\\repo\\.bin\\tsrs-lint.cmd'];
+    const getRealpathCandidates = vi.fn(() => ['C:\\cache\\.bin\\tsrs-lint.exe']);
+
+    expect(
+      resolveWindowsLintBackendExecutable(candidates, {
+        exists: () => true,
+        getRealpathCandidates,
+      }),
+    ).toBe(candidates[0]);
+    expect(getRealpathCandidates).not.toHaveBeenCalled();
+  });
+
+  it('resolves a Bun wrapper when the symlinked paths do not exist', () => {
+    const backendPath = 'C:\\repo\\node_modules\\.bun\\tsrs\\node_modules\\.bin\\tsrs-lint.exe';
+
+    expect(
+      resolveWindowsLintBackendExecutable(['C:\\repo\\.bin\\tsrs-lint.exe'], {
+        exists: (path) => path === backendPath,
+        getRealpathCandidates: () => [backendPath],
+      }),
+    ).toBe(backendPath);
+  });
+
+  it.each([
+    { name: 'absent', getRealpathCandidates: undefined },
+    { name: 'empty', getRealpathCandidates: () => [] },
+    {
+      name: 'unavailable',
+      getRealpathCandidates: () => {
+        throw new Error('realpath failed');
+      },
+    },
+  ])('reports the original candidates when the fallback is $name', ({ getRealpathCandidates }) => {
+    const candidates = ['C:\\repo\\.bin\\tsrs-lint.exe', 'C:\\repo\\.bin\\tsrs-lint.cmd'];
+
+    expect(() =>
+      resolveWindowsLintBackendExecutable(candidates, {
+        exists: () => false,
+        getRealpathCandidates,
+      }),
+    ).toThrow(
+      `Unable to resolve type-aware lint executable, tried:\n- ${candidates[0]}\n- ${candidates[1]}`,
+    );
   });
 });
