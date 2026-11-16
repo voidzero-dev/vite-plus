@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { SourceEditor, parseSource } from '../vitest-v5/ast.ts';
+import { parseSource } from '../ast-utils.ts';
+import { SourceEditor } from '../vitest-v5/ast.ts';
 import { migrateVitestV5Config } from '../vitest-v5/config.ts';
 import { migrateVitestV5Source } from '../vitest-v5/source.ts';
 

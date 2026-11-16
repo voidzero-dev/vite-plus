@@ -1,0 +1,7 @@
+{
+  "name": "oxlint-plugin-example",
+  "version": "1.0.0",
+  "dependencies": {
+    "oxlint": "^1.0.0"
+  }
+}
