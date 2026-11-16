@@ -649,7 +649,7 @@ function staticValue(source: string) {
  * writes on its own. A tool config merged later already carries these defaults,
  * so it can replace such a block without losing anything the user wrote.
  */
-function hasOnlyInjectedDefaults(viteConfigPath: string, configKey: string): boolean {
+export function hasOnlyInjectedDefaults(viteConfigPath: string, configKey: string): boolean {
   const defaults: object[] =
     configKey === 'fmt'
       ? [{}]
@@ -720,7 +720,8 @@ function mergeAndRemoveJsonConfig(
   const keyExists = hasConfigKey(fullViteConfigPath, configKey);
   // A block of injected defaults is not a second copy of the JSON config. The
   // first `vp migrate` writes one even when ESLint stays, so a later `--full`
-  // run must replace it with the converted config instead.
+  // run must replace it with the converted config instead. Prettier takes the
+  // same decision before its conversion, see `migratePrettierToOxfmt`.
   const replaceDefaults = keyExists && hasOnlyInjectedDefaults(fullViteConfigPath, configKey);
   if (keyExists && !replaceDefaults) {
     // This run converted the JSON from ESLint and already removed the ESLint

@@ -1,0 +1,20 @@
+[[case]]
+name = "migration_full_replaces_injected_defaults"
+vp = "global"
+skip-platforms = [{ os = "linux", libc = "musl" }]
+steps = [
+  { argv = ["vp", "migrate", "--no-hooks", "--no-agent", "--no-editor"], comment = "the first run declines both the ESLint and the Prettier migration", snapshot = false, continue-on-failure = true, interactions = [
+    { "expect-milestone" = "confirm:confirm:yes" },
+    { "write-key" = "left" },
+    { "expect-milestone" = "confirm:confirm:no" },
+    { "write-key" = "enter" },
+    { "expect-milestone" = "confirm:confirm:yes" },
+    { "write-key" = "left" },
+    { "expect-milestone" = "confirm:confirm:no" },
+    { "write-key" = "enter" },
+  ] },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "both tools stay, but the first run still injects default fmt and lint blocks", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "a later full run converts both tools", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "the converted rules and format options replace the injected defaults. The default blocks hold no settings, so treating them as an existing config would lose every converted setting", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".oxlintrc.json", "--assert", "missing"], comment = "the converted Oxlint config is removed only after its merge", continue-on-failure = true },
+]

@@ -125,4 +125,76 @@ describe('Prettier migration', () => {
     });
     expect(report.prettierMigrated).toBe(true);
   });
+
+  // `vp fmt --migrate` converts nothing while the config declares `fmt`, and the
+  // first `vp migrate` injects `fmt: {}` even when Prettier stays.
+  it.each([
+    [0, 'migrated'],
+    [1, 'failed'],
+  ] as const)(
+    'clears the injected empty fmt block for the conversion (exit code %s)',
+    async (exitCode, outcome) => {
+      fs.writeFileSync(path.join(projectPath, '.prettierrc.json'), '{"semi":false}');
+      const viteConfigPath = path.join(projectPath, 'vite.config.ts');
+      const viteConfig = `import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  fmt: {},
+  lint: { rules: {} },
+});
+`;
+      fs.writeFileSync(viteConfigPath, viteConfig);
+      let configDuringConversion = '';
+      mockRunCommandSilently.mockImplementation(async () => {
+        configDuringConversion = fs.readFileSync(viteConfigPath, 'utf8');
+        return { exitCode, stdout: Buffer.alloc(0), stderr: Buffer.from('Invalid JSON') };
+      });
+
+      await expect(
+        migratePrettierToOxfmt(projectPath, false, '.prettierrc.json', undefined, { silent: true }),
+      ).resolves.toBe(outcome);
+
+      expect(configDuringConversion).not.toContain('fmt');
+      expect(configDuringConversion).toContain('lint: { rules: {} }');
+      // A failed conversion leaves the project as it was.
+      expect(fs.readFileSync(viteConfigPath, 'utf8')).toBe(
+        exitCode === 0 ? configDuringConversion : viteConfig,
+      );
+      expect(fs.existsSync(path.join(projectPath, '.prettierrc.json'))).toBe(exitCode !== 0);
+    },
+  );
+
+  it('keeps Prettier when the fmt block has user settings', async () => {
+    fs.writeFileSync(path.join(projectPath, '.prettierrc.json'), '{"semi":false}');
+    const viteConfigPath = path.join(projectPath, 'vite.config.ts');
+    const viteConfig = `import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  fmt: { singleQuote: true },
+});
+`;
+    fs.writeFileSync(viteConfigPath, viteConfig);
+    const report = createMigrationReport();
+
+    await expect(
+      migratePrettierToOxfmt(projectPath, false, '.prettierrc.json', undefined, {
+        silent: true,
+        report,
+      }),
+    ).resolves.toBe('skipped');
+
+    // The conversion would be skipped, so removing Prettier would lose its options.
+    expect(mockRunCommandSilently).not.toHaveBeenCalled();
+    expect(fs.readFileSync(viteConfigPath, 'utf8')).toBe(viteConfig);
+    expect(fs.readFileSync(path.join(projectPath, '.prettierrc.json'), 'utf8')).toBe(
+      '{"semi":false}',
+    );
+    expect(fs.readFileSync(path.join(projectPath, 'package.json'), 'utf8')).toBe(
+      JSON.stringify(packageJson),
+    );
+    expect(report.prettierMigrated).toBe(false);
+    expect(report.warnings).toEqual([
+      'Kept Prettier because vite.config.ts already has a fmt config. Move the Prettier options into it manually, then remove Prettier.',
+    ]);
+  });
 });
