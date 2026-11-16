@@ -87,7 +87,7 @@ const PNPM_MINIMUM_RELEASE_AGE_EXCLUDES = [
 // Keep this reviewed exception version-specific: dependency updates must not
 // automatically exempt future releases or the @tsrs/* platform packages.
 // https://github.com/oxc-project/tsrs/issues/945
-const PNPM_TSRS_TRUST_POLICY_EXCLUDE = 'tsrs@0.25.0-ts7.1.0-beta';
+const PNPM_TSRS_TRUST_POLICY_EXCLUDE = 'tsrs@7.1.0-beta.tsrs2';
 
 function hasTsrsTrustPolicyException(excludes: readonly unknown[]): boolean {
   return excludes.includes('tsrs') || excludes.includes(PNPM_TSRS_TRUST_POLICY_EXCLUDE);

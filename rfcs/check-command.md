@@ -205,16 +205,16 @@ The check module reuses `SubcommandResolver` and `resolve_and_capture_output` fr
 See the [backend replacement RFC](./tsrs-lint-backend.md) for the rationale,
 dependency changes and compatibility considerations.
 
-Vite+ replaces the bundled Go backend with `tsrs@0.25.0-ts7.1.0-beta`,
+Vite+ replaces the bundled Go backend with `tsrs@7.1.0-beta.tsrs2`,
 a Rust port of the TypeScript 7 compiler. `resolve-lint.ts` selects the bundled
 `tsrs` package and passes its `bin/tsrs-lint` launcher to Oxlint through
 `OXLINT_TSGOLINT_PATH`. The same resolver serves `vp lint` and `vp check`.
 Users do not need to set an environment variable for the default backend.
 
-With TypeScript diagnostics enabled, this release checks the whole program for
-each tsconfig selected by the lint input files. Unselected or ignored program
-files can therefore report type errors. Oxlint ignores still control lint rules,
-and `skipLibCheck` controls declaration checking.
+With TypeScript diagnostics enabled, this release reports file-level errors only
+for files selected by Oxlint, after applying paths and ignore patterns.
+Other program files still provide type information. This matches tsgolint's
+diagnostic scope.
 Selected files outside the discovered tsconfigs use an inferred program with
 fallback compiler options.
 

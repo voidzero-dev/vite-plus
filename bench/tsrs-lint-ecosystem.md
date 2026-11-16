@@ -1,5 +1,80 @@
 # Ecosystem correctness comparison
 
+## Diagnostic-scope fix: 2026-11-16
+
+`tsrs@7.1.0-beta.tsrs2` includes [tsrs #998](https://github.com/oxc-project/tsrs/pull/998).
+File-level compiler diagnostics now respect Oxlint's file selection and ignore
+patterns, as they do with tsgolint. Other program files still provide types.
+The release uses the new TypeScript-aligned version scheme and the npm `next` tag;
+`latest` still points to `0.25.0-ts7.1.0-beta` at the time of this run.
+
+The local comparison reran all six repositories that previously passed with Go
+and failed with tsrs. It used four backends: `oxlint-tsgolint@7.0.2006`,
+`tsrs@0.25.0-ts7.1.0-beta`, and the new release with its default fast mode and
+with `TSRS_FAST=0`. Both new-release modes produced the same results.
+
+All runs used the same published Vite+ preview,
+`0.0.0-commit.25a7c006af2db834bfc66f9689b02de1060f580f`, and Oxlint `1.93.0`.
+Only the backend changed within each comparison. Each repository retained the
+same source, dependencies, and generated files for all four backends. The first
+three rows use upstream snapshots from November 13; the remaining rows use the
+original catalog-fork snapshots. This targeted run is separate from the historical
+84-repository sweep below. It is not a new full-catalog or performance run.
+
+### Affected repositories
+
+The lint error columns count error-severity diagnostics. `Pass` means exit code 0.
+All lint workloads enable type checking. Nostalgist targets `src tests`;
+yielded-auth uses explicit `--type-aware --type-check` flags.
+
+| Repository / tested commit                                                                                                       | Lint errors: Go | Lint errors: old tsrs | Lint errors: new tsrs | `vp check`: Go / old / new                       |
+| -------------------------------------------------------------------------------------------------------------------------------- | --------------: | --------------------: | --------------------: | ------------------------------------------------ |
+| [css-modules-kit `90dd7ef9f`](https://github.com/mizdra/css-modules-kit/tree/90dd7ef9fc872311d370abe75c15662f3a76ff49)           |               0 |                     3 |                     0 | Pass / Fail / Pass                               |
+| [elysia-clerk `6e42ab83b`](https://github.com/clerk-community/elysia-clerk/tree/6e42ab83b4fd8401f5ddb13ae206cbf4887df469)        |               0 |                     4 |                     0 | Format failure / Format failure / Format failure |
+| [vinext `f795c5637`](https://github.com/cloudflare/vinext/tree/f795c5637b04015a04e67369aaf79d0c6077dcbf)                         |               0 |                    17 |                     0 | Pass / Fail / Pass                               |
+| [nostalgist `436e23e4c`](https://github.com/vite-plus-ecosystem-ci/nostalgist/tree/436e23e4cac64e61e71825bcb1c001cf3728b736)     |               0 |                     1 |                     0 | Pass / Fail / Pass                               |
+| [ramen-api `9e31be0d3`](https://github.com/vite-plus-ecosystem-ci/ramen-api/tree/9e31be0d3410948f6ee086c068c692d087ee07c7)       |               0 |                   118 |                     0 | Pass / Fail / Pass                               |
+| [yielded-auth `788239010`](https://github.com/vite-plus-ecosystem-ci/yielded-auth/tree/788239010e5f806d28f7fb3151e9b37c1e59a39c) |               0 |                     5 |                     0 | Format failure / Format failure / Format failure |
+
+These 48 commands reproduce all 148 additional errors with the old tsrs release.
+The new release removes all 148 and matches the Go control. The two shared
+formatting failures are `CHANGELOG.md` in elysia-clerk and
+`packages/auth/src/oauth/server/clients.ts` in yielded-auth. They prevent
+`vp check` from reaching lint; separate lint commands pass in both projects.
+No project configuration changes were needed for the fix.
+
+### Minimal reproduction
+
+The [six-case reproduction](https://github.com/why-reproductions-are-required/tsrs-lint-diagnostic-scope)
+uses `export const bad: string = 123;` in a fixture. All 24 invocations across
+the four backends matched the expected results:
+
+| Configuration                                                | Go       | Old tsrs | New tsrs, both modes |
+| ------------------------------------------------------------ | -------- | -------- | -------------------- |
+| Fixture selected for linting                                 | `TS2322` | `TS2322` | `TS2322`             |
+| Fixture ignored by lint, included in the TS program          | Pass     | `TS2322` | Pass                 |
+| Same lint ignore, type checking disabled                     | Pass     | Pass     | Pass                 |
+| Also excluded by `tsconfig.json`, without imports            | Pass     | Pass     | Pass                 |
+| Excluded by `tsconfig.json`, but imported by selected source | Pass     | `TS2322` | Pass                 |
+| CLI targets only `src`; fixture remains in the TS program    | Pass     | `TS2322` | Pass                 |
+
+The first case checks two selected files; the other cases each check one.
+The selected-file error remains visible, so these passes do not result from
+skipping type checking. Compiler-version differences are separate from this
+resolved diagnostic-scope regression.
+
+The new version still fails pnpm `12.21.0` installation with
+`trustPolicy: no-downgrade`. Its exact reviewed exception,
+`tsrs@7.1.0-beta.tsrs2`, permits installation. The bootstrap publication conflict
+in [tsrs #945](https://github.com/oxc-project/tsrs/issues/945) remains separate
+from the diagnostic-scope fix.
+
+## Historical full-catalog baseline: 2026-11-12
+
+The results below describe `tsrs@0.25.0-ts7.1.0-beta` before #998. The six new
+command failures are resolved by the targeted rerun above. Other historical
+failures were not re-audited in this rerun.
+
 On 2026-11-12, the local comparison covered **all 83 catalog forks plus vinext** with
 the latest preview built from PR #3352 at `25a7c006af2db834bfc66f9689b02de1060f580f`.
 The 740 commands found six repositories where a command passes with Go and fails
@@ -9,7 +84,7 @@ The full results and exact fork commits are listed below.
 This is a correctness comparison on macOS ARM64. Two repository batches ran
 concurrently; their elapsed times are not performance or memory measurements.
 
-## Tested toolchain
+### Tested toolchain
 
 | Component            | Version / source                                                                                                                                                       |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -28,7 +103,7 @@ dependencies, generated files, and command flags. Only the lint backend changes.
 The fork commits and dependency trees are retained from the November 11 local run
 to isolate the preview update. The current catalog has the same 83 repository names.
 
-## Exit-status summary
+### Exit-status summary
 
 | Workload                            | Both pass | Both fail | Go passes, tsrs fails | Go fails, tsrs passes |
 | ----------------------------------- | --------: | --------: | --------------------: | --------------------: |
@@ -40,7 +115,7 @@ to isolate the preview update. The current catalog has the same 83 repository na
 
 `Both fail` includes configuration, formatting, dependency, and source errors. It does not identify a backend regression.
 
-## New command failures
+### New command failures
 
 These are compiler diagnostics. All five default-lint cases already enable
 `typeCheck` in their configuration. `yielded-auth` passes default lint with both
@@ -70,7 +145,7 @@ report errors in lint-ignored fixtures and imported declarations. The additional
 diagnostics in already-failing projects, listed below, have not all received this
 independent compiler audit.
 
-## npmx.dev and vinext
+### npmx.dev and vinext
 
 For the pinned npmx.dev fork, default lint passes with both backends. `vp check`
 stops on the same eight formatting files. Explicit type checking reports 260 errors
@@ -83,7 +158,7 @@ It does not contain the `tsconfig.exclude` fix in
 That PR's [successful Check run](https://github.com/fengmk2/vinext/actions/runs/43164787804/job/131004010311)
 uses a different commit and earlier preview; it is separate evidence from this sweep.
 
-## Complete fork results
+### Complete fork results
 
 Each exit-code pair is **Go / tsrs**: `0` means success; `1` or `2` means failure. All source links pin the tested commit.
 The error column counts error-severity diagnostics in the explicit type-check workload; warnings are excluded. Equal counts do not establish identical diagnostics.
@@ -176,7 +251,7 @@ The error column counts error-severity diagnostics in the explicit type-check wo
 | [yaak `f7402f5f4`](https://github.com/vite-plus-ecosystem-ci/yaak/tree/f7402f5f4f9752c4722a478cdb51dd54ad87cc34)                                                 | 0 / 0 | 0 / 0           | 1 / 1               |         327 / 342 | 1 / 1      | —                    |
 | [yielded-auth `788239010`](https://github.com/vite-plus-ecosystem-ci/yielded-auth/tree/788239010e5f806d28f7fb3151e9b37c1e59a39c)                                 | 0 / 0 | 0 / 0           | 0 / 1               |             0 / 5 | 1 / 1      | —                    |
 
-## Diagnostic changes in already-failing projects
+### Diagnostic changes in already-failing projects
 
 The following projects already fail explicit type checking with Go and have additional error diagnostics with tsrs. Counts compare file, code, severity, first-label position, and message; a changed message or position can count as one addition and one removal. These differences have not all been independently attributed to the upstream compiler.
 
@@ -212,7 +287,7 @@ The following projects already fail explicit type checking with Go and have addi
 | vue-core               |           12 |              2 | `TS2305` × 3, `TS2322` × 2, `TS2353` × 1, `TS5115` × 1, `TS7006` × 2, `TS7031` × 3                                                                                                                                                                                                                                                                      |
 | yaak                   |           16 |              1 | `TS1479` × 1, `TS2300` × 14, `TS2345` × 1                                                                                                                                                                                                                                                                                                               |
 
-## Method and coverage limits
+### Method and coverage limits
 
 Each control runs these four workloads. The lint commands also use
 `--format json --threads 4` for structured comparison:
@@ -272,7 +347,7 @@ This local sweep does not cover other platforms or every application build and
 test. Raw commands, output, dependency receipts, backend traces, diagnostic
 differences, and compiler audits are retained outside this repository.
 
-## Separate Ecosystem CI results
+### Separate Ecosystem CI results
 
 The PR-head [Ecosystem CI run](https://github.com/voidzero-dev/vite-plus/actions/runs/43187905687)
 passes all **51 project/platform jobs across 31 repositories**. This is the
@@ -284,7 +359,7 @@ Linux and Windows, and nuxt-devtools on Linux and Windows. Migration retains
 `trustPolicy: no-downgrade` and adds only the reviewed
 `tsrs@0.25.0-ts7.1.0-beta` exception.
 
-## Earlier reduced-case findings
+### Earlier reduced-case findings
 
 The [earlier report](https://github.com/voidzero-dev/vite-plus/blob/25a7c006af2db834bfc66f9689b02de1060f580f/bench/tsrs-lint-ecosystem.md#exact-upstream-attribution-2026-11-08)
 preserves the original 14-repository experiment and seven reduced reproductions.

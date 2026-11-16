@@ -136,7 +136,7 @@ trustPolicyExclude:
   - testnpm2@1.0.0
   # Reviewed OIDC release; the bootstrap placeholder used staged publishing.
   # https://github.com/oxc-project/tsrs/issues/945
-  - tsrs@0.25.0-ts7.1.0-beta
+  - tsrs@7.1.0-beta.tsrs2
 overrides:
   vite@*: 'catalog:'
   vitest@*: 'catalog:'
