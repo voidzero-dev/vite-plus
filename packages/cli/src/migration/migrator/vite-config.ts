@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import type { Program } from '@oxc-project/types';
+import type { ObjectExpression, Program } from '@oxc-project/types';
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { braceExpand } from 'minimatch';
 import { type OxlintConfig } from 'oxlint';
@@ -645,6 +645,32 @@ function staticValue(source: string) {
 }
 
 /**
+ * Whether the property whose value starts at `offset` follows a spread in its
+ * object. Returns `undefined` when no object literal holds such a property.
+ */
+function followsSpread(node: unknown, offset: number): boolean | undefined {
+  if (typeof node !== 'object' || node === null) {
+    return undefined;
+  }
+  if ((node as { type?: unknown }).type === 'ObjectExpression') {
+    const { properties } = node as ObjectExpression;
+    const index = properties.findIndex(
+      (property) => property.type === 'Property' && property.value.start === offset,
+    );
+    if (index !== -1) {
+      return properties.slice(0, index).some((property) => property.type === 'SpreadElement');
+    }
+  }
+  for (const child of Object.values(node)) {
+    const found = followsSpread(child, offset);
+    if (found !== undefined) {
+      return found;
+    }
+  }
+  return undefined;
+}
+
+/**
  * Whether the existing `configKey` block holds only the defaults that Vite+
  * writes on its own. A tool config merged later already carries these defaults,
  * so it can replace such a block without losing anything the user wrote.
@@ -687,6 +713,12 @@ export function hasOnlyInjectedDefaults(viteConfigPath: string, configKey: strin
     return false;
   }
   try {
+    // Vite+ prepends its blocks, so one that follows a spread was written by
+    // the user to override it. Replacing that block could move it before the
+    // spread, where the spread wins over the converted settings.
+    if (followsSpread(parseSource(viteConfigPath, source).program, before.length) !== false) {
+      return false;
+    }
     const existing = staticValue(source.slice(before.length, source.length - after.length));
     const expected = staticValue(JSON.stringify(injected));
     return !!existing && !!expected && sameStaticValue(existing, expected);

@@ -164,13 +164,18 @@ export default defineConfig({
     },
   );
 
-  it('keeps Prettier when the fmt block has user settings', async () => {
+  it.each([
+    ['has user settings', 'fmt: { singleQuote: true },'],
+    // Vite+ prepends its empty block. One after a spread overrides the spread,
+    // and the converted options would land before it and lose to it.
+    ['follows a spread', '...{ fmt: { semi: true } },\n  fmt: {},'],
+  ])('keeps Prettier when the fmt block %s', async (_name, properties) => {
     fs.writeFileSync(path.join(projectPath, '.prettierrc.json'), '{"semi":false}');
     const viteConfigPath = path.join(projectPath, 'vite.config.ts');
     const viteConfig = `import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
-  fmt: { singleQuote: true },
+  ${properties}
 });
 `;
     fs.writeFileSync(viteConfigPath, viteConfig);
