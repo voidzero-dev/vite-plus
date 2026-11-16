@@ -115,6 +115,24 @@ describe('output identity', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
+  it('releases terminal input and preserves the task error when output throws', async () => {
+    vi.stubEnv('CI', '');
+    const { output } = capture(52, true);
+    const error = new Error('compile failed');
+    const exitListeners = process.listenerCount('exit');
+    const endListeners = process.stdin.listenerCount('end');
+    const task = () => {
+      vi.spyOn(output, 'write').mockImplementation(() => {
+        throw new Error('output failed');
+      });
+      throw error;
+    };
+
+    await expect(tasks([{ title: 'Compile', task }], { output })).rejects.toBe(error);
+    expect(process.listenerCount('exit')).toBe(exitListeners);
+    expect(process.stdin.listenerCount('end')).toBe(endListeners);
+  });
+
   it('uses one space in streamed messages and aligns continuation lines', async () => {
     const c = capture();
     const columns = Object.getOwnPropertyDescriptor(process.stdout, 'columns');

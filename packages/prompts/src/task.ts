@@ -32,7 +32,11 @@ export const tasks = async (tasks: Task[], opts?: CommonOptions) => {
     try {
       result = await task.task(s.message.bind(s));
     } catch (error) {
-      s.error(task.title);
+      try {
+        s.error(task.title);
+      } catch {
+        // The caller needs the task error even if its output stream throws.
+      }
       throw error;
     }
     s.stop(result || task.title);

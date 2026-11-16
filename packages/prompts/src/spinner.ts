@@ -97,7 +97,6 @@ const blockInput = (output: Writable, onInterrupt: () => void): (() => void) => 
   return () => {
     inputBlocked = false;
     input.off('keypress', onKeypress);
-    output.write(cursor.show);
     // Windows keeps raw mode: https://github.com/bombshell-dev/clack/issues/176
     if (input.isTTY && process.platform !== 'win32') {
       input.setRawMode(false);
@@ -105,6 +104,7 @@ const blockInput = (output: Writable, onInterrupt: () => void): (() => void) => 
     // @ts-expect-error https://github.com/nodejs/node/issues/31762#issuecomment-1441223907
     rl.terminal = false;
     rl.close();
+    output.write(cursor.show);
   };
 };
 
@@ -314,27 +314,30 @@ export const spinner = ({
     isSpinnerActive = false;
     isCancelled = code === 1;
     clearInterval(loop);
-    clearPrevMessage();
-    const step =
-      code === 0
-        ? completeColor(S_STEP_SUBMIT)
-        : code === 1
-          ? color.red(S_STEP_CANCEL)
-          : color.red(S_STEP_ERROR);
-    _message = msg ?? _message;
-    if (!silent) {
-      if (indicator === 'timer') {
-        output.write(`${step} ${_message} ${formatTimer(elapsedMs)}\n`);
-      } else {
-        output.write(`${step} ${_message}\n`);
+    try {
+      clearPrevMessage();
+      const step =
+        code === 0
+          ? completeColor(S_STEP_SUBMIT)
+          : code === 1
+            ? color.red(S_STEP_CANCEL)
+            : color.red(S_STEP_ERROR);
+      _message = msg ?? _message;
+      if (!silent) {
+        if (indicator === 'timer') {
+          output.write(`${step} ${_message} ${formatTimer(elapsedMs)}\n`);
+        } else {
+          output.write(`${step} ${_message}\n`);
+        }
       }
+    } finally {
+      if (!preserveElapsed) {
+        _elapsedMs = 0;
+      }
+      _prevMessage = undefined;
+      clearHooks();
+      unblock?.();
     }
-    if (!preserveElapsed) {
-      _elapsedMs = 0;
-    }
-    _prevMessage = undefined;
-    clearHooks();
-    unblock?.();
   };
 
   const pause = (): void => {
