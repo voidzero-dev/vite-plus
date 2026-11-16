@@ -1,5 +1,4 @@
 import { spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import {
   chmodSync,
   existsSync,
@@ -509,46 +508,22 @@ function getScopedHooksPath(scope: 'local' | 'worktree'): string {
   return result.status === 0 ? result.stdout?.toString().trim() : '';
 }
 
-// Exact Husky 9.1.7 generated contents, with CRLF and a final newline normalized.
-// https://github.com/typicode/husky/blob/v9.1.7/husky
-// https://github.com/typicode/husky/blob/v9.1.7/index.js
-// Unknown versions are deliberately preserved rather than guessing that their
-// dispatcher is safe to abandon.
-const HUSKY_GENERATED_SCRIPT_HASHES: Readonly<Record<string, string>> = {
-  h: 'd80994934f440d579303d6590fa1ce7bc0d31c650179d2089dea5191d1ab10d1',
-  'husky.sh': '21122903fca7209a13c991e5be68780636e28f1b8f0ae7ea07ed0065dfe37268',
-};
+type HuskyReplacement = 'automatic' | 'explicit' | 'non-empty' | null;
 
-function isUnmodifiedHuskyFile(directory: string, name: string): boolean {
-  const path = join(directory, name);
-  const stats = lstatSync(path);
-  if (!stats.isFile() || stats.isSymbolicLink() || stats.nlink !== 1) {
-    return false;
-  }
-  const contents = readFileSync(path, 'utf8').replace(/\r\n/g, '\n').replace(/\n$/, '');
-  if (name === '.gitignore') {
-    return contents === '*';
-  }
-  if (SUPPORTED_GIT_HOOK_NAMES.includes(name)) {
-    return contents === HOOK_STUB_SCRIPT;
-  }
-  const expectedHash = HUSKY_GENERATED_SCRIPT_HASHES[name];
-  return (
-    expectedHash !== undefined &&
-    createHash('sha256').update(contents).digest('hex') === expectedHash
-  );
-}
-
-/** Only reclaim an abandoned, repository-local Husky setup after hooks were moved. */
-function canReplaceStaleHuskyPath(hooksPath: string, location: HooksLocation): boolean {
+/** Only reclaim a repository-local Husky setup after hooks were moved. */
+function getHuskyReplacement(
+  hooksPath: string,
+  location: HooksLocation,
+  replaceHusky: boolean,
+): HuskyReplacement {
   const normalized = normalizeHooksPath(hooksPath);
   if (normalized !== '.husky' && normalized !== join('.husky', '_')) {
-    return false;
+    return null;
   }
   // Never override a global, worktree, or command-scoped hook policy.
   const scoped = spawnSync('git', ['config', '--show-scope', '--get', 'core.hooksPath']);
   if (scoped.status !== 0 || !scoped.stdout.toString().startsWith('local\t')) {
-    return false;
+    return null;
   }
   // Local config is shared by linked worktrees. Inspecting only this checkout
   // cannot establish whether the others have also migrated away from Husky.
@@ -560,8 +535,9 @@ function canReplaceStaleHuskyPath(hooksPath: string, location: HooksLocation): b
       .split('\0')
       .filter((field) => field.startsWith('worktree ')).length !== 1
   ) {
-    return false;
+    return null;
   }
+  let hasFiles = false;
   try {
     const huskyDir = join(location.toplevel, '.husky');
     const huskyStats = lstatSync(huskyDir, { throwIfNoEntry: false });
@@ -571,16 +547,30 @@ function canReplaceStaleHuskyPath(hooksPath: string, location: HooksLocation): b
       (huskyStats && (!huskyStats.isDirectory() || huskyStats.isSymbolicLink())) ||
       (dispatcherStats && (!dispatcherStats.isDirectory() || dispatcherStats.isSymbolicLink()))
     ) {
-      return false;
+      return null;
     }
-    // Git can execute hook names outside Vite+'s supported set (including
-    // arbitrary names through `git hook run`). Only ignore generated files.
-    if (
-      (huskyStats && readdirSync(huskyDir).some((name) => name !== '_')) ||
-      (dispatcherStats &&
-        readdirSync(dispatcherDir).some((name) => !isUnmodifiedHuskyFile(dispatcherDir, name)))
-    ) {
-      return false;
+    // Never inspect script contents or infer that leftover files are generated.
+    // An explicit replacement may stop custom checks, but must not bypass the
+    // path/link protections or write through any of the old files.
+    for (const directory of [huskyDir, dispatcherDir]) {
+      const stats = directory === huskyDir ? huskyStats : dispatcherStats;
+      if (!stats) {
+        continue;
+      }
+      const names = readdirSync(directory);
+      if (directory === resolve(location.toplevel, normalized) && names.length > 0) {
+        hasFiles = true;
+      }
+      for (const name of names) {
+        if (directory === huskyDir && name === '_') {
+          continue;
+        }
+        hasFiles = true;
+        const entry = lstatSync(join(directory, name));
+        if (!entry.isFile() || entry.isSymbolicLink() || entry.nlink > 1) {
+          return null;
+        }
+      }
     }
     // A dispatcher alone is not evidence of a completed migration.
     if (
@@ -589,7 +579,7 @@ function canReplaceStaleHuskyPath(hooksPath: string, location: HooksLocation): b
       ) ||
       !existsSync(join(location.toplevel, 'package.json'))
     ) {
-      return false;
+      return null;
     }
     // Include ancestor manifests when hooks are configured from a workspace package.
     const relativeBase = relative(location.toplevel, location.baseDir);
@@ -604,7 +594,7 @@ function canReplaceStaleHuskyPath(hooksPath: string, location: HooksLocation): b
       }
       const pkg = JSON.parse(readFileSync(manifest, 'utf8')) as Record<string, unknown>;
       if (!pkg || typeof pkg !== 'object' || Array.isArray(pkg) || 'husky' in pkg) {
-        return false;
+        return null;
       }
       for (const key of [
         'dependencies',
@@ -614,7 +604,7 @@ function canReplaceStaleHuskyPath(hooksPath: string, location: HooksLocation): b
       ]) {
         const dependencies = pkg[key];
         if (dependencies && typeof dependencies === 'object' && 'husky' in dependencies) {
-          return false;
+          return null;
         }
       }
       if (
@@ -624,14 +614,14 @@ function canReplaceStaleHuskyPath(hooksPath: string, location: HooksLocation): b
           (script) => typeof script === 'string' && /\bhusky\b/.test(script),
         )
       ) {
-        return false;
+        return null;
       }
     }
   } catch {
     // Unreadable or invalid manifests are not evidence that Husky was removed.
-    return false;
+    return null;
   }
-  return true;
+  return replaceHusky ? 'explicit' : hasFiles ? 'non-empty' : 'automatic';
 }
 
 function unsetScopedHooksPath(scope: 'local' | 'worktree'): InstallResult | null {
@@ -689,6 +679,8 @@ export interface InstallOptions {
    * Still honors `VP_GIT_HOOKS=0` / `HUSKY=0`.
    */
   ignoreUserPreference?: boolean;
+  /** Explicitly replace a local Husky path after migrating project checks. */
+  replaceHusky?: boolean;
 }
 
 export function isGitHooksEnvDisabled(): boolean {
@@ -719,19 +711,44 @@ export function install(dir?: string, options: InstallOptions = {}): InstallResu
     return { message: describeUnsafeHookInstallPath(unsafeInstallPath), isError: false };
   }
 
+  if (options.replaceHusky) {
+    const oldRoot = resolveHooksPath('.husky', location.toplevel);
+    const targetRoot = resolveHooksPath(location.dir, location.baseDir);
+    const relativeTarget = relative(oldRoot, targetRoot);
+    if (
+      relativeTarget === '' ||
+      (!isAbsolute(relativeTarget) &&
+        relativeTarget !== '..' &&
+        !relativeTarget.startsWith(`..${sep}`))
+    ) {
+      return {
+        message:
+          'Husky replacement requires a hooks directory outside .husky to preserve old files',
+        isError: true,
+      };
+    }
+  }
+
   const internal = (x = '') => join(location.baseDir, location.dir, '_', x);
   // Read the effective value so a worktree-scoped setting cannot silently
   // override the local value we are about to write.
   const existingHooksPath = getEffectiveHooksPath();
+  let replacement: HuskyReplacement = null;
   if (
     existingHooksPath &&
-    !hooksPathsEqual(existingHooksPath, location.target, location.toplevel) &&
-    !canReplaceStaleHuskyPath(existingHooksPath, location)
+    !hooksPathsEqual(existingHooksPath, location.target, location.toplevel)
   ) {
-    return {
-      message: `core.hooksPath is already set to "${existingHooksPath}", skipping`,
-      isError: false,
-    };
+    replacement = getHuskyReplacement(existingHooksPath, location, options.replaceHusky === true);
+    if (replacement === null || replacement === 'non-empty') {
+      const guidance =
+        replacement === 'non-empty'
+          ? `. Vite+ hooks at ${displayHooksDir(location)} are not active. Migrate any custom Husky checks, then run \`vp hooks enable --replace-husky\` (with the same --hooks-dir if customized). Switching stops running hooks from "${existingHooksPath}"; the old files are preserved.`
+          : '';
+      return {
+        message: `core.hooksPath is already set to "${existingHooksPath}", skipping${guidance}`,
+        isError: false,
+      };
+    }
   }
 
   rmSync(internal('husky.sh'), { force: true });
@@ -761,6 +778,12 @@ export function install(dir?: string, options: InstallOptions = {}): InstallResu
     return { message: storeDir.error || 'failed to store hooks directory', isError: true };
   }
 
+  if (replacement === 'explicit') {
+    return {
+      message: `Git hook dispatcher installed at ${displayHooksDir(location)}/_. Replaced core.hooksPath "${existingHooksPath}". Old Husky files were preserved, but hooks from "${existingHooksPath}" no longer run. Custom checks must be migrated to ${displayHooksDir(location)}.`,
+      isError: false,
+    };
+  }
   return { message: '', isError: false };
 }
 
@@ -768,17 +791,17 @@ export function install(dir?: string, options: InstallOptions = {}): InstallResu
  * Install (or refresh) the Vite+ hook dispatcher and mark hooks as enabled.
  * Clears a previous `vp hooks disable` preference.
  */
-export function enable(dir?: string): InstallResult {
+export function enable(dir?: string, options: { replaceHusky?: boolean } = {}): InstallResult {
   const location = resolveHooksLocation(dir);
   if ('isError' in location) {
     return location;
   }
-  const result = install(dir, { ignoreUserPreference: true });
+  const result = install(dir, { ignoreUserPreference: true, replaceHusky: options.replaceHusky });
   if (result.isError) {
     return result;
   }
   if (result.message) {
-    // Non-error skip messages (env disabled, foreign hooksPath, unsafe path, etc.)
+    // Preserve skip messages and the explicit Husky replacement notice.
     return result;
   }
   return {

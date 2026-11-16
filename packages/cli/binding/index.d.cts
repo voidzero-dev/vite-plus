@@ -3811,6 +3811,7 @@ export declare function hasConfigKey(viteConfigPath: string, configKey: string):
 export interface HooksArgs {
   command: 'enable' | 'disable' | 'status';
   hooksDir?: string;
+  replaceHusky: boolean;
 }
 
 /** Check inherited `.gitignore` rules without requiring the directory to exist. */

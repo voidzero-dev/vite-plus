@@ -1,0 +1,7 @@
+{
+  "name": "hooks-replace-husky",
+  "private": true,
+  "scripts": {
+    "prepare": "vp config"
+  }
+}
