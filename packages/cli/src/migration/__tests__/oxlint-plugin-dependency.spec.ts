@@ -8,7 +8,9 @@ import { PackageManager, type WorkspaceInfo } from '../../types/index.ts';
 import { readJsonFile, writeJsonFile } from '../../utils/json.ts';
 import {
   collectOxlintOwnerDirs,
+  detectVitePlusBootstrapPending,
   dropDeadOxlintPluginsDependency,
+  ensureVitePlusBootstrap,
   finalizeCoreMigrationForExistingVitePlus,
   packageOwnsOxlintApi,
   resolveOxlintMigrateVersion,
@@ -549,6 +551,57 @@ describe('Oxlint plugin dependency cleanup', () => {
     dropDeadOxlintPluginsDependency(projectPath);
 
     expect(JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'))).toEqual(pkg);
+  });
+
+  it('keeps a published plugin runtime dependency when the project migrates again', () => {
+    const packageJsonPath = path.join(projectPath, 'package.json');
+    const workspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
+    writeJsonFile(packageJsonPath, {
+      name: 'oxlint-plugin-example',
+      dependencies: { oxlint: '^1.0.0' },
+    });
+    const workspace: WorkspaceInfo = {
+      rootDir: projectPath,
+      isMonorepo: false,
+      monorepoScope: '',
+      workspacePatterns: [],
+      parentDirs: [],
+      packages: [],
+      packageManager: PackageManager.pnpm,
+      packageManagerVersion: '10.33.0',
+      downloadPackageManager: {
+        name: PackageManager.pnpm,
+        packageName: 'pnpm',
+        version: '10.33.0',
+        installDir: projectPath,
+        binPrefix: projectPath,
+      },
+    };
+    const pending = () =>
+      detectVitePlusBootstrapPending(projectPath, PackageManager.pnpm, [], '10.33.0');
+
+    rewriteStandaloneProject(projectPath, workspace, true, true);
+
+    expect(pending()).toBe(false);
+    expect(ensureVitePlusBootstrap(workspace).changed).toBe(false);
+    expect(readJsonFile(packageJsonPath).dependencies).toEqual({ oxlint: '^1.0.0' });
+
+    // An existing Vite+ project can still reference a catalog entry that the
+    // bootstrap deletes, so the kept dependency takes the concrete range.
+    const pkg = readJsonFile(packageJsonPath);
+    writeJsonFile(packageJsonPath, { ...pkg, dependencies: { oxlint: 'catalog:' } });
+    fs.writeFileSync(
+      workspaceYamlPath,
+      fs
+        .readFileSync(workspaceYamlPath, 'utf8')
+        .replace('catalog:\n', 'catalog:\n  oxlint: ^1.0.0\n'),
+    );
+
+    expect(pending()).toBe(true);
+    expect(ensureVitePlusBootstrap(workspace).changed).toBe(true);
+    expect(readJsonFile(packageJsonPath).dependencies).toEqual({ oxlint: '^1.0.0' });
+    expect(fs.readFileSync(workspaceYamlPath, 'utf8')).not.toContain('oxlint: ^1.0.0');
+    expect(pending()).toBe(false);
   });
 
   it('keeps optional oxlint on the existing tool-migration path', () => {
