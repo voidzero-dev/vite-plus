@@ -21,7 +21,7 @@ use vt_str::Str;
 use vt_workspace::{WorkspaceFile, WorkspaceRoot, find_workspace_root};
 
 use crate::{
-    config::NpmConfig,
+    config::{NpmConfig, is_default_registry},
     env_forbidden::ensure_managed_package_manager_allowed,
     request::{HttpClient, download_and_extract_tgz_with_hash_and_config, is_not_found},
     shim,
@@ -1308,7 +1308,9 @@ async fn resolve_dist_tag(
     // A persisted response authenticated as one user must not be reused by
     // another user of the same registry URL. Avoid storing credential-derived
     // cache keys and query authenticated registries directly instead.
-    if urls.iter().any(|url| npm_config.has_auth_for_origin(url)) {
+    // Package managers are public on the default registry, so its responses do
+    // not depend on the credential and keep the cache and offline fallback.
+    if urls.iter().any(|url| !is_default_registry(url) && npm_config.has_auth_for_origin(url)) {
         return fetch_dist_tag_version(package_manager_type, tag, &urls, npm_config).await;
     }
 
@@ -3447,6 +3449,30 @@ mod tests {
             redirect.assert_hits(2);
             first.assert_hits(1);
             second.assert_hits(1);
+        })
+        .await;
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn authenticated_default_registry_latest_versions_use_the_cache() {
+        // A fresh cache entry answers without a request, so this never reaches the real registry.
+        let config = NpmConfig {
+            values: HashMap::from([(
+                "//registry.npmjs.org/:_authtoken".to_string(),
+                "TOKEN".to_string(),
+            )]),
+        };
+        let vp_home = create_temp_dir();
+        EnvConfig::with_vars_async([(env_vars::VP_HOME, vp_home.path().as_os_str())], |_| async {
+            let cache_path = dist_tag_cache_path(
+                PackageManagerType::Pnpm,
+                &["https://registry.npmjs.org/pnpm/latest".into()],
+            );
+            write_dist_tag_cache(&cache_path, "10.1.0").unwrap();
+            assert_eq!(
+                resolve_dist_tag(PackageManagerType::Pnpm, "latest", &config).await.unwrap(),
+                "10.1.0"
+            );
         })
         .await;
     }
