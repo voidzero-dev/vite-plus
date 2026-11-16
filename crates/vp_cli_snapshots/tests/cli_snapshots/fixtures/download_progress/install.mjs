@@ -8,6 +8,7 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -43,9 +44,12 @@ let runtimeDownloads = 0;
 let checksumRequests = 0;
 let indexRequests = 0;
 
+const cli = realpathSync(join(process.env.VP_HOME, 'current/node_modules/vite-plus'));
+const installer = readFileSync(resolve(cli, '../../crates/vp_setup/src/install.rs'), 'utf8');
+const pnpmVersion = /const PINNED_PNPM_VERSION: &str = "([^"]+)";/.exec(installer)[1];
 const pnpmManifest = JSON.stringify({
   name: 'pnpm',
-  version: '10.34.7',
+  version: pnpmVersion,
   bin: { pnpm: 'bin/pnpm.cjs' },
 });
 const pnpmCjs = `
@@ -71,8 +75,9 @@ const pnpmArchive = createArchive({
 // install's content key instead; the bootstrap reuses it and skips the download.
 // Key = short_fingerprint(PINNED_PNPM_INTEGRITY) in crates/vp_setup/src/install.rs
 // (the first 32 hex of its SHA-256).
-const SETUP_PNPM_KEY = '2f9ea5a98bd92b2d1d6694aedb029783';
-const seededPnpm = join(home, 'package_manager/pnpm/.verified-v1/10.34.7', SETUP_PNPM_KEY, 'pnpm');
+const pnpmIntegrity = /const PINNED_PNPM_INTEGRITY: &str = "([^"]+)";/.exec(installer)[1];
+const SETUP_PNPM_KEY = createHash('sha256').update(pnpmIntegrity).digest('hex').slice(0, 32);
+const seededPnpm = join(home, 'package_manager/pnpm/.verified-v1', pnpmVersion, SETUP_PNPM_KEY, 'pnpm');
 mkdirSync(join(seededPnpm, 'bin'), { recursive: true });
 writeFileSync(join(seededPnpm, 'package.json'), pnpmManifest);
 writeFileSync(join(seededPnpm, 'bin/pnpm.cjs'), pnpmCjs);
@@ -119,13 +124,13 @@ async function handleRequest(request, response) {
     // A pinned default must not resolve the latest LTS alias.
     indexRequests++;
     response.writeHead(404).end();
-  } else if (request.url === '/pnpm/10.34.7') {
+  } else if (request.url === `/pnpm/${pnpmVersion}`) {
     response.end(
       JSON.stringify({
         name: 'pnpm',
-        version: '10.34.7',
+        version: pnpmVersion,
         dist: {
-          tarball: `${mirror}/pnpm/-/pnpm-10.34.7.tgz`,
+          tarball: `${mirror}/pnpm/-/pnpm-${pnpmVersion}.tgz`,
           integrity: 'sha512-' + createHash('sha512').update(pnpmArchive).digest('base64'),
         },
       }),

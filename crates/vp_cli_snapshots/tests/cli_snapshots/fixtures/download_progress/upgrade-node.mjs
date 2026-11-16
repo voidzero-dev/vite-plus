@@ -40,7 +40,9 @@ const pnpmVersion = /export const INSTALL_PNPM_VERSION = '([^']+)';/.exec(
 // short_fingerprint(PINNED_PNPM_INTEGRITY) in crates/vp_setup/src/install.rs (the
 // first 32 hex of its SHA-256). Seed the stub there so the pinned bootstrap reuses
 // it instead of downloading.
-const SETUP_PNPM_KEY = '2f9ea5a98bd92b2d1d6694aedb029783';
+const installer = readFileSync(resolve(cli, '../../crates/vp_setup/src/install.rs'), 'utf8');
+const pnpmIntegrity = /const PINNED_PNPM_INTEGRITY: &str = "([^"]+)";/.exec(installer)[1];
+const SETUP_PNPM_KEY = createHash('sha256').update(pnpmIntegrity).digest('hex').slice(0, 32);
 const home = resolve('upgrade-home');
 const user = resolve('upgrade-user');
 const current = join(home, 'current');

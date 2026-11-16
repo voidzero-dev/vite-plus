@@ -7,6 +7,9 @@ license.workspace = true
 publish = false
 rust-version.workspace = true
 
+[lib]
+doctest = false
+
 [dependencies]
 clap = { workspace = true }
 console = { workspace = true }

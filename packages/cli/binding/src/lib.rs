@@ -52,6 +52,7 @@ use crate::cli::{
 pub fn init() {
     vp_shared::ensure_blocking_stdio();
     vp_shared::ensure_windows_pathext();
+    vp_shared::set_user_agent_version(env!("CARGO_PKG_VERSION"));
     crate::cli::init_tracing();
 
     // Install a Vite+ panic hook so panics are correctly attributed to Vite+.

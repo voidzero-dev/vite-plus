@@ -9,6 +9,7 @@
 mod ast_grep;
 mod eslint;
 mod file_walker;
+mod import_merge;
 mod import_rewriter;
 mod pack_config;
 mod package;

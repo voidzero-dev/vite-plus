@@ -9,6 +9,13 @@ pub enum Error {
     #[error("Version {version} not found for {runtime}")]
     VersionNotFound { runtime: Str, version: Str },
 
+    /// `VP_ENV_FORBIDDEN=1` forbids downloading or using a managed runtime
+    #[error(
+        "{var}=1: Vite+ does not manage Node.js; it neither downloads nor uses a managed Node.js",
+        var = vp_shared::env_vars::VP_ENV_FORBIDDEN
+    )]
+    DisabledByEnvForbidden,
+
     /// Platform not supported for this runtime
     #[error("Platform {platform} is not supported for {runtime}")]
     UnsupportedPlatform { platform: Str, runtime: Str },

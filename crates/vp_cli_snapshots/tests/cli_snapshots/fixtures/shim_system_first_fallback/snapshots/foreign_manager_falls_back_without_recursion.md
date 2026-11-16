@@ -38,3 +38,13 @@ env exec still runs managed Node when the inherited PATH contains the external m
 ```
 <version>
 ```
+
+## `PATH=${workspace}/foreign-bin${PATH_SEPARATOR}${VP_HOME}/fallback-bin${PATH_SEPARATOR}${PATH} VP_ENV_FORBIDDEN=1 VP_NODE_DIST_MIRROR=http://127.0.0.1:1 NPM_CONFIG_REGISTRY=http://127.0.0.1:1 node --version`
+
+With VP_ENV_FORBIDDEN=1, Node.js fails in the fallback shim instead of forwarding back to the external manager or using the managed runtime.
+
+**Exit code:** 1
+
+```
+vp: VP_ENV_FORBIDDEN=1: Vite+ does not manage 'node', and no system 'node' comes before the Vite+ shims on PATH
+```

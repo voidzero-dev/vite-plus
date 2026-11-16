@@ -1,0 +1,19 @@
+# The fake `create-vp-test-generated-setup` CLI writes AGENTS.md and
+# .vscode/settings.json and runs `git init`, so the setup prompts that follow
+# it must react to those files.
+[[case]]
+name = "create_remote_generated_setup"
+vp = "local"
+steps = [
+  { argv = ["vp", "create", "vp-test-generated-setup", "--package-manager", "pnpm", "--", "my-app"], comment = "after the create CLI: no git prompt, a hooks prompt, then append/skip for the generated AGENTS.md", snapshot = false, continue-on-failure = true, interactions = [
+    { "expect-milestone" = "confirm:confirm:yes" },
+    { "write-key" = "enter" },
+    { "expect-milestone" = "select:select:1" },
+    { "write-key" = "up" },
+    { "expect-milestone" = "select:select:0" },
+    { "write-key" = "enter" },
+  ] },
+  { argv = ["vpt", "grep-file", "my-app/AGENTS.md", "<!--VITE PLUS START-->"], comment = "Vite+ instructions are appended to the generated AGENTS.md", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "my-app/.vscode/settings.json"], comment = "generated editor config is merged without a prompt", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", "my-app/.vite-hooks/pre-commit", "--assert", "file"], comment = "hooks are set up in the repository the create CLI initialized", continue-on-failure = true },
+]

@@ -1,6 +1,6 @@
 {
   "name": "@voidzero-dev/vite-plus-prompts",
-  "version": "1.5.1",
+  "version": "1.6.0",
   "description": "The Unified Toolchain for the Web",
   "homepage": "https://viteplus.dev/guide",
   "bugs": {
@@ -35,6 +35,7 @@
     "fast-string-width": "^3.0.0",
     "fast-wrap-ansi": "^0.2.0",
     "is-unicode-supported": "^2.0.0",
+    "signal-exit": "catalog:",
     "tsdown": "catalog:"
   }
 }

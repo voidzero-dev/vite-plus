@@ -20,6 +20,11 @@ pub enum Error {
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
 
+    #[error(
+        "invalid environment specification {0:?}; expected a Node.js version or node|npm|pnpm|yarn|bun@<version>"
+    )]
+    InvalidPackageManagerSpec(String),
+
     #[error("Invalid {manager} version {version}: {source}")]
     InvalidPackageManagerVersion {
         manager: crate::PackageManagerType,

@@ -330,8 +330,9 @@ export function rewritePackageJson(
   // contain "vitest".
   const hasNuxtTestUtils = hasNuxtTestUtilsDependency(pkg);
   // Normalize a pre-existing pinned vite-plus so sub-packages don't drift
-  // from siblings: in catalog-supporting monorepos that's `catalog:`, under
-  // force-override (file:) it's the tgz path. Preserve protocol-prefixed
+  // from siblings: in catalog-supporting monorepos that's `catalog:`, without
+  // catalogs it's the concrete version, under force-override (file:) it's the
+  // tgz path. Preserve protocol-prefixed
   // specs (catalog:named, workspace:*, link:, file:, npm:, github:, git+/git:,
   // http(s)://) so deliberate user pins survive; only vanilla version ranges
   // (e.g. `^0.1.20`, `latest`) are rewritten.
@@ -352,7 +353,6 @@ export function rewritePackageJson(
   const existingVitePlus = existingVitePlusGroup?.[VITE_PLUS_NAME];
   const shouldNormalizeExistingVitePlus =
     !!existingVitePlus &&
-    supportCatalog &&
     existingVitePlus !== canonicalVitePlusSpec &&
     !isProtocolPinnedSpec(existingVitePlus);
   // vitest-adjacent / browser-mode signals only trigger a vite-plus INSTALL when the

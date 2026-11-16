@@ -1,0 +1,8 @@
+{
+  "name": "user-agent-fixture",
+  "private": true,
+  "scripts": {
+    "check-agent": "node check-agent.cjs current"
+  },
+  "packageManager": "pnpm@11.20.0"
+}

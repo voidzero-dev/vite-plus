@@ -97,7 +97,9 @@ async fn execute_direct_subcommand(
 
     let status = match subcommand {
         SynthesizableSubcommand::Check {
+            continue_on_error,
             fix,
+            fix_dangerously,
             quiet,
             deny_warnings,
             no_fmt,
@@ -107,7 +109,9 @@ async fn execute_direct_subcommand(
         } => {
             return crate::check::execute_check(
                 &resolver,
+                continue_on_error,
                 fix,
+                fix_dangerously,
                 quiet,
                 deny_warnings,
                 no_fmt,

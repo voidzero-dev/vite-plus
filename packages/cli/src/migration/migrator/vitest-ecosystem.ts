@@ -27,10 +27,13 @@ import {
   REMOVE_PACKAGES,
   VITEST_BROWSER_DEP_NAMES,
   VITEST_IS_MANAGED_OVERRIDE,
+  isPlainRecord,
   pnpmOverrideKey,
+  vitePeerDependencyRuleRequired,
   type CatalogDependencyResolver,
   type ManagedOverrideKeyStyle,
   type PackageJsonDependencyField,
+  type PnpmPeerDependencyRules,
 } from './shared.ts';
 
 // Official packages that do not declare a required `vitest` peer. Keep them
@@ -538,23 +541,98 @@ function managedVitestOverrideKeys(keyStyle: ManagedOverrideKeyStyle): string[] 
   return keyStyle === 'pnpm-ranged' ? ['vitest', pnpmOverrideKey('vitest')] : ['vitest'];
 }
 
-// Remove the managed `vitest` entry from pnpm peerDependencyRules (its
-// `allowAny` array entry and `allowedVersions.vitest`), in place. Works on both
-// the package.json `pnpm.peerDependencyRules` JSON shape and the same shape read
-// back from pnpm-workspace.yaml.
-export function removeVitestPeerDependencyRule(peerDependencyRules: {
-  allowAny?: string[];
-  allowedVersions?: Record<string, string>;
-}): void {
-  if (!VITEST_IS_MANAGED_OVERRIDE) {
-    return;
+/** The pnpm peerDependencyRules keys for one migration step. */
+export interface PnpmPeerDependencyRuleKeys {
+  /** Keys that migration writes to `allowAny` and `allowedVersions` as `'*'`. */
+  managed: string[];
+  /** Keys that migration removes. */
+  stale: string[];
+}
+
+// The pnpm peerDependencyRules keys vite-plus manages and removes. The managed
+// keys are the managed override keys, minus `vite` once its core alias
+// satisfies `vite` peer ranges on this pnpm version (see
+// `vitePeerDependencyRuleRequired`). The stale keys are:
+// - `vitest`, a lingering managed rule, when the workspace does not use Vitest.
+// - `vite`, when the rule is not required. Then it only hides real
+//   incompatibilities. Migration cannot tell whether an earlier migration or the
+//   user wrote the entry; its only purpose was to accept the `1.x` alias, so
+//   both go.
+export function pnpmPeerDependencyRuleKeys(
+  usesVitest: boolean,
+  pnpmVersion: string | undefined,
+): PnpmPeerDependencyRuleKeys {
+  const viteRuleRequired = vitePeerDependencyRuleRequired(
+    VITE_PLUS_OVERRIDE_PACKAGES.vite,
+    pnpmVersion,
+  );
+  const managed = Object.keys(managedOverridePackages(usesVitest)).filter(
+    (key) => viteRuleRequired || key !== 'vite',
+  );
+  const stale: string[] = [];
+  if (!usesVitest && VITEST_IS_MANAGED_OVERRIDE) {
+    stale.push('vitest');
   }
-  if (Array.isArray(peerDependencyRules.allowAny)) {
-    peerDependencyRules.allowAny = peerDependencyRules.allowAny.filter((key) => key !== 'vitest');
+  if (!viteRuleRequired) {
+    stale.push('vite');
   }
-  if (peerDependencyRules.allowedVersions) {
-    delete peerDependencyRules.allowedVersions.vitest;
+  return { managed, stale };
+}
+
+// Whether migration wrote this `allowedVersions` value. It only ever wrote `'*'`
+// for `vite`, so another `vite` range is the user's own constraint and stays.
+export function isManagedAllowedVersion(key: string, value: unknown): boolean {
+  return key !== 'vite' || value === '*';
+}
+
+// Whether pnpm peerDependencyRules hold a stale `allowAny` or `allowedVersions`
+// entry for one of `staleKeys`. Works on both the package.json
+// `pnpm.peerDependencyRules` JSON shape and the same shape read back from
+// pnpm-workspace.yaml.
+export function peerDependencyRulesHaveStaleEntry(
+  rules: { allowAny?: unknown; allowedVersions?: unknown } | null | undefined,
+  staleKeys: readonly string[],
+): boolean {
+  return (
+    (Array.isArray(rules?.allowAny) && rules.allowAny.some((key) => staleKeys.includes(key))) ||
+    (isPlainRecord(rules?.allowedVersions) &&
+      Object.entries(rules.allowedVersions).some(
+        ([key, value]) => staleKeys.includes(key) && isManagedAllowedVersion(key, value),
+      ))
+  );
+}
+
+// Re-derive the managed pnpm peerDependencyRules on top of the package.json
+// `pnpm.peerDependencyRules` shape. Returns the new rules, or `undefined` when
+// no rule remains so the caller can drop the field. Does not mutate `rules`.
+export function mergeManagedPnpmPeerDependencyRules(
+  rules: PnpmPeerDependencyRules | undefined,
+  { managed, stale }: PnpmPeerDependencyRuleKeys,
+): PnpmPeerDependencyRules | undefined {
+  const allowAny = [
+    ...new Set([
+      ...(Array.isArray(rules?.allowAny) ? rules.allowAny : []).filter(
+        (key) => !stale.includes(key),
+      ),
+      ...managed,
+    ]),
+  ];
+  const allowedVersions = {
+    ...Object.fromEntries(
+      Object.entries(rules?.allowedVersions ?? {}).filter(
+        ([key, value]) => !(stale.includes(key) && isManagedAllowedVersion(key, value)),
+      ),
+    ),
+    ...Object.fromEntries(managed.map((key) => [key, '*'])),
+  };
+  const next: PnpmPeerDependencyRules = { ...rules, allowAny, allowedVersions };
+  if (allowAny.length === 0) {
+    delete next.allowAny;
   }
+  if (Object.keys(allowedVersions).length === 0) {
+    delete next.allowedVersions;
+  }
+  return Object.keys(next).length > 0 ? next : undefined;
 }
 
 // Legacy wrapper package names that may appear as the target of override

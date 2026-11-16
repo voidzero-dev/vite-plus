@@ -31,7 +31,7 @@ use vp_pm_cli::{
 };
 use vp_shared::{EnvConfig, env_vars};
 
-const PINNED_PNPM_VERSION: &str = "10.34.7";
+const PINNED_PNPM_VERSION: &str = "10.34.9";
 /// Content marker for bytes that do not match the pin, so a test can tell which
 /// pnpm an install holds.
 const MARKER: &str = "MISMATCHED_PNPM_CONTENT";

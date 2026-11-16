@@ -3,10 +3,13 @@ import { existsSync, readFileSync } from 'node:fs';
 import { appendFile, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { VITEST_VERSION } from '../packages/cli/src/utils/constants.ts';
+import {
+  VITEST_VERSION,
+  VITE_PLUS_CORE_ALIAS_PREFIX,
+} from '../packages/cli/src/utils/constants.ts';
 import vitePlusCorePkg from '../packages/core/package.json' with { type: 'json' };
 import { patchNpmxVitestConfig } from './npmx.ts';
-import { ecosystemCiDir, tgzDir, vitePlusTgzVersion } from './paths.ts';
+import { ecosystemCiDir, tgzDir, vitePlusCoreTgzVersion, vitePlusTgzVersion } from './paths.ts';
 import repos from './repo.json' with { type: 'json' };
 import { prepareWebdriverioProject } from './webdriverio.ts';
 
@@ -31,6 +34,7 @@ const cli = process.env.VP_CLI_BIN ?? 'vp';
 // (local-npm-registry.ts), so vp migrate pins and installs the checkout's
 // own version through the standard registry code paths, with no `file:` specs.
 const vitePlusVersion = vitePlusTgzVersion();
+const vitePlusCoreVersion = vitePlusCoreTgzVersion();
 
 const registryScript = join(
   import.meta.dirname,
@@ -319,7 +323,7 @@ const migrateEnv: NodeJS.ProcessEnv = {
   ...registryInfo.env,
   ...(forceFreshMigration ? { VP_FORCE_MIGRATE: '1' } : {}),
   VP_OVERRIDE_PACKAGES: JSON.stringify({
-    vite: `npm:@voidzero-dev/vite-plus-core@${vitePlusVersion}`,
+    vite: `${VITE_PLUS_CORE_ALIAS_PREFIX}${vitePlusCoreVersion}`,
     ...vitestOverrides,
   }),
   // The vp binary was built before the pack step pinned the package versions,

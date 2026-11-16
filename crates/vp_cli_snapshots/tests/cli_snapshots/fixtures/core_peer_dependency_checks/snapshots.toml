@@ -1,0 +1,21 @@
+[[case]]
+name = "core_peer_dependency_checks_pnpm_strict"
+vp = "global"
+local-registry = true
+comment = "The core version encodes the bundled Vite version, so strict pnpm peer checks accept a Vite 8 plugin through the vite alias and still reject a Vite 7 plugin."
+steps = [
+  { argv = ["vpt", "write-file", "pnpm-workspace.yaml", "strictPeerDependencies: true\nminimumReleaseAge: 0\n"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], timeout = 120000, snapshot = false },
+  { argv = ["node", "check-peers.mjs"], timeout = 120000 },
+]
+
+[[case]]
+name = "core_peer_dependency_checks_pnpm_strict_override"
+vp = "global"
+local-registry = true
+comment = "The same strict pnpm peer checks in the layout that vp migrate writes, with the vite@* alias override and no peer rule."
+steps = [
+  { argv = ["vpt", "write-file", "pnpm-workspace.yaml", "strictPeerDependencies: true\nminimumReleaseAge: 0\noverrides:\n  vite@*: npm:@voidzero-dev/vite-plus-core@latest\n"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], timeout = 120000, snapshot = false },
+  { argv = ["node", "check-peers.mjs"], timeout = 120000 },
+]

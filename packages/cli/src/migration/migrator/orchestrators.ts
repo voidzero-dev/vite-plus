@@ -3,10 +3,11 @@ import path from 'node:path';
 
 import { PackageManager, type WorkspaceInfo, type WorkspacePackage } from '../../types/index.ts';
 import { VITE_PLUS_NAME, VITE_PLUS_VERSION, isForceOverrideMode } from '../../utils/constants.ts';
-import { editJsonFile } from '../../utils/json.ts';
+import { editJsonFile, readJsonFile } from '../../utils/json.ts';
 import {
   applyBuildAllowanceToPackageJsonPnpm,
   applyYarnWorkspaceHoistingFix,
+  bunSupportsCatalog,
   cleanupDeprecatedTsconfigOptions,
   collectInjectedProviderNames,
   collectOxlintDependencyNames,
@@ -25,12 +26,15 @@ import {
   injectLintTypeCheckDefaults,
   managedOverridePackages,
   mergeManagedPnpmOverrides,
+  mergeManagedPnpmPeerDependencyRules,
+  pnpmPeerDependencyRuleKeys,
   mergeStagedConfigToViteConfig,
   mergeTsdownConfigFile,
   mergeViteConfigFiles,
   migratePnpmOverridesToWorkspaceYaml,
   migratePnpmSettingsToWorkspaceYaml,
   migrateTaskCacheConfigInViteConfig,
+  pnpmRequiresWorkspacePackages,
   pnpmSupportsWorkspaceSettings,
   prepareOxlintConfigs,
   supportsCatalog,
@@ -40,7 +44,6 @@ import {
   removeLintStagedFromPackageJson,
   removeMigratedOxlintConfigs,
   removeManagedVitestEntry,
-  removeVitestPeerDependencyRule,
   rewriteAllImports,
   rewriteBunCatalog,
   rewriteLintStagedConfigFile,
@@ -52,11 +55,13 @@ import {
   setDirectViteEdge,
   sourceTreeReferencesRetainedVitestModule,
   takePnpmWorkspaceSettings,
+  trackVitePeerDependencyRuleRemoval,
   usesVitestBrowserMode,
   usesWebdriverioProvider,
   workspaceUsesVitestDirectly,
   workspaceUsesWebdriverio,
   workspaceUsesWebdriverioProvider,
+  yarnSupportsPreapprovedPackages,
   wrapLazyPluginsInViteConfig,
 } from '../migrator.ts';
 import { type MigrationReport } from '../report.ts';
@@ -81,6 +86,12 @@ export function rewriteStandaloneProject(
   }
 
   const packageManager = workspaceInfo.packageManager;
+  const reportVitePeerDependencyRuleRemoval = trackVitePeerDependencyRuleRemoval(
+    projectPath,
+    packageManager,
+    report,
+    workspaceInfo.downloadPackageManager.version,
+  );
   const catalogDependencyResolver = createCatalogDependencyResolver(projectPath, packageManager);
   const vitestEcosystemPackages = collectVitestEcosystemInstallDependencyNames(projectPath);
   // Captured before `rewritePackageJson` strips `oxlint`; the import rewriter
@@ -193,13 +204,10 @@ export function rewriteStandaloneProject(
         // whose target is a removed package, before re-merging the user's
         // overrides into the new pnpm config.
         dropRemovePackageOverrideKeys(pkg.pnpm?.overrides);
-        // Common case: drop a lingering managed `vitest` override + its peer
-        // rules before re-merging.
+        // Common case: drop a lingering managed `vitest` override before
+        // re-merging. `mergeManagedPnpmPeerDependencyRules` drops its peer rule.
         if (!usesVitest) {
           removeManagedVitestEntry(pkg.pnpm?.overrides, 'pnpm-ranged');
-          if (pkg.pnpm?.peerDependencyRules) {
-            removeVitestPeerDependencyRule(pkg.pnpm.peerDependencyRules);
-          }
         }
         // Project already has pnpm config in package.json -- keep using it.
         // `mergeManagedPnpmOverrides` writes the range-qualified keys and drops
@@ -208,16 +216,10 @@ export function rewriteStandaloneProject(
         pkg.pnpm = {
           ...pkg.pnpm,
           overrides: mergeManagedPnpmOverrides(pkg.pnpm?.overrides, managed),
-          peerDependencyRules: {
-            ...pkg.pnpm?.peerDependencyRules,
-            allowAny: [
-              ...new Set([...(pkg.pnpm?.peerDependencyRules?.allowAny ?? []), ...overrideKeys]),
-            ],
-            allowedVersions: {
-              ...pkg.pnpm?.peerDependencyRules?.allowedVersions,
-              ...Object.fromEntries(overrideKeys.map((key) => [key, '*'])),
-            },
-          },
+          peerDependencyRules: mergeManagedPnpmPeerDependencyRules(
+            pkg.pnpm?.peerDependencyRules,
+            pnpmPeerDependencyRuleKeys(usesVitest, workspaceInfo.downloadPackageManager.version),
+          ),
         };
       } else {
         movedPnpmSettings = takePnpmWorkspaceSettings(pkg);
@@ -301,6 +303,7 @@ export function rewriteStandaloneProject(
       usePnpmWorkspaceYaml,
       providerCatalogAdditions,
       usesWebdriverio,
+      workspaceInfo.downloadPackageManager.version,
     );
   }
 
@@ -312,6 +315,12 @@ export function rewriteStandaloneProject(
 
   if (packageManager === PackageManager.pnpm) {
     ensurePnpmWorkspaceExoticSubdepsSetting(projectPath);
+    if (
+      pnpmRequiresWorkspacePackages(workspaceInfo.downloadPackageManager.version) &&
+      fs.existsSync(path.join(projectPath, 'pnpm-workspace.yaml'))
+    ) {
+      ensurePnpmWorkspacePackages(projectPath, ['.']);
+    }
   }
 
   if (packageManager === PackageManager.yarn) {
@@ -321,6 +330,7 @@ export function rewriteStandaloneProject(
       vitestEcosystemPackages,
       providerCatalogAdditions,
       supportCatalog,
+      yarnSupportsPreapprovedPackages(workspaceInfo.downloadPackageManager.version),
     );
   }
 
@@ -345,6 +355,7 @@ export function rewriteStandaloneProject(
   dropDeadOxlintPluginsDependency(projectPath, workspaceInfo.packages, originalOxlintDependencies);
   wrapLazyPluginsInViteConfig(projectPath, silent, report);
   migrateTaskCacheConfigInViteConfig(projectPath, silent, report);
+  reportVitePeerDependencyRuleRemoval();
 }
 
 /**
@@ -357,6 +368,12 @@ export function rewriteMonorepo(
   silent = false,
   report?: MigrationReport,
 ): void {
+  const reportVitePeerDependencyRuleRemoval = trackVitePeerDependencyRuleRemoval(
+    workspaceInfo.rootDir,
+    workspaceInfo.packageManager,
+    report,
+    workspaceInfo.downloadPackageManager.version,
+  );
   const catalogDependencyResolver = createCatalogDependencyResolver(
     workspaceInfo.rootDir,
     workspaceInfo.packageManager,
@@ -395,12 +412,16 @@ export function rewriteMonorepo(
     workspaceInfo.rootDir,
     workspaceInfo.packages,
   );
-  // Catalog support: pnpm >= 9.5.0, Yarn >= 4.10.0, bun in a workspace (always
-  // true here — this is the monorepo path). An older PM falls back to concrete.
+  // Catalog support: pnpm >= 9.5.0, Yarn >= 4.10.0, bun per `bunSupportsCatalog`.
+  // An older PM falls back to concrete.
   const supportCatalog = supportsCatalog(
     workspaceInfo.packageManager,
     workspaceInfo.downloadPackageManager.version,
-    true,
+    workspaceInfo.packageManager === PackageManager.bun &&
+      bunSupportsCatalog(
+        readJsonFile(path.join(workspaceInfo.rootDir, 'package.json')),
+        workspaceInfo.downloadPackageManager.version,
+      ),
   );
   const workspaceContext = {
     rootDir: workspaceInfo.rootDir,
@@ -418,8 +439,9 @@ export function rewriteMonorepo(
       vitestEcosystemPackages,
       providerCatalogAdditions,
       supportCatalog,
+      yarnSupportsPreapprovedPackages(workspaceInfo.downloadPackageManager.version),
     );
-  } else if (workspaceInfo.packageManager === PackageManager.bun) {
+  } else if (workspaceInfo.packageManager === PackageManager.bun && supportCatalog) {
     rewriteBunCatalog(
       workspaceInfo.rootDir,
       workspaceUsesVitest,
@@ -450,6 +472,7 @@ export function rewriteMonorepo(
       usePnpmWorkspaceSettings,
       providerCatalogAdditions,
       usesWebdriverio,
+      workspaceInfo.downloadPackageManager.version,
     );
     ensurePnpmWorkspacePackages(workspaceInfo.rootDir, workspaceInfo.workspacePatterns);
     if (usePnpmWorkspaceSettings && isForceOverrideMode()) {
@@ -515,6 +538,7 @@ export function rewriteMonorepo(
     wrapLazyPluginsInViteConfig(projectPath, silent, report);
     migrateTaskCacheConfigInViteConfig(projectPath, silent, report);
   }
+  reportVitePeerDependencyRuleRemoval();
 }
 
 /**
@@ -639,6 +663,8 @@ export function rewriteMonorepoProject(
   }
 
   if (!deferLazyPluginWrapping) {
+    // rewrite imports in all TypeScript/JavaScript files before lazy plugin import merging
+    rewriteAllImports(projectPath, silent, report);
     wrapLazyPluginsInViteConfig(projectPath, silent, report);
     migrateTaskCacheConfigInViteConfig(projectPath, silent, report);
   }

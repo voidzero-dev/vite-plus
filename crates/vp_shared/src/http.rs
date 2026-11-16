@@ -120,6 +120,25 @@ pub fn download_timeout() -> Duration {
     }
 }
 
+/// Vite+ version reported in the `User-Agent` header.
+static USER_AGENT_VERSION: OnceLock<&'static str> = OnceLock::new();
+
+/// Record the Vite+ version for the `User-Agent` header of the shared clients.
+///
+/// `vp_shared` is versioned `0.0.0`, so each executable passes its own
+/// `CARGO_PKG_VERSION`. Call this before the first request: the clients read
+/// the value once when they are built. Later calls have no effect.
+pub fn set_user_agent_version(version: &'static str) {
+    let _ = USER_AGENT_VERSION.set(version);
+}
+
+/// Some servers reject requests without a `User-Agent`. For example,
+/// `mirrors.aliyun.com/nodejs-release` returns 403 (issue #3422). npm and pnpm
+/// send `<name>/<version>`, so vp does the same.
+fn user_agent(version: Option<&str>) -> Str {
+    version.map_or_else(|| Str::from("vp"), |version| vt_str::format!("vp/{version}"))
+}
+
 /// Get the process-wide `reqwest::Client`.
 ///
 /// The client is built on first call and reused thereafter. See module docs
@@ -219,8 +238,10 @@ fn build_with(
     insecure: bool,
     follow_redirects: bool,
 ) -> Result<reqwest::Client, reqwest::Error> {
-    let mut builder =
-        reqwest::Client::builder().timeout(REQUEST_TIMEOUT).connect_timeout(CONNECT_TIMEOUT);
+    let mut builder = reqwest::Client::builder()
+        .timeout(REQUEST_TIMEOUT)
+        .connect_timeout(CONNECT_TIMEOUT)
+        .user_agent(user_agent(USER_AGENT_VERSION.get().copied()).as_str());
     if !extra_certs.is_empty() {
         builder = builder.tls_certs_merge(extra_certs);
     }
@@ -379,6 +400,48 @@ mod tests {
             "a bad extra CA bundle has to fail the build even with the bundled-roots retry in \
              place"
         );
+    }
+
+    #[test]
+    fn user_agent_names_vp_and_its_version() {
+        assert_eq!(user_agent(Some("1.5.1")), "vp/1.5.1");
+        assert_eq!(user_agent(None), "vp");
+    }
+
+    /// Regression for #3422: `mirrors.aliyun.com` returns 403 to requests
+    /// without a `User-Agent`. Both shared clients must send one.
+    #[tokio::test]
+    async fn clients_send_a_user_agent() {
+        use std::io::{Read, Write};
+
+        // `build_with` skips the provider setup in `build_clients`.
+        crate::ensure_tls_provider();
+        let expected = vt_str::format!(
+            "\r\nuser-agent: {}\r\n",
+            user_agent(USER_AGENT_VERSION.get().copied())
+        );
+        for follow_redirects in [true, false] {
+            let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+            let addr = listener.local_addr().expect("local addr");
+            let server = std::thread::spawn(move || {
+                let (mut stream, _) = listener.accept().expect("accept");
+                let mut buf = [0_u8; 4096];
+                let len = stream.read(&mut buf).expect("read request");
+                stream
+                    .write_all(b"HTTP/1.1 204 No Content\r\nconnection: close\r\n\r\n")
+                    .expect("write response");
+                buf[..len].to_vec()
+            });
+            let client = build_with(Vec::new(), false, follow_redirects).expect("build client");
+            client
+                .get(vt_str::format!("http://{addr}/").as_str())
+                .send()
+                .await
+                .expect("send request");
+            let request = server.join().expect("server thread");
+            let request = std::str::from_utf8(&request).expect("UTF-8 request");
+            assert!(request.contains(expected.as_str()), "{request}");
+        }
     }
 
     #[test]

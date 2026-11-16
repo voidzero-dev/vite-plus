@@ -2,7 +2,7 @@
 
 use js_semver::{Range, Version};
 use vp_js_runtime::NodeProvider;
-use vp_shared::EnvConfig;
+use vp_shared::{EnvConfig, env_vars, output};
 
 use crate::{commands::env::config, error::Error};
 
@@ -14,18 +14,32 @@ pub(super) async fn resolve() -> Result<Option<String>, Error> {
         // Project discovery and normal Node overrides do not apply here.
         return Ok(None);
     };
+    if env.env_forbidden {
+        // The system node installs dependencies; resolving a selector would query the Node.js index.
+        output::warn(&format!(
+            "{}=1: ignoring {}; Vite+ installs its dependencies with the system Node.js.",
+            env_vars::VP_ENV_FORBIDDEN,
+            env_vars::VP_SETUP_NODE_VERSION
+        ));
+        return Ok(None);
+    }
     config::resolve_version_alias(selector, &NodeProvider::new()).await.map(Some)
 }
 
-pub(super) fn supports_cli(version: &str) -> bool {
-    // This binary installs its own release. Read that release's requirement
-    // from the same package manifest used to publish it.
+/// `engines.node` of the release this binary installs, read from the same
+/// package manifest used to publish it.
+pub(super) fn cli_node_range() -> String {
     let package: serde_json::Value =
         serde_json::from_str(include_str!("../../../../packages/cli/package.json"))
             .expect("CLI package.json must be valid JSON");
-    let range = package["engines"]["node"].as_str().expect("CLI must declare engines.node");
+    package["engines"]["node"].as_str().expect("CLI must declare engines.node").to_owned()
+}
+
+pub(super) fn supports_cli(version: &str) -> bool {
+    // This binary installs its own release.
+    let range = cli_node_range();
     Version::parse(version).is_ok_and(|version| {
-        Range::parse(range).expect("CLI Node range must be valid").satisfies(&version)
+        Range::parse(&range).expect("CLI Node range must be valid").satisfies(&version)
     })
 }
 
@@ -40,8 +54,6 @@ pub(super) async fn write_resolution(version: &str) -> Result<(), Error> {
 
 #[cfg(test)]
 mod tests {
-    use vp_shared::env_vars;
-
     use super::*;
 
     async fn with_selector(selector: Option<&str>) -> Option<String> {
@@ -66,6 +78,22 @@ mod tests {
     #[tokio::test]
     async fn explicit_selector_overrides_normal_node_configuration() {
         assert_eq!(with_selector(Some(" v22.23.1 ")).await.as_deref(), Some("22.23.1"));
+    }
+
+    #[tokio::test]
+    async fn env_forbidden_ignores_the_selector_without_resolving_it() {
+        // An alias needs the Node.js index; resolving it here would fail under VP_ENV_FORBIDDEN.
+        let root = tempfile::tempdir().unwrap();
+        let resolved = EnvConfig::with_vars_async(
+            [
+                (env_vars::VP_HOME, root.path().to_str()),
+                (env_vars::VP_SETUP_NODE_VERSION, Some("lts")),
+                (env_vars::VP_ENV_FORBIDDEN, Some("1")),
+            ],
+            |_| async { resolve().await.unwrap() },
+        )
+        .await;
+        assert_eq!(resolved, None);
     }
 
     #[tokio::test]
