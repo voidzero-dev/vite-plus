@@ -30,6 +30,7 @@ import { documentationUrl } from '../../utils/documentation.ts';
 import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
 import { displayRelative } from '../../utils/path.ts';
 import { hasBaseUrlInTsconfig } from '../../utils/tsconfig.ts';
+import { parseSource, sameStaticValue } from '../ast.ts';
 import { detectConfigs, type ConfigFiles } from '../detector.ts';
 import {
   collectInstalledPackageNames,
@@ -43,7 +44,6 @@ import {
   sanitizeInheritedJsPlugins,
 } from '../migrator.ts';
 import { type MigrationReport } from '../report.ts';
-import { parseSource, sameStaticValue } from '../vitest-v5/ast.ts';
 import {
   type OxlintConfigMigration,
   type OxlintModulePlan,
