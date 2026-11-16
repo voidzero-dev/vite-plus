@@ -1,0 +1,16 @@
+[[case]]
+name = "migration_eslint_full_replaces_lint_defaults"
+vp = "global"
+skip-platforms = [{ os = "linux", libc = "musl" }]
+steps = [
+  { argv = ["vp", "migrate", "--no-hooks", "--no-agent", "--no-editor"], comment = "the first run declines the ESLint migration", snapshot = false, continue-on-failure = true, interactions = [
+    { "expect-milestone" = "confirm:confirm:yes" },
+    { "write-key" = "left" },
+    { "expect-milestone" = "confirm:confirm:no" },
+    { "write-key" = "enter" },
+  ] },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "ESLint stays, but the first run still injects a default lint block", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "a later full run converts the ESLint rules", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "the converted rules replace the injected defaults. The default block is not a second copy of the converted config, so dropping that config would lose every rule", continue-on-failure = true },
+  { argv = ["vpt", "stat-file", ".oxlintrc.json", "--assert", "missing"], comment = "the converted config is removed only after its merge", continue-on-failure = true },
+]
