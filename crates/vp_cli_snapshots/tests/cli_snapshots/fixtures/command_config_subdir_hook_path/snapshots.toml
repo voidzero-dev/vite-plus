@@ -1,0 +1,17 @@
+[[case]]
+name = "command_config_subdir_hook_path"
+vp = "local"
+steps = [
+  { argv = ["git", "init"], snapshot = false },
+  { argv = ["vp", "config", "--no-agent", "--hooks-dir", ".vite-hooks"], cwd = "pkg", snapshot = false },
+  { argv = ["git", "config", "--local", "core.hooksPath"], comment = "the hooks path stays relative to the checkout" },
+  { argv = ["vpt", "mkdir", "-p", "pkg/node_modules/.bin", "shadow/pkg"], snapshot = false },
+  { argv = ["vpt", "write-file", "pkg/node_modules/.bin/test-hook-cmd", "#!/usr/bin/env sh\nprintf 'hook-path-ok\\n'\nprintf 'CDPATH=%s\\n' \"${CDPATH-unset}\"\n"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "pkg/node_modules/.bin/test-hook-cmd"], snapshot = false },
+  # ./pkg keeps the user hook's cd independent of CDPATH, isolating the dispatcher.
+  { argv = ["vpt", "write-file", "pkg/.vite-hooks/pre-commit", "cd ./pkg\ntest-hook-cmd\n"], snapshot = false },
+  { argv = ["git", "hook", "run", "pre-commit"], comment = "a package-only binary stays available after cd", continue-on-failure = true },
+  { argv = ["git", "hook", "run", "pre-commit"], envs = [["CDPATH", ""]], comment = "an empty CDPATH remains empty in the user hook", continue-on-failure = true },
+  { argv = ["git", "hook", "run", "pre-commit"], envs = [["CDPATH", "."]], comment = "cd must not contaminate the resolved path with extra output", continue-on-failure = true },
+  { argv = ["git", "hook", "run", "pre-commit"], envs = [["CDPATH", "shadow"]], comment = "cd must not select shadow/pkg; the user hook still inherits CDPATH", continue-on-failure = true },
+]
