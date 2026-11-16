@@ -155,3 +155,5 @@ jobs:
           bot-logins: ${{ steps.app-token.outputs.app-slug }}[bot]
           triage-model: cloudflare-workers-ai/@cf/moonshotai/kimi-k2.7-code
           verification-model: cloudflare-workers-ai/@cf/moonshotai/kimi-k2.6
+          # Without this skill, the action's built-in prompt writes titles without a Conventional Commits prefix.
+          pr-skill: .agents/skills/pr-writer
