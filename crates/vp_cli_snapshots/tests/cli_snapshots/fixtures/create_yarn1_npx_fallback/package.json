@@ -1,0 +1,5 @@
+{
+  "name": "create-yarn1-parent",
+  "private": true,
+  "packageManager": "yarn@1.22.22"
+}
