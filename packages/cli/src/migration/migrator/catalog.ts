@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import tsrsPkg from 'tsrs/package.json' with { type: 'json' };
 import { coerce, isGreaterThanOrEqual, isLessThan } from 'verkit';
 import { Scalar, YAMLMap, YAMLSeq } from 'yaml';
 
@@ -84,10 +85,10 @@ const PNPM_MINIMUM_RELEASE_AGE_EXCLUDES = [
 
 // The bootstrap placeholder used staged publishing; the real release uses
 // GitHub trusted publishing with provenance. pnpm ranks the former higher.
-// Keep this reviewed exception version-specific: dependency updates must not
-// automatically exempt future releases or the @tsrs/* platform packages.
+// Use the same dependency metadata as vp toolchain. Exempt only the bundled
+// version, not other releases or the @tsrs/* platform packages.
 // https://github.com/oxc-project/tsrs/issues/945
-const PNPM_TSRS_TRUST_POLICY_EXCLUDE = 'tsrs@7.1.0-beta.tsrs2';
+const PNPM_TSRS_TRUST_POLICY_EXCLUDE = `tsrs@${tsrsPkg.version}`;
 
 function hasTsrsTrustPolicyException(excludes: readonly unknown[]): boolean {
   return excludes.includes('tsrs') || excludes.includes(PNPM_TSRS_TRUST_POLICY_EXCLUDE);

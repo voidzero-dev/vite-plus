@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import tsrsPkg from 'tsrs/package.json' with { type: 'json' };
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseAllDocuments, parse as parseYaml } from 'yaml';
 
@@ -14,6 +15,9 @@ import {
   VITEST_VERSION,
 } from '../../utils/constants.js';
 import { createMigrationReport } from '../report.js';
+
+// A different bundled version verifies that migration follows dependency updates.
+vi.mock('tsrs/package.json', () => ({ default: { version: '99.0.0-test' } }));
 
 // Mock VITE_PLUS_VERSION to a stable value for snapshot tests.
 // When tests run via `vp test`, the env var is injected with the actual version,
@@ -4518,7 +4522,7 @@ describe('ensureVitePlusBootstrap', () => {
   });
 
   it.each(['example@1.0.0', 'tsrs@0.25.0-ts7.1.0-beta'])(
-    'reconciles the reviewed tsrs exception while preserving %s and pnpm trust checks',
+    'reconciles the bundled tsrs exception while preserving %s and pnpm trust checks',
     (existingException) => {
       fs.writeFileSync(
         path.join(tmpDir, 'package.json'),
@@ -4542,7 +4546,7 @@ describe('ensureVitePlusBootstrap', () => {
 
       const workspace = readYamlObject(workspacePath);
       expect(workspace.trustPolicy).toBe('no-downgrade');
-      expect(workspace.trustPolicyExclude).toEqual([existingException, 'tsrs@7.1.0-beta.tsrs2']);
+      expect(workspace.trustPolicyExclude).toEqual([existingException, `tsrs@${tsrsPkg.version}`]);
       expect(workspace.trustLockfile).toBeUndefined();
       const after = fs.readFileSync(workspacePath, 'utf-8');
       expect(after).toContain('# Keep the project exception.');
@@ -4571,7 +4575,7 @@ describe('ensureVitePlusBootstrap', () => {
     },
   );
 
-  it.each(['tsrs', 'tsrs@7.1.0-beta.tsrs2'])(
+  it.each(['tsrs', `tsrs@${tsrsPkg.version}`])(
     'preserves an existing tsrs trust exception: %s',
     (exception) => {
       fs.writeFileSync(
