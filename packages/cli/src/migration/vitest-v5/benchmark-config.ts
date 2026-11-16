@@ -1,6 +1,7 @@
 import type * as t from '@oxc-project/types';
 
-import { SourceEditor, isString, objectProperty, staticObject } from './ast.ts';
+import { isString, objectProperty, staticObject } from '../ast-utils.ts';
+import { SourceEditor } from './ast.ts';
 
 const REPORTERS = new Set([
   'default',

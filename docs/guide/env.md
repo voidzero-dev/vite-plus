@@ -99,7 +99,7 @@ A project selection applies only to its matching shims. For example, pnpm contro
 Package-manager specs follow npm's order: an exact version, then a semver range, then a dist-tag. `default` is an alias of `latest`, except for npm, where it selects the npm on `PATH`.
 
 ::: details Dist-tag caching
-When a package-manager dist-tag such as `latest` or `latest-10` is resolved, including a named shim falling back to the latest release, the resolved version is cached for one hour. An expired cache remains available when the registry cannot be reached.
+When a package-manager dist-tag such as `latest` or `latest-10` is resolved, including a named shim falling back to the latest release, the resolved version is cached for one hour. An expired cache remains available when the registry cannot be reached. Registries other than `https://registry.npmjs.org` that have credentials in `.npmrc` are queried on every resolution, because their responses can differ between users.
 :::
 
 `pn` runs the same managed binary as `pnpm`, and `pnx` runs the same managed binary as `pnpx` (`pnpm dlx`). These aliases also work with managed pnpm versions older than v11.
