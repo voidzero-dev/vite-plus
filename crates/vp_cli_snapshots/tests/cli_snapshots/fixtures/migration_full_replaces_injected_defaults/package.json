@@ -1,0 +1,12 @@
+{
+  "name": "migration-full-replaces-injected-defaults",
+  "scripts": {
+    "lint": "eslint .",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0",
+    "prettier": "^3.0.0",
+    "vite": "^7.0.0"
+  }
+}

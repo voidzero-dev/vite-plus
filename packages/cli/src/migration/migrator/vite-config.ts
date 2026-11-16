@@ -1,7 +1,9 @@
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
-import type { Program } from '@oxc-project/types';
+import type { ObjectExpression, Program } from '@oxc-project/types';
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { braceExpand } from 'minimatch';
 import { type OxlintConfig } from 'oxlint';
@@ -14,6 +16,7 @@ import {
   migrateTaskCacheConfig,
   rewriteImportsInDirectory,
   rewriteScripts,
+  upsertJsonConfig,
   wrapLazyPlugins,
 } from '../../../binding/index.js';
 import {
@@ -27,6 +30,7 @@ import { documentationUrl } from '../../utils/documentation.ts';
 import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
 import { displayRelative } from '../../utils/path.ts';
 import { hasBaseUrlInTsconfig } from '../../utils/tsconfig.ts';
+import { parseSource, sameStaticValue } from '../ast-utils.ts';
 import { detectConfigs, type ConfigFiles } from '../detector.ts';
 import {
   collectInstalledPackageNames,
@@ -635,6 +639,94 @@ function configImportOffset(filename: string, source: string): number {
   return offset;
 }
 
+function staticValue(source: string) {
+  const statement = parseSource('value.ts', `const value = ${source};`).program.body[0];
+  return statement?.type === 'VariableDeclaration' ? statement.declarations[0]?.init : undefined;
+}
+
+/**
+ * Whether the property whose value starts at `offset` follows a spread in its
+ * object. Returns `undefined` when no object literal holds such a property.
+ */
+function followsSpread(node: unknown, offset: number): boolean | undefined {
+  if (typeof node !== 'object' || node === null) {
+    return undefined;
+  }
+  if ((node as { type?: unknown }).type === 'ObjectExpression') {
+    const { properties } = node as ObjectExpression;
+    const index = properties.findIndex(
+      (property) => property.type === 'Property' && property.value.start === offset,
+    );
+    if (index !== -1) {
+      return properties.slice(0, index).some((property) => property.type === 'SpreadElement');
+    }
+  }
+  for (const child of Object.values(node)) {
+    const found = followsSpread(child, offset);
+    if (found !== undefined) {
+      return found;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Whether the existing `configKey` block holds only the defaults that Vite+
+ * writes on its own. A tool config merged later already carries these defaults,
+ * so it can replace such a block without losing anything the user wrote.
+ */
+export function hasOnlyInjectedDefaults(viteConfigPath: string, configKey: string): boolean {
+  // The blocks `injectFmtDefaults` and `injectLintTypeCheckDefaults` write.
+  const injected =
+    configKey === 'fmt'
+      ? {}
+      : configKey === 'lint'
+        ? createDefaultVitePlusLintConfig({ includeTypeAwareDefaults: true })
+        : undefined;
+  if (!injected) {
+    return false;
+  }
+  // shortcut: a placeholder upsert marks the range of the existing value, so
+  // this uses the same key lookup as the replacement. Add a binding that
+  // returns the value when another caller needs to read one.
+  const placeholder = `"${randomUUID()}"`;
+  const placeholderPath = path.join(os.tmpdir(), `vite-plus-config-${randomUUID()}.json`);
+  fs.writeFileSync(placeholderPath, placeholder);
+  let marked: string[];
+  try {
+    marked = upsertJsonConfig(viteConfigPath, placeholderPath, configKey).content.split(
+      placeholder,
+    );
+  } finally {
+    fs.rmSync(placeholderPath, { force: true });
+  }
+  const source = fs.readFileSync(viteConfigPath, 'utf8');
+  const [before, after] = marked;
+  // Several config objects, an inserted key, or a shorthand property do not
+  // yield one replaced value.
+  if (
+    marked.length !== 2 ||
+    before.length + after.length > source.length ||
+    !source.startsWith(before) ||
+    !source.endsWith(after)
+  ) {
+    return false;
+  }
+  try {
+    // Vite+ prepends its blocks, so one that follows a spread was written by
+    // the user to override it. Replacing that block could move it before the
+    // spread, where the spread wins over the converted settings.
+    if (followsSpread(parseSource(viteConfigPath, source).program, before.length) !== false) {
+      return false;
+    }
+    const existing = staticValue(source.slice(before.length, source.length - after.length));
+    const expected = staticValue(JSON.stringify(injected));
+    return !!existing && !!expected && sameStaticValue(existing, expected);
+  } catch {
+    return false;
+  }
+}
+
 function mergeAndRemoveJsonConfig(
   projectPath: string,
   viteConfigPath: string,
@@ -653,7 +745,30 @@ function mergeAndRemoveJsonConfig(
   // create-fate's vite.config.ts + .oxfmtrc.jsonc) ends up with two of them.
   // AST-based check ignores comments, string-literal occurrences, and nested
   // keys (e.g. `plugins: [{ fmt: ... }]`).
-  if (hasConfigKey(fullViteConfigPath, configKey)) {
+  const keyExists = hasConfigKey(fullViteConfigPath, configKey);
+  // A block of injected defaults is not a second copy of the JSON config. The
+  // first `vp migrate` writes one even when ESLint stays, so a later `--full`
+  // run must replace it with the converted config instead. Prettier takes the
+  // same decision before its conversion, see `migratePrettierToOxfmt`.
+  const replaceDefaults = keyExists && hasOnlyInjectedDefaults(fullViteConfigPath, configKey);
+  if (keyExists && !replaceDefaults) {
+    // This run converted the JSON from ESLint and already removed the ESLint
+    // config, so the JSON is the only copy of those rules. The pending marker
+    // keeps that true for later runs, until the user merges the rules.
+    if (
+      configKey === 'lint' &&
+      (report?.eslintMigrated ||
+        fs
+          .readFileSync(fullViteConfigPath, 'utf8')
+          .split(/\r?\n/)
+          .includes(pendingOxlintMigrationMarker(jsonConfigPath)))
+    ) {
+      warnMigration(
+        `Preserved ${displayRelative(fullJsonConfigPath)} because ${viteConfigPath} already has a ${configKey} config. Merge it manually.`,
+        report,
+      );
+      return false;
+    }
     if (!deferRemoval) {
       fs.unlinkSync(fullJsonConfigPath);
     }
@@ -666,15 +781,16 @@ function mergeAndRemoveJsonConfig(
   }
   // Only delete the original JSON after a successful merge. Resolved lint
   // configs contain object extends, which JSON Oxlint configs do not accept.
+  const mergeConfig = replaceDefaults ? upsertJsonConfig : mergeJsonConfig;
   let result;
   if (!modulePlan) {
-    result = mergeJsonConfig(fullViteConfigPath, fullJsonConfigPath, configKey);
+    result = mergeConfig(fullViteConfigPath, fullJsonConfigPath, configKey);
   } else {
     const tempDir = fs.mkdtempSync(path.join(projectPath, '.vite-plus-lint-'));
     try {
       const tempConfig = path.join(tempDir, 'config.json');
       fs.writeFileSync(tempConfig, modulePlan.configContent);
-      result = mergeJsonConfig(fullViteConfigPath, tempConfig, configKey);
+      result = mergeConfig(fullViteConfigPath, tempConfig, configKey);
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }
