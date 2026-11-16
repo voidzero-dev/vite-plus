@@ -1,0 +1,20 @@
+[[case]]
+name = "migration_oxlint_published_plugin_rerun"
+vp = "global"
+steps = [
+  { argv = [
+    "vp",
+    "migrate",
+    "--no-interactive",
+  ], comment = "this package declares `oxlint` as a runtime dependency, which marks it a published Oxlint plugin", continue-on-failure = true },
+  { argv = [
+    "vp",
+    "migrate",
+    "--no-interactive",
+  ], comment = "a second run finds nothing left to do. The kept dependency must not make the migrated project look unfinished", continue-on-failure = true },
+  { argv = [
+    "vpt",
+    "print-file",
+    "package.json",
+  ], comment = "the `oxlint` runtime dependency survives both runs. Consumers of a published plugin install it through this entry, so the rerun path keeps it as the first run does", continue-on-failure = true },
+]
