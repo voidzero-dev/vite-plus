@@ -9,7 +9,7 @@ use console::style;
 use serde::Serialize;
 use vp_pm_cli::OutdatedFormat;
 
-use super::{latest_package_versions, parse_package_spec};
+use super::{alias_target, latest_package_versions, parse_package_spec, update_version_spec};
 use crate::{
     cli::exit_status,
     commands::env::{config::get_node_modules_dir, package_metadata::PackageMetadata},
@@ -19,13 +19,15 @@ use crate::{
 #[derive(Debug)]
 pub struct OutdatedPackage {
     pub name: String,
+    /// Versions of npm aliases carry the aliased package name (`other@1.0.0`).
     pub current: String,
     /// Newest version within the version spec recorded at install time (or
     /// given on the command line); what an update would install.
     pub wanted: String,
     /// Newest version on the registry's `latest` dist-tag.
     pub latest: String,
-    pub spec: Option<String>,
+    /// Spec an update reinstalls the package with.
+    pub spec: String,
     install_id: String,
     node: String,
     bins: Vec<String>,
@@ -49,21 +51,18 @@ pub enum LookupMode {
     WantedAndLatest,
 }
 
-fn registry_specs(
-    installed: &[(PackageMetadata, Option<String>)],
-    mode: LookupMode,
-) -> Vec<String> {
+fn registry_specs(installed: &[(PackageMetadata, String)], mode: LookupMode) -> Vec<String> {
     let mut specs = Vec::new();
     let mut seen = HashSet::new();
-    for (package, spec) in installed {
-        let wanted_query = spec.as_deref().unwrap_or(&package.name);
-        let queries = std::iter::once(wanted_query).chain(
-            (mode == LookupMode::WantedAndLatest && wanted_query != package.name)
-                .then_some(package.name.as_str()),
+    for (package, wanted_query) in installed {
+        let latest_query = package.latest_spec();
+        let queries = std::iter::once(wanted_query.clone()).chain(
+            (mode == LookupMode::WantedAndLatest && *wanted_query != latest_query)
+                .then_some(latest_query),
         );
         for query in queries {
-            if seen.insert(query.to_string()) {
-                specs.push(query.to_string());
+            if seen.insert(query.clone()) {
+                specs.push(query);
             }
         }
     }
@@ -87,7 +86,7 @@ fn resolve_registry_version(
 
 fn resolve_package_versions(
     versions: &HashMap<String, Result<String, String>>,
-    package_name: &str,
+    latest_key: &str,
     wanted_key: &str,
     mode: LookupMode,
 ) -> Result<(String, String), (String, String)> {
@@ -95,10 +94,17 @@ fn resolve_package_versions(
         .map_err(|error| (wanted_key.to_string(), error))?;
     let latest = match mode {
         LookupMode::WantedOnly => wanted.clone(),
-        LookupMode::WantedAndLatest => resolve_registry_version(versions, package_name)
-            .map_err(|error| (package_name.to_string(), error))?,
+        LookupMode::WantedAndLatest => resolve_registry_version(versions, latest_key)
+            .map_err(|error| (latest_key.to_string(), error))?,
     };
     Ok((wanted, latest))
+}
+
+fn aliased_version(alias_target: Option<&str>, version: &str) -> String {
+    match alias_target {
+        Some(target) => format!("{target}@{version}"),
+        None => version.to_string(),
+    }
 }
 
 /// For json output in `vp outdated` command
@@ -133,11 +139,11 @@ pub async fn get_outdated_packages(
                 // time (unless `--latest` overrides it); explicit versions
                 // and tags win over both.
                 let query_spec = if version_spec.is_some() {
-                    Some(package.clone())
+                    package.clone()
                 } else if latest {
-                    None
+                    metadata.latest_spec()
                 } else {
-                    Some(metadata.update_spec())
+                    metadata.update_spec()
                 };
                 installed.push((metadata, query_spec));
             }
@@ -148,8 +154,7 @@ pub async fn get_outdated_packages(
             .await?
             .into_iter()
             .map(|package| {
-                let spec =
-                    (!latest && package.version_spec.is_some()).then(|| package.update_spec());
+                let spec = if latest { package.latest_spec() } else { package.update_spec() };
                 (package, spec)
             })
             .collect()
@@ -180,16 +185,20 @@ pub async fn get_outdated_packages(
     let mut outdated = Vec::new();
     let mut failures = Vec::new();
     for (package, spec) in installed {
-        let wanted_key = spec.clone().unwrap_or_else(|| package.name.clone());
         let (wanted, latest) =
-            match resolve_package_versions(&versions, &package.name, &wanted_key, mode) {
+            match resolve_package_versions(&versions, &package.latest_spec(), &spec, mode) {
                 Ok(versions) => versions,
                 Err(failure) => {
                     failures.push(failure);
                     continue;
                 }
             };
-        let current = package.version.trim().to_string();
+        // Label alias versions like `npm outdated`, so switching the aliased package is a change too.
+        let installed_alias = package.alias_target();
+        let wanted_alias = update_version_spec(&spec).as_deref().and_then(alias_target);
+        let current = aliased_version(installed_alias.as_deref(), package.version.trim());
+        let wanted = aliased_version(wanted_alias.as_deref(), &wanted);
+        let latest = aliased_version(installed_alias.as_deref(), &latest);
         if current == wanted && current == latest {
             continue;
         }
@@ -407,7 +416,7 @@ fn print_table(packages: &[OutdatedPackage], long: bool) {
 mod tests {
     use super::*;
 
-    fn installed(version_spec: Option<&str>) -> Vec<(PackageMetadata, Option<String>)> {
+    fn installed(version_spec: Option<&str>) -> Vec<(PackageMetadata, String)> {
         let mut package = PackageMetadata::new(
             "some-pkg".into(),
             "1.0.0".into(),
@@ -418,7 +427,7 @@ mod tests {
             "npm".into(),
         );
         package.version_spec = version_spec.map(str::to_string);
-        let query_spec = package.version_spec.is_some().then(|| package.update_spec());
+        let query_spec = package.update_spec();
         vec![(package, query_spec)]
     }
 
@@ -438,6 +447,16 @@ mod tests {
     fn wanted_and_latest_deduplicates_the_bare_spec() {
         let specs = registry_specs(&installed(None), LookupMode::WantedAndLatest);
         assert_eq!(specs, ["some-pkg"]);
+    }
+
+    #[test]
+    fn npm_aliases_query_the_latest_alias_target() {
+        let specs =
+            registry_specs(&installed(Some("npm:other@^1.0.0")), LookupMode::WantedAndLatest);
+        assert_eq!(specs, ["some-pkg@npm:other@^1.0.0", "some-pkg@npm:other"]);
+
+        let specs = registry_specs(&installed(Some("npm:other")), LookupMode::WantedAndLatest);
+        assert_eq!(specs, ["some-pkg@npm:other"]);
     }
 
     #[test]

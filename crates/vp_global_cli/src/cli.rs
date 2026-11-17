@@ -888,13 +888,17 @@ async fn managed_update(
         current_node_version = get_current_node_version().await?;
 
         for metadata in &all {
-            if latest && metadata.version_spec.is_some() {
-                spec_rewrites.push((metadata.name.clone(), None, metadata.name.clone()));
+            if latest && metadata.version_spec != metadata.latest_version_spec() {
+                spec_rewrites.push((
+                    metadata.name.clone(),
+                    metadata.latest_version_spec(),
+                    metadata.latest_spec(),
+                ));
             }
             if !is_same_node_version(&metadata.platform.node, &current_node_version) {
                 node_mismatches.push(NodeMismatchPackage {
                     name: metadata.name.clone(),
-                    spec: if latest { metadata.name.clone() } else { metadata.update_spec() },
+                    spec: if latest { metadata.latest_spec() } else { metadata.update_spec() },
                     installed_node: metadata.platform.node.clone(),
                 });
             }
@@ -922,9 +926,13 @@ async fn managed_update(
                     if new_spec != metadata.version_spec {
                         spec_rewrites.push((package_name.clone(), new_spec, package.clone()));
                     }
-                } else if latest && metadata.version_spec.is_some() {
+                } else if latest && metadata.version_spec != metadata.latest_version_spec() {
                     // `--latest` applies to bare names only; explicit specs win.
-                    spec_rewrites.push((package_name.clone(), None, package_name.clone()));
+                    spec_rewrites.push((
+                        package_name.clone(),
+                        metadata.latest_version_spec(),
+                        metadata.latest_spec(),
+                    ));
                 }
                 if !is_same_node_version(&metadata.platform.node, &current_node_version) {
                     // Match the spec `get_outdated_packages` resolves for this
@@ -932,7 +940,7 @@ async fn managed_update(
                     let spec = if version_spec.is_some() {
                         package.clone()
                     } else if latest {
-                        package_name.clone()
+                        metadata.latest_spec()
                     } else {
                         metadata.update_spec()
                     };
@@ -971,7 +979,7 @@ async fn managed_update(
             // A newer `latest` alone (e.g. a version-pinned package) is not
             // updatable; only a newer wanted version is.
             .filter(|package| package.wanted != package.current)
-            .map(|package| package.spec.unwrap_or(package.name)),
+            .map(|package| package.spec),
     );
 
     let outdated_specs = to_update.iter().map(String::as_str).collect::<HashSet<_>>();

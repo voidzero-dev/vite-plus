@@ -8,7 +8,7 @@ use uuid::{Uuid, Version};
 use vt_path::AbsolutePathBuf;
 
 use super::config::get_packages_dir;
-use crate::error::Error;
+use crate::{commands::global, error::Error};
 
 // This is legacy, for old Vite+ version's compatibility
 const LEGACY_INSTALL_ID_PREFIX: char = '#';
@@ -42,8 +42,9 @@ pub struct PackageMetadata {
     #[serde(default)]
     pub js_bins: HashSet<String>,
     /// Version spec the package was installed with (a dist-tag like
-    /// `nightly`, a range, or an exact version), so `vp update -g` keeps
-    /// resolving within it. `None` means the implicit `latest` tag.
+    /// `nightly`, a range, an exact version, or an npm alias like
+    /// `npm:other@^1`), so `vp update -g` keeps resolving within it.
+    /// `None` means the implicit `latest` tag.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version_spec: Option<String>,
     /// Package manager used for installation (npm, yarn, pnpm)
@@ -91,6 +92,25 @@ impl PackageMetadata {
     /// the bare name (implicit `latest`) otherwise.
     pub fn update_spec(&self) -> String {
         match &self.version_spec {
+            Some(spec) => format!("{}@{spec}", self.name),
+            None => self.name.clone(),
+        }
+    }
+
+    /// Registry package installed under this name, when it is an npm alias.
+    pub fn alias_target(&self) -> Option<String> {
+        self.version_spec.as_deref().and_then(global::alias_target)
+    }
+
+    /// Version spec that remains once `--latest` drops the recorded one:
+    /// an npm alias keeps its target, everything else falls back to `latest`.
+    pub fn latest_version_spec(&self) -> Option<String> {
+        self.alias_target().map(|target| format!("npm:{target}"))
+    }
+
+    /// Registry spec for the `latest` dist-tag of the installed package.
+    pub fn latest_spec(&self) -> String {
+        match self.latest_version_spec() {
             Some(spec) => format!("{}@{spec}", self.name),
             None => self.name.clone(),
         }
@@ -293,6 +313,26 @@ mod tests {
 
         metadata.version_spec = Some("^1.0.0".to_string());
         assert_eq!(metadata.update_spec(), "some-pkg@^1.0.0");
+        assert_eq!(metadata.latest_spec(), "some-pkg");
+    }
+
+    #[test]
+    fn test_npm_alias_specs_keep_the_alias_target() {
+        let mut metadata = PackageMetadata::new(
+            "typescript".to_string(),
+            "1.5.0".to_string(),
+            "22.0.0".to_string(),
+            None,
+            vec![],
+            HashSet::new(),
+            "npm".to_string(),
+        );
+        metadata.version_spec = Some("npm:cowsay@^1.5".to_string());
+
+        assert_eq!(metadata.alias_target().as_deref(), Some("cowsay"));
+        assert_eq!(metadata.update_spec(), "typescript@npm:cowsay@^1.5");
+        assert_eq!(metadata.latest_version_spec().as_deref(), Some("npm:cowsay"));
+        assert_eq!(metadata.latest_spec(), "typescript@npm:cowsay");
     }
 
     #[test]
