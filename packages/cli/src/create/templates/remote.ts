@@ -81,7 +81,8 @@ export async function runRemoteTemplateCommand(
   silent = false,
 ): Promise<ExecutionWithProjectDir> {
   autoFixRemoteTemplateCommand(templateInfo, workspaceInfo);
-  const dlxArgs = ['dlx', templateInfo.command, ...templateInfo.args];
+  // `--` keeps the global CLI from reading a template's `--help` as its own.
+  const dlxArgs = ['dlx', '--', templateInfo.command, ...templateInfo.args];
   // `vp dlx` detects the package manager from cwd and defaults to pnpm outside a project.
   // A user override is kept as given: its hash selects the verified install create downloaded.
   const envs = {
