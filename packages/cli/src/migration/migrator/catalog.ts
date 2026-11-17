@@ -1116,7 +1116,7 @@ export function rewriteBunCatalog(
     // takes them instead of a newly created default catalog.
     const { preferredCatalogSpec } = readBunCatalogDependencyResolver(pkg);
     const preferredName = preferredCatalogSpec.slice('catalog:'.length);
-    const namedTarget = activeCatalogs.catalogs?.[preferredName || 'default'];
+    const namedTarget = preferredName ? activeCatalogs.catalogs?.[preferredName] : undefined;
     const defaultCatalog = useWorkspacesCatalog ? workspacesObj?.catalog : pkg.catalog;
     const catalog: Record<string, string> = { ...defaultCatalog };
 

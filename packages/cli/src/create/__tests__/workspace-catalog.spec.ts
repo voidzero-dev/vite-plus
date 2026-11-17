@@ -7,6 +7,7 @@ import { stringify } from 'yaml';
 
 import {
   createCatalogDependencyResolver,
+  rewriteBunCatalog,
   rewriteMonorepoProject,
   rewriteYarnrcYml,
   yarnrcSatisfiesVitePlus,
@@ -280,30 +281,84 @@ it('uses the same named default catalog when migrating Yarn settings', () => {
   expect(yarnrcSatisfiesVitePlus(root, false, true, false)).toBe(true);
 });
 
-it('uses Bun catalogs.default before its catalog shorthand', () => {
-  const file = path.join(root, 'package.json');
-  fs.writeFileSync(
-    file,
-    JSON.stringify({
-      workspaces: ['apps/*'],
-      catalog: { vite: '0.0.0-unused' },
-      catalogs: { default: { 'vite-plus': '0.3.2' } },
-    }),
+describe.each(['root', 'nested'])('Bun %s shared default catalog', (location) => {
+  const config = {
+    catalog: { vite: '^8.0.0', 'vite-plus': '0.3.2', '@vitest/spy': '^5.0.0' },
+    catalogs: { default: { react: '^19.0.0' } },
+  };
+  let file: string;
+
+  beforeEach(() => {
+    file = path.join(root, 'package.json');
+    fs.writeFileSync(
+      file,
+      JSON.stringify(
+        location === 'nested'
+          ? { workspaces: { packages: ['apps/*'], ...config } }
+          : { workspaces: ['apps/*'], ...config },
+      ),
+    );
+  });
+
+  it.each(['catalog:', 'catalog:default'])(
+    'resolves and completes %s without duplicating existing entries',
+    (spec) => {
+      const resolver = createCatalogDependencyResolver(root, PackageManager.bun)!;
+      expect(resolver(spec, 'vite')).toBe('^8.0.0');
+      expect(resolver(spec, 'vite-plus')).toBe('0.3.2');
+      expect(resolver(spec, 'react')).toBe('^19.0.0');
+      fs.writeFileSync(
+        path.join(project, 'package.json'),
+        JSON.stringify({
+          devDependencies: {
+            vite: spec,
+            'vite-plus': spec,
+            '@vitest/spy': spec,
+            '@vitest/utils': spec,
+          },
+        }),
+      );
+      ensureCreateCatalogEntries(root, project, PackageManager.bun);
+      const result = readJsonFile(file);
+      const active = (location === 'nested' ? result.workspaces : result) as typeof config;
+      expect(active.catalog).toEqual(config.catalog);
+      expect(active.catalogs).toEqual({
+        default: { react: '^19.0.0', '@vitest/utils': VITEST_VERSION },
+      });
+      const before = fs.readFileSync(file, 'utf8');
+      ensureCreateCatalogEntries(root, project, PackageManager.bun);
+      expect(fs.readFileSync(file, 'utf8')).toBe(before);
+    },
   );
-  const resolver = createCatalogDependencyResolver(root, PackageManager.bun)!;
-  expect(resolver('catalog:', 'vite')).toBeUndefined();
-  expect(resolver('catalog:default', 'vite-plus')).toBe('0.3.2');
-  fs.writeFileSync(
-    path.join(project, 'package.json'),
-    JSON.stringify({
-      devDependencies: { vite: 'catalog:', 'vite-plus': 'catalog:' },
-    }),
-  );
-  ensureCreateCatalogEntries(root, project, PackageManager.bun);
-  expect(readJsonFile(file)).toEqual({
-    workspaces: ['apps/*'],
-    catalog: { vite: '0.0.0-unused' },
-    catalogs: { default: { 'vite-plus': '0.3.2', vite: VITE_PLUS_OVERRIDE_PACKAGES.vite } },
+
+  it('migrates entries in their existing locations and adds only missing entries', () => {
+    const ecosystem = new Set(['@vitest/spy', '@vitest/utils']);
+    rewriteBunCatalog(root, false, ecosystem);
+    const result = readJsonFile(file);
+    const active = (location === 'nested' ? result.workspaces : result) as typeof config;
+    expect(active.catalog).toEqual({
+      vite: VITE_PLUS_OVERRIDE_PACKAGES.vite,
+      'vite-plus': VITE_PLUS_VERSION,
+      '@vitest/spy': VITEST_VERSION,
+      '@vitest/utils': VITEST_VERSION,
+    });
+    expect(active.catalogs).toEqual(config.catalogs);
+    const before = fs.readFileSync(file, 'utf8');
+    rewriteBunCatalog(root, false, ecosystem);
+    expect(fs.readFileSync(file, 'utf8')).toBe(before);
+  });
+
+  it('does not silently remove pre-existing duplicate entries', () => {
+    const contents = readJsonFile(file);
+    const active = (location === 'nested' ? contents.workspaces : contents) as typeof config;
+    Object.assign(active.catalog, { react: active.catalogs.default.react });
+    fs.writeFileSync(file, JSON.stringify(contents));
+    rewriteBunCatalog(root, false, new Set());
+    const result = readJsonFile(file);
+    expect(location === 'nested' ? result.workspaces : result).toMatchObject({
+      catalog: { react: '^19.0.0' },
+      catalogs: { default: { react: '^19.0.0' } },
+    });
   });
 });
 

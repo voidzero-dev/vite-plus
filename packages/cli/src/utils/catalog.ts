@@ -14,10 +14,10 @@ export function createCatalogDependencyResolverFromCatalogs(
   catalogs: Record<string, Record<string, string>> | undefined,
   packageManager: PackageManager,
 ): CatalogDependencyResolver {
-  // Bun's named default overrides its shorthand; Yarn keeps the two catalogs separate.
+  // Bun merges the two default catalogs; Yarn keeps them separate.
   const defaultCatalog =
     packageManager === PackageManager.bun
-      ? (catalogs?.default ?? catalog)
+      ? { ...catalog, ...catalogs?.default }
       : packageManager === PackageManager.yarn
         ? catalog
         : (catalog ?? catalogs?.default);
