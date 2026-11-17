@@ -1,3 +1,5 @@
+import { coerce, isGreaterThanOrEqual } from 'verkit';
+
 import { PackageManager } from '../types/index.ts';
 import { VITE_PLUS_NAME } from './constants.ts';
 import type { NpmWorkspaces } from './workspace.ts';
@@ -10,9 +12,24 @@ export type CatalogDependencyResolver = ((
   preferredCatalogSpec: string;
 };
 
-export function isNamedCatalog(catalogName: string, packageManager: PackageManager): boolean {
+export function bunSupportsMergedDefaultCatalogs(version: string): boolean {
+  // Bun 1.4.0 unified the default catalogs: https://github.com/oven-sh/bun/pull/38333.
+  const coerced = coerce(version);
+  return coerced
+    ? isGreaterThanOrEqual(coerced, '1.4.0')
+    : version === 'latest' || version === 'canary';
+}
+
+export function isNamedCatalog(
+  catalogName: string,
+  packageManager: PackageManager,
+  version = 'latest',
+): boolean {
   return (
-    catalogName !== '' && (catalogName !== 'default' || packageManager === PackageManager.yarn)
+    catalogName !== '' &&
+    (catalogName !== 'default' ||
+      packageManager === PackageManager.yarn ||
+      (packageManager === PackageManager.bun && !bunSupportsMergedDefaultCatalogs(version)))
   );
 }
 
@@ -20,22 +37,23 @@ export function createCatalogDependencyResolverFromCatalogs(
   catalog: Record<string, string> | undefined,
   catalogs: Record<string, Record<string, string>> | undefined,
   packageManager: PackageManager,
+  version = 'latest',
 ): CatalogDependencyResolver {
-  // Bun merges the two default catalogs; Yarn keeps them separate.
-  const defaultCatalog =
-    packageManager === PackageManager.bun
-      ? { ...catalog, ...catalogs?.default }
-      : packageManager === PackageManager.yarn
-        ? catalog
-        : (catalog ?? catalogs?.default);
+  let defaultCatalog = catalog ?? catalogs?.default;
+  if (isNamedCatalog('default', packageManager, version)) {
+    defaultCatalog = catalog;
+  } else if (packageManager === PackageManager.bun) {
+    defaultCatalog = { ...catalog, ...catalogs?.default };
+  }
   const preferredCatalogSpec = selectPreferredCatalogSpec(
     packageManager === PackageManager.bun ? defaultCatalog : catalog,
     catalogs,
     packageManager,
+    version,
   );
   const resolver = (catalogSpec: string, dependencyName: string) => {
     const catalogName = catalogSpec.slice('catalog:'.length);
-    if (isNamedCatalog(catalogName, packageManager)) {
+    if (isNamedCatalog(catalogName, packageManager, version)) {
       return catalogs?.[catalogName]?.[dependencyName];
     }
     return defaultCatalog?.[dependencyName];
@@ -47,6 +65,7 @@ export function selectPreferredCatalogSpec(
   catalog: Record<string, string> | undefined,
   catalogs: Record<string, Record<string, string>> | undefined,
   packageManager: PackageManager,
+  version = 'latest',
 ): string {
   const candidates: Array<{ spec: string; values: Record<string, string> }> = [];
   if (catalog) {
@@ -54,7 +73,7 @@ export function selectPreferredCatalogSpec(
   }
   for (const [name, values] of Object.entries(catalogs ?? {})) {
     candidates.push({
-      spec: isNamedCatalog(name, packageManager) ? `catalog:${name}` : 'catalog:',
+      spec: isNamedCatalog(name, packageManager, version) ? `catalog:${name}` : 'catalog:',
       values,
     });
   }
@@ -71,7 +90,7 @@ export function selectPreferredCatalogSpec(
     }
   }
 
-  if (!catalog && catalogs?.default && packageManager === PackageManager.yarn) {
+  if (!catalog && catalogs?.default && isNamedCatalog('default', packageManager, version)) {
     return 'catalog:default';
   }
   return 'catalog:';
@@ -105,11 +124,19 @@ export function getBunCatalogConfig(pkg: {
   return nested?.catalog != null || nested?.catalogs != null ? nested : pkg;
 }
 
-export function readBunCatalogDependencyResolver(pkg: {
-  workspaces?: NpmWorkspaces;
-  catalog?: Record<string, string>;
-  catalogs?: Record<string, Record<string, string>>;
-}): CatalogDependencyResolver {
+export function readBunCatalogDependencyResolver(
+  pkg: {
+    workspaces?: NpmWorkspaces;
+    catalog?: Record<string, string>;
+    catalogs?: Record<string, Record<string, string>>;
+  },
+  version = 'latest',
+): CatalogDependencyResolver {
   const { catalog, catalogs } = getBunCatalogConfig(pkg);
-  return createCatalogDependencyResolverFromCatalogs(catalog, catalogs, PackageManager.bun);
+  return createCatalogDependencyResolverFromCatalogs(
+    catalog,
+    catalogs,
+    PackageManager.bun,
+    version,
+  );
 }

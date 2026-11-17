@@ -7,6 +7,7 @@ import { Scalar, YAMLMap, YAMLSeq } from 'yaml';
 
 import { PackageManager, type WorkspacePackage } from '../../types/index.ts';
 import {
+  bunSupportsMergedDefaultCatalogs,
   createCatalogDependencyResolverFromCatalogs,
   getBunCatalogConfig,
   getYamlCatalogPath,
@@ -51,6 +52,7 @@ import {
   REMOVE_PACKAGES,
   VITEST_IS_MANAGED_OVERRIDE,
   isPlainRecord,
+  pinnedPackageManagerVersion,
   pnpmOverrideKey,
   readPackageJsonIfExists,
   vitePeerDependencyRuleRequired,
@@ -763,6 +765,7 @@ function isVitePlusOverrideSpec(value: string): boolean {
 export function createCatalogDependencyResolver(
   projectPath: string,
   packageManager: PackageManager,
+  packageManagerVersion?: string,
 ): CatalogDependencyResolver | undefined {
   if (packageManager === PackageManager.pnpm) {
     const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
@@ -795,8 +798,13 @@ export function createCatalogDependencyResolver(
       workspaces?: NpmWorkspaces;
       catalog?: Record<string, string>;
       catalogs?: Record<string, Record<string, string>>;
+      packageManager?: string;
+      devEngines?: { packageManager?: unknown };
     };
-    return readBunCatalogDependencyResolver(pkg);
+    return readBunCatalogDependencyResolver(
+      pkg,
+      packageManagerVersion ?? pinnedPackageManagerVersion(pkg),
+    );
   }
   return undefined;
 }
@@ -1025,7 +1033,7 @@ function shouldWriteCatalogEntry(
   addMissing: boolean,
   otherDefaultCatalog?: Record<string, string>,
 ): boolean {
-  // Bun merges the two default catalogs and rejects names defined in both.
+  // Merged Bun default catalogs reject names defined in both.
   return name in catalog || (addMissing && !Object.hasOwn(otherDefaultCatalog ?? {}, name));
 }
 
@@ -1107,6 +1115,7 @@ export function rewriteBunCatalog(
   usesVitest: boolean,
   vitestEcosystemPackages: ReadonlySet<string>,
   usesWebdriverioProvider = false,
+  packageManagerVersion = 'latest',
 ): void {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
@@ -1129,9 +1138,13 @@ export function rewriteBunCatalog(
     // Like the pnpm catalog, add missing entries to the catalog the new
     // `catalog:` references point at. A named one such as `catalogs.build`
     // takes them instead of a newly created default catalog.
-    const { preferredCatalogSpec } = readBunCatalogDependencyResolver(pkg);
+    const { preferredCatalogSpec } = readBunCatalogDependencyResolver(pkg, packageManagerVersion);
+    const mergeDefaults = bunSupportsMergedDefaultCatalogs(packageManagerVersion);
     const preferredName = preferredCatalogSpec.slice('catalog:'.length);
-    const namedTarget = activeCatalogs.catalogs?.[preferredName || 'default'];
+    const namedTarget =
+      preferredName || mergeDefaults
+        ? activeCatalogs.catalogs?.[preferredName || 'default']
+        : undefined;
     const defaultCatalog = useWorkspacesCatalog ? workspacesObj?.catalog : pkg.catalog;
     const catalog: Record<string, string> = { ...defaultCatalog };
 
@@ -1159,7 +1172,7 @@ export function rewriteBunCatalog(
         usesVitest,
         vitestEcosystemPackages,
         namedTarget,
-        workspacesObj.catalog,
+        mergeDefaults ? workspacesObj.catalog : undefined,
       );
       for (const named of Object.values(workspacesObj.catalogs)) {
         pruneLegacyWrapperAliases(named);
@@ -1171,7 +1184,7 @@ export function rewriteBunCatalog(
         usesVitest,
         vitestEcosystemPackages,
         namedTarget,
-        pkg.catalog,
+        mergeDefaults ? pkg.catalog : undefined,
       );
       for (const named of Object.values(pkg.catalogs)) {
         pruneLegacyWrapperAliases(named);

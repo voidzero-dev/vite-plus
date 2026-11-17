@@ -92,7 +92,11 @@ export function rewriteStandaloneProject(
     report,
     workspaceInfo.downloadPackageManager.version,
   );
-  const catalogDependencyResolver = createCatalogDependencyResolver(projectPath, packageManager);
+  const catalogDependencyResolver = createCatalogDependencyResolver(
+    projectPath,
+    packageManager,
+    workspaceInfo.downloadPackageManager.version,
+  );
   const vitestEcosystemPackages = collectVitestEcosystemInstallDependencyNames(projectPath);
   // Captured before `rewritePackageJson` strips `oxlint`; the import rewriter
   // reads the manifests afterwards and would no longer see the signal.
@@ -377,6 +381,7 @@ export function rewriteMonorepo(
   const catalogDependencyResolver = createCatalogDependencyResolver(
     workspaceInfo.rootDir,
     workspaceInfo.packageManager,
+    workspaceInfo.downloadPackageManager.version,
   );
   // Captured before `rewritePackageJson` strips `oxlint`; the import rewriter
   // reads the manifests afterwards and would no longer see the signal.
@@ -447,6 +452,7 @@ export function rewriteMonorepo(
       workspaceUsesVitest,
       vitestEcosystemPackages,
       usesWebdriverio,
+      workspaceInfo.downloadPackageManager.version,
     );
   }
   rewriteRootWorkspacePackageJson(

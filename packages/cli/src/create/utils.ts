@@ -6,6 +6,7 @@ import { parseDocument } from 'yaml';
 
 import { PackageManager } from '../types/index.ts';
 import {
+  bunSupportsMergedDefaultCatalogs,
   getBunCatalogConfig,
   getYamlCatalogPath,
   isNamedCatalog,
@@ -31,6 +32,7 @@ export function ensureCreateCatalogEntries(
   rootDir: string,
   projectDir: string,
   packageManager: PackageManager,
+  packageManagerVersion = 'latest',
 ): void {
   const packageJsonPath = path.join(projectDir, 'package.json');
   if (packageManager === PackageManager.npm || !fs.existsSync(packageJsonPath)) {
@@ -61,16 +63,22 @@ export function ensureCreateCatalogEntries(
       catalogs?: Record<string, Record<string, string>>;
     }>(path.join(rootDir, 'package.json'), (root) => {
       const target = getBunCatalogConfig(root);
-      const resolveCatalog = readBunCatalogDependencyResolver(root);
+      const resolveCatalog = readBunCatalogDependencyResolver(root, packageManagerVersion);
+      const mergeDefaults = bunSupportsMergedDefaultCatalogs(packageManagerVersion);
       let changed = false;
       for (const [name, spec] of entries) {
         if (resolveCatalog(spec, name) !== undefined) {
           continue;
         }
         const catalogName = spec.slice('catalog:'.length);
-        const catalog = isNamedCatalog(catalogName, packageManager)
-          ? ((target.catalogs ??= {})[catalogName] ??= {})
-          : (target.catalogs?.default ?? target.catalog ?? (target.catalog = {}));
+        let catalog: Record<string, string>;
+        if (isNamedCatalog(catalogName, packageManager, packageManagerVersion)) {
+          catalog = (target.catalogs ??= {})[catalogName] ??= {};
+        } else if (mergeDefaults && target.catalogs?.default) {
+          catalog = target.catalogs.default;
+        } else {
+          catalog = target.catalog ??= {};
+        }
         catalog[name] = versions[name];
         changed = true;
       }

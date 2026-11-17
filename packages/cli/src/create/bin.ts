@@ -1334,7 +1334,11 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       skipStagedMigration,
       compactOutput,
       undefined,
-      createCatalogDependencyResolver(workspaceInfo.rootDir, workspaceInfo.packageManager),
+      createCatalogDependencyResolver(
+        workspaceInfo.rootDir,
+        workspaceInfo.packageManager,
+        workspaceInfo.packageManagerVersion,
+      ),
       {
         rootDir: workspaceInfo.rootDir,
         packages: discoverWorkspacePackages(
@@ -1345,7 +1349,12 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       false,
       supportCatalog,
     );
-    ensureCreateCatalogEntries(workspaceInfo.rootDir, fullPath, workspaceInfo.packageManager);
+    ensureCreateCatalogEntries(
+      workspaceInfo.rootDir,
+      fullPath,
+      workspaceInfo.packageManager,
+      workspaceInfo.packageManagerVersion,
+    );
     for (const framework of detectFramework(fullPath)) {
       if (!hasFrameworkShim(fullPath, framework)) {
         addFrameworkShim(fullPath, framework);

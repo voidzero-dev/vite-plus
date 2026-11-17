@@ -416,6 +416,29 @@ export function readPackageJsonIfExists(packageJsonPath: string): DependencyBag 
   }
 }
 
+export function pinnedPackageManagerVersion(pkg: {
+  packageManager?: string;
+  devEngines?: { packageManager?: unknown };
+}): string | undefined {
+  if (typeof pkg.packageManager === 'string') {
+    const separator = pkg.packageManager.indexOf('@');
+    if (separator !== -1) {
+      return pkg.packageManager.slice(separator + 1);
+    }
+  }
+  const devEngine = pkg.devEngines?.packageManager;
+  if (
+    typeof devEngine === 'object' &&
+    devEngine !== null &&
+    !Array.isArray(devEngine) &&
+    'version' in devEngine &&
+    typeof devEngine.version === 'string'
+  ) {
+    return devEngine.version;
+  }
+  return undefined;
+}
+
 // pnpm v10 introduced the map-shaped `allowBuilds` and removed the implicit
 // "build everything" default; v9 (>= 9.5) gates builds via the list-shaped
 // `onlyBuiltDependencies`. Both live in pnpm-workspace.yaml or in

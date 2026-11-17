@@ -73,6 +73,7 @@ import {
   REMOVE_PACKAGES,
   VITEST_IS_MANAGED_OVERRIDE,
   managedOverrideKey,
+  pinnedPackageManagerVersion,
   pnpmMajor,
   pnpmOverrideKey,
   type ManagedOverrideKeyStyle,
@@ -176,26 +177,6 @@ export function overridesSatisfyVitePlus(
       catalogDependencyResolver,
     ),
   );
-}
-
-function pinnedPackageManagerVersion(pkg: BootstrapPackageJson): string | undefined {
-  if (typeof pkg.packageManager === 'string') {
-    const separator = pkg.packageManager.indexOf('@');
-    if (separator !== -1) {
-      return pkg.packageManager.slice(separator + 1);
-    }
-  }
-  const devEngine = pkg.devEngines?.packageManager;
-  if (
-    typeof devEngine === 'object' &&
-    devEngine !== null &&
-    !Array.isArray(devEngine) &&
-    'version' in devEngine &&
-    typeof devEngine.version === 'string'
-  ) {
-    return devEngine.version;
-  }
-  return undefined;
 }
 
 function vitePlusDependencyNeedsConcreteVersion(pkg: BootstrapPackageJson): boolean {
@@ -688,7 +669,11 @@ export function detectVitePlusBootstrapPending(
       packageManager === PackageManager.bun &&
         bunSupportsCatalog(pkg, resolvedPackageManagerVersion),
     );
-  const catalogDependencyResolver = createCatalogDependencyResolver(projectPath, packageManager);
+  const catalogDependencyResolver = createCatalogDependencyResolver(
+    projectPath,
+    packageManager,
+    resolvedPackageManagerVersion,
+  );
   const canonicalVitePlusSpec = supportCatalog
     ? (catalogDependencyResolver?.preferredCatalogSpec ?? 'catalog:')
     : VITE_PLUS_VERSION;
@@ -757,7 +742,9 @@ export function detectVitePlusBootstrapPending(
     // `catalog:` references, so the catalog resolver must NOT be consulted —
     // otherwise a dangling `catalog:` override resolves through the dead catalog
     // field and is mistaken for satisfied, masking the pending rewrite.
-    const bunCatalogResolver = supportCatalog ? readBunCatalogDependencyResolver(pkg) : undefined;
+    const bunCatalogResolver = supportCatalog
+      ? readBunCatalogDependencyResolver(pkg, resolvedPackageManagerVersion)
+      : undefined;
     // A `catalog:` vite-plus spec looks current, so judge its catalog value too.
     return (
       (supportCatalog &&
@@ -1018,6 +1005,7 @@ export function ensureVitePlusBootstrap(
   const catalogDependencyResolver = createCatalogDependencyResolver(
     projectPath,
     workspaceInfo.packageManager,
+    workspaceInfo.downloadPackageManager.version,
   );
   const canonicalVitePlusSpec = supportCatalog
     ? (catalogDependencyResolver?.preferredCatalogSpec ?? 'catalog:')
@@ -1118,7 +1106,9 @@ export function ensureVitePlusBootstrap(
       const ensured = ensureOverrideEntries(
         pkg.overrides,
         usesVitest,
-        supportCatalog ? readBunCatalogDependencyResolver(pkg) : undefined,
+        supportCatalog
+          ? readBunCatalogDependencyResolver(pkg, workspaceInfo.downloadPackageManager.version)
+          : undefined,
         'bare',
         usesWebdriverio,
       );
@@ -1295,7 +1285,13 @@ export function ensureVitePlusBootstrap(
     // rewriteBunCatalog runs only on monorepo roots). A standalone bun project
     // keeps the concrete overrides set by `ensureOverrideEntries` above.
     const before = fs.readFileSync(packageJsonPath, 'utf-8');
-    rewriteBunCatalog(projectPath, usesVitest, vitestEcosystemPackages, usesWebdriverio);
+    rewriteBunCatalog(
+      projectPath,
+      usesVitest,
+      vitestEcosystemPackages,
+      usesWebdriverio,
+      workspaceInfo.downloadPackageManager.version,
+    );
     const after = fs.readFileSync(packageJsonPath, 'utf-8');
     result.packageJson = result.packageJson || before !== after;
   }

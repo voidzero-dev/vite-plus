@@ -56,6 +56,42 @@ steps = [
 ]
 
 [[case]]
+name = "migrate_existing_bun_legacy_default_catalogs"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL", "CI"]
+comment = "Bun 1.2.14 keeps catalog and catalogs.default separate through migration and a second bootstrap pass."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "bun@1.2.14"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "workspaces", '{"packages":["apps/*"],"catalog":{"vite":"npm:@voidzero-dev/vite-plus-core@*"},"catalogs":{"default":{"react":"19.2.0"}}}'], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies", '{"vite":"catalog:","react":"catalog:default"}'], snapshot = false },
+  { argv = ["vp", "install"], snapshot = false, timeout = 240000 },
+  { argv = ["vp", "migrate", "--no-interactive"], snapshot = false, timeout = 240000 },
+  ["vpt", "print-file", "package.json"],
+  { argv = ["vp", "install", "--frozen-lockfile"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive"], snapshot = false, timeout = 240000 },
+  { argv = ["vp", "install", "--frozen-lockfile"], snapshot = false },
+]
+
+[[case]]
+name = "create_existing_bun_legacy_default_catalogs"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL", "CI"]
+comment = "Bun 1.3.14 still needs shorthand references completed in catalog rather than catalogs.default."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "bun@1.3.14"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "workspaces", '{"packages":["apps/*"],"catalog":{"vite":"npm:@voidzero-dev/vite-plus-core@*"},"catalogs":{"default":{"react":"19.2.0"}}}'], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies", '{"vite":"catalog:","react":"catalog:default"}'], snapshot = false },
+  { argv = ["vp", "install"], snapshot = false, timeout = 240000 },
+  { argv = ["vp", "create", "vite:application", "--directory", "apps/web", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"], snapshot = false, timeout = 240000 },
+  ["vpt", "print-file", "package.json"],
+  ["vpt", "print-file", "apps/web/package.json"],
+  { argv = ["vp", "install", "--frozen-lockfile"], snapshot = false },
+  { argv = ["vp", "run", "build"], cwd = "apps/web", snapshot = false },
+]
+
+[[case]]
 name = "create_existing_bun_aligned_vitest_catalog"
 vp = "local"
 local-registry = true
