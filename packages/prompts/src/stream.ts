@@ -22,7 +22,7 @@ export const stream = {
       }
       const chunkLen = strip(chunk).length;
       const columns =
-        'columns' in output && typeof output.columns === 'number' ? output.columns : 0;
+        'columns' in output && typeof output.columns === 'number' ? output.columns : Infinity;
       if (lineWidth + chunkLen < columns) {
         lineWidth += chunkLen;
         output.write(chunk);

@@ -123,6 +123,18 @@ describe('output identity', () => {
     expect(write).not.toHaveBeenCalled();
   });
 
+  it('keeps streamed chunks together when the output has no columns', async () => {
+    let content = '';
+    const output = new Writable({
+      write(chunk, _, done) {
+        content += chunk.toString();
+        done();
+      },
+    });
+    await stream.message(['hel', 'lo', ' world'], { output, symbol: '!' });
+    expect(content).toBe('! hello world\n');
+  });
+
   it('uses one space in animated spinner frames', () => {
     vi.stubEnv('CI', '');
     vi.useFakeTimers();
