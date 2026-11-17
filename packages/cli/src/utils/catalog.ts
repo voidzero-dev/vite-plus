@@ -1,6 +1,7 @@
 import { PackageManager } from '../types/index.ts';
 import { VITE_PLUS_NAME } from './constants.ts';
 import type { NpmWorkspaces } from './workspace.ts';
+import type { YamlDocument } from './yaml.ts';
 
 export type CatalogDependencyResolver = ((
   catalogSpec: string,
@@ -67,6 +68,21 @@ export function selectPreferredCatalogSpec(
     return 'catalog:default';
   }
   return 'catalog:';
+}
+
+export function getYamlCatalogPath(
+  doc: YamlDocument,
+  catalogSpec: string,
+  packageManager: PackageManager,
+): string[] {
+  const catalogName = catalogSpec.slice('catalog:'.length);
+  return catalogName && (catalogName !== 'default' || packageManager === PackageManager.yarn)
+    ? ['catalogs', catalogName]
+    : packageManager === PackageManager.yarn ||
+        doc.has('catalog') ||
+        !doc.hasIn(['catalogs', 'default'])
+      ? ['catalog']
+      : ['catalogs', 'default'];
 }
 
 export function getBunCatalogConfig(pkg: {

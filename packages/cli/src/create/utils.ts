@@ -5,7 +5,11 @@ import validateNpmPackageName from 'validate-npm-package-name';
 import { parseDocument } from 'yaml';
 
 import { PackageManager } from '../types/index.ts';
-import { getBunCatalogConfig, readBunCatalogDependencyResolver } from '../utils/catalog.ts';
+import {
+  getBunCatalogConfig,
+  getYamlCatalogPath,
+  readBunCatalogDependencyResolver,
+} from '../utils/catalog.ts';
 import {
   VITEST_VERSION,
   VITE_PLUS_NAME,
@@ -86,15 +90,7 @@ export function ensureCreateCatalogEntries(
   );
   let changed = false;
   for (const [name, spec] of entries) {
-    const catalogName = spec.slice('catalog:'.length);
-    const catalogPath =
-      catalogName && (catalogName !== 'default' || packageManager === PackageManager.yarn)
-        ? ['catalogs', catalogName]
-        : packageManager === PackageManager.yarn ||
-            doc.has('catalog') ||
-            !doc.hasIn(['catalogs', 'default'])
-          ? ['catalog']
-          : ['catalogs', 'default'];
+    const catalogPath = getYamlCatalogPath(doc, spec, packageManager);
     const entryPath = [...catalogPath, name];
     if (!doc.hasIn(entryPath)) {
       doc.setIn(entryPath, versions[name]);

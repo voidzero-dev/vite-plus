@@ -9,6 +9,7 @@ import { PackageManager, type WorkspacePackage } from '../../types/index.ts';
 import {
   createCatalogDependencyResolverFromCatalogs,
   getBunCatalogConfig,
+  getYamlCatalogPath,
   readBunCatalogDependencyResolver,
   selectPreferredCatalogSpec,
   type CatalogDependencyResolver,
@@ -901,16 +902,7 @@ export function rewriteCatalog(
     parsed?.catalogs,
     packageManager,
   );
-  const preferredCatalogName = preferredCatalogSpec.slice('catalog:'.length);
-  const targetPath: readonly string[] =
-    preferredCatalogName &&
-    (preferredCatalogName !== 'default' || packageManager === PackageManager.yarn)
-      ? ['catalogs', preferredCatalogName]
-      : packageManager === PackageManager.yarn ||
-          doc.has('catalog') ||
-          !doc.hasIn(['catalogs', 'default'])
-        ? ['catalog']
-        : ['catalogs', 'default'];
+  const targetPath = getYamlCatalogPath(doc, preferredCatalogSpec, packageManager);
 
   rewriteYamlCatalogAtPath(
     doc,
