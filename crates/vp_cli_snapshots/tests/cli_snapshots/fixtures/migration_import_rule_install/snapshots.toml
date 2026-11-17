@@ -1,0 +1,14 @@
+[[case]]
+name = "migration_import_rule_install"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+comment = "An existing Vite+ project installs dependencies before evaluating dynamic lint settings."
+steps = [
+  { argv = ["vpt", "stat-file", "node_modules", "--assert", "missing"] },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"] },
+  { argv = ["vpt", "stat-file", "node_modules/vite-plus/package.json", "--assert", "file"] },
+  { argv = ["vpt", "print-file", "templates/unit.test.ts"] },
+  { argv = ["vpt", "print-file", "unit.test.ts"] },
+  { argv = ["vpt", "print-file", "package.json"] },
+]

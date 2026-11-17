@@ -32,6 +32,7 @@ import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
 import { displayRelative } from '../../utils/path.ts';
 import { hasBaseUrlInTsconfig } from '../../utils/tsconfig.ts';
 import { parseSource, sameStaticValue } from '../ast-utils.ts';
+import { readLintConfigInWorker } from '../compat/runner.ts';
 import { detectConfigs, type ConfigFiles } from '../detector.ts';
 import {
   collectInstalledPackageNames,
@@ -1024,12 +1025,25 @@ function importRuleEnabled(rule: unknown): boolean | undefined {
 }
 
 /** Read the import rule before migration merges or removes lint configs. */
-export async function resolveImportRuleConfig(projectPath: string): Promise<string> {
+export async function resolveImportRuleConfig(
+  projectPath: string,
+  options?: { prepareRuntime?: () => Promise<void>; report?: MigrationReport },
+): Promise<string> {
   const extracted = readStaticLintConfig(projectPath);
   let lint: OxlintConfig | undefined;
   if (extracted == null) {
-    const { resolveViteConfig } = await import('../../resolve-vite-config.ts');
-    lint = (await resolveViteConfig(projectPath)).lint;
+    await options?.prepareRuntime?.();
+    try {
+      lint = await readLintConfigInWorker(projectPath);
+    } catch {
+      warnMigration(
+        'Could not load lint configuration in an isolated process. Skipped Vite/Vitest import rewrites; fix the config and re-run `vp migrate`.',
+        options?.report,
+      );
+      // An unreadable config may disable the rule. Preserve imports rather than
+      // applying defaults that would overwrite the user's protected files.
+      return JSON.stringify({ enabled: false, overrides: [] });
+    }
   } else {
     lint = JSON.parse(extracted);
   }

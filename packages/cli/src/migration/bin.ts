@@ -833,7 +833,7 @@ async function executeMigrationPlan(
     },
   );
 
-  const importRuleConfig = await resolveImportRuleConfig(workspaceInfo.rootDir);
+  const importRuleConfig = await resolveImportRuleConfig(workspaceInfo.rootDir, { report });
 
   // 4. Check vite and vitest version is supported by migration
   updateMigrationProgress('Validating toolchain');
@@ -1220,13 +1220,45 @@ async function main() {
     // (raw vite is read from the untouched node_modules).
     report.dependencyUpgrades = await collectToolchainVersionChanges(workspaceInfoOptional.rootDir);
 
+    // Dynamic lint settings can import the project's dependencies. Install before
+    // evaluating them, while the original config and dependency specs still exist.
+    // Static configs need no initial install; the normal upgrade installs below.
+    let initialInstallFailed = false;
+    const importRuleConfig = await resolveImportRuleConfig(workspaceInfoOptional.rootDir, {
+      report,
+      prepareRuntime: async () => {
+        const resolved = await ensureExistingPackageManager();
+        if (convertYarnPnp && configureYarnNodeModulesMode(workspaceInfoOptional.rootDir)) {
+          report.packageManagerBootstrapConfigured = true;
+          didMigrate = true;
+        }
+        updateMigrationProgress('Installing dependencies');
+        const initialInstallSummary = await runViteInstall(
+          workspaceInfoOptional.rootDir,
+          options.interactive,
+          undefined,
+          { silent: true, packageManager, packageManagerVersion: resolved?.version },
+        );
+        initialInstallFailed = initialInstallSummary.status === 'failed';
+        if (initialInstallFailed) {
+          clearMigrationProgress();
+        }
+        installDurationMs += handleInstallResult(
+          initialInstallSummary,
+          workspaceInfoOptional.rootDir,
+          report,
+          { propagateExitCode: false },
+        );
+        updateMigrationProgress('Reading lint configuration');
+      },
+    });
+
     // finalizeCoreMigrationForExistingVitePlus rewrites Vite/Vitest imports across
     // every workspace package via a synchronous native directory walk; on a large
     // monorepo it is the slowest phase (several seconds) and blocks the event loop,
     // so surface it first instead of leaving the spinner silent. The spinner paints
     // this message synchronously on start(), before the walk begins.
     updateMigrationProgress('Rewriting toolchain imports across the workspace');
-    const importRuleConfig = await resolveImportRuleConfig(workspaceInfoOptional.rootDir);
     const coreMigrationResult = finalizeCoreMigrationForExistingVitePlus(
       workspaceInfoOptional,
       true,
@@ -1320,7 +1352,7 @@ async function main() {
       : undefined;
 
     // Runtime metadata can participate in the package manager's lockfile.
-    let needsInstall = coreMigrationResult.dependencies || nodeUpgrades > 0;
+    let needsInstall = coreMigrationResult.dependencies || nodeUpgrades > 0 || initialInstallFailed;
     if (vitePlusBootstrapPending) {
       const downloadResult = await ensureExistingPackageManager();
       if (downloadResult && packageManager) {

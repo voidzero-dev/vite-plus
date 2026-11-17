@@ -4,10 +4,11 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { resolveViteConfig } from '../../resolve-vite-config.ts';
+import { readLintConfigInWorker } from '../compat/runner.ts';
 import { resolveImportRuleConfig, rewriteAllImports } from '../migrator.ts';
+import { createMigrationReport } from '../report.ts';
 
-vi.mock('../../resolve-vite-config.ts', () => ({ resolveViteConfig: vi.fn() }));
+vi.mock('../compat/runner.ts', () => ({ readLintConfigInWorker: vi.fn() }));
 
 describe('migration import rule settings', () => {
   let root: string;
@@ -39,7 +40,7 @@ describe('migration import rule settings', () => {
       config({ rules: { [rule]: severity } });
       expect(await rewrite()).toBe(false);
       expect(read('unit.test.ts')).toContain("from 'vitest'");
-      expect(resolveViteConfig).not.toHaveBeenCalled();
+      expect(readLintConfigInWorker).not.toHaveBeenCalled();
     },
   );
 
@@ -78,12 +79,43 @@ describe('migration import rule settings', () => {
 
   it('resolves dynamic lint config when static extraction cannot read it', async () => {
     write('vite.config.ts', 'export default () => getConfig();');
-    vi.mocked(resolveViteConfig, { partial: true }).mockResolvedValue({
-      lint: { rules: { [rule]: 'off' } },
+    vi.mocked(readLintConfigInWorker).mockResolvedValue({
+      rules: { [rule]: 'off' },
     });
     expect(await rewrite()).toBe(false);
-    expect(resolveViteConfig).toHaveBeenCalledWith(root);
+    expect(readLintConfigInWorker).toHaveBeenCalledWith(root);
     expect(read('unit.test.ts')).toContain("from 'vitest'");
+  });
+
+  it('prepares dependencies before loading dynamic config, but not for static config', async () => {
+    const prepareRuntime = vi.fn(async () => {
+      expect(readLintConfigInWorker).not.toHaveBeenCalled();
+    });
+    config({});
+    await resolveImportRuleConfig(root, { prepareRuntime });
+    expect(prepareRuntime).not.toHaveBeenCalled();
+
+    write('vite.config.ts', 'export default () => ({});');
+    vi.mocked(readLintConfigInWorker).mockImplementation(async () => {
+      expect(prepareRuntime).toHaveBeenCalledOnce();
+      return undefined;
+    });
+    await resolveImportRuleConfig(root, { prepareRuntime });
+    expect(readLintConfigInWorker).toHaveBeenCalledOnce();
+  });
+
+  it('warns and preserves imports when dynamic config cannot be loaded', async () => {
+    write('vite.config.ts', 'export default () => getConfig();');
+    // A failed Vite config must not fall back to an unrelated JSON rule setting.
+    write('.oxlintrc.json', JSON.stringify({ rules: { [rule]: 'error' } }));
+    vi.mocked(readLintConfigInWorker).mockRejectedValue(new Error('config worker crashed'));
+    const report = createMigrationReport();
+    const settings = await resolveImportRuleConfig(root, { report });
+    expect(rewriteAllImports(root, true, report, true, [], settings)).toBe(false);
+    expect(read('unit.test.ts')).toContain("from 'vitest'");
+    expect(report.warnings).toEqual([
+      expect.stringContaining('Skipped Vite/Vitest import rewrites'),
+    ]);
   });
 
   it('reads JSON config inheritance before the config migration removes it', async () => {

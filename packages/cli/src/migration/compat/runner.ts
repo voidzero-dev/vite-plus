@@ -1,64 +1,55 @@
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
+import type { OxlintConfig } from 'oxlint';
+
 import { runCommandSilently } from '../../utils/command.ts';
 import { addMigrationWarning, type MigrationReport } from '../report.ts';
-import { ROLLDOWN_COMPAT_RESULT_PREFIX } from './protocol.ts';
+import { LINT_CONFIG_RESULT_PREFIX, ROLLDOWN_COMPAT_RESULT_PREFIX } from './protocol.ts';
 
 export { ROLLDOWN_COMPAT_RESULT_PREFIX };
 
 /**
  * Resolve the isolated compat worker emitted at `migration/compat/worker.js`.
  *
- * The worker is a sibling of this module in source (`src/migration/compat/`),
- * so `./worker.js` is the correct relative path. The bundler, however, inlines
- * this runner into the parent `migration/bin.js` entry, which sits one level up
- * from the emitted `migration/compat/worker.js`; there the worker lives in the
- * nested `./compat/` directory. A fixed literal can only satisfy one layout:
- * `./compat/worker.js` doubles to `compat/compat/worker.js` in source, while
- * `./worker.js` misses the bundled worker. Probe for the nested
- * `./compat/worker.js` next to this module to pick the right prefix for
- * whichever layout this code is running in.
+ * In source the worker is a sibling of this module. Bundling can place this
+ * runner in `migration/bin.js` or a shared chunk at the dist root, since both
+ * migration and creation import config helpers. Check both bundled layouts
+ * before falling back to the source layout.
  */
 function resolveWorkerPath(): string {
-  const nestedWorker = new URL('./compat/worker.js', import.meta.url);
-  if (existsSync(nestedWorker)) {
-    return fileURLToPath(nestedWorker);
+  for (const relativePath of ['./migration/compat/worker.js', './compat/worker.js']) {
+    const worker = new URL(relativePath, import.meta.url);
+    if (existsSync(worker)) {
+      return fileURLToPath(worker);
+    }
   }
   return fileURLToPath(new URL('./worker.js', import.meta.url));
 }
 
 // Config resolution executes arbitrary project code; on the upgrade path the
 // project's own (older) vite-plus copy may not honor the lazyPlugins-skip env
-// handshake, so a blocking plugin factory can wedge the worker. The check is
-// best-effort: kill the worker after this long and continue without warnings
-// rather than hanging the migration.
+// handshake, so a blocking plugin factory can wedge the worker. Kill it after
+// this long; each caller decides how to report the failed config load.
 const WORKER_TIMEOUT_MS = 30_000;
 
 interface RolldownCompatibilityResult {
   warnings: string[];
 }
 
-function parseRolldownCompatibilityResult(stdout: Buffer): RolldownCompatibilityResult | undefined {
+function parseWorkerResult(stdout: Buffer, prefix: string): unknown {
   const output = stdout.toString();
-  const markerIndex = output.lastIndexOf(ROLLDOWN_COMPAT_RESULT_PREFIX);
+  const markerIndex = output.lastIndexOf(prefix);
   if (markerIndex === -1) {
     return undefined;
   }
 
-  const resultStart = markerIndex + ROLLDOWN_COMPAT_RESULT_PREFIX.length;
+  const resultStart = markerIndex + prefix.length;
   const resultEnd = output.indexOf('\n', resultStart);
   const serialized = output.slice(resultStart, resultEnd === -1 ? undefined : resultEnd).trim();
 
   try {
-    const result = JSON.parse(serialized) as Partial<RolldownCompatibilityResult>;
-    if (
-      !Array.isArray(result.warnings) ||
-      !result.warnings.every((item) => typeof item === 'string')
-    ) {
-      return undefined;
-    }
-    return { warnings: result.warnings };
+    return JSON.parse(serialized);
   } catch {
     return undefined;
   }
@@ -88,11 +79,43 @@ export async function checkRolldownCompatibility(
       return;
     }
 
-    const compatibilityResult = parseRolldownCompatibilityResult(result.stdout);
-    for (const warning of compatibilityResult?.warnings ?? []) {
+    const compatibilityResult = parseWorkerResult(result.stdout, ROLLDOWN_COMPAT_RESULT_PREFIX) as
+      | Partial<RolldownCompatibilityResult>
+      | undefined;
+    if (
+      !Array.isArray(compatibilityResult?.warnings) ||
+      !compatibilityResult.warnings.every((item) => typeof item === 'string')
+    ) {
+      return;
+    }
+    for (const warning of compatibilityResult.warnings) {
       addMigrationWarning(report, warning);
     }
   } catch {
     // Config resolution is best-effort. Skip failures silently.
   }
+}
+
+/** Read only serializable lint metadata without running project code in migration. */
+export async function readLintConfigInWorker(rootDir: string): Promise<OxlintConfig | undefined> {
+  const result = await runCommandSilently({
+    command: process.execPath,
+    args: [resolveWorkerPath(), rootDir, 'lint'],
+    cwd: rootDir,
+    envs: process.env,
+    timeoutMs: WORKER_TIMEOUT_MS,
+  });
+  if (result.exitCode !== 0) {
+    throw new Error(`Config worker exited with code ${result.exitCode}`);
+  }
+  const metadata = parseWorkerResult(result.stdout, LINT_CONFIG_RESULT_PREFIX) as
+    | { lint?: OxlintConfig | null }
+    | undefined;
+  if (metadata?.lint === null) {
+    return undefined;
+  }
+  if (!metadata?.lint || typeof metadata.lint !== 'object' || Array.isArray(metadata.lint)) {
+    throw new Error('Config worker did not return lint metadata');
+  }
+  return metadata.lint;
 }

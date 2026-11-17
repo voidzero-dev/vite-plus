@@ -94,3 +94,17 @@ steps = [
   { argv = ["vpt", "print-file", "examples/standalone/unit.test.ts"] },
   { argv = ["vpt", "print-file", "packages/app/unit.test.ts"] },
 ]
+
+[[case]]
+name = "migration_import_rule_runtime_cjs"
+vp = "local"
+comment = "Isolated config loading preserves CommonJS support and inherited lint overrides."
+steps = [
+  { argv = ["vpt", "rm", "vite.config.ts"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.cjs", "module.exports = () => ({ lint: { extends: [{ overrides: [{ files: ['templates/**', 'examples/**'], rules: { 'vite-plus/prefer-vite-plus-imports': 'off' } }] }], overrides: [{ files: ['templates/managed/**'], rules: { 'vite-plus/prefer-vite-plus-imports': 'error' } }] } });\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"] },
+  { argv = ["vpt", "print-file", "templates/starter/unit.test.ts"] },
+  { argv = ["vpt", "print-file", "templates/managed/unit.test.ts"] },
+  { argv = ["vpt", "print-file", "examples/standalone/unit.test.ts"] },
+  { argv = ["vpt", "print-file", "packages/app/unit.test.ts"] },
+]
