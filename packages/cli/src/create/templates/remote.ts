@@ -2,13 +2,9 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import colors from 'picocolors';
 
 import type { WorkspaceInfo } from '../../types/index.ts';
-import { runCommand, runCommandSilently } from '../../utils/command.ts';
+import { getVpCommand, runCommand, runCommandSilently } from '../../utils/command.ts';
 import { checkNpmPackageExists } from '../../utils/package.ts';
-import {
-  type ExecutionWithProjectDir,
-  formatDlxCommand,
-  runCommandAndDetectProjectDir,
-} from '../command.ts';
+import { type ExecutionWithProjectDir, runCommandAndDetectProjectDir } from '../command.ts';
 import type { TemplateInfo } from './types.ts';
 
 const { gray, yellow } = colors;
@@ -85,12 +81,15 @@ export async function runRemoteTemplateCommand(
   silent = false,
 ): Promise<ExecutionWithProjectDir> {
   autoFixRemoteTemplateCommand(templateInfo, workspaceInfo);
-  const remotePackageName = templateInfo.command;
-  const execArgs = [...templateInfo.args];
-  const envs = templateInfo.envs;
-  const { command, args } = formatDlxCommand(remotePackageName, execArgs, workspaceInfo);
+  const dlxArgs = ['dlx', templateInfo.command, ...templateInfo.args];
+  // `vp dlx` detects the package manager from cwd and defaults to pnpm outside a project.
+  const envs = {
+    ...templateInfo.envs,
+    VP_PACKAGE_MANAGER: `${workspaceInfo.packageManager}@${workspaceInfo.packageManagerVersion}`,
+  };
+  const { command, args } = getVpCommand(dlxArgs);
   if (!silent) {
-    prompts.log.info(`Running: ${gray(`${command} ${args.join(' ')}`)}`);
+    prompts.log.info(`Running: ${gray(`vp ${dlxArgs.join(' ')}`)}`);
   }
   if (detectCreatedProjectDir) {
     return await runCommandAndDetectProjectDir(
