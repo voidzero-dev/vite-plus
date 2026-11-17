@@ -25,7 +25,7 @@ vp = ["local", "global"]
 steps = [
   { argv = ["git", "init"], snapshot = false },
   { argv = ["git", "config", "core.hooksPath", ".husky/_"], snapshot = false },
-  { argv = ["vpt", "mkdir", ".husky/_"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", ".husky/_"], snapshot = false },
   { argv = ["vpt", "write-file", ".vite-hooks/pre-commit", "exit 0\n"], snapshot = false },
   { argv = ["vp", "config", "--no-agent"], tty = false, comment = "recover an empty old directory automatically" },
   { argv = ["git", "config", "--local", "core.hooksPath"], comment = "Vite+ hooks are active without an explicit override" },
