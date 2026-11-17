@@ -83,9 +83,12 @@ export async function runRemoteTemplateCommand(
   autoFixRemoteTemplateCommand(templateInfo, workspaceInfo);
   const dlxArgs = ['dlx', templateInfo.command, ...templateInfo.args];
   // `vp dlx` detects the package manager from cwd and defaults to pnpm outside a project.
+  // A user override is kept as given: its hash selects the verified install create downloaded.
   const envs = {
     ...templateInfo.envs,
-    VP_PACKAGE_MANAGER: `${workspaceInfo.packageManager}@${workspaceInfo.packageManagerVersion}`,
+    VP_PACKAGE_MANAGER:
+      templateInfo.envs.VP_PACKAGE_MANAGER?.trim() ||
+      `${workspaceInfo.packageManager}@${workspaceInfo.packageManagerVersion}`,
   };
   const { command, args } = getVpCommand(dlxArgs);
   if (!silent) {
