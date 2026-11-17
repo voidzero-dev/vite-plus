@@ -1,5 +1,6 @@
 import { rewriteScripts } from '../../../binding/index.js';
 import { PackageManager } from '../../types/index.ts';
+import type { CatalogDependencyResolver } from '../../utils/catalog.ts';
 import {
   VITEST_VERSION,
   VITE_PLUS_NAME,
@@ -32,7 +33,6 @@ import {
   REMOVE_PACKAGES,
   VITEST_BROWSER_DEP_NAMES,
   VITEST_IS_MANAGED_OVERRIDE,
-  type CatalogDependencyResolver,
   type PackageJsonDependencyField,
 } from './shared.ts';
 

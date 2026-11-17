@@ -5,6 +5,7 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import type { OxlintConfig } from 'oxlint';
 import { coerce, isLessThan, satisfies, tryParse } from 'verkit';
 
+import type { CatalogDependencyResolver } from '../../utils/catalog.ts';
 import {
   VITEST_VERSION,
   VITE_PLUS_OVERRIDE_PACKAGES,
@@ -333,13 +334,6 @@ export type PackageJsonDependencyField =
   | 'dependencies'
   | 'peerDependencies'
   | 'optionalDependencies';
-
-export type CatalogDependencyResolver = ((
-  catalogSpec: string,
-  dependencyName: string,
-) => string | undefined) & {
-  preferredCatalogSpec: string;
-};
 
 export function warnMigration(message: string, report?: MigrationReport) {
   addMigrationWarning(report, message);

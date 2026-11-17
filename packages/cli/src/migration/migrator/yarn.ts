@@ -6,6 +6,7 @@ import { coerce } from 'verkit';
 import { Scalar, YAMLSeq } from 'yaml';
 
 import { PackageManager, type WorkspacePackage } from '../../types/index.ts';
+import { createCatalogDependencyResolverFromCatalogs } from '../../utils/catalog.ts';
 import {
   VITEST_AGE_GATE_EXEMPT_PACKAGES,
   VITE_PLUS_NAME,
@@ -13,12 +14,7 @@ import {
 } from '../../utils/constants.ts';
 import { readJsonFile } from '../../utils/json.ts';
 import { editYamlFile, readYamlFile, scalarString } from '../../utils/yaml.ts';
-import {
-  createCatalogDependencyResolverFromCatalogs,
-  overridesSatisfyVitePlus,
-  rewriteCatalog,
-  usesWebdriverioProvider,
-} from '../migrator.ts';
+import { overridesSatisfyVitePlus, rewriteCatalog, usesWebdriverioProvider } from '../migrator.ts';
 import { type MigrationReport } from '../report.ts';
 import {
   WEBDRIVERIO_PROVIDER,

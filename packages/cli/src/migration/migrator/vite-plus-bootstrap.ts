@@ -3,6 +3,10 @@ import path from 'node:path';
 
 import { PackageManager, type WorkspaceInfo, type WorkspacePackage } from '../../types/index.ts';
 import {
+  readBunCatalogDependencyResolver,
+  type CatalogDependencyResolver,
+} from '../../utils/catalog.ts';
+import {
   VITEST_VERSION,
   VITE_PLUS_NAME,
   VITE_PLUS_OVERRIDE_PACKAGES,
@@ -40,7 +44,6 @@ import {
   pnpmWorkspaceTsrsTrustPolicyExceptionPending,
   projectUsesVitestDirectly,
   pruneLegacyWrapperAliases,
-  readBunCatalogDependencyResolver,
   readPnpmWorkspaceCatalogDependencyResolver,
   readPnpmWorkspaceOverrides,
   readPnpmWorkspacePeerDependencyRules,
@@ -72,7 +75,6 @@ import {
   managedOverrideKey,
   pnpmMajor,
   pnpmOverrideKey,
-  type CatalogDependencyResolver,
   type ManagedOverrideKeyStyle,
   type PnpmPackageJsonSettings,
 } from './shared.ts';

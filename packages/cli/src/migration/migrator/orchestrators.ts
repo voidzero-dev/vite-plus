@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { PackageManager, type WorkspaceInfo, type WorkspacePackage } from '../../types/index.ts';
+import type { CatalogDependencyResolver } from '../../utils/catalog.ts';
 import { VITE_PLUS_NAME, VITE_PLUS_VERSION, isForceOverrideMode } from '../../utils/constants.ts';
 import { editJsonFile, readJsonFile } from '../../utils/json.ts';
 import {
@@ -68,7 +69,6 @@ import { type MigrationReport } from '../report.ts';
 import {
   PROVIDER_OVERRIDE_DROP_NAMES,
   pnpmMajor,
-  type CatalogDependencyResolver,
   type PnpmPackageJsonSettings,
   type PreparedOxlintConfigs,
 } from './shared.ts';

@@ -4,8 +4,8 @@ import path from 'node:path';
 import validateNpmPackageName from 'validate-npm-package-name';
 import { parseDocument } from 'yaml';
 
-import { getBunCatalogConfig, readBunCatalogDependencyResolver } from '../migration/migrator.ts';
 import { PackageManager } from '../types/index.ts';
+import { getBunCatalogConfig, readBunCatalogDependencyResolver } from '../utils/catalog.ts';
 import {
   VITE_PLUS_NAME,
   VITE_PLUS_OVERRIDE_PACKAGES,

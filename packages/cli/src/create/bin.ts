@@ -19,7 +19,6 @@ import {
   promptEslintMigration,
   promptPrettierMigration,
   promptTsupMigration,
-  readBunCatalogDependencyResolver,
   rewriteMonorepo,
   rewriteMonorepoProject,
   rewriteStandaloneProject,
@@ -40,6 +39,7 @@ import {
   detectGatedBuilds,
   resolveApproveBuildTargets,
 } from '../utils/approve-builds.ts';
+import { readBunCatalogDependencyResolver } from '../utils/catalog.ts';
 import { unwrapCliParseOutcome } from '../utils/cli-parse.ts';
 import { isForceOverrideMode } from '../utils/constants.ts';
 import { documentationUrl } from '../utils/documentation.ts';
