@@ -183,8 +183,7 @@ export function bunSupportsCatalog(
   }
   // Mirrors `useWorkspacesCatalog` in rewriteBunCatalog.
   const writesNestedCatalog =
-    !Array.isArray(workspaces) &&
-    (workspaces.catalog != null || (pkg.catalog == null && workspaces.catalogs != null));
+    !Array.isArray(workspaces) && (workspaces.catalog != null || workspaces.catalogs != null);
   return (
     writesNestedCatalog ||
     versionAtLeast(version, BUN_TOP_LEVEL_CATALOG_MIN_VERSION, ['latest', 'canary'])
@@ -347,6 +346,7 @@ export function rewritePnpmWorkspaceYaml(
       usesVitest,
       vitestEcosystemPackages,
       catalogAdditions,
+      PackageManager.pnpm,
     );
     if (!writeWorkspaceSettings) {
       return;
@@ -771,7 +771,7 @@ export function createCatalogDependencyResolver(
       catalog?: Record<string, string>;
       catalogs?: Record<string, Record<string, string>>;
     } | null;
-    return createCatalogDependencyResolverFromCatalogs(doc?.catalog, doc?.catalogs);
+    return createCatalogDependencyResolverFromCatalogs(doc?.catalog, doc?.catalogs, packageManager);
   }
   if (packageManager === PackageManager.yarn) {
     const yarnrcYmlPath = path.join(projectPath, '.yarnrc.yml');
@@ -782,7 +782,7 @@ export function createCatalogDependencyResolver(
       catalog?: Record<string, string>;
       catalogs?: Record<string, Record<string, string>>;
     } | null;
-    return createCatalogDependencyResolverFromCatalogs(doc?.catalog, doc?.catalogs);
+    return createCatalogDependencyResolverFromCatalogs(doc?.catalog, doc?.catalogs, packageManager);
   }
   if (packageManager === PackageManager.bun) {
     const packageJsonPath = path.join(projectPath, 'package.json');
@@ -794,9 +794,6 @@ export function createCatalogDependencyResolver(
       catalog?: Record<string, string>;
       catalogs?: Record<string, Record<string, string>>;
     };
-    // A missing/absent `workspaces.catalog` resolves identically whether the
-    // fallback is `undefined` (optional chaining) or `{}`, so this shares the
-    // exact bun catalog resolution used by the in-memory callers.
     return readBunCatalogDependencyResolver(pkg);
   }
   return undefined;
@@ -805,18 +802,22 @@ export function createCatalogDependencyResolver(
 export function createCatalogDependencyResolverFromCatalogs(
   catalog: Record<string, string> | undefined,
   catalogs: Record<string, Record<string, string>> | undefined,
+  packageManager: PackageManager,
 ): CatalogDependencyResolver {
-  const preferredCatalogSpec = selectPreferredCatalogSpec(catalog, catalogs);
+  // Bun's named default overrides its shorthand; Yarn keeps the two catalogs separate.
+  const defaultCatalog =
+    packageManager === PackageManager.bun
+      ? (catalogs?.default ?? catalog)
+      : packageManager === PackageManager.yarn
+        ? catalog
+        : (catalog ?? catalogs?.default);
+  const preferredCatalogSpec = selectPreferredCatalogSpec(defaultCatalog, catalogs, packageManager);
   const resolver = (catalogSpec: string, dependencyName: string) => {
     const catalogName = catalogSpec.slice('catalog:'.length);
-    // pnpm accepts the default catalog in either `catalog` or
-    // `catalogs.default`, but rejects a workspace that defines both. Both
-    // `catalog:` and `catalog:default` resolve through that one logical
-    // default catalog.
-    if (catalogName && catalogName !== 'default') {
+    if (catalogName && (catalogName !== 'default' || packageManager === PackageManager.yarn)) {
       return catalogs?.[catalogName]?.[dependencyName];
     }
-    return (catalog ?? catalogs?.default)?.[dependencyName];
+    return defaultCatalog?.[dependencyName];
   };
   return Object.assign(resolver, { preferredCatalogSpec });
 }
@@ -824,6 +825,7 @@ export function createCatalogDependencyResolverFromCatalogs(
 function selectPreferredCatalogSpec(
   catalog: Record<string, string> | undefined,
   catalogs: Record<string, Record<string, string>> | undefined,
+  packageManager: PackageManager,
 ): string {
   const candidates: Array<{ spec: string; values: Record<string, string> }> = [];
   if (catalog) {
@@ -831,7 +833,10 @@ function selectPreferredCatalogSpec(
   }
   for (const [name, values] of Object.entries(catalogs ?? {})) {
     candidates.push({
-      spec: name === 'default' ? 'catalog:' : `catalog:${name}`,
+      spec:
+        name === 'default' && packageManager !== PackageManager.yarn
+          ? 'catalog:'
+          : `catalog:${name}`,
       values,
     });
   }
@@ -848,11 +853,8 @@ function selectPreferredCatalogSpec(
     }
   }
 
-  // Reuse either valid spelling of the default catalog. Do not repurpose an
-  // unrelated named catalog; when no managed/default catalog exists, create
-  // the conventional top-level `catalog` instead.
-  if (catalog || catalogs?.default) {
-    return 'catalog:';
+  if (!catalog && catalogs?.default && packageManager === PackageManager.yarn) {
+    return 'catalog:default';
   }
   return 'catalog:';
 }
@@ -942,17 +944,25 @@ export function rewriteCatalog(
   usesVitest: boolean,
   vitestEcosystemPackages: ReadonlySet<string>,
   catalogAdditions: ReadonlySet<string>,
+  packageManager: PackageManager,
 ): string {
   const parsed = doc.toJS() as {
     catalog?: Record<string, string>;
     catalogs?: Record<string, Record<string, string>>;
   } | null;
-  const preferredCatalogSpec = selectPreferredCatalogSpec(parsed?.catalog, parsed?.catalogs);
+  const preferredCatalogSpec = selectPreferredCatalogSpec(
+    parsed?.catalog,
+    parsed?.catalogs,
+    packageManager,
+  );
   const preferredCatalogName = preferredCatalogSpec.slice('catalog:'.length);
   const targetPath: readonly string[] =
-    preferredCatalogName && preferredCatalogName !== 'default'
+    preferredCatalogName &&
+    (preferredCatalogName !== 'default' || packageManager === PackageManager.yarn)
       ? ['catalogs', preferredCatalogName]
-      : doc.has('catalog') || !doc.hasIn(['catalogs', 'default'])
+      : packageManager === PackageManager.yarn ||
+          doc.has('catalog') ||
+          !doc.hasIn(['catalogs', 'default'])
         ? ['catalog']
         : ['catalogs', 'default'];
 
@@ -1153,16 +1163,14 @@ export function rewriteBunCatalog(
     // prefer the location the user already chose to avoid moving their config.
     const workspacesObj =
       pkg.workspaces && !Array.isArray(pkg.workspaces) ? pkg.workspaces : undefined;
-    const useWorkspacesCatalog =
-      workspacesObj?.catalog != null || (pkg.catalog == null && workspacesObj?.catalogs != null);
+    const activeCatalogs = getBunCatalogConfig(pkg);
+    const useWorkspacesCatalog = activeCatalogs === workspacesObj;
     // Like the pnpm catalog, add missing entries to the catalog the new
     // `catalog:` references point at. A named one such as `catalogs.build`
     // takes them instead of a newly created default catalog.
     const { preferredCatalogSpec } = readBunCatalogDependencyResolver(pkg);
     const preferredName = preferredCatalogSpec.slice('catalog:'.length);
-    const namedTarget = preferredName
-      ? (workspacesObj?.catalogs?.[preferredName] ?? pkg.catalogs?.[preferredName])
-      : undefined;
+    const namedTarget = activeCatalogs.catalogs?.[preferredName || 'default'];
     const defaultCatalog = useWorkspacesCatalog ? workspacesObj?.catalog : pkg.catalog;
     const catalog: Record<string, string> = { ...defaultCatalog };
 
@@ -1406,7 +1414,11 @@ export function readPnpmWorkspaceCatalogDependencyResolver(
     catalog?: Record<string, string>;
     catalogs?: Record<string, Record<string, string>>;
   } | null;
-  return createCatalogDependencyResolverFromCatalogs(doc?.catalog, doc?.catalogs);
+  return createCatalogDependencyResolverFromCatalogs(
+    doc?.catalog,
+    doc?.catalogs,
+    PackageManager.pnpm,
+  );
 }
 
 export function readPnpmWorkspaceOverrides(
@@ -1557,23 +1569,21 @@ export function ensurePnpmWorkspacePackages(
   return changed;
 }
 
+export function getBunCatalogConfig(pkg: {
+  workspaces?: NpmWorkspaces;
+  catalog?: Record<string, string>;
+  catalogs?: Record<string, Record<string, string>>;
+}) {
+  const nested = pkg.workspaces && !Array.isArray(pkg.workspaces) ? pkg.workspaces : undefined;
+  // Bun uses the nested catalog configuration as a whole, without falling back to root entries.
+  return nested?.catalog != null || nested?.catalogs != null ? nested : pkg;
+}
+
 export function readBunCatalogDependencyResolver(pkg: {
   workspaces?: NpmWorkspaces;
   catalog?: Record<string, string>;
   catalogs?: Record<string, Record<string, string>>;
 }): CatalogDependencyResolver {
-  const workspacesObj = pkg.workspaces && !Array.isArray(pkg.workspaces) ? pkg.workspaces : {};
-  const fromWorkspaces = createCatalogDependencyResolverFromCatalogs(
-    workspacesObj.catalog,
-    workspacesObj.catalogs,
-  );
-  const fromPkg = createCatalogDependencyResolverFromCatalogs(pkg.catalog, pkg.catalogs);
-  const resolver = (catalogSpec: string, dependencyName: string) =>
-    fromWorkspaces(catalogSpec, dependencyName) ?? fromPkg(catalogSpec, dependencyName);
-  return Object.assign(resolver, {
-    preferredCatalogSpec:
-      workspacesObj.catalog || workspacesObj.catalogs
-        ? fromWorkspaces.preferredCatalogSpec
-        : fromPkg.preferredCatalogSpec,
-  });
+  const { catalog, catalogs } = getBunCatalogConfig(pkg);
+  return createCatalogDependencyResolverFromCatalogs(catalog, catalogs, PackageManager.bun);
 }

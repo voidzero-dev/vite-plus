@@ -8,6 +8,8 @@ import { stringify } from 'yaml';
 import {
   createCatalogDependencyResolver,
   rewriteMonorepoProject,
+  rewriteYarnrcYml,
+  yarnrcSatisfiesVitePlus,
 } from '../../migration/migrator.ts';
 import { PackageManager } from '../../types/index.ts';
 import { VITE_PLUS_OVERRIDE_PACKAGES, VITE_PLUS_VERSION } from '../../utils/constants.ts';
@@ -79,6 +81,16 @@ describe.each([PackageManager.yarn, PackageManager.bun])('%s workspace catalogs'
         createCatalogDependencyResolver(root, pm),
       );
       ensureCreateCatalogEntries(root, project, pm);
+      const spec =
+        kind === 'named'
+          ? 'catalog:tools'
+          : kind === 'default' && pm === PackageManager.yarn
+            ? 'catalog:default'
+            : 'catalog:';
+      expect(readJsonFile(path.join(project, 'package.json')).devDependencies).toEqual({
+        vite: spec,
+        'vite-plus': spec,
+      });
       const result = pm === PackageManager.yarn ? readYamlFile(file) : readJsonFile(file);
       const entries = {
         ...(kind === 'missing' ? { 'vite-plus': VITE_PLUS_VERSION } : existing),
@@ -100,6 +112,111 @@ describe.each([PackageManager.yarn, PackageManager.bun])('%s workspace catalogs'
       expect(fs.readFileSync(file, 'utf8')).toBe(before);
     },
   );
+});
+
+it('fills the active Bun catalog even when ignored root catalogs have those entries', () => {
+  const file = path.join(root, 'package.json');
+  const ignored = { vite: '0.0.0-unused', 'vite-plus': '0.0.0-unused' };
+  fs.writeFileSync(
+    file,
+    JSON.stringify({
+      workspaces: { packages: ['apps/*'], catalog: { react: '^19.0.0' } },
+      catalog: ignored,
+      catalogs: { tools: ignored },
+    }),
+  );
+  const resolver = createCatalogDependencyResolver(root, PackageManager.bun)!;
+  expect(resolver('catalog:', 'vite')).toBeUndefined();
+  expect(resolver('catalog:tools', 'vite')).toBeUndefined();
+  fs.writeFileSync(
+    path.join(project, 'package.json'),
+    JSON.stringify({
+      devDependencies: { vite: 'catalog:', 'vite-plus': 'catalog:tools' },
+    }),
+  );
+  ensureCreateCatalogEntries(root, project, PackageManager.bun);
+  expect(readJsonFile(file)).toEqual({
+    workspaces: {
+      packages: ['apps/*'],
+      catalog: { react: '^19.0.0', vite: VITE_PLUS_OVERRIDE_PACKAGES.vite },
+      catalogs: { tools: { 'vite-plus': VITE_PLUS_VERSION } },
+    },
+    catalog: ignored,
+    catalogs: { tools: ignored },
+  });
+});
+
+it('keeps Yarn default and named default catalog references distinct', () => {
+  fs.writeFileSync(
+    path.join(root, '.yarnrc.yml'),
+    stringify({
+      catalog: { vite: '^8.0.0' },
+      catalogs: { default: { 'vite-plus': '0.3.2' } },
+    }),
+  );
+  const resolver = createCatalogDependencyResolver(root, PackageManager.yarn)!;
+  expect(resolver.preferredCatalogSpec).toBe('catalog:default');
+  expect(resolver('catalog:', 'vite')).toBe('^8.0.0');
+  expect(resolver('catalog:', 'vite-plus')).toBeUndefined();
+  expect(resolver('catalog:default', 'vite-plus')).toBe('0.3.2');
+  fs.writeFileSync(
+    path.join(project, 'package.json'),
+    JSON.stringify({
+      devDependencies: { vite: 'catalog:default', 'vite-plus': 'catalog:default' },
+    }),
+  );
+  ensureCreateCatalogEntries(root, project, PackageManager.yarn);
+  expect(readYamlFile(path.join(root, '.yarnrc.yml'))).toEqual({
+    catalog: { vite: '^8.0.0' },
+    catalogs: { default: { 'vite-plus': '0.3.2', vite: VITE_PLUS_OVERRIDE_PACKAGES.vite } },
+  });
+});
+
+it('uses the same named default catalog when migrating Yarn settings', () => {
+  const file = path.join(root, '.yarnrc.yml');
+  fs.writeFileSync(
+    file,
+    stringify({
+      catalog: { react: '^19.0.0' },
+      catalogs: { default: { 'vite-plus': '0.3.2' } },
+    }),
+  );
+  rewriteYarnrcYml(root, false, new Set(), new Set(), true, false);
+  const config = readYamlFile(file);
+  expect(config.catalog).toEqual({ react: '^19.0.0' });
+  expect(config).toMatchObject({
+    catalogs: {
+      default: { 'vite-plus': VITE_PLUS_VERSION, vite: VITE_PLUS_OVERRIDE_PACKAGES.vite },
+    },
+  });
+  expect(yarnrcSatisfiesVitePlus(root, false, true, false)).toBe(true);
+});
+
+it('uses Bun catalogs.default before its catalog shorthand', () => {
+  const file = path.join(root, 'package.json');
+  fs.writeFileSync(
+    file,
+    JSON.stringify({
+      workspaces: ['apps/*'],
+      catalog: { vite: '0.0.0-unused' },
+      catalogs: { default: { 'vite-plus': '0.3.2' } },
+    }),
+  );
+  const resolver = createCatalogDependencyResolver(root, PackageManager.bun)!;
+  expect(resolver('catalog:', 'vite')).toBeUndefined();
+  expect(resolver('catalog:default', 'vite-plus')).toBe('0.3.2');
+  fs.writeFileSync(
+    path.join(project, 'package.json'),
+    JSON.stringify({
+      devDependencies: { vite: 'catalog:', 'vite-plus': 'catalog:' },
+    }),
+  );
+  ensureCreateCatalogEntries(root, project, PackageManager.bun);
+  expect(readJsonFile(file)).toEqual({
+    workspaces: ['apps/*'],
+    catalog: { vite: '0.0.0-unused' },
+    catalogs: { default: { 'vite-plus': '0.3.2', vite: VITE_PLUS_OVERRIDE_PACKAGES.vite } },
+  });
 });
 
 it('fills Bun nested named catalogs without moving or replacing existing settings', () => {

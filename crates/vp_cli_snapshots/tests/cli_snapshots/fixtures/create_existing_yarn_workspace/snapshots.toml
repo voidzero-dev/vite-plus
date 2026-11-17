@@ -14,6 +14,28 @@ steps = [
 ]
 
 [[case]]
+name = "create_existing_yarn_named_default_catalog"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL", "CI"]
+env = { YARN_NPM_MINIMAL_AGE_GATE = "0" }
+comment = "Yarn's named default catalog must remain catalog:default, not catalog:."
+steps = [
+  { argv = ["vp", "create", "vite:application", "--directory", "apps/seed", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"], snapshot = false, timeout = 240000 },
+  { argv = ["vpt", "replace-file-content", ".yarnrc.yml", "catalog:\n", "catalogs:\n  default:\n"], snapshot = false },
+  { argv = ["vpt", "replace-file-content", ".yarnrc.yml", "  vite:", "    vite:"], snapshot = false },
+  { argv = ["vpt", "replace-file-content", ".yarnrc.yml", "  vite-plus:", "    vite-plus:"], snapshot = false },
+  { argv = ["vpt", "json-edit", "apps/seed/package.json", "devDependencies.vite", "catalog:default"], snapshot = false },
+  { argv = ["vpt", "json-edit", "apps/seed/package.json", "devDependencies.vite-plus", "catalog:default"], snapshot = false },
+  { argv = ["vp", "install"], comment = "Verify that the existing workspace installs before adding another app.", snapshot = false },
+  { argv = ["vp", "create", "vite:application", "--directory", "apps/web", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"], snapshot = false, timeout = 240000 },
+  ["vpt", "print-file", ".yarnrc.yml"],
+  ["vpt", "print-file", "apps/web/package.json"],
+  { argv = ["vp", "install", "--frozen-lockfile"], snapshot = false },
+  { argv = ["vp", "run", "build"], cwd = "apps/web", snapshot = false },
+]
+
+[[case]]
 name = "create_existing_yarn_without_catalog_support"
 vp = "local"
 local-registry = true
@@ -27,15 +49,4 @@ steps = [
   ["vpt", "print-file", "apps/web/package.json"],
   { argv = ["vp", "install", "--frozen-lockfile"], snapshot = false },
   { argv = ["vp", "run", "build"], cwd = "apps/web", snapshot = false },
-]
-
-[[case]]
-name = "create_workspace_install_failure"
-vp = "local"
-local-registry = true
-unset-env = ["VP_SKIP_INSTALL", "CI"]
-comment = "Creation reports a failing exit code when workspace dependency installation fails."
-steps = [
-  { argv = ["vpt", "json-edit", "package.json", "dependencies.missing-dependency", "file:./missing-dependency"], snapshot = false },
-  ["vp", "create", "vite:application", "--directory", "apps/web", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"],
 ]

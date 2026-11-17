@@ -124,10 +124,15 @@ describe('generator scaffold dependencies', () => {
     [PackageManager.pnpm, '10.0.0'],
     [PackageManager.yarn, '4.10.0'],
     [PackageManager.bun, '1.3.0'],
-  ])('resolves catalogs.default for %s %s', async (manager, version) => {
+  ])('uses installable versions with catalogs.default for %s %s', async (manager, version) => {
     const pkg = await scaffold(manager, version, {
       catalogs: { default: { '@types/node': '^22', typescript: '^5' } },
     });
-    expect(pkg.devDependencies).toEqual({ '@types/node': 'catalog:', typescript: 'catalog:' });
+    const { catalog } = readYamlFile(path.join(templatesDir, 'monorepo/pnpm-workspace.yaml'));
+    expect(pkg.devDependencies).toEqual(
+      manager === PackageManager.yarn
+        ? catalog
+        : { '@types/node': 'catalog:', typescript: 'catalog:' },
+    );
   });
 });

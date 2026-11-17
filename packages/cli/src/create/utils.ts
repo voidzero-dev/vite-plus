@@ -4,7 +4,7 @@ import path from 'node:path';
 import validateNpmPackageName from 'validate-npm-package-name';
 import { parseDocument } from 'yaml';
 
-import { readBunCatalogDependencyResolver } from '../migration/migrator/catalog.ts';
+import { getBunCatalogConfig, readBunCatalogDependencyResolver } from '../migration/migrator.ts';
 import { PackageManager } from '../types/index.ts';
 import {
   VITE_PLUS_NAME,
@@ -48,8 +48,7 @@ export function ensureCreateCatalogEntries(
       catalog?: Record<string, string>;
       catalogs?: Record<string, Record<string, string>>;
     }>(path.join(rootDir, 'package.json'), (root) => {
-      const nested =
-        root.workspaces && !Array.isArray(root.workspaces) ? root.workspaces : undefined;
+      const target = getBunCatalogConfig(root);
       const resolveCatalog = readBunCatalogDependencyResolver(root);
       let changed = false;
       for (const [name, spec] of entries) {
@@ -58,20 +57,9 @@ export function ensureCreateCatalogEntries(
         }
         const catalogName = spec.slice('catalog:'.length);
         const named = catalogName && catalogName !== 'default';
-        // Keep each catalog in its existing location, including older Bun's nested form.
-        const useNested =
-          nested &&
-          (named
-            ? nested.catalogs?.[catalogName] != null ||
-              (root.catalogs?.[catalogName] == null &&
-                (nested.catalog != null || (root.catalog == null && nested.catalogs != null)))
-            : nested.catalog != null ||
-              nested.catalogs?.default != null ||
-              (root.catalog == null && nested.catalogs != null));
-        const target = useNested ? nested : root;
         const catalog = named
           ? ((target.catalogs ??= {})[catalogName] ??= {})
-          : (target.catalog ?? target.catalogs?.default ?? (target.catalog = {}));
+          : (target.catalogs?.default ?? target.catalog ?? (target.catalog = {}));
         catalog[name] = versions[name];
         changed = true;
       }
@@ -93,9 +81,11 @@ export function ensureCreateCatalogEntries(
   for (const [name, spec] of entries) {
     const catalogName = spec.slice('catalog:'.length);
     const catalogPath =
-      catalogName && catalogName !== 'default'
+      catalogName && (catalogName !== 'default' || packageManager === PackageManager.yarn)
         ? ['catalogs', catalogName]
-        : doc.has('catalog') || !doc.hasIn(['catalogs', 'default'])
+        : packageManager === PackageManager.yarn ||
+            doc.has('catalog') ||
+            !doc.hasIn(['catalogs', 'default'])
           ? ['catalog']
           : ['catalogs', 'default'];
     const entryPath = [...catalogPath, name];

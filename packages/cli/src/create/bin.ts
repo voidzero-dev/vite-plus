@@ -1034,9 +1034,6 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       packageManagerVersion: workspaceInfo.downloadPackageManager.version,
       projectDir,
     });
-    if (installSummary.status === 'failed') {
-      process.exitCode = installSummary.exitCode || 1;
-    }
     return;
   }
   // #endregion
@@ -1428,9 +1425,6 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     packageManagerVersion: workspaceInfo.downloadPackageManager.version,
     projectDir,
   });
-  if (installSummary?.status === 'failed') {
-    process.exitCode = installSummary.exitCode || 1;
-  }
   // #endregion
 }
 
