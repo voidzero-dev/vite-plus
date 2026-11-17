@@ -1,0 +1,13 @@
+[[case]]
+name = "create_existing_bun_workspace"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL", "CI"]
+comment = "Creating an application supplies missing Bun catalog entries before installation."
+steps = [
+  { argv = ["vp", "create", "vite:application", "--directory", "apps/web", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"], snapshot = false, timeout = 240000 },
+  ["vpt", "stat-file", "bun.lock", "--assert", "file"],
+  ["vpt", "print-file", "package.json"],
+  { argv = ["vp", "install", "--frozen-lockfile"], snapshot = false },
+  { argv = ["vp", "run", "build"], cwd = "apps/web", snapshot = false },
+]

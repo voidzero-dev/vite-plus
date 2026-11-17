@@ -7,6 +7,7 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { getPackageManagerOverride, parseCreateArgs, vitePlusHeader } from '../../binding/index.js';
 import {
   addFrameworkShim,
+  bunSupportsCatalog,
   createCatalogDependencyResolver,
   detectEslintProject,
   detectFramework,
@@ -18,11 +19,13 @@ import {
   promptEslintMigration,
   promptPrettierMigration,
   promptTsupMigration,
+  readBunCatalogDependencyResolver,
   rewriteMonorepo,
   rewriteMonorepoProject,
   rewriteStandaloneProject,
   setPackageManager,
   shouldSkipStagedMigrationForHooks,
+  supportsCatalog,
 } from '../migration/migrator.ts';
 import { DependencyType, PackageManager, type WorkspaceInfo } from '../types/index.ts';
 import {
@@ -92,7 +95,7 @@ import { BuiltinTemplate, TemplateType } from './templates/types.ts';
 import {
   deriveDefaultPackageName,
   detectLauncherPackageManager,
-  ensurePnpmCreateCatalogEntries,
+  ensureCreateCatalogEntries,
   ensureDefaultGitignoreEntries,
   ensureGitignoreVsCodeEditorConfigs,
   formatLocalVpCommand,
@@ -1031,6 +1034,9 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       packageManagerVersion: workspaceInfo.downloadPackageManager.version,
       projectDir,
     });
+    if (installSummary.status === 'failed') {
+      process.exitCode = installSummary.exitCode || 1;
+    }
     return;
   }
   // #endregion
@@ -1317,15 +1323,22 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       shouldSetupHooks,
       workspaceInfo.packageManager,
     );
+    const bunWorkspace =
+      workspaceInfo.packageManager === PackageManager.bun
+        ? readJsonFile(path.join(workspaceInfo.rootDir, 'package.json'))
+        : undefined;
+    const supportCatalog = bunWorkspace
+      ? bunSupportsCatalog(bunWorkspace, workspaceInfo.packageManagerVersion)
+      : supportsCatalog(workspaceInfo.packageManager, workspaceInfo.packageManagerVersion);
     rewriteMonorepoProject(
       fullPath,
       workspaceInfo.packageManager,
       skipStagedMigration,
       compactOutput,
       undefined,
-      workspaceInfo.packageManager === PackageManager.pnpm
-        ? createCatalogDependencyResolver(workspaceInfo.rootDir, workspaceInfo.packageManager)
-        : undefined,
+      bunWorkspace
+        ? readBunCatalogDependencyResolver(bunWorkspace)
+        : createCatalogDependencyResolver(workspaceInfo.rootDir, workspaceInfo.packageManager),
       {
         rootDir: workspaceInfo.rootDir,
         packages: discoverWorkspacePackages(
@@ -1333,10 +1346,10 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
           workspaceInfo.rootDir,
         ),
       },
+      false,
+      supportCatalog,
     );
-    if (workspaceInfo.packageManager === PackageManager.pnpm) {
-      ensurePnpmCreateCatalogEntries(workspaceInfo.rootDir, fullPath);
-    }
+    ensureCreateCatalogEntries(workspaceInfo.rootDir, fullPath, workspaceInfo.packageManager);
     for (const framework of detectFramework(fullPath)) {
       if (!hasFrameworkShim(fullPath, framework)) {
         addFrameworkShim(fullPath, framework);
@@ -1415,6 +1428,9 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     packageManagerVersion: workspaceInfo.downloadPackageManager.version,
     projectDir,
   });
+  if (installSummary?.status === 'failed') {
+    process.exitCode = installSummary.exitCode || 1;
+  }
   // #endregion
 }
 

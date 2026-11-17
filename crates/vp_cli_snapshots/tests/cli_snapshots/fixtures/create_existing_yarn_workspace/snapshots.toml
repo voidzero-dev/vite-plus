@@ -1,0 +1,41 @@
+[[case]]
+name = "create_existing_yarn_workspace"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL", "CI"]
+comment = "Creating an application supplies missing Yarn catalog entries before installation."
+env = { YARN_NPM_MINIMAL_AGE_GATE = "0" }
+steps = [
+  { argv = ["vp", "create", "vite:application", "--directory", "apps/web", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"], snapshot = false, timeout = 240000 },
+  ["vpt", "stat-file", "yarn.lock", "--assert", "file"],
+  ["vpt", "print-file", ".yarnrc.yml"],
+  { argv = ["vp", "install", "--frozen-lockfile"], snapshot = false },
+  { argv = ["vp", "run", "build"], cwd = "apps/web", snapshot = false },
+]
+
+[[case]]
+name = "create_existing_yarn_without_catalog_support"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL", "CI"]
+comment = "Yarn before 4.10 receives concrete versions instead of unsupported catalog references."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@4.9.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "resolutions.typescript", "5.9.3"], comment = "Yarn 4.9's built-in TypeScript patch predates TypeScript 7.", snapshot = false },
+  { argv = ["vp", "create", "vite:application", "--directory", "apps/web", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"], snapshot = false, timeout = 240000 },
+  ["vpt", "stat-file", "yarn.lock", "--assert", "file"],
+  ["vpt", "print-file", "apps/web/package.json"],
+  { argv = ["vp", "install", "--frozen-lockfile"], snapshot = false },
+  { argv = ["vp", "run", "build"], cwd = "apps/web", snapshot = false },
+]
+
+[[case]]
+name = "create_workspace_install_failure"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL", "CI"]
+comment = "Creation reports a failing exit code when workspace dependency installation fails."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "dependencies.missing-dependency", "file:./missing-dependency"], snapshot = false },
+  ["vp", "create", "vite:application", "--directory", "apps/web", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"],
+]

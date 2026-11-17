@@ -4,6 +4,7 @@ import path from 'node:path';
 import validateNpmPackageName from 'validate-npm-package-name';
 import { parseDocument } from 'yaml';
 
+import { readBunCatalogDependencyResolver } from '../migration/migrator/catalog.ts';
 import { PackageManager } from '../types/index.ts';
 import {
   VITE_PLUS_NAME,
@@ -11,6 +12,7 @@ import {
   VITE_PLUS_VERSION,
 } from '../utils/constants.ts';
 import { editJsonFile, readJsonFile } from '../utils/json.ts';
+import type { NpmWorkspaces } from '../utils/workspace.ts';
 import { getRandomProjectName } from './random-name.ts';
 
 export type CreateEditorOption = string | false | undefined;
@@ -18,13 +20,15 @@ export type CreateEditorOption = string | false | undefined;
 /** Complete only the managed catalog references of a newly created workspace member.
  * Running the full root migrator here would also change unrelated packages and overrides.
  */
-export function ensurePnpmCreateCatalogEntries(rootDir: string, projectDir: string): void {
-  const workspacePath = path.join(rootDir, 'pnpm-workspace.yaml');
+export function ensureCreateCatalogEntries(
+  rootDir: string,
+  projectDir: string,
+  packageManager: PackageManager,
+): void {
   const packageJsonPath = path.join(projectDir, 'package.json');
-  if (!fs.existsSync(workspacePath) || !fs.existsSync(packageJsonPath)) {
+  if (packageManager === PackageManager.npm || !fs.existsSync(packageJsonPath)) {
     return;
   }
-  const doc = parseDocument(fs.readFileSync(workspacePath, 'utf8'));
   const pkg = readJsonFile(packageJsonPath) as Partial<
     Record<'dependencies' | 'devDependencies' | 'optionalDependencies', Record<string, string>>
   >;
@@ -32,24 +36,72 @@ export function ensurePnpmCreateCatalogEntries(rootDir: string, projectDir: stri
     ...VITE_PLUS_OVERRIDE_PACKAGES,
     [VITE_PLUS_NAME]: VITE_PLUS_VERSION,
   };
-  let changed = false;
-  for (const field of ['dependencies', 'devDependencies', 'optionalDependencies'] as const) {
-    for (const [name, spec] of Object.entries(pkg[field] ?? {})) {
-      if (!Object.hasOwn(versions, name) || !spec.startsWith('catalog:')) {
-        continue;
-      }
-      const catalogName = spec.slice('catalog:'.length);
-      const catalogPath =
-        catalogName && catalogName !== 'default'
-          ? ['catalogs', catalogName]
-          : doc.has('catalog') || !doc.hasIn(['catalogs', 'default'])
-            ? ['catalog']
-            : ['catalogs', 'default'];
-      const entryPath = [...catalogPath, name];
-      if (!doc.hasIn(entryPath)) {
-        doc.setIn(entryPath, versions[name]);
+  const entries = (['dependencies', 'devDependencies', 'optionalDependencies'] as const)
+    .flatMap((field) => Object.entries(pkg[field] ?? {}))
+    .filter(([name, spec]) => Object.hasOwn(versions, name) && spec.startsWith('catalog:'));
+  if (entries.length === 0) {
+    return;
+  }
+  if (packageManager === PackageManager.bun) {
+    editJsonFile<{
+      workspaces?: NpmWorkspaces;
+      catalog?: Record<string, string>;
+      catalogs?: Record<string, Record<string, string>>;
+    }>(path.join(rootDir, 'package.json'), (root) => {
+      const nested =
+        root.workspaces && !Array.isArray(root.workspaces) ? root.workspaces : undefined;
+      const resolveCatalog = readBunCatalogDependencyResolver(root);
+      let changed = false;
+      for (const [name, spec] of entries) {
+        if (resolveCatalog(spec, name) !== undefined) {
+          continue;
+        }
+        const catalogName = spec.slice('catalog:'.length);
+        const named = catalogName && catalogName !== 'default';
+        // Keep each catalog in its existing location, including older Bun's nested form.
+        const useNested =
+          nested &&
+          (named
+            ? nested.catalogs?.[catalogName] != null ||
+              (root.catalogs?.[catalogName] == null &&
+                (nested.catalog != null || (root.catalog == null && nested.catalogs != null)))
+            : nested.catalog != null ||
+              nested.catalogs?.default != null ||
+              (root.catalog == null && nested.catalogs != null));
+        const target = useNested ? nested : root;
+        const catalog = named
+          ? ((target.catalogs ??= {})[catalogName] ??= {})
+          : (target.catalog ?? target.catalogs?.default ?? (target.catalog = {}));
+        catalog[name] = versions[name];
         changed = true;
       }
+      return changed ? root : undefined;
+    });
+    return;
+  }
+  const workspacePath = path.join(
+    rootDir,
+    packageManager === PackageManager.yarn ? '.yarnrc.yml' : 'pnpm-workspace.yaml',
+  );
+  if (packageManager === PackageManager.pnpm && !fs.existsSync(workspacePath)) {
+    return;
+  }
+  const doc = parseDocument(
+    fs.existsSync(workspacePath) ? fs.readFileSync(workspacePath, 'utf8') : '',
+  );
+  let changed = false;
+  for (const [name, spec] of entries) {
+    const catalogName = spec.slice('catalog:'.length);
+    const catalogPath =
+      catalogName && catalogName !== 'default'
+        ? ['catalogs', catalogName]
+        : doc.has('catalog') || !doc.hasIn(['catalogs', 'default'])
+          ? ['catalog']
+          : ['catalogs', 'default'];
+    const entryPath = [...catalogPath, name];
+    if (!doc.hasIn(entryPath)) {
+      doc.setIn(entryPath, versions[name]);
+      changed = true;
     }
   }
   if (changed) {
