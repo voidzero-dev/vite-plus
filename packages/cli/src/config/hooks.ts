@@ -537,35 +537,30 @@ function getHuskyReplacement(
   ) {
     return null;
   }
-  let hasFiles = false;
+  let hasEntries = false;
   try {
     const huskyDir = join(location.toplevel, '.husky');
-    const huskyStats = lstatSync(huskyDir, { throwIfNoEntry: false });
-    const dispatcherDir = join(huskyDir, '_');
-    const dispatcherStats = lstatSync(dispatcherDir, { throwIfNoEntry: false });
-    if (
-      (huskyStats && (!huskyStats.isDirectory() || huskyStats.isSymbolicLink())) ||
-      (dispatcherStats && (!dispatcherStats.isDirectory() || dispatcherStats.isSymbolicLink()))
-    ) {
-      return null;
-    }
+    const activeHooksDir = resolve(location.toplevel, normalized);
     // Never inspect script contents or infer that leftover files are generated.
     // An explicit replacement may stop custom checks, but must not bypass the
     // path/link protections or write through any of the old files.
-    for (const directory of [huskyDir, dispatcherDir]) {
-      const stats = directory === huskyDir ? huskyStats : dispatcherStats;
+    for (const directory of [huskyDir, join(huskyDir, '_')]) {
+      const stats = lstatSync(directory, { throwIfNoEntry: false });
       if (!stats) {
         continue;
       }
+      if (!stats.isDirectory() || stats.isSymbolicLink()) {
+        return null;
+      }
       const names = readdirSync(directory);
-      if (directory === resolve(location.toplevel, normalized) && names.length > 0) {
-        hasFiles = true;
+      if (directory === activeHooksDir && names.length > 0) {
+        hasEntries = true;
       }
       for (const name of names) {
         if (directory === huskyDir && name === '_') {
           continue;
         }
-        hasFiles = true;
+        hasEntries = true;
         const entry = lstatSync(join(directory, name));
         if (!entry.isFile() || entry.isSymbolicLink() || entry.nlink > 1) {
           return null;
@@ -621,7 +616,10 @@ function getHuskyReplacement(
     // Unreadable or invalid manifests are not evidence that Husky was removed.
     return null;
   }
-  return replaceHusky ? 'explicit' : hasFiles ? 'non-empty' : 'automatic';
+  if (replaceHusky) {
+    return 'explicit';
+  }
+  return hasEntries ? 'non-empty' : 'automatic';
 }
 
 function unsetScopedHooksPath(scope: 'local' | 'worktree'): InstallResult | null {
@@ -716,10 +714,9 @@ export function install(dir?: string, options: InstallOptions = {}): InstallResu
     const targetRoot = resolveHooksPath(location.dir, location.baseDir);
     const relativeTarget = relative(oldRoot, targetRoot);
     if (
-      relativeTarget === '' ||
-      (!isAbsolute(relativeTarget) &&
-        relativeTarget !== '..' &&
-        !relativeTarget.startsWith(`..${sep}`))
+      !isAbsolute(relativeTarget) &&
+      relativeTarget !== '..' &&
+      !relativeTarget.startsWith(`..${sep}`)
     ) {
       return {
         message:
@@ -797,11 +794,8 @@ export function enable(dir?: string, options: { replaceHusky?: boolean } = {}): 
     return location;
   }
   const result = install(dir, { ignoreUserPreference: true, replaceHusky: options.replaceHusky });
-  if (result.isError) {
-    return result;
-  }
-  if (result.message) {
-    // Preserve skip messages and the explicit Husky replacement notice.
+  // Preserve errors, skip messages, and the explicit Husky replacement notice.
+  if (result.isError || result.message) {
     return result;
   }
   return {

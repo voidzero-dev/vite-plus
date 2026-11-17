@@ -1,3 +1,4 @@
+import type { SpawnSyncReturns } from 'node:child_process';
 import { execFileSync, execSync, spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
 import {
@@ -31,6 +32,25 @@ import {
 
 // Unmodified upstream dispatcher; retained to verify safe migration against real Husky output.
 const HUSKY_DISPATCHER = readFileSync(new URL('./fixtures/husky-9.1.7/h', import.meta.url), 'utf8');
+
+function runCommit(cwd: string, message = 'test'): SpawnSyncReturns<string> {
+  return spawnSync(
+    'git',
+    [
+      '-c',
+      'user.name=Test',
+      '-c',
+      'user.email=test@example.invalid',
+      '-c',
+      'commit.gpgsign=false',
+      'commit',
+      '--allow-empty',
+      '-m',
+      message,
+    ],
+    { cwd, encoding: 'utf8' },
+  );
+}
 
 function countDirnameCalls(script: string): number {
   // Count nested dirname calls in the `d=...` line
@@ -171,22 +191,7 @@ describe('install', () => {
             encoding: 'utf8',
           }).trim(),
         ).toBe(`${hooksDir}/_`);
-        const commit = spawnSync(
-          'git',
-          [
-            '-c',
-            'user.name=Test',
-            '-c',
-            'user.email=test@example.invalid',
-            '-c',
-            'commit.gpgsign=false',
-            'commit',
-            '--allow-empty',
-            '-m',
-            'test',
-          ],
-          { encoding: 'utf8' },
-        );
+        const commit = runCommit(tmp);
         expect(commit.status).toBe(1);
         expect(commit.stdout + commit.stderr).toContain('commit-msg script failed');
         expect(enable().isError).toBe(false);
@@ -293,31 +298,14 @@ describe('install', () => {
         mkdirSync(join(tmp, dir));
         writeFileSync(join(tmp, dir, 'commit-msg'), 'echo migrated-check-rejected >&2\nexit 1\n');
         process.chdir(tmp);
-        const runCommit = () =>
-          spawnSync(
-            'git',
-            [
-              '-c',
-              'user.name=Test',
-              '-c',
-              'user.email=test@example.invalid',
-              '-c',
-              'commit.gpgsign=false',
-              'commit',
-              '--allow-empty',
-              '-m',
-              'test',
-            ],
-            { cwd: tmp, encoding: 'utf8' },
-          );
-        const before = runCommit();
+        const before = runCommit(tmp);
         expect(before.status).toBe(1);
         expect(before.stderr).toContain('original-check-rejected');
         const replacement = enable(dir, { replaceHusky: true });
         expect(replacement.isError).toBe(false);
         expect(replacement.message).toContain('no longer run');
         expect(readFileSync(old, 'utf8')).toBe(original);
-        const after = runCommit();
+        const after = runCommit(tmp);
         expect(after.status).toBe(1);
         expect(after.stderr).toContain('migrated-check-rejected');
         expect(after.stderr).not.toContain('original-check-rejected');
@@ -360,26 +348,11 @@ describe('install', () => {
         mkdirSync(join(tmp, '.vite-hooks'));
         writeFileSync(join(tmp, '.vite-hooks', 'commit-msg'), 'exit 0\n');
         process.chdir(tmp);
-        const assertCommitRejected = () => {
-          const result = spawnSync(
-            'git',
-            [
-              '-c',
-              'user.name=Test',
-              '-c',
-              'user.email=test@example.invalid',
-              '-c',
-              'commit.gpgsign=false',
-              'commit',
-              '--allow-empty',
-              '-m',
-              'test',
-            ],
-            { cwd: tmp, encoding: 'utf8' },
-          );
+        function assertCommitRejected(): void {
+          const result = runCommit(tmp);
           expect(result.status).toBe(1);
           expect(result.stderr).toContain('original hook rejected');
-        };
+        }
         assertCommitRejected();
         for (const setup of [install, enable]) {
           expect(setup()).toEqual({
@@ -482,22 +455,7 @@ describe('install', () => {
       try {
         mkdirSync(original);
         execFileSync('git', ['init'], { cwd: original, stdio: 'ignore' });
-        execFileSync(
-          'git',
-          [
-            '-c',
-            'user.name=Test',
-            '-c',
-            'user.email=test@example.invalid',
-            '-c',
-            'commit.gpgsign=false',
-            'commit',
-            '--allow-empty',
-            '-m',
-            'initial',
-          ],
-          { cwd: original, stdio: 'ignore' },
-        );
+        expect(runCommit(original, 'initial').status).toBe(0);
         execFileSync('git', ['worktree', 'add', '-b', 'linked', linked], {
           cwd: original,
           stdio: 'ignore',
@@ -516,24 +474,7 @@ describe('install', () => {
         const oldHook = join(unmigrated, '.husky', 'pre-commit');
         writeFileSync(oldHook, '#!/bin/sh\necho "unmigrated hook rejected" >&2\nexit 1\n');
         chmodSync(oldHook, 0o755);
-        const commit = () =>
-          spawnSync(
-            'git',
-            [
-              '-c',
-              'user.name=Test',
-              '-c',
-              'user.email=test@example.invalid',
-              '-c',
-              'commit.gpgsign=false',
-              'commit',
-              '--allow-empty',
-              '-m',
-              'rejected',
-            ],
-            { cwd: unmigrated, encoding: 'utf8' },
-          );
-        expect(commit().status).toBe(1);
+        expect(runCommit(unmigrated, 'rejected').status).toBe(1);
         process.chdir(migrated);
 
         expect(install()).toEqual({
@@ -544,7 +485,7 @@ describe('install', () => {
         expect(
           execFileSync('git', ['config', '--local', 'core.hooksPath'], { encoding: 'utf8' }).trim(),
         ).toBe('.husky');
-        const after = commit();
+        const after = runCommit(unmigrated, 'rejected');
         expect(after.status).toBe(1);
         expect(after.stderr).toContain('unmigrated hook rejected');
         expect(existsSync(join(migrated, '.vite-hooks', '_'))).toBe(false);
