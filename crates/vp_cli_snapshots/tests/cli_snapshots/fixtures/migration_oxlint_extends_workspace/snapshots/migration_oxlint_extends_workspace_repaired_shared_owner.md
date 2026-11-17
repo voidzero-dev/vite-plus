@@ -75,6 +75,7 @@ VITE+ - The Unified Toolchain for the Web
 • Node <version>  pnpm <version>
 • Dependencies:
     vite   → <version>
+✓ Dependencies installed in <duration>
 • 1 config update applied
 ```
 
