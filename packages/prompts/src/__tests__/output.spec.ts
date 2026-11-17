@@ -131,8 +131,8 @@ describe('output identity', () => {
         done();
       },
     });
-    await stream.message(['hel', 'lo', ' world'], { output, symbol: '!' });
-    expect(content).toBe('! hello world\n');
+    await stream.message(['some', 'thing', ' else'], { output, symbol: '!' });
+    expect(content).toBe('! something else\n');
   });
 
   it('uses one space in animated spinner frames', () => {
