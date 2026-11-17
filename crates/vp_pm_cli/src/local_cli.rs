@@ -117,7 +117,7 @@ fn find_system_executable(cwd: &AbsolutePath, kind: PackageManagerType) -> Optio
     vp_command::find_external_tool(&kind.to_string(), &query, cwd)
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     use std::ffi::OsStr;
 
@@ -127,7 +127,6 @@ mod tests {
 
     /// Under `VP_ENV_FORBIDDEN=1`, a managed pnpm that a parent put on PATH is
     /// rejected; otherwise it is reused like a system one.
-    #[cfg(unix)]
     #[tokio::test(flavor = "current_thread")]
     async fn managed_install_on_path_is_rejected_when_env_forbidden() {
         use std::os::unix::fs::PermissionsExt;
