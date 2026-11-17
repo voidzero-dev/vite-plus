@@ -50,7 +50,7 @@ catalog:
   lint-staged: ^17.6.1
   minimatch: ^11.0.0
   nanotar: ^0.3.0
-  oxc-parser: =0.158.0
+  oxc-parser: =0.159.0
   oxfmt: =0.79.0
   oxlint: =1.94.0
   oxlint-tsgolint: =7.0.2007
