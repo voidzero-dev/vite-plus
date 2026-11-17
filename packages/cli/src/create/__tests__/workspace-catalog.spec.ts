@@ -12,7 +12,11 @@ import {
   yarnrcSatisfiesVitePlus,
 } from '../../migration/migrator.ts';
 import { PackageManager } from '../../types/index.ts';
-import { VITE_PLUS_OVERRIDE_PACKAGES, VITE_PLUS_VERSION } from '../../utils/constants.ts';
+import {
+  VITEST_VERSION,
+  VITE_PLUS_OVERRIDE_PACKAGES,
+  VITE_PLUS_VERSION,
+} from '../../utils/constants.ts';
 import { readJsonFile } from '../../utils/json.ts';
 import { readYamlFile } from '../../utils/yaml.ts';
 import { ensureCreateCatalogEntries } from '../utils.ts';
@@ -48,6 +52,90 @@ function integrate(dependencies: Record<string, string> = { vite: '^8.0.0' }) {
   ensureCreateCatalogEntries(root, project, PackageManager.pnpm);
   return readYamlFile(workspaceFile);
 }
+
+it.each([PackageManager.pnpm, PackageManager.yarn, PackageManager.bun])(
+  'completes aligned Vitest entries in the selected %s catalog without replacing existing versions',
+  (pm) => {
+    const config = {
+      catalog: { '@vitest/utils': '^4.0.0' },
+      catalogs: { tools: { 'vite-plus': '0.3.2', '@vitest/spy': '^4.0.0' } },
+    };
+    const file = path.join(
+      root,
+      {
+        [PackageManager.pnpm]: 'pnpm-workspace.yaml',
+        [PackageManager.yarn]: '.yarnrc.yml',
+        [PackageManager.bun]: 'package.json',
+      }[pm],
+    );
+    fs.writeFileSync(file, pm === PackageManager.bun ? JSON.stringify(config) : stringify(config));
+    fs.writeFileSync(
+      path.join(project, 'package.json'),
+      JSON.stringify({
+        devDependencies: {
+          'vite-plus': 'catalog:tools',
+          '@vitest/utils': '^5.0.0',
+          '@vitest/spy': 'catalog:tools',
+        },
+      }),
+    );
+    rewriteMonorepoProject(
+      project,
+      pm,
+      true,
+      true,
+      undefined,
+      createCatalogDependencyResolver(root, pm),
+    );
+    ensureCreateCatalogEntries(root, project, pm);
+    expect(readJsonFile(path.join(project, 'package.json')).devDependencies).toMatchObject({
+      '@vitest/utils': 'catalog:tools',
+      '@vitest/spy': 'catalog:tools',
+    });
+    expect(pm === PackageManager.bun ? readJsonFile(file) : readYamlFile(file)).toMatchObject({
+      catalog: config.catalog,
+      catalogs: { tools: { ...config.catalogs.tools, '@vitest/utils': VITEST_VERSION } },
+    });
+    const before = fs.readFileSync(file, 'utf8');
+    ensureCreateCatalogEntries(root, project, pm);
+    expect(fs.readFileSync(file, 'utf8')).toBe(before);
+  },
+);
+
+it('only completes referenced install dependencies in the aligned Vitest package set', () => {
+  fs.writeFileSync(
+    path.join(project, 'package.json'),
+    JSON.stringify({
+      dependencies: { '@vitest/utils': 'catalog:tools' },
+      optionalDependencies: { '@vitest/spy': 'catalog:tools' },
+      devDependencies: { '@vitest/expect': 'catalog:tools', '@vitest/mocker': '^5.0.0' },
+      peerDependencies: { '@vitest/browser': 'catalog:tools' },
+    }),
+  );
+  ensureCreateCatalogEntries(root, project, PackageManager.pnpm);
+  expect(readYamlFile(workspaceFile)).toEqual({
+    packages: ['apps/*'],
+    catalogs: { tools: { '@vitest/utils': VITEST_VERSION, '@vitest/spy': VITEST_VERSION } },
+  });
+});
+
+it('leaves Vitest ecosystem catalogs unmanaged when the Vitest override is absent', () => {
+  const version = VITE_PLUS_OVERRIDE_PACKAGES.vitest;
+  try {
+    delete VITE_PLUS_OVERRIDE_PACKAGES.vitest;
+    fs.writeFileSync(
+      path.join(project, 'package.json'),
+      JSON.stringify({
+        devDependencies: { '@vitest/utils': 'catalog:tools' },
+      }),
+    );
+    const before = fs.readFileSync(workspaceFile, 'utf8');
+    ensureCreateCatalogEntries(root, project, PackageManager.pnpm);
+    expect(fs.readFileSync(workspaceFile, 'utf8')).toBe(before);
+  } finally {
+    VITE_PLUS_OVERRIDE_PACKAGES.vitest = version;
+  }
+});
 
 describe.each([PackageManager.yarn, PackageManager.bun])('%s workspace catalogs', (pm) => {
   it.each(['missing', 'partial', 'named', 'default'] as const)(

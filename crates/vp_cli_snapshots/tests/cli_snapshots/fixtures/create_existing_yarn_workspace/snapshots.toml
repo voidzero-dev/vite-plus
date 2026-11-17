@@ -36,6 +36,23 @@ steps = [
 ]
 
 [[case]]
+name = "create_existing_yarn_aligned_vitest_catalog"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL", "CI"]
+env = { YARN_NPM_MINIMAL_AGE_GATE = "0" }
+comment = "Creating a member completes aligned Vitest entries in the named toolchain catalog without changing the default catalog."
+steps = [
+  { argv = ["vpt", "cp", "vitest-template.config.ts", "vite.config.ts"], snapshot = false },
+  { argv = ["vpt", "write-file", ".yarnrc.yml", "nodeLinker: node-modules\ncatalog:\n  '@vitest/utils': '^5.0.0'\ncatalogs:\n  tools:\n    vite-plus: '*'\n"], snapshot = false },
+  { argv = ["vp", "install"], snapshot = false },
+  { argv = ["vp", "create", "vitest-app", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"], snapshot = false, timeout = 240000 },
+  ["vpt", "print-file", "apps/web/package.json"],
+  ["vpt", "print-file", ".yarnrc.yml"],
+  { argv = ["vp", "install", "--frozen-lockfile"], snapshot = false },
+]
+
+[[case]]
 name = "create_existing_yarn_without_catalog_support"
 vp = "local"
 local-registry = true

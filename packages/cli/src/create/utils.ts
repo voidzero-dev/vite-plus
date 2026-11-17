@@ -7,11 +7,13 @@ import { parseDocument } from 'yaml';
 import { PackageManager } from '../types/index.ts';
 import { getBunCatalogConfig, readBunCatalogDependencyResolver } from '../utils/catalog.ts';
 import {
+  VITEST_VERSION,
   VITE_PLUS_NAME,
   VITE_PLUS_OVERRIDE_PACKAGES,
   VITE_PLUS_VERSION,
 } from '../utils/constants.ts';
 import { editJsonFile, readJsonFile } from '../utils/json.ts';
+import { VITEST_EXACT_VERSION_PACKAGES } from '../utils/vitest-ecosystem.ts';
 import type { NpmWorkspaces } from '../utils/workspace.ts';
 import { getRandomProjectName } from './random-name.ts';
 
@@ -36,6 +38,11 @@ export function ensureCreateCatalogEntries(
     ...VITE_PLUS_OVERRIDE_PACKAGES,
     [VITE_PLUS_NAME]: VITE_PLUS_VERSION,
   };
+  if ('vitest' in VITE_PLUS_OVERRIDE_PACKAGES) {
+    for (const name of VITEST_EXACT_VERSION_PACKAGES) {
+      versions[name] ??= VITEST_VERSION;
+    }
+  }
   const entries = (['dependencies', 'devDependencies', 'optionalDependencies'] as const)
     .flatMap((field) => Object.entries(pkg[field] ?? {}))
     .filter(([name, spec]) => Object.hasOwn(versions, name) && spec.startsWith('catalog:'));
