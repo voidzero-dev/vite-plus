@@ -51,6 +51,14 @@ We recommend enabling both `typeAware` and `typeCheck` in the `lint` block:
 
 Vite+ uses [tsrs](https://github.com/oxc-project/tsrs), a Rust port of the TypeScript 7 compiler. Its `tsrs-lint` executable gives Oxlint access to type information and allows type checking directly via `vp lint` and `vp check`.
 
+### Content Mappers
+
+Projects that use `tsconfig.json` `contentMappers` (for example `vize` for `.vue` files) must opt in to running external mapper packages. Set the environment variable that the bundled `tsrs-lint` backend reads before running `vp lint`:
+
+```bash
+TSRS_LINT_RUN_EXTERNAL_CODE=1 vp lint
+```
+
 ## JS Plugins
 
 If you are migrating from ESLint and still depend on a few critical JavaScript-based ESLint plugins, Oxlint has [JS plugin support](https://oxc.rs/docs/guide/usage/linter/js-plugins) that can help you keep those plugins running while you complete the migration.
