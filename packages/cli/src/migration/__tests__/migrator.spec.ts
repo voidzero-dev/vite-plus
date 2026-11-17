@@ -5,7 +5,7 @@ import path from 'node:path';
 
 import tsrsPkg from 'tsrs/package.json' with { type: 'json' };
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { parseAllDocuments, parse as parseYaml } from 'yaml';
+import { parseAllDocuments, parseDocument, parse as parseYaml } from 'yaml';
 
 import { rewriteScripts } from '../../../binding/index.js';
 import { PackageManager } from '../../types/index.js';
@@ -36,6 +36,8 @@ vi.mock('../../utils/constants.js', async (importOriginal) => {
 
 const {
   rewritePackageJson,
+  createCatalogDependencyResolver,
+  rewriteCatalog,
   rewriteStandaloneProject,
   rewriteMonorepo,
   rewriteMonorepoProject,
@@ -5624,6 +5626,51 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(pkg.devDependencies.vite).toBe('catalog:build');
     expect(pkg.devDependencies['vite-plus']).toBe('catalog:build');
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+  });
+
+  it.each([
+    ['legacy', 'default'],
+    ['default', 'legacy'],
+  ])('keeps pnpm catalog references resolvable when %s precedes %s', (first, second) => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'catalog-order-workspace',
+        devDependencies: { vite: 'catalog:legacy' },
+      }),
+    );
+    const contents = [
+      'packages: [packages/*]',
+      'catalogs:',
+      `  ${first}:`,
+      '    vite: ^8.0.0',
+      `  ${second}:`,
+      '    vite: ^8.0.0',
+      '',
+    ].join('\n');
+    fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), contents);
+    const expectedSpec = first === 'default' ? 'catalog:' : `catalog:${first}`;
+    const resolver = createCatalogDependencyResolver(tmpDir, PackageManager.pnpm)!;
+    expect(resolver.preferredCatalogSpec).toBe(expectedSpec);
+    expect(
+      rewriteCatalog(parseDocument(contents), false, new Set(), new Set(), PackageManager.pnpm),
+    ).toBe(resolver.preferredCatalogSpec);
+
+    rewriteMonorepo(makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    expect(pkg.devDependencies.vite).toBe('catalog:legacy');
+    expect(pkg.devDependencies['vite-plus']).toBe(expectedSpec);
+    const migratedResolver = createCatalogDependencyResolver(tmpDir, PackageManager.pnpm)!;
+    expect(migratedResolver(pkg.devDependencies['vite-plus'], 'vite-plus')).toBe('latest');
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      catalog?: unknown;
+      catalogs: Record<string, Record<string, string>>;
+    };
+    expect(workspace.catalog).toBeUndefined();
+    expect(workspace.catalogs[second]['vite-plus']).toBeUndefined();
   });
 
   it('writes managed dependencies into an active catalogs.default definition', () => {

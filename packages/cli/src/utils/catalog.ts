@@ -22,7 +22,11 @@ export function createCatalogDependencyResolverFromCatalogs(
       : packageManager === PackageManager.yarn
         ? catalog
         : (catalog ?? catalogs?.default);
-  const preferredCatalogSpec = selectPreferredCatalogSpec(defaultCatalog, catalogs, packageManager);
+  const preferredCatalogSpec = selectPreferredCatalogSpec(
+    packageManager === PackageManager.bun ? defaultCatalog : catalog,
+    catalogs,
+    packageManager,
+  );
   const resolver = (catalogSpec: string, dependencyName: string) => {
     const catalogName = catalogSpec.slice('catalog:'.length);
     if (catalogName && (catalogName !== 'default' || packageManager === PackageManager.yarn)) {
