@@ -67,3 +67,17 @@ steps = [
   { argv = ["vp", "install", "--frozen-lockfile"], snapshot = false },
   { argv = ["vp", "run", "build"], cwd = "apps/web", snapshot = false },
 ]
+
+[[case]]
+name = "create_existing_yarn_template_catalog_without_support"
+vp = "local"
+local-registry = true
+comment = "A template's catalog reference must not add catalog settings that Yarn before 4.10 rejects."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@4.9.0"], snapshot = false },
+  { argv = ["vpt", "cp", "vitest-template.config.ts", "vite.config.ts"], snapshot = false },
+  { argv = ["vpt", "write-file", ".yarnrc.yml", "nodeLinker: node-modules\n"], snapshot = false },
+  { argv = ["vp", "create", "vitest-app", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"], snapshot = false, timeout = 240000 },
+  ["vpt", "print-file", ".yarnrc.yml"],
+  { argv = ["yarn", "config", "get", "nodeLinker"], comment = "Yarn still accepts the root configuration." },
+]

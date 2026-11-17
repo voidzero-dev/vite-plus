@@ -1344,12 +1344,14 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       false,
       supportCatalog,
     );
-    ensureCreateCatalogEntries(
-      workspaceInfo.rootDir,
-      fullPath,
-      workspaceInfo.packageManager,
-      workspaceInfo.packageManagerVersion,
-    );
+    if (supportCatalog) {
+      ensureCreateCatalogEntries(
+        workspaceInfo.rootDir,
+        fullPath,
+        workspaceInfo.packageManager,
+        workspaceInfo.packageManagerVersion,
+      );
+    }
     for (const framework of detectFramework(fullPath)) {
       if (!hasFrameworkShim(fullPath, framework)) {
         addFrameworkShim(fullPath, framework);
