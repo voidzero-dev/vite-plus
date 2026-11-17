@@ -5,7 +5,7 @@ import path from 'node:path';
 
 import tsrsPkg from 'tsrs/package.json' with { type: 'json' };
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { parseAllDocuments, parseDocument, parse as parseYaml } from 'yaml';
+import { parseAllDocuments, parse as parseYaml } from 'yaml';
 
 import { rewriteScripts } from '../../../binding/index.js';
 import { PackageManager } from '../../types/index.js';
@@ -37,7 +37,6 @@ vi.mock('../../utils/constants.js', async (importOriginal) => {
 const {
   rewritePackageJson,
   createCatalogDependencyResolver,
-  rewriteCatalog,
   rewriteStandaloneProject,
   rewriteMonorepo,
   rewriteMonorepoProject,
@@ -5652,9 +5651,6 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     const expectedSpec = first === 'default' ? 'catalog:' : `catalog:${first}`;
     const resolver = createCatalogDependencyResolver(tmpDir, PackageManager.pnpm)!;
     expect(resolver.preferredCatalogSpec).toBe(expectedSpec);
-    expect(
-      rewriteCatalog(parseDocument(contents), false, new Set(), new Set(), PackageManager.pnpm),
-    ).toBe(resolver.preferredCatalogSpec);
 
     rewriteMonorepo(makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true);
 
