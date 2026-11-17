@@ -37,20 +37,23 @@ beforeEach(() => {
 
 afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
 
-function integrate(dependencies: Record<string, string> = { vite: '^8.0.0' }) {
+function integrate(
+  dependencies: Record<string, string> = { vite: '^8.0.0' },
+  pm: PackageManager = PackageManager.pnpm,
+) {
   fs.writeFileSync(
     path.join(project, 'package.json'),
     JSON.stringify({ devDependencies: dependencies }),
   );
   rewriteMonorepoProject(
     project,
-    PackageManager.pnpm,
+    pm,
     true,
     true,
     undefined,
-    createCatalogDependencyResolver(root, PackageManager.pnpm),
+    createCatalogDependencyResolver(root, pm),
   );
-  ensureCreateCatalogEntries(root, project, PackageManager.pnpm);
+  ensureCreateCatalogEntries(root, project, pm);
   return readYamlFile(workspaceFile);
 }
 
@@ -70,25 +73,14 @@ it.each([PackageManager.pnpm, PackageManager.yarn, PackageManager.bun])(
       }[pm],
     );
     fs.writeFileSync(file, pm === PackageManager.bun ? JSON.stringify(config) : stringify(config));
-    fs.writeFileSync(
-      path.join(project, 'package.json'),
-      JSON.stringify({
-        devDependencies: {
-          'vite-plus': 'catalog:tools',
-          '@vitest/utils': '^5.0.0',
-          '@vitest/spy': 'catalog:tools',
-        },
-      }),
-    );
-    rewriteMonorepoProject(
-      project,
+    integrate(
+      {
+        'vite-plus': 'catalog:tools',
+        '@vitest/utils': '^5.0.0',
+        '@vitest/spy': 'catalog:tools',
+      },
       pm,
-      true,
-      true,
-      undefined,
-      createCatalogDependencyResolver(root, pm),
     );
-    ensureCreateCatalogEntries(root, project, pm);
     expect(readJsonFile(path.join(project, 'package.json')).devDependencies).toMatchObject({
       '@vitest/utils': 'catalog:tools',
       '@vitest/spy': 'catalog:tools',
@@ -157,19 +149,7 @@ describe.each([PackageManager.yarn, PackageManager.bun])('%s workspace catalogs'
           pm === PackageManager.yarn ? stringify(config) : JSON.stringify(contents),
         );
       }
-      fs.writeFileSync(
-        path.join(project, 'package.json'),
-        JSON.stringify({ devDependencies: { vite: '^8.0.0' } }),
-      );
-      rewriteMonorepoProject(
-        project,
-        pm,
-        true,
-        true,
-        undefined,
-        createCatalogDependencyResolver(root, pm),
-      );
-      ensureCreateCatalogEntries(root, project, pm);
+      integrate(undefined, pm);
       const spec =
         kind === 'named'
           ? 'catalog:tools'
@@ -386,16 +366,16 @@ describe.each(['root', 'nested'])('Bun %s shared default catalog', (location) =>
     expect(fs.readFileSync(file, 'utf8')).toBe(before);
   });
 
-  it('does not silently remove pre-existing duplicate entries', () => {
+  it('updates pre-existing duplicate entries in place without removing either', () => {
     const contents = readJsonFile(file);
     const active = (location === 'nested' ? contents.workspaces : contents) as typeof config;
-    Object.assign(active.catalog, { react: active.catalogs.default.react });
+    Object.assign(active.catalogs.default, { vite: active.catalog.vite });
     fs.writeFileSync(file, JSON.stringify(contents));
     rewriteBunCatalog(root, false, new Set());
     const result = readJsonFile(file);
     expect(location === 'nested' ? result.workspaces : result).toMatchObject({
-      catalog: { react: '^19.0.0' },
-      catalogs: { default: { react: '^19.0.0' } },
+      catalog: { vite: VITE_PLUS_OVERRIDE_PACKAGES.vite },
+      catalogs: { default: { vite: VITE_PLUS_OVERRIDE_PACKAGES.vite } },
     });
   });
 });
