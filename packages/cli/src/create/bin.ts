@@ -39,7 +39,6 @@ import {
   detectGatedBuilds,
   resolveApproveBuildTargets,
 } from '../utils/approve-builds.ts';
-import { readBunCatalogDependencyResolver } from '../utils/catalog.ts';
 import { unwrapCliParseOutcome } from '../utils/cli-parse.ts';
 import { isForceOverrideMode } from '../utils/constants.ts';
 import { documentationUrl } from '../utils/documentation.ts';
@@ -1320,22 +1319,22 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       shouldSetupHooks,
       workspaceInfo.packageManager,
     );
-    const bunWorkspace =
-      workspaceInfo.packageManager === PackageManager.bun
-        ? readJsonFile(path.join(workspaceInfo.rootDir, 'package.json'))
-        : undefined;
-    const supportCatalog = bunWorkspace
-      ? bunSupportsCatalog(bunWorkspace, workspaceInfo.packageManagerVersion)
-      : supportsCatalog(workspaceInfo.packageManager, workspaceInfo.packageManagerVersion);
+    const supportCatalog = supportsCatalog(
+      workspaceInfo.packageManager,
+      workspaceInfo.packageManagerVersion,
+      workspaceInfo.packageManager === PackageManager.bun &&
+        bunSupportsCatalog(
+          readJsonFile(path.join(workspaceInfo.rootDir, 'package.json')),
+          workspaceInfo.packageManagerVersion,
+        ),
+    );
     rewriteMonorepoProject(
       fullPath,
       workspaceInfo.packageManager,
       skipStagedMigration,
       compactOutput,
       undefined,
-      bunWorkspace
-        ? readBunCatalogDependencyResolver(bunWorkspace)
-        : createCatalogDependencyResolver(workspaceInfo.rootDir, workspaceInfo.packageManager),
+      createCatalogDependencyResolver(workspaceInfo.rootDir, workspaceInfo.packageManager),
       {
         rootDir: workspaceInfo.rootDir,
         packages: discoverWorkspacePackages(

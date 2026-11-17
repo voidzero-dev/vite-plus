@@ -180,17 +180,12 @@ const BUN_TOP_LEVEL_CATALOG_MIN_VERSION = '1.2.21';
 // needs the nested location that `rewriteBunCatalog` keeps in place. Otherwise
 // `catalog:` edges make `bun install` abort with "vite@catalog: failed to
 // resolve", so the toolchain edges must stay concrete.
-export function bunSupportsCatalog(
-  pkg: { workspaces?: NpmWorkspaces; catalog?: Record<string, string> },
-  version: string,
-): boolean {
+export function bunSupportsCatalog(pkg: { workspaces?: NpmWorkspaces }, version: string): boolean {
   const { workspaces } = pkg;
   if (workspaces == null) {
     return false;
   }
-  // Mirrors `useWorkspacesCatalog` in rewriteBunCatalog.
-  const writesNestedCatalog =
-    !Array.isArray(workspaces) && (workspaces.catalog != null || workspaces.catalogs != null);
+  const writesNestedCatalog = getBunCatalogConfig(pkg) !== pkg;
   return (
     writesNestedCatalog ||
     versionAtLeast(version, BUN_TOP_LEVEL_CATALOG_MIN_VERSION, ['latest', 'canary'])

@@ -10,6 +10,12 @@ export type CatalogDependencyResolver = ((
   preferredCatalogSpec: string;
 };
 
+export function isNamedCatalog(catalogName: string, packageManager: PackageManager): boolean {
+  return (
+    catalogName !== '' && (catalogName !== 'default' || packageManager === PackageManager.yarn)
+  );
+}
+
 export function createCatalogDependencyResolverFromCatalogs(
   catalog: Record<string, string> | undefined,
   catalogs: Record<string, Record<string, string>> | undefined,
@@ -29,7 +35,7 @@ export function createCatalogDependencyResolverFromCatalogs(
   );
   const resolver = (catalogSpec: string, dependencyName: string) => {
     const catalogName = catalogSpec.slice('catalog:'.length);
-    if (catalogName && (catalogName !== 'default' || packageManager === PackageManager.yarn)) {
+    if (isNamedCatalog(catalogName, packageManager)) {
       return catalogs?.[catalogName]?.[dependencyName];
     }
     return defaultCatalog?.[dependencyName];
@@ -48,10 +54,7 @@ export function selectPreferredCatalogSpec(
   }
   for (const [name, values] of Object.entries(catalogs ?? {})) {
     candidates.push({
-      spec:
-        name === 'default' && packageManager !== PackageManager.yarn
-          ? 'catalog:'
-          : `catalog:${name}`,
+      spec: isNamedCatalog(name, packageManager) ? `catalog:${name}` : 'catalog:',
       values,
     });
   }
@@ -80,13 +83,16 @@ export function getYamlCatalogPath(
   packageManager: PackageManager,
 ): string[] {
   const catalogName = catalogSpec.slice('catalog:'.length);
-  return catalogName && (catalogName !== 'default' || packageManager === PackageManager.yarn)
-    ? ['catalogs', catalogName]
-    : packageManager === PackageManager.yarn ||
-        doc.has('catalog') ||
-        !doc.hasIn(['catalogs', 'default'])
-      ? ['catalog']
-      : ['catalogs', 'default'];
+  if (isNamedCatalog(catalogName, packageManager)) {
+    return ['catalogs', catalogName];
+  }
+  if (packageManager === PackageManager.yarn || doc.has('catalog')) {
+    return ['catalog'];
+  }
+  if (doc.hasIn(['catalogs', 'default'])) {
+    return ['catalogs', 'default'];
+  }
+  return ['catalog'];
 }
 
 export function getBunCatalogConfig(pkg: {

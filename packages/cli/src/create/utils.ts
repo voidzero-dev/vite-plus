@@ -8,6 +8,7 @@ import { PackageManager } from '../types/index.ts';
 import {
   getBunCatalogConfig,
   getYamlCatalogPath,
+  isNamedCatalog,
   readBunCatalogDependencyResolver,
 } from '../utils/catalog.ts';
 import {
@@ -67,8 +68,7 @@ export function ensureCreateCatalogEntries(
           continue;
         }
         const catalogName = spec.slice('catalog:'.length);
-        const named = catalogName && catalogName !== 'default';
-        const catalog = named
+        const catalog = isNamedCatalog(catalogName, packageManager)
           ? ((target.catalogs ??= {})[catalogName] ??= {})
           : (target.catalogs?.default ?? target.catalog ?? (target.catalog = {}));
         catalog[name] = versions[name];
@@ -82,12 +82,11 @@ export function ensureCreateCatalogEntries(
     rootDir,
     packageManager === PackageManager.yarn ? '.yarnrc.yml' : 'pnpm-workspace.yaml',
   );
-  if (packageManager === PackageManager.pnpm && !fs.existsSync(workspacePath)) {
+  const workspaceExists = fs.existsSync(workspacePath);
+  if (packageManager === PackageManager.pnpm && !workspaceExists) {
     return;
   }
-  const doc = parseDocument(
-    fs.existsSync(workspacePath) ? fs.readFileSync(workspacePath, 'utf8') : '',
-  );
+  const doc = parseDocument(workspaceExists ? fs.readFileSync(workspacePath, 'utf8') : '');
   let changed = false;
   for (const [name, spec] of entries) {
     const catalogPath = getYamlCatalogPath(doc, spec, packageManager);
