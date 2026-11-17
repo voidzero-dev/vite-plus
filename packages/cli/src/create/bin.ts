@@ -23,6 +23,7 @@ import {
   rewriteStandaloneProject,
   setPackageManager,
   shouldSkipStagedMigrationForHooks,
+  workspaceSupportsCatalog,
 } from '../migration/migrator.ts';
 import { DependencyType, PackageManager, type WorkspaceInfo } from '../types/index.ts';
 import {
@@ -92,7 +93,7 @@ import { BuiltinTemplate, TemplateType } from './templates/types.ts';
 import {
   deriveDefaultPackageName,
   detectLauncherPackageManager,
-  ensurePnpmCreateCatalogEntries,
+  ensureCreateCatalogEntries,
   ensureDefaultGitignoreEntries,
   ensureGitignoreVsCodeEditorConfigs,
   formatLocalVpCommand,
@@ -1317,15 +1318,22 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       shouldSetupHooks,
       workspaceInfo.packageManager,
     );
+    const supportCatalog = workspaceSupportsCatalog(
+      workspaceInfo.rootDir,
+      workspaceInfo.packageManager,
+      workspaceInfo.packageManagerVersion,
+    );
     rewriteMonorepoProject(
       fullPath,
       workspaceInfo.packageManager,
       skipStagedMigration,
       compactOutput,
       undefined,
-      workspaceInfo.packageManager === PackageManager.pnpm
-        ? createCatalogDependencyResolver(workspaceInfo.rootDir, workspaceInfo.packageManager)
-        : undefined,
+      createCatalogDependencyResolver(
+        workspaceInfo.rootDir,
+        workspaceInfo.packageManager,
+        workspaceInfo.packageManagerVersion,
+      ),
       {
         rootDir: workspaceInfo.rootDir,
         packages: discoverWorkspacePackages(
@@ -1333,9 +1341,16 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
           workspaceInfo.rootDir,
         ),
       },
+      false,
+      supportCatalog,
     );
-    if (workspaceInfo.packageManager === PackageManager.pnpm) {
-      ensurePnpmCreateCatalogEntries(workspaceInfo.rootDir, fullPath);
+    if (supportCatalog) {
+      ensureCreateCatalogEntries(
+        workspaceInfo.rootDir,
+        fullPath,
+        workspaceInfo.packageManager,
+        workspaceInfo.packageManagerVersion,
+      );
     }
     for (const framework of detectFramework(fullPath)) {
       if (!hasFrameworkShim(fullPath, framework)) {

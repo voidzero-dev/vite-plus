@@ -5,6 +5,7 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import type { OxlintConfig } from 'oxlint';
 import { coerce, isLessThan, satisfies, tryParse } from 'verkit';
 
+import type { CatalogDependencyResolver } from '../../utils/catalog.ts';
 import {
   VITEST_VERSION,
   VITE_PLUS_OVERRIDE_PACKAGES,
@@ -334,13 +335,6 @@ export type PackageJsonDependencyField =
   | 'peerDependencies'
   | 'optionalDependencies';
 
-export type CatalogDependencyResolver = ((
-  catalogSpec: string,
-  dependencyName: string,
-) => string | undefined) & {
-  preferredCatalogSpec: string;
-};
-
 export function warnMigration(message: string, report?: MigrationReport) {
   addMigrationWarning(report, message);
   if (!report) {
@@ -420,6 +414,29 @@ export function readPackageJsonIfExists(packageJsonPath: string): DependencyBag 
   } catch {
     return undefined;
   }
+}
+
+export function pinnedPackageManagerVersion(pkg: {
+  packageManager?: string;
+  devEngines?: { packageManager?: unknown };
+}): string | undefined {
+  if (typeof pkg.packageManager === 'string') {
+    const separator = pkg.packageManager.indexOf('@');
+    if (separator !== -1) {
+      return pkg.packageManager.slice(separator + 1);
+    }
+  }
+  const devEngine = pkg.devEngines?.packageManager;
+  if (
+    typeof devEngine === 'object' &&
+    devEngine !== null &&
+    !Array.isArray(devEngine) &&
+    'version' in devEngine &&
+    typeof devEngine.version === 'string'
+  ) {
+    return devEngine.version;
+  }
+  return undefined;
 }
 
 // pnpm v10 introduced the map-shaped `allowBuilds` and removed the implicit

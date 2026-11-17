@@ -2,12 +2,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { PackageManager, type WorkspaceInfo, type WorkspacePackage } from '../../types/index.ts';
+import type { CatalogDependencyResolver } from '../../utils/catalog.ts';
 import { VITE_PLUS_NAME, VITE_PLUS_VERSION, isForceOverrideMode } from '../../utils/constants.ts';
-import { editJsonFile, readJsonFile } from '../../utils/json.ts';
+import { editJsonFile } from '../../utils/json.ts';
 import {
   applyBuildAllowanceToPackageJsonPnpm,
   applyYarnWorkspaceHoistingFix,
-  bunSupportsCatalog,
   cleanupDeprecatedTsconfigOptions,
   collectInjectedProviderNames,
   collectOxlintDependencyNames,
@@ -60,6 +60,7 @@ import {
   usesWebdriverioProvider,
   workspaceUsesVitestDirectly,
   workspaceUsesWebdriverio,
+  workspaceSupportsCatalog,
   workspaceUsesWebdriverioProvider,
   yarnSupportsPreapprovedPackages,
   wrapLazyPluginsInViteConfig,
@@ -68,7 +69,6 @@ import { type MigrationReport } from '../report.ts';
 import {
   PROVIDER_OVERRIDE_DROP_NAMES,
   pnpmMajor,
-  type CatalogDependencyResolver,
   type PnpmPackageJsonSettings,
   type PreparedOxlintConfigs,
 } from './shared.ts';
@@ -92,7 +92,11 @@ export function rewriteStandaloneProject(
     report,
     workspaceInfo.downloadPackageManager.version,
   );
-  const catalogDependencyResolver = createCatalogDependencyResolver(projectPath, packageManager);
+  const catalogDependencyResolver = createCatalogDependencyResolver(
+    projectPath,
+    packageManager,
+    workspaceInfo.downloadPackageManager.version,
+  );
   const vitestEcosystemPackages = collectVitestEcosystemInstallDependencyNames(projectPath);
   // Captured before `rewritePackageJson` strips `oxlint`; the import rewriter
   // reads the manifests afterwards and would no longer see the signal.
@@ -377,6 +381,7 @@ export function rewriteMonorepo(
   const catalogDependencyResolver = createCatalogDependencyResolver(
     workspaceInfo.rootDir,
     workspaceInfo.packageManager,
+    workspaceInfo.downloadPackageManager.version,
   );
   // Captured before `rewritePackageJson` strips `oxlint`; the import rewriter
   // reads the manifests afterwards and would no longer see the signal.
@@ -414,14 +419,10 @@ export function rewriteMonorepo(
   );
   // Catalog support: pnpm >= 9.5.0, Yarn >= 4.10.0, bun per `bunSupportsCatalog`.
   // An older PM falls back to concrete.
-  const supportCatalog = supportsCatalog(
+  const supportCatalog = workspaceSupportsCatalog(
+    workspaceInfo.rootDir,
     workspaceInfo.packageManager,
     workspaceInfo.downloadPackageManager.version,
-    workspaceInfo.packageManager === PackageManager.bun &&
-      bunSupportsCatalog(
-        readJsonFile(path.join(workspaceInfo.rootDir, 'package.json')),
-        workspaceInfo.downloadPackageManager.version,
-      ),
   );
   const workspaceContext = {
     rootDir: workspaceInfo.rootDir,
@@ -447,6 +448,7 @@ export function rewriteMonorepo(
       workspaceUsesVitest,
       vitestEcosystemPackages,
       usesWebdriverio,
+      workspaceInfo.downloadPackageManager.version,
     );
   }
   rewriteRootWorkspacePackageJson(

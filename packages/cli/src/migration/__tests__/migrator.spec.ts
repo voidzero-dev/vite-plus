@@ -36,6 +36,7 @@ vi.mock('../../utils/constants.js', async (importOriginal) => {
 
 const {
   rewritePackageJson,
+  createCatalogDependencyResolver,
   rewriteStandaloneProject,
   rewriteMonorepo,
   rewriteMonorepoProject,
@@ -2141,6 +2142,123 @@ describe('ensureVitePlusBootstrap', () => {
     };
     expect(pkg.devDependencies).toEqual({ vite: 'catalog:', 'vite-plus': 'catalog:' });
     expect(pkg.overrides).toEqual({ vite: 'catalog:' });
+  });
+
+  it.each(['1.2.14', '1.3.14', '1.4.0'])(
+    'keeps split default catalogs resolvable when migrating Bun %s',
+    (version) => {
+      const file = path.join(tmpDir, 'package.json');
+      fs.writeFileSync(
+        file,
+        JSON.stringify({
+          name: 'bun-split-default',
+          packageManager: `bun@${version}`,
+          devDependencies: { vite: 'catalog:', react: 'catalog:default' },
+          workspaces: {
+            packages: [],
+            catalog: { vite: '^8.0.0' },
+            catalogs: { default: { react: '^19.0.0' } },
+          },
+        }),
+      );
+      const workspace = makeWorkspaceInfo(tmpDir, PackageManager.bun, version);
+      rewriteMonorepo(workspace, true);
+      const pkg = readJson(file) as {
+        devDependencies: Record<string, string>;
+        workspaces: {
+          catalog: Record<string, string>;
+          catalogs: Record<string, Record<string, string>>;
+        };
+      };
+      const merged = version === '1.4.0';
+      expect(pkg.devDependencies['vite-plus']).toBe('catalog:');
+      expect(pkg.devDependencies.react).toBe('catalog:default');
+      expect(pkg.workspaces.catalog['vite-plus']).toBe(merged ? undefined : 'latest');
+      expect(pkg.workspaces.catalogs.default).toEqual(
+        merged ? { react: '^19.0.0', 'vite-plus': 'latest' } : { react: '^19.0.0' },
+      );
+      const resolver = createCatalogDependencyResolver(tmpDir, PackageManager.bun, version)!;
+      expect(resolver('catalog:', 'vite-plus')).toBe('latest');
+      expect(resolver('catalog:', 'react')).toBe(merged ? '^19.0.0' : undefined);
+      const before = fs.readFileSync(file, 'utf8');
+      rewriteMonorepo(workspace, true);
+      expect(fs.readFileSync(file, 'utf8')).toBe(before);
+    },
+  );
+
+  it.each(['1.2.14', '1.3.14', '1.4.0'])(
+    'reconciles a named default catalog with the correct reference on Bun %s',
+    (version) => {
+      const file = path.join(tmpDir, 'package.json');
+      fs.writeFileSync(
+        file,
+        JSON.stringify({
+          name: 'bun-named-default',
+          packageManager: `bun@${version}`,
+          devDependencies: { vite: 'catalog:default', 'vite-plus': '0.3.2' },
+          workspaces: {
+            packages: [],
+            catalogs: { default: { vite: '^8.0.0', 'vite-plus': '0.3.2' } },
+          },
+        }),
+      );
+      const workspace = makeWorkspaceInfo(tmpDir, PackageManager.bun, version);
+      ensureVitePlusBootstrap(workspace);
+      const pkg = readJson(file) as {
+        devDependencies: Record<string, string>;
+        workspaces: { catalog?: unknown };
+      };
+      expect(pkg.devDependencies['vite-plus']).toBe(
+        version === '1.4.0' ? 'catalog:' : 'catalog:default',
+      );
+      expect(pkg.workspaces.catalog).toBeUndefined();
+      const resolver = createCatalogDependencyResolver(tmpDir, PackageManager.bun, version)!;
+      expect(resolver(pkg.devDependencies['vite-plus'], 'vite-plus')).toBe('latest');
+      expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.bun)).toBe(false);
+      const before = fs.readFileSync(file, 'utf8');
+      ensureVitePlusBootstrap(workspace);
+      expect(fs.readFileSync(file, 'utf8')).toBe(before);
+    },
+  );
+
+  it.each([
+    ['1.3.14', 'root'],
+    ['1.3.14', 'nested'],
+    ['1.4.0', 'root'],
+    ['1.4.0', 'nested'],
+  ])('fills a missing named-default entry on Bun %s in %s catalogs', (version, location) => {
+    const file = path.join(tmpDir, 'package.json');
+    const catalogs: {
+      catalog: Record<string, string>;
+      catalogs: Record<string, Record<string, string>>;
+    } = {
+      catalog: { vite: '^8.0.0' },
+      catalogs: { default: { 'vite-plus': '0.3.2' } },
+    };
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        name: 'bun-split-toolchain',
+        packageManager: `bun@${version}`,
+        devDependencies: { 'vite-plus': 'catalog:default' },
+        ...(location === 'nested'
+          ? { workspaces: { packages: [], ...catalogs } }
+          : { workspaces: [], ...catalogs }),
+      }),
+    );
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.bun, version));
+    const pkg = readJson(file) as {
+      devDependencies: Record<string, string>;
+      workspaces: typeof catalogs;
+    } & typeof catalogs;
+    const active = location === 'nested' ? pkg.workspaces : pkg;
+    expect(active.catalog.vite).toBe(VITE_PLUS_OVERRIDE_PACKAGES.vite);
+    expect(active.catalogs.default.vite).toBe(
+      version === '1.4.0' ? undefined : VITE_PLUS_OVERRIDE_PACKAGES.vite,
+    );
+    const resolver = createCatalogDependencyResolver(tmpDir, PackageManager.bun)!;
+    expect(resolver(pkg.devDependencies.vite, 'vite')).toBe(VITE_PLUS_OVERRIDE_PACKAGES.vite);
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.bun)).toBe(false);
   });
 
   it('adds a missing @vitest/* entry to the bun catalog it now references', () => {
@@ -5624,6 +5742,48 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(pkg.devDependencies.vite).toBe('catalog:build');
     expect(pkg.devDependencies['vite-plus']).toBe('catalog:build');
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+  });
+
+  it.each([
+    ['legacy', 'default'],
+    ['default', 'legacy'],
+  ])('keeps pnpm catalog references resolvable when %s precedes %s', (first, second) => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'catalog-order-workspace',
+        devDependencies: { vite: 'catalog:legacy' },
+      }),
+    );
+    const contents = [
+      'packages: [packages/*]',
+      'catalogs:',
+      `  ${first}:`,
+      '    vite: ^8.0.0',
+      `  ${second}:`,
+      '    vite: ^8.0.0',
+      '',
+    ].join('\n');
+    fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), contents);
+    const expectedSpec = first === 'default' ? 'catalog:' : `catalog:${first}`;
+    const resolver = createCatalogDependencyResolver(tmpDir, PackageManager.pnpm)!;
+    expect(resolver.preferredCatalogSpec).toBe(expectedSpec);
+
+    rewriteMonorepo(makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    expect(pkg.devDependencies.vite).toBe('catalog:legacy');
+    expect(pkg.devDependencies['vite-plus']).toBe(expectedSpec);
+    const migratedResolver = createCatalogDependencyResolver(tmpDir, PackageManager.pnpm)!;
+    expect(migratedResolver(pkg.devDependencies['vite-plus'], 'vite-plus')).toBe('latest');
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      catalog?: unknown;
+      catalogs: Record<string, Record<string, string>>;
+    };
+    expect(workspace.catalog).toBeUndefined();
+    expect(workspace.catalogs[second]['vite-plus']).toBeUndefined();
   });
 
   it('writes managed dependencies into an active catalogs.default definition', () => {

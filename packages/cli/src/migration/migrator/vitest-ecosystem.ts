@@ -4,6 +4,7 @@ import path from 'node:path';
 import { YAMLMap } from 'yaml';
 
 import { PackageManager, type WorkspacePackage } from '../../types/index.ts';
+import type { CatalogDependencyResolver } from '../../utils/catalog.ts';
 import {
   VITEST_VERSION,
   VITE_PLUS_NAME,
@@ -30,7 +31,6 @@ import {
   isPlainRecord,
   pnpmOverrideKey,
   vitePeerDependencyRuleRequired,
-  type CatalogDependencyResolver,
   type ManagedOverrideKeyStyle,
   type PackageJsonDependencyField,
   type PnpmPeerDependencyRules,

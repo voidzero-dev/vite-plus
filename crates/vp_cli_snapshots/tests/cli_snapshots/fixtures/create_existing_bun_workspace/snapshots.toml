@@ -1,0 +1,125 @@
+[[case]]
+name = "create_existing_bun_workspace"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL", "CI"]
+comment = "Creating an application supplies missing Bun catalog entries before installation."
+steps = [
+  { argv = ["vp", "create", "vite:application", "--directory", "apps/web", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"], snapshot = false, timeout = 240000 },
+  ["vpt", "stat-file", "bun.lock", "--assert", "file"],
+  ["vpt", "print-file", "package.json"],
+  { argv = ["vp", "install", "--frozen-lockfile"], snapshot = false },
+  { argv = ["vp", "run", "build"], cwd = "apps/web", snapshot = false },
+]
+
+[[case]]
+name = "create_existing_bun_split_default_catalog"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL", "CI"]
+comment = "Creating and migrating a member keeps Bun's shared default catalog installable without duplicating entries."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "bun@1.4.4"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "catalog.vite", "npm:@voidzero-dev/vite-plus-core@*"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "catalog.vite-plus", "*"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "catalogs.default.react", "19.2.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.react", "catalog:default"], snapshot = false },
+  { argv = ["vp", "install"], snapshot = false },
+  { argv = ["vp", "create", "vite:application", "--directory", "apps/web", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"], snapshot = false, timeout = 240000 },
+  ["vpt", "print-file", "package.json"],
+  { argv = ["vp", "install", "--frozen-lockfile"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive"], snapshot = false, timeout = 240000 },
+  ["vpt", "print-file", "package.json"],
+  { argv = ["vp", "install", "--frozen-lockfile"], snapshot = false },
+  { argv = ["vp", "run", "build"], cwd = "apps/web", snapshot = false },
+]
+
+[[case]]
+name = "create_existing_bun_named_default_catalog"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL", "CI"]
+comment = "Creating and migrating a member reuses Bun's named default catalog without creating a duplicate shorthand catalog."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "bun@1.4.4"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "catalogs.default.vite-plus", "*"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "catalogs.default.react", "19.2.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.react", "catalog:default"], snapshot = false },
+  { argv = ["vp", "install"], snapshot = false },
+  { argv = ["vp", "create", "vite:application", "--directory", "apps/web", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"], snapshot = false, timeout = 240000 },
+  ["vpt", "print-file", "package.json"],
+  { argv = ["vp", "install", "--frozen-lockfile"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive"], snapshot = false, timeout = 240000 },
+  ["vpt", "print-file", "package.json"],
+  { argv = ["vp", "install", "--frozen-lockfile"], snapshot = false },
+  { argv = ["vp", "run", "build"], cwd = "apps/web", snapshot = false },
+]
+
+[[case]]
+name = "migrate_existing_bun_legacy_default_catalogs"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL", "CI"]
+comment = "Bun 1.2.14 keeps catalog and catalogs.default separate through migration and a second bootstrap pass."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "bun@1.2.14"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "workspaces", '{"packages":["apps/*"],"catalog":{"vite":"npm:@voidzero-dev/vite-plus-core@*"},"catalogs":{"default":{"react":"19.2.0"}}}'], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies", '{"vite":"catalog:","react":"catalog:default"}'], snapshot = false },
+  { argv = ["vp", "install"], snapshot = false, timeout = 240000 },
+  { argv = ["vp", "migrate", "--no-interactive"], snapshot = false, timeout = 240000 },
+  ["vpt", "print-file", "package.json"],
+  { argv = ["vp", "install", "--frozen-lockfile"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive"], snapshot = false, timeout = 240000 },
+  { argv = ["vp", "install", "--frozen-lockfile"], snapshot = false },
+]
+
+[[case]]
+name = "create_existing_bun_legacy_default_catalogs"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL", "CI"]
+comment = "Bun 1.3.14 still needs shorthand references completed in catalog rather than catalogs.default."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "bun@1.3.14"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "workspaces", '{"packages":["apps/*"],"catalog":{"vite":"npm:@voidzero-dev/vite-plus-core@*"},"catalogs":{"default":{"react":"19.2.0"}}}'], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies", '{"vite":"catalog:","react":"catalog:default"}'], snapshot = false },
+  { argv = ["vp", "install"], snapshot = false, timeout = 240000 },
+  { argv = ["vp", "create", "vite:application", "--directory", "apps/web", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"], snapshot = false, timeout = 240000 },
+  ["vpt", "print-file", "package.json"],
+  ["vpt", "print-file", "apps/web/package.json"],
+  { argv = ["vp", "install", "--frozen-lockfile"], snapshot = false },
+  { argv = ["vp", "run", "build"], cwd = "apps/web", snapshot = false },
+]
+
+[[case]]
+name = "create_existing_bun_aligned_vitest_catalog"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL", "CI"]
+comment = "Creating a member completes aligned Vitest entries in the named toolchain catalog without changing the default catalog."
+steps = [
+  { argv = ["vpt", "cp", "vitest-template.config.ts", "vite.config.ts"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "catalog.@vitest/utils", "^5.0.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "catalogs.tools.vite-plus", "*"], snapshot = false },
+  { argv = ["vp", "install"], snapshot = false },
+  { argv = ["vp", "create", "vitest-app", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"], snapshot = false, timeout = 240000 },
+  ["vpt", "print-file", "apps/web/package.json"],
+  ["vpt", "print-file", "package.json"],
+  { argv = ["vp", "install", "--frozen-lockfile"], snapshot = false },
+]
+
+[[case]]
+name = "create_existing_bun_nested_catalogs"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL", "CI"]
+comment = "Bun uses nested catalog configuration without falling back to ignored root entries."
+steps = [
+  { argv = ["vpt", "cp", "nested-catalogs.json", "package.json"], snapshot = false },
+  { argv = ["vp", "install"], comment = "The ignored root catalog does not prevent installation before creation.", snapshot = false },
+  { argv = ["vp", "create", "vite:application", "--directory", "apps/web", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"], snapshot = false, timeout = 240000 },
+  ["vpt", "stat-file", "bun.lock", "--assert", "file"],
+  ["vpt", "print-file", "package.json"],
+  { argv = ["vp", "install", "--frozen-lockfile"], snapshot = false },
+  { argv = ["vp", "run", "build"], cwd = "apps/web", snapshot = false },
+]

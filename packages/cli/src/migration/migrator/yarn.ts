@@ -5,7 +5,8 @@ import path from 'node:path';
 import { coerce } from 'verkit';
 import { Scalar, YAMLSeq } from 'yaml';
 
-import { type WorkspacePackage } from '../../types/index.ts';
+import { PackageManager, type WorkspacePackage } from '../../types/index.ts';
+import { createCatalogDependencyResolverFromCatalogs } from '../../utils/catalog.ts';
 import {
   VITEST_AGE_GATE_EXEMPT_PACKAGES,
   VITE_PLUS_NAME,
@@ -13,12 +14,7 @@ import {
 } from '../../utils/constants.ts';
 import { readJsonFile } from '../../utils/json.ts';
 import { editYamlFile, readYamlFile, scalarString } from '../../utils/yaml.ts';
-import {
-  createCatalogDependencyResolverFromCatalogs,
-  overridesSatisfyVitePlus,
-  rewriteCatalog,
-  usesWebdriverioProvider,
-} from '../migrator.ts';
+import { overridesSatisfyVitePlus, rewriteCatalog, usesWebdriverioProvider } from '../migrator.ts';
 import { type MigrationReport } from '../report.ts';
 import {
   WEBDRIVERIO_PROVIDER,
@@ -393,7 +389,13 @@ export function rewriteYarnrcYml(
     }
     // catalog (Yarn >= 4.10.0 only)
     if (supportCatalog) {
-      rewriteCatalog(doc, usesVitest, vitestEcosystemPackages, catalogAdditions);
+      rewriteCatalog(
+        doc,
+        usesVitest,
+        vitestEcosystemPackages,
+        catalogAdditions,
+        PackageManager.yarn,
+      );
     }
   });
 }
@@ -434,12 +436,13 @@ export function yarnrcSatisfiesVitePlus(
   if (!supportCatalog) {
     return Object.hasOwn(doc, 'nodeLinker') && npmPreapprovedSatisfied;
   }
-  const resolver = createCatalogDependencyResolverFromCatalogs(doc?.catalog, doc?.catalogs);
+  const resolver = createCatalogDependencyResolverFromCatalogs(
+    doc?.catalog,
+    doc?.catalogs,
+    PackageManager.yarn,
+  );
   const catalogName = resolver.preferredCatalogSpec.slice('catalog:'.length);
-  const managedCatalog =
-    catalogName && catalogName !== 'default'
-      ? doc?.catalogs?.[catalogName]
-      : (doc?.catalog ?? doc?.catalogs?.default);
+  const managedCatalog = catalogName ? doc?.catalogs?.[catalogName] : doc?.catalog;
   return (
     Object.hasOwn(doc, 'nodeLinker') &&
     npmPreapprovedSatisfied &&

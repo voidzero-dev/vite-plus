@@ -3,16 +3,24 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { stringify } from 'yaml';
 
 import {
   createCatalogDependencyResolver,
+  rewriteBunCatalog,
   rewriteMonorepoProject,
+  rewriteYarnrcYml,
+  yarnrcSatisfiesVitePlus,
 } from '../../migration/migrator.ts';
 import { PackageManager } from '../../types/index.ts';
-import { VITE_PLUS_OVERRIDE_PACKAGES, VITE_PLUS_VERSION } from '../../utils/constants.ts';
+import {
+  VITEST_VERSION,
+  VITE_PLUS_OVERRIDE_PACKAGES,
+  VITE_PLUS_VERSION,
+} from '../../utils/constants.ts';
 import { readJsonFile } from '../../utils/json.ts';
 import { readYamlFile } from '../../utils/yaml.ts';
-import { ensurePnpmCreateCatalogEntries } from '../utils.ts';
+import { ensureCreateCatalogEntries } from '../utils.ts';
 
 let root: string;
 let project: string;
@@ -29,22 +37,453 @@ beforeEach(() => {
 
 afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
 
-function integrate(dependencies: Record<string, string> = { vite: '^8.0.0' }) {
+function integrate(
+  dependencies: Record<string, string> = { vite: '^8.0.0' },
+  pm: PackageManager = PackageManager.pnpm,
+) {
   fs.writeFileSync(
     path.join(project, 'package.json'),
     JSON.stringify({ devDependencies: dependencies }),
   );
   rewriteMonorepoProject(
     project,
-    PackageManager.pnpm,
+    pm,
     true,
     true,
     undefined,
-    createCatalogDependencyResolver(root, PackageManager.pnpm),
+    createCatalogDependencyResolver(root, pm),
   );
-  ensurePnpmCreateCatalogEntries(root, project);
+  ensureCreateCatalogEntries(root, project, pm);
   return readYamlFile(workspaceFile);
 }
+
+it.each([PackageManager.pnpm, PackageManager.yarn, PackageManager.bun])(
+  'completes aligned Vitest entries in the selected %s catalog without replacing existing versions',
+  (pm) => {
+    const config = {
+      catalog: { '@vitest/utils': '^4.0.0' },
+      catalogs: { tools: { 'vite-plus': '0.3.2', '@vitest/spy': '^4.0.0' } },
+    };
+    const file = path.join(
+      root,
+      {
+        [PackageManager.pnpm]: 'pnpm-workspace.yaml',
+        [PackageManager.yarn]: '.yarnrc.yml',
+        [PackageManager.bun]: 'package.json',
+      }[pm],
+    );
+    fs.writeFileSync(file, pm === PackageManager.bun ? JSON.stringify(config) : stringify(config));
+    integrate(
+      {
+        'vite-plus': 'catalog:tools',
+        '@vitest/utils': '^5.0.0',
+        '@vitest/spy': 'catalog:tools',
+      },
+      pm,
+    );
+    expect(readJsonFile(path.join(project, 'package.json')).devDependencies).toMatchObject({
+      '@vitest/utils': 'catalog:tools',
+      '@vitest/spy': 'catalog:tools',
+    });
+    expect(pm === PackageManager.bun ? readJsonFile(file) : readYamlFile(file)).toMatchObject({
+      catalog: config.catalog,
+      catalogs: { tools: { ...config.catalogs.tools, '@vitest/utils': VITEST_VERSION } },
+    });
+    const before = fs.readFileSync(file, 'utf8');
+    ensureCreateCatalogEntries(root, project, pm);
+    expect(fs.readFileSync(file, 'utf8')).toBe(before);
+  },
+);
+
+it('only completes referenced install dependencies in the aligned Vitest package set', () => {
+  fs.writeFileSync(
+    path.join(project, 'package.json'),
+    JSON.stringify({
+      dependencies: { '@vitest/utils': 'catalog:tools' },
+      optionalDependencies: { '@vitest/spy': 'catalog:tools' },
+      devDependencies: { '@vitest/expect': 'catalog:tools', '@vitest/mocker': '^5.0.0' },
+      peerDependencies: { '@vitest/browser': 'catalog:tools' },
+    }),
+  );
+  ensureCreateCatalogEntries(root, project, PackageManager.pnpm);
+  expect(readYamlFile(workspaceFile)).toEqual({
+    packages: ['apps/*'],
+    catalogs: { tools: { '@vitest/utils': VITEST_VERSION, '@vitest/spy': VITEST_VERSION } },
+  });
+});
+
+it('leaves Vitest ecosystem catalogs unmanaged when the Vitest override is absent', () => {
+  const version = VITE_PLUS_OVERRIDE_PACKAGES.vitest;
+  try {
+    delete VITE_PLUS_OVERRIDE_PACKAGES.vitest;
+    fs.writeFileSync(
+      path.join(project, 'package.json'),
+      JSON.stringify({
+        devDependencies: { '@vitest/utils': 'catalog:tools' },
+      }),
+    );
+    const before = fs.readFileSync(workspaceFile, 'utf8');
+    ensureCreateCatalogEntries(root, project, PackageManager.pnpm);
+    expect(fs.readFileSync(workspaceFile, 'utf8')).toBe(before);
+  } finally {
+    VITE_PLUS_OVERRIDE_PACKAGES.vitest = version;
+  }
+});
+
+describe.each([PackageManager.yarn, PackageManager.bun])('%s workspace catalogs', (pm) => {
+  it.each(['missing', 'partial', 'named', 'default'] as const)(
+    'completes a %s catalog without changing existing versions',
+    (kind) => {
+      const existing = { 'vite-plus': '0.3.2', react: '^19.0.0' };
+      const config = {
+        missing: {},
+        partial: { catalog: existing },
+        named: { catalogs: { tools: existing } },
+        default: { catalogs: { default: existing } },
+      }[kind];
+      const file = path.join(root, pm === PackageManager.yarn ? '.yarnrc.yml' : 'package.json');
+      const contents = { private: true, workspaces: ['apps/*'], ...config };
+      if (pm !== PackageManager.yarn || kind !== 'missing') {
+        fs.writeFileSync(
+          file,
+          pm === PackageManager.yarn ? stringify(config) : JSON.stringify(contents),
+        );
+      }
+      integrate(undefined, pm);
+      const spec =
+        kind === 'named'
+          ? 'catalog:tools'
+          : kind === 'default' && pm === PackageManager.yarn
+            ? 'catalog:default'
+            : 'catalog:';
+      expect(readJsonFile(path.join(project, 'package.json')).devDependencies).toEqual({
+        vite: spec,
+        'vite-plus': spec,
+      });
+      const result = pm === PackageManager.yarn ? readYamlFile(file) : readJsonFile(file);
+      const entries = {
+        ...(kind === 'missing' ? { 'vite-plus': VITE_PLUS_VERSION } : existing),
+        vite: VITE_PLUS_OVERRIDE_PACKAGES.vite,
+      };
+      const expected =
+        kind === 'named'
+          ? { catalogs: { tools: entries } }
+          : kind === 'default'
+            ? { catalogs: { default: entries } }
+            : { catalog: entries };
+      expect(result).toEqual(
+        pm === PackageManager.yarn
+          ? expected
+          : { private: true, workspaces: ['apps/*'], ...expected },
+      );
+      const before = fs.readFileSync(file, 'utf8');
+      ensureCreateCatalogEntries(root, project, pm);
+      expect(fs.readFileSync(file, 'utf8')).toBe(before);
+    },
+  );
+});
+
+it('fills the active Bun catalog even when ignored root catalogs have those entries', () => {
+  const file = path.join(root, 'package.json');
+  const ignored = { vite: '0.0.0-unused', 'vite-plus': '0.0.0-unused' };
+  fs.writeFileSync(
+    file,
+    JSON.stringify({
+      workspaces: { packages: ['apps/*'], catalog: { react: '^19.0.0' } },
+      catalog: ignored,
+      catalogs: { tools: ignored },
+    }),
+  );
+  const resolver = createCatalogDependencyResolver(root, PackageManager.bun)!;
+  expect(resolver('catalog:', 'vite')).toBeUndefined();
+  expect(resolver('catalog:tools', 'vite')).toBeUndefined();
+  fs.writeFileSync(
+    path.join(project, 'package.json'),
+    JSON.stringify({
+      devDependencies: { vite: 'catalog:', 'vite-plus': 'catalog:tools' },
+    }),
+  );
+  ensureCreateCatalogEntries(root, project, PackageManager.bun);
+  expect(readJsonFile(file)).toEqual({
+    workspaces: {
+      packages: ['apps/*'],
+      catalog: { react: '^19.0.0', vite: VITE_PLUS_OVERRIDE_PACKAGES.vite },
+      catalogs: { tools: { 'vite-plus': VITE_PLUS_VERSION } },
+    },
+    catalog: ignored,
+    catalogs: { tools: ignored },
+  });
+});
+
+it('keeps Yarn default and named default catalog references distinct', () => {
+  fs.writeFileSync(
+    path.join(root, '.yarnrc.yml'),
+    stringify({
+      catalog: { vite: '^8.0.0' },
+      catalogs: { default: { 'vite-plus': '0.3.2' } },
+    }),
+  );
+  const resolver = createCatalogDependencyResolver(root, PackageManager.yarn)!;
+  expect(resolver.preferredCatalogSpec).toBe('catalog:default');
+  expect(resolver('catalog:', 'vite')).toBe('^8.0.0');
+  expect(resolver('catalog:', 'vite-plus')).toBeUndefined();
+  expect(resolver('catalog:default', 'vite-plus')).toBe('0.3.2');
+  fs.writeFileSync(
+    path.join(project, 'package.json'),
+    JSON.stringify({
+      devDependencies: { vite: 'catalog:default', 'vite-plus': 'catalog:default' },
+    }),
+  );
+  ensureCreateCatalogEntries(root, project, PackageManager.yarn);
+  expect(readYamlFile(path.join(root, '.yarnrc.yml'))).toEqual({
+    catalog: { vite: '^8.0.0' },
+    catalogs: { default: { 'vite-plus': '0.3.2', vite: VITE_PLUS_OVERRIDE_PACKAGES.vite } },
+  });
+});
+
+it('uses the same named default catalog when migrating Yarn settings', () => {
+  const file = path.join(root, '.yarnrc.yml');
+  fs.writeFileSync(
+    file,
+    stringify({
+      catalog: { react: '^19.0.0' },
+      catalogs: { default: { 'vite-plus': '0.3.2' } },
+    }),
+  );
+  rewriteYarnrcYml(root, false, new Set(), new Set(), true, false);
+  const config = readYamlFile(file);
+  expect(config.catalog).toEqual({ react: '^19.0.0' });
+  expect(config).toMatchObject({
+    catalogs: {
+      default: { 'vite-plus': VITE_PLUS_VERSION, vite: VITE_PLUS_OVERRIDE_PACKAGES.vite },
+    },
+  });
+  expect(yarnrcSatisfiesVitePlus(root, false, true, false)).toBe(true);
+});
+
+describe.each(['root', 'nested'])('Bun %s shared default catalog', (location) => {
+  const config = {
+    catalog: { vite: '^8.0.0', 'vite-plus': '0.3.2', '@vitest/spy': '^5.0.0' },
+    catalogs: { default: { react: '^19.0.0' } },
+  };
+  let file: string;
+
+  beforeEach(() => {
+    file = path.join(root, 'package.json');
+    fs.writeFileSync(
+      file,
+      JSON.stringify(
+        location === 'nested'
+          ? { workspaces: { packages: ['apps/*'], ...config } }
+          : { workspaces: ['apps/*'], ...config },
+      ),
+    );
+  });
+
+  it.each(['catalog:', 'catalog:default'])(
+    'resolves and completes %s without duplicating existing entries',
+    (spec) => {
+      const resolver = createCatalogDependencyResolver(root, PackageManager.bun)!;
+      expect(resolver(spec, 'vite')).toBe('^8.0.0');
+      expect(resolver(spec, 'vite-plus')).toBe('0.3.2');
+      expect(resolver(spec, 'react')).toBe('^19.0.0');
+      fs.writeFileSync(
+        path.join(project, 'package.json'),
+        JSON.stringify({
+          devDependencies: {
+            vite: spec,
+            'vite-plus': spec,
+            '@vitest/spy': spec,
+            '@vitest/utils': spec,
+          },
+        }),
+      );
+      ensureCreateCatalogEntries(root, project, PackageManager.bun);
+      const result = readJsonFile(file);
+      const active = (location === 'nested' ? result.workspaces : result) as typeof config;
+      expect(active.catalog).toEqual(config.catalog);
+      expect(active.catalogs).toEqual({
+        default: { react: '^19.0.0', '@vitest/utils': VITEST_VERSION },
+      });
+      const before = fs.readFileSync(file, 'utf8');
+      ensureCreateCatalogEntries(root, project, PackageManager.bun);
+      expect(fs.readFileSync(file, 'utf8')).toBe(before);
+    },
+  );
+
+  it('migrates entries in their existing locations and adds only missing entries', () => {
+    const ecosystem = new Set(['@vitest/spy', '@vitest/utils']);
+    rewriteBunCatalog(root, false, ecosystem);
+    const result = readJsonFile(file);
+    const active = (location === 'nested' ? result.workspaces : result) as typeof config;
+    expect(active.catalog).toEqual({
+      vite: VITE_PLUS_OVERRIDE_PACKAGES.vite,
+      'vite-plus': VITE_PLUS_VERSION,
+      '@vitest/spy': VITEST_VERSION,
+    });
+    expect(active.catalogs).toEqual({
+      default: { react: '^19.0.0', '@vitest/utils': VITEST_VERSION },
+    });
+    const before = fs.readFileSync(file, 'utf8');
+    rewriteBunCatalog(root, false, ecosystem);
+    expect(fs.readFileSync(file, 'utf8')).toBe(before);
+  });
+
+  it.each([
+    { name: 'default only', catalog: undefined },
+    { name: 'split toolchain', catalog: { vite: '^8.0.0' } },
+    { name: 'unrelated shorthand', catalog: { react: '^19.0.0' } },
+  ])('migrates $name without duplicating named default entries', ({ catalog }) => {
+    const initial = { catalog, catalogs: { default: { 'vite-plus': '0.3.2' } } };
+    fs.writeFileSync(
+      file,
+      JSON.stringify(
+        location === 'nested'
+          ? { workspaces: { packages: ['apps/*'], ...initial } }
+          : { workspaces: ['apps/*'], ...initial },
+      ),
+    );
+    rewriteBunCatalog(root, false, new Set());
+    const result = readJsonFile(file);
+    const active = (location === 'nested' ? result.workspaces : result) as {
+      catalog?: Record<string, string>;
+      catalogs: Record<string, Record<string, string>>;
+    };
+    expect(active.catalog).toEqual(
+      catalog && {
+        ...catalog,
+        ...(catalog.vite ? { vite: VITE_PLUS_OVERRIDE_PACKAGES.vite } : {}),
+      },
+    );
+    expect(active.catalogs).toEqual({
+      default: {
+        'vite-plus': VITE_PLUS_VERSION,
+        ...(!catalog?.vite ? { vite: VITE_PLUS_OVERRIDE_PACKAGES.vite } : {}),
+      },
+    });
+    const before = fs.readFileSync(file, 'utf8');
+    rewriteBunCatalog(root, false, new Set());
+    expect(fs.readFileSync(file, 'utf8')).toBe(before);
+  });
+
+  it('updates pre-existing duplicate entries in place without removing either', () => {
+    const contents = readJsonFile(file);
+    const active = (location === 'nested' ? contents.workspaces : contents) as typeof config;
+    Object.assign(active.catalogs.default, { vite: active.catalog.vite });
+    fs.writeFileSync(file, JSON.stringify(contents));
+    rewriteBunCatalog(root, false, new Set());
+    const result = readJsonFile(file);
+    expect(location === 'nested' ? result.workspaces : result).toMatchObject({
+      catalog: { vite: VITE_PLUS_OVERRIDE_PACKAGES.vite },
+      catalogs: { default: { vite: VITE_PLUS_OVERRIDE_PACKAGES.vite } },
+    });
+  });
+});
+
+it.each([
+  { name: 'tools', spec: 'catalog:tools' },
+  { name: 'default', spec: 'catalog:' },
+])(
+  'fills Bun nested $name catalogs without moving or replacing existing settings',
+  ({ name, spec }) => {
+    const file = path.join(root, 'package.json');
+    const contents = {
+      private: true,
+      workspaces: { packages: ['apps/*'], catalogs: { [name]: { 'vite-plus': '0.3.2' } } },
+      catalog: { react: '^19.0.0' },
+    };
+    fs.writeFileSync(file, JSON.stringify(contents));
+    fs.writeFileSync(
+      path.join(project, 'package.json'),
+      JSON.stringify({
+        devDependencies: { vite: spec, 'vite-plus': spec },
+      }),
+    );
+    ensureCreateCatalogEntries(root, project, PackageManager.bun);
+    expect(readJsonFile(file)).toEqual({
+      ...contents,
+      workspaces: {
+        packages: ['apps/*'],
+        catalogs: {
+          [name]: {
+            'vite-plus': '0.3.2',
+            vite: VITE_PLUS_OVERRIDE_PACKAGES.vite,
+          },
+        },
+      },
+    });
+  },
+);
+
+it.each(['1.2.14', '1.3.14', '1.4.0'])(
+  'completes references in the correct default catalog on Bun %s',
+  (version) => {
+    const file = path.join(root, 'package.json');
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        private: true,
+        workspaces: {
+          packages: ['apps/*'],
+          catalog: { vite: VITE_PLUS_OVERRIDE_PACKAGES.vite },
+          catalogs: { default: { react: '^19.0.0' } },
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(project, 'package.json'),
+      JSON.stringify({
+        devDependencies: { vite: 'catalog:default', 'vite-plus': 'catalog:' },
+      }),
+    );
+    ensureCreateCatalogEntries(root, project, PackageManager.bun, version);
+    const merged = version === '1.4.0';
+    expect(readJsonFile(file)).toEqual({
+      private: true,
+      workspaces: {
+        packages: ['apps/*'],
+        catalog: {
+          vite: VITE_PLUS_OVERRIDE_PACKAGES.vite,
+          ...(merged ? {} : { 'vite-plus': VITE_PLUS_VERSION }),
+        },
+        catalogs: {
+          default: {
+            react: '^19.0.0',
+            ...(merged
+              ? { 'vite-plus': VITE_PLUS_VERSION }
+              : { vite: VITE_PLUS_OVERRIDE_PACKAGES.vite }),
+          },
+        },
+      },
+    });
+    const before = fs.readFileSync(file, 'utf8');
+    ensureCreateCatalogEntries(root, project, PackageManager.bun, version);
+    expect(fs.readFileSync(file, 'utf8')).toBe(before);
+  },
+);
+
+it.each([
+  { packageManager: 'bun@1.3.14' },
+  { devEngines: { packageManager: { name: 'bun', version: '1.3.14' } } },
+])('uses the Bun pin when no resolved version is supplied: %j', (pin) => {
+  fs.writeFileSync(
+    path.join(root, 'package.json'),
+    JSON.stringify({
+      ...pin,
+      workspaces: {
+        packages: ['apps/*'],
+        catalog: { vite: '^8.0.0' },
+        catalogs: { default: { react: '^19.0.0' } },
+      },
+    }),
+  );
+  const pinned = createCatalogDependencyResolver(root, PackageManager.bun)!;
+  expect(pinned('catalog:', 'react')).toBeUndefined();
+  expect(pinned('catalog:default', 'vite')).toBeUndefined();
+  const resolved = createCatalogDependencyResolver(root, PackageManager.bun, '1.4.0')!;
+  expect(resolved('catalog:', 'react')).toBe('^19.0.0');
+  expect(resolved('catalog:default', 'vite')).toBe('^8.0.0');
+});
 
 describe('catalogs for applications created in existing pnpm workspaces', () => {
   it('makes references generated by member integration resolvable in a plain workspace', () => {
@@ -113,7 +552,7 @@ describe('catalogs for applications created in existing pnpm workspaces', () => 
 
   it('leaves templates without a package manifest alone', () => {
     const content = fs.readFileSync(workspaceFile, 'utf8');
-    ensurePnpmCreateCatalogEntries(root, project);
+    ensureCreateCatalogEntries(root, project, PackageManager.pnpm);
     expect(fs.readFileSync(workspaceFile, 'utf8')).toBe(content);
   });
 
@@ -129,7 +568,7 @@ describe('catalogs for applications created in existing pnpm workspaces', () => 
         },
       }),
     );
-    ensurePnpmCreateCatalogEntries(root, project);
+    ensureCreateCatalogEntries(root, project, PackageManager.pnpm);
     expect(fs.readFileSync(workspaceFile, 'utf8')).toBe(content);
   });
 });
