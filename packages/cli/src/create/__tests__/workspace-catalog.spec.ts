@@ -340,11 +340,49 @@ describe.each(['root', 'nested'])('Bun %s shared default catalog', (location) =>
       vite: VITE_PLUS_OVERRIDE_PACKAGES.vite,
       'vite-plus': VITE_PLUS_VERSION,
       '@vitest/spy': VITEST_VERSION,
-      '@vitest/utils': VITEST_VERSION,
     });
-    expect(active.catalogs).toEqual(config.catalogs);
+    expect(active.catalogs).toEqual({
+      default: { react: '^19.0.0', '@vitest/utils': VITEST_VERSION },
+    });
     const before = fs.readFileSync(file, 'utf8');
     rewriteBunCatalog(root, false, ecosystem);
+    expect(fs.readFileSync(file, 'utf8')).toBe(before);
+  });
+
+  it.each([
+    { name: 'default only', catalog: undefined },
+    { name: 'split toolchain', catalog: { vite: '^8.0.0' } },
+    { name: 'unrelated shorthand', catalog: { react: '^19.0.0' } },
+  ])('migrates $name without duplicating named default entries', ({ catalog }) => {
+    const initial = { catalog, catalogs: { default: { 'vite-plus': '0.3.2' } } };
+    fs.writeFileSync(
+      file,
+      JSON.stringify(
+        location === 'nested'
+          ? { workspaces: { packages: ['apps/*'], ...initial } }
+          : { workspaces: ['apps/*'], ...initial },
+      ),
+    );
+    rewriteBunCatalog(root, false, new Set());
+    const result = readJsonFile(file);
+    const active = (location === 'nested' ? result.workspaces : result) as {
+      catalog?: Record<string, string>;
+      catalogs: Record<string, Record<string, string>>;
+    };
+    expect(active.catalog).toEqual(
+      catalog && {
+        ...catalog,
+        ...(catalog.vite ? { vite: VITE_PLUS_OVERRIDE_PACKAGES.vite } : {}),
+      },
+    );
+    expect(active.catalogs).toEqual({
+      default: {
+        'vite-plus': VITE_PLUS_VERSION,
+        ...(!catalog?.vite ? { vite: VITE_PLUS_OVERRIDE_PACKAGES.vite } : {}),
+      },
+    });
+    const before = fs.readFileSync(file, 'utf8');
+    rewriteBunCatalog(root, false, new Set());
     expect(fs.readFileSync(file, 'utf8')).toBe(before);
   });
 

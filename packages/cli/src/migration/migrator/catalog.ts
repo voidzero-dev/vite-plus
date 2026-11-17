@@ -1024,11 +1024,22 @@ function rewriteVitestEcosystemYamlCatalog(
   }
 }
 
+function shouldWriteCatalogEntry(
+  name: string,
+  catalog: Record<string, string>,
+  addMissing: boolean,
+  otherDefaultCatalog?: Record<string, string>,
+): boolean {
+  // Bun merges the two default catalogs and rejects names defined in both.
+  return name in catalog || (addMissing && !Object.hasOwn(otherDefaultCatalog ?? {}, name));
+}
+
 function rewriteCatalogObject(
   catalog: Record<string, string>,
   addMissing: boolean,
   usesVitest: boolean,
   vitestEcosystemPackages: ReadonlySet<string>,
+  otherDefaultCatalog?: Record<string, string>,
 ): void {
   const managed = managedOverridePackages(usesVitest);
   // Common case (no direct vitest): strip a lingering managed `vitest` catalog
@@ -1037,12 +1048,18 @@ function rewriteCatalogObject(
     removeManagedVitestEntry(catalog);
   }
   for (const [key, value] of Object.entries(managed)) {
-    if (value.startsWith('file:') || (!addMissing && !(key in catalog))) {
+    if (
+      value.startsWith('file:') ||
+      !shouldWriteCatalogEntry(key, catalog, addMissing, otherDefaultCatalog)
+    ) {
       continue;
     }
     catalog[key] = value;
   }
-  if (!VITE_PLUS_VERSION.startsWith('file:') && (addMissing || VITE_PLUS_NAME in catalog)) {
+  if (
+    !VITE_PLUS_VERSION.startsWith('file:') &&
+    shouldWriteCatalogEntry(VITE_PLUS_NAME, catalog, addMissing, otherDefaultCatalog)
+  ) {
     catalog[VITE_PLUS_NAME] = VITE_PLUS_VERSION;
   }
   for (const name of REMOVE_PACKAGES) {
@@ -1055,7 +1072,11 @@ function rewriteCatalogObject(
       ? new Set([...Object.keys(catalog), ...vitestEcosystemPackages])
       : Object.keys(catalog);
     for (const name of names) {
-      if (vitestEcosystemPackages.has(name) && isAlignableVitestEcosystemPackage(name)) {
+      if (
+        vitestEcosystemPackages.has(name) &&
+        isAlignableVitestEcosystemPackage(name) &&
+        shouldWriteCatalogEntry(name, catalog, addMissing, otherDefaultCatalog)
+      ) {
         catalog[name] = VITEST_VERSION;
       }
     }
@@ -1067,9 +1088,16 @@ function rewriteCatalogsObject(
   usesVitest: boolean,
   vitestEcosystemPackages: ReadonlySet<string>,
   targetCatalog?: Record<string, string>,
+  defaultCatalog?: Record<string, string>,
 ): void {
-  for (const catalog of Object.values(catalogs)) {
-    rewriteCatalogObject(catalog, catalog === targetCatalog, usesVitest, vitestEcosystemPackages);
+  for (const [name, catalog] of Object.entries(catalogs)) {
+    rewriteCatalogObject(
+      catalog,
+      catalog === targetCatalog,
+      usesVitest,
+      vitestEcosystemPackages,
+      name === 'default' ? defaultCatalog : undefined,
+    );
   }
 }
 
@@ -1108,7 +1136,7 @@ export function rewriteBunCatalog(
     // takes them instead of a newly created default catalog.
     const { preferredCatalogSpec } = readBunCatalogDependencyResolver(pkg);
     const preferredName = preferredCatalogSpec.slice('catalog:'.length);
-    const namedTarget = preferredName ? activeCatalogs.catalogs?.[preferredName] : undefined;
+    const namedTarget = activeCatalogs.catalogs?.[preferredName || 'default'];
     const defaultCatalog = useWorkspacesCatalog ? workspacesObj?.catalog : pkg.catalog;
     const catalog: Record<string, string> = { ...defaultCatalog };
 
@@ -1136,13 +1164,20 @@ export function rewriteBunCatalog(
         usesVitest,
         vitestEcosystemPackages,
         namedTarget,
+        workspacesObj.catalog,
       );
       for (const named of Object.values(workspacesObj.catalogs)) {
         pruneLegacyWrapperAliases(named);
       }
     }
     if (pkg.catalogs) {
-      rewriteCatalogsObject(pkg.catalogs, usesVitest, vitestEcosystemPackages, namedTarget);
+      rewriteCatalogsObject(
+        pkg.catalogs,
+        usesVitest,
+        vitestEcosystemPackages,
+        namedTarget,
+        pkg.catalog,
+      );
       for (const named of Object.values(pkg.catalogs)) {
         pruneLegacyWrapperAliases(named);
       }
