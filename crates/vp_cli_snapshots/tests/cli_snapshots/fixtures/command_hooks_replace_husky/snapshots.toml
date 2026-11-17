@@ -1,0 +1,32 @@
+[[case]]
+name = "command_hooks_replace_husky"
+vp = ["local", "global"]
+steps = [
+  { argv = ["git", "init"], snapshot = false },
+  { argv = ["git", "config", "core.hooksPath", ".husky/_"], snapshot = false },
+  { argv = ["vpt", "write-file", ".husky/_/pre-commit", "#!/bin/sh\necho original-check-rejected >&2\nexit 1\n"], snapshot = false },
+  { argv = ["vpt", "write-file", ".vite-hooks/commit-msg", "echo migrated-check-rejected >&2\nexit 1\n"], snapshot = false },
+  { argv = ["vp", "config", "--no-agent"], tty = false, comment = "preserve non-empty Husky directory and explain recovery" },
+  { argv = ["vp", "hooks", "enable"], comment = "ordinary enable also preserves old hooks" },
+  { argv = ["git", "config", "--local", "core.hooksPath"], comment = "Husky remains active until explicit replacement" },
+  { argv = ["vp", "hooks", "enable", "--replace-husky"], envs = [["VP_GIT_HOOKS", "0"]], comment = "explicit replacement honors environment opt-out" },
+  { argv = ["git", "config", "--local", "core.hooksPath"], comment = "opt-out left the path unchanged" },
+  { argv = ["vp", "hooks", "enable", "--replace-husky"], comment = "explicitly activate the migrated hooks, explaining the old hooks no longer run" },
+  { argv = ["git", "config", "--local", "core.hooksPath"], comment = "Vite+ dispatcher is now active" },
+  { argv = ["vpt", "print-file", ".husky/_/pre-commit"], comment = "old Husky script was preserved" },
+  { argv = ["vpt", "print-file", "package.json"], comment = "prepare does not acquire the explicit replacement flag" },
+  { argv = ["git", "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false", "commit", "--allow-empty", "-m", "test"], comment = "the migrated check rejects the commit", continue-on-failure = true },
+  { argv = ["vp", "hooks", "disable", "--replace-husky"], comment = "the replacement option is enable-only", continue-on-failure = true },
+]
+
+[[case]]
+name = "command_hooks_recover_empty_husky"
+vp = ["local", "global"]
+steps = [
+  { argv = ["git", "init"], snapshot = false },
+  { argv = ["git", "config", "core.hooksPath", ".husky/_"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", ".husky/_"], snapshot = false },
+  { argv = ["vpt", "write-file", ".vite-hooks/pre-commit", "exit 0\n"], snapshot = false },
+  { argv = ["vp", "config", "--no-agent"], tty = false, comment = "recover an empty old directory automatically" },
+  { argv = ["git", "config", "--local", "core.hooksPath"], comment = "Vite+ hooks are active without an explicit override" },
+]
