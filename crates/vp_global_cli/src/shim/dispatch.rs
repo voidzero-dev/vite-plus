@@ -235,16 +235,17 @@ fn npm_dry_run_from_config_output(stdout: &str) -> Option<bool> {
     stdout.lines().find_map(|line| line.strip_prefix("dry-run=")).map(npm_config_bool)
 }
 
-/// Parse a boolean npm config value the way npm's option parser (nopt) does:
-/// numbers are true when nonzero, `false` and `null` are false, and any other
-/// string is true. `npm config get` prints environment values unparsed, such
-/// as `1` for `NPM_CONFIG_DRY_RUN=1`.
+/// Parse a boolean npm config value the way npm does. `npm config get` prints
+/// environment and npmrc values before npm converts them to booleans, such as
+/// `1` for `NPM_CONFIG_DRY_RUN=1`. npm first reads `undefined` (case-sensitive)
+/// as no value. Its option parser (nopt) then makes numbers true when nonzero,
+/// `false` and `null` false, and any other string true.
 fn npm_config_bool(value: &str) -> bool {
     let value = value.trim();
     if let Ok(number) = value.parse::<f64>() {
         return number != 0.0;
     }
-    !value.is_empty() && value != "false" && value != "null"
+    !matches!(value, "" | "false" | "null" | "undefined")
 }
 
 /// After npm install -g completes, check if installed binaries are on PATH.
@@ -2026,10 +2027,10 @@ mod tests {
 
     #[test]
     fn test_npm_config_bool() {
-        for value in ["true", "1", "yes", "true\n"] {
+        for value in ["true", "1", "yes", "true\n", "UNDEFINED"] {
             assert!(npm_config_bool(value), "{value:?} should be true");
         }
-        for value in ["false", "0", "null", "", "false\n"] {
+        for value in ["false", "0", "null", "undefined", "", "false\n"] {
             assert!(!npm_config_bool(value), "{value:?} should be false");
         }
     }

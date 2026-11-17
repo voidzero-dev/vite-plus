@@ -109,9 +109,9 @@ BinConfig records Node.js 24
 <home>/.vite-plus/bins/npm-global-relink-cli.json: found "\"nodeVersion\": \"24.22.1\""
 ```
 
-## `VP_NODE_VERSION=26.12.1 NPM_CONFIG_PREFIX=${workspace}/node-26 npm install -g --ignore-scripts ./pkg --dry-run false`
+## `VP_NODE_VERSION=26.12.1 NPM_CONFIG_PREFIX=${workspace}/node-26 npm_config_dry_run=undefined npm install -g --ignore-scripts ./pkg`
 
-npm reads `--dry-run false` as a real install with Node.js 26 (moves the link)
+npm reads `npm_config_dry_run=undefined` as a real install with Node.js 26 (moves the link)
 
 ```
 
@@ -128,9 +128,28 @@ BinConfig records Node.js 26
 <home>/.vite-plus/bins/npm-global-relink-cli.json: found "\"nodeVersion\": \"26.12.1\""
 ```
 
-## `vpt rm -rf node-24`
+## `NPM_CONFIG_PREFIX=${workspace}/node-24 npm install -g --ignore-scripts ./pkg --dry-run false`
 
-Remove the Node.js 24 copy: the command must not depend on it
+npm reads `--dry-run false` as a real install with Node.js 24 (moves the link)
+
+```
+
+up to date in <duration>
+note: Moving 'npm-global-relink-cli' from Node.js <version> to 24.22.1
+Linked 'npm-global-relink-cli' to <home>/.vite-plus/bin/npm-global-relink-cli
+```
+
+## `vpt grep-file $VP_HOME/bins/npm-global-relink-cli.json '"nodeVersion": "24.22.1"'`
+
+BinConfig records Node.js 24
+
+```
+<home>/.vite-plus/bins/npm-global-relink-cli.json: found "\"nodeVersion\": \"24.22.1\""
+```
+
+## `vpt rm -rf node-26`
+
+Remove the Node.js 26 copy: the command must not depend on it
 
 ```
 ```
@@ -143,9 +162,9 @@ Should be callable via the moved link
 relink-cli works
 ```
 
-## `VP_NODE_VERSION=26.12.1 NPM_CONFIG_PREFIX=${workspace}/node-26 npm install -g --ignore-scripts ./pkg`
+## `NPM_CONFIG_PREFIX=${workspace}/node-24 npm install -g --ignore-scripts ./pkg`
 
-Install again with Node.js 26 (the link is current, so no message)
+Install again with Node.js 24 (the link is current, so no message)
 
 ```
 
