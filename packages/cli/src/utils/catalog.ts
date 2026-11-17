@@ -12,12 +12,20 @@ export type CatalogDependencyResolver = ((
   preferredCatalogSpec: string;
 };
 
+// Whether `version` is at least `minVersion`. A non-coercible version passes
+// only when it is one of the given dist-tags, which always point at a current
+// (feature-capable) release.
+export function versionAtLeast(version: string, minVersion: string, tags: string[]): boolean {
+  const coerced = coerce(version);
+  if (coerced) {
+    return isGreaterThanOrEqual(coerced, minVersion);
+  }
+  return tags.includes(version);
+}
+
 export function bunSupportsMergedDefaultCatalogs(version: string): boolean {
   // Bun 1.4.0 unified the default catalogs: https://github.com/oven-sh/bun/pull/38333.
-  const coerced = coerce(version);
-  return coerced
-    ? isGreaterThanOrEqual(coerced, '1.4.0')
-    : version === 'latest' || version === 'canary';
+  return versionAtLeast(version, '1.4.0', ['latest', 'canary']);
 }
 
 export function isNamedCatalog(

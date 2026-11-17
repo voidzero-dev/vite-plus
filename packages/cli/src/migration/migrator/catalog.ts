@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import tsrsPkg from 'tsrs/package.json' with { type: 'json' };
-import { coerce, isGreaterThanOrEqual, isLessThan } from 'verkit';
+import { coerce, isLessThan } from 'verkit';
 import { Scalar, YAMLMap, YAMLSeq } from 'yaml';
 
 import { PackageManager, type WorkspacePackage } from '../../types/index.ts';
@@ -13,6 +13,7 @@ import {
   getYamlCatalogPath,
   readBunCatalogDependencyResolver,
   selectPreferredCatalogSpec,
+  versionAtLeast,
   type CatalogDependencyResolver,
 } from '../../utils/catalog.ts';
 import {
@@ -101,17 +102,6 @@ const PNPM_TSRS_TRUST_POLICY_EXCLUDE = `tsrs@${tsrsPkg.version}`;
 
 function hasTsrsTrustPolicyException(excludes: readonly unknown[]): boolean {
   return excludes.includes('tsrs') || excludes.includes(PNPM_TSRS_TRUST_POLICY_EXCLUDE);
-}
-
-// Whether `version` is at least `minVersion`. A non-coercible version passes
-// only when it is one of the given dist-tags, which always point at a current
-// (feature-capable) release.
-function versionAtLeast(version: string, minVersion: string, tags: string[]): boolean {
-  const coerced = coerce(version);
-  if (coerced) {
-    return isGreaterThanOrEqual(coerced, minVersion);
-  }
-  return tags.includes(version);
 }
 
 // The packages field became optional in pnpm 10.5.0.
@@ -212,6 +202,20 @@ export function supportsCatalog(
     default:
       return false;
   }
+}
+
+// `supportsCatalog` for a workspace root, reading Bun's workspace state from its package.json.
+export function workspaceSupportsCatalog(
+  rootDir: string,
+  packageManager: PackageManager,
+  version: string,
+): boolean {
+  return supportsCatalog(
+    packageManager,
+    version,
+    packageManager === PackageManager.bun &&
+      bunSupportsCatalog(readJsonFile(path.join(rootDir, 'package.json')), version),
+  );
 }
 
 // These are the root package.json#pnpm settings pnpm 10.6.2+ accepts at the
@@ -768,15 +772,7 @@ export function createCatalogDependencyResolver(
   packageManagerVersion?: string,
 ): CatalogDependencyResolver | undefined {
   if (packageManager === PackageManager.pnpm) {
-    const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
-    if (!fs.existsSync(pnpmWorkspaceYamlPath)) {
-      return undefined;
-    }
-    const doc = readYamlFile(pnpmWorkspaceYamlPath) as {
-      catalog?: Record<string, string>;
-      catalogs?: Record<string, Record<string, string>>;
-    } | null;
-    return createCatalogDependencyResolverFromCatalogs(doc?.catalog, doc?.catalogs, packageManager);
+    return readPnpmWorkspaceCatalogDependencyResolver(projectPath);
   }
   if (packageManager === PackageManager.yarn) {
     const yarnrcYmlPath = path.join(projectPath, '.yarnrc.yml');
@@ -1145,7 +1141,7 @@ export function rewriteBunCatalog(
       preferredName || mergeDefaults
         ? activeCatalogs.catalogs?.[preferredName || 'default']
         : undefined;
-    const defaultCatalog = useWorkspacesCatalog ? workspacesObj?.catalog : pkg.catalog;
+    const defaultCatalog = activeCatalogs.catalog;
     const catalog: Record<string, string> = { ...defaultCatalog };
 
     rewriteCatalogObject(catalog, !namedTarget, usesVitest, vitestEcosystemPackages);

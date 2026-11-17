@@ -7,7 +7,6 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { getPackageManagerOverride, parseCreateArgs, vitePlusHeader } from '../../binding/index.js';
 import {
   addFrameworkShim,
-  bunSupportsCatalog,
   createCatalogDependencyResolver,
   detectEslintProject,
   detectFramework,
@@ -24,7 +23,7 @@ import {
   rewriteStandaloneProject,
   setPackageManager,
   shouldSkipStagedMigrationForHooks,
-  supportsCatalog,
+  workspaceSupportsCatalog,
 } from '../migration/migrator.ts';
 import { DependencyType, PackageManager, type WorkspaceInfo } from '../types/index.ts';
 import {
@@ -1319,14 +1318,10 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       shouldSetupHooks,
       workspaceInfo.packageManager,
     );
-    const supportCatalog = supportsCatalog(
+    const supportCatalog = workspaceSupportsCatalog(
+      workspaceInfo.rootDir,
       workspaceInfo.packageManager,
       workspaceInfo.packageManagerVersion,
-      workspaceInfo.packageManager === PackageManager.bun &&
-        bunSupportsCatalog(
-          readJsonFile(path.join(workspaceInfo.rootDir, 'package.json')),
-          workspaceInfo.packageManagerVersion,
-        ),
     );
     rewriteMonorepoProject(
       fullPath,
