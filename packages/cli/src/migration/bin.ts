@@ -99,6 +99,7 @@ import {
 } from './migrator.ts';
 import { prepareNpmViteAliasReinstall } from './npm-reinstall.ts';
 import type { MigrationOptions } from './options.ts';
+import { addVitePlusRenovatePreset, findRenovateConfigToUpdate } from './renovate.ts';
 import { addMigrationWarning, createMigrationReport, type MigrationReport } from './report.ts';
 import {
   collectMigrationSetupPlan,
@@ -147,6 +148,24 @@ async function confirmFrameworkShim(framework: Framework, interactive: boolean):
     return confirmed;
   }
   return true;
+}
+
+async function confirmRenovatePreset(rootDir: string): Promise<string | undefined> {
+  const configPath = await findRenovateConfigToUpdate(rootDir);
+  if (!configPath) {
+    return undefined;
+  }
+  const confirmed = await prompts.confirm({
+    message:
+      'Group Vite+ and Vitest updates in Renovate?\n  ' +
+      muted(`Adds group:vitePlus to ${displayRelative(configPath, rootDir)}.`),
+    initialValue: false,
+    testId: 'renovate',
+  });
+  if (prompts.isCancel(confirmed)) {
+    cancelAndExit();
+  }
+  return confirmed ? configPath : undefined;
 }
 
 async function confirmYarnNodeModulesMode(
@@ -285,6 +304,7 @@ function parseArgs() {
 
 interface MigrationPlan extends MigrationSetupPlan {
   packageManager: PackageManager;
+  renovateConfigPath?: string;
   convertYarnPnp: boolean;
   migratePrettier: boolean;
   hasPrettierDependency: boolean;
@@ -936,6 +956,10 @@ async function executeMigrationPlan(
     );
   }
 
+  if (plan.renovateConfigPath) {
+    await addVitePlusRenovatePreset(plan.renovateConfigPath);
+  }
+
   clearMigrationProgress();
   completeVitestV5Migration(vitestV5Plan, report);
 
@@ -1089,7 +1113,8 @@ async function main() {
       `No package manager is declared in package.json; using ${workspaceInfoOptional.packageManager} for this migration without adding a pin. Run \`vp env pin\` to declare it explicitly.`,
     );
   }
-  if (hasVitePlusDependency(rootPkg) && !isForceOverrideMode()) {
+  const alreadyUsesVitePlus = hasVitePlusDependency(rootPkg);
+  if (alreadyUsesVitePlus && !isForceOverrideMode()) {
     // Runs with the detected package manager, which may be undefined for an
     // existing Vite+ project that has no lockfile/`packageManager` pin. In that
     // case `confirmYarnNodeModulesMode` no-ops here and the guard is re-run
@@ -1744,6 +1769,9 @@ async function main() {
     options,
     workspaceInfoOptional.packages,
   );
+  if (options.interactive && !alreadyUsesVitePlus) {
+    plan.renovateConfigPath = await confirmRenovatePreset(workspaceInfoOptional.rootDir);
+  }
 
   // Phase 2: Execute without prompts
   const result = await executeMigrationPlan(
