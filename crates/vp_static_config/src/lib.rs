@@ -112,7 +112,7 @@ pub fn has_config_file(dir: &AbsolutePath) -> bool {
 /// Resolve the vite config file path in the given directory.
 ///
 /// Tries each config file name in priority order and returns the first one that exists.
-fn resolve_config_path(dir: &AbsolutePath) -> Option<vt_path::AbsolutePathBuf> {
+pub fn resolve_config_path(dir: &AbsolutePath) -> Option<vt_path::AbsolutePathBuf> {
     for name in CONFIG_FILE_NAMES {
         let path = dir.join(name);
         if path.as_path().exists() {

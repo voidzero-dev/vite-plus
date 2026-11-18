@@ -1,5 +1,6 @@
 use std::{env, ffi::OsStr, iter, sync::Arc};
 
+use vp_static_config::FieldValue;
 use vt::config::user::{
     AutoTracking, EnabledCacheConfig, GlobWithBase, InputBase, UserCacheConfig, UserInputEntry,
 };
@@ -11,7 +12,7 @@ use super::{
     help::should_prepend_vitest_run,
     types::{
         CliOptions, EnvMap, ResolvedSubcommand, ResolvedUniversalViteConfig,
-        SynthesizableSubcommand,
+        SynthesizableSubcommand, ViteConfigResolverFn,
     },
 };
 
@@ -51,21 +52,13 @@ impl SubcommandResolver {
             .ok_or_else(|| anyhow::anyhow!("CLI options not available (running without NAPI?)"))
     }
 
-    pub(crate) async fn resolve_universal_vite_config(
+    /// Resolve `fields` of the workspace root's Vite config.
+    pub(crate) async fn resolve_vite_config(
         &self,
+        fields: &[&str],
     ) -> anyhow::Result<ResolvedUniversalViteConfig> {
-        let cli_options = self.cli_options()?;
-        let workspace_path_str = self
-            .workspace_path
-            .as_path()
-            .to_str()
-            .ok_or_else(|| anyhow::anyhow!("workspace path is not valid UTF-8"))?;
-        let vite_config_json =
-            (cli_options.resolve_universal_vite_config)(workspace_path_str.to_string()).await?;
-
-        Ok(serde_json::from_str(&vite_config_json).inspect_err(|_| {
-            tracing::error!("Failed to parse vite config: {vite_config_json}");
-        })?)
+        let resolve_fn = &self.cli_options()?.resolve_universal_vite_config;
+        resolve_vite_config_fields(&self.workspace_path, fields, resolve_fn).await
     }
 
     /// Resolve a synthesizable subcommand to a concrete program, args, cache config, and envs.
@@ -280,6 +273,56 @@ impl SubcommandResolver {
     }
 }
 
+/// Resolve `fields` of the Vite config in `dir`. Static extraction answers when
+/// it accounts for every field, and `resolve_fn` loads the config through Vite
+/// otherwise. Fields not listed may be absent from the result.
+pub(super) async fn resolve_vite_config_fields(
+    dir: &AbsolutePath,
+    fields: &[&str],
+    resolve_fn: &ViteConfigResolverFn,
+) -> anyhow::Result<ResolvedUniversalViteConfig> {
+    if let Some(config) = static_vite_config_fields(dir, fields) {
+        tracing::debug!("Using statically extracted {fields:?} for {}", dir.as_path().display());
+        return Ok(config);
+    }
+    tracing::debug!(
+        "{fields:?} not statically analyzable for {}, falling back to NAPI",
+        dir.as_path().display()
+    );
+    let dir = dir
+        .as_path()
+        .to_str()
+        .ok_or_else(|| anyhow::anyhow!("config directory is not valid UTF-8"))?;
+    let config_json = resolve_fn(dir.to_string()).await?;
+    Ok(serde_json::from_str(&config_json).inspect_err(|_| {
+        tracing::error!("Failed to parse vite config: {config_json}");
+    })?)
+}
+
+/// The listed fields as the JS resolver would report them, or `None` when any
+/// of them needs JavaScript.
+fn static_vite_config_fields(
+    dir: &AbsolutePath,
+    fields: &[&str],
+) -> Option<ResolvedUniversalViteConfig> {
+    let config = vp_static_config::resolve_static_config(dir);
+    let mut object = serde_json::Map::new();
+    for &field in fields {
+        match config.get(field) {
+            Some(FieldValue::Json(value)) => {
+                object.insert(field.to_owned(), value);
+            }
+            Some(FieldValue::NonStatic) => return None,
+            None => {}
+        }
+    }
+    if let Some(path) = vp_static_config::resolve_config_path(dir) {
+        object.insert("configFile".to_owned(), path.as_path().display().to_string().into());
+    }
+    // The JS result goes through the same deserialization, so `null` reads as `None` in both.
+    serde_json::from_value(serde_json::Value::Object(object)).ok()
+}
+
 /// Create a negative glob entry to exclude a pattern from cache fingerprinting.
 fn exclude_glob(pattern: &str, base: InputBase) -> UserInputEntry {
     UserInputEntry::GlobWithBase(GlobWithBase { pattern: Str::from(pattern), base })
@@ -386,6 +429,35 @@ mod tests {
             let resolved = resolver.resolve(command, &envs, &cwd).await.unwrap();
             assert_eq!(resolved.program, runtime);
         }
+    }
+
+    #[tokio::test]
+    async fn vite_config_skips_javascript_only_when_static() {
+        const CHECK_FIELDS: &[&str] = &["lint", "fmt", "check"];
+        let temp = tempfile::tempdir().unwrap();
+        let root = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let resolver = SubcommandResolver::new(root.clone().into())
+            .with_cli_options(cli_options(Arc::from(OsStr::new("node"))));
+
+        // No config file: every block is absent, and JavaScript is not needed.
+        let config = resolver.resolve_vite_config(CHECK_FIELDS).await.unwrap();
+        assert!(config.config_file.is_none() && config.lint.is_none() && config.fmt.is_none());
+
+        let config_path = temp.path().join("vite.config.ts");
+        std::fs::write(
+            &config_path,
+            "import { defineConfig } from 'vite-plus';\nexport default defineConfig({ lint: { options: { typeAware: true } }, fmt: null, check: { fmt: false } });",
+        )
+        .unwrap();
+        let config = resolver.resolve_vite_config(CHECK_FIELDS).await.unwrap();
+        assert_eq!(config.config_file.as_deref(), config_path.to_str());
+        assert_eq!(config.lint, Some(serde_json::json!({ "options": { "typeAware": true } })));
+        assert_eq!(config.fmt, None);
+        assert_eq!(config.check, Some(serde_json::json!({ "fmt": false })));
+
+        // A spread may hide any block, so the JavaScript resolver must run.
+        std::fs::write(&config_path, "const base = {}; export default { ...base };").unwrap();
+        assert!(resolver.resolve_vite_config(CHECK_FIELDS).await.is_err());
     }
 
     #[tokio::test]
