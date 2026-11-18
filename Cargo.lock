@@ -8394,6 +8394,7 @@ dependencies = [
  "rustc-hash",
  "serde",
  "serde_json",
+ "shell-escape",
  "tar",
  "tempfile",
  "tokio",

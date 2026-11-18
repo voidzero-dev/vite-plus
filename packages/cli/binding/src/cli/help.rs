@@ -17,8 +17,13 @@ use super::types::SynthesizableSubcommand;
 /// needs the names to point users at the global installation.
 const GLOBAL_ONLY_SUBCOMMANDS: &[&str] = &["env", "upgrade", "implode"];
 
-pub(super) fn handle_cli_parse_error(err: clap::Error) -> Result<ExitStatus, Error> {
-    if matches!(err.kind(), ErrorKind::InvalidSubcommand) && print_invalid_subcommand_error(&err) {
+pub(super) fn handle_cli_parse_error(
+    err: clap::Error,
+    args: &[String],
+) -> Result<ExitStatus, Error> {
+    if matches!(err.kind(), ErrorKind::InvalidSubcommand)
+        && print_invalid_subcommand_error(&err, args)
+    {
         return Ok(ExitStatus(err.exit_code() as u8));
     }
     if matches!(err.kind(), ErrorKind::UnknownArgument)
@@ -107,7 +112,7 @@ pub(super) fn should_print_help(args: &[String]) -> bool {
     args.is_empty() || matches!(args, [arg] if arg == "-h" || arg == "--help")
 }
 
-fn print_invalid_subcommand_error(error: &clap::Error) -> bool {
+fn print_invalid_subcommand_error(error: &clap::Error, args: &[String]) -> bool {
     let Some(details) = extract_invalid_subcommand_details(error) else {
         return false;
     };
@@ -122,11 +127,17 @@ fn print_invalid_subcommand_error(error: &clap::Error) -> bool {
             "curl -fsSL https://vite.plus | bash"
         };
         let install_command = style(install_command).for_stderr().blue().bright();
+        // Echo every argument so following the hint repeats the original
+        // request, e.g. `vp upgrade --check` must not become `vp upgrade`.
+        let original_command = std::iter::once("vp".into())
+            .chain(args.iter().map(|arg| shell_escape::escape(arg.as_str().into())))
+            .collect::<Vec<_>>()
+            .join(" ");
         output::error(&format!(
             "The {command} command is only available in the global `vp` CLI.\n\n\
              {}\n  {install_command}\n\n\
              Then open a new terminal and run the command again.\n\
-             If already installed, run `vp {invalid_subcommand}` {} instead of through a package manager or package.json script.\n\n\
+             If already installed, run `{original_command}` {} instead of through a package manager or package.json script.\n\n\
              {} {}",
             style("Install it with:").for_stderr().bold(),
             style("directly in your terminal").for_stderr().bold(),

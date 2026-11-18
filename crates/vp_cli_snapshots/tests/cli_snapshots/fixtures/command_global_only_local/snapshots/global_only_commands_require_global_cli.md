@@ -13,7 +13,7 @@ Install it with:
   curl -fsSL https://vite.plus | bash
 
 Then open a new terminal and run the command again.
-If already installed, run `vp env` directly in your terminal instead of through a package manager or package.json script.
+If already installed, run `vp env current` directly in your terminal instead of through a package manager or package.json script.
 
 Installation Guide: https://viteplus.dev/guide/
 ```
@@ -31,7 +31,7 @@ Install it with:
   curl -fsSL https://vite.plus | bash
 
 Then open a new terminal and run the command again.
-If already installed, run `vp upgrade` directly in your terminal instead of through a package manager or package.json script.
+If already installed, run `vp upgrade --check` directly in your terminal instead of through a package manager or package.json script.
 
 Installation Guide: https://viteplus.dev/guide/
 ```
@@ -49,7 +49,7 @@ Install it with:
   curl -fsSL https://vite.plus | bash
 
 Then open a new terminal and run the command again.
-If already installed, run `vp implode` directly in your terminal instead of through a package manager or package.json script.
+If already installed, run `vp implode --yes` directly in your terminal instead of through a package manager or package.json script.
 
 Installation Guide: https://viteplus.dev/guide/
 ```
