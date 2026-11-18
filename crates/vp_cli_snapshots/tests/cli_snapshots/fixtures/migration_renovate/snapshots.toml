@@ -50,6 +50,7 @@ steps = [
     { "write-key" = "enter" },
   ] },
   { argv = ["vp", "migrate", "--full", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false, comment = "a later full migration skips the Renovate prompt" },
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false, comment = "a later non-interactive migration respects the original choice" },
   ["vpt", "print-file", "renovate.json"],
 ]
 
@@ -58,6 +59,14 @@ name = "non_interactive"
 vp = "global"
 steps = [
   { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  ["vpt", "print-file", "renovate.json"],
+]
+
+[[case]]
+name = "non_tty"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate"], tty = false, snapshot = false },
   ["vpt", "print-file", "renovate.json"],
 ]
 

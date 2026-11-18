@@ -150,10 +150,13 @@ async function confirmFrameworkShim(framework: Framework, interactive: boolean):
   return true;
 }
 
-async function confirmRenovatePreset(rootDir: string): Promise<string | undefined> {
+async function confirmRenovatePreset(
+  rootDir: string,
+  interactive: boolean,
+): Promise<string | undefined> {
   const configPath = await findRenovateConfigToUpdate(rootDir);
-  if (!configPath) {
-    return undefined;
+  if (!configPath || !interactive) {
+    return configPath;
   }
   const confirmed = await prompts.confirm({
     message:
@@ -1769,8 +1772,11 @@ async function main() {
     options,
     workspaceInfoOptional.packages,
   );
-  if (options.interactive && !alreadyUsesVitePlus) {
-    plan.renovateConfigPath = await confirmRenovatePreset(workspaceInfoOptional.rootDir);
+  if (!alreadyUsesVitePlus) {
+    plan.renovateConfigPath = await confirmRenovatePreset(
+      workspaceInfoOptional.rootDir,
+      options.interactive,
+    );
   }
 
   // Phase 2: Execute without prompts

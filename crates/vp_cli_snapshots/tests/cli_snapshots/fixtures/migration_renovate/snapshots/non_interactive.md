@@ -7,6 +7,6 @@
 
 ```
 {
-  "extends": ["config:recommended"]
+  "extends": ["config:recommended","group:vitePlus"]
 }
 ```
