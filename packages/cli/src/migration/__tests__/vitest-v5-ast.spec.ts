@@ -156,6 +156,21 @@ function local(require) { return require('vitest/runners'); }`;
     expect(edited.content).toBe(`${input}\r\nexpect(() => {}).toThrow(/^$/);`);
   });
 
+  it('reports positions across every line terminator and drops duplicate findings', () => {
+    const editor = new SourceEditor('test.ts', 'a;\nb;\r\nc;\rd;\u2028e; f;');
+    for (const node of [undefined, ...editor.ast.body, editor.ast.body[0]]) {
+      editor.report(node, 'removed-api', 'message: with colon');
+    }
+    expect(editor.findings.map(({ line, column }) => [line, column])).toEqual([
+      [1, 1],
+      [2, 1],
+      [3, 1],
+      [4, 1],
+      [5, 1],
+      [5, 4],
+    ]);
+  });
+
   it.each([
     'api: { port: 1 } /* keep , 😀 */, enabled: true',
     'enabled: true, /* keep , 😀 */ api: { port: 1 }',

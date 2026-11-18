@@ -209,6 +209,8 @@ export class SourceEditor {
   private readonly names = new Set<string>();
   private readonly edits: Array<{ start: number; end: number; text: string }> = [];
   private readonly additions = new Map<t.ObjectExpression, Map<string, AddedProperty>>();
+  private readonly reported = new Set<string>();
+  private lineStarts?: number[];
 
   constructor(
     readonly file: string,
@@ -360,19 +362,29 @@ export class SourceEditor {
     message: string,
     severity: VitestV5Finding['severity'] = 'review',
   ): void {
-    const prefix = this.source.slice(0, node?.start ?? 0);
-    const lines = prefix.split(/\r\n|[\r\n\u2028\u2029]/);
-    const line = lines.length;
-    const column = lines.at(-1)!.length + 1;
-    if (
-      !this.findings.some(
-        (item) =>
-          item.line === line &&
-          item.column === column &&
-          item.code === code &&
-          item.message === message,
-      )
-    ) {
+    const start = node?.start ?? 0;
+    const lineStarts = (this.lineStarts ??= [
+      0,
+      ...Array.from(
+        this.source.matchAll(/\r\n|[\r\n\u2028\u2029]/g),
+        (match) => match.index + match[0].length,
+      ),
+    ]);
+    let low = 0;
+    let high = lineStarts.length - 1;
+    while (low < high) {
+      const mid = Math.ceil((low + high) / 2);
+      if (lineStarts[mid] <= start) {
+        low = mid;
+      } else {
+        high = mid - 1;
+      }
+    }
+    const line = low + 1;
+    const column = start - lineStarts[low] + 1;
+    const key = `${line}:${column}:${code}:${message}`;
+    if (!this.reported.has(key)) {
+      this.reported.add(key);
       this.findings.push({ file: this.file, line, column, code, severity, message });
     }
   }

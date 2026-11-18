@@ -1,0 +1,13 @@
+[[case]]
+name = "command_dlx_npm6"
+vp = "global"
+local-registry = true
+skip-platforms = ["windows", { os = "linux", libc = "musl" }]
+env = { npm_config_audit = "false" }
+comment = "npm 6 has no `npm exec`, so `vp dlx` runs its standalone npx."
+steps = [
+  { argv = ["vp", "dlx", "-s", "vp-test-echo", "hello", "--flag"], comment = "should run vp-test-echo with npx and pass its flags through", continue-on-failure = true },
+  { argv = ["vp", "dlx", "-s", "vp-test-echo@1.0.0", "hello"], comment = "should run specific version", continue-on-failure = true },
+  { argv = ["vp", "dlx", "-s", "-p", "vp-test-upper", "vp-test-echo@1.0.0", "hello"], comment = "should install the versioned command next to the extra package", continue-on-failure = true },
+  { argv = ["vp", "dlx", "-s", "-p", "vp-test-echo", "-p", "vp-test-upper", "-c", "echo hello-from-shell | vp-test-echo | vp-test-upper"], comment = "should run shell mode command", continue-on-failure = true },
+]

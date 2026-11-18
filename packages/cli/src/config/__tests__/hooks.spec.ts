@@ -1,4 +1,5 @@
-import { execSync, spawn } from 'node:child_process';
+import type { SpawnSyncReturns } from 'node:child_process';
+import { execFileSync, execSync, spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
 import {
   chmodSync,
@@ -18,6 +19,8 @@ import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
+  HOOK_STUB_SCRIPT,
+  SUPPORTED_GIT_HOOK_NAMES,
   disable,
   enable,
   hookScript,
@@ -26,6 +29,28 @@ import {
   resolveHooksDir,
   status,
 } from '../hooks.js';
+
+// Unmodified upstream dispatcher; retained to verify safe migration against real Husky output.
+const HUSKY_DISPATCHER = readFileSync(new URL('./fixtures/husky-9.1.7/h', import.meta.url), 'utf8');
+
+function runCommit(cwd: string, message = 'test'): SpawnSyncReturns<string> {
+  return spawnSync(
+    'git',
+    [
+      '-c',
+      'user.name=Test',
+      '-c',
+      'user.email=test@example.invalid',
+      '-c',
+      'commit.gpgsign=false',
+      'commit',
+      '--allow-empty',
+      '-m',
+      message,
+    ],
+    { cwd, encoding: 'utf8' },
+  );
+}
 
 function countDirnameCalls(script: string): number {
   // Count nested dirname calls in the `d=...` line
@@ -114,22 +139,525 @@ describe('install', () => {
       execSync('git config core.hooksPath .husky/_', { cwd: tmp });
       mkdirSync(join(tmp, '.husky'));
       writeFileSync(join(tmp, '.husky', 'pre-commit'), 'npm test\n');
+      writeFileSync(join(tmp, 'package.json'), '{}');
+      mkdirSync(join(tmp, '.vite-hooks'));
+      writeFileSync(join(tmp, '.vite-hooks', 'pre-commit'), 'npm test\n');
       process.chdir(tmp);
 
       expect(install()).toEqual({
-        message: 'core.hooksPath is already set to ".husky/_", skipping',
+        message: expect.stringContaining('core.hooksPath is already set to ".husky/_", skipping'),
         isError: false,
       });
       expect(execSync('git config --local core.hooksPath', { cwd: tmp }).toString().trim()).toBe(
         '.husky/_',
       );
       expect(readFileSync(join(tmp, '.husky', 'pre-commit'), 'utf8')).toBe('npm test\n');
-      expect(existsSync(join(tmp, '.vite-hooks'))).toBe(false);
+      expect(existsSync(join(tmp, '.vite-hooks', '_'))).toBe(false);
     } finally {
       process.chdir(originalCwd);
       rmSync(tmp, { recursive: true, force: true });
     }
   });
+
+  it.each([
+    ['.husky', '.vite-hooks', 'missing'],
+    ['.husky', '.vite-hooks', 'empty'],
+    ['.husky/_', '.vite-hooks', 'missing'],
+    ['.husky/_', '.vite-hooks', 'empty'],
+    ['./.husky/_/', '.vite-hooks', 'empty'],
+    ['.husky/_', '.custom-hooks', 'empty'],
+    ['.husky/_', 'packages/app/.vite-hooks', 'empty'],
+  ])(
+    'recovers %s after migration to %s when the old directory is %s',
+    (hooksPath, hooksDir, state) => {
+      const tmp = mkdtempSync(join(tmpdir(), 'hooks-husky-migration-'));
+      const originalCwd = process.cwd();
+      try {
+        execFileSync('git', ['init'], { cwd: tmp, stdio: 'ignore' });
+        execFileSync('git', ['config', 'core.hooksPath', hooksPath], { cwd: tmp });
+        writeFileSync(
+          join(tmp, 'package.json'),
+          JSON.stringify({ scripts: { prepare: 'vp config' } }),
+        );
+        if (state === 'empty') {
+          mkdirSync(join(tmp, hooksPath), { recursive: true });
+        }
+        mkdirSync(join(tmp, hooksDir), { recursive: true });
+        writeFileSync(join(tmp, hooksDir, 'commit-msg'), 'exit 1\n');
+        process.chdir(tmp);
+        expect(install(hooksDir)).toEqual({ message: '', isError: false });
+        expect(
+          execFileSync('git', ['config', '--get', 'core.hooksPath'], {
+            encoding: 'utf8',
+          }).trim(),
+        ).toBe(`${hooksDir}/_`);
+        const commit = runCommit(tmp);
+        expect(commit.status).toBe(1);
+        expect(commit.stdout + commit.stderr).toContain('commit-msg script failed');
+        expect(enable().isError).toBe(false);
+        expect(install()).toEqual({ message: '', isError: false });
+      } finally {
+        process.chdir(originalCwd);
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.each(['\n', '\r\n'])(
+    'preserves leftover generated Husky files with %j line endings until explicit replacement',
+    (newline) => {
+      const tmp = mkdtempSync(join(tmpdir(), 'hooks-husky-generated-'));
+      const originalCwd = process.cwd();
+      try {
+        execFileSync('git', ['init'], { cwd: tmp, stdio: 'ignore' });
+        execFileSync('git', ['config', 'core.hooksPath', '.husky/_'], { cwd: tmp });
+        const manifest = JSON.stringify({ scripts: { prepare: 'vp config' } });
+        writeFileSync(join(tmp, 'package.json'), manifest);
+        const internal = join(tmp, '.husky', '_');
+        mkdirSync(internal, { recursive: true });
+        const files: Record<string, string> = {
+          h: HUSKY_DISPATCHER.replaceAll('\n', newline),
+          'husky.sh': readFileSync(
+            new URL('./fixtures/husky-9.1.7/husky.sh', import.meta.url),
+            'utf8',
+          ).replaceAll('\n', newline),
+          '.gitignore': '*',
+          ...Object.fromEntries(
+            SUPPORTED_GIT_HOOK_NAMES.map((name) => [
+              name,
+              HOOK_STUB_SCRIPT.replaceAll('\n', newline),
+            ]),
+          ),
+        };
+        for (const [name, contents] of Object.entries(files)) {
+          writeFileSync(join(internal, name), contents);
+        }
+        mkdirSync(join(tmp, '.vite-hooks'));
+        writeFileSync(join(tmp, '.vite-hooks', 'pre-commit'), 'exit 0\n');
+        process.chdir(tmp);
+        for (const setup of [install, enable]) {
+          const skipped = setup();
+          expect(skipped.isError).toBe(false);
+          expect(skipped.message).toContain('Vite+ hooks at .vite-hooks are not active');
+          expect(skipped.message).toContain('vp hooks enable --replace-husky');
+          expect(existsSync(join(tmp, '.vite-hooks', '_'))).toBe(false);
+        }
+        const replacement = enable(undefined, { replaceHusky: true });
+        expect(replacement.isError).toBe(false);
+        expect(replacement.message).toContain('Old Husky files were preserved');
+        expect(replacement.message).toContain('no longer run');
+        expect(
+          execFileSync('git', ['config', '--get', 'core.hooksPath'], { encoding: 'utf8' }).trim(),
+        ).toBe('.vite-hooks/_');
+        for (const [name, contents] of Object.entries(files)) {
+          expect(readFileSync(join(internal, name), 'utf8')).toBe(contents);
+        }
+        expect(readFileSync(join(tmp, 'package.json'), 'utf8')).toBe(manifest);
+        expect(install()).toEqual({ message: '', isError: false });
+      } finally {
+        process.chdir(originalCwd);
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it('requires explicit replacement even for an empty nested directory under .husky', () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'hooks-husky-nested-empty-'));
+    const originalCwd = process.cwd();
+    try {
+      execFileSync('git', ['init'], { cwd: tmp, stdio: 'ignore' });
+      execFileSync('git', ['config', 'core.hooksPath', '.husky'], { cwd: tmp });
+      writeFileSync(join(tmp, 'package.json'), '{}');
+      mkdirSync(join(tmp, '.husky', '_'), { recursive: true });
+      mkdirSync(join(tmp, '.vite-hooks'));
+      writeFileSync(join(tmp, '.vite-hooks', 'pre-commit'), 'exit 0\n');
+      process.chdir(tmp);
+      expect(install().message).toContain('Vite+ hooks at .vite-hooks are not active');
+      expect(enable(undefined, { replaceHusky: true }).message).toContain(
+        'Replaced core.hooksPath ".husky"',
+      );
+    } finally {
+      process.chdir(originalCwd);
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it.each(['.vite-hooks', '.custom-hooks'])(
+    'explicitly replaces custom Husky checks with migrated checks in %s',
+    (dir) => {
+      const tmp = mkdtempSync(join(tmpdir(), 'hooks-husky-replace-'));
+      const originalCwd = process.cwd();
+      try {
+        execFileSync('git', ['init'], { cwd: tmp, stdio: 'ignore' });
+        execFileSync('git', ['config', 'core.hooksPath', '.husky/_'], { cwd: tmp });
+        writeFileSync(join(tmp, 'package.json'), '{}');
+        mkdirSync(join(tmp, '.husky', '_'), { recursive: true });
+        const old = join(tmp, '.husky', '_', 'pre-commit');
+        const original = '#!/bin/sh\necho original-check-rejected >&2\nexit 1\n';
+        writeFileSync(old, original, { mode: 0o755 });
+        mkdirSync(join(tmp, dir));
+        writeFileSync(join(tmp, dir, 'commit-msg'), 'echo migrated-check-rejected >&2\nexit 1\n');
+        process.chdir(tmp);
+        const before = runCommit(tmp);
+        expect(before.status).toBe(1);
+        expect(before.stderr).toContain('original-check-rejected');
+        const replacement = enable(dir, { replaceHusky: true });
+        expect(replacement.isError).toBe(false);
+        expect(replacement.message).toContain('no longer run');
+        expect(readFileSync(old, 'utf8')).toBe(original);
+        const after = runCommit(tmp);
+        expect(after.status).toBe(1);
+        expect(after.stderr).toContain('migrated-check-rejected');
+        expect(after.stderr).not.toContain('original-check-rejected');
+      } finally {
+        process.chdir(originalCwd);
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it
+    .skipIf(process.platform === 'win32')
+    .each(['custom supported hook', 'symlinked hook', 'custom dispatcher'])(
+    'preserves a rejecting %s during install and enable',
+    (kind) => {
+      const tmp = mkdtempSync(join(tmpdir(), 'hooks-custom-husky-'));
+      const originalCwd = process.cwd();
+      try {
+        execFileSync('git', ['init'], { cwd: tmp, stdio: 'ignore' });
+        execFileSync('git', ['config', 'core.hooksPath', '.husky/_'], { cwd: tmp });
+        writeFileSync(
+          join(tmp, 'package.json'),
+          JSON.stringify({ scripts: { prepare: 'vp config' } }),
+        );
+        const internal = join(tmp, '.husky', '_');
+        mkdirSync(internal, { recursive: true });
+        const rejectingScript = '#!/bin/sh\necho "original hook rejected" >&2\nexit 1\n';
+        writeFileSync(join(internal, 'h'), HUSKY_DISPATCHER);
+        const hook = join(internal, 'pre-commit');
+        if (kind === 'symlinked hook') {
+          const external = join(tmp, 'reject-commit');
+          writeFileSync(external, rejectingScript, { mode: 0o755 });
+          symlinkSync(external, hook);
+        } else if (kind === 'custom dispatcher') {
+          writeFileSync(hook, HOOK_STUB_SCRIPT, { mode: 0o755 });
+          writeFileSync(join(internal, 'h'), rejectingScript);
+        } else {
+          writeFileSync(hook, rejectingScript, { mode: 0o755 });
+        }
+        mkdirSync(join(tmp, '.vite-hooks'));
+        writeFileSync(join(tmp, '.vite-hooks', 'commit-msg'), 'exit 0\n');
+        process.chdir(tmp);
+        function assertCommitRejected(): void {
+          const result = runCommit(tmp);
+          expect(result.status).toBe(1);
+          expect(result.stderr).toContain('original hook rejected');
+        }
+        assertCommitRejected();
+        for (const setup of [install, enable]) {
+          expect(setup()).toEqual({
+            message: expect.stringContaining(
+              'core.hooksPath is already set to ".husky/_", skipping',
+            ),
+            isError: false,
+          });
+          expect(
+            execFileSync('git', ['config', '--get', 'core.hooksPath'], {
+              encoding: 'utf8',
+            }).trim(),
+          ).toBe('.husky/_');
+          expect(existsSync(join(tmp, '.vite-hooks', '_'))).toBe(false);
+          assertCommitRejected();
+        }
+      } finally {
+        process.chdir(originalCwd);
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.each([
+    ['production Husky dependency', { dependencies: { husky: '^9.0.0' } }],
+    ['Husky dependency', { devDependencies: { husky: '^9.0.0' } }],
+    ['optional Husky dependency', { optionalDependencies: { husky: '^9.0.0' } }],
+    ['peer Husky dependency', { peerDependencies: { husky: '^9.0.0' } }],
+    ['Husky prepare script', { scripts: { prepare: 'husky' } }],
+    ['legacy Husky config', { husky: { hooks: { 'pre-commit': 'npm test' } } }],
+  ])('preserves a Husky path with %s', (_name, pkg) => {
+    const tmp = mkdtempSync(join(tmpdir(), 'hooks-active-husky-'));
+    const originalCwd = process.cwd();
+    try {
+      execFileSync('git', ['init'], { cwd: tmp, stdio: 'ignore' });
+      execFileSync('git', ['config', 'core.hooksPath', '.husky/_'], { cwd: tmp });
+      writeFileSync(join(tmp, 'package.json'), JSON.stringify(pkg));
+      mkdirSync(join(tmp, '.vite-hooks'));
+      writeFileSync(join(tmp, '.vite-hooks', 'pre-commit'), 'exit 1\n');
+      process.chdir(tmp);
+
+      expect(install().message).toContain('core.hooksPath is already set to ".husky/_", skipping');
+      expect(enable(undefined, { replaceHusky: true }).message).toContain('skipping');
+      expect(existsSync(join(tmp, '.vite-hooks', '_'))).toBe(false);
+    } finally {
+      process.chdir(originalCwd);
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it.each([
+    ['.husky', 'reference-transaction'],
+    ['.husky', 'post-index-change'],
+    ['.husky', 'pre-receive'],
+    ['.husky/_', 'reference-transaction'],
+    ['.husky/_', 'post-index-change'],
+    ['.husky/_', 'pre-receive'],
+  ])('preserves an existing %s/%s hook outside the supported-name list', (hooksPath, hook) => {
+    const tmp = mkdtempSync(join(tmpdir(), 'hooks-other-husky-hook-'));
+    const originalCwd = process.cwd();
+    try {
+      execFileSync('git', ['init'], { cwd: tmp, stdio: 'ignore' });
+      execFileSync('git', ['config', 'core.hooksPath', hooksPath], { cwd: tmp });
+      writeFileSync(join(tmp, 'package.json'), '{}');
+      mkdirSync(join(tmp, '.vite-hooks'));
+      writeFileSync(join(tmp, '.vite-hooks', 'pre-commit'), 'exit 0\n');
+      mkdirSync(join(tmp, hooksPath), { recursive: true });
+      const oldHook = join(tmp, hooksPath, hook);
+      writeFileSync(oldHook, '#!/bin/sh\necho "original hook rejected" >&2\nexit 1\n');
+      chmodSync(oldHook, 0o755);
+      process.chdir(tmp);
+
+      const runHook = () => spawnSync('git', ['hook', 'run', hook], { encoding: 'utf8' });
+      const before = runHook();
+      expect(before.status).toBe(1);
+      expect(before.stderr).toContain('original hook rejected');
+      expect(install()).toEqual({
+        message: expect.stringContaining(
+          `core.hooksPath is already set to "${hooksPath}", skipping`,
+        ),
+        isError: false,
+      });
+      const after = runHook();
+      expect(after.status).toBe(1);
+      expect(after.stderr).toContain('original hook rejected');
+      expect(existsSync(join(tmp, '.vite-hooks', '_'))).toBe(false);
+    } finally {
+      process.chdir(originalCwd);
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it.each(['original', 'linked'])(
+    'does not replace shared Husky config from a migrated %s worktree',
+    (migratedWorktree) => {
+      const tmp = mkdtempSync(join(tmpdir(), 'hooks-husky-shared-config-'));
+      const original = join(tmp, 'original');
+      const linked = join(tmp, 'linked');
+      const originalCwd = process.cwd();
+      try {
+        mkdirSync(original);
+        execFileSync('git', ['init'], { cwd: original, stdio: 'ignore' });
+        expect(runCommit(original, 'initial').status).toBe(0);
+        execFileSync('git', ['worktree', 'add', '-b', 'linked', linked], {
+          cwd: original,
+          stdio: 'ignore',
+        });
+        const migrated = migratedWorktree === 'original' ? original : linked;
+        const unmigrated = migratedWorktree === 'original' ? linked : original;
+        execFileSync('git', ['config', '--local', 'core.hooksPath', '.husky'], { cwd: original });
+        writeFileSync(join(migrated, 'package.json'), '{}');
+        mkdirSync(join(migrated, '.vite-hooks'));
+        writeFileSync(join(migrated, '.vite-hooks', 'pre-commit'), 'exit 0\n');
+        writeFileSync(
+          join(unmigrated, 'package.json'),
+          JSON.stringify({ devDependencies: { husky: '*' } }),
+        );
+        mkdirSync(join(unmigrated, '.husky'));
+        const oldHook = join(unmigrated, '.husky', 'pre-commit');
+        writeFileSync(oldHook, '#!/bin/sh\necho "unmigrated hook rejected" >&2\nexit 1\n');
+        chmodSync(oldHook, 0o755);
+        expect(runCommit(unmigrated, 'rejected').status).toBe(1);
+        process.chdir(migrated);
+
+        expect(install()).toEqual({
+          message: 'core.hooksPath is already set to ".husky", skipping',
+          isError: false,
+        });
+        expect(enable(undefined, { replaceHusky: true }).message).toContain('skipping');
+        expect(
+          execFileSync('git', ['config', '--local', 'core.hooksPath'], { encoding: 'utf8' }).trim(),
+        ).toBe('.husky');
+        const after = runCommit(unmigrated, 'rejected');
+        expect(after.status).toBe(1);
+        expect(after.stderr).toContain('unmigrated hook rejected');
+        expect(existsSync(join(migrated, '.vite-hooks', '_'))).toBe(false);
+      } finally {
+        process.chdir(originalCwd);
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(process.platform === 'win32').each(['.husky', '.husky/_'])(
+    'preserves a symlinked Husky directory at %s',
+    (linkedDir) => {
+      const tmp = mkdtempSync(join(tmpdir(), 'hooks-husky-symlink-'));
+      const originalCwd = process.cwd();
+      try {
+        execFileSync('git', ['init'], { cwd: tmp, stdio: 'ignore' });
+        execFileSync('git', ['config', 'core.hooksPath', '.husky/_'], { cwd: tmp });
+        writeFileSync(join(tmp, 'package.json'), '{}');
+        mkdirSync(join(tmp, '.vite-hooks'));
+        writeFileSync(join(tmp, '.vite-hooks', 'pre-commit'), 'exit 1\n');
+        mkdirSync(join(tmp, 'external'));
+        if (linkedDir === '.husky/_') {
+          mkdirSync(join(tmp, '.husky'));
+        }
+        symlinkSync(join(tmp, 'external'), join(tmp, linkedDir), 'dir');
+        process.chdir(tmp);
+
+        expect(install().message).toContain(
+          'core.hooksPath is already set to ".husky/_", skipping',
+        );
+        expect(existsSync(join(tmp, '.vite-hooks', '_'))).toBe(false);
+      } finally {
+        process.chdir(originalCwd);
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.each([
+    'custom hooks path',
+    'worktree-scoped Husky path',
+    'global Husky path',
+    'missing manifest',
+    'invalid manifest',
+    'no migrated hook',
+    'disabled hooks',
+    'Husky in an ancestor manifest',
+  ])('does not reclaim a Husky setup with %s', (scenario) => {
+    const tmp = mkdtempSync(join(tmpdir(), 'hooks-husky-preserve-'));
+    const originalCwd = process.cwd();
+    const oldGlobal = process.env.GIT_CONFIG_GLOBAL;
+    try {
+      execFileSync('git', ['init'], { cwd: tmp, stdio: 'ignore' });
+      let hooksPath = '.husky/_';
+      if (scenario === 'custom hooks path') {
+        hooksPath = '.husky/custom';
+      }
+      execFileSync('git', ['config', '--local', 'core.hooksPath', hooksPath], { cwd: tmp });
+      writeFileSync(join(tmp, 'package.json'), '{}');
+      mkdirSync(join(tmp, '.vite-hooks'));
+      writeFileSync(join(tmp, '.vite-hooks', 'pre-commit'), 'exit 1\n');
+      process.chdir(tmp);
+      if (scenario === 'worktree-scoped Husky path') {
+        execFileSync('git', ['config', 'extensions.worktreeConfig', 'true']);
+        execFileSync('git', ['config', '--worktree', 'core.hooksPath', hooksPath]);
+      } else if (scenario === 'global Husky path') {
+        process.env.GIT_CONFIG_GLOBAL = join(tmp, 'global-config');
+        execFileSync('git', ['config', '--global', 'core.hooksPath', hooksPath]);
+        execFileSync('git', ['config', '--local', '--unset', 'core.hooksPath']);
+      } else if (scenario === 'missing manifest') {
+        rmSync(join(tmp, 'package.json'));
+      } else if (scenario === 'invalid manifest') {
+        writeFileSync(join(tmp, 'package.json'), '{');
+      } else if (scenario === 'no migrated hook') {
+        rmSync(join(tmp, '.vite-hooks', 'pre-commit'));
+      } else if (scenario === 'disabled hooks') {
+        execFileSync('git', ['config', 'vp.hooks.disabled', 'true']);
+      } else if (scenario === 'Husky in an ancestor manifest') {
+        writeFileSync(
+          join(tmp, 'package.json'),
+          JSON.stringify({ devDependencies: { husky: '*' } }),
+        );
+        const sub = join(tmp, 'packages', 'app');
+        mkdirSync(join(sub, '.vite-hooks'), { recursive: true });
+        writeFileSync(join(sub, 'package.json'), '{}');
+        writeFileSync(join(sub, '.vite-hooks', 'pre-commit'), 'exit 1\n');
+        process.chdir(sub);
+      }
+
+      expect(install().isError).toBe(false);
+      if (scenario !== 'disabled hooks') {
+        expect(enable(undefined, { replaceHusky: true }).message).toContain('skipping');
+      }
+      expect(
+        execFileSync('git', ['config', '--get', 'core.hooksPath'], { encoding: 'utf8' }).trim(),
+      ).toBe(hooksPath);
+      expect(existsSync(join(process.cwd(), '.vite-hooks', '_'))).toBe(false);
+    } finally {
+      if (oldGlobal === undefined) {
+        delete process.env.GIT_CONFIG_GLOBAL;
+      } else {
+        process.env.GIT_CONFIG_GLOBAL = oldGlobal;
+      }
+      process.chdir(originalCwd);
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it.each(['HUSKY', 'VP_GIT_HOOKS', 'VITE_GIT_HOOKS'])(
+    'explicit replacement honors %s=0',
+    (name) => {
+      const tmp = mkdtempSync(join(tmpdir(), 'hooks-husky-replace-disabled-'));
+      const originalCwd = process.cwd();
+      const previous = process.env[name];
+      try {
+        execFileSync('git', ['init'], { cwd: tmp, stdio: 'ignore' });
+        execFileSync('git', ['config', 'core.hooksPath', '.husky/_'], { cwd: tmp });
+        writeFileSync(join(tmp, 'package.json'), '{}');
+        mkdirSync(join(tmp, '.vite-hooks'));
+        writeFileSync(join(tmp, '.vite-hooks', 'pre-commit'), 'exit 0\n');
+        process.chdir(tmp);
+        process.env[name] = '0';
+        expect(enable(undefined, { replaceHusky: true })).toEqual({
+          message: 'skip install (git hooks disabled)',
+          isError: false,
+        });
+        expect(
+          execFileSync('git', ['config', '--get', 'core.hooksPath'], { encoding: 'utf8' }).trim(),
+        ).toBe('.husky/_');
+        expect(existsSync(join(tmp, '.vite-hooks', '_'))).toBe(false);
+      } finally {
+        if (previous === undefined) {
+          delete process.env[name];
+        } else {
+          process.env[name] = previous;
+        }
+        process.chdir(originalCwd);
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.each(['.husky', '.husky/_'])(
+    'explicit replacement does not overwrite old files when --hooks-dir points into .husky (%s)',
+    (oldPath) => {
+      const tmp = mkdtempSync(join(tmpdir(), 'hooks-husky-replace-overlap-'));
+      const originalCwd = process.cwd();
+      try {
+        execFileSync('git', ['init'], { cwd: tmp, stdio: 'ignore' });
+        execFileSync('git', ['config', 'core.hooksPath', oldPath], { cwd: tmp });
+        writeFileSync(join(tmp, 'package.json'), '{}');
+        mkdirSync(join(tmp, '.husky', '_'), { recursive: true });
+        writeFileSync(join(tmp, '.husky', 'pre-commit'), 'exit 1\n');
+        const dispatcher = join(tmp, '.husky', '_', 'h');
+        writeFileSync(dispatcher, 'custom dispatcher\n');
+        process.chdir(tmp);
+        expect(enable('.husky', { replaceHusky: true })).toEqual({
+          message:
+            'Husky replacement requires a hooks directory outside .husky to preserve old files',
+          isError: true,
+        });
+        expect(readFileSync(dispatcher, 'utf8')).toBe('custom dispatcher\n');
+        expect(
+          execFileSync('git', ['config', '--get', 'core.hooksPath'], { encoding: 'utf8' }).trim(),
+        ).toBe(oldPath);
+      } finally {
+        process.chdir(originalCwd);
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    },
+  );
 
   it('refreshes an equivalent hooks path spelling', () => {
     const tmp = mkdtempSync(join(tmpdir(), 'hooks-equivalent-path-test-'));
