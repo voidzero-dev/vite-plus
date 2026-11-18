@@ -433,7 +433,7 @@ mod tests {
 
     #[tokio::test]
     async fn vite_config_skips_javascript_only_when_static() {
-        const CHECK_FIELDS: &[&str] = &["lint", "fmt", "check"];
+        use crate::check::CHECK_CONFIG_FIELDS as CHECK_FIELDS;
         let temp = tempfile::tempdir().unwrap();
         let root = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
         let resolver = SubcommandResolver::new(root.clone().into())
@@ -457,6 +457,14 @@ mod tests {
 
         // A spread may hide any block, so the JavaScript resolver must run.
         std::fs::write(&config_path, "const base = {}; export default { ...base };").unwrap();
+        assert!(resolver.resolve_vite_config(CHECK_FIELDS).await.is_err());
+
+        // A plugin's `config` hook may add `lint` or `check`, so the JavaScript resolver must run.
+        std::fs::write(
+            &config_path,
+            "import { defineConfig } from 'vite-plus';\nexport default defineConfig({ plugins: [typeCheck()], fmt: {} });",
+        )
+        .unwrap();
         assert!(resolver.resolve_vite_config(CHECK_FIELDS).await.is_err());
     }
 
