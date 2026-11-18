@@ -133,6 +133,77 @@ This switches both components to system-first mode. Vite+ prefers system tools a
 
 Using `pm` records the selected mode for all currently supported package managers and replaces their individual choices. An unscoped `on` or `off` does the same while also changing Node.js.
 
+## Replacing nvm or fnm
+
+`vp env` can replace [nvm](https://github.com/nvm-sh/nvm) and [fnm](https://github.com/Schniz/fnm) for Node.js version management. It reads the version files that those tools use, so existing projects need no changes. The `vp env` commands do not run Node.js themselves, so projects that use older releases, such as Node.js 16 or 18, also work.
+
+### What Carries Over
+
+- `.nvmrc` and `.node-version` files work as they are. Vite+ also reads `engines.node` and `devEngines.runtime` in `package.json`. See [Node.js Selection](#node-js-selection) for the order of these sources.
+- An `.nvmrc` file can contain an exact version such as `18.20.8` or `v18.20.8`, a major version such as `18`, an LTS alias such as `lts/*` or `lts/hydrogen`, or `node` for the latest release. Vite+ ignores `system`, `default`, and `iojs`, and then checks the next source.
+- You do not need a directory-change hook, such as `fnm env --use-on-cd` or an nvm auto-use script. The `node`, `npm`, and `npx` shims select the version for the current directory each time they run. An editor or a script gets the same version when the shim directory is on its `PATH`.
+- When a shim needs a version that is not installed, Vite+ installs it. To install a version in advance, use `vp env install`.
+
+### Command Equivalents
+
+| Task                               | nvm                       | fnm                               | Vite+                               |
+| ---------------------------------- | ------------------------- | --------------------------------- | ----------------------------------- |
+| Install a version                  | `nvm install 18`          | `fnm install 18`                  | `vp env install 18`                 |
+| Use a version in the current shell | `nvm use 18`              | `fnm use 18`                      | `vp env use 18`                     |
+| Set the default version            | `nvm alias default 18`    | `fnm default 18`                  | `vp env default 18`                 |
+| Pin the project version            | Edit `.nvmrc`             | Edit `.node-version`              | `vp env pin 18`                     |
+| Show the current version           | `nvm current`             | `fnm current`                     | `vp env current`                    |
+| List installed versions            | `nvm ls`                  | `fnm list`                        | `vp env list node`                  |
+| List available versions            | `nvm ls-remote`           | `fnm list-remote`                 | `vp env list-remote node`           |
+| Run a command with a version       | `nvm exec 18 node app.js` | `fnm exec --using=18 node app.js` | `vp env exec --node 18 node app.js` |
+| Show the path of `node`            | `nvm which current`       |                                   | `vp env which node`                 |
+| Uninstall a version                | `nvm uninstall 16.20.2`   | `fnm uninstall 16.20.2`           | `vp env uninstall 16.20.2`          |
+
+`vp env use` changes only the current shell, and it needs the shell setup from `vp env setup`. In Command Prompt, use `vp-use` instead. See [Setup](#setup).
+
+`vp env pin` updates an existing `.nvmrc` or `.node-version` file. See [Manage](#manage) for the other pin targets.
+
+### Migrating from nvm or fnm
+
+1. Install the Vite+ global CLI. See [Install `vp` Globally](/guide/#install-vp-globally).
+2. Make sure that Vite+ manages Node.js:
+
+   ```bash
+   vp env on node
+   ```
+
+3. Remove the lines that load nvm or fnm from your shell profile, such as `~/.zshrc`, `~/.bashrc`, or the PowerShell `$PROFILE`. These lines put the `node` of nvm or fnm before the Vite+ shims on `PATH`. For example:
+
+   ```bash
+   # nvm
+   export NVM_DIR="$HOME/.nvm"
+   [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
+   # fnm
+   eval "$(fnm env --use-on-cd)"
+   ```
+
+4. Open a new terminal and run `vp env doctor node`. In its `PATH` section, the `node` line must show the Vite+ shim. A warning such as `node ~/.nvm/... (not vp shim)` means that another `node` still comes first.
+5. In each project, run `node -v` to check the selected version.
+6. Install the global command-line tools that you need again with [`vp install -g`](/guide/package-management/global-packages). Packages that you installed with `npm install -g` under nvm or fnm stay in the directories of those tools.
+7. After you check your projects, you can uninstall nvm or fnm.
+
+### Older Node.js Releases
+
+`vp env` can install a Node.js release when the Node.js project publishes a binary for your operating system and CPU architecture.
+
+Package managers and other tools that you run keep their own Node.js requirements.
+
+### Using Vite+ with nvm or fnm
+
+Vite+ does not switch between itself and another manager for each project. To keep nvm or fnm as your main Node.js manager, run:
+
+```bash
+vp env off node
+```
+
+In this system-first mode, the Vite+ `node` shim comes after other tools on `PATH`, so the `node` from nvm or fnm runs when one is active. Vite+ uses its managed Node.js only when it finds no other `node`. To run a Vite+-managed version for one command, use `vp env exec --node <version>`.
+
 ## Commands
 
 ### Setup
