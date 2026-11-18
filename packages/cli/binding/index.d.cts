@@ -3620,7 +3620,9 @@ export declare function analyzeMigrationSource(filename: string, source: string)
  * Pass the `cwd` that `downloadPackageManager` will receive, so relative PATH
  * entries resolve against the same directory.
  */
-export declare function availablePackageManagers(cwd?: string | undefined | null): Promise<Array<string>>;
+export declare function availablePackageManagers(
+  cwd?: string | undefined | null,
+): Promise<Array<string>>;
 
 /** Error from batch import rewriting */
 export interface BatchRewriteError {
