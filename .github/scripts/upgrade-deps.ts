@@ -17,6 +17,8 @@ import {
 
 const ROOT = process.cwd();
 const META_DIR = process.env.UPGRADE_DEPS_META_DIR;
+const PNPM_WORKSPACE_PATH = path.join(ROOT, 'pnpm-workspace.yaml');
+const TSRS_PIN_PATTERN = /^ {2}tsrs: =([\d.]+(?:-[\w.-]+)?)/m;
 
 type Change = {
   old: string | null;
@@ -177,12 +179,21 @@ async function containsCommit(
 }
 
 // ============ npm Registry ============
+class NpmMetadataError extends Error {
+  readonly status: number;
+
+  constructor(packageName: string, response: Response) {
+    super(
+      `Failed to fetch npm metadata for ${packageName}: ${response.status} ${response.statusText}`,
+    );
+    this.status = response.status;
+  }
+}
+
 async function fetchNpmVersion(packageName: string, tag = 'latest'): Promise<NpmVersionResponse> {
   const res = await fetch(`https://registry.npmjs.org/${packageName}/${tag}`);
   if (!res.ok) {
-    throw new Error(
-      `Failed to fetch npm metadata for ${packageName}: ${res.status} ${res.statusText}`,
-    );
+    throw new NpmMetadataError(packageName, res);
   }
   return (await res.json()) as NpmVersionResponse;
 }
@@ -193,6 +204,23 @@ async function getNpmVersion(packageName: string, tag = 'latest'): Promise<strin
     throw new Error(`Invalid npm response for ${packageName}: missing version field`);
   }
   return data.version;
+}
+
+async function getTsrsVersion(): Promise<string> {
+  try {
+    return await getNpmVersion('tsrs', 'next');
+  } catch (error) {
+    if (!(error instanceof NpmMetadataError) || error.status !== 404) {
+      throw error;
+    }
+    const currentPin = TSRS_PIN_PATTERN.exec(fs.readFileSync(PNPM_WORKSPACE_PATH, 'utf8'))?.[1];
+    if (!currentPin) {
+      throw new Error('Missing tsrs pin in pnpm-workspace.yaml', { cause: error });
+    }
+    // The latest tag uses a different version scheme.
+    console.log(`tsrs@next is unavailable. Keeping the workspace pin at ${currentPin}.`);
+    return currentPin;
+  }
 }
 
 async function getLatestNpmVersionForMajor(packageName: string, major: number): Promise<string> {
@@ -262,8 +290,7 @@ async function updateUpstreamVersions(): Promise<void> {
 
 // ============ Update pnpm-workspace.yaml ============
 async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<void> {
-  const filePath = path.join(ROOT, 'pnpm-workspace.yaml');
-  let content = fs.readFileSync(filePath, 'utf8');
+  let content = fs.readFileSync(PNPM_WORKSPACE_PATH, 'utf8');
 
   // oxlint's trailing \n in the pattern disambiguates from oxlint-tsgolint.
   // Official @vitest/* catalog entries (browser + core direct deps) stay pinned
@@ -377,8 +404,8 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
     },
     {
       name: 'tsrs',
-      pattern: /tsrs: =([\d.]+(?:-[\w.-]+)?)/,
-      replacement: `tsrs: =${versions.tsrs}`,
+      pattern: TSRS_PIN_PATTERN,
+      replacement: `  tsrs: =${versions.tsrs}`,
       newVersion: versions.tsrs,
     },
     {
@@ -416,7 +443,7 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
     recordChange(name, oldVersion, newVersion);
   }
 
-  fs.writeFileSync(filePath, content);
+  fs.writeFileSync(PNPM_WORKSPACE_PATH, content);
   console.log('Updated pnpm-workspace.yaml');
 }
 
@@ -615,8 +642,7 @@ async function upgradeDependencies(): Promise<void> {
     getNpmVersion('oxfmt'),
     getNpmVersion('oxlint'),
     getNpmVersion('oxlint-tsgolint'),
-    // tsrs publishes TypeScript prereleases under next; latest retains the old version scheme.
-    getNpmVersion('tsrs', 'next'),
+    getTsrsVersion(),
     getNpmVersion('@oxc-project/runtime'),
     getNpmVersion('@oxc-project/types'),
     getNpmVersion('oxc-parser'),
