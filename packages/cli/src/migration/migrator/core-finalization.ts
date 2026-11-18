@@ -147,7 +147,8 @@ export function finalizeCoreMigrationForExistingVitePlus(
   silent = false,
   report?: MigrationReport,
   pending = detectPendingCoreMigration(workspaceInfo),
-  importRuleConfig?: string,
+  // null defers import rewriting until dynamic lint settings can be resolved.
+  importRuleConfig?: string | null,
 ): CoreMigrationFinalizationResult {
   const projectPaths = getCoreMigrationProjectPaths(workspaceInfo);
   const result: CoreMigrationFinalizationResult = {
@@ -173,14 +174,16 @@ export function finalizeCoreMigrationForExistingVitePlus(
     }
   }
 
-  result.imports = rewriteAllImports(
-    workspaceInfo.rootDir,
-    silent,
-    report,
-    true,
-    [],
-    importRuleConfig,
-  );
+  if (importRuleConfig !== null) {
+    result.imports = rewriteAllImports(
+      workspaceInfo.rootDir,
+      silent,
+      report,
+      true,
+      [],
+      importRuleConfig,
+    );
+  }
   result.dependencies = dropDeadOxlintPluginsDependency(
     workspaceInfo.rootDir,
     workspaceInfo.packages,

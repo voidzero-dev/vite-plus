@@ -87,21 +87,28 @@ describe('migration import rule settings', () => {
     expect(read('unit.test.ts')).toContain("from 'vitest'");
   });
 
-  it('prepares dependencies before loading dynamic config, but not for static config', async () => {
-    const prepareRuntime = vi.fn(async () => {
-      expect(readLintConfigInWorker).not.toHaveBeenCalled();
-    });
+  it('defers a failed dynamic load until the scheduled install completes', async () => {
+    const report = createMigrationReport();
     config({});
-    await resolveImportRuleConfig(root, { prepareRuntime });
-    expect(prepareRuntime).not.toHaveBeenCalled();
+    expect(await resolveImportRuleConfig(root, { deferRuntimeFailure: true })).toBeDefined();
+    expect(readLintConfigInWorker).not.toHaveBeenCalled();
 
-    write('vite.config.ts', 'export default () => ({});');
-    vi.mocked(readLintConfigInWorker).mockImplementation(async () => {
-      expect(prepareRuntime).toHaveBeenCalledOnce();
-      return undefined;
+    write('vite.config.ts', 'export default () => getConfig();');
+    vi.mocked(readLintConfigInWorker).mockRejectedValueOnce(new Error('missing dependency'));
+    expect(
+      await resolveImportRuleConfig(root, { deferRuntimeFailure: true, report }),
+    ).toBeUndefined();
+    expect(report.warnings).toEqual([]);
+    expect(read('unit.test.ts')).toContain("from 'vitest'");
+
+    vi.mocked(readLintConfigInWorker).mockResolvedValue({
+      rules: { [rule]: 'off' },
     });
-    await resolveImportRuleConfig(root, { prepareRuntime });
-    expect(readLintConfigInWorker).toHaveBeenCalledOnce();
+    const settings = await resolveImportRuleConfig(root, { report });
+    expect(rewriteAllImports(root, true, report, true, [], settings)).toBe(false);
+    expect(read('unit.test.ts')).toContain("from 'vitest'");
+    expect(report.warnings).toEqual([]);
+    expect(readLintConfigInWorker).toHaveBeenCalledTimes(2);
   });
 
   it('warns and preserves imports when dynamic config cannot be loaded', async () => {

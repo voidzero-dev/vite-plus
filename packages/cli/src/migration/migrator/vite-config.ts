@@ -1024,22 +1024,28 @@ function importRuleEnabled(rule: unknown): boolean | undefined {
   throw new Error(`Invalid severity for ${PREFER_VITE_PLUS_IMPORTS_RULE}: ${JSON.stringify(rule)}`);
 }
 
+export function warnUnresolvedImportRuleConfig(report?: MigrationReport): void {
+  warnMigration(
+    'Could not load lint configuration in an isolated process. Skipped Vite/Vitest import rewrites; fix the config and re-run `vp migrate`.',
+    report,
+  );
+}
+
 /** Read the import rule before migration merges or removes lint configs. */
 export async function resolveImportRuleConfig(
   projectPath: string,
-  options?: { prepareRuntime?: () => Promise<void>; report?: MigrationReport },
-): Promise<string> {
+  options?: { deferRuntimeFailure?: boolean; report?: MigrationReport },
+): Promise<string | undefined> {
   const extracted = readStaticLintConfig(projectPath);
   let lint: OxlintConfig | undefined;
   if (extracted == null) {
-    await options?.prepareRuntime?.();
     try {
       lint = await readLintConfigInWorker(projectPath);
     } catch {
-      warnMigration(
-        'Could not load lint configuration in an isolated process. Skipped Vite/Vitest import rewrites; fix the config and re-run `vp migrate`.',
-        options?.report,
-      );
+      if (options?.deferRuntimeFailure) {
+        return undefined;
+      }
+      warnUnresolvedImportRuleConfig(options?.report);
       // An unreadable config may disable the rule. Preserve imports rather than
       // applying defaults that would overwrite the user's protected files.
       return JSON.stringify({ enabled: false, overrides: [] });

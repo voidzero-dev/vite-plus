@@ -1,6 +1,6 @@
 # migration_import_rule_install
 
-An existing Vite+ project installs dependencies before evaluating dynamic lint settings.
+An existing Vite+ project retries dynamic lint settings after the upgrade installs missing dependencies.
 
 ## `vpt stat-file node_modules --assert missing`
 

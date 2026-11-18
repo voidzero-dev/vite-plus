@@ -49,6 +49,7 @@ import {
   checkVitestVersion,
   checkViteVersion,
   collectToolchainVersionChanges,
+  collectOxlintOwnerDirs,
   confirmPrettierMigration,
   confirmTsxMigration,
   confirmOxnodeMigration,
@@ -84,6 +85,7 @@ import {
   migrateTsNodeToVpx,
   configureYarnNodeModulesMode,
   rewriteMonorepo,
+  rewriteAllImports,
   rewriteStandaloneProject,
   resolveImportRuleConfig,
   planVitestV5Migration,
@@ -93,6 +95,7 @@ import {
   removeMigratedOxlintConfigs,
   shouldSkipStagedMigrationForHooks,
   warnPackageLevelPrettier,
+  warnUnresolvedImportRuleConfig,
   vitestV5NeedsMigration,
   type Framework,
   type NodeVersionManagerDetection,
@@ -1220,38 +1223,15 @@ async function main() {
     // (raw vite is read from the untouched node_modules).
     report.dependencyUpgrades = await collectToolchainVersionChanges(workspaceInfoOptional.rootDir);
 
-    // Dynamic lint settings can import the project's dependencies. Install before
-    // evaluating them, while the original config and dependency specs still exist.
-    // Static configs need no initial install; the normal upgrade installs below.
-    let initialInstallFailed = false;
+    // Try the project's available dependencies first. A failed dynamic load can
+    // retry after the upgrade's normal install, without scheduling an extra one.
     const importRuleConfig = await resolveImportRuleConfig(workspaceInfoOptional.rootDir, {
-      report,
-      prepareRuntime: async () => {
-        const resolved = await ensureExistingPackageManager();
-        if (convertYarnPnp && configureYarnNodeModulesMode(workspaceInfoOptional.rootDir)) {
-          report.packageManagerBootstrapConfigured = true;
-          didMigrate = true;
-        }
-        updateMigrationProgress('Installing dependencies');
-        const initialInstallSummary = await runViteInstall(
-          workspaceInfoOptional.rootDir,
-          options.interactive,
-          undefined,
-          { silent: true, packageManager, packageManagerVersion: resolved?.version },
-        );
-        initialInstallFailed = initialInstallSummary.status === 'failed';
-        if (initialInstallFailed) {
-          clearMigrationProgress();
-        }
-        installDurationMs += handleInstallResult(
-          initialInstallSummary,
-          workspaceInfoOptional.rootDir,
-          report,
-          { propagateExitCode: false },
-        );
-        updateMigrationProgress('Reading lint configuration');
-      },
+      deferRuntimeFailure: true,
     });
+    const deferredOxlintOwnerDirs =
+      importRuleConfig === undefined
+        ? collectOxlintOwnerDirs(workspaceInfoOptional.rootDir, workspaceInfoOptional.packages)
+        : [];
 
     // finalizeCoreMigrationForExistingVitePlus rewrites Vite/Vitest imports across
     // every workspace package via a synchronous native directory walk; on a large
@@ -1264,7 +1244,7 @@ async function main() {
       true,
       report,
       pendingCoreMigration,
-      importRuleConfig,
+      importRuleConfig ?? null,
     );
     if (
       coreMigrationResult.dependencies ||
@@ -1310,6 +1290,7 @@ async function main() {
 
     if (
       !didMigrate &&
+      importRuleConfig !== undefined &&
       !convertYarnPnp &&
       report.warnings.length === 0 &&
       !vitePlusBootstrapPending &&
@@ -1352,7 +1333,7 @@ async function main() {
       : undefined;
 
     // Runtime metadata can participate in the package manager's lockfile.
-    let needsInstall = coreMigrationResult.dependencies || nodeUpgrades > 0 || initialInstallFailed;
+    let needsInstall = coreMigrationResult.dependencies || nodeUpgrades > 0;
     if (vitePlusBootstrapPending) {
       const downloadResult = await ensureExistingPackageManager();
       if (downloadResult && packageManager) {
@@ -1696,6 +1677,28 @@ async function main() {
         workspaceInfoOptional.rootDir,
         report,
       );
+    }
+
+    if (importRuleConfig === undefined) {
+      if (needsInstall && finalInstallOk) {
+        updateMigrationProgress('Reading lint configuration');
+        const resolvedImportRuleConfig = await resolveImportRuleConfig(
+          workspaceInfoOptional.rootDir,
+          { report },
+        );
+        updateMigrationProgress('Rewriting toolchain imports across the workspace');
+        didMigrate =
+          rewriteAllImports(
+            workspaceInfoOptional.rootDir,
+            true,
+            report,
+            true,
+            deferredOxlintOwnerDirs,
+            resolvedImportRuleConfig,
+          ) || didMigrate;
+      } else {
+        warnUnresolvedImportRuleConfig(report);
+      }
     }
 
     if (plan.selectedAgentTargetPaths && plan.selectedAgentTargetPaths.length > 0) {

@@ -1,4 +1,23 @@
 [[case]]
+name = "migration_import_rule_reporter_workspace"
+vp = "local"
+comment = "Migration and lint autofix respect the root overrides for templates and questions, while rewriting app imports."
+steps = [
+  { argv = ["vpt", "write-file", "vite.config.ts", "import { defineConfig } from 'vite-plus';\nexport default defineConfig({ lint: { jsPlugins: ['vite-plus/oxlint-plugin'], rules: { 'vite-plus/prefer-vite-plus-imports': 'error' }, overrides: [{ files: ['templates/**', 'questions/**'], rules: { 'vite-plus/prefer-vite-plus-imports': 'off' } }] } });\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "questions/demo.test.ts", "import { test } from 'vitest';\ntest('question', () => {});\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/app/demo.test.ts", "import { test } from 'vitest';\ntest('app', () => {});\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"] },
+  { argv = ["vpt", "print-file", "templates/starter/vite.config.ts"] },
+  { argv = ["vpt", "print-file", "questions/demo.test.ts"] },
+  { argv = ["vpt", "print-file", "packages/app/demo.test.ts"] },
+  { argv = ["vpt", "write-file", "packages/app/demo.test.ts", "import { test } from 'vitest';\ntest('app', () => {});\n"], snapshot = false },
+  { argv = ["vp", "lint", "--threads=1", "--fix", "templates/starter/vite.config.ts", "questions/demo.test.ts", "packages/app/demo.test.ts"] },
+  { argv = ["vpt", "print-file", "templates/starter/vite.config.ts"] },
+  { argv = ["vpt", "print-file", "questions/demo.test.ts"] },
+  { argv = ["vpt", "print-file", "packages/app/demo.test.ts"] },
+]
+
+[[case]]
 name = "migration_import_rule_upgrade"
 vp = "local"
 comment = "Existing Vite+ migration honors ordered lint overrides while still migrating scripts, dependencies, catalogs and overrides."
