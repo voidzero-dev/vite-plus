@@ -178,7 +178,9 @@ mod tests {
         .unwrap();
         let cwd = AbsolutePathBuf::new(home.path().to_path_buf()).unwrap();
         // The registry has nothing, so a download attempt shows up as an error.
-        let registry = httpmock::MockServer::start_async().await.base_url();
+        // Keep the server so the pool cannot hand it to a parallel test.
+        let server = httpmock::MockServer::start_async().await;
+        let registry = server.base_url();
         let managed = |script: &'static str| {
             let bin = home.path().join(if script.contains("exit") { "broken" } else { "working" });
             std::fs::create_dir_all(&bin).unwrap();
