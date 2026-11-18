@@ -55,7 +55,7 @@ fn registry_specs(installed: &[(PackageMetadata, String)], mode: LookupMode) -> 
     let mut specs = Vec::new();
     let mut seen = HashSet::new();
     for (package, wanted_query) in installed {
-        let latest_query = package.latest_spec();
+        let latest_query = latest_query(&package.name, spec_alias_target(wanted_query).as_deref());
         let queries = std::iter::once(wanted_query.clone()).chain(
             (mode == LookupMode::WantedAndLatest && *wanted_query != latest_query)
                 .then_some(latest_query),
@@ -98,6 +98,19 @@ fn resolve_package_versions(
             .map_err(|error| (latest_key.to_string(), error))?,
     };
     Ok((wanted, latest))
+}
+
+/// Package an install from `spec` resolves to, when it goes through an npm alias.
+fn spec_alias_target(spec: &str) -> Option<String> {
+    update_version_spec(spec).as_deref().and_then(alias_target)
+}
+
+/// `latest` follows the package the spec installs, so an explicit `name@6` drops the installed alias.
+fn latest_query(name: &str, alias_target: Option<&str>) -> String {
+    match alias_target {
+        Some(target) => format!("{name}@npm:{target}"),
+        None => name.to_string(),
+    }
 }
 
 fn aliased_version(alias_target: Option<&str>, version: &str) -> String {
@@ -185,20 +198,19 @@ pub async fn get_outdated_packages(
     let mut outdated = Vec::new();
     let mut failures = Vec::new();
     for (package, spec) in installed {
-        let (wanted, latest) =
-            match resolve_package_versions(&versions, &package.latest_spec(), &spec, mode) {
-                Ok(versions) => versions,
-                Err(failure) => {
-                    failures.push(failure);
-                    continue;
-                }
-            };
+        let target_alias = spec_alias_target(&spec);
+        let latest_key = latest_query(&package.name, target_alias.as_deref());
+        let (wanted, latest) = match resolve_package_versions(&versions, &latest_key, &spec, mode) {
+            Ok(versions) => versions,
+            Err(failure) => {
+                failures.push(failure);
+                continue;
+            }
+        };
         // Label alias versions like `npm outdated`, so switching the aliased package is a change too.
-        let installed_alias = package.alias_target();
-        let wanted_alias = update_version_spec(&spec).as_deref().and_then(alias_target);
-        let current = aliased_version(installed_alias.as_deref(), package.version.trim());
-        let wanted = aliased_version(wanted_alias.as_deref(), &wanted);
-        let latest = aliased_version(installed_alias.as_deref(), &latest);
+        let current = aliased_version(package.alias_target().as_deref(), package.version.trim());
+        let wanted = aliased_version(target_alias.as_deref(), &wanted);
+        let latest = aliased_version(target_alias.as_deref(), &latest);
         if current == wanted && current == latest {
             continue;
         }
@@ -457,6 +469,14 @@ mod tests {
 
         let specs = registry_specs(&installed(Some("npm:other")), LookupMode::WantedAndLatest);
         assert_eq!(specs, ["some-pkg@npm:other"]);
+    }
+
+    #[test]
+    fn explicit_specs_query_latest_of_the_requested_package() {
+        let mut installed = installed(Some("npm:other"));
+        installed[0].1 = "some-pkg@latest".into();
+        let specs = registry_specs(&installed, LookupMode::WantedAndLatest);
+        assert_eq!(specs, ["some-pkg@latest", "some-pkg"]);
     }
 
     #[test]
