@@ -95,18 +95,20 @@ i="${XDG_CONFIG_HOME:-$HOME/.config}/vite-plus/hooks-init.sh"
 
 { [ "${HUSKY-}" = "0" ] || [ "${VP_GIT_HOOKS-}" = "0" ] || [ "${VITE_GIT_HOOKS-}" = "0" ]; } && exit 0
 
-# Prefer an absolute project path, resolved independently of CDPATH.
+# Resolve without CDPATH or shell functions from the init script.
 d="$(dirname "$(dirname "$(dirname "$0")")")"
-absolute_d="$(CDPATH= cd "$d" && pwd)" || exit 1
-# PATH cannot represent colons in directory names; preserve the original relative path.
+absolute_d="$(CDPATH= command cd "$d" && command pwd)" || exit 1
+# Keep the original relative entry for commands in the hook's working directory.
+hook_path="$d/node_modules/.bin"
+# PATH cannot represent colons in directory names.
 case "$absolute_d" in
   *:*) ;;
-  *) d="$absolute_d" ;;
+  *) hook_path="$absolute_d/node_modules/.bin:$hook_path" ;;
 esac
 __vp_shell=/bin/sh
 [ -x "$__vp_shell" ] || __vp_shell=$(command -v sh)
 
-export PATH="$d/node_modules/.bin:$PATH"
+export PATH="$hook_path:$PATH"
 "$__vp_shell" -e "$s" "$@"
 c=$?
 

@@ -1,0 +1,5 @@
+{
+  "name": "hooks-workspace-path-test",
+  "private": true,
+  "workspaces": ["packages/*"]
+}

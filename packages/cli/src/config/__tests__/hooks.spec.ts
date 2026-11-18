@@ -1372,7 +1372,11 @@ describe('hookScript', () => {
           encoding: 'utf8',
         });
 
-        expect(output).toBe(`${join(realpathSync(tmp), 'node_modules', '.bin')}:${inheritedPath}`);
+        const projectBin = join(realpathSync(tmp), 'node_modules', '.bin');
+        const expectedBins = projectBin.includes(':')
+          ? './node_modules/.bin'
+          : `${projectBin}:./node_modules/.bin`;
+        expect(output).toBe(`${expectedBins}:${inheritedPath}`);
       } finally {
         rmSync(tmp, { recursive: true, force: true });
       }
@@ -1388,7 +1392,13 @@ describe('hookScript', () => {
   ])(
     'keeps project binaries after cd: $pkg, $dir, CDPATH=$cdpath, linked=$linked',
     ({ pkg, dir, cdpath, linked }) => {
-      const tmp = realpathSync(mkdtempSync(join(tmpdir(), 'hooks-subdir-cd-test-')));
+      // These cases need a colon-free PATH entry even when TMPDIR contains a colon.
+      let tempRoot = realpathSync(tmpdir());
+      if (tempRoot.includes(':')) {
+        tempRoot = realpathSync('/tmp');
+      }
+      expect(tempRoot).not.toContain(':');
+      const tmp = realpathSync(mkdtempSync(join(tempRoot, 'hooks-subdir-cd-test-')));
       const originalCwd = process.cwd();
       try {
         execSync('git init', { cwd: tmp, stdio: 'ignore' });

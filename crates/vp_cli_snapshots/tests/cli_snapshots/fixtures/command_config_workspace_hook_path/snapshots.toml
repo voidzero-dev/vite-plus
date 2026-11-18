@@ -1,0 +1,14 @@
+[[case]]
+name = "command_config_workspace_hook_path"
+vp = "local"
+steps = [
+  { argv = ["git", "init"], snapshot = false },
+  { argv = ["vp", "config", "--no-agent", "--hooks-dir", ".vite-hooks"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/ui/node_modules/.bin/test-hook-cmd", "#!/usr/bin/env sh\nprintf 'workspace-hook-path-ok\\n'\n"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "packages/ui/node_modules/.bin/test-hook-cmd"], snapshot = false },
+  { argv = ["vpt", "write-file", ".vite-hooks/pre-commit", "cd ./packages/ui\ntest-hook-cmd\n"], snapshot = false },
+  { argv = ["git", "hook", "run", "pre-commit"], comment = "a root hook can find a binary installed only in the child workspace after cd", continue-on-failure = true },
+  { argv = ["vpt", "write-file", "node_modules/.bin/test-hook-cmd", "#!/usr/bin/env sh\nprintf 'root-hook-path-first\\n'\n"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "node_modules/.bin/test-hook-cmd"], snapshot = false },
+  { argv = ["git", "hook", "run", "pre-commit"], comment = "the root project's binary takes precedence over the child workspace's binary" },
+]
