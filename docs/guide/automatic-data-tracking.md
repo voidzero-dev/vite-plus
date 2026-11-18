@@ -39,6 +39,24 @@ For this task, Vite Task records source files, config files, missing files the c
 
 File system tracking also tracks outputs. If you omit [`cache.output`](/config/run#cache-output), Vite Task archives files the command writes after a successful run and restores them on a cache hit.
 
+::: warning
+Automatic output tracking archives only files the command **writes** during the cache-filling run. Code generators that skip files which are already up to date — such as the TanStack Router generator, `paraglide-js compile`, or `wrangler types` — may write nothing on the run that creates the cache entry. If the generated files are later deleted, the cache hit restores nothing.
+
+Add explicit output globs for generator tasks that may skip unchanged files:
+
+```ts [vite.config.ts]
+tasks: {
+  codegen: {
+    command: 'paraglide-js compile --outdir src/paraglide',
+    cache: {
+      input: [{ auto: true }, '!src/paraglide/**'],
+      output: [{ auto: true }, 'src/paraglide/**'],
+    },
+  },
+}
+```
+:::
+
 ### Rebuildable Inputs
 
 Some tools read files they also write:
@@ -285,5 +303,6 @@ Add config when your project has behavior the command or tool cannot know. These
 | Exclude an output directory from inputs                           | `input: [{ auto: true }, '!dist/**']`                                                           |
 | Exclude a temporary generated file from input and output tracking | `input: [{ auto: true }, '!.tmp/config.mjs']`<br>`output: [{ auto: true }, '!.tmp/config.mjs']` |
 | Avoid automatic file tracking for a task                          | `input: ['src/**']`<br>`output: ['dist/**']`                                                    |
+| Include outputs that a generator skips when already up to date    | `output: [{ auto: true }, 'src/paraglide/**']`                                                 |
 | Track and pass an env var                                         | `env: ['NODE_ENV']`                                                                             |
 | Pass an env var without fingerprinting it                         | `untrackedEnv: ['GITHUB_ACTIONS']`                                                              |
