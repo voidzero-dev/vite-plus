@@ -393,13 +393,3 @@ VP_NODE_SKIP_SIGNATURE_VERIFY=1 vp env install 22
 `vp env` can install a Node.js release when the Node.js project publishes a binary for your operating system and CPU architecture.
 
 Package managers and other tools that you run keep their own Node.js requirements.
-
-### Using Vite+ with nvm or fnm
-
-Vite+ does not switch between itself and another manager for each project. To keep nvm or fnm as your main Node.js manager, run:
-
-```bash
-vp env off node
-```
-
-In this system-first mode, the Vite+ `node` shim comes after other tools on `PATH`, so the `node` from nvm or fnm runs when one is active. Vite+ uses its managed Node.js only when it finds no other `node`. To run a Vite+-managed version for one command, use `vp env exec --node <version>`.
