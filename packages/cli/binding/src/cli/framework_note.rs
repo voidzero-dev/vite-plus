@@ -38,8 +38,9 @@ fn detect(cwd: &AbsolutePath) -> Option<(&'static str, &'static str, &AbsolutePa
     // Stop at the nearest package, just as `vp run` does. A dependency in a
     // workspace root or sibling must not cause a hint for this package.
     let package = vt_workspace::find_package_root(cwd).ok()?;
+    let content = package.package_json.content();
     let manifest: serde_json::Value =
-        serde_json::from_slice(package.package_json.content()).ok()?;
+        serde_json::from_slice(content.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(content)).ok()?;
     if manifest
         .get("scripts")
         .and_then(|scripts| scripts.get("dev"))
@@ -76,6 +77,16 @@ fn detect(cwd: &AbsolutePath) -> Option<(&'static str, &'static str, &AbsolutePa
         _ => {}
     }
     let command = if dependency == "vitepress" {
+        // A selected subdirectory can be a Vite app inside a docs package.
+        if cwd != package.path
+            && app_target::root_has_intent_signal(
+                &vp_static_config::resolve_static_config(cwd),
+                cwd,
+                "dev",
+            )
+        {
+            return None;
+        }
         vitepress_dev_command(&config, package.path)?
     } else {
         command
@@ -126,6 +137,20 @@ mod tests {
                 .unwrap();
                 assert_eq!(detect(&root), Some((name, command, &*root)));
             }
+        }
+    }
+
+    #[test]
+    fn detects_frameworks_with_or_without_a_utf8_bom() {
+        let temp = TempDir::new().unwrap();
+        let root = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        for prefix in ["", "\u{feff}"] {
+            fs::write(
+                root.join("package.json"),
+                format!("{prefix}{}", json!({ "dependencies": { "astro": "*" } })),
+            )
+            .unwrap();
+            assert_eq!(detect(&root), Some(("Astro", "astro dev", &*root)));
         }
     }
 
@@ -233,6 +258,27 @@ mod tests {
             fs::write(root.join("vite.config.ts"), config).unwrap();
             assert_eq!(detect(&root), None, "{config}");
         }
+    }
+
+    #[test]
+    fn skips_vitepress_for_a_selected_vite_app_subdirectory() {
+        let temp = TempDir::new().unwrap();
+        let root = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let demo = root.join("examples/demo");
+        fs::create_dir_all(&demo).unwrap();
+        fs::create_dir_all(root.join("docs/.vitepress")).unwrap();
+        fs::write(root.join("package.json"), r#"{"devDependencies":{"vitepress":"*"}}"#).unwrap();
+        assert_eq!(detect(&demo), Some(("VitePress", "vitepress dev docs", &*root)));
+
+        fs::write(demo.join("index.html"), "<div id='app'></div>").unwrap();
+        assert_eq!(detect(&demo), None);
+        fs::remove_file(demo.join("index.html")).unwrap();
+        for config in ["export default { root: 'app' };", "export default { appType: 'spa' };"] {
+            fs::write(demo.join("vite.config.ts"), config).unwrap();
+            assert_eq!(detect(&demo), None, "{config}");
+        }
+        // The playground does not suppress hints when the package root is selected.
+        assert_eq!(detect(&root), Some(("VitePress", "vitepress dev docs", &*root)));
     }
 
     #[test]

@@ -29,6 +29,31 @@ note: This package depends on VitePress and has no dev script or task. `vp dev` 
 q
 ```
 
+## `vp -C site/examples/demo dev`
+
+The selected Vite playground gets no hint for the package's documentation site.
+
+**→ expect-milestone:** `dev-server:ready`
+
+```
+
+  VITE+ <version>  ready in <duration>
+
+  ➜  Local:   http://127.0.0.1:<port>/
+  ➜  press h + enter to show help
+```
+
+**← write-line:** `q`
+
+```
+
+  VITE+ <version>  ready in <duration>
+
+  ➜  Local:   http://127.0.0.1:<port>/
+  ➜  press h + enter to show help
+q
+```
+
 ## `vpt cp -r site/docs/.vitepress site/.vitepress`
 
 

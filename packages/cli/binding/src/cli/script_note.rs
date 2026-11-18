@@ -18,21 +18,27 @@ const NPM_LIFECYCLE_EVENT_ENV_NAME: &str = "npm_lifecycle_event";
 /// `command` is the built-in as the user spelled it: the global binary forwards
 /// the invoked subcommand, so `vp format` stays `format` here. A direct local
 /// invocation takes the first argument before help normalization.
-pub(super) fn print(command: Option<&str>, cwd: &AbsolutePath) {
-    let Some(command) = command else { return };
+///
+/// Returns whether a note was printed, so callers can skip other hints.
+pub(super) fn print(command: Option<&str>, cwd: &AbsolutePath, show_directory: bool) -> bool {
+    let Some(command) = command else { return false };
     if spawned_from_script() {
-        return;
+        return false;
     }
-    if !has_package_json_script(cwd, command) {
-        return;
-    }
+    let Some(package_dir) = script_package_dir(cwd, command) else { return false };
 
     let built_in = style(format!("`vp {command}`")).for_stderr().blue().bright().to_string();
     let via_run = style(format!("`vpr {command}`")).for_stderr().blue().bright().to_string();
+    let action = if show_directory {
+        format!("change to `{}` and use", package_dir.as_path().display())
+    } else {
+        "use".to_string()
+    };
     output::note(&format!(
         "You are running {built_in} as a Vite+ built-in command. \
-         If you meant to run the {command} npm script, use {via_run} instead."
+         If you meant to run the {command} npm script, {action} {via_run} instead."
     ));
+    true
 }
 
 /// npm-compatible runners set `npm_lifecycle_event`; Vite Task uses its own marker.
@@ -41,20 +47,52 @@ pub(super) fn spawned_from_script() -> bool {
         || std::env::var_os(NPM_LIFECYCLE_EVENT_ENV_NAME).is_some_and(|event| !event.is_empty())
 }
 
-/// Whether the package enclosing `cwd` defines a `<name>` script.
+/// The nearest package directory, if it defines a `<name>` script.
 ///
 /// Walks up to the nearest `package.json`, which is the package `vp run`
 /// resolves the task from, so the note holds when a built-in runs from a
 /// subdirectory. It stops there rather than climbing to a package that happens
 /// to define the script: `vpr <name>` would not reach that one either.
-fn has_package_json_script(cwd: &AbsolutePath, name: &str) -> bool {
-    let Ok(package) = vt_workspace::find_package_root(cwd) else { return false };
-    serde_json::from_slice::<serde_json::Value>(package.package_json.content()).is_ok_and(
-        |manifest| {
-            manifest
-                .get("scripts")
-                .and_then(|scripts| scripts.get(name))
-                .is_some_and(serde_json::Value::is_string)
-        },
-    )
+fn script_package_dir<'a>(cwd: &'a AbsolutePath, name: &str) -> Option<&'a AbsolutePath> {
+    let package = vt_workspace::find_package_root(cwd).ok()?;
+    let content = package.package_json.content();
+    let manifest: serde_json::Value =
+        serde_json::from_slice(content.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(content)).ok()?;
+    manifest
+        .get("scripts")
+        .and_then(|scripts| scripts.get(name))
+        .is_some_and(serde_json::Value::is_string)
+        .then_some(package.path)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use tempfile::TempDir;
+    use vt_path::AbsolutePathBuf;
+
+    use super::script_package_dir;
+
+    #[test]
+    fn finds_scripts_only_in_the_nearest_package_with_or_without_a_bom() {
+        let temp = TempDir::new().unwrap();
+        let root = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let app = root.join("app");
+        let source = app.join("src");
+        fs::create_dir_all(&source).unwrap();
+        fs::write(root.join("package.json"), r#"{"scripts":{"dev":"root-dev"}}"#).unwrap();
+        fs::write(app.join("package.json"), "{}").unwrap();
+        assert_eq!(script_package_dir(&source, "dev"), None);
+
+        for prefix in ["", "\u{feff}"] {
+            fs::write(
+                app.join("package.json"),
+                format!("{prefix}{}", r#"{"scripts":{"dev":"nuxt dev"}}"#),
+            )
+            .unwrap();
+            assert_eq!(script_package_dir(&source, "dev"), Some(&*app));
+            assert_eq!(script_package_dir(&source, "build"), None);
+        }
+    }
 }

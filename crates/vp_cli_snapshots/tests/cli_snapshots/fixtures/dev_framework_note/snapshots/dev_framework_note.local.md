@@ -57,7 +57,7 @@ q
 
 ## `cd default-package && vp dev`
 
-The hint uses the resolved defaultPackage, which depends on Nuxt, not the caller's Astro dependency.
+The hint uses the resolved Nuxt package and ignores the caller's Astro dev script.
 
 **→ expect-milestone:** `dev-server:ready`
 

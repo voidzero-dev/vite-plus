@@ -47,6 +47,7 @@ use self::{
 /// No caching, no task graph, no dependency resolution.
 async fn execute_direct_subcommand(
     mut subcommand: SynthesizableSubcommand,
+    invoked_command: Option<&str>,
     cwd: &AbsolutePathBuf,
     options: Option<CliOptions>,
     explicit_chdir: bool,
@@ -63,11 +64,14 @@ async fn execute_direct_subcommand(
         app_target::AppTarget::CurrentDir => cwd,
     };
 
-    // Explicit Vite arguments can select another root or config. Only hint
-    // for bare dev, after defaultPackage / package selection.
+    // Both hints must describe the resolved package, not the invocation directory.
+    let script_note_printed =
+        script_note::print(invoked_command, cwd, retargeted || explicit_chdir);
+    // Only show the framework hint for bare dev. Explicit Vite arguments
+    // can select another root or config.
     if let SynthesizableSubcommand::Dev { args } = &mut subcommand
         && args.is_empty()
-        && framework_note::print(cwd, retargeted || explicit_chdir)
+        && (script_note_printed || framework_note::print(cwd, retargeted || explicit_chdir))
     {
         // Vite runs in a child process and cannot see the parent's output.
         // Preserve the hint when its startup banner would clear the screen.
@@ -416,8 +420,14 @@ pub async fn main(
             // legitimately trigger a project's `install` lifecycle scripts
             // through the package manager, so redirecting those to `vpr` would
             // be wrong; and `exec` names a binary rather than a task.
-            script_note::print(raw_subcommand.as_deref(), &cwd);
-            execute_direct_subcommand(subcmd, &cwd, options, explicit_chdir).await
+            execute_direct_subcommand(
+                subcmd,
+                raw_subcommand.as_deref(),
+                &cwd,
+                options,
+                explicit_chdir,
+            )
+            .await
         }
         CLIArgs::ViteTask(command) => execute_vite_task_command(command, cwd, options).await,
         CLIArgs::PackageManager(pm) => execute_pm_command(pm, &cwd, options.as_ref()).await,

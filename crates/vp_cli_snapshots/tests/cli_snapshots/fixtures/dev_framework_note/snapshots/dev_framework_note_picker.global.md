@@ -1,11 +1,14 @@
 # dev_framework_note_picker
 
-The hint identifies the package selected in the workspace picker.
+The hint identifies the selected package and ignores the workspace root's dev script.
 
 ## `vpt write-file pnpm-workspace.yaml 'packages:
   - app
   - plain
 '`
+
+
+## `vpt json-edit package.json scripts.dev 'astro dev'`
 
 
 ## `vp dev`

@@ -13,7 +13,7 @@ steps = [
     { "expect-milestone" = "dev-server:ready" },
     { "write-line" = "q" },
   ] },
-  { argv = ["vp", "dev"], cwd = "default-package", comment = "The hint uses the resolved defaultPackage, which depends on Nuxt, not the caller's Astro dependency.", interactions = [
+  { argv = ["vp", "dev"], cwd = "default-package", comment = "The hint uses the resolved Nuxt package and ignores the caller's Astro dev script.", interactions = [
     { "expect-milestone" = "dev-server:ready" },
     { "write-line" = "q" },
   ] },
@@ -32,6 +32,10 @@ steps = [
     { "expect-milestone" = "dev-server:ready" },
     { "write-line" = "q" },
   ] },
+  { argv = ["vp", "-C", "site/examples/demo", "dev"], comment = "The selected Vite playground gets no hint for the package's documentation site.", interactions = [
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
   { argv = ["vpt", "cp", "-r", "site/docs/.vitepress", "site/.vitepress"], snapshot = false },
   { argv = ["vp", "-C", "site", "dev"], comment = "Configuration at the package root takes precedence.", interactions = [
     { "expect-milestone" = "dev-server:ready" },
@@ -47,14 +51,31 @@ steps = [
 [[case]]
 name = "dev_framework_note_picker"
 vp = ["local", "global"]
-comment = "The hint identifies the package selected in the workspace picker."
+comment = "The hint identifies the selected package and ignores the workspace root's dev script."
 steps = [
   { argv = ["vpt", "write-file", "pnpm-workspace.yaml", "packages:\n  - app\n  - plain\n"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "scripts.dev", "astro dev"], snapshot = false },
   { argv = ["vp", "dev"], interactions = [
     { "expect-milestone" = "package-select::0" },
     { "write" = "nuxt-app" },
     { "expect-milestone" = "package-select:nuxt-app:0" },
     { "write-key" = "enter" },
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
+]
+
+[[case]]
+name = "dev_framework_note_selected_script"
+vp = ["local", "global"]
+comment = "A selected package with a dev script gets one script hint that names its directory."
+steps = [
+  { argv = ["vpt", "json-edit", "app/package.json", "scripts.dev", "nuxt dev"], snapshot = false },
+  { argv = ["vp", "dev"], cwd = "default-package", interactions = [
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
+  { argv = ["vp", "-C", "app", "dev"], interactions = [
     { "expect-milestone" = "dev-server:ready" },
     { "write-line" = "q" },
   ] },
