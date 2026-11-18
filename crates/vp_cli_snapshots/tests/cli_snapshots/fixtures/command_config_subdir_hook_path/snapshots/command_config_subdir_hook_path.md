@@ -14,21 +14,10 @@ the hooks path stays relative to the checkout
 pkg/.vite-hooks/_
 ```
 
-## `vpt mkdir -p pkg/node_modules/.bin shadow/pkg`
+## `vpt mkdir -p shadow/pkg`
 
 
-## `vpt write-file pkg/node_modules/.bin/test-hook-cmd '#'\!'/usr/bin/env sh
-printf '\''hook-path-ok\n'\''
-printf '\''CDPATH=%s\n'\'' "${CDPATH-unset}"
-'`
-
-
-## `vpt chmod +x pkg/node_modules/.bin/test-hook-cmd`
-
-
-## `vpt write-file pkg/.vite-hooks/pre-commit 'cd ./pkg
-test-hook-cmd
-'`
+## `vpt cp -r test-deps pkg/node_modules`
 
 
 ## `git hook run pre-commit`

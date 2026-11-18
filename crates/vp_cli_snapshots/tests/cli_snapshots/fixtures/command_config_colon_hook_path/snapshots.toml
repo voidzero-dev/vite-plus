@@ -4,12 +4,10 @@ vp = "local"
 # A colon is a valid Unix directory name, but Windows does not allow it.
 skip-platforms = ["windows"]
 steps = [
-  { argv = ["vpt", "write-file", "project:demo/pkg/package.json", "{\"name\":\"hooks-colon-path-test\",\"private\":true}\n"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "project", "project:demo"], snapshot = false },
   { argv = ["git", "init"], cwd = "project:demo", snapshot = false },
   { argv = ["vp", "config", "--no-agent", "--hooks-dir", ".vite-hooks"], cwd = "project:demo/pkg", snapshot = false },
   { argv = ["git", "config", "--local", "core.hooksPath"], cwd = "project:demo", comment = "the hooks path stays relative to the checkout" },
-  { argv = ["vpt", "write-file", "project:demo/pkg/node_modules/.bin/test-hook-cmd", "#!/usr/bin/env sh\nprintf 'colon-hook-path-ok\\n'\nprintf 'bin-path=%s\\n' \"${PATH%%:*}\"\n"], snapshot = false },
-  { argv = ["vpt", "chmod", "+x", "project:demo/pkg/node_modules/.bin/test-hook-cmd"], snapshot = false },
-  { argv = ["vpt", "write-file", "project:demo/pkg/.vite-hooks/pre-commit", "test-hook-cmd\n"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "test-deps", "project:demo/pkg/node_modules"], snapshot = false },
   { argv = ["git", "hook", "run", "pre-commit"], cwd = "project:demo", comment = "a nested installation keeps its relative bin entry when the checkout path contains a colon" },
 ]

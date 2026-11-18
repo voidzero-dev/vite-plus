@@ -4,12 +4,8 @@ vp = "local"
 steps = [
   { argv = ["git", "init"], snapshot = false },
   { argv = ["vp", "config", "--no-agent", "--hooks-dir", ".vite-hooks"], snapshot = false },
-  { argv = ["vpt", "write-file", "packages/ui/node_modules/.bin/test-hook-cmd", "#!/usr/bin/env sh\nprintf 'workspace-hook-path-ok\\n'\n"], snapshot = false },
-  { argv = ["vpt", "chmod", "+x", "packages/ui/node_modules/.bin/test-hook-cmd"], snapshot = false },
-  { argv = ["vpt", "write-file", ".vite-hooks/pre-commit", "cd ./packages/ui\ntest-hook-cmd\n"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "workspace-deps", "packages/ui/node_modules"], snapshot = false },
   { argv = ["git", "hook", "run", "pre-commit"], comment = "a root hook can find a binary installed only in the child workspace after cd", continue-on-failure = true },
-  { argv = ["vpt", "write-file", "node_modules/.bin/test-hook-cmd", "#!/usr/bin/env sh\nprintf 'root-hook-path-ok\\n'\n"], snapshot = false },
-  { argv = ["vpt", "chmod", "+x", "node_modules/.bin/test-hook-cmd"], snapshot = false },
-  { argv = ["vpt", "write-file", ".vite-hooks/pre-commit", "test-hook-cmd\ncd ./packages/ui\ntest-hook-cmd\n"], snapshot = false },
-  { argv = ["git", "hook", "run", "pre-commit"], comment = "a root hook runs the root binary before cd and the workspace binary after cd" },
+  { argv = ["vpt", "cp", "-r", "root-deps", "node_modules"], snapshot = false },
+  { argv = ["git", "hook", "run", "pre-push"], comment = "a root hook runs the root binary before cd and the workspace binary after cd" },
 ]

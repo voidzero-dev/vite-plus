@@ -1,0 +1,3 @@
+#!/usr/bin/env sh
+echo hook-path-ok
+printf 'CDPATH=%s\n' "${CDPATH-unset}"

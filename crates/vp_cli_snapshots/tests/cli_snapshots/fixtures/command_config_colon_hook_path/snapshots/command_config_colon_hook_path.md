@@ -1,7 +1,6 @@
 # command_config_colon_hook_path
 
-## `vpt write-file project:demo/pkg/package.json '{"name":"hooks-colon-path-test","private":true}
-'`
+## `vpt cp -r project project:demo`
 
 
 ## `cd 'project:demo' && git init`
@@ -18,17 +17,7 @@ the hooks path stays relative to the checkout
 pkg/.vite-hooks/_
 ```
 
-## `vpt write-file project:demo/pkg/node_modules/.bin/test-hook-cmd '#'\!'/usr/bin/env sh
-printf '\''colon-hook-path-ok\n'\''
-printf '\''bin-path=%s\n'\'' "${PATH%%:*}"
-'`
-
-
-## `vpt chmod +x project:demo/pkg/node_modules/.bin/test-hook-cmd`
-
-
-## `vpt write-file project:demo/pkg/.vite-hooks/pre-commit 'test-hook-cmd
-'`
+## `vpt cp -r test-deps project:demo/pkg/node_modules`
 
 
 ## `cd 'project:demo' && git hook run pre-commit`

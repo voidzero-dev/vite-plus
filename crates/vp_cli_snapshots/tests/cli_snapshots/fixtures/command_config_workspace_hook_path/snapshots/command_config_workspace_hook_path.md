@@ -6,17 +6,7 @@
 ## `vp config --no-agent --hooks-dir .vite-hooks`
 
 
-## `vpt write-file packages/ui/node_modules/.bin/test-hook-cmd '#'\!'/usr/bin/env sh
-printf '\''workspace-hook-path-ok\n'\''
-'`
-
-
-## `vpt chmod +x packages/ui/node_modules/.bin/test-hook-cmd`
-
-
-## `vpt write-file .vite-hooks/pre-commit 'cd ./packages/ui
-test-hook-cmd
-'`
+## `vpt cp -r workspace-deps packages/ui/node_modules`
 
 
 ## `git hook run pre-commit`
@@ -27,21 +17,10 @@ a root hook can find a binary installed only in the child workspace after cd
 workspace-hook-path-ok
 ```
 
-## `vpt write-file node_modules/.bin/test-hook-cmd '#'\!'/usr/bin/env sh
-printf '\''root-hook-path-ok\n'\''
-'`
+## `vpt cp -r root-deps node_modules`
 
 
-## `vpt chmod +x node_modules/.bin/test-hook-cmd`
-
-
-## `vpt write-file .vite-hooks/pre-commit 'test-hook-cmd
-cd ./packages/ui
-test-hook-cmd
-'`
-
-
-## `git hook run pre-commit`
+## `git hook run pre-push`
 
 a root hook runs the root binary before cd and the workspace binary after cd
 
