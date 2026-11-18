@@ -24,7 +24,6 @@ petgraph = { workspace = true }
 console = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-shell-escape = { workspace = true }
 tokio = { workspace = true, features = ["fs"] }
 tracing = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
