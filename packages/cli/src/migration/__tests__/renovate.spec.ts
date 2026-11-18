@@ -39,12 +39,71 @@ describe('Renovate configuration', () => {
     expect(await addVitePlusRenovatePreset(active)).toBe(false);
   });
 
-  it.each([
-    '{extends: ["local>org/shared"]}',
-    '{"extends": [\'local>org/shared\']}',
-    '{"extends": [], "prConcurrentLimit": 0x10}',
-  ])('skips a config that uses JSON5-only syntax: %s', async (source) => {
+  it('preserves JSON5 comments, quotes, indentation, and trailing commas', async () => {
+    const source = [
+      '// 项目 🚀',
+      '{',
+      '\tprConcurrentLimit: 0x10,',
+      "\tdescription: '\\\\u{61}',",
+      '\textends: [',
+      "\t\t'config:recommended', // Keep this rule first",
+      '\t],',
+      '}',
+      '',
+    ].join('\r\n');
     const file = await config('.gitlab/renovate.json5', source);
+    expect(await findRenovateConfigToUpdate(root)).toBe(file);
+    expect(await addVitePlusRenovatePreset(file)).toBe(true);
+    expect(await fs.readFile(file, 'utf8')).toBe(
+      source.replace('\t],', "\t\t'group:vitePlus',\r\n\t],"),
+    );
+    expect(await addVitePlusRenovatePreset(file)).toBe(false);
+  });
+
+  it('inserts a missing comma before a trailing line comment', async () => {
+    const source = "{extends: [\n  'first' // keep this comma, too\n]}";
+    const file = await config('renovate.json5', source);
+    expect(await addVitePlusRenovatePreset(file)).toBe(true);
+    expect(await fs.readFile(file, 'utf8')).toBe(
+      "{extends: [\n  'first', // keep this comma, too\n  'group:vitePlus'\n]}",
+    );
+  });
+
+  it.each([
+    ['{extends: []}', "{extends: ['group:vitePlus']}"],
+    [
+      "{labels: ['deps'], enabled: true}",
+      "{labels: ['deps'], enabled: true, extends: ['group:vitePlus']}",
+    ],
+  ])('adds the first preset in %s', async (source, expected) => {
+    const file = await config('.renovaterc.json5', source);
+    expect(await findRenovateConfigToUpdate(root)).toBe(file);
+    expect(await addVitePlusRenovatePreset(file)).toBe(true);
+    expect(await fs.readFile(file, 'utf8')).toBe(expected);
+    expect(await findRenovateConfigToUpdate(root)).toBeUndefined();
+  });
+
+  it.each([
+    '{extends: getPresets()}',
+    "{extends: ['first'], rules: {...base}}",
+    "{extends: ['first'], [key]: true}",
+    "{extends: ['first'], limit: 1_000}",
+    '{extends: [], limit: 0b10}',
+    '{extends: [], enabled: (true)}',
+    "{extends: ['\\u{61}']}",
+    "{extends: ['first'], extends: []}",
+    "{extends: ['group:vitePlus']}",
+    "{extends: ['first'",
+  ])('skips unsupported or ineligible JSON5 configs: %s', async (source) => {
+    const file = await config('.gitlab/renovate.json5', source);
+    expect(await findRenovateConfigToUpdate(root)).toBeUndefined();
+    expect(await addVitePlusRenovatePreset(file)).toBe(false);
+    expect(await fs.readFile(file, 'utf8')).toBe(source);
+  });
+
+  it('accepts JSON5-only syntax only in a .json5 file', async () => {
+    const source = "{extends: ['config:recommended']}";
+    const file = await config('renovate.jsonc', source);
     expect(await findRenovateConfigToUpdate(root)).toBeUndefined();
     expect(await addVitePlusRenovatePreset(file)).toBe(false);
     expect(await fs.readFile(file, 'utf8')).toBe(source);

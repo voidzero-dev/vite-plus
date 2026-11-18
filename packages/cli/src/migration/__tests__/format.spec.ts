@@ -97,10 +97,13 @@ describe('formatMigratedProject', () => {
     expect(report.warnings).toEqual([]);
   });
 
-  it('preserves standalone Renovate configs during full-project formatting', async () => {
+  it.each(['git', 'no-git'])('preserves standalone Renovate configs (%s)', async (mode) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-migrate-format-renovate-'));
     try {
-      const source = "{extends:['config:recommended'],}";
+      if (mode === 'git') {
+        execFileSync('git', ['init'], { cwd: root, stdio: 'ignore' });
+      }
+      const source = "{extends:['config:recommended','group:vitePlus'],}";
       fs.mkdirSync(path.join(root, '.github'));
       fs.mkdirSync(path.join(root, 'nested'));
       const configs = ['renovate.json', '.github/renovate.json5'];
@@ -113,7 +116,6 @@ describe('formatMigratedProject', () => {
         new URL('./bin/oxfmt', import.meta.resolve('oxfmt/package.json')),
       );
       const formatted = await formatMigratedProject(root, false, createMigrationReport(), {
-        collectPaths: async () => undefined,
         format: async (cwd, _interactive, paths) => {
           execFileSync(process.execPath, [oxfmt, ...(paths ?? [])], { cwd, stdio: 'pipe' });
           return { status: 'formatted', exitCode: 0, durationMs: 0 };

@@ -10,6 +10,7 @@ import {
 } from 'jsonc-parser';
 
 import { appendMissingJsoncArrayItems, detectFormattingOptions } from '../utils/json.ts';
+import { withJson5Preset } from './renovate-json5.ts';
 
 const PRESET = 'group:vitePlus';
 
@@ -43,7 +44,10 @@ function hasDuplicateKeys(node: Node): boolean {
   return children.some(hasDuplicateKeys);
 }
 
-function withVitePlusPreset(file: string, source: string): string | undefined {
+async function withVitePlusPreset(file: string, source: string): Promise<string | undefined> {
+  if (file.endsWith('.json5')) {
+    return withJson5Preset(source, PRESET);
+  }
   const embedded = path.basename(file) === 'package.json';
   const errors: ParseError[] = [];
   const tree = parseTree(source, errors, {
@@ -84,7 +88,7 @@ export async function findRenovateConfigToUpdate(rootDir: string): Promise<strin
     const file = path.join(rootDir, name);
     try {
       const source = await fs.readFile(file, 'utf8');
-      return withVitePlusPreset(file, source) === undefined ? undefined : file;
+      return (await withVitePlusPreset(file, source)) === undefined ? undefined : file;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
         return undefined;
@@ -105,7 +109,7 @@ export async function addVitePlusRenovatePreset(file: string): Promise<boolean> 
     }
     throw error;
   }
-  const updated = withVitePlusPreset(file, source);
+  const updated = await withVitePlusPreset(file, source);
   if (updated === undefined) {
     return false;
   }

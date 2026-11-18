@@ -69,7 +69,6 @@ function isExistingFile(projectRoot: string, relativePath: string): boolean {
 }
 
 function wholeProjectFormatPaths(projectRoot: string): string[] | undefined {
-  // Oxfmt can rewrite even JSON5 syntax that the Renovate migration skipped.
   const configs = STANDALONE_RENOVATE_CONFIG_FILES.filter((file) =>
     isExistingFile(projectRoot, file),
   );
@@ -133,9 +132,12 @@ export async function collectChangedFormatPaths(
       ...parseNullDelimitedPaths(staged.stdout),
       ...parseNullDelimitedPaths(untracked.stdout),
     ]);
+    // The Renovate migration preserves the original formatting around its edit.
+    for (const config of STANDALONE_RENOVATE_CONFIG_FILES) {
+      changedPaths.delete(config);
+    }
 
-    // Oxfmt owns the supported-file list and skips unknown formats. Passing
-    // every existing changed file keeps migration aligned as Oxfmt evolves.
+    // Oxfmt handles file type detection for the remaining paths.
     return [...changedPaths]
       .filter((file) => !excludedPaths?.has(file) && isExistingFile(projectRoot, file))
       .toSorted();
