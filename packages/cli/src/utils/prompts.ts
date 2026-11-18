@@ -60,9 +60,10 @@ const DEFAULT_PACKAGE_MANAGER_ORDER = [
   PackageManager.bun,
 ];
 
-export async function selectPackageManager(interactive?: boolean, silent = false) {
+export async function selectPackageManager(interactive?: boolean, silent = false, cwd?: string) {
   // Without a global install, Vite+ cannot download package managers, so only those on PATH work.
-  const available = new Set(await availablePackageManagers());
+  // Check from the directory the download will use, so relative PATH entries resolve the same way.
+  const available = new Set(await availablePackageManagers(cwd));
   const defaultPackageManager = DEFAULT_PACKAGE_MANAGER_ORDER.find((packageManager) =>
     available.has(packageManager),
   );

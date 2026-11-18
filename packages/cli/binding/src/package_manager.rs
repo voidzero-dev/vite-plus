@@ -147,9 +147,14 @@ pub async fn download_package_manager(
 /// List the package managers `downloadPackageManager` can provide.
 ///
 /// Without a global install, only the package managers on PATH are available.
+/// Pass the `cwd` that `downloadPackageManager` will receive, so relative PATH
+/// entries resolve against the same directory.
 #[napi]
-pub async fn available_package_managers() -> Result<Vec<String>> {
-    let cwd = vt_path::current_dir().map_err(anyhow::Error::from)?;
+pub async fn available_package_managers(cwd: Option<String>) -> Result<Vec<String>> {
+    let cwd = match cwd {
+        Some(cwd) => AbsolutePathBuf::new(cwd.into()).ok_or(Error::from_reason("invalid cwd"))?,
+        None => vt_path::current_dir().map_err(anyhow::Error::from)?,
+    };
     let mut available = Vec::new();
     for kind in [
         PackageManagerType::Pnpm,
