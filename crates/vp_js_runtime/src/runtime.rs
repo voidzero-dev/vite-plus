@@ -478,9 +478,31 @@ pub async fn download_runtime_for_project(project_path: &AbsolutePath) -> Result
     // Resolve version from the project directory, walking up to inherit from ancestors
     let resolution = resolve_node_version(project_path, true).await?;
 
-    // Validate the version from the resolved source
-    let version_req =
-        resolution.as_ref().and_then(|r| normalize_version(&r.version, &r.source.to_string()));
+    // Validate the version from the resolved source. `devEngines.runtime` is
+    // validated strictly against the devEngines spec (semver only, aliases not
+    // allowed) and its effective `onFail` controls whether invalid values error
+    // or fall through to lower-priority sources.
+    let version_req = if let Some(ref r) = resolution {
+        match r.source {
+            VersionSource::DevEnginesRuntime => {
+                if let Some(ref source_path) = r.source_path {
+                    let source_pkg = read_package_json(source_path).await?;
+                    if let Some(ref pkg) = source_pkg {
+                        validate_dev_engines_runtime_version(&r.version, pkg, true).await?
+                    } else {
+                        // Source package.json could not be parsed; treat the raw
+                        // version as invalid so we fall through to other sources.
+                        None
+                    }
+                } else {
+                    None
+                }
+            }
+            _ => normalize_version(&r.version, &r.source.to_string()),
+        }
+    } else {
+        None
+    };
 
     // For compatibility checking, we need to read all sources from the local package.json
     let package_json_path = project_path.join("package.json");
@@ -492,11 +514,19 @@ pub async fn download_runtime_for_project(project_path: &AbsolutePath) -> Result
         .and_then(|e| e.node.clone())
         .and_then(|v| normalize_version(&v, "engines.node"));
 
-    let dev_engines_runtime = pkg
-        .as_ref()
-        .and_then(|p| p.dev_engines_runtime("node"))
-        .and_then(|r| r.version.clone())
-        .and_then(|v| normalize_version(&v, "devEngines.runtime"));
+    let dev_engines_runtime = if let Some(ref source_pkg) = pkg {
+        if let Some(entry) = source_pkg.dev_engines_runtime("node") {
+            if let Some(ref v) = entry.version {
+                validate_dev_engines_runtime_version(v, source_pkg, true).await?
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    };
 
     let nvmrc = if version_req.is_none() {
         let root =
@@ -672,6 +702,77 @@ pub fn normalize_version(version: &Str, source: &str) -> Option<Str> {
         eprintln!("warning: invalid version '{version}' in {source}, ignoring");
     }
     None
+}
+
+/// Check if a version string is a valid semver exact version or range.
+/// Rejects aliases such as `lts/*`, `lts/iron`, `lts/-1`, or `latest`.
+/// Trims whitespace before checking. Does not print warnings.
+#[must_use]
+pub fn is_valid_semver_version(version: &str) -> bool {
+    let trimmed = version.trim();
+
+    if trimmed.is_empty() {
+        return false;
+    }
+
+    // Try parsing as exact version (strip 'v' prefix for exact version check)
+    let without_v = trimmed.strip_prefix('v').unwrap_or(trimmed);
+    if Version::parse(without_v).is_ok() {
+        return true;
+    }
+
+    // Try parsing as range
+    Range::parse(trimmed).is_ok()
+}
+
+/// Validate a `devEngines.runtime` version string according to the devEngines spec.
+///
+/// `devEngines.runtime.version` must be a valid semver exact version or range.
+/// Aliases such as `lts/*`, `lts/iron`, `lts/-1`, or `latest` are not allowed.
+///
+/// Returns the trimmed semver version if valid. Returns `Ok(None)` when the
+/// version is invalid and the effective `onFail` allows falling back. Returns
+/// an error when the effective `onFail` is `error`.
+pub async fn validate_dev_engines_runtime_version(
+    version: &Str,
+    source_pkg: &PackageJson,
+    warn: bool,
+) -> Result<Option<Str>, Error> {
+    let trimmed: Str = version.trim().into();
+
+    if is_valid_semver_version(&trimmed) {
+        return Ok(Some(trimmed));
+    }
+
+    let on_fail = source_pkg
+        .dev_engines
+        .as_ref()
+        .and_then(|d| d.runtime.as_ref())
+        .and_then(|r| r.find_with_index("node"))
+        .map(|(index, _)| {
+            source_pkg
+                .dev_engines
+                .as_ref()
+                .and_then(|d| d.runtime.as_ref())
+                .expect("runtime field exists because find_with_index succeeded")
+                .effective_on_fail(index)
+        })
+        .unwrap_or(vp_shared::OnFail::Error);
+
+    match on_fail {
+        vp_shared::OnFail::Error => Err(Error::InvalidDevEnginesRuntimeVersion {
+            version: trimmed,
+        }),
+        vp_shared::OnFail::Ignore => Ok(None),
+        _ => {
+            if warn {
+                eprintln!(
+                    "warning: devEngines.runtime.version \"{version}\" is not a valid semver range (see devEngines spec)"
+                );
+            }
+            Ok(None)
+        }
+    }
 }
 
 /// Read package.json contents.
@@ -1382,15 +1483,63 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_invalid_dev_engines_runtime_is_ignored() {
+    async fn test_invalid_dev_engines_runtime_with_ignore_falls_back() {
         with_mock_mirror(&["24.11.0"], |temp_path| async move {
-            // Create package.json with invalid devEngines.runtime version
-            let package_json = r#"{"devEngines":{"runtime":{"name":"node","version":"invalid"}}}"#;
+            // Create package.json with invalid devEngines.runtime version and onFail ignore
+            let package_json = r#"{"devEngines":{"runtime":{"name":"node","version":"invalid","onFail":"ignore"}}}"#;
             tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
 
             // Should fall through to fetch latest LTS since devEngines.runtime is invalid
             let runtime = download_runtime_for_project(&temp_path).await.unwrap();
             assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
+            assert_eq!(runtime.version(), "24.11.0");
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn test_invalid_dev_engines_runtime_with_error_fails() {
+        with_mock_mirror(&[], |temp_path| async move {
+            // Create package.json with invalid devEngines.runtime version and onFail error
+            let package_json = r#"{"devEngines":{"runtime":{"name":"node","version":"invalid","onFail":"error"}}}"#;
+            tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+
+            // Should fail because onFail is error
+            let result = download_runtime_for_project(&temp_path).await;
+            assert!(result.is_err());
+            let err = result.unwrap_err().to_string();
+            assert!(err.contains("devEngines.runtime.version"));
+            assert!(err.contains("not a valid semver range"));
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn test_dev_engines_runtime_lts_alias_rejected_with_error() {
+        with_mock_mirror(&[], |temp_path| async move {
+            // Create package.json with lts/* in devEngines.runtime and onFail error
+            let package_json = r#"{"devEngines":{"runtime":{"name":"node","version":"lts/*","onFail":"error"}}}"#;
+            tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+
+            // Should fail because lts/* is not valid semver and onFail is error
+            let result = download_runtime_for_project(&temp_path).await;
+            assert!(result.is_err());
+            let err = result.unwrap_err().to_string();
+            assert!(err.contains("devEngines.runtime.version"));
+            assert!(err.contains("\"lts/*\""));
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn test_dev_engines_runtime_lts_alias_with_warn_falls_back() {
+        with_mock_mirror(&["24.11.0"], |temp_path| async move {
+            // Create package.json with lts/* in devEngines.runtime and onFail warn
+            let package_json = r#"{"devEngines":{"runtime":{"name":"node","version":"lts/*","onFail":"warn"}}}"#;
+            tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+
+            // Should fall through to fetch latest LTS since lts/* is rejected
+            let runtime = download_runtime_for_project(&temp_path).await.unwrap();
             assert_eq!(runtime.version(), "24.11.0");
         })
         .await;
@@ -1536,6 +1685,24 @@ mod tests {
         assert_eq!(normalize_version(&"latest".into(), ".node-version"), Some("latest".into()));
         assert_eq!(normalize_version(&"Latest".into(), ".node-version"), Some("Latest".into()));
         assert_eq!(normalize_version(&"LATEST".into(), ".node-version"), Some("LATEST".into()));
+    }
+
+    #[test]
+    fn test_is_valid_semver_version_rejects_aliases() {
+        assert!(!is_valid_semver_version("lts/*"));
+        assert!(!is_valid_semver_version("lts/iron"));
+        assert!(!is_valid_semver_version("lts/-1"));
+        assert!(!is_valid_semver_version("latest"));
+        assert!(!is_valid_semver_version("LATEST"));
+    }
+
+    #[test]
+    fn test_is_valid_semver_version_accepts_semver() {
+        assert!(is_valid_semver_version("20.18.0"));
+        assert!(is_valid_semver_version("v20.18.0"));
+        assert!(is_valid_semver_version("^20.18.0"));
+        assert!(is_valid_semver_version("20"));
+        assert!(is_valid_semver_version("*"));
     }
 
     #[tokio::test]

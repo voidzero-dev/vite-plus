@@ -198,7 +198,7 @@ ranges, it just does not author them through `vp env pin`. The alias-to-semver
 conversion table in section 5.2 applies to `vp migrate` (which preserves the
 floating intent of `.nvmrc` values), not to pin.
 
-Rule: Vite+ is lenient when **reading** (`devEngines.runtime.version` containing an alias still resolves, with a doctor warning about spec non-compliance) but strict when **writing** (only valid semver ranges or exact versions are ever written to `devEngines`).
+Rule: `devEngines.runtime.version` is **strict** when reading: only valid semver exact versions or ranges are accepted; aliases such as `lts`, `lts/*`, `lts/iron`, `lts/-1`, or `latest` are rejected. When the effective `onFail` is `error`, the command fails with `devEngines.runtime.version "<value>" is not a valid semver range (see devEngines spec)`; with `warn` or `download`, a warning is printed and resolution falls through to lower-priority sources; with `ignore`, it falls through silently. CLI inputs such as `vp env pin lts` may still accept aliases, but they are resolved to an exact semver version before being written to `devEngines`. `.node-version`, `.nvmrc`, and other non-manifest sources continue to support aliases.
 
 When `.node-version` is the write target and a `devEngines.runtime` node entry also exists:
 
@@ -340,8 +340,8 @@ A small shared Rust helper (in `vp_shared`) will own "edit one field in package.
 | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `runtime` (single + array)                             | Yes, for `name: "node"`; other runtimes surfaced by doctor, not managed                                                                                                                    |
 | `packageManager` (single + array)                      | Yes, for pnpm / yarn / npm / bun                                                                                                                                                           |
-| `version` optional, semver range syntax                | Yes (lenient read, strict write)                                                                                                                                                           |
-| `onFail` (`ignore` / `warn` / `error` / `download`)    | Partial: drives the unsupported-name fallthrough for `packageManager`; otherwise parsed/preserved, not yet acted on (see section 2.3 and [Deferred / Future Work](#deferred--future-work)) |
+| `version` optional, semver range syntax                | Yes (strict read for `devEngines.runtime`: aliases rejected; strict write)                                                                                                                  |
+| `onFail` (`ignore` / `warn` / `error` / `download`)    | Acted on for invalid `devEngines.runtime.version`; drives the unsupported-name fallthrough for `packageManager`; otherwise parsed/preserved (see section 2.3 and [Deferred / Future Work](#deferred--future-work)) |
 | Array `onFail` defaults (prior `ignore`, last `error`) | Yes                                                                                                                                                                                        |
 | `os` / `cpu` / `libc`                                  | Out of scope (possible future doctor checks)                                                                                                                                               |
 | Integrity hash                                         | Not part of the spec; the `packageManager` field hash remains supported                                                                                                                    |

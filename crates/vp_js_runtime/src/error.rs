@@ -99,4 +99,10 @@ pub enum Error {
     /// Semver range parsing error
     #[error(transparent)]
     SemverRange(#[from] js_semver::SemverError),
+
+    /// `devEngines.runtime.version` is not a valid semver range and `onFail` is `error`
+    #[error(
+        "devEngines.runtime.version \"{version}\" is not a valid semver range (see devEngines spec)"
+    )]
+    InvalidDevEnginesRuntimeVersion { version: Str },
 }
