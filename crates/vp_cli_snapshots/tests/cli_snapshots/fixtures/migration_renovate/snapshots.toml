@@ -5,8 +5,6 @@ steps = [
   { argv = ["vpt", "rm", "renovate.json"], snapshot = false },
   { argv = ["vpt", "write-file", "renovate.json5", '{"extends": ["config:recommended"],}'], snapshot = false },
   { argv = ["vp", "migrate", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false, interactions = [
-    { "expect-milestone" = "confirm:renovate:no" },
-    { "write-key" = "right" },
     { "expect-milestone" = "confirm:renovate:yes" },
     { "write-key" = "enter" },
   ] },
@@ -23,8 +21,6 @@ steps = [
   { argv = ["git", "add", "renovate.json5"], snapshot = false },
   { argv = ["git", "-c", "user.name=Vite Plus", "-c", "user.email=vite-plus@example.com", "commit", "-m", "init"], snapshot = false },
   { argv = ["vp", "migrate", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false, interactions = [
-    { "expect-milestone" = "confirm:renovate:no" },
-    { "write-key" = "right" },
     { "expect-milestone" = "confirm:renovate:yes" },
     { "write-key" = "enter" },
   ] },
@@ -46,6 +42,8 @@ name = "decline"
 vp = "global"
 steps = [
   { argv = ["vp", "migrate", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false, interactions = [
+    { "expect-milestone" = "confirm:renovate:yes" },
+    { "write-key" = "right" },
     { "expect-milestone" = "confirm:renovate:no" },
     { "write-key" = "enter" },
   ] },

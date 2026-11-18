@@ -162,7 +162,7 @@ async function confirmRenovatePreset(
     message:
       'Group Vite+ and Vitest updates in Renovate?\n  ' +
       muted(`Adds group:vitePlus to ${displayRelative(configPath, rootDir)}.`),
-    initialValue: false,
+    initialValue: true,
     testId: 'renovate',
   });
   if (prompts.isCancel(confirmed)) {
