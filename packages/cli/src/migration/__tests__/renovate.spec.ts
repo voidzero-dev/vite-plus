@@ -39,33 +39,37 @@ describe('Renovate configuration', () => {
     expect(await addVitePlusRenovatePreset(active)).toBe(false);
   });
 
-  it('preserves JSON5 keys, quotes, comments and trailing commas', async () => {
-    const source =
-      "{\n  // Keep our shared rules\n  extends: ['local>org/shared',],\n  labels: ['deps'],\n}\n";
+  it.each([
+    '{extends: ["local>org/shared"]}',
+    '{"extends": [\'local>org/shared\']}',
+    '{"extends": [], "prConcurrentLimit": 0x10}',
+  ])('skips a config that uses JSON5-only syntax: %s', async (source) => {
     const file = await config('.gitlab/renovate.json5', source);
-    expect(await findRenovateConfigToUpdate(root)).toBe(file);
-    await addVitePlusRenovatePreset(file);
-    expect(await fs.readFile(file, 'utf8')).toBe(
-      source.replace("'local>org/shared',", "'local>org/shared','group:vitePlus',"),
-    );
+    expect(await findRenovateConfigToUpdate(root)).toBeUndefined();
+    expect(await addVitePlusRenovatePreset(file)).toBe(false);
+    expect(await fs.readFile(file, 'utf8')).toBe(source);
   });
 
-  it('keeps a multiline JSONC preset list and its comments when appending', async () => {
-    const source = [
-      '{',
-      '  "extends": [',
-      '    // Organization defaults',
-      '    "local>org/shared",',
-      '  ],',
-      '}',
-      '',
-    ].join('\n');
-    const file = await config('renovate.jsonc', source);
-    await addVitePlusRenovatePreset(file);
-    expect(await fs.readFile(file, 'utf8')).toBe(
-      source.replace('    "local>org/shared",', '    "local>org/shared",\n    "group:vitePlus",'),
-    );
-  });
+  it.each(['renovate.jsonc', 'renovate.json5'])(
+    'preserves a multiline JSONC preset list in %s',
+    async (name) => {
+      const source = [
+        '{',
+        '  "extends": [',
+        '    // Organization defaults',
+        '    "local>org/shared",',
+        '  ],',
+        '}',
+        '',
+      ].join('\n');
+      const file = await config(name, source);
+      expect(await findRenovateConfigToUpdate(root)).toBe(file);
+      expect(await addVitePlusRenovatePreset(file)).toBe(true);
+      expect(await fs.readFile(file, 'utf8')).toBe(
+        source.replace('    "local>org/shared",', '    "local>org/shared",\n    "group:vitePlus",'),
+      );
+    },
+  );
 
   it('adds extends to an existing package.json renovate object after other migration edits', async () => {
     const file = await config('package.json', '{"name":"old","renovate":{}}\n');

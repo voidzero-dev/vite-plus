@@ -1,7 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import jju from 'jju';
 import {
   findNodeAtLocation,
   getNodeValue,
@@ -11,15 +10,12 @@ import {
 } from 'jsonc-parser';
 
 import { appendMissingJsoncArrayItems, detectFormattingOptions } from '../utils/json.ts';
-import { isPlainRecord } from './migrator/shared.ts';
 
 const PRESET = 'group:vitePlus';
-// Treat names like "constructor" as ordinary JSON properties.
-const JSON5_OPTIONS = { null_prototype: true, reserved_keys: 'replace' } as const;
 
 // Renovate uses the first repository config in this order.
 // https://docs.renovatebot.com/configuration-options/#locations-for-configuration-filenames
-const CONFIG_FILES = [
+export const STANDALONE_RENOVATE_CONFIG_FILES = [
   'renovate.json',
   'renovate.jsonc',
   'renovate.json5',
@@ -33,8 +29,8 @@ const CONFIG_FILES = [
   '.renovaterc.json',
   '.renovaterc.jsonc',
   '.renovaterc.json5',
-  'package.json',
 ];
+const CONFIG_FILES = [...STANDALONE_RENOVATE_CONFIG_FILES, 'package.json'];
 
 function hasDuplicateKeys(node: Node): boolean {
   const children = node.children ?? [];
@@ -47,29 +43,7 @@ function hasDuplicateKeys(node: Node): boolean {
   return children.some(hasDuplicateKeys);
 }
 
-function canAddPreset(presets: unknown): presets is string[] | undefined {
-  return (
-    presets === undefined ||
-    (Array.isArray(presets) &&
-      presets.every((preset) => typeof preset === 'string') &&
-      !presets.includes(PRESET))
-  );
-}
-
 function withVitePlusPreset(file: string, source: string): string | undefined {
-  if (file.endsWith('.json5')) {
-    try {
-      const config: unknown = jju.parse(source, { ...JSON5_OPTIONS });
-      if (!isPlainRecord(config) || !canAddPreset(config.extends)) {
-        return undefined;
-      }
-      config.extends = [...(config.extends ?? []), PRESET];
-      return jju.update(source, config, { ...JSON5_OPTIONS, mode: 'json5' });
-    } catch {
-      return undefined;
-    }
-  }
-
   const embedded = path.basename(file) === 'package.json';
   const errors: ParseError[] = [];
   const tree = parseTree(source, errors, {
@@ -85,7 +59,12 @@ function withVitePlusPreset(file: string, source: string): string | undefined {
   }
   const extendsNode = findNodeAtLocation(config, ['extends']);
   const presets: unknown = extendsNode && getNodeValue(extendsNode);
-  if (!canAddPreset(presets)) {
+  if (
+    presets !== undefined &&
+    (!Array.isArray(presets) ||
+      !presets.every((preset) => typeof preset === 'string') ||
+      presets.includes(PRESET))
+  ) {
     return undefined;
   }
   // Keep a compact config or preset list on one line.

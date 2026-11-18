@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import { runCommandSilently } from '../utils/command.ts';
 import { type CommandRunSummary, runViteFmt } from '../utils/prompts.ts';
+import { STANDALONE_RENOVATE_CONFIG_FILES } from './renovate.ts';
 import { addMigrationWarning, type MigrationReport } from './report.ts';
 
 type FormatRunner = (
@@ -65,6 +66,14 @@ function isExistingFile(projectRoot: string, relativePath: string): boolean {
   } catch {
     return false;
   }
+}
+
+function wholeProjectFormatPaths(projectRoot: string): string[] | undefined {
+  // Oxfmt can rewrite even JSON5 syntax that the Renovate migration skipped.
+  const configs = STANDALONE_RENOVATE_CONFIG_FILES.filter((file) =>
+    isExistingFile(projectRoot, file),
+  );
+  return configs.length ? ['.', ...configs.map((file) => `!/${file}`)] : undefined;
 }
 
 /**
@@ -176,7 +185,8 @@ export async function formatMigratedProject(
     };
     // `undefined` means "format the whole project" (single invocation); a path
     // list is batched so a huge monorepo cannot overflow the command line.
-    const batches = paths === undefined ? [undefined] : chunkPathsByArgLength(paths);
+    const batches =
+      paths === undefined ? [wholeProjectFormatPaths(projectRoot)] : chunkPathsByArgLength(paths);
     let allFormatted = true;
     for (const batch of batches) {
       const result = await format(projectRoot, interactive, batch, formatOptions);

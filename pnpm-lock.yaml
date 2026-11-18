@@ -212,9 +212,6 @@ catalogs:
     '@types/cross-spawn':
       specifier: ^6.0.6
       version: 6.0.6
-    '@types/jju':
-      specifier: ^1.4.5
-      version: 1.4.5
     '@types/node':
       specifier: 24.10.3
       version: 24.10.3
@@ -281,9 +278,6 @@ catalogs:
     glob:
       specifier: ^13.0.0
       version: 13.0.7
-    jju:
-      specifier: ^1.4.0
-      version: 1.4.0
     jsonc-parser:
       specifier: ^3.3.1
       version: 3.3.1
@@ -503,9 +497,6 @@ importers:
       '@types/cross-spawn':
         specifier: 'catalog:'
         version: 6.0.6
-      '@types/jju':
-        specifier: 'catalog:'
-        version: 1.4.5
       '@types/validate-npm-package-name':
         specifier: 'catalog:'
         version: 4.0.2
@@ -536,9 +527,6 @@ importers:
       detect-newline:
         specifier: 'catalog:'
         version: 4.0.1
-      jju:
-        specifier: 'catalog:'
-        version: 1.4.0
       jsonc-parser:
         specifier: 'catalog:'
         version: 3.3.1
@@ -3705,9 +3693,6 @@ packages:
   '@types/etag@1.8.4':
     resolution: {integrity: sha512-f1z/UMth8gQ6636NBqhFmJ3zES7EuDcUnV6K1gl1osHp+85KPKX+VixYWUpqLkw1fftCagyHJjJOZjZkEi2rHw==}
 
-  '@types/jju@1.4.5':
-    resolution: {integrity: sha512-5Yx4wOq3X+xArOlyZcuAK1Pli4vW0E6nQ6UC8jWdbcY5OlBsoElFTOf4kggYKls/NCHdShAK6UR8NRSQARUNfQ==}
-
   '@types/json-schema@7.0.15':
     resolution: {integrity: sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA==}
 
@@ -5381,9 +5366,6 @@ packages:
   jiti@2.7.0:
     resolution: {integrity: sha512-AC/7JofJvZGrrneWNaEnJeOLUx+JlGt7tNa0wZiRPT4MY1wmfKjt2+6O2p2uz2+skll8OZZmJMNqeke7kKbNgQ==}
     hasBin: true
-
-  jju@1.4.0:
-    resolution: {integrity: sha512-8wb9Yw966OSxApiCt0K3yNJL8pnNeIv+OEq2YMidz4FKP6nonSRoOXc80iXY4JaN2FC11B9qsNmDsm+ZOfMROA==}
 
   jose@6.2.12:
     resolution: {integrity: sha512-9NiFmJEex0sy2Dk58j2UGBSHgUs2ypF9eZSu4L6vjOX3Dp96Sw1F3uL+H+D1sx02jZZdzUT0HgvCy59CuvXcWw==}
@@ -9165,8 +9147,6 @@ snapshots:
     dependencies:
       '@types/node': 26.6.6
 
-  '@types/jju@1.4.5': {}
-
   '@types/json-schema@7.0.15': {}
 
   '@types/less@3.0.8': {}
@@ -10843,8 +10823,6 @@ snapshots:
       '@pkgjs/parseargs': 0.11.0
 
   jiti@2.7.0: {}
-
-  jju@1.4.0: {}
 
   jose@6.2.12: {}
 

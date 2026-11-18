@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it, vi } from 'vitest';
 
@@ -94,6 +95,39 @@ describe('formatMigratedProject', () => {
     ).resolves.toBe(true);
     expect(format).not.toHaveBeenCalled();
     expect(report.warnings).toEqual([]);
+  });
+
+  it('preserves standalone Renovate configs during full-project formatting', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-migrate-format-renovate-'));
+    try {
+      const source = "{extends:['config:recommended'],}";
+      fs.mkdirSync(path.join(root, '.github'));
+      fs.mkdirSync(path.join(root, 'nested'));
+      const configs = ['renovate.json', '.github/renovate.json5'];
+      for (const file of [...configs, 'nested/renovate.json5']) {
+        fs.writeFileSync(path.join(root, file), source);
+      }
+      fs.writeFileSync(path.join(root, 'package.json'), '{"name":"demo"}');
+
+      const oxfmt = fileURLToPath(
+        new URL('./bin/oxfmt', import.meta.resolve('oxfmt/package.json')),
+      );
+      const formatted = await formatMigratedProject(root, false, createMigrationReport(), {
+        collectPaths: async () => undefined,
+        format: async (cwd, _interactive, paths) => {
+          execFileSync(process.execPath, [oxfmt, ...(paths ?? [])], { cwd, stdio: 'pipe' });
+          return { status: 'formatted', exitCode: 0, durationMs: 0 };
+        },
+      });
+      expect(formatted).toBe(true);
+      for (const file of configs) {
+        expect(fs.readFileSync(path.join(root, file), 'utf8')).toBe(source);
+      }
+      expect(fs.readFileSync(path.join(root, 'nested/renovate.json5'), 'utf8')).not.toBe(source);
+      expect(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).not.toBe('{"name":"demo"}');
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it('reports a formatter nonzero exit without throwing', async () => {
