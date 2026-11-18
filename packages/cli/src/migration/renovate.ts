@@ -2,8 +2,15 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import jju from 'jju';
-import { getNodeValue, parseTree, type Node, type ParseError } from 'jsonc-parser';
+import {
+  findNodeAtLocation,
+  getNodeValue,
+  parseTree,
+  type Node,
+  type ParseError,
+} from 'jsonc-parser';
 
+import { appendMissingJsoncArrayItems, detectFormattingOptions } from '../utils/json.ts';
 import { isPlainRecord } from './migrator/shared.ts';
 
 const PRESET = 'group:vitePlus';
@@ -40,41 +47,57 @@ function hasDuplicateKeys(node: Node): boolean {
   return children.some(hasDuplicateKeys);
 }
 
+function canAddPreset(presets: unknown): presets is string[] | undefined {
+  return (
+    presets === undefined ||
+    (Array.isArray(presets) &&
+      presets.every((preset) => typeof preset === 'string') &&
+      !presets.includes(PRESET))
+  );
+}
+
 function withVitePlusPreset(file: string, source: string): string | undefined {
-  const embedded = path.basename(file) === 'package.json';
-  try {
-    let document: unknown;
-    if (file.endsWith('.json5')) {
-      document = jju.parse(source, { ...JSON5_OPTIONS });
-    } else {
-      const errors: ParseError[] = [];
-      const tree = parseTree(source, errors, {
-        allowTrailingComma: !embedded,
-        disallowComments: embedded,
-      });
-      if (!tree || errors.length || hasDuplicateKeys(tree)) {
+  if (file.endsWith('.json5')) {
+    try {
+      const config: unknown = jju.parse(source, { ...JSON5_OPTIONS });
+      if (!isPlainRecord(config) || !canAddPreset(config.extends)) {
         return undefined;
       }
-      document = getNodeValue(tree);
-    }
-    const config = embedded && isPlainRecord(document) ? document.renovate : document;
-    if (!isPlainRecord(config)) {
+      config.extends = [...(config.extends ?? []), PRESET];
+      return jju.update(source, config, { ...JSON5_OPTIONS, mode: 'json5' });
+    } catch {
       return undefined;
     }
-    const presets = config.extends === undefined ? [] : config.extends;
-    if (
-      !Array.isArray(presets) ||
-      !presets.every((preset) => typeof preset === 'string') ||
-      presets.includes(PRESET)
-    ) {
-      return undefined;
-    }
-    config.extends = [...presets, PRESET];
-    // Edit only the changed property, preserving comments, indentation and JSON5 syntax.
-    return jju.update(source, document, { ...JSON5_OPTIONS, mode: embedded ? 'json' : 'json5' });
-  } catch {
+  }
+
+  const embedded = path.basename(file) === 'package.json';
+  const errors: ParseError[] = [];
+  const tree = parseTree(source, errors, {
+    allowTrailingComma: !embedded,
+    disallowComments: embedded,
+  });
+  if (!tree || errors.length || hasDuplicateKeys(tree)) {
     return undefined;
   }
+  const config = embedded ? findNodeAtLocation(tree, ['renovate']) : tree;
+  if (config?.type !== 'object') {
+    return undefined;
+  }
+  const extendsNode = findNodeAtLocation(config, ['extends']);
+  const presets: unknown = extendsNode && getNodeValue(extendsNode);
+  if (!canAddPreset(presets)) {
+    return undefined;
+  }
+  // Keep a compact config or preset list on one line.
+  const target = extendsNode ?? config;
+  const multiline = source.slice(target.offset, target.offset + target.length).includes('\n');
+  return appendMissingJsoncArrayItems(
+    source,
+    embedded ? ['renovate', 'extends'] : ['extends'],
+    presets,
+    [PRESET],
+    multiline ? detectFormattingOptions(source) : undefined,
+  );
 }
 
 export async function findRenovateConfigToUpdate(rootDir: string): Promise<string | undefined> {

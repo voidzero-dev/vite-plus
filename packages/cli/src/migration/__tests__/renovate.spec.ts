@@ -50,6 +50,23 @@ describe('Renovate configuration', () => {
     );
   });
 
+  it('keeps a multiline JSONC preset list and its comments when appending', async () => {
+    const source = [
+      '{',
+      '  "extends": [',
+      '    // Organization defaults',
+      '    "local>org/shared",',
+      '  ],',
+      '}',
+      '',
+    ].join('\n');
+    const file = await config('renovate.jsonc', source);
+    await addVitePlusRenovatePreset(file);
+    expect(await fs.readFile(file, 'utf8')).toBe(
+      source.replace('    "local>org/shared",', '    "local>org/shared",\n    "group:vitePlus",'),
+    );
+  });
+
   it('adds extends to an existing package.json renovate object after other migration edits', async () => {
     const file = await config('package.json', '{"name":"old","renovate":{}}\n');
     expect(await findRenovateConfigToUpdate(root)).toBe(file);
