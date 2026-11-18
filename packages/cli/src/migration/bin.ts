@@ -1289,6 +1289,9 @@ async function main() {
     // `--full`; the per-action flags (--hooks/--agent/--editor) still opt into a
     // single action without `--full`.
     const fullSetup = options.full === true;
+    const renovateConfigPath = fullSetup
+      ? await confirmRenovatePreset(workspaceInfoOptional.rootDir, options.interactive)
+      : undefined;
     // Hint at `--full` only on a bare upgrade that left setup actions on the
     // table. Suppress it when the user passed an explicit per-action flag
     // (--hooks/--agent/--editor): that ran the action they asked for, so a
@@ -1301,6 +1304,7 @@ async function main() {
     if (
       !didMigrate &&
       !convertYarnPnp &&
+      !renovateConfigPath &&
       report.warnings.length === 0 &&
       !vitePlusBootstrapPending &&
       !(fullSetup
@@ -1736,6 +1740,10 @@ async function main() {
       });
     }
 
+    // The preset edit alone needs neither a dependency install nor a formatting pass.
+    if (renovateConfigPath && (await addVitePlusRenovatePreset(renovateConfigPath))) {
+      didMigrate = true;
+    }
     if (didMigrate || report.warnings.length > 0) {
       clearMigrationProgress();
       showMigrationSummary({
@@ -1772,7 +1780,7 @@ async function main() {
     options,
     workspaceInfoOptional.packages,
   );
-  if (!alreadyUsesVitePlus) {
+  if (!alreadyUsesVitePlus || options.full) {
     plan.renovateConfigPath = await confirmRenovatePreset(
       workspaceInfoOptional.rootDir,
       options.interactive,

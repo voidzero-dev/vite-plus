@@ -19,6 +19,7 @@ Migration is idempotent: running it again after a successful migration should no
 On a project that already depends on `vite-plus`, `vp migrate` performs an upgrade only: it updates dependencies and package-manager configuration and finalizes imports. It does not touch project setup.
 
 - `--full` also runs the setup actions: git hooks, editor config, agent files, ESLint, Prettier, tsup, and tsx migration, framework shims, the tsconfig `baseUrl` fix, and the Volta to `.node-version` conversion.
+- `--full` checks an existing Renovate config for the `group:vitePlus` preset. See [Dependency Bots](./upgrade-project.md#dependency-bots).
 - `--hooks`, `--agent`, and `--editor` opt into a single setup action without `--full`.
 
 When a default upgrade skips setup actions that would apply, it prints a hint to run `vp migrate --full`. Fresh (non Vite+) projects always run the full migration.
