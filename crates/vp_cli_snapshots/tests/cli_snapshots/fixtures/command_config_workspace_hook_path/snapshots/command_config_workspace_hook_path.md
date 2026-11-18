@@ -28,17 +28,24 @@ workspace-hook-path-ok
 ```
 
 ## `vpt write-file node_modules/.bin/test-hook-cmd '#'\!'/usr/bin/env sh
-printf '\''root-hook-path-first\n'\''
+printf '\''root-hook-path-ok\n'\''
 '`
 
 
 ## `vpt chmod +x node_modules/.bin/test-hook-cmd`
 
 
+## `vpt write-file .vite-hooks/pre-commit 'test-hook-cmd
+cd ./packages/ui
+test-hook-cmd
+'`
+
+
 ## `git hook run pre-commit`
 
-the root project's binary takes precedence over the child workspace's binary
+a root hook runs the root binary before cd and the workspace binary after cd
 
 ```
-root-hook-path-first
+root-hook-path-ok
+workspace-hook-path-ok
 ```

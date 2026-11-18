@@ -65,26 +65,28 @@ s=$(dirname "$(dirname "$0")")/$n
 
 [ ! -f "$s" ] && exit 0
 
+__vp_hook_cwd="$PWD"
 i="\${XDG_CONFIG_HOME:-$HOME/.config}/vite-plus/hooks-init.sh"
 [ ! -f "$i" ] && i="\${XDG_CONFIG_HOME:-$HOME/.config}/husky/init.sh"
 [ -f "$i" ] && . "$i"
 
 { [ "\${HUSKY-}" = "0" ] || [ "\${VP_GIT_HOOKS-}" = "0" ] || [ "\${VITE_GIT_HOOKS-}" = "0" ]; } && exit 0
 
-# Resolve without CDPATH or shell functions from the init script.
 d=${rootExpr}
-absolute_d="$(CDPATH= command cd "$d" && command pwd)" || exit 1
-# Keep the original relative entry for commands in the hook's working directory.
-hook_path="$d/node_modules/.bin"
-# PATH cannot represent colons in directory names.
-case "$absolute_d" in
-  *:*) ;;
-  *) hook_path="$absolute_d/node_modules/.bin:$hook_path" ;;
+# Keep root hooks relative so they can use the current workspace's commands after cd.
+case "$d" in
+  .|/*) ;;
+  *)
+    case "$__vp_hook_cwd/$d" in
+      *:*) ;; # PATH cannot represent this directory. Keep the original entry.
+      *) d="$__vp_hook_cwd/$d" ;;
+    esac
+    ;;
 esac
 __vp_shell=/bin/sh
 [ -x "$__vp_shell" ] || __vp_shell=$(command -v sh)
 
-export PATH="$hook_path:$PATH"
+export PATH="$d/node_modules/.bin:$PATH"
 "$__vp_shell" -e "$s" "$@"
 c=$?
 

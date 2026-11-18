@@ -3,24 +3,19 @@
 ## `git init`
 
 
-## `vp config --no-agent --hooks-dir .vite-hooks`
+## `cd pkg && vp config --no-agent --hooks-dir .vite-hooks`
 
 
-## `vpt write-file node_modules/.bin/test-hook-cmd '#'\!'/usr/bin/env sh
-case "$PATH" in
-  *"Now using node"*|*"pwd wrapper output"*)
-    printf '\''hook-path-contaminated\n'\''
-    exit 1
-    ;;
-esac
+## `vpt write-file pkg/node_modules/.bin/test-hook-cmd '#'\!'/usr/bin/env sh
 printf '\''init-hook-path-ok\n'\''
 '`
 
 
-## `vpt chmod +x node_modules/.bin/test-hook-cmd`
+## `vpt chmod +x pkg/node_modules/.bin/test-hook-cmd`
 
 
-## `vpt write-file .vite-hooks/pre-commit 'printf '\''init-loaded=%s\n'\'' "$HOOK_INIT_LOADED"
+## `vpt write-file pkg/.vite-hooks/pre-commit 'cd ./pkg
+printf '\''init-loaded=%s\n'\'' "$HOOK_INIT_LOADED"
 test-hook-cmd
 '`
 
@@ -33,7 +28,7 @@ test-hook-cmd
 
 ## `XDG_CONFIG_HOME=${VP_HOME}/hooks-init-config git hook run pre-commit`
 
-the init script runs, but path resolution bypasses its noisy cd and pwd functions
+the hook finds the package binary after the init script overrides PWD and defines noisy cd and pwd functions
 
 ```
 init-loaded=yes

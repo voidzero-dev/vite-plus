@@ -1372,11 +1372,7 @@ describe('hookScript', () => {
           encoding: 'utf8',
         });
 
-        const projectBin = join(realpathSync(tmp), 'node_modules', '.bin');
-        const expectedBins = projectBin.includes(':')
-          ? './node_modules/.bin'
-          : `${projectBin}:./node_modules/.bin`;
-        expect(output).toBe(`${expectedBins}:${inheritedPath}`);
+        expect(output).toBe(`./node_modules/.bin:${inheritedPath}`);
       } finally {
         rmSync(tmp, { recursive: true, force: true });
       }
@@ -1446,7 +1442,7 @@ describe('hookScript', () => {
           writeFileSync(join(nodeModulesBin, 'hook-command'), '#!/bin/sh\nprintf "%s" "$0"\n', {
             mode: 0o755,
           });
-          // A competing package must not redirect the dispatcher's cd through CDPATH.
+          // A competing package on CDPATH must not affect project command lookup.
           mkdirSync(join(root, 'shadow', pkg), { recursive: true });
         }
 

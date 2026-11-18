@@ -3,11 +3,11 @@ name = "command_config_hook_init_functions"
 vp = "local"
 steps = [
   { argv = ["git", "init"], snapshot = false },
-  { argv = ["vp", "config", "--no-agent", "--hooks-dir", ".vite-hooks"], snapshot = false },
-  { argv = ["vpt", "write-file", "node_modules/.bin/test-hook-cmd", "#!/usr/bin/env sh\ncase \"$PATH\" in\n  *\"Now using node\"*|*\"pwd wrapper output\"*)\n    printf 'hook-path-contaminated\\n'\n    exit 1\n    ;;\nesac\nprintf 'init-hook-path-ok\\n'\n"], snapshot = false },
-  { argv = ["vpt", "chmod", "+x", "node_modules/.bin/test-hook-cmd"], snapshot = false },
-  { argv = ["vpt", "write-file", ".vite-hooks/pre-commit", "printf 'init-loaded=%s\\n' \"$HOOK_INIT_LOADED\"\ntest-hook-cmd\n"], snapshot = false },
+  { argv = ["vp", "config", "--no-agent", "--hooks-dir", ".vite-hooks"], cwd = "pkg", snapshot = false },
+  { argv = ["vpt", "write-file", "pkg/node_modules/.bin/test-hook-cmd", "#!/usr/bin/env sh\nprintf 'init-hook-path-ok\\n'\n"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "pkg/node_modules/.bin/test-hook-cmd"], snapshot = false },
+  { argv = ["vpt", "write-file", "pkg/.vite-hooks/pre-commit", "cd ./pkg\nprintf 'init-loaded=%s\\n' \"$HOOK_INIT_LOADED\"\ntest-hook-cmd\n"], snapshot = false },
   { argv = ["vpt", "mkdir", "-p", "$VP_HOME/hooks-init-config/vite-plus"], snapshot = false },
   { argv = ["vpt", "cp", "hooks-init.sh", "$VP_HOME/hooks-init-config/vite-plus/hooks-init.sh"], snapshot = false },
-  { argv = ["git", "hook", "run", "pre-commit"], envs = [["XDG_CONFIG_HOME", "${VP_HOME}/hooks-init-config"]], comment = "the init script runs, but path resolution bypasses its noisy cd and pwd functions" },
+  { argv = ["git", "hook", "run", "pre-commit"], envs = [["XDG_CONFIG_HOME", "${VP_HOME}/hooks-init-config"]], comment = "the hook finds the package binary after the init script overrides PWD and defines noisy cd and pwd functions" },
 ]
