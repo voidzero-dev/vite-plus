@@ -88,10 +88,12 @@ export async function runRemoteTemplateCommand(
   const remotePackageName = templateInfo.command;
   const execArgs = [...templateInfo.args];
   const envs = templateInfo.envs;
-  const { command, args } = formatDlxCommand(remotePackageName, execArgs, workspaceInfo);
+  const { command: runner, args } = formatDlxCommand(remotePackageName, execArgs, workspaceInfo);
   if (!silent) {
-    prompts.log.info(`Running: ${gray(`${command} ${args.join(' ')}`)}`);
+    prompts.log.info(`Running: ${gray(`${runner} ${args.join(' ')}`)}`);
   }
+  // A Vite+ shim earlier on PATH would choose its own version, so launch the selected installation.
+  const command = workspaceInfo.downloadPackageManager.binPaths[runner] ?? runner;
   if (detectCreatedProjectDir) {
     return await runCommandAndDetectProjectDir(
       { command, args, cwd, envs },

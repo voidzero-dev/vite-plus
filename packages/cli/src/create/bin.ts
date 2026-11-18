@@ -687,27 +687,32 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     ? (detectedPackageManager ?? requestedPackageManager)
     : (requestedPackageManager ?? detectedPackageManager);
   const launcherPackageManager = detectLauncherPackageManager();
-  const packageManager =
+  const chosenPackageManager =
     (packageManagerOverride?.name as PackageManager | undefined) ??
     preferredPackageManager ??
-    launcherPackageManager ??
-    (await selectPackageManager(options.interactive, compactOutput));
+    launcherPackageManager;
+  // Only the non-interactive default is Vite+'s own choice, so only it may become npm when pnpm is unavailable.
+  const fallbackToNpm = chosenPackageManager === undefined && !options.interactive;
+  const selectedPackageManager =
+    chosenPackageManager ?? (await selectPackageManager(options.interactive, compactOutput));
   const packageManagerVersion =
     packageManagerOverride?.version ??
-    (packageManager === detectedPackageManager
+    (selectedPackageManager === detectedPackageManager
       ? workspaceInfoOptional.packageManagerVersion
       : 'latest');
   const shouldSilencePackageManagerInstallLog =
     compactOutput || (isMonorepo && workspaceInfoOptional.packageManager !== undefined);
   // ensure the package manager is installed by vite-plus
   const downloadResult = await downloadPackageManager(
-    packageManager,
+    selectedPackageManager,
     packageManagerVersion,
     options.interactive,
     shouldSilencePackageManagerInstallLog,
     workspaceInfoOptional.rootDir,
     packageManagerOverride?.expectedHash ?? undefined,
+    fallbackToNpm,
   );
+  const packageManager = downloadResult.name as PackageManager;
   let resolvedPackageManagerOverride: string | undefined;
   if (packageManagerOverride) {
     resolvedPackageManagerOverride = `${packageManager}@${downloadResult.version}`;

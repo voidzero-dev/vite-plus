@@ -436,7 +436,8 @@ impl PackageManagerBuilder {
                 &version_or_req,
                 hash.as_deref(),
             )
-            .await;
+            .await
+            .map(|(package_manager, _)| package_manager);
             // Nothing selected this family, so the npm that ships with Node.js will do.
             if source == PackageManagerSource::Default
                 && matches!(
@@ -576,6 +577,8 @@ impl PackageManager {
             let output = tokio::process::Command::new(executable.as_path())
                 .arg("--version")
                 .current_dir(cwd)
+                // User preloads can print to stdout; only the actual command should run them.
+                .env_remove("NODE_OPTIONS")
                 .output()
                 .await
                 .ok()?;
@@ -594,21 +597,27 @@ impl PackageManager {
     /// A system installation need not provide every binary in the tool family.
     #[must_use]
     pub fn bin_names(&self) -> Vec<&'static str> {
+        self.bin_paths().into_iter().map(|(name, _)| name).collect()
+    }
+
+    /// Like [`Self::bin_names`], with the executable each name resolves to,
+    /// such as `pnpm.exe` or `pnpm.cmd` on Windows.
+    #[must_use]
+    pub fn bin_paths(&self) -> Vec<(&'static str, AbsolutePathBuf)> {
         let self_real = std::env::current_exe().ok().and_then(|path| path.canonicalize().ok());
         self.client
             .bin_names()
             .iter()
-            .copied()
-            .filter(|tool| {
-                vp_command::resolve_bin(
+            .filter_map(|&tool| {
+                let path = vp_command::resolve_bin(
                     tool,
                     Some(self.bin_prefix.as_path().as_os_str()),
                     &self.bin_prefix,
                 )
-                .is_ok_and(|path| {
-                    path.parent() == Some(&*self.bin_prefix)
-                        && (self_real.is_none() || path.as_path().canonicalize().ok() != self_real)
-                })
+                .ok()?;
+                (path.parent() == Some(&*self.bin_prefix)
+                    && (self_real.is_none() || path.as_path().canonicalize().ok() != self_real))
+                    .then_some((tool, path))
             })
             .collect()
     }
@@ -616,6 +625,11 @@ impl PackageManager {
     #[must_use]
     pub fn get_bin_prefix(&self) -> AbsolutePathBuf {
         self.bin_prefix.clone()
+    }
+
+    #[must_use]
+    pub const fn get_client(&self) -> PackageManagerType {
+        self.client
     }
 
     #[must_use]
@@ -5875,6 +5889,29 @@ mod tests {
                 .await
                 .expect("the probe runs in the project that pins yarn");
         assert_eq!(manager.get_version(), "4.9.0");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test(flavor = "current_thread")]
+    async fn system_version_probe_ignores_node_preloads() {
+        use std::os::unix::fs::PermissionsExt;
+
+        // Like a `NODE_OPTIONS=--require` preload, the fake pnpm prints before its version.
+        let dir = tempfile::tempdir().unwrap();
+        let pnpm = dir.path().join("pnpm");
+        std::fs::write(&pnpm, "#!/bin/sh\n[ -n \"$NODE_OPTIONS\" ] && echo preload\necho 10.0.0\n")
+            .unwrap();
+        std::fs::set_permissions(&pnpm, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let pnpm = vt_path::AbsolutePathBuf::new(pnpm).unwrap();
+        let cwd = vt_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
+
+        let vars = [("NODE_OPTIONS", Some(std::ffi::OsStr::new("--require ./preload.js")))];
+        let manager = vp_shared::EnvConfig::with_vars_async(vars, |_| {
+            PackageManager::from_system_executable(PackageManagerType::Pnpm, &pnpm, &cwd)
+        })
+        .await
+        .expect("the preload output is not part of the version");
+        assert_eq!(manager.get_version(), "10.0.0");
     }
 
     #[cfg(unix)]

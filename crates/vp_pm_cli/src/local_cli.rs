@@ -8,6 +8,7 @@
 
 use vp_error::Error;
 use vt_path::{AbsolutePath, AbsolutePathBuf};
+use vt_str::Str;
 
 use crate::{
     PackageManager, PackageManagerType, ShimMode, download_package_manager_for_cwd,
@@ -60,17 +61,18 @@ impl Source {
     }
 }
 
-/// Provide `kind` the way the global install's mode allows.
+/// Provide `kind` the way the global install's mode allows, with the registry
+/// package that supplied a download (such as `@yarnpkg/cli-dist`).
 pub async fn provide_for_local_cli(
     cwd: &AbsolutePath,
     kind: PackageManagerType,
     version_or_latest: &str,
     expected_hash: Option<&str>,
-) -> Result<PackageManager, Error> {
+) -> Result<(PackageManager, Str), Error> {
     match Source::resolve(cwd, kind).await? {
         Source::System { executable, provision } => {
             match PackageManager::from_system_executable(kind, &executable, cwd).await {
-                Some(package_manager) => Ok(package_manager),
+                Some(package_manager) => Ok((package_manager, kind.to_string().into())),
                 // Like the global CLI, system-first falls back to a download when the system one fails.
                 None if provision == Provision::SystemFirst => {
                     download(cwd, kind, version_or_latest, expected_hash).await
@@ -85,18 +87,23 @@ pub async fn provide_for_local_cli(
     }
 }
 
-/// Like [`provide_for_local_cli`], but returns `None` for a system package manager
-/// without running it to read its version.
+/// Like [`provide_for_local_cli`], but returns `None` for a usable system package
+/// manager. Only system-first mode runs it to check.
 pub async fn managed_for_local_cli(
     cwd: &AbsolutePath,
     kind: PackageManagerType,
     version_or_latest: &str,
     expected_hash: Option<&str>,
 ) -> Result<Option<PackageManager>, Error> {
-    match Source::resolve(cwd, kind).await? {
-        Source::System { .. } => Ok(None),
-        Source::Download => download(cwd, kind, version_or_latest, expected_hash).await.map(Some),
+    if let Source::System { executable, provision } = Source::resolve(cwd, kind).await? {
+        // Only system-first can fall back, so only it pays for running the system one.
+        if provision != Provision::SystemFirst
+            || PackageManager::from_system_executable(kind, &executable, cwd).await.is_some()
+        {
+            return Ok(None);
+        }
     }
+    download(cwd, kind, version_or_latest, expected_hash).await.map(|(pm, _)| Some(pm))
 }
 
 async fn download(
@@ -104,10 +111,10 @@ async fn download(
     kind: PackageManagerType,
     version_or_latest: &str,
     expected_hash: Option<&str>,
-) -> Result<PackageManager, Error> {
-    let (install_dir, _, version) =
+) -> Result<(PackageManager, Str), Error> {
+    let (install_dir, package_name, version) =
         download_package_manager_for_cwd(cwd, kind, version_or_latest, expected_hash).await?;
-    Ok(PackageManager::from_install_dir(kind, version, install_dir))
+    Ok((PackageManager::from_install_dir(kind, version, install_dir), package_name))
 }
 
 fn find_system_executable(cwd: &AbsolutePath, kind: PackageManagerType) -> Option<AbsolutePathBuf> {
@@ -156,5 +163,41 @@ mod tests {
         assert!(
             matches!(source, Source::System { executable, .. } if executable.as_path() == pnpm)
         );
+    }
+
+    /// In system-first mode, a system pnpm that fails to run is replaced by a download.
+    #[tokio::test(flavor = "current_thread")]
+    async fn system_first_downloads_when_the_system_one_fails() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let home = tempfile::tempdir().unwrap();
+        std::fs::write(
+            home.path().join("config.json"),
+            r#"{"packageManagerShimModes":{"pnpm":"system_first"}}"#,
+        )
+        .unwrap();
+        let cwd = AbsolutePathBuf::new(home.path().to_path_buf()).unwrap();
+        // The registry has nothing, so a download attempt shows up as an error.
+        let registry = httpmock::MockServer::start_async().await.base_url();
+        let managed = |script: &'static str| {
+            let bin = home.path().join(if script.contains("exit") { "broken" } else { "working" });
+            std::fs::create_dir_all(&bin).unwrap();
+            let pnpm = bin.join("pnpm");
+            std::fs::write(&pnpm, script).unwrap();
+            std::fs::set_permissions(&pnpm, std::fs::Permissions::from_mode(0o755)).unwrap();
+            let vars = [
+                (env_vars::VP_HOME, Some(home.path().as_os_str().to_owned())),
+                ("PATH", Some(bin.into_os_string())),
+                ("NPM_CONFIG_REGISTRY", Some(registry.clone().into())),
+            ];
+            EnvConfig::with_vars_async(vars, |_| {
+                managed_for_local_cli(&cwd, PackageManagerType::Pnpm, "10.18.0", None)
+            })
+        };
+
+        let working = managed("#!/bin/sh\necho 10.18.0\n").await;
+        assert!(matches!(working, Ok(None)), "the working system pnpm is used: {working:?}");
+        let broken = managed("#!/bin/sh\nexit 1\n").await;
+        assert!(broken.is_err(), "the broken system pnpm is replaced by a download: {broken:?}");
     }
 }

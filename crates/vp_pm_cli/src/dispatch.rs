@@ -73,7 +73,7 @@ async fn dispatch_with_manager(
         ManagerSource::Detect { local_cli } => {
             if let Some((kind, version, hash)) = package_manager_override()? {
                 if local_cli {
-                    crate::provide_for_local_cli(cwd, kind, &version, hash.as_deref()).await?
+                    crate::provide_for_local_cli(cwd, kind, &version, hash.as_deref()).await?.0
                 } else {
                     build_selected_package_manager(cwd, kind, &version, hash.as_deref()).await?
                 }
