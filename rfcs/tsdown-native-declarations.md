@@ -1,172 +1,146 @@
 # RFC: Native declaration generation for `vp pack`
 
-Status: Proposed. Researched on 2026-11-11 against [PR #3352](https://github.com/voidzero-dev/vite-plus/pull/3352), head `8e76399da0512e2b5fcc6bb0774d4e9cbc967015`.
+Status: Proposed, experimental. Researched on 2026-11-19 against `main` at `1fbe723e9`.
 
 ## Decision
 
-Use the `tsrs` dependency introduced by #3352 to generate declarations for projects that do not install `typescript`. Select `dts.generator: 'tsrs'` through a Vite+ adapter. Keep the project's existing compiler when it supplies TypeScript 5, 6, or 7, and honor an explicit generator. Preserve Oxc generation for isolated declarations.
+When a `vp pack` build needs declarations and the project does not provide `typescript`, generate them with the `tsrs` package that `vite-plus` already ships for `vp lint` and `vp check`. In all other cases, keep the generator that tsdown and `rolldown-plugin-dts` (the declaration plugin) select today.
 
-The latest declaration plugin supports this integration. Its automatic selection does not select `tsrs`, even when that package is installed. Upgrading dependencies alone therefore does not provide the proposed default. The `tsrs` generator uses the TypeScript 7.1-compatible native API; `generator: 'tsgo'` remains a separate choice that loads the Microsoft `typescript` package. [Generator implementation](https://github.com/sxzz/rolldown-plugin-dts/blob/v0.30.1/src/options.ts), [native API loading](https://github.com/sxzz/rolldown-plugin-dts/blob/v0.30.1/src/tsgo.ts).
+Today this case fails with "TypeScript is not installed". The change turns that error into a working build. It does not change the output of a build that works today, because every other selection stays upstream.
 
-This makes a project-level `typescript` dependency unnecessary for supported `vp check` and `vp pack` workflows. It does not replace `tsc` tasks, the editor's compiler, Vue/Volar integrations, or dependencies that use the classic TypeScript API. Application type packages such as `@types/node` remain project dependencies when needed. Existing projects keep `typescript` unless a separate dependency audit establishes that they can remove it.
+The declaration plugin never selects `tsrs` automatically, even when it is installed. Its documentation says so, and the probe below confirms it. Vite+ therefore owns this default. [Generator option](https://github.com/sxzz/rolldown-plugin-dts/blob/v0.30.2/src/options.ts#L40-L58)
 
-Ship the native default first in the experimental release built on #3352. Promote it after the declaration, packaging, and platform gates below pass. TypeScript 7.1 is still a beta, and upstream marks the `tsrs` generator as highly experimental.
+The change does not replace `tsc` tasks, the editor's compiler, Vue/Volar integrations, or tools that use the classic TypeScript API. It does not remove `typescript` from existing projects. It does not change the default of the programmatic `build()` from `vite-plus/pack`. Upstream marks `tsrs` as highly experimental, and TypeScript 7.1 is still a beta. The default therefore ships as experimental.
 
-## Version baseline
+## Baseline
 
-These are researched versions, not floating release requirements. Refresh the matrix before implementation and pin the versions used for release qualification.
+| Component                                 | `main` today                                       | Required                                                                     |
+| ----------------------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `tsdown`, `@tsdown/css`, `@tsdown/exe`    | `0.23.4`                                           | `0.23.7`, kept in lockstep                                                   |
+| Declaration plugin bundled through tsdown | `0.28.8`, no `tsrs` generator                      | `0.30.x`; `0.30.2` was probed. The `tsrs` generator first ships in `0.29.0`. |
+| `tsrs`                                    | `=7.1.0-beta.tsrs2`, a CLI dependency used by lint | The same package, also used by pack. `7.1.0-beta.tsrs3` was probed too.      |
+| Bundled Rolldown                          | `1.2.19`                                           | `1.3.x`, which tsdown `0.23.7` requires (`~1.3.0`)                           |
 
-| Component | PR #3352 baseline | Proposed target |
-| --- | --- | --- |
-| `tsdown`, `@tsdown/css`, `@tsdown/exe` | `0.23.4` | `0.23.7`, kept in lockstep |
-| Declaration plugin bundled through tsdown | `rolldown-plugin-dts@0.28.8` | `0.30.1` |
-| Core's direct declaration-plugin development dependency | Catalog `^0.28.0` | Align with the bundled `0.30.1` |
-| Native compiler supplied by Vite+ | `tsrs@0.24.0-ts7.1.0-beta`, used by lint/check | Same exact package, also used by pack |
-| Microsoft compiler used as a parity reference | Project/repository compiler varies | Exact `typescript@7.1.0-beta` matching tsrs's source pin |
-| Bundled Rolldown | `1.2.18` | A validated `1.3.x` integration; tsdown `0.23.7` requires `~1.3.0` |
+This RFC assumes that the shared Vite and Rolldown 1.3 upgrade lands first. The tsdown and declaration-plugin upgrade then follows through the normal upgrade-deps process. That upgrade is a prerequisite, not part of this design. See [Out of scope](#out-of-scope) for the items that it must handle.
 
-The npm registry currently labels TypeScript `7.0.2` as `latest`, `7.1.0-beta` as `beta`, and `7.1.0-dev.20261111.1` as `next`. The design targets the beta API already supported by the pinned tsrs release, not a presumed stable TypeScript 7.1 release. [TypeScript registry metadata](https://registry.npmjs.org/typescript), [tsrs release and upstream pin](https://github.com/oxc-project/tsrs/blob/v0.24.0/docs/releases/0.24.0.md).
+tsdown `0.23.7` and the declaration plugin `0.30.2` require Node `^22.18.0 || ^24.11.0 || >=26.0.0`, the same range as `packages/cli`. `packages/core` still advertises Node 20, but its bundled tsdown `0.23.4` already requires `^22.18.0`. Fix that metadata separately.
 
-Two integration constraints precede the dependency update:
+### `tsrs` version coupling
 
-- Core redirects tsdown's Rolldown imports to its shared bundle. Updating tsdown does not install an independent runtime Rolldown for pack. Qualify a Vite version with the selected Rolldown `1.3.x` before changing that shared bundle. If the combination is not ready, defer the tsdown upgrade. Do not force the current bundle past its supported range. [Core import rewriting](../packages/core/build-support/rewrite-imports.ts), [Rolldown 1.3 release warning](https://github.com/rolldown/rolldown/releases/tag/v1.3.0).
-- Both target packages require Node `^22.18.0 || ^24.11.0 || >=26.0.0`. The PR's local CLI already declares this range; core still advertises Node 20 and a broader `>=24.11.0` range. Align core's metadata and document the change for direct core consumers. `vp migrate` can report incompatible runtime pins, but cannot make these dependencies run on Node 20. [tsdown manifest](https://github.com/rolldown/tsdown/blob/v0.23.7/package.json), [plugin manifest](https://github.com/sxzz/rolldown-plugin-dts/blob/v0.30.1/package.json).
+The declaration plugin supports "only the latest `tsrs` release", but its own repository pins `tsrs@0.24.0-ts7.1.0-beta` at `v0.30.2`. Vite+ updates `tsrs` on its own schedule for lint. One `tsrs` version serves lint and pack. [Plugin tsrs pin](https://github.com/sxzz/rolldown-plugin-dts/blob/v0.30.2/pnpm-workspace.yaml#L35)
 
-## User behavior
+- Treat each `tsrs` update and each declaration-plugin update as a pack change.
+- The upgrade-deps PR must pass the declaration fixtures below.
+- If an update breaks declaration emit, hold the update for both lint and pack. Do not ship a second `tsrs` for pack.
 
-A plain TypeScript library with a supported tsconfig needs only its normal `vite-plus` installation:
+## Selection rule
 
-```ts
-import { defineConfig } from 'vite-plus';
+Apply the rule to each resolved config in `packages/cli/src/pack-bin.ts`, after `resolveUserConfig()` and before `buildWithConfigs()`. At that point tsdown has resolved declaration enablement, including inference from `types`, `typings`, `exports.types`, and `compilerOptions.declaration`. The rule runs again on watch reloads because `runBuild` resolves the configs again. [tsdown dts inference](https://github.com/rolldown/tsdown/blob/v0.23.7/src/config/options.ts#L154-L166)
 
-export default defineConfig({
-  pack: {
-    entry: ['src/index.ts'],
-    dts: true,
-  },
-});
-```
+Select `generator: 'tsrs'` only when all of these conditions are true:
 
-If the project does not provide `typescript`, `vp pack` selects bundled tsrs. If it already provides TypeScript 5/6, the same configuration keeps the classic compiler. An existing project can select bundled tsrs without removing its other compiler:
+1. `config.dts` is an object, so declarations are enabled.
+2. The user did not set `dts.generator`.
+3. The effective tsconfig does not set `compilerOptions.isolatedDeclarations`. Upstream selects Oxc there, which works without TypeScript.
+4. The config does not use Vue or other Volar languages. These need the classic API, and upstream reports that requirement.
+5. `typescript` does not resolve from the declaration plugin's location.
 
-```ts
-pack: {
-  dts: { generator: 'tsrs' },
-}
-```
+Condition 5 uses the same lookup as the plugin, from the bundled tsdown in `@voidzero-dev/vite-plus-core`. It does not use the project root. The plugin loads the classic compiler with `createRequire(import.meta.url)` and the native API with `import.meta.resolve('typescript')`. A different origin can disagree with the plugin. [Classic loader](https://github.com/sxzz/rolldown-plugin-dts/blob/v0.30.2/src/require.ts#L5), [native loader](https://github.com/sxzz/rolldown-plugin-dts/blob/v0.30.2/src/tsgo.ts#L30-L42)
 
-Keep declaration enablement separate from compiler selection. Preserve `dts: false`, CLI overrides, executable defaults, and tsdown's inference from `types`, `typings`, `exports.types`, and `compilerOptions.declaration`. Installing tsrs must not start generating declarations for projects that previously disabled them. Apply the adapter after tsdown has resolved this enablement, including array/workspace configurations and watch reloads. [tsdown configuration resolution](https://github.com/rolldown/tsdown/blob/v0.23.7/src/config/options.ts).
+If all conditions are true but the config sets `dts.compilerOptions` or `dts.tsconfigRaw`, do not select `tsrs`. Fail with a diagnostic that names the options and two fixes: move them into a tsconfig, or install `typescript`. Native generators do not apply these options to the compiler program. In the probe, `dts.compilerOptions.stripInternal: true` had no effect and gave no warning. The build fails today in this case, so a clear error keeps the current result and does not publish different types.
 
-Keep `dts.typecheck` at its upstream default, `false`. Declaration emit can still fail on emit diagnostics; a complete type check remains an explicit choice. Keep #3352's existing `lint.options.typeCheck` behavior. This upgrade does not turn on additional checking for all pack builds.
+If no tsconfig exists, do not select `tsrs`, because native generators require one. Keep the upstream error.
 
-### Generator selection
+In every other case, leave the config unchanged. An explicit generator string or a custom `Generator` object stays as it is. Do not retry a failed check or emit with another compiler, because that can change published types and hide errors.
 
-Apply these rules in order for each enabled declaration build. Resolve project packages from the package that owns the build, with workspace inheritance bounded by the workspace root.
+### Compiler location
 
-| Condition | Behavior |
-| --- | --- |
-| Explicit generator string or custom `Generator` object | Preserve it and its options. Validate requirements; do not replace it after an error. |
-| Implicit generator with Vue/Volar, `resolver: 'tsc'`, or a requested classic-only capability | Use a compatible project TypeScript 5/6 compiler. If unavailable, report the specific requirement and migration action. |
-| `isolatedDeclarations: true`, without conflicting requirements | Keep Oxc. `typecheck: true` needs a checking generator; report the conflict instead of ignoring it. |
-| Project TypeScript 5/6 | Keep `tsc` and the selected project version. |
-| Project TypeScript exposes the required declaration API | Use `tsgo` with that package's module URL. |
-| Project TypeScript 7.0 | Retain the deprecated CLI backend that plugin `0.30.1` still supplies. Report its migration path; do not assume later plugin minors retain it. |
-| No project TypeScript, supported tsconfig and native options | Use bundled `tsrs`, with its module URL supplied by core. |
-| Unsupported or broken compiler installation/configuration | Fail before emission with a focused diagnostic. Do not reinterpret a broken installation as an absent compiler. |
+Pass `dts.tsrs.moduleUrl` as the file URL of the CLI's own `tsrs`, from `resolveBundled('tsrs')` in `packages/cli/src/utils/constants.ts`. Do this when Vite+ selects `tsrs`, and also when the user selects `generator: 'tsrs'` without a `moduleUrl`. A user value for `dts.tsrs.moduleUrl` stays as it is.
 
-An explicit `tsgo` selection continues to require a compatible Microsoft compiler. An explicit `tsrs.moduleUrl` or native executable path remains an advanced override. A `tsgo` options object alone is not a new generator selector; preserve upstream semantics and migrate old boolean selectors through the existing migration rules.
+The plugin loads `tsrs/async` relative to that URL. Lint and pack then use the same binary, and `@voidzero-dev/vite-plus-core` needs no new dependency. Without this URL, the plugin's default `import.meta.resolve('tsrs')` from core can fail in strict layouts, because core does not depend on `tsrs`.
 
-Native eligibility requires a real tsconfig, a supported platform, and the required `async`/`fs` exports and `Program.prototype.getDeclarationEmit` capability. Check capabilities as well as versions. Classify unsupported options before creating build outputs. Do not retry a failing type check, compiler crash, or declaration emit through a different compiler: that can change published types and conceal errors.
+### Hoisting
 
-### Compatibility limits
+Condition 5 depends on the install layout. A transitive `typescript` that resolves from core, for example through npm's flat layout or pnpm's hidden hoisting, makes upstream select `tsc` or `tsgo`. That is unchanged upstream behavior, but the generator for one project can change when its dependency tree changes. This pnpm behavior is expected, not tested.
 
-The native generators currently read program options from the on-disk tsconfig. They do not apply `dts.compilerOptions` or `dts.tsconfigRaw` to the compiler program. Declaration maps also require `compilerOptions.declarationMap` in that file. Preserve an existing classic compiler when these overrides matter; reject an incompatible explicit native selection with a migration diagnostic instead of silently ignoring settings. [Native option definitions](https://github.com/sxzz/rolldown-plugin-dts/blob/v0.30.1/src/options.ts).
+- When Vite+ selects `tsrs`, print one info line per build with the generator, the `tsrs` version, and the reason.
+- Print the `typescript` path that was found in debug output.
+- Document explicit `generator: 'tsrs'` for projects that need a fixed generator.
 
-Retain TypeScript 5/6 for Vue/Volar and classic API consumers. Treat non-Volar custom languages as explicit native configurations that require `vfs` and filename mapping. Preserve `runExternalCode: false` by default. Content mappers require an explicit opt-in and cannot combine with native VFS in the current plugin. TypeScript 7.1's new API does not make old compiler API plugins interchangeable. [Plugin integrations](https://github.com/sxzz/rolldown-plugin-dts/blob/v0.30.1/README.md), [TypeScript 7.1 API](https://devblogs.microsoft.com/typescript/announcing-typescript-7-1-beta/).
+## Experimental warning
 
-Native support makes the pinned compiler's language and library features available. It does not change `target`, `lib`, module resolution, runtime polyfills, or editor settings. Check syntax that also passes through Rolldown/Oxc, including import attributes, through the full pack pipeline before advertising support. A library that uses newer declaration syntax may need a higher minimum TypeScript version for its consumers; migration cannot downlevel arbitrary public types.
+The declaration plugin warns one time per process: "tsrs support is highly experimental and may change or break without notice." With `failOnWarn: true`, or `'ci-only'` in CI, this warning makes the process exit with status 1 after a successful emit.
 
-## Packaging and implementation
+`vp pack` itself defaults to `failOnWarn: false`, the tsdown default. The `--fail-on-warn` help text says `default: true`, which is a separate bug. The CLI command sets `ignoreOptionDefaultValue`, so that default is not applied.
 
-Keep ownership in the local packages. The global CLI continues to delegate to the project's `vite-plus`; it does not provide the compiler.
+When the user did not set `dts.generator`, add the exact warning to `suppressWarnings` before `resolveUserConfig()`. Keep the user's entries. tsdown builds its logger during resolution, so the entry cannot be added later. The warning fires only when `tsrs` runs, so the entry has no effect when Vite+ does not select `tsrs`. The info line above replaces the warning. When the user selects `tsrs` explicitly, keep the upstream warning. [tsdown suppressWarnings](https://github.com/rolldown/tsdown/blob/v0.23.7/src/config/types.ts#L495-L507)
 
-1. Add the same exact `tsrs` production dependency to core that #3352 adds to the CLI. Keep the CLI's direct dependency for lint resolution. Package managers can deduplicate matching versions, but neither package may rely on hoisting to the other. Avoid shipping a second Go compiler as a default fallback.
-2. Keep `tsrs` and its API subpaths external when rebuilding tsdown. Resolve the default `tsrs.moduleUrl` from core's own dependency. Preserve tsrs's SDK, platform binary, and adjacent standard libraries. The lint executable path is not a declaration API module URL.
-3. Update `mergePackageJson()` so upstream peer merging cannot replace the direct tsrs dependency with an optional peer. Keep `typescript` and the framework peers optional. Include TypeScript 7.1 prereleases in the effective peer range: tsdown's broad stable range alone does not admit `7.1.0-beta`.
-4. Audit the declaration plugin's new `yuku` dependency and its native packages. The existing build externalizes `yuku-parser@0.19.0`; plugin `0.30.1` uses `yuku@^0.27.0`. Replace the old packaging assumption with the resolved dependency graph and verify native loading from the published tarball. [Plugin dependencies](https://registry.npmjs.org/rolldown-plugin-dts/0.30.1).
-5. Put compiler selection in one core pack adapter, used by CLI resolution and public `build`/`resolveUserConfig` entry points. Preserve the remaining `vite-plus/pack` exports and custom generators. Hook after effective package/tsconfig discovery and before declaration-plugin construction, rather than setting a generator once in `pack-bin.ts` before defaults are known.
-6. Resolve explicitly selected project TypeScript from the owning package. The plugin's classic compiler loader currently has a module-global cache. Scope compiler contexts by resolved compiler URL and project, or obtain upstream provider injection before claiming mixed-version programmatic builds work. Do not change process-wide module resolution to switch compilers. [Classic compiler loading](https://github.com/sxzz/rolldown-plugin-dts/blob/v0.30.1/src/require.ts).
-7. Preserve the declaration externalization rules for `vite-plus`, Vitest, PostCSS, and Lightning CSS, including when declarations are enabled by inference. Keep public `vite-plus/test*` specifiers in output. Verify ESM/CJS filenames, exports, maps, and ambient declarations against the existing pack fixtures.
-8. Handle the expected native-backend notice without failing a successful build. `vp pack` defaults to `failOnWarn: true`; the plugin's experimental warning currently sets exit status 1 even when emit succeeds. Give that notice a structured upstream code and report it once as informational in the experimental Vite+ release. If a temporary adapter is needed, match only the pinned, known notice. Preserve failures for other warnings, including ignored compiler settings and missing maps.
+## Packaging
 
-Prefer an upstream integration hook for the adapter. If a local bundle transform is necessary, anchor it to the pinned source shape, assert the expected replacement count, and cover both CLI and programmatic calls. Do not add another public `native: true` switch alongside `dts.generator`.
+The local `vite-plus` package owns this behavior. The global CLI continues to delegate to the project's `vite-plus`, and it does not supply a compiler.
 
-Expose the declaration plugin version, bundled tsrs version, and TypeScript source version through toolchain metadata. Debug pack output should include the selected generator, compiler location, and selection reason. Check and pack can use different compilers when a project retains TypeScript; report those identities without claiming diagnostic equivalence.
+1. Keep the `tsrs` dependency in `packages/cli` only. Do not add it to core.
+2. Keep the plugin's optional `tsrs: "*"` peer, which `mergePackageJson()` in `packages/core/build.ts` copies into core. It serves direct core users who select `tsrs` programmatically.
+3. Show the declaration plugin version and the TypeScript version that `tsrs` targets in toolchain metadata, next to the existing `tsrs` entry.
 
-## `vp migrate`
+## Compatibility limits
 
-Extend the existing pack migration in [`crates/vp_migration/src/pack_config.rs`](../crates/vp_migration/src/pack_config.rs) and its TypeScript orchestration. Run it for existing Vite+ projects without requiring `--full`, including workspace packages and retained `tsdown.config.*` imports. Read the installed source toolchain before the final install, as the current versioned migration does.
-
-Separate schema updates from compiler adoption. Apply static, behavior-preserving schema changes on the normal upgrade path. Keep TypeScript 5/6/7 selection and dependencies unless a recognized obsolete native configuration requires a change. Unknown source versions take the conservative path; do not assume a fresh project.
-
-| Existing configuration | Automatic action | Boundary |
-| --- | --- | --- |
-| Top-level `dts.vue`, `build`, `parallel`, `eager`, `newContext` | Move them under `dts.tsc` and retain classic compiler selection where required. | Preserve explicit nested values; conflicting values or dynamic objects require a finding. |
-| Top-level `dts.incremental` | Move `true`; for `false`, preserve the old behavior of following tsconfig rather than writing the new disabling override. | Conflicts with `dts.tsc.incremental` need review. Do not implement this as a blind key rename. |
-| `dts.emitDtsOnly` / `dts.dtsInput` | Normalize equivalent static settings to `dts.dtsOnly`. | Conflicting aliases, or combination with `dts.entry`, need a resolved entry plan before editing. |
-| `dts.entry` whose matches are already build entries | Keep the filter; preserve its old base directory when different from the build's `cwd`. | For static workspace paths, rewrite patterns relative to the resolved declaration cwd. Do not change compiler-config discovery by changing `dts.cwd` without checking it. |
-| `dts.entry` that used to add declaration-only files | Add a separate declaration-only pack configuration with those inputs, and retain the original JS entry set. | Preserve names, output paths, maps, cleaning, and package exports. Dynamic globs/layouts or output collisions require review; never add JS outputs just to recover `.d.ts` files. |
-| Explicit `tsgo` backed only by `@typescript/native-preview` | For supported plain TS projects with no custom executable/options, select bundled `tsrs`; preserve the other project compiler and type-check settings. | Run native eligibility checks. Keep the original config and dependencies when checks fail; report the blocker. |
-| TypeScript 7.0 automatic/explicit `tsgo` | Keep the working `0.30.1` CLI bridge and identify it in the migration report. | Do not force a project-wide beta compiler upgrade. Native adoption remains an explicit `generator: 'tsrs'` change. |
-| Custom `tsgo.path` | Report the changed contract: on 7.1 it selects an API server executable. | Do not copy a CLI binary path into `tsrs.path` or assume API compatibility. |
-| Native compiler overrides or declaration maps configured only in `dts` | Create a project-owned pack tsconfig extending the original; set equivalent compiler options there and point only the affected pack config at it. | Move only static values, preserve effective `include`/`exclude`/`files`, references, relative paths, and project ownership. Keep shared configs unchanged. |
-
-The `dts.entry` and alias changes come from [tsdown 0.23.7](https://github.com/rolldown/tsdown/releases/tag/v0.23.7). The native-preview removal, executable-path change, and native map behavior come from [plugin 0.29](https://github.com/sxzz/rolldown-plugin-dts/releases/tag/v0.29.0). Preserve deprecated options through the compatibility window where the target plugin still accepts them; use migration to remove warnings and handle semantic changes.
-
-For a declaration-only split, generate a second `pack` array item using `dts: { dtsOnly: true }`, with no `dts.entry`. Run both through tsdown's existing shared cleanup in `buildWithConfigs`, and avoid competing export writes. Verify that watch cleanup retains each sibling's outputs. Only automate the split when the migrator can preserve the output contract. Otherwise report the exact missing declaration entries and retain the source configuration for review. [Shared cleanup implementation](https://github.com/rolldown/tsdown/blob/v0.23.7/src/build.ts).
-
-For a native-preview migration, remove that dependency only after checking scripts, imports, CI, shared workspace consumers, and package-manager catalogs. Retain standalone `tsgo` tasks that still use it. Do not add `typescript` to the generic bundled-package removal list, alias `typescript` to `tsrs`, or replace `tsc -b`/`tsc --emitDeclarationOnly` with `vp check`.
-
-Preserve comments, JSONC, workspace ownership, and explicit values. Use static AST transforms; do not evaluate a config to decide what to rewrite. Spreads, computed keys, conflicting aliases, unresolved package versions, and third-party config files produce actionable findings. Each finding names the file, unsupported setting, and next action. Running migration twice must produce no second diff. Stop a dependent rewrite if its prerequisite fails; do not leave a partially converted native configuration.
-
-Treat a configuration that the target toolchain cannot run as an upgrade blocker, not a successful migration with a warning. Identify it before the final dependency install and retain the previous toolchain when possible. If the user has already upgraded, report the incomplete migration and the supported rollback or manual edit. Keep harmless deprecations separate from these blockers in the migration report.
-
-For TypeScript 7 incompatibilities such as removed compiler options, retain the classic generator where possible. Report source-level type errors and public declaration incompatibilities for review. Do not weaken checking with `skipLibCheck`, `noCheck`, or disabled rules to make migration appear successful.
+- Native generators read program options only from the tsconfig file on disk. Declaration maps also need `compilerOptions.declarationMap` in that file. [Native option notes](https://github.com/sxzz/rolldown-plugin-dts/blob/v0.30.2/src/options.ts#L100-L122)
+- Vue/Volar and classic API consumers keep TypeScript 5/6.
+- Non-Volar custom languages need `tsrs.vfs`. Content mappers need the `runExternalCode` opt-in and cannot combine with VFS. Keep `runExternalCode: false`.
+- `tsrs` follows TypeScript 7.1 beta. Diagnostics and emitted declarations can differ from TypeScript 5/6. A library that uses newer declaration syntax can need a newer TypeScript in its consumers.
+- The rule does not change `target`, `lib`, module resolution, polyfills, or editor settings.
 
 ## Release gates
 
-| Area | Required evidence |
-| --- | --- |
-| No project compiler | Published CLI/core tarballs emit inferred declarations with no `typescript`, native-preview, or project `tsrs`; the native standard libraries resolve. |
-| Existing compilers | TypeScript 5.9, 6.0, 7.0, and 7.1 beta retain the intended generator. Explicit strings, custom generators, missing/corrupt compilers, and Oxc conflicts produce the documented outcomes. |
-| Packaging | npm, pnpm with `hoist: false`, Yarn PnP, and Bun; workspace and standalone installs; local CLI with no global `vp`; public config types with declaration checking enabled. |
-| Declarations | Compare old/new exports, `.d.ts`/`.d.mts`/`.d.cts`, maps, JSDoc, JS inputs, referenced projects, entry filters, and retained public imports. Compile representative consumer fixtures with the library's supported TS5/6/7 versions. |
-| Native parity | Compare tsrs with exact `typescript@7.1.0-beta` using identical options and inputs. Compare older compilers separately to identify version changes rather than mislabeling them as Rust defects. Assert real process exit codes, including the default `failOnWarn` behavior. |
-| Configuration | Arrays, callbacks, shared configs, `cwd`, disabled/inferred dts, CLI flags, inline compiler overrides, no tsconfig, Vue/Volar, VFS, and content-mapper opt-in. |
-| Lifecycle | Watch edit/add/delete/config changes, failed rebuild recovery, cancellation, multiple projects/compiler versions, API cleanup, and no stale declarations or leftover native processes. |
-| Migration | Existing Vite+ without `--full`, all supported package managers, catalogs, retained consumers, source-version detection, static rewrites, manual findings, and idempotence. |
-| Platforms | macOS x64/ARM64, Linux x64/ARM64 glibc/musl, Windows x64; Windows ARM64 remains a blocker inherited from #3352 until tsrs ships and passes native validation. |
+| Area                | Required evidence                                                                                                                                                                                                                     |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| No project compiler | Packed CLI and core tarballs emit inferred and explicit declarations with no `typescript` and no project `tsrs`. Check npm, pnpm with default hoisting and `hoist: false`, Yarn PnP, and Bun.                                         |
+| Selection           | No TypeScript selects `tsrs`. TypeScript 5.9 and 6.0 keep `tsc`. TypeScript 7.1 beta keeps `tsgo`. `isolatedDeclarations` keeps Oxc. An explicit generator stays. `dts.compilerOptions` without TypeScript fails with the diagnostic. |
+| Exit codes          | Automatic `tsrs` with `failOnWarn: true` exits 0. Explicit `tsrs` keeps the upstream warning. Type errors with `typecheck: true` still fail.                                                                                          |
+| Lifecycle           | Watch rebuilds after edits and config changes. No `tsrs` process remains after exit or cancellation.                                                                                                                                  |
+| Platforms           | macOS x64/ARM64, Linux x64/ARM64 glibc and musl, Windows x64/ARM64. `tsrs` ships a package for each of these eight targets. Check `yuku` on musl.                                                                                     |
+| Updates             | The upgrade-deps PR runs the declaration fixtures for each `tsrs` or declaration-plugin update.                                                                                                                                       |
 
-Use existing [`command_pack_dts_compat`](../crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/command_pack_dts_compat/snapshots.toml), pack package-manager/watch fixtures, [`pack.spec.ts`](../packages/cli/src/__tests__/pack.spec.ts), and migration tests. Add fixtures to the snapshot runner with the local registry. The native-preview fixture currently proves a supported path and must become an explicit migration regression rather than disappear.
+Add the cases to [`command_pack_dts_compat`](../crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/command_pack_dts_compat/snapshots.toml) with the local registry, and add unit coverage for the rule in [`pack.spec.ts`](../packages/cli/src/__tests__/pack.spec.ts).
 
-Measure cold emit, warm rebuilds, and peak memory on the same projects and compiler settings. Lint benchmarks from #3352 do not establish declaration performance or correctness. Keep tsrs's reference defaults; do not enable its fast preset as part of this change.
+The experimental release does not need performance or memory benchmarks, parity runs against TypeScript 5/6, VFS or content-mapper coverage, or several compiler versions in one process.
 
-## Delivery order
+## Upstream requests
 
-1. Qualify the Vite/Rolldown combination and update tsdown, its extensions, declaration plugin, native dependencies, and core engine/peer metadata. Retain supported legacy compiler paths.
-2. Add the shared pack adapter, native dependency resolution, toolchain reporting, and the no-TypeScript path. Keep this in the experimental release until its gates pass.
-3. Add the versioned migration transformations and manual findings before releasing the upgrade to existing projects. Include the native-preview and `dts.entry` transitions.
-4. Update pack documentation and plain TypeScript templates after validation. Omit TypeScript from new templates only when their scripts, editor setup, and framework dependencies permit it. Retain it in templates that need the classic API.
+1. tsdown: allow changes to `dts` in `tsdownConfigResolved`, or add a hook before the declaration plugin starts. The programmatic `build()` can then get the same default without the CLI seam. Today the hook documentation says that changes "are not supported". [tsdown plugin hooks](https://github.com/rolldown/tsdown/blob/v0.23.7/src/features/plugin.ts#L40-L51)
+2. Declaration plugin: test against the latest `tsrs` release, or declare a supported `tsrs` range.
+3. Declaration plugin: give the experimental warning a stable code, so suppression does not depend on its text.
 
-Keep these as small PRs stacked on #3352. Do not make a stable release until Windows ARM64 and the shared Rolldown integration have a supported outcome. The fallback release plan is to retain the previous qualified pack toolchain while completing these prerequisites, rather than introduce an untested compiler fallback.
+## Out of scope
+
+- **Dependency upgrade.** The tsdown `0.23.7`, declaration plugin `0.30.x`, and Rolldown 1.3 upgrade happens in its own PR. That PR must handle these upstream changes, in code or in `vp migrate`:
+  - `dts.entry` only filters build entries, and a matching file that is not an entry no longer gets a declaration. Its patterns resolve from tsdown's `cwd`. `dts.emitDtsOnly` and `dts.dtsInput` are deprecated aliases of `dts.dtsOnly`. ([tsdown 0.23.7](https://github.com/rolldown/tsdown/releases/tag/v0.23.7))
+  - `@typescript/native-preview` is no longer supported ([plugin 0.29.0](https://github.com/sxzz/rolldown-plugin-dts/releases/tag/v0.29.0)). Remove its peer and development dependency from `packages/core/package.json`. The `command_pack_dts_native_preview` snapshot case must become a migration regression.
+  - `tsgo.path` selects an API server executable on TypeScript 7.1.
+  - Top-level `dts.vue`, `build`, `incremental`, `parallel`, `eager`, and `newContext` are deprecated. The plugin moves them under `dts.tsc` at runtime with a warning, so migration only needs to remove warnings. [Plugin deprecations](https://github.com/sxzz/rolldown-plugin-dts/blob/v0.30.2/src/options.ts#L411-L435)
+  - The merged `typescript` peer range in `mergePackageJson()` must admit TypeScript 7.1 prereleases. The tsdown range `^5.0.0 || ^6.0.0 || ^7.0.0` overwrites the plugin range `~7.1.0-0`, so `7.1.0-beta` is outside the merged range.
+  - The plugin depends on `yuku@^0.28.0` instead of `yuku-parser@0.19.0`. Update the externalization in `packages/core/build.ts` from the resolved dependency graph. `@yuku-toolchain/*` publishes no musl package, so check loading on musl.
+- **Migration.** Rewrites that change the output layout, such as a separate declaration-only pack config, a generated pack tsconfig, or an automatic switch from native-preview to `tsrs`, start as report-only findings.
+- **Templates.** Remove `typescript` from plain TypeScript templates only after the gates pass, and only when their scripts, editor setup, and framework dependencies permit it.
+- **Programmatic default** for `build()` from `vite-plus/pack`, until upstream request 1 lands.
+- **Several TypeScript versions in one process.** The plugin caches one classic compiler per process.
 
 ## Design probe
 
-On macOS ARM64 with Node `24.22.2`, an isolated npm installation of `tsdown@0.23.7`, `rolldown-plugin-dts@0.30.1`, and `tsrs@0.24.0-ts7.1.0-beta` confirmed these behaviors:
+On macOS ARM64 with Node `24.22.3`, isolated npm installs of `tsdown@0.23.7`, `rolldown-plugin-dts@0.30.2`, and `rolldown@1.3.3` gave these results. The installs disabled lifecycle scripts and automatic peers.
 
-- `typescript` could not resolve, and upstream `dts: true` failed with the missing-TypeScript diagnostic.
-- Explicit `generator: 'tsrs'` emitted `export declare const answer: number;` without installing TypeScript.
-- Explicit `typecheck: true` rejected a string assigned to that numeric export.
-- With `failOnWarn: true`, emit completed and `build()` resolved, but the process exited with status 1 because of the experimental-backend warning. The adapter must handle this before the native default can ship.
+| Case                                                                                                     | Result                                                                                                            |
+| -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `dts: true`, no `typescript`                                                                             | Fails: "TypeScript is not installed".                                                                             |
+| `dts: true`, `tsrs` installed, no `typescript`                                                           | Same failure. Upstream does not select `tsrs`.                                                                    |
+| `isolatedDeclarations`, no `typescript`                                                                  | Oxc emits declarations.                                                                                           |
+| Explicit `tsrs`, with `7.1.0-beta.tsrs2` and `7.1.0-beta.tsrs3`                                          | Emits declarations, JSDoc, and declaration maps.                                                                  |
+| `tsrs.moduleUrl` that points to a separate install, with no `tsrs` near the plugin                       | Emits declarations.                                                                                               |
+| `typecheck: true` with a type error                                                                      | The build fails.                                                                                                  |
+| `dts.compilerOptions.stripInternal: true`                                                                | Ignored without a warning. The `@internal` export stays.                                                          |
+| `failOnWarn: true`                                                                                       | Emits, then exits with status 1 because of the experimental warning.                                              |
+| `failOnWarn: true` with the warning in `suppressWarnings`                                                | Exits 0.                                                                                                          |
+| `resolveUserConfig()`, then set the generator, then `buildWithConfigs()`, with dts inferred from `types` | Resolved `dts` is `{}`. The build emits declarations and exits 0 with the suppression. No `tsrs` process remains. |
 
-The probe used published packages from npm because the question depends on their shipped native API. Installation disabled lifecycle scripts and automatic peer installation. This checks the upstream integration premise only; it does not validate the proposed Vite+ adapter, migration, cross-platform support, or release performance.
+These results check the upstream premises and the CLI seam. They do not validate the Vite+ implementation, other package managers, or other platforms.
