@@ -8,7 +8,6 @@
 
 use std::process::ExitStatus;
 
-use chrono::Local;
 use console::style;
 use vp_pm_cli::{
     PackageManagerType, package_manager_bin_path, resolve_package_manager_install_dir,
@@ -299,8 +298,8 @@ async fn execute_package_binary(
     }
 
     // Format installation timestamp (date only)
-    let installed_local = metadata.installed_at.with_timezone(&Local);
-    let installed_str = installed_local.format("%Y-%m-%d").to_string();
+    let installed_local = metadata.installed_at.to_zoned(jiff::tz::TimeZone::system());
+    let installed_str = installed_local.strftime("%Y-%m-%d").to_string();
 
     // Print binary path (first line, uncolored, pipe-friendly)
     vp_shared::output::print_stdout_line(format_args!("{}", binary_path.as_path().display()));

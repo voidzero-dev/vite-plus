@@ -2,7 +2,7 @@
 
 use std::collections::HashSet;
 
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 use uuid::{Uuid, Version};
 use vt_path::AbsolutePathBuf;
@@ -49,7 +49,7 @@ pub struct PackageMetadata {
     /// Package manager used for installation (npm, yarn, pnpm)
     pub manager: String,
     /// Installation timestamp
-    pub installed_at: DateTime<Utc>,
+    pub installed_at: Timestamp,
 }
 
 /// Platform versions pinned to this package.
@@ -82,7 +82,7 @@ impl PackageMetadata {
             js_bins,
             version_spec: None,
             manager,
-            installed_at: Utc::now(),
+            installed_at: Timestamp::now(),
         }
     }
 

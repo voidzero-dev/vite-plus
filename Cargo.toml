@@ -175,7 +175,7 @@ bstr = { version = "1.12.0", default-features = false, features = ["alloc", "std
 bitflags = "2.13.0"
 brush-parser = "0.4.0"
 blake3 = "1.8.5"
-chrono = { version = "0.4", features = ["serde"] }
+jiff = { version = "0.2", features = ["serde"] }
 clap = "4.5.40"
 clap_complete = "4.6.0"
 console = "0.16.4"

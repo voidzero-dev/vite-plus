@@ -12,7 +12,7 @@ name = "vp"
 path = "src/main.rs"
 
 [dependencies]
-chrono = { workspace = true }
+jiff = { workspace = true }
 clap = { workspace = true, features = ["derive", "string"] }
 clap_complete = { workspace = true, features = ["unstable-dynamic"] }
 directories = { workspace = true }
