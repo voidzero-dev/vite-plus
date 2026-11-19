@@ -65,7 +65,12 @@ where
 
     if let CommandResolution::Run(command) = &mut resolution.outcome {
         let mut env = ToolPathEnv::from_env();
-        env.prepend(manager.get_bin_prefix(), &manager.bin_names(), PrependOptions::default())?;
+        // Promoting a system manager's directory can also shadow the selected Node.js.
+        env.prepend(
+            manager.get_bin_prefix(),
+            &manager.bin_names(),
+            PrependOptions { dedupe_anywhere: !manager.is_managed() },
+        )?;
         for (key, value) in env.into_envs() {
             command.env.insert(key.to_string(), value.to_string_lossy().into_owned());
         }
