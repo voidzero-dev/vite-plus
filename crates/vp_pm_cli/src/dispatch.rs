@@ -9,8 +9,11 @@ use vt_path::AbsolutePath;
 
 use crate::{
     EnvironmentPackageManagerResolution, PackageManager, PackageManagerType,
-    cli::PackageManagerCommand, download_package_manager_for_cwd, error::Error,
-    package_manager_override, resolution::run_resolution,
+    cli::PackageManagerCommand,
+    download_package_manager_for_cwd,
+    error::Error,
+    package_manager_override,
+    resolution::{CommandResolution, run_resolution},
 };
 
 #[derive(Debug)]
@@ -96,7 +99,13 @@ async fn dispatch_with_manager(
     };
     let package_manager = manager.client;
     let why_hint_packages = command.why_hint_packages(package_manager).map(<[String]>::to_vec);
-    let resolution = command.resolve_for_manager(&manager)?;
+    let mut resolution = command.resolve_for_manager(&manager)?;
+    if let CommandResolution::Run(command) = &mut resolution.outcome
+        && PackageManagerType::from_name(&command.program) == Some(package_manager)
+    {
+        // Run the manager used for version checks without changing its children's PATH.
+        command.program = manager.bin_prefix.join(&command.program).to_string();
+    }
     let status = run_resolution(cwd, resolution, render_diagnostics).await?;
     Ok(DispatchResult { status, why_hint_packages })
 }

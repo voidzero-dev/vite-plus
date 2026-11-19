@@ -106,6 +106,22 @@ pub async fn managed_for_local_cli(
     download(cwd, kind, version_or_latest, expected_hash).await.map(|(pm, _)| Some(pm))
 }
 
+/// Whether [`provide_for_local_cli`] can provide `kind`: it is on PATH, or the global
+/// install allows a download that `VP_ENV_FORBIDDEN` does not forbid.
+pub async fn is_available_for_local_cli(
+    cwd: &AbsolutePath,
+    kind: PackageManagerType,
+) -> Result<bool, Error> {
+    match Source::resolve(cwd, kind).await {
+        Ok(Source::System { .. }) => Ok(true),
+        Ok(Source::Download) => Ok(ensure_managed_package_manager_allowed(kind).is_ok()),
+        Err(Error::PackageManagerNotInstalled(_) | Error::DisabledByEnvForbidden { .. }) => {
+            Ok(false)
+        }
+        Err(error) => Err(error),
+    }
+}
+
 async fn download(
     cwd: &AbsolutePath,
     kind: PackageManagerType,
@@ -201,5 +217,36 @@ mod tests {
         assert!(matches!(working, Ok(None)), "the working system pnpm is used: {working:?}");
         let broken = managed("#!/bin/sh\nexit 1\n").await;
         assert!(broken.is_err(), "the broken system pnpm is replaced by a download: {broken:?}");
+    }
+
+    /// Under `VP_ENV_FORBIDDEN=1`, neither a download nor a managed pnpm on PATH
+    /// counts as available, even when a global install allows downloads.
+    #[cfg(unix)]
+    #[tokio::test(flavor = "current_thread")]
+    async fn env_forbidden_makes_managed_package_managers_unavailable() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let home = tempfile::tempdir().unwrap();
+        std::fs::write(home.path().join("config.json"), "{}").unwrap();
+        let bin = home.path().join("package_manager/pnpm/10.0.0/bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        let pnpm = bin.join("pnpm");
+        std::fs::write(&pnpm, "#!/bin/sh\n").unwrap();
+        std::fs::set_permissions(&pnpm, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let cwd = AbsolutePathBuf::new(home.path().to_path_buf()).unwrap();
+        let available = |kind: PackageManagerType, forbidden: Option<&'static str>| {
+            let vars = [
+                (env_vars::VP_HOME, Some(home.path().as_os_str())),
+                ("PATH", Some(bin.as_os_str())),
+                (env_vars::VP_ENV_FORBIDDEN, forbidden.map(OsStr::new)),
+            ];
+            let cwd = &cwd;
+            EnvConfig::with_vars_async(vars, move |_| is_available_for_local_cli(cwd, kind))
+        };
+
+        for kind in [PackageManagerType::Pnpm, PackageManagerType::Yarn] {
+            assert!(available(kind, None).await.unwrap(), "{kind} is available");
+            assert!(!available(kind, Some("1")).await.unwrap(), "{kind} is forbidden");
+        }
     }
 }

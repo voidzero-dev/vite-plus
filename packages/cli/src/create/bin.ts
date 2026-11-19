@@ -694,7 +694,8 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   // Only the non-interactive default is Vite+'s own choice, so only it may become npm when pnpm is unavailable.
   const fallbackToNpm = chosenPackageManager === undefined && !options.interactive;
   const selectedPackageManager =
-    chosenPackageManager ?? (await selectPackageManager(options.interactive, compactOutput));
+    chosenPackageManager ??
+    (await selectPackageManager(options.interactive, compactOutput, workspaceInfoOptional.rootDir));
   const packageManagerVersion =
     packageManagerOverride?.version ??
     (selectedPackageManager === detectedPackageManager
