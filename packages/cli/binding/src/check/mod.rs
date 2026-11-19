@@ -47,7 +47,7 @@ pub(crate) async fn execute_check(
     let suppress_unmatched = no_error_on_unmatched_pattern || (fix && has_paths);
     let mut fmt_fix_started: Option<Instant> = None;
     let mut deferred_lint_pass: Option<(String, String)> = None;
-    let resolved_vite_config = resolver.resolve_vite_config(CHECK_CONFIG_FIELDS).await?;
+    let resolved_vite_config = resolver.resolve_universal_vite_config(CHECK_CONFIG_FIELDS).await?;
 
     // Keep package runs on the root settings selected by `vp check`.
     // Direct `vp lint` and `vp fmt` leave config discovery to the tools.

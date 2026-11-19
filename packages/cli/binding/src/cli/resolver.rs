@@ -53,7 +53,7 @@ impl SubcommandResolver {
     }
 
     /// Resolve `fields` of the workspace root's Vite config.
-    pub(crate) async fn resolve_vite_config(
+    pub(crate) async fn resolve_universal_vite_config(
         &self,
         fields: &[&str],
     ) -> anyhow::Result<ResolvedUniversalViteConfig> {
@@ -449,7 +449,7 @@ mod tests {
         };
 
         // No config file: every block is absent, and JavaScript is not needed.
-        let config = resolver.resolve_vite_config(CHECK_FIELDS).await.unwrap();
+        let config = resolver.resolve_universal_vite_config(CHECK_FIELDS).await.unwrap();
         assert!(config.config_file.is_none() && config.lint.is_none() && config.fmt.is_none());
 
         let config_path = temp.path().join("vite.config.ts");
@@ -458,7 +458,7 @@ mod tests {
             "import { defineConfig } from 'vite-plus';\nexport default defineConfig({ lint: { options: { typeAware: true } }, fmt: null, check: { fmt: false } });",
         )
         .unwrap();
-        let config = resolver.resolve_vite_config(CHECK_FIELDS).await.unwrap();
+        let config = resolver.resolve_universal_vite_config(CHECK_FIELDS).await.unwrap();
         assert_eq!(config.config_file.as_deref(), config_path.to_str());
         assert_eq!(config.lint, Some(serde_json::json!({ "options": { "typeAware": true } })));
         assert_eq!(config.fmt, None);
@@ -466,7 +466,7 @@ mod tests {
 
         // A spread may hide any block, so the JavaScript resolver must run.
         std::fs::write(&config_path, "const base = {}; export default { ...base };").unwrap();
-        assert!(from_vite(resolver.resolve_vite_config(CHECK_FIELDS).await.unwrap()));
+        assert!(from_vite(resolver.resolve_universal_vite_config(CHECK_FIELDS).await.unwrap()));
 
         // A plugin's `config` hook may add `lint` or `check`, so the JavaScript resolver must run.
         std::fs::write(
@@ -474,7 +474,7 @@ mod tests {
             "import { defineConfig } from 'vite-plus';\nexport default defineConfig({ plugins: [typeCheck()], fmt: {} });",
         )
         .unwrap();
-        assert!(from_vite(resolver.resolve_vite_config(CHECK_FIELDS).await.unwrap()));
+        assert!(from_vite(resolver.resolve_universal_vite_config(CHECK_FIELDS).await.unwrap()));
 
         // Code after `module.exports = ...` may change `check`, so the JavaScript resolver must run.
         std::fs::remove_file(&config_path).unwrap();
@@ -483,7 +483,7 @@ mod tests {
             "module.exports = { check: { lint: false } };\nif (process.env.CI) module.exports.check.lint = true;",
         )
         .unwrap();
-        assert!(from_vite(resolver.resolve_vite_config(CHECK_FIELDS).await.unwrap()));
+        assert!(from_vite(resolver.resolve_universal_vite_config(CHECK_FIELDS).await.unwrap()));
     }
 
     #[tokio::test]
