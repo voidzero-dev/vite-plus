@@ -342,8 +342,8 @@ pub struct VersionResolution {
     pub source_path: Option<AbsolutePathBuf>,
     /// Project root directory (the directory containing the version source)
     pub project_root: Option<AbsolutePathBuf>,
-    /// Effective `onFail` of the `devEngines.runtime` node entry.
-    /// `None` for the other sources.
+    /// Effective `onFail` of the `devEngines.runtime` node entry: `Some`
+    /// exactly when `source` is [`VersionSource::DevEnginesRuntime`].
     pub on_fail: Option<OnFail>,
 }
 
@@ -351,30 +351,19 @@ impl VersionResolution {
     /// Validate the version for its source.
     ///
     /// Returns `Ok(None)` when the caller should skip this source and try the
-    /// lower-priority sources. A `devEngines.runtime` version follows
-    /// [`validate_dev_engines_runtime_version`]. The other sources also accept
-    /// Node.js aliases, and an invalid value prints a warning when `warn` is true.
+    /// lower-priority sources. A `devEngines.runtime` version must be semver and
+    /// follows the entry's `onFail` (see [`dev_engines_runtime_fallback`]). The
+    /// other sources follow [`validate_version`].
     ///
     /// # Errors
     /// Returns [`Error::InvalidDevEnginesRuntimeVersion`] when a
     /// `devEngines.runtime` version is not semver and its effective `onFail`
     /// is `error` or `download`.
     pub fn validated_version(&self, warn: bool) -> Result<Option<Str>, Error> {
-        if self.source == VersionSource::DevEnginesRuntime
-            && let Some(path) = &self.source_path
-        {
-            return validate_dev_engines_runtime_version(
-                &self.version,
-                self.on_fail.unwrap_or(OnFail::Error),
-                path,
-                warn,
-            );
+        if let (Some(on_fail), Some(path)) = (self.on_fail, &self.source_path) {
+            return validate_dev_engines_runtime_version(&self.version, on_fail, path, warn);
         }
-        if warn {
-            return Ok(normalize_version(&self.version, &self.source.to_string()));
-        }
-        let trimmed = self.version.trim();
-        Ok(is_valid_version(trimmed).then(|| trimmed.into()))
+        Ok(validate_version(&self.version, &self.source.to_string(), warn))
     }
 }
 
@@ -428,9 +417,7 @@ pub async fn resolve_node_version(
             let content = tokio::fs::read_to_string(&package_json_path).await?;
             if let Ok(pkg) = serde_json::from_str::<PackageJson>(&content) {
                 // Check devEngines.runtime first (dev-environment requirement)
-                if let Some((node_rt, on_fail)) = pkg.dev_engines_runtime_with_on_fail("node")
-                    && let Some(version) = &node_rt.version
-                {
+                if let Some((version, on_fail)) = pkg.dev_engines_runtime_version("node") {
                     return Ok(Some(VersionResolution {
                         version: version.clone(),
                         source: VersionSource::DevEnginesRuntime,
@@ -499,7 +486,7 @@ pub async fn resolve_node_version(
 ///
 /// `devEngines.runtime.version` must be semver. When the entry selects the
 /// version, an invalid value follows the entry's effective `onFail` (see
-/// [`validate_dev_engines_runtime_version`]). When a valid `.node-version`
+/// [`dev_engines_runtime_fallback`]). When a valid `.node-version`
 /// selects the version, the entry is only a compatibility constraint, so an
 /// invalid value prints a warning (unless `onFail` is `ignore`) and is skipped.
 ///
@@ -553,22 +540,16 @@ pub async fn download_runtime_for_project(project_path: &AbsolutePath) -> Result
     // The local devEngines.runtime is a fallback when `.node-version` is invalid
     // and a constraint for the compatibility check. Skip it when it is the
     // resolved source, which is already validated above.
-    let dev_engines_runtime =
-        if resolution.as_ref().is_some_and(|r| r.source == VersionSource::DevEnginesRuntime) {
+    let dev_engines_runtime = match pkg.as_ref() {
+        _ if resolution.as_ref().is_some_and(|r| r.source == VersionSource::DevEnginesRuntime) => {
             None
-        } else if let Some((entry, on_fail)) =
-            pkg.as_ref().and_then(|p| p.dev_engines_runtime_with_on_fail("node"))
-            && let Some(version) = &entry.version
-        {
-            if version_req.is_some() {
-                validate_dev_engines_runtime_constraint(version, on_fail, &package_json_path)
-            } else {
-                // As a fallback, the entry selects the version, so its onFail applies
-                validate_dev_engines_runtime_version(version, on_fail, &package_json_path, true)?
-            }
-        } else {
-            None
-        };
+        }
+        Some(pkg) if version_req.is_some() => {
+            dev_engines_runtime_constraint(pkg, &package_json_path, true)
+        }
+        Some(pkg) => dev_engines_runtime_fallback(pkg, &package_json_path, true)?,
+        None => None,
+    };
 
     let nvmrc = if version_req.is_none() {
         read_nvmrc_file(root).await.and_then(|v| normalize_version(&v, ".nvmrc"))
@@ -720,7 +701,7 @@ pub fn is_valid_version(version: &str) -> bool {
 pub fn is_valid_semver_version(version: &str) -> bool {
     let trimmed = version.trim();
 
-    if trimmed.is_empty() || NodeProvider::is_version_alias(trimmed) {
+    if trimmed.is_empty() {
         return false;
     }
 
@@ -734,7 +715,8 @@ pub fn is_valid_semver_version(version: &str) -> bool {
     Range::parse(trimmed).is_ok()
 }
 
-/// Validate a `devEngines.runtime` node version read from the manifest at `path`.
+/// Validate a `devEngines.runtime` node version read from the manifest at `path`
+/// when the entry selects the version.
 ///
 /// The devEngines spec allows only semver versions and ranges, so Node.js
 /// aliases such as `lts`, `lts/*`, `lts/iron`, and `latest` are invalid here,
@@ -742,13 +724,7 @@ pub fn is_valid_semver_version(version: &str) -> bool {
 /// entry's effective `onFail`, as in npm: `ignore` skips the entry, `warn`
 /// skips it with a warning (printed only when `warn` is true), and `error`
 /// and `download` fail, because no version is available to download.
-///
-/// Returns the trimmed version, or `Ok(None)` when the caller should skip the entry.
-///
-/// # Errors
-/// Returns [`Error::InvalidDevEnginesRuntimeVersion`] when the version is not
-/// semver and `on_fail` is `error` or `download`.
-pub fn validate_dev_engines_runtime_version(
+fn validate_dev_engines_runtime_version(
     version: &str,
     on_fail: OnFail,
     path: &AbsolutePath,
@@ -763,11 +739,7 @@ pub fn validate_dev_engines_runtime_version(
         OnFail::Ignore => Ok(None),
         OnFail::Warn => {
             if warn {
-                vp_shared::output::warn(&format!(
-                    "devEngines.runtime.version \"{trimmed}\" in {} is not a valid semver \
-                     range (see devEngines spec), ignoring",
-                    path.as_path().display()
-                ));
+                warn_invalid_dev_engines_runtime_version(trimmed, path);
             }
             Ok(None)
         }
@@ -778,21 +750,69 @@ pub fn validate_dev_engines_runtime_version(
     }
 }
 
-/// Validate a `devEngines.runtime` node version that is only a compatibility
-/// constraint, because a higher-priority source (a valid `.node-version`)
-/// selects the version.
+fn warn_invalid_dev_engines_runtime_version(version: &str, path: &AbsolutePath) {
+    vp_shared::output::warn(&format!(
+        "devEngines.runtime.version \"{version}\" in {} is not a valid semver range \
+         (see devEngines spec), ignoring",
+        path.as_path().display()
+    ));
+}
+
+/// The `devEngines.runtime` node version of `pkg`, read from `path`, as the
+/// fallback when the higher-priority `.node-version` in the same directory is
+/// invalid. The entry selects the version, so an invalid value follows its
+/// effective `onFail` (see [`VersionResolution::validated_version`]).
 ///
-/// An invalid value never fails here: it prints the warning of
-/// [`validate_dev_engines_runtime_version`] unless `on_fail` is `ignore`, like a
-/// version that does not satisfy the constraint. Returns the trimmed version
-/// when it is valid.
-pub fn validate_dev_engines_runtime_constraint(
-    version: &str,
-    on_fail: OnFail,
+/// # Errors
+/// Returns [`Error::InvalidDevEnginesRuntimeVersion`] when the version is not
+/// semver and the effective `onFail` is `error` or `download`.
+pub fn dev_engines_runtime_fallback(
+    pkg: &PackageJson,
     path: &AbsolutePath,
+    warn: bool,
+) -> Result<Option<Str>, Error> {
+    match pkg.dev_engines_runtime_version("node") {
+        Some((version, on_fail)) => {
+            validate_dev_engines_runtime_version(version, on_fail, path, warn)
+        }
+        None => Ok(None),
+    }
+}
+
+/// The `devEngines.runtime` node version of `pkg`, read from `path`, as a
+/// compatibility constraint only, because a valid `.node-version` in the same
+/// directory selects the version.
+///
+/// An invalid value never fails here: it prints a warning (when `warn` is true)
+/// unless its `onFail` is `ignore`, like a version that does not satisfy the
+/// constraint. Returns the trimmed version when it is valid.
+pub fn dev_engines_runtime_constraint(
+    pkg: &PackageJson,
+    path: &AbsolutePath,
+    warn: bool,
 ) -> Option<Str> {
-    let on_fail = if on_fail == OnFail::Ignore { OnFail::Ignore } else { OnFail::Warn };
-    validate_dev_engines_runtime_version(version, on_fail, path, true).ok().flatten()
+    let (version, on_fail) = pkg.dev_engines_runtime_version("node")?;
+    let trimmed = version.trim();
+    if is_valid_semver_version(trimmed) {
+        return Some(trimmed.into());
+    }
+    if warn && on_fail != OnFail::Ignore {
+        warn_invalid_dev_engines_runtime_version(trimmed, path);
+    }
+    None
+}
+
+/// Validate a version from a source that accepts Node.js aliases
+/// (`.node-version`, `engines.node`, `.nvmrc`): an exact version, a range, or
+/// an alias. Returns the trimmed version. An invalid value returns `None`,
+/// with the [`normalize_version`] warning when `warn` is true.
+#[must_use]
+pub fn validate_version(version: &Str, source: &str, warn: bool) -> Option<Str> {
+    if warn {
+        return normalize_version(version, source);
+    }
+    let trimmed = version.trim();
+    is_valid_version(trimmed).then(|| trimmed.into())
 }
 
 /// Normalize and validate a version string as semver (exact version or range) or LTS alias.
