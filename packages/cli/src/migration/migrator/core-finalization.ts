@@ -7,6 +7,7 @@ import { editJsonFile, readJsonFile } from '../../utils/json.ts';
 import { rulesDir } from '../../utils/path.ts';
 import {
   dropDeadOxlintPluginsDependency,
+  finalizeOxcConfigMigration,
   hasTsconfigTypesToRewrite,
   mergeTsdownConfigFile,
   migrateTaskCacheConfigInViteConfig,
@@ -84,6 +85,7 @@ export type CoreMigrationFinalizationResult = {
   scripts: boolean;
   tsconfigTypes: boolean;
   imports: boolean;
+  oxcConfigs: boolean;
   tsdownConfig: boolean;
   taskCacheConfig: boolean;
   // Kept out of the report so that review items alone do not make an
@@ -154,6 +156,7 @@ export function finalizeCoreMigrationForExistingVitePlus(
     scripts: false,
     tsconfigTypes: false,
     imports: false,
+    oxcConfigs: false,
     tsdownConfig: false,
     taskCacheConfig: false,
     taskCacheWarnings: [],
@@ -190,6 +193,15 @@ export function finalizeCoreMigrationForExistingVitePlus(
       migrateTaskCacheConfigInViteConfig(projectPath, silent, report, result.taskCacheWarnings) ||
       result.taskCacheConfig;
   }
+
+  // A failed migration may have installed Vite+ before merging these files.
+  // Finish that core work without opting into unrelated first-time setup.
+  result.oxcConfigs = finalizeOxcConfigMigration(
+    workspaceInfo.rootDir,
+    silent,
+    report,
+    workspaceInfo.packages,
+  );
 
   return result;
 }

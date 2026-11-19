@@ -1,0 +1,45 @@
+[[case]]
+name = "migration_oxc_ecosystem_pdfme"
+vp = "global"
+comment = "Reproduces the root and workspace config flags and playground inheritance in https://github.com/vite-plus-ecosystem-ci/pdfme/pull/7."
+steps = [
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", ".oxlintrc.json"],
+  ["vpt", "print-file", ".oxfmtrc.json"],
+  ["vpt", "print-file", "playground/.oxlintrc.json"],
+  ["vp", "run", "fmt"],
+  ["vpt", "print-file", "packages/common/src/index.ts"],
+  ["vp", "run", "fmt:check"],
+  ["vp", "run", "lint"],
+  ["vp", "run", "lint:root"],
+  { argv = ["vp", "lint", "-c", ".oxlintrc.json", "src"], cwd = "playground" },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "repeat migration and rerun scripts from both the root and a workspace" },
+  ["vp", "run", "fmt:check"],
+  { argv = ["vp", "run", "fmt"], cwd = "packages/common" },
+  { argv = ["vp", "run", "lint"], cwd = "packages/common" },
+  { argv = ["vpt", "write-file", "packages/common/src/index.ts", "console.log('hello')\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "playground/src/index.ts", "console.log('hello')\n"], snapshot = false },
+  { argv = ["vp", "run", "lint"], comment = "the workspace script must still use the root JSON rules", continue-on-failure = true },
+  { argv = ["vp", "lint", "-c", ".oxlintrc.json", "src"], cwd = "playground", comment = "the playground must still inherit the root JSON rules", continue-on-failure = true },
+]
+
+[[case]]
+name = "migration_oxc_ecosystem_pdfme_inline_config"
+vp = ["local", "global"]
+comment = "Explicit config paths in pdfme-style scripts must also work when inline lint and fmt options exist."
+steps = [
+  { argv = ["vpt", "write-file", "vite.config.mts", "export default { lint: { rules: { 'no-console': 'off' } }, fmt: { singleQuote: false, semi: true } };\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", ".oxlintrc.json"],
+  ["vpt", "print-file", ".oxfmtrc.json"],
+  ["vp", "run", "fmt"],
+  ["vpt", "print-file", "packages/common/src/index.ts"],
+  ["vp", "run", "fmt:check"],
+  ["vp", "run", "lint"],
+  ["vp", "run", "lint:root"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vp", "run", "fmt:check"],
+  { argv = ["vpt", "write-file", "packages/common/src/index.ts", "console.log('hello')\n"], snapshot = false },
+  { argv = ["vp", "run", "lint"], comment = "the explicit JSON rule must override the inline no-console setting", continue-on-failure = true },
+  { argv = ["vp", "run", "lint:root"], comment = "the root --config script must also use the explicit JSON rule", continue-on-failure = true },
+]

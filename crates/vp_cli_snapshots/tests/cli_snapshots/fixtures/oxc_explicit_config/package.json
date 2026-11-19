@@ -1,0 +1,9 @@
+{
+  "name": "@test/oxc-explicit-config",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lint:custom": "vp lint --config custom-lint.json index.js"
+  }
+}

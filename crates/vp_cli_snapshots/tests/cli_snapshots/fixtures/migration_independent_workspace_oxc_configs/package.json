@@ -1,0 +1,14 @@
+{
+  "name": "migration-independent-workspace-oxc-configs",
+  "private": true,
+  "type": "module",
+  "packageManager": "npm@11.8.0",
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "lint": "oxlint -c .oxlintrc.json root.js"
+  },
+  "devDependencies": {
+    "vite": "^8.3.4",
+    "oxlint": "^1.88.0"
+  }
+}
