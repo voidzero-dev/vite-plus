@@ -34,7 +34,8 @@ use clap_complete::env::CompleteEnv;
 use console::style;
 use vp_cli_help::error::{
     extract_invalid_subcommand_details, extract_unknown_argument, has_pass_as_value_suggestion,
-    print_invalid_subcommand_error, print_subcommand_suggestion, print_unknown_argument_error,
+    move_flags_after_command, print_invalid_subcommand_error, print_subcommand_suggestion,
+    print_unknown_argument_error,
 };
 use vp_shared::{exit_code_from_status, output};
 
@@ -549,10 +550,22 @@ async fn main() -> ExitCode {
                         &invalid_argument,
                         has_pass_as_value_suggestion(&e),
                     );
+                    // Like a top-level typo, offer the corrected order only as a prompt.
+                    let run_flags = <vt_workspace::package_filter::PackageQueryArgs as clap::Args>::augment_args(
+                        clap::Command::new("run"),
+                    );
+                    if let Some(corrected_raw_args) =
+                        move_flags_after_command(&raw_args, "run", &run_flags)
+                        && prompt_to_run_suggested_command(&corrected_raw_args.join(" "))
+                    {
+                        run_corrected_args(&cwd, &corrected_raw_args, explicit_chdir).await
+                    } else {
+                        clap_error_to_exit_code(&e)
+                    }
                 } else {
                     e.print().ok();
+                    clap_error_to_exit_code(&e)
                 }
-                clap_error_to_exit_code(&e)
             } else {
                 e.print().ok();
                 clap_error_to_exit_code(&e)

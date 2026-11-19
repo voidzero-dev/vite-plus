@@ -2,7 +2,7 @@ use clap::error::ErrorKind;
 use console::style;
 use vp_cli_help::error::{
     extract_invalid_subcommand_details, extract_unknown_argument, has_pass_as_value_suggestion,
-    print_subcommand_suggestion, print_unknown_argument_error,
+    move_flags_after_command, print_subcommand_suggestion, print_unknown_argument_error,
 };
 use vp_error::Error;
 use vp_shared::output;
@@ -17,7 +17,10 @@ use super::types::SynthesizableSubcommand;
 /// needs the names to point users at the global installation.
 const GLOBAL_ONLY_SUBCOMMANDS: &[&str] = &["env", "upgrade", "implode"];
 
-pub(super) fn handle_cli_parse_error(err: clap::Error) -> Result<ExitStatus, Error> {
+pub(super) fn handle_cli_parse_error(
+    err: clap::Error,
+    args: &[String],
+) -> Result<ExitStatus, Error> {
     if matches!(err.kind(), ErrorKind::InvalidSubcommand) && print_invalid_subcommand_error(&err) {
         return Ok(ExitStatus(err.exit_code() as u8));
     }
@@ -25,6 +28,13 @@ pub(super) fn handle_cli_parse_error(err: clap::Error) -> Result<ExitStatus, Err
         && let Some(invalid_argument) = extract_unknown_argument(&err)
     {
         print_unknown_argument_error(&invalid_argument, has_pass_as_value_suggestion(&err));
+        let run_flags =
+            <vt_workspace::package_filter::PackageQueryArgs as clap::Args>::augment_args(
+                clap::Command::new("run"),
+            );
+        if let Some(corrected_args) = move_flags_after_command(args, "run", &run_flags) {
+            print_subcommand_suggestion(&corrected_args.join(" "));
+        }
         return Ok(ExitStatus(err.exit_code() as u8));
     }
 
@@ -184,6 +194,45 @@ mod tests {
         let error = CLIArgs::try_parse_from(["vp", "--cache"]).expect_err("Expected parse error");
         assert_eq!(extract_unknown_argument(&error).as_deref(), Some("--cache"));
         assert!(!has_pass_as_value_suggestion(&error));
+    }
+
+    #[test]
+    fn run_flags_before_command_are_unknown_arguments() {
+        // `handle_cli_parse_error` suggests the corrected order only for this error kind.
+        let error = CLIArgs::try_parse_from(["vp", "--filter", "backend", "run", "dev"])
+            .expect_err("Expected parse error");
+        assert_eq!(error.kind(), ErrorKind::UnknownArgument);
+        assert_eq!(extract_unknown_argument(&error).as_deref(), Some("--filter"));
+    }
+
+    #[test]
+    fn every_vite_task_package_selection_flag_moves_after_run() {
+        // `vp_cli_help` tests a copy of these options; check each real one here.
+        use clap::{Args, Command};
+
+        let command =
+            vt_workspace::package_filter::PackageQueryArgs::augment_args(Command::new("run"));
+        let mut checked = 0;
+        for arg in command.get_arguments() {
+            let takes_value = arg.get_action().takes_values();
+            let long = arg.get_long().map(|long| format!("--{long}"));
+            let short = arg.get_short().map(|short| format!("-{short}"));
+            for flag in long.into_iter().chain(short) {
+                let mut leading = vec![flag.clone()];
+                if takes_value {
+                    leading.push("app".to_owned());
+                }
+                let input = [leading.clone(), vec!["run".to_owned(), "build".to_owned()]].concat();
+                let expected = [vec!["run".to_owned()], leading, vec!["build".to_owned()]].concat();
+                assert_eq!(
+                    move_flags_after_command(&input, "run", &command),
+                    Some(expected),
+                    "{flag}"
+                );
+                checked += 1;
+            }
+        }
+        assert!(checked > 0, "PackageQueryArgs exposes no flags");
     }
 
     #[test]
