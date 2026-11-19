@@ -7,7 +7,8 @@
 
 use vp_js_runtime::{
     NodeProvider, VersionSource, is_valid_version, normalize_version, read_nvmrc_file,
-    read_package_json, resolve_node_version, validate_dev_engines_runtime_version,
+    read_package_json, resolve_node_version, validate_dev_engines_runtime_constraint,
+    validate_dev_engines_runtime_version,
 };
 use vp_pm_cli::PackageManagerType;
 pub use vp_pm_cli::{Config, ShimMode, get_config_path, load_config, save_config};
@@ -230,6 +231,9 @@ pub(crate) async fn resolve_project_version_source(
         if let (Some(source_path), Some(project_root)) =
             (resolution.source_path, resolution.project_root)
         {
+            if warn_invalid && resolution.source == VersionSource::NodeVersionFile {
+                warn_invalid_shadowed_dev_engines_runtime(&project_root).await;
+            }
             return Ok(Some(ProjectVersionSource {
                 version: version.to_string(),
                 source: resolution.source.to_string(),
@@ -299,6 +303,21 @@ pub(crate) async fn resolve_project_version_source(
     }
 
     Ok(None)
+}
+
+/// Warn when a valid `.node-version` in `project_root` shadows a
+/// `devEngines.runtime` node entry with an invalid version.
+///
+/// The entry is only a compatibility constraint here, so it never fails
+/// (see `vp_js_runtime::validate_dev_engines_runtime_constraint`).
+async fn warn_invalid_shadowed_dev_engines_runtime(project_root: &AbsolutePath) {
+    let package_json_path = project_root.join("package.json");
+    if let Some(pkg) = read_package_json(&package_json_path).await.ok().flatten()
+        && let Some((entry, on_fail)) = pkg.dev_engines_runtime_with_on_fail("node")
+        && let Some(version) = &entry.version
+    {
+        validate_dev_engines_runtime_constraint(version, on_fail, &package_json_path);
+    }
 }
 
 fn validate_version_spec(

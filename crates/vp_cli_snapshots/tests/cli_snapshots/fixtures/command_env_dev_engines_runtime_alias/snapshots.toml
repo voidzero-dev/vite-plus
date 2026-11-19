@@ -8,5 +8,8 @@ steps = [
   { argv = ["vp", "env", "current", "node", "--json"], comment = "the default onFail (error) fails instead of resolving the alias", continue-on-failure = true },
   { argv = ["node", "--version"], comment = "the node shim reports the same error", continue-on-failure = true },
   { argv = ["vpt", "json-edit", "package.json", "devEngines.runtime.onFail", "warn"], snapshot = false, continue-on-failure = true },
-  { argv = ["vp", "env", "current", "node", "--json"], comment = "onFail warn skips the entry with a warning, so engines.node selects the version" },
+  { argv = ["vp", "env", "current", "node", "--json"], comment = "onFail warn skips the entry with a warning, so engines.node selects the version", continue-on-failure = true },
+  { argv = ["vpt", "json-edit", "package.json", "devEngines.runtime.onFail", "error"], snapshot = false, continue-on-failure = true },
+  { argv = ["vpt", "write-file", ".node-version", "22.23.4"], snapshot = false },
+  { argv = ["vp", "env", "current", "node", "--json"], comment = "a valid .node-version selects the version: the invalid devEngines.runtime is only a constraint, so it warns and does not fail" },
 ]

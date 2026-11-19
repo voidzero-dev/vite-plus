@@ -44,3 +44,28 @@ warn: devEngines.runtime.version "lts/*" in <workspace>/package.json is not a va
   }
 }
 ```
+
+## `vpt json-edit package.json devEngines.runtime.onFail error`
+
+
+## `vpt write-file .node-version 22.23.4`
+
+
+## `vp env current node --json`
+
+a valid .node-version selects the version: the invalid devEngines.runtime is only a constraint, so it warns and does not fail
+
+```
+warn: devEngines.runtime.version "lts/*" in <workspace>/package.json is not a valid semver range (see devEngines spec), ignoring
+{
+  "node": {
+    "version": "22.23.4",
+    "source": ".node-version",
+    "source_path": "<workspace>/.node-version",
+    "project_root": "<workspace>",
+    "bin_path": "<home>/.vite-plus/js_runtime/node/<version>/bin/node",
+    "installed": false,
+    "mode": "managed"
+  }
+}
+```

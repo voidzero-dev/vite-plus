@@ -529,8 +529,11 @@ pub async fn download_runtime_for_project(project_path: &AbsolutePath) -> Result
         None => None,
     };
 
-    // For compatibility checking, we need to read all sources from the local package.json
-    let package_json_path = project_path.join("package.json");
+    // The lower-priority sources for the fallback and the compatibility check
+    // come from the directory where resolution stopped, which can be an
+    // ancestor of the project path
+    let root = resolution.as_ref().and_then(|r| r.project_root.as_deref()).unwrap_or(project_path);
+    let package_json_path = root.join("package.json");
     let pkg = read_package_json(&package_json_path).await?;
 
     let engines_node = pkg
@@ -549,22 +552,17 @@ pub async fn download_runtime_for_project(project_path: &AbsolutePath) -> Result
             pkg.as_ref().and_then(|p| p.dev_engines_runtime_with_on_fail("node"))
             && let Some(version) = &entry.version
         {
-            // As a fallback, the entry selects the version, so its onFail applies.
-            // As a constraint only, an invalid entry only warns, like a version
-            // that does not satisfy the constraint.
-            let on_fail = match on_fail {
-                OnFail::Ignore => OnFail::Ignore,
-                _ if version_req.is_some() => OnFail::Warn,
-                on_fail => on_fail,
-            };
-            validate_dev_engines_runtime_version(version, on_fail, &package_json_path, true)?
+            if version_req.is_some() {
+                validate_dev_engines_runtime_constraint(version, on_fail, &package_json_path)
+            } else {
+                // As a fallback, the entry selects the version, so its onFail applies
+                validate_dev_engines_runtime_version(version, on_fail, &package_json_path, true)?
+            }
         } else {
             None
         };
 
     let nvmrc = if version_req.is_none() {
-        let root =
-            resolution.as_ref().and_then(|r| r.project_root.as_deref()).unwrap_or(project_path);
         read_nvmrc_file(root).await.and_then(|v| normalize_version(&v, ".nvmrc"))
     } else {
         None
@@ -770,6 +768,23 @@ pub fn validate_dev_engines_runtime_version(
             path: path.into(),
         }),
     }
+}
+
+/// Validate a `devEngines.runtime` node version that is only a compatibility
+/// constraint, because a higher-priority source (a valid `.node-version`)
+/// selects the version.
+///
+/// An invalid value never fails here: it prints the warning of
+/// [`validate_dev_engines_runtime_version`] unless `on_fail` is `ignore`, like a
+/// version that does not satisfy the constraint. Returns the trimmed version
+/// when it is valid.
+pub fn validate_dev_engines_runtime_constraint(
+    version: &str,
+    on_fail: OnFail,
+    path: &AbsolutePath,
+) -> Option<Str> {
+    let on_fail = if on_fail == OnFail::Ignore { OnFail::Ignore } else { OnFail::Warn };
+    validate_dev_engines_runtime_version(version, on_fail, path, true).ok().flatten()
 }
 
 /// Normalize and validate a version string as semver (exact version or range) or LTS alias.
@@ -1553,6 +1568,26 @@ mod tests {
 
             // The alias is not resolved: engines.node selects the version
             let runtime = download_runtime_for_project(&temp_path).await.unwrap();
+            assert_eq!(runtime.version(), "20.19.0");
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn test_parent_dev_engines_runtime_alias_falls_through_to_parent_engines_node() {
+        with_mock_mirror(&["20.19.0"], |temp_path| async move {
+            let child = temp_path.join("child");
+            tokio::fs::create_dir(&child).await.unwrap();
+            let package_json = r#"{
+  "devEngines": {"runtime": {"name": "node", "version": "lts/*", "onFail": "warn"}},
+  "engines": {"node": "^20.18.0"}
+}"#;
+            tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+            tokio::fs::write(temp_path.join(".nvmrc"), "22.21.0\n").await.unwrap();
+
+            // The fallback uses the directory of the skipped entry, not the child,
+            // so engines.node wins over the lower-priority .nvmrc
+            let runtime = download_runtime_for_project(&child).await.unwrap();
             assert_eq!(runtime.version(), "20.19.0");
         })
         .await;

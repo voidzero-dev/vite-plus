@@ -209,7 +209,7 @@ When an invalid version (an alias or any other non-semver value) would select th
 | `warn`            | Print the same message as a warning and continue with the lower-priority sources                       |
 | `ignore`          | Continue with the lower-priority sources without a message                                             |
 
-When a valid `.node-version` selects the version, `devEngines.runtime` is only a compatibility constraint. An invalid value then prints the warning (unless `onFail` is `ignore`) and does not fail, like a version that does not satisfy the constraint. `vp env doctor` reports the invalid value in both cases.
+When a valid `.node-version` in the same directory selects the version, `devEngines.runtime` is only a compatibility constraint. An invalid value then prints the warning (unless `onFail` is `ignore`) and does not fail, like a version that does not satisfy the constraint. `vp env doctor` reports the invalid value in both cases.
 
 When `.node-version` is the write target and a `devEngines.runtime` node entry also exists:
 
