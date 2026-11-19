@@ -1,16 +1,16 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     path::{Path, PathBuf},
     sync::LazyLock,
 };
 
 use ast_grep_config::RuleConfig;
-use ast_grep_language::SupportLang;
+use ast_grep_language::{LanguageExt, SupportLang};
 use rayon::prelude::*;
 use regex::Regex;
 use vp_error::Error;
 
-use crate::{ast_grep, file_walker, import_merge, pack_config};
+use crate::{ImportRuleConfig, ast_grep, file_walker, import_merge, pack_config};
 
 /// ast-grep rules for rewriting vite imports and declare module statements
 ///
@@ -270,7 +270,7 @@ fix: $NEW_IMPORT
 /// fails at runtime with `ERR_PACKAGE_PATH_NOT_EXPORTED`. The original
 /// specifier still resolves through the transitively-installed `vitest`
 /// dependency.
-const REWRITE_VITEST_RULES: &str = r#"---
+const REWRITE_VITEST_CONFIG_RULES: &str = r#"---
 id: rewrite-vitest-config-import
 language: TypeScript
 rule:
@@ -344,7 +344,10 @@ transform:
       replace: vitest/config
       by: "vite-plus"
 fix: $NEW_IMPORT
----
+"#;
+
+// The dependency scan uses these same four import contexts for upstream packages.
+const REWRITE_BARE_VITEST_RULES: &str = r#"---
 id: rewrite-vitest-import
 language: TypeScript
 rule:
@@ -418,7 +421,9 @@ transform:
       replace: vitest
       by: "vite-plus/test"
 fix: $NEW_IMPORT
----
+"#;
+
+const REWRITE_VITEST_BROWSER_AND_SUBPATH_RULES: &str = r#"---
 id: rewrite-vitest-browser-import
 language: TypeScript
 rule:
@@ -1578,13 +1583,13 @@ fn vitest_rewrite_rules() -> String {
         .map(|name| regex::escape(name))
         .collect::<Vec<_>>()
         .join("|");
-    let generic = REWRITE_VITEST_RULES.replace(
+    let browser_and_subpaths = REWRITE_VITEST_BROWSER_AND_SUBPATH_RULES.replace(
         r#"regex: ^['"]vitest/.+['"]$"#,
         &format!(r#"regex: ^['"]vitest/({allowed})['"]$"#),
     );
     // Exact public replacements run before the generic subpath rules. Each
     // generated rule retains the same AST context and Nuxt skip classification.
-    let template = REWRITE_VITEST_RULES
+    let template = REWRITE_VITEST_BROWSER_AND_SUBPATH_RULES
         .split("---\nid: rewrite-vitest-subpath-import")
         .nth(1)
         .expect("missing subpath rule template");
@@ -1616,7 +1621,9 @@ fn vitest_rewrite_rules() -> String {
         );
         rules.push('\n');
     }
-    rules.push_str(&generic);
+    rules.push_str(REWRITE_VITEST_CONFIG_RULES);
+    rules.push_str(REWRITE_BARE_VITEST_RULES);
+    rules.push_str(&browser_and_subpaths);
     rules
 }
 
@@ -1637,12 +1644,26 @@ fn is_unscoped_vitest_rule(rule: &RuleConfig<SupportLang>) -> bool {
         || rule.id.starts_with("rewrite-vitest-subpath-")
 }
 
-static PARSED_UNSCOPED_VITEST_RULES: LazyLock<Vec<RuleConfig<SupportLang>>> = LazyLock::new(|| {
-    ast_grep::load_rules(&vitest_rewrite_rules())
-        .expect("failed to parse vitest rewrite rules")
-        .into_iter()
-        .filter(is_unscoped_vitest_rule)
-        .collect()
+fn has_unscoped_vitest_import(content: &str) -> bool {
+    let parsed = SupportLang::TypeScript.ast_grep(content);
+    let root = parsed.root();
+    PARSED_VITEST_RULES
+        .iter()
+        .any(|rule| is_unscoped_vitest_rule(rule) && root.find(&rule.matcher).is_some())
+}
+
+const RETAINED_VITEST_DEPENDENCIES: [&str; 3] =
+    ["vitest", "@vitest/browser", "@vitest/browser-preview"];
+
+// Reuse the import, re-export, require, and dynamic/type-import contexts from
+// the bare Vitest rewrite. A preserved subpath needs its package regardless of
+// whether Vite+ exports a corresponding shim for that particular entry point.
+static RETAINED_VITEST_IMPORT_RULES: LazyLock<Vec<RuleConfig<SupportLang>>> = LazyLock::new(|| {
+    let rules = REWRITE_BARE_VITEST_RULES.replace(
+        r#"regex: ^['"]vitest['"]$"#,
+        &format!(r#"regex: ^['"](?:{})(?:/[^'"]+)?['"]$"#, RETAINED_VITEST_DEPENDENCIES.join("|")),
+    );
+    ast_grep::load_rules(&rules).expect("failed to parse Vitest dependency import rules")
 });
 
 static PARSED_VITEST_RULES_WITHOUT_UNSCOPED: LazyLock<Vec<RuleConfig<SupportLang>>> =
@@ -1777,22 +1798,12 @@ fn apply_regex_replace(content: &mut String, re: &Regex, replacement: &str) -> b
     }
 }
 
-/// Rewrite `/// <reference types="..." />` directives in place.
-///
-/// Only processes the file preamble (blank lines and comments before the first statement)
-/// to match TypeScript semantics and avoid false positives inside string/template literals.
-/// Allocates only for preamble lines, leaving the file body untouched.
-/// Returns whether any changes were made.
-fn rewrite_reference_types(
-    content: &mut String,
-    skip_packages: &SkipPackages,
-    preserve_unscoped_vitest: bool,
-    preserved_vitest: &mut bool,
-) -> bool {
+/// TypeScript only recognizes triple-slash reference directives in the file preamble.
+fn reference_preamble(content: &str) -> &str {
     // Fast path: skip files with no triple-slash reference directives.
     // Check for "///" which covers all spacing variants (///<ref, /// <ref, ///\t<ref).
     if !content.contains("///") {
-        return false;
+        return "";
     }
 
     // Find the byte offset where the preamble ends.
@@ -1870,10 +1881,25 @@ fn rewrite_reference_types(
 
     // Guard: unclosed block comment means the file has a syntax error; skip rewriting.
     if in_block_comment {
-        return false;
+        return "";
     }
 
-    let preamble = &content[..preamble_end];
+    &content[..preamble_end]
+}
+
+fn is_unscoped_vitest_reference(line: &str) -> bool {
+    RE_REF_VITEST.is_match(line) || RE_REF_VITEST_SUBPATH.is_match(line)
+}
+
+/// Rewrite triple-slash type references in the preamble, leaving the file body untouched.
+fn rewrite_reference_types(
+    content: &mut String,
+    skip_packages: &SkipPackages,
+    preserve_unscoped_vitest: bool,
+    preserved_vitest: &mut bool,
+) -> bool {
+    let preamble = reference_preamble(content);
+    let preamble_end = preamble.len();
     // Check for "///" which covers all spacing variants (///<ref, /// <ref, etc.)
     if !preamble.contains("///") {
         return false;
@@ -1905,11 +1931,7 @@ fn rewrite_reference_types(
             // preserved, and the preservation must be reported so the migrate
             // summary counts files whose only upstream reference is a
             // triple-slash directive (ast-grep never sees those).
-            if preserve_unscoped_vitest
-                && (RE_REF_VITEST_CONFIG.is_match(line)
-                    || RE_REF_VITEST_SUBPATH.is_match(line)
-                    || RE_REF_VITEST.is_match(line))
-            {
+            if preserve_unscoped_vitest && is_unscoped_vitest_reference(line) {
                 *preserved_vitest = true;
                 continue;
             }
@@ -2037,7 +2059,7 @@ fn rewrite_reference_types(
     changed
 }
 
-/// Packages to skip rewriting based on peerDependencies or dependencies
+/// Package imports excluded from rewriting in a file.
 #[derive(Debug, Clone, Copy, Default)]
 struct SkipPackages {
     /// Skip rewriting vite imports (vite is in peerDependencies or dependencies)
@@ -2062,6 +2084,8 @@ struct PackageRewriteContext {
 /// Options controlling directory-wide import rewriting.
 #[derive(Debug, Clone, Default)]
 pub struct RewriteImportsOptions {
+    /// Effective settings for `vite-plus/prefer-vite-plus-imports` from the root lint config.
+    pub import_rule: ImportRuleConfig,
     /// Preserve `vitest` and `vitest/*` module specifiers throughout packages
     /// whose nearest package.json declares `@nuxt/test-utils`.
     pub preserve_vitest_in_nuxt_packages: bool,
@@ -2100,6 +2124,76 @@ fn find_nearest_package_json(file_path: &Path, root: &Path) -> Option<PathBuf> {
     }
 
     None
+}
+
+fn retained_vitest_dependency(specifier: &str) -> Option<&'static str> {
+    RETAINED_VITEST_DEPENDENCIES.into_iter().find(|name| {
+        specifier.strip_prefix(name).is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
+    })
+}
+
+fn collect_retained_vitest_dependencies(content: &str, dependencies: &mut BTreeSet<&'static str>) {
+    if !RETAINED_VITEST_DEPENDENCIES
+        .iter()
+        .any(|name| !dependencies.contains(name) && content.contains(name))
+    {
+        return;
+    }
+    for line in reference_preamble(content).trim_start_matches('\u{feff}').lines() {
+        if let Some(captures) = RE_REF_TEST_ENTRY.captures(line) {
+            dependencies.extend(retained_vitest_dependency(&captures[2]));
+        }
+    }
+    let parsed = SupportLang::TypeScript.ast_grep(content);
+    let root = parsed.root();
+    for rule in &*RETAINED_VITEST_IMPORT_RULES {
+        for matched in root.find_all(&rule.matcher) {
+            // A string in `export default 'vitest'` is a value, not a module source.
+            if rule.id == "rewrite-vitest-export"
+                && matched.parent().and_then(|export| export.field("source")).is_none()
+            {
+                continue;
+            }
+            dependencies
+                .extend(retained_vitest_dependency(matched.text().trim_matches(['\'', '"'])));
+            if dependencies.len() == RETAINED_VITEST_DEPENDENCIES.len() {
+                return;
+            }
+        }
+    }
+}
+
+/// Group protected imports by their nearest manifest. The migration caller
+/// can then determine which workspace package supplies each dependency.
+pub fn find_retained_vitest_packages(
+    root: &Path,
+    import_rule: &ImportRuleConfig,
+) -> Result<BTreeMap<PathBuf, BTreeSet<&'static str>>, Error> {
+    let mut owners = BTreeMap::new();
+    if !import_rule.can_disable_rewrites() {
+        return Ok(owners);
+    }
+
+    // An installed library's own test files cannot justify dependencies in the
+    // project being migrated, even when it has no .gitignore.
+    let sources = file_walker::find_ts_files_filtered(root, |entry| {
+        entry.depth() == 0 || entry.file_name() != "node_modules"
+    })?;
+    for path in sources.files {
+        if import_rule.is_enabled_for(root, &path) {
+            continue;
+        }
+        let Some(manifest) = find_nearest_package_json(&path, root) else { continue };
+        let owner = manifest.parent().expect("package.json has a parent directory");
+        let dependencies: &mut BTreeSet<_> = owners.entry(owner.to_path_buf()).or_default();
+        if dependencies.len() == RETAINED_VITEST_DEPENDENCIES.len() {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(path) else { continue };
+        collect_retained_vitest_dependencies(&content, dependencies);
+    }
+    owners.retain(|_, dependencies| !dependencies.is_empty());
+    Ok(owners)
 }
 
 /// Canonical Vite/Vitest config entry basenames, the single source shared with
@@ -2317,7 +2411,14 @@ pub fn rewrite_imports_in_directory_with_options(
     let results: Vec<(PathBuf, FileResult, bool)> = files_with_context
         .into_par_iter()
         .map(|(file_path, package_context)| {
-            let skip_packages = package_context.skip_packages;
+            let mut skip_packages = package_context.skip_packages;
+            // The lint rule covers Vite, Vitest, and Oxlint plugin imports.
+            // Migration handles tsdown independently when it moves projects to vp pack.
+            if !options.import_rule.is_enabled_for(root, &file_path) {
+                skip_packages.skip_vite = true;
+                skip_packages.skip_vitest = true;
+                skip_packages.skip_oxlint = true;
+            }
             if skip_packages.all_skipped() {
                 return (file_path, FileResult::Unchanged(Vec::new()), false);
             }
@@ -2505,9 +2606,7 @@ fn rewrite_import_content_full(
     // Apply vitest rules if not skipped (using pre-parsed rules)
     if !skip_packages.skip_vitest {
         let vitest_rules = if preserve_unscoped_vitest {
-            let upstream_rewrite =
-                ast_grep::apply_loaded_rules(&new_content, &PARSED_UNSCOPED_VITEST_RULES);
-            preserved_vitest = upstream_rewrite != new_content;
+            preserved_vitest = has_unscoped_vitest_import(&new_content);
             &*PARSED_VITEST_RULES_WITHOUT_UNSCOPED
         } else {
             &*PARSED_VITEST_RULES
@@ -2578,6 +2677,128 @@ mod tests {
         let file = root.join(relative);
         std::fs::create_dir_all(file.parent().unwrap()).unwrap();
         std::fs::write(file, content).unwrap();
+    }
+
+    #[test]
+    fn finds_only_owners_of_vitest_imports_retained_by_the_rule() {
+        let temp = tempdir().unwrap();
+        let root = temp.path();
+        let config = ImportRuleConfig::from_json(
+            r#"{
+            "enabled": true,
+            "overrides": [
+                { "files": ["./templates/**"], "excludeFiles": [], "enabled": false },
+                { "files": ["templates/managed/**"], "excludeFiles": [], "enabled": true }
+            ]
+        }"#,
+        )
+        .unwrap();
+        write_pack_fixture(root, "package.json", "{}");
+        write_pack_fixture(root, "app.ts", "import 'vitest';");
+        // Both source files in templates/static contribute to the same package.
+        write_pack_fixture(
+            root,
+            "templates/static/src/browser.ts",
+            "import '@vitest/browser/context';\nimport '@vitest/browser-preview/provider';",
+        );
+        let vitest = &["vitest"];
+        let browser = &["@vitest/browser"];
+        let preview = &["@vitest/browser-preview"];
+        let combined: &[&str] = &["vitest", "@vitest/browser", "@vitest/browser-preview"];
+        let mut expected = BTreeMap::new();
+        for (package, source, dependencies) in [
+            ("static", "import { test } from 'vitest';", combined),
+            ("export", "export type { TestProject } from 'vitest/node';", vitest),
+            ("require", "const config = require('vitest/config');", vitest),
+            ("dynamic", "const tests = import('vitest');", vitest),
+            ("type", "type V = typeof import('vitest');", vitest),
+            ("directive", "/// <reference types='vitest/globals' />", vitest),
+            ("managed", "import 'vitest';", &[]),
+            ("scoped", "import '@vitest/browser';", browser),
+            ("context", "export { page } from '@vitest/browser/context';", browser),
+            ("browser_type", "type Browser = typeof import('@vitest/browser/matchers');", browser),
+            ("browser_require", "const browser = require('@vitest/browser/client');", browser),
+            ("browser_reference", "/// <reference types='@vitest/browser/locators' />", browser),
+            ("preview", "import { preview } from '@vitest/browser-preview';", preview),
+            (
+                "preview_context",
+                "const context = import('@vitest/browser-preview/context');",
+                preview,
+            ),
+            (
+                "preview_reference",
+                "/// <reference types='@vitest/browser-preview/provider' />",
+                preview,
+            ),
+            ("browser_direct_provider", "import '@vitest/browser-playwright';", &[]),
+            ("preview_prefix", "import '@vitest/browser-preview-extra/context';", &[]),
+            (
+                "preview_reference_prefix",
+                "/// <reference types='@vitest/browser-preview-extra' />",
+                &[],
+            ),
+            ("browser_text", "const example = \"import('@vitest/browser/context')\";", &[]),
+            ("export_value", "export default '@vitest/browser';", &[]),
+            ("text", "// import 'vitest';\nconst example = \"import('vitest')\";", &[]),
+        ] {
+            let dir = root.join("templates").join(package);
+            write_pack_fixture(&dir, "package.json", "{}");
+            write_pack_fixture(&dir, "src/test.ts", source);
+            if !dependencies.is_empty() {
+                expected.insert(dir, dependencies.iter().copied().collect());
+            }
+        }
+        assert_eq!(find_retained_vitest_packages(root, &config).unwrap(), expected);
+    }
+
+    #[test]
+    fn scans_project_sources_but_skips_installed_packages_with_no_gitignore() {
+        let temp = tempdir().unwrap();
+        let root = temp.path().join("node_modules/project");
+        write_pack_fixture(&root, "package.json", "{}");
+        write_pack_fixture(&root, "test.ts", "import 'vitest';");
+        write_pack_fixture(&root, "node_modules/library/package.json", "{}");
+        write_pack_fixture(&root, "node_modules/library/test.ts", "import '@vitest/browser';");
+
+        let config = ImportRuleConfig::from_json(r#"{"enabled": false, "overrides": []}"#).unwrap();
+        assert_eq!(
+            find_retained_vitest_packages(&root, &config).unwrap(),
+            BTreeMap::from([(root, BTreeSet::from(["vitest"]))])
+        );
+    }
+
+    #[test]
+    fn disabled_import_rule_keeps_the_independent_tsdown_rewrites() {
+        let temp = tempdir().unwrap();
+        let root = temp.path();
+        let source = r#"/// <reference types="vitest/globals" />
+/// <reference types="tsdown/client" />
+import { defineConfig } from 'vite';
+import { test } from 'vitest';
+import { definePlugin } from '@oxlint/plugins';
+import { defineConfig as pack } from 'tsdown';
+"#;
+        write_pack_fixture(root, "package.json", r#"{"devDependencies":{"tsdown":"*"}}"#);
+        write_pack_fixture(root, "vite.config.mjs", source);
+        write_pack_fixture(root, "plugin/package.json", r#"{"peerDependencies":{"tsdown":"*"}}"#);
+        write_pack_fixture(root, "plugin/vite.config.mjs", source);
+
+        let result = rewrite_imports_in_directory_with_options(
+            root,
+            RewriteImportsOptions {
+                import_rule: ImportRuleConfig::from_json(r#"{"enabled":false,"overrides":[]}"#)
+                    .unwrap(),
+                ..RewriteImportsOptions::default()
+            },
+        )
+        .unwrap();
+
+        assert_eq!(result.modified_files, [root.join("vite.config.mjs")]);
+        assert_eq!(
+            std::fs::read_to_string(root.join("vite.config.mjs")).unwrap(),
+            source.replace("tsdown", "vite-plus/pack")
+        );
+        assert_eq!(std::fs::read_to_string(root.join("plugin/vite.config.mjs")).unwrap(), source);
     }
 
     fn write_tsdown_fixture(root: &Path, version: &str) {

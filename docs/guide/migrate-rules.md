@@ -187,7 +187,7 @@ Packages that are **not** aligned:
 - `@vitest/coverage-c8` stopped at an older release and has no Vitest 4 version; and
 - third-party `vitest-*` integrations keep their own compatible versions, though their required Vitest peer may still trigger [direct provisioning](#when-vitest-is-directly-required).
 
-For browser mode, Vite+ bundles the base `@vitest/browser` runtime and `@vitest/browser-preview`; migration removes their direct dependency entries. The Playwright provider stays opt-in. Migration uses the bundled Vitest version for `@vitest/browser-playwright`, through the preferred toolchain catalog or the dependency entry, and installs its `playwright` peer alongside.
+For browser mode, Vite+ bundles the base `@vitest/browser` runtime and `@vitest/browser-preview`. Migration keeps a declaration for either package if a preserved import uses it. For example, an import from `@vitest/browser/context` needs `@vitest/browser`. Otherwise, migration removes these bundled packages from the project's direct dependencies. The Playwright provider stays opt-in. Migration uses the bundled Vitest version for `@vitest/browser-playwright`, through the preferred toolchain catalog or the dependency entry, and installs its `playwright` peer alongside.
 
 Migration detects Playwright usage before it rewrites imports, including legacy `vitest/browser-playwright`, `vitest/browser/providers/playwright`, and `vitest/plugins/browser-playwright` aliases.
 
@@ -196,6 +196,11 @@ Migration detects Playwright usage before it rewrites imports, including legacy 
 Object-valued nested npm and Bun overrides are preserved: they are user-defined scopes rather than scalar version pins.
 
 ## Source Rewrite Rules
+
+Migration skips Vite and Vitest import rewrites in files where the root lint
+config disables `vite-plus/prefer-vite-plus-imports`. If a template outside the
+workspace relies on an ancestor's dependency for a preserved Vitest import,
+migration keeps that declaration. See [Keeping upstream imports in templates and examples](./migrate.md#keeping-upstream-imports-in-templates-and-examples).
 
 ### `vite` Imports
 

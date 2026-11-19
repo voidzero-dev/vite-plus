@@ -1,0 +1,5 @@
+packages:
+  - templates/*
+  - packages/*
+nodeLinker: isolated
+hoist: false

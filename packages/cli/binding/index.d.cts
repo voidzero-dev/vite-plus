@@ -3813,6 +3813,12 @@ export declare function ensureBlockingStdio(): void;
  */
 export declare function findMonorepoRoot(cwd: string): string | null;
 
+/** Upstream Vitest and browser imports preserved in files under each manifest. */
+export declare function findRetainedVitestPackages(
+  root: string,
+  importRuleConfig: string,
+): Array<RetainedVitestPackage>;
+
 /** Read the same `VP_PACKAGE_MANAGER` override used by `vp install`. */
 export declare function getPackageManagerOverride(): PackageManagerOverride | null;
 
@@ -4010,6 +4016,9 @@ export interface PathAccess {
   readDir: boolean;
 }
 
+/** JSON for a static lint block; undefined requests normal config resolution. */
+export declare function readStaticLintConfig(root: string): string | null;
+
 /** Remove a top-level key from a recognized Vite config object. */
 export declare function removeConfigKey(
   viteConfigPath: string,
@@ -4021,6 +4030,11 @@ export declare function resolveNpmAuthorization(cwd: string, url: string): strin
 
 /** Resolve the npm registry for packages in `scope` (without `@`) from the npm config at `cwd`. */
 export declare function resolveNpmRegistry(cwd: string, scope?: string | undefined | null): string;
+
+export interface RetainedVitestPackage {
+  packageDir: string;
+  dependencies: Array<string>;
+}
 
 /**
  * Rewrite ESLint scripts: rename `eslint` → `vp lint` and strip ESLint-only flags.
@@ -4071,6 +4085,7 @@ export declare function rewriteImportsInDirectory(
   root: string,
   preserveVitestInNuxtPackages?: boolean | undefined | null,
   oxlintOwnerDirs?: Array<string> | undefined | null,
+  importRuleConfig?: string | undefined | null,
 ): BatchRewriteResult;
 
 /**

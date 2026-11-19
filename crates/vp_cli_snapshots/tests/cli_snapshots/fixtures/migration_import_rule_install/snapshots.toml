@@ -1,0 +1,42 @@
+[[case]]
+name = "migration_import_rule_install"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+comment = "After installation makes dynamic lint settings available, the upgrade keeps a direct Vitest dependency for the excluded template and removes it from the app."
+steps = [
+  { argv = ["vpt", "write-file", "pnpm-workspace.yaml", "packages:\n  - templates\n  - packages/*\nnodeLinker: isolated\nhoist: false\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "templates/package.json", "{\"name\":\"template\",\"private\":true,\"type\":\"module\",\"devDependencies\":{\"vitest\":\"^5.0.0\"}}\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/app/package.json", "{\"name\":\"app\",\"private\":true,\"type\":\"module\",\"devDependencies\":{\"vitest\":\"^5.0.0\"}}\n"], snapshot = false },
+  { argv = ["vpt", "cp", "unit.test.ts", "packages/app/unit.test.ts"], snapshot = false },
+  ["vpt", "stat-file", "node_modules", "--assert", "missing"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "stat-file", "node_modules/vite-plus/package.json", "--assert", "file"],
+  ["vpt", "print-file", "templates/unit.test.ts"],
+  ["vpt", "print-file", "templates/package.json"],
+  ["vpt", "print-file", "packages/app/unit.test.ts"],
+  ["vpt", "print-file", "packages/app/package.json"],
+  ["vpt", "print-file", "unit.test.ts"],
+  ["vpt", "print-file", "package.json"],
+  ["vpt", "stat-file", "templates/node_modules/vitest/package.json", "--assert", "file"],
+  { cwd = "templates", argv = ["node", "--input-type=module", "-e", "import { test } from 'vitest'; console.log(typeof test);"] },
+  ["vpt", "stat-file", "packages/app/node_modules/vitest/package.json", "--assert", "missing"],
+  { argv = ["vp", "install", "--frozen-lockfile", "--ignore-scripts"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+]
+
+[[case]]
+name = "migration_import_rule_runtime_no_install"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+comment = "Reading mode in a dynamic config does not trigger an install on an up-to-date project."
+steps = [
+  { argv = ["vpt", "write-file", "vite.config.ts", "export default ({ mode }) => ({ mode });\n"], snapshot = false },
+  { argv = ["vpt", "write-file", ".pnpmfile.cjs", "require('node:fs').writeFileSync(require('node:path').join(__dirname, 'install-requested'), 'install');\nmodule.exports = {};\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  { argv = ["vpt", "stat-file", "install-requested", "--assert", "file"], comment = "The upgrade's required install activates the probe." },
+  { argv = ["vpt", "rm", "install-requested"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "stat-file", "install-requested", "--assert", "missing"],
+]
