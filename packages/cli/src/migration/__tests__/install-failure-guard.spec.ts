@@ -4,7 +4,8 @@ import { fileURLToPath } from 'node:url';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { handleInstallResult } from '../install-result.ts';
+import { PackageManager } from '../../types/index.ts';
+import { getMigrationInstallIdleTimeoutMs, handleInstallResult } from '../install-result.ts';
 import { createMigrationReport } from '../report.ts';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -73,6 +74,21 @@ describe('handleInstallResult', () => {
     expect(consoleError).toHaveBeenCalledWith(expect.any(String), failureMessage(7));
   });
 
+  it('keeps an already reported timeout diagnostic and exit code', () => {
+    const report = createMigrationReport();
+    const message = 'Dependency resolution stopped after 300 seconds without output.';
+    expect(
+      handleInstallResult(
+        { status: 'failed', durationMs: 300_000, exitCode: 124, failureMessage: message },
+        rootDir,
+        report,
+      ),
+    ).toBe(0);
+    expect(report.warnings).toEqual([message]);
+    expect(process.exitCode).toBe(124);
+    expect(consoleError).not.toHaveBeenCalled();
+  });
+
   it.each(['skipped', 'formatted'] as const)('stays silent for a %s install', (status) => {
     const report = createMigrationReport();
 
@@ -80,6 +96,15 @@ describe('handleInstallResult', () => {
     expect(report.warnings).toEqual([]);
     expect(process.exitCode).toBeUndefined();
     expect(consoleError).not.toHaveBeenCalled();
+  });
+});
+
+describe('getMigrationInstallIdleTimeoutMs', () => {
+  it('bounds non-interactive pnpm 9 installs only', () => {
+    expect(getMigrationInstallIdleTimeoutMs(false, PackageManager.pnpm, '9.9.0')).toBe(300_000);
+    expect(getMigrationInstallIdleTimeoutMs(true, PackageManager.pnpm, '9.9.0')).toBeUndefined();
+    expect(getMigrationInstallIdleTimeoutMs(false, PackageManager.pnpm, '12.21.0')).toBeUndefined();
+    expect(getMigrationInstallIdleTimeoutMs(false, PackageManager.npm, '9.9.0')).toBeUndefined();
   });
 });
 

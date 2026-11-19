@@ -41,7 +41,7 @@ import { detectWorkspace } from '../utils/workspace.ts';
 import { checkRolldownCompatibility } from './compat/runner.ts';
 import { detectMigrationWarnings } from './detector.ts';
 import { canFormatWithOxfmt, collectChangedFormatPaths, formatMigratedProject } from './format.ts';
-import { handleInstallResult } from './install-result.ts';
+import { getMigrationInstallIdleTimeoutMs, handleInstallResult } from './install-result.ts';
 import {
   addFrameworkShim,
   applyVitestV5Migration,
@@ -843,6 +843,11 @@ async function executeMigrationPlan(
   migrateSetupVpVersion(workspaceInfo.rootDir, report);
 
   // 4. Run vp install to ensure the project is ready
+  const installIdleTimeoutMs = getMigrationInstallIdleTimeoutMs(
+    interactive,
+    workspaceInfo.packageManager,
+    downloadResult.version,
+  );
   updateMigrationProgress('Installing dependencies');
   const initialInstallSummary = await runViteInstall(
     workspaceInfo.rootDir,
@@ -852,6 +857,7 @@ async function executeMigrationPlan(
       silent: true,
       packageManager: workspaceInfo.packageManager,
       packageManagerVersion: workspaceInfo.downloadPackageManager.version,
+      idleTimeoutMs: installIdleTimeoutMs,
     },
   );
 
@@ -1033,6 +1039,7 @@ async function executeMigrationPlan(
       silent: true,
       packageManager: workspaceInfo.packageManager,
       packageManagerVersion: workspaceInfo.downloadPackageManager.version,
+      idleTimeoutMs: installIdleTimeoutMs,
     },
   );
   if (finalInstallSummary.status === 'failed') {
@@ -1675,6 +1682,11 @@ async function main() {
           silent: true,
           packageManager,
           packageManagerVersion,
+          idleTimeoutMs: getMigrationInstallIdleTimeoutMs(
+            options.interactive,
+            packageManager,
+            packageManagerVersion,
+          ),
         },
       );
       if (installSummary.status === 'failed') {
