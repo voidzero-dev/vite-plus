@@ -2062,7 +2062,7 @@ fn rewrite_reference_types(
     changed
 }
 
-/// Packages to skip rewriting based on peerDependencies or dependencies
+/// Package imports excluded from rewriting in a file.
 #[derive(Debug, Clone, Copy, Default)]
 struct SkipPackages {
     /// Skip rewriting vite imports (vite is in peerDependencies or dependencies)
@@ -2414,7 +2414,15 @@ pub fn rewrite_imports_in_directory_with_options(
     let results: Vec<(PathBuf, FileResult, bool)> = files_with_context
         .into_par_iter()
         .map(|(file_path, package_context)| {
-            let skip_packages = package_context.skip_packages;
+            let mut skip_packages = package_context.skip_packages;
+            let relative_path = file_path.strip_prefix(root).unwrap_or(&file_path);
+            // The lint rule covers Vite, Vitest, and Oxlint plugin imports.
+            // Migration handles tsdown independently when it moves projects to vp pack.
+            if !options.import_rule.is_enabled(relative_path) {
+                skip_packages.skip_vite = true;
+                skip_packages.skip_vitest = true;
+                skip_packages.skip_oxlint = true;
+            }
             if skip_packages.all_skipped() {
                 return (file_path, FileResult::Unchanged(Vec::new()), false);
             }
@@ -2423,7 +2431,6 @@ pub fn rewrite_imports_in_directory_with_options(
                 &file_path,
                 root,
                 &skip_packages,
-                &options.import_rule,
                 options.preserve_vitest_in_nuxt_packages && package_context.uses_nuxt_test_utils,
             ) {
                 Ok(rewrite_result) => {
@@ -2498,7 +2505,6 @@ fn rewrite_import(
     file_path: &Path,
     root: &Path,
     skip_packages: &SkipPackages,
-    import_rule: &ImportRuleConfig,
     preserve_vitest_in_nuxt_package: bool,
 ) -> Result<RewriteResult, Error> {
     let content = std::fs::read_to_string(file_path)?;
@@ -2518,18 +2524,13 @@ fn rewrite_import(
     // whereas `vite-plus` re-exports no `UserConfig` symbol for a rewritten
     // augmentation to merge with. This is layered ON TOP of the package-level
     // skip (a skipped package stays skipped).
-    let relative_path = file_path.strip_prefix(root).unwrap_or(file_path);
-    let mut result = if import_rule.is_enabled(relative_path) {
-        rewrite_import_content_full(
-            &content,
-            skip_packages,
-            preserve_vitest_in_nuxt_package,
-            is_vite_config,
-            file_path.to_str(),
-        )?
-    } else {
-        RewriteResult { content, updated: false, preserved_vitest: false, warnings: Vec::new() }
-    };
+    let mut result = rewrite_import_content_full(
+        &content,
+        skip_packages,
+        preserve_vitest_in_nuxt_package,
+        is_vite_config,
+        file_path.to_str(),
+    )?;
     if let Some(preserve_defaults) = preserve_defaults {
         let rewritten =
             pack_config::rewrite_pack_config(&result.content, is_tsdown_config, preserve_defaults);
@@ -2770,6 +2771,40 @@ mod tests {
             find_retained_vitest_packages(&root, &config).unwrap(),
             BTreeMap::from([(root, BTreeSet::from(["vitest"]))])
         );
+    }
+
+    #[test]
+    fn disabled_import_rule_keeps_the_independent_tsdown_rewrites() {
+        let temp = tempdir().unwrap();
+        let root = temp.path();
+        let source = r#"/// <reference types="vitest/globals" />
+/// <reference types="tsdown/client" />
+import { defineConfig } from 'vite';
+import { test } from 'vitest';
+import { definePlugin } from '@oxlint/plugins';
+import { defineConfig as pack } from 'tsdown';
+"#;
+        write_pack_fixture(root, "package.json", r#"{"devDependencies":{"tsdown":"*"}}"#);
+        write_pack_fixture(root, "vite.config.mjs", source);
+        write_pack_fixture(root, "plugin/package.json", r#"{"peerDependencies":{"tsdown":"*"}}"#);
+        write_pack_fixture(root, "plugin/vite.config.mjs", source);
+
+        let result = rewrite_imports_in_directory_with_options(
+            root,
+            RewriteImportsOptions {
+                import_rule: ImportRuleConfig::from_json(r#"{"enabled":false,"overrides":[]}"#)
+                    .unwrap(),
+                ..RewriteImportsOptions::default()
+            },
+        )
+        .unwrap();
+
+        assert_eq!(result.modified_files, [root.join("vite.config.mjs")]);
+        assert_eq!(
+            std::fs::read_to_string(root.join("vite.config.mjs")).unwrap(),
+            source.replace("tsdown", "vite-plus/pack")
+        );
+        assert_eq!(std::fs::read_to_string(root.join("plugin/vite.config.mjs")).unwrap(), source);
     }
 
     fn write_tsdown_fixture(root: &Path, version: &str) {
@@ -3221,14 +3256,9 @@ export default defineConfig({{
         .unwrap();
 
         // Run the rewrite
-        let result = rewrite_import(
-            &vite_config_path,
-            temp_dir.path(),
-            &SkipPackages::default(),
-            &ImportRuleConfig::default(),
-            false,
-        )
-        .unwrap();
+        let result =
+            rewrite_import(&vite_config_path, temp_dir.path(), &SkipPackages::default(), false)
+                .unwrap();
 
         assert!(result.updated);
         assert_eq!(

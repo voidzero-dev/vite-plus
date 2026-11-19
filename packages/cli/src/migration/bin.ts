@@ -1677,36 +1677,33 @@ async function main() {
     }
 
     if (importRuleConfig === null) {
+      let resolvedImportRuleConfig: string | null = null;
       if (needsInstall && finalInstallOk) {
         updateMigrationProgress('Reading lint configuration');
-        const resolvedImportRuleConfig = await tryResolveImportRuleConfig(
-          workspaceInfoOptional.rootDir,
-        );
-        const resolvedDependencies =
-          resolvedImportRuleConfig === null
-            ? retainedImportDependencies
-            : collectRetainedImportDependencies(workspaceInfoOptional, resolvedImportRuleConfig);
-        if (resolvedImportRuleConfig === null) {
-          warnUnresolvedImportRuleConfig(report);
-        }
-        updateMigrationProgress('Rewriting toolchain imports across the workspace');
-        didMigrate =
-          rewriteAllImports(workspaceInfoOptional.rootDir, true, report, {
-            oxlintOwnerDirs: deferredOxlintOwnerDirs,
-            importRuleConfig: resolvedImportRuleConfig ?? DISABLED_IMPORT_RULE_CONFIG,
-          }) || didMigrate;
-        // The first install used the owners we could identify without loading
-        // the config. Sync again only if the resolved rule changes dependencies.
-        if (
-          !isDeepStrictEqual(resolvedDependencies, retainedImportDependencies) &&
-          bootstrapPending(resolvedDependencies) &&
-          (await reconcileBootstrap(resolvedDependencies))
-        ) {
-          didMigrate = true;
-          await installExistingDependencies();
-        }
-      } else {
+        resolvedImportRuleConfig = await tryResolveImportRuleConfig(workspaceInfoOptional.rootDir);
+      }
+      if (resolvedImportRuleConfig === null) {
         warnUnresolvedImportRuleConfig(report);
+      }
+      const resolvedDependencies =
+        resolvedImportRuleConfig === null
+          ? retainedImportDependencies
+          : collectRetainedImportDependencies(workspaceInfoOptional, resolvedImportRuleConfig);
+      updateMigrationProgress('Rewriting toolchain imports across the workspace');
+      didMigrate =
+        rewriteAllImports(workspaceInfoOptional.rootDir, true, report, {
+          oxlintOwnerDirs: deferredOxlintOwnerDirs,
+          importRuleConfig: resolvedImportRuleConfig ?? DISABLED_IMPORT_RULE_CONFIG,
+        }) || didMigrate;
+      // The first install used the owners we could identify without loading
+      // the config. Sync again only if the resolved rule changes dependencies.
+      if (
+        !isDeepStrictEqual(resolvedDependencies, retainedImportDependencies) &&
+        bootstrapPending(resolvedDependencies) &&
+        (await reconcileBootstrap(resolvedDependencies))
+      ) {
+        didMigrate = true;
+        await installExistingDependencies();
       }
     }
 

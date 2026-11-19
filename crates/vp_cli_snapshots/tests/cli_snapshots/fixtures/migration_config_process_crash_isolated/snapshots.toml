@@ -9,7 +9,7 @@ steps = [
 [[case]]
 name = "migration_config_dynamic_process_crash_isolated"
 vp = "local"
-comment = "A crashing dynamic config warns and preserves imports while the existing-Vite+ upgrade continues."
+comment = "A crashing dynamic config preserves Vitest imports while migration still rewrites tsdown imports."
 steps = [
   { argv = ["vpt", "json-edit", "package.json", "devDependencies", "{\"vite-plus\":\"latest\"}"], snapshot = false },
   { argv = ["vpt", "json-edit", "package.json", "scripts", "{\"build\":\"vite build\"}"], snapshot = false },
@@ -19,4 +19,7 @@ steps = [
   ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
   ["vpt", "print-file", "unit.test.ts"],
   ["vpt", "print-file", "package.json"],
+  { argv = ["vpt", "write-file", "unit.test.ts", "import { test } from 'vitest';\nimport { defineConfig } from 'tsdown';\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "Dependencies are up to date on the second run." },
+  ["vpt", "print-file", "unit.test.ts"],
 ]

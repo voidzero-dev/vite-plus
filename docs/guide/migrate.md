@@ -75,12 +75,14 @@ and examples.
 ```
 
 `vp migrate`, `vp lint --fix`, and `vp check --fix` all use this override for
-import rewrites. Oxlint matches the file patterns relative to the root config
-directory. A later matching override can re-enable the rule.
+Vite and Vitest import rewrites. Oxlint matches the file patterns relative to
+the root config directory. A later matching override can re-enable the rule.
 
 Migration keeps the dependencies that supply preserved `vitest`,
 `@vitest/browser`, and `@vitest/browser-preview` imports. If a template outside
 the workspace imports `vitest` from the root project, the root keeps its dependency.
+When migration removes a `tsdown` development dependency, it still rewrites
+imports from `tsdown` to `vite-plus/pack`.
 
 ## Recommended Workflow
 

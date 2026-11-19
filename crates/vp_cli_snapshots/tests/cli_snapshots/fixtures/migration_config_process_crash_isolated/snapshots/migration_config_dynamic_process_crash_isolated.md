@@ -1,6 +1,6 @@
 # migration_config_dynamic_process_crash_isolated
 
-A crashing dynamic config warns and preserves imports while the existing-Vite+ upgrade continues.
+A crashing dynamic config preserves Vitest imports while migration still rewrites tsdown imports.
 
 ## `vpt json-edit package.json devDependencies '{"vite-plus":"latest"}'`
 
@@ -53,4 +53,33 @@ import { test } from 'vitest';
   },
   "version": "0.0.0"
 }
+```
+
+## `vpt write-file unit.test.ts 'import { test } from '\''vitest'\'';
+import { defineConfig } from '\''tsdown'\'';
+'`
+
+
+## `vp migrate --no-interactive --no-hooks --no-agent --no-editor`
+
+Dependencies are up to date on the second run.
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+▲ No package manager is declared in package.json; using pnpm for this migration without adding a pin. Run `vp env pin` to declare it explicitly.
+◇ Updated . to Vite+ <version>
+• Node <version>  pnpm <version>
+• Dependencies:
+    vite   → <version>
+• 1 file had imports rewritten
+! Warnings:
+  - Could not load lint configuration in an isolated process. Skipped Vite/Vitest import rewrites; fix the config and re-run `vp migrate`.
+```
+
+## `vpt print-file unit.test.ts`
+
+```
+import { test } from 'vitest';
+import { defineConfig } from 'vite-plus/pack';
 ```
