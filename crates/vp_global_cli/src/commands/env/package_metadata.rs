@@ -2,8 +2,8 @@
 
 use std::collections::HashSet;
 
-use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
+use time::OffsetDateTime;
 use uuid::{Uuid, Version};
 use vt_path::AbsolutePathBuf;
 
@@ -49,7 +49,8 @@ pub struct PackageMetadata {
     /// Package manager used for installation (npm, yarn, pnpm)
     pub manager: String,
     /// Installation timestamp
-    pub installed_at: Timestamp,
+    #[serde(with = "time::serde::rfc3339")]
+    pub installed_at: OffsetDateTime,
 }
 
 /// Platform versions pinned to this package.
@@ -82,7 +83,7 @@ impl PackageMetadata {
             js_bins,
             version_spec: None,
             manager,
-            installed_at: Timestamp::now(),
+            installed_at: OffsetDateTime::now_utc(),
         }
     }
 
@@ -239,7 +240,7 @@ mod tests {
     }
 
     #[test]
-    fn test_legacy_metadata_defaults_to_empty_install_id() {
+    fn test_legacy_metadata_preserves_timestamp_and_defaults() {
         let metadata: PackageMetadata = serde_json::from_str(
             r#"{
                 "name": "typescript",
@@ -247,13 +248,17 @@ mod tests {
                 "platform": { "node": "22.0.0" },
                 "bins": ["tsc"],
                 "manager": "npm",
-                "installedAt": "2026-01-01T00:00:00Z"
+                "installedAt": "2026-01-01T00:00:00.123456789Z"
             }"#,
         )
         .unwrap();
 
         assert!(metadata.install_id.is_empty());
         assert_eq!(metadata.version_spec, None);
+        assert_eq!(
+            serde_json::to_value(&metadata).unwrap()["installedAt"],
+            "2026-01-01T00:00:00.123456789Z"
+        );
     }
 
     #[test]

@@ -9,6 +9,7 @@
 use std::process::ExitStatus;
 
 use console::style;
+use time::{Date, OffsetDateTime};
 use vp_pm_cli::{
     PackageManagerType, package_manager_bin_path, resolve_package_manager_install_dir,
     resolve_package_manager_version_for_cwd,
@@ -297,9 +298,8 @@ async fn execute_package_binary(
         return Ok(exit_status(1));
     }
 
-    // Format installation timestamp (date only)
-    let installed_local = metadata.installed_at.to_zoned(jiff::tz::TimeZone::system());
-    let installed_str = installed_local.strftime("%Y-%m-%d").to_string();
+    let installed_at = metadata.installed_at;
+    let installed_date = local_date(installed_at).unwrap_or_else(|| installed_at.date());
 
     // Print binary path (first line, uncolored, pipe-friendly)
     vp_shared::output::print_stdout_line(format_args!("{}", binary_path.as_path().display()));
@@ -323,10 +323,51 @@ async fn execute_package_binary(
     vp_shared::output::print_stdout_line(format_args!(
         "  {:<LABEL_WIDTH$}  {}",
         style("Installed:").dim(),
-        style(&installed_str).dim()
+        style(installed_date).dim()
     ));
 
     Ok(ExitStatus::default())
+}
+
+#[cfg(not(windows))]
+fn local_date(timestamp: OffsetDateTime) -> Option<Date> {
+    let offset = time::UtcOffset::local_offset_at(timestamp).unwrap_or(time::UtcOffset::UTC);
+    timestamp.checked_to_offset(offset).map(OffsetDateTime::date)
+}
+
+// Use the system's DST rules for the installation year. The Windows API used
+// by time::UtcOffset::local_offset_at only receives the current rules.
+#[cfg(windows)]
+fn local_date(timestamp: OffsetDateTime) -> Option<Date> {
+    use windows_sys::Win32::{
+        Foundation::SYSTEMTIME, System::Time::SystemTimeToTzSpecificLocalTimeEx,
+    };
+
+    let utc = timestamp.checked_to_utc()?;
+    let input = SYSTEMTIME {
+        wYear: utc.year().try_into().ok()?,
+        wMonth: u8::from(utc.month()).into(),
+        wDay: utc.day().into(),
+        wHour: utc.hour().into(),
+        wMinute: utc.minute().into(),
+        wSecond: utc.second().into(),
+        wMilliseconds: utc.millisecond(),
+        ..SYSTEMTIME::default()
+    };
+    let mut local = SYSTEMTIME::default();
+    // SAFETY: null selects the system time zone. Both buffers live through the call.
+    let success = unsafe {
+        SystemTimeToTzSpecificLocalTimeEx(std::ptr::null(), &raw const input, &raw mut local)
+    };
+    if success == 0 {
+        return Some(utc.date());
+    }
+    Date::from_calendar_date(
+        local.wYear.into(),
+        u8::try_from(local.wMonth).ok()?.try_into().ok()?,
+        local.wDay.try_into().ok()?,
+    )
+    .ok()
 }
 
 /// Locate a binary within a package's installation directory.
