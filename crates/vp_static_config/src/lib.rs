@@ -46,9 +46,13 @@ pub enum FieldValue {
 ///   values). Absent keys may exist via the spread and are treated as
 ///   [`FieldValue::NonStatic`] by [`FieldMap::get`], but not by
 ///   [`FieldMap::get_declared`].
+///
+/// `overwritable` marks a map whose declared values later code may change, so
+/// only [`FieldMap::get_declared`] reports them.
 pub struct FieldMap {
     map: FxHashMap<Box<str>, FieldValue>,
     open: bool,
+    overwritable: bool,
     config_path: Option<vt_path::AbsolutePathBuf>,
 }
 
@@ -56,13 +60,13 @@ impl FieldMap {
     /// Returns an open empty map — used when the config is not analyzable.
     /// `get()` returns `Some(NonStatic)` for any key, triggering NAPI fallback.
     fn unanalyzable() -> Self {
-        Self { map: FxHashMap::default(), open: true, config_path: None }
+        Self { map: FxHashMap::default(), open: true, overwritable: false, config_path: None }
     }
 
     /// Returns a closed empty map — used when no config file exists.
     /// `get()` returns `None` for any key (field definitively absent).
     fn no_config() -> Self {
-        Self { map: FxHashMap::default(), open: false, config_path: None }
+        Self { map: FxHashMap::default(), open: false, overwritable: false, config_path: None }
     }
 
     /// The config file these fields came from, or `None` when the directory has none.
@@ -78,8 +82,12 @@ impl FieldMap {
     /// - open map: returns the stored value if explicitly declared after the
     ///   last spread/computed key, or `Some(NonStatic)` for any other key (it
     ///   may exist in the spread).
+    /// - overwritable map: returns `Some(NonStatic)` for every key.
     #[must_use]
     pub fn get(&self, key: &str) -> Option<FieldValue> {
+        if self.overwritable {
+            return Some(FieldValue::NonStatic);
+        }
         self.map.get(key).cloned().or_else(|| self.open.then_some(FieldValue::NonStatic))
     }
 
@@ -174,7 +182,7 @@ fn parse_js_ts_config(source: &str, extension: &str) -> FieldMap {
 /// 1. `export default defineConfig({ ... })` with `defineConfig` from a trusted package
 /// 2. `export default { ... }`
 /// 3. `module.exports = defineConfig({ ... })` with `defineConfig` from a trusted package
-/// 4. `module.exports = { ... }` as the last top-level statement
+/// 4. `module.exports = { ... }`, overwritable unless it is the last top-level statement
 fn extract_config_fields(program: &Program<'_>) -> FieldMap {
     let has_trusted_define_config_binding = program.body.iter().any(|stmt| {
         is_trusted_define_config_import(stmt) || has_trusted_define_config_cjs_binding(stmt)
@@ -198,11 +206,11 @@ fn extract_config_fields(program: &Program<'_>) -> FieldMap {
                     && m.static_property_name().is_some_and(|name| name == "exports")
             })
         {
+            let mut fields =
+                extract_config_from_expr(&assign.right, has_trusted_define_config_binding);
             // Later statements can mutate `module.exports`, so only a final assignment is exhaustive.
-            if index + 1 != program.body.len() {
-                return FieldMap::unanalyzable();
-            }
-            return extract_config_from_expr(&assign.right, has_trusted_define_config_binding);
+            fields.overwritable = index + 1 != program.body.len();
+            return fields;
         }
     }
 
@@ -471,7 +479,7 @@ fn extract_object_fields(obj: &oxc_ast::ast::ObjectExpression<'_>) -> FieldMap {
         map.insert(Box::from(key), value);
     }
 
-    FieldMap { map, open, config_path: None }
+    FieldMap { map, open, overwritable: false, config_path: None }
 }
 
 /// Convert an f64 to a JSON value following `JSON.stringify` semantics.
@@ -800,6 +808,21 @@ mod tests {
             "cjs",
         );
         assert_non_static(&result, "check");
+    }
+
+    #[test]
+    fn module_exports_followed_by_code_keeps_declared_fields() {
+        let result = parse_js_ts_config(
+            "module.exports = { defaultPackage: './web' };\nfunction helper() {}",
+            "cjs",
+        );
+        assert_non_static(&result, "defaultPackage");
+        assert_non_static(&result, "run");
+        assert_eq!(
+            result.get_declared("defaultPackage"),
+            Some(FieldValue::Json(serde_json::json!("./web")))
+        );
+        assert_eq!(result.get_declared("run"), None);
     }
 
     #[test]
