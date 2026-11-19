@@ -3,7 +3,7 @@ name = "accept"
 vp = "global"
 steps = [
   { argv = ["vpt", "rm", "renovate.json"], snapshot = false },
-  { argv = ["vpt", "write-file", "renovate.json5", '{"extends": ["config:recommended"],}'], snapshot = false },
+  { argv = ["vpt", "write-file", "renovate.json5", '{"extends": "config:recommended",}'], snapshot = false },
   { argv = ["vp", "migrate", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false, interactions = [
     { "expect-milestone" = "confirm:renovate:yes" },
     { "write-key" = "enter" },
@@ -77,8 +77,10 @@ steps = [
 name = "non_interactive"
 vp = "global"
 steps = [
+  { argv = ["vpt", "rm", "renovate.json"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "renovate", "config:recommended"], snapshot = false },
   { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
-  ["vpt", "print-file", "renovate.json"],
+  ["node", "-p", "JSON.stringify(require('./package.json').renovate)"],
 ]
 
 [[case]]

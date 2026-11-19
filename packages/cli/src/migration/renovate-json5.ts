@@ -65,22 +65,35 @@ export async function withJson5Preset(source: string, preset: string): Promise<s
     return undefined;
   }
   const extendsProperty = objectProperty(object, 'extends');
-  const array = extendsProperty?.value;
+  const existing = extendsProperty?.value;
+  if (isString(existing)) {
+    if (existing.value === preset) {
+      return undefined;
+    }
+    const original = wrapped.slice(existing.start, existing.end);
+    const list = `[${original}, ${quotePreset(preset, original[0])}]`;
+    return wrapped.slice(1, existing.start) + list + wrapped.slice(existing.end, -2);
+  }
   if (
-    array !== undefined &&
-    (array.type !== 'ArrayExpression' ||
-      !array.elements.every((item) => isString(item) && item.value !== preset))
+    existing !== undefined &&
+    (existing.type !== 'ArrayExpression' ||
+      !existing.elements.every((item) => isString(item) && item.value !== preset))
   ) {
     return undefined;
   }
   const styleProperty = extendsProperty ?? object.properties.at(-1);
-  const entry = formatPresetEntry(wrapped, preset, array, styleProperty);
-  return appendEntry(wrapped, array ?? object, parsed.comments, entry).slice(1, -2);
+  const entry = formatPresetEntry(wrapped, preset, existing, styleProperty);
+  return appendEntry(wrapped, existing ?? object, parsed.comments, entry).slice(1, -2);
 }
 
 function quoteAt(source: string, node?: t.Span | null): string {
   const char = node && source[node.start];
   return char === "'" || char === '"' ? char : '';
+}
+
+function quotePreset(preset: string, quote: string): string {
+  const jsonString = JSON.stringify(preset);
+  return quote === '"' ? jsonString : "'" + jsonString.slice(1, -1).replaceAll("'", "\\'") + "'";
 }
 
 /** Match the property's quotes and colon spacing when creating an `extends` list. */
@@ -93,9 +106,7 @@ function formatPresetEntry(
   const property = styleProperty?.type === 'Property' ? styleProperty : undefined;
   const keyQuote = quoteAt(source, property?.key);
   const quote = quoteAt(source, array?.elements.at(-1) ?? property?.value) || keyQuote || "'";
-  const jsonString = JSON.stringify(preset);
-  const item =
-    quote === '"' ? jsonString : "'" + jsonString.slice(1, -1).replaceAll("'", "\\'") + "'";
+  const item = quotePreset(preset, quote);
   if (array) {
     return item;
   }

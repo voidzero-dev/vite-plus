@@ -153,11 +153,63 @@ describe('Renovate configuration', () => {
     });
   });
 
+  const presets = ['config:recommended', 'group:vitePlus'];
+  it.each([
+    ['renovate.json', { extends: 'config:recommended' }, { extends: presets }],
+    [
+      'package.json',
+      { name: 'demo', renovate: 'config:recommended' },
+      { name: 'demo', renovate: { extends: presets } },
+    ],
+    [
+      'package.json',
+      { renovate: { extends: 'config:recommended', enabled: true } },
+      { renovate: { extends: presets, enabled: true } },
+    ],
+  ] as const)('expands a single preset in %s: %j', async (name, original, expected) => {
+    const file = await config(name, JSON.stringify(original));
+    expect(await findRenovateConfigToUpdate(root)).toBe(file);
+    expect(await addVitePlusRenovatePreset(file)).toBe(true);
+    const updated = await fs.readFile(file, 'utf8');
+    expect(JSON.parse(updated)).toEqual(expected);
+    await expectSkipped(file, updated);
+  });
+
+  it.each([
+    ['renovate.jsonc', '"extends"', '"config:recomm\\u0065nded"', '"group:vitePlus"'],
+    ['renovate.json5', 'extends', "'config:recomm\\x65nded'", "'group:vitePlus'"],
+  ])(
+    'preserves the shorthand literal and surrounding comments in %s',
+    async (name, key, literal, group) => {
+      const source = `{\r\n  ${key}: /* before */ ${literal} /* after */,\r\n}\r\n`;
+      const file = await config(name, source);
+      expect(await findRenovateConfigToUpdate(root)).toBe(file);
+      expect(await addVitePlusRenovatePreset(file)).toBe(true);
+      const updated = await fs.readFile(file, 'utf8');
+      expect(updated).toBe(source.replace(literal, `[${literal}, ${group}]`));
+      await expectSkipped(file, updated);
+    },
+  );
+
+  it.each([
+    ['renovate.json', '{"extends":"group:vitePlus"}'],
+    ['renovate.json5', "{extends:'group:vite\\x50lus'}"],
+    ['package.json', '{"renovate":"group:vitePlus"}'],
+    ['package.json', '{"renovate":{"extends":"group:vitePlus"}}'],
+  ])('skips an already enabled shorthand in %s: %s', async (name, source) => {
+    await expectSkipped(await config(name, source), source);
+  });
+
+  it('ignores an empty Renovate shorthand in package.json', async () => {
+    const source = '{"renovate":""}';
+    await expectSkipped(await config('package.json', source), source);
+  });
+
   it.each([
     '{',
     '[]',
     '{ "extends": null }',
-    '{ "extends": "not-an-array" }',
+    '{ "extends": {} }',
     '{ "extends": ["valid", 42] }',
     '{ "extends": ["first"], "extends": ["second"] }',
     '{ "extends": ["group:vitePlus"] }',

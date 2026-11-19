@@ -53,11 +53,22 @@ async function withVitePlusPreset(file: string, source: string): Promise<string 
   }
   const configPath = embedded ? ['renovate'] : [];
   const config = findNodeAtLocation(tree, configPath);
-  if (config?.type !== 'object') {
-    return undefined;
+  const extendsPath = [...configPath, 'extends'];
+  // Renovate ignores an empty `renovate` field in package.json.
+  const manifestShorthand = embedded && config?.type === 'string' && config.value !== '';
+  const extendsNode = manifestShorthand ? config : findNodeAtLocation(tree, extendsPath);
+  if (extendsNode?.type === 'string') {
+    if (extendsNode.value === PRESET) {
+      return undefined;
+    }
+    // Keep the original string literal, including its escape sequences.
+    const { offset, length } = extendsNode;
+    const end = offset + length;
+    const presets = `[${source.slice(offset, end)}, "${PRESET}"]`;
+    const replacement = manifestShorthand ? `{"extends": ${presets}}` : presets;
+    return source.slice(0, offset) + replacement + source.slice(end);
   }
-  const extendsNode = findNodeAtLocation(config, ['extends']);
-  if (extendsNode && extendsNode.type !== 'array') {
+  if (config?.type !== 'object' || (extendsNode && extendsNode.type !== 'array')) {
     return undefined;
   }
   const presets: unknown[] | undefined = extendsNode?.children?.map((item) => item.value);
@@ -69,7 +80,7 @@ async function withVitePlusPreset(file: string, source: string): Promise<string 
   const multiline = source.slice(target.offset, target.offset + target.length).includes('\n');
   return appendMissingJsoncArrayItems(
     source,
-    [...configPath, 'extends'],
+    extendsPath,
     presets,
     [PRESET],
     multiline ? detectFormattingOptions(source) : undefined,
