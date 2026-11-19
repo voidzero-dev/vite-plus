@@ -440,19 +440,18 @@ function getExistingVitePlusSetupOptions(
 }
 
 async function collectMigrationPlan(
-  rootDir: string,
-  detectedPackageManager: PackageManager | undefined,
-  detectedPackageManagerVersion: string,
+  workspace: WorkspaceInfoOptional,
   options: MigrationOptions,
-  packages?: WorkspacePackage[],
+  includeRenovate: boolean,
 ): Promise<MigrationPlan> {
+  const { rootDir, packages } = workspace;
   // 1. Package manager selection
   const packageManager =
-    detectedPackageManager ?? (await selectPackageManager(options.interactive, true, rootDir));
+    workspace.packageManager ?? (await selectPackageManager(options.interactive, true, rootDir));
   const convertYarnPnp = await confirmYarnNodeModulesMode(
     rootDir,
     packageManager,
-    detectedPackageManager ? detectedPackageManagerVersion : 'latest',
+    workspace.packageManager ? workspace.packageManagerVersion : 'latest',
     options.interactive,
   );
 
@@ -500,8 +499,11 @@ async function collectMigrationPlan(
 
   // 11. Framework shim detection + prompt
   const frameworkShimFrameworks = await collectFrameworkShimFrameworks(rootDir, options, packages);
+  const renovateConfigPath = includeRenovate
+    ? await confirmRenovatePreset(rootDir, options.interactive)
+    : undefined;
 
-  const plan: MigrationPlan = {
+  return {
     packageManager,
     convertYarnPnp,
     ...setupPlan,
@@ -517,9 +519,8 @@ async function collectMigrationPlan(
     migrateNodeVersionFile,
     nodeVersionDetection,
     frameworkShimFrameworks,
+    renovateConfigPath,
   };
-
-  return plan;
 }
 
 // Shown on a bare existing-Vite+ upgrade that skipped the setup bucket, on both
@@ -1117,6 +1118,7 @@ async function main() {
     );
   }
   const alreadyUsesVitePlus = hasVitePlusDependency(rootPkg);
+  const fullSetup = !alreadyUsesVitePlus || options.full === true;
   if (alreadyUsesVitePlus && !isForceOverrideMode()) {
     // Runs with the detected package manager, which may be undefined for an
     // existing Vite+ project that has no lockfile/`packageManager` pin. In that
@@ -1288,7 +1290,6 @@ async function main() {
     // migration, framework shims, tsconfig baseUrl, .node-version) runs only with
     // `--full`; the per-action flags (--hooks/--agent/--editor) still opt into a
     // single action without `--full`.
-    const fullSetup = options.full === true;
     const renovateConfigPath = fullSetup
       ? await confirmRenovatePreset(workspaceInfoOptional.rootDir, options.interactive)
       : undefined;
@@ -1773,19 +1774,7 @@ async function main() {
   }
 
   // Phase 1: Collect all user decisions upfront
-  const plan = await collectMigrationPlan(
-    workspaceInfoOptional.rootDir,
-    workspaceInfoOptional.packageManager,
-    workspaceInfoOptional.packageManagerVersion,
-    options,
-    workspaceInfoOptional.packages,
-  );
-  if (!alreadyUsesVitePlus || options.full) {
-    plan.renovateConfigPath = await confirmRenovatePreset(
-      workspaceInfoOptional.rootDir,
-      options.interactive,
-    );
-  }
+  const plan = await collectMigrationPlan(workspaceInfoOptional, options, fullSetup);
 
   // Phase 2: Execute without prompts
   const result = await executeMigrationPlan(

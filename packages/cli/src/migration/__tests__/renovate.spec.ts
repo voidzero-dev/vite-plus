@@ -24,9 +24,21 @@ describe('Renovate configuration', () => {
     return file;
   }
 
+  async function expectSkipped(file: string, source: string): Promise<void> {
+    expect(await findRenovateConfigToUpdate(root)).toBeUndefined();
+    expect(await addVitePlusRenovatePreset(file)).toBe(false);
+    expect(await fs.readFile(file, 'utf8')).toBe(source);
+  }
+
   it('edits only the first config and preserves comments and existing presets', async () => {
-    const source =
-      '{\r\n  // Keep our preset first\r\n  "extends": ["local>org/shared"],\r\n  "labels": ["deps"],\r\n}\r\n';
+    const source = [
+      '{',
+      '  // Keep our preset first',
+      '  "extends": ["local>org/shared"],',
+      '  "labels": ["deps"],',
+      '}',
+      '',
+    ].join('\r\n');
     const active = await config('.github/renovate.jsonc', source);
     const ignored = await config('.renovaterc', '{}\n');
     expect(await findRenovateConfigToUpdate(root)).toBe(active);
@@ -96,17 +108,13 @@ describe('Renovate configuration', () => {
     "{extends: ['first'",
   ])('skips unsupported or ineligible JSON5 configs: %s', async (source) => {
     const file = await config('.gitlab/renovate.json5', source);
-    expect(await findRenovateConfigToUpdate(root)).toBeUndefined();
-    expect(await addVitePlusRenovatePreset(file)).toBe(false);
-    expect(await fs.readFile(file, 'utf8')).toBe(source);
+    await expectSkipped(file, source);
   });
 
   it('accepts JSON5-only syntax only in a .json5 file', async () => {
     const source = "{extends: ['config:recommended']}";
     const file = await config('renovate.jsonc', source);
-    expect(await findRenovateConfigToUpdate(root)).toBeUndefined();
-    expect(await addVitePlusRenovatePreset(file)).toBe(false);
-    expect(await fs.readFile(file, 'utf8')).toBe(source);
+    await expectSkipped(file, source);
   });
 
   it.each(['renovate.jsonc', 'renovate.json5'])(
@@ -158,9 +166,7 @@ describe('Renovate configuration', () => {
     async (source) => {
       const file = await config('renovate.json', source);
       await config('.github/renovate.json', '{}');
-      expect(await findRenovateConfigToUpdate(root)).toBeUndefined();
-      expect(await addVitePlusRenovatePreset(file)).toBe(false);
-      expect(await fs.readFile(file, 'utf8')).toBe(source);
+      await expectSkipped(file, source);
     },
   );
 

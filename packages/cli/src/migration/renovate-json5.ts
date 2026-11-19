@@ -8,6 +8,7 @@ import { isString, objectProperty, staticObject } from './ast-utils.ts';
 const JSON5_NUMBER =
   /^[+-]?(?:Infinity|NaN|0[xX][\da-fA-F]+|(?:0|[1-9]\d*)(?:\.\d*)?(?:[eE][+-]?\d+)?|\.\d+(?:[eE][+-]?\d+)?)$/;
 const CODE_POINT_ESCAPE = /(?:^|[^\\])(?:\\\\)*\\u\{/;
+const LINE_INDENT = /(\r\n|[\r\n\u2028\u2029])([^\S\r\n\u2028\u2029]*)$/;
 
 function isJson5Value(node: t.Node, source: string): boolean {
   switch (node.type) {
@@ -63,7 +64,8 @@ export async function withJson5Preset(source: string, preset: string): Promise<s
   if (object.type !== 'ObjectExpression' || !isJson5Value(object, wrapped)) {
     return undefined;
   }
-  const array = objectProperty(object, 'extends')?.value;
+  const extendsProperty = objectProperty(object, 'extends');
+  const array = extendsProperty?.value;
   if (
     array !== undefined &&
     (array.type !== 'ArrayExpression' ||
@@ -71,7 +73,9 @@ export async function withJson5Preset(source: string, preset: string): Promise<s
   ) {
     return undefined;
   }
-  return appendRenovateJson5Preset(wrapped, object, array, parsed.comments, preset).slice(1, -2);
+  const styleProperty = extendsProperty ?? object.properties.at(-1);
+  const entry = formatPresetEntry(wrapped, preset, array, styleProperty);
+  return appendEntry(wrapped, array ?? object, parsed.comments, entry).slice(1, -2);
 }
 
 function quoteAt(source: string, node?: t.Span | null): string {
@@ -79,52 +83,52 @@ function quoteAt(source: string, node?: t.Span | null): string {
   return char === "'" || char === '"' ? char : '';
 }
 
-const LINE_INDENT = /(\r\n|[\r\n\u2028\u2029])([^\S\r\n\u2028\u2029]*)$/;
-
-/** All spans refer to source, including any parser-supplied expression wrapper. */
-function appendRenovateJson5Preset(
+/** Match the property's quotes and colon spacing when creating an `extends` list. */
+function formatPresetEntry(
   source: string,
-  object: t.ObjectExpression,
-  array: t.ArrayExpression | undefined,
-  comments: readonly t.Span[],
   preset: string,
+  array: t.ArrayExpression | undefined,
+  styleProperty: t.ObjectPropertyKind | undefined,
 ): string {
-  const container = array ?? object;
-  const items = array ? array.elements : object.properties;
+  const property = styleProperty?.type === 'Property' ? styleProperty : undefined;
+  const keyQuote = quoteAt(source, property?.key);
+  const quote = quoteAt(source, array?.elements.at(-1) ?? property?.value) || keyQuote || "'";
+  const jsonString = JSON.stringify(preset);
+  const item =
+    quote === '"' ? jsonString : "'" + jsonString.slice(1, -1).replaceAll("'", "\\'") + "'";
+  if (array) {
+    return item;
+  }
+  const colon =
+    property && /^[ \t]*:[ \t]*$/.exec(source.slice(property.key.end, property.value.start));
+  return `${keyQuote}extends${keyQuote}${colon?.[0] ?? ': '}[${item}]`;
+}
+
+function appendEntry(
+  source: string,
+  container: t.ArrayExpression | t.ObjectExpression,
+  comments: readonly t.Span[],
+  entry: string,
+): string {
+  const items = container.type === 'ArrayExpression' ? container.elements : container.properties;
   const last = items.at(-1);
   const previous = items.at(-2);
   const close = container.end - 1;
   const afterLast = last?.end ?? container.start + 1;
 
-  // After the final item only comments, whitespace and a trailing comma are
-  // possible. A comma *inside* a comment must not become an array separator.
-  let end = afterLast;
+  // Search between comments so a comma in a comment cannot act as a separator.
+  let afterComments = afterLast;
   let trailingComma = false;
   for (const comment of comments) {
     if (comment.start >= afterLast && comment.end <= close) {
-      trailingComma ||= source.slice(end, comment.start).includes(',');
-      end = comment.end;
+      trailingComma ||= source.slice(afterComments, comment.start).includes(',');
+      afterComments = comment.end;
     }
   }
-  const tail = source.slice(end, close);
+  const tail = source.slice(afterComments, close);
   trailingComma ||= tail.includes(',');
-  const insert = end + tail.trimEnd().length;
+  const insert = afterComments + tail.trimEnd().length;
   const padding = source.slice(insert, close);
-
-  const property = array
-    ? object.properties.find((prop) => prop.type === 'Property' && prop.value === array)
-    : object.properties.at(-1);
-  const key = property?.type === 'Property' ? property.key : undefined;
-  const value = property?.type === 'Property' ? property.value : undefined;
-  const keyQuote = quoteAt(source, key);
-  const quote =
-    quoteAt(source, array?.elements.at(-1)) || quoteAt(source, value) || keyQuote || "'";
-  const string = JSON.stringify(preset);
-  let entry = quote === '"' ? string : "'" + string.slice(1, -1).replaceAll("'", "\\'") + "'";
-  if (!array) {
-    const colon = key && value && /^[ \t]*:[ \t]*$/.exec(source.slice(key.end, value.start));
-    entry = `${keyQuote}extends${keyQuote}${colon?.[0] ?? ': '}[${entry}]`;
-  }
 
   const lastLine = last && LINE_INDENT.exec(source.slice(0, last.start));
   const closingLine = LINE_INDENT.exec(padding);
@@ -139,7 +143,8 @@ function appendRenovateJson5Preset(
     spacing = newline + indent;
   } else {
     const between = previous && last && source.slice(previous.end, last.start);
-    spacing = (between && /,([ \t]*)$/.exec(between)?.[1]) ?? (end > afterLast ? ' ' : padding);
+    const separatorSpace = between && /,([ \t]*)$/.exec(between)?.[1];
+    spacing = separatorSpace ?? (afterComments > afterLast ? ' ' : padding);
   }
 
   // Place a necessary comma before any comment attached to the old last item.

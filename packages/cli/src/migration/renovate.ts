@@ -1,13 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import {
-  findNodeAtLocation,
-  getNodeValue,
-  parseTree,
-  type Node,
-  type ParseError,
-} from 'jsonc-parser';
+import { findNodeAtLocation, parseTree, type Node, type ParseError } from 'jsonc-parser';
 
 import { appendMissingJsoncArrayItems, detectFormattingOptions } from '../utils/json.ts';
 import { withJson5Preset } from './renovate-json5.ts';
@@ -57,18 +51,17 @@ async function withVitePlusPreset(file: string, source: string): Promise<string 
   if (!tree || errors.length || hasDuplicateKeys(tree)) {
     return undefined;
   }
-  const config = embedded ? findNodeAtLocation(tree, ['renovate']) : tree;
+  const configPath = embedded ? ['renovate'] : [];
+  const config = findNodeAtLocation(tree, configPath);
   if (config?.type !== 'object') {
     return undefined;
   }
   const extendsNode = findNodeAtLocation(config, ['extends']);
-  const presets: unknown = extendsNode && getNodeValue(extendsNode);
-  if (
-    presets !== undefined &&
-    (!Array.isArray(presets) ||
-      !presets.every((preset) => typeof preset === 'string') ||
-      presets.includes(PRESET))
-  ) {
+  if (extendsNode && extendsNode.type !== 'array') {
+    return undefined;
+  }
+  const presets: unknown[] | undefined = extendsNode?.children?.map((item) => item.value);
+  if (presets?.some((preset) => typeof preset !== 'string' || preset === PRESET)) {
     return undefined;
   }
   // Keep a compact config or preset list on one line.
@@ -76,7 +69,7 @@ async function withVitePlusPreset(file: string, source: string): Promise<string 
   const multiline = source.slice(target.offset, target.offset + target.length).includes('\n');
   return appendMissingJsoncArrayItems(
     source,
-    embedded ? ['renovate', 'extends'] : ['extends'],
+    [...configPath, 'extends'],
     presets,
     [PRESET],
     multiline ? detectFormattingOptions(source) : undefined,
@@ -88,7 +81,8 @@ export async function findRenovateConfigToUpdate(rootDir: string): Promise<strin
     const file = path.join(rootDir, name);
     try {
       const source = await fs.readFile(file, 'utf8');
-      return (await withVitePlusPreset(file, source)) === undefined ? undefined : file;
+      const updated = await withVitePlusPreset(file, source);
+      return updated === undefined ? undefined : file;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
         return undefined;

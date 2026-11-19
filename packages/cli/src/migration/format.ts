@@ -69,10 +69,11 @@ function isExistingFile(projectRoot: string, relativePath: string): boolean {
 }
 
 function wholeProjectFormatPaths(projectRoot: string): string[] | undefined {
-  const configs = STANDALONE_RENOVATE_CONFIG_FILES.filter((file) =>
+  // Anchor the exclusions so nested files with the same name still get formatted.
+  const exclusions = STANDALONE_RENOVATE_CONFIG_FILES.filter((file) =>
     isExistingFile(projectRoot, file),
-  );
-  return configs.length ? ['.', ...configs.map((file) => `!/${file}`)] : undefined;
+  ).map((file) => `!/${file}`);
+  return exclusions.length > 0 ? ['.', ...exclusions] : undefined;
 }
 
 /**

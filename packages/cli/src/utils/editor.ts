@@ -526,16 +526,19 @@ function mergeAndWriteEditorConfig(
   }
 
   const formattingOptions = detectFormattingOptions(originalText);
-  const newText =
-    fileName === 'extensions.json'
-      ? appendMissingJsoncArrayItems(
-          originalText,
-          ['recommendations'],
-          existing.recommendations,
-          Array.isArray(incoming.recommendations) ? incoming.recommendations : [],
-          formattingOptions,
-        )
-      : mergeSettingsText(originalText, existing, incoming, formattingOptions);
+  let newText: string;
+  if (fileName === 'extensions.json') {
+    const { recommendations } = incoming;
+    newText = appendMissingJsoncArrayItems(
+      originalText,
+      ['recommendations'],
+      existing.recommendations,
+      Array.isArray(recommendations) ? recommendations : [],
+      formattingOptions,
+    );
+  } else {
+    newText = mergeSettingsText(originalText, existing, incoming, formattingOptions);
+  }
 
   // Do not rewrite when the merge produced no changes (keeps the operation idempotent).
   if (newText === originalText) {
