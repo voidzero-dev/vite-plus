@@ -149,7 +149,7 @@ The walk-up algorithm is unchanged: at each directory, sources are checked in th
 
 #### 2.3 `onFail` semantics
 
-> **Status:** As of this PR, `runtime.onFail` is **parsed and preserved but not yet acted on**. Managed mode always resolves and downloads the requested version (equivalent to `onFail: "download"`), and a resolution/download failure surfaces as an error regardless of the declared `onFail`. The matrix below is the intended future behavior, tracked under [Deferred / Future Work](#deferred--future-work).
+> **Status:** `runtime.onFail` is acted on only for an invalid `devEngines.runtime.version` (see the rule in section 2.4). Otherwise it is **parsed and preserved but not yet acted on**: managed mode always resolves and downloads the requested version (equivalent to `onFail: "download"`), and a resolution/download failure surfaces as an error regardless of the declared `onFail`. The matrix below is the intended future behavior, tracked under [Deferred / Future Work](#deferred--future-work).
 
 The intended semantics, once implemented: managed mode already implements the strongest remediation (`download`), so `onFail` mainly matters when remediation is impossible or when system-first mode (`vp env off`) is active:
 
@@ -198,7 +198,18 @@ ranges, it just does not author them through `vp env pin`. The alias-to-semver
 conversion table in section 5.2 applies to `vp migrate` (which preserves the
 floating intent of `.nvmrc` values), not to pin.
 
-Rule: `devEngines.runtime.version` is **strict** when reading: only valid semver exact versions or ranges are accepted; aliases such as `lts`, `lts/*`, `lts/iron`, `lts/-1`, or `latest` are rejected. When the effective `onFail` is `error`, the command fails with `devEngines.runtime.version "<value>" is not a valid semver range (see devEngines spec)`; with `warn` or `download`, a warning is printed and resolution falls through to lower-priority sources; with `ignore`, it falls through silently. CLI inputs such as `vp env pin lts` may still accept aliases, but they are resolved to an exact semver version before being written to `devEngines`. `.node-version`, `.nvmrc`, and other non-manifest sources continue to support aliases.
+Rule: `devEngines.runtime.version` accepts only semver exact versions and ranges, for both reading and writing, like npm and pnpm. Vite+ does not resolve Node.js aliases (`lts`, `lts/*`, `lts/iron`, `lts/-1`, `latest`) in this field. CLI inputs such as `vp env pin lts` still accept aliases and write the resolved exact version. `.node-version` and `.nvmrc` keep their alias support.
+
+When an invalid version (an alias or any other non-semver value) would select the Node.js version, the entry's effective `onFail` applies:
+
+| `onFail`          | Invalid `devEngines.runtime.version`                                                                   |
+| ----------------- | ------------------------------------------------------------------------------------------------------ |
+| `error` (default) | Fail: `devEngines.runtime.version "lts/*" in <path> is not a valid semver range (see devEngines spec)` |
+| `download`        | Fail, as `error`: there is no version to download (npm also treats `download` as `error` here)         |
+| `warn`            | Print the same message as a warning and continue with the lower-priority sources                       |
+| `ignore`          | Continue with the lower-priority sources without a message                                             |
+
+When a valid `.node-version` selects the version, `devEngines.runtime` is only a compatibility constraint. An invalid value then prints the warning (unless `onFail` is `ignore`) and does not fail, like a version that does not satisfy the constraint. `vp env doctor` reports the invalid value in both cases.
 
 When `.node-version` is the write target and a `devEngines.runtime` node entry also exists:
 
@@ -336,15 +347,15 @@ A small shared Rust helper (in `vp_shared`) will own "edit one field in package.
 
 ## Spec Compliance Matrix
 
-| Spec feature                                           | Vite+ support after this RFC                                                                                                                                                               |
-| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `runtime` (single + array)                             | Yes, for `name: "node"`; other runtimes surfaced by doctor, not managed                                                                                                                    |
-| `packageManager` (single + array)                      | Yes, for pnpm / yarn / npm / bun                                                                                                                                                           |
-| `version` optional, semver range syntax                | Yes (strict read for `devEngines.runtime`: aliases rejected; strict write)                                                                                                                  |
-| `onFail` (`ignore` / `warn` / `error` / `download`)    | Acted on for invalid `devEngines.runtime.version`; drives the unsupported-name fallthrough for `packageManager`; otherwise parsed/preserved (see section 2.3 and [Deferred / Future Work](#deferred--future-work)) |
-| Array `onFail` defaults (prior `ignore`, last `error`) | Yes                                                                                                                                                                                        |
-| `os` / `cpu` / `libc`                                  | Out of scope (possible future doctor checks)                                                                                                                                               |
-| Integrity hash                                         | Not part of the spec; the `packageManager` field hash remains supported                                                                                                                    |
+| Spec feature                                           | Vite+ support after this RFC                                                                                                                                                                                                |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `runtime` (single + array)                             | Yes, for `name: "node"`; other runtimes surfaced by doctor, not managed                                                                                                                                                     |
+| `packageManager` (single + array)                      | Yes, for pnpm / yarn / npm / bun                                                                                                                                                                                            |
+| `version` optional, semver range syntax                | Yes. `runtime`: semver only, and an invalid value follows `onFail` (section 2.4). `packageManager`: lenient read (an invalid range counts as any version, with a warning), strict write                                     |
+| `onFail` (`ignore` / `warn` / `error` / `download`)    | Partial: drives the unsupported-name fallthrough for `packageManager` and an invalid `runtime` version; otherwise parsed/preserved, not yet acted on (see section 2.3 and [Deferred / Future Work](#deferred--future-work)) |
+| Array `onFail` defaults (prior `ignore`, last `error`) | Yes                                                                                                                                                                                                                         |
+| `os` / `cpu` / `libc`                                  | Out of scope (possible future doctor checks)                                                                                                                                                                                |
+| Integrity hash                                         | Not part of the spec; the `packageManager` field hash remains supported                                                                                                                                                     |
 
 ## Non-Goals
 
@@ -357,10 +368,10 @@ A small shared Rust helper (in `vp_shared`) will own "edit one field in package.
 
 `onFail` is parsed, preserved, and validated (`vp env doctor` flags unknown values), but the full behavioral matrix is **not yet implemented** in this PR. What is and isn't acted on today:
 
-| Field            | `onFail` behavior today                                                                                                                                                                                                                   |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `runtime`        | Not acted on. Managed mode always resolves and downloads (equivalent to `download`); failures error out regardless of `onFail`. The section 2.3 matrix is future work.                                                                    |
-| `packageManager` | Acted on only when no array entry names a supported package manager: `ignore`/`warn` continue the detection chain, `error`/`download` fail. A selected (supported) entry's `onFail` is not consulted on a later resolve/download failure. |
+| Field            | `onFail` behavior today                                                                                                                                                                                                                     |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `runtime`        | Acted on only for an invalid `devEngines.runtime.version` (section 2.4). Otherwise managed mode always resolves and downloads (equivalent to `download`); failures error out regardless of `onFail`. The section 2.3 matrix is future work. |
+| `packageManager` | Acted on only when no array entry names a supported package manager: `ignore`/`warn` continue the detection chain, `error`/`download` fail. A selected (supported) entry's `onFail` is not consulted on a later resolve/download failure.   |
 
 The deferred behavior, in priority order:
 

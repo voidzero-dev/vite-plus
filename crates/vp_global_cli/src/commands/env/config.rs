@@ -223,31 +223,10 @@ pub(crate) async fn resolve_project_version_source(
         return Ok(None);
     };
 
-    // Validate the resolved source. `devEngines.runtime` must be a valid semver
-    // exact version or range; aliases such as `lts/*` are rejected and respect
-    // the entry's effective `onFail`.
-    let validated = match resolution.source {
-        VersionSource::DevEnginesRuntime => {
-            if let Some(ref source_path) = resolution.source_path {
-                if let Some(source_pkg) = read_package_json(source_path).await.ok().flatten() {
-                    validate_dev_engines_runtime_version(
-                        &resolution.version,
-                        &source_pkg,
-                        warn_invalid,
-                    )
-                    .await
-                    .map_err(|e| Error::ConfigError(e.to_string().into()))?
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        }
-        _ => validate_version_spec(&resolution.version, &resolution.source.to_string(), warn_invalid).map(Into::into),
-    };
-
-    if let Some(version) = validated {
+    if let Some(version) = resolution
+        .validated_version(warn_invalid)
+        .map_err(|e| Error::ConfigError(e.to_string().into()))?
+    {
         if let (Some(source_path), Some(project_root)) =
             (resolution.source_path, resolution.project_root)
         {
@@ -273,25 +252,21 @@ pub(crate) async fn resolve_project_version_source(
     let package_json_path = project_root.join("package.json");
     let pkg = read_package_json(&package_json_path).await.ok().flatten();
 
-    if matches!(resolution.source, VersionSource::NodeVersionFile) {
-        if let Some(ref source_pkg) = pkg {
-            if let Some(entry) = source_pkg.dev_engines_runtime("node") {
-                if let Some(ref v) = entry.version {
-                    match validate_dev_engines_runtime_version(v, source_pkg, warn_invalid).await {
-                        Ok(Some(version)) => {
-                            return Ok(Some(ProjectVersionSource {
-                                version: version.to_string(),
-                                source: "devEngines.runtime".into(),
-                                source_path: package_json_path,
-                                project_root,
-                            }));
-                        }
-                        Ok(None) => {}
-                        Err(e) => return Err(Error::ConfigError(e.to_string().into())),
-                    }
-                }
-            }
-        }
+    // devEngines.runtime selects the version here, so its onFail applies to an invalid value
+    if matches!(resolution.source, VersionSource::NodeVersionFile)
+        && let Some((entry, on_fail)) =
+            pkg.as_ref().and_then(|pkg| pkg.dev_engines_runtime_with_on_fail("node"))
+        && let Some(version) = &entry.version
+        && let Some(version) =
+            validate_dev_engines_runtime_version(version, on_fail, &package_json_path, warn_invalid)
+                .map_err(|e| Error::ConfigError(e.to_string().into()))?
+    {
+        return Ok(Some(ProjectVersionSource {
+            version: version.to_string(),
+            source: "devEngines.runtime".into(),
+            source_path: package_json_path,
+            project_root,
+        }));
     }
 
     if matches!(
@@ -941,19 +916,75 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_project_source_falls_back_from_invalid_dev_engines_with_ignore_to_engines_node() {
+    async fn test_project_source_falls_back_from_invalid_dev_engines_with_warn_to_engines_node() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        for version in ["not-a-version", "lts/*"] {
+            tokio::fs::write(
+                temp_path.join("package.json"),
+                format!(
+                    r#"{{"devEngines":{{"runtime":{{"name":"node","version":"{version}","onFail":"warn"}}}},"engines":{{"node":"22.22.0"}}}}"#
+                ),
+            )
+            .await
+            .unwrap();
+
+            let source = resolve_project_version_source(&temp_path, false).await.unwrap().unwrap();
+            assert_eq!(source.version, "22.22.0", "{version}");
+            assert_eq!(source.source, "engines.node", "{version}");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_project_source_rejects_dev_engines_alias_by_default() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
         tokio::fs::write(
             temp_path.join("package.json"),
-            r#"{"devEngines":{"runtime":{"name":"node","version":"not-a-version","onFail":"ignore"}},"engines":{"node":"22.22.0"}}"#,
+            r#"{"devEngines":{"runtime":{"name":"node","version":"lts/*"}},"engines":{"node":"22.22.0"}}"#,
+        )
+        .await
+        .unwrap();
+
+        let Err(error) = resolve_project_version_source(&temp_path, false).await else {
+            panic!("an alias in devEngines.runtime should fail with the default onFail");
+        };
+        assert!(
+            error.to_string().contains("devEngines.runtime.version \"lts/*\""),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_project_source_rejects_dev_engines_alias_after_invalid_node_version() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        tokio::fs::write(temp_path.join(".node-version"), "not-a-version").await.unwrap();
+        tokio::fs::write(
+            temp_path.join("package.json"),
+            r#"{"devEngines":{"runtime":{"name":"node","version":"latest","onFail":"download"}}}"#,
+        )
+        .await
+        .unwrap();
+
+        assert!(resolve_project_version_source(&temp_path, false).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_project_source_valid_node_version_skips_invalid_dev_engines() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        tokio::fs::write(temp_path.join(".node-version"), "22.22.0").await.unwrap();
+        tokio::fs::write(
+            temp_path.join("package.json"),
+            r#"{"devEngines":{"runtime":{"name":"node","version":"lts/*"}}}"#,
         )
         .await
         .unwrap();
 
         let source = resolve_project_version_source(&temp_path, false).await.unwrap().unwrap();
         assert_eq!(source.version, "22.22.0");
-        assert_eq!(source.source, "engines.node");
+        assert_eq!(source.source, ".node-version");
     }
 
     #[tokio::test]
@@ -972,7 +1003,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_project_source_stops_at_invalid_package_source_with_ignore() {
+    async fn test_project_source_stops_at_invalid_package_source() {
         let temp_dir = TempDir::new().unwrap();
         let parent = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
         let child = parent.join("child");
@@ -995,55 +1026,6 @@ mod tests {
         tokio::fs::write(temp_path.join(".node-version"), "not-a-version").await.unwrap();
 
         assert!(resolve_project_version_source(&temp_path, false).await.unwrap().is_none());
-    }
-
-    #[tokio::test]
-    async fn test_project_source_dev_engines_runtime_alias_with_error_fails() {
-        let temp_dir = TempDir::new().unwrap();
-        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        tokio::fs::write(
-            temp_path.join("package.json"),
-            r#"{"devEngines":{"runtime":{"name":"node","version":"lts/*","onFail":"error"}}}"#,
-        )
-        .await
-        .unwrap();
-
-        let result = resolve_project_version_source(&temp_path, false).await;
-        assert!(result.is_err());
-        let err = result.err().unwrap().to_string();
-        assert!(err.contains("devEngines.runtime.version"));
-        assert!(err.contains("\"lts/*\""));
-    }
-
-    #[tokio::test]
-    async fn test_project_source_dev_engines_runtime_alias_with_warn_falls_back_to_engines_node() {
-        let temp_dir = TempDir::new().unwrap();
-        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        tokio::fs::write(
-            temp_path.join("package.json"),
-            r#"{"devEngines":{"runtime":{"name":"node","version":"lts/*","onFail":"warn"}},"engines":{"node":"22.22.0"}}"#,
-        )
-        .await
-        .unwrap();
-
-        let source = resolve_project_version_source(&temp_path, false).await.unwrap().unwrap();
-        assert_eq!(source.version, "22.22.0");
-        assert_eq!(source.source, "engines.node");
-    }
-
-    #[tokio::test]
-    async fn test_project_source_dev_engines_runtime_invalid_with_error_fails() {
-        let temp_dir = TempDir::new().unwrap();
-        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        tokio::fs::write(
-            temp_path.join("package.json"),
-            r#"{"devEngines":{"runtime":{"name":"node","version":"not-a-version","onFail":"error"}}}"#,
-        )
-        .await
-        .unwrap();
-
-        let result = resolve_project_version_source(&temp_path, false).await;
-        assert!(result.is_err());
     }
 
     #[tokio::test]

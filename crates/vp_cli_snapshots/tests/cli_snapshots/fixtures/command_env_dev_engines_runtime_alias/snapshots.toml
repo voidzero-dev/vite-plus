@@ -1,0 +1,12 @@
+[[case]]
+name = "command_env_dev_engines_runtime_alias"
+vp = "global"
+comment = "devEngines.runtime.version accepts only semver, as in npm and pnpm. A Node.js alias follows the entry's onFail."
+seed-runtime = false
+prewarm-package-managers = false
+steps = [
+  { argv = ["vp", "env", "current", "node", "--json"], comment = "the default onFail (error) fails instead of resolving the alias", continue-on-failure = true },
+  { argv = ["node", "--version"], comment = "the node shim reports the same error", continue-on-failure = true },
+  { argv = ["vpt", "json-edit", "package.json", "devEngines.runtime.onFail", "warn"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "env", "current", "node", "--json"], comment = "onFail warn skips the entry with a warning, so engines.node selects the version" },
+]
