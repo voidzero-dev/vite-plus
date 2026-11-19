@@ -50,7 +50,9 @@ import {
   type PreparedOxlintConfigs,
   LEGACY_WRAPPER_FALLBACK_VERSIONS,
   PROVIDER_OVERRIDE_DROP_NAMES,
-  REMOVE_PACKAGES,
+  OPT_IN_BROWSER_PROVIDERS,
+  bundledPackagesToRemove,
+  type RetainedImportDependencies,
   VITEST_IS_MANAGED_OVERRIDE,
   isPlainRecord,
   pinnedPackageManagerVersion,
@@ -402,8 +404,8 @@ export function rewritePnpmWorkspaceYaml(
       const currentVersion =
         getYamlMapScalarStringValue(overrides, overrideKey) ??
         getYamlMapScalarStringValue(overrides, key);
-      // @vitest/browser is an override-only entry: migration removes its direct
-      // dependency and catalog entry because Vite+ already supplies it.
+      // Keep the WebdriverIO browser override concrete: it also works in a
+      // workspace where no package directly imports the browser entry point.
       const version =
         key === '@vitest/browser'
           ? managed[key]
@@ -984,19 +986,19 @@ function rewriteYamlCatalogAtPath(
     catalog.set(scalarString(VITE_PLUS_NAME), scalarString(VITE_PLUS_VERSION));
   }
   if (addMissing && VITEST_IS_MANAGED_OVERRIDE) {
-    // Injected providers, plus every declared alignable @vitest/* so its
-    // `catalog:` reference (written by getAlignedVitestEcosystemDependencySpec)
-    // resolves instead of dangling. That writer does not require `vitest` in
-    // the catalog, so neither does this one: a project may declare only an
-    // excluded utility such as `@vitest/utils`. #2005
-    const additions = new Set<string>([...catalogAdditions, ...vitestEcosystemPackages]);
+    // These packages need catalog entries even when the catalog omits vitest (#2005).
+    // Retained browser peers keep their declared catalog ranges.
+    const additions = new Set([
+      ...vitestEcosystemPackages,
+      ...OPT_IN_BROWSER_PROVIDERS.filter((name) => catalogAdditions.has(name)),
+    ]);
     for (const name of additions) {
       if (isAlignableVitestEcosystemPackage(name)) {
         catalog.set(scalarString(name), scalarString(VITEST_VERSION));
       }
     }
   }
-  for (const name of REMOVE_PACKAGES) {
+  for (const name of bundledPackagesToRemove(catalogAdditions)) {
     catalog.delete(name);
   }
   // Drop any entry still pointing at the deleted `vite-plus-test` wrapper.
@@ -1038,6 +1040,7 @@ function rewriteCatalogObject(
   addMissing: boolean,
   usesVitest: boolean,
   vitestEcosystemPackages: ReadonlySet<string>,
+  catalogAdditions: ReadonlySet<string>,
   otherDefaultCatalog?: Record<string, string>,
 ): void {
   const managed = managedOverridePackages(usesVitest);
@@ -1061,7 +1064,7 @@ function rewriteCatalogObject(
   ) {
     catalog[VITE_PLUS_NAME] = VITE_PLUS_VERSION;
   }
-  for (const name of REMOVE_PACKAGES) {
+  for (const name of bundledPackagesToRemove(catalogAdditions)) {
     delete catalog[name];
   }
   if (VITEST_IS_MANAGED_OVERRIDE) {
@@ -1082,24 +1085,6 @@ function rewriteCatalogObject(
   }
 }
 
-function rewriteCatalogsObject(
-  catalogs: Record<string, Record<string, string>>,
-  usesVitest: boolean,
-  vitestEcosystemPackages: ReadonlySet<string>,
-  targetCatalog?: Record<string, string>,
-  defaultCatalog?: Record<string, string>,
-): void {
-  for (const [name, catalog] of Object.entries(catalogs)) {
-    rewriteCatalogObject(
-      catalog,
-      catalog === targetCatalog,
-      usesVitest,
-      vitestEcosystemPackages,
-      name === 'default' ? defaultCatalog : undefined,
-    );
-  }
-}
-
 /**
  * Write catalog entries to root package.json for bun.
  * Bun stores catalogs in package.json under the `catalog` key,
@@ -1112,6 +1097,7 @@ export function rewriteBunCatalog(
   vitestEcosystemPackages: ReadonlySet<string>,
   usesWebdriverioProvider = false,
   packageManagerVersion = 'latest',
+  catalogAdditions: ReadonlySet<string> = new Set(),
 ): void {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
@@ -1130,7 +1116,6 @@ export function rewriteBunCatalog(
     const workspacesObj =
       pkg.workspaces && !Array.isArray(pkg.workspaces) ? pkg.workspaces : undefined;
     const activeCatalogs = getBunCatalogConfig(pkg);
-    const useWorkspacesCatalog = activeCatalogs === workspacesObj;
     // Like the pnpm catalog, add missing entries to the catalog the new
     // `catalog:` references point at. A named one such as `catalogs.build`
     // takes them instead of a newly created default catalog.
@@ -1141,49 +1126,35 @@ export function rewriteBunCatalog(
       preferredName || mergeDefaults
         ? activeCatalogs.catalogs?.[preferredName || 'default']
         : undefined;
-    const defaultCatalog = activeCatalogs.catalog;
-    const catalog: Record<string, string> = { ...defaultCatalog };
-
-    rewriteCatalogObject(catalog, !namedTarget, usesVitest, vitestEcosystemPackages);
-    pruneLegacyWrapperAliases(catalog);
-
-    if (namedTarget && !defaultCatalog) {
-      // No default catalog to update, and none is needed.
-    } else if (useWorkspacesCatalog) {
-      workspacesObj.catalog = catalog;
-      if (pkg.catalog) {
-        rewriteCatalogObject(pkg.catalog, false, usesVitest, vitestEcosystemPackages);
-        pruneLegacyWrapperAliases(pkg.catalog);
-      }
-    } else {
-      pkg.catalog = catalog;
-      if (workspacesObj?.catalog) {
-        rewriteCatalogObject(workspacesObj.catalog, false, usesVitest, vitestEcosystemPackages);
-        pruneLegacyWrapperAliases(workspacesObj.catalog);
-      }
-    }
-    if (workspacesObj?.catalogs) {
-      rewriteCatalogsObject(
-        workspacesObj.catalogs,
+    function rewriteCatalog(
+      target: Record<string, string>,
+      addMissing: boolean,
+      otherDefaultCatalog?: Record<string, string>,
+    ): void {
+      rewriteCatalogObject(
+        target,
+        addMissing,
         usesVitest,
         vitestEcosystemPackages,
-        namedTarget,
-        mergeDefaults ? workspacesObj.catalog : undefined,
+        catalogAdditions,
+        otherDefaultCatalog,
       );
-      for (const named of Object.values(workspacesObj.catalogs)) {
-        pruneLegacyWrapperAliases(named);
+      pruneLegacyWrapperAliases(target);
+    }
+    if (!namedTarget || activeCatalogs.catalog) {
+      const catalog = { ...activeCatalogs.catalog };
+      rewriteCatalog(catalog, !namedTarget);
+      activeCatalogs.catalog = catalog;
+
+      const otherCatalog = activeCatalogs === pkg ? workspacesObj?.catalog : pkg.catalog;
+      if (otherCatalog) {
+        rewriteCatalog(otherCatalog, false);
       }
     }
-    if (pkg.catalogs) {
-      rewriteCatalogsObject(
-        pkg.catalogs,
-        usesVitest,
-        vitestEcosystemPackages,
-        namedTarget,
-        mergeDefaults ? pkg.catalog : undefined,
-      );
-      for (const named of Object.values(pkg.catalogs)) {
-        pruneLegacyWrapperAliases(named);
+    for (const location of [workspacesObj, pkg]) {
+      for (const [name, named] of Object.entries(location?.catalogs ?? {})) {
+        const otherDefault = mergeDefaults && name === 'default' ? location?.catalog : undefined;
+        rewriteCatalog(named, named === namedTarget, otherDefault);
       }
     }
 
@@ -1240,6 +1211,7 @@ export function rewriteRootWorkspacePackageJson(
   // When false, the root `vite-plus` edge and the direct `vite` edge are concrete.
   supportCatalog = true,
   preparedOxlintConfigs?: PreparedOxlintConfigs,
+  retainedImportDependencies?: RetainedImportDependencies,
 ): void {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
@@ -1374,7 +1346,14 @@ export function rewriteRootWorkspacePackageJson(
     undefined,
     undefined,
     catalogDependencyResolver,
-    packages ? { rootDir: projectPath, packages, oxlintConfigs: preparedOxlintConfigs } : undefined,
+    packages
+      ? {
+          rootDir: projectPath,
+          packages,
+          oxlintConfigs: preparedOxlintConfigs,
+          retainedImportDependencies,
+        }
+      : undefined,
     true,
     supportCatalog,
   );

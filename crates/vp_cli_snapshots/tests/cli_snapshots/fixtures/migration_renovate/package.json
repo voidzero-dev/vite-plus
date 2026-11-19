@@ -1,0 +1,8 @@
+{
+  "name": "migration-renovate",
+  "private": true,
+  "packageManager": "npm@11.13.0",
+  "devDependencies": {
+    "vite": "^7.0.0"
+  }
+}

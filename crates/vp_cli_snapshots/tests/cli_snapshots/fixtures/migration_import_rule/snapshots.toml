@@ -1,0 +1,129 @@
+[[case]]
+name = "migration_import_rule_reporter_workspace"
+vp = "local"
+comment = "Migration and lint autofix respect the root overrides for templates and questions, while rewriting app imports."
+steps = [
+  { argv = ["vpt", "write-file", "vite.config.ts", "import { defineConfig } from 'vite-plus';\nexport default defineConfig({ lint: { jsPlugins: ['vite-plus/oxlint-plugin'], rules: { 'vite-plus/prefer-vite-plus-imports': 'error' }, overrides: [{ files: ['templates/**', 'questions/**'], rules: { 'vite-plus/prefer-vite-plus-imports': 'off' } }] } });\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "questions/demo.test.ts", "import { test } from 'vitest';\ntest('question', () => {});\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/app/demo.test.ts", "import { test } from 'vitest';\ntest('app', () => {});\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "templates/starter/vite.config.ts"],
+  ["vpt", "print-file", "questions/demo.test.ts"],
+  ["vpt", "print-file", "packages/app/demo.test.ts"],
+  { argv = ["vpt", "write-file", "packages/app/demo.test.ts", "import { test } from 'vitest';\ntest('app', () => {});\n"], snapshot = false },
+  ["vp", "lint", "--threads=1", "--fix", "templates/starter/vite.config.ts", "questions/demo.test.ts", "packages/app/demo.test.ts"],
+  ["vpt", "print-file", "templates/starter/vite.config.ts"],
+  ["vpt", "print-file", "questions/demo.test.ts"],
+  ["vpt", "print-file", "packages/app/demo.test.ts"],
+]
+
+[[case]]
+name = "migration_import_rule_upgrade"
+vp = "local"
+comment = "Existing Vite+ migration honors ordered lint overrides while still migrating scripts, dependencies, catalogs and overrides."
+steps = [
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "templates/starter/vite.config.ts"],
+  ["vpt", "print-file", "templates/starter/unit.test.ts"],
+  ["vpt", "print-file", "templates/managed/unit.test.ts"],
+  ["vpt", "print-file", "examples/standalone/unit.test.ts"],
+  ["vpt", "print-file", "packages/app/unit.test.ts"],
+  ["vpt", "print-file", "templates/starter/package.json"],
+  ["vpt", "print-file", "pnpm-workspace.yaml"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "write-file", "packages/app/unit.test.ts", "import { test } from 'vitest';\ntest('autofix', () => {});\n"],
+  { argv = ["vp", "lint", "--threads=1", "--fix", "templates/starter/unit.test.ts", "packages/app/unit.test.ts"], continue-on-failure = true },
+  { argv = ["vpt", "print-file", "templates/starter/unit.test.ts"], continue-on-failure = true },
+  ["vpt", "print-file", "packages/app/unit.test.ts"],
+]
+
+[[case]]
+name = "migration_import_rule_fresh"
+vp = "local"
+comment = "Initial migration respects the same import rule configuration."
+steps = [
+  ["vpt", "json-edit", "package.json", "devDependencies", "{}"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "templates/starter/vite.config.ts"],
+  ["vpt", "print-file", "templates/starter/unit.test.ts"],
+  ["vpt", "print-file", "templates/managed/unit.test.ts"],
+  ["vpt", "print-file", "examples/standalone/unit.test.ts"],
+  ["vpt", "print-file", "packages/app/unit.test.ts"],
+  ["vpt", "print-file", "templates/starter/package.json"],
+  ["vpt", "print-file", "pnpm-workspace.yaml"],
+]
+
+[[case]]
+name = "migration_import_rule_full"
+vp = "local"
+comment = "Full migration and check autofix share the import rule; other lint rules remain active."
+steps = [
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor", "--full"],
+  ["vpt", "print-file", "templates/starter/vite.config.ts"],
+  ["vpt", "print-file", "templates/starter/unit.test.ts"],
+  ["vpt", "print-file", "templates/managed/unit.test.ts"],
+  ["vpt", "print-file", "examples/standalone/unit.test.ts"],
+  ["vpt", "print-file", "packages/app/unit.test.ts"],
+  ["vpt", "print-file", "templates/starter/package.json"],
+  ["vpt", "print-file", "pnpm-workspace.yaml"],
+  ["vpt", "write-file", "packages/app/unit.test.ts", "import { test } from 'vitest';\ntest('autofix', () => {});\n"],
+  { argv = ["vp", "check", "--no-fmt", "--fix", "templates/starter/unit.test.ts", "packages/app/unit.test.ts"], continue-on-failure = true },
+  { argv = ["vpt", "print-file", "templates/starter/unit.test.ts"], continue-on-failure = true },
+  ["vpt", "print-file", "packages/app/unit.test.ts"],
+]
+
+[[case]]
+name = "migration_import_rule_global_off"
+vp = "local"
+comment = "A global numeric off setting applies unless a matching override re-enables imports."
+steps = [
+  ["vpt", "write-file", "vite.config.ts", "export default { lint: { rules: { 'vite-plus/prefer-vite-plus-imports': [0] }, overrides: [{ files: ['packages/**'], rules: { 'vite-plus/prefer-vite-plus-imports': [1] } }] } };\n"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "templates/starter/vite.config.ts"],
+  ["vpt", "print-file", "templates/starter/unit.test.ts"],
+  ["vpt", "print-file", "templates/managed/unit.test.ts"],
+  ["vpt", "print-file", "examples/standalone/unit.test.ts"],
+  ["vpt", "print-file", "packages/app/unit.test.ts"],
+]
+
+[[case]]
+name = "migration_import_rule_runtime"
+vp = "local"
+comment = "Dynamic lint configuration uses normal config resolution."
+steps = [
+  ["vpt", "write-file", "vite.config.ts", "const files = ['templates/**', 'examples/**'];\nexport default () => ({ lint: { overrides: [{ files, excludeFiles: ['templates/managed/**'], rules: { 'vite-plus/prefer-vite-plus-imports': 'off' } }] } });\n"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "templates/starter/vite.config.ts"],
+  ["vpt", "print-file", "templates/starter/unit.test.ts"],
+  ["vpt", "print-file", "templates/managed/unit.test.ts"],
+  ["vpt", "print-file", "examples/standalone/unit.test.ts"],
+  ["vpt", "print-file", "packages/app/unit.test.ts"],
+]
+
+[[case]]
+name = "migration_import_rule_extends"
+vp = "local"
+comment = "Inherited overrides apply before local overrides; bare patterns match at any depth."
+steps = [
+  ["vpt", "write-file", "vite.config.ts", "export default { lint: { extends: [{ overrides: [{ files: ['*.ts'], rules: { 'vite-plus/prefer-vite-plus-imports': 'off' } }] }], overrides: [{ files: ['packages/**', './templates/managed/**'], rules: { 'vite-plus/prefer-vite-plus-imports': ['error'] } }] } };\n"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "templates/starter/vite.config.ts"],
+  ["vpt", "print-file", "templates/starter/unit.test.ts"],
+  ["vpt", "print-file", "templates/managed/unit.test.ts"],
+  ["vpt", "print-file", "examples/standalone/unit.test.ts"],
+  ["vpt", "print-file", "packages/app/unit.test.ts"],
+]
+
+[[case]]
+name = "migration_import_rule_runtime_cjs"
+vp = "local"
+comment = "Isolated config loading preserves CommonJS support and inherited lint overrides."
+steps = [
+  { argv = ["vpt", "rm", "vite.config.ts"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.cjs", "module.exports = () => ({ lint: { extends: [{ overrides: [{ files: ['templates/**', 'examples/**'], rules: { 'vite-plus/prefer-vite-plus-imports': 'off' } }] }], overrides: [{ files: ['templates/managed/**'], rules: { 'vite-plus/prefer-vite-plus-imports': 'error' } }] } });\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "templates/starter/unit.test.ts"],
+  ["vpt", "print-file", "templates/managed/unit.test.ts"],
+  ["vpt", "print-file", "examples/standalone/unit.test.ts"],
+  ["vpt", "print-file", "packages/app/unit.test.ts"],
+]

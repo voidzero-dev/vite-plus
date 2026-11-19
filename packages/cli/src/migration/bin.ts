@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { styleText } from 'node:util';
+import { isDeepStrictEqual, styleText } from 'node:util';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { satisfies } from 'verkit';
@@ -48,6 +48,8 @@ import {
   applyVitestV5NodeMigration,
   checkVitestVersion,
   checkViteVersion,
+  collectOxlintOwnerDirs,
+  collectRetainedImportDependencies,
   collectToolchainVersionChanges,
   confirmPrettierMigration,
   confirmTsxMigration,
@@ -64,10 +66,12 @@ import {
   detectTsNodeProject,
   detectVitePlusBootstrapPending,
   detectYarnPnpMode,
+  DISABLED_IMPORT_RULE_CONFIG,
   ensureVitePlusBootstrap,
   finalizeCoreMigrationForExistingVitePlus,
   finishVitestV5Migration,
   formatVitestV5Findings,
+  getWorkspaceProjectPaths,
   hasFrameworkShim,
   detectLegacyGitHooksMigrationCandidate,
   injectLintTypeCheckDefaults,
@@ -83,8 +87,11 @@ import {
   migrateOxnodeToVpx,
   migrateTsNodeToVpx,
   configureYarnNodeModulesMode,
+  rewriteAllImports,
   rewriteMonorepo,
   rewriteStandaloneProject,
+  resolveImportRuleConfig,
+  tryResolveImportRuleConfig,
   planVitestV5Migration,
   refreshVitestV5Migration,
   retryPreservedOxlintConfigs,
@@ -92,13 +99,16 @@ import {
   removeMigratedOxlintConfigs,
   shouldSkipStagedMigrationForHooks,
   warnPackageLevelPrettier,
+  warnUnresolvedImportRuleConfig,
   vitestV5NeedsMigration,
   type Framework,
   type NodeVersionManagerDetection,
   type VitestV5MigrationPlan,
+  type RetainedImportDependencies,
 } from './migrator.ts';
 import { prepareNpmViteAliasReinstall } from './npm-reinstall.ts';
 import type { MigrationOptions } from './options.ts';
+import { addVitePlusRenovatePreset, findRenovateConfigToUpdate } from './renovate.ts';
 import { addMigrationWarning, createMigrationReport, type MigrationReport } from './report.ts';
 import {
   collectMigrationSetupPlan,
@@ -147,6 +157,27 @@ async function confirmFrameworkShim(framework: Framework, interactive: boolean):
     return confirmed;
   }
   return true;
+}
+
+async function confirmRenovatePreset(
+  rootDir: string,
+  interactive: boolean,
+): Promise<string | undefined> {
+  const configPath = await findRenovateConfigToUpdate(rootDir);
+  if (!configPath || !interactive) {
+    return configPath;
+  }
+  const confirmed = await prompts.confirm({
+    message:
+      'Group Vite+ and Vitest updates in Renovate?\n  ' +
+      muted(`Adds group:vitePlus to ${displayRelative(configPath, rootDir)}.`),
+    initialValue: true,
+    testId: 'renovate',
+  });
+  if (prompts.isCancel(confirmed)) {
+    cancelAndExit();
+  }
+  return confirmed ? configPath : undefined;
 }
 
 async function confirmYarnNodeModulesMode(
@@ -229,16 +260,6 @@ async function fixBaseUrlForWorkspace(
   return fixedProjectPaths;
 }
 
-function getWorkspaceProjectPaths(workspaceInfo: {
-  rootDir: string;
-  packages?: WorkspacePackage[];
-}): string[] {
-  return [
-    workspaceInfo.rootDir,
-    ...(workspaceInfo.packages ?? []).map((pkg) => path.join(workspaceInfo.rootDir, pkg.path)),
-  ];
-}
-
 function hasBaseUrlInWorkspace(workspaceInfo: {
   rootDir: string;
   packages?: WorkspacePackage[];
@@ -285,6 +306,7 @@ function parseArgs() {
 
 interface MigrationPlan extends MigrationSetupPlan {
   packageManager: PackageManager;
+  renovateConfigPath?: string;
   convertYarnPnp: boolean;
   migratePrettier: boolean;
   hasPrettierDependency: boolean;
@@ -417,19 +439,18 @@ function getExistingVitePlusSetupOptions(
 }
 
 async function collectMigrationPlan(
-  rootDir: string,
-  detectedPackageManager: PackageManager | undefined,
-  detectedPackageManagerVersion: string,
+  workspace: WorkspaceInfoOptional,
   options: MigrationOptions,
-  packages?: WorkspacePackage[],
+  includeRenovate: boolean,
 ): Promise<MigrationPlan> {
+  const { rootDir, packages } = workspace;
   // 1. Package manager selection
   const packageManager =
-    detectedPackageManager ?? (await selectPackageManager(options.interactive, true, rootDir));
+    workspace.packageManager ?? (await selectPackageManager(options.interactive, true, rootDir));
   const convertYarnPnp = await confirmYarnNodeModulesMode(
     rootDir,
     packageManager,
-    detectedPackageManager ? detectedPackageManagerVersion : 'latest',
+    workspace.packageManager ? workspace.packageManagerVersion : 'latest',
     options.interactive,
   );
 
@@ -477,8 +498,11 @@ async function collectMigrationPlan(
 
   // 11. Framework shim detection + prompt
   const frameworkShimFrameworks = await collectFrameworkShimFrameworks(rootDir, options, packages);
+  const renovateConfigPath = includeRenovate
+    ? await confirmRenovatePreset(rootDir, options.interactive)
+    : undefined;
 
-  const plan: MigrationPlan = {
+  return {
     packageManager,
     convertYarnPnp,
     ...setupPlan,
@@ -494,9 +518,8 @@ async function collectMigrationPlan(
     migrateNodeVersionFile,
     nodeVersionDetection,
     frameworkShimFrameworks,
+    renovateConfigPath,
   };
-
-  return plan;
 }
 
 // Shown on a bare existing-Vite+ upgrade that skipped the setup bucket, on both
@@ -832,6 +855,8 @@ async function executeMigrationPlan(
     },
   );
 
+  const importRuleConfig = await resolveImportRuleConfig(workspaceInfo.rootDir, report);
+
   // 4. Check vite and vitest version is supported by migration
   updateMigrationProgress('Validating toolchain');
   const isViteSupported = checkViteVersion(workspaceInfo.rootDir);
@@ -925,7 +950,7 @@ async function executeMigrationPlan(
   // 7. Rewrite configs
   updateMigrationProgress('Rewriting configs');
   if (workspaceInfo.isMonorepo) {
-    rewriteMonorepo(workspaceInfo, skipStagedMigration, true, report);
+    rewriteMonorepo(workspaceInfo, skipStagedMigration, true, report, importRuleConfig);
   } else {
     rewriteStandaloneProject(
       workspaceInfo.rootDir,
@@ -933,7 +958,12 @@ async function executeMigrationPlan(
       skipStagedMigration,
       true,
       report,
+      importRuleConfig,
     );
+  }
+
+  if (plan.renovateConfigPath) {
+    await addVitePlusRenovatePreset(plan.renovateConfigPath);
   }
 
   clearMigrationProgress();
@@ -1089,7 +1119,9 @@ async function main() {
       `No package manager is declared in package.json; using ${workspaceInfoOptional.packageManager} for this migration without adding a pin. Run \`vp env pin\` to declare it explicitly.`,
     );
   }
-  if (hasVitePlusDependency(rootPkg) && !isForceOverrideMode()) {
+  const alreadyUsesVitePlus = hasVitePlusDependency(rootPkg);
+  const fullSetup = !alreadyUsesVitePlus || options.full === true;
+  if (alreadyUsesVitePlus && !isForceOverrideMode()) {
     // Runs with the detected package manager, which may be undefined for an
     // existing Vite+ project that has no lockfile/`packageManager` pin. In that
     // case `confirmYarnNodeModulesMode` no-ops here and the guard is re-run
@@ -1146,23 +1178,32 @@ async function main() {
       didMigrate = true;
     }
 
-    const pendingCoreMigration = detectPendingCoreMigration(workspaceInfoOptional);
-    const vitePlusBootstrapPending = detectVitePlusBootstrapPending(
-      workspaceInfoOptional.rootDir,
-      workspaceInfoOptional.packageManager,
-      workspaceInfoOptional.packages,
-      workspaceInfoOptional.packageManagerVersion,
+    // Find the packages that supply preserved imports before bootstrap changes their
+    // manifests. If the config needs missing dependencies, retry after the normal install.
+    const importRuleConfig = await tryResolveImportRuleConfig(workspaceInfoOptional.rootDir);
+    const retainedImportDependencies = collectRetainedImportDependencies(
+      workspaceInfoOptional,
+      importRuleConfig,
     );
-    let packageManager: PackageManager | undefined = vitePlusBootstrapPending
-      ? (workspaceInfoOptional.packageManager ??
-        (await selectPackageManager(options.interactive, true, workspaceInfoOptional.rootDir)))
-      : workspaceInfoOptional.packageManager;
-    let downloadedPackageManager: Awaited<ReturnType<typeof downloadPackageManager>> | undefined;
+    const pendingCoreMigration = detectPendingCoreMigration(workspaceInfoOptional);
+    let packageManager = workspaceInfoOptional.packageManager;
+    let downloadedPackageManager: WorkspaceInfo['downloadPackageManager'] | undefined;
     let packageManagerVersion = workspaceInfoOptional.packageManagerVersion;
-    const downloadExistingPackageManager = async () => {
-      if (!packageManager) {
-        return undefined;
-      }
+    const bootstrapPending = (dependencies: RetainedImportDependencies) =>
+      detectVitePlusBootstrapPending(
+        workspaceInfoOptional.rootDir,
+        packageManager,
+        workspaceInfoOptional.packages,
+        packageManagerVersion,
+        dependencies,
+      );
+    const vitePlusBootstrapPending = bootstrapPending(retainedImportDependencies);
+    async function ensureExistingPackageManager() {
+      packageManager ??= await selectPackageManager(
+        options.interactive,
+        true,
+        workspaceInfoOptional.rootDir,
+      );
       downloadedPackageManager ??= await downloadSupportedPackageManager({
         rootDir: workspaceInfoOptional.rootDir,
         packageManager,
@@ -1172,16 +1213,8 @@ async function main() {
         failMigrationProgress,
       });
       packageManagerVersion = downloadedPackageManager.version;
-      return downloadedPackageManager;
-    };
-    const ensureExistingPackageManager = async () => {
-      packageManager ??= await selectPackageManager(
-        options.interactive,
-        true,
-        workspaceInfoOptional.rootDir,
-      );
-      return downloadExistingPackageManager();
-    };
+      return { packageManager, downloadPackageManager: downloadedPackageManager };
+    }
 
     if (vitePlusBootstrapPending) {
       await ensureExistingPackageManager();
@@ -1214,7 +1247,14 @@ async function main() {
     // Capture the toolchain version changes BEFORE the reconcile mutates the
     // manifest, so the `from` values still reflect the pre-migration versions
     // (raw vite is read from the untouched node_modules).
-    report.dependencyUpgrades = await collectToolchainVersionChanges(workspaceInfoOptional.rootDir);
+    report.dependencyUpgrades = await collectToolchainVersionChanges(
+      workspaceInfoOptional.rootDir,
+      retainedImportDependencies.vitest.has(workspaceInfoOptional.rootDir),
+    );
+    const deferredOxlintOwnerDirs =
+      importRuleConfig === null
+        ? collectOxlintOwnerDirs(workspaceInfoOptional.rootDir, workspaceInfoOptional.packages)
+        : [];
 
     // finalizeCoreMigrationForExistingVitePlus rewrites Vite/Vitest imports across
     // every workspace package via a synchronous native directory walk; on a large
@@ -1227,6 +1267,7 @@ async function main() {
       true,
       report,
       pendingCoreMigration,
+      importRuleConfig,
     );
     if (
       coreMigrationResult.dependencies ||
@@ -1260,7 +1301,9 @@ async function main() {
     // migration, framework shims, tsconfig baseUrl, .node-version) runs only with
     // `--full`; the per-action flags (--hooks/--agent/--editor) still opt into a
     // single action without `--full`.
-    const fullSetup = options.full === true;
+    const renovateConfigPath = fullSetup
+      ? await confirmRenovatePreset(workspaceInfoOptional.rootDir, options.interactive)
+      : undefined;
     // Hint at `--full` only on a bare upgrade that left setup actions on the
     // table. Suppress it when the user passed an explicit per-action flag
     // (--hooks/--agent/--editor): that ran the action they asked for, so a
@@ -1272,7 +1315,9 @@ async function main() {
 
     if (
       !didMigrate &&
+      importRuleConfig !== null &&
       !convertYarnPnp &&
+      !renovateConfigPath &&
       report.warnings.length === 0 &&
       !vitePlusBootstrapPending &&
       !(fullSetup
@@ -1315,21 +1360,18 @@ async function main() {
 
     // Runtime metadata can participate in the package manager's lockfile.
     let needsInstall = coreMigrationResult.dependencies || nodeUpgrades > 0;
-    if (vitePlusBootstrapPending) {
-      const downloadResult = await ensureExistingPackageManager();
-      if (downloadResult && packageManager) {
-        updateMigrationProgress('Configuring package manager');
-        const bootstrapResult = ensureVitePlusBootstrap(
-          {
-            ...workspaceInfoOptional,
-            packageManager,
-            downloadPackageManager: downloadResult,
-          },
-          report,
-        );
-        didMigrate = bootstrapResult.changed || didMigrate;
-        needsInstall = bootstrapResult.changed || needsInstall;
-      }
+    async function reconcileBootstrap(dependencies: RetainedImportDependencies): Promise<boolean> {
+      const resolved = await ensureExistingPackageManager();
+      updateMigrationProgress('Configuring package manager');
+      return ensureVitePlusBootstrap(
+        { ...workspaceInfoOptional, ...resolved },
+        report,
+        dependencies,
+      ).changed;
+    }
+    if (vitePlusBootstrapPending && (await reconcileBootstrap(retainedImportDependencies))) {
+      didMigrate = true;
+      needsInstall = true;
     }
 
     let fixBaseUrl = false;
@@ -1428,12 +1470,12 @@ async function main() {
         workspaceInfoOptional.packages,
       );
       if (migrateTsup) {
-        await ensureExistingPackageManager();
+        const resolved = await ensureExistingPackageManager();
         updateMigrationProgress('Migrating tsup');
         const tsupOk = await migrateTsupToTsdown(
           workspaceInfoOptional.rootDir,
           options.interactive,
-          packageManager!, // is it safe to do this?
+          resolved.packageManager,
           tsupConfigFile,
           workspaceInfoOptional.packages,
           { silent: true, report },
@@ -1610,12 +1652,9 @@ async function main() {
       }
     }
 
-    if (needsInstall) {
-      clearMigrationProgress();
-      completeVitestV5Migration(vitestV5Plan, report);
-      const resolved = await ensureExistingPackageManager();
+    async function installExistingDependencies(): Promise<void> {
+      await ensureExistingPackageManager();
       updateMigrationProgress('Installing dependencies');
-      const resolvedVersion = resolved?.version ?? packageManagerVersion;
       const npmReinstallPreparation =
         packageManager === PackageManager.npm
           ? prepareNpmViteAliasReinstall(
@@ -1635,16 +1674,9 @@ async function main() {
         {
           silent: true,
           packageManager,
-          packageManagerVersion: resolvedVersion,
+          packageManagerVersion,
         },
       );
-      // Route the install result through the shared helper (mirrors the full
-      // migration path and is enforced by install-failure-guard.spec): a failed
-      // install warns, appends to report.warnings, and flips process.exitCode
-      // rather than being silently credited as a successful migration. Clear the
-      // spinner first only on failure so the warning isn't interleaved with it;
-      // on success handleInstallResult returns durationMs, so the credited
-      // duration is unchanged.
       if (installSummary.status === 'failed') {
         clearMigrationProgress();
         npmReinstallPreparation?.restore();
@@ -1658,6 +1690,42 @@ async function main() {
         workspaceInfoOptional.rootDir,
         report,
       );
+    }
+    if (needsInstall) {
+      clearMigrationProgress();
+      completeVitestV5Migration(vitestV5Plan, report);
+      await installExistingDependencies();
+    }
+
+    if (importRuleConfig === null) {
+      let resolvedImportRuleConfig: string | null = null;
+      if (needsInstall && finalInstallOk) {
+        updateMigrationProgress('Reading lint configuration');
+        resolvedImportRuleConfig = await tryResolveImportRuleConfig(workspaceInfoOptional.rootDir);
+      }
+      if (resolvedImportRuleConfig === null) {
+        warnUnresolvedImportRuleConfig(report);
+      }
+      const resolvedDependencies =
+        resolvedImportRuleConfig === null
+          ? retainedImportDependencies
+          : collectRetainedImportDependencies(workspaceInfoOptional, resolvedImportRuleConfig);
+      updateMigrationProgress('Rewriting toolchain imports across the workspace');
+      didMigrate =
+        rewriteAllImports(workspaceInfoOptional.rootDir, true, report, {
+          oxlintOwnerDirs: deferredOxlintOwnerDirs,
+          importRuleConfig: resolvedImportRuleConfig ?? DISABLED_IMPORT_RULE_CONFIG,
+        }) || didMigrate;
+      // The first install used the owners we could identify without loading
+      // the config. Sync again only if the resolved rule changes dependencies.
+      if (
+        !isDeepStrictEqual(resolvedDependencies, retainedImportDependencies) &&
+        bootstrapPending(resolvedDependencies) &&
+        (await reconcileBootstrap(resolvedDependencies))
+      ) {
+        didMigrate = true;
+        await installExistingDependencies();
+      }
     }
 
     if (plan.selectedAgentTargetPaths && plan.selectedAgentTargetPaths.length > 0) {
@@ -1708,6 +1776,10 @@ async function main() {
       });
     }
 
+    // The preset edit alone needs neither a dependency install nor a formatting pass.
+    if (renovateConfigPath && (await addVitePlusRenovatePreset(renovateConfigPath))) {
+      didMigrate = true;
+    }
     if (didMigrate || report.warnings.length > 0) {
       clearMigrationProgress();
       showMigrationSummary({
@@ -1737,13 +1809,7 @@ async function main() {
   }
 
   // Phase 1: Collect all user decisions upfront
-  const plan = await collectMigrationPlan(
-    workspaceInfoOptional.rootDir,
-    workspaceInfoOptional.packageManager,
-    workspaceInfoOptional.packageManagerVersion,
-    options,
-    workspaceInfoOptional.packages,
-  );
+  const plan = await collectMigrationPlan(workspaceInfoOptional, options, fullSetup);
 
   // Phase 2: Execute without prompts
   const result = await executeMigrationPlan(
