@@ -45,7 +45,8 @@ use self::{
 /// Execute a synthesizable subcommand directly (not through vite-task Session).
 /// No caching, no task graph, no dependency resolution.
 async fn execute_direct_subcommand(
-    subcommand: SynthesizableSubcommand,
+    mut subcommand: SynthesizableSubcommand,
+    raw_args: &[String],
     cwd: &AbsolutePathBuf,
     options: Option<CliOptions>,
     explicit_chdir: bool,
@@ -61,6 +62,14 @@ async fn execute_direct_subcommand(
         app_target::AppTarget::Dir(dir) => dir,
         app_target::AppTarget::CurrentDir => cwd,
     };
+
+    // A lone `--` uses bare-command target selection. Restore the separator
+    // after selecting the target so Vite receives the original arguments.
+    if let SynthesizableSubcommand::Dev { args } | SynthesizableSubcommand::Build { args } =
+        &mut subcommand
+    {
+        vp_shared::restore_leading_arg_separator(raw_args, args);
+    }
 
     // The resolver hands back the workspace root it already found whenever the
     // command runs in the unchanged cwd (never after a -C/elicitation
@@ -406,19 +415,14 @@ pub async fn main(
     };
 
     match cli_args {
-        CLIArgs::Synthesizable(mut subcmd) => {
-            if let SynthesizableSubcommand::Dev { args } | SynthesizableSubcommand::Build { args } =
-                &mut subcmd
-            {
-                vp_shared::restore_leading_arg_separator(&args_vec, args);
-            }
+        CLIArgs::Synthesizable(subcmd) => {
             // Only the built-ins can be mistaken for a script. `run`/`cache`
             // below are the script path itself; `install` and friends
             // legitimately trigger a project's `install` lifecycle scripts
             // through the package manager, so redirecting those to `vpr` would
             // be wrong; and `exec` names a binary rather than a task.
             script_note::print(raw_subcommand.as_deref(), &cwd);
-            execute_direct_subcommand(subcmd, &cwd, options, explicit_chdir).await
+            execute_direct_subcommand(subcmd, &args_vec, &cwd, options, explicit_chdir).await
         }
         CLIArgs::ViteTask(command) => execute_vite_task_command(command, cwd, options).await,
         CLIArgs::PackageManager(pm) => execute_pm_command(pm, &cwd, options.as_ref()).await,
