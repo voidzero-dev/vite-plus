@@ -337,7 +337,7 @@ VP_NODE_SKIP_SIGNATURE_VERIFY=1 vp env install 22
 
 `vp env` can replace [nvm](https://github.com/nvm-sh/nvm) and [fnm](https://github.com/Schniz/fnm) for Node.js version management. It reads the version files that those tools use, so existing projects need no changes. The `vp env` commands do not run Node.js themselves, so projects that use older releases, such as Node.js 16 or 18, also work.
 
-### What Carries Over
+### Similarities between nvm or fnm and Vite+
 
 - `.nvmrc` and `.node-version` files work as they are. Vite+ also reads `engines.node` and `devEngines.runtime` in `package.json`. See [Node.js Selection](#node-js-selection) for the order of these sources.
 - An `.nvmrc` file can contain an exact version such as `18.20.8` or `v18.20.8`, a major version such as `18`, an LTS alias such as `lts/*` or `lts/hydrogen`, or `node` for the latest release. Vite+ ignores `system`, `default`, and `iojs`, and then checks the next source.
