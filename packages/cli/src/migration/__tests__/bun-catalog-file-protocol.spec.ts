@@ -34,6 +34,7 @@ function makeWorkspaceInfo(rootDir: string, packageManager: PackageManager): Wor
       name: packageManager,
       installDir: '/tmp',
       binPrefix: '/tmp/bin',
+      binPaths: {},
       packageName: packageManager,
       version: '1.0.0',
     },

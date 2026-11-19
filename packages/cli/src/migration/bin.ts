@@ -425,7 +425,7 @@ async function collectMigrationPlan(
 ): Promise<MigrationPlan> {
   // 1. Package manager selection
   const packageManager =
-    detectedPackageManager ?? (await selectPackageManager(options.interactive, true));
+    detectedPackageManager ?? (await selectPackageManager(options.interactive, true, rootDir));
   const convertYarnPnp = await confirmYarnNodeModulesMode(
     rootDir,
     packageManager,
@@ -1155,7 +1155,7 @@ async function main() {
     );
     let packageManager: PackageManager | undefined = vitePlusBootstrapPending
       ? (workspaceInfoOptional.packageManager ??
-        (await selectPackageManager(options.interactive, true)))
+        (await selectPackageManager(options.interactive, true, workspaceInfoOptional.rootDir)))
       : workspaceInfoOptional.packageManager;
     let downloadedPackageManager: Awaited<ReturnType<typeof downloadPackageManager>> | undefined;
     let packageManagerVersion = workspaceInfoOptional.packageManagerVersion;
@@ -1175,7 +1175,11 @@ async function main() {
       return downloadedPackageManager;
     };
     const ensureExistingPackageManager = async () => {
-      packageManager ??= await selectPackageManager(options.interactive, true);
+      packageManager ??= await selectPackageManager(
+        options.interactive,
+        true,
+        workspaceInfoOptional.rootDir,
+      );
       return downloadExistingPackageManager();
     };
 

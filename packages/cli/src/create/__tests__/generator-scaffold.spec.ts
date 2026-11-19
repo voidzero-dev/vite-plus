@@ -58,6 +58,7 @@ async function scaffold(
       version,
       installDir: '',
       binPrefix: '',
+      binPaths: {},
     },
     packages: [],
   };

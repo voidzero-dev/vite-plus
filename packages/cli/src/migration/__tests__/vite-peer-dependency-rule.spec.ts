@@ -43,6 +43,7 @@ function makeWorkspaceInfo(rootDir: string, version = '10.33.0'): WorkspaceInfo 
       name: PackageManager.pnpm,
       installDir: '/tmp',
       binPrefix: '/tmp/bin',
+      binPaths: {},
       packageName: PackageManager.pnpm,
       version,
     },

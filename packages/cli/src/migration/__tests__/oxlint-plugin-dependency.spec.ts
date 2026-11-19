@@ -110,6 +110,7 @@ describe('Oxlint plugin dependency cleanup', () => {
           version: '10.33.0',
           installDir: projectPath,
           binPrefix: projectPath,
+          binPaths: {},
         },
       };
 
@@ -575,6 +576,7 @@ describe('Oxlint plugin dependency cleanup', () => {
         version: '10.33.0',
         installDir: projectPath,
         binPrefix: projectPath,
+        binPaths: {},
       },
     };
     const pending = () =>
