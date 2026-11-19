@@ -99,6 +99,7 @@ import {
 } from './migrator.ts';
 import { prepareNpmViteAliasReinstall } from './npm-reinstall.ts';
 import type { MigrationOptions } from './options.ts';
+import { addVitePlusRenovatePreset, findRenovateConfigToUpdate } from './renovate.ts';
 import { addMigrationWarning, createMigrationReport, type MigrationReport } from './report.ts';
 import {
   collectMigrationSetupPlan,
@@ -147,6 +148,27 @@ async function confirmFrameworkShim(framework: Framework, interactive: boolean):
     return confirmed;
   }
   return true;
+}
+
+async function confirmRenovatePreset(
+  rootDir: string,
+  interactive: boolean,
+): Promise<string | undefined> {
+  const configPath = await findRenovateConfigToUpdate(rootDir);
+  if (!configPath || !interactive) {
+    return configPath;
+  }
+  const confirmed = await prompts.confirm({
+    message:
+      'Group Vite+ and Vitest updates in Renovate?\n  ' +
+      muted(`Adds group:vitePlus to ${displayRelative(configPath, rootDir)}.`),
+    initialValue: true,
+    testId: 'renovate',
+  });
+  if (prompts.isCancel(confirmed)) {
+    cancelAndExit();
+  }
+  return confirmed ? configPath : undefined;
 }
 
 async function confirmYarnNodeModulesMode(
@@ -285,6 +307,7 @@ function parseArgs() {
 
 interface MigrationPlan extends MigrationSetupPlan {
   packageManager: PackageManager;
+  renovateConfigPath?: string;
   convertYarnPnp: boolean;
   migratePrettier: boolean;
   hasPrettierDependency: boolean;
@@ -417,19 +440,18 @@ function getExistingVitePlusSetupOptions(
 }
 
 async function collectMigrationPlan(
-  rootDir: string,
-  detectedPackageManager: PackageManager | undefined,
-  detectedPackageManagerVersion: string,
+  workspace: WorkspaceInfoOptional,
   options: MigrationOptions,
-  packages?: WorkspacePackage[],
+  includeRenovate: boolean,
 ): Promise<MigrationPlan> {
+  const { rootDir, packages } = workspace;
   // 1. Package manager selection
   const packageManager =
-    detectedPackageManager ?? (await selectPackageManager(options.interactive, true));
+    workspace.packageManager ?? (await selectPackageManager(options.interactive, true, rootDir));
   const convertYarnPnp = await confirmYarnNodeModulesMode(
     rootDir,
     packageManager,
-    detectedPackageManager ? detectedPackageManagerVersion : 'latest',
+    workspace.packageManager ? workspace.packageManagerVersion : 'latest',
     options.interactive,
   );
 
@@ -477,8 +499,11 @@ async function collectMigrationPlan(
 
   // 11. Framework shim detection + prompt
   const frameworkShimFrameworks = await collectFrameworkShimFrameworks(rootDir, options, packages);
+  const renovateConfigPath = includeRenovate
+    ? await confirmRenovatePreset(rootDir, options.interactive)
+    : undefined;
 
-  const plan: MigrationPlan = {
+  return {
     packageManager,
     convertYarnPnp,
     ...setupPlan,
@@ -494,9 +519,8 @@ async function collectMigrationPlan(
     migrateNodeVersionFile,
     nodeVersionDetection,
     frameworkShimFrameworks,
+    renovateConfigPath,
   };
-
-  return plan;
 }
 
 // Shown on a bare existing-Vite+ upgrade that skipped the setup bucket, on both
@@ -936,6 +960,10 @@ async function executeMigrationPlan(
     );
   }
 
+  if (plan.renovateConfigPath) {
+    await addVitePlusRenovatePreset(plan.renovateConfigPath);
+  }
+
   clearMigrationProgress();
   completeVitestV5Migration(vitestV5Plan, report);
 
@@ -1089,7 +1117,9 @@ async function main() {
       `No package manager is declared in package.json; using ${workspaceInfoOptional.packageManager} for this migration without adding a pin. Run \`vp env pin\` to declare it explicitly.`,
     );
   }
-  if (hasVitePlusDependency(rootPkg) && !isForceOverrideMode()) {
+  const alreadyUsesVitePlus = hasVitePlusDependency(rootPkg);
+  const fullSetup = !alreadyUsesVitePlus || options.full === true;
+  if (alreadyUsesVitePlus && !isForceOverrideMode()) {
     // Runs with the detected package manager, which may be undefined for an
     // existing Vite+ project that has no lockfile/`packageManager` pin. In that
     // case `confirmYarnNodeModulesMode` no-ops here and the guard is re-run
@@ -1155,7 +1185,7 @@ async function main() {
     );
     let packageManager: PackageManager | undefined = vitePlusBootstrapPending
       ? (workspaceInfoOptional.packageManager ??
-        (await selectPackageManager(options.interactive, true)))
+        (await selectPackageManager(options.interactive, true, workspaceInfoOptional.rootDir)))
       : workspaceInfoOptional.packageManager;
     let downloadedPackageManager: Awaited<ReturnType<typeof downloadPackageManager>> | undefined;
     let packageManagerVersion = workspaceInfoOptional.packageManagerVersion;
@@ -1175,7 +1205,11 @@ async function main() {
       return downloadedPackageManager;
     };
     const ensureExistingPackageManager = async () => {
-      packageManager ??= await selectPackageManager(options.interactive, true);
+      packageManager ??= await selectPackageManager(
+        options.interactive,
+        true,
+        workspaceInfoOptional.rootDir,
+      );
       return downloadExistingPackageManager();
     };
 
@@ -1256,7 +1290,9 @@ async function main() {
     // migration, framework shims, tsconfig baseUrl, .node-version) runs only with
     // `--full`; the per-action flags (--hooks/--agent/--editor) still opt into a
     // single action without `--full`.
-    const fullSetup = options.full === true;
+    const renovateConfigPath = fullSetup
+      ? await confirmRenovatePreset(workspaceInfoOptional.rootDir, options.interactive)
+      : undefined;
     // Hint at `--full` only on a bare upgrade that left setup actions on the
     // table. Suppress it when the user passed an explicit per-action flag
     // (--hooks/--agent/--editor): that ran the action they asked for, so a
@@ -1269,6 +1305,7 @@ async function main() {
     if (
       !didMigrate &&
       !convertYarnPnp &&
+      !renovateConfigPath &&
       report.warnings.length === 0 &&
       !vitePlusBootstrapPending &&
       !(fullSetup
@@ -1704,6 +1741,10 @@ async function main() {
       });
     }
 
+    // The preset edit alone needs neither a dependency install nor a formatting pass.
+    if (renovateConfigPath && (await addVitePlusRenovatePreset(renovateConfigPath))) {
+      didMigrate = true;
+    }
     if (didMigrate || report.warnings.length > 0) {
       clearMigrationProgress();
       showMigrationSummary({
@@ -1733,13 +1774,7 @@ async function main() {
   }
 
   // Phase 1: Collect all user decisions upfront
-  const plan = await collectMigrationPlan(
-    workspaceInfoOptional.rootDir,
-    workspaceInfoOptional.packageManager,
-    workspaceInfoOptional.packageManagerVersion,
-    options,
-    workspaceInfoOptional.packages,
-  );
+  const plan = await collectMigrationPlan(workspaceInfoOptional, options, fullSetup);
 
   // Phase 2: Execute without prompts
   const result = await executeMigrationPlan(

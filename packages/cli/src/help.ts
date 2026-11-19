@@ -344,7 +344,7 @@ const commandHelpDocs = {
               'Default hook timeout in milliseconds (default: 10000). Use 0 to disable timeout completely.',
           },
           {
-            label: '--bail <number>',
+            label: '--bail [number]',
             description: 'Stop test execution when given number of tests have failed (default: 0)',
           },
           {

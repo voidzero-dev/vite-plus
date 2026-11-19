@@ -556,6 +556,11 @@ pub fn redact_output(
     paths: &[(&str, &'static str)],
     normalize_separators: bool,
 ) -> String {
+    // Keep installation guidance snapshots portable while matching the full platform command.
+    output = output.replace(
+        "powershell -c \"irm https://vite.plus/ps1 | iex\"",
+        "curl -fsSL https://vite.plus | bash",
+    );
     // Piped Windows commands retain CRLF, unlike the rendered PTY output.
     {
         use cow_utils::CowUtils as _;

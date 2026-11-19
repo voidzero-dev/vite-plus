@@ -1400,6 +1400,7 @@ describe('setPackageManager', () => {
     name: 'pnpm',
     installDir: '/tmp/install',
     binPrefix: '/tmp/install/bin',
+    binPaths: {},
     packageName: 'pnpm',
     version: '11.5.1',
   };
@@ -1706,6 +1707,7 @@ function makeWorkspaceInfo(
       name: packageManager,
       installDir: '/tmp',
       binPrefix: '/tmp/bin',
+      binPaths: {},
       packageName: packageManager,
       version,
     },

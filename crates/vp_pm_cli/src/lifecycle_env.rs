@@ -76,8 +76,17 @@ impl PackageManager {
                 return native;
             }
         }
-        let shim = bin_dir.join(self.client.to_string());
-        let shim = if cfg!(windows) { shim.with_extension("cmd") } else { shim };
+        // A system installation may provide only a native executable, such as a
+        // standalone Windows `pnpm.exe`, so prefer the file that exists.
+        let client = self.client.to_string();
+        let shim = self
+            .bin_paths()
+            .into_iter()
+            .find_map(|(name, path)| (name == client).then_some(path))
+            .unwrap_or_else(|| {
+                let shim = bin_dir.join(&client);
+                if cfg!(windows) { shim.with_extension("cmd") } else { shim }
+            });
         // The shim breaks child runners on Windows (see above), so if this
         // shows up in a log the on-disk layout probably changed. (bun never
         // has a JS CLI entry, so the message would be misleading there.)
@@ -280,6 +289,21 @@ mod tests {
             install_dir.join("bin").join("pnpm")
         };
         assert_eq!(pm.lifecycle_exec_path().as_path(), expected.as_path());
+    }
+
+    /// A standalone Windows pnpm installs only `pnpm.exe`, with no `pnpm.cmd` beside it.
+    #[cfg(windows)]
+    #[test]
+    fn exec_path_uses_the_existing_native_executable() {
+        let dir = tempfile::tempdir().unwrap();
+        let bin = dir.path().join("bin");
+        write_file(&bin.join("pnpm.exe"));
+        let pm = PackageManager::from_bin_prefix(
+            PackageManagerType::Pnpm,
+            "10.0.0",
+            AbsolutePathBuf::new(bin.clone()).unwrap(),
+        );
+        assert_eq!(pm.lifecycle_exec_path().as_path(), bin.join("pnpm.exe").as_path());
     }
 
     #[test]
