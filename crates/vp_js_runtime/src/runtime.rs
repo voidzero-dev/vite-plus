@@ -529,12 +529,20 @@ pub async fn download_runtime_for_project(project_path: &AbsolutePath) -> Result
         None => None,
     };
 
+    // A parse error in the project's own package.json fails, as before
+    let project_pkg = read_package_json(&project_path.join("package.json")).await?;
+
     // The lower-priority sources for the fallback and the compatibility check
     // come from the directory where resolution stopped, which can be an
-    // ancestor of the project path
+    // ancestor of the project path. resolve_node_version skips an ancestor
+    // manifest that does not parse, so skip it here too instead of failing.
     let root = resolution.as_ref().and_then(|r| r.project_root.as_deref()).unwrap_or(project_path);
     let package_json_path = root.join("package.json");
-    let pkg = read_package_json(&package_json_path).await?;
+    let pkg = if root == project_path {
+        project_pkg
+    } else {
+        read_package_json(&package_json_path).await.ok().flatten()
+    };
 
     let engines_node = pkg
         .as_ref()
@@ -1589,6 +1597,23 @@ mod tests {
             // so engines.node wins over the lower-priority .nvmrc
             let runtime = download_runtime_for_project(&child).await.unwrap();
             assert_eq!(runtime.version(), "20.19.0");
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn test_parent_node_version_ignores_unparsable_parent_package_json() {
+        with_mock_mirror(&["20.18.0"], |temp_path| async move {
+            let child = temp_path.join("child");
+            tokio::fs::create_dir(&child).await.unwrap();
+            tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
+            tokio::fs::write(temp_path.join("package.json"), "not-json").await.unwrap();
+            tokio::fs::write(child.join("package.json"), r#"{"name":"child"}"#).await.unwrap();
+
+            // resolve_node_version skips the ancestor manifest that does not parse,
+            // so it must not block the valid inherited pin here
+            let runtime = download_runtime_for_project(&child).await.unwrap();
+            assert_eq!(runtime.version(), "20.18.0");
         })
         .await;
     }
