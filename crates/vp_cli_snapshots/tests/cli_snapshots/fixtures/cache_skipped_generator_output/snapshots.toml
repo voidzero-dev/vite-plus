@@ -1,0 +1,19 @@
+[[case]]
+name = "restore_skipped_generator_output"
+vp = "local"
+steps = [
+  { argv = ["node", "generate.mjs"], comment = "Start with up-to-date outputs." },
+  ["vp", "run", "codegen"],
+  ["vpt", "rm", "-r", "generated", "manifest.txt"],
+  ["vp", "run", "codegen"],
+  ["vpt", "stat-file", "generated/message.txt", "--assert", "missing"],
+  ["vpt", "print-file", "manifest.txt"],
+
+  { argv = ["vpt", "rm", "manifest.txt"], comment = "Regenerate both outputs before filling the cache with the output glob." },
+  ["node", "generate.mjs"],
+  ["vp", "run", "codegen-with-glob"],
+  ["vpt", "rm", "-r", "generated", "manifest.txt"],
+  ["vp", "run", "codegen-with-glob"],
+  ["vpt", "print-file", "generated/message.txt"],
+  ["vpt", "print-file", "manifest.txt"],
+]
