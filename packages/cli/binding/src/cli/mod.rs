@@ -406,7 +406,12 @@ pub async fn main(
     };
 
     match cli_args {
-        CLIArgs::Synthesizable(subcmd) => {
+        CLIArgs::Synthesizable(mut subcmd) => {
+            if let SynthesizableSubcommand::Dev { args } | SynthesizableSubcommand::Build { args } =
+                &mut subcmd
+            {
+                vp_shared::restore_leading_arg_separator(&args_vec, args);
+            }
             // Only the built-ins can be mistaken for a script. `run`/`cache`
             // below are the script path itself; `install` and friends
             // legitimately trigger a project's `install` lifecycle scripts
