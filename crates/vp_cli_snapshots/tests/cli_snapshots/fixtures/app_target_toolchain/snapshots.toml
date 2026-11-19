@@ -1,0 +1,34 @@
+[[case]]
+name = "default_package_uses_target_toolchain"
+vp = "global"
+comment = "The implicit target uses the same local CLI, working directory, and Node.js runtime as an explicit -C."
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "app/node_modules/vite-plus/dist"], snapshot = false },
+  { argv = ["vpt", "write-file", "app/node_modules/vite-plus/package.json", '{"name":"vite-plus","version":"0.0.0","type":"module"}'], snapshot = false },
+  { argv = ["vpt", "cp", "probe.mjs", "app/node_modules/vite-plus/dist/bin.js"], snapshot = false },
+  ["vp", "build"],
+  ["vp", "-C", "app", "build"],
+]
+
+[[case]]
+name = "workspace_uses_selected_members_runtime"
+vp = "global"
+comment = "Auto-selection and the picker use the member's Node.js pin with one shared Vite+ installation."
+steps = [
+  { argv = ["vpt", "rm", "vite.config.ts"], snapshot = false },
+  { argv = ["vpt", "write-file", "pnpm-workspace.yaml", "packages:\n  - app\n  - other\n"], snapshot = false },
+  { argv = ["vpt", "touch-file", "app/index.html"], snapshot = false },
+  { argv = ["vpt", "write-file", "other/package.json", '{"name":"other","private":true}'], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "node_modules/vite-plus/dist"], snapshot = false },
+  { argv = ["vpt", "write-file", "node_modules/vite-plus/package.json", '{"name":"vite-plus","version":"0.0.0","type":"module"}'], snapshot = false },
+  { argv = ["vpt", "cp", "probe.mjs", "node_modules/vite-plus/dist/bin.js"], snapshot = false },
+  ["vp", "-C", "app", "build"],
+  ["vp", "build"],
+  { argv = ["vpt", "touch-file", "other/index.html"], snapshot = false },
+  { argv = ["vp", "build"], interactions = [
+    { "expect-milestone" = "package-select::0" },
+    { "write" = "app" },
+    { "expect-milestone" = "package-select:app:0" },
+    { "write-key" = "enter" },
+  ] },
+]

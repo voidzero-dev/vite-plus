@@ -37,6 +37,7 @@ indexmap = { workspace = true }
 indoc = { workspace = true }
 jiff = { workspace = true }
 js-semver = { workspace = true }
+vp_app_target = { workspace = true }
 vp_error = { workspace = true }
 vp_js_runtime = { workspace = true }
 vp_pm_cli = { workspace = true }

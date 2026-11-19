@@ -84,7 +84,7 @@ pub struct CliOptions {
     pub pack: Arc<ThreadsafeFunction<JsCommandContext, Promise<JsCommandResolvedResult>>>,
     pub doc: Arc<ThreadsafeFunction<JsCommandContext, Promise<JsCommandResolvedResult>>>,
     pub cwd: Option<String>,
-    /// Whether the user supplied the global `-C` option.
+    /// Whether the working directory was fixed by `-C` or global app target selection.
     pub explicit_chdir: Option<bool>,
     /// CLI arguments (should be process.argv.slice(2) from JavaScript)
     pub args: Option<Vec<String>>,

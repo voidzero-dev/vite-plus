@@ -3655,7 +3655,7 @@ export interface CliOptions {
   pack: (err: Error | null, arg: JsCommandContext) => Promise<JsCommandResolvedResult>;
   doc: (err: Error | null, arg: JsCommandContext) => Promise<JsCommandResolvedResult>;
   cwd?: string;
-  /** Whether the user supplied the global `-C` option. */
+  /** Whether the working directory was fixed by `-C` or global app target selection. */
   explicitChdir?: boolean;
   /** CLI arguments (should be process.argv.slice(2) from JavaScript) */
   args?: Array<string>;

@@ -2,6 +2,8 @@
 
 use std::process::{ExitStatus, Output};
 
+use vp_app_target::AppTarget;
+use vp_cli_help::script_note;
 use vt_path::AbsolutePathBuf;
 
 use crate::{error::Error, js_executor::JsExecutor};
@@ -16,10 +18,10 @@ pub async fn execute(
     args: &[String],
     raw_subcommand: Option<&str>,
 ) -> Result<ExitStatus, Error> {
-    execute_app(cwd, command, args, raw_subcommand, false).await
+    execute_local(cwd, command, args, raw_subcommand, false).await
 }
 
-/// Execute an app command and preserve whether the user supplied `-C`.
+/// Select the target of a bare app command before resolving the project CLI and runtime.
 pub async fn execute_app(
     cwd: AbsolutePathBuf,
     command: &str,
@@ -27,9 +29,33 @@ pub async fn execute_app(
     raw_subcommand: Option<&str>,
     explicit_chdir: bool,
 ) -> Result<ExitStatus, Error> {
-    let mut executor = JsExecutor::new(None)
-        .with_raw_subcommand(raw_subcommand)
-        .with_explicit_chdir(explicit_chdir);
+    let resolve_target = !explicit_chdir && args.is_empty();
+    let (cwd, raw_subcommand) = if resolve_target {
+        script_note::print(raw_subcommand.or(Some(command)), &cwd);
+        let (target, _) = vp_app_target::resolve_app_target(command, &cwd)
+            .map_err(|error| Error::Other(vt_str::format!("{error:#}")))?;
+        let cwd = match target {
+            AppTarget::CurrentDir => cwd,
+            AppTarget::Dir(dir) => dir,
+            AppTarget::Exit(code) => return Ok(crate::cli::exit_status(i32::from(code))),
+        };
+        // The note refers to the script in the invocation directory.
+        (cwd, Some(""))
+    } else {
+        (cwd, raw_subcommand)
+    };
+    execute_local(cwd, command, args, raw_subcommand, explicit_chdir || resolve_target).await
+}
+
+async fn execute_local(
+    cwd: AbsolutePathBuf,
+    command: &str,
+    args: &[String],
+    raw_subcommand: Option<&str>,
+    fixed_target: bool,
+) -> Result<ExitStatus, Error> {
+    let mut executor =
+        JsExecutor::new(None).with_raw_subcommand(raw_subcommand).with_fixed_target(fixed_target);
     let mut full_args = vec![command.to_string()];
     full_args.extend(args.iter().cloned());
     executor.delegate_to_local_cli(&cwd, &full_args).await

@@ -304,6 +304,7 @@ typedmap = "0.6.0"
 url = "2.5.8"
 uuid = "1.27.0"
 vfs = "0.13.0"
+vp_app_target = { path = "crates/vp_app_target" }
 vp_command = { path = "crates/vp_command" }
 vp_cli_help = { path = "crates/vp_cli_help" }
 vp_error = { path = "crates/vp_error" }
@@ -318,6 +319,7 @@ vp_toolchain = { path = "crates/vp_toolchain" }
 vt = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "cb1ea8d214b26a0f3ca2b2ef3b6bc471b18ffacb" }
 vt_casefold = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "cb1ea8d214b26a0f3ca2b2ef3b6bc471b18ffacb" }
 vt_path = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "cb1ea8d214b26a0f3ca2b2ef3b6bc471b18ffacb" }
+vt_plan = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "cb1ea8d214b26a0f3ca2b2ef3b6bc471b18ffacb" }
 vt_powershell = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "cb1ea8d214b26a0f3ca2b2ef3b6bc471b18ffacb" }
 vt_pty_terminal_test = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "cb1ea8d214b26a0f3ca2b2ef3b6bc471b18ffacb" }
 vt_pty_terminal_test_client = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "cb1ea8d214b26a0f3ca2b2ef3b6bc471b18ffacb" }

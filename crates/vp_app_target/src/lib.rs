@@ -1,27 +1,27 @@
 //! Target elicitation for bare app commands at a workspace root.
 //!
 //! A bare `vp dev`/`build`/`preview`/`pack` at a workspace root has no target
-//! and would silently run against the root. Explicit `-C` and any subcommand
-//! arguments skip target selection. An exact bare command uses
+//! and would silently run against the root. Both CLI entry points call this
+//! resolver only for bare app commands without an explicit `-C`. It uses
 //! `defaultPackage`, a root intent signal, or the package picker. See
 //! rfcs/cwd-flag.md.
 
-use vp_error::Error;
+#![deny(clippy::print_stdout)]
+
+use anyhow::Result;
 use vp_shared::{env_vars, output};
-use vt::ExitStatus;
 use vt_path::{AbsolutePath, AbsolutePathBuf};
+use vt_str::format;
 use vt_workspace::WorkspaceFile;
 
-use super::types::SynthesizableSubcommand;
-
 /// Where a bare app command should run.
-pub(super) enum AppTarget {
+pub enum AppTarget {
     /// No elicitation applies; run in the invocation directory as today.
     CurrentDir,
     /// Run as if invoked in this directory (implicit `-C`).
     Dir(AbsolutePathBuf),
     /// Elicitation printed its output and decided the exit code.
-    Exit(ExitStatus),
+    Exit(u8),
 }
 
 struct PackageRow {
@@ -29,18 +29,6 @@ struct PackageRow {
     path: vt_str::Str,
     absolute: AbsolutePathBuf,
     likely_runnable: bool,
-}
-
-/// App commands are the single-target subcommands; everything else never
-/// goes through elicitation.
-fn app_command_parts(subcommand: &SynthesizableSubcommand) -> Option<(&'static str, &[String])> {
-    match subcommand {
-        SynthesizableSubcommand::Dev { args } => Some(("dev", args)),
-        SynthesizableSubcommand::Build { args } => Some(("build", args)),
-        SynthesizableSubcommand::Preview { args } => Some(("preview", args)),
-        SynthesizableSubcommand::Pack { args } => Some(("pack", args)),
-        _ => None,
-    }
 }
 
 /// Does the workspace root have an intent signal for this app command?
@@ -99,7 +87,7 @@ fn resolve_default_package(
 ) -> AppTarget {
     let fail = |msg: &str| {
         output::error(msg);
-        AppTarget::Exit(ExitStatus(1))
+        AppTarget::Exit(1)
     };
     match value {
         vp_static_config::FieldValue::Json(serde_json::Value::String(dir)) => {
@@ -126,13 +114,13 @@ fn resolve_default_package(
 /// window-title update) for the tests to synchronize on, same gate and
 /// protocol as packages/prompts/src/milestone.ts; real terminals never see
 /// the marker as content.
-fn run_package_picker(command: &str, rows: &[PackageRow]) -> Result<Option<usize>, Error> {
+fn run_package_picker(command: &str, rows: &[PackageRow]) -> Result<Option<usize>> {
     let emit_milestones =
         std::env::var_os(env_vars::VP_EMIT_MILESTONES).is_some_and(|value| value == "1");
     let items: Vec<vt_select::SelectItem> = rows
         .iter()
         .map(|row| vt_select::SelectItem {
-            label: vt_str::format!("{} {}", row.name, row.path),
+            label: format!("{} {}", row.name, row.path),
             display_name: row.name.clone(),
             description: row.path.clone(),
             group: None,
@@ -157,12 +145,10 @@ fn run_package_picker(command: &str, rows: &[PackageRow]) -> Result<Option<usize
             if !emit_milestones {
                 return;
             }
-            let milestone =
-                vt_str::format!("package-select:{}:{}", state.query, state.selected_index);
+            let milestone = format!("package-select:{}:{}", state.query, state.selected_index);
             emit_milestone_title(&milestone);
         },
-    )
-    .map_err(Error::Anyhow)?;
+    )?;
     Ok(match result {
         vt_select::SelectResult::Selected => Some(selected_index),
         vt_select::SelectResult::Cancelled => None,
@@ -192,8 +178,8 @@ fn emit_milestone_title(name: &str) {
 /// picker. Slightly over-approximates (an empty workspace reports true), in
 /// which case the script merely spawns the real binary, which then behaves
 /// identically to a direct invocation.
-pub(super) fn needs_elicitation(subcommand: &SynthesizableSubcommand, cwd: &AbsolutePath) -> bool {
-    matches!(classify(subcommand, cwd, false), Classification::Elicit(..))
+pub fn needs_elicitation(command: &str, cwd: &AbsolutePath) -> bool {
+    matches!(classify(command, cwd), Classification::Elicit(_))
 }
 
 /// Outcome of classifying a bare app command.
@@ -206,7 +192,7 @@ enum Classification {
     RunInPlace(Option<vt_workspace::WorkspaceRoot>),
     /// Elicit a target: `defaultPackage`, or the picker/listing at a
     /// workspace root.
-    Elicit(&'static str, Elicitation),
+    Elicit(Elicitation),
 }
 
 /// Why a bare app command needs target elicitation.
@@ -236,29 +222,14 @@ fn default_package_for_command(
     }
 }
 
-/// The RFC's resolution order, written once for both entry points. An explicit
-/// `-C` or any subcommand argument runs in place. An exact bare app command
-/// then uses `defaultPackage` at the invocation root or checks the workspace
-/// root itself. `defaultPackage` is a root-pointer concept: it applies where
+/// A bare app command uses `defaultPackage` at the invocation root or checks
+/// the workspace root itself. `defaultPackage` applies where
 /// the invocation directory is its own root (a workspace root, a standalone
 /// package, or a framework directory with no package.json ancestry). Below a
 /// workspace root, the current directory identifies the target. A member's
 /// own config must not redirect.
 ///
-/// The one `find_workspace_root` walk here rides back out on
-/// [`Classification::RunInPlace`] whenever the command ends up running in
-/// `cwd`, so a bare command in a sub-package walks the tree once, not twice.
-fn classify(
-    subcommand: &SynthesizableSubcommand,
-    cwd: &AbsolutePath,
-    explicit_chdir: bool,
-) -> Classification {
-    let Some((command, args)) = app_command_parts(subcommand) else {
-        return Classification::RunInPlace(None);
-    };
-    if explicit_chdir || !args.is_empty() {
-        return Classification::RunInPlace(None);
-    }
+fn classify(command: &str, cwd: &AbsolutePath) -> Classification {
     let workspace = vt_workspace::find_workspace_root(cwd);
     let at_invocation_root =
         workspace.as_ref().map_or(true, |(_, rel_from_root)| rel_from_root.as_str().is_empty());
@@ -270,7 +241,7 @@ fn classify(
         .and_then(|config| config.get_declared("defaultPackage"))
         .and_then(|value| default_package_for_command(command, value))
     {
-        return Classification::Elicit(command, Elicitation::DefaultPackage(value));
+        return Classification::Elicit(Elicitation::DefaultPackage(value));
     }
     // The picker/listing needs workspace metadata; anything unresolvable
     // keeps today's behavior (the caller surfaces its own workspace errors).
@@ -295,23 +266,23 @@ fn classify(
     if root_has_intent_signal(&root_config, &workspace_root.path, command) {
         return Classification::RunInPlace(Some(workspace_root));
     }
-    Classification::Elicit(command, Elicitation::WorkspaceRoot(workspace_root))
+    Classification::Elicit(Elicitation::WorkspaceRoot(workspace_root))
 }
 
-/// Resolve an app command's target. The second tuple element is the workspace
+/// Resolve the target of a bare `dev`, `build`, `preview`, or `pack` command.
+/// The second tuple element is the workspace
 /// root already found for `cwd`. It is present only when the command runs in
 /// the unchanged `cwd`, so it matches a fresh lookup there. The caller reuses
 /// it to skip a second `find_workspace_root` walk.
-pub(super) fn resolve_app_target(
-    subcommand: &SynthesizableSubcommand,
+pub fn resolve_app_target(
+    command: &str,
     cwd: &AbsolutePath,
-    explicit_chdir: bool,
-) -> Result<(AppTarget, Option<vt_workspace::WorkspaceRoot>), Error> {
-    let (command, elicitation) = match classify(subcommand, cwd, explicit_chdir) {
+) -> Result<(AppTarget, Option<vt_workspace::WorkspaceRoot>)> {
+    let elicitation = match classify(command, cwd) {
         Classification::RunInPlace(workspace_root) => {
             return Ok((AppTarget::CurrentDir, workspace_root));
         }
-        Classification::Elicit(command, elicitation) => (command, elicitation),
+        Classification::Elicit(elicitation) => elicitation,
     };
     let workspace_root = match elicitation {
         Elicitation::DefaultPackage(value) => {
@@ -320,8 +291,7 @@ pub(super) fn resolve_app_target(
         Elicitation::WorkspaceRoot(workspace_root) => workspace_root,
     };
 
-    let graph =
-        vt_workspace::load_package_graph(&workspace_root).map_err(|e| Error::Anyhow(e.into()))?;
+    let graph = vt_workspace::load_package_graph(&workspace_root)?;
     let mut root_row = None;
     let mut rows: Vec<PackageRow> = graph
         .node_weights()
@@ -371,13 +341,16 @@ pub(super) fn resolve_app_target(
             run_package_picker(command, &rows)?
         };
         let Some(index) = picked else {
-            return Ok((AppTarget::Exit(ExitStatus(130)), None));
+            return Ok((AppTarget::Exit(130), None));
         };
         let row = &rows[index];
-        // Deliberately stdout via println!: these lines belong to the
-        // command's own output stream, like the tool output that follows.
-        println!("Selected package: {} ({})", row.name, row.path);
-        println!("Tip: run this directly with `vp -C {} {command}`", row.path);
+        output::print_and_flush(
+            &mut std::io::stdout().lock(),
+            &format!(
+                "Selected package: {} ({})\nTip: run this directly with `vp -C {} {command}`\n",
+                row.name, row.path, row.path
+            ),
+        );
         return Ok((AppTarget::Dir(row.absolute.clone()), None));
     }
 
@@ -392,7 +365,7 @@ pub(super) fn resolve_app_target(
     let example = &rows[0].path;
     output::raw_stderr(&format!("  Pass a directory:  vp -C {example} {command}"));
     output::raw_stderr(&format!("  Or run every package's {command} script:  vp run -r {command}"));
-    Ok((AppTarget::Exit(ExitStatus(1)), None))
+    Ok((AppTarget::Exit(1), None))
 }
 
 #[cfg(test)]
@@ -409,7 +382,8 @@ mod tests {
         for field in ["root", "build", "input", "environments", "appType"] {
             fs::write(
                 temp.path().join("vite.config.ts"),
-                format!("const value = {{}}; export default {{ {field}: value }};"),
+                vt_str::format!("const value = {{}}; export default {{ {field}: value }};")
+                    .as_bytes(),
             )
             .expect("config should be written");
             let config = vp_static_config::resolve_static_config(&dir);
@@ -440,42 +414,6 @@ mod tests {
 
         for command in ["dev", "build", "preview"] {
             assert!(!root_has_intent_signal(&config, &dir, command));
-        }
-    }
-
-    #[test]
-    fn arguments_and_explicit_chdir_run_in_place() {
-        let cwd = AbsolutePathBuf::new(std::env::current_dir().expect("cwd should exist"))
-            .expect("cwd should be absolute");
-        let commands = [
-            SynthesizableSubcommand::Build { args: vec!["--watch".into()] },
-            SynthesizableSubcommand::Build { args: vec!["--ssr".into()] },
-            SynthesizableSubcommand::Build { args: vec!["apps/web".into()] },
-            SynthesizableSubcommand::Dev { args: vec!["--host".into()] },
-            SynthesizableSubcommand::Preview { args: vec!["--help".into()] },
-            SynthesizableSubcommand::Pack { args: vec!["--root".into(), "src".into()] },
-        ];
-
-        for command in &commands {
-            assert!(matches!(classify(command, &cwd, false), Classification::RunInPlace(None)));
-        }
-        assert!(matches!(
-            classify(&SynthesizableSubcommand::Build { args: vec![] }, &cwd, true),
-            Classification::RunInPlace(None)
-        ));
-    }
-
-    #[test]
-    fn only_app_commands_elicit() {
-        for (subcommand, expected) in [
-            (SynthesizableSubcommand::Dev { args: vec![] }, Some("dev")),
-            (SynthesizableSubcommand::Build { args: vec![] }, Some("build")),
-            (SynthesizableSubcommand::Preview { args: vec![] }, Some("preview")),
-            (SynthesizableSubcommand::Pack { args: vec![] }, Some("pack")),
-            (SynthesizableSubcommand::Lint { args: vec![] }, None),
-            (SynthesizableSubcommand::Test { args: vec![] }, None),
-        ] {
-            assert_eq!(app_command_parts(&subcommand).map(|(name, _)| name), expected);
         }
     }
 }
