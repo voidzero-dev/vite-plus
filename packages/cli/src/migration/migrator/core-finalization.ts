@@ -175,14 +175,7 @@ export function finalizeCoreMigrationForExistingVitePlus(
   }
 
   if (importRuleConfig !== null) {
-    result.imports = rewriteAllImports(
-      workspaceInfo.rootDir,
-      silent,
-      report,
-      true,
-      [],
-      importRuleConfig,
-    );
+    result.imports = rewriteAllImports(workspaceInfo.rootDir, silent, report, { importRuleConfig });
   }
   result.dependencies = dropDeadOxlintPluginsDependency(
     workspaceInfo.rootDir,

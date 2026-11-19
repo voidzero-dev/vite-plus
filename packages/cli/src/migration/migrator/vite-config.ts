@@ -1031,27 +1031,21 @@ export function warnUnresolvedImportRuleConfig(report?: MigrationReport): void {
   );
 }
 
-/** Read the import rule before migration merges or removes lint configs. */
-export async function resolveImportRuleConfig(
-  projectPath: string,
-  options?: { deferRuntimeFailure?: boolean; report?: MigrationReport },
-): Promise<string | undefined> {
+/**
+ * Read the import rule before migration merges or removes lint configs.
+ * Return null if the worker cannot load the project config.
+ */
+export async function tryResolveImportRuleConfig(projectPath: string): Promise<string | null> {
   const extracted = readStaticLintConfig(projectPath);
   let lint: OxlintConfig | undefined;
-  if (extracted == null) {
+  if (extracted != null) {
+    lint = JSON.parse(extracted);
+  } else {
     try {
       lint = await readLintConfigInWorker(projectPath);
     } catch {
-      if (options?.deferRuntimeFailure) {
-        return undefined;
-      }
-      warnUnresolvedImportRuleConfig(options?.report);
-      // An unreadable config may disable the rule. Preserve imports rather than
-      // applying defaults that would overwrite the user's protected files.
-      return JSON.stringify({ enabled: false, overrides: [] });
+      return null;
     }
-  } else {
-    lint = JSON.parse(extracted);
   }
   if (!lint) {
     const filename = detectConfigs(projectPath).oxlintConfig;
@@ -1060,7 +1054,6 @@ export async function resolveImportRuleConfig(
         lint = resolveOxlintConfigExtends(path.join(projectPath, filename)).config;
       } catch {
         // The config migration reports and preserves unresolved JSON configs.
-        // Keep its existing error handling instead of aborting unrelated steps.
       }
     }
   }
@@ -1071,38 +1064,52 @@ export async function resolveImportRuleConfig(
       importRuleEnabled(layer.rules?.[PREFER_VITE_PLUS_IMPORTS_RULE]) ?? previous,
     true,
   );
-  const overrides = layers.flatMap((layer) =>
-    (layer.overrides ?? []).flatMap((override) => {
+  const overrides = [];
+  for (const layer of layers) {
+    for (const override of layer.overrides ?? []) {
       const enabled = importRuleEnabled(override.rules?.[PREFER_VITE_PLUS_IMPORTS_RULE]);
-      return enabled === undefined
-        ? []
-        : [{ files: override.files, excludeFiles: override.excludeFiles ?? [], enabled }];
-    }),
-  );
+      if (enabled !== undefined) {
+        overrides.push({
+          files: override.files,
+          excludeFiles: override.excludeFiles ?? [],
+          enabled,
+        });
+      }
+    }
+  }
   return JSON.stringify({ enabled, overrides });
 }
 
-/**
- * Rewrite imports in all TypeScript/JavaScript files under a directory
- * This rewrites vite/vitest imports to @voidzero-dev/vite-plus
- * @param projectPath - The root directory to search for files
- */
+/** Preserve imports if the last attempt to read the rule fails. */
+export async function resolveImportRuleConfig(
+  projectPath: string,
+  report?: MigrationReport,
+): Promise<string> {
+  const config = await tryResolveImportRuleConfig(projectPath);
+  if (config !== null) {
+    return config;
+  }
+  warnUnresolvedImportRuleConfig(report);
+  return JSON.stringify({ enabled: false, overrides: [] });
+}
+
+/** Rewrite toolchain imports throughout the project and record the results. */
 export function rewriteAllImports(
   projectPath: string,
   silent = false,
   report?: MigrationReport,
-  preserveNuxtVitestImports = true,
-  // Directories of packages that own the Oxlint plugin API, captured before
-  // `rewritePackageJson` stripped `oxlint` from their manifests. See
-  // `collectOxlintOwnerDirs`.
-  oxlintOwnerDirs: string[] = [],
-  importRuleConfig?: string,
+  options: {
+    preserveNuxtVitestImports?: boolean;
+    // Capture package owners before migration removes oxlint from their manifests.
+    oxlintOwnerDirs?: string[];
+    importRuleConfig?: string;
+  } = {},
 ): boolean {
   const result = rewriteImportsInDirectory(
     projectPath,
-    preserveNuxtVitestImports,
-    oxlintOwnerDirs,
-    importRuleConfig,
+    options.preserveNuxtVitestImports ?? true,
+    options.oxlintOwnerDirs ?? [],
+    options.importRuleConfig,
   );
   const modified = result.modifiedFiles.length;
   const preserved = result.preservedVitestFiles.length;

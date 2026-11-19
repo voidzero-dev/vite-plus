@@ -48,8 +48,8 @@ import {
   applyVitestV5NodeMigration,
   checkVitestVersion,
   checkViteVersion,
-  collectToolchainVersionChanges,
   collectOxlintOwnerDirs,
+  collectToolchainVersionChanges,
   confirmPrettierMigration,
   confirmTsxMigration,
   confirmOxnodeMigration,
@@ -84,10 +84,11 @@ import {
   migrateOxnodeToVpx,
   migrateTsNodeToVpx,
   configureYarnNodeModulesMode,
-  rewriteMonorepo,
   rewriteAllImports,
+  rewriteMonorepo,
   rewriteStandaloneProject,
   resolveImportRuleConfig,
+  tryResolveImportRuleConfig,
   planVitestV5Migration,
   refreshVitestV5Migration,
   retryPreservedOxlintConfigs,
@@ -836,7 +837,7 @@ async function executeMigrationPlan(
     },
   );
 
-  const importRuleConfig = await resolveImportRuleConfig(workspaceInfo.rootDir, { report });
+  const importRuleConfig = await resolveImportRuleConfig(workspaceInfo.rootDir, report);
 
   // 4. Check vite and vitest version is supported by migration
   updateMigrationProgress('Validating toolchain');
@@ -1225,11 +1226,9 @@ async function main() {
 
     // Try the project's available dependencies first. A failed dynamic load can
     // retry after the upgrade's normal install, without scheduling an extra one.
-    const importRuleConfig = await resolveImportRuleConfig(workspaceInfoOptional.rootDir, {
-      deferRuntimeFailure: true,
-    });
+    const importRuleConfig = await tryResolveImportRuleConfig(workspaceInfoOptional.rootDir);
     const deferredOxlintOwnerDirs =
-      importRuleConfig === undefined
+      importRuleConfig === null
         ? collectOxlintOwnerDirs(workspaceInfoOptional.rootDir, workspaceInfoOptional.packages)
         : [];
 
@@ -1244,7 +1243,7 @@ async function main() {
       true,
       report,
       pendingCoreMigration,
-      importRuleConfig ?? null,
+      importRuleConfig,
     );
     if (
       coreMigrationResult.dependencies ||
@@ -1290,7 +1289,7 @@ async function main() {
 
     if (
       !didMigrate &&
-      importRuleConfig !== undefined &&
+      importRuleConfig !== null &&
       !convertYarnPnp &&
       report.warnings.length === 0 &&
       !vitePlusBootstrapPending &&
@@ -1679,23 +1678,19 @@ async function main() {
       );
     }
 
-    if (importRuleConfig === undefined) {
+    if (importRuleConfig === null) {
       if (needsInstall && finalInstallOk) {
         updateMigrationProgress('Reading lint configuration');
         const resolvedImportRuleConfig = await resolveImportRuleConfig(
           workspaceInfoOptional.rootDir,
-          { report },
+          report,
         );
         updateMigrationProgress('Rewriting toolchain imports across the workspace');
         didMigrate =
-          rewriteAllImports(
-            workspaceInfoOptional.rootDir,
-            true,
-            report,
-            true,
-            deferredOxlintOwnerDirs,
-            resolvedImportRuleConfig,
-          ) || didMigrate;
+          rewriteAllImports(workspaceInfoOptional.rootDir, true, report, {
+            oxlintOwnerDirs: deferredOxlintOwnerDirs,
+            importRuleConfig: resolvedImportRuleConfig,
+          }) || didMigrate;
       } else {
         warnUnresolvedImportRuleConfig(report);
       }

@@ -5,7 +5,6 @@ use vp_error::Error;
 
 /// The import rule's settings, with inherited configs flattened by the JS caller.
 #[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct ImportRuleConfig {
     enabled: bool,
     overrides: Vec<ImportRuleOverride>,
@@ -30,7 +29,7 @@ impl ImportRuleConfig {
         let mut config: Self = serde_json::from_str(json)?;
         for entry in &mut config.overrides {
             for pattern in entry.files.iter_mut().chain(&mut entry.exclude_files) {
-                fast_glob::validate(&*pattern).map_err(|error| {
+                fast_glob::validate(pattern.as_str()).map_err(|error| {
                     Error::InvalidArgument(format!("Invalid lint glob {pattern:?}: {error}").into())
                 })?;
                 // Match Oxlint's GlobSet: bare names match at every depth, while
@@ -47,17 +46,18 @@ impl ImportRuleConfig {
     }
 
     pub(crate) fn is_enabled(&self, relative_path: &Path) -> bool {
+        if self.overrides.is_empty() {
+            return self.enabled;
+        }
         let path = relative_path.to_string_lossy().replace('\\', "/");
+        let matches_path = |pattern: &String| fast_glob::glob_match(pattern, &path);
         self.overrides
             .iter()
-            .filter(|entry| {
-                entry.files.iter().any(|pattern| fast_glob::glob_match(pattern, &path))
-                    && !entry
-                        .exclude_files
-                        .iter()
-                        .any(|pattern| fast_glob::glob_match(pattern, &path))
+            .rfind(|entry| {
+                entry.files.iter().any(matches_path)
+                    && !entry.exclude_files.iter().any(matches_path)
             })
-            .fold(self.enabled, |_, entry| entry.enabled)
+            .map_or(self.enabled, |entry| entry.enabled)
     }
 }
 

@@ -10,5 +10,5 @@ steps = [
   { argv = ["vpt", "print-file", "examples/starter/tsconfig.json"], comment = "record related type-reference changes" },
   { argv = ["vpt", "print-file", "pnpm-workspace.yaml"], comment = "the template remains a workspace member and shares toolchain overrides" },
   { argv = ["vpt", "print-file", "packages/app/package.json"], comment = "control: the application continues to use Vite+" },
-  { argv = ["vpt", "print-file", "packages/app/vite.config.ts"] },
+  ["vpt", "print-file", "packages/app/vite.config.ts"],
 ]

@@ -2328,7 +2328,7 @@ pub fn rewrite_imports_in_directory_with_options(
                 &file_path,
                 root,
                 &skip_packages,
-                options.import_rule.is_enabled(file_path.strip_prefix(root).unwrap_or(&file_path)),
+                &options.import_rule,
                 options.preserve_vitest_in_nuxt_packages && package_context.uses_nuxt_test_utils,
             ) {
                 Ok(rewrite_result) => {
@@ -2403,7 +2403,7 @@ fn rewrite_import(
     file_path: &Path,
     root: &Path,
     skip_packages: &SkipPackages,
-    rewrite_imports: bool,
+    import_rule: &ImportRuleConfig,
     preserve_vitest_in_nuxt_package: bool,
 ) -> Result<RewriteResult, Error> {
     let content = std::fs::read_to_string(file_path)?;
@@ -2423,7 +2423,8 @@ fn rewrite_import(
     // whereas `vite-plus` re-exports no `UserConfig` symbol for a rewritten
     // augmentation to merge with. This is layered ON TOP of the package-level
     // skip (a skipped package stays skipped).
-    let mut result = if rewrite_imports {
+    let relative_path = file_path.strip_prefix(root).unwrap_or(file_path);
+    let mut result = if import_rule.is_enabled(relative_path) {
         rewrite_import_content_full(
             &content,
             skip_packages,
@@ -3041,7 +3042,7 @@ export default defineConfig({{
             &vite_config_path,
             temp_dir.path(),
             &SkipPackages::default(),
-            true,
+            &ImportRuleConfig::default(),
             false,
         )
         .unwrap();

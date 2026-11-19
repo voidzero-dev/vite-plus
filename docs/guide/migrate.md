@@ -63,34 +63,24 @@ For the Vitest v5 upgrade, read the [compatibility settings and review checklist
 
 ### Keeping upstream imports in templates and examples
 
-Disable `vite-plus/prefer-vite-plus-imports` for selected files in the root
-`vite.config.ts`:
+If your root `vite.config.ts` enables `vite-plus/prefer-vite-plus-imports`, add
+this entry to `lint.overrides` to keep `vite` and `vitest` imports in templates
+and examples.
 
-```ts
-import { defineConfig } from 'vite-plus';
-
-export default defineConfig({
-  lint: {
-    overrides: [
-      {
-        files: ['templates/**', 'examples/**'],
-        rules: {
-          'vite-plus/prefer-vite-plus-imports': 'off',
-        },
-      },
-    ],
-  },
-});
+```json
+{
+  "files": ["templates/**", "examples/**"],
+  "rules": { "vite-plus/prefer-vite-plus-imports": "off" }
+}
 ```
 
-`vp migrate` uses the same rule settings for its import rewrite step. The override
-also applies to `vp lint --fix` and `vp check --fix`. Patterns use Oxlint's glob
-syntax, relative to the root config directory. Later matching overrides can
-re-enable the rule.
+`vp migrate`, `vp lint --fix`, and `vp check --fix` all use this override for
+import rewrites. Oxlint matches the file patterns relative to the root config
+directory. A later matching override can re-enable the rule.
 
-This controls import rewrites only. Migration still updates dependencies, scripts,
-configs, shared catalogs, and package-manager overrides. Other lint rules remain
-enabled. There is no separate migration exclusion setting.
+Other lint rules follow their own settings. Migration updates dependencies,
+scripts, configs, shared catalogs, and package-manager overrides independently
+of this rule.
 
 ## Recommended Workflow
 

@@ -356,7 +356,7 @@ export function rewriteStandaloneProject(
   injectFmtDefaults(projectPath, silent, report);
   mergeTsdownConfigFile(projectPath, silent, report);
   // rewrite imports in all TypeScript/JavaScript files before lazy plugin import merging
-  rewriteAllImports(projectPath, silent, report, true, oxlintOwnerDirs, importRuleConfig);
+  rewriteAllImports(projectPath, silent, report, { oxlintOwnerDirs, importRuleConfig });
   dropDeadOxlintPluginsDependency(projectPath, workspaceInfo.packages, originalOxlintDependencies);
   wrapLazyPluginsInViteConfig(projectPath, silent, report);
   migrateTaskCacheConfigInViteConfig(projectPath, silent, report);
@@ -529,7 +529,7 @@ export function rewriteMonorepo(
   injectFmtDefaults(workspaceInfo.rootDir, silent, report);
   mergeTsdownConfigFile(workspaceInfo.rootDir, silent, report);
   // rewrite imports in all TypeScript/JavaScript files before lazy plugin import merging
-  rewriteAllImports(workspaceInfo.rootDir, silent, report, true, oxlintOwnerDirs, importRuleConfig);
+  rewriteAllImports(workspaceInfo.rootDir, silent, report, { oxlintOwnerDirs, importRuleConfig });
   dropDeadOxlintPluginsDependency(
     workspaceInfo.rootDir,
     workspaceInfo.packages,

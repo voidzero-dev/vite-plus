@@ -174,18 +174,18 @@ fn extract_config_fields(program: &Program<'_>) -> FieldMap {
     for stmt in &program.body {
         // ESM: export default ...
         if let Statement::ExportDefaultDeclaration(decl) = stmt {
-            if let Some(expr) = decl.declaration.as_expression() {
-                if let Expression::Identifier(id) = expr.get_inner_expression() {
-                    return extract_exported_const(
-                        program,
-                        id.name.as_str(),
-                        has_trusted_define_config_binding,
-                    );
-                }
-                return extract_config_from_expr(expr, has_trusted_define_config_binding);
+            let Some(expr) = decl.declaration.as_expression() else {
+                // export default class/function — not analyzable
+                return FieldMap::unanalyzable();
+            };
+            if let Expression::Identifier(id) = expr.get_inner_expression() {
+                return extract_exported_const(
+                    program,
+                    id.name.as_str(),
+                    has_trusted_define_config_binding,
+                );
             }
-            // export default class/function — not analyzable
-            return FieldMap::unanalyzable();
+            return extract_config_from_expr(expr, has_trusted_define_config_binding);
         }
 
         // CJS: module.exports = ...

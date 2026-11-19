@@ -16,7 +16,7 @@ steps = [
   { argv = ["vpt", "replace-file-content", "vite.config.ts", "import { defineConfig } from 'vite';", ""], snapshot = false },
   { argv = ["vpt", "replace-file-content", "vite.config.ts", "export default defineConfig({});", "export default () => ({});"], snapshot = false },
   { argv = ["vpt", "write-file", "unit.test.ts", "import { test } from 'vitest';\n"], snapshot = false },
-  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"] },
-  { argv = ["vpt", "print-file", "unit.test.ts"] },
-  { argv = ["vpt", "print-file", "package.json"] },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "unit.test.ts"],
+  ["vpt", "print-file", "package.json"],
 ]

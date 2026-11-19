@@ -2,6 +2,7 @@ use std::path::Path;
 
 use napi::{anyhow, bindgen_prelude::*};
 use napi_derive::napi;
+use vp_migration::ImportRuleConfig;
 
 /// JSON for a static lint block; undefined requests normal config resolution.
 #[napi]
@@ -381,14 +382,14 @@ pub fn rewrite_imports_in_directory(
     oxlint_owner_dirs: Option<Vec<String>>,
     import_rule_config: Option<String>,
 ) -> Result<BatchRewriteResult> {
+    let import_rule = match import_rule_config.as_deref() {
+        Some(json) => ImportRuleConfig::from_json(json).map_err(anyhow::Error::from)?,
+        None => ImportRuleConfig::default(),
+    };
     let result = vp_migration::rewrite_imports_in_directory_with_options(
         Path::new(&root),
         vp_migration::RewriteImportsOptions {
-            import_rule: import_rule_config
-                .map(|json| vp_migration::ImportRuleConfig::from_json(&json))
-                .transpose()
-                .map_err(anyhow::Error::from)?
-                .unwrap_or_default(),
+            import_rule,
             preserve_vitest_in_nuxt_packages: preserve_vitest_in_nuxt_packages.unwrap_or(false),
             oxlint_owner_dirs: oxlint_owner_dirs
                 .unwrap_or_default()

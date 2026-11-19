@@ -5,7 +5,11 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { readLintConfigInWorker } from '../compat/runner.ts';
-import { resolveImportRuleConfig, rewriteAllImports } from '../migrator.ts';
+import {
+  resolveImportRuleConfig,
+  rewriteAllImports,
+  tryResolveImportRuleConfig,
+} from '../migrator.ts';
 import { createMigrationReport } from '../report.ts';
 
 vi.mock('../compat/runner.ts', () => ({ readLintConfigInWorker: vi.fn() }));
@@ -20,7 +24,9 @@ describe('migration import rule settings', () => {
   };
   const read = (filename: string) => fs.readFileSync(path.join(root, filename), 'utf8');
   const rewrite = async () =>
-    rewriteAllImports(root, true, undefined, true, [], await resolveImportRuleConfig(root));
+    rewriteAllImports(root, true, undefined, {
+      importRuleConfig: await resolveImportRuleConfig(root),
+    });
   const config = (lint: unknown) =>
     write('vite.config.ts', `export default ${JSON.stringify({ lint })};`);
 
@@ -90,22 +96,20 @@ describe('migration import rule settings', () => {
   it('defers a failed dynamic load until the scheduled install completes', async () => {
     const report = createMigrationReport();
     config({});
-    expect(await resolveImportRuleConfig(root, { deferRuntimeFailure: true })).toBeDefined();
+    expect(await tryResolveImportRuleConfig(root)).not.toBeNull();
     expect(readLintConfigInWorker).not.toHaveBeenCalled();
 
     write('vite.config.ts', 'export default () => getConfig();');
     vi.mocked(readLintConfigInWorker).mockRejectedValueOnce(new Error('missing dependency'));
-    expect(
-      await resolveImportRuleConfig(root, { deferRuntimeFailure: true, report }),
-    ).toBeUndefined();
+    expect(await tryResolveImportRuleConfig(root)).toBeNull();
     expect(report.warnings).toEqual([]);
     expect(read('unit.test.ts')).toContain("from 'vitest'");
 
     vi.mocked(readLintConfigInWorker).mockResolvedValue({
       rules: { [rule]: 'off' },
     });
-    const settings = await resolveImportRuleConfig(root, { report });
-    expect(rewriteAllImports(root, true, report, true, [], settings)).toBe(false);
+    const importRuleConfig = await resolveImportRuleConfig(root, report);
+    expect(rewriteAllImports(root, true, report, { importRuleConfig })).toBe(false);
     expect(read('unit.test.ts')).toContain("from 'vitest'");
     expect(report.warnings).toEqual([]);
     expect(readLintConfigInWorker).toHaveBeenCalledTimes(2);
@@ -117,8 +121,8 @@ describe('migration import rule settings', () => {
     write('.oxlintrc.json', JSON.stringify({ rules: { [rule]: 'error' } }));
     vi.mocked(readLintConfigInWorker).mockRejectedValue(new Error('config worker crashed'));
     const report = createMigrationReport();
-    const settings = await resolveImportRuleConfig(root, { report });
-    expect(rewriteAllImports(root, true, report, true, [], settings)).toBe(false);
+    const importRuleConfig = await resolveImportRuleConfig(root, report);
+    expect(rewriteAllImports(root, true, report, { importRuleConfig })).toBe(false);
     expect(read('unit.test.ts')).toContain("from 'vitest'");
     expect(report.warnings).toEqual([
       expect.stringContaining('Skipped Vite/Vitest import rewrites'),

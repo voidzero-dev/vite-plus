@@ -5,12 +5,12 @@ local-registry = true
 unset-env = ["VP_SKIP_INSTALL"]
 comment = "An existing Vite+ project retries dynamic lint settings after the upgrade installs missing dependencies."
 steps = [
-  { argv = ["vpt", "stat-file", "node_modules", "--assert", "missing"] },
-  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"] },
-  { argv = ["vpt", "stat-file", "node_modules/vite-plus/package.json", "--assert", "file"] },
-  { argv = ["vpt", "print-file", "templates/unit.test.ts"] },
-  { argv = ["vpt", "print-file", "unit.test.ts"] },
-  { argv = ["vpt", "print-file", "package.json"] },
+  ["vpt", "stat-file", "node_modules", "--assert", "missing"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "stat-file", "node_modules/vite-plus/package.json", "--assert", "file"],
+  ["vpt", "print-file", "templates/unit.test.ts"],
+  ["vpt", "print-file", "unit.test.ts"],
+  ["vpt", "print-file", "package.json"],
 ]
 
 [[case]]
@@ -22,9 +22,9 @@ comment = "Reading mode in a dynamic config does not trigger an install on an up
 steps = [
   { argv = ["vpt", "write-file", "vite.config.ts", "export default ({ mode }) => ({ mode });\n"], snapshot = false },
   { argv = ["vpt", "write-file", ".pnpmfile.cjs", "require('node:fs').writeFileSync(require('node:path').join(__dirname, 'install-requested'), 'install');\nmodule.exports = {};\n"], snapshot = false },
-  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"] },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
   { argv = ["vpt", "stat-file", "install-requested", "--assert", "file"], comment = "The upgrade's required install activates the probe." },
   { argv = ["vpt", "rm", "install-requested"], snapshot = false },
-  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"] },
-  { argv = ["vpt", "stat-file", "install-requested", "--assert", "missing"] },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "stat-file", "install-requested", "--assert", "missing"],
 ]

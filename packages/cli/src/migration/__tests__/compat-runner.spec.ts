@@ -15,19 +15,23 @@ import { createMigrationReport } from '../report.ts';
 
 const mockRunCommandSilently = vi.mocked(runCommandSilently);
 
-describe('checkRolldownCompatibility', () => {
-  beforeEach(() => {
-    mockRunCommandSilently.mockReset();
+function mockWorkerOutput(stdout: string, exitCode = 0): void {
+  mockRunCommandSilently.mockResolvedValue({
+    exitCode,
+    stdout: Buffer.from(stdout),
+    stderr: Buffer.alloc(0),
   });
+}
 
+beforeEach(() => {
+  mockRunCommandSilently.mockReset();
+});
+
+describe('checkRolldownCompatibility', () => {
   it('merges warnings returned by the isolated config worker', async () => {
-    mockRunCommandSilently.mockResolvedValue({
-      exitCode: 0,
-      stdout: Buffer.from(
-        `project config output\n${ROLLDOWN_COMPAT_RESULT_PREFIX}${JSON.stringify({ warnings: ['manualChunks warning'] })}\n`,
-      ),
-      stderr: Buffer.alloc(0),
-    });
+    mockWorkerOutput(
+      `project config output\n${ROLLDOWN_COMPAT_RESULT_PREFIX}{"warnings":["manualChunks warning"]}\n`,
+    );
     const report = createMigrationReport();
 
     await checkRolldownCompatibility('/project', report);
@@ -53,13 +57,7 @@ describe('checkRolldownCompatibility', () => {
   });
 
   it('skips compatibility checking when project config crashes the worker', async () => {
-    mockRunCommandSilently.mockResolvedValue({
-      exitCode: 7,
-      stdout: Buffer.from(
-        `${ROLLDOWN_COMPAT_RESULT_PREFIX}${JSON.stringify({ warnings: ['incomplete result'] })}\n`,
-      ),
-      stderr: Buffer.from('project config crashed'),
-    });
+    mockWorkerOutput(`${ROLLDOWN_COMPAT_RESULT_PREFIX}{"warnings":["incomplete result"]}\n`, 7);
     const report = createMigrationReport();
 
     await expect(checkRolldownCompatibility('/project', report)).resolves.toBeUndefined();
@@ -76,20 +74,10 @@ describe('checkRolldownCompatibility', () => {
 });
 
 describe('readLintConfigInWorker', () => {
-  beforeEach(() => {
-    mockRunCommandSilently.mockReset();
-  });
-
   it.each([null, { rules: { 'vite-plus/prefer-vite-plus-imports': 'off' } }])(
     'reads lint metadata %j after project output',
     async (lint) => {
-      mockRunCommandSilently.mockResolvedValue({
-        exitCode: 0,
-        stdout: Buffer.from(
-          `project output\n${LINT_CONFIG_RESULT_PREFIX}${JSON.stringify({ lint })}\n`,
-        ),
-        stderr: Buffer.alloc(0),
-      });
+      mockWorkerOutput(`project output\n${LINT_CONFIG_RESULT_PREFIX}${JSON.stringify({ lint })}\n`);
       expect(await readLintConfigInWorker('/project')).toEqual(lint ?? undefined);
       expect(mockRunCommandSilently).toHaveBeenCalledWith({
         command: process.execPath,
@@ -102,22 +90,14 @@ describe('readLintConfigInWorker', () => {
   );
 
   it('rejects a crashed worker even if it emitted metadata', async () => {
-    mockRunCommandSilently.mockResolvedValue({
-      exitCode: 7,
-      stdout: Buffer.from(`${LINT_CONFIG_RESULT_PREFIX}{"lint":null}\n`),
-      stderr: Buffer.from('config crashed'),
-    });
+    mockWorkerOutput(`${LINT_CONFIG_RESULT_PREFIX}{"lint":null}\n`, 7);
     await expect(readLintConfigInWorker('/project')).rejects.toThrow('exited with code 7');
   });
 
   it.each(['', '{', '{}', '{"lint":[]}'])(
     'rejects missing or invalid metadata %j',
     async (json) => {
-      mockRunCommandSilently.mockResolvedValue({
-        exitCode: 0,
-        stdout: Buffer.from(json ? `${LINT_CONFIG_RESULT_PREFIX}${json}\n` : ''),
-        stderr: Buffer.alloc(0),
-      });
+      mockWorkerOutput(json ? `${LINT_CONFIG_RESULT_PREFIX}${json}\n` : '');
       await expect(readLintConfigInWorker('/project')).rejects.toThrow(
         'did not return lint metadata',
       );

@@ -27,17 +27,23 @@ function resolveWorkerPath(): string {
   return fileURLToPath(new URL('./worker.js', import.meta.url));
 }
 
-// Config resolution executes arbitrary project code; on the upgrade path the
-// project's own (older) vite-plus copy may not honor the lazyPlugins-skip env
-// handshake, so a blocking plugin factory can wedge the worker. Kill it after
-// this long; each caller decides how to report the failed config load.
-const WORKER_TIMEOUT_MS = 30_000;
-
-interface RolldownCompatibilityResult {
-  warnings: string[];
+// A project's config can crash or block. Both probes use the same child process
+// settings and timeout, and their callers decide how to handle failure.
+async function runConfigWorker(rootDir: string, ...args: string[]): Promise<Buffer> {
+  const { exitCode, stdout } = await runCommandSilently({
+    command: process.execPath,
+    args: [resolveWorkerPath(), rootDir, ...args],
+    cwd: rootDir,
+    envs: process.env,
+    timeoutMs: 30_000,
+  });
+  if (exitCode !== 0) {
+    throw new Error(`Config worker exited with code ${exitCode}`);
+  }
+  return stdout;
 }
 
-function parseWorkerResult(stdout: Buffer, prefix: string): unknown {
+function parseWorkerResult(stdout: Buffer, prefix: string): Record<string, unknown> | undefined {
   const output = stdout.toString();
   const markerIndex = output.lastIndexOf(prefix);
   if (markerIndex === -1) {
@@ -49,46 +55,24 @@ function parseWorkerResult(stdout: Buffer, prefix: string): unknown {
   const serialized = output.slice(resultStart, resultEnd === -1 ? undefined : resultEnd).trim();
 
   try {
-    return JSON.parse(serialized);
+    const result = JSON.parse(serialized);
+    return result !== null && typeof result === 'object' ? result : undefined;
   } catch {
     return undefined;
   }
 }
 
-/**
- * Resolve a project's Vite config in a child process before checking it for
- * Rolldown-incompatible options. Config files execute arbitrary project code;
- * isolating them prevents process-level handlers, explicit exits, and
- * asynchronous crashes from terminating the migration itself.
- */
 export async function checkRolldownCompatibility(
   rootDir: string,
   report: MigrationReport,
 ): Promise<void> {
   try {
-    const workerPath = resolveWorkerPath();
-    const result = await runCommandSilently({
-      command: process.execPath,
-      args: [workerPath, rootDir],
-      cwd: rootDir,
-      envs: process.env,
-      timeoutMs: WORKER_TIMEOUT_MS,
-    });
-
-    if (result.exitCode !== 0) {
+    const stdout = await runConfigWorker(rootDir);
+    const warnings = parseWorkerResult(stdout, ROLLDOWN_COMPAT_RESULT_PREFIX)?.warnings;
+    if (!Array.isArray(warnings) || !warnings.every((item) => typeof item === 'string')) {
       return;
     }
-
-    const compatibilityResult = parseWorkerResult(result.stdout, ROLLDOWN_COMPAT_RESULT_PREFIX) as
-      | Partial<RolldownCompatibilityResult>
-      | undefined;
-    if (
-      !Array.isArray(compatibilityResult?.warnings) ||
-      !compatibilityResult.warnings.every((item) => typeof item === 'string')
-    ) {
-      return;
-    }
-    for (const warning of compatibilityResult.warnings) {
+    for (const warning of warnings) {
       addMigrationWarning(report, warning);
     }
   } catch {
@@ -98,24 +82,13 @@ export async function checkRolldownCompatibility(
 
 /** Read only serializable lint metadata without running project code in migration. */
 export async function readLintConfigInWorker(rootDir: string): Promise<OxlintConfig | undefined> {
-  const result = await runCommandSilently({
-    command: process.execPath,
-    args: [resolveWorkerPath(), rootDir, 'lint'],
-    cwd: rootDir,
-    envs: process.env,
-    timeoutMs: WORKER_TIMEOUT_MS,
-  });
-  if (result.exitCode !== 0) {
-    throw new Error(`Config worker exited with code ${result.exitCode}`);
-  }
-  const metadata = parseWorkerResult(result.stdout, LINT_CONFIG_RESULT_PREFIX) as
-    | { lint?: OxlintConfig | null }
-    | undefined;
-  if (metadata?.lint === null) {
+  const stdout = await runConfigWorker(rootDir, 'lint');
+  const lint = parseWorkerResult(stdout, LINT_CONFIG_RESULT_PREFIX)?.lint;
+  if (lint === null) {
     return undefined;
   }
-  if (!metadata?.lint || typeof metadata.lint !== 'object' || Array.isArray(metadata.lint)) {
+  if (typeof lint !== 'object' || Array.isArray(lint)) {
     throw new Error('Config worker did not return lint metadata');
   }
-  return metadata.lint;
+  return lint;
 }
