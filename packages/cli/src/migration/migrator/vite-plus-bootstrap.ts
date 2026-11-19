@@ -299,9 +299,10 @@ function reconcileVitePlusBootstrapPackage(
   // one only through source/a shim). An already-installed copy of such a provider
   // must REFERENCE that catalog entry, not pin a concrete version. See #2005.
   providerCatalogAdditions: ReadonlySet<string> = new Set(),
+  hasProtectedVitestImports = false,
 ): boolean {
   const before = JSON.stringify(pkg);
-  const usesVitest = projectUsesVitestDirectly(projectPath, pkg, undefined, true);
+  const usesVitest = hasProtectedVitestImports || projectUsesVitestDirectly(projectPath, pkg);
   ensureVitePlusDependencySpecs(pkg, vitePlusVersion, ensureVitePlus);
 
   const installGroups = [pkg.devDependencies, pkg.dependencies, pkg.optionalDependencies];
@@ -625,6 +626,7 @@ export function detectVitePlusBootstrapPending(
   packageManager: PackageManager | undefined,
   packages?: WorkspacePackage[],
   packageManagerVersion?: string,
+  protectedVitestImportOwners?: ReadonlySet<string>,
 ): boolean {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
@@ -707,6 +709,7 @@ export function detectVitePlusBootstrapPending(
         index === 0,
         catalogDependencyResolver,
         providerCatalogAdditions,
+        protectedVitestImportOwners?.has(packagePath),
       )
     ) {
       return true;
@@ -715,7 +718,12 @@ export function detectVitePlusBootstrapPending(
 
   // Shared override/catalog sinks must keep vitest managed when any package in
   // the workspace needs it. The direct dependency itself is localized above.
-  const usesVitest = workspaceUsesVitestDirectly(projectPath, packages, true);
+  const usesVitest = workspaceUsesVitestDirectly(
+    projectPath,
+    packages,
+    true,
+    protectedVitestImportOwners,
+  );
   const usesWebdriverio = workspaceUsesWebdriverioProvider(projectPath, packages);
 
   if (packageManager === PackageManager.yarn) {
@@ -958,6 +966,7 @@ function ensurePnpmPeerDependencyRules(
 export function ensureVitePlusBootstrap(
   workspaceInfo: WorkspaceInfo,
   report?: MigrationReport,
+  protectedVitestImportOwners?: ReadonlySet<string>,
 ): VitePlusBootstrapResult {
   const projectPath = workspaceInfo.rootDir;
   const packageJsonPath = path.join(projectPath, 'package.json');
@@ -980,7 +989,12 @@ export function ensureVitePlusBootstrap(
   // Shared override/catalog sinks are workspace-wide, so keep vitest managed
   // when any package needs it. Each package's direct vitest dependency is
   // reconciled independently below.
-  const usesVitest = workspaceUsesVitestDirectly(projectPath, workspaceInfo.packages, true);
+  const usesVitest = workspaceUsesVitestDirectly(
+    projectPath,
+    workspaceInfo.packages,
+    true,
+    protectedVitestImportOwners,
+  );
   const usesWebdriverio = workspaceUsesWebdriverioProvider(projectPath, workspaceInfo.packages);
   const pnpmMajorVersion = pnpmMajor(workspaceInfo.downloadPackageManager.version);
   const shouldAllowBrowserBuilds = workspaceUsesWebdriverio(projectPath, workspaceInfo.packages);
@@ -1072,6 +1086,7 @@ export function ensureVitePlusBootstrap(
       true,
       catalogDependencyResolver,
       providerCatalogAdditions,
+      protectedVitestImportOwners?.has(projectPath),
     );
 
     if (workspaceInfo.packageManager === PackageManager.yarn) {
@@ -1189,6 +1204,7 @@ export function ensureVitePlusBootstrap(
           false,
           catalogDependencyResolver,
           providerCatalogAdditions,
+          protectedVitestImportOwners?.has(packagePath),
         );
         if (
           yarnHoisting &&
@@ -1389,6 +1405,7 @@ function readInstalledRawViteVersion(projectPath: string): string | undefined {
  */
 export async function collectToolchainVersionChanges(
   projectPath: string,
+  hasProtectedVitestImports = false,
 ): Promise<DependencyVersionChange[]> {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
@@ -1443,7 +1460,7 @@ export async function collectToolchainVersionChanges(
   // reconcile uses to keep and align it).
   if (
     declaredRootSpec(pkg, 'vitest') !== undefined &&
-    projectUsesVitestDirectly(projectPath, pkg, undefined, true)
+    (hasProtectedVitestImports || projectUsesVitestDirectly(projectPath, pkg))
   ) {
     pushChange('vitest', VITEST_VERSION, fromFor('vitest'));
   }

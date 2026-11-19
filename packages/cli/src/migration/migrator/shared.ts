@@ -16,6 +16,8 @@ import { detectPackageMetadata } from '../../utils/package.ts';
 import { displayRelative } from '../../utils/path.ts';
 import { addManualStep, addMigrationWarning, type MigrationReport } from '../report.ts';
 
+export const DISABLED_IMPORT_RULE_CONFIG = JSON.stringify({ enabled: false, overrides: [] });
+
 // Commands whose effects prevent literal analysis of later invocations.
 export const SHELL_STATE_COMMANDS: readonly string[] = [
   'cd',

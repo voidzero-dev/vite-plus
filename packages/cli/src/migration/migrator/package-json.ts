@@ -60,9 +60,8 @@ export function rewritePackageJson(
   // is REMOVED so it arrives transitively through vite-plus. Defaults to true to
   // preserve legacy behavior for callers that don't compute the signal.
   usesVitestDirectly = true,
-  // Module augmentations, compilerOptions.types, and `vitest/package.json`
-  // intentionally retain the upstream package identity after import rewriting
-  // and therefore require a package-local provider under strict layouts.
+  // An import preserved by the lint rule, a module augmentation, or a reference
+  // to Vitest types or package metadata needs the upstream package locally.
   retainedVitestModule = false,
   // Installed dependency metadata can reveal required Vitest peers whose
   // package names do not include "vitest".

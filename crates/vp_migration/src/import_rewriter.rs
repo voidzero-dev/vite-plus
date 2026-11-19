@@ -1,11 +1,11 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeSet, HashMap, HashSet},
     path::{Path, PathBuf},
     sync::LazyLock,
 };
 
 use ast_grep_config::RuleConfig;
-use ast_grep_language::SupportLang;
+use ast_grep_language::{LanguageExt, SupportLang};
 use rayon::prelude::*;
 use regex::Regex;
 use vp_error::Error;
@@ -1645,6 +1645,12 @@ static PARSED_UNSCOPED_VITEST_RULES: LazyLock<Vec<RuleConfig<SupportLang>>> = La
         .collect()
 });
 
+fn has_unscoped_vitest_import(content: &str) -> bool {
+    let parsed = SupportLang::TypeScript.ast_grep(content);
+    let root = parsed.root();
+    PARSED_UNSCOPED_VITEST_RULES.iter().any(|rule| root.find(&rule.matcher).is_some())
+}
+
 static PARSED_VITEST_RULES_WITHOUT_UNSCOPED: LazyLock<Vec<RuleConfig<SupportLang>>> =
     LazyLock::new(|| {
         ast_grep::load_rules(&vitest_rewrite_rules())
@@ -1777,22 +1783,12 @@ fn apply_regex_replace(content: &mut String, re: &Regex, replacement: &str) -> b
     }
 }
 
-/// Rewrite `/// <reference types="..." />` directives in place.
-///
-/// Only processes the file preamble (blank lines and comments before the first statement)
-/// to match TypeScript semantics and avoid false positives inside string/template literals.
-/// Allocates only for preamble lines, leaving the file body untouched.
-/// Returns whether any changes were made.
-fn rewrite_reference_types(
-    content: &mut String,
-    skip_packages: &SkipPackages,
-    preserve_unscoped_vitest: bool,
-    preserved_vitest: &mut bool,
-) -> bool {
+/// TypeScript only recognizes triple-slash reference directives in the file preamble.
+fn reference_preamble(content: &str) -> &str {
     // Fast path: skip files with no triple-slash reference directives.
     // Check for "///" which covers all spacing variants (///<ref, /// <ref, ///\t<ref).
     if !content.contains("///") {
-        return false;
+        return "";
     }
 
     // Find the byte offset where the preamble ends.
@@ -1870,10 +1866,25 @@ fn rewrite_reference_types(
 
     // Guard: unclosed block comment means the file has a syntax error; skip rewriting.
     if in_block_comment {
-        return false;
+        return "";
     }
 
-    let preamble = &content[..preamble_end];
+    &content[..preamble_end]
+}
+
+fn is_unscoped_vitest_reference(line: &str) -> bool {
+    RE_REF_VITEST.is_match(line) || RE_REF_VITEST_SUBPATH.is_match(line)
+}
+
+/// Rewrite triple-slash type references in the preamble, leaving the file body untouched.
+fn rewrite_reference_types(
+    content: &mut String,
+    skip_packages: &SkipPackages,
+    preserve_unscoped_vitest: bool,
+    preserved_vitest: &mut bool,
+) -> bool {
+    let preamble = reference_preamble(content);
+    let preamble_end = preamble.len();
     // Check for "///" which covers all spacing variants (///<ref, /// <ref, etc.)
     if !preamble.contains("///") {
         return false;
@@ -1905,11 +1916,7 @@ fn rewrite_reference_types(
             // preserved, and the preservation must be reported so the migrate
             // summary counts files whose only upstream reference is a
             // triple-slash directive (ast-grep never sees those).
-            if preserve_unscoped_vitest
-                && (RE_REF_VITEST_CONFIG.is_match(line)
-                    || RE_REF_VITEST_SUBPATH.is_match(line)
-                    || RE_REF_VITEST.is_match(line))
-            {
+            if preserve_unscoped_vitest && is_unscoped_vitest_reference(line) {
                 *preserved_vitest = true;
                 continue;
             }
@@ -2102,6 +2109,40 @@ fn find_nearest_package_json(file_path: &Path, root: &Path) -> Option<PathBuf> {
     }
 
     None
+}
+
+/// Find packages that need a direct Vitest dependency because their lint rule
+/// disables rewriting in a file that uses an upstream Vitest import or type reference.
+pub fn find_retained_vitest_packages(
+    root: &Path,
+    import_rule: &ImportRuleConfig,
+) -> Result<Vec<PathBuf>, Error> {
+    if !import_rule.can_disable_rewrites() {
+        return Ok(Vec::new());
+    }
+
+    let mut owners = BTreeSet::new();
+    for path in file_walker::find_ts_files(root)?.files {
+        if import_rule.is_enabled(path.strip_prefix(root).unwrap_or(&path)) {
+            continue;
+        }
+        let Some(manifest) = find_nearest_package_json(&path, root) else { continue };
+        let owner = manifest.parent().expect("package.json has a parent directory");
+        if owners.contains(owner) {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(path) else { continue };
+        if content.contains("vitest")
+            && (reference_preamble(&content)
+                .trim_start_matches('\u{feff}')
+                .lines()
+                .any(is_unscoped_vitest_reference)
+                || has_unscoped_vitest_import(&content))
+        {
+            owners.insert(owner.to_path_buf());
+        }
+    }
+    Ok(owners.into_iter().collect())
 }
 
 /// Canonical Vite/Vitest config entry basenames, the single source shared with
@@ -2514,9 +2555,7 @@ fn rewrite_import_content_full(
     // Apply vitest rules if not skipped (using pre-parsed rules)
     if !skip_packages.skip_vitest {
         let vitest_rules = if preserve_unscoped_vitest {
-            let upstream_rewrite =
-                ast_grep::apply_loaded_rules(&new_content, &PARSED_UNSCOPED_VITEST_RULES);
-            preserved_vitest = upstream_rewrite != new_content;
+            preserved_vitest = has_unscoped_vitest_import(&new_content);
             &*PARSED_VITEST_RULES_WITHOUT_UNSCOPED
         } else {
             &*PARSED_VITEST_RULES
@@ -2587,6 +2626,43 @@ mod tests {
         let file = root.join(relative);
         std::fs::create_dir_all(file.parent().unwrap()).unwrap();
         std::fs::write(file, content).unwrap();
+    }
+
+    #[test]
+    fn finds_only_owners_of_vitest_imports_retained_by_the_rule() {
+        let temp = tempdir().unwrap();
+        let root = temp.path();
+        let config = ImportRuleConfig::from_json(
+            r#"{
+            "enabled": true,
+            "overrides": [
+                { "files": ["./templates/**"], "excludeFiles": [], "enabled": false },
+                { "files": ["templates/managed/**"], "excludeFiles": [], "enabled": true }
+            ]
+        }"#,
+        )
+        .unwrap();
+        write_pack_fixture(root, "package.json", "{}");
+        for (package, source) in [
+            ("static", "import { test } from 'vitest';"),
+            ("export", "export type { TestProject } from 'vitest/node';"),
+            ("require", "const config = require('vitest/config');"),
+            ("dynamic", "const tests = import('vitest');"),
+            ("type", "type V = typeof import('vitest');"),
+            ("directive", "/// <reference types='vitest/globals' />"),
+            ("managed", "import 'vitest';"),
+            ("scoped", "import '@vitest/browser';"),
+            ("text", "// import 'vitest';\nconst example = \"import('vitest')\";"),
+        ] {
+            write_pack_fixture(root, &format!("templates/{package}/package.json"), "{}");
+            write_pack_fixture(root, &format!("templates/{package}/src/test.ts"), source);
+        }
+        write_pack_fixture(root, "app.ts", "import 'vitest';");
+
+        let owners = find_retained_vitest_packages(root, &config).unwrap();
+        let expected = ["directive", "dynamic", "export", "require", "static", "type"]
+            .map(|package| root.join("templates").join(package));
+        assert_eq!(owners, expected);
     }
 
     fn write_tsdown_fixture(root: &Path, version: &str) {

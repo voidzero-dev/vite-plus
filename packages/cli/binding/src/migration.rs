@@ -16,6 +16,19 @@ pub fn read_static_lint_config(root: String) -> Result<Option<String>> {
     })
 }
 
+/// Directories of packages whose lint settings preserve upstream Vitest imports.
+#[napi]
+pub fn find_retained_vitest_packages(
+    root: String,
+    import_rule_config: String,
+) -> Result<Vec<String>> {
+    let import_rule =
+        ImportRuleConfig::from_json(&import_rule_config).map_err(anyhow::Error::from)?;
+    let owners = vp_migration::find_retained_vitest_packages(Path::new(&root), &import_rule)
+        .map_err(anyhow::Error::from)?;
+    Ok(owners.into_iter().map(|path| path.to_string_lossy().into_owned()).collect())
+}
+
 /// A literal argument with its original JavaScript UTF-16 source range.
 #[napi(object)]
 pub struct LiteralCommandToken {

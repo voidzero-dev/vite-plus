@@ -1109,6 +1109,7 @@ module.exports.documentationUrl = nativeBinding.documentationUrl;
 module.exports.downloadPackageManager = nativeBinding.downloadPackageManager;
 module.exports.ensureBlockingStdio = nativeBinding.ensureBlockingStdio;
 module.exports.findMonorepoRoot = nativeBinding.findMonorepoRoot;
+module.exports.findRetainedVitestPackages = nativeBinding.findRetainedVitestPackages;
 module.exports.getPackageManagerOverride = nativeBinding.getPackageManagerOverride;
 module.exports.getVpDirs = nativeBinding.getVpDirs;
 module.exports.hasConfigKey = nativeBinding.hasConfigKey;

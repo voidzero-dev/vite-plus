@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { styleText } from 'node:util';
+import { isDeepStrictEqual, styleText } from 'node:util';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { satisfies } from 'verkit';
@@ -49,6 +49,7 @@ import {
   checkVitestVersion,
   checkViteVersion,
   collectOxlintOwnerDirs,
+  collectProtectedVitestImportOwners,
   collectToolchainVersionChanges,
   confirmPrettierMigration,
   confirmTsxMigration,
@@ -65,10 +66,12 @@ import {
   detectTsNodeProject,
   detectVitePlusBootstrapPending,
   detectYarnPnpMode,
+  DISABLED_IMPORT_RULE_CONFIG,
   ensureVitePlusBootstrap,
   finalizeCoreMigrationForExistingVitePlus,
   finishVitestV5Migration,
   formatVitestV5Findings,
+  getWorkspaceProjectPaths,
   hasFrameworkShim,
   detectLegacyGitHooksMigrationCandidate,
   injectLintTypeCheckDefaults,
@@ -232,16 +235,6 @@ async function fixBaseUrlForWorkspace(
     }
   }
   return fixedProjectPaths;
-}
-
-function getWorkspaceProjectPaths(workspaceInfo: {
-  rootDir: string;
-  packages?: WorkspacePackage[];
-}): string[] {
-  return [
-    workspaceInfo.rootDir,
-    ...(workspaceInfo.packages ?? []).map((pkg) => path.join(workspaceInfo.rootDir, pkg.path)),
-  ];
 }
 
 function hasBaseUrlInWorkspace(workspaceInfo: {
@@ -1154,19 +1147,26 @@ async function main() {
       didMigrate = true;
     }
 
-    const pendingCoreMigration = detectPendingCoreMigration(workspaceInfoOptional);
-    const vitePlusBootstrapPending = detectVitePlusBootstrapPending(
-      workspaceInfoOptional.rootDir,
-      workspaceInfoOptional.packageManager,
-      workspaceInfoOptional.packages,
-      workspaceInfoOptional.packageManagerVersion,
+    // A config that needs missing dependencies can retry after the normal install.
+    // Find the packages that need Vitest before bootstrap updates their manifests.
+    const importRuleConfig = await tryResolveImportRuleConfig(workspaceInfoOptional.rootDir);
+    const protectedVitestImportOwners = collectProtectedVitestImportOwners(
+      workspaceInfoOptional,
+      importRuleConfig,
     );
-    let packageManager: PackageManager | undefined = vitePlusBootstrapPending
-      ? (workspaceInfoOptional.packageManager ??
-        (await selectPackageManager(options.interactive, true, workspaceInfoOptional.rootDir)))
-      : workspaceInfoOptional.packageManager;
+    const pendingCoreMigration = detectPendingCoreMigration(workspaceInfoOptional);
+    let packageManager = workspaceInfoOptional.packageManager;
     let downloadedPackageManager: Awaited<ReturnType<typeof downloadPackageManager>> | undefined;
     let packageManagerVersion = workspaceInfoOptional.packageManagerVersion;
+    const bootstrapPending = (owners: ReadonlySet<string>) =>
+      detectVitePlusBootstrapPending(
+        workspaceInfoOptional.rootDir,
+        packageManager,
+        workspaceInfoOptional.packages,
+        packageManagerVersion,
+        owners,
+      );
+    const vitePlusBootstrapPending = bootstrapPending(protectedVitestImportOwners);
     const downloadExistingPackageManager = async () => {
       if (!packageManager) {
         return undefined;
@@ -1222,11 +1222,10 @@ async function main() {
     // Capture the toolchain version changes BEFORE the reconcile mutates the
     // manifest, so the `from` values still reflect the pre-migration versions
     // (raw vite is read from the untouched node_modules).
-    report.dependencyUpgrades = await collectToolchainVersionChanges(workspaceInfoOptional.rootDir);
-
-    // Try the project's available dependencies first. A failed dynamic load can
-    // retry after the upgrade's normal install, without scheduling an extra one.
-    const importRuleConfig = await tryResolveImportRuleConfig(workspaceInfoOptional.rootDir);
+    report.dependencyUpgrades = await collectToolchainVersionChanges(
+      workspaceInfoOptional.rootDir,
+      protectedVitestImportOwners.has(workspaceInfoOptional.rootDir),
+    );
     const deferredOxlintOwnerDirs =
       importRuleConfig === null
         ? collectOxlintOwnerDirs(workspaceInfoOptional.rootDir, workspaceInfoOptional.packages)
@@ -1333,21 +1332,21 @@ async function main() {
 
     // Runtime metadata can participate in the package manager's lockfile.
     let needsInstall = coreMigrationResult.dependencies || nodeUpgrades > 0;
-    if (vitePlusBootstrapPending) {
+    const reconcileBootstrap = async (owners: ReadonlySet<string>): Promise<boolean> => {
       const downloadResult = await ensureExistingPackageManager();
-      if (downloadResult && packageManager) {
-        updateMigrationProgress('Configuring package manager');
-        const bootstrapResult = ensureVitePlusBootstrap(
-          {
-            ...workspaceInfoOptional,
-            packageManager,
-            downloadPackageManager: downloadResult,
-          },
-          report,
-        );
-        didMigrate = bootstrapResult.changed || didMigrate;
-        needsInstall = bootstrapResult.changed || needsInstall;
+      if (!downloadResult || !packageManager) {
+        return false;
       }
+      updateMigrationProgress('Configuring package manager');
+      return ensureVitePlusBootstrap(
+        { ...workspaceInfoOptional, packageManager, downloadPackageManager: downloadResult },
+        report,
+        owners,
+      ).changed;
+    };
+    if (vitePlusBootstrapPending && (await reconcileBootstrap(protectedVitestImportOwners))) {
+      didMigrate = true;
+      needsInstall = true;
     }
 
     let fixBaseUrl = false;
@@ -1628,9 +1627,7 @@ async function main() {
       }
     }
 
-    if (needsInstall) {
-      clearMigrationProgress();
-      completeVitestV5Migration(vitestV5Plan, report);
+    const installExistingDependencies = async (): Promise<void> => {
       const resolved = await ensureExistingPackageManager();
       updateMigrationProgress('Installing dependencies');
       const resolvedVersion = resolved?.version ?? packageManagerVersion;
@@ -1656,13 +1653,6 @@ async function main() {
           packageManagerVersion: resolvedVersion,
         },
       );
-      // Route the install result through the shared helper (mirrors the full
-      // migration path and is enforced by install-failure-guard.spec): a failed
-      // install warns, appends to report.warnings, and flips process.exitCode
-      // rather than being silently credited as a successful migration. Clear the
-      // spinner first only on failure so the warning isn't interleaved with it;
-      // on success handleInstallResult returns durationMs, so the credited
-      // duration is unchanged.
       if (installSummary.status === 'failed') {
         clearMigrationProgress();
         npmReinstallPreparation?.restore();
@@ -1676,21 +1666,42 @@ async function main() {
         workspaceInfoOptional.rootDir,
         report,
       );
+    };
+    if (needsInstall) {
+      clearMigrationProgress();
+      completeVitestV5Migration(vitestV5Plan, report);
+      await installExistingDependencies();
     }
 
     if (importRuleConfig === null) {
       if (needsInstall && finalInstallOk) {
         updateMigrationProgress('Reading lint configuration');
-        const resolvedImportRuleConfig = await resolveImportRuleConfig(
+        const resolvedImportRuleConfig = await tryResolveImportRuleConfig(
           workspaceInfoOptional.rootDir,
-          report,
         );
+        const resolvedOwners =
+          resolvedImportRuleConfig === null
+            ? protectedVitestImportOwners
+            : collectProtectedVitestImportOwners(workspaceInfoOptional, resolvedImportRuleConfig);
+        if (resolvedImportRuleConfig === null) {
+          warnUnresolvedImportRuleConfig(report);
+        }
         updateMigrationProgress('Rewriting toolchain imports across the workspace');
         didMigrate =
           rewriteAllImports(workspaceInfoOptional.rootDir, true, report, {
             oxlintOwnerDirs: deferredOxlintOwnerDirs,
-            importRuleConfig: resolvedImportRuleConfig,
+            importRuleConfig: resolvedImportRuleConfig ?? DISABLED_IMPORT_RULE_CONFIG,
           }) || didMigrate;
+        // The first install used the owners we could identify without loading
+        // the config. Sync again only if the resolved rule changes dependencies.
+        if (
+          !isDeepStrictEqual(resolvedOwners, protectedVitestImportOwners) &&
+          bootstrapPending(resolvedOwners) &&
+          (await reconcileBootstrap(resolvedOwners))
+        ) {
+          didMigrate = true;
+          await installExistingDependencies();
+        }
       } else {
         warnUnresolvedImportRuleConfig(report);
       }

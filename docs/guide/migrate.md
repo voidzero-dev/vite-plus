@@ -78,9 +78,9 @@ and examples.
 import rewrites. Oxlint matches the file patterns relative to the root config
 directory. A later matching override can re-enable the rule.
 
-Other lint rules follow their own settings. Migration updates dependencies,
-scripts, configs, shared catalogs, and package-manager overrides independently
-of this rule.
+When a file keeps an import from `vitest`, migration keeps a direct `vitest`
+dependency in the package that owns the file. The usual workspace catalog and
+override rules apply to that dependency.
 
 ## Recommended Workflow
 

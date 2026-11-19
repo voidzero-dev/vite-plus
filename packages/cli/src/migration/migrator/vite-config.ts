@@ -50,6 +50,7 @@ import {
   type OxlintConfigMigration,
   type OxlintModulePlan,
   type PreparedOxlintConfigs,
+  DISABLED_IMPORT_RULE_CONFIG,
   OXLINT_OWNER_CONFIG_KEYS,
   LINT_STAGED_JSON_CONFIG_FILES,
   LINT_STAGED_OTHER_CONFIG_FILES,
@@ -1090,7 +1091,7 @@ export async function resolveImportRuleConfig(
     return config;
   }
   warnUnresolvedImportRuleConfig(report);
-  return JSON.stringify({ enabled: false, overrides: [] });
+  return DISABLED_IMPORT_RULE_CONFIG;
 }
 
 /** Rewrite toolchain imports throughout the project and record the results. */

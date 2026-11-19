@@ -196,6 +196,10 @@ Object-valued nested npm and Bun overrides are preserved: they are user-defined 
 
 ## Source Rewrite Rules
 
+Migration skips Vite and Vitest import rewrites in files where the root lint
+config disables `vite-plus/prefer-vite-plus-imports`. A package that keeps a
+`vitest` import needs a direct `vitest` dependency. See [Keeping upstream imports in templates and examples](./migrate.md#keeping-upstream-imports-in-templates-and-examples).
+
 ### `vite` Imports
 
 `vite` and `vite/*` imports are rewritten to `vite-plus` **only in config entry files**: `vite.config.*`, `vitest.config.*`, and any config file the migration resolved. Every other file keeps its `vite` imports, for two reasons:

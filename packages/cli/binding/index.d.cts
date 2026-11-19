@@ -3813,6 +3813,12 @@ export declare function ensureBlockingStdio(): void;
  */
 export declare function findMonorepoRoot(cwd: string): string | null;
 
+/** Directories of packages whose lint settings preserve upstream Vitest imports. */
+export declare function findRetainedVitestPackages(
+  root: string,
+  importRuleConfig: string,
+): Array<string>;
+
 /** Read the same `VP_PACKAGE_MANAGER` override used by `vp install`. */
 export declare function getPackageManagerOverride(): PackageManagerOverride | null;
 

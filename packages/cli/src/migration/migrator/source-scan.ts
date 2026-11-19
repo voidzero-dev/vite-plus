@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { findRetainedVitestPackages } from '../../../binding/index.js';
 import { type WorkspacePackage } from '../../types/index.ts';
 import { VITE_PLUS_NAME } from '../../utils/constants.ts';
 import { editJsonFile, readJsonFile } from '../../utils/json.ts';
@@ -8,6 +9,7 @@ import { detectPackageMetadata } from '../../utils/package.ts';
 import { hasVitestTypesInTsconfig } from '../../utils/tsconfig.ts';
 import { projectUsesVitestDirectly } from '../migrator.ts';
 import {
+  DISABLED_IMPORT_RULE_CONFIG,
   OPT_IN_BROWSER_PROVIDERS,
   OXLINT_PLUGINS_PACKAGE,
   packageOwnsOxlintApi,
@@ -16,6 +18,47 @@ import {
   RETENTION_SCAN_SKIP_DIRS,
   type DependencyBag,
 } from './shared.ts';
+
+type WorkspaceProjects = { rootDir: string; packages?: readonly WorkspacePackage[] };
+
+export function getWorkspaceProjectPaths({ rootDir, packages }: WorkspaceProjects): string[] {
+  return [rootDir, ...(packages ?? []).map((pkg) => path.join(rootDir, pkg.path))];
+}
+
+/** Find workspace packages whose imports will still resolve through upstream Vitest. */
+export function collectProtectedVitestImportOwners(
+  workspace: WorkspaceProjects,
+  importRuleConfig: string | null | undefined,
+): Set<string> {
+  if (importRuleConfig === undefined) {
+    return new Set();
+  }
+  const owners = new Set(
+    findRetainedVitestPackages(workspace.rootDir, importRuleConfig ?? DISABLED_IMPORT_RULE_CONFIG),
+  );
+  if (!owners.size) {
+    return owners;
+  }
+
+  return new Set(
+    getWorkspaceProjectPaths(workspace).filter((dir) => {
+      if (!owners.has(dir)) {
+        return false;
+      }
+      if (importRuleConfig !== null) {
+        return true;
+      }
+      // Until the config can load, keep declared providers for potential imports.
+      // A failed config probe alone must not add dependencies or schedule an install.
+      const pkg = readPackageJsonIfExists(path.join(dir, 'package.json'));
+      return !!(
+        pkg?.dependencies?.vitest ||
+        pkg?.devDependencies?.vitest ||
+        pkg?.optionalDependencies?.vitest
+      );
+    }),
+  );
+}
 
 // Workspace-wide direct-vitest signal for the SHARED sinks a monorepo root
 // owns (pnpm-workspace.yaml catalog/overrides/peer rules, .yarnrc.yml catalog,
@@ -26,7 +69,11 @@ export function workspaceUsesVitestDirectly(
   rootDir: string,
   packages: WorkspacePackage[] | undefined,
   preserveNuxtVitestImports = true,
+  protectedVitestImportOwners?: ReadonlySet<string>,
 ): boolean {
+  if (protectedVitestImportOwners?.size) {
+    return true;
+  }
   const rootPkg = readPackageJsonIfExists(path.join(rootDir, 'package.json')) ?? {};
   if (projectUsesVitestDirectly(rootDir, rootPkg, undefined, preserveNuxtVitestImports)) {
     return true;
@@ -309,11 +356,8 @@ export function hasNuxtTestUtilsDependency(pkg: DependencyBag): boolean {
   );
 }
 
-// Normal imports and triple-slash type directives from `vitest` are rewritten
-// to `vite-plus/test` later in the same migration and therefore do not justify
-// a lasting direct dependency. Module augmentations, `vitest/package.json`, and
-// compilerOptions.types entries deliberately retain the upstream package
-// identity, so keep Vitest package-local for those surfaces.
+// These references keep their upstream package identity even when import
+// rewriting is enabled. They need a package-local Vitest dependency.
 export function sourceTreeReferencesRetainedVitestModule(projectPath: string): boolean {
   return (
     findPackageTsconfigFiles(projectPath).some(hasVitestTypesInTsconfig) ||

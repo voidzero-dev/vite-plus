@@ -12,6 +12,7 @@ import {
   collectInjectedProviderNames,
   collectOxlintDependencyNames,
   collectOxlintOwnerDirs,
+  collectProtectedVitestImportOwners,
   collectProviderSourceModes,
   collectVitestEcosystemInstallDependencyNames,
   createCatalogDependencyResolver,
@@ -114,7 +115,10 @@ export function rewriteStandaloneProject(
   const providerSourceModes = collectProviderSourceModes(projectPath);
   const usesWebdriverio = workspaceUsesWebdriverioProvider(projectPath);
   const browserMode = usesVitestBrowserMode(projectPath);
-  const retainedVitestModule = sourceTreeReferencesRetainedVitestModule(projectPath);
+  const retainedVitestModule =
+    collectProtectedVitestImportOwners({ rootDir: projectPath }, importRuleConfig).has(
+      projectPath,
+    ) || sourceTreeReferencesRetainedVitestModule(projectPath);
   const providerCatalogAdditions = collectInjectedProviderNames(
     projectPath,
     undefined,
@@ -406,10 +410,15 @@ export function rewriteMonorepo(
   );
   // The SHARED workspace sinks (catalog / overrides / peer rules) keep `vitest`
   // managed iff ANY package in the workspace uses vitest directly.
+  const protectedVitestImportOwners = collectProtectedVitestImportOwners(
+    workspaceInfo,
+    importRuleConfig,
+  );
   const workspaceUsesVitest = workspaceUsesVitestDirectly(
     workspaceInfo.rootDir,
     workspaceInfo.packages,
     true,
+    protectedVitestImportOwners,
   );
   const vitestEcosystemPackages = collectVitestEcosystemInstallDependencyNames(
     workspaceInfo.rootDir,
@@ -427,6 +436,7 @@ export function rewriteMonorepo(
     workspaceInfo.downloadPackageManager.version,
   );
   const workspaceContext = {
+    protectedVitestImportOwners,
     rootDir: workspaceInfo.rootDir,
     packages: workspaceInfo.packages,
     oxlintConfigs: prepareOxlintConfigs([
@@ -465,6 +475,7 @@ export function rewriteMonorepo(
     workspaceUsesVitest,
     supportCatalog,
     workspaceContext.oxlintConfigs,
+    protectedVitestImportOwners,
   );
   if (workspaceInfo.packageManager === PackageManager.pnpm) {
     rewritePnpmWorkspaceYaml(
@@ -565,6 +576,7 @@ export function rewriteMonorepoProject(
     rootDir: string;
     packages: WorkspacePackage[];
     oxlintConfigs?: PreparedOxlintConfigs;
+    protectedVitestImportOwners?: ReadonlySet<string>;
   },
   deferLazyPluginWrapping = false,
   // Whether this workspace's edges use catalog references. Yarn catalogs require
@@ -618,7 +630,9 @@ export function rewriteMonorepoProject(
     // not depend on package.json and nothing mutates the source tree between
     // these reads, so this is identical to the previous per-call scans.
     const browserMode = usesVitestBrowserMode(projectPath);
-    const retainedVitestModule = sourceTreeReferencesRetainedVitestModule(projectPath);
+    const retainedVitestModule =
+      workspaceContext?.protectedVitestImportOwners?.has(projectPath) ||
+      sourceTreeReferencesRetainedVitestModule(projectPath);
     // rewrite scripts in package.json
     extractedStagedConfig = rewritePackageJson(
       pkg,

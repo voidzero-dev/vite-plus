@@ -3576,6 +3576,45 @@ describe('ensureVitePlusBootstrap', () => {
     expect(pkg.overrides.vitest).toBeUndefined();
   });
 
+  it('repairs a missing Vitest dependency only in the workspace that keeps the import', () => {
+    const templateDir = path.join(tmpDir, 'templates/starter');
+    writePkgAt(tmpDir, { private: true, devDependencies: { 'vite-plus': 'catalog:' } });
+    writePkgAt(templateDir, { name: 'starter' });
+    const workspace = {
+      ...makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
+      isMonorepo: true,
+      workspacePatterns: ['templates/*'],
+      packages: [{ name: 'starter', path: 'templates/starter' }],
+    };
+    const pending = (owners?: ReadonlySet<string>) =>
+      detectVitePlusBootstrapPending(
+        tmpDir,
+        workspace.packageManager,
+        workspace.packages,
+        workspace.packageManagerVersion,
+        owners,
+      );
+
+    ensureVitePlusBootstrap(workspace);
+    expect(pending()).toBe(false);
+
+    const owners = new Set([templateDir]);
+    expect(pending(owners)).toBe(true);
+    ensureVitePlusBootstrap(workspace, undefined, owners);
+    expect(readJson(path.join(templateDir, 'package.json'))).toHaveProperty(
+      'devDependencies.vitest',
+      'catalog:',
+    );
+    expect(readJson(path.join(tmpDir, 'package.json'))).not.toHaveProperty(
+      'devDependencies.vitest',
+    );
+    expect(readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml'))).toHaveProperty(
+      'catalog.vitest',
+      VITEST_VERSION,
+    );
+    expect(pending(owners)).toBe(false);
+  });
+
   it('reconciles vitest and vite-plus in the workspace package that needs them', () => {
     const appDir = path.join(tmpDir, 'packages/app');
     fs.mkdirSync(appDir, { recursive: true });
