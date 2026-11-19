@@ -191,6 +191,9 @@ fn prompt_to_run_suggested_command(suggestion: &str) -> bool {
     if std::io::stderr().flush().is_err() {
         return false;
     }
+    if env::var(vp_shared::env_vars::VP_EMIT_MILESTONES).as_deref() == Ok("1") {
+        vt_pty_terminal_test_client::mark_milestone("text:suggested-command:ready");
+    }
 
     let Some(input) = read_confirmation_input() else {
         return false;
