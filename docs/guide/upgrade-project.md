@@ -31,7 +31,9 @@ Set the `vite` alias to that value. Update these entries wherever they are decla
 
 Dependabot and Renovate see `vite-plus` and the `vite` alias as two separate dependencies with different versions. A bot can update one without the other. Vite+ then stops before it runs a Vite command and asks you to run `vp migrate`.
 
-Renovate can group eligible Vite+ and Vitest updates in one PR. In `renovate.json`, append the [`group:vitePlus` preset](https://docs.renovatebot.com/presets-group/#groupviteplus) to your existing `extends` list.
+Renovate can group eligible Vite+ and Vitest updates in one PR. On the first migration, `vp migrate` checks your existing JSON, JSONC, or JSON5 Renovate config. For a project that already uses Vite+, run `vp migrate --full` to check it again. If `group:vitePlus` is missing, an interactive run asks before adding it to `extends` and defaults to **Yes**. A non-interactive run adds it automatically. In `.json5` files, the edit preserves existing comments, quotes, and formatting.
+
+If your config names a single preset as a string, the migration keeps it first in the new `extends` list. To enable grouping manually, append the [`group:vitePlus` preset](https://docs.renovatebot.com/presets-group/#groupviteplus) after your existing presets.
 
 ```json [renovate.json]
 {
