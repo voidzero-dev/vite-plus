@@ -466,6 +466,15 @@ mod tests {
         )
         .unwrap();
         assert!(resolver.resolve_vite_config(CHECK_FIELDS).await.is_err());
+
+        // Code after `module.exports = ...` may change `check`, so the JavaScript resolver must run.
+        std::fs::remove_file(&config_path).unwrap();
+        std::fs::write(
+            temp.path().join("vite.config.cjs"),
+            "module.exports = { check: { lint: false } };\nif (process.env.CI) module.exports.check.lint = true;",
+        )
+        .unwrap();
+        assert!(resolver.resolve_vite_config(CHECK_FIELDS).await.is_err());
     }
 
     #[tokio::test]

@@ -174,13 +174,13 @@ fn parse_js_ts_config(source: &str, extension: &str) -> FieldMap {
 /// 1. `export default defineConfig({ ... })` with `defineConfig` from a trusted package
 /// 2. `export default { ... }`
 /// 3. `module.exports = defineConfig({ ... })` with `defineConfig` from a trusted package
-/// 4. `module.exports = { ... }`
+/// 4. `module.exports = { ... }` as the last top-level statement
 fn extract_config_fields(program: &Program<'_>) -> FieldMap {
     let has_trusted_define_config_binding = program.body.iter().any(|stmt| {
         is_trusted_define_config_import(stmt) || has_trusted_define_config_cjs_binding(stmt)
     });
 
-    for stmt in &program.body {
+    for (index, stmt) in program.body.iter().enumerate() {
         // ESM: export default ...
         if let Statement::ExportDefaultDeclaration(decl) = stmt {
             if let Some(expr) = decl.declaration.as_expression() {
@@ -198,6 +198,10 @@ fn extract_config_fields(program: &Program<'_>) -> FieldMap {
                     && m.static_property_name().is_some_and(|name| name == "exports")
             })
         {
+            // Later statements can mutate `module.exports`, so only a final assignment is exhaustive.
+            if index + 1 != program.body.len() {
+                return FieldMap::unanalyzable();
+            }
             return extract_config_from_expr(&assign.right, has_trusted_define_config_binding);
         }
     }
@@ -781,6 +785,21 @@ mod tests {
     fn module_exports_object() {
         let result = parse_js_ts_config("module.exports = { run: { cache: true } }", "cjs");
         assert_json(&result, "run", serde_json::json!({ "cache": true }));
+    }
+
+    #[test]
+    fn module_exports_mutated_later_is_non_static() {
+        let result = parse_js_ts_config(
+            r"
+            module.exports = {
+                check: { lint: false },
+                lint: { rules: { 'no-debugger': 'error' } },
+            };
+            if (process.env.CI) module.exports.check.lint = true;
+            ",
+            "cjs",
+        );
+        assert_non_static(&result, "check");
     }
 
     #[test]
