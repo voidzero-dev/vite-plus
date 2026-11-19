@@ -9,6 +9,7 @@ import {
 import { PackageManager } from '../types/index.ts';
 import { isPnpmIgnoredBuildsError, parseInstallGatedBuilds } from './approve-builds.ts';
 import { getVpCommand, runCommandSilently } from './command.ts';
+import { formatPnpmInstallOutput, watchPnpmResolution } from './pnpm-install-progress.ts';
 import { reconcilePreviewBridgeRegistry } from './preview-registry.ts';
 import { getSilentSpinner, getSpinner } from './spinner.ts';
 import { accent } from './terminal.ts';
@@ -17,6 +18,8 @@ export interface CommandRunSummary {
   durationMs: number;
   exitCode?: number;
   status: 'installed' | 'formatted' | 'failed' | 'skipped';
+  /** Failure already reported by the installer. */
+  failureMessage?: string;
   /**
    * Packages whose build (install/postinstall) scripts the package manager
    * gated during the install. Only populated when `runViteInstall` is called
@@ -137,6 +140,7 @@ export async function runViteInstall(
     silent?: boolean;
     packageManager?: PackageManager;
     packageManagerVersion?: string;
+    idleTimeoutMs?: number;
     /** Keep creation's resolved version when installation runs in the generated project. */
     packageManagerOverride?: string;
     /**
@@ -179,17 +183,26 @@ export async function runViteInstall(
     installArgs.push('--ignore-scripts');
   }
 
+  const idleTimeoutMs = options?.idleTimeoutMs;
+  const shouldWatchIdle = idleTimeoutMs === undefined ? undefined : watchPnpmResolution();
+  if (idleTimeoutMs !== undefined) {
+    // Request resolution events even with reporter=silent or loglevel=silent.
+    installArgs.push('--', '--reporter=ndjson', '--loglevel=info');
+  }
+
   const spinner = options?.silent ? getSilentSpinner() : getSpinner(interactive);
   const startTime = Date.now();
   spinner.start(`Installing dependencies...`);
-  const { exitCode, stderr, stdout } = await runCommandSilently({
+  const { exitCode, stderr, stdout, idleTimedOut } = await runCommandSilently({
     ...getVpCommand(['install', ...installArgs]),
     cwd,
+    idleTimeoutMs,
+    shouldWatchIdle,
     envs: options?.packageManagerOverride
       ? { ...process.env, VP_PACKAGE_MANAGER: options.packageManagerOverride }
       : process.env,
   });
-  const combinedOutput = `${stdout.toString()}\n${stderr.toString()}`;
+  const combinedOutput = detectIgnoredBuilds ? `${stdout.toString()}\n${stderr.toString()}` : '';
   const pendingBuilds = detectIgnoredBuilds
     ? parseInstallGatedBuilds(combinedOutput, options?.packageManager)
     : undefined;
@@ -197,7 +210,10 @@ export async function runViteInstall(
   // completed (deps are on disk). Treat that one case as success so callers can
   // offer to approve the builds rather than report a broken install.
   const ignoredBuildsOnly =
-    exitCode !== 0 && detectIgnoredBuilds && isPnpmIgnoredBuildsError(combinedOutput);
+    exitCode !== 0 &&
+    !idleTimedOut &&
+    detectIgnoredBuilds &&
+    isPnpmIgnoredBuildsError(combinedOutput);
   if (exitCode === 0 || ignoredBuildsOnly) {
     spinner.stop(`Dependencies installed`);
     return {
@@ -207,14 +223,25 @@ export async function runViteInstall(
       pendingBuilds,
     } satisfies CommandRunSummary;
   } else {
-    spinner.stop(`Install failed`);
-    prompts.log.info(stdout.toString());
+    spinner.stop(idleTimedOut ? 'Install timed out' : 'Install failed');
+    prompts.log.info(
+      shouldWatchIdle ? formatPnpmInstallOutput(stdout.toString()) : stdout.toString(),
+    );
     prompts.log.error(stderr.toString());
-    prompts.log.info(`You may need to run "vp install" manually in ${cwd}`);
+    const failureMessage =
+      idleTimedOut && idleTimeoutMs !== undefined
+        ? `Dependency resolution stopped after ${idleTimeoutMs / 1000} seconds without output. If pnpm hangs again, update the project's pnpm pin. Run \`vp install --no-frozen-lockfile\` in ${cwd} to retry.`
+        : undefined;
+    if (failureMessage) {
+      prompts.log.error(failureMessage);
+    } else {
+      prompts.log.info(`You may need to run "vp install" manually in ${cwd}`);
+    }
     return {
       durationMs: Date.now() - startTime,
       exitCode,
       status: 'failed',
+      ...(failureMessage && { failureMessage }),
     } satisfies CommandRunSummary;
   }
 }

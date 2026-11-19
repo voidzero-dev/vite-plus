@@ -545,6 +545,9 @@ importers:
       pirates:
         specifier: 'catalog:'
         version: 4.0.7
+      signal-exit:
+        specifier: 'catalog:'
+        version: 4.1.0
       tinyglobby:
         specifier: 'catalog:'
         version: 0.2.17

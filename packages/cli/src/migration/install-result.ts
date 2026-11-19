@@ -1,6 +1,20 @@
+import { PackageManager } from '../types/index.ts';
 import type { CommandRunSummary } from '../utils/prompts.ts';
 import { warnMsg } from '../utils/terminal.ts';
 import type { MigrationReport } from './report.ts';
+
+const PNPM_9_INSTALL_IDLE_TIMEOUT_MS = 5 * 60_000;
+
+/** Bound silent pnpm 9 dependency resolution during non-interactive migration. */
+export function getMigrationInstallIdleTimeoutMs(
+  interactive: boolean | undefined,
+  packageManager: PackageManager | undefined,
+  version: string | undefined,
+): number | undefined {
+  return !interactive && packageManager === PackageManager.pnpm && version?.startsWith('9.')
+    ? PNPM_9_INSTALL_IDLE_TIMEOUT_MS
+    : undefined;
+}
 
 /**
  * Reconcile a CommandRunSummary from `runViteInstall` with the migration's
@@ -28,8 +42,12 @@ export function handleInstallResult(
   }
   if (installSummary.status === 'failed') {
     const exitCode = installSummary.exitCode ?? 1;
-    const message = `Dependency installation failed (exit code ${exitCode}). Run \`vp install\` manually in ${rootDir} to resync node_modules.`;
-    warnMsg(message);
+    const message =
+      installSummary.failureMessage ??
+      `Dependency installation failed (exit code ${exitCode}). Run \`vp install\` manually in ${rootDir} to resync node_modules.`;
+    if (!installSummary.failureMessage) {
+      warnMsg(message);
+    }
     report.warnings.push(message);
     if (options?.propagateExitCode !== false) {
       process.exitCode = exitCode;

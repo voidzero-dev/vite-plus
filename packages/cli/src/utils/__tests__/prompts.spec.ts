@@ -1,10 +1,16 @@
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { describe, expect, it, vi } from 'vitest';
 
 import { downloadPackageManager as downloadPackageManagerBinding } from '../../../binding/index.js';
 import { PackageManager } from '../../types/index.ts';
+import { runCommandSilently } from '../command.ts';
 import {
   downloadPackageManager,
   resolveGitInit,
+  runViteInstall,
   shouldIgnoreScriptsForAutoInstall,
 } from '../prompts.ts';
 
@@ -12,6 +18,47 @@ vi.mock('../../../binding/index.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../../binding/index.js')>()),
   downloadPackageManager: vi.fn(),
 }));
+
+vi.mock('../command.ts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../command.ts')>()),
+  runCommandSilently: vi.fn(),
+}));
+
+describe('runViteInstall', () => {
+  it('captures pnpm resolution events without rewriting silent logging preferences', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'vp-pnpm-install-reporter-'));
+    const configPath = join(cwd, '.npmrc');
+    const config = 'reporter=silent\nloglevel=silent\n';
+    writeFileSync(configPath, config);
+    try {
+      vi.mocked(runCommandSilently).mockResolvedValueOnce({
+        exitCode: 0,
+        stdout: Buffer.from('progress'),
+        stderr: Buffer.alloc(0),
+      });
+      const result = await runViteInstall(cwd, false, ['--no-frozen-lockfile'], {
+        packageManager: PackageManager.pnpm,
+        packageManagerVersion: '9.15.9',
+        idleTimeoutMs: 2000,
+        silent: true,
+      });
+      const command = vi.mocked(runCommandSilently).mock.lastCall?.[0];
+      expect(command?.args.slice(-5)).toEqual([
+        'install',
+        '--no-frozen-lockfile',
+        '--',
+        '--reporter=ndjson',
+        '--loglevel=info',
+      ]);
+      expect(command?.idleTimeoutMs).toBe(2000);
+      expect(command?.shouldWatchIdle).toBeTypeOf('function');
+      expect(result.status).toBe('installed');
+      expect(readFileSync(configPath, 'utf8')).toBe(config);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+});
 
 describe('downloadPackageManager', () => {
   it('forwards the target workspace directory to the native binding', async () => {
