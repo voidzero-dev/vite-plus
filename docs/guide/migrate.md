@@ -78,9 +78,9 @@ and examples.
 import rewrites. Oxlint matches the file patterns relative to the root config
 directory. A later matching override can re-enable the rule.
 
-When a file keeps an import from `vitest`, migration keeps a direct `vitest`
-dependency in the package that owns the file. The usual workspace catalog and
-override rules apply to that dependency.
+Migration keeps the dependencies that supply preserved `vitest`,
+`@vitest/browser`, and `@vitest/browser-preview` imports. If a template outside
+the workspace imports `vitest` from the root project, the root keeps its dependency.
 
 ## Recommended Workflow
 

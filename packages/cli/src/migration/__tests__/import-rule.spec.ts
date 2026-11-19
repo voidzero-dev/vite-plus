@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { readLintConfigInWorker } from '../compat/runner.ts';
 import {
+  collectRetainedImportDependencies,
   resolveImportRuleConfig,
   rewriteAllImports,
   tryResolveImportRuleConfig,
@@ -91,6 +92,38 @@ describe('migration import rule settings', () => {
     expect(await rewrite()).toBe(false);
     expect(readLintConfigInWorker).toHaveBeenCalledWith(root);
     expect(read('unit.test.ts')).toContain("from 'vitest'");
+  });
+
+  it('finds the nearest managed supplier for each import in an unmanaged template', async () => {
+    write(
+      'package.json',
+      JSON.stringify({
+        devDependencies: { vitest: '*', '@vitest/browser': '*', '@vitest/browser-preview': '*' },
+      }),
+    );
+    write(
+      'packages/app/package.json',
+      JSON.stringify({
+        optionalDependencies: { '@vitest/browser': '*' },
+        peerDependencies: { '@vitest/browser-preview': '^5' },
+      }),
+    );
+    write('packages/app/templates/starter/package.json', '{}');
+    write(
+      'packages/app/templates/starter/test.ts',
+      "import 'vitest';\nimport '@vitest/browser/context';\nimport '@vitest/browser-preview';",
+    );
+    config({ overrides: [{ files: ['packages/app/templates/**'], rules: { [rule]: 'off' } }] });
+    const workspace = { rootDir: root, packages: [{ name: 'app', path: 'packages/app' }] };
+    expect(
+      collectRetainedImportDependencies(workspace, await resolveImportRuleConfig(root)),
+    ).toEqual({
+      vitest: new Set([root]),
+      browser: new Map([
+        [path.join(root, 'packages/app'), new Set(['@vitest/browser', '@vitest/browser-preview'])],
+        [root, new Set(['@vitest/browser-preview'])],
+      ]),
+    });
   });
 
   it('defers a failed dynamic load until the scheduled install completes', async () => {

@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeSet, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     path::{Path, PathBuf},
     sync::LazyLock,
 };
@@ -1651,6 +1651,24 @@ fn has_unscoped_vitest_import(content: &str) -> bool {
     PARSED_UNSCOPED_VITEST_RULES.iter().any(|rule| root.find(&rule.matcher).is_some())
 }
 
+const RETAINED_VITEST_DEPENDENCIES: [&str; 3] =
+    ["vitest", "@vitest/browser", "@vitest/browser-preview"];
+
+// Reuse the import, re-export, require, and dynamic/type-import contexts from
+// the bare Vitest rewrite. A preserved subpath needs its package regardless of
+// whether Vite+ exports a corresponding shim for that particular entry point.
+static RETAINED_VITEST_IMPORT_RULES: LazyLock<Vec<RuleConfig<SupportLang>>> = LazyLock::new(|| {
+    let rules = REWRITE_VITEST_RULES.replace(
+        r#"regex: ^['"]vitest['"]$"#,
+        &format!(r#"regex: ^['"](?:{})(?:/[^'"]+)?['"]$"#, RETAINED_VITEST_DEPENDENCIES.join("|")),
+    );
+    ast_grep::load_rules(&rules)
+        .expect("failed to parse Vitest dependency import rules")
+        .into_iter()
+        .filter(is_bare_vitest_rule)
+        .collect()
+});
+
 static PARSED_VITEST_RULES_WITHOUT_UNSCOPED: LazyLock<Vec<RuleConfig<SupportLang>>> =
     LazyLock::new(|| {
         ast_grep::load_rules(&vitest_rewrite_rules())
@@ -2111,38 +2129,74 @@ fn find_nearest_package_json(file_path: &Path, root: &Path) -> Option<PathBuf> {
     None
 }
 
-/// Find packages that need a direct Vitest dependency because their lint rule
-/// disables rewriting in a file that uses an upstream Vitest import or type reference.
+fn retained_vitest_dependency(specifier: &str) -> Option<&'static str> {
+    RETAINED_VITEST_DEPENDENCIES.into_iter().find(|name| {
+        specifier.strip_prefix(name).is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
+    })
+}
+
+fn collect_retained_vitest_dependencies(content: &str, dependencies: &mut BTreeSet<&'static str>) {
+    if !RETAINED_VITEST_DEPENDENCIES
+        .iter()
+        .any(|name| !dependencies.contains(name) && content.contains(name))
+    {
+        return;
+    }
+    for line in reference_preamble(content).trim_start_matches('\u{feff}').lines() {
+        if let Some(captures) = RE_REF_TEST_ENTRY.captures(line) {
+            dependencies.extend(retained_vitest_dependency(&captures[2]));
+        }
+    }
+    let parsed = SupportLang::TypeScript.ast_grep(content);
+    let root = parsed.root();
+    for rule in &*RETAINED_VITEST_IMPORT_RULES {
+        for matched in root.find_all(&rule.matcher) {
+            // A string in `export default 'vitest'` is a value, not a module source.
+            if rule.id == "rewrite-vitest-export"
+                && matched.parent().and_then(|export| export.field("source")).is_none()
+            {
+                continue;
+            }
+            dependencies
+                .extend(retained_vitest_dependency(matched.text().trim_matches(['\'', '"'])));
+            if dependencies.len() == RETAINED_VITEST_DEPENDENCIES.len() {
+                return;
+            }
+        }
+    }
+}
+
+/// Group protected imports by their nearest manifest. The migration caller
+/// can then determine which workspace package supplies each dependency.
 pub fn find_retained_vitest_packages(
     root: &Path,
     import_rule: &ImportRuleConfig,
-) -> Result<Vec<PathBuf>, Error> {
+) -> Result<BTreeMap<PathBuf, BTreeSet<&'static str>>, Error> {
+    let mut owners = BTreeMap::new();
     if !import_rule.can_disable_rewrites() {
-        return Ok(Vec::new());
+        return Ok(owners);
     }
 
-    let mut owners = BTreeSet::new();
-    for path in file_walker::find_ts_files(root)?.files {
+    // An installed library's own test files cannot justify dependencies in the
+    // project being migrated, even when it has no .gitignore.
+    let sources = file_walker::find_ts_files_filtered(root, |entry| {
+        entry.depth() == 0 || entry.file_name() != "node_modules"
+    })?;
+    for path in sources.files {
         if import_rule.is_enabled(path.strip_prefix(root).unwrap_or(&path)) {
             continue;
         }
         let Some(manifest) = find_nearest_package_json(&path, root) else { continue };
         let owner = manifest.parent().expect("package.json has a parent directory");
-        if owners.contains(owner) {
+        let dependencies: &mut BTreeSet<_> = owners.entry(owner.to_path_buf()).or_default();
+        if dependencies.len() == RETAINED_VITEST_DEPENDENCIES.len() {
             continue;
         }
         let Ok(content) = std::fs::read_to_string(path) else { continue };
-        if content.contains("vitest")
-            && (reference_preamble(&content)
-                .trim_start_matches('\u{feff}')
-                .lines()
-                .any(is_unscoped_vitest_reference)
-                || has_unscoped_vitest_import(&content))
-        {
-            owners.insert(owner.to_path_buf());
-        }
+        collect_retained_vitest_dependencies(&content, dependencies);
     }
-    Ok(owners.into_iter().collect())
+    owners.retain(|_, dependencies| !dependencies.is_empty());
+    Ok(owners)
 }
 
 /// Canonical Vite/Vitest config entry basenames, the single source shared with
@@ -2652,17 +2706,70 @@ mod tests {
             ("directive", "/// <reference types='vitest/globals' />"),
             ("managed", "import 'vitest';"),
             ("scoped", "import '@vitest/browser';"),
+            ("context", "export { page } from '@vitest/browser/context';"),
+            ("browser_type", "type Browser = typeof import('@vitest/browser/matchers');"),
+            ("browser_require", "const browser = require('@vitest/browser/client');"),
+            ("browser_reference", "/// <reference types='@vitest/browser/locators' />"),
+            ("preview", "import { preview } from '@vitest/browser-preview';"),
+            ("preview_context", "const context = import('@vitest/browser-preview/context');"),
+            ("preview_reference", "/// <reference types='@vitest/browser-preview/provider' />"),
+            ("browser_direct_provider", "import '@vitest/browser-playwright';"),
+            ("preview_prefix", "import '@vitest/browser-preview-extra/context';"),
+            ("preview_reference_prefix", "/// <reference types='@vitest/browser-preview-extra' />"),
+            ("browser_text", "const example = \"import('@vitest/browser/context')\";"),
+            ("export_value", "export default '@vitest/browser';"),
             ("text", "// import 'vitest';\nconst example = \"import('vitest')\";"),
         ] {
             write_pack_fixture(root, &format!("templates/{package}/package.json"), "{}");
             write_pack_fixture(root, &format!("templates/{package}/src/test.ts"), source);
         }
         write_pack_fixture(root, "app.ts", "import 'vitest';");
+        write_pack_fixture(
+            root,
+            "templates/static/src/browser.ts",
+            "import '@vitest/browser/context';\nimport '@vitest/browser-preview/provider';",
+        );
 
-        let owners = find_retained_vitest_packages(root, &config).unwrap();
-        let expected = ["directive", "dynamic", "export", "require", "static", "type"]
-            .map(|package| root.join("templates").join(package));
-        assert_eq!(owners, expected);
+        let mut owners = find_retained_vitest_packages(root, &config).unwrap();
+        for (package, dependencies) in [
+            ("directive", &["vitest"][..]),
+            ("dynamic", &["vitest"]),
+            ("export", &["vitest"]),
+            ("require", &["vitest"]),
+            ("static", &["vitest", "@vitest/browser", "@vitest/browser-preview"]),
+            ("type", &["vitest"]),
+            ("scoped", &["@vitest/browser"]),
+            ("context", &["@vitest/browser"]),
+            ("browser_type", &["@vitest/browser"]),
+            ("browser_require", &["@vitest/browser"]),
+            ("browser_reference", &["@vitest/browser"]),
+            ("preview", &["@vitest/browser-preview"]),
+            ("preview_context", &["@vitest/browser-preview"]),
+            ("preview_reference", &["@vitest/browser-preview"]),
+        ] {
+            assert_eq!(
+                owners.remove(&root.join("templates").join(package)),
+                Some(dependencies.iter().copied().collect()),
+                "{package}"
+            );
+        }
+        assert!(owners.is_empty(), "{owners:?}");
+    }
+
+    #[test]
+    fn scans_project_sources_but_skips_installed_packages_with_no_gitignore() {
+        let temp = tempdir().unwrap();
+        let root = temp.path().join("node_modules/project");
+        write_pack_fixture(&root, "package.json", "{}");
+        write_pack_fixture(&root, "test.ts", "import 'vitest';");
+        write_pack_fixture(&root, "node_modules/library/package.json", "{}");
+        write_pack_fixture(&root, "node_modules/library/test.ts", "import '@vitest/browser';");
+
+        let config = ImportRuleConfig::from_json(r#"{"enabled": false, "overrides": []}"#).unwrap();
+        assert_eq!(
+            find_retained_vitest_packages(&root, &config).unwrap(),
+            BTreeMap::from([(root, BTreeSet::from(["vitest"]))])
+        );
     }
 
     fn write_tsdown_fixture(root: &Path, version: &str) {

@@ -14,6 +14,10 @@ import {
   VITE_PLUS_OVERRIDE_PACKAGES,
   VITEST_VERSION,
 } from '../../utils/constants.js';
+import {
+  DISABLED_IMPORT_RULE_CONFIG,
+  type RetainedImportDependencies,
+} from '../migrator/shared.ts';
 import { createMigrationReport } from '../report.js';
 
 // A different bundled version verifies that migration follows dependency updates.
@@ -3576,6 +3580,28 @@ describe('ensureVitePlusBootstrap', () => {
     expect(pkg.overrides.vitest).toBeUndefined();
   });
 
+  it('keeps a declared browser peer range on the first migration', () => {
+    const peerDependencies = { '@vitest/browser-preview': '^4 || ^5' };
+    writePkgAt(tmpDir, { name: 'test-plugin', peerDependencies });
+    fs.writeFileSync(
+      path.join(tmpDir, 'index.ts'),
+      "export { preview } from '@vitest/browser-preview';",
+    );
+
+    rewriteStandaloneProject(
+      tmpDir,
+      makeWorkspaceInfo(tmpDir, PackageManager.npm),
+      true,
+      true,
+      undefined,
+      DISABLED_IMPORT_RULE_CONFIG,
+    );
+
+    const pkg = readJson(path.join(tmpDir, 'package.json'));
+    expect(pkg.peerDependencies).toEqual(peerDependencies);
+    expect(pkg).not.toHaveProperty(['devDependencies', '@vitest/browser-preview']);
+  });
+
   it('repairs a missing Vitest dependency only in the workspace that keeps the import', () => {
     const templateDir = path.join(tmpDir, 'templates/starter');
     writePkgAt(tmpDir, { private: true, devDependencies: { 'vite-plus': 'catalog:' } });
@@ -3586,7 +3612,7 @@ describe('ensureVitePlusBootstrap', () => {
       workspacePatterns: ['templates/*'],
       packages: [{ name: 'starter', path: 'templates/starter' }],
     };
-    const pending = (owners?: ReadonlySet<string>) =>
+    const pending = (owners?: RetainedImportDependencies) =>
       detectVitePlusBootstrapPending(
         tmpDir,
         workspace.packageManager,
@@ -3598,7 +3624,7 @@ describe('ensureVitePlusBootstrap', () => {
     ensureVitePlusBootstrap(workspace);
     expect(pending()).toBe(false);
 
-    const owners = new Set([templateDir]);
+    const owners = { vitest: new Set([templateDir]), browser: new Map<string, Set<string>>() };
     expect(pending(owners)).toBe(true);
     ensureVitePlusBootstrap(workspace, undefined, owners);
     expect(readJson(path.join(templateDir, 'package.json'))).toHaveProperty(
@@ -3614,6 +3640,63 @@ describe('ensureVitePlusBootstrap', () => {
     );
     expect(pending(owners)).toBe(false);
   });
+
+  it.each([
+    [PackageManager.pnpm, '10.33.0', 'pnpm-workspace.yaml'],
+    [PackageManager.yarn, '4.11.0', '.yarnrc.yml'],
+    [PackageManager.bun, '1.4.4', 'package.json'],
+  ] as const)(
+    'keeps retained browser dependencies and peer ranges in a named %s catalog',
+    (manager, version, file) => {
+      const browser = '@vitest/browser';
+      const preview = '@vitest/browser-preview';
+      const peerRange = '^4 || ^5';
+      const templateDir = path.join(tmpDir, 'templates/starter');
+      const catalogs = {
+        tools: { [browser]: '^4.0.0', [preview]: peerRange, 'vite-plus': 'latest' },
+      };
+      const workspace = {
+        ...makeWorkspaceInfo(tmpDir, manager, version),
+        isMonorepo: true,
+        workspacePatterns: ['templates/*'],
+        packages: [{ name: 'starter', path: 'templates/starter' }],
+      };
+      writePkgAt(tmpDir, {
+        name: 'root',
+        private: true,
+        workspaces: workspace.workspacePatterns,
+        ...(manager === PackageManager.bun ? { catalogs } : {}),
+      });
+      if (manager !== PackageManager.bun) {
+        fs.writeFileSync(path.join(tmpDir, file), JSON.stringify({ catalogs }));
+      }
+      writePkgAt(templateDir, {
+        name: 'starter',
+        dependencies: { [browser]: 'catalog:tools' },
+        peerDependencies: { [preview]: 'catalog:tools' },
+      });
+      const retained = {
+        vitest: new Set<string>(),
+        browser: new Map([[templateDir, new Set([browser, preview])]]),
+      };
+
+      ensureVitePlusBootstrap(workspace, undefined, retained);
+
+      const result =
+        file === 'package.json'
+          ? readJson(path.join(tmpDir, file))
+          : readYamlObject(path.join(tmpDir, file));
+      expect(result).toHaveProperty(['catalogs', 'tools', browser], VITEST_VERSION);
+      expect(result).toHaveProperty(['catalogs', 'tools', preview], peerRange);
+      expect(readJson(path.join(templateDir, 'package.json'))).toMatchObject({
+        dependencies: { [browser]: 'catalog:tools' },
+        peerDependencies: { [preview]: 'catalog:tools' },
+      });
+      expect(
+        detectVitePlusBootstrapPending(tmpDir, manager, workspace.packages, version, retained),
+      ).toBe(false);
+    },
+  );
 
   it('reconciles vitest and vite-plus in the workspace package that needs them', () => {
     const appDir = path.join(tmpDir, 'packages/app');

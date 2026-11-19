@@ -16,17 +16,29 @@ pub fn read_static_lint_config(root: String) -> Result<Option<String>> {
     })
 }
 
-/// Directories of packages whose lint settings preserve upstream Vitest imports.
+#[napi(object)]
+pub struct RetainedVitestPackage {
+    pub package_dir: String,
+    pub dependencies: Vec<String>,
+}
+
+/// Upstream Vitest and browser imports preserved in files under each manifest.
 #[napi]
 pub fn find_retained_vitest_packages(
     root: String,
     import_rule_config: String,
-) -> Result<Vec<String>> {
+) -> Result<Vec<RetainedVitestPackage>> {
     let import_rule =
         ImportRuleConfig::from_json(&import_rule_config).map_err(anyhow::Error::from)?;
     let owners = vp_migration::find_retained_vitest_packages(Path::new(&root), &import_rule)
         .map_err(anyhow::Error::from)?;
-    Ok(owners.into_iter().map(|path| path.to_string_lossy().into_owned()).collect())
+    Ok(owners
+        .into_iter()
+        .map(|(dir, dependencies)| RetainedVitestPackage {
+            package_dir: dir.to_string_lossy().into_owned(),
+            dependencies: dependencies.into_iter().map(str::to_owned).collect(),
+        })
+        .collect())
 }
 
 /// A literal argument with its original JavaScript UTF-16 source range.

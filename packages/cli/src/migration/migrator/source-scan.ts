@@ -17,6 +17,7 @@ import {
   readPackageJsonIfExists,
   RETENTION_SCAN_SKIP_DIRS,
   type DependencyBag,
+  type RetainedImportDependencies,
 } from './shared.ts';
 
 type WorkspaceProjects = { rootDir: string; packages?: readonly WorkspacePackage[] };
@@ -25,39 +26,60 @@ export function getWorkspaceProjectPaths({ rootDir, packages }: WorkspaceProject
   return [rootDir, ...(packages ?? []).map((pkg) => path.join(rootDir, pkg.path))];
 }
 
-/** Find workspace packages whose imports will still resolve through upstream Vitest. */
-export function collectProtectedVitestImportOwners(
+/** Find the managed packages that supply imports preserved by the lint rule. */
+export function collectRetainedImportDependencies(
   workspace: WorkspaceProjects,
   importRuleConfig: string | null | undefined,
-): Set<string> {
+): RetainedImportDependencies {
+  const retained = { vitest: new Set<string>(), browser: new Map<string, Set<string>>() };
   if (importRuleConfig === undefined) {
-    return new Set();
+    return retained;
   }
-  const owners = new Set(
-    findRetainedVitestPackages(workspace.rootDir, importRuleConfig ?? DISABLED_IMPORT_RULE_CONFIG),
+  const imports = findRetainedVitestPackages(
+    workspace.rootDir,
+    importRuleConfig ?? DISABLED_IMPORT_RULE_CONFIG,
   );
-  if (!owners.size) {
-    return owners;
+  if (imports.length === 0) {
+    return retained;
   }
 
-  return new Set(
-    getWorkspaceProjectPaths(workspace).filter((dir) => {
-      if (!owners.has(dir)) {
-        return false;
-      }
-      if (importRuleConfig !== null) {
-        return true;
-      }
-      // Until the config can load, keep declared providers for potential imports.
-      // A failed config probe alone must not add dependencies or schedule an install.
+  const declarations = new Map(
+    getWorkspaceProjectPaths(workspace).map((dir) => {
       const pkg = readPackageJsonIfExists(path.join(dir, 'package.json'));
-      return !!(
-        pkg?.dependencies?.vitest ||
-        pkg?.devDependencies?.vitest ||
-        pkg?.optionalDependencies?.vitest
-      );
+      return [dir, { installed: collectInstallDependencyNames(pkg), peers: pkg?.peerDependencies }];
     }),
   );
+
+  function retainSuppliers(packageDir: string, name: string) {
+    // When the rule is known, a managed package can repair its missing Vitest install.
+    if (name === 'vitest' && importRuleConfig !== null && declarations.has(packageDir)) {
+      retained.vitest.add(packageDir);
+      return;
+    }
+    // Unmanaged templates resolve imports through their workspace ancestors.
+    // Keep browser peer contracts on the way to the nearest install declaration.
+    for (let dir = packageDir; ; dir = path.dirname(dir)) {
+      const pkg = declarations.get(dir);
+      const installed = pkg?.installed.has(name);
+      if (name === 'vitest' && installed) {
+        retained.vitest.add(dir);
+      } else if (name !== 'vitest' && (installed || pkg?.peers?.[name] !== undefined)) {
+        const names = retained.browser.get(dir) ?? new Set<string>();
+        names.add(name);
+        retained.browser.set(dir, names);
+      }
+      if (installed || dir === workspace.rootDir || dir === path.dirname(dir)) {
+        return;
+      }
+    }
+  }
+
+  for (const { packageDir, dependencies } of imports) {
+    for (const name of dependencies) {
+      retainSuppliers(packageDir, name);
+    }
+  }
+  return retained;
 }
 
 // Workspace-wide direct-vitest signal for the SHARED sinks a monorepo root

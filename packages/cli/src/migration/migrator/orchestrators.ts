@@ -9,10 +9,10 @@ import {
   applyBuildAllowanceToPackageJsonPnpm,
   applyYarnWorkspaceHoistingFix,
   cleanupDeprecatedTsconfigOptions,
-  collectInjectedProviderNames,
+  collectBrowserCatalogAdditions,
   collectOxlintDependencyNames,
   collectOxlintOwnerDirs,
-  collectProtectedVitestImportOwners,
+  collectRetainedImportDependencies,
   collectProviderSourceModes,
   collectVitestEcosystemInstallDependencyNames,
   createCatalogDependencyResolver,
@@ -72,6 +72,7 @@ import {
   pnpmMajor,
   type PnpmPackageJsonSettings,
   type PreparedOxlintConfigs,
+  type RetainedImportDependencies,
 } from './shared.ts';
 
 export function rewriteStandaloneProject(
@@ -108,20 +109,24 @@ export function rewriteStandaloneProject(
     workspaceInfo.packages,
   );
   // Source-tree scan signals are computed once here and reused below (and inside
-  // projectUsesVitestDirectly / collectInjectedProviderNames) so the source tree
+  // projectUsesVitestDirectly / collectBrowserCatalogAdditions) so the source tree
   // is traversed once each instead of repeatedly. They do not depend on
   // package.json contents and no scanned source files are mutated before they
   // are consumed, so the values match the previous lazy per-call scans exactly.
   const providerSourceModes = collectProviderSourceModes(projectPath);
   const usesWebdriverio = workspaceUsesWebdriverioProvider(projectPath);
   const browserMode = usesVitestBrowserMode(projectPath);
+  const retainedImportDependencies = collectRetainedImportDependencies(
+    { rootDir: projectPath },
+    importRuleConfig,
+  );
   const retainedVitestModule =
-    collectProtectedVitestImportOwners({ rootDir: projectPath }, importRuleConfig).has(
-      projectPath,
-    ) || sourceTreeReferencesRetainedVitestModule(projectPath);
-  const providerCatalogAdditions = collectInjectedProviderNames(
+    retainedImportDependencies.vitest.has(projectPath) ||
+    sourceTreeReferencesRetainedVitestModule(projectPath);
+  const browserCatalogAdditions = collectBrowserCatalogAdditions(
     projectPath,
     undefined,
+    retainedImportDependencies.browser,
     new Map([[projectPath, providerSourceModes]]),
   );
   const pnpmMajorVersion = pnpmMajor(workspaceInfo.downloadPackageManager.version);
@@ -269,7 +274,8 @@ export function rewriteStandaloneProject(
       usesVitest,
       retainedVitestModule,
       requiredVitestPeer,
-      providerCatalogAdditions,
+      browserCatalogAdditions,
+      retainedImportDependencies.browser.get(projectPath),
     );
 
     // ensure vite-plus is in devDependencies — but only when it isn't already a
@@ -310,7 +316,7 @@ export function rewriteStandaloneProject(
       usesVitest,
       vitestEcosystemPackages,
       usePnpmWorkspaceYaml,
-      providerCatalogAdditions,
+      browserCatalogAdditions,
       usesWebdriverio,
       workspaceInfo.downloadPackageManager.version,
     );
@@ -337,7 +343,7 @@ export function rewriteStandaloneProject(
       projectPath,
       usesVitest,
       vitestEcosystemPackages,
-      providerCatalogAdditions,
+      browserCatalogAdditions,
       supportCatalog,
       yarnSupportsPreapprovedPackages(workspaceInfo.downloadPackageManager.version),
     );
@@ -410,7 +416,7 @@ export function rewriteMonorepo(
   );
   // The SHARED workspace sinks (catalog / overrides / peer rules) keep `vitest`
   // managed iff ANY package in the workspace uses vitest directly.
-  const protectedVitestImportOwners = collectProtectedVitestImportOwners(
+  const retainedImportDependencies = collectRetainedImportDependencies(
     workspaceInfo,
     importRuleConfig,
   );
@@ -418,15 +424,16 @@ export function rewriteMonorepo(
     workspaceInfo.rootDir,
     workspaceInfo.packages,
     true,
-    protectedVitestImportOwners,
+    retainedImportDependencies.vitest,
   );
   const vitestEcosystemPackages = collectVitestEcosystemInstallDependencyNames(
     workspaceInfo.rootDir,
     workspaceInfo.packages,
   );
-  const providerCatalogAdditions = collectInjectedProviderNames(
+  const browserCatalogAdditions = collectBrowserCatalogAdditions(
     workspaceInfo.rootDir,
     workspaceInfo.packages,
+    retainedImportDependencies.browser,
   );
   // Catalog support: pnpm >= 9.5.0, Yarn >= 4.10.0, bun per `bunSupportsCatalog`.
   // An older PM falls back to concrete.
@@ -436,7 +443,7 @@ export function rewriteMonorepo(
     workspaceInfo.downloadPackageManager.version,
   );
   const workspaceContext = {
-    protectedVitestImportOwners,
+    retainedImportDependencies,
     rootDir: workspaceInfo.rootDir,
     packages: workspaceInfo.packages,
     oxlintConfigs: prepareOxlintConfigs([
@@ -450,7 +457,7 @@ export function rewriteMonorepo(
       workspaceInfo.rootDir,
       workspaceUsesVitest,
       vitestEcosystemPackages,
-      providerCatalogAdditions,
+      browserCatalogAdditions,
       supportCatalog,
       yarnSupportsPreapprovedPackages(workspaceInfo.downloadPackageManager.version),
     );
@@ -461,6 +468,7 @@ export function rewriteMonorepo(
       vitestEcosystemPackages,
       usesWebdriverio,
       workspaceInfo.downloadPackageManager.version,
+      browserCatalogAdditions,
     );
   }
   rewriteRootWorkspacePackageJson(
@@ -475,7 +483,7 @@ export function rewriteMonorepo(
     workspaceUsesVitest,
     supportCatalog,
     workspaceContext.oxlintConfigs,
-    protectedVitestImportOwners,
+    retainedImportDependencies,
   );
   if (workspaceInfo.packageManager === PackageManager.pnpm) {
     rewritePnpmWorkspaceYaml(
@@ -485,7 +493,7 @@ export function rewriteMonorepo(
       workspaceUsesVitest,
       vitestEcosystemPackages,
       usePnpmWorkspaceSettings,
-      providerCatalogAdditions,
+      browserCatalogAdditions,
       usesWebdriverio,
       workspaceInfo.downloadPackageManager.version,
     );
@@ -518,7 +526,7 @@ export function rewriteMonorepo(
       workspaceContext,
       true,
       supportCatalog,
-      providerCatalogAdditions,
+      browserCatalogAdditions,
     );
   }
 
@@ -576,7 +584,7 @@ export function rewriteMonorepoProject(
     rootDir: string;
     packages: WorkspacePackage[];
     oxlintConfigs?: PreparedOxlintConfigs;
-    protectedVitestImportOwners?: ReadonlySet<string>;
+    retainedImportDependencies?: RetainedImportDependencies;
   },
   deferLazyPluginWrapping = false,
   // Whether this workspace's edges use catalog references. Yarn catalogs require
@@ -586,7 +594,7 @@ export function rewriteMonorepoProject(
   // Opt-in browser providers the workspace catalog is gaining (a sibling package
   // uses one source-only). An already-installed copy here must reference that
   // catalog entry rather than pin a concrete version. See #2005.
-  providerCatalogAdditions: ReadonlySet<string> = new Set(),
+  browserCatalogAdditions: ReadonlySet<string> = new Set(),
 ): void {
   cleanupDeprecatedTsconfigOptions(projectPath, silent, report);
   rewriteTsconfigTypes(projectPath, silent, report);
@@ -631,7 +639,7 @@ export function rewriteMonorepoProject(
     // these reads, so this is identical to the previous per-call scans.
     const browserMode = usesVitestBrowserMode(projectPath);
     const retainedVitestModule =
-      workspaceContext?.protectedVitestImportOwners?.has(projectPath) ||
+      workspaceContext?.retainedImportDependencies?.vitest.has(projectPath) ||
       sourceTreeReferencesRetainedVitestModule(projectPath);
     // rewrite scripts in package.json
     extractedStagedConfig = rewritePackageJson(
@@ -648,7 +656,8 @@ export function rewriteMonorepoProject(
       }),
       retainedVitestModule,
       requiredVitestPeer,
-      providerCatalogAdditions,
+      browserCatalogAdditions,
+      workspaceContext?.retainedImportDependencies?.browser.get(projectPath),
     );
     // If this SUB-workspace now depends on `vite-plus` and Yarn isolates its
     // hoisting (via the root `nmHoistingLimits` OR the workspace's own

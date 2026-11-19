@@ -30,7 +30,7 @@ import {
   OXLINT_PLUGINS_PACKAGE,
   OXLINT_PLUGIN_API_PACKAGES,
   packageOwnsOxlintApi,
-  REMOVE_PACKAGES,
+  bundledPackagesToRemove,
   VITEST_BROWSER_DEP_NAMES,
   VITEST_IS_MANAGED_OVERRIDE,
   type PackageJsonDependencyField,
@@ -70,6 +70,7 @@ export function rewritePackageJson(
   // one only through source/a shim). An already-installed copy of such a provider
   // must REFERENCE that catalog entry, not pin a concrete version. See #2005.
   providerCatalogAdditions: ReadonlySet<string> = new Set(),
+  retainedBrowserPackages?: ReadonlySet<string>,
 ): Record<string, string | string[]> | null {
   if (pkg.scripts) {
     const updated = rewriteScripts(
@@ -193,7 +194,7 @@ export function rewritePackageJson(
     needVitePlus = true;
   }
   // remove packages that are replaced with vite-plus
-  for (const name of REMOVE_PACKAGES) {
+  for (const name of bundledPackagesToRemove(retainedBrowserPackages)) {
     let wasRemoved = false;
     for (const { dependencyField, dependencies } of dependencyGroups) {
       if (
