@@ -91,7 +91,7 @@ These options only affect `vp check`; standalone `vp fmt` and `vp lint` still ru
 
 ### Reading the config
 
-When the `lint`, `fmt`, and `check` blocks are written as literals rather than expressions, `vp check` reads them without running `vite.config.*`. Otherwise it loads the config through Vite. If `vp check` does not pick up your settings, set `VP_SKIP_STATIC_CONFIG=1` to always load the config through Vite:
+`vp check` reads the `lint`, `fmt`, and `check` blocks without running `vite.config.*` when it can, and otherwise loads the config through Vite. If `vp check` does not pick up your settings, set `VP_SKIP_STATIC_CONFIG=1` to always load the config through Vite:
 
 ```bash
 VP_SKIP_STATIC_CONFIG=1 vp check
