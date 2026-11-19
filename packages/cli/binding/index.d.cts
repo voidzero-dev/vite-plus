@@ -3725,7 +3725,10 @@ export interface DetectWorkspaceResult {
 export declare function documentationUrl(path: string): string;
 
 /**
- * Download a package manager
+ * Download a package manager, or use the one on PATH when no global install manages it.
+ *
+ * See `vp_pm_cli::provide_for_local_cli` for when a download is allowed. The
+ * result describes the system installation when one is used.
  *
  * ## Parameters
  *
@@ -3733,16 +3736,18 @@ export declare function documentationUrl(path: string): string;
  *   - `name`: The name of the package manager
  *   - `version`: The version of the package manager
  *   - `expected_hash`: The expected hash of the package manager
- *   - `cwd`: An absolute directory used to load workspace npm configuration
+ *   - `cwd`: An absolute directory used to load workspace npm configuration and resolve relative PATH entries
+ *   - `fallback_to_npm`: Whether to use npm when the requested package manager is unavailable
  *
  * ## Returns
  *
  * Returns a `DownloadPackageManagerResult` containing:
- * - The name of the package manager
+ * - The name of the package manager, `npm` after a fallback
  * - The install directory of the package manager
  * - The binary prefix of the package manager
  * - The package name of the package manager
  * - The version of the package manager
+ * - The executables of the package manager by name
  *
  * ## Example
  *
@@ -3767,6 +3772,11 @@ export interface DownloadPackageManagerOptions {
   version: string;
   expectedHash?: string;
   cwd?: string;
+  /**
+   * Use the npm that ships with Node.js when the requested manager is unavailable.
+   * Set it only when the caller chose the manager itself, as `vp install` does.
+   */
+  fallbackToNpm?: boolean;
 }
 
 export interface DownloadPackageManagerResult {
@@ -3775,6 +3785,11 @@ export interface DownloadPackageManagerResult {
   binPrefix: string;
   packageName: string;
   version: string;
+  /**
+   * Executables in `bin_prefix` by name. Launch these, not a bare name that a
+   * Vite+ shim earlier on PATH would resolve to another version.
+   */
+  binPaths: Record<string, string>;
 }
 
 /** Re-enable blocking stdio after Node.js has initialized its lazy standard streams. */

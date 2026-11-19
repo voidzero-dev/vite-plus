@@ -85,6 +85,7 @@ export async function downloadPackageManager(
   silent = false,
   cwd?: string,
   expectedHash?: string,
+  fallbackToNpm?: boolean,
 ): Promise<DownloadPackageManagerResult> {
   const spinner = silent ? getSilentSpinner() : getSpinner(interactive);
   spinner.start(`${packageManager}@${version} installing...`);
@@ -93,8 +94,9 @@ export async function downloadPackageManager(
     version,
     cwd,
     expectedHash,
+    fallbackToNpm,
   });
-  spinner.stop(`${packageManager}@${downloadResult.version} installed`);
+  spinner.stop(`${downloadResult.name}@${downloadResult.version} installed`);
   return downloadResult;
 }
 
