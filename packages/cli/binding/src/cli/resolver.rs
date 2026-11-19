@@ -275,18 +275,21 @@ impl SubcommandResolver {
 
 /// Resolve `fields` of the Vite config in `dir`. Static extraction answers when
 /// it accounts for every field, and `resolve_fn` loads the config through Vite
-/// otherwise. Fields not listed may be absent from the result.
+/// otherwise or when `VP_SKIP_STATIC_CONFIG=1`. Fields not listed may be absent
+/// from the result.
 pub(super) async fn resolve_vite_config_fields(
     dir: &AbsolutePath,
     fields: &[&str],
     resolve_fn: &ViteConfigResolverFn,
 ) -> anyhow::Result<ResolvedUniversalViteConfig> {
-    if let Some(config) = static_vite_config_fields(dir, fields) {
+    if !vp_shared::EnvConfig::get().skip_static_config
+        && let Some(config) = static_vite_config_fields(dir, fields)
+    {
         tracing::debug!("Using statically extracted {fields:?} for {}", dir.as_path().display());
         return Ok(config);
     }
     tracing::debug!(
-        "{fields:?} not statically analyzable for {}, falling back to NAPI",
+        "{fields:?} not statically read for {}, falling back to NAPI",
         dir.as_path().display()
     );
     let dir = dir
@@ -463,6 +466,15 @@ mod tests {
         assert_eq!(config.lint, Some(serde_json::json!({ "options": { "typeAware": true } })));
         assert_eq!(config.fmt, None);
         assert_eq!(config.check, Some(serde_json::json!({ "fmt": false })));
+
+        // `VP_SKIP_STATIC_CONFIG=1` loads even a static config through Vite.
+        let config = vp_shared::EnvConfig::with_vars_async(
+            [(vp_shared::env_vars::VP_SKIP_STATIC_CONFIG, "1")],
+            |_| resolver.resolve_universal_vite_config(CHECK_FIELDS),
+        )
+        .await
+        .unwrap();
+        assert!(from_vite(config));
 
         // A spread may hide any block, so the JavaScript resolver must run.
         std::fs::write(&config_path, "const base = {}; export default { ...base };").unwrap();

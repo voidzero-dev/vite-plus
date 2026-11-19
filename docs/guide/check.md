@@ -88,3 +88,11 @@ export default defineConfig({
 ```
 
 These options only affect `vp check`; standalone `vp fmt` and `vp lint` still run normally. A step is skipped if it is disabled in config or the matching `--no-fmt` / `--no-lint` flag is passed. Because the defaults apply to every `vp check` run, a pre-commit hook that calls `vp check` will skip the disabled step too. See [Check Config](/config/check) for the full reference.
+
+### Reading the config
+
+When the `lint`, `fmt`, and `check` blocks are written as literals rather than expressions, `vp check` reads them without running `vite.config.*`. Otherwise it loads the config through Vite. If `vp check` does not pick up your settings, set `VP_SKIP_STATIC_CONFIG=1` to always load the config through Vite:
+
+```bash
+VP_SKIP_STATIC_CONFIG=1 vp check
+```
