@@ -1,0 +1,101 @@
+[[case]]
+name = "accept"
+vp = "global"
+steps = [
+  { argv = ["vpt", "rm", "renovate.json"], snapshot = false },
+  { argv = ["vpt", "write-file", "renovate.json5", '{"extends": "config:recommended",}'], snapshot = false },
+  { argv = ["vp", "migrate", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false, interactions = [
+    { "expect-milestone" = "confirm:renovate:yes" },
+    { "write-key" = "enter" },
+  ] },
+  ["vpt", "print-file", "renovate.json5"],
+]
+
+[[case]]
+name = "json5_only_syntax"
+vp = "global"
+steps = [
+  { argv = ["vpt", "rm", "renovate.json"], snapshot = false },
+  { argv = ["vpt", "write-file", "renovate.json5", "{extends: [/* shared */ 'config:recommended',],}"], snapshot = false },
+  { argv = ["git", "init", "--quiet"], snapshot = false },
+  { argv = ["git", "add", "renovate.json5"], snapshot = false },
+  { argv = ["git", "-c", "user.name=Vite Plus", "-c", "user.email=vite-plus@example.com", "commit", "-m", "init"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false, interactions = [
+    { "expect-milestone" = "confirm:renovate:yes" },
+    { "write-key" = "enter" },
+  ] },
+  ["vpt", "print-file", "renovate.json5"],
+]
+
+[[case]]
+name = "unsupported_json5"
+vp = "global"
+steps = [
+  { argv = ["vpt", "rm", "renovate.json"], snapshot = false },
+  { argv = ["vpt", "write-file", "renovate.json5", "{extends: getPresets()}"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  ["vpt", "print-file", "renovate.json5"],
+]
+
+[[case]]
+name = "decline"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false, interactions = [
+    { "expect-milestone" = "confirm:renovate:yes" },
+    { "write-key" = "right" },
+    { "expect-milestone" = "confirm:renovate:no" },
+    { "write-key" = "enter" },
+  ] },
+  { argv = ["vp", "migrate", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false, comment = "a regular upgrade respects the earlier decline" },
+  ["vpt", "print-file", "renovate.json"],
+  { argv = ["vp", "migrate", "--full", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false, interactions = [
+    { "expect-milestone" = "confirm:renovate:yes" },
+    { "write-key" = "enter" },
+  ] },
+  ["vpt", "print-file", "renovate.json"],
+]
+
+[[case]]
+name = "existing_full"
+vp = "global"
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.vite-plus", "latest"], snapshot = false },
+  { argv = ["vp", "migrate", "--full", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false, interactions = [
+    { "expect-milestone" = "confirm:renovate:yes" },
+    { "write-key" = "right" },
+    { "expect-milestone" = "confirm:renovate:no" },
+    { "write-key" = "enter" },
+  ] },
+  ["vpt", "print-file", "renovate.json"],
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  { argv = ["vp", "migrate", "--full", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false, comment = "the preset is already enabled" },
+  ["vpt", "print-file", "renovate.json"],
+]
+
+[[case]]
+name = "non_interactive"
+vp = "global"
+steps = [
+  { argv = ["vpt", "rm", "renovate.json"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "renovate", "config:recommended"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  ["node", "-p", "JSON.stringify(require('./package.json').renovate)"],
+]
+
+[[case]]
+name = "non_tty"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate"], tty = false, snapshot = false },
+  ["vpt", "print-file", "renovate.json"],
+]
+
+[[case]]
+name = "already_enabled"
+vp = "global"
+steps = [
+  { argv = ["vpt", "json-edit", "renovate.json", "extends", '["group:vitePlus", "config:recommended"]'], snapshot = false },
+  { argv = ["vp", "migrate", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  ["vpt", "print-file", "renovate.json"],
+]
