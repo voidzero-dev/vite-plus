@@ -42,7 +42,7 @@ Select `generator: 'tsrs'` only when all of these conditions are true:
 1. `config.dts` is an object, so declarations are enabled.
 2. The user did not set `dts.generator`.
 3. The effective tsconfig does not set `compilerOptions.isolatedDeclarations`. Upstream selects Oxc there, which works without TypeScript.
-4. The config does not use Vue or other Volar languages. These need the classic API, and upstream reports that requirement.
+4. The config does not use Vue or other custom languages. Vue and other Volar languages need the classic API, and upstream reports that requirement. Other custom languages need `tsrs.vfs`, which only the user can opt into.
 5. `typescript` does not resolve from the declaration plugin's location.
 
 Condition 5 uses the same lookup as the plugin, from the bundled tsdown in `@voidzero-dev/vite-plus-core`. It does not use the project root. The plugin loads the classic compiler with `createRequire(import.meta.url)` and the native API with `import.meta.resolve('typescript')`. A different origin can disagree with the plugin. [Classic loader](https://github.com/sxzz/rolldown-plugin-dts/blob/v0.30.2/src/require.ts#L5), [native loader](https://github.com/sxzz/rolldown-plugin-dts/blob/v0.30.2/src/tsgo.ts#L30-L42)
