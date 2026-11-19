@@ -310,24 +310,23 @@ jobs:
 
       # Publishing can succeed even if the runner loses the response. Do not
       # replace assets on a published release, including an immutable release.
-      - name: Check whether the GitHub release is already published
+      - name: Check GitHub release state
         id: github-release
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           script: |
-            try {
-              const { data } = await github.rest.repos.getReleaseByTag({
-                ...context.repo,
-                tag: `v${process.env.VERSION}`,
-              });
-              core.setOutput('published', String(!data.draft));
-            } catch (error) {
-              if (error.status !== 404) throw error;
-              core.setOutput('published', 'false');
-            }
+            const { repository: { release } } = await github.graphql(
+              `query ($owner: String!, $repo: String!, $tag: String!) {
+                repository(owner: $owner, name: $repo) {
+                  release(tagName: $tag) { isDraft }
+                }
+              }`,
+              { ...context.repo, tag: `v${process.env.VERSION}` },
+            );
+            core.setOutput('state', release ? (release.isDraft ? 'draft' : 'published') : 'missing');
 
       - name: Create release body
-        if: steps.github-release.outputs.published != 'true'
+        if: steps.github-release.outputs.state != 'published'
         env:
           REPOSITORY: ${{ github.repository }}
           COMMIT_SHA: ${{ github.sha }}
@@ -360,32 +359,43 @@ jobs:
           View the full commit: https://github.com/${REPOSITORY}/commit/${COMMIT_SHA}
           EOF
 
-      - name: Create GitHub Release
-        if: steps.github-release.outputs.published != 'true'
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
-        id: release
-        with:
-          body_path: ./RELEASE_BODY.md
-          draft: true
-          make_latest: true
-          prerelease: false
-          name: vite-plus v${{ env.VERSION }}
-          tag_name: v${{ env.VERSION }}
-          target_commitish: ${{ github.sha }}
-          overwrite_files: true
-          fail_on_unmatched_files: true
-          files: |
+      - name: Prepare draft GitHub release and upload assets
+        if: steps.github-release.outputs.state != 'published'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_STATE: ${{ steps.github-release.outputs.state }}
+        run: |
+          shopt -s failglob
+          assets=(
             installer-release/vp-setup-*.exe
             binary-release/vp-*.tar.gz
             binary-release/vp-*.zip
             binary-release/vp-checksums.txt
             binary-release/vp-install-lock.yaml
+          )
+          for asset in "${assets[@]}"; do
+            if [[ ! -f "$asset" ]]; then
+              echo "::error::Missing release asset $asset"
+              exit 1
+            fi
+          done
+
+          tag="v${VERSION}"
+          release_args=(--repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA"
+            --title "vite-plus $tag" --notes-file ./RELEASE_BODY.md)
+          if [[ "$RELEASE_STATE" == "draft" ]]; then
+            gh release edit "$tag" "${release_args[@]}" --prerelease=false
+          else
+            gh release create "$tag" "${release_args[@]}" --draft
+          fi
+          gh release upload "$tag" "${assets[@]}" --clobber --repo "$GITHUB_REPOSITORY"
 
       - name: Publish GitHub Release
-        if: steps.github-release.outputs.published != 'true'
+        if: steps.github-release.outputs.state != 'published'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release edit "v${VERSION}" --draft=false --repo "${{ github.repository }}"
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "v${VERSION}" --draft=false --latest --repo "$GITHUB_REPOSITORY"
 
   update-homebrew:
     name: Open Homebrew formula PR

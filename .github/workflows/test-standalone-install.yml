@@ -1430,43 +1430,41 @@ jobs:
           vp env run --node 24 -- node -p "process.versions"
 
       - name: Verify installation on cmd
-        shell: cmd
+        shell: pwsh
         working-directory: ${{ runner.temp }}
         run: |
-          echo PATH: %PATH%
-          dir "%USERPROFILE%\.vite-plus"
-          dir "%USERPROFILE%\.vite-plus\bin"
+          $PSNativeCommandUseErrorActionPreference = $true
+          $vpHome = Join-Path $env:USERPROFILE '.vite-plus'
 
-          REM test create command
-          vp create vite --no-interactive --no-agent -- hello-cmd --no-interactive -t vanilla
-          if errorlevel 1 exit /b %errorlevel%
-          if not exist hello-cmd\package.json exit /b 1
-          cd hello-cmd && vp run build && vp --version
+          Write-Host "PATH: $env:Path"
+          Get-ChildItem $vpHome
+          Get-ChildItem (Join-Path $vpHome 'bin')
+
+          cmd.exe /d /c 'vp create vite --no-interactive --no-agent -- hello-cmd --no-interactive -t vanilla'
+          if (-not (Test-Path 'hello-cmd/package.json')) {
+            throw 'create-vite did not generate package.json'
+          }
+          Set-Location hello-cmd
+          cmd.exe /d /c 'vp run build && vp --version'
 
       - name: Verify bin setup on cmd
-        shell: cmd
+        shell: pwsh
         run: |
-          REM Verify bin directory was created by vp env --setup
-          set "BIN_PATH=%USERPROFILE%\.vite-plus\bin"
-          dir "%BIN_PATH%"
+          $PSNativeCommandUseErrorActionPreference = $true
+          $binPath = Join-Path $env:USERPROFILE '.vite-plus/bin'
+          Get-ChildItem $binPath
 
-          REM Verify shim executables exist (Windows uses trampoline .exe files)
-          for %%s in (node.exe npm.exe npx.exe vp.exe) do (
-            if not exist "%BIN_PATH%\%%s" (
-              echo Error: Shim not found: %BIN_PATH%\%%s
-              exit /b 1
-            )
-            echo Found shim: %BIN_PATH%\%%s
-          )
+          # Verify the Windows trampoline executables created by vp env --setup.
+          foreach ($shim in @('node.exe', 'npm.exe', 'npx.exe', 'vp.exe')) {
+            $shimPath = Join-Path $binPath $shim
+            if (-not (Test-Path $shimPath -PathType Leaf)) {
+              throw "Shim not found: $shimPath"
+            }
+            Write-Host "Found shim: $shimPath"
+          }
 
-          where node
-          where npm
-          where npx
-          where vp
-
-          REM Verify vp env doctor works
-          vp env doctor
-          vp env run --node 24 -- node -p "process.versions"
+          cmd.exe /d /c 'where.exe node && where.exe npm && where.exe npx && where.exe vp'
+          cmd.exe /d /c 'vp env doctor && vp env run --node 24 -- node -p process.versions'
 
       - name: Verify installation on bash
         shell: bash
@@ -2258,10 +2256,10 @@ jobs:
           vp --help
 
       - name: Verify installation (cmd)
-        shell: cmd
+        shell: pwsh
         run: |
-          vp --version
-          vp --help
+          $PSNativeCommandUseErrorActionPreference = $true
+          cmd.exe /d /c 'vp --version && vp --help'
 
       - name: Verify installation (bash)
         shell: bash

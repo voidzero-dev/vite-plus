@@ -565,55 +565,31 @@ jobs:
 
       - name: Test global package install (cmd)
         if: ${{ runner.os == 'Windows' }}
-        shell: cmd
+        shell: pwsh
         run: |
-          echo "PATH: %PATH%"
-          where.exe node
-          where.exe npm
-          where.exe npx
-          where.exe vp
+          $PSNativeCommandUseErrorActionPreference = $true
+          $vpHome = Join-Path $env:USERPROFILE '.vite-plus'
+          $vpBin = Join-Path $vpHome 'bin'
 
-          vp env use 18
-          node --version
-          vp env use --unset
-          node --version
+          Write-Host "PATH: $env:Path"
+          cmd.exe /d /c 'where.exe node && where.exe npm && where.exe npx && where.exe vp'
 
-          vp env doctor
+          # Keep each use/unset pair in the same CMD process.
+          cmd.exe /d /c 'vp env use 18 && node --version && vp env use --unset && node --version'
+          cmd.exe /d /c 'vp env doctor'
 
-          REM Test 1: Install a JS-based CLI (typescript)
-          vp install -g typescript
-          tsc --version
-          where.exe tsc
+          cmd.exe /d /c 'vp install -g typescript && tsc --version && where.exe tsc'
+          Get-ChildItem (Join-Path $vpHome 'packages/typescript')
+          Get-ChildItem $vpBin
 
-          REM Test 2: Verify the package was installed correctly
-          dir "%USERPROFILE%\.vite-plus\packages\typescript\"
-          dir "%USERPROFILE%\.vite-plus\bin\"
+          cmd.exe /d /c 'vp uninstall -g typescript'
+          foreach ($shim in @('tsc.cmd', 'tsc')) {
+            if (Test-Path (Join-Path $vpBin $shim)) {
+              throw "$shim still exists after uninstall"
+            }
+          }
 
-          REM Test 3: Uninstall
-          vp uninstall -g typescript
-
-          REM Test 4: Verify uninstall removed shim (.cmd wrapper)
-          echo Checking bin dir after uninstall:
-          dir "%USERPROFILE%\.vite-plus\bin\"
-          if exist "%USERPROFILE%\.vite-plus\bin\tsc.cmd" (
-            echo Error: tsc.cmd shim file still exists
-            exit /b 1
-          )
-          echo tsc.cmd shim removed successfully
-
-          REM Test 5: Verify shell script was also removed (for Git Bash)
-          if exist "%USERPROFILE%\.vite-plus\bin\tsc" (
-            echo Error: tsc shell script still exists
-            exit /b 1
-          )
-          echo tsc shell script removed successfully
-
-          REM Test 6: use session
-          vp env use 18
-          node --version
-          vp env doctor
-          vp env use --unset
-          node --version
+          cmd.exe /d /c 'vp env use 18 && node --version && vp env doctor && vp env use --unset && node --version'
 
       - name: Test global package install (bash)
         run: |
@@ -749,40 +725,34 @@ jobs:
 
       - name: Test upgrade (cmd)
         if: ${{ runner.os == 'Windows' }}
-        shell: cmd
+        shell: pwsh
         run: |
-          REM See bash block above for why we assert on the install dir basename.
-          for /f "usebackq delims=" %%v in (`node -p "require('path').basename(require('fs').realpathSync(require('path').resolve(process.env.USERPROFILE, '.vite-plus', 'current')))"`) do set INITIAL_DIR=%%v
-          echo Initial install dir: %INITIAL_DIR%
+          $PSNativeCommandUseErrorActionPreference = $true
 
-          REM --check queries npm registry and prints update status
-          vp upgrade --check
+          # See bash block above for why we assert on the install dir basename.
+          function Get-CurrentDirname {
+            node -p "require('path').basename(require('fs').realpathSync(require('path').resolve(process.env.USERPROFILE, '.vite-plus', 'current')))"
+          }
 
-          REM full upgrade: download, extract, swap
-          vp upgrade --force
-          vp --version
-          vp env doctor
+          $initialDir = Get-CurrentDirname
+          Write-Host "Initial install dir: $initialDir"
 
-          dir "%USERPROFILE%\.vite-plus\"
+          cmd.exe /d /c 'vp upgrade --check && vp upgrade --force && vp --version && vp env doctor'
+          Get-ChildItem (Join-Path $env:USERPROFILE '.vite-plus')
 
-          for /f "usebackq delims=" %%v in (`node -p "require('path').basename(require('fs').realpathSync(require('path').resolve(process.env.USERPROFILE, '.vite-plus', 'current')))"`) do set UPDATED_DIR=%%v
-          echo Updated install dir: %UPDATED_DIR%
-          if "%UPDATED_DIR%"=="%INITIAL_DIR%" (
-            echo Error: current install dir should have changed after upgrade, still %INITIAL_DIR%
-            exit /b 1
-          )
+          $updatedDir = Get-CurrentDirname
+          Write-Host "Updated install dir: $updatedDir"
+          if ($updatedDir -ceq $initialDir) {
+            throw "Current install dir should have changed after upgrade (still $initialDir)"
+          }
 
-          REM rollback to the previous install
-          vp upgrade --rollback
-          vp --version
-          vp env doctor
+          cmd.exe /d /c 'vp upgrade --rollback && vp --version && vp env doctor'
 
-          for /f "usebackq delims=" %%v in (`node -p "require('path').basename(require('fs').realpathSync(require('path').resolve(process.env.USERPROFILE, '.vite-plus', 'current')))"`) do set ROLLBACK_DIR=%%v
-          echo Rollback install dir: %ROLLBACK_DIR%
-          if not "%ROLLBACK_DIR%"=="%INITIAL_DIR%" (
-            echo Error: current install dir should have been restored after rollback, expected %INITIAL_DIR%, got %ROLLBACK_DIR%
-            exit /b 1
-          )
+          $rollbackDir = Get-CurrentDirname
+          Write-Host "Rollback install dir: $rollbackDir"
+          if ($rollbackDir -cne $initialDir) {
+            throw "Current install dir should have been restored after rollback (expected $initialDir, got $rollbackDir)"
+          }
 
       - name: Test same-version forced upgrade (Windows)
         if: ${{ runner.os == 'Windows' }}
@@ -948,26 +918,28 @@ jobs:
 
       - name: Test implode (cmd)
         if: ${{ runner.os == 'Windows' }}
-        shell: cmd
+        shell: pwsh
         run: |
-          REM Retry — Windows file locks can cause transient "Access is denied" errors
-          REM vp.exe renames its own parent directory; cmd.exe may report
-          REM "The system cannot find the path specified" on exit — ignore it.
-          for /L %%i in (1,1,3) do (
-            vp implode --yes || ver >NUL
-            if not exist "%USERPROFILE%\.vite-plus" goto implode_done
-            echo Retry %%i: vp implode failed, waiting 5s...
-            timeout /T 5 /NOBREAK >NUL
-          )
-          :implode_done
-          timeout /T 5 /NOBREAK >NUL
-          dir "%USERPROFILE%\"
-          if exist "%USERPROFILE%\.vite-plus" (
-            echo Error: .vite-plus still exists after implode
-            exit /b 1
-          )
-          pnpm bootstrap-cli:ci
-          vp --version
+          $vpHome = Join-Path $env:USERPROFILE '.vite-plus'
+
+          # Windows file locks can require a retry. CMD can report an error
+          # after vp.exe moves its own parent directory, so check the directory.
+          $PSNativeCommandUseErrorActionPreference = $false
+          foreach ($attempt in 1..3) {
+            cmd.exe /d /c 'vp implode --yes'
+            if (-not (Test-Path $vpHome)) { break }
+            Write-Host "Implode attempt $attempt left $vpHome in place. Waiting 5s."
+            Start-Sleep -Seconds 5
+          }
+          Start-Sleep -Seconds 5
+
+          Get-ChildItem $env:USERPROFILE
+          if (Test-Path $vpHome) {
+            throw "$vpHome still exists after implode"
+          }
+
+          $PSNativeCommandUseErrorActionPreference = $true
+          cmd.exe /d /c 'pnpm bootstrap-cli:ci && vp --version'
 
   # Build the native CLI and snapshot runner once per platform, then share
   # them across the E2E job and snapshot shards. Tar preserves permissions.

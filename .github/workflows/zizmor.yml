@@ -1,0 +1,39 @@
+name: Zizmor
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/**'
+      - '.github/actions/**'
+
+permissions: {}
+
+jobs:
+  zizmor:
+    if: github.repository == 'voidzero-dev/vite-plus' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
+        with:
+          tool: zizmor@1.30.1
+
+      # Use the same severity threshold as the Security Analysis check.
+      - name: Run zizmor
+        shell: bash
+        run: zizmor --offline --strict-collection --min-severity=medium --format=sarif --no-exit-codes . > "$RUNNER_TEMP/zizmor.sarif"
+
+      - name: Upload code-scanning results
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: ${{ runner.temp }}/zizmor.sarif
+          # Reuse the original category so GitHub updates its existing alerts.
+          category: zizmor
