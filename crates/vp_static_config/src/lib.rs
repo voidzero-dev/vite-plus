@@ -49,19 +49,26 @@ pub enum FieldValue {
 pub struct FieldMap {
     map: FxHashMap<Box<str>, FieldValue>,
     open: bool,
+    config_path: Option<vt_path::AbsolutePathBuf>,
 }
 
 impl FieldMap {
     /// Returns an open empty map — used when the config is not analyzable.
     /// `get()` returns `Some(NonStatic)` for any key, triggering NAPI fallback.
     fn unanalyzable() -> Self {
-        Self { map: FxHashMap::default(), open: true }
+        Self { map: FxHashMap::default(), open: true, config_path: None }
     }
 
     /// Returns a closed empty map — used when no config file exists.
     /// `get()` returns `None` for any key (field definitively absent).
     fn no_config() -> Self {
-        Self { map: FxHashMap::default(), open: false }
+        Self { map: FxHashMap::default(), open: false, config_path: None }
+    }
+
+    /// The config file these fields came from, or `None` when the directory has none.
+    #[must_use]
+    pub fn config_path(&self) -> Option<&AbsolutePath> {
+        self.config_path.as_deref()
     }
 
     /// Look up a field by name.
@@ -112,7 +119,7 @@ pub fn has_config_file(dir: &AbsolutePath) -> bool {
 /// Resolve the vite config file path in the given directory.
 ///
 /// Tries each config file name in priority order and returns the first one that exists.
-pub fn resolve_config_path(dir: &AbsolutePath) -> Option<vt_path::AbsolutePathBuf> {
+fn resolve_config_path(dir: &AbsolutePath) -> Option<vt_path::AbsolutePathBuf> {
     for name in CONFIG_FILE_NAMES {
         let path = dir.join(name);
         if path.as_path().exists() {
@@ -131,13 +138,16 @@ pub fn resolve_static_config(dir: &AbsolutePath) -> FieldMap {
         // No config file found — closed empty map; get() returns None for any key.
         return FieldMap::no_config();
     };
-    let Ok(source) = std::fs::read_to_string(&config_path) else {
-        return FieldMap::unanalyzable();
+    let mut fields = match std::fs::read_to_string(&config_path) {
+        Ok(source) => {
+            let extension =
+                config_path.as_path().extension().and_then(|e| e.to_str()).unwrap_or("");
+            parse_js_ts_config(&source, extension)
+        }
+        Err(_) => FieldMap::unanalyzable(),
     };
-
-    let extension = config_path.as_path().extension().and_then(|e| e.to_str()).unwrap_or("");
-
-    parse_js_ts_config(&source, extension)
+    fields.config_path = Some(config_path);
+    fields
 }
 
 /// Parse a JS/TS config file, extracting the default export object's fields.
@@ -457,7 +467,7 @@ fn extract_object_fields(obj: &oxc_ast::ast::ObjectExpression<'_>) -> FieldMap {
         map.insert(Box::from(key), value);
     }
 
-    FieldMap { map, open }
+    FieldMap { map, open, config_path: None }
 }
 
 /// Convert an f64 to a JSON value following `JSON.stringify` semantics.

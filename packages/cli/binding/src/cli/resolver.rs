@@ -316,7 +316,7 @@ fn static_vite_config_fields(
             None => {}
         }
     }
-    if let Some(path) = vp_static_config::resolve_config_path(dir) {
+    if let Some(path) = config.config_path() {
         object.insert("configFile".to_owned(), path.as_path().display().to_string().into());
     }
     // The JS result goes through the same deserialization, so `null` reads as `None` in both.
