@@ -134,11 +134,7 @@ pub async fn prepend_js_runtime_to_path_env(project_path: &AbsolutePath) -> Resu
         runtime.get_bin_prefix()
     };
 
-    prepend_tools_to_path_env(
-        &node_bin_prefix,
-        &["node"],
-        PrependOptions { dedupe_anywhere: true },
-    )?;
+    prepend_tools_to_path_env(&node_bin_prefix, &["node"], PrependOptions::default())?;
     if let Some(package_manager) = env::package_manager::resolve_current_spec(project_path).await? {
         if config.package_manager_shim_mode_for(package_manager.package_manager_type)
             == env::config::ShimMode::SystemFirst
@@ -164,7 +160,7 @@ pub async fn prepend_js_runtime_to_path_env(project_path: &AbsolutePath) -> Resu
         prepend_tools_to_path_env(
             &bin_dir,
             package_manager.package_manager_type.bin_names(),
-            PrependOptions { dedupe_anywhere: true },
+            PrependOptions::default(),
         )?;
     }
 

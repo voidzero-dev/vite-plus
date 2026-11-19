@@ -205,6 +205,28 @@ mod tests {
         assert_eq!(envs[1].1, "node,npm,npx");
     }
 
+    // Regression for https://github.com/voidzero-dev/vite-plus/issues/3492
+    // When Vite+ explicitly resolves a project runtime, that runtime's bin
+    // directory must move to the front of PATH even if another runtime bin
+    // directory appears earlier.
+    #[test]
+    fn selected_runtime_takes_precedence_over_earlier_unmanaged_runtime() {
+        let path = env::join_paths(["/system/node/bin", "/vp/node/bin", "/other/bin"]).unwrap();
+        let mut child = ToolPathEnv::new(path, "");
+        child.prepend("/vp/node/bin", &["node"], PrependOptions::default()).unwrap();
+        let envs = child.into_envs();
+        let paths: Vec<_> = env::split_paths(&envs[0].1).collect();
+        assert_eq!(
+            paths,
+            [
+                PathBuf::from("/vp/node/bin"),
+                PathBuf::from("/system/node/bin"),
+                PathBuf::from("/other/bin"),
+            ]
+        );
+        assert_eq!(envs[1].1, "node");
+    }
+
     #[test]
     fn failed_path_injection_does_not_record_tools_or_change_path() {
         let mut child = ToolPathEnv::new("/original/bin".into(), "node");

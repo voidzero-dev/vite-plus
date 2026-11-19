@@ -147,7 +147,7 @@ impl JsExecutor {
         }
 
         let mut env = ToolPathEnv::from_env();
-        env.prepend(runtime_bin_prefix, &["node"], PrependOptions { dedupe_anywhere: true })?;
+        env.prepend(runtime_bin_prefix, &["node"], PrependOptions::default())?;
         cmd.envs(env.into_envs());
         Ok(cmd)
     }
