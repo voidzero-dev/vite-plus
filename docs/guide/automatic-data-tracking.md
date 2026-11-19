@@ -43,7 +43,7 @@ File system tracking also tracks outputs. If you omit [`cache.output`](/config/r
 
 Some generators skip files that are already up to date. If the run that fills the cache skips a generated file, automatic output tracking leaves that file out of the cache. If you delete the file later, it can still be missing after a cache hit.
 
-Declare the generated files with a `cache.output` glob. Vite Task archives matching files that exist when the command finishes, including files the generator skipped. If the generator checks its previous outputs, exclude them from `cache.input` to keep the same cache key when you delete them.
+In `cache.output`, keep `{ auto: true }` to archive the files the generator writes. Add a glob for the generated files so Vite Task also archives matching files the generator skipped. If the generator checks its previous outputs, exclude them from `cache.input` to keep the same cache key when you delete them.
 
 ```ts [vite.config.ts]
 tasks: {
@@ -51,7 +51,7 @@ tasks: {
     command: 'paraglide-js compile --project ./project.inlang --outdir ./src/paraglide',
     cache: {
       input: [{ auto: true }, '!src/paraglide/**'],
-      output: ['src/paraglide/**'],
+      output: [{ auto: true }, 'src/paraglide/**'],
     },
   },
 }
@@ -303,6 +303,6 @@ Add config when your project has behavior the command or tool cannot know. These
 | Exclude an output directory from inputs                           | `input: [{ auto: true }, '!dist/**']`                                                           |
 | Exclude a temporary generated file from input and output tracking | `input: [{ auto: true }, '!.tmp/config.mjs']`<br>`output: [{ auto: true }, '!.tmp/config.mjs']` |
 | Avoid automatic file tracking for a task                          | `input: ['src/**']`<br>`output: ['dist/**']`                                                    |
-| Restore generated files a task may skip                           | `output: ['src/paraglide/**']`                                                                  |
+| Restore generated files a task may skip                           | `output: [{ auto: true }, 'src/paraglide/**']`                                                  |
 | Track and pass an env var                                         | `env: ['NODE_ENV']`                                                                             |
 | Pass an env var without fingerprinting it                         | `untrackedEnv: ['GITHUB_ACTIONS']`                                                              |
