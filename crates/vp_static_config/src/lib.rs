@@ -8,8 +8,8 @@ use oxc_allocator::Allocator;
 use oxc_ast::{
     StaticPropertyName,
     ast::{
-        BindingPattern, Expression, ImportDeclarationSpecifier, ImportOrExportKind,
-        ObjectPropertyKind, Program, Statement, VariableDeclarationKind,
+        AssignmentOperator, BindingPattern, Expression, ImportDeclarationSpecifier,
+        ImportOrExportKind, ObjectPropertyKind, Program, Statement, VariableDeclarationKind,
     },
 };
 use oxc_parser::Parser;
@@ -199,8 +199,10 @@ fn extract_config_fields(program: &Program<'_>) -> FieldMap {
         }
 
         // CJS: module.exports = ...
+        // Compound assignments such as `||=` may skip their right side at runtime.
         if let Statement::ExpressionStatement(expr_stmt) = stmt
             && let Expression::AssignmentExpression(assign) = &expr_stmt.expression
+            && assign.operator == AssignmentOperator::Assign
             && assign.left.as_member_expression().is_some_and(|m| {
                 m.object().is_specific_id("module")
                     && m.static_property_name().is_some_and(|name| name == "exports")
@@ -823,6 +825,18 @@ mod tests {
             Some(FieldValue::Json(serde_json::json!("./web")))
         );
         assert_eq!(result.get_declared("run"), None);
+    }
+
+    #[test]
+    fn module_exports_compound_assignment_is_non_static() {
+        for source in [
+            "module.exports ||= { check: { lint: false } };",
+            "module.exports ??= { check: { lint: false } };",
+        ] {
+            let result = parse_js_ts_config(source, "cjs");
+            assert_non_static(&result, "check");
+            assert_eq!(result.get_declared("check"), None);
+        }
     }
 
     #[test]
