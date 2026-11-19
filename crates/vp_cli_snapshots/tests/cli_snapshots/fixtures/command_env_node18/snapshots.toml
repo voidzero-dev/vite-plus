@@ -1,0 +1,10 @@
+# Node.js 18 is the oldest release that `vp env` must install and run.
+[[case]]
+name = "command_env_node18"
+vp = "global"
+steps = [
+  { argv = ["vp", "env", "install", "18.20.8"], comment = "Install the oldest supported Node.js release" },
+  { argv = ["vp", "env", "exec", "--node", "18.20.8", "node", "-p", "'Node major: ' + process.versions.node.split('.')[0]"], comment = "Run Node.js 18 through vp env exec" },
+  { argv = ["vpt", "write-file", ".node-version", "18.20.8\n"], snapshot = false },
+  { argv = ["node", "-p", "'Node major: ' + process.versions.node.split('.')[0]"], comment = "The node shim selects the project's Node.js 18" },
+]

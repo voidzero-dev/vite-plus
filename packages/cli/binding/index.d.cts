@@ -3613,6 +3613,17 @@ export interface ViteImportGlobMeta {
 /** Parse source and resolve lexical bindings for the TypeScript migration rules. */
 export declare function analyzeMigrationSource(filename: string, source: string): string;
 
+/**
+ * List the package managers `downloadPackageManager` can provide.
+ *
+ * Without a global install, only the package managers on PATH are available.
+ * Pass the `cwd` that `downloadPackageManager` will receive, so relative PATH
+ * entries resolve against the same directory.
+ */
+export declare function availablePackageManagers(
+  cwd?: string | undefined | null,
+): Promise<Array<string>>;
+
 /** Error from batch import rewriting */
 export interface BatchRewriteError {
   /** The file path that had an error */
@@ -3725,7 +3736,10 @@ export interface DetectWorkspaceResult {
 export declare function documentationUrl(path: string): string;
 
 /**
- * Download a package manager
+ * Download a package manager, or use the one on PATH when no global install manages it.
+ *
+ * See `vp_pm_cli::provide_for_local_cli` for when a download is allowed. The
+ * result describes the system installation when one is used.
  *
  * ## Parameters
  *
@@ -3733,16 +3747,18 @@ export declare function documentationUrl(path: string): string;
  *   - `name`: The name of the package manager
  *   - `version`: The version of the package manager
  *   - `expected_hash`: The expected hash of the package manager
- *   - `cwd`: An absolute directory used to load workspace npm configuration
+ *   - `cwd`: An absolute directory used to load workspace npm configuration and resolve relative PATH entries
+ *   - `fallback_to_npm`: Whether to use npm when the requested package manager is unavailable
  *
  * ## Returns
  *
  * Returns a `DownloadPackageManagerResult` containing:
- * - The name of the package manager
+ * - The name of the package manager, `npm` after a fallback
  * - The install directory of the package manager
  * - The binary prefix of the package manager
  * - The package name of the package manager
  * - The version of the package manager
+ * - The executables of the package manager by name
  *
  * ## Example
  *
@@ -3767,6 +3783,11 @@ export interface DownloadPackageManagerOptions {
   version: string;
   expectedHash?: string;
   cwd?: string;
+  /**
+   * Use the npm that ships with Node.js when the requested manager is unavailable.
+   * Set it only when the caller chose the manager itself, as `vp install` does.
+   */
+  fallbackToNpm?: boolean;
 }
 
 export interface DownloadPackageManagerResult {
@@ -3775,6 +3796,11 @@ export interface DownloadPackageManagerResult {
   binPrefix: string;
   packageName: string;
   version: string;
+  /**
+   * Executables in `bin_prefix` by name. Launch these, not a bare name that a
+   * Vite+ shim earlier on PATH would resolve to another version.
+   */
+  binPaths: Record<string, string>;
 }
 
 /** Re-enable blocking stdio after Node.js has initialized its lazy standard streams. */
@@ -3786,6 +3812,12 @@ export declare function ensureBlockingStdio(): void;
  * Returns `null` when `cwd` is not inside a pnpm or `package.json` workspace.
  */
 export declare function findMonorepoRoot(cwd: string): string | null;
+
+/** Upstream Vitest and browser imports preserved in files under each manifest. */
+export declare function findRetainedVitestPackages(
+  root: string,
+  importRuleConfig: string,
+): Array<RetainedVitestPackage>;
 
 /** Read the same `VP_PACKAGE_MANAGER` override used by `vp install`. */
 export declare function getPackageManagerOverride(): PackageManagerOverride | null;
@@ -3984,6 +4016,9 @@ export interface PathAccess {
   readDir: boolean;
 }
 
+/** JSON for a static lint block; undefined requests normal config resolution. */
+export declare function readStaticLintConfig(root: string): string | null;
+
 /** Remove a top-level key from a recognized Vite config object. */
 export declare function removeConfigKey(
   viteConfigPath: string,
@@ -3995,6 +4030,11 @@ export declare function resolveNpmAuthorization(cwd: string, url: string): strin
 
 /** Resolve the npm registry for packages in `scope` (without `@`) from the npm config at `cwd`. */
 export declare function resolveNpmRegistry(cwd: string, scope?: string | undefined | null): string;
+
+export interface RetainedVitestPackage {
+  packageDir: string;
+  dependencies: Array<string>;
+}
 
 /**
  * Rewrite ESLint scripts: rename `eslint` → `vp lint` and strip ESLint-only flags.
@@ -4045,6 +4085,7 @@ export declare function rewriteImportsInDirectory(
   root: string,
   preserveVitestInNuxtPackages?: boolean | undefined | null,
   oxlintOwnerDirs?: Array<string> | undefined | null,
+  importRuleConfig?: string | undefined | null,
 ): BatchRewriteResult;
 
 /**

@@ -1,0 +1,27 @@
+[[case]]
+name = "local_package_manager_without_global"
+vp = "local"
+comment = "Without a global install's config, the local CLI must use the package manager on PATH and never download one into Vite+ directories."
+skip-platforms = ["windows"]
+prewarm-package-managers = false # The system pnpm is a fake; nothing may be downloaded.
+steps = [
+  { argv = ["vpt", "rm", "../home/.vite-plus/config.json"], snapshot = false, comment = "the global install's config is the local CLI's only sign of a global install" },
+  { argv = ["vpt", "chmod", "+x", "system-bin/pnpm"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "broken-bin/pnpm"], snapshot = false },
+  { argv = ["vp", "install"], continue-on-failure = true, comment = "no pnpm on PATH: fail instead of downloading" },
+  { argv = ["vp", "install"], envs = [["PATH", "${workspace}/broken-bin${PATH_SEPARATOR}${PATH}"]], continue-on-failure = true, comment = "a pnpm on PATH that fails to run: fail instead of downloading" },
+  { argv = ["vp", "install"], envs = [["PATH", "${workspace}/system-bin${PATH_SEPARATOR}${PATH}"]], comment = "the system pnpm runs the install" },
+  { argv = ["vpt", "stat-file", "../home/.vite-plus/package_manager"], comment = "no package manager was downloaded" },
+]
+
+[[case]]
+name = "local_package_manager_system_first_fallback"
+vp = "local"
+comment = "With a global install in system-first mode, the local CLI downloads the package manager when the one on PATH fails to run."
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "write-file", "../home/.vite-plus/config.json", "{\"packageManagerShimModes\":{\"pnpm\":\"system_first\"}}\n"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "broken-bin/pnpm"], snapshot = false },
+  { argv = ["vp", "install"], envs = [["PATH", "${workspace}/broken-bin${PATH_SEPARATOR}${PATH}"], ["npm_config_update_notifier", "false"]], comment = "the broken system pnpm falls back to a download; the real pnpm's update banner would race its output" },
+  { argv = ["vpt", "stat-file", "../home/.vite-plus/package_manager/pnpm/10.18.0"], comment = "the pinned pnpm was downloaded" },
+]

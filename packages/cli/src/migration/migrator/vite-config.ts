@@ -14,6 +14,7 @@ import {
   mergeJsonConfig,
   mergeTsdownConfig,
   migrateTaskCacheConfig,
+  readStaticLintConfig,
   rewriteImportsInDirectory,
   rewriteScripts,
   upsertJsonConfig,
@@ -31,6 +32,7 @@ import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
 import { displayRelative } from '../../utils/path.ts';
 import { hasBaseUrlInTsconfig } from '../../utils/tsconfig.ts';
 import { parseSource, sameStaticValue } from '../ast-utils.ts';
+import { readLintConfigInWorker } from '../compat/runner.ts';
 import { detectConfigs, type ConfigFiles } from '../detector.ts';
 import {
   collectInstalledPackageNames,
@@ -48,6 +50,7 @@ import {
   type OxlintConfigMigration,
   type OxlintModulePlan,
   type PreparedOxlintConfigs,
+  DISABLED_IMPORT_RULE_CONFIG,
   OXLINT_OWNER_CONFIG_KEYS,
   LINT_STAGED_JSON_CONFIG_FILES,
   LINT_STAGED_OTHER_CONFIG_FILES,
@@ -1002,22 +1005,115 @@ export function migrateTaskCacheConfigInViteConfig(
   return true;
 }
 
+function importRuleEnabled(rules: OxlintConfig['rules']): boolean | undefined {
+  const rule = rules?.[PREFER_VITE_PLUS_IMPORTS_RULE];
+  const severity = Array.isArray(rule) ? rule[0] : rule;
+  switch (severity) {
+    case undefined:
+      return undefined;
+    case 0:
+    case 'off':
+    case 'allow':
+      return false;
+    case 1:
+    case 2:
+    case 'warn':
+    case 'error':
+    case 'deny':
+      return true;
+    default:
+      throw new Error(
+        `Invalid severity for ${PREFER_VITE_PLUS_IMPORTS_RULE}: ${JSON.stringify(rule)}`,
+      );
+  }
+}
+
+export function warnUnresolvedImportRuleConfig(report?: MigrationReport): void {
+  warnMigration(
+    'Could not load lint configuration in an isolated process. Skipped Vite/Vitest import rewrites; fix the config and re-run `vp migrate`.',
+    report,
+  );
+}
+
 /**
- * Rewrite imports in all TypeScript/JavaScript files under a directory
- * This rewrites vite/vitest imports to @voidzero-dev/vite-plus
- * @param projectPath - The root directory to search for files
+ * Read the import rule before migration merges or removes lint configs.
+ * Return null if the worker cannot load the project config.
  */
+export async function tryResolveImportRuleConfig(projectPath: string): Promise<string | null> {
+  const extracted = readStaticLintConfig(projectPath);
+  let lint: OxlintConfig | undefined;
+  if (extracted != null) {
+    lint = JSON.parse(extracted);
+  } else {
+    try {
+      lint = await readLintConfigInWorker(projectPath);
+    } catch {
+      return null;
+    }
+  }
+  if (!lint) {
+    const filename = detectConfigs(projectPath).oxlintConfig;
+    if (filename) {
+      try {
+        lint = resolveOxlintConfigExtends(path.join(projectPath, filename)).config;
+      } catch {
+        // The config migration reports and preserves unresolved JSON configs.
+      }
+    }
+  }
+
+  const layers = lint ? oxlintConfigLayers(lint) : [];
+  const enabled = layers.reduce(
+    (previous, layer) => importRuleEnabled(layer.rules) ?? previous,
+    true,
+  );
+  const overrides = [];
+  for (const layer of layers) {
+    for (const override of layer.overrides ?? []) {
+      const overrideEnabled = importRuleEnabled(override.rules);
+      if (overrideEnabled !== undefined) {
+        overrides.push({
+          files: override.files,
+          excludeFiles: override.excludeFiles ?? [],
+          enabled: overrideEnabled,
+        });
+      }
+    }
+  }
+  return JSON.stringify({ enabled, overrides });
+}
+
+/** Preserve imports if the last attempt to read the rule fails. */
+export async function resolveImportRuleConfig(
+  projectPath: string,
+  report?: MigrationReport,
+): Promise<string> {
+  const config = await tryResolveImportRuleConfig(projectPath);
+  if (config !== null) {
+    return config;
+  }
+  warnUnresolvedImportRuleConfig(report);
+  return DISABLED_IMPORT_RULE_CONFIG;
+}
+
+/** Rewrite toolchain imports throughout the project and record the results. */
 export function rewriteAllImports(
   projectPath: string,
   silent = false,
   report?: MigrationReport,
-  preserveNuxtVitestImports = true,
-  // Directories of packages that own the Oxlint plugin API, captured before
-  // `rewritePackageJson` stripped `oxlint` from their manifests. See
-  // `collectOxlintOwnerDirs`.
-  oxlintOwnerDirs: string[] = [],
+  options: {
+    preserveNuxtVitestImports?: boolean;
+    // Capture package owners before migration removes oxlint from their manifests.
+    oxlintOwnerDirs?: string[];
+    importRuleConfig?: string;
+  } = {},
 ): boolean {
-  const result = rewriteImportsInDirectory(projectPath, preserveNuxtVitestImports, oxlintOwnerDirs);
+  const result = rewriteImportsInDirectory(
+    projectPath,
+    options.preserveNuxtVitestImports ?? true,
+    options.oxlintOwnerDirs ?? [],
+    options.importRuleConfig,
+  );
   const modified = result.modifiedFiles.length;
   const preserved = result.preservedVitestFiles.length;
   const errors = result.errors.length;

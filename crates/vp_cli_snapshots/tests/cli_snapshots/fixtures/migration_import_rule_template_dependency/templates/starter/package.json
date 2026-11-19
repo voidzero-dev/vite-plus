@@ -1,0 +1,6 @@
+{
+  "name": "starter",
+  "private": true,
+  "type": "module",
+  "devDependencies": { "vitest": "^5.0.0" }
+}

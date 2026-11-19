@@ -1,0 +1,13 @@
+{
+  "name": "migration-import-rule-install",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.11.2",
+  "scripts": {
+    "build": "vite build"
+  },
+  "devDependencies": {
+    "lint-policy": "file:./lint-policy",
+    "vite-plus": "latest"
+  }
+}
