@@ -62,6 +62,53 @@ pub fn has_pass_as_value_suggestion(error: &clap::Error) -> bool {
     }
 }
 
+/// Returns how many arguments `arg` occupies when it spells `option`.
+fn option_len(option: &clap::Arg, arg: &str) -> Option<usize> {
+    let takes_value = option.get_action().takes_values();
+    let len = if takes_value { 2 } else { 1 };
+    if let Some(long) = option.get_long()
+        && let Some(rest) = arg.strip_prefix("--").and_then(|arg| arg.strip_prefix(long))
+    {
+        // `--filter app` or `--filter=app`.
+        return if rest.is_empty() {
+            Some(len)
+        } else {
+            (takes_value && rest.starts_with('=')).then_some(1)
+        };
+    }
+    let rest = arg.strip_prefix('-')?.strip_prefix(option.get_short()?)?;
+    // `-F app`, `-Fapp`, or `-F=app`.
+    if rest.is_empty() { Some(len) } else { takes_value.then_some(1) }
+}
+
+/// Moves the `flags` options written before `command` to after it.
+///
+/// `vp --filter app run dev` becomes `vp run --filter app dev`, the order pnpm users often type.
+/// Callers pass the options that `command` accepts, such as vite-task's `PackageQueryArgs`.
+/// Returns `None` unless every argument before `command` is one of those options.
+pub fn move_flags_after_command(
+    args: &[String],
+    command: &str,
+    flags: &clap::Command,
+) -> Option<Vec<String>> {
+    let mut index = 0;
+    while let Some(arg) = args.get(index)
+        && arg.starts_with('-')
+    {
+        index += flags.get_arguments().find_map(|option| option_len(option, arg))?;
+    }
+
+    if index == 0 || args.get(index).map(String::as_str) != Some(command) {
+        return None;
+    }
+
+    let mut corrected = Vec::with_capacity(args.len());
+    corrected.push(args[index].clone());
+    corrected.extend_from_slice(&args[..index]);
+    corrected.extend_from_slice(&args[index + 1..]);
+    Some(corrected)
+}
+
 pub fn print_unknown_argument_error(invalid_argument: &str, pass_as_value: bool) {
     let highlighted_argument = style(invalid_argument).for_stderr().blue().bright().to_string();
     output::error(&format!("Unexpected argument '{highlighted_argument}'"));
@@ -94,6 +141,90 @@ mod tests {
             let details = extract_invalid_subcommand_details(&error).unwrap();
             assert_eq!(details.invalid_subcommand, "instal");
             assert_eq!(details.suggestion.as_deref(), Some("install"));
+        }
+    }
+
+    fn args(values: &[&str]) -> Vec<String> {
+        values.iter().map(|value| (*value).to_owned()).collect()
+    }
+
+    /// A copy of vite-task's `PackageQueryArgs`; `packages/cli/binding` tests the real one.
+    fn run_flags() -> clap::Command {
+        use clap::{Arg, ArgAction};
+
+        let flag = |name: &'static str| Arg::new(name).long(name).action(ArgAction::SetTrue);
+        clap::Command::new("run")
+            .arg(flag("recursive").short('r'))
+            .arg(flag("transitive").short('t'))
+            .arg(flag("workspace-root").short('w'))
+            .arg(Arg::new("filter").short('F').long("filter").action(ArgAction::Append))
+            .arg(flag("fail-if-no-match"))
+    }
+
+    fn moved(input: &[&str]) -> Option<Vec<String>> {
+        move_flags_after_command(&args(input), "run", &run_flags())
+    }
+
+    #[test]
+    fn run_flags_before_command_move_after_run() {
+        for (input, expected) in [
+            (
+                &["--filter", "backend", "run", "dev"][..],
+                &["run", "--filter", "backend", "dev"][..],
+            ),
+            (&["--filter=backend", "run", "dev"], &["run", "--filter=backend", "dev"]),
+            (&["-F", "backend", "run", "dev"], &["run", "-F", "backend", "dev"]),
+            (&["-Fbackend", "run", "dev"], &["run", "-Fbackend", "dev"]),
+            (&["-F=backend", "run", "dev"], &["run", "-F=backend", "dev"]),
+            (&["-t", "-r", "run", "build"], &["run", "-t", "-r", "build"]),
+            (
+                &[
+                    "--filter",
+                    "a",
+                    "--filter",
+                    "!b",
+                    "--fail-if-no-match",
+                    "run",
+                    "build",
+                    "--",
+                    "-x",
+                ],
+                &[
+                    "run",
+                    "--filter",
+                    "a",
+                    "--filter",
+                    "!b",
+                    "--fail-if-no-match",
+                    "build",
+                    "--",
+                    "-x",
+                ],
+            ),
+            (&["-r", "run"], &["run", "-r"]),
+        ] {
+            assert_eq!(moved(input), Some(args(expected)), "{input:?}");
+        }
+    }
+
+    #[test]
+    fn run_flags_before_other_input_are_left_alone() {
+        for input in [
+            // Only `vp run` accepts every package-selection flag.
+            &["--filter", "backend", "build"][..],
+            &["--filter", "backend", "add", "react"],
+            // `backend` is the value of `--filter`, not the command.
+            &["--filter", "run"],
+            &["--filter"],
+            &["-r"],
+            // Unknown or combined flags are not guessed.
+            &["--cache", "run", "build"],
+            &["-rw", "run", "build"],
+            &["--filterx", "run", "build"],
+            &["run", "--filter", "backend", "dev"],
+            &[],
+        ] {
+            assert_eq!(moved(input), None, "{input:?}");
         }
     }
 
