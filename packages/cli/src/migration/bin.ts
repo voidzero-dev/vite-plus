@@ -1148,8 +1148,8 @@ async function main() {
       didMigrate = true;
     }
 
-    // A config that needs missing dependencies can retry after the normal install.
-    // Find the packages that need Vitest before bootstrap updates their manifests.
+    // Find the packages that supply preserved imports before bootstrap changes their
+    // manifests. If the config needs missing dependencies, retry after the normal install.
     const importRuleConfig = await tryResolveImportRuleConfig(workspaceInfoOptional.rootDir);
     const retainedImportDependencies = collectRetainedImportDependencies(
       workspaceInfoOptional,
@@ -1157,7 +1157,7 @@ async function main() {
     );
     const pendingCoreMigration = detectPendingCoreMigration(workspaceInfoOptional);
     let packageManager = workspaceInfoOptional.packageManager;
-    let downloadedPackageManager: Awaited<ReturnType<typeof downloadPackageManager>> | undefined;
+    let downloadedPackageManager: WorkspaceInfo['downloadPackageManager'] | undefined;
     let packageManagerVersion = workspaceInfoOptional.packageManagerVersion;
     const bootstrapPending = (dependencies: RetainedImportDependencies) =>
       detectVitePlusBootstrapPending(
@@ -1168,10 +1168,12 @@ async function main() {
         dependencies,
       );
     const vitePlusBootstrapPending = bootstrapPending(retainedImportDependencies);
-    const downloadExistingPackageManager = async () => {
-      if (!packageManager) {
-        return undefined;
-      }
+    async function ensureExistingPackageManager() {
+      packageManager ??= await selectPackageManager(
+        options.interactive,
+        true,
+        workspaceInfoOptional.rootDir,
+      );
       downloadedPackageManager ??= await downloadSupportedPackageManager({
         rootDir: workspaceInfoOptional.rootDir,
         packageManager,
@@ -1181,16 +1183,8 @@ async function main() {
         failMigrationProgress,
       });
       packageManagerVersion = downloadedPackageManager.version;
-      return downloadedPackageManager;
-    };
-    const ensureExistingPackageManager = async () => {
-      packageManager ??= await selectPackageManager(
-        options.interactive,
-        true,
-        workspaceInfoOptional.rootDir,
-      );
-      return downloadExistingPackageManager();
-    };
+      return { packageManager, downloadPackageManager: downloadedPackageManager };
+    }
 
     if (vitePlusBootstrapPending) {
       await ensureExistingPackageManager();
@@ -1333,20 +1327,15 @@ async function main() {
 
     // Runtime metadata can participate in the package manager's lockfile.
     let needsInstall = coreMigrationResult.dependencies || nodeUpgrades > 0;
-    const reconcileBootstrap = async (
-      dependencies: RetainedImportDependencies,
-    ): Promise<boolean> => {
-      const downloadResult = await ensureExistingPackageManager();
-      if (!downloadResult || !packageManager) {
-        return false;
-      }
+    async function reconcileBootstrap(dependencies: RetainedImportDependencies): Promise<boolean> {
+      const resolved = await ensureExistingPackageManager();
       updateMigrationProgress('Configuring package manager');
       return ensureVitePlusBootstrap(
-        { ...workspaceInfoOptional, packageManager, downloadPackageManager: downloadResult },
+        { ...workspaceInfoOptional, ...resolved },
         report,
         dependencies,
       ).changed;
-    };
+    }
     if (vitePlusBootstrapPending && (await reconcileBootstrap(retainedImportDependencies))) {
       didMigrate = true;
       needsInstall = true;
@@ -1448,12 +1437,12 @@ async function main() {
         workspaceInfoOptional.packages,
       );
       if (migrateTsup) {
-        await ensureExistingPackageManager();
+        const resolved = await ensureExistingPackageManager();
         updateMigrationProgress('Migrating tsup');
         const tsupOk = await migrateTsupToTsdown(
           workspaceInfoOptional.rootDir,
           options.interactive,
-          packageManager!, // is it safe to do this?
+          resolved.packageManager,
           tsupConfigFile,
           workspaceInfoOptional.packages,
           { silent: true, report },
@@ -1630,10 +1619,9 @@ async function main() {
       }
     }
 
-    const installExistingDependencies = async (): Promise<void> => {
-      const resolved = await ensureExistingPackageManager();
+    async function installExistingDependencies(): Promise<void> {
+      await ensureExistingPackageManager();
       updateMigrationProgress('Installing dependencies');
-      const resolvedVersion = resolved?.version ?? packageManagerVersion;
       const npmReinstallPreparation =
         packageManager === PackageManager.npm
           ? prepareNpmViteAliasReinstall(
@@ -1653,7 +1641,7 @@ async function main() {
         {
           silent: true,
           packageManager,
-          packageManagerVersion: resolvedVersion,
+          packageManagerVersion,
         },
       );
       if (installSummary.status === 'failed') {
@@ -1669,7 +1657,7 @@ async function main() {
         workspaceInfoOptional.rootDir,
         report,
       );
-    };
+    }
     if (needsInstall) {
       clearMigrationProgress();
       completeVitestV5Migration(vitestV5Plan, report);

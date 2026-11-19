@@ -27,6 +27,7 @@ import {
   findYarnWorkspaceHoisting,
   getAlignedVitestEcosystemDependencySpec,
   getCatalogDependencySpec,
+  getWorkspaceProjectPaths,
   isAlignableVitestEcosystemPackage,
   isLegacyWrapperSpec,
   isProtocolPinnedSpec,
@@ -296,9 +297,7 @@ function reconcileVitePlusBootstrapPackage(
   supportCatalog: boolean,
   ensureVitePlus: boolean,
   catalogDependencyResolver?: CatalogDependencyResolver,
-  // Opt-in browser providers the workspace catalog is gaining (some package uses
-  // one only through source/a shim). An already-installed copy of such a provider
-  // must REFERENCE that catalog entry, not pin a concrete version. See #2005.
+  // An installed provider references the shared catalog entry added for a sibling.
   browserCatalogAdditions: ReadonlySet<string> = new Set(),
   retainedImportDependencies?: RetainedImportDependencies,
 ): boolean {
@@ -499,9 +498,10 @@ export function bootstrapProjectPaths(
   rootDir: string,
   packages: WorkspacePackage[] | undefined,
 ): string[] {
-  return [rootDir, ...(packages ?? []).map((pkg) => path.join(rootDir, pkg.path))];
+  return getWorkspaceProjectPaths({ rootDir, packages });
 }
 
+/** Catalog entries needed for retained browser imports and newly installed providers. */
 export function collectBrowserCatalogAdditions(
   rootDir: string,
   packages?: WorkspacePackage[],
@@ -524,15 +524,12 @@ export function collectBrowserCatalogAdditions(
     const sourceModes =
       precomputedSourceModes?.get(packagePath) ?? collectProviderSourceModes(packagePath);
     const installGroups = [pkg.devDependencies, pkg.dependencies, pkg.optionalDependencies];
-    const dependencyGroups = [...installGroups, pkg.peerDependencies];
     for (const provider of OPT_IN_BROWSER_PROVIDERS) {
-      const used =
-        sourceModes[provider] ||
-        dependencyGroups.some((dependencies) => dependencies?.[provider] !== undefined);
+      const needsProvider = sourceModes[provider] || pkg.peerDependencies?.[provider] !== undefined;
       const installed = installGroups.some(
         (dependencies) => dependencies?.[provider] !== undefined,
       );
-      if (used && !installed) {
+      if (needsProvider && !installed) {
         names.add(provider);
       }
     }

@@ -3642,15 +3642,16 @@ describe('ensureVitePlusBootstrap', () => {
   });
 
   it.each([
-    [PackageManager.pnpm, '10.33.0', 'pnpm-workspace.yaml'],
-    [PackageManager.yarn, '4.11.0', '.yarnrc.yml'],
-    [PackageManager.bun, '1.4.4', 'package.json'],
+    [PackageManager.pnpm, '10.33.0', 'pnpm-workspace.yaml', readYamlObject],
+    [PackageManager.yarn, '4.11.0', '.yarnrc.yml', readYamlObject],
+    [PackageManager.bun, '1.4.4', 'package.json', readJson],
   ] as const)(
     'keeps retained browser dependencies and peer ranges in a named %s catalog',
-    (manager, version, file) => {
+    (manager, version, file, readCatalog) => {
       const browser = '@vitest/browser';
       const preview = '@vitest/browser-preview';
       const peerRange = '^4 || ^5';
+      const catalogFile = path.join(tmpDir, file);
       const templateDir = path.join(tmpDir, 'templates/starter');
       const catalogs = {
         tools: { [browser]: '^4.0.0', [preview]: peerRange, 'vite-plus': 'latest' },
@@ -3668,7 +3669,7 @@ describe('ensureVitePlusBootstrap', () => {
         ...(manager === PackageManager.bun ? { catalogs } : {}),
       });
       if (manager !== PackageManager.bun) {
-        fs.writeFileSync(path.join(tmpDir, file), JSON.stringify({ catalogs }));
+        fs.writeFileSync(catalogFile, JSON.stringify({ catalogs }));
       }
       writePkgAt(templateDir, {
         name: 'starter',
@@ -3682,10 +3683,7 @@ describe('ensureVitePlusBootstrap', () => {
 
       ensureVitePlusBootstrap(workspace, undefined, retained);
 
-      const result =
-        file === 'package.json'
-          ? readJson(path.join(tmpDir, file))
-          : readYamlObject(path.join(tmpDir, file));
+      const result = readCatalog(catalogFile);
       expect(result).toHaveProperty(['catalogs', 'tools', browser], VITEST_VERSION);
       expect(result).toHaveProperty(['catalogs', 'tools', preview], peerRange);
       expect(readJson(path.join(templateDir, 'package.json'))).toMatchObject({

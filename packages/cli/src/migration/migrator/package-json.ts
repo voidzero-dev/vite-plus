@@ -66,10 +66,9 @@ export function rewritePackageJson(
   // Installed dependency metadata can reveal required Vitest peers whose
   // package names do not include "vitest".
   requiredVitestPeer = false,
-  // Opt-in browser providers the workspace catalog is gaining (some package uses
-  // one only through source/a shim). An already-installed copy of such a provider
-  // must REFERENCE that catalog entry, not pin a concrete version. See #2005.
-  providerCatalogAdditions: ReadonlySet<string> = new Set(),
+  // An installed provider references the shared catalog entry added for a sibling.
+  browserCatalogAdditions: ReadonlySet<string> = new Set(),
+  // Bundled browser packages that this package still imports.
   retainedBrowserPackages?: ReadonlySet<string>,
 ): Record<string, string | string[]> | null {
   if (pkg.scripts) {
@@ -255,7 +254,7 @@ export function rewritePackageJson(
           provider,
           installGroupEntry.dependencyField,
           packageManager,
-          providerCatalogAdditions.has(provider)
+          browserCatalogAdditions.has(provider)
             ? supportCatalog && packageManager !== PackageManager.bun
             : supportCatalog,
           catalogDependencyResolver,

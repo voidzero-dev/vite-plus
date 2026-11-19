@@ -1005,24 +1005,27 @@ export function migrateTaskCacheConfigInViteConfig(
   return true;
 }
 
-function importRuleEnabled(rule: unknown): boolean | undefined {
+function importRuleEnabled(rules: OxlintConfig['rules']): boolean | undefined {
+  const rule = rules?.[PREFER_VITE_PLUS_IMPORTS_RULE];
   const severity = Array.isArray(rule) ? rule[0] : rule;
-  if (severity === undefined) {
-    return undefined;
+  switch (severity) {
+    case undefined:
+      return undefined;
+    case 0:
+    case 'off':
+    case 'allow':
+      return false;
+    case 1:
+    case 2:
+    case 'warn':
+    case 'error':
+    case 'deny':
+      return true;
+    default:
+      throw new Error(
+        `Invalid severity for ${PREFER_VITE_PLUS_IMPORTS_RULE}: ${JSON.stringify(rule)}`,
+      );
   }
-  if (severity === 'off' || severity === 'allow' || severity === 0) {
-    return false;
-  }
-  if (
-    severity === 1 ||
-    severity === 2 ||
-    severity === 'warn' ||
-    severity === 'error' ||
-    severity === 'deny'
-  ) {
-    return true;
-  }
-  throw new Error(`Invalid severity for ${PREFER_VITE_PLUS_IMPORTS_RULE}: ${JSON.stringify(rule)}`);
 }
 
 export function warnUnresolvedImportRuleConfig(report?: MigrationReport): void {
@@ -1061,19 +1064,18 @@ export async function tryResolveImportRuleConfig(projectPath: string): Promise<s
 
   const layers = lint ? oxlintConfigLayers(lint) : [];
   const enabled = layers.reduce(
-    (previous, layer) =>
-      importRuleEnabled(layer.rules?.[PREFER_VITE_PLUS_IMPORTS_RULE]) ?? previous,
+    (previous, layer) => importRuleEnabled(layer.rules) ?? previous,
     true,
   );
   const overrides = [];
   for (const layer of layers) {
     for (const override of layer.overrides ?? []) {
-      const enabled = importRuleEnabled(override.rules?.[PREFER_VITE_PLUS_IMPORTS_RULE]);
-      if (enabled !== undefined) {
+      const overrideEnabled = importRuleEnabled(override.rules);
+      if (overrideEnabled !== undefined) {
         overrides.push({
           files: override.files,
           excludeFiles: override.excludeFiles ?? [],
-          enabled,
+          enabled: overrideEnabled,
         });
       }
     }

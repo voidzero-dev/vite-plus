@@ -7,6 +7,7 @@ import { editJsonFile, readJsonFile } from '../../utils/json.ts';
 import { rulesDir } from '../../utils/path.ts';
 import {
   dropDeadOxlintPluginsDependency,
+  getWorkspaceProjectPaths,
   hasTsconfigTypesToRewrite,
   mergeTsdownConfigFile,
   migrateTaskCacheConfigInViteConfig,
@@ -91,13 +92,6 @@ export type CoreMigrationFinalizationResult = {
   taskCacheWarnings: string[];
 };
 
-function getCoreMigrationProjectPaths(workspaceInfo: CoreMigrationWorkspace): string[] {
-  return [
-    workspaceInfo.rootDir,
-    ...(workspaceInfo.packages ?? []).map((pkg) => path.join(workspaceInfo.rootDir, pkg.path)),
-  ];
-}
-
 function hasCorePackageScriptRewrites(projectPath: string): boolean {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
@@ -135,7 +129,7 @@ function rewriteCorePackageScripts(projectPath: string): boolean {
 export function detectPendingCoreMigration(
   workspaceInfo: CoreMigrationWorkspace,
 ): PendingCoreMigration {
-  const projectPaths = getCoreMigrationProjectPaths(workspaceInfo);
+  const projectPaths = getWorkspaceProjectPaths(workspaceInfo);
   return {
     scripts: projectPaths.some((projectPath) => hasCorePackageScriptRewrites(projectPath)),
     tsconfigTypes: projectPaths.some((projectPath) => hasTsconfigTypesToRewrite(projectPath)),
@@ -150,7 +144,7 @@ export function finalizeCoreMigrationForExistingVitePlus(
   // null defers import rewriting until dynamic lint settings can be resolved.
   importRuleConfig?: string | null,
 ): CoreMigrationFinalizationResult {
-  const projectPaths = getCoreMigrationProjectPaths(workspaceInfo);
+  const projectPaths = getWorkspaceProjectPaths(workspaceInfo);
   const result: CoreMigrationFinalizationResult = {
     dependencies: false,
     scripts: false,

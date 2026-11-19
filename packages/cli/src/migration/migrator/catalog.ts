@@ -986,12 +986,8 @@ function rewriteYamlCatalogAtPath(
     catalog.set(scalarString(VITE_PLUS_NAME), scalarString(VITE_PLUS_VERSION));
   }
   if (addMissing && VITEST_IS_MANAGED_OVERRIDE) {
-    // Injected providers, plus every declared alignable @vitest/* so its
-    // `catalog:` reference (written by getAlignedVitestEcosystemDependencySpec)
-    // resolves instead of dangling. That writer does not require `vitest` in
-    // the catalog, so neither does this one: a project may declare only an
-    // excluded utility such as `@vitest/utils`. #2005
-    // A retained peer-only browser package keeps its public catalog range.
+    // These packages need catalog entries even when the catalog omits vitest (#2005).
+    // Retained browser peers keep their declared catalog ranges.
     const additions = new Set([
       ...vitestEcosystemPackages,
       ...OPT_IN_BROWSER_PROVIDERS.filter((name) => catalogAdditions.has(name)),
@@ -1120,7 +1116,6 @@ export function rewriteBunCatalog(
     const workspacesObj =
       pkg.workspaces && !Array.isArray(pkg.workspaces) ? pkg.workspaces : undefined;
     const activeCatalogs = getBunCatalogConfig(pkg);
-    const useWorkspacesCatalog = activeCatalogs === workspacesObj;
     // Like the pnpm catalog, add missing entries to the catalog the new
     // `catalog:` references point at. A named one such as `catalogs.build`
     // takes them instead of a newly created default catalog.
@@ -1131,10 +1126,7 @@ export function rewriteBunCatalog(
       preferredName || mergeDefaults
         ? activeCatalogs.catalogs?.[preferredName || 'default']
         : undefined;
-    const defaultCatalog = activeCatalogs.catalog;
-    const catalog: Record<string, string> = { ...defaultCatalog };
-
-    function rewrite(
+    function rewriteCatalog(
       target: Record<string, string>,
       addMissing: boolean,
       otherDefaultCatalog?: Record<string, string>,
@@ -1149,25 +1141,20 @@ export function rewriteBunCatalog(
       );
       pruneLegacyWrapperAliases(target);
     }
-    rewrite(catalog, !namedTarget);
+    if (!namedTarget || activeCatalogs.catalog) {
+      const catalog = { ...activeCatalogs.catalog };
+      rewriteCatalog(catalog, !namedTarget);
+      activeCatalogs.catalog = catalog;
 
-    if (namedTarget && !defaultCatalog) {
-      // No default catalog to update, and none is needed.
-    } else if (useWorkspacesCatalog) {
-      workspacesObj.catalog = catalog;
-      if (pkg.catalog) {
-        rewrite(pkg.catalog, false);
-      }
-    } else {
-      pkg.catalog = catalog;
-      if (workspacesObj?.catalog) {
-        rewrite(workspacesObj.catalog, false);
+      const otherCatalog = activeCatalogs === pkg ? workspacesObj?.catalog : pkg.catalog;
+      if (otherCatalog) {
+        rewriteCatalog(otherCatalog, false);
       }
     }
     for (const location of [workspacesObj, pkg]) {
       for (const [name, named] of Object.entries(location?.catalogs ?? {})) {
         const otherDefault = mergeDefaults && name === 'default' ? location?.catalog : undefined;
-        rewrite(named, named === namedTarget, otherDefault);
+        rewriteCatalog(named, named === namedTarget, otherDefault);
       }
     }
 

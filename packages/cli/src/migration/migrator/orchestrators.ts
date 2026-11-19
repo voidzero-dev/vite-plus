@@ -21,6 +21,7 @@ import {
   ensurePnpmWorkspaceExoticSubdepsSetting,
   ensurePnpmWorkspacePackages,
   findYarnWorkspaceHoisting,
+  getWorkspaceProjectPaths,
   hasDirectVitePlusInstallEntry,
   hasOwnWebdriverioDependency,
   injectFmtDefaults,
@@ -446,10 +447,7 @@ export function rewriteMonorepo(
     retainedImportDependencies,
     rootDir: workspaceInfo.rootDir,
     packages: workspaceInfo.packages,
-    oxlintConfigs: prepareOxlintConfigs([
-      workspaceInfo.rootDir,
-      ...workspaceInfo.packages.map((pkg) => path.join(workspaceInfo.rootDir, pkg.path)),
-    ]),
+    oxlintConfigs: prepareOxlintConfigs(getWorkspaceProjectPaths(workspaceInfo)),
   };
   // rewrite root workspace
   if (workspaceInfo.packageManager === PackageManager.yarn) {
@@ -591,9 +589,7 @@ export function rewriteMonorepoProject(
   // Yarn >= 4.10.0; pnpm/bun monorepos always manage a catalog. Defaults to true
   // so the `vp create` callers (always a catalog-capable bundled PM) are covered.
   supportCatalog = true,
-  // Opt-in browser providers the workspace catalog is gaining (a sibling package
-  // uses one source-only). An already-installed copy here must reference that
-  // catalog entry rather than pin a concrete version. See #2005.
+  // An installed provider references the shared catalog entry added for a sibling.
   browserCatalogAdditions: ReadonlySet<string> = new Set(),
 ): void {
   cleanupDeprecatedTsconfigOptions(projectPath, silent, report);

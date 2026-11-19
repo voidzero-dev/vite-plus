@@ -49,11 +49,11 @@ impl ImportRuleConfig {
         !self.enabled || self.overrides.iter().any(|entry| !entry.enabled)
     }
 
-    pub(crate) fn is_enabled(&self, relative_path: &Path) -> bool {
+    pub(crate) fn is_enabled_for(&self, root: &Path, path: &Path) -> bool {
         if self.overrides.is_empty() {
             return self.enabled;
         }
-        let path = relative_path.to_string_lossy().replace('\\', "/");
+        let path = path.strip_prefix(root).unwrap_or(path).to_string_lossy().replace('\\', "/");
         let matches_path = |pattern: &String| fast_glob::glob_match(pattern, &path);
         self.overrides
             .iter()
@@ -88,7 +88,8 @@ mod tests {
             ("deep/root.test.ts", false),
             (r"templates\starter\vite.config.ts", false),
         ] {
-            assert_eq!(config.is_enabled(Path::new(path)), enabled, "{path}");
+            let root = Path::new("project");
+            assert_eq!(config.is_enabled_for(root, &root.join(path)), enabled, "{path}");
         }
     }
 

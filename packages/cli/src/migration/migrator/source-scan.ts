@@ -50,20 +50,19 @@ export function collectRetainedImportDependencies(
     }),
   );
 
-  function retainSuppliers(packageDir: string, name: string) {
-    // When the rule is known, a managed package can repair its missing Vitest install.
-    if (name === 'vitest' && importRuleConfig !== null && declarations.has(packageDir)) {
-      retained.vitest.add(packageDir);
-      return;
-    }
+  function retainSuppliers(packageDir: string, name: string): void {
     // Unmanaged templates resolve imports through their workspace ancestors.
     // Keep browser peer contracts on the way to the nearest install declaration.
     for (let dir = packageDir; ; dir = path.dirname(dir)) {
       const pkg = declarations.get(dir);
       const installed = pkg?.installed.has(name);
-      if (name === 'vitest' && installed) {
-        retained.vitest.add(dir);
-      } else if (name !== 'vitest' && (installed || pkg?.peers?.[name] !== undefined)) {
+      if (name === 'vitest') {
+        // A known rule can also repair a missing install in the importing package.
+        if (installed || (dir === packageDir && pkg && importRuleConfig !== null)) {
+          retained.vitest.add(dir);
+          return;
+        }
+      } else if (installed || pkg?.peers?.[name] !== undefined) {
         const names = retained.browser.get(dir) ?? new Set<string>();
         names.add(name);
         retained.browser.set(dir, names);
@@ -96,21 +95,10 @@ export function workspaceUsesVitestDirectly(
   if (protectedVitestImportOwners?.size) {
     return true;
   }
-  const rootPkg = readPackageJsonIfExists(path.join(rootDir, 'package.json')) ?? {};
-  if (projectUsesVitestDirectly(rootDir, rootPkg, undefined, preserveNuxtVitestImports)) {
-    return true;
-  }
-  if (!packages) {
-    return false;
-  }
-  for (const pkg of packages) {
-    const packageDir = path.join(rootDir, pkg.path);
-    const subPkg = readPackageJsonIfExists(path.join(packageDir, 'package.json')) ?? {};
-    if (projectUsesVitestDirectly(packageDir, subPkg, undefined, preserveNuxtVitestImports)) {
-      return true;
-    }
-  }
-  return false;
+  return getWorkspaceProjectPaths({ rootDir, packages }).some((dir) => {
+    const pkg = readPackageJsonIfExists(path.join(dir, 'package.json')) ?? {};
+    return projectUsesVitestDirectly(dir, pkg, undefined, preserveNuxtVitestImports);
+  });
 }
 
 // Specifier fragments that signal vitest browser mode. Matched as substrings

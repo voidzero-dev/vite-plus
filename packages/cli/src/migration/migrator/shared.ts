@@ -17,7 +17,9 @@ import { displayRelative } from '../../utils/path.ts';
 import { addManualStep, addMigrationWarning, type MigrationReport } from '../report.ts';
 
 export interface RetainedImportDependencies {
+  /** Package directories that need a direct Vitest dependency. */
   vitest: ReadonlySet<string>;
+  /** Declared browser dependencies and peers to keep in each package directory. */
   browser: ReadonlyMap<string, ReadonlySet<string>>;
 }
 
