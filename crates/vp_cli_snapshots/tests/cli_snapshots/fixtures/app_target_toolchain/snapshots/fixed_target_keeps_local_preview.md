@@ -42,11 +42,10 @@ PATH Node.js: <version>
 ## `vpt cp legacy-probe.mjs app/node_modules/vite-plus/dist/bin.js`
 
 
-## `vp -C app build`
-
-
-## `vpt print-file app/dist/index.html`
+## `VP_GLOBAL_CLI_JS_SCRIPTS_DIR=${workspace}/global-cli vp -C app build`
 
 ```
-<h1>Selected app</h1>
+VITE+ - The Unified Toolchain for the Web
+
+Global CLI in app: ["build"]
 ```

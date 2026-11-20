@@ -30,35 +30,22 @@ The global CLI keeps explicit arguments and falls back only when a legacy CLI wo
 '`
 
 
-## `vp build`
-
-
-## `vpt print-file app/dist/index.html`
+## `VP_GLOBAL_CLI_JS_SCRIPTS_DIR=${workspace}/global-cli vp build`
 
 ```
-<h1>Selected app</h1>
+VITE+ - The Unified Toolchain for the Web
+
+note: vp build: using ./app (defaultPackage in vite.config.ts)
+Global CLI in app: ["build"]
 ```
 
-## `vpt print-file app/build-args.json`
+## `VP_GLOBAL_CLI_JS_SCRIPTS_DIR=${workspace}/global-cli vp -C app build`
 
 ```
-["build"]
+VITE+ - The Unified Toolchain for the Web
+
+Global CLI in app: ["build"]
 ```
-
-## `vpt rm -r app/dist`
-
-
-## `vp -C app build`
-
-
-## `vpt print-file app/dist/index.html`
-
-```
-<h1>Selected app</h1>
-```
-
-## `vpt rm -r app/dist`
-
 
 ## `vp -C app build --config vite.config.mjs`
 
@@ -74,12 +61,6 @@ Legacy CLI in app: ["build","--config","vite.config.mjs"]
 VITE+ - The Unified Toolchain for the Web
 
 Legacy CLI in app: ["build","--","--help"]
-```
-
-## `vpt stat-file app/nested/dist --assert missing`
-
-```
-app/nested/dist: missing
 ```
 
 ## `vpt rm app/vite.config.mjs`
