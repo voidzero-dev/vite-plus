@@ -1,0 +1,8 @@
+{
+  "name": "nuxt-app",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "nuxt": "*"
+  }
+}
