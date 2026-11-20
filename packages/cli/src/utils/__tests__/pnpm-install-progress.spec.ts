@@ -32,6 +32,36 @@ describe('watchPnpmResolution', () => {
 });
 
 describe('formatPnpmInstallOutput', () => {
+  it('replays the original records when pnpm is configured for NDJSON', async () => {
+    const output = [
+      stage('/project', 'resolution_started'),
+      JSON.stringify({ name: 'pnpm:lifecycle', level: 'debug', line: 'setup failed' }),
+      '',
+    ].join('\n');
+
+    expect(await formatPnpmInstallOutput(output, '/project', 'ndjson')).toBe(output);
+  });
+
+  it('preserves the pnpm error object in JSON and parseable output', async () => {
+    const error = {
+      code: 'ELIFECYCLE',
+      message: 'fixture@ postinstall: `node fail.cjs`\nExit status 7',
+    };
+    const output = [
+      stage('/project', 'resolution_started'),
+      JSON.stringify({
+        name: 'pnpm',
+        level: 'error',
+        code: error.code,
+        err: { name: 'pnpm', message: error.message, stack: 'internal stack' },
+      }),
+    ].join('\n');
+
+    expect(JSON.parse(await formatPnpmInstallOutput(output, '/project', 'json'))).toEqual({
+      error,
+    });
+  });
+
   it('keeps the real peer conflict and respects the root peer dependency rules', async () => {
     const request = { parents: [{ name: 'react-dom', version: '18.3.1' }], wantedRange: '^18.3.1' };
     const allowed = {
@@ -314,9 +344,13 @@ describe('formatPnpmInstallOutput', () => {
         timeout: 50,
       });
 
-      expect(await formatPnpmInstallOutput(output, '/project')).toBe(
-        `GET ${url} error (${reason}). Will retry in 50ms. ${retries}`,
-      );
+      for (const mode of ['info', 'warn'] as const) {
+        expect(await formatPnpmInstallOutput(output, '/project', mode)).toBe(
+          `GET ${url} error (${reason}). Will retry in 50ms. ${retries}`,
+        );
+      }
+      expect(await formatPnpmInstallOutput(output, '/project', 'error')).toBe('');
+      expect(await formatPnpmInstallOutput(output, '/project', 'silent')).toBe('');
     },
   );
 

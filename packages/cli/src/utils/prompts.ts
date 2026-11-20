@@ -11,7 +11,7 @@ import { isPnpmIgnoredBuildsError, parseInstallGatedBuilds } from './approve-bui
 import { getVpCommand, runCommandSilently } from './command.ts';
 import {
   formatPnpmInstallOutput,
-  getPnpmInstallLogLevel,
+  getPnpmInstallOutputMode,
   watchPnpmResolution,
 } from './pnpm-install-progress.ts';
 import { reconcilePreviewBridgeRegistry } from './preview-registry.ts';
@@ -238,16 +238,20 @@ export async function runViteInstall(
     } satisfies CommandRunSummary;
   } else {
     spinner.stop(idleTimedOut ? 'Install timed out' : 'Install failed');
-    const logLevel =
-      shouldWatchIdle !== undefined && !idleTimedOut
-        ? await getPnpmInstallLogLevel(cwd, envs)
-        : 'info';
-    prompts.log.info(
-      shouldWatchIdle
-        ? await formatPnpmInstallOutput(stdout.toString(), cwd, logLevel)
-        : stdout.toString(),
-    );
-    prompts.log.error(stderr.toString());
+    const mode = shouldWatchIdle ? await getPnpmInstallOutputMode(cwd, envs) : 'info';
+    const output = shouldWatchIdle
+      ? await formatPnpmInstallOutput(stdout.toString(), cwd, mode)
+      : stdout.toString();
+    if (mode === 'json' || mode === 'ndjson') {
+      // The prompt logger wraps long lines, including JSON strings.
+      if (output) {
+        process.stdout.write(output.endsWith('\n') ? output : `${output}\n`);
+      }
+      process.stderr.write(stderr);
+    } else {
+      prompts.log.info(output);
+      prompts.log.error(stderr.toString());
+    }
     let failureMessage: string | undefined;
     if (idleTimedOut && idleTimeoutMs !== undefined) {
       const reason = `stopped after ${idleTimeoutMs / 1000} seconds without output.`;

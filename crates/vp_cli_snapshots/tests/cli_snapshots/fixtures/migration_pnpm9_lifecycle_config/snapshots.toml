@@ -40,3 +40,14 @@ steps = [
   { argv = ["vpt", "write-file", ".npmrc", "loglevel=warn\n"], snapshot = false },
   { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "Warn-level output keeps the script error and exit code without replaying debug lifecycle events." },
 ]
+
+[[case]]
+name = "json_failure"
+vp = "global"
+local-registry = true
+env = { VP_TEST_FAIL_POSTINSTALL = "1" }
+unset-env = ["VP_SKIP_INSTALL", "CI"]
+steps = [
+  { argv = ["vpt", "write-file", ".npmrc", "json=true\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "The migration keeps pnpm's JSON error object and exit code." },
+]

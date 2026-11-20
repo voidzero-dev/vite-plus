@@ -97,6 +97,42 @@ describe('runViteInstall', () => {
       stderr.mockRestore();
     }
   });
+
+  it('uses the configured reporter when replaying a timed-out install', async () => {
+    const run = vi.mocked(runCommandSilently);
+    run.mockResolvedValueOnce({
+      exitCode: 124,
+      idleTimedOut: true,
+      stdout: Buffer.from(
+        JSON.stringify({ name: 'pnpm:progress', level: 'debug', status: 'resolved' }) + '\n',
+      ),
+      stderr: Buffer.alloc(0),
+    });
+    run.mockImplementation(async ({ args }) => ({
+      exitCode: 0,
+      stdout: Buffer.from(args.includes('reporter') ? 'silent\n' : 'undefined\n'),
+      stderr: Buffer.alloc(0),
+    }));
+
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const result = await runViteInstall(cwd, false, undefined, {
+        idleTimeoutMs: 300_000,
+        silent: true,
+      });
+      expect(result).toMatchObject({ status: 'failed', exitCode: 124 });
+      expect(stdout.mock.calls.flat().join('')).not.toContain('Progress:');
+      expect(stderr).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.stringContaining('vp install --no-frozen-lockfile'),
+      );
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      run.mockReset();
+    }
+  });
 });
 
 describe('downloadPackageManager', () => {
