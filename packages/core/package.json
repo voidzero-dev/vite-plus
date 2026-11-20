@@ -124,7 +124,6 @@
     "@oxc-node/cli": "catalog:",
     "@tsdown/css": "catalog:",
     "@tsdown/exe": "catalog:",
-    "@typescript/native-preview": "catalog:",
     "@vitejs/devtools": "^0.8.2",
     "es-module-lexer": "^3.0.0",
     "hookable": "^6.0.1",
@@ -141,6 +140,7 @@
     "tinyglobby": "^0.2.15",
     "tree-kill": "^1.2.2",
     "tsdown": "catalog:",
+    "tsrs": "catalog:",
     "typescript": "catalog:",
     "vite": "workspace:*"
   },
