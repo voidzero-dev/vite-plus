@@ -58,6 +58,37 @@ describe('runViteInstall', () => {
       rmSync(cwd, { recursive: true, force: true });
     }
   });
+
+  it.each([
+    {
+      initialInstall: true,
+      failureMessage: 'Initial dependency resolution stopped after 300 seconds without output.',
+    },
+    {
+      initialInstall: false,
+      failureMessage:
+        'Dependency resolution stopped after 300 seconds without output. If pnpm hangs again, ' +
+        "update the project's pnpm pin. Run `vp install --no-frozen-lockfile` in /project to retry.",
+    },
+  ])(
+    'reports the timeout for initialInstall=$initialInstall',
+    async ({ initialInstall, failureMessage }) => {
+      vi.mocked(runCommandSilently).mockResolvedValueOnce({
+        exitCode: 124,
+        idleTimedOut: true,
+        stdout: Buffer.alloc(0),
+        stderr: Buffer.alloc(0),
+      });
+
+      const result = await runViteInstall('/project', false, undefined, {
+        idleTimeoutMs: 300_000,
+        initialInstall,
+        silent: true,
+      });
+
+      expect(result).toMatchObject({ status: 'failed', exitCode: 124, failureMessage });
+    },
+  );
 });
 
 describe('downloadPackageManager', () => {

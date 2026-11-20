@@ -141,6 +141,8 @@ export async function runViteInstall(
     packageManager?: PackageManager;
     packageManagerVersion?: string;
     idleTimeoutMs?: number;
+    /** Report timeouts as part of the best-effort first migration install. */
+    initialInstall?: boolean;
     /** Keep creation's resolved version when installation runs in the generated project. */
     packageManagerOverride?: string;
     /**
@@ -228,12 +230,16 @@ export async function runViteInstall(
       shouldWatchIdle ? formatPnpmInstallOutput(stdout.toString()) : stdout.toString(),
     );
     prompts.log.error(stderr.toString());
-    const failureMessage =
-      idleTimedOut && idleTimeoutMs !== undefined
-        ? `Dependency resolution stopped after ${idleTimeoutMs / 1000} seconds without output. If pnpm hangs again, update the project's pnpm pin. Run \`vp install --no-frozen-lockfile\` in ${cwd} to retry.`
-        : undefined;
-    if (failureMessage) {
-      prompts.log.error(failureMessage);
+    let failureMessage: string | undefined;
+    if (idleTimedOut && idleTimeoutMs !== undefined) {
+      const reason = `stopped after ${idleTimeoutMs / 1000} seconds without output.`;
+      if (options?.initialInstall) {
+        failureMessage = `Initial dependency resolution ${reason}`;
+        prompts.log.warn(failureMessage);
+      } else {
+        failureMessage = `Dependency resolution ${reason} If pnpm hangs again, update the project's pnpm pin. Run \`vp install --no-frozen-lockfile\` in ${cwd} to retry.`;
+        prompts.log.error(failureMessage);
+      }
     } else {
       prompts.log.info(`You may need to run "vp install" manually in ${cwd}`);
     }

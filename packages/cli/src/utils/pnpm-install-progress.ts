@@ -42,6 +42,45 @@ export function watchPnpmResolution(): (line: string) => boolean {
   };
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function appendPeerDependencyIssues(messages: string[], issuesByProjects: unknown): void {
+  for (const [project, value] of Object.entries(asRecord(issuesByProjects))) {
+    const issues = asRecord(value);
+    const conflicts = Array.isArray(issues.conflicts) ? issues.conflicts : [];
+    const intersections = asRecord(issues.intersections);
+    const missing = Object.entries(asRecord(issues.missing)).filter(
+      ([name]) => conflicts.includes(name) || Object.hasOwn(intersections, name),
+    );
+    const peers = [...Object.entries(asRecord(issues.bad)), ...missing];
+    const location = project === '.' ? '' : ` in ${project}`;
+
+    for (const [name, entries] of peers) {
+      if (!Array.isArray(entries)) {
+        continue;
+      }
+      for (const entry of entries) {
+        const issue = asRecord(entry);
+        if (typeof issue.wantedRange !== 'string') {
+          continue;
+        }
+        const parent = asRecord(Array.isArray(issue.parents) ? issue.parents.at(-1) : undefined);
+        const requester =
+          typeof parent.name === 'string' && typeof parent.version === 'string'
+            ? `${parent.name}@${parent.version} requires `
+            : '';
+        const found =
+          typeof issue.foundVersion === 'string' ? `found ${issue.foundVersion}` : 'missing';
+        messages.push(`  ${requester}${name}@${issue.wantedRange} (${found})${location}`);
+      }
+    }
+  }
+}
+
 export function formatPnpmInstallOutput(output: string): string {
   const messages: string[] = [];
   const progress = { resolved: 0, found_in_store: 0, fetched: 0, imported: 0 };
@@ -65,6 +104,9 @@ export function formatPnpmInstallOutput(output: string): string {
       if (typeof message === 'string') {
         const code = typeof log.code === 'string' ? `${log.code} ` : '';
         messages.push(`${code}${message}`);
+        if (log.code === 'ERR_PNPM_PEER_DEP_ISSUES') {
+          appendPeerDependencyIssues(messages, log.issuesByProjects);
+        }
         if (typeof log.hint === 'string') {
           messages.push(log.hint);
         }
