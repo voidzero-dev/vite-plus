@@ -115,15 +115,20 @@ export function normalizeHooksPath(hooksPath: string): string {
   return normalized;
 }
 
-function getGitToplevel(): string | InstallResult {
-  const result = spawnSync('git', ['rev-parse', '--show-toplevel']);
+function gitRevParse(...flags: string[]): string | InstallResult {
+  const result = spawnSync('git', ['rev-parse', ...flags]);
   if (result.status == null) {
     return { message: 'git command not found', isError: true };
   }
   if (result.status !== 0) {
     return { message: ".git can't be found", isError: false };
   }
-  return realpathOrSelf(result.stdout.toString().trim());
+  return result.stdout.toString();
+}
+
+function getGitToplevel(): string | InstallResult {
+  const output = gitRevParse('--show-toplevel');
+  return typeof output === 'string' ? realpathOrSelf(output.trim()) : output;
 }
 
 function realpathOrSelf(path: string): string {
@@ -137,11 +142,7 @@ function realpathOrSelf(path: string): string {
 /** Resolve a core.hooksPath value against the worktree root for ownership checks. */
 function resolveHooksPath(hooksPath: string, gitRoot: string): string {
   const resolved = isAbsolute(hooksPath) ? hooksPath : resolve(gitRoot, hooksPath);
-  try {
-    return normalizeHooksPath(realpathSync(resolved));
-  } catch {
-    return normalizeHooksPath(resolved);
-  }
+  return normalizeHooksPath(realpathOrSelf(resolved));
 }
 
 function hooksPathsEqual(a: string, b: string, gitRoot: string): boolean {
@@ -366,14 +367,11 @@ function displayHooksDir(location: HooksLocation): string {
 
 function getGitWorktree(): { toplevel: string; prefix: string } | InstallResult {
   // One git process prints both lines; the prefix line is empty at the worktree root.
-  const result = spawnSync('git', ['rev-parse', '--show-toplevel', '--show-prefix']);
-  if (result.status == null) {
-    return { message: 'git command not found', isError: true };
+  const output = gitRevParse('--show-toplevel', '--show-prefix');
+  if (typeof output !== 'string') {
+    return output;
   }
-  if (result.status !== 0) {
-    return { message: ".git can't be found", isError: false };
-  }
-  const [toplevel = '', prefix = ''] = result.stdout.toString().split('\n');
+  const [toplevel = '', prefix = ''] = output.split('\n');
   return {
     toplevel: realpathOrSelf(toplevel.trim()),
     prefix: prefix.trim().replace(/\/$/, ''),
