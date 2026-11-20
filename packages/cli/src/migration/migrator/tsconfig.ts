@@ -2,7 +2,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
-import { parse as parseJsonc, type ParseError } from 'jsonc-parser';
+import {
+  applyEdits,
+  createScanner,
+  findNodeAtLocation,
+  parse as parseJsonc,
+  parseTree,
+  type ParseError,
+} from 'jsonc-parser';
 import { minimatch } from 'minimatch';
 
 import { ResolverFactory } from '../../../binding/index.js';
@@ -166,11 +173,70 @@ type PackConfigTsconfigEdits = {
   excludedConfig?: string;
 };
 
-/** Prepare edits for each TypeScript project that imports the generated config. */
+function coversProjectFile(project: ProjectFileConfig, directory: string, file: string): boolean {
+  const { files, include, exclude } = project.lists;
+  return !!(
+    matchTsconfigPaths(files, directory, file, false) ||
+    (matchTsconfigPaths(include, directory, file, true) &&
+      !matchTsconfigPaths(exclude, directory, file, true))
+  );
+}
+
+function removeProjectFileEntry(text: string, key: ProjectFileKey, index: number): string {
+  const tree = parseTree(text);
+  const elements = tree && findNodeAtLocation(tree, [key])?.children;
+  const entry = elements?.[index];
+  if (!entry) {
+    return text;
+  }
+  // Delete the string and its adjacent comma without reprinting the array.
+  // jsonc-parser's array removal can consume the previous quote in compact JSON.
+  const scanner = createScanner(text, true);
+  scanner.setPosition(entry.offset + entry.length);
+  scanner.scan();
+  const previous = elements?.[index - 1];
+  if (text[scanner.getTokenOffset()] !== ',' && previous) {
+    scanner.setPosition(previous.offset + previous.length);
+    scanner.scan();
+  }
+  const edits = [{ offset: entry.offset, length: entry.length, content: '' }];
+  const comma = scanner.getTokenOffset();
+  if (text[comma] === ',') {
+    edits.push({ offset: comma, length: 1, content: '' });
+  }
+  return applyEdits(text, edits);
+}
+
+function removeReferencedPackFile(
+  filename: string,
+  project: ProjectFileConfig,
+  generatedPath: string,
+): string {
+  let text = project.text;
+  for (const key of ['files', 'include'] as const) {
+    const list = project.lists[key];
+    if (list?.filename !== filename) {
+      continue;
+    }
+    const directory = path.dirname(filename);
+    // Earlier migrations could add the exact generated path to the consumer.
+    // Keep unrelated entries and patterns when moving it to the owning project.
+    for (let index = list.entries.length - 1; index >= 0; index--) {
+      const entry = resolveTsconfigEntry(list, directory, list.entries[index]);
+      if (entry === generatedPath) {
+        text = removeProjectFileEntry(text, key, index);
+      }
+    }
+  }
+  return text;
+}
+
+/** Prepare edits where TypeScript owns the input config, including referenced projects. */
 export function preparePackConfigTsconfigEdits(
   viteConfigPath: string,
   generatedPath: string,
   workspaceRoot: string,
+  originalPath?: string,
 ): PackConfigTsconfigEdits {
   const isJavaScript = /\.[cm]?js$/.test(generatedPath);
   if (!isJavaScript && !/\.[cm]?ts$/.test(generatedPath)) {
@@ -200,8 +266,7 @@ export function preparePackConfigTsconfigEdits(
   }
   const visited = new Set<string>();
   const edits = new Map<string, string>();
-  let missingPreset: PackConfigTsconfigEdits['missingPreset'];
-  let excludedConfig: PackConfigTsconfigEdits['excludedConfig'];
+  const projects = new Map<string, { config: ProjectFileConfig; references: string[] }>();
   for (const filename of filenames) {
     if (!fs.lstatSync(filename, { throwIfNoEntry: false })?.isFile()) {
       continue;
@@ -211,6 +276,7 @@ export function preparePackConfigTsconfigEdits(
     if (
       path.isAbsolute(fromRoot) ||
       fromRoot.split(path.sep)[0] === '..' ||
+      fromRoot.split(path.sep).includes('node_modules') ||
       visited.has(realFilename)
     ) {
       continue;
@@ -221,18 +287,66 @@ export function preparePackConfigTsconfigEdits(
       continue;
     }
     const directory = path.dirname(filename);
-    const { text, lists, javaScript, references } = project;
-    if (Array.isArray(references)) {
-      for (const reference of references) {
-        if (typeof reference?.path === 'string') {
-          const target = path.resolve(directory, reference.path.replaceAll('\\', '/'));
-          filenames.add(
-            fs.statSync(target, { throwIfNoEntry: false })?.isDirectory()
-              ? path.join(target, 'tsconfig.json')
-              : target,
-          );
+    const references: string[] = [];
+    for (const reference of Array.isArray(project.references) ? project.references : []) {
+      if (typeof reference?.path === 'string') {
+        const target = path.resolve(directory, reference.path.replaceAll('\\', '/'));
+        const config = fs.statSync(target, { throwIfNoEntry: false })?.isDirectory()
+          ? path.join(target, 'tsconfig.json')
+          : target;
+        references.push(config);
+        filenames.add(config);
+      }
+    }
+    projects.set(filename, { config: project, references });
+  }
+
+  const owners = new Set<string>();
+  const consumers = new Set<string>();
+  if (originalPath) {
+    for (const [filename, { config, references }] of projects) {
+      if (!coversProjectFile(config, path.dirname(filename), viteConfigPath)) {
+        continue;
+      }
+      const pending = new Set(references);
+      pending.delete(filename);
+      for (const reference of pending) {
+        const target = projects.get(reference);
+        if (!target) {
+          continue;
+        }
+        const { javaScript } = target.config;
+        if (
+          (!isJavaScript || (javaScript.allowJs ?? javaScript.checkJs)) &&
+          coversProjectFile(target.config, path.dirname(reference), originalPath)
+        ) {
+          owners.add(reference);
+          consumers.add(filename);
+        }
+        for (const child of target.references) {
+          if (child !== filename) {
+            pending.add(child);
+          }
         }
       }
+    }
+  }
+
+  let missingPreset: PackConfigTsconfigEdits['missingPreset'];
+  let excludedConfig: PackConfigTsconfigEdits['excludedConfig'];
+  for (const [filename, { config }] of projects) {
+    const directory = path.dirname(filename);
+    // An earlier edit can change effective paths inherited by a later project.
+    const project = edits.size
+      ? (readProjectFileLists(filename, resolver, edits) ?? config)
+      : config;
+    const { text, lists, javaScript } = project;
+    if (consumers.has(filename) && !owners.has(filename)) {
+      const updated = removeReferencedPackFile(filename, project, generatedPath);
+      if (updated !== text) {
+        edits.set(filename, updated);
+      }
+      continue;
     }
 
     const listed = (file: string) => matchTsconfigPaths(lists.files, directory, file, false);
@@ -240,8 +354,9 @@ export function preparePackConfigTsconfigEdits(
     const includesPattern = (file: string) =>
       matchTsconfigPaths(lists.include, directory, file, true);
     const included = (file: string) => (excluded(file) ? undefined : includesPattern(file));
-    const explicitlyListed = listed(viteConfigPath);
-    const includedViteConfig = included(viteConfigPath);
+    const inputPath = owners.has(filename) ? (originalPath ?? viteConfigPath) : viteConfigPath;
+    const explicitlyListed = listed(inputPath);
+    const includedViteConfig = included(inputPath);
     const generatedListed = listed(generatedPath);
     if (project.missingPreset) {
       // Explicit local files can safely be edited without knowing inherited
@@ -251,7 +366,7 @@ export function preparePackConfigTsconfigEdits(
         hasLocalFiles &&
         lists.include?.filename === filename &&
         !explicitlyListed &&
-        !includesPattern(viteConfigPath);
+        !includesPattern(inputPath);
       if (unrelated) {
         continue;
       }

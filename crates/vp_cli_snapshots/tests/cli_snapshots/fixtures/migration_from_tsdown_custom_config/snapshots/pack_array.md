@@ -17,7 +17,7 @@ Convert the retained library config through a local constant and build both bund
 ## `vpt write-file cli.config.ts 'export default { entry: '\''src/cli.ts'\'', outDir: '\''cli-out'\'', copy: '\''cli-resources'\'' };'`
 
 
-## `vpt write-file vite.config.ts 'import libraryConfig from '\''./tsdown.config.ts'\''; import cliConfig from '\''./cli.config.ts'\''; const library = { ...libraryConfig, dts: false }; export default { pack: [library, cliConfig] };'`
+## `vpt write-file vite.config.ts 'import libraryConfig from '\''./tsdown.config.ts'\''; import cliConfig from '\''./cli.config.ts'\''; const library = { ...libraryConfig, dts: false }; export default { pack: [library, cliConfig], build: { lib: { entry: library.entry } } };'`
 
 
 ## `vpt mkdir -p public cli-resources`

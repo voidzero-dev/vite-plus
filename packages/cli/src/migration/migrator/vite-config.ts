@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
+import { isBuiltin } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -16,6 +17,7 @@ import {
   mergeTsdownJsonConfig,
   migrateTaskCacheConfig,
   readStaticLintConfig,
+  ResolverFactory,
   rewriteImportsInDirectory,
   rewriteScripts,
   rewriteTsdownConfigForPack,
@@ -430,8 +432,7 @@ function convertedPackConfigName(tsdownConfigPath: string): string {
   return `vite-pack.config${path.extname(tsdownConfigPath)}`;
 }
 
-function convertedPackLinkTarget(tsdownConfigPath: string, workspaceRoot: string) {
-  const source = fs.realpathSync(tsdownConfigPath);
+function convertedPackLinkTarget(source: string, workspaceRoot: string) {
   const relative = path.relative(fs.realpathSync(workspaceRoot), source);
   if (path.isAbsolute(relative) || relative.split(path.sep)[0] === '..') {
     return undefined;
@@ -440,21 +441,82 @@ function convertedPackLinkTarget(tsdownConfigPath: string, workspaceRoot: string
   return path.join(dir, `${name}.vite-pack.config${ext}`);
 }
 
-function writePackConfigLink(filename: string, target: string, replace: boolean) {
+function writePackConfigOutput(filename: string, create: (file: string) => void, replace: boolean) {
   const directory = path.dirname(filename);
-  const relativeTarget = path.relative(fs.realpathSync(directory), target);
   if (!replace) {
-    fs.symlinkSync(relativeTarget, filename, 'file');
+    create(filename);
     return;
   }
-  // Keep the old generated file if creating the replacement link fails.
+  // Keep the old generated output if creating its replacement fails.
   const temporary = path.join(directory, `.${path.basename(filename)}.${randomUUID()}`);
-  fs.symlinkSync(relativeTarget, temporary, 'file');
+  create(temporary);
   try {
     fs.renameSync(temporary, filename);
   } finally {
     fs.rmSync(temporary, { force: true });
   }
+}
+
+function applySourceEdits(source: string, edits: (Span & { text: string })[]): string {
+  for (const { start, end, text } of edits.toSorted((left, right) => right.start - left.start)) {
+    source = source.slice(0, start) + text + source.slice(end);
+  }
+  return source;
+}
+
+/** Preserve static module imports when copying an installed preset into the project. */
+function relocateInstalledPackConfig(
+  content: string,
+  preset: string,
+  realPreset: string,
+  output: string,
+): string {
+  const { program } = parseSource(preset, content);
+  const outputDirectory = path.dirname(output);
+  let resolver: ResolverFactory | undefined;
+  const edits = program.body.flatMap((statement) => {
+    if (
+      statement.type !== 'ImportDeclaration' &&
+      statement.type !== 'ExportNamedDeclaration' &&
+      statement.type !== 'ExportAllDeclaration'
+    ) {
+      return [];
+    }
+    const source = statement.source;
+    if (!source) {
+      return [];
+    }
+    const specifier = source.value;
+    let target: string | undefined;
+    let relativeFrom = outputDirectory;
+    if (specifier.startsWith('./') || specifier.startsWith('../')) {
+      target = path.resolve(path.dirname(preset), specifier);
+    } else if (
+      !isBuiltin(specifier) &&
+      specifier !== VITE_PLUS_NAME &&
+      !specifier.startsWith(`${VITE_PLUS_NAME}/`) &&
+      !path.isAbsolute(specifier)
+    ) {
+      resolver ??= new ResolverFactory({
+        conditionNames: ['module-sync', 'node', 'import'],
+        symlinks: false,
+        nodePath: false,
+      });
+      const installed = resolver.sync(path.dirname(realPreset), specifier).path;
+      if (installed && installed !== resolver.sync(outputDirectory, specifier).path) {
+        // Keep preset-only dependencies in the same installed package scope.
+        target = installed;
+        relativeFrom = fs.realpathSync(outputDirectory);
+      }
+    }
+    if (!target) {
+      return [];
+    }
+    const relative = path.relative(relativeFrom, target).split(path.sep).join('/');
+    const relocated = relative.startsWith('../') ? relative : `./${relative}`;
+    return [{ start: source.start, end: source.end, text: JSON.stringify(relocated) }];
+  });
+  return applySourceEdits(content, edits);
 }
 
 function configImports(filename: string, source: string) {
@@ -506,6 +568,11 @@ function packProperties(program: Program, requireStatic = false): (ObjectPropert
 }
 
 type PackIdentifier = Extract<Node, { type: 'Identifier' }>;
+type PackUse = {
+  property?: ObjectProperty;
+  value: PackIdentifier;
+  copy?: { initializer: ObjectExpression; reference: PackIdentifier };
+};
 
 function packValueIdentifiers(node: Node): PackIdentifier[] {
   const value = unwrapTypeExpression(node);
@@ -528,7 +595,7 @@ function packValueIdentifiers(node: Node): PackIdentifier[] {
   }
 }
 
-function privateConstInitializers(program: Program): Map<number, Node> {
+function privateConstInitializers(program: Program) {
   const initializers = new Map<number, Node>();
   const pending: unknown[] = [...program.body];
   while (pending.length > 0) {
@@ -554,24 +621,72 @@ function privateConstInitializers(program: Program): Map<number, Node> {
   return initializers;
 }
 
+function viteConfigMemberReads(program: Program): Set<number> {
+  const reads = new Set<number>();
+  const objects = configReturnValues(defaultConfigValue(program)).filter(
+    (value) => value?.type === 'ObjectExpression',
+  );
+  for (const object of objects) {
+    for (const property of object.properties) {
+      if (property.type !== 'Property' || property.computed || property.kind !== 'init') {
+        continue;
+      }
+      const value = unwrapTypeExpression(property.value);
+      if (value.type === 'ObjectExpression') {
+        objects.push(value);
+      } else if (
+        value.type === 'MemberExpression' &&
+        !value.computed &&
+        value.object.type === 'Identifier'
+      ) {
+        reads.add(value.object.start);
+      }
+    }
+  }
+  return reads;
+}
+
+/** Copy a literal override without reevaluating the original constant. */
+function sharedPackSpread(initializer: ObjectExpression): PackIdentifier | undefined {
+  const spreads = initializer.properties.filter((member) => member.type === 'SpreadElement');
+  const spread = spreads.length === 1 ? spreads[0].argument : undefined;
+  if (
+    spread?.type === 'Identifier' &&
+    initializer.properties.every(
+      (member) =>
+        member.type === 'SpreadElement' ||
+        (!member.computed &&
+          !member.method &&
+          member.kind === 'init' &&
+          sameStaticValue(member.value, member.value)),
+    )
+  ) {
+    return spread;
+  }
+  return undefined;
+}
+
 function packAssignments(
   { program, bindings }: ReturnType<typeof parseSource>,
   packs: readonly (ObjectProperty | undefined)[],
 ) {
-  const uses: { property?: ObjectProperty; value: PackIdentifier }[] = packs.flatMap((property) =>
+  const uses: PackUse[] = packs.flatMap((property) =>
     property ? packValueIdentifiers(property.value).map((value) => ({ property, value })) : [],
   );
   if (uses.length === 0) {
     return uses;
   }
   const initializers = privateConstInitializers(program);
-  const aliasesByReference = new Map<number, { initializer: Node; remaining: number }>();
+  const aliasesByReference = new Map<
+    number,
+    { initializer: Node; references: number[]; remaining: number }
+  >();
   for (const { start, constant, references } of bindings) {
     const initializer = initializers.get(start);
     if (!initializer || !constant) {
       continue;
     }
-    const alias = { initializer, remaining: references.length };
+    const alias = { initializer, references, remaining: references.length };
     for (const reference of references) {
       aliasesByReference.set(reference, alias);
     }
@@ -585,7 +700,21 @@ function packAssignments(
       uses.push(...packValueIdentifiers(alias.initializer).map((value) => ({ value })));
     }
   }
-  return uses;
+  const packReferences = new Set(uses.map(({ value }) => value.start));
+  const propertyReads = viteConfigMemberReads(program);
+  const copies = uses.flatMap(({ property, value: reference }) => {
+    const alias = aliasesByReference.get(reference.start);
+    if (
+      !alias?.remaining ||
+      alias.initializer.type !== 'ObjectExpression' ||
+      !alias.references.every((start) => packReferences.has(start) || propertyReads.has(start))
+    ) {
+      return [];
+    }
+    const value = sharedPackSpread(alias.initializer);
+    return value ? [{ property, value, copy: { initializer: alias.initializer, reference } }] : [];
+  });
+  return [...uses, ...copies];
 }
 
 function importedPackBindings(
@@ -626,7 +755,14 @@ function importedPackBindings(
     }
     const uses = assignments.filter(({ value }) => references.includes(value.start));
     return uses.length
-      ? [{ statement, binding, uses, onlyPack: references.length === uses.length }]
+      ? [
+          {
+            statement,
+            binding,
+            uses,
+            onlyPack: references.length === uses.length && uses.every(({ copy }) => !copy),
+          },
+        ]
       : [];
   });
 }
@@ -686,11 +822,17 @@ function rewritePackConfigImports(
       do {
         name = nextName++ === 0 ? 'vitePackConfig' : `vitePackConfig${nextName}`;
       } while (source.includes(name));
-      for (const { property, value } of uses) {
+      for (const { property, value, copy } of uses) {
+        const reference = copy?.reference ?? value;
+        const replacement = copy
+          ? source.slice(copy.initializer.start, value.start) +
+            name +
+            source.slice(value.end, copy.initializer.end)
+          : name;
         edits.push({
-          start: value.start,
-          end: value.end,
-          text: property?.shorthand ? `pack: ${name}` : name,
+          start: reference.start,
+          end: reference.end,
+          text: property?.shorthand ? `pack: ${replacement}` : replacement,
         });
       }
     }
@@ -705,10 +847,7 @@ function rewritePackConfigImports(
       text: `${newline}import ${name} from ${literal};`,
     });
   }
-  for (const { start, end, text } of edits.toSorted((left, right) => right.start - left.start)) {
-    source = source.slice(0, start) + text + source.slice(end);
-  }
-  return source;
+  return applySourceEdits(source, edits);
 }
 
 /** Return the active pack configuration when equivalence cannot be established. */
@@ -796,16 +935,30 @@ function mergeRetainedTsdownConfig(
   const importsConverted =
     !!parsed && importedPackBindings(parsed, assignments, viteConfigPath, convertedPath).length > 0;
   const sourceIsLink = fs.lstatSync(tsdownConfigPath).isSymbolicLink();
+  const sourceTarget = sourceIsLink
+    ? path.resolve(path.dirname(tsdownConfigPath), fs.readlinkSync(tsdownConfigPath))
+    : undefined;
+  const realSource = sourceIsLink ? fs.realpathSync(tsdownConfigPath) : undefined;
+  const installedPreset =
+    sourceTarget &&
+    realSource &&
+    [sourceTarget, realSource].some((file) => file.split(path.sep).includes('node_modules'))
+      ? sourceTarget
+      : undefined;
   const convertedEntry = fs.lstatSync(convertedPath, { throwIfNoEntry: false });
+  const convertedExists = fs.statSync(convertedPath, { throwIfNoEntry: false })?.isFile();
   if (
     importsConverted &&
     originalImports.length === 0 &&
-    (!sourceIsLink || (convertedEntry?.isSymbolicLink() && fs.existsSync(convertedPath)))
+    convertedExists &&
+    (installedPreset ? convertedEntry?.isFile() : !sourceIsLink || convertedEntry?.isSymbolicLink())
   ) {
-    return (
-      fs.existsSync(convertedPath) &&
-      preparePackConfigTsconfigEdits(viteConfigPath, convertedPath, workspaceRoot).apply()
-    );
+    return preparePackConfigTsconfigEdits(
+      viteConfigPath,
+      convertedPath,
+      workspaceRoot,
+      tsdownConfigPath,
+    ).apply();
   }
   if (!keepTsdownConfig && !importsConverted) {
     return undefined;
@@ -814,20 +967,22 @@ function mergeRetainedTsdownConfig(
     return undefined;
   }
 
-  const { content, warnings } = rewriteTsdownConfigForPack(tsdownConfigPath, workspaceRoot);
+  const { content: converted, warnings } = rewriteTsdownConfigForPack(
+    tsdownConfigPath,
+    workspaceRoot,
+  );
   for (const warning of warnings) {
     warnMigration(`${displayRelative(tsdownConfigPath)}: ${warning}`, report);
   }
-  if (content === undefined) {
+  if (converted === undefined && !importsConverted) {
     return undefined;
   }
 
-  // Bundlers resolve a config link from its target. Keep the converted module
-  // in that directory and give TypeScript a file at the original project path.
-  const linkedTarget = sourceIsLink
-    ? convertedPackLinkTarget(tsdownConfigPath, workspaceRoot)
-    : undefined;
-  if (sourceIsLink && !linkedTarget) {
+  // Keep relative imports beside a workspace-owned source. Installed presets
+  // get a project-owned file because a reinstall can replace their directory.
+  const siblingTarget = realSource ? convertedPackLinkTarget(realSource, workspaceRoot) : undefined;
+  const linkedTarget = installedPreset ? undefined : siblingTarget;
+  if (sourceIsLink && !installedPreset && !linkedTarget) {
     warnMigration(
       `The shared config at ${displayRelative(tsdownConfigPath)} points outside the workspace. Migrate its pack options manually. See ${documentationUrl('/guide/migrate#tsdown')}`,
       report,
@@ -852,16 +1007,25 @@ function mergeRetainedTsdownConfig(
     config = result.content;
   }
 
+  const existingLink = convertedEntry?.isSymbolicLink()
+    ? path.resolve(fs.realpathSync(path.dirname(convertedPath)), fs.readlinkSync(convertedPath))
+    : undefined;
+  const reuseLink = linkedTarget !== undefined && existingLink === linkedTarget;
+  const replaceInstalledLink =
+    !!installedPreset && siblingTarget !== undefined && existingLink === siblingTarget;
+  let content = converted ?? fs.readFileSync(tsdownConfigPath, 'utf8');
+  if (installedPreset && realSource) {
+    if (replaceInstalledLink && convertedExists) {
+      content = fs.readFileSync(convertedPath, 'utf8');
+    }
+    content = relocateInstalledPackConfig(content, installedPreset, realSource, convertedPath);
+  }
   const writePath = linkedTarget ?? convertedPath;
-  const reuseLink =
-    linkedTarget !== undefined &&
-    convertedEntry?.isSymbolicLink() &&
-    path.resolve(fs.realpathSync(path.dirname(convertedPath)), fs.readlinkSync(convertedPath)) ===
-      linkedTarget;
+  const existingFile = reuseLink || replaceInstalledLink ? undefined : convertedEntry;
   const targetEntry = linkedTarget
     ? fs.lstatSync(linkedTarget, { throwIfNoEntry: false })
-    : convertedEntry;
-  const outputs = [{ file: convertedPath, entry: reuseLink ? undefined : convertedEntry }];
+    : existingFile;
+  const outputs = [{ file: convertedPath, entry: existingFile }];
   if (linkedTarget) {
     outputs.push({ file: linkedTarget, entry: targetEntry });
   }
@@ -879,6 +1043,7 @@ function mergeRetainedTsdownConfig(
     viteConfigPath,
     convertedPath,
     workspaceRoot,
+    tsdownConfigPath,
   );
   if (tsconfigEdits.missingPreset) {
     const { filename, specifier } = tsconfigEdits.missingPreset;
@@ -896,10 +1061,22 @@ function mergeRetainedTsdownConfig(
     return false;
   }
   if (!targetEntry) {
-    fs.writeFileSync(writePath, content, { flag: 'wx' });
+    writePackConfigOutput(
+      writePath,
+      (file) => fs.writeFileSync(file, content, { flag: 'wx' }),
+      replaceInstalledLink,
+    );
   }
   if (linkedTarget && !reuseLink) {
-    writePackConfigLink(convertedPath, linkedTarget, convertedEntry !== undefined);
+    const relativeTarget = path.relative(
+      fs.realpathSync(path.dirname(convertedPath)),
+      linkedTarget,
+    );
+    writePackConfigOutput(
+      convertedPath,
+      (file) => fs.symlinkSync(relativeTarget, file, 'file'),
+      convertedEntry !== undefined,
+    );
   }
   const included = tsconfigEdits.apply();
   try {
