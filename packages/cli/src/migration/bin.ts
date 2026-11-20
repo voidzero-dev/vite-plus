@@ -843,11 +843,6 @@ async function executeMigrationPlan(
   migrateSetupVpVersion(workspaceInfo.rootDir, report);
 
   // 4. Run vp install to ensure the project is ready
-  const installIdleTimeoutMs = getMigrationInstallIdleTimeoutMs(
-    interactive,
-    workspaceInfo.packageManager,
-    downloadResult.version,
-  );
   updateMigrationProgress('Installing dependencies');
   const initialInstallSummary = await runViteInstall(
     workspaceInfo.rootDir,
@@ -857,7 +852,12 @@ async function executeMigrationPlan(
       silent: true,
       packageManager: workspaceInfo.packageManager,
       packageManagerVersion: workspaceInfo.downloadPackageManager.version,
-      idleTimeoutMs: installIdleTimeoutMs,
+      idleTimeoutMs: await getMigrationInstallIdleTimeoutMs(
+        workspaceInfo.rootDir,
+        interactive,
+        workspaceInfo.packageManager,
+        workspaceInfo.downloadPackageManager.version,
+      ),
       initialInstall: true,
     },
   );
@@ -1040,7 +1040,12 @@ async function executeMigrationPlan(
       silent: true,
       packageManager: workspaceInfo.packageManager,
       packageManagerVersion: workspaceInfo.downloadPackageManager.version,
-      idleTimeoutMs: installIdleTimeoutMs,
+      idleTimeoutMs: await getMigrationInstallIdleTimeoutMs(
+        workspaceInfo.rootDir,
+        interactive,
+        workspaceInfo.packageManager,
+        workspaceInfo.downloadPackageManager.version,
+      ),
     },
   );
   if (finalInstallSummary.status === 'failed') {
@@ -1683,7 +1688,8 @@ async function main() {
           silent: true,
           packageManager,
           packageManagerVersion,
-          idleTimeoutMs: getMigrationInstallIdleTimeoutMs(
+          idleTimeoutMs: await getMigrationInstallIdleTimeoutMs(
+            workspaceInfoOptional.rootDir,
             options.interactive,
             packageManager,
             packageManagerVersion,

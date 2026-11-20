@@ -4,9 +4,22 @@ import { fileURLToPath } from 'node:url';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { downloadPackageManager, getPackageManagerOverride } from '../../../binding/index.js';
 import { PackageManager } from '../../types/index.ts';
+import { runCommandSilently } from '../../utils/command.ts';
 import { getMigrationInstallIdleTimeoutMs, handleInstallResult } from '../install-result.ts';
 import { createMigrationReport } from '../report.ts';
+
+vi.mock(import('../../../binding/index.js'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  downloadPackageManager: vi.fn(),
+  getPackageManagerOverride: vi.fn(),
+}));
+
+vi.mock(import('../../utils/command.ts'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  runCommandSilently: vi.fn(),
+}));
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const binPath = path.resolve(here, '..', 'bin.ts');
@@ -100,11 +113,83 @@ describe('handleInstallResult', () => {
 });
 
 describe('getMigrationInstallIdleTimeoutMs', () => {
-  it('bounds non-interactive pnpm 9 installs only', () => {
-    expect(getMigrationInstallIdleTimeoutMs(false, PackageManager.pnpm, '9.9.0')).toBe(300_000);
-    expect(getMigrationInstallIdleTimeoutMs(true, PackageManager.pnpm, '9.9.0')).toBeUndefined();
-    expect(getMigrationInstallIdleTimeoutMs(false, PackageManager.pnpm, '12.21.0')).toBeUndefined();
-    expect(getMigrationInstallIdleTimeoutMs(false, PackageManager.npm, '9.9.0')).toBeUndefined();
+  const cwd = '/project';
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.stubEnv('VP_SKIP_INSTALL', undefined);
+    vi.stubEnv('VP_CLI_BIN', undefined);
+  });
+
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('bounds non-interactive pnpm 9 installs only', async () => {
+    expect(await getMigrationInstallIdleTimeoutMs(cwd, false, PackageManager.pnpm, '9.9.0')).toBe(
+      300_000,
+    );
+    expect(
+      await getMigrationInstallIdleTimeoutMs(cwd, true, PackageManager.pnpm, '9.9.0'),
+    ).toBeUndefined();
+    expect(
+      await getMigrationInstallIdleTimeoutMs(cwd, false, PackageManager.pnpm, '12.21.0'),
+    ).toBeUndefined();
+    expect(
+      await getMigrationInstallIdleTimeoutMs(cwd, false, PackageManager.npm, '9.9.0'),
+    ).toBeUndefined();
+  });
+
+  it('leaves a pnpm 9 project unguarded when the override selects Yarn', async () => {
+    vi.stubEnv('VP_CLI_BIN', '/global/vp');
+    vi.mocked(getPackageManagerOverride).mockReturnValue({ name: 'yarn', version: '4.10.3' });
+
+    expect(
+      await getMigrationInstallIdleTimeoutMs(cwd, false, PackageManager.pnpm, '9.15.9'),
+    ).toBeUndefined();
+    expect(runCommandSilently).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['12.21.0', '9.15.9', 300_000],
+    ['9.15.9', '12.21.0', undefined],
+  ])(
+    'uses the global launcher selection over pnpm %s from the workspace',
+    async (pin, version, expected) => {
+      vi.stubEnv('VP_CLI_BIN', '/global/vp');
+      vi.mocked(getPackageManagerOverride).mockReturnValue({ name: 'pnpm', version: 'default' });
+      vi.mocked(runCommandSilently).mockResolvedValue({
+        exitCode: 0,
+        stdout: Buffer.from(JSON.stringify({ package_manager: { name: 'pnpm', version } })),
+        stderr: Buffer.alloc(0),
+      });
+
+      expect(await getMigrationInstallIdleTimeoutMs(cwd, false, PackageManager.pnpm, pin)).toBe(
+        expected,
+      );
+      expect(runCommandSilently).toHaveBeenCalledWith(
+        expect.objectContaining({
+          command: '/global/vp',
+          args: ['env', 'current', 'pm', '--json'],
+          cwd,
+        }),
+      );
+    },
+  );
+
+  it('uses the resolved pnpm override for the local launcher', async () => {
+    vi.mocked(getPackageManagerOverride).mockReturnValue({ name: 'pnpm', version: 'latest-9' });
+    vi.mocked(downloadPackageManager).mockResolvedValue({
+      name: 'pnpm',
+      version: '9.15.9',
+      installDir: '/pnpm',
+      binPrefix: '/pnpm/bin',
+      binPaths: { pnpm: '/pnpm/bin/pnpm' },
+      packageName: 'pnpm',
+    });
+
+    expect(await getMigrationInstallIdleTimeoutMs(cwd, false, PackageManager.pnpm, '12.21.0')).toBe(
+      300_000,
+    );
+    expect(downloadPackageManager).toHaveBeenCalledWith({ name: 'pnpm', version: 'latest-9', cwd });
   });
 });
 

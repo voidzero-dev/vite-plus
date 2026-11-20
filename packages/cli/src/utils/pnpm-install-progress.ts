@@ -1,3 +1,7 @@
+import { join } from 'node:path';
+
+import { readJsonFile } from './json.ts';
+
 function parsePnpmLog(line: string): Record<string, unknown> | undefined {
   if (!line.startsWith('{')) {
     return undefined;
@@ -48,40 +52,50 @@ function asRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
-function appendPeerDependencyIssues(messages: string[], issuesByProjects: unknown): void {
-  for (const [project, value] of Object.entries(asRecord(issuesByProjects))) {
-    const issues = asRecord(value);
-    const conflicts = Array.isArray(issues.conflicts) ? issues.conflicts : [];
-    const intersections = asRecord(issues.intersections);
-    const missing = Object.entries(asRecord(issues.missing)).filter(
-      ([name]) => conflicts.includes(name) || Object.hasOwn(intersections, name),
-    );
-    const peers = [...Object.entries(asRecord(issues.bad)), ...missing];
-    const location = project === '.' ? '' : ` in ${project}`;
-
-    for (const [name, entries] of peers) {
-      if (!Array.isArray(entries)) {
-        continue;
-      }
-      for (const entry of entries) {
-        const issue = asRecord(entry);
-        if (typeof issue.wantedRange !== 'string') {
-          continue;
-        }
-        const parent = asRecord(Array.isArray(issue.parents) ? issue.parents.at(-1) : undefined);
-        const requester =
-          typeof parent.name === 'string' && typeof parent.version === 'string'
-            ? `${parent.name}@${parent.version} requires `
-            : '';
-        const found =
-          typeof issue.foundVersion === 'string' ? `found ${issue.foundVersion}` : 'missing';
-        messages.push(`  ${requester}${name}@${issue.wantedRange} (${found})${location}`);
-      }
+function appendDependencyContext(messages: string[], log: Record<string, unknown>): void {
+  if (!Array.isArray(log.pkgsStack)) {
+    return;
+  }
+  const stack = log.pkgsStack.flatMap((entry: unknown) => {
+    const { name, version } = asRecord(entry);
+    if (typeof name !== 'string') {
+      return [];
     }
+    return [typeof version === 'string' ? `${name}@${version}` : name];
+  });
+  const [requester, ...ancestors] = stack;
+  if (requester) {
+    messages.push(`While installing the dependencies of ${requester}`);
+    messages.push(...ancestors.map((ancestor) => `  at ${ancestor}`));
+  } else if (typeof log.prefix === 'string') {
+    messages.push(`While installing a direct dependency of ${log.prefix}`);
   }
 }
 
-export function formatPnpmInstallOutput(output: string): string {
+function readPnpmPeerRules(cwd: string): unknown {
+  try {
+    const manifest = readJsonFile(join(cwd, 'package.json'));
+    return asRecord(manifest.pnpm).peerDependencyRules;
+  } catch {
+    return undefined;
+  }
+}
+
+async function formatPeerDependencyIssues(issuesByProjects: unknown, cwd: string): Promise<string> {
+  const { renderPeerIssues } = await import('@pnpm/render-peer-issues');
+  type Options = NonNullable<Parameters<typeof renderPeerIssues>[1]>;
+  try {
+    return renderPeerIssues(asRecord(issuesByProjects) as Parameters<typeof renderPeerIssues>[0], {
+      rules: readPnpmPeerRules(cwd) as Options['rules'],
+      width: process.stdout.columns ?? 80,
+    }).trimEnd();
+  } catch {
+    // Keep the error headline if a record cannot be rendered.
+    return '';
+  }
+}
+
+export async function formatPnpmInstallOutput(output: string, cwd: string): Promise<string> {
   const messages: string[] = [];
   const progress = { resolved: 0, found_in_store: 0, fetched: 0, imported: 0 };
   for (const line of output.split(/\r?\n/)) {
@@ -104,8 +118,14 @@ export function formatPnpmInstallOutput(output: string): string {
       if (typeof message === 'string') {
         const code = typeof log.code === 'string' ? `${log.code} ` : '';
         messages.push(`${code}${message}`);
+        if (log.level === 'error') {
+          appendDependencyContext(messages, log);
+        }
         if (log.code === 'ERR_PNPM_PEER_DEP_ISSUES') {
-          appendPeerDependencyIssues(messages, log.issuesByProjects);
+          const details = await formatPeerDependencyIssues(log.issuesByProjects, cwd);
+          if (details) {
+            messages.push(details);
+          }
         }
         if (typeof log.hint === 'string') {
           messages.push(log.hint);

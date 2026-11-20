@@ -1,3 +1,7 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import { formatPnpmInstallOutput, watchPnpmResolution } from '../pnpm-install-progress.ts';
@@ -27,8 +31,13 @@ describe('watchPnpmResolution', () => {
 });
 
 describe('formatPnpmInstallOutput', () => {
-  it('keeps the package, the required peer range, and the installed version', () => {
+  it('keeps the real peer conflict and respects the root peer dependency rules', async () => {
     const request = { parents: [{ name: 'react-dom', version: '18.3.1' }], wantedRange: '^18.3.1' };
+    const allowed = {
+      parents: [{ name: 'legacy-plugin', version: '1.0.0' }],
+      wantedRange: '^19',
+      foundVersion: '17.0.2',
+    };
     const output = JSON.stringify({
       name: 'pnpm',
       level: 'error',
@@ -36,24 +45,58 @@ describe('formatPnpmInstallOutput', () => {
       err: { message: 'Unmet peer dependencies' },
       issuesByProjects: {
         '.': {
-          bad: { react: [{ ...request, foundVersion: '17.0.2' }] },
-          missing: { 'optional-peer': [{ parents: [], wantedRange: '*' }] },
-        },
-        'packages/app': {
-          missing: { react: [request] },
-          intersections: { react: '^18.3.1' },
+          bad: { react: [{ ...request, foundVersion: '17.0.2' }, allowed] },
+          missing: {},
+          conflicts: [],
+          intersections: {},
         },
       },
     });
 
-    expect(formatPnpmInstallOutput(output)).toBe(
-      'ERR_PNPM_PEER_DEP_ISSUES Unmet peer dependencies\n' +
-        '  react-dom@18.3.1 requires react@^18.3.1 (found 17.0.2)\n' +
-        '  react-dom@18.3.1 requires react@^18.3.1 (missing) in packages/app',
+    const cwd = mkdtempSync(join(tmpdir(), 'vp-pnpm-peer-rules-'));
+    try {
+      writeFileSync(
+        join(cwd, 'package.json'),
+        JSON.stringify({
+          pnpm: {
+            peerDependencyRules: { allowedVersions: { 'legacy-plugin@^1>react': '17' } },
+          },
+        }),
+      );
+      const formatted = await formatPnpmInstallOutput(output, cwd);
+      expect(formatted).toContain('ERR_PNPM_PEER_DEP_ISSUES Unmet peer dependencies');
+      expect(formatted).toContain('react-dom 18.3.1');
+      expect(formatted).toContain('unmet peer react@^18.3.1: found 17.0.2');
+      expect(formatted).not.toContain('legacy-plugin');
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it.each([
+    [
+      [
+        { name: 'requester', version: '1.0.0' },
+        { name: 'parent', version: '2.0.0' },
+      ],
+      'While installing the dependencies of requester@1.0.0\n  at parent@2.0.0',
+    ],
+    [[], 'While installing a direct dependency of /project/packages/app'],
+  ])('keeps the dependency that requested an unavailable version', async (pkgsStack, context) => {
+    const error = JSON.stringify({
+      name: 'pnpm',
+      level: 'error',
+      code: 'ERR_PNPM_NO_MATCHING_VERSION',
+      err: { message: 'No matching version found for picocolors@999.0.0' },
+      pkgsStack,
+      prefix: '/project/packages/app',
+    });
+    expect(await formatPnpmInstallOutput(error, '/project')).toBe(
+      `ERR_PNPM_NO_MATCHING_VERSION No matching version found for picocolors@999.0.0\n${context}`,
     );
   });
 
-  it('keeps progress and readable errors while dropping verbose pnpm records', () => {
+  it('keeps progress and readable errors while dropping verbose pnpm records', async () => {
     const output = [
       'launcher warning',
       JSON.stringify({ name: 'pnpm:package-manifest', level: 'debug', initial: {} }),
@@ -72,7 +115,7 @@ describe('formatPnpmInstallOutput', () => {
       }),
     ].join('\n');
 
-    expect(formatPnpmInstallOutput(output)).toBe(
+    expect(await formatPnpmInstallOutput(output, '/project')).toBe(
       'launcher warning\n' +
         'ERR_PNPM_LINKED_PKG_DIR_NOT_FOUND Missing local dependency\n' +
         'Progress: resolved 1, reused 0, downloaded 1, added 0',
