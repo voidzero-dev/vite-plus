@@ -6,6 +6,6 @@
     "postinstall": "node postinstall.cjs"
   },
   "devDependencies": {
-    "vite": "8.3.8"
+    "vite": "file:./local-vite"
   }
 }

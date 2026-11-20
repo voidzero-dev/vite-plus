@@ -8,6 +8,8 @@ import { readJsonFile } from './json.ts';
 import { displayRelative } from './path.ts';
 import { formatDuration } from './terminal.ts';
 
+export const PNPM_PROBE_TIMEOUT_MS = 5000;
+
 function isPnpmLoggerName(name: unknown): name is string {
   return typeof name === 'string' && (name === 'pnpm' || name.startsWith('pnpm:'));
 }
@@ -101,7 +103,7 @@ export async function getPnpmInstallReporting(
       ],
       cwd,
       envs: { ...envs, NODE_OPTIONS: undefined },
-      timeoutMs: 5000,
+      timeoutMs: PNPM_PROBE_TIMEOUT_MS,
     });
     if (exitCode !== 0) {
       return undefined;

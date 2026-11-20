@@ -61,7 +61,7 @@ export function exitCodeFromClose(code: number | null, signal: NodeJS.Signals | 
   return signalNumber ? 128 + signalNumber : 1;
 }
 
-function listProcessParents(): [number, number][] {
+function listProcfsParents(): [number, number][] | undefined {
   if (process.platform === 'linux') {
     try {
       // Minimal Linux images may not ship ps.
@@ -81,58 +81,17 @@ function listProcessParents(): [number, number][] {
       // Fall back to ps if procfs is unavailable.
     }
   }
-  const { stdout } = spawn.sync('ps', ['-A', '-o', 'pid=', '-o', 'ppid='], {
-    env: { PATH: '/usr/bin:/bin' },
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'ignore'],
-    timeout: 5000,
-  });
-  return (stdout ?? '').split('\n').map((line) => {
-    const [pid, parent] = line.trim().split(/\s+/, 2);
-    return [Number(pid), Number(parent)];
-  });
+  return undefined;
 }
 
-function signalProcessGroup(child: ChildProcess, signal: NodeJS.Signals) {
-  if (child.pid === undefined) {
-    return;
-  }
-  try {
-    // The group can still exist after the process that started it has exited.
-    process.kill(-child.pid, signal);
-  } catch {
-    child.kill(signal);
-  }
-}
-
-function stopCommandTree(child: ChildProcess, { waitForWindows = true } = {}) {
-  const pid = child.pid;
-  if (pid === undefined || child.exitCode !== null || child.signalCode !== null) {
-    return;
-  }
-  if (process.platform === 'win32') {
-    const taskkill = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'taskkill.exe');
-    const args = ['/pid', String(pid), '/t', '/f'];
-    if (!waitForWindows) {
-      execFile(taskkill, args, { timeout: 5000, windowsHide: true }, (error) => {
-        if (error) {
-          child.kill('SIGKILL');
-        }
-      });
-      return;
-    }
-    const result = spawn.sync(taskkill, args, {
-      stdio: 'ignore',
-      timeout: 5000,
-      windowsHide: true,
-    });
-    if (result.status === 0) {
-      return;
-    }
-  } else {
+function stopPosixCommandTree(child: ChildProcess, pid: number, wait: boolean) {
+  const stopTree = (parents: [number, number][]) => {
     // The process group belongs to the caller. Only stop this child's tree.
+    if (child.exitCode !== null || child.signalCode !== null) {
+      return;
+    }
     const childrenByParent = new Map<number, number[]>();
-    for (const [childPid, parentPid] of listProcessParents()) {
+    for (const [childPid, parentPid] of parents) {
       if (!Number.isInteger(childPid) || childPid <= 1 || !Number.isInteger(parentPid)) {
         continue;
       }
@@ -154,8 +113,59 @@ function stopCommandTree(child: ChildProcess, { waitForWindows = true } = {}) {
         // A descendant can exit while we walk the tree.
       }
     }
+    child.kill('SIGKILL');
+  };
+  const parents = listProcfsParents();
+  if (parents !== undefined) {
+    stopTree(parents);
+    return;
   }
-  child.kill('SIGKILL');
+  const args = ['-A', '-o', 'pid=', '-o', 'ppid='];
+  const options = { env: { PATH: '/usr/bin:/bin' }, timeout: 5000 };
+  const stopFromPs = (stdout: string) => {
+    stopTree(
+      stdout.split('\n').map((line) => {
+        const [childPid, parentPid] = line.trim().split(/\s+/, 2);
+        return [Number(childPid), Number(parentPid)];
+      }),
+    );
+  };
+  if (wait) {
+    const { stdout } = spawn.sync('ps', args, {
+      ...options,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    stopFromPs(stdout ?? '');
+  } else {
+    execFile('ps', args, options, (_error, stdout) => stopFromPs(stdout));
+  }
+}
+
+function stopCommandTree(child: ChildProcess, { wait = true } = {}) {
+  const pid = child.pid;
+  if (pid === undefined || child.exitCode !== null || child.signalCode !== null) {
+    return;
+  }
+  if (process.platform !== 'win32') {
+    stopPosixCommandTree(child, pid, wait);
+    return;
+  }
+  const taskkill = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'taskkill.exe');
+  const args = ['/pid', String(pid), '/t', '/f'];
+  const options = { timeout: 5000, windowsHide: true };
+  if (!wait) {
+    execFile(taskkill, args, options, (error) => {
+      if (error) {
+        child.kill('SIGKILL');
+      }
+    });
+    return;
+  }
+  const result = spawn.sync(taskkill, args, { ...options, stdio: 'ignore' });
+  if (result.status !== 0) {
+    child.kill('SIGKILL');
+  }
 }
 
 export async function runCommandSilently(options: RunCommandOptions): Promise<RunCommandResult> {
@@ -163,9 +173,7 @@ export async function runCommandSilently(options: RunCommandOptions): Promise<Ru
   const timeoutMs = idleTimeoutMs ?? options.timeoutMs;
   const hasDeadline = idleTimeoutMs === undefined && timeoutMs !== undefined;
   const shouldWatchIdle = idleTimeoutMs === undefined ? undefined : options.shouldWatchIdle;
-  // A separate group lets a deadline stop descendants whose wrapper has exited.
-  // Installs keep the caller's process group for terminal and CI cancellation.
-  const useProcessGroup = hasDeadline && process.platform !== 'win32';
+  // Captured commands stay in the caller's group for terminal and CI cancellation.
   const child = spawn(options.command, options.args, {
     // No stdin pipe: leaving one open would deadlock any descendant `.ps1`
     // shim whose `$MyInvocation.ExpectingInput` branch waits for EOF on
@@ -173,14 +181,11 @@ export async function runCommandSilently(options: RunCommandOptions): Promise<Ru
     stdio: ['ignore', 'pipe', 'pipe'],
     cwd: options.cwd,
     env: options.envs,
-    detached: useProcessGroup,
   });
   const removeExitHandler =
-    useProcessGroup || idleTimeoutMs !== undefined
+    idleTimeoutMs !== undefined
       ? onExit((_code, signal) => {
-          if (useProcessGroup) {
-            signalProcessGroup(child, signal ?? 'SIGKILL');
-          } else if (signal === null) {
+          if (signal === null) {
             // Terminal signals already reach the child in the caller's group.
             stopCommandTree(child);
           }
@@ -198,11 +203,8 @@ export async function runCommandSilently(options: RunCommandOptions): Promise<Ru
     const startTimer = () => {
       timer = setTimeout(() => {
         timedOut = true;
-        if (useProcessGroup) {
-          signalProcessGroup(child, 'SIGKILL');
-        } else {
-          stopCommandTree(child, { waitForWindows: !hasDeadline });
-        }
+        // Deadline callers can proceed while platform cleanup finishes.
+        stopCommandTree(child, { wait: !hasDeadline });
         // A descendant may still hold a pipe open after the wrapper exits.
         child.stdout?.destroy();
         child.stderr?.destroy();
