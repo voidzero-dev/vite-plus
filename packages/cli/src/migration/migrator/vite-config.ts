@@ -431,15 +431,22 @@ function importedPackBindings(
       return [];
     }
     const value = unwrapTypeExpression(property.value);
-    const expressions =
-      value.type === 'ObjectExpression'
-        ? value.properties.flatMap((member) =>
-            member.type === 'SpreadElement' ? [unwrapTypeExpression(member.argument)] : [],
-          )
-        : [value];
-    return expressions.flatMap((expression) =>
-      expression.type === 'Identifier' ? [{ property, value: expression }] : [],
-    );
+    const entries = value.type === 'ArrayExpression' ? value.elements : [value];
+    return entries.flatMap((entry) => {
+      if (!entry) {
+        return [];
+      }
+      const config = unwrapTypeExpression(entry.type === 'SpreadElement' ? entry.argument : entry);
+      const expressions =
+        config.type === 'ObjectExpression'
+          ? config.properties.flatMap((member) =>
+              member.type === 'SpreadElement' ? [unwrapTypeExpression(member.argument)] : [],
+            )
+          : [config];
+      return expressions.flatMap((expression) =>
+        expression.type === 'Identifier' ? [{ property, value: expression }] : [],
+      );
+    });
   });
   const directory = path.dirname(vitePath);
   const withoutExtension = path.join(path.dirname(packPath), path.parse(packPath).name);
