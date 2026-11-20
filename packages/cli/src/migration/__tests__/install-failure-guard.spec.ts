@@ -119,7 +119,7 @@ describe('handleInstallResult', () => {
 describe('getMigrationInstallWatchOptions', () => {
   const cwd = '/project';
   const projectVersion = '9.15.9';
-  const projectWatchOptions = { idleTimeoutMs: 300_000, packageManagerVersion: projectVersion };
+  const projectWatchOptions = { idleTimeoutMs: 300_000, effectivePnpmVersion: projectVersion };
   const overridePnpm = {
     name: 'pnpm',
     version: '10.33.0',
@@ -172,7 +172,7 @@ describe('getMigrationInstallWatchOptions', () => {
   });
 
   it.each([
-    ['10.33.0', '9.15.1', { idleTimeoutMs: 300_000, packageManagerVersion: '9.15.1' }],
+    ['10.33.0', '9.15.1', { idleTimeoutMs: 300_000, effectivePnpmVersion: '9.15.1' }],
     ['9.15.9', '12.21.0', undefined],
   ])(
     'checks the version selected by the global pnpm %s launcher',

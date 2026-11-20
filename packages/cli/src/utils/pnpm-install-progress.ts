@@ -1,7 +1,5 @@
 import { join } from 'node:path';
 
-import { coerce, isGreaterThanOrEqual } from 'verkit';
-
 import { resolveNpmRegistry } from '../../binding/index.js';
 import { getVpCommand, runCommandSilently } from './command.ts';
 import { readJsonFile } from './json.ts';
@@ -37,7 +35,7 @@ type PnpmInstallOutputMode = 'info' | 'warn' | 'error' | 'silent' | 'json' | 'nd
 export async function getPnpmInstallOutputMode(
   cwd: string,
   envs: NodeJS.ProcessEnv,
-): Promise<PnpmInstallOutputMode> {
+): Promise<PnpmInstallOutputMode | undefined> {
   const probeEnv = pnpmProbeEnv(envs);
   const [reporter, loglevel, json, parseable] = await Promise.all(
     ['reporter', 'loglevel', 'json', 'parseable'].map(async (key) => {
@@ -63,6 +61,9 @@ export async function getPnpmInstallOutputMode(
   }
   if (reporter === 'silent' || loglevel === 'silent') {
     return 'silent';
+  }
+  if ([reporter, loglevel, json, parseable].includes(undefined)) {
+    return undefined;
   }
   if (reporter === 'ndjson') {
     return 'ndjson';
@@ -121,35 +122,10 @@ function getPnpmTerminalError(log: Record<string, unknown> | undefined) {
       return {
         code: log.code ?? error.code ?? error.name,
         message: error.message,
-        errno: log.errno,
       };
     }
   }
   return undefined;
-}
-
-export function restorePnpmInstallExitCode(
-  exitCode: number,
-  output: string,
-  mode: PnpmInstallOutputMode,
-  packageManagerVersion: string | undefined,
-): number {
-  if (exitCode <= 1 || (mode !== 'silent' && mode !== 'json') || !packageManagerVersion) {
-    return exitCode;
-  }
-  const version = coerce(packageManagerVersion);
-  if (version?.major !== 9 || isGreaterThanOrEqual(version, '9.15.8')) {
-    return exitCode;
-  }
-  // Older pnpm 9 releases exit 1 in silent, JSON and parseable modes,
-  // while the NDJSON reporter uses the terminal error's errno.
-  for (const line of output.split(/\r?\n/).toReversed()) {
-    const error = getPnpmTerminalError(parsePnpmLog(line));
-    if (error) {
-      return error.errno === exitCode ? 1 : exitCode;
-    }
-  }
-  return exitCode;
 }
 
 function formatRequestRetry(log: Record<string, unknown>): string | undefined {
@@ -342,6 +318,30 @@ export async function formatPnpmInstallOutput(
           `WARN ${deprecatedSubdependencies.length} deprecated subdependencies found: ${dependencies}`,
         );
         deprecatedSubdependencies.length = 0;
+      }
+    } else if (log.name === 'pnpm:hook' && log.level === 'debug') {
+      // readPackage's context.log() uses debug records in pnpm 9's info reporter.
+      if (mode === 'info' && typeof log.hook === 'string' && typeof log.message === 'string') {
+        const label = typeof log.prefix === 'string' ? displayRelative(log.prefix, cwd) : '';
+        const message = redactRegistryUrls(log.message);
+        messages.push(label ? `${label} ${log.hook}: ${message}` : `${log.hook}: ${message}`);
+      }
+    } else if (mode === 'silent' && log.level === 'error') {
+      // The silent reporter suppresses errors returned to the CLI and pnpm's
+      // own diagnostics, but can still print an internal error from a hook.
+      const error = asRecord(log.err);
+      if (
+        getPnpmTerminalError(log) ||
+        (typeof error.code === 'string' && error.code.startsWith('ERR_PNPM_'))
+      ) {
+        continue;
+      }
+      const message = error.message ?? log.message;
+      if (typeof message === 'string') {
+        messages.push(redactRegistryUrls(message));
+      }
+      if (typeof error.stack === 'string') {
+        messages.push(redactRegistryUrls(error.stack));
       }
     } else if (
       mode !== 'info' &&

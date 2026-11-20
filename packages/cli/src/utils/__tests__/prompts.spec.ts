@@ -35,6 +35,7 @@ describe('runViteInstall', () => {
   });
 
   afterEach(() => {
+    vi.mocked(runCommandSilently).mockReset();
     vi.unstubAllEnvs();
     rmSync(cwd, { recursive: true, force: true });
   });
@@ -50,14 +51,16 @@ describe('runViteInstall', () => {
     });
     const result = await runViteInstall(cwd, false, ['--no-frozen-lockfile'], {
       packageManager: PackageManager.pnpm,
-      packageManagerVersion: '9.15.9',
+      packageManagerVersion: '11.22.0',
+      effectivePnpmVersion: '9.15.9',
       idleTimeoutMs: 2000,
       silent: true,
     });
     const command = vi.mocked(runCommandSilently).mock.lastCall?.[0];
-    expect(command?.args.slice(-7)).toEqual([
+    expect(command?.args.slice(-8)).toEqual([
       'install',
       '--no-frozen-lockfile',
+      '--ignore-scripts',
       '--',
       '--config._reporter=ndjson',
       '--config._loglevel=info',
@@ -68,6 +71,38 @@ describe('runViteInstall', () => {
     expect(command?.shouldWatchIdle).toBeTypeOf('function');
     expect(result.status).toBe('installed');
     expect(readFileSync(configPath, 'utf8')).toBe(config);
+  });
+
+  it.each([
+    ['reporter', 'silent'],
+    ['loglevel', 'silent'],
+    ['json', 'true'],
+    ['parseable', 'true'],
+    ['reporter', undefined],
+  ])('keeps the native old pnpm reporter for %s=%s', async (key, value) => {
+    const run = vi.mocked(runCommandSilently);
+    run.mockImplementation(async ({ args }) => {
+      if (args.includes('install')) {
+        return { exitCode: 1, stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) };
+      }
+      return {
+        exitCode: args.includes(key) && value === undefined ? 1 : 0,
+        stdout: Buffer.from(args.includes(key) ? (value ?? '') : 'undefined'),
+        stderr: Buffer.alloc(0),
+      };
+    });
+    const result = await runViteInstall(cwd, false, ['--no-frozen-lockfile'], {
+      packageManager: PackageManager.pnpm,
+      packageManagerVersion: '9.15.9',
+      effectivePnpmVersion: '9.15.7',
+      idleTimeoutMs: 4000,
+      silent: true,
+    });
+    const install = run.mock.lastCall?.[0];
+    expect(install?.args.slice(-2)).toEqual(['install', '--no-frozen-lockfile']);
+    expect(install?.idleTimeoutMs).toBeUndefined();
+    expect(install?.shouldWatchIdle).toBeUndefined();
+    expect(result).toMatchObject({ status: 'failed', exitCode: 1 });
   });
 
   it.each([true, false])('reports the timeout for initialInstall=%s', async (initialInstall) => {
@@ -99,14 +134,14 @@ describe('runViteInstall', () => {
   });
 
   it.each([
-    [false, 1],
+    [false, 7],
     [true, 124],
   ] as const)(
     'preserves the silent install exit code with idleTimedOut=%s',
     async (timedOut, exitCode) => {
       const run = vi.mocked(runCommandSilently);
       run.mockResolvedValueOnce({
-        exitCode: 124,
+        exitCode,
         ...(timedOut && { idleTimedOut: true as const }),
         stdout: Buffer.from(
           [
@@ -136,7 +171,7 @@ describe('runViteInstall', () => {
         const result = await runViteInstall(cwd, false, undefined, {
           idleTimeoutMs: 300_000,
           packageManager: PackageManager.pnpm,
-          packageManagerVersion: '9.15.1',
+          packageManagerVersion: '9.15.9',
           silent: true,
         });
         expect(result).toMatchObject({ status: 'failed', exitCode });
