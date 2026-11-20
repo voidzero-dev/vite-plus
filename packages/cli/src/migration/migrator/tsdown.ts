@@ -195,7 +195,8 @@ export function collectPackagesKeepingTsdown(
       const converted = findDivergedTsdownPackConfig(original, workspaceRoot);
       if (converted) {
         keptPackages.add(dir);
-        if (report && !reportedConfigs.has(original)) {
+        // The JSON merge already reports its conflicts, including retained scripts.
+        if (report && !original.endsWith('.json') && !reportedConfigs.has(original)) {
           reportedConfigs.add(original);
           warnMigration(
             `Kept standalone tsdown because ${displayRelative(original)} differs from ${displayRelative(converted)}. Please manually merge the configs before switching to \`vp pack\`. See ${documentationUrl('/guide/migrate#tsdown')}`,

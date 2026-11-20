@@ -383,9 +383,6 @@ export function findDivergedTsdownPackConfig(
   tsdownConfigPath: string,
   workspaceRoot: string,
 ): string | undefined {
-  if (tsdownConfigPath.endsWith('.json')) {
-    return undefined;
-  }
   const projectPath = path.dirname(tsdownConfigPath);
   const { viteConfig } = detectConfigs(projectPath);
   if (!viteConfig) {
@@ -394,10 +391,17 @@ export function findDivergedTsdownPackConfig(
   const vitePath = path.join(projectPath, viteConfig);
   const convertedName = convertedPackConfigName(tsdownConfigPath);
   const convertedPath = path.join(projectPath, convertedName);
-  const convertedImports = tsdownConfigImportPaths(convertedName);
   try {
+    if (!hasConfigKey(vitePath, 'pack')) {
+      return undefined;
+    }
+    if (tsdownConfigPath.endsWith('.json')) {
+      return matchesInlinePackConfig(vitePath, tsdownConfigPath, workspaceRoot)
+        ? undefined
+        : vitePath;
+    }
+    const convertedImports = tsdownConfigImportPaths(convertedName);
     if (
-      !hasConfigKey(vitePath, 'pack') ||
       !configImports(vitePath, fs.readFileSync(vitePath, 'utf8')).some(({ value }) =>
         convertedImports.includes(value),
       )
