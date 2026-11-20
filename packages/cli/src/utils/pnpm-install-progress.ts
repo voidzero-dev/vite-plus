@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 
 import { resolveNpmRegistry } from '../../binding/index.js';
+import { getVpCommand, runCommandSilently } from './command.ts';
 import { readJsonFile } from './json.ts';
 import { displayRelative } from './path.ts';
 import { formatDuration } from './terminal.ts';
@@ -18,6 +19,29 @@ function parsePnpmLog(line: string): Record<string, unknown> | undefined {
     // The launcher and scripts with inherited stdio can also write plain text.
   }
   return undefined;
+}
+
+export async function hasQuietPnpmReporter(cwd: string, envs: NodeJS.ProcessEnv): Promise<boolean> {
+  const quietSettings = { reporter: 'silent', loglevel: 'silent', json: 'true', parseable: 'true' };
+  // Only read settings. The project hooks and preloads belong to the install.
+  const probeEnv = { ...envs, NODE_OPTIONS: undefined, npm_config_ignore_pnpmfile: 'true' };
+  const matches = await Promise.all(
+    Object.entries(quietSettings).map(async ([key, value]) => {
+      try {
+        const { exitCode, stdout } = await runCommandSilently({
+          ...getVpCommand(['pm', 'config', 'get', key]),
+          cwd,
+          envs: probeEnv,
+          idleTimeoutMs: 5000,
+        });
+        // The native command prints the setting after any reporter logs.
+        return exitCode === 0 && stdout.toString().trim().split(/\r?\n/).at(-1) === value;
+      } catch {
+        return false;
+      }
+    }),
+  );
+  return matches.some(Boolean);
 }
 
 export function watchPnpmResolution(): (line: string) => boolean {
@@ -191,13 +215,21 @@ async function formatPeerDependencyIssues(issuesByProjects: unknown, cwd: string
   }
 }
 
-export async function formatPnpmInstallOutput(output: string, cwd: string): Promise<string> {
+export async function formatPnpmInstallOutput(
+  output: string,
+  cwd: string,
+  { errorsOnly = false } = {},
+): Promise<string> {
   const messages: string[] = [];
   const progress = { resolved: 0, found_in_store: 0, fetched: 0, imported: 0 };
   for (const line of output.split(/\r?\n/)) {
     const log = parsePnpmLog(line);
     if (!log) {
       messages.push(line);
+    } else if (errorsOnly && log.level !== 'error') {
+      if (log.name === 'pnpm:lifecycle' && log.stdio === 'stderr' && typeof log.line === 'string') {
+        messages.push(log.line);
+      }
     } else if (log.name === 'pnpm:progress') {
       if (typeof log.status === 'string' && Object.hasOwn(progress, log.status)) {
         progress[log.status as keyof typeof progress]++;

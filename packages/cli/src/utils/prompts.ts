@@ -9,7 +9,11 @@ import {
 import { PackageManager } from '../types/index.ts';
 import { isPnpmIgnoredBuildsError, parseInstallGatedBuilds } from './approve-builds.ts';
 import { getVpCommand, runCommandSilently } from './command.ts';
-import { formatPnpmInstallOutput, watchPnpmResolution } from './pnpm-install-progress.ts';
+import {
+  formatPnpmInstallOutput,
+  hasQuietPnpmReporter,
+  watchPnpmResolution,
+} from './pnpm-install-progress.ts';
 import { reconcilePreviewBridgeRegistry } from './preview-registry.ts';
 import { getSilentSpinner, getSpinner } from './spinner.ts';
 import { accent, errorMsg, warnMsg } from './terminal.ts';
@@ -202,14 +206,15 @@ export async function runViteInstall(
   const spinner = options?.silent ? getSilentSpinner() : getSpinner(interactive);
   const startTime = Date.now();
   spinner.start(`Installing dependencies...`);
+  const envs = options?.packageManagerOverride
+    ? { ...process.env, VP_PACKAGE_MANAGER: options.packageManagerOverride }
+    : process.env;
   const { exitCode, stderr, stdout, idleTimedOut } = await runCommandSilently({
     ...getVpCommand(['install', ...installArgs]),
     cwd,
     idleTimeoutMs,
     shouldWatchIdle,
-    envs: options?.packageManagerOverride
-      ? { ...process.env, VP_PACKAGE_MANAGER: options.packageManagerOverride }
-      : process.env,
+    envs,
   });
   const combinedOutput = detectIgnoredBuilds ? `${stdout.toString()}\n${stderr.toString()}` : '';
   const pendingBuilds = detectIgnoredBuilds
@@ -233,8 +238,12 @@ export async function runViteInstall(
     } satisfies CommandRunSummary;
   } else {
     spinner.stop(idleTimedOut ? 'Install timed out' : 'Install failed');
+    const errorsOnly =
+      shouldWatchIdle !== undefined && !idleTimedOut && (await hasQuietPnpmReporter(cwd, envs));
     prompts.log.info(
-      shouldWatchIdle ? await formatPnpmInstallOutput(stdout.toString(), cwd) : stdout.toString(),
+      shouldWatchIdle
+        ? await formatPnpmInstallOutput(stdout.toString(), cwd, { errorsOnly })
+        : stdout.toString(),
     );
     prompts.log.error(stderr.toString());
     let failureMessage: string | undefined;

@@ -147,6 +147,36 @@ describe('formatPnpmInstallOutput', () => {
     );
   });
 
+  it('keeps errors without replaying progress and lifecycle status in quiet mode', async () => {
+    const output = [
+      'plain launcher output',
+      { name: 'pnpm:progress', status: 'resolved', level: 'debug' },
+      { name: 'pnpm:lifecycle', stage: 'postinstall', script: 'node install.cjs', level: 'debug' },
+      {
+        name: 'pnpm:lifecycle',
+        stage: 'postinstall',
+        line: 'working',
+        stdio: 'stdout',
+        level: 'debug',
+      },
+      {
+        name: 'pnpm:lifecycle',
+        stage: 'postinstall',
+        line: 'setup failed',
+        stdio: 'stderr',
+        level: 'debug',
+      },
+      { name: 'pnpm:lifecycle', stage: 'postinstall', exitCode: 7, level: 'debug' },
+      { name: 'pnpm', level: 'error', code: 'ELIFECYCLE', err: { message: 'Command failed' } },
+    ]
+      .map((line) => (typeof line === 'string' ? line : JSON.stringify(line)))
+      .join('\n');
+
+    expect(await formatPnpmInstallOutput(output, '/project', { errorsOnly: true })).toBe(
+      'plain launcher output\nsetup failed\nELIFECYCLE Command failed',
+    );
+  });
+
   it.each([401, 403])('shows safe registry configuration for HTTP %s', async (status) => {
     const cwd = mkdtempSync(join(tmpdir(), 'vp-pnpm-auth-context-'));
     try {
