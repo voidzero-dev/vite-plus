@@ -88,6 +88,14 @@ impl SavedStdinTerminal {
         #[cfg(not(unix))]
         let _ = self;
     }
+
+    #[napi]
+    pub fn restore_on_default_hangup(&self) {
+        #[cfg(unix)]
+        self.state.restore_on_default_hangup();
+        #[cfg(not(unix))]
+        let _ = self;
+    }
 }
 
 /// Capture stdin's terminal mode when it has one.

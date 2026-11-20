@@ -23,5 +23,5 @@ steps = [{ argv = ["node", "probe.mjs", "--hangup"], timeout = 25000 }]
 name = "command_dev_local_signal_during_config"
 vp = "local"
 skip-platforms = ["windows"]
-comment = "SIGINT and SIGTERM stop interactive Vite during synchronous config evaluation."
+comment = "SIGINT, SIGTERM, and SIGHUP stop interactive Vite during synchronous config evaluation."
 steps = [{ argv = ["node", "probe-config-interrupt.mjs"], timeout = 25000 }]

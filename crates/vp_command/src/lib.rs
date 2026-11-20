@@ -369,28 +369,71 @@ pub fn fix_stdio_streams() {
 
 /// The stdin terminal settings before an interactive command starts.
 #[cfg(unix)]
-pub struct StdinTerminalState(nix::sys::termios::Termios);
+pub struct StdinTerminalState(nix::libc::termios);
+
+#[cfg(unix)]
+static HANGUP_TERMINAL: std::sync::OnceLock<nix::libc::termios> = std::sync::OnceLock::new();
 
 #[cfg(unix)]
 impl StdinTerminalState {
     #[must_use]
     pub fn capture() -> Option<Self> {
-        nix::sys::termios::tcgetattr(std::io::stdin()).ok().map(Self)
+        nix::sys::termios::tcgetattr(std::io::stdin()).ok().map(|state| Self(state.into()))
     }
 
     pub fn restore(&self) {
+        restore_stdin_terminal(&self.0);
+    }
+
+    /// Restore stdin before the default SIGHUP action terminates this process.
+    pub fn restore_on_default_hangup(&self) {
         use nix::{
-            sys::termios::{SetArg, tcsetattr},
-            unistd::{getpgrp, tcgetpgrp},
+            libc,
+            sys::signal::{SaFlags, SigAction, SigHandler, SigSet, Signal, sigaction},
         };
 
-        let stdin = std::io::stdin();
-        // A background process must leave the terminal to its foreground job.
-        if tcgetpgrp(&stdin).is_ok_and(|foreground| foreground != getpgrp()) {
+        let mut previous = std::mem::MaybeUninit::<libc::sigaction>::uninit();
+        // SAFETY: passing a null action only queries the current disposition.
+        if unsafe { libc::sigaction(libc::SIGHUP, std::ptr::null(), previous.as_mut_ptr()) } != 0 {
             return;
         }
-        let _ = tcsetattr(stdin, SetArg::TCSANOW, &self.0);
+        // SAFETY: the successful query initialized the disposition.
+        if unsafe { previous.assume_init() }.sa_sigaction != libc::SIG_DFL {
+            return;
+        }
+        HANGUP_TERMINAL.get_or_init(|| self.0);
+        let action = SigAction::new(
+            SigHandler::Handler(restore_stdin_after_hangup),
+            SaFlags::SA_RESETHAND,
+            SigSet::empty(),
+        );
+        // SAFETY: the handler uses immutable state and async-signal-safe operations.
+        let _ = unsafe { sigaction(Signal::SIGHUP, &action) };
     }
+}
+
+#[cfg(unix)]
+fn restore_stdin_terminal(state: &nix::libc::termios) {
+    use nix::libc;
+
+    // SAFETY: these terminal operations are async-signal-safe. A background
+    // process must leave the terminal to its foreground job.
+    unsafe {
+        let foreground = libc::tcgetpgrp(libc::STDIN_FILENO);
+        if foreground >= 0 && foreground != libc::getpgrp() {
+            return;
+        }
+        libc::tcsetattr(libc::STDIN_FILENO, libc::TCSANOW, state);
+    }
+}
+
+#[cfg(unix)]
+extern "C" fn restore_stdin_after_hangup(signal: nix::libc::c_int) {
+    if let Some(state) = HANGUP_TERMINAL.get() {
+        restore_stdin_terminal(state);
+    }
+    // SAFETY: raise is async-signal-safe. SA_RESETHAND restored the default action.
+    unsafe { nix::libc::raise(signal) };
 }
 
 /// Restore the terminal and SIGINT disposition after an interactive child exits.

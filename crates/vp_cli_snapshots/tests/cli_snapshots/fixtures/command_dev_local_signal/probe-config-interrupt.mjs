@@ -33,3 +33,4 @@ async function stopDuringConfig(signal) {
 
 await stopDuringConfig('SIGINT');
 await stopDuringConfig('SIGTERM');
+await stopDuringConfig('SIGHUP');
