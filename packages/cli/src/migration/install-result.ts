@@ -1,4 +1,6 @@
+import { downloadPackageManager, getPackageManagerOverride } from '../../binding/index.js';
 import { PackageManager } from '../types/index.ts';
+import { getVpCommand, runCommandSilently } from '../utils/command.ts';
 import type { CommandRunSummary } from '../utils/prompts.ts';
 import { warnMsg } from '../utils/terminal.ts';
 import type { MigrationReport } from './report.ts';
@@ -6,14 +8,46 @@ import type { MigrationReport } from './report.ts';
 const PNPM_9_INSTALL_IDLE_TIMEOUT_MS = 5 * 60_000;
 
 /** Bound silent pnpm 9 dependency resolution during non-interactive migration. */
-export function getMigrationInstallIdleTimeoutMs(
+export async function getMigrationInstallIdleTimeoutMs(
+  cwd: string,
   interactive: boolean | undefined,
   packageManager: PackageManager | undefined,
   version: string | undefined,
-): number | undefined {
-  return !interactive && packageManager === PackageManager.pnpm && version?.startsWith('9.')
-    ? PNPM_9_INSTALL_IDLE_TIMEOUT_MS
-    : undefined;
+): Promise<number | undefined> {
+  if (interactive || process.env.VP_SKIP_INSTALL) {
+    return undefined;
+  }
+  try {
+    const override = getPackageManagerOverride();
+    if ((override?.name ?? packageManager) !== PackageManager.pnpm) {
+      return undefined;
+    }
+    if (process.env.VP_CLI_BIN) {
+      // The global launcher can select a system binary ahead of the project pin.
+      const { exitCode, stdout } = await runCommandSilently({
+        ...getVpCommand(['env', 'current', 'pm', '--json']),
+        cwd,
+        envs: process.env,
+      });
+      if (exitCode !== 0) {
+        return undefined;
+      }
+      const { package_manager: selection } = JSON.parse(stdout.toString()) as {
+        package_manager?: { name: string; version: string };
+      };
+      if (selection?.name !== PackageManager.pnpm) {
+        return undefined;
+      }
+      version = selection.version;
+    } else if (override) {
+      // The local launcher uses the same provider as this binding.
+      version = (await downloadPackageManager({ ...override, cwd })).version;
+    }
+    return version?.startsWith('9.') ? PNPM_9_INSTALL_IDLE_TIMEOUT_MS : undefined;
+  } catch {
+    // Let the install command report any manager selection error.
+    return undefined;
+  }
 }
 
 /**

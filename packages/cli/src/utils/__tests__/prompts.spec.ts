@@ -25,10 +25,10 @@ vi.mock('../command.ts', async (importOriginal) => ({
 }));
 
 describe('runViteInstall', () => {
-  it('captures pnpm resolution events without rewriting silent logging preferences', async () => {
+  it('requests pnpm resolution events without rewriting logging preferences', async () => {
     const cwd = mkdtempSync(join(tmpdir(), 'vp-pnpm-install-reporter-'));
     const configPath = join(cwd, '.npmrc');
-    const config = 'reporter=silent\nloglevel=silent\n';
+    const config = 'reporter=silent\nloglevel=silent\njson=true\nparseable=true\n';
     writeFileSync(configPath, config);
     try {
       vi.mocked(runCommandSilently).mockResolvedValueOnce({
@@ -43,12 +43,14 @@ describe('runViteInstall', () => {
         silent: true,
       });
       const command = vi.mocked(runCommandSilently).mock.lastCall?.[0];
-      expect(command?.args.slice(-5)).toEqual([
+      expect(command?.args.slice(-7)).toEqual([
         'install',
         '--no-frozen-lockfile',
         '--',
         '--reporter=ndjson',
         '--loglevel=info',
+        '--config.json=false',
+        '--config.parseable=false',
       ]);
       expect(command?.idleTimeoutMs).toBe(2000);
       expect(command?.shouldWatchIdle).toBeTypeOf('function');
@@ -80,13 +82,20 @@ describe('runViteInstall', () => {
         stderr: Buffer.alloc(0),
       });
 
-      const result = await runViteInstall('/project', false, undefined, {
-        idleTimeoutMs: 300_000,
-        initialInstall,
-        silent: true,
-      });
+      const stderr = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        const result = await runViteInstall('/project', false, undefined, {
+          idleTimeoutMs: 300_000,
+          initialInstall,
+          silent: true,
+        });
 
-      expect(result).toMatchObject({ status: 'failed', exitCode: 124, failureMessage });
+        expect(result).toMatchObject({ status: 'failed', exitCode: 124, failureMessage });
+        expect(stderr).toHaveBeenCalledTimes(1);
+        expect(stderr).toHaveBeenCalledWith(expect.any(String), failureMessage);
+      } finally {
+        stderr.mockRestore();
+      }
     },
   );
 });

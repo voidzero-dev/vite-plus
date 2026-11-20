@@ -12,7 +12,7 @@ import { getVpCommand, runCommandSilently } from './command.ts';
 import { formatPnpmInstallOutput, watchPnpmResolution } from './pnpm-install-progress.ts';
 import { reconcilePreviewBridgeRegistry } from './preview-registry.ts';
 import { getSilentSpinner, getSpinner } from './spinner.ts';
-import { accent } from './terminal.ts';
+import { accent, errorMsg, warnMsg } from './terminal.ts';
 
 export interface CommandRunSummary {
   durationMs: number;
@@ -188,8 +188,14 @@ export async function runViteInstall(
   const idleTimeoutMs = options?.idleTimeoutMs;
   const shouldWatchIdle = idleTimeoutMs === undefined ? undefined : watchPnpmResolution();
   if (idleTimeoutMs !== undefined) {
-    // Request resolution events even with reporter=silent or loglevel=silent.
-    installArgs.push('--', '--reporter=ndjson', '--loglevel=info');
+    // pnpm disables reporter events when either JSON or parseable output is enabled.
+    installArgs.push(
+      '--',
+      '--reporter=ndjson',
+      '--loglevel=info',
+      '--config.json=false',
+      '--config.parseable=false',
+    );
   }
 
   const spinner = options?.silent ? getSilentSpinner() : getSpinner(interactive);
@@ -227,7 +233,7 @@ export async function runViteInstall(
   } else {
     spinner.stop(idleTimedOut ? 'Install timed out' : 'Install failed');
     prompts.log.info(
-      shouldWatchIdle ? formatPnpmInstallOutput(stdout.toString()) : stdout.toString(),
+      shouldWatchIdle ? await formatPnpmInstallOutput(stdout.toString(), cwd) : stdout.toString(),
     );
     prompts.log.error(stderr.toString());
     let failureMessage: string | undefined;
@@ -235,10 +241,10 @@ export async function runViteInstall(
       const reason = `stopped after ${idleTimeoutMs / 1000} seconds without output.`;
       if (options?.initialInstall) {
         failureMessage = `Initial dependency resolution ${reason}`;
-        prompts.log.warn(failureMessage);
+        warnMsg(failureMessage);
       } else {
         failureMessage = `Dependency resolution ${reason} If pnpm hangs again, update the project's pnpm pin. Run \`vp install --no-frozen-lockfile\` in ${cwd} to retry.`;
-        prompts.log.error(failureMessage);
+        errorMsg(failureMessage);
       }
     } else {
       prompts.log.info(`You may need to run "vp install" manually in ${cwd}`);
