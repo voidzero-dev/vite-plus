@@ -188,13 +188,14 @@ export async function runViteInstall(
   const idleTimeoutMs = options?.idleTimeoutMs;
   const shouldWatchIdle = idleTimeoutMs === undefined ? undefined : watchPnpmResolution();
   if (idleTimeoutMs !== undefined) {
-    // pnpm disables reporter events when either JSON or parseable output is enabled.
+    // pnpm 9 normalizes these keys for the installer but skips underscore-prefixed
+    // keys when exporting raw config to lifecycle scripts.
     installArgs.push(
       '--',
-      '--reporter=ndjson',
-      '--loglevel=info',
-      '--config.json=false',
-      '--config.parseable=false',
+      '--config._reporter=ndjson',
+      '--config._loglevel=info',
+      '--config._json=false',
+      '--config._parseable=false',
     );
   }
 

@@ -59,10 +59,10 @@ describe('runViteInstall', () => {
       'install',
       '--no-frozen-lockfile',
       '--',
-      '--reporter=ndjson',
-      '--loglevel=info',
-      '--config.json=false',
-      '--config.parseable=false',
+      '--config._reporter=ndjson',
+      '--config._loglevel=info',
+      '--config._json=false',
+      '--config._parseable=false',
     ]);
     expect(command?.idleTimeoutMs).toBe(2000);
     expect(command?.shouldWatchIdle).toBeTypeOf('function');
