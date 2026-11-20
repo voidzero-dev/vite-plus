@@ -147,7 +147,7 @@
   "peerDependencies": {
     "@arethetypeswrong/core": "^0.18.1",
     "@types/node": "^20.19.0 || >=22.12.0",
-    "@typescript/native-preview": "*",
+    "@typescript/native-preview": "^7.0.0-0",
     "@vitejs/devtools": "^0.7.1 || ^0.8.0",
     "@volar/typescript": "~2.4.0",
     "@vue/language-core": "~3.2.0 || ~3.3.0",

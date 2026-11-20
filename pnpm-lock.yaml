@@ -580,7 +580,7 @@ importers:
         specifier: ^20.19.0 || >=22.12.0
         version: 26.6.6
       '@typescript/native-preview':
-        specifier: '*'
+        specifier: ^7.0.0-0
         version: 7.0.0-dev.20260707.2
       '@volar/typescript':
         specifier: ~2.4.0
