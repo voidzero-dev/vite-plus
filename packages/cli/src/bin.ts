@@ -13,6 +13,7 @@
 import module from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isMainThread } from 'node:worker_threads';
 
 import { ensureBlockingStdio, run } from '../binding/index.js';
 import { maybePrintCommandHelp } from './help.ts';
@@ -166,9 +167,10 @@ if (maybePrintCommandHelp(args)) {
       process.exit(0);
     }
 
-    // The package bin owns its PID. A forked caller needs its IPC channel.
+    // Limit process replacement to the standalone package launcher.
     const execDev =
       command === 'dev' &&
+      isMainThread &&
       process.platform !== 'win32' &&
       path.basename(process.argv[1] ?? '') === 'vp' &&
       process.send === undefined;

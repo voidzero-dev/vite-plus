@@ -6,7 +6,7 @@ export default {
       name: 'report-listening-port',
       configureServer(server) {
         server.httpServer.once('listening', () => {
-          console.log(`listening ${server.httpServer.address().port}`);
+          console.log(`listening ${server.httpServer.address().port} ${process.pid}`);
         });
       },
     },

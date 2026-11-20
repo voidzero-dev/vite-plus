@@ -7,24 +7,36 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 
-async function listeningPort(stdout) {
+const workerMode = process.argv[2] === '--worker';
+
+async function listenerInfo(stdout, launchPid) {
+  let listener;
   for await (const line of createInterface({ input: stdout })) {
-    const match = /^listening (\d+)$/.exec(line);
+    const match = /^listening (\d+) (\d+)$/.exec(line);
     if (match) {
-      return Number(match[1]);
+      listener = { port: Number(match[1]), pid: Number(match[2]) };
+      if (!workerMode) {
+        assert.equal(listener.pid, launchPid);
+        return listener;
+      }
+      assert.notEqual(listener.pid, launchPid, 'Vite replaced the Worker host');
+    }
+    if (listener && line === 'worker host alive') {
+      return listener;
     }
   }
-  assert.fail('Vite exited before listening');
+  assert.fail('Vite did not listen in the expected process');
 }
 
 const cache = mkdtempSync(join(tmpdir(), 'vp-dev-cache-'));
 const env = { ...process.env, NODE_COMPILE_CACHE: cache };
 delete env.NODE_DISABLE_COMPILE_CACHE;
-const child = spawn('vp', ['dev', '--host', '127.0.0.1', '--port', '0', '--base', '/probe/'], {
-  detached: true,
-  stdio: ['ignore', 'pipe', 'inherit'],
-  env,
-});
+const args = ['dev', '--host', '127.0.0.1', '--port', '0', '--base', '/probe/'];
+const child = spawn(
+  workerMode ? process.execPath : 'vp',
+  workerMode ? ['worker-host.mjs', ...args] : args,
+  { detached: true, stdio: ['ignore', 'pipe', 'inherit'], env },
+);
 const exited = once(child, 'exit');
 function stopProcessGroup() {
   if (child.pid !== undefined) {
@@ -40,7 +52,7 @@ function stopProcessGroup() {
 
 const timer = setTimeout(stopProcessGroup, 20_000);
 try {
-  const port = await listeningPort(child.stdout);
+  const { port, pid } = await listenerInfo(child.stdout, child.pid);
   const response = await fetch(`http://127.0.0.1:${port}/probe/`, {
     signal: AbortSignal.timeout(3_000),
   });
@@ -49,13 +61,17 @@ try {
   assert.match(html, /Project-local Vite/);
   assert.match(html, /src="\/probe\/@vite\/client"/);
   console.log('Vite served the project with the client under /probe/');
-  assert.ok(
-    readdirSync(cache, { recursive: true, withFileTypes: true }).some((entry) => entry.isFile()),
-    'vp saves its compile cache before starting Vite',
-  );
-  console.log('vp saved its compile cache before starting Vite');
+  if (workerMode) {
+    console.log('The Worker host stayed alive while Vite ran as a child');
+  } else {
+    assert.ok(
+      readdirSync(cache, { recursive: true, withFileTypes: true }).some((entry) => entry.isFile()),
+      'vp saves its compile cache before starting Vite',
+    );
+    console.log('vp saved its compile cache before starting Vite');
+  }
 
-  child.kill('SIGTERM');
+  process.kill(pid, 'SIGTERM');
   const [code, signal] = await exited;
   const socket = connect(port, '127.0.0.1');
   try {
@@ -66,7 +82,8 @@ try {
     socket.destroy();
   }
   assert.deepEqual([code, signal], [143, null]);
-  console.log('SIGTERM to the launch PID closed the port with exit code 143');
+  const target = workerMode ? 'Vite child' : 'launch PID';
+  console.log(`SIGTERM to the ${target} closed the port with exit code 143`);
 } finally {
   clearTimeout(timer);
   stopProcessGroup();
