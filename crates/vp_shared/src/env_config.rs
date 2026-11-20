@@ -191,6 +191,12 @@ pub struct EnvConfig {
     /// Emergency bypass of the global CLI installation lockfile, enabled only by `1`.
     pub setup_skip_install_lockfile: bool,
 
+    /// Load the Vite config through Vite instead of reading it statically,
+    /// enabled only by `1`.
+    ///
+    /// Env: `VP_SKIP_STATIC_CONFIG`
+    pub skip_static_config: bool,
+
     /// Override package manager and version.
     ///
     /// Env: `VP_PACKAGE_MANAGER`
@@ -282,6 +288,8 @@ impl EnvConfig {
             setup_node_version_file: std::env::var(env_vars::VP_SETUP_NODE_VERSION_FILE).ok(),
             setup_skip_install_lockfile: std::env::var(env_vars::VP_SETUP_SKIP_INSTALL_LOCKFILE)
                 .as_deref()
+                == Ok("1"),
+            skip_static_config: std::env::var(env_vars::VP_SKIP_STATIC_CONFIG).as_deref()
                 == Ok("1"),
             package_manager: std::env::var(env_vars::VP_PACKAGE_MANAGER).ok(),
             npm_version: std::env::var(env_vars::VP_NPM_VERSION).ok(),
