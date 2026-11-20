@@ -1,6 +1,6 @@
 # migration_pack_tsdown_shared
 
-A workspace member can keep using a linked tsdown config and build with its converted pack config.
+A workspace member can build with its converted pack config and still read named exports from the linked tsdown config.
 
 ## `node create-config-link.mjs`
 
@@ -47,11 +47,14 @@ packages/lib/shared-out/lib.mjs: file
 Shared pack asset
 ```
 
+## `node change-build-output.mjs`
+
+
 ## `cd packages/lib && vp build`
 
 
-## `vpt stat-file packages/lib/dist/index.html --assert file`
+## `vpt stat-file packages/lib/vite-out/index.html --assert file`
 
 ```
-packages/lib/dist/index.html: file
+packages/lib/vite-out/index.html: file
 ```

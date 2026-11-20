@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import type { Node, ObjectExpression, Program } from '@oxc-project/types';
+import type { ObjectExpression, ObjectProperty, Program, Span } from '@oxc-project/types';
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { braceExpand } from 'minimatch';
 import { type OxlintConfig } from 'oxlint';
@@ -39,6 +39,7 @@ import {
   defaultConfigValue,
   objectProperty,
   parseSource,
+  propertyName,
   sameConfigModule,
   sameStaticValue,
   staticObject,
@@ -411,22 +412,45 @@ export function configNeedsVitePlus(projectPath: string, keepTsdownDependency: b
   }
 }
 
-function usesImportedPackConfig(
+function packProperties(program: Program, requireStatic = false): (ObjectProperty | undefined)[] {
+  return configReturnValues(defaultConfigValue(program)).map((config) =>
+    config?.type === 'ObjectExpression' && (!requireStatic || staticObject(config, true))
+      ? objectProperty(config, 'pack')
+      : undefined,
+  );
+}
+
+function importedPackBindings(
   { program, bindings }: ReturnType<typeof parseSource>,
-  packs: readonly (Node | undefined)[],
+  packs: readonly (ObjectProperty | undefined)[],
   vitePath: string,
   packPath: string,
-): boolean {
+) {
+  const assignments = packs.flatMap((property) => {
+    if (!property) {
+      return [];
+    }
+    const value = unwrapTypeExpression(property.value);
+    const expressions =
+      value.type === 'ObjectExpression'
+        ? value.properties.flatMap((member) =>
+            member.type === 'SpreadElement' ? [unwrapTypeExpression(member.argument)] : [],
+          )
+        : [value];
+    return expressions.flatMap((expression) =>
+      expression.type === 'Identifier' ? [{ property, value: expression }] : [],
+    );
+  });
   const directory = path.dirname(vitePath);
   const withoutExtension = path.join(path.dirname(packPath), path.parse(packPath).name);
   const jsPath = packPath.replace(/\.(m|c)?ts$/, '.$1js');
-  return program.body.some((statement) => {
+  return program.body.flatMap((statement) => {
     if (statement.type !== 'ImportDeclaration' || statement.importKind === 'type') {
-      return false;
+      return [];
     }
     const specifier = statement.source.value;
     if (!specifier.startsWith('./') && !specifier.startsWith('../')) {
-      return false;
+      return [];
     }
     const imported = path.resolve(directory, specifier);
     // Treat another file at the written path as an explicit import of that file.
@@ -434,16 +458,104 @@ function usesImportedPackConfig(
       imported !== packPath &&
       ((imported !== jsPath && imported !== withoutExtension) || fs.existsSync(imported))
     ) {
-      return false;
+      return [];
     }
-    return statement.specifiers.some((spec) => {
-      if (spec.type !== 'ImportDefaultSpecifier') {
-        return false;
-      }
-      const references = bindings.find(({ start }) => start === spec.local.start)?.references;
-      return packs.every((pack) => pack?.type === 'Identifier' && references?.includes(pack.start));
-    });
+    const binding = statement.specifiers.find(
+      (spec) =>
+        spec.type === 'ImportDefaultSpecifier' ||
+        (spec.type === 'ImportSpecifier' &&
+          spec.importKind !== 'type' &&
+          propertyName(spec.imported) === 'default'),
+    );
+    const references = bindings.find(({ start }) => start === binding?.local.start)?.references;
+    if (!binding || !references) {
+      return [];
+    }
+    const uses = assignments.filter(({ value }) => references.includes(value.start));
+    return uses.length
+      ? [{ statement, binding, uses, onlyPack: references.length === uses.length }]
+      : [];
   });
+}
+
+function importSeparator(source: string, comments: readonly Span[], left: Span, right: Span) {
+  for (
+    let index = source.indexOf(',', left.end);
+    index !== -1 && index < right.start;
+    index = source.indexOf(',', index + 1)
+  ) {
+    if (!comments.some(({ start, end }) => start <= index && index < end)) {
+      return index;
+    }
+  }
+  return undefined;
+}
+
+function rewritePackConfigImports(
+  source: string,
+  comments: readonly Span[],
+  imports: ReturnType<typeof importedPackBindings>,
+  originalName: string,
+  convertedName: string,
+): string {
+  const edits: Array<Span & { text: string }> = [];
+  const originalStem = path.parse(originalName).name;
+  const convertedStem = path.parse(convertedName).name;
+  const newline = source.includes('\r\n') ? '\r\n' : '\n';
+  let nextName = 0;
+  for (const { statement, binding, uses, onlyPack } of imports) {
+    const original = statement.source.value;
+    const filename = path.posix.basename(original);
+    const converted =
+      original.slice(0, -filename.length) + filename.replace(originalStem, convertedStem);
+    const literal = JSON.stringify(converted);
+    if (onlyPack && statement.specifiers.length === 1) {
+      edits.push({ start: statement.source.start, end: statement.source.end, text: literal });
+      continue;
+    }
+
+    let name = binding.local.name;
+    const index = statement.specifiers.indexOf(binding);
+    const next = statement.specifiers[index + 1];
+    const previous = statement.specifiers[index - 1];
+    // A named default specifier can share the braces with other named imports.
+    // Keep punctuation and comments outside the removed binding.
+    const separator = next
+      ? importSeparator(source, comments, binding, next)
+      : previous?.type === 'ImportSpecifier'
+        ? importSeparator(source, comments, previous, binding)
+        : undefined;
+    if (onlyPack && separator !== undefined) {
+      edits.push({ start: binding.start, end: binding.end, text: '' });
+      edits.push({ start: separator, end: separator + 1, text: '' });
+    } else {
+      // Other consumers still need the original module and binding.
+      do {
+        name = nextName++ === 0 ? 'vitePackConfig' : `vitePackConfig${nextName}`;
+      } while (source.includes(name));
+      for (const { property, value } of uses) {
+        edits.push({
+          start: value.start,
+          end: value.end,
+          text: property.shorthand ? `pack: ${name}` : name,
+        });
+      }
+    }
+    const lineEnd = source.indexOf(newline, statement.end);
+    const insertion =
+      lineEnd === -1
+        ? source.length
+        : (comments.find(({ start, end }) => start <= lineEnd && lineEnd < end)?.end ?? lineEnd);
+    edits.push({
+      start: insertion,
+      end: insertion,
+      text: `${newline}import ${name} from ${literal};`,
+    });
+  }
+  for (const { start, end, text } of edits.toSorted((left, right) => right.start - left.start)) {
+    source = source.slice(0, start) + text + source.slice(end);
+  }
+  return source;
 }
 
 /** Return the active pack configuration when equivalence cannot be established. */
@@ -473,25 +585,31 @@ export function findDivergedTsdownPackConfig(
       return undefined;
     }
     const source = parseSource(vitePath, fs.readFileSync(vitePath, 'utf8'));
-    const packs = configReturnValues(defaultConfigValue(source.program)).map((config) => {
-      const pack = staticObject(config, true) && objectProperty(config, 'pack')?.value;
-      return pack ? unwrapTypeExpression(pack) : undefined;
-    });
+    const packs = packProperties(source.program, true);
     if (packs.length === 0) {
       return vitePath;
     }
-    if (usesImportedPackConfig(source, packs, vitePath, tsdownConfigPath)) {
+    const usesConfig = (file: string) =>
+      importedPackBindings(source, packs, vitePath, file).some(
+        ({ uses }) =>
+          uses.length === packs.length &&
+          uses.every(({ property, value }) => unwrapTypeExpression(property.value) === value),
+      );
+    if (usesConfig(tsdownConfigPath)) {
       return undefined;
     }
     const { content } = rewriteTsdownConfigForPack(tsdownConfigPath, workspaceRoot);
     const expected = content ?? fs.readFileSync(tsdownConfigPath, 'utf8');
-    if (usesImportedPackConfig(source, packs, vitePath, convertedPath)) {
+    if (usesConfig(convertedPath)) {
       return sameConfigModule(convertedPath, expected, fs.readFileSync(convertedPath, 'utf8'))
         ? undefined
         : convertedPath;
     }
     const expectedValue = defaultConfigValue(parseSource(tsdownConfigPath, expected).program);
-    return expectedValue && packs.every((pack) => pack && sameStaticValue(pack, expectedValue))
+    return expectedValue &&
+      packs.every(
+        (pack) => pack && sameStaticValue(unwrapTypeExpression(pack.value), expectedValue),
+      )
       ? undefined
       : vitePath;
   } catch {
@@ -514,13 +632,18 @@ function mergeRetainedTsdownConfig(
   const convertedPath = path.join(path.dirname(tsdownConfigPath), convertedName);
   const source = fs.readFileSync(viteConfigPath, 'utf8');
   const hasPack = hasConfigKey(viteConfigPath, 'pack');
-  const imports = hasPack ? configImports(viteConfigPath, source) : [];
-  const convertedImports = tsdownConfigImportPaths(convertedName);
-  const importsConverted = imports.some(({ value }) => convertedImports.includes(value));
+  const parsed = hasPack ? parseSource(viteConfigPath, source) : undefined;
+  const packs = parsed ? packProperties(parsed.program) : [];
+  const originalImports = parsed
+    ? importedPackBindings(parsed, packs, viteConfigPath, tsdownConfigPath)
+    : [];
+  const importsConverted =
+    !!parsed && importedPackBindings(parsed, packs, viteConfigPath, convertedPath).length > 0;
   const sourceIsLink = fs.lstatSync(tsdownConfigPath).isSymbolicLink();
   const convertedEntry = fs.lstatSync(convertedPath, { throwIfNoEntry: false });
   if (
     importsConverted &&
+    originalImports.length === 0 &&
     (!sourceIsLink || (convertedEntry?.isSymbolicLink() && fs.existsSync(convertedPath)))
   ) {
     return (
@@ -531,8 +654,6 @@ function mergeRetainedTsdownConfig(
   if (!keepTsdownConfig && !importsConverted) {
     return undefined;
   }
-  const originalPaths = tsdownConfigImportPaths(originalName);
-  const originalImports = imports.filter(({ value }) => originalPaths.includes(value));
   if (hasPack && !importsConverted && originalImports.length === 0) {
     return undefined;
   }
@@ -559,13 +680,14 @@ function mergeRetainedTsdownConfig(
   }
 
   let config = source;
-  if (hasPack && !importsConverted) {
-    const originalStem = `./${path.parse(originalName).name}`;
-    const convertedStem = `./${path.parse(convertedName).name}`;
-    for (const entry of originalImports.toReversed()) {
-      const specifier = JSON.stringify(entry.value.replace(originalStem, convertedStem));
-      config = config.slice(0, entry.start) + specifier + config.slice(entry.end);
-    }
+  if (parsed && originalImports.length > 0) {
+    config = rewritePackConfigImports(
+      source,
+      parsed.comments,
+      originalImports,
+      originalName,
+      convertedName,
+    );
   } else if (!hasPack) {
     const result = mergeTsdownConfig(viteConfigPath, `./${convertedName}`);
     if (!result.updated) {
@@ -625,7 +747,7 @@ function mergeRetainedTsdownConfig(
   }
   const included = tsconfigEdits.apply();
   try {
-    if (!importsConverted) {
+    if (config !== source) {
       fs.writeFileSync(viteConfigPath, config);
     }
   } catch (error) {

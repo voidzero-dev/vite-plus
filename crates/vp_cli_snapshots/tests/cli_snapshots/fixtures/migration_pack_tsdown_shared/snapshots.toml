@@ -4,7 +4,7 @@ vp = "local"
 local-registry = true
 skip-platforms = ["windows"]
 unset-env = ["VP_SKIP_INSTALL"]
-comment = "A workspace member can keep using a linked tsdown config and build with its converted pack config."
+comment = "A workspace member can build with its converted pack config and still read named exports from the linked tsdown config."
 steps = [
   { argv = ["node", "create-config-link.mjs"], snapshot = false },
   { argv = ["vp", "migrate", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks"], snapshot = false },
@@ -16,6 +16,7 @@ steps = [
   { argv = ["vp", "pack"], cwd = "packages/lib", snapshot = false },
   ["vpt", "stat-file", "packages/lib/shared-out/lib.mjs", "--assert", "file"],
   ["vpt", "print-file", "packages/lib/shared-out/public/asset.txt"],
+  { argv = ["node", "change-build-output.mjs"], snapshot = false },
   { argv = ["vp", "build"], cwd = "packages/lib", snapshot = false },
-  ["vpt", "stat-file", "packages/lib/dist/index.html", "--assert", "file"],
+  ["vpt", "stat-file", "packages/lib/vite-out/index.html", "--assert", "file"],
 ]

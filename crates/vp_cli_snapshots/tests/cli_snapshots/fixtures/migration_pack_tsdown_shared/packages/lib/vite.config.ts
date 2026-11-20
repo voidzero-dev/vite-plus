@@ -1,3 +1,3 @@
-import pack from './tsdown.config.ts';
+import pack, { viteOutDir } from './tsdown.config.ts';
 
-export default { pack };
+export default { pack, build: { outDir: viteOutDir } };
