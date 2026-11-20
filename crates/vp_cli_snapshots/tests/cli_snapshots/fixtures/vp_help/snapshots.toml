@@ -3,3 +3,13 @@ name = "help"
 vp = ["local", "global"]
 comment = "Top-level help output, one snapshot per flavor. The parity matrix keeps the two command surfaces honest."
 steps = [["vp", "help"]]
+
+[[case]]
+name = "vite_help_without_package"
+env = { VP_NODE_VERSION = "22.23.4" }
+vp = "global"
+steps = [
+  ["vpt", "stat-file", "package.json", "--assert", "missing"],
+  { argv = ["vp", "help", "dev", "--"], timeout = 30000, continue-on-failure = true },
+  ["vp", "help", "build", "--"],
+]

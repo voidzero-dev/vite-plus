@@ -1353,8 +1353,13 @@ pub fn try_parse_args_from_with_options(
     render_options: RenderOptions,
 ) -> Result<Args, clap::error::Error> {
     let cmd = apply_custom_help(Args::command(), render_options);
-    let matches = cmd.try_get_matches_from(args)?;
-    Args::from_arg_matches(&matches).map_err(|e| e.into())
+    let argv: Vec<_> = args.into_iter().collect();
+    let matches = cmd.try_get_matches_from(&argv)?;
+    let mut parsed = Args::from_arg_matches(&matches)?;
+    if let Some(Commands::Dev { args } | Commands::Build { args }) = &mut parsed.command {
+        vp_shared::restore_leading_arg_separator(&argv, args);
+    }
+    Ok(parsed)
 }
 
 #[cfg(test)]

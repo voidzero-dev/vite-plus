@@ -339,7 +339,7 @@ pub async fn install(
         let mut conflicts = Vec::<(String, String)>::new();
         let mut finalize_blocked = false;
 
-        // 5.1 Detect binary ownership conflicts before writing metadata.
+        // 5.1 Detect binary ownership conflicts and foreign files before changing any installation.
         for bin_name in &bin_names {
             match BinConfig::load(bin_name).await {
                 Ok(Some(config)) => {
@@ -359,6 +359,34 @@ pub async fn install(
             }
         }
         if finalize_blocked {
+            continue;
+        }
+
+        let bin_dir = match get_bin_dir().map_err(|error| package_error(&package_name, error)) {
+            Ok(bin_dir) => bin_dir,
+            Err(error) => {
+                let _ = cleanup_failed_install(&install_dir).await;
+                if first_error.is_none() {
+                    first_error = Some(error);
+                }
+                continue;
+            }
+        };
+        // Reject foreign files at new shim paths here, because `--force` uninstalls owners in 5.2.
+        if let Some(path) = bin_names.iter().find_map(|bin_name| foreign_bin(&bin_dir, bin_name)) {
+            let _ = cleanup_failed_install(&install_dir).await;
+            if first_error.is_none() {
+                first_error = Some(package_error(
+                    &package_name,
+                    Error::Other(
+                        format!(
+                            "{} already exists and is not managed by Vite+",
+                            path.as_path().display()
+                        )
+                        .into(),
+                    ),
+                ));
+            }
             continue;
         }
 
@@ -402,33 +430,6 @@ pub async fn install(
         }
 
         // 5.3 Prepare metadata and remove binaries that the new install no longer provides.
-        let bin_dir = match get_bin_dir().map_err(|error| package_error(&package_name, error)) {
-            Ok(bin_dir) => bin_dir,
-            Err(error) => {
-                let _ = cleanup_failed_install(&install_dir).await;
-                if first_error.is_none() {
-                    first_error = Some(error);
-                }
-                continue;
-            }
-        };
-        // Reject foreign files at new shim paths before activating the installation.
-        if let Some(path) = bin_names.iter().find_map(|bin_name| foreign_bin(&bin_dir, bin_name)) {
-            let _ = cleanup_failed_install(&install_dir).await;
-            if first_error.is_none() {
-                first_error = Some(package_error(
-                    &package_name,
-                    Error::Other(
-                        format!(
-                            "{} already exists and is not managed by Vite+",
-                            path.as_path().display()
-                        )
-                        .into(),
-                    ),
-                ));
-            }
-            continue;
-        }
         let metadata_version = installed_version.as_deref().unwrap_or("unknown");
 
         let mut metadata = PackageMetadata::new(
@@ -1508,6 +1509,55 @@ touch "$npm_config_prefix/prepared"
             assert_eq!(installations.len(), 1);
             assert_eq!(installations[0].path(), installation.as_path());
         }).await;
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_force_install_rejected_by_foreign_bin_keeps_conflicting_package() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = tempfile::tempdir().unwrap();
+        vp_shared::EnvConfig::with_vars_async(
+            [(env_vars::VP_HOME, temp.path())],
+            |env| async move {
+                // A local npm stand-in installs `pkg-a` with `shared`, and `pkg-b` with `shared` and `foreign`.
+                let node_bin = env.dirs.data.join("js_runtime/node/22.18.0/bin");
+                std::fs::create_dir_all(&node_bin).unwrap();
+                std::fs::write(node_bin.join("node"), b"").unwrap();
+                let npm = node_bin.join("npm");
+                std::fs::write(
+                    &npm,
+                    r#"#!/bin/sh
+set -eu
+name="$4"
+package="$npm_config_prefix/lib/node_modules/$name"
+mkdir -p "$package"
+if [ "$name" = pkg-a ]; then bins='"shared":"cli"'; else bins='"shared":"cli","foreign":"cli"'; fi
+printf '{"name":"%s","version":"1.0.0","bin":{%s}}' "$name" "$bins" > "$package/package.json"
+printf '#!/bin/sh\n' > "$package/cli"
+"#,
+                )
+                .unwrap();
+                std::fs::set_permissions(&npm, std::fs::Permissions::from_mode(0o755)).unwrap();
+                let options = |force| InstallOptions {
+                    node_version: Some("22.18.0"),
+                    force,
+                    ignore_scripts: true,
+                    concurrency: 1,
+                    update: false,
+                };
+
+                install(&["pkg-a".to_string()], options(false)).await.unwrap();
+                let bin_dir = get_bin_dir().unwrap();
+                std::fs::write(bin_dir.join("foreign").as_path(), b"user file").unwrap();
+
+                assert!(install(&["pkg-b".to_string()], options(true)).await.is_err());
+                assert!(PackageMetadata::load("pkg-a").await.unwrap().is_some());
+                assert_eq!(BinConfig::load("shared").await.unwrap().unwrap().package, "pkg-a");
+                assert!(PackageMetadata::load("pkg-b").await.unwrap().is_none());
+            },
+        )
+        .await;
     }
 
     #[test]
