@@ -160,6 +160,19 @@ export function detectMigrationWarnings(
   );
 }
 
+export function detectDefaultTsdownConfig(projectPath: string): string | undefined {
+  const names = [
+    'tsdown.config.ts',
+    'tsdown.config.mts',
+    'tsdown.config.cts',
+    'tsdown.config.js',
+    'tsdown.config.mjs',
+    'tsdown.config.cjs',
+    'tsdown.config.json',
+  ];
+  return names.find((name) => fs.existsSync(path.join(projectPath, name)));
+}
+
 export function detectConfigs(projectPath: string): ConfigFiles {
   const configs: ConfigFiles = {};
 
@@ -189,22 +202,12 @@ export function detectConfigs(projectPath: string): ConfigFiles {
 
   // Check for tsdown.config.*
   // https://tsdown.dev/options/config-file
-  const tsdownConfigs = [
-    'tsdown.config.ts',
-    'tsdown.config.mts',
-    'tsdown.config.cts',
-    'tsdown.config.js',
-    'tsdown.config.mjs',
-    'tsdown.config.cjs',
-    'tsdown.config.json',
-    'tsdown.config',
-  ];
   // Additionally, you can define your configuration directly in the `tsdown` field of your package.json file
-  for (const config of tsdownConfigs) {
-    if (fs.existsSync(path.join(projectPath, config))) {
-      configs.tsdownConfig = config;
-      break;
-    }
+  const tsdownConfig =
+    detectDefaultTsdownConfig(projectPath) ??
+    (fs.existsSync(path.join(projectPath, 'tsdown.config')) ? 'tsdown.config' : undefined);
+  if (tsdownConfig) {
+    configs.tsdownConfig = tsdownConfig;
   }
 
   // Check for tsup.config.* (still detected even though tsdown supersedes it —

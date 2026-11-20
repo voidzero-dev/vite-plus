@@ -5,6 +5,7 @@ import { parseLiteralCommands } from '../../../binding/index.js';
 import type { WorkspacePackage } from '../../types/index.ts';
 import { documentationUrl } from '../../utils/documentation.ts';
 import { displayRelative } from '../../utils/path.ts';
+import { detectDefaultTsdownConfig } from '../detector.ts';
 import type { MigrationReport } from '../report.ts';
 import {
   getCommandStartIndex,
@@ -129,8 +130,9 @@ export function collectPackagesKeepingTsdown(
   packages: readonly WorkspacePackage[] = [],
   report?: Pick<MigrationReport, 'warnings'>,
 ): ReadonlySet<string> {
+  const workspaceRoot = path.resolve(rootDir);
   const projectPaths = new Set([
-    path.resolve(rootDir),
+    workspaceRoot,
     ...packages.map((pkg) => path.resolve(rootDir, pkg.path)),
   ]);
   const keptPackages = new Set<string>();
@@ -167,16 +169,34 @@ export function collectPackagesKeepingTsdown(
     }
   }
   // Keeping a manifest's tsdown scripts also keeps unflagged commands in it.
-  // After a directory change they can read another package's default config.
+  // These can run in another package or find a default config in a parent.
   for (const dir of keptPackages) {
     for (const cwd of defaultDirectories.get(dir) ?? []) {
       if (cwd === undefined || !projectPaths.has(cwd)) {
         return projectPaths;
       }
       keptPackages.add(cwd);
+      const config = findDefaultTsdownConfig(cwd, workspaceRoot);
+      if (config) {
+        for (const owner of findConfigOwners(config, projectPaths)) {
+          keptPackages.add(owner);
+        }
+      }
     }
   }
   return keptPackages;
+}
+
+function findDefaultTsdownConfig(cwd: string, workspaceRoot: string): string | undefined {
+  for (let directory = cwd; ; directory = path.dirname(directory)) {
+    const config = detectDefaultTsdownConfig(directory);
+    if (config) {
+      return path.join(directory, config);
+    }
+    if (directory === workspaceRoot || directory === path.dirname(directory)) {
+      return undefined;
+    }
+  }
 }
 
 // A shell expansion or directory selection can load a config from anywhere

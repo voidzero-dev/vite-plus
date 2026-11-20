@@ -1230,6 +1230,7 @@ export function rewriteRootWorkspacePackageJson(
     workspaceUsesVitest,
     workspaceUsesWebdriverioProvider(projectPath, packages),
   );
+  const keepTsdown = tsdownPackages.size > 0;
 
   let movedPnpmSettings: Record<string, unknown> | undefined;
   editJsonFile<{
@@ -1248,8 +1249,8 @@ export function rewriteRootWorkspacePackageJson(
     pruneLegacyWrapperAliases(pkg.pnpm?.overrides);
     // Remove stale overrides for bundled and official opt-in providers before
     // aligning them with Vitest. Preserve community-provider overrides.
-    dropRemovePackageOverrideKeys(pkg.resolutions);
-    dropRemovePackageOverrideKeys(pkg.overrides);
+    dropRemovePackageOverrideKeys(pkg.resolutions, [], keepTsdown);
+    dropRemovePackageOverrideKeys(pkg.overrides, [], keepTsdown);
     // Common case (no workspace-wide direct vitest): strip a lingering managed
     // `vitest` from the shared root sinks so it isn't re-pinned.
     if (!workspaceUsesVitest) {
@@ -1290,7 +1291,7 @@ export function rewriteRootWorkspacePackageJson(
         // Strip selector-shaped overrides (e.g. `parent>@vitest/browser-playwright`)
         // whose target is a removed package, before re-merging the user's
         // overrides into the new pnpm config.
-        dropRemovePackageOverrideKeys(pkg.pnpm?.overrides, [], tsdownPackages.size > 0);
+        dropRemovePackageOverrideKeys(pkg.pnpm?.overrides, [], keepTsdown);
         // Common case: drop a lingering managed `vitest` override before merging.
         // `mergeManagedPnpmPeerDependencyRules` drops its peer rule.
         if (!workspaceUsesVitest) {

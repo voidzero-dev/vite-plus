@@ -185,6 +185,59 @@ describe('explicit tsdown config selection', () => {
   });
 
   it.each([false, true])(
+    'keeps the default config a retained member can load (local config=%s)',
+    (hasLocalConfig) => {
+      const lib = path.join(tmpDir, 'packages/lib');
+      fs.mkdirSync(lib, { recursive: true });
+      fs.writeFileSync(path.join(tmpDir, 'package.json'), '{"name":"root"}');
+      fs.writeFileSync(
+        path.join(lib, 'package.json'),
+        JSON.stringify({
+          name: 'lib',
+          scripts: { build: 'tsdown', release: 'tsdown -c release.ts' },
+        }),
+      );
+      const original = '{"entry":"src/lib.ts","outDir":"inherited-out"}';
+      const rootConfig = path.join(tmpDir, 'tsdown.config.json');
+      fs.writeFileSync(rootConfig, original);
+      if (hasLocalConfig) {
+        fs.writeFileSync(path.join(lib, 'tsdown.config.json'), '{}');
+      }
+      const workspace = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+      workspace.packages = [{ name: 'lib', path: 'packages/lib' }];
+
+      expect(collectPackagesKeepingTsdown(tmpDir, workspace.packages)).toEqual(
+        new Set(hasLocalConfig ? [lib] : [lib, tmpDir]),
+      );
+      finalizeCoreMigrationForExistingVitePlus(workspace, true);
+      expect(fs.existsSync(rootConfig)).toBe(!hasLocalConfig);
+      if (!hasLocalConfig) {
+        expect(fs.readFileSync(rootConfig, 'utf8')).toBe(original);
+      }
+    },
+  );
+
+  it.each([
+    { manager: PackageManager.yarn, field: 'resolutions', version: '1.22.22' },
+    { manager: PackageManager.bun, field: 'overrides', version: '1.3.11' },
+  ])('keeps the $manager pin for a retained script', ({ manager, field, version }) => {
+    const manifest = path.join(tmpDir, 'package.json');
+    fs.writeFileSync(
+      manifest,
+      JSON.stringify({
+        name: 'app',
+        scripts: { release: 'tsdown -c release.ts' },
+        devDependencies: { tsdown: '^0.22.2' },
+        [field]: { tsdown: '0.22.2' },
+      }),
+    );
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, manager, version), true, true);
+    expect(readJson(manifest)).toHaveProperty([field, 'tsdown'], '0.22.2');
+    expect(readJson(manifest)).toHaveProperty('devDependencies.tsdown', '^0.22.2');
+    expect(readJson(manifest)).toHaveProperty('scripts.release', 'tsdown -c release.ts');
+  });
+
+  it.each([false, true])(
     'keeps the shared tsdown dependency with a root member (upgrade=%s)',
     (upgrade) => {
       const lib = path.join(tmpDir, 'packages/lib');
@@ -253,6 +306,26 @@ describe('explicit tsdown config selection', () => {
       expect(fs.readFileSync(converted, 'utf8')).toBe(packSource);
     },
   );
+
+  it('uses the bundled config type when the standalone import is the only change', () => {
+    const tsdown = path.join(tmpDir, 'tsdown.config.ts');
+    const original =
+      "import { defineConfig } from 'tsdown';\nexport default defineConfig({ entry: ['src/lib.ts'] });\n";
+    fs.writeFileSync(tsdown, original);
+    const installedTsdown = path.join(tmpDir, 'node_modules/tsdown');
+    fs.mkdirSync(installedTsdown, { recursive: true });
+    fs.writeFileSync(path.join(installedTsdown, 'package.json'), '{"version":"0.23.4"}');
+
+    expect(mergeTsdownConfigFile(tmpDir, true, createMigrationReport(), true)).toBe(true);
+    expect(fs.readFileSync(tsdown, 'utf8')).toBe(original);
+    expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).toContain(
+      './vite-pack.config.js',
+    );
+    expect(fs.readFileSync(path.join(tmpDir, 'vite-pack.config.ts'), 'utf8')).toBe(
+      original.replace("'tsdown'", "'vite-plus/pack'"),
+    );
+    expect(mergeTsdownConfigFile(tmpDir, true, createMigrationReport(), true)).toBe(false);
+  });
 });
 
 describe('Yarn PnP migration preflight', () => {

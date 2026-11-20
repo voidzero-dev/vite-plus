@@ -2424,7 +2424,9 @@ pub fn rewrite_imports_in_directory_with_options(
                 skip_packages.skip_vitest = true;
                 skip_packages.skip_oxlint = true;
             }
-            if skip_packages.all_skipped() {
+            if skip_packages.all_skipped()
+                && !(package_context.preserve_tsdown && is_vite_config_file(&file_path))
+            {
                 return (file_path, FileResult::Unchanged(Vec::new()), false);
             }
 
@@ -2513,12 +2515,16 @@ fn rewrite_import(
     let content = std::fs::read_to_string(file_path)?;
     let is_tsdown_config = file_path.file_stem().is_some_and(|stem| stem == "tsdown.config");
     let is_vite_config = is_vite_config_file(file_path);
-    let preserve_defaults =
-        if !skip_packages.skip_tsdown && (is_vite_config || is_tsdown_config && !preserve_tsdown) {
-            Some(pack_config::preserve_legacy_defaults(file_path, root, is_tsdown_config, &content))
-        } else {
-            None
-        };
+    // A retained standalone dependency affects its imports, while the pack
+    // options in a Vite config are still read by the bundled toolchain.
+    let rewrite_pack_options = if is_vite_config {
+        preserve_tsdown || !skip_packages.skip_tsdown
+    } else {
+        is_tsdown_config && !preserve_tsdown && !skip_packages.skip_tsdown
+    };
+    let preserve_defaults = rewrite_pack_options.then(|| {
+        pack_config::preserve_legacy_defaults(file_path, root, is_tsdown_config, &content)
+    });
     let mut skip_packages = *skip_packages;
     skip_packages.skip_tsdown |= preserve_tsdown;
 
@@ -2555,17 +2561,13 @@ pub fn rewrite_tsdown_config_for_pack(
     let original = std::fs::read_to_string(config_path)?;
     let legacy_defaults =
         pack_config::preserve_legacy_defaults(config_path, workspace_root, true, &original);
-    let content = pack_config::rewrite_pack_config(&original, true, legacy_defaults);
-    let warnings = pack_config::pack_config_warnings(&content, true);
-    if content == original {
-        return Ok((None, warnings));
-    }
-
     let skip_packages =
         SkipPackages { skip_vite: true, skip_vitest: true, skip_tsdown: false, skip_oxlint: true };
     let rewritten =
-        rewrite_import_content_full(&content, &skip_packages, false, false, config_path.to_str())?;
-    Ok((Some(rewritten.content), warnings))
+        rewrite_import_content_full(&original, &skip_packages, false, false, config_path.to_str())?;
+    let content = pack_config::rewrite_pack_config(&rewritten.content, true, legacy_defaults);
+    let warnings = pack_config::pack_config_warnings(&content, true);
+    Ok(((content != original).then_some(content), warnings))
 }
 
 /// Fast pre-filter to skip expensive AST parsing for files with no relevant imports.
@@ -2830,6 +2832,33 @@ import { defineConfig as pack } from 'tsdown';
             source.replace("tsdown", "vite-plus/pack")
         );
         assert_eq!(std::fs::read_to_string(root.join("plugin/vite.config.mjs")).unwrap(), source);
+    }
+
+    #[test]
+    fn retained_tsdown_dependency_does_not_skip_pack_options() {
+        let temp = tempdir().unwrap();
+        let root = temp.path();
+        let vite = "export default { pack: { publicDir: 'public' } };";
+        let standalone = "export default { publicDir: 'public' };";
+        write_pack_fixture(root, "package.json", r#"{"dependencies":{"tsdown":"0.22.14"}}"#);
+        write_pack_fixture(root, "vite.config.ts", vite);
+        write_pack_fixture(root, "tsdown.config.ts", standalone);
+
+        let result = rewrite_imports_in_directory_with_options(
+            root,
+            RewriteImportsOptions {
+                import_rule: ImportRuleConfig::from_json(r#"{"enabled":false,"overrides":[]}"#)
+                    .unwrap(),
+                preserve_tsdown_dirs: vec![root.to_path_buf()],
+                ..RewriteImportsOptions::default()
+            },
+        )
+        .unwrap();
+
+        assert_eq!(result.modified_files, [root.join("vite.config.ts")]);
+        let actual = std::fs::read_to_string(root.join("vite.config.ts")).unwrap();
+        assert!(actual.contains("copy: 'public'"), "{actual}");
+        assert_eq!(std::fs::read_to_string(root.join("tsdown.config.ts")).unwrap(), standalone);
     }
 
     fn write_tsdown_fixture(root: &Path, version: &str) {
