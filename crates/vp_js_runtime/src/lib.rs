@@ -68,6 +68,5 @@ pub use providers::{
 pub use runtime::{
     JsRuntime, JsRuntimeType, ProjectNodeVersion, VersionResolution, VersionSource,
     download_runtime, download_runtime_for_project, download_runtime_with_provider,
-    ensure_managed_node_allowed, is_valid_version, normalize_version, read_package_json,
-    resolve_node_version, select_project_node_version,
+    ensure_managed_node_allowed, resolve_node_version, select_project_node_version,
 };

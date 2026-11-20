@@ -5,11 +5,10 @@
 //! - Version resolution with priority order
 //! - Config file management
 
-use vp_js_runtime::{NodeProvider, select_project_node_version};
+use vp_js_runtime::{NodeProvider, ProjectNodeVersion, select_project_node_version};
 use vp_pm_cli::PackageManagerType;
 pub use vp_pm_cli::{Config, ShimMode, get_config_path, load_config, save_config};
 use vt_path::{AbsolutePath, AbsolutePathBuf};
-use vt_str::Str;
 
 use crate::error::Error;
 
@@ -198,13 +197,6 @@ pub async fn resolve_version(cwd: &AbsolutePath) -> Result<VersionResolution, Er
     resolve_version_from_files(cwd).await
 }
 
-pub(crate) struct ProjectVersionSource {
-    pub version: Str,
-    pub source: String,
-    pub source_path: AbsolutePathBuf,
-    pub project_root: AbsolutePathBuf,
-}
-
 /// Resolve the effective project-file Node.js version source.
 ///
 /// The selection is [`select_project_node_version`], the same one that
@@ -214,20 +206,12 @@ pub(crate) struct ProjectVersionSource {
 pub(crate) async fn resolve_project_version_source(
     cwd: &AbsolutePath,
     warn_invalid: bool,
-) -> Result<Option<ProjectVersionSource>, Error> {
-    let selected = select_project_node_version(cwd, warn_invalid).await.map_err(config_error)?;
-    Ok(selected.map(|selected| ProjectVersionSource {
-        version: selected.version,
-        source: selected.source.to_string(),
-        source_path: selected.source_path,
-        project_root: selected.project_root,
-    }))
-}
-
-/// Report a version resolution error as a configuration error, not as the
-/// download failure that `Error::RuntimeDownload` would print.
-fn config_error(error: vp_js_runtime::Error) -> Error {
-    Error::ConfigError(error.to_string().into())
+) -> Result<Option<ProjectNodeVersion>, Error> {
+    // A configuration error, not the download failure that `?` would report
+    // through `Error::RuntimeDownload`
+    select_project_node_version(cwd, warn_invalid)
+        .await
+        .map_err(|error| Error::ConfigError(error.to_string().into()))
 }
 
 /// Resolve Node.js version from project files only (skipping session overrides).
@@ -242,7 +226,7 @@ pub async fn resolve_version_from_files(cwd: &AbsolutePath) -> Result<VersionRes
         let resolved = resolve_version_string(&project_source.version, &provider).await?;
         return Ok(VersionResolution {
             version: resolved,
-            source: project_source.source,
+            source: project_source.source.to_string(),
             source_path: Some(project_source.source_path),
             project_root: Some(project_source.project_root),
             is_range,
@@ -522,7 +506,7 @@ mod tests {
 
         let source = resolve_project_version_source(&temp_path, false).await.unwrap().unwrap();
         assert_eq!(source.version, "22.22.0");
-        assert_eq!(source.source, ".nvmrc");
+        assert_eq!(source.source.as_str(), ".nvmrc");
         assert_eq!(source.source_path, temp_path.join(".nvmrc"));
     }
 
@@ -536,7 +520,7 @@ mod tests {
 
         let source = resolve_project_version_source(&temp_path, false).await.unwrap().unwrap();
         assert_eq!(source.version, "24.0.0");
-        assert_eq!(source.source, ".node-version");
+        assert_eq!(source.source.as_str(), ".node-version");
         assert_eq!(source.source_path, temp_path.join(".node-version"));
     }
 
@@ -550,7 +534,7 @@ mod tests {
 
         let source = resolve_project_version_source(&child, false).await.unwrap().unwrap();
         assert_eq!(source.version, "22.22.0");
-        assert_eq!(source.source, ".nvmrc");
+        assert_eq!(source.source.as_str(), ".nvmrc");
         assert_eq!(source.source_path, parent.join(".nvmrc"));
     }
 
@@ -563,7 +547,7 @@ mod tests {
 
         let source = resolve_project_version_source(&temp_path, false).await.unwrap().unwrap();
         assert_eq!(source.version, "22.22.0");
-        assert_eq!(source.source, ".nvmrc");
+        assert_eq!(source.source.as_str(), ".nvmrc");
     }
 
     #[tokio::test]
@@ -790,7 +774,7 @@ mod tests {
 
         let source = resolve_project_version_source(&temp_path, false).await.unwrap().unwrap();
         assert_eq!(source.version, "22.22.0");
-        assert_eq!(source.source, "devEngines.runtime");
+        assert_eq!(source.source.as_str(), "devEngines.runtime");
         assert_eq!(source.source_path, temp_path.join("package.json"));
     }
 
@@ -810,7 +794,7 @@ mod tests {
 
         let source = resolve_project_version_source(&child, false).await.unwrap().unwrap();
         assert_eq!(source.version, "22.22.0");
-        assert_eq!(source.source, "devEngines.runtime");
+        assert_eq!(source.source.as_str(), "devEngines.runtime");
         assert_eq!(source.source_path, child.join("package.json"));
     }
 
@@ -828,7 +812,7 @@ mod tests {
 
         let source = resolve_project_version_source(&temp_path, false).await.unwrap().unwrap();
         assert_eq!(source.version, "22.22.0");
-        assert_eq!(source.source, "devEngines.runtime");
+        assert_eq!(source.source.as_str(), "devEngines.runtime");
     }
 
     #[tokio::test]
@@ -847,7 +831,7 @@ mod tests {
 
             let source = resolve_project_version_source(&temp_path, false).await.unwrap().unwrap();
             assert_eq!(source.version, "22.22.0", "{version}");
-            assert_eq!(source.source, "engines.node", "{version}");
+            assert_eq!(source.source.as_str(), "engines.node", "{version}");
         }
     }
 
@@ -900,7 +884,7 @@ mod tests {
 
         let source = resolve_project_version_source(&temp_path, false).await.unwrap().unwrap();
         assert_eq!(source.version, "22.22.0");
-        assert_eq!(source.source, ".node-version");
+        assert_eq!(source.source.as_str(), ".node-version");
     }
 
     #[tokio::test]
@@ -914,7 +898,7 @@ mod tests {
 
         let source = resolve_project_version_source(&child, false).await.unwrap().unwrap();
         assert_eq!(source.version, "24.18.0");
-        assert_eq!(source.source, ".node-version");
+        assert_eq!(source.source.as_str(), ".node-version");
         assert_eq!(source.source_path, parent.join(".node-version"));
     }
 
