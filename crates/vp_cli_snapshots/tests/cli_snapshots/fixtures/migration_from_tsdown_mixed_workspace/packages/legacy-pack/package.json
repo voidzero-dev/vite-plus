@@ -1,0 +1,8 @@
+{
+  "name": "legacy-pack",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vp pack"
+  }
+}

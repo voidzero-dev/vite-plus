@@ -132,9 +132,14 @@ export const REMOVE_PACKAGES = [
   '@vitest/browser-preview',
 ] as const;
 
-// A preserved browser import still needs its original dependency and catalog entry.
-export function bundledPackagesToRemove(retained?: ReadonlySet<string>): readonly string[] {
-  return retained?.size ? REMOVE_PACKAGES.filter((name) => !retained.has(name)) : REMOVE_PACKAGES;
+// Preserve bundled dependencies and catalog entries that the project still uses.
+export function bundledPackagesToRemove(
+  retained?: ReadonlySet<string>,
+  keepTsdown = false,
+): readonly string[] {
+  return retained?.size || keepTsdown
+    ? REMOVE_PACKAGES.filter((name) => !retained?.has(name) && !(name === 'tsdown' && keepTsdown))
+    : REMOVE_PACKAGES;
 }
 
 // WebDriverIO is community-maintained. The versioned v5 preflight ensures its
@@ -349,7 +354,7 @@ export type PackageJsonDependencyField =
   | 'peerDependencies'
   | 'optionalDependencies';
 
-export function warnMigration(message: string, report?: MigrationReport) {
+export function warnMigration(message: string, report?: Pick<MigrationReport, 'warnings'>) {
   addMigrationWarning(report, message);
   if (!report) {
     prompts.log.warn(message);

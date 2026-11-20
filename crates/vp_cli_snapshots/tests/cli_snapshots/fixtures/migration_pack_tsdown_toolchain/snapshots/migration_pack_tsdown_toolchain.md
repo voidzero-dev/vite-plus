@@ -91,7 +91,9 @@ export default defineConfig({
   "scripts": {
     "build": "vp pack"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "vite-plus": "catalog:"
+  }
 }
 ```
 

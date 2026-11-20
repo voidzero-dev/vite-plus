@@ -1,0 +1,544 @@
+[[case]]
+name = "explicit_config"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+comment = "Build with the published, pinned tsdown so the test checks the output of the selected config after a real dependency install."
+steps = [
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "run", "bundle"], snapshot = false },
+  ["vpt", "print-file", "lib-out/library.mjs"],
+  { argv = ["vpt", "rm", "-r", "lib-out"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "package.json"],
+  ["vpt", "print-file", "tsdown.custom.config.ts"],
+  { argv = ["vp", "run", "bundle"], snapshot = false },
+  ["vpt", "print-file", "lib-out/library.mjs"],
+  ["vpt", "stat-file", "dist/tsdown.custom.config.mjs", "--assert", "missing"],
+  ["vp", "migrate", "--no-interactive"],
+  { argv = ["vpt", "rm", "-r", "lib-out"], snapshot = false },
+  { argv = ["vp", "run", "bundle"], snapshot = false },
+  ["vpt", "print-file", "lib-out/library.mjs"],
+  { argv = ["vp", "pack", "src/library.ts", "--out-dir", "positional-out"], snapshot = false },
+  ["vpt", "print-file", "positional-out/library.mjs"],
+]
+
+[[case]]
+name = "pack_array"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+comment = "Convert the retained library config through a local constant and build both bundles with their assets."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.vite-plus", "^1.7.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.tsdown", "0.22.14"], snapshot = false },
+  { argv = ["vpt", "write-file", "tsdown.config.ts", "import { defineConfig } from 'tsdown'; export default defineConfig({ entry: 'src/library.ts', outDir: 'library-out', publicDir: 'public', dts: true });"], snapshot = false },
+  { argv = ["vpt", "write-file", "src/cli.ts", "export const cli = true;"], snapshot = false },
+  { argv = ["vpt", "write-file", "cli.config.ts", "export default { entry: 'src/cli.ts', outDir: 'cli-out', copy: 'cli-resources' };"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "import libraryConfig from './tsdown.config.ts'; import cliConfig from './cli.config.ts'; const library = { ...libraryConfig, dts: false }; export default { pack: [library, cliConfig], build: { lib: { entry: library.entry } } };"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "public", "cli-resources"], snapshot = false },
+  { argv = ["vpt", "write-file", "public/asset.txt", "library asset\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "cli-resources/asset.txt", "cli asset\n"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  { argv = ["vp", "run", "bundle"], snapshot = false },
+  { argv = ["vpt", "stat-file", "lib-out/library.mjs", "--assert", "file"], snapshot = false },
+  { argv = ["vp", "pack"], snapshot = false },
+  { argv = ["vpt", "stat-file", "library-out/library.mjs", "--assert", "file"], snapshot = false },
+  { argv = ["vpt", "stat-file", "library-out/library.d.mts", "--assert", "missing"], snapshot = false },
+  { argv = ["vpt", "stat-file", "cli-out/cli.mjs", "--assert", "file"], snapshot = false },
+  ["vpt", "print-file", "library-out/public/asset.txt", "cli-out/cli-resources/asset.txt"],
+]
+
+[[case]]
+name = "pack_array_callback"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+comment = "A callback sets both output directories on the options used by pack."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.vite-plus", "^1.7.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.tsdown", "0.22.14"], snapshot = false },
+  { argv = ["vpt", "write-file", "src/cli.ts", "export const cli = true;"], snapshot = false },
+  { argv = ["vpt", "write-file", "tsdown.config.ts", "export default [{ entry: 'src/library.ts', outDir: 'old-library-out', publicDir: 'public' }, { entry: 'src/cli.ts', outDir: 'old-cli-out', publicDir: 'cli-resources' }];"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "import configs from './tsdown.config.ts'; configs.forEach((options, index) => { options.outDir = index === 0 ? 'library-out' : 'cli-out'; }); export default { pack: configs };"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "public", "cli-resources"], snapshot = false },
+  { argv = ["vpt", "write-file", "public/asset.txt", "library asset\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "cli-resources/asset.txt", "CLI asset\n"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  { argv = ["vp", "pack"], snapshot = false },
+  ["vpt", "stat-file", "library-out/library.mjs", "cli-out/cli.mjs", "--assert", "file"],
+  ["vpt", "print-file", "library-out/public/asset.txt", "cli-out/cli-resources/asset.txt"],
+  ["vpt", "stat-file", "old-library-out", "old-cli-out", "--assert", "missing"],
+]
+
+[[case]]
+name = "pack_array_loop"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+comment = "A for-of loop sets a shared output directory for both packs and their resources."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.vite-plus", "^1.7.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.tsdown", "0.22.14"], snapshot = false },
+  { argv = ["vpt", "write-file", "src/cli.ts", "export const cli = true;"], snapshot = false },
+  { argv = ["vpt", "write-file", "tsdown.config.ts", "export default [{ entry: 'src/library.ts', outDir: 'library-out', publicDir: 'public' }, { entry: 'src/cli.ts', outDir: 'cli-out', publicDir: 'cli-resources' }];"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "import configs from './tsdown.config.ts'; for (const config of configs) { config.outDir = 'release-out'; } export default { pack: configs };"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "public", "cli-resources"], snapshot = false },
+  { argv = ["vpt", "write-file", "public/asset.txt", "library asset\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "cli-resources/asset.txt", "CLI asset\n"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  { argv = ["vp", "pack"], snapshot = false },
+  ["vpt", "stat-file", "release-out/library.mjs", "release-out/cli.mjs", "--assert", "file"],
+  ["vpt", "print-file", "release-out/public/asset.txt", "release-out/cli-resources/asset.txt"],
+  ["vpt", "stat-file", "library-out", "cli-out", "--assert", "missing"],
+]
+
+[[case]]
+name = "pack_filtered_config"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+comment = "The pack array filter keeps the library and its resources."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.vite-plus", "^1.7.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.tsdown", "0.22.14"], snapshot = false },
+  { argv = ["vpt", "write-file", "src/cli.ts", "export const cli = true;"], snapshot = false },
+  { argv = ["vpt", "write-file", "tsdown.config.ts", "export default [{ name: 'library', entry: 'src/library.ts', outDir: 'library-out', publicDir: 'public' }, { name: 'demo', entry: 'src/cli.ts', outDir: 'cli-out', publicDir: 'cli-resources' }];"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "import configs from './tsdown.config.ts'; export default { pack: configs.filter(config => config.name !== 'demo') };"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "public", "cli-resources"], snapshot = false },
+  { argv = ["vpt", "write-file", "public/asset.txt", "library asset\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "cli-resources/asset.txt", "CLI asset\n"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  { argv = ["vp", "pack"], snapshot = false },
+  ["vpt", "stat-file", "library-out/library.mjs", "--assert", "file"],
+  ["vpt", "print-file", "library-out/public/asset.txt"],
+  ["vpt", "stat-file", "cli-out", "--assert", "missing"],
+]
+
+[[case]]
+name = "pack_mutated_import"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+comment = "An assignment to the imported pack options controls the output directory after migration."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.vite-plus", "^1.7.0"], snapshot = false },
+  { argv = ["vpt", "write-file", "tsdown.config.ts", "export default { entry: 'src/library.ts', outDir: 'library-out', publicDir: 'public' };"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "import pack from './tsdown.config.ts'; pack.outDir = 'release-out'; export default { pack, build: { lib: { entry: pack.entry } } };"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "pack"], snapshot = false },
+  { argv = ["vpt", "stat-file", "release-out/library.mjs", "--assert", "file"], snapshot = false },
+  { argv = ["vpt", "rm", "-r", "release-out"], snapshot = false },
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  { argv = ["vp", "pack"], snapshot = false },
+  ["vpt", "print-file", "release-out/library.mjs"],
+  ["vpt", "stat-file", "library-out/library.mjs", "vite-pack.config.ts", "--assert", "missing"],
+]
+
+[[case]]
+name = "pack_appended_entry"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+comment = "Vite can append an entry through an alias and still build both entries after migration."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.vite-plus", "^1.7.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.tsdown", "0.22.14"], snapshot = false },
+  { argv = ["vpt", "write-file", "src/cli.ts", "export const cli = true;"], snapshot = false },
+  { argv = ["vpt", "write-file", "tsdown.config.ts", "export default { entry: ['src/library.ts'], outDir: 'library-out' };"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "import pack from './tsdown.config.ts'; const entries = pack.entry; entries.push('src/cli.ts'); export default { pack };"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "pack"], snapshot = false },
+  { argv = ["vpt", "stat-file", "library-out/library.mjs", "library-out/cli.mjs", "--assert", "file"], snapshot = false },
+  { argv = ["vpt", "rm", "-r", "library-out"], snapshot = false },
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  { argv = ["vp", "pack"], snapshot = false },
+  ["vpt", "print-file", "library-out/library.mjs", "library-out/cli.mjs"],
+]
+
+[[case]]
+name = "pack_entry_helper"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+comment = "The local entry helper and pack use the same options after migration."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.vite-plus", "^1.7.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.tsdown", "0.22.14"], snapshot = false },
+  { argv = ["vpt", "write-file", "src/cli.ts", "export const cli = true;"], snapshot = false },
+  { argv = ["vpt", "write-file", "tsdown.config.ts", "export default { entry: ['src/library.ts'], outDir: 'library-out', publicDir: 'public' };"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "import pack from './tsdown.config.ts'; function configure(options: typeof pack) { options.entry.push('src/cli.ts'); } configure(pack); export default { pack };"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "public"], snapshot = false },
+  { argv = ["vpt", "write-file", "public/asset.txt", "library asset\n"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  { argv = ["vp", "pack"], snapshot = false },
+  ["vpt", "stat-file", "library-out/library.mjs", "library-out/cli.mjs", "--assert", "file"],
+  ["vpt", "print-file", "library-out/public/asset.txt"],
+]
+
+[[case]]
+name = "pack_indexed_config"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+comment = "An indexed pack config still selects one bundle and copies its resources after migration."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.vite-plus", "^1.7.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.tsdown", "0.22.14"], snapshot = false },
+  { argv = ["vpt", "write-file", "src/cli.ts", "export const cli = true;"], snapshot = false },
+  { argv = ["vpt", "write-file", "tsdown.config.ts", "export default [{ entry: 'src/library.ts', outDir: 'library-out', publicDir: 'public' }, { entry: 'src/cli.ts', outDir: 'cli-out' }];"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "import configs from './tsdown.config.ts'; export default { pack: configs[0] };"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "public"], snapshot = false },
+  { argv = ["vpt", "write-file", "public/asset.txt", "library asset\n"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  { argv = ["vp", "pack"], snapshot = false },
+  ["vpt", "stat-file", "library-out/library.mjs", "--assert", "file"],
+  ["vpt", "print-file", "library-out/public/asset.txt"],
+  ["vpt", "stat-file", "cli-out/cli.mjs", "--assert", "missing"],
+]
+
+[[case]]
+name = "pack_variable_index"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+comment = "An environment-selected pack config copies the resources for the selected build."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.vite-plus", "^1.7.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.tsdown", "0.22.14"], snapshot = false },
+  { argv = ["vpt", "write-file", "src/cli.ts", "export const cli = true;"], snapshot = false },
+  { argv = ["vpt", "write-file", "tsdown.config.ts", "export default [{ entry: 'src/library.ts', outDir: 'library-out', publicDir: 'public' }, { entry: 'src/cli.ts', outDir: 'cli-out', publicDir: 'cli-resources' }];"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "import configs from './tsdown.config.ts'; const profile = process.env.BUILD_CLI === '1' ? 1 : 0; export default { pack: configs[profile] };"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "public", "cli-resources"], snapshot = false },
+  { argv = ["vpt", "write-file", "public/asset.txt", "library asset\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "cli-resources/asset.txt", "CLI asset\n"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  { argv = ["vp", "pack"], envs = [["BUILD_CLI", "0"]], snapshot = false },
+  ["vpt", "stat-file", "library-out/library.mjs", "--assert", "file"],
+  ["vpt", "stat-file", "cli-out/cli.mjs", "--assert", "missing"],
+  ["vpt", "print-file", "library-out/public/asset.txt"],
+  { argv = ["vp", "pack"], envs = [["BUILD_CLI", "1"]], snapshot = false },
+  ["vpt", "stat-file", "cli-out/cli.mjs", "--assert", "file"],
+  ["vpt", "print-file", "cli-out/cli-resources/asset.txt"],
+]
+
+[[case]]
+name = "pack_mapped_config"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+comment = "A mapped pack array still builds both bundles, copies resources, and disables declarations after migration."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.vite-plus", "^1.7.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.tsdown", "0.22.14"], snapshot = false },
+  { argv = ["vpt", "write-file", "src/cli.ts", "export const cli = true;"], snapshot = false },
+  { argv = ["vpt", "write-file", "tsdown.config.ts", "export default [{ entry: 'src/library.ts', outDir: 'library-out', publicDir: 'public', dts: true }, { entry: 'src/cli.ts', outDir: 'cli-out' }];"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "import configs from './tsdown.config.ts'; export default { pack: configs.map(config => ({ ...config, dts: false })) };"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "public"], snapshot = false },
+  { argv = ["vpt", "write-file", "public/asset.txt", "library asset\n"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  { argv = ["vp", "pack"], snapshot = false },
+  ["vpt", "stat-file", "library-out/library.mjs", "cli-out/cli.mjs", "--assert", "file"],
+  ["vpt", "print-file", "library-out/public/asset.txt"],
+  ["vpt", "stat-file", "library-out/library.d.mts", "--assert", "missing"],
+]
+
+[[case]]
+name = "native_loader"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.vite-plus", "^1.7.0"], snapshot = false },
+  { argv = ["vpt", "write-file", "tsdown.config.ts", "import { defineConfig } from 'tsdown'; export default defineConfig({ entry: ['src/library.ts'] });"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "import { defineConfig } from 'vite-plus'; import pack from './tsdown.config.ts'; export default defineConfig({ pack });"], snapshot = false },
+  { argv = ["vpt", "write-file", "index.html", "<main>Native config</main>"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "build", "--configLoader", "native"], snapshot = false },
+  { argv = ["vpt", "rm", "-r", "dist"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  ["vpt", "stat-file", "vite-pack.config.ts", "--assert", "file"],
+  { argv = ["vp", "build", "--configLoader", "native"], snapshot = false },
+  ["vpt", "print-file", "dist/index.html"],
+]
+
+[[case]]
+name = "native_loader_esm_preset"
+vp = "global"
+local-registry = true
+skip-platforms = ["windows"]
+unset-env = ["VP_SKIP_INSTALL"]
+comment = "The native loader can import a converted ESM preset in a CommonJS project."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "type", "commonjs"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "scripts.bundle", "tsdown -c tsdown.config.js"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.vite-plus", "^1.7.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.tsdown", "0.22.14"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "node_modules/build-preset", "public"], snapshot = false },
+  { argv = ["vpt", "write-file", "node_modules/build-preset/package.json", '{"name":"build-preset","version":"1.0.0","type":"module"}'], snapshot = false },
+  { argv = ["vpt", "write-file", "node_modules/build-preset/pack.js", "export default { entry: 'src/library.ts', outDir: 'library-out', publicDir: 'public' };"], snapshot = false },
+  { argv = ["node", "-e", "require('node:fs').symlinkSync('node_modules/build-preset/pack.js', 'tsdown.config.js', 'file')"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.mts", "import pack from './tsdown.config.js'; export default { pack };"], snapshot = false },
+  { argv = ["vpt", "write-file", "index.html", "<main>Native config</main>"], snapshot = false },
+  { argv = ["vpt", "write-file", "public/asset.txt", "library asset\n"], snapshot = false },
+  { argv = ["vp", "build", "--configLoader", "native"], snapshot = false },
+  { argv = ["vpt", "rm", "-r", "dist"], snapshot = false },
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], envs = [["VP_SKIP_INSTALL", "1"]], snapshot = false },
+  ["vpt", "stat-file", "tsdown.config.js", "--assert", "symlink"],
+  ["vpt", "stat-file", "vite-pack.config.mjs", "--assert", "file"],
+  { argv = ["vp", "build", "--configLoader", "native"], snapshot = false },
+  ["vpt", "print-file", "dist/index.html"],
+  { argv = ["vp", "pack"], snapshot = false },
+  ["vpt", "print-file", "library-out/public/asset.txt"],
+]
+
+[[case]]
+name = "composite_tsconfig"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.vite-plus", "^1.7.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.typescript", "7.0.2"], snapshot = false },
+  { argv = ["vpt", "write-file", "tsdown.config.ts", "export default { entry: ['src/library.ts'], publicDir: 'public' };"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "import { defineConfig } from 'vite-plus'; import pack from './tsdown.config.ts'; export default defineConfig({ pack });"], snapshot = false },
+  { argv = ["vpt", "write-file", "tsconfig.node.json", '''
+{
+  "compilerOptions": {
+    "composite": true,
+    "noEmit": true,
+    "module": "NodeNext",
+    "allowImportingTsExtensions": true,
+    "skipLibCheck": true,
+    "target": "ES2022"
+  },
+  "include": ["vite.config.ts", "tsdown.config.ts"]
+}
+'''], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "exec", "tsc", "-b", "tsconfig.node.json", "--force"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  ["vpt", "stat-file", "vite-pack.config.ts", "--assert", "file"],
+  { argv = ["vp", "exec", "tsc", "-b", "tsconfig.node.json", "--force"], snapshot = false },
+  ["vpt", "print-file", "tsconfig.node.json"],
+]
+
+[[case]]
+name = "project_references"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.vite-plus", "^1.7.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.typescript", "7.0.2"], snapshot = false },
+  { argv = ["vpt", "write-file", "tsdown.config.ts", "export default { entry: ['src/library.ts'], publicDir: 'public' };"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "import { defineConfig } from 'vite-plus'; import pack from './tsdown.config.ts'; export default defineConfig({ pack });"], snapshot = false },
+  { argv = ["vpt", "write-file", "tsconfig.json", '{"files":[],"references":[{"path":"./configs/tsconfig.tools.json"}]}'], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "configs"], snapshot = false },
+  { argv = ["vpt", "write-file", "configs/tsconfig.tools.json", '''
+{
+  "compilerOptions": {
+    "composite": true,
+    "noEmit": true,
+    "module": "NodeNext",
+    "allowImportingTsExtensions": true,
+    "skipLibCheck": true,
+    "target": "ES2022"
+  },
+  "files": ["../vite.config.ts", "../tsdown.config.ts"]
+}
+'''], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "exec", "tsc", "-b", "--force"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  { argv = ["vp", "exec", "tsc", "-b", "--force"], snapshot = false },
+  ["vpt", "stat-file", "vite-pack.config.ts", "--assert", "file"],
+  ["vpt", "print-file", "tsconfig.json", "configs/tsconfig.tools.json"],
+]
+
+[[case]]
+name = "inherited_tsconfig"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.vite-plus", "^1.7.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.typescript", "7.0.2"], snapshot = false },
+  { argv = ["vpt", "write-file", "tsdown.config.ts", "export default { entry: ['src/library.ts'], publicDir: 'public' };"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "import { defineConfig } from 'vite-plus'; import pack from './tsdown.config.ts'; export default defineConfig({ pack });"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "configs"], snapshot = false },
+  { argv = ["vpt", "write-file", "configs/node-base.json", '{"include":["../vite.config.ts","../tsdown.config.ts"]}'], snapshot = false },
+  { argv = ["vpt", "write-file", "tsconfig.node.json", '''
+{
+  "extends": "./configs/node-base.json",
+  "compilerOptions": {
+    "composite": true,
+    "noEmit": true,
+    "module": "NodeNext",
+    "allowImportingTsExtensions": true,
+    "skipLibCheck": true,
+    "target": "ES2022"
+  }
+}
+'''], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "exec", "tsc", "-b", "tsconfig.node.json", "--force"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  { argv = ["vp", "exec", "tsc", "-b", "tsconfig.node.json", "--force"], snapshot = false },
+  ["vpt", "print-file", "configs/node-base.json"],
+  ["vpt", "print-file", "tsconfig.node.json"],
+]
+
+[[case]]
+name = "composite_allow_js"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.vite-plus", "^1.7.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.typescript", "7.0.2"], snapshot = false },
+  { argv = ["vpt", "write-file", "tsdown.config.mjs", "export default { entry: ['src/library.ts'], publicDir: 'public' };"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "import { defineConfig } from 'vite-plus'; import pack from './tsdown.config.mjs'; export default defineConfig({ pack });"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "configs"], snapshot = false },
+  { argv = ["vpt", "write-file", "configs/node-base.json", '{"compilerOptions":{"allowJs":true},"files":["${configDir}/vite.config.ts","${configDir}/tsdown.config.mjs"]}'], snapshot = false },
+  { argv = ["vpt", "write-file", "tsconfig.node.json", '''
+{
+  "extends": "./configs/node-base.json",
+  "compilerOptions": {
+    "composite": true,
+    "noEmit": true,
+    "module": "NodeNext",
+    "skipLibCheck": true,
+    "target": "ES2022"
+  }
+}
+'''], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "exec", "tsc", "-b", "tsconfig.node.json", "--force"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  { argv = ["vp", "exec", "tsc", "-b", "tsconfig.node.json", "--force"], snapshot = false },
+  ["vpt", "stat-file", "vite-pack.config.mjs", "--assert", "file"],
+  ["vpt", "print-file", "configs/node-base.json"],
+  ["vpt", "print-file", "tsconfig.node.json"],
+]
+
+[[case]]
+name = "composite_package_preset"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.vite-plus", "^1.7.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.typescript", "7.0.2"], snapshot = false },
+  { argv = ["vpt", "write-file", "tsdown.config.mjs", "export default { entry: ['src/library.ts'], publicDir: 'public' };"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "import { defineConfig } from 'vite-plus'; import pack from './tsdown.config.mjs'; export default defineConfig({ pack });"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "configs"], snapshot = false },
+  { argv = ["vpt", "write-file", "pnpm-workspace.yaml", "packages: ['.', configs]\ncatalogs:\n  build:\n    tsdown: 0.23.4\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "configs/package.json", '{"name":"@repo/tsconfig","version":"1.0.0","exports":{"./node.json":"./node-base.json"}}'], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.@repo/tsconfig", "workspace:*"], snapshot = false },
+  { argv = ["vpt", "write-file", "configs/node-base.json", '{"compilerOptions":{"allowJs":true},"files":["${configDir}/vite.config.ts","${configDir}/tsdown.config.mjs"]}'], snapshot = false },
+  { argv = ["vpt", "write-file", "tsconfig.node.json", '''
+{
+  "extends": "@repo/tsconfig/node.json",
+  "compilerOptions": {
+    "composite": true,
+    "noEmit": true,
+    "module": "NodeNext",
+    "skipLibCheck": true,
+    "target": "ES2022"
+  }
+}
+'''], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "exec", "tsc", "-b", "tsconfig.node.json", "--force"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  { argv = ["vp", "exec", "tsc", "-b", "tsconfig.node.json", "--force"], snapshot = false },
+  ["vpt", "stat-file", "vite-pack.config.mjs", "--assert", "file"],
+  ["vpt", "print-file", "configs/node-base.json"],
+  ["vpt", "print-file", "tsconfig.node.json"],
+]
+
+[[case]]
+name = "active_pack_override"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+comment = "Keep the standalone build when the active pack overrides the converted config's entry."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "scripts.build", "tsdown"], snapshot = false },
+  { argv = ["vpt", "write-file", "tsdown.config.ts", "import { defineConfig } from 'tsdown'; export default defineConfig({ entry: ['src/library.ts'] });"], snapshot = false },
+  { argv = ["vpt", "write-file", "src/browser.ts", "export const answer = 21;"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  ["vpt", "stat-file", "vite-pack.config.ts", "--assert", "file"],
+  { argv = ["vpt", "json-edit", "package.json", "scripts", '{"build":"tsdown"}'], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "import { defineConfig } from 'vite-plus'; import config from './vite-pack.config.js'; export default defineConfig({ pack: { ...config, entry: ['src/browser.ts'] } });"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "package.json"],
+  { argv = ["vp", "run", "build"], snapshot = false },
+  ["vpt", "stat-file", "dist/library.mjs", "--assert", "file"],
+  ["vpt", "stat-file", "dist/browser.mjs", "--assert", "missing"],
+]
+
+[[case]]
+name = "standard_config"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "cp", "tsdown.custom.config.ts", "tsdown.config.ts"], snapshot = false },
+  { argv = ["vpt", "rm", "tsdown.custom.config.ts"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "scripts.bundle", "tsdown"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  ["vpt", "print-file", "package.json"],
+  { argv = ["vp", "run", "bundle"], snapshot = false },
+  ["vpt", "print-file", "lib-out/library.mjs"],
+]
+
+[[case]]
+name = "configdir_descendant"
+vp = "global"
+local-registry = true
+env = { VP_NODE_VERSION = "22.23.4" }
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.vite-plus", "^1.7.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.typescript", "7.0.2"], snapshot = false },
+  { argv = ["vpt", "write-file", "pnpm-workspace.yaml", "packages: ['.', 'packages/*']\ncatalogs:\n  build:\n    tsdown: 0.23.4\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "tsdown.config.ts", "export default { entry: ['src/library.ts'], publicDir: 'public' };"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "import { defineConfig } from 'vite-plus'; import pack from './tsdown.config.ts'; export default defineConfig({ pack });"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "configs", "packages/member/src"], snapshot = false },
+  { argv = ["vpt", "write-file", "configs/base.json", '''
+{
+  "compilerOptions": {
+    "composite": true,
+    "noEmit": true,
+    "target": "ES2022",
+    "module": "NodeNext",
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true
+  },
+  "include": ["${configDir}/src", "${configDir}/vite.config.ts", "${configDir}/tsdown.config.ts"]
+}
+'''], snapshot = false },
+  { argv = ["vpt", "write-file", "tsconfig.json", '{"extends":"./configs/base.json"}'], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/member/package.json", '{"name":"member","private":true,"type":"module"}'], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/member/tsconfig.json", '{"extends":"../../tsconfig.json"}'], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/member/src/member.ts", "export const member = true;"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "exec", "tsc", "--showConfig", "-p", "packages/member/tsconfig.json"], comment = "The inherited source paths are relative to the member." },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  { argv = ["vp", "exec", "tsc", "-b", "--force", "tsconfig.json", "packages/member/tsconfig.json"], snapshot = false },
+  ["vpt", "stat-file", "vite-pack.config.ts", "--assert", "file"],
+  ["vpt", "print-file", "tsconfig.json"],
+  { argv = ["vp", "exec", "tsc", "--showConfig", "-p", "packages/member/tsconfig.json"], comment = "The member still lists its own source after migration." },
+]

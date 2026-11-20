@@ -1,0 +1,5 @@
+packages:
+  - '.'
+catalogs:
+  build:
+    tsdown: 0.23.4

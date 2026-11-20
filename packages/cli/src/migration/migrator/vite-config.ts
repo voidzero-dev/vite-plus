@@ -1,9 +1,18 @@
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
+import { isBuiltin } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 
-import type { ObjectExpression, Program } from '@oxc-project/types';
+import type {
+  ArrowFunctionExpression,
+  Function as FunctionNode,
+  Node,
+  ObjectExpression,
+  ObjectProperty,
+  Program,
+  Span,
+} from '@oxc-project/types';
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { braceExpand } from 'minimatch';
 import { type OxlintConfig } from 'oxlint';
@@ -13,10 +22,14 @@ import {
   hasConfigKey,
   mergeJsonConfig,
   mergeTsdownConfig,
+  mergeTsdownJsonConfig,
   migrateTaskCacheConfig,
+  normalizeTsdownJsonPackConfigs,
   readStaticLintConfig,
+  ResolverFactory,
   rewriteImportsInDirectory,
   rewriteScripts,
+  rewriteTsdownConfigForPack,
   upsertJsonConfig,
   wrapLazyPlugins,
 } from '../../../binding/index.js';
@@ -25,20 +38,34 @@ import {
   ensureVitePlusImportRuleDefaults,
   PREFER_VITE_PLUS_IMPORTS_RULE,
 } from '../../oxlint-plugin-config.ts';
+import { findViteConfig, findViteConfigUp } from '../../resolve-vite-config.ts';
 import { type WorkspacePackage } from '../../types/index.ts';
 import { BASEURL_TSCONFIG_WARNING, VITE_PLUS_NAME } from '../../utils/constants.ts';
 import { documentationUrl } from '../../utils/documentation.ts';
 import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
 import { displayRelative } from '../../utils/path.ts';
 import { hasBaseUrlInTsconfig } from '../../utils/tsconfig.ts';
-import { parseSource, sameStaticValue } from '../ast-utils.ts';
+import {
+  configReturnValues,
+  defaultConfigValue,
+  isString,
+  memberName,
+  objectProperty,
+  parseSource,
+  propertyName,
+  sameConfigModule,
+  sameStaticValue,
+  staticObject,
+  unwrapTypeExpression,
+} from '../ast-utils.ts';
 import { readLintConfigInWorker } from '../compat/runner.ts';
 import { detectConfigs, type ConfigFiles } from '../detector.ts';
 import {
   collectInstalledPackageNames,
+  preparePackConfigTsconfigEdits,
   oxlintMigrationMarker,
   prepareOxlintConfigs,
-  readRulesYaml,
+  getScriptRulesYaml,
   removeMigratedOxlintConfigs,
   resolveOxlintConfigExtends,
   prepareOxlintConfigModules,
@@ -104,7 +131,11 @@ export function removeLintStagedFromPackageJson(packageJsonPath: string): void {
 
 // Migrate standalone lint-staged config files into staged in vite.config.ts.
 // JSON-parseable files are inlined automatically; non-JSON files get a warning.
-export function rewriteLintStagedConfigFile(projectPath: string, report?: MigrationReport): void {
+export function rewriteLintStagedConfigFile(
+  projectPath: string,
+  report?: MigrationReport,
+  keepTsdown = false,
+): void {
   let hasUnsupported = false;
 
   for (const filename of LINT_STAGED_JSON_CONFIG_FILES) {
@@ -124,7 +155,7 @@ export function rewriteLintStagedConfigFile(projectPath: string, report?: Migrat
     // Skip if staged already exists in vite.config.ts (already migrated by rewritePackageJson).
     if (!hasStagedConfigInViteConfig(projectPath)) {
       const config = readJsonFile(configPath);
-      const updated = rewriteScripts(JSON.stringify(config), readRulesYaml());
+      const updated = rewriteScripts(JSON.stringify(config), getScriptRulesYaml(false, keepTsdown));
       const finalConfig = updated ? JSON.parse(updated) : config;
       if (!mergeStagedConfigToViteConfig(projectPath, finalConfig, true, report)) {
         // Merge failed — preserve the original config file so the user doesn't lose their rules
@@ -192,16 +223,48 @@ export default defineConfig({});
 }
 
 /**
- * Merge tsdown.config.* into vite.config.ts
- * - For JSON files: merge content directly into `pack` field and delete the JSON file
- * - For TS/JS files: import the config file
+ * Merge tsdown.config.* into vite.config.ts. Import TS/JS configs and inline JSON.
+ * Keep the original config when standalone tsdown may still load it.
+ * Convert direct pack imports of retained configs in other workspace packages.
  */
 export function mergeTsdownConfigFile(
   projectPath: string,
   silent = false,
   report?: MigrationReport,
+  keepTsdownConfig = false,
+  workspaceRoot = projectPath,
+  tsdownPackages?: ReadonlySet<string>,
 ): boolean {
   const configs = detectConfigs(projectPath);
+  const mergedLocal = mergeLocalTsdownConfigFile(
+    projectPath,
+    configs,
+    workspaceRoot,
+    keepTsdownConfig,
+    silent,
+    report,
+  );
+  const mergedImports =
+    configs.viteConfig && tsdownPackages?.size
+      ? mergeImportedTsdownConfigs(
+          path.join(projectPath, configs.viteConfig),
+          workspaceRoot,
+          tsdownPackages,
+          silent,
+          report,
+        )
+      : false;
+  return mergedLocal || mergedImports;
+}
+
+function mergeLocalTsdownConfigFile(
+  projectPath: string,
+  configs: ConfigFiles,
+  workspaceRoot: string,
+  keepTsdownConfig: boolean,
+  silent: boolean,
+  report: MigrationReport | undefined,
+): boolean {
   if (!configs.tsdownConfig) {
     return false;
   }
@@ -211,10 +274,49 @@ export function mergeTsdownConfigFile(
   const fullViteConfigPath = path.join(projectPath, viteConfig);
   const fullTsdownConfigPath = path.join(projectPath, configs.tsdownConfig);
 
-  // For JSON files, merge content directly and delete the file
   if (configs.tsdownConfig.endsWith('.json')) {
-    mergeAndRemoveJsonConfig(projectPath, viteConfig, configs.tsdownConfig, 'pack', silent, report);
-    return createdViteConfig || !fs.existsSync(fullTsdownConfigPath);
+    if (hasConfigKey(fullViteConfigPath, 'pack')) {
+      const matching = matchingInlinePackConfig(
+        fullViteConfigPath,
+        fullTsdownConfigPath,
+        workspaceRoot,
+      );
+      if (!matching) {
+        infoMigration(
+          `Please manually merge ${displayRelative(fullTsdownConfigPath)} into the existing pack config in ${displayRelative(fullViteConfigPath)}. The JSON file was preserved. See ${documentationUrl('/guide/migrate#tsdown')}`,
+          report,
+        );
+        return false;
+      }
+      if (keepTsdownConfig) {
+        return false;
+      }
+      if (matching.updated) {
+        fs.writeFileSync(fullViteConfigPath, matching.content);
+      }
+    }
+    const merged = mergeAndRemoveJsonConfig(
+      projectPath,
+      viteConfig,
+      configs.tsdownConfig,
+      'pack',
+      silent,
+      report,
+      { deferRemoval: keepTsdownConfig, workspaceRoot },
+    );
+    return createdViteConfig || merged;
+  }
+
+  const converted = mergeRetainedTsdownConfig(
+    fullViteConfigPath,
+    fullTsdownConfigPath,
+    workspaceRoot,
+    keepTsdownConfig,
+    silent,
+    report,
+  );
+  if (converted !== undefined) {
+    return createdViteConfig || converted;
   }
 
   // For TS/JS files, import the config file
@@ -224,11 +326,7 @@ export function mergeTsdownConfigFile(
   // this tsdown config, leave both files untouched and keep the manual follow-up.
   if (hasConfigKey(fullViteConfigPath, 'pack')) {
     const viteConfigContent = fs.readFileSync(fullViteConfigPath, 'utf8');
-    const runtimeImportPath = tsdownRelativePath
-      .replace(/\.mts$/, '.mjs')
-      .replace(/\.cts$/, '.cjs')
-      .replace(/\.ts$/, '.js');
-    const importsTsdownConfig = [tsdownRelativePath, runtimeImportPath].some(
+    const importsTsdownConfig = tsdownConfigImportPaths(configs.tsdownConfig).some(
       (importPath) =>
         viteConfigContent.includes(`from '${importPath}'`) ||
         viteConfigContent.includes(`from "${importPath}"`),
@@ -260,6 +358,1391 @@ export function mergeTsdownConfigFile(
     report,
   );
   return createdViteConfig || result.updated;
+}
+
+function mergeImportedTsdownConfigs(
+  viteConfigPath: string,
+  workspaceRoot: string,
+  tsdownPackages: ReadonlySet<string>,
+  silent: boolean,
+  report: MigrationReport | undefined,
+): boolean {
+  const directory = path.resolve(path.dirname(viteConfigPath));
+  const owners = new Set<string>();
+  try {
+    if (!hasConfigKey(viteConfigPath, 'pack')) {
+      return false;
+    }
+    const { program } = parseSource(viteConfigPath, fs.readFileSync(viteConfigPath, 'utf8'));
+    for (const { value } of configImports(program)) {
+      if (!value.startsWith('./') && !value.startsWith('../')) {
+        continue;
+      }
+      const owner = path.dirname(path.resolve(directory, value));
+      if (owner !== directory && tsdownPackages.has(owner)) {
+        owners.add(owner);
+      }
+    }
+  } catch {
+    return false;
+  }
+  let changed = false;
+  for (const owner of owners) {
+    const { tsdownConfig } = detectConfigs(owner);
+    if (tsdownConfig && !tsdownConfig.endsWith('.json')) {
+      changed =
+        mergeRetainedTsdownConfig(
+          viteConfigPath,
+          path.join(owner, tsdownConfig),
+          workspaceRoot,
+          true,
+          silent,
+          report,
+        ) || changed;
+    }
+  }
+  return changed;
+}
+
+function matchingInlinePackConfig(
+  viteConfigPath: string,
+  tsdownConfigPath: string,
+  workspaceRoot: string,
+) {
+  try {
+    const source = fs.readFileSync(viteConfigPath, 'utf8');
+    const { existing, expected } = normalizeTsdownJsonPackConfigs(
+      source,
+      viteConfigPath,
+      tsdownConfigPath,
+      workspaceRoot,
+    );
+    const current = configReturnValues(
+      defaultConfigValue(parseSource(viteConfigPath, existing).program),
+    );
+    if (current.length === 0) {
+      return undefined;
+    }
+    const standalone = defaultConfigValue(parseSource(viteConfigPath, expected).program);
+    const inlined =
+      standalone?.type === 'ObjectExpression' && objectProperty(standalone, 'pack')?.value;
+    const matches =
+      inlined &&
+      current.every((config) => {
+        const pack = staticObject(config, true) && objectProperty(config, 'pack')?.value;
+        return !!pack && sameStaticValue(pack, inlined);
+      });
+    return matches ? { content: existing, updated: source !== existing } : undefined;
+  } catch {
+    // Unknown or invalid config syntax is not enough to discard the source.
+    return undefined;
+  }
+}
+
+function tsdownConfigImportPath(filename: string): string {
+  return `./${filename.replace(/\.(m|c)?ts$/, '.$1js')}`;
+}
+
+function tsdownConfigImportPaths(filename: string): string[] {
+  return [`./${filename}`, `./${path.parse(filename).name}`, tsdownConfigImportPath(filename)];
+}
+
+function packConfigPaths(tsdownConfigPath: string) {
+  const directory = path.dirname(tsdownConfigPath);
+  const sourceIsLink = fs.lstatSync(tsdownConfigPath).isSymbolicLink();
+  const sourceTarget = sourceIsLink
+    ? path.resolve(directory, fs.readlinkSync(tsdownConfigPath))
+    : undefined;
+  const realSource = sourceIsLink ? fs.realpathSync(tsdownConfigPath) : undefined;
+  const installedPreset =
+    sourceTarget &&
+    realSource &&
+    [sourceTarget, realSource].some((file) => file.split(path.sep).includes('node_modules'))
+      ? sourceTarget
+      : undefined;
+  const extension = path.extname(tsdownConfigPath);
+  const originalConvertedName = `vite-pack.config${extension}`;
+  let convertedName = originalConvertedName;
+  if (extension === '.js' && installedPreset && realSource) {
+    // The installed package's module scope does not follow a copied .js file.
+    const { program } = parseSource(realSource, fs.readFileSync(realSource, 'utf8'));
+    if (program.sourceType === 'module') {
+      convertedName = 'vite-pack.config.mjs';
+    }
+  }
+  return {
+    convertedName,
+    convertedPath: path.join(directory, convertedName),
+    previousPath:
+      convertedName !== originalConvertedName
+        ? path.join(directory, originalConvertedName)
+        : undefined,
+    realSource,
+    installedPreset,
+  };
+}
+
+function convertedPackLinkTarget(source: string, workspaceRoot: string) {
+  const relative = path.relative(fs.realpathSync(workspaceRoot), source);
+  if (path.isAbsolute(relative) || relative.split(path.sep)[0] === '..') {
+    return undefined;
+  }
+  const { dir, name, ext } = path.parse(source);
+  return path.join(dir, `${name}.vite-pack.config${ext}`);
+}
+
+function writePackConfigOutput(filename: string, create: (file: string) => void, replace: boolean) {
+  const directory = path.dirname(filename);
+  if (!replace) {
+    create(filename);
+    return;
+  }
+  // Keep the old generated output if creating its replacement fails.
+  const temporary = path.join(directory, `.${path.basename(filename)}.${randomUUID()}`);
+  create(temporary);
+  try {
+    fs.renameSync(temporary, filename);
+  } finally {
+    fs.rmSync(temporary, { force: true });
+  }
+}
+
+function applySourceEdits(source: string, edits: (Span & { text: string })[]): string {
+  for (const { start, end, text } of edits.toSorted((left, right) => right.start - left.start)) {
+    source = source.slice(0, start) + text + source.slice(end);
+  }
+  return source;
+}
+
+function* configNodes(program: Program): IterableIterator<Node> {
+  const pending: unknown[] = [...program.body];
+  while (pending.length > 0) {
+    const item = pending.pop();
+    if (Array.isArray(item)) {
+      pending.push(...item);
+    } else if (typeof item === 'object' && item !== null && 'type' in item) {
+      const node = item as Node;
+      yield node;
+      pending.push(...Object.values(node));
+    }
+  }
+}
+
+/** Preserve static module imports when copying an installed preset into the project. */
+function relocateInstalledPackConfig(
+  content: string,
+  preset: string,
+  realPreset: string,
+  output: string,
+): string | undefined {
+  const { program } = parseSource(preset, content);
+  for (const node of configNodes(program)) {
+    if (
+      node.type === 'ImportExpression' ||
+      (node.type === 'MetaProperty' && node.meta.name === 'import') ||
+      (node.type === 'Identifier' && (node.name === '__dirname' || node.name === '__filename')) ||
+      (node.type === 'CallExpression' &&
+        node.callee.type === 'Identifier' &&
+        node.callee.name === 'require')
+    ) {
+      return undefined;
+    }
+  }
+  const presetDirectory = path.dirname(preset);
+  const installedDirectory = path.dirname(realPreset);
+  const outputDirectory = path.dirname(output);
+  const edits: (Span & { text: string })[] = [];
+  let resolver: ResolverFactory | undefined;
+  for (const statement of program.body) {
+    if (
+      statement.type !== 'ImportDeclaration' &&
+      statement.type !== 'ExportNamedDeclaration' &&
+      statement.type !== 'ExportAllDeclaration'
+    ) {
+      continue;
+    }
+    const source = statement.source;
+    if (!source) {
+      continue;
+    }
+    const specifier = source.value;
+    let target: string | undefined;
+    if (specifier.startsWith('./') || specifier.startsWith('../')) {
+      target = path.resolve(presetDirectory, specifier);
+    } else if (
+      !isBuiltin(specifier) &&
+      specifier !== VITE_PLUS_NAME &&
+      !specifier.startsWith(`${VITE_PLUS_NAME}/`) &&
+      !path.isAbsolute(specifier)
+    ) {
+      resolver ??= new ResolverFactory({
+        conditionNames: ['module-sync', 'node', 'import'],
+        symlinks: false,
+        nodePath: false,
+      });
+      const installed = resolver.sync(installedDirectory, specifier).path;
+      if (!installed) {
+        return undefined;
+      }
+      if (installed !== resolver.sync(outputDirectory, specifier).path) {
+        // Keep the public path to the preset so a reinstall can replace its store entry.
+        target = path.resolve(presetDirectory, path.relative(installedDirectory, installed));
+        if (!fs.existsSync(target) || fs.realpathSync(target) !== fs.realpathSync(installed)) {
+          return undefined;
+        }
+      }
+    }
+    if (!target) {
+      continue;
+    }
+    if (target.split(path.sep).includes('.pnpm')) {
+      return undefined;
+    }
+    const relative = path.relative(outputDirectory, target).split(path.sep).join('/');
+    const relocated = relative.startsWith('../') ? relative : `./${relative}`;
+    edits.push({ start: source.start, end: source.end, text: JSON.stringify(relocated) });
+  }
+  return applySourceEdits(content, edits);
+}
+
+function configImports(program: Program) {
+  return program.body.flatMap((statement) =>
+    statement.type === 'ImportDeclaration' ? [statement.source] : [],
+  );
+}
+
+/** Check whether a generated or retained configuration needs Vite+ in focused installs. */
+export function configNeedsVitePlus(
+  projectPath: string,
+  keepTsdownDependency: boolean,
+  options?: { wrapPlugins?: boolean; preserveVitestConfig?: boolean },
+): boolean {
+  const { viteConfig, tsdownConfig } = detectConfigs(projectPath);
+  if (!viteConfig || (!tsdownConfig && !keepTsdownDependency)) {
+    return false;
+  }
+  const vitePath = path.join(projectPath, viteConfig);
+  try {
+    const { program } = parseSource(vitePath, fs.readFileSync(vitePath, 'utf8'));
+    const specifiers = configImports(program).map(({ value }) => value);
+    for (const node of configNodes(program)) {
+      // Import rewriting also handles literal CommonJS require calls.
+      if (
+        node.type === 'CallExpression' &&
+        node.callee.type === 'Identifier' &&
+        node.callee.name === 'require' &&
+        node.arguments.length === 1 &&
+        isString(node.arguments[0])
+      ) {
+        specifiers.push(node.arguments[0].value);
+      }
+    }
+    const importsVitePlus = specifiers.some(
+      (specifier) => specifier === VITE_PLUS_NAME || specifier.startsWith(`${VITE_PLUS_NAME}/`),
+    );
+    // Workspace migration wraps plugins after rewriting imports and manifests.
+    if (
+      keepTsdownDependency &&
+      (importsVitePlus ||
+        specifiers.some((specifier) => specifier === 'vite' || specifier.startsWith('vite/')) ||
+        (!options?.preserveVitestConfig && specifiers.includes('vitest/config')) ||
+        (options?.wrapPlugins && wrapLazyPlugins(vitePath).updated))
+    ) {
+      return true;
+    }
+    if (!tsdownConfig || !hasConfigKey(vitePath, 'pack')) {
+      return false;
+    }
+    const { convertedName, previousPath } = packConfigPaths(path.join(projectPath, tsdownConfig));
+    const convertedImports = tsdownConfigImportPaths(convertedName);
+    if (previousPath) {
+      convertedImports.push(...tsdownConfigImportPaths(path.basename(previousPath)));
+    }
+    return importsVitePlus || specifiers.some((specifier) => convertedImports.includes(specifier));
+  } catch {
+    return false;
+  }
+}
+
+function packProperties(program: Program, requireStatic = false): (ObjectProperty | undefined)[] {
+  return configReturnValues(defaultConfigValue(program)).map((config) =>
+    config?.type === 'ObjectExpression' && (!requireStatic || staticObject(config, true))
+      ? objectProperty(config, 'pack')
+      : undefined,
+  );
+}
+
+type PackIdentifier = Extract<Node, { type: 'Identifier' }>;
+type PackMapping = 'static' | 'unverified';
+type PackReference = {
+  value: PackIdentifier;
+  mapping?: PackMapping;
+};
+type PackUse = PackReference & {
+  property?: ObjectProperty;
+  copy?: { initializer: ObjectExpression; reference: PackIdentifier };
+};
+
+function objectAssignTarget(node: Node): Node | undefined {
+  if (
+    node.type === 'CallExpression' &&
+    node.callee.type === 'MemberExpression' &&
+    node.callee.object.type === 'Identifier' &&
+    node.callee.object.name === 'Object' &&
+    memberName(node.callee) === 'assign'
+  ) {
+    const target = node.arguments[0];
+    return target?.type === 'SpreadElement' ? undefined : target;
+  }
+  return undefined;
+}
+
+const stablePackOptions = new Set(['entry', 'format', 'minify', 'name', 'outDir', 'sourcemap']);
+const packArrayMethods = new Set(['map', 'filter']);
+
+function packCallbackResult(callback: Node | undefined) {
+  if (
+    (callback?.type !== 'ArrowFunctionExpression' && callback?.type !== 'FunctionExpression') ||
+    callback.async ||
+    callback.generator ||
+    callback.params.length > 2
+  ) {
+    return undefined;
+  }
+  const [parameter, index] = callback.params;
+  if (parameter?.type !== 'Identifier' || (index && index.type !== 'Identifier')) {
+    return undefined;
+  }
+  let result = callback.body;
+  if (result?.type === 'BlockStatement') {
+    const [statement] = result.body;
+    result =
+      result.body.length === 1 && statement.type === 'ReturnStatement' ? statement.argument : null;
+  }
+  return result
+    ? { value: unwrapTypeExpression(result), parameter: parameter.name, index: index?.name }
+    : undefined;
+}
+
+function isStaticPackMapping(value: Node, parameter: string): boolean {
+  if (value.type === 'Identifier') {
+    return value.name === parameter;
+  }
+  // Read only the complete object and override options that require no migration.
+  return (
+    value.type === 'ObjectExpression' &&
+    sharedPackSpread(value)?.name === parameter &&
+    value.properties.every((member) => {
+      if (member.type === 'SpreadElement') {
+        return true;
+      }
+      const name = propertyName(member.key);
+      return name === 'dts'
+        ? member.value.type === 'Literal' && member.value.value === false
+        : name !== undefined && stablePackOptions.has(name);
+    })
+  );
+}
+
+function isStaticPackFilter(node: Node, parameter: string, index?: string): boolean {
+  const value = unwrapTypeExpression(node);
+  switch (value.type) {
+    case 'Literal':
+      return sameStaticValue(value, value);
+    case 'Identifier':
+      return value.name === index;
+    case 'MemberExpression': {
+      const name = memberName(value);
+      return (
+        value.object.type === 'Identifier' &&
+        value.object.name === parameter &&
+        name !== undefined &&
+        stablePackOptions.has(name)
+      );
+    }
+    case 'UnaryExpression':
+      return value.operator === '!' && isStaticPackFilter(value.argument, parameter, index);
+    case 'BinaryExpression':
+      return (
+        (value.operator === '===' || value.operator === '!==') &&
+        isStaticPackFilter(value.left, parameter, index) &&
+        isStaticPackFilter(value.right, parameter, index)
+      );
+    case 'LogicalExpression':
+      return (
+        isStaticPackFilter(value.left, parameter, index) &&
+        isStaticPackFilter(value.right, parameter, index)
+      );
+    default:
+      return false;
+  }
+}
+
+function packValueReferences(node: Node, mapping?: PackMapping): PackReference[] {
+  const value = unwrapTypeExpression(node);
+  switch (value.type) {
+    case 'Identifier':
+      return [{ value, mapping }];
+    case 'ConditionalExpression':
+      // The test still reads the original values used to choose a config.
+      return [
+        ...packValueReferences(value.consequent, mapping),
+        ...packValueReferences(value.alternate, mapping),
+      ];
+    case 'ArrayExpression':
+      return value.elements.flatMap((entry) => (entry ? packValueReferences(entry, mapping) : []));
+    case 'MemberExpression': {
+      if (!value.computed) {
+        return [];
+      }
+      // Keep the index expression. For a dynamic index, check the source array
+      // before redirecting the import and keep the existing pack toolchain defaults.
+      const literalIndex =
+        value.property.type === 'Literal' &&
+        typeof value.property.value === 'number' &&
+        Number.isInteger(value.property.value) &&
+        value.property.value >= 0;
+      return packValueReferences(value.object, literalIndex ? mapping : (mapping ?? 'static'));
+    }
+    case 'CallExpression': {
+      const target = objectAssignTarget(value);
+      if (target) {
+        return packValueReferences(target, mapping);
+      }
+      const { callee } = value;
+      const method = memberName(callee);
+      if (callee.type !== 'MemberExpression' || !method || !packArrayMethods.has(method)) {
+        return [];
+      }
+      const receiver = unwrapTypeExpression(callee.object);
+      const callback =
+        value.arguments.length === 1 ? packCallbackResult(value.arguments[0]) : undefined;
+      const knownReceiver =
+        receiver.type === 'Identifier' ||
+        (receiver.type === 'CallExpression' &&
+          packArrayMethods.has(memberName(receiver.callee) ?? ''));
+      const staticMapping =
+        knownReceiver &&
+        callback &&
+        (method === 'map'
+          ? isStaticPackMapping(callback.value, callback.parameter)
+          : isStaticPackFilter(callback.value, callback.parameter, callback.index));
+      return packValueReferences(receiver, staticMapping ? (mapping ?? 'static') : 'unverified');
+    }
+    case 'ObjectExpression':
+      return value.properties.flatMap((member) =>
+        member.type === 'SpreadElement' ? packValueReferences(member.argument, mapping) : [],
+      );
+    case 'SpreadElement':
+      return packValueReferences(value.argument, mapping);
+    default:
+      return [];
+  }
+}
+
+function privateConstInitializers(program: Program) {
+  const initializers = new Map<number, Node>();
+  const pending: unknown[] = [...program.body];
+  while (pending.length > 0) {
+    const item = pending.pop();
+    if (Array.isArray(item)) {
+      pending.push(...item);
+    } else if (typeof item === 'object' && item !== null && 'type' in item) {
+      const node = item as Node;
+      // Exported declarations can also be read by other modules.
+      if (node.type === 'ExportNamedDeclaration') {
+        continue;
+      }
+      if (node.type === 'VariableDeclaration' && node.kind === 'const') {
+        for (const { id, init } of node.declarations) {
+          if (id.type === 'Identifier' && init) {
+            initializers.set(id.start, init);
+          }
+        }
+      }
+      pending.push(...Object.values(node));
+    }
+  }
+  return initializers;
+}
+
+function viteConfigMemberReads(program: Program): Set<number> {
+  const reads = new Set<number>();
+  const objects = configReturnValues(defaultConfigValue(program)).filter(
+    (value) => value?.type === 'ObjectExpression',
+  );
+  for (const object of objects) {
+    for (const property of object.properties) {
+      if (property.type !== 'Property' || property.computed || property.kind !== 'init') {
+        continue;
+      }
+      const value = unwrapTypeExpression(property.value);
+      if (value.type === 'ObjectExpression') {
+        objects.push(value);
+      } else if (
+        value.type === 'MemberExpression' &&
+        !value.computed &&
+        value.object.type === 'Identifier'
+      ) {
+        reads.add(value.object.start);
+      }
+    }
+  }
+  return reads;
+}
+
+/** Copy a literal override without reevaluating the original constant. */
+function sharedPackSpread(initializer: ObjectExpression): PackIdentifier | undefined {
+  const spreads = initializer.properties.filter((member) => member.type === 'SpreadElement');
+  const spread = spreads.length === 1 ? spreads[0].argument : undefined;
+  if (
+    spread?.type === 'Identifier' &&
+    initializer.properties.every(
+      (member) =>
+        member.type === 'SpreadElement' ||
+        (!member.computed &&
+          !member.method &&
+          member.kind === 'init' &&
+          sameStaticValue(member.value, member.value)),
+    )
+  ) {
+    return spread;
+  }
+  return undefined;
+}
+
+function packAssignments(
+  { program, bindings }: ReturnType<typeof parseSource>,
+  packs: readonly (ObjectProperty | undefined)[],
+) {
+  const uses: PackUse[] = packs.flatMap((property) =>
+    property
+      ? packValueReferences(property.value).map(({ value, mapping }) => ({
+          property,
+          value,
+          mapping,
+        }))
+      : [],
+  );
+  if (uses.length === 0) {
+    return uses;
+  }
+  const initializers = privateConstInitializers(program);
+  const aliasesByReference = new Map<
+    number,
+    { initializer: Node; references: number[]; remaining: number; mapping?: PackMapping }
+  >();
+  for (const { start, constant, references } of bindings) {
+    const initializer = initializers.get(start);
+    if (!initializer || !constant) {
+      continue;
+    }
+    const alias = { initializer, references, remaining: references.length };
+    for (const reference of references) {
+      aliasesByReference.set(reference, alias);
+    }
+  }
+
+  // Follow a constant only when every reference feeds pack. Add its initializer
+  // uses to the same work list so chains of private aliases are handled too.
+  for (const { value, mapping } of uses) {
+    const alias = aliasesByReference.get(value.start);
+    if (!alias) {
+      continue;
+    }
+    if (mapping === 'unverified' || alias.mapping === undefined) {
+      alias.mapping = mapping;
+    }
+    if (--alias.remaining === 0) {
+      uses.push(...packValueReferences(alias.initializer, alias.mapping));
+    }
+  }
+  const packReferences = new Set(uses.map(({ value }) => value.start));
+  const propertyReads = viteConfigMemberReads(program);
+  const copies = uses.flatMap(({ property, value: reference, mapping }) => {
+    const alias = aliasesByReference.get(reference.start);
+    if (
+      !alias?.remaining ||
+      alias.initializer.type !== 'ObjectExpression' ||
+      !alias.references.every((start) => packReferences.has(start) || propertyReads.has(start))
+    ) {
+      return [];
+    }
+    const value = sharedPackSpread(alias.initializer);
+    return value
+      ? [{ property, value, mapping, copy: { initializer: alias.initializer, reference } }]
+      : [];
+  });
+  return [...uses, ...copies];
+}
+
+const arrayMutators = new Set([
+  'copyWithin',
+  'fill',
+  'pop',
+  'push',
+  'reverse',
+  'shift',
+  'sort',
+  'splice',
+  'unshift',
+]);
+
+function packRootIdentifier(node: Node): PackIdentifier | undefined {
+  let root = unwrapTypeExpression(node);
+  while (root.type === 'MemberExpression') {
+    root = unwrapTypeExpression(root.object);
+  }
+  return root.type === 'Identifier' ? root : undefined;
+}
+
+function aliasBindingStarts(binding: Node): number[] {
+  switch (binding.type) {
+    case 'Identifier':
+      return [binding.start];
+    case 'ObjectPattern':
+      return binding.properties.flatMap((property) =>
+        property.type === 'Property' ? aliasBindingStarts(property.value) : [],
+      );
+    case 'ArrayPattern':
+      return binding.elements.flatMap((element) => (element ? aliasBindingStarts(element) : []));
+    case 'AssignmentPattern':
+      return aliasBindingStarts(binding.left);
+    default:
+      return [];
+  }
+}
+
+function mutationExpressions(body: Node | null) {
+  return body?.type === 'BlockStatement'
+    ? body.body.map((statement) =>
+        statement.type === 'ExpressionStatement' ? statement.expression : undefined,
+      )
+    : [body?.type === 'ExpressionStatement' ? body.expression : body];
+}
+
+function entryMutationHelper(node: FunctionNode | ArrowFunctionExpression) {
+  const [parameter] = node.params;
+  if (node.async || node.generator || node.params.length !== 1 || parameter.type !== 'Identifier') {
+    return undefined;
+  }
+  const type = parameter.typeAnnotation?.typeAnnotation;
+  const typeReference =
+    type?.type === 'TSTypeQuery' && type.exprName.type === 'Identifier'
+      ? type.exprName.start
+      : undefined;
+  if (type && typeReference === undefined) {
+    return undefined;
+  }
+  const expressions = mutationExpressions(node.body);
+  if (
+    expressions.length > 0 &&
+    expressions.every((expression) => {
+      if (expression?.type !== 'CallExpression' || expression.callee.type !== 'MemberExpression') {
+        return false;
+      }
+      const method = memberName(expression.callee);
+      const receiver = expression.callee.object;
+      return (
+        !!method &&
+        arrayMutators.has(method) &&
+        receiver.type === 'MemberExpression' &&
+        memberName(receiver) === 'entry' &&
+        receiver.object.type === 'Identifier' &&
+        receiver.object.name === parameter.name &&
+        expression.arguments.every((argument) => sameStaticValue(argument, argument))
+      );
+    })
+  ) {
+    return { typeReference };
+  }
+  return undefined;
+}
+
+function setsPackArrayOutput(
+  options: Node,
+  body: Node | null,
+  bindings: ReturnType<typeof parseSource>['bindings'],
+): boolean {
+  if (options.type !== 'Identifier' || options.typeAnnotation) {
+    return false;
+  }
+  const binding = bindings.find(({ start }) => start === options.start);
+  const expressions = mutationExpressions(body);
+  // The body can compute the directory normally. Only the assignment may
+  // use the options object, so it cannot read a renamed option in the copy.
+  const references = new Set(binding?.references);
+  return (
+    expressions.length > 0 &&
+    expressions.every(
+      (expression) =>
+        expression?.type === 'AssignmentExpression' &&
+        expression.operator === '=' &&
+        expression.left.type === 'MemberExpression' &&
+        memberName(expression.left) === 'outDir' &&
+        expression.left.object.type === 'Identifier' &&
+        references.delete(expression.left.object.start),
+    ) &&
+    references.size === 0
+  );
+}
+
+function packMutationReferences({ program, bindings }: ReturnType<typeof parseSource>) {
+  const writes = new Set<number>();
+  const aliasInitializers = new Map<number, number>();
+  const arrayOrigins = new Map<number, number>();
+  const helpers = new Map<number, NonNullable<ReturnType<typeof entryMutationHelper>>>();
+  const calls = new Map<number, number>();
+  const rewritable = new Map<number, { typeReference?: number; array?: boolean }>();
+  const recordHelper = (start: number, node: FunctionNode | ArrowFunctionExpression) => {
+    const helper = entryMutationHelper(node);
+    if (helper) {
+      helpers.set(start, helper);
+    }
+  };
+  const recordArrayBinding = (element: Node, array: PackIdentifier) => {
+    for (const start of aliasBindingStarts(element)) {
+      arrayOrigins.set(start, array.start);
+    }
+  };
+  for (const node of configNodes(program)) {
+    let target: Node;
+    switch (node.type) {
+      case 'FunctionDeclaration':
+        if (node.id) {
+          recordHelper(node.id.start, node);
+        }
+        continue;
+      case 'ForOfStatement': {
+        const array = unwrapTypeExpression(node.right);
+        if (array.type !== 'Identifier') {
+          continue;
+        }
+        if (node.left.type !== 'VariableDeclaration') {
+          writes.add(array.start);
+          continue;
+        }
+        const { id } = node.left.declarations[0];
+        recordArrayBinding(id, array);
+        if (!node.await && setsPackArrayOutput(id, node.body, bindings)) {
+          rewritable.set(array.start, { array: true });
+        }
+        continue;
+      }
+      case 'VariableDeclaration':
+        if (node.kind === 'const') {
+          for (const { id, init } of node.declarations) {
+            const origin = init && packRootIdentifier(init);
+            if (origin) {
+              for (const start of aliasBindingStarts(id)) {
+                aliasInitializers.set(start, origin.start);
+              }
+            }
+            if (
+              id.type === 'Identifier' &&
+              (init?.type === 'FunctionExpression' || init?.type === 'ArrowFunctionExpression')
+            ) {
+              recordHelper(id.start, init);
+            }
+          }
+        }
+        continue;
+      case 'AssignmentExpression':
+        target = node.left;
+        break;
+      case 'UpdateExpression':
+        target = node.argument;
+        break;
+      case 'UnaryExpression':
+        if (node.operator !== 'delete') {
+          continue;
+        }
+        target = node.argument;
+        break;
+      case 'CallExpression': {
+        const { callee } = node;
+        const method = memberName(callee);
+        if (callee.type === 'MemberExpression' && method === 'forEach') {
+          const object = unwrapTypeExpression(callee.object);
+          if (object.type === 'Identifier') {
+            const [callback] = node.arguments;
+            if (
+              node.arguments.length === 1 &&
+              (callback.type === 'FunctionExpression' ||
+                callback.type === 'ArrowFunctionExpression') &&
+              !callback.params.some((parameter) => parameter.type === 'RestElement')
+            ) {
+              const [element, , array] = callback.params;
+              // Writes to the element or the third callback argument affect
+              // the original array. A callback that only reads can stay split.
+              for (const parameter of [element, array]) {
+                if (parameter) {
+                  recordArrayBinding(parameter, object);
+                }
+              }
+              if (
+                element &&
+                callback.params.length <= 2 &&
+                !callback.async &&
+                !callback.generator &&
+                setsPackArrayOutput(element, callback.body, bindings)
+              ) {
+                rewritable.set(object.start, { array: true });
+              }
+            } else {
+              writes.add(object.start);
+            }
+          }
+        }
+        const receiver =
+          callee.type === 'MemberExpression' && method && arrayMutators.has(method)
+            ? callee.object
+            : undefined;
+        const assigned = objectAssignTarget(node) ?? receiver;
+        if (!assigned) {
+          const [argument] = node.arguments;
+          if (
+            callee.type === 'Identifier' &&
+            node.arguments.length === 1 &&
+            argument.type === 'Identifier'
+          ) {
+            calls.set(callee.start, argument.start);
+          }
+          // A function can change options passed by reference. Keep those
+          // references together unless the local helper can be verified.
+          for (const argument of node.arguments) {
+            const root = packRootIdentifier(
+              argument.type === 'SpreadElement' ? argument.argument : argument,
+            );
+            if (root) {
+              writes.add(root.start);
+            }
+          }
+          continue;
+        }
+        target = assigned;
+        break;
+      }
+      default:
+        continue;
+    }
+    const root = packRootIdentifier(target);
+    if (root) {
+      writes.add(root.start);
+    }
+  }
+  const origins = new Map<number, number>();
+  for (const { start, references, constant } of bindings) {
+    const helper = helpers.get(start);
+    const argument = references.length === 1 ? calls.get(references[0]) : undefined;
+    if (constant && helper && argument !== undefined) {
+      rewritable.set(argument, helper);
+    }
+    const origin = (constant ? aliasInitializers.get(start) : undefined) ?? arrayOrigins.get(start);
+    if (origin !== undefined) {
+      for (const reference of references) {
+        origins.set(reference, origin);
+      }
+    }
+  }
+  // The initializer can itself reference an alias. Follow those links until
+  // the write set contains every original binding reached by a mutation.
+  for (const write of writes) {
+    const origin = origins.get(write);
+    if (origin !== undefined) {
+      writes.add(origin);
+    }
+  }
+  return { writes, rewritable };
+}
+
+function importedPackBindings(
+  parsed: ReturnType<typeof parseSource>,
+  assignments: ReturnType<typeof packAssignments>,
+  vitePath: string,
+  packPath: string,
+) {
+  if (assignments.length === 0) {
+    return [];
+  }
+  const { program, bindings } = parsed;
+  const directory = path.dirname(vitePath);
+  const withoutExtension = path.join(path.dirname(packPath), path.parse(packPath).name);
+  const jsPath = packPath.replace(/\.(m|c)?ts$/, '.$1js');
+  const { writes, rewritable } = packMutationReferences(parsed);
+  return program.body.flatMap((statement) => {
+    if (statement.type !== 'ImportDeclaration' || statement.importKind === 'type') {
+      return [];
+    }
+    const specifier = statement.source.value;
+    if (!specifier.startsWith('./') && !specifier.startsWith('../')) {
+      return [];
+    }
+    const imported = path.resolve(directory, specifier);
+    // Treat another file at the written path as an explicit import of that file.
+    if (
+      imported !== packPath &&
+      ((imported !== jsPath && imported !== withoutExtension) || fs.existsSync(imported))
+    ) {
+      return [];
+    }
+    const binding = statement.specifiers.find(
+      (spec) =>
+        spec.type === 'ImportDefaultSpecifier' ||
+        (spec.type === 'ImportSpecifier' &&
+          spec.importKind !== 'type' &&
+          propertyName(spec.imported) === 'default'),
+    );
+    const references = bindings.find(({ start }) => start === binding?.local.start)?.references;
+    if (!binding || !references) {
+      return [];
+    }
+    const uses = assignments.filter(({ value }) => references.includes(value.start));
+    if (uses.length === 0) {
+      return [];
+    }
+    const written = references.filter((reference) => writes.has(reference));
+    const onlyPackUses = references.length === uses.length && uses.every(({ copy }) => !copy);
+    const helperReferences = new Set(uses.map(({ value }) => value.start));
+    const canRedirectMutations =
+      written.length > 0 &&
+      uses.every(({ copy }) => !copy) &&
+      written.every((reference) => {
+        const mutation = rewritable.get(reference);
+        if (!mutation) {
+          return false;
+        }
+        helperReferences.add(reference);
+        const type = mutation.typeReference;
+        if (type !== undefined) {
+          helperReferences.add(type);
+        }
+        return type === undefined || references.includes(type);
+      }) &&
+      references.every((reference) => helperReferences.has(reference));
+    return [
+      {
+        statement,
+        binding,
+        uses,
+        mutates: written.length > 0,
+        canRedirectMutations,
+        mutatesArray: written.some((reference) => rewritable.get(reference)?.array),
+        onlyPack: onlyPackUses || canRedirectMutations,
+      },
+    ];
+  });
+}
+
+function importSeparator(source: string, comments: readonly Span[], left: Span, right: Span) {
+  for (
+    let index = source.indexOf(',', left.end);
+    index !== -1 && index < right.start;
+    index = source.indexOf(',', index + 1)
+  ) {
+    if (!comments.some(({ start, end }) => start <= index && index < end)) {
+      return index;
+    }
+  }
+  return undefined;
+}
+
+function rewritePackConfigImports(
+  source: string,
+  comments: readonly Span[],
+  imports: ReturnType<typeof importedPackBindings>,
+  originalName: string,
+  convertedName: string,
+  previousImports: ReturnType<typeof importedPackBindings>,
+): string {
+  const edits: Array<Span & { text: string }> = previousImports.map(({ statement }) => {
+    const { start, end, value } = statement.source;
+    return {
+      start,
+      end,
+      text: JSON.stringify(value.slice(0, -path.posix.basename(value).length) + convertedName),
+    };
+  });
+  const originalStem = path.parse(originalName).name;
+  const convertedStem = path.parse(convertedName).name;
+  const newline = source.includes('\r\n') ? '\r\n' : '\n';
+  let nextName = 0;
+  for (const { statement, binding, uses, onlyPack } of imports) {
+    const original = statement.source.value;
+    const filename = path.posix.basename(original);
+    const replacement =
+      path.extname(originalName) === path.extname(convertedName)
+        ? filename.replace(originalStem, convertedStem)
+        : convertedName;
+    const converted = original.slice(0, -filename.length) + replacement;
+    const literal = JSON.stringify(converted);
+    if (onlyPack && statement.specifiers.length === 1) {
+      edits.push({ start: statement.source.start, end: statement.source.end, text: literal });
+      continue;
+    }
+
+    let name = binding.local.name;
+    const index = statement.specifiers.indexOf(binding);
+    const next = statement.specifiers[index + 1];
+    const previous = statement.specifiers[index - 1];
+    // A named default specifier can share the braces with other named imports.
+    // Keep punctuation and comments outside the removed binding.
+    const separator = next
+      ? importSeparator(source, comments, binding, next)
+      : previous?.type === 'ImportSpecifier'
+        ? importSeparator(source, comments, previous, binding)
+        : undefined;
+    if (onlyPack && separator !== undefined) {
+      edits.push({ start: binding.start, end: binding.end, text: '' });
+      edits.push({ start: separator, end: separator + 1, text: '' });
+    } else {
+      // Other consumers still need the original module and binding.
+      do {
+        name = nextName++ === 0 ? 'vitePackConfig' : `vitePackConfig${nextName}`;
+      } while (source.includes(name));
+      for (const { property, value, copy } of uses) {
+        const reference = copy?.reference ?? value;
+        const replacement = copy
+          ? source.slice(copy.initializer.start, value.start) +
+            name +
+            source.slice(value.end, copy.initializer.end)
+          : name;
+        edits.push({
+          start: reference.start,
+          end: reference.end,
+          text: property?.shorthand ? `pack: ${replacement}` : replacement,
+        });
+      }
+    }
+    const lineEnd = source.indexOf(newline, statement.end);
+    const insertion =
+      lineEnd === -1
+        ? source.length
+        : (comments.find(({ start, end }) => start <= lineEnd && lineEnd < end)?.end ?? lineEnd);
+    edits.push({
+      start: insertion,
+      end: insertion,
+      text: `${newline}import ${name} from ${literal};`,
+    });
+  }
+  return applySourceEdits(source, edits);
+}
+
+/** Return the active pack configuration when equivalence cannot be established. */
+export function findDivergedTsdownPackConfig(
+  tsdownConfigPath: string,
+  workspaceRoot: string,
+  commandDirectory: string,
+): string | undefined {
+  const configDirectory = path.dirname(tsdownConfigPath);
+  // A package-local tsdown config will get a local Vite config during migration.
+  const vitePath =
+    commandDirectory === configDirectory
+      ? findViteConfig(commandDirectory)
+      : findViteConfigUp(commandDirectory, workspaceRoot);
+  if (!vitePath) {
+    return undefined;
+  }
+  try {
+    const hasPack = hasConfigKey(vitePath, 'pack');
+    if (tsdownConfigPath.endsWith('.json')) {
+      return hasPack && !matchingInlinePackConfig(vitePath, tsdownConfigPath, workspaceRoot)
+        ? vitePath
+        : undefined;
+    }
+    const { convertedPath, previousPath } = packConfigPaths(tsdownConfigPath);
+    if (!hasPack && !fs.existsSync(convertedPath)) {
+      // Use the same merge as the later config edit before replacing the build command.
+      const merged = mergeTsdownConfig(vitePath, `./${path.basename(tsdownConfigPath)}`);
+      return merged.updated ? undefined : vitePath;
+    }
+    const source = parseSource(vitePath, fs.readFileSync(vitePath, 'utf8'));
+    const packs = packProperties(source.program, true);
+    if (packs.length === 0) {
+      return vitePath;
+    }
+    const assignments = packAssignments(source, packs);
+    const usesConfig = (file: string) =>
+      importedPackBindings(source, assignments, vitePath, file).some(
+        ({ uses, mutates }) =>
+          !mutates &&
+          uses.length === packs.length &&
+          uses.every(
+            ({ property, value }) => property && unwrapTypeExpression(property.value) === value,
+          ),
+      );
+    if (usesConfig(tsdownConfigPath)) {
+      return undefined;
+    }
+    const { content } = rewriteTsdownConfigForPack(tsdownConfigPath, workspaceRoot);
+    const expected = content ?? fs.readFileSync(tsdownConfigPath, 'utf8');
+    const activePath = [convertedPath, previousPath].find(
+      (file) => file && fs.existsSync(file) && usesConfig(file),
+    );
+    if (activePath) {
+      return sameConfigModule(activePath, expected, fs.readFileSync(activePath, 'utf8'))
+        ? undefined
+        : activePath;
+    }
+    const expectedValue = defaultConfigValue(parseSource(tsdownConfigPath, expected).program);
+    return expectedValue &&
+      packs.every(
+        (pack) => pack && sameStaticValue(unwrapTypeExpression(pack.value), expectedValue),
+      )
+      ? undefined
+      : vitePath;
+  } catch {
+    // The original command is the only verified build when comparison fails.
+    return vitePath;
+  }
+}
+
+/** Write a separate converted config only when pack needs compatibility changes. */
+function mergeRetainedTsdownConfig(
+  viteConfigPath: string,
+  tsdownConfigPath: string,
+  workspaceRoot: string,
+  keepTsdownConfig: boolean,
+  silent: boolean,
+  report: MigrationReport | undefined,
+): boolean | undefined {
+  const originalName = path.basename(tsdownConfigPath);
+  const { convertedName, convertedPath, previousPath, realSource, installedPreset } =
+    packConfigPaths(tsdownConfigPath);
+  const source = fs.readFileSync(viteConfigPath, 'utf8');
+  const hasPack = hasConfigKey(viteConfigPath, 'pack');
+  const parsed = hasPack ? parseSource(viteConfigPath, source) : undefined;
+  const assignments = parsed ? packAssignments(parsed, packProperties(parsed.program)) : [];
+  const originalImports = parsed
+    ? importedPackBindings(parsed, assignments, viteConfigPath, tsdownConfigPath)
+    : [];
+  const convertedImports = parsed
+    ? importedPackBindings(parsed, assignments, viteConfigPath, convertedPath)
+    : [];
+  const previousImports =
+    parsed && previousPath
+      ? importedPackBindings(parsed, assignments, viteConfigPath, previousPath)
+      : [];
+  const upgradesModule = previousImports.length > 0;
+  const importsConverted = convertedImports.length > 0 || upgradesModule;
+  const convertedEntry = fs.lstatSync(convertedPath, { throwIfNoEntry: false });
+  const convertedExists = fs.statSync(convertedPath, { throwIfNoEntry: false })?.isFile();
+  if (
+    importsConverted &&
+    originalImports.length === 0 &&
+    !upgradesModule &&
+    convertedExists &&
+    (installedPreset ? convertedEntry?.isFile() : !realSource || convertedEntry?.isSymbolicLink())
+  ) {
+    return preparePackConfigTsconfigEdits(
+      viteConfigPath,
+      convertedPath,
+      workspaceRoot,
+      tsdownConfigPath,
+    ).apply();
+  }
+  if (!keepTsdownConfig && !importsConverted) {
+    return undefined;
+  }
+  if (hasPack && !importsConverted && originalImports.length === 0) {
+    return undefined;
+  }
+
+  const packImports = [...originalImports, ...convertedImports, ...previousImports];
+  const mappings = packImports.flatMap(({ uses }) =>
+    uses.flatMap(({ mapping }) => (mapping ? [mapping] : [])),
+  );
+  const usesArray = mappings.length > 0 || packImports.some(({ mutatesArray }) => mutatesArray);
+  const usesBundledDefaults =
+    usesArray || packImports.some(({ canRedirectMutations }) => canRedirectMutations);
+  const { content: converted, warnings } = rewriteTsdownConfigForPack(
+    tsdownConfigPath,
+    workspaceRoot,
+    // Derived configs already ran under vp pack. Keep their bundled defaults.
+    usesBundledDefaults ? viteConfigPath : undefined,
+  );
+  for (const warning of warnings) {
+    warnMigration(`${displayRelative(tsdownConfigPath)}: ${warning}`, report);
+  }
+  if (converted === undefined && !importsConverted) {
+    return undefined;
+  }
+  if (
+    originalImports.some(({ mutates, canRedirectMutations }) => mutates && !canRedirectMutations)
+  ) {
+    warnMigration(
+      `${displayRelative(viteConfigPath)} changes the imported options from ${displayRelative(tsdownConfigPath)} or passes them to code that can change them. Keep those changes when you migrate the pack options manually. See ${documentationUrl('/guide/migrate#tsdown')}`,
+      report,
+    );
+    return false;
+  }
+  if (usesArray) {
+    const array =
+      !mappings.includes('unverified') &&
+      defaultConfigValue(
+        parseSource(tsdownConfigPath, converted ?? fs.readFileSync(tsdownConfigPath, 'utf8'))
+          .program,
+      );
+    if (
+      !array ||
+      array.type !== 'ArrayExpression' ||
+      !array.elements.every((entry) => staticObject(entry))
+    ) {
+      warnMigration(
+        `Cannot verify how ${displayRelative(viteConfigPath)} selects options from ${displayRelative(tsdownConfigPath)}. Migrate the pack options manually. See ${documentationUrl('/guide/migrate#tsdown')}`,
+        report,
+      );
+      return false;
+    }
+  }
+
+  // Keep relative imports beside a workspace-owned source. Installed presets
+  // get a project-owned file because a reinstall can replace their directory.
+  const siblingTarget = realSource ? convertedPackLinkTarget(realSource, workspaceRoot) : undefined;
+  const linkedTarget = installedPreset ? undefined : siblingTarget;
+  if (realSource && !installedPreset && !linkedTarget) {
+    warnMigration(
+      `The shared config at ${displayRelative(tsdownConfigPath)} points outside the workspace. Migrate its pack options manually. See ${documentationUrl('/guide/migrate#tsdown')}`,
+      report,
+    );
+    return undefined;
+  }
+
+  let config = source;
+  if (parsed && (originalImports.length > 0 || upgradesModule)) {
+    config = rewritePackConfigImports(
+      source,
+      parsed.comments,
+      originalImports,
+      originalName,
+      convertedName,
+      previousImports,
+    );
+  } else if (!hasPack) {
+    const result = mergeTsdownConfig(viteConfigPath, `./${convertedName}`);
+    if (!result.updated) {
+      return undefined;
+    }
+    config = result.content;
+  }
+
+  const existingLink = convertedEntry?.isSymbolicLink()
+    ? path.resolve(fs.realpathSync(path.dirname(convertedPath)), fs.readlinkSync(convertedPath))
+    : undefined;
+  const reuseLink = linkedTarget !== undefined && existingLink === linkedTarget;
+  const replaceInstalledLink =
+    !!installedPreset && siblingTarget !== undefined && existingLink === siblingTarget;
+  let content = converted ?? fs.readFileSync(tsdownConfigPath, 'utf8');
+  if (installedPreset && realSource) {
+    if (replaceInstalledLink && convertedExists) {
+      content = fs.readFileSync(convertedPath, 'utf8');
+    }
+    const relocated = relocateInstalledPackConfig(
+      content,
+      installedPreset,
+      realSource,
+      convertedPath,
+    );
+    if (relocated === undefined) {
+      warnMigration(
+        `Cannot copy ${displayRelative(tsdownConfigPath)} without changing how the installed preset resolves files. Migrate its pack options manually. See ${documentationUrl('/guide/migrate#tsdown')}`,
+        report,
+      );
+      return hasPack ? false : undefined;
+    }
+    content = relocated;
+  }
+  if (upgradesModule && previousPath && fs.existsSync(previousPath)) {
+    let matches = false;
+    try {
+      matches = sameConfigModule(previousPath, content, fs.readFileSync(previousPath, 'utf8'));
+    } catch {
+      // Keep a previous copy whose content cannot be verified.
+    }
+    if (!matches) {
+      warnMigration(
+        `${displayRelative(previousPath)} differs from the generated pack options. Migrate this config to ${convertedName} manually. See ${documentationUrl('/guide/migrate#tsdown')}`,
+        report,
+      );
+      return false;
+    }
+  }
+  const writePath = linkedTarget ?? convertedPath;
+  const existingFile = reuseLink || replaceInstalledLink ? undefined : convertedEntry;
+  const targetEntry = linkedTarget
+    ? fs.lstatSync(linkedTarget, { throwIfNoEntry: false })
+    : existingFile;
+  const outputs = [{ file: convertedPath, entry: existingFile }];
+  if (linkedTarget) {
+    outputs.push({ file: linkedTarget, entry: targetEntry });
+  }
+  const conflict = outputs.find(
+    ({ file, entry }) => entry && (!entry.isFile() || fs.readFileSync(file, 'utf8') !== content),
+  );
+  if (conflict) {
+    warnMigration(
+      `Cannot write the converted pack config because ${displayRelative(conflict.file)} already exists. Merge ${displayRelative(tsdownConfigPath)} into pack manually.`,
+      report,
+    );
+    return false;
+  }
+  const tsconfigEdits = preparePackConfigTsconfigEdits(
+    viteConfigPath,
+    convertedPath,
+    workspaceRoot,
+    tsdownConfigPath,
+  );
+  if (tsconfigEdits.missingPreset) {
+    const { filename, specifier } = tsconfigEdits.missingPreset;
+    warnMigration(
+      `Resolve the TypeScript preset \`${specifier}\` used by ${displayRelative(filename)} and rerun \`vp migrate\` to add the converted pack config.`,
+      report,
+    );
+    return false;
+  }
+  if (tsconfigEdits.excludedConfig) {
+    warnMigration(
+      `Allow \`${convertedName}\` in ${displayRelative(tsconfigEdits.excludedConfig)} and rerun \`vp migrate\` to add the converted pack config.`,
+      report,
+    );
+    return false;
+  }
+  if (!targetEntry) {
+    writePackConfigOutput(
+      writePath,
+      (file) => fs.writeFileSync(file, content, { flag: 'wx' }),
+      replaceInstalledLink,
+    );
+  }
+  if (linkedTarget && !reuseLink) {
+    const relativeTarget = path.relative(
+      fs.realpathSync(path.dirname(convertedPath)),
+      linkedTarget,
+    );
+    writePackConfigOutput(
+      convertedPath,
+      (file) => fs.symlinkSync(relativeTarget, file, 'file'),
+      convertedEntry !== undefined,
+    );
+  }
+  const included = tsconfigEdits.apply();
+  try {
+    if (config !== source) {
+      fs.writeFileSync(viteConfigPath, config);
+    }
+  } catch (error) {
+    if (!convertedEntry && !included) {
+      fs.unlinkSync(convertedPath);
+    }
+    throw error;
+  }
+  if (report) {
+    report.tsdownImportCount++;
+  }
+  if (!silent) {
+    prompts.log.success(`✔ Added ${displayRelative(convertedPath)} for vp pack`);
+  }
+  return true;
 }
 
 /**
@@ -499,8 +1982,7 @@ function mergeOxlintConfigFile(
       'lint',
       silent,
       report,
-      plan,
-      preparedOxlintConfigs !== undefined,
+      { modulePlan: plan, deferRemoval: preparedOxlintConfigs !== undefined },
     );
     if (!migration.migrated) {
       recordPendingMigration();
@@ -737,8 +2219,11 @@ function mergeAndRemoveJsonConfig(
   configKey: string,
   silent = false,
   report?: MigrationReport,
-  modulePlan?: OxlintModulePlan,
-  deferRemoval = false,
+  {
+    modulePlan,
+    deferRemoval = false,
+    workspaceRoot = projectPath,
+  }: { modulePlan?: OxlintModulePlan; deferRemoval?: boolean; workspaceRoot?: string } = {},
 ): boolean {
   const fullViteConfigPath = path.join(projectPath, viteConfigPath);
   const fullJsonConfigPath = path.join(projectPath, jsonConfigPath);
@@ -786,7 +2271,9 @@ function mergeAndRemoveJsonConfig(
   // configs contain object extends, which JSON Oxlint configs do not accept.
   const mergeConfig = replaceDefaults ? upsertJsonConfig : mergeJsonConfig;
   let result;
-  if (!modulePlan) {
+  if (configKey === 'pack') {
+    result = mergeTsdownJsonConfig(fullJsonConfigPath, workspaceRoot, fullViteConfigPath);
+  } else if (!modulePlan) {
     result = mergeConfig(fullViteConfigPath, fullJsonConfigPath, configKey);
   } else {
     const tempDir = fs.mkdtempSync(path.join(projectPath, '.vite-plus-lint-'));
@@ -1106,6 +2593,7 @@ export function rewriteAllImports(
     // Capture package owners before migration removes oxlint from their manifests.
     oxlintOwnerDirs?: string[];
     importRuleConfig?: string;
+    preserveTsdownDirs?: string[];
   } = {},
 ): boolean {
   const result = rewriteImportsInDirectory(
@@ -1113,6 +2601,7 @@ export function rewriteAllImports(
     options.preserveNuxtVitestImports ?? true,
     options.oxlintOwnerDirs ?? [],
     options.importRuleConfig,
+    options.preserveTsdownDirs,
   );
   const modified = result.modifiedFiles.length;
   const preserved = result.preservedVitestFiles.length;

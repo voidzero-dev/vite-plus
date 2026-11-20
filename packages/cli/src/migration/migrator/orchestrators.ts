@@ -32,7 +32,9 @@ import {
   pnpmPeerDependencyRuleKeys,
   mergeStagedConfigToViteConfig,
   mergeTsdownConfigFile,
+  configNeedsVitePlus,
   mergeViteConfigFiles,
+  migratedVitePlusSpec,
   migratePnpmOverridesToWorkspaceYaml,
   migratePnpmSettingsToWorkspaceYaml,
   migrateTaskCacheConfigInViteConfig,
@@ -55,6 +57,7 @@ import {
   rewriteTsconfigTypes,
   rewriteYarnrcYml,
   setDirectViteEdge,
+  collectPackagesKeepingTsdown,
   sourceTreeReferencesRetainedVitestModule,
   takePnpmWorkspaceSettings,
   trackVitePeerDependencyRuleRemoval,
@@ -88,6 +91,8 @@ export function rewriteStandaloneProject(
   if (!fs.existsSync(packageJsonPath)) {
     return;
   }
+  const tsdownPackages = collectPackagesKeepingTsdown(projectPath, workspaceInfo.packages, report);
+  const keepTsdown = tsdownPackages.has(path.resolve(projectPath));
 
   const packageManager = workspaceInfo.packageManager;
   const reportVitePeerDependencyRuleRemoval = trackVitePeerDependencyRuleRemoval(
@@ -180,8 +185,8 @@ export function rewriteStandaloneProject(
     pruneLegacyWrapperAliases(pkg.pnpm?.overrides);
     // Remove stale overrides for bundled and official opt-in providers before
     // aligning them with Vitest. Preserve community-provider overrides.
-    dropRemovePackageOverrideKeys(pkg.resolutions);
-    dropRemovePackageOverrideKeys(pkg.overrides);
+    dropRemovePackageOverrideKeys(pkg.resolutions, [], keepTsdown);
+    dropRemovePackageOverrideKeys(pkg.overrides, [], keepTsdown);
     // Common case (no direct vitest): strip a lingering managed `vitest` from
     // the npm/bun `overrides` and yarn `resolutions` sinks so it isn't re-pinned.
     if (!usesVitest) {
@@ -218,7 +223,7 @@ export function rewriteStandaloneProject(
         // Strip selector-shaped overrides (e.g. `parent>@vitest/browser-playwright`)
         // whose target is a removed package, before re-merging the user's
         // overrides into the new pnpm config.
-        dropRemovePackageOverrideKeys(pkg.pnpm?.overrides);
+        dropRemovePackageOverrideKeys(pkg.pnpm?.overrides, [], keepTsdown);
         // Common case: drop a lingering managed `vitest` override before
         // re-merging. `mergeManagedPnpmPeerDependencyRules` drops its peer rule.
         if (!usesVitest) {
@@ -251,7 +256,7 @@ export function rewriteStandaloneProject(
       // remove packages from `resolutions` field if they exist
       // https://pnpm.io/9.x/package_json#resolutions
       for (const key of [...overrideKeys, ...PROVIDER_OVERRIDE_DROP_NAMES]) {
-        if (pkg.resolutions?.[key]) {
+        if (pkg.resolutions?.[key] && !(keepTsdown && key === 'tsdown')) {
           delete pkg.resolutions[key];
         }
       }
@@ -277,6 +282,7 @@ export function rewriteStandaloneProject(
       requiredVitestPeer,
       browserCatalogAdditions,
       retainedImportDependencies.browser.get(projectPath),
+      keepTsdown,
     );
 
     // ensure vite-plus is in devDependencies — but only when it isn't already a
@@ -320,6 +326,7 @@ export function rewriteStandaloneProject(
       browserCatalogAdditions,
       usesWebdriverio,
       workspaceInfo.downloadPackageManager.version,
+      keepTsdown,
     );
   }
 
@@ -347,6 +354,7 @@ export function rewriteStandaloneProject(
       browserCatalogAdditions,
       supportCatalog,
       yarnSupportsPreapprovedPackages(workspaceInfo.downloadPackageManager.version),
+      keepTsdown,
     );
   }
 
@@ -358,16 +366,20 @@ export function rewriteStandaloneProject(
   }
 
   if (!skipStagedMigration) {
-    rewriteLintStagedConfigFile(projectPath, report);
+    rewriteLintStagedConfigFile(projectPath, report, keepTsdown);
   }
   cleanupDeprecatedTsconfigOptions(projectPath, silent, report);
-  rewriteTsconfigTypes(projectPath, silent, report);
+  rewriteTsconfigTypes(projectPath, silent, report, keepTsdown);
   mergeViteConfigFiles(projectPath, silent, report, workspaceInfo.packages);
   injectLintTypeCheckDefaults(projectPath, silent, report);
   injectFmtDefaults(projectPath, silent, report);
-  mergeTsdownConfigFile(projectPath, silent, report);
+  mergeTsdownConfigFile(projectPath, silent, report, keepTsdown);
   // rewrite imports in all TypeScript/JavaScript files before lazy plugin import merging
-  rewriteAllImports(projectPath, silent, report, { oxlintOwnerDirs, importRuleConfig });
+  rewriteAllImports(projectPath, silent, report, {
+    oxlintOwnerDirs,
+    importRuleConfig,
+    preserveTsdownDirs: [...tsdownPackages],
+  });
   dropDeadOxlintPluginsDependency(projectPath, workspaceInfo.packages, originalOxlintDependencies);
   wrapLazyPluginsInViteConfig(projectPath, silent, report);
   migrateTaskCacheConfigInViteConfig(projectPath, silent, report);
@@ -385,6 +397,13 @@ export function rewriteMonorepo(
   report?: MigrationReport,
   importRuleConfig?: string,
 ): void {
+  const tsdownPackages = collectPackagesKeepingTsdown(
+    workspaceInfo.rootDir,
+    workspaceInfo.packages,
+    report,
+  );
+  const keepRootTsdown = tsdownPackages.has(path.resolve(workspaceInfo.rootDir));
+  const keepTsdownInCatalog = tsdownPackages.size > 0;
   const reportVitePeerDependencyRuleRemoval = trackVitePeerDependencyRuleRemoval(
     workspaceInfo.rootDir,
     workspaceInfo.packageManager,
@@ -447,6 +466,7 @@ export function rewriteMonorepo(
     retainedImportDependencies,
     rootDir: workspaceInfo.rootDir,
     packages: workspaceInfo.packages,
+    tsdownPackages,
     oxlintConfigs: prepareOxlintConfigs(getWorkspaceProjectPaths(workspaceInfo)),
   };
   // rewrite root workspace
@@ -458,6 +478,7 @@ export function rewriteMonorepo(
       browserCatalogAdditions,
       supportCatalog,
       yarnSupportsPreapprovedPackages(workspaceInfo.downloadPackageManager.version),
+      keepTsdownInCatalog,
     );
   } else if (workspaceInfo.packageManager === PackageManager.bun && supportCatalog) {
     rewriteBunCatalog(
@@ -467,6 +488,7 @@ export function rewriteMonorepo(
       usesWebdriverio,
       workspaceInfo.downloadPackageManager.version,
       browserCatalogAdditions,
+      keepTsdownInCatalog,
     );
   }
   rewriteRootWorkspacePackageJson(
@@ -482,6 +504,7 @@ export function rewriteMonorepo(
     supportCatalog,
     workspaceContext.oxlintConfigs,
     retainedImportDependencies,
+    tsdownPackages,
   );
   if (workspaceInfo.packageManager === PackageManager.pnpm) {
     rewritePnpmWorkspaceYaml(
@@ -494,6 +517,7 @@ export function rewriteMonorepo(
       browserCatalogAdditions,
       usesWebdriverio,
       workspaceInfo.downloadPackageManager.version,
+      keepTsdownInCatalog,
     );
     ensurePnpmWorkspacePackages(workspaceInfo.rootDir, workspaceInfo.workspacePatterns);
     if (usePnpmWorkspaceSettings && isForceOverrideMode()) {
@@ -513,9 +537,10 @@ export function rewriteMonorepo(
   // runner across two `@vitest/runner` instances. `rewriteMonorepoProject` detects
   // the layout per workspace (reading the root `.yarnrc.yml` itself) and auto-fixes
   // or warns — see `applyYarnWorkspaceHoistingFix`.
-  for (const pkg of workspaceInfo.packages) {
+  const members = getWorkspaceProjectPaths(workspaceInfo).slice(1);
+  for (const projectPath of members) {
     rewriteMonorepoProject(
-      path.join(workspaceInfo.rootDir, pkg.path),
+      projectPath,
       workspaceInfo.packageManager,
       skipStagedMigration,
       silent,
@@ -525,14 +550,15 @@ export function rewriteMonorepo(
       true,
       supportCatalog,
       browserCatalogAdditions,
+      tsdownPackages.has(path.resolve(projectPath)),
     );
   }
 
   if (!skipStagedMigration) {
-    rewriteLintStagedConfigFile(workspaceInfo.rootDir, report);
+    rewriteLintStagedConfigFile(workspaceInfo.rootDir, report, keepRootTsdown);
   }
   cleanupDeprecatedTsconfigOptions(workspaceInfo.rootDir, silent, report);
-  rewriteTsconfigTypes(workspaceInfo.rootDir, silent, report);
+  rewriteTsconfigTypes(workspaceInfo.rootDir, silent, report, keepRootTsdown);
   mergeViteConfigFiles(
     workspaceInfo.rootDir,
     silent,
@@ -544,9 +570,20 @@ export function rewriteMonorepo(
   removeMigratedOxlintConfigs(workspaceContext.oxlintConfigs);
   injectLintTypeCheckDefaults(workspaceInfo.rootDir, silent, report);
   injectFmtDefaults(workspaceInfo.rootDir, silent, report);
-  mergeTsdownConfigFile(workspaceInfo.rootDir, silent, report);
+  mergeTsdownConfigFile(
+    workspaceInfo.rootDir,
+    silent,
+    report,
+    keepRootTsdown,
+    workspaceInfo.rootDir,
+    tsdownPackages,
+  );
   // rewrite imports in all TypeScript/JavaScript files before lazy plugin import merging
-  rewriteAllImports(workspaceInfo.rootDir, silent, report, { oxlintOwnerDirs, importRuleConfig });
+  rewriteAllImports(workspaceInfo.rootDir, silent, report, {
+    oxlintOwnerDirs,
+    importRuleConfig,
+    preserveTsdownDirs: [...tsdownPackages],
+  });
   dropDeadOxlintPluginsDependency(
     workspaceInfo.rootDir,
     workspaceInfo.packages,
@@ -554,8 +591,7 @@ export function rewriteMonorepo(
   );
   wrapLazyPluginsInViteConfig(workspaceInfo.rootDir, silent, report);
   migrateTaskCacheConfigInViteConfig(workspaceInfo.rootDir, silent, report);
-  for (const pkg of workspaceInfo.packages) {
-    const projectPath = path.join(workspaceInfo.rootDir, pkg.path);
+  for (const projectPath of members) {
     wrapLazyPluginsInViteConfig(projectPath, silent, report);
     migrateTaskCacheConfigInViteConfig(projectPath, silent, report);
   }
@@ -583,6 +619,7 @@ export function rewriteMonorepoProject(
     packages: WorkspacePackage[];
     oxlintConfigs?: PreparedOxlintConfigs;
     retainedImportDependencies?: RetainedImportDependencies;
+    tsdownPackages?: ReadonlySet<string>;
   },
   deferLazyPluginWrapping = false,
   // Whether this workspace's edges use catalog references. Yarn catalogs require
@@ -591,9 +628,11 @@ export function rewriteMonorepoProject(
   supportCatalog = true,
   // An installed provider references the shared catalog entry added for a sibling.
   browserCatalogAdditions: ReadonlySet<string> = new Set(),
+  keepTsdown = collectPackagesKeepingTsdown(projectPath, [], report).has(path.resolve(projectPath)),
+  keepTsdownDependency = keepTsdown,
 ): void {
   cleanupDeprecatedTsconfigOptions(projectPath, silent, report);
-  rewriteTsconfigTypes(projectPath, silent, report);
+  rewriteTsconfigTypes(projectPath, silent, report, keepTsdown);
   mergeViteConfigFiles(
     projectPath,
     silent,
@@ -602,7 +641,14 @@ export function rewriteMonorepoProject(
     workspaceContext?.rootDir,
     workspaceContext?.oxlintConfigs,
   );
-  mergeTsdownConfigFile(projectPath, silent, report);
+  mergeTsdownConfigFile(
+    projectPath,
+    silent,
+    report,
+    keepTsdown,
+    workspaceContext?.rootDir,
+    workspaceContext?.tsdownPackages,
+  );
 
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
@@ -619,13 +665,13 @@ export function rewriteMonorepoProject(
       ? findYarnWorkspaceHoisting(workspaceContext?.rootDir ?? projectPath)
       : undefined;
 
-  let extractedStagedConfig: Record<string, string | string[]> | null = null;
   editJsonFile<{
     devDependencies?: Record<string, string>;
     dependencies?: Record<string, string>;
     peerDependencies?: Record<string, string>;
     optionalDependencies?: Record<string, string>;
     scripts?: Record<string, string>;
+    'lint-staged'?: Record<string, string | string[]>;
     installConfig?: { hoistingLimits?: string };
   }>(packageJsonPath, (pkg) => {
     const requiredVitestPeer = projectListsRequiredVitestPeer(projectPath, pkg);
@@ -638,7 +684,7 @@ export function rewriteMonorepoProject(
       workspaceContext?.retainedImportDependencies?.vitest.has(projectPath) ||
       sourceTreeReferencesRetainedVitestModule(projectPath);
     // rewrite scripts in package.json
-    extractedStagedConfig = rewritePackageJson(
+    const extractedStagedConfig = rewritePackageJson(
       pkg,
       packageManager,
       supportCatalog,
@@ -654,7 +700,29 @@ export function rewriteMonorepoProject(
       requiredVitestPeer,
       browserCatalogAdditions,
       workspaceContext?.retainedImportDependencies?.browser.get(projectPath),
+      keepTsdown,
+      keepTsdownDependency,
+      configNeedsVitePlus(projectPath, keepTsdownDependency, {
+        wrapPlugins: true,
+        preserveVitestConfig:
+          pkg.dependencies?.vitest !== undefined || pkg.peerDependencies?.vitest !== undefined,
+      }),
     );
+    if (
+      extractedStagedConfig &&
+      mergeStagedConfigToViteConfig(projectPath, extractedStagedConfig, silent, report)
+    ) {
+      delete pkg['lint-staged'];
+      if (keepTsdownDependency && !hasDirectVitePlusInstallEntry(pkg)) {
+        pkg.devDependencies = {
+          ...pkg.devDependencies,
+          [VITE_PLUS_NAME]: migratedVitePlusSpec(
+            supportCatalog && packageManager !== PackageManager.npm,
+            catalogDependencyResolver,
+          ),
+        };
+      }
+    }
     // If this SUB-workspace now depends on `vite-plus` and Yarn isolates its
     // hoisting (via the root `nmHoistingLimits` OR the workspace's own
     // `installConfig.hoistingLimits`), dedupe the bundled `vitest` family to the
@@ -678,16 +746,11 @@ export function rewriteMonorepoProject(
     return pkg;
   });
 
-  // Merge extracted staged config into vite.config.ts, then remove lint-staged from package.json
-  if (extractedStagedConfig) {
-    if (mergeStagedConfigToViteConfig(projectPath, extractedStagedConfig, silent, report)) {
-      removeLintStagedFromPackageJson(packageJsonPath);
-    }
-  }
-
   if (!deferLazyPluginWrapping) {
     // rewrite imports in all TypeScript/JavaScript files before lazy plugin import merging
-    rewriteAllImports(projectPath, silent, report);
+    rewriteAllImports(projectPath, silent, report, {
+      preserveTsdownDirs: keepTsdown ? [path.resolve(projectPath)] : [],
+    });
     wrapLazyPluginsInViteConfig(projectPath, silent, report);
     migrateTaskCacheConfigInViteConfig(projectPath, silent, report);
   }

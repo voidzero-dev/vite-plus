@@ -1,0 +1,5 @@
+{
+  "entry": ["src/library.ts"],
+  "outDir": "lib-out",
+  "dts": false
+}

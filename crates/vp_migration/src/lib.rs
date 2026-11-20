@@ -25,6 +25,7 @@ pub use file_walker::{WalkResult, find_ts_files, is_directory_gitignored};
 pub use import_rewriter::{
     BatchRewriteResult, RewriteImportsOptions, find_retained_vitest_packages,
     rewrite_imports_in_directory, rewrite_imports_in_directory_with_options,
+    rewrite_tsdown_config_for_pack,
 };
 pub use import_rule::ImportRuleConfig;
 pub use package::{rewrite_eslint, rewrite_prettier, rewrite_scripts};
@@ -32,6 +33,6 @@ pub use shell_command::{LiteralCommandToken, parse_literal_commands};
 pub use source_analysis::analyze_migration_source;
 pub use task_cache::{TaskCacheMigrationResult, migrate_task_cache_config};
 pub use vite_config::{
-    MergeResult, has_config_key, merge_json_config, merge_tsdown_config, remove_config_key,
-    upsert_json_config, wrap_lazy_plugins,
+    MergeResult, has_config_key, merge_json_config, merge_tsdown_config, merge_tsdown_json_config,
+    normalize_tsdown_json_pack_configs, remove_config_key, upsert_json_config, wrap_lazy_plugins,
 };
