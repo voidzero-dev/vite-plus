@@ -150,14 +150,20 @@ describe('Yarn PnP migration preflight', () => {
     expect(detectYarnPnpMode(tmpDir, '4.12.0')).toBeUndefined();
   });
 
-  it('honours YARN_NODE_LINKER over project configuration', () => {
-    fs.writeFileSync(path.join(tmpDir, '.yarnrc.yml'), 'nodeLinker: node-modules\n');
+  it('detects both environment PnP and project PnP masked by an override', () => {
+    const yarnrcPath = path.join(tmpDir, '.yarnrc.yml');
+    fs.writeFileSync(yarnrcPath, 'nodeLinker: node-modules\n');
     process.env.YARN_NODE_LINKER = 'pnp';
     expect(detectYarnPnpMode(tmpDir, '4.12.0')).toEqual({ source: 'environment' });
 
     process.env.YARN_NODE_LINKER = 'node-modules';
-    fs.writeFileSync(path.join(tmpDir, '.yarnrc.yml'), 'nodeLinker: pnp\n');
     expect(detectYarnPnpMode(tmpDir, '4.12.0')).toBeUndefined();
+
+    fs.writeFileSync(yarnrcPath, 'nodeLinker: pnp\n');
+    expect(detectYarnPnpMode(tmpDir, '4.12.0')).toEqual({ source: 'configuration' });
+
+    process.env.YARN_NODE_LINKER = 'pnp';
+    expect(detectYarnPnpMode(tmpDir, '4.12.0')).toEqual({ source: 'environment' });
   });
 
   it('converts the project rc without discarding other settings and is idempotent', () => {

@@ -174,10 +174,11 @@ export interface YarnPnpDetection {
 }
 
 /**
- * Detect Yarn Plug'n'Play using the same precedence Yarn applies to
- * `nodeLinker`. Yarn 2+ defaults to PnP when no value is configured, while
- * Yarn Classic defaults to node_modules. Unknown/`latest` Yarn versions are
- * treated as modern because that is the version `vp` will provision.
+ * Detect Yarn Plug'n'Play for migration. A project-local `nodeLinker: pnp`
+ * still needs conversion when a temporary environment override masks it.
+ * Yarn 2+ defaults to PnP when no value is configured, while Yarn Classic
+ * defaults to node_modules. Unknown/`latest` Yarn versions are treated as
+ * modern because that is the version `vp` will provision.
  */
 export function detectYarnPnpMode(
   projectPath: string,
@@ -190,7 +191,12 @@ export function detectYarnPnpMode(
 
   const environmentLinker = process.env.YARN_NODE_LINKER?.trim();
   if (environmentLinker) {
-    return environmentLinker.toLowerCase() === 'pnp' ? { source: 'environment' } : undefined;
+    if (environmentLinker.toLowerCase() === 'pnp') {
+      return { source: 'environment' };
+    }
+    return readYarnrcValue(projectPath, 'nodeLinker')?.toLowerCase() === 'pnp'
+      ? { source: 'configuration' }
+      : undefined;
   }
 
   const configuredLinker = resolveEffectiveYarnConfigValue(
