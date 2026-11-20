@@ -22,13 +22,14 @@ export async function getMigrationInstallIdleTimeoutMs(
     if ((override?.name ?? packageManager) !== PackageManager.pnpm) {
       return undefined;
     }
+    const probeEnv = { ...process.env, NODE_OPTIONS: undefined };
     let pnpmExecutable: string | undefined;
     if (process.env.VP_CLI_BIN) {
       // The global launcher can select a system binary ahead of the project pin.
       const { exitCode, stdout } = await runCommandSilently({
         ...getVpCommand(['env', 'current', 'pm', '--json']),
         cwd,
-        envs: process.env,
+        envs: probeEnv,
       });
       if (exitCode !== 0) {
         return undefined;
@@ -74,7 +75,7 @@ export async function getMigrationInstallIdleTimeoutMs(
         command: pnpmExecutable,
         args: ['--version'],
         cwd,
-        envs: { ...process.env, NODE_OPTIONS: undefined },
+        envs: probeEnv,
       });
       version = exitCode === 0 ? stdout.toString().trim() : undefined;
     }
