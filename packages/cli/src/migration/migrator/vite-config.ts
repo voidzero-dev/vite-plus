@@ -505,7 +505,9 @@ function packProperties(program: Program, requireStatic = false): (ObjectPropert
   );
 }
 
-function packValueIdentifiers(node: Node): Extract<Node, { type: 'Identifier' }>[] {
+type PackIdentifier = Extract<Node, { type: 'Identifier' }>;
+
+function packValueIdentifiers(node: Node): PackIdentifier[] {
   const value = unwrapTypeExpression(node);
   switch (value.type) {
     case 'Identifier':
@@ -526,15 +528,72 @@ function packValueIdentifiers(node: Node): Extract<Node, { type: 'Identifier' }>
   }
 }
 
-function importedPackBindings(
+function privateConstInitializers(program: Program): Map<number, Node> {
+  const initializers = new Map<number, Node>();
+  const pending: unknown[] = [...program.body];
+  while (pending.length > 0) {
+    const item = pending.pop();
+    if (Array.isArray(item)) {
+      pending.push(...item);
+    } else if (typeof item === 'object' && item !== null && 'type' in item) {
+      const node = item as Node;
+      // Exported declarations can also be read by other modules.
+      if (node.type === 'ExportNamedDeclaration') {
+        continue;
+      }
+      if (node.type === 'VariableDeclaration' && node.kind === 'const') {
+        for (const { id, init } of node.declarations) {
+          if (id.type === 'Identifier' && init) {
+            initializers.set(id.start, init);
+          }
+        }
+      }
+      pending.push(...Object.values(node));
+    }
+  }
+  return initializers;
+}
+
+function packAssignments(
   { program, bindings }: ReturnType<typeof parseSource>,
   packs: readonly (ObjectProperty | undefined)[],
+) {
+  const uses: { property?: ObjectProperty; value: PackIdentifier }[] = packs.flatMap((property) =>
+    property ? packValueIdentifiers(property.value).map((value) => ({ property, value })) : [],
+  );
+  if (uses.length === 0) {
+    return uses;
+  }
+  const initializers = privateConstInitializers(program);
+  const aliasesByReference = new Map<number, { initializer: Node; remaining: number }>();
+  for (const { start, constant, references } of bindings) {
+    const initializer = initializers.get(start);
+    if (!initializer || !constant) {
+      continue;
+    }
+    const alias = { initializer, remaining: references.length };
+    for (const reference of references) {
+      aliasesByReference.set(reference, alias);
+    }
+  }
+
+  // Follow a constant only when every reference feeds pack. Add its initializer
+  // uses to the same work list so chains of private aliases are handled too.
+  for (const { value } of uses) {
+    const alias = aliasesByReference.get(value.start);
+    if (alias && --alias.remaining === 0) {
+      uses.push(...packValueIdentifiers(alias.initializer).map((value) => ({ value })));
+    }
+  }
+  return uses;
+}
+
+function importedPackBindings(
+  { program, bindings }: ReturnType<typeof parseSource>,
+  assignments: ReturnType<typeof packAssignments>,
   vitePath: string,
   packPath: string,
 ) {
-  const assignments = packs.flatMap((property) =>
-    property ? packValueIdentifiers(property.value).map((value) => ({ property, value })) : [],
-  );
   const directory = path.dirname(vitePath);
   const withoutExtension = path.join(path.dirname(packPath), path.parse(packPath).name);
   const jsPath = packPath.replace(/\.(m|c)?ts$/, '.$1js');
@@ -631,7 +690,7 @@ function rewritePackConfigImports(
         edits.push({
           start: value.start,
           end: value.end,
-          text: property.shorthand ? `pack: ${name}` : name,
+          text: property?.shorthand ? `pack: ${name}` : name,
         });
       }
     }
@@ -683,11 +742,14 @@ export function findDivergedTsdownPackConfig(
     if (packs.length === 0) {
       return vitePath;
     }
+    const assignments = packAssignments(source, packs);
     const usesConfig = (file: string) =>
-      importedPackBindings(source, packs, vitePath, file).some(
+      importedPackBindings(source, assignments, vitePath, file).some(
         ({ uses }) =>
           uses.length === packs.length &&
-          uses.every(({ property, value }) => unwrapTypeExpression(property.value) === value),
+          uses.every(
+            ({ property, value }) => property && unwrapTypeExpression(property.value) === value,
+          ),
       );
     if (usesConfig(tsdownConfigPath)) {
       return undefined;
@@ -727,12 +789,12 @@ function mergeRetainedTsdownConfig(
   const source = fs.readFileSync(viteConfigPath, 'utf8');
   const hasPack = hasConfigKey(viteConfigPath, 'pack');
   const parsed = hasPack ? parseSource(viteConfigPath, source) : undefined;
-  const packs = parsed ? packProperties(parsed.program) : [];
+  const assignments = parsed ? packAssignments(parsed, packProperties(parsed.program)) : [];
   const originalImports = parsed
-    ? importedPackBindings(parsed, packs, viteConfigPath, tsdownConfigPath)
+    ? importedPackBindings(parsed, assignments, viteConfigPath, tsdownConfigPath)
     : [];
   const importsConverted =
-    !!parsed && importedPackBindings(parsed, packs, viteConfigPath, convertedPath).length > 0;
+    !!parsed && importedPackBindings(parsed, assignments, viteConfigPath, convertedPath).length > 0;
   const sourceIsLink = fs.lstatSync(tsdownConfigPath).isSymbolicLink();
   const convertedEntry = fs.lstatSync(convertedPath, { throwIfNoEntry: false });
   if (
