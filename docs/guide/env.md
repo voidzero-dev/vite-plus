@@ -45,6 +45,8 @@ The `lts` alias selects the newest LTS release. The `latest` alias selects the n
 
 `devEngines.runtime` ranks above `engines.node` because it declares the development-environment requirement, while `engines.node` is a consumer-facing support range. `vp env doctor` warns when declared sources conflict.
 
+`devEngines.runtime.version` accepts only semver versions and ranges, as in npm and pnpm. Aliases such as `lts/*` and `latest` work in `.node-version`, `.nvmrc`, and CLI arguments, but not in this field. When this field selects the Node.js version, an alias makes the command fail with the default `onFail` (`error`) or `download`. With `warn` or `ignore`, Vite+ skips the entry and checks the next sources. When a valid `.node-version` in the same directory selects the version, an alias in this field only causes a warning, and no warning when its `onFail` is `ignore`. To pin the current LTS release there, run `vp env pin lts`.
+
 ::: tip Using pnpm with Vite+ runtime management
 pnpm can also manage the runtime declared in `devEngines.runtime`. When both pnpm and Vite+ manage Node.js, they can download the same version separately or select different versions, causing inconsistent behavior between commands.
 

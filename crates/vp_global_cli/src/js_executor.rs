@@ -506,6 +506,8 @@ fn local_vite_plus_is_older(local: &str, global: &str) -> bool {
 ///
 /// Returns `false` when all sources are missing or invalid, so the caller
 /// can fall through to the user's configured default instead of LTS.
+/// Returns an error when an invalid `devEngines.runtime` version selects the
+/// version and its effective `onFail` is `error` or `download`.
 async fn has_valid_version_source(project_path: &AbsolutePath) -> Result<bool, Error> {
     Ok(config::resolve_project_version_source(project_path, false).await?.is_some())
 }

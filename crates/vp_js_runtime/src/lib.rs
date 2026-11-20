@@ -66,7 +66,8 @@ pub use providers::{
     resolve_version_from_list,
 };
 pub use runtime::{
-    JsRuntime, JsRuntimeType, VersionResolution, VersionSource, download_runtime,
-    download_runtime_for_project, download_runtime_with_provider, ensure_managed_node_allowed,
-    is_valid_version, normalize_version, read_package_json, resolve_node_version,
+    JsRuntime, JsRuntimeType, VersionResolution, VersionSource, dev_engines_runtime_constraint,
+    dev_engines_runtime_fallback, download_runtime, download_runtime_for_project,
+    download_runtime_with_provider, ensure_managed_node_allowed, is_valid_version,
+    normalize_version, read_package_json, resolve_node_version, validate_version,
 };
