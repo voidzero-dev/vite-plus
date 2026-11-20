@@ -1308,7 +1308,7 @@ export function rewriteRootWorkspacePackageJson(
       } else {
         const overrideKeys = Object.keys(managedOverridePackages(workspaceUsesVitest));
         for (const key of [...overrideKeys, ...PROVIDER_OVERRIDE_DROP_NAMES]) {
-          if (pkg.resolutions?.[key]) {
+          if (pkg.resolutions?.[key] && !(keepTsdown && key === 'tsdown')) {
             delete pkg.resolutions[key];
           }
         }

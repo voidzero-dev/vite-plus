@@ -254,7 +254,7 @@ export function rewriteStandaloneProject(
       // remove packages from `resolutions` field if they exist
       // https://pnpm.io/9.x/package_json#resolutions
       for (const key of [...overrideKeys, ...PROVIDER_OVERRIDE_DROP_NAMES]) {
-        if (pkg.resolutions?.[key]) {
+        if (pkg.resolutions?.[key] && !(keepTsdown && key === 'tsdown')) {
           delete pkg.resolutions[key];
         }
       }

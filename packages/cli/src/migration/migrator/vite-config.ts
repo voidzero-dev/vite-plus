@@ -15,6 +15,7 @@ import {
   mergeTsdownConfig,
   migrateTaskCacheConfig,
   readStaticLintConfig,
+  renderTsdownJsonPackConfig,
   rewriteImportsInDirectory,
   rewriteScripts,
   rewriteTsdownConfigForPack,
@@ -32,7 +33,13 @@ import { documentationUrl } from '../../utils/documentation.ts';
 import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
 import { displayRelative } from '../../utils/path.ts';
 import { hasBaseUrlInTsconfig } from '../../utils/tsconfig.ts';
-import { parseSource, sameStaticValue } from '../ast-utils.ts';
+import {
+  defaultConfigValue,
+  objectProperty,
+  parseSource,
+  sameStaticValue,
+  staticObject,
+} from '../ast-utils.ts';
 import { readLintConfigInWorker } from '../compat/runner.ts';
 import { detectConfigs, type ConfigFiles } from '../detector.ts';
 import {
@@ -218,8 +225,17 @@ export function mergeTsdownConfigFile(
   const fullTsdownConfigPath = path.join(projectPath, configs.tsdownConfig);
 
   if (configs.tsdownConfig.endsWith('.json')) {
-    if (keepTsdownConfig && hasConfigKey(fullViteConfigPath, 'pack')) {
-      return false;
+    if (hasConfigKey(fullViteConfigPath, 'pack')) {
+      if (keepTsdownConfig) {
+        return false;
+      }
+      if (!matchesInlinePackConfig(fullViteConfigPath, fullTsdownConfigPath, workspaceRoot)) {
+        infoMigration(
+          `Please manually merge ${displayRelative(fullTsdownConfigPath)} into the existing pack config in ${displayRelative(fullViteConfigPath)}. The JSON file was preserved. See ${documentationUrl('/guide/migrate#tsdown')}`,
+          report,
+        );
+        return false;
+      }
     }
     const merged = mergeAndRemoveJsonConfig(
       projectPath,
@@ -288,6 +304,30 @@ export function mergeTsdownConfigFile(
   return createdViteConfig || result.updated;
 }
 
+function matchesInlinePackConfig(
+  viteConfigPath: string,
+  tsdownConfigPath: string,
+  workspaceRoot: string,
+): boolean {
+  try {
+    const current = defaultConfigValue(viteConfigPath, fs.readFileSync(viteConfigPath, 'utf8'));
+    if (!staticObject(current, true)) {
+      return false;
+    }
+    const pack = objectProperty(current, 'pack')?.value;
+    const expected = defaultConfigValue(
+      viteConfigPath,
+      renderTsdownJsonPackConfig(viteConfigPath, tsdownConfigPath, workspaceRoot),
+    );
+    const inlined =
+      expected?.type === 'ObjectExpression' && objectProperty(expected, 'pack')?.value;
+    return !!pack && !!inlined && sameStaticValue(pack, inlined);
+  } catch {
+    // Unknown or invalid config syntax is not enough to discard the source.
+    return false;
+  }
+}
+
 function tsdownConfigImportPath(filename: string): string {
   return `./${filename.replace(/\.(m|c)?ts$/, '.$1js')}`;
 }
@@ -341,7 +381,7 @@ function mergeRetainedTsdownConfig(
   } else {
     const result = mergeTsdownConfig(viteConfigPath, `./${convertedName}`);
     if (!result.updated) {
-      return false;
+      return undefined;
     }
     config = result.content;
   }

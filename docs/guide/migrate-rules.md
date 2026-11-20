@@ -286,6 +286,8 @@ If a package script selects a tsdown config with `-c` or `--config`, migration k
 
 Migration fills in missing `pack` configuration from each package's default tsdown config. Both direct `vp pack` calls and calls targeting the package with `-C` use that configuration. Migration keeps the original config file when a retained script can load it, including when tsdown finds the config in a parent directory. If a retained JavaScript or TypeScript config needs changes for `vp pack`, migration writes those changes to a separate `vite-pack.config.*` file.
 
+Migration also keeps member configs when a retained tsdown config can select workspace packages. If a later migration finds that a JSON file differs from the inline `pack` config, it keeps the JSON file and prints instructions to merge it.
+
 ### tsx to `vpx`
 
 When a `package.json` script, a lint-staged task, or a `#!/usr/bin/env tsx` shebang runs [tsx](https://tsx.is), migration offers to move it to [`vpx`](/guide/vpx), Vite+'s TypeScript script runner. It rewrites scripts and lint-staged tasks in `package.json` and JSON lint-staged files, and `#!/usr/bin/env tsx` shebangs in script files:
