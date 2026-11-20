@@ -122,11 +122,16 @@ steps = [
   { argv = ["vpt", "write-file", "package.json", "{\"name\":\"core-module-identity\",\"private\":true,\"type\":\"module\",\"packageManager\":\"npm@11.11.0\",\"devDependencies\":{\"vite-plus\":\"latest\"}}\n"], snapshot = false },
   { argv = ["vpt", "replace-file-content", "vite.config.ts", "from 'vite';", "from 'vite-plus';"], snapshot = false },
   { argv = ["vp", "install", "--ignore-scripts"], timeout = 120000, snapshot = false },
-  { argv = ["node", "check-npm-layout.mjs"] },
+  { argv = ["node", "check-npm-layout.mjs", "cli-only"] },
   { argv = ["node", "check-bundled.mjs"] },
   { argv = ["vp", "dev"] },
   { argv = ["vp", "build"] },
   { argv = ["vp", "pack", "entry.js"] },
+  { argv = ["node", "pin-core-alias.mjs"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], timeout = 120000, snapshot = false },
+  ["node", "check-npm-layout.mjs"],
+  ["node", "check-api.mjs"],
+  { argv = ["vp", "test", "run"], snapshot = false },
   { argv = ["vpt", "write-file", "typecheck/package.json", "{\"name\":\"typecheck-tools\",\"private\":true,\"dependencies\":{\"typescript\":\"6.0.3\"},\"packageManager\":\"npm@11.11.0\"}\n"], snapshot = false },
   { argv = ["vp", "install", "--ignore-scripts"], cwd = "typecheck", snapshot = false },
   { argv = ["vpt", "cp", "check-config.mts", "check-config.cts"], snapshot = false },
@@ -159,10 +164,13 @@ steps = [
 name = "core_module_identity_npm_tagged_alias"
 vp = "global"
 local-registry = true
-comment = "The core version satisfies Vitest's vite peer range, so npm keeps a tagged core alias instead of replacing it with upstream Vite."
+comment = "Check how npm resolves a tagged core alias, then migrate to the exact alias and build with the shared core."
 steps = [
   { argv = ["vpt", "write-file", "package.json", "{\"name\":\"core-module-identity\",\"private\":true,\"type\":\"module\",\"packageManager\":\"npm@11.11.0\",\"devDependencies\":{\"vite-plus\":\"latest\",\"vite\":\"npm:@voidzero-dev/vite-plus-core@latest\"}}\n"], snapshot = false },
   { argv = ["vp", "install", "--ignore-scripts"], timeout = 120000, snapshot = false },
-  ["node", "check-tagged-alias.mjs"],
+  ["node", "check-npm-layout.mjs", "tagged"],
+  { argv = ["vp", "migrate", "--no-interactive"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], timeout = 120000, snapshot = false },
+  ["node", "check-npm-layout.mjs", "migrated"],
   ["vp", "pack", "entry.js"],
 ]
