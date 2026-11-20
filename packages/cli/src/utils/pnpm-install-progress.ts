@@ -26,18 +26,18 @@ export function pnpmProbeEnv(envs: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   return { ...envs, NODE_OPTIONS: undefined, npm_config_ignore_pnpmfile: 'true' };
 }
 
-type PnpmLogLevel = 'info' | 'warn' | 'error' | 'silent';
+type PnpmInstallOutputMode = 'info' | 'warn' | 'error' | 'silent' | 'json' | 'ndjson';
 
-export async function getPnpmInstallLogLevel(
+export async function getPnpmInstallOutputMode(
   cwd: string,
   envs: NodeJS.ProcessEnv,
-): Promise<PnpmLogLevel> {
+): Promise<PnpmInstallOutputMode> {
   const probeEnv = pnpmProbeEnv(envs);
   const [reporter, loglevel, json, parseable] = await Promise.all(
     ['reporter', 'loglevel', 'json', 'parseable'].map(async (key) => {
       try {
         const { exitCode, stdout } = await runCommandSilently({
-          ...getVpCommand(['pm', 'config', 'get', key]),
+          ...getVpCommand(['pm', 'config', 'get', key, '--location', 'project']),
           cwd,
           envs: probeEnv,
           idleTimeoutMs: 5000,
@@ -52,8 +52,14 @@ export async function getPnpmInstallLogLevel(
       return undefined;
     }),
   );
-  if (reporter === 'silent' || loglevel === 'silent' || json === 'true' || parseable === 'true') {
+  if (json === 'true' || parseable === 'true') {
+    return 'json';
+  }
+  if (reporter === 'silent' || loglevel === 'silent') {
     return 'silent';
+  }
+  if (reporter === 'ndjson') {
+    return 'ndjson';
   }
   return loglevel === 'warn' || loglevel === 'error' ? loglevel : 'info';
 }
@@ -232,22 +238,46 @@ async function formatPeerDependencyIssues(issuesByProjects: unknown, cwd: string
 export async function formatPnpmInstallOutput(
   output: string,
   cwd: string,
-  logLevel: PnpmLogLevel = 'info',
+  mode: PnpmInstallOutputMode = 'info',
 ): Promise<string> {
+  if (mode === 'ndjson') {
+    return output;
+  }
   const messages: string[] = [];
   const progress = { resolved: 0, found_in_store: 0, fetched: 0, imported: 0 };
   for (const line of output.split(/\r?\n/)) {
     const log = parsePnpmLog(line);
     if (!log) {
       messages.push(line);
+    } else if (mode === 'json') {
+      // pnpm 9 uses the same error object in JSON and parseable modes.
+      const error = asRecord(log.err);
+      if (log.name === 'pnpm' && log.level === 'error' && typeof error.message === 'string') {
+        const message = redactRegistryUrls(error.message, asRecord(log.request).url);
+        messages.push(
+          JSON.stringify(
+            { error: { code: log.code ?? error.code ?? error.name, message } },
+            null,
+            2,
+          ),
+        );
+      }
+    } else if (log.name === 'pnpm:request-retry') {
+      // pnpm's human reporter displays retry records as warnings.
+      if (mode === 'info' || mode === 'warn') {
+        const retry = formatRequestRetry(log);
+        if (retry) {
+          messages.push(retry);
+        }
+      }
     } else if (
-      logLevel !== 'info' &&
+      mode !== 'info' &&
       log.level !== 'error' &&
-      !(logLevel === 'warn' && log.level === 'warn')
+      !(mode === 'warn' && log.level === 'warn')
     ) {
-      // Silent and machine-readable reporters keep the script stderr fallback.
+      // Keep the script stderr fallback for silent installs.
       if (
-        logLevel === 'silent' &&
+        mode === 'silent' &&
         log.name === 'pnpm:lifecycle' &&
         log.stdio === 'stderr' &&
         typeof log.line === 'string'
@@ -255,13 +285,12 @@ export async function formatPnpmInstallOutput(
         messages.push(log.line);
       }
     } else if (log.name === 'pnpm:progress') {
-      if (typeof log.status === 'string' && Object.hasOwn(progress, log.status)) {
+      if (
+        mode === 'info' &&
+        typeof log.status === 'string' &&
+        Object.hasOwn(progress, log.status)
+      ) {
         progress[log.status as keyof typeof progress]++;
-      }
-    } else if (log.name === 'pnpm:request-retry') {
-      const retry = formatRequestRetry(log);
-      if (retry) {
-        messages.push(retry);
       }
     } else if (log.name === 'pnpm:lifecycle' && typeof log.stage === 'string') {
       const directory =
