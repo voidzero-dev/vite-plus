@@ -13,9 +13,9 @@ import {
   hasConfigKey,
   mergeJsonConfig,
   mergeTsdownConfig,
+  mergeTsdownJsonConfig,
   migrateTaskCacheConfig,
   readStaticLintConfig,
-  renderTsdownJsonPackConfig,
   rewriteImportsInDirectory,
   rewriteScripts,
   rewriteTsdownConfigForPack,
@@ -44,6 +44,7 @@ import { readLintConfigInWorker } from '../compat/runner.ts';
 import { detectConfigs, type ConfigFiles } from '../detector.ts';
 import {
   collectInstalledPackageNames,
+  includeGeneratedPackConfig,
   oxlintMigrationMarker,
   prepareOxlintConfigs,
   getScriptRulesYaml,
@@ -244,23 +245,21 @@ export function mergeTsdownConfigFile(
       'pack',
       silent,
       report,
-      undefined,
-      keepTsdownConfig,
+      { deferRemoval: keepTsdownConfig, workspaceRoot },
     );
     return createdViteConfig || merged;
   }
 
-  if (keepTsdownConfig) {
-    const converted = mergeRetainedTsdownConfig(
-      fullViteConfigPath,
-      fullTsdownConfigPath,
-      workspaceRoot,
-      silent,
-      report,
-    );
-    if (converted !== undefined) {
-      return createdViteConfig || converted;
-    }
+  const converted = mergeRetainedTsdownConfig(
+    fullViteConfigPath,
+    fullTsdownConfigPath,
+    workspaceRoot,
+    keepTsdownConfig,
+    silent,
+    report,
+  );
+  if (converted !== undefined) {
+    return createdViteConfig || converted;
   }
 
   // For TS/JS files, import the config file
@@ -317,7 +316,7 @@ function matchesInlinePackConfig(
     const pack = objectProperty(current, 'pack')?.value;
     const expected = defaultConfigValue(
       viteConfigPath,
-      renderTsdownJsonPackConfig(viteConfigPath, tsdownConfigPath, workspaceRoot),
+      mergeTsdownJsonConfig(tsdownConfigPath, workspaceRoot).content,
     );
     const inlined =
       expected?.type === 'ObjectExpression' && objectProperty(expected, 'pack')?.value;
@@ -341,6 +340,7 @@ function mergeRetainedTsdownConfig(
   viteConfigPath: string,
   tsdownConfigPath: string,
   workspaceRoot: string,
+  keepTsdownConfig: boolean,
   silent: boolean,
   report: MigrationReport | undefined,
 ): boolean | undefined {
@@ -356,7 +356,13 @@ function mergeRetainedTsdownConfig(
     : [];
   const convertedImports = tsdownConfigImportPaths(convertedName);
   if (imports.some(({ value }) => convertedImports.includes(value))) {
-    return false;
+    return (
+      fs.existsSync(convertedPath) &&
+      includeGeneratedPackConfig(viteConfigPath, convertedPath, workspaceRoot)
+    );
+  }
+  if (!keepTsdownConfig) {
+    return undefined;
   }
   const originalPaths = tsdownConfigImportPaths(originalName);
   const originalImports = imports.filter(({ value }) => originalPaths.includes(value));
@@ -398,10 +404,11 @@ function mergeRetainedTsdownConfig(
     );
     return false;
   }
+  const included = includeGeneratedPackConfig(viteConfigPath, convertedPath, workspaceRoot);
   try {
     fs.writeFileSync(viteConfigPath, config);
   } catch (error) {
-    if (create) {
+    if (create && !included) {
       fs.unlinkSync(convertedPath);
     }
     throw error;
@@ -652,8 +659,7 @@ function mergeOxlintConfigFile(
       'lint',
       silent,
       report,
-      plan,
-      preparedOxlintConfigs !== undefined,
+      { modulePlan: plan, deferRemoval: preparedOxlintConfigs !== undefined },
     );
     if (!migration.migrated) {
       recordPendingMigration();
@@ -890,8 +896,11 @@ function mergeAndRemoveJsonConfig(
   configKey: string,
   silent = false,
   report?: MigrationReport,
-  modulePlan?: OxlintModulePlan,
-  deferRemoval = false,
+  {
+    modulePlan,
+    deferRemoval = false,
+    workspaceRoot = projectPath,
+  }: { modulePlan?: OxlintModulePlan; deferRemoval?: boolean; workspaceRoot?: string } = {},
 ): boolean {
   const fullViteConfigPath = path.join(projectPath, viteConfigPath);
   const fullJsonConfigPath = path.join(projectPath, jsonConfigPath);
@@ -939,7 +948,9 @@ function mergeAndRemoveJsonConfig(
   // configs contain object extends, which JSON Oxlint configs do not accept.
   const mergeConfig = replaceDefaults ? upsertJsonConfig : mergeJsonConfig;
   let result;
-  if (!modulePlan) {
+  if (configKey === 'pack') {
+    result = mergeTsdownJsonConfig(fullJsonConfigPath, workspaceRoot, fullViteConfigPath);
+  } else if (!modulePlan) {
     result = mergeConfig(fullViteConfigPath, fullJsonConfigPath, configKey);
   } else {
     const tempDir = fs.mkdtempSync(path.join(projectPath, '.vite-plus-lint-'));

@@ -41,9 +41,15 @@ function scriptInvocation(command: readonly { value: string }[]): {
       start++;
     }
   }
-  const invocation = argv.slice(start);
+  let invocation = argv.slice(start);
   if (wrapper === 'cross-env-shell' && invocation.length === 1 && invocation[0].includes(' ')) {
     return { args: [], shellCommand: invocation[0] };
+  }
+  if (invocation[0] === 'dotenv' || (invocation[0] === 'dotenvx' && invocation[1] === 'run')) {
+    const separator = invocation.indexOf('--', 1);
+    if (separator !== -1) {
+      invocation = invocation.slice(separator + 1);
+    }
   }
   let executable = getCommandStartIndex(invocation);
   if (invocation[0] === 'bunx' && invocation[executable] === '--bun') {

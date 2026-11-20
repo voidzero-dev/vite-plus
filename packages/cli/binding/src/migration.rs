@@ -266,19 +266,21 @@ pub fn has_config_key(vite_config_path: String, config_key: String) -> Result<bo
     Ok(vp_migration::has_config_key(&content, &config_key).map_err(anyhow::Error::from)?)
 }
 
-/// Render the pack options that migration would inline from the tsdown JSON source.
+/// Convert a standalone tsdown JSON config to inline pack options.
+/// With no Vite config path, render a standalone object for comparison.
 #[napi]
-pub fn render_tsdown_json_pack_config(
-    vite_config_path: String,
+pub fn merge_tsdown_json_config(
     json_config_path: String,
     workspace_root: String,
-) -> Result<String> {
-    Ok(vp_migration::render_tsdown_json_pack_config(
-        Path::new(&vite_config_path),
+    vite_config_path: Option<String>,
+) -> Result<MergeJsonConfigResult> {
+    let result = vp_migration::merge_tsdown_json_config(
         Path::new(&json_config_path),
         Path::new(&workspace_root),
+        vite_config_path.as_deref().map(Path::new),
     )
-    .map_err(anyhow::Error::from)?)
+    .map_err(anyhow::Error::from)?;
+    Ok(MergeJsonConfigResult { content: result.content, updated: result.updated })
 }
 
 /// Remove a top-level key from a recognized Vite config object.

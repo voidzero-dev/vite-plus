@@ -33,6 +33,6 @@ pub use shell_command::{LiteralCommandToken, parse_literal_commands};
 pub use source_analysis::analyze_migration_source;
 pub use task_cache::{TaskCacheMigrationResult, migrate_task_cache_config};
 pub use vite_config::{
-    MergeResult, has_config_key, merge_json_config, merge_tsdown_config, remove_config_key,
-    render_tsdown_json_pack_config, upsert_json_config, wrap_lazy_plugins,
+    MergeResult, has_config_key, merge_json_config, merge_tsdown_config, merge_tsdown_json_config,
+    remove_config_key, upsert_json_config, wrap_lazy_plugins,
 };

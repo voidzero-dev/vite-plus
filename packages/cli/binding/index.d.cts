@@ -3940,6 +3940,16 @@ export declare function mergeTsdownConfig(
   tsdownConfigPath: string,
 ): MergeJsonConfigResult;
 
+/**
+ * Convert a standalone tsdown JSON config to inline pack options.
+ * With no Vite config path, render a standalone object for comparison.
+ */
+export declare function mergeTsdownJsonConfig(
+  jsonConfigPath: string,
+  workspaceRoot: string,
+  viteConfigPath?: string | undefined | null,
+): MergeJsonConfigResult;
+
 export interface MigrateArgs {
   path?: string;
   agent?: false | string | Array<string>;
@@ -4024,13 +4034,6 @@ export declare function removeConfigKey(
   viteConfigPath: string,
   configKey: string,
 ): MergeJsonConfigResult;
-
-/** Render the pack options that migration would inline from the tsdown JSON source. */
-export declare function renderTsdownJsonPackConfig(
-  viteConfigPath: string,
-  jsonConfigPath: string,
-  workspaceRoot: string,
-): string;
 
 /** Resolve the `Authorization` header value npm would send to `url` from the npm config at `cwd`. */
 export declare function resolveNpmAuthorization(cwd: string, url: string): string | null;
