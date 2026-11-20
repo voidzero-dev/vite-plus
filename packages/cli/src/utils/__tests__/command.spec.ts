@@ -1,6 +1,7 @@
 import { execFileSync, spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout } from 'node:timers/promises';
@@ -39,6 +40,25 @@ describe('command runners', () => {
     });
     expect(result.exitCode).toBe(0);
     expect(result.stdout.toString()).toBe('ok');
+  });
+
+  it('captures a large stdout write followed immediately by exit', async () => {
+    const size = 8 * 1024 * 1024;
+    const ending = '\ndependency@999.0.0\n';
+    const result = await runCommandSilently({
+      command: process.execPath,
+      args: [
+        '-e',
+        `process.stdout.write('x'.repeat(${size}) + ${JSON.stringify(ending)});
+        process.exit(7);`,
+      ],
+      cwd: process.cwd(),
+      envs: process.env,
+      stdoutToFile: true,
+    });
+    expect(result.exitCode).toBe(7);
+    expect(result.stdout.length).toBe(size + Buffer.byteLength(ending));
+    expect(result.stdout.subarray(size).toString()).toBe(ending);
   });
 
   it('kills a wedged child and rejects once timeoutMs is exceeded', async () => {
@@ -128,7 +148,8 @@ describe('command runners', () => {
           .toBe(true);
       } finally {
         stopFixtureChild(pidFile);
-        rmSync(cwd, { recursive: true, force: true });
+        // The deadline rejects while taskkill and Windows handle cleanup finish.
+        await rm(cwd, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
       }
     },
   );
@@ -168,7 +189,7 @@ describe('command runners', () => {
     expect(result.stderr.toString()).toContain('step 7');
   });
 
-  it('only times the portion between complete stdout lines that start and stop the timer', async () => {
+  it.each([false, true])('times watched stdout stages (file: %s)', async (stdoutToFile) => {
     const observedLines: string[] = [];
     const result = await runCommandSilently({
       command: process.execPath,
@@ -188,6 +209,7 @@ describe('command runners', () => {
       cwd: process.cwd(),
       envs: process.env,
       idleTimeoutMs: 1000,
+      stdoutToFile,
       shouldWatchIdle: (line) => {
         observedLines.push(line);
         return line === 'resolution_started';
@@ -202,7 +224,7 @@ describe('command runners', () => {
     ]);
   });
 
-  it('stops an idle install tree and keeps partial output available for diagnosis', async () => {
+  it.each([false, true])('stops an idle tree (file: %s)', async (stdoutToFile) => {
     const cwd = mkdtempSync(join(tmpdir(), 'vp-install-command-'));
     const finished = join(cwd, 'finished');
     const spawnSync = vi.spyOn(crossSpawn, 'sync');
@@ -225,6 +247,7 @@ describe('command runners', () => {
         cwd,
         envs: process.env,
         idleTimeoutMs: 1000,
+        stdoutToFile,
         shouldWatchIdle: (line) => line === 'install started',
       });
       expect(result.exitCode).toBe(124);

@@ -239,6 +239,12 @@ export async function runViteInstall(
     cwd,
     idleTimeoutMs,
     shouldWatchIdle,
+    // pnpm 9 can exit before a large error record drains through a pipe.
+    stdoutToFile:
+      watchedVersion?.major === 9 &&
+      idleTimeoutMs !== undefined &&
+      originalMode !== 'ndjson' &&
+      originalMode !== 'silent',
     envs,
   });
   const combinedOutput = detectIgnoredBuilds ? `${stdout.toString()}\n${stderr.toString()}` : '';

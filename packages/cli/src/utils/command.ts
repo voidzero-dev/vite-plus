@@ -1,8 +1,20 @@
 import { execFile, type ChildProcess } from 'node:child_process';
-import { readdirSync, readFileSync } from 'node:fs';
-import { constants } from 'node:os';
+import {
+  closeSync,
+  fstatSync,
+  mkdtempSync,
+  openSync,
+  readdirSync,
+  readFileSync,
+  readSync,
+  rmdirSync,
+  rmSync,
+  unlinkSync,
+} from 'node:fs';
+import { constants, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
+import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 
 import spawn from 'cross-spawn';
@@ -22,6 +34,8 @@ export interface RunCommandOptions {
   idleTimeoutMs?: number;
   /** When set, arm the idle timer only when this stdout line handler returns true. */
   shouldWatchIdle?: (line: string) => boolean;
+  /** Capture stdout through a regular file so a child can finish writing before process.exit(). */
+  stdoutToFile?: boolean;
 }
 
 export interface ExecutionResult {
@@ -168,7 +182,46 @@ function stopCommandTree(child: ChildProcess, { wait = true } = {}) {
   }
 }
 
+function openStdoutFile(): number | undefined {
+  let directory: string | undefined;
+  let fd: number | undefined;
+  try {
+    directory = mkdtempSync(join(tmpdir(), 'vp-command-'));
+    const file = join(directory, 'stdout');
+    fd = openSync(file, 'wx+', 0o600);
+    // Unlink before launch so cancellation cannot leave captured output on disk.
+    unlinkSync(file);
+    rmdirSync(directory);
+    return fd;
+  } catch {
+    // Fall back to the pipe if temporary file capture is unavailable.
+    if (fd !== undefined) {
+      closeSync(fd);
+    }
+    if (directory !== undefined) {
+      rmSync(directory, { recursive: true, force: true, maxRetries: 3 });
+    }
+    return undefined;
+  }
+}
+
 export async function runCommandSilently(options: RunCommandOptions): Promise<RunCommandResult> {
+  // Node writes to pipes synchronously on Windows.
+  const stdoutFd =
+    options.stdoutToFile && process.platform !== 'win32' ? openStdoutFile() : undefined;
+  try {
+    return await runCapturedCommand(options, stdoutFd);
+  } finally {
+    if (stdoutFd !== undefined) {
+      closeSync(stdoutFd);
+    }
+  }
+}
+
+function runCapturedCommand(
+  options: RunCommandOptions,
+  stdoutFd: number | undefined,
+): Promise<RunCommandResult> {
   const { idleTimeoutMs } = options;
   const timeoutMs = idleTimeoutMs ?? options.timeoutMs;
   const hasDeadline = idleTimeoutMs === undefined && timeoutMs !== undefined;
@@ -178,7 +231,7 @@ export async function runCommandSilently(options: RunCommandOptions): Promise<Ru
     // No stdin pipe: leaving one open would deadlock any descendant `.ps1`
     // shim whose `$MyInvocation.ExpectingInput` branch waits for EOF on
     // stdin before invoking `node`.
-    stdio: ['ignore', 'pipe', 'pipe'],
+    stdio: ['ignore', stdoutFd ?? 'pipe', 'pipe'],
     cwd: options.cwd,
     env: options.envs,
   });
@@ -191,10 +244,15 @@ export async function runCommandSilently(options: RunCommandOptions): Promise<Ru
           }
         })
       : undefined;
-  const promise = new Promise<RunCommandResult>((resolve, reject) => {
+  return new Promise<RunCommandResult>((resolve, reject) => {
     const stdout: Buffer[] = [];
     const stderr: Buffer[] = [];
+    const fileOutput = stdoutFd === undefined ? undefined : new PassThrough();
+    const stdoutStream = fileOutput ?? child.stdout;
+    let offset = 0;
+    let settled = false;
     let timedOut = false;
+    let filePoll: ReturnType<typeof setInterval> | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const stopTimer = () => {
       clearTimeout(timer);
@@ -202,6 +260,10 @@ export async function runCommandSilently(options: RunCommandOptions): Promise<Ru
     };
     const startTimer = () => {
       timer = setTimeout(() => {
+        // Check for bytes written since the last poll before deciding it is idle.
+        if (idleTimeoutMs !== undefined && readFileOutput()) {
+          return;
+        }
         timedOut = true;
         // Deadline callers can proceed while platform cleanup finishes.
         stopCommandTree(child, { wait: !hasDeadline });
@@ -224,11 +286,11 @@ export async function runCommandSilently(options: RunCommandOptions): Promise<Ru
         timer?.refresh();
       }
     };
-    child.stdout?.on('data', capture(stdout));
+    stdoutStream?.on('data', capture(stdout));
     child.stderr?.on('data', capture(stderr));
     const lines =
-      shouldWatchIdle && child.stdout
-        ? createInterface({ input: child.stdout, crlfDelay: Infinity })
+      shouldWatchIdle && stdoutStream
+        ? createInterface({ input: stdoutStream, crlfDelay: Infinity })
         : undefined;
     lines?.on('line', (line: string) => {
       if (timedOut) {
@@ -241,12 +303,50 @@ export async function runCommandSilently(options: RunCommandOptions): Promise<Ru
       }
     });
     const cleanup = () => {
+      settled = true;
+      clearInterval(filePoll);
       lines?.close();
+      fileOutput?.destroy();
       stopTimer();
       removeExitHandler?.();
     };
+    const readFileOutput = () => {
+      if (stdoutFd === undefined || !fileOutput) {
+        return false;
+      }
+      const start = offset;
+      try {
+        // Drain only the bytes available at the start of this poll.
+        const size = fstatSync(stdoutFd).size;
+        while (offset < size) {
+          const buffer = Buffer.allocUnsafe(Math.min(64 * 1024, size - offset));
+          // A positional read leaves the child's write offset alone.
+          const bytes = readSync(stdoutFd, buffer, { position: offset });
+          if (bytes === 0) {
+            break;
+          }
+          offset += bytes;
+          fileOutput.write(buffer.subarray(0, bytes));
+        }
+      } catch (error) {
+        cleanup();
+        stopCommandTree(child, { wait: false });
+        child.stderr?.destroy();
+        reject(error);
+        return true;
+      }
+      return offset > start;
+    };
+    if (fileOutput) {
+      filePoll = setInterval(readFileOutput, 100);
+      filePoll.unref();
+    }
     child.on('close', (code, signal) => {
-      if (timedOut && hasDeadline) {
+      if (settled) {
+        return;
+      }
+      readFileOutput();
+      if (settled) {
         return;
       }
       cleanup();
@@ -258,11 +358,12 @@ export async function runCommandSilently(options: RunCommandOptions): Promise<Ru
       });
     });
     child.on('error', (err) => {
-      cleanup();
-      reject(err);
+      if (!settled) {
+        cleanup();
+        reject(err);
+      }
     });
   });
-  return await promise;
 }
 
 export async function runCommand(options: RunCommandOptions): Promise<ExecutionResult> {
