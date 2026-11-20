@@ -65,6 +65,11 @@ s=$(dirname "$(dirname "$0")")/$n
 
 [ ! -f "$s" ] && exit 0
 
+# A checkout path containing ':' cannot be part of a PATH entry.
+case "$PWD" in
+  *:*) __vp_hook_prefix= ;;
+  *) __vp_hook_prefix="$PWD/" ;;
+esac
 i="\${XDG_CONFIG_HOME:-$HOME/.config}/vite-plus/hooks-init.sh"
 [ ! -f "$i" ] && i="\${XDG_CONFIG_HOME:-$HOME/.config}/husky/init.sh"
 [ -f "$i" ] && . "$i"
@@ -72,6 +77,11 @@ i="\${XDG_CONFIG_HOME:-$HOME/.config}/vite-plus/hooks-init.sh"
 { [ "\${HUSKY-}" = "0" ] || [ "\${VP_GIT_HOOKS-}" = "0" ] || [ "\${VITE_GIT_HOOKS-}" = "0" ]; } && exit 0
 
 d=${rootExpr}
+# Root hooks follow cd. Only prefix relative subdirectories that fit in PATH.
+case "$d" in
+  .|/*|*:*) ;;
+  *) d="$__vp_hook_prefix$d" ;;
+esac
 __vp_shell=/bin/sh
 [ -x "$__vp_shell" ] || __vp_shell=$(command -v sh)
 

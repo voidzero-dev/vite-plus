@@ -8,6 +8,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   statSync,
@@ -33,7 +34,11 @@ import {
 // Unmodified upstream dispatcher; retained to verify safe migration against real Husky output.
 const HUSKY_DISPATCHER = readFileSync(new URL('./fixtures/husky-9.1.7/h', import.meta.url), 'utf8');
 
-function runCommit(cwd: string, message = 'test'): SpawnSyncReturns<string> {
+function runCommit(
+  cwd: string,
+  message = 'test',
+  ...gitOptions: string[]
+): SpawnSyncReturns<string> {
   return spawnSync(
     'git',
     [
@@ -43,6 +48,7 @@ function runCommit(cwd: string, message = 'test'): SpawnSyncReturns<string> {
       'user.email=test@example.invalid',
       '-c',
       'commit.gpgsign=false',
+      ...gitOptions,
       'commit',
       '--allow-empty',
       '-m',
@@ -1373,6 +1379,65 @@ describe('hookScript', () => {
 
         expect(output).toBe(`./node_modules/.bin:${inheritedPath}`);
       } finally {
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'runs package binaries from the active worktree after cd',
+    () => {
+      const packagePath = 'packages/my pkg';
+      const hooksDir = '.config/hooks';
+      // These checkouts need a colon-free PATH entry even when TMPDIR contains a colon.
+      const systemTemp = realpathSync(tmpdir());
+      const tempRoot = systemTemp.includes(':') ? realpathSync('/tmp') : systemTemp;
+      expect(tempRoot).not.toContain(':');
+      const tmp = mkdtempSync(join(tempRoot, 'hooks-worktree-path-'));
+      const linked = join(tmp, 'linked');
+      const checkouts = [tmp, linked];
+      const originalCwd = process.cwd();
+      try {
+        execFileSync('git', ['init'], { cwd: tmp, stdio: 'ignore' });
+        const commit = runCommit(tmp, 'initial', '-c', 'core.hooksPath=/dev/null');
+        expect(commit.status, commit.stderr).toBe(0);
+        execFileSync('git', ['worktree', 'add', '--detach', linked], { cwd: tmp, stdio: 'ignore' });
+
+        for (const root of checkouts) {
+          const pkgDir = join(root, packagePath);
+          const binDir = join(pkgDir, 'node_modules', '.bin');
+          mkdirSync(binDir, { recursive: true });
+          process.chdir(pkgDir);
+          expect(install(hooksDir).isError).toBe(false);
+          expect(
+            execFileSync('git', ['config', '--get', 'core.hooksPath'], { encoding: 'utf8' }).trim(),
+          ).toBe(`${packagePath}/${hooksDir}/_`);
+          writeFileSync(
+            join(pkgDir, hooksDir, 'pre-commit'),
+            `cd './${packagePath}'\nhook-command\n`,
+          );
+          writeFileSync(join(binDir, 'hook-command'), '#!/bin/sh\nprintf "%s" "$0"\n', {
+            mode: 0o755,
+          });
+          // A competing package on CDPATH must not affect project command lookup.
+          mkdirSync(join(root, 'shadow', packagePath), { recursive: true });
+        }
+
+        // Run both after the last install, since linked worktrees share core.hooksPath.
+        for (const root of checkouts) {
+          const result = spawnSync('git', ['hook', 'run', 'pre-commit'], {
+            cwd: root,
+            env: { HOME: join(tmp, 'home'), PATH: '/usr/bin:/bin', CDPATH: join(root, 'shadow') },
+            encoding: 'utf8',
+          });
+          expect(result.status, result.stderr).toBe(0);
+          // Git forwards hook stdout to stderr.
+          expect(result.stderr).toBe(
+            join(root, packagePath, 'node_modules', '.bin', 'hook-command'),
+          );
+        }
+      } finally {
+        process.chdir(originalCwd);
         rmSync(tmp, { recursive: true, force: true });
       }
     },
