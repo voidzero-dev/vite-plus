@@ -60,7 +60,7 @@ export function exitCodeFromClose(code: number | null, signal: NodeJS.Signals | 
   return signalNumber ? 128 + signalNumber : 1;
 }
 
-function stopCommandTree(child: ChildProcess, signal: NodeJS.Signals = 'SIGKILL') {
+function stopCommandTree(child: ChildProcess) {
   const pid = child.pid;
   if (pid === undefined) {
     return;
@@ -72,22 +72,47 @@ function stopCommandTree(child: ChildProcess, signal: NodeJS.Signals = 'SIGKILL'
       timeout: 5000,
       windowsHide: true,
     });
-    if (result.status !== 0) {
-      child.kill('SIGKILL');
+    if (result.status === 0) {
+      return;
     }
   } else {
-    try {
-      process.kill(-pid, signal);
-    } catch {
-      child.kill(signal);
+    // The process group belongs to the caller. Only stop this child's tree.
+    const { stdout } = spawn.sync('ps', ['-A', '-o', 'pid=', '-o', 'ppid='], {
+      env: { PATH: '/usr/bin:/bin' },
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 5000,
+    });
+    const childrenByParent = new Map<number, number[]>();
+    for (const line of (stdout ?? '').split('\n')) {
+      const [childPid, parentPid] = line.trim().split(/\s+/).map(Number);
+      if (!Number.isInteger(childPid) || childPid <= 1 || !Number.isInteger(parentPid)) {
+        continue;
+      }
+      const children = childrenByParent.get(parentPid) ?? [];
+      children.push(childPid);
+      childrenByParent.set(parentPid, children);
+    }
+    const tree = [pid];
+    for (const parent of tree) {
+      tree.push(...(childrenByParent.get(parent) ?? []));
+    }
+    for (let index = tree.length - 1; index > 0; index--) {
+      try {
+        process.kill(tree[index], 'SIGKILL');
+      } catch {
+        // A descendant can exit while we walk the tree.
+      }
     }
   }
+  child.kill('SIGKILL');
 }
 
 export async function runCommandSilently(options: RunCommandOptions): Promise<RunCommandResult> {
   const { idleTimeoutMs } = options;
   const timeoutMs = idleTimeoutMs ?? options.timeoutMs;
   const shouldWatchIdle = idleTimeoutMs === undefined ? undefined : options.shouldWatchIdle;
+  // Keep the caller's process group for terminal and CI cancellation.
   const child = spawn(options.command, options.args, {
     // No stdin pipe: leaving one open would deadlock any descendant `.ps1`
     // shim whose `$MyInvocation.ExpectingInput` branch waits for EOF on
@@ -95,19 +120,15 @@ export async function runCommandSilently(options: RunCommandOptions): Promise<Ru
     stdio: ['ignore', 'pipe', 'pipe'],
     cwd: options.cwd,
     env: options.envs,
-    // The install wrapper can wait on a package manager of its own. Keep them
-    // in one process group so a timeout stops both on Unix.
-    detached: idleTimeoutMs !== undefined && process.platform !== 'win32',
   });
   const removeExitHandler =
     idleTimeoutMs === undefined
       ? undefined
       : onExit((_code, signal) => {
-          // Windows children share the console and receive Ctrl+C directly.
-          if (signal && process.platform === 'win32') {
-            return;
+          // Terminal signals already reach the child in the caller's group.
+          if (signal === null) {
+            stopCommandTree(child);
           }
-          stopCommandTree(child, signal ?? 'SIGKILL');
         });
   const promise = new Promise<RunCommandResult>((resolve, reject) => {
     const stdout: Buffer[] = [];
@@ -125,7 +146,7 @@ export async function runCommandSilently(options: RunCommandOptions): Promise<Ru
           child.kill('SIGKILL');
         } else {
           stopCommandTree(child);
-          // A descendant that started another session can hold a pipe open.
+          // A descendant may still hold a pipe open.
           child.stdout?.destroy();
           child.stderr?.destroy();
         }

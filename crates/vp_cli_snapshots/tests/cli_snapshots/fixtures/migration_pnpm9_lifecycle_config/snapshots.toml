@@ -18,3 +18,14 @@ steps = [
   { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
   { argv = ["vpt", "print-file", "postinstall-config.jsonl", ".npmrc"], comment = "Both installs preserve the project's reporting settings in postinstall and on disk." },
 ]
+
+[[case]]
+name = "silent_failure"
+vp = "global"
+local-registry = true
+env = { VP_TEST_FAIL_POSTINSTALL = "1" }
+unset-env = ["VP_SKIP_INSTALL", "CI"]
+steps = [
+  { argv = ["vpt", "write-file", ".npmrc", "reporter=silent\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "The migration keeps the postinstall error and exit code without displaying install progress." },
+]
