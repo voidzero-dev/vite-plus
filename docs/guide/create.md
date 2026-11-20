@@ -74,6 +74,12 @@ Vite+ ships with these built-in templates:
 
 Run `vp create --list` to see the built-in templates and the common shorthand templates Vite+ recognizes.
 
+After a third-party template runs, `vp create` migrates the generated project to Vite+. When a standalone project already depends on `vite-plus`, `vp create` skips this migration and keeps the template's tooling choices.
+
+::: tip When no template fits
+If no suitable template is available through `vp create`, use your framework or tool's own initializer to create the project. Then follow the [`vp migrate` guide](/guide/migrate) to move the generated project onto Vite+.
+:::
+
 ## Options
 
 - `--directory <dir>` writes the generated project into a specific target directory. Only built-in templates and bundled `@org` templates support this option.

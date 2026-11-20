@@ -13,7 +13,7 @@
 ## `node check-npm-layout.mjs`
 
 ```
-npm installed separate CLI core and upstream Vitest peer without overrides
+npm shares the CLI core with the Vitest peer without a project alias or overrides
 ```
 
 ## `node check-bundled.mjs`

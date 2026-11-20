@@ -4,16 +4,18 @@ import type * as t from '@oxc-project/types';
 import { minimatch } from 'minimatch';
 
 import {
-  CONFIG_SOURCES,
-  SourceEditor,
-  importedName,
   objectProperty,
   propertyName,
-  projectElements,
   staticObject,
   sameStaticValue,
   isString,
   isBoolean,
+} from '../ast-utils.ts';
+import {
+  CONFIG_SOURCES,
+  SourceEditor,
+  importedName,
+  projectElements,
   isModuleExports,
   type AddedProperty,
   type RewriteResult,

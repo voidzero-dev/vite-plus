@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use napi::{Error, anyhow, bindgen_prelude::*};
 use napi_derive::napi;
 use vp_error::Error::{UnrecognizedPackageManager, UnsupportedPackageManager};
@@ -12,6 +14,9 @@ pub struct DownloadPackageManagerOptions {
     pub version: String,
     pub expected_hash: Option<String>,
     pub cwd: Option<String>,
+    /// Use the npm that ships with Node.js when the requested manager is unavailable.
+    /// Set it only when the caller chose the manager itself, as `vp install` does.
+    pub fallback_to_npm: Option<bool>,
 }
 
 #[napi(object)]
@@ -22,9 +27,34 @@ pub struct DownloadPackageManagerResult {
     pub bin_prefix: String,
     pub package_name: String,
     pub version: String,
+    /// Executables in `bin_prefix` by name. Launch these, not a bare name that a
+    /// Vite+ shim earlier on PATH would resolve to another version.
+    pub bin_paths: HashMap<String, String>,
 }
 
-/// Download a package manager
+#[napi(object)]
+pub struct PackageManagerOverride {
+    pub name: String,
+    pub version: String,
+    pub expected_hash: Option<String>,
+}
+
+/// Read the same `VP_PACKAGE_MANAGER` override used by `vp install`.
+#[napi]
+pub fn get_package_manager_override() -> Result<Option<PackageManagerOverride>> {
+    Ok(vp_pm_cli::package_manager_override().map_err(anyhow::Error::from)?.map(
+        |(name, version, expected_hash)| PackageManagerOverride {
+            name: name.to_string(),
+            version,
+            expected_hash,
+        },
+    ))
+}
+
+/// Download a package manager, or use the one on PATH when no global install manages it.
+///
+/// See `vp_pm_cli::provide_for_local_cli` for when a download is allowed. The
+/// result describes the system installation when one is used.
 ///
 /// ## Parameters
 ///
@@ -32,16 +62,18 @@ pub struct DownloadPackageManagerResult {
 ///   - `name`: The name of the package manager
 ///   - `version`: The version of the package manager
 ///   - `expected_hash`: The expected hash of the package manager
-///   - `cwd`: An absolute directory used to load workspace npm configuration
+///   - `cwd`: An absolute directory used to load workspace npm configuration and resolve relative PATH entries
+///   - `fallback_to_npm`: Whether to use npm when the requested package manager is unavailable
 ///
 /// ## Returns
 ///
 /// Returns a `DownloadPackageManagerResult` containing:
-/// - The name of the package manager
+/// - The name of the package manager, `npm` after a fallback
 /// - The install directory of the package manager
 /// - The binary prefix of the package manager
 /// - The package name of the package manager
 /// - The version of the package manager
+/// - The executables of the package manager by name
 ///
 /// ## Example
 ///
@@ -73,32 +105,68 @@ pub async fn download_package_manager(
         }
     };
 
-    let result = if let Some(cwd) = options.cwd {
-        let cwd = AbsolutePathBuf::new(cwd.into()).ok_or(Error::from_reason("invalid cwd"))?;
-        vp_pm_cli::download_package_manager_for_cwd(
-            &cwd,
-            package_manager_type,
-            &options.version,
-            options.expected_hash.as_deref(),
-        )
-        .await
-    } else {
-        vp_pm_cli::download_package_manager(
-            package_manager_type,
-            &options.version,
-            options.expected_hash.as_deref(),
-        )
-        .await
+    let cwd = match options.cwd {
+        Some(cwd) => AbsolutePathBuf::new(cwd.into()).ok_or(Error::from_reason("invalid cwd"))?,
+        None => vt_path::current_dir().map_err(anyhow::Error::from)?,
     };
-    let (install_dir, package_name, version) = result.map_err(anyhow::Error::from)?;
+    let (manager, package_name) = match vp_pm_cli::provide_for_local_cli(
+        &cwd,
+        package_manager_type,
+        &options.version,
+        options.expected_hash.as_deref(),
+    )
+    .await
+    {
+        Err(
+            vp_error::Error::PackageManagerNotInstalled(_)
+            | vp_error::Error::PackageManagerNotRunnable { .. },
+        ) if options.fallback_to_npm == Some(true) => {
+            vp_pm_cli::provide_for_local_cli(&cwd, PackageManagerType::Npm, "latest", None).await
+        }
+        result => result,
+    }
+    .map_err(anyhow::Error::from)?;
+    let bin_prefix = manager.get_bin_prefix();
+    let install_dir =
+        bin_prefix.parent().map_or_else(|| bin_prefix.clone(), |dir| dir.to_absolute_path_buf());
 
     Ok(DownloadPackageManagerResult {
-        name: options.name,
+        name: manager.get_client().to_string(),
         install_dir: install_dir.as_path().to_string_lossy().to_string(),
-        bin_prefix: install_dir.join("bin").as_path().to_string_lossy().to_string(),
+        bin_prefix: bin_prefix.as_path().to_string_lossy().to_string(),
         package_name: package_name.to_string(),
-        version: version.to_string(),
+        version: manager.get_version().to_owned(),
+        bin_paths: manager
+            .bin_paths()
+            .into_iter()
+            .map(|(name, path)| (name.to_owned(), path.as_path().to_string_lossy().to_string()))
+            .collect(),
     })
+}
+
+/// List the package managers `downloadPackageManager` can provide.
+///
+/// Without a global install, only the package managers on PATH are available.
+/// Pass the `cwd` that `downloadPackageManager` will receive, so relative PATH
+/// entries resolve against the same directory.
+#[napi]
+pub async fn available_package_managers(cwd: Option<String>) -> Result<Vec<String>> {
+    let cwd = match cwd {
+        Some(cwd) => AbsolutePathBuf::new(cwd.into()).ok_or(Error::from_reason("invalid cwd"))?,
+        None => vt_path::current_dir().map_err(anyhow::Error::from)?,
+    };
+    let mut available = Vec::new();
+    for kind in [
+        PackageManagerType::Pnpm,
+        PackageManagerType::Yarn,
+        PackageManagerType::Npm,
+        PackageManagerType::Bun,
+    ] {
+        if vp_pm_cli::is_available_for_local_cli(&cwd, kind).await.map_err(anyhow::Error::from)? {
+            available.push(kind.to_string());
+        }
+    }
+    Ok(available)
 }
 
 #[napi(object)]
@@ -221,9 +289,49 @@ mod tests {
             version: "latest".to_string(),
             expected_hash: None,
             cwd: Some("relative/project".to_string()),
+            fallback_to_npm: None,
         })
         .await
         .unwrap_err();
         assert_eq!(error.reason, "invalid cwd");
+    }
+
+    /// Without a global install, a missing pnpm falls back to the npm on PATH only when asked.
+    #[cfg(unix)]
+    #[tokio::test(flavor = "current_thread")]
+    async fn download_package_manager_falls_back_to_npm_on_request() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let home = tempfile::tempdir().unwrap();
+        let bin = home.path().join("bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        let npm = bin.join("npm");
+        std::fs::write(&npm, "#!/bin/sh\necho 10.9.2\n").unwrap();
+        std::fs::set_permissions(&npm, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let download = |fallback_to_npm| {
+            download_package_manager(DownloadPackageManagerOptions {
+                name: "pnpm".to_string(),
+                version: "latest".to_string(),
+                expected_hash: None,
+                cwd: Some(home.path().to_string_lossy().to_string()),
+                fallback_to_npm: Some(fallback_to_npm),
+            })
+        };
+
+        vp_shared::EnvConfig::with_vars_async(
+            [
+                (vp_shared::env_vars::VP_HOME, Some(home.path().join("vp-home").as_os_str())),
+                ("PATH", Some(bin.as_os_str())),
+            ],
+            |_| async {
+                let error = download(false).await.unwrap_err();
+                assert!(error.reason.contains("No usable pnpm"), "{}", error.reason);
+
+                let result = download(true).await.unwrap();
+                assert_eq!((result.name.as_str(), result.version.as_str()), ("npm", "10.9.2"));
+                assert_eq!(result.bin_paths["npm"], npm.to_string_lossy());
+            },
+        )
+        .await;
     }
 }

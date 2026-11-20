@@ -127,9 +127,22 @@ fn print_invalid_subcommand_error(error: &clap::Error) -> bool {
     if GLOBAL_ONLY_SUBCOMMANDS.contains(&invalid_subcommand.as_str()) {
         let command =
             style(format!("`{invalid_subcommand}`")).for_stderr().blue().bright().to_string();
+        let install_command = if cfg!(windows) {
+            "powershell -c \"irm https://vite.plus/ps1 | iex\""
+        } else {
+            "curl -fsSL https://vite.plus | bash"
+        };
+        let install_command = style(install_command).for_stderr().blue().bright();
         output::error(&format!(
-            "The {command} command is only available in the global `vp` CLI. See {} to install it, then run the same command via the global `vp` binary.",
-            vp_shared::documentation_url("/guide/")
+            "The {command} command is only available in the global `vp` CLI.\n\n\
+             {}\n  {install_command}\n\n\
+             Then open a new terminal and run the command again.\n\
+             If it's already installed, run the command {} instead of through a package manager or package.json script.\n\n\
+             {} {}",
+            style("Install it with:").for_stderr().bold(),
+            style("directly in your terminal").for_stderr().bold(),
+            style("Installation Guide:").for_stderr().bold(),
+            style(vp_shared::documentation_url("/guide/")).for_stderr().underlined()
         ));
         return true;
     }

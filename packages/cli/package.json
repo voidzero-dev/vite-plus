@@ -1,6 +1,6 @@
 {
   "name": "vite-plus",
-  "version": "1.5.1",
+  "version": "1.7.0",
   "description": "The Unified Toolchain for the Web",
   "homepage": "https://viteplus.dev/guide",
   "bugs": {
@@ -364,7 +364,7 @@
     "@vitest/utils": "catalog:",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
-    "oxlint-tsgolint": "catalog:",
+    "tsrs": "catalog:",
     "vite": "workspace:@voidzero-dev/vite-plus-core@*",
     "vitest": "catalog:"
   },

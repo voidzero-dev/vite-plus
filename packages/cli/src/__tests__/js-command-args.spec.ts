@@ -60,6 +60,11 @@ describe('JavaScript command NAPI arguments', () => {
     expect(expectParsed(parseHooksArgs(['enable', '--hooks-dir', '.custom']))).toEqual({
       command: 'enable',
       hooksDir: '.custom',
+      replaceHusky: false,
+    });
+    expect(expectParsed(parseHooksArgs(['enable', '--replace-husky']))).toEqual({
+      command: 'enable',
+      replaceHusky: true,
     });
   });
 

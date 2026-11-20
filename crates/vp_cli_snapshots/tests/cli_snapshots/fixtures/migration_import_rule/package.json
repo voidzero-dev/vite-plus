@@ -1,0 +1,7 @@
+{
+  "name": "migration-import-rule",
+  "private": true,
+  "type": "module",
+  "devDependencies": { "vite-plus": "catalog:" },
+  "devEngines": { "packageManager": { "name": "pnpm", "version": "10.33.0", "onFail": "download" } }
+}

@@ -21,7 +21,7 @@ Arguments after the command are passed to the executed program, not parsed as Vi
 
 ## Compatibility
 
-- **npm:** `npm exec --yes`.
+- **npm:** `npm exec --yes`. npm 6 has no `npm exec`, so Vite+ runs its `npx`.
 - **pnpm:** `pnpm dlx`.
 - **Yarn Classic:** Fallback: `npx --yes`.
 - **Yarn Modern:** `yarn dlx`.

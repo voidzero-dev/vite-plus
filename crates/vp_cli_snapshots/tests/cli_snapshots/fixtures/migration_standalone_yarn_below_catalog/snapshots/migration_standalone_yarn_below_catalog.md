@@ -43,7 +43,4 @@ node-modules linker is configured, but no catalog field is written
 
 ```
 nodeLinker: node-modules
-npmPreapprovedPackages:
-  - vitest
-  - '@vitest/*'
 ```

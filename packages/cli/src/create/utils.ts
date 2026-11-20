@@ -6,11 +6,21 @@ import { parseDocument } from 'yaml';
 
 import { PackageManager } from '../types/index.ts';
 import {
+  bunSupportsMergedDefaultCatalogs,
+  getBunCatalogConfig,
+  getYamlCatalogPath,
+  isNamedCatalog,
+  readBunCatalogDependencyResolver,
+} from '../utils/catalog.ts';
+import {
+  VITEST_VERSION,
   VITE_PLUS_NAME,
   VITE_PLUS_OVERRIDE_PACKAGES,
   VITE_PLUS_VERSION,
 } from '../utils/constants.ts';
 import { editJsonFile, readJsonFile } from '../utils/json.ts';
+import { VITEST_EXACT_VERSION_PACKAGES } from '../utils/vitest-ecosystem.ts';
+import type { NpmWorkspaces } from '../utils/workspace.ts';
 import { getRandomProjectName } from './random-name.ts';
 
 export type CreateEditorOption = string | false | undefined;
@@ -18,13 +28,16 @@ export type CreateEditorOption = string | false | undefined;
 /** Complete only the managed catalog references of a newly created workspace member.
  * Running the full root migrator here would also change unrelated packages and overrides.
  */
-export function ensurePnpmCreateCatalogEntries(rootDir: string, projectDir: string): void {
-  const workspacePath = path.join(rootDir, 'pnpm-workspace.yaml');
+export function ensureCreateCatalogEntries(
+  rootDir: string,
+  projectDir: string,
+  packageManager: PackageManager,
+  packageManagerVersion = 'latest',
+): void {
   const packageJsonPath = path.join(projectDir, 'package.json');
-  if (!fs.existsSync(workspacePath) || !fs.existsSync(packageJsonPath)) {
+  if (packageManager === PackageManager.npm || !fs.existsSync(packageJsonPath)) {
     return;
   }
-  const doc = parseDocument(fs.readFileSync(workspacePath, 'utf8'));
   const pkg = readJsonFile(packageJsonPath) as Partial<
     Record<'dependencies' | 'devDependencies' | 'optionalDependencies', Record<string, string>>
   >;
@@ -32,24 +45,63 @@ export function ensurePnpmCreateCatalogEntries(rootDir: string, projectDir: stri
     ...VITE_PLUS_OVERRIDE_PACKAGES,
     [VITE_PLUS_NAME]: VITE_PLUS_VERSION,
   };
-  let changed = false;
-  for (const field of ['dependencies', 'devDependencies', 'optionalDependencies'] as const) {
-    for (const [name, spec] of Object.entries(pkg[field] ?? {})) {
-      if (!Object.hasOwn(versions, name) || !spec.startsWith('catalog:')) {
-        continue;
-      }
-      const catalogName = spec.slice('catalog:'.length);
-      const catalogPath =
-        catalogName && catalogName !== 'default'
-          ? ['catalogs', catalogName]
-          : doc.has('catalog') || !doc.hasIn(['catalogs', 'default'])
-            ? ['catalog']
-            : ['catalogs', 'default'];
-      const entryPath = [...catalogPath, name];
-      if (!doc.hasIn(entryPath)) {
-        doc.setIn(entryPath, versions[name]);
+  if ('vitest' in VITE_PLUS_OVERRIDE_PACKAGES) {
+    for (const name of VITEST_EXACT_VERSION_PACKAGES) {
+      versions[name] ??= VITEST_VERSION;
+    }
+  }
+  const entries = (['dependencies', 'devDependencies', 'optionalDependencies'] as const)
+    .flatMap((field) => Object.entries(pkg[field] ?? {}))
+    .filter(([name, spec]) => Object.hasOwn(versions, name) && spec.startsWith('catalog:'));
+  if (entries.length === 0) {
+    return;
+  }
+  if (packageManager === PackageManager.bun) {
+    editJsonFile<{
+      workspaces?: NpmWorkspaces;
+      catalog?: Record<string, string>;
+      catalogs?: Record<string, Record<string, string>>;
+    }>(path.join(rootDir, 'package.json'), (root) => {
+      const target = getBunCatalogConfig(root);
+      const resolveCatalog = readBunCatalogDependencyResolver(root, packageManagerVersion);
+      const mergeDefaults = bunSupportsMergedDefaultCatalogs(packageManagerVersion);
+      let changed = false;
+      for (const [name, spec] of entries) {
+        if (resolveCatalog(spec, name) !== undefined) {
+          continue;
+        }
+        const catalogName = spec.slice('catalog:'.length);
+        let catalog: Record<string, string>;
+        if (isNamedCatalog(catalogName, packageManager, packageManagerVersion)) {
+          catalog = (target.catalogs ??= {})[catalogName] ??= {};
+        } else if (mergeDefaults && target.catalogs?.default) {
+          catalog = target.catalogs.default;
+        } else {
+          catalog = target.catalog ??= {};
+        }
+        catalog[name] = versions[name];
         changed = true;
       }
+      return changed ? root : undefined;
+    });
+    return;
+  }
+  const workspacePath = path.join(
+    rootDir,
+    packageManager === PackageManager.yarn ? '.yarnrc.yml' : 'pnpm-workspace.yaml',
+  );
+  const workspaceExists = fs.existsSync(workspacePath);
+  if (packageManager === PackageManager.pnpm && !workspaceExists) {
+    return;
+  }
+  const doc = parseDocument(workspaceExists ? fs.readFileSync(workspacePath, 'utf8') : '');
+  let changed = false;
+  for (const [name, spec] of entries) {
+    const catalogPath = getYamlCatalogPath(doc, spec, packageManager);
+    const entryPath = [...catalogPath, name];
+    if (!doc.hasIn(entryPath)) {
+      doc.setIn(entryPath, versions[name]);
+      changed = true;
     }
   }
   if (changed) {

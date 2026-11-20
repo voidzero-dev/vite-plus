@@ -23,6 +23,9 @@ import { pack } from './resolve-pack.ts';
 import { test } from './resolve-test.ts';
 import { vite } from './resolve-vite.ts';
 import { accent, errorMsg, log } from './utils/terminal.ts';
+import { setUserAgent } from './utils/user-agent.ts';
+
+setUserAgent();
 
 // Node.js sets O_NONBLOCK when pipe-backed stdio is first accessed. Materialize
 // the output streams before restoring the blocking semantics expected by Rust.

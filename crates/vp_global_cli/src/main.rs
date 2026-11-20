@@ -89,7 +89,7 @@ pub(crate) fn apply_chdir(
 /// Normalize CLI arguments:
 /// - `vp list ...` / `vp ls ...` → `vp pm list ...`
 /// - `vp rebuild ...` → `vp pm rebuild ...`
-/// - `vp help [command] [args...]` → `vp [command] [args...] --help`
+/// - `vp help [command] [args...]` → `vp [command] [args...]` with `--help`
 /// - `vp node [args...]` → `vp env exec node [args...]`
 fn normalize_args(args: Vec<String>) -> Vec<String> {
     let mut normalized = args;
@@ -118,11 +118,16 @@ fn normalize_args(args: Vec<String>) -> Vec<String> {
             Some("help") if normalized.len() == 2 => {
                 vec![normalized[0].clone(), "--help".to_string()]
             }
-            // `vp help [command] [args...]` -> `vp [command] [args...] --help`
             Some("help") if normalized.len() > 2 => {
                 let mut next = Vec::with_capacity(normalized.len());
                 next.push(normalized[0].clone());
                 next.extend(normalized[2..].iter().cloned());
+                if matches!(next[1].as_str(), "dev" | "build")
+                    && let Some(index) = next[2..].iter().position(|arg| arg == "--")
+                {
+                    // Bare help renders before project discovery.
+                    next.truncate(index + 2);
+                }
                 next.push("--help".to_string());
                 next
             }
@@ -333,11 +338,40 @@ fn is_homebrew_recovery_command(args: &[String]) -> bool {
         )
 }
 
-#[tokio::main]
-async fn main() -> ExitCode {
+fn main() -> ExitCode {
+    let args: Vec<String> = std::env::args().collect();
+
+    // Inspect shim mode without clearing its environment markers: Homebrew
+    // setup still needs them before the normal shim dispatch.
+    let argv0 = args.first().map(|s| s.as_str()).unwrap_or("vp");
+    let shim_tool = shim::peek_shim_tool(argv0);
+
+    // Identify Vite+ to child tools independently of `npm_config_user_agent`,
+    // which package managers replace with their own value.
+    //
+    // `vpr` and `vpx` are Vite+ entry points too. Ordinary tool shims (such as
+    // `npm`/`npx`/`node`) only inherit an existing marker from their parent.
+    //
+    // SAFETY: `set_var` must run while the process is still single-threaded.
+    // This runs before the async runtime (and its worker threads) are created.
+    if matches!(shim_tool.as_deref(), None | Some("vpr" | "vpx")) {
+        unsafe {
+            std::env::set_var(
+                vp_shared::env_vars::VP_USER_AGENT,
+                concat!("vp/", env!("CARGO_PKG_VERSION")),
+            );
+        }
+    }
+
+    tokio::runtime::Runtime::new().expect("failed to build tokio runtime").block_on(run())
+}
+
+async fn run() -> ExitCode {
     // Probe before tracing, directory resolution, or argument dispatch can emit output.
-    if env::var_os(vp_shared::env_vars::VP_SELF_SETUP_SUPPORT_CHECK).is_some() {
-        vp_shared::output::print_stdout_line(format_args!("vite-plus-self-setup-v1"));
+    if let Some(check) = env::var_os(vp_shared::env_vars::VP_SELF_SETUP_SUPPORT_CHECK) {
+        for line in vp_setup::support::support_response(&check) {
+            vp_shared::output::print_stdout_line(format_args!("{line}"));
+        }
         return ExitCode::SUCCESS;
     }
 
@@ -348,6 +382,7 @@ async fn main() -> ExitCode {
 
     vp_shared::ensure_blocking_stdio();
     vp_shared::ensure_windows_pathext();
+    vp_shared::set_user_agent_version(env!("CARGO_PKG_VERSION"));
 
     // Initialize tracing
     vp_shared::init_tracing();
@@ -700,6 +735,14 @@ mod tests {
         let input = s(&["vp", "help", "pm", "apprev-build"]);
         let normalized = normalize_args(input);
         assert_eq!(normalized, s(&["vp", "pm", "apprev-build", "--help"]));
+    }
+
+    #[test]
+    fn normalize_args_truncates_vite_help_at_separator() {
+        for command in ["dev", "build"] {
+            let input = s(&["vp", "help", command, "--mode", "staging", "--", "--app", "web"]);
+            assert_eq!(normalize_args(input), s(&["vp", command, "--mode", "staging", "--help"]));
+        }
     }
 
     #[test]

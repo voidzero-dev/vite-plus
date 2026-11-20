@@ -1,0 +1,33 @@
+[[case]]
+name = "migration_turborepo_workspace"
+vp = "local"
+comment = "Warn once for the workspace and preserve Turborepo scripts, dependencies, and configuration."
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"] },
+  { argv = ["vpt", "print-file", "package.json"] },
+  { argv = ["vpt", "print-file", "turbo.json"] },
+  { argv = ["vpt", "print-file", "packages/app/turbo.jsonc"] },
+  { argv = ["vp", "migrate", "--no-interactive", "--full", "--no-hooks", "--no-agent", "--no-editor"], comment = "An existing Vite+ project also gets the warning with --full." },
+]
+
+[[case]]
+name = "migration_turborepo_config_only"
+vp = "local"
+comment = "A package-level turbo.jsonc is sufficient without a root config or turbo dependency."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies", "{}"], snapshot = false },
+  { argv = ["vpt", "rm", "turbo.json"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"] },
+  { argv = ["vpt", "print-file", "packages/app/turbo.jsonc"] },
+]
+
+[[case]]
+name = "migration_turborepo_dependency_only"
+vp = "local"
+comment = "A turbo dependency is sufficient without any Turborepo configuration files."
+steps = [
+  { argv = ["vpt", "rm", "turbo.json"], snapshot = false },
+  { argv = ["vpt", "rm", "packages/app/turbo.jsonc"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"] },
+  { argv = ["vpt", "print-file", "package.json"] },
+]

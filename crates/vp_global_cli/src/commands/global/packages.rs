@@ -51,7 +51,7 @@ pub async fn execute(json: bool, pattern: Option<&str>) -> Result<ExitStatus, Er
         let mut w_node = col_node.len();
 
         for pkg in &packages {
-            let name = format!("{}@{}", pkg.name, pkg.version);
+            let name = package_label(pkg);
             w_pkg = w_pkg.max(name.len());
             w_node = w_node.max(pkg.platform.node.len());
         }
@@ -67,7 +67,7 @@ pub async fn execute(json: bool, pattern: Option<&str>) -> Result<ExitStatus, Er
         ));
 
         for pkg in &packages {
-            let name = format!("{:<w_pkg$}", format!("{}@{}", pkg.name, pkg.version));
+            let name = format!("{:<w_pkg$}", package_label(pkg));
             let bins = pkg.bins.join(", ");
             vp_shared::output::print_stdout_line(format_args!(
                 "{}{:>gap$}{:<w_node$}{:>gap$}{}",
@@ -81,4 +81,12 @@ pub async fn execute(json: bool, pattern: Option<&str>) -> Result<ExitStatus, Er
     }
 
     Ok(ExitStatus::default())
+}
+
+/// Show npm aliases the way npm lists them: `<name>@npm:<target>@<version>`.
+fn package_label(package: &PackageMetadata) -> String {
+    match package.alias_target() {
+        Some(target) => format!("{}@npm:{target}@{}", package.name, package.version),
+        None => format!("{}@{}", package.name, package.version),
+    }
 }

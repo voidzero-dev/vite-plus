@@ -78,7 +78,7 @@ pub const NPM_CONFIG_REGISTRY_UPPER: &str = "NPM_CONFIG_REGISTRY";
 /// Node.js distribution mirror URL for downloads.
 pub const VP_NODE_DIST_MIRROR: &str = "VP_NODE_DIST_MIRROR";
 
-/// Skip PGP signature verification of `SHASUMS256.txt` when set (escape hatch).
+/// Skip PGP signature verification of `SHASUMS256.txt` when non-empty (escape hatch).
 /// The SHA-256 checksum is still verified.
 pub const VP_NODE_SKIP_SIGNATURE_VERIFY: &str = "VP_NODE_SKIP_SIGNATURE_VERIFY";
 
@@ -93,6 +93,9 @@ pub const VP_SETUP_NODE_VERSION_FILE: &str = "VP_SETUP_NODE_VERSION_FILE";
 
 /// Resolve global CLI dependencies without the installation lockfile when set to `1`.
 pub const VP_SETUP_SKIP_INSTALL_LOCKFILE: &str = "VP_SETUP_SKIP_INSTALL_LOCKFILE";
+
+/// Load the Vite config through Vite instead of reading it statically when set to `1`.
+pub const VP_SKIP_STATIC_CONFIG: &str = "VP_SKIP_STATIC_CONFIG";
 
 /// Override package manager and version for vp commands (for example, `pnpm@10.18.0`).
 /// Direct package-manager shims use their own version overrides instead.
@@ -128,6 +131,11 @@ pub const VP_YARN_MANAGER: &str = "VP_YARN_MANAGER";
 
 /// Bun management preference; takes precedence over `VP_PM_MANAGER`.
 pub const VP_BUN_MANAGER: &str = "VP_BUN_MANAGER";
+
+/// `1` (exactly) stops Vite+ from managing Node.js and every package manager:
+/// at run time it neither downloads nor uses a managed installation,
+/// regardless of `config.json` and the `VP_*_MANAGER` variables.
+pub const VP_ENV_FORBIDDEN: &str = "VP_ENV_FORBIDDEN";
 
 /// Enable debug output for shim dispatch.
 pub const VP_DEBUG_SHIM: &str = "VP_DEBUG_SHIM";
@@ -203,6 +211,14 @@ pub const VP_CLI_BIN: &str = "VP_CLI_BIN";
 
 /// Global CLI version, passed from Rust binary to JS for --version display.
 pub const VP_GLOBAL_VERSION: &str = "VP_GLOBAL_VERSION";
+
+/// Advertises that the process tree is running under Vite+ (value: `vp/<version>`).
+///
+/// Each global or local `vp`, `vpr`, or `vpx` invocation sets its own version.
+/// Ordinary tool shims preserve an inherited value without creating one.
+/// Tools we invoke (e.g. `vp dlx create-vite`) use this instead of
+/// `npm_config_user_agent`, which the underlying package manager overwrites.
+pub const VP_USER_AGENT: &str = "VP_USER_AGENT";
 
 // ── HTTP client configuration ───────────────────────────────────────────
 

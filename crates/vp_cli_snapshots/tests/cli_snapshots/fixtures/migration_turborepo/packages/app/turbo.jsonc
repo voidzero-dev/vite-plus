@@ -1,0 +1,9 @@
+{
+  // Keep the package's Turborepo configuration during migration.
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "outputs": ["lib/**"]
+    }
+  }
+}

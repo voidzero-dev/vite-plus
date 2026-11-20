@@ -1,0 +1,13 @@
+[[case]]
+name = "command_config_colon_hook_path"
+vp = "local"
+# A colon is a valid Unix directory name, but Windows does not allow it.
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vpt", "cp", "-r", "project", "project:demo"], snapshot = false },
+  { argv = ["git", "init"], cwd = "project:demo", snapshot = false },
+  { argv = ["vp", "config", "--no-agent", "--hooks-dir", ".vite-hooks"], cwd = "project:demo/pkg", snapshot = false },
+  { argv = ["git", "config", "--local", "core.hooksPath"], cwd = "project:demo", comment = "the hooks path stays relative to the checkout" },
+  { argv = ["vpt", "cp", "-r", "test-deps", "project:demo/pkg/node_modules"], snapshot = false },
+  { argv = ["git", "hook", "run", "pre-commit"], cwd = "project:demo", comment = "a nested installation keeps its relative bin entry when the checkout path contains a colon" },
+]

@@ -175,7 +175,6 @@ bstr = { version = "1.12.0", default-features = false, features = ["alloc", "std
 bitflags = "2.13.0"
 brush-parser = "0.4.0"
 blake3 = "1.8.5"
-chrono = { version = "0.4", features = ["serde"] }
 clap = "4.5.40"
 clap_complete = "4.6.0"
 console = "0.16.4"
@@ -194,7 +193,7 @@ dunce = "1.0.5"
 fast-glob = "1.1.0"
 flate2 = { version = "1.1.10", features = ["zlib-rs"] }
 form_urlencoded = "1.2.2"
-fspy = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "40cb9cac46bddbf8aa5ce5373df1a6a1980acc38" }
+fspy = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "cb1ea8d214b26a0f3ca2b2ef3b6bc471b18ffacb" }
 futures = "0.3.32"
 futures-util = "0.3.31"
 glob = "0.3.3"
@@ -212,6 +211,13 @@ infer = { version = "0.22.0", default-features = false }
 insta = "1.49.0"
 itertools = "0.15.0"
 itoa = "1.0.18"
+jiff = { version = "1.0.1", default-features = false, features = [
+  "serde",
+  "tz-system",
+  "tzdb-bundle-platform",
+  "tzdb-concatenated",
+  "tzdb-zoneinfo",
+] }
 js-semver = "1.0.0"
 json-escape-simd = "3.1.1"
 json-strip-comments = "3"
@@ -234,7 +240,7 @@ napi-derive = { version = "3.6.3", default-features = false, features = [
   "strict",
   "tracing",
 ] }
-nix = { version = "0.31.0", features = ["dir"] }
+nix = { version = "0.32.0", features = ["dir"] }
 nodejs-built-in-modules = "1.0.0"
 nom = "8.0.0"
 num-bigint = "0.5.1"
@@ -250,7 +256,7 @@ pnp = "0.12.12"
 percent-encoding = "2.3.2"
 petgraph = "0.8.3"
 pretty_assertions = "1.4.1"
-phf = "0.14.0"
+phf = { version = "0.14.0", features = ["macros"] }
 prettyplease = "0.3.0"
 proc-macro2 = "1"
 quote = "1"
@@ -279,13 +285,13 @@ smallvec = { version = "1.16.0", features = ["union"] }
 string_cache = "0.11.0"
 sugar_path = { version = "3", features = ["cached_current_dir"] }
 supports-color = "3"
-syn = { version = "2", default-features = false }
+syn = { version = "3", default-features = false }
 tar = { version = "0.4.43", default-features = false }
 temp-env = "0.3.6"
 tempfile = "3.14.0"
 terminal_size = "0.4.4"
 test-log = { version = "0.2.18", features = ["trace"] }
-testing_macros = "1.0.1"
+testing_macros = "2.0.0"
 thiserror = "2"
 tokio = { version = "1.52.3", default-features = false }
 tokio-util = "0.7"
@@ -309,16 +315,16 @@ vp_setup = { path = "crates/vp_setup" }
 vp_shared = { path = "crates/vp_shared" }
 vp_static_config = { path = "crates/vp_static_config" }
 vp_toolchain = { path = "crates/vp_toolchain" }
-vt = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "40cb9cac46bddbf8aa5ce5373df1a6a1980acc38" }
-vt_casefold = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "40cb9cac46bddbf8aa5ce5373df1a6a1980acc38" }
-vt_path = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "40cb9cac46bddbf8aa5ce5373df1a6a1980acc38" }
-vt_powershell = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "40cb9cac46bddbf8aa5ce5373df1a6a1980acc38" }
-vt_pty_terminal_test = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "40cb9cac46bddbf8aa5ce5373df1a6a1980acc38" }
-vt_pty_terminal_test_client = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "40cb9cac46bddbf8aa5ce5373df1a6a1980acc38" }
-vt_select = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "40cb9cac46bddbf8aa5ce5373df1a6a1980acc38" }
-vt_snapshot_test = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "40cb9cac46bddbf8aa5ce5373df1a6a1980acc38" }
-vt_str = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "40cb9cac46bddbf8aa5ce5373df1a6a1980acc38" }
-vt_workspace = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "40cb9cac46bddbf8aa5ce5373df1a6a1980acc38" }
+vt = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "cb1ea8d214b26a0f3ca2b2ef3b6bc471b18ffacb" }
+vt_casefold = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "cb1ea8d214b26a0f3ca2b2ef3b6bc471b18ffacb" }
+vt_path = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "cb1ea8d214b26a0f3ca2b2ef3b6bc471b18ffacb" }
+vt_powershell = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "cb1ea8d214b26a0f3ca2b2ef3b6bc471b18ffacb" }
+vt_pty_terminal_test = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "cb1ea8d214b26a0f3ca2b2ef3b6bc471b18ffacb" }
+vt_pty_terminal_test_client = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "cb1ea8d214b26a0f3ca2b2ef3b6bc471b18ffacb" }
+vt_select = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "cb1ea8d214b26a0f3ca2b2ef3b6bc471b18ffacb" }
+vt_snapshot_test = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "cb1ea8d214b26a0f3ca2b2ef3b6bc471b18ffacb" }
+vt_str = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "cb1ea8d214b26a0f3ca2b2ef3b6bc471b18ffacb" }
+vt_workspace = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "cb1ea8d214b26a0f3ca2b2ef3b6bc471b18ffacb" }
 walkdir = "2.5.0"
 webpki-root-certs = "1.0.10"
 which = "8.0.6"

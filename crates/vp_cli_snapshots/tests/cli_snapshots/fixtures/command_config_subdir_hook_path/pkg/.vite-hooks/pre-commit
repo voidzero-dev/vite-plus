@@ -1,0 +1,3 @@
+# Ignore CDPATH here so that it only affects the dispatcher under test.
+cd ./pkg
+test-hook-cmd

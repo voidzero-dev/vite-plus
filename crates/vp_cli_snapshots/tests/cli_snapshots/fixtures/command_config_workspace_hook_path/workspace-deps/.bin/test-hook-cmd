@@ -1,0 +1,2 @@
+#!/usr/bin/env sh
+echo workspace-hook-path-ok

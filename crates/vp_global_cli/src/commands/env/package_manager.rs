@@ -1,6 +1,7 @@
 use vp_pm_cli::{
-    EnvironmentPackageManagerResolution, PackageManagerType, resolve_environment_package_manager,
-    resolve_environment_package_manager_spec, resolve_package_manager_version_for_cwd,
+    EnvironmentPackageManagerResolution, PackageManagerSpec, PackageManagerType,
+    resolve_environment_package_manager, resolve_environment_package_manager_spec,
+    resolve_package_manager_version_for_cwd,
 };
 use vt_path::AbsolutePath;
 
@@ -91,14 +92,7 @@ pub(crate) async fn resolve_current_or_fallback_for(
 pub(crate) async fn resolve_current_spec(
     cwd: &AbsolutePath,
 ) -> Result<Option<EnvironmentPackageManagerResolution>, Error> {
-    let env = vp_shared::EnvConfig::get();
-    let selected = env
-        .package_manager
-        .as_deref()
-        .map(str::trim)
-        .filter(|spec| !spec.is_empty())
-        .map(parse_package_manager_spec_with_hash)
-        .transpose()?;
+    let selected = vp_pm_cli::package_manager_override()?;
     let mut resolution = resolve_environment_package_manager_spec(
         cwd,
         selected.as_ref().map(|(kind, version, hash)| (*kind, version.as_str(), hash.as_deref())),
@@ -110,8 +104,6 @@ pub(crate) async fn resolve_current_spec(
     }
     Ok(resolution)
 }
-
-pub(crate) type PackageManagerSpec = (PackageManagerType, String, Option<String>);
 
 /// Both entry points select a family before looking up its default version.
 async fn resolve_selection(
@@ -190,17 +182,10 @@ pub(crate) async fn warn_if_target_differs(cwd: &AbsolutePath, target: PackageMa
     }
 }
 
-pub(crate) const ALL_PACKAGE_MANAGERS: [PackageManagerType; 4] = [
-    PackageManagerType::Npm,
-    PackageManagerType::Pnpm,
-    PackageManagerType::Yarn,
-    PackageManagerType::Bun,
-];
-
 pub(crate) fn selected(scope: super::spec::EnvScope) -> Vec<PackageManagerType> {
     match scope {
         super::spec::EnvScope::All | super::spec::EnvScope::PackageManagers => {
-            ALL_PACKAGE_MANAGERS.to_vec()
+            PackageManagerType::ALL.to_vec()
         }
         super::spec::EnvScope::PackageManager(kind) => vec![kind],
         super::spec::EnvScope::Node => Vec::new(),

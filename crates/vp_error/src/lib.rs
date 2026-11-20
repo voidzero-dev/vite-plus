@@ -55,6 +55,17 @@ pub enum Error {
     #[error("Package manager {name}@{version} not found on {url}")]
     PackageManagerVersionNotFound { name: Str, version: Str, url: Str },
 
+    #[error(
+        "No usable {0} was found on PATH. Install it, or install the global `vp` CLI so Vite+ can manage it."
+    )]
+    PackageManagerNotInstalled(Str),
+
+    #[error(
+        "{name} at {} failed to report its version. Fix or reinstall it, or install the global `vp` CLI so Vite+ can manage it.",
+        .executable.as_path().display()
+    )]
+    PackageManagerNotRunnable { name: Str, executable: AbsolutePathBuf },
+
     #[error(transparent)]
     Semver(#[from] semver::Error),
 
@@ -95,6 +106,14 @@ pub enum Error {
 
     #[error("Invalid argument: {0}")]
     InvalidArgument(Str),
+
+    /// `VP_ENV_FORBIDDEN=1` forbids downloading or using a managed release of
+    /// `tool`, and resolving one through the registry.
+    #[error(
+        "{var}=1: Vite+ does not manage {tool}; it neither downloads nor uses a managed {tool}",
+        var = vp_shared::env_vars::VP_ENV_FORBIDDEN
+    )]
+    DisabledByEnvForbidden { tool: Str },
 
     #[cfg(feature = "migration")]
     #[error(transparent)]

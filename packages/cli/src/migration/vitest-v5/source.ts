@@ -2,19 +2,21 @@ import type * as t from '@oxc-project/types';
 
 import entryPoints from '../../vitest-v5-entry-points.json' with { type: 'json' };
 import {
+  objectProperty,
+  propertyName,
+  staticObject,
+  isString,
+  memberName,
+  isBoolean,
+  isRegExp,
+} from '../ast-utils.ts';
+import {
   NODE_SOURCES,
   ROOT_TEST_SOURCES,
   SourceEditor,
   importedName,
-  memberName,
-  objectProperty,
-  propertyName,
-  staticObject,
   testApiName,
-  isString,
   isImportMetaVitest,
-  isBoolean,
-  isRegExp,
   type RewriteResult,
   type SourceOptions,
 } from './ast.ts';

@@ -3,7 +3,8 @@ import { runInNewContext } from 'node:vm';
 
 import { describe, expect, it } from 'vitest';
 
-import { parseSource, SourceEditor } from '../vitest-v5/ast.ts';
+import { parseSource } from '../ast-utils.ts';
+import { SourceEditor } from '../vitest-v5/ast.ts';
 import { migrateVitestV5Config } from '../vitest-v5/config.ts';
 
 const options = { preserveV4: true, temporalPolyfill: true };

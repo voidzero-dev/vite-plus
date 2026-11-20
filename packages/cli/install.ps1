@@ -420,7 +420,15 @@ function Get-PayloadAndHandoff {
             $binarySource = $LocalBinary
         }
         $binarySource = (Resolve-Path -LiteralPath $binarySource).Path
-        if (Test-SelfSetupSupport -BinarySource $binarySource) {
+        # VP_ENV_FORBIDDEN=1 (exact value only) stops Vite+ from managing Node.js
+        # and every package manager.
+        if ($env:VP_ENV_FORBIDDEN -ceq '1') {
+            # Binaries without VP_ENV_FORBIDDEN support would ignore it and download managed tools.
+            if (-not (Test-EnvForbiddenSupport -BinarySource $binarySource)) {
+                Write-Error-Exit "vite-plus $ViteVersion does not support VP_ENV_FORBIDDEN. Choose a version that supports it, or unset VP_ENV_FORBIDDEN."
+            }
+            Invoke-InstallHandoff -BinarySource $binarySource
+        } elseif (Test-SelfSetupSupport -BinarySource $binarySource) {
             Invoke-InstallHandoff -BinarySource $binarySource
         } else {
             Invoke-LegacyInstaller -BinarySource $binarySource
@@ -440,6 +448,20 @@ function Test-SelfSetupSupport {
         # Old binaries must exit with help rather than opening an interactive picker.
         $response = & $BinarySource --help 2>$null
         return $LASTEXITCODE -eq 0 -and @($response).Count -eq 1 -and $response -ceq 'vite-plus-self-setup-v1'
+    } catch {
+        return $false
+    } finally {
+        $env:VP_SELF_SETUP_SUPPORT_CHECK = $previous
+    }
+}
+
+function Test-EnvForbiddenSupport {
+    param([string]$BinarySource)
+    $previous = $env:VP_SELF_SETUP_SUPPORT_CHECK
+    try {
+        $env:VP_SELF_SETUP_SUPPORT_CHECK = 'env-forbidden'
+        $response = @(& $BinarySource --help 2>$null)
+        return $LASTEXITCODE -eq 0 -and $response.Count -eq 2 -and $response[0] -ceq 'vite-plus-self-setup-v1' -and $response[1] -ceq 'vite-plus-self-setup-env-forbidden'
     } catch {
         return $false
     } finally {

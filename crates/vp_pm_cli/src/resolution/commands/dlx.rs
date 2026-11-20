@@ -47,17 +47,24 @@ impl Resolve<DlxArgs> for Npm {
             return CommandResolution::Noop;
         };
 
-        let mut cmd = CommandBuilder::new("npm");
-        cmd.arg("exec");
+        // `npm exec` landed in npm 7. npm 6 only ships the standalone `npx`.
+        let has_exec = self.supports_v7_commands();
+        let mut cmd = CommandBuilder::new(if has_exec { "npm" } else { "npx" });
+        cmd.arg_if("exec", has_exec);
         for package in &args.package {
             cmd.arg(vt_str::format!("--package={package}"));
         }
         if !args.shell_mode && !args.package.is_empty() {
             cmd.arg(vt_str::format!("--package={package_spec}"));
         }
-        cmd.arg("--yes");
+        // npm 6 `npx` never prompts, and takes the word after an unknown `--yes` as its value.
+        cmd.arg_if("--yes", has_exec);
         if args.silent {
-            cmd.arg("--loglevel").arg("silent");
+            if has_exec {
+                cmd.arg("--loglevel").arg("silent");
+            } else {
+                cmd.arg("--quiet");
+            }
         }
         if args.shell_mode {
             cmd.arg("-c").arg(build_shell_command(package_spec, command_args));
@@ -67,7 +74,8 @@ impl Resolve<DlxArgs> for Npm {
             } else {
                 extract_command_from_spec(package_spec)
             };
-            cmd.arg("--").arg(command).extend(command_args);
+            // npm 6 `npx` already passes everything after the command through untouched.
+            cmd.arg_if("--", has_exec).arg(command).extend(command_args);
         }
         cmd.into()
     }
@@ -328,6 +336,41 @@ mod tests {
             command.args,
             vec!["exec", "--yes", "--loglevel", "silent", "-c", "echo hello world"]
         );
+    }
+
+    #[test]
+    fn test_npm_6_uses_npx_without_exec_only_flags() {
+        let command = expect_run(
+            resolve(&npm("6.14.18"), dlx_args("create-vue@3.10.0", &["my-app"])).outcome,
+        );
+
+        assert_eq!(command.program, "npx");
+        assert_eq!(command.args, vec!["create-vue@3.10.0", "my-app"]);
+    }
+
+    #[test]
+    fn test_npm_6_npx_with_packages_and_silent() {
+        let mut options = dlx_args("yo@5.0.0", &["webapp"]);
+        options.package = vec!["generator-webapp".to_string()];
+        options.silent = true;
+        let command = expect_run(resolve(&npm("6.14.18"), options).outcome);
+
+        assert_eq!(command.program, "npx");
+        assert_eq!(
+            command.args,
+            vec!["--package=generator-webapp", "--package=yo@5.0.0", "--quiet", "yo", "webapp"]
+        );
+    }
+
+    #[test]
+    fn test_npm_6_npx_shell_mode() {
+        let mut options = dlx_args("echo hello | cowsay", &[]);
+        options.package = vec!["cowsay".to_string()];
+        options.shell_mode = true;
+        let command = expect_run(resolve(&npm("6.14.18"), options).outcome);
+
+        assert_eq!(command.program, "npx");
+        assert_eq!(command.args, vec!["--package=cowsay", "-c", "echo hello | cowsay"]);
     }
 
     #[test]

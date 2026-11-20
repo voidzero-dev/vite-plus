@@ -89,6 +89,9 @@ pub enum SynthesizableSubcommand {
         /// Auto-fix format and lint issues
         #[arg(long)]
         fix: bool,
+        /// Auto-fix format and lint issues, including dangerous fixes and suggestions
+        #[arg(long)]
+        fix_dangerously: bool,
         /// Disable reporting on warnings, only errors are reported
         #[arg(long)]
         quiet: bool,

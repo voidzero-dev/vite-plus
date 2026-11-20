@@ -130,3 +130,18 @@ steps = [
   ["vpt", "stat-file", "brew-prefix/INSTALL_RECEIPT.json", "--assert", "file"],
   ["vpt", "stat-file", "brew-prefix/node_modules/vite-plus/dist/bin.js", "--assert", "file"],
 ]
+
+[[case]]
+name = "command_self_setup_external_homebrew_env_forbidden"
+vp = "global"
+skip-platforms = ["windows"]
+env = { VP_SELF_SETUP_NO_MODIFY_PATH = "1", NPM_CONFIG_REGISTRY = "http://127.0.0.1:9" }
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "brew-prefix/bin", "home", "empty"], snapshot = false },
+  { argv = ["vpt", "cp", "$VP_HOME/bin/vp", "brew-prefix/bin/vp"], snapshot = false },
+  { argv = ["vpt", "write-file", "brew-prefix/INSTALL_RECEIPT.json", '{"homebrew_version":"7.0.2","source":{"tap":"fengmk2/core"}}'], comment = "A Homebrew formula without bundled dependencies installs them into the user package directory", snapshot = false },
+  { argv = ["vpt", "write-file", "home/config.json", '{"nodeShimMode":"managed","packageManagerShimModes":{"bun":"managed","npm":"managed","pnpm":"managed","yarn":"managed"}}'], snapshot = false },
+  { argv = ["./brew-prefix/bin/vp", "--help"], envs = [["VP_HOME", "${workspace}/home"], ["VP_ENV_FORBIDDEN", "1"], ["PATH", "${workspace}/empty"]], comment = "Without a system node and pnpm, setup fails before it saves preferences or creates the package directory", continue-on-failure = true },
+  ["vpt", "print-file", "home/config.json"],
+  ["vpt", "stat-file", "home/cli-packages", "--assert", "missing"],
+]

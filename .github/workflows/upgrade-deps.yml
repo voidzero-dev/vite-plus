@@ -45,10 +45,17 @@ jobs:
 
       - name: Upgrade dependencies and sync upstream
         id: build
-        continue-on-error: true # Create PR even if installation or upstream sync fails
+        continue-on-error: true # Let fixups handle failures after version selection.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node .github/scripts/upgrade-deps.ts
+
+      - name: Check upgrade metadata
+        run: |
+          if [ ! -s "${UPGRADE_DEPS_META_DIR}/versions.json" ]; then
+            echo '::error::The upgrade step did not write versions.json. See "Upgrade dependencies and sync upstream" for details.'
+            exit 1
+          fi
 
       - name: Use the updated Node.js pin
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -125,9 +132,12 @@ jobs:
             ### Background
             - Upgrade script: `./.github/scripts/upgrade-deps.ts`
             - Development, CI, and global CLI dependency installation use the
-              latest stable `24.x` release pinned in `.node-version`.
-              Keep the exact version selected by the upgrade script. Do not replace
-              it with a moving LTS alias or advance the major version.
+              latest stable `24.x` release whose `date` in
+              `https://nodejs.org/dist/index.json` is at least two days ago,
+              pinned in `.node-version`. The upgrade script counts from midnight
+              UTC on that date, so even late-day releases are at least 24 hours old.
+              Keep the exact version selected by the upgrade script. Do not bypass
+              the release-age check, use a moving LTS alias, or advance the major version.
               Runtime commands keep their latest LTS fallback.
             - Vitest is capped at the latest stable `5.x` release. Keep the exact
               version selected by the upgrade script when merging upstream catalogs.
@@ -247,8 +257,13 @@ jobs:
             A successful internal build does
             not prove that `vp pack` works with consumers' TypeScript versions.
 
-            Re-record with `UPDATE_SNAPSHOTS=1` only for cosmetic drift from the
-            upgrade (e.g. a bumped version string in help output). Unexpected stack
+            Use `versions.json` to find snapshots that print an upgraded dependency's
+            version. Run each affected case with `just snapshot-test <case>`. When
+            `tsrs` changes, include `migration_monorepo_pnpm`, which prints the
+            bundled version in `trustPolicyExclude`. Keep fixture-supplied versions.
+            If the diff shows only expected cosmetic changes, such as the recorded
+            version bump, run `UPDATE_SNAPSHOTS=1 just snapshot-test <case>`, then
+            rerun the case without `UPDATE_SNAPSHOTS`. Unexpected stack
             traces, missing output, or diverging CLI behavior are regressions to fix.
             Inspect `git status --short` and `git diff --stat` before finishing;
             every changed file, including generated NAPI bindings, must be intentional.
@@ -326,6 +341,14 @@ jobs:
         run: |
           set -euo pipefail
           node packages/tools/src/check-rolldown-compat.ts
+          # Earlier native builds or restored caches can use a different C compiler.
+          # CMake can drop its install prefix when that compiler changes. Clear its
+          # configuration before rebuilding, while keeping compiled Rust dependencies.
+          target_dir="${CARGO_TARGET_DIR:-target}"
+          if [[ -d "$target_dir" ]]; then
+            find "$target_dir" -type f -name CMakeCache.txt -delete
+            find "$target_dir" -type d -name CMakeFiles -prune -exec rm -rf -- {} +
+          fi
           pnpm bootstrap-cli
           export PATH="$HOME/.vite-plus/bin:$PATH"
           pnpm test:unit
@@ -406,6 +429,8 @@ jobs:
                Include the version and a short 7-char SHA in both `From` and `To` for `rolldown`
                and `vite`. Link each SHA label to the full commit in the official repository.
                Omit packages whose old and new values are equal.
+               Report the pnpm installer version only; omit its integrity hash from this table
+               and the unchanged dependency list.
                Keep the baseline list of unchanged dependencies after the table.
             3. `## Code changes` — bullet list of the actual non-version edits, each naming
                the file(s) touched. If the only changes are version bumps + lockfile + generated
@@ -507,7 +532,7 @@ jobs:
         run: gh pr comment "${PR_NUMBER}" --repo "${GITHUB_REPOSITORY}" --body-file "${UPGRADE_DEPS_META_DIR}/cli-help-report.md"
 
       - name: Report validation failure
-        if: always() && steps.final-validation.outcome != 'success'
+        if: always() && steps.final-validation.outcome == 'failure'
         shell: bash
         run: |
           echo '::error::The upgraded dependencies did not pass final validation.'

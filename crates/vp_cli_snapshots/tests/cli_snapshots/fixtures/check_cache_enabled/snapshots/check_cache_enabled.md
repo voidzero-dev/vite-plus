@@ -38,3 +38,13 @@ $ vp check ○ cache miss: 'foo.js' added in 'src', executing
 pass: All 4 files are correctly formatted (<duration>, <n> threads)
 pass: Found no warnings or lint errors in 3 files (<duration>, <n> threads)
 ```
+
+## `VP_SKIP_STATIC_CONFIG=1 vp run check`
+
+changing VP_SKIP_STATIC_CONFIG should be a cache miss
+
+```
+$ vp check ○ cache miss: env 'VP_SKIP_STATIC_CONFIG' changed, executing
+pass: All 4 files are correctly formatted (<duration>, <n> threads)
+pass: Found no warnings or lint errors in 3 files (<duration>, <n> threads)
+```

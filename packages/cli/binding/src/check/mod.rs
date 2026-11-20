@@ -17,11 +17,17 @@ use crate::cli::{
     resolve_and_capture_output,
 };
 
+/// The config blocks `vp check` reads. `plugins` is listed only so that a config
+/// with plugins falls back to Vite, because a plugin's `config` hook can add the
+/// other blocks.
+pub(crate) const CHECK_CONFIG_FIELDS: &[&str] = &["lint", "fmt", "check", "plugins"];
+
 /// Execute the `vp check` composite command (fmt + lint + optional type checks).
 pub(crate) async fn execute_check(
     resolver: &SubcommandResolver,
     continue_on_error: bool,
     fix: bool,
+    fix_dangerously: bool,
     quiet: bool,
     deny_warnings: bool,
     no_fmt_flag: bool,
@@ -31,6 +37,7 @@ pub(crate) async fn execute_check(
     envs: &Arc<EnvMap>,
     cwd: &AbsolutePathBuf,
 ) -> Result<ExitStatus, Error> {
+    let fix = fix || fix_dangerously;
     let mut status = ExitStatus::SUCCESS;
     let mut first_failure = None;
     let has_paths = !paths.is_empty();
@@ -40,7 +47,7 @@ pub(crate) async fn execute_check(
     let suppress_unmatched = no_error_on_unmatched_pattern || (fix && has_paths);
     let mut fmt_fix_started: Option<Instant> = None;
     let mut deferred_lint_pass: Option<(String, String)> = None;
-    let resolved_vite_config = resolver.resolve_universal_vite_config().await?;
+    let resolved_vite_config = resolver.resolve_universal_vite_config(CHECK_CONFIG_FIELDS).await?;
 
     // Keep package runs on the root settings selected by `vp check`.
     // Direct `vp lint` and `vp fmt` leave config discovery to the tools.
@@ -175,10 +182,10 @@ pub(crate) async fn execute_check(
     if run_lint_phase {
         let lint_message_kind = LintMessageKind::from_flags(lint_enabled, type_check_enabled);
         let mut args = config_args(resolved_vite_config.lint.is_some());
-        // oxlint cannot auto-fix type diagnostics, so `--fix` is dropped on the
+        // oxlint cannot auto-fix type diagnostics, so fix flags are dropped on the
         // type-check-only path.
         if fix && lint_enabled {
-            args.push("--fix".to_string());
+            args.push(if fix_dangerously { "--fix-dangerously" } else { "--fix" }.to_string());
         }
         if quiet {
             args.push("--quiet".to_string());

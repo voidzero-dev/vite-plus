@@ -12,7 +12,7 @@ _runtime and package management, create, dev, check, test, build, pack, and mono
 
 ---
 
-Vite+ is the unified entry point for local web development. It combines [Vite](https://vite.dev/), [Vitest](https://vitest.dev/), [Oxlint](https://oxc.rs/docs/guide/usage/linter.html), [Oxfmt](https://oxc.rs/docs/guide/usage/formatter.html), [Rolldown](https://rolldown.rs/), [tsdown](https://tsdown.dev/), and [Vite Task](https://github.com/voidzero-dev/vite-task) into one zero-config toolchain that also manages runtime and package manager workflows:
+Vite+ is the unified entry point for local web development. It combines [Vite](https://vite.dev/), [Vitest](https://vitest.dev/), [Oxlint](https://oxc.rs/docs/guide/usage/linter.html), [Oxfmt](https://oxc.rs/docs/guide/usage/formatter.html), [tsrs](https://oxc.rs/docs/guide/usage/typechecker.html), [oxc-node](https://oxc.rs/docs/guide/usage/oxc-node.html), [Rolldown](https://rolldown.rs/), [tsdown](https://tsdown.dev/), and [Vite Task](https://github.com/voidzero-dev/vite-task) into one zero-config toolchain that also manages runtime and package manager workflows:
 
 - **`vp env`:** Manage Node.js and package managers globally and per project
 - **`vp install`:** Install dependencies with automatic package manager detection
@@ -203,11 +203,11 @@ If you are manually migrating a project to Vite+, install these dev dependencies
 vp install -D vite-plus
 ```
 
-Add package-manager overrides so that other packages use the Vite+ versions. Alias `vite` to `@voidzero-dev/vite-plus-core`, setting `<vite-plus-version>` to the installed `vite-plus` version. Pin `vitest` to `<vitest-version>`, using the bundled version shown by `vp toolchain vitest`. The project and `vp test` then use the same Vitest copy. Without the pin, a dependency or workspace package can install a different Vitest version. The two versions can use separate mocks, `expect` functions, and runner states:
+Add package-manager overrides so that other packages use the Vite+ versions. Alias `vite` to `@voidzero-dev/vite-plus-core`, setting `<core-version>` to the core version that the installed `vite-plus` uses, shown by `vp toolchain vite-plus-core`. The core version encodes the bundled Vite version (for example, `8.3.5000` for Vite `8.3.5`), so package managers check `vite` peer ranges against the bundled Vite. Pin `vitest` to `<vitest-version>`, using the bundled version shown by `vp toolchain vitest`. The project and `vp test` then use the same Vitest copy. Without the pin, a dependency or workspace package can install a different Vitest version. The two versions can use separate mocks, `expect` functions, and runner states:
 
 ```json
 "overrides": {
-  "vite": "npm:@voidzero-dev/vite-plus-core@<vite-plus-version>",
+  "vite": "npm:@voidzero-dev/vite-plus-core@<core-version>",
   "vitest": "<vitest-version>"
 }
 ```
@@ -216,7 +216,7 @@ If you are using `pnpm`, add this to your `pnpm-workspace.yaml`:
 
 ```yaml
 overrides:
-  vite@*: npm:@voidzero-dev/vite-plus-core@<vite-plus-version> # Match the installed vite-plus version
+  vite@*: npm:@voidzero-dev/vite-plus-core@<core-version> # Match the version from vp toolchain vite-plus-core
   vitest@*: <vitest-version> # Match the version from vp toolchain vitest
 ```
 
@@ -224,7 +224,7 @@ Or, if you are using Yarn:
 
 ```json
 "resolutions": {
-  "vite": "npm:@voidzero-dev/vite-plus-core@<vite-plus-version>",
+  "vite": "npm:@voidzero-dev/vite-plus-core@<core-version>",
   "vitest": "<vitest-version>"
 }
 ```

@@ -34,6 +34,7 @@ function makeWorkspaceInfo(rootDir: string, packageManager: PackageManager): Wor
       name: packageManager,
       installDir: '/tmp',
       binPrefix: '/tmp/bin',
+      binPaths: {},
       packageName: packageManager,
       version: '1.0.0',
     },
@@ -114,8 +115,8 @@ describe('rewriteMonorepo bun catalog with file: protocol', () => {
       overrides: Record<string, string>;
       devDependencies: Record<string, string>;
     };
-    expect(pkg.workspaces.catalog.vite).toBeUndefined();
-    expect(pkg.workspaces.catalog.vitest).toBeUndefined();
+    expect(pkg.workspaces.catalog?.vite).toBeUndefined();
+    expect(pkg.workspaces.catalog?.vitest).toBeUndefined();
     expect(pkg.workspaces.catalogs.build.vite).toBe('^7.0.0');
     expect(pkg.workspaces.catalogs.build.vitest).toBe('^4.0.0');
     expect(pkg.workspaces.catalogs.build.tsdown).toBeUndefined();

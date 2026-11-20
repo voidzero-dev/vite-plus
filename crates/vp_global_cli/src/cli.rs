@@ -736,8 +736,12 @@ async fn run_package_manager_command(
             == commands::env::config::ShimMode::SystemFirst
         && let Some(system_path) =
             crate::shim::dispatch::find_system_tool(&selected.package_manager_type.to_string())
-        && let Some(manager) =
-            system_package_manager(selected.package_manager_type, &system_path).await
+        && let Some(manager) = vp_pm_cli::PackageManager::from_system_executable(
+            selected.package_manager_type,
+            &system_path,
+            &cwd,
+        )
+        .await
     {
         vp_pm_cli::dispatch_with_resolved_package_manager(&cwd, command, manager).await?
     } else {
@@ -776,32 +780,6 @@ fn active_toolchain_manifest(cwd: &vt_path::AbsolutePath) -> Option<vp_toolchain
             crate::js_executor::JsExecutor::new(None).get_scripts_dir().ok()?.join("toolchain.json")
         };
     vp_toolchain::load_manifest(&manifest_path).ok()
-}
-
-async fn system_package_manager(
-    kind: vp_pm_cli::PackageManagerType,
-    executable: &vt_path::AbsolutePath,
-) -> Option<vp_pm_cli::PackageManager> {
-    // Only npm skips `--version`; `npm_version_from_package_json` explains why.
-    let version = if kind == vp_pm_cli::PackageManagerType::Npm
-        && let Some(version) = vp_pm_cli::npm_version_from_package_json(executable)
-    {
-        version.to_string()
-    } else {
-        let output = tokio::process::Command::new(executable.as_path())
-            .arg("--version")
-            .output()
-            .await
-            .ok()?;
-        if !output.status.success() {
-            return None;
-        }
-        let version = std::str::from_utf8(&output.stdout).ok()?.trim();
-        js_semver::Version::parse(version).ok()?;
-        version.to_owned()
-    };
-    let bin_prefix = executable.parent()?.to_absolute_path_buf();
-    Some(vp_pm_cli::PackageManager::from_bin_prefix(kind, version, bin_prefix))
 }
 
 async fn managed_install(
@@ -888,13 +866,17 @@ async fn managed_update(
         current_node_version = get_current_node_version().await?;
 
         for metadata in &all {
-            if latest && metadata.version_spec.is_some() {
-                spec_rewrites.push((metadata.name.clone(), None, metadata.name.clone()));
+            if latest && metadata.version_spec != metadata.latest_version_spec() {
+                spec_rewrites.push((
+                    metadata.name.clone(),
+                    metadata.latest_version_spec(),
+                    metadata.latest_spec(),
+                ));
             }
             if !is_same_node_version(&metadata.platform.node, &current_node_version) {
                 node_mismatches.push(NodeMismatchPackage {
                     name: metadata.name.clone(),
-                    spec: if latest { metadata.name.clone() } else { metadata.update_spec() },
+                    spec: if latest { metadata.latest_spec() } else { metadata.update_spec() },
                     installed_node: metadata.platform.node.clone(),
                 });
             }
@@ -922,9 +904,13 @@ async fn managed_update(
                     if new_spec != metadata.version_spec {
                         spec_rewrites.push((package_name.clone(), new_spec, package.clone()));
                     }
-                } else if latest && metadata.version_spec.is_some() {
+                } else if latest && metadata.version_spec != metadata.latest_version_spec() {
                     // `--latest` applies to bare names only; explicit specs win.
-                    spec_rewrites.push((package_name.clone(), None, package_name.clone()));
+                    spec_rewrites.push((
+                        package_name.clone(),
+                        metadata.latest_version_spec(),
+                        metadata.latest_spec(),
+                    ));
                 }
                 if !is_same_node_version(&metadata.platform.node, &current_node_version) {
                     // Match the spec `get_outdated_packages` resolves for this
@@ -932,7 +918,7 @@ async fn managed_update(
                     let spec = if version_spec.is_some() {
                         package.clone()
                     } else if latest {
-                        package_name.clone()
+                        metadata.latest_spec()
                     } else {
                         metadata.update_spec()
                     };
@@ -971,7 +957,7 @@ async fn managed_update(
             // A newer `latest` alone (e.g. a version-pinned package) is not
             // updatable; only a newer wanted version is.
             .filter(|package| package.wanted != package.current)
-            .map(|package| package.spec.unwrap_or(package.name)),
+            .map(|package| package.spec),
     );
 
     let outdated_specs = to_update.iter().map(String::as_str).collect::<HashSet<_>>();
@@ -1367,8 +1353,13 @@ pub fn try_parse_args_from_with_options(
     render_options: RenderOptions,
 ) -> Result<Args, clap::error::Error> {
     let cmd = apply_custom_help(Args::command(), render_options);
-    let matches = cmd.try_get_matches_from(args)?;
-    Args::from_arg_matches(&matches).map_err(|e| e.into())
+    let argv: Vec<_> = args.into_iter().collect();
+    let matches = cmd.try_get_matches_from(&argv)?;
+    let mut parsed = Args::from_arg_matches(&matches)?;
+    if let Some(Commands::Dev { args } | Commands::Build { args }) = &mut parsed.command {
+        vp_shared::restore_leading_arg_separator(&argv, args);
+    }
+    Ok(parsed)
 }
 
 #[cfg(test)]
@@ -1595,48 +1586,5 @@ mod tests {
     #[test]
     fn unknown_subcommand_does_not_suppress_header() {
         assert!(!should_suppress_header_for_subcommand("test", &["--lsp".to_string()]));
-    }
-
-    #[cfg(unix)]
-    #[tokio::test]
-    async fn system_npm_version_is_read_from_its_package_without_running_it() {
-        use std::os::unix::fs::PermissionsExt;
-
-        use super::system_package_manager;
-
-        // A Node.js install. Running npm-cli.js fails, so a spawned `npm --version` would
-        // return `None`.
-        //
-        // <root>/
-        // ├── bin/npm -> ../lib/node_modules/npm/bin/npm-cli.js
-        // └── lib/node_modules/npm/
-        //     ├── package.json      {"name":"npm","version":"10.9.2"}
-        //     └── bin/npm-cli.js    exit 1
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path();
-        let package = root.join("lib/node_modules/npm");
-        std::fs::create_dir_all(package.join("bin")).unwrap();
-        std::fs::write(package.join("package.json"), r#"{"name":"npm","version":"10.9.2"}"#)
-            .unwrap();
-        let cli = package.join("bin/npm-cli.js");
-        std::fs::write(&cli, "#!/bin/sh\nexit 1\n").unwrap();
-        std::fs::set_permissions(&cli, std::fs::Permissions::from_mode(0o755)).unwrap();
-        std::fs::create_dir_all(root.join("bin")).unwrap();
-        std::os::unix::fs::symlink("../lib/node_modules/npm/bin/npm-cli.js", root.join("bin/npm"))
-            .unwrap();
-        let npm = vt_path::AbsolutePathBuf::new(root.join("bin/npm")).unwrap();
-
-        let manager = system_package_manager(vp_pm_cli::PackageManagerType::Npm, &npm)
-            .await
-            .expect("npm's version is read without running npm");
-        // Scripts see the version in the user agent.
-        let context =
-            vp_pm_cli::LifecycleEnvContext { vp_version: "0.0.0".into(), node_version: None };
-        let user_agent = manager
-            .lifecycle_env_vars(&context)
-            .into_iter()
-            .find_map(|(name, value)| (name == "npm_config_user_agent").then_some(value))
-            .unwrap();
-        assert!(user_agent.to_string_lossy().starts_with("vp/0.0.0 npm/10.9.2 "), "{user_agent:?}");
     }
 }
