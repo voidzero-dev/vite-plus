@@ -98,41 +98,62 @@ describe('runViteInstall', () => {
     }
   });
 
-  it('uses the configured reporter when replaying a timed-out install', async () => {
-    const run = vi.mocked(runCommandSilently);
-    run.mockResolvedValueOnce({
-      exitCode: 124,
-      idleTimedOut: true,
-      stdout: Buffer.from(
-        JSON.stringify({ name: 'pnpm:progress', level: 'debug', status: 'resolved' }) + '\n',
-      ),
-      stderr: Buffer.alloc(0),
-    });
-    run.mockImplementation(async ({ args }) => ({
-      exitCode: 0,
-      stdout: Buffer.from(args.includes('reporter') ? 'silent\n' : 'undefined\n'),
-      stderr: Buffer.alloc(0),
-    }));
-
-    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
-    const stderr = vi.spyOn(console, 'error').mockImplementation(() => {});
-    try {
-      const result = await runViteInstall(cwd, false, undefined, {
-        idleTimeoutMs: 300_000,
-        silent: true,
+  it.each([
+    [false, 1],
+    [true, 124],
+  ] as const)(
+    'preserves the silent install exit code with idleTimedOut=%s',
+    async (timedOut, exitCode) => {
+      const run = vi.mocked(runCommandSilently);
+      run.mockResolvedValueOnce({
+        exitCode: 124,
+        ...(timedOut && { idleTimedOut: true as const }),
+        stdout: Buffer.from(
+          [
+            { name: 'pnpm:progress', level: 'debug', status: 'resolved' },
+            {
+              name: 'pnpm',
+              level: 'error',
+              code: 'ELIFECYCLE',
+              errno: 124,
+              err: { name: 'pnpm', message: 'Exit status 124' },
+            },
+          ]
+            .map((log) => JSON.stringify(log))
+            .join('\n'),
+        ),
+        stderr: Buffer.alloc(0),
       });
-      expect(result).toMatchObject({ status: 'failed', exitCode: 124 });
-      expect(stdout.mock.calls.flat().join('')).not.toContain('Progress:');
-      expect(stderr).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.stringContaining('vp install --no-frozen-lockfile'),
-      );
-    } finally {
-      stdout.mockRestore();
-      stderr.mockRestore();
-      run.mockReset();
-    }
-  });
+      run.mockImplementation(async ({ args }) => ({
+        exitCode: 0,
+        stdout: Buffer.from(args.includes('reporter') ? 'silent\n' : 'undefined\n'),
+        stderr: Buffer.alloc(0),
+      }));
+
+      const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+      const stderr = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        const result = await runViteInstall(cwd, false, undefined, {
+          idleTimeoutMs: 300_000,
+          packageManager: PackageManager.pnpm,
+          packageManagerVersion: '9.15.1',
+          silent: true,
+        });
+        expect(result).toMatchObject({ status: 'failed', exitCode });
+        expect(stdout.mock.calls.flat().join('')).not.toContain('Progress:');
+        if (timedOut) {
+          expect(stderr).toHaveBeenCalledWith(
+            expect.any(String),
+            expect.stringContaining('vp install --no-frozen-lockfile'),
+          );
+        }
+      } finally {
+        stdout.mockRestore();
+        stderr.mockRestore();
+        run.mockReset();
+      }
+    },
+  );
 });
 
 describe('downloadPackageManager', () => {

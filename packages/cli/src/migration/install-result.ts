@@ -9,12 +9,12 @@ import type { MigrationReport } from './report.ts';
 const PNPM_9_INSTALL_IDLE_TIMEOUT_MS = 5 * 60_000;
 
 /** Bound silent pnpm 9 dependency resolution during non-interactive migration. */
-export async function getMigrationInstallIdleTimeoutMs(
+export async function getMigrationInstallWatchOptions(
   cwd: string,
   interactive: boolean | undefined,
   packageManager: PackageManager | undefined,
   version: string | undefined,
-): Promise<number | undefined> {
+): Promise<{ idleTimeoutMs: number; packageManagerVersion: string } | undefined> {
   if (interactive || process.env.VP_SKIP_INSTALL) {
     return undefined;
   }
@@ -88,7 +88,9 @@ export async function getMigrationInstallIdleTimeoutMs(
       });
       version = exitCode === 0 ? stdout.toString().trim() : undefined;
     }
-    return version?.startsWith('9.') ? PNPM_9_INSTALL_IDLE_TIMEOUT_MS : undefined;
+    return version?.startsWith('9.')
+      ? { idleTimeoutMs: PNPM_9_INSTALL_IDLE_TIMEOUT_MS, packageManagerVersion: version }
+      : undefined;
   } catch {
     // Let the install command report any manager selection error.
     return undefined;

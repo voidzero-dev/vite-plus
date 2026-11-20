@@ -41,7 +41,7 @@ import { detectWorkspace } from '../utils/workspace.ts';
 import { checkRolldownCompatibility } from './compat/runner.ts';
 import { detectMigrationWarnings } from './detector.ts';
 import { canFormatWithOxfmt, collectChangedFormatPaths, formatMigratedProject } from './format.ts';
-import { getMigrationInstallIdleTimeoutMs, handleInstallResult } from './install-result.ts';
+import { getMigrationInstallWatchOptions, handleInstallResult } from './install-result.ts';
 import {
   addFrameworkShim,
   applyVitestV5Migration,
@@ -852,12 +852,12 @@ async function executeMigrationPlan(
       silent: true,
       packageManager: workspaceInfo.packageManager,
       packageManagerVersion: workspaceInfo.downloadPackageManager.version,
-      idleTimeoutMs: await getMigrationInstallIdleTimeoutMs(
+      ...(await getMigrationInstallWatchOptions(
         workspaceInfo.rootDir,
         interactive,
         workspaceInfo.packageManager,
         workspaceInfo.downloadPackageManager.version,
-      ),
+      )),
       initialInstall: true,
     },
   );
@@ -1040,12 +1040,12 @@ async function executeMigrationPlan(
       silent: true,
       packageManager: workspaceInfo.packageManager,
       packageManagerVersion: workspaceInfo.downloadPackageManager.version,
-      idleTimeoutMs: await getMigrationInstallIdleTimeoutMs(
+      ...(await getMigrationInstallWatchOptions(
         workspaceInfo.rootDir,
         interactive,
         workspaceInfo.packageManager,
         workspaceInfo.downloadPackageManager.version,
-      ),
+      )),
     },
   );
   if (finalInstallSummary.status === 'failed') {
@@ -1688,12 +1688,12 @@ async function main() {
           silent: true,
           packageManager,
           packageManagerVersion,
-          idleTimeoutMs: await getMigrationInstallIdleTimeoutMs(
+          ...(await getMigrationInstallWatchOptions(
             workspaceInfoOptional.rootDir,
             options.interactive,
             packageManager,
             packageManagerVersion,
-          ),
+          )),
         },
       );
       if (installSummary.status === 'failed') {

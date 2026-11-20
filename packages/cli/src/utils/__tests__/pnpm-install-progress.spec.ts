@@ -5,7 +5,11 @@ import { stripVTControlCharacters } from 'node:util';
 
 import { describe, expect, it } from 'vitest';
 
-import { formatPnpmInstallOutput, watchPnpmResolution } from '../pnpm-install-progress.ts';
+import {
+  formatPnpmInstallOutput,
+  restorePnpmInstallExitCode,
+  watchPnpmResolution,
+} from '../pnpm-install-progress.ts';
 
 function stage(prefix: string, stage: string) {
   return JSON.stringify({ name: 'pnpm:stage', prefix, stage });
@@ -28,6 +32,35 @@ describe('watchPnpmResolution', () => {
     expect(watch(stage('/workspace/a', 'resolution_done'))).toBe(true);
     expect(watch(stage('/workspace/b', 'resolution_done'))).toBe(false);
     expect(watch('> node postinstall.cjs')).toBe(false);
+  });
+});
+
+describe('restorePnpmInstallExitCode', () => {
+  const log = {
+    name: 'pnpm',
+    level: 'error',
+    code: 'ELIFECYCLE',
+    errno: 7,
+    err: { name: 'pnpm', message: 'Exit status 7' },
+  };
+  const output = JSON.stringify(log);
+
+  it.each([
+    ['9.15.1', 'json', 1],
+    ['9.15.7', 'silent', 1],
+    ['9.15.8', 'silent', 7],
+    ['9.15.9', 'json', 7],
+    ['9.15.1', 'ndjson', 7],
+    ['9.15.1', 'warn', 7],
+  ] as const)('preserves the pnpm %s exit code in %s mode', (version, mode, exitCode) => {
+    expect(restorePnpmInstallExitCode(7, output, mode, version)).toBe(exitCode);
+  });
+
+  it('uses the last terminal error to identify the source of the exit code', () => {
+    const recovered = JSON.stringify({ ...log, err: { ...log.err, name: 'Error' } });
+    const otherError = JSON.stringify({ ...log, errno: undefined });
+    expect(restorePnpmInstallExitCode(7, recovered, 'silent', '9.15.1')).toBe(7);
+    expect(restorePnpmInstallExitCode(7, `${output}\n${otherError}`, 'silent', '9.15.1')).toBe(7);
   });
 });
 
@@ -251,31 +284,15 @@ describe('formatPnpmInstallOutput', () => {
     ['error', ''],
     ['silent', 'setup failed\n'],
   ] as const)('filters pnpm output at the %s log level', async (logLevel, detail) => {
+    const script = { name: 'pnpm:lifecycle', stage: 'postinstall', wd: '/dep', level: 'debug' };
     const output = [
       'plain launcher output',
       { name: 'pnpm', level: 'warn', message: 'dependency warning' },
       { name: 'pnpm:progress', status: 'resolved', level: 'debug' },
-      {
-        name: 'pnpm:lifecycle',
-        stage: 'postinstall',
-        script: 'node install.cjs',
-        level: 'debug',
-      },
-      {
-        name: 'pnpm:lifecycle',
-        stage: 'postinstall',
-        line: 'working',
-        stdio: 'stdout',
-        level: 'debug',
-      },
-      {
-        name: 'pnpm:lifecycle',
-        stage: 'postinstall',
-        line: 'setup failed',
-        stdio: 'stderr',
-        level: 'debug',
-      },
-      { name: 'pnpm:lifecycle', stage: 'postinstall', exitCode: 7, level: 'debug' },
+      { ...script, script: 'node install.cjs' },
+      { ...script, line: 'working', stdio: 'stdout' },
+      { ...script, line: 'setup failed', stdio: 'stderr' },
+      { ...script, exitCode: 7 },
       { name: 'pnpm', level: 'error', code: 'ELIFECYCLE', err: { message: 'Command failed' } },
     ]
       .map((line) => (typeof line === 'string' ? line : JSON.stringify(line)))
@@ -283,6 +300,28 @@ describe('formatPnpmInstallOutput', () => {
 
     expect(await formatPnpmInstallOutput(output, '/project', logLevel)).toBe(
       `plain launcher output\n${detail}ELIFECYCLE Command failed`,
+    );
+  });
+
+  it('replays stderr only from completed non-optional failing scripts in silent mode', async () => {
+    const failed = { name: 'pnpm:lifecycle', stage: 'postinstall', wd: '/failed', level: 'debug' };
+    const successful = { ...failed, wd: '/successful' };
+    const optional = { ...failed, wd: '/optional' };
+    const output = [
+      { ...failed, line: 'first failure detail', stdio: 'stderr' },
+      { ...successful, line: 'successful script', stdio: 'stderr' },
+      { ...optional, line: 'optional script', stdio: 'stderr' },
+      { ...failed, stage: 'install', line: 'unfinished script', stdio: 'stderr' },
+      { ...successful, exitCode: 0 },
+      { ...optional, exitCode: 7, optional: true },
+      { ...failed, line: 'second failure detail', stdio: 'stderr' },
+      { ...failed, exitCode: 7 },
+    ]
+      .map((log) => JSON.stringify(log))
+      .join('\n');
+
+    expect(await formatPnpmInstallOutput(output, '/project', 'silent')).toBe(
+      'first failure detail\nsecond failure detail',
     );
   });
 
