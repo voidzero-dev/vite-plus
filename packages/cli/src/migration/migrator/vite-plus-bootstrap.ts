@@ -52,6 +52,7 @@ import {
   rewriteBunCatalog,
   rewritePnpmWorkspaceYaml,
   rewriteYarnrcYml,
+  scriptsLoadVitePlusRegister,
   setDirectViteEdge,
   collectPackagesKeepingTsdown,
   configNeedsVitePlus,
@@ -85,6 +86,7 @@ import {
 } from './shared.ts';
 
 export type BootstrapPackageJson = {
+  scripts?: Record<string, string>;
   overrides?: Record<string, string>;
   resolutions?: Record<string, string>;
   devDependencies?: Record<string, string>;
@@ -313,10 +315,11 @@ function reconcileVitePlusBootstrapPackage(
     vitePlusVersion,
     ensureVitePlus ||
       (!hasDirectVitePlusInstallEntry(pkg) &&
-        configNeedsVitePlus(projectPath, keepTsdown, {
-          preserveVitestConfig:
-            pkg.dependencies?.vitest !== undefined || pkg.peerDependencies?.vitest !== undefined,
-        })),
+        ((keepTsdown && scriptsLoadVitePlusRegister(pkg.scripts)) ||
+          configNeedsVitePlus(projectPath, keepTsdown, {
+            preserveVitestConfig:
+              pkg.dependencies?.vitest !== undefined || pkg.peerDependencies?.vitest !== undefined,
+          }))),
   );
 
   const installGroups = [pkg.devDependencies, pkg.dependencies, pkg.optionalDependencies];

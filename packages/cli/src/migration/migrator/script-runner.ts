@@ -85,6 +85,7 @@ const LOADER_OPTIONS = new Set([
   '-r',
 ]);
 const LOADER_SETTINGS = new Set(['import', 'loader', 'require']);
+const VITE_PLUS_REGISTER = 'vite-plus/register';
 const KEEP_REPL = '`vpx` does not start a TypeScript REPL';
 const KEEP_SHELL =
   'the command uses shell syntax that vp migrate does not rewrite, such as pipes, variables, or subshells';
@@ -220,12 +221,7 @@ export function rewriteScriptRunnerCommand(
   return { command: rewritten, kept: rewrite.kept };
 }
 
-function rewriteSegment(
-  runner: ScriptRunnerMigration,
-  rewrite: Rewrite,
-  tokens: LiteralCommandToken[],
-): void {
-  const values = tokens.map(({ value }) => value);
+function scriptCommandPrefix(values: readonly string[]) {
   // Environment assignments and cross-env stay in front of the command.
   let first = 0;
   const skipAssignments = () => {
@@ -254,6 +250,16 @@ function rewriteSegment(
     }
     skipAssignments();
   }
+  return { first, shell, unknownEnvironment };
+}
+
+function rewriteSegment(
+  runner: ScriptRunnerMigration,
+  rewrite: Rewrite,
+  tokens: LiteralCommandToken[],
+): void {
+  const values = tokens.map(({ value }) => value);
+  const { first, shell, unknownEnvironment } = scriptCommandPrefix(values);
   if (first >= values.length) {
     return;
   }
@@ -498,6 +504,69 @@ function scanEnvironmentOptions(
 function optionName(arg: string): string {
   const name = arg.split('=', 1)[0];
   return name.startsWith('--') ? `--${name.slice(2).replaceAll('_', '-')}` : name;
+}
+
+function nodeOptionsLoadVitePlusRegister(args: readonly string[]): boolean {
+  for (let index = 0; index < args.length; index++) {
+    const value = args[index];
+    if (value === '--' || !value.startsWith('-')) {
+      return false;
+    }
+    const name = optionName(value);
+    const equals = value.indexOf('=');
+    const argument = equals === -1 ? args[index + 1] : value.slice(equals + 1);
+    if (name === '--import' && argument === VITE_PLUS_REGISTER) {
+      return true;
+    }
+    if (equals === -1 && NODE_OPTIONS_WITH_VALUE.has(name)) {
+      index++;
+    }
+  }
+  return false;
+}
+
+function scriptLoadsVitePlusRegister(command: string): boolean {
+  if (!command.includes(VITE_PLUS_REGISTER)) {
+    return false;
+  }
+  return (
+    parseLiteralCommands(command, true)?.some((tokens) => {
+      const values = tokens.map(({ value }) => value);
+      const { first, shell, unknownEnvironment } = scriptCommandPrefix(values);
+      if (unknownEnvironment) {
+        return false;
+      }
+      // NODE_OPTIONS can load the register entry before a package-manager script starts.
+      const loadsFromEnvironment = values.slice(0, first).some((assignment) => {
+        if (!/^NODE_OPTIONS=/i.test(assignment)) {
+          return false;
+        }
+        const segments = parseLiteralCommands(assignment.slice(13), false);
+        return (
+          segments?.length === 1 &&
+          nodeOptionsLoadVitePlusRegister(segments[0].map(({ value }) => value))
+        );
+      });
+      if (loadsFromEnvironment) {
+        return first < values.length;
+      }
+      const start = first + getCommandStartIndex(values.slice(first));
+      if (values[start] === 'node') {
+        return nodeOptionsLoadVitePlusRegister(values.slice(start + 1));
+      }
+      const launcher = COMMAND_LAUNCHERS.get(values[start]);
+      const commands = shell
+        ? values.slice(start)
+        : values.slice(start + 1).filter((_, index) => launcher?.(values[start + index]));
+      return commands.some(scriptLoadsVitePlusRegister);
+    }) ?? false
+  );
+}
+
+export function scriptsLoadVitePlusRegister(scripts: Record<string, string> | undefined): boolean {
+  return Object.values(scripts ?? {}).some(
+    (command) => typeof command === 'string' && scriptLoadsVitePlusRegister(command),
+  );
 }
 
 /** Remove `tokens[index]` with the space before it. */
@@ -824,7 +893,7 @@ function scanOptions(
         if (runner.isRegister?.(name, loader)) {
           scanned.imports.push({
             token: tokens[inline ? index : index + 1],
-            value: inline ? '--import=vite-plus/register' : 'vite-plus/register',
+            value: inline ? `--import=${VITE_PLUS_REGISTER}` : VITE_PLUS_REGISTER,
             option: !inline && name !== '--import' ? tokens[index] : undefined,
           });
         }

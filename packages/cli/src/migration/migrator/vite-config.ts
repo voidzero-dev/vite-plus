@@ -7,6 +7,7 @@ import path from 'node:path';
 import type {
   ArrowFunctionExpression,
   Function as FunctionNode,
+  ImportDeclaration,
   Node,
   ObjectExpression,
   ObjectProperty,
@@ -626,8 +627,9 @@ export function configNeedsVitePlus(
     const { program } = parseSource(vitePath, fs.readFileSync(vitePath, 'utf8'));
     const specifiers = configImports(program).map(({ value }) => value);
     for (const node of configNodes(program)) {
-      // Import rewriting also handles literal CommonJS require calls.
-      if (
+      if (node.type === 'ImportExpression' && isString(node.source)) {
+        specifiers.push(node.source.value);
+      } else if (
         node.type === 'CallExpression' &&
         node.callee.type === 'Identifier' &&
         node.callee.name === 'require' &&
@@ -673,7 +675,7 @@ function packProperties(program: Program, requireStatic = false): (ObjectPropert
 }
 
 type PackIdentifier = Extract<Node, { type: 'Identifier' }>;
-type PackMapping = 'static' | 'unverified';
+type PackMapping = 'array' | 'copy' | 'unverified';
 type PackReference = {
   value: PackIdentifier;
   mapping?: PackMapping;
@@ -698,7 +700,26 @@ function objectAssignTarget(node: Node): Node | undefined {
 }
 
 const stablePackOptions = new Set(['entry', 'format', 'minify', 'name', 'outDir', 'sourcemap']);
-const packArrayMethods = new Set(['map', 'filter']);
+const packArrayMethods = new Set(['map', 'filter', 'find']);
+
+function isStablePackOverride(member: ObjectProperty): boolean {
+  const name = propertyName(member.key);
+  return name === 'dts'
+    ? member.value.type === 'Literal' && member.value.value === false
+    : name !== undefined && stablePackOptions.has(name);
+}
+
+function isStaticPackOverrideObject(node: Node): boolean {
+  return (
+    staticObject(node) &&
+    node.properties.every(
+      (member) =>
+        member.type === 'Property' &&
+        isStablePackOverride(member) &&
+        sameStaticValue(member.value, member.value),
+    )
+  );
+}
 
 function packCallbackResult(callback: Node | undefined) {
   if (
@@ -732,15 +753,9 @@ function isStaticPackMapping(value: Node, parameter: string): boolean {
   return (
     value.type === 'ObjectExpression' &&
     sharedPackSpread(value)?.name === parameter &&
-    value.properties.every((member) => {
-      if (member.type === 'SpreadElement') {
-        return true;
-      }
-      const name = propertyName(member.key);
-      return name === 'dts'
-        ? member.value.type === 'Literal' && member.value.value === false
-        : name !== undefined && stablePackOptions.has(name);
-    })
+    value.properties.every(
+      (member) => member.type === 'SpreadElement' || isStablePackOverride(member),
+    )
   );
 }
 
@@ -780,6 +795,7 @@ function isStaticPackFilter(node: Node, parameter: string, index?: string): bool
 
 function packValueReferences(node: Node, mapping?: PackMapping): PackReference[] {
   const value = unwrapTypeExpression(node);
+  const arrayMapping = mapping === 'unverified' ? 'unverified' : 'array';
   switch (value.type) {
     case 'Identifier':
       return [{ value, mapping }];
@@ -802,12 +818,25 @@ function packValueReferences(node: Node, mapping?: PackMapping): PackReference[]
         typeof value.property.value === 'number' &&
         Number.isInteger(value.property.value) &&
         value.property.value >= 0;
-      return packValueReferences(value.object, literalIndex ? mapping : (mapping ?? 'static'));
+      return packValueReferences(value.object, literalIndex ? mapping : arrayMapping);
     }
     case 'CallExpression': {
       const target = objectAssignTarget(value);
       if (target) {
-        return packValueReferences(target, mapping);
+        const sources = value.arguments.slice(1);
+        const copies = sources.filter((source) => !isStaticPackOverrideObject(source));
+        if (
+          isStaticPackOverrideObject(target) &&
+          copies.length === 1 &&
+          unwrapTypeExpression(copies[0]).type === 'Identifier'
+        ) {
+          // Redirect only the copied options. Keep the order of all overrides.
+          return packValueReferences(copies[0], mapping ?? 'copy');
+        }
+        return [
+          ...packValueReferences(target, mapping),
+          ...copies.flatMap((source) => packValueReferences(source, 'unverified')),
+        ];
       }
       const { callee } = value;
       const method = memberName(callee);
@@ -827,7 +856,7 @@ function packValueReferences(node: Node, mapping?: PackMapping): PackReference[]
         (method === 'map'
           ? isStaticPackMapping(callback.value, callback.parameter)
           : isStaticPackFilter(callback.value, callback.parameter, callback.index));
-      return packValueReferences(receiver, staticMapping ? (mapping ?? 'static') : 'unverified');
+      return packValueReferences(receiver, staticMapping ? arrayMapping : 'unverified');
     }
     case 'ObjectExpression':
       return value.properties.flatMap((member) =>
@@ -950,8 +979,10 @@ function packAssignments(
     if (!alias) {
       continue;
     }
-    if (mapping === 'unverified' || alias.mapping === undefined) {
+    if (mapping === 'unverified' || (mapping === 'array' && alias.mapping !== 'unverified')) {
       alias.mapping = mapping;
+    } else {
+      alias.mapping ??= mapping;
     }
     if (--alias.remaining === 0) {
       uses.push(...packValueReferences(alias.initializer, alias.mapping));
@@ -1074,23 +1105,35 @@ function setsPackArrayOutput(
   const references = new Set(binding?.references);
   return (
     expressions.length > 0 &&
-    expressions.every(
-      (expression) =>
-        expression?.type === 'AssignmentExpression' &&
-        expression.operator === '=' &&
-        expression.left.type === 'MemberExpression' &&
-        memberName(expression.left) === 'outDir' &&
-        expression.left.object.type === 'Identifier' &&
-        references.delete(expression.left.object.start),
-    ) &&
+    expressions.every((expression) => {
+      const reference = packOutputWrite(expression);
+      return reference !== undefined && references.delete(reference);
+    }) &&
     references.size === 0
   );
+}
+
+function packOutputWrite(node: Node | null | undefined): number | undefined {
+  if (
+    node?.type === 'AssignmentExpression' &&
+    node.operator === '=' &&
+    node.left.type === 'MemberExpression' &&
+    memberName(node.left) === 'outDir' &&
+    node.left.object.type === 'Identifier'
+  ) {
+    return node.left.object.start;
+  }
+  return undefined;
 }
 
 function packMutationReferences({ program, bindings }: ReturnType<typeof parseSource>) {
   const writes = new Set<number>();
   const aliasInitializers = new Map<number, number>();
   const arrayOrigins = new Map<number, number>();
+  const foundOptions = new Map<number, number>();
+  const guards = new Set<number>();
+  const outputWrites = new Set<number>();
+  const entryWrites = new Set<number>();
   const helpers = new Map<number, NonNullable<ReturnType<typeof entryMutationHelper>>>();
   const calls = new Map<number, number>();
   const rewritable = new Map<number, { typeReference?: number; array?: boolean }>();
@@ -1113,6 +1156,17 @@ function packMutationReferences({ program, bindings }: ReturnType<typeof parseSo
           recordHelper(node.id.start, node);
         }
         continue;
+      case 'ConditionalExpression':
+      case 'IfStatement': {
+        const test =
+          node.test.type === 'UnaryExpression' && node.test.operator === '!'
+            ? node.test.argument
+            : node.test;
+        if (test.type === 'Identifier') {
+          guards.add(test.start);
+        }
+        continue;
+      }
       case 'ForOfStatement': {
         const array = unwrapTypeExpression(node.right);
         if (array.type !== 'Identifier') {
@@ -1132,11 +1186,32 @@ function packMutationReferences({ program, bindings }: ReturnType<typeof parseSo
       case 'VariableDeclaration':
         if (node.kind === 'const') {
           for (const { id, init } of node.declarations) {
-            const origin = init && packRootIdentifier(init);
+            const initializer = init && unwrapTypeExpression(init);
+            const find =
+              initializer?.type === 'CallExpression' &&
+              initializer.callee.type === 'MemberExpression' &&
+              memberName(initializer.callee) === 'find'
+                ? {
+                    array: unwrapTypeExpression(initializer.callee.object),
+                    callback:
+                      initializer.arguments.length === 1
+                        ? packCallbackResult(initializer.arguments[0])
+                        : undefined,
+                  }
+                : undefined;
+            const origin = init && packRootIdentifier(find?.array ?? init);
             if (origin) {
               for (const start of aliasBindingStarts(id)) {
                 aliasInitializers.set(start, origin.start);
               }
+            }
+            if (
+              id.type === 'Identifier' &&
+              find?.array.type === 'Identifier' &&
+              find.callback &&
+              isStaticPackFilter(find.callback.value, find.callback.parameter, find.callback.index)
+            ) {
+              foundOptions.set(id.start, find.array.start);
             }
             if (
               id.type === 'Identifier' &&
@@ -1147,9 +1222,14 @@ function packMutationReferences({ program, bindings }: ReturnType<typeof parseSo
           }
         }
         continue;
-      case 'AssignmentExpression':
+      case 'AssignmentExpression': {
+        const reference = packOutputWrite(node);
+        if (reference !== undefined) {
+          outputWrites.add(reference);
+        }
         target = node.left;
         break;
+      }
       case 'UpdateExpression':
         target = node.argument;
         break;
@@ -1162,7 +1242,7 @@ function packMutationReferences({ program, bindings }: ReturnType<typeof parseSo
       case 'CallExpression': {
         const { callee } = node;
         const method = memberName(callee);
-        if (callee.type === 'MemberExpression' && method === 'forEach') {
+        if (callee.type === 'MemberExpression' && (method === 'forEach' || method === 'find')) {
           const object = unwrapTypeExpression(callee.object);
           if (object.type === 'Identifier') {
             const [callback] = node.arguments;
@@ -1181,6 +1261,7 @@ function packMutationReferences({ program, bindings }: ReturnType<typeof parseSo
                 }
               }
               if (
+                method === 'forEach' &&
                 element &&
                 callback.params.length <= 2 &&
                 !callback.async &&
@@ -1198,6 +1279,12 @@ function packMutationReferences({ program, bindings }: ReturnType<typeof parseSo
           callee.type === 'MemberExpression' && method && arrayMutators.has(method)
             ? callee.object
             : undefined;
+        if (
+          receiver?.type === 'Identifier' &&
+          node.arguments.every((argument) => sameStaticValue(argument, argument))
+        ) {
+          entryWrites.add(receiver.start);
+        }
         const assigned = objectAssignTarget(node) ?? receiver;
         if (!assigned) {
           const [argument] = node.arguments;
@@ -1233,6 +1320,16 @@ function packMutationReferences({ program, bindings }: ReturnType<typeof parseSo
   }
   const origins = new Map<number, number>();
   for (const { start, references, constant } of bindings) {
+    const found = foundOptions.get(start);
+    if (
+      constant &&
+      found !== undefined &&
+      references.some((reference) => outputWrites.has(reference)) &&
+      references.every((reference) => guards.has(reference) || outputWrites.has(reference))
+    ) {
+      // Both the selector and pack must use the same converted array.
+      rewritable.set(found, { array: true });
+    }
     const helper = helpers.get(start);
     const argument = references.length === 1 ? calls.get(references[0]) : undefined;
     if (constant && helper && argument !== undefined) {
@@ -1253,7 +1350,44 @@ function packMutationReferences({ program, bindings }: ReturnType<typeof parseSo
       writes.add(origin);
     }
   }
-  return { writes, rewritable };
+  return { writes, rewritable, entryWrites };
+}
+
+/** Identify a literal entry array exported by name and used in the default config. */
+function sharedPackEntryName(file: string): string | undefined {
+  if (!fs.statSync(file, { throwIfNoEntry: false })?.isFile()) {
+    return undefined;
+  }
+  const { program, bindings } = parseSource(file, fs.readFileSync(file, 'utf8'));
+  const config = defaultConfigValue(program);
+  const entry = staticObject(config) && objectProperty(config, 'entry')?.value;
+  if (!entry || entry.type !== 'Identifier') {
+    return undefined;
+  }
+  const shared = bindings.find(({ references }) => references.includes(entry.start));
+  if (!shared?.constant) {
+    return undefined;
+  }
+  for (const statement of program.body) {
+    if (
+      statement.type !== 'ExportNamedDeclaration' ||
+      statement.declaration?.type !== 'VariableDeclaration' ||
+      statement.declaration.kind !== 'const'
+    ) {
+      continue;
+    }
+    const declaration = statement.declaration.declarations.find(
+      ({ id }) => id.start === shared.start,
+    );
+    if (
+      declaration?.id.type === 'Identifier' &&
+      declaration.init?.type === 'ArrayExpression' &&
+      declaration.init.elements.every(isString)
+    ) {
+      return declaration.id.name;
+    }
+  }
+  return undefined;
 }
 
 function importedPackBindings(
@@ -1269,23 +1403,38 @@ function importedPackBindings(
   const directory = path.dirname(vitePath);
   const withoutExtension = path.join(path.dirname(packPath), path.parse(packPath).name);
   const jsPath = packPath.replace(/\.(m|c)?ts$/, '.$1js');
-  const { writes, rewritable } = packMutationReferences(parsed);
-  return program.body.flatMap((statement) => {
+  const imports = program.body.filter((statement): statement is ImportDeclaration => {
     if (statement.type !== 'ImportDeclaration' || statement.importKind === 'type') {
-      return [];
+      return false;
     }
     const specifier = statement.source.value;
     if (!specifier.startsWith('./') && !specifier.startsWith('../')) {
-      return [];
+      return false;
     }
     const imported = path.resolve(directory, specifier);
     // Treat another file at the written path as an explicit import of that file.
-    if (
-      imported !== packPath &&
-      ((imported !== jsPath && imported !== withoutExtension) || fs.existsSync(imported))
-    ) {
-      return [];
-    }
+    return (
+      imported === packPath ||
+      ((imported === jsPath || imported === withoutExtension) && !fs.existsSync(imported))
+    );
+  });
+  if (imports.length === 0) {
+    return [];
+  }
+  const { writes, rewritable, entryWrites } = packMutationReferences(parsed);
+  const referencesByStart = new Map(bindings.map(({ start, references }) => [start, references]));
+  const importWrites = imports.flatMap((statement) =>
+    statement.specifiers.flatMap((specifier) => {
+      if (specifier.type === 'ImportSpecifier' && specifier.importKind === 'type') {
+        return [];
+      }
+      const written = referencesByStart
+        .get(specifier.local.start)
+        ?.filter((ref) => writes.has(ref));
+      return written?.length ? [{ statement, specifier, written }] : [];
+    }),
+  );
+  return imports.flatMap((statement) => {
     const binding = statement.specifiers.find(
       (spec) =>
         spec.type === 'ImportDefaultSpecifier' ||
@@ -1293,10 +1442,10 @@ function importedPackBindings(
           spec.importKind !== 'type' &&
           propertyName(spec.imported) === 'default'),
     );
-    const references = bindings.find(({ start }) => start === binding?.local.start)?.references;
-    if (!binding || !references) {
+    if (!binding) {
       return [];
     }
+    const references = referencesByStart.get(binding.local.start) ?? [];
     const uses = assignments.filter(({ value }) => references.includes(value.start));
     if (uses.length === 0) {
       return [];
@@ -1304,7 +1453,7 @@ function importedPackBindings(
     const written = references.filter((reference) => writes.has(reference));
     const onlyPackUses = references.length === uses.length && uses.every(({ copy }) => !copy);
     const helperReferences = new Set(uses.map(({ value }) => value.start));
-    const canRedirectMutations =
+    const canRedirectDirectWrites =
       written.length > 0 &&
       uses.every(({ copy }) => !copy) &&
       written.every((reference) => {
@@ -1320,15 +1469,31 @@ function importedPackBindings(
         return type === undefined || references.includes(type);
       }) &&
       references.every((reference) => helperReferences.has(reference));
+    const onlyPack = onlyPackUses || canRedirectDirectWrites;
+    const siblingWrites = importWrites.filter(({ specifier }) => specifier !== binding);
+    const entryImport = siblingWrites.length === 1 ? siblingWrites[0] : undefined;
+    const sharedImport =
+      onlyPack &&
+      entryImport?.specifier.type === 'ImportSpecifier' &&
+      entryImport.statement.specifiers.length === (entryImport.statement === statement ? 2 : 1) &&
+      entryImport.written.every((reference) => entryWrites.has(reference)) &&
+      propertyName(entryImport.specifier.imported) === sharedPackEntryName(packPath)
+        ? entryImport.statement
+        : undefined;
+    const mutates = written.length > 0 || siblingWrites.length > 0;
     return [
       {
         statement,
         binding,
         uses,
-        mutates: written.length > 0,
-        canRedirectMutations,
+        mutates,
+        canRedirectMutations:
+          mutates &&
+          (written.length === 0 || canRedirectDirectWrites) &&
+          (siblingWrites.length === 0 || sharedImport !== undefined),
         mutatesArray: written.some((reference) => rewritable.get(reference)?.array),
-        onlyPack: onlyPackUses || canRedirectMutations,
+        onlyPack,
+        sharedImport,
       },
     ];
   });
@@ -1355,29 +1520,42 @@ function rewritePackConfigImports(
   convertedName: string,
   previousImports: ReturnType<typeof importedPackBindings>,
 ): string {
-  const edits: Array<Span & { text: string }> = previousImports.map(({ statement }) => {
-    const { start, end, value } = statement.source;
-    return {
-      start,
-      end,
-      text: JSON.stringify(value.slice(0, -path.posix.basename(value).length) + convertedName),
-    };
-  });
+  const edits: Array<Span & { text: string }> = [];
+  const redirected = new Set<Span>();
+  const replaceImport = (specifier: Span, replacement: string) => {
+    if (!redirected.has(specifier)) {
+      redirected.add(specifier);
+      edits.push({ start: specifier.start, end: specifier.end, text: replacement });
+    }
+  };
+  for (const { statement, sharedImport } of previousImports) {
+    for (const { source: specifier } of sharedImport ? [statement, sharedImport] : [statement]) {
+      const { value } = specifier;
+      replaceImport(
+        specifier,
+        JSON.stringify(value.slice(0, -path.posix.basename(value).length) + convertedName),
+      );
+    }
+  }
   const originalStem = path.parse(originalName).name;
   const convertedStem = path.parse(convertedName).name;
   const newline = source.includes('\r\n') ? '\r\n' : '\n';
   let nextName = 0;
-  for (const { statement, binding, uses, onlyPack } of imports) {
-    const original = statement.source.value;
+  const convertedSpecifier = (original: string) => {
     const filename = path.posix.basename(original);
     const replacement =
       path.extname(originalName) === path.extname(convertedName)
         ? filename.replace(originalStem, convertedStem)
         : convertedName;
-    const converted = original.slice(0, -filename.length) + replacement;
-    const literal = JSON.stringify(converted);
-    if (onlyPack && statement.specifiers.length === 1) {
-      edits.push({ start: statement.source.start, end: statement.source.end, text: literal });
+    return JSON.stringify(original.slice(0, -filename.length) + replacement);
+  };
+  for (const { statement, binding, uses, onlyPack, sharedImport } of imports) {
+    const literal = convertedSpecifier(statement.source.value);
+    if (sharedImport && sharedImport !== statement) {
+      replaceImport(sharedImport.source, convertedSpecifier(sharedImport.source.value));
+    }
+    if (onlyPack && (statement.specifiers.length === 1 || sharedImport === statement)) {
+      replaceImport(statement.source, literal);
       continue;
     }
 
@@ -1552,9 +1730,10 @@ function mergeRetainedTsdownConfig(
   const mappings = packImports.flatMap(({ uses }) =>
     uses.flatMap(({ mapping }) => (mapping ? [mapping] : [])),
   );
-  const usesArray = mappings.length > 0 || packImports.some(({ mutatesArray }) => mutatesArray);
+  const usesArray =
+    mappings.includes('array') || packImports.some(({ mutatesArray }) => mutatesArray);
   const usesBundledDefaults =
-    usesArray || packImports.some(({ canRedirectMutations }) => canRedirectMutations);
+    mappings.length > 0 || packImports.some(({ canRedirectMutations }) => canRedirectMutations);
   const { content: converted, warnings } = rewriteTsdownConfigForPack(
     tsdownConfigPath,
     workspaceRoot,
@@ -1576,7 +1755,7 @@ function mergeRetainedTsdownConfig(
     );
     return false;
   }
-  if (usesArray) {
+  if (usesArray || mappings.includes('unverified')) {
     const array =
       !mappings.includes('unverified') &&
       defaultConfigValue(

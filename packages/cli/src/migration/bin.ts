@@ -1566,6 +1566,17 @@ async function main() {
       }
     }
 
+    // A preloader rewritten by full setup can add a new package-local dependency.
+    if (
+      tsdownPackages.size > 0 &&
+      (report.tsxMigrated || report.oxnodeMigrated || report.tsNodeMigrated) &&
+      bootstrapPending(retainedImportDependencies) &&
+      (await reconcileBootstrap(retainedImportDependencies))
+    ) {
+      didMigrate = true;
+      needsInstall = true;
+    }
+
     // Check if node version manager file migration is needed (full setup only)
     if (fullSetup) {
       const nodeVersionDetection = detectNodeVersionManagerFile(workspaceInfoOptional.rootDir);
