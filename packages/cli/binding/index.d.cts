@@ -3970,9 +3970,10 @@ export interface NormalizedTsdownJsonPackConfigs {
   expected: string;
 }
 
-/** Apply the standalone toolchain's option migration to both sides of the comparison. */
+/** Normalize each config with the defaults of the toolchain that reads it. */
 export declare function normalizeTsdownJsonPackConfigs(
   viteConfig: string,
+  viteConfigPath: string,
   jsonConfigPath: string,
   workspaceRoot: string,
 ): NormalizedTsdownJsonPackConfigs;
@@ -4152,6 +4153,7 @@ export declare function rewriteScripts(scriptsJson: string, rulesYaml: string): 
 export declare function rewriteTsdownConfigForPack(
   configPath: string,
   workspaceRoot: string,
+  viteConfigPath?: string | undefined | null,
 ): TsdownConfigRewriteResult;
 
 /**

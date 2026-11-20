@@ -406,6 +406,7 @@ function matchingInlinePackConfig(
     const source = fs.readFileSync(viteConfigPath, 'utf8');
     const { existing, expected } = normalizeTsdownJsonPackConfigs(
       source,
+      viteConfigPath,
       tsdownConfigPath,
       workspaceRoot,
     );
@@ -617,9 +618,13 @@ function packProperties(program: Program, requireStatic = false): (ObjectPropert
 }
 
 type PackIdentifier = Extract<Node, { type: 'Identifier' }>;
-type PackUse = {
-  property?: ObjectProperty;
+type PackMapping = 'static' | 'unverified';
+type PackReference = {
   value: PackIdentifier;
+  mapping?: PackMapping;
+};
+type PackUse = PackReference & {
+  property?: ObjectProperty;
   copy?: { initializer: ObjectExpression; reference: PackIdentifier };
 };
 
@@ -637,16 +642,58 @@ function objectAssignTarget(node: Node): Node | undefined {
   return undefined;
 }
 
-function packValueIdentifiers(node: Node): PackIdentifier[] {
+const staticPackOverrides = new Set(['entry', 'format', 'minify', 'name', 'outDir', 'sourcemap']);
+
+function isStaticPackMapping(callback: Node | undefined): boolean {
+  if (
+    (callback?.type !== 'ArrowFunctionExpression' && callback?.type !== 'FunctionExpression') ||
+    callback.async ||
+    callback.generator ||
+    callback.params.length !== 1 ||
+    callback.params[0].type !== 'Identifier'
+  ) {
+    return false;
+  }
+  const parameter = callback.params[0].name;
+  let result = callback.body;
+  if (result?.type === 'BlockStatement') {
+    const [statement] = result.body;
+    result =
+      result.body.length === 1 && statement.type === 'ReturnStatement' ? statement.argument : null;
+  }
+  const value = result && unwrapTypeExpression(result);
+  if (value?.type === 'Identifier') {
+    return value.name === parameter;
+  }
+  // Read only the complete object and override options that require no migration.
+  return (
+    value?.type === 'ObjectExpression' &&
+    sharedPackSpread(value)?.name === parameter &&
+    value.properties.every((member) => {
+      if (member.type === 'SpreadElement') {
+        return true;
+      }
+      const name = propertyName(member.key);
+      return name === 'dts'
+        ? member.value.type === 'Literal' && member.value.value === false
+        : name !== undefined && staticPackOverrides.has(name);
+    })
+  );
+}
+
+function packValueReferences(node: Node, mapping?: PackMapping): PackReference[] {
   const value = unwrapTypeExpression(node);
   switch (value.type) {
     case 'Identifier':
-      return [value];
+      return [{ value, mapping }];
     case 'ConditionalExpression':
       // The test still reads the original values used to choose a config.
-      return [...packValueIdentifiers(value.consequent), ...packValueIdentifiers(value.alternate)];
+      return [
+        ...packValueReferences(value.consequent, mapping),
+        ...packValueReferences(value.alternate, mapping),
+      ];
     case 'ArrayExpression':
-      return value.elements.flatMap((entry) => (entry ? packValueIdentifiers(entry) : []));
+      return value.elements.flatMap((entry) => (entry ? packValueReferences(entry, mapping) : []));
     case 'MemberExpression':
       // Keep the index expression and redirect the imported array it selects from.
       return value.computed &&
@@ -654,18 +701,30 @@ function packValueIdentifiers(node: Node): PackIdentifier[] {
         typeof value.property.value === 'number' &&
         Number.isInteger(value.property.value) &&
         value.property.value >= 0
-        ? packValueIdentifiers(value.object)
+        ? packValueReferences(value.object, mapping)
         : [];
     case 'CallExpression': {
       const target = objectAssignTarget(value);
-      return target ? packValueIdentifiers(target) : [];
+      if (target) {
+        return packValueReferences(target, mapping);
+      }
+      const { callee } = value;
+      if (callee.type !== 'MemberExpression' || memberName(callee) !== 'map') {
+        return [];
+      }
+      const receiver = unwrapTypeExpression(callee.object);
+      const staticMapping =
+        receiver.type === 'Identifier' &&
+        value.arguments.length === 1 &&
+        isStaticPackMapping(value.arguments[0]);
+      return packValueReferences(receiver, staticMapping ? (mapping ?? 'static') : 'unverified');
     }
     case 'ObjectExpression':
       return value.properties.flatMap((member) =>
-        member.type === 'SpreadElement' ? packValueIdentifiers(member.argument) : [],
+        member.type === 'SpreadElement' ? packValueReferences(member.argument, mapping) : [],
       );
     case 'SpreadElement':
-      return packValueIdentifiers(value.argument);
+      return packValueReferences(value.argument, mapping);
     default:
       return [];
   }
@@ -747,7 +806,13 @@ function packAssignments(
   packs: readonly (ObjectProperty | undefined)[],
 ) {
   const uses: PackUse[] = packs.flatMap((property) =>
-    property ? packValueIdentifiers(property.value).map((value) => ({ property, value })) : [],
+    property
+      ? packValueReferences(property.value).map(({ value, mapping }) => ({
+          property,
+          value,
+          mapping,
+        }))
+      : [],
   );
   if (uses.length === 0) {
     return uses;
@@ -755,7 +820,7 @@ function packAssignments(
   const initializers = privateConstInitializers(program);
   const aliasesByReference = new Map<
     number,
-    { initializer: Node; references: number[]; remaining: number }
+    { initializer: Node; references: number[]; remaining: number; mapping?: PackMapping }
   >();
   for (const { start, constant, references } of bindings) {
     const initializer = initializers.get(start);
@@ -770,15 +835,21 @@ function packAssignments(
 
   // Follow a constant only when every reference feeds pack. Add its initializer
   // uses to the same work list so chains of private aliases are handled too.
-  for (const { value } of uses) {
+  for (const { value, mapping } of uses) {
     const alias = aliasesByReference.get(value.start);
-    if (alias && --alias.remaining === 0) {
-      uses.push(...packValueIdentifiers(alias.initializer).map((value) => ({ value })));
+    if (!alias) {
+      continue;
+    }
+    if (mapping === 'unverified' || alias.mapping === undefined) {
+      alias.mapping = mapping;
+    }
+    if (--alias.remaining === 0) {
+      uses.push(...packValueReferences(alias.initializer, alias.mapping));
     }
   }
   const packReferences = new Set(uses.map(({ value }) => value.start));
   const propertyReads = viteConfigMemberReads(program);
-  const copies = uses.flatMap(({ property, value: reference }) => {
+  const copies = uses.flatMap(({ property, value: reference, mapping }) => {
     const alias = aliasesByReference.get(reference.start);
     if (
       !alias?.remaining ||
@@ -788,7 +859,9 @@ function packAssignments(
       return [];
     }
     const value = sharedPackSpread(alias.initializer);
-    return value ? [{ property, value, copy: { initializer: alias.initializer, reference } }] : [];
+    return value
+      ? [{ property, value, mapping, copy: { initializer: alias.initializer, reference } }]
+      : [];
   });
   return [...uses, ...copies];
 }
@@ -805,11 +878,52 @@ const arrayMutators = new Set([
   'unshift',
 ]);
 
-function packMutationReferences(program: Program): Set<number> {
+function packRootIdentifier(node: Node): PackIdentifier | undefined {
+  let root = unwrapTypeExpression(node);
+  while (root.type === 'MemberExpression') {
+    root = unwrapTypeExpression(root.object);
+  }
+  return root.type === 'Identifier' ? root : undefined;
+}
+
+function aliasBindingStarts(binding: Node): number[] {
+  switch (binding.type) {
+    case 'Identifier':
+      return [binding.start];
+    case 'ObjectPattern':
+      return binding.properties.flatMap((property) =>
+        property.type === 'Property' ? aliasBindingStarts(property.value) : [],
+      );
+    case 'ArrayPattern':
+      return binding.elements.flatMap((element) => (element ? aliasBindingStarts(element) : []));
+    case 'AssignmentPattern':
+      return aliasBindingStarts(binding.left);
+    default:
+      return [];
+  }
+}
+
+function packMutationReferences({
+  program,
+  bindings,
+}: ReturnType<typeof parseSource>): Set<number> {
   const writes = new Set<number>();
+  const aliasInitializers = new Map<number, number>();
   for (const node of configNodes(program)) {
     let target: Node;
     switch (node.type) {
+      case 'VariableDeclaration':
+        if (node.kind === 'const') {
+          for (const { id, init } of node.declarations) {
+            const origin = init && packRootIdentifier(init);
+            if (origin) {
+              for (const start of aliasBindingStarts(id)) {
+                aliasInitializers.set(start, origin.start);
+              }
+            }
+          }
+        }
+        continue;
       case 'AssignmentExpression':
         target = node.left;
         break;
@@ -839,27 +953,48 @@ function packMutationReferences(program: Program): Set<number> {
       default:
         continue;
     }
-    target = unwrapTypeExpression(target);
-    while (target.type === 'MemberExpression') {
-      target = unwrapTypeExpression(target.object);
+    const root = packRootIdentifier(target);
+    if (root) {
+      writes.add(root.start);
     }
-    if (target.type === 'Identifier') {
-      writes.add(target.start);
+  }
+  if (writes.size === 0 || aliasInitializers.size === 0) {
+    return writes;
+  }
+  const origins = new Map<number, number>();
+  for (const { start, references, constant } of bindings) {
+    const origin = aliasInitializers.get(start);
+    if (constant && origin !== undefined) {
+      for (const reference of references) {
+        origins.set(reference, origin);
+      }
+    }
+  }
+  // The initializer can itself reference an alias. Follow those links until
+  // the write set contains every original binding reached by a mutation.
+  for (const write of writes) {
+    const origin = origins.get(write);
+    if (origin !== undefined) {
+      writes.add(origin);
     }
   }
   return writes;
 }
 
 function importedPackBindings(
-  { program, bindings }: ReturnType<typeof parseSource>,
+  parsed: ReturnType<typeof parseSource>,
   assignments: ReturnType<typeof packAssignments>,
   vitePath: string,
   packPath: string,
 ) {
+  if (assignments.length === 0) {
+    return [];
+  }
+  const { program, bindings } = parsed;
   const directory = path.dirname(vitePath);
   const withoutExtension = path.join(path.dirname(packPath), path.parse(packPath).name);
   const jsPath = packPath.replace(/\.(m|c)?ts$/, '.$1js');
-  const writes = packMutationReferences(program);
+  const writes = packMutationReferences(parsed);
   return program.body.flatMap((statement) => {
     if (statement.type !== 'ImportDeclaration' || statement.importKind === 'type') {
       return [];
@@ -1070,8 +1205,10 @@ function mergeRetainedTsdownConfig(
   const originalImports = parsed
     ? importedPackBindings(parsed, assignments, viteConfigPath, tsdownConfigPath)
     : [];
-  const importsConverted =
-    !!parsed && importedPackBindings(parsed, assignments, viteConfigPath, convertedPath).length > 0;
+  const convertedImports = parsed
+    ? importedPackBindings(parsed, assignments, viteConfigPath, convertedPath)
+    : [];
+  const importsConverted = convertedImports.length > 0;
   const sourceIsLink = fs.lstatSync(tsdownConfigPath).isSymbolicLink();
   const sourceTarget = sourceIsLink
     ? path.resolve(path.dirname(tsdownConfigPath), fs.readlinkSync(tsdownConfigPath))
@@ -1105,9 +1242,14 @@ function mergeRetainedTsdownConfig(
     return undefined;
   }
 
+  const mappings = [...originalImports, ...convertedImports].flatMap(({ uses }) =>
+    uses.flatMap(({ mapping }) => (mapping ? [mapping] : [])),
+  );
   const { content: converted, warnings } = rewriteTsdownConfigForPack(
     tsdownConfigPath,
     workspaceRoot,
+    // The map already ran under vp pack. Keep its bundled defaults when adapting the input.
+    mappings.length > 0 ? viteConfigPath : undefined,
   );
   for (const warning of warnings) {
     warnMigration(`${displayRelative(tsdownConfigPath)}: ${warning}`, report);
@@ -1121,6 +1263,25 @@ function mergeRetainedTsdownConfig(
       report,
     );
     return false;
+  }
+  if (mappings.length > 0) {
+    const array =
+      !mappings.includes('unverified') &&
+      defaultConfigValue(
+        parseSource(tsdownConfigPath, converted ?? fs.readFileSync(tsdownConfigPath, 'utf8'))
+          .program,
+      );
+    if (
+      !array ||
+      array.type !== 'ArrayExpression' ||
+      !array.elements.every((entry) => staticObject(entry))
+    ) {
+      warnMigration(
+        `Cannot verify how ${displayRelative(viteConfigPath)} maps the options from ${displayRelative(tsdownConfigPath)}. Migrate the pack options manually. See ${documentationUrl('/guide/migrate#tsdown')}`,
+        report,
+      );
+      return false;
+    }
   }
 
   // Keep relative imports beside a workspace-owned source. Installed presets

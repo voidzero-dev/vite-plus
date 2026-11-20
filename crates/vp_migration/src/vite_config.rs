@@ -129,17 +129,24 @@ pub fn merge_tsdown_json_config(
     Ok(merged)
 }
 
-/// Apply the standalone toolchain's option migration to both sides of the comparison.
+/// Normalize each config with the defaults of the toolchain that reads it.
 pub fn normalize_tsdown_json_pack_configs(
     vite_config: &str,
+    vite_config_path: &Path,
     json_config_path: &Path,
     workspace_root: &Path,
 ) -> Result<(String, String), Error> {
-    let (json, legacy) = read_tsdown_json_config(json_config_path, workspace_root)?;
+    let (json, standalone_legacy) = read_tsdown_json_config(json_config_path, workspace_root)?;
+    let bundled_legacy = crate::pack_config::preserve_legacy_defaults(
+        vite_config_path,
+        workspace_root,
+        false,
+        vite_config,
+    );
     let expected = merge_json_config_content("export default {};", &json, "pack")?;
     Ok((
-        crate::pack_config::rewrite_pack_config(vite_config, false, legacy),
-        crate::pack_config::rewrite_pack_config(&expected.content, false, legacy),
+        crate::pack_config::rewrite_pack_config(vite_config, false, bundled_legacy),
+        crate::pack_config::rewrite_pack_config(&expected.content, false, standalone_legacy),
     ))
 }
 

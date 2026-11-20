@@ -1,6 +1,6 @@
 # pack_appended_entry
 
-Vite can append an entry to the imported pack options and still build both entries after migration.
+Vite can append an entry through an alias and still build both entries after migration.
 
 ## `vpt json-edit package.json devDependencies.vite-plus ^1.7.0`
 
@@ -14,7 +14,7 @@ Vite can append an entry to the imported pack options and still build both entri
 ## `vpt write-file tsdown.config.ts 'export default { entry: ['\''src/library.ts'\''], outDir: '\''library-out'\'' };'`
 
 
-## `vpt write-file vite.config.ts 'import pack from '\''./tsdown.config.ts'\''; pack.entry.push('\''src/cli.ts'\''); export default { pack };'`
+## `vpt write-file vite.config.ts 'import pack from '\''./tsdown.config.ts'\''; const entries = pack.entry; entries.push('\''src/cli.ts'\''); export default { pack };'`
 
 
 ## `vp install --ignore-scripts`
