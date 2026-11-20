@@ -6,8 +6,8 @@
  * registers no NAPI exports of its own; `packages/cli/binding/src/oxc_node.rs` forwards
  * the ones the loader uses under an `oxcNode` namespace.
  *
- * This script points the `oxc` dependency at the workspace version, so the binding links
- * one copy of oxc, and adapts an AST predicate for the workspace's Oxc version.
+ * This script aligns `oxc` and `oxc_sourcemap` with the workspace so that the source maps
+ * from Oxc's code generator have the type oxc-node expects. It also adapts an AST predicate.
  * It is idempotent. Keep it free of package imports: CI runs it right after checkout,
  * before dependencies are installed.
  */
@@ -24,35 +24,32 @@ function log(message: string) {
   console.log(`[patch-oxc-node] ${message}`);
 }
 
-function oxcVersion(cargoToml: string, file: string): string {
-  const version = parseCargoOxcVersions(cargoToml).get('oxc');
-  if (!version) {
-    throw new Error(`[patch-oxc-node] Could not find the \`oxc\` dependency in ${file}`);
+export function syncOxcVersions(cargoToml: string, workspaceToml: string): string {
+  const workspaceVersions = parseCargoOxcVersions(workspaceToml);
+  const vendoredVersions = parseCargoOxcVersions(cargoToml);
+  for (const crate of ['oxc', 'oxc_sourcemap']) {
+    const version = workspaceVersions.get(crate);
+    if (!version || !vendoredVersions.has(crate)) {
+      const file = version ? 'oxc-node/Cargo.toml' : 'Cargo.toml';
+      throw new Error(`[patch-oxc-node] Could not find the \`${crate}\` dependency in ${file}`);
+    }
+    cargoToml = replaceCargoCrateVersion(cargoToml, crate, version);
   }
-  return version;
-}
-
-/** Point oxc-node's `oxc` dependency at `version`. */
-export function setOxcVersion(cargoToml: string, version: string): string {
-  if (!parseCargoOxcVersions(cargoToml).has('oxc')) {
-    throw new Error('[patch-oxc-node] Could not find the `oxc` dependency in oxc-node/Cargo.toml');
-  }
-  return replaceCargoCrateVersion(cargoToml, 'oxc', version);
+  return cargoToml;
 }
 
 export function patchOxcNode(rootDir: string = process.cwd()): void {
-  const version = oxcVersion(readFileSync(join(rootDir, 'Cargo.toml'), 'utf-8'), 'Cargo.toml');
+  const workspaceToml = readFileSync(join(rootDir, 'Cargo.toml'), 'utf-8');
   const cargoTomlPath = join(rootDir, OXC_NODE_DIR, 'Cargo.toml');
   const cargoToml = readFileSync(cargoTomlPath, 'utf-8');
-  const patched = setOxcVersion(cargoToml, version);
+  const patched = syncOxcVersions(cargoToml, workspaceToml);
   if (patched !== cargoToml) {
     writeFileSync(cargoTomlPath, patched, 'utf-8');
-    log(`✓ Cargo.toml: oxc ${version}`);
+    log('✓ Cargo.toml: synchronized oxc and oxc_sourcemap');
   }
   const libPath = join(rootDir, OXC_NODE_DIR, 'src/lib.rs');
   const source = readFileSync(libPath, 'utf-8');
-  // Oxc 0.156 renamed this predicate; the workspace still uses 0.155.
-  // Matching the variant preserves await-using detection with either version.
+  // Matching the variant works across the predicate rename in Oxc 0.156.
   const patchedSource = source.replace(
     'it.kind.is_await_using()',
     'matches!(it.kind, oxc::ast::ast::VariableDeclarationKind::AwaitUsing)',
