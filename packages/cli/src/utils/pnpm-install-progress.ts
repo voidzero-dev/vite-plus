@@ -68,10 +68,14 @@ function formatRequestRetry(log: Record<string, unknown>): string | undefined {
   }
   const error = asRecord(log.error);
   const code = error.httpStatusCode ?? error.status ?? error.errno ?? error.code ?? error.message;
-  const reason = typeof code === 'string' || typeof code === 'number' ? ` (${code})` : '';
+  const reason =
+    typeof code === 'string' || typeof code === 'number'
+      ? ` (${redactRegistryUrls(String(code), url)})`
+      : '';
+  const safeUrl = displayRegistryUrl(url) ?? '[registry URL]';
   const retriesLeft = maxRetries - attempt + 1;
   const retries = retriesLeft === 1 ? 'retry' : 'retries';
-  return `${method} ${url} error${reason}. Will retry in ${formatDuration(timeout)}. ${retriesLeft} ${retries} left.`;
+  return `${method} ${safeUrl} error${reason}. Will retry in ${formatDuration(timeout)}. ${retriesLeft} ${retries} left.`;
 }
 
 function appendPublishedVersions(messages: string[], packageMeta: unknown): void {
@@ -109,21 +113,35 @@ function displayRegistryUrl(value: string): string | undefined {
   return undefined;
 }
 
+function redactRegistryUrls(text: string, requestUrl?: unknown): string {
+  if (typeof requestUrl === 'string' && requestUrl.length > 0) {
+    text = text.replaceAll(requestUrl, displayRegistryUrl(requestUrl) ?? '[registry URL]');
+  }
+  // Some pnpm errors only include the URL in their message. Keep the colon that ends a URL label.
+  return text.replace(
+    /https?:\/\/[^\s"'<>]+?(?=:\s|[\s"'<>]|$)/gi,
+    (url) => displayRegistryUrl(url) ?? '[registry URL]',
+  );
+}
+
 function appendRegistryAuthContext(
   messages: string[],
   log: Record<string, unknown>,
   cwd: string,
 ): void {
-  const scope = typeof log.pkgName === 'string' ? /^@([^/]+)\//.exec(log.pkgName)?.[1] : undefined;
-  try {
-    const registry = resolveNpmRegistry(cwd, scope);
-    const displayUrl = displayRegistryUrl(registry);
-    if (displayUrl) {
-      const key = scope && registry !== resolveNpmRegistry(cwd) ? `@${scope}:registry` : 'registry';
-      messages.push(`${key}=${displayUrl}`);
+  if (typeof log.pkgName === 'string') {
+    const scope = /^@([^/]+)\//.exec(log.pkgName)?.[1];
+    try {
+      const registry = resolveNpmRegistry(cwd, scope);
+      const displayUrl = displayRegistryUrl(registry);
+      if (displayUrl) {
+        const key =
+          scope && registry !== resolveNpmRegistry(cwd) ? `@${scope}:registry` : 'registry';
+        messages.push(`${key}=${displayUrl}`);
+      }
+    } catch {
+      // Keep the original failure and the guidance if the config cannot be read.
     }
-  } catch {
-    // Keep the original failure and the guidance if the config cannot be read.
   }
   messages.push(
     'Check the registry and authentication settings in .npmrc. Run "pnpm login" if you need to sign in.',
@@ -217,8 +235,8 @@ export async function formatPnpmInstallOutput(output: string, cwd: string): Prom
             : message;
         const requestUrl = asRecord(log.request).url;
         const displayed =
-          authFailure && typeof requestUrl === 'string' && requestUrl.length > 0
-            ? details.replaceAll(requestUrl, displayRegistryUrl(requestUrl) ?? '[registry URL]')
+          log.level === 'error' || typeof requestUrl === 'string'
+            ? redactRegistryUrls(details, requestUrl)
             : details;
         messages.push(code ? `${code} ${displayed}` : displayed);
         if (log.level === 'error') {
@@ -235,9 +253,12 @@ export async function formatPnpmInstallOutput(output: string, cwd: string): Prom
         }
         if (typeof log.hint === 'string') {
           messages.push(
-            log.hint.replace(
-              /^An authorization header was used:.*$/m,
-              'An authorization header was used: [hidden]',
+            redactRegistryUrls(
+              log.hint.replace(
+                /^An authorization header was used:.*$/gm,
+                'An authorization header was used: [hidden]',
+              ),
+              requestUrl,
             ),
           );
         }

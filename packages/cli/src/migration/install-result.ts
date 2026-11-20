@@ -26,11 +26,20 @@ export async function getMigrationInstallIdleTimeoutMs(
     let pnpmExecutable: string | undefined;
     if (process.env.VP_CLI_BIN) {
       // The global launcher can select a system binary ahead of the project pin.
-      const { exitCode, stdout } = await runCommandSilently({
+      let selectionResult = await runCommandSilently({
         ...getVpCommand(['env', 'current', 'pm', '--json']),
         cwd,
         envs: probeEnv,
       });
+      if (selectionResult.exitCode === 2) {
+        // Older launchers reject the pm argument but include the selection in the full report.
+        selectionResult = await runCommandSilently({
+          ...getVpCommand(['env', 'current', '--json']),
+          cwd,
+          envs: probeEnv,
+        });
+      }
+      const { exitCode, stdout } = selectionResult;
       if (exitCode !== 0) {
         return undefined;
       }
@@ -38,8 +47,8 @@ export async function getMigrationInstallIdleTimeoutMs(
         package_manager?: {
           name: string;
           version: string;
-          installed: boolean;
-          bin_paths: Record<string, string>;
+          installed?: boolean;
+          bin_paths?: Record<string, string>;
         };
       };
       if (selection?.name !== PackageManager.pnpm) {
@@ -52,15 +61,14 @@ export async function getMigrationInstallIdleTimeoutMs(
       if (override) {
         // Use the installer provider for a missing or unusable launcher.
         pnpmExecutable =
-          launcherVersion && selection.installed
-            ? selection.bin_paths.pnpm
-            : (
-                await downloadPackageManager({
-                  ...override,
-                  version: launcherVersion ?? override.version,
-                  cwd,
-                })
-              ).binPaths.pnpm;
+          launcherVersion && selection.installed ? selection.bin_paths?.pnpm : undefined;
+        pnpmExecutable ??= (
+          await downloadPackageManager({
+            ...override,
+            version: launcherVersion ?? override.version,
+            cwd,
+          })
+        ).binPaths.pnpm;
       }
     } else if (override) {
       // The local launcher uses the same provider as this binding.

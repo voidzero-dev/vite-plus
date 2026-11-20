@@ -219,6 +219,34 @@ describe('getMigrationInstallIdleTimeoutMs', () => {
     },
   );
 
+  it.each([
+    ['10.33.0', '9.15.9', 300_000],
+    ['9.15.9', '10.33.0', undefined],
+  ])('reads the pnpm version from a legacy launcher', async (pin, version, expected) => {
+    vi.stubEnv('VP_CLI_BIN', '/global/vp');
+    vi.stubEnv('NODE_OPTIONS', '--require=/preload.cjs');
+    vi.mocked(runCommandSilently)
+      .mockResolvedValueOnce({ ...commandOutput(''), exitCode: 2 })
+      .mockResolvedValueOnce(
+        commandOutput(
+          JSON.stringify({ package_manager: { name: 'pnpm', version, bin_path: '/legacy/pnpm' } }),
+        ),
+      );
+
+    expect(await getMigrationInstallIdleTimeoutMs(cwd, false, PackageManager.pnpm, pin)).toBe(
+      expected,
+    );
+    expect(runCommandSilently).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        command: '/global/vp',
+        args: ['env', 'current', '--json'],
+        cwd,
+        envs: expect.objectContaining({ NODE_OPTIONS: undefined }),
+      }),
+    );
+  });
+
   it('prepares a global pnpm override that has yet to be installed', async () => {
     vi.stubEnv('VP_CLI_BIN', '/global/vp');
     vi.mocked(getPackageManagerOverride).mockReturnValue({ name: 'pnpm', version: '10.33.0' });
