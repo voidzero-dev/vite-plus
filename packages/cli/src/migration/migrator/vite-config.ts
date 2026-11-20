@@ -464,33 +464,61 @@ function applySourceEdits(source: string, edits: (Span & { text: string })[]): s
   return source;
 }
 
+function* configNodes(program: Program): IterableIterator<Node> {
+  const pending: unknown[] = [...program.body];
+  while (pending.length > 0) {
+    const item = pending.pop();
+    if (Array.isArray(item)) {
+      pending.push(...item);
+    } else if (typeof item === 'object' && item !== null && 'type' in item) {
+      const node = item as Node;
+      yield node;
+      pending.push(...Object.values(node));
+    }
+  }
+}
+
 /** Preserve static module imports when copying an installed preset into the project. */
 function relocateInstalledPackConfig(
   content: string,
   preset: string,
   realPreset: string,
   output: string,
-): string {
+): string | undefined {
   const { program } = parseSource(preset, content);
+  for (const node of configNodes(program)) {
+    if (
+      node.type === 'ImportExpression' ||
+      (node.type === 'MetaProperty' && node.meta.name === 'import') ||
+      (node.type === 'Identifier' && (node.name === '__dirname' || node.name === '__filename')) ||
+      (node.type === 'CallExpression' &&
+        node.callee.type === 'Identifier' &&
+        node.callee.name === 'require')
+    ) {
+      return undefined;
+    }
+  }
+  const presetDirectory = path.dirname(preset);
+  const installedDirectory = path.dirname(realPreset);
   const outputDirectory = path.dirname(output);
+  const edits: (Span & { text: string })[] = [];
   let resolver: ResolverFactory | undefined;
-  const edits = program.body.flatMap((statement) => {
+  for (const statement of program.body) {
     if (
       statement.type !== 'ImportDeclaration' &&
       statement.type !== 'ExportNamedDeclaration' &&
       statement.type !== 'ExportAllDeclaration'
     ) {
-      return [];
+      continue;
     }
     const source = statement.source;
     if (!source) {
-      return [];
+      continue;
     }
     const specifier = source.value;
     let target: string | undefined;
-    let relativeFrom = outputDirectory;
     if (specifier.startsWith('./') || specifier.startsWith('../')) {
-      target = path.resolve(path.dirname(preset), specifier);
+      target = path.resolve(presetDirectory, specifier);
     } else if (
       !isBuiltin(specifier) &&
       specifier !== VITE_PLUS_NAME &&
@@ -502,20 +530,28 @@ function relocateInstalledPackConfig(
         symlinks: false,
         nodePath: false,
       });
-      const installed = resolver.sync(path.dirname(realPreset), specifier).path;
-      if (installed && installed !== resolver.sync(outputDirectory, specifier).path) {
-        // Keep preset-only dependencies in the same installed package scope.
-        target = installed;
-        relativeFrom = fs.realpathSync(outputDirectory);
+      const installed = resolver.sync(installedDirectory, specifier).path;
+      if (!installed) {
+        return undefined;
+      }
+      if (installed !== resolver.sync(outputDirectory, specifier).path) {
+        // Keep the public path to the preset so a reinstall can replace its store entry.
+        target = path.resolve(presetDirectory, path.relative(installedDirectory, installed));
+        if (!fs.existsSync(target) || fs.realpathSync(target) !== fs.realpathSync(installed)) {
+          return undefined;
+        }
       }
     }
     if (!target) {
-      return [];
+      continue;
     }
-    const relative = path.relative(relativeFrom, target).split(path.sep).join('/');
+    if (target.split(path.sep).includes('.pnpm')) {
+      return undefined;
+    }
+    const relative = path.relative(outputDirectory, target).split(path.sep).join('/');
     const relocated = relative.startsWith('../') ? relative : `./${relative}`;
-    return [{ start: source.start, end: source.end, text: JSON.stringify(relocated) }];
-  });
+    edits.push({ start: source.start, end: source.end, text: JSON.stringify(relocated) });
+  }
   return applySourceEdits(content, edits);
 }
 
@@ -544,7 +580,9 @@ export function configNeedsVitePlus(
     // Workspace migration wraps plugins after rewriting imports and manifests.
     if (
       keepTsdownDependency &&
-      (importsVitePlus || (options?.wrapPlugins && wrapLazyPlugins(vitePath).updated))
+      (importsVitePlus ||
+        imports.some(({ value }) => value === 'vite') ||
+        (options?.wrapPlugins && wrapLazyPlugins(vitePath).updated))
     ) {
       return true;
     }
@@ -717,6 +755,40 @@ function packAssignments(
   return [...uses, ...copies];
 }
 
+function packMutationReferences(program: Program): Set<number> {
+  const writes = new Set<number>();
+  for (const node of configNodes(program)) {
+    let target: Node;
+    switch (node.type) {
+      case 'AssignmentExpression':
+        target = node.left;
+        break;
+      case 'UpdateExpression':
+        target = node.argument;
+        break;
+      case 'UnaryExpression':
+        if (node.operator !== 'delete') {
+          continue;
+        }
+        target = node.argument;
+        break;
+      default:
+        continue;
+    }
+    target = unwrapTypeExpression(target);
+    if (target.type !== 'MemberExpression') {
+      continue;
+    }
+    do {
+      target = unwrapTypeExpression(target.object);
+    } while (target.type === 'MemberExpression');
+    if (target.type === 'Identifier') {
+      writes.add(target.start);
+    }
+  }
+  return writes;
+}
+
 function importedPackBindings(
   { program, bindings }: ReturnType<typeof parseSource>,
   assignments: ReturnType<typeof packAssignments>,
@@ -726,6 +798,7 @@ function importedPackBindings(
   const directory = path.dirname(vitePath);
   const withoutExtension = path.join(path.dirname(packPath), path.parse(packPath).name);
   const jsPath = packPath.replace(/\.(m|c)?ts$/, '.$1js');
+  const writes = packMutationReferences(program);
   return program.body.flatMap((statement) => {
     if (statement.type !== 'ImportDeclaration' || statement.importKind === 'type') {
       return [];
@@ -760,6 +833,7 @@ function importedPackBindings(
             statement,
             binding,
             uses,
+            mutates: references.some((reference) => writes.has(reference)),
             onlyPack: references.length === uses.length && uses.every(({ copy }) => !copy),
           },
         ]
@@ -884,7 +958,8 @@ export function findDivergedTsdownPackConfig(
     const assignments = packAssignments(source, packs);
     const usesConfig = (file: string) =>
       importedPackBindings(source, assignments, vitePath, file).some(
-        ({ uses }) =>
+        ({ uses, mutates }) =>
+          !mutates &&
           uses.length === packs.length &&
           uses.every(
             ({ property, value }) => property && unwrapTypeExpression(property.value) === value,
@@ -977,6 +1052,13 @@ function mergeRetainedTsdownConfig(
   if (converted === undefined && !importsConverted) {
     return undefined;
   }
+  if (originalImports.some(({ mutates }) => mutates)) {
+    warnMigration(
+      `${displayRelative(viteConfigPath)} changes the imported options from ${displayRelative(tsdownConfigPath)}. Keep those changes when you migrate the pack options manually. See ${documentationUrl('/guide/migrate#tsdown')}`,
+      report,
+    );
+    return false;
+  }
 
   // Keep relative imports beside a workspace-owned source. Installed presets
   // get a project-owned file because a reinstall can replace their directory.
@@ -1018,7 +1100,20 @@ function mergeRetainedTsdownConfig(
     if (replaceInstalledLink && convertedExists) {
       content = fs.readFileSync(convertedPath, 'utf8');
     }
-    content = relocateInstalledPackConfig(content, installedPreset, realSource, convertedPath);
+    const relocated = relocateInstalledPackConfig(
+      content,
+      installedPreset,
+      realSource,
+      convertedPath,
+    );
+    if (relocated === undefined) {
+      warnMigration(
+        `Cannot copy ${displayRelative(tsdownConfigPath)} without changing how the installed preset resolves files. Migrate its pack options manually. See ${documentationUrl('/guide/migrate#tsdown')}`,
+        report,
+      );
+      return hasPack ? false : undefined;
+    }
+    content = relocated;
   }
   const writePath = linkedTarget ?? convertedPath;
   const existingFile = reuseLink || replaceInstalledLink ? undefined : convertedEntry;
