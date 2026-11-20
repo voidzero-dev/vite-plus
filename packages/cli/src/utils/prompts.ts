@@ -266,7 +266,7 @@ export async function runViteInstall(
     const mode = originalMode ?? 'info';
     const installOutput = stdout.toString();
     const output = shouldWatchIdle
-      ? await formatPnpmInstallOutput(installOutput, cwd, mode)
+      ? await formatPnpmInstallOutput(installOutput, cwd, mode, reporting)
       : installOutput;
     if (reporterUnknown || mode === 'json' || mode === 'ndjson') {
       // The prompt logger wraps long lines, including JSON strings.
