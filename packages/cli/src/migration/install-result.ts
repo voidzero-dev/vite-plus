@@ -22,6 +22,7 @@ export async function getMigrationInstallIdleTimeoutMs(
     if ((override?.name ?? packageManager) !== PackageManager.pnpm) {
       return undefined;
     }
+    let pnpmExecutable: string | undefined;
     if (process.env.VP_CLI_BIN) {
       // The global launcher can select a system binary ahead of the project pin.
       const { exitCode, stdout } = await runCommandSilently({
@@ -33,15 +34,39 @@ export async function getMigrationInstallIdleTimeoutMs(
         return undefined;
       }
       const { package_manager: selection } = JSON.parse(stdout.toString()) as {
-        package_manager?: { name: string; version: string };
+        package_manager?: {
+          name: string;
+          version: string;
+          installed: boolean;
+          bin_paths: Record<string, string>;
+        };
       };
       if (selection?.name !== PackageManager.pnpm) {
         return undefined;
       }
       version = selection.version;
+      if (override) {
+        // The global launcher reports the target path even before its first install.
+        pnpmExecutable = selection.installed
+          ? selection.bin_paths.pnpm
+          : (await downloadPackageManager({ ...override, version, cwd })).binPaths.pnpm;
+      }
     } else if (override) {
       // The local launcher uses the same provider as this binding.
-      version = (await downloadPackageManager({ ...override, cwd })).version;
+      pnpmExecutable = (await downloadPackageManager({ ...override, cwd })).binPaths.pnpm;
+    }
+    if (override) {
+      if (!pnpmExecutable) {
+        return undefined;
+      }
+      // The override chooses a launcher. pnpm can then switch to the project pin.
+      const { exitCode, stdout } = await runCommandSilently({
+        command: pnpmExecutable,
+        args: ['--version'],
+        cwd,
+        envs: { ...process.env, NODE_OPTIONS: undefined },
+      });
+      version = exitCode === 0 ? stdout.toString().trim() : undefined;
     }
     return version?.startsWith('9.') ? PNPM_9_INSTALL_IDLE_TIMEOUT_MS : undefined;
   } catch {
