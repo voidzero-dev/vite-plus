@@ -62,6 +62,75 @@ describe('formatPnpmInstallOutput', () => {
     });
   });
 
+  it('keeps only the terminal error after pnpm repairs a lockfile', async () => {
+    const repairedLockfile = JSON.stringify({
+      name: 'pnpm',
+      level: 'error',
+      err: {
+        name: 'Error',
+        code: 'ERR_PNPM_LOCKFILE_MISSING_DEPENDENCY',
+        message: 'The lockfile is broken! Resolution step will be performed to fix it.',
+      },
+    });
+    const terminalError = {
+      code: 'ELIFECYCLE',
+      message: 'fixture@ postinstall: `node fail.cjs`\nExit status 7',
+    };
+    const output = [
+      repairedLockfile,
+      stage('/project', 'resolution_started'),
+      stage('/project', 'resolution_done'),
+      JSON.stringify({
+        name: 'pnpm',
+        level: 'error',
+        code: terminalError.code,
+        err: { name: 'pnpm', ...terminalError },
+      }),
+    ].join('\n');
+
+    expect(await formatPnpmInstallOutput(repairedLockfile, '/project', 'json')).toBe('');
+    expect(JSON.parse(await formatPnpmInstallOutput(output, '/project', 'json'))).toEqual({
+      error: terminalError,
+    });
+  });
+
+  it.each([
+    ['info', true],
+    ['warn', true],
+    ['error', false],
+    ['silent', false],
+    ['json', false],
+  ] as const)(
+    'reports deprecations at the %s log level when warnings are enabled',
+    async (mode, showWarnings) => {
+      const deprecation = {
+        name: 'pnpm:deprecation',
+        level: 'debug',
+        pkgName: 'inflight',
+        pkgVersion: '1.0.6',
+        deprecated: 'This package is no longer supported.',
+        depth: 0,
+      };
+      const output = [
+        JSON.stringify(deprecation),
+        JSON.stringify({
+          ...deprecation,
+          pkgName: 'old-transitive',
+          pkgVersion: '2.0.0',
+          depth: 1,
+        }),
+        stage('/project', 'resolution_done'),
+      ].join('\n');
+
+      expect(await formatPnpmInstallOutput(output, '/project', mode)).toBe(
+        showWarnings
+          ? 'WARN deprecated inflight@1.0.6: This package is no longer supported.\n' +
+              'WARN 1 deprecated subdependencies found: old-transitive@2.0.0'
+          : '',
+      );
+    },
+  );
+
   it('keeps the real peer conflict and respects the root peer dependency rules', async () => {
     const request = { parents: [{ name: 'react-dom', version: '18.3.1' }], wantedRange: '^18.3.1' };
     const allowed = {
