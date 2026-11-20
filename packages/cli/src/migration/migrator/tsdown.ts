@@ -1,10 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import type { Node } from '@oxc-project/types';
+
 import { parseLiteralCommands } from '../../../binding/index.js';
 import type { WorkspacePackage } from '../../types/index.ts';
 import { documentationUrl } from '../../utils/documentation.ts';
 import { displayRelative } from '../../utils/path.ts';
+import { defaultConfigValue, objectProperty, staticObject } from '../ast-utils.ts';
 import { detectDefaultTsdownConfig } from '../detector.ts';
 import type { MigrationReport } from '../report.ts';
 import {
@@ -205,13 +208,22 @@ function findConfigOwners(
   configPath: string | undefined,
   projectPaths: ReadonlySet<string>,
 ): Iterable<string> {
-  if (!configPath) {
+  if (!configPath || projectPaths.size === 1) {
     return projectPaths;
   }
   try {
     const stat = fs.lstatSync(configPath, { throwIfNoEntry: false });
     if (stat?.isDirectory() || stat?.isSymbolicLink()) {
       return projectPaths;
+    }
+    if (stat?.isFile()) {
+      const source = fs.readFileSync(configPath, 'utf8');
+      const config = configPath.endsWith('.json')
+        ? defaultConfigValue('tsdown.config.ts', `export default ${source}`)
+        : defaultConfigValue(configPath, source);
+      if (mayLoadWorkspaceConfigs(config)) {
+        return projectPaths;
+      }
     }
   } catch {
     return projectPaths;
@@ -224,4 +236,16 @@ function findConfigOwners(
       return [];
     }
   }
+}
+function mayLoadWorkspaceConfigs(config: Node | null | undefined): boolean {
+  if (config?.type === 'ArrayExpression') {
+    return config.elements.some(mayLoadWorkspaceConfigs);
+  }
+  // A dynamic export or spread can supply workspace options. The migration
+  // keeps member configs when it cannot rule that out without running code.
+  if (!staticObject(config, true)) {
+    return true;
+  }
+  const workspace = objectProperty(config, 'workspace')?.value;
+  return !!workspace && (workspace.type !== 'Literal' || Boolean(workspace.value));
 }

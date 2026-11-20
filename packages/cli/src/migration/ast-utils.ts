@@ -135,3 +135,18 @@ export function parseSource(file: string, source: string): ParsedSource {
   // that reconstruct RegExp/BigInt values in Oxc's serialized AST.
   return { program: ast.node, bindings, comments };
 }
+
+export function defaultConfigValue(file: string, source: string): t.Node | undefined {
+  const exported = parseSource(file, source).program.body.find(
+    (statement) => statement.type === 'ExportDefaultDeclaration',
+  )?.declaration;
+  if (
+    exported?.type === 'CallExpression' &&
+    exported.callee.type === 'Identifier' &&
+    exported.callee.name === 'defineConfig' &&
+    exported.arguments.length === 1
+  ) {
+    return exported.arguments[0];
+  }
+  return exported;
+}

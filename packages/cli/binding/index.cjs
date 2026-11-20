@@ -1125,6 +1125,7 @@ module.exports.parseMigrateArgs = nativeBinding.parseMigrateArgs;
 module.exports.parseStagedArgs = nativeBinding.parseStagedArgs;
 module.exports.readStaticLintConfig = nativeBinding.readStaticLintConfig;
 module.exports.removeConfigKey = nativeBinding.removeConfigKey;
+module.exports.renderTsdownJsonPackConfig = nativeBinding.renderTsdownJsonPackConfig;
 module.exports.resolveNpmAuthorization = nativeBinding.resolveNpmAuthorization;
 module.exports.resolveNpmRegistry = nativeBinding.resolveNpmRegistry;
 module.exports.rewriteEslint = nativeBinding.rewriteEslint;

@@ -4025,6 +4025,13 @@ export declare function removeConfigKey(
   configKey: string,
 ): MergeJsonConfigResult;
 
+/** Render the pack options that migration would inline from the tsdown JSON source. */
+export declare function renderTsdownJsonPackConfig(
+  viteConfigPath: string,
+  jsonConfigPath: string,
+  workspaceRoot: string,
+): string;
+
 /** Resolve the `Authorization` header value npm would send to `url` from the npm config at `cwd`. */
 export declare function resolveNpmAuthorization(cwd: string, url: string): string | null;
 

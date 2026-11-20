@@ -112,6 +112,23 @@ fn merge_json_config_content(
     Ok(MergeResult { content, updated })
 }
 
+/// Render the pack options migration would inline from a tsdown JSON file.
+pub fn render_tsdown_json_pack_config(
+    vite_config_path: &Path,
+    json_config_path: &Path,
+    workspace_root: &Path,
+) -> Result<String, Error> {
+    let json = std::fs::read_to_string(json_config_path)?;
+    let inlined = merge_json_config_content("export default {};", &json, "pack")?.content;
+    let legacy = crate::pack_config::preserve_legacy_defaults(
+        vite_config_path,
+        workspace_root,
+        false,
+        &inlined,
+    );
+    Ok(crate::pack_config::rewrite_pack_config(&inlined, false, legacy))
+}
+
 /// Set the value of a top-level config key in vite.config.ts/js (upsert).
 ///
 /// Unlike [`merge_json_config`], which *prepends* a new key (and duplicates it
@@ -1042,11 +1059,18 @@ fn merge_tsdown_config_content(
     tsdown_config_path: &str,
 ) -> Result<MergeResult, Error> {
     // Check if already migrated (idempotency check)
-    if vite_config_content.contains("import tsdownConfig from") {
+    if vite_config_content.contains("import tsdownConfig from")
+        || has_unsupported_direct_return(vite_config_content)
+    {
         return Ok(MergeResult { content: vite_config_content.to_string(), updated: false });
     }
 
-    // Step 1: Add import statement at the beginning
+    let pack_rule = generate_merge_rule("tsdownConfig", "pack");
+    let (merged_config, updated) = ast_grep::apply_rules(vite_config_content, &pack_rule)?;
+    if !updated {
+        return Ok(MergeResult { content: merged_config, updated: false });
+    }
+
     // Use JavaScript extensions for TypeScript files (TypeScript module resolution convention)
     // .ts → .js, .mts → .mjs, .cts → .cjs
     let import_path = if tsdown_config_path.ends_with(".mts") {
@@ -1058,14 +1082,8 @@ fn merge_tsdown_config_content(
     } else {
         tsdown_config_path.to_string()
     };
-    let content_with_import =
-        format!("import tsdownConfig from '{import_path}';\n\n{vite_config_content}");
-
-    // Step 2: Add pack: tsdownConfig to defineConfig
-    let pack_rule = generate_merge_rule("tsdownConfig", "pack");
-    let (final_content, _) = ast_grep::apply_rules(&content_with_import, &pack_rule)?;
-
-    Ok(MergeResult { content: final_content, updated: true })
+    let content = format!("import tsdownConfig from '{import_path}';\n\n{merged_config}");
+    Ok(MergeResult { content, updated: true })
 }
 
 #[cfg(test)]

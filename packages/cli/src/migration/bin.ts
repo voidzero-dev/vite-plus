@@ -667,9 +667,13 @@ function showMigrationSummary(options: {
     log(FULL_MIGRATION_HINT);
   }
   showMigrationWarnings(report.warnings);
-  if (report.manualSteps.length > 0) {
+  showMigrationManualSteps(report.manualSteps);
+}
+
+function showMigrationManualSteps(steps: readonly string[]): void {
+  if (steps.length > 0) {
     log(`${styleText('blue', '→')} Manual follow-up:`);
-    for (const step of report.manualSteps) {
+    for (const step of steps) {
       log(`  - ${step}`);
     }
   }
@@ -1335,6 +1339,7 @@ async function main() {
         : hasExplicitExistingVitePlusSetupRequest(options))
     ) {
       showMigrationWarnings([...tsdownAdvisories.warnings, ...migrationWarnings]);
+      showMigrationManualSteps(report.manualSteps);
       if (vitestV5Preflight) {
         prompts.log.warn(vitestV5Preflight);
       }
