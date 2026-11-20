@@ -51,12 +51,14 @@ async function main() {
       const isFirstHooksRun = !existsSync(join(location.baseDir, location.dir, '_', 'pre-commit'));
 
       let shouldSetupHooks = true;
+      let prompted = false;
       if (isHooksUserDisabled()) {
         // Honor `vp hooks disable` without re-prompting (option A).
         log('skip install (hooks disabled; run `vp hooks enable` to re-enable)');
         shouldSetupHooks = false;
       } else if (interactive && isFirstHooksRun && !dir && !isLifecycleScript) {
         // Explicit directories and lifecycle scripts already opt in.
+        prompted = true;
         shouldSetupHooks = await promptGitHooks({
           interactive,
           message: 'Install the Git hook dispatcher for this project?',
@@ -64,7 +66,11 @@ async function main() {
       }
 
       if (shouldSetupHooks) {
-        const { message, isError } = install(dir);
+        // Without a prompt, reuse the checks above. After a prompt, `vp hooks` may have changed them.
+        const { message, isError } = install(
+          dir,
+          prompted ? {} : { location, ignoreUserPreference: true },
+        );
         if (message) {
           log(message);
           if (isError) {
