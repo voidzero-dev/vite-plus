@@ -20,6 +20,15 @@ function stopFixtureChild(pidFile: string) {
   }
 }
 
+function fixtureProcessGroup(pid: string): number {
+  if (process.platform === 'linux') {
+    const stat = readFileSync(`/proc/${pid}/stat`, 'utf8');
+    // Fields after the parenthesized command name start with state, PPID, and PGID.
+    return Number(stat.slice(stat.lastIndexOf(')') + 2).split(' ')[2]);
+  }
+  return Number(execFileSync('ps', ['-o', 'pgid=', '-p', pid], { encoding: 'utf8' }));
+}
+
 describe('command runners', () => {
   it('resolves with the child output when no timeout is set', async () => {
     const result = await runCommandSilently({
@@ -275,14 +284,11 @@ describe('command runners', () => {
         }
         await expect.poll(() => readFileSync(ready, 'utf8'), { timeout: 3000 }).toMatch(/^\d+$/);
         const childPid = readFileSync(ready, 'utf8');
-        const groups = execFileSync('ps', ['-A', '-o', 'pid=', '-o', 'pgid='], {
-          encoding: 'utf8',
-        });
-        const entry = groups.split('\n').find((line) => line.trim().split(/\s+/)[0] === childPid);
+        const childGroup = fixtureProcessGroup(childPid);
         process.kill(-runnerPid, 'SIGINT');
         await expect(exited).resolves.toEqual([null, 'SIGINT']);
         await expect.poll(() => existsSync(join(cwd, 'cleaned'))).toBe(true);
-        expect(Number(entry?.trim().split(/\s+/)[1])).toBe(runnerPid);
+        expect(childGroup).toBe(runnerPid);
       } finally {
         if (runnerPid && runner.exitCode === null && runner.signalCode === null) {
           process.kill(-runnerPid, 'SIGTERM');

@@ -102,6 +102,7 @@ describe('runViteInstall', () => {
   it.each([
     ['append-only', false, true],
     ['append-only', true, false],
+    ['append-only', '1', false],
     ['silent', false, false],
     ['ndjson', false, false],
   ] as const)(
@@ -140,6 +141,9 @@ describe('runViteInstall', () => {
     ['loglevel', 'silent'],
     ['json', true],
     ['parseable', true],
+    ['json', '1'],
+    ['parseable', '1'],
+    ['json', '0'],
   ] as const)('keeps the native old pnpm reporter for %s=%s', async (key, value) => {
     const run = vi.mocked(runCommandSilently);
     run.mockImplementation(async ({ args }) => {
@@ -165,6 +169,42 @@ describe('runViteInstall', () => {
     expect(install?.idleTimeoutMs).toBeUndefined();
     expect(install?.shouldWatchIdle).toBeUndefined();
     expect(result).toMatchObject({ status: 'failed', exitCode: 1 });
+  });
+
+  it.each([
+    ['json', '1'],
+    ['parseable', '1'],
+    ['json', '0'],
+  ] as const)('preserves JSON errors for pnpm %s=%s', async (key, value) => {
+    const run = vi.mocked(runCommandSilently);
+    const error = { code: 'ELIFECYCLE', message: 'Exit status 7' };
+    run.mockResolvedValueOnce({
+      exitCode: 0,
+      stdout: Buffer.from(JSON.stringify({ [key]: value })),
+      stderr: Buffer.alloc(0),
+    });
+    run.mockResolvedValueOnce({
+      exitCode: 7,
+      stdout: Buffer.from(
+        JSON.stringify({ name: 'pnpm', level: 'error', err: { name: 'pnpm', ...error } }),
+      ),
+      stderr: Buffer.alloc(0),
+    });
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    try {
+      const result = await runViteInstall(cwd, false, undefined, {
+        packageManager: PackageManager.pnpm,
+        packageManagerVersion: '9.15.9',
+        pnpmExecutable,
+        idleTimeoutMs: 4000,
+        silent: true,
+      });
+      expect(result).toMatchObject({ status: 'failed', exitCode: 7 });
+      expect(run.mock.lastCall?.[0].args).toContain('--config._reporter=ndjson');
+      expect(stdout).toHaveBeenCalledWith(`${JSON.stringify({ error }, null, 2)}\n`);
+    } finally {
+      stdout.mockRestore();
+    }
   });
 
   it.each([null, 'configuration output without JSON'])(

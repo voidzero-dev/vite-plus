@@ -398,11 +398,17 @@ describe('formatPnpmInstallOutput', () => {
   );
 
   it('redacts registry URLs in visible diagnostics', async () => {
+    const cwd = resolve('workspace');
     const url =
       'https://fixture-user:fixture-password@registry.example.com/team/package?token=fixture-query#fixture-fragment';
     const publicUrl = 'https://registry.example.com/team/package';
     const output = [
-      { name: 'pnpm:registry', level: 'warn', message: `Registry rejected ${url}: Forbidden` },
+      {
+        name: 'pnpm:registry',
+        level: 'warn',
+        prefix: join(cwd, 'packages', 'publisher'),
+        message: `Registry rejected ${url}: Forbidden`,
+      },
       { name: 'pnpm', level: 'info', message: `Using registry at "${url}"` },
       {
         name: 'pnpm:deprecation',
@@ -424,9 +430,9 @@ describe('formatPnpmInstallOutput', () => {
       .map((log) => JSON.stringify(log))
       .join('\n');
 
-    expect(await formatPnpmInstallOutput(output, '/project')).toBe(
+    expect(await formatPnpmInstallOutput(output, cwd)).toBe(
       [
-        `Registry rejected ${publicUrl}: Forbidden`,
+        `packages/publisher: Registry rejected ${publicUrl}: Forbidden`,
         `Using registry at "${publicUrl}"`,
         `WARN deprecated old-package@1.0.0: See ${publicUrl} for the replacement`,
         `ERR_PNPM_FETCH_403 GET ${publicUrl}: Forbidden`,
