@@ -387,7 +387,7 @@ impl JsExecutor {
                     && !crate::help::has_help_flag_before_terminator(tool_args) =>
             {
                 let version = local_entry_version(&local);
-                if local_cli_may_reselect(version.as_deref())
+                if local_cli_may_reselect(&local, version.as_deref())
                     && vp_app_target::legacy_cli_may_select_target(command, project_path)
                 {
                     if let Some(version) =
@@ -531,7 +531,7 @@ impl JsExecutor {
 
 fn local_entry_accepts_fixed_app_target(entry_point: &AbsolutePath) -> bool {
     local_entry_version(entry_point)
-        .is_some_and(|version| supports_fixed_app_target(&version, env!("CARGO_PKG_VERSION")))
+        .is_some_and(|version| supports_fixed_app_target(entry_point, &version))
 }
 
 fn local_entry_version(entry_point: &AbsolutePath) -> Option<String> {
@@ -542,9 +542,9 @@ fn local_entry_version(entry_point: &AbsolutePath) -> Option<String> {
         .and_then(|package_dir| read_package_json_version(package_dir.join("package.json")))
 }
 
-fn local_cli_may_reselect(version: Option<&str>) -> bool {
+fn local_cli_may_reselect(entry_point: &AbsolutePath, version: Option<&str>) -> bool {
     version.is_none_or(|version| {
-        !supports_fixed_app_target(version, env!("CARGO_PKG_VERSION"))
+        !supports_fixed_app_target(entry_point, version)
             && (is_preview_version(version)
                 // The app target picker first shipped in 0.2.8.
                 || js_semver::Version::parse(version)
@@ -611,12 +611,15 @@ fn is_preview_version(version: &str) -> bool {
     version.starts_with("0.0.0-")
 }
 
-fn supports_fixed_app_target(local: &str, global: &str) -> bool {
-    if is_preview_version(local) {
-        return local == global;
+fn supports_fixed_app_target(entry_point: &AbsolutePath, version: &str) -> bool {
+    if is_preview_version(version) {
+        // A preview version identifies a commit. Its installed CLI entry point
+        // reads the marker when it supports fixed app targets.
+        return std::fs::read_to_string(entry_point.as_path())
+            .is_ok_and(|source| source.contains(env_vars::VP_EXPLICIT_CHDIR));
     }
     // Vite+ 0.3.0 first shipped support for VP_EXPLICIT_CHDIR in the local CLI.
-    js_semver::Version::parse(local)
+    js_semver::Version::parse(version)
         .is_ok_and(|version| version >= js_semver::Version::new(0, 3, 0))
 }
 
@@ -702,12 +705,20 @@ mod tests {
 
     #[test]
     fn only_compatible_local_clis_accept_a_fixed_app_target() {
-        assert!(!supports_fixed_app_target("0.2.9", "1.7.0"));
-        assert!(supports_fixed_app_target("0.3.0", "1.7.0"));
-        assert!(supports_fixed_app_target("1.7.0", "1.7.0"));
-        assert!(!supports_fixed_app_target("latest", "1.7.0"));
-        assert!(supports_fixed_app_target("0.0.0-commit.abc", "0.0.0-commit.abc"));
-        assert!(!supports_fixed_app_target("0.0.0-commit.abc", "0.0.0-commit.xyz"));
+        let dir = tempfile::tempdir().unwrap();
+        let entry = AbsolutePathBuf::new(dir.path().join("bin.js")).unwrap();
+        assert!(!supports_fixed_app_target(&entry, "0.2.9"));
+        assert!(supports_fixed_app_target(&entry, "0.3.0"));
+        assert!(supports_fixed_app_target(&entry, "1.7.0"));
+        assert!(!supports_fixed_app_target(&entry, "latest"));
+
+        let preview = "0.0.0-commit.abc";
+        assert!(!supports_fixed_app_target(&entry, preview));
+        std::fs::write(entry.as_path(), "console.log('old preview');").unwrap();
+        assert!(!supports_fixed_app_target(&entry, preview));
+        std::fs::write(entry.as_path(), "const fixed = process.env.VP_EXPLICIT_CHDIR === '1';")
+            .unwrap();
+        assert!(supports_fixed_app_target(&entry, preview));
     }
 
     #[test]

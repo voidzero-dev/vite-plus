@@ -105,3 +105,20 @@ steps = [
   { argv = ["vpt", "rm", "app/vite.config.mjs"], snapshot = false },
   ["vp", "-C", "app", "build"],
 ]
+
+[[case]]
+name = "fixed_target_keeps_local_preview"
+vp = "global"
+comment = "A local preview that supports the fixed-target marker runs both explicit and selected targets."
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "app/node_modules/vite-plus/dist"], snapshot = false },
+  { argv = ["vpt", "write-file", "app/node_modules/vite-plus/package.json", '{"name":"vite-plus","version":"0.0.0-commit.preview","type":"module"}'], snapshot = false },
+  { argv = ["vpt", "cp", "probe.mjs", "app/node_modules/vite-plus/dist/bin.js"], snapshot = false },
+  { argv = ["vpt", "cp", "fixed-target-config.mjs", "app/vite.config.mjs"], snapshot = false },
+  { argv = ["vpt", "write-file", "app/index.html", "<h1>Selected app</h1>\n"], snapshot = false },
+  ["vp", "-C", "app", "build"],
+  ["vp", "build"],
+  { argv = ["vpt", "cp", "legacy-probe.mjs", "app/node_modules/vite-plus/dist/bin.js"], snapshot = false },
+  { argv = ["vp", "-C", "app", "build"], snapshot = false },
+  ["vpt", "print-file", "app/dist/index.html"],
+]

@@ -276,7 +276,7 @@ The global binary resolves the working directory before choosing the local `vite
 
 ### Entry points and version assumption
 
-- The global binary and the local bin both parse `-C` and use `crates/vp_app_target` for implicit target selection. The global binary tells a compatible delegated CLI when the working directory is already fixed, so the child skips selection. Stable local releases support this marker from `0.3.0`. Local preview builds accept the marker when their version matches the global build.
+- The global binary and the local bin both parse `-C` and use `crates/vp_app_target` for implicit target selection. The global binary tells a compatible delegated CLI when the working directory is already fixed, so the child skips selection. Stable local releases support this marker from `0.3.0`. For a local preview build, the global binary checks the installed JavaScript entry point for the marker.
 - If the invocation directory resolves to a local CLI without marker support, that CLI handles implicit selection for a bare command. Once `-C` or the global CLI fixes a target, the global binary checks whether the local CLI there can select another package. When it can, the global binary runs the installed tool directly for versions `0.2.8` and `0.2.9`. For a bare command it can use the global installation if it cannot resolve the legacy tool. Releases before the picker and legacy workspaces with no targets keep the local CLI entry point.
 - A root-level `"dev": "vp dev"` script uses the same target rules through the entry point that runs `vp`.
 

@@ -9,6 +9,9 @@ const pathNode = execFileSync('node', ['--version'], { encoding: 'utf8' }).trim(
 assert.equal(name, 'app');
 assert.equal(process.version, expectedNode);
 assert.equal(pathNode, expectedNode);
+if (version.startsWith('0.0.0-')) {
+  assert.equal(process.env.VP_EXPLICIT_CHDIR, '1');
+}
 if (process.platform !== 'win32' && realpathSync(process.env.PWD) !== realpathSync(process.cwd())) {
   throw new Error('PWD differs from cwd');
 }
