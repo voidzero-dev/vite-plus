@@ -144,7 +144,7 @@ jobs:
           EOF
 
       - name: Run triagebot
-        uses: oxc-project/triagebot-action@2b78d839c4d4bcbfd1fa9cc342a6d9d3651e866e
+        uses: oxc-project/triagebot-action@7c541257fdcd88d717d6bad6d69c59db9255e897 # main
         with:
           read-token: ${{ github.token }}
           write-token: ${{ steps.app-token.outputs.token }}
