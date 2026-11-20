@@ -257,8 +257,13 @@ jobs:
             A successful internal build does
             not prove that `vp pack` works with consumers' TypeScript versions.
 
-            Re-record with `UPDATE_SNAPSHOTS=1` only for cosmetic drift from the
-            upgrade (e.g. a bumped version string in help output). Unexpected stack
+            Use `versions.json` to find snapshots that print an upgraded dependency's
+            version. Run each affected case with `just snapshot-test <case>`. When
+            `tsrs` changes, include `migration_monorepo_pnpm`, which prints the
+            bundled version in `trustPolicyExclude`. Keep fixture-supplied versions.
+            If the diff shows only expected cosmetic changes, such as the recorded
+            version bump, run `UPDATE_SNAPSHOTS=1 just snapshot-test <case>`, then
+            rerun the case without `UPDATE_SNAPSHOTS`. Unexpected stack
             traces, missing output, or diverging CLI behavior are regressions to fix.
             Inspect `git status --short` and `git diff --stat` before finishing;
             every changed file, including generated NAPI bindings, must be intentional.
