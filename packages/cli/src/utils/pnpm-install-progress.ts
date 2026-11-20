@@ -6,13 +6,17 @@ import { readJsonFile } from './json.ts';
 import { displayRelative } from './path.ts';
 import { formatDuration } from './terminal.ts';
 
+function isPnpmLoggerName(name: unknown): name is string {
+  return typeof name === 'string' && (name === 'pnpm' || name.startsWith('pnpm:'));
+}
+
 function parsePnpmLog(line: string): Record<string, unknown> | undefined {
   if (!line.startsWith('{')) {
     return undefined;
   }
   try {
     const log: Record<string, unknown> = JSON.parse(line);
-    if (typeof log?.name === 'string' && (log.name === 'pnpm' || log.name.startsWith('pnpm:'))) {
+    if (isPnpmLoggerName(log?.name)) {
       return log;
     }
   } catch {
@@ -244,15 +248,28 @@ export async function formatPnpmInstallOutput(
     return output;
   }
   const messages: string[] = [];
+  const showWarnings = mode === 'info' || mode === 'warn';
+  const deprecatedSubdependencies: string[] = [];
+  let terminalErrorIndex: number | undefined;
   const progress = { resolved: 0, found_in_store: 0, fetched: 0, imported: 0 };
   for (const line of output.split(/\r?\n/)) {
     const log = parsePnpmLog(line);
     if (!log) {
       messages.push(line);
     } else if (mode === 'json') {
-      // pnpm 9 uses the same error object in JSON and parseable modes.
+      // pnpm 9's CLI error handler sets the terminal error's name before logging it.
+      // Recovered errors, such as a repaired lockfile, can also be logged at error level.
       const error = asRecord(log.err);
-      if (log.name === 'pnpm' && log.level === 'error' && typeof error.message === 'string') {
+      if (
+        log.name === 'pnpm' &&
+        log.level === 'error' &&
+        isPnpmLoggerName(error.name) &&
+        typeof error.message === 'string'
+      ) {
+        if (terminalErrorIndex !== undefined) {
+          messages.splice(terminalErrorIndex, 1);
+        }
+        terminalErrorIndex = messages.length;
         const message = redactRegistryUrls(error.message, asRecord(log.request).url);
         messages.push(
           JSON.stringify(
@@ -264,11 +281,30 @@ export async function formatPnpmInstallOutput(
       }
     } else if (log.name === 'pnpm:request-retry') {
       // pnpm's human reporter displays retry records as warnings.
-      if (mode === 'info' || mode === 'warn') {
+      if (showWarnings) {
         const retry = formatRequestRetry(log);
         if (retry) {
           messages.push(retry);
         }
+      }
+    } else if (log.name === 'pnpm:deprecation') {
+      // Deprecation events are logged at debug level and reported as warnings.
+      const { depth, deprecated, pkgName, pkgVersion } = log;
+      if (showWarnings && typeof pkgName === 'string' && typeof pkgVersion === 'string') {
+        const dependency = `${pkgName}@${pkgVersion}`;
+        if (depth === 0 && typeof deprecated === 'string') {
+          messages.push(`WARN deprecated ${dependency}: ${deprecated}`);
+        } else if (typeof depth === 'number' && depth > 0) {
+          deprecatedSubdependencies.push(dependency);
+        }
+      }
+    } else if (log.name === 'pnpm:stage' && log.stage === 'resolution_done') {
+      if (deprecatedSubdependencies.length > 0) {
+        const dependencies = deprecatedSubdependencies.toSorted().join(', ');
+        messages.push(
+          `WARN ${deprecatedSubdependencies.length} deprecated subdependencies found: ${dependencies}`,
+        );
+        deprecatedSubdependencies.length = 0;
       }
     } else if (
       mode !== 'info' &&
