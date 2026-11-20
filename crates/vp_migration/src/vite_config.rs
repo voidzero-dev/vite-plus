@@ -119,20 +119,38 @@ pub fn merge_tsdown_json_config(
     workspace_root: &Path,
     vite_config_path: Option<&Path>,
 ) -> Result<MergeResult, Error> {
-    let json = std::fs::read_to_string(json_config_path)?;
+    let (json, legacy) = read_tsdown_json_config(json_config_path, workspace_root)?;
     let vite = vite_config_path.map(std::fs::read_to_string).transpose()?;
     let mut merged =
         merge_json_config_content(vite.as_deref().unwrap_or("export default {};"), &json, "pack")?;
     if merged.updated {
-        let legacy = crate::pack_config::preserve_legacy_defaults(
-            json_config_path,
-            workspace_root,
-            true,
-            &json,
-        );
         merged.content = crate::pack_config::rewrite_pack_config(&merged.content, false, legacy);
     }
     Ok(merged)
+}
+
+/// Apply the standalone toolchain's option migration to both sides of the comparison.
+pub fn normalize_tsdown_json_pack_configs(
+    vite_config: &str,
+    json_config_path: &Path,
+    workspace_root: &Path,
+) -> Result<(String, String), Error> {
+    let (json, legacy) = read_tsdown_json_config(json_config_path, workspace_root)?;
+    let expected = merge_json_config_content("export default {};", &json, "pack")?;
+    Ok((
+        crate::pack_config::rewrite_pack_config(vite_config, false, legacy),
+        crate::pack_config::rewrite_pack_config(&expected.content, false, legacy),
+    ))
+}
+
+fn read_tsdown_json_config(
+    json_config_path: &Path,
+    workspace_root: &Path,
+) -> Result<(String, bool), Error> {
+    let json = std::fs::read_to_string(json_config_path)?;
+    let legacy =
+        crate::pack_config::preserve_legacy_defaults(json_config_path, workspace_root, true, &json);
+    Ok((json, legacy))
 }
 
 /// Set the value of a top-level config key in vite.config.ts/js (upsert).

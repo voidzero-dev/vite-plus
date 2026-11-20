@@ -283,6 +283,28 @@ pub fn merge_tsdown_json_config(
     Ok(MergeJsonConfigResult { content: result.content, updated: result.updated })
 }
 
+#[napi(object)]
+pub struct NormalizedTsdownJsonPackConfigs {
+    pub existing: String,
+    pub expected: String,
+}
+
+/// Apply the standalone toolchain's option migration to both sides of the comparison.
+#[napi]
+pub fn normalize_tsdown_json_pack_configs(
+    vite_config: String,
+    json_config_path: String,
+    workspace_root: String,
+) -> Result<NormalizedTsdownJsonPackConfigs> {
+    let (existing, expected) = vp_migration::normalize_tsdown_json_pack_configs(
+        &vite_config,
+        Path::new(&json_config_path),
+        Path::new(&workspace_root),
+    )
+    .map_err(anyhow::Error::from)?;
+    Ok(NormalizedTsdownJsonPackConfigs { existing, expected })
+}
+
 /// Remove a top-level key from a recognized Vite config object.
 #[napi]
 pub fn remove_config_key(

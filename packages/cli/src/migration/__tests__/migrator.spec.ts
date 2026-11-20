@@ -560,6 +560,75 @@ export default defineConfig(({ command }) => {
     expect(report.warnings).toContainEqual(expect.stringContaining('Please manually merge'));
   });
 
+  it.each(['publicDir', 'copy'])('merges equivalent JSON and inline %s options', (assetKey) => {
+    const manifest = path.join(tmpDir, 'package.json');
+    fs.writeFileSync(
+      manifest,
+      JSON.stringify({ scripts: { build: 'tsdown' }, devDependencies: { tsdown: '0.22.14' } }),
+    );
+    const json = path.join(tmpDir, 'tsdown.config.json');
+    const options = { entry: 'src/lib.ts', outDir: 'library-out' };
+    fs.writeFileSync(json, JSON.stringify({ ...options, publicDir: 'public' }));
+    const vite = path.join(tmpDir, 'vite.config.ts');
+    const inline = JSON.stringify({ ...options, [assetKey]: 'public' });
+    fs.writeFileSync(vite, `export default { pack: ${inline} };\n`);
+
+    const workspace = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+    const migrate = () => {
+      const report = createMigrationReport();
+      rewriteStandaloneProject(tmpDir, workspace, true, true, report);
+      expect(report.manualSteps).toEqual([]);
+      expect(readJson(manifest)).toHaveProperty('scripts.build', 'vp pack');
+    };
+    migrate();
+
+    const source = fs.readFileSync(vite, 'utf8');
+    expect(source).toMatch(/"?copy"?:\s*"public"/);
+    expect(source).toContain('resolveDepSubpath: true');
+    expect(fs.existsSync(json)).toBe(false);
+    migrate();
+    expect(fs.readFileSync(vite, 'utf8')).toBe(source);
+  });
+
+  it('checks a workspace directory once per scan for scripts with expansions', () => {
+    const projects = ['packages/a', 'packages/b', 'packages/c'].map((dir) => ({
+      path: dir,
+      name: path.basename(dir),
+    }));
+    const viteFiles = new Set<string>();
+    for (const project of projects) {
+      const directory = path.join(tmpDir, project.path);
+      fs.mkdirSync(directory, { recursive: true });
+      fs.writeFileSync(
+        path.join(directory, 'package.json'),
+        JSON.stringify({ scripts: { build: 'tsdown --format "$FORMAT"' } }),
+      );
+      fs.writeFileSync(
+        path.join(directory, 'tsdown.config.ts'),
+        "export default { entry: 'a.ts' };\n",
+      );
+      const vite = path.join(directory, 'vite.config.ts');
+      fs.writeFileSync(vite, "import pack from './tsdown.config.ts';\nexport default { pack };\n");
+      viteFiles.add(vite);
+    }
+    const reads = vi.spyOn(fs, 'readFileSync');
+    try {
+      expect(collectPackagesKeepingTsdown(tmpDir, projects).size).toBe(0);
+      expect(
+        reads.mock.calls.filter(([file]) => typeof file === 'string' && viteFiles.has(file)),
+      ).toHaveLength(projects.length);
+
+      const [vite] = viteFiles;
+      fs.writeFileSync(vite, "export default { pack: { entry: 'different.ts' } };\n");
+      const kept = collectPackagesKeepingTsdown(tmpDir, projects);
+      expect(kept).toEqual(
+        new Set([tmpDir, ...projects.map(({ path: dir }) => path.join(tmpDir, dir))]),
+      );
+    } finally {
+      reads.mockRestore();
+    }
+  });
+
   it('preserves a pnpm resolutions pin used by a workspace member', () => {
     const lib = path.join(tmpDir, 'packages/lib');
     fs.mkdirSync(lib, { recursive: true });
@@ -1240,10 +1309,11 @@ export default defineConfig(({ command }) => {
   it.each([
     "Object.assign(base, { outDir: 'release' });\nexport default { pack: base };\n",
     "export default { pack: Object.assign(base, { outDir: 'release' }) };\n",
+    "base.entry.push('src/cli.ts');\nexport default { pack: base };\n",
   ])('keeps the pack config modified by %s', (config) => {
     fs.writeFileSync(
       path.join(tmpDir, 'tsdown.config.ts'),
-      "export default { entry: 'src/lib.ts', publicDir: 'public' };\n",
+      "export default { entry: ['src/lib.ts'], publicDir: 'public' };\n",
     );
     const vite = path.join(tmpDir, 'vite.config.ts');
     const source = `import base from './tsdown.config.ts';\n${config}`;
