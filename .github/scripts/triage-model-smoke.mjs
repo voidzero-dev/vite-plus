@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { cpSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -11,6 +11,16 @@ assert.ok(model.startsWith('cloudflare-workers-ai/'));
 const bundle = pathToFileURL(resolve(bundlePath));
 const work = mkdtempSync(join(tmpdir(), 'issue-triage-'));
 cpSync(skillPath, join(work, skillPath), { recursive: true });
+if (stage === 'triage' && (process.env.WIRE_CAPTURE || process.env.WIRE_REPLAY)) {
+  // Keep the live probe to one model turn. The normal mock test uses the project skill.
+  writeFileSync(join(work, skillPath, 'SKILL.md'), [
+    '---', 'name: triage', 'description: Classify a synthetic feature request.', '---',
+    'For the reproduce step, classify the supplied issue from its title and body.',
+    'A request for a new feature has no bug to reproduce. Skip it as not-actionable.',
+    'The supplied issue is the complete fixture. Return the structured result directly with finish.',
+    'No files, shell commands, or additional context are needed.',
+  ].join('\n'));
+}
 process.chdir(work);
 execFileSync('git', ['init', '-q', '-b', 'main']);
 execFileSync('git', ['add', skillPath]);
@@ -60,6 +70,15 @@ globalThis.fetch = async (input, init) => {
     const finish = body.tools.find((tool) => tool.function.name === 'finish').function;
     const result = results[requests++];
     assert.deepEqual(Object.keys(result).sort(), finish.parameters.required.slice().sort());
+    if (requests === 1 && process.env.WIRE_CAPTURE) {
+      mkdirSync(process.env.WIRE_CAPTURE, { recursive: true });
+      writeFileSync(join(process.env.WIRE_CAPTURE, 'request-1.json'), init.body);
+    }
+    if (requests === 1 && process.env.WIRE_REPLAY) {
+      const stream = readFileSync(join(process.env.WIRE_REPLAY, 'response-1.sse'));
+      console.log('Replaying the live Workers AI response through the pinned handler.');
+      return new Response(stream, { headers: { 'Content-Type': 'text/event-stream' } });
+    }
     const tool = { index: 0, id: 'fixture-call-' + requests, type: 'function', function: { name: 'finish', arguments: JSON.stringify(result) } };
     const chunk = (delta, reason) => 'data: ' + JSON.stringify({
       id: 'fixture', object: 'chat.completion.chunk', model: modelId,
