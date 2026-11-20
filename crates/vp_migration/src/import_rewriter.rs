@@ -2554,13 +2554,19 @@ fn rewrite_import(
 }
 
 /// Adapt a retained standalone config for the bundled pack tool, without writing the source file.
+/// Use bundled defaults when the Vite config already maps the imported options.
 pub fn rewrite_tsdown_config_for_pack(
     config_path: &Path,
     workspace_root: &Path,
+    vite_config_path: Option<&Path>,
 ) -> Result<(Option<String>, Vec<String>), Error> {
     let original = std::fs::read_to_string(config_path)?;
-    let legacy_defaults =
-        pack_config::preserve_legacy_defaults(config_path, workspace_root, true, &original);
+    let legacy_defaults = pack_config::preserve_legacy_defaults(
+        vite_config_path.unwrap_or(config_path),
+        workspace_root,
+        vite_config_path.is_none(),
+        &original,
+    );
     let skip_packages =
         SkipPackages { skip_vite: true, skip_vitest: true, skip_tsdown: false, skip_oxlint: true };
     let rewritten =

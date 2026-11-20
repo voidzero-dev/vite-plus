@@ -289,15 +289,17 @@ pub struct NormalizedTsdownJsonPackConfigs {
     pub expected: String,
 }
 
-/// Apply the standalone toolchain's option migration to both sides of the comparison.
+/// Normalize each config with the defaults of the toolchain that reads it.
 #[napi]
 pub fn normalize_tsdown_json_pack_configs(
     vite_config: String,
+    vite_config_path: String,
     json_config_path: String,
     workspace_root: String,
 ) -> Result<NormalizedTsdownJsonPackConfigs> {
     let (existing, expected) = vp_migration::normalize_tsdown_json_pack_configs(
         &vite_config,
+        Path::new(&vite_config_path),
         Path::new(&json_config_path),
         Path::new(&workspace_root),
     )
@@ -387,10 +389,12 @@ pub struct TsdownConfigRewriteResult {
 pub fn rewrite_tsdown_config_for_pack(
     config_path: String,
     workspace_root: String,
+    vite_config_path: Option<String>,
 ) -> Result<TsdownConfigRewriteResult> {
     let (content, warnings) = vp_migration::rewrite_tsdown_config_for_pack(
         Path::new(&config_path),
         Path::new(&workspace_root),
+        vite_config_path.as_deref().map(Path::new),
     )
     .map_err(anyhow::Error::from)?;
     Ok(TsdownConfigRewriteResult { content, warnings })
