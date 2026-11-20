@@ -165,11 +165,10 @@ jobs:
               follow the pinned upstream requirements.
             - After changing tsdown or rolldown-plugin-dts, run
               `node .github/scripts/upgrade-deps.ts --sync-bundled-deps`, then
-              `pnpm install --no-frozen-lockfile`. Core's external `yuku-parser` must
+              `pnpm install --no-frozen-lockfile`. Core's external `yuku` package must
               use the exact installed version resolved by the plugin bundled through
-              tsdown, so it stays aligned with the bundled Yuku code. Do not replace
-              this pin with a version range. The sync command also
-              copies Vite's postcss and optional fsevents ranges into core and
+              tsdown. The sync command also copies Vite's `postcss`,
+              `fsevents`, and `napi-windows-process-start-time` ranges into core and
               updates the upgrade metadata. `@oxlint/plugins` shares Oxlint's release
               version and must use the exact same version selected by the upgrade script.
 

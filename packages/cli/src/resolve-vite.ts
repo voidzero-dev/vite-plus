@@ -13,6 +13,7 @@ export function resolveViteRoot({ cwd, args }: JsCommandContext): string {
   // Match Vite's boolean options so cac does not consume the following root
   // as an option value. Other Vite options accept a required or optional value.
   for (const flag of [
+    '--bypass-lock',
     '--clearScreen',
     '--cors',
     '--strictPort',
