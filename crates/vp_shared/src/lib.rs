@@ -4,6 +4,7 @@
 #![allow(clippy::disallowed_macros)]
 #![allow(clippy::disallowed_types)]
 
+mod args;
 mod dirs;
 mod documentation;
 mod env_config;
@@ -24,6 +25,7 @@ pub mod string_similarity;
 mod tls;
 mod tracing;
 
+pub use args::restore_leading_arg_separator;
 pub use dirs::{
     SHIM_POINTER_EXTENSION, SHIM_POINTER_HEADER, VP_BINARY_NAME, VpDirEnvError, VpDirs,
     VpDirsLayout, is_windows_trampoline, shim_pointer_file_name, validate_vp_dir_env,

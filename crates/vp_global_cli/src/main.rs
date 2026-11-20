@@ -88,7 +88,7 @@ pub(crate) fn apply_chdir(
 /// Normalize CLI arguments:
 /// - `vp list ...` / `vp ls ...` → `vp pm list ...`
 /// - `vp rebuild ...` → `vp pm rebuild ...`
-/// - `vp help [command] [args...]` → `vp [command] [args...] --help`
+/// - `vp help [command] [args...]` → `vp [command] [args...]` with `--help`
 /// - `vp node [args...]` → `vp env exec node [args...]`
 fn normalize_args(args: Vec<String>) -> Vec<String> {
     let mut normalized = args;
@@ -117,11 +117,16 @@ fn normalize_args(args: Vec<String>) -> Vec<String> {
             Some("help") if normalized.len() == 2 => {
                 vec![normalized[0].clone(), "--help".to_string()]
             }
-            // `vp help [command] [args...]` -> `vp [command] [args...] --help`
             Some("help") if normalized.len() > 2 => {
                 let mut next = Vec::with_capacity(normalized.len());
                 next.push(normalized[0].clone());
                 next.extend(normalized[2..].iter().cloned());
+                if matches!(next[1].as_str(), "dev" | "build")
+                    && let Some(index) = next[2..].iter().position(|arg| arg == "--")
+                {
+                    // Bare help renders before project discovery.
+                    next.truncate(index + 2);
+                }
                 next.push("--help".to_string());
                 next
             }
@@ -712,6 +717,14 @@ mod tests {
         let input = s(&["vp", "help", "pm", "apprev-build"]);
         let normalized = normalize_args(input);
         assert_eq!(normalized, s(&["vp", "pm", "apprev-build", "--help"]));
+    }
+
+    #[test]
+    fn normalize_args_truncates_vite_help_at_separator() {
+        for command in ["dev", "build"] {
+            let input = s(&["vp", "help", command, "--mode", "staging", "--", "--app", "web"]);
+            assert_eq!(normalize_args(input), s(&["vp", command, "--mode", "staging", "--help"]));
+        }
     }
 
     #[test]
