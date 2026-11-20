@@ -574,14 +574,19 @@ impl PackageManager {
             version.to_string()
         } else {
             // Corepack rejects a manager that the current project does not pin.
-            let output = tokio::process::Command::new(executable.as_path())
+            let mut command = tokio::process::Command::new(executable.as_path());
+            command
                 .arg("--version")
                 .current_dir(cwd)
                 // User preloads can print to stdout; only the actual command should run them.
-                .env_remove("NODE_OPTIONS")
-                .output()
-                .await
-                .ok()?;
+                .env_remove("NODE_OPTIONS");
+            if client == PackageManagerType::Pnpm {
+                // pnpm can load the project's hooks even for `--version`.
+                command
+                    .env_remove("NPM_CONFIG_IGNORE_PNPMFILE")
+                    .env("npm_config_ignore_pnpmfile", "true");
+            }
+            let output = command.output().await.ok()?;
             if !output.status.success() {
                 return None;
             }
@@ -5893,24 +5898,34 @@ mod tests {
 
     #[cfg(unix)]
     #[tokio::test(flavor = "current_thread")]
-    async fn system_version_probe_ignores_node_preloads() {
+    async fn system_pnpm_version_probe_ignores_preloads_and_hooks() {
         use std::os::unix::fs::PermissionsExt;
 
-        // Like a `NODE_OPTIONS=--require` preload, the fake pnpm prints before its version.
         let dir = tempfile::tempdir().unwrap();
         let pnpm = dir.path().join("pnpm");
-        std::fs::write(&pnpm, "#!/bin/sh\n[ -n \"$NODE_OPTIONS\" ] && echo preload\necho 10.0.0\n")
-            .unwrap();
+        std::fs::write(
+            &pnpm,
+            "#!/bin/sh\n\
+             [ -n \"$NODE_OPTIONS\" ] && echo preload\n\
+             [ -n \"$NPM_CONFIG_IGNORE_PNPMFILE\" ] && echo hook\n\
+             [ \"$npm_config_ignore_pnpmfile\" != true ] && echo hook\n\
+             echo 10.0.0\n",
+        )
+        .unwrap();
         std::fs::set_permissions(&pnpm, std::fs::Permissions::from_mode(0o755)).unwrap();
         let pnpm = vt_path::AbsolutePathBuf::new(pnpm).unwrap();
         let cwd = vt_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
 
-        let vars = [("NODE_OPTIONS", Some(std::ffi::OsStr::new("--require ./preload.js")))];
+        let vars = [
+            ("NODE_OPTIONS", Some(std::ffi::OsStr::new("--require ./preload.js"))),
+            ("NPM_CONFIG_IGNORE_PNPMFILE", Some(std::ffi::OsStr::new("false"))),
+            ("npm_config_ignore_pnpmfile", Some(std::ffi::OsStr::new("false"))),
+        ];
         let manager = vp_shared::EnvConfig::with_vars_async(vars, |_| {
             PackageManager::from_system_executable(PackageManagerType::Pnpm, &pnpm, &cwd)
         })
         .await
-        .expect("the preload output is not part of the version");
+        .expect("the pnpm probe only prints its version");
         assert_eq!(manager.get_version(), "10.0.0");
     }
 

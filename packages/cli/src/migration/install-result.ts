@@ -1,4 +1,8 @@
-import { downloadPackageManager, getPackageManagerOverride } from '../../binding/index.js';
+import {
+  downloadPackageManager,
+  getPackageManagerOverride,
+  type DownloadPackageManagerResult,
+} from '../../binding/index.js';
 import { PackageManager } from '../types/index.ts';
 import { getVpCommand, runCommandSilently } from '../utils/command.ts';
 import { pnpmProbeEnv } from '../utils/pnpm-install-progress.ts';
@@ -13,8 +17,10 @@ export async function getMigrationInstallWatchOptions(
   cwd: string,
   interactive: boolean | undefined,
   packageManager: PackageManager | undefined,
-  version: string | undefined,
-): Promise<{ idleTimeoutMs: number; effectivePnpmVersion: string } | undefined> {
+  downloaded: Pick<DownloadPackageManagerResult, 'version' | 'binPaths'> | undefined,
+): Promise<
+  { idleTimeoutMs: number; effectivePnpmVersion: string; pnpmExecutable: string } | undefined
+> {
   if (interactive || process.env.VP_SKIP_INSTALL) {
     return undefined;
   }
@@ -24,7 +30,8 @@ export async function getMigrationInstallWatchOptions(
       return undefined;
     }
     const probeEnv = pnpmProbeEnv(process.env);
-    let pnpmExecutable: string | undefined;
+    let version = downloaded?.version;
+    let pnpmExecutable = downloaded?.binPaths.pnpm;
     if (process.env.VP_CLI_BIN) {
       // The global launcher can select a system binary ahead of the project pin.
       let selectionResult = await runCommandSilently({
@@ -50,6 +57,7 @@ export async function getMigrationInstallWatchOptions(
           version: string;
           installed?: boolean;
           bin_paths?: Record<string, string>;
+          bin_path?: string;
         };
       };
       if (selection?.name !== PackageManager.pnpm) {
@@ -58,18 +66,25 @@ export async function getMigrationInstallWatchOptions(
       // env current can see a system binary that failed the version probe.
       // The installer falls back to the package manager resolved for the project.
       const launcherVersion = selection.version === 'unknown' ? undefined : selection.version;
+      const launcherExecutable =
+        launcherVersion && selection.installed !== false
+          ? (selection.bin_paths?.pnpm ?? selection.bin_path)
+          : undefined;
+      pnpmExecutable =
+        launcherExecutable ??
+        (launcherVersion === undefined || launcherVersion === version ? pnpmExecutable : undefined);
       version = launcherVersion ?? version;
       if (override) {
         // Use the installer provider for a missing or unusable launcher.
         pnpmExecutable =
-          launcherVersion && selection.installed ? selection.bin_paths?.pnpm : undefined;
-        pnpmExecutable ??= (
-          await downloadPackageManager({
-            ...override,
-            version: launcherVersion ?? override.version,
-            cwd,
-          })
-        ).binPaths.pnpm;
+          launcherExecutable ??
+          (
+            await downloadPackageManager({
+              ...override,
+              version: launcherVersion ?? override.version,
+              cwd,
+            })
+          ).binPaths.pnpm;
       }
     } else if (override) {
       // The local launcher uses the same provider as this binding.
@@ -88,8 +103,12 @@ export async function getMigrationInstallWatchOptions(
       });
       version = exitCode === 0 ? stdout.toString().trim() : undefined;
     }
-    return version?.startsWith('9.')
-      ? { idleTimeoutMs: PNPM_9_INSTALL_IDLE_TIMEOUT_MS, effectivePnpmVersion: version }
+    return version?.startsWith('9.') && pnpmExecutable
+      ? {
+          idleTimeoutMs: PNPM_9_INSTALL_IDLE_TIMEOUT_MS,
+          effectivePnpmVersion: version,
+          pnpmExecutable,
+        }
       : undefined;
   } catch {
     // Let the install command report any manager selection error.

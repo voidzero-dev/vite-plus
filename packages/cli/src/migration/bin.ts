@@ -856,7 +856,7 @@ async function executeMigrationPlan(
         workspaceInfo.rootDir,
         interactive,
         workspaceInfo.packageManager,
-        workspaceInfo.downloadPackageManager.version,
+        workspaceInfo.downloadPackageManager,
       )),
       initialInstall: true,
     },
@@ -1044,7 +1044,7 @@ async function executeMigrationPlan(
         workspaceInfo.rootDir,
         interactive,
         workspaceInfo.packageManager,
-        workspaceInfo.downloadPackageManager.version,
+        workspaceInfo.downloadPackageManager,
       )),
     },
   );
@@ -1692,7 +1692,7 @@ async function main() {
             workspaceInfoOptional.rootDir,
             options.interactive,
             packageManager,
-            packageManagerVersion,
+            downloadedPackageManager,
           )),
         },
       );

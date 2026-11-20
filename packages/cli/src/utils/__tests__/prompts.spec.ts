@@ -25,6 +25,7 @@ vi.mock('../command.ts', async (importOriginal) => ({
 }));
 
 describe('runViteInstall', () => {
+  const pnpmExecutable = '/resolved/bin/pnpm';
   let cwd: string;
 
   beforeEach(() => {
@@ -44,19 +45,43 @@ describe('runViteInstall', () => {
     const configPath = join(cwd, '.npmrc');
     const config = 'reporter=silent\nloglevel=silent\njson=true\nparseable=true\n';
     writeFileSync(configPath, config);
-    vi.mocked(runCommandSilently).mockImplementation(async ({ args }) => ({
+    vi.stubEnv('NODE_OPTIONS', '--require=/preload.cjs');
+    const run = vi.mocked(runCommandSilently);
+    run.mockImplementation(async ({ args }) => ({
       exitCode: 0,
-      stdout: Buffer.from(args.includes('install') ? 'progress' : 'undefined'),
+      stdout: Buffer.from(
+        args.includes('install')
+          ? 'progress'
+          : JSON.stringify({ reporter: 'silent', loglevel: 'silent', json: true, parseable: true }),
+      ),
       stderr: Buffer.alloc(0),
     }));
     const result = await runViteInstall(cwd, false, ['--no-frozen-lockfile'], {
       packageManager: PackageManager.pnpm,
       packageManagerVersion: '11.22.0',
       effectivePnpmVersion: '9.15.9',
+      pnpmExecutable,
       idleTimeoutMs: 2000,
       silent: true,
     });
-    const command = vi.mocked(runCommandSilently).mock.lastCall?.[0];
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(run).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        command: pnpmExecutable,
+        args: [
+          'config',
+          'list',
+          '--location',
+          'project',
+          '--config._json=true',
+          '--config._ignore-pnpmfile=true',
+        ],
+        envs: expect.objectContaining({ NODE_OPTIONS: undefined }),
+        timeoutMs: 5000,
+      }),
+    );
+    const command = run.mock.lastCall?.[0];
     expect(command?.args.slice(-8)).toEqual([
       'install',
       '--no-frozen-lockfile',
@@ -69,6 +94,7 @@ describe('runViteInstall', () => {
     ]);
     expect(command?.idleTimeoutMs).toBe(2000);
     expect(command?.shouldWatchIdle).toBeTypeOf('function');
+    expect(command?.envs.NODE_OPTIONS).toBe('--require=/preload.cjs');
     expect(result.status).toBe('installed');
     expect(readFileSync(configPath, 'utf8')).toBe(config);
   });
@@ -83,22 +109,23 @@ describe('runViteInstall', () => {
     async (reporter, ignorePnpmfile, nativeReporter) => {
       const pnpmfile = 'custom-pnpmfile.cjs';
       writeFileSync(join(cwd, pnpmfile), 'module.exports = { hooks: { filterLog: () => false } };');
-      const configuration: Record<string, string> = {
+      const configuration = {
         reporter,
         pnpmfile,
-        'ignore-pnpmfile': String(ignorePnpmfile),
+        'ignore-pnpmfile': ignorePnpmfile,
       };
       const run = vi.mocked(runCommandSilently);
-      run.mockImplementation(async ({ args }) => ({
+      run.mockResolvedValue({
         exitCode: 0,
-        stdout: Buffer.from(configuration[args[args.indexOf('get') + 1]] ?? 'undefined'),
+        stdout: Buffer.from(JSON.stringify(configuration)),
         stderr: Buffer.alloc(0),
-      }));
+      });
 
       await runViteInstall(cwd, false, undefined, {
         idleTimeoutMs: 2000,
         packageManager: PackageManager.pnpm,
         packageManagerVersion: '9.15.9',
+        pnpmExecutable,
         silent: true,
       });
 
@@ -111,18 +138,17 @@ describe('runViteInstall', () => {
   it.each([
     ['reporter', 'silent'],
     ['loglevel', 'silent'],
-    ['json', 'true'],
-    ['parseable', 'true'],
-    ['reporter', undefined],
-  ])('keeps the native old pnpm reporter for %s=%s', async (key, value) => {
+    ['json', true],
+    ['parseable', true],
+  ] as const)('keeps the native old pnpm reporter for %s=%s', async (key, value) => {
     const run = vi.mocked(runCommandSilently);
     run.mockImplementation(async ({ args }) => {
       if (args.includes('install')) {
         return { exitCode: 1, stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) };
       }
       return {
-        exitCode: args.includes(key) && value === undefined ? 1 : 0,
-        stdout: Buffer.from(args.includes(key) ? (value ?? '') : 'undefined'),
+        exitCode: 0,
+        stdout: Buffer.from(JSON.stringify({ [key]: value })),
         stderr: Buffer.alloc(0),
       };
     });
@@ -130,6 +156,7 @@ describe('runViteInstall', () => {
       packageManager: PackageManager.pnpm,
       packageManagerVersion: '9.15.9',
       effectivePnpmVersion: '9.15.7',
+      pnpmExecutable,
       idleTimeoutMs: 4000,
       silent: true,
     });
@@ -139,6 +166,49 @@ describe('runViteInstall', () => {
     expect(install?.shouldWatchIdle).toBeUndefined();
     expect(result).toMatchObject({ status: 'failed', exitCode: 1 });
   });
+
+  it.each([null, 'configuration output without JSON'])(
+    'keeps the native report when the settings query fails with %s',
+    async (config) => {
+      const run = vi.mocked(runCommandSilently);
+      if (config === null) {
+        run.mockRejectedValueOnce(new Error('Command timed out'));
+      } else {
+        run.mockResolvedValueOnce({
+          exitCode: 0,
+          stdout: Buffer.from(config),
+          stderr: Buffer.alloc(0),
+        });
+      }
+      const nativeOutput = '{"reporter":"native","message":"script failed"}\n';
+      const nativeError = Buffer.from('Fixture error\n');
+      run.mockResolvedValueOnce({
+        exitCode: 7,
+        stdout: Buffer.from(nativeOutput),
+        stderr: nativeError,
+      });
+      const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+      const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+      try {
+        const result = await runViteInstall(cwd, false, undefined, {
+          idleTimeoutMs: 300_000,
+          packageManager: PackageManager.pnpm,
+          packageManagerVersion: '9.15.9',
+          pnpmExecutable,
+          silent: true,
+        });
+        expect(result).toMatchObject({ status: 'failed', exitCode: 7 });
+        const install = run.mock.lastCall?.[0];
+        expect(install?.args.at(-1)).toBe('install');
+        expect(install?.idleTimeoutMs).toBeUndefined();
+        expect(stdout).toHaveBeenCalledWith(nativeOutput);
+        expect(stderr).toHaveBeenCalledWith(nativeError);
+      } finally {
+        stdout.mockRestore();
+        stderr.mockRestore();
+      }
+    },
+  );
 
   it.each([true, false])('reports the timeout for initialInstall=%s', async (initialInstall) => {
     const failureMessage = initialInstall
@@ -199,7 +269,7 @@ describe('runViteInstall', () => {
           ? install
           : {
               exitCode: 0,
-              stdout: Buffer.from(args.includes('reporter') ? 'silent\n' : 'undefined\n'),
+              stdout: Buffer.from(JSON.stringify({ reporter: 'silent' })),
               stderr: Buffer.alloc(0),
             },
       );
@@ -211,6 +281,7 @@ describe('runViteInstall', () => {
           idleTimeoutMs: 300_000,
           packageManager: PackageManager.pnpm,
           packageManagerVersion: '9.15.9',
+          pnpmExecutable,
           silent: true,
         });
         expect(result).toMatchObject({ status: 'failed', exitCode });
