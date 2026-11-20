@@ -80,6 +80,11 @@ describe('formatPnpmInstallOutput', () => {
   it('replays the original records when pnpm is configured for NDJSON', async () => {
     const output = [
       stage('/project', 'resolution_started'),
+      JSON.stringify({
+        name: 'pnpm:package-requester',
+        level: 'warn',
+        message: 'Fetching https://registry.example.com/package.tgz?token=fixture-query failed!',
+      }),
       JSON.stringify({ name: 'pnpm:lifecycle', level: 'debug', line: 'setup failed' }),
       '',
     ].join('\n');
@@ -370,6 +375,66 @@ describe('formatPnpmInstallOutput', () => {
       `${diagnostic}\ninstall failed`,
     );
     expect(await formatPnpmInstallOutput(output, '/project', 'info')).toBe('install failed');
+  });
+
+  it.each(['info', 'warn', 'debug'] as const)(
+    'filters internal package fetch warnings at the %s log level',
+    async (mode) => {
+      const output = [
+        {
+          name: 'pnpm:package-requester',
+          level: 'warn',
+          message: 'Fetching https://registry.example.com/package.tgz?token=fixture-query failed!',
+        },
+        { name: 'pnpm', level: 'warn', message: 'The package store was moved' },
+      ]
+        .map((log) => JSON.stringify(log))
+        .join('\n');
+
+      expect(await formatPnpmInstallOutput(output, '/project', mode)).toBe(
+        'The package store was moved',
+      );
+    },
+  );
+
+  it('redacts registry URLs in visible diagnostics', async () => {
+    const url =
+      'https://fixture-user:fixture-password@registry.example.com/team/package?token=fixture-query#fixture-fragment';
+    const publicUrl = 'https://registry.example.com/team/package';
+    const output = [
+      { name: 'pnpm:registry', level: 'warn', message: `Registry rejected ${url}: Forbidden` },
+      { name: 'pnpm', level: 'info', message: `Using registry at "${url}"` },
+      {
+        name: 'pnpm:deprecation',
+        level: 'debug',
+        pkgName: 'old-package',
+        pkgVersion: '1.0.0',
+        deprecated: `See ${url} for the replacement`,
+        depth: 0,
+      },
+      {
+        name: 'pnpm',
+        level: 'error',
+        code: 'ERR_PNPM_FETCH_403',
+        err: { message: `GET ${url}: Forbidden` },
+        pkgsStack: [{ name: 'parent-package', version: url }],
+        hint: '  An authorization header was used: Bearer fixture-auth[hidden]',
+      },
+    ]
+      .map((log) => JSON.stringify(log))
+      .join('\n');
+
+    expect(await formatPnpmInstallOutput(output, '/project')).toBe(
+      [
+        `Registry rejected ${publicUrl}: Forbidden`,
+        `Using registry at "${publicUrl}"`,
+        `WARN deprecated old-package@1.0.0: See ${publicUrl} for the replacement`,
+        `ERR_PNPM_FETCH_403 GET ${publicUrl}: Forbidden`,
+        `While installing the dependencies of parent-package@${publicUrl}`,
+        '  An authorization header was used: [hidden]',
+        'Check the registry and authentication settings in .npmrc. Run "pnpm login" if you need to sign in.',
+      ].join('\n'),
+    );
   });
 
   it.each([401, 403])('shows safe registry configuration for HTTP %s', async (status) => {
