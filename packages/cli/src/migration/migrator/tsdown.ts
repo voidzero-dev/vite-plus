@@ -10,6 +10,7 @@ import { displayRelative } from '../../utils/path.ts';
 import {
   defaultConfigValue,
   objectProperty,
+  parseSource,
   staticObject,
   unwrapTypeExpression,
 } from '../ast-utils.ts';
@@ -192,14 +193,14 @@ export function collectPackagesKeepingTsdown(
       if (!original) {
         continue;
       }
-      const converted = findDivergedTsdownPackConfig(original, workspaceRoot);
+      const converted = findDivergedTsdownPackConfig(original, workspaceRoot, cwd);
       if (converted) {
         keptPackages.add(dir);
         // The JSON merge already reports its conflicts, including retained scripts.
         if (report && !original.endsWith('.json') && !reportedConfigs.has(original)) {
           reportedConfigs.add(original);
           warnMigration(
-            `Kept standalone tsdown because ${displayRelative(original)} differs from ${displayRelative(converted)}. Please manually merge the configs before switching to \`vp pack\`. See ${documentationUrl('/guide/migrate#tsdown')}`,
+            `Kept standalone tsdown because migration could not verify that ${displayRelative(converted)} matches ${displayRelative(original)}. Please manually merge the configs before switching to \`vp pack\`. See ${documentationUrl('/guide/migrate#tsdown')}`,
             report,
           );
         }
@@ -268,9 +269,10 @@ function findConfigOwners(
     }
     if (stat?.isFile()) {
       const source = fs.readFileSync(configPath, 'utf8');
-      const config = configPath.endsWith('.json')
-        ? defaultConfigValue('tsdown.config.ts', `export default ${source}`)
-        : defaultConfigValue(configPath, source);
+      const parsed = configPath.endsWith('.json')
+        ? parseSource('tsdown.config.ts', `export default ${source}`)
+        : parseSource(configPath, source);
+      const config = defaultConfigValue(parsed.program);
       if (mayLoadWorkspaceConfigs(config)) {
         return projectPaths;
       }

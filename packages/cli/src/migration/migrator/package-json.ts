@@ -35,6 +35,15 @@ import {
   type PackageJsonDependencyField,
 } from './shared.ts';
 
+export function migratedVitePlusSpec(
+  supportCatalog: boolean,
+  catalogDependencyResolver?: CatalogDependencyResolver,
+): string {
+  return supportCatalog && !VITE_PLUS_VERSION.startsWith('file:')
+    ? (catalogDependencyResolver?.preferredCatalogSpec ?? 'catalog:')
+    : VITE_PLUS_VERSION;
+}
+
 export function rewritePackageJson(
   pkg: {
     scripts?: Record<string, string>;
@@ -73,14 +82,14 @@ export function rewritePackageJson(
   keepTsdownDependency = keepTsdown,
   needVitePlusForPack = false,
 ): Record<string, string | string[]> | null {
-  if (pkg.scripts) {
-    const updated = rewriteScripts(
-      JSON.stringify(pkg.scripts),
-      getScriptRulesYaml(skipStagedMigration, keepTsdown),
-    );
-    if (updated) {
-      pkg.scripts = JSON.parse(updated);
-    }
+  const rewrittenScripts = pkg.scripts
+    ? rewriteScripts(
+        JSON.stringify(pkg.scripts),
+        getScriptRulesYaml(skipStagedMigration, keepTsdown),
+      )
+    : undefined;
+  if (rewrittenScripts) {
+    pkg.scripts = JSON.parse(rewrittenScripts);
   }
   // Extract staged config from package.json (lint-staged) → will be merged into vite.config.ts.
   // The lint-staged key is NOT deleted here — it's removed by the caller only after
@@ -337,10 +346,7 @@ export function rewritePackageJson(
   // specs (catalog:named, workspace:*, link:, file:, npm:, github:, git+/git:,
   // http(s)://) so deliberate user pins survive; only vanilla version ranges
   // (e.g. `^0.1.20`, `latest`) are rewritten.
-  const canonicalVitePlusSpec =
-    supportCatalog && !VITE_PLUS_VERSION.startsWith('file:')
-      ? (catalogDependencyResolver?.preferredCatalogSpec ?? 'catalog:')
-      : VITE_PLUS_VERSION;
+  const canonicalVitePlusSpec = migratedVitePlusSpec(supportCatalog, catalogDependencyResolver);
   // Treat vite-plus as present when it lives in either `devDependencies` or
   // `dependencies` (devDeps wins when both exist). Re-pin/normalize happens in
   // whichever group already owns it so a `dependencies` entry is never
@@ -387,7 +393,9 @@ export function rewritePackageJson(
     if (shouldNormalizeExistingVitePlus) {
       existingVitePlusGroup[VITE_PLUS_NAME] = canonicalVitePlusSpec;
     }
-  } else if (needVitePlus || needVitePlusForPack) {
+  } else if (needVitePlus || needVitePlusForPack || (keepTsdownDependency && rewrittenScripts)) {
+    // Retaining tsdown can leave all declared dependencies intact even when a
+    // script has been rewritten to use a Vite+ command.
     // Absent from both groups: add it to `devDependencies` as before.
     pkg.devDependencies = {
       ...pkg.devDependencies,
