@@ -1,0 +1,57 @@
+name: Triage model smoke test (upstream PR 19)
+
+on:
+  pull_request:
+    types: [synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  model:
+    if: github.event.pull_request.number == 3508
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        stage: [triage, verification]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: config
+        name: Read selected model and skill from the PR
+        env:
+          STAGE: ${{ matrix.stage }}
+        run: |
+          ruby -ryaml -e '
+            workflow = YAML.load_file(".github/workflows/issue-triage.yml")
+            step = workflow.fetch("jobs").fetch("triage").fetch("steps").find { |s| s["name"] == "Run triagebot" }
+            inputs = step.fetch("with")
+            File.open(ENV.fetch("GITHUB_OUTPUT"), "a") do |f|
+              f.puts "model=#{inputs.fetch(ENV.fetch("STAGE") + "-model")}", "skill=#{inputs.fetch("triage-skill")}"
+            end'
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ipanasenko/triagebot-action
+          ref: 341657009fd13f34b3d45fe2c10996530e86ce29 # withastro/triagebot-action#19
+          path: pinned-action
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Exercise the pinned action with synthetic events
+        env:
+          STAGE: ${{ matrix.stage }}
+          MODEL: ${{ steps.config.outputs.model }}
+          SKILL: ${{ steps.config.outputs.skill }}
+        run: |
+          fixture_home=$(mktemp -d)
+          run_fixture() {
+            env -i PATH="$PATH" HOME="$fixture_home" GIT_CONFIG_NOSYSTEM=1 GIT_ALLOW_PROTOCOL=file \
+              node .github/scripts/triage-model-smoke.mjs "$STAGE" "$1" "$SKILL" pinned-action/dist/index.mjs
+          }
+          run_fixture 'cloudflare-workers-ai/@cf/google/gemma-4-26b-a4b-it'
+          run_fixture "$MODEL"
