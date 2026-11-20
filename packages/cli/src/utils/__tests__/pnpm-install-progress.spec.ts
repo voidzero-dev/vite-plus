@@ -180,6 +180,69 @@ describe('formatPnpmInstallOutput', () => {
     }
   });
 
+  it('uses the tarball request when the auth failure has no package name', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'vp-pnpm-tarball-auth-'));
+    try {
+      const url = 'https://private.example.com/package.tgz';
+      writeFileSync(join(cwd, '.npmrc'), 'registry=https://default.example.com/\n');
+      const output = JSON.stringify({
+        name: 'pnpm',
+        level: 'error',
+        code: 'ERR_PNPM_FETCH_401',
+        err: { message: `GET ${url}: Unauthorized - 401` },
+        request: { url },
+      });
+
+      expect(await formatPnpmInstallOutput(output, cwd)).toBe(
+        `ERR_PNPM_FETCH_401 GET ${url}: Unauthorized - 401\n` +
+          'Check the registry and authentication settings in .npmrc. Run "pnpm login" if you need to sign in.',
+      );
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it('shows only public URL components in retries and final fetch errors', async () => {
+    const publicUrl = 'https://registry.example.com/team/package';
+    const requestUrl = 'https://fixture-user:fixture-password@registry.example.com/team/package';
+    const suffix = '?token=fixture-query#fixture-fragment';
+    const output = [
+      JSON.stringify({
+        name: 'pnpm:request-retry',
+        level: 'debug',
+        method: 'GET',
+        url: requestUrl + suffix,
+        error: { message: `request to ${publicUrl}${suffix} failed` },
+        attempt: 1,
+        maxRetries: 1,
+        timeout: 50,
+      }),
+      JSON.stringify({
+        name: 'pnpm',
+        level: 'error',
+        code: 'ERR_PNPM_FETCH_503',
+        err: { message: `GET ${requestUrl}${suffix}: Service Unavailable - 503` },
+        request: { url: requestUrl + suffix },
+        hint: `Check "${requestUrl}${suffix}"`,
+      }),
+      JSON.stringify({
+        name: 'pnpm',
+        level: 'error',
+        code: 'ERR_PNPM_META_FETCH_FAIL',
+        err: { message: `GET ${requestUrl}${suffix}: request to ${publicUrl}${suffix} failed` },
+      }),
+    ].join('\n');
+
+    expect(await formatPnpmInstallOutput(output, '/project')).toBe(
+      [
+        `GET ${publicUrl} error (request to ${publicUrl} failed). Will retry in 50ms. 1 retry left.`,
+        `ERR_PNPM_FETCH_503 GET ${publicUrl}: Service Unavailable - 503`,
+        `Check "${publicUrl}"`,
+        `ERR_PNPM_META_FETCH_FAIL GET ${publicUrl}: request to ${publicUrl} failed`,
+      ].join('\n'),
+    );
+  });
+
   it('preserves the source location for unexpected errors from package hooks', async () => {
     const stack =
       "pnpm: Cannot read properties of undefined (reading 'name')\n" +

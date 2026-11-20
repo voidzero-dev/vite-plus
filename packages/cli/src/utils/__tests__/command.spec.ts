@@ -1,3 +1,5 @@
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -132,6 +134,46 @@ describe('command runners', () => {
       await setTimeout(1500);
       expect(existsSync(finished)).toBe(false);
     } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it.skipIf(process.platform === 'win32')('lets a guarded child clean up on SIGINT', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'vp-cancel-command-'));
+    const program = `
+      const { writeFileSync } = require('node:fs');
+      process.on('SIGINT', () => {
+        writeFileSync('cleaned', '');
+        process.exit(0);
+      });
+      writeFileSync('ready', '');
+      setTimeout(() => {}, 10000);
+    `;
+    const commandModule = new URL('../command.ts', import.meta.url).href;
+    const runner = spawn(
+      process.execPath,
+      [
+        '--input-type=module',
+        '-e',
+        `import { runCommandSilently } from ${JSON.stringify(commandModule)};
+        await runCommandSilently({
+          command: process.execPath,
+          args: ['-e', ${JSON.stringify(program)}],
+          cwd: process.cwd(),
+          envs: process.env,
+          idleTimeoutMs: 30_000,
+        });`,
+      ],
+      { cwd, stdio: 'ignore' },
+    );
+    const exited = once(runner, 'exit');
+    try {
+      await expect.poll(() => existsSync(join(cwd, 'ready')), { timeout: 3000 }).toBe(true);
+      runner.kill('SIGINT');
+      await expect(exited).resolves.toEqual([null, 'SIGINT']);
+      await expect.poll(() => existsSync(join(cwd, 'cleaned'))).toBe(true);
+    } finally {
+      runner.kill('SIGTERM');
       rmSync(cwd, { recursive: true, force: true });
     }
   });

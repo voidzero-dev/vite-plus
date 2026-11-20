@@ -60,7 +60,7 @@ export function exitCodeFromClose(code: number | null, signal: NodeJS.Signals | 
   return signalNumber ? 128 + signalNumber : 1;
 }
 
-function stopCommandTree(child: ChildProcess) {
+function stopCommandTree(child: ChildProcess, signal: NodeJS.Signals = 'SIGKILL') {
   const pid = child.pid;
   if (pid === undefined) {
     return;
@@ -77,9 +77,9 @@ function stopCommandTree(child: ChildProcess) {
     }
   } else {
     try {
-      process.kill(-pid, 'SIGKILL');
+      process.kill(-pid, signal);
     } catch {
-      child.kill('SIGKILL');
+      child.kill(signal);
     }
   }
 }
@@ -99,9 +99,16 @@ export async function runCommandSilently(options: RunCommandOptions): Promise<Ru
     // in one process group so a timeout stops both on Unix.
     detached: idleTimeoutMs !== undefined && process.platform !== 'win32',
   });
-  // A separate process group does not receive the parent's terminal signals.
   const removeExitHandler =
-    idleTimeoutMs === undefined ? undefined : onExit(() => stopCommandTree(child));
+    idleTimeoutMs === undefined
+      ? undefined
+      : onExit((_code, signal) => {
+          // Windows children share the console and receive Ctrl+C directly.
+          if (signal && process.platform === 'win32') {
+            return;
+          }
+          stopCommandTree(child, signal ?? 'SIGKILL');
+        });
   const promise = new Promise<RunCommandResult>((resolve, reject) => {
     const stdout: Buffer[] = [];
     const stderr: Buffer[] = [];
