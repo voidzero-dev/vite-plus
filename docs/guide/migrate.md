@@ -61,6 +61,29 @@ Most projects will require further manual adjustments after running `vp migrate`
 
 For the Vitest v5 upgrade, read the [compatibility settings and review checklist](./vitest-v5.md) and the [upstream Vitest migration guide](https://vitest.dev/guide/migration/). The preflight checks your original runner version and Node runtime before dependency updates. Keep the original lockfile available and resolve blocking findings before retrying.
 
+### Keeping upstream imports in templates and examples
+
+If your root `vite.config.ts` enables `vite-plus/prefer-vite-plus-imports`, add
+this entry to `lint.overrides` to keep `vite` and `vitest` imports in templates
+and examples.
+
+```json
+{
+  "files": ["templates/**", "examples/**"],
+  "rules": { "vite-plus/prefer-vite-plus-imports": "off" }
+}
+```
+
+`vp migrate`, `vp lint --fix`, and `vp check --fix` all use this override for
+Vite and Vitest import rewrites. Oxlint matches the file patterns relative to
+the root config directory. A later matching override can re-enable the rule.
+
+Migration keeps the dependencies that supply preserved `vitest`,
+`@vitest/browser`, and `@vitest/browser-preview` imports. If a template outside
+the workspace imports `vitest` from the root project, the root keeps its dependency.
+When migration removes a `tsdown` development dependency, it still rewrites
+imports from `tsdown` to `vite-plus/pack`.
+
 ## Recommended Workflow
 
 Before running the migration:

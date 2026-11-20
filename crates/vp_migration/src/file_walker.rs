@@ -82,9 +82,17 @@ pub fn is_directory_gitignored(root: &Path, directory: &Path) -> Result<bool, Er
 /// }
 /// ```
 pub fn find_ts_files(root: &Path) -> Result<WalkResult, Error> {
+    find_ts_files_filtered(root, |_| true)
+}
+
+pub(crate) fn find_ts_files_filtered(
+    root: &Path,
+    include: impl Fn(&ignore::DirEntry) -> bool + Send + Sync + 'static,
+) -> Result<WalkResult, Error> {
     let mut files = Vec::new();
 
     let walker = WalkBuilder::new(root)
+        .filter_entry(include)
         .hidden(true) // Skip hidden files/dirs
         .git_ignore(true) // Respect .gitignore
         .git_global(true) // Respect global gitignore
