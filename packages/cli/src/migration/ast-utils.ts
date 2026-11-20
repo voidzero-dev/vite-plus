@@ -136,8 +136,8 @@ export function parseSource(file: string, source: string): ParsedSource {
   return { program: ast.node, bindings, comments };
 }
 
-export function defaultConfigValue(file: string, source: string): t.Node | undefined {
-  const declaration = parseSource(file, source).program.body.find(
+export function defaultConfigValue(program: t.Program): t.Node | undefined {
+  const declaration = program.body.find(
     (statement) => statement.type === 'ExportDefaultDeclaration',
   )?.declaration;
   if (!declaration) {

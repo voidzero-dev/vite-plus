@@ -5,6 +5,7 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { parse as parseJsonc, type ParseError } from 'jsonc-parser';
 import { minimatch } from 'minimatch';
 
+import { ResolverFactory } from '../../../binding/index.js';
 import { appendMissingJsoncArrayItems, detectFormattingOptions } from '../../utils/json.ts';
 import { displayRelative } from '../../utils/path.ts';
 import {
@@ -78,6 +79,7 @@ type JavaScriptOptions = Partial<Record<(typeof javaScriptOptionKeys)[number], b
 
 function readProjectFileLists(
   filename: string,
+  resolver: ResolverFactory,
   ancestors = new Set<string>(),
 ): { text: string; lists: ProjectFileLists; javaScript: JavaScriptOptions } | undefined {
   if (ancestors.has(filename) || !fs.statSync(filename, { throwIfNoEntry: false })?.isFile()) {
@@ -100,14 +102,14 @@ function readProjectFileLists(
   const bases = Array.isArray(config.extends) ? config.extends : [config.extends];
   ancestors.add(filename);
   for (const base of bases) {
-    if (typeof base !== 'string' || (!base.startsWith('.') && !path.isAbsolute(base))) {
+    if (typeof base !== 'string' || base === '') {
       continue;
     }
-    const target = path.resolve(directory, base);
-    const resolved = fs.statSync(target, { throwIfNoEntry: false })?.isFile()
-      ? target
-      : `${target}.json`;
-    const inherited = readProjectFileLists(resolved, ancestors);
+    const resolved = resolveProjectConfigBase(directory, base, resolver);
+    if (!resolved) {
+      continue;
+    }
+    const inherited = readProjectFileLists(resolved, resolver, ancestors);
     Object.assign(lists, inherited?.lists);
     Object.assign(javaScript, inherited?.javaScript);
   }
@@ -127,6 +129,21 @@ function readProjectFileLists(
   return { text, lists, javaScript };
 }
 
+function resolveProjectConfigBase(
+  directory: string,
+  base: string,
+  resolver: ResolverFactory,
+): string | undefined {
+  const specifier = base.replaceAll('\\', '/');
+  if (!specifier.startsWith('./') && !specifier.startsWith('../') && !path.isAbsolute(specifier)) {
+    return resolver.sync(directory, specifier).path;
+  }
+  const target = path.resolve(directory, specifier);
+  return fs.statSync(target, { throwIfNoEntry: false })?.isFile() || target.endsWith('.json')
+    ? target
+    : `${target}.json`;
+}
+
 /** Keep the generated config in each TypeScript project that imports it from Vite config. */
 export function includeGeneratedPackConfig(
   viteConfigPath: string,
@@ -138,6 +155,13 @@ export function includeGeneratedPackConfig(
     return false;
   }
   const root = path.resolve(workspaceRoot);
+  // TypeScript resolves package presets as JSON using the NodeNext CJS conditions.
+  const resolver = new ResolverFactory({
+    extensions: ['.json'],
+    conditionNames: ['require', 'types', 'node'],
+    mainFields: ['tsconfig'],
+    mainFiles: ['tsconfig'],
+  });
   let changed = false;
   for (
     let directory = path.dirname(path.resolve(viteConfigPath));
@@ -148,7 +172,7 @@ export function includeGeneratedPackConfig(
       if (!fs.lstatSync(filename, { throwIfNoEntry: false })?.isFile()) {
         continue;
       }
-      const project = readProjectFileLists(filename);
+      const project = readProjectFileLists(filename, resolver);
       if (!project) {
         continue;
       }

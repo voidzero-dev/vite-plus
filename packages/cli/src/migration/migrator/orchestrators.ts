@@ -34,6 +34,7 @@ import {
   mergeTsdownConfigFile,
   tsdownPackNeedsVitePlus,
   mergeViteConfigFiles,
+  migratedVitePlusSpec,
   migratePnpmOverridesToWorkspaceYaml,
   migratePnpmSettingsToWorkspaceYaml,
   migrateTaskCacheConfigInViteConfig,
@@ -648,13 +649,13 @@ export function rewriteMonorepoProject(
       ? findYarnWorkspaceHoisting(workspaceContext?.rootDir ?? projectPath)
       : undefined;
 
-  let extractedStagedConfig: Record<string, string | string[]> | null = null;
   editJsonFile<{
     devDependencies?: Record<string, string>;
     dependencies?: Record<string, string>;
     peerDependencies?: Record<string, string>;
     optionalDependencies?: Record<string, string>;
     scripts?: Record<string, string>;
+    'lint-staged'?: Record<string, string | string[]>;
     installConfig?: { hoistingLimits?: string };
   }>(packageJsonPath, (pkg) => {
     const requiredVitestPeer = projectListsRequiredVitestPeer(projectPath, pkg);
@@ -667,7 +668,7 @@ export function rewriteMonorepoProject(
       workspaceContext?.retainedImportDependencies?.vitest.has(projectPath) ||
       sourceTreeReferencesRetainedVitestModule(projectPath);
     // rewrite scripts in package.json
-    extractedStagedConfig = rewritePackageJson(
+    const extractedStagedConfig = rewritePackageJson(
       pkg,
       packageManager,
       supportCatalog,
@@ -687,6 +688,21 @@ export function rewriteMonorepoProject(
       keepTsdownDependency,
       tsdownPackNeedsVitePlus(projectPath),
     );
+    if (
+      extractedStagedConfig &&
+      mergeStagedConfigToViteConfig(projectPath, extractedStagedConfig, silent, report)
+    ) {
+      delete pkg['lint-staged'];
+      if (keepTsdownDependency && !hasDirectVitePlusInstallEntry(pkg)) {
+        pkg.devDependencies = {
+          ...pkg.devDependencies,
+          [VITE_PLUS_NAME]: migratedVitePlusSpec(
+            supportCatalog && packageManager !== PackageManager.npm,
+            catalogDependencyResolver,
+          ),
+        };
+      }
+    }
     // If this SUB-workspace now depends on `vite-plus` and Yarn isolates its
     // hoisting (via the root `nmHoistingLimits` OR the workspace's own
     // `installConfig.hoistingLimits`), dedupe the bundled `vitest` family to the
@@ -709,13 +725,6 @@ export function rewriteMonorepoProject(
     }
     return pkg;
   });
-
-  // Merge extracted staged config into vite.config.ts, then remove lint-staged from package.json
-  if (extractedStagedConfig) {
-    if (mergeStagedConfigToViteConfig(projectPath, extractedStagedConfig, silent, report)) {
-      removeLintStagedFromPackageJson(packageJsonPath);
-    }
-  }
 
   if (!deferLazyPluginWrapping) {
     // rewrite imports in all TypeScript/JavaScript files before lazy plugin import merging

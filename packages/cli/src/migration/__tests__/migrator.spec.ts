@@ -309,6 +309,32 @@ describe('explicit tsdown config selection', () => {
     );
   });
 
+  it.each(['lint-staged', undefined])(
+    'adds vite-plus to a member that keeps tsdown and migrates staged config (script=%s)',
+    (staged) => {
+      const manifest = path.join(tmpDir, 'package.json');
+      fs.writeFileSync(
+        manifest,
+        JSON.stringify({
+          scripts: { release: 'tsdown -c release.ts', staged },
+          devDependencies: { tsdown: '0.23.4' },
+          'lint-staged': { '*.ts': 'node check.cjs' },
+        }),
+      );
+      rewriteMonorepoProject(tmpDir, PackageManager.pnpm, false, true);
+      const pkg = readJson(manifest);
+      expect(pkg).toHaveProperty('scripts.release', 'tsdown -c release.ts');
+      expect(pkg).toHaveProperty('devDependencies', { tsdown: '0.23.4', 'vite-plus': 'catalog:' });
+      expect(pkg).not.toHaveProperty('lint-staged');
+      if (staged) {
+        expect(pkg).toHaveProperty('scripts.staged', 'vp staged');
+      }
+      expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).toContain(
+        "from 'vite-plus'",
+      );
+    },
+  );
+
   it.each([
     ['ts', false],
     ['ts', true],
@@ -368,6 +394,43 @@ describe('explicit tsdown config selection', () => {
       }
     },
   );
+
+  it.each([
+    "export default { pack: { ...pack, entry: ['src/browser.ts'] } };",
+    "export default { pack: { entry: ['src/browser.ts'] } };",
+    "export default () => { const pack = { entry: ['src/browser.ts'] }; return { pack }; };",
+  ])('keeps the command if the active pack differs from the generated module', (config) => {
+    const manifest = path.join(tmpDir, 'package.json');
+    fs.writeFileSync(
+      manifest,
+      JSON.stringify({
+        name: 'library',
+        scripts: { build: 'tsdown' },
+        devDependencies: { tsdown: '0.23.4' },
+      }),
+    );
+    const original =
+      "import { defineConfig } from 'tsdown'; export default defineConfig({ entry: ['src/lib.ts'] });";
+    fs.writeFileSync(path.join(tmpDir, 'tsdown.config.ts'), original);
+    expect(mergeTsdownConfigFile(tmpDir, true, createMigrationReport(), true)).toBe(true);
+    const generatedPath = path.join(tmpDir, 'vite-pack.config.ts');
+    const generated = fs.readFileSync(generatedPath, 'utf8');
+    const viteConfig = `import pack from './vite-pack.config.js'; ${config}`;
+    fs.writeFileSync(path.join(tmpDir, 'vite.config.ts'), viteConfig);
+
+    const report = createMigrationReport();
+    rewriteStandaloneProject(
+      tmpDir,
+      makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
+      true,
+      true,
+      report,
+    );
+    expect(readJson(manifest)).toHaveProperty('scripts.build', 'tsdown');
+    expect(readJson(manifest)).toHaveProperty('devDependencies.tsdown', '0.23.4');
+    expect(fs.readFileSync(generatedPath, 'utf8')).toBe(generated);
+    expect(report.warnings).toEqual([expect.stringContaining('Please manually merge')]);
+  });
 
   it('preserves a pnpm resolutions pin used by a workspace member', () => {
     const lib = path.join(tmpDir, 'packages/lib');
@@ -702,6 +765,52 @@ describe('explicit tsdown config selection', () => {
       expect(includeGeneratedPackConfig(viteConfig, generatedPath, tmpDir)).toBe(false);
     },
   );
+
+  it.each([
+    { bases: ['off', 'on'], local: {}, included: true },
+    { bases: ['on', 'off'], local: {}, included: false },
+    { bases: ['off', 'on'], local: { allowJs: false }, included: false },
+  ])('resolves package presets in extends order ($bases, $local)', ({ bases, local, included }) => {
+    const preset = path.join(tmpDir, 'node_modules/@repo/tsconfig');
+    fs.mkdirSync(preset, { recursive: true });
+    fs.writeFileSync(
+      path.join(preset, 'package.json'),
+      JSON.stringify({
+        name: '@repo/tsconfig',
+        exports: {
+          './on.json': { import: './off.json', require: './on.json' },
+          './off.json': './off.json',
+        },
+      }),
+    );
+    for (const name of ['on', 'off']) {
+      fs.writeFileSync(
+        path.join(preset, `${name}.json`),
+        JSON.stringify({
+          compilerOptions: { allowJs: name === 'on' },
+          files: ['${configDir}/vite.config.ts'],
+        }),
+      );
+    }
+    const config = path.join(tmpDir, 'tsconfig.node.json');
+    const original = JSON.stringify({
+      extends: bases.map((base) => `@repo/tsconfig/${base}.json`),
+      compilerOptions: { composite: true, ...local },
+    });
+    fs.writeFileSync(config, original);
+    expect(
+      includeGeneratedPackConfig(
+        path.join(tmpDir, 'vite.config.ts'),
+        path.join(tmpDir, 'vite-pack.config.mjs'),
+        tmpDir,
+      ),
+    ).toBe(included);
+    if (included) {
+      expect(readJsonFile(config, true).files).toEqual(['vite.config.ts', 'vite-pack.config.mjs']);
+    } else {
+      expect(fs.readFileSync(config, 'utf8')).toBe(original);
+    }
+  });
 
   it.each([
     ["({ mode }) => ({ server: { port: mode === 'development' ? 4000 : 5000 } })", false],
