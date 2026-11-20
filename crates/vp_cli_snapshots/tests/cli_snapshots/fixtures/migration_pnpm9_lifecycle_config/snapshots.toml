@@ -1,0 +1,20 @@
+[[case]]
+name = "default_config"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL", "CI"]
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  { argv = ["vpt", "print-file", "postinstall-config.jsonl"], comment = "Both installs run postinstall with a working pnpm root and no added reporting settings." },
+]
+
+[[case]]
+name = "configured_reporter"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL", "CI"]
+steps = [
+  { argv = ["vpt", "write-file", ".npmrc", "reporter=silent\nloglevel=warn\njson=true\nparseable=true\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  { argv = ["vpt", "print-file", "postinstall-config.jsonl", ".npmrc"], comment = "Both installs preserve the project's reporting settings in postinstall and on disk." },
+]
