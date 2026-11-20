@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { downloadPackageManager as downloadPackageManagerBinding } from '../../../binding/index.js';
 import { PackageManager } from '../../types/index.ts';
@@ -25,79 +25,78 @@ vi.mock('../command.ts', async (importOriginal) => ({
 }));
 
 describe('runViteInstall', () => {
+  let cwd: string;
+
+  beforeEach(() => {
+    cwd = mkdtempSync(join(tmpdir(), 'vp-pnpm-install-'));
+    vi.stubEnv('VP_SKIP_INSTALL', undefined);
+    vi.stubEnv('VP_VERSION', '1.0.0');
+    vi.stubEnv('VP_CLI_BIN', undefined);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    rmSync(cwd, { recursive: true, force: true });
+  });
+
   it('requests pnpm resolution events without rewriting logging preferences', async () => {
-    const cwd = mkdtempSync(join(tmpdir(), 'vp-pnpm-install-reporter-'));
     const configPath = join(cwd, '.npmrc');
     const config = 'reporter=silent\nloglevel=silent\njson=true\nparseable=true\n';
     writeFileSync(configPath, config);
-    try {
-      vi.mocked(runCommandSilently).mockResolvedValueOnce({
-        exitCode: 0,
-        stdout: Buffer.from('progress'),
-        stderr: Buffer.alloc(0),
-      });
-      const result = await runViteInstall(cwd, false, ['--no-frozen-lockfile'], {
-        packageManager: PackageManager.pnpm,
-        packageManagerVersion: '9.15.9',
-        idleTimeoutMs: 2000,
-        silent: true,
-      });
-      const command = vi.mocked(runCommandSilently).mock.lastCall?.[0];
-      expect(command?.args.slice(-7)).toEqual([
-        'install',
-        '--no-frozen-lockfile',
-        '--',
-        '--reporter=ndjson',
-        '--loglevel=info',
-        '--config.json=false',
-        '--config.parseable=false',
-      ]);
-      expect(command?.idleTimeoutMs).toBe(2000);
-      expect(command?.shouldWatchIdle).toBeTypeOf('function');
-      expect(result.status).toBe('installed');
-      expect(readFileSync(configPath, 'utf8')).toBe(config);
-    } finally {
-      rmSync(cwd, { recursive: true, force: true });
-    }
+    vi.mocked(runCommandSilently).mockResolvedValueOnce({
+      exitCode: 0,
+      stdout: Buffer.from('progress'),
+      stderr: Buffer.alloc(0),
+    });
+    const result = await runViteInstall(cwd, false, ['--no-frozen-lockfile'], {
+      packageManager: PackageManager.pnpm,
+      packageManagerVersion: '9.15.9',
+      idleTimeoutMs: 2000,
+      silent: true,
+    });
+    const command = vi.mocked(runCommandSilently).mock.lastCall?.[0];
+    expect(command?.args.slice(-7)).toEqual([
+      'install',
+      '--no-frozen-lockfile',
+      '--',
+      '--reporter=ndjson',
+      '--loglevel=info',
+      '--config.json=false',
+      '--config.parseable=false',
+    ]);
+    expect(command?.idleTimeoutMs).toBe(2000);
+    expect(command?.shouldWatchIdle).toBeTypeOf('function');
+    expect(result.status).toBe('installed');
+    expect(readFileSync(configPath, 'utf8')).toBe(config);
   });
 
-  it.each([
-    {
-      initialInstall: true,
-      failureMessage: 'Initial dependency resolution stopped after 300 seconds without output.',
-    },
-    {
-      initialInstall: false,
-      failureMessage:
-        'Dependency resolution stopped after 300 seconds without output. If pnpm hangs again, ' +
-        "update the project's pnpm pin. Run `vp install --no-frozen-lockfile` in /project to retry.",
-    },
-  ])(
-    'reports the timeout for initialInstall=$initialInstall',
-    async ({ initialInstall, failureMessage }) => {
-      vi.mocked(runCommandSilently).mockResolvedValueOnce({
-        exitCode: 124,
-        idleTimedOut: true,
-        stdout: Buffer.alloc(0),
-        stderr: Buffer.alloc(0),
+  it.each([true, false])('reports the timeout for initialInstall=%s', async (initialInstall) => {
+    const failureMessage = initialInstall
+      ? 'Initial dependency resolution stopped after 300 seconds without output.'
+      : 'Dependency resolution stopped after 300 seconds without output. If pnpm hangs again, ' +
+        `update the project's pnpm pin. Run \`vp install --no-frozen-lockfile\` in ${cwd} to retry.`;
+    vi.mocked(runCommandSilently).mockResolvedValueOnce({
+      exitCode: 124,
+      idleTimedOut: true,
+      stdout: Buffer.alloc(0),
+      stderr: Buffer.alloc(0),
+    });
+
+    const stderr = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const result = await runViteInstall(cwd, false, undefined, {
+        idleTimeoutMs: 300_000,
+        initialInstall,
+        silent: true,
       });
 
-      const stderr = vi.spyOn(console, 'error').mockImplementation(() => {});
-      try {
-        const result = await runViteInstall('/project', false, undefined, {
-          idleTimeoutMs: 300_000,
-          initialInstall,
-          silent: true,
-        });
-
-        expect(result).toMatchObject({ status: 'failed', exitCode: 124, failureMessage });
-        expect(stderr).toHaveBeenCalledTimes(1);
-        expect(stderr).toHaveBeenCalledWith(expect.any(String), failureMessage);
-      } finally {
-        stderr.mockRestore();
-      }
-    },
-  );
+      expect(result).toMatchObject({ status: 'failed', exitCode: 124, failureMessage });
+      expect(stderr).toHaveBeenCalledTimes(1);
+      expect(stderr).toHaveBeenCalledWith(expect.any(String), failureMessage);
+    } finally {
+      stderr.mockRestore();
+    }
+  });
 });
 
 describe('downloadPackageManager', () => {

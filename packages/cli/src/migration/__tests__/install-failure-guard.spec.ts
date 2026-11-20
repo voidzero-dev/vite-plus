@@ -24,6 +24,10 @@ vi.mock(import('../../utils/command.ts'), async (importOriginal) => ({
 const here = path.dirname(fileURLToPath(import.meta.url));
 const binPath = path.resolve(here, '..', 'bin.ts');
 
+function commandOutput(text: string) {
+  return { exitCode: 0, stdout: Buffer.from(text), stderr: Buffer.alloc(0) };
+}
+
 /**
  * `runViteInstall` returns `{ status: 'failed', exitCode }` (it does not throw)
  * when the install process exits non-zero. Earlier versions of `migration/bin.ts`
@@ -114,6 +118,15 @@ describe('handleInstallResult', () => {
 
 describe('getMigrationInstallIdleTimeoutMs', () => {
   const cwd = '/project';
+  const projectVersion = '9.15.9';
+  const overridePnpm = {
+    name: 'pnpm',
+    version: '10.33.0',
+    installDir: '/override-pnpm',
+    binPrefix: '/override-pnpm/bin',
+    binPaths: { pnpm: '/override-pnpm/bin/pnpm' },
+    packageName: 'pnpm',
+  };
 
   beforeEach(() => {
     vi.resetAllMocks();
@@ -124,18 +137,19 @@ describe('getMigrationInstallIdleTimeoutMs', () => {
   afterEach(() => vi.unstubAllEnvs());
 
   it('bounds non-interactive pnpm 9 installs only', async () => {
-    expect(await getMigrationInstallIdleTimeoutMs(cwd, false, PackageManager.pnpm, '9.9.0')).toBe(
-      300_000,
-    );
     expect(
-      await getMigrationInstallIdleTimeoutMs(cwd, true, PackageManager.pnpm, '9.9.0'),
+      await getMigrationInstallIdleTimeoutMs(cwd, false, PackageManager.pnpm, projectVersion),
+    ).toBe(300_000);
+    expect(
+      await getMigrationInstallIdleTimeoutMs(cwd, true, PackageManager.pnpm, projectVersion),
     ).toBeUndefined();
     expect(
       await getMigrationInstallIdleTimeoutMs(cwd, false, PackageManager.pnpm, '12.21.0'),
     ).toBeUndefined();
     expect(
-      await getMigrationInstallIdleTimeoutMs(cwd, false, PackageManager.npm, '9.9.0'),
+      await getMigrationInstallIdleTimeoutMs(cwd, false, PackageManager.npm, undefined),
     ).toBeUndefined();
+    expect(runCommandSilently).not.toHaveBeenCalled();
   });
 
   it('leaves a pnpm 9 project unguarded when the override selects Yarn', async () => {
@@ -143,53 +157,93 @@ describe('getMigrationInstallIdleTimeoutMs', () => {
     vi.mocked(getPackageManagerOverride).mockReturnValue({ name: 'yarn', version: '4.10.3' });
 
     expect(
-      await getMigrationInstallIdleTimeoutMs(cwd, false, PackageManager.pnpm, '9.15.9'),
+      await getMigrationInstallIdleTimeoutMs(cwd, false, PackageManager.pnpm, projectVersion),
     ).toBeUndefined();
     expect(runCommandSilently).not.toHaveBeenCalled();
   });
 
   it.each([
-    ['12.21.0', '9.15.9', 300_000],
+    ['10.33.0', '9.15.9', 300_000],
     ['9.15.9', '12.21.0', undefined],
   ])(
-    'uses the global launcher selection over pnpm %s from the workspace',
-    async (pin, version, expected) => {
+    'checks the version selected by the global pnpm %s launcher',
+    async (version, effectiveVersion, expected) => {
       vi.stubEnv('VP_CLI_BIN', '/global/vp');
       vi.mocked(getPackageManagerOverride).mockReturnValue({ name: 'pnpm', version: 'default' });
-      vi.mocked(runCommandSilently).mockResolvedValue({
-        exitCode: 0,
-        stdout: Buffer.from(JSON.stringify({ package_manager: { name: 'pnpm', version } })),
-        stderr: Buffer.alloc(0),
-      });
+      vi.mocked(runCommandSilently)
+        .mockResolvedValueOnce(
+          commandOutput(
+            JSON.stringify({
+              package_manager: {
+                name: 'pnpm',
+                version,
+                installed: true,
+                bin_paths: overridePnpm.binPaths,
+              },
+            }),
+          ),
+        )
+        .mockResolvedValueOnce(commandOutput(effectiveVersion));
 
-      expect(await getMigrationInstallIdleTimeoutMs(cwd, false, PackageManager.pnpm, pin)).toBe(
-        expected,
-      );
-      expect(runCommandSilently).toHaveBeenCalledWith(
+      expect(
+        await getMigrationInstallIdleTimeoutMs(cwd, false, PackageManager.pnpm, projectVersion),
+      ).toBe(expected);
+      expect(runCommandSilently).toHaveBeenNthCalledWith(
+        1,
         expect.objectContaining({
           command: '/global/vp',
           args: ['env', 'current', 'pm', '--json'],
           cwd,
         }),
       );
+      expect(runCommandSilently).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({ command: overridePnpm.binPaths.pnpm, args: ['--version'], cwd }),
+      );
     },
   );
 
-  it('uses the resolved pnpm override for the local launcher', async () => {
-    vi.mocked(getPackageManagerOverride).mockReturnValue({ name: 'pnpm', version: 'latest-9' });
-    vi.mocked(downloadPackageManager).mockResolvedValue({
-      name: 'pnpm',
-      version: '9.15.9',
-      installDir: '/pnpm',
-      binPrefix: '/pnpm/bin',
-      binPaths: { pnpm: '/pnpm/bin/pnpm' },
-      packageName: 'pnpm',
-    });
+  it('prepares a global pnpm override that has yet to be installed', async () => {
+    vi.stubEnv('VP_CLI_BIN', '/global/vp');
+    vi.mocked(getPackageManagerOverride).mockReturnValue({ name: 'pnpm', version: '10.33.0' });
+    vi.mocked(downloadPackageManager).mockResolvedValue(overridePnpm);
+    vi.mocked(runCommandSilently)
+      .mockResolvedValueOnce(
+        commandOutput(
+          JSON.stringify({
+            package_manager: {
+              name: 'pnpm',
+              version: '10.33.0',
+              installed: false,
+              bin_paths: overridePnpm.binPaths,
+            },
+          }),
+        ),
+      )
+      .mockResolvedValueOnce(commandOutput('9.15.9'));
 
-    expect(await getMigrationInstallIdleTimeoutMs(cwd, false, PackageManager.pnpm, '12.21.0')).toBe(
-      300_000,
+    expect(
+      await getMigrationInstallIdleTimeoutMs(cwd, false, PackageManager.pnpm, projectVersion),
+    ).toBe(300_000);
+    expect(downloadPackageManager).toHaveBeenCalledWith({
+      name: 'pnpm',
+      version: '10.33.0',
+      cwd,
+    });
+  });
+
+  it('checks the effective version of the local pnpm override', async () => {
+    vi.mocked(getPackageManagerOverride).mockReturnValue({ name: 'pnpm', version: '10.33.0' });
+    vi.mocked(downloadPackageManager).mockResolvedValue(overridePnpm);
+    vi.mocked(runCommandSilently).mockResolvedValueOnce(commandOutput('9.15.9'));
+
+    expect(
+      await getMigrationInstallIdleTimeoutMs(cwd, false, PackageManager.pnpm, projectVersion),
+    ).toBe(300_000);
+    expect(downloadPackageManager).toHaveBeenCalledWith({ name: 'pnpm', version: '10.33.0', cwd });
+    expect(runCommandSilently).toHaveBeenCalledWith(
+      expect.objectContaining({ command: overridePnpm.binPaths.pnpm, args: ['--version'], cwd }),
     );
-    expect(downloadPackageManager).toHaveBeenCalledWith({ name: 'pnpm', version: 'latest-9', cwd });
   });
 });
 

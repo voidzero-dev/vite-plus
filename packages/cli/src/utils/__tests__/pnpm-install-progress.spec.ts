@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import { stripVTControlCharacters } from 'node:util';
 
 import { describe, expect, it } from 'vitest';
 
@@ -63,7 +64,7 @@ describe('formatPnpmInstallOutput', () => {
           },
         }),
       );
-      const formatted = await formatPnpmInstallOutput(output, cwd);
+      const formatted = stripVTControlCharacters(await formatPnpmInstallOutput(output, cwd));
       expect(formatted).toContain('ERR_PNPM_PEER_DEP_ISSUES Unmet peer dependencies');
       expect(formatted).toContain('react-dom 18.3.1');
       expect(formatted).toContain('unmet peer react@^18.3.1: found 17.0.2');
@@ -119,6 +120,49 @@ describe('formatPnpmInstallOutput', () => {
       'launcher warning\n' +
         'ERR_PNPM_LINKED_PKG_DIR_NOT_FOUND Missing local dependency\n' +
         'Progress: resolved 1, reused 0, downloaded 1, added 0',
+    );
+  });
+
+  it('preserves the source location for unexpected errors from package hooks', async () => {
+    const stack =
+      "pnpm: Cannot read properties of undefined (reading 'name')\n" +
+      '    at readPackage (/project/.pnpmfile.cjs:3:24)';
+    const output = JSON.stringify({
+      name: 'pnpm',
+      level: 'error',
+      err: { message: "Cannot read properties of undefined (reading 'name')", stack },
+    });
+
+    expect(await formatPnpmInstallOutput(output, '/project')).toBe(stack);
+  });
+
+  it('identifies the directories and failure of concurrent install scripts', async () => {
+    const cwd = resolve('fixture');
+    const lifecycleEvent = (pkg: string, event: Record<string, unknown>) =>
+      JSON.stringify({
+        name: 'pnpm:lifecycle',
+        level: 'debug',
+        stage: 'postinstall',
+        wd: join(cwd, 'node_modules', pkg),
+        ...event,
+      });
+    const output = [
+      lifecycleEvent('a', { script: 'node postinstall.cjs' }),
+      lifecycleEvent('b', { script: 'node postinstall.cjs' }),
+      lifecycleEvent('a', { line: 'shared message' }),
+      lifecycleEvent('b', { line: 'shared message' }),
+      lifecycleEvent('a', { exitCode: 0 }),
+      lifecycleEvent('b', { exitCode: 7 }),
+    ].join('\n');
+
+    expect(await formatPnpmInstallOutput(output, cwd)).toBe(
+      [
+        'node_modules/a postinstall$ node postinstall.cjs',
+        'node_modules/b postinstall$ node postinstall.cjs',
+        'node_modules/a postinstall: shared message',
+        'node_modules/b postinstall: shared message',
+        'node_modules/b postinstall: failed with exit code 7',
+      ].join('\n'),
     );
   });
 });

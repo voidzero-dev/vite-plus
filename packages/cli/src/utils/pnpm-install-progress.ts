@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 
 import { readJsonFile } from './json.ts';
+import { displayRelative } from './path.ts';
 
 function parsePnpmLog(line: string): Record<string, unknown> | undefined {
   if (!line.startsWith('{')) {
@@ -107,17 +108,31 @@ export async function formatPnpmInstallOutput(output: string, cwd: string): Prom
         progress[log.status as keyof typeof progress]++;
       }
     } else if (log.name === 'pnpm:lifecycle' && typeof log.stage === 'string') {
+      const directory =
+        typeof log.wd === 'string' ? displayRelative(log.wd, cwd) || '.' : log.depPath;
+      const label = typeof directory === 'string' ? `${directory} ${log.stage}` : log.stage;
       if (typeof log.script === 'string') {
-        messages.push(`${log.stage}$ ${log.script}`);
+        messages.push(`${label}$ ${log.script}`);
       } else if (typeof log.line === 'string') {
-        messages.push(`${log.stage}: ${log.line}`);
+        messages.push(`${label}: ${log.line}`);
+      } else if (typeof log.exitCode === 'number' && log.exitCode !== 0) {
+        const optional = log.optional === true ? ' (optional dependency)' : '';
+        messages.push(`${label}: failed with exit code ${log.exitCode}${optional}`);
       }
     } else if (log.level !== 'debug' && log.name !== 'pnpm:install-check') {
-      const error = log.err as { message?: unknown } | undefined;
-      const message = log.message ?? error?.message;
+      const error = asRecord(log.err);
+      const message = log.message ?? error.message;
       if (typeof message === 'string') {
-        const code = typeof log.code === 'string' ? `${log.code} ` : '';
-        messages.push(`${code}${message}`);
+        const errorCode = log.code ?? error.code;
+        const code = typeof errorCode === 'string' ? errorCode : '';
+        const details =
+          log.level === 'error' &&
+          typeof error.stack === 'string' &&
+          !code.startsWith('ERR_PNPM_') &&
+          code !== 'ELIFECYCLE'
+            ? error.stack
+            : message;
+        messages.push(code ? `${code} ${details}` : details);
         if (log.level === 'error') {
           appendDependencyContext(messages, log);
         }
