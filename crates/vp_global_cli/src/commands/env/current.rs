@@ -72,7 +72,11 @@ pub async fn execute(
         && let Some(bin_path) = crate::shim::dispatch::find_system_tool("node")
     {
         Some(NodeInfo {
-            version: read_tool_version(&bin_path).await.unwrap_or_else(|| "unknown".into()),
+            version: read_tool_version(
+                tokio::process::Command::new(bin_path.as_path()).arg("--version"),
+            )
+            .await
+            .unwrap_or_else(|| "unknown".into()),
             source: "system PATH".into(),
             source_path: None,
             project_root: None,
@@ -154,9 +158,8 @@ pub async fn execute(
     Ok(ExitStatus::default())
 }
 
-async fn read_tool_version(path: &vt_path::AbsolutePath) -> Option<String> {
-    let output =
-        tokio::process::Command::new(path.as_path()).arg("--version").output().await.ok()?;
+async fn read_tool_version(command: &mut tokio::process::Command) -> Option<String> {
+    let output = command.output().await.ok()?;
     output
         .status
         .success()
@@ -205,7 +208,9 @@ async fn resolve_package_manager_info(
             };
             return Ok(Some(PackageManagerInfo {
                 name: selected_type.to_string(),
-                version: read_tool_version(&primary).await.unwrap_or_else(|| "unknown".into()),
+                version: read_tool_version(&mut selected_type.system_version_command(&primary))
+                    .await
+                    .unwrap_or_else(|| "unknown".into()),
                 source: "system PATH".into(),
                 source_path: None,
                 project_root: selected.as_ref().and_then(|resolution| {

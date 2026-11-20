@@ -62,6 +62,29 @@ impl fmt::Display for PackageManagerType {
 impl PackageManagerType {
     pub const ALL: [Self; 4] = [Self::Npm, Self::Pnpm, Self::Yarn, Self::Bun];
 
+    /// Ask a system package manager for its effective version without loading pnpm hooks.
+    pub fn system_version_command(self, executable: &AbsolutePath) -> tokio::process::Command {
+        let mut command = tokio::process::Command::new(executable.as_path());
+        command.arg("--version");
+        if self == Self::Pnpm {
+            // pnpm 11 and later use pnpm_config_ instead of npm_config_.
+            let keys = ["npm_config_ignore_pnpmfile", "pnpm_config_ignore_pnpmfile"];
+            for (key, _) in env::vars_os() {
+                if key
+                    .to_str()
+                    .is_some_and(|name| keys.iter().any(|key| name.eq_ignore_ascii_case(key)))
+                {
+                    command.env_remove(key);
+                }
+            }
+            command.env_remove("NODE_OPTIONS");
+            for key in keys {
+                command.env(key, "true");
+            }
+        }
+        command
+    }
+
     /// Map an invoked shim tool name (including aliases like `npx`, `pn`, `pnpx`, `pnx`,
     /// `yarnpkg`, `bunx`) to the package-manager family that provides it.
     #[must_use]
@@ -574,19 +597,14 @@ impl PackageManager {
             version.to_string()
         } else {
             // Corepack rejects a manager that the current project does not pin.
-            let mut command = tokio::process::Command::new(executable.as_path());
-            command
-                .arg("--version")
+            let output = client
+                .system_version_command(executable)
                 .current_dir(cwd)
                 // User preloads can print to stdout; only the actual command should run them.
-                .env_remove("NODE_OPTIONS");
-            if client == PackageManagerType::Pnpm {
-                // pnpm can load the project's hooks even for `--version`.
-                command
-                    .env_remove("NPM_CONFIG_IGNORE_PNPMFILE")
-                    .env("npm_config_ignore_pnpmfile", "true");
-            }
-            let output = command.output().await.ok()?;
+                .env_remove("NODE_OPTIONS")
+                .output()
+                .await
+                .ok()?;
             if !output.status.success() {
                 return None;
             }
@@ -5909,6 +5927,8 @@ mod tests {
              [ -n \"$NODE_OPTIONS\" ] && echo preload\n\
              [ -n \"$NPM_CONFIG_IGNORE_PNPMFILE\" ] && echo hook\n\
              [ \"$npm_config_ignore_pnpmfile\" != true ] && echo hook\n\
+             [ -n \"$PNPM_CONFIG_IGNORE_PNPMFILE\" ] && echo hook\n\
+             [ \"$pnpm_config_ignore_pnpmfile\" != true ] && echo hook\n\
              echo 10.0.0\n",
         )
         .unwrap();
@@ -5920,6 +5940,8 @@ mod tests {
             ("NODE_OPTIONS", Some(std::ffi::OsStr::new("--require ./preload.js"))),
             ("NPM_CONFIG_IGNORE_PNPMFILE", Some(std::ffi::OsStr::new("false"))),
             ("npm_config_ignore_pnpmfile", Some(std::ffi::OsStr::new("false"))),
+            ("PNPM_CONFIG_IGNORE_PNPMFILE", Some(std::ffi::OsStr::new("false"))),
+            ("pnpm_config_ignore_pnpmfile", Some(std::ffi::OsStr::new("false"))),
         ];
         let manager = vp_shared::EnvConfig::with_vars_async(vars, |_| {
             PackageManager::from_system_executable(PackageManagerType::Pnpm, &pnpm, &cwd)

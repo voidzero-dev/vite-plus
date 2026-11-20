@@ -218,8 +218,8 @@ describe('getMigrationInstallWatchOptions', () => {
           args: ['env', 'current', 'pm', '--json'],
           cwd,
           envs: expect.objectContaining({
-            NODE_OPTIONS: undefined,
             npm_config_ignore_pnpmfile: 'true',
+            pnpm_config_ignore_pnpmfile: 'true',
           }),
         }),
       );
@@ -230,11 +230,14 @@ describe('getMigrationInstallWatchOptions', () => {
           args: ['--version'],
           cwd,
           envs: expect.objectContaining({
-            NODE_OPTIONS: undefined,
             npm_config_ignore_pnpmfile: 'true',
+            pnpm_config_ignore_pnpmfile: 'true',
           }),
         }),
       );
+      for (const [options] of vi.mocked(runCommandSilently).mock.calls) {
+        expect(options.envs).not.toHaveProperty('NODE_OPTIONS');
+      }
       expect(process.env.NODE_OPTIONS).toBe('--require=/preload.cjs');
       expect(process.env.npm_config_ignore_pnpmfile).toBe('false');
     },
@@ -266,7 +269,7 @@ describe('getMigrationInstallWatchOptions', () => {
         command: '/global/vp',
         args: ['env', 'current', '--json'],
         cwd,
-        envs: expect.objectContaining({ NODE_OPTIONS: undefined }),
+        envs: expect.objectContaining({ npm_config_ignore_pnpmfile: 'true' }),
       }),
     );
   });

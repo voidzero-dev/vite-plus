@@ -1,4 +1,4 @@
-import type { ChildProcess } from 'node:child_process';
+import { execFile, type ChildProcess } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import { constants } from 'node:os';
 import { join } from 'node:path';
@@ -93,14 +93,35 @@ function listProcessParents(): [number, number][] {
   });
 }
 
-function stopCommandTree(child: ChildProcess) {
+function signalProcessGroup(child: ChildProcess, signal: NodeJS.Signals) {
+  if (child.pid === undefined) {
+    return;
+  }
+  try {
+    // The group can still exist after the process that started it has exited.
+    process.kill(-child.pid, signal);
+  } catch {
+    child.kill(signal);
+  }
+}
+
+function stopCommandTree(child: ChildProcess, { waitForWindows = true } = {}) {
   const pid = child.pid;
   if (pid === undefined || child.exitCode !== null || child.signalCode !== null) {
     return;
   }
   if (process.platform === 'win32') {
     const taskkill = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'taskkill.exe');
-    const result = spawn.sync(taskkill, ['/pid', String(pid), '/t', '/f'], {
+    const args = ['/pid', String(pid), '/t', '/f'];
+    if (!waitForWindows) {
+      execFile(taskkill, args, { timeout: 5000, windowsHide: true }, (error) => {
+        if (error) {
+          child.kill('SIGKILL');
+        }
+      });
+      return;
+    }
+    const result = spawn.sync(taskkill, args, {
       stdio: 'ignore',
       timeout: 5000,
       windowsHide: true,
@@ -140,8 +161,11 @@ function stopCommandTree(child: ChildProcess) {
 export async function runCommandSilently(options: RunCommandOptions): Promise<RunCommandResult> {
   const { idleTimeoutMs } = options;
   const timeoutMs = idleTimeoutMs ?? options.timeoutMs;
+  const hasDeadline = idleTimeoutMs === undefined && timeoutMs !== undefined;
   const shouldWatchIdle = idleTimeoutMs === undefined ? undefined : options.shouldWatchIdle;
-  // Keep the caller's process group for terminal and CI cancellation.
+  // A separate group lets a deadline stop descendants whose wrapper has exited.
+  // Installs keep the caller's process group for terminal and CI cancellation.
+  const useProcessGroup = hasDeadline && process.platform !== 'win32';
   const child = spawn(options.command, options.args, {
     // No stdin pipe: leaving one open would deadlock any descendant `.ps1`
     // shim whose `$MyInvocation.ExpectingInput` branch waits for EOF on
@@ -149,16 +173,19 @@ export async function runCommandSilently(options: RunCommandOptions): Promise<Ru
     stdio: ['ignore', 'pipe', 'pipe'],
     cwd: options.cwd,
     env: options.envs,
+    detached: useProcessGroup,
   });
   const removeExitHandler =
-    idleTimeoutMs === undefined
-      ? undefined
-      : onExit((_code, signal) => {
-          // Terminal signals already reach the child in the caller's group.
-          if (signal === null) {
+    useProcessGroup || idleTimeoutMs !== undefined
+      ? onExit((_code, signal) => {
+          if (useProcessGroup) {
+            signalProcessGroup(child, signal ?? 'SIGKILL');
+          } else if (signal === null) {
+            // Terminal signals already reach the child in the caller's group.
             stopCommandTree(child);
           }
-        });
+        })
+      : undefined;
   const promise = new Promise<RunCommandResult>((resolve, reject) => {
     const stdout: Buffer[] = [];
     const stderr: Buffer[] = [];
@@ -171,13 +198,17 @@ export async function runCommandSilently(options: RunCommandOptions): Promise<Ru
     const startTimer = () => {
       timer = setTimeout(() => {
         timedOut = true;
-        if (idleTimeoutMs === undefined) {
-          child.kill('SIGKILL');
+        if (useProcessGroup) {
+          signalProcessGroup(child, 'SIGKILL');
         } else {
-          stopCommandTree(child);
-          // A descendant may still hold a pipe open.
-          child.stdout?.destroy();
-          child.stderr?.destroy();
+          stopCommandTree(child, { waitForWindows: !hasDeadline });
+        }
+        // A descendant may still hold a pipe open after the wrapper exits.
+        child.stdout?.destroy();
+        child.stderr?.destroy();
+        if (hasDeadline) {
+          cleanup();
+          reject(new Error(`Command timed out after ${timeoutMs}ms: ${options.command}`));
         }
       }, timeoutMs);
       timer.unref();
@@ -213,11 +244,10 @@ export async function runCommandSilently(options: RunCommandOptions): Promise<Ru
       removeExitHandler?.();
     };
     child.on('close', (code, signal) => {
-      cleanup();
-      if (timedOut && idleTimeoutMs === undefined) {
-        reject(new Error(`Command timed out after ${options.timeoutMs}ms: ${options.command}`));
+      if (timedOut && hasDeadline) {
         return;
       }
+      cleanup();
       resolve({
         ...(timedOut && { idleTimedOut: true as const }),
         exitCode: timedOut ? 124 : exitCodeFromClose(code, signal),

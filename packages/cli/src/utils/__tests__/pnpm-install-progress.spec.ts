@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -5,7 +6,11 @@ import { stripVTControlCharacters } from 'node:util';
 
 import { describe, expect, it } from 'vitest';
 
-import { formatPnpmInstallOutput, watchPnpmResolution } from '../pnpm-install-progress.ts';
+import {
+  formatPnpmInstallOutput,
+  pnpmProbeEnv,
+  watchPnpmResolution,
+} from '../pnpm-install-progress.ts';
 
 function stage(prefix: string, stage: string) {
   return JSON.stringify({ name: 'pnpm:stage', prefix, stage });
@@ -14,6 +19,29 @@ function stage(prefix: string, stage: string) {
 function lifecycle(wd: string, event: { script: string } | { exitCode: number }) {
   return JSON.stringify({ name: 'pnpm:lifecycle', wd, stage: 'prepare', ...event });
 }
+
+it('passes both hook settings to a real probe child with case-insensitive environment keys', () => {
+  const env = {
+    ...process.env,
+    NODE_OPTIONS: '--require=missing-probe-preload',
+    NPM_CONFIG_IGNORE_PNPMFILE: 'false',
+    Pnpm_Config_Ignore_Pnpmfile: 'false',
+  };
+  const probeEnv = pnpmProbeEnv(env);
+  const output = execFileSync(
+    process.execPath,
+    [
+      '-p',
+      'JSON.stringify([process.env.npm_config_ignore_pnpmfile, process.env.pnpm_config_ignore_pnpmfile])',
+    ],
+    { env: probeEnv, encoding: 'utf8' },
+  );
+  expect(JSON.parse(output)).toEqual(['true', 'true']);
+  expect(probeEnv).not.toHaveProperty('NPM_CONFIG_IGNORE_PNPMFILE');
+  expect(probeEnv).not.toHaveProperty('Pnpm_Config_Ignore_Pnpmfile');
+  expect(env.NODE_OPTIONS).toBe('--require=missing-probe-preload');
+  expect(env.NPM_CONFIG_IGNORE_PNPMFILE).toBe('false');
+});
 
 describe('watchPnpmResolution', () => {
   it('tracks concurrent resolutions and suspends the timer while any lifecycle script runs', () => {
@@ -32,6 +60,23 @@ describe('watchPnpmResolution', () => {
 });
 
 describe('formatPnpmInstallOutput', () => {
+  it('keeps silent script output immediately followed by a terminal pnpm record', async () => {
+    const text = '{"time":0,"hostname":"fixture"} status from postinstall';
+    const record = JSON.stringify({
+      time: 1720000000000,
+      hostname: 'test-host',
+      pid: 123,
+      level: 'error',
+      name: 'pnpm',
+      code: 'ELIFECYCLE',
+      err: { name: 'pnpm', message: 'Exit status 7', stack: 'internal stack' },
+    });
+    const output = `${text}${record}\n`;
+
+    expect(await formatPnpmInstallOutput(output, '/project', 'silent')).toBe(text);
+    expect(await formatPnpmInstallOutput(output, '/project', 'ndjson')).toBe(output);
+  });
+
   it('replays the original records when pnpm is configured for NDJSON', async () => {
     const output = [
       stage('/project', 'resolution_started'),
