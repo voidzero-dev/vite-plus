@@ -8,8 +8,8 @@ use oxc_allocator::Allocator;
 use oxc_ast::{
     StaticPropertyName,
     ast::{
-        BindingPattern, Expression, ImportDeclarationSpecifier, ImportOrExportKind,
-        ObjectPropertyKind, Program, Statement, VariableDeclarationKind,
+        AssignmentOperator, BindingPattern, Expression, ImportDeclarationSpecifier,
+        ImportOrExportKind, ObjectPropertyKind, Program, Statement, VariableDeclarationKind,
     },
 };
 use oxc_parser::Parser;
@@ -47,22 +47,33 @@ pub enum FieldValue {
 ///   values). Absent keys may exist via the spread and are treated as
 ///   [`FieldValue::NonStatic`] by [`FieldMap::get`], but not by
 ///   [`FieldMap::get_declared`].
+///
+/// `overwritable` marks a map whose declared values later code may change, so
+/// only [`FieldMap::get_declared`] reports them.
 pub struct FieldMap {
     map: FxHashMap<Box<str>, FieldValue>,
     open: bool,
+    overwritable: bool,
+    config_path: Option<vt_path::AbsolutePathBuf>,
 }
 
 impl FieldMap {
     /// Returns an open empty map — used when the config is not analyzable.
     /// `get()` returns `Some(NonStatic)` for any key, triggering NAPI fallback.
     fn unanalyzable() -> Self {
-        Self { map: FxHashMap::default(), open: true }
+        Self { map: FxHashMap::default(), open: true, overwritable: false, config_path: None }
     }
 
     /// Returns a closed empty map — used when no config file exists.
     /// `get()` returns `None` for any key (field definitively absent).
     fn no_config() -> Self {
-        Self { map: FxHashMap::default(), open: false }
+        Self { map: FxHashMap::default(), open: false, overwritable: false, config_path: None }
+    }
+
+    /// The config file these fields came from, or `None` when the directory has none.
+    #[must_use]
+    pub fn config_path(&self) -> Option<&AbsolutePath> {
+        self.config_path.as_deref()
     }
 
     /// Look up a field by name.
@@ -72,8 +83,12 @@ impl FieldMap {
     /// - open map: returns the stored value if explicitly declared after the
     ///   last spread/computed key, or `Some(NonStatic)` for any other key (it
     ///   may exist in the spread).
+    /// - overwritable map: returns `Some(NonStatic)` for every key.
     #[must_use]
     pub fn get(&self, key: &str) -> Option<FieldValue> {
+        if self.overwritable {
+            return Some(FieldValue::NonStatic);
+        }
         self.map.get(key).cloned().or_else(|| self.open.then_some(FieldValue::NonStatic))
     }
 
@@ -132,13 +147,16 @@ pub fn resolve_static_config(dir: &AbsolutePath) -> FieldMap {
         // No config file found — closed empty map; get() returns None for any key.
         return FieldMap::no_config();
     };
-    let Ok(source) = std::fs::read_to_string(&config_path) else {
-        return FieldMap::unanalyzable();
+    let mut fields = match std::fs::read_to_string(&config_path) {
+        Ok(source) => {
+            let extension =
+                config_path.as_path().extension().and_then(|e| e.to_str()).unwrap_or("");
+            parse_js_ts_config(&source, extension)
+        }
+        Err(_) => FieldMap::unanalyzable(),
     };
-
-    let extension = config_path.as_path().extension().and_then(|e| e.to_str()).unwrap_or("");
-
-    parse_js_ts_config(&source, extension)
+    fields.config_path = Some(config_path);
+    fields
 }
 
 /// Parse a JS/TS config file, extracting the default export object's fields.
@@ -165,13 +183,13 @@ fn parse_js_ts_config(source: &str, extension: &str) -> FieldMap {
 /// 1. `export default defineConfig({ ... })` with `defineConfig` from a trusted package
 /// 2. `export default { ... }`
 /// 3. `module.exports = defineConfig({ ... })` with `defineConfig` from a trusted package
-/// 4. `module.exports = { ... }`
+/// 4. `module.exports = { ... }`, overwritable unless it is the last top-level statement
 fn extract_config_fields(program: &Program<'_>) -> FieldMap {
     let has_trusted_define_config_binding = program.body.iter().any(|stmt| {
         is_trusted_define_config_import(stmt) || has_trusted_define_config_cjs_binding(stmt)
     });
 
-    for stmt in &program.body {
+    for (index, stmt) in program.body.iter().enumerate() {
         // ESM: export default ...
         if let Statement::ExportDefaultDeclaration(decl) = stmt {
             let Some(expr) = decl.declaration.as_expression() else {
@@ -189,14 +207,20 @@ fn extract_config_fields(program: &Program<'_>) -> FieldMap {
         }
 
         // CJS: module.exports = ...
+        // Compound assignments such as `||=` may skip their right side at runtime.
         if let Statement::ExpressionStatement(expr_stmt) = stmt
             && let Expression::AssignmentExpression(assign) = &expr_stmt.expression
+            && assign.operator == AssignmentOperator::Assign
             && assign.left.as_member_expression().is_some_and(|m| {
                 m.object().is_specific_id("module")
                     && m.static_property_name().is_some_and(|name| name == "exports")
             })
         {
-            return extract_config_from_expr(&assign.right, has_trusted_define_config_binding);
+            let mut fields =
+                extract_config_from_expr(&assign.right, has_trusted_define_config_binding);
+            // Later statements can mutate `module.exports`, so only a final assignment is exhaustive.
+            fields.overwritable = index + 1 != program.body.len();
+            return fields;
         }
     }
 
@@ -495,7 +519,7 @@ fn extract_object_fields(obj: &oxc_ast::ast::ObjectExpression<'_>) -> FieldMap {
         map.insert(Box::from(key), value);
     }
 
-    FieldMap { map, open }
+    FieldMap { map, open, overwritable: false, config_path: None }
 }
 
 /// Convert an f64 to a JSON value following `JSON.stringify` semantics.
@@ -855,6 +879,48 @@ mod tests {
     fn module_exports_object() {
         let result = parse_js_ts_config("module.exports = { run: { cache: true } }", "cjs");
         assert_json(&result, "run", serde_json::json!({ "cache": true }));
+    }
+
+    #[test]
+    fn module_exports_mutated_later_is_non_static() {
+        let result = parse_js_ts_config(
+            r"
+            module.exports = {
+                check: { lint: false },
+                lint: { rules: { 'no-debugger': 'error' } },
+            };
+            if (process.env.CI) module.exports.check.lint = true;
+            ",
+            "cjs",
+        );
+        assert_non_static(&result, "check");
+    }
+
+    #[test]
+    fn module_exports_followed_by_code_keeps_declared_fields() {
+        let result = parse_js_ts_config(
+            "module.exports = { defaultPackage: './web' };\nfunction helper() {}",
+            "cjs",
+        );
+        assert_non_static(&result, "defaultPackage");
+        assert_non_static(&result, "run");
+        assert_eq!(
+            result.get_declared("defaultPackage"),
+            Some(FieldValue::Json(serde_json::json!("./web")))
+        );
+        assert_eq!(result.get_declared("run"), None);
+    }
+
+    #[test]
+    fn module_exports_compound_assignment_is_non_static() {
+        for source in [
+            "module.exports ||= { check: { lint: false } };",
+            "module.exports ??= { check: { lint: false } };",
+        ] {
+            let result = parse_js_ts_config(source, "cjs");
+            assert_non_static(&result, "check");
+            assert_eq!(result.get_declared("check"), None);
+        }
     }
 
     #[test]
