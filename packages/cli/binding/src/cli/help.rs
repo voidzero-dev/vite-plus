@@ -18,7 +18,6 @@ use super::types::SynthesizableSubcommand;
 /// needs the names to point users at the global installation.
 const GLOBAL_ONLY_SUBCOMMANDS: &[&str] = &["env", "upgrade", "implode"];
 
-/// `chdir` is the absolute directory that `-C` selected; `args` no longer contain `-C`.
 pub(super) fn handle_cli_parse_error(
     err: clap::Error,
     args: &[String],

@@ -283,7 +283,6 @@ mod tests {
 
     #[test]
     fn command_args_read_the_same_in_every_shell() {
-        // POSIX shells, Command Prompt, and PowerShell all read these back as `input`.
         for (input, expected) in [
             (&["run", "--filter", "backend", "dev"][..], "run --filter backend dev"),
             (&["run", "--filter", "@my/*", "build"], r#"run --filter "@my/*" build"#),
