@@ -858,6 +858,7 @@ async function executeMigrationPlan(
       packageManager: workspaceInfo.packageManager,
       packageManagerVersion: workspaceInfo.downloadPackageManager.version,
       idleTimeoutMs: installIdleTimeoutMs,
+      initialInstall: true,
     },
   );
 

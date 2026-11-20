@@ -27,6 +27,32 @@ describe('watchPnpmResolution', () => {
 });
 
 describe('formatPnpmInstallOutput', () => {
+  it('keeps the package, the required peer range, and the installed version', () => {
+    const request = { parents: [{ name: 'react-dom', version: '18.3.1' }], wantedRange: '^18.3.1' };
+    const output = JSON.stringify({
+      name: 'pnpm',
+      level: 'error',
+      code: 'ERR_PNPM_PEER_DEP_ISSUES',
+      err: { message: 'Unmet peer dependencies' },
+      issuesByProjects: {
+        '.': {
+          bad: { react: [{ ...request, foundVersion: '17.0.2' }] },
+          missing: { 'optional-peer': [{ parents: [], wantedRange: '*' }] },
+        },
+        'packages/app': {
+          missing: { react: [request] },
+          intersections: { react: '^18.3.1' },
+        },
+      },
+    });
+
+    expect(formatPnpmInstallOutput(output)).toBe(
+      'ERR_PNPM_PEER_DEP_ISSUES Unmet peer dependencies\n' +
+        '  react-dom@18.3.1 requires react@^18.3.1 (found 17.0.2)\n' +
+        '  react-dom@18.3.1 requires react@^18.3.1 (missing) in packages/app',
+    );
+  });
+
   it('keeps progress and readable errors while dropping verbose pnpm records', () => {
     const output = [
       'launcher warning',
