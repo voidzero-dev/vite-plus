@@ -249,7 +249,7 @@ describe('formatPnpmInstallOutput', () => {
   it.each([
     ['warn', 'dependency warning\nELIFECYCLE Command failed'],
     ['error', 'ELIFECYCLE Command failed'],
-    ['silent', 'setup failed'],
+    ['silent', ''],
   ] as const)('filters pnpm output at the %s log level', async (logLevel, detail) => {
     const script = { name: 'pnpm:lifecycle', stage: 'postinstall', wd: '/dep', level: 'debug' };
     const output = [
@@ -271,7 +271,7 @@ describe('formatPnpmInstallOutput', () => {
       .join('\n');
 
     expect(await formatPnpmInstallOutput(output, '/project', logLevel)).toBe(
-      `plain launcher output\n${detail}`,
+      ['plain launcher output', detail].filter(Boolean).join('\n'),
     );
   });
 
@@ -300,26 +300,31 @@ describe('formatPnpmInstallOutput', () => {
     expect(await formatPnpmInstallOutput(output, '/project', 'warn')).toBe('');
   });
 
-  it('replays stderr only from completed non-optional failing scripts in silent mode', async () => {
-    const failed = { name: 'pnpm:lifecycle', stage: 'postinstall', wd: '/failed', level: 'debug' };
-    const successful = { ...failed, wd: '/successful' };
-    const optional = { ...failed, wd: '/optional' };
+  it('keeps inherited stderr once and ignores structured script output in silent mode', async () => {
+    const script = { name: 'pnpm:lifecycle', stage: 'postinstall', wd: '/project', level: 'debug' };
     const output = [
-      { ...failed, line: 'first failure detail', stdio: 'stderr' },
-      { ...successful, line: 'successful script', stdio: 'stderr' },
-      { ...optional, line: 'optional script', stdio: 'stderr' },
-      { ...failed, stage: 'install', line: 'unfinished script', stdio: 'stderr' },
-      { ...successful, exitCode: 0 },
-      { ...optional, exitCode: 7, optional: true },
-      { ...failed, line: 'second failure detail', stdio: 'stderr' },
-      { ...failed, exitCode: 7 },
+      'postinstall failed',
+      JSON.stringify({ ...script, line: 'postinstall failed', stdio: 'stderr' }),
+      JSON.stringify({ ...script, exitCode: 7 }),
+    ].join('\n');
+
+    expect(await formatPnpmInstallOutput(output, '/project', 'silent')).toBe('postinstall failed');
+  });
+
+  it('shows the lockfile diagnostic at debug level in output order', async () => {
+    const diagnostic = 'No entry for "fixture@1.0.0" in pnpm-lock.yaml';
+    const output = [
+      { name: 'pnpm:lockfile', level: 'debug', message: diagnostic },
+      { name: 'pnpm:install-check', level: 'debug', message: 'internal platform check' },
+      { name: 'pnpm', level: 'error', message: 'install failed' },
     ]
       .map((log) => JSON.stringify(log))
       .join('\n');
 
-    expect(await formatPnpmInstallOutput(output, '/project', 'silent')).toBe(
-      'first failure detail\nsecond failure detail',
+    expect(await formatPnpmInstallOutput(output, '/project', 'debug')).toBe(
+      `${diagnostic}\ninstall failed`,
     );
+    expect(await formatPnpmInstallOutput(output, '/project', 'info')).toBe('install failed');
   });
 
   it.each([401, 403])('shows safe registry configuration for HTTP %s', async (status) => {

@@ -11,7 +11,7 @@ import { isPnpmIgnoredBuildsError, parseInstallGatedBuilds } from './approve-bui
 import { getVpCommand, runCommandSilently } from './command.ts';
 import {
   formatPnpmInstallOutput,
-  getPnpmInstallOutputMode,
+  getPnpmInstallReporting,
   watchPnpmResolution,
 } from './pnpm-install-progress.ts';
 import { reconcilePreviewBridgeRegistry } from './preview-registry.ts';
@@ -201,14 +201,17 @@ export async function runViteInstall(
       : undefined;
   const legacyReporter =
     watchedVersion?.major === 9 && !isGreaterThanOrEqual(watchedVersion, '9.15.8');
-  const originalMode = legacyReporter ? await getPnpmInstallOutputMode(cwd, envs) : undefined;
+  const reporting =
+    watchedVersion?.major === 9 ? await getPnpmInstallReporting(cwd, envs) : undefined;
+  const originalMode = reporting?.mode;
   // pnpm < 9.15.8 waits for other scripts and exits 1 in silent, JSON and
   // parseable modes. Its NDJSON reporter kills the scripts and can change the
   // exit status. Keep the native reporter when it cannot expose resolution events.
   const keepLegacyReporter =
     legacyReporter &&
     (originalMode === undefined || originalMode === 'silent' || originalMode === 'json');
-  const idleTimeoutMs = keepLegacyReporter ? undefined : options?.idleTimeoutMs;
+  const idleTimeoutMs =
+    reporting?.useNativeReporter || keepLegacyReporter ? undefined : options?.idleTimeoutMs;
   const shouldWatchIdle = idleTimeoutMs === undefined ? undefined : watchPnpmResolution();
   if (idleTimeoutMs !== undefined) {
     // pnpm 9 normalizes these keys for the installer but skips underscore-prefixed
@@ -254,10 +257,7 @@ export async function runViteInstall(
     } satisfies CommandRunSummary;
   } else {
     spinner.stop(idleTimedOut ? 'Install timed out' : 'Install failed');
-    const mode =
-      originalMode ??
-      (shouldWatchIdle ? await getPnpmInstallOutputMode(cwd, envs) : undefined) ??
-      'info';
+    const mode = originalMode ?? 'info';
     const installOutput = stdout.toString();
     const output = shouldWatchIdle
       ? await formatPnpmInstallOutput(installOutput, cwd, mode)
