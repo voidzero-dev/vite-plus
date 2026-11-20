@@ -175,7 +175,6 @@ bstr = { version = "1.12.0", default-features = false, features = ["alloc", "std
 bitflags = "2.13.0"
 brush-parser = "0.4.0"
 blake3 = "1.8.5"
-chrono = { version = "0.4", features = ["serde"] }
 clap = "4.5.40"
 clap_complete = "4.6.0"
 console = "0.16.4"
@@ -212,6 +211,13 @@ infer = { version = "0.22.0", default-features = false }
 insta = "1.49.0"
 itertools = "0.15.0"
 itoa = "1.0.18"
+jiff = { version = "1.0.1", default-features = false, features = [
+  "serde",
+  "tz-system",
+  "tzdb-bundle-platform",
+  "tzdb-concatenated",
+  "tzdb-zoneinfo",
+] }
 js-semver = "1.0.0"
 json-escape-simd = "3.1.1"
 json-strip-comments = "3"
