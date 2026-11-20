@@ -45,10 +45,17 @@ jobs:
 
       - name: Upgrade dependencies and sync upstream
         id: build
-        continue-on-error: true # Create PR even if installation or upstream sync fails
+        continue-on-error: true # Let fixups handle failures after version selection.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node .github/scripts/upgrade-deps.ts
+
+      - name: Check upgrade metadata
+        run: |
+          if [ ! -s "${UPGRADE_DEPS_META_DIR}/versions.json" ]; then
+            echo '::error::The upgrade step did not write versions.json. See "Upgrade dependencies and sync upstream" for details.'
+            exit 1
+          fi
 
       - name: Use the updated Node.js pin
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -520,7 +527,7 @@ jobs:
         run: gh pr comment "${PR_NUMBER}" --repo "${GITHUB_REPOSITORY}" --body-file "${UPGRADE_DEPS_META_DIR}/cli-help-report.md"
 
       - name: Report validation failure
-        if: always() && steps.final-validation.outcome != 'success'
+        if: always() && steps.final-validation.outcome == 'failure'
         shell: bash
         run: |
           echo '::error::The upgraded dependencies did not pass final validation.'

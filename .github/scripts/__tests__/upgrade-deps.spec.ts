@@ -123,10 +123,10 @@ test.each([false, true])(
       if (url === 'https://registry.npmjs.org/oxlint-tsgolint/latest') {
         return Response.json({ version: '7.0.2004' });
       }
-      if (url === 'https://registry.npmjs.org/tsrs/latest') {
-        throw new Error('tsrs must use the next dist-tag');
-      }
       if (url === 'https://registry.npmjs.org/tsrs/next') {
+        throw new Error('tsrs must use the latest dist-tag');
+      }
+      if (url === 'https://registry.npmjs.org/tsrs/latest') {
         return Response.json({ version: '7.1.0-beta.tsrs3' });
       }
       if (
