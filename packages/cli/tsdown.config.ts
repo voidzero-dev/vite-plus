@@ -158,12 +158,13 @@ export default defineConfig([
     },
   },
 
-  // CJS — dual-format entries
+  // CJS — dual-format entries and the interactive Vite preload.
   {
     name: 'cli-cjs',
     entry: {
       'define-config': './src/define-config.ts',
       index: './src/index.cts',
+      'vite-dev-terminal': './src/vite-dev-terminal.ts',
       // Match @oxlint/plugins' CJS support for compiled plugins. plugins-dev
       // uses its ESM entry for both import and require, matching upstream.
       'lint-plugins': './src/lint-plugins.ts',
@@ -172,5 +173,6 @@ export default defineConfig([
     format: 'cjs',
     dts: false,
     clean: false,
+    deps: { neverBundle: [/\.\.\/binding\/index\.(js|cjs)/] },
   },
 ]);

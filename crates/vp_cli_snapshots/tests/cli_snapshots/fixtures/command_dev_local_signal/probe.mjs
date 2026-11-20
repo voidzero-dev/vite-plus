@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { connect } from 'node:net';
@@ -8,6 +8,11 @@ import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 
 const workerMode = process.argv[2] === '--worker';
+const hangupMode = process.argv[2] === '--hangup';
+
+function stty(...args) {
+  return execFileSync('stty', args, { encoding: 'utf8', stdio: ['inherit', 'pipe', 'inherit'] }).trim();
+}
 
 async function listenerInfo(stdout, launchPid) {
   let listener;
@@ -31,26 +36,18 @@ async function listenerInfo(stdout, launchPid) {
 const cache = mkdtempSync(join(tmpdir(), 'vp-dev-cache-'));
 const env = { ...process.env, NODE_COMPILE_CACHE: cache };
 delete env.NODE_DISABLE_COMPILE_CACHE;
+if (hangupMode) {
+  env.VP_PROBE_RAW = '1';
+}
+const initialTerminal = hangupMode ? stty('-g') : undefined;
 const args = ['dev', '--host', '127.0.0.1', '--port', '0', '--base', '/probe/'];
 const child = spawn(
   workerMode ? process.execPath : 'vp',
   workerMode ? ['worker-host.mjs', ...args] : args,
-  { detached: true, stdio: ['ignore', 'pipe', 'inherit'], env },
+  { stdio: [hangupMode ? 'inherit' : 'ignore', 'pipe', 'inherit'], env },
 );
 const exited = once(child, 'exit');
-function stopProcessGroup() {
-  if (child.pid !== undefined) {
-    try {
-      process.kill(-child.pid, 'SIGKILL');
-    } catch (err) {
-      if (err.code !== 'ESRCH') {
-        throw err;
-      }
-    }
-  }
-}
 
-const timer = setTimeout(stopProcessGroup, 20_000);
 try {
   const { port, pid } = await listenerInfo(child.stdout, child.pid);
   const response = await fetch(`http://127.0.0.1:${port}/probe/`, {
@@ -63,6 +60,8 @@ try {
   console.log('Vite served the project with the client under /probe/');
   if (workerMode) {
     console.log('The Worker host stayed alive while Vite ran as a child');
+  } else if (hangupMode) {
+    assert.notEqual(stty('-g'), initialTerminal, 'the Vite plugin switched the terminal to raw mode');
   } else {
     assert.ok(
       readdirSync(cache, { recursive: true, withFileTypes: true }).some((entry) => entry.isFile()),
@@ -71,7 +70,7 @@ try {
     console.log('vp saved its compile cache before starting Vite');
   }
 
-  process.kill(pid, 'SIGTERM');
+  process.kill(pid, hangupMode ? 'SIGHUP' : 'SIGTERM');
   const [code, signal] = await exited;
   const socket = connect(port, '127.0.0.1');
   try {
@@ -81,11 +80,26 @@ try {
   } finally {
     socket.destroy();
   }
-  assert.deepEqual([code, signal], [143, null]);
-  const target = workerMode ? 'Vite child' : 'launch PID';
-  console.log(`SIGTERM to the ${target} closed the port with exit code 143`);
+  if (hangupMode) {
+    assert.deepEqual([code, signal], [null, 'SIGHUP']);
+    assert.equal(stty('-g'), initialTerminal, 'SIGHUP restored the terminal mode');
+    console.log('SIGHUP to the launch PID closed the port and restored the terminal');
+  } else {
+    assert.deepEqual([code, signal], [143, null]);
+    const target = workerMode ? 'Vite child' : 'launch PID';
+    console.log(`SIGTERM to the ${target} closed the port with exit code 143`);
+  }
+} catch (error) {
+  console.error(error);
+  process.exitCode = 1;
 } finally {
-  clearTimeout(timer);
-  stopProcessGroup();
+  if (initialTerminal !== undefined) {
+    stty(initialTerminal);
+  }
   rmSync(cache, { recursive: true, force: true });
+  if (process.exitCode === 1) {
+    // The runner starts the probe in its own group. Stop its descendants
+    // before an early failure can leave the runner waiting for their pipes.
+    process.kill(-process.pid, 'SIGKILL');
+  }
 }

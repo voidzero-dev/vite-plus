@@ -3,7 +3,7 @@ name = "command_dev_local_signal"
 vp = "local"
 skip-platforms = ["windows"]
 comment = "SIGTERM sent to the project-local vp dev PID stops the listening Vite server."
-steps = [{ argv = ["node", "probe.mjs"], tty = false }]
+steps = [{ argv = ["node", "probe.mjs"], tty = false, timeout = 25000 }]
 
 [[case]]
 name = "command_dev_local_signal_worker"
@@ -11,3 +11,10 @@ vp = "local"
 skip-platforms = ["windows"]
 comment = "A Node Worker runs project-local vp dev without replacing its host process."
 steps = [{ argv = ["node", "probe.mjs", "--worker"], tty = false, timeout = 25000 }]
+
+[[case]]
+name = "command_dev_local_signal_hangup"
+vp = "local"
+skip-platforms = ["windows"]
+comment = "SIGHUP restores the terminal mode after an interactive Vite plugin changes it."
+steps = [{ argv = ["node", "probe.mjs", "--hangup"], timeout = 25000 }]

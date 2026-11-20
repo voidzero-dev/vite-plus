@@ -72,6 +72,33 @@ pub fn ensure_blocking_stdio() {
     vp_shared::ensure_blocking_stdio();
 }
 
+/// The terminal mode saved before starting the tool.
+#[napi]
+pub struct SavedStdinTerminal {
+    #[cfg(unix)]
+    state: vp_command::StdinTerminalState,
+}
+
+#[napi]
+impl SavedStdinTerminal {
+    #[napi]
+    pub fn restore(&self) {
+        #[cfg(unix)]
+        self.state.restore();
+        #[cfg(not(unix))]
+        let _ = self;
+    }
+}
+
+/// Capture stdin's terminal mode when it has one.
+#[napi]
+pub fn capture_stdin_terminal() -> Option<SavedStdinTerminal> {
+    #[cfg(unix)]
+    return vp_command::StdinTerminalState::capture().map(|state| SavedStdinTerminal { state });
+    #[cfg(not(unix))]
+    None
+}
+
 /// Configuration options passed from JavaScript to Rust.
 #[napi(object, object_to_js = false)]
 pub struct CliOptions {

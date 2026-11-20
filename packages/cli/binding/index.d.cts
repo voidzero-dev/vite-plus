@@ -3610,6 +3610,11 @@ export interface ViteImportGlobMeta {
   isSubImportsPattern?: boolean;
 }
 
+/** The terminal mode saved before starting the tool. */
+export declare class SavedStdinTerminal {
+  restore(): void;
+}
+
 /** Parse source and resolve lexical bindings for the TypeScript migration rules. */
 export declare function analyzeMigrationSource(filename: string, source: string): string;
 
@@ -3643,6 +3648,9 @@ export interface BatchRewriteResult {
   /** Pack configurations that need manual migration */
   warnings: Array<BatchRewriteError>;
 }
+
+/** Capture stdin's terminal mode when it has one. */
+export declare function captureStdinTerminal(): SavedStdinTerminal | null;
 
 /** Configuration options passed from JavaScript to Rust. */
 export interface CliOptions {

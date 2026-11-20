@@ -5,8 +5,6 @@
     clippy::print_stderr
 )]
 
-#[cfg(unix)]
-use std::os::fd::{BorrowedFd, RawFd};
 use std::{
     collections::HashMap,
     ffi::{OsStr, OsString},
@@ -155,7 +153,7 @@ pub fn exec_node_command(mut cmd: Command) -> Error {
 pub async fn execute_with_terminal_guard(mut cmd: Command) -> Result<ExitStatus, Error> {
     // Save terminal state and ignore SIGINT (Unix) or Ctrl+C (Windows) until the child exits.
     #[cfg(unix)]
-    let _guard = TerminalStateGuard::save(nix::libc::STDIN_FILENO);
+    let _guard = TerminalStateGuard::save();
     #[cfg(windows)]
     let _guard = ConsoleCtrlGuard::install();
 
@@ -369,35 +367,44 @@ pub fn fix_stdio_streams() {
     clear_cloexec(unsafe { BorrowedFd::borrow_raw(STDERR_FILENO) });
 }
 
-/// Guard that saves terminal state and restores it on drop.
-/// This prevents escape sequences from appearing in the prompt when a child process
-/// is interrupted (e.g., via Ctrl+C) while the terminal is in a non-standard state.
+/// The stdin terminal settings before an interactive command starts.
+#[cfg(unix)]
+pub struct StdinTerminalState(nix::sys::termios::Termios);
+
+#[cfg(unix)]
+impl StdinTerminalState {
+    #[must_use]
+    pub fn capture() -> Option<Self> {
+        nix::sys::termios::tcgetattr(std::io::stdin()).ok().map(Self)
+    }
+
+    pub fn restore(&self) {
+        use nix::{
+            sys::termios::{SetArg, tcsetattr},
+            unistd::{getpgrp, tcgetpgrp},
+        };
+
+        let stdin = std::io::stdin();
+        // A background process must leave the terminal to its foreground job.
+        if tcgetpgrp(&stdin).is_ok_and(|foreground| foreground != getpgrp()) {
+            return;
+        }
+        let _ = tcsetattr(stdin, SetArg::TCSANOW, &self.0);
+    }
+}
+
+/// Restore the terminal and SIGINT disposition after an interactive child exits.
 #[cfg(unix)]
 struct TerminalStateGuard {
-    fd: RawFd,
-    original: nix::sys::termios::Termios,
+    terminal: StdinTerminalState,
     original_sigint: Option<nix::sys::signal::SigAction>,
 }
 
 #[cfg(unix)]
 impl TerminalStateGuard {
-    /// Save the current terminal state for the given file descriptor.
-    /// Returns None if the fd is not a terminal or if saving fails.
-    fn save(fd: RawFd) -> Option<Self> {
-        use nix::sys::termios::tcgetattr;
-
-        // SAFETY: fd comes from a valid stdin/stdout/stderr file descriptor
-        let borrowed_fd = unsafe { BorrowedFd::borrow_raw(fd) };
-
-        // Only save state if this is actually a terminal
-        if !nix::unistd::isatty(borrowed_fd).unwrap_or(false) {
-            return None;
-        }
-
-        match tcgetattr(borrowed_fd) {
-            Ok(original) => Some(Self { fd, original, original_sigint: Self::ignore_sigint() }),
-            Err(_) => None,
-        }
+    fn save() -> Option<Self> {
+        let terminal = StdinTerminalState::capture()?;
+        Some(Self { terminal, original_sigint: Self::ignore_sigint() })
     }
 
     fn ignore_sigint() -> Option<nix::sys::signal::SigAction> {
@@ -413,17 +420,9 @@ impl TerminalStateGuard {
 #[cfg(unix)]
 impl Drop for TerminalStateGuard {
     fn drop(&mut self) {
-        use nix::sys::{
-            signal::{Signal, sigaction},
-            termios::{SetArg, tcsetattr},
-        };
+        use nix::sys::signal::{Signal, sigaction};
 
-        // SAFETY: fd comes from stdin/stdout/stderr and the guard does not outlive the process
-        let borrowed_fd = unsafe { BorrowedFd::borrow_raw(self.fd) };
-
-        // Best effort: ignore errors during cleanup
-        let _ = tcsetattr(borrowed_fd, SetArg::TCSANOW, &self.original);
-
+        self.terminal.restore();
         // SAFETY: restores the signal disposition captured by save().
         if let Some(original_sigint) = self.original_sigint.take() {
             let _ = unsafe { sigaction(Signal::SIGINT, &original_sigint) };

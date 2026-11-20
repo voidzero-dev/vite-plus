@@ -1,4 +1,4 @@
-use std::{env, ffi::OsStr, iter, sync::Arc};
+use std::{env, ffi::OsStr, io::IsTerminal as _, iter, sync::Arc};
 
 use vp_static_config::FieldValue;
 use vt::config::user::{
@@ -212,11 +212,21 @@ impl SubcommandResolver {
                 let js_path_str = js_path
                     .to_str()
                     .ok_or_else(|| anyhow::anyhow!("vite JS path is not valid UTF-8"))?;
+                let terminal_preload = (cfg!(unix)
+                    && cli_options.exec_dev
+                    && std::io::stdin().is_terminal())
+                .then(|| {
+                    Str::from(format!(
+                        "--require={}/dist/vite-dev-terminal.cjs",
+                        cli_options.vite_plus_package_path,
+                    ))
+                });
 
                 Ok(ResolvedSubcommand {
                     program: Arc::clone(&cli_options.node_exec_path),
-                    args: iter::once(Str::from(js_path_str))
-                        .chain(iter::once(Str::from("dev")))
+                    args: terminal_preload
+                        .into_iter()
+                        .chain([Str::from(js_path_str), Str::from("dev")])
                         .chain(args.into_iter().map(Str::from))
                         .collect(),
                     cache_config: UserCacheConfig::disabled(),
