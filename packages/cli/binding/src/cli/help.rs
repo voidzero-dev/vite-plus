@@ -1,8 +1,9 @@
 use clap::error::ErrorKind;
 use console::style;
 use vp_cli_help::error::{
-    extract_invalid_subcommand_details, extract_unknown_argument, has_pass_as_value_suggestion,
-    move_flags_after_command, print_subcommand_suggestion, print_unknown_argument_error,
+    extract_invalid_subcommand_details, extract_unknown_argument, format_command_args,
+    has_pass_as_value_suggestion, move_flags_after_command, print_subcommand_suggestion,
+    print_unknown_argument_error,
 };
 use vp_error::Error;
 use vp_shared::output;
@@ -33,7 +34,7 @@ pub(super) fn handle_cli_parse_error(
                 clap::Command::new("run"),
             );
         if let Some(corrected_args) = move_flags_after_command(args, "run", &run_flags) {
-            print_subcommand_suggestion(&corrected_args.join(" "));
+            print_subcommand_suggestion(&format_command_args(&corrected_args));
         }
         return Ok(ExitStatus(err.exit_code() as u8));
     }

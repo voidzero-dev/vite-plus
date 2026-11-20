@@ -10,6 +10,7 @@ rust-version.workspace = true
 [dependencies]
 clap = { workspace = true }
 console = { workspace = true }
+shell-escape = { workspace = true }
 terminal_size = { workspace = true }
 vp_shared = { workspace = true }
 

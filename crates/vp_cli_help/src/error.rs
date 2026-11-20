@@ -1,5 +1,7 @@
 //! Shared clap error details and diagnostics. Callers own headers and command correction.
 
+use std::borrow::Cow;
+
 use clap::error::{ContextKind, ContextValue};
 use console::style;
 use vp_shared::output;
@@ -107,6 +109,20 @@ pub fn move_flags_after_command(
     corrected.extend_from_slice(&args[..index]);
     corrected.extend_from_slice(&args[index + 1..]);
     Some(corrected)
+}
+
+/// Joins `args` into a command line that a POSIX shell splits back into the same `args`.
+///
+/// Users copy a suggested command, so values such as `hello world` or `@my/*` keep their quotes.
+pub fn format_command_args(args: &[String]) -> String {
+    let mut command = String::new();
+    for arg in args {
+        if !command.is_empty() {
+            command.push(' ');
+        }
+        command.push_str(&shell_escape::unix::escape(Cow::Borrowed(arg)));
+    }
+    command
 }
 
 pub fn print_unknown_argument_error(invalid_argument: &str, pass_as_value: bool) {
@@ -225,6 +241,23 @@ mod tests {
             &[],
         ] {
             assert_eq!(moved(input), None, "{input:?}");
+        }
+    }
+
+    #[test]
+    fn command_args_keep_shell_quoting() {
+        for (input, expected) in [
+            (&["run", "--filter", "backend", "dev"][..], "run --filter backend dev"),
+            (&["run", "--filter", "@my/*", "build"], "run --filter '@my/*' build"),
+            (
+                &["run", "dev", "--", "--message", "hello world"],
+                "run dev -- --message 'hello world'",
+            ),
+            (&["run", "--filter", "!b", "build"], r"run --filter ''\!'b' build"),
+            (&["run", "dev", "--", "it's"], r"run dev -- 'it'\''s'"),
+            (&["run", "dev", "--", ""], "run dev -- ''"),
+        ] {
+            assert_eq!(format_command_args(&args(input)), expected, "{input:?}");
         }
     }
 
