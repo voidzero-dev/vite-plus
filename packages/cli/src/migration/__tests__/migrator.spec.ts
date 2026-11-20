@@ -632,6 +632,70 @@ describe('explicit tsdown config selection', () => {
     expect(mergeTsdownConfigFile(tmpDir, true, createMigrationReport(), true)).toBe(false);
   });
 
+  it('leaves an import used for the Vite library entry in the original config', () => {
+    const original =
+      "export const entry = 'src/lib.ts';\nexport default { entry, publicDir: 'public' };\n";
+    fs.writeFileSync(path.join(tmpDir, 'tsdown.config.ts'), original);
+    const viteConfig = path.join(tmpDir, 'vite.config.ts');
+    const viteSource =
+      "import { entry } from './tsdown.config.ts';\n" +
+      'export default { build: { lib: { entry } }, pack: { entry: "src/pack.ts" } };\n';
+    fs.writeFileSync(viteConfig, viteSource);
+
+    expect(mergeTsdownConfigFile(tmpDir, true, createMigrationReport(), true)).toBe(false);
+    expect(fs.readFileSync(viteConfig, 'utf8')).toBe(viteSource);
+    expect(fs.existsSync(path.join(tmpDir, 'vite-pack.config.ts'))).toBe(false);
+  });
+
+  it.each([
+    "import pack /* use for pack, only */, { entry } from './tsdown.config.js';",
+    "import { default as pack, entry } from './tsdown.config.js';",
+    "import { entry, default as pack } from './tsdown.config.js';",
+  ])('separates the pack default import from named Vite imports (%s)', (declaration) => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'tsdown.config.ts'),
+      "export const entry = 'src/lib.ts';\nexport default { entry, publicDir: 'public' };\n",
+    );
+    const viteConfig = path.join(tmpDir, 'vite.config.ts');
+    fs.writeFileSync(
+      viteConfig,
+      `${declaration} // original import\nexport default { build: { lib: { entry } }, pack };\n`,
+    );
+
+    expect(mergeTsdownConfigFile(tmpDir, true, createMigrationReport(), true)).toBe(true);
+    const updated = fs.readFileSync(viteConfig, 'utf8');
+    expect(updated).toMatch(/\{\s*entry\s*\} from '\.\/tsdown\.config\.js'; \/\/ original import/);
+    expect(updated).toContain('import pack from "./vite-pack.config.js";');
+    expect(updated).toContain('build: { lib: { entry } }, pack');
+    if (declaration.includes('/*')) {
+      expect(updated).toContain('/* use for pack, only */');
+    }
+    expect(mergeTsdownConfigFile(tmpDir, true, createMigrationReport(), true)).toBe(false);
+    expect(fs.readFileSync(viteConfig, 'utf8')).toBe(updated);
+  });
+
+  it('keeps the original default binding used by the build and rewrites the pack shorthand', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'tsdown.config.ts'),
+      "export default { entry: 'src/lib.ts', publicDir: 'public' };\n",
+    );
+    const viteConfig = path.join(tmpDir, 'vite.config.ts');
+    fs.writeFileSync(
+      viteConfig,
+      "import pack from './tsdown.config.ts';\n" +
+        'const vitePackConfig = { build: { lib: { entry: pack.entry } } };\n' +
+        'export default { ...vitePackConfig, pack };\n',
+    );
+
+    expect(mergeTsdownConfigFile(tmpDir, true, createMigrationReport(), true)).toBe(true);
+    const updated = fs.readFileSync(viteConfig, 'utf8');
+    expect(updated).toContain("import pack from './tsdown.config.ts';");
+    expect(updated).toContain('import vitePackConfig2 from "./vite-pack.config.ts";');
+    expect(updated).toContain('entry: pack.entry');
+    expect(updated).toContain('...vitePackConfig, pack: vitePackConfig2');
+    expect(mergeTsdownConfigFile(tmpDir, true, createMigrationReport(), true)).toBe(false);
+  });
+
   it.skipIf(process.platform === 'win32')(
     'keeps imports relative to a shared tsdown config and repairs a previous local copy',
     () => {
