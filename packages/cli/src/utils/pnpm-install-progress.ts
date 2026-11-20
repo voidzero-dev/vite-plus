@@ -37,14 +37,41 @@ function parsePnpmLog(line: string): PnpmLog | undefined {
   return undefined;
 }
 
+function splitPnpmLine(line: string): { text: string; log: PnpmLog | undefined } {
+  const log = parsePnpmLog(line);
+  if (log) {
+    return { text: '', log };
+  }
+  // An inherited script can leave its final stdout line open. pnpm writes the
+  // next record after that text, starting with the logger's timestamp and host.
+  for (const { index } of line.matchAll(/\{"time":\d+,"hostname":/g)) {
+    if (index) {
+      const suffix = parsePnpmLog(line.slice(index));
+      if (suffix) {
+        return { text: line.slice(0, index), log: suffix };
+      }
+    }
+  }
+  return { text: line, log: undefined };
+}
+
 export function pnpmProbeEnv(envs: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  // The project hooks and preloads belong to the install.
-  return {
-    ...envs,
-    NODE_OPTIONS: undefined,
-    NPM_CONFIG_IGNORE_PNPMFILE: undefined,
-    npm_config_ignore_pnpmfile: 'true',
-  };
+  const probeEnv = { ...envs };
+  const replaced = new Set([
+    'node_options',
+    'npm_config_ignore_pnpmfile',
+    'pnpm_config_ignore_pnpmfile',
+  ]);
+  for (const key of Object.keys(probeEnv)) {
+    // Windows spawn sorts keys and keeps only the first spelling of each name.
+    if (replaced.has(key.toLowerCase())) {
+      delete probeEnv[key];
+    }
+  }
+  // pnpm 11 and later read pnpm_config_ instead of npm_config_.
+  probeEnv.npm_config_ignore_pnpmfile = 'true';
+  probeEnv.pnpm_config_ignore_pnpmfile = 'true';
+  return probeEnv;
 }
 
 type PnpmInstallOutputMode = 'debug' | 'info' | 'warn' | 'error' | 'silent' | 'json' | 'ndjson';
@@ -131,7 +158,7 @@ export function watchPnpmResolution(): (line: string) => boolean {
   const resolving = new Set<string>();
   const runningScripts = new Set<string>();
   return (line) => {
-    const log = parsePnpmLog(line);
+    const { log } = splitPnpmLine(line);
     if (log?.name === 'pnpm:stage' && typeof log.prefix === 'string') {
       if (log.stage === 'resolution_started') {
         resolving.add(log.prefix);
@@ -324,10 +351,14 @@ export async function formatPnpmInstallOutput(
   let terminalErrorIndex: number | undefined;
   const progress = { resolved: 0, found_in_store: 0, fetched: 0, imported: 0 };
   for (const line of output.split(/\r?\n/)) {
-    const log = parsePnpmLog(line);
+    const { text, log } = splitPnpmLine(line);
+    if (text || !log) {
+      messages.push(text);
+    }
     if (!log) {
-      messages.push(line);
-    } else if (mode === 'json') {
+      continue;
+    }
+    if (mode === 'json') {
       const error = getPnpmTerminalError(log);
       if (error) {
         if (terminalErrorIndex !== undefined) {

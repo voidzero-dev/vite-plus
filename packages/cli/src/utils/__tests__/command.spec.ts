@@ -35,6 +35,41 @@ describe('command runners', () => {
     ).rejects.toThrow(/timed out after 200ms/);
   });
 
+  it('enforces the deadline after a wrapper exits with inherited pipes', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'vp-deadline-command-'));
+    const pidFile = join(cwd, 'pid');
+    const start = performance.now();
+    try {
+      await expect(
+        runCommandSilently({
+          command: process.execPath,
+          args: [
+            '-e',
+            `const child = require('node:child_process').spawn(
+              process.execPath, ['-e', 'setTimeout(() => {}, 5000)'], { stdio: 'inherit' }
+            );
+            require('node:fs').writeFileSync('pid', String(child.pid));
+            child.unref();`,
+          ],
+          cwd,
+          envs: process.env,
+          timeoutMs: 1200,
+        }),
+      ).rejects.toThrow(/timed out after 1200ms/);
+      expect(existsSync(pidFile)).toBe(true);
+      expect(performance.now() - start).toBeLessThan(3500);
+    } finally {
+      if (existsSync(pidFile)) {
+        try {
+          process.kill(Number(readFileSync(pidFile, 'utf8')), 'SIGKILL');
+        } catch {
+          // The timed command runner may already have stopped this descendant.
+        }
+      }
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
   it('does not reject a fast child because a timeout is configured', async () => {
     const result = await runCommandSilently({
       command: process.execPath,
@@ -144,9 +179,12 @@ describe('command runners', () => {
     }
   });
 
-  it.skipIf(process.platform === 'win32')(
-    'lets Ctrl+C reach guarded children in the caller process group',
-    async () => {
+  it.skipIf(process.platform === 'win32').each([
+    ['idle timeout', { idleTimeoutMs: 30_000 }, true],
+    ['hard deadline', { timeoutMs: 30_000 }, false],
+  ] as const)(
+    'lets Ctrl+C reach captured commands with a %s',
+    async (_name, timeout, sharesProcessGroup) => {
       const cwd = mkdtempSync(join(tmpdir(), 'vp-cancel-command-'));
       const ready = join(cwd, 'ready');
       const program = `
@@ -170,7 +208,7 @@ describe('command runners', () => {
           args: ['-e', ${JSON.stringify(program)}],
           cwd: process.cwd(),
           envs: process.env,
-          idleTimeoutMs: 30_000,
+          ...${JSON.stringify(timeout)},
         });`,
         ],
         { cwd, stdio: 'ignore', detached: true },
@@ -190,7 +228,9 @@ describe('command runners', () => {
         process.kill(-runnerPid, 'SIGINT');
         await expect(exited).resolves.toEqual([null, 'SIGINT']);
         await expect.poll(() => existsSync(join(cwd, 'cleaned'))).toBe(true);
-        expect(Number(entry?.trim().split(/\s+/)[1])).toBe(runnerPid);
+        expect(Number(entry?.trim().split(/\s+/)[1])).toBe(
+          sharesProcessGroup ? runnerPid : Number(childPid),
+        );
       } finally {
         if (runnerPid && runner.exitCode === null && runner.signalCode === null) {
           process.kill(-runnerPid, 'SIGTERM');
