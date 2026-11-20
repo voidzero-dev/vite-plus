@@ -256,8 +256,9 @@ impl JsExecutor {
     /// Delegate to local or global vite-plus CLI.
     ///
     /// Uses `oxc_resolver` to find the project's local vite-plus installation.
-    /// If found, runs the local `dist/bin.js` directly. Otherwise, falls back
-    /// to the global installation's `dist/bin.js`.
+    /// Runs the local `dist/bin.js` when it can honor the invocation.
+    /// Falls back to the global installation when the local CLI is missing
+    /// or cannot honor a fixed app target.
     ///
     /// Uses the project's runtime resolved via `config::resolve_version()`.
     /// For side-effect-free commands like `--version`, use [`delegate_with_cli_runtime`] instead.
@@ -370,12 +371,11 @@ impl JsExecutor {
     ) -> Result<Command, Error> {
         // Try to resolve vite-plus from the project directory using oxc_resolver
         let entry_point = match Self::resolve_local_vite_plus(project_path) {
-            Some(path) => path,
-            None => {
-                if self.warn_on_missing_local_cli {
+            Some(path) if !self.fixed_target || local_entry_accepts_fixed_app_target(&path) => path,
+            local_entry => {
+                if local_entry.is_none() && self.warn_on_missing_local_cli {
                     commands::warn_missing_local_cli_if_project(project_path);
                 }
-                // Fall back to the global installation's bin.js
                 let scripts_dir = self.get_scripts_dir()?;
                 scripts_dir.join("bin.js")
             }
@@ -454,14 +454,18 @@ impl JsExecutor {
     /// The global fallback accepts a fixed target. Defer to the local CLI
     /// when its installed entry point cannot honor the marker.
     pub(crate) fn can_delegate_fixed_app_target(project_path: &AbsolutePath) -> bool {
-        let Some(entry_point) = Self::resolve_local_vite_plus(project_path) else { return true };
-        entry_point
-            .as_path()
-            .parent()
-            .and_then(std::path::Path::parent)
-            .and_then(|package_dir| read_package_json_version(package_dir.join("package.json")))
-            .is_some_and(|version| supports_fixed_app_target(&version, env!("CARGO_PKG_VERSION")))
+        Self::resolve_local_vite_plus(project_path)
+            .is_none_or(|entry_point| local_entry_accepts_fixed_app_target(&entry_point))
     }
+}
+
+fn local_entry_accepts_fixed_app_target(entry_point: &AbsolutePath) -> bool {
+    entry_point
+        .as_path()
+        .parent()
+        .and_then(std::path::Path::parent)
+        .and_then(|package_dir| read_package_json_version(package_dir.join("package.json")))
+        .is_some_and(|version| supports_fixed_app_target(&version, env!("CARGO_PKG_VERSION")))
 }
 
 /// Resolve the version of the project-local `vite-plus`, if one is installed.
