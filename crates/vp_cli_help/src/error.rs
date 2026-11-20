@@ -114,9 +114,13 @@ pub fn move_flags_after_command(
 /// Joins `args` into a command line that a POSIX shell splits back into the same `args`.
 ///
 /// Users copy a suggested command, so values such as `hello world` or `@my/*` keep their quotes.
-pub fn format_command_args(args: &[String]) -> String {
+/// `chdir` is the directory that `-C` selected, and the command starts with `-C <chdir>`.
+/// Callers pass an absolute path because a relative path can select a different directory
+/// from the shell that the user copies the command into.
+pub fn format_command_args(chdir: Option<&str>, args: &[String]) -> String {
+    let chdir_args = chdir.into_iter().flat_map(|dir| ["-C", dir]);
     let mut command = String::new();
-    for arg in args {
+    for arg in chdir_args.chain(args.iter().map(String::as_str)) {
         if !command.is_empty() {
             command.push(' ');
         }
@@ -257,8 +261,16 @@ mod tests {
             (&["run", "dev", "--", "it's"], r"run dev -- 'it'\''s'"),
             (&["run", "dev", "--", ""], "run dev -- ''"),
         ] {
-            assert_eq!(format_command_args(&args(input)), expected, "{input:?}");
+            assert_eq!(format_command_args(None, &args(input)), expected, "{input:?}");
         }
+    }
+
+    #[test]
+    fn command_args_start_with_the_selected_directory() {
+        assert_eq!(
+            format_command_args(Some("/work/other project"), &args(&["run", "-r", "build"])),
+            "-C '/work/other project' run -r build",
+        );
     }
 
     #[test]

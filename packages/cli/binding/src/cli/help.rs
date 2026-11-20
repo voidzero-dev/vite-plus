@@ -18,9 +18,11 @@ use super::types::SynthesizableSubcommand;
 /// needs the names to point users at the global installation.
 const GLOBAL_ONLY_SUBCOMMANDS: &[&str] = &["env", "upgrade", "implode"];
 
+/// `chdir` is the absolute directory that `-C` selected; `args` no longer contain `-C`.
 pub(super) fn handle_cli_parse_error(
     err: clap::Error,
     args: &[String],
+    chdir: Option<&str>,
 ) -> Result<ExitStatus, Error> {
     if matches!(err.kind(), ErrorKind::InvalidSubcommand) && print_invalid_subcommand_error(&err) {
         return Ok(ExitStatus(err.exit_code() as u8));
@@ -34,7 +36,7 @@ pub(super) fn handle_cli_parse_error(
                 clap::Command::new("run"),
             );
         if let Some(corrected_args) = move_flags_after_command(args, "run", &run_flags) {
-            print_subcommand_suggestion(&format_command_args(&corrected_args));
+            print_subcommand_suggestion(&format_command_args(chdir, &corrected_args));
         }
         return Ok(ExitStatus(err.exit_code() as u8));
     }

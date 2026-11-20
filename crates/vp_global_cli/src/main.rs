@@ -589,9 +589,12 @@ async fn run() -> ExitCode {
                     let run_flags = <vt_workspace::package_filter::PackageQueryArgs as clap::Args>::augment_args(
                         clap::Command::new("run"),
                     );
+                    // `-C` already changed `cwd` and left `raw_args`, so show it again.
+                    let chdir = explicit_chdir.then(|| cwd.as_path().to_string_lossy());
                     if let Some(corrected_raw_args) =
                         move_flags_after_command(&raw_args, "run", &run_flags)
                         && prompt_to_run_suggested_command(&format_command_args(
+                            chdir.as_deref(),
                             &corrected_raw_args,
                         ))
                     {
