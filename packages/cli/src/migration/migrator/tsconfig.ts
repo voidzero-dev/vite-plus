@@ -69,6 +69,50 @@ export function hasTsconfigTypesToRewrite(projectPath: string, keepTsdown = fals
   );
 }
 
+const projectFileKeys = ['files', 'include', 'exclude'] as const;
+type ProjectFileKey = (typeof projectFileKeys)[number];
+type ProjectFileList = { filename: string; entries: string[] };
+type ProjectFileLists = Partial<Record<ProjectFileKey, ProjectFileList>>;
+
+function readProjectFileLists(
+  filename: string,
+  ancestors = new Set<string>(),
+): { text: string; lists: ProjectFileLists } | undefined {
+  if (ancestors.has(filename) || !fs.statSync(filename, { throwIfNoEntry: false })?.isFile()) {
+    return undefined;
+  }
+  const text = fs.readFileSync(filename, 'utf8');
+  const errors: ParseError[] = [];
+  const config = parseJsonc(text, errors, { allowTrailingComma: true }) as
+    | ({ extends?: unknown } & Partial<Record<ProjectFileKey, unknown>>)
+    | undefined;
+  if (!config || errors.length) {
+    return undefined;
+  }
+  const directory = path.dirname(filename);
+  const lists: ProjectFileLists = {};
+  const bases = Array.isArray(config.extends) ? config.extends : [config.extends];
+  ancestors.add(filename);
+  for (const base of bases) {
+    if (typeof base !== 'string' || (!base.startsWith('.') && !path.isAbsolute(base))) {
+      continue;
+    }
+    const target = path.resolve(directory, base);
+    const resolved = fs.statSync(target, { throwIfNoEntry: false })?.isFile()
+      ? target
+      : `${target}.json`;
+    Object.assign(lists, readProjectFileLists(resolved, ancestors)?.lists);
+  }
+  ancestors.delete(filename);
+  for (const key of projectFileKeys) {
+    const entries = config[key];
+    if (Array.isArray(entries) && entries.every((entry) => typeof entry === 'string')) {
+      lists[key] = { filename, entries };
+    }
+  }
+  return { text, lists };
+}
+
 /** Keep the generated TypeScript config in each project that imports it from Vite config. */
 export function includeGeneratedPackConfig(
   viteConfigPath: string,
@@ -89,20 +133,15 @@ export function includeGeneratedPackConfig(
       if (!fs.lstatSync(filename, { throwIfNoEntry: false })?.isFile()) {
         continue;
       }
-      const text = fs.readFileSync(filename, 'utf8');
-      const errors: ParseError[] = [];
-      const config = parseJsonc(text, errors, { allowTrailingComma: true }) as
-        | { files?: unknown; include?: unknown; exclude?: unknown }
-        | undefined;
-      if (!config || errors.length) {
+      const project = readProjectFileLists(filename);
+      if (!project) {
         continue;
       }
-
-      const listed = (file: string) => matchesTsconfigPaths(directory, config.files, file, false);
-      const excluded = (file: string) =>
-        matchesTsconfigPaths(directory, config.exclude, file, true);
+      const { text, lists } = project;
+      const listed = (file: string) => matchesTsconfigPaths(lists.files, file, false);
+      const excluded = (file: string) => matchesTsconfigPaths(lists.exclude, file, true);
       const included = (file: string) =>
-        matchesTsconfigPaths(directory, config.include, file, true) && !excluded(file);
+        matchesTsconfigPaths(lists.include, file, true) && !excluded(file);
       if (listed(generatedPath) || included(generatedPath)) {
         continue;
       }
@@ -113,11 +152,26 @@ export function includeGeneratedPackConfig(
       // A files entry bypasses exclude, as it does for an original explicit file.
       const key = explicitlyListed || excluded(generatedPath) ? 'files' : 'include';
       const relative = path.relative(directory, generatedPath).split(path.sep).join('/');
+      const selected = lists[key];
+      const inherited = selected && selected.filename !== filename;
+      const rebased = inherited
+        ? selected.entries.map((entry) =>
+            path
+              .relative(
+                directory,
+                path.resolve(path.dirname(selected.filename), entry.replaceAll('\\', '/')),
+              )
+              .split(path.sep)
+              .join('/'),
+          )
+        : [];
+      // Local keys override inherited keys. Carry over the original paths with
+      // their original base so the addition preserves the rest of the project.
       const updated = appendMissingJsoncArrayItems(
         text,
         [key],
-        config[key],
-        [relative],
+        inherited ? undefined : selected?.entries,
+        [...rebased, relative],
         detectFormattingOptions(text),
       );
       if (updated !== text) {
@@ -132,20 +186,18 @@ export function includeGeneratedPackConfig(
 }
 
 function matchesTsconfigPaths(
-  directory: string,
-  entries: unknown,
+  list: ProjectFileList | undefined,
   filename: string,
   allowGlob: boolean,
 ): boolean {
   const file = path.resolve(filename).split(path.sep).join('/');
   return (
-    Array.isArray(entries) &&
-    entries.some((entry: unknown) => {
-      if (typeof entry !== 'string') {
-        return false;
-      }
+    list?.entries.some((entry) => {
       const specifier = entry.replaceAll('\\', '/');
-      const fullPath = path.resolve(directory, specifier).split(path.sep).join('/');
+      const fullPath = path
+        .resolve(path.dirname(list.filename), specifier)
+        .split(path.sep)
+        .join('/');
       if (!allowGlob) {
         return fullPath === file;
       }
@@ -159,6 +211,6 @@ function matchesTsconfigPaths(
         noext: true,
         nonegate: true,
       });
-    })
+    }) ?? false
   );
 }

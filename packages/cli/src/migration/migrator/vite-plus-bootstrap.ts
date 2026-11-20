@@ -54,6 +54,7 @@ import {
   rewriteYarnrcYml,
   setDirectViteEdge,
   collectPackagesKeepingTsdown,
+  tsdownPackNeedsVitePlus,
   pnpmPeerDependencyRuleKeys,
   takePnpmWorkspaceSettings,
   trackVitePeerDependencyRuleRemoval,
@@ -307,7 +308,11 @@ function reconcileVitePlusBootstrapPackage(
   const usesVitest =
     retainedImportDependencies?.vitest.has(projectPath) ||
     projectUsesVitestDirectly(projectPath, pkg);
-  ensureVitePlusDependencySpecs(pkg, vitePlusVersion, ensureVitePlus);
+  ensureVitePlusDependencySpecs(
+    pkg,
+    vitePlusVersion,
+    ensureVitePlus || (!hasDirectVitePlusInstallEntry(pkg) && tsdownPackNeedsVitePlus(projectPath)),
+  );
 
   const installGroups = [pkg.devDependencies, pkg.dependencies, pkg.optionalDependencies];
   const dependencyGroups = [...installGroups, pkg.peerDependencies];

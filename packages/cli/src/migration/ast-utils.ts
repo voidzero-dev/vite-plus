@@ -137,16 +137,84 @@ export function parseSource(file: string, source: string): ParsedSource {
 }
 
 export function defaultConfigValue(file: string, source: string): t.Node | undefined {
-  const exported = parseSource(file, source).program.body.find(
+  const declaration = parseSource(file, source).program.body.find(
     (statement) => statement.type === 'ExportDefaultDeclaration',
   )?.declaration;
+  if (!declaration) {
+    return undefined;
+  }
+  const exported = unwrapTypeExpression(declaration);
   if (
     exported?.type === 'CallExpression' &&
     exported.callee.type === 'Identifier' &&
     exported.callee.name === 'defineConfig' &&
     exported.arguments.length === 1
   ) {
-    return exported.arguments[0];
+    return unwrapTypeExpression(exported.arguments[0]);
   }
   return exported;
+}
+
+export function unwrapTypeExpression(node: t.Node): t.Node {
+  while (
+    node.type === 'TSAsExpression' ||
+    node.type === 'TSSatisfiesExpression' ||
+    node.type === 'TSNonNullExpression' ||
+    node.type === 'TSTypeAssertion'
+  ) {
+    node = node.expression;
+  }
+  return node;
+}
+
+/** Read direct callback returns without evaluating the config or entering nested functions. */
+export function configReturnValues(config: t.Node | undefined): (t.Node | null)[] {
+  if (!config) {
+    return [];
+  }
+  if (config.type !== 'ArrowFunctionExpression' && config.type !== 'FunctionExpression') {
+    return [config];
+  }
+  const body = config.body;
+  if (!body) {
+    return [];
+  }
+  if (body.type !== 'BlockStatement') {
+    return [unwrapTypeExpression(body)];
+  }
+  // A final top-level return ensures a normal call does not fall through.
+  if (body.body.at(-1)?.type !== 'ReturnStatement') {
+    return [];
+  }
+  const values: (t.Node | null)[] = [];
+  const pending: unknown[] = [...body.body];
+  while (pending.length > 0) {
+    const item = pending.pop();
+    if (Array.isArray(item)) {
+      pending.push(...item);
+    } else if (typeof item === 'object' && item !== null && 'type' in item) {
+      const node = item as t.Node;
+      if (node.type === 'ReturnStatement') {
+        values.push(node.argument ? unwrapTypeExpression(node.argument) : null);
+      } else if (
+        node.type !== 'ArrowFunctionExpression' &&
+        node.type !== 'FunctionExpression' &&
+        node.type !== 'FunctionDeclaration'
+      ) {
+        pending.push(...Object.values(node));
+      }
+    }
+  }
+  return values;
+}
+
+export function sameConfigModule(file: string, source: string, other: string): boolean {
+  const syntax = (text: string) =>
+    JSON.stringify(parseSource(file, text).program, function (this: { type?: string }, key, value) {
+      if (key === 'start' || key === 'end' || (key === 'raw' && this.type === 'Literal')) {
+        return undefined;
+      }
+      return value;
+    });
+  return syntax(source) === syntax(other);
 }

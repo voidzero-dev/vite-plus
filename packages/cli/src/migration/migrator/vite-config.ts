@@ -34,9 +34,11 @@ import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
 import { displayRelative } from '../../utils/path.ts';
 import { hasBaseUrlInTsconfig } from '../../utils/tsconfig.ts';
 import {
+  configReturnValues,
   defaultConfigValue,
   objectProperty,
   parseSource,
+  sameConfigModule,
   sameStaticValue,
   staticObject,
 } from '../ast-utils.ts';
@@ -309,18 +311,25 @@ function matchesInlinePackConfig(
   workspaceRoot: string,
 ): boolean {
   try {
-    const current = defaultConfigValue(viteConfigPath, fs.readFileSync(viteConfigPath, 'utf8'));
-    if (!staticObject(current, true)) {
+    const current = configReturnValues(
+      defaultConfigValue(viteConfigPath, fs.readFileSync(viteConfigPath, 'utf8')),
+    );
+    if (current.length === 0) {
       return false;
     }
-    const pack = objectProperty(current, 'pack')?.value;
     const expected = defaultConfigValue(
       viteConfigPath,
       mergeTsdownJsonConfig(tsdownConfigPath, workspaceRoot).content,
     );
     const inlined =
       expected?.type === 'ObjectExpression' && objectProperty(expected, 'pack')?.value;
-    return !!pack && !!inlined && sameStaticValue(pack, inlined);
+    return (
+      !!inlined &&
+      current.every((config) => {
+        const pack = staticObject(config, true) && objectProperty(config, 'pack')?.value;
+        return !!pack && sameStaticValue(pack, inlined);
+      })
+    );
   } catch {
     // Unknown or invalid config syntax is not enough to discard the source.
     return false;
@@ -335,6 +344,80 @@ function tsdownConfigImportPaths(filename: string): string[] {
   return [`./${filename}`, `./${path.parse(filename).name}`, tsdownConfigImportPath(filename)];
 }
 
+function convertedPackConfigName(tsdownConfigPath: string): string {
+  return `vite-pack.config${path.extname(tsdownConfigPath)}`;
+}
+
+function configImports(filename: string, source: string) {
+  return parseSource(filename, source).program.body.flatMap((statement) =>
+    statement.type === 'ImportDeclaration' ? [statement.source] : [],
+  );
+}
+
+/** Make sure a retained config's new pack imports resolve in focused installs. */
+export function tsdownPackNeedsVitePlus(projectPath: string): boolean {
+  const { viteConfig, tsdownConfig } = detectConfigs(projectPath);
+  if (!viteConfig || !tsdownConfig) {
+    return false;
+  }
+  const vitePath = path.join(projectPath, viteConfig);
+  try {
+    if (!hasConfigKey(vitePath, 'pack')) {
+      return false;
+    }
+    const imports = configImports(vitePath, fs.readFileSync(vitePath, 'utf8'));
+    const converted = convertedPackConfigName(tsdownConfig);
+    const convertedImports = tsdownConfigImportPaths(converted);
+    return (
+      imports.some(
+        ({ value }) => value === VITE_PLUS_NAME || value.startsWith(`${VITE_PLUS_NAME}/`),
+      ) || imports.some(({ value }) => convertedImports.includes(value))
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** Return the active conversion that differs from its standalone source. */
+export function findDivergedTsdownPackConfig(
+  tsdownConfigPath: string,
+  workspaceRoot: string,
+): string | undefined {
+  if (tsdownConfigPath.endsWith('.json')) {
+    return undefined;
+  }
+  const projectPath = path.dirname(tsdownConfigPath);
+  const { viteConfig } = detectConfigs(projectPath);
+  if (!viteConfig) {
+    return undefined;
+  }
+  const vitePath = path.join(projectPath, viteConfig);
+  const convertedName = convertedPackConfigName(tsdownConfigPath);
+  const convertedPath = path.join(projectPath, convertedName);
+  const convertedImports = tsdownConfigImportPaths(convertedName);
+  try {
+    if (
+      !hasConfigKey(vitePath, 'pack') ||
+      !configImports(vitePath, fs.readFileSync(vitePath, 'utf8')).some(({ value }) =>
+        convertedImports.includes(value),
+      )
+    ) {
+      return undefined;
+    }
+  } catch {
+    return undefined;
+  }
+  try {
+    const { content } = rewriteTsdownConfigForPack(tsdownConfigPath, workspaceRoot);
+    const expected = content ?? fs.readFileSync(tsdownConfigPath, 'utf8');
+    const active = fs.readFileSync(convertedPath, 'utf8');
+    return sameConfigModule(convertedPath, expected, active) ? undefined : convertedPath;
+  } catch {
+    // The original command is the only verified build when comparison fails.
+    return convertedPath;
+  }
+}
+
 /** Write a separate converted config only when pack needs compatibility changes. */
 function mergeRetainedTsdownConfig(
   viteConfigPath: string,
@@ -345,15 +428,11 @@ function mergeRetainedTsdownConfig(
   report: MigrationReport | undefined,
 ): boolean | undefined {
   const originalName = path.basename(tsdownConfigPath);
-  const convertedName = `vite-pack.config${path.extname(originalName)}`;
+  const convertedName = convertedPackConfigName(originalName);
   const convertedPath = path.join(path.dirname(tsdownConfigPath), convertedName);
   const source = fs.readFileSync(viteConfigPath, 'utf8');
   const hasPack = hasConfigKey(viteConfigPath, 'pack');
-  const imports = hasPack
-    ? parseSource(viteConfigPath, source).program.body.flatMap((statement) =>
-        statement.type === 'ImportDeclaration' ? [statement.source] : [],
-      )
-    : [];
+  const imports = hasPack ? configImports(viteConfigPath, source) : [];
   const convertedImports = tsdownConfigImportPaths(convertedName);
   if (imports.some(({ value }) => convertedImports.includes(value))) {
     return (

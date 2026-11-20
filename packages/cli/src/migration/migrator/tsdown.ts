@@ -7,8 +7,14 @@ import { parseLiteralCommands } from '../../../binding/index.js';
 import type { WorkspacePackage } from '../../types/index.ts';
 import { documentationUrl } from '../../utils/documentation.ts';
 import { displayRelative } from '../../utils/path.ts';
-import { defaultConfigValue, objectProperty, staticObject } from '../ast-utils.ts';
+import {
+  defaultConfigValue,
+  objectProperty,
+  staticObject,
+  unwrapTypeExpression,
+} from '../ast-utils.ts';
 import { detectDefaultTsdownConfig } from '../detector.ts';
+import { findDivergedTsdownPackConfig } from '../migrator.ts';
 import type { MigrationReport } from '../report.ts';
 import {
   getCommandStartIndex,
@@ -177,6 +183,28 @@ export function collectPackagesKeepingTsdown(
       }
     }
   }
+  // A previously converted default config can drift while the standalone command
+  // remains active. Check before changing its scripts, dependencies or imports.
+  const reportedConfigs = new Set<string>();
+  for (const [dir, directories] of defaultDirectories) {
+    for (const cwd of new Set(directories)) {
+      const original = cwd && projectPaths.has(cwd) && findDefaultTsdownConfig(cwd, workspaceRoot);
+      if (!original) {
+        continue;
+      }
+      const converted = findDivergedTsdownPackConfig(original, workspaceRoot);
+      if (converted) {
+        keptPackages.add(dir);
+        if (report && !reportedConfigs.has(original)) {
+          reportedConfigs.add(original);
+          warnMigration(
+            `Kept standalone tsdown because ${displayRelative(original)} differs from ${displayRelative(converted)}. Please manually merge the configs before switching to \`vp pack\`. See ${documentationUrl('/guide/migrate#tsdown')}`,
+            report,
+          );
+        }
+      }
+    }
+  }
   // Keeping a manifest's tsdown scripts also keeps unflagged commands in it.
   // These can run in another package or find a default config in a parent.
   for (const dir of keptPackages) {
@@ -259,6 +287,7 @@ function findConfigOwners(
   }
 }
 function mayLoadWorkspaceConfigs(config: Node | null | undefined): boolean {
+  config = config && unwrapTypeExpression(config);
   if (config?.type === 'ArrayExpression') {
     return config.elements.some(mayLoadWorkspaceConfigs);
   }
@@ -267,6 +296,7 @@ function mayLoadWorkspaceConfigs(config: Node | null | undefined): boolean {
   if (!staticObject(config, true)) {
     return true;
   }
-  const workspace = objectProperty(config, 'workspace')?.value;
+  const value = objectProperty(config, 'workspace')?.value;
+  const workspace = value && unwrapTypeExpression(value);
   return !!workspace && (workspace.type !== 'Literal' || Boolean(workspace.value));
 }

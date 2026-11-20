@@ -1210,7 +1210,7 @@ async function main() {
         dependencies,
         tsdownPackages,
       );
-    const vitePlusBootstrapPending = bootstrapPending(retainedImportDependencies);
+    let vitePlusBootstrapPending = bootstrapPending(retainedImportDependencies);
     async function ensureExistingPackageManager() {
       packageManager ??= await selectPackageManager(
         options.interactive,
@@ -1283,6 +1283,9 @@ async function main() {
       importRuleConfig,
       tsdownPackages,
     );
+    if (coreMigrationResult.tsdownConfig && !vitePlusBootstrapPending) {
+      vitePlusBootstrapPending = bootstrapPending(retainedImportDependencies);
+    }
     if (
       coreMigrationResult.dependencies ||
       coreMigrationResult.scripts ||

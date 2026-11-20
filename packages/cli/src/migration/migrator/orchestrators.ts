@@ -32,6 +32,7 @@ import {
   pnpmPeerDependencyRuleKeys,
   mergeStagedConfigToViteConfig,
   mergeTsdownConfigFile,
+  tsdownPackNeedsVitePlus,
   mergeViteConfigFiles,
   migratePnpmOverridesToWorkspaceYaml,
   migratePnpmSettingsToWorkspaceYaml,
@@ -684,6 +685,7 @@ export function rewriteMonorepoProject(
       workspaceContext?.retainedImportDependencies?.browser.get(projectPath),
       keepTsdown,
       keepTsdownDependency,
+      tsdownPackNeedsVitePlus(projectPath),
     );
     // If this SUB-workspace now depends on `vite-plus` and Yarn isolates its
     // hoisting (via the root `nmHoistingLimits` OR the workspace's own

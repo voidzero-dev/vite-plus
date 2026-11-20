@@ -71,6 +71,7 @@ export function rewritePackageJson(
   retainedBrowserPackages?: ReadonlySet<string>,
   keepTsdown = false,
   keepTsdownDependency = keepTsdown,
+  needVitePlusForPack = false,
 ): Record<string, string | string[]> | null {
   if (pkg.scripts) {
     const updated = rewriteScripts(
@@ -386,7 +387,7 @@ export function rewritePackageJson(
     if (shouldNormalizeExistingVitePlus) {
       existingVitePlusGroup[VITE_PLUS_NAME] = canonicalVitePlusSpec;
     }
-  } else if (needVitePlus) {
+  } else if (needVitePlus || needVitePlusForPack) {
     // Absent from both groups: add it to `devDependencies` as before.
     pkg.devDependencies = {
       ...pkg.devDependencies,
