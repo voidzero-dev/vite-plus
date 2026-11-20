@@ -17,14 +17,10 @@ VITE+ - The Unified Toolchain for the Web
   > node postinstall.cjs
 
   Configuring the project
-  ELIFECYCLE pnpm9-lifecycle-config@ postinstall: `node postinstall.cjs`
-  Exit status 7
 ■ Fixture postinstall failed
 
 ● You may need to run "vp install" manually in <workspace>
 ● Fixture postinstall failed
-  ELIFECYCLE pnpm9-lifecycle-config@ postinstall: `node postinstall.cjs`
-  Exit status 7
 ■
 ● You may need to run "vp install" manually in <workspace>
 warn: Dependency installation failed (exit code 7). Run `vp install` manually in <workspace> to resync node_modules.

@@ -14,7 +14,7 @@ export async function getMigrationInstallWatchOptions(
   interactive: boolean | undefined,
   packageManager: PackageManager | undefined,
   version: string | undefined,
-): Promise<{ idleTimeoutMs: number; packageManagerVersion: string } | undefined> {
+): Promise<{ idleTimeoutMs: number; effectivePnpmVersion: string } | undefined> {
   if (interactive || process.env.VP_SKIP_INSTALL) {
     return undefined;
   }
@@ -89,7 +89,7 @@ export async function getMigrationInstallWatchOptions(
       version = exitCode === 0 ? stdout.toString().trim() : undefined;
     }
     return version?.startsWith('9.')
-      ? { idleTimeoutMs: PNPM_9_INSTALL_IDLE_TIMEOUT_MS, packageManagerVersion: version }
+      ? { idleTimeoutMs: PNPM_9_INSTALL_IDLE_TIMEOUT_MS, effectivePnpmVersion: version }
       : undefined;
   } catch {
     // Let the install command report any manager selection error.

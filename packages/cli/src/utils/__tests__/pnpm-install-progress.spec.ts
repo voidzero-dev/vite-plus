@@ -5,11 +5,7 @@ import { stripVTControlCharacters } from 'node:util';
 
 import { describe, expect, it } from 'vitest';
 
-import {
-  formatPnpmInstallOutput,
-  restorePnpmInstallExitCode,
-  watchPnpmResolution,
-} from '../pnpm-install-progress.ts';
+import { formatPnpmInstallOutput, watchPnpmResolution } from '../pnpm-install-progress.ts';
 
 function stage(prefix: string, stage: string) {
   return JSON.stringify({ name: 'pnpm:stage', prefix, stage });
@@ -32,35 +28,6 @@ describe('watchPnpmResolution', () => {
     expect(watch(stage('/workspace/a', 'resolution_done'))).toBe(true);
     expect(watch(stage('/workspace/b', 'resolution_done'))).toBe(false);
     expect(watch('> node postinstall.cjs')).toBe(false);
-  });
-});
-
-describe('restorePnpmInstallExitCode', () => {
-  const log = {
-    name: 'pnpm',
-    level: 'error',
-    code: 'ELIFECYCLE',
-    errno: 7,
-    err: { name: 'pnpm', message: 'Exit status 7' },
-  };
-  const output = JSON.stringify(log);
-
-  it.each([
-    ['9.15.1', 'json', 1],
-    ['9.15.7', 'silent', 1],
-    ['9.15.8', 'silent', 7],
-    ['9.15.9', 'json', 7],
-    ['9.15.1', 'ndjson', 7],
-    ['9.15.1', 'warn', 7],
-  ] as const)('preserves the pnpm %s exit code in %s mode', (version, mode, exitCode) => {
-    expect(restorePnpmInstallExitCode(7, output, mode, version)).toBe(exitCode);
-  });
-
-  it('uses the last terminal error to identify the source of the exit code', () => {
-    const recovered = JSON.stringify({ ...log, err: { ...log.err, name: 'Error' } });
-    const otherError = JSON.stringify({ ...log, errno: undefined });
-    expect(restorePnpmInstallExitCode(7, recovered, 'silent', '9.15.1')).toBe(7);
-    expect(restorePnpmInstallExitCode(7, `${output}\n${otherError}`, 'silent', '9.15.1')).toBe(7);
   });
 });
 
@@ -280,9 +247,9 @@ describe('formatPnpmInstallOutput', () => {
   });
 
   it.each([
-    ['warn', 'dependency warning\n'],
-    ['error', ''],
-    ['silent', 'setup failed\n'],
+    ['warn', 'dependency warning\nELIFECYCLE Command failed'],
+    ['error', 'ELIFECYCLE Command failed'],
+    ['silent', 'setup failed'],
   ] as const)('filters pnpm output at the %s log level', async (logLevel, detail) => {
     const script = { name: 'pnpm:lifecycle', stage: 'postinstall', wd: '/dep', level: 'debug' };
     const output = [
@@ -293,14 +260,44 @@ describe('formatPnpmInstallOutput', () => {
       { ...script, line: 'working', stdio: 'stdout' },
       { ...script, line: 'setup failed', stdio: 'stderr' },
       { ...script, exitCode: 7 },
-      { name: 'pnpm', level: 'error', code: 'ELIFECYCLE', err: { message: 'Command failed' } },
+      {
+        name: 'pnpm',
+        level: 'error',
+        code: 'ELIFECYCLE',
+        err: { name: 'pnpm', message: 'Command failed' },
+      },
     ]
       .map((line) => (typeof line === 'string' ? line : JSON.stringify(line)))
       .join('\n');
 
     expect(await formatPnpmInstallOutput(output, '/project', logLevel)).toBe(
-      `plain launcher output\n${detail}ELIFECYCLE Command failed`,
+      `plain launcher output\n${detail}`,
     );
+  });
+
+  it('suppresses terminal errors in silent mode', async () => {
+    const output = JSON.stringify({
+      name: 'pnpm',
+      level: 'error',
+      code: 'EACCES',
+      errno: -13,
+      err: { name: 'pnpm', code: 'EACCES', message: 'Store is not writable' },
+    });
+    expect(await formatPnpmInstallOutput(output, '/project', 'silent')).toBe('');
+  });
+
+  it('replays readPackage hook messages at the default log level', async () => {
+    const output = JSON.stringify({
+      name: 'pnpm:hook',
+      level: 'debug',
+      hook: 'readPackage',
+      prefix: '/project',
+      message: 'fixture hook rewrote dependency',
+    });
+    expect(await formatPnpmInstallOutput(output, '/project')).toBe(
+      'readPackage: fixture hook rewrote dependency',
+    );
+    expect(await formatPnpmInstallOutput(output, '/project', 'warn')).toBe('');
   });
 
   it('replays stderr only from completed non-optional failing scripts in silent mode', async () => {

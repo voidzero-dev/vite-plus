@@ -12,7 +12,6 @@ import { getVpCommand, runCommandSilently } from './command.ts';
 import {
   formatPnpmInstallOutput,
   getPnpmInstallOutputMode,
-  restorePnpmInstallExitCode,
   watchPnpmResolution,
 } from './pnpm-install-progress.ts';
 import { reconcilePreviewBridgeRegistry } from './preview-registry.ts';
@@ -146,6 +145,8 @@ export async function runViteInstall(
     packageManager?: PackageManager;
     packageManagerVersion?: string;
     idleTimeoutMs?: number;
+    /** The pnpm actually running the install, for the resolution watchdog. */
+    effectivePnpmVersion?: string;
     /** Report timeouts as part of the best-effort first migration install. */
     initialInstall?: boolean;
     /** Keep creation's resolved version when installation runs in the generated project. */
@@ -190,7 +191,24 @@ export async function runViteInstall(
     installArgs.push('--ignore-scripts');
   }
 
-  const idleTimeoutMs = options?.idleTimeoutMs;
+  const envs = options?.packageManagerOverride
+    ? { ...process.env, VP_PACKAGE_MANAGER: options.packageManagerOverride }
+    : process.env;
+  const effectivePnpmVersion = options?.effectivePnpmVersion ?? options?.packageManagerVersion;
+  const watchedVersion =
+    options?.idleTimeoutMs !== undefined && effectivePnpmVersion
+      ? coerce(effectivePnpmVersion)
+      : undefined;
+  const legacyReporter =
+    watchedVersion?.major === 9 && !isGreaterThanOrEqual(watchedVersion, '9.15.8');
+  const originalMode = legacyReporter ? await getPnpmInstallOutputMode(cwd, envs) : undefined;
+  // pnpm < 9.15.8 waits for other scripts and exits 1 in silent, JSON and
+  // parseable modes. Its NDJSON reporter kills the scripts and can change the
+  // exit status. Keep the native reporter when it cannot expose resolution events.
+  const keepLegacyReporter =
+    legacyReporter &&
+    (originalMode === undefined || originalMode === 'silent' || originalMode === 'json');
+  const idleTimeoutMs = keepLegacyReporter ? undefined : options?.idleTimeoutMs;
   const shouldWatchIdle = idleTimeoutMs === undefined ? undefined : watchPnpmResolution();
   if (idleTimeoutMs !== undefined) {
     // pnpm 9 normalizes these keys for the installer but skips underscore-prefixed
@@ -207,9 +225,6 @@ export async function runViteInstall(
   const spinner = options?.silent ? getSilentSpinner() : getSpinner(interactive);
   const startTime = Date.now();
   spinner.start(`Installing dependencies...`);
-  const envs = options?.packageManagerOverride
-    ? { ...process.env, VP_PACKAGE_MANAGER: options.packageManagerOverride }
-    : process.env;
   const { exitCode, stderr, stdout, idleTimedOut } = await runCommandSilently({
     ...getVpCommand(['install', ...installArgs]),
     cwd,
@@ -239,7 +254,10 @@ export async function runViteInstall(
     } satisfies CommandRunSummary;
   } else {
     spinner.stop(idleTimedOut ? 'Install timed out' : 'Install failed');
-    const mode = shouldWatchIdle ? await getPnpmInstallOutputMode(cwd, envs) : 'info';
+    const mode =
+      originalMode ??
+      (shouldWatchIdle ? await getPnpmInstallOutputMode(cwd, envs) : undefined) ??
+      'info';
     const installOutput = stdout.toString();
     const output = shouldWatchIdle
       ? await formatPnpmInstallOutput(installOutput, cwd, mode)
@@ -269,15 +287,7 @@ export async function runViteInstall(
     }
     return {
       durationMs: Date.now() - startTime,
-      exitCode:
-        shouldWatchIdle && !idleTimedOut
-          ? restorePnpmInstallExitCode(
-              exitCode,
-              installOutput,
-              mode,
-              options?.packageManagerVersion,
-            )
-          : exitCode,
+      exitCode,
       status: 'failed',
       ...(failureMessage && { failureMessage }),
     } satisfies CommandRunSummary;
