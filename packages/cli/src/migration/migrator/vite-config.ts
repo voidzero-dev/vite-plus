@@ -4,7 +4,15 @@ import { isBuiltin } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 
-import type { Node, ObjectExpression, ObjectProperty, Program, Span } from '@oxc-project/types';
+import type {
+  ArrowFunctionExpression,
+  Function as FunctionNode,
+  Node,
+  ObjectExpression,
+  ObjectProperty,
+  Program,
+  Span,
+} from '@oxc-project/types';
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { braceExpand } from 'minimatch';
 import { type OxlintConfig } from 'oxlint';
@@ -440,8 +448,39 @@ function tsdownConfigImportPaths(filename: string): string[] {
   return [`./${filename}`, `./${path.parse(filename).name}`, tsdownConfigImportPath(filename)];
 }
 
-function convertedPackConfigName(tsdownConfigPath: string): string {
-  return `vite-pack.config${path.extname(tsdownConfigPath)}`;
+function packConfigPaths(tsdownConfigPath: string) {
+  const directory = path.dirname(tsdownConfigPath);
+  const sourceIsLink = fs.lstatSync(tsdownConfigPath).isSymbolicLink();
+  const sourceTarget = sourceIsLink
+    ? path.resolve(directory, fs.readlinkSync(tsdownConfigPath))
+    : undefined;
+  const realSource = sourceIsLink ? fs.realpathSync(tsdownConfigPath) : undefined;
+  const installedPreset =
+    sourceTarget &&
+    realSource &&
+    [sourceTarget, realSource].some((file) => file.split(path.sep).includes('node_modules'))
+      ? sourceTarget
+      : undefined;
+  const extension = path.extname(tsdownConfigPath);
+  const originalConvertedName = `vite-pack.config${extension}`;
+  let convertedName = originalConvertedName;
+  if (extension === '.js' && installedPreset && realSource) {
+    // The installed package's module scope does not follow a copied .js file.
+    const { program } = parseSource(realSource, fs.readFileSync(realSource, 'utf8'));
+    if (program.sourceType === 'module') {
+      convertedName = 'vite-pack.config.mjs';
+    }
+  }
+  return {
+    convertedName,
+    convertedPath: path.join(directory, convertedName),
+    previousPath:
+      convertedName !== originalConvertedName
+        ? path.join(directory, originalConvertedName)
+        : undefined,
+    realSource,
+    installedPreset,
+  };
 }
 
 function convertedPackLinkTarget(source: string, workspaceRoot: string) {
@@ -601,8 +640,11 @@ export function configNeedsVitePlus(
     if (!tsdownConfig || !hasConfigKey(vitePath, 'pack')) {
       return false;
     }
-    const converted = convertedPackConfigName(tsdownConfig);
-    const convertedImports = tsdownConfigImportPaths(converted);
+    const { convertedName, previousPath } = packConfigPaths(path.join(projectPath, tsdownConfig));
+    const convertedImports = tsdownConfigImportPaths(convertedName);
+    if (previousPath) {
+      convertedImports.push(...tsdownConfigImportPaths(path.basename(previousPath)));
+    }
     return importsVitePlus || imports.some(({ value }) => convertedImports.includes(value));
   } catch {
     return false;
@@ -694,15 +736,19 @@ function packValueReferences(node: Node, mapping?: PackMapping): PackReference[]
       ];
     case 'ArrayExpression':
       return value.elements.flatMap((entry) => (entry ? packValueReferences(entry, mapping) : []));
-    case 'MemberExpression':
-      // Keep the index expression and redirect the imported array it selects from.
-      return value.computed &&
+    case 'MemberExpression': {
+      if (!value.computed) {
+        return [];
+      }
+      // Keep the index expression. For a dynamic index, check the source array
+      // before redirecting the import and keep the existing pack toolchain defaults.
+      const literalIndex =
         value.property.type === 'Literal' &&
         typeof value.property.value === 'number' &&
         Number.isInteger(value.property.value) &&
-        value.property.value >= 0
-        ? packValueReferences(value.object, mapping)
-        : [];
+        value.property.value >= 0;
+      return packValueReferences(value.object, literalIndex ? mapping : (mapping ?? 'static'));
+    }
     case 'CallExpression': {
       const target = objectAssignTarget(value);
       if (target) {
@@ -903,15 +949,69 @@ function aliasBindingStarts(binding: Node): number[] {
   }
 }
 
-function packMutationReferences({
-  program,
-  bindings,
-}: ReturnType<typeof parseSource>): Set<number> {
+function entryMutationHelper(node: FunctionNode | ArrowFunctionExpression) {
+  const [parameter] = node.params;
+  if (node.async || node.generator || node.params.length !== 1 || parameter.type !== 'Identifier') {
+    return undefined;
+  }
+  const type = parameter.typeAnnotation?.typeAnnotation;
+  const typeReference =
+    type?.type === 'TSTypeQuery' && type.exprName.type === 'Identifier'
+      ? type.exprName.start
+      : undefined;
+  if (type && typeReference === undefined) {
+    return undefined;
+  }
+  const body = node.body;
+  const expressions =
+    body?.type === 'BlockStatement'
+      ? body.body.map((statement) =>
+          statement.type === 'ExpressionStatement' ? statement.expression : undefined,
+        )
+      : [body];
+  if (
+    expressions.length > 0 &&
+    expressions.every((expression) => {
+      if (expression?.type !== 'CallExpression' || expression.callee.type !== 'MemberExpression') {
+        return false;
+      }
+      const method = memberName(expression.callee);
+      const receiver = expression.callee.object;
+      return (
+        !!method &&
+        arrayMutators.has(method) &&
+        receiver.type === 'MemberExpression' &&
+        memberName(receiver) === 'entry' &&
+        receiver.object.type === 'Identifier' &&
+        receiver.object.name === parameter.name &&
+        expression.arguments.every((argument) => sameStaticValue(argument, argument))
+      );
+    })
+  ) {
+    return { typeReference };
+  }
+  return undefined;
+}
+
+function packMutationReferences({ program, bindings }: ReturnType<typeof parseSource>) {
   const writes = new Set<number>();
   const aliasInitializers = new Map<number, number>();
+  const helpers = new Map<number, NonNullable<ReturnType<typeof entryMutationHelper>>>();
+  const calls = new Map<number, number>();
+  const recordHelper = (start: number, node: FunctionNode | ArrowFunctionExpression) => {
+    const helper = entryMutationHelper(node);
+    if (helper) {
+      helpers.set(start, helper);
+    }
+  };
   for (const node of configNodes(program)) {
     let target: Node;
     switch (node.type) {
+      case 'FunctionDeclaration':
+        if (node.id) {
+          recordHelper(node.id.start, node);
+        }
+        continue;
       case 'VariableDeclaration':
         if (node.kind === 'const') {
           for (const { id, init } of node.declarations) {
@@ -920,6 +1020,12 @@ function packMutationReferences({
               for (const start of aliasBindingStarts(id)) {
                 aliasInitializers.set(start, origin.start);
               }
+            }
+            if (
+              id.type === 'Identifier' &&
+              (init?.type === 'FunctionExpression' || init?.type === 'ArrowFunctionExpression')
+            ) {
+              recordHelper(id.start, init);
             }
           }
         }
@@ -945,6 +1051,24 @@ function packMutationReferences({
             : undefined;
         const assigned = objectAssignTarget(node) ?? receiver;
         if (!assigned) {
+          const [argument] = node.arguments;
+          if (
+            callee.type === 'Identifier' &&
+            node.arguments.length === 1 &&
+            argument.type === 'Identifier'
+          ) {
+            calls.set(callee.start, argument.start);
+          }
+          // A function can change options passed by reference. Keep those
+          // references together unless the local helper can be verified.
+          for (const argument of node.arguments) {
+            const root = packRootIdentifier(
+              argument.type === 'SpreadElement' ? argument.argument : argument,
+            );
+            if (root) {
+              writes.add(root.start);
+            }
+          }
           continue;
         }
         target = assigned;
@@ -958,13 +1082,19 @@ function packMutationReferences({
       writes.add(root.start);
     }
   }
-  if (writes.size === 0 || aliasInitializers.size === 0) {
-    return writes;
-  }
+  const entryCalls = new Map<number, number | undefined>();
   const origins = new Map<number, number>();
   for (const { start, references, constant } of bindings) {
+    if (!constant) {
+      continue;
+    }
+    const helper = helpers.get(start);
+    const argument = references.length === 1 ? calls.get(references[0]) : undefined;
+    if (helper && argument !== undefined) {
+      entryCalls.set(argument, helper.typeReference);
+    }
     const origin = aliasInitializers.get(start);
-    if (constant && origin !== undefined) {
+    if (origin !== undefined) {
       for (const reference of references) {
         origins.set(reference, origin);
       }
@@ -978,7 +1108,7 @@ function packMutationReferences({
       writes.add(origin);
     }
   }
-  return writes;
+  return { writes, entryCalls };
 }
 
 function importedPackBindings(
@@ -994,7 +1124,7 @@ function importedPackBindings(
   const directory = path.dirname(vitePath);
   const withoutExtension = path.join(path.dirname(packPath), path.parse(packPath).name);
   const jsPath = packPath.replace(/\.(m|c)?ts$/, '.$1js');
-  const writes = packMutationReferences(parsed);
+  const { writes, entryCalls } = packMutationReferences(parsed);
   return program.body.flatMap((statement) => {
     if (statement.type !== 'ImportDeclaration' || statement.importKind === 'type') {
       return [];
@@ -1023,17 +1153,37 @@ function importedPackBindings(
       return [];
     }
     const uses = assignments.filter(({ value }) => references.includes(value.start));
-    return uses.length
-      ? [
-          {
-            statement,
-            binding,
-            uses,
-            mutates: references.some((reference) => writes.has(reference)),
-            onlyPack: references.length === uses.length && uses.every(({ copy }) => !copy),
-          },
-        ]
-      : [];
+    if (uses.length === 0) {
+      return [];
+    }
+    const written = references.filter((reference) => writes.has(reference));
+    const onlyPackUses = references.length === uses.length && uses.every(({ copy }) => !copy);
+    const helperReferences = new Set(uses.map(({ value }) => value.start));
+    const canRedirectEntryCalls =
+      written.length > 0 &&
+      uses.every(({ copy }) => !copy) &&
+      written.every((reference) => {
+        if (!entryCalls.has(reference)) {
+          return false;
+        }
+        helperReferences.add(reference);
+        const type = entryCalls.get(reference);
+        if (type !== undefined) {
+          helperReferences.add(type);
+        }
+        return type === undefined || references.includes(type);
+      }) &&
+      references.every((reference) => helperReferences.has(reference));
+    return [
+      {
+        statement,
+        binding,
+        uses,
+        mutates: written.length > 0,
+        canRedirectEntryCalls,
+        onlyPack: onlyPackUses || canRedirectEntryCalls,
+      },
+    ];
   });
 }
 
@@ -1056,8 +1206,16 @@ function rewritePackConfigImports(
   imports: ReturnType<typeof importedPackBindings>,
   originalName: string,
   convertedName: string,
+  previousImports: ReturnType<typeof importedPackBindings>,
 ): string {
-  const edits: Array<Span & { text: string }> = [];
+  const edits: Array<Span & { text: string }> = previousImports.map(({ statement }) => {
+    const { start, end, value } = statement.source;
+    return {
+      start,
+      end,
+      text: JSON.stringify(value.slice(0, -path.posix.basename(value).length) + convertedName),
+    };
+  });
   const originalStem = path.parse(originalName).name;
   const convertedStem = path.parse(convertedName).name;
   const newline = source.includes('\r\n') ? '\r\n' : '\n';
@@ -1065,8 +1223,11 @@ function rewritePackConfigImports(
   for (const { statement, binding, uses, onlyPack } of imports) {
     const original = statement.source.value;
     const filename = path.posix.basename(original);
-    const converted =
-      original.slice(0, -filename.length) + filename.replace(originalStem, convertedStem);
+    const replacement =
+      path.extname(originalName) === path.extname(convertedName)
+        ? filename.replace(originalStem, convertedStem)
+        : convertedName;
+    const converted = original.slice(0, -filename.length) + replacement;
     const literal = JSON.stringify(converted);
     if (onlyPack && statement.specifiers.length === 1) {
       edits.push({ start: statement.source.start, end: statement.source.end, text: literal });
@@ -1142,7 +1303,7 @@ export function findDivergedTsdownPackConfig(
         ? vitePath
         : undefined;
     }
-    const convertedPath = path.join(configDirectory, convertedPackConfigName(tsdownConfigPath));
+    const { convertedPath, previousPath } = packConfigPaths(tsdownConfigPath);
     if (!hasPack && !fs.existsSync(convertedPath)) {
       // Use the same merge as the later config edit before replacing the build command.
       const merged = mergeTsdownConfig(vitePath, `./${path.basename(tsdownConfigPath)}`);
@@ -1168,10 +1329,13 @@ export function findDivergedTsdownPackConfig(
     }
     const { content } = rewriteTsdownConfigForPack(tsdownConfigPath, workspaceRoot);
     const expected = content ?? fs.readFileSync(tsdownConfigPath, 'utf8');
-    if (usesConfig(convertedPath)) {
-      return sameConfigModule(convertedPath, expected, fs.readFileSync(convertedPath, 'utf8'))
+    const activePath = [convertedPath, previousPath].find(
+      (file) => file && fs.existsSync(file) && usesConfig(file),
+    );
+    if (activePath) {
+      return sameConfigModule(activePath, expected, fs.readFileSync(activePath, 'utf8'))
         ? undefined
-        : convertedPath;
+        : activePath;
     }
     const expectedValue = defaultConfigValue(parseSource(tsdownConfigPath, expected).program);
     return expectedValue &&
@@ -1196,8 +1360,8 @@ function mergeRetainedTsdownConfig(
   report: MigrationReport | undefined,
 ): boolean | undefined {
   const originalName = path.basename(tsdownConfigPath);
-  const convertedName = convertedPackConfigName(originalName);
-  const convertedPath = path.join(path.dirname(tsdownConfigPath), convertedName);
+  const { convertedName, convertedPath, previousPath, realSource, installedPreset } =
+    packConfigPaths(tsdownConfigPath);
   const source = fs.readFileSync(viteConfigPath, 'utf8');
   const hasPack = hasConfigKey(viteConfigPath, 'pack');
   const parsed = hasPack ? parseSource(viteConfigPath, source) : undefined;
@@ -1208,25 +1372,20 @@ function mergeRetainedTsdownConfig(
   const convertedImports = parsed
     ? importedPackBindings(parsed, assignments, viteConfigPath, convertedPath)
     : [];
-  const importsConverted = convertedImports.length > 0;
-  const sourceIsLink = fs.lstatSync(tsdownConfigPath).isSymbolicLink();
-  const sourceTarget = sourceIsLink
-    ? path.resolve(path.dirname(tsdownConfigPath), fs.readlinkSync(tsdownConfigPath))
-    : undefined;
-  const realSource = sourceIsLink ? fs.realpathSync(tsdownConfigPath) : undefined;
-  const installedPreset =
-    sourceTarget &&
-    realSource &&
-    [sourceTarget, realSource].some((file) => file.split(path.sep).includes('node_modules'))
-      ? sourceTarget
-      : undefined;
+  const previousImports =
+    parsed && previousPath
+      ? importedPackBindings(parsed, assignments, viteConfigPath, previousPath)
+      : [];
+  const upgradesModule = previousImports.length > 0;
+  const importsConverted = convertedImports.length > 0 || upgradesModule;
   const convertedEntry = fs.lstatSync(convertedPath, { throwIfNoEntry: false });
   const convertedExists = fs.statSync(convertedPath, { throwIfNoEntry: false })?.isFile();
   if (
     importsConverted &&
     originalImports.length === 0 &&
+    !upgradesModule &&
     convertedExists &&
-    (installedPreset ? convertedEntry?.isFile() : !sourceIsLink || convertedEntry?.isSymbolicLink())
+    (installedPreset ? convertedEntry?.isFile() : !realSource || convertedEntry?.isSymbolicLink())
   ) {
     return preparePackConfigTsconfigEdits(
       viteConfigPath,
@@ -1242,14 +1401,17 @@ function mergeRetainedTsdownConfig(
     return undefined;
   }
 
-  const mappings = [...originalImports, ...convertedImports].flatMap(({ uses }) =>
+  const packImports = [...originalImports, ...convertedImports, ...previousImports];
+  const mappings = packImports.flatMap(({ uses }) =>
     uses.flatMap(({ mapping }) => (mapping ? [mapping] : [])),
   );
+  const usesBundledDefaults =
+    mappings.length > 0 || packImports.some(({ canRedirectEntryCalls }) => canRedirectEntryCalls);
   const { content: converted, warnings } = rewriteTsdownConfigForPack(
     tsdownConfigPath,
     workspaceRoot,
-    // The map already ran under vp pack. Keep its bundled defaults when adapting the input.
-    mappings.length > 0 ? viteConfigPath : undefined,
+    // Derived configs already ran under vp pack. Keep their bundled defaults.
+    usesBundledDefaults ? viteConfigPath : undefined,
   );
   for (const warning of warnings) {
     warnMigration(`${displayRelative(tsdownConfigPath)}: ${warning}`, report);
@@ -1257,9 +1419,11 @@ function mergeRetainedTsdownConfig(
   if (converted === undefined && !importsConverted) {
     return undefined;
   }
-  if (originalImports.some(({ mutates }) => mutates)) {
+  if (
+    originalImports.some(({ mutates, canRedirectEntryCalls }) => mutates && !canRedirectEntryCalls)
+  ) {
     warnMigration(
-      `${displayRelative(viteConfigPath)} changes the imported options from ${displayRelative(tsdownConfigPath)}. Keep those changes when you migrate the pack options manually. See ${documentationUrl('/guide/migrate#tsdown')}`,
+      `${displayRelative(viteConfigPath)} changes the imported options from ${displayRelative(tsdownConfigPath)} or passes them to code that can change them. Keep those changes when you migrate the pack options manually. See ${documentationUrl('/guide/migrate#tsdown')}`,
       report,
     );
     return false;
@@ -1277,7 +1441,7 @@ function mergeRetainedTsdownConfig(
       !array.elements.every((entry) => staticObject(entry))
     ) {
       warnMigration(
-        `Cannot verify how ${displayRelative(viteConfigPath)} maps the options from ${displayRelative(tsdownConfigPath)}. Migrate the pack options manually. See ${documentationUrl('/guide/migrate#tsdown')}`,
+        `Cannot verify how ${displayRelative(viteConfigPath)} selects options from ${displayRelative(tsdownConfigPath)}. Migrate the pack options manually. See ${documentationUrl('/guide/migrate#tsdown')}`,
         report,
       );
       return false;
@@ -1288,7 +1452,7 @@ function mergeRetainedTsdownConfig(
   // get a project-owned file because a reinstall can replace their directory.
   const siblingTarget = realSource ? convertedPackLinkTarget(realSource, workspaceRoot) : undefined;
   const linkedTarget = installedPreset ? undefined : siblingTarget;
-  if (sourceIsLink && !installedPreset && !linkedTarget) {
+  if (realSource && !installedPreset && !linkedTarget) {
     warnMigration(
       `The shared config at ${displayRelative(tsdownConfigPath)} points outside the workspace. Migrate its pack options manually. See ${documentationUrl('/guide/migrate#tsdown')}`,
       report,
@@ -1297,13 +1461,14 @@ function mergeRetainedTsdownConfig(
   }
 
   let config = source;
-  if (parsed && originalImports.length > 0) {
+  if (parsed && (originalImports.length > 0 || upgradesModule)) {
     config = rewritePackConfigImports(
       source,
       parsed.comments,
       originalImports,
       originalName,
       convertedName,
+      previousImports,
     );
   } else if (!hasPack) {
     const result = mergeTsdownConfig(viteConfigPath, `./${convertedName}`);
@@ -1338,6 +1503,21 @@ function mergeRetainedTsdownConfig(
       return hasPack ? false : undefined;
     }
     content = relocated;
+  }
+  if (upgradesModule && previousPath && fs.existsSync(previousPath)) {
+    let matches = false;
+    try {
+      matches = sameConfigModule(previousPath, content, fs.readFileSync(previousPath, 'utf8'));
+    } catch {
+      // Keep a previous copy whose content cannot be verified.
+    }
+    if (!matches) {
+      warnMigration(
+        `${displayRelative(previousPath)} differs from the generated pack options. Migrate this config to ${convertedName} manually. See ${documentationUrl('/guide/migrate#tsdown')}`,
+        report,
+      );
+      return false;
+    }
   }
   const writePath = linkedTarget ?? convertedPath;
   const existingFile = reuseLink || replaceInstalledLink ? undefined : convertedEntry;
