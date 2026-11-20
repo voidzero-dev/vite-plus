@@ -770,7 +770,7 @@ async function mergePackageJson() {
   // declared here.
   destPkg.peerDependencies = {
     // The patched tsgo generator also supports projects that use the native preview CLI.
-    '@typescript/native-preview': '*',
+    '@typescript/native-preview': '^7.0.0-0',
     ...dtsPkg.peerDependencies,
     ...tsdownPkg.peerDependencies,
     ...vitePkg.peerDependencies,
