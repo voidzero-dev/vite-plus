@@ -1,0 +1,20 @@
+[[case]]
+name = "system_pm_preserves_node_and_path"
+vp = "global"
+skip-platforms = ["windows"]
+prewarm-package-managers = false
+steps = [["node", "verify.mjs", "system-pm"]]
+
+[[case]]
+name = "managed_shim_preserves_system_node_path"
+vp = "global"
+skip-platforms = ["windows"]
+prewarm-package-managers = false
+steps = [["node", "verify.mjs", "shim"]]
+
+[[case]]
+name = "explicit_pm_preserves_system_node_path"
+vp = "global"
+skip-platforms = ["windows"]
+prewarm-package-managers = false
+steps = [["node", "verify.mjs", "explicit-pm"]]

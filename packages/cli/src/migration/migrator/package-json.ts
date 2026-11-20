@@ -1,5 +1,6 @@
 import { rewriteScripts } from '../../../binding/index.js';
 import { PackageManager } from '../../types/index.ts';
+import type { CatalogDependencyResolver } from '../../utils/catalog.ts';
 import {
   VITEST_VERSION,
   VITE_PLUS_NAME,
@@ -29,10 +30,9 @@ import {
   OXLINT_PLUGINS_PACKAGE,
   OXLINT_PLUGIN_API_PACKAGES,
   packageOwnsOxlintApi,
-  REMOVE_PACKAGES,
+  bundledPackagesToRemove,
   VITEST_BROWSER_DEP_NAMES,
   VITEST_IS_MANAGED_OVERRIDE,
-  type CatalogDependencyResolver,
   type PackageJsonDependencyField,
 } from './shared.ts';
 
@@ -60,17 +60,16 @@ export function rewritePackageJson(
   // is REMOVED so it arrives transitively through vite-plus. Defaults to true to
   // preserve legacy behavior for callers that don't compute the signal.
   usesVitestDirectly = true,
-  // Module augmentations, compilerOptions.types, and `vitest/package.json`
-  // intentionally retain the upstream package identity after import rewriting
-  // and therefore require a package-local provider under strict layouts.
+  // An import preserved by the lint rule, a module augmentation, or a reference
+  // to Vitest types or package metadata needs the upstream package locally.
   retainedVitestModule = false,
   // Installed dependency metadata can reveal required Vitest peers whose
   // package names do not include "vitest".
   requiredVitestPeer = false,
-  // Opt-in browser providers the workspace catalog is gaining (some package uses
-  // one only through source/a shim). An already-installed copy of such a provider
-  // must REFERENCE that catalog entry, not pin a concrete version. See #2005.
-  providerCatalogAdditions: ReadonlySet<string> = new Set(),
+  // An installed provider references the shared catalog entry added for a sibling.
+  browserCatalogAdditions: ReadonlySet<string> = new Set(),
+  // Bundled browser packages that this package still imports.
+  retainedBrowserPackages?: ReadonlySet<string>,
 ): Record<string, string | string[]> | null {
   if (pkg.scripts) {
     const updated = rewriteScripts(
@@ -194,7 +193,7 @@ export function rewritePackageJson(
     needVitePlus = true;
   }
   // remove packages that are replaced with vite-plus
-  for (const name of REMOVE_PACKAGES) {
+  for (const name of bundledPackagesToRemove(retainedBrowserPackages)) {
     let wasRemoved = false;
     for (const { dependencyField, dependencies } of dependencyGroups) {
       if (
@@ -255,7 +254,7 @@ export function rewritePackageJson(
           provider,
           installGroupEntry.dependencyField,
           packageManager,
-          providerCatalogAdditions.has(provider)
+          browserCatalogAdditions.has(provider)
             ? supportCatalog && packageManager !== PackageManager.bun
             : supportCatalog,
           catalogDependencyResolver,

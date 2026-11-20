@@ -16,6 +16,10 @@ fpr = "fpr" # GPG colon-format record name for a key fingerprint
 # the parts aren't tokenized.
 PnP = "PnP"
 
+# Repository name and pinned commit in the ecosystem benchmark report.
+sigle = "sigle"
+"6b2b2ba86" = "6b2b2ba86"
+
 [files]
 extend-exclude = [
   "crates/fspy_detours_sys/detours",

@@ -5,3 +5,21 @@ steps = [
   { argv = ["vp", "migrate", "--no-interactive", "--no-hooks"], comment = "project config process handlers must not terminate migration", continue-on-failure = true },
   { argv = ["vpt", "print-file", "vite.config.ts"], comment = "migration still rewrites the config after its compatibility probe crashes", continue-on-failure = true },
 ]
+
+[[case]]
+name = "migration_config_dynamic_process_crash_isolated"
+vp = "local"
+comment = "A crashing dynamic config preserves Vitest imports while migration still rewrites tsdown imports."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies", "{\"vite-plus\":\"latest\"}"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "scripts", "{\"build\":\"vite build\"}"], snapshot = false },
+  { argv = ["vpt", "replace-file-content", "vite.config.ts", "import { defineConfig } from 'vite';", ""], snapshot = false },
+  { argv = ["vpt", "replace-file-content", "vite.config.ts", "export default defineConfig({});", "export default () => ({});"], snapshot = false },
+  { argv = ["vpt", "write-file", "unit.test.ts", "import { test } from 'vitest';\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "unit.test.ts"],
+  ["vpt", "print-file", "package.json"],
+  { argv = ["vpt", "write-file", "unit.test.ts", "import { test } from 'vitest';\nimport { defineConfig } from 'tsdown';\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "Dependencies are up to date on the second run." },
+  ["vpt", "print-file", "unit.test.ts"],
+]

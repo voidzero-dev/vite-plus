@@ -15,7 +15,7 @@ import { describe, expect, it } from 'vitest';
 const cliPkgDir = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '../..');
 const distDir = path.join(cliPkgDir, 'dist');
 const corePkgPath = path.join(cliPkgDir, '../core/package.json');
-const vitestPkgPath = createRequire(import.meta.url).resolve('vitest/package.json');
+const require = createRequire(import.meta.url);
 
 describe('versions export', () => {
   describe('build artifacts', () => {
@@ -82,12 +82,13 @@ describe('versions export', () => {
       }
     });
 
-    it('should contain vitest version matching installed package', async () => {
-      const vitestPkg = JSON.parse(fs.readFileSync(vitestPkgPath, 'utf-8'));
+    it.each(['vitest', 'tsrs'] as const)('should match the installed %s version', async (name) => {
+      const pkgPath = require.resolve(`${name}/package.json`);
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
       const mod = await import('../../dist/versions.js');
       const versions = mod.versions as Record<string, string>;
-      expect(versions.vitest, 'versions.vitest should match installed vitest version').toBe(
-        vitestPkg.version,
+      expect(versions[name], `versions.${name} should match installed ${name} version`).toBe(
+        pkg.version,
       );
     });
   });
@@ -115,7 +116,7 @@ describe('versions export', () => {
       expect(versions.vitest).toBeTypeOf('string');
       expect(versions.oxlint).toBeTypeOf('string');
       expect(versions.oxfmt).toBeTypeOf('string');
-      expect(versions['oxlint-tsgolint']).toBeTypeOf('string');
+      expect(versions.tsrs).toBeTypeOf('string');
     });
   });
 });

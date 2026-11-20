@@ -14,10 +14,10 @@ catalog:
   '@nkzw/safe-word-list': ^3.1.0
   '@oxc-node/cli': ^1.0.2
   '@oxc-node/core': ^1.0.2
-  '@oxc-project/runtime': =0.158.0
-  '@oxc-project/types': =0.158.0
+  '@oxc-project/runtime': =0.159.0
+  '@oxc-project/types': =0.159.0
   # Kept at the oxlint version by .github/scripts/upgrade-deps.ts
-  '@oxlint/plugins': =1.93.0
+  '@oxlint/plugins': =1.94.0
   '@rolldown/pluginutils': ^1.0.0
   '@tsdown/css': =0.23.4
   '@tsdown/exe': =0.23.4
@@ -25,15 +25,15 @@ catalog:
   '@types/node': 24.10.3
   '@types/validate-npm-package-name': ^4.0.2
   '@typescript/native-preview': 7.0.0-dev.20260707.2
-  '@vitest/browser': 5.1.0
-  '@vitest/browser-playwright': 5.1.0
-  '@vitest/browser-preview': 5.1.0
+  '@vitest/browser': 5.1.1
+  '@vitest/browser-playwright': 5.1.1
+  '@vitest/browser-preview': 5.1.1
   '@vitest/browser-webdriverio': 5.0.0
-  '@vitest/mocker': 5.1.0
-  '@vitest/pretty-format': 5.1.0
-  '@vitest/snapshot': 5.1.0
-  '@vitest/spy': 5.1.0
-  '@vitest/utils': 5.1.0
+  '@vitest/mocker': 5.1.1
+  '@vitest/pretty-format': 5.1.1
+  '@vitest/snapshot': 5.1.1
+  '@vitest/spy': 5.1.1
+  '@vitest/utils': 5.1.1
   bingo: ^0.16.0
   cac: ^7.1.0
   consola: ^3.4.2
@@ -50,9 +50,9 @@ catalog:
   lint-staged: ^17.6.1
   minimatch: ^11.0.0
   nanotar: ^0.3.0
-  oxc-parser: =0.158.0
-  oxfmt: =0.78.0
-  oxlint: =1.93.0
+  oxc-parser: =0.159.0
+  oxfmt: =0.79.0
+  oxlint: =1.94.0
   oxlint-tsgolint: =7.0.2007
   pathe: ^2.0.3
   picocolors: ^1.1.1
@@ -67,11 +67,12 @@ catalog:
   source-map: 0.8.0
   tinyglobby: ^0.2.15
   tsdown: =0.23.4
+  tsrs: =7.1.0-beta.tsrs3
   typescript: ~7.0.2
   valibot: 1.5.0
   validate-npm-package-name: ^8.0.0
   verkit: ^0.5.0
-  vitest: 5.1.0
+  vitest: 5.1.1
   yaml: ^2.9.1
   # Keep generator option schemas compatible with bingo's Zod version.
   zod: ^4.4.3
@@ -94,6 +95,7 @@ minimumReleaseAgeExclude:
   - '@oxlint/*'
   - '@rolldown/*'
   - '@tsdown/*'
+  - '@tsrs/*'
   - '@types/*'
   - '@vitejs/*'
   - '@vitest/*'
@@ -119,6 +121,7 @@ minimumReleaseAgeExclude:
   - rolldown-plugin-dts
   - tinyexec
   - tsdown
+  - tsrs
   - tsx
   - unrun
   - verkit

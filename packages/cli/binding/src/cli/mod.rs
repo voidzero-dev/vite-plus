@@ -45,7 +45,8 @@ use self::{
 /// Execute a synthesizable subcommand directly (not through vite-task Session).
 /// No caching, no task graph, no dependency resolution.
 async fn execute_direct_subcommand(
-    subcommand: SynthesizableSubcommand,
+    mut subcommand: SynthesizableSubcommand,
+    raw_args: &[String],
     cwd: &AbsolutePathBuf,
     options: Option<CliOptions>,
     explicit_chdir: bool,
@@ -61,6 +62,14 @@ async fn execute_direct_subcommand(
         app_target::AppTarget::Dir(dir) => dir,
         app_target::AppTarget::CurrentDir => cwd,
     };
+
+    // A lone `--` uses bare-command target selection. Restore the separator
+    // after selecting the target so Vite receives the original arguments.
+    if let SynthesizableSubcommand::Dev { args } | SynthesizableSubcommand::Build { args } =
+        &mut subcommand
+    {
+        vp_shared::restore_leading_arg_separator(raw_args, args);
+    }
 
     // The resolver hands back the workspace root it already found whenever the
     // command runs in the unchanged cwd (never after a -C/elicitation
@@ -210,7 +219,7 @@ async fn envs_with_explicit_package_manager_path(
         return Ok(envs);
     };
 
-    let (install_dir, _, _) = match vp_pm_cli::download_package_manager_for_cwd(
+    let manager = match vp_pm_cli::managed_for_local_cli(
         cwd,
         resolution.package_manager_type,
         &resolution.version,
@@ -218,7 +227,9 @@ async fn envs_with_explicit_package_manager_path(
     )
     .await
     {
-        Ok(result) => result,
+        Ok(Some(manager)) => manager,
+        // A system package manager is already on PATH.
+        Ok(None) => return Ok(envs),
         // A missing package manager has other causes, such as no network or an
         // unknown version. The command still runs from PATH, so those causes
         // stay a debug log. An integrity failure is different. If vp hides it,
@@ -233,7 +244,13 @@ async fn envs_with_explicit_package_manager_path(
         }
     };
 
-    Ok(prepend_to_env_path(&envs, &install_dir.join("bin")))
+    Ok(prepend_to_env_path(&envs, &manager.get_bin_prefix()))
+}
+
+/// A system package manager is already on PATH. Moving its directory to the front would also
+/// promote the other tools in it, such as a second `node`.
+pub(crate) fn package_manager_prepend(pm: &vp_pm_cli::PackageManager) -> PrependOptions {
+    PrependOptions { dedupe_anywhere: !pm.is_managed() }
 }
 
 /// Execute a vite-task command (run, cache) through Session.
@@ -266,10 +283,10 @@ async fn execute_vite_task_command(
     let mut config_loader = VitePlusConfigLoader::new(resolve_vite_config_fn);
 
     // Update PATH to include package manager bin directory BEFORE session init
-    match vp_pm_cli::PackageManager::builder(&cwd).build().await {
+    match vp_pm_cli::PackageManager::builder(&cwd).for_local_cli().build().await {
         Ok(pm) => {
             let bin_prefix = pm.get_bin_prefix();
-            prepend_tools_to_path_env(&bin_prefix, &pm.bin_names(), PrependOptions::default())?;
+            prepend_tools_to_path_env(&bin_prefix, &pm.bin_names(), package_manager_prepend(&pm))?;
 
             // Stamp the package-manager lifecycle env (`npm_execpath`,
             // `npm_config_user_agent`) like pnpm/npm/yarn would, so child
@@ -405,7 +422,7 @@ pub async fn main(
             // through the package manager, so redirecting those to `vpr` would
             // be wrong; and `exec` names a binary rather than a task.
             script_note::print(raw_subcommand.as_deref(), &cwd);
-            execute_direct_subcommand(subcmd, &cwd, options, explicit_chdir).await
+            execute_direct_subcommand(subcmd, &args_vec, &cwd, options, explicit_chdir).await
         }
         CLIArgs::ViteTask(command) => execute_vite_task_command(command, cwd, options).await,
         CLIArgs::PackageManager(pm) => execute_pm_command(pm, &cwd, options.as_ref()).await,
@@ -431,7 +448,7 @@ async fn execute_pm_command(
             vp_shared::documentation_url("/guide/")
         )));
     }
-    let result = match vp_pm_cli::dispatch_with_metadata(cwd, command).await {
+    let result = match vp_pm_cli::dispatch_for_local_cli(cwd, command).await {
         Ok(result) => result,
         // Render `UserMessage` cleanly (no `error:` prefix) and exit non-zero —
         // matches the global CLI's `is_user_message()` branch in main.rs so the
@@ -570,7 +587,9 @@ mod tests {
             SystemTime::now().duration_since(UNIX_EPOCH).expect("time should be valid").as_nanos();
         let temp_dir = std::env::temp_dir().join(format!("vite-plus-bad-hash-{suffix}"));
         let vp_home = temp_dir.join("vp-home");
-        fs::create_dir_all(&temp_dir).expect("temp dir should be created");
+        fs::create_dir_all(&vp_home).expect("VP_HOME should be created");
+        // A global install in managed mode lets the local CLI use its package managers.
+        fs::write(vp_home.join("config.json"), "{}").expect("config should be written");
 
         let expected_hash = format!("sha512.{}", "0".repeat(128));
         fs::write(

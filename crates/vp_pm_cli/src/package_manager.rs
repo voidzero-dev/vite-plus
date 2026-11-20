@@ -21,7 +21,7 @@ use vt_str::Str;
 use vt_workspace::{WorkspaceFile, WorkspaceRoot, find_workspace_root};
 
 use crate::{
-    config::NpmConfig,
+    config::{NpmConfig, is_default_registry},
     env_forbidden::ensure_managed_package_manager_allowed,
     request::{HttpClient, download_and_extract_tgz_with_hash_and_config, is_not_found},
     shim,
@@ -60,6 +60,8 @@ impl fmt::Display for PackageManagerType {
 }
 
 impl PackageManagerType {
+    pub const ALL: [Self; 4] = [Self::Npm, Self::Pnpm, Self::Yarn, Self::Bun];
+
     /// Map an invoked shim tool name (including aliases like `npx`, `pn`, `pnpx`, `pnx`,
     /// `yarnpkg`, `bunx`) to the package-manager family that provides it.
     #[must_use]
@@ -381,11 +383,19 @@ pub struct PackageManager {
 pub struct PackageManagerBuilder {
     client_override: Option<PackageManagerType>,
     cwd: AbsolutePathBuf,
+    local_cli: bool,
 }
 
 impl PackageManagerBuilder {
     pub fn new(cwd: impl AsRef<AbsolutePath>) -> Self {
-        Self { client_override: None, cwd: cwd.as_ref().to_absolute_path_buf() }
+        Self { client_override: None, cwd: cwd.as_ref().to_absolute_path_buf(), local_cli: false }
+    }
+
+    /// Provide the package manager through [`crate::provide_for_local_cli`] instead of always downloading it.
+    #[must_use]
+    pub const fn for_local_cli(mut self) -> Self {
+        self.local_cli = true;
+        self
     }
 
     #[must_use]
@@ -417,6 +427,28 @@ impl PackageManagerBuilder {
             )
         {
             return resolve_npm_from_path(&self.cwd).await;
+        }
+
+        if self.local_cli {
+            let result = crate::provide_for_local_cli(
+                &self.cwd,
+                package_manager_type,
+                &version_or_req,
+                hash.as_deref(),
+            )
+            .await
+            .map(|(package_manager, _)| package_manager);
+            // Nothing selected this family, so the npm that ships with Node.js will do.
+            if source == PackageManagerSource::Default
+                && matches!(
+                    result,
+                    Err(Error::PackageManagerNotInstalled(_)
+                        | Error::PackageManagerNotRunnable { .. })
+                )
+            {
+                return resolve_npm_from_path(&self.cwd).await;
+            }
+            return result;
         }
 
         let npm_config = NpmConfig::load_for_cwd(&self.cwd);
@@ -529,25 +561,63 @@ impl PackageManager {
         Self { client, version: version.into(), bin_prefix }
     }
 
+    /// Describe a package manager found on PATH, or `None` when its version cannot be read.
+    pub async fn from_system_executable(
+        client: PackageManagerType,
+        executable: &AbsolutePath,
+        cwd: &AbsolutePath,
+    ) -> Option<Self> {
+        // Only npm skips `--version`; `npm_version_from_package_json` explains why.
+        let version = if client == PackageManagerType::Npm
+            && let Some(version) = npm_version_from_package_json(executable)
+        {
+            version.to_string()
+        } else {
+            // Corepack rejects a manager that the current project does not pin.
+            let output = tokio::process::Command::new(executable.as_path())
+                .arg("--version")
+                .current_dir(cwd)
+                // User preloads can print to stdout; only the actual command should run them.
+                .env_remove("NODE_OPTIONS")
+                .output()
+                .await
+                .ok()?;
+            if !output.status.success() {
+                return None;
+            }
+            let version = std::str::from_utf8(&output.stdout).ok()?.trim();
+            js_semver::Version::parse(version).ok()?;
+            version.to_owned()
+        };
+        let bin_prefix = executable.parent()?.to_absolute_path_buf();
+        Some(Self::from_bin_prefix(client, version, bin_prefix))
+    }
+
     /// Executables supplied by this installation, including any available aliases.
     /// A system installation need not provide every binary in the tool family.
     #[must_use]
     pub fn bin_names(&self) -> Vec<&'static str> {
+        self.bin_paths().into_iter().map(|(name, _)| name).collect()
+    }
+
+    /// Like [`Self::bin_names`], with the executable each name resolves to,
+    /// such as `pnpm.exe` or `pnpm.cmd` on Windows.
+    #[must_use]
+    pub fn bin_paths(&self) -> Vec<(&'static str, AbsolutePathBuf)> {
         let self_real = std::env::current_exe().ok().and_then(|path| path.canonicalize().ok());
         self.client
             .bin_names()
             .iter()
-            .copied()
-            .filter(|tool| {
-                vp_command::resolve_bin(
+            .filter_map(|&tool| {
+                let path = vp_command::resolve_bin(
                     tool,
                     Some(self.bin_prefix.as_path().as_os_str()),
                     &self.bin_prefix,
                 )
-                .is_ok_and(|path| {
-                    path.parent() == Some(&*self.bin_prefix)
-                        && (self_real.is_none() || path.as_path().canonicalize().ok() != self_real)
-                })
+                .ok()?;
+                (path.parent() == Some(&*self.bin_prefix)
+                    && (self_real.is_none() || path.as_path().canonicalize().ok() != self_real))
+                    .then_some((tool, path))
             })
             .collect()
     }
@@ -555,6 +625,22 @@ impl PackageManager {
     #[must_use]
     pub fn get_bin_prefix(&self) -> AbsolutePathBuf {
         self.bin_prefix.clone()
+    }
+
+    #[must_use]
+    pub const fn get_client(&self) -> PackageManagerType {
+        self.client
+    }
+
+    #[must_use]
+    pub fn get_version(&self) -> &str {
+        &self.version
+    }
+
+    /// Whether Vite+ downloaded this installation rather than finding it on PATH.
+    #[must_use]
+    pub fn is_managed(&self) -> bool {
+        vp_command::is_managed_install(self.bin_prefix.as_path())
     }
 }
 
@@ -1308,7 +1394,9 @@ async fn resolve_dist_tag(
     // A persisted response authenticated as one user must not be reused by
     // another user of the same registry URL. Avoid storing credential-derived
     // cache keys and query authenticated registries directly instead.
-    if urls.iter().any(|url| npm_config.has_auth_for_origin(url)) {
+    // Package managers are public on the default registry, so its responses do
+    // not depend on the credential and keep the cache and offline fallback.
+    if urls.iter().any(|url| !is_default_registry(url) && npm_config.has_auth_for_origin(url)) {
         return fetch_dist_tag_version(package_manager_type, tag, &urls, npm_config).await;
     }
 
@@ -3447,6 +3535,30 @@ mod tests {
             redirect.assert_hits(2);
             first.assert_hits(1);
             second.assert_hits(1);
+        })
+        .await;
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn authenticated_default_registry_latest_versions_use_the_cache() {
+        // A fresh cache entry answers without a request, so this never reaches the real registry.
+        let config = NpmConfig {
+            values: HashMap::from([(
+                "//registry.npmjs.org/:_authtoken".to_string(),
+                "TOKEN".to_string(),
+            )]),
+        };
+        let vp_home = create_temp_dir();
+        EnvConfig::with_vars_async([(env_vars::VP_HOME, vp_home.path().as_os_str())], |_| async {
+            let cache_path = dist_tag_cache_path(
+                PackageManagerType::Pnpm,
+                &["https://registry.npmjs.org/pnpm/latest".into()],
+            );
+            write_dist_tag_cache(&cache_path, "10.1.0").unwrap();
+            assert_eq!(
+                resolve_dist_tag(PackageManagerType::Pnpm, "latest", &config).await.unwrap(),
+                "10.1.0"
+            );
         })
         .await;
     }
@@ -5752,6 +5864,95 @@ mod tests {
         fs::write(yarn_dir.join("package.json"), "{}").unwrap();
 
         assert_eq!(find_extracted_package_dir(temp_dir.path()).unwrap(), yarn_dir);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn system_version_probe_runs_in_the_requested_project() {
+        use std::os::unix::fs::PermissionsExt;
+
+        // Like Corepack, the fake yarn reports its version only in a project that pins it.
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let yarn = root.join("bin/yarn");
+        std::fs::create_dir_all(yarn.parent().unwrap()).unwrap();
+        std::fs::write(&yarn, "#!/bin/sh\n[ -f yarn-project ] && echo 4.9.0\n").unwrap();
+        std::fs::set_permissions(&yarn, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let project = root.join("project");
+        std::fs::create_dir(&project).unwrap();
+        std::fs::write(project.join("yarn-project"), "").unwrap();
+        let yarn = vt_path::AbsolutePathBuf::new(yarn).unwrap();
+        let project = vt_path::AbsolutePathBuf::new(project).unwrap();
+
+        let manager =
+            PackageManager::from_system_executable(PackageManagerType::Yarn, &yarn, &project)
+                .await
+                .expect("the probe runs in the project that pins yarn");
+        assert_eq!(manager.get_version(), "4.9.0");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test(flavor = "current_thread")]
+    async fn system_version_probe_ignores_node_preloads() {
+        use std::os::unix::fs::PermissionsExt;
+
+        // Like a `NODE_OPTIONS=--require` preload, the fake pnpm prints before its version.
+        let dir = tempfile::tempdir().unwrap();
+        let pnpm = dir.path().join("pnpm");
+        std::fs::write(&pnpm, "#!/bin/sh\n[ -n \"$NODE_OPTIONS\" ] && echo preload\necho 10.0.0\n")
+            .unwrap();
+        std::fs::set_permissions(&pnpm, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let pnpm = vt_path::AbsolutePathBuf::new(pnpm).unwrap();
+        let cwd = vt_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
+
+        let vars = [("NODE_OPTIONS", Some(std::ffi::OsStr::new("--require ./preload.js")))];
+        let manager = vp_shared::EnvConfig::with_vars_async(vars, |_| {
+            PackageManager::from_system_executable(PackageManagerType::Pnpm, &pnpm, &cwd)
+        })
+        .await
+        .expect("the preload output is not part of the version");
+        assert_eq!(manager.get_version(), "10.0.0");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn system_npm_version_is_read_from_its_package_without_running_it() {
+        use std::os::unix::fs::PermissionsExt;
+
+        // A Node.js install. Running npm-cli.js fails, so a spawned `npm --version` would
+        // return `None`.
+        //
+        // <root>/
+        // ├── bin/npm -> ../lib/node_modules/npm/bin/npm-cli.js
+        // └── lib/node_modules/npm/
+        //     ├── package.json      {"name":"npm","version":"10.9.2"}
+        //     └── bin/npm-cli.js    exit 1
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let package = root.join("lib/node_modules/npm");
+        std::fs::create_dir_all(package.join("bin")).unwrap();
+        std::fs::write(package.join("package.json"), r#"{"name":"npm","version":"10.9.2"}"#)
+            .unwrap();
+        let cli = package.join("bin/npm-cli.js");
+        std::fs::write(&cli, "#!/bin/sh\nexit 1\n").unwrap();
+        std::fs::set_permissions(&cli, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::create_dir_all(root.join("bin")).unwrap();
+        std::os::unix::fs::symlink("../lib/node_modules/npm/bin/npm-cli.js", root.join("bin/npm"))
+            .unwrap();
+        let npm = vt_path::AbsolutePathBuf::new(root.join("bin/npm")).unwrap();
+
+        let cwd = vt_path::AbsolutePathBuf::new(root.to_path_buf()).unwrap();
+        let manager = PackageManager::from_system_executable(PackageManagerType::Npm, &npm, &cwd)
+            .await
+            .expect("npm's version is read without running npm");
+        // Scripts see the version in the user agent.
+        let context = crate::LifecycleEnvContext { vp_version: "0.0.0".into(), node_version: None };
+        let user_agent = manager
+            .lifecycle_env_vars(&context)
+            .into_iter()
+            .find_map(|(name, value)| (name == "npm_config_user_agent").then_some(value))
+            .unwrap();
+        assert!(user_agent.to_string_lossy().starts_with("vp/0.0.0 npm/10.9.2 "), "{user_agent:?}");
     }
 
     /// A tarball with regular `files`, then symlink `links` (name -> target), the

@@ -65,6 +65,7 @@ describe('Oxlint JSON extends migration', () => {
           name: PackageManager.npm,
           installDir: project,
           binPrefix: project,
+          binPaths: {},
           packageName: 'npm',
           version: '11.0.0',
         },

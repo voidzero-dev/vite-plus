@@ -416,10 +416,7 @@ mod tests {
 
         // `build_with` skips the provider setup in `build_clients`.
         crate::ensure_tls_provider();
-        let expected = vt_str::format!(
-            "\r\nuser-agent: {}\r\n",
-            user_agent(USER_AGENT_VERSION.get().copied())
-        );
+        let expected = user_agent(USER_AGENT_VERSION.get().copied());
         for follow_redirects in [true, false] {
             let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
             let addr = listener.local_addr().expect("local addr");
@@ -440,7 +437,12 @@ mod tests {
                 .expect("send request");
             let request = server.join().expect("server thread");
             let request = std::str::from_utf8(&request).expect("UTF-8 request");
-            assert!(request.contains(expected.as_str()), "{request}");
+            // HTTP field names are case-insensitive; field values are not.
+            let actual = request.lines().skip(1).find_map(|line| {
+                let (name, value) = line.split_once(':')?;
+                name.eq_ignore_ascii_case("user-agent").then(|| value.trim())
+            });
+            assert_eq!(actual, Some(expected.as_str()), "{request}");
         }
     }
 

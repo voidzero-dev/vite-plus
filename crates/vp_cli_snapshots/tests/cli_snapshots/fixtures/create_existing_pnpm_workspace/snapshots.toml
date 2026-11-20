@@ -11,3 +11,19 @@ steps = [
   { argv = ["vp", "install", "--frozen-lockfile"], snapshot = false },
   { argv = ["vp", "run", "build"], cwd = "apps/web", snapshot = false },
 ]
+
+[[case]]
+name = "migrate_existing_pnpm_catalog_order"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL", "CI"]
+comment = "Migration writes Vite+ into the same catalog selected for dependency references when a named catalog precedes the default."
+steps = [
+  { argv = ["vpt", "write-file", "pnpm-workspace.yaml", "packages:\n  - apps/*\ncatalogs:\n  legacy:\n    vite: 'npm:@voidzero-dev/vite-plus-core@*'\n  default:\n    vite: 'npm:@voidzero-dev/vite-plus-core@*'\n"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.vite", "catalog:legacy"], snapshot = false },
+  { argv = ["vp", "install"], snapshot = false, timeout = 240000 },
+  { argv = ["vp", "migrate", "--no-interactive"], snapshot = false, timeout = 240000 },
+  ["vpt", "print-file", "package.json"],
+  ["vpt", "print-file", "pnpm-workspace.yaml"],
+  { argv = ["vp", "install", "--frozen-lockfile"], snapshot = false },
+]

@@ -1,0 +1,15 @@
+{
+  "name": "plain-workspace",
+  "private": true,
+  "packageManager": "bun@1.4.0",
+  "workspaces": {
+    "packages": ["apps/*"],
+    "catalog": {
+      "is-number": "7.0.0"
+    }
+  },
+  "catalog": {
+    "vite": "0.0.0-unused",
+    "vite-plus": "0.0.0-unused"
+  }
+}

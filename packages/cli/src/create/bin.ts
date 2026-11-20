@@ -23,6 +23,7 @@ import {
   rewriteStandaloneProject,
   setPackageManager,
   shouldSkipStagedMigrationForHooks,
+  workspaceSupportsCatalog,
 } from '../migration/migrator.ts';
 import { DependencyType, PackageManager, type WorkspaceInfo } from '../types/index.ts';
 import {
@@ -92,7 +93,7 @@ import { BuiltinTemplate, TemplateType } from './templates/types.ts';
 import {
   deriveDefaultPackageName,
   detectLauncherPackageManager,
-  ensurePnpmCreateCatalogEntries,
+  ensureCreateCatalogEntries,
   ensureDefaultGitignoreEntries,
   ensureGitignoreVsCodeEditorConfigs,
   formatLocalVpCommand,
@@ -686,27 +687,33 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     ? (detectedPackageManager ?? requestedPackageManager)
     : (requestedPackageManager ?? detectedPackageManager);
   const launcherPackageManager = detectLauncherPackageManager();
-  const packageManager =
+  const chosenPackageManager =
     (packageManagerOverride?.name as PackageManager | undefined) ??
     preferredPackageManager ??
-    launcherPackageManager ??
-    (await selectPackageManager(options.interactive, compactOutput));
+    launcherPackageManager;
+  // Only the non-interactive default is Vite+'s own choice, so only it may become npm when pnpm is unavailable.
+  const fallbackToNpm = chosenPackageManager === undefined && !options.interactive;
+  const selectedPackageManager =
+    chosenPackageManager ??
+    (await selectPackageManager(options.interactive, compactOutput, workspaceInfoOptional.rootDir));
   const packageManagerVersion =
     packageManagerOverride?.version ??
-    (packageManager === detectedPackageManager
+    (selectedPackageManager === detectedPackageManager
       ? workspaceInfoOptional.packageManagerVersion
       : 'latest');
   const shouldSilencePackageManagerInstallLog =
     compactOutput || (isMonorepo && workspaceInfoOptional.packageManager !== undefined);
   // ensure the package manager is installed by vite-plus
   const downloadResult = await downloadPackageManager(
-    packageManager,
+    selectedPackageManager,
     packageManagerVersion,
     options.interactive,
     shouldSilencePackageManagerInstallLog,
     workspaceInfoOptional.rootDir,
     packageManagerOverride?.expectedHash ?? undefined,
+    fallbackToNpm,
   );
+  const packageManager = downloadResult.name as PackageManager;
   let resolvedPackageManagerOverride: string | undefined;
   if (packageManagerOverride) {
     resolvedPackageManagerOverride = `${packageManager}@${downloadResult.version}`;
@@ -1317,15 +1324,22 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       shouldSetupHooks,
       workspaceInfo.packageManager,
     );
+    const supportCatalog = workspaceSupportsCatalog(
+      workspaceInfo.rootDir,
+      workspaceInfo.packageManager,
+      workspaceInfo.packageManagerVersion,
+    );
     rewriteMonorepoProject(
       fullPath,
       workspaceInfo.packageManager,
       skipStagedMigration,
       compactOutput,
       undefined,
-      workspaceInfo.packageManager === PackageManager.pnpm
-        ? createCatalogDependencyResolver(workspaceInfo.rootDir, workspaceInfo.packageManager)
-        : undefined,
+      createCatalogDependencyResolver(
+        workspaceInfo.rootDir,
+        workspaceInfo.packageManager,
+        workspaceInfo.packageManagerVersion,
+      ),
       {
         rootDir: workspaceInfo.rootDir,
         packages: discoverWorkspacePackages(
@@ -1333,9 +1347,16 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
           workspaceInfo.rootDir,
         ),
       },
+      false,
+      supportCatalog,
     );
-    if (workspaceInfo.packageManager === PackageManager.pnpm) {
-      ensurePnpmCreateCatalogEntries(workspaceInfo.rootDir, fullPath);
+    if (supportCatalog) {
+      ensureCreateCatalogEntries(
+        workspaceInfo.rootDir,
+        fullPath,
+        workspaceInfo.packageManager,
+        workspaceInfo.packageManagerVersion,
+      );
     }
     for (const framework of detectFramework(fullPath)) {
       if (!hasFrameworkShim(fullPath, framework)) {

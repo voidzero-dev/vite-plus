@@ -20,6 +20,7 @@ describe('downloadPackageManager', () => {
       version: '11.24.0',
       installDir: '/cache/pnpm',
       binPrefix: '/cache/pnpm/bin',
+      binPaths: {},
       packageName: 'pnpm',
     };
     vi.mocked(downloadPackageManagerBinding).mockResolvedValueOnce(result);
@@ -40,6 +41,7 @@ describe('downloadPackageManager', () => {
       version: '10.6.1',
       installDir: '/cache/pnpm',
       binPrefix: '/cache/pnpm/bin',
+      binPaths: {},
       packageName: 'pnpm',
     });
     await downloadPackageManager(

@@ -1,0 +1,3 @@
+test-hook-cmd
+cd ./packages/ui
+test-hook-cmd

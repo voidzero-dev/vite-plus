@@ -1,0 +1,11 @@
+[[case]]
+name = "lint_typecheck_file_scope"
+vp = "local"
+env = { VITE_DISABLE_AUTO_INSTALL = "1" }
+steps = [
+  { argv = ["vp", "lint", "src/index.ts", "fixtures/bad.ts"], comment = "ignored imported files provide types without reporting their own errors" },
+  ["vp", "check", "--no-fmt", "src/index.ts", "fixtures/bad.ts"],
+  ["vpt", "replace-file-content", "vite.config.ts", "'fixtures/**'", ""],
+  { argv = ["vp", "lint", "src/index.ts"], comment = "command-line paths also limit diagnostics when no files are ignored" },
+  { argv = ["vp", "lint", "fixtures/bad.ts"], comment = "the same error is reported when its file is selected", continue-on-failure = true },
+]

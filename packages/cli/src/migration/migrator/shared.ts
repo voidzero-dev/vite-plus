@@ -5,6 +5,7 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import type { OxlintConfig } from 'oxlint';
 import { coerce, isLessThan, satisfies, tryParse } from 'verkit';
 
+import type { CatalogDependencyResolver } from '../../utils/catalog.ts';
 import {
   VITEST_VERSION,
   VITE_PLUS_OVERRIDE_PACKAGES,
@@ -14,6 +15,15 @@ import { readJsonFile } from '../../utils/json.ts';
 import { detectPackageMetadata } from '../../utils/package.ts';
 import { displayRelative } from '../../utils/path.ts';
 import { addManualStep, addMigrationWarning, type MigrationReport } from '../report.ts';
+
+export interface RetainedImportDependencies {
+  /** Package directories that need a direct Vitest dependency. */
+  vitest: ReadonlySet<string>;
+  /** Declared browser dependencies and peers to keep in each package directory. */
+  browser: ReadonlyMap<string, ReadonlySet<string>>;
+}
+
+export const DISABLED_IMPORT_RULE_CONFIG = JSON.stringify({ enabled: false, overrides: [] });
 
 // Commands whose effects prevent literal analysis of later invocations.
 export const SHELL_STATE_COMMANDS: readonly string[] = [
@@ -121,6 +131,11 @@ export const REMOVE_PACKAGES = [
   '@vitest/browser',
   '@vitest/browser-preview',
 ] as const;
+
+// A preserved browser import still needs its original dependency and catalog entry.
+export function bundledPackagesToRemove(retained?: ReadonlySet<string>): readonly string[] {
+  return retained?.size ? REMOVE_PACKAGES.filter((name) => !retained.has(name)) : REMOVE_PACKAGES;
+}
 
 // WebDriverIO is community-maintained. The versioned v5 preflight ensures its
 // minimum version and framework peer; generic reconciliation must not repin it.
@@ -334,13 +349,6 @@ export type PackageJsonDependencyField =
   | 'peerDependencies'
   | 'optionalDependencies';
 
-export type CatalogDependencyResolver = ((
-  catalogSpec: string,
-  dependencyName: string,
-) => string | undefined) & {
-  preferredCatalogSpec: string;
-};
-
 export function warnMigration(message: string, report?: MigrationReport) {
   addMigrationWarning(report, message);
   if (!report) {
@@ -420,6 +428,29 @@ export function readPackageJsonIfExists(packageJsonPath: string): DependencyBag 
   } catch {
     return undefined;
   }
+}
+
+export function pinnedPackageManagerVersion(pkg: {
+  packageManager?: string;
+  devEngines?: { packageManager?: unknown };
+}): string | undefined {
+  if (typeof pkg.packageManager === 'string') {
+    const separator = pkg.packageManager.indexOf('@');
+    if (separator !== -1) {
+      return pkg.packageManager.slice(separator + 1);
+    }
+  }
+  const devEngine = pkg.devEngines?.packageManager;
+  if (
+    typeof devEngine === 'object' &&
+    devEngine !== null &&
+    !Array.isArray(devEngine) &&
+    'version' in devEngine &&
+    typeof devEngine.version === 'string'
+  ) {
+    return devEngine.version;
+  }
+  return undefined;
 }
 
 // pnpm v10 introduced the map-shaped `allowBuilds` and removed the implicit

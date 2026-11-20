@@ -144,16 +144,17 @@ jobs:
           EOF
 
       - name: Run triagebot
-        uses: withastro/triagebot-action@51d30da13c0bd571a3822fc56882de40fead0086 # main
+        uses: oxc-project/triagebot-action@7c541257fdcd88d717d6bad6d69c59db9255e897 # main
         with:
           read-token: ${{ github.token }}
           write-token: ${{ steps.app-token.outputs.token }}
           cloudflare-api-key: ${{ secrets.CLOUDFLARE_API_KEY }}
           cloudflare-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           triage-skill: .agents/skills/triage
-          auto-pr-on-fix: true
+          # Assigned issues belong to their assignees; fix.md also skips the fix so no PR opens after reporter confirmation.
+          auto-pr-on-fix: ${{ !github.event.issue.assignees[0] }}
           bot-logins: ${{ steps.app-token.outputs.app-slug }}[bot]
-          triage-model: cloudflare-workers-ai/@cf/moonshotai/kimi-k2.7-code
-          verification-model: cloudflare-workers-ai/@cf/moonshotai/kimi-k2.6
+          triage-model: cloudflare-ai/@cf/zai-org/glm-5.3
+          verification-model: cloudflare-ai/@cf/zai-org/glm-5.3
           # Without this skill, the action's built-in prompt writes titles without a Conventional Commits prefix.
           pr-skill: .agents/skills/pr-writer

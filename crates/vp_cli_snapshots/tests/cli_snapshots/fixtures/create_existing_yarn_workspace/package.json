@@ -1,0 +1,6 @@
+{
+  "name": "plain-workspace",
+  "private": true,
+  "packageManager": "yarn@4.18.1",
+  "workspaces": ["apps/*"]
+}

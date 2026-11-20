@@ -130,6 +130,11 @@ catalog:
   vite-plus: <version>
 
 minimumReleaseAge: 1440
+trustPolicy: no-downgrade
+trustPolicyExclude:
+  # Keep the project's existing exception.
+  - testnpm2@1.0.0
+  - tsrs@7.1.0-beta.tsrs3
 overrides:
   vite@*: 'catalog:'
   vitest@*: 'catalog:'
@@ -145,6 +150,8 @@ minimumReleaseAgeExclude:
   - '@oxlint/*'
   - oxlint-tsgolint
   - '@oxlint-tsgolint/*'
+  - tsrs
+  - '@tsrs/*'
   - oxfmt
   - '@oxfmt/*'
   - vitest
