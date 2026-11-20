@@ -40,8 +40,39 @@ function parsePnpmLog(line: string): PnpmLog | undefined {
   return undefined;
 }
 
-function splitPnpmLine(line: string): { text: string; log: PnpmLog | undefined } {
+function parsePnpmDiagnostic(line: string): PnpmLog | undefined {
   const log = parsePnpmLog(line);
+  if (log) {
+    return log;
+  }
+  // pnpm can exit before its pipe drains a large error record. Match the
+  // logger header and only trust a complete error code before the payload.
+  const header =
+    /^\{"time":\d+,"hostname":"(?:[^"\\]|\\.)*","pid":\d+,"level":"error","name":"pnpm"(?=,|$)/.exec(
+      line,
+    );
+  if (!header) {
+    return undefined;
+  }
+  const code = /^,"code":"([A-Z0-9_]+)"(?=,|$)/.exec(line.slice(header[0].length))?.[1];
+  const details = 'pnpm did not finish writing the error details.';
+  return {
+    name: 'pnpm',
+    level: 'error',
+    code,
+    err: {
+      name: 'pnpm',
+      message:
+        code === 'ERR_PNPM_NO_MATCHING_VERSION' ? `No matching version found. ${details}` : details,
+    },
+  };
+}
+
+function splitPnpmLine(
+  line: string,
+  parse = parsePnpmLog,
+): { text: string; log: PnpmLog | undefined } {
+  const log = parse(line);
   if (log) {
     return { text: '', log };
   }
@@ -49,7 +80,7 @@ function splitPnpmLine(line: string): { text: string; log: PnpmLog | undefined }
   // next record after that text, starting with the logger's timestamp and host.
   for (const { index } of line.matchAll(/\{"time":\d+,"hostname":/g)) {
     if (index) {
-      const suffix = parsePnpmLog(line.slice(index));
+      const suffix = parse(line.slice(index));
       if (suffix) {
         return { text: line.slice(0, index), log: suffix };
       }
@@ -327,7 +358,11 @@ function appendRegistryAuthContext(
   );
 }
 
-function appendDependencyContext(messages: string[], log: Record<string, unknown>): void {
+function appendDependencyContext(
+  messages: string[],
+  log: Record<string, unknown>,
+  cwd: string,
+): void {
   if (!Array.isArray(log.pkgsStack)) {
     return;
   }
@@ -340,6 +375,10 @@ function appendDependencyContext(messages: string[], log: Record<string, unknown
   });
   const [requester, ...ancestors] = stack;
   if (requester) {
+    const member = typeof log.prefix === 'string' ? displayRelative(log.prefix, cwd) : '';
+    if (member) {
+      messages.push(`In ${member}`);
+    }
     messages.push(`While installing the dependencies of ${requester}`);
     messages.push(...ancestors.map((ancestor) => `  at ${ancestor}`));
   } else if (typeof log.prefix === 'string') {
@@ -387,7 +426,7 @@ export async function formatPnpmInstallOutput(
   let terminalErrorIndex: number | undefined;
   const progress = { resolved: 0, found_in_store: 0, fetched: 0, imported: 0 };
   for (const line of output.split(/\r?\n/)) {
-    const { text, log } = splitPnpmLine(line);
+    const { text, log } = splitPnpmLine(line, parsePnpmDiagnostic);
     if (text || !log) {
       messages.push(text);
     }
@@ -514,7 +553,7 @@ export async function formatPnpmInstallOutput(
         messages.push(warningPath ? `${warningPath}: ${headline}` : headline);
         const context: string[] = [];
         if (log.level === 'error') {
-          appendDependencyContext(context, log);
+          appendDependencyContext(context, log, cwd);
         }
         if (log.code === 'ERR_PNPM_PEER_DEP_ISSUES') {
           const details = await formatPeerDependencyIssues(log.issuesByProjects, cwd);

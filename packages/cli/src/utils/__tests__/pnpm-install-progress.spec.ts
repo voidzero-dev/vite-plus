@@ -112,6 +112,36 @@ describe('formatPnpmInstallOutput', () => {
     });
   });
 
+  it('recovers the error code from a truncated pnpm version diagnostic', async () => {
+    const code = 'ERR_PNPM_NO_MATCHING_VERSION';
+    const output =
+      '{"time":1720000000000,"hostname":"test-host","pid":123,"level":"error","name":"pnpm",' +
+      `"code":"${code}","packageMeta":{"versions":{"1.0.0":{"description":"unfinished`;
+    const message = 'No matching version found. pnpm did not finish writing the error details.';
+
+    expect(await formatPnpmInstallOutput(output, '/project')).toBe(`${code} ${message}`);
+    expect(JSON.parse(await formatPnpmInstallOutput(output, '/project', 'json'))).toEqual({
+      error: { code, message },
+    });
+    expect(await formatPnpmInstallOutput(output, '/project', 'ndjson')).toBe(output);
+  });
+
+  it('keeps inherited text before a truncated error and ignores codes in its metadata', async () => {
+    const inherited = 'status from postinstall';
+    const error =
+      '{"time":1720000000000,"hostname":"test-host","pid":123,"level":"error","name":"pnpm",' +
+      '"packageMeta":{"code":"ERR_NESTED","description":"unfinished';
+    const message = 'pnpm did not finish writing the error details.';
+
+    expect(await formatPnpmInstallOutput(inherited + error, '/project')).toBe(
+      `${inherited}\n${message}`,
+    );
+    expect(await formatPnpmInstallOutput(inherited + error, '/project', 'silent')).toBe(inherited);
+    expect(JSON.parse(await formatPnpmInstallOutput(error, '/project', 'json'))).toEqual({
+      error: { code: 'pnpm', message },
+    });
+  });
+
   it('keeps only the terminal error after pnpm repairs a lockfile', async () => {
     const repairedLockfile = JSON.stringify({
       name: 'pnpm',
@@ -231,7 +261,7 @@ describe('formatPnpmInstallOutput', () => {
         { name: 'requester', version: '1.0.0' },
         { name: 'parent', version: '2.0.0' },
       ],
-      'While installing the dependencies of requester@1.0.0\n  at parent@2.0.0',
+      'In packages/app\nWhile installing the dependencies of requester@1.0.0\n  at parent@2.0.0',
     ],
     [[], 'While installing a direct dependency of /project/packages/app'],
   ])('keeps the dependency that requested an unavailable version', async (pkgsStack, context) => {
