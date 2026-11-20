@@ -16,6 +16,7 @@ function isPnpmLoggerName(name: unknown): name is string {
 
 type PnpmLog = Record<string, unknown> & { name: string };
 
+// pnpm's human reporter uses these streams for general diagnostics.
 const PNPM_MISC_LOGGERS = new Set([
   'pnpm',
   'pnpm:global',
@@ -217,7 +218,7 @@ function formatRequestRetry(log: Record<string, unknown>): string | undefined {
   const code = error.httpStatusCode ?? error.status ?? error.errno ?? error.code ?? error.message;
   const reason =
     typeof code === 'string' || typeof code === 'number'
-      ? ` (${redactRegistryUrls(String(code), url)})`
+      ? ` (${redactPnpmDiagnostic(String(code), url)})`
       : '';
   const safeUrl = displayRegistryUrl(url) ?? '[registry URL]';
   const retriesLeft = maxRetries - attempt + 1;
@@ -268,6 +269,13 @@ function redactRegistryUrls(text: string, requestUrl?: unknown): string {
   return text.replace(
     /https?:\/\/[^\s"'<>]+?(?=:\s|[\s"'<>]|$)/gi,
     (url) => displayRegistryUrl(url) ?? '[registry URL]',
+  );
+}
+
+function redactPnpmDiagnostic(text: string, requestUrl?: unknown): string {
+  return redactRegistryUrls(
+    text.replace(/^([ \t]*An authorization header was used:)[^\r\n]*/gm, '$1 [hidden]'),
+    requestUrl,
   );
 }
 
@@ -382,9 +390,9 @@ export async function formatPnpmInstallOutput(
       // Deprecation events are logged at debug level and reported as warnings.
       const { depth, deprecated, pkgName, pkgVersion } = log;
       if (showWarnings && typeof pkgName === 'string' && typeof pkgVersion === 'string') {
-        const dependency = `${pkgName}@${pkgVersion}`;
+        const dependency = redactRegistryUrls(`${pkgName}@${pkgVersion}`);
         if (depth === 0 && typeof deprecated === 'string') {
-          messages.push(`WARN deprecated ${dependency}: ${deprecated}`);
+          messages.push(`WARN deprecated ${dependency}: ${redactPnpmDiagnostic(deprecated)}`);
         } else if (typeof depth === 'number' && depth > 0) {
           deprecatedSubdependencies.push(dependency);
         }
@@ -401,7 +409,7 @@ export async function formatPnpmInstallOutput(
       // readPackage's context.log() uses debug records in pnpm 9's info reporter.
       if (showInfo && typeof log.hook === 'string' && typeof log.message === 'string') {
         const label = typeof log.prefix === 'string' ? displayRelative(log.prefix, cwd) : '';
-        const message = redactRegistryUrls(log.message);
+        const message = redactPnpmDiagnostic(log.message);
         messages.push(label ? `${label} ${log.hook}: ${message}` : `${log.hook}: ${message}`);
       }
     } else if (mode === 'silent' && log.level === 'error') {
@@ -416,10 +424,10 @@ export async function formatPnpmInstallOutput(
       }
       const message = error.message ?? log.message;
       if (typeof message === 'string') {
-        messages.push(redactRegistryUrls(message));
+        messages.push(redactPnpmDiagnostic(message));
       }
       if (typeof error.stack === 'string') {
-        messages.push(redactRegistryUrls(error.stack));
+        messages.push(redactPnpmDiagnostic(error.stack));
       }
     } else if (!showInfo && log.level !== 'error' && !(mode === 'warn' && log.level === 'warn')) {
       // The silent reporter leaves directly inherited script output visible.
@@ -432,7 +440,8 @@ export async function formatPnpmInstallOutput(
     } else if (log.name === 'pnpm:lifecycle' && typeof log.stage === 'string') {
       const directory =
         typeof log.wd === 'string' ? displayRelative(log.wd, cwd) || '.' : log.depPath;
-      const label = typeof directory === 'string' ? `${directory} ${log.stage}` : log.stage;
+      const label =
+        typeof directory === 'string' ? `${redactRegistryUrls(directory)} ${log.stage}` : log.stage;
       if (typeof log.script === 'string') {
         messages.push(`${label}$ ${log.script}`);
       } else if (typeof log.line === 'string') {
@@ -441,10 +450,7 @@ export async function formatPnpmInstallOutput(
         const optional = log.optional === true ? ' (optional dependency)' : '';
         messages.push(`${label}: failed with exit code ${log.exitCode}${optional}`);
       }
-    } else if (
-      log.name !== 'pnpm:install-check' &&
-      (log.level !== 'debug' || (mode === 'debug' && PNPM_MISC_LOGGERS.has(log.name)))
-    ) {
+    } else if (PNPM_MISC_LOGGERS.has(log.name) && (log.level !== 'debug' || mode === 'debug')) {
       const error = asRecord(log.err);
       const message = log.message ?? error.message;
       if (typeof message === 'string') {
@@ -458,38 +464,29 @@ export async function formatPnpmInstallOutput(
           code !== 'ELIFECYCLE'
             ? error.stack
             : message;
-        const requestUrl = asRecord(log.request).url;
-        const displayed =
-          log.level === 'error' || log.level === 'debug' || typeof requestUrl === 'string'
-            ? redactRegistryUrls(details, requestUrl)
-            : details;
+        const requestUrl = asRecord(log.request).url ?? log.url;
+        const displayed = redactPnpmDiagnostic(details, requestUrl);
         messages.push(code ? `${code} ${displayed}` : displayed);
+        const context: string[] = [];
         if (log.level === 'error') {
-          appendDependencyContext(messages, log);
+          appendDependencyContext(context, log);
         }
         if (log.code === 'ERR_PNPM_PEER_DEP_ISSUES') {
           const details = await formatPeerDependencyIssues(log.issuesByProjects, cwd);
           if (details) {
-            messages.push(details);
+            context.push(details);
           }
         }
         if (code === 'ERR_PNPM_NO_MATCHING_VERSION') {
-          appendPublishedVersions(messages, log.packageMeta);
+          appendPublishedVersions(context, log.packageMeta);
         }
         if (typeof log.hint === 'string') {
-          messages.push(
-            redactRegistryUrls(
-              log.hint.replace(
-                /^An authorization header was used:.*$/gm,
-                'An authorization header was used: [hidden]',
-              ),
-              requestUrl,
-            ),
-          );
+          context.push(log.hint);
         }
         if (authFailure) {
-          appendRegistryAuthContext(messages, log, cwd);
+          appendRegistryAuthContext(context, log, cwd);
         }
+        messages.push(...context.map((message) => redactPnpmDiagnostic(message, requestUrl)));
       }
     }
   }
