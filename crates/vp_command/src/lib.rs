@@ -372,7 +372,7 @@ pub fn fix_stdio_streams() {
 pub struct StdinTerminalState(nix::libc::termios);
 
 #[cfg(unix)]
-static HANGUP_TERMINAL: std::sync::OnceLock<nix::libc::termios> = std::sync::OnceLock::new();
+static SIGNAL_TERMINAL_STATE: std::sync::OnceLock<nix::libc::termios> = std::sync::OnceLock::new();
 
 #[cfg(unix)]
 impl StdinTerminalState {
@@ -385,30 +385,35 @@ impl StdinTerminalState {
         restore_stdin_terminal(&self.0);
     }
 
-    /// Restore stdin before the default SIGHUP action terminates this process.
-    pub fn restore_on_default_hangup(&self) {
+    /// Restore stdin before the default SIGHUP or SIGINT action terminates this process.
+    pub fn restore_on_default_signals(&self) {
         use nix::{
             libc,
             sys::signal::{SaFlags, SigAction, SigHandler, SigSet, Signal, sigaction},
         };
 
-        let mut previous = std::mem::MaybeUninit::<libc::sigaction>::uninit();
-        // SAFETY: passing a null action only queries the current disposition.
-        if unsafe { libc::sigaction(libc::SIGHUP, std::ptr::null(), previous.as_mut_ptr()) } != 0 {
-            return;
-        }
-        // SAFETY: the successful query initialized the disposition.
-        if unsafe { previous.assume_init() }.sa_sigaction != libc::SIG_DFL {
-            return;
-        }
-        HANGUP_TERMINAL.get_or_init(|| self.0);
         let action = SigAction::new(
-            SigHandler::Handler(restore_stdin_after_hangup),
+            SigHandler::Handler(restore_stdin_after_signal),
             SaFlags::SA_RESETHAND,
             SigSet::empty(),
         );
-        // SAFETY: the handler uses immutable state and async-signal-safe operations.
-        let _ = unsafe { sigaction(Signal::SIGHUP, &action) };
+        for signal in [Signal::SIGHUP, Signal::SIGINT] {
+            let mut previous = std::mem::MaybeUninit::<libc::sigaction>::uninit();
+            // SAFETY: passing a null action only queries the current disposition.
+            if unsafe {
+                libc::sigaction(signal as libc::c_int, std::ptr::null(), previous.as_mut_ptr())
+            } != 0
+            {
+                continue;
+            }
+            // SAFETY: the successful query initialized the disposition.
+            if unsafe { previous.assume_init() }.sa_sigaction != libc::SIG_DFL {
+                continue;
+            }
+            SIGNAL_TERMINAL_STATE.get_or_init(|| self.0);
+            // SAFETY: the handler uses immutable state and async-signal-safe operations.
+            let _ = unsafe { sigaction(signal, &action) };
+        }
     }
 }
 
@@ -428,8 +433,8 @@ fn restore_stdin_terminal(state: &nix::libc::termios) {
 }
 
 #[cfg(unix)]
-extern "C" fn restore_stdin_after_hangup(signal: nix::libc::c_int) {
-    if let Some(state) = HANGUP_TERMINAL.get() {
+extern "C" fn restore_stdin_after_signal(signal: nix::libc::c_int) {
+    if let Some(state) = SIGNAL_TERMINAL_STATE.get() {
         restore_stdin_terminal(state);
     }
     // SAFETY: raise is async-signal-safe. SA_RESETHAND restored the default action.

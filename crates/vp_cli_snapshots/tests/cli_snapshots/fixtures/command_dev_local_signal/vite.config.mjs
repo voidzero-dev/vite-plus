@@ -12,6 +12,12 @@ export default {
     {
       name: 'report-listening-port',
       configureServer(server) {
+        if (process.env.VP_PROBE_RERAISE_SIGINT === '1') {
+          process.once('SIGINT', () => {
+            writeSync(2, 'Vite plugin re-sent SIGINT\n');
+            process.kill(process.pid, 'SIGINT');
+          });
+        }
         server.httpServer.once('listening', () => {
           if (process.env.VP_PROBE_RAW === '1') {
             process.stdin.setRawMode(true);

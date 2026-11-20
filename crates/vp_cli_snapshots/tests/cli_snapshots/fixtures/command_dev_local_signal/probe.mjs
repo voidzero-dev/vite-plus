@@ -9,7 +9,10 @@ import { createInterface } from 'node:readline';
 import { text } from 'node:stream/consumers';
 
 const workerMode = process.argv[2] === '--worker';
-const hangupMode = process.argv[2] === '--hangup';
+const terminalSignal = {
+  '--hangup': 'SIGHUP',
+  '--reraise-sigint': 'SIGINT',
+}[process.argv[2]];
 
 function stty(...args) {
   return execFileSync('stty', args, { encoding: 'utf8', stdio: ['inherit', 'pipe', 'inherit'] }).trim();
@@ -37,20 +40,23 @@ async function listenerInfo(stdout, launchPid) {
 const cache = mkdtempSync(join(tmpdir(), 'vp-dev-cache-'));
 const env = { ...process.env, NODE_COMPILE_CACHE: cache };
 delete env.NODE_DISABLE_COMPILE_CACHE;
-if (hangupMode) {
+if (terminalSignal) {
   env.VP_PROBE_RAW = '1';
 }
-const initialTerminal = hangupMode ? stty('-g') : undefined;
+if (terminalSignal === 'SIGINT') {
+  env.VP_PROBE_RERAISE_SIGINT = '1';
+}
+const initialTerminal = terminalSignal ? stty('-g') : undefined;
 const args = ['dev', '--host', '127.0.0.1', '--port', '0', '--base', '/probe/'];
-if (hangupMode) {
+if (terminalSignal) {
   args.push('--debug', 'config');
 }
 const child = spawn(
   workerMode ? process.execPath : 'vp',
   workerMode ? ['worker-host.mjs', ...args] : args,
-  { stdio: [hangupMode ? 'inherit' : 'ignore', 'pipe', hangupMode ? 'pipe' : 'inherit'], env },
+  { stdio: [terminalSignal ? 'inherit' : 'ignore', 'pipe', terminalSignal ? 'pipe' : 'inherit'], env },
 );
-const debugOutput = hangupMode ? text(child.stderr) : undefined;
+const debugOutput = terminalSignal ? text(child.stderr) : undefined;
 
 try {
   const { port, pid } = await listenerInfo(child.stdout, child.pid);
@@ -64,7 +70,7 @@ try {
   console.log('Vite served the project with the client under /probe/');
   if (workerMode) {
     console.log('The Worker host stayed alive while Vite ran as a child');
-  } else if (hangupMode) {
+  } else if (terminalSignal) {
     assert.notEqual(stty('-g'), initialTerminal, 'the Vite plugin switched the terminal to raw mode');
   } else {
     assert.ok(
@@ -74,7 +80,7 @@ try {
     console.log('vp saved its compile cache before starting Vite');
   }
 
-  process.kill(pid, hangupMode ? 'SIGHUP' : 'SIGTERM');
+  process.kill(pid, terminalSignal ?? 'SIGTERM');
   const [code, signal] = await once(child, 'exit', { signal: AbortSignal.timeout(5_000) });
   const socket = connect(port, '127.0.0.1');
   try {
@@ -84,12 +90,17 @@ try {
   } finally {
     socket.destroy();
   }
-  if (hangupMode) {
-    assert.match(await debugOutput, /vite:config/);
+  if (terminalSignal) {
+    const stderr = await debugOutput;
+    assert.match(stderr, /vite:config/);
     console.log('Vite printed its config debug logs');
-    assert.deepEqual([code, signal], [null, 'SIGHUP']);
-    assert.equal(stty('-g'), initialTerminal, 'SIGHUP restored the terminal mode');
-    console.log('SIGHUP to the launch PID closed the port and restored the terminal');
+    if (terminalSignal === 'SIGINT') {
+      assert.match(stderr, /Vite plugin re-sent SIGINT/);
+      console.log('Vite ran the plugin callback and re-sent SIGINT');
+    }
+    assert.deepEqual([code, signal], [null, terminalSignal]);
+    assert.equal(stty('-g'), initialTerminal, `${terminalSignal} restored the terminal mode`);
+    console.log(`${terminalSignal} to the launch PID closed the port and restored the terminal`);
   } else {
     assert.deepEqual([code, signal], [143, null]);
     const target = workerMode ? 'Vite child' : 'launch PID';

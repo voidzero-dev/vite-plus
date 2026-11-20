@@ -3613,7 +3613,7 @@ export interface ViteImportGlobMeta {
 /** The terminal mode saved before starting the tool. */
 export declare class SavedStdinTerminal {
   restore(): void;
-  restoreOnDefaultHangup(): void;
+  restoreOnDefaultSignals(): void;
 }
 
 /** Parse source and resolve lexical bindings for the TypeScript migration rules. */

@@ -90,9 +90,9 @@ impl SavedStdinTerminal {
     }
 
     #[napi]
-    pub fn restore_on_default_hangup(&self) {
+    pub fn restore_on_default_signals(&self) {
         #[cfg(unix)]
-        self.state.restore_on_default_hangup();
+        self.state.restore_on_default_signals();
         #[cfg(not(unix))]
         let _ = self;
     }
