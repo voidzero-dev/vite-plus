@@ -226,14 +226,14 @@ export function mergeTsdownConfigFile(
 
   if (configs.tsdownConfig.endsWith('.json')) {
     if (hasConfigKey(fullViteConfigPath, 'pack')) {
-      if (keepTsdownConfig) {
-        return false;
-      }
       if (!matchesInlinePackConfig(fullViteConfigPath, fullTsdownConfigPath, workspaceRoot)) {
         infoMigration(
           `Please manually merge ${displayRelative(fullTsdownConfigPath)} into the existing pack config in ${displayRelative(fullViteConfigPath)}. The JSON file was preserved. See ${documentationUrl('/guide/migrate#tsdown')}`,
           report,
         );
+        return false;
+      }
+      if (keepTsdownConfig) {
         return false;
       }
     }
@@ -374,8 +374,10 @@ function mergeRetainedTsdownConfig(
 
   let config = source;
   if (hasPack) {
-    const specifier = JSON.stringify(tsdownConfigImportPath(convertedName));
+    const originalStem = `./${path.parse(originalName).name}`;
+    const convertedStem = `./${path.parse(convertedName).name}`;
     for (const entry of originalImports.toReversed()) {
+      const specifier = JSON.stringify(entry.value.replace(originalStem, convertedStem));
       config = config.slice(0, entry.start) + specifier + config.slice(entry.end);
     }
   } else {

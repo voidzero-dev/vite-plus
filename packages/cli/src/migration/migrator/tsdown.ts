@@ -184,6 +184,8 @@ export function collectPackagesKeepingTsdown(
         for (const owner of findConfigOwners(config, projectPaths)) {
           keptPackages.add(owner);
         }
+      } else if (manifestSelectsTsdownWorkspace(cwd)) {
+        return projectPaths;
       }
     }
   }
@@ -200,6 +202,19 @@ function findDefaultTsdownConfig(cwd: string, workspaceRoot: string): string | u
       return undefined;
     }
   }
+}
+
+function manifestSelectsTsdownWorkspace(cwd: string): boolean {
+  // tsdown checks package.json when it cannot find a default config file.
+  const manifest = readPackageJsonIfExists(path.join(cwd, 'package.json')) as
+    | { tsdown?: unknown }
+    | undefined;
+  const config = manifest?.tsdown;
+  const configs = Array.isArray(config) ? config : [config];
+  return configs.some(
+    (item: unknown) =>
+      typeof item === 'object' && item !== null && 'workspace' in item && Boolean(item.workspace),
+  );
 }
 
 // A shell expansion or directory selection can load a config from anywhere
