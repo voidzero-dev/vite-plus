@@ -136,6 +136,30 @@ describe('formatPnpmInstallOutput', () => {
     expect(await formatPnpmInstallOutput(output, '/project')).toBe(stack);
   });
 
+  it.each([
+    [{ status: 503 }, '503', 2, 2, '1 retry left.'],
+    [{ code: 'ECONNRESET' }, 'ECONNRESET', 1, 2, '2 retries left.'],
+  ])(
+    'keeps the request and timing for registry retries with %o',
+    async (error, reason, attempt, maxRetries, retries) => {
+      const url = 'http://127.0.0.1:4500/@scope%2Fpackage';
+      const output = JSON.stringify({
+        name: 'pnpm:request-retry',
+        level: 'debug',
+        method: 'GET',
+        url,
+        error,
+        attempt,
+        maxRetries,
+        timeout: 50,
+      });
+
+      expect(await formatPnpmInstallOutput(output, '/project')).toBe(
+        `GET ${url} error (${reason}). Will retry in 50ms. ${retries}`,
+      );
+    },
+  );
+
   it('identifies the directories and failure of concurrent install scripts', async () => {
     const cwd = resolve('fixture');
     const lifecycleEvent = (pkg: string, event: Record<string, unknown>) =>

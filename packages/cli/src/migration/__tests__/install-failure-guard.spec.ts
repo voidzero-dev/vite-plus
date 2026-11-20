@@ -127,6 +127,14 @@ describe('getMigrationInstallIdleTimeoutMs', () => {
     binPaths: { pnpm: '/override-pnpm/bin/pnpm' },
     packageName: 'pnpm',
   };
+  const unusableSystemPnpm = JSON.stringify({
+    package_manager: {
+      name: 'pnpm',
+      version: 'unknown',
+      installed: true,
+      bin_paths: { pnpm: '/system/bin/pnpm' },
+    },
+  });
 
   beforeEach(() => {
     vi.resetAllMocks();
@@ -230,6 +238,37 @@ describe('getMigrationInstallIdleTimeoutMs', () => {
       version: '10.33.0',
       cwd,
     });
+  });
+
+  it.each([
+    ['9.15.9', 300_000],
+    ['12.21.0', undefined],
+  ])('uses the resolved pnpm %s when the system binary cannot start', async (version, expected) => {
+    vi.stubEnv('VP_CLI_BIN', '/global/vp');
+    vi.mocked(runCommandSilently).mockResolvedValueOnce(commandOutput(unusableSystemPnpm));
+
+    expect(await getMigrationInstallIdleTimeoutMs(cwd, false, PackageManager.pnpm, version)).toBe(
+      expected,
+    );
+    expect(downloadPackageManager).not.toHaveBeenCalled();
+    expect(runCommandSilently).toHaveBeenCalledTimes(1);
+  });
+
+  it('resolves the override when the global system pnpm cannot start', async () => {
+    vi.stubEnv('VP_CLI_BIN', '/global/vp');
+    vi.mocked(getPackageManagerOverride).mockReturnValue({ name: 'pnpm', version: '10.33.0' });
+    vi.mocked(downloadPackageManager).mockResolvedValue(overridePnpm);
+    vi.mocked(runCommandSilently)
+      .mockResolvedValueOnce(commandOutput(unusableSystemPnpm))
+      .mockResolvedValueOnce(commandOutput('9.15.9'));
+
+    expect(
+      await getMigrationInstallIdleTimeoutMs(cwd, false, PackageManager.pnpm, projectVersion),
+    ).toBe(300_000);
+    expect(downloadPackageManager).toHaveBeenCalledWith({ name: 'pnpm', version: '10.33.0', cwd });
+    expect(runCommandSilently).toHaveBeenLastCalledWith(
+      expect.objectContaining({ command: overridePnpm.binPaths.pnpm, args: ['--version'], cwd }),
+    );
   });
 
   it('checks the effective version of the local pnpm override', async () => {
