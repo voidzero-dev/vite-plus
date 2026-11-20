@@ -94,6 +94,7 @@ describe('runViteInstall', () => {
     ]);
     expect(command?.idleTimeoutMs).toBe(2000);
     expect(command?.shouldWatchIdle).toBeTypeOf('function');
+    expect(command?.stdoutToFile).toBe(true);
     expect(command?.envs.NODE_OPTIONS).toBe('--require=/preload.cjs');
     expect(result.status).toBe('installed');
     expect(readFileSync(configPath, 'utf8')).toBe(config);
@@ -133,6 +134,7 @@ describe('runViteInstall', () => {
       const install = run.mock.lastCall?.[0];
       expect(install?.args.includes('--config._reporter=ndjson')).toBe(!nativeReporter);
       expect(install?.idleTimeoutMs).toBe(nativeReporter ? undefined : 2000);
+      expect(install?.stdoutToFile).toBe(!nativeReporter && reporter === 'append-only');
     },
   );
 
