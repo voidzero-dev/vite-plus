@@ -312,7 +312,11 @@ function reconcileVitePlusBootstrapPackage(
     pkg,
     vitePlusVersion,
     ensureVitePlus ||
-      (!hasDirectVitePlusInstallEntry(pkg) && configNeedsVitePlus(projectPath, keepTsdown)),
+      (!hasDirectVitePlusInstallEntry(pkg) &&
+        configNeedsVitePlus(projectPath, keepTsdown, {
+          preserveVitestConfig:
+            pkg.dependencies?.vitest !== undefined || pkg.peerDependencies?.vitest !== undefined,
+        })),
   );
 
   const installGroups = [pkg.devDependencies, pkg.dependencies, pkg.optionalDependencies];

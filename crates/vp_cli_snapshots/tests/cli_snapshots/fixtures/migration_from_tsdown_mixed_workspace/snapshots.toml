@@ -62,6 +62,32 @@ steps = [
 ]
 
 [[case]]
+name = "focused_vitest_config_install"
+vp = "global"
+local-registry = true
+env = { VP_NODE_VERSION = "24.22.3", VP_SKIP_INSTALL = "1" }
+comment = "A filtered install provides Vite+ for a member that previously used vitest/config."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies", '{"vite":"8.3.8","vitest":"5.1.1"}'], snapshot = false },
+  { argv = ["vpt", "write-file", "pnpm-workspace.yaml", "packages: ['packages/*']\nsharedWorkspaceLockfile: false\n"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "packages/vitest-member/src"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/vitest-member/package.json", '{"name":"vitest-member","private":true,"type":"module","scripts":{"release":"tsdown -c release.config.mts"},"devDependencies":{"tsdown":"0.22.14"}}'], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/vitest-member/vite.config.ts", "import { defineConfig } from 'vitest/config'; export default defineConfig({});"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/vitest-member/release.config.mts", "export default { entry: 'src/index.ts', outDir: 'release-out', dts: false };"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/vitest-member/src/index.ts", "export const sample = true;"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/vitest-member/index.html", "<main>Member test config</main>"], snapshot = false },
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  ["vpt", "print-file", "packages/vitest-member/package.json", "packages/vitest-member/vite.config.ts"],
+  { argv = ["pnpm", "--filter", "vitest-member", "install", "--ignore-scripts"], snapshot = false },
+  ["vpt", "stat-file", "node_modules/vite-plus", "--assert", "missing"],
+  { argv = ["node", "--input-type=module", "-e", "console.log(typeof (await import('./vite.config.ts')).default)"], cwd = "packages/vitest-member" },
+  { argv = ["vp", "build", "--configLoader", "native"], cwd = "packages/vitest-member", snapshot = false },
+  ["vpt", "print-file", "packages/vitest-member/dist/index.html"],
+  { argv = ["vp", "run", "release"], cwd = "packages/vitest-member", snapshot = false },
+  ["vpt", "stat-file", "packages/vitest-member/release-out/index.mjs", "--assert", "file"],
+]
+
+[[case]]
 name = "cross_directory_default"
 vp = "global"
 local-registry = true

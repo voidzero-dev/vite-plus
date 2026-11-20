@@ -149,6 +149,19 @@ describe('explicit tsdown config selection', () => {
     expect(configNeedsVitePlus(tmpDir, true)).toBe(expected);
   });
 
+  it.each([false, true])(
+    'checks focused installs for vitest/config (preserved=%s)',
+    (preserveVitestConfig) => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'vite.config.ts'),
+        "import { defineConfig } from 'vitest/config'; export default defineConfig({});\n",
+      );
+      expect(configNeedsVitePlus(tmpDir, true, { preserveVitestConfig })).toBe(
+        !preserveVitestConfig,
+      );
+    },
+  );
+
   it.each([
     ['tsdown --config custom.ts', true],
     ['tsdown --config="custom config.ts"', true],
@@ -1475,16 +1488,17 @@ export default defineConfig(({ command }) => {
   });
 
   it.each([
-    'config => ({ ...config, copy: config.publicDir })',
-    "config => ({ ...config, publicDir: 'other' })",
-  ])('keeps the original pack options for an unverified config mapping (%s)', (callback) => {
+    'map(config => ({ ...config, copy: config.publicDir }))',
+    "map(config => ({ ...config, publicDir: 'other' }))",
+    "filter(config => config.publicDir === 'public')",
+  ])('keeps the original pack options for an unverified selection (%s)', (selection) => {
     const tsdown = path.join(tmpDir, 'tsdown.config.ts');
     const original = "export default [{ entry: 'src/lib.ts', publicDir: 'public' }];\n";
     fs.writeFileSync(tsdown, original);
     const vite = path.join(tmpDir, 'vite.config.ts');
     const source =
       `import configs from './tsdown.config.ts';\n` +
-      `const bundles = configs.map(${callback});\nexport default { pack: bundles };\n`;
+      `const bundles = configs.${selection};\nexport default { pack: bundles };\n`;
     fs.writeFileSync(vite, source);
     const report = createMigrationReport();
 
@@ -1497,16 +1511,44 @@ export default defineConfig(({ command }) => {
     );
   });
 
+  it('preserves the filter and mapping of a converted pack array', () => {
+    const tsdown = path.join(tmpDir, 'tsdown.config.ts');
+    fs.writeFileSync(tsdown, "export default [{ name: 'library', publicDir: 'public' }];\n");
+    const vite = path.join(tmpDir, 'vite.config.ts');
+    const config =
+      "export default { pack: configs.filter((config, index) => config.name !== 'demo' && index !== 2).map(config => ({ ...config, dts: false })) };\n";
+    fs.writeFileSync(vite, `import configs from './tsdown.config.ts';\n${config}`);
+
+    expect(mergeTsdownConfigFile(tmpDir, true, createMigrationReport(), true)).toBe(true);
+    expect(fs.readFileSync(vite, 'utf8')).toBe(
+      `import configs from "./vite-pack.config.ts";\n${config}`,
+    );
+    expect(fs.readFileSync(path.join(tmpDir, 'vite-pack.config.ts'), 'utf8')).toContain(
+      "copy: 'public'",
+    );
+  });
+
   it.each([
-    ['options.outDir = index === 0 ? "lib" : "cli";', 'converted'],
-    ['const read = options.publicDir;', 'split'],
-    ['const alias = options; alias.outDir = alias.publicDir;', 'retained'],
-  ])('handles an options array callback with %s', (body, expected) => {
+    [
+      'configs.forEach((options, index) => { options.outDir = index === 0 ? "lib" : "cli"; });',
+      'converted',
+    ],
+    ['configs.forEach(options => { const read = options.publicDir; });', 'split'],
+    [
+      'configs.forEach(options => { const alias = options; alias.outDir = alias.publicDir; });',
+      'retained',
+    ],
+    ['for (const options of configs) options.outDir = "release";', 'converted'],
+    [
+      'for (const options of configs) { const alias = options; alias.outDir = alias.publicDir; }',
+      'retained',
+    ],
+  ])('keeps the options used by %s', (statement, expected) => {
     const tsdown = path.join(tmpDir, 'tsdown.config.ts');
     const original = "export default [{ entry: 'src/lib.ts', publicDir: 'public' }];\n";
     fs.writeFileSync(tsdown, original);
     const vite = path.join(tmpDir, 'vite.config.ts');
-    const selector = `configs.forEach((options, index) => { ${body} });\n`;
+    const selector = `${statement}\n`;
     const config = `${selector}export default { pack: configs };\n`;
     const source = `import configs from './tsdown.config.ts';\n${config}`;
     fs.writeFileSync(vite, source);
