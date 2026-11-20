@@ -187,6 +187,8 @@ if (maybePrintCommandHelp(args)) {
       },
       nodeVersion: process.version,
       explicitChdir,
+      // The package bin owns its PID. A forked caller needs its IPC channel.
+      execDev: path.basename(process.argv[1] ?? '') === 'vp' && process.send === undefined,
       args: rustCliArgs,
     });
 

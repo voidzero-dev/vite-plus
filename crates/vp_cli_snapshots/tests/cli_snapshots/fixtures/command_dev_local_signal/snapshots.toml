@@ -1,0 +1,6 @@
+[[case]]
+name = "command_dev_local_signal"
+vp = "local"
+skip-platforms = ["windows"]
+comment = "SIGTERM sent to the project-local vp dev PID stops the listening Vite server."
+steps = [{ argv = ["node", "probe.mjs"], tty = false }]

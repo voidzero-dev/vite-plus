@@ -80,6 +80,7 @@ async fn execute_direct_subcommand(
     };
     let workspace_path: Arc<AbsolutePath> = workspace_root.path.into();
 
+    let exec_dev = options.as_ref().is_some_and(|options| options.exec_dev);
     let resolver = if let Some(options) = options {
         SubcommandResolver::new(Arc::clone(&workspace_path)).with_cli_options(options)
     } else {
@@ -154,7 +155,7 @@ async fn execute_direct_subcommand(
                 )
                 .await?
             } else {
-                resolve_and_execute(&resolver, other, &envs, cwd).await?
+                resolve_and_execute(&resolver, other, &envs, cwd, exec_dev).await?
             }
         }
     };

@@ -38,13 +38,17 @@ pub(super) async fn resolve_and_execute(
     subcommand: SynthesizableSubcommand,
     envs: &Arc<EnvMap>,
     cwd: &AbsolutePathBuf,
+    exec_dev: bool,
 ) -> Result<ExitStatus, Error> {
-    let is_interactive = matches!(
-        subcommand,
-        SynthesizableSubcommand::Dev { .. } | SynthesizableSubcommand::Preview { .. }
-    );
-
+    let is_dev = matches!(subcommand, SynthesizableSubcommand::Dev { .. });
+    let is_interactive = is_dev || matches!(subcommand, SynthesizableSubcommand::Preview { .. });
     let mut cmd = resolve_and_build_command(resolver, subcommand, envs, cwd).await?;
+    #[cfg(unix)]
+    if exec_dev && is_dev {
+        return Err(vp_command::exec_node_command(cmd));
+    }
+    #[cfg(not(unix))]
+    let _ = exec_dev;
 
     // For interactive commands (dev, preview), use terminal guard to restore terminal state on exit
     let status = if is_interactive {

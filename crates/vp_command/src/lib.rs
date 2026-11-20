@@ -123,6 +123,27 @@ pub fn build_command(bin_path: &AbsolutePath, cwd: &AbsolutePath) -> Command {
     cmd
 }
 
+/// Replace a Node.js launcher with its prepared command. Only returns on error.
+#[cfg(unix)]
+pub fn exec_node_command(mut cmd: Command) -> Error {
+    use std::os::unix::process::CommandExt;
+
+    use nix::sys::signal::{SaFlags, SigAction, SigHandler, SigSet, Signal, sigaction};
+
+    vp_shared::ensure_blocking_stdio();
+    // Rust's exec resets SIGPIPE. Restore SIGXFSZ too, since Node.js ignores it
+    // and ignored signal dispositions survive exec.
+    let default = SigAction::new(SigHandler::SigDfl, SaFlags::empty(), SigSet::empty());
+    // SAFETY: installs a valid signal disposition and records the previous one.
+    let original = unsafe { sigaction(Signal::SIGXFSZ, &default) }.ok();
+    let error = cmd.as_std_mut().exec();
+    if let Some(original) = original {
+        // SAFETY: restores the disposition captured before the failed exec.
+        let _ = unsafe { sigaction(Signal::SIGXFSZ, &original) };
+    }
+    Error::Anyhow(error.into())
+}
+
 /// Execute a command while preserving terminal state.
 ///
 /// This prevents escape sequences from appearing in the prompt when the child process
