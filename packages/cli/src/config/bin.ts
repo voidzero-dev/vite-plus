@@ -64,7 +64,8 @@ async function main() {
       }
 
       if (shouldSetupHooks) {
-        const { message, isError } = install(dir);
+        // The location and disable preference were checked above.
+        const { message, isError } = install(dir, { location, ignoreUserPreference: true });
         if (message) {
           log(message);
           if (isError) {

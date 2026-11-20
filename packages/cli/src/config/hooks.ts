@@ -123,11 +123,14 @@ function getGitToplevel(): string | InstallResult {
   if (result.status !== 0) {
     return { message: ".git can't be found", isError: false };
   }
-  const toplevel = result.stdout.toString().trim();
+  return realpathOrSelf(result.stdout.toString().trim());
+}
+
+function realpathOrSelf(path: string): string {
   try {
-    return realpathSync(toplevel);
+    return realpathSync(path);
   } catch {
-    return toplevel;
+    return path;
   }
 }
 
@@ -362,19 +365,19 @@ function displayHooksDir(location: HooksLocation): string {
 }
 
 function getGitWorktree(): { toplevel: string; prefix: string } | InstallResult {
-  const toplevel = getGitToplevel();
-  if (typeof toplevel !== 'string') {
-    return toplevel;
-  }
-  const prefixResult = spawnSync('git', ['rev-parse', '--show-prefix']);
-  if (prefixResult.status == null) {
+  // One git process prints both lines; the prefix line is empty at the worktree root.
+  const result = spawnSync('git', ['rev-parse', '--show-toplevel', '--show-prefix']);
+  if (result.status == null) {
     return { message: 'git command not found', isError: true };
   }
-  if (prefixResult.status !== 0) {
+  if (result.status !== 0) {
     return { message: ".git can't be found", isError: false };
   }
-  const prefix = prefixResult.stdout.toString().trim().replace(/\/$/, '');
-  return { toplevel, prefix };
+  const [toplevel = '', prefix = ''] = result.stdout.toString().split('\n');
+  return {
+    toplevel: realpathOrSelf(toplevel.trim()),
+    prefix: prefix.trim().replace(/\/$/, ''),
+  };
 }
 
 export type ResolveHooksLocationOptions = {
@@ -673,10 +676,13 @@ function unsetOwnedHooksPath(target: string): InstallResult | null {
 
 export interface InstallOptions {
   /**
-   * When true, ignore a user-disabled preference (used by `vp hooks enable`).
+   * When true, ignore a user-disabled preference (used by `vp hooks enable`,
+   * and by `vp config` after it has checked the preference itself).
    * Still honors `VP_GIT_HOOKS=0` / `HUSKY=0`.
    */
   ignoreUserPreference?: boolean;
+  /** Location the caller already resolved for the same `dir`, to skip repeating the git lookups. */
+  location?: HooksLocation;
   /** Explicitly replace a local Husky path after migrating project checks. */
   replaceHusky?: boolean;
 }
@@ -700,7 +706,7 @@ export function install(dir?: string, options: InstallOptions = {}): InstallResu
       isError: false,
     };
   }
-  const location = resolveHooksLocation(dir);
+  const location = options.location ?? resolveHooksLocation(dir);
   if ('isError' in location) {
     return location;
   }
@@ -793,7 +799,11 @@ export function enable(dir?: string, options: { replaceHusky?: boolean } = {}): 
   if ('isError' in location) {
     return location;
   }
-  const result = install(dir, { ignoreUserPreference: true, replaceHusky: options.replaceHusky });
+  const result = install(dir, {
+    ignoreUserPreference: true,
+    replaceHusky: options.replaceHusky,
+    location,
+  });
   // Preserve errors, skip messages, and the explicit Husky replacement notice.
   if (result.isError || result.message) {
     return result;
