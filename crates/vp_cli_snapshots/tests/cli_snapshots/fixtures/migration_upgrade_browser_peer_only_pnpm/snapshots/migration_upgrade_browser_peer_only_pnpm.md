@@ -13,7 +13,6 @@ VITE+ - The Unified Toolchain for the Web
     vite-plus  latest → <version>
     vite              → <version>
 • Package manager settings configured
-• Removed `vite` from pnpm peerDependencyRules: the core version now matches the bundled Vite
 ```
 
 ## `vpt print-file package.json`
@@ -57,8 +56,10 @@ overrides:
   vitest@*: 'catalog:'
 peerDependencyRules:
   allowAny:
+    - vite
     - vitest
   allowedVersions:
+    vite: '*'
     vitest: '*'
 ```
 

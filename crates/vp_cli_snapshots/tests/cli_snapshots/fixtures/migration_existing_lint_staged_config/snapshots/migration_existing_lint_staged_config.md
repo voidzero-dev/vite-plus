@@ -43,6 +43,11 @@ catalog:
   vite-plus: <version>
 overrides:
   vite@*: 'catalog:'
+peerDependencyRules:
+  allowAny:
+    - vite
+  allowedVersions:
+    vite: '*'
 ```
 
 ## `vpt stat-file .lintstagedrc.json --assert-not file`

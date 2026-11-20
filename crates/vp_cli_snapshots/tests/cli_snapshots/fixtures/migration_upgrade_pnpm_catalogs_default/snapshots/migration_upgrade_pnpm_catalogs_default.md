@@ -52,6 +52,11 @@ catalogs:
     rari: ^0.14.12
 overrides:
   vite@*: catalog:build
+peerDependencyRules:
+  allowAny:
+    - vite
+  allowedVersions:
+    vite: '*'
 ```
 
 ## `vp migrate --no-interactive`
@@ -101,4 +106,9 @@ catalogs:
     rari: ^0.14.12
 overrides:
   vite@*: catalog:build
+peerDependencyRules:
+  allowAny:
+    - vite
+  allowedVersions:
+    vite: '*'
 ```

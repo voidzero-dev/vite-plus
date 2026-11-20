@@ -27,6 +27,11 @@ catalog:
   vite-plus: <version>
 overrides:
   vite@*: "catalog:"
+peerDependencyRules:
+  allowAny:
+    - vite
+  allowedVersions:
+    vite: "*"
 ```
 
 ## `vp run -r build`

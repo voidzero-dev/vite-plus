@@ -46,6 +46,11 @@ catalog:
   vite-plus: <version>
 overrides:
   vite@*: "catalog:"
+peerDependencyRules:
+  allowAny:
+    - vite
+  allowedVersions:
+    vite: "*"
 ```
 
 ## `vpt stat-file my-mono/.git --assert dir`

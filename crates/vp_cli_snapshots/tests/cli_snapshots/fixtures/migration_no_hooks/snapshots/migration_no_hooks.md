@@ -39,6 +39,11 @@ catalog:
   vite-plus: <version>
 overrides:
   vite@*: 'catalog:'
+peerDependencyRules:
+  allowAny:
+    - vite
+  allowedVersions:
+    vite: '*'
 ```
 
 ## `vpt stat-file .vite-hooks --assert-not dir`

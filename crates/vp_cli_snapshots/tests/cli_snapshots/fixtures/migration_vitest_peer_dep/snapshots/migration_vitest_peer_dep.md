@@ -51,7 +51,9 @@ overrides:
   vitest@*: 'catalog:'
 peerDependencyRules:
   allowAny:
+    - vite
     - vitest
   allowedVersions:
+    vite: '*'
     vitest: '*'
 ```

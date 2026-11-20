@@ -65,4 +65,9 @@ catalog:
 
 overrides:
   vite@*: 'catalog:'
+peerDependencyRules:
+  allowAny:
+    - vite
+  allowedVersions:
+    vite: '*'
 ```

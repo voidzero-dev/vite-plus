@@ -48,6 +48,11 @@ catalog:
   vite-plus: <version>
 overrides:
   vite@*: 'catalog:'
+peerDependencyRules:
+  allowAny:
+    - vite
+  allowedVersions:
+    vite: '*'
 ```
 
 ## `vpt print-file vite.config.ts`
