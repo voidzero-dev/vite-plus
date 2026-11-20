@@ -66,6 +66,7 @@ const {
   mergeViteConfigFiles,
   rewriteEslintPackageJson,
   collectInstalledPackageNames,
+  configNeedsVitePlus,
   sanitizeMigratedOxlintConfig,
   sanitizeInheritedJsPlugins,
   detectIncompatibleEslintIntegration,
@@ -133,6 +134,19 @@ describe('explicit tsdown config selection', () => {
 
   afterEach(() => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it.each([
+    ["require('vite')", true],
+    ["require('vite-plus')", true],
+    ["require('vite-plus/pack')", true],
+    ["myRequire('vite')", false],
+  ])('checks focused installs for CommonJS config import %s', (load, expected) => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'vite.config.cjs'),
+      `const { defineConfig } = ${load}; module.exports = defineConfig({});\n`,
+    );
+    expect(configNeedsVitePlus(tmpDir, true)).toBe(expected);
   });
 
   it.each([
@@ -1481,6 +1495,42 @@ export default defineConfig(({ command }) => {
     expect(report.warnings).toContainEqual(
       expect.stringContaining('Migrate the pack options manually'),
     );
+  });
+
+  it.each([
+    ['options.outDir = index === 0 ? "lib" : "cli";', 'converted'],
+    ['const read = options.publicDir;', 'split'],
+    ['const alias = options; alias.outDir = alias.publicDir;', 'retained'],
+  ])('handles an options array callback with %s', (body, expected) => {
+    const tsdown = path.join(tmpDir, 'tsdown.config.ts');
+    const original = "export default [{ entry: 'src/lib.ts', publicDir: 'public' }];\n";
+    fs.writeFileSync(tsdown, original);
+    const vite = path.join(tmpDir, 'vite.config.ts');
+    const selector = `configs.forEach((options, index) => { ${body} });\n`;
+    const config = `${selector}export default { pack: configs };\n`;
+    const source = `import configs from './tsdown.config.ts';\n${config}`;
+    fs.writeFileSync(vite, source);
+    const report = createMigrationReport();
+
+    expect(mergeTsdownConfigFile(tmpDir, true, report, true)).toBe(expected !== 'retained');
+    const updated = fs.readFileSync(vite, 'utf8');
+    const generated = path.join(tmpDir, 'vite-pack.config.ts');
+    expect(fs.readFileSync(tsdown, 'utf8')).toBe(original);
+    if (expected === 'retained') {
+      expect(updated).toBe(source);
+      expect(fs.existsSync(generated)).toBe(false);
+      expect(report.warnings).toContainEqual(
+        expect.stringContaining('changes the imported options'),
+      );
+    } else if (expected === 'split') {
+      expect(updated).toContain("import configs from './tsdown.config.ts';");
+      expect(updated).toContain(selector);
+      expect(updated).toContain('pack: vitePackConfig');
+      expect(fs.readFileSync(generated, 'utf8')).toContain("copy: 'public'");
+    } else {
+      expect(updated).toBe(`import configs from "./vite-pack.config.ts";\n${config}`);
+      expect(fs.readFileSync(generated, 'utf8')).toContain("copy: 'public'");
+    }
   });
 
   it('keeps the original import when a derived project excludes the converted config', () => {

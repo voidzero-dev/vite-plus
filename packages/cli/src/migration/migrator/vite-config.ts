@@ -48,6 +48,7 @@ import { hasBaseUrlInTsconfig } from '../../utils/tsconfig.ts';
 import {
   configReturnValues,
   defaultConfigValue,
+  isString,
   memberName,
   objectProperty,
   parseSource,
@@ -372,10 +373,8 @@ function mergeImportedTsdownConfigs(
     if (!hasConfigKey(viteConfigPath, 'pack')) {
       return false;
     }
-    for (const { value } of configImports(
-      viteConfigPath,
-      fs.readFileSync(viteConfigPath, 'utf8'),
-    )) {
+    const { program } = parseSource(viteConfigPath, fs.readFileSync(viteConfigPath, 'utf8'));
+    for (const { value } of configImports(program)) {
       if (!value.startsWith('./') && !value.startsWith('../')) {
         continue;
       }
@@ -606,8 +605,8 @@ function relocateInstalledPackConfig(
   return applySourceEdits(content, edits);
 }
 
-function configImports(filename: string, source: string) {
-  return parseSource(filename, source).program.body.flatMap((statement) =>
+function configImports(program: Program) {
+  return program.body.flatMap((statement) =>
     statement.type === 'ImportDeclaration' ? [statement.source] : [],
   );
 }
@@ -624,15 +623,28 @@ export function configNeedsVitePlus(
   }
   const vitePath = path.join(projectPath, viteConfig);
   try {
-    const imports = configImports(vitePath, fs.readFileSync(vitePath, 'utf8'));
-    const importsVitePlus = imports.some(
-      ({ value }) => value === VITE_PLUS_NAME || value.startsWith(`${VITE_PLUS_NAME}/`),
+    const { program } = parseSource(vitePath, fs.readFileSync(vitePath, 'utf8'));
+    const specifiers = configImports(program).map(({ value }) => value);
+    for (const node of configNodes(program)) {
+      // Import rewriting also handles literal CommonJS require calls.
+      if (
+        node.type === 'CallExpression' &&
+        node.callee.type === 'Identifier' &&
+        node.callee.name === 'require' &&
+        node.arguments.length === 1 &&
+        isString(node.arguments[0])
+      ) {
+        specifiers.push(node.arguments[0].value);
+      }
+    }
+    const importsVitePlus = specifiers.some(
+      (specifier) => specifier === VITE_PLUS_NAME || specifier.startsWith(`${VITE_PLUS_NAME}/`),
     );
     // Workspace migration wraps plugins after rewriting imports and manifests.
     if (
       keepTsdownDependency &&
       (importsVitePlus ||
-        imports.some(({ value }) => value === 'vite') ||
+        specifiers.some((specifier) => specifier === 'vite' || specifier.startsWith('vite/')) ||
         (options?.wrapPlugins && wrapLazyPlugins(vitePath).updated))
     ) {
       return true;
@@ -645,7 +657,7 @@ export function configNeedsVitePlus(
     if (previousPath) {
       convertedImports.push(...tsdownConfigImportPaths(path.basename(previousPath)));
     }
-    return importsVitePlus || imports.some(({ value }) => convertedImports.includes(value));
+    return importsVitePlus || specifiers.some((specifier) => convertedImports.includes(specifier));
   } catch {
     return false;
   }
@@ -949,6 +961,15 @@ function aliasBindingStarts(binding: Node): number[] {
   }
 }
 
+function callbackExpressions(node: FunctionNode | ArrowFunctionExpression) {
+  const body = node.body;
+  return body?.type === 'BlockStatement'
+    ? body.body.map((statement) =>
+        statement.type === 'ExpressionStatement' ? statement.expression : undefined,
+      )
+    : [body];
+}
+
 function entryMutationHelper(node: FunctionNode | ArrowFunctionExpression) {
   const [parameter] = node.params;
   if (node.async || node.generator || node.params.length !== 1 || parameter.type !== 'Identifier') {
@@ -962,13 +983,7 @@ function entryMutationHelper(node: FunctionNode | ArrowFunctionExpression) {
   if (type && typeReference === undefined) {
     return undefined;
   }
-  const body = node.body;
-  const expressions =
-    body?.type === 'BlockStatement'
-      ? body.body.map((statement) =>
-          statement.type === 'ExpressionStatement' ? statement.expression : undefined,
-        )
-      : [body];
+  const expressions = callbackExpressions(node);
   if (
     expressions.length > 0 &&
     expressions.every((expression) => {
@@ -993,11 +1008,44 @@ function entryMutationHelper(node: FunctionNode | ArrowFunctionExpression) {
   return undefined;
 }
 
+function setsPackArrayOutput(
+  callback: FunctionNode | ArrowFunctionExpression,
+  bindings: ReturnType<typeof parseSource>['bindings'],
+): boolean {
+  if (callback.async || callback.generator) {
+    return false;
+  }
+  const [options] = callback.params;
+  if (options?.type !== 'Identifier' || options.typeAnnotation || callback.params.length > 2) {
+    return false;
+  }
+  const binding = bindings.find(({ start }) => start === options.start);
+  const expressions = callbackExpressions(callback);
+  // The callback can compute the directory normally. Only the assignment may
+  // use the options object, so it cannot read a renamed option in the copy.
+  const references = new Set(binding?.references);
+  return (
+    expressions.length > 0 &&
+    expressions.every(
+      (expression) =>
+        expression?.type === 'AssignmentExpression' &&
+        expression.operator === '=' &&
+        expression.left.type === 'MemberExpression' &&
+        memberName(expression.left) === 'outDir' &&
+        expression.left.object.type === 'Identifier' &&
+        references.delete(expression.left.object.start),
+    ) &&
+    references.size === 0
+  );
+}
+
 function packMutationReferences({ program, bindings }: ReturnType<typeof parseSource>) {
   const writes = new Set<number>();
   const aliasInitializers = new Map<number, number>();
+  const callbackOrigins = new Map<number, number>();
   const helpers = new Map<number, NonNullable<ReturnType<typeof entryMutationHelper>>>();
   const calls = new Map<number, number>();
+  const rewritable = new Map<number, { typeReference?: number; array?: boolean }>();
   const recordHelper = (start: number, node: FunctionNode | ArrowFunctionExpression) => {
     const helper = entryMutationHelper(node);
     if (helper) {
@@ -1045,6 +1093,34 @@ function packMutationReferences({ program, bindings }: ReturnType<typeof parseSo
       case 'CallExpression': {
         const { callee } = node;
         const method = memberName(callee);
+        if (callee.type === 'MemberExpression' && method === 'forEach') {
+          const object = unwrapTypeExpression(callee.object);
+          if (object.type === 'Identifier') {
+            const [callback] = node.arguments;
+            if (
+              node.arguments.length === 1 &&
+              (callback.type === 'FunctionExpression' ||
+                callback.type === 'ArrowFunctionExpression') &&
+              !callback.params.some((parameter) => parameter.type === 'RestElement')
+            ) {
+              const [element, , array] = callback.params;
+              // Writes to the element or the third callback argument affect
+              // the original array. A callback that only reads can stay split.
+              for (const parameter of [element, array]) {
+                if (parameter) {
+                  for (const start of aliasBindingStarts(parameter)) {
+                    callbackOrigins.set(start, object.start);
+                  }
+                }
+              }
+              if (setsPackArrayOutput(callback, bindings)) {
+                rewritable.set(object.start, { array: true });
+              }
+            } else {
+              writes.add(object.start);
+            }
+          }
+        }
         const receiver =
           callee.type === 'MemberExpression' && method && arrayMutators.has(method)
             ? callee.object
@@ -1082,18 +1158,15 @@ function packMutationReferences({ program, bindings }: ReturnType<typeof parseSo
       writes.add(root.start);
     }
   }
-  const entryCalls = new Map<number, number | undefined>();
   const origins = new Map<number, number>();
   for (const { start, references, constant } of bindings) {
-    if (!constant) {
-      continue;
-    }
     const helper = helpers.get(start);
     const argument = references.length === 1 ? calls.get(references[0]) : undefined;
-    if (helper && argument !== undefined) {
-      entryCalls.set(argument, helper.typeReference);
+    if (constant && helper && argument !== undefined) {
+      rewritable.set(argument, helper);
     }
-    const origin = aliasInitializers.get(start);
+    const origin =
+      (constant ? aliasInitializers.get(start) : undefined) ?? callbackOrigins.get(start);
     if (origin !== undefined) {
       for (const reference of references) {
         origins.set(reference, origin);
@@ -1108,7 +1181,7 @@ function packMutationReferences({ program, bindings }: ReturnType<typeof parseSo
       writes.add(origin);
     }
   }
-  return { writes, entryCalls };
+  return { writes, rewritable };
 }
 
 function importedPackBindings(
@@ -1124,7 +1197,7 @@ function importedPackBindings(
   const directory = path.dirname(vitePath);
   const withoutExtension = path.join(path.dirname(packPath), path.parse(packPath).name);
   const jsPath = packPath.replace(/\.(m|c)?ts$/, '.$1js');
-  const { writes, entryCalls } = packMutationReferences(parsed);
+  const { writes, rewritable } = packMutationReferences(parsed);
   return program.body.flatMap((statement) => {
     if (statement.type !== 'ImportDeclaration' || statement.importKind === 'type') {
       return [];
@@ -1159,15 +1232,16 @@ function importedPackBindings(
     const written = references.filter((reference) => writes.has(reference));
     const onlyPackUses = references.length === uses.length && uses.every(({ copy }) => !copy);
     const helperReferences = new Set(uses.map(({ value }) => value.start));
-    const canRedirectEntryCalls =
+    const canRedirectMutations =
       written.length > 0 &&
       uses.every(({ copy }) => !copy) &&
       written.every((reference) => {
-        if (!entryCalls.has(reference)) {
+        const mutation = rewritable.get(reference);
+        if (!mutation) {
           return false;
         }
         helperReferences.add(reference);
-        const type = entryCalls.get(reference);
+        const type = mutation.typeReference;
         if (type !== undefined) {
           helperReferences.add(type);
         }
@@ -1180,8 +1254,9 @@ function importedPackBindings(
         binding,
         uses,
         mutates: written.length > 0,
-        canRedirectEntryCalls,
-        onlyPack: onlyPackUses || canRedirectEntryCalls,
+        canRedirectMutations,
+        mutatesArray: written.some((reference) => rewritable.get(reference)?.array),
+        onlyPack: onlyPackUses || canRedirectMutations,
       },
     ];
   });
@@ -1405,8 +1480,9 @@ function mergeRetainedTsdownConfig(
   const mappings = packImports.flatMap(({ uses }) =>
     uses.flatMap(({ mapping }) => (mapping ? [mapping] : [])),
   );
+  const usesArray = mappings.length > 0 || packImports.some(({ mutatesArray }) => mutatesArray);
   const usesBundledDefaults =
-    mappings.length > 0 || packImports.some(({ canRedirectEntryCalls }) => canRedirectEntryCalls);
+    usesArray || packImports.some(({ canRedirectMutations }) => canRedirectMutations);
   const { content: converted, warnings } = rewriteTsdownConfigForPack(
     tsdownConfigPath,
     workspaceRoot,
@@ -1420,7 +1496,7 @@ function mergeRetainedTsdownConfig(
     return undefined;
   }
   if (
-    originalImports.some(({ mutates, canRedirectEntryCalls }) => mutates && !canRedirectEntryCalls)
+    originalImports.some(({ mutates, canRedirectMutations }) => mutates && !canRedirectMutations)
   ) {
     warnMigration(
       `${displayRelative(viteConfigPath)} changes the imported options from ${displayRelative(tsdownConfigPath)} or passes them to code that can change them. Keep those changes when you migrate the pack options manually. See ${documentationUrl('/guide/migrate#tsdown')}`,
@@ -1428,7 +1504,7 @@ function mergeRetainedTsdownConfig(
     );
     return false;
   }
-  if (mappings.length > 0) {
+  if (usesArray) {
     const array =
       !mappings.includes('unverified') &&
       defaultConfigValue(
