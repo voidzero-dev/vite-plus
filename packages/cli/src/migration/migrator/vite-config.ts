@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import type { ObjectExpression, ObjectProperty, Program, Span } from '@oxc-project/types';
+import type { Node, ObjectExpression, ObjectProperty, Program, Span } from '@oxc-project/types';
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { braceExpand } from 'minimatch';
 import { type OxlintConfig } from 'oxlint';
@@ -212,6 +212,7 @@ export default defineConfig({});
 /**
  * Merge tsdown.config.* into vite.config.ts. Import TS/JS configs and inline JSON.
  * Keep the original config when standalone tsdown may still load it.
+ * Convert direct pack imports of retained configs in other workspace packages.
  */
 export function mergeTsdownConfigFile(
   projectPath: string,
@@ -219,8 +220,38 @@ export function mergeTsdownConfigFile(
   report?: MigrationReport,
   keepTsdownConfig = false,
   workspaceRoot = projectPath,
+  tsdownPackages?: ReadonlySet<string>,
 ): boolean {
   const configs = detectConfigs(projectPath);
+  const mergedLocal = mergeLocalTsdownConfigFile(
+    projectPath,
+    configs,
+    workspaceRoot,
+    keepTsdownConfig,
+    silent,
+    report,
+  );
+  const mergedImports =
+    configs.viteConfig && tsdownPackages?.size
+      ? mergeImportedTsdownConfigs(
+          path.join(projectPath, configs.viteConfig),
+          workspaceRoot,
+          tsdownPackages,
+          silent,
+          report,
+        )
+      : false;
+  return mergedLocal || mergedImports;
+}
+
+function mergeLocalTsdownConfigFile(
+  projectPath: string,
+  configs: ConfigFiles,
+  workspaceRoot: string,
+  keepTsdownConfig: boolean,
+  silent: boolean,
+  report: MigrationReport | undefined,
+): boolean {
   if (!configs.tsdownConfig) {
     return false;
   }
@@ -308,6 +339,52 @@ export function mergeTsdownConfigFile(
   return createdViteConfig || result.updated;
 }
 
+function mergeImportedTsdownConfigs(
+  viteConfigPath: string,
+  workspaceRoot: string,
+  tsdownPackages: ReadonlySet<string>,
+  silent: boolean,
+  report: MigrationReport | undefined,
+): boolean {
+  const directory = path.resolve(path.dirname(viteConfigPath));
+  const owners = new Set<string>();
+  try {
+    if (!hasConfigKey(viteConfigPath, 'pack')) {
+      return false;
+    }
+    for (const { value } of configImports(
+      viteConfigPath,
+      fs.readFileSync(viteConfigPath, 'utf8'),
+    )) {
+      if (!value.startsWith('./') && !value.startsWith('../')) {
+        continue;
+      }
+      const owner = path.dirname(path.resolve(directory, value));
+      if (owner !== directory && tsdownPackages.has(owner)) {
+        owners.add(owner);
+      }
+    }
+  } catch {
+    return false;
+  }
+  let changed = false;
+  for (const owner of owners) {
+    const { tsdownConfig } = detectConfigs(owner);
+    if (tsdownConfig && !tsdownConfig.endsWith('.json')) {
+      changed =
+        mergeRetainedTsdownConfig(
+          viteConfigPath,
+          path.join(owner, tsdownConfig),
+          workspaceRoot,
+          true,
+          silent,
+          report,
+        ) || changed;
+    }
+  }
+  return changed;
+}
+
 function matchesInlinePackConfig(
   viteConfigPath: string,
   tsdownConfigPath: string,
@@ -387,7 +464,11 @@ function configImports(filename: string, source: string) {
 }
 
 /** Check whether a generated or retained configuration needs Vite+ in focused installs. */
-export function configNeedsVitePlus(projectPath: string, keepTsdownDependency: boolean): boolean {
+export function configNeedsVitePlus(
+  projectPath: string,
+  keepTsdownDependency: boolean,
+  options?: { wrapPlugins?: boolean },
+): boolean {
   const { viteConfig, tsdownConfig } = detectConfigs(projectPath);
   if (!viteConfig || (!tsdownConfig && !keepTsdownDependency)) {
     return false;
@@ -398,7 +479,11 @@ export function configNeedsVitePlus(projectPath: string, keepTsdownDependency: b
     const importsVitePlus = imports.some(
       ({ value }) => value === VITE_PLUS_NAME || value.startsWith(`${VITE_PLUS_NAME}/`),
     );
-    if (keepTsdownDependency && importsVitePlus) {
+    // Workspace migration wraps plugins after rewriting imports and manifests.
+    if (
+      keepTsdownDependency &&
+      (importsVitePlus || (options?.wrapPlugins && wrapLazyPlugins(vitePath).updated))
+    ) {
       return true;
     }
     if (!tsdownConfig || !hasConfigKey(vitePath, 'pack')) {
@@ -420,34 +505,36 @@ function packProperties(program: Program, requireStatic = false): (ObjectPropert
   );
 }
 
+function packValueIdentifiers(node: Node): Extract<Node, { type: 'Identifier' }>[] {
+  const value = unwrapTypeExpression(node);
+  switch (value.type) {
+    case 'Identifier':
+      return [value];
+    case 'ConditionalExpression':
+      // The test still reads the original values used to choose a config.
+      return [...packValueIdentifiers(value.consequent), ...packValueIdentifiers(value.alternate)];
+    case 'ArrayExpression':
+      return value.elements.flatMap((entry) => (entry ? packValueIdentifiers(entry) : []));
+    case 'ObjectExpression':
+      return value.properties.flatMap((member) =>
+        member.type === 'SpreadElement' ? packValueIdentifiers(member.argument) : [],
+      );
+    case 'SpreadElement':
+      return packValueIdentifiers(value.argument);
+    default:
+      return [];
+  }
+}
+
 function importedPackBindings(
   { program, bindings }: ReturnType<typeof parseSource>,
   packs: readonly (ObjectProperty | undefined)[],
   vitePath: string,
   packPath: string,
 ) {
-  const assignments = packs.flatMap((property) => {
-    if (!property) {
-      return [];
-    }
-    const value = unwrapTypeExpression(property.value);
-    const entries = value.type === 'ArrayExpression' ? value.elements : [value];
-    return entries.flatMap((entry) => {
-      if (!entry) {
-        return [];
-      }
-      const config = unwrapTypeExpression(entry.type === 'SpreadElement' ? entry.argument : entry);
-      const expressions =
-        config.type === 'ObjectExpression'
-          ? config.properties.flatMap((member) =>
-              member.type === 'SpreadElement' ? [unwrapTypeExpression(member.argument)] : [],
-            )
-          : [config];
-      return expressions.flatMap((expression) =>
-        expression.type === 'Identifier' ? [{ property, value: expression }] : [],
-      );
-    });
-  });
+  const assignments = packs.flatMap((property) =>
+    property ? packValueIdentifiers(property.value).map((value) => ({ property, value })) : [],
+  );
   const directory = path.dirname(vitePath);
   const withoutExtension = path.join(path.dirname(packPath), path.parse(packPath).name);
   const jsPath = packPath.replace(/\.(m|c)?ts$/, '.$1js');

@@ -1649,6 +1649,7 @@ async function main() {
             report,
             tsdownPackages.has(path.resolve(projectPath)),
             workspaceInfoOptional.rootDir,
+            tsdownPackages,
           );
         }
       }
