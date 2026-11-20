@@ -31,6 +31,12 @@ struct PackageRow {
     likely_runnable: bool,
 }
 
+/// Does this app invocation leave target selection to the CLI?
+pub fn is_bare_app_command(command: &str, args: &[String]) -> bool {
+    args.is_empty()
+        || (matches!(command, "build" | "dev") && matches!(args, [separator] if separator == "--"))
+}
+
 /// Does the workspace root have an intent signal for this app command?
 /// This signal selects the root. It does not prove that the command succeeds.
 /// The `defaultPackage` lookup passes the config that [`classify`] already
@@ -179,10 +185,31 @@ fn emit_milestone_title(name: &str) {
 /// which case the script merely spawns the real binary, which then behaves
 /// identically to a direct invocation.
 pub fn needs_elicitation(command: &str, cwd: &AbsolutePath) -> bool {
-    matches!(classify(command, cwd), Classification::Elicit(_))
+    matches!(classify(command, cwd, root_has_intent_signal), Classification::Elicit(_))
 }
 
 /// Outcome of classifying a bare app command.
+/// A local CLI that predates the fixed-target marker still chooses a target
+/// for bare commands when the directory lacks its older root intent signals.
+pub fn legacy_cli_may_select_target(command: &str, args: &[String], cwd: &AbsolutePath) -> bool {
+    is_bare_app_command(command, args)
+        && matches!(classify(command, cwd, legacy_root_has_intent), Classification::Elicit(_))
+}
+
+fn legacy_root_has_intent(
+    config: &vp_static_config::FieldMap,
+    dir: &AbsolutePath,
+    command: &str,
+) -> bool {
+    match command {
+        "pack" => root_has_intent_signal(config, dir, command),
+        "build" => {
+            dir.as_path().join("index.html").is_file() || config.get_declared("build").is_some()
+        }
+        _ => dir.as_path().join("index.html").is_file(),
+    }
+}
+
 enum Classification {
     /// Run in `cwd` unchanged. Carries the workspace root found for `cwd`
     /// (when the lookup succeeded) so the caller can reuse it instead of
@@ -229,7 +256,11 @@ fn default_package_for_command(
 /// workspace root, the current directory identifies the target. A member's
 /// own config must not redirect.
 ///
-fn classify(command: &str, cwd: &AbsolutePath) -> Classification {
+fn classify(
+    command: &str,
+    cwd: &AbsolutePath,
+    root_has_intent: fn(&vp_static_config::FieldMap, &AbsolutePath, &str) -> bool,
+) -> Classification {
     let workspace = vt_workspace::find_workspace_root(cwd);
     let at_invocation_root =
         workspace.as_ref().map_or(true, |(_, rel_from_root)| rel_from_root.as_str().is_empty());
@@ -263,7 +294,7 @@ fn classify(command: &str, cwd: &AbsolutePath) -> Classification {
     let Some(root_config) = root_config else {
         return Classification::RunInPlace(Some(workspace_root));
     };
-    if root_has_intent_signal(&root_config, &workspace_root.path, command) {
+    if root_has_intent(&root_config, &workspace_root.path, command) {
         return Classification::RunInPlace(Some(workspace_root));
     }
     Classification::Elicit(Elicitation::WorkspaceRoot(workspace_root))
@@ -278,7 +309,7 @@ pub fn resolve_app_target(
     command: &str,
     cwd: &AbsolutePath,
 ) -> Result<(AppTarget, Option<vt_workspace::WorkspaceRoot>)> {
-    let elicitation = match classify(command, cwd) {
+    let elicitation = match classify(command, cwd, root_has_intent_signal) {
         Classification::RunInPlace(workspace_root) => {
             return Ok((AppTarget::CurrentDir, workspace_root));
         }

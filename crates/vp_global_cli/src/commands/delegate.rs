@@ -30,8 +30,7 @@ pub async fn execute_app(
     explicit_chdir: bool,
 ) -> Result<ExitStatus, Error> {
     // Build and dev forward a lone separator, but it does not select an entry.
-    let bare_command = args.is_empty()
-        || (matches!(command, "build" | "dev") && matches!(args, [separator] if separator == "--"));
+    let bare_command = vp_app_target::is_bare_app_command(command, args);
     // An older local CLI would ignore the marker and pick a target again.
     let resolve_target =
         !explicit_chdir && bare_command && JsExecutor::can_delegate_fixed_app_target(&cwd);

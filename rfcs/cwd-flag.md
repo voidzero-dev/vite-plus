@@ -277,7 +277,7 @@ The global binary resolves the working directory before choosing the local `vite
 ### Entry points and version assumption
 
 - The global binary and the local bin both parse `-C` and use `crates/vp_app_target` for implicit target selection. The global binary tells a compatible delegated CLI when the working directory is already fixed, so the child skips selection. Stable local releases support this marker from `0.3.0`. Local preview builds accept the marker when their version matches the global build.
-- If the invocation directory resolves to a local CLI without marker support, that CLI handles implicit selection for a bare command. Once `-C` or the global CLI fixes a target, the global binary checks the CLI it resolves at that target. If the selected CLI lacks marker support, the global installation runs the command in the target directory with that project's Node.js runtime.
+- If the invocation directory resolves to a local CLI without marker support, that CLI handles implicit selection for a bare command. Once `-C` or the global CLI fixes a target, the global binary checks the CLI it resolves at that target. If a legacy CLI would select a second target for a bare command, the global installation runs in the selected directory with that project's Node.js runtime. Other invocations keep the selected local CLI.
 - A root-level `"dev": "vp dev"` script uses the same target rules through the entry point that runs `vp`.
 
 ### Picker contents

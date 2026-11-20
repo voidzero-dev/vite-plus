@@ -371,7 +371,15 @@ impl JsExecutor {
     ) -> Result<Command, Error> {
         // Try to resolve vite-plus from the project directory using oxc_resolver
         let entry_point = match Self::resolve_local_vite_plus(project_path) {
-            Some(path) if !self.fixed_target || local_entry_accepts_fixed_app_target(&path) => path,
+            Some(path)
+                if !self.fixed_target
+                    || local_entry_accepts_fixed_app_target(&path)
+                    || args.split_first().is_none_or(|(command, args)| {
+                        !vp_app_target::legacy_cli_may_select_target(command, args, project_path)
+                    }) =>
+            {
+                path
+            }
             local_entry => {
                 if local_entry.is_none() && self.warn_on_missing_local_cli {
                     commands::warn_missing_local_cli_if_project(project_path);

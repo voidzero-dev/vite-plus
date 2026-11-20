@@ -1,6 +1,6 @@
 # legacy_cli_at_fixed_target
 
-The global CLI builds the fixed directory with that project's Node.js when its local CLI predates the fixed target marker.
+The global CLI keeps explicit arguments and falls back only when a legacy CLI would select another package.
 
 ## `vpt mkdir -p app/node_modules/vite-plus/dist`
 
@@ -60,23 +60,35 @@ The global CLI builds the fixed directory with that project's Node.js when its l
 ## `vpt rm -r app/dist`
 
 
+## `vp -C app build --config vite.config.mjs`
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+Legacy CLI in app: ["build","--config","vite.config.mjs"]
+```
+
 ## `vp -C app build -- --help`
 
-
-## `vpt stat-file app/dist/index.html --assert file`
-
 ```
-app/dist/index.html: file
-```
+VITE+ - The Unified Toolchain for the Web
 
-## `vpt print-file app/build-args.json`
-
-```
-["build","--","--help"]
+Legacy CLI in app: ["build","--","--help"]
 ```
 
 ## `vpt stat-file app/nested/dist --assert missing`
 
 ```
 app/nested/dist: missing
+```
+
+## `vpt rm app/vite.config.mjs`
+
+
+## `vp -C app build`
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+Legacy CLI in app: ["build"]
 ```
