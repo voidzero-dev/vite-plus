@@ -352,6 +352,33 @@ function convertedPackConfigName(tsdownConfigPath: string): string {
   return `vite-pack.config${path.extname(tsdownConfigPath)}`;
 }
 
+function convertedPackLinkTarget(tsdownConfigPath: string, workspaceRoot: string) {
+  const source = fs.realpathSync(tsdownConfigPath);
+  const relative = path.relative(fs.realpathSync(workspaceRoot), source);
+  if (path.isAbsolute(relative) || relative.split(path.sep)[0] === '..') {
+    return undefined;
+  }
+  const { dir, name, ext } = path.parse(source);
+  return path.join(dir, `${name}.vite-pack.config${ext}`);
+}
+
+function writePackConfigLink(filename: string, target: string, replace: boolean) {
+  const directory = path.dirname(filename);
+  const relativeTarget = path.relative(fs.realpathSync(directory), target);
+  if (!replace) {
+    fs.symlinkSync(relativeTarget, filename, 'file');
+    return;
+  }
+  // Keep the old generated file if creating the replacement link fails.
+  const temporary = path.join(directory, `.${path.basename(filename)}.${randomUUID()}`);
+  fs.symlinkSync(relativeTarget, temporary, 'file');
+  try {
+    fs.renameSync(temporary, filename);
+  } finally {
+    fs.rmSync(temporary, { force: true });
+  }
+}
+
 function configImports(filename: string, source: string) {
   return parseSource(filename, source).program.body.flatMap((statement) =>
     statement.type === 'ImportDeclaration' ? [statement.source] : [],
@@ -489,18 +516,24 @@ function mergeRetainedTsdownConfig(
   const hasPack = hasConfigKey(viteConfigPath, 'pack');
   const imports = hasPack ? configImports(viteConfigPath, source) : [];
   const convertedImports = tsdownConfigImportPaths(convertedName);
-  if (imports.some(({ value }) => convertedImports.includes(value))) {
+  const importsConverted = imports.some(({ value }) => convertedImports.includes(value));
+  const sourceIsLink = fs.lstatSync(tsdownConfigPath).isSymbolicLink();
+  const convertedEntry = fs.lstatSync(convertedPath, { throwIfNoEntry: false });
+  if (
+    importsConverted &&
+    (!sourceIsLink || (convertedEntry?.isSymbolicLink() && fs.existsSync(convertedPath)))
+  ) {
     return (
       fs.existsSync(convertedPath) &&
       preparePackConfigTsconfigEdits(viteConfigPath, convertedPath, workspaceRoot).apply()
     );
   }
-  if (!keepTsdownConfig) {
+  if (!keepTsdownConfig && !importsConverted) {
     return undefined;
   }
   const originalPaths = tsdownConfigImportPaths(originalName);
   const originalImports = imports.filter(({ value }) => originalPaths.includes(value));
-  if (hasPack && originalImports.length === 0) {
+  if (hasPack && !importsConverted && originalImports.length === 0) {
     return undefined;
   }
 
@@ -512,15 +545,28 @@ function mergeRetainedTsdownConfig(
     return undefined;
   }
 
+  // Bundlers resolve a config link from its target. Keep the converted module
+  // in that directory and give TypeScript a file at the original project path.
+  const linkedTarget = sourceIsLink
+    ? convertedPackLinkTarget(tsdownConfigPath, workspaceRoot)
+    : undefined;
+  if (sourceIsLink && !linkedTarget) {
+    warnMigration(
+      `The shared config at ${displayRelative(tsdownConfigPath)} points outside the workspace. Migrate its pack options manually. See ${documentationUrl('/guide/migrate#tsdown')}`,
+      report,
+    );
+    return undefined;
+  }
+
   let config = source;
-  if (hasPack) {
+  if (hasPack && !importsConverted) {
     const originalStem = `./${path.parse(originalName).name}`;
     const convertedStem = `./${path.parse(convertedName).name}`;
     for (const entry of originalImports.toReversed()) {
       const specifier = JSON.stringify(entry.value.replace(originalStem, convertedStem));
       config = config.slice(0, entry.start) + specifier + config.slice(entry.end);
     }
-  } else {
+  } else if (!hasPack) {
     const result = mergeTsdownConfig(viteConfigPath, `./${convertedName}`);
     if (!result.updated) {
       return undefined;
@@ -528,10 +574,25 @@ function mergeRetainedTsdownConfig(
     config = result.content;
   }
 
-  const create = !fs.existsSync(convertedPath);
-  if (!create && fs.readFileSync(convertedPath, 'utf8') !== content) {
+  const writePath = linkedTarget ?? convertedPath;
+  const reuseLink =
+    linkedTarget !== undefined &&
+    convertedEntry?.isSymbolicLink() &&
+    path.resolve(fs.realpathSync(path.dirname(convertedPath)), fs.readlinkSync(convertedPath)) ===
+      linkedTarget;
+  const targetEntry = linkedTarget
+    ? fs.lstatSync(linkedTarget, { throwIfNoEntry: false })
+    : convertedEntry;
+  const outputs = [{ file: convertedPath, entry: reuseLink ? undefined : convertedEntry }];
+  if (linkedTarget) {
+    outputs.push({ file: linkedTarget, entry: targetEntry });
+  }
+  const conflict = outputs.find(
+    ({ file, entry }) => entry && (!entry.isFile() || fs.readFileSync(file, 'utf8') !== content),
+  );
+  if (conflict) {
     warnMigration(
-      `Cannot write the converted pack config because ${displayRelative(convertedPath)} already exists. Merge ${displayRelative(tsdownConfigPath)} into pack manually.`,
+      `Cannot write the converted pack config because ${displayRelative(conflict.file)} already exists. Merge ${displayRelative(tsdownConfigPath)} into pack manually.`,
       report,
     );
     return false;
@@ -556,14 +617,19 @@ function mergeRetainedTsdownConfig(
     );
     return false;
   }
-  if (create) {
-    fs.writeFileSync(convertedPath, content, { flag: 'wx' });
+  if (!targetEntry) {
+    fs.writeFileSync(writePath, content, { flag: 'wx' });
+  }
+  if (linkedTarget && !reuseLink) {
+    writePackConfigLink(convertedPath, linkedTarget, convertedEntry !== undefined);
   }
   const included = tsconfigEdits.apply();
   try {
-    fs.writeFileSync(viteConfigPath, config);
+    if (!importsConverted) {
+      fs.writeFileSync(viteConfigPath, config);
+    }
   } catch (error) {
-    if (create && !included) {
+    if (!convertedEntry && !included) {
       fs.unlinkSync(convertedPath);
     }
     throw error;
