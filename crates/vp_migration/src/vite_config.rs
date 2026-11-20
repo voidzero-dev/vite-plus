@@ -112,21 +112,27 @@ fn merge_json_config_content(
     Ok(MergeResult { content, updated })
 }
 
-/// Render the pack options migration would inline from a tsdown JSON file.
-pub fn render_tsdown_json_pack_config(
-    vite_config_path: &Path,
+/// Convert a standalone tsdown JSON config to inline pack options.
+/// With no Vite config path, render a standalone object for comparison.
+pub fn merge_tsdown_json_config(
     json_config_path: &Path,
     workspace_root: &Path,
-) -> Result<String, Error> {
+    vite_config_path: Option<&Path>,
+) -> Result<MergeResult, Error> {
     let json = std::fs::read_to_string(json_config_path)?;
-    let inlined = merge_json_config_content("export default {};", &json, "pack")?.content;
-    let legacy = crate::pack_config::preserve_legacy_defaults(
-        vite_config_path,
-        workspace_root,
-        false,
-        &inlined,
-    );
-    Ok(crate::pack_config::rewrite_pack_config(&inlined, false, legacy))
+    let vite = vite_config_path.map(std::fs::read_to_string).transpose()?;
+    let mut merged =
+        merge_json_config_content(vite.as_deref().unwrap_or("export default {};"), &json, "pack")?;
+    if merged.updated {
+        let legacy = crate::pack_config::preserve_legacy_defaults(
+            json_config_path,
+            workspace_root,
+            true,
+            &json,
+        );
+        merged.content = crate::pack_config::rewrite_pack_config(&merged.content, false, legacy);
+    }
+    Ok(merged)
 }
 
 /// Set the value of a top-level config key in vite.config.ts/js (upsert).

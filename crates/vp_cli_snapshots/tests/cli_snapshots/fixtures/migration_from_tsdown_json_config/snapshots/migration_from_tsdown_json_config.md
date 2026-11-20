@@ -9,7 +9,7 @@ VITE+ - The Unified Toolchain for the Web
 
 ◇ Migrated . to Vite+ <version>
 • Node <version>  pnpm <version>
-• 2 config updates applied, 1 file had imports rewritten
+• 2 config updates applied
 ```
 
 ## `vpt stat-file tsdown.config.json --assert-not file`
