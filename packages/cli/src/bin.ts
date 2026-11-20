@@ -10,6 +10,7 @@
  * If no local installation is found, this global dist/bin.js is used as fallback.
  */
 
+import module from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -165,6 +166,17 @@ if (maybePrintCommandHelp(args)) {
       process.exit(0);
     }
 
+    // The package bin owns its PID. A forked caller needs its IPC channel.
+    const execDev =
+      command === 'dev' &&
+      process.platform !== 'win32' &&
+      path.basename(process.argv[1] ?? '') === 'vp' &&
+      process.send === undefined;
+    if (execDev) {
+      // Save the launcher's compile cache before handing its process to Vite.
+      module.flushCompileCache?.();
+    }
+
     const exitCode = await run({
       nodeExecPath: process.execPath,
       lint,
@@ -187,8 +199,7 @@ if (maybePrintCommandHelp(args)) {
       },
       nodeVersion: process.version,
       explicitChdir,
-      // The package bin owns its PID. A forked caller needs its IPC channel.
-      execDev: path.basename(process.argv[1] ?? '') === 'vp' && process.send === undefined,
+      execDev,
       args: rustCliArgs,
     });
 
