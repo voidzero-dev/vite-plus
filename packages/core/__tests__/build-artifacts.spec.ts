@@ -4,7 +4,10 @@ import path from 'node:path';
 import url from 'node:url';
 
 import type { SgNode } from '@ast-grep/napi';
+import type { Plugin } from '@voidzero-dev/vite-plus-core';
 import { Lang, parse as parseAst } from '@ast-grep/napi';
+import { transformWithOxc } from '@voidzero-dev/vite-plus-core';
+import { build } from '@voidzero-dev/vite-plus-core/rolldown';
 import { init, parse } from 'es-module-lexer';
 import { glob } from 'tinyglobby';
 import { describe, expect, it } from 'vite-plus/test';
@@ -101,6 +104,30 @@ describe('build artifacts', () => {
     // Vite rewrites before serving may remain. New entries require review;
     // do not accept a snapshot containing an unresolved Node package lookup.
     expect(references).toMatchSnapshot();
+  });
+
+  it('accepts the bundled Oxc source map as a Vite plugin transform result', async () => {
+    const plugin = {
+      name: 'oxc-transform',
+      resolveId(id) {
+        return id;
+      },
+      load() {
+        return 'export const answer: number = 42';
+      },
+      async transform(code, id) {
+        const result = await transformWithOxc(code, id, { sourcemap: true });
+        return { code: result.code, map: result.map };
+      },
+    } satisfies Plugin;
+
+    const { output } = await build({
+      input: 'entry.ts',
+      plugins: [plugin],
+      output: { dir: '.', sourcemap: true },
+      write: false,
+    });
+    expect(output[0].map?.sources).toEqual(['entry.ts']);
   });
 
   it('should include esm-shims.js in dist for tsdown shims support', async () => {

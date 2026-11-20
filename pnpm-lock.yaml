@@ -383,6 +383,7 @@ packageExtensionsChecksum: sha256-If0sPrN3HV7D+EgeoSZUm8CYcOJOyo0gWobIh2WtTMM=
 patchedDependencies:
   chokidar@3.6.0: e17269188c54412478078f7ac7877c1d5a475a2f2438328e3a7e725513ccbf1f
   dotenv-expand@13.0.0: 49330a663821151418e003e822a82a6a61d2f0f8a6e3cab00c1c94815a112889
+  rolldown-plugin-dts@0.30.2: b0dafbbff6f9bb67827607b7e4c93e79a1fcf6a587578d8f6a9f177d4b9b6f71
   sirv@3.0.2: bdff24dcf974e66c415307615e28db5fdf44c1b4aba389e84b0e094350655330
 
 importers:
@@ -582,6 +583,9 @@ importers:
       '@types/node':
         specifier: ^20.19.0 || >=22.12.0
         version: 26.6.6
+      '@typescript/native-preview':
+        specifier: '*'
+        version: 7.0.0-dev.20260707.2
       '@volar/typescript':
         specifier: ~2.4.0
         version: 2.4.28
@@ -690,7 +694,7 @@ importers:
         version: link:../../rolldown/packages/rolldown
       rolldown-plugin-dts:
         specifier: 'catalog:'
-        version: 0.30.2(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(rolldown@rolldown+packages+rolldown)(tsrs@7.1.0-beta.tsrs3)(typescript@7.0.2)(vue-tsc@3.3.12(typescript@7.0.2))
+        version: 0.30.2(patch_hash=b0dafbbff6f9bb67827607b7e4c93e79a1fcf6a587578d8f6a9f177d4b9b6f71)(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(rolldown@rolldown+packages+rolldown)(tsrs@7.1.0-beta.tsrs4)(typescript@7.0.2)(vue-tsc@3.3.12(typescript@7.0.2))
       rollup:
         specifier: 'catalog:'
         version: 4.63.1
@@ -708,10 +712,10 @@ importers:
         version: 1.2.2
       tsdown:
         specifier: 'catalog:'
-        version: 0.23.7(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.7)(@tsdown/exe@0.23.7)(@vitejs/devtools@0.8.2(crossws@0.4.17(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsrs@7.1.0-beta.tsrs3)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2))
+        version: 0.23.7(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.7)(@tsdown/exe@0.23.7)(@vitejs/devtools@0.8.2(crossws@0.4.17(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsrs@7.1.0-beta.tsrs4)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2))
       tsrs:
         specifier: 'catalog:'
-        version: 7.1.0-beta.tsrs3
+        version: 7.1.0-beta.tsrs4
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -870,7 +874,7 @@ importers:
         version: 'link:'
       rolldown-plugin-dts:
         specifier: 'catalog:'
-        version: 0.30.2(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(rolldown@rolldown+packages+rolldown)(tsrs@0.0.0)(typescript@6.0.3)(vue-tsc@3.3.12(typescript@6.0.3))
+        version: 0.30.2(patch_hash=b0dafbbff6f9bb67827607b7e4c93e79a1fcf6a587578d8f6a9f177d4b9b6f71)(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(rolldown@rolldown+packages+rolldown)(tsrs@0.0.0)(typescript@6.0.3)(vue-tsc@3.3.12(typescript@6.0.3))
       rollup:
         specifier: 'catalog:'
         version: 4.63.1
@@ -1141,7 +1145,7 @@ importers:
         version: 2.0.4
       rolldown-plugin-dts:
         specifier: ^0.30.2
-        version: 0.30.2(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(rolldown@rolldown+packages+rolldown)(tsrs@0.0.0)(typescript@7.0.2)(vue-tsc@3.3.12(typescript@7.0.2))
+        version: 0.30.2(patch_hash=b0dafbbff6f9bb67827607b7e4c93e79a1fcf6a587578d8f6a9f177d4b9b6f71)(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(rolldown@rolldown+packages+rolldown)(tsrs@0.0.0)(typescript@7.0.2)(vue-tsc@3.3.12(typescript@7.0.2))
       rollup:
         specifier: ^4.59.0
         version: 4.63.1
@@ -11758,7 +11762,7 @@ snapshots:
 
   rgb2hex@0.2.5: {}
 
-  rolldown-plugin-dts@0.30.2(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(rolldown@rolldown+packages+rolldown)(tsrs@0.0.0)(typescript@6.0.3)(vue-tsc@3.3.12(typescript@6.0.3)):
+  rolldown-plugin-dts@0.30.2(patch_hash=b0dafbbff6f9bb67827607b7e4c93e79a1fcf6a587578d8f6a9f177d4b9b6f71)(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(rolldown@rolldown+packages+rolldown)(tsrs@0.0.0)(typescript@6.0.3)(vue-tsc@3.3.12(typescript@6.0.3)):
     dependencies:
       dts-resolver: 3.0.0(oxc-resolver@11.24.2)
       get-tsconfig: 5.0.0-beta.6
@@ -11775,7 +11779,7 @@ snapshots:
       - '@yuku-toolchain/wasm'
       - oxc-resolver
 
-  rolldown-plugin-dts@0.30.2(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(rolldown@rolldown+packages+rolldown)(tsrs@0.0.0)(typescript@7.0.2)(vue-tsc@3.3.12(typescript@7.0.2)):
+  rolldown-plugin-dts@0.30.2(patch_hash=b0dafbbff6f9bb67827607b7e4c93e79a1fcf6a587578d8f6a9f177d4b9b6f71)(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(rolldown@rolldown+packages+rolldown)(tsrs@0.0.0)(typescript@7.0.2)(vue-tsc@3.3.12(typescript@7.0.2)):
     dependencies:
       dts-resolver: 3.0.0(oxc-resolver@11.24.2)
       get-tsconfig: 5.0.0-beta.6
@@ -11792,7 +11796,7 @@ snapshots:
       - '@yuku-toolchain/wasm'
       - oxc-resolver
 
-  rolldown-plugin-dts@0.30.2(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(rolldown@rolldown+packages+rolldown)(tsrs@7.1.0-beta.tsrs5)(typescript@7.0.2)(vue-tsc@3.3.12(typescript@7.0.2)):
+  rolldown-plugin-dts@0.30.2(patch_hash=b0dafbbff6f9bb67827607b7e4c93e79a1fcf6a587578d8f6a9f177d4b9b6f71)(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(rolldown@rolldown+packages+rolldown)(tsrs@7.1.0-beta.tsrs5)(typescript@7.0.2)(vue-tsc@3.3.12(typescript@7.0.2)):
     dependencies:
       dts-resolver: 3.0.0(oxc-resolver@11.24.2)
       get-tsconfig: 5.0.0-beta.6
@@ -12282,7 +12286,7 @@ snapshots:
       obug: 3.0.0
       picomatch: 4.0.7
       rolldown: link:rolldown/packages/rolldown
-      rolldown-plugin-dts: 0.30.2(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(rolldown@rolldown+packages+rolldown)(tsrs@0.0.0)(typescript@7.0.2)(vue-tsc@3.3.12(typescript@7.0.2))
+      rolldown-plugin-dts: 0.30.2(patch_hash=b0dafbbff6f9bb67827607b7e4c93e79a1fcf6a587578d8f6a9f177d4b9b6f71)(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(rolldown@rolldown+packages+rolldown)(tsrs@0.0.0)(typescript@7.0.2)(vue-tsc@3.3.12(typescript@7.0.2))
       tinyexec: 1.3.1
       tinyglobby: 0.2.17
       tinyps: 0.5.1
@@ -12316,7 +12320,7 @@ snapshots:
       obug: 3.0.0
       picomatch: 4.0.7
       rolldown: link:rolldown/packages/rolldown
-      rolldown-plugin-dts: 0.30.2(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(rolldown@rolldown+packages+rolldown)(tsrs@7.1.0-beta.tsrs5)(typescript@7.0.2)(vue-tsc@3.3.12(typescript@7.0.2))
+      rolldown-plugin-dts: 0.30.2(patch_hash=b0dafbbff6f9bb67827607b7e4c93e79a1fcf6a587578d8f6a9f177d4b9b6f71)(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(rolldown@rolldown+packages+rolldown)(tsrs@7.1.0-beta.tsrs5)(typescript@7.0.2)(vue-tsc@3.3.12(typescript@7.0.2))
       tinyexec: 1.3.1
       tinyglobby: 0.2.17
       tinyps: 0.5.1

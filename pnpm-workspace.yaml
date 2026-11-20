@@ -182,6 +182,7 @@ packageExtensions:
 patchedDependencies:
   chokidar@3.6.0: vite/patches/chokidar@3.6.0.patch
   dotenv-expand@13.0.0: vite/patches/dotenv-expand@13.0.0.patch
+  rolldown-plugin-dts@0.30.2: patches/rolldown-plugin-dts@0.30.2.patch
   sirv@3.0.2: vite/patches/sirv@3.0.2.patch
 peerDependencyRules:
   allowAny:
