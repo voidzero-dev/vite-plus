@@ -35,8 +35,10 @@ pub(super) fn handle_cli_parse_error(
             <vt_workspace::package_filter::PackageQueryArgs as clap::Args>::augment_args(
                 clap::Command::new("run"),
             );
-        if let Some(corrected_args) = move_flags_after_command(args, "run", &run_flags) {
-            print_subcommand_suggestion(&format_command_args(chdir, &corrected_args));
+        if let Some(corrected_args) = move_flags_after_command(args, "run", &run_flags)
+            && let Some(suggestion) = format_command_args(chdir, &corrected_args)
+        {
+            print_subcommand_suggestion(&suggestion);
         }
         return Ok(ExitStatus(err.exit_code() as u8));
     }

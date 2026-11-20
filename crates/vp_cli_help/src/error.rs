@@ -111,22 +111,63 @@ pub fn move_flags_after_command(
     Some(corrected)
 }
 
-/// Joins `args` into a command line that a POSIX shell splits back into the same `args`.
+/// Joins `args` into a command line that the user's shell splits back into the same `args`.
 ///
 /// Users copy a suggested command, so values such as `hello world` or `@my/*` keep their quotes.
 /// `chdir` is the directory that `-C` selected, and the command starts with `-C <chdir>`.
 /// Callers pass an absolute path because a relative path can select a different directory
 /// from the shell that the user copies the command into.
-pub fn format_command_args(chdir: Option<&str>, args: &[String]) -> String {
+///
+/// Returns `None` when no text gives the same arguments, so callers show no suggestion.
+pub fn format_command_args(chdir: Option<&str>, args: &[String]) -> Option<String> {
+    let quote = if cfg!(windows) { quote_windows_arg } else { quote_posix_arg };
+    join_quoted_args(chdir, args, quote)
+}
+
+fn join_quoted_args(
+    chdir: Option<&str>,
+    args: &[String],
+    quote: fn(&str) -> Option<Cow<'_, str>>,
+) -> Option<String> {
     let chdir_args = chdir.into_iter().flat_map(|dir| ["-C", dir]);
     let mut command = String::new();
     for arg in chdir_args.chain(args.iter().map(String::as_str)) {
         if !command.is_empty() {
             command.push(' ');
         }
-        command.push_str(&shell_escape::unix::escape(Cow::Borrowed(arg)));
+        command.push_str(&quote(arg)?);
     }
-    command
+    Some(command)
+}
+
+fn quote_posix_arg(arg: &str) -> Option<Cow<'_, str>> {
+    Some(shell_escape::unix::escape(Cow::Borrowed(arg)))
+}
+
+/// Quotes `arg` for Command Prompt and PowerShell, which both read a value in double quotes as
+/// one argument. Command Prompt passes single quotes through, so POSIX quoting changes the value.
+fn quote_windows_arg(arg: &str) -> Option<Cow<'_, str>> {
+    // In double quotes, Command Prompt expands `%NAME%`, PowerShell expands `$name` and
+    // `` `n ``, and Windows PowerShell 5.1 drops an escaped `"`. No text works in both shells.
+    if arg.contains(['%', '$', '`', '"']) {
+        return None;
+    }
+    // PowerShell reads a leading `@` as splatting and `,` as an array, so they need quotes too.
+    let is_plain = |ch: char| {
+        ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '=' | '/' | '\\' | '.' | ':' | '+')
+    };
+    if !arg.is_empty() && arg.chars().all(is_plain) {
+        return Some(Cow::Borrowed(arg));
+    }
+
+    // Backslashes before the closing quote double, so they do not escape it.
+    let trailing_backslashes = arg.len() - arg.trim_end_matches('\\').len();
+    let mut quoted = String::with_capacity(arg.len() + trailing_backslashes + 2);
+    quoted.push('"');
+    quoted.push_str(arg);
+    quoted.extend(std::iter::repeat_n('\\', trailing_backslashes));
+    quoted.push('"');
+    Some(Cow::Owned(quoted))
 }
 
 pub fn print_unknown_argument_error(invalid_argument: &str, pass_as_value: bool) {
@@ -249,7 +290,7 @@ mod tests {
     }
 
     #[test]
-    fn command_args_keep_shell_quoting() {
+    fn command_args_keep_posix_quoting() {
         for (input, expected) in [
             (&["run", "--filter", "backend", "dev"][..], "run --filter backend dev"),
             (&["run", "--filter", "@my/*", "build"], "run --filter '@my/*' build"),
@@ -261,15 +302,56 @@ mod tests {
             (&["run", "dev", "--", "it's"], r"run dev -- 'it'\''s'"),
             (&["run", "dev", "--", ""], "run dev -- ''"),
         ] {
-            assert_eq!(format_command_args(None, &args(input)), expected, "{input:?}");
+            assert_eq!(
+                join_quoted_args(None, &args(input), quote_posix_arg).as_deref(),
+                Some(expected),
+                "{input:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn command_args_keep_windows_quoting() {
+        // Command Prompt and PowerShell both read these back as the original arguments.
+        for (input, expected) in [
+            (&["run", "--filter", "backend", "dev"][..], "run --filter backend dev"),
+            (&["run", "--filter", "@my/*", "build"], r#"run --filter "@my/*" build"#),
+            (&["run", "--filter", "!b", "build"], r#"run --filter "!b" build"#),
+            (&["run", "--filter", "a,b", "build"], r#"run --filter "a,b" build"#),
+            (
+                &["run", "dev", "--", "--message", "hello world"],
+                r#"run dev -- --message "hello world""#,
+            ),
+            (&["run", "dev", "--", r"C:\dir with space\"], r#"run dev -- "C:\dir with space\\""#),
+            (&["run", "dev", "--", r"C:\work\app"], r"run dev -- C:\work\app"),
+            (&["run", "dev", "--", ""], r#"run dev -- """#),
+        ] {
+            assert_eq!(
+                join_quoted_args(None, &args(input), quote_windows_arg).as_deref(),
+                Some(expected),
+                "{input:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn windows_values_that_no_quoting_keeps_have_no_suggestion() {
+        for value in ["%PATH%", "$HOME", "`n", r#"say "hi""#] {
+            let input = args(&["run", "dev", "--", value]);
+            assert_eq!(join_quoted_args(None, &input, quote_windows_arg), None, "{value}");
         }
     }
 
     #[test]
     fn command_args_start_with_the_selected_directory() {
+        let input = args(&["run", "-r", "build"]);
         assert_eq!(
-            format_command_args(Some("/work/other project"), &args(&["run", "-r", "build"])),
-            "-C '/work/other project' run -r build",
+            join_quoted_args(Some("/work/other project"), &input, quote_posix_arg).as_deref(),
+            Some("-C '/work/other project' run -r build"),
+        );
+        assert_eq!(
+            join_quoted_args(Some(r"C:\work\other project"), &input, quote_windows_arg).as_deref(),
+            Some(r#"-C "C:\work\other project" run -r build"#),
         );
     }
 

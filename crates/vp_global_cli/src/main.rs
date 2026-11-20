@@ -593,10 +593,9 @@ async fn run() -> ExitCode {
                     let chdir = explicit_chdir.then(|| cwd.as_path().to_string_lossy());
                     if let Some(corrected_raw_args) =
                         move_flags_after_command(&raw_args, "run", &run_flags)
-                        && prompt_to_run_suggested_command(&format_command_args(
-                            chdir.as_deref(),
-                            &corrected_raw_args,
-                        ))
+                        && let Some(suggestion) =
+                            format_command_args(chdir.as_deref(), &corrected_raw_args)
+                        && prompt_to_run_suggested_command(&suggestion)
                     {
                         run_corrected_args(&cwd, &corrected_raw_args, explicit_chdir).await
                     } else {
