@@ -617,9 +617,6 @@ importers:
       terser:
         specifier: ^5.16.0
         version: 5.51.2
-      tsrs:
-        specifier: '*'
-        version: 0.0.0
       tsx:
         specifier: ^4.8.1
         version: 4.23.15
@@ -660,9 +657,6 @@ importers:
       '@tsdown/exe':
         specifier: 'catalog:'
         version: 0.23.7(tsdown@0.23.7)
-      '@typescript/native-preview':
-        specifier: 'catalog:'
-        version: 7.0.0-dev.20260707.2
       '@vitejs/devtools':
         specifier: ^0.8.2
         version: 0.8.2(crossws@0.4.17(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core)
@@ -692,7 +686,7 @@ importers:
         version: link:../../rolldown/packages/rolldown
       rolldown-plugin-dts:
         specifier: 'catalog:'
-        version: 0.30.2(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(rolldown@rolldown+packages+rolldown)(tsrs@0.0.0)(typescript@7.0.2)(vue-tsc@3.3.12(typescript@7.0.2))
+        version: 0.30.2(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(rolldown@rolldown+packages+rolldown)(tsrs@7.1.0-beta.tsrs3)(typescript@7.0.2)(vue-tsc@3.3.12(typescript@7.0.2))
       rollup:
         specifier: 'catalog:'
         version: 4.63.1
@@ -710,7 +704,10 @@ importers:
         version: 1.2.2
       tsdown:
         specifier: 'catalog:'
-        version: 0.23.7(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.7)(@tsdown/exe@0.23.7)(@vitejs/devtools@0.8.2(crossws@0.4.17(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsrs@0.0.0)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2))
+        version: 0.23.7(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.7)(@tsdown/exe@0.23.7)(@vitejs/devtools@0.8.2(crossws@0.4.17(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsrs@7.1.0-beta.tsrs3)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2))
+      tsrs:
+        specifier: 'catalog:'
+        version: 7.1.0-beta.tsrs3
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -9085,6 +9082,24 @@ snapshots:
 
   '@tootallnate/quickjs-emscripten@0.23.0': {}
 
+  '@tsdown/css@0.23.7(jiti@2.7.0)(postcss-import@16.2.0(postcss@8.5.33))(postcss-modules@9.0.1(postcss@8.5.33))(postcss@8.5.33)(sass-embedded@1.108.2(source-map-js@1.2.2))(sass@1.108.2)(tsdown@0.23.7)(tsx@4.23.15)':
+    dependencies:
+      lightningcss: 1.33.0
+      postcss-load-config: 6.0.1(jiti@2.7.0)(postcss@8.5.33)(tsx@4.23.15)(yaml@2.9.1)
+      rolldown: link:rolldown/packages/rolldown
+      tsdown: 0.23.7(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.7)(@tsdown/exe@0.23.7)(@vitejs/devtools@0.8.2(crossws@0.4.17(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsrs@0.0.0)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2))
+    optionalDependencies:
+      postcss: 8.5.33
+      postcss-import: 16.2.0(postcss@8.5.33)
+      postcss-modules: 9.0.1(postcss@8.5.33)
+      sass: 1.108.2
+      sass-embedded: 1.108.2(source-map-js@1.2.2)
+    transitivePeerDependencies:
+      - jiti
+      - tsx
+      - yaml
+    optional: true
+
   '@tsdown/css@0.23.7(jiti@2.7.0)(postcss-import@16.2.0(postcss@8.5.33))(postcss-modules@9.0.1(postcss@8.5.33))(postcss@8.5.33)(sass-embedded@1.108.2(source-map-js@1.2.2))(sass@1.108.2)(tsdown@0.23.7)(tsx@4.23.15)(yaml@2.9.1)':
     dependencies:
       lightningcss: 1.33.0
@@ -12267,7 +12282,7 @@ snapshots:
       verkit: 0.5.0
     optionalDependencies:
       '@arethetypeswrong/core': 0.18.2
-      '@tsdown/css': 0.23.7(jiti@2.7.0)(postcss-import@16.2.0(postcss@8.5.33))(postcss-modules@9.0.1(postcss@8.5.33))(postcss@8.5.33)(sass-embedded@1.108.2(source-map-js@1.2.2))(sass@1.108.2)(tsdown@0.23.7)(tsx@4.23.15)(yaml@2.9.1)
+      '@tsdown/css': 0.23.7(jiti@2.7.0)(postcss-import@16.2.0(postcss@8.5.33))(postcss-modules@9.0.1(postcss@8.5.33))(postcss@8.5.33)(sass-embedded@1.108.2(source-map-js@1.2.2))(sass@1.108.2)(tsdown@0.23.7)(tsx@4.23.15)
       '@tsdown/exe': 0.23.7(tsdown@0.23.7)
       '@vitejs/devtools': 0.8.2(crossws@0.4.17(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core)
       publint: 0.3.24
@@ -12319,7 +12334,8 @@ snapshots:
 
   tslib@2.8.1: {}
 
-  tsrs@0.0.0: {}
+  tsrs@0.0.0:
+    optional: true
 
   tsrs@7.1.0-beta.tsrs3:
     optionalDependencies:
