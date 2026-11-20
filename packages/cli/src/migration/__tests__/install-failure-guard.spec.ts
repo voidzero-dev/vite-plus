@@ -177,6 +177,7 @@ describe('getMigrationInstallIdleTimeoutMs', () => {
     'checks the version selected by the global pnpm %s launcher',
     async (version, effectiveVersion, expected) => {
       vi.stubEnv('VP_CLI_BIN', '/global/vp');
+      vi.stubEnv('NODE_OPTIONS', '--require=/preload.cjs');
       vi.mocked(getPackageManagerOverride).mockReturnValue({ name: 'pnpm', version: 'default' });
       vi.mocked(runCommandSilently)
         .mockResolvedValueOnce(
@@ -202,12 +203,19 @@ describe('getMigrationInstallIdleTimeoutMs', () => {
           command: '/global/vp',
           args: ['env', 'current', 'pm', '--json'],
           cwd,
+          envs: expect.objectContaining({ NODE_OPTIONS: undefined }),
         }),
       );
       expect(runCommandSilently).toHaveBeenNthCalledWith(
         2,
-        expect.objectContaining({ command: overridePnpm.binPaths.pnpm, args: ['--version'], cwd }),
+        expect.objectContaining({
+          command: overridePnpm.binPaths.pnpm,
+          args: ['--version'],
+          cwd,
+          envs: expect.objectContaining({ NODE_OPTIONS: undefined }),
+        }),
       );
+      expect(process.env.NODE_OPTIONS).toBe('--require=/preload.cjs');
     },
   );
 

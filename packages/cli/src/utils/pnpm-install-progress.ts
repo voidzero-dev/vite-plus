@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 
+import { resolveNpmRegistry } from '../../binding/index.js';
 import { readJsonFile } from './json.ts';
 import { displayRelative } from './path.ts';
 import { formatDuration } from './terminal.ts';
@@ -71,6 +72,62 @@ function formatRequestRetry(log: Record<string, unknown>): string | undefined {
   const retriesLeft = maxRetries - attempt + 1;
   const retries = retriesLeft === 1 ? 'retry' : 'retries';
   return `${method} ${url} error${reason}. Will retry in ${formatDuration(timeout)}. ${retriesLeft} ${retries} left.`;
+}
+
+function appendPublishedVersions(messages: string[], packageMeta: unknown): void {
+  const { name, 'dist-tags': distTags, versions } = asRecord(packageMeta);
+  const tags = asRecord(distTags);
+  if (typeof name !== 'string') {
+    return;
+  }
+  if (typeof tags.latest === 'string') {
+    messages.push(`The latest release of ${name} is "${tags.latest}".`);
+  }
+  const otherTags = Object.entries(tags).flatMap(([tag, version]) =>
+    tag !== 'latest' && typeof version === 'string' ? [`  ${tag}: ${version}`] : [],
+  );
+  if (otherTags.length > 0) {
+    messages.push('Other release tags', ...otherTags);
+  }
+  const versionCount = Object.keys(asRecord(versions)).length;
+  if (versionCount > 0) {
+    messages.push(
+      `Run "pnpm view ${name} versions" to see all ${versionCount} published versions.`,
+    );
+  }
+}
+
+function displayRegistryUrl(value: string): string | undefined {
+  try {
+    const url = new URL(value);
+    if (url.protocol === 'http:' || url.protocol === 'https:') {
+      return `${url.origin}${url.pathname}`;
+    }
+  } catch {
+    // pnpm may fail before a usable registry URL is available.
+  }
+  return undefined;
+}
+
+function appendRegistryAuthContext(
+  messages: string[],
+  log: Record<string, unknown>,
+  cwd: string,
+): void {
+  const scope = typeof log.pkgName === 'string' ? /^@([^/]+)\//.exec(log.pkgName)?.[1] : undefined;
+  try {
+    const registry = resolveNpmRegistry(cwd, scope);
+    const displayUrl = displayRegistryUrl(registry);
+    if (displayUrl) {
+      const key = scope && registry !== resolveNpmRegistry(cwd) ? `@${scope}:registry` : 'registry';
+      messages.push(`${key}=${displayUrl}`);
+    }
+  } catch {
+    // Keep the original failure and the guidance if the config cannot be read.
+  }
+  messages.push(
+    'Check the registry and authentication settings in .npmrc. Run "pnpm login" if you need to sign in.',
+  );
 }
 
 function appendDependencyContext(messages: string[], log: Record<string, unknown>): void {
@@ -150,6 +207,7 @@ export async function formatPnpmInstallOutput(output: string, cwd: string): Prom
       if (typeof message === 'string') {
         const errorCode = log.code ?? error.code;
         const code = typeof errorCode === 'string' ? errorCode : '';
+        const authFailure = code === 'ERR_PNPM_FETCH_401' || code === 'ERR_PNPM_FETCH_403';
         const details =
           log.level === 'error' &&
           typeof error.stack === 'string' &&
@@ -157,7 +215,12 @@ export async function formatPnpmInstallOutput(output: string, cwd: string): Prom
           code !== 'ELIFECYCLE'
             ? error.stack
             : message;
-        messages.push(code ? `${code} ${details}` : details);
+        const requestUrl = asRecord(log.request).url;
+        const displayed =
+          authFailure && typeof requestUrl === 'string' && requestUrl.length > 0
+            ? details.replaceAll(requestUrl, displayRegistryUrl(requestUrl) ?? '[registry URL]')
+            : details;
+        messages.push(code ? `${code} ${displayed}` : displayed);
         if (log.level === 'error') {
           appendDependencyContext(messages, log);
         }
@@ -167,8 +230,19 @@ export async function formatPnpmInstallOutput(output: string, cwd: string): Prom
             messages.push(details);
           }
         }
+        if (code === 'ERR_PNPM_NO_MATCHING_VERSION') {
+          appendPublishedVersions(messages, log.packageMeta);
+        }
         if (typeof log.hint === 'string') {
-          messages.push(log.hint);
+          messages.push(
+            log.hint.replace(
+              /^An authorization header was used:.*$/m,
+              'An authorization header was used: [hidden]',
+            ),
+          );
+        }
+        if (authFailure) {
+          appendRegistryAuthContext(messages, log, cwd);
         }
       }
     }

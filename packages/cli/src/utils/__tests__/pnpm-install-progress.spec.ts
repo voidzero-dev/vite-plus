@@ -123,6 +123,63 @@ describe('formatPnpmInstallOutput', () => {
     );
   });
 
+  it('shows the published versions and tags when a requested version is missing', async () => {
+    const output = JSON.stringify({
+      name: 'pnpm',
+      level: 'error',
+      code: 'ERR_PNPM_NO_MATCHING_VERSION',
+      err: { message: 'No matching version found for @scope/package@999.0.0' },
+      packageMeta: {
+        name: '@scope/package',
+        'dist-tags': { latest: '1.2.3', next: '2.0.0-beta.1' },
+        versions: { '1.2.3': {}, '2.0.0-beta.1': {} },
+      },
+    });
+
+    expect(await formatPnpmInstallOutput(output, '/project')).toBe(
+      [
+        'ERR_PNPM_NO_MATCHING_VERSION No matching version found for @scope/package@999.0.0',
+        'The latest release of @scope/package is "1.2.3".',
+        'Other release tags',
+        '  next: 2.0.0-beta.1',
+        'Run "pnpm view @scope/package versions" to see all 2 published versions.',
+      ].join('\n'),
+    );
+  });
+
+  it.each([401, 403])('shows safe registry configuration for HTTP %s', async (status) => {
+    const cwd = mkdtempSync(join(tmpdir(), 'vp-pnpm-auth-context-'));
+    try {
+      const registry = 'https://fixture-user:fixture-password@registry.example.com/team/';
+      const url = `${registry}@vp-pnpm-auth%2Fpackage?token=fixture-query`;
+      writeFileSync(join(cwd, 'package.json'), '{"name":"fixture"}');
+      writeFileSync(
+        join(cwd, '.npmrc'),
+        `@vp-pnpm-auth:registry=${registry}?token=fixture-config\n`,
+      );
+      const output = JSON.stringify({
+        name: 'pnpm',
+        level: 'error',
+        code: `ERR_PNPM_FETCH_${status}`,
+        err: { message: `GET ${url}: Registry refused access` },
+        pkgName: '@vp-pnpm-auth/package',
+        request: { url },
+        hint: 'An authorization header was used: Bearer fixture-auth[hidden]',
+      });
+      const formatted = await formatPnpmInstallOutput(output, cwd);
+
+      expect(formatted).toContain(
+        `ERR_PNPM_FETCH_${status} GET https://registry.example.com/team/@vp-pnpm-auth%2Fpackage`,
+      );
+      expect(formatted).toContain('@vp-pnpm-auth:registry=https://registry.example.com/team/');
+      expect(formatted).toContain('An authorization header was used: [hidden]');
+      expect(formatted).toContain('authentication settings in .npmrc');
+      expect(formatted).not.toMatch(/fixture-(user|password|query|config|auth)/);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
   it('preserves the source location for unexpected errors from package hooks', async () => {
     const stack =
       "pnpm: Cannot read properties of undefined (reading 'name')\n" +
