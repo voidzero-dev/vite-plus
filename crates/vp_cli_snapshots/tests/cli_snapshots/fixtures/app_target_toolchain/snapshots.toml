@@ -7,6 +7,7 @@ steps = [
   { argv = ["vpt", "write-file", "app/node_modules/vite-plus/package.json", '{"name":"vite-plus","version":"0.0.0","type":"module"}'], snapshot = false },
   { argv = ["vpt", "cp", "probe.mjs", "app/node_modules/vite-plus/dist/bin.js"], snapshot = false },
   ["vp", "build"],
+  ["vp", "build", "--"],
   ["vp", "-C", "app", "build"],
 ]
 

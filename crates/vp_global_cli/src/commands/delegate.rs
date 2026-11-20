@@ -29,7 +29,10 @@ pub async fn execute_app(
     raw_subcommand: Option<&str>,
     explicit_chdir: bool,
 ) -> Result<ExitStatus, Error> {
-    let resolve_target = !explicit_chdir && args.is_empty();
+    // Build and dev forward a lone separator, but it does not select an entry.
+    let bare_command = args.is_empty()
+        || (matches!(command, "build" | "dev") && matches!(args, [separator] if separator == "--"));
+    let resolve_target = !explicit_chdir && bare_command;
     let (cwd, raw_subcommand) = if resolve_target {
         script_note::print(raw_subcommand.or(Some(command)), &cwd);
         let (target, _) = vp_app_target::resolve_app_target(command, &cwd)

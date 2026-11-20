@@ -22,6 +22,17 @@ Process Node.js: <version>
 PATH Node.js: <version>
 ```
 
+## `vp build --`
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+note: vp build: using ./app (defaultPackage in vite.config.ts)
+Vite+ <version>: build -- in app
+Process Node.js: <version>
+PATH Node.js: <version>
+```
+
 ## `vp -C app build`
 
 ```
