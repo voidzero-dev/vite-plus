@@ -757,6 +757,8 @@ async function mergePackageJson() {
   // and its declarations import their types, so isolated installs need them
   // declared here.
   destPkg.peerDependencies = {
+    // The patched tsgo generator also supports projects that use the native preview CLI.
+    '@typescript/native-preview': '*',
     ...dtsPkg.peerDependencies,
     ...tsdownPkg.peerDependencies,
     ...vitePkg.peerDependencies,
@@ -764,6 +766,7 @@ async function mergePackageJson() {
 
   // Merge peerDependenciesMeta from rolldown-plugin-dts, tsdown and vite
   destPkg.peerDependenciesMeta = {
+    '@typescript/native-preview': { optional: true },
     ...dtsPkg.peerDependenciesMeta,
     ...tsdownPkg.peerDependenciesMeta,
     ...vitePkg.peerDependenciesMeta,

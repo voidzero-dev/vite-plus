@@ -1,1 +1,4 @@
 * text=auto eol=lf
+
+# A unified diff adds a space before unchanged, tab-indented source lines.
+patches/*.patch whitespace=-space-before-tab

@@ -1,0 +1,76 @@
+diff --git a/dist/index.mjs b/dist/index.mjs
+index f086bb2..9392720 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -294,15 +294,17 @@ const spawnAsync = (...args) => new Promise((resolve, reject) => {
+ 	});
+ 	child.on("error", (error) => reject(error));
+ });
+-let tsgoPathCache;
+-function resolveTsgoPath(logger) {
+-	if (tsgoPathCache) return tsgoPathCache;
+-	const pkgJsonPath = tryResolve("typescript/package.json");
++const tsgoPathCache = new Map();
++function resolveTsgoPath(logger, name) {
++	if (tsgoPathCache.has(name)) return tsgoPathCache.get(name);
++	const pkgJsonPath = tryResolve(`${name}/package.json`);
+ 	if (!pkgJsonPath) throw new Error("TypeScript Go is not installed. Please install the `typescript@7.0` package to use the `tsgo` generator.");
+ 	const { version } = require(pkgJsonPath);
+-	logger.info(`Emit types with ${styleText("underline", `typescript@${version}`)}`);
++	logger.info(`Emit types with ${styleText("underline", `${name}@${version}`)}`);
+ 	const getExePath = require(path.join(path.dirname(pkgJsonPath), "lib/getExePath.js"));
+-	return tsgoPathCache = (typeof getExePath === "function" ? getExePath : getExePath.default)();
++	const exePath = (typeof getExePath === "function" ? getExePath : getExePath.default)();
++	tsgoPathCache.set(name, exePath);
++	return exePath;
+ }
+ var TsgoCliGenerator = class {
+ 	options;
+@@ -595,10 +597,10 @@ function mapError(error, tsFileName, fileName) {
+ 	return String(error).replaceAll(tsFileName, fileName);
+ }
+ // src/generator/index.ts
+-function createGenerator({ generator, tsconfig, tsconfigRaw, cwd, oxc, languageContext, tsc, tsgo, tsrs, sourcemap, typecheck }, getEntries, loadSource) {
++function createGenerator({ generator, legacyTsgo, tsconfig, tsconfigRaw, cwd, oxc, languageContext, tsc, tsgo, tsrs, sourcemap, typecheck }, getEntries, loadSource) {
+ 	if (typeof generator !== "string") return generator;
+ 	if (generator === "oxc") return new OxcGenerator(oxc, languageContext);
+-	if (generator === "tsgo" && isLegacyTsgo(tsgo.moduleUrl)) return new TsgoCliGenerator({
++	if (legacyTsgo) return new TsgoCliGenerator({
+ 		tsgoPath: tsgo.path,
+ 		tsconfig,
+ 		sourcemap,
+@@ -1972,6 +1974,8 @@ function resolveOptions({ generator, entry, cwd = process.cwd(), dtsOnly = false
+ 	oxc ||= {};
+ 	tsgo ||= {};
+ 	const defaultTsgoModuleUrl = getDefaultTsgoModuleUrl();
++	// Existing projects can explicitly select the preview CLI alongside classic TypeScript.
++	const previewTsgo = generator === "tsgo" && tsgo.moduleUrl == null && Number.parseInt(getPackageInfo("typescript")?.version ?? "0", 10) < 7 && getPackageInfo("@typescript/native-preview");
+ 	tsgo.moduleUrl ??= defaultTsgoModuleUrl;
+ 	tsgo.vfs ??= false;
+ 	tsrs ||= {};
+@@ -1988,7 +1992,7 @@ function resolveOptions({ generator, entry, cwd = process.cwd(), dtsOnly = false
+ 	if (typecheck && generator === "oxc") throw new Error("The `typecheck` option is not supported by the `oxc` generator. Use `generator: 'tsc'` or `generator: 'tsgo'` instead.");
+ 	if (generator === "tsc" && tscOptions.parallel && hasCustomLanguages) throw new Error("The `tsc.parallel` option does not support `customLanguages`. Disable `tsc.parallel` or use the built-in `tsc.vue` option for Vue.");
+ 	if (isUsingVolar) requireTSApi(vueOptions ? "Vue" : "custom languages", vueOptions ? "." : ". Custom languages require the TypeScript API.");
+-	const legacyTsgo = generator === "tsgo" && isLegacyTsgo(tsgo.moduleUrl);
++	const legacyTsgo = generator === "tsgo" && (previewTsgo || isLegacyTsgo(tsgo.moduleUrl));
+ 	if (legacyTsgo && customLanguages.length) throw new Error("The `tsgo` generator on TypeScript 7.0 does not support custom languages. Upgrade to TypeScript >=7.1, enable `isolatedDeclarations` or set `generator: 'oxc'` to use Oxc instead, or install TypeScript 6.0 or below.");
+ 	const native = generator === "tsgo" ? tsgo : generator === "tsrs" ? tsrs : void 0;
+ 	if (customLanguages.length && !isUsingVolar && native && !native.vfs) throw new Error(`The \`${generator}\` generator requires \`${generator}.vfs: true\` to process custom languages. Enable VFS, use \`generator: 'oxc'\`, or use a compatible \`tsc\` installation.`);
+@@ -2001,7 +2005,7 @@ function resolveOptions({ generator, entry, cwd = process.cwd(), dtsOnly = false
+ 			warnedNative.add(compiler);
+ 			logger.warn(compiler === "tsrs" ? "tsrs support is highly experimental and may change or break without notice. Some options will be unavailable." : "TypeScript Go is experimental. Some options will be unavailable.");
+ 		}
+-		if (legacyTsgo) tsgo.path ??= resolveTsgoPath(logger);
++		if (legacyTsgo) tsgo.path ??= resolveTsgoPath(logger, previewTsgo ? "@typescript/native-preview" : "typescript");
+ 		else {
+ 			loadTsgoApi(native.moduleUrl, logger, compiler);
+ 			const contentMappers = resolvedTsconfig?.contentMappers;
+@@ -2019,6 +2023,7 @@ function resolveOptions({ generator, entry, cwd = process.cwd(), dtsOnly = false
+ 	emitJs ??= !!(compilerOptions.checkJs || compilerOptions.allowJs);
+ 	const resolved = {
+ 		generator,
++		legacyTsgo,
+ 		entry: entry ? Array.isArray(entry) ? entry : [entry] : void 0,
+ 		cwd,
+ 		dtsOnly,
