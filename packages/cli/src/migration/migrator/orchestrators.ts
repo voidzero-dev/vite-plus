@@ -702,7 +702,11 @@ export function rewriteMonorepoProject(
       workspaceContext?.retainedImportDependencies?.browser.get(projectPath),
       keepTsdown,
       keepTsdownDependency,
-      configNeedsVitePlus(projectPath, keepTsdownDependency, { wrapPlugins: true }),
+      configNeedsVitePlus(projectPath, keepTsdownDependency, {
+        wrapPlugins: true,
+        preserveVitestConfig:
+          pkg.dependencies?.vitest !== undefined || pkg.peerDependencies?.vitest !== undefined,
+      }),
     );
     if (
       extractedStagedConfig &&

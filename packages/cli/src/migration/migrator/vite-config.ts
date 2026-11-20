@@ -615,7 +615,7 @@ function configImports(program: Program) {
 export function configNeedsVitePlus(
   projectPath: string,
   keepTsdownDependency: boolean,
-  options?: { wrapPlugins?: boolean },
+  options?: { wrapPlugins?: boolean; preserveVitestConfig?: boolean },
 ): boolean {
   const { viteConfig, tsdownConfig } = detectConfigs(projectPath);
   if (!viteConfig || (!tsdownConfig && !keepTsdownDependency)) {
@@ -645,6 +645,7 @@ export function configNeedsVitePlus(
       keepTsdownDependency &&
       (importsVitePlus ||
         specifiers.some((specifier) => specifier === 'vite' || specifier.startsWith('vite/')) ||
+        (!options?.preserveVitestConfig && specifiers.includes('vitest/config')) ||
         (options?.wrapPlugins && wrapLazyPlugins(vitePath).updated))
     ) {
       return true;
@@ -696,32 +697,40 @@ function objectAssignTarget(node: Node): Node | undefined {
   return undefined;
 }
 
-const staticPackOverrides = new Set(['entry', 'format', 'minify', 'name', 'outDir', 'sourcemap']);
+const stablePackOptions = new Set(['entry', 'format', 'minify', 'name', 'outDir', 'sourcemap']);
+const packArrayMethods = new Set(['map', 'filter']);
 
-function isStaticPackMapping(callback: Node | undefined): boolean {
+function packCallbackResult(callback: Node | undefined) {
   if (
     (callback?.type !== 'ArrowFunctionExpression' && callback?.type !== 'FunctionExpression') ||
     callback.async ||
     callback.generator ||
-    callback.params.length !== 1 ||
-    callback.params[0].type !== 'Identifier'
+    callback.params.length > 2
   ) {
-    return false;
+    return undefined;
   }
-  const parameter = callback.params[0].name;
+  const [parameter, index] = callback.params;
+  if (parameter?.type !== 'Identifier' || (index && index.type !== 'Identifier')) {
+    return undefined;
+  }
   let result = callback.body;
   if (result?.type === 'BlockStatement') {
     const [statement] = result.body;
     result =
       result.body.length === 1 && statement.type === 'ReturnStatement' ? statement.argument : null;
   }
-  const value = result && unwrapTypeExpression(result);
-  if (value?.type === 'Identifier') {
+  return result
+    ? { value: unwrapTypeExpression(result), parameter: parameter.name, index: index?.name }
+    : undefined;
+}
+
+function isStaticPackMapping(value: Node, parameter: string): boolean {
+  if (value.type === 'Identifier') {
     return value.name === parameter;
   }
   // Read only the complete object and override options that require no migration.
   return (
-    value?.type === 'ObjectExpression' &&
+    value.type === 'ObjectExpression' &&
     sharedPackSpread(value)?.name === parameter &&
     value.properties.every((member) => {
       if (member.type === 'SpreadElement') {
@@ -730,9 +739,43 @@ function isStaticPackMapping(callback: Node | undefined): boolean {
       const name = propertyName(member.key);
       return name === 'dts'
         ? member.value.type === 'Literal' && member.value.value === false
-        : name !== undefined && staticPackOverrides.has(name);
+        : name !== undefined && stablePackOptions.has(name);
     })
   );
+}
+
+function isStaticPackFilter(node: Node, parameter: string, index?: string): boolean {
+  const value = unwrapTypeExpression(node);
+  switch (value.type) {
+    case 'Literal':
+      return sameStaticValue(value, value);
+    case 'Identifier':
+      return value.name === index;
+    case 'MemberExpression': {
+      const name = memberName(value);
+      return (
+        value.object.type === 'Identifier' &&
+        value.object.name === parameter &&
+        name !== undefined &&
+        stablePackOptions.has(name)
+      );
+    }
+    case 'UnaryExpression':
+      return value.operator === '!' && isStaticPackFilter(value.argument, parameter, index);
+    case 'BinaryExpression':
+      return (
+        (value.operator === '===' || value.operator === '!==') &&
+        isStaticPackFilter(value.left, parameter, index) &&
+        isStaticPackFilter(value.right, parameter, index)
+      );
+    case 'LogicalExpression':
+      return (
+        isStaticPackFilter(value.left, parameter, index) &&
+        isStaticPackFilter(value.right, parameter, index)
+      );
+    default:
+      return false;
+  }
 }
 
 function packValueReferences(node: Node, mapping?: PackMapping): PackReference[] {
@@ -767,14 +810,23 @@ function packValueReferences(node: Node, mapping?: PackMapping): PackReference[]
         return packValueReferences(target, mapping);
       }
       const { callee } = value;
-      if (callee.type !== 'MemberExpression' || memberName(callee) !== 'map') {
+      const method = memberName(callee);
+      if (callee.type !== 'MemberExpression' || !method || !packArrayMethods.has(method)) {
         return [];
       }
       const receiver = unwrapTypeExpression(callee.object);
+      const callback =
+        value.arguments.length === 1 ? packCallbackResult(value.arguments[0]) : undefined;
+      const knownReceiver =
+        receiver.type === 'Identifier' ||
+        (receiver.type === 'CallExpression' &&
+          packArrayMethods.has(memberName(receiver.callee) ?? ''));
       const staticMapping =
-        receiver.type === 'Identifier' &&
-        value.arguments.length === 1 &&
-        isStaticPackMapping(value.arguments[0]);
+        knownReceiver &&
+        callback &&
+        (method === 'map'
+          ? isStaticPackMapping(callback.value, callback.parameter)
+          : isStaticPackFilter(callback.value, callback.parameter, callback.index));
       return packValueReferences(receiver, staticMapping ? (mapping ?? 'static') : 'unverified');
     }
     case 'ObjectExpression':
@@ -961,13 +1013,12 @@ function aliasBindingStarts(binding: Node): number[] {
   }
 }
 
-function callbackExpressions(node: FunctionNode | ArrowFunctionExpression) {
-  const body = node.body;
+function mutationExpressions(body: Node | null) {
   return body?.type === 'BlockStatement'
     ? body.body.map((statement) =>
         statement.type === 'ExpressionStatement' ? statement.expression : undefined,
       )
-    : [body];
+    : [body?.type === 'ExpressionStatement' ? body.expression : body];
 }
 
 function entryMutationHelper(node: FunctionNode | ArrowFunctionExpression) {
@@ -983,7 +1034,7 @@ function entryMutationHelper(node: FunctionNode | ArrowFunctionExpression) {
   if (type && typeReference === undefined) {
     return undefined;
   }
-  const expressions = callbackExpressions(node);
+  const expressions = mutationExpressions(node.body);
   if (
     expressions.length > 0 &&
     expressions.every((expression) => {
@@ -1009,19 +1060,16 @@ function entryMutationHelper(node: FunctionNode | ArrowFunctionExpression) {
 }
 
 function setsPackArrayOutput(
-  callback: FunctionNode | ArrowFunctionExpression,
+  options: Node,
+  body: Node | null,
   bindings: ReturnType<typeof parseSource>['bindings'],
 ): boolean {
-  if (callback.async || callback.generator) {
-    return false;
-  }
-  const [options] = callback.params;
-  if (options?.type !== 'Identifier' || options.typeAnnotation || callback.params.length > 2) {
+  if (options.type !== 'Identifier' || options.typeAnnotation) {
     return false;
   }
   const binding = bindings.find(({ start }) => start === options.start);
-  const expressions = callbackExpressions(callback);
-  // The callback can compute the directory normally. Only the assignment may
+  const expressions = mutationExpressions(body);
+  // The body can compute the directory normally. Only the assignment may
   // use the options object, so it cannot read a renamed option in the copy.
   const references = new Set(binding?.references);
   return (
@@ -1042,7 +1090,7 @@ function setsPackArrayOutput(
 function packMutationReferences({ program, bindings }: ReturnType<typeof parseSource>) {
   const writes = new Set<number>();
   const aliasInitializers = new Map<number, number>();
-  const callbackOrigins = new Map<number, number>();
+  const arrayOrigins = new Map<number, number>();
   const helpers = new Map<number, NonNullable<ReturnType<typeof entryMutationHelper>>>();
   const calls = new Map<number, number>();
   const rewritable = new Map<number, { typeReference?: number; array?: boolean }>();
@@ -1050,6 +1098,11 @@ function packMutationReferences({ program, bindings }: ReturnType<typeof parseSo
     const helper = entryMutationHelper(node);
     if (helper) {
       helpers.set(start, helper);
+    }
+  };
+  const recordArrayBinding = (element: Node, array: PackIdentifier) => {
+    for (const start of aliasBindingStarts(element)) {
+      arrayOrigins.set(start, array.start);
     }
   };
   for (const node of configNodes(program)) {
@@ -1060,6 +1113,22 @@ function packMutationReferences({ program, bindings }: ReturnType<typeof parseSo
           recordHelper(node.id.start, node);
         }
         continue;
+      case 'ForOfStatement': {
+        const array = unwrapTypeExpression(node.right);
+        if (array.type !== 'Identifier') {
+          continue;
+        }
+        if (node.left.type !== 'VariableDeclaration') {
+          writes.add(array.start);
+          continue;
+        }
+        const { id } = node.left.declarations[0];
+        recordArrayBinding(id, array);
+        if (!node.await && setsPackArrayOutput(id, node.body, bindings)) {
+          rewritable.set(array.start, { array: true });
+        }
+        continue;
+      }
       case 'VariableDeclaration':
         if (node.kind === 'const') {
           for (const { id, init } of node.declarations) {
@@ -1108,12 +1177,16 @@ function packMutationReferences({ program, bindings }: ReturnType<typeof parseSo
               // the original array. A callback that only reads can stay split.
               for (const parameter of [element, array]) {
                 if (parameter) {
-                  for (const start of aliasBindingStarts(parameter)) {
-                    callbackOrigins.set(start, object.start);
-                  }
+                  recordArrayBinding(parameter, object);
                 }
               }
-              if (setsPackArrayOutput(callback, bindings)) {
+              if (
+                element &&
+                callback.params.length <= 2 &&
+                !callback.async &&
+                !callback.generator &&
+                setsPackArrayOutput(element, callback.body, bindings)
+              ) {
                 rewritable.set(object.start, { array: true });
               }
             } else {
@@ -1165,8 +1238,7 @@ function packMutationReferences({ program, bindings }: ReturnType<typeof parseSo
     if (constant && helper && argument !== undefined) {
       rewritable.set(argument, helper);
     }
-    const origin =
-      (constant ? aliasInitializers.get(start) : undefined) ?? callbackOrigins.get(start);
+    const origin = (constant ? aliasInitializers.get(start) : undefined) ?? arrayOrigins.get(start);
     if (origin !== undefined) {
       for (const reference of references) {
         origins.set(reference, origin);
