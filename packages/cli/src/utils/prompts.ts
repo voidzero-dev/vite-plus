@@ -147,6 +147,8 @@ export async function runViteInstall(
     idleTimeoutMs?: number;
     /** The pnpm actually running the install, for the resolution watchdog. */
     effectivePnpmVersion?: string;
+    /** Path to the pnpm launcher selected for the migration install. */
+    pnpmExecutable?: string;
     /** Report timeouts as part of the best-effort first migration install. */
     initialInstall?: boolean;
     /** Keep creation's resolved version when installation runs in the generated project. */
@@ -202,16 +204,20 @@ export async function runViteInstall(
   const legacyReporter =
     watchedVersion?.major === 9 && !isGreaterThanOrEqual(watchedVersion, '9.15.8');
   const reporting =
-    watchedVersion?.major === 9 ? await getPnpmInstallReporting(cwd, envs) : undefined;
+    watchedVersion?.major === 9 && options?.pnpmExecutable
+      ? await getPnpmInstallReporting(cwd, options.pnpmExecutable, envs)
+      : undefined;
+  const reporterUnknown = watchedVersion?.major === 9 && reporting === undefined;
   const originalMode = reporting?.mode;
   // pnpm < 9.15.8 waits for other scripts and exits 1 in silent, JSON and
   // parseable modes. Its NDJSON reporter kills the scripts and can change the
   // exit status. Keep the native reporter when it cannot expose resolution events.
   const keepLegacyReporter =
-    legacyReporter &&
-    (originalMode === undefined || originalMode === 'silent' || originalMode === 'json');
+    legacyReporter && (originalMode === 'silent' || originalMode === 'json');
   const idleTimeoutMs =
-    reporting?.useNativeReporter || keepLegacyReporter ? undefined : options?.idleTimeoutMs;
+    reporterUnknown || reporting?.useNativeReporter || keepLegacyReporter
+      ? undefined
+      : options?.idleTimeoutMs;
   const shouldWatchIdle = idleTimeoutMs === undefined ? undefined : watchPnpmResolution();
   if (idleTimeoutMs !== undefined) {
     // pnpm 9 normalizes these keys for the installer but skips underscore-prefixed
@@ -262,7 +268,7 @@ export async function runViteInstall(
     const output = shouldWatchIdle
       ? await formatPnpmInstallOutput(installOutput, cwd, mode)
       : installOutput;
-    if (mode === 'json' || mode === 'ndjson') {
+    if (reporterUnknown || mode === 'json' || mode === 'ndjson') {
       // The prompt logger wraps long lines, including JSON strings.
       if (output) {
         process.stdout.write(output.endsWith('\n') ? output : `${output}\n`);

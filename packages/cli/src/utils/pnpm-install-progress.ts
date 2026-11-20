@@ -3,7 +3,7 @@ import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 import { resolveNpmRegistry } from '../../binding/index.js';
-import { getVpCommand, runCommandSilently } from './command.ts';
+import { runCommandSilently } from './command.ts';
 import { readJsonFile } from './json.ts';
 import { displayRelative } from './path.ts';
 import { formatDuration } from './terminal.ts';
@@ -39,52 +39,61 @@ function parsePnpmLog(line: string): PnpmLog | undefined {
 
 export function pnpmProbeEnv(envs: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   // The project hooks and preloads belong to the install.
-  return { ...envs, NODE_OPTIONS: undefined, npm_config_ignore_pnpmfile: 'true' };
+  return {
+    ...envs,
+    NODE_OPTIONS: undefined,
+    NPM_CONFIG_IGNORE_PNPMFILE: undefined,
+    npm_config_ignore_pnpmfile: 'true',
+  };
 }
 
 type PnpmInstallOutputMode = 'debug' | 'info' | 'warn' | 'error' | 'silent' | 'json' | 'ndjson';
 
+function isPnpmConfigEnabled(value: unknown): boolean {
+  return value === true || value === 'true';
+}
+
 export async function getPnpmInstallReporting(
   cwd: string,
+  pnpmExecutable: string,
   envs: NodeJS.ProcessEnv,
-): Promise<{ mode: PnpmInstallOutputMode | undefined; useNativeReporter: boolean }> {
-  const readConfig = async (args: string[], env: NodeJS.ProcessEnv) => {
-    try {
-      const { exitCode, stdout } = await runCommandSilently({
-        ...getVpCommand(args),
-        cwd,
-        envs: env,
-        idleTimeoutMs: 5000,
-      });
-      if (exitCode === 0) {
-        return stdout.toString().trim().split(/\r?\n/).at(-1);
-      }
-    } catch {
-      // Replay the normal diagnostics if the setting cannot be read.
+): Promise<{ mode: PnpmInstallOutputMode; useNativeReporter: boolean } | undefined> {
+  let config: Record<string, unknown>;
+  try {
+    const { exitCode, stdout } = await runCommandSilently({
+      // Use the selected pnpm directly to avoid another launcher version check.
+      // The overrides change the query without replacing the configured values.
+      command: pnpmExecutable,
+      args: [
+        'config',
+        'list',
+        '--location',
+        'project',
+        '--config._json=true',
+        '--config._ignore-pnpmfile=true',
+      ],
+      cwd,
+      envs: { ...envs, NODE_OPTIONS: undefined },
+      timeoutMs: 5000,
+    });
+    if (exitCode !== 0) {
+      return undefined;
     }
+    const parsed: unknown = JSON.parse(stdout.toString());
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return undefined;
+    }
+    config = parsed as Record<string, unknown>;
+  } catch {
     return undefined;
-  };
-  const probeEnv = pnpmProbeEnv(envs);
-  const [reporter, loglevel, json, parseable, pnpmfile, globalPnpmfile, lockfileDir] =
-    await Promise.all(
-      [
-        'reporter',
-        'loglevel',
-        'json',
-        'parseable',
-        'pnpmfile',
-        'global-pnpmfile',
-        'lockfile-dir',
-      ].map((key) => readConfig(['pm', 'config', 'get', key, '--location', 'project'], probeEnv)),
-    );
-  if (json === 'true' || parseable === 'true') {
+  }
+
+  const { reporter, loglevel, json, parseable, pnpmfile } = config;
+  if (isPnpmConfigEnabled(json) || isPnpmConfigEnabled(parseable)) {
     return { mode: 'json', useNativeReporter: false };
   }
   if (reporter === 'silent' || loglevel === 'silent') {
     return { mode: 'silent', useNativeReporter: false };
-  }
-  if ([reporter, loglevel, json, parseable].includes(undefined)) {
-    return { mode: undefined, useNativeReporter: false };
   }
   if (reporter === 'ndjson') {
     return { mode: 'ndjson', useNativeReporter: false };
@@ -92,36 +101,19 @@ export async function getPnpmInstallReporting(
 
   // pnpm runs filterLog inside its human reporters. Let pnpm own the output
   // when a configured file can supply a filter, with no extra hook execution.
-  const directory = resolve(cwd, lockfileDir && lockfileDir !== 'undefined' ? lockfileDir : '.');
-  const localFile = pnpmfile && pnpmfile !== 'undefined' ? pnpmfile : '.pnpmfile.cjs';
-  const globalFile =
-    globalPnpmfile && globalPnpmfile !== 'undefined'
-      ? globalPnpmfile.replace(/^~[/\\]/, `${homedir()}/`)
-      : undefined;
-  const hasPnpmfile =
-    existsSync(resolve(directory, localFile)) ||
-    (globalFile !== undefined && existsSync(resolve(directory, globalFile)));
-  // The config override skips the hook without replacing the raw setting.
-  // `vp exec` forwards the flag to pnpm's config command.
-  const ignorePnpmfile = hasPnpmfile
-    ? await readConfig(
-        [
-          'exec',
-          '--',
-          'pnpm',
-          'config',
-          'get',
-          'ignore-pnpmfile',
-          '--location',
-          'project',
-          '--config._ignore-pnpmfile=true',
-        ],
-        { ...envs, NODE_OPTIONS: undefined },
-      )
-    : undefined;
+  const lockfileDir = config['lockfile-dir'];
+  const globalPnpmfile = config['global-pnpmfile'];
+  const directory = resolve(cwd, typeof lockfileDir === 'string' ? lockfileDir : '.');
+  const localFile = typeof pnpmfile === 'string' && pnpmfile ? pnpmfile : '.pnpmfile.cjs';
+  const useNativeReporter =
+    !isPnpmConfigEnabled(config['ignore-pnpmfile']) &&
+    (existsSync(resolve(directory, localFile)) ||
+      (typeof globalPnpmfile === 'string' &&
+        globalPnpmfile.length > 0 &&
+        existsSync(resolve(directory, globalPnpmfile.replace(/^~[/\\]/, `${homedir()}/`)))));
   const mode =
     loglevel === 'debug' || loglevel === 'warn' || loglevel === 'error' ? loglevel : 'info';
-  return { mode, useNativeReporter: hasPnpmfile && ignorePnpmfile !== 'true' };
+  return { mode, useNativeReporter };
 }
 
 function getPnpmLifecycleKey(log: Record<string, unknown> | undefined): string | undefined {

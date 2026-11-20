@@ -119,7 +119,12 @@ describe('handleInstallResult', () => {
 describe('getMigrationInstallWatchOptions', () => {
   const cwd = '/project';
   const projectVersion = '9.15.9';
-  const projectWatchOptions = { idleTimeoutMs: 300_000, effectivePnpmVersion: projectVersion };
+  const projectPnpm = { version: projectVersion, binPaths: { pnpm: '/project-pnpm/bin/pnpm' } };
+  const projectWatchOptions = {
+    idleTimeoutMs: 300_000,
+    effectivePnpmVersion: projectVersion,
+    pnpmExecutable: projectPnpm.binPaths.pnpm,
+  };
   const overridePnpm = {
     name: 'pnpm',
     version: '10.33.0',
@@ -127,6 +132,10 @@ describe('getMigrationInstallWatchOptions', () => {
     binPrefix: '/override-pnpm/bin',
     binPaths: { pnpm: '/override-pnpm/bin/pnpm' },
     packageName: 'pnpm',
+  };
+  const overrideWatchOptions = {
+    ...projectWatchOptions,
+    pnpmExecutable: overridePnpm.binPaths.pnpm,
   };
   const unusableSystemPnpm = JSON.stringify({
     package_manager: {
@@ -147,13 +156,16 @@ describe('getMigrationInstallWatchOptions', () => {
 
   it('bounds non-interactive pnpm 9 installs only', async () => {
     expect(
-      await getMigrationInstallWatchOptions(cwd, false, PackageManager.pnpm, projectVersion),
+      await getMigrationInstallWatchOptions(cwd, false, PackageManager.pnpm, projectPnpm),
     ).toEqual(projectWatchOptions);
     expect(
-      await getMigrationInstallWatchOptions(cwd, true, PackageManager.pnpm, projectVersion),
+      await getMigrationInstallWatchOptions(cwd, true, PackageManager.pnpm, projectPnpm),
     ).toBeUndefined();
     expect(
-      await getMigrationInstallWatchOptions(cwd, false, PackageManager.pnpm, '12.21.0'),
+      await getMigrationInstallWatchOptions(cwd, false, PackageManager.pnpm, {
+        ...projectPnpm,
+        version: '12.21.0',
+      }),
     ).toBeUndefined();
     expect(
       await getMigrationInstallWatchOptions(cwd, false, PackageManager.npm, undefined),
@@ -166,13 +178,13 @@ describe('getMigrationInstallWatchOptions', () => {
     vi.mocked(getPackageManagerOverride).mockReturnValue({ name: 'yarn', version: '4.10.3' });
 
     expect(
-      await getMigrationInstallWatchOptions(cwd, false, PackageManager.pnpm, projectVersion),
+      await getMigrationInstallWatchOptions(cwd, false, PackageManager.pnpm, projectPnpm),
     ).toBeUndefined();
     expect(runCommandSilently).not.toHaveBeenCalled();
   });
 
   it.each([
-    ['10.33.0', '9.15.1', { idleTimeoutMs: 300_000, effectivePnpmVersion: '9.15.1' }],
+    ['10.33.0', '9.15.1', { ...overrideWatchOptions, effectivePnpmVersion: '9.15.1' }],
     ['9.15.9', '12.21.0', undefined],
   ])(
     'checks the version selected by the global pnpm %s launcher',
@@ -197,7 +209,7 @@ describe('getMigrationInstallWatchOptions', () => {
         .mockResolvedValueOnce(commandOutput(effectiveVersion));
 
       expect(
-        await getMigrationInstallWatchOptions(cwd, false, PackageManager.pnpm, projectVersion),
+        await getMigrationInstallWatchOptions(cwd, false, PackageManager.pnpm, projectPnpm),
       ).toEqual(expected);
       expect(runCommandSilently).toHaveBeenNthCalledWith(
         1,
@@ -229,7 +241,7 @@ describe('getMigrationInstallWatchOptions', () => {
   );
 
   it.each([
-    ['10.33.0', projectVersion, projectWatchOptions],
+    ['10.33.0', projectVersion, { ...projectWatchOptions, pnpmExecutable: '/legacy/pnpm' }],
     ['9.15.9', '10.33.0', undefined],
   ])('reads the pnpm version from a legacy launcher', async (pin, version, expected) => {
     vi.stubEnv('VP_CLI_BIN', '/global/vp');
@@ -242,9 +254,12 @@ describe('getMigrationInstallWatchOptions', () => {
         ),
       );
 
-    expect(await getMigrationInstallWatchOptions(cwd, false, PackageManager.pnpm, pin)).toEqual(
-      expected,
-    );
+    expect(
+      await getMigrationInstallWatchOptions(cwd, false, PackageManager.pnpm, {
+        ...projectPnpm,
+        version: pin,
+      }),
+    ).toEqual(expected);
     expect(runCommandSilently).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
@@ -276,8 +291,8 @@ describe('getMigrationInstallWatchOptions', () => {
       .mockResolvedValueOnce(commandOutput('9.15.9'));
 
     expect(
-      await getMigrationInstallWatchOptions(cwd, false, PackageManager.pnpm, projectVersion),
-    ).toEqual(projectWatchOptions);
+      await getMigrationInstallWatchOptions(cwd, false, PackageManager.pnpm, projectPnpm),
+    ).toEqual(overrideWatchOptions);
     expect(downloadPackageManager).toHaveBeenCalledWith({
       name: 'pnpm',
       version: '10.33.0',
@@ -292,9 +307,12 @@ describe('getMigrationInstallWatchOptions', () => {
     vi.stubEnv('VP_CLI_BIN', '/global/vp');
     vi.mocked(runCommandSilently).mockResolvedValueOnce(commandOutput(unusableSystemPnpm));
 
-    expect(await getMigrationInstallWatchOptions(cwd, false, PackageManager.pnpm, version)).toEqual(
-      expected,
-    );
+    expect(
+      await getMigrationInstallWatchOptions(cwd, false, PackageManager.pnpm, {
+        ...projectPnpm,
+        version,
+      }),
+    ).toEqual(expected);
     expect(downloadPackageManager).not.toHaveBeenCalled();
     expect(runCommandSilently).toHaveBeenCalledTimes(1);
   });
@@ -308,8 +326,8 @@ describe('getMigrationInstallWatchOptions', () => {
       .mockResolvedValueOnce(commandOutput('9.15.9'));
 
     expect(
-      await getMigrationInstallWatchOptions(cwd, false, PackageManager.pnpm, projectVersion),
-    ).toEqual(projectWatchOptions);
+      await getMigrationInstallWatchOptions(cwd, false, PackageManager.pnpm, projectPnpm),
+    ).toEqual(overrideWatchOptions);
     expect(downloadPackageManager).toHaveBeenCalledWith({ name: 'pnpm', version: '10.33.0', cwd });
     expect(runCommandSilently).toHaveBeenLastCalledWith(
       expect.objectContaining({ command: overridePnpm.binPaths.pnpm, args: ['--version'], cwd }),
@@ -322,8 +340,8 @@ describe('getMigrationInstallWatchOptions', () => {
     vi.mocked(runCommandSilently).mockResolvedValueOnce(commandOutput('9.15.9'));
 
     expect(
-      await getMigrationInstallWatchOptions(cwd, false, PackageManager.pnpm, projectVersion),
-    ).toEqual(projectWatchOptions);
+      await getMigrationInstallWatchOptions(cwd, false, PackageManager.pnpm, projectPnpm),
+    ).toEqual(overrideWatchOptions);
     expect(downloadPackageManager).toHaveBeenCalledWith({ name: 'pnpm', version: '10.33.0', cwd });
     expect(runCommandSilently).toHaveBeenCalledWith(
       expect.objectContaining({ command: overridePnpm.binPaths.pnpm, args: ['--version'], cwd }),
