@@ -44,11 +44,11 @@ describe('runViteInstall', () => {
     const configPath = join(cwd, '.npmrc');
     const config = 'reporter=silent\nloglevel=silent\njson=true\nparseable=true\n';
     writeFileSync(configPath, config);
-    vi.mocked(runCommandSilently).mockResolvedValueOnce({
+    vi.mocked(runCommandSilently).mockImplementation(async ({ args }) => ({
       exitCode: 0,
-      stdout: Buffer.from('progress'),
+      stdout: Buffer.from(args.includes('install') ? 'progress' : 'undefined'),
       stderr: Buffer.alloc(0),
-    });
+    }));
     const result = await runViteInstall(cwd, false, ['--no-frozen-lockfile'], {
       packageManager: PackageManager.pnpm,
       packageManagerVersion: '11.22.0',
@@ -72,6 +72,41 @@ describe('runViteInstall', () => {
     expect(result.status).toBe('installed');
     expect(readFileSync(configPath, 'utf8')).toBe(config);
   });
+
+  it.each([
+    ['append-only', false, true],
+    ['append-only', true, false],
+    ['silent', false, false],
+    ['ndjson', false, false],
+  ] as const)(
+    'selects the native reporter for a pnpmfile with reporter=%s and ignore-pnpmfile=%s',
+    async (reporter, ignorePnpmfile, nativeReporter) => {
+      const pnpmfile = 'custom-pnpmfile.cjs';
+      writeFileSync(join(cwd, pnpmfile), 'module.exports = { hooks: { filterLog: () => false } };');
+      const configuration: Record<string, string> = {
+        reporter,
+        pnpmfile,
+        'ignore-pnpmfile': String(ignorePnpmfile),
+      };
+      const run = vi.mocked(runCommandSilently);
+      run.mockImplementation(async ({ args }) => ({
+        exitCode: 0,
+        stdout: Buffer.from(configuration[args[args.indexOf('get') + 1]] ?? 'undefined'),
+        stderr: Buffer.alloc(0),
+      }));
+
+      await runViteInstall(cwd, false, undefined, {
+        idleTimeoutMs: 2000,
+        packageManager: PackageManager.pnpm,
+        packageManagerVersion: '9.15.9',
+        silent: true,
+      });
+
+      const install = run.mock.lastCall?.[0];
+      expect(install?.args.includes('--config._reporter=ndjson')).toBe(!nativeReporter);
+      expect(install?.idleTimeoutMs).toBe(nativeReporter ? undefined : 2000);
+    },
+  );
 
   it.each([
     ['reporter', 'silent'],
@@ -140,7 +175,7 @@ describe('runViteInstall', () => {
     'preserves the silent install exit code with idleTimedOut=%s',
     async (timedOut, exitCode) => {
       const run = vi.mocked(runCommandSilently);
-      run.mockResolvedValueOnce({
+      const install = {
         exitCode,
         ...(timedOut && { idleTimedOut: true as const }),
         stdout: Buffer.from(
@@ -158,12 +193,16 @@ describe('runViteInstall', () => {
             .join('\n'),
         ),
         stderr: Buffer.alloc(0),
-      });
-      run.mockImplementation(async ({ args }) => ({
-        exitCode: 0,
-        stdout: Buffer.from(args.includes('reporter') ? 'silent\n' : 'undefined\n'),
-        stderr: Buffer.alloc(0),
-      }));
+      };
+      run.mockImplementation(async ({ args }) =>
+        args.includes('install')
+          ? install
+          : {
+              exitCode: 0,
+              stdout: Buffer.from(args.includes('reporter') ? 'silent\n' : 'undefined\n'),
+              stderr: Buffer.alloc(0),
+            },
+      );
 
       const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
       const stderr = vi.spyOn(console, 'error').mockImplementation(() => {});

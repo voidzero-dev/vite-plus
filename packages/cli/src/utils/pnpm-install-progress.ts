@@ -1,4 +1,6 @@
-import { join } from 'node:path';
+import { existsSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join, resolve } from 'node:path';
 
 import { resolveNpmRegistry } from '../../binding/index.js';
 import { getVpCommand, runCommandSilently } from './command.ts';
@@ -10,12 +12,22 @@ function isPnpmLoggerName(name: unknown): name is string {
   return typeof name === 'string' && (name === 'pnpm' || name.startsWith('pnpm:'));
 }
 
-function parsePnpmLog(line: string): Record<string, unknown> | undefined {
+type PnpmLog = Record<string, unknown> & { name: string };
+
+const PNPM_MISC_LOGGERS = new Set([
+  'pnpm',
+  'pnpm:global',
+  'pnpm:lockfile',
+  'pnpm:store',
+  'pnpm:registry',
+]);
+
+function parsePnpmLog(line: string): PnpmLog | undefined {
   if (!line.startsWith('{')) {
     return undefined;
   }
   try {
-    const log: Record<string, unknown> = JSON.parse(line);
+    const log: PnpmLog = JSON.parse(line);
     if (isPnpmLoggerName(log?.name)) {
       return log;
     }
@@ -30,45 +42,86 @@ export function pnpmProbeEnv(envs: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   return { ...envs, NODE_OPTIONS: undefined, npm_config_ignore_pnpmfile: 'true' };
 }
 
-type PnpmInstallOutputMode = 'info' | 'warn' | 'error' | 'silent' | 'json' | 'ndjson';
+type PnpmInstallOutputMode = 'debug' | 'info' | 'warn' | 'error' | 'silent' | 'json' | 'ndjson';
 
-export async function getPnpmInstallOutputMode(
+export async function getPnpmInstallReporting(
   cwd: string,
   envs: NodeJS.ProcessEnv,
-): Promise<PnpmInstallOutputMode | undefined> {
-  const probeEnv = pnpmProbeEnv(envs);
-  const [reporter, loglevel, json, parseable] = await Promise.all(
-    ['reporter', 'loglevel', 'json', 'parseable'].map(async (key) => {
-      try {
-        const { exitCode, stdout } = await runCommandSilently({
-          ...getVpCommand(['pm', 'config', 'get', key, '--location', 'project']),
-          cwd,
-          envs: probeEnv,
-          idleTimeoutMs: 5000,
-        });
-        // The native command prints the setting after any reporter logs.
-        if (exitCode === 0) {
-          return stdout.toString().trim().split(/\r?\n/).at(-1);
-        }
-      } catch {
-        // Replay the normal diagnostics if the setting cannot be read.
+): Promise<{ mode: PnpmInstallOutputMode | undefined; useNativeReporter: boolean }> {
+  const readConfig = async (args: string[], env: NodeJS.ProcessEnv) => {
+    try {
+      const { exitCode, stdout } = await runCommandSilently({
+        ...getVpCommand(args),
+        cwd,
+        envs: env,
+        idleTimeoutMs: 5000,
+      });
+      if (exitCode === 0) {
+        return stdout.toString().trim().split(/\r?\n/).at(-1);
       }
-      return undefined;
-    }),
-  );
+    } catch {
+      // Replay the normal diagnostics if the setting cannot be read.
+    }
+    return undefined;
+  };
+  const probeEnv = pnpmProbeEnv(envs);
+  const [reporter, loglevel, json, parseable, pnpmfile, globalPnpmfile, lockfileDir] =
+    await Promise.all(
+      [
+        'reporter',
+        'loglevel',
+        'json',
+        'parseable',
+        'pnpmfile',
+        'global-pnpmfile',
+        'lockfile-dir',
+      ].map((key) => readConfig(['pm', 'config', 'get', key, '--location', 'project'], probeEnv)),
+    );
   if (json === 'true' || parseable === 'true') {
-    return 'json';
+    return { mode: 'json', useNativeReporter: false };
   }
   if (reporter === 'silent' || loglevel === 'silent') {
-    return 'silent';
+    return { mode: 'silent', useNativeReporter: false };
   }
   if ([reporter, loglevel, json, parseable].includes(undefined)) {
-    return undefined;
+    return { mode: undefined, useNativeReporter: false };
   }
   if (reporter === 'ndjson') {
-    return 'ndjson';
+    return { mode: 'ndjson', useNativeReporter: false };
   }
-  return loglevel === 'warn' || loglevel === 'error' ? loglevel : 'info';
+
+  // pnpm runs filterLog inside its human reporters. Let pnpm own the output
+  // when a configured file can supply a filter, with no extra hook execution.
+  const directory = resolve(cwd, lockfileDir && lockfileDir !== 'undefined' ? lockfileDir : '.');
+  const localFile = pnpmfile && pnpmfile !== 'undefined' ? pnpmfile : '.pnpmfile.cjs';
+  const globalFile =
+    globalPnpmfile && globalPnpmfile !== 'undefined'
+      ? globalPnpmfile.replace(/^~[/\\]/, `${homedir()}/`)
+      : undefined;
+  const hasPnpmfile =
+    existsSync(resolve(directory, localFile)) ||
+    (globalFile !== undefined && existsSync(resolve(directory, globalFile)));
+  // The config override skips the hook without replacing the raw setting.
+  // `vp exec` forwards the flag to pnpm's config command.
+  const ignorePnpmfile = hasPnpmfile
+    ? await readConfig(
+        [
+          'exec',
+          '--',
+          'pnpm',
+          'config',
+          'get',
+          'ignore-pnpmfile',
+          '--location',
+          'project',
+          '--config._ignore-pnpmfile=true',
+        ],
+        { ...envs, NODE_OPTIONS: undefined },
+      )
+    : undefined;
+  const mode =
+    loglevel === 'debug' || loglevel === 'warn' || loglevel === 'error' ? loglevel : 'info';
+  return { mode, useNativeReporter: hasPnpmfile && ignorePnpmfile !== 'true' };
 }
 
 function getPnpmLifecycleKey(log: Record<string, unknown> | undefined): string | undefined {
@@ -273,9 +326,9 @@ export async function formatPnpmInstallOutput(
     return output;
   }
   const messages: string[] = [];
-  const showWarnings = mode === 'info' || mode === 'warn';
+  const showInfo = mode === 'info' || mode === 'debug';
+  const showWarnings = showInfo || mode === 'warn';
   const deprecatedSubdependencies: string[] = [];
-  const scriptStderr = new Map<string, string[]>();
   let terminalErrorIndex: number | undefined;
   const progress = { resolved: 0, found_in_store: 0, fetched: 0, imported: 0 };
   for (const line of output.split(/\r?\n/)) {
@@ -321,7 +374,7 @@ export async function formatPnpmInstallOutput(
       }
     } else if (log.name === 'pnpm:hook' && log.level === 'debug') {
       // readPackage's context.log() uses debug records in pnpm 9's info reporter.
-      if (mode === 'info' && typeof log.hook === 'string' && typeof log.message === 'string') {
+      if (showInfo && typeof log.hook === 'string' && typeof log.message === 'string') {
         const label = typeof log.prefix === 'string' ? displayRelative(log.prefix, cwd) : '';
         const message = redactRegistryUrls(log.message);
         messages.push(label ? `${label} ${log.hook}: ${message}` : `${log.hook}: ${message}`);
@@ -343,31 +396,12 @@ export async function formatPnpmInstallOutput(
       if (typeof error.stack === 'string') {
         messages.push(redactRegistryUrls(error.stack));
       }
-    } else if (
-      mode !== 'info' &&
-      log.level !== 'error' &&
-      !(mode === 'warn' && log.level === 'warn')
-    ) {
-      const script = mode === 'silent' ? getPnpmLifecycleKey(log) : undefined;
-      if (script) {
-        // Wait for the script's result before replaying its stderr.
-        const lines = scriptStderr.get(script) ?? [];
-        if (typeof log.exitCode === 'number') {
-          if (log.exitCode !== 0 && log.optional !== true && lines.length > 0) {
-            messages.push(lines.join('\n'));
-          }
-          scriptStderr.delete(script);
-        } else if (log.stdio === 'stderr' && typeof log.line === 'string') {
-          lines.push(log.line);
-          scriptStderr.set(script, lines);
-        }
-      }
+    } else if (!showInfo && log.level !== 'error' && !(mode === 'warn' && log.level === 'warn')) {
+      // The silent reporter leaves directly inherited script output visible.
+      // Its lifecycle warnings and messages remain in the structured stream.
+      continue;
     } else if (log.name === 'pnpm:progress') {
-      if (
-        mode === 'info' &&
-        typeof log.status === 'string' &&
-        Object.hasOwn(progress, log.status)
-      ) {
+      if (showInfo && typeof log.status === 'string' && Object.hasOwn(progress, log.status)) {
         progress[log.status as keyof typeof progress]++;
       }
     } else if (log.name === 'pnpm:lifecycle' && typeof log.stage === 'string') {
@@ -382,7 +416,10 @@ export async function formatPnpmInstallOutput(
         const optional = log.optional === true ? ' (optional dependency)' : '';
         messages.push(`${label}: failed with exit code ${log.exitCode}${optional}`);
       }
-    } else if (log.level !== 'debug' && log.name !== 'pnpm:install-check') {
+    } else if (
+      log.name !== 'pnpm:install-check' &&
+      (log.level !== 'debug' || (mode === 'debug' && PNPM_MISC_LOGGERS.has(log.name)))
+    ) {
       const error = asRecord(log.err);
       const message = log.message ?? error.message;
       if (typeof message === 'string') {
@@ -398,7 +435,7 @@ export async function formatPnpmInstallOutput(
             : message;
         const requestUrl = asRecord(log.request).url;
         const displayed =
-          log.level === 'error' || typeof requestUrl === 'string'
+          log.level === 'error' || log.level === 'debug' || typeof requestUrl === 'string'
             ? redactRegistryUrls(details, requestUrl)
             : details;
         messages.push(code ? `${code} ${displayed}` : displayed);
