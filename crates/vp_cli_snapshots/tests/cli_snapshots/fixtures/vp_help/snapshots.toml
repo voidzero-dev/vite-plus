@@ -6,6 +6,7 @@ steps = [["vp", "help"]]
 
 [[case]]
 name = "vite_help_without_package"
+env = { VP_NODE_VERSION = "22.23.4" }
 vp = "global"
 steps = [
   ["vpt", "stat-file", "package.json", "--assert", "missing"],
