@@ -39,6 +39,7 @@ import { hasBaseUrlInTsconfig } from '../../utils/tsconfig.ts';
 import {
   configReturnValues,
   defaultConfigValue,
+  memberName,
   objectProperty,
   parseSource,
   propertyName,
@@ -612,6 +613,20 @@ type PackUse = {
   copy?: { initializer: ObjectExpression; reference: PackIdentifier };
 };
 
+function objectAssignTarget(node: Node): Node | undefined {
+  if (
+    node.type === 'CallExpression' &&
+    node.callee.type === 'MemberExpression' &&
+    node.callee.object.type === 'Identifier' &&
+    node.callee.object.name === 'Object' &&
+    memberName(node.callee) === 'assign'
+  ) {
+    const target = node.arguments[0];
+    return target?.type === 'SpreadElement' ? undefined : target;
+  }
+  return undefined;
+}
+
 function packValueIdentifiers(node: Node): PackIdentifier[] {
   const value = unwrapTypeExpression(node);
   switch (value.type) {
@@ -622,6 +637,19 @@ function packValueIdentifiers(node: Node): PackIdentifier[] {
       return [...packValueIdentifiers(value.consequent), ...packValueIdentifiers(value.alternate)];
     case 'ArrayExpression':
       return value.elements.flatMap((entry) => (entry ? packValueIdentifiers(entry) : []));
+    case 'MemberExpression':
+      // Keep the index expression and redirect the imported array it selects from.
+      return value.computed &&
+        value.property.type === 'Literal' &&
+        typeof value.property.value === 'number' &&
+        Number.isInteger(value.property.value) &&
+        value.property.value >= 0
+        ? packValueIdentifiers(value.object)
+        : [];
+    case 'CallExpression': {
+      const target = objectAssignTarget(value);
+      return target ? packValueIdentifiers(target) : [];
+    }
     case 'ObjectExpression':
       return value.properties.flatMap((member) =>
         member.type === 'SpreadElement' ? packValueIdentifiers(member.argument) : [],
@@ -772,16 +800,21 @@ function packMutationReferences(program: Program): Set<number> {
         }
         target = node.argument;
         break;
+      case 'CallExpression': {
+        const assigned = objectAssignTarget(node);
+        if (!assigned) {
+          continue;
+        }
+        target = assigned;
+        break;
+      }
       default:
         continue;
     }
     target = unwrapTypeExpression(target);
-    if (target.type !== 'MemberExpression') {
-      continue;
-    }
-    do {
+    while (target.type === 'MemberExpression') {
       target = unwrapTypeExpression(target.object);
-    } while (target.type === 'MemberExpression');
+    }
     if (target.type === 'Identifier') {
       writes.add(target.start);
     }
@@ -948,7 +981,9 @@ export function findDivergedTsdownPackConfig(
     }
     const convertedPath = path.join(configDirectory, convertedPackConfigName(tsdownConfigPath));
     if (!hasPack && !fs.existsSync(convertedPath)) {
-      return undefined;
+      // Use the same merge as the later config edit before replacing the build command.
+      const merged = mergeTsdownConfig(vitePath, `./${path.basename(tsdownConfigPath)}`);
+      return merged.updated ? undefined : vitePath;
     }
     const source = parseSource(vitePath, fs.readFileSync(vitePath, 'utf8'));
     const packs = packProperties(source.program, true);

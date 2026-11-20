@@ -286,7 +286,7 @@ If a package script selects a tsdown config with `-c` or `--config`, migration k
 
 Migration fills in missing `pack` configuration from each package's default tsdown config. Both direct `vp pack` calls and calls targeting the package with `-C` use that configuration. Migration keeps the original config file when a retained script can load it, including when tsdown finds the config in a parent directory. If a retained JavaScript or TypeScript config needs changes for `vp pack`, migration writes those changes to a separate `vite-pack.config.*` file. If the original config links to a shared file in the workspace, the converted copy stays next to that file so its relative imports still resolve.
 
-Migration keeps the original config in use if copying it would lose changes to imported options or change how an installed preset resolves files. The migration report tells you how to migrate the pack options manually. Migration also keeps member configs when a retained tsdown config can select workspace packages. When a later migration cannot verify that the active `pack` config matches the standalone default, it keeps the `tsdown` command and dependency and prints instructions to merge the configs.
+Migration keeps the original config in use if copying it would lose changes to imported options or change how an installed preset resolves files. Migration also keeps member configs when a retained tsdown config can select workspace packages. If migration cannot merge the default config or verify that the active `pack` config matches it, migration keeps the `tsdown` command and dependency. The migration report gives the steps for a manual merge.
 
 ### tsx to `vpx`
 
