@@ -204,10 +204,10 @@ function getPnpmLifecycleKey(log: Record<string, unknown> | undefined): string |
   return undefined;
 }
 
-export function watchPnpmResolution(): (line: string) => boolean {
+export function watchPnpmResolution() {
   const resolving = new Set<string>();
   const runningScripts = new Set<string>();
-  return (line) => {
+  return (line: string, deferIdleTimeout?: (delayMs: number) => void) => {
     const { log } = splitPnpmLine(line);
     if (log?.name === 'pnpm:stage' && typeof log.prefix === 'string') {
       if (log.stage === 'resolution_started') {
@@ -215,6 +215,14 @@ export function watchPnpmResolution(): (line: string) => boolean {
       } else if (log.stage === 'resolution_done') {
         resolving.delete(log.prefix);
       }
+    }
+    if (
+      log?.name === 'pnpm:request-retry' &&
+      resolving.size > 0 &&
+      typeof log.timeout === 'number'
+    ) {
+      // pnpm logs this delay after scheduling the next registry request.
+      deferIdleTimeout?.(log.timeout);
     }
     // Resolving a Git dependency can invoke an install or prepare script.
     const script = getPnpmLifecycleKey(log);
@@ -399,10 +407,27 @@ async function formatPeerDependencyIssues(issuesByProjects: unknown, cwd: string
   const { renderPeerIssues } = await import('@pnpm/render-peer-issues');
   type Options = NonNullable<Parameters<typeof renderPeerIssues>[1]>;
   try {
-    return renderPeerIssues(asRecord(issuesByProjects) as Parameters<typeof renderPeerIssues>[0], {
+    const issues = asRecord(issuesByProjects) as Parameters<typeof renderPeerIssues>[0];
+    const details = renderPeerIssues(issues, {
       rules: readPnpmPeerRules(cwd) as Options['rules'],
       width: process.stdout.columns ?? 80,
     }).trimEnd();
+    if (!details) {
+      return '';
+    }
+    const hints = [];
+    const hasMissingPeers = Object.values(issues).some(({ missing }) =>
+      Object.values(missing).some((entries) => entries.some(({ optional }) => !optional)),
+    );
+    if (hasMissingPeers) {
+      hints.push(
+        'hint: To install missing peer dependencies automatically, set "auto-install-peers=true" in the project .npmrc.',
+      );
+    }
+    hints.push(
+      'hint: To allow installation with peer dependency issues, set "strict-peer-dependencies=false" in the project .npmrc.',
+    );
+    return [details, '', ...hints].join('\n');
   } catch {
     // Keep the error headline if a record cannot be rendered.
     return '';

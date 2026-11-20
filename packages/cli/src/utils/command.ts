@@ -32,8 +32,8 @@ export interface RunCommandOptions {
   timeoutMs?: number;
   /** Stop the command tree when neither output stream makes progress. */
   idleTimeoutMs?: number;
-  /** When set, arm the idle timer only when this stdout line handler returns true. */
-  shouldWatchIdle?: (line: string) => boolean;
+  /** Arm the idle timer while this handler returns true. It can defer the timer for a known wait. */
+  shouldWatchIdle?: (line: string, deferIdleTimeout: (delayMs: number) => void) => boolean;
   /** Capture stdout through a regular file so a child can finish writing before process.exit(). */
   stdoutToFile?: boolean;
 }
@@ -252,8 +252,11 @@ function runCapturedCommand(
     let offset = 0;
     let settled = false;
     let timedOut = false;
+    let watching = false;
     let filePoll: ReturnType<typeof setInterval> | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let deferredUntil = 0;
+    let deferTimer: ReturnType<typeof setTimeout> | undefined;
     const stopTimer = () => {
       clearTimeout(timer);
       timer = undefined;
@@ -277,6 +280,25 @@ function runCapturedCommand(
       }, timeoutMs);
       timer.unref();
     };
+    const deferIdleTimeout = (delayMs: number) => {
+      if (!Number.isFinite(delayMs) || delayMs <= 0 || delayMs > 0x7fff_ffff) {
+        return;
+      }
+      const until = performance.now() + delayMs;
+      // Another request can be scheduled later while this one is still waiting.
+      if (deferTimer && until <= deferredUntil) {
+        return;
+      }
+      deferredUntil = until;
+      stopTimer();
+      clearTimeout(deferTimer);
+      deferTimer = setTimeout(() => {
+        deferTimer = undefined;
+        if (watching) {
+          startTimer();
+        }
+      }, delayMs).unref();
+    };
     if (timeoutMs !== undefined && !shouldWatchIdle) {
       startTimer();
     }
@@ -296,9 +318,10 @@ function runCapturedCommand(
       if (timedOut) {
         return;
       }
-      if (!shouldWatchIdle?.(line)) {
+      watching = shouldWatchIdle?.(line, deferIdleTimeout) ?? false;
+      if (!watching) {
         stopTimer();
-      } else if (timer === undefined) {
+      } else if (timer === undefined && deferTimer === undefined) {
         startTimer();
       }
     });
@@ -308,6 +331,7 @@ function runCapturedCommand(
       lines?.close();
       fileOutput?.destroy();
       stopTimer();
+      clearTimeout(deferTimer);
       removeExitHandler?.();
     };
     const readFileOutput = () => {
