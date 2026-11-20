@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   formatPnpmInstallOutput,
@@ -56,6 +56,26 @@ describe('watchPnpmResolution', () => {
     expect(watch(stage('/workspace/a', 'resolution_done'))).toBe(true);
     expect(watch(stage('/workspace/b', 'resolution_done'))).toBe(false);
     expect(watch('> node postinstall.cjs')).toBe(false);
+  });
+
+  it('defers the idle timer for retries scheduled during resolution', () => {
+    const watch = watchPnpmResolution();
+    const defer = vi.fn();
+    const retry = JSON.stringify({ name: 'pnpm:request-retry', timeout: 360_000 });
+    expect(watch(retry, defer)).toBe(false);
+    expect(defer).not.toHaveBeenCalled();
+
+    expect(watch(stage('/workspace/a', 'resolution_started'), defer)).toBe(true);
+    expect(watch(retry, defer)).toBe(true);
+    expect(defer).toHaveBeenCalledExactlyOnceWith(360_000);
+
+    expect(watch(lifecycle('/store/git-a', { script: 'npm install' }), defer)).toBe(false);
+    expect(watch(retry, defer)).toBe(false);
+    expect(defer).toHaveBeenCalledTimes(2);
+    expect(watch(lifecycle('/store/git-a', { exitCode: 0 }), defer)).toBe(true);
+    expect(watch(stage('/workspace/a', 'resolution_done'), defer)).toBe(false);
+    expect(watch(retry, defer)).toBe(false);
+    expect(defer).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -250,10 +270,51 @@ describe('formatPnpmInstallOutput', () => {
       expect(formatted).toContain('react-dom 18.3.1');
       expect(formatted).toContain('unmet peer react@^18.3.1: found 17.0.2');
       expect(formatted).not.toContain('legacy-plugin');
+      expect(formatted).toContain('strict-peer-dependencies=false');
+      expect(formatted).not.toContain('auto-install-peers=true');
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }
   });
+
+  it.each([false, true])(
+    'shows the appropriate hints for an optional=%s missing peer',
+    async (optional) => {
+      const code = 'ERR_PNPM_PEER_DEP_ISSUES';
+      const message = 'Unmet peer dependencies';
+      const output = JSON.stringify({
+        name: 'pnpm',
+        level: 'error',
+        code,
+        err: { name: 'pnpm', message },
+        issuesByProjects: {
+          '.': {
+            bad: {},
+            missing: {
+              react: [
+                {
+                  parents: [{ name: 'react-dom', version: '18.3.1' }],
+                  wantedRange: '^18.3.1',
+                  optional,
+                },
+              ],
+            },
+            conflicts: [],
+            intersections: { react: '^18.3.1' },
+          },
+        },
+      });
+      const text = await formatPnpmInstallOutput(output, '/project', 'warn');
+      expect(text).toContain('missing peer');
+      expect(text).toContain('strict-peer-dependencies=false');
+      expect(text.includes('auto-install-peers=true')).toBe(!optional);
+      expect(await formatPnpmInstallOutput(output, '/project', 'silent')).toBe('');
+      expect(JSON.parse(await formatPnpmInstallOutput(output, '/project', 'json'))).toEqual({
+        error: { code, message },
+      });
+      expect(await formatPnpmInstallOutput(output, '/project', 'ndjson')).toBe(output);
+    },
+  );
 
   it.each([
     [

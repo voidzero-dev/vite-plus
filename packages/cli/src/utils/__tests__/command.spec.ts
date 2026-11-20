@@ -224,6 +224,33 @@ describe('command runners', () => {
     ]);
   });
 
+  it.each([false, true])('allows scheduled retries (file: %s)', async (stdoutToFile) => {
+    const result = await runCommandSilently({
+      command: process.execPath,
+      args: [
+        '-e',
+        `console.log('long wait');
+          setTimeout(() => console.log('short wait'), 100);
+          setTimeout(() => console.log('retried'), 700);
+          setInterval(() => {}, 1000);`,
+      ],
+      cwd: process.cwd(),
+      envs: process.env,
+      idleTimeoutMs: 220,
+      stdoutToFile,
+      shouldWatchIdle: (line, deferIdleTimeout) => {
+        if (line === 'long wait') {
+          deferIdleTimeout(700);
+        } else if (line === 'short wait') {
+          deferIdleTimeout(150);
+        }
+        return true;
+      },
+    });
+    expect(result.stdout.toString()).toContain('retried');
+    expect(result).toMatchObject({ exitCode: 124, idleTimedOut: true });
+  });
+
   it.each([false, true])('stops an idle tree (file: %s)', async (stdoutToFile) => {
     const cwd = mkdtempSync(join(tmpdir(), 'vp-install-command-'));
     const finished = join(cwd, 'finished');
