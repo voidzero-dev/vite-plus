@@ -79,10 +79,6 @@ export function pnpmProbeEnv(envs: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
 
 type PnpmInstallOutputMode = 'debug' | 'info' | 'warn' | 'error' | 'silent' | 'json' | 'ndjson';
 
-function isPnpmConfigEnabled(value: unknown): boolean {
-  return value === true || value === 'true';
-}
-
 export async function getPnpmInstallReporting(
   cwd: string,
   pnpmExecutable: string,
@@ -119,7 +115,9 @@ export async function getPnpmInstallReporting(
   }
 
   const { reporter, loglevel, json, parseable, pnpmfile } = config;
-  if (isPnpmConfigEnabled(json) || isPnpmConfigEnabled(parseable)) {
+  // pnpm tests the resolved values for truthiness. Its config parser converts
+  // true and false to booleans and keeps environment values like "1" as strings.
+  if (json || parseable) {
     return { mode: 'json', useNativeReporter: false };
   }
   if (reporter === 'silent' || loglevel === 'silent') {
@@ -136,7 +134,7 @@ export async function getPnpmInstallReporting(
   const directory = resolve(cwd, typeof lockfileDir === 'string' ? lockfileDir : '.');
   const localFile = typeof pnpmfile === 'string' && pnpmfile ? pnpmfile : '.pnpmfile.cjs';
   const useNativeReporter =
-    !isPnpmConfigEnabled(config['ignore-pnpmfile']) &&
+    !config['ignore-pnpmfile'] &&
     (existsSync(resolve(directory, localFile)) ||
       (typeof globalPnpmfile === 'string' &&
         globalPnpmfile.length > 0 &&
@@ -466,7 +464,12 @@ export async function formatPnpmInstallOutput(
             : message;
         const requestUrl = asRecord(log.request).url ?? log.url;
         const displayed = redactPnpmDiagnostic(details, requestUrl);
-        messages.push(code ? `${code} ${displayed}` : displayed);
+        const headline = code ? `${code} ${displayed}` : displayed;
+        const warningPath =
+          log.level === 'warn' && typeof log.prefix === 'string'
+            ? displayRelative(log.prefix, cwd)
+            : '';
+        messages.push(warningPath ? `${warningPath}: ${headline}` : headline);
         const context: string[] = [];
         if (log.level === 'error') {
           appendDependencyContext(context, log);
