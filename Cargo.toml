@@ -211,6 +211,13 @@ infer = { version = "0.22.0", default-features = false }
 insta = "1.49.0"
 itertools = "0.15.0"
 itoa = "1.0.18"
+jiff = { version = "1.0.1", default-features = false, features = [
+  "serde",
+  "tz-system",
+  "tzdb-bundle-platform",
+  "tzdb-concatenated",
+  "tzdb-zoneinfo",
+] }
 js-semver = "1.0.0"
 json-escape-simd = "3.1.1"
 json-strip-comments = "3"
@@ -286,7 +293,6 @@ terminal_size = "0.4.4"
 test-log = { version = "0.2.18", features = ["trace"] }
 testing_macros = "2.0.0"
 thiserror = "2"
-time = { version = "0.3.55", features = ["local-offset", "serde-well-known"] }
 tokio = { version = "1.52.3", default-features = false }
 tokio-util = "0.7"
 toml = "1.0.0"
@@ -322,7 +328,6 @@ vt_workspace = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "c
 walkdir = "2.5.0"
 webpki-root-certs = "1.0.10"
 which = "8.0.6"
-windows-sys = "0.61.2"
 winreg = "0.56.0"
 xxhash-rust = "0.8.16"
 zip = { version = "9.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }

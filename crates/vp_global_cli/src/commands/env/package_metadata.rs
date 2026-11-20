@@ -2,8 +2,8 @@
 
 use std::collections::HashSet;
 
+use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
-use time::OffsetDateTime;
 use uuid::{Uuid, Version};
 use vt_path::AbsolutePathBuf;
 
@@ -49,8 +49,7 @@ pub struct PackageMetadata {
     /// Package manager used for installation (npm, yarn, pnpm)
     pub manager: String,
     /// Installation timestamp
-    #[serde(with = "time::serde::rfc3339")]
-    pub installed_at: OffsetDateTime,
+    pub installed_at: Timestamp,
 }
 
 /// Platform versions pinned to this package.
@@ -83,7 +82,7 @@ impl PackageMetadata {
             js_bins,
             version_spec: None,
             manager,
-            installed_at: OffsetDateTime::now_utc(),
+            installed_at: Timestamp::now(),
         }
     }
 

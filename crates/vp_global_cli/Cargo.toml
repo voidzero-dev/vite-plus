@@ -22,7 +22,6 @@ flate2 = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-time = { workspace = true }
 tar = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
@@ -36,6 +35,7 @@ rustc-hash = { workspace = true }
 crossterm = { workspace = true }
 indexmap = { workspace = true }
 indoc = { workspace = true }
+jiff = { workspace = true }
 js-semver = { workspace = true }
 vp_error = { workspace = true }
 vp_js_runtime = { workspace = true }
@@ -50,9 +50,6 @@ vt_str = { workspace = true }
 vt_workspace = { workspace = true }
 url = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
-
-[target.'cfg(windows)'.dependencies]
-windows-sys = { workspace = true, features = ["Win32_System_Time"] }
 
 [dev-dependencies]
 httpmock = { workspace = true }
