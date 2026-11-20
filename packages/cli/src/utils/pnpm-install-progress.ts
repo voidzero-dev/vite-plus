@@ -1,5 +1,7 @@
 import { join } from 'node:path';
 
+import { coerce, isGreaterThanOrEqual } from 'verkit';
+
 import { resolveNpmRegistry } from '../../binding/index.js';
 import { getVpCommand, runCommandSilently } from './command.ts';
 import { readJsonFile } from './json.ts';
@@ -68,6 +70,17 @@ export async function getPnpmInstallOutputMode(
   return loglevel === 'warn' || loglevel === 'error' ? loglevel : 'info';
 }
 
+function getPnpmLifecycleKey(log: Record<string, unknown> | undefined): string | undefined {
+  if (
+    log?.name === 'pnpm:lifecycle' &&
+    typeof log.wd === 'string' &&
+    typeof log.stage === 'string'
+  ) {
+    return JSON.stringify([log.wd, log.stage]);
+  }
+  return undefined;
+}
+
 export function watchPnpmResolution(): (line: string) => boolean {
   const resolving = new Set<string>();
   const runningScripts = new Set<string>();
@@ -81,12 +94,8 @@ export function watchPnpmResolution(): (line: string) => boolean {
       }
     }
     // Resolving a Git dependency can invoke an install or prepare script.
-    if (
-      log?.name === 'pnpm:lifecycle' &&
-      typeof log.wd === 'string' &&
-      typeof log.stage === 'string'
-    ) {
-      const script = JSON.stringify([log.wd, log.stage]);
+    const script = getPnpmLifecycleKey(log);
+    if (log && script) {
       if (typeof log.script === 'string') {
         runningScripts.add(script);
       } else if (typeof log.exitCode === 'number') {
@@ -101,6 +110,46 @@ function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
+}
+
+function getPnpmTerminalError(log: Record<string, unknown> | undefined) {
+  // The CLI error handler names the terminal error. Recovered errors, such as
+  // a repaired lockfile, can also be logged at error level.
+  if (log?.name === 'pnpm' && log.level === 'error') {
+    const error = asRecord(log.err);
+    if (isPnpmLoggerName(error.name) && typeof error.message === 'string') {
+      return {
+        code: log.code ?? error.code ?? error.name,
+        message: error.message,
+        errno: log.errno,
+      };
+    }
+  }
+  return undefined;
+}
+
+export function restorePnpmInstallExitCode(
+  exitCode: number,
+  output: string,
+  mode: PnpmInstallOutputMode,
+  packageManagerVersion: string | undefined,
+): number {
+  if (exitCode <= 1 || (mode !== 'silent' && mode !== 'json') || !packageManagerVersion) {
+    return exitCode;
+  }
+  const version = coerce(packageManagerVersion);
+  if (version?.major !== 9 || isGreaterThanOrEqual(version, '9.15.8')) {
+    return exitCode;
+  }
+  // Older pnpm 9 releases exit 1 in silent, JSON and parseable modes,
+  // while the NDJSON reporter uses the terminal error's errno.
+  for (const line of output.split(/\r?\n/).toReversed()) {
+    const error = getPnpmTerminalError(parsePnpmLog(line));
+    if (error) {
+      return error.errno === exitCode ? 1 : exitCode;
+    }
+  }
+  return exitCode;
 }
 
 function formatRequestRetry(log: Record<string, unknown>): string | undefined {
@@ -250,6 +299,7 @@ export async function formatPnpmInstallOutput(
   const messages: string[] = [];
   const showWarnings = mode === 'info' || mode === 'warn';
   const deprecatedSubdependencies: string[] = [];
+  const scriptStderr = new Map<string, string[]>();
   let terminalErrorIndex: number | undefined;
   const progress = { resolved: 0, found_in_store: 0, fetched: 0, imported: 0 };
   for (const line of output.split(/\r?\n/)) {
@@ -257,27 +307,14 @@ export async function formatPnpmInstallOutput(
     if (!log) {
       messages.push(line);
     } else if (mode === 'json') {
-      // pnpm 9's CLI error handler sets the terminal error's name before logging it.
-      // Recovered errors, such as a repaired lockfile, can also be logged at error level.
-      const error = asRecord(log.err);
-      if (
-        log.name === 'pnpm' &&
-        log.level === 'error' &&
-        isPnpmLoggerName(error.name) &&
-        typeof error.message === 'string'
-      ) {
+      const error = getPnpmTerminalError(log);
+      if (error) {
         if (terminalErrorIndex !== undefined) {
           messages.splice(terminalErrorIndex, 1);
         }
         terminalErrorIndex = messages.length;
         const message = redactRegistryUrls(error.message, asRecord(log.request).url);
-        messages.push(
-          JSON.stringify(
-            { error: { code: log.code ?? error.code ?? error.name, message } },
-            null,
-            2,
-          ),
-        );
+        messages.push(JSON.stringify({ error: { code: error.code, message } }, null, 2));
       }
     } else if (log.name === 'pnpm:request-retry') {
       // pnpm's human reporter displays retry records as warnings.
@@ -311,14 +348,19 @@ export async function formatPnpmInstallOutput(
       log.level !== 'error' &&
       !(mode === 'warn' && log.level === 'warn')
     ) {
-      // Keep the script stderr fallback for silent installs.
-      if (
-        mode === 'silent' &&
-        log.name === 'pnpm:lifecycle' &&
-        log.stdio === 'stderr' &&
-        typeof log.line === 'string'
-      ) {
-        messages.push(log.line);
+      const script = mode === 'silent' ? getPnpmLifecycleKey(log) : undefined;
+      if (script) {
+        // Wait for the script's result before replaying its stderr.
+        const lines = scriptStderr.get(script) ?? [];
+        if (typeof log.exitCode === 'number') {
+          if (log.exitCode !== 0 && log.optional !== true && lines.length > 0) {
+            messages.push(lines.join('\n'));
+          }
+          scriptStderr.delete(script);
+        } else if (log.stdio === 'stderr' && typeof log.line === 'string') {
+          lines.push(log.line);
+          scriptStderr.set(script, lines);
+        }
       }
     } else if (log.name === 'pnpm:progress') {
       if (

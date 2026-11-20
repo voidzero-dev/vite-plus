@@ -12,6 +12,7 @@ import { getVpCommand, runCommandSilently } from './command.ts';
 import {
   formatPnpmInstallOutput,
   getPnpmInstallOutputMode,
+  restorePnpmInstallExitCode,
   watchPnpmResolution,
 } from './pnpm-install-progress.ts';
 import { reconcilePreviewBridgeRegistry } from './preview-registry.ts';
@@ -239,9 +240,10 @@ export async function runViteInstall(
   } else {
     spinner.stop(idleTimedOut ? 'Install timed out' : 'Install failed');
     const mode = shouldWatchIdle ? await getPnpmInstallOutputMode(cwd, envs) : 'info';
+    const installOutput = stdout.toString();
     const output = shouldWatchIdle
-      ? await formatPnpmInstallOutput(stdout.toString(), cwd, mode)
-      : stdout.toString();
+      ? await formatPnpmInstallOutput(installOutput, cwd, mode)
+      : installOutput;
     if (mode === 'json' || mode === 'ndjson') {
       // The prompt logger wraps long lines, including JSON strings.
       if (output) {
@@ -267,7 +269,15 @@ export async function runViteInstall(
     }
     return {
       durationMs: Date.now() - startTime,
-      exitCode,
+      exitCode:
+        shouldWatchIdle && !idleTimedOut
+          ? restorePnpmInstallExitCode(
+              exitCode,
+              installOutput,
+              mode,
+              options?.packageManagerVersion,
+            )
+          : exitCode,
       status: 'failed',
       ...(failureMessage && { failureMessage }),
     } satisfies CommandRunSummary;
