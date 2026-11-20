@@ -8,7 +8,7 @@
 
 ## `vpt print-file pnpm-hook-events`
 
-The selected pnpm loads the project hook for both installs and skips it during version probes.
+The selected pnpm loads the project hook for both installs and skips it during version and config probes.
 
 ```
 install

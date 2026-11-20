@@ -17,7 +17,7 @@ unset-env = ["VP_SKIP_INSTALL", "CI"]
 steps = [
   { argv = ["vpt", "cp", "record-pnpm-hook.cjs", ".pnpmfile.cjs"], snapshot = false },
   { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
-  { argv = ["vpt", "print-file", "pnpm-hook-events"], comment = "The selected pnpm loads the project hook for both installs and skips it during version probes." },
+  { argv = ["vpt", "print-file", "pnpm-hook-events"], comment = "The selected pnpm loads the project hook for both installs and skips it during version and config probes." },
 ]
 
 [[case]]

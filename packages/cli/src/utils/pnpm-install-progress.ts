@@ -79,11 +79,21 @@ export function pnpmProbeEnv(envs: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
 
 type PnpmInstallOutputMode = 'debug' | 'info' | 'warn' | 'error' | 'silent' | 'json' | 'ndjson';
 
+interface PnpmLifecycleOutputOptions {
+  aggregateOutput?: boolean;
+  hideLifecyclePrefix?: boolean;
+}
+
+interface PnpmInstallReporting extends PnpmLifecycleOutputOptions {
+  mode: PnpmInstallOutputMode;
+  useNativeReporter: boolean;
+}
+
 export async function getPnpmInstallReporting(
   cwd: string,
   pnpmExecutable: string,
   envs: NodeJS.ProcessEnv,
-): Promise<{ mode: PnpmInstallOutputMode; useNativeReporter: boolean } | undefined> {
+): Promise<PnpmInstallReporting | undefined> {
   let config: Record<string, unknown>;
   try {
     const { exitCode, stdout } = await runCommandSilently({
@@ -141,7 +151,15 @@ export async function getPnpmInstallReporting(
         existsSync(resolve(directory, globalPnpmfile.replace(/^~[/\\]/, `${homedir()}/`)))));
   const mode =
     loglevel === 'debug' || loglevel === 'warn' || loglevel === 'error' ? loglevel : 'info';
-  return { mode, useNativeReporter };
+  // pnpm defaults to append-only when stdout is captured.
+  const appendOnly = !reporter || reporter === 'append-only';
+  return {
+    mode,
+    useNativeReporter,
+    aggregateOutput: appendOnly && Boolean(config['aggregate-output']),
+    hideLifecyclePrefix:
+      (appendOnly || Boolean(config.stream)) && Boolean(config['reporter-hide-prefix']),
+  };
 }
 
 function getPnpmLifecycleKey(log: Record<string, unknown> | undefined): string | undefined {
@@ -279,15 +297,23 @@ function redactPnpmDiagnostic(text: string, requestUrl?: unknown): string {
 
 function appendRegistryAuthContext(
   messages: string[],
-  log: Record<string, unknown>,
+  pkgName: unknown,
+  requestUrl: unknown,
   cwd: string,
 ): void {
-  if (typeof log.pkgName === 'string') {
-    const scope = /^@([^/]+)\//.exec(log.pkgName)?.[1];
+  if (typeof pkgName === 'string' && typeof requestUrl === 'string') {
+    const scope = /^@([^/]+)\//.exec(pkgName)?.[1];
     try {
       const registry = resolveNpmRegistry(cwd, scope);
       const displayUrl = displayRegistryUrl(registry);
-      if (displayUrl) {
+      const packagePath = encodeURIComponent(pkgName).replace(/^%40/, '@');
+      // The launcher and pnpm can load different npmrc files. Only show the
+      // configured registry when it matches the actual package metadata URL.
+      if (
+        displayUrl &&
+        displayRegistryUrl(requestUrl) ===
+          new URL(packagePath, displayUrl.replace(/\/?$/, '/')).href
+      ) {
         const key =
           scope && registry !== resolveNpmRegistry(cwd) ? `@${scope}:registry` : 'registry';
         messages.push(`${key}=${displayUrl}`);
@@ -348,6 +374,7 @@ export async function formatPnpmInstallOutput(
   output: string,
   cwd: string,
   mode: PnpmInstallOutputMode = 'info',
+  lifecycle: PnpmLifecycleOutputOptions = {},
 ): Promise<string> {
   if (mode === 'ndjson') {
     return output;
@@ -356,6 +383,7 @@ export async function formatPnpmInstallOutput(
   const showInfo = mode === 'info' || mode === 'debug';
   const showWarnings = showInfo || mode === 'warn';
   const deprecatedSubdependencies: string[] = [];
+  const pendingScripts = new Map<string, string[]>();
   let terminalErrorIndex: number | undefined;
   const progress = { resolved: 0, found_in_store: 0, fetched: 0, imported: 0 };
   for (const line of output.split(/\r?\n/)) {
@@ -390,7 +418,9 @@ export async function formatPnpmInstallOutput(
       if (showWarnings && typeof pkgName === 'string' && typeof pkgVersion === 'string') {
         const dependency = redactRegistryUrls(`${pkgName}@${pkgVersion}`);
         if (depth === 0 && typeof deprecated === 'string') {
-          messages.push(`WARN deprecated ${dependency}: ${redactPnpmDiagnostic(deprecated)}`);
+          const prefix = typeof log.prefix === 'string' ? displayRelative(log.prefix, cwd) : '';
+          const warning = `WARN deprecated ${dependency}: ${redactPnpmDiagnostic(deprecated)}`;
+          messages.push(prefix ? `${prefix}: ${warning}` : warning);
         } else if (typeof depth === 'number' && depth > 0) {
           deprecatedSubdependencies.push(dependency);
         }
@@ -440,13 +470,25 @@ export async function formatPnpmInstallOutput(
         typeof log.wd === 'string' ? displayRelative(log.wd, cwd) || '.' : log.depPath;
       const label =
         typeof directory === 'string' ? `${redactRegistryUrls(directory)} ${log.stage}` : log.stage;
+      const key = lifecycle.aggregateOutput ? getPnpmLifecycleKey(log) : undefined;
+      const scriptOutput = key === undefined ? messages : (pendingScripts.get(key) ?? []);
       if (typeof log.script === 'string') {
-        messages.push(`${label}$ ${log.script}`);
+        scriptOutput.push(`${label}$ ${log.script}`);
       } else if (typeof log.line === 'string') {
-        messages.push(`${label}: ${log.line}`);
+        scriptOutput.push(lifecycle.hideLifecyclePrefix ? log.line : `${label}: ${log.line}`);
       } else if (typeof log.exitCode === 'number' && log.exitCode !== 0) {
         const optional = log.optional === true ? ' (optional dependency)' : '';
-        messages.push(`${label}: failed with exit code ${log.exitCode}${optional}`);
+        scriptOutput.push(`${label}: failed with exit code ${log.exitCode}${optional}`);
+      }
+      if (key !== undefined) {
+        if (typeof log.exitCode === 'number') {
+          pendingScripts.delete(key);
+          if (scriptOutput.length > 0) {
+            messages.push(scriptOutput.join('\n'));
+          }
+        } else {
+          pendingScripts.set(key, scriptOutput);
+        }
       }
     } else if (PNPM_MISC_LOGGERS.has(log.name) && (log.level !== 'debug' || mode === 'debug')) {
       const error = asRecord(log.err);
@@ -487,7 +529,7 @@ export async function formatPnpmInstallOutput(
           context.push(log.hint);
         }
         if (authFailure) {
-          appendRegistryAuthContext(context, log, cwd);
+          appendRegistryAuthContext(context, log.pkgName, requestUrl, cwd);
         }
         messages.push(...context.map((message) => redactPnpmDiagnostic(message, requestUrl)));
       }

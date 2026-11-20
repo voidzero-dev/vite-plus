@@ -153,9 +153,11 @@ describe('formatPnpmInstallOutput', () => {
   ] as const)(
     'reports deprecations at the %s log level when warnings are enabled',
     async (mode, showWarnings) => {
+      const cwd = resolve('workspace');
       const deprecation = {
         name: 'pnpm:deprecation',
         level: 'debug',
+        prefix: join(cwd, 'packages', 'member'),
         pkgName: 'inflight',
         pkgVersion: '1.0.6',
         deprecated: 'This package is no longer supported.',
@@ -169,12 +171,12 @@ describe('formatPnpmInstallOutput', () => {
           pkgVersion: '2.0.0',
           depth: 1,
         }),
-        stage('/project', 'resolution_done'),
+        stage(cwd, 'resolution_done'),
       ].join('\n');
 
-      expect(await formatPnpmInstallOutput(output, '/project', mode)).toBe(
+      expect(await formatPnpmInstallOutput(output, cwd, mode)).toBe(
         showWarnings
-          ? 'WARN deprecated inflight@1.0.6: This package is no longer supported.\n' +
+          ? 'packages/member: WARN deprecated inflight@1.0.6: This package is no longer supported.\n' +
               'WARN 1 deprecated subdependencies found: old-transitive@2.0.0'
           : '',
       );
@@ -476,27 +478,33 @@ describe('formatPnpmInstallOutput', () => {
     }
   });
 
-  it('uses the tarball request when the auth failure has no package name', async () => {
-    const cwd = mkdtempSync(join(tmpdir(), 'vp-pnpm-tarball-auth-'));
-    try {
-      const url = 'https://private.example.com/package.tgz';
-      writeFileSync(join(cwd, '.npmrc'), 'registry=https://default.example.com/\n');
-      const output = JSON.stringify({
-        name: 'pnpm',
-        level: 'error',
-        code: 'ERR_PNPM_FETCH_401',
-        err: { message: `GET ${url}: Unauthorized - 401` },
-        request: { url },
-      });
+  it.each([
+    ['https://private.example.com/package.tgz', undefined],
+    ['https://private.example.com/team/@vp-pnpm-auth%2Fpackage', '@vp-pnpm-auth/package'],
+  ])(
+    'shows the auth failure request for %s without guessing its registry config',
+    async (url, pkgName) => {
+      const cwd = mkdtempSync(join(tmpdir(), 'vp-pnpm-tarball-auth-'));
+      try {
+        writeFileSync(join(cwd, '.npmrc'), 'registry=https://default.example.com/\n');
+        const output = JSON.stringify({
+          name: 'pnpm',
+          level: 'error',
+          code: 'ERR_PNPM_FETCH_401',
+          err: { message: `GET ${url}: Unauthorized - 401` },
+          pkgName,
+          request: { url },
+        });
 
-      expect(await formatPnpmInstallOutput(output, cwd)).toBe(
-        `ERR_PNPM_FETCH_401 GET ${url}: Unauthorized - 401\n` +
-          'Check the registry and authentication settings in .npmrc. Run "pnpm login" if you need to sign in.',
-      );
-    } finally {
-      rmSync(cwd, { recursive: true, force: true });
-    }
-  });
+        expect(await formatPnpmInstallOutput(output, cwd)).toBe(
+          `ERR_PNPM_FETCH_401 GET ${url}: Unauthorized - 401\n` +
+            'Check the registry and authentication settings in .npmrc. Run "pnpm login" if you need to sign in.',
+        );
+      } finally {
+        rmSync(cwd, { recursive: true, force: true });
+      }
+    },
+  );
 
   it('shows only public URL components in retries and final fetch errors', async () => {
     const publicUrl = 'https://registry.example.com/team/package';
@@ -606,6 +614,52 @@ describe('formatPnpmInstallOutput', () => {
         'node_modules/a postinstall: shared message',
         'node_modules/b postinstall: shared message',
         'node_modules/b postinstall: failed with exit code 7',
+      ].join('\n'),
+    );
+  });
+
+  it('groups concurrent lifecycle output when requested and can hide script line prefixes', async () => {
+    const cwd = resolve('fixture');
+    const event = (pkg: string, details: Record<string, unknown>) => ({
+      name: 'pnpm:lifecycle',
+      level: 'debug',
+      wd: join(cwd, 'packages', pkg),
+      stage: 'postinstall',
+      ...details,
+    });
+    const output = [
+      event('a', { script: 'node check.cjs' }),
+      event('b', { script: 'node check.cjs' }),
+      event('a', { line: 'a early', stdio: 'stdout' }),
+      event('b', { line: 'b early', stdio: 'stdout' }),
+      event('b', { line: 'b late', stdio: 'stderr' }),
+      event('b', { exitCode: 7 }),
+      event('a', { line: 'a late', stdio: 'stdout' }),
+      event('a', { exitCode: 0 }),
+    ]
+      .map((log) => JSON.stringify(log))
+      .join('\n');
+
+    expect(await formatPnpmInstallOutput(output, cwd, 'info', { aggregateOutput: true })).toBe(
+      [
+        'packages/b postinstall$ node check.cjs',
+        'packages/b postinstall: b early',
+        'packages/b postinstall: b late',
+        'packages/b postinstall: failed with exit code 7',
+        'packages/a postinstall$ node check.cjs',
+        'packages/a postinstall: a early',
+        'packages/a postinstall: a late',
+      ].join('\n'),
+    );
+    expect(await formatPnpmInstallOutput(output, cwd, 'info', { hideLifecyclePrefix: true })).toBe(
+      [
+        'packages/a postinstall$ node check.cjs',
+        'packages/b postinstall$ node check.cjs',
+        'a early',
+        'b early',
+        'b late',
+        'packages/b postinstall: failed with exit code 7',
+        'a late',
       ].join('\n'),
     );
   });
