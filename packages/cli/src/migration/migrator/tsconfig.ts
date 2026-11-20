@@ -173,11 +173,13 @@ type PackConfigTsconfigEdits = {
   excludedConfig?: string;
 };
 
-function coversProjectFile(project: ProjectFileConfig, directory: string, file: string): boolean {
+function coversProjectFile(project: ProjectFileConfig, filename: string, file: string): boolean {
   const { files, include, exclude } = project.lists;
+  const directory = path.dirname(filename);
+  const includes = include ?? (files ? undefined : { filename, entries: ['**/*'] });
   return !!(
     matchTsconfigPaths(files, directory, file, false) ||
-    (matchTsconfigPaths(include, directory, file, true) &&
+    (matchTsconfigPaths(includes, directory, file, true) &&
       !matchTsconfigPaths(exclude, directory, file, true))
   );
 }
@@ -305,7 +307,7 @@ export function preparePackConfigTsconfigEdits(
   const consumers = new Set<string>();
   if (originalPath) {
     for (const [filename, { config, references }] of projects) {
-      if (!coversProjectFile(config, path.dirname(filename), viteConfigPath)) {
+      if (!coversProjectFile(config, filename, viteConfigPath)) {
         continue;
       }
       const pending = new Set(references);
@@ -318,7 +320,7 @@ export function preparePackConfigTsconfigEdits(
         const { javaScript } = target.config;
         if (
           (!isJavaScript || (javaScript.allowJs ?? javaScript.checkJs)) &&
-          coversProjectFile(target.config, path.dirname(reference), originalPath)
+          coversProjectFile(target.config, reference, originalPath)
         ) {
           owners.add(reference);
           consumers.add(filename);

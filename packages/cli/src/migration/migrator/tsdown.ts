@@ -188,8 +188,12 @@ export function collectPackagesKeepingTsdown(
   // remains active. Check before changing its scripts, dependencies or imports.
   const reportedConfigs = new Set<string>();
   for (const [dir, directories] of defaultDirectories) {
-    for (const cwd of new Set(directories)) {
-      const original = cwd && projectPaths.has(cwd) && findDefaultTsdownConfig(cwd, workspaceRoot);
+    // Shell expansions and pipes can hide the working directory from the parser.
+    const possibleDirectories = directories.some((cwd) => !cwd || !projectPaths.has(cwd))
+      ? projectPaths
+      : new Set(directories);
+    for (const cwd of possibleDirectories) {
+      const original = cwd && findDefaultTsdownConfig(cwd, workspaceRoot);
       if (!original) {
         continue;
       }
