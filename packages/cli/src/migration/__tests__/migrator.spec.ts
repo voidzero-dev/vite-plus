@@ -745,6 +745,50 @@ describe('explicit tsdown config selection', () => {
     expect(mergeTsdownConfigFile(tmpDir, true, createMigrationReport(), true)).toBe(false);
   });
 
+  it.each([
+    'const pack = { ...base, dts: false };\nexport default { pack };\n',
+    "import { defineConfig } from 'vite-plus';\nexport default defineConfig(() => { const options = { ...base, dts: false }; const pack = options; return { pack }; });\n",
+    'const pack = { ...base, dts: false };\nexport default { pack: [pack, pack] };\n',
+  ])('converts the tsdown spread inside a private pack constant (%s)', (config) => {
+    const original = "export default { entry: 'src/lib.ts', publicDir: 'public' };\n";
+    const tsdown = path.join(tmpDir, 'tsdown.config.ts');
+    fs.writeFileSync(tsdown, original);
+    const vite = path.join(tmpDir, 'vite.config.ts');
+    const originalImport = "import base from './tsdown.config.ts';";
+    fs.writeFileSync(vite, `${originalImport}\nexport const entry = base.entry;\n${config}`);
+
+    expect(mergeTsdownConfigFile(tmpDir, true, createMigrationReport(), true)).toBe(true);
+    const updated = fs.readFileSync(vite, 'utf8');
+    expect(updated).toBe(
+      `${originalImport}\nimport vitePackConfig from "./vite-pack.config.ts";\n` +
+        `export const entry = base.entry;\n${config.replace('...base', '...vitePackConfig')}`,
+    );
+    expect(fs.readFileSync(path.join(tmpDir, 'vite-pack.config.ts'), 'utf8')).toContain(
+      "copy: 'public'",
+    );
+    expect(fs.readFileSync(tsdown, 'utf8')).toBe(original);
+    expect(mergeTsdownConfigFile(tmpDir, true, createMigrationReport(), true)).toBe(false);
+    expect(fs.readFileSync(vite, 'utf8')).toBe(updated);
+  });
+
+  it.each([
+    'const pack = { ...base, dts: false };\nexport default { build: { lib: { entry: pack.entry } }, pack };\n',
+    'export const pack = { ...base, dts: false };\nexport default { pack };\n',
+    'const pack = { ...base, dts: false };\nexport { pack };\nexport default { pack };\n',
+  ])('preserves the original config of constants also used outside pack (%s)', (config) => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'tsdown.config.ts'),
+      "export default { entry: 'src/lib.ts', publicDir: 'public' };\n",
+    );
+    const vite = path.join(tmpDir, 'vite.config.ts');
+    const source = `import base from './tsdown.config.ts';\n${config}`;
+    fs.writeFileSync(vite, source);
+
+    expect(mergeTsdownConfigFile(tmpDir, true, createMigrationReport(), true)).toBe(false);
+    expect(fs.readFileSync(vite, 'utf8')).toBe(source);
+    expect(fs.existsSync(path.join(tmpDir, 'vite-pack.config.ts'))).toBe(false);
+  });
+
   it('uses one converted member config for root and member pack imports', () => {
     const member = path.join(tmpDir, 'packages/member');
     fs.mkdirSync(member, { recursive: true });
