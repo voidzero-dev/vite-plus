@@ -3,10 +3,15 @@
 ## `vp help build --`
 
 ```
-vp/<version>
+VITE+ - The Unified Toolchain for the Web
 
-Usage:
-  $ vp build [root]
+Usage: vp build [ROOT] [OPTIONS]
+
+Build for production.
+Options are forwarded to Vite.
+
+Arguments:
+  [ROOT]  Project root directory (default: current directory)
 
 Options:
   --target <target>             [string] transpile target (default: 'baseline-widely-available')
@@ -21,16 +26,20 @@ Options:
   --emptyOutDir                 [boolean] force empty outDir when it's outside of root
   -w, --watch                   [boolean] rebuilds when modules have changed on disk
   --app                         [boolean] same as `builder: {}`
-  -c, --config <file>           [string] use specified config file
   --base <path>                 [string] public base path (default: /)
   -l, --logLevel <level>        [string] info | warn | error | silent
   --clearScreen                 [boolean] allow/disable clear screen when logging
-  --configLoader <loader>       [string] use 'bundle' to bundle the config with Rolldown, or 'runner' (experimental) to process it on the fly, or 'native' (experimental) to load using the native runtime (default: bundle)
-  --profile [name]              [boolean | string] start built-in Node.js inspector
   -d, --debug [feat]            [string | boolean] show debug logs
   -f, --filter <filter>         [string] filter debug logs
   -m, --mode <mode>             [string] set env mode
   -h, --help                    Display this message
+
+Examples:
+  vp build
+  vp build --watch
+  vp build --sourcemap
+
+Documentation: https://viteplus.dev/guide/build
 ```
 
 ## `vpt stat-file vite-argv.json --assert missing`

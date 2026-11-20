@@ -121,16 +121,13 @@ fn normalize_args(args: Vec<String>) -> Vec<String> {
                 let mut next = Vec::with_capacity(normalized.len());
                 next.push(normalized[0].clone());
                 next.extend(normalized[2..].iter().cloned());
-                let help_index = if matches!(next[1].as_str(), "dev" | "build") {
-                    // Vite treats `--help` as a positional argument after `--`.
-                    next[2..]
-                        .iter()
-                        .position(|arg| arg == "--")
-                        .map_or(next.len(), |index| index + 2)
-                } else {
-                    next.len()
-                };
-                next.insert(help_index, "--help".to_string());
+                if matches!(next[1].as_str(), "dev" | "build")
+                    && let Some(index) = next[2..].iter().position(|arg| arg == "--")
+                {
+                    // Bare help renders before project discovery.
+                    next.truncate(index + 2);
+                }
+                next.push("--help".to_string());
                 next
             }
             // `vp pm --help <command>` → `vp pm <command> --help`
@@ -720,6 +717,14 @@ mod tests {
         let input = s(&["vp", "help", "pm", "apprev-build"]);
         let normalized = normalize_args(input);
         assert_eq!(normalized, s(&["vp", "pm", "apprev-build", "--help"]));
+    }
+
+    #[test]
+    fn normalize_args_truncates_vite_help_at_separator() {
+        for command in ["dev", "build"] {
+            let input = s(&["vp", "help", command, "--mode", "staging", "--", "--app", "web"]);
+            assert_eq!(normalize_args(input), s(&["vp", command, "--mode", "staging", "--help"]));
+        }
     }
 
     #[test]
