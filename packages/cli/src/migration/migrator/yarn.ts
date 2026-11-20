@@ -355,6 +355,7 @@ export function rewriteYarnrcYml(
   // `resolutions` instead, so no `catalog`/`catalogs` field is written here.
   supportCatalog: boolean,
   supportPreapproved: boolean,
+  keepTsdown = false,
 ): void {
   const yarnrcYmlPath = path.join(projectPath, '.yarnrc.yml');
   if (!fs.existsSync(yarnrcYmlPath)) {
@@ -395,6 +396,7 @@ export function rewriteYarnrcYml(
         vitestEcosystemPackages,
         catalogAdditions,
         PackageManager.yarn,
+        keepTsdown,
       );
     }
   });

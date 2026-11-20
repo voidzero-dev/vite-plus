@@ -18,7 +18,6 @@ import {
   managedOverridePackages,
   normalizeVitestPeerCatalogSpec,
   pruneLegacyWrapperAliases,
-  readRulesYaml,
   removeManagedVitestEntry,
   setDirectViteEdge,
 } from '../migrator.ts';
@@ -70,11 +69,13 @@ export function rewritePackageJson(
   browserCatalogAdditions: ReadonlySet<string> = new Set(),
   // Bundled browser packages that this package still imports.
   retainedBrowserPackages?: ReadonlySet<string>,
+  keepTsdown = false,
+  keepTsdownDependency = keepTsdown,
 ): Record<string, string | string[]> | null {
   if (pkg.scripts) {
     const updated = rewriteScripts(
       JSON.stringify(pkg.scripts),
-      getScriptRulesYaml(skipStagedMigration),
+      getScriptRulesYaml(skipStagedMigration, keepTsdown),
     );
     if (updated) {
       pkg.scripts = JSON.parse(updated);
@@ -86,7 +87,7 @@ export function rewritePackageJson(
   let extractedStagedConfig: Record<string, string | string[]> | null = null;
   if (!skipStagedMigration && pkg['lint-staged']) {
     const config = pkg['lint-staged'];
-    const updated = rewriteScripts(JSON.stringify(config), readRulesYaml());
+    const updated = rewriteScripts(JSON.stringify(config), getScriptRulesYaml(false, keepTsdown));
     extractedStagedConfig = updated ? JSON.parse(updated) : config;
   }
   const supportCatalog = !!isMonorepo && packageManager !== PackageManager.npm;
@@ -193,7 +194,7 @@ export function rewritePackageJson(
     needVitePlus = true;
   }
   // remove packages that are replaced with vite-plus
-  for (const name of bundledPackagesToRemove(retainedBrowserPackages)) {
+  for (const name of bundledPackagesToRemove(retainedBrowserPackages, keepTsdownDependency)) {
     let wasRemoved = false;
     for (const { dependencyField, dependencies } of dependencyGroups) {
       if (

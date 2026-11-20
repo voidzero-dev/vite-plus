@@ -342,6 +342,7 @@ export function rewritePnpmWorkspaceYaml(
   catalogAdditions: ReadonlySet<string> = new Set(),
   usesWebdriverioProvider = false,
   pnpmVersion: string | undefined,
+  keepTsdown = false,
 ): void {
   const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
   if (!fs.existsSync(pnpmWorkspaceYamlPath)) {
@@ -357,6 +358,7 @@ export function rewritePnpmWorkspaceYaml(
       vitestEcosystemPackages,
       catalogAdditions,
       PackageManager.pnpm,
+      keepTsdown,
     );
     if (!writeWorkspaceSettings) {
       return;
@@ -893,6 +895,7 @@ export function rewriteCatalog(
   vitestEcosystemPackages: ReadonlySet<string>,
   catalogAdditions: ReadonlySet<string>,
   packageManager: PackageManager,
+  keepTsdown = false,
 ): string {
   const parsed = doc.toJS() as {
     catalog?: Record<string, string>;
@@ -912,6 +915,7 @@ export function rewriteCatalog(
     usesVitest,
     vitestEcosystemPackages,
     catalogAdditions,
+    keepTsdown,
   );
 
   if (targetPath[0] !== 'catalog') {
@@ -922,6 +926,7 @@ export function rewriteCatalog(
       usesVitest,
       vitestEcosystemPackages,
       catalogAdditions,
+      keepTsdown,
     );
   }
 
@@ -943,6 +948,7 @@ export function rewriteCatalog(
         usesVitest,
         vitestEcosystemPackages,
         catalogAdditions,
+        keepTsdown,
       );
     }
   }
@@ -957,6 +963,7 @@ function rewriteYamlCatalogAtPath(
   usesVitest: boolean,
   vitestEcosystemPackages: ReadonlySet<string>,
   catalogAdditions: ReadonlySet<string>,
+  keepTsdown: boolean,
 ): void {
   const managed = managedOverridePackages(usesVitest);
   let catalogNode = doc.getIn(catalogPath);
@@ -998,7 +1005,7 @@ function rewriteYamlCatalogAtPath(
       }
     }
   }
-  for (const name of bundledPackagesToRemove(catalogAdditions)) {
+  for (const name of bundledPackagesToRemove(catalogAdditions, keepTsdown)) {
     catalog.delete(name);
   }
   // Drop any entry still pointing at the deleted `vite-plus-test` wrapper.
@@ -1041,6 +1048,7 @@ function rewriteCatalogObject(
   usesVitest: boolean,
   vitestEcosystemPackages: ReadonlySet<string>,
   catalogAdditions: ReadonlySet<string>,
+  keepTsdown: boolean,
   otherDefaultCatalog?: Record<string, string>,
 ): void {
   const managed = managedOverridePackages(usesVitest);
@@ -1064,7 +1072,7 @@ function rewriteCatalogObject(
   ) {
     catalog[VITE_PLUS_NAME] = VITE_PLUS_VERSION;
   }
-  for (const name of bundledPackagesToRemove(catalogAdditions)) {
+  for (const name of bundledPackagesToRemove(catalogAdditions, keepTsdown)) {
     delete catalog[name];
   }
   if (VITEST_IS_MANAGED_OVERRIDE) {
@@ -1098,6 +1106,7 @@ export function rewriteBunCatalog(
   usesWebdriverioProvider = false,
   packageManagerVersion = 'latest',
   catalogAdditions: ReadonlySet<string> = new Set(),
+  keepTsdown = false,
 ): void {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
@@ -1137,6 +1146,7 @@ export function rewriteBunCatalog(
         usesVitest,
         vitestEcosystemPackages,
         catalogAdditions,
+        keepTsdown,
         otherDefaultCatalog,
       );
       pruneLegacyWrapperAliases(target);
@@ -1212,6 +1222,7 @@ export function rewriteRootWorkspacePackageJson(
   supportCatalog = true,
   preparedOxlintConfigs?: PreparedOxlintConfigs,
   retainedImportDependencies?: RetainedImportDependencies,
+  tsdownPackages: ReadonlySet<string> = new Set(),
 ): void {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
@@ -1356,6 +1367,10 @@ export function rewriteRootWorkspacePackageJson(
       : undefined,
     true,
     supportCatalog,
+    undefined,
+    tsdownPackages.has(path.resolve(projectPath)),
+    // A workspace member may run the binary from the root devDependencies.
+    tsdownPackages.size > 0,
   );
 }
 

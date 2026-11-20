@@ -39,11 +39,12 @@ export function rewriteTsconfigTypes(
   projectPath: string,
   silent = false,
   report?: MigrationReport,
+  keepTsdown = false,
 ): boolean {
   let changed = false;
   const files = findTsconfigFiles(projectPath);
   for (const filePath of files) {
-    if (rewriteTypesInTsconfig(filePath)) {
+    if (rewriteTypesInTsconfig(filePath, keepTsdown)) {
       changed = true;
       if (report) {
         report.removedConfigCount++;
@@ -56,6 +57,8 @@ export function rewriteTsconfigTypes(
   return changed;
 }
 
-export function hasTsconfigTypesToRewrite(projectPath: string): boolean {
-  return findTsconfigFiles(projectPath).some((filePath) => hasTypesToRewriteInTsconfig(filePath));
+export function hasTsconfigTypesToRewrite(projectPath: string, keepTsdown = false): boolean {
+  return findTsconfigFiles(projectPath).some((filePath) =>
+    hasTypesToRewriteInTsconfig(filePath, keepTsdown),
+  );
 }

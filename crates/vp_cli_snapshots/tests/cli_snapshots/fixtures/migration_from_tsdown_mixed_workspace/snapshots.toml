@@ -1,0 +1,84 @@
+[[case]]
+name = "mixed_workspace"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+comment = "Install the pinned tsdown to build the root library. The other package already uses vp pack and still needs its own tsdown config merged during migration."
+steps = [
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  { argv = ["vp", "run", "bundle"], snapshot = false },
+  ["vpt", "print-file", "custom-out/root-library.mjs"],
+  { argv = ["vp", "run", "build"], cwd = "packages/legacy-pack", snapshot = false },
+  ["vpt", "stat-file", "packages/legacy-pack/lib-out/library.mjs", "--assert", "file"],
+  ["vpt", "print-file", "packages/legacy-pack/lib-out/library.mjs"],
+  ["vpt", "stat-file", "packages/legacy-pack/dist/index.mjs", "--assert", "missing"],
+]
+
+[[case]]
+name = "dynamic_config"
+vp = "global"
+local-registry = true
+# The reported script uses POSIX shell syntax.
+skip-platforms = ["windows"]
+unset-env = ["VP_SKIP_INSTALL"]
+comment = "The root script selects a config through an environment variable. Build both packages, then select the child's original JSON from the same script after a second migration."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "scripts.bundle", 'export TSDOWN_CONFIG=tsdown.custom.config.ts && tsdown --config "$TSDOWN_CONFIG"'], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  { argv = ["vp", "run", "bundle"], snapshot = false },
+  ["vpt", "print-file", "custom-out/root-library.mjs"],
+  { argv = ["vp", "run", "build"], cwd = "packages/legacy-pack", snapshot = false },
+  ["vpt", "stat-file", "packages/legacy-pack/lib-out/library.mjs", "--assert", "file"],
+  ["vpt", "print-file", "packages/legacy-pack/lib-out/library.mjs"],
+  ["vpt", "stat-file", "packages/legacy-pack/dist/index.mjs", "--assert", "missing"],
+  { argv = ["vpt", "rm", "-r", "packages/legacy-pack/lib-out"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "scripts.bundle", 'export TSDOWN_CONFIG=packages/legacy-pack/tsdown.config.json && tsdown --config "$TSDOWN_CONFIG"'], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive"], snapshot = false },
+  ["vpt", "stat-file", "packages/legacy-pack/tsdown.config.json", "--assert", "file"],
+  { argv = ["vp", "run", "bundle"], snapshot = false },
+  ["vpt", "print-file", "packages/legacy-pack/lib-out/library.mjs"],
+]
+
+[[case]]
+name = "dynamic_config_with_chdir"
+vp = "global"
+local-registry = true
+# The reported script uses POSIX shell syntax.
+skip-platforms = ["windows"]
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "scripts.bundle", 'export TSDOWN_CONFIG=tsdown.custom.config.ts && tsdown --config "$TSDOWN_CONFIG"'], snapshot = false },
+  { argv = ["vpt", "json-edit", "packages/legacy-pack/package.json", "scripts.build", "vp -C . pack"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  { argv = ["vp", "run", "bundle"], snapshot = false },
+  ["vpt", "print-file", "custom-out/root-library.mjs"],
+  { argv = ["vp", "run", "build"], cwd = "packages/legacy-pack", snapshot = false },
+  ["vpt", "stat-file", "packages/legacy-pack/lib-out/library.mjs", "--assert", "file"],
+  ["vpt", "print-file", "packages/legacy-pack/lib-out/library.mjs"],
+  ["vpt", "stat-file", "packages/legacy-pack/dist/index.mjs", "--assert", "missing"],
+  ["vpt", "stat-file", "packages/legacy-pack/tsdown.config.json", "--assert", "file"],
+]
+
+[[case]]
+name = "dynamic_config_with_root_chdir"
+vp = "global"
+local-registry = true
+# The reported script uses POSIX shell syntax.
+skip-platforms = ["windows"]
+unset-env = ["VP_SKIP_INSTALL"]
+comment = "The root script builds a package that has a default tsdown config and no build script. Keep the original config available to standalone tsdown."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "scripts.bundle", 'export TSDOWN_CONFIG=tsdown.custom.config.ts && tsdown --config "$TSDOWN_CONFIG"'], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "scripts.bundleChild", "vp -C packages/legacy-pack pack"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/legacy-pack/package.json", '{"name":"legacy-pack","private":true,"type":"module"}'], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  { argv = ["vp", "run", "bundle"], snapshot = false },
+  ["vpt", "print-file", "custom-out/root-library.mjs"],
+  { argv = ["vp", "run", "bundleChild"], snapshot = false },
+  ["vpt", "print-file", "packages/legacy-pack/lib-out/library.mjs"],
+  ["vpt", "stat-file", "packages/legacy-pack/dist/index.mjs", "--assert", "missing"],
+  ["vpt", "stat-file", "packages/legacy-pack/tsdown.config.json", "--assert", "file"],
+  { argv = ["vpt", "rm", "-r", "packages/legacy-pack/lib-out"], snapshot = false },
+  { argv = ["vp", "pack"], cwd = "packages/legacy-pack", snapshot = false },
+  ["vpt", "stat-file", "packages/legacy-pack/lib-out/library.mjs", "--assert", "file"],
+]

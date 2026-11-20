@@ -97,6 +97,7 @@ import {
   retryPreservedOxlintConfigs,
   prepareOxlintConfigs,
   removeMigratedOxlintConfigs,
+  collectPackagesKeepingTsdown,
   shouldSkipStagedMigrationForHooks,
   warnPackageLevelPrettier,
   warnUnresolvedImportRuleConfig,
@@ -1178,6 +1179,11 @@ async function main() {
       didMigrate = true;
     }
 
+    const tsdownPackages = collectPackagesKeepingTsdown(
+      workspaceInfoOptional.rootDir,
+      workspaceInfoOptional.packages,
+      report,
+    );
     // Find the packages that supply preserved imports before bootstrap changes their
     // manifests. If the config needs missing dependencies, retry after the normal install.
     const importRuleConfig = await tryResolveImportRuleConfig(workspaceInfoOptional.rootDir);
@@ -1185,7 +1191,7 @@ async function main() {
       workspaceInfoOptional,
       importRuleConfig,
     );
-    const pendingCoreMigration = detectPendingCoreMigration(workspaceInfoOptional);
+    const pendingCoreMigration = detectPendingCoreMigration(workspaceInfoOptional, tsdownPackages);
     let packageManager = workspaceInfoOptional.packageManager;
     let downloadedPackageManager: WorkspaceInfo['downloadPackageManager'] | undefined;
     let packageManagerVersion = workspaceInfoOptional.packageManagerVersion;
@@ -1196,6 +1202,7 @@ async function main() {
         workspaceInfoOptional.packages,
         packageManagerVersion,
         dependencies,
+        tsdownPackages,
       );
     const vitePlusBootstrapPending = bootstrapPending(retainedImportDependencies);
     async function ensureExistingPackageManager() {
@@ -1268,6 +1275,7 @@ async function main() {
       report,
       pendingCoreMigration,
       importRuleConfig,
+      tsdownPackages,
     );
     if (
       coreMigrationResult.dependencies ||
@@ -1367,6 +1375,7 @@ async function main() {
         { ...workspaceInfoOptional, ...resolved },
         report,
         dependencies,
+        tsdownPackages,
       ).changed;
     }
     if (vitePlusBootstrapPending && (await reconcileBootstrap(retainedImportDependencies))) {
@@ -1623,9 +1632,13 @@ async function main() {
         removeMigratedOxlintConfigs(oxlintConfigs);
       }
       if (tsupMigrated) {
-        mergeTsdownConfigFile(workspaceInfoOptional.rootDir, true, report);
-        for (const pkg of workspaceInfoOptional.packages ?? []) {
-          mergeTsdownConfigFile(path.join(workspaceInfoOptional.rootDir, pkg.path), true, report);
+        for (const projectPath of getWorkspaceProjectPaths(workspaceInfoOptional)) {
+          mergeTsdownConfigFile(
+            projectPath,
+            true,
+            report,
+            tsdownPackages.has(path.resolve(projectPath)),
+          );
         }
       }
       needsInstall = true;
@@ -1715,6 +1728,7 @@ async function main() {
         rewriteAllImports(workspaceInfoOptional.rootDir, true, report, {
           oxlintOwnerDirs: deferredOxlintOwnerDirs,
           importRuleConfig: resolvedImportRuleConfig ?? DISABLED_IMPORT_RULE_CONFIG,
+          preserveTsdownDirs: [...tsdownPackages],
         }) || didMigrate;
       // The first install used the owners we could identify without loading
       // the config. Sync again only if the resolved rule changes dependencies.
