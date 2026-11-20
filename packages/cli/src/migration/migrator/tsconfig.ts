@@ -76,21 +76,30 @@ type ProjectFileKey = (typeof projectFileKeys)[number];
 type ProjectFileList = { filename: string; entries: string[] };
 type ProjectFileLists = Partial<Record<ProjectFileKey, ProjectFileList>>;
 type JavaScriptOptions = Partial<Record<(typeof javaScriptOptionKeys)[number], boolean>>;
+type ProjectFileConfig = {
+  text: string;
+  lists: ProjectFileLists;
+  javaScript: JavaScriptOptions;
+  references?: { path?: unknown }[];
+  missingPreset?: string;
+};
 
 function readProjectFileLists(
   filename: string,
   resolver: ResolverFactory,
+  edits: ReadonlyMap<string, string>,
   ancestors = new Set<string>(),
-): { text: string; lists: ProjectFileLists; javaScript: JavaScriptOptions } | undefined {
+): ProjectFileConfig | undefined {
   if (ancestors.has(filename) || !fs.statSync(filename, { throwIfNoEntry: false })?.isFile()) {
     return undefined;
   }
-  const text = fs.readFileSync(filename, 'utf8');
+  const text = edits.get(filename) ?? fs.readFileSync(filename, 'utf8');
   const errors: ParseError[] = [];
   const config = parseJsonc(text, errors, { allowTrailingComma: true }) as
     | ({
         extends?: unknown;
         compilerOptions?: Partial<Record<keyof JavaScriptOptions, unknown>>;
+        references?: ProjectFileConfig['references'];
       } & Partial<Record<ProjectFileKey, unknown>>)
     | undefined;
   if (!config || errors.length) {
@@ -99,6 +108,7 @@ function readProjectFileLists(
   const directory = path.dirname(filename);
   const lists: ProjectFileLists = {};
   const javaScript: JavaScriptOptions = {};
+  let missingPreset: string | undefined;
   const bases = Array.isArray(config.extends) ? config.extends : [config.extends];
   ancestors.add(filename);
   for (const base of bases) {
@@ -106,12 +116,16 @@ function readProjectFileLists(
       continue;
     }
     const resolved = resolveProjectConfigBase(directory, base, resolver);
-    if (!resolved) {
+    const inherited = resolved
+      ? readProjectFileLists(resolved, resolver, edits, ancestors)
+      : undefined;
+    if (!inherited) {
+      missingPreset ??= base;
       continue;
     }
-    const inherited = readProjectFileLists(resolved, resolver, ancestors);
-    Object.assign(lists, inherited?.lists);
-    Object.assign(javaScript, inherited?.javaScript);
+    Object.assign(lists, inherited.lists);
+    Object.assign(javaScript, inherited.javaScript);
+    missingPreset ??= inherited.missingPreset;
   }
   ancestors.delete(filename);
   for (const key of projectFileKeys) {
@@ -126,7 +140,8 @@ function readProjectFileLists(
       javaScript[key] = value;
     }
   }
-  return { text, lists, javaScript };
+  // Project references are local to this config. TypeScript does not inherit them.
+  return { text, lists, javaScript, references: config.references, missingPreset };
 }
 
 function resolveProjectConfigBase(
@@ -144,17 +159,23 @@ function resolveProjectConfigBase(
     : `${target}.json`;
 }
 
-/** Keep the generated config in each TypeScript project that imports it from Vite config. */
-export function includeGeneratedPackConfig(
+type PackConfigTsconfigEdits = {
+  apply: () => boolean;
+  missingPreset?: { filename: string; specifier: string };
+};
+
+/** Prepare edits for each TypeScript project that imports the generated config. */
+export function preparePackConfigTsconfigEdits(
   viteConfigPath: string,
   generatedPath: string,
   workspaceRoot: string,
-): boolean {
+): PackConfigTsconfigEdits {
   const isJavaScript = /\.[cm]?js$/.test(generatedPath);
   if (!isJavaScript && !/\.[cm]?ts$/.test(generatedPath)) {
-    return false;
+    return { apply: () => false };
   }
   const root = path.resolve(workspaceRoot);
+  const realRoot = fs.realpathSync(root);
   // TypeScript resolves package presets as JSON using the NodeNext CJS conditions.
   const resolver = new ResolverFactory({
     extensions: ['.json'],
@@ -162,67 +183,124 @@ export function includeGeneratedPackConfig(
     mainFields: ['tsconfig'],
     mainFiles: ['tsconfig'],
   });
-  let changed = false;
+  const filenames = new Set<string>();
   for (
     let directory = path.dirname(path.resolve(viteConfigPath));
     ;
     directory = path.dirname(directory)
   ) {
-    for (const filename of findTsconfigFiles(directory)) {
-      if (!fs.lstatSync(filename, { throwIfNoEntry: false })?.isFile()) {
-        continue;
-      }
-      const project = readProjectFileLists(filename, resolver);
-      if (!project) {
-        continue;
-      }
-      const { text, lists, javaScript } = project;
-      // TypeScript defaults allowJs to checkJs when allowJs is omitted.
-      if (isJavaScript && !(javaScript.allowJs ?? javaScript.checkJs)) {
-        continue;
-      }
-      const listed = (file: string) => matchesTsconfigPaths(lists.files, directory, file, false);
-      const excluded = (file: string) => matchesTsconfigPaths(lists.exclude, directory, file, true);
-      const included = (file: string) =>
-        matchesTsconfigPaths(lists.include, directory, file, true) && !excluded(file);
-      if (listed(generatedPath) || included(generatedPath)) {
-        continue;
-      }
-      const explicitlyListed = listed(viteConfigPath);
-      if (!explicitlyListed && !included(viteConfigPath)) {
-        continue;
-      }
-      // A files entry bypasses exclude, as it does for an original explicit file.
-      const key = explicitlyListed || excluded(generatedPath) ? 'files' : 'include';
-      const relative = path.relative(directory, generatedPath).split(path.sep).join('/');
-      const selected = lists[key];
-      const inherited = selected && selected.filename !== filename;
-      const rebased = inherited
-        ? selected.entries.map((entry) =>
-            path
-              .relative(directory, resolveTsconfigEntry(selected, directory, entry))
-              .split(path.sep)
-              .join('/'),
-          )
-        : [];
-      // Local keys override inherited keys. Carry over the original paths with
-      // their original base so the addition preserves the rest of the project.
-      const updated = appendMissingJsoncArrayItems(
-        text,
-        [key],
-        inherited ? undefined : selected?.entries,
-        [...rebased, relative],
-        detectFormattingOptions(text),
-      );
-      if (updated !== text) {
-        fs.writeFileSync(filename, updated);
-        changed = true;
-      }
+    for (const file of findTsconfigFiles(directory)) {
+      filenames.add(file);
     }
     if (directory === root || directory === path.dirname(directory)) {
-      return changed;
+      break;
     }
   }
+  const visited = new Set<string>();
+  const edits = new Map<string, string>();
+  let missingPreset: PackConfigTsconfigEdits['missingPreset'];
+  for (const filename of filenames) {
+    if (!fs.lstatSync(filename, { throwIfNoEntry: false })?.isFile()) {
+      continue;
+    }
+    const realFilename = fs.realpathSync(filename);
+    const fromRoot = path.relative(realRoot, realFilename);
+    if (
+      path.isAbsolute(fromRoot) ||
+      fromRoot.split(path.sep)[0] === '..' ||
+      visited.has(realFilename)
+    ) {
+      continue;
+    }
+    visited.add(realFilename);
+    const project = readProjectFileLists(filename, resolver, edits);
+    if (!project) {
+      continue;
+    }
+    const directory = path.dirname(filename);
+    const { text, lists, javaScript, references } = project;
+    if (Array.isArray(references)) {
+      for (const reference of references) {
+        if (typeof reference?.path === 'string') {
+          const target = path.resolve(directory, reference.path.replaceAll('\\', '/'));
+          filenames.add(
+            fs.statSync(target, { throwIfNoEntry: false })?.isDirectory()
+              ? path.join(target, 'tsconfig.json')
+              : target,
+          );
+        }
+      }
+    }
+
+    const listed = (file: string) => matchesTsconfigPaths(lists.files, directory, file, false);
+    const excluded = (file: string) => matchesTsconfigPaths(lists.exclude, directory, file, true);
+    const includesPattern = (file: string) =>
+      matchesTsconfigPaths(lists.include, directory, file, true);
+    const included = (file: string) => includesPattern(file) && !excluded(file);
+    const explicitlyListed = listed(viteConfigPath);
+    const generatedListed = listed(generatedPath);
+    if (project.missingPreset) {
+      // Explicit local files can safely be edited without knowing inherited
+      // patterns. Otherwise the unresolved preset may own the project scope.
+      const hasLocalFiles = lists.files?.filename === filename;
+      const unrelated =
+        hasLocalFiles &&
+        lists.include?.filename === filename &&
+        !explicitlyListed &&
+        !includesPattern(viteConfigPath);
+      if (unrelated) {
+        continue;
+      }
+      if (isJavaScript || !hasLocalFiles || (!explicitlyListed && !generatedListed)) {
+        missingPreset ??= { filename, specifier: project.missingPreset };
+        continue;
+      }
+    }
+    // TypeScript defaults allowJs to checkJs when allowJs is omitted.
+    if (isJavaScript && !(javaScript.allowJs ?? javaScript.checkJs)) {
+      continue;
+    }
+    if (generatedListed || (!project.missingPreset && included(generatedPath))) {
+      continue;
+    }
+    if (!explicitlyListed && !included(viteConfigPath)) {
+      continue;
+    }
+    // A files entry bypasses exclude, as it does for an original explicit file.
+    const key = explicitlyListed || excluded(generatedPath) ? 'files' : 'include';
+    const relative = path.relative(directory, generatedPath).split(path.sep).join('/');
+    const selected = lists[key];
+    const inherited = selected && selected.filename !== filename;
+    const rebased = inherited
+      ? selected.entries.map((entry) =>
+          path
+            .relative(directory, resolveTsconfigEntry(selected, directory, entry))
+            .split(path.sep)
+            .join('/'),
+        )
+      : [];
+    // Local keys override inherited keys. Carry over the original paths with
+    // their original base so the addition preserves the rest of the project.
+    const updated = appendMissingJsoncArrayItems(
+      text,
+      [key],
+      inherited ? undefined : selected?.entries,
+      [...rebased, relative],
+      detectFormattingOptions(text),
+    );
+    if (updated !== text) {
+      edits.set(filename, updated);
+    }
+  }
+  return {
+    missingPreset,
+    apply() {
+      for (const [filename, text] of edits) {
+        fs.writeFileSync(filename, text);
+      }
+      return edits.size > 0;
+    },
+  };
 }
 
 function matchesTsconfigPaths(

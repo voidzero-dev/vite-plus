@@ -48,7 +48,7 @@ import { readLintConfigInWorker } from '../compat/runner.ts';
 import { detectConfigs, type ConfigFiles } from '../detector.ts';
 import {
   collectInstalledPackageNames,
-  includeGeneratedPackConfig,
+  preparePackConfigTsconfigEdits,
   oxlintMigrationMarker,
   prepareOxlintConfigs,
   getScriptRulesYaml,
@@ -490,7 +490,7 @@ function mergeRetainedTsdownConfig(
   if (imports.some(({ value }) => convertedImports.includes(value))) {
     return (
       fs.existsSync(convertedPath) &&
-      includeGeneratedPackConfig(viteConfigPath, convertedPath, workspaceRoot)
+      preparePackConfigTsconfigEdits(viteConfigPath, convertedPath, workspaceRoot).apply()
     );
   }
   if (!keepTsdownConfig) {
@@ -527,16 +527,30 @@ function mergeRetainedTsdownConfig(
   }
 
   const create = !fs.existsSync(convertedPath);
-  if (create) {
-    fs.writeFileSync(convertedPath, content, { flag: 'wx' });
-  } else if (fs.readFileSync(convertedPath, 'utf8') !== content) {
+  if (!create && fs.readFileSync(convertedPath, 'utf8') !== content) {
     warnMigration(
       `Cannot write the converted pack config because ${displayRelative(convertedPath)} already exists. Merge ${displayRelative(tsdownConfigPath)} into pack manually.`,
       report,
     );
     return false;
   }
-  const included = includeGeneratedPackConfig(viteConfigPath, convertedPath, workspaceRoot);
+  const tsconfigEdits = preparePackConfigTsconfigEdits(
+    viteConfigPath,
+    convertedPath,
+    workspaceRoot,
+  );
+  if (tsconfigEdits.missingPreset) {
+    const { filename, specifier } = tsconfigEdits.missingPreset;
+    warnMigration(
+      `Resolve the TypeScript preset \`${specifier}\` used by ${displayRelative(filename)} and rerun \`vp migrate\` to add the converted pack config.`,
+      report,
+    );
+    return false;
+  }
+  if (create) {
+    fs.writeFileSync(convertedPath, content, { flag: 'wx' });
+  }
+  const included = tsconfigEdits.apply();
   try {
     fs.writeFileSync(viteConfigPath, config);
   } catch (error) {
