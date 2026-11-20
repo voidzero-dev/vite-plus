@@ -358,25 +358,27 @@ function configImports(filename: string, source: string) {
   );
 }
 
-/** Make sure a retained config's new pack imports resolve in focused installs. */
-export function tsdownPackNeedsVitePlus(projectPath: string): boolean {
+/** Check whether a generated or retained configuration needs Vite+ in focused installs. */
+export function configNeedsVitePlus(projectPath: string, keepTsdownDependency: boolean): boolean {
   const { viteConfig, tsdownConfig } = detectConfigs(projectPath);
-  if (!viteConfig || !tsdownConfig) {
+  if (!viteConfig || (!tsdownConfig && !keepTsdownDependency)) {
     return false;
   }
   const vitePath = path.join(projectPath, viteConfig);
   try {
-    if (!hasConfigKey(vitePath, 'pack')) {
+    const imports = configImports(vitePath, fs.readFileSync(vitePath, 'utf8'));
+    const importsVitePlus = imports.some(
+      ({ value }) => value === VITE_PLUS_NAME || value.startsWith(`${VITE_PLUS_NAME}/`),
+    );
+    if (keepTsdownDependency && importsVitePlus) {
+      return true;
+    }
+    if (!tsdownConfig || !hasConfigKey(vitePath, 'pack')) {
       return false;
     }
-    const imports = configImports(vitePath, fs.readFileSync(vitePath, 'utf8'));
     const converted = convertedPackConfigName(tsdownConfig);
     const convertedImports = tsdownConfigImportPaths(converted);
-    return (
-      imports.some(
-        ({ value }) => value === VITE_PLUS_NAME || value.startsWith(`${VITE_PLUS_NAME}/`),
-      ) || imports.some(({ value }) => convertedImports.includes(value))
-    );
+    return importsVitePlus || imports.some(({ value }) => convertedImports.includes(value));
   } catch {
     return false;
   }
@@ -543,6 +545,13 @@ function mergeRetainedTsdownConfig(
     const { filename, specifier } = tsconfigEdits.missingPreset;
     warnMigration(
       `Resolve the TypeScript preset \`${specifier}\` used by ${displayRelative(filename)} and rerun \`vp migrate\` to add the converted pack config.`,
+      report,
+    );
+    return false;
+  }
+  if (tsconfigEdits.excludedConfig) {
+    warnMigration(
+      `Allow \`${convertedName}\` in ${displayRelative(tsconfigEdits.excludedConfig)} and rerun \`vp migrate\` to add the converted pack config.`,
       report,
     );
     return false;
