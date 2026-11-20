@@ -632,6 +632,54 @@ describe('explicit tsdown config selection', () => {
     expect(mergeTsdownConfigFile(tmpDir, true, createMigrationReport(), true)).toBe(false);
   });
 
+  it.skipIf(process.platform === 'win32')(
+    'keeps imports relative to a shared tsdown config and repairs a previous local copy',
+    () => {
+      const member = path.join(tmpDir, 'packages/lib');
+      const tooling = path.join(tmpDir, 'tooling');
+      fs.mkdirSync(member, { recursive: true });
+      fs.mkdirSync(tooling);
+      const shared = path.join(tooling, 'tsdown-library.ts');
+      const original =
+        "import { outDir } from './options.ts';\nexport default { outDir, publicDir: 'public' };\n";
+      fs.writeFileSync(shared, original);
+      fs.writeFileSync(path.join(tooling, 'options.ts'), "export const outDir = 'shared-out';\n");
+      const tsdown = path.join(member, 'tsdown.config.ts');
+      fs.symlinkSync('../../tooling/tsdown-library.ts', tsdown, 'file');
+      const vite = path.join(member, 'vite.config.ts');
+      fs.writeFileSync(vite, "import pack from './tsdown.config.js';\nexport default { pack };\n");
+      const tsconfig = path.join(member, 'tsconfig.json');
+      fs.writeFileSync(tsconfig, '{"files":["vite.config.ts"]}\n');
+
+      expect(mergeTsdownConfigFile(member, true, createMigrationReport(), true, tmpDir)).toBe(true);
+      const converted = path.join(member, 'vite-pack.config.ts');
+      const sharedCopy = fs.realpathSync(converted);
+      expect(path.dirname(sharedCopy)).toBe(fs.realpathSync(tooling));
+      expect(fs.lstatSync(converted).isSymbolicLink()).toBe(true);
+      const pack = fs.readFileSync(converted, 'utf8');
+      expect(pack).toContain("from './options.ts'");
+      expect(pack).toContain("copy: 'public'");
+      const viteSource = fs.readFileSync(vite, 'utf8');
+      expect(viteSource).toContain('from "./vite-pack.config.js"');
+      expect(readJsonFile(tsconfig, true).files).toEqual(['vite.config.ts', 'vite-pack.config.ts']);
+
+      // A previous migration wrote the same converted text in the member directory.
+      fs.unlinkSync(converted);
+      fs.unlinkSync(sharedCopy);
+      fs.writeFileSync(converted, pack);
+      expect(mergeTsdownConfigFile(member, true, createMigrationReport(), false, tmpDir)).toBe(
+        true,
+      );
+      expect(fs.realpathSync(converted)).toBe(sharedCopy);
+      expect(fs.readFileSync(vite, 'utf8')).toBe(viteSource);
+      expect(fs.readFileSync(shared, 'utf8')).toBe(original);
+      expect(fs.readlinkSync(tsdown)).toBe('../../tooling/tsdown-library.ts');
+      expect(mergeTsdownConfigFile(member, true, createMigrationReport(), true, tmpDir)).toBe(
+        false,
+      );
+    },
+  );
+
   it.each(['files', 'include'])(
     'adds the converted config to a composite project using %s',
     (key) => {
