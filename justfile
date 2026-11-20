@@ -126,15 +126,13 @@ snapshot-test-global *args='':
 # Single source of truth for clippy, used by CI too. The `-A` flags allow
 # new toolchain lints that fire in upstream rolldown crates without a `[lints]` table.
 lint:
-  cargo clippy --workspace --exclude rolldown_common --all-targets --all-features -- --deny warnings \
+  cargo clippy --workspace --all-targets --all-features -- --deny warnings \
     -A clippy::byte_char_slices \
     -A clippy::manual_assert_eq \
     -A clippy::needless_return_with_question_mark \
     -A clippy::redundant_else \
     -A clippy::unused_async_trait_impl \
     -A clippy::useless_borrows_in_formatting
-  # Rolldown's JSON parser test checks the exact value of an integer literal stored as f64.
-  cargo clippy -p rolldown_common --all-targets --all-features -- --deny warnings -A clippy::float_cmp
   cargo clippy --manifest-path crates/vp_trampoline/Cargo.toml --all-targets -- --deny warnings
 
 [unix]
