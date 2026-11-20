@@ -2,6 +2,7 @@ import { join } from 'node:path';
 
 import { readJsonFile } from './json.ts';
 import { displayRelative } from './path.ts';
+import { formatDuration } from './terminal.ts';
 
 function parsePnpmLog(line: string): Record<string, unknown> | undefined {
   if (!line.startsWith('{')) {
@@ -51,6 +52,25 @@ function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
+}
+
+function formatRequestRetry(log: Record<string, unknown>): string | undefined {
+  const { method, url, timeout, attempt, maxRetries } = log;
+  if (
+    typeof method !== 'string' ||
+    typeof url !== 'string' ||
+    typeof timeout !== 'number' ||
+    typeof attempt !== 'number' ||
+    typeof maxRetries !== 'number'
+  ) {
+    return undefined;
+  }
+  const error = asRecord(log.error);
+  const code = error.httpStatusCode ?? error.status ?? error.errno ?? error.code ?? error.message;
+  const reason = typeof code === 'string' || typeof code === 'number' ? ` (${code})` : '';
+  const retriesLeft = maxRetries - attempt + 1;
+  const retries = retriesLeft === 1 ? 'retry' : 'retries';
+  return `${method} ${url} error${reason}. Will retry in ${formatDuration(timeout)}. ${retriesLeft} ${retries} left.`;
 }
 
 function appendDependencyContext(messages: string[], log: Record<string, unknown>): void {
@@ -106,6 +126,11 @@ export async function formatPnpmInstallOutput(output: string, cwd: string): Prom
     } else if (log.name === 'pnpm:progress') {
       if (typeof log.status === 'string' && Object.hasOwn(progress, log.status)) {
         progress[log.status as keyof typeof progress]++;
+      }
+    } else if (log.name === 'pnpm:request-retry') {
+      const retry = formatRequestRetry(log);
+      if (retry) {
+        messages.push(retry);
       }
     } else if (log.name === 'pnpm:lifecycle' && typeof log.stage === 'string') {
       const directory =

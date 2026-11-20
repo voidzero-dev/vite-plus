@@ -44,12 +44,22 @@ export async function getMigrationInstallIdleTimeoutMs(
       if (selection?.name !== PackageManager.pnpm) {
         return undefined;
       }
-      version = selection.version;
+      // env current can see a system binary that failed the version probe.
+      // The installer falls back to the package manager resolved for the project.
+      const launcherVersion = selection.version === 'unknown' ? undefined : selection.version;
+      version = launcherVersion ?? version;
       if (override) {
-        // The global launcher reports the target path even before its first install.
-        pnpmExecutable = selection.installed
-          ? selection.bin_paths.pnpm
-          : (await downloadPackageManager({ ...override, version, cwd })).binPaths.pnpm;
+        // Use the installer provider for a missing or unusable launcher.
+        pnpmExecutable =
+          launcherVersion && selection.installed
+            ? selection.bin_paths.pnpm
+            : (
+                await downloadPackageManager({
+                  ...override,
+                  version: launcherVersion ?? override.version,
+                  cwd,
+                })
+              ).binPaths.pnpm;
       }
     } else if (override) {
       // The local launcher uses the same provider as this binding.
