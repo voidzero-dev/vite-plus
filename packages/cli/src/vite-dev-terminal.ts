@@ -10,10 +10,13 @@ if (isMainThread && process.execArgv.at(-1)?.endsWith('/dist/vite-dev-terminal.c
   if (terminal) {
     process.once('exit', () => terminal.restore());
     terminal.restoreOnDefaultSignals();
-    // After Node removes its last signal listener, a plugin can re-send the
-    // signal and terminate before the exit event runs.
+    // After Node removes its last listener for a signal, that signal can
+    // terminate the process before the exit event runs.
     process.on('removeListener', (event) => {
-      if ((event === 'SIGHUP' || event === 'SIGINT') && process.listenerCount(event) === 0) {
+      if (
+        (event === 'SIGHUP' || event === 'SIGINT' || event === 'SIGTERM') &&
+        process.listenerCount(event) === 0
+      ) {
         terminal.restoreOnDefaultSignals();
       }
     });

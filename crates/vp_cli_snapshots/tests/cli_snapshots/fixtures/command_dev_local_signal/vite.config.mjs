@@ -1,4 +1,5 @@
-import { writeSync } from 'node:fs';
+import { writeFileSync, writeSync } from 'node:fs';
+import { setTimeout } from 'node:timers/promises';
 
 if (process.env.VP_PROBE_SYNC_CONFIG === '1') {
   writeSync(1, 'Evaluating Vite config\n');
@@ -24,6 +25,13 @@ export default {
           }
           console.log(`listening ${server.httpServer.address().port} ${process.pid}`);
         });
+      },
+      async closeBundle() {
+        const marker = process.env.VP_PROBE_SHUTDOWN_MARKER;
+        if (marker) {
+          writeFileSync(marker, '');
+          await setTimeout(6_000);
+        }
       },
     },
   ],

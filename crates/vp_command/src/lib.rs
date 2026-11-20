@@ -385,7 +385,7 @@ impl StdinTerminalState {
         restore_stdin_terminal(&self.0);
     }
 
-    /// Restore stdin before the default SIGHUP or SIGINT action terminates this process.
+    /// Restore stdin before the default action for SIGHUP, SIGINT, or SIGTERM.
     pub fn restore_on_default_signals(&self) {
         use nix::{
             libc,
@@ -397,7 +397,7 @@ impl StdinTerminalState {
             SaFlags::SA_RESETHAND,
             SigSet::empty(),
         );
-        for signal in [Signal::SIGHUP, Signal::SIGINT] {
+        for signal in [Signal::SIGHUP, Signal::SIGINT, Signal::SIGTERM] {
             let mut previous = std::mem::MaybeUninit::<libc::sigaction>::uninit();
             // SAFETY: passing a null action only queries the current disposition.
             if unsafe {

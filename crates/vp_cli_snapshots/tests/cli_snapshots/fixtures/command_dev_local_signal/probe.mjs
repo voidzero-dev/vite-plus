@@ -1,17 +1,19 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { connect } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { text } from 'node:stream/consumers';
+import { setTimeout } from 'node:timers/promises';
 
 const workerMode = process.argv[2] === '--worker';
 const terminalSignal = {
   '--hangup': 'SIGHUP',
   '--reraise-sigint': 'SIGINT',
+  '--repeat-sigterm': 'SIGTERM',
 }[process.argv[2]];
 
 function stty(...args) {
@@ -38,6 +40,7 @@ async function listenerInfo(stdout, launchPid) {
 }
 
 const cache = mkdtempSync(join(tmpdir(), 'vp-dev-cache-'));
+const shutdownMarker = terminalSignal === 'SIGTERM' ? join(cache, 'shutdown-started') : undefined;
 const env = { ...process.env, NODE_COMPILE_CACHE: cache };
 delete env.NODE_DISABLE_COMPILE_CACHE;
 if (terminalSignal) {
@@ -45,6 +48,9 @@ if (terminalSignal) {
 }
 if (terminalSignal === 'SIGINT') {
   env.VP_PROBE_RERAISE_SIGINT = '1';
+}
+if (shutdownMarker) {
+  env.VP_PROBE_SHUTDOWN_MARKER = shutdownMarker;
 }
 const initialTerminal = terminalSignal ? stty('-g') : undefined;
 const args = ['dev', '--host', '127.0.0.1', '--port', '0', '--base', '/probe/'];
@@ -81,6 +87,14 @@ try {
   }
 
   process.kill(pid, terminalSignal ?? 'SIGTERM');
+  if (shutdownMarker) {
+    const deadline = AbortSignal.timeout(4_000);
+    while (!existsSync(shutdownMarker)) {
+      await setTimeout(20, undefined, { signal: deadline });
+    }
+    console.log('Vite began asynchronous shutdown after the first SIGTERM');
+    process.kill(pid, 'SIGTERM');
+  }
   const [code, signal] = await once(child, 'exit', { signal: AbortSignal.timeout(5_000) });
   const socket = connect(port, '127.0.0.1');
   try {
