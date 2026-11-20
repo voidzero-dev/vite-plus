@@ -58,9 +58,9 @@ jobs:
           node-version-file: .node-version
           package-manager-cache: false
 
-      - name: Patch vendored oxc-node
+      - name: Patch vendored sources
         shell: bash
-        run: node packages/tools/src/patch-oxc-node.ts
+        run: node packages/tools/src/patch-vendored-sources.ts
 
       - name: Clear git origin for nested checkout
         shell: bash

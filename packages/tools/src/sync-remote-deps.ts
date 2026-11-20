@@ -14,7 +14,8 @@ import upstreamVersions from '../.upstream-versions.json' with { type: 'json' };
 import { parseCargoOxcVersions, replaceCargoCrateVersion } from './cargo-toml.ts';
 import type { PackageManifest as PackageJson } from './package-manifest.ts';
 import { dependencyFields, readPackageManifest } from './package-manifest.ts';
-import { OXC_NODE_DIR, patchOxcNode } from './patch-oxc-node.ts';
+import { OXC_NODE_DIR } from './patch-oxc-node.ts';
+import { patchVendoredSources } from './patch-vendored-sources.ts';
 import {
   alignVendoredVitestDependencies,
   REMOVED_VITEST_PACKAGES,
@@ -955,6 +956,10 @@ export async function syncRemote() {
     cloneOrResetRepo(repo, join(rootDir, dir), branch, hash);
   }
 
+  // oxc-node shares the root Oxc pins, which follow the vendored Rolldown.
+  syncCargoOxcWithRolldown(rootDir);
+  patchVendoredSources(rootDir);
+
   const { yaml, verkit } = await loadWorkspaceTools().catch(() => {
     log('Dependencies not found, running pnpm install...');
     execCommand('pnpm install --no-frozen-lockfile', rootDir);
@@ -1010,14 +1015,6 @@ export async function syncRemote() {
   log('✓ package.json Vite DevTools ranges updated successfully!');
 
   execCommand('pnpm install --no-frozen-lockfile', rootDir);
-
-  // Keep the root Cargo.toml oxc pins in lockstep with the vendored rolldown.
-  log('Syncing Cargo.toml oxc versions with rolldown...');
-  syncCargoOxcWithRolldown(rootDir);
-
-  // oxc-node compiles into the native binding; it follows the oxc pins above.
-  log('Patching vendored oxc-node...');
-  patchOxcNode(rootDir);
 
   // Merge package.json exports
   log('Merging package.json exports...');
