@@ -83,6 +83,13 @@ dist/tsdown.custom.config.mjs: missing
 
 ## `vp migrate --no-interactive`
 
+```
+VITE+ - The Unified Toolchain for the Web
+
+! Warnings:
+  - package.json script "bundle" selects a tsdown config. Kept tsdown in this workspace. Move the selected config into `pack` in `vite.config.ts` before switching to `vp pack` without the config flag. See https://viteplus.dev/guide/migrate#tsdown
+This project is already using Vite+! Happy coding!
+```
 
 ## `vpt rm -r lib-out`
 

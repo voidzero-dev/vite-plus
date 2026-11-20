@@ -60,6 +60,7 @@ const {
   injectFmtDefaults,
   injectLintTypeCheckDefaults,
   ensureSvelteRuneGlobals,
+  mergeTsdownConfigFile,
   mergeViteConfigFiles,
   rewriteEslintPackageJson,
   collectInstalledPackageNames,
@@ -154,6 +155,104 @@ describe('explicit tsdown config selection', () => {
     }
     expect(keptPackages).toEqual(new Set(expected));
   });
+
+  it('keeps a default config used by a retained script after changing directory', () => {
+    const lib = path.join(tmpDir, 'packages/lib');
+    fs.mkdirSync(lib, { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        scripts: { worker: 'tsdown -c release.ts', library: 'cd packages/lib && tsdown' },
+      }),
+    );
+    fs.writeFileSync(path.join(lib, 'package.json'), '{"name":"lib"}');
+    const source = '{"entry":"src/library.ts","outDir":"lib-out"}';
+    const config = path.join(lib, 'tsdown.config.json');
+    fs.writeFileSync(config, source);
+    const workspace = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+    workspace.packages = [
+      { name: 'lib', path: 'packages/lib' },
+      { name: 'independent', path: 'packages/independent' },
+    ];
+
+    expect(collectPackagesKeepingTsdown(tmpDir, workspace.packages)).toEqual(
+      new Set([path.resolve(tmpDir), lib]),
+    );
+    const result = finalizeCoreMigrationForExistingVitePlus(workspace, true);
+    expect(result.tsdownConfig).toBe(true);
+    expect(fs.readFileSync(config, 'utf8')).toBe(source);
+    expect(fs.readFileSync(path.join(lib, 'vite.config.ts'), 'utf8')).toContain('lib-out');
+  });
+
+  it.each([false, true])(
+    'keeps the shared tsdown dependency with a root member (upgrade=%s)',
+    (upgrade) => {
+      const lib = path.join(tmpDir, 'packages/lib');
+      fs.mkdirSync(lib, { recursive: true });
+      const rootManifest = path.join(tmpDir, 'package.json');
+      fs.writeFileSync(
+        rootManifest,
+        JSON.stringify({
+          name: 'root',
+          devDependencies: { tsdown: '0.23.4', ...(upgrade ? { 'vite-plus': 'latest' } : {}) },
+        }),
+      );
+      const childManifest = path.join(lib, 'package.json');
+      fs.writeFileSync(
+        childManifest,
+        JSON.stringify({ name: 'lib', scripts: { build: 'tsdown -c release.ts' } }),
+      );
+      const workspace = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+      workspace.isMonorepo = true;
+      workspace.workspacePatterns = ['.', 'packages/*'];
+      workspace.packages = [
+        { name: 'root', path: '.' },
+        { name: 'lib', path: 'packages/lib' },
+      ];
+
+      if (upgrade) {
+        ensureVitePlusBootstrap(workspace);
+      } else {
+        rewriteMonorepo(workspace, true, true);
+      }
+      expect(readJson(rootManifest)).toHaveProperty('devDependencies.tsdown', '0.23.4');
+      expect(readJson(childManifest)).toHaveProperty('scripts.build', 'tsdown -c release.ts');
+    },
+  );
+
+  it.each([undefined, './tsdown.config.js', './tsdown.config'])(
+    'converts the config for vp pack while keeping the standalone source (import=%s)',
+    (existingImport) => {
+      const tsdown = path.join(tmpDir, 'tsdown.config.ts');
+      const vite = path.join(tmpDir, 'vite.config.ts');
+      const original =
+        "import { defineConfig } from 'tsdown';\nexport default defineConfig({ publicDir: 'public' });\n";
+      fs.writeFileSync(tsdown, original);
+      if (existingImport) {
+        fs.writeFileSync(
+          vite,
+          `import legacy from '${existingImport}';\nexport default { pack: legacy };\n`,
+        );
+      }
+
+      expect(mergeTsdownConfigFile(tmpDir, true, createMigrationReport(), true)).toBe(true);
+      expect(fs.readFileSync(tsdown, 'utf8')).toBe(original);
+      const converted = path.join(tmpDir, 'vite-pack.config.ts');
+      const packSource = fs.readFileSync(converted, 'utf8');
+      expect(packSource).toContain("copy: 'public'");
+      expect(packSource).toContain('vite-plus/pack');
+      const viteSource = fs.readFileSync(vite, 'utf8');
+      expect(viteSource).toContain('./vite-pack.config.js');
+      if (existingImport) {
+        expect(viteSource).toContain('pack: legacy');
+      }
+
+      expect(mergeTsdownConfigFile(tmpDir, true, createMigrationReport(), true)).toBe(false);
+      expect(fs.readFileSync(tsdown, 'utf8')).toBe(original);
+      expect(fs.readFileSync(vite, 'utf8')).toBe(viteSource);
+      expect(fs.readFileSync(converted, 'utf8')).toBe(packSource);
+    },
+  );
 });
 
 describe('Yarn PnP migration preflight', () => {
@@ -2933,7 +3032,10 @@ describe('ensureVitePlusBootstrap', () => {
       }),
     );
     fs.writeFileSync(config, configSource);
-    fs.writeFileSync(workspaceYaml, 'catalogs:\n  build:\n    tsdown: 0.23.4\n');
+    fs.writeFileSync(
+      workspaceYaml,
+      "catalogs:\n  build:\n    tsdown: 0.23.4\noverrides:\n  tsdown: 0.23.4\n  'vite-plus>tsdown': 0.22.2\n",
+    );
 
     const workspace = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
     expect(detectPendingCoreMigration(workspace).scripts).toBe(false);
@@ -2947,6 +3049,8 @@ describe('ensureVitePlusBootstrap', () => {
     });
     expect(readJson(manifest)).not.toHaveProperty('devDependencies.oxfmt');
     expect(readYamlObject(workspaceYaml)).toHaveProperty('catalogs.build.tsdown', '0.23.4');
+    expect(readYamlObject(workspaceYaml)).toHaveProperty('overrides.tsdown', '0.23.4');
+    expect(readYamlObject(workspaceYaml)).not.toHaveProperty(['overrides', 'vite-plus>tsdown']);
     expect(fs.readFileSync(config, 'utf8')).toBe(configSource);
     const viteConfig = path.join(tmpDir, 'vite.config.ts');
     const mergedConfig = fs.readFileSync(viteConfig, 'utf8');

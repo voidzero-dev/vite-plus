@@ -1197,8 +1197,7 @@ export function ensureVitePlusBootstrap(
     workspaceInfo.packageManager === PackageManager.yarn
       ? findYarnWorkspaceHoisting(projectPath)
       : undefined;
-  for (const workspacePackage of workspaceInfo.packages) {
-    const packagePath = path.join(projectPath, workspacePackage.path);
+  for (const packagePath of getWorkspaceProjectPaths(workspaceInfo).slice(1)) {
     const childPackageJsonPath = path.join(packagePath, 'package.json');
     if (!fs.existsSync(childPackageJsonPath)) {
       continue;

@@ -384,7 +384,7 @@ export function rewritePnpmWorkspaceYaml(
       for (const keyNode of keysSnapshot) {
         const rawKey =
           keyNode instanceof Scalar ? String(keyNode.value ?? '') : String(keyNode ?? '');
-        if (shouldDropProviderOverrideKey(rawKey)) {
+        if (shouldDropProviderOverrideKey(rawKey, keepTsdown)) {
           overrides.delete(keyNode);
         }
       }
@@ -1290,7 +1290,7 @@ export function rewriteRootWorkspacePackageJson(
         // Strip selector-shaped overrides (e.g. `parent>@vitest/browser-playwright`)
         // whose target is a removed package, before re-merging the user's
         // overrides into the new pnpm config.
-        dropRemovePackageOverrideKeys(pkg.pnpm?.overrides);
+        dropRemovePackageOverrideKeys(pkg.pnpm?.overrides, [], tsdownPackages.size > 0);
         // Common case: drop a lingering managed `vitest` override before merging.
         // `mergeManagedPnpmPeerDependencyRules` drops its peer rule.
         if (!workspaceUsesVitest) {

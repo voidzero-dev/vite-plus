@@ -70,7 +70,10 @@ export function createMigrationReport(): MigrationReport {
   };
 }
 
-export function addMigrationWarning(report: MigrationReport | undefined, warning: string) {
+export function addMigrationWarning(
+  report: Pick<MigrationReport, 'warnings'> | undefined,
+  warning: string,
+) {
   if (!report || report.warnings.includes(warning)) {
     return;
   }

@@ -220,6 +220,7 @@ export function finalizeCoreMigrationForExistingVitePlus(
         silent,
         report,
         tsdownPackages.has(path.resolve(projectPath)),
+        workspaceInfo.rootDir,
       ) || result.tsdownConfig;
   }
 

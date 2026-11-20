@@ -2547,6 +2547,27 @@ fn rewrite_import(
     Ok(result)
 }
 
+/// Adapt a retained standalone config for the bundled pack tool, without writing the source file.
+pub fn rewrite_tsdown_config_for_pack(
+    config_path: &Path,
+    workspace_root: &Path,
+) -> Result<(Option<String>, Vec<String>), Error> {
+    let original = std::fs::read_to_string(config_path)?;
+    let legacy_defaults =
+        pack_config::preserve_legacy_defaults(config_path, workspace_root, true, &original);
+    let content = pack_config::rewrite_pack_config(&original, true, legacy_defaults);
+    let warnings = pack_config::pack_config_warnings(&content, true);
+    if content == original {
+        return Ok((None, warnings));
+    }
+
+    let skip_packages =
+        SkipPackages { skip_vite: true, skip_vitest: true, skip_tsdown: false, skip_oxlint: true };
+    let rewritten =
+        rewrite_import_content_full(&content, &skip_packages, false, false, config_path.to_str())?;
+    Ok((Some(rewritten.content), warnings))
+}
+
 /// Fast pre-filter to skip expensive AST parsing for files with no relevant imports.
 fn content_may_need_rewriting(content: &str, skip_packages: &SkipPackages) -> bool {
     // "vite" also matches "vitest" as a substring, covering both packages

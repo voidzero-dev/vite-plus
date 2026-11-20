@@ -15,6 +15,20 @@ steps = [
 ]
 
 [[case]]
+name = "cross_directory_default"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "scripts.bundleChild", "cd packages/legacy-pack && tsdown"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  ["vpt", "stat-file", "packages/legacy-pack/tsdown.config.json", "--assert", "file"],
+  { argv = ["vp", "run", "bundleChild"], snapshot = false },
+  ["vpt", "print-file", "packages/legacy-pack/lib-out/library.mjs"],
+  ["vpt", "stat-file", "packages/legacy-pack/dist/index.mjs", "--assert", "missing"],
+]
+
+[[case]]
 name = "dynamic_config"
 vp = "global"
 local-registry = true

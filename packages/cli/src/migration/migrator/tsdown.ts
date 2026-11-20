@@ -15,6 +15,7 @@ import {
 
 const ENVIRONMENT_ASSIGNMENT = /^[A-Za-z_]\w*=/;
 const EXPLICIT_CONFIG = /^(?:-c|--config)(?:=|$)/;
+const OTHER_CONFIG_DIRECTORY = /^(?:--cwd|-W|--workspace)(?:=|$)/;
 // When the shell parser cannot read an expansion or compound command, keep
 // possible explicit config selections rather than risk changing their entry.
 const POSSIBLE_CONFIG_COMMAND =
@@ -47,44 +48,73 @@ function scriptInvocation(command: readonly { value: string }[]): {
   return { args: invocation.slice(executable) };
 }
 
-// An undefined argument means the script selects a config that we cannot locate.
-function selectedTsdownConfigs(script: string): (string | undefined)[] {
+type TsdownConfigUse = {
+  // An undefined path can refer to any workspace package.
+  selected: (string | undefined)[];
+  defaultDirectories: (string | undefined)[];
+};
+
+function resolveScriptPath(cwd: string | undefined, value: string | undefined): string | undefined {
+  if (!cwd || !value || /^[-~]|%[^%]+%|![^!]+!|[*?]/.test(value)) {
+    return undefined;
+  }
+  return path.resolve(cwd, value);
+}
+
+function scanTsdownScript(script: string, cwd: string | undefined): TsdownConfigUse {
+  const usage: TsdownConfigUse = {
+    selected: [],
+    defaultDirectories: [],
+  };
   if (!script.includes('tsdown')) {
-    return [];
+    return usage;
   }
   const commands = parseLiteralCommands(script, true);
   if (!commands) {
-    return POSSIBLE_CONFIG_COMMAND.test(script) ? [undefined] : [];
+    if (POSSIBLE_CONFIG_COMMAND.test(script)) {
+      usage.selected.push(undefined);
+    }
+    usage.defaultDirectories.push(undefined);
+    return usage;
   }
-  const configs: (string | undefined)[] = [];
-  let knownCwd = true;
+  // An && chain can only reach the tsdown command after every preceding cd succeeds.
+  const andChain = commands.slice(1).every((command, index) => {
+    const previous = commands[index].at(-1)!;
+    return script.slice(previous.end, command[0].start).trim() === '&&';
+  });
   for (const command of commands) {
     const { args, shellCommand } = scriptInvocation(command);
     if (SHELL_STATE_COMMANDS.includes(args[0]) || args[0] === 'chdir') {
-      knownCwd = false;
+      cwd =
+        andChain && command[0].value === 'cd' && command.length === 2
+          ? resolveScriptPath(cwd, command[1].value)
+          : undefined;
     }
     if (shellCommand) {
-      configs.push(
-        ...selectedTsdownConfigs(shellCommand).map((arg) => (knownCwd ? arg : undefined)),
-      );
+      const nested = scanTsdownScript(shellCommand, cwd);
+      usage.selected.push(...nested.selected);
+      usage.defaultDirectories.push(...nested.defaultDirectories);
       continue;
     }
     if (args[0] !== 'tsdown') {
       continue;
     }
-    for (let index = 1; index < args.length; index++) {
-      const arg = args[index];
-      if (arg === '--') {
-        break;
-      }
+    const separator = args.indexOf('--', 1);
+    const flags = args.slice(1, separator === -1 ? undefined : separator);
+    const configDirectory = flags.some((arg) => OTHER_CONFIG_DIRECTORY.test(arg)) ? undefined : cwd;
+    const previousSelections = usage.selected.length;
+    for (const [index, arg] of flags.entries()) {
       if (EXPLICIT_CONFIG.test(arg)) {
         const equals = arg.indexOf('=');
-        const value = equals < 0 ? args[index + 1] : arg.slice(equals + 1);
-        configs.push(knownCwd && !value?.startsWith('-') ? value : undefined);
+        const value = equals < 0 ? flags[index + 1] : arg.slice(equals + 1);
+        usage.selected.push(resolveScriptPath(configDirectory, value));
       }
     }
+    if (usage.selected.length === previousSelections && !flags.includes('--no-config')) {
+      usage.defaultDirectories.push(configDirectory);
+    }
   }
-  return configs;
+  return usage;
 }
 
 function readPackageScripts(manifestPath: string): Record<string, unknown> {
@@ -97,25 +127,34 @@ function readPackageScripts(manifestPath: string): Record<string, unknown> {
 export function collectPackagesKeepingTsdown(
   rootDir: string,
   packages: readonly WorkspacePackage[] = [],
-  report?: MigrationReport,
+  report?: Pick<MigrationReport, 'warnings'>,
 ): ReadonlySet<string> {
   const projectPaths = new Set([
     path.resolve(rootDir),
     ...packages.map((pkg) => path.resolve(rootDir, pkg.path)),
   ]);
   const keptPackages = new Set<string>();
+  const defaultDirectories = new Map<string, (string | undefined)[]>();
   for (const dir of projectPaths) {
     const manifestPath = path.join(dir, 'package.json');
     for (const [name, script] of Object.entries(readPackageScripts(manifestPath))) {
-      const configs = typeof script === 'string' ? selectedTsdownConfigs(script) : [];
-      if (configs.length === 0) {
+      if (typeof script !== 'string') {
+        continue;
+      }
+      const usage = scanTsdownScript(script, dir);
+      if (usage.defaultDirectories.length > 0) {
+        const directories = defaultDirectories.get(dir) ?? [];
+        directories.push(...usage.defaultDirectories);
+        defaultDirectories.set(dir, directories);
+      }
+      if (usage.selected.length === 0) {
         continue;
       }
       keptPackages.add(dir);
       // Explicit config files can belong to a different package. Keep that
       // package's config and imports even though its own scripts do not select it.
-      for (const config of configs) {
-        for (const owner of findConfigOwners(dir, config, projectPaths)) {
+      for (const config of usage.selected) {
+        for (const owner of findConfigOwners(config, projectPaths)) {
           keptPackages.add(owner);
         }
       }
@@ -127,21 +166,28 @@ export function collectPackagesKeepingTsdown(
       }
     }
   }
+  // Keeping a manifest's tsdown scripts also keeps unflagged commands in it.
+  // After a directory change they can read another package's default config.
+  for (const dir of keptPackages) {
+    for (const cwd of defaultDirectories.get(dir) ?? []) {
+      if (cwd === undefined || !projectPaths.has(cwd)) {
+        return projectPaths;
+      }
+      keptPackages.add(cwd);
+    }
+  }
   return keptPackages;
 }
 
 // A shell expansion or directory selection can load a config from anywhere
 // in the workspace. Keep all packages when the config cannot be located.
 function findConfigOwners(
-  dir: string,
-  config: string | undefined,
+  configPath: string | undefined,
   projectPaths: ReadonlySet<string>,
 ): Iterable<string> {
-  // Windows command interpreters can expand variables in otherwise literal words.
-  if (!config || /%[^%]+%|![^!]+!/.test(config)) {
+  if (!configPath) {
     return projectPaths;
   }
-  const configPath = path.resolve(dir, config);
   try {
     const stat = fs.lstatSync(configPath, { throwIfNoEntry: false });
     if (stat?.isDirectory() || stat?.isSymbolicLink()) {

@@ -17,6 +17,7 @@ import {
   readStaticLintConfig,
   rewriteImportsInDirectory,
   rewriteScripts,
+  rewriteTsdownConfigForPack,
   upsertJsonConfig,
   wrapLazyPlugins,
 } from '../../../binding/index.js';
@@ -197,13 +198,14 @@ export default defineConfig({});
 
 /**
  * Merge tsdown.config.* into vite.config.ts. Import TS/JS configs and inline JSON.
- * Keep the original JSON when standalone tsdown may still load it.
+ * Keep the original config when standalone tsdown may still load it.
  */
 export function mergeTsdownConfigFile(
   projectPath: string,
   silent = false,
   report?: MigrationReport,
   keepTsdownConfig = false,
+  workspaceRoot = projectPath,
 ): boolean {
   const configs = detectConfigs(projectPath);
   if (!configs.tsdownConfig) {
@@ -232,6 +234,19 @@ export function mergeTsdownConfigFile(
     return createdViteConfig || merged;
   }
 
+  if (keepTsdownConfig) {
+    const converted = mergeRetainedTsdownConfig(
+      fullViteConfigPath,
+      fullTsdownConfigPath,
+      workspaceRoot,
+      silent,
+      report,
+    );
+    if (converted !== undefined) {
+      return createdViteConfig || converted;
+    }
+  }
+
   // For TS/JS files, import the config file
   const tsdownRelativePath = `./${configs.tsdownConfig}`;
   // Do not prepend a second `pack` key when the config is already wired under
@@ -239,11 +254,7 @@ export function mergeTsdownConfigFile(
   // this tsdown config, leave both files untouched and keep the manual follow-up.
   if (hasConfigKey(fullViteConfigPath, 'pack')) {
     const viteConfigContent = fs.readFileSync(fullViteConfigPath, 'utf8');
-    const runtimeImportPath = tsdownRelativePath
-      .replace(/\.mts$/, '.mjs')
-      .replace(/\.cts$/, '.cjs')
-      .replace(/\.ts$/, '.js');
-    const importsTsdownConfig = [tsdownRelativePath, runtimeImportPath].some(
+    const importsTsdownConfig = tsdownConfigImportPaths(configs.tsdownConfig).some(
       (importPath) =>
         viteConfigContent.includes(`from '${importPath}'`) ||
         viteConfigContent.includes(`from "${importPath}"`),
@@ -275,6 +286,91 @@ export function mergeTsdownConfigFile(
     report,
   );
   return createdViteConfig || result.updated;
+}
+
+function tsdownConfigImportPath(filename: string): string {
+  return `./${filename.replace(/\.(m|c)?ts$/, '.$1js')}`;
+}
+
+function tsdownConfigImportPaths(filename: string): string[] {
+  return [`./${filename}`, `./${path.parse(filename).name}`, tsdownConfigImportPath(filename)];
+}
+
+/** Write a separate converted config only when pack needs compatibility changes. */
+function mergeRetainedTsdownConfig(
+  viteConfigPath: string,
+  tsdownConfigPath: string,
+  workspaceRoot: string,
+  silent: boolean,
+  report: MigrationReport | undefined,
+): boolean | undefined {
+  const originalName = path.basename(tsdownConfigPath);
+  const convertedName = `vite-pack.config${path.extname(originalName)}`;
+  const convertedPath = path.join(path.dirname(tsdownConfigPath), convertedName);
+  const source = fs.readFileSync(viteConfigPath, 'utf8');
+  const hasPack = hasConfigKey(viteConfigPath, 'pack');
+  const imports = hasPack
+    ? parseSource(viteConfigPath, source).program.body.flatMap((statement) =>
+        statement.type === 'ImportDeclaration' ? [statement.source] : [],
+      )
+    : [];
+  const convertedImports = tsdownConfigImportPaths(convertedName);
+  if (imports.some(({ value }) => convertedImports.includes(value))) {
+    return false;
+  }
+  const originalPaths = tsdownConfigImportPaths(originalName);
+  const originalImports = imports.filter(({ value }) => originalPaths.includes(value));
+  if (hasPack && originalImports.length === 0) {
+    return undefined;
+  }
+
+  const { content, warnings } = rewriteTsdownConfigForPack(tsdownConfigPath, workspaceRoot);
+  for (const warning of warnings) {
+    warnMigration(`${displayRelative(tsdownConfigPath)}: ${warning}`, report);
+  }
+  if (content === undefined) {
+    return undefined;
+  }
+
+  let config = source;
+  if (hasPack) {
+    const specifier = JSON.stringify(tsdownConfigImportPath(convertedName));
+    for (const entry of originalImports.toReversed()) {
+      config = config.slice(0, entry.start) + specifier + config.slice(entry.end);
+    }
+  } else {
+    const result = mergeTsdownConfig(viteConfigPath, `./${convertedName}`);
+    if (!result.updated) {
+      return false;
+    }
+    config = result.content;
+  }
+
+  const create = !fs.existsSync(convertedPath);
+  if (create) {
+    fs.writeFileSync(convertedPath, content, { flag: 'wx' });
+  } else if (fs.readFileSync(convertedPath, 'utf8') !== content) {
+    warnMigration(
+      `Cannot write the converted pack config because ${displayRelative(convertedPath)} already exists. Merge ${displayRelative(tsdownConfigPath)} into pack manually.`,
+      report,
+    );
+    return false;
+  }
+  try {
+    fs.writeFileSync(viteConfigPath, config);
+  } catch (error) {
+    if (create) {
+      fs.unlinkSync(convertedPath);
+    }
+    throw error;
+  }
+  if (report) {
+    report.tsdownImportCount++;
+  }
+  if (!silent) {
+    prompts.log.success(`✔ Added ${displayRelative(convertedPath)} for vp pack`);
+  }
+  return true;
 }
 
 /**
