@@ -32,9 +32,12 @@ struct PackageRow {
 }
 
 /// Does this app invocation leave target selection to the CLI?
-pub fn is_bare_app_command(command: &str, args: &[String]) -> bool {
-    args.is_empty()
-        || (matches!(command, "build" | "dev") && matches!(args, [separator] if separator == "--"))
+pub fn is_bare_app_command<'a>(command: &str, mut args: impl Iterator<Item = &'a str>) -> bool {
+    match args.next() {
+        None => true,
+        Some("--") => matches!(command, "build" | "dev") && args.next().is_none(),
+        Some(_) => false,
+    }
 }
 
 /// Does the workspace root have an intent signal for this app command?
@@ -188,12 +191,17 @@ pub fn needs_elicitation(command: &str, cwd: &AbsolutePath) -> bool {
     matches!(classify(command, cwd, root_has_intent_signal), Classification::Elicit(_))
 }
 
-/// Outcome of classifying a bare app command.
 /// A local CLI that predates the fixed-target marker still chooses a target
-/// for bare commands when the directory lacks its older root intent signals.
-pub fn legacy_cli_may_select_target(command: &str, args: &[String], cwd: &AbsolutePath) -> bool {
-    is_bare_app_command(command, args)
-        && matches!(classify(command, cwd, legacy_root_has_intent), Classification::Elicit(_))
+/// when the directory has a default package or selectable workspace members.
+pub fn legacy_cli_may_select_target(command: &str, cwd: &AbsolutePath) -> bool {
+    match classify(command, cwd, legacy_root_has_intent) {
+        Classification::RunInPlace(_) => false,
+        Classification::Elicit(Elicitation::DefaultPackage(_)) => true,
+        Classification::Elicit(Elicitation::WorkspaceRoot(workspace)) => {
+            vt_workspace::load_package_graph(&workspace)
+                .is_ok_and(|graph| graph.node_weights().any(|info| !info.path.as_str().is_empty()))
+        }
+    }
 }
 
 fn legacy_root_has_intent(

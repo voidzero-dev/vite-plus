@@ -139,6 +139,7 @@ impl JsExecutor {
     fn create_js_command(
         runtime_binary: &AbsolutePath,
         runtime_bin_prefix: &AbsolutePath,
+        manager: Option<&vp_pm_cli::PackageManager>,
     ) -> Result<Command, Error> {
         let mut cmd = Command::new(runtime_binary.as_path());
         if let Ok(bin_path) = Self::get_bin_path() {
@@ -148,6 +149,15 @@ impl JsExecutor {
 
         let mut env = ToolPathEnv::from_env();
         env.prepend(runtime_bin_prefix, &["node"], PrependOptions { dedupe_anywhere: true })?;
+        if let Some(manager) = manager
+            && let Err(error) = env.prepend(
+                manager.get_bin_prefix(),
+                &manager.bin_names(),
+                PrependOptions::default(),
+            )
+        {
+            tracing::debug!(?error, "failed to prepend package manager for direct tool command");
+        }
         cmd.envs(env.into_envs());
         Ok(cmd)
     }
@@ -256,9 +266,9 @@ impl JsExecutor {
     /// Delegate to local or global vite-plus CLI.
     ///
     /// Uses `oxc_resolver` to find the project's local vite-plus installation.
-    /// Runs the local `dist/bin.js` when it can honor the invocation.
-    /// Falls back to the global installation when the local CLI is missing
-    /// or cannot honor a fixed app target.
+    /// Runs the local `dist/bin.js` when it can honor the invocation. A fixed
+    /// target may need the local tool's entry point to skip an older picker.
+    /// Falls back to the global installation when no suitable local entry exists.
     ///
     /// Uses the project's runtime resolved via `config::resolve_version()`.
     /// For side-effect-free commands like `--version`, use [`delegate_with_cli_runtime`] instead.
@@ -334,7 +344,7 @@ impl JsExecutor {
         let scripts_dir = self.get_scripts_dir()?;
         let entry_point = scripts_dir.join("bin.js");
 
-        let mut cmd = Self::create_js_command(&node_binary, &bin_prefix)?;
+        let mut cmd = Self::create_js_command(&node_binary, &bin_prefix, None)?;
         cmd.arg(entry_point.as_path()).args(args).current_dir(project_path.as_path());
         vp_command::sync_child_pwd(&mut cmd, project_path);
 
@@ -362,37 +372,71 @@ impl JsExecutor {
     }
 
     /// Prepare a JS command with the entry point resolved.
-    fn prepare_js_entry(
+    async fn prepare_js_entry(
         &self,
         project_path: &AbsolutePath,
         node_binary: &AbsolutePath,
         bin_prefix: &AbsolutePath,
         args: &[String],
     ) -> Result<Command, Error> {
-        // Try to resolve vite-plus from the project directory using oxc_resolver
-        let entry_point = match Self::resolve_local_vite_plus(project_path) {
-            Some(path)
-                if !self.fixed_target
-                    || local_entry_accepts_fixed_app_target(&path)
-                    || args.split_first().is_none_or(|(command, args)| {
-                        !vp_app_target::legacy_cli_may_select_target(command, args, project_path)
-                    }) =>
+        let mut legacy_tool = None;
+        let mut forwarded = args;
+        let entry_point = match (Self::resolve_local_vite_plus(project_path), args.split_first()) {
+            (Some(local), Some((command, tool_args)))
+                if self.fixed_target
+                    && !crate::help::has_help_flag_before_terminator(tool_args) =>
             {
-                path
+                let version = local_entry_version(&local);
+                if local_cli_may_reselect(version.as_deref())
+                    && vp_app_target::legacy_cli_may_select_target(command, project_path)
+                {
+                    if let Some(version) =
+                        version.filter(|version| matches!(version.as_str(), "0.2.8" | "0.2.9"))
+                        && let Some(tool) =
+                            resolve_legacy_app_tool(&local, project_path, command, &version)
+                    {
+                        legacy_tool = Some((command, version));
+                        if command == "pack" {
+                            // The pack entry accepts tool arguments directly.
+                            forwarded = tool_args;
+                        }
+                        tool
+                    } else if vp_app_target::is_bare_app_command(
+                        command,
+                        tool_args.iter().map(String::as_str),
+                    ) {
+                        self.get_scripts_dir()?.join("bin.js")
+                    } else {
+                        local
+                    }
+                } else {
+                    local
+                }
             }
-            local_entry => {
-                if local_entry.is_none() && self.warn_on_missing_local_cli {
+            (Some(local), _) => local,
+            (None, _) => {
+                if self.warn_on_missing_local_cli {
                     commands::warn_missing_local_cli_if_project(project_path);
                 }
-                let scripts_dir = self.get_scripts_dir()?;
-                scripts_dir.join("bin.js")
+                self.get_scripts_dir()?.join("bin.js")
             }
         };
 
-        tracing::debug!("Delegating to CLI via JS entry point: {:?} {:?}", entry_point, args);
-
-        let mut cmd = Self::create_js_command(node_binary, bin_prefix)?;
-        cmd.arg(entry_point.as_path()).args(args).current_dir(project_path.as_path());
+        tracing::debug!(?entry_point, ?forwarded, "Delegating to JS entry point");
+        let manager = if legacy_tool.is_some() {
+            vp_pm_cli::managed_for_direct_command(project_path).await?
+        } else {
+            None
+        };
+        let mut cmd = Self::create_js_command(node_binary, bin_prefix, manager.as_ref())?;
+        cmd.arg(entry_point.as_path()).args(forwarded).current_dir(project_path.as_path());
+        if let Some((command, version)) = legacy_tool {
+            self.set_legacy_app_env(&mut cmd, command, &version);
+            vp_cli_help::script_note::print(
+                self.raw_subcommand.as_deref().or(Some(command)),
+                project_path,
+            );
+        }
         if let Some(raw_subcommand) = &self.raw_subcommand {
             cmd.env(vp_shared::env_vars::VP_RAW_SUBCOMMAND, raw_subcommand);
         }
@@ -403,6 +447,24 @@ impl JsExecutor {
         Ok(cmd)
     }
 
+    /// Supply the defaults the legacy CLI normally passes to its app tools.
+    fn set_legacy_app_env(&self, cmd: &mut Command, command: &str, version: &str) {
+        for (key, value) in [("NODE_PACKAGE_MANAGER", "vite-plus"), ("JS_RUNTIME_NAME", "node")] {
+            if std::env::var_os(key).is_none() {
+                cmd.env(key, value);
+            }
+        }
+        if let Some(runtime) = &self.project_runtime
+            && runtime.version() != "system"
+            && std::env::var_os("JS_RUNTIME_VERSION").is_none()
+        {
+            cmd.env("JS_RUNTIME_VERSION", runtime.version());
+        }
+        if command != "pack" && std::env::var_os("VP_VERSION").is_none() {
+            cmd.env("VP_VERSION", version);
+        }
+    }
+
     /// Run a JS entry point with the given runtime, resolving local vite-plus first.
     async fn run_js_entry(
         &self,
@@ -411,7 +473,7 @@ impl JsExecutor {
         bin_prefix: &AbsolutePath,
         args: &[String],
     ) -> Result<ExitStatus, Error> {
-        let cmd = self.prepare_js_entry(project_path, node_binary, bin_prefix, args)?;
+        let cmd = self.prepare_js_entry(project_path, node_binary, bin_prefix, args).await?;
         Ok(vp_command::execute_with_terminal_guard(cmd).await?)
     }
 
@@ -423,7 +485,7 @@ impl JsExecutor {
         bin_prefix: &AbsolutePath,
         args: &[String],
     ) -> Result<Output, Error> {
-        let mut cmd = self.prepare_js_entry(project_path, node_binary, bin_prefix, args)?;
+        let mut cmd = self.prepare_js_entry(project_path, node_binary, bin_prefix, args).await?;
         let output = cmd.output().await?;
         Ok(output)
     }
@@ -468,12 +530,62 @@ impl JsExecutor {
 }
 
 fn local_entry_accepts_fixed_app_target(entry_point: &AbsolutePath) -> bool {
+    local_entry_version(entry_point)
+        .is_some_and(|version| supports_fixed_app_target(&version, env!("CARGO_PKG_VERSION")))
+}
+
+fn local_entry_version(entry_point: &AbsolutePath) -> Option<String> {
     entry_point
         .as_path()
         .parent()
         .and_then(std::path::Path::parent)
         .and_then(|package_dir| read_package_json_version(package_dir.join("package.json")))
-        .is_some_and(|version| supports_fixed_app_target(&version, env!("CARGO_PKG_VERSION")))
+}
+
+fn local_cli_may_reselect(version: Option<&str>) -> bool {
+    version.is_none_or(|version| {
+        !supports_fixed_app_target(version, env!("CARGO_PKG_VERSION"))
+            && (is_preview_version(version)
+                // The app target picker first shipped in 0.2.8.
+                || js_semver::Version::parse(version)
+                    .map_or(true, |version| version >= js_semver::Version::new(0, 2, 8)))
+    })
+}
+
+/// Resolve the same tool entries used by the legacy CLI's app commands.
+fn resolve_legacy_app_tool(
+    local_entry: &AbsolutePath,
+    project_path: &AbsolutePath,
+    command: &str,
+    version: &str,
+) -> Option<AbsolutePathBuf> {
+    use oxc_resolver::{ResolveOptions, Resolver};
+
+    let dist = local_entry.parent()?;
+    match command {
+        "dev" | "build" | "preview" => {
+            let resolver = Resolver::new(ResolveOptions {
+                condition_names: vec!["require".into(), "node".into()],
+                ..ResolveOptions::default()
+            });
+            let specifier = "@voidzero-dev/vite-plus-core";
+            // A hoisted Core from another toolchain can shadow the local
+            // package's dependency when resolving from the project directory.
+            [project_path, dist].into_iter().find_map(|dir| {
+                let core = resolver.resolve(dir, specifier).ok()?;
+                if core.package_json()?.version()? != version {
+                    return None;
+                }
+                let cli = AbsolutePathBuf::new(core.path().parent()?.join("cli.js"))?;
+                cli.as_path().is_file().then_some(cli)
+            })
+        }
+        "pack" => {
+            let tool = dist.join("pack-bin.js");
+            tool.as_path().is_file().then_some(tool)
+        }
+        _ => None,
+    }
 }
 
 /// Resolve the version of the project-local `vite-plus`, if one is installed.
@@ -659,14 +771,15 @@ mod tests {
             )
         };
 
-        let cmd = JsExecutor::create_js_command(&runtime_binary, &runtime_bin_prefix).unwrap();
+        let cmd =
+            JsExecutor::create_js_command(&runtime_binary, &runtime_bin_prefix, None).unwrap();
 
         // The command should use the node binary directly
         assert_eq!(cmd.as_std().get_program(), OsStr::new(expected_program));
     }
 
-    #[test]
-    fn test_prepare_test_command_does_not_probe_node() {
+    #[tokio::test]
+    async fn test_prepare_test_command_does_not_probe_node() {
         use std::ffi::OsStr;
 
         let project = tempfile::TempDir::new().unwrap();
@@ -691,6 +804,7 @@ mod tests {
                 &bin_prefix,
                 &["test".into(), "run".into()],
             )
+            .await
             .unwrap();
 
         assert_eq!(cmd.as_std().get_program(), node_binary.as_path().as_os_str());

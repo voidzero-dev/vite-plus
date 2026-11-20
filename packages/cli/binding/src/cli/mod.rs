@@ -208,45 +208,10 @@ async fn envs_with_explicit_package_manager_path(
     cwd: &AbsolutePath,
     envs: Arc<EnvMap>,
 ) -> Result<Arc<EnvMap>, Error> {
-    let Some(resolution) = (match vp_pm_cli::resolve_package_manager_from_package_json(cwd) {
-        Ok(resolution) => resolution,
-        Err(error) => {
-            tracing::debug!(
-                ?error,
-                "failed to resolve explicit packageManager for direct command PATH setup"
-            );
-            return Ok(envs);
-        }
-    }) else {
-        return Ok(envs);
-    };
-
-    let manager = match vp_pm_cli::managed_for_local_cli(
-        cwd,
-        resolution.package_manager_type,
-        &resolution.version,
-        resolution.hash.as_deref(),
-    )
-    .await
-    {
-        Ok(Some(manager)) => manager,
-        // A system package manager is already on PATH.
-        Ok(None) => return Ok(envs),
-        // A missing package manager has other causes, such as no network or an
-        // unknown version. The command still runs from PATH, so those causes
-        // stay a debug log. An integrity failure is different. If vp hides it,
-        // the user sees only "command not found" further down.
-        Err(error) if error.is_integrity_failure() => return Err(error),
-        Err(error) => {
-            tracing::debug!(
-                ?error,
-                "failed to ensure managed package manager for direct command PATH setup"
-            );
-            return Ok(envs);
-        }
-    };
-
-    Ok(prepend_to_env_path(&envs, &manager.get_bin_prefix()))
+    match vp_pm_cli::managed_for_direct_command(cwd).await? {
+        Some(manager) => Ok(prepend_to_env_path(&envs, &manager.get_bin_prefix())),
+        None => Ok(envs),
+    }
 }
 
 /// A system package manager is already on PATH. Moving its directory to the front would also

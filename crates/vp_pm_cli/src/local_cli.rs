@@ -12,7 +12,8 @@ use vt_str::Str;
 
 use crate::{
     PackageManager, PackageManagerType, ShimMode, download_package_manager_for_cwd,
-    ensure_managed_package_manager_allowed, user_config::load_config_if_present,
+    ensure_managed_package_manager_allowed, resolve_package_manager_from_package_json,
+    user_config::load_config_if_present,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -104,6 +105,41 @@ pub async fn managed_for_local_cli(
         }
     }
     download(cwd, kind, version_or_latest, expected_hash).await.map(|(pm, _)| Some(pm))
+}
+
+/// Prepare an explicitly pinned package manager for a direct tool command.
+/// Other preparation failures leave PATH usable, but integrity errors must be visible.
+pub async fn managed_for_direct_command(
+    cwd: &AbsolutePath,
+) -> Result<Option<PackageManager>, Error> {
+    let resolution = match resolve_package_manager_from_package_json(cwd) {
+        Ok(Some(resolution)) => resolution,
+        Ok(None) => return Ok(None),
+        Err(error) => {
+            tracing::debug!(
+                ?error,
+                "failed to resolve explicit packageManager for direct command PATH setup"
+            );
+            return Ok(None);
+        }
+    };
+    match managed_for_local_cli(
+        cwd,
+        resolution.package_manager_type,
+        &resolution.version,
+        resolution.hash.as_deref(),
+    )
+    .await
+    {
+        Err(error) if !error.is_integrity_failure() => {
+            tracing::debug!(
+                ?error,
+                "failed to ensure managed package manager for direct command PATH setup"
+            );
+            Ok(None)
+        }
+        result => result,
+    }
 }
 
 /// Whether [`provide_for_local_cli`] can provide `kind`: it is on PATH, or the global
