@@ -183,8 +183,8 @@ export function rewriteStandaloneProject(
     pruneLegacyWrapperAliases(pkg.pnpm?.overrides);
     // Remove stale overrides for bundled and official opt-in providers before
     // aligning them with Vitest. Preserve community-provider overrides.
-    dropRemovePackageOverrideKeys(pkg.resolutions);
-    dropRemovePackageOverrideKeys(pkg.overrides);
+    dropRemovePackageOverrideKeys(pkg.resolutions, [], keepTsdown);
+    dropRemovePackageOverrideKeys(pkg.overrides, [], keepTsdown);
     // Common case (no direct vitest): strip a lingering managed `vitest` from
     // the npm/bun `overrides` and yarn `resolutions` sinks so it isn't re-pinned.
     if (!usesVitest) {

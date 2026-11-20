@@ -284,7 +284,7 @@ Unrelated `bunx` commands and other package-executor forms remain unchanged.
 
 If a package script selects a tsdown config with `-c` or `--config`, migration keeps the standalone tsdown setup for that package and any workspace package that owns a selected config. It also keeps the shared workspace dependency when needed. If a script does not give migration enough information to locate the selected config, migration keeps the workspace's standalone tsdown setup. To switch to `vp pack`, move the selected config into `pack` in `vite.config.ts` and remove the flag when you change the command.
 
-Migration fills in missing `pack` configuration from each package's default tsdown config. Both direct `vp pack` calls and calls targeting the package with `-C` use that configuration. Migration keeps the original config file when standalone tsdown may still load it, including when a retained script changes to another package before running tsdown. If a retained JavaScript or TypeScript config needs changes for `vp pack`, migration writes those changes to a separate `vite-pack.config.*` file.
+Migration fills in missing `pack` configuration from each package's default tsdown config. Both direct `vp pack` calls and calls targeting the package with `-C` use that configuration. Migration keeps the original config file when a retained script can load it, including when tsdown finds the config in a parent directory. If a retained JavaScript or TypeScript config needs changes for `vp pack`, migration writes those changes to a separate `vite-pack.config.*` file.
 
 ### tsx to `vpx`
 

@@ -29,6 +29,25 @@ steps = [
 ]
 
 [[case]]
+name = "inherited_default"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "scripts.bundle", "vp pack"], snapshot = false },
+  { argv = ["vpt", "rm", "packages/legacy-pack/tsdown.config.json"], snapshot = false },
+  { argv = ["vpt", "write-file", "tsdown.config.json", '{"entry":["src/library.ts"],"outDir":"inherited-out","dts":false}'], snapshot = false },
+  { argv = ["vpt", "json-edit", "packages/legacy-pack/package.json", "scripts.build", "tsdown"], snapshot = false },
+  { argv = ["vpt", "json-edit", "packages/legacy-pack/package.json", "scripts.release", "tsdown -c release.config.ts"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/legacy-pack/release.config.ts", "export default { entry: ['src/library.ts'], dts: false };"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  ["vpt", "stat-file", "tsdown.config.json", "--assert", "file"],
+  { argv = ["vp", "run", "build"], cwd = "packages/legacy-pack", snapshot = false },
+  ["vpt", "print-file", "packages/legacy-pack/inherited-out/library.mjs"],
+  ["vpt", "stat-file", "packages/legacy-pack/dist/index.mjs", "--assert", "missing"],
+]
+
+[[case]]
 name = "dynamic_config"
 vp = "global"
 local-registry = true

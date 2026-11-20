@@ -237,11 +237,11 @@ function providerKeyReachesVitePlus(
     return false;
   }
   const keyParents = extractOverrideParentSegments(key) ?? [];
-  // An unscoped pnpm override can pin a retained direct tsdown dependency.
+  // A global override or resolution can pin a retained direct tsdown dependency.
   if (
     keepTsdown &&
     ancestorChain.length === 0 &&
-    keyParents.length === 0 &&
+    keyParents.every((parent) => parent === '**') &&
     extractOverrideTargetName(key) === 'tsdown'
   ) {
     return false;
