@@ -147,11 +147,21 @@ describe('formatPnpmInstallOutput', () => {
     );
   });
 
-  it('keeps errors without replaying progress and lifecycle status in quiet mode', async () => {
+  it.each([
+    ['warn', 'dependency warning\n'],
+    ['error', ''],
+    ['silent', 'setup failed\n'],
+  ] as const)('filters pnpm output at the %s log level', async (logLevel, detail) => {
     const output = [
       'plain launcher output',
+      { name: 'pnpm', level: 'warn', message: 'dependency warning' },
       { name: 'pnpm:progress', status: 'resolved', level: 'debug' },
-      { name: 'pnpm:lifecycle', stage: 'postinstall', script: 'node install.cjs', level: 'debug' },
+      {
+        name: 'pnpm:lifecycle',
+        stage: 'postinstall',
+        script: 'node install.cjs',
+        level: 'debug',
+      },
       {
         name: 'pnpm:lifecycle',
         stage: 'postinstall',
@@ -172,8 +182,8 @@ describe('formatPnpmInstallOutput', () => {
       .map((line) => (typeof line === 'string' ? line : JSON.stringify(line)))
       .join('\n');
 
-    expect(await formatPnpmInstallOutput(output, '/project', { errorsOnly: true })).toBe(
-      'plain launcher output\nsetup failed\nELIFECYCLE Command failed',
+    expect(await formatPnpmInstallOutput(output, '/project', logLevel)).toBe(
+      `plain launcher output\n${detail}ELIFECYCLE Command failed`,
     );
   });
 

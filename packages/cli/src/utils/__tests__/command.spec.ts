@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout } from 'node:timers/promises';
 
-import { describe, expect, it } from 'vitest';
+import crossSpawn from 'cross-spawn';
+import { describe, expect, it, vi } from 'vitest';
 
 import { runCommand, runCommandSilently } from '../command.ts';
 
@@ -106,6 +107,7 @@ describe('command runners', () => {
   it('stops an idle install tree and keeps partial output available for diagnosis', async () => {
     const cwd = mkdtempSync(join(tmpdir(), 'vp-install-command-'));
     const finished = join(cwd, 'finished');
+    const spawnSync = vi.spyOn(crossSpawn, 'sync');
     const manager = `
       process.stderr.write('resolving packages\\n');
       setTimeout(() => {
@@ -133,7 +135,11 @@ describe('command runners', () => {
       expect(result.stderr.toString()).toContain('resolving packages');
       await setTimeout(1500);
       expect(existsSync(finished)).toBe(false);
+      if (process.platform === 'linux') {
+        expect(spawnSync).not.toHaveBeenCalledWith('ps', expect.anything(), expect.anything());
+      }
     } finally {
+      spawnSync.mockRestore();
       rmSync(cwd, { recursive: true, force: true });
     }
   });
