@@ -135,6 +135,24 @@ export default defineConfig([
     },
   },
 
+  // Vite sets DEBUG from its CLI flags before importing its own code.
+  // Keep this preload out of the shared CJS chunks that import Vite.
+  {
+    name: 'vite-dev-terminal',
+    entry: {
+      'vite-dev-terminal': './src/vite-dev-terminal.ts',
+    },
+    outDir: 'dist',
+    format: 'cjs',
+    fixedExtension: true,
+    dts: false,
+    clean: false,
+    deps: { neverBundle: [/\.\.\/binding\/index\.(js|cjs)/] },
+    outputOptions: {
+      codeSplitting: false,
+    },
+  },
+
   // Standalone machine protocol shipped with the prebuilt `vp` archive.
   // Keep this as one self-contained file so Containerbase can extract the
   // verified release asset without installing npm dependencies.
@@ -158,13 +176,12 @@ export default defineConfig([
     },
   },
 
-  // CJS — dual-format entries and the interactive Vite preload.
+  // CJS — dual-format entries
   {
     name: 'cli-cjs',
     entry: {
       'define-config': './src/define-config.ts',
       index: './src/index.cts',
-      'vite-dev-terminal': './src/vite-dev-terminal.ts',
       // Match @oxlint/plugins' CJS support for compiled plugins. plugins-dev
       // uses its ESM entry for both import and require, matching upstream.
       'lint-plugins': './src/lint-plugins.ts',
@@ -173,6 +190,5 @@ export default defineConfig([
     format: 'cjs',
     dts: false,
     clean: false,
-    deps: { neverBundle: [/\.\.\/binding\/index\.(js|cjs)/] },
   },
 ]);

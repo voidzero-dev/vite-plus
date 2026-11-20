@@ -16,5 +16,5 @@ steps = [{ argv = ["node", "probe.mjs", "--worker"], tty = false, timeout = 2500
 name = "command_dev_local_signal_hangup"
 vp = "local"
 skip-platforms = ["windows"]
-comment = "SIGHUP restores the terminal mode after an interactive Vite plugin changes it."
+comment = "Interactive Vite prints config debug logs and restores the terminal mode on SIGHUP."
 steps = [{ argv = ["node", "probe.mjs", "--hangup"], timeout = 25000 }]

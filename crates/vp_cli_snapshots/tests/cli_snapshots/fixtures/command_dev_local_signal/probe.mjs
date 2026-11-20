@@ -6,6 +6,7 @@ import { connect } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
+import { text } from 'node:stream/consumers';
 
 const workerMode = process.argv[2] === '--worker';
 const hangupMode = process.argv[2] === '--hangup';
@@ -41,12 +42,16 @@ if (hangupMode) {
 }
 const initialTerminal = hangupMode ? stty('-g') : undefined;
 const args = ['dev', '--host', '127.0.0.1', '--port', '0', '--base', '/probe/'];
+if (hangupMode) {
+  args.push('--debug', 'config');
+}
 const child = spawn(
   workerMode ? process.execPath : 'vp',
   workerMode ? ['worker-host.mjs', ...args] : args,
-  { stdio: [hangupMode ? 'inherit' : 'ignore', 'pipe', 'inherit'], env },
+  { stdio: [hangupMode ? 'inherit' : 'ignore', 'pipe', hangupMode ? 'pipe' : 'inherit'], env },
 );
 const exited = once(child, 'exit');
+const debugOutput = hangupMode ? text(child.stderr) : undefined;
 
 try {
   const { port, pid } = await listenerInfo(child.stdout, child.pid);
@@ -81,6 +86,8 @@ try {
     socket.destroy();
   }
   if (hangupMode) {
+    assert.match(await debugOutput, /vite:config/);
+    console.log('Vite printed its config debug logs');
     assert.deepEqual([code, signal], [null, 'SIGHUP']);
     assert.equal(stty('-g'), initialTerminal, 'SIGHUP restored the terminal mode');
     console.log('SIGHUP to the launch PID closed the port and restored the terminal');
