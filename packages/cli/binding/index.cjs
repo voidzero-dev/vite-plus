@@ -1118,6 +1118,7 @@ module.exports.mergeJsonConfig = nativeBinding.mergeJsonConfig;
 module.exports.mergeTsdownConfig = nativeBinding.mergeTsdownConfig;
 module.exports.mergeTsdownJsonConfig = nativeBinding.mergeTsdownJsonConfig;
 module.exports.migrateTaskCacheConfig = nativeBinding.migrateTaskCacheConfig;
+module.exports.normalizeTsdownJsonPackConfigs = nativeBinding.normalizeTsdownJsonPackConfigs;
 module.exports.parseConfigArgs = nativeBinding.parseConfigArgs;
 module.exports.parseCreateArgs = nativeBinding.parseCreateArgs;
 module.exports.parseHooksArgs = nativeBinding.parseHooksArgs;

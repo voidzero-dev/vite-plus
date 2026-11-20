@@ -3965,6 +3965,18 @@ export interface MigrateArgs {
  */
 export declare function migrateTaskCacheConfig(viteConfigPath: string): TaskCacheConfigResult;
 
+export interface NormalizedTsdownJsonPackConfigs {
+  existing: string;
+  expected: string;
+}
+
+/** Apply the standalone toolchain's option migration to both sides of the comparison. */
+export declare function normalizeTsdownJsonPackConfigs(
+  viteConfig: string,
+  jsonConfigPath: string,
+  workspaceRoot: string,
+): NormalizedTsdownJsonPackConfigs;
+
 export interface PackageManagerOverride {
   name: string;
   version: string;

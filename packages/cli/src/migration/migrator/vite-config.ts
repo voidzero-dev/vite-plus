@@ -16,6 +16,7 @@ import {
   mergeTsdownConfig,
   mergeTsdownJsonConfig,
   migrateTaskCacheConfig,
+  normalizeTsdownJsonPackConfigs,
   readStaticLintConfig,
   ResolverFactory,
   rewriteImportsInDirectory,
@@ -266,7 +267,12 @@ function mergeLocalTsdownConfigFile(
 
   if (configs.tsdownConfig.endsWith('.json')) {
     if (hasConfigKey(fullViteConfigPath, 'pack')) {
-      if (!matchesInlinePackConfig(fullViteConfigPath, fullTsdownConfigPath, workspaceRoot)) {
+      const matching = matchingInlinePackConfig(
+        fullViteConfigPath,
+        fullTsdownConfigPath,
+        workspaceRoot,
+      );
+      if (!matching) {
         infoMigration(
           `Please manually merge ${displayRelative(fullTsdownConfigPath)} into the existing pack config in ${displayRelative(fullViteConfigPath)}. The JSON file was preserved. See ${documentationUrl('/guide/migrate#tsdown')}`,
           report,
@@ -275,6 +281,9 @@ function mergeLocalTsdownConfigFile(
       }
       if (keepTsdownConfig) {
         return false;
+      }
+      if (matching.updated) {
+        fs.writeFileSync(fullViteConfigPath, matching.content);
       }
     }
     const merged = mergeAndRemoveJsonConfig(
@@ -388,36 +397,37 @@ function mergeImportedTsdownConfigs(
   return changed;
 }
 
-function matchesInlinePackConfig(
+function matchingInlinePackConfig(
   viteConfigPath: string,
   tsdownConfigPath: string,
   workspaceRoot: string,
-): boolean {
+) {
   try {
+    const source = fs.readFileSync(viteConfigPath, 'utf8');
+    const { existing, expected } = normalizeTsdownJsonPackConfigs(
+      source,
+      tsdownConfigPath,
+      workspaceRoot,
+    );
     const current = configReturnValues(
-      defaultConfigValue(
-        parseSource(viteConfigPath, fs.readFileSync(viteConfigPath, 'utf8')).program,
-      ),
+      defaultConfigValue(parseSource(viteConfigPath, existing).program),
     );
     if (current.length === 0) {
-      return false;
+      return undefined;
     }
-    const expected = defaultConfigValue(
-      parseSource(viteConfigPath, mergeTsdownJsonConfig(tsdownConfigPath, workspaceRoot).content)
-        .program,
-    );
+    const standalone = defaultConfigValue(parseSource(viteConfigPath, expected).program);
     const inlined =
-      expected?.type === 'ObjectExpression' && objectProperty(expected, 'pack')?.value;
-    return (
-      !!inlined &&
+      standalone?.type === 'ObjectExpression' && objectProperty(standalone, 'pack')?.value;
+    const matches =
+      inlined &&
       current.every((config) => {
         const pack = staticObject(config, true) && objectProperty(config, 'pack')?.value;
         return !!pack && sameStaticValue(pack, inlined);
-      })
-    );
+      });
+    return matches ? { content: existing, updated: source !== existing } : undefined;
   } catch {
     // Unknown or invalid config syntax is not enough to discard the source.
-    return false;
+    return undefined;
   }
 }
 
@@ -783,6 +793,18 @@ function packAssignments(
   return [...uses, ...copies];
 }
 
+const arrayMutators = new Set([
+  'copyWithin',
+  'fill',
+  'pop',
+  'push',
+  'reverse',
+  'shift',
+  'sort',
+  'splice',
+  'unshift',
+]);
+
 function packMutationReferences(program: Program): Set<number> {
   const writes = new Set<number>();
   for (const node of configNodes(program)) {
@@ -801,7 +823,13 @@ function packMutationReferences(program: Program): Set<number> {
         target = node.argument;
         break;
       case 'CallExpression': {
-        const assigned = objectAssignTarget(node);
+        const { callee } = node;
+        const method = memberName(callee);
+        const receiver =
+          callee.type === 'MemberExpression' && method && arrayMutators.has(method)
+            ? callee.object
+            : undefined;
+        const assigned = objectAssignTarget(node) ?? receiver;
         if (!assigned) {
           continue;
         }
@@ -975,7 +1003,7 @@ export function findDivergedTsdownPackConfig(
   try {
     const hasPack = hasConfigKey(vitePath, 'pack');
     if (tsdownConfigPath.endsWith('.json')) {
-      return hasPack && !matchesInlinePackConfig(vitePath, tsdownConfigPath, workspaceRoot)
+      return hasPack && !matchingInlinePackConfig(vitePath, tsdownConfigPath, workspaceRoot)
         ? vitePath
         : undefined;
     }

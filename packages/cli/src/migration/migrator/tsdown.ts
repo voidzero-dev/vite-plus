@@ -186,6 +186,20 @@ export function collectPackagesKeepingTsdown(
   }
   // A previously converted default config can drift while the standalone command
   // remains active. Check before changing its scripts, dependencies or imports.
+  const checkedDefaults = new Map<string, { original?: string; converted?: string }>();
+  const checkDefault = (cwd: string) => {
+    const cached = checkedDefaults.get(cwd);
+    if (cached) {
+      return cached;
+    }
+    const original = findDefaultTsdownConfig(cwd, workspaceRoot);
+    const converted = original
+      ? findDivergedTsdownPackConfig(original, workspaceRoot, cwd)
+      : undefined;
+    const result = { original, converted };
+    checkedDefaults.set(cwd, result);
+    return result;
+  };
   const reportedConfigs = new Set<string>();
   for (const [dir, directories] of defaultDirectories) {
     // Shell expansions and pipes can hide the working directory from the parser.
@@ -193,12 +207,11 @@ export function collectPackagesKeepingTsdown(
       ? projectPaths
       : new Set(directories);
     for (const cwd of possibleDirectories) {
-      const original = cwd && findDefaultTsdownConfig(cwd, workspaceRoot);
-      if (!original) {
+      if (!cwd) {
         continue;
       }
-      const converted = findDivergedTsdownPackConfig(original, workspaceRoot, cwd);
-      if (converted) {
+      const { original, converted } = checkDefault(cwd);
+      if (original && converted) {
         keptPackages.add(dir);
         // The JSON merge already reports its conflicts, including retained scripts.
         if (report && !original.endsWith('.json') && !reportedConfigs.has(original)) {
@@ -219,7 +232,7 @@ export function collectPackagesKeepingTsdown(
         return projectPaths;
       }
       keptPackages.add(cwd);
-      const config = findDefaultTsdownConfig(cwd, workspaceRoot);
+      const { original: config } = checkDefault(cwd);
       if (config) {
         for (const owner of findConfigOwners(config, projectPaths)) {
           keptPackages.add(owner);
