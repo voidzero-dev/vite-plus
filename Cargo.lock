@@ -8454,7 +8454,6 @@ dependencies = [
  "terminal_size",
  "vp_shared",
  "vt_path",
- "vt_plan",
  "vt_workspace",
 ]
 

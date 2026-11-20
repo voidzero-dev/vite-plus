@@ -193,6 +193,9 @@ pub const VP_EMIT_MILESTONES: &str = "VP_EMIT_MILESTONES";
 /// before forwarding to the actual tool.
 pub const VP_SHIM_WRAPPER: &str = "VP_SHIM_WRAPPER";
 
+/// Vite Task sets this on spawned tasks (see `vt::MARKER_ENV_NAME`).
+pub const VP_RUN: &str = "VP_RUN";
+
 /// The subcommand as the user wrote it, passed from the global CLI to the local
 /// one.
 ///

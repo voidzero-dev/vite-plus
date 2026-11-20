@@ -17,7 +17,6 @@ serde_json = { workspace = true }
 terminal_size = { workspace = true }
 vp_shared = { workspace = true }
 vt_path = { workspace = true }
-vt_plan = { workspace = true }
 vt_workspace = { workspace = true }
 
 [lints]

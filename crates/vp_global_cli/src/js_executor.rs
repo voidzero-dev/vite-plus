@@ -35,7 +35,7 @@ pub struct JsExecutor {
     scripts_dir: Option<AbsolutePathBuf>,
     /// Subcommand as the user wrote it, forwarded to the CLI this one runs
     raw_subcommand: Option<String>,
-    /// Whether the user selected the command directory with `-C`
+    /// Whether `-C` or app target selection fixed the command directory
     fixed_target: bool,
     /// Whether a project-local CLI miss should emit a warning before global fallback
     warn_on_missing_local_cli: bool,
@@ -450,6 +450,18 @@ impl JsExecutor {
             None
         }
     }
+
+    /// The global fallback accepts a fixed target. Defer to the local CLI
+    /// when its installed entry point cannot honor the marker.
+    pub(crate) fn can_delegate_fixed_app_target(project_path: &AbsolutePath) -> bool {
+        let Some(entry_point) = Self::resolve_local_vite_plus(project_path) else { return true };
+        entry_point
+            .as_path()
+            .parent()
+            .and_then(std::path::Path::parent)
+            .and_then(|package_dir| read_package_json_version(package_dir.join("package.json")))
+            .is_some_and(|version| supports_fixed_app_target(&version, env!("CARGO_PKG_VERSION")))
+    }
 }
 
 /// Resolve the version of the project-local `vite-plus`, if one is installed.
@@ -473,6 +485,15 @@ fn read_package_json_version(pkg_json: impl AsRef<std::path::Path>) -> Option<St
 /// flags a build under test.
 fn is_preview_version(version: &str) -> bool {
     version.starts_with("0.0.0-")
+}
+
+fn supports_fixed_app_target(local: &str, global: &str) -> bool {
+    if is_preview_version(local) {
+        return local == global;
+    }
+    // Vite+ 0.3.0 first shipped support for VP_EXPLICIT_CHDIR in the local CLI.
+    js_semver::Version::parse(local)
+        .is_ok_and(|version| version >= js_semver::Version::new(0, 3, 0))
 }
 
 /// True when the local `vite-plus` should be treated as older than `global`, so
@@ -553,6 +574,16 @@ mod tests {
         assert!(!local_vite_plus_is_older("0.3.0", "0.2.1"));
         // Unparsable versions are conservative: never escalate.
         assert!(!local_vite_plus_is_older("latest", "0.2.1"));
+    }
+
+    #[test]
+    fn only_compatible_local_clis_accept_a_fixed_app_target() {
+        assert!(!supports_fixed_app_target("0.2.9", "1.7.0"));
+        assert!(supports_fixed_app_target("0.3.0", "1.7.0"));
+        assert!(supports_fixed_app_target("1.7.0", "1.7.0"));
+        assert!(!supports_fixed_app_target("latest", "1.7.0"));
+        assert!(supports_fixed_app_target("0.0.0-commit.abc", "0.0.0-commit.abc"));
+        assert!(!supports_fixed_app_target("0.0.0-commit.abc", "0.0.0-commit.xyz"));
     }
 
     #[test]

@@ -20,7 +20,7 @@ Auto-selection and the picker use the member's Node.js pin with one shared Vite+
 ## `vpt mkdir -p node_modules/vite-plus/dist`
 
 
-## `vpt write-file node_modules/vite-plus/package.json '{"name":"vite-plus","version":"0.0.0","type":"module"}'`
+## `vpt write-file node_modules/vite-plus/package.json '{"name":"vite-plus","version":"0.3.0","type":"module"}'`
 
 
 ## `vpt cp probe.mjs node_modules/vite-plus/dist/bin.js`

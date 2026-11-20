@@ -6,9 +6,8 @@
 //! uses points at `vpr`.
 
 use console::style;
-use vp_shared::output;
+use vp_shared::{env_vars, output};
 use vt_path::AbsolutePath;
-use vt_plan::MARKER_ENV_NAME;
 
 const NPM_LIFECYCLE_EVENT_ENV_NAME: &str = "npm_lifecycle_event";
 
@@ -23,7 +22,7 @@ pub fn print(command: Option<&str>, cwd: &AbsolutePath) {
     // A task spawned this command, so the user is already on a script-running
     // path. npm-compatible runners set `npm_lifecycle_event`; Vite Task uses
     // its own marker.
-    if std::env::var_os(MARKER_ENV_NAME).is_some()
+    if std::env::var_os(env_vars::VP_RUN).is_some()
         || std::env::var_os(NPM_LIFECYCLE_EVENT_ENV_NAME).is_some_and(|event| !event.is_empty())
     {
         return;

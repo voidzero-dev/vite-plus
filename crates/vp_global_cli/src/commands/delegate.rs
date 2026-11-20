@@ -32,7 +32,9 @@ pub async fn execute_app(
     // Build and dev forward a lone separator, but it does not select an entry.
     let bare_command = args.is_empty()
         || (matches!(command, "build" | "dev") && matches!(args, [separator] if separator == "--"));
-    let resolve_target = !explicit_chdir && bare_command;
+    // An older local CLI would ignore the marker and pick a target again.
+    let resolve_target =
+        !explicit_chdir && bare_command && JsExecutor::can_delegate_fixed_app_target(&cwd);
     let (cwd, raw_subcommand) = if resolve_target {
         script_note::print(raw_subcommand.or(Some(command)), &cwd);
         let (target, _) = vp_app_target::resolve_app_target(command, &cwd)

@@ -4,7 +4,7 @@ vp = "global"
 comment = "The implicit target uses the same local CLI, working directory, and Node.js runtime as an explicit -C."
 steps = [
   { argv = ["vpt", "mkdir", "-p", "app/node_modules/vite-plus/dist"], snapshot = false },
-  { argv = ["vpt", "write-file", "app/node_modules/vite-plus/package.json", '{"name":"vite-plus","version":"0.0.0","type":"module"}'], snapshot = false },
+  { argv = ["vpt", "write-file", "app/node_modules/vite-plus/package.json", '{"name":"vite-plus","version":"0.3.0","type":"module"}'], snapshot = false },
   { argv = ["vpt", "cp", "probe.mjs", "app/node_modules/vite-plus/dist/bin.js"], snapshot = false },
   ["vp", "build"],
   ["vp", "build", "--"],
@@ -21,7 +21,7 @@ steps = [
   { argv = ["vpt", "touch-file", "app/index.html"], snapshot = false },
   { argv = ["vpt", "write-file", "other/package.json", '{"name":"other","private":true}'], snapshot = false },
   { argv = ["vpt", "mkdir", "-p", "node_modules/vite-plus/dist"], snapshot = false },
-  { argv = ["vpt", "write-file", "node_modules/vite-plus/package.json", '{"name":"vite-plus","version":"0.0.0","type":"module"}'], snapshot = false },
+  { argv = ["vpt", "write-file", "node_modules/vite-plus/package.json", '{"name":"vite-plus","version":"0.3.0","type":"module"}'], snapshot = false },
   { argv = ["vpt", "cp", "probe.mjs", "node_modules/vite-plus/dist/bin.js"], snapshot = false },
   ["vp", "-C", "app", "build"],
   ["vp", "build"],
@@ -32,4 +32,19 @@ steps = [
     { "expect-milestone" = "package-select:app:0" },
     { "write-key" = "enter" },
   ] },
+]
+
+[[case]]
+name = "legacy_local_cli_selects_target"
+vp = "global"
+comment = "A local CLI that predates the fixed target marker receives the original directory and arguments."
+steps = [
+  { argv = ["vpt", "rm", "vite.config.ts"], snapshot = false },
+  { argv = ["vpt", "write-file", "pnpm-workspace.yaml", "packages:\n  - app\n"], snapshot = false },
+  { argv = ["vpt", "touch-file", "app/index.html"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "node_modules/vite-plus/dist"], snapshot = false },
+  { argv = ["vpt", "write-file", "node_modules/vite-plus/package.json", '{"name":"vite-plus","version":"0.2.9","type":"module"}'], snapshot = false },
+  { argv = ["vpt", "cp", "legacy-probe.mjs", "node_modules/vite-plus/dist/bin.js"], snapshot = false },
+  ["vp", "build"],
+  ["vp", "build", "--"],
 ]

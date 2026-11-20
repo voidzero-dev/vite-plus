@@ -5,7 +5,7 @@ The implicit target uses the same local CLI, working directory, and Node.js runt
 ## `vpt mkdir -p app/node_modules/vite-plus/dist`
 
 
-## `vpt write-file app/node_modules/vite-plus/package.json '{"name":"vite-plus","version":"0.0.0","type":"module"}'`
+## `vpt write-file app/node_modules/vite-plus/package.json '{"name":"vite-plus","version":"0.3.0","type":"module"}'`
 
 
 ## `vpt cp probe.mjs app/node_modules/vite-plus/dist/bin.js`
