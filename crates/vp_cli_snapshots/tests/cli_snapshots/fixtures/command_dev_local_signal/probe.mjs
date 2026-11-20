@@ -40,9 +40,16 @@ async function listenerInfo(stdout, launchPid) {
 }
 
 const cache = mkdtempSync(join(tmpdir(), 'vp-dev-cache-'));
+const cacheProof = join(cache, 'cache-before-vite');
 const shutdownMarker = terminalSignal === 'SIGTERM' ? join(cache, 'shutdown-started') : undefined;
 const env = { ...process.env, NODE_COMPILE_CACHE: cache };
 delete env.NODE_DISABLE_COMPILE_CACHE;
+if (!workerMode && !terminalSignal) {
+  env.NODE_OPTIONS = ['--require=./check-launcher-cache.cjs', env.NODE_OPTIONS]
+    .filter(Boolean)
+    .join(' ');
+  env.VP_PROBE_CACHE_PROOF = cacheProof;
+}
 if (terminalSignal) {
   env.VP_PROBE_RAW = '1';
 }
@@ -80,8 +87,8 @@ try {
     assert.notEqual(stty('-g'), initialTerminal, 'the Vite plugin switched the terminal to raw mode');
   } else {
     assert.ok(
-      readdirSync(cache, { recursive: true, withFileTypes: true }).some((entry) => entry.isFile()),
-      'vp saves its compile cache before starting Vite',
+      existsSync(cacheProof),
+      'Vite startup checked the launcher cache before loading its entry point',
     );
     console.log('vp saved its compile cache before starting Vite');
   }

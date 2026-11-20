@@ -1,4 +1,4 @@
-use std::{env, ffi::OsStr, io::IsTerminal as _, iter, sync::Arc};
+use std::{env, ffi::OsStr, iter, sync::Arc};
 
 use vp_static_config::FieldValue;
 use vt::config::user::{
@@ -214,7 +214,7 @@ impl SubcommandResolver {
                     .ok_or_else(|| anyhow::anyhow!("vite JS path is not valid UTF-8"))?;
                 let terminal_preload = (cfg!(unix)
                     && cli_options.exec_dev
-                    && std::io::stdin().is_terminal())
+                    && vp_shared::is_stdin_terminal())
                 .then(|| {
                     Str::from(format!(
                         "--require={}/dist/vite-dev-terminal.cjs",
