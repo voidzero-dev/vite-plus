@@ -332,6 +332,43 @@ describe('explicit tsdown config selection', () => {
     expect(fs.existsSync(path.join(tmpDir, '.oxfmtrc.json'))).toBe(false);
   });
 
+  it('adds vite-plus when a retained tsdown member will import lazyPlugins', () => {
+    const member = path.join(tmpDir, 'packages/member');
+    fs.mkdirSync(member, { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), '{"name":"root","private":true}');
+    fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'packages: [packages/*]\n');
+    const manifest = path.join(member, 'package.json');
+    fs.writeFileSync(
+      manifest,
+      JSON.stringify({
+        name: 'member',
+        scripts: { release: 'tsdown -c release.config.ts' },
+        devDependencies: { tsdown: '0.22.14', '@vitejs/plugin-react': '5.1.2' },
+      }),
+    );
+    fs.writeFileSync(path.join(member, 'release.config.ts'), 'export default {};\n');
+    const viteConfig = path.join(member, 'vite.config.ts');
+    fs.writeFileSync(
+      viteConfig,
+      "import react from '@vitejs/plugin-react';\nexport default { plugins: [react()] };\n",
+    );
+    const workspace = makeWorkspaceInfo(tmpDir, PackageManager.pnpm, '12.11.2');
+    workspace.isMonorepo = true;
+    workspace.workspacePatterns = ['packages/*'];
+    workspace.parentDirs = ['packages'];
+    workspace.packages = [{ name: 'member', path: 'packages/member' }];
+
+    rewriteMonorepo(workspace, true, true, createMigrationReport());
+
+    expect(readJson(manifest)).toMatchObject({
+      scripts: { release: 'tsdown -c release.config.ts' },
+      devDependencies: { tsdown: '0.22.14', 'vite-plus': 'catalog:' },
+    });
+    expect(fs.readFileSync(viteConfig, 'utf8')).toContain(
+      "import { lazyPlugins } from 'vite-plus';",
+    );
+  });
+
   it('repairs a previously migrated formatter config in a member that keeps tsdown', () => {
     const member = path.join(tmpDir, 'packages/member');
     const manifest = path.join(member, 'package.json');
@@ -678,6 +715,10 @@ describe('explicit tsdown config selection', () => {
     ['pack', 'pack: vitePackConfig2'],
     ['pack: [pack, cliConfig]', 'pack: [vitePackConfig2, cliConfig]'],
     [
+      'pack: process.env.PACK_KIND === "library" ? pack : cliConfig',
+      'pack: process.env.PACK_KIND === "library" ? vitePackConfig2 : cliConfig',
+    ],
+    [
       'pack: [{ ...pack, dts: false }, cliConfig]',
       'pack: [{ ...vitePackConfig2, dts: false }, cliConfig]',
     ],
@@ -702,6 +743,39 @@ describe('explicit tsdown config selection', () => {
     expect(updated).toContain('entry: pack.entry');
     expect(updated).toContain(`...vitePackConfig, ${rewrittenPack}`);
     expect(mergeTsdownConfigFile(tmpDir, true, createMigrationReport(), true)).toBe(false);
+  });
+
+  it('uses one converted member config for root and member pack imports', () => {
+    const member = path.join(tmpDir, 'packages/member');
+    fs.mkdirSync(member, { recursive: true });
+    const source = "export default { publicDir: 'public' };\n";
+    const original = path.join(member, 'tsdown.config.ts');
+    fs.writeFileSync(original, source);
+    const rootConfig = path.join(tmpDir, 'vite.config.ts');
+    const memberConfig = path.join(member, 'vite.config.ts');
+    fs.writeFileSync(
+      rootConfig,
+      "import pack from './packages/member/tsdown.config.js';\nexport default { pack };\n",
+    );
+    fs.writeFileSync(
+      memberConfig,
+      "import pack from './tsdown.config.ts';\nexport default { pack };\n",
+    );
+    const tsdownPackages = new Set([member]);
+    const report = createMigrationReport();
+    expect(mergeTsdownConfigFile(tmpDir, true, report, false, tmpDir, tsdownPackages)).toBe(true);
+    expect(mergeTsdownConfigFile(member, true, report, true, tmpDir, tsdownPackages)).toBe(true);
+    expect(fs.readFileSync(rootConfig, 'utf8')).toContain(
+      'from "./packages/member/vite-pack.config.js"',
+    );
+    expect(fs.readFileSync(memberConfig, 'utf8')).toContain('from "./vite-pack.config.ts"');
+    expect(fs.readFileSync(path.join(member, 'vite-pack.config.ts'), 'utf8')).toContain(
+      "copy: 'public'",
+    );
+    expect(fs.readFileSync(original, 'utf8')).toBe(source);
+    expect(fs.existsSync(path.join(tmpDir, 'vite-pack.config.ts'))).toBe(false);
+    expect(mergeTsdownConfigFile(tmpDir, true, report, false, tmpDir, tsdownPackages)).toBe(false);
+    expect(mergeTsdownConfigFile(member, true, report, true, tmpDir, tsdownPackages)).toBe(false);
   });
 
   it.skipIf(process.platform === 'win32')(

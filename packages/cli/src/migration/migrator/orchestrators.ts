@@ -466,6 +466,7 @@ export function rewriteMonorepo(
     retainedImportDependencies,
     rootDir: workspaceInfo.rootDir,
     packages: workspaceInfo.packages,
+    tsdownPackages,
     oxlintConfigs: prepareOxlintConfigs(getWorkspaceProjectPaths(workspaceInfo)),
   };
   // rewrite root workspace
@@ -569,7 +570,14 @@ export function rewriteMonorepo(
   removeMigratedOxlintConfigs(workspaceContext.oxlintConfigs);
   injectLintTypeCheckDefaults(workspaceInfo.rootDir, silent, report);
   injectFmtDefaults(workspaceInfo.rootDir, silent, report);
-  mergeTsdownConfigFile(workspaceInfo.rootDir, silent, report, keepRootTsdown);
+  mergeTsdownConfigFile(
+    workspaceInfo.rootDir,
+    silent,
+    report,
+    keepRootTsdown,
+    workspaceInfo.rootDir,
+    tsdownPackages,
+  );
   // rewrite imports in all TypeScript/JavaScript files before lazy plugin import merging
   rewriteAllImports(workspaceInfo.rootDir, silent, report, {
     oxlintOwnerDirs,
@@ -611,6 +619,7 @@ export function rewriteMonorepoProject(
     packages: WorkspacePackage[];
     oxlintConfigs?: PreparedOxlintConfigs;
     retainedImportDependencies?: RetainedImportDependencies;
+    tsdownPackages?: ReadonlySet<string>;
   },
   deferLazyPluginWrapping = false,
   // Whether this workspace's edges use catalog references. Yarn catalogs require
@@ -632,7 +641,14 @@ export function rewriteMonorepoProject(
     workspaceContext?.rootDir,
     workspaceContext?.oxlintConfigs,
   );
-  mergeTsdownConfigFile(projectPath, silent, report, keepTsdown, workspaceContext?.rootDir);
+  mergeTsdownConfigFile(
+    projectPath,
+    silent,
+    report,
+    keepTsdown,
+    workspaceContext?.rootDir,
+    workspaceContext?.tsdownPackages,
+  );
 
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
@@ -686,7 +702,7 @@ export function rewriteMonorepoProject(
       workspaceContext?.retainedImportDependencies?.browser.get(projectPath),
       keepTsdown,
       keepTsdownDependency,
-      configNeedsVitePlus(projectPath, keepTsdownDependency),
+      configNeedsVitePlus(projectPath, keepTsdownDependency, { wrapPlugins: true }),
     );
     if (
       extractedStagedConfig &&
