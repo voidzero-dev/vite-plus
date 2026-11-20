@@ -1,6 +1,6 @@
 import { execFileSync, spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout } from 'node:timers/promises';
@@ -9,6 +9,16 @@ import crossSpawn from 'cross-spawn';
 import { describe, expect, it, vi } from 'vitest';
 
 import { runCommand, runCommandSilently } from '../command.ts';
+
+function stopFixtureChild(pidFile: string) {
+  if (existsSync(pidFile)) {
+    try {
+      process.kill(Number(readFileSync(pidFile, 'utf8')), 'SIGKILL');
+    } catch {
+      // The command runner may already have stopped the child.
+    }
+  }
+}
 
 describe('command runners', () => {
   it('resolves with the child output when no timeout is set', async () => {
@@ -35,40 +45,84 @@ describe('command runners', () => {
     ).rejects.toThrow(/timed out after 200ms/);
   });
 
-  it('enforces the deadline after a wrapper exits with inherited pipes', async () => {
-    const cwd = mkdtempSync(join(tmpdir(), 'vp-deadline-command-'));
-    const pidFile = join(cwd, 'pid');
-    const start = performance.now();
-    try {
-      await expect(
-        runCommandSilently({
-          command: process.execPath,
-          args: [
-            '-e',
-            `const child = require('node:child_process').spawn(
+  it.skipIf(process.platform === 'win32')(
+    'enforces the deadline after a wrapper exits with inherited pipes',
+    async () => {
+      const cwd = mkdtempSync(join(tmpdir(), 'vp-deadline-command-'));
+      const pidFile = join(cwd, 'pid');
+      const start = performance.now();
+      try {
+        await expect(
+          runCommandSilently({
+            command: process.execPath,
+            args: [
+              '-e',
+              `const child = require('node:child_process').spawn(
               process.execPath, ['-e', 'setTimeout(() => {}, 5000)'], { stdio: 'inherit' }
             );
             require('node:fs').writeFileSync('pid', String(child.pid));
             child.unref();`,
-          ],
-          cwd,
-          envs: process.env,
-          timeoutMs: 1200,
-        }),
-      ).rejects.toThrow(/timed out after 1200ms/);
-      expect(existsSync(pidFile)).toBe(true);
-      expect(performance.now() - start).toBeLessThan(3500);
-    } finally {
-      if (existsSync(pidFile)) {
-        try {
-          process.kill(Number(readFileSync(pidFile, 'utf8')), 'SIGKILL');
-        } catch {
-          // The timed command runner may already have stopped this descendant.
-        }
+            ],
+            cwd,
+            envs: process.env,
+            timeoutMs: 1200,
+          }),
+        ).rejects.toThrow(/timed out after 1200ms/);
+        expect(existsSync(pidFile)).toBe(true);
+        expect(performance.now() - start).toBeLessThan(3500);
+      } finally {
+        stopFixtureChild(pidFile);
+        rmSync(cwd, { recursive: true, force: true });
       }
-      rmSync(cwd, { recursive: true, force: true });
-    }
-  });
+    },
+  );
+
+  it.skipIf(process.platform !== 'win32')(
+    'enforces the deadline and stops a running pnpm.cmd wrapper and its child',
+    async () => {
+      const cwd = mkdtempSync(join(tmpdir(), 'vp-deadline-cmd-'));
+      const pidFile = join(cwd, 'pid');
+      const wrapper = join(cwd, 'pnpm.cmd');
+      try {
+        writeFileSync(wrapper, '@echo off\r\n"%VP_COMMAND_TEST_NODE%" "%~dp0hold.cjs"\r\n');
+        writeFileSync(
+          join(cwd, 'hold.cjs'),
+          "require('node:fs').writeFileSync('pid', String(process.pid));\nsetInterval(() => {}, 1000);",
+        );
+        const start = performance.now();
+        await expect(
+          runCommandSilently({
+            command: wrapper,
+            args: ['--version'],
+            cwd,
+            envs: { ...process.env, VP_COMMAND_TEST_NODE: process.execPath },
+            timeoutMs: 1500,
+          }),
+        ).rejects.toThrow(/timed out after 1500ms/);
+        expect(performance.now() - start).toBeLessThan(4500);
+        const pid = Number(readFileSync(pidFile, 'utf8'));
+        await expect
+          .poll(
+            () => {
+              try {
+                process.kill(pid, 0);
+                return false;
+              } catch (error) {
+                if ((error as NodeJS.ErrnoException).code === 'ESRCH') {
+                  return true;
+                }
+                throw error;
+              }
+            },
+            { timeout: 2500 },
+          )
+          .toBe(true);
+      } finally {
+        stopFixtureChild(pidFile);
+        rmSync(cwd, { recursive: true, force: true });
+      }
+    },
+  );
 
   it('does not reject a fast child because a timeout is configured', async () => {
     const result = await runCommandSilently({
@@ -180,11 +234,11 @@ describe('command runners', () => {
   });
 
   it.skipIf(process.platform === 'win32').each([
-    ['idle timeout', { idleTimeoutMs: 30_000 }, true],
-    ['hard deadline', { timeoutMs: 30_000 }, false],
+    ['idle timeout', { idleTimeoutMs: 30_000 }],
+    ['hard deadline', { timeoutMs: 30_000 }],
   ] as const)(
-    'lets Ctrl+C reach captured commands with a %s',
-    async (_name, timeout, sharesProcessGroup) => {
+    'keeps captured commands with a %s in the caller process group',
+    async (_name, timeout) => {
       const cwd = mkdtempSync(join(tmpdir(), 'vp-cancel-command-'));
       const ready = join(cwd, 'ready');
       const program = `
@@ -228,9 +282,7 @@ describe('command runners', () => {
         process.kill(-runnerPid, 'SIGINT');
         await expect(exited).resolves.toEqual([null, 'SIGINT']);
         await expect.poll(() => existsSync(join(cwd, 'cleaned'))).toBe(true);
-        expect(Number(entry?.trim().split(/\s+/)[1])).toBe(
-          sharesProcessGroup ? runnerPid : Number(childPid),
-        );
+        expect(Number(entry?.trim().split(/\s+/)[1])).toBe(runnerPid);
       } finally {
         if (runnerPid && runner.exitCode === null && runner.signalCode === null) {
           process.kill(-runnerPid, 'SIGTERM');

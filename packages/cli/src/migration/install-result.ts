@@ -5,7 +5,7 @@ import {
 } from '../../binding/index.js';
 import { PackageManager } from '../types/index.ts';
 import { getVpCommand, runCommandSilently } from '../utils/command.ts';
-import { pnpmProbeEnv } from '../utils/pnpm-install-progress.ts';
+import { PNPM_PROBE_TIMEOUT_MS, pnpmProbeEnv } from '../utils/pnpm-install-progress.ts';
 import type { CommandRunSummary } from '../utils/prompts.ts';
 import { warnMsg } from '../utils/terminal.ts';
 import type { MigrationReport } from './report.ts';
@@ -29,22 +29,20 @@ export async function getMigrationInstallWatchOptions(
     if ((override?.name ?? packageManager) !== PackageManager.pnpm) {
       return undefined;
     }
-    const probeEnv = pnpmProbeEnv(process.env);
+    const probeOptions = { cwd, envs: pnpmProbeEnv(process.env), timeoutMs: PNPM_PROBE_TIMEOUT_MS };
     let version = downloaded?.version;
     let pnpmExecutable = downloaded?.binPaths.pnpm;
     if (process.env.VP_CLI_BIN) {
       // The global launcher can select a system binary ahead of the project pin.
       let selectionResult = await runCommandSilently({
         ...getVpCommand(['env', 'current', 'pm', '--json']),
-        cwd,
-        envs: probeEnv,
+        ...probeOptions,
       });
       if (selectionResult.exitCode === 2) {
         // Older launchers reject the pm argument but include the selection in the full report.
         selectionResult = await runCommandSilently({
           ...getVpCommand(['env', 'current', '--json']),
-          cwd,
-          envs: probeEnv,
+          ...probeOptions,
         });
       }
       const { exitCode, stdout } = selectionResult;
@@ -98,8 +96,7 @@ export async function getMigrationInstallWatchOptions(
       const { exitCode, stdout } = await runCommandSilently({
         command: pnpmExecutable,
         args: ['--version'],
-        cwd,
-        envs: probeEnv,
+        ...probeOptions,
       });
       version = exitCode === 0 ? stdout.toString().trim() : undefined;
     }

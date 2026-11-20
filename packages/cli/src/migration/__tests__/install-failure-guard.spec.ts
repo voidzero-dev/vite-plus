@@ -217,6 +217,7 @@ describe('getMigrationInstallWatchOptions', () => {
           command: '/global/vp',
           args: ['env', 'current', 'pm', '--json'],
           cwd,
+          timeoutMs: 5000,
           envs: expect.objectContaining({
             npm_config_ignore_pnpmfile: 'true',
             pnpm_config_ignore_pnpmfile: 'true',
@@ -229,6 +230,7 @@ describe('getMigrationInstallWatchOptions', () => {
           command: overridePnpm.binPaths.pnpm,
           args: ['--version'],
           cwd,
+          timeoutMs: 5000,
           envs: expect.objectContaining({
             npm_config_ignore_pnpmfile: 'true',
             pnpm_config_ignore_pnpmfile: 'true',
@@ -269,9 +271,21 @@ describe('getMigrationInstallWatchOptions', () => {
         command: '/global/vp',
         args: ['env', 'current', '--json'],
         cwd,
+        timeoutMs: 5000,
         envs: expect.objectContaining({ npm_config_ignore_pnpmfile: 'true' }),
       }),
     );
+  });
+
+  it('lets the installer select pnpm after its launcher probe times out', async () => {
+    vi.stubEnv('VP_CLI_BIN', '/global/vp');
+    vi.mocked(runCommandSilently).mockRejectedValueOnce(new Error('Command timed out'));
+
+    expect(
+      await getMigrationInstallWatchOptions(cwd, false, PackageManager.pnpm, projectPnpm),
+    ).toBeUndefined();
+    expect(runCommandSilently).toHaveBeenCalledTimes(1);
+    expect(downloadPackageManager).not.toHaveBeenCalled();
   });
 
   it('prepares a global pnpm override that has yet to be installed', async () => {
@@ -347,7 +361,12 @@ describe('getMigrationInstallWatchOptions', () => {
     ).toEqual(overrideWatchOptions);
     expect(downloadPackageManager).toHaveBeenCalledWith({ name: 'pnpm', version: '10.33.0', cwd });
     expect(runCommandSilently).toHaveBeenCalledWith(
-      expect.objectContaining({ command: overridePnpm.binPaths.pnpm, args: ['--version'], cwd }),
+      expect.objectContaining({
+        command: overridePnpm.binPaths.pnpm,
+        args: ['--version'],
+        cwd,
+        timeoutMs: 5000,
+      }),
     );
   });
 });
