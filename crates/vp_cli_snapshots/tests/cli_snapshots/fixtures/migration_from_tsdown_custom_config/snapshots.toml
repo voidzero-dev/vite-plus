@@ -24,6 +24,25 @@ steps = [
 ]
 
 [[case]]
+name = "native_loader"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.vite-plus", "^1.7.0"], snapshot = false },
+  { argv = ["vpt", "write-file", "tsdown.config.ts", "import { defineConfig } from 'tsdown'; export default defineConfig({ entry: ['src/library.ts'] });"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "import { defineConfig } from 'vite-plus'; import pack from './tsdown.config.ts'; export default defineConfig({ pack });"], snapshot = false },
+  { argv = ["vpt", "write-file", "index.html", "<main>Native config</main>"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "build", "--configLoader", "native"], snapshot = false },
+  { argv = ["vpt", "rm", "-r", "dist"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  ["vpt", "stat-file", "vite-pack.config.ts", "--assert", "file"],
+  { argv = ["vp", "build", "--configLoader", "native"], snapshot = false },
+  ["vpt", "print-file", "dist/index.html"],
+]
+
+[[case]]
 name = "standard_config"
 vp = "global"
 local-registry = true

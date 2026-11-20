@@ -288,6 +288,39 @@ describe('explicit tsdown config selection', () => {
   });
 
   it.each([false, true])(
+    'keeps members selected by the tsdown manifest config (config file=%s)',
+    (hasDefaultFile) => {
+      const lib = path.join(tmpDir, 'packages/lib');
+      fs.mkdirSync(lib, { recursive: true });
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({
+          name: 'root',
+          tsdown: { workspace: true },
+          scripts: { build: 'tsdown', release: 'tsdown -c release.config.ts' },
+        }),
+      );
+      const rootConfig = "export default { entry: 'src/lib.ts' };";
+      fs.writeFileSync(path.join(tmpDir, 'release.config.ts'), rootConfig);
+      if (hasDefaultFile) {
+        fs.writeFileSync(path.join(tmpDir, 'tsdown.config.ts'), rootConfig);
+      }
+      fs.writeFileSync(path.join(lib, 'package.json'), '{"name":"lib"}');
+      const memberConfig = path.join(lib, 'tsdown.config.json');
+      const memberSource = '{"entry":"src/lib.ts","outDir":"member-out"}';
+      fs.writeFileSync(memberConfig, memberSource);
+      const workspace = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+      workspace.packages = [{ name: 'lib', path: 'packages/lib' }];
+
+      finalizeCoreMigrationForExistingVitePlus(workspace, true);
+      expect(fs.existsSync(memberConfig)).toBe(!hasDefaultFile);
+      if (!hasDefaultFile) {
+        expect(fs.readFileSync(memberConfig, 'utf8')).toBe(memberSource);
+      }
+    },
+  );
+
+  it.each([false, true])(
     'keeps the shared tsdown dependency with a root member (upgrade=%s)',
     (upgrade) => {
       const lib = path.join(tmpDir, 'packages/lib');
@@ -323,18 +356,18 @@ describe('explicit tsdown config selection', () => {
     },
   );
 
-  it.each([undefined, './tsdown.config.js', './tsdown.config'])(
-    'converts the config for vp pack while keeping the standalone source (import=%s)',
-    (existingImport) => {
+  it.each([undefined, '.js', '.ts', ''])(
+    'converts the config for vp pack while keeping the standalone source and import suffix (%s)',
+    (importSuffix) => {
       const tsdown = path.join(tmpDir, 'tsdown.config.ts');
       const vite = path.join(tmpDir, 'vite.config.ts');
       const original =
         "import { defineConfig } from 'tsdown';\nexport default defineConfig({ publicDir: 'public' });\n";
       fs.writeFileSync(tsdown, original);
-      if (existingImport) {
+      if (importSuffix !== undefined) {
         fs.writeFileSync(
           vite,
-          `import legacy from '${existingImport}';\nexport default { pack: legacy };\n`,
+          `import legacy from './tsdown.config${importSuffix}';\nexport default { pack: legacy };\n`,
         );
       }
 
@@ -345,8 +378,9 @@ describe('explicit tsdown config selection', () => {
       expect(packSource).toContain("copy: 'public'");
       expect(packSource).toContain('vite-plus/pack');
       const viteSource = fs.readFileSync(vite, 'utf8');
-      expect(viteSource).toContain('./vite-pack.config.js');
-      if (existingImport) {
+      const convertedImport = viteSource.match(/from ['"](\.\/vite-pack\.config[^'"]*)['"]/)?.[1];
+      expect(convertedImport).toBe(`./vite-pack.config${importSuffix ?? '.js'}`);
+      if (importSuffix !== undefined) {
         expect(viteSource).toContain('pack: legacy');
       }
 
@@ -377,33 +411,37 @@ describe('explicit tsdown config selection', () => {
     expect(mergeTsdownConfigFile(tmpDir, true, createMigrationReport(), true)).toBe(false);
   });
 
-  it.each([false, true])(
-    'removes a JSON source only when it still matches the inline pack config (edited=%s)',
-    (edited) => {
-      const tsdown = path.join(tmpDir, 'tsdown.config.json');
-      const viteConfig = path.join(tmpDir, 'vite.config.ts');
-      const installedTsdown = path.join(tmpDir, 'node_modules/tsdown');
-      fs.mkdirSync(installedTsdown, { recursive: true });
-      fs.writeFileSync(path.join(installedTsdown, 'package.json'), '{"version":"0.23.4"}');
-      const original = '{"entry":["src/lib.ts"],"outDir":"original-out"}';
-      fs.writeFileSync(tsdown, original);
-      expect(mergeTsdownConfigFile(tmpDir, true, createMigrationReport(), true)).toBe(true);
-      const inlined = fs.readFileSync(viteConfig, 'utf8');
-      const source = edited ? original.replace('original-out', 'edited-out') : original;
-      fs.writeFileSync(tsdown, source);
+  it.each([
+    [false, false],
+    [true, false],
+    [false, true],
+    [true, true],
+  ])('compares the JSON source to the inline pack config (edited=%s, kept=%s)', (edited, kept) => {
+    const tsdown = path.join(tmpDir, 'tsdown.config.json');
+    const viteConfig = path.join(tmpDir, 'vite.config.ts');
+    const installedTsdown = path.join(tmpDir, 'node_modules/tsdown');
+    fs.mkdirSync(installedTsdown, { recursive: true });
+    fs.writeFileSync(path.join(installedTsdown, 'package.json'), '{"version":"0.23.4"}');
+    const original = '{"entry":["src/lib.ts"],"outDir":"original-out"}';
+    fs.writeFileSync(tsdown, original);
+    expect(mergeTsdownConfigFile(tmpDir, true, createMigrationReport(), true)).toBe(true);
+    const inlined = fs.readFileSync(viteConfig, 'utf8');
+    const source = edited ? original.replace('original-out', 'edited-out') : original;
+    fs.writeFileSync(tsdown, source);
 
-      const report = createMigrationReport();
-      expect(mergeTsdownConfigFile(tmpDir, true, report)).toBe(!edited);
-      expect(fs.readFileSync(viteConfig, 'utf8')).toBe(inlined);
-      if (edited) {
-        expect(fs.readFileSync(tsdown, 'utf8')).toBe(source);
-        expect(report.manualSteps).toEqual([expect.stringContaining('Please manually merge')]);
-      } else {
-        expect(fs.existsSync(tsdown)).toBe(false);
-        expect(report.manualSteps).toHaveLength(0);
-      }
-    },
-  );
+    const report = createMigrationReport();
+    const removed = !edited && !kept;
+    expect(mergeTsdownConfigFile(tmpDir, true, report, kept)).toBe(removed);
+    expect(fs.readFileSync(viteConfig, 'utf8')).toBe(inlined);
+    if (!removed) {
+      expect(fs.readFileSync(tsdown, 'utf8')).toBe(source);
+    } else {
+      expect(fs.existsSync(tsdown)).toBe(false);
+    }
+    expect(report.manualSteps).toEqual(
+      edited ? [expect.stringContaining('Please manually merge')] : [],
+    );
+  });
 
   it('leaves a combined Vite config and the standalone source for manual merging', () => {
     const tsdown = path.join(tmpDir, 'tsdown.config.ts');
