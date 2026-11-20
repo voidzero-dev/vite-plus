@@ -94,7 +94,10 @@ impl SubcommandResolver {
                     .chain(args.into_iter().map(Str::from))
                     .collect(),
                     cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
-                        env: Some(Box::new([Str::from("OXLINT_TSGOLINT_PATH")])),
+                        env: Some(Box::new([
+                            Str::from("OXLINT_TSGOLINT_PATH"),
+                            Str::from("TSRS_LINT_RUN_EXTERNAL_CODE"),
+                        ])),
                         untracked_env: None,
                         input: None,
                         output: None,
@@ -424,5 +427,29 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[tokio::test]
+    async fn lint_tracks_backend_env_vars_for_caching() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let resolver = SubcommandResolver::new(root.clone().into())
+            .with_cli_options(cli_options(Arc::from(OsStr::new("node"))));
+        let envs = Arc::new(EnvMap::default());
+
+        let resolved = resolver
+            .resolve(SynthesizableSubcommand::Lint { args: vec![] }, &envs, &root)
+            .await
+            .unwrap();
+
+        let tracked_envs: Vec<String> = resolved
+            .cache_config
+            .into_enabled()
+            .and_then(|cfg| {
+                cfg.env.map(|envs| envs.iter().map(|env| env.as_str().to_string()).collect())
+            })
+            .unwrap_or_default();
+        assert!(tracked_envs.iter().any(|env| env == "OXLINT_TSGOLINT_PATH"));
+        assert!(tracked_envs.iter().any(|env| env == "TSRS_LINT_RUN_EXTERNAL_CODE"));
     }
 }
