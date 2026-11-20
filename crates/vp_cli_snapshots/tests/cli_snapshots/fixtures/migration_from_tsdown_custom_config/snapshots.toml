@@ -107,6 +107,39 @@ steps = [
 ]
 
 [[case]]
+name = "composite_allow_js"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.vite-plus", "^1.7.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.typescript", "7.0.2"], snapshot = false },
+  { argv = ["vpt", "write-file", "tsdown.config.mjs", "export default { entry: ['src/library.ts'], publicDir: 'public' };"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "import { defineConfig } from 'vite-plus'; import pack from './tsdown.config.mjs'; export default defineConfig({ pack });"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "configs"], snapshot = false },
+  { argv = ["vpt", "write-file", "configs/node-base.json", '{"compilerOptions":{"allowJs":true},"files":["${configDir}/vite.config.ts","${configDir}/tsdown.config.mjs"]}'], snapshot = false },
+  { argv = ["vpt", "write-file", "tsconfig.node.json", '''
+{
+  "extends": "./configs/node-base.json",
+  "compilerOptions": {
+    "composite": true,
+    "noEmit": true,
+    "module": "NodeNext",
+    "skipLibCheck": true,
+    "target": "ES2022"
+  }
+}
+'''], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "exec", "tsc", "-b", "tsconfig.node.json", "--force"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  { argv = ["vp", "exec", "tsc", "-b", "tsconfig.node.json", "--force"], snapshot = false },
+  ["vpt", "stat-file", "vite-pack.config.mjs", "--assert", "file"],
+  ["vpt", "print-file", "configs/node-base.json"],
+  ["vpt", "print-file", "tsconfig.node.json"],
+]
+
+[[case]]
 name = "standard_config"
 vp = "global"
 local-registry = true
