@@ -24,6 +24,11 @@ catalog:
   vite-plus: <version>
 overrides:
   vite@*: "catalog:"
+peerDependencyRules:
+  allowAny:
+    - vite
+  allowedVersions:
+    vite: "*"
 ```
 
 ## `vp create @your-org:with-build-dep --no-interactive --directory default-app`
@@ -52,6 +57,11 @@ catalog:
   vite-plus: <version>
 overrides:
   vite@*: "catalog:"
+peerDependencyRules:
+  allowAny:
+    - vite
+  allowedVersions:
+    vite: "*"
 ```
 
 ## `cd default-app && vp pm approve-builds core-js`
@@ -74,4 +84,9 @@ catalog:
   vite-plus: <version>
 overrides:
   vite@*: "catalog:"
+peerDependencyRules:
+  allowAny:
+    - vite
+  allowedVersions:
+    vite: "*"
 ```
