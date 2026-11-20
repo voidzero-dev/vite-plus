@@ -38,7 +38,7 @@ import {
   collectInstalledPackageNames,
   oxlintMigrationMarker,
   prepareOxlintConfigs,
-  readRulesYaml,
+  getScriptRulesYaml,
   removeMigratedOxlintConfigs,
   resolveOxlintConfigExtends,
   prepareOxlintConfigModules,
@@ -104,7 +104,11 @@ export function removeLintStagedFromPackageJson(packageJsonPath: string): void {
 
 // Migrate standalone lint-staged config files into staged in vite.config.ts.
 // JSON-parseable files are inlined automatically; non-JSON files get a warning.
-export function rewriteLintStagedConfigFile(projectPath: string, report?: MigrationReport): void {
+export function rewriteLintStagedConfigFile(
+  projectPath: string,
+  report?: MigrationReport,
+  keepTsdown = false,
+): void {
   let hasUnsupported = false;
 
   for (const filename of LINT_STAGED_JSON_CONFIG_FILES) {
@@ -124,7 +128,7 @@ export function rewriteLintStagedConfigFile(projectPath: string, report?: Migrat
     // Skip if staged already exists in vite.config.ts (already migrated by rewritePackageJson).
     if (!hasStagedConfigInViteConfig(projectPath)) {
       const config = readJsonFile(configPath);
-      const updated = rewriteScripts(JSON.stringify(config), readRulesYaml());
+      const updated = rewriteScripts(JSON.stringify(config), getScriptRulesYaml(false, keepTsdown));
       const finalConfig = updated ? JSON.parse(updated) : config;
       if (!mergeStagedConfigToViteConfig(projectPath, finalConfig, true, report)) {
         // Merge failed — preserve the original config file so the user doesn't lose their rules
@@ -192,14 +196,14 @@ export default defineConfig({});
 }
 
 /**
- * Merge tsdown.config.* into vite.config.ts
- * - For JSON files: merge content directly into `pack` field and delete the JSON file
- * - For TS/JS files: import the config file
+ * Merge tsdown.config.* into vite.config.ts. Import TS/JS configs and inline JSON.
+ * Keep the original JSON when standalone tsdown may still load it.
  */
 export function mergeTsdownConfigFile(
   projectPath: string,
   silent = false,
   report?: MigrationReport,
+  keepTsdownConfig = false,
 ): boolean {
   const configs = detectConfigs(projectPath);
   if (!configs.tsdownConfig) {
@@ -211,10 +215,21 @@ export function mergeTsdownConfigFile(
   const fullViteConfigPath = path.join(projectPath, viteConfig);
   const fullTsdownConfigPath = path.join(projectPath, configs.tsdownConfig);
 
-  // For JSON files, merge content directly and delete the file
   if (configs.tsdownConfig.endsWith('.json')) {
-    mergeAndRemoveJsonConfig(projectPath, viteConfig, configs.tsdownConfig, 'pack', silent, report);
-    return createdViteConfig || !fs.existsSync(fullTsdownConfigPath);
+    if (keepTsdownConfig && hasConfigKey(fullViteConfigPath, 'pack')) {
+      return false;
+    }
+    const merged = mergeAndRemoveJsonConfig(
+      projectPath,
+      viteConfig,
+      configs.tsdownConfig,
+      'pack',
+      silent,
+      report,
+      undefined,
+      keepTsdownConfig,
+    );
+    return createdViteConfig || merged;
   }
 
   // For TS/JS files, import the config file
@@ -1106,6 +1121,7 @@ export function rewriteAllImports(
     // Capture package owners before migration removes oxlint from their manifests.
     oxlintOwnerDirs?: string[];
     importRuleConfig?: string;
+    preserveTsdownDirs?: string[];
   } = {},
 ): boolean {
   const result = rewriteImportsInDirectory(
@@ -1113,6 +1129,7 @@ export function rewriteAllImports(
     options.preserveNuxtVitestImports ?? true,
     options.oxlintOwnerDirs ?? [],
     options.importRuleConfig,
+    options.preserveTsdownDirs,
   );
   const modified = result.modifiedFiles.length;
   const preserved = result.preservedVitestFiles.length;

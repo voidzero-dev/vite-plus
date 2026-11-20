@@ -282,6 +282,10 @@ For commands launched through `bunx`, migration preserves `bunx` and its `--bun`
 
 Unrelated `bunx` commands and other package-executor forms remain unchanged.
 
+If a package script selects a tsdown config with `-c` or `--config`, migration keeps the standalone tsdown setup for that package and any workspace package that owns a selected config. It also keeps the shared workspace dependency when needed. If a script does not give migration enough information to locate the selected config, migration keeps the workspace's standalone tsdown setup. To switch to `vp pack`, move the selected config into `pack` in `vite.config.ts` and remove the flag when you change the command.
+
+Migration fills in missing `pack` configuration from each package's default tsdown config. Both direct `vp pack` calls and calls targeting the package with `-C` use that configuration. Migration keeps the original config file when standalone tsdown may still load it.
+
 ### tsx to `vpx`
 
 When a `package.json` script, a lint-staged task, or a `#!/usr/bin/env tsx` shebang runs [tsx](https://tsx.is), migration offers to move it to [`vpx`](/guide/vpx), Vite+'s TypeScript script runner. It rewrites scripts and lint-staged tasks in `package.json` and JSON lint-staged files, and `#!/usr/bin/env tsx` shebangs in script files:

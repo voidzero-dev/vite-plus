@@ -70,6 +70,7 @@ const {
   installGitHooks,
   preflightGitHooksSetup,
   shouldSkipStagedMigrationForHooks,
+  collectPackagesKeepingTsdown,
   detectLegacyGitHooksMigrationCandidate,
   detectYarnPnpMode,
   configureYarnNodeModulesMode,
@@ -96,6 +97,62 @@ describe('pnpm workspace settings support', () => {
     ['latest', true],
   ])('detects support for pnpm %s', (version, expected) => {
     expect(pnpmSupportsWorkspaceSettings(version)).toBe(expected);
+  });
+});
+
+describe('explicit tsdown config selection', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-tsdown-config-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it.each([
+    ['tsdown --config custom.ts', true],
+    ['tsdown --config="custom config.ts"', true],
+    ['cross-env NODE_ENV=build tsdown -c custom.ts', true],
+    ['CI=1 cross-env NODE_ENV=build tsdown --config custom.ts', true],
+    ['cross-env-shell NODE_ENV=build "tsdown --config custom.ts"', true],
+    ['bunx --bun tsdown -c=custom.ts', true],
+    ['echo build && tsdown --config "$CONFIG"', true],
+    ['tsdown --no-config src/library.ts', false],
+    ['tsdown --config-loader native src/library.ts', false],
+    ['tsdown -- --config', false],
+    ['echo "tsdown --config custom.ts"', false],
+  ])('checks %s', (script, expected) => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ scripts: { build: script } }),
+    );
+    expect(collectPackagesKeepingTsdown(tmpDir).has(path.resolve(tmpDir))).toBe(expected);
+  });
+
+  it.each([
+    ['tsdown --config packages/shared/tsdown.config.json', false],
+    ['tsdown --config "$TSDOWN_CONFIG"', true],
+    ['tsdown --config "%TSDOWN_CONFIG%"', true],
+  ])('keeps packages that can own the config selected by %s', (script, keepIndependent) => {
+    const shared = path.join(tmpDir, 'packages/shared');
+    fs.mkdirSync(shared, { recursive: true });
+    fs.writeFileSync(path.join(shared, 'tsdown.config.json'), '{}');
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ scripts: { build: script } }),
+    );
+
+    const keptPackages = collectPackagesKeepingTsdown(tmpDir, [
+      { name: 'shared', path: 'packages/shared' },
+      { name: 'independent', path: 'packages/independent' },
+    ]);
+    const expected = [path.resolve(tmpDir), shared];
+    if (keepIndependent) {
+      expected.push(path.join(tmpDir, 'packages/independent'));
+    }
+    expect(keptPackages).toEqual(new Set(expected));
   });
 });
 
@@ -2860,6 +2917,44 @@ describe('ensureVitePlusBootstrap', () => {
     expect(workspace.catalog.oxlint).toBeUndefined();
     expect(workspace.catalog['oxlint-tsgolint']).toBeUndefined();
     expect(workspace.catalog.tsdown).toBeUndefined();
+  });
+
+  it('keeps the selected tsdown config and its catalog dependency on an existing Vite+ upgrade', () => {
+    const script = 'tsdown -c tsdown.config.json';
+    const manifest = path.join(tmpDir, 'package.json');
+    const config = path.join(tmpDir, 'tsdown.config.json');
+    const workspaceYaml = path.join(tmpDir, 'pnpm-workspace.yaml');
+    const configSource = '{ "entry": "src/library.ts", "outDir": "lib-out" }';
+    fs.writeFileSync(
+      manifest,
+      JSON.stringify({
+        scripts: { build: script },
+        devDependencies: { tsdown: 'catalog:build', oxfmt: '^0.1.0', 'vite-plus': 'latest' },
+      }),
+    );
+    fs.writeFileSync(config, configSource);
+    fs.writeFileSync(workspaceYaml, 'catalogs:\n  build:\n    tsdown: 0.23.4\n');
+
+    const workspace = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+    expect(detectPendingCoreMigration(workspace).scripts).toBe(false);
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(true);
+    expect(finalizeCoreMigrationForExistingVitePlus(workspace, true).tsdownConfig).toBe(true);
+    expect(ensureVitePlusBootstrap(workspace).changed).toBe(true);
+
+    expect(readJson(manifest)).toMatchObject({
+      scripts: { build: script },
+      devDependencies: { tsdown: 'catalog:build' },
+    });
+    expect(readJson(manifest)).not.toHaveProperty('devDependencies.oxfmt');
+    expect(readYamlObject(workspaceYaml)).toHaveProperty('catalogs.build.tsdown', '0.23.4');
+    expect(fs.readFileSync(config, 'utf8')).toBe(configSource);
+    const viteConfig = path.join(tmpDir, 'vite.config.ts');
+    const mergedConfig = fs.readFileSync(viteConfig, 'utf8');
+    expect(mergedConfig).toContain('pack:');
+    expect(mergedConfig).toContain('lib-out');
+    expect(finalizeCoreMigrationForExistingVitePlus(workspace, true).tsdownConfig).toBe(false);
+    expect(fs.readFileSync(viteConfig, 'utf8').match(/\bpack:/g)).toHaveLength(1);
+    expect(fs.readFileSync(config, 'utf8')).toBe(configSource);
   });
 
   it('reconciles stale pnpm-workspace.yaml overrides when package.json has an empty pnpm field (urllib shape)', () => {

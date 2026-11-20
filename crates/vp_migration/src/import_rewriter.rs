@@ -2079,6 +2079,7 @@ struct SkipPackages {
 struct PackageRewriteContext {
     skip_packages: SkipPackages,
     uses_nuxt_test_utils: bool,
+    preserve_tsdown: bool,
 }
 
 /// Options controlling directory-wide import rewriting.
@@ -2094,6 +2095,8 @@ pub struct RewriteImportsOptions {
     /// before migration. Capture these before manifest edits so ownership
     /// does not depend on which dependency declarations survive those edits.
     pub oxlint_owner_dirs: Vec<PathBuf>,
+    /// Package directories whose standalone tsdown imports and configs stay on tsdown.
+    pub preserve_tsdown_dirs: Vec<PathBuf>,
 }
 
 impl SkipPackages {
@@ -2299,6 +2302,7 @@ fn get_package_rewrite_context(package_json_path: &Path) -> PackageRewriteContex
         uses_nuxt_test_utils: ["dependencies", "devDependencies", "optionalDependencies"]
             .into_iter()
             .any(|key| has_package(key, "@nuxt/test-utils")),
+        preserve_tsdown: false,
     }
 }
 
@@ -2384,6 +2388,7 @@ pub fn rewrite_imports_in_directory_with_options(
     // Pre-compute package context for each file (requires mutable cache, done sequentially).
     let mut package_context_cache: HashMap<PathBuf, PackageRewriteContext> = HashMap::new();
     let oxlint_owner_dirs: HashSet<PathBuf> = options.oxlint_owner_dirs.into_iter().collect();
+    let preserve_tsdown_dirs: HashSet<PathBuf> = options.preserve_tsdown_dirs.into_iter().collect();
 
     let files_with_context: Vec<(PathBuf, PackageRewriteContext)> = walk_result
         .files
@@ -2393,10 +2398,10 @@ pub fn rewrite_imports_in_directory_with_options(
                 if let Some(package_json_path) = find_nearest_package_json(&file_path, root) {
                     *package_context_cache.entry(package_json_path.clone()).or_insert_with(|| {
                         let mut context = get_package_rewrite_context(&package_json_path);
-                        if let Some(package_dir) = package_json_path.parent()
-                            && oxlint_owner_dirs.contains(package_dir)
-                        {
-                            context.skip_packages.skip_oxlint = true;
+                        if let Some(package_dir) = package_json_path.parent() {
+                            context.skip_packages.skip_oxlint |=
+                                oxlint_owner_dirs.contains(package_dir);
+                            context.preserve_tsdown = preserve_tsdown_dirs.contains(package_dir);
                         }
                         context
                     })
@@ -2428,6 +2433,7 @@ pub fn rewrite_imports_in_directory_with_options(
                 root,
                 &skip_packages,
                 options.preserve_vitest_in_nuxt_packages && package_context.uses_nuxt_test_utils,
+                package_context.preserve_tsdown,
             ) {
                 Ok(rewrite_result) => {
                     if rewrite_result.updated {
@@ -2502,15 +2508,19 @@ fn rewrite_import(
     root: &Path,
     skip_packages: &SkipPackages,
     preserve_vitest_in_nuxt_package: bool,
+    preserve_tsdown: bool,
 ) -> Result<RewriteResult, Error> {
     let content = std::fs::read_to_string(file_path)?;
     let is_tsdown_config = file_path.file_stem().is_some_and(|stem| stem == "tsdown.config");
     let is_vite_config = is_vite_config_file(file_path);
-    let preserve_defaults = if !skip_packages.skip_tsdown && (is_tsdown_config || is_vite_config) {
-        Some(pack_config::preserve_legacy_defaults(file_path, root, is_tsdown_config, &content))
-    } else {
-        None
-    };
+    let preserve_defaults =
+        if !skip_packages.skip_tsdown && (is_vite_config || is_tsdown_config && !preserve_tsdown) {
+            Some(pack_config::preserve_legacy_defaults(file_path, root, is_tsdown_config, &content))
+        } else {
+            None
+        };
+    let mut skip_packages = *skip_packages;
+    skip_packages.skip_tsdown |= preserve_tsdown;
 
     // Issue #2004: `vite` specifiers are rewritten only in config entry files;
     // everything else keeps its `vite` imports (they still resolve through the
@@ -2522,7 +2532,7 @@ fn rewrite_import(
     // skip (a skipped package stays skipped).
     let mut result = rewrite_import_content_full(
         &content,
-        skip_packages,
+        &skip_packages,
         preserve_vitest_in_nuxt_package,
         is_vite_config,
         file_path.to_str(),
@@ -3250,9 +3260,14 @@ export default defineConfig({{
         .unwrap();
 
         // Run the rewrite
-        let result =
-            rewrite_import(&vite_config_path, temp_dir.path(), &SkipPackages::default(), false)
-                .unwrap();
+        let result = rewrite_import(
+            &vite_config_path,
+            temp_dir.path(),
+            &SkipPackages::default(),
+            false,
+            false,
+        )
+        .unwrap();
 
         assert!(result.updated);
         assert_eq!(

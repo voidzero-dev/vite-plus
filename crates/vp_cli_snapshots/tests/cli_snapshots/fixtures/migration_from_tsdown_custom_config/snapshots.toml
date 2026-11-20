@@ -1,0 +1,39 @@
+[[case]]
+name = "explicit_config"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+comment = "Build with the published, pinned tsdown so the test checks the output of the selected config after a real dependency install."
+steps = [
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "run", "bundle"], snapshot = false },
+  ["vpt", "print-file", "lib-out/library.mjs"],
+  { argv = ["vpt", "rm", "-r", "lib-out"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "package.json"],
+  ["vpt", "print-file", "tsdown.custom.config.ts"],
+  { argv = ["vp", "run", "bundle"], snapshot = false },
+  ["vpt", "print-file", "lib-out/library.mjs"],
+  ["vpt", "stat-file", "dist/tsdown.custom.config.mjs", "--assert", "missing"],
+  { argv = ["vp", "migrate", "--no-interactive"], snapshot = false },
+  { argv = ["vpt", "rm", "-r", "lib-out"], snapshot = false },
+  { argv = ["vp", "run", "bundle"], snapshot = false },
+  ["vpt", "print-file", "lib-out/library.mjs"],
+  { argv = ["vp", "pack", "src/library.ts", "--out-dir", "positional-out"], snapshot = false },
+  ["vpt", "print-file", "positional-out/library.mjs"],
+]
+
+[[case]]
+name = "standard_config"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+steps = [
+  { argv = ["vpt", "cp", "tsdown.custom.config.ts", "tsdown.config.ts"], snapshot = false },
+  { argv = ["vpt", "rm", "tsdown.custom.config.ts"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "scripts.bundle", "tsdown"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  ["vpt", "print-file", "package.json"],
+  { argv = ["vp", "run", "bundle"], snapshot = false },
+  ["vpt", "print-file", "lib-out/library.mjs"],
+]

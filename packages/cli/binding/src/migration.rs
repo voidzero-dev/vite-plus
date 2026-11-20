@@ -406,6 +406,7 @@ pub fn rewrite_imports_in_directory(
     preserve_vitest_in_nuxt_packages: Option<bool>,
     oxlint_owner_dirs: Option<Vec<String>>,
     import_rule_config: Option<String>,
+    preserve_tsdown_dirs: Option<Vec<String>>,
 ) -> Result<BatchRewriteResult> {
     let import_rule = match import_rule_config.as_deref() {
         Some(json) => ImportRuleConfig::from_json(json).map_err(anyhow::Error::from)?,
@@ -416,6 +417,11 @@ pub fn rewrite_imports_in_directory(
         vp_migration::RewriteImportsOptions {
             import_rule,
             preserve_vitest_in_nuxt_packages: preserve_vitest_in_nuxt_packages.unwrap_or(false),
+            preserve_tsdown_dirs: preserve_tsdown_dirs
+                .unwrap_or_default()
+                .into_iter()
+                .map(std::path::PathBuf::from)
+                .collect(),
             oxlint_owner_dirs: oxlint_owner_dirs
                 .unwrap_or_default()
                 .into_iter()

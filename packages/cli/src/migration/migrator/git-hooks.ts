@@ -24,7 +24,8 @@ import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
 import {
   hasStagedConfigInViteConfig,
   mergeStagedConfigToViteConfig,
-  readRulesYaml,
+  getScriptRulesYaml,
+  collectPackagesKeepingTsdown,
   removeLintStagedFromPackageJson,
 } from '../migrator.ts';
 import { type MigrationReport } from '../report.ts';
@@ -433,7 +434,13 @@ export function installGitHooks(
       'lint-staged'?: Record<string, string | string[]>;
     };
     const stagedConfig = pkgData?.['lint-staged'] ?? DEFAULT_STAGED_CONFIG;
-    const updated = rewriteScripts(JSON.stringify(stagedConfig), readRulesYaml());
+    const updated = rewriteScripts(
+      JSON.stringify(stagedConfig),
+      getScriptRulesYaml(
+        false,
+        collectPackagesKeepingTsdown(projectPath, packages).has(path.resolve(projectPath)),
+      ),
+    );
     const finalConfig: Record<string, string | string[]> = updated
       ? JSON.parse(updated)
       : stagedConfig;

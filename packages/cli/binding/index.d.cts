@@ -4086,6 +4086,7 @@ export declare function rewriteImportsInDirectory(
   preserveVitestInNuxtPackages?: boolean | undefined | null,
   oxlintOwnerDirs?: Array<string> | undefined | null,
   importRuleConfig?: string | undefined | null,
+  preserveTsdownDirs?: Array<string> | undefined | null,
 ): BatchRewriteResult;
 
 /**
