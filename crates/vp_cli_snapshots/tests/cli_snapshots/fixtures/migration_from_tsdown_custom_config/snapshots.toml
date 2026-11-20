@@ -15,7 +15,7 @@ steps = [
   { argv = ["vp", "run", "bundle"], snapshot = false },
   ["vpt", "print-file", "lib-out/library.mjs"],
   ["vpt", "stat-file", "dist/tsdown.custom.config.mjs", "--assert", "missing"],
-  { argv = ["vp", "migrate", "--no-interactive"], snapshot = false },
+  ["vp", "migrate", "--no-interactive"],
   { argv = ["vpt", "rm", "-r", "lib-out"], snapshot = false },
   { argv = ["vp", "run", "bundle"], snapshot = false },
   ["vpt", "print-file", "lib-out/library.mjs"],

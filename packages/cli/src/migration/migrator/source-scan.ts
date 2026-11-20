@@ -23,7 +23,12 @@ import {
 type WorkspaceProjects = { rootDir: string; packages?: readonly WorkspacePackage[] };
 
 export function getWorkspaceProjectPaths({ rootDir, packages }: WorkspaceProjects): string[] {
-  return [rootDir, ...(packages ?? []).map((pkg) => path.join(rootDir, pkg.path))];
+  return [
+    ...new Set([
+      path.resolve(rootDir),
+      ...(packages ?? []).map((pkg) => path.resolve(rootDir, pkg.path)),
+    ]),
+  ];
 }
 
 /** Find the managed packages that supply imports preserved by the lint rule. */

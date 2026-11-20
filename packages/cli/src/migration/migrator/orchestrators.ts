@@ -221,7 +221,7 @@ export function rewriteStandaloneProject(
         // Strip selector-shaped overrides (e.g. `parent>@vitest/browser-playwright`)
         // whose target is a removed package, before re-merging the user's
         // overrides into the new pnpm config.
-        dropRemovePackageOverrideKeys(pkg.pnpm?.overrides);
+        dropRemovePackageOverrideKeys(pkg.pnpm?.overrides, [], keepTsdown);
         // Common case: drop a lingering managed `vitest` override before
         // re-merging. `mergeManagedPnpmPeerDependencyRules` drops its peer rule.
         if (!usesVitest) {
@@ -534,8 +534,8 @@ export function rewriteMonorepo(
   // runner across two `@vitest/runner` instances. `rewriteMonorepoProject` detects
   // the layout per workspace (reading the root `.yarnrc.yml` itself) and auto-fixes
   // or warns — see `applyYarnWorkspaceHoistingFix`.
-  for (const pkg of workspaceInfo.packages) {
-    const projectPath = path.join(workspaceInfo.rootDir, pkg.path);
+  const members = getWorkspaceProjectPaths(workspaceInfo).slice(1);
+  for (const projectPath of members) {
     rewriteMonorepoProject(
       projectPath,
       workspaceInfo.packageManager,
@@ -581,8 +581,7 @@ export function rewriteMonorepo(
   );
   wrapLazyPluginsInViteConfig(workspaceInfo.rootDir, silent, report);
   migrateTaskCacheConfigInViteConfig(workspaceInfo.rootDir, silent, report);
-  for (const pkg of workspaceInfo.packages) {
-    const projectPath = path.join(workspaceInfo.rootDir, pkg.path);
+  for (const projectPath of members) {
     wrapLazyPluginsInViteConfig(projectPath, silent, report);
     migrateTaskCacheConfigInViteConfig(projectPath, silent, report);
   }
@@ -631,7 +630,7 @@ export function rewriteMonorepoProject(
     workspaceContext?.rootDir,
     workspaceContext?.oxlintConfigs,
   );
-  mergeTsdownConfigFile(projectPath, silent, report, keepTsdown);
+  mergeTsdownConfigFile(projectPath, silent, report, keepTsdown, workspaceContext?.rootDir);
 
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {

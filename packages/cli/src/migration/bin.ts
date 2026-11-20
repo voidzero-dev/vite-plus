@@ -1179,10 +1179,12 @@ async function main() {
       didMigrate = true;
     }
 
+    // Preserved commands are advisory and do not indicate pending migration.
+    const tsdownAdvisories: Pick<MigrationReport, 'warnings'> = { warnings: [] };
     const tsdownPackages = collectPackagesKeepingTsdown(
       workspaceInfoOptional.rootDir,
       workspaceInfoOptional.packages,
-      report,
+      tsdownAdvisories,
     );
     // Find the packages that supply preserved imports before bootstrap changes their
     // manifests. If the config needs missing dependencies, retry after the normal install.
@@ -1332,7 +1334,7 @@ async function main() {
         ? hasExistingVitePlusMigrationCandidates(workspaceInfoOptional, options)
         : hasExplicitExistingVitePlusSetupRequest(options))
     ) {
-      showMigrationWarnings(migrationWarnings);
+      showMigrationWarnings([...tsdownAdvisories.warnings, ...migrationWarnings]);
       if (vitestV5Preflight) {
         prompts.log.warn(vitestV5Preflight);
       }
@@ -1345,7 +1347,7 @@ async function main() {
       prompts.outro(`This project is already using Vite+! ${accent('Happy coding!')}`);
       return;
     }
-    report.warnings.push(...migrationWarnings);
+    report.warnings.push(...tsdownAdvisories.warnings, ...migrationWarnings);
     for (const warning of coreMigrationResult.taskCacheWarnings) {
       addMigrationWarning(report, warning);
     }
@@ -1638,6 +1640,7 @@ async function main() {
             true,
             report,
             tsdownPackages.has(path.resolve(projectPath)),
+            workspaceInfoOptional.rootDir,
           );
         }
       }

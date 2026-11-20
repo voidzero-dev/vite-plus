@@ -4126,6 +4126,12 @@ export declare function rewritePrettier(scriptsJson: string): string | null;
  */
 export declare function rewriteScripts(scriptsJson: string, rulesYaml: string): string | null;
 
+/** Rewrite a retained tsdown config for vp pack without editing the source file. */
+export declare function rewriteTsdownConfigForPack(
+  configPath: string,
+  workspaceRoot: string,
+): TsdownConfigRewriteResult;
+
 /**
  * Main entry point for the CLI, called from JavaScript.
  *
@@ -4239,6 +4245,11 @@ export interface TaskCacheConfigResult {
   updated: boolean;
   /** Tasks that set cache settings outside `cache` but could not be updated */
   manualTasks: Array<string>;
+}
+
+export interface TsdownConfigRewriteResult {
+  content?: string;
+  warnings: Array<string>;
 }
 
 /**

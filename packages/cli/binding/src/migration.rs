@@ -337,6 +337,26 @@ pub fn merge_tsdown_config(
     Ok(MergeJsonConfigResult { content: result.content, updated: result.updated })
 }
 
+#[napi(object)]
+pub struct TsdownConfigRewriteResult {
+    pub content: Option<String>,
+    pub warnings: Vec<String>,
+}
+
+/// Rewrite a retained tsdown config for vp pack without editing the source file.
+#[napi]
+pub fn rewrite_tsdown_config_for_pack(
+    config_path: String,
+    workspace_root: String,
+) -> Result<TsdownConfigRewriteResult> {
+    let (content, warnings) = vp_migration::rewrite_tsdown_config_for_pack(
+        Path::new(&config_path),
+        Path::new(&workspace_root),
+    )
+    .map_err(anyhow::Error::from)?;
+    Ok(TsdownConfigRewriteResult { content, warnings })
+}
+
 /// Wrap safe inline `plugins: [...]` arrays in recognized Vite config objects
 /// with `lazyPlugins(() => [...])` and add a `lazyPlugins` import from
 /// `vite-plus` when needed.

@@ -354,7 +354,7 @@ export type PackageJsonDependencyField =
   | 'peerDependencies'
   | 'optionalDependencies';
 
-export function warnMigration(message: string, report?: MigrationReport) {
+export function warnMigration(message: string, report?: Pick<MigrationReport, 'warnings'>) {
   addMigrationWarning(report, message);
   if (!report) {
     prompts.log.warn(message);
