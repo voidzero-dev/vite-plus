@@ -50,7 +50,6 @@ const child = spawn(
   workerMode ? ['worker-host.mjs', ...args] : args,
   { stdio: [hangupMode ? 'inherit' : 'ignore', 'pipe', hangupMode ? 'pipe' : 'inherit'], env },
 );
-const exited = once(child, 'exit');
 const debugOutput = hangupMode ? text(child.stderr) : undefined;
 
 try {
@@ -76,7 +75,7 @@ try {
   }
 
   process.kill(pid, hangupMode ? 'SIGHUP' : 'SIGTERM');
-  const [code, signal] = await exited;
+  const [code, signal] = await once(child, 'exit', { signal: AbortSignal.timeout(5_000) });
   const socket = connect(port, '127.0.0.1');
   try {
     await assert.rejects(once(socket, 'connect', { signal: AbortSignal.timeout(3_000) }), {

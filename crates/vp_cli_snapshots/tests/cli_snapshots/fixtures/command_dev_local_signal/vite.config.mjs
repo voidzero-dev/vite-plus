@@ -1,3 +1,10 @@
+import { writeSync } from 'node:fs';
+
+if (process.env.VP_PROBE_SYNC_CONFIG === '1') {
+  writeSync(1, 'Evaluating Vite config\n');
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 6_000);
+}
+
 export default {
   clearScreen: false,
   optimizeDeps: { noDiscovery: true },
