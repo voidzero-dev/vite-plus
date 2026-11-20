@@ -674,7 +674,14 @@ describe('explicit tsdown config selection', () => {
     expect(fs.readFileSync(viteConfig, 'utf8')).toBe(updated);
   });
 
-  it('keeps the original default binding used by the build and rewrites the pack shorthand', () => {
+  it.each([
+    ['pack', 'pack: vitePackConfig2'],
+    ['pack: [pack, cliConfig]', 'pack: [vitePackConfig2, cliConfig]'],
+    [
+      'pack: [{ ...pack, dts: false }, cliConfig]',
+      'pack: [{ ...vitePackConfig2, dts: false }, cliConfig]',
+    ],
+  ])('keeps the original default binding used by the build with %s', (pack, rewrittenPack) => {
     fs.writeFileSync(
       path.join(tmpDir, 'tsdown.config.ts'),
       "export default { entry: 'src/lib.ts', publicDir: 'public' };\n",
@@ -684,7 +691,8 @@ describe('explicit tsdown config selection', () => {
       viteConfig,
       "import pack from './tsdown.config.ts';\n" +
         'const vitePackConfig = { build: { lib: { entry: pack.entry } } };\n' +
-        'export default { ...vitePackConfig, pack };\n',
+        "const cliConfig = { entry: 'src/cli.ts' };\n" +
+        `export default { ...vitePackConfig, ${pack} };\n`,
     );
 
     expect(mergeTsdownConfigFile(tmpDir, true, createMigrationReport(), true)).toBe(true);
@@ -692,7 +700,7 @@ describe('explicit tsdown config selection', () => {
     expect(updated).toContain("import pack from './tsdown.config.ts';");
     expect(updated).toContain('import vitePackConfig2 from "./vite-pack.config.ts";');
     expect(updated).toContain('entry: pack.entry');
-    expect(updated).toContain('...vitePackConfig, pack: vitePackConfig2');
+    expect(updated).toContain(`...vitePackConfig, ${rewrittenPack}`);
     expect(mergeTsdownConfigFile(tmpDir, true, createMigrationReport(), true)).toBe(false);
   });
 

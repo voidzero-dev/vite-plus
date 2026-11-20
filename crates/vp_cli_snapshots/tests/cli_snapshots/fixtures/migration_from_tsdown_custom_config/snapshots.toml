@@ -24,6 +24,32 @@ steps = [
 ]
 
 [[case]]
+name = "pack_array"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+comment = "Convert the retained library config in a pack array and build both bundles with their assets."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.vite-plus", "^1.7.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.tsdown", "0.22.14"], snapshot = false },
+  { argv = ["vpt", "write-file", "tsdown.config.ts", "import { defineConfig } from 'tsdown'; export default defineConfig({ entry: 'src/library.ts', outDir: 'library-out', publicDir: 'public' });"], snapshot = false },
+  { argv = ["vpt", "write-file", "src/cli.ts", "export const cli = true;"], snapshot = false },
+  { argv = ["vpt", "write-file", "cli.config.ts", "export default { entry: 'src/cli.ts', outDir: 'cli-out', copy: 'cli-resources' };"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "import libraryConfig from './tsdown.config.ts'; import cliConfig from './cli.config.ts'; export default { pack: [libraryConfig, cliConfig] };"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "public", "cli-resources"], snapshot = false },
+  { argv = ["vpt", "write-file", "public/asset.txt", "library asset\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "cli-resources/asset.txt", "cli asset\n"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  { argv = ["vp", "run", "bundle"], snapshot = false },
+  { argv = ["vpt", "stat-file", "lib-out/library.mjs", "--assert", "file"], snapshot = false },
+  { argv = ["vp", "pack"], snapshot = false },
+  { argv = ["vpt", "stat-file", "library-out/library.mjs", "--assert", "file"], snapshot = false },
+  { argv = ["vpt", "stat-file", "cli-out/cli.mjs", "--assert", "file"], snapshot = false },
+  ["vpt", "print-file", "library-out/public/asset.txt", "cli-out/cli-resources/asset.txt"],
+]
+
+[[case]]
 name = "native_loader"
 vp = "global"
 local-registry = true
