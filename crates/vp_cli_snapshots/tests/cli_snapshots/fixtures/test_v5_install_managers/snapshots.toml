@@ -56,7 +56,24 @@ vp = "global"
 local-registry = true
 unset-env = ["VP_SKIP_INSTALL"]
 env = { YARN_ENABLE_SCRIPTS = "0" }
-comment = "Convert explicit Yarn PnP even when the migration command has a temporary node-modules override."
+comment = "Vite+ does not support PnP; validate the documented conversion to node-modules before executing the v5 runner."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@4.12.0"], snapshot = false },
+  { argv = ["vpt", "write-file", ".yarnrc.yml", "nodeLinker: pnp\n"], snapshot = false },
+  { argv = ["vp", "install"], snapshot = false, timeout = 180000 },
+  ["vpt", "stat-file", ".pnp.cjs", "--assert", "file"],
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], timeout = 180000 },
+  ["vpt", "print-file", ".yarnrc.yml"],
+  ["vp", "test", "run"],
+]
+
+[[case]]
+name = "yarn_pnp_conversion_with_node_modules_override"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+env = { YARN_ENABLE_SCRIPTS = "0" }
+comment = "Migration saves the project linker when the command has a temporary node-modules override."
 steps = [
   { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@4.12.0"], snapshot = false },
   { argv = ["vpt", "write-file", ".yarnrc.yml", "nodeLinker: pnp\n"], snapshot = false },
@@ -64,5 +81,4 @@ steps = [
   ["vpt", "stat-file", ".pnp.cjs", "--assert", "file"],
   { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], envs = [["YARN_NODE_LINKER", "node-modules"]], timeout = 180000 },
   ["vpt", "print-file", ".yarnrc.yml"],
-  ["vp", "test", "run"],
 ]

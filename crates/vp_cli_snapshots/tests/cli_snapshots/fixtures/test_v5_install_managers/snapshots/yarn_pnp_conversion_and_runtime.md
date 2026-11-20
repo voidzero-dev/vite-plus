@@ -1,6 +1,6 @@
 # yarn_pnp_conversion_and_runtime
 
-Convert explicit Yarn PnP even when the migration command has a temporary node-modules override.
+Vite+ does not support PnP; validate the documented conversion to node-modules before executing the v5 runner.
 
 ## `vpt json-edit package.json packageManager yarn@4.12.0`
 
@@ -18,7 +18,7 @@ Convert explicit Yarn PnP even when the migration command has a temporary node-m
 .pnp.cjs: file
 ```
 
-## `YARN_NODE_LINKER=node-modules vp migrate --no-interactive --no-hooks --no-agent --no-editor`
+## `vp migrate --no-interactive --no-hooks --no-agent --no-editor`
 
 ```
 VITE+ - The Unified Toolchain for the Web
