@@ -80,7 +80,7 @@ export function rewritePackageJson(
   retainedBrowserPackages?: ReadonlySet<string>,
   keepTsdown = false,
   keepTsdownDependency = keepTsdown,
-  needVitePlusForPack = false,
+  needVitePlusForConfig = false,
 ): Record<string, string | string[]> | null {
   const rewrittenScripts = pkg.scripts
     ? rewriteScripts(
@@ -393,7 +393,7 @@ export function rewritePackageJson(
     if (shouldNormalizeExistingVitePlus) {
       existingVitePlusGroup[VITE_PLUS_NAME] = canonicalVitePlusSpec;
     }
-  } else if (needVitePlus || needVitePlusForPack || (keepTsdownDependency && rewrittenScripts)) {
+  } else if (needVitePlus || needVitePlusForConfig || (keepTsdownDependency && rewrittenScripts)) {
     // Retaining tsdown can leave all declared dependencies intact even when a
     // script has been rewritten to use a Vite+ command.
     // Absent from both groups: add it to `devDependencies` as before.

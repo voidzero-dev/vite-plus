@@ -15,6 +15,28 @@ steps = [
 ]
 
 [[case]]
+name = "focused_formatter_install"
+vp = "global"
+local-registry = true
+env = { VP_NODE_VERSION = "22.23.4", VP_SKIP_INSTALL = "1" }
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies", '{"tsdown":"catalog:build"}'], snapshot = false },
+  { argv = ["vpt", "write-file", "pnpm-workspace.yaml", "packages: ['packages/*']\nsharedWorkspaceLockfile: false\ncatalogs:\n  build:\n    tsdown: 0.23.4\n"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "packages/format-member/src"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/format-member/package.json", '{"name":"format-member","private":true,"type":"module","scripts":{"release":"tsdown -c release.ts"},"devDependencies":{"tsdown":"0.23.4","typescript":"7.0.2"}}'], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/format-member/release.ts", "export default { entry: ['src/library.ts'], outDir: 'format-out', dts: false };"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/format-member/src/library.ts", "export const value = 42;"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/format-member/.oxfmtrc.json", '{"singleQuote":true}'], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  ["vpt", "print-file", "packages/format-member/package.json", "packages/format-member/vite.config.ts"],
+  { argv = ["pnpm", "--filter", "format-member", "install", "--ignore-scripts"], snapshot = false },
+  ["vpt", "stat-file", "node_modules/vite-plus", "--assert", "missing"],
+  { argv = ["vp", "exec", "tsc", "--ignoreConfig", "--noEmit", "--skipLibCheck", "--module", "NodeNext", "vite.config.ts"], cwd = "packages/format-member", snapshot = false },
+  { argv = ["vp", "run", "release"], cwd = "packages/format-member", snapshot = false },
+  ["vpt", "stat-file", "packages/format-member/format-out/library.mjs", "--assert", "file"],
+]
+
+[[case]]
 name = "cross_directory_default"
 vp = "global"
 local-registry = true

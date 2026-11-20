@@ -72,6 +72,7 @@ export function hasTsconfigTypesToRewrite(projectPath: string, keepTsdown = fals
 
 const projectFileKeys = ['files', 'include', 'exclude'] as const;
 const javaScriptOptionKeys = ['allowJs', 'checkJs'] as const;
+const configDirTemplate = '${configDir}';
 type ProjectFileKey = (typeof projectFileKeys)[number];
 type ProjectFileList = { filename: string; entries: string[] };
 type ProjectFileLists = Partial<Record<ProjectFileKey, ProjectFileList>>;
@@ -162,6 +163,7 @@ function resolveProjectConfigBase(
 type PackConfigTsconfigEdits = {
   apply: () => boolean;
   missingPreset?: { filename: string; specifier: string };
+  excludedConfig?: string;
 };
 
 /** Prepare edits for each TypeScript project that imports the generated config. */
@@ -199,6 +201,7 @@ export function preparePackConfigTsconfigEdits(
   const visited = new Set<string>();
   const edits = new Map<string, string>();
   let missingPreset: PackConfigTsconfigEdits['missingPreset'];
+  let excludedConfig: PackConfigTsconfigEdits['excludedConfig'];
   for (const filename of filenames) {
     if (!fs.lstatSync(filename, { throwIfNoEntry: false })?.isFile()) {
       continue;
@@ -232,12 +235,13 @@ export function preparePackConfigTsconfigEdits(
       }
     }
 
-    const listed = (file: string) => matchesTsconfigPaths(lists.files, directory, file, false);
-    const excluded = (file: string) => matchesTsconfigPaths(lists.exclude, directory, file, true);
+    const listed = (file: string) => matchTsconfigPaths(lists.files, directory, file, false);
+    const excluded = (file: string) => matchTsconfigPaths(lists.exclude, directory, file, true);
     const includesPattern = (file: string) =>
-      matchesTsconfigPaths(lists.include, directory, file, true);
-    const included = (file: string) => includesPattern(file) && !excluded(file);
+      matchTsconfigPaths(lists.include, directory, file, true);
+    const included = (file: string) => (excluded(file) ? undefined : includesPattern(file));
     const explicitlyListed = listed(viteConfigPath);
+    const includedViteConfig = included(viteConfigPath);
     const generatedListed = listed(generatedPath);
     if (project.missingPreset) {
       // Explicit local files can safely be edited without knowing inherited
@@ -263,20 +267,34 @@ export function preparePackConfigTsconfigEdits(
     if (generatedListed || (!project.missingPreset && included(generatedPath))) {
       continue;
     }
-    if (!explicitlyListed && !included(viteConfigPath)) {
+    if (!explicitlyListed && !includedViteConfig) {
       continue;
     }
-    // A files entry bypasses exclude, as it does for an original explicit file.
-    const key = explicitlyListed || excluded(generatedPath) ? 'files' : 'include';
+    const usesConfigDir = explicitlyListed !== 'fixed' && includedViteConfig !== 'fixed';
+    const generatedExcluded = excluded(generatedPath);
+    if (usesConfigDir && project.missingPreset) {
+      missingPreset ??= { filename, specifier: project.missingPreset };
+      continue;
+    }
+    if (usesConfigDir && generatedExcluded) {
+      // A required configDir files entry would also require this file in derived projects.
+      excludedConfig ??= filename;
+      continue;
+    }
+    // Project-relative includes let derived projects omit the generated file.
+    // A fixed files entry bypasses exclude, as it does for an original explicit file.
+    const key = !usesConfigDir && (explicitlyListed || generatedExcluded) ? 'files' : 'include';
     const relative = path.relative(directory, generatedPath).split(path.sep).join('/');
     const selected = lists[key];
     const inherited = selected && selected.filename !== filename;
     const rebased = inherited
       ? selected.entries.map((entry) =>
-          path
-            .relative(directory, resolveTsconfigEntry(selected, directory, entry))
-            .split(path.sep)
-            .join('/'),
+          configDirPath(entry) === undefined
+            ? path
+                .relative(directory, resolveTsconfigEntry(selected, directory, entry))
+                .split(path.sep)
+                .join('/')
+            : entry,
         )
       : [];
     // Local keys override inherited keys. Carry over the original paths with
@@ -285,7 +303,7 @@ export function preparePackConfigTsconfigEdits(
       text,
       [key],
       inherited ? undefined : selected?.entries,
-      [...rebased, relative],
+      [...rebased, usesConfigDir ? `${configDirTemplate}/${relative}` : relative],
       detectFormattingOptions(text),
     );
     if (updated !== text) {
@@ -294,6 +312,7 @@ export function preparePackConfigTsconfigEdits(
   }
   return {
     missingPreset,
+    excludedConfig,
     apply() {
       for (const [filename, text] of edits) {
         fs.writeFileSync(filename, text);
@@ -303,33 +322,47 @@ export function preparePackConfigTsconfigEdits(
   };
 }
 
-function matchesTsconfigPaths(
+function matchTsconfigPaths(
   list: ProjectFileList | undefined,
   projectDirectory: string,
   filename: string,
   allowGlob: boolean,
-): boolean {
+): 'fixed' | 'configDir' | undefined {
+  if (!list) {
+    return undefined;
+  }
   const file = path.resolve(filename).split(path.sep).join('/');
-  return (
-    list?.entries.some((entry) => {
-      const fullPath = resolveTsconfigEntry(list, projectDirectory, entry)
-        .split(path.sep)
-        .join('/');
-      if (!allowGlob) {
-        return fullPath === file;
+  let match: 'configDir' | undefined;
+  for (const entry of list.entries) {
+    const fullPath = resolveTsconfigEntry(list, projectDirectory, entry).split(path.sep).join('/');
+    // TypeScript treats a directory with no wildcard as a recursive include.
+    const pattern = /[.*?]/.test(path.posix.basename(fullPath)) ? fullPath : `${fullPath}/**/*`;
+    const matches = allowGlob
+      ? minimatch(file, pattern, {
+          dot: true,
+          nocase: process.platform === 'win32',
+          nobrace: true,
+          nocomment: true,
+          noext: true,
+          nonegate: true,
+        })
+      : fullPath === file;
+    if (matches) {
+      if (configDirPath(entry) === undefined) {
+        return 'fixed';
       }
-      // TypeScript treats a directory with no wildcard as a recursive include.
-      const pattern = /[.*?]/.test(path.posix.basename(fullPath)) ? fullPath : `${fullPath}/**/*`;
-      return minimatch(file, pattern, {
-        dot: true,
-        nocase: process.platform === 'win32',
-        nobrace: true,
-        nocomment: true,
-        noext: true,
-        nonegate: true,
-      });
-    }) ?? false
-  );
+      match = 'configDir';
+    }
+  }
+  return match;
+}
+
+function configDirPath(entry: string): string | undefined {
+  const specifier = entry.replaceAll('\\', '/');
+  if (specifier === configDirTemplate || specifier.startsWith(configDirTemplate + '/')) {
+    return specifier.slice(configDirTemplate.length + 1);
+  }
+  return undefined;
 }
 
 function resolveTsconfigEntry(
@@ -337,10 +370,8 @@ function resolveTsconfigEntry(
   projectDirectory: string,
   entry: string,
 ): string {
-  const specifier = entry.replaceAll('\\', '/');
-  const configDir = '${configDir}';
-  if (specifier === configDir || specifier.startsWith(configDir + '/')) {
-    return path.resolve(projectDirectory, specifier.slice(configDir.length + 1));
-  }
-  return path.resolve(path.dirname(list.filename), specifier);
+  const projectPath = configDirPath(entry);
+  return projectPath === undefined
+    ? path.resolve(path.dirname(list.filename), entry.replaceAll('\\', '/'))
+    : path.resolve(projectDirectory, projectPath);
 }

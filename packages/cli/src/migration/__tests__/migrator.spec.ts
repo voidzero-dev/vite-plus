@@ -309,6 +309,58 @@ describe('explicit tsdown config selection', () => {
     );
   });
 
+  it('adds vite-plus to a member that keeps tsdown and migrates its formatter settings', () => {
+    const manifest = path.join(tmpDir, 'package.json');
+    fs.writeFileSync(
+      manifest,
+      JSON.stringify({
+        scripts: { release: 'tsdown -c release.ts' },
+        devDependencies: { tsdown: '0.23.4' },
+        type: 'module',
+      }),
+    );
+    fs.writeFileSync(path.join(tmpDir, '.oxfmtrc.json'), '{"singleQuote":true}');
+
+    rewriteMonorepoProject(tmpDir, PackageManager.pnpm, false, true);
+
+    const rewritten = readJson(manifest);
+    expect(rewritten.scripts).toEqual({ release: 'tsdown -c release.ts' });
+    expect(rewritten.devDependencies).toEqual({ tsdown: '0.23.4', 'vite-plus': 'catalog:' });
+    expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).toContain(
+      "from 'vite-plus'",
+    );
+    expect(fs.existsSync(path.join(tmpDir, '.oxfmtrc.json'))).toBe(false);
+  });
+
+  it('repairs a previously migrated formatter config in a member that keeps tsdown', () => {
+    const member = path.join(tmpDir, 'packages/member');
+    const manifest = path.join(member, 'package.json');
+    fs.mkdirSync(member, { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      '{"devDependencies":{"vite-plus":"latest"}}',
+    );
+    fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'packages: [packages/*]\n');
+    fs.writeFileSync(
+      manifest,
+      '{"scripts":{"release":"tsdown -c release.ts"},"devDependencies":{"tsdown":"0.23.4"}}',
+    );
+    fs.writeFileSync(
+      path.join(member, 'vite.config.ts'),
+      "import { defineConfig } from 'vite-plus'; export default defineConfig({ fmt: {} });\n",
+    );
+    const workspace = makeWorkspaceInfo(tmpDir, PackageManager.pnpm, '12.11.2');
+    workspace.isMonorepo = true;
+    workspace.packages = [{ name: 'member', path: 'packages/member' }];
+
+    expect(ensureVitePlusBootstrap(workspace).changed).toBe(true);
+    expect(readJson(manifest).devDependencies).toEqual({
+      tsdown: '0.23.4',
+      'vite-plus': 'catalog:',
+    });
+    expect(ensureVitePlusBootstrap(workspace).changed).toBe(false);
+  });
+
   it.each(['lint-staged', undefined])(
     'adds vite-plus to a member that keeps tsdown and migrates staged config (script=%s)',
     (staged) => {
@@ -695,7 +747,7 @@ describe('explicit tsdown config selection', () => {
     ['include', '..'],
     ['files', '${configDir}'],
     ['include', '${configDir}'],
-  ])('rebases inherited %s with base %s when adding the converted config', (key, prefix) => {
+  ])('preserves inherited %s with base %s when adding the converted config', (key, prefix) => {
     const baseDirectory = path.join(tmpDir, 'configs');
     fs.mkdirSync(baseDirectory);
     const base = path.join(baseDirectory, 'node-base.json');
@@ -717,14 +769,46 @@ describe('explicit tsdown config selection', () => {
       "export default { publicDir: 'public' };\n",
     );
     expect(mergeTsdownConfigFile(tmpDir, true, createMigrationReport(), true)).toBe(true);
-    expect(readJsonFile(config, true)[key]).toEqual([
-      'vite.config.ts',
-      'tsdown.config.ts',
-      'other.ts',
-      'vite-pack.config.ts',
-    ]);
+    const updated = readJsonFile(config, true);
+    if (prefix === '${configDir}' && key === 'files') {
+      expect(updated.files).toBeUndefined();
+      expect(updated.include).toEqual(['${configDir}/vite-pack.config.ts']);
+    } else {
+      const relativePrefix = prefix === '${configDir}' ? `${prefix}/` : '';
+      expect(updated[key]).toEqual(
+        ['vite.config.ts', 'tsdown.config.ts', 'other.ts', 'vite-pack.config.ts'].map(
+          (file) => relativePrefix + file,
+        ),
+      );
+    }
     expect(fs.readFileSync(base, 'utf8')).toBe(inherited);
     expect(mergeTsdownConfigFile(tmpDir, true, createMigrationReport(), true)).toBe(false);
+  });
+
+  it('keeps the original import when a derived project excludes the converted config', () => {
+    const vite = path.join(tmpDir, 'vite.config.ts');
+    const preset = path.join(tmpDir, 'configs/base.json');
+    const config = path.join(tmpDir, 'tsconfig.json');
+    const viteSource = "import pack from './tsdown.config.ts'; export default { pack };\n";
+    const configSource = '{"extends":"./configs/base.json"}';
+    fs.mkdirSync(path.dirname(preset));
+    fs.writeFileSync(
+      preset,
+      '{"files":["${configDir}/vite.config.ts"],"exclude":["${configDir}/vite-pack.config.ts"]}',
+    );
+    fs.writeFileSync(config, configSource);
+    fs.writeFileSync(vite, viteSource);
+    fs.writeFileSync(
+      path.join(tmpDir, 'tsdown.config.ts'),
+      "export default { publicDir: 'public' };\n",
+    );
+
+    const report = createMigrationReport();
+    expect(mergeTsdownConfigFile(tmpDir, true, report, true)).toBe(false);
+    expect(report.warnings).toContainEqual(expect.stringContaining('Allow `vite-pack.config.ts`'));
+    expect(fs.readFileSync(vite, 'utf8')).toBe(viteSource);
+    expect(fs.readFileSync(config, 'utf8')).toBe(configSource);
+    expect(fs.existsSync(path.join(tmpDir, 'vite-pack.config.ts'))).toBe(false);
   });
 
   it('adds the generated config to its referenced project through a solution config', () => {
@@ -792,11 +876,8 @@ describe('explicit tsdown config selection', () => {
     const inherited = '{"files":["${configDir}/vite.config.ts","${configDir}/tsdown.config.ts"]}';
     fs.writeFileSync(path.join(preset, 'node.json'), inherited);
     expect(mergeTsdownConfigFile(tmpDir, true, createMigrationReport(), true)).toBe(true);
-    expect(readJsonFile(config, true).files).toEqual([
-      'vite.config.ts',
-      'tsdown.config.ts',
-      'vite-pack.config.ts',
-    ]);
+    expect(readJsonFile(config, true)).not.toHaveProperty('files');
+    expect(readJsonFile(config, true).include).toEqual(['${configDir}/vite-pack.config.ts']);
     expect(readJsonFile(other, true).files).toEqual(['vite.config.ts', 'vite-pack.config.ts']);
     expect(fs.readFileSync(path.join(preset, 'node.json'), 'utf8')).toBe(inherited);
   });
@@ -882,7 +963,8 @@ describe('explicit tsdown config selection', () => {
       ).apply(),
     ).toBe(included);
     if (included) {
-      expect(readJsonFile(config, true).files).toEqual(['vite.config.ts', 'vite-pack.config.mjs']);
+      expect(readJsonFile(config, true)).not.toHaveProperty('files');
+      expect(readJsonFile(config, true).include).toEqual(['${configDir}/vite-pack.config.mjs']);
     } else {
       expect(fs.readFileSync(config, 'utf8')).toBe(original);
     }

@@ -83,6 +83,6 @@ vite-pack.config.mjs: file
     "skipLibCheck": true,
     "target": "ES2022"
   },
-  "files": ["vite.config.ts", "tsdown.config.mjs", "vite-pack.config.mjs"]
+  "include": ["${configDir}/vite-pack.config.mjs"]
 }
 ```

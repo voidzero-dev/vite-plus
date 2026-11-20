@@ -32,7 +32,7 @@ import {
   pnpmPeerDependencyRuleKeys,
   mergeStagedConfigToViteConfig,
   mergeTsdownConfigFile,
-  tsdownPackNeedsVitePlus,
+  configNeedsVitePlus,
   mergeViteConfigFiles,
   migratedVitePlusSpec,
   migratePnpmOverridesToWorkspaceYaml,
@@ -686,7 +686,7 @@ export function rewriteMonorepoProject(
       workspaceContext?.retainedImportDependencies?.browser.get(projectPath),
       keepTsdown,
       keepTsdownDependency,
-      tsdownPackNeedsVitePlus(projectPath),
+      configNeedsVitePlus(projectPath, keepTsdownDependency),
     );
     if (
       extractedStagedConfig &&
