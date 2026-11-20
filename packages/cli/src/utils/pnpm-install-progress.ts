@@ -21,12 +21,20 @@ function parsePnpmLog(line: string): Record<string, unknown> | undefined {
   return undefined;
 }
 
-export async function hasQuietPnpmReporter(cwd: string, envs: NodeJS.ProcessEnv): Promise<boolean> {
-  const quietSettings = { reporter: 'silent', loglevel: 'silent', json: 'true', parseable: 'true' };
-  // Only read settings. The project hooks and preloads belong to the install.
-  const probeEnv = { ...envs, NODE_OPTIONS: undefined, npm_config_ignore_pnpmfile: 'true' };
-  const matches = await Promise.all(
-    Object.entries(quietSettings).map(async ([key, value]) => {
+export function pnpmProbeEnv(envs: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  // The project hooks and preloads belong to the install.
+  return { ...envs, NODE_OPTIONS: undefined, npm_config_ignore_pnpmfile: 'true' };
+}
+
+type PnpmLogLevel = 'info' | 'warn' | 'error' | 'silent';
+
+export async function getPnpmInstallLogLevel(
+  cwd: string,
+  envs: NodeJS.ProcessEnv,
+): Promise<PnpmLogLevel> {
+  const probeEnv = pnpmProbeEnv(envs);
+  const [reporter, loglevel, json, parseable] = await Promise.all(
+    ['reporter', 'loglevel', 'json', 'parseable'].map(async (key) => {
       try {
         const { exitCode, stdout } = await runCommandSilently({
           ...getVpCommand(['pm', 'config', 'get', key]),
@@ -35,13 +43,19 @@ export async function hasQuietPnpmReporter(cwd: string, envs: NodeJS.ProcessEnv)
           idleTimeoutMs: 5000,
         });
         // The native command prints the setting after any reporter logs.
-        return exitCode === 0 && stdout.toString().trim().split(/\r?\n/).at(-1) === value;
+        if (exitCode === 0) {
+          return stdout.toString().trim().split(/\r?\n/).at(-1);
+        }
       } catch {
-        return false;
+        // Replay the normal diagnostics if the setting cannot be read.
       }
+      return undefined;
     }),
   );
-  return matches.some(Boolean);
+  if (reporter === 'silent' || loglevel === 'silent' || json === 'true' || parseable === 'true') {
+    return 'silent';
+  }
+  return loglevel === 'warn' || loglevel === 'error' ? loglevel : 'info';
 }
 
 export function watchPnpmResolution(): (line: string) => boolean {
@@ -218,7 +232,7 @@ async function formatPeerDependencyIssues(issuesByProjects: unknown, cwd: string
 export async function formatPnpmInstallOutput(
   output: string,
   cwd: string,
-  { errorsOnly = false } = {},
+  logLevel: PnpmLogLevel = 'info',
 ): Promise<string> {
   const messages: string[] = [];
   const progress = { resolved: 0, found_in_store: 0, fetched: 0, imported: 0 };
@@ -226,8 +240,18 @@ export async function formatPnpmInstallOutput(
     const log = parsePnpmLog(line);
     if (!log) {
       messages.push(line);
-    } else if (errorsOnly && log.level !== 'error') {
-      if (log.name === 'pnpm:lifecycle' && log.stdio === 'stderr' && typeof log.line === 'string') {
+    } else if (
+      logLevel !== 'info' &&
+      log.level !== 'error' &&
+      !(logLevel === 'warn' && log.level === 'warn')
+    ) {
+      // Silent and machine-readable reporters keep the script stderr fallback.
+      if (
+        logLevel === 'silent' &&
+        log.name === 'pnpm:lifecycle' &&
+        log.stdio === 'stderr' &&
+        typeof log.line === 'string'
+      ) {
         messages.push(log.line);
       }
     } else if (log.name === 'pnpm:progress') {

@@ -178,6 +178,7 @@ describe('getMigrationInstallIdleTimeoutMs', () => {
     async (version, effectiveVersion, expected) => {
       vi.stubEnv('VP_CLI_BIN', '/global/vp');
       vi.stubEnv('NODE_OPTIONS', '--require=/preload.cjs');
+      vi.stubEnv('npm_config_ignore_pnpmfile', 'false');
       vi.mocked(getPackageManagerOverride).mockReturnValue({ name: 'pnpm', version: 'default' });
       vi.mocked(runCommandSilently)
         .mockResolvedValueOnce(
@@ -203,7 +204,10 @@ describe('getMigrationInstallIdleTimeoutMs', () => {
           command: '/global/vp',
           args: ['env', 'current', 'pm', '--json'],
           cwd,
-          envs: expect.objectContaining({ NODE_OPTIONS: undefined }),
+          envs: expect.objectContaining({
+            NODE_OPTIONS: undefined,
+            npm_config_ignore_pnpmfile: 'true',
+          }),
         }),
       );
       expect(runCommandSilently).toHaveBeenNthCalledWith(
@@ -212,10 +216,14 @@ describe('getMigrationInstallIdleTimeoutMs', () => {
           command: overridePnpm.binPaths.pnpm,
           args: ['--version'],
           cwd,
-          envs: expect.objectContaining({ NODE_OPTIONS: undefined }),
+          envs: expect.objectContaining({
+            NODE_OPTIONS: undefined,
+            npm_config_ignore_pnpmfile: 'true',
+          }),
         }),
       );
       expect(process.env.NODE_OPTIONS).toBe('--require=/preload.cjs');
+      expect(process.env.npm_config_ignore_pnpmfile).toBe('false');
     },
   );
 

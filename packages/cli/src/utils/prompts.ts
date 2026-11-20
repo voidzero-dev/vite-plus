@@ -11,7 +11,7 @@ import { isPnpmIgnoredBuildsError, parseInstallGatedBuilds } from './approve-bui
 import { getVpCommand, runCommandSilently } from './command.ts';
 import {
   formatPnpmInstallOutput,
-  hasQuietPnpmReporter,
+  getPnpmInstallLogLevel,
   watchPnpmResolution,
 } from './pnpm-install-progress.ts';
 import { reconcilePreviewBridgeRegistry } from './preview-registry.ts';
@@ -238,11 +238,13 @@ export async function runViteInstall(
     } satisfies CommandRunSummary;
   } else {
     spinner.stop(idleTimedOut ? 'Install timed out' : 'Install failed');
-    const errorsOnly =
-      shouldWatchIdle !== undefined && !idleTimedOut && (await hasQuietPnpmReporter(cwd, envs));
+    const logLevel =
+      shouldWatchIdle !== undefined && !idleTimedOut
+        ? await getPnpmInstallLogLevel(cwd, envs)
+        : 'info';
     prompts.log.info(
       shouldWatchIdle
-        ? await formatPnpmInstallOutput(stdout.toString(), cwd, { errorsOnly })
+        ? await formatPnpmInstallOutput(stdout.toString(), cwd, logLevel)
         : stdout.toString(),
     );
     prompts.log.error(stderr.toString());

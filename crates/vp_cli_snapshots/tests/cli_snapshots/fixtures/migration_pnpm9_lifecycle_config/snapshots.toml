@@ -29,3 +29,14 @@ steps = [
   { argv = ["vpt", "write-file", ".npmrc", "reporter=silent\n"], snapshot = false },
   { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "The migration keeps the postinstall error and exit code without displaying install progress." },
 ]
+
+[[case]]
+name = "warn_failure"
+vp = "global"
+local-registry = true
+env = { VP_TEST_FAIL_POSTINSTALL = "1" }
+unset-env = ["VP_SKIP_INSTALL", "CI"]
+steps = [
+  { argv = ["vpt", "write-file", ".npmrc", "loglevel=warn\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "Warn-level output keeps the script error and exit code without replaying debug lifecycle events." },
+]

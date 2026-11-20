@@ -1,4 +1,5 @@
 import type { ChildProcess } from 'node:child_process';
+import { readdirSync, readFileSync } from 'node:fs';
 import { constants } from 'node:os';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
@@ -60,9 +61,41 @@ export function exitCodeFromClose(code: number | null, signal: NodeJS.Signals | 
   return signalNumber ? 128 + signalNumber : 1;
 }
 
+function listProcessParents(): [number, number][] {
+  if (process.platform === 'linux') {
+    try {
+      // Minimal Linux images may not ship ps.
+      return readdirSync('/proc')
+        .filter((entry) => /^\d+$/.test(entry))
+        .flatMap((pid): [number, number][] => {
+          try {
+            const status = readFileSync(`/proc/${pid}/status`, 'utf8');
+            const parent = /^PPid:[ \t]+(\d+)$/m.exec(status);
+            return parent ? [[Number(pid), Number(parent[1])]] : [];
+          } catch {
+            // An exited or inaccessible process has no readable status.
+            return [];
+          }
+        });
+    } catch {
+      // Fall back to ps if procfs is unavailable.
+    }
+  }
+  const { stdout } = spawn.sync('ps', ['-A', '-o', 'pid=', '-o', 'ppid='], {
+    env: { PATH: '/usr/bin:/bin' },
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+    timeout: 5000,
+  });
+  return (stdout ?? '').split('\n').map((line) => {
+    const [pid, parent] = line.trim().split(/\s+/, 2);
+    return [Number(pid), Number(parent)];
+  });
+}
+
 function stopCommandTree(child: ChildProcess) {
   const pid = child.pid;
-  if (pid === undefined) {
+  if (pid === undefined || child.exitCode !== null || child.signalCode !== null) {
     return;
   }
   if (process.platform === 'win32') {
@@ -77,15 +110,8 @@ function stopCommandTree(child: ChildProcess) {
     }
   } else {
     // The process group belongs to the caller. Only stop this child's tree.
-    const { stdout } = spawn.sync('ps', ['-A', '-o', 'pid=', '-o', 'ppid='], {
-      env: { PATH: '/usr/bin:/bin' },
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-      timeout: 5000,
-    });
     const childrenByParent = new Map<number, number[]>();
-    for (const line of (stdout ?? '').split('\n')) {
-      const [childPid, parentPid] = line.trim().split(/\s+/).map(Number);
+    for (const [childPid, parentPid] of listProcessParents()) {
       if (!Number.isInteger(childPid) || childPid <= 1 || !Number.isInteger(parentPid)) {
         continue;
       }
@@ -93,13 +119,16 @@ function stopCommandTree(child: ChildProcess) {
       children.push(childPid);
       childrenByParent.set(parentPid, children);
     }
-    const tree = [pid];
+    const tree = new Set([pid]);
     for (const parent of tree) {
-      tree.push(...(childrenByParent.get(parent) ?? []));
+      for (const childPid of childrenByParent.get(parent) ?? []) {
+        tree.add(childPid);
+      }
     }
-    for (let index = tree.length - 1; index > 0; index--) {
+    tree.delete(pid);
+    for (const childPid of Array.from(tree).toReversed()) {
       try {
-        process.kill(tree[index], 'SIGKILL');
+        process.kill(childPid, 'SIGKILL');
       } catch {
         // A descendant can exit while we walk the tree.
       }

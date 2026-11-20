@@ -1,6 +1,7 @@
 import { downloadPackageManager, getPackageManagerOverride } from '../../binding/index.js';
 import { PackageManager } from '../types/index.ts';
 import { getVpCommand, runCommandSilently } from '../utils/command.ts';
+import { pnpmProbeEnv } from '../utils/pnpm-install-progress.ts';
 import type { CommandRunSummary } from '../utils/prompts.ts';
 import { warnMsg } from '../utils/terminal.ts';
 import type { MigrationReport } from './report.ts';
@@ -22,7 +23,7 @@ export async function getMigrationInstallIdleTimeoutMs(
     if ((override?.name ?? packageManager) !== PackageManager.pnpm) {
       return undefined;
     }
-    const probeEnv = { ...process.env, NODE_OPTIONS: undefined };
+    const probeEnv = pnpmProbeEnv(process.env);
     let pnpmExecutable: string | undefined;
     if (process.env.VP_CLI_BIN) {
       // The global launcher can select a system binary ahead of the project pin.
