@@ -1,0 +1,21 @@
+{
+  "create-vp-test-vite-plus": {
+    "name": "create-vp-test-vite-plus",
+    "dist-tags": {
+      "latest": "1.0.0"
+    },
+    "versions": {
+      "1.0.0": {
+        "name": "create-vp-test-vite-plus",
+        "version": "1.0.0",
+        "bin": {
+          "create-vp-test-vite-plus": "index.cjs"
+        },
+        "dist": {
+          "tarball": "{REGISTRY}/create-vp-test-vite-plus/-/create-vp-test-vite-plus-1.0.0.tgz",
+          "integrity": "sha512-xvpZCYhS9b6ee0uUQC7FlICwKIR/W6nkIQfWZ1UAfd8b+gzgUjT5kR8JILcITLstgv0prAnOeAVmsgyQExbD7A=="
+        }
+      }
+    }
+  }
+}

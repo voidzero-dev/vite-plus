@@ -156,11 +156,13 @@ steps = [
 ]
 
 [[case]]
-name = "core_module_identity_npm_tagged_alias_rejected"
+name = "core_module_identity_npm_tagged_alias"
 vp = "global"
 local-registry = true
+comment = "The core version satisfies Vitest's vite peer range, so npm keeps a tagged core alias instead of replacing it with upstream Vite."
 steps = [
   { argv = ["vpt", "write-file", "package.json", "{\"name\":\"core-module-identity\",\"private\":true,\"type\":\"module\",\"packageManager\":\"npm@11.11.0\",\"devDependencies\":{\"vite-plus\":\"latest\",\"vite\":\"npm:@voidzero-dev/vite-plus-core@latest\"}}\n"], snapshot = false },
   { argv = ["vp", "install", "--ignore-scripts"], timeout = 120000, snapshot = false },
   ["node", "check-tagged-alias.mjs"],
+  ["vp", "pack", "entry.js"],
 ]

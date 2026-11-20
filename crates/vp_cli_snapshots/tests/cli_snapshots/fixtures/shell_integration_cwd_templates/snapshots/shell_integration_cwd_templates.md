@@ -140,10 +140,10 @@ fish wrapper and vpr completion keep global -C before env use/run
 ```
 # Vite+ environment setup (https://viteplus.dev)
 set -gx VP_HOME "<workspace>/home"
-while set -l __vp_idx (contains -i -- "<workspace>/home/bin" $PATH)
+while set -l __vp_idx (builtin contains -i -- "<workspace>/home/bin" $PATH)
     set -e PATH[$__vp_idx]
 end
-while set -l __vp_idx (contains -i -- "<workspace>/home/fallback-bin" $PATH)
+while set -l __vp_idx (builtin contains -i -- "<workspace>/home/fallback-bin" $PATH)
     set -e PATH[$__vp_idx]
 end
 set -gx PATH "<workspace>/home/bin" $PATH "<workspace>/home/fallback-bin"
@@ -152,17 +152,17 @@ set -gx PATH "<workspace>/home/bin" $PATH "<workspace>/home/fallback-bin"
 # which sets/unsets VP_NODE_VERSION in the current shell session.
 function vp
     set -l __vp_command_index 1
-    if test (count $argv) -ge 1
+    if test (builtin count $argv) -ge 1
         if test "$argv[1]" = "-C"
             set __vp_command_index 3
         else if string match -qr '^-C.+' -- "$argv[1]"
             set __vp_command_index 2
         end
     end
-    set -l __vp_next_index (math $__vp_command_index + 1)
+    set -l __vp_next_index (builtin math $__vp_command_index + 1)
 
-    if test (count $argv) -ge $__vp_next_index; and test "$argv[$__vp_command_index]" = "env"; and test "$argv[$__vp_next_index]" = "use"
-        if contains -- -h $argv; or contains -- --help $argv
+    if test (builtin count $argv) -ge $__vp_next_index; and test "$argv[$__vp_command_index]" = "env"; and test "$argv[$__vp_next_index]" = "use"
+        if builtin contains -- -h $argv; or builtin contains -- --help $argv
             command vp $argv; return
         end
         set -lx VP_ENV_USE_EVAL_ENABLE 1
@@ -178,28 +178,28 @@ function vp
 end
 
 # Dynamic shell completion for fish
-VP_COMPLETE=fish command vp | source
+VP_COMPLETE=fish command vp | builtin source
 
 function __vpr_complete
-    set -l tokens (commandline --current-process --tokenize --cut-at-cursor)
-    set -l current (commandline --current-token)
+    set -l tokens (builtin commandline --current-process --tokenize --cut-at-cursor)
+    set -l current (builtin commandline --current-token)
     set -l args $tokens[2..]
     set -l translated vp
-    if test (count $args) -eq 0; and string match -qr '^-C' -- "$current"
+    if test (builtin count $args) -eq 0; and string match -qr '^-C' -- "$current"
         # Keep completing the global -C option until its value is finished.
-    else if test (count $args) -ge 1; and test "$args[1]" = "-C"
+    else if test (builtin count $args) -ge 1; and test "$args[1]" = "-C"
         set -a translated -C
-        if test (count $args) -ge 2
+        if test (builtin count $args) -ge 2
             set -a translated "$args[2]" run $args[3..]
         end
-    else if test (count $args) -ge 1; and string match -qr '^-C.+' -- "$args[1]"
+    else if test (builtin count $args) -ge 1; and string match -qr '^-C.+' -- "$args[1]"
         set -a translated "$args[1]" run $args[2..]
     else
         set -a translated run $args
     end
     VP_COMPLETE=fish command vp -- $translated $current
 end
-complete -c vpr --keep-order --exclusive --arguments "(__vpr_complete)"
+builtin complete -c vpr --keep-order --exclusive --arguments "(__vpr_complete)"
 ```
 
 ## `vpt print-file home/env.nu`
@@ -258,7 +258,10 @@ def "nu-complete vp current-command" [buffer: string, place: any] {
     if (($place | %describe) starts-with "record") { $place.command | %str join ' ' } else { $buffer }
 }
 # Fish gets the command as an argument, so quotes in it cannot end a fish string.
+# Without fish, return null so Nushell falls back to file completion. Nushell 0.116+ shows no
+# suggestions when a parameter completer fails (#3272).
 def "nu-complete vp fish" [command: string] {
+    if (%which fish | %is-empty) { return null }
     let fish_script = 'VP_COMPLETE=fish command vp | source; complete --do-complete=$argv[1]'
     ^fish --command $fish_script $command | %from tsv --flexible --noheaders --no-infer | %rename value description | %update value {|row|
         let value = $row.value

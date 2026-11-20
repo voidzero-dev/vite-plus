@@ -10,7 +10,7 @@
 VITE+ - The Unified Toolchain for the Web
 
 ✓ Pinned Node.js version to 22.13.0
-  Created .node-version in <workspace>
+  Updated .node-version in <workspace>
 note: Version will be downloaded on first use.
 ```
 

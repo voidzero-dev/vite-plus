@@ -37,7 +37,7 @@ Finished in <duration> on 1 file with <n> rules using <n> threads.
 
 ## `vp lint --threads=1 -c .oxlintrc.json type-aware.ts`
 
-Inherited typeAware enables no-floating-promises
+Inherited typeAware reports no-floating-promises only for the selected file
 
 **Exit code:** 1
 
@@ -114,7 +114,7 @@ Finished in <duration> on 1 file with <n> rules using <n> threads.
 
 ## `vp lint --threads=1 type-aware.ts`
 
-Imported typeAware produces the same diagnostic and exit code
+Imported typeAware preserves the diagnostic and exit code
 
 **Exit code:** 1
 

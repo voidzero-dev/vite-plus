@@ -20,12 +20,14 @@ Options:
   -F, --filter <FILTERS>   Match packages by name, directory, or glob pattern
   --fail-if-no-match       Exit with a non-zero status if a filter matches no packages
   --ignore-depends-on      Do not run dependencies specified in `dependsOn` fields
-  -v, --verbose            Show the full detailed summary after execution
+  -v, --verbose            Show the full detailed summary after execution; `-vv` also lists the inputs and outputs of each cached run
   --cache                  Force caching on for all tasks and scripts
   --no-cache               Force caching off for all tasks and scripts
   --log <MODE>             Set output mode: interleaved (default), labeled, or grouped
   --concurrency-limit <N>  Maximum number of tasks to run concurrently (default: 4)
   --parallel               Run tasks without dependency ordering; concurrency is unlimited unless `--concurrency-limit` is specified
+  --dry-run                Show what the run would do and whether each command would hit the cache, without running anything
+  --json                   Print JSON: every package and task without a task, or the run plan with `--dry-run`
   --last-details           Display the detailed summary of the last run
   -h, --help               Print help
 
@@ -61,12 +63,14 @@ Options:
   -F, --filter <FILTERS>   Match packages by name, directory, or glob pattern
   --fail-if-no-match       Exit with a non-zero status if a filter matches no packages
   --ignore-depends-on      Do not run dependencies specified in `dependsOn` fields
-  -v, --verbose            Show the full detailed summary after execution
+  -v, --verbose            Show the full detailed summary after execution; `-vv` also lists the inputs and outputs of each cached run
   --cache                  Force caching on for all tasks and scripts
   --no-cache               Force caching off for all tasks and scripts
   --log <MODE>             Set output mode: interleaved (default), labeled, or grouped
   --concurrency-limit <N>  Maximum number of tasks to run concurrently (default: 4)
   --parallel               Run tasks without dependency ordering; concurrency is unlimited unless `--concurrency-limit` is specified
+  --dry-run                Show what the run would do and whether each command would hit the cache, without running anything
+  --json                   Print JSON: every package and task without a task, or the run plan with `--dry-run`
   --last-details           Display the detailed summary of the last run
   -h, --help               Print help
 

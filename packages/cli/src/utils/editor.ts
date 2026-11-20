@@ -4,18 +4,16 @@ import path from 'node:path';
 import { styleText } from 'node:util';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
-import {
-  applyEdits,
-  type FormattingOptions,
-  type JSONPath,
-  modify,
-  type ModificationOptions,
-  parse as parseJsonc,
-} from 'jsonc-parser';
+import { type FormattingOptions, type JSONPath, parse as parseJsonc } from 'jsonc-parser';
 
 import { getVpDirs } from '../../binding/index.js';
 import { PackageManager } from '../types/package.ts';
-import { detectFormattingOptions, writeJsonFile } from './json.ts';
+import {
+  appendMissingJsoncArrayItems,
+  applyJsoncEdit,
+  detectFormattingOptions,
+  writeJsonFile,
+} from './json.ts';
 
 // Language-specific overrides because user-level [lang] settings beat the workspace default
 const VSCODE_LANGUAGE_OVERRIDES = {
@@ -49,8 +47,6 @@ const ZED_SETTINGS = {
         settings: {
           run: 'onType',
           fixKind: 'safe_fix',
-          typeAware: true,
-          unusedDisableDirectives: 'deny',
         },
       },
     },
@@ -530,10 +526,19 @@ function mergeAndWriteEditorConfig(
   }
 
   const formattingOptions = detectFormattingOptions(originalText);
-  const newText =
-    fileName === 'extensions.json'
-      ? mergeExtensionsText(originalText, existing, incoming, formattingOptions)
-      : mergeSettingsText(originalText, existing, incoming, formattingOptions);
+  let newText: string;
+  if (fileName === 'extensions.json') {
+    const { recommendations } = incoming;
+    newText = appendMissingJsoncArrayItems(
+      originalText,
+      ['recommendations'],
+      existing.recommendations,
+      Array.isArray(recommendations) ? recommendations : [],
+      formattingOptions,
+    );
+  } else {
+    newText = mergeSettingsText(originalText, existing, incoming, formattingOptions);
+  }
 
   // Do not rewrite when the merge produced no changes (keeps the operation idempotent).
   if (newText === originalText) {
@@ -551,16 +556,6 @@ function mergeAndWriteEditorConfig(
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-/** Apply a single `jsonc-parser` modification to `text` and return the patched text. */
-function applyJsoncEdit(
-  text: string,
-  path: JSONPath,
-  value: unknown,
-  options: ModificationOptions,
-): string {
-  return applyEdits(text, modify(text, path, value, options));
 }
 
 /**
@@ -591,47 +586,6 @@ function mergeSettingsText(
     }
   };
   insertMissing(existing, incoming, []);
-  return currentText;
-}
-
-/**
- * For `extensions.json`, append missing recommendations without rebuilding the array,
- * so comments inside the array survive. Existing entries always win.
- */
-function mergeExtensionsText(
-  text: string,
-  existing: Record<string, unknown>,
-  incoming: Record<string, unknown>,
-  formattingOptions: FormattingOptions,
-): string {
-  const incomingRecs = Array.isArray(incoming['recommendations'])
-    ? (incoming['recommendations'] as unknown[])
-    : [];
-  const existingValue = existing['recommendations'];
-
-  // No existing recommendations key: insert the incoming array as-is.
-  if (!('recommendations' in existing)) {
-    return applyJsoncEdit(text, ['recommendations'], incomingRecs, { formattingOptions });
-  }
-
-  // Unexpected non-array value: existing user value wins, leave it untouched.
-  if (!Array.isArray(existingValue)) {
-    return text;
-  }
-
-  const existingRecs = new Set<unknown>(existingValue);
-  let currentText = text;
-  let nextIndex = existingValue.length;
-  for (const rec of incomingRecs) {
-    if (existingRecs.has(rec)) {
-      continue;
-    }
-    currentText = applyJsoncEdit(currentText, ['recommendations', nextIndex], rec, {
-      formattingOptions,
-      isArrayInsertion: true,
-    });
-    nextIndex++;
-  }
   return currentText;
 }
 

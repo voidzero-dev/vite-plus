@@ -10,4 +10,7 @@ steps = [
   { argv = ["vp", "install", "--", "--silent"], comment = "should install packages first", continue-on-failure = true },
   { argv = ["vp", "pm", "audit", "--production"], comment = "should audit production dependencies" },
   { argv = ["vp", "pm", "audit", "--fix"], comment = "bun 1.4 runs bun audit fix" },
+  { argv = ["node", "../setup-yarn.cjs"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@2.3.1"], snapshot = false },
+  { argv = ["vp", "pm", "audit", "--json"], comment = "Yarn Berry before 2.4.0 has no npm audit, so warn without querying the registry." },
 ]

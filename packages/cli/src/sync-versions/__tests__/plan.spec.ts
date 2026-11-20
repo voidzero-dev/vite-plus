@@ -10,6 +10,7 @@ import {
 
 const toolchain: SyncVersionsToolchain = {
   vitePlus: '0.4.0',
+  vitePlusCore: '8.3.5000',
   vitest: '5.0.0',
 };
 
@@ -50,7 +51,7 @@ describe('planSyncVersions', () => {
         '@vitest/coverage-v8': '5.0.0',
         '@vitest/eslint-plugin': '1.6.0',
         '@vitest/coverage-c8': '0.33.0',
-        '@voidzero-dev/vite-plus-core': '0.4.0',
+        '@voidzero-dev/vite-plus-core': '8.3.5000',
         'vite-plus': '0.4.0',
         vitest: '5.0.0',
       },
@@ -77,7 +78,7 @@ describe('planSyncVersions', () => {
       devDependencies: {
         '@vitest/ui': 'npm:@vitest/ui@5.0.0',
         'vite-plus': 'npm:@scope/vite-plus-fork@0.3.0',
-        vite: 'npm:@voidzero-dev/vite-plus-core@0.4.0',
+        vite: 'npm:@voidzero-dev/vite-plus-core@8.3.5000',
         vitest: 'npm:vitest@5.0.0',
       },
     });
@@ -113,7 +114,7 @@ describe('planSyncVersions', () => {
       catalog: { '@vitest/coverage-v8': '5.0.0' },
       catalogs: {
         toolchain: {
-          vite: 'npm:@voidzero-dev/vite-plus-core@0.4.0',
+          vite: 'npm:@voidzero-dev/vite-plus-core@8.3.5000',
           'vite-plus': '0.4.0',
         },
       },
@@ -138,7 +139,7 @@ describe('planSyncVersions', () => {
         .replace("vitest: '^4.1.11'", "vitest: '5.0.0'")
         .replace(
           'vite: "npm:@voidzero-dev/vite-plus-core@0.3.0"',
-          'vite: "npm:@voidzero-dev/vite-plus-core@0.4.0"',
+          'vite: "npm:@voidzero-dev/vite-plus-core@8.3.5000"',
         )
         .replace('vite-plus: 0.3.0', 'vite-plus: 0.4.0'),
     );

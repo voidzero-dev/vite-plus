@@ -100,9 +100,9 @@ Vite+ covers the full frontend development cycle, from starting a project throug
 
 - [`vp create`](/guide/create) creates new apps, packages, and monorepos.
 - [`vp migrate`](/guide/migrate) moves existing projects onto Vite+.
-- [`vp install`](/guide/package-management) installs dependencies with the right package manager.
-- [`vp add`](/guide/package-management), [`vp remove`](/guide/package-management), [`vp update`](/guide/package-management), [`vp dedupe`](/guide/package-management), [`vp outdated`](/guide/package-management), [`vp list`](/guide/package-management), [`vp why`](/guide/package-management), and [`vp info`](/guide/package-management) cover the rest of the package-management workflow.
-- [`vp link`](/guide/package-management), [`vp unlink`](/guide/package-management), [`vp rebuild`](/guide/package-management), and [`vp pm <command>`](/guide/package-management) provide lower-level package-manager operations.
+- [`vp install`](/guide/package-management/install) installs dependencies with the right package manager.
+- [`vp add`](/guide/package-management/add), [`vp remove`](/guide/package-management/remove), [`vp update`](/guide/package-management/update), [`vp dedupe`](/guide/package-management/dedupe), [`vp outdated`](/guide/package-management/outdated), [`vp list`](/guide/package-management/list), [`vp why`](/guide/package-management/why), and [`vp info`](/guide/package-management/info) cover the rest of the package-management workflow.
+- [`vp link`](/guide/package-management/link), [`vp unlink`](/guide/package-management/unlink), [`vp rebuild`](/guide/package-management/rebuild), and [`vp pm <command>`](/guide/package-management/) provide lower-level package-manager operations.
 
 ### Project Toolchain
 
@@ -115,7 +115,7 @@ Vite+ covers the full frontend development cycle, from starting a project throug
 - [`vp toolchain`](/guide/upgrade#show-the-toolchain) shows the active project toolchain; use `--global` to inspect the global installation instead.
 - [`vp run`](/guide/run) runs tasks across workspaces with caching.
 - [`vp cache clean`](/guide/cache) clears task cache entries.
-- [`vp exec`](/guide/vpx) runs local project binaries, while [`vp dlx`](/guide/vpx) and [`vpx`](/guide/vpx) download and run package binaries.
+- [`vp exec`](/guide/vpx) runs local project binaries, while [`vp dlx`](/guide/package-management/dlx) and [`vpx`](/guide/vpx) download and run package binaries.
 - [`vp config`](/guide/commit-hooks) installs the Git hook dispatcher and configures agent integration.
 - [`vp hooks`](/guide/commit-hooks) manages the Git hook dispatcher, and [`vp staged`](/guide/commit-hooks) runs checks on staged files.
 - [Monorepo Guide](/guide/monorepo) covers multi-package project structure and commands.

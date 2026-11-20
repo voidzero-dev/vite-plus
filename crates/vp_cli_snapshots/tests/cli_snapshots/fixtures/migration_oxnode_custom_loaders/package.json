@@ -1,0 +1,13 @@
+{
+  "name": "migration-oxnode-custom-loaders",
+  "type": "module",
+  "scripts": {
+    "loader": "node --no-warnings --experimental-specifier-resolution=node --import @oxc-node/core/register --loader ./scripts/variant-loader.js --loader ./scripts/image-loader.js ./scripts/build-assets.tsx",
+    "shebang": "./scripts/build-assets.tsx",
+    "extensionless": "./bin/build-assets"
+  },
+  "devDependencies": {
+    "@oxc-node/core": "0.1.0",
+    "vite-plus": "latest"
+  }
+}

@@ -1,0 +1,12 @@
+[[case]]
+name = "managed_global_rejects_project_options"
+vp = "global"
+comment = "Project-only flags are rejected before managed global operations can install, remove, or update packages."
+steps = [
+  { argv = ["vp", "install", "-g", "-D", "--frozen-lockfile", "--filter", "app", "typescript"], continue-on-failure = true },
+  { argv = ["vp", "add", "-g", "--allow-build", "typescript", "typescript"], continue-on-failure = true },
+  { argv = ["vp", "remove", "-g", "--filter", "app", "typescript"], continue-on-failure = true },
+  { argv = ["vp", "update", "-g", "--interactive", "typescript"], continue-on-failure = true },
+  { argv = ["vp", "outdated", "-g", "--compatible"], continue-on-failure = true },
+  { argv = ["vp", "pm", "list", "-g", "--depth", "0"], continue-on-failure = true },
+]

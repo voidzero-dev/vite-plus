@@ -76,6 +76,20 @@ Use `--no-hooks` when you want `vp config` to leave the Git hook dispatcher unch
 
 If `core.hooksPath` points to another hook directory, `vp config` skips dispatcher installation to preserve the existing setup. Run `vp hooks status` to inspect the current configuration.
 
+After migrating from Husky, existing clones can retain a local `core.hooksPath` of `.husky` or `.husky/_`. `vp config` and `vp hooks enable` automatically replace this stale setting only when the old directory is missing or empty, no Husky hook files remain, the Vite+ hooks directory contains a hook script, and the repository and ancestor package manifests no longer declare Husky dependencies, configuration, or scripts.
+
+If old files remain, both commands preserve the configuration and report that the migrated Vite+ hooks are not active. This includes unmodified Husky-generated files left in existing clones after pulling a migration commit. First migrate any custom checks you want to retain, remove Husky dependencies and lifecycle commands, then explicitly switch this clone:
+
+```bash
+vp hooks enable --replace-husky
+# If your migrated hooks use a custom directory:
+vp hooks enable --replace-husky --hooks-dir .custom-hooks
+```
+
+The explicit option changes `core.hooksPath` and preserves the old files. **Hooks from the old directory no longer run after switching.** The replacement notice explains this change. Do not add `--replace-husky` to `prepare` or other lifecycle scripts; it is a one-time choice for the current clone.
+
+Both automatic and explicit replacement preserve global and worktree-scoped hook settings and refuse unsafe paths. Replacement is skipped when multiple worktrees are registered, because local Git configuration is shared and another checkout may still use Husky. Environment opt-outs such as `VP_GIT_HOOKS=0` and `HUSKY=0` remain effective even with `--replace-husky`.
+
 You can also set `VP_GIT_HOOKS=0` to disable hook installation from lifecycle scripts such as `prepare` or `postinstall`.
 
 Project-owned hook scripts such as `.vite-hooks/pre-commit` should be committed to the repository. The generated dispatcher and shims under `.vite-hooks/_` are ignored and recreated by `vp config` or `vp hooks enable`. Neither command creates or modifies project hook scripts or staged-file configuration.

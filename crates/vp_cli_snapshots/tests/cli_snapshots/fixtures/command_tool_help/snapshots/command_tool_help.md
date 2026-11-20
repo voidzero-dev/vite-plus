@@ -144,7 +144,7 @@ Options:
   --dir <path>                        Base directory to scan for the test files
   --ui                                Enable UI
   --open                              Open UI automatically (default: !process.env.CI)
-  --api [port]                        Specify server port. Note if the port is already being used, Vite will automatically try the next available port so this may not be the actual port the server ends up listening on. If true will be set to 51204 or 63315 in browser mode. Use '--help --api' for more info.
+  --api [port]                        Specify server port. Note if the port is already being used, Vite will automatically try the next available port so this may not be the actual port the server ends up listening on. If true will be set to 51204 or 23315 in browser mode. Use '--help --api' for more info.
   --silent [value]                    Silent console output from tests. Use 'passed-only' to see logs from failing tests only.
   --hideSkippedTests                  Hide logs for skipped tests
   --reporter <name>                   Specify reporters (default, agent, minimal, blob, verbose, dot, json, tap, tap-flat, junit, tree, hanging-process, github-actions)
@@ -169,12 +169,14 @@ Options:
   --dangerouslyIgnoreUnhandledErrors  Ignore any unhandled errors that occur
   --shard <shards>                    Test suite shard to execute in a format of <index>/<count>
   --changed [since]                   Run tests that are affected by the changed files (default: false)
+  --sinceLastRun                      Run tests with dependencies modified since their last run, plus tests that failed (default: false)
+  --lastFailed                        Run only the tests that failed in the last run (default: false)
   --sequence <options>                Options for how tests should be sorted. Use '--help --sequence' for more info.
   --inspect [[host:]port]             Enable Node.js inspector (default: 127.0.0.1:9229)
   --inspectBrk [[host:]port]          Enable Node.js inspector and break before the test starts
   --testTimeout <timeout>             Default timeout of a test in milliseconds (default: 5000). Use 0 to disable timeout completely.
   --hookTimeout <timeout>             Default hook timeout in milliseconds (default: 10000). Use 0 to disable timeout completely.
-  --bail <number>                     Stop test execution when given number of tests have failed (default: 0)
+  --bail [number]                     Stop test execution when given number of tests have failed (default: 0)
   --retry <times>                     Retry the test specific number of times if it fails (default: 0). Use '--help --retry' for more info.
   --repeats <number>                  Repeat every test a specific number of times regardless of the result (default: 0)
   --diff <path>                       DiffOptions object or a path to a module which exports DiffOptions object. Use '--help --diff' for more info.
@@ -259,7 +261,7 @@ Options:
   --from-vite [vitest]          Reuse config from Vite or Vitest
   --report                      Size report (default: true)
   --env.* <value>               Define compile-time env variables
-  --env-file <file>             Load environment variables from a file, when used together with --env, variables in --env take precedence
+  --env-file <file>             Load environment variables from a file, can be repeated
   --env-prefix <prefix>         Prefix for env variables to inject into the bundle (default: VITE_PACK_, TSDOWN_)
   --on-success <command>        Command to run on success
   --copy <dir>                  Copy files to output dir

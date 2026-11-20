@@ -34,3 +34,16 @@ should run specific version
 ```
 hello
 ```
+
+## `vpt json-edit package.json packageManager pnpm@7.20.0`
+
+
+## `vp dlx --shell-mode 'echo hello'`
+
+Reject shell mode before pnpm 7.21.0 without executing the package manager.
+
+**Exit code:** 1
+
+```
+pnpm < 7.21.0 does not support --shell-mode.
+```

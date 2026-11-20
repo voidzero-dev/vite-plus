@@ -9,12 +9,12 @@ A .cts that uses export is CommonJS with ES module syntax; it fails with a clear
 **Exit code:** 1
 
 ```
-<repo>/packages/cli/dist/script-preload.cjs:454
+<repo>/packages/cli/dist/script-preload.cjs:477
         const result = oxcNode.load(url, context, nextLoad, HELPER_MODULE_NAME);
                                ^
 
 Error: Failed to transform <workspace>/src/both.cts: a `.cts` file is CommonJS, but this one uses ES module syntax (`import`, `export` or `import.meta`), which oxc-node does not compile to CommonJS. Rename it to `.mts` to run it as an ES module, or write it as CommonJS with `import x = require("...")` and `export =`.
-    at load (<repo>/packages/cli/dist/script-preload.cjs:454:25)
+    at load (<repo>/packages/cli/dist/script-preload.cjs:477:25)
     at nextStep (node:internal/modules/customization_hooks:189:26)
     at loadWithHooks (node:internal/modules/customization_hooks:374:18)
     at #loadSync (node:internal/modules/esm/loader:865:14)
@@ -37,12 +37,12 @@ Importing it reports the same error
 **Exit code:** 1
 
 ```
-<repo>/packages/cli/dist/script-preload.cjs:454
+<repo>/packages/cli/dist/script-preload.cjs:477
         const result = oxcNode.load(url, context, nextLoad, HELPER_MODULE_NAME);
                                ^
 
 Error: Failed to transform <workspace>/src/both.cts: a `.cts` file is CommonJS, but this one uses ES module syntax (`import`, `export` or `import.meta`), which oxc-node does not compile to CommonJS. Rename it to `.mts` to run it as an ES module, or write it as CommonJS with `import x = require("...")` and `export =`.
-    at load (<repo>/packages/cli/dist/script-preload.cjs:454:25)
+    at load (<repo>/packages/cli/dist/script-preload.cjs:477:25)
     at nextStep (node:internal/modules/customization_hooks:189:26)
     at loadWithHooks (node:internal/modules/customization_hooks:374:18)
     at #loadSync (node:internal/modules/esm/loader:865:14)

@@ -1,0 +1,27 @@
+[[case]]
+name = "create_symlink_target_destination"
+vp = "local"
+comment = "The overwrite prompt shows the link destination even with a trailing separator; cancellation preserves the link and its contents."
+steps = [
+  { argv = ["node", "setup.mjs"], snapshot = false },
+  { argv = ["vp", "create", "vite:application", "--directory", "new-project/", "--interactive", "--no-agent", "--no-editor", "--no-git", "--no-hooks"], interactions = [
+    { "expect-milestone" = "select:select:0" },
+    { "write-key" = "enter" },
+  ] },
+  ["vpt", "stat-file", "new-project", "--assert", "symlink"],
+  ["vpt", "print-file", "linked-directory/keep.txt"],
+]
+
+[[case]]
+name = "create_dangling_symlink_target_destination"
+vp = "local"
+comment = "A missing link destination is still shown in the overwrite prompt; cancellation preserves the dangling link."
+steps = [
+  { argv = ["node", "setup.mjs", "dangling"], snapshot = false },
+  { argv = ["vp", "create", "vite:application", "--directory", "new-project", "--interactive", "--no-agent", "--no-editor", "--no-git", "--no-hooks"], interactions = [
+    { "expect-milestone" = "select:select:0" },
+    { "write-key" = "enter" },
+  ] },
+  ["vpt", "stat-file", "new-project", "--assert", "symlink"],
+  ["vpt", "stat-file", "linked-directory", "--assert", "missing"],
+]

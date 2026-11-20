@@ -1,0 +1,64 @@
+[[case]]
+name = "script_import_custom_loaders_node22_async"
+vp = ["local", "global"]
+env = { VP_NODE_VERSION = "22.18.0" }
+unset-env = ["NODE_OPTIONS", "VP_SCRIPT_TSCONFIG", "TSX_TSCONFIG_PATH", "OXC_TSCONFIG_PATH", "TS_NODE_PROJECT"]
+comment = "Two representative project loaders compose with the TypeScript preload. Their output also shows the hook order and require() inside loader-supplied CommonJS source."
+steps = [
+  { argv = ["node", "--version"] },
+  { argv = ["node", "--no-warnings", "--experimental-specifier-resolution=node", "--import", "vite-plus/register", "--loader", "./scripts/variant-loader.js", "--loader", "./scripts/image-loader.js", "./src/main.ts"] },
+  { argv = ["node", "--no-warnings", "--import=vite-plus/register", "--loader=./scripts/image-loader.js", "--loader=./scripts/variant-loader.js", "./src/main.ts"], comment = "Reversing the custom loaders reverses their observable load order." },
+  { argv = ["node", "./src/main.ts"], envs = [["NODE_OPTIONS", "--no-warnings --import=vite-plus/register --loader=./scripts/variant-loader.js --loader=./scripts/image-loader.js"]], comment = "The same chain works when inherited through NODE_OPTIONS." },
+]
+
+[[case]]
+name = "script_import_custom_loaders_node22_sync"
+vp = "global"
+env = { VP_NODE_VERSION = "22.23.4" }
+unset-env = ["NODE_OPTIONS", "VP_SCRIPT_TSCONFIG", "TSX_TSCONFIG_PATH", "OXC_TSCONFIG_PATH", "TS_NODE_PROJECT"]
+comment = "Two representative project loaders compose with the TypeScript preload. Their output also shows the hook order and require() inside loader-supplied CommonJS source."
+steps = [
+  { argv = ["node", "--version"] },
+  { argv = ["node", "--no-warnings", "--experimental-specifier-resolution=node", "--import", "vite-plus/register", "--loader", "./scripts/variant-loader.js", "--loader", "./scripts/image-loader.js", "./src/main.ts"] },
+  { argv = ["node", "--no-warnings", "--import=vite-plus/register", "--loader=./scripts/image-loader.js", "--loader=./scripts/variant-loader.js", "./src/main.ts"], comment = "Reversing the custom loaders reverses their observable load order." },
+  { argv = ["node", "./src/main.ts"], envs = [["NODE_OPTIONS", "--no-warnings --import=vite-plus/register --loader=./scripts/variant-loader.js --loader=./scripts/image-loader.js"]], comment = "The same chain works when inherited through NODE_OPTIONS." },
+]
+
+[[case]]
+name = "script_import_custom_loaders_node24_async"
+vp = "global"
+env = { VP_NODE_VERSION = "24.11.0" }
+unset-env = ["NODE_OPTIONS", "VP_SCRIPT_TSCONFIG", "TSX_TSCONFIG_PATH", "OXC_TSCONFIG_PATH", "TS_NODE_PROJECT"]
+comment = "Two representative project loaders compose with the TypeScript preload. Their output also shows the hook order and require() inside loader-supplied CommonJS source."
+steps = [
+  { argv = ["node", "--version"] },
+  { argv = ["node", "--no-warnings", "--experimental-specifier-resolution=node", "--import", "vite-plus/register", "--loader", "./scripts/variant-loader.js", "--loader", "./scripts/image-loader.js", "./src/main.ts"] },
+  { argv = ["node", "--no-warnings", "--import=vite-plus/register", "--loader=./scripts/image-loader.js", "--loader=./scripts/variant-loader.js", "./src/main.ts"], comment = "Reversing the custom loaders reverses their observable load order." },
+  { argv = ["node", "./src/main.ts"], envs = [["NODE_OPTIONS", "--no-warnings --import=vite-plus/register --loader=./scripts/variant-loader.js --loader=./scripts/image-loader.js"]], comment = "The same chain works when inherited through NODE_OPTIONS." },
+]
+
+[[case]]
+name = "script_import_custom_loaders_node24_sync"
+vp = "global"
+env = { VP_NODE_VERSION = "24.22.1" }
+unset-env = ["NODE_OPTIONS", "VP_SCRIPT_TSCONFIG", "TSX_TSCONFIG_PATH", "OXC_TSCONFIG_PATH", "TS_NODE_PROJECT"]
+comment = "Two representative project loaders compose with the TypeScript preload. Their output also shows the hook order and require() inside loader-supplied CommonJS source."
+steps = [
+  { argv = ["node", "--version"] },
+  { argv = ["node", "--no-warnings", "--experimental-specifier-resolution=node", "--import", "vite-plus/register", "--loader", "./scripts/variant-loader.js", "--loader", "./scripts/image-loader.js", "./src/main.ts"] },
+  { argv = ["node", "--no-warnings", "--import=vite-plus/register", "--loader=./scripts/image-loader.js", "--loader=./scripts/variant-loader.js", "./src/main.ts"], comment = "Reversing the custom loaders reverses their observable load order." },
+  { argv = ["node", "./src/main.ts"], envs = [["NODE_OPTIONS", "--no-warnings --import=vite-plus/register --loader=./scripts/variant-loader.js --loader=./scripts/image-loader.js"]], comment = "The same chain works when inherited through NODE_OPTIONS." },
+]
+
+[[case]]
+name = "script_import_custom_loaders_node26_sync"
+vp = "global"
+env = { VP_NODE_VERSION = "26.12.1" }
+unset-env = ["NODE_OPTIONS", "VP_SCRIPT_TSCONFIG", "TSX_TSCONFIG_PATH", "OXC_TSCONFIG_PATH", "TS_NODE_PROJECT"]
+comment = "Two representative project loaders compose with the TypeScript preload. Their output also shows the hook order and require() inside loader-supplied CommonJS source."
+steps = [
+  { argv = ["node", "--version"] },
+  { argv = ["node", "--no-warnings", "--experimental-specifier-resolution=node", "--import", "vite-plus/register", "--loader", "./scripts/variant-loader.js", "--loader", "./scripts/image-loader.js", "./src/main.ts"] },
+  { argv = ["node", "--no-warnings", "--import=vite-plus/register", "--loader=./scripts/image-loader.js", "--loader=./scripts/variant-loader.js", "./src/main.ts"], comment = "Reversing the custom loaders reverses their observable load order." },
+  { argv = ["node", "./src/main.ts"], envs = [["NODE_OPTIONS", "--no-warnings --import=vite-plus/register --loader=./scripts/variant-loader.js --loader=./scripts/image-loader.js"]], comment = "The same chain works when inherited through NODE_OPTIONS." },
+]

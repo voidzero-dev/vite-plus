@@ -389,6 +389,14 @@ impl HttpClient {
     }
 }
 
+/// Extract a tgz archive into `target_dir`, skipping symbolic and hard link
+/// entries.
+///
+/// Callers then build the install tree inside `target_dir` with
+/// `create_dir_all`, `rename` and shim writes, and those follow links, so an
+/// archive-supplied link could redirect them into another install or any
+/// existing directory. npm skips link entries in package tarballs the same way.
+/// Otherwise this matches `Archive::unpack`.
 fn extract_tgz(tgz_file: impl AsRef<Path>, target_dir: impl AsRef<Path>) -> Result<(), Error> {
     let tgz_file = tgz_file.as_ref();
     let target_dir = target_dir.as_ref();
@@ -397,7 +405,29 @@ fn extract_tgz(tgz_file: impl AsRef<Path>, target_dir: impl AsRef<Path>) -> Resu
     let file = std::fs::File::open(tgz_file)?;
     let tar_stream = GzDecoder::new(file);
     let mut archive = Archive::new(tar_stream);
-    archive.unpack(target_dir)?;
+    if target_dir.symlink_metadata().is_err() {
+        std::fs::create_dir_all(target_dir)?;
+    }
+    // Canonicalize as `Archive::unpack` does, so Windows accepts long paths.
+    let target_dir = target_dir.canonicalize().unwrap_or_else(|_| target_dir.to_path_buf());
+    // Apply directories last, deepest first, as `Archive::unpack` does, so a
+    // directory's permissions cannot block extracting its contents.
+    let mut directories = Vec::new();
+    for entry in archive.entries()? {
+        let mut entry = entry?;
+        let entry_type = entry.header().entry_type();
+        if entry_type.is_symlink() || entry_type.is_hard_link() {
+            tracing::debug!("Skip link entry {:?}", entry.path()?);
+        } else if entry_type.is_dir() {
+            directories.push(entry);
+        } else {
+            entry.unpack_in(&target_dir)?;
+        }
+    }
+    directories.sort_by(|a, b| b.path_bytes().cmp(&a.path_bytes()));
+    for mut directory in directories {
+        directory.unpack_in(&target_dir)?;
+    }
 
     tracing::debug!("Extract tgz finished");
 
@@ -407,7 +437,7 @@ fn extract_tgz(tgz_file: impl AsRef<Path>, target_dir: impl AsRef<Path>) -> Resu
 /// Extract exactly one regular file from a tgz archive.
 ///
 /// Unlike [`extract_tgz`], this function never writes an archive-controlled
-/// path or link. Use it when an integrity pin covers one file inside an
+/// path. Use it when an integrity pin covers one file inside an
 /// unauthenticated archive.
 fn extract_tgz_file(
     tgz_file: impl AsRef<Path>,

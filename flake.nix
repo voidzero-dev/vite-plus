@@ -31,7 +31,8 @@
       devShells = forAllSystems (pkgs: {
         default = pkgs.mkShell {
           packages = with pkgs; [
-            nodejs_22
+            # Follow the repository's Node.js major; flake.lock pins the Nix package.
+            pkgs."nodejs_${builtins.head (lib.splitString "." (builtins.readFile ./.node-version))}"
             pnpm_12
             just
             cmake

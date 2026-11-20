@@ -1,0 +1,9 @@
+[[case]]
+name = "command_config_hook_init_functions"
+vp = "local"
+steps = [
+  { argv = ["git", "init"], snapshot = false },
+  { argv = ["vp", "config", "--no-agent", "--hooks-dir", ".vite-hooks"], cwd = "pkg", snapshot = false },
+  { argv = ["vpt", "cp", "-r", "test-deps", "pkg/node_modules"], snapshot = false },
+  { argv = ["git", "hook", "run", "pre-commit"], envs = [["XDG_CONFIG_HOME", "${workspace}/config"]], comment = "the hook finds the package binary after the init script overrides PWD and defines noisy cd and pwd functions" },
+]

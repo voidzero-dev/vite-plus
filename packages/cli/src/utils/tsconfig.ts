@@ -14,7 +14,7 @@ export type BaseUrlFixStatus = 'not-needed' | 'fixed' | 'declined' | 'failed';
 
 /**
  * Check if tsconfig.json has compilerOptions.baseUrl set.
- * oxlint's TypeScript checker (tsgolint) does not support baseUrl,
+ * Oxlint's TypeScript 7 backend does not support baseUrl,
  * so typeAware/typeCheck must be disabled when it is present.
  */
 export function hasBaseUrlInTsconfigFile(filePath: string): boolean {

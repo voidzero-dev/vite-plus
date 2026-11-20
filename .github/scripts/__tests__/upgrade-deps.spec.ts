@@ -37,10 +37,28 @@ test.each([false, true])(
       'pnpm-workspace.yaml',
       'packages/tools/.upstream-versions.json',
       'packages/cli/src/utils/constants.ts',
+      'crates/vp_setup/src/install.rs',
+      'packages/cli/generate-install-lockfile.ts',
+      'crates/vp_pm_cli/tests/package_manager_pin_verification.rs',
+      'packages/cli/install-legacy.sh',
+      'packages/cli/install-legacy.ps1',
     ]) {
       mkdirSync(dirname(join(tempDir, file)), { recursive: true });
       copyFileSync(join(root, file), join(tempDir, file));
     }
+    const nodeVersionPath = join(tempDir, '.node-version');
+    writeFileSync(nodeVersionPath, '24.9.0\n');
+    const packageJsonPath = join(tempDir, 'package.json');
+    writeJson(packageJsonPath, { packageManager: 'pnpm@12.11.2' });
+    const packageJsonBefore = readFileSync(packageJsonPath, 'utf8');
+    const installerPath = join(tempDir, 'crates/vp_setup/src/install.rs');
+    const oldPnpmVersion = /const PINNED_PNPM_VERSION: &str = "([^"]+)";/.exec(
+      readFileSync(installerPath, 'utf8'),
+    )![1];
+    const oldPnpmIntegrity = /const PINNED_PNPM_INTEGRITY: &str = "([^"]+)";/.exec(
+      readFileSync(installerPath, 'utf8'),
+    )![1];
+    const pnpmDigest = Buffer.alloc(64, 0xab);
     const workspacePath = join(tempDir, 'pnpm-workspace.yaml');
     writeFileSync(
       workspacePath,
@@ -50,6 +68,7 @@ test.each([false, true])(
     );
 
     vi.spyOn(process, 'cwd').mockReturnValue(tempDir);
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-11-12T12:00:00Z'));
     vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.stubEnv('UPGRADE_DEPS_META_DIR', metaDir);
     // Each run also covers one side of the oxc-node pin guard: a release that does not
@@ -58,6 +77,15 @@ test.each([false, true])(
       readFileSync(join(tempDir, 'packages/tools/.upstream-versions.json'), 'utf8'),
     )['oxc-node'].hash;
     vi.stubGlobal('fetch', async (url: string) => {
+      if (url === 'https://nodejs.org/dist/index.json') {
+        return Response.json([
+          { version: 'v26.13.0', date: '2026-11-01', lts: 'Lithium' },
+          { version: 'v24.9.0', date: '2026-11-01', lts: 'Krypton' },
+          { version: 'v24.11.0-rc.1', date: '2026-11-01', lts: false },
+          { version: 'v24.10.2', date: '2026-11-10', lts: 'Krypton' },
+          { version: 'v24.10.3', date: '2026-11-11', lts: 'Krypton' },
+        ]);
+      }
       if (url.startsWith('https://api.github.com/repos/oxc-project/oxc-node/compare/')) {
         expect(url).toContain(`/compare/${pinnedOxcNode}...`);
         return Response.json({ status: failInstall ? 'diverged' : 'ahead' });
@@ -67,6 +95,18 @@ test.each([false, true])(
       }
       if (url === 'https://registry.npmjs.org/vitest') {
         return Response.json({ versions: { '4.1.11': {}, '5.0.0': {} } });
+      }
+      if (url === 'https://registry.npmjs.org/pnpm') {
+        return Response.json({
+          'dist-tags': { latest: '12.11.2' },
+          versions: { '12.11.2': {}, '10.99.0-beta.1': {}, '10.40.2': {}, '10.9.0': {} },
+        });
+      }
+      if (url === 'https://registry.npmjs.org/pnpm/10.40.2') {
+        return Response.json({
+          version: '10.40.2',
+          dist: { integrity: `sha512-${pnpmDigest.toString('base64')}` },
+        });
       }
       if (url === 'https://registry.npmjs.org/@tsdown/css/latest') {
         return Response.json({ dependencies: { lightningcss: '^1.33.0' } });
@@ -82,6 +122,12 @@ test.each([false, true])(
       }
       if (url === 'https://registry.npmjs.org/oxlint-tsgolint/latest') {
         return Response.json({ version: '7.0.2004' });
+      }
+      if (url === 'https://registry.npmjs.org/tsrs/next') {
+        throw new Error('tsrs must use the latest dist-tag');
+      }
+      if (url === 'https://registry.npmjs.org/tsrs/latest') {
+        return Response.json({ version: '7.1.0-beta.tsrs3' });
       }
       if (
         url === 'https://registry.npmjs.org/oxc-minify/latest' ||
@@ -133,11 +179,36 @@ test.each([false, true])(
     expect(readFileSync(workspacePath, 'utf8')).toContain("\n  '@oxlint/plugins': =1.88.0\n");
     expect(readFileSync(workspacePath, 'utf8')).toContain('\n  oxlint: =1.88.0\n');
     expect(readFileSync(workspacePath, 'utf8')).toContain('\n  oxlint-tsgolint: =7.0.2004\n');
+    expect(readFileSync(workspacePath, 'utf8')).toContain('\n  tsrs: =7.1.0-beta.tsrs3\n');
+    expect(readFileSync(nodeVersionPath, 'utf8')).toBe('24.10.2\n');
+    expect(readFileSync(installerPath, 'utf8')).toContain(
+      'const PINNED_PNPM_VERSION: &str = "10.40.2";',
+    );
+    expect(readFileSync(installerPath, 'utf8')).toContain(
+      `const PINNED_PNPM_INTEGRITY: &str = "sha512.${pnpmDigest.toString('hex')}";`,
+    );
+    expect(
+      readFileSync(join(tempDir, 'packages/cli/generate-install-lockfile.ts'), 'utf8'),
+    ).toContain("export const INSTALL_PNPM_VERSION = '10.40.2';");
+    expect(
+      readFileSync(
+        join(tempDir, 'crates/vp_pm_cli/tests/package_manager_pin_verification.rs'),
+        'utf8',
+      ),
+    ).toContain('const PINNED_PNPM_VERSION: &str = "10.40.2";');
+    expect(readFileSync(packageJsonPath, 'utf8')).toBe(packageJsonBefore);
     const versions = JSON.parse(readFileSync(join(metaDir, 'versions.json'), 'utf8'));
+    expect(versions['Node.js']).toEqual({ old: '24.9.0', new: '24.10.2' });
+    expect(versions['pnpm (installer)']).toEqual({ old: oldPnpmVersion, new: '10.40.2' });
+    expect(versions['pnpm installer integrity']).toEqual({
+      old: oldPnpmIntegrity,
+      new: `sha512.${pnpmDigest.toString('hex')}`,
+    });
     expect(versions['lint-staged']).toEqual({ old: '16.2.6', new: '17.5.1' });
     expect(versions['@oxlint/plugins'].new).toBe('1.88.0');
     expect(versions['@oxlint/plugins'].new).toBe(versions.oxlint.new);
     expect(versions['oxlint-tsgolint'].new).toBe('7.0.2004');
+    expect(versions.tsrs.new).toBe('7.1.0-beta.tsrs3');
     expect(versions).not.toHaveProperty('oxc-minify');
     expect(versions).not.toHaveProperty('oxc-transform');
     expect(versions['oxc-node']).toEqual(
@@ -153,6 +224,9 @@ test.each([false, true])(
     );
     expect(readFileSync(join(metaDir, 'pr-body.md'), 'utf8')).toContain(
       '| `lint-staged` | `16.2.6` | `17.5.1` |',
+    );
+    expect(readFileSync(join(metaDir, 'pr-body.md'), 'utf8')).toContain(
+      `| \`pnpm (installer)\` | \`${oldPnpmVersion}\` | \`10.40.2\` |`,
     );
   },
 );
@@ -176,9 +250,11 @@ function createSyncFixture() {
   const metaDir = join(root, 'meta');
   const versionsPath = join(metaDir, 'versions.json');
   writeJson(corePath, {
+    version: '8.3.5001',
     dependencies: { 'yuku-parser': '^0.9.3', postcss: '^8.5.6' },
     optionalDependencies: { fsevents: '~2.3.3' },
     devDependencies: { 'rolldown-plugin-dts': '^0.28.0' },
+    bundledVersions: { vite: '8.3.5' },
   });
   writeJson(join(root, 'store/tsdown/package.json'), { name: 'tsdown', version: '0.23.0' });
   writeJson(pluginPath, {
@@ -204,6 +280,7 @@ function createSyncFixture() {
     dependencies: { 'yuku-codegen': '^0.8.1', 'yuku-parser': '^0.8.1' },
   });
   writeJson(vitePath, {
+    version: '8.3.5',
     dependencies: { postcss: '^8.5.28' },
     optionalDependencies: { fsevents: '~2.4.0' },
   });
@@ -227,9 +304,12 @@ test('pins the bundled parser, syncs Vite ranges, and preserves upgrade metadata
   const { corePath, versionsPath, metaDir, run } = fixture;
   run();
   expect(readJson(corePath)).toEqual({
+    // The bundled Vite did not change, so the release counter stays.
+    version: '8.3.5001',
     dependencies: { 'yuku-parser': '0.10.3', postcss: '^8.5.28' },
     optionalDependencies: { fsevents: '~2.4.0' },
     devDependencies: { 'rolldown-plugin-dts': '^0.28.0' },
+    bundledVersions: { vite: '8.3.5' },
   });
   expect(readJson(versionsPath)).toEqual({
     oxlint: { old: '1.86.0', new: '1.87.0' },
@@ -257,6 +337,47 @@ test('pins the bundled parser, syncs Vite ranges, and preserves upgrade metadata
   const before = readFileSync(corePath, 'utf8');
   run();
   expect(readFileSync(corePath, 'utf8')).toBe(before);
+});
+
+test('restarts the core version counter when the bundled Vite changes', () => {
+  const fixture = createSyncFixture();
+  const { corePath, versionsPath, metaDir, run } = fixture;
+  writeJson(fixture.vitePath, { ...readJson(fixture.vitePath), version: '8.4.2' });
+  run();
+  expect(readJson(corePath).version).toBe('8.4.2000');
+  expect(readJson(corePath).bundledVersions).toEqual({ vite: '8.4.2' });
+  expect(readJson(versionsPath)['@voidzero-dev/vite-plus-core']).toEqual({
+    old: '8.3.5001',
+    new: '8.4.2000',
+  });
+  expect(readFileSync(join(metaDir, 'pr-body.md'), 'utf8')).toContain(
+    '| `@voidzero-dev/vite-plus-core` | `8.3.5001` | `8.4.2000` |',
+  );
+
+  // A second pass keeps the recorded old version and the encoded version.
+  run();
+  expect(readJson(corePath).version).toBe('8.4.2000');
+  expect(readJson(versionsPath)['@voidzero-dev/vite-plus-core']).toEqual({
+    old: '8.3.5001',
+    new: '8.4.2000',
+  });
+});
+
+test('starts the vp counter when the bundled Vite is a prerelease', () => {
+  const fixture = createSyncFixture();
+  writeJson(fixture.vitePath, { ...readJson(fixture.vitePath), version: '9.0.0-beta.3' });
+  fixture.run();
+  expect(readJson(fixture.corePath).version).toBe('9.0.0-beta.3.vp.0');
+  expect(readJson(fixture.corePath).bundledVersions).toEqual({ vite: '9.0.0-beta.3' });
+});
+
+test('fails without writing core when the Vite source has no version', () => {
+  const fixture = createSyncFixture();
+  const { version: _, ...vite } = readJson(fixture.vitePath);
+  writeJson(fixture.vitePath, vite);
+  const before = readFileSync(fixture.corePath, 'utf8');
+  expect(fixture.run).toThrow('Missing version');
+  expect(readFileSync(fixture.corePath, 'utf8')).toBe(before);
 });
 
 test('updates the parser pin when its installed version changes within the same range', () => {

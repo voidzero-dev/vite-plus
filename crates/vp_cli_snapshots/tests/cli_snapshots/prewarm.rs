@@ -12,21 +12,34 @@ static EXACT_VERSION: LazyLock<regex::Regex> = LazyLock::new(|| {
 });
 
 #[derive(Default)]
-pub struct BunPrewarm {
-    versions: BTreeSet<String>,
+pub struct PackageManagerPrewarm {
+    versions: BTreeSet<(String, String)>,
     packages: BTreeSet<PathBuf>,
 }
 
-impl BunPrewarm {
-    fn version(&mut self, spec: &str) {
-        if let Some(version) = EXACT_VERSION.captures(spec).and_then(|captures| captures.get(1)) {
-            self.versions.insert(version.as_str().to_owned());
+impl PackageManagerPrewarm {
+    fn version(&mut self, manager: &str, spec: &str) {
+        if !matches!(manager, "bun" | "pnpm") {
+            return;
         }
+        let Some(captures) = EXACT_VERSION.captures(spec) else {
+            return;
+        };
+        let version = &captures[1];
+        // pnpm 12+ selects a native platform package through registry metadata.
+        // Its main tarball is not the archive installed by the CLI.
+        if manager == "pnpm" {
+            let major = version.split('.').next().unwrap().parse::<u64>().unwrap_or(u64::MAX);
+            if major >= 12 {
+                return;
+            }
+        }
+        self.versions.insert((manager.to_owned(), version.to_owned()));
     }
 
-    fn package_manager(&mut self, value: &Value) {
-        if let Some(spec) = value.as_str().and_then(|value| value.strip_prefix("bun@")) {
-            self.version(spec);
+    fn package_manager(&mut self, spec: &str) {
+        if let Some((manager, version)) = spec.split_once('@') {
+            self.version(manager, version);
         }
     }
 
@@ -35,15 +48,17 @@ impl BunPrewarm {
             for entry in entries {
                 self.dev_engine(entry);
             }
-        } else if value["name"] == "bun"
+        } else if let Some(manager) = value["name"].as_str()
             && let Some(version) = value["version"].as_str()
         {
-            self.version(version);
+            self.version(manager, version);
         }
     }
 
     pub fn package_json(&mut self, value: &Value) {
-        self.package_manager(&value["packageManager"]);
+        if let Some(spec) = value["packageManager"].as_str() {
+            self.package_manager(spec);
+        }
         self.dev_engine(&value["devEngines"]["packageManager"]);
     }
 
@@ -72,8 +87,9 @@ impl BunPrewarm {
     pub fn env<'a>(&mut self, entries: impl IntoIterator<Item = (&'a str, &'a str)>) {
         for (key, value) in entries {
             match key {
-                "VP_BUN_VERSION" => self.version(value),
-                "VP_PACKAGE_MANAGER" => self.package_manager(&Value::String(value.to_owned())),
+                "VP_BUN_VERSION" => self.version("bun", value),
+                "VP_PNPM_VERSION" => self.version("pnpm", value),
+                "VP_PACKAGE_MANAGER" => self.package_manager(value),
                 _ => {}
             }
         }
@@ -89,7 +105,11 @@ impl BunPrewarm {
                 let value =
                     serde_json::from_str(raw).unwrap_or_else(|_| Value::String((*raw).into()));
                 match *key {
-                    "packageManager" => self.package_manager(&value),
+                    "packageManager" => {
+                        if let Some(spec) = value.as_str() {
+                            self.package_manager(spec);
+                        }
+                    }
                     "devEngines" => self.dev_engine(&value["packageManager"]),
                     "devEngines.packageManager" => self.dev_engine(&value),
                     _ => {}
@@ -104,18 +124,24 @@ impl BunPrewarm {
             }
             ["vp", "env", "default" | "use" | "exec", specs @ ..] => {
                 for spec in specs {
-                    self.package_manager(&Value::String((*spec).into()));
+                    self.package_manager(spec);
                 }
             }
             _ => {}
         }
     }
 
-    pub fn urls(&self, package: &str) -> Vec<String> {
+    pub fn urls(&self, bun_package: &str) -> Vec<String> {
         self.versions
             .iter()
-            .map(|version| {
-                format!("https://registry.npmjs.org/@oven/{package}/-/{package}-{version}.tgz")
+            .map(|(manager, version)| {
+                if manager == "bun" {
+                    format!(
+                        "https://registry.npmjs.org/@oven/{bun_package}/-/{bun_package}-{version}.tgz"
+                    )
+                } else {
+                    format!("https://registry.npmjs.org/pnpm/-/pnpm-{version}.tgz")
+                }
             })
             .collect()
     }

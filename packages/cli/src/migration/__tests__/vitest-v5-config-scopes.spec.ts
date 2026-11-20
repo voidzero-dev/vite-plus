@@ -5,12 +5,12 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { PackageManager } from '../../types/index.ts';
+import { parseSource } from '../ast-utils.ts';
 import {
   applyVitestV5Migration,
   finishVitestV5Migration,
   planVitestV5Migration,
 } from '../migrator.ts';
-import { parseSource } from '../vitest-v5/ast.ts';
 import { migrateVitestV5Config } from '../vitest-v5/config.ts';
 import { migrateVitestV5Source } from '../vitest-v5/source.ts';
 

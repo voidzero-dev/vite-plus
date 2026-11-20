@@ -38,6 +38,7 @@ jobs:
         with:
           filters: |
             related-files:
+              - '.node-version'
               - 'packages/**/build.ts'
               - .github/workflows/e2e-test.yml
               - .github/workflows/reusable-ecosystem-ci.yml
@@ -98,7 +99,8 @@ jobs:
       packages: read
     uses: ./.github/workflows/reusable-ecosystem-ci.yml
     with:
-      runner: ubuntu-latest
+      # Older Playwright versions in ecosystem projects do not support Ubuntu 26.04.
+      runner: ubuntu-24.04
       # Match the CLI cache producer's Rust toolchains and environment.
       build-runner: namespace-profile-linux-x64-default
       target: x86_64-unknown-linux-gnu

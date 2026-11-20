@@ -2,7 +2,7 @@
 
 Every environment entry point must preserve and verify the same Corepack integrity suffix without repeating the expensive cache setup in separate cases.
 
-## `vpt rm -rf $VP_HOME/package_manager/yarn/4.17.1 $VP_HOME/package_manager/yarn/4.17.1.lock`
+## `vpt rm -rf $VP_HOME/package_manager/yarn/4.17.1 $VP_HOME/package_manager/yarn/.verified-v1/4.17.1 $VP_HOME/package_manager/yarn/4.17.1.lock`
 
 Ensure the Corepack-pinned Yarn version is not cached
 

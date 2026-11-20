@@ -4,10 +4,10 @@
 #[path = "cli_snapshots/prewarm.rs"]
 mod prewarm;
 
-use prewarm::BunPrewarm;
+use prewarm::PackageManagerPrewarm;
 use serde_json::json;
 
-fn step(prewarm: &mut BunPrewarm, argv: &[&str]) {
+fn step(prewarm: &mut PackageManagerPrewarm, argv: &[&str]) {
     prewarm.step(&argv.iter().map(|arg| (*arg).to_owned()).collect::<Vec<_>>());
 }
 
@@ -17,7 +17,7 @@ fn package_changes_update_the_manifest_without_a_second_version_list() {
     let package = fixture.path().join("package.json");
     std::fs::write(&package, r#"{"packageManager":"bun@1.2.3"}"#).unwrap();
     std::fs::create_dir_all(fixture.path().join("packages/app")).unwrap();
-    let mut before = BunPrewarm::default();
+    let mut before = PackageManagerPrewarm::default();
     before.workspace(fixture.path(), "packages/app").unwrap();
     assert_eq!(
         before.urls("bun-windows-x64"),
@@ -29,7 +29,7 @@ fn package_changes_update_the_manifest_without_a_second_version_list() {
         r#"{"devEngines":{"packageManager":{"name":"bun","version":"2.0.0"}}}"#,
     )
     .unwrap();
-    let mut after = BunPrewarm::default();
+    let mut after = PackageManagerPrewarm::default();
     after.workspace(fixture.path(), "packages/app").unwrap();
     assert_eq!(
         after.urls("bun-windows-x64"),
@@ -39,7 +39,7 @@ fn package_changes_update_the_manifest_without_a_second_version_list() {
 
 #[test]
 fn collects_setup_steps_and_overrides_without_duplicate_downloads() {
-    let mut manifest = BunPrewarm::default();
+    let mut manifest = PackageManagerPrewarm::default();
     manifest.package_json(&json!({"packageManager": "bun@1.2.3"}));
     manifest.env([("VP_BUN_VERSION", "1.2.3"), ("VP_PACKAGE_MANAGER", "bun@2.0.0")]);
     step(&mut manifest, &["vpt", "json-edit", "sub/package.json", "packageManager", "bun@3.0.0"]);
@@ -67,8 +67,8 @@ fn collects_setup_steps_and_overrides_without_duplicate_downloads() {
 
 #[test]
 fn changing_a_step_pin_changes_the_archive_to_prepare() {
-    let mut before = BunPrewarm::default();
-    let mut after = BunPrewarm::default();
+    let mut before = PackageManagerPrewarm::default();
+    let mut after = PackageManagerPrewarm::default();
     step(&mut before, &["vpt", "json-edit", "package.json", "packageManager", "bun@1.0.0"]);
     step(&mut after, &["vpt", "json-edit", "package.json", "packageManager", "bun@2.0.0"]);
     assert!(before.urls("bun-windows-x64")[0].ends_with("-1.0.0.tgz"));
@@ -77,10 +77,11 @@ fn changing_a_step_pin_changes_the_archive_to_prepare() {
 
 #[test]
 fn ignores_assertions_other_managers_and_floating_specs() {
-    let mut manifest = BunPrewarm::default();
-    manifest.package_json(
-        &json!({"packageManager": "pnpm@1.0.0", "devDependencies": {"bun":"99.0.0"}}),
-    );
+    let mut manifest = PackageManagerPrewarm::default();
+    manifest.package_json(&json!({
+        "packageManager": "npm@1.0.0",
+        "devDependencies": {"bun": "99.0.0"}
+    }));
     manifest.env([("EXPECTED_BUN_VERSION", "99.0.0"), ("VP_BUN_VERSION", "latest")]);
     step(&mut manifest, &["vpt", "print", "bun@99.0.0"]);
     step(
@@ -96,11 +97,46 @@ fn ignores_assertions_other_managers_and_floating_specs() {
 
 #[test]
 fn supports_dev_engine_arrays_and_integrity_pins() {
-    let mut manifest = BunPrewarm::default();
-    manifest.package_json(&json!({"devEngines":{"packageManager":[{"name":"pnpm","version":"99.0.0"},{"name":"bun","version":"1.2.3"}]}}));
-    manifest.package_json(&json!({"packageManager":"bun@v2.0.0-beta.1+sha512.deadbeef"}));
+    let mut manifest = PackageManagerPrewarm::default();
+    manifest.package_json(&json!({
+        "devEngines": {
+            "packageManager": [
+                {"name": "pnpm", "version": "99.0.0"},
+                {"name": "bun", "version": "1.2.3"}
+            ]
+        }
+    }));
+    manifest.package_json(&json!({"packageManager": "bun@v2.0.0-beta.1+sha512.deadbeef"}));
     let urls = manifest.urls("bun-windows-x64-baseline");
     assert_eq!(urls.len(), 2);
     assert!(urls[0].ends_with("bun-windows-x64-baseline-1.2.3.tgz"));
     assert!(urls[1].ends_with("bun-windows-x64-baseline-2.0.0-beta.1.tgz"));
+}
+
+#[test]
+fn prepares_pnpm_project_pins_and_independent_session_overrides() {
+    let mut manifest = PackageManagerPrewarm::default();
+    manifest.package_json(&json!({"packageManager": "pnpm@10.18.0"}));
+    manifest.env([("VP_PACKAGE_MANAGER", "pnpm@10.19.0"), ("VP_PNPM_VERSION", "10.21.0")]);
+    step(&mut manifest, &["vp", "env", "use", "pnpm@10.20.0"]);
+    step(&mut manifest, &["vpt", "json-edit", "package.json", "packageManager", "pnpm@10.19.0"]);
+    manifest.package_json(&json!({
+        "devEngines": {
+            "packageManager": {"name": "pnpm", "version": "11.0.6+sha512.deadbeef"}
+        }
+    }));
+    assert_eq!(
+        manifest.urls("bun-linux-x64"),
+        ["10.18.0", "10.19.0", "10.20.0", "10.21.0", "11.0.6"]
+            .map(|version| format!("https://registry.npmjs.org/pnpm/-/pnpm-{version}.tgz"))
+    );
+}
+
+#[test]
+fn does_not_prepare_pnpm_placeholders_or_resolve_floating_versions() {
+    let mut manifest = PackageManagerPrewarm::default();
+    for spec in ["pnpm@12.0.0-beta.0", "pnpm@12.11.2", "pnpm@latest", "pnpm@^10.19.0"] {
+        manifest.package_json(&json!({"packageManager": spec}));
+    }
+    assert!(manifest.urls("bun-linux-x64").is_empty());
 }

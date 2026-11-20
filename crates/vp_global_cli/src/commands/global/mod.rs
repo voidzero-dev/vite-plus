@@ -1,13 +1,12 @@
 //! Managed global package utilities.
 
-use std::{collections::HashMap, fs::File, io::Read, process::Stdio, time::Duration};
+use std::{collections::HashMap, fs::File, io::Read, process::Stdio};
 
 use flate2::read::GzDecoder;
 use futures::{StreamExt, stream::FuturesUnordered};
-use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use tar::Archive;
 use tokio::process::Command;
-use vp_shared::{PrependOptions, ToolPathEnv};
+use vp_shared::{PrependOptions, ToolPathEnv, progress::Progress};
 use vt_path::{AbsolutePathBuf, current_dir};
 
 use crate::{commands::env::config::resolve_version, error::Error};
@@ -49,7 +48,13 @@ impl NpmRegistry {
     }
 
     async fn latest_package_version(&self, package_spec: &str) -> Result<String, Error> {
-        let output = npm_view(&self.npm_path, &self.node_bin_dir, package_spec, "version").await?;
+        let output = npm_view(
+            &self.npm_path,
+            &self.node_bin_dir,
+            &registry_query_spec(package_spec),
+            "version",
+        )
+        .await?;
 
         parse_npm_view_version(&output)
     }
@@ -66,6 +71,8 @@ async fn npm_view(
     let output = Command::new(npm_path.as_path())
         .args(["view", "-g", package_spec, field, "--json"])
         .envs(env.into_envs())
+        // The spinner's raw stdin would be restored by Node when npm exits.
+        .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
@@ -92,17 +99,7 @@ pub(crate) async fn latest_package_versions(
     let mut package_specs = specs.iter();
     let mut versions = HashMap::with_capacity(specs.len());
 
-    let progress = ProgressBar::new(specs.len() as u64);
-    if vp_shared::is_stderr_terminal() && std::env::var_os("CI").is_none() {
-        let style = ProgressStyle::with_template("{spinner:.cyan} {msg} ({pos}/{len})")
-            .unwrap_or_else(|_| ProgressStyle::default_spinner())
-            .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]);
-        progress.set_style(style);
-        progress.set_message("Checking latest package versions");
-        progress.enable_steady_tick(Duration::from_millis(80));
-    } else {
-        progress.set_draw_target(ProgressDrawTarget::hidden());
-    }
+    let progress = Progress::counter("Checking latest package versions", specs.len() as u64);
 
     let mut queries = FuturesUnordered::new();
 
@@ -121,11 +118,13 @@ pub(crate) async fn latest_package_versions(
         }
 
         if let Some(version) = queries.next().await {
-            progress.inc(1);
+            if let Some(progress) = &progress {
+                progress.bar().inc(1);
+            }
             versions.insert(version.package_spec, version.version);
         }
     }
-    progress.finish_and_clear();
+    drop(progress);
 
     Ok(versions)
 }
@@ -177,14 +176,23 @@ pub(crate) fn parse_package_spec(spec: &str) -> Result<(String, Option<String>),
 
 /// Return the version part of a registry package spec that update flows
 /// should keep resolving within: a dist-tag (e.g. `nightly` in
-/// `some-pkg@nightly`), a range, or an exact version. The implicit `latest`
-/// tag and non-registry version parts (URLs, aliases) yield `None`.
+/// `some-pkg@nightly`), a range, an exact version, or an npm alias
+/// (`npm:other` / `npm:other@^1`). The implicit `latest` tag and other
+/// non-registry version parts (URLs, git, tarballs) yield `None`.
 pub(crate) fn update_version_spec(spec: &str) -> Option<String> {
     if is_local_package_spec(spec) {
         return None;
     }
     let (_, version_spec) = parse_package_spec(spec).ok()?;
     let version_spec = version_spec?;
+    // Keep the alias so updates reinstall the aliased package, not one named after the alias.
+    if let Some(target) = version_spec.strip_prefix("npm:") {
+        let target_name = alias_target(&version_spec)?;
+        return Some(match update_version_spec(target) {
+            Some(target_spec) => format!("npm:{target_name}@{target_spec}"),
+            None => format!("npm:{target_name}"),
+        });
+    }
     if version_spec.is_empty()
         || version_spec == "latest"
         || version_spec.contains(':')
@@ -198,6 +206,26 @@ pub(crate) fn update_version_spec(spec: &str) -> Option<String> {
     } else {
         Some(version_spec)
     }
+}
+
+/// Package name behind an npm alias version part (`npm:<target>[@<spec>]`).
+pub(crate) fn alias_target(version_spec: &str) -> Option<String> {
+    let target = version_spec.strip_prefix("npm:")?;
+    if is_local_package_spec(target) {
+        return None;
+    }
+    parse_package_spec(target).ok().map(|(name, _)| name).filter(|name| !name.is_empty())
+}
+
+/// `npm view` rejects alias specs, so query the aliased package itself.
+fn registry_query_spec(spec: &str) -> String {
+    if !is_local_package_spec(spec)
+        && let Ok((_, Some(version_spec))) = parse_package_spec(spec)
+        && let Some(target) = version_spec.strip_prefix("npm:")
+    {
+        return target.to_string();
+    }
+    spec.to_string()
 }
 
 fn resolve_local_package_path(spec: &str) -> Result<AbsolutePathBuf, Error> {
@@ -378,10 +406,37 @@ mod tests {
     fn update_version_spec_ignores_non_registry_specs() {
         assert_eq!(update_version_spec("./local-pkg"), None);
         assert_eq!(update_version_spec("file:../pkg"), None);
-        assert_eq!(update_version_spec("some-pkg@npm:other@1.0.0"), None);
         assert_eq!(update_version_spec("some-pkg@github:user/repo"), None);
         assert_eq!(update_version_spec("some-pkg@archive.tgz"), None);
         assert_eq!(update_version_spec("some-pkg@archive.tar.gz"), None);
         assert_eq!(update_version_spec("some-pkg@archive.tar"), None);
+    }
+
+    #[test]
+    fn update_version_spec_keeps_npm_aliases() {
+        assert_eq!(update_version_spec("typescript@npm:cowsay"), Some("npm:cowsay".to_string()));
+        assert_eq!(
+            update_version_spec("typescript@npm:cowsay@latest"),
+            Some("npm:cowsay".to_string())
+        );
+        assert_eq!(
+            update_version_spec("typescript@npm:cowsay@^1.5"),
+            Some("npm:cowsay@^1.5".to_string())
+        );
+        assert_eq!(
+            update_version_spec("@scope/alias@npm:@types/node@20"),
+            Some("npm:@types/node@20".to_string())
+        );
+        assert_eq!(update_version_spec("some-pkg@npm:"), None);
+        assert_eq!(update_version_spec("some-pkg@npm:./local"), None);
+    }
+
+    #[test]
+    fn registry_query_spec_resolves_npm_aliases() {
+        assert_eq!(registry_query_spec("typescript@npm:cowsay"), "cowsay");
+        assert_eq!(registry_query_spec("typescript@npm:cowsay@^1.5"), "cowsay@^1.5");
+        assert_eq!(registry_query_spec("@scope/alias@npm:@types/node@20"), "@types/node@20");
+        assert_eq!(registry_query_spec("typescript@^5"), "typescript@^5");
+        assert_eq!(registry_query_spec("typescript"), "typescript");
     }
 }

@@ -1,17 +1,17 @@
 {
   "rolldown": {
     "repo": "https://github.com/rolldown/rolldown.git",
-    "branch": "main",
-    "hash": "89d821ca07cf9ccd84dd92bd3f48af0f579ab21a"
+    "branch": "v1.2",
+    "hash": "b9c75ddc8bd50f2c1a4c7be0b548bdab5cba85ab"
   },
   "vite": {
     "repo": "https://github.com/vitejs/vite.git",
     "branch": "main",
-    "hash": "981f07fa4580fb88b333c4450431e4715d2a0b82"
+    "hash": "b39e6e63dcbfc3cf4be871acf3554efbd6d0e268"
   },
   "oxc-node": {
     "repo": "https://github.com/oxc-project/oxc-node.git",
     "branch": "main",
-    "hash": "6d5376df15df5446a91d01d53f3d7965d8b9708e"
+    "hash": "16c0f340aebd927b72d941b693e51dd6f5264f17"
   }
 }

@@ -74,6 +74,11 @@ impl Npm {
         self.version.as_ref().is_none_or(|version| version >= &Version::new(9, 8, 0))
     }
 
+    /// `stage` landed in npm 11.15.0. Unknown versions are treated as current.
+    pub(crate) fn supports_v11_15_commands(&self) -> bool {
+        self.version.as_ref().is_none_or(|version| version >= &Version::new(11, 15, 0))
+    }
+
     /// `approve-scripts` and `deny-scripts` landed in npm 11.16.0.
     /// Unknown versions are treated as current.
     pub(crate) fn supports_v11_16_commands(&self) -> bool {
@@ -96,12 +101,22 @@ impl PackageManagerDialect for Npm {
 }
 
 impl Pnpm {
+    /// `patch` and `patch-commit` landed in pnpm 7.4.0.
+    pub(crate) fn supports_v7_4_commands(&self) -> bool {
+        self.version >= Version::new(7, 4, 0)
+    }
+
+    /// `approve-builds` landed in pnpm 10.1.0.
+    pub(crate) fn supports_v10_1_commands(&self) -> bool {
+        self.version >= Version::new(10, 1, 0)
+    }
+
     /// `licenses list` landed in pnpm 7.17.0.
     pub(crate) fn supports_v7_17_commands(&self) -> bool {
         self.version >= Version::new(7, 17, 0)
     }
 
-    /// `pkg get`, `pkg set`, `pkg delete`, and `pkg fix` landed in pnpm 11.3.0.
+    /// `pkg get`, `pkg set`, `pkg delete`, `pkg fix`, and `stage` landed in pnpm 11.3.0.
     pub(crate) fn supports_v11_3_commands(&self) -> bool {
         self.version >= Version::new(11, 3, 0)
     }
@@ -133,8 +148,17 @@ impl Yarn {
         crate::package_manager::is_yarn_berry(&self.version)
     }
 
+    /// `npm audit` landed in Yarn 2.4.0.
+    pub(crate) fn supports_v2_4_commands(&self) -> bool {
+        self.version >= Version::new(2, 4, 0)
+    }
+
+    /// Berry `unlink` and `patch-commit --save` landed in Yarn 3.0.0.
+    pub(crate) fn supports_v3_commands(&self) -> bool {
+        self.version >= Version::new(3, 0, 0)
+    }
+
     /// `npm publish --staged` and `npm stage list/approve/reject` landed in Yarn 4.16.0.
-    /// https://github.com/yarnpkg/berry/releases/tag/%40yarnpkg/cli/4.16.0
     pub(crate) fn supports_v4_16_commands(&self) -> bool {
         self.version >= Version::new(4, 16, 0)
     }

@@ -33,7 +33,6 @@ steps = [
 name = "command_env_list_remote_closed_pipe"
 vp = "global"
 skip-platforms = ["windows"]
-seed-runtime = false
 steps = [
   { argv = ["vpt", "head-lines", "1", "--", "vp", "env", "list-remote", "--lts"], tty = false, comment = "Closing stdout after the heading does not make remote version listing fail" },
 ]

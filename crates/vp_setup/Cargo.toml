@@ -19,6 +19,7 @@ tempfile = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
+vp_command = { workspace = true }
 vp_js_runtime = { workspace = true }
 vp_pm_cli = { workspace = true }
 vt_path = { workspace = true }

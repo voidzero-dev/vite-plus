@@ -304,16 +304,18 @@ argv[0] = "npx"       → Shim mode: resolve version, exec npx
 │  └──────────────┬───────────────┘                                           │
 │                 │                                                           │
 │                 ▼                                                           │
-│  ┌──────────────────────────────┐     ┌─────────────────────────────┐       │
-│  │  Version Resolution          │────▶│  Priority Order:            │       │
-│  │  (walk up directory tree)    │     │  0. VP_NODE_VERSION  │       │
-│  └──────────────┬───────────────┘     │  1. .session-node-version   │       │
-│                 │                     │  2. .node-version           │       │
-│                 │                     │  3. package.json#devEngines │       │
-│                 │                     │  4. package.json#engines    │       │
-│                 │                     │  5. User default (config)   │       │
-│                 │                     │  6. Latest LTS              │       │
-│                 ▼                     └─────────────────────────────┘       │
+│  ┌──────────────────────────────┐     ┌───────────────────────────────┐     │
+│  │  Version Resolution          │────▶│  Priority Order:              │     │
+│  │  (walk up directory tree)    │     │  0. VP_NODE_VERSION           │     │
+│  └──────────────┬───────────────┘     │  1. .session-node-version     │     │
+│                 │                     │  Walk up from cwd to root:    │     │
+│                 │                     │    2. .node-version           │     │
+│                 │                     │    3. package.json#devEngines │     │
+│                 │                     │    4. package.json#engines    │     │
+│                 │                     │    5. .nvmrc                  │     │
+│                 │                     │  6. User default (config)     │     │
+│                 │                     │  7. Latest LTS                │     │
+│                 ▼                     └───────────────────────────────┘     │
 │  ┌──────────────────────────────┐                                           │
 │  │  Ensure Node.js installed    │                                           │
 │  │  (download if needed)        │                                           │
@@ -557,7 +559,7 @@ New LTS codenames are added dynamically based on the Node.js release schedule. v
 
 ### Version Resolution Priority
 
-When resolving which Node.js version to use, vite-plus checks the following sources in order:
+When resolving which Node.js version to use, vite-plus checks the following sources in order. 2–5 are checked in the current directory, walking up to the filesystem root; the first directory with any of them wins. 6–7 apply only when none is found:
 
 0. **`VP_NODE_VERSION` env var** (session override, highest priority)
    - Set by `vp env use` via shell wrapper eval
@@ -569,21 +571,21 @@ When resolving which Node.js version to use, vite-plus checks the following sour
    - Deleted by `vp env use --unset`
 
 2. **`.node-version`** file
-   - Checked in current directory, then parent directories
    - Simple format: one version per file
 
 3. **`package.json#devEngines.runtime`**
-   - Checked in current directory, then parent directories
    - Development-environment requirement field (see [RFC: devEngines Support](./dev-engines.md))
 
 4. **`package.json#engines.node`**
-   - Checked in current directory, then parent directories
    - Consumer-facing npm constraint field
 
-5. **User default** (`~/.vite-plus/config.json`)
+5. **`.nvmrc`** file
+   - nvm-compatible version file
+
+6. **User default** (`~/.vite-plus/config.json`)
    - Set via `vp env default <version>`
 
-6. **System default** (latest LTS)
+7. **System default** (latest LTS)
    - Fallback when no version source is found
 
 ### Cache Behavior
@@ -780,13 +782,14 @@ $ node -v
 v22.13.0  # Falls back to latest LTS
 ```
 
-The resolution order is:
+The resolution order is below. 2–5 are checked in the current directory, walking up to the filesystem root; the first directory with any of them wins. 6–7 apply only when none is found:
 
-1. `VP_NODE_VERSION` env var (session override)
-2. `.session-node-version` file (session override)
-3. `.node-version` in current or parent directories
-4. `package.json#devEngines.runtime` in current or parent directories
-5. `package.json#engines.node` in current or parent directories
+0. `VP_NODE_VERSION` env var (session override)
+1. `.session-node-version` file (session override)
+2. `.node-version`
+3. `package.json#devEngines.runtime`
+4. `package.json#engines.node`
+5. `.nvmrc`
 6. **User Default**: Configured via `vp env default <version>` (stored in `~/.vite-plus/config.json`)
 7. **System Default**: Latest LTS version
 
@@ -1374,7 +1377,7 @@ Run 'vp install -g typescript' to reinstall.
 
 ## Pin Command
 
-The `vp env pin` command provides per-directory Node.js version pinning. The write target follows the compatibility-first rule from [RFC: devEngines Support](./dev-engines.md): an existing `.node-version` keeps being updated; otherwise the pin is written to `package.json#devEngines.runtime` (creating the node entry with `onFail: "download"` when absent); `.node-version` is only created when the directory has no `package.json`. An explicit `--target node-version` / `--target dev-engines` flag overrides the selection.
+The `vp env pin` command provides per-directory Node.js version pinning. The write target follows the compatibility-first rule from [RFC: devEngines Support](./dev-engines.md): an existing `.node-version` keeps being updated, as does an existing `.nvmrc` when it is the effective Node source in the current directory; otherwise the pin is written to `package.json#devEngines.runtime` (creating the node entry with `onFail: "download"` when absent); `.node-version` is only created when the directory has no `package.json`. An explicit `--target node-version` / `--target nvmrc` / `--target dev-engines` flag overrides the selection.
 
 ### Behavior
 
@@ -1437,7 +1440,7 @@ $ vp env unpin
 ✓ Removed .node-version from /Users/user/projects/my-app
 ```
 
-`vp env unpin` removes the pin from the same source that `vp env pin` would write: it deletes `.node-version` when present, otherwise it removes the node entry from `package.json#devEngines.runtime`.
+`vp env unpin` removes the pin from the same source that `vp env pin` would write: it deletes `.node-version` when present, otherwise `.nvmrc` when it is the effective Node source in the current directory, otherwise it removes the node entry from `package.json#devEngines.runtime`.
 
 ### Version Format Support
 
@@ -1454,12 +1457,12 @@ Both write targets receive the same exact resolved version; the devEngines spec 
 
 ### Flags
 
-| Flag                                   | Description                                                                      |
-| -------------------------------------- | -------------------------------------------------------------------------------- |
-| `--unpin`                              | Remove the pin from its current source (`.node-version` or `devEngines.runtime`) |
-| `--no-install`                         | Skip pre-downloading the pinned version                                          |
-| `--force`                              | Overwrite an existing pin without confirmation                                   |
-| `--target <node-version\|dev-engines>` | Explicitly choose the write target (overrides the default selection)             |
+| Flag                                          | Description                                                                                 |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `--unpin`                                     | Remove the pin from its current source (`.node-version`, `.nvmrc`, or `devEngines.runtime`) |
+| `--no-install`                                | Skip pre-downloading the pinned version                                                     |
+| `--force`                                     | Overwrite an existing pin without confirmation                                              |
+| `--target <node-version\|nvmrc\|dev-engines>` | Explicitly choose the write target (overrides the default selection)                        |
 
 ### Pre-download Behavior
 
@@ -1481,6 +1484,7 @@ $ vp env pin 22.13.0
 .node-version already exists with version 20.18.0
 Overwrite with 22.13.0? (y/n): y
 ✓ Pinned Node.js version to 22.13.0
+  Updated .node-version in /Users/user/projects/my-app
 ```
 
 Use `--force` to skip confirmation:
@@ -1488,6 +1492,7 @@ Use `--force` to skip confirmation:
 ```bash
 $ vp env pin 22.13.0 --force
 ✓ Pinned Node.js version to 22.13.0
+  Updated .node-version in /Users/user/projects/my-app
 ```
 
 When the target is already pinned to the same version, the command no-ops (with or without `--force`):

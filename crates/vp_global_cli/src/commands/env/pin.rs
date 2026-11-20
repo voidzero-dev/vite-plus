@@ -18,7 +18,7 @@ use vp_shared::output;
 use vt_path::AbsolutePathBuf;
 
 use super::{
-    config::{get_config_path, load_config},
+    config::{get_config_path, load_config, resolve_version_alias},
     package_manager,
     spec::{EnvScope, EnvSpecs},
 };
@@ -379,6 +379,15 @@ fn print_pin_success(input_version: &str, resolved_version: &str, was_alias: boo
     }
 }
 
+/// Print which pin file was written, distinguishing a new file from an overwrite.
+fn print_pin_file_written(file_name: &str, existed: bool, cwd: &AbsolutePathBuf) {
+    let action = if existed { "Updated" } else { "Created" };
+    vp_shared::output::print_stdout_line(format_args!(
+        "  {action} {file_name} in {}",
+        cwd.as_path().display()
+    ));
+}
+
 /// Pin by writing the `.node-version` file.
 ///
 /// Returns `true` when the pin was written, `false` when nothing changed
@@ -393,7 +402,8 @@ async fn pin_node_version_file(
     let node_version_path = cwd.join(NODE_VERSION_FILE);
 
     // Check if .node-version already exists
-    if tokio::fs::try_exists(&node_version_path).await.unwrap_or(false) {
+    let exists = tokio::fs::try_exists(&node_version_path).await.unwrap_or(false);
+    if exists {
         let existing_content = tokio::fs::read_to_string(&node_version_path).await?;
         let existing_version = existing_content.trim();
         if !confirm_overwrite_pin(
@@ -410,11 +420,7 @@ async fn pin_node_version_file(
     tokio::fs::write(&node_version_path, format!("{resolved_version}\n")).await?;
 
     print_pin_success(input_version, resolved_version, was_alias);
-    vp_shared::output::print_stdout_line(format_args!(
-        "  Created {} in {}",
-        NODE_VERSION_FILE,
-        cwd.as_path().display()
-    ));
+    print_pin_file_written(NODE_VERSION_FILE, exists, cwd);
 
     // If a devEngines.runtime range is declared and no longer satisfied, offer to
     // sync it in interactive terminals and warn otherwise (rfcs/dev-engines.md)
@@ -442,9 +448,9 @@ async fn pin_nvmrc_file(
     force: bool,
 ) -> Result<bool, Error> {
     let path = cwd.join(NVMRC_FILE);
-    let mut content = match tokio::fs::read_to_string(&path).await {
-        Ok(content) => content,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+    let (mut content, exists) = match tokio::fs::read_to_string(&path).await {
+        Ok(content) => (content, true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => (String::new(), false),
         Err(error) => return Err(error.into()),
     };
     if let Some(span) = nvmrc_version_span(&content)? {
@@ -468,10 +474,7 @@ async fn pin_nvmrc_file(
     }
     tokio::fs::write(&path, content).await?;
     print_pin_success(input_version, resolved_version, was_alias);
-    vp_shared::output::print_stdout_line(format_args!(
-        "  Updated {NVMRC_FILE} in {}",
-        cwd.as_path().display()
-    ));
+    print_pin_file_written(NVMRC_FILE, exists, cwd);
     Ok(true)
 }
 
@@ -686,34 +689,18 @@ async fn remove_dev_engines_runtime_node(cwd: &AbsolutePathBuf) -> Result<bool, 
 
 /// Resolve version for pinning.
 ///
-/// Aliases (lts, latest) are resolved to exact versions.
+/// Aliases (lts, latest, lts/*, lts/iron) and ranges are resolved to exact versions.
 /// Returns (resolved_version, was_alias).
 async fn resolve_version_for_pin(
     version: &str,
     provider: &NodeProvider,
 ) -> Result<(String, bool), Error> {
-    match version.to_lowercase().as_str() {
-        "lts" => {
-            let resolved = provider.resolve_latest_version().await?;
-            Ok((resolved.to_string(), true))
-        }
-        "latest" => {
-            let resolved = provider.resolve_absolute_latest_version().await?;
-            Ok((resolved.to_string(), true))
-        }
-        _ => {
-            // For exact versions, validate they exist
-            if NodeProvider::is_exact_version(version) {
-                // Validate the version exists by trying to resolve it
-                provider.resolve_version(version).await?;
-                Ok((version.to_string(), false))
-            } else {
-                // For ranges/partial versions, resolve to exact version
-                let resolved = provider.resolve_version(version).await?;
-                Ok((resolved.to_string(), true))
-            }
-        }
+    if NodeProvider::is_exact_version(version) {
+        // Validate the version exists by trying to resolve it
+        provider.resolve_version(version).await?;
+        return Ok((version.to_string(), false));
     }
+    Ok((resolve_version_alias(version, provider).await?, true))
 }
 
 /// Remove the Node.js pin from the current directory.
@@ -1823,6 +1810,22 @@ mod tests {
             let (resolved, was_alias) = resolve_version_for_pin("20", &provider).await.unwrap();
             assert!(was_alias, "partial version should be treated as alias");
             assert_eq!(resolved, "20.19.0");
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn test_resolve_version_for_pin_lts_aliases() {
+        let vp_home = TempDir::new().unwrap();
+        with_mock_node_index([(env_vars::VP_HOME, vp_home.path().as_os_str())], || async {
+            let provider = NodeProvider::new();
+
+            for (alias, expected) in [("lts/*", "24.11.0"), ("lts/iron", "20.19.0")] {
+                let (resolved, was_alias) =
+                    resolve_version_for_pin(alias, &provider).await.unwrap();
+                assert!(was_alias, "{alias} should be treated as alias");
+                assert_eq!(resolved, expected);
+            }
         })
         .await;
     }

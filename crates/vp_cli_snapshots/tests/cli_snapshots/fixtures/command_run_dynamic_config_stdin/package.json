@@ -1,0 +1,7 @@
+{
+  "name": "command-run-dynamic-config-stdin",
+  "private": true,
+  "scripts": {
+    "probe": "vpt check-blocking"
+  }
+}

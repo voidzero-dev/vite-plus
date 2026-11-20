@@ -7,9 +7,9 @@
  * the ones the loader uses under an `oxcNode` namespace.
  *
  * This script points the `oxc` dependency at the workspace version, so the binding links
- * one copy of oxc, and exposes the frozen loader initialization APIs to embedders
- * without registering upstream NAPI exports. It is idempotent. Keep it free of package
- * imports: CI runs it right after checkout, before dependencies are installed.
+ * one copy of oxc, and adapts an AST predicate for the workspace's Oxc version.
+ * It is idempotent. Keep it free of package imports: CI runs it right after checkout,
+ * before dependencies are installed.
  */
 
 import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
@@ -40,22 +40,6 @@ export function setOxcVersion(cargoToml: string, version: string): string {
   return replaceCargoCrateVersion(cargoToml, 'oxc', version);
 }
 
-/** Keep the loader's JS environment and diagnostic source without its NAPI exports. */
-export function exposeLoaderInitialization(source: string): string {
-  for (const name of ['freezeTsconfig', 'initializeLoader']) {
-    const original = `#[cfg(feature = "napi")]\n#[napi(js_name = "${name}")]`;
-    const replacement = `#[cfg_attr(feature = "napi", napi(js_name = "${name}"))]`;
-    if (source.includes(original)) {
-      source = source.replace(original, replacement);
-    } else if (!source.includes(replacement)) {
-      throw new Error(
-        `[patch-oxc-node] Could not find the ${name} registration in oxc-node/src/lib.rs`,
-      );
-    }
-  }
-  return source;
-}
-
 export function patchOxcNode(rootDir: string = process.cwd()): void {
   const version = oxcVersion(readFileSync(join(rootDir, 'Cargo.toml'), 'utf-8'), 'Cargo.toml');
   const cargoTomlPath = join(rootDir, OXC_NODE_DIR, 'Cargo.toml');
@@ -67,10 +51,15 @@ export function patchOxcNode(rootDir: string = process.cwd()): void {
   }
   const libPath = join(rootDir, OXC_NODE_DIR, 'src/lib.rs');
   const source = readFileSync(libPath, 'utf-8');
-  const patchedSource = exposeLoaderInitialization(source);
+  // Oxc 0.156 renamed this predicate; the workspace still uses 0.155.
+  // Matching the variant preserves await-using detection with either version.
+  const patchedSource = source.replace(
+    'it.kind.is_await_using()',
+    'matches!(it.kind, oxc::ast::ast::VariableDeclarationKind::AwaitUsing)',
+  );
   if (patchedSource !== source) {
     writeFileSync(libPath, patchedSource, 'utf-8');
-    log('✓ lib.rs: loader initialization available to embedders');
+    log('✓ lib.rs: compatible await-using detection');
   }
 }
 

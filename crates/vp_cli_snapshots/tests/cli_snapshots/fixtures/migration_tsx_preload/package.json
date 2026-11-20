@@ -1,0 +1,17 @@
+{
+  "name": "migration-tsx-preload",
+  "type": "module",
+  "scripts": {
+    "seed": "node --import=tsx ./scripts/seed.ts",
+    "eval": "node --import tsx --eval \"import('./scripts/seed.ts')\"",
+    "test": "node --import tsx --test",
+    "watch": "node --import=tsx --watch --test ./scripts/seed.ts",
+    "tool": "cross-env NODE_OPTIONS=\"--trace-warnings --import tsx\" mocha",
+    "config": "TSX_TSCONFIG_PATH=tsconfig.json node --import tsx ./scripts/seed.ts",
+    "launcher": "NODE_OPTIONS=--import=tsx concurrently \"node ./scripts/seed.ts\" \"node --test\""
+  },
+  "devDependencies": {
+    "tsx": "file:.fixture/tsx",
+    "vite": "^7.0.0"
+  }
+}

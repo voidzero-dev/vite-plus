@@ -1,7 +1,9 @@
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
-import type { Program } from '@oxc-project/types';
+import type { ObjectExpression, Program } from '@oxc-project/types';
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { braceExpand } from 'minimatch';
 import { type OxlintConfig } from 'oxlint';
@@ -12,8 +14,10 @@ import {
   mergeJsonConfig,
   mergeTsdownConfig,
   migrateTaskCacheConfig,
+  readStaticLintConfig,
   rewriteImportsInDirectory,
   rewriteScripts,
+  upsertJsonConfig,
   wrapLazyPlugins,
 } from '../../../binding/index.js';
 import {
@@ -27,6 +31,8 @@ import { documentationUrl } from '../../utils/documentation.ts';
 import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
 import { displayRelative } from '../../utils/path.ts';
 import { hasBaseUrlInTsconfig } from '../../utils/tsconfig.ts';
+import { parseSource, sameStaticValue } from '../ast-utils.ts';
+import { readLintConfigInWorker } from '../compat/runner.ts';
 import { detectConfigs, type ConfigFiles } from '../detector.ts';
 import {
   collectInstalledPackageNames,
@@ -44,6 +50,7 @@ import {
   type OxlintConfigMigration,
   type OxlintModulePlan,
   type PreparedOxlintConfigs,
+  DISABLED_IMPORT_RULE_CONFIG,
   OXLINT_OWNER_CONFIG_KEYS,
   LINT_STAGED_JSON_CONFIG_FILES,
   LINT_STAGED_OTHER_CONFIG_FILES,
@@ -418,7 +425,7 @@ function mergeOxlintConfigFile(
     Object.assign(inheritedOptions, layer.options);
   }
   oxlintJson.options ||= {};
-  // Skip typeAware/typeCheck when tsconfig.json has baseUrl (unsupported by tsgolint)
+  // Skip typeAware/typeCheck when tsconfig.json has baseUrl (unsupported by TypeScript 7)
   if (!hasBaseUrlInTsconfig(projectPath)) {
     if (inheritedOptions.typeAware === undefined) {
       oxlintJson.options.typeAware = true;
@@ -635,6 +642,94 @@ function configImportOffset(filename: string, source: string): number {
   return offset;
 }
 
+function staticValue(source: string) {
+  const statement = parseSource('value.ts', `const value = ${source};`).program.body[0];
+  return statement?.type === 'VariableDeclaration' ? statement.declarations[0]?.init : undefined;
+}
+
+/**
+ * Whether the property whose value starts at `offset` follows a spread in its
+ * object. Returns `undefined` when no object literal holds such a property.
+ */
+function followsSpread(node: unknown, offset: number): boolean | undefined {
+  if (typeof node !== 'object' || node === null) {
+    return undefined;
+  }
+  if ((node as { type?: unknown }).type === 'ObjectExpression') {
+    const { properties } = node as ObjectExpression;
+    const index = properties.findIndex(
+      (property) => property.type === 'Property' && property.value.start === offset,
+    );
+    if (index !== -1) {
+      return properties.slice(0, index).some((property) => property.type === 'SpreadElement');
+    }
+  }
+  for (const child of Object.values(node)) {
+    const found = followsSpread(child, offset);
+    if (found !== undefined) {
+      return found;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Whether the existing `configKey` block holds only the defaults that Vite+
+ * writes on its own. A tool config merged later already carries these defaults,
+ * so it can replace such a block without losing anything the user wrote.
+ */
+export function hasOnlyInjectedDefaults(viteConfigPath: string, configKey: string): boolean {
+  // The blocks `injectFmtDefaults` and `injectLintTypeCheckDefaults` write.
+  const injected =
+    configKey === 'fmt'
+      ? {}
+      : configKey === 'lint'
+        ? createDefaultVitePlusLintConfig({ includeTypeAwareDefaults: true })
+        : undefined;
+  if (!injected) {
+    return false;
+  }
+  // shortcut: a placeholder upsert marks the range of the existing value, so
+  // this uses the same key lookup as the replacement. Add a binding that
+  // returns the value when another caller needs to read one.
+  const placeholder = `"${randomUUID()}"`;
+  const placeholderPath = path.join(os.tmpdir(), `vite-plus-config-${randomUUID()}.json`);
+  fs.writeFileSync(placeholderPath, placeholder);
+  let marked: string[];
+  try {
+    marked = upsertJsonConfig(viteConfigPath, placeholderPath, configKey).content.split(
+      placeholder,
+    );
+  } finally {
+    fs.rmSync(placeholderPath, { force: true });
+  }
+  const source = fs.readFileSync(viteConfigPath, 'utf8');
+  const [before, after] = marked;
+  // Several config objects, an inserted key, or a shorthand property do not
+  // yield one replaced value.
+  if (
+    marked.length !== 2 ||
+    before.length + after.length > source.length ||
+    !source.startsWith(before) ||
+    !source.endsWith(after)
+  ) {
+    return false;
+  }
+  try {
+    // Vite+ prepends its blocks, so one that follows a spread was written by
+    // the user to override it. Replacing that block could move it before the
+    // spread, where the spread wins over the converted settings.
+    if (followsSpread(parseSource(viteConfigPath, source).program, before.length) !== false) {
+      return false;
+    }
+    const existing = staticValue(source.slice(before.length, source.length - after.length));
+    const expected = staticValue(JSON.stringify(injected));
+    return !!existing && !!expected && sameStaticValue(existing, expected);
+  } catch {
+    return false;
+  }
+}
+
 function mergeAndRemoveJsonConfig(
   projectPath: string,
   viteConfigPath: string,
@@ -653,7 +748,30 @@ function mergeAndRemoveJsonConfig(
   // create-fate's vite.config.ts + .oxfmtrc.jsonc) ends up with two of them.
   // AST-based check ignores comments, string-literal occurrences, and nested
   // keys (e.g. `plugins: [{ fmt: ... }]`).
-  if (hasConfigKey(fullViteConfigPath, configKey)) {
+  const keyExists = hasConfigKey(fullViteConfigPath, configKey);
+  // A block of injected defaults is not a second copy of the JSON config. The
+  // first `vp migrate` writes one even when ESLint stays, so a later `--full`
+  // run must replace it with the converted config instead. Prettier takes the
+  // same decision before its conversion, see `migratePrettierToOxfmt`.
+  const replaceDefaults = keyExists && hasOnlyInjectedDefaults(fullViteConfigPath, configKey);
+  if (keyExists && !replaceDefaults) {
+    // This run converted the JSON from ESLint and already removed the ESLint
+    // config, so the JSON is the only copy of those rules. The pending marker
+    // keeps that true for later runs, until the user merges the rules.
+    if (
+      configKey === 'lint' &&
+      (report?.eslintMigrated ||
+        fs
+          .readFileSync(fullViteConfigPath, 'utf8')
+          .split(/\r?\n/)
+          .includes(pendingOxlintMigrationMarker(jsonConfigPath)))
+    ) {
+      warnMigration(
+        `Preserved ${displayRelative(fullJsonConfigPath)} because ${viteConfigPath} already has a ${configKey} config. Merge it manually.`,
+        report,
+      );
+      return false;
+    }
     if (!deferRemoval) {
       fs.unlinkSync(fullJsonConfigPath);
     }
@@ -666,15 +784,16 @@ function mergeAndRemoveJsonConfig(
   }
   // Only delete the original JSON after a successful merge. Resolved lint
   // configs contain object extends, which JSON Oxlint configs do not accept.
+  const mergeConfig = replaceDefaults ? upsertJsonConfig : mergeJsonConfig;
   let result;
   if (!modulePlan) {
-    result = mergeJsonConfig(fullViteConfigPath, fullJsonConfigPath, configKey);
+    result = mergeConfig(fullViteConfigPath, fullJsonConfigPath, configKey);
   } else {
     const tempDir = fs.mkdtempSync(path.join(projectPath, '.vite-plus-lint-'));
     try {
       const tempConfig = path.join(tempDir, 'config.json');
       fs.writeFileSync(tempConfig, modulePlan.configContent);
-      result = mergeJsonConfig(fullViteConfigPath, tempConfig, configKey);
+      result = mergeConfig(fullViteConfigPath, tempConfig, configKey);
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }
@@ -886,22 +1005,115 @@ export function migrateTaskCacheConfigInViteConfig(
   return true;
 }
 
+function importRuleEnabled(rules: OxlintConfig['rules']): boolean | undefined {
+  const rule = rules?.[PREFER_VITE_PLUS_IMPORTS_RULE];
+  const severity = Array.isArray(rule) ? rule[0] : rule;
+  switch (severity) {
+    case undefined:
+      return undefined;
+    case 0:
+    case 'off':
+    case 'allow':
+      return false;
+    case 1:
+    case 2:
+    case 'warn':
+    case 'error':
+    case 'deny':
+      return true;
+    default:
+      throw new Error(
+        `Invalid severity for ${PREFER_VITE_PLUS_IMPORTS_RULE}: ${JSON.stringify(rule)}`,
+      );
+  }
+}
+
+export function warnUnresolvedImportRuleConfig(report?: MigrationReport): void {
+  warnMigration(
+    'Could not load lint configuration in an isolated process. Skipped Vite/Vitest import rewrites; fix the config and re-run `vp migrate`.',
+    report,
+  );
+}
+
 /**
- * Rewrite imports in all TypeScript/JavaScript files under a directory
- * This rewrites vite/vitest imports to @voidzero-dev/vite-plus
- * @param projectPath - The root directory to search for files
+ * Read the import rule before migration merges or removes lint configs.
+ * Return null if the worker cannot load the project config.
  */
+export async function tryResolveImportRuleConfig(projectPath: string): Promise<string | null> {
+  const extracted = readStaticLintConfig(projectPath);
+  let lint: OxlintConfig | undefined;
+  if (extracted != null) {
+    lint = JSON.parse(extracted);
+  } else {
+    try {
+      lint = await readLintConfigInWorker(projectPath);
+    } catch {
+      return null;
+    }
+  }
+  if (!lint) {
+    const filename = detectConfigs(projectPath).oxlintConfig;
+    if (filename) {
+      try {
+        lint = resolveOxlintConfigExtends(path.join(projectPath, filename)).config;
+      } catch {
+        // The config migration reports and preserves unresolved JSON configs.
+      }
+    }
+  }
+
+  const layers = lint ? oxlintConfigLayers(lint) : [];
+  const enabled = layers.reduce(
+    (previous, layer) => importRuleEnabled(layer.rules) ?? previous,
+    true,
+  );
+  const overrides = [];
+  for (const layer of layers) {
+    for (const override of layer.overrides ?? []) {
+      const overrideEnabled = importRuleEnabled(override.rules);
+      if (overrideEnabled !== undefined) {
+        overrides.push({
+          files: override.files,
+          excludeFiles: override.excludeFiles ?? [],
+          enabled: overrideEnabled,
+        });
+      }
+    }
+  }
+  return JSON.stringify({ enabled, overrides });
+}
+
+/** Preserve imports if the last attempt to read the rule fails. */
+export async function resolveImportRuleConfig(
+  projectPath: string,
+  report?: MigrationReport,
+): Promise<string> {
+  const config = await tryResolveImportRuleConfig(projectPath);
+  if (config !== null) {
+    return config;
+  }
+  warnUnresolvedImportRuleConfig(report);
+  return DISABLED_IMPORT_RULE_CONFIG;
+}
+
+/** Rewrite toolchain imports throughout the project and record the results. */
 export function rewriteAllImports(
   projectPath: string,
   silent = false,
   report?: MigrationReport,
-  preserveNuxtVitestImports = true,
-  // Directories of packages that own the Oxlint plugin API, captured before
-  // `rewritePackageJson` stripped `oxlint` from their manifests. See
-  // `collectOxlintOwnerDirs`.
-  oxlintOwnerDirs: string[] = [],
+  options: {
+    preserveNuxtVitestImports?: boolean;
+    // Capture package owners before migration removes oxlint from their manifests.
+    oxlintOwnerDirs?: string[];
+    importRuleConfig?: string;
+  } = {},
 ): boolean {
-  const result = rewriteImportsInDirectory(projectPath, preserveNuxtVitestImports, oxlintOwnerDirs);
+  const result = rewriteImportsInDirectory(
+    projectPath,
+    options.preserveNuxtVitestImports ?? true,
+    options.oxlintOwnerDirs ?? [],
+    options.importRuleConfig,
+  );
   const modified = result.modifiedFiles.length;
   const preserved = result.preservedVitestFiles.length;
   const errors = result.errors.length;

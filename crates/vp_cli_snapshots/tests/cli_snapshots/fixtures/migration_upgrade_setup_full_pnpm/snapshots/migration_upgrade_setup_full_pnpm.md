@@ -22,6 +22,7 @@ VITE+ - The Unified Toolchain for the Web
 • 2 config updates applied
 • Node version manager file migrated to .node-version
 • Package manager settings configured
+• Removed `vite` from pnpm peerDependencyRules: the core version now matches the bundled Vite
 → Manual follow-up:
   - Remove the "volta" field from package.json
 ```

@@ -6,7 +6,7 @@ use std::{
 };
 
 use console::style;
-use vp_pm_cli::{package_manager_bin_path, package_manager_install_dir};
+use vp_pm_cli::{package_manager_bin_path, resolve_package_manager_install_dir};
 use vp_shared::{env_vars, output};
 use vt_path::{AbsolutePathBuf, current_dir};
 
@@ -107,10 +107,33 @@ pub async fn execute(cwd: AbsolutePathBuf, scope: Option<String>) -> Result<Exit
 
     // Section: Installation
     vp_shared::output::print_stdout_line(format_args!("{}", style("Installation").bold()));
-    if crate::homebrew::owns_current_exe() {
-        print_check(" ", "CLI source", "Homebrew");
-        if let Ok(binary) = std::env::current_exe().and_then(std::fs::canonicalize) {
-            print_check(" ", "CLI binary", &abbreviate_home(&binary.display().to_string()));
+    if let Some(homebrew) = crate::homebrew::current() {
+        print_check(" ", "CLI source", homebrew.source_label());
+        print_check(" ", "CLI formula", &homebrew.formula);
+        print_check(" ", "CLI binary", &abbreviate_home(&homebrew.binary.to_string()));
+        if let Some(package) = crate::homebrew::user_package_dir()? {
+            let display = abbreviate_home(&package.to_string());
+            let problem =
+                match crate::self_setup::package_complete(&homebrew.binary, &package).await {
+                    Ok(true) => None,
+                    Ok(false) => Some("incomplete"),
+                    Err(_) => Some("could not verify"),
+                };
+            if let Some(problem) = problem {
+                has_errors = true;
+                print_check(
+                    &style(output::CROSS).red().to_string(),
+                    "CLI dependencies",
+                    &format!("{display} {}", style(format!("({problem})")).red()),
+                );
+                print_hint("Run 'vp --help' to retry CLI dependency setup.");
+            } else {
+                print_check(
+                    &style(output::CHECK).green().to_string(),
+                    "CLI dependencies",
+                    &display,
+                );
+            }
         }
     }
     has_errors |= !check_dirs().await;
@@ -338,7 +361,7 @@ async fn check_shim_mode(scope: EnvScope) -> Option<(config::Config, Option<Abso
                 config.package_manager_shim_mode_for(package_manager),
             );
         } else {
-            let modes = package_manager::ALL_PACKAGE_MANAGERS.map(|package_manager| {
+            let modes = vp_pm_cli::PackageManagerType::ALL.map(|package_manager| {
                 (package_manager, config.package_manager_shim_mode_for(package_manager))
             });
             let shared_mode = modes[0].1;
@@ -363,7 +386,7 @@ fn unreadable_config() -> String {
 }
 
 async fn check_package_manager_session_override() {
-    for kind in package_manager::ALL_PACKAGE_MANAGERS {
+    for kind in vp_pm_cli::PackageManagerType::ALL {
         let environment = package_manager::environment_version(kind);
         let session = config::read_session_package_manager(kind).await;
         if let Some(value) = environment.or(session) {
@@ -440,13 +463,20 @@ async fn check_package_manager_resolution(
                     .bright()
                     .to_string(),
             );
-            let installed =
-                package_manager_install_dir(resolution.package_manager_type, &resolution.version)
-                    .is_some_and(|directory| {
-                        resolution.package_manager_type.bin_names().iter().all(|name| {
-                            package_manager_bin_path(&directory, name).as_path().exists()
-                        })
-                    });
+            // Report the directory the shim selects for this pin, so the check
+            // matches the executable the shim runs rather than another cached install.
+            let installed = resolve_package_manager_install_dir(
+                resolution.package_manager_type,
+                &resolution.version,
+                resolution.hash.as_deref(),
+            )
+            .is_ok_and(|directory| {
+                resolution
+                    .package_manager_type
+                    .bin_names()
+                    .iter()
+                    .all(|name| package_manager_bin_path(&directory, name).as_path().exists())
+            });
             if installed {
                 print_check(&style(output::CHECK).green().to_string(), "PM binaries", "installed");
             } else {

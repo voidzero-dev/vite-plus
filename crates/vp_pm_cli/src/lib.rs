@@ -10,29 +10,39 @@
 mod cli;
 mod config;
 mod dispatch;
+mod env_forbidden;
 mod error;
 mod lifecycle_env;
+mod local_cli;
 mod package_manager;
 mod request;
 pub(crate) mod resolution;
 mod shim;
+mod spec;
+mod user_config;
 
 pub use cli::{ManagedGlobalCommand, PackageManagerCommand, PmCommand};
-pub use config::{npm_authorization_for_url, npm_registry, npm_registry_for_scope};
-pub use dispatch::{
-    DispatchResult, dispatch, dispatch_with_metadata, dispatch_with_package_manager,
-    dispatch_with_resolved_package_manager,
+pub use config::{
+    npm_authorization_for_url, npm_registry, npm_registry_for_scope, npm_user_config_path,
 };
+pub use dispatch::{
+    DispatchResult, dispatch, dispatch_for_local_cli, dispatch_with_metadata,
+    dispatch_with_package_manager, dispatch_with_resolved_package_manager,
+};
+pub use env_forbidden::ensure_managed_package_manager_allowed;
 pub use error::Error;
 pub use lifecycle_env::LifecycleEnvContext;
+pub use local_cli::{is_available_for_local_cli, managed_for_local_cli, provide_for_local_cli};
 pub use package_manager::{
     EnvironmentPackageManagerResolution, PackageManager, PackageManagerBuilder,
-    PackageManagerResolution, PackageManagerSource, PackageManagerType, download_package_manager,
-    download_package_manager_for_cwd, ensure_package_manager_bin, fetch_package_manager_versions,
+    PackageManagerResolution, PackageManagerSource, PackageManagerType, VERIFIED_NAMESPACE,
+    bootstrap_pnpm, download_package_manager, download_package_manager_for_cwd,
+    ensure_package_manager_bin, fetch_package_manager_versions,
     fetch_package_manager_versions_for_cwd, get_package_manager_type_and_version,
-    is_package_manager_dist_tag, npm_version_from_package_json, package_manager_bin_path,
-    package_manager_install_dir, resolve_environment_package_manager,
-    resolve_environment_package_manager_spec, resolve_package_manager_from_package_json,
+    install_cache_key, installed_package_manager_dir, is_package_manager_dist_tag,
+    npm_version_from_package_json, package_manager_bin_path, package_manager_install_dir,
+    resolve_environment_package_manager, resolve_environment_package_manager_spec,
+    resolve_package_manager_from_package_json, resolve_package_manager_install_dir,
     resolve_package_manager_version, resolve_package_manager_version_for_cwd,
 };
 pub use request::HttpClient;
@@ -43,3 +53,5 @@ pub use resolution::{
     PublishArgs, RebuildArgs, RemoveArgs, SearchArgs, StageCommand, TeamCommand, TokenCommand,
     UnlinkArgs, UpdateArgs, VersionArgs, ViewArgs, WhoamiArgs, WhyArgs,
 };
+pub use spec::{PackageManagerSpec, package_manager_override, parse_package_manager_spec};
+pub use user_config::{Config, ShimMode, get_config_path, load_config, save_config};

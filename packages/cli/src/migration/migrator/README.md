@@ -35,6 +35,10 @@ Pick the file by what a function _does_, not by where it happens to be called.
 | `prettier.ts`            | Prettier → Oxfmt migration and its prompts/warnings.                                                                                                                                                                    |
 | `tsup.ts`                | tsup → tsdown (`vp pack`) migration via `tsdown-migrate` and its prompts/warnings.                                                                                                                                      |
 | `tsx.ts`                 | tsx → `vpx` script migration, tsx dependency retention, and its prompt/warnings.                                                                                                                                        |
+| `ts-node.ts`             | ts-node → `vpx` migration, retained type-checking and loader uses, and its prompt/warnings.                                                                                                                             |
+| `ts-node-config.ts`      | Conservative ts-node option translation and config/env preflight before script migration.                                                                                                                               |
+| `oxnode.ts`              | oxnode → `vpx` command rules, loader compatibility, and its prompt/warnings.                                                                                                                                            |
+| `script-runner.ts`       | Shared script-runner command parsing, shebang rewrites, project detection, and conservative dependency retention.                                                                                                       |
 | `tsconfig.ts`            | `tsconfig.json` cleanup and `types` rewriting.                                                                                                                                                                          |
 | `framework-shim.ts`      | Framework (Vue/Astro) shim detection and injection.                                                                                                                                                                     |
 | `git-hooks.ts`           | Vite+ hook defaults, project-owned hook preservation, and conservative detection of existing hook tools.                                                                                                                |
@@ -67,7 +71,7 @@ Pick the file by what a function _does_, not by where it happens to be called.
    time, so they must be imported from a fully-evaluated leaf:
 
    ```ts
-   import { REMOVE_PACKAGES, type CatalogDependencyResolver } from './shared.ts';
+   import { REMOVE_PACKAGES, type PackageJsonDependencyField } from './shared.ts';
    ```
 
    Keep `shared.ts` a **pure leaf**: it may import external packages and

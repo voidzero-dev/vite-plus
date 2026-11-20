@@ -1,0 +1,63 @@
+[[case]]
+name = "migration_tsx_jsdoc"
+vp = "local"
+comment = "A JSDoc tsx code fence must not keep the tsx dependency (#3297). The tsx package is a local stub."
+steps = [
+  { argv = ["vpt", "print-file", "use-editing.ts"], comment = "the source mentions tsx only in a JSDoc code fence" },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "migration must not warn that use-editing.ts still uses tsx" },
+  { argv = ["vpt", "print-file", "package.json"], comment = "start runs vpx, and the unused tsx devDependency is removed" },
+]
+
+[[case]]
+name = "migration_tsx_jsdoc_import_type"
+vp = "local"
+steps = [
+  { argv = ["vpt", "write-file", "options.js", "/** @param {import('tsx/esm/api').RegisterOptions} options */\nexport function withDefaults(options) { return options; }\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "a JSDoc import type still needs the tsx declarations" },
+  { argv = ["vpt", "print-file", "package.json"], comment = "start runs vpx, and the tsx devDependency stays" },
+]
+
+[[case]]
+name = "migration_tsx_jsdoc_import_tag"
+vp = "local"
+steps = [
+  { argv = ["vpt", "write-file", "options.js", "/** @import { RegisterOptions } from 'tsx/esm/api' */\n/** @param {RegisterOptions} options */\nexport function withDefaults(options) { return options; }\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "a JSDoc @import tag still needs the tsx declarations" },
+  { argv = ["vpt", "print-file", "package.json"], comment = "start runs vpx, and the tsx devDependency stays" },
+]
+
+[[case]]
+name = "migration_tsx_jsdoc_unbraced_type"
+vp = "local"
+steps = [
+  { argv = ["vpt", "write-file", "options.js", "/** @type import('tsx/esm/api').RegisterOptions */\nexport const options = {};\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "an unbraced JSDoc type still needs the tsx declarations" },
+  { argv = ["vpt", "print-file", "package.json"], comment = "start runs vpx, and the tsx devDependency stays" },
+]
+
+[[case]]
+name = "migration_tsx_jsdoc_name_first_param"
+vp = "local"
+steps = [
+  { argv = ["vpt", "write-file", "options.js", "/** @param options {import('tsx/esm/api').RegisterOptions} */\nexport function withDefaults(options) { return options; }\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "a type after the parameter name still needs the tsx declarations" },
+  { argv = ["vpt", "print-file", "package.json"], comment = "start runs vpx, and the tsx devDependency stays" },
+]
+
+[[case]]
+name = "migration_tsx_jsdoc_mixed_template"
+vp = "local"
+steps = [
+  { argv = ["vpt", "write-file", "options.js", "/**\n * @template T, [U=import('tsx/esm/api').RegisterOptions]\n * @param {T} value\n * @returns {U | undefined}\n */\nexport function defaults(value) { return undefined; }\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "a default after a required template parameter still needs the tsx declarations" },
+  { argv = ["vpt", "print-file", "package.json"], comment = "start runs vpx, and the tsx devDependency stays" },
+]
+
+[[case]]
+name = "migration_tsx_jsdoc_constrained_template"
+vp = "local"
+steps = [
+  { argv = ["vpt", "write-file", "options.js", "/**\n * @template {object} T, [U=import('tsx/esm/api').RegisterOptions]\n * @param {T} value\n * @returns {U | undefined}\n */\nexport function defaults(value) { return undefined; }\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "a template constraint must not hide imports in later defaults" },
+  { argv = ["vpt", "print-file", "package.json"], comment = "start runs vpx, and the tsx devDependency stays" },
+]

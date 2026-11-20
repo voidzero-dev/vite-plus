@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -42,11 +43,94 @@ describe('rewriteTsxCommand', () => {
     ['NODE_ENV=test tsx ./a.ts', 'NODE_ENV=test vpx ./a.ts'],
     ['cross-env NODE_ENV=production tsx ./a.ts', 'cross-env NODE_ENV=production vpx ./a.ts'],
     ['tsx ./a.ts && tsx watch ./b.ts; vp build', 'vpx ./a.ts && vpx --watch ./b.ts; vp build'],
-    ['node --import tsx ./a.ts', 'vpx ./a.ts'],
-    ['node --import=tsx --inspect ./a.ts', 'vpx --inspect ./a.ts'],
+    ['node --import tsx ./a.ts', 'node --import vite-plus/register ./a.ts'],
+    ['node --import=tsx --inspect ./a.ts', 'node --import=vite-plus/register --inspect ./a.ts'],
     ['node --loader tsx/esm --watch ./a.ts', 'vpx --watch ./a.ts'],
     ['node -r tsx/cjs ./a.cts', 'vpx ./a.cts'],
-    ['node --import tsx --import ./setup.ts ./a.ts', 'vpx --import ./setup.ts ./a.ts'],
+    [
+      'node --import tsx --import ./setup.ts ./a.ts',
+      'node --import vite-plus/register --import ./setup.ts ./a.ts',
+    ],
+    ['node --import tsx', 'node --import vite-plus/register'],
+    ['node --import tsx -e 1', 'node --import vite-plus/register -e 1'],
+    ['node --import tsx --print 1', 'node --import vite-plus/register --print 1'],
+    ['node --import tsx --check ./a.ts', 'node --import vite-plus/register --check ./a.ts'],
+    ['node --import tsx --test', 'node --import vite-plus/register --test'],
+    [
+      'node --import tsx --watch --test ./a.test.ts',
+      'node --import vite-plus/register --watch --test ./a.test.ts',
+    ],
+    [
+      'node --import tsx --watch-path src ./a.ts',
+      'node --import vite-plus/register --watch-path src ./a.ts',
+    ],
+    ['node --import tsx src/index', 'node --import vite-plus/register src/index'],
+    [
+      'node --import "tsx" --import=\'tsx\' -- ./a.ts',
+      'node --import "vite-plus/register" --import=vite-plus/register -- ./a.ts',
+    ],
+    [
+      'pnpm exec node --inspect --import=tsx ./a.ts',
+      'pnpm exec node --inspect --import=vite-plus/register ./a.ts',
+    ],
+    [
+      'TSX_TSCONFIG_PATH=cli.json node --import tsx ./a.ts',
+      'TSX_TSCONFIG_PATH=cli.json node --import vite-plus/register ./a.ts',
+    ],
+    ['TSX_TSCONFIG_PATH=cli.json tsx ./a.ts', 'TSX_TSCONFIG_PATH=cli.json vpx ./a.ts'],
+    [
+      'TSX_TSCONFIG_PATH=cli.json tsx --tsconfig other.json ./a.ts',
+      'TSX_TSCONFIG_PATH=cli.json vpx --tsconfig other.json ./a.ts',
+    ],
+    [
+      'cross-env-shell TSX_TSCONFIG_PATH=cli.json "tsx ./a.ts"',
+      'cross-env-shell TSX_TSCONFIG_PATH=cli.json "vpx ./a.ts"',
+    ],
+    [
+      'TSX_TSCONFIG_PATH=cli.json concurrently "tsx ./a.ts"',
+      'TSX_TSCONFIG_PATH=cli.json concurrently "vpx ./a.ts"',
+    ],
+    [
+      "NODE_OPTIONS='--import tsx' node ./a.ts",
+      "NODE_OPTIONS='--import vite-plus/register' node ./a.ts",
+    ],
+    ['NODE_OPTIONS=--import=tsx mocha', 'NODE_OPTIONS=--import=vite-plus/register mocha'],
+    [
+      'cross-env NODE_OPTIONS="--trace-warnings --import=tsx" mocha --reporter spec',
+      'cross-env NODE_OPTIONS="--trace-warnings --import=vite-plus/register" mocha --reporter spec',
+    ],
+    [
+      'cross-env NODE_OPTIONS="--import "tsx mocha',
+      'cross-env NODE_OPTIONS="--import vite-plus/register" mocha',
+    ],
+    [
+      'cross-env NODE_OPTIONS=--import" tsx" mocha',
+      'cross-env NODE_OPTIONS="--import vite-plus/register" mocha',
+    ],
+    [
+      'cross-env node_options=--import=tsx node ./a.ts',
+      'cross-env node_options=--import=vite-plus/register node ./a.ts',
+    ],
+    [
+      'TSX_TSCONFIG_PATH=cli.json NODE_OPTIONS=--import=tsx node ./a.ts',
+      'TSX_TSCONFIG_PATH=cli.json NODE_OPTIONS=--import=vite-plus/register node ./a.ts',
+    ],
+    [
+      'NODE_OPTIONS=--import=tsx node --import tsx ./a.ts',
+      'NODE_OPTIONS=--import=vite-plus/register node --import vite-plus/register ./a.ts',
+    ],
+    [
+      'NODE_OPTIONS=--import=tsx concurrently "node ./a.ts" "node --test"',
+      'NODE_OPTIONS=--import=vite-plus/register concurrently "node ./a.ts" "node --test"',
+    ],
+    [
+      'TSX_TSCONFIG_PATH=cli.json concurrently "node --import tsx ./a.ts"',
+      'TSX_TSCONFIG_PATH=cli.json concurrently "node --import vite-plus/register ./a.ts"',
+    ],
+    [
+      'cross-env-shell NODE_OPTIONS=--import=tsx "node --import tsx ./a.ts"',
+      'cross-env-shell NODE_OPTIONS=--import=vite-plus/register "node --import vite-plus/register ./a.ts"',
+    ],
     [
       'concurrently "tsx watch src/api.ts" "vp dev"',
       'concurrently "vpx --watch src/api.ts" "vp dev"',
@@ -92,18 +176,10 @@ describe('rewriteTsxCommand', () => {
     ['tsx $ENTRY', 'shell syntax'],
     ['tsx %ENTRY%.ts', 'shell syntax'],
     ['.\\node_modules\\.bin\\tsx.cmd scripts/a.ts', 'shell syntax'],
-    ['node --import tsx', 'REPL'],
-    ['node --import tsx -e 1', '--eval or --print'],
-    ['node --import tsx --watch-path src ./a.ts', '--watch-path'],
-    ["NODE_OPTIONS='--import tsx' node ./a.ts", '`NODE_OPTIONS` loads tsx'],
     // A quoted argument of a program that does not run commands is data.
     ['echo "tsx scripts/build.ts"', 'does not rewrite this use of tsx'],
     // Only the value of `-c` is a command; the next argument is the shell's `$0`.
     [`sh -c 'echo "$0"' 'tsx a.ts'`, 'does not rewrite this use of tsx'],
-    ['TSX_TSCONFIG_PATH=cli.json tsx ./a.ts', 'TSX_TSCONFIG_PATH'],
-    ['TSX_TSCONFIG_PATH=cli.json node --import tsx ./a.ts', 'TSX_TSCONFIG_PATH'],
-    ['cross-env-shell TSX_TSCONFIG_PATH=cli.json "tsx ./a.ts"', 'TSX_TSCONFIG_PATH'],
-    ['TSX_TSCONFIG_PATH=cli.json concurrently "tsx ./a.ts"', 'TSX_TSCONFIG_PATH'],
     ['NODE_OPTIONS=--import=tsx tsx ./a.ts', 'NODE_OPTIONS'],
     // Windows reads environment variable names in any case.
     ['cross-env node_options=--import=tsx tsx ./a.ts', 'NODE_OPTIONS'],
@@ -112,7 +188,20 @@ describe('rewriteTsxCommand', () => {
     ['export TSX_TSCONFIG_PATH=cli.json && tsx ./a.ts', 'shell syntax'],
     ['tsx watch --test ./a.test.ts', '`vpx --watch` does not run `--test`'],
     ['tsx --watch --test ./a.test.ts', '`vpx --watch` does not run `--test`'],
-    ['node --import tsx --watch --test ./a.test.ts', '`vpx --watch` does not run `--test`'],
+    [
+      'NODE_OPTIONS=--import=tsx concurrently "tsx ./a.ts" "node --import tsx ./b.ts"',
+      'NODE_OPTIONS',
+    ],
+    ['NODE_OPTIONS=--loader=tsx/esm node --import tsx ./a.ts', 'NODE_OPTIONS'],
+    ['NODE_OPTIONS="--import=tsx --require=tsx/cjs" node ./a.ts', 'NODE_OPTIONS'],
+    ['NODE_OPTIONS="--import=tsx" node -r tsx/cjs ./a.cts', 'NODE_OPTIONS'],
+    ['NODE_OPTIONS="--import=\'tsx\'" node --import tsx ./a.ts', 'NODE_OPTIONS'],
+    ['NODE_OPTIONS=--import=tsx runner --require tsx/cjs', 'does not rewrite this use of tsx'],
+    ['NODE_OPTIONS="$NODE_OPTIONS --import tsx" node ./a.ts', 'shell syntax'],
+    ['node ./a.ts --import tsx', 'does not rewrite this use of tsx'],
+    ['node --eval "--import tsx"', 'does not rewrite this use of tsx'],
+    ['node --title "--import tsx" ./a.ts', 'does not rewrite this use of tsx'],
+    ['echo "NODE_OPTIONS=--import=tsx"', 'does not rewrite this use of tsx'],
   ])('keeps %s', (command, reason) => {
     const result = rewriteTsxCommand(command);
     expect(result.command).toBe(command);
@@ -123,6 +212,56 @@ describe('rewriteTsxCommand', () => {
     const result = rewriteTsxCommand("tsx ./a.ts && tsx -e 'run()'");
     expect(result.command).toBe("vpx ./a.ts && tsx -e 'run()'");
     expect(result.kept).toEqual([expect.stringContaining('--eval')]);
+  });
+
+  it.skipIf(process.platform === 'win32').each([
+    ['NODE_OPTIONS="--import "tsx', '--import vite-plus/register'],
+    ["NODE_OPTIONS=--import' tsx'", '--import vite-plus/register'],
+    [`NODE_OPTIONS='--import "tsx"'`, '--import "vite-plus/register"'],
+  ])('preserves shell assignment semantics for %s', (assignment, expected) => {
+    const command = `${assignment} sh -c 'printenv NODE_OPTIONS'`;
+    const result = rewriteTsxCommand(command);
+    expect(result.kept).toEqual([]);
+    expect(execFileSync('sh', ['-c', result.command], { encoding: 'utf8' }).trim()).toBe(expected);
+    expect(rewriteTsxCommand(result.command).command).toBe(result.command);
+  });
+
+  it.skipIf(process.platform === 'win32')(
+    'does not split NODE_OPTIONS data at an unquoted tab',
+    () => {
+      const command = `NODE_OPTIONS='--title=a\t--import=tsx' node --eval 'process.stdout.write(process.title)'`;
+      const result = rewriteTsxCommand(command);
+      expect(result.command).toBe(command);
+      expect(execFileSync('sh', ['-c', result.command], { encoding: 'utf8' })).toBe(
+        'a\t--import=tsx',
+      );
+    },
+  );
+
+  it.each([
+    [
+      'node --import tsx ./a.ts --import tsx',
+      'node --import vite-plus/register ./a.ts --import tsx',
+    ],
+    [
+      'node --import tsx -- ./a.ts --import tsx',
+      'node --import vite-plus/register -- ./a.ts --import tsx',
+    ],
+    [
+      'node --title "--import tsx" --import tsx ./a.ts',
+      'node --title "--import tsx" --import vite-plus/register ./a.ts',
+    ],
+    [
+      'node --import tsx --eval "--import tsx"',
+      'node --import vite-plus/register --eval "--import tsx"',
+    ],
+    [
+      'NODE_OPTIONS=\'--import tsx --title "--import tsx"\' node ./a.ts',
+      'NODE_OPTIONS=\'--import vite-plus/register --title "--import tsx"\' node ./a.ts',
+    ],
+  ])('only replaces preload modules in %s', (command, expected) => {
+    expect(rewriteTsxCommand(command).command).toBe(expected);
+    expect(rewriteTsxCommand(expected).command).toBe(expected);
   });
 
   describe('with the scripts it runs', () => {
@@ -244,6 +383,22 @@ describe('rewriteTsxCommand', () => {
     it.each([
       ['tsx esm.cts', '`esm.cts` uses import or export'],
       ['node --import tsx ./esm.cts', '`./esm.cts` uses import or export'],
+      ['node --import tsx --import ./esm.cts ./plain.ts', '`./esm.cts` uses import or export'],
+      ['NODE_OPTIONS=--import=tsx node ./esm.cts', '`./esm.cts` uses import or export'],
+      [
+        'NODE_OPTIONS="--import tsx --import ./esm.cts" node ./plain.ts',
+        '`./esm.cts` uses import or export',
+      ],
+      ['NODE_OPTIONS="--import tsx --import ./esm.cts" mocha', '`./esm.cts` uses import or export'],
+      [
+        'NODE_OPTIONS=--import=tsx concurrently "node ./esm.cts" "node --import tsx ./plain.ts"',
+        '`./esm.cts` uses import or export',
+      ],
+      [
+        'node --import tsx --test plain.ts dirname.ts',
+        '`dirname.ts` mixes import or export with CommonJS globals',
+      ],
+      ['node --import tsx generated.ts', '`generated.ts` does not exist yet'],
       ['tsx watch dirname.ts', '`dirname.ts` mixes import or export with CommonJS globals'],
       [
         'tsx --test plain.ts dirname.ts',
@@ -301,6 +456,18 @@ describe('rewriteTsxCommand', () => {
       ['tsx import-equals.cts', 'vpx import-equals.cts'],
       ['tsx importer.ts', 'vpx importer.ts'],
       ['tsx --test plain.ts', 'vpx --test plain.ts'],
+      [
+        'node --import tsx --eval 1 generated.ts',
+        'node --import vite-plus/register --eval 1 generated.ts',
+      ],
+      [
+        'NODE_OPTIONS=--import=tsx node --eval 1 generated.ts',
+        'NODE_OPTIONS=--import=vite-plus/register node --eval 1 generated.ts',
+      ],
+      [
+        'node --import tsx --test tests/*.test.ts',
+        'node --import vite-plus/register --test tests/*.test.ts',
+      ],
       // A glob, and a script after a shell state change, are not checked.
       ['tsx --test tests/*.test.ts', 'vpx --test tests/*.test.ts'],
       ['cd tools && tsx only.ts', 'cd tools && vpx only.ts'],
@@ -406,6 +573,253 @@ describe('migrateTsxToVpx', () => {
       changed: false,
       dependencyRemoved: false,
     });
+  });
+
+  it('migrates a project that only uses preloads and removes the unused dependency', () => {
+    write('package.json', {
+      type: 'module',
+      scripts: {
+        seed: 'node --import=tsx scripts/seed.ts',
+        test: 'node --import tsx --test',
+        mocha: 'cross-env NODE_OPTIONS="--import tsx" mocha',
+      },
+      devDependencies: { tsx: '^4.20.0' },
+    });
+    write('.lintstagedrc.json', { '*.ts': 'node --import tsx scripts/check.ts' });
+    const report = createMigrationReport();
+
+    expect(detectTsxProject(root)).toBe(true);
+    expect(migrateTsxToVpx(root, undefined, report)).toEqual({
+      changed: true,
+      dependencyRemoved: true,
+    });
+    expect(readJson('package.json').scripts).toEqual({
+      seed: 'node --import=vite-plus/register scripts/seed.ts',
+      test: 'node --import vite-plus/register --test',
+      mocha: 'cross-env NODE_OPTIONS="--import vite-plus/register" mocha',
+    });
+    expect(readJson('.lintstagedrc.json')).toEqual({
+      '*.ts': 'node --import vite-plus/register scripts/check.ts',
+    });
+    expect(readJson('package.json').devDependencies).toEqual({});
+    expect(report.warnings).toEqual([]);
+    expect(detectTsxProject(root)).toBe(false);
+    expect(migrateTsxToVpx(root)).toEqual({ changed: false, dependencyRemoved: false });
+  });
+
+  it('retains tsx for tool configuration that still needs a manual preload edit', () => {
+    write('package.json', {
+      scripts: { seed: 'node --import=tsx scripts/seed.ts' },
+      ava: { nodeArguments: ['--import=tsx'] },
+      devDependencies: { tsx: '^4.20.0' },
+    });
+    const report = createMigrationReport();
+
+    expect(migrateTsxToVpx(root, undefined, report)).toEqual({
+      changed: true,
+      dependencyRemoved: false,
+    });
+    expect(readJson('package.json').scripts.seed).toBe(
+      'node --import=vite-plus/register scripts/seed.ts',
+    );
+    expect(readJson('package.json').ava).toEqual({ nodeArguments: ['--import=tsx'] });
+    expect(readJson('package.json').devDependencies).toEqual({ tsx: '^4.20.0' });
+    expect(report.warnings).toContain(
+      'Kept the tsx devDependency in package.json: `ava` in package.json still uses tsx.',
+    );
+  });
+
+  it.each([
+    'node --run generate',
+    'node --run=generate',
+    'npm run generate',
+    'npm run-script generate',
+    'npx npm run generate',
+    'pnpm exec npm run generate',
+    'pnpm run generate',
+    'yarn generate',
+    'bun run generate',
+  ])('keeps an inherited preload when %s launches a retained tsx script', (launcher) => {
+    const build = `NODE_OPTIONS=--import=tsx ${launcher}`;
+    write('bad.cts', "import fs from 'node:fs'; console.log(typeof fs.readFileSync);\n");
+    write('package.json', {
+      type: 'module',
+      scripts: { build, generate: 'tsx bad.cts' },
+      devDependencies: { tsx: '^4.23.15' },
+    });
+    const report = createMigrationReport();
+
+    expect(migrateTsxToVpx(root, undefined, report)).toEqual({
+      changed: false,
+      dependencyRemoved: false,
+    });
+    expect(readJson('package.json').scripts).toEqual({ build, generate: 'tsx bad.cts' });
+    expect(report.warnings).toContainEqual(
+      expect.stringContaining('script `generate` needs tsx: `bad.cts` uses import or export'),
+    );
+  });
+
+  it.each(['node bad.cts', 'npm run nested', 'node --run nested'])(
+    'checks child commands that inherit tsx without naming it: %s',
+    (generate) => {
+      const build = 'NODE_OPTIONS=--import=tsx node --run generate';
+      write('bad.cts', "import fs from 'node:fs'; console.log(typeof fs.readFileSync);\n");
+      write('package.json', {
+        type: 'module',
+        scripts: { build, generate, nested: 'node bad.cts' },
+        devDependencies: { tsx: '^4.23.15' },
+      });
+
+      expect(migrateTsxToVpx(root).dependencyRemoved).toBe(false);
+      expect(readJson('package.json').scripts.build).toBe(build);
+    },
+  );
+
+  it.each(['npm run generate', 'node --run generate'])(
+    'migrates an inherited preload with compatible child scripts through %s',
+    (launcher) => {
+      write('package.json', {
+        type: 'module',
+        scripts: {
+          build: `NODE_OPTIONS=--import=tsx ${launcher}`,
+          generate: 'npm run nested && node scripts/seed.ts',
+          nested: 'tsx scripts/check.ts',
+        },
+        devDependencies: { tsx: '^4.23.15' },
+      });
+      const report = createMigrationReport();
+
+      expect(migrateTsxToVpx(root, undefined, report).dependencyRemoved).toBe(true);
+      expect(readJson('package.json').scripts).toEqual({
+        build: `NODE_OPTIONS=--import=vite-plus/register ${launcher}`,
+        generate: 'npm run nested && node scripts/seed.ts',
+        nested: 'vpx scripts/check.ts',
+      });
+      expect(report.warnings).toEqual([]);
+    },
+  );
+
+  it.each(['pregenerate', 'postgenerate'])(
+    'checks package-manager lifecycle script %s under the inherited preload',
+    (hook) => {
+      const build = 'NODE_OPTIONS=--import=tsx npm run generate';
+      write('bad.cts', "import fs from 'node:fs'; console.log(typeof fs.readFileSync);\n");
+      write('package.json', {
+        type: 'module',
+        scripts: { build, generate: 'node scripts/seed.ts', [hook]: 'node bad.cts' },
+        devDependencies: { tsx: '^4.23.15' },
+      });
+
+      expect(migrateTsxToVpx(root).dependencyRemoved).toBe(false);
+      expect(readJson('package.json').scripts.build).toBe(build);
+    },
+  );
+
+  it.each([
+    'node --run missing',
+    'npm --prefix tools run generate',
+    'npm run generate --workspace=tools',
+    'pnpm --filter tools run generate',
+    'pnpm run generate --filter=tools',
+    'npm run generate -- bad.cts',
+    'node --run generate -- bad.cts',
+    'node --run cycle',
+  ])('keeps an inherited preload when the task cannot be resolved: %s', (launcher) => {
+    const build = `NODE_OPTIONS=--import=tsx ${launcher}`;
+    write('package.json', {
+      scripts: { build, generate: 'node scripts/seed.ts', cycle: 'npm run cycle' },
+      devDependencies: { tsx: '^4.23.15' },
+    });
+    const report = createMigrationReport();
+
+    expect(migrateTsxToVpx(root, undefined, report).dependencyRemoved).toBe(false);
+    expect(readJson('package.json').scripts.build).toBe(build);
+    expect(report.warnings).toContainEqual(
+      expect.stringContaining('child command that vp migrate cannot check'),
+    );
+  });
+
+  it.each([true, false])(
+    'checks child scripts independently of record order (%s)',
+    (childFirst) => {
+      const build = 'NODE_OPTIONS=--import=tsx npm run generate';
+      const generate = 'tsx bad.cts';
+      write('bad.cts', "import fs from 'node:fs'; console.log(typeof fs.readFileSync);\n");
+      write('package.json', {
+        type: 'module',
+        scripts: childFirst ? { generate, build } : { build, generate },
+        devDependencies: { tsx: '^4.23.15' },
+      });
+
+      expect(migrateTsxToVpx(root).dependencyRemoved).toBe(false);
+      expect(readJson('package.json').scripts).toEqual({ build, generate });
+    },
+  );
+
+  it.each([
+    'NODE_OPTIONS=--import=tsx env node bad.cts',
+    'env NODE_OPTIONS=--import=tsx node bad.cts',
+    'NODE_OPTIONS=--import=tsx env MODE=test node bad.cts',
+    'NODE_OPTIONS=--import=tsx env -- node bad.cts',
+    'NODE_OPTIONS=--import=tsx env -C tools node bad.cts',
+    'NODE_OPTIONS=--import=tsx pnpm exec env node bad.cts',
+    'NODE_OPTIONS=--import=tsx npx env node bad.cts',
+    'NODE_OPTIONS=--import=tsx npm exec env node bad.cts',
+    'NODE_OPTIONS=--import=tsx pnpm exec cross-env MODE=test node bad.cts',
+    'NODE_OPTIONS=--import=tsx pnpm exec cross-env-shell MODE=test "node bad.cts"',
+    'NODE_OPTIONS=--import=tsx env cross-env MODE=test node bad.cts',
+  ])('keeps the preload and dependency for a wrapped incompatible entry: %s', (build) => {
+    write('bad.cts', "import fs from 'node:fs'; console.log(typeof fs.readFileSync);\n");
+    write('package.json', {
+      type: 'module',
+      scripts: { build },
+      devDependencies: { tsx: '^4.23.15' },
+    });
+    const report = createMigrationReport();
+
+    expect(migrateTsxToVpx(root, undefined, report)).toEqual({
+      changed: false,
+      dependencyRemoved: false,
+    });
+    expect(readJson('package.json').scripts.build).toBe(build);
+    expect(report.warnings).toContainEqual(expect.stringContaining('Kept tsx in'));
+  });
+
+  it('inspects a compatible command through env without removing the wrapper', () => {
+    write('package.json', {
+      type: 'module',
+      scripts: { build: 'NODE_OPTIONS=--import=tsx env MODE=test node scripts/seed.ts' },
+      devDependencies: { tsx: '^4.23.15' },
+    });
+
+    expect(migrateTsxToVpx(root).dependencyRemoved).toBe(true);
+    expect(readJson('package.json').scripts.build).toBe(
+      'NODE_OPTIONS=--import=vite-plus/register env MODE=test node scripts/seed.ts',
+    );
+  });
+
+  it('resolves inherited script preloads within each workspace package', () => {
+    write('package.json', {
+      scripts: {
+        build: 'NODE_OPTIONS=--import=tsx node --run generate',
+        generate: 'node scripts/seed.ts',
+      },
+      devDependencies: { tsx: '^4.23.15' },
+    });
+    const build = 'NODE_OPTIONS=--import=tsx npm run generate';
+    write('packages/a/package.json', {
+      type: 'module',
+      scripts: { build, generate: 'tsx bad.cts' },
+    });
+    write('packages/a/bad.cts', "import fs from 'node:fs'; console.log(typeof fs.readFileSync);\n");
+
+    expect(migrateTsxToVpx(root, [{ name: 'a', path: 'packages/a' }]).dependencyRemoved).toBe(
+      false,
+    );
+    expect(readJson('package.json').scripts.build).toBe(
+      'NODE_OPTIONS=--import=vite-plus/register node --run generate',
+    );
+    expect(readJson('packages/a/package.json').scripts.build).toBe(build);
   });
 
   it.each([
@@ -579,6 +993,48 @@ describe('migrateTsxToVpx', () => {
       'ava.config.mjs still uses tsx',
     ],
     [
+      'an import after a regular expression containing slashes',
+      'src/regex.ts',
+      'const slash = /[//]/; import("tsx/esm/api");\n',
+      'src/regex.ts still uses tsx',
+    ],
+    [
+      'a command string containing comment markers',
+      'src/command.ts',
+      'execSync(`tsx job.ts --url https://example.com --glob "src/*"`);\n',
+      'src/command.ts still uses tsx',
+    ],
+    [
+      'a runtime import after a Unicode comment',
+      'src/unicode.ts',
+      'const emoji = "🦀"; /* 文档: import("tsx") */ import("tsx/esm/api");\n',
+      'src/unicode.ts still uses tsx',
+    ],
+    [
+      'an import after a line comment',
+      'src/commented-import.ts',
+      'import(// Load the runtime\n"tsx/esm/api");\n',
+      'src/commented-import.ts still uses tsx',
+    ],
+    [
+      'a JSDoc import type',
+      'src/options.js',
+      "/** @param {import('tsx/esm/api').RegisterOptions} options */\nexport function withDefaults(options) { return options; }\n",
+      'src/options.js still uses tsx',
+    ],
+    [
+      'a JSDoc import tag',
+      'src/options.js',
+      "/** @import { RegisterOptions } from 'tsx/esm/api' */\n/** @param {RegisterOptions} options */\nexport function withDefaults(options) { return options; }\n",
+      'src/options.js still uses tsx',
+    ],
+    [
+      'a file that cannot be parsed',
+      'src/invalid.ts',
+      'const value = ; /* import("tsx") */\n',
+      'src/invalid.ts still uses tsx',
+    ],
+    [
       'a framework component',
       'src/pages/index.astro',
       "---\nimport { tsImport } from 'tsx/esm/api';\n---\n",
@@ -601,6 +1057,61 @@ describe('migrateTsxToVpx', () => {
     expect(readJson('package.json').scripts.dev).toBe('vpx --watch src/server.ts');
     expect(readJson('package.json').devDependencies).toEqual({ tsx: '^4.20.0' });
     expect(report.warnings).toContain(`Kept the tsx devDependency in package.json: ${user}.`);
+  });
+
+  it.each([
+    [
+      'js',
+      '@typedef {{ nested: { enabled: boolean }, options: import("tsx/esm/api").RegisterOptions }} Options',
+    ],
+    ['jsx', '@param {"}" | import("tsx/esm/api").RegisterOptions} options'],
+    ['mjs', '@type {typeof import("tsx/esm/api")}'],
+    ['js', '@type import("tsx/esm/api").RegisterOptions'],
+    ['js', '@type typeof import("tsx/esm/api")'],
+    ['js', '@type null | import("tsx/esm/api").RegisterOptions - Options for registration.'],
+    ['js', '@type Record<string, import("tsx/esm/api").RegisterOptions>'],
+    ['js', '@type (\n * import("tsx/esm/api").RegisterOptions\n * | undefined\n * )'],
+    ['js', '@type function(import("tsx/esm/api").RegisterOptions): void'],
+    ['js', '@type null | function(import("tsx/esm/api").RegisterOptions): void'],
+    ['js', '@this import("tsx/esm/api").RegisterOptions'],
+    ['js', '@enum import("tsx/esm/api").RegisterOptions'],
+    ['js', '@extends Base<import("tsx/esm/api").RegisterOptions>'],
+    ['js', '@param options {import("tsx/esm/api").RegisterOptions}'],
+    ['js', '@arg options {import("tsx/esm/api").RegisterOptions}'],
+    ['js', '@argument [options={}] {import("tsx/esm/api").RegisterOptions}'],
+    ['js', '@property options.nested {import("tsx/esm/api").RegisterOptions}'],
+    ['js', '@prop [options="]"] {import("tsx/esm/api").RegisterOptions}'],
+    ['js', '@param options[].nested {import("tsx/esm/api").RegisterOptions}'],
+    ['js', '@template T, [U=import("tsx/esm/api").RegisterOptions]'],
+    ['js', '@template {object} T, [U=import("tsx/esm/api").RegisterOptions]'],
+    ['js', '@template T, U,\n * [V=object], [W=import("tsx/esm/api").RegisterOptions]'],
+    ['js', '@template {import("tsx/esm/api").RegisterOptions} T, [U=object]'],
+    [
+      'cjs',
+      '@returns {import("tsx/esm/api", { with: { "resolution-mode": "import" } }).RegisterOptions}',
+    ],
+    ['js', '@import * as tsx from "tsx/esm/api"'],
+    ['js', '@template [T=import("tsx/esm/api").RegisterOptions]'],
+    ['js', '@template {object} [T=object], [U=import("tsx/esm/api").RegisterOptions]'],
+    ['js', '@import {\n * RegisterOptions\n * } from "tsx/esm/api"'],
+    ['js', '@param {{\n * options: import(\n * "tsx/esm/api"\n * ).RegisterOptions\n * }} options'],
+  ])('keeps tsx for a .%s JSDoc type: %s', (extension, annotation) => {
+    write('package.json', {
+      scripts: { start: 'tsx src/server.ts' },
+      devDependencies: { tsx: '^4.20.0' },
+    });
+    write(
+      `src/options.${extension}`,
+      `/** ${annotation} */\nfunction withDefaults(options) { return options; }\n`,
+    );
+    const report = createMigrationReport();
+
+    expect(migrateTsxToVpx(root, undefined, report).dependencyRemoved).toBe(false);
+    expect(readJson('package.json').scripts.start).toBe('vpx src/server.ts');
+    expect(readJson('package.json').devDependencies).toEqual({ tsx: '^4.20.0' });
+    expect(report.warnings).toEqual([
+      `Kept the tsx devDependency in package.json: src/options.${extension} still uses tsx.`,
+    ]);
   });
 
   it.each(['dependencies', 'optionalDependencies', 'peerDependencies'])(
@@ -698,6 +1209,29 @@ describe('migrateTsxToVpx', () => {
     ]);
   });
 
+  it.each(['tsx', 'tsx watch'])(
+    'retains a %s shebang whose package-relative preload needs tsx',
+    (command) => {
+      write('package.json', { type: 'module', devDependencies: { tsx: '^4.20.0' } });
+      write('setup.cts', "import fs from 'node:fs'; console.log(typeof fs.readFileSync);\n");
+      const source = `#!/usr/bin/env -S ${command} --require ./setup.cts\nexport {};\n`;
+      write('scripts/release.ts', source);
+      const report = createMigrationReport();
+
+      expect(migrateTsxToVpx(root, undefined, report)).toEqual({
+        changed: false,
+        dependencyRemoved: false,
+      });
+      expect(read('scripts/release.ts')).toBe(source);
+      expect(readJson('package.json').devDependencies).toEqual({ tsx: '^4.20.0' });
+      expect(report.warnings).toContainEqual(
+        expect.stringContaining(
+          'Kept tsx in the shebang of scripts/release.ts: `./setup.cts` uses import or export',
+        ),
+      );
+    },
+  );
+
   it('keeps tsx for a script that would lose CommonJS globals under vpx', () => {
     write('package.json', { scripts: { build: 'tsx scripts/build.ts' } });
     write('scripts/build.ts', "import fs from 'node:fs';\nfs.readdirSync(__dirname);\n");
@@ -741,5 +1275,138 @@ describe('migrateTsxToVpx', () => {
       expect.stringContaining('Kept tsx in packages/b/package.json scripts "calc"'),
       'Kept the tsx devDependency in package.json: `scripts` in packages/b/package.json still uses tsx.',
     ]);
+  });
+
+  it.each([
+    ['a line comment', 'index.ts', '// import("tsx/esm/api");\nexport {};\n'],
+    ['a loader comment', 'index.js', '/* node --import tsx */\nexport {};\n'],
+    [
+      'a JSDoc description',
+      'index.js',
+      '/** Use import("tsx/esm/api") to load TypeScript. */\nexport {};\n',
+    ],
+    [
+      'a parameter description',
+      'index.js',
+      '/** @param {object} options - See import("tsx/esm/api").RegisterOptions. */\nexport function run(options) {}\n',
+    ],
+    [
+      'an unbraced type description',
+      'index.js',
+      '/** @type object See import("tsx/esm/api").RegisterOptions. */\nexport const options = {};\n',
+    ],
+    [
+      'an unbraced union type description',
+      'index.js',
+      '/** @type object | undefined - See import("tsx/esm/api").RegisterOptions. */\nexport const options = {};\n',
+    ],
+    [
+      'an example after an unbraced type',
+      'index.js',
+      '/** @type object\n * @example\n * import("tsx/esm/api");\n */\nexport const options = {};\n',
+    ],
+    [
+      'a name-first parameter description',
+      'index.js',
+      '/** @param options {object} See import("tsx/esm/api").RegisterOptions. */\nexport function run(options) {}\n',
+    ],
+    [
+      'an optional parameter default',
+      'index.js',
+      '/** @param [options=import("tsx/esm/api")] {object} */\nexport function run(options) {}\n',
+    ],
+    [
+      'a required template parameter description',
+      'index.js',
+      '/** @template T See import("tsx/esm/api").RegisterOptions. */\nexport function run() {}\n',
+    ],
+    [
+      'a defaulted template parameter description',
+      'index.js',
+      '/** @template {object} T, [U=object] See import("tsx/esm/api").RegisterOptions. */\nexport function run() {}\n',
+    ],
+    ['a JSDoc example', 'index.js', '/** @example\n * import("tsx/esm/api");\n */\nexport {};\n'],
+    [
+      'a fenced JSDoc example',
+      'index.js',
+      '/** @example\n * ```js\n * @import { RegisterOptions } from "tsx/esm/api"\n * ```\n */\nexport {};\n',
+    ],
+    [
+      'a non-JSDoc block',
+      'index.js',
+      '/* @param {import("tsx/esm/api").RegisterOptions} options */\nexport function run(options) {}\n',
+    ],
+    [
+      'a type tag in TypeScript',
+      'index.ts',
+      '/** @param {import("tsx/esm/api").RegisterOptions} options */\nexport function run(options: object) {}\n',
+    ],
+    [
+      'an import of another package',
+      'index.js',
+      '/** @import { Options } from "tsx-other" */\nexport {};\n',
+    ],
+    [
+      'a comment inside a template expression',
+      'index.mts',
+      'export const message = `value: ${/* import("tsx") */ 1}`;\n',
+    ],
+    [
+      'a comment inside JSX',
+      'index.tsx',
+      'export const element = <div>{/* import("tsx") */}</div>;\n',
+    ],
+    [
+      'a comment after Unicode text',
+      'index.ts',
+      'export const emoji = "🦀"; /* 文档: import("tsx") */\n',
+    ],
+  ])('removes tsx when only %s mentions it', (_, file, content) => {
+    write('package.json', {
+      scripts: { start: 'tsx src/server.ts' },
+      devDependencies: { tsx: '^4.20.0' },
+    });
+    write(file, content);
+    const report = createMigrationReport();
+
+    expect(migrateTsxToVpx(root, undefined, report).dependencyRemoved).toBe(true);
+    expect(readJson('package.json').devDependencies).toEqual({});
+    expect(report.warnings).toEqual([]);
+  });
+
+  it('removes tsx when the only reference is a code fence inside a JSDoc comment', () => {
+    write('package.json', {
+      type: 'module',
+      scripts: { start: 'tsx index.ts' },
+      devDependencies: { tsx: '^4.20.0' },
+    });
+    write(
+      'index.ts',
+      [
+        '/**',
+        ' * @example',
+        ' * ```tsx',
+        ' * const isEditing = useEditingStore(selectIsEditing);',
+        ' * ```',
+        ' */',
+        'export function useEditingStore() {}',
+        '',
+      ].join('\n'),
+    );
+    const report = createMigrationReport();
+
+    expect(detectTsxProject(root)).toBe(true);
+    expect(migrateTsxToVpx(root, undefined, report)).toEqual({
+      changed: true,
+      dependencyRemoved: true,
+    });
+
+    expect(readJson('package.json')).toEqual({
+      type: 'module',
+      scripts: { start: 'vpx index.ts' },
+      devDependencies: {},
+    });
+    expect(report.tsxMigrated).toBe(true);
+    expect(report.warnings).toEqual([]);
   });
 });

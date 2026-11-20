@@ -4,11 +4,13 @@
 #![allow(clippy::disallowed_macros)]
 #![allow(clippy::disallowed_types)]
 
+mod args;
 mod dirs;
 mod documentation;
 mod env_config;
 pub mod env_vars;
 mod error;
+pub mod file_lock;
 pub mod header;
 mod http;
 mod interactivity;
@@ -23,6 +25,7 @@ pub mod string_similarity;
 mod tls;
 mod tracing;
 
+pub use args::restore_leading_arg_separator;
 pub use dirs::{
     SHIM_POINTER_EXTENSION, SHIM_POINTER_HEADER, VP_BINARY_NAME, VpDirEnvError, VpDirs,
     VpDirsLayout, is_windows_trampoline, shim_pointer_file_name, validate_vp_dir_env,
@@ -31,7 +34,7 @@ pub use documentation::documentation_url;
 pub use env_config::{EnvConfig, ManagerPreference};
 pub use error::format_error_chain;
 pub use http::{
-    HttpClientError, download_timeout, request_timeout, shared_http_client,
+    HttpClientError, download_timeout, request_timeout, set_user_agent_version, shared_http_client,
     shared_http_client_without_redirects,
 };
 pub use interactivity::{

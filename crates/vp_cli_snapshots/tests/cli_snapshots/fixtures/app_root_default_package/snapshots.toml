@@ -74,6 +74,17 @@ steps = [
 ]
 
 [[case]]
+name = "default_package_build_with_separator"
+env = { VP_NODE_VERSION = "22.23.4" }
+vp = ["local", "global"]
+cwd = "per_command"
+comment = "A lone -- lets vp build use defaultPackage at the workspace root."
+steps = [
+  ["vp", "build", "--"],
+  ["vpt", "grep-file", "apps/web/dist/index.html", "<h1>web</h1>"],
+]
+
+[[case]]
 name = "default_package_per_command_fallthrough"
 vp = ["local", "global"]
 comment = """

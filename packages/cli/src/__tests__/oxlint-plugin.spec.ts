@@ -37,6 +37,25 @@ const oxlintOptionalToolPackageFilename = path.join(
   import.meta.dirname,
   'fixtures/oxlint-optional-tool-package/rule.ts',
 );
+// Packages the migrator leaves alone: `vite` or `vitest` as a peer or runtime
+// dependency, or a published Vite plugin. Their consumers may not use Vite+.
+const vitePeerPackageConfig = path.join(
+  import.meta.dirname,
+  'fixtures/vite-peer-package/vite.config.ts',
+);
+const vitePluginPackageConfig = path.join(
+  import.meta.dirname,
+  'fixtures/vite-plugin-package/vite.config.ts',
+);
+const vitestPeerPackageSource = path.join(
+  import.meta.dirname,
+  'fixtures/vitest-peer-package/src/index.ts',
+);
+// `vite` and `vitest` only as devDependencies: the imports are still reported.
+const viteDevPackageConfig = path.join(
+  import.meta.dirname,
+  'fixtures/vite-dev-package/vite.config.ts',
+);
 
 describe('oxlint plugin config defaults', () => {
   it('adds vite-plus js plugin and lint rule defaults', () => {
@@ -404,6 +423,18 @@ new RuleTester({
       code: `import 'vite/client'`,
       filename: 'src/env.ts',
     },
+    {
+      code: `import { defineConfig } from 'vite'`,
+      filename: vitePeerPackageConfig,
+    },
+    {
+      code: `import { defineConfig } from 'vite'`,
+      filename: vitePluginPackageConfig,
+    },
+    {
+      code: `import { expect } from 'vitest';\nimport { defineConfig } from 'vitest/config';\nimport { page } from '@vitest/browser/context';`,
+      filename: vitestPeerPackageSource,
+    },
     // `vite-plus` exports no `rolldown` subpaths, so these stay on `vite` even
     // in config entry files (same as the migrate rewriter).
     {
@@ -533,6 +564,19 @@ new RuleTester({
       output: `import foo = require('vite-plus/client')`,
     },
     {
+      // Keeping `vite` doesn't keep `vitest`.
+      code: `import { expect } from 'vitest'`,
+      errors: 1,
+      filename: vitePeerPackageConfig,
+      output: `import { expect } from 'vite-plus/test'`,
+    },
+    {
+      code: `import { expect } from 'vitest';\nimport { defineConfig } from 'vite';`,
+      errors: 2,
+      filename: viteDevPackageConfig,
+      output: `import { expect } from 'vite-plus/test';\nimport { defineConfig } from 'vite-plus';`,
+    },
+    {
       // In a config file both `vitest` and `vite` are flagged.
       code: `export * from 'vitest';\nimport { defineConfig } from 'vite';`,
       errors: 2,
@@ -542,13 +586,13 @@ new RuleTester({
     {
       code: `import { vi } from 'vitest';\nimport { startVitest } from 'vitest/node';\nimport { mockNuxtImport } from '@nuxt/test-utils/runtime';`,
       errors: 2,
-      filename: path.join(import.meta.dirname, 'ordinary.spec.ts'),
+      filename: path.join(import.meta.dirname, 'fixtures/vite-dev-package/ordinary.spec.ts'),
       output: `import { vi } from 'vite-plus/test';\nimport { startVitest } from 'vite-plus/test/node';\nimport { mockNuxtImport } from '@nuxt/test-utils/runtime';`,
     },
     {
       code: `import { vi } from 'vitest';\nimport { mockNuxtImport } from '@nuxt/test-utils/runtime';`,
       errors: 1,
-      filename: path.join(import.meta.dirname, 'ordinary.spec.ts'),
+      filename: path.join(import.meta.dirname, 'fixtures/vite-dev-package/ordinary.spec.ts'),
       output: `import { vi } from 'vite-plus/test';\nimport { mockNuxtImport } from '@nuxt/test-utils/runtime';`,
     },
   ],

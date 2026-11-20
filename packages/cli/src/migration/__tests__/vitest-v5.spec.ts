@@ -6,6 +6,7 @@ import { runInNewContext } from 'node:vm';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { PackageManager } from '../../types/index.ts';
+import { parseSource } from '../ast-utils.ts';
 import {
   applyVitestV5Migration,
   applyVitestV5NodeMigration,
@@ -15,7 +16,6 @@ import {
   refreshVitestV5Migration,
   vitestV5NeedsMigration,
 } from '../migrator.ts';
-import { parseSource } from '../vitest-v5/ast.ts';
 import { literalTestCommands, migrateVitestV5Command } from '../vitest-v5/commands.ts';
 import { migrateVitestV5Config } from '../vitest-v5/config.ts';
 import { migrateVitestV5Source } from '../vitest-v5/source.ts';

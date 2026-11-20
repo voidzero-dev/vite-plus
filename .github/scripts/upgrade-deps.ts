@@ -3,8 +3,16 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import {
+  CORE_PACKAGE_NAME,
+  initialCoreVersion,
+  tryDecodeCoreVersion,
+} from '../../packages/tools/src/core-version.ts';
+import {
   findLatestStableVersionForMajor,
   getBundledDependencyRanges,
+  getLatestNodeVersion,
+  getPnpmInstallerIntegrity,
+  updatePnpmInstallerPins,
 } from './upgrade-deps-utils.ts';
 
 const ROOT = process.cwd();
@@ -32,7 +40,7 @@ type LatestTagOptions = {
   stableOnly?: boolean;
 };
 
-type NpmLatestResponse = {
+type NpmVersionResponse = {
   version?: unknown;
   dependencies?: Record<string, string>;
 };
@@ -63,6 +71,7 @@ type PnpmWorkspaceVersions = {
   oxfmt: string;
   oxlint: string;
   oxlintTsgolint: string;
+  tsrs: string;
   oxcProjectRuntime: string;
   oxcProjectTypes: string;
   oxcParser: string;
@@ -79,6 +88,11 @@ const STABLE_SEMVER_TAG_RE = /^v?\d+\.\d+\.\d+$/;
 // Vitest major upgrades can change the bundled API, export shims, and CLI
 // behavior. Advance this only after Vite+ has adapted to the new major.
 const SUPPORTED_VITEST_MAJOR = 5;
+// Review compatibility before advancing the shared development, CI, and installation pin.
+const SUPPORTED_NODE_MAJOR = 24;
+// Installer pnpm is independent of package.json's development package manager.
+// Review install behavior and lockfile compatibility before advancing this major.
+const SUPPORTED_PNPM_INSTALLER_MAJOR = 10;
 
 const isFullSha = (s: string): boolean => /^[0-9a-f]{40}$/.test(s);
 
@@ -163,18 +177,18 @@ async function containsCommit(
 }
 
 // ============ npm Registry ============
-async function fetchNpmLatest(packageName: string): Promise<NpmLatestResponse> {
+async function fetchNpmVersion(packageName: string): Promise<NpmVersionResponse> {
   const res = await fetch(`https://registry.npmjs.org/${packageName}/latest`);
   if (!res.ok) {
     throw new Error(
       `Failed to fetch npm metadata for ${packageName}: ${res.status} ${res.statusText}`,
     );
   }
-  return (await res.json()) as NpmLatestResponse;
+  return (await res.json()) as NpmVersionResponse;
 }
 
-async function getLatestNpmVersion(packageName: string): Promise<string> {
-  const data = await fetchNpmLatest(packageName);
+async function getNpmVersion(packageName: string): Promise<string> {
+  const data = await fetchNpmVersion(packageName);
   if (typeof data.version !== 'string') {
     throw new Error(`Invalid npm response for ${packageName}: missing version field`);
   }
@@ -198,10 +212,15 @@ async function getLatestNpmVersionForMajor(packageName: string, major: number): 
   return version;
 }
 
+async function getLatestPnpmInstaller(): Promise<{ version: string; integrity: string }> {
+  const version = await getLatestNpmVersionForMajor('pnpm', SUPPORTED_PNPM_INSTALLER_MAJOR);
+  return { version, integrity: await getPnpmInstallerIntegrity(version) };
+}
+
 // Read a dependency range from the latest published version of `packageName`,
 // e.g. the `lightningcss` range that the bundled `@tsdown/css` depends on.
 async function getNpmDependencyRange(packageName: string, dependencyName: string): Promise<string> {
-  const data = await fetchNpmLatest(packageName);
+  const data = await fetchNpmVersion(packageName);
   const range = data.dependencies?.[dependencyName];
   if (typeof range !== 'string') {
     throw new Error(
@@ -281,8 +300,8 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
     ...vitestExactVersionEntries,
     {
       name: 'tsdown',
-      pattern: /tsdown: \^([\d.]+(?:-[\w.]+)?)/,
-      replacement: `tsdown: ^${versions.tsdown}`,
+      pattern: /tsdown: =([\d.]+(?:-[\w.]+)?)/,
+      replacement: `tsdown: =${versions.tsdown}`,
       newVersion: versions.tsdown,
     },
     // `@tsdown/css` and `@tsdown/exe` are bundled into core and published in
@@ -290,14 +309,14 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
     // so pin both catalog entries to the tsdown version to avoid drift.
     {
       name: '@tsdown/css',
-      pattern: /'@tsdown\/css': \^([\d.]+(?:-[\w.]+)?)/,
-      replacement: `'@tsdown/css': ^${versions.tsdown}`,
+      pattern: /'@tsdown\/css': =([\d.]+(?:-[\w.]+)?)/,
+      replacement: `'@tsdown/css': =${versions.tsdown}`,
       newVersion: versions.tsdown,
     },
     {
       name: '@tsdown/exe',
-      pattern: /'@tsdown\/exe': \^([\d.]+(?:-[\w.]+)?)/,
-      replacement: `'@tsdown/exe': ^${versions.tsdown}`,
+      pattern: /'@tsdown\/exe': =([\d.]+(?:-[\w.]+)?)/,
+      replacement: `'@tsdown/exe': =${versions.tsdown}`,
       newVersion: versions.tsdown,
     },
     // `lightningcss` is a core dependency consumed by the bundled `@tsdown/css`.
@@ -355,6 +374,12 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
       pattern: /oxlint-tsgolint: =([\d.]+(?:-[\w.]+)?)/,
       replacement: `oxlint-tsgolint: =${versions.oxlintTsgolint}`,
       newVersion: versions.oxlintTsgolint,
+    },
+    {
+      name: 'tsrs',
+      pattern: /tsrs: =([\d.]+(?:-[\w.-]+)?)/,
+      replacement: `tsrs: =${versions.tsrs}`,
+      newVersion: versions.tsrs,
     },
     {
       name: '@oxc-project/runtime',
@@ -420,6 +445,17 @@ async function updateVitestVersionConstant(vitestVersion: string): Promise<void>
   console.log('Updated packages/cli/src/utils/constants.ts');
 }
 
+// Update the shared Node.js pin for development, CI, and installation.
+function updateNodeVersionFile(nodeVersion: string): void {
+  const filePath = path.join(ROOT, '.node-version');
+  const oldVersion = fs.readFileSync(filePath, 'utf8').trim();
+  if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(oldVersion)) {
+    throw new Error(`Expected an exact stable Node.js version in ${filePath}`);
+  }
+  fs.writeFileSync(filePath, `${nodeVersion}\n`);
+  recordChange('Node.js', oldVersion, nodeVersion);
+}
+
 // ============ Write metadata files for PR description ============
 const formatVersion = (v: Change): string => {
   if (v.tag) {
@@ -453,8 +489,12 @@ function writeMetaFiles(): void {
     JSON.stringify(versionsObj, null, 2) + '\n',
   );
 
-  const changed = [...changes.entries()].filter(([, v]) => v.old !== v.new);
-  const unchanged = [...changes.entries()].filter(([, v]) => v.old === v.new);
+  // Keep the integrity in versions.json, but report the installer as one dependency.
+  const dependencies = [...changes.entries()].filter(
+    ([name]) => name !== 'pnpm installer integrity',
+  );
+  const changed = dependencies.filter(([, v]) => v.old !== v.new);
+  const unchanged = dependencies.filter(([, v]) => v.old === v.new);
 
   const commitLines = ['feat(deps): upgrade upstream dependencies', ''];
   if (changed.length) {
@@ -519,14 +559,36 @@ function syncBundledDependencies(): void {
     recordChange(name, changes.get(name)?.old ?? oldRange, range);
     pkg[field][name] = range;
   }
+  syncCoreVersion(pkg);
   fs.writeFileSync(filePath, JSON.stringify(pkg, null, 2) + '\n');
   writeMetaFiles();
+}
+
+// The core version encodes the bundled Vite version (rfcs/core-version-alignment.md).
+// When the bundled Vite changes, restart the release counter at 0. The release
+// workflow selects the next unpublished counter.
+function syncCoreVersion(pkg: { version?: unknown; bundledVersions?: Record<string, string> }) {
+  const vitePath = path.join(ROOT, 'vite/packages/vite/package.json');
+  const viteVersion = readJsonFile(vitePath).version;
+  if (typeof viteVersion !== 'string' || !viteVersion.trim()) {
+    throw new Error(`Missing version in ${vitePath}`);
+  }
+  pkg.bundledVersions = { ...pkg.bundledVersions, vite: viteVersion };
+  const current = typeof pkg.version === 'string' ? pkg.version : undefined;
+  if (current !== undefined && tryDecodeCoreVersion(current)?.vite === viteVersion) {
+    return;
+  }
+  const next = initialCoreVersion(viteVersion);
+  recordChange(CORE_PACKAGE_NAME, changes.get(CORE_PACKAGE_NAME)?.old ?? current, next);
+  pkg.version = next;
 }
 
 async function upgradeDependencies(): Promise<void> {
   console.log('Fetching latest versions…');
 
   const [
+    nodeVersion,
+    pnpmInstaller,
     vitestVersion,
     tsdownVersion,
     lightningcssVersion,
@@ -536,25 +598,31 @@ async function upgradeDependencies(): Promise<void> {
     oxfmtVersion,
     oxlintVersion,
     oxlintTsgolintVersion,
+    tsrsVersion,
     oxcProjectRuntimeVersion,
     oxcProjectTypesVersion,
     oxcParserVersion,
   ] = await Promise.all([
+    getLatestNodeVersion(SUPPORTED_NODE_MAJOR),
+    getLatestPnpmInstaller(),
     getLatestNpmVersionForMajor('vitest', SUPPORTED_VITEST_MAJOR),
-    getLatestNpmVersion('tsdown'),
+    getNpmVersion('tsdown'),
     // Mirror exactly what the bundled @tsdown/css depends on.
     getNpmDependencyRange('@tsdown/css', 'lightningcss'),
-    getLatestNpmVersion('lint-staged'),
-    getLatestNpmVersion('@oxc-node/cli'),
-    getLatestNpmVersion('@oxc-node/core'),
-    getLatestNpmVersion('oxfmt'),
-    getLatestNpmVersion('oxlint'),
-    getLatestNpmVersion('oxlint-tsgolint'),
-    getLatestNpmVersion('@oxc-project/runtime'),
-    getLatestNpmVersion('@oxc-project/types'),
-    getLatestNpmVersion('oxc-parser'),
+    getNpmVersion('lint-staged'),
+    getNpmVersion('@oxc-node/cli'),
+    getNpmVersion('@oxc-node/core'),
+    getNpmVersion('oxfmt'),
+    getNpmVersion('oxlint'),
+    getNpmVersion('oxlint-tsgolint'),
+    getNpmVersion('tsrs'),
+    getNpmVersion('@oxc-project/runtime'),
+    getNpmVersion('@oxc-project/types'),
+    getNpmVersion('oxc-parser'),
   ]);
 
+  console.log(`Node.js: ${nodeVersion}`);
+  console.log(`pnpm (installer): ${pnpmInstaller.version}`);
   console.log(`vitest: ${vitestVersion}`);
   console.log(`tsdown: ${tsdownVersion}`);
   console.log(`lightningcss (from @tsdown/css): ${lightningcssVersion}`);
@@ -565,10 +633,18 @@ async function upgradeDependencies(): Promise<void> {
   console.log(`oxlint: ${oxlintVersion}`);
   console.log(`@oxlint/plugins (from oxlint): ${oxlintVersion}`);
   console.log(`oxlint-tsgolint: ${oxlintTsgolintVersion}`);
+  console.log(`tsrs: ${tsrsVersion}`);
   console.log(`@oxc-project/runtime: ${oxcProjectRuntimeVersion}`);
   console.log(`@oxc-project/types: ${oxcProjectTypesVersion}`);
   console.log(`oxc-parser: ${oxcParserVersion}`);
 
+  const { oldVersion, oldIntegrity } = updatePnpmInstallerPins(
+    ROOT,
+    pnpmInstaller.version,
+    pnpmInstaller.integrity,
+  );
+  recordChange('pnpm (installer)', oldVersion, pnpmInstaller.version);
+  recordChange('pnpm installer integrity', oldIntegrity, pnpmInstaller.integrity);
   await updateUpstreamVersions();
   await updatePnpmWorkspace({
     vitest: vitestVersion,
@@ -580,11 +656,13 @@ async function upgradeDependencies(): Promise<void> {
     oxfmt: oxfmtVersion,
     oxlint: oxlintVersion,
     oxlintTsgolint: oxlintTsgolintVersion,
+    tsrs: tsrsVersion,
     oxcProjectRuntime: oxcProjectRuntimeVersion,
     oxcProjectTypes: oxcProjectTypesVersion,
     oxcParser: oxcParserVersion,
   });
   await updateVitestVersionConstant(vitestVersion);
+  updateNodeVersionFile(nodeVersion);
   // Keep the selected versions available if installation or upstream sync fails.
   writeMetaFiles();
 

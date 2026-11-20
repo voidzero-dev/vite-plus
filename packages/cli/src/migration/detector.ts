@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import type { WorkspacePackage } from '../types/index.ts';
 import { VITE_CONFIG_FILES } from '../utils/constants.ts';
 
 export interface ConfigFiles {
@@ -58,6 +59,106 @@ export const PRETTIER_CONFIG_FILES = [
   'prettier.config.cts',
   'prettier.config.mts',
 ] as const;
+
+const CONFIG_SCRIPT_EXTENSIONS = ['js', 'mjs', 'cjs', 'ts', 'mts', 'cts'] as const;
+
+const MIGRATION_WARNING_DETECTIONS = [
+  {
+    packageName: 'rollup',
+    match: 'all',
+    configFiles: CONFIG_SCRIPT_EXTENSIONS.map((extension) => `rollup.config.${extension}`),
+    warning:
+      'Rollup configuration detected. Rollup is API-compatible with Rolldown and can be migrated first before migrating further to tsdown or Vite. Once migrated to tsdown or Vite, re-run vp migrate.',
+  },
+  {
+    packageName: 'rolldown',
+    match: 'all',
+    configFiles: CONFIG_SCRIPT_EXTENSIONS.map((extension) => `rolldown.config.${extension}`),
+    warning:
+      'Rolldown configuration detected. Rolldown can be migrated to tsdown or Vite, and it is recommended to do so. Once migrated, re-run vp migrate.',
+  },
+  {
+    packageName: 'jest',
+    match: 'all',
+    configFiles: [
+      ...CONFIG_SCRIPT_EXTENSIONS.map((extension) => `jest.config.${extension}`),
+      'jest.config.json',
+    ],
+    packageJsonField: 'jest',
+    warning:
+      'Jest configuration detected. Vitest is highly compatible with Jest, and so we recommend migrating. See the Vitest Jest migration guide: https://vitest.dev/guide/migration/jest, then re-run vp migrate.',
+  },
+  {
+    packageName: 'turbo',
+    match: 'any',
+    configFiles: ['turbo.json', 'turbo.jsonc'],
+    warning:
+      'Turborepo detected. Task orchestration and caching were not migrated. vp run does not read Turborepo configuration. See https://viteplus.dev/guide/run and https://viteplus.dev/guide/cache.',
+  },
+] as const;
+
+function hasDependency(packageJson: Record<string, unknown>, packageName: string): boolean {
+  return ['dependencies', 'devDependencies', 'optionalDependencies'].some((field) => {
+    const dependencies = packageJson[field];
+    return typeof dependencies === 'object' && dependencies !== null && packageName in dependencies;
+  });
+}
+
+/**
+ * Detect tools that need manual migration advice.
+ */
+export function detectMigrationWarnings(
+  projectPath: string,
+  packages: readonly WorkspacePackage[] = [],
+): string[] {
+  const projectPaths = [
+    projectPath,
+    ...packages.map((workspacePackage) => path.join(projectPath, workspacePackage.path)),
+  ];
+  const detected = new Set<string>();
+  let rootPackageJson: Record<string, unknown> | undefined;
+
+  for (const currentPath of projectPaths) {
+    const packageJsonPath = path.join(currentPath, 'package.json');
+    if (!fs.existsSync(packageJsonPath)) {
+      continue;
+    }
+
+    let packageJson: Record<string, unknown>;
+    try {
+      packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8')) as Record<string, unknown>;
+    } catch {
+      continue;
+    }
+    if (currentPath === projectPath) {
+      rootPackageJson = packageJson;
+    }
+
+    for (const detection of MIGRATION_WARNING_DETECTIONS) {
+      const hasPackage =
+        hasDependency(packageJson, detection.packageName) ||
+        (currentPath !== projectPath &&
+          rootPackageJson !== undefined &&
+          hasDependency(rootPackageJson, detection.packageName));
+      if (detection.match === 'all' && !hasPackage) {
+        continue;
+      }
+      const hasConfig =
+        detection.configFiles.some((configFile) =>
+          fs.existsSync(path.join(currentPath, configFile)),
+        ) ||
+        ('packageJsonField' in detection && Object.hasOwn(packageJson, detection.packageJsonField));
+
+      if (detection.match === 'any' ? hasPackage || hasConfig : hasPackage && hasConfig) {
+        detected.add(detection.warning);
+      }
+    }
+  }
+
+  return MIGRATION_WARNING_DETECTIONS.map(({ warning }) => warning).filter((warning) =>
+    detected.has(warning),
+  );
+}
 
 export function detectConfigs(projectPath: string): ConfigFiles {
   const configs: ConfigFiles = {};

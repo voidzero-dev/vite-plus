@@ -16,4 +16,20 @@ export default defineConfig({
       instances: [{ browser: 'chromium' }],
     },
   },
+  build: {
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            {
+              name(id) {
+                const c = id.includes('node_modules') ? 'vendor' : null;
+                return c;
+              },
+            },
+          ],
+        },
+      },
+    },
+  },
 });

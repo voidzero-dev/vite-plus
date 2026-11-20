@@ -1,0 +1,12 @@
+{
+  "name": "migration-turborepo",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "build": "turbo run build"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0"
+  },
+  "packageManager": "npm@11.16.0"
+}

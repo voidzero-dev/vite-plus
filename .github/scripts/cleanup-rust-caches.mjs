@@ -5,7 +5,7 @@ function family(cache) {
   // Keep the job, OS, architecture, Rust/environment hash, and archive version
   // separate. Only the final manifest hash can differ within one family.
   const match =
-    /^v1-rust-.+-(?:Linux|Darwin|Windows_NT)-(?:x64|arm64)-[a-f0-9]{8}-[a-f0-9]{8}$/.exec(
+    /^v2-rust-.+-(?:Linux|Darwin|Windows_NT)-(?:x64|arm64)-[a-f0-9]{8}-[a-f0-9]{8}$/.exec(
       cache.key,
     );
   if (cache.ref !== ref || !match || !cache.version) {
@@ -48,7 +48,7 @@ export async function cleanupRustCaches({ github, context, core }, { dryRun = tr
       direction: 'desc',
     });
   const now = Date.now();
-  const candidates = supersededRustCaches(await list('v1-rust-'), now);
+  const candidates = supersededRustCaches(await list('v2-rust-'), now);
   let count = 0;
   let bytes = 0;
   for (const candidate of candidates) {

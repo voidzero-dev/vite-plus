@@ -104,3 +104,13 @@ steps = [
   { argv = ["vpt", "print-file", "dist/method/index.mjs"] },
   { argv = ["vpt", "print-file", "dist/control/index.mjs"] },
 ]
+
+[[case]]
+name = "migration_pack_tsdown_023_wrapped"
+vp = "global"
+comment = "Upgrade a pack config whose config object is wrapped in a type assertion."
+steps = [
+  { argv = ["vpt", "write-file", "vite.config.ts", "import { defineConfig } from 'vite-plus';\nimport type { UserConfig } from 'vite-plus';\n\nexport default defineConfig({\n  pack: {\n    entry: 'src/index.ts',\n    bundle: false,\n  },\n} as UserConfig);\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive"] },
+  { argv = ["vpt", "print-file", "vite.config.ts"] },
+]

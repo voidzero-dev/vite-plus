@@ -3,13 +3,27 @@ import path from 'node:path';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import type { OxlintConfig } from 'oxlint';
-import { coerce, satisfies } from 'verkit';
+import { coerce, isLessThan, satisfies, tryParse } from 'verkit';
 
-import { VITEST_VERSION, VITE_PLUS_OVERRIDE_PACKAGES } from '../../utils/constants.ts';
+import type { CatalogDependencyResolver } from '../../utils/catalog.ts';
+import {
+  VITEST_VERSION,
+  VITE_PLUS_OVERRIDE_PACKAGES,
+  coreAliasVersion,
+} from '../../utils/constants.ts';
 import { readJsonFile } from '../../utils/json.ts';
 import { detectPackageMetadata } from '../../utils/package.ts';
 import { displayRelative } from '../../utils/path.ts';
 import { addManualStep, addMigrationWarning, type MigrationReport } from '../report.ts';
+
+export interface RetainedImportDependencies {
+  /** Package directories that need a direct Vitest dependency. */
+  vitest: ReadonlySet<string>;
+  /** Declared browser dependencies and peers to keep in each package directory. */
+  browser: ReadonlyMap<string, ReadonlySet<string>>;
+}
+
+export const DISABLED_IMPORT_RULE_CONFIG = JSON.stringify({ enabled: false, overrides: [] });
 
 // Commands whose effects prevent literal analysis of later invocations.
 export const SHELL_STATE_COMMANDS: readonly string[] = [
@@ -118,6 +132,11 @@ export const REMOVE_PACKAGES = [
   '@vitest/browser-preview',
 ] as const;
 
+// A preserved browser import still needs its original dependency and catalog entry.
+export function bundledPackagesToRemove(retained?: ReadonlySet<string>): readonly string[] {
+  return retained?.size ? REMOVE_PACKAGES.filter((name) => !retained.has(name)) : REMOVE_PACKAGES;
+}
+
 // WebDriverIO is community-maintained. The versioned v5 preflight ensures its
 // minimum version and framework peer; generic reconciliation must not repin it.
 export const WEBDRIVERIO_PROVIDER = '@vitest/browser-webdriverio';
@@ -211,6 +230,54 @@ export const VITEST_BROWSER_DEP_NAMES = [
 // and must be left untouched.
 export const VITEST_IS_MANAGED_OVERRIDE = 'vitest' in VITE_PLUS_OVERRIDE_PACKAGES;
 
+/**
+ * pnpm before 10.2.0 applies the `vite@*` alias override to peer ranges too, so
+ * every `vite` peer reads `vite@npm:@voidzero-dev/vite-plus-core@<version>` and
+ * fails against the installed core. Those versions need the `vite` peer rule
+ * whatever the core version. An unknown version counts as a current pnpm.
+ */
+const PNPM_PEERS_USE_ALIAS_TARGET_VERSION = '10.2.0';
+
+function pnpmAppliesAliasOverrideToPeers(pnpmVersion: string | undefined): boolean {
+  const version = pnpmVersion ? coerce(pnpmVersion) : null;
+  return version !== null && isLessThan(version, PNPM_PEERS_USE_ALIAS_TARGET_VERSION);
+}
+
+/**
+ * Whether pnpm still needs the managed `vite` peer rule (`allowAny: [vite]`,
+ * `allowedVersions: { vite: '*' }`) for the given core alias.
+ *
+ * A stable core version encodes the bundled Vite version (`8.3.5000` bundles
+ * Vite `8.3.5`, see rfcs/core-version-alignment.md). Package managers check
+ * `vite` peer ranges against it correctly, so the rule would only hide real
+ * incompatibilities. Every other spec still needs the rule: a preview
+ * (`0.0.0-commit.<sha>`), a Vite+ prerelease (`8.4.0-vp.0` fails `^8.0.0`), a
+ * `1.x` core from before the alignment, a dist-tag, or a `file:` or URL spec
+ * whose version is unknown.
+ *
+ * Major 8 is the first aligned core major. `packages/tools/src/core-version.ts`
+ * owns the version scheme; the CLI cannot import it, so keep the two in sync.
+ */
+export function vitePeerDependencyRuleRequired(
+  viteSpec: string | undefined,
+  pnpmVersion: string | undefined,
+): boolean {
+  if (pnpmAppliesAliasOverrideToPeers(pnpmVersion)) {
+    return true;
+  }
+  const aliasVersion = coreAliasVersion(viteSpec);
+  if (aliasVersion === undefined) {
+    return true;
+  }
+  const version = tryParse(aliasVersion);
+  return (
+    !version ||
+    version.major < 8 ||
+    (version.prerelease?.length ?? 0) > 0 ||
+    (version.build?.length ?? 0) > 0
+  );
+}
+
 // Fallback specs used when normalizing a stale wrapper alias. Real user
 // ranges (e.g. `vitest: ^3.0.0`) are preserved — only the wrapper alias is
 // rewritten. For `vitest`, we substitute the vitest version vite-plus
@@ -282,13 +349,6 @@ export type PackageJsonDependencyField =
   | 'peerDependencies'
   | 'optionalDependencies';
 
-export type CatalogDependencyResolver = ((
-  catalogSpec: string,
-  dependencyName: string,
-) => string | undefined) & {
-  preferredCatalogSpec: string;
-};
-
 export function warnMigration(message: string, report?: MigrationReport) {
   addMigrationWarning(report, message);
   if (!report) {
@@ -334,7 +394,7 @@ function checkPackageVersion(projectPath: string, name: string, minVersion: stri
   return true;
 }
 
-type PnpmPeerDependencyRules = {
+export type PnpmPeerDependencyRules = {
   allowAny?: string[];
   allowedVersions?: Record<string, string>;
   [key: string]: unknown;
@@ -368,6 +428,29 @@ export function readPackageJsonIfExists(packageJsonPath: string): DependencyBag 
   } catch {
     return undefined;
   }
+}
+
+export function pinnedPackageManagerVersion(pkg: {
+  packageManager?: string;
+  devEngines?: { packageManager?: unknown };
+}): string | undefined {
+  if (typeof pkg.packageManager === 'string') {
+    const separator = pkg.packageManager.indexOf('@');
+    if (separator !== -1) {
+      return pkg.packageManager.slice(separator + 1);
+    }
+  }
+  const devEngine = pkg.devEngines?.packageManager;
+  if (
+    typeof devEngine === 'object' &&
+    devEngine !== null &&
+    !Array.isArray(devEngine) &&
+    'version' in devEngine &&
+    typeof devEngine.version === 'string'
+  ) {
+    return devEngine.version;
+  }
+  return undefined;
 }
 
 // pnpm v10 introduced the map-shaped `allowBuilds` and removed the implicit

@@ -125,7 +125,25 @@ function execCommand(command: string, cwd?: string): string {
   }
 }
 
-function cloneOrResetRepo(repoUrl: string, dir: string, branch: string = 'main', hash?: string) {
+function fetchPinnedCommit(dir: string, hash: string): void {
+  if (spawnSync('git', ['cat-file', '-e', `${hash}^{commit}`], { cwd: dir }).status === 0) {
+    return;
+  }
+  // A pin can name an unmerged pull request, which a branch/tag fetch omits.
+  const result = spawnSync('git', ['fetch', 'origin', hash], { cwd: dir, encoding: 'utf8' });
+  if (result.status !== 0) {
+    throw new Error(
+      `Failed to fetch pinned commit ${hash}: ${result.error?.message ?? result.stderr}`,
+    );
+  }
+}
+
+export function cloneOrResetRepo(
+  repoUrl: string,
+  dir: string,
+  branch: string = 'main',
+  hash?: string,
+) {
   log(`Processing ${dir}...`);
 
   if (existsSync(dir)) {
@@ -158,6 +176,7 @@ function cloneOrResetRepo(repoUrl: string, dir: string, branch: string = 'main',
 
       if (hash) {
         // Reset to specific hash
+        fetchPinnedCommit(dir, hash);
         log(`Resetting ${dir} to pinned hash ${hash.substring(0, 8)}...`);
         execCommand(`git checkout ${branch}`, dir);
         execCommand(`git reset --hard ${hash}`, dir);
@@ -198,6 +217,7 @@ function cloneRepo(repoUrl: string, dir: string, branch: string, hash?: string) 
   log(`Cloning ${repoUrl} (${branch}) into ${dir}...`);
   execCommand(`git clone --branch ${branch} ${repoUrl} ${dir}`);
   if (hash) {
+    fetchPinnedCommit(dir, hash);
     log(`Checking out pinned hash ${hash.substring(0, 8)}...`);
     execCommand(`git reset --hard ${hash}`, dir);
     log(`${dir} cloned and reset to ${hash.substring(0, 8)}`);
@@ -422,20 +442,22 @@ const OXC_PACKAGE_PREFIXES = [
   '@oxfmt/',
   '@oxlint-tsgolint/',
 ];
-const OXC_PACKAGES = new Set([
+const SYNCED_PACKAGES = new Set([
+  '@napi-rs/cli',
   'oxc-minify',
   'oxc-parser',
   'oxc-transform',
   'oxfmt',
   'oxlint',
   'oxlint-tsgolint',
+  'tinybench',
 ]);
 // These packages should always use the highest version
 function syncedPackages(packageName: string): boolean {
-  if (OXC_PACKAGES.has(packageName) || packageName === 'tinybench') {
-    return true;
-  }
-  return OXC_PACKAGE_PREFIXES.some((prefix) => packageName.startsWith(prefix));
+  return (
+    SYNCED_PACKAGES.has(packageName) ||
+    OXC_PACKAGE_PREFIXES.some((prefix) => packageName.startsWith(prefix))
+  );
 }
 
 function mergeSemverVersions(
@@ -454,7 +476,7 @@ function mergeSemverVersions(
   const isExact2 = v2.startsWith('=');
   if (isExact1 || isExact2) {
     if (isExact1 && isExact2 && v1 !== v2) {
-      // For oxc-related packages, use the higher version
+      // For synced packages, use the higher version
       if (syncedPackages(packageName)) {
         const ver1 = v1.slice(1); // Remove '=' prefix
         const ver2 = v2.slice(1);

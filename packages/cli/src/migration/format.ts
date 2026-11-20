@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import { runCommandSilently } from '../utils/command.ts';
 import { type CommandRunSummary, runViteFmt } from '../utils/prompts.ts';
+import { STANDALONE_RENOVATE_CONFIG_FILES } from './renovate.ts';
 import { addMigrationWarning, type MigrationReport } from './report.ts';
 
 type FormatRunner = (
@@ -67,6 +68,14 @@ function isExistingFile(projectRoot: string, relativePath: string): boolean {
   }
 }
 
+function wholeProjectFormatPaths(projectRoot: string): string[] | undefined {
+  // Anchor the exclusions so nested files with the same name still get formatted.
+  const exclusions = STANDALONE_RENOVATE_CONFIG_FILES.filter((file) =>
+    isExistingFile(projectRoot, file),
+  ).map((file) => `!/${file}`);
+  return exclusions.length > 0 ? ['.', ...exclusions] : undefined;
+}
+
 /**
  * Limit automatic formatting to files changed in the current Git worktree.
  * This prevents migration from reformatting unrelated source trees while still
@@ -124,9 +133,12 @@ export async function collectChangedFormatPaths(
       ...parseNullDelimitedPaths(staged.stdout),
       ...parseNullDelimitedPaths(untracked.stdout),
     ]);
+    // The Renovate migration preserves the original formatting around its edit.
+    for (const config of STANDALONE_RENOVATE_CONFIG_FILES) {
+      changedPaths.delete(config);
+    }
 
-    // Oxfmt owns the supported-file list and skips unknown formats. Passing
-    // every existing changed file keeps migration aligned as Oxfmt evolves.
+    // Oxfmt handles file type detection for the remaining paths.
     return [...changedPaths]
       .filter((file) => !excludedPaths?.has(file) && isExistingFile(projectRoot, file))
       .toSorted();
@@ -176,7 +188,8 @@ export async function formatMigratedProject(
     };
     // `undefined` means "format the whole project" (single invocation); a path
     // list is batched so a huge monorepo cannot overflow the command line.
-    const batches = paths === undefined ? [undefined] : chunkPathsByArgLength(paths);
+    const batches =
+      paths === undefined ? [wholeProjectFormatPaths(projectRoot)] : chunkPathsByArgLength(paths);
     let allFormatted = true;
     for (const batch of batches) {
       const result = await format(projectRoot, interactive, batch, formatOptions);

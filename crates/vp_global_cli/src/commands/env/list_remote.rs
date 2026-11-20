@@ -5,7 +5,7 @@ use std::{collections::BTreeMap, io, process::ExitStatus};
 use console::style;
 use futures::future::try_join_all;
 use serde::Serialize;
-use vp_js_runtime::{LtsInfo, NodeProvider, NodeVersionEntry};
+use vp_js_runtime::{LtsInfo, NodeProvider, NodeVersionEntry, find_absolute_latest_version};
 use vp_pm_cli::{fetch_package_manager_versions_for_cwd, resolve_package_manager_version_for_cwd};
 use vt_path::AbsolutePathBuf;
 
@@ -277,7 +277,8 @@ fn build_node_versions(
     default: Option<&str>,
     installed: &[String],
 ) -> Vec<NodeVersionJson> {
-    let latest = versions.first().map(|entry| entry.version.as_str());
+    // Mark the same version that the `latest` alias resolves to, so pre-releases are skipped.
+    let latest = find_absolute_latest_version(versions).ok();
     let latest_lts =
         versions.iter().find(|entry| entry.is_lts()).map(|entry| entry.version.as_str());
     let mut filtered = filter_recent(
@@ -299,7 +300,7 @@ fn build_node_versions(
                     LtsInfo::Codename(name) => Some(name.to_string()),
                     _ => None,
                 },
-                latest: latest == Some(entry.version.as_str()),
+                latest: latest.as_deref() == Some(version.as_str()),
                 latest_lts: latest_lts == Some(entry.version.as_str()),
                 installed: installed.contains(&version),
                 current: current == Some(version.as_str()),
@@ -422,6 +423,41 @@ mod tests {
         };
 
         assert_eq!(format_package_manager_version(&entry, false), "* 10.18.0 current default");
+    }
+
+    #[test]
+    fn node_latest_marker_skips_prerelease() {
+        let versions = vec![
+            NodeVersionEntry {
+                version: "v27.0.0-alpha.0.0.0".into(),
+                lts: LtsInfo::Boolean(false),
+            },
+            NodeVersionEntry {
+                version: "v26.13.0".into(),
+                lts: LtsInfo::Codename("Lithium".into()),
+            },
+            NodeVersionEntry { version: "v26.12.1".into(), lts: LtsInfo::Boolean(false) },
+        ];
+
+        let entries = build_node_versions(
+            &versions,
+            None,
+            false,
+            false,
+            &SortingMethod::Desc,
+            None,
+            None,
+            &[],
+        );
+
+        let latest: Vec<_> = entries
+            .iter()
+            .filter(|entry| entry.latest)
+            .map(|entry| entry.version.as_str())
+            .collect();
+        assert_eq!(latest, ["26.13.0"]);
+        // The pre-release is still listed so it can be installed by its exact version.
+        assert_eq!(entries[0].version, "27.0.0-alpha.0.0.0");
     }
 
     #[test]

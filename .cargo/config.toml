@@ -5,10 +5,6 @@ WORKSPACE_DIR = { value = "rolldown", relative = true }
 [build]
 rustflags = ["--cfg", "tokio_unstable"] # also update .github/workflows/ci.yml
 
-# fix sqlite build error on linux
-[target.'cfg(target_os = "linux")']
-rustflags = ["--cfg", "tokio_unstable", "-C", "link-args=-Wl,--warn-unresolved-symbols"]
-
 # Increase stack size on Windows to avoid stack overflow
 [target.'cfg(all(windows, target_env = "msvc"))']
 rustflags = ["--cfg", "tokio_unstable", "-C", "link-arg=/STACK:8388608"]

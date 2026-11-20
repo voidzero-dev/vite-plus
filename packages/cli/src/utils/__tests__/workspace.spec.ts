@@ -42,6 +42,7 @@ function makeWorkspaceInfo(overrides: Partial<WorkspaceInfo> = {}): WorkspaceInf
       name: '',
       installDir: '',
       binPrefix: '',
+      binPaths: {},
       packageName: '',
       version: '',
     },

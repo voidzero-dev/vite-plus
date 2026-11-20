@@ -63,6 +63,18 @@ steps = [
 ]
 
 [[case]]
+name = "vpx_script_await_using"
+vp = ["local", "global"]
+env = { VP_NODE_VERSION = "22.18.0" }
+comment = "Node.js 22.18.0 exercises asynchronous loader hooks and lowered await using; Node.js 24 exercises synchronous hooks and native await using. Both reject require() of the asynchronous module."
+steps = [
+  { argv = ["vpx", "./src/await-using.mts"], comment = "Node.js 22 disposes the resource after the module body runs" },
+  { argv = ["vpx", "./src/require-await-using.cts"], comment = "Node.js 22 rejects require() of the lowered asynchronous module" },
+  { argv = ["vpx", "./src/await-using.mts"], envs = [["VP_NODE_VERSION", "24.22.1"]], comment = "Node.js 24 runs await using natively and produces the same disposal output" },
+  { argv = ["vpx", "./src/require-await-using.cts"], envs = [["VP_NODE_VERSION", "24.22.1"]], comment = "Node.js 24 rejects require() when the only top-level await is an await using declaration" },
+]
+
+[[case]]
 name = "vpx_script_ts_dependency"
 vp = ["local", "global"]
 comment = "TypeScript published in node_modules is transformed, which Node.js type stripping refuses."

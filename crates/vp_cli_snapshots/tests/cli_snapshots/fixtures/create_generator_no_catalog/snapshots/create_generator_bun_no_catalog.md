@@ -24,12 +24,12 @@
     "dev": "node bin/index.ts"
   },
   "dependencies": {
-    "bingo": "^0.13.2",
+    "bingo": "^0.16.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/node": "^24",
-    "typescript": "^7.0.0"
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2"
   },
   "engines": {
     "node": ">=22.18.0"

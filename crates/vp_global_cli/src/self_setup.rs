@@ -7,6 +7,7 @@ mod shell;
 use std::{path::Path, process::ExitCode};
 
 use dialoguer::{Confirm, theme::ColorfulTheme};
+pub(crate) use external::package_complete;
 use vp_pm_cli::PackageManagerType;
 use vp_setup::{SELF_SETUP_MARKER, VP_BINARY_NAME, install, is_commit_preview_version};
 use vp_shared::{EnvConfig, ManagerPreference, env_vars, output};
@@ -32,7 +33,7 @@ pub(crate) async fn maybe_run() -> Result<Option<ExitCode>, Error> {
     let binary = std::fs::canonicalize(binary)?;
     let bin = binary.parent().ok_or(Error::CliBinaryNotFound)?;
     // Once the binary path is resolved, normal commands only check marker existence.
-    if bin.join(SELF_SETUP_MARKER).try_exists()? {
+    if !crate::homebrew::owns_current_exe() && bin.join(SELF_SETUP_MARKER).try_exists()? {
         if let Some(shell) = shell.as_deref() {
             print_shell_result(shell);
             return Ok(Some(ExitCode::SUCCESS));
@@ -42,18 +43,39 @@ pub(crate) async fn maybe_run() -> Result<Option<ExitCode>, Error> {
 
     vp_shared::validate_vp_dir_env().map_err(|error| Error::Other(error.to_string().into()))?;
     let data = normalize_target(&EnvConfig::get().dirs.data)?;
-    let external = if dunce::simplified(&binary).starts_with(dunce::simplified(data.as_path())) {
+    let external = if !crate::homebrew::owns_current_exe()
+        && dunce::simplified(&binary).starts_with(dunce::simplified(data.as_path()))
+    {
         None
     } else {
         Some(external::SetupState::new(&binary, local_install_version().as_deref())?)
     };
     let bundled = external.is_some() && has_bundled_package(&binary);
+    let user_package = crate::homebrew::user_package_dir()?;
+    let retains_binary = bundled || user_package.is_some();
+    let reuse =
+        shell.is_none() && std::env::var_os(env_vars::VP_SELF_SETUP_REPLACE_EXISTING).is_none();
     // Installers explicitly request setup, including same-version reinstalls.
-    if shell.is_none()
-        && std::env::var_os(env_vars::VP_SELF_SETUP_REPLACE_EXISTING).is_none()
+    if reuse
         && let Some(state) = &external
-        && let Some(installed_binary) = state.completed_binary(bundled).await?
+        && let Some(installed_binary) =
+            completed_external(state, retains_binary, user_package.as_deref()).await?
     {
+        if installed_binary.as_path() == binary {
+            return Ok(None);
+        }
+        return execute_installed(&installed_binary, false);
+    }
+    // Claim fresh roots before the setup lock, preferences, or payload make them nonempty.
+    crate::install_dirs::prepare(&EnvConfig::get().dirs)?;
+    let lock = if let Some(state) = &external { Some(state.lock().await?) } else { None };
+    // Another invocation may have finished while this one waited for setup.
+    if reuse
+        && let Some(state) = &external
+        && let Some(installed_binary) =
+            completed_external(state, retains_binary, user_package.as_deref()).await?
+    {
+        drop(lock);
         if installed_binary.as_path() == binary {
             return Ok(None);
         }
@@ -61,16 +83,33 @@ pub(crate) async fn maybe_run() -> Result<Option<ExitCode>, Error> {
     }
     // Setup diagnostics must not pollute the original command's machine-readable stdout.
     output::route_user_output_to_stderr();
-    let installed_binary = run(&binary, bundled).await?;
+    let installed_binary = run(&binary, bundled, user_package.as_deref()).await?;
     if let Some(state) = external {
         state.save(&installed_binary).await?;
     }
+    drop(lock);
     output::success("Vite+ setup complete.");
     if let Some(shell) = shell.as_deref() {
         print_shell_result(shell);
         return Ok(Some(ExitCode::SUCCESS));
     }
     execute_installed(&installed_binary, true)
+}
+
+async fn completed_external(
+    state: &external::SetupState,
+    retains_binary: bool,
+    user_package: Option<&AbsolutePath>,
+) -> Result<Option<AbsolutePathBuf>, Error> {
+    let Some(binary) = state.completed_binary(retains_binary).await? else {
+        return Ok(None);
+    };
+    if let Some(package) = user_package
+        && !external::package_complete(&binary, package).await?
+    {
+        return Ok(None);
+    }
+    Ok(Some(binary))
 }
 
 fn execute_installed(
@@ -110,7 +149,7 @@ fn execute_installed(
     }
 }
 
-fn has_bundled_package(binary: &Path) -> bool {
+pub(crate) fn has_bundled_package(binary: &Path) -> bool {
     let Some(prefix) = binary.parent().and_then(Path::parent) else { return false };
     let package = prefix.join("node_modules/vite-plus");
     // Unix shims can target an external binary; Windows trampolines need the managed layout.
@@ -151,13 +190,18 @@ fn print_shell_result(shell: &str) {
 }
 
 /// Setup Vite+ for the first run
-async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
+async fn run(
+    source: &Path,
+    bundled: bool,
+    user_package: Option<&AbsolutePath>,
+) -> Result<AbsolutePathBuf, Error> {
     let env = EnvConfig::get();
     let dirs = &env.dirs;
     let active_binary = dirs.data.join("current").join("bin").join(VP_BINARY_NAME);
     let in_place = same_file::is_same_file(source, active_binary.as_path()).unwrap_or(false);
     // External package managers own their payload. Only set up the user's config and shims.
-    let deploy = !in_place && !bundled;
+    let externally_owned = bundled || user_package.is_some();
+    let deploy = !in_place && !externally_owned;
     #[cfg(windows)]
     if !in_place
         && ["vp.exe", "vpx.exe", "vpr.exe"]
@@ -175,10 +219,12 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
         ));
     }
     let previous_install = if deploy { previous_install()? } else { None };
-    let node_override = shim_mode(env.node_manager);
+    // VP_ENV_FORBIDDEN=1 places every component after the system tools, whatever VP_*_MANAGER says.
+    let forbidden = env.env_forbidden.then_some(config::ShimMode::SystemFirst);
+    let node_override = forbidden.or_else(|| shim_mode(env.node_manager));
     // A package upgrade can change the executable path or expire its receipt.
     // Preferences belong to the user, not to that particular binary.
-    let configured = bundled && config::get_config_path()?.as_path().is_file();
+    let configured = externally_owned && config::get_config_path()?.as_path().is_file();
     // A supplied Node choice skips the combined prompt; upgrades preserve all saved choices.
     let default_mode = if in_place || configured || node_override.is_some() {
         None
@@ -186,8 +232,8 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
         management_default()?
     };
     let version = env!("CARGO_PKG_VERSION");
-    let registry = std::env::var(env_vars::NPM_CONFIG_REGISTRY_UPPER)
-        .or_else(|_| std::env::var(env_vars::NPM_CONFIG_REGISTRY))
+    let registry = std::env::var(env_vars::NPM_CONFIG_REGISTRY)
+        .or_else(|_| std::env::var(env_vars::NPM_CONFIG_REGISTRY_UPPER))
         .ok()
         .filter(|value| !value.is_empty())
         .or_else(|| {
@@ -210,9 +256,49 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
         return Err(Error::Other("Invalid local installation version".into()));
     }
 
+    // VP_ENV_FORBIDDEN=1 installs with the system node and pnpm. Check them before
+    // changing anything: a same-version reinstall reuses the active directory, and
+    // Homebrew setup saves preferences and creates its package directory below.
+    let system_tools = if env.env_forbidden && !skip_deps && !bundled {
+        let source = AbsolutePathBuf::new(source.to_path_buf()).ok_or(Error::CliBinaryNotFound)?;
+        let installs = if let Some(package) = user_package {
+            !external::package_complete(&source, package).await?
+        } else if deploy {
+            true
+        } else {
+            // An in-place setup completes the version directory it runs from. Missing or
+            // stale installation receipts reinstall, as the lockfile preparation below decides.
+            let version_dir = source.parent().and_then(|bin| bin.parent());
+            match version_dir {
+                Some(version_dir) => {
+                    !version_dir.join("node_modules/vite-plus/package.json").as_path().is_file()
+                        || !vp_setup::lockfile::is_complete(&source, version_dir).await?
+                }
+                None => true,
+            }
+        };
+        if installs {
+            Some(install::system_install_tools(Some(&runtime::cli_node_range())).await?)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    // Standalone deployment shares the upgrade lock. In-place setup may run
+    // inside an upgrade child, so it must not reacquire the parent's lock.
+    let _install_lock =
+        if deploy { Some(install::lock_install_dir(&dirs.data).await?) } else { None };
+
     // 1. Prepare the payload before activating it. Upgrade has already done this in the in-place case.
     let previous_version = install::read_current_version(&dirs.data).await;
-    let version_dir = if deploy {
+    let version_dir = if let Some(package) = user_package {
+        // Save choices before network work so a failed install does not ask again.
+        save_management_preferences(node_override, default_mode).await?;
+        tokio::fs::create_dir_all(package.join("bin")).await?;
+        package.to_absolute_path_buf()
+    } else if deploy {
         let name =
             install::target_install_dir_name(install_version, previous_version.as_deref(), true);
         dirs.data.join(name)
@@ -222,12 +308,11 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
         )
         .ok_or(Error::CliBinaryNotFound)?
     };
-    let binary = if bundled {
+    let binary = if externally_owned {
         AbsolutePathBuf::new(source.to_path_buf()).ok_or(Error::CliBinaryNotFound)?
     } else {
         version_dir.join("bin").join(VP_BINARY_NAME)
     };
-    crate::install_dirs::prepare(dirs)?;
     if deploy {
         tokio::fs::create_dir_all(version_dir.join("bin")).await?;
         install::clear_self_setup_marker(&version_dir).await?;
@@ -248,14 +333,31 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
         false
     };
     let needs_deps = needs_dependency_install
-        || !version_dir.join("node_modules/vite-plus/package.json").as_path().is_file();
+        || if let Some(package) = user_package {
+            !external::package_complete(&binary, package).await?
+        } else {
+            !version_dir.join("node_modules/vite-plus/package.json").as_path().is_file()
+        };
     // Standalone retries also return the selected runtime when dependencies already exist.
     let node_version =
         if !skip_deps && (deploy || needs_deps) { runtime::resolve().await? } else { None };
     if needs_deps {
         output::info(&format!("installing vite-plus@{version}..."));
         install::generate_wrapper_package_json(&version_dir, version).await?;
-        if !skip_deps {
+        if !skip_deps && env.env_forbidden {
+            // Normally checked above, before any change; check now if that was skipped.
+            let tools = match system_tools {
+                Some(tools) => tools,
+                None => install::system_install_tools(Some(&runtime::cli_node_range())).await?,
+            };
+            install::install_production_deps(
+                &version_dir,
+                registry,
+                true,
+                Some(install::NodeVersion::System(&tools)),
+            )
+            .await?;
+        } else if !skip_deps {
             let preferred =
                 node_version.as_deref().filter(|version| runtime::supports_cli(version));
             if let Some(version) = node_version.as_deref().filter(|_| preferred.is_none()) {
@@ -263,8 +365,27 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
                     "Requested Node.js {version} does not support this Vite+ release; using a separate installation runtime."
                 ));
             }
-            install::install_production_deps(&version_dir, registry, true, preferred).await?;
+            install::install_production_deps(
+                &version_dir,
+                registry,
+                true,
+                preferred.map(install::NodeVersion::Preferred),
+            )
+            .await?;
         }
+        if user_package.is_some() && !external::package_matches_binary(&version_dir) {
+            return Err(Error::Other("Vite+ dependencies do not match this CLI version".into()));
+        }
+    }
+    if let Some(package) = user_package
+        && !external::package_complete(&binary, package).await?
+    {
+        // Legacy archives and local dependency bypasses may not produce a receipt.
+        // Never re-execute into setup when the payload cannot pass its completion check.
+        return Err(Error::Other(
+            "Homebrew dependency installation has no matching completion receipt. Reinstall a formula with a published installation lockfile."
+                .into(),
+        ));
     }
     if let Some(version) = node_version {
         runtime::write_resolution(&version).await?;
@@ -307,22 +428,9 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
                 ));
             }
         }
-        let mut settings = config::load_config().await?;
-        if let Some(mode) = node_override.or(default_mode) {
-            settings.node_shim_mode = mode;
+        if user_package.is_none() {
+            save_management_preferences(node_override, default_mode).await?;
         }
-        let pm_mode = shim_mode(env.pm_manager).or(default_mode);
-        for (family, preference) in [
-            (PackageManagerType::Npm, env.npm_manager),
-            (PackageManagerType::Pnpm, env.pnpm_manager),
-            (PackageManagerType::Yarn, env.yarn_manager),
-            (PackageManagerType::Bun, env.bun_manager),
-        ] {
-            if let Some(mode) = shim_mode(preference).or(pm_mode) {
-                settings.set_package_manager_shim_mode(family, mode);
-            }
-        }
-        config::save_config(&settings).await?;
     }
 
     // Existing Windows installs also need the fallback directory in their persistent PATH.
@@ -364,10 +472,36 @@ async fn run(source: &Path, bundled: bool) -> Result<AbsolutePathBuf, Error> {
     }
 
     // A failure above leaves the marker absent so a later launch can retry.
-    if !bundled {
+    if !externally_owned {
         tokio::fs::write(version_dir.join("bin").join(SELF_SETUP_MARKER), b"").await?;
     }
     Ok(binary)
+}
+
+async fn save_management_preferences(
+    node_override: Option<config::ShimMode>,
+    default_mode: Option<config::ShimMode>,
+) -> Result<(), Error> {
+    let env = EnvConfig::get();
+    let mut settings = config::load_config().await?;
+    if let Some(mode) = node_override.or(default_mode) {
+        settings.node_shim_mode = mode;
+    }
+    // VP_ENV_FORBIDDEN=1 places every package manager after the system tools too.
+    let forbidden = env.env_forbidden.then_some(config::ShimMode::SystemFirst);
+    let pm_mode = shim_mode(env.pm_manager).or(default_mode);
+    for (family, preference) in [
+        (PackageManagerType::Npm, env.npm_manager),
+        (PackageManagerType::Pnpm, env.pnpm_manager),
+        (PackageManagerType::Yarn, env.yarn_manager),
+        (PackageManagerType::Bun, env.bun_manager),
+    ] {
+        if let Some(mode) = forbidden.or_else(|| shim_mode(preference)).or(pm_mode) {
+            settings.set_package_manager_shim_mode(family, mode);
+        }
+    }
+    config::save_config(&settings).await?;
+    Ok(())
 }
 
 fn interactive() -> bool {

@@ -4,7 +4,7 @@ import { styleText } from 'node:util';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
-import { parseCreateArgs, vitePlusHeader } from '../../binding/index.js';
+import { getPackageManagerOverride, parseCreateArgs, vitePlusHeader } from '../../binding/index.js';
 import {
   addFrameworkShim,
   createCatalogDependencyResolver,
@@ -23,6 +23,7 @@ import {
   rewriteStandaloneProject,
   setPackageManager,
   shouldSkipStagedMigrationForHooks,
+  workspaceSupportsCatalog,
 } from '../migration/migrator.ts';
 import { DependencyType, PackageManager, type WorkspaceInfo } from '../types/index.ts';
 import {
@@ -38,11 +39,13 @@ import {
   resolveApproveBuildTargets,
 } from '../utils/approve-builds.ts';
 import { unwrapCliParseOutcome } from '../utils/cli-parse.ts';
+import { isForceOverrideMode } from '../utils/constants.ts';
 import { documentationUrl } from '../utils/documentation.ts';
 import { detectExistingEditors, selectEditors, writeEditorConfigs } from '../utils/editor.ts';
 import { findGitRoot, initGitRepository } from '../utils/git.ts';
 import { renderCliDoc } from '../utils/help.ts';
 import { readJsonFile } from '../utils/json.ts';
+import { hasVitePlusDependency } from '../utils/package.ts';
 import { displayRelative } from '../utils/path.ts';
 import {
   cancelAndExit,
@@ -90,7 +93,7 @@ import { BuiltinTemplate, TemplateType } from './templates/types.ts';
 import {
   deriveDefaultPackageName,
   detectLauncherPackageManager,
-  ensurePnpmCreateCatalogEntries,
+  ensureCreateCatalogEntries,
   ensureDefaultGitignoreEntries,
   ensureGitignoreVsCodeEditorConfigs,
   formatLocalVpCommand,
@@ -675,79 +678,125 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     }
   }
 
-  // Resolve package manager: existing monorepo > CLI flag > ambient detection > launcher > prompt/default
+  // The installer applies VP_PACKAGE_MANAGER before project pins or the create CLI flag.
+  const packageManagerOverride = getPackageManagerOverride();
+  // Otherwise: existing monorepo > CLI flag > ambient detection > launcher > prompt/default.
   const requestedPackageManager = options.packageManager;
   const detectedPackageManager = workspaceInfoOptional.packageManager;
+  const preferredPackageManager = isMonorepo
+    ? (detectedPackageManager ?? requestedPackageManager)
+    : (requestedPackageManager ?? detectedPackageManager);
   const launcherPackageManager = detectLauncherPackageManager();
-  const packageManager =
-    (isMonorepo
-      ? (detectedPackageManager ?? requestedPackageManager)
-      : (requestedPackageManager ?? detectedPackageManager)) ??
-    launcherPackageManager ??
-    (await selectPackageManager(options.interactive, compactOutput));
+  const chosenPackageManager =
+    (packageManagerOverride?.name as PackageManager | undefined) ??
+    preferredPackageManager ??
+    launcherPackageManager;
+  // Only the non-interactive default is Vite+'s own choice, so only it may become npm when pnpm is unavailable.
+  const fallbackToNpm = chosenPackageManager === undefined && !options.interactive;
+  const selectedPackageManager =
+    chosenPackageManager ??
+    (await selectPackageManager(options.interactive, compactOutput, workspaceInfoOptional.rootDir));
   const packageManagerVersion =
-    packageManager === detectedPackageManager
+    packageManagerOverride?.version ??
+    (selectedPackageManager === detectedPackageManager
       ? workspaceInfoOptional.packageManagerVersion
-      : 'latest';
+      : 'latest');
   const shouldSilencePackageManagerInstallLog =
     compactOutput || (isMonorepo && workspaceInfoOptional.packageManager !== undefined);
   // ensure the package manager is installed by vite-plus
   const downloadResult = await downloadPackageManager(
-    packageManager,
+    selectedPackageManager,
     packageManagerVersion,
     options.interactive,
     shouldSilencePackageManagerInstallLog,
     workspaceInfoOptional.rootDir,
+    packageManagerOverride?.expectedHash ?? undefined,
+    fallbackToNpm,
   );
+  const packageManager = downloadResult.name as PackageManager;
+  let resolvedPackageManagerOverride: string | undefined;
+  if (packageManagerOverride) {
+    resolvedPackageManagerOverride = `${packageManager}@${downloadResult.version}`;
+    if (packageManagerOverride.expectedHash) {
+      resolvedPackageManagerOverride += `+${packageManagerOverride.expectedHash}`;
+    }
+  }
   const workspaceInfo: WorkspaceInfo = {
     ...workspaceInfoOptional,
     packageManager,
+    packageManagerVersion: downloadResult.version,
     downloadPackageManager: downloadResult,
+  };
+  const installOptions = {
+    silent: compactOutput,
+    packageManager,
+    packageManagerVersion: downloadResult.version,
+    packageManagerOverride: resolvedPackageManagerOverride,
+    detectIgnoredBuilds: true,
   };
   // Only the global CLI puts `vp` on PATH; launches through a package manager reach it through the project's package manager.
   const vpRunCommand = launcherPackageManager
     ? formatLocalVpCommand(packageManager, 'vp run')
     : 'vp run';
 
-  const existingAgentTargetPaths =
-    options.agent !== undefined || !options.interactive
-      ? undefined
-      : detectExistingAgentTargetPaths(workspaceInfoOptional.rootDir);
-  if (existingAgentTargetPaths !== undefined) {
-    selectedAgentTargetPaths = existingAgentTargetPaths;
-  } else {
-    const agentSelection = await selectAgentTargets({
-      interactive: options.interactive,
-      agent: options.agent,
-      onCancel: () => cancelAndExit(),
-    });
-    selectedAgentTargetPaths = agentSelection.targetPaths;
-    shouldWriteCopilotSetupWorkflow = agentSelection.selectedAgents.some(
-      (agent) => agent.id === COPILOT_AGENT_ID,
-    );
-  }
-
   const shouldConfigureEditors = shouldConfigureEditorsForCreate({
     editor: options.editor,
     isMonorepo,
   });
-  if (shouldConfigureEditors) {
-    const existingEditors =
-      options.editor || !options.interactive
-        ? undefined
-        : detectExistingEditors(workspaceInfoOptional.rootDir);
-    selectedEditors =
-      existingEditors ??
-      (await selectEditors({
-        interactive: options.interactive,
-        editor: options.editor,
-        onCancel: () => cancelAndExit(),
-      }));
-  }
 
-  const shouldSetupGit = await resolveGitInit(options, isMonorepo);
-  if (!isMonorepo && (!options.interactive || shouldSetupGit || options.hooks === true)) {
-    shouldSetupHooks = await promptGitHooks(options);
+  // Agent, editor, git and hook choices. Direct scaffolds ask up front. A
+  // `create-xxx` CLI asks after it ran (`generatedProjectPath`), so its own
+  // prompts come first and the answers reflect the files it generated.
+  let shouldSetupGit = false;
+  const resolveProjectSetup = async (generatedProjectPath?: string) => {
+    const agentInstructionsRoot =
+      generatedProjectPath && !isMonorepo ? generatedProjectPath : workspaceInfoOptional.rootDir;
+    const existingAgentTargetPaths =
+      options.agent !== undefined || !options.interactive
+        ? undefined
+        : detectExistingAgentTargetPaths(agentInstructionsRoot);
+    if (existingAgentTargetPaths !== undefined) {
+      selectedAgentTargetPaths = existingAgentTargetPaths;
+    } else {
+      const agentSelection = await selectAgentTargets({
+        interactive: options.interactive,
+        agent: options.agent,
+        onCancel: () => cancelAndExit(),
+      });
+      selectedAgentTargetPaths = agentSelection.targetPaths;
+      shouldWriteCopilotSetupWorkflow = agentSelection.selectedAgents.some(
+        (agent) => agent.id === COPILOT_AGENT_ID,
+      );
+    }
+
+    if (shouldConfigureEditors) {
+      const existingEditors =
+        options.editor || !options.interactive
+          ? undefined
+          : detectExistingEditors(generatedProjectPath ?? workspaceInfoOptional.rootDir);
+      selectedEditors =
+        existingEditors ??
+        (await selectEditors({
+          interactive: options.interactive,
+          editor: options.editor,
+          onCancel: () => cancelAndExit(),
+        }));
+    }
+
+    // A `create-xxx` CLI may have initialized the repository itself.
+    const hasGitRepository =
+      generatedProjectPath !== undefined && fs.existsSync(path.join(generatedProjectPath, '.git'));
+    shouldSetupGit = !hasGitRepository && (await resolveGitInit(options, isMonorepo));
+    if (
+      !isMonorepo &&
+      (!options.interactive || hasGitRepository || shouldSetupGit || options.hooks === true)
+    ) {
+      shouldSetupHooks = await promptGitHooks(options);
+    }
+  };
+
+  if (isDirectScaffoldTemplate) {
+    await resolveProjectSetup();
   }
 
   const createProgress =
@@ -970,12 +1019,12 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       );
     }
     updateCreateProgress('Installing dependencies');
-    const installSummary = await runViteInstall(fullPath, options.interactive, installArgs, {
-      silent: compactOutput,
-      packageManager: workspaceInfo.packageManager,
-      packageManagerVersion: workspaceInfo.downloadPackageManager.version,
-      detectIgnoredBuilds: true,
-    });
+    const installSummary = await runViteInstall(
+      fullPath,
+      options.interactive,
+      installArgs,
+      installOptions,
+    );
     await handleIgnoredBuilds(fullPath, fullPath, installSummary);
     updateCreateProgress('Formatting code');
     await runViteFmt(fullPath, options.interactive, undefined, { silent: compactOutput });
@@ -1056,6 +1105,9 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   }
 
   const fullPath = path.join(workspaceInfo.rootDir, projectDir);
+  if (!isDirectScaffoldTemplate) {
+    await resolveProjectSetup(fullPath);
+  }
 
   // Register a scaffolded generator in `create.templates` so it appears in the
   // `vp create` picker (and resolves by name) without a manual config edit.
@@ -1117,7 +1169,8 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     await writeEditorConfigs({
       projectRoot: fullPath,
       editorId: selectedEditors,
-      interactive: options.interactive,
+      // Editor configs a `create-xxx` CLI generated are merged without asking per file.
+      interactive: options.interactive && isDirectScaffoldTemplate,
       silent: compactOutput,
       extraVsCodeSettings: { 'npm.scriptRunner': 'vp' },
       packageManager,
@@ -1128,6 +1181,18 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     resumeCreateProgress();
   }
 
+  // A `create-xxx` CLI that already generates a Vite+ project made its own
+  // toolchain choices (e.g. keeping ESLint), so skip migration like `vp migrate`
+  // does for Vite+ projects. Monorepo packages still need the rewrite to align
+  // with the workspace catalog.
+  const packageJsonPath = path.join(fullPath, 'package.json');
+  const isVitePlusTemplate =
+    !isMonorepo &&
+    templateInfo.type === TemplateType.remote &&
+    !isForceOverrideMode() &&
+    fs.existsSync(packageJsonPath) &&
+    hasVitePlusDependency(readJsonFile(packageJsonPath));
+
   // The migrate-before-rewrite reorder is only needed when the template
   // actually ships ESLint or Prettier (e.g. `create-vite --template
   // react-ts`). Builtin templates (vite:library, vite:application,
@@ -1135,9 +1200,10 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   // and relies on `rewrite*Project` to add tarball overrides BEFORE the
   // first install, so install-first would break CI's local-tarball resolve.
   const shouldMigrateLintFmtTools =
-    detectEslintProject(fullPath).hasDependency ||
-    detectPrettierProject(fullPath).hasDependency ||
-    detectTsupProject(fullPath).hasDependency;
+    !isVitePlusTemplate &&
+    (detectEslintProject(fullPath).hasDependency ||
+      detectPrettierProject(fullPath).hasDependency ||
+      detectTsupProject(fullPath).hasDependency);
 
   let installSummary: CommandRunSummary | undefined;
 
@@ -1163,12 +1229,12 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     // re-detects and approves, so we only need this pre-install to skip
     // `--ignore-scripts` (detectIgnoredBuilds treats the gated-build error as
     // installed, so migration still proceeds).
-    installSummary = await runViteInstall(installCwd, options.interactive, installArgs, {
-      silent: compactOutput,
-      packageManager: workspaceInfo.packageManager,
-      packageManagerVersion: workspaceInfo.downloadPackageManager.version,
-      detectIgnoredBuilds: true,
-    });
+    installSummary = await runViteInstall(
+      installCwd,
+      options.interactive,
+      installArgs,
+      installOptions,
+    );
     if (installSummary.status !== 'installed') {
       return;
     }
@@ -1258,15 +1324,22 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       shouldSetupHooks,
       workspaceInfo.packageManager,
     );
+    const supportCatalog = workspaceSupportsCatalog(
+      workspaceInfo.rootDir,
+      workspaceInfo.packageManager,
+      workspaceInfo.packageManagerVersion,
+    );
     rewriteMonorepoProject(
       fullPath,
       workspaceInfo.packageManager,
       skipStagedMigration,
       compactOutput,
       undefined,
-      workspaceInfo.packageManager === PackageManager.pnpm
-        ? createCatalogDependencyResolver(workspaceInfo.rootDir, workspaceInfo.packageManager)
-        : undefined,
+      createCatalogDependencyResolver(
+        workspaceInfo.rootDir,
+        workspaceInfo.packageManager,
+        workspaceInfo.packageManagerVersion,
+      ),
       {
         rootDir: workspaceInfo.rootDir,
         packages: discoverWorkspacePackages(
@@ -1274,9 +1347,16 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
           workspaceInfo.rootDir,
         ),
       },
+      false,
+      supportCatalog,
     );
-    if (workspaceInfo.packageManager === PackageManager.pnpm) {
-      ensurePnpmCreateCatalogEntries(workspaceInfo.rootDir, fullPath);
+    if (supportCatalog) {
+      ensureCreateCatalogEntries(
+        workspaceInfo.rootDir,
+        fullPath,
+        workspaceInfo.packageManager,
+        workspaceInfo.packageManagerVersion,
+      );
     }
     for (const framework of detectFramework(fullPath)) {
       if (!hasFrameworkShim(fullPath, framework)) {
@@ -1284,12 +1364,12 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       }
     }
     updateCreateProgress('Installing dependencies');
-    installSummary = await runViteInstall(workspaceInfo.rootDir, options.interactive, installArgs, {
-      silent: compactOutput,
-      packageManager: workspaceInfo.packageManager,
-      packageManagerVersion: workspaceInfo.downloadPackageManager.version,
-      detectIgnoredBuilds: true,
-    });
+    installSummary = await runViteInstall(
+      workspaceInfo.rootDir,
+      options.interactive,
+      installArgs,
+      installOptions,
+    );
     await handleIgnoredBuilds(fullPath, workspaceInfo.rootDir, installSummary);
     updateCreateProgress('Formatting code');
     // Also format the root config when generator registration rewrote it (the
@@ -1317,12 +1397,14 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       await installAndMigrate(fullPath);
     }
     updateCreateProgress('Applying Vite+ project setup');
-    const skipStagedMigration = shouldSkipStagedMigrationForHooks(
-      fullPath,
-      shouldSetupHooks,
-      workspaceInfo.packageManager,
-    );
-    rewriteStandaloneProject(fullPath, workspaceInfo, skipStagedMigration, compactOutput);
+    if (!isVitePlusTemplate) {
+      const skipStagedMigration = shouldSkipStagedMigrationForHooks(
+        fullPath,
+        shouldSetupHooks,
+        workspaceInfo.packageManager,
+      );
+      rewriteStandaloneProject(fullPath, workspaceInfo, skipStagedMigration, compactOutput);
+    }
     setPackageManager(fullPath, workspaceInfo.downloadPackageManager);
     for (const framework of detectFramework(fullPath)) {
       if (!hasFrameworkShim(fullPath, framework)) {
@@ -1333,12 +1415,12 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       installGitHooks(fullPath, compactOutput, undefined, workspaceInfo.packageManager);
     }
     updateCreateProgress('Installing dependencies');
-    installSummary = await runViteInstall(fullPath, options.interactive, installArgs, {
-      silent: compactOutput,
-      packageManager: workspaceInfo.packageManager,
-      packageManagerVersion: workspaceInfo.downloadPackageManager.version,
-      detectIgnoredBuilds: true,
-    });
+    installSummary = await runViteInstall(
+      fullPath,
+      options.interactive,
+      installArgs,
+      installOptions,
+    );
     await handleIgnoredBuilds(fullPath, fullPath, installSummary);
     updateCreateProgress('Formatting code');
     await runViteFmt(fullPath, options.interactive, undefined, { silent: compactOutput });
