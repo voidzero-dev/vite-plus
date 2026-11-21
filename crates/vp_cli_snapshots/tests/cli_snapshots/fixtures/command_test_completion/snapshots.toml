@@ -1,0 +1,87 @@
+[[case]]
+name = "test_completion_follows_local_toolchain"
+vp = "global"
+seed-runtime = false
+env = { VP_COMPLETE = "bash", _CLAP_COMPLETE_INDEX = "2" }
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "node_modules"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "package-alpha", "node_modules/vite-plus"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "package-alpha/artifacts", "node_modules/vite-plus/dist"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "node_modules/vite-plus/node_modules/vitest"], snapshot = false },
+  { argv = ["vpt", "cp", "package-alpha/vitest-package.json", "node_modules/vite-plus/node_modules/vitest/package.json"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "other/node_modules"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "package-beta", "other/node_modules/vite-plus"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "package-beta/artifacts", "other/node_modules/vite-plus/dist"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "other/node_modules/vite-plus/node_modules/vitest"], snapshot = false },
+  { argv = ["vpt", "cp", "package-beta/vitest-package.json", "other/node_modules/vite-plus/node_modules/vitest/package.json"], snapshot = false },
+  { argv = ["vp", "--", "vp", "test", "--al"], envs = [["VP_GLOBAL_CLI_JS_SCRIPTS_DIR", "${workspace}/global/dist"]], comment = "Uses the runnable local CLI metadata without starting Node" },
+  { argv = ["vp", "--", "vp", "-C", "other", "test", "--be"], envs = [["VP_GLOBAL_CLI_JS_SCRIPTS_DIR", "${workspace}/global/dist"], ["_CLAP_COMPLETE_INDEX", "4"]], comment = "Reads metadata from the directory selected inside the completion payload" },
+  { argv = ["vp", "--", "vp", "-Cother", "test", "--be"], envs = [["VP_GLOBAL_CLI_JS_SCRIPTS_DIR", "${workspace}/global/dist"], ["_CLAP_COMPLETE_INDEX", "3"]] },
+  { argv = ["vp", "--", "vp", "-C=other", "test", "--be"], envs = [["VP_GLOBAL_CLI_JS_SCRIPTS_DIR", "${workspace}/global/dist"], ["_CLAP_COMPLETE_INDEX", "3"]] },
+]
+
+[[case]]
+name = "test_completion_old_local_does_not_use_global_metadata"
+vp = "global"
+seed-runtime = false
+env = { VP_COMPLETE = "bash", _CLAP_COMPLETE_INDEX = "2" }
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "node_modules"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "package-old", "node_modules/vite-plus"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "package-old/artifacts", "node_modules/vite-plus/dist"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "package-global", "global"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "package-global/artifacts", "global/dist"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "global/node_modules/vitest"], snapshot = false },
+  { argv = ["vpt", "cp", "package-global/vitest-package.json", "global/node_modules/vitest/package.json"], snapshot = false },
+  { argv = ["vp", "--", "vp", "test", "--glob"], envs = [["VP_GLOBAL_CLI_JS_SCRIPTS_DIR", "${workspace}/global/dist"]], comment = "An old runnable local package must not use a newer global completion schema" },
+  { argv = ["vpt", "rm", "node_modules/vite-plus/dist/bin.js"], snapshot = false },
+  { argv = ["vp", "--", "vp", "test", "--glob"], envs = [["VP_GLOBAL_CLI_JS_SCRIPTS_DIR", "${workspace}/global/dist"]], comment = "Falls back globally only when the local CLI is not runnable" },
+]
+
+[[case]]
+name = "test_completion_vitest_3_silently_declines"
+vp = "global"
+seed-runtime = false
+env = { VP_COMPLETE = "bash", _CLAP_COMPLETE_INDEX = "2" }
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "node_modules"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "package-alpha", "node_modules/vite-plus"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "package-alpha/artifacts", "node_modules/vite-plus/dist"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "node_modules/vite-plus/node_modules/vitest"], snapshot = false },
+  { argv = ["vpt", "write-file", "node_modules/vite-plus/node_modules/vitest/package.json", '{"name":"vitest","version":"3.2.4"}'], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "package-global", "global"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "package-global/artifacts", "global/dist"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "global/node_modules/vitest"], snapshot = false },
+  { argv = ["vpt", "cp", "package-global/vitest-package.json", "global/node_modules/vitest/package.json"], snapshot = false },
+  { argv = ["vp", "--", "vp", "test", "--al"], envs = [["VP_GLOBAL_CLI_JS_SCRIPTS_DIR", "${workspace}/global/dist"]], comment = "Stale Vitest 5 metadata with legacy Vitest: empty stdout/stderr and success" },
+  { argv = ["vp", "--", "vp", "test", "--glob"], envs = [["VP_GLOBAL_CLI_JS_SCRIPTS_DIR", "${workspace}/global/dist"]], comment = "Does not borrow the global toolchain's Vitest 5 metadata" },
+  { argv = ["vpt", "rm", "node_modules/vite-plus/dist/completion/test.json"], snapshot = false },
+  { argv = ["vp", "--", "vp", "test", "--al"], envs = [["VP_GLOBAL_CLI_JS_SCRIPTS_DIR", "${workspace}/global/dist"]], comment = "Missing metadata also completes silently" },
+  { argv = ["vpt", "cp", "package-alpha/artifacts/completion/test.json", "node_modules/vite-plus/dist/completion/test.json"], snapshot = false },
+  { argv = ["vpt", "cp", "package-alpha/vitest-package.json", "node_modules/vite-plus/node_modules/vitest/package.json"], snapshot = false },
+  { argv = ["vp", "--", "vp", "test", "--al"], comment = "Positive control: matched Vitest 5 metadata completes again, without executing tests" },
+]
+
+[[case]]
+name = "test_completion_vitest_4_silently_declines"
+vp = "global"
+seed-runtime = false
+env = { VP_COMPLETE = "bash", _CLAP_COMPLETE_INDEX = "2" }
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "node_modules"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "package-alpha", "node_modules/vite-plus"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "package-alpha/artifacts", "node_modules/vite-plus/dist"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "node_modules/vite-plus/node_modules/vitest"], snapshot = false },
+  { argv = ["vpt", "write-file", "node_modules/vite-plus/node_modules/vitest/package.json", '{"name":"vitest","version":"4.1.10"}'], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "package-global", "global"], snapshot = false },
+  { argv = ["vpt", "cp", "-r", "package-global/artifacts", "global/dist"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "global/node_modules/vitest"], snapshot = false },
+  { argv = ["vpt", "cp", "package-global/vitest-package.json", "global/node_modules/vitest/package.json"], snapshot = false },
+  { argv = ["vp", "--", "vp", "test", "--al"], envs = [["VP_GLOBAL_CLI_JS_SCRIPTS_DIR", "${workspace}/global/dist"]], comment = "Stale Vitest 5 metadata with legacy Vitest: empty stdout/stderr and success" },
+  { argv = ["vp", "--", "vp", "test", "--glob"], envs = [["VP_GLOBAL_CLI_JS_SCRIPTS_DIR", "${workspace}/global/dist"]], comment = "Does not borrow the global toolchain's Vitest 5 metadata" },
+  { argv = ["vpt", "rm", "node_modules/vite-plus/dist/completion/test.json"], snapshot = false },
+  { argv = ["vp", "--", "vp", "test", "--al"], envs = [["VP_GLOBAL_CLI_JS_SCRIPTS_DIR", "${workspace}/global/dist"]], comment = "Missing metadata also completes silently" },
+  { argv = ["vpt", "cp", "package-alpha/artifacts/completion/test.json", "node_modules/vite-plus/dist/completion/test.json"], snapshot = false },
+  { argv = ["vpt", "cp", "package-alpha/vitest-package.json", "node_modules/vite-plus/node_modules/vitest/package.json"], snapshot = false },
+  { argv = ["vp", "--", "vp", "test", "--al"], comment = "Positive control: matched Vitest 5 metadata completes again, without executing tests" },
+]
