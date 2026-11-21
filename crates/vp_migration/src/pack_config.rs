@@ -95,6 +95,62 @@ pub(crate) fn rewrite_inline_pack_types(content: &str, file: &Path) -> Option<St
             continue;
         }
         let Some(specifiers) = &import.specifiers else { continue };
+        if let Some(namespace) = specifiers.iter().find_map(|specifier| match specifier {
+            ImportDeclarationSpecifier::ImportNamespaceSpecifier(namespace) => Some(namespace),
+            _ => None,
+        }) {
+            let Some(symbol) = namespace.local.symbol_id.get() else { continue };
+            let mut pack = Vec::new();
+            let mut all_pack = true;
+            for reference in scoping.get_resolved_references(symbol) {
+                let node = reference.node_id();
+                if let AstKind::TSQualifiedName(name) = semantic.nodes().parent_kind(node)
+                    && reference.is_type()
+                    && name.right.name == "UserConfig"
+                    && contains(name.span.start)
+                {
+                    pack.push(name.span.start as usize..name.span.end as usize);
+                } else {
+                    all_pack = false;
+                }
+            }
+            if pack.is_empty() {
+                continue;
+            }
+            if !all_pack {
+                // Keep the namespace for its remaining standalone uses.
+                for span in pack {
+                    edits.push((span, "import('vite-plus/pack').UserConfig".to_owned()));
+                }
+            } else if specifiers.len() == 1 {
+                let span = import.source.span;
+                edits.push((
+                    span.start as usize + 1..span.end as usize - 1,
+                    "vite-plus/pack".to_owned(),
+                ));
+            } else {
+                // A default binding can share the declaration with the namespace.
+                let span = namespace.span.start as usize..namespace.span.end as usize;
+                if let Some(node) = grep.root().dfs().find(|node| {
+                    node.kind() == "namespace_import" && node.range().start == span.start
+                }) && let Some(comma) = node.prev_all().find(|node| node.kind() != "comment")
+                    && comma.kind() == ","
+                {
+                    let start = import.span.start as usize;
+                    let newline = if content.contains("\r\n") { "\r\n" } else { "\n" };
+                    edits.push((
+                        start..start,
+                        format!(
+                            "import type {} from 'vite-plus/pack';{newline}",
+                            &content[span.clone()]
+                        ),
+                    ));
+                    edits.push((comma.range(), String::new()));
+                    edits.push((span, String::new()));
+                }
+            }
+            continue;
+        }
         let mut moved = Vec::new();
         for specifier in specifiers {
             let ImportDeclarationSpecifier::ImportSpecifier(specifier) = specifier else {
@@ -815,6 +871,52 @@ fn move_option(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn migrates_namespace_used_by_pack() {
+        let file = Path::new("vite.config.ts");
+        let input = "
+import type * as tsdown from 'tsdown';
+export default { pack: { entry: 'src/index.ts' } satisfies tsdown.UserConfig };
+";
+        let actual = rewrite_inline_pack_types(input, file).unwrap();
+        assert!(actual.contains("import type * as tsdown from 'vite-plus/pack'"), "{actual}");
+        assert!(actual.contains("satisfies tsdown.UserConfig"), "{actual}");
+    }
+
+    #[test]
+    fn keeps_namespace_references_for_standalone_tsdown() {
+        let file = Path::new("vite.config.ts");
+        let input = "
+import type * as buildTypes from 'tsdown';
+export type LegacyOptions = buildTypes.UserConfig;
+export default { pack: { entry: 'src/index.ts' } satisfies buildTypes.UserConfig };
+";
+        let actual = rewrite_inline_pack_types(input, file).unwrap();
+        assert!(actual.contains("import type * as buildTypes from 'tsdown'"), "{actual}");
+        assert!(actual.contains("LegacyOptions = buildTypes.UserConfig"), "{actual}");
+        assert!(actual.contains("satisfies import('vite-plus/pack').UserConfig"), "{actual}");
+        assert!(rewrite_inline_pack_types(&actual, file).is_none(), "{actual}");
+    }
+
+    #[test]
+    fn splits_pack_namespace_from_a_default_binding() {
+        let file = Path::new("vite.config.ts");
+        let input = "
+import legacy, /* pack */ * as buildTypes from 'tsdown';
+legacy();
+export default { pack: { entry: 'src/index.ts' } satisfies buildTypes.UserConfig };
+";
+        let actual = rewrite_inline_pack_types(input, file).unwrap();
+        assert!(actual.contains("import type * as buildTypes from 'vite-plus/pack'"), "{actual}");
+        assert!(actual.contains("import legacy") && actual.contains("/* pack */"), "{actual}");
+        assert!(actual.contains("from 'tsdown'") && !actual.contains("legacy,"), "{actual}");
+        let allocator = Allocator::default();
+        assert!(
+            Parser::new(&allocator, &actual, SourceType::ts()).parse().diagnostics.is_empty(),
+            "{actual}"
+        );
+    }
 
     #[test]
     fn inline_pack_uses_the_bundled_type_without_touching_standalone_references() {

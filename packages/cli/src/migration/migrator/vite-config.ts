@@ -843,6 +843,31 @@ function literalPackIndex(member: MemberExpression): number | undefined {
     : undefined;
 }
 
+function packArrayAt(node: Node) {
+  const value = unwrapTypeExpression(node);
+  if (
+    value.type !== 'CallExpression' ||
+    value.callee.type !== 'MemberExpression' ||
+    memberName(value.callee) !== 'at'
+  ) {
+    return undefined;
+  }
+  const [argument] = value.arguments;
+  const index = argument && unwrapTypeExpression(argument);
+  const literal =
+    index?.type === 'UnaryExpression' && (index.operator === '-' || index.operator === '+')
+      ? unwrapTypeExpression(index.argument)
+      : index;
+  return {
+    array: unwrapTypeExpression(value.callee.object),
+    literalIndex:
+      value.arguments.length === 1 &&
+      literal?.type === 'Literal' &&
+      typeof literal.value === 'number' &&
+      Number.isInteger(literal.value),
+  };
+}
+
 function packValueReferences(
   node: Node,
   mapping?: PackMapping,
@@ -869,6 +894,10 @@ function packValueReferences(
       return follow(value.object, literalPackIndex(value) !== undefined ? mapping : arrayMapping);
     }
     case 'CallExpression': {
+      const at = packArrayAt(value);
+      if (at) {
+        return follow(at.array, at.literalIndex ? arrayMapping : 'unverified');
+      }
       const target = objectAssignTarget(value);
       if (target) {
         const sources = value.arguments.slice(1);
@@ -1231,8 +1260,12 @@ const arrayMutators = new Set([
 
 function packRootIdentifier(node: Node): PackIdentifier | undefined {
   let root = unwrapTypeExpression(node);
-  while (root.type === 'MemberExpression') {
-    root = unwrapTypeExpression(root.object);
+  while (root.type === 'MemberExpression' || root.type === 'CallExpression') {
+    const receiver = root.type === 'MemberExpression' ? root.object : packArrayAt(root)?.array;
+    if (!receiver) {
+      return undefined;
+    }
+    root = unwrapTypeExpression(receiver);
   }
   return root.type === 'Identifier' ? root : undefined;
 }
@@ -1653,6 +1686,7 @@ function packMutationReferences(
           for (const { id, init } of node.declarations) {
             const initializer = init && unwrapTypeExpression(init);
             const selection = initializer && mutationArrayReference(initializer);
+            const at = initializer && packArrayAt(initializer);
             const find =
               initializer?.type === 'CallExpression' &&
               initializer.callee.type === 'MemberExpression' &&
@@ -1697,6 +1731,9 @@ function packMutationReferences(
             ) {
               foundOptions.set(id.start, find.array.start);
             }
+            if (id.type === 'Identifier' && at?.literalIndex && at.array.type === 'Identifier') {
+              foundOptions.set(id.start, at.array.start);
+            }
             if (id.type === 'Identifier' && selection?.mapping === 'array') {
               filteredOptions.set(id.start, selection.value.start);
             }
@@ -1711,7 +1748,11 @@ function packMutationReferences(
         continue;
       case 'AssignmentExpression': {
         const receiver = packOutputAssignment(node)?.receiver;
-        if (receiver?.type === 'Identifier') {
+        const at = receiver && packArrayAt(receiver);
+        if (at?.literalIndex && at.array.type === 'Identifier') {
+          indexedOutputWrites.add(at.array.start);
+          rewritable.set(at.array.start, { array: true });
+        } else if (receiver?.type === 'Identifier') {
           outputWrites.add(receiver.start);
         } else if (
           receiver?.type === 'MemberExpression' &&

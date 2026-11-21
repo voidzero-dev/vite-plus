@@ -47,8 +47,12 @@ export function getCommandStartIndex(argv: readonly string[]): number {
   if (argv[start] === 'exec' || argv[start] === 'x' || argv[start] === 'dlx') {
     start++;
   }
-  // `npx --yes tsx`: skip the install prompt flag.
-  if (argv[start] === '-y' || argv[start] === '--yes') {
+  // The npx install policy comes before the executable.
+  if (
+    argv[start] === '-y' ||
+    argv[start] === '--yes' ||
+    (argv[0] === 'npx' && argv[start] === '--no-install')
+  ) {
     start++;
   }
   if (argv[start] === '--') {

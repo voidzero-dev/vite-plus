@@ -873,6 +873,32 @@ steps = [
 ]
 
 [[case]]
+name = "focused_namespace_pack_types"
+vp = "global"
+local-registry = true
+env = { VP_NODE_VERSION = "24.22.3", VP_SKIP_INSTALL = "1" }
+comment = "Type-check namespace imports in pack options after installing only the workspace member."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies", "{\"vite\":\"8.3.8\"}"], snapshot = false },
+  { argv = ["vpt", "write-file", "pnpm-workspace.yaml", "packages:\n  - 'packages/*'\nsharedWorkspaceLockfile: false\n"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "packages/generator/src"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/package.json", "{\"name\":\"generator\",\"private\":true,\"type\":\"module\",\"scripts\":{\"release\":\"tsdown -c release.config.mts\"},\"devDependencies\":{\"tsdown\":\"0.22.2\",\"typescript\":\"5.9.3\"}}"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/src/index.ts", "export const release = true;\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/vite.config.ts", "import type * as tsdown from 'tsdown';\nexport default { pack: { entry: 'src/index.ts', outDir: 'pack-out' } satisfies tsdown.UserConfig };\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/release.config.mts", "import type * as tsdown from 'tsdown';\nexport default { entry: 'src/index.ts', outDir: 'release-out', dts: false } satisfies tsdown.UserConfig;\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/tsconfig.json", "{\"compilerOptions\": {\"target\": \"ES2022\", \"module\": \"ESNext\", \"moduleResolution\": \"Bundler\", \"skipLibCheck\": true, \"strict\": true, \"noUnusedLocals\": true}, \"include\": [\"vite.config.ts\", \"release.config.mts\"]}"], snapshot = false },
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  { argv = ["pnpm", "--filter", "generator", "install", "--ignore-scripts"], snapshot = false },
+  ["vpt", "stat-file", "node_modules/vite-plus", "--assert", "missing"],
+  ["vpt", "stat-file", "packages/generator/node_modules/vite-plus/package.json", "--assert", "file"],
+  { argv = ["pnpm", "exec", "tsc", "--noEmit"], cwd = "packages/generator", snapshot = false },
+  ["vpt", "print-file", "packages/generator/vite.config.ts"],
+  ["vpt", "print-file", "packages/generator/release.config.mts"],
+  { argv = ["pnpm", "run", "release"], cwd = "packages/generator", snapshot = false },
+  ["vpt", "stat-file", "packages/generator/release-out/index.mjs", "--assert", "file"],
+]
+
+[[case]]
 name = "focused_dotenv_vpx"
 vp = "global"
 local-registry = true
@@ -894,4 +920,27 @@ steps = [
   { argv = ["pnpm", "run", "generate"], cwd = "packages/generator" },
   { argv = ["pnpm", "run", "release"], cwd = "packages/generator", snapshot = false },
   ["vpt", "stat-file", "packages/generator/release-out/index.mjs", "--assert", "file"],
+]
+
+[[case]]
+name = "focused_npx_no_install_vpx"
+vp = "global"
+local-registry = true
+env = { VP_NODE_VERSION = "24.22.3", VP_SKIP_INSTALL = "1" }
+comment = "npx --no-install finds vpx after installing only the workspace member."
+steps = [
+  { argv = ["vpt","json-edit","package.json","devDependencies","{\"vite\":\"8.3.8\"}"], snapshot = false },
+  { argv = ["vpt","write-file","pnpm-workspace.yaml","packages:\n  - 'packages/*'\nsharedWorkspaceLockfile: false\n"], snapshot = false },
+  { argv = ["vpt","mkdir","-p","packages/generator/src"], snapshot = false },
+  { argv = ["vpt","write-file","packages/generator/package.json","{\"name\":\"generator\",\"private\":true,\"type\":\"module\",\"scripts\":{\"release\":\"tsdown -c release.config.mts\",\"generate\":\"npx --no-install vpx ./generate.ts\"},\"devDependencies\":{\"tsdown\":\"0.22.14\"}}"], snapshot = false },
+  { argv = ["vpt","write-file","packages/generator/src/index.ts","export const release = true;\n"], snapshot = false },
+  { argv = ["vpt","write-file","packages/generator/release.config.mts","export default { entry: 'src/index.ts', outDir: 'release-out', dts: false };\n"], snapshot = false },
+  { argv = ["vpt","write-file","packages/generator/generate.ts","const value: string = 'LOCAL_VPX_RAN';\nconsole.log(value);\n"], snapshot = false },
+  { argv = ["vp","migrate","--full","--no-interactive","--no-hooks","--no-agent","--no-editor"], snapshot = false },
+  { argv = ["pnpm","--filter","generator","install","--ignore-scripts"], snapshot = false },
+  ["vpt","stat-file","node_modules/vite-plus","--assert","missing"],
+  ["vpt","stat-file","packages/generator/node_modules/vite-plus/package.json","--assert","file"],
+  { argv = ["pnpm","run","generate"], cwd = "packages/generator", envs = [["npm_config_offline","true"]] },
+  { argv = ["pnpm","run","release"], cwd = "packages/generator", snapshot = false },
+  ["vpt","stat-file","packages/generator/release-out/index.mjs","--assert","file"],
 ]

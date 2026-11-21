@@ -544,6 +544,9 @@ describe('explicit tsdown config selection', () => {
     ['dotenvx run -f .env -- pnpm exec vpx ./generate.ts', true],
     ['dotenv -e .env -- echo vpx', false],
     ['npx vp --version', true],
+    ['npx --no-install vpx ./generate.ts', true],
+    ['npx --no-install -- vpx ./generate.ts', true],
+    ['npx --no-install --package another-command vpx ./generate.ts', false],
     ['npx --package another-command vp --version', false],
     ['bunx --no-install vp --version', true],
     ['bunx --bun vp --version', true],
@@ -1941,6 +1944,40 @@ export default defineConfig(({ command }) => {
     expect(fs.readFileSync(path.join(tmpDir, 'vite-pack.config.ts'), 'utf8')).toContain(
       "copy: 'public'",
     );
+  });
+
+  it.each([
+    [true, "configs.at(-1)!.outDir = 'cli-dist';"],
+    [true, "const cli = configs.at(-1); if (cli) cli.outDir = 'cli-dist';"],
+    [false, "configs.at(Number(process.env.BUILD_INDEX))!.outDir = 'cli-dist';"],
+  ])('keeps array option writes through at() (%s)', (redirect, mutation) => {
+    const tsdown = path.join(tmpDir, 'tsdown.config.ts');
+    const original =
+      "export default [{ name: 'lib', publicDir: 'public' }, { name: 'cli', outDir: 'cli-old' }];\n";
+    fs.writeFileSync(tsdown, original);
+    const vite = path.join(tmpDir, 'vite.config.ts');
+    const config =
+      "import configs from './tsdown.config.ts';\n" +
+      mutation +
+      '\nexport default { pack: configs };\n';
+    fs.writeFileSync(vite, config);
+
+    const report = createMigrationReport();
+    expect(mergeTsdownConfigFile(tmpDir, true, report, true)).toBe(redirect);
+    expect(fs.readFileSync(tsdown, 'utf8')).toBe(original);
+    if (redirect) {
+      expect(fs.readFileSync(vite, 'utf8')).toBe(
+        config.replace("'./tsdown.config.ts'", '"./vite-pack.config.ts"'),
+      );
+      expect(fs.readFileSync(path.join(tmpDir, 'vite-pack.config.ts'), 'utf8')).toContain(
+        "copy: 'public'",
+      );
+    } else {
+      expect(fs.readFileSync(vite, 'utf8')).toBe(config);
+      expect(report.warnings).toContainEqual(
+        expect.stringContaining('changes the imported options'),
+      );
+    }
   });
 
   it.each([
