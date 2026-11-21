@@ -3735,6 +3735,13 @@ export interface BatchRewriteResult {
   warnings: Array<BatchRewriteError>;
 }
 
+/** Classify the declaration compiler used by a Vite or standalone tsdown config. */
+export declare function classifyNativePreviewPackConfig(
+  source: string,
+  standalone: boolean,
+  tsdownConfig?: string | undefined | null,
+): 'tsgo' | 'standalone' | 'manual' | 'none';
+
 /** Configuration options passed from JavaScript to Rust. */
 export interface CliOptions {
   /** The current JavaScript runtime (`process.execPath`). */
