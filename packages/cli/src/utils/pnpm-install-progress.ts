@@ -403,7 +403,11 @@ function readPnpmPeerRules(cwd: string): unknown {
   }
 }
 
-async function formatPeerDependencyIssues(issuesByProjects: unknown, cwd: string): Promise<string> {
+async function formatPeerDependencyIssues(
+  issuesByProjects: unknown,
+  cwd: string,
+  kind: 'warning' | 'error',
+): Promise<string> {
   const { renderPeerIssues } = await import('@pnpm/render-peer-issues');
   type Options = NonNullable<Parameters<typeof renderPeerIssues>[1]>;
   try {
@@ -412,8 +416,8 @@ async function formatPeerDependencyIssues(issuesByProjects: unknown, cwd: string
       rules: readPnpmPeerRules(cwd) as Options['rules'],
       width: process.stdout.columns ?? 80,
     }).trimEnd();
-    if (!details) {
-      return '';
+    if (!details || kind === 'warning') {
+      return details;
     }
     const hints = [];
     const hasMissingPeers = Object.values(issues).some(({ missing }) =>
@@ -448,6 +452,7 @@ export async function formatPnpmInstallOutput(
   const showWarnings = showInfo || mode === 'warn';
   const deprecatedSubdependencies: string[] = [];
   const pendingScripts = new Map<string, string[]>();
+  let seenPeerIssues = false;
   let terminalErrorIndex: number | undefined;
   const progress = { resolved: 0, found_in_store: 0, fetched: 0, imported: 0 };
   for (const line of output.split(/\r?\n/)) {
@@ -474,6 +479,17 @@ export async function formatPnpmInstallOutput(
         const retry = formatRequestRetry(log);
         if (retry) {
           messages.push(retry);
+        }
+      }
+    } else if (log.name === 'pnpm:peer-dependency-issues') {
+      // pnpm's human reporter consumes only the first peer issues record.
+      if (showWarnings && !seenPeerIssues) {
+        seenPeerIssues = true;
+        const details = await formatPeerDependencyIssues(log.issuesByProjects, cwd, 'warning');
+        if (details) {
+          messages.push(
+            `WARN Issues with peer dependencies found\n${redactPnpmDiagnostic(details)}`,
+          );
         }
       }
     } else if (log.name === 'pnpm:deprecation') {
@@ -581,7 +597,7 @@ export async function formatPnpmInstallOutput(
           appendDependencyContext(context, log, cwd);
         }
         if (log.code === 'ERR_PNPM_PEER_DEP_ISSUES') {
-          const details = await formatPeerDependencyIssues(log.issuesByProjects, cwd);
+          const details = await formatPeerDependencyIssues(log.issuesByProjects, cwd, 'error');
           if (details) {
             context.push(details);
           }
