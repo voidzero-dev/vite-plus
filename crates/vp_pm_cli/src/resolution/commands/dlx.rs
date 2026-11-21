@@ -22,6 +22,10 @@ pub struct DlxArgs {
     /// Package to execute and arguments
     #[arg(required = true, trailing_var_arg = true, allow_hyphen_values = true)]
     pub(crate) args: Vec<String>,
+
+    /// Whether npm config sets `yes`, which `--yes` would override.
+    #[arg(skip)]
+    pub(crate) npm_yes_configured: bool,
 }
 
 impl Resolve<DlxArgs> for Pnpm {
@@ -58,7 +62,7 @@ impl Resolve<DlxArgs> for Npm {
             cmd.arg(vt_str::format!("--package={package_spec}"));
         }
         // npm 6 `npx` never prompts, and takes the word after an unknown `--yes` as its value.
-        cmd.arg_if("--yes", has_exec);
+        cmd.arg_if("--yes", has_exec && !args.npm_yes_configured);
         if args.silent {
             if has_exec {
                 cmd.arg("--loglevel").arg("silent");
@@ -134,7 +138,7 @@ fn resolve_npx(args: &DlxArgs) -> CommandResolution {
 
     let mut cmd = CommandBuilder::new("npx");
     cmd.repeated("--package", args.package.iter());
-    cmd.arg("--yes").arg_if("--quiet", args.silent);
+    cmd.arg_if("--yes", !args.npm_yes_configured).arg_if("--quiet", args.silent);
     if args.shell_mode {
         cmd.arg("-c").arg(build_shell_command(package_spec, command_args));
     } else {
@@ -260,6 +264,15 @@ mod tests {
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["exec", "--yes", "--", "create-vue", "my-app"]);
+    }
+
+    #[test]
+    fn test_npm_exec_leaves_configured_yes_to_npm() {
+        let mut options = dlx_args("create-vue", &["my-app"]);
+        options.npm_yes_configured = true;
+        let command = expect_run(resolve(&npm("11.0.0"), options).outcome);
+
+        assert_eq!(command.args, vec!["exec", "--", "create-vue", "my-app"]);
     }
 
     #[test]
@@ -404,6 +417,15 @@ mod tests {
             command.env.get("npm_config_update_notifier").map(String::as_str),
             Some("false")
         );
+    }
+
+    #[test]
+    fn test_yarn_v1_fallback_leaves_configured_yes_to_npx() {
+        let mut options = dlx_args("create-vue", &["my-app"]);
+        options.npm_yes_configured = true;
+        let command = expect_run(resolve(&yarn("1.22.19"), options).outcome);
+
+        assert_eq!(command.args, vec!["create-vue", "my-app"]);
     }
 
     #[test]
