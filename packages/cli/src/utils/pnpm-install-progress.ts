@@ -603,6 +603,16 @@ export async function formatPnpmInstallOutput(
       }
     } else if (PNPM_MISC_LOGGERS.has(log.name) && (log.level !== 'debug' || mode === 'debug')) {
       const error = asRecord(log.err);
+      // pnpm scopes ordinary info messages to the current importer.
+      if (
+        log.level === 'info' &&
+        typeof log.prefix === 'string' &&
+        log.prefix &&
+        log.prefix !== cwd &&
+        typeof error.message !== 'string'
+      ) {
+        continue;
+      }
       const message = log.message ?? error.message;
       if (typeof message === 'string') {
         const errorCode = log.code ?? error.code;
