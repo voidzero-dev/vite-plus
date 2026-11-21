@@ -189,7 +189,7 @@ If you cannot reach the private registry from the machine where you install Vite
 
 Your project lockfile lists the packages the registry needs to serve. With pnpm, run `pnpm list --lockfile-only --depth Infinity --json` to see the dependency tree before installation. If you maintain the mirror, include the metadata and tarballs for dev dependencies as well as runtime dependencies. Follow `optionalDependencies` through the tree. The `os`, `cpu`, and Linux `libc` fields in `pnpm-lock.yaml` identify the native packages for your platform. Check that you can reach the tarball URLs from the machine where you install Vite+.
 
-For example, `vite-plus@1.7.0` uses `@tsrs/win32-x64` for type-aware linting on Windows x64. Check the lockfile on each upgrade because the required packages can change. The published `toolchain.json` lists tool versions and omits platform bindings.
+For example, Windows x64 bindings have `os: [win32]` and `cpu: [x64]` in the pnpm lockfile. Check the lockfile on each upgrade because the required packages can change. The published `toolchain.json` lists tool versions and omits platform bindings.
 
 ### Which commands can use the network?
 
