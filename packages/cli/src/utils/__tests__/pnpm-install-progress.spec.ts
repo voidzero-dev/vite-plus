@@ -240,19 +240,20 @@ describe('formatPnpmInstallOutput', () => {
       wantedRange: '^19',
       foundVersion: '17.0.2',
     };
+    const issuesByProjects = {
+      '.': {
+        bad: { react: [{ ...request, foundVersion: '17.0.2' }, allowed] },
+        missing: {},
+        conflicts: [],
+        intersections: {},
+      },
+    };
     const output = JSON.stringify({
       name: 'pnpm',
       level: 'error',
       code: 'ERR_PNPM_PEER_DEP_ISSUES',
       err: { message: 'Unmet peer dependencies' },
-      issuesByProjects: {
-        '.': {
-          bad: { react: [{ ...request, foundVersion: '17.0.2' }, allowed] },
-          missing: {},
-          conflicts: [],
-          intersections: {},
-        },
-      },
+      issuesByProjects,
     });
 
     const cwd = mkdtempSync(join(tmpdir(), 'vp-pnpm-peer-rules-'));
@@ -272,10 +273,81 @@ describe('formatPnpmInstallOutput', () => {
       expect(formatted).not.toContain('legacy-plugin');
       expect(formatted).toContain('strict-peer-dependencies=false');
       expect(formatted).not.toContain('auto-install-peers=true');
+      const warning = JSON.stringify({
+        name: 'pnpm:peer-dependency-issues',
+        level: 'debug',
+        issuesByProjects,
+      });
+      const formattedWarning = stripVTControlCharacters(
+        await formatPnpmInstallOutput(warning, cwd),
+      );
+      expect(formattedWarning).toContain('unmet peer react@^18.3.1: found 17.0.2');
+      expect(formattedWarning).not.toContain('legacy-plugin');
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }
   });
+
+  it.each([
+    ['debug', true],
+    ['info', true],
+    ['warn', true],
+    ['error', false],
+    ['silent', false],
+    ['json', false],
+    ['ndjson', false],
+  ] as const)(
+    'reports a nonfatal peer conflict at the expected level in %s mode',
+    async (mode, showWarning) => {
+      const warning = JSON.stringify({
+        name: 'pnpm:peer-dependency-issues',
+        level: 'debug',
+        issuesByProjects: {
+          '.': {
+            bad: {
+              react: [
+                {
+                  parents: [{ name: 'react-dom', version: '18.3.1' }],
+                  wantedRange: '^18.3.1',
+                  foundVersion: '17.0.2',
+                },
+              ],
+            },
+            missing: {},
+            conflicts: [],
+            intersections: {},
+          },
+        },
+      });
+      const error = { code: 'ELIFECYCLE', message: 'Exit status 7' };
+      const failure = JSON.stringify({
+        name: 'pnpm',
+        level: 'error',
+        code: error.code,
+        err: { name: 'pnpm', ...error },
+      });
+      const output = `${warning}\n${warning}\n${failure}\n`;
+      const formatted = await formatPnpmInstallOutput(output, '/project', mode);
+      if (mode === 'ndjson') {
+        expect(formatted).toBe(output);
+      } else if (mode === 'json') {
+        expect(JSON.parse(formatted)).toEqual({ error });
+      } else if (mode === 'silent') {
+        expect(formatted).toBe('');
+      } else {
+        expect(formatted).toContain('ELIFECYCLE Exit status 7');
+      }
+      const warnings = formatted.match(/WARN Issues with peer dependencies found/g) ?? [];
+      expect(warnings).toHaveLength(showWarning ? 1 : 0);
+      if (showWarning) {
+        expect(stripVTControlCharacters(formatted)).toContain(
+          'unmet peer react@^18.3.1: found 17.0.2',
+        );
+        expect(formatted.indexOf('WARN Issues')).toBeLessThan(formatted.indexOf('ELIFECYCLE'));
+      }
+      expect(formatted).not.toMatch(/(?:auto-install-peers=true|strict-peer-dependencies=false)/);
+    },
+  );
 
   it.each([false, true])(
     'shows the appropriate hints for an optional=%s missing peer',
