@@ -29,7 +29,7 @@ vp install react
 | `--shamefully-hoist`     | Create a flat `node_modules` layout.                                        |                                                                                                      |
 | `--resolution-only`      | Re-run dependency resolution for analysis.                                  | Cannot be combined with package names.                                                               |
 | `--silent`               | Suppress Vite+ output and request native quiet output.                      |                                                                                                      |
-| `--filter <pattern>`     | Select workspaces by pattern.                                               | Can be repeated.                                                                                     |
+| `--filter <pattern>`     | Select workspaces.                                                          | Can be repeated. See [npm workspace filters](./add#npm-workspace-filters).                           |
 | `-w, --workspace-root`   | Select the workspace root.                                                  |                                                                                                      |
 | `-E, --save-exact`       | Save an exact dependency version.                                           | Requires package names.                                                                              |
 | `--save-peer`            | Request the manager's peer-dependency save behavior.                        | Requires package names.                                                                              |

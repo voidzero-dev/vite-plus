@@ -12,10 +12,10 @@ vp remove -g --dry-run typescript
 
 | Option                 | Description                                              | Notes                                                                        |
 | ---------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `-D, --save-dev`       | Remove from devDependencies.                             |                                                                              |
-| `-O, --save-optional`  | Remove from optionalDependencies.                        |                                                                              |
-| `-P, --save-prod`      | Remove from dependencies.                                |                                                                              |
-| `--filter <pattern>`   | Select workspaces by pattern.                            | Can be repeated.                                                             |
+| `-D, --save-dev`       | On pnpm, target `devDependencies`.                       |                                                                              |
+| `-O, --save-optional`  | On pnpm, target `optionalDependencies`.                  |                                                                              |
+| `-P, --save-prod`      | On pnpm, target `dependencies`.                          |                                                                              |
+| `--filter <pattern>`   | Select workspaces.                                       | Can be repeated. See [npm workspace filters](./add#npm-workspace-filters).   |
 | `-w, --workspace-root` | Remove from workspace root.                              |                                                                              |
 | `-r, --recursive`      | Remove recursively from all workspace packages.          |                                                                              |
 | `-g, --global`         | Remove global packages.                                  | Requires the global CLI. Uses the [global package store](./global-packages). |
@@ -33,14 +33,23 @@ The commands below describe project operations. Global mode is described under [
 
 | Option                 | npm             | pnpm | Yarn Classic | Yarn Modern | Bun          | Notes                            |
 | ---------------------- | --------------- | ---- | ------------ | ----------- | ------------ | -------------------------------- |
-| `-D, --save-dev`       | Yes             | Yes  | No           | No          | No           |                                  |
-| `-O, --save-optional`  | Yes             | Yes  | No           | No          | No           |                                  |
-| `-P, --save-prod`      | Yes             | Yes  | No           | No          | No           |                                  |
+| `-D, --save-dev`       | Yes             | Yes  | No           | No          | No           | npm can remove across sections.  |
+| `-O, --save-optional`  | Yes             | Yes  | No           | No          | No           | npm can remove across sections.  |
+| `-P, --save-prod`      | Yes             | Yes  | No           | No          | No           | npm can remove across sections.  |
 | `--filter <pattern>`   | 7.14.0 or later | Yes  | One filter   | Yes         | 1.4 or later |                                  |
 | `-w, --workspace-root` | 8.1.0 or later  | Yes  | No           | No          | No           |                                  |
 | `-r, --recursive`      | 8.1.0 or later  | Yes  | No           | Yes         | No           | npm includes the workspace root. |
 | `-g, --global`         | Yes             | Yes  | Yes          | Yes         | Yes          |                                  |
 | `--dry-run`            | Yes             | Yes  | Yes          | Yes         | Yes          |                                  |
+
+When pnpm removes a dependency, it can also remove the same package from `peerDependencies`.
+
+In an npm workspace, suppose `web` lists `lodash` in `devDependencies` and `docs` lists it in `dependencies`.
+With npm 7.14.0 or later, the following command removes `lodash` from both workspaces.
+
+```bash
+vp remove -D --filter web --filter docs lodash
+```
 
 ## Native Options
 
