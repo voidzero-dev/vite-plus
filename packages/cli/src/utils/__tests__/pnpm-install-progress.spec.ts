@@ -134,9 +134,13 @@ describe('formatPnpmInstallOutput', () => {
   });
 
   it.each([undefined, 'info', 'debug', 'warn', 'error', 'silent', 'json', 'ndjson'] as const)(
-    'reports recursive workspace failures in output mode %s',
+    'scopes workspace progress and reports recursive failures in output mode %s',
     async (mode) => {
       const cwd = resolve('workspace');
+      const archivePrefix = join(cwd, 'packages', 'archive');
+      const workspacePrefix = join(cwd, 'packages', 'workspace');
+      const lockfile = 'Lockfile is up to date, resolution step is skipped';
+      const globalMessage = 'Using the shared package store';
       const url = 'https://user:fixture-secret@registry.example.com/archive.tgz?token=test';
       const archive = `GET ${url} failed\nAn authorization header was used: fixture-secret`;
       const workspace = 'No workspace package named fixture-absent';
@@ -148,8 +152,22 @@ describe('formatPnpmInstallOutput', () => {
       };
       const headline = `${summary.code} ${summary.message}`;
       const output = [
-        { name: 'pnpm', level: 'info', err: { message: workspace, code: workspaceCode } },
-        { name: 'pnpm', level: 'info', err: { message: archive, code: archiveCode } },
+        { name: 'pnpm', level: 'info', prefix: cwd, message: lockfile },
+        { name: 'pnpm', level: 'info', prefix: archivePrefix, message: lockfile },
+        { name: 'pnpm', level: 'info', prefix: workspacePrefix, message: lockfile },
+        { name: 'pnpm:global', level: 'info', message: globalMessage },
+        {
+          name: 'pnpm',
+          level: 'info',
+          prefix: workspacePrefix,
+          err: { message: workspace, code: workspaceCode },
+        },
+        {
+          name: 'pnpm',
+          level: 'info',
+          prefix: archivePrefix,
+          err: { message: archive, code: archiveCode },
+        },
         {
           name: 'pnpm',
           level: 'error',
@@ -157,12 +175,12 @@ describe('formatPnpmInstallOutput', () => {
           err: { name: 'pnpm', message: summary.message },
           failures: [
             {
-              prefix: join(cwd, 'packages', 'archive'),
+              prefix: archivePrefix,
               message: archive,
               error: { code: archiveCode, request: { url } },
             },
             {
-              prefix: join(cwd, 'packages', 'workspace'),
+              prefix: workspacePrefix,
               message: workspace,
               error: { code: workspaceCode },
             },
@@ -186,7 +204,7 @@ describe('formatPnpmInstallOutput', () => {
         );
       } else {
         expect(rendered).toBe(
-          `packages/workspace: ${workspaceCode} ${workspace}\npackages/archive: ${archiveCode} ${safeArchive}\n${headline}`,
+          `${lockfile}\n${globalMessage}\npackages/workspace: ${workspaceCode} ${workspace}\npackages/archive: ${archiveCode} ${safeArchive}\n${headline}`,
         );
       }
     },
