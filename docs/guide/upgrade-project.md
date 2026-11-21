@@ -27,8 +27,6 @@ npm view vite-plus@<version> dependencies.vite
 
 Set the `vite` alias to that value. Update these entries wherever they are declared in your workspace, including overrides or catalogs, then install dependencies to refresh the lockfile. Also [update the Vitest pin](#updating-the-vitest-pin) to match the bundled version. After the install, `vp toolchain vite-plus-core` shows the same core version.
 
-When the core is a prerelease, npm can install a separate stable Vite for Vitest if the project omits the `vite` dependency or uses an `@latest` alias. Set `devDependencies.vite` and `overrides.vite` to the exact alias above and run `vp install` so the project, CLI, and Vitest share one core.
-
 ### Dependency Bots
 
 Dependabot and Renovate see `vite-plus` and the `vite` alias as two separate dependencies with different versions. A bot can update one without the other. Vite+ then stops before it runs a Vite command and asks you to run `vp migrate`.

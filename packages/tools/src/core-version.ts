@@ -84,12 +84,22 @@ export function encodeCoreVersion(vite: string, n: number): string {
   return `${major}.${minor}.${patch * PATCH_FACTOR + n}`;
 }
 
+function developmentCoreVersion(vite: string, counter: number): string {
+  // Temporarily use stable core versions to test Vite 8.4 beta.1 with stable peer ranges.
+  if (vite === '8.4.0-beta.1') {
+    return encodeCoreVersion('8.4.0', counter);
+  }
+  return isPrereleaseVersion(vite)
+    ? `${vite}.${PRERELEASE_TAG}.${counter}`
+    : encodeCoreVersion(vite, counter);
+}
+
 /**
  * Returns the first core version for a bundled Vite version: counter 0 on a
  * stable Vite, `<vite>.vp.0` on a Vite prerelease.
  */
 export function initialCoreVersion(vite: string): string {
-  return isPrereleaseVersion(vite) ? `${vite}.${PRERELEASE_TAG}.0` : encodeCoreVersion(vite, 0);
+  return developmentCoreVersion(vite, 0);
 }
 
 /** Decodes a core version into the bundled Vite version and its counters. */
@@ -140,9 +150,7 @@ function nextCounter(values: Iterable<number>, what: string): number {
  * stable Vite, `<vite>.vp.999` on a Vite prerelease. Releases never use it.
  */
 export function localCoreVersion(vite: string): string {
-  return isPrereleaseVersion(vite)
-    ? `${vite}.${PRERELEASE_TAG}.${LOCAL_BUILD_COUNTER}`
-    : encodeCoreVersion(vite, LOCAL_BUILD_COUNTER);
+  return developmentCoreVersion(vite, LOCAL_BUILD_COUNTER);
 }
 
 /**
@@ -228,9 +236,14 @@ export function assertCoreVersionMatchesVite(
   }
   const decoded = decodeCoreVersion(pkg.version);
   if (decoded.vite !== vite) {
+    if (!release && [initialCoreVersion(vite), localCoreVersion(vite)].includes(pkg.version)) {
+      return;
+    }
+    const hint = release
+      ? 'Run the Prepare Release workflow to select the core version.'
+      : `Set its version to ${initialCoreVersion(vite)}.`;
     throw new Error(
-      `${CORE_PACKAGE_NAME}@${pkg.version} encodes Vite ${decoded.vite}, but it bundles Vite ${vite}. ` +
-        `Set its version to ${initialCoreVersion(vite)}.`,
+      `${CORE_PACKAGE_NAME}@${pkg.version} encodes Vite ${decoded.vite}, but it bundles Vite ${vite}. ${hint}`,
     );
   }
   if (!release) {
@@ -444,7 +457,7 @@ async function main(argv: Array<string>): Promise<void> {
       if (values.release) {
         assertCoreVersionUnclaimed(await readCorePackument(), core.version, cli.version);
       }
-      console.log(`${CORE_PACKAGE_NAME}@${core.version} encodes Vite ${vite}`);
+      console.log(`${CORE_PACKAGE_NAME}@${core.version} bundles Vite ${vite}`);
       break;
     }
     default:

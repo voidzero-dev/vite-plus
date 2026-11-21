@@ -67,11 +67,6 @@ catalogs:
     vite-plus: <version>
 overrides:
   vite@*: catalog:vite-stack
-peerDependencyRules:
-  allowAny:
-    - vite
-  allowedVersions:
-    vite: '*'
 ```
 
 ## `vp migrate --no-interactive`

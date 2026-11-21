@@ -10,10 +10,10 @@
 ## `vp install --ignore-scripts`
 
 
-## `node check-npm-layout.mjs cli-only`
+## `node check-npm-layout.mjs`
 
 ```
-Checked npm resolution against the Vite peer range declared by Vitest
+npm shares the CLI core with the Vitest peer without a project alias or overrides
 ```
 
 ## `node check-bundled.mjs`
@@ -58,27 +58,6 @@ VITE+ - The Unified Toolchain for the Web
 ℹ 1 files, total: <size> kB
 ✔ Build complete in <duration>
 ```
-
-## `node pin-core-alias.mjs`
-
-
-## `vp install --ignore-scripts`
-
-
-## `node check-npm-layout.mjs`
-
-```
-npm shares the exact core alias between the project, CLI, and Vitest without overrides
-```
-
-## `node check-api.mjs`
-
-```
-Packed alias, ESM, CommonJS, and module-runner identity passed
-```
-
-## `vp test run`
-
 
 ## `vpt write-file typecheck/package.json '{"name":"typecheck-tools","private":true,"dependencies":{"typescript":"6.0.3"},"packageManager":"npm@11.11.0"}
 '`
