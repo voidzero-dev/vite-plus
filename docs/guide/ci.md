@@ -189,7 +189,7 @@ If you cannot reach the private registry from the machine where you install Vite
 
 Your project lockfile lists the packages the registry needs to serve. With pnpm, run `pnpm list --lockfile-only --depth Infinity --json` to see the dependency tree before installation. If you maintain the mirror, include the metadata and tarballs for dev dependencies as well as runtime dependencies. Follow `optionalDependencies` through the tree. The `os`, `cpu`, and Linux `libc` fields in `pnpm-lock.yaml` identify the native packages for your platform. Check that you can reach the tarball URLs from the machine where you install Vite+.
 
-For example, on Windows x64, `vite-plus@1.4.0` uses `@oxlint-tsgolint/win32-x64` for type-aware linting. In `1.7.0` that binding is `@tsrs/win32-x64`. Check the lockfile again on each upgrade. The published `toolchain.json` lists tool versions and omits platform bindings.
+For example, `vite-plus@1.7.0` uses `@tsrs/win32-x64` for type-aware linting on Windows x64. Check the lockfile on each upgrade because the required packages can change. The published `toolchain.json` lists tool versions and omits platform bindings.
 
 ### Which commands can use the network?
 
@@ -197,4 +197,4 @@ For example, on Windows x64, `vite-plus@1.4.0` uses `@oxlint-tsgolint/win32-x64`
 - `vp run` can replay a task from its local cache. On a cache miss the task runs its own command, which may use the network. A configured remote cache also needs network access.
 - `vp install`, `vp add`, and `vp dlx` can fetch packages. `vp migrate` can install dependencies. With `vp create`, the template determines the source. For example, `vite:application` uses `create-vite@latest` from the registry and `vite:library` downloads its template from GitHub.
 
-In Vite+ releases from `1.4.0` through `1.7.0`, even `vp lint` or `vp test` can try to download the project's pinned package manager if it is missing from Vite+'s cache. A command can still succeed after the request fails. If you use one of these releases, check that the registry serves the version in `packageManager` or `devEngines.packageManager`.
+With `vite-plus@1.7.0`, `vp lint` and `vp test` can try to download the project's pinned package manager if it is missing from Vite+'s cache. A command can still succeed after the request fails. Check that the registry serves the version in `packageManager` or `devEngines.packageManager`.
