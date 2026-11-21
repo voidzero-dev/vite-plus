@@ -191,12 +191,12 @@ With pnpm, run `pnpm list --lockfile-only --depth Infinity --json` to see your p
 
 For example, Windows x64 bindings have `os: [win32]` and `cpu: [x64]` in the pnpm lockfile. Check the lockfile on each upgrade because the required packages can change. The published `toolchain.json` lists tool versions and omits platform bindings.
 
-`pnpm list` can omit pnpm itself. If your project pins pnpm 12, mirror `pnpm` and its platform executable at the pinned version. On Windows x64 the executable package is `@pnpm/exe.win32-x64`. pnpm records its own version under `packageManagerDependencies` when it writes a [lockfile with two documents](https://pnpm.io/lockfile#when-a-lockfile-has-two-documents).
-
 ### Which commands can use the network?
 
 - `vp lint`, `vp fmt --check`, `vp check`, and a basic `vp test run` use installed tools. Install any test environment, coverage provider, or browser binary your suite needs in advance. Project configuration, plugins, and tests can make their own requests.
 - `vp run` can replay a task from its local cache. On a cache miss the task runs its own command, which may use the network. A configured remote cache also needs network access.
 - `vp install`, `vp add`, and `vp dlx` can fetch packages. `vp migrate` can install dependencies. With `vp create`, the template determines the source. For example, `vite:application` uses `create-vite@latest` from the registry and `vite:library` downloads its template from GitHub.
 
-With `vite-plus@1.7.0`, local commands such as `vp fmt --check`, `vp lint`, `vp check`, `vp test run`, and `vp run build` can try to download the project's pinned package manager even when it is on `PATH`. If Vite+'s cache is empty and the registry accepts a connection but never responds, the command can spend several minutes retrying and still succeed. For pnpm 12, use a reachable registry that [serves its platform executable](#which-packages-does-my-project-need). `vp --version` skips this lookup.
+With `vite-plus@1.7.0`, local commands such as `vp fmt --check`, `vp lint`, `vp check`, `vp test run`, and `vp run build` can try to download the project's pinned package manager even when it is on `PATH`. If Vite+'s cache is empty and the registry accepts a connection but never responds, the command can spend several minutes retrying and still succeed. `vp --version` skips this lookup.
+
+For pnpm 12 on Windows x64, this version of `vp` requests `@pnpm/exe.win32-x64` directly. If you encounter this delay, check that your registry serves that package at the project's pinned pnpm version.
