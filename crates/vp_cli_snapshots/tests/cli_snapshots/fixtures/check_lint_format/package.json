@@ -1,0 +1,5 @@
+{
+  "name": "check-lint-format",
+  "private": true,
+  "type": "module"
+}

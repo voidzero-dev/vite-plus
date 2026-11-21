@@ -18,6 +18,7 @@ Options:
   --continue-on-error              Run remaining checks even if an earlier check fails
   --quiet                          Disable reporting on warnings, only errors are reported
   --deny-warnings                  Treat lint warnings as errors
+  --format <FORMAT>                Output format for lint and type-check diagnostics (default: default)
   --no-fmt                         Skip format check
   --no-lint                        Skip lint rules; type-check still runs when `lint.options.typeCheck` is true
   --no-error-on-unmatched-pattern  Do not exit with error when pattern is unmatched
@@ -50,6 +51,7 @@ Options:
   --continue-on-error              Run remaining checks even if an earlier check fails
   --quiet                          Disable reporting on warnings, only errors are reported
   --deny-warnings                  Treat lint warnings as errors
+  --format <FORMAT>                Output format for lint and type-check diagnostics (default: default)
   --no-fmt                         Skip format check
   --no-lint                        Skip lint rules; type-check still runs when `lint.options.typeCheck` is true
   --no-error-on-unmatched-pattern  Do not exit with error when pattern is unmatched
@@ -82,6 +84,7 @@ Options:
   --continue-on-error              Run remaining checks even if an earlier check fails
   --quiet                          Disable reporting on warnings, only errors are reported
   --deny-warnings                  Treat lint warnings as errors
+  --format <FORMAT>                Output format for lint and type-check diagnostics (default: default)
   --no-fmt                         Skip format check
   --no-lint                        Skip lint rules; type-check still runs when `lint.options.typeCheck` is true
   --no-error-on-unmatched-pattern  Do not exit with error when pattern is unmatched
