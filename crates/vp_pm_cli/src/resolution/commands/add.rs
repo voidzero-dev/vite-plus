@@ -232,7 +232,7 @@ impl Npm {
             .arg_if("--include-workspace-root", args.workspace_root);
         match args.save_dependency.target() {
             Some(SaveDependencyTarget::Production) => {
-                cmd.arg("--save");
+                cmd.arg("--save-prod");
             }
             Some(SaveDependencyTarget::Dev) => {
                 cmd.arg("--save-dev");
@@ -591,6 +591,18 @@ mod tests {
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["install", "react"]);
+    }
+
+    #[test]
+    fn test_npm_add_save_prod() {
+        let mut options = add_args(&["react"]);
+        options.save_dependency.save_prod = true;
+        let resolution = resolve(&npm("11.0.0"), options);
+        let command = expect_run(resolution.outcome);
+
+        // `--save` would leave an existing devDependency in place; `--save-prod` moves it.
+        assert_eq!(command.program, "npm");
+        assert_eq!(command.args, vec!["install", "--save-prod", "react"]);
     }
 
     #[test]
