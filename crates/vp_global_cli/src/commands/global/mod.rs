@@ -48,42 +48,44 @@ impl NpmRegistry {
     }
 
     async fn latest_package_version(&self, package_spec: &str) -> Result<String, Error> {
-        let output = npm_view(
-            &self.npm_path,
-            &self.node_bin_dir,
-            &registry_query_spec(package_spec),
-            "version",
-        )
-        .await?;
+        let query = registry_query_spec(package_spec);
+        // npm view enumerates a range. Ask npm's install resolver which manifest it would pick.
+        let is_range = !is_local_package_spec(&query)
+            && parse_package_spec(&query)?.1.is_some_and(|version| {
+                js_semver::Range::parse(&version).is_ok()
+                    && js_semver::Version::parse(&version).is_err()
+            });
+        let mut command = if is_range {
+            let node = self.node_bin_dir.join(if cfg!(windows) { "node.exe" } else { "node" });
+            let mut command = Command::new(node.as_path());
+            command.args([
+                "--input-type=commonjs",
+                "-e",
+                include_str!("resolve-version.cjs"),
+                "--",
+                &query,
+            ]);
+            command
+        } else {
+            let mut command = Command::new(self.npm_path.as_path());
+            command.args(["view", "-g", &query, "version", "--json"]);
+            command
+        };
 
-        parse_npm_view_version(&output)
+        let mut env = ToolPathEnv::from_env();
+        env.prepend(&self.node_bin_dir, &["node", "npm", "npx"], PrependOptions::default())?;
+        // The spinner's raw stdin would be restored by Node when it exits.
+        let output = command.envs(env.into_envs()).stdin(Stdio::null()).output().await?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let action = if is_range { "npm resolution" } else { "npm view" };
+            return Err(Error::Other(
+                format!("{action} failed for {query}: {}", stderr.trim()).into(),
+            ));
+        }
+
+        parse_npm_view_version(&output.stdout)
     }
-}
-
-async fn npm_view(
-    npm_path: &AbsolutePathBuf,
-    node_bin_dir: &AbsolutePathBuf,
-    package_spec: &str,
-    field: &str,
-) -> Result<Vec<u8>, Error> {
-    let mut env = ToolPathEnv::from_env();
-    env.prepend(node_bin_dir, &["node", "npm", "npx"], PrependOptions::default())?;
-    let output = Command::new(npm_path.as_path())
-        .args(["view", "-g", package_spec, field, "--json"])
-        .envs(env.into_envs())
-        // The spinner's raw stdin would be restored by Node when npm exits.
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
-        .await?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        return Err(Error::Other(format!("npm view failed for {package_spec}: {stderr}").into()));
-    }
-
-    Ok(output.stdout)
 }
 
 pub(crate) async fn latest_package_versions(
@@ -317,7 +319,7 @@ fn parse_npm_view_version(stdout: &[u8]) -> Result<String, Error> {
         Ok(serde_json::Value::Array(versions)) => {
             // A range query lists matching versions in publish order, so a
             // backport release can come last (e.g. vite 4.5.14 after 5.0.x);
-            // pick the semver max like installs do, not the last element.
+            // use semver precedence when npm returns multiple versions.
             let max = versions
                 .iter()
                 .filter_map(|version| version.as_str())

@@ -1,0 +1,27 @@
+{
+  "testnpm2": {
+    "name": "testnpm2",
+    "dist-tags": {
+      "latest": "1.0.0",
+      "next": "1.0.1"
+    },
+    "versions": {
+      "1.0.0": {
+        "name": "testnpm2",
+        "version": "1.0.0",
+        "dist": {
+          "tarball": "{REGISTRY}/testnpm2/-/testnpm2-1.0.0.tgz",
+          "integrity": "sha512-8gdtqxKad+83Iog2v514VsHsSk/R+we9j5/9zX9tB+QC2ubvB06zJ08k0PSl5uzviXByEMiWm7EzSbBAh2GZ/w=="
+        }
+      },
+      "1.0.1": {
+        "name": "testnpm2",
+        "version": "1.0.1",
+        "dist": {
+          "tarball": "{REGISTRY}/testnpm2/-/testnpm2-1.0.1.tgz",
+          "integrity": "sha512-F4AQ+KmzhbOSlt7ae+X2O8IJktFZAcN6OK169TT4ny7M3e4Vje7NITZTOU31AtEk9L/Z8lrCrqinl/eY6WPuEw=="
+        }
+      }
+    }
+  }
+}
