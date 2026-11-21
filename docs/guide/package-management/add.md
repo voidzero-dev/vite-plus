@@ -89,7 +89,7 @@ vp add --filter web --filter docs lodash
 
 A filter such as `'app-*'` does not match workspace names by prefix. Wildcards can match paths, so `'*'` can select only some members.
 
-From the workspace root, pass npm's `--workspaces` option to select every member. By default, npm excludes the root package.
+With npm 7.14.0 or later, run these commands from the workspace root to select every member. The native `--workspaces` option excludes the root package by default.
 
 ```bash
 vp add lodash -- --workspaces
