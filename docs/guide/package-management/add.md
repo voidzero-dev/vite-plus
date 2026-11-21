@@ -34,7 +34,7 @@ Choose one dependency target at a time. Peer dependencies follow the native mana
 | `--no-lockfile`              | Skip reading or generating a lockfile.                 | Cannot be combined with --global.                                              |
 | `--shamefully-hoist`         | Create a flat `node_modules` layout.                   | Cannot be combined with --global.                                              |
 | `--silent`                   | Suppress Vite+ output and request native quiet output. | Cannot be combined with --global.                                              |
-| `--filter <pattern>`         | Select workspaces by pattern.                          | Can be repeated.                                                               |
+| `--filter <pattern>`         | Select workspaces.                                     | Can be repeated. See [npm workspace filters](#npm-workspace-filters).          |
 | `-w, --workspace-root`       | Add to workspace root.                                 |                                                                                |
 | `--workspace`                | Require the dependency to exist in the workspace.      |                                                                                |
 | `-g, --global`               | Install globally.                                      | Requires the global CLI. Uses the [global package store](./global-packages).   |
@@ -78,6 +78,25 @@ The commands below describe project operations. Global mode is described under [
 | `-g, --global`               | Yes             | Yes              | Yes          | Yes         | Yes            |                                                    |
 | `--node <version>`           | Yes             | Yes              | Yes          | Yes         | Yes            |                                                    |
 | `--concurrency <number>`     | Yes             | Yes              | Yes          | Yes         | Yes            |                                                    |
+
+### npm Workspace Filters
+
+With npm 7.14.0 or later, pass an exact workspace name, a workspace directory, or a parent directory to `--filter`. Repeat the flag to select several workspaces by name.
+
+```bash
+vp add --filter web --filter docs lodash
+```
+
+A filter such as `'app-*'` does not match workspace names by prefix. Wildcards can match paths, so `'*'` can select only some members.
+
+From the workspace root, pass npm's `--workspaces` option to select every member. By default, npm excludes the root package.
+
+```bash
+vp add lodash -- --workspaces
+vp remove lodash -- --workspaces
+```
+
+With npm 8.1.0 or later, `vp remove -r lodash` includes the root package as well as all members.
 
 ## Native Options
 
