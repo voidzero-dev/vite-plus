@@ -234,6 +234,10 @@ describe('formatPnpmInstallOutput', () => {
       'ERR_PNPM_LOCKFILE_CONFIG_MISMATCH',
       'Cannot proceed with the frozen installation. The current "autoInstallPeers" configuration doesn\'t match the value found in the lockfile',
     ],
+    [
+      'ERR_PNPM_LOCKFILE_MISSING_DEPENDENCY',
+      "Broken lockfile: no entry for 'is-number@7.0.0' in pnpm-lock.yaml",
+    ],
   ])('shows the member named by %s', async (code, message) => {
     const cwd = resolve('workspace');
     const error = {
@@ -246,12 +250,12 @@ describe('formatPnpmInstallOutput', () => {
     };
     const headline = `${error.code} ${error.err.message}\n${error.hint}`;
 
-    expect(await formatPnpmInstallOutput(JSON.stringify(error), cwd)).toBe(
+    expect(await formatPnpmInstallOutput(JSON.stringify(error), cwd, 'error')).toBe(
       `packages/worker: ${headline}`,
     );
-    expect(await formatPnpmInstallOutput(JSON.stringify({ ...error, prefix: cwd }), cwd)).toBe(
-      headline,
-    );
+    expect(
+      await formatPnpmInstallOutput(JSON.stringify({ ...error, prefix: cwd }), cwd, 'error'),
+    ).toBe(headline);
   });
 
   it.each(['info', 'debug', 'warn', 'error', 'silent', 'json', 'ndjson'] as const)(
