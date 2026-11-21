@@ -519,6 +519,26 @@ export async function formatPnpmInstallOutput(
         );
         deprecatedSubdependencies.length = 0;
       }
+    } else if (log.name === 'pnpm:skipped-optional-dependency') {
+      // pnpm reports direct skips from the current importer at info level.
+      if (
+        showInfo &&
+        log.prefix === cwd &&
+        Array.isArray(log.parents) &&
+        log.parents.length === 0
+      ) {
+        const { id, name, version, pref } = asRecord(log.package);
+        const nameAndVersion =
+          typeof name === 'string' && name && typeof version === 'string'
+            ? `${name}@${version}`
+            : '';
+        const dependency = (typeof id === 'string' && id) || nameAndVersion || pref;
+        if (typeof dependency === 'string' && dependency) {
+          messages.push(
+            `info: ${redactPnpmDiagnostic(dependency)} is an optional dependency and failed compatibility check. Excluding it from installation.`,
+          );
+        }
+      }
     } else if (log.name === 'pnpm:hook' && log.level === 'debug') {
       // readPackage's context.log() uses debug records in pnpm 9's info reporter.
       if (showInfo && typeof log.hook === 'string' && typeof log.message === 'string') {
