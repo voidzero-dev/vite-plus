@@ -132,6 +132,52 @@ describe('formatPnpmInstallOutput', () => {
     });
   });
 
+  it.each(['info', 'debug', 'warn', 'error', 'silent', 'json', 'ndjson'] as const)(
+    'replays direct optional dependency skips at the expected level in %s mode',
+    async (mode) => {
+      const cwd = resolve('workspace');
+      const directSkip = {
+        name: 'pnpm:skipped-optional-dependency',
+        level: 'debug',
+        reason: 'resolution_failure',
+        prefix: cwd,
+        parents: [],
+        package: { name: '@fixture/binary', pref: '1.0.0', version: '1.0.0' },
+      };
+      const output = [
+        directSkip,
+        { ...directSkip, parents: [{ name: 'fixture-parent', version: '1.0.0' }] },
+        { ...directSkip, prefix: join(cwd, 'packages', 'member') },
+        { ...directSkip, reason: 'unsupported_platform', parents: undefined },
+      ]
+        .map((record) => JSON.stringify(record))
+        .join('\n');
+      const formatted = await formatPnpmInstallOutput(output, cwd, mode);
+      if (mode === 'ndjson') {
+        expect(formatted).toBe(output);
+      } else if (mode === 'info' || mode === 'debug') {
+        expect(formatted).toBe(
+          'info: @fixture/binary@1.0.0 is an optional dependency and failed compatibility check. Excluding it from installation.',
+        );
+      } else {
+        expect(formatted).toBe('');
+      }
+    },
+  );
+
+  it('redacts the requested URL for a skipped optional dependency without a name', async () => {
+    const output = JSON.stringify({
+      name: 'pnpm:skipped-optional-dependency',
+      prefix: '/project',
+      parents: [],
+      package: { pref: 'https://user:fixture-secret@registry.example.com/archive.tgz?token=test' },
+    });
+
+    expect(await formatPnpmInstallOutput(output, '/project')).toBe(
+      'info: https://registry.example.com/archive.tgz is an optional dependency and failed compatibility check. Excluding it from installation.',
+    );
+  });
+
   it('recovers the error code from a truncated pnpm version diagnostic', async () => {
     const code = 'ERR_PNPM_NO_MATCHING_VERSION';
     const output =
