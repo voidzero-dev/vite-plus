@@ -10,6 +10,7 @@ import { transformWithOxc } from '@voidzero-dev/vite-plus-core';
 import { build } from '@voidzero-dev/vite-plus-core/rolldown';
 import { init, parse } from 'es-module-lexer';
 import { glob } from 'tinyglobby';
+import { satisfies } from 'verkit';
 import { describe, expect, it } from 'vite-plus/test';
 
 const coreDir = path.resolve(import.meta.dirname, '..');
@@ -202,6 +203,14 @@ describe('build artifacts', () => {
     for (const name of peers) {
       expect(pkg.peerDependencies).toHaveProperty([name]);
       expect(pkg.peerDependenciesMeta).toHaveProperty([name], { optional: true });
+    }
+  });
+
+  it('accepts the native TypeScript beta and existing stable compilers as peers', () => {
+    const require = createRequire(import.meta.url);
+    const { peerDependencies } = require('../package.json');
+    for (const version of ['5.9.3', '6.0.3', '7.0.2', '7.1.0-beta']) {
+      expect(satisfies(version, peerDependencies.typescript), version).toBe(true);
     }
   });
 });

@@ -142,12 +142,12 @@
     "tsdown": "catalog:",
     "tsrs": "catalog:",
     "typescript": "catalog:",
+    "verkit": "catalog:",
     "vite": "workspace:*"
   },
   "peerDependencies": {
     "@arethetypeswrong/core": "^0.18.1",
     "@types/node": "^20.19.0 || >=22.12.0",
-    "@typescript/native-preview": "^7.0.0-0",
     "@vitejs/devtools": "^0.7.1 || ^0.8.0",
     "@volar/typescript": "~2.4.0",
     "@vue/language-core": "~3.2.0 || ~3.3.0",
@@ -162,16 +162,13 @@
     "terser": "^5.16.0",
     "tsrs": "*",
     "tsx": "^4.8.1",
-    "typescript": "^5.0.0 || ^6.0.0 || ^7.0.0",
+    "typescript": "^5.0.0 || ^6.0.0 || ^7.0.0 || ~7.1.0-0",
     "unplugin-unused": ">=0.5.0",
     "unrun": "*",
     "vue-tsc": "~3.2.0 || ~3.3.0",
     "yaml": "^2.4.2"
   },
   "peerDependenciesMeta": {
-    "@typescript/native-preview": {
-      "optional": true
-    },
     "@volar/typescript": {
       "optional": true
     },

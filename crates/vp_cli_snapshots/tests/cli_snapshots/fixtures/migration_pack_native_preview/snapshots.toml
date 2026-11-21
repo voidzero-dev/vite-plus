@@ -1,0 +1,16 @@
+[[case]]
+name = "migration_pack_native_preview"
+vp = "global"
+local-registry = true
+comment = "Migrate a library that used native-preview for declarations and preserve the compiler of a separate workspace package."
+steps = [
+  ["vp", "migrate", "--no-interactive"],
+  ["vpt", "print-file", "package.json"],
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  ["vp", "migrate", "--no-interactive"],
+  { argv = ["node", "-e", "require('node:assert/strict').equal(require('./package.json').devDependencies['@typescript/native-preview'], undefined)"], snapshot = false },
+  ["vp", "exec", "tsc", "--version"],
+  { argv = ["vp", "exec", "tsc", "--version"], cwd = "packages/classic" },
+  ["vp", "pack"],
+  ["vpt", "print-file", "dist/index.d.mts"],
+]

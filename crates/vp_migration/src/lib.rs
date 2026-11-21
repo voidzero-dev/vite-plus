@@ -27,6 +27,7 @@ pub use import_rewriter::{
     rewrite_imports_in_directory, rewrite_imports_in_directory_with_options,
 };
 pub use import_rule::ImportRuleConfig;
+pub use pack_config::classify_native_preview_pack_config;
 pub use package::{rewrite_eslint, rewrite_prettier, rewrite_scripts};
 pub use shell_command::{LiteralCommandToken, parse_literal_commands};
 pub use source_analysis::analyze_migration_source;

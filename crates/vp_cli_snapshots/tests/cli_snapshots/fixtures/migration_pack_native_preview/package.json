@@ -1,0 +1,12 @@
+{
+  "name": "migration-pack-native-preview",
+  "private": true,
+  "type": "module",
+  "types": "./dist/index.d.mts",
+  "devDependencies": {
+    "@typescript/native-preview": "7.0.0-dev.20260707.2",
+    "typescript": "5.9.3",
+    "vite-plus": "1.6.0"
+  },
+  "packageManager": "pnpm@11.24.0"
+}

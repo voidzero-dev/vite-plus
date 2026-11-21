@@ -16,6 +16,7 @@ import type { BuildOptions, RolldownOptions } from 'rolldown';
 import { build } from 'rolldown';
 import { dts } from 'rolldown-plugin-dts';
 import { glob } from 'tinyglobby';
+import { findMinimumForRange, isRangeSubset } from 'verkit';
 
 import { generateLicenseFile } from '../../scripts/generate-license.js';
 import viteRolldownConfig from '../../vite/packages/vite/rolldown.config.js';
@@ -762,6 +763,15 @@ async function mergePackageJson() {
       'rolldown-plugin-dts/package.json',
     ),
   );
+  // tsdown declares stable TypeScript peers. Its declaration plugin also accepts
+  // prereleases that provide the native declaration emit API.
+  const typescriptRange = tsdownPkg.peerDependencies.typescript;
+  const compilerPrereleases = (dtsPkg.peerDependencies.typescript as string)
+    .split(/\s*\|\|\s*/)
+    .filter(
+      (range) =>
+        findMinimumForRange(range)?.prerelease?.length && !isRangeSubset(range, typescriptRange),
+    );
 
   // Merge peerDependencies from rolldown-plugin-dts, tsdown and vite. The bundled
   // dts plugin still resolves `vue-tsc`, `@volar/typescript`,
@@ -769,16 +779,14 @@ async function mergePackageJson() {
   // and its declarations import their types, so isolated installs need them
   // declared here.
   destPkg.peerDependencies = {
-    // The patched tsgo generator also supports projects that use the native preview CLI.
-    '@typescript/native-preview': '^7.0.0-0',
     ...dtsPkg.peerDependencies,
     ...tsdownPkg.peerDependencies,
     ...vitePkg.peerDependencies,
+    typescript: [typescriptRange, ...compilerPrereleases].join(' || '),
   };
 
   // Merge peerDependenciesMeta from rolldown-plugin-dts, tsdown and vite
   destPkg.peerDependenciesMeta = {
-    '@typescript/native-preview': { optional: true },
     ...dtsPkg.peerDependenciesMeta,
     ...tsdownPkg.peerDependenciesMeta,
     ...vitePkg.peerDependenciesMeta,

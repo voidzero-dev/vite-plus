@@ -73,6 +73,12 @@ When `external` accompanies either `skipNodeModulesBundle` form, static matchers
 
 The transform does not evaluate configuration code. Objects with spreads, computed keys, or duplicate keys, and conflicting old and new options require manual review. Dynamic boolean selectors remain unchanged. Unrelated Vite and plugin options remain unchanged. Run `vp pack` after migration to check the result. Node.js requirements, TypeScript module resolution, and programmatic `build()` return values require separate review.
 
+### TypeScript Go declaration builds
+
+If a package uses TypeScript 5 or 6 and selects `@typescript/native-preview` for declaration builds, run `vp migrate` when you upgrade Vite+. Migration recognizes `pack.dts.generator: 'tsgo'` and the older `dts.tsgo: true` syntax. It installs `typescript@7.1.0-beta` in the package that supplies the compiler and removes the preview dependency when it finds no other use. Packages that share that compiler also get the new `tsc` command. Projects already building declarations with `typescript@7.0` can keep using it.
+
+Migration reports configs with a dynamic compiler selection or a custom `tsgo.path` for review. On TypeScript 7.1, that path identifies the API server executable. If the package needs the classic TypeScript API or declares an incompatible peer range, install a separate TypeScript 7.1+ compiler and point `pack.dts.tsgo.moduleUrl` at it. Check the version used by your existing `tsc` scripts after installation. [Upstream migration notes](https://github.com/rolldown/tsdown/releases/tag/v0.23.5)
+
 ## Task Cache Configuration
 
 `vp migrate` moves `env`, `untrackedEnv`, `input`, and `output` from the top level of each task into the task's [`cache`](/config/run#cache) object. It updates static `run.tasks` objects in `vite.config.*`. This also runs on existing Vite+ projects without `--full`, including workspace packages.
