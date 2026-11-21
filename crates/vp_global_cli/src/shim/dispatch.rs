@@ -1375,7 +1375,7 @@ async fn cached_project_source_still_current(
     };
 
     let current_source_path = current.source_path.as_path().display().to_string();
-    Ok(entry.source == current.source
+    Ok(entry.source == current.source.as_str()
         && entry.source_path.as_deref() == Some(current_source_path.as_str()))
 }
 

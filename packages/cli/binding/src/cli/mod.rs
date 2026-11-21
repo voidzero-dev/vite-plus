@@ -411,7 +411,11 @@ pub async fn main(
     let args_with_program = std::iter::once("vp".to_string()).chain(args_vec.iter().cloned());
     let cli_args = match CLIArgs::try_parse_from(args_with_program) {
         Ok(args) => args,
-        Err(err) => return handle_cli_parse_error(err),
+        Err(err) => {
+            // `bin.ts` already applied `-C` to `cwd` and removed it from `args_vec`.
+            let chdir = explicit_chdir.then(|| cwd.as_path().to_string_lossy());
+            return handle_cli_parse_error(err, &args_vec, &cwd, chdir.as_deref());
+        }
     };
 
     match cli_args {
