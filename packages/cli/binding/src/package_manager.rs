@@ -174,6 +174,7 @@ pub async fn available_package_managers(cwd: Option<String>) -> Result<Vec<Strin
 pub struct DetectWorkspaceResult {
     pub package_manager_name: Option<String>,
     pub package_manager_version: Option<String>,
+    pub package_manager_hash: Option<String>,
     pub is_monorepo: bool,
     pub root: Option<String>,
 }
@@ -189,6 +190,7 @@ pub struct DetectWorkspaceResult {
 /// Returns a `DetectWorkspaceResult` containing:
 /// - The name of the package manager
 /// - The version of the package manager
+/// - The integrity hash from the package manager pin, if present
 /// - Whether the workspace is a monorepo
 /// - The workspace root, where the package.json file is located.
 ///
@@ -210,6 +212,7 @@ pub async fn detect_workspace(cwd: String) -> Result<DetectWorkspaceResult> {
             return Ok(DetectWorkspaceResult {
                 package_manager_name: None,
                 package_manager_version: None,
+                package_manager_hash: None,
                 is_monorepo: false,
                 root: None,
             });
@@ -226,9 +229,10 @@ pub async fn detect_workspace(cwd: String) -> Result<DetectWorkspaceResult> {
     let workspace_root_path = workspace_root.path.as_path().to_string_lossy().to_string();
 
     match get_package_manager_type_and_version(&workspace_root, None) {
-        Ok((package_manager_type, version, _, _)) => Ok(DetectWorkspaceResult {
+        Ok((package_manager_type, version, hash, _)) => Ok(DetectWorkspaceResult {
             package_manager_name: Some(package_manager_type.to_string()),
             package_manager_version: Some(version.to_string()),
+            package_manager_hash: hash.map(|hash| hash.to_string()),
             is_monorepo,
             root: Some(workspace_root_path),
         }),
@@ -236,6 +240,7 @@ pub async fn detect_workspace(cwd: String) -> Result<DetectWorkspaceResult> {
             Ok(DetectWorkspaceResult {
                 package_manager_name: None,
                 package_manager_version: None,
+                package_manager_hash: None,
                 is_monorepo,
                 root: Some(workspace_root_path),
             })

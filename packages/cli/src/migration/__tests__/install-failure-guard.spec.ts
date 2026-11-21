@@ -288,6 +288,49 @@ describe('getMigrationInstallWatchOptions', () => {
     expect(downloadPackageManager).not.toHaveBeenCalled();
   });
 
+  it('waits for the exact launcher if its selected cache is not provisioned', async () => {
+    vi.stubEnv('VP_CLI_BIN', '/global/vp');
+    vi.mocked(runCommandSilently).mockResolvedValueOnce(
+      commandOutput(
+        JSON.stringify({
+          package_manager: {
+            name: 'pnpm',
+            version: projectVersion,
+            installed: false,
+            bin_paths: { pnpm: '/selected-pnpm/bin/pnpm' },
+          },
+        }),
+      ),
+    );
+    expect(
+      await getMigrationInstallWatchOptions(cwd, false, PackageManager.pnpm, projectPnpm),
+    ).toBeUndefined();
+    expect(runCommandSilently).toHaveBeenCalledTimes(1);
+    expect(downloadPackageManager).not.toHaveBeenCalled();
+  });
+
+  it('uses the provisioned integrity pin when a legacy launcher omits its install state', async () => {
+    vi.stubEnv('VP_CLI_BIN', '/global/vp');
+    vi.mocked(runCommandSilently)
+      .mockResolvedValueOnce({ ...commandOutput(''), exitCode: 2 })
+      .mockResolvedValueOnce(
+        commandOutput(
+          JSON.stringify({
+            package_manager: { name: 'pnpm', version: projectVersion, bin_path: '/legacy/pnpm' },
+          }),
+        ),
+      );
+    expect(
+      await getMigrationInstallWatchOptions(
+        cwd,
+        false,
+        PackageManager.pnpm,
+        projectPnpm,
+        `sha512.${'0'.repeat(128)}`,
+      ),
+    ).toEqual(projectWatchOptions);
+  });
+
   it('prepares a global pnpm override that has yet to be installed', async () => {
     vi.stubEnv('VP_CLI_BIN', '/global/vp');
     vi.mocked(getPackageManagerOverride).mockReturnValue({ name: 'pnpm', version: '10.33.0' });
