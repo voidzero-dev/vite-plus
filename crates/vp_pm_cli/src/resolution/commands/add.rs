@@ -232,7 +232,8 @@ impl Npm {
             .arg_if("--include-workspace-root", args.workspace_root);
         match args.save_dependency.target() {
             Some(SaveDependencyTarget::Production) => {
-                cmd.arg("--save-prod");
+                // `--save` overrides npm's `save=false` setting when the user explicitly selects production.
+                cmd.arg("--save").arg("--save-prod");
             }
             Some(SaveDependencyTarget::Dev) => {
                 cmd.arg("--save-dev");
@@ -602,7 +603,7 @@ mod tests {
 
         // `--save` would leave an existing devDependency in place; `--save-prod` moves it.
         assert_eq!(command.program, "npm");
-        assert_eq!(command.args, vec!["install", "--save-prod", "react"]);
+        assert_eq!(command.args, vec!["install", "--save", "--save-prod", "react"]);
     }
 
     #[test]
