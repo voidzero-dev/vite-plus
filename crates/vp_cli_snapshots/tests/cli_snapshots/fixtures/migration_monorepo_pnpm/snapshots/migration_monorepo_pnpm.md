@@ -134,7 +134,7 @@ trustPolicy: no-downgrade
 trustPolicyExclude:
   # Keep the project's existing exception.
   - testnpm2@1.0.0
-  - tsrs@7.1.0-beta.tsrs3
+  - tsrs@7.1.0-beta.tsrs4
 overrides:
   vite@*: 'catalog:'
   vitest@*: 'catalog:'
