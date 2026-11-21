@@ -1,3 +1,5 @@
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it, vi } from 'vitest';
 
 import type { WorkspaceInfo } from '../../types/index.ts';
@@ -13,8 +15,9 @@ vi.mock('../../utils/command.ts', async (importOriginal) => ({
 
 describe('runRemoteTemplateCommand', () => {
   // `vp dlx` resolves the selected package manager itself, so a Vite+ shim earlier on PATH cannot replace it.
-  it('runs the template through vp dlx with the selected package manager', async () => {
-    vi.stubEnv('VP_CLI_BIN', 'vp');
+  // An older global `vp` in VP_CLI_BIN must not run it, so this package's CLI runs on the current Node.js.
+  it("runs the template through this package's vp dlx with the selected package manager", async () => {
+    vi.stubEnv('VP_CLI_BIN', '/old/global/vp');
     const workspaceInfo = {
       packageManager: 'pnpm',
       packageManagerVersion: '10.32.0',
@@ -29,8 +32,8 @@ describe('runRemoteTemplateCommand', () => {
     vi.unstubAllEnvs();
 
     expect(runCommandSilently).toHaveBeenLastCalledWith({
-      command: 'vp',
-      args: ['dlx', '--', 'create-foo', 'app'],
+      command: process.execPath,
+      args: [fileURLToPath(import.meta.resolve('vite-plus/bin')), 'dlx', '--', 'create-foo', 'app'],
       cwd: '/workspace',
       envs: { VP_PACKAGE_MANAGER: 'pnpm@10.32.0' },
     });
@@ -38,7 +41,6 @@ describe('runRemoteTemplateCommand', () => {
 
   // The generator may run inside the new workspace, whose registry could resolve a tag differently.
   it('forwards the resolved override instead of the tag the user gave', async () => {
-    vi.stubEnv('VP_CLI_BIN', 'vp');
     const workspaceInfo = {
       packageManager: 'pnpm',
       packageManagerVersion: '10.18.0',
@@ -51,7 +53,6 @@ describe('runRemoteTemplateCommand', () => {
     } as unknown as TemplateInfo;
 
     await runRemoteTemplateCommand(workspaceInfo, '/workspace', templateInfo, false, true);
-    vi.unstubAllEnvs();
 
     expect(runCommandSilently).toHaveBeenLastCalledWith(
       expect.objectContaining({ envs: { VP_PACKAGE_MANAGER: 'pnpm@10.18.0+sha512.abc' } }),

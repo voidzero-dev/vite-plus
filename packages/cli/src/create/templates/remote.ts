@@ -2,7 +2,7 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import colors from 'picocolors';
 
 import type { WorkspaceInfo } from '../../types/index.ts';
-import { getVpCommand, runCommand, runCommandSilently } from '../../utils/command.ts';
+import { getLocalVpCommand, runCommand, runCommandSilently } from '../../utils/command.ts';
 import { checkNpmPackageExists } from '../../utils/package.ts';
 import { type ExecutionWithProjectDir, runCommandAndDetectProjectDir } from '../command.ts';
 import type { TemplateInfo } from './types.ts';
@@ -92,7 +92,8 @@ export async function runRemoteTemplateCommand(
       workspaceInfo.packageManagerOverride ??
       `${workspaceInfo.packageManager}@${workspaceInfo.packageManagerVersion}`,
   };
-  const { command, args } = getVpCommand(dlxArgs);
+  // The global `vp` may be an older release and would pick its own Node.js outside a project.
+  const { command, args } = getLocalVpCommand(dlxArgs);
   if (!silent) {
     prompts.log.info(`Running: ${gray(`vp ${dlxArgs.join(' ')}`)}`);
   }
