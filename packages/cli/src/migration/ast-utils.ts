@@ -136,14 +136,35 @@ export function parseSource(file: string, source: string): ParsedSource {
   return { program: ast.node, bindings, comments };
 }
 
-export function defaultConfigValue(program: t.Program): t.Node | undefined {
+export function defaultConfigValue({ program, bindings }: ParsedSource): t.Node | undefined {
   const declaration = program.body.find(
     (statement) => statement.type === 'ExportDefaultDeclaration',
   )?.declaration;
   if (!declaration) {
     return undefined;
   }
-  const exported = unwrapTypeExpression(declaration);
+  let exported = unwrapTypeExpression(declaration);
+  // Follow private constants that are used only to pass the config to its export.
+  while (exported.type === 'Identifier') {
+    const reference = exported.start;
+    const binding = bindings.find(
+      ({ constant, references }) =>
+        constant && references.length === 1 && references[0] === reference,
+    );
+    const alias =
+      binding &&
+      program.body
+        .flatMap((statement) =>
+          statement.type === 'VariableDeclaration' && statement.kind === 'const'
+            ? statement.declarations
+            : [],
+        )
+        .find(({ id, end }) => id.start === binding.start && end <= reference);
+    if (!alias?.init || alias.id.type !== 'Identifier') {
+      break;
+    }
+    exported = unwrapTypeExpression(alias.init);
+  }
   if (
     exported?.type === 'CallExpression' &&
     exported.callee.type === 'Identifier' &&

@@ -419,13 +419,11 @@ function matchingInlinePackConfig(
       tsdownConfigPath,
       workspaceRoot,
     );
-    const current = configReturnValues(
-      defaultConfigValue(parseSource(viteConfigPath, existing).program),
-    );
+    const current = configReturnValues(defaultConfigValue(parseSource(viteConfigPath, existing)));
     if (current.length === 0) {
       return undefined;
     }
-    const standalone = defaultConfigValue(parseSource(viteConfigPath, expected).program);
+    const standalone = defaultConfigValue(parseSource(viteConfigPath, expected));
     const inlined =
       standalone?.type === 'ObjectExpression' && objectProperty(standalone, 'pack')?.value;
     const matches =
@@ -684,8 +682,11 @@ export function configNeedsVitePlus(
   return false;
 }
 
-function packProperties(program: Program, requireStatic = false): (ObjectProperty | undefined)[] {
-  return configReturnValues(defaultConfigValue(program)).map((config) =>
+function packProperties(
+  parsed: ReturnType<typeof parseSource>,
+  requireStatic = false,
+): (ObjectProperty | undefined)[] {
+  return configReturnValues(defaultConfigValue(parsed)).map((config) =>
     config?.type === 'ObjectExpression' && (!requireStatic || staticObject(config, true))
       ? objectProperty(config, 'pack')
       : undefined,
@@ -1011,9 +1012,9 @@ function privatePackBindings(program: Program) {
   return initializers;
 }
 
-function viteConfigMemberReads(program: Program): Set<number> {
+function viteConfigMemberReads(parsed: ReturnType<typeof parseSource>): Set<number> {
   const reads = new Set<number>();
-  const objects = configReturnValues(defaultConfigValue(program)).filter(
+  const objects = configReturnValues(defaultConfigValue(parsed)).filter(
     (value) => value?.type === 'ObjectExpression',
   );
   for (const object of objects) {
@@ -1057,7 +1058,7 @@ function sharedPackSpread(initializer: ObjectExpression): PackIdentifier | undef
 }
 
 function packAssignments(
-  { program, bindings }: ReturnType<typeof parseSource>,
+  parsed: ReturnType<typeof parseSource>,
   packs: readonly (ObjectProperty | undefined)[],
 ) {
   const readOnlyArguments = new Set<number>();
@@ -1067,6 +1068,7 @@ function packAssignments(
   if (!packs.some(Boolean)) {
     return { uses, readOnlyArguments, mapperArguments, localArrays };
   }
+  const { program, bindings } = parsed;
   const initializers = privatePackBindings(program);
   const localMappers = new Map<number, PackHelper>();
   const context = { localArrays, readOnlyArguments, localMappers, mapperArguments };
@@ -1131,7 +1133,7 @@ function packAssignments(
     }
   }
   const packReferences = new Set(uses.map(({ value }) => value.start));
-  const propertyReads = viteConfigMemberReads(program);
+  const propertyReads = viteConfigMemberReads(parsed);
   const copies = uses.flatMap(({ property, value: reference, mapping }) => {
     const alias = aliasesByReference.get(reference.start);
     if (
@@ -1261,36 +1263,43 @@ function packHelperParameter(
 
 function packHelperArgument(
   node: Node,
-): { value: PackIdentifier; property?: string; unverified?: boolean } | undefined {
+):
+  | { references: PackIdentifier[]; options?: ReadonlyMap<string | undefined, PackIdentifier> }
+  | undefined {
   const argument = unwrapTypeExpression(node);
   if (argument.type === 'Identifier') {
-    return { value: argument };
+    return { references: [argument], options: new Map([[undefined, argument]]) };
   }
   if (argument.type !== 'ObjectExpression') {
     return undefined;
   }
   const properties = new Set<string>();
-  let reference;
-  let unverified = false;
+  const references: PackIdentifier[] = [];
+  const options = new Map<string, PackIdentifier>();
+  let verified = true;
   for (const member of argument.properties) {
-    if (member.type !== 'Property' || member.computed || member.kind !== 'init') {
-      return undefined;
+    const value = member.type === 'SpreadElement' ? member.argument : member.value;
+    const reference = packRootIdentifier(value);
+    if (reference) {
+      references.push(reference);
+    }
+    if (member.type !== 'Property' || member.computed || member.kind !== 'init' || member.method) {
+      verified = false;
+      continue;
     }
     const property = propertyName(member.key);
     if (property === undefined || properties.has(property)) {
-      return undefined;
+      verified = false;
+      continue;
     }
     properties.add(property);
     if (member.value.type === 'Identifier') {
-      if (reference) {
-        return undefined;
-      }
-      reference = { value: member.value, property };
+      options.set(property, member.value);
     } else if (!sameStaticValue(member.value, member.value)) {
-      unverified = true;
+      verified = false;
     }
   }
-  return reference && { ...reference, unverified };
+  return { references, options: verified ? options : undefined };
 }
 
 function packMappingHelper(node: Node): PackHelper | undefined {
@@ -1431,12 +1440,13 @@ function packOutputAssignment(node: Node | null | undefined) {
 }
 
 function packMutationReferences(
-  { program, bindings }: ReturnType<typeof parseSource>,
+  parsed: ReturnType<typeof parseSource>,
   readOnlyArguments: ReadonlySet<number>,
   mapperArguments: ReadonlyMap<number, PackHelper>,
   localArrays: ReadonlyMap<number, LocalPackArray>,
 ) {
-  const configValue = defaultConfigValue(program);
+  const { program, bindings } = parsed;
+  const configValue = defaultConfigValue(parsed);
   const writes = new Set<number>();
   const reassignments = new Set<number>();
   const aliasInitializers = new Map<number, number>();
@@ -1687,9 +1697,10 @@ function packMutationReferences(
             ) {
               calls.set(callee.start, helperArgument);
             }
-            const root = helperArgument?.value ?? packRootIdentifier(value);
-            if (root && !readOnlyArguments.has(root.start)) {
-              writes.add(root.start);
+            for (const root of helperArgument?.references ?? [packRootIdentifier(value)]) {
+              if (root && !readOnlyArguments.has(root.start)) {
+                writes.add(root.start);
+              }
             }
           }
           continue;
@@ -1744,14 +1755,9 @@ function packMutationReferences(
     }
     const helper = helpers.get(start);
     const argument = references.length === 1 ? calls.get(references[0]) : undefined;
-    if (
-      constant &&
-      helper &&
-      argument &&
-      !argument.unverified &&
-      helper.property === argument.property
-    ) {
-      rewritable.set(argument.value.start, helper);
+    const option = helper && argument?.options?.get(helper.property);
+    if (constant && helper && option) {
+      rewritable.set(option.start, helper);
     }
     const alias = aliasInitializers.get(start);
     const parents = alias !== undefined ? [alias] : arrayOrigins.get(start);
@@ -1779,13 +1785,13 @@ function readPackEntry(file: string) {
   if (!fs.statSync(file, { throwIfNoEntry: false })?.isFile()) {
     return undefined;
   }
-  const { program, bindings } = parseSource(file, fs.readFileSync(file, 'utf8'));
-  const config = defaultConfigValue(program);
+  const parsed = parseSource(file, fs.readFileSync(file, 'utf8'));
+  const config = defaultConfigValue(parsed);
   if (!staticObject(config)) {
     return undefined;
   }
   const value = objectProperty(config, 'entry')?.value;
-  return { program, bindings, entry: value && unwrapTypeExpression(value) };
+  return { ...parsed, entry: value && unwrapTypeExpression(value) };
 }
 
 function isUnsetPackEntry(pack: ReturnType<typeof readPackEntry>): boolean {
@@ -2102,7 +2108,7 @@ export function findDivergedTsdownPackConfig(
       return merged.updated ? undefined : vitePath;
     }
     const source = parseSource(vitePath, fs.readFileSync(vitePath, 'utf8'));
-    const packs = packProperties(source.program, true);
+    const packs = packProperties(source, true);
     if (packs.length === 0) {
       return vitePath;
     }
@@ -2129,7 +2135,7 @@ export function findDivergedTsdownPackConfig(
         ? undefined
         : activePath;
     }
-    const expectedValue = defaultConfigValue(parseSource(tsdownConfigPath, expected).program);
+    const expectedValue = defaultConfigValue(parseSource(tsdownConfigPath, expected));
     return expectedValue &&
       packs.every(
         (pack) => pack && sameStaticValue(unwrapTypeExpression(pack.value), expectedValue),
@@ -2158,7 +2164,7 @@ function mergeRetainedTsdownConfig(
   const hasPack = hasConfigKey(viteConfigPath, 'pack');
   const parsed = hasPack ? parseSource(viteConfigPath, source) : undefined;
   const assignments = parsed
-    ? packAssignments(parsed, packProperties(parsed.program))
+    ? packAssignments(parsed, packProperties(parsed))
     : {
         uses: [],
         readOnlyArguments: new Set<number>(),
@@ -2233,8 +2239,7 @@ function mergeRetainedTsdownConfig(
     const array =
       !mappings.includes('unverified') &&
       defaultConfigValue(
-        parseSource(tsdownConfigPath, converted ?? fs.readFileSync(tsdownConfigPath, 'utf8'))
-          .program,
+        parseSource(tsdownConfigPath, converted ?? fs.readFileSync(tsdownConfigPath, 'utf8')),
       );
     if (
       !array ||

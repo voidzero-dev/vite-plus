@@ -630,8 +630,16 @@ function scriptRequiresVitePlus(command: string, projectPath?: string): boolean 
       const invocation = values.slice(first);
       const bunPrefix =
         invocation[0] === 'bunx' ? 1 : invocation[0] === 'bun' && invocation[1] === 'x' ? 2 : 0;
-      const bunNoInstall = bunPrefix > 0 && invocation[bunPrefix] === '--no-install';
-      const start = first + (bunNoInstall ? bunPrefix + 1 : getCommandStartIndex(invocation));
+      let commandStart = getCommandStartIndex(invocation);
+      if (bunPrefix > 0) {
+        while (
+          invocation[commandStart] === '--bun' ||
+          invocation[commandStart] === '--no-install'
+        ) {
+          commandStart++;
+        }
+      }
+      const start = first + commandStart;
       const executable = values[start];
       const wrappers = values.slice(first, start);
       const downloadsCommand =

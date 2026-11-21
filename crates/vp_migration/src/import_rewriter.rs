@@ -2544,8 +2544,14 @@ fn rewrite_import(
         file_path.to_str(),
     )?;
     if let Some(preserve_defaults) = preserve_defaults {
-        let rewritten =
-            pack_config::rewrite_pack_config(&result.content, is_tsdown_config, preserve_defaults);
+        let with_pack_types = (preserve_tsdown && is_vite_config)
+            .then(|| pack_config::rewrite_inline_pack_types(&result.content, file_path))
+            .flatten();
+        let rewritten = pack_config::rewrite_pack_config(
+            with_pack_types.as_deref().unwrap_or(&result.content),
+            is_tsdown_config,
+            preserve_defaults,
+        );
         result.updated |= rewritten != result.content;
         result.content = rewritten;
         result.warnings = pack_config::pack_config_warnings(&result.content, is_tsdown_config);
@@ -2844,7 +2850,7 @@ import { defineConfig as pack } from 'tsdown';
     fn retained_tsdown_dependency_does_not_skip_pack_options() {
         let temp = tempdir().unwrap();
         let root = temp.path();
-        let vite = "export default { pack: { publicDir: 'public' } };";
+        let vite = "import type { UserConfig } from 'tsdown';\nexport default { pack: { publicDir: 'public' } satisfies UserConfig };";
         let standalone = "export default { publicDir: 'public' };";
         write_pack_fixture(root, "package.json", r#"{"dependencies":{"tsdown":"0.22.14"}}"#);
         write_pack_fixture(root, "vite.config.ts", vite);
@@ -2863,6 +2869,7 @@ import { defineConfig as pack } from 'tsdown';
 
         assert_eq!(result.modified_files, [root.join("vite.config.ts")]);
         let actual = std::fs::read_to_string(root.join("vite.config.ts")).unwrap();
+        assert!(actual.contains("import type { UserConfig } from 'vite-plus/pack'"), "{actual}");
         assert!(actual.contains("copy: 'public'"), "{actual}");
         assert_eq!(std::fs::read_to_string(root.join("tsdown.config.ts")).unwrap(), standalone);
     }

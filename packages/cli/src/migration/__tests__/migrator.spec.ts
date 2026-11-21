@@ -535,9 +535,12 @@ describe('explicit tsdown config selection', () => {
     ['npx vp --version', true],
     ['npx --package another-command vp --version', false],
     ['bunx --no-install vp --version', true],
+    ['bunx --bun vp --version', true],
+    ['bunx --bun --no-install vp --version', true],
     ['bunx vp --version', true],
     ['bun x vp --version', true],
     ['bun x --no-install vp --version', true],
+    ['bun x --no-install --bun vp --version', true],
     ['bunx --package another-command vp --version', false],
     ['echo vp fmt', false],
     ['vpx ./generate.ts', true],
@@ -1766,6 +1769,10 @@ export default defineConfig(({ command }) => {
       "function configure({ options, mode }: { options: typeof base; mode: string }) { if (mode === 'release') { options.entry.push('src/cli.ts'); options.outDir = 'release-out'; } }",
       "{ options: base, mode: 'release' }",
     ],
+    [
+      "const mode = process.env.RELEASE_MODE ?? 'release'; function configure({ options, mode }: { options: typeof base; mode: string }) { if (mode === 'release') options.entry.push('src/cli.ts'); }",
+      '{ options: base, mode }',
+    ],
   ])('redirects a pack import shared with a local entry helper (%s)', (helper, argument) => {
     const tsdown = path.join(tmpDir, 'tsdown.config.ts');
     const original = "export default { entry: ['src/lib.ts'], publicDir: 'public' };\n";
@@ -1791,6 +1798,7 @@ export default defineConfig(({ command }) => {
     ],
     ["import { configure } from './configure.ts';", 'base'],
     ["import { configure } from './configure.ts';", '{ options: base }'],
+    ["import { configure, mode } from './configure.ts';", '{ options: base, mode }'],
   ])(
     'keeps options passed to a helper whose writes cannot be migrated (%s)',
     (helper, argument) => {
@@ -1811,6 +1819,25 @@ export default defineConfig(({ command }) => {
       );
     },
   );
+
+  it('keeps the bundled pack import when a defineConfig result is exported by name', () => {
+    const tsdown = path.join(tmpDir, 'tsdown.config.ts');
+    const vite = path.join(tmpDir, 'vite.config.ts');
+    const original = "export default { entry: 'src/lib.ts', publicDir: 'public' };\n";
+    fs.writeFileSync(tsdown, original);
+    fs.writeFileSync(
+      vite,
+      "import { defineConfig } from 'vite-plus';\nimport pack from './tsdown.config.ts';\nconst config = defineConfig({ pack });\nexport default config;\n",
+    );
+
+    expect(mergeTsdownConfigFile(tmpDir, true, createMigrationReport(), true)).toBe(true);
+    const updated = fs.readFileSync(vite, 'utf8');
+    expect(updated).toContain('import pack from "./vite-pack.config.ts"');
+    expect(updated).toContain('const config = defineConfig({ pack });');
+    expect(fs.readFileSync(tsdown, 'utf8')).toBe(original);
+    expect(mergeTsdownConfigFile(tmpDir, true, createMigrationReport(), true)).toBe(false);
+    expect(fs.readFileSync(vite, 'utf8')).toBe(updated);
+  });
 
   it('flags a copy whose overrides may change migrated resource options', () => {
     fs.writeFileSync(

@@ -306,7 +306,7 @@ function findConfigOwners(
       const parsed = configPath.endsWith('.json')
         ? parseSource('tsdown.config.ts', `export default ${source}`)
         : parseSource(configPath, source);
-      const config = defaultConfigValue(parsed.program);
+      const config = defaultConfigValue(parsed);
       if (mayLoadWorkspaceConfigs(config)) {
         return projectPaths;
       }
