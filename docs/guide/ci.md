@@ -197,8 +197,6 @@ pnpm install --frozen-lockfile
 .\node_modules\.bin\vp.cmd test run
 ```
 
-If you cannot reach the private registry from the machine where you install Vite+, run `pnpm fetch` on a connected machine with the same platform, pnpm version, and lockfile. Copy the populated pnpm store to the offline machine, then run `pnpm install --offline --frozen-lockfile` there. Install scripts that download additional files need those files available separately.
-
 ### Which commands can use the network?
 
 - `vp lint`, `vp fmt --check`, `vp check`, and a basic `vp test run` use installed tools. Install any test environment, coverage provider, or browser binary your suite needs in advance. Project configuration, plugins, and tests can make their own requests.
