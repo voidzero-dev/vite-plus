@@ -175,6 +175,8 @@ Set the registry in the project's `.npmrc`. Replace the example URL with your ow
 registry=https://npm.corp.example/
 ```
 
+If you mirror packages by hand, run `pnpm list --lockfile-only --depth Infinity --json` to list the project's locked dependencies. Include dev dependencies and use the `os`, `cpu`, and `libc` fields in `pnpm-lock.yaml` to select optional native packages for your platform.
+
 ::: tip Prevent package-manager downloads
 With `vite-plus` versions `1.6.x` and `1.7.x`, set `VP_ENV_FORBIDDEN=1` before running `vp` to prevent it from downloading the project's pinned package manager. In PowerShell, set it in the same session as the commands below.
 
@@ -196,12 +198,6 @@ pnpm install --frozen-lockfile
 ```
 
 If you cannot reach the private registry from the machine where you install Vite+, run `pnpm fetch` on a connected machine with the same platform, pnpm version, and lockfile. Copy the populated pnpm store to the offline machine, then run `pnpm install --offline --frozen-lockfile` there. Install scripts that download additional files need those files available separately.
-
-### Which packages does my project need?
-
-With pnpm, run `pnpm list --lockfile-only --depth Infinity --json` to see your project's dependencies before installation. If you maintain the mirror, include the metadata and tarballs for dev dependencies as well as runtime dependencies. Follow `optionalDependencies` through the tree. The `os`, `cpu`, and Linux `libc` fields in `pnpm-lock.yaml` identify the native packages for your platform. Check that you can reach the tarball URLs from the machine where you install Vite+.
-
-For example, Windows x64 bindings have `os: [win32]` and `cpu: [x64]` in the pnpm lockfile. Check the lockfile on each upgrade because the required packages can change. The published `toolchain.json` lists tool versions and omits platform bindings.
 
 ### Which commands can use the network?
 
