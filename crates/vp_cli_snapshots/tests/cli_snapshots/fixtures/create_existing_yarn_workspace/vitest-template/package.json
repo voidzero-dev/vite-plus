@@ -1,0 +1,5 @@
+{
+  "name": "vitest-template",
+  "private": true,
+  "bin": "index.mjs"
+}

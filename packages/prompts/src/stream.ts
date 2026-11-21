@@ -7,17 +7,12 @@ import type { LogMessageOptions } from './log.js';
 
 const prefix = '  ';
 
-// TODO (43081j): this currently doesn't support custom `output` writable
-// because we rely on `columns` existing (i.e. `process.stdout.columns).
-//
-// If we want to support `output` being passed in, we will need to use
-// a condition like `if (output instance Writable)` to check if it has columns
 export const stream = {
   message: async (
     iterable: Iterable<string> | AsyncIterable<string>,
-    { symbol = '' }: LogMessageOptions = {},
+    { symbol = '', output = process.stdout }: LogMessageOptions = {},
   ) => {
-    process.stdout.write(symbol ? `${symbol} ` : '');
+    output.write(symbol ? `${symbol} ` : '');
     const initialWidth = symbol ? 2 : 0;
     let lineWidth = initialWidth;
     for await (let chunk of iterable) {
@@ -26,15 +21,17 @@ export const stream = {
         lineWidth = initialWidth + strip(chunk.slice(chunk.lastIndexOf('\n'))).length;
       }
       const chunkLen = strip(chunk).length;
-      if (lineWidth + chunkLen < process.stdout.columns) {
+      const columns =
+        'columns' in output && typeof output.columns === 'number' ? output.columns : Infinity;
+      if (lineWidth + chunkLen < columns) {
         lineWidth += chunkLen;
-        process.stdout.write(chunk);
+        output.write(chunk);
       } else {
-        process.stdout.write(`\n${prefix}${chunk.trimStart()}`);
+        output.write(`\n${prefix}${chunk.trimStart()}`);
         lineWidth = initialWidth + strip(chunk.trimStart()).length;
       }
     }
-    process.stdout.write('\n');
+    output.write('\n');
   },
   info: (iterable: Iterable<string> | AsyncIterable<string>) => {
     return stream.message(iterable, { symbol: color.blue(S_INFO) });

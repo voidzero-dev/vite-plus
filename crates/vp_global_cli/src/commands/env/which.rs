@@ -8,8 +8,8 @@
 
 use std::process::ExitStatus;
 
-use chrono::Local;
 use console::style;
+use jiff::tz::TimeZone;
 use vp_pm_cli::{
     PackageManagerType, package_manager_bin_path, resolve_package_manager_install_dir,
     resolve_package_manager_version_for_cwd,
@@ -298,9 +298,7 @@ async fn execute_package_binary(
         return Ok(exit_status(1));
     }
 
-    // Format installation timestamp (date only)
-    let installed_local = metadata.installed_at.with_timezone(&Local);
-    let installed_str = installed_local.format("%Y-%m-%d").to_string();
+    let installed_date = TimeZone::system().to_datetime(metadata.installed_at).date();
 
     // Print binary path (first line, uncolored, pipe-friendly)
     vp_shared::output::print_stdout_line(format_args!("{}", binary_path.as_path().display()));
@@ -324,7 +322,7 @@ async fn execute_package_binary(
     vp_shared::output::print_stdout_line(format_args!(
         "  {:<LABEL_WIDTH$}  {}",
         style("Installed:").dim(),
-        style(&installed_str).dim()
+        style(installed_date).dim()
     ));
 
     Ok(ExitStatus::default())

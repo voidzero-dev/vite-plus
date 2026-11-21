@@ -31,7 +31,7 @@ export const VITE_CONFIG_FILES = [
   'vite.config.cts',
 ] as const;
 
-export const VITEST_VERSION = '5.1.0';
+export const VITEST_VERSION = '5.1.1';
 
 // Exact action release used by generated workflows and the @v1 migration.
 // The Renovate custom manager keeps this value current.

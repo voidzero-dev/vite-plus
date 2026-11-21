@@ -361,7 +361,7 @@ async fn check_shim_mode(scope: EnvScope) -> Option<(config::Config, Option<Abso
                 config.package_manager_shim_mode_for(package_manager),
             );
         } else {
-            let modes = package_manager::ALL_PACKAGE_MANAGERS.map(|package_manager| {
+            let modes = vp_pm_cli::PackageManagerType::ALL.map(|package_manager| {
                 (package_manager, config.package_manager_shim_mode_for(package_manager))
             });
             let shared_mode = modes[0].1;
@@ -386,7 +386,7 @@ fn unreadable_config() -> String {
 }
 
 async fn check_package_manager_session_override() {
-    for kind in package_manager::ALL_PACKAGE_MANAGERS {
+    for kind in vp_pm_cli::PackageManagerType::ALL {
         let environment = package_manager::environment_version(kind);
         let session = config::read_session_package_manager(kind).await;
         if let Some(value) = environment.or(session) {

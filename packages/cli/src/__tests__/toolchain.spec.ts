@@ -32,7 +32,7 @@ describe('toolchain export', () => {
       'vitest',
       'oxlint',
       'oxfmt',
-      'oxlint-tsgolint',
+      'tsrs',
       'tsdown',
       'vite-task',
       'oxc',

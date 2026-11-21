@@ -1,13 +1,7 @@
 import type * as t from '@oxc-project/types';
 
-import {
-  SourceEditor,
-  isImportMetaVitest,
-  isString,
-  memberName,
-  propertyName,
-  testApiName,
-} from './ast.ts';
+import { isString, propertyName, memberName } from '../ast-utils.ts';
+import { SourceEditor, isImportMetaVitest, testApiName } from './ast.ts';
 
 interface BenchmarkCall {
   call: t.CallExpression;

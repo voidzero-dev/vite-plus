@@ -48,7 +48,7 @@ vite-plus@<version>
 │   └── bundles tsdown@<version>
 ├── depends on vitest@<version>
 ├── depends on oxlint@<version>
-├── depends on oxlint-tsgolint@<version>
+├── depends on tsrs@<version>
 ├── depends on oxfmt@<version>
 ├── compiles vite-task (built <build-time>, revision <revision>)
 └── compiles oxc-node@<version> (<revision>)
@@ -85,7 +85,7 @@ vite-plus@<version>
 │   └── bundles tsdown@<version>
 ├── depends on vitest@<version>
 ├── depends on oxlint@<version>
-├── depends on oxlint-tsgolint@<version>
+├── depends on tsrs@<version>
 ├── depends on oxfmt@<version>
 ├── compiles vite-task (built <build-time>, revision <revision>)
 └── compiles oxc-node@<version> (<revision>)

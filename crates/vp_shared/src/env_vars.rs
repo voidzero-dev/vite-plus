@@ -94,6 +94,9 @@ pub const VP_SETUP_NODE_VERSION_FILE: &str = "VP_SETUP_NODE_VERSION_FILE";
 /// Resolve global CLI dependencies without the installation lockfile when set to `1`.
 pub const VP_SETUP_SKIP_INSTALL_LOCKFILE: &str = "VP_SETUP_SKIP_INSTALL_LOCKFILE";
 
+/// Load the Vite config through Vite instead of reading it statically when set to `1`.
+pub const VP_SKIP_STATIC_CONFIG: &str = "VP_SKIP_STATIC_CONFIG";
+
 /// Override package manager and version for vp commands (for example, `pnpm@10.18.0`).
 /// Direct package-manager shims use their own version overrides instead.
 pub const VP_PACKAGE_MANAGER: &str = "VP_PACKAGE_MANAGER";

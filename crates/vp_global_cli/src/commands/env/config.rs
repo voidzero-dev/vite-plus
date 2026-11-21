@@ -5,158 +5,12 @@
 //! - Version resolution with priority order
 //! - Config file management
 
-use std::collections::BTreeMap;
-
-use serde::{Deserialize, Deserializer, Serialize, de};
-use vp_js_runtime::{
-    NodeProvider, VersionSource, is_valid_version, normalize_version, read_nvmrc_file,
-    read_package_json, resolve_node_version,
-};
+use vp_js_runtime::{NodeProvider, ProjectNodeVersion, select_project_node_version};
 use vp_pm_cli::PackageManagerType;
+pub use vp_pm_cli::{Config, ShimMode, get_config_path, load_config, save_config};
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 
-use super::package_manager::ALL_PACKAGE_MANAGERS;
 use crate::error::Error;
-
-/// Config file name
-const CONFIG_FILE: &str = "config.json";
-
-/// Shim mode determines how shims resolve tools.
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum ShimMode {
-    /// Shims always use vite-plus managed Node.js
-    #[default]
-    Managed,
-    /// Shims prefer system Node.js, fallback to managed if not found
-    SystemFirst,
-}
-
-/// User configuration stored in `<CONFIG>/config.json`
-#[derive(Serialize, Deserialize, Default, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct Config {
-    /// Default Node.js version when no project version file is found
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub default_node_version: Option<String>,
-    /// Default versions used by package-manager shims when the project does not select that family.
-    #[serde(
-        default,
-        alias = "defaultPackageManager",
-        deserialize_with = "deserialize_package_manager_default_versions",
-        skip_serializing_if = "BTreeMap::is_empty"
-    )]
-    pub default_package_manager_versions: BTreeMap<String, String>,
-    /// Node.js shim mode. `shimMode` is accepted as the legacy field name.
-    #[serde(default, alias = "shimMode", skip_serializing_if = "is_default_shim_mode")]
-    pub node_shim_mode: ShimMode,
-    /// Explicit per-package-manager shim modes. An absent family has not been configured yet.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub package_manager_shim_modes: BTreeMap<String, ShimMode>,
-}
-
-impl Config {
-    #[must_use]
-    pub fn default_package_manager_version_for(
-        &self,
-        package_manager: PackageManagerType,
-    ) -> Option<&str> {
-        self.default_package_manager_versions.get(&package_manager.to_string()).map(String::as_str)
-    }
-
-    pub fn set_default_package_manager_version(
-        &mut self,
-        package_manager: PackageManagerType,
-        version: String,
-    ) {
-        self.default_package_manager_versions.insert(package_manager.to_string(), version);
-    }
-
-    pub fn clear_default_package_manager_version(&mut self, package_manager: PackageManagerType) {
-        self.default_package_manager_versions.remove(&package_manager.to_string());
-    }
-
-    #[must_use]
-    pub fn configured_package_manager_shim_mode_for(
-        &self,
-        package_manager: PackageManagerType,
-    ) -> Option<ShimMode> {
-        self.package_manager_shim_modes.get(&package_manager.to_string()).copied()
-    }
-
-    #[must_use]
-    pub fn package_manager_shim_mode_for(&self, package_manager: PackageManagerType) -> ShimMode {
-        self.configured_package_manager_shim_mode_for(package_manager).unwrap_or_default()
-    }
-
-    /// Node.js and each package-manager family have their own mode; package binaries are always managed.
-    #[must_use]
-    pub fn shim_mode_for_tool(&self, tool: &str) -> ShimMode {
-        if tool == "node" {
-            self.node_shim_mode
-        } else if let Some(kind) = PackageManagerType::from_tool(tool) {
-            self.package_manager_shim_mode_for(kind)
-        } else {
-            ShimMode::Managed
-        }
-    }
-
-    pub fn set_shim_modes(&mut self, node: bool, package_manager: bool, mode: ShimMode) {
-        if node {
-            self.node_shim_mode = mode;
-        }
-        if package_manager {
-            self.set_all_package_manager_shim_modes(mode);
-        }
-    }
-
-    pub fn set_all_package_manager_shim_modes(&mut self, mode: ShimMode) {
-        self.package_manager_shim_modes.clear();
-        for package_manager in ALL_PACKAGE_MANAGERS {
-            self.set_package_manager_shim_mode(package_manager, mode);
-        }
-    }
-
-    pub fn set_package_manager_shim_mode(
-        &mut self,
-        package_manager: PackageManagerType,
-        mode: ShimMode,
-    ) {
-        self.package_manager_shim_modes.insert(package_manager.to_string(), mode);
-    }
-}
-
-#[derive(Deserialize)]
-#[serde(untagged)]
-enum PackageManagerDefaultVersions {
-    Versions(BTreeMap<String, String>),
-    Legacy(String),
-}
-
-fn deserialize_package_manager_default_versions<'de, D>(
-    deserializer: D,
-) -> Result<BTreeMap<String, String>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    match PackageManagerDefaultVersions::deserialize(deserializer)? {
-        PackageManagerDefaultVersions::Versions(versions) => Ok(versions),
-        PackageManagerDefaultVersions::Legacy(spec) => {
-            let (name, version) = spec
-                .split_once('@')
-                .filter(|(name, version)| {
-                    PackageManagerType::from_name(name).is_some() && !version.is_empty()
-                })
-                .ok_or_else(|| de::Error::custom("invalid legacy package-manager default"))?;
-            Ok(BTreeMap::from([(name.to_string(), version.to_string())]))
-        }
-    }
-}
-
-/// Check if shim mode is the default (for skip_serializing_if)
-fn is_default_shim_mode(mode: &ShimMode) -> bool {
-    *mode == ShimMode::Managed
-}
 
 /// Version resolution result
 #[derive(Debug)]
@@ -214,38 +68,6 @@ pub fn get_node_modules_dir(prefix: &AbsolutePath, package_name: &str) -> Absolu
     {
         unix_path
     }
-}
-
-/// Get the config file path (`<CONFIG>/config.json`).
-pub fn get_config_path() -> Result<AbsolutePathBuf, Error> {
-    Ok(vp_shared::EnvConfig::get().dirs.config.join(CONFIG_FILE))
-}
-
-/// Load configuration from disk.
-pub async fn load_config() -> Result<Config, Error> {
-    let config_path = get_config_path()?;
-
-    if !tokio::fs::try_exists(&config_path).await.unwrap_or(false) {
-        return Ok(Config::default());
-    }
-
-    let content = tokio::fs::read_to_string(&config_path).await?;
-    let config: Config = serde_json::from_str(&content)?;
-    Ok(config)
-}
-
-/// Save configuration to disk.
-pub async fn save_config(config: &Config) -> Result<(), Error> {
-    let config_path = get_config_path()?;
-
-    // Ensure directory exists
-    if let Some(parent) = config_path.parent() {
-        tokio::fs::create_dir_all(parent).await?;
-    }
-
-    let content = serde_json::to_string_pretty(config)?;
-    tokio::fs::write(&config_path, content).await?;
-    Ok(())
 }
 
 /// Environment variable for per-shell session Node.js version override.
@@ -375,115 +197,21 @@ pub async fn resolve_version(cwd: &AbsolutePath) -> Result<VersionResolution, Er
     resolve_version_from_files(cwd).await
 }
 
-pub(crate) struct ProjectVersionSource {
-    pub version: String,
-    pub source: String,
-    pub source_path: AbsolutePathBuf,
-    pub project_root: AbsolutePathBuf,
-}
-
 /// Resolve the effective project-file Node.js version source.
 ///
-/// `warn_invalid` controls whether invalid version specs print user-facing
-/// warnings. Use `true` for env commands, and `false` for shim cache validation
-/// so wrapped tool output stays quiet.
+/// The selection is [`select_project_node_version`], the same one that
+/// `download_runtime_for_project` uses. `warn_invalid` controls whether invalid
+/// version specs print user-facing warnings. Use `true` for env commands, and
+/// `false` for shim cache validation so wrapped tool output stays quiet.
 pub(crate) async fn resolve_project_version_source(
     cwd: &AbsolutePath,
     warn_invalid: bool,
-) -> Result<Option<ProjectVersionSource>, Error> {
-    let Some(resolution) = resolve_node_version(cwd, true)
+) -> Result<Option<ProjectNodeVersion>, Error> {
+    // A configuration error, not the download failure that `?` would report
+    // through `Error::RuntimeDownload`
+    select_project_node_version(cwd, warn_invalid)
         .await
-        .map_err(|e| Error::ConfigError(e.to_string().into()))?
-    else {
-        return Ok(None);
-    };
-
-    if let Some(version) =
-        validate_version_spec(&resolution.version, &resolution.source.to_string(), warn_invalid)
-    {
-        if let (Some(source_path), Some(project_root)) =
-            (resolution.source_path, resolution.project_root)
-        {
-            return Ok(Some(ProjectVersionSource {
-                version,
-                source: resolution.source.to_string(),
-                source_path,
-                project_root,
-            }));
-        }
-        return Ok(None);
-    }
-
-    // Invalid version from a project source: try lower-priority sources in the same directory.
-    // This mirrors the fallback logic in download_runtime_for_project().
-    if matches!(resolution.source, VersionSource::NvmrcFile) {
-        return Ok(None);
-    }
-
-    let Some(project_root) = resolution.project_root else {
-        return Ok(None);
-    };
-    let package_json_path = project_root.join("package.json");
-    let pkg = read_package_json(&package_json_path).await.ok().flatten();
-
-    if matches!(resolution.source, VersionSource::NodeVersionFile)
-        && let Some(version) = pkg
-            .as_ref()
-            .and_then(|pkg| pkg.dev_engines_runtime("node"))
-            .and_then(|r| r.version.clone())
-            .and_then(|v| validate_version_spec(&v, "devEngines.runtime", warn_invalid))
-    {
-        return Ok(Some(ProjectVersionSource {
-            version,
-            source: "devEngines.runtime".into(),
-            source_path: package_json_path,
-            project_root,
-        }));
-    }
-
-    if matches!(
-        resolution.source,
-        VersionSource::NodeVersionFile | VersionSource::DevEnginesRuntime
-    ) && let Some(version) = pkg
-        .as_ref()
-        .and_then(|pkg| pkg.engines.as_ref())
-        .and_then(|e| e.node.clone())
-        .and_then(|v| validate_version_spec(&v, "engines.node", warn_invalid))
-    {
-        return Ok(Some(ProjectVersionSource {
-            version,
-            source: "engines.node".into(),
-            source_path: package_json_path,
-            project_root,
-        }));
-    }
-
-    if let Some(version) = read_nvmrc_file(&project_root)
-        .await
-        .and_then(|v| validate_version_spec(&v, ".nvmrc", warn_invalid))
-    {
-        return Ok(Some(ProjectVersionSource {
-            version,
-            source: ".nvmrc".into(),
-            source_path: project_root.join(".nvmrc"),
-            project_root,
-        }));
-    }
-
-    Ok(None)
-}
-
-fn validate_version_spec(
-    version: &vt_str::Str,
-    source: &str,
-    warn_invalid: bool,
-) -> Option<String> {
-    if warn_invalid {
-        normalize_version(version, source).map(|v| v.to_string())
-    } else {
-        let trimmed = version.trim();
-        is_valid_version(trimmed).then(|| trimmed.to_string())
-    }
+        .map_err(|error| Error::ConfigError(error.to_string().into()))
 }
 
 /// Resolve Node.js version from project files only (skipping session overrides).
@@ -498,7 +226,7 @@ pub async fn resolve_version_from_files(cwd: &AbsolutePath) -> Result<VersionRes
         let resolved = resolve_version_string(&project_source.version, &provider).await?;
         return Ok(VersionResolution {
             version: resolved,
-            source: project_source.source,
+            source: project_source.source.to_string(),
             source_path: Some(project_source.source_path),
             project_root: Some(project_source.project_root),
             is_range,
@@ -778,7 +506,7 @@ mod tests {
 
         let source = resolve_project_version_source(&temp_path, false).await.unwrap().unwrap();
         assert_eq!(source.version, "22.22.0");
-        assert_eq!(source.source, ".nvmrc");
+        assert_eq!(source.source.as_str(), ".nvmrc");
         assert_eq!(source.source_path, temp_path.join(".nvmrc"));
     }
 
@@ -792,7 +520,7 @@ mod tests {
 
         let source = resolve_project_version_source(&temp_path, false).await.unwrap().unwrap();
         assert_eq!(source.version, "24.0.0");
-        assert_eq!(source.source, ".node-version");
+        assert_eq!(source.source.as_str(), ".node-version");
         assert_eq!(source.source_path, temp_path.join(".node-version"));
     }
 
@@ -806,7 +534,7 @@ mod tests {
 
         let source = resolve_project_version_source(&child, false).await.unwrap().unwrap();
         assert_eq!(source.version, "22.22.0");
-        assert_eq!(source.source, ".nvmrc");
+        assert_eq!(source.source.as_str(), ".nvmrc");
         assert_eq!(source.source_path, parent.join(".nvmrc"));
     }
 
@@ -819,7 +547,7 @@ mod tests {
 
         let source = resolve_project_version_source(&temp_path, false).await.unwrap().unwrap();
         assert_eq!(source.version, "22.22.0");
-        assert_eq!(source.source, ".nvmrc");
+        assert_eq!(source.source.as_str(), ".nvmrc");
     }
 
     #[tokio::test]
@@ -1046,7 +774,7 @@ mod tests {
 
         let source = resolve_project_version_source(&temp_path, false).await.unwrap().unwrap();
         assert_eq!(source.version, "22.22.0");
-        assert_eq!(source.source, "devEngines.runtime");
+        assert_eq!(source.source.as_str(), "devEngines.runtime");
         assert_eq!(source.source_path, temp_path.join("package.json"));
     }
 
@@ -1066,7 +794,7 @@ mod tests {
 
         let source = resolve_project_version_source(&child, false).await.unwrap().unwrap();
         assert_eq!(source.version, "22.22.0");
-        assert_eq!(source.source, "devEngines.runtime");
+        assert_eq!(source.source.as_str(), "devEngines.runtime");
         assert_eq!(source.source_path, child.join("package.json"));
     }
 
@@ -1084,23 +812,79 @@ mod tests {
 
         let source = resolve_project_version_source(&temp_path, false).await.unwrap().unwrap();
         assert_eq!(source.version, "22.22.0");
-        assert_eq!(source.source, "devEngines.runtime");
+        assert_eq!(source.source.as_str(), "devEngines.runtime");
     }
 
     #[tokio::test]
-    async fn test_project_source_falls_back_from_invalid_dev_engines_to_engines_node() {
+    async fn test_project_source_falls_back_from_invalid_dev_engines_with_warn_to_engines_node() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        for version in ["not-a-version", "lts/*"] {
+            tokio::fs::write(
+                temp_path.join("package.json"),
+                format!(
+                    r#"{{"devEngines":{{"runtime":{{"name":"node","version":"{version}","onFail":"warn"}}}},"engines":{{"node":"22.22.0"}}}}"#
+                ),
+            )
+            .await
+            .unwrap();
+
+            let source = resolve_project_version_source(&temp_path, false).await.unwrap().unwrap();
+            assert_eq!(source.version, "22.22.0", "{version}");
+            assert_eq!(source.source.as_str(), "engines.node", "{version}");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_project_source_rejects_dev_engines_alias_by_default() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
         tokio::fs::write(
             temp_path.join("package.json"),
-            r#"{"devEngines":{"runtime":{"name":"node","version":"not-a-version"}},"engines":{"node":"22.22.0"}}"#,
+            r#"{"devEngines":{"runtime":{"name":"node","version":"lts/*"}},"engines":{"node":"22.22.0"}}"#,
+        )
+        .await
+        .unwrap();
+
+        let Err(error) = resolve_project_version_source(&temp_path, false).await else {
+            panic!("an alias in devEngines.runtime should fail with the default onFail");
+        };
+        assert!(
+            error.to_string().contains("devEngines.runtime.version \"lts/*\""),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_project_source_rejects_dev_engines_alias_after_invalid_node_version() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        tokio::fs::write(temp_path.join(".node-version"), "not-a-version").await.unwrap();
+        tokio::fs::write(
+            temp_path.join("package.json"),
+            r#"{"devEngines":{"runtime":{"name":"node","version":"latest","onFail":"download"}}}"#,
+        )
+        .await
+        .unwrap();
+
+        assert!(resolve_project_version_source(&temp_path, false).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_project_source_valid_node_version_skips_invalid_dev_engines() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        tokio::fs::write(temp_path.join(".node-version"), "22.22.0").await.unwrap();
+        tokio::fs::write(
+            temp_path.join("package.json"),
+            r#"{"devEngines":{"runtime":{"name":"node","version":"lts/*"}}}"#,
         )
         .await
         .unwrap();
 
         let source = resolve_project_version_source(&temp_path, false).await.unwrap().unwrap();
         assert_eq!(source.version, "22.22.0");
-        assert_eq!(source.source, "engines.node");
+        assert_eq!(source.source.as_str(), ".node-version");
     }
 
     #[tokio::test]
@@ -1114,7 +898,7 @@ mod tests {
 
         let source = resolve_project_version_source(&child, false).await.unwrap().unwrap();
         assert_eq!(source.version, "24.18.0");
-        assert_eq!(source.source, ".node-version");
+        assert_eq!(source.source.as_str(), ".node-version");
         assert_eq!(source.source_path, parent.join(".node-version"));
     }
 
@@ -1127,7 +911,7 @@ mod tests {
         tokio::fs::write(parent.join(".node-version"), "24.18.0").await.unwrap();
         tokio::fs::write(
             child.join("package.json"),
-            r#"{"devEngines":{"runtime":{"name":"node","version":"not-a-version"}}}"#,
+            r#"{"devEngines":{"runtime":{"name":"node","version":"not-a-version","onFail":"ignore"}}}"#,
         )
         .await
         .unwrap();
@@ -1569,75 +1353,6 @@ mod tests {
             },
         )
         .await;
-    }
-
-    #[test]
-    fn node_only_mode_change_leaves_package_managers_undecided() {
-        let mut config = Config::default();
-        config.set_shim_modes(true, false, ShimMode::SystemFirst);
-        assert_eq!(config.node_shim_mode, ShimMode::SystemFirst);
-        assert_eq!(config.configured_package_manager_shim_mode_for(PackageManagerType::Pnpm), None);
-        assert_eq!(
-            config.package_manager_shim_mode_for(PackageManagerType::Pnpm),
-            ShimMode::Managed
-        );
-    }
-
-    #[test]
-    fn package_manager_mode_change_preserves_other_package_manager_modes() {
-        let mut config = Config::default();
-        config.set_package_manager_shim_mode(PackageManagerType::Pnpm, ShimMode::SystemFirst);
-
-        assert_eq!(
-            config.configured_package_manager_shim_mode_for(PackageManagerType::Pnpm),
-            Some(ShimMode::SystemFirst)
-        );
-        assert_eq!(config.configured_package_manager_shim_mode_for(PackageManagerType::Bun), None);
-
-        config.set_shim_modes(false, true, ShimMode::Managed);
-        assert_eq!(
-            config.configured_package_manager_shim_mode_for(PackageManagerType::Pnpm),
-            Some(ShimMode::Managed)
-        );
-        assert_eq!(
-            config.configured_package_manager_shim_mode_for(PackageManagerType::Bun),
-            Some(ShimMode::Managed)
-        );
-        assert_eq!(config.package_manager_shim_modes.len(), ALL_PACKAGE_MANAGERS.len());
-    }
-
-    #[test]
-    fn package_manager_only_mode_change_preserves_node_mode() {
-        let mut config = Config { node_shim_mode: ShimMode::SystemFirst, ..Config::default() };
-        config.set_shim_modes(false, true, ShimMode::Managed);
-        assert_eq!(config.node_shim_mode, ShimMode::SystemFirst);
-        assert_eq!(config.package_manager_shim_modes.len(), ALL_PACKAGE_MANAGERS.len());
-    }
-
-    #[test]
-    fn legacy_shim_mode_loads_as_node_shim_mode() {
-        let config: Config = serde_json::from_str(r#"{"shimMode":"system_first"}"#).unwrap();
-
-        assert_eq!(config.node_shim_mode, ShimMode::SystemFirst);
-        assert_eq!(
-            serde_json::to_value(config).unwrap(),
-            serde_json::json!({ "nodeShimMode": "system_first" })
-        );
-    }
-
-    #[test]
-    fn legacy_package_manager_default_migrates_to_version_map() {
-        let config: Config =
-            serde_json::from_str(r#"{"defaultPackageManager":"pnpm@10.18.0"}"#).unwrap();
-
-        assert_eq!(
-            config.default_package_manager_version_for(PackageManagerType::Pnpm),
-            Some("10.18.0")
-        );
-        assert_eq!(
-            serde_json::to_value(config).unwrap()["defaultPackageManagerVersions"]["pnpm"],
-            "10.18.0"
-        );
     }
 
     #[tokio::test]

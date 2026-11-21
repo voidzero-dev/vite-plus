@@ -40,7 +40,7 @@ type LatestTagOptions = {
   stableOnly?: boolean;
 };
 
-type NpmLatestResponse = {
+type NpmVersionResponse = {
   version?: unknown;
   dependencies?: Record<string, string>;
 };
@@ -71,6 +71,7 @@ type PnpmWorkspaceVersions = {
   oxfmt: string;
   oxlint: string;
   oxlintTsgolint: string;
+  tsrs: string;
   oxcProjectRuntime: string;
   oxcProjectTypes: string;
   oxcParser: string;
@@ -176,18 +177,18 @@ async function containsCommit(
 }
 
 // ============ npm Registry ============
-async function fetchNpmLatest(packageName: string): Promise<NpmLatestResponse> {
+async function fetchNpmVersion(packageName: string): Promise<NpmVersionResponse> {
   const res = await fetch(`https://registry.npmjs.org/${packageName}/latest`);
   if (!res.ok) {
     throw new Error(
       `Failed to fetch npm metadata for ${packageName}: ${res.status} ${res.statusText}`,
     );
   }
-  return (await res.json()) as NpmLatestResponse;
+  return (await res.json()) as NpmVersionResponse;
 }
 
-async function getLatestNpmVersion(packageName: string): Promise<string> {
-  const data = await fetchNpmLatest(packageName);
+async function getNpmVersion(packageName: string): Promise<string> {
+  const data = await fetchNpmVersion(packageName);
   if (typeof data.version !== 'string') {
     throw new Error(`Invalid npm response for ${packageName}: missing version field`);
   }
@@ -219,7 +220,7 @@ async function getLatestPnpmInstaller(): Promise<{ version: string; integrity: s
 // Read a dependency range from the latest published version of `packageName`,
 // e.g. the `lightningcss` range that the bundled `@tsdown/css` depends on.
 async function getNpmDependencyRange(packageName: string, dependencyName: string): Promise<string> {
-  const data = await fetchNpmLatest(packageName);
+  const data = await fetchNpmVersion(packageName);
   const range = data.dependencies?.[dependencyName];
   if (typeof range !== 'string') {
     throw new Error(
@@ -373,6 +374,12 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
       pattern: /oxlint-tsgolint: =([\d.]+(?:-[\w.]+)?)/,
       replacement: `oxlint-tsgolint: =${versions.oxlintTsgolint}`,
       newVersion: versions.oxlintTsgolint,
+    },
+    {
+      name: 'tsrs',
+      pattern: /tsrs: =([\d.]+(?:-[\w.-]+)?)/,
+      replacement: `tsrs: =${versions.tsrs}`,
+      newVersion: versions.tsrs,
     },
     {
       name: '@oxc-project/runtime',
@@ -591,6 +598,7 @@ async function upgradeDependencies(): Promise<void> {
     oxfmtVersion,
     oxlintVersion,
     oxlintTsgolintVersion,
+    tsrsVersion,
     oxcProjectRuntimeVersion,
     oxcProjectTypesVersion,
     oxcParserVersion,
@@ -598,18 +606,19 @@ async function upgradeDependencies(): Promise<void> {
     getLatestNodeVersion(SUPPORTED_NODE_MAJOR),
     getLatestPnpmInstaller(),
     getLatestNpmVersionForMajor('vitest', SUPPORTED_VITEST_MAJOR),
-    getLatestNpmVersion('tsdown'),
+    getNpmVersion('tsdown'),
     // Mirror exactly what the bundled @tsdown/css depends on.
     getNpmDependencyRange('@tsdown/css', 'lightningcss'),
-    getLatestNpmVersion('lint-staged'),
-    getLatestNpmVersion('@oxc-node/cli'),
-    getLatestNpmVersion('@oxc-node/core'),
-    getLatestNpmVersion('oxfmt'),
-    getLatestNpmVersion('oxlint'),
-    getLatestNpmVersion('oxlint-tsgolint'),
-    getLatestNpmVersion('@oxc-project/runtime'),
-    getLatestNpmVersion('@oxc-project/types'),
-    getLatestNpmVersion('oxc-parser'),
+    getNpmVersion('lint-staged'),
+    getNpmVersion('@oxc-node/cli'),
+    getNpmVersion('@oxc-node/core'),
+    getNpmVersion('oxfmt'),
+    getNpmVersion('oxlint'),
+    getNpmVersion('oxlint-tsgolint'),
+    getNpmVersion('tsrs'),
+    getNpmVersion('@oxc-project/runtime'),
+    getNpmVersion('@oxc-project/types'),
+    getNpmVersion('oxc-parser'),
   ]);
 
   console.log(`Node.js: ${nodeVersion}`);
@@ -624,6 +633,7 @@ async function upgradeDependencies(): Promise<void> {
   console.log(`oxlint: ${oxlintVersion}`);
   console.log(`@oxlint/plugins (from oxlint): ${oxlintVersion}`);
   console.log(`oxlint-tsgolint: ${oxlintTsgolintVersion}`);
+  console.log(`tsrs: ${tsrsVersion}`);
   console.log(`@oxc-project/runtime: ${oxcProjectRuntimeVersion}`);
   console.log(`@oxc-project/types: ${oxcProjectTypesVersion}`);
   console.log(`oxc-parser: ${oxcParserVersion}`);
@@ -646,6 +656,7 @@ async function upgradeDependencies(): Promise<void> {
     oxfmt: oxfmtVersion,
     oxlint: oxlintVersion,
     oxlintTsgolint: oxlintTsgolintVersion,
+    tsrs: tsrsVersion,
     oxcProjectRuntime: oxcProjectRuntimeVersion,
     oxcProjectTypes: oxcProjectTypesVersion,
     oxcParser: oxcParserVersion,

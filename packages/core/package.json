@@ -242,5 +242,6 @@
     "vite": "8.3.8",
     "rolldown": "1.2.19",
     "tsdown": "0.23.4"
-  }
+  },
+  "vitePlusVersion": "1.7.0"
 }

@@ -4,16 +4,18 @@ import type * as t from '@oxc-project/types';
 import { minimatch } from 'minimatch';
 
 import {
-  SourceEditor,
-  importedName,
-  isBoolean,
-  isModuleExports,
   isString,
   objectProperty,
   propertyName,
-  memberName,
-  projectElements,
   staticObject,
+  isBoolean,
+  memberName,
+} from '../ast-utils.ts';
+import {
+  SourceEditor,
+  importedName,
+  isModuleExports,
+  projectElements,
   type SourceOptions,
   type VitestV5Finding,
 } from './ast.ts';

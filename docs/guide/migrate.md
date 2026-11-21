@@ -61,6 +61,29 @@ Most projects will require further manual adjustments after running `vp migrate`
 
 For the Vitest v5 upgrade, read the [compatibility settings and review checklist](./vitest-v5.md) and the [upstream Vitest migration guide](https://vitest.dev/guide/migration/). The preflight checks your original runner version and Node runtime before dependency updates. Keep the original lockfile available and resolve blocking findings before retrying.
 
+### Keeping upstream imports in templates and examples
+
+If your root `vite.config.ts` enables `vite-plus/prefer-vite-plus-imports`, add
+this entry to `lint.overrides` to keep `vite` and `vitest` imports in templates
+and examples.
+
+```json
+{
+  "files": ["templates/**", "examples/**"],
+  "rules": { "vite-plus/prefer-vite-plus-imports": "off" }
+}
+```
+
+`vp migrate`, `vp lint --fix`, and `vp check --fix` all use this override for
+Vite and Vitest import rewrites. Oxlint matches the file patterns relative to
+the root config directory. A later matching override can re-enable the rule.
+
+Migration keeps the dependencies that supply preserved `vitest`,
+`@vitest/browser`, and `@vitest/browser-preview` imports. If a template outside
+the workspace imports `vitest` from the root project, the root keeps its dependency.
+When migration removes a `tsdown` development dependency, it still rewrites
+imports from `tsdown` to `vite-plus/pack`.
+
 ## Recommended Workflow
 
 Before running the migration:
@@ -95,21 +118,21 @@ Upgrade the [global CLI](./upgrade.md#global-vp) to your target 1.0 release, the
 
 ### Without the Global CLI
 
-Use an existing Node.js runtime that satisfies `^22.18.0 || ^24.11.0 || >=26.0.0`. Run the target migrator through your package manager without adding it to the project first. For the `1.6.0` release:
+Use an existing Node.js runtime that satisfies `^22.18.0 || ^24.11.0 || >=26.0.0`. Run the target migrator through your package manager without adding it to the project first. For the `1.7.0` release:
 
 ::: code-group
 
 ```bash [pnpm]
-pnpm dlx --package=vite-plus@1.6.0 vp migrate --no-interactive
+pnpm dlx --package=vite-plus@1.7.0 vp migrate --no-interactive
 ```
 
 ```bash [npm]
-npx --package=vite-plus@1.6.0 vp migrate --no-interactive
+npx --package=vite-plus@1.7.0 vp migrate --no-interactive
 ```
 
 :::
 
-Replace `1.6.0` with your target release. For a preview, use the version from the PR and pass `--registry=https://registry-bridge.viteplus.dev` to `pnpm` or `npx` before the `vp` command. Keep the version in `--package` explicit so you run the target migrator rather than the old local CLI.
+Replace `1.7.0` with your target release. For a preview, use the version from the PR and pass `--registry=https://registry-bridge.viteplus.dev` to `pnpm` or `npx` before the `vp` command. Keep the version in `--package` explicit so you run the target migrator rather than the old local CLI.
 
 After migration, finish dependency installation and validate with the updated local CLI:
 
@@ -151,7 +174,7 @@ View and copy this prompt into your coding agent to upgrade an existing Vite+ 0.
 
 ### Vitest
 
-Vitest is automatically migrated through `vp migrate`. `vite-plus` re-exports upstream `vitest@5.1.0` under `vite-plus/test*`, so for node-mode tests a single `vite-plus` install is enough — you no longer need to install `vitest` directly.
+Vitest is automatically migrated through `vp migrate`. `vite-plus` re-exports upstream `vitest@5.1.1` under `vite-plus/test*`, so for node-mode tests a single `vite-plus` install is enough — you no longer need to install `vitest` directly.
 
 For browser mode, you can use the base browser runtime (`@vitest/browser`) and Preview provider (`@vitest/browser-preview`) included in `vite-plus`. To use Playwright or WebDriverIO, you also need the opt-in provider (`@vitest/browser-playwright` or `@vitest/browser-webdriverio`) and its framework peer (`playwright` or `webdriverio`).
 

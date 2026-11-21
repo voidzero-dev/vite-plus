@@ -34,8 +34,9 @@ use std::{
 use clap_complete::env::CompleteEnv;
 use console::style;
 use vp_cli_help::error::{
-    extract_invalid_subcommand_details, extract_unknown_argument, has_pass_as_value_suggestion,
-    print_invalid_subcommand_error, print_subcommand_suggestion, print_unknown_argument_error,
+    extract_invalid_subcommand_details, extract_unknown_argument, format_command_args,
+    has_pass_as_value_suggestion, move_flags_after_command, print_invalid_subcommand_error,
+    print_subcommand_suggestion, print_unknown_argument_error,
 };
 use vp_shared::{exit_code_from_status, output};
 
@@ -89,7 +90,7 @@ pub(crate) fn apply_chdir(
 /// Normalize CLI arguments:
 /// - `vp list ...` / `vp ls ...` → `vp pm list ...`
 /// - `vp rebuild ...` → `vp pm rebuild ...`
-/// - `vp help [command] [args...]` → `vp [command] [args...] --help`
+/// - `vp help [command] [args...]` → `vp [command] [args...]` with `--help`
 /// - `vp node [args...]` → `vp env exec node [args...]`
 fn normalize_args(args: Vec<String>) -> Vec<String> {
     let mut normalized = args;
@@ -118,11 +119,16 @@ fn normalize_args(args: Vec<String>) -> Vec<String> {
             Some("help") if normalized.len() == 2 => {
                 vec![normalized[0].clone(), "--help".to_string()]
             }
-            // `vp help [command] [args...]` -> `vp [command] [args...] --help`
             Some("help") if normalized.len() > 2 => {
                 let mut next = Vec::with_capacity(normalized.len());
                 next.push(normalized[0].clone());
                 next.extend(normalized[2..].iter().cloned());
+                if matches!(next[1].as_str(), "dev" | "build")
+                    && let Some(index) = next[2..].iter().position(|arg| arg == "--")
+                {
+                    // Bare help renders before project discovery.
+                    next.truncate(index + 2);
+                }
                 next.push("--help".to_string());
                 next
             }
@@ -176,8 +182,26 @@ fn is_affirmative_response(input: &str) -> bool {
     matches!(input.trim().to_ascii_lowercase().as_str(), "y" | "yes" | "ok" | "true" | "1")
 }
 
+/// Moves vite-task's package-selection flags after `run` when `vp run` accepts them there.
+fn move_package_flags_after_run(
+    raw_args: &[String],
+    cwd: &vt_path::AbsolutePath,
+) -> Option<Vec<String>> {
+    use vt_workspace::package_filter::PackageQueryArgs;
+
+    let run_flags = <PackageQueryArgs as clap::Args>::augment_args(clap::Command::new("run"));
+    let cwd = std::sync::Arc::<vt_path::AbsolutePath>::from(cwd);
+    move_flags_after_command(raw_args, "run", &run_flags, |matches| {
+        // `vp run` checks combinations such as `-r` with `--filter` here, not in clap.
+        <PackageQueryArgs as clap::FromArgMatches>::from_arg_matches(matches)
+            .is_ok_and(|query| query.into_package_query(None, &cwd).is_ok())
+    })
+}
+
 fn should_prompt_for_correction() -> bool {
-    vp_shared::is_stdin_terminal() && vp_shared::is_stderr_terminal()
+    !vp_shared::is_ci_environment()
+        && vp_shared::is_stdin_terminal()
+        && vp_shared::is_stderr_terminal()
 }
 
 fn prompt_to_run_suggested_command(suggestion: &str) -> bool {
@@ -191,6 +215,9 @@ fn prompt_to_run_suggested_command(suggestion: &str) -> bool {
     eprint!("Do you want to run {highlighted_suggestion}? (y/N): ");
     if std::io::stderr().flush().is_err() {
         return false;
+    }
+    if env::var(vp_shared::env_vars::VP_EMIT_MILESTONES).as_deref() == Ok("1") {
+        vt_pty_terminal_test_client::mark_milestone("text:suggested-command:ready");
     }
 
     let Some(input) = read_confirmation_input() else {
@@ -614,10 +641,33 @@ async fn run() -> ExitCode {
                         &invalid_argument,
                         has_pass_as_value_suggestion(&e),
                     );
+                    // `-C` already changed `cwd` and left `raw_args`, so show it again.
+                    let chdir = explicit_chdir.then(|| cwd.as_path().to_string_lossy());
+                    let correction = move_package_flags_after_run(&raw_args, &cwd).and_then(
+                        |corrected_raw_args| {
+                            let suggestion =
+                                format_command_args(chdir.as_deref(), &corrected_raw_args)?;
+                            Some((corrected_raw_args, suggestion))
+                        },
+                    );
+                    match correction {
+                        // Without a prompt, print the command, like the local CLI, so that
+                        // a CI log shows how to fix the script.
+                        Some((_, suggestion)) if !should_prompt_for_correction() => {
+                            print_subcommand_suggestion(&suggestion);
+                            clap_error_to_exit_code(&e)
+                        }
+                        Some((corrected_raw_args, suggestion))
+                            if prompt_to_run_suggested_command(&suggestion) =>
+                        {
+                            run_corrected_args(&cwd, &corrected_raw_args, explicit_chdir).await
+                        }
+                        _ => clap_error_to_exit_code(&e),
+                    }
                 } else {
                     e.print().ok();
+                    clap_error_to_exit_code(&e)
                 }
-                clap_error_to_exit_code(&e)
             } else {
                 e.print().ok();
                 clap_error_to_exit_code(&e)
@@ -750,6 +800,14 @@ mod tests {
         let input = s(&["vp", "help", "pm", "apprev-build"]);
         let normalized = normalize_args(input);
         assert_eq!(normalized, s(&["vp", "pm", "apprev-build", "--help"]));
+    }
+
+    #[test]
+    fn normalize_args_truncates_vite_help_at_separator() {
+        for command in ["dev", "build"] {
+            let input = s(&["vp", "help", command, "--mode", "staging", "--", "--app", "web"]);
+            assert_eq!(normalize_args(input), s(&["vp", command, "--mode", "staging", "--help"]));
+        }
     }
 
     #[test]

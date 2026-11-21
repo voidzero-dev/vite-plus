@@ -4,9 +4,9 @@
 
 ## Overview
 
-`vp check` is the default command for fast static checks in Vite+. It brings together formatting through [Oxfmt](https://oxc.rs/docs/guide/usage/formatter.html), linting through [Oxlint](https://oxc.rs/docs/guide/usage/linter.html), and TypeScript type checks through [tsgolint](https://github.com/oxc-project/tsgolint). By merging all of these tasks into a single command, `vp check` is faster than running formatting, linting, and type checking as separate tools in separate commands.
+`vp check` is the default command for fast static checks in Vite+. It brings together formatting through [Oxfmt](https://oxc.rs/docs/guide/usage/formatter.html), linting through [Oxlint](https://oxc.rs/docs/guide/usage/linter.html), and TypeScript type checks through [tsrs](https://github.com/oxc-project/tsrs). By merging all of these tasks into a single command, `vp check` is faster than running formatting, linting, and type checking as separate tools in separate commands.
 
-When both `typeAware` and `typeCheck` are enabled in the `lint.options` block in `vite.config.ts`, `vp check` also runs TypeScript type checks through the Oxlint type-aware path powered by the TypeScript Go toolchain and [tsgolint](https://github.com/oxc-project/tsgolint). `vp create` and `vp migrate` enable both `typeAware` and `typeCheck` by default.
+When both `typeAware` and `typeCheck` are enabled in the `lint.options` block in `vite.config.ts`, `vp check` also runs TypeScript type checks through the Oxlint type-aware path powered by `tsrs-lint`. `vp create` and `vp migrate` enable both `typeAware` and `typeCheck` by default.
 
 We recommend turning both `typeAware` and `typeCheck` on so `vp check` becomes the single command for static checks during development.
 
@@ -88,3 +88,11 @@ export default defineConfig({
 ```
 
 These options only affect `vp check`; standalone `vp fmt` and `vp lint` still run normally. A step is skipped if it is disabled in config or the matching `--no-fmt` / `--no-lint` flag is passed. Because the defaults apply to every `vp check` run, a pre-commit hook that calls `vp check` will skip the disabled step too. See [Check Config](/config/check) for the full reference.
+
+### Reading the config
+
+`vp check` reads the `lint`, `fmt`, and `check` blocks without running `vite.config.*` when it can, and otherwise loads the config through Vite. If `vp check` does not pick up your settings, set `VP_SKIP_STATIC_CONFIG=1` to always load the config through Vite:
+
+```bash
+VP_SKIP_STATIC_CONFIG=1 vp check
+```

@@ -14,13 +14,25 @@ struct HooksCliArgs {
 enum HooksSubcommand {
     /// Install or refresh the hook dispatcher (sets core.hooksPath)
     #[command(disable_help_flag = true)]
-    Enable(HooksActionArgs),
+    Enable(HooksEnableArgs),
     /// Disable hooks: unset core.hooksPath, remove <dir>/_, persist preference
     #[command(disable_help_flag = true)]
     Disable(HooksActionArgs),
     /// Show preference, core.hooksPath, and dispatcher state
     #[command(disable_help_flag = true)]
     Status(HooksActionArgs),
+}
+
+#[derive(Debug, Args)]
+struct HooksEnableArgs {
+    #[command(flatten)]
+    action: HooksActionArgs,
+
+    #[arg(
+        long,
+        help = "Replace a local Husky hooks path after migrating custom checks (old files are preserved but no longer run)"
+    )]
+    replace_husky: bool,
 }
 
 #[derive(Debug, Args)]
@@ -53,16 +65,17 @@ pub struct HooksArgs {
     #[napi(ts_type = "'enable' | 'disable' | 'status'")]
     pub command: String,
     pub hooks_dir: Option<String>,
+    pub replace_husky: bool,
 }
 
 impl From<HooksCliArgs> for HooksArgs {
     fn from(value: HooksCliArgs) -> Self {
-        let (command, args) = match value.command {
-            HooksSubcommand::Enable(args) => ("enable", args),
-            HooksSubcommand::Disable(args) => ("disable", args),
-            HooksSubcommand::Status(args) => ("status", args),
+        let (command, args, replace_husky) = match value.command {
+            HooksSubcommand::Enable(args) => ("enable", args.action, args.replace_husky),
+            HooksSubcommand::Disable(args) => ("disable", args, false),
+            HooksSubcommand::Status(args) => ("status", args, false),
         };
-        Self { command: command.into(), hooks_dir: args.hooks_dir }
+        Self { command: command.into(), hooks_dir: args.hooks_dir, replace_husky }
     }
 }
 
@@ -111,6 +124,7 @@ pub fn parse_hooks_args(argv: Vec<String>) -> ParseHooksArgsOutcome {
                     lines: vec![
                         "  vp hooks enable".into(),
                         "  vp hooks enable --hooks-dir .custom-hooks".into(),
+                        "  vp hooks enable --replace-husky".into(),
                         "  vp hooks disable".into(),
                         "  vp hooks status".into(),
                     ],
@@ -145,7 +159,19 @@ mod tests {
             let args = parsed(&[name, "--hooks-dir", ".custom"]);
             assert_eq!(args.command, name);
             assert_eq!(args.hooks_dir.as_deref(), Some(".custom"));
+            assert!(!args.replace_husky);
         }
+    }
+
+    #[test]
+    fn replacement_is_only_available_for_enable() {
+        let args = parsed(&["enable", "--replace-husky", "--hooks-dir", ".custom"]);
+        assert!(args.replace_husky);
+        assert_eq!(args.hooks_dir.as_deref(), Some(".custom"));
+        for name in ["disable", "status"] {
+            assert_eq!(parse_error(&[name, "--replace-husky"]).kind, "unknown-argument");
+        }
+        assert_eq!(parse_error(&["--replace-husky", "enable"]).kind, "unknown-argument");
     }
 
     #[test]

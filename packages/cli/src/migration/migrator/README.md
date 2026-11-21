@@ -71,7 +71,7 @@ Pick the file by what a function _does_, not by where it happens to be called.
    time, so they must be imported from a fully-evaluated leaf:
 
    ```ts
-   import { REMOVE_PACKAGES, type CatalogDependencyResolver } from './shared.ts';
+   import { REMOVE_PACKAGES, type PackageJsonDependencyField } from './shared.ts';
    ```
 
    Keep `shared.ts` a **pure leaf**: it may import external packages and

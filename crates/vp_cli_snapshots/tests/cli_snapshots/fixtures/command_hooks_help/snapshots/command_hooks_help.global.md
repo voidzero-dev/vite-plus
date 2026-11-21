@@ -23,6 +23,7 @@ Environment:
 Examples:
   vp hooks enable
   vp hooks enable --hooks-dir .custom-hooks
+  vp hooks enable --replace-husky
   vp hooks disable
   vp hooks status
 
@@ -52,6 +53,7 @@ Environment:
 Examples:
   vp hooks enable
   vp hooks enable --hooks-dir .custom-hooks
+  vp hooks enable --replace-husky
   vp hooks disable
   vp hooks status
 
@@ -70,6 +72,7 @@ Install or refresh the hook dispatcher (sets core.hooksPath)
 Options:
   --hooks-dir <path>  Custom hooks directory (default: .vite-hooks, or last used)
   -h, --help          Show this help message
+  --replace-husky     Replace a local Husky hooks path after migrating custom checks (old files are preserved but no longer run)
 
 Documentation: https://viteplus.dev/guide/commit-hooks
 ```
@@ -97,6 +100,7 @@ Environment:
 Examples:
   vp hooks enable
   vp hooks enable --hooks-dir .custom-hooks
+  vp hooks enable --replace-husky
   vp hooks disable
   vp hooks status
 

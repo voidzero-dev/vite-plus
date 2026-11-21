@@ -1,0 +1,5 @@
+{
+  "name": "app", "private": true, "type": "module",
+  "scripts": { "build": "vite build", "test": "vitest run" },
+  "devDependencies": { "vite": "catalog:", "vitest": "catalog:legacy", "@vitest/coverage-v8": "catalog:legacy" }
+}

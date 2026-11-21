@@ -45,7 +45,11 @@ export async function executeGeneratorScaffold(
     workspaceInfo.downloadPackageManager.version,
     workspaceInfo.isMonorepo,
   )
-    ? createCatalogDependencyResolver(workspaceInfo.rootDir, workspaceInfo.packageManager)
+    ? createCatalogDependencyResolver(
+        workspaceInfo.rootDir,
+        workspaceInfo.packageManager,
+        workspaceInfo.downloadPackageManager.version,
+      )
     : undefined;
   const { catalog } = readYamlFile(path.join(templatesDir, 'monorepo/pnpm-workspace.yaml')) as {
     catalog: Record<string, string>;

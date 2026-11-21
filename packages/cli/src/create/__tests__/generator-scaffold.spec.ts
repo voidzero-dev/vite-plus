@@ -58,6 +58,7 @@ async function scaffold(
       version,
       installDir: '',
       binPrefix: '',
+      binPaths: {},
     },
     packages: [],
   };
@@ -121,13 +122,20 @@ describe('generator scaffold dependencies', () => {
   });
 
   it.each([
-    [PackageManager.pnpm, '10.0.0'],
-    [PackageManager.yarn, '4.10.0'],
-    [PackageManager.bun, '1.3.0'],
-  ])('resolves catalogs.default for %s %s', async (manager, version) => {
-    const pkg = await scaffold(manager, version, {
-      catalogs: { default: { '@types/node': '^22', typescript: '^5' } },
-    });
-    expect(pkg.devDependencies).toEqual({ '@types/node': 'catalog:', typescript: 'catalog:' });
-  });
+    [PackageManager.pnpm, '10.0.0', true],
+    [PackageManager.yarn, '4.10.0', false],
+    [PackageManager.bun, '1.3.0', false],
+    [PackageManager.bun, '1.4.0', true],
+  ] as const)(
+    'uses installable versions with catalogs.default for %s %s',
+    async (manager, version, sharedDefault) => {
+      const pkg = await scaffold(manager, version, {
+        catalogs: { default: { '@types/node': '^22', typescript: '^5' } },
+      });
+      const { catalog } = readYamlFile(path.join(templatesDir, 'monorepo/pnpm-workspace.yaml'));
+      expect(pkg.devDependencies).toEqual(
+        sharedDefault ? { '@types/node': 'catalog:', typescript: 'catalog:' } : catalog,
+      );
+    },
+  );
 });

@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import tsrsPkg from 'tsrs/package.json' with { type: 'json' };
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseAllDocuments, parse as parseYaml } from 'yaml';
 
@@ -13,7 +14,14 @@ import {
   VITE_PLUS_OVERRIDE_PACKAGES,
   VITEST_VERSION,
 } from '../../utils/constants.js';
+import {
+  DISABLED_IMPORT_RULE_CONFIG,
+  type RetainedImportDependencies,
+} from '../migrator/shared.ts';
 import { createMigrationReport } from '../report.js';
+
+// A different bundled version verifies that migration follows dependency updates.
+vi.mock('tsrs/package.json', () => ({ default: { version: '99.0.0-test' } }));
 
 // Mock VITE_PLUS_VERSION to a stable value for snapshot tests.
 // When tests run via `vp test`, the env var is injected with the actual version,
@@ -32,6 +40,7 @@ vi.mock('../../utils/constants.js', async (importOriginal) => {
 
 const {
   rewritePackageJson,
+  createCatalogDependencyResolver,
   rewriteStandaloneProject,
   rewriteMonorepo,
   rewriteMonorepoProject,
@@ -1395,6 +1404,7 @@ describe('setPackageManager', () => {
     name: 'pnpm',
     installDir: '/tmp/install',
     binPrefix: '/tmp/install/bin',
+    binPaths: {},
     packageName: 'pnpm',
     version: '11.5.1',
   };
@@ -1701,6 +1711,7 @@ function makeWorkspaceInfo(
       name: packageManager,
       installDir: '/tmp',
       binPrefix: '/tmp/bin',
+      binPaths: {},
       packageName: packageManager,
       version,
     },
@@ -2137,6 +2148,123 @@ describe('ensureVitePlusBootstrap', () => {
     };
     expect(pkg.devDependencies).toEqual({ vite: 'catalog:', 'vite-plus': 'catalog:' });
     expect(pkg.overrides).toEqual({ vite: 'catalog:' });
+  });
+
+  it.each(['1.2.14', '1.3.14', '1.4.0'])(
+    'keeps split default catalogs resolvable when migrating Bun %s',
+    (version) => {
+      const file = path.join(tmpDir, 'package.json');
+      fs.writeFileSync(
+        file,
+        JSON.stringify({
+          name: 'bun-split-default',
+          packageManager: `bun@${version}`,
+          devDependencies: { vite: 'catalog:', react: 'catalog:default' },
+          workspaces: {
+            packages: [],
+            catalog: { vite: '^8.0.0' },
+            catalogs: { default: { react: '^19.0.0' } },
+          },
+        }),
+      );
+      const workspace = makeWorkspaceInfo(tmpDir, PackageManager.bun, version);
+      rewriteMonorepo(workspace, true);
+      const pkg = readJson(file) as {
+        devDependencies: Record<string, string>;
+        workspaces: {
+          catalog: Record<string, string>;
+          catalogs: Record<string, Record<string, string>>;
+        };
+      };
+      const merged = version === '1.4.0';
+      expect(pkg.devDependencies['vite-plus']).toBe('catalog:');
+      expect(pkg.devDependencies.react).toBe('catalog:default');
+      expect(pkg.workspaces.catalog['vite-plus']).toBe(merged ? undefined : 'latest');
+      expect(pkg.workspaces.catalogs.default).toEqual(
+        merged ? { react: '^19.0.0', 'vite-plus': 'latest' } : { react: '^19.0.0' },
+      );
+      const resolver = createCatalogDependencyResolver(tmpDir, PackageManager.bun, version)!;
+      expect(resolver('catalog:', 'vite-plus')).toBe('latest');
+      expect(resolver('catalog:', 'react')).toBe(merged ? '^19.0.0' : undefined);
+      const before = fs.readFileSync(file, 'utf8');
+      rewriteMonorepo(workspace, true);
+      expect(fs.readFileSync(file, 'utf8')).toBe(before);
+    },
+  );
+
+  it.each(['1.2.14', '1.3.14', '1.4.0'])(
+    'reconciles a named default catalog with the correct reference on Bun %s',
+    (version) => {
+      const file = path.join(tmpDir, 'package.json');
+      fs.writeFileSync(
+        file,
+        JSON.stringify({
+          name: 'bun-named-default',
+          packageManager: `bun@${version}`,
+          devDependencies: { vite: 'catalog:default', 'vite-plus': '0.3.2' },
+          workspaces: {
+            packages: [],
+            catalogs: { default: { vite: '^8.0.0', 'vite-plus': '0.3.2' } },
+          },
+        }),
+      );
+      const workspace = makeWorkspaceInfo(tmpDir, PackageManager.bun, version);
+      ensureVitePlusBootstrap(workspace);
+      const pkg = readJson(file) as {
+        devDependencies: Record<string, string>;
+        workspaces: { catalog?: unknown };
+      };
+      expect(pkg.devDependencies['vite-plus']).toBe(
+        version === '1.4.0' ? 'catalog:' : 'catalog:default',
+      );
+      expect(pkg.workspaces.catalog).toBeUndefined();
+      const resolver = createCatalogDependencyResolver(tmpDir, PackageManager.bun, version)!;
+      expect(resolver(pkg.devDependencies['vite-plus'], 'vite-plus')).toBe('latest');
+      expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.bun)).toBe(false);
+      const before = fs.readFileSync(file, 'utf8');
+      ensureVitePlusBootstrap(workspace);
+      expect(fs.readFileSync(file, 'utf8')).toBe(before);
+    },
+  );
+
+  it.each([
+    ['1.3.14', 'root'],
+    ['1.3.14', 'nested'],
+    ['1.4.0', 'root'],
+    ['1.4.0', 'nested'],
+  ])('fills a missing named-default entry on Bun %s in %s catalogs', (version, location) => {
+    const file = path.join(tmpDir, 'package.json');
+    const catalogs: {
+      catalog: Record<string, string>;
+      catalogs: Record<string, Record<string, string>>;
+    } = {
+      catalog: { vite: '^8.0.0' },
+      catalogs: { default: { 'vite-plus': '0.3.2' } },
+    };
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        name: 'bun-split-toolchain',
+        packageManager: `bun@${version}`,
+        devDependencies: { 'vite-plus': 'catalog:default' },
+        ...(location === 'nested'
+          ? { workspaces: { packages: [], ...catalogs } }
+          : { workspaces: [], ...catalogs }),
+      }),
+    );
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.bun, version));
+    const pkg = readJson(file) as {
+      devDependencies: Record<string, string>;
+      workspaces: typeof catalogs;
+    } & typeof catalogs;
+    const active = location === 'nested' ? pkg.workspaces : pkg;
+    expect(active.catalog.vite).toBe(VITE_PLUS_OVERRIDE_PACKAGES.vite);
+    expect(active.catalogs.default.vite).toBe(
+      version === '1.4.0' ? undefined : VITE_PLUS_OVERRIDE_PACKAGES.vite,
+    );
+    const resolver = createCatalogDependencyResolver(tmpDir, PackageManager.bun)!;
+    expect(resolver(pkg.devDependencies.vite, 'vite')).toBe(VITE_PLUS_OVERRIDE_PACKAGES.vite);
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.bun)).toBe(false);
   });
 
   it('adds a missing @vitest/* entry to the bun catalog it now references', () => {
@@ -3452,6 +3580,122 @@ describe('ensureVitePlusBootstrap', () => {
     expect(pkg.overrides.vitest).toBeUndefined();
   });
 
+  it('keeps a declared browser peer range on the first migration', () => {
+    const peerDependencies = { '@vitest/browser-preview': '^4 || ^5' };
+    writePkgAt(tmpDir, { name: 'test-plugin', peerDependencies });
+    fs.writeFileSync(
+      path.join(tmpDir, 'index.ts'),
+      "export { preview } from '@vitest/browser-preview';",
+    );
+
+    rewriteStandaloneProject(
+      tmpDir,
+      makeWorkspaceInfo(tmpDir, PackageManager.npm),
+      true,
+      true,
+      undefined,
+      DISABLED_IMPORT_RULE_CONFIG,
+    );
+
+    const pkg = readJson(path.join(tmpDir, 'package.json'));
+    expect(pkg.peerDependencies).toEqual(peerDependencies);
+    expect(pkg).not.toHaveProperty(['devDependencies', '@vitest/browser-preview']);
+  });
+
+  it('repairs a missing Vitest dependency only in the workspace that keeps the import', () => {
+    const templateDir = path.join(tmpDir, 'templates/starter');
+    writePkgAt(tmpDir, { private: true, devDependencies: { 'vite-plus': 'catalog:' } });
+    writePkgAt(templateDir, { name: 'starter' });
+    const workspace = {
+      ...makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
+      isMonorepo: true,
+      workspacePatterns: ['templates/*'],
+      packages: [{ name: 'starter', path: 'templates/starter' }],
+    };
+    const pending = (owners?: RetainedImportDependencies) =>
+      detectVitePlusBootstrapPending(
+        tmpDir,
+        workspace.packageManager,
+        workspace.packages,
+        workspace.packageManagerVersion,
+        owners,
+      );
+
+    ensureVitePlusBootstrap(workspace);
+    expect(pending()).toBe(false);
+
+    const owners = { vitest: new Set([templateDir]), browser: new Map<string, Set<string>>() };
+    expect(pending(owners)).toBe(true);
+    ensureVitePlusBootstrap(workspace, undefined, owners);
+    expect(readJson(path.join(templateDir, 'package.json'))).toHaveProperty(
+      'devDependencies.vitest',
+      'catalog:',
+    );
+    expect(readJson(path.join(tmpDir, 'package.json'))).not.toHaveProperty(
+      'devDependencies.vitest',
+    );
+    expect(readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml'))).toHaveProperty(
+      'catalog.vitest',
+      VITEST_VERSION,
+    );
+    expect(pending(owners)).toBe(false);
+  });
+
+  it.each([
+    [PackageManager.pnpm, '10.33.0', 'pnpm-workspace.yaml', readYamlObject],
+    [PackageManager.yarn, '4.11.0', '.yarnrc.yml', readYamlObject],
+    [PackageManager.bun, '1.4.4', 'package.json', readJson],
+  ] as const)(
+    'keeps retained browser dependencies and peer ranges in a named %s catalog',
+    (manager, version, file, readCatalog) => {
+      const browser = '@vitest/browser';
+      const preview = '@vitest/browser-preview';
+      const peerRange = '^4 || ^5';
+      const catalogFile = path.join(tmpDir, file);
+      const templateDir = path.join(tmpDir, 'templates/starter');
+      const catalogs = {
+        tools: { [browser]: '^4.0.0', [preview]: peerRange, 'vite-plus': 'latest' },
+      };
+      const workspace = {
+        ...makeWorkspaceInfo(tmpDir, manager, version),
+        isMonorepo: true,
+        workspacePatterns: ['templates/*'],
+        packages: [{ name: 'starter', path: 'templates/starter' }],
+      };
+      writePkgAt(tmpDir, {
+        name: 'root',
+        private: true,
+        workspaces: workspace.workspacePatterns,
+        ...(manager === PackageManager.bun ? { catalogs } : {}),
+      });
+      if (manager !== PackageManager.bun) {
+        fs.writeFileSync(catalogFile, JSON.stringify({ catalogs }));
+      }
+      writePkgAt(templateDir, {
+        name: 'starter',
+        dependencies: { [browser]: 'catalog:tools' },
+        peerDependencies: { [preview]: 'catalog:tools' },
+      });
+      const retained = {
+        vitest: new Set<string>(),
+        browser: new Map([[templateDir, new Set([browser, preview])]]),
+      };
+
+      ensureVitePlusBootstrap(workspace, undefined, retained);
+
+      const result = readCatalog(catalogFile);
+      expect(result).toHaveProperty(['catalogs', 'tools', browser], VITEST_VERSION);
+      expect(result).toHaveProperty(['catalogs', 'tools', preview], peerRange);
+      expect(readJson(path.join(templateDir, 'package.json'))).toMatchObject({
+        dependencies: { [browser]: 'catalog:tools' },
+        peerDependencies: { [preview]: 'catalog:tools' },
+      });
+      expect(
+        detectVitePlusBootstrapPending(tmpDir, manager, workspace.packages, version, retained),
+      ).toBe(false);
+    },
+  );
+
   it('reconciles vitest and vite-plus in the workspace package that needs them', () => {
     const appDir = path.join(tmpDir, 'packages/app');
     fs.mkdirSync(appDir, { recursive: true });
@@ -4480,6 +4724,8 @@ describe('ensureVitePlusBootstrap', () => {
     // Vite+ pins a possibly-fresh vitest; its family must bypass the gate.
     expect(workspace.minimumReleaseAgeExclude).toContain('vitest');
     expect(workspace.minimumReleaseAgeExclude).toContain('@vitest/*');
+    expect(workspace.minimumReleaseAgeExclude).toContain('tsrs');
+    expect(workspace.minimumReleaseAgeExclude).toContain('@tsrs/*');
     // The user's own entry and the vite-plus/ox families are preserved.
     expect(workspace.minimumReleaseAgeExclude).toContain('my-internal-pkg');
     expect(workspace.minimumReleaseAgeExclude).toContain('vite-plus');
@@ -4514,6 +4760,79 @@ describe('ensureVitePlusBootstrap', () => {
     // No gate present → we never introduce the exclude list.
     expect(workspace.minimumReleaseAgeExclude).toBeUndefined();
   });
+
+  it.each(['example@1.0.0', 'tsrs@0.25.0-ts7.1.0-beta'])(
+    'reconciles the bundled tsrs exception while preserving %s and pnpm trust checks',
+    (existingException) => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({
+          name: 'test',
+          devDependencies: { 'vite-plus': 'latest' },
+          packageManager: 'pnpm@11.22.0',
+        }),
+      );
+      const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+      ensureVitePlusBootstrap(workspaceInfo);
+      expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+
+      const workspacePath = path.join(tmpDir, 'pnpm-workspace.yaml');
+      fs.appendFileSync(
+        workspacePath,
+        `\ntrustPolicy: no-downgrade\ntrustPolicyExclude:\n  # Keep the project exception.\n  - ${existingException}\n`,
+      );
+      expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(true);
+      expect(ensureVitePlusBootstrap(workspaceInfo).changed).toBe(true);
+
+      const workspace = readYamlObject(workspacePath);
+      expect(workspace.trustPolicy).toBe('no-downgrade');
+      expect(workspace.trustPolicyExclude).toEqual([existingException, `tsrs@${tsrsPkg.version}`]);
+      expect(workspace.trustLockfile).toBeUndefined();
+      const after = fs.readFileSync(workspacePath, 'utf-8');
+      expect(after).toContain('# Keep the project exception.');
+      expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+      expect(ensureVitePlusBootstrap(workspaceInfo).changed).toBe(false);
+      expect(fs.readFileSync(workspacePath, 'utf-8')).toBe(after);
+    },
+  );
+
+  it.each(['', 'trustPolicy: off\n'])(
+    'leaves trust exceptions unchanged without no-downgrade: %j',
+    (policy) => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({ name: 'test', devDependencies: { 'vite-plus': 'latest' } }),
+      );
+      const workspacePath = path.join(tmpDir, 'pnpm-workspace.yaml');
+      fs.writeFileSync(workspacePath, `${policy}trustPolicyExclude:\n  - example@1.0.0\n`);
+
+      ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
+
+      const workspace = readYamlObject(workspacePath);
+      expect(workspace.trustPolicyExclude).toEqual(['example@1.0.0']);
+      expect(workspace.trustPolicy).toBe(policy ? 'off' : undefined);
+    },
+  );
+
+  it.each(['tsrs', `tsrs@${tsrsPkg.version}`])(
+    'preserves an existing tsrs trust exception: %s',
+    (exception) => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({ name: 'test', devDependencies: { 'vite-plus': 'latest' } }),
+      );
+      const workspacePath = path.join(tmpDir, 'pnpm-workspace.yaml');
+      fs.writeFileSync(
+        workspacePath,
+        `trustPolicy: no-downgrade\ntrustPolicyExclude:\n  - ${exception}\n`,
+      );
+
+      ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
+
+      expect(readYamlObject(workspacePath).trustPolicyExclude).toEqual([exception]);
+      expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+    },
+  );
 
   it('merges the vitest family into an existing yarn npmPreapprovedPackages list', () => {
     fs.writeFileSync(
@@ -5545,6 +5864,48 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(pkg.devDependencies.vite).toBe('catalog:build');
     expect(pkg.devDependencies['vite-plus']).toBe('catalog:build');
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+  });
+
+  it.each([
+    ['legacy', 'default'],
+    ['default', 'legacy'],
+  ])('keeps pnpm catalog references resolvable when %s precedes %s', (first, second) => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'catalog-order-workspace',
+        devDependencies: { vite: 'catalog:legacy' },
+      }),
+    );
+    const contents = [
+      'packages: [packages/*]',
+      'catalogs:',
+      `  ${first}:`,
+      '    vite: ^8.0.0',
+      `  ${second}:`,
+      '    vite: ^8.0.0',
+      '',
+    ].join('\n');
+    fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), contents);
+    const expectedSpec = first === 'default' ? 'catalog:' : `catalog:${first}`;
+    const resolver = createCatalogDependencyResolver(tmpDir, PackageManager.pnpm)!;
+    expect(resolver.preferredCatalogSpec).toBe(expectedSpec);
+
+    rewriteMonorepo(makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    expect(pkg.devDependencies.vite).toBe('catalog:legacy');
+    expect(pkg.devDependencies['vite-plus']).toBe(expectedSpec);
+    const migratedResolver = createCatalogDependencyResolver(tmpDir, PackageManager.pnpm)!;
+    expect(migratedResolver(pkg.devDependencies['vite-plus'], 'vite-plus')).toBe('latest');
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      catalog?: unknown;
+      catalogs: Record<string, Record<string, string>>;
+    };
+    expect(workspace.catalog).toBeUndefined();
+    expect(workspace.catalogs[second]['vite-plus']).toBeUndefined();
   });
 
   it('writes managed dependencies into an active catalogs.default definition', () => {
@@ -9485,6 +9846,96 @@ export default defineConfig({
     expect(viteConfig).not.toContain('singleQuote: false');
     // Redundant standalone file removed.
     expect(fs.existsSync(path.join(tmpDir, '.oxfmtrc.jsonc'))).toBe(false);
+  });
+
+  // The first `vp migrate` injects default blocks even when ESLint stays. A
+  // later `--full` run converts its rules, and the result must replace the
+  // defaults instead of being dropped as a second copy.
+  it.each(['as injected', 'after formatting'])(
+    'replaces injected fmt and lint defaults with a standalone config (%s)',
+    (shape) => {
+      const viteConfigPath = path.join(tmpDir, 'vite.config.ts');
+      if (shape === 'as injected') {
+        injectLintTypeCheckDefaults(tmpDir, true);
+        injectFmtDefaults(tmpDir, true);
+      } else {
+        fs.writeFileSync(
+          viteConfigPath,
+          `import { defineConfig } from "vite-plus";
+
+export default defineConfig({
+  fmt: {},
+  lint: {
+    options: { typeCheck: true, typeAware: true },
+    jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
+    rules: { "vite-plus/prefer-vite-plus-imports": "error" },
+  },
+});
+`,
+        );
+      }
+      fs.writeFileSync(
+        path.join(tmpDir, '.oxlintrc.json'),
+        JSON.stringify({ rules: { eqeqeq: 'error' } }),
+      );
+      fs.writeFileSync(path.join(tmpDir, '.oxfmtrc.json'), JSON.stringify({ semi: false }));
+      const report = createMigrationReport();
+
+      mergeViteConfigFiles(tmpDir, true, report);
+
+      const viteConfig = fs.readFileSync(viteConfigPath, 'utf8');
+      expect(viteConfig.match(/^\s*(fmt|lint)\s*:/gm)).toHaveLength(2);
+      expect(viteConfig).toContain('"eqeqeq": "error"');
+      expect(viteConfig).toContain('"vite-plus/prefer-vite-plus-imports": "error"');
+      expect(viteConfig).toContain('"semi":false');
+      expect(fs.existsSync(path.join(tmpDir, '.oxlintrc.json'))).toBe(false);
+      expect(fs.existsSync(path.join(tmpDir, '.oxfmtrc.json'))).toBe(false);
+      expect(report.warnings).toEqual([]);
+      expect(report.mergedConfigCount).toBe(2);
+    },
+  );
+
+  it('preserves converted ESLint rules when the lint block has user settings', () => {
+    const viteConfigPath = path.join(tmpDir, 'vite.config.ts');
+    fs.writeFileSync(
+      viteConfigPath,
+      `import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  lint: { rules: { 'no-console': 'error' } },
+});
+`,
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.oxlintrc.json'),
+      JSON.stringify({ rules: { eqeqeq: 'error' } }),
+    );
+    const report = createMigrationReport();
+    report.eslintMigrated = true;
+
+    mergeViteConfigFiles(tmpDir, true, report);
+
+    // The rules were not merged, so the JSON file remains their only copy.
+    const viteConfig = fs.readFileSync(viteConfigPath, 'utf8');
+    expect(viteConfig).toContain("'no-console': 'error'");
+    expect(viteConfig).not.toContain('eqeqeq');
+    expect(fs.existsSync(path.join(tmpDir, '.oxlintrc.json'))).toBe(true);
+    expect(report.warnings).toEqual([
+      expect.stringMatching(
+        /^Preserved .*\.oxlintrc\.json because vite\.config\.ts already has a lint config\. Merge it manually\.$/,
+      ),
+    ]);
+
+    // A later run that converts another tool merges again without having
+    // converted ESLint. The pending marker must still protect the file.
+    const laterReport = createMigrationReport();
+    mergeViteConfigFiles(tmpDir, true, laterReport);
+
+    expect(fs.existsSync(path.join(tmpDir, '.oxlintrc.json'))).toBe(true);
+    expect(laterReport.warnings).toHaveLength(1);
+    expect(
+      fs.readFileSync(viteConfigPath, 'utf8').match(/^\/\/ vp migrate: pending /gm),
+    ).toHaveLength(1);
   });
 });
 
