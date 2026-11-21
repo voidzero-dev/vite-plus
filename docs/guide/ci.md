@@ -194,13 +194,13 @@ On Windows, run these commands in the package that declares `vite-plus`, with th
 ```powershell
 pnpm install --frozen-lockfile
 .\node_modules\.bin\vp.cmd check
-.\node_modules\.bin\vp.cmd test run
+.\node_modules\.bin\vp.cmd test
 ```
 
 ### Which commands can use the network?
 
-- `vp lint`, `vp fmt --check`, `vp check`, and a basic `vp test run` use installed tools. Install any test environment, coverage provider, or browser binary your suite needs in advance. Project configuration, plugins, and tests can make their own requests.
+- `vp lint`, `vp fmt --check`, `vp check`, and `vp test` use installed tools. Install any test environment, coverage provider, or browser binary your suite needs in advance. Project configuration, plugins, and tests can make their own requests.
 - `vp run` can replay a task from its local cache. On a cache miss the task runs its own command, which may use the network. A configured remote cache also needs network access.
 - `vp install`, `vp add`, and `vp dlx` can fetch packages. `vp migrate` can install dependencies. With `vp create`, the template determines the source. For example, `vite:application` uses `create-vite@latest` from the registry and `vite:library` downloads its template from GitHub.
 
-When Vite+ manages the project's pinned package manager, local commands such as `vp fmt --check`, `vp lint`, `vp check`, `vp test run`, and `vp run build` can fetch it even when it is on `PATH`. For pnpm 12 on Windows x64, `vp` requests `@pnpm/exe.win32-x64` at the pinned version. With an empty Vite+ cache, a registry that never responds can delay the command for several minutes. `vp --version` skips this lookup.
+When Vite+ manages the project's pinned package manager, local commands such as `vp fmt --check`, `vp lint`, `vp check`, `vp test`, and `vp run build` can fetch it even when it is on `PATH`. For pnpm 12 on Windows x64, `vp` requests `@pnpm/exe.win32-x64` at the pinned version. With an empty Vite+ cache, a registry that never responds can delay the command for several minutes. `vp --version` skips this lookup.
