@@ -17,6 +17,7 @@ import { sourceTreeMatches } from '../migrator.ts';
 import { type MigrationReport } from '../report.ts';
 import {
   type DependencyBag,
+  dotenvCommandStart,
   getCommandStartIndex,
   isPlainRecord,
   LINT_STAGED_JSON_CONFIG_FILES,
@@ -627,7 +628,8 @@ function scriptRequiresVitePlus(command: string, projectPath?: string): boolean 
       if (loadsFromEnvironment) {
         return first < values.length;
       }
-      const invocation = values.slice(first);
+      const wrapperStart = dotenvCommandStart(values, first);
+      const invocation = values.slice(wrapperStart);
       const bunPrefix =
         invocation[0] === 'bunx' ? 1 : invocation[0] === 'bun' && invocation[1] === 'x' ? 2 : 0;
       let commandStart = getCommandStartIndex(invocation);
@@ -639,9 +641,9 @@ function scriptRequiresVitePlus(command: string, projectPath?: string): boolean 
           commandStart++;
         }
       }
-      const start = first + commandStart;
+      const start = wrapperStart + commandStart;
       const executable = values[start];
-      const wrappers = values.slice(first, start);
+      const wrappers = values.slice(wrapperStart, start);
       const downloadsCommand =
         bunPrefix === 0 && wrappers.some((word) => ['dlx', 'x'].includes(word));
       if (

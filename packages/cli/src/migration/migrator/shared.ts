@@ -57,6 +57,19 @@ export function getCommandStartIndex(argv: readonly string[]): number {
   return start;
 }
 
+/** Find the command after an explicit dotenv argument separator. */
+export function dotenvCommandStart(argv: readonly string[], start: number): number {
+  const command = argv[start];
+  const argumentsStart =
+    command === 'dotenv'
+      ? start + 1
+      : command === 'dotenvx' && argv[start + 1] === 'run'
+        ? start + 2
+        : undefined;
+  const separator = argumentsStart === undefined ? -1 : argv.indexOf('--', argumentsStart);
+  return separator === -1 ? start : separator + 1;
+}
+
 // Scans that decide whether a removed tool is still used. Built output can still load
 // it after migration, so skip only installed source and VCS metadata.
 export const RETENTION_SCAN_SKIP_DIRS: ReadonlySet<string> = new Set([

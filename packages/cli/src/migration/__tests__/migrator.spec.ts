@@ -157,6 +157,14 @@ describe('explicit tsdown config selection', () => {
     expect(configNeedsVitePlus(tmpDir, true)).toBe(true);
   });
 
+  it('checks focused installs for a pack config with retained standalone types', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'vite.config.ts'),
+      "import type { UserConfig } from 'tsdown'; export default { pack: { entry: 'src/index.ts' } satisfies UserConfig };\n",
+    );
+    expect(configNeedsVitePlus(tmpDir, true)).toBe(true);
+  });
+
   it.each([
     ['vite.config.ts', false],
     ['vite.config.ts', true],
@@ -532,6 +540,9 @@ describe('explicit tsdown config selection', () => {
     ['vp fmt', true],
     ['vpr fixture-check', true],
     ['pnpm exec vp fmt', true],
+    ['dotenv -e .env -- vpx ./generate.ts', true],
+    ['dotenvx run -f .env -- pnpm exec vpx ./generate.ts', true],
+    ['dotenv -e .env -- echo vpx', false],
     ['npx vp --version', true],
     ['npx --package another-command vp --version', false],
     ['bunx --no-install vp --version', true],
@@ -1931,6 +1942,66 @@ export default defineConfig(({ command }) => {
       "copy: 'public'",
     );
   });
+
+  it.each([
+    [true, "export default [{ entry: ['src/app.ts'], outDir: 'apps-out' }];\n"],
+    [false, 'export default { concat: config => [config] };\n'],
+  ])('moves a concat argument only for a verified imported array (%s)', (convert, apps) => {
+    const tsdown = path.join(tmpDir, 'tsdown.config.ts');
+    const original = "export default { entry: ['src/lib.ts'], publicDir: 'public' };\n";
+    fs.writeFileSync(tsdown, original);
+    const vite = path.join(tmpDir, 'vite.config.ts');
+    const config =
+      "import apps from './apps.ts';\n" +
+      "import library from './tsdown.config.ts';\n" +
+      'export default { pack: apps.concat(library) };\n';
+    fs.writeFileSync(vite, config);
+    fs.writeFileSync(path.join(tmpDir, 'apps.ts'), apps);
+
+    const report = createMigrationReport();
+    expect(mergeTsdownConfigFile(tmpDir, true, report, true)).toBe(convert);
+    expect(fs.readFileSync(tsdown, 'utf8')).toBe(original);
+    expect(fs.readFileSync(path.join(tmpDir, 'apps.ts'), 'utf8')).toBe(apps);
+    if (convert) {
+      expect(fs.readFileSync(vite, 'utf8')).toBe(
+        config.replace("'./tsdown.config.ts'", '"./vite-pack.config.ts"'),
+      );
+      expect(fs.readFileSync(path.join(tmpDir, 'vite-pack.config.ts'), 'utf8')).toContain(
+        "copy: 'public'",
+      );
+    } else {
+      expect(fs.readFileSync(vite, 'utf8')).toBe(config);
+      expect(report.warnings).toContainEqual(
+        expect.stringContaining('changes the imported options'),
+      );
+    }
+  });
+
+  it.each(['Array<typeof cli>', '(typeof cli)[]'])(
+    'keeps writes through a helper array indexed at a literal with %s',
+    (annotation) => {
+      const tsdown = path.join(tmpDir, 'tsdown.config.ts');
+      const original =
+        "export default { entry: ['src/lib.ts'], outDir: 'library-out', publicDir: 'public' };\n";
+      fs.writeFileSync(tsdown, original);
+      const vite = path.join(tmpDir, 'vite.config.ts');
+      const config =
+        "import library from './tsdown.config.ts';\n" +
+        "const cli = { entry: ['src/cli.ts'], outDir: 'cli-out' };\n" +
+        `function configure(builds: ${annotation}) { builds[0].entry.push('src/extra.ts'); builds[0].outDir = 'release-out'; }\n` +
+        'configure([library, cli]);\nexport default { pack: [library, cli] };\n';
+      fs.writeFileSync(vite, config);
+
+      expect(mergeTsdownConfigFile(tmpDir, true, createMigrationReport(), true)).toBe(true);
+      expect(fs.readFileSync(vite, 'utf8')).toBe(
+        config.replace("'./tsdown.config.ts'", '"./vite-pack.config.ts"'),
+      );
+      expect(fs.readFileSync(tsdown, 'utf8')).toBe(original);
+      expect(fs.readFileSync(path.join(tmpDir, 'vite-pack.config.ts'), 'utf8')).toContain(
+        "copy: 'public'",
+      );
+    },
+  );
 
   it.each([
     "for (const options of [library, cli]) options.outDir = 'release-' + options.name;",

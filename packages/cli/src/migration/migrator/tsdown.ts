@@ -18,6 +18,7 @@ import { detectDefaultTsdownConfig } from '../detector.ts';
 import { findDivergedTsdownPackConfig } from '../migrator.ts';
 import type { MigrationReport } from '../report.ts';
 import {
+  dotenvCommandStart,
   getCommandStartIndex,
   readPackageJsonIfExists,
   SHELL_STATE_COMMANDS,
@@ -48,16 +49,10 @@ function scriptInvocation(command: readonly { value: string }[]): {
       start++;
     }
   }
-  let invocation = argv.slice(start);
-  if (wrapper === 'cross-env-shell' && invocation.length === 1 && invocation[0].includes(' ')) {
-    return { args: [], shellCommand: invocation[0] };
+  if (wrapper === 'cross-env-shell' && argv.length === start + 1 && argv[start].includes(' ')) {
+    return { args: [], shellCommand: argv[start] };
   }
-  if (invocation[0] === 'dotenv' || (invocation[0] === 'dotenvx' && invocation[1] === 'run')) {
-    const separator = invocation.indexOf('--', 1);
-    if (separator !== -1) {
-      invocation = invocation.slice(separator + 1);
-    }
-  }
+  const invocation = argv.slice(dotenvCommandStart(argv, start));
   let executable = getCommandStartIndex(invocation);
   if (invocation[0] === 'bunx' && invocation[executable] === '--bun') {
     executable++;

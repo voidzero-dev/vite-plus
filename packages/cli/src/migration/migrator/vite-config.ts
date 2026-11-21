@@ -627,9 +627,13 @@ export function configNeedsVitePlus(
     }
     const configPath = path.join(projectPath, config);
     try {
-      const { program } = parseSource(configPath, fs.readFileSync(configPath, 'utf8'));
-      const specifiers = configImports(program).map(({ value }) => value);
-      for (const node of configNodes(program)) {
+      const parsed = parseSource(configPath, fs.readFileSync(configPath, 'utf8'));
+      if (keepTsdownDependency && config === viteConfig && packProperties(parsed).some(Boolean)) {
+        // vp pack and its migrated inline types need a member-local installation.
+        return true;
+      }
+      const specifiers = configImports(parsed.program).map(({ value }) => value);
+      for (const node of configNodes(parsed.program)) {
         if (
           (node.type === 'ImportExpression' ||
             node.type === 'ExportNamedDeclaration' ||
@@ -696,6 +700,8 @@ function packProperties(
 type PackIdentifier = Extract<Node, { type: 'Identifier' }>;
 type PackMapping = 'array' | 'copy' | 'unverified';
 type PackHelper = { typeReference?: number };
+type PackOptionKey = string | number | undefined;
+type PackMutationTarget = { name: string; index?: number };
 type LocalPackArray = {
   initializer: Extract<Node, { type: 'ArrayExpression' }>;
   exclusive: boolean;
@@ -705,6 +711,7 @@ type PackValueContext = {
   readOnlyArguments: Set<number>;
   localMappers: ReadonlyMap<number, PackHelper>;
   mapperArguments: Map<number, PackHelper>;
+  isImportedArray: (receiver: PackIdentifier) => boolean;
 };
 type PackReference = {
   value: PackIdentifier;
@@ -825,15 +832,15 @@ function isStaticPackFilter(node: Node, parameter: string, index?: string): bool
   }
 }
 
-function hasLiteralPackIndex(member: MemberExpression): boolean {
+function literalPackIndex(member: MemberExpression): number | undefined {
   const { property } = member;
-  return (
-    member.computed &&
+  return member.computed &&
     property.type === 'Literal' &&
     typeof property.value === 'number' &&
     Number.isInteger(property.value) &&
     property.value >= 0
-  );
+    ? property.value
+    : undefined;
 }
 
 function packValueReferences(
@@ -859,7 +866,7 @@ function packValueReferences(
       }
       // Keep the index expression. For a dynamic index, check the source array
       // before redirecting the import and keep the existing pack toolchain defaults.
-      return follow(value.object, hasLiteralPackIndex(value) ? mapping : arrayMapping);
+      return follow(value.object, literalPackIndex(value) !== undefined ? mapping : arrayMapping);
     }
     case 'CallExpression': {
       const target = objectAssignTarget(value);
@@ -901,9 +908,14 @@ function packValueReferences(
         const literalReceiver =
           context &&
           (receiver.type === 'ArrayExpression' ||
-            (receiver.type === 'Identifier' && context.localArrays.get(receiver.start)?.exclusive));
+            (receiver.type === 'Identifier' &&
+              (context.localArrays.get(receiver.start)?.exclusive ||
+                context.isImportedArray(receiver))));
         if (!literalReceiver) {
-          return follow(receiver, knownReceiver ? arrayMapping : 'unverified');
+          return [
+            ...follow(receiver, knownReceiver ? arrayMapping : 'unverified'),
+            ...value.arguments.flatMap((argument) => follow(argument, 'unverified')),
+          ];
         }
         const argumentMapping = mapping === 'unverified' ? 'unverified' : 'copy';
         const references = follow(receiver, argumentMapping);
@@ -912,7 +924,7 @@ function packValueReferences(
             argument.type === 'SpreadElement' ? argument.argument : argument,
           );
           if (root) {
-            // A local array literal concatenates its arguments without writing to them.
+            // A verified array concatenates its arguments without writing to them.
             context.readOnlyArguments.add(root.start);
           }
           references.push(...follow(argument, argumentMapping));
@@ -1057,9 +1069,56 @@ function sharedPackSpread(initializer: ObjectExpression): PackIdentifier | undef
   return undefined;
 }
 
+function isImportedPackArray(
+  configPath: string,
+  { program, bindings }: ReturnType<typeof parseSource>,
+  receiver: PackIdentifier,
+): boolean {
+  const binding = bindings.find(
+    ({ constant, references }) =>
+      constant && references.length === 1 && references[0] === receiver.start,
+  );
+  if (!binding) {
+    return false;
+  }
+  const statement = program.body.find(
+    (statement): statement is ImportDeclaration =>
+      statement.type === 'ImportDeclaration' &&
+      statement.importKind !== 'type' &&
+      statement.specifiers.some(
+        (specifier) =>
+          specifier.local.start === binding.start &&
+          (specifier.type === 'ImportDefaultSpecifier' ||
+            (specifier.type === 'ImportSpecifier' &&
+              specifier.importKind !== 'type' &&
+              propertyName(specifier.imported) === 'default')),
+      ),
+  );
+  const specifier = statement?.source.value;
+  if (!specifier?.startsWith('./') && !specifier?.startsWith('../')) {
+    return false;
+  }
+  const file = path.resolve(path.dirname(configPath), specifier);
+  try {
+    const { program: imported } = parseSource(file, fs.readFileSync(file, 'utf8'));
+    const [statement] = imported.body;
+    if (imported.body.length !== 1 || statement.type !== 'ExportDefaultDeclaration') {
+      return false;
+    }
+    const array = unwrapTypeExpression(statement.declaration);
+    return (
+      array.type === 'ArrayExpression' &&
+      array.elements.every((entry) => entry && staticObject(entry) && sameStaticValue(entry, entry))
+    );
+  } catch {
+    return false;
+  }
+}
+
 function packAssignments(
   parsed: ReturnType<typeof parseSource>,
   packs: readonly (ObjectProperty | undefined)[],
+  configPath: string,
 ) {
   const readOnlyArguments = new Set<number>();
   const mapperArguments = new Map<number, PackHelper>();
@@ -1071,7 +1130,14 @@ function packAssignments(
   const { program, bindings } = parsed;
   const initializers = privatePackBindings(program);
   const localMappers = new Map<number, PackHelper>();
-  const context = { localArrays, readOnlyArguments, localMappers, mapperArguments };
+  const context = {
+    localArrays,
+    readOnlyArguments,
+    localMappers,
+    mapperArguments,
+    isImportedArray: (receiver: PackIdentifier) =>
+      isImportedPackArray(configPath, parsed, receiver),
+  };
   const aliasesByReference = new Map<
     number,
     { initializer: Node; references: number[]; remaining: number; mapping?: PackMapping }
@@ -1198,14 +1264,14 @@ function mutationExpressions(body: Node | null) {
 
 function packHelperParameter(
   node: FunctionNode | ArrowFunctionExpression,
-  mutation?: { name: string; guards: ReadonlySet<string> },
+  mutation?: PackMutationTarget & { guards: ReadonlySet<string> },
 ) {
   const [parameter] = node.params;
   if (node.async || node.generator || node.params.length !== 1) {
     return undefined;
   }
   let name: string;
-  let property: string | undefined;
+  let property: PackOptionKey;
   let type: Node | undefined;
   if (parameter.type === 'Identifier') {
     name = parameter.name;
@@ -1213,7 +1279,22 @@ function packHelperParameter(
     if (mutation && (mutation.name !== name || mutation.guards.size > 0)) {
       return undefined;
     }
-  } else if (mutation && parameter.type === 'ObjectPattern') {
+    property = mutation?.index;
+    if (property !== undefined && type) {
+      if (type.type === 'TSArrayType') {
+        type = type.elementType;
+      } else if (
+        type.type === 'TSTypeReference' &&
+        type.typeName.type === 'Identifier' &&
+        ['Array', 'ReadonlyArray'].includes(type.typeName.name) &&
+        type.typeArguments?.params.length === 1
+      ) {
+        [type] = type.typeArguments.params;
+      } else {
+        return undefined;
+      }
+    }
+  } else if (mutation && mutation.index === undefined && parameter.type === 'ObjectPattern') {
     const properties = new Map<string, string>();
     for (const member of parameter.properties) {
       if (member.type !== 'Property' || member.computed || member.value.type !== 'Identifier') {
@@ -1264,39 +1345,48 @@ function packHelperParameter(
 function packHelperArgument(
   node: Node,
 ):
-  | { references: PackIdentifier[]; options?: ReadonlyMap<string | undefined, PackIdentifier> }
+  | { references: PackIdentifier[]; options?: ReadonlyMap<PackOptionKey, PackIdentifier> }
   | undefined {
   const argument = unwrapTypeExpression(node);
   if (argument.type === 'Identifier') {
     return { references: [argument], options: new Map([[undefined, argument]]) };
   }
-  if (argument.type !== 'ObjectExpression') {
+  if (argument.type !== 'ObjectExpression' && argument.type !== 'ArrayExpression') {
     return undefined;
   }
-  const properties = new Set<string>();
   const references: PackIdentifier[] = [];
-  const options = new Map<string, PackIdentifier>();
+  const options = new Map<PackOptionKey, PackIdentifier>();
   let verified = true;
-  for (const member of argument.properties) {
-    const value = member.type === 'SpreadElement' ? member.argument : member.value;
-    const reference = packRootIdentifier(value);
+  const recordOption = (key: PackOptionKey, value: Node) => {
+    const reference = packRootIdentifier(value.type === 'SpreadElement' ? value.argument : value);
     if (reference) {
       references.push(reference);
     }
-    if (member.type !== 'Property' || member.computed || member.kind !== 'init' || member.method) {
+    if (value.type === 'Identifier') {
+      options.set(key, value);
+    } else if (!sameStaticValue(value, value)) {
       verified = false;
-      continue;
     }
-    const property = propertyName(member.key);
-    if (property === undefined || properties.has(property)) {
-      verified = false;
-      continue;
+  };
+  if (argument.type === 'ArrayExpression') {
+    for (const [index, element] of argument.elements.entries()) {
+      if (element) {
+        recordOption(index, element);
+      }
     }
-    properties.add(property);
-    if (member.value.type === 'Identifier') {
-      options.set(property, member.value);
-    } else if (!sameStaticValue(member.value, member.value)) {
-      verified = false;
+  } else {
+    const properties = new Set<string>();
+    for (const member of argument.properties) {
+      const property =
+        member.type === 'Property' && !member.computed && member.kind === 'init' && !member.method
+          ? propertyName(member.key)
+          : undefined;
+      if (property === undefined || properties.has(property)) {
+        verified = false;
+      } else {
+        properties.add(property);
+      }
+      recordOption(property, member.type === 'SpreadElement' ? member : member.value);
     }
   }
   return { references, options: verified ? options : undefined };
@@ -1318,11 +1408,24 @@ function packMappingHelper(node: Node): PackHelper | undefined {
   return undefined;
 }
 
-function mutatedPackOption(expression: Node): string | undefined {
+function packMutationTarget(receiver: Node): PackMutationTarget | undefined {
+  if (receiver.type === 'Identifier') {
+    return { name: receiver.name };
+  }
+  if (receiver.type === 'MemberExpression' && receiver.object.type === 'Identifier') {
+    const index = literalPackIndex(receiver);
+    if (index !== undefined) {
+      return { name: receiver.object.name, index };
+    }
+  }
+  return undefined;
+}
+
+function mutatedPackOption(expression: Node): PackMutationTarget | undefined {
   const output = packOutputAssignment(expression);
   if (output) {
-    return output.receiver.type === 'Identifier' && sameStaticValue(output.value, output.value)
-      ? output.receiver.name
+    return sameStaticValue(output.value, output.value)
+      ? packMutationTarget(output.receiver)
       : undefined;
   }
   if (expression.type !== 'CallExpression' || expression.callee.type !== 'MemberExpression') {
@@ -1334,14 +1437,13 @@ function mutatedPackOption(expression: Node): string | undefined {
     arrayMutators.has(method) &&
     receiver.type === 'MemberExpression' &&
     memberName(receiver) === 'entry' &&
-    receiver.object.type === 'Identifier' &&
     expression.arguments.every((argument) => sameStaticValue(argument, argument))
-    ? receiver.object.name
+    ? packMutationTarget(receiver.object)
     : undefined;
 }
 
 function entryMutationHelper(node: FunctionNode | ArrowFunctionExpression) {
-  let name: string | undefined;
+  let mutation: PackMutationTarget | undefined;
   const guards = new Set<string>();
   const visitsOnlyPackWrites = (statement: Node): boolean => {
     if (statement.type === 'BlockStatement') {
@@ -1367,16 +1469,19 @@ function entryMutationHelper(node: FunctionNode | ArrowFunctionExpression) {
     const target = mutatedPackOption(
       statement.type === 'ExpressionStatement' ? statement.expression : statement,
     );
-    if (!target || (name !== undefined && name !== target)) {
+    if (
+      !target ||
+      (mutation && (mutation.name !== target.name || mutation.index !== target.index))
+    ) {
       return false;
     }
-    name = target;
+    mutation = target;
     return true;
   };
-  if (!node.body || !visitsOnlyPackWrites(node.body) || !name) {
+  if (!node.body || !visitsOnlyPackWrites(node.body) || !mutation) {
     return undefined;
   }
-  const parameter = packHelperParameter(node, { name, guards });
+  const parameter = packHelperParameter(node, { ...mutation, guards });
   return parameter && { property: parameter.property, typeReference: parameter.typeReference };
 }
 
@@ -1611,7 +1716,7 @@ function packMutationReferences(
         } else if (
           receiver?.type === 'MemberExpression' &&
           receiver.object.type === 'Identifier' &&
-          hasLiteralPackIndex(receiver)
+          literalPackIndex(receiver) !== undefined
         ) {
           indexedOutputWrites.add(receiver.object.start);
         }
@@ -1717,6 +1822,7 @@ function packMutationReferences(
     }
   }
   const origins = new Map<number, readonly number[]>();
+  let localInitializers: ReturnType<typeof privatePackBindings> | undefined;
   const updatesFilteredOutput = (reference: number) =>
     indexedOutputWrites.has(reference) || rewritable.get(reference)?.array === true;
   for (const { start, references, constant } of bindings) {
@@ -1756,8 +1862,27 @@ function packMutationReferences(
     const helper = helpers.get(start);
     const argument = references.length === 1 ? calls.get(references[0]) : undefined;
     const option = helper && argument?.options?.get(helper.property);
-    if (constant && helper && option) {
-      rewritable.set(option.start, helper);
+    if (constant && helper && argument && option) {
+      let { typeReference } = helper;
+      if (typeof helper.property === 'number' && typeReference !== undefined) {
+        const reference = typeReference;
+        const typeBinding = bindings.find(
+          ({ constant, references }) => constant && references.includes(reference),
+        );
+        const initializer =
+          typeBinding &&
+          (localInitializers ??= privatePackBindings(program)).get(typeBinding.start);
+        if (initializer && isStaticPackOverrideObject(unwrapTypeExpression(initializer))) {
+          // A local type built only from stable options still describes the converted options.
+          typeReference = undefined;
+        }
+      }
+      rewritable.set(option.start, { typeReference });
+      for (const reference of argument.references) {
+        if (reference.start !== option.start) {
+          writes.delete(reference.start);
+        }
+      }
     }
     const alias = aliasInitializers.get(start);
     const parents = alias !== undefined ? [alias] : arrayOrigins.get(start);
@@ -2112,7 +2237,7 @@ export function findDivergedTsdownPackConfig(
     if (packs.length === 0) {
       return vitePath;
     }
-    const assignments = packAssignments(source, packs);
+    const assignments = packAssignments(source, packs, vitePath);
     const usesConfig = (file: string) =>
       importedPackBindings(source, assignments, vitePath, file).some(
         ({ uses, mutates }) =>
@@ -2164,7 +2289,7 @@ function mergeRetainedTsdownConfig(
   const hasPack = hasConfigKey(viteConfigPath, 'pack');
   const parsed = hasPack ? parseSource(viteConfigPath, source) : undefined;
   const assignments = parsed
-    ? packAssignments(parsed, packProperties(parsed))
+    ? packAssignments(parsed, packProperties(parsed), viteConfigPath)
     : {
         uses: [],
         readOnlyArguments: new Set<number>(),

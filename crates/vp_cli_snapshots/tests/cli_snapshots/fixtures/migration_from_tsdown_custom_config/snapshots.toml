@@ -944,3 +944,33 @@ steps = [
   { argv = ["pnpm", "run", "bundle"], snapshot = false },
   ["vpt", "stat-file", "legacy-out/library.mjs", "--assert", "file"],
 ]
+
+[[case]]
+name = "pack_array_helper_with_imported_concat"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+comment = "Keep the library mutation and resources when an imported array concatenates the pack options."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.vite-plus", "^1.7.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.tsdown", "0.22.14"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "scripts.bundle", "tsdown -c tsdown.config.ts"], snapshot = false },
+  { argv = ["vpt", "write-file", "tsdown.config.ts", "export default { entry: ['src/library.ts'], outDir: 'library-out', publicDir: 'public' };\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "app-builds.ts", "export default [{ entry: ['src/browser.ts'], outDir: 'apps-out' }];\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "src/cli.ts", "export const cli = true;\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "src/browser.ts", "export const browser = true;\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "src/extra.ts", "export const extra = true;\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "import apps from './app-builds.ts';\nimport library from './tsdown.config.ts';\nconst cli = { entry: ['src/cli.ts'], outDir: 'cli-out' };\nfunction configure(builds: Array<typeof cli>) {\n  builds[0].entry.push('src/extra.ts');\n  builds[0].outDir = 'release-out';\n}\nconfigure([library, cli]);\nexport default { pack: apps.concat(library, cli) };\n"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "public"], snapshot = false },
+  { argv = ["vpt", "write-file", "public/resource.txt", "library resource\n"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  { argv = ["vp", "pack"], snapshot = false },
+  ["vpt", "stat-file", "release-out/library.mjs", "release-out/extra.mjs", "cli-out/cli.mjs", "apps-out/browser.mjs", "--assert", "file"],
+  ["vpt", "print-file", "release-out/public/resource.txt"],
+  ["vpt", "stat-file", "library-out", "--assert", "missing"],
+  { argv = ["pnpm", "run", "bundle"], snapshot = false },
+  ["vpt", "stat-file", "library-out/library.mjs", "--assert", "file"],
+  ["vpt", "stat-file", "library-out/extra.mjs", "--assert", "missing"],
+  ["vpt", "print-file", "library-out/public/resource.txt"],
+]
