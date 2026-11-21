@@ -44,14 +44,6 @@ pnpm 10.5.0 reads settings from package.json
   "pnpm": {
     "overrides": {
       "vite@*": "npm:@voidzero-dev/vite-plus-core@<version>"
-    },
-    "peerDependencyRules": {
-      "allowAny": [
-        "vite"
-      ],
-      "allowedVersions": {
-        "vite": "*"
-      }
     }
   }
 }

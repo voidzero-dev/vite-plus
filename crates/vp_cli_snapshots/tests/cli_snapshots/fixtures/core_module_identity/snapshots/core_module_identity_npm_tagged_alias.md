@@ -1,6 +1,6 @@
 # core_module_identity_npm_tagged_alias
 
-Check how npm resolves a tagged core alias, then migrate to the exact alias and build with the shared core.
+The core version satisfies Vitest's vite peer range, so npm keeps a tagged core alias instead of replacing it with upstream Vite.
 
 ## `vpt write-file package.json '{"name":"core-module-identity","private":true,"type":"module","packageManager":"npm@11.11.0","devDependencies":{"vite-plus":"latest","vite":"npm:@voidzero-dev/vite-plus-core@latest"}}
 '`
@@ -9,22 +9,10 @@ Check how npm resolves a tagged core alias, then migrate to the exact alias and 
 ## `vp install --ignore-scripts`
 
 
-## `node check-npm-layout.mjs tagged`
+## `node check-tagged-alias.mjs`
 
 ```
-Checked npm resolution against the Vite peer range declared by Vitest
-```
-
-## `vp migrate --no-interactive`
-
-
-## `vp install --ignore-scripts`
-
-
-## `node check-npm-layout.mjs migrated`
-
-```
-npm shares the migrated core alias between the project, CLI, and Vitest
+npm keeps the tagged core alias and shares it between the project, CLI, and Vitest
 ```
 
 ## `vp pack entry.js`

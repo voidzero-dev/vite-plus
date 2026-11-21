@@ -5,7 +5,7 @@ Bun 1.3.14 still needs shorthand references completed in catalog rather than cat
 ## `vpt json-edit package.json packageManager bun@1.3.14`
 
 
-## `vpt json-edit package.json workspaces '{"packages":["apps/*"],"catalog":{"vite":"npm:@voidzero-dev/vite-plus-core@latest"},"catalogs":{"default":{"react":"19.2.0"}}}'`
+## `vpt json-edit package.json workspaces '{"packages":["apps/*"],"catalog":{"vite":"npm:@voidzero-dev/vite-plus-core@*"},"catalogs":{"default":{"react":"19.2.0"}}}'`
 
 
 ## `vpt json-edit package.json devDependencies '{"vite":"catalog:","react":"catalog:default"}'`
@@ -30,7 +30,7 @@ Bun 1.3.14 still needs shorthand references completed in catalog rather than cat
   "private": true,
   "workspaces": {
     "catalog": {
-      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+      "vite": "npm:@voidzero-dev/vite-plus-core@*",
       "vite-plus": "<version>"
     },
     "catalogs": {

@@ -575,10 +575,13 @@ function syncCoreVersion(pkg: { version?: unknown; bundledVersions?: Record<stri
   }
   pkg.bundledVersions = { ...pkg.bundledVersions, vite: viteVersion };
   const current = typeof pkg.version === 'string' ? pkg.version : undefined;
-  if (current !== undefined && tryDecodeCoreVersion(current)?.vite === viteVersion) {
+  const next = initialCoreVersion(viteVersion);
+  if (
+    current === next ||
+    (current !== undefined && tryDecodeCoreVersion(current)?.vite === viteVersion)
+  ) {
     return;
   }
-  const next = initialCoreVersion(viteVersion);
   recordChange(CORE_PACKAGE_NAME, changes.get(CORE_PACKAGE_NAME)?.old ?? current, next);
   pkg.version = next;
 }

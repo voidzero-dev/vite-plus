@@ -51,11 +51,6 @@ catalogs:
     vite: npm:@voidzero-dev/vite-plus-core@<version>
 overrides:
   vite@*: catalog:legacy
-peerDependencyRules:
-  allowAny:
-    - vite
-  allowedVersions:
-    vite: "*"
 ```
 
 ## `vp install --frozen-lockfile`
