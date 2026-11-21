@@ -115,6 +115,26 @@ describe('output identity', () => {
     }
   });
 
+  it('writes the whole streamed message using the selected output and its width', async () => {
+    const c = capture(10);
+    const write = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
+    await stream.message(['first', 'second'], { output: c.output, symbol: '!' });
+    expect(c.text()).toBe('! first\n  second\n');
+    expect(write).not.toHaveBeenCalled();
+  });
+
+  it('keeps streamed chunks together when the output has no columns', async () => {
+    let content = '';
+    const output = new Writable({
+      write(chunk, _, done) {
+        content += chunk.toString();
+        done();
+      },
+    });
+    await stream.message(['some', 'thing', ' else'], { output, symbol: '!' });
+    expect(content).toBe('! something else\n');
+  });
+
   it('uses one space in animated spinner frames', () => {
     vi.stubEnv('CI', '');
     vi.useFakeTimers();

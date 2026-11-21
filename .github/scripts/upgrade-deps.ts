@@ -177,8 +177,8 @@ async function containsCommit(
 }
 
 // ============ npm Registry ============
-async function fetchNpmVersion(packageName: string, tag = 'latest'): Promise<NpmVersionResponse> {
-  const res = await fetch(`https://registry.npmjs.org/${packageName}/${tag}`);
+async function fetchNpmVersion(packageName: string): Promise<NpmVersionResponse> {
+  const res = await fetch(`https://registry.npmjs.org/${packageName}/latest`);
   if (!res.ok) {
     throw new Error(
       `Failed to fetch npm metadata for ${packageName}: ${res.status} ${res.statusText}`,
@@ -187,8 +187,8 @@ async function fetchNpmVersion(packageName: string, tag = 'latest'): Promise<Npm
   return (await res.json()) as NpmVersionResponse;
 }
 
-async function getNpmVersion(packageName: string, tag = 'latest'): Promise<string> {
-  const data = await fetchNpmVersion(packageName, tag);
+async function getNpmVersion(packageName: string): Promise<string> {
+  const data = await fetchNpmVersion(packageName);
   if (typeof data.version !== 'string') {
     throw new Error(`Invalid npm response for ${packageName}: missing version field`);
   }
@@ -615,8 +615,7 @@ async function upgradeDependencies(): Promise<void> {
     getNpmVersion('oxfmt'),
     getNpmVersion('oxlint'),
     getNpmVersion('oxlint-tsgolint'),
-    // tsrs publishes TypeScript prereleases under next; latest retains the old version scheme.
-    getNpmVersion('tsrs', 'next'),
+    getNpmVersion('tsrs'),
     getNpmVersion('@oxc-project/runtime'),
     getNpmVersion('@oxc-project/types'),
     getNpmVersion('oxc-parser'),

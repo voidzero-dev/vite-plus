@@ -193,6 +193,17 @@ impl PackageJson {
     pub fn dev_engines_runtime(&self, name: &str) -> Option<&DevEngineDependency> {
         self.dev_engines.as_ref()?.runtime.as_ref()?.find_by_name(name)
     }
+
+    /// The `version` of the `devEngines.runtime` entry for the given runtime
+    /// name, with the entry's effective `onFail` (see
+    /// [`DevEngineField::effective_on_fail`]). `None` when the entry is missing
+    /// or declares no version.
+    #[must_use]
+    pub fn dev_engines_runtime_version(&self, name: &str) -> Option<(&Str, OnFail)> {
+        let field = self.dev_engines.as_ref()?.runtime.as_ref()?;
+        let (index, entry) = field.find_with_index(name)?;
+        Some((entry.version.as_ref()?, field.effective_on_fail(index)))
+    }
 }
 
 /// Build a `devEngines` dependency entry (`{ name, version, onFail: "download" }`)
@@ -410,6 +421,28 @@ mod tests {
         let pm = pkg.dev_engines.unwrap().package_manager.unwrap();
         assert_eq!(pm.effective_on_fail(0), OnFail::Error);
         assert_eq!(pm.effective_on_fail(1), OnFail::Warn);
+    }
+
+    #[test]
+    fn test_dev_engines_runtime_version_uses_entry_position() {
+        let json = r#"{
+            "devEngines": {
+                "runtime": [
+                    {"name": "node", "version": "^24.0.0"},
+                    {"name": "deno", "version": "^2.0.0"},
+                    {"name": "bun"}
+                ]
+            }
+        }"#;
+
+        let pkg: PackageJson = serde_json::from_str(json).unwrap();
+        let (version, on_fail) = pkg.dev_engines_runtime_version("node").unwrap();
+        assert_eq!(version.as_str(), "^24.0.0");
+        // A prior array element defaults to ignore
+        assert_eq!(on_fail, OnFail::Ignore);
+        // An entry without a version has no version requirement
+        assert!(pkg.dev_engines_runtime_version("bun").is_none());
+        assert!(pkg.dev_engines_runtime_version("yarn").is_none());
     }
 
     #[test]

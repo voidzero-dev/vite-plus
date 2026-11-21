@@ -45,10 +45,17 @@ jobs:
 
       - name: Upgrade dependencies and sync upstream
         id: build
-        continue-on-error: true # Create PR even if installation or upstream sync fails
+        continue-on-error: true # Let fixups handle failures after version selection.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node .github/scripts/upgrade-deps.ts
+
+      - name: Check upgrade metadata
+        run: |
+          if [ ! -s "${UPGRADE_DEPS_META_DIR}/versions.json" ]; then
+            echo '::error::The upgrade step did not write versions.json. See "Upgrade dependencies and sync upstream" for details.'
+            exit 1
+          fi
 
       - name: Use the updated Node.js pin
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -250,8 +257,13 @@ jobs:
             A successful internal build does
             not prove that `vp pack` works with consumers' TypeScript versions.
 
-            Re-record with `UPDATE_SNAPSHOTS=1` only for cosmetic drift from the
-            upgrade (e.g. a bumped version string in help output). Unexpected stack
+            Use `versions.json` to find snapshots that print an upgraded dependency's
+            version. Run each affected case with `just snapshot-test <case>`. When
+            `tsrs` changes, include `migration_monorepo_pnpm`, which prints the
+            bundled version in `trustPolicyExclude`. Keep fixture-supplied versions.
+            If the diff shows only expected cosmetic changes, such as the recorded
+            version bump, run `UPDATE_SNAPSHOTS=1 just snapshot-test <case>`, then
+            rerun the case without `UPDATE_SNAPSHOTS`. Unexpected stack
             traces, missing output, or diverging CLI behavior are regressions to fix.
             Inspect `git status --short` and `git diff --stat` before finishing;
             every changed file, including generated NAPI bindings, must be intentional.
@@ -520,7 +532,7 @@ jobs:
         run: gh pr comment "${PR_NUMBER}" --repo "${GITHUB_REPOSITORY}" --body-file "${UPGRADE_DEPS_META_DIR}/cli-help-report.md"
 
       - name: Report validation failure
-        if: always() && steps.final-validation.outcome != 'success'
+        if: always() && steps.final-validation.outcome == 'failure'
         shell: bash
         run: |
           echo '::error::The upgraded dependencies did not pass final validation.'

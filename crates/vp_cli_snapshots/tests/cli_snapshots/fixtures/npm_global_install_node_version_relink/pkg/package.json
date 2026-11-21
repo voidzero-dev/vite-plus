@@ -1,0 +1,7 @@
+{
+  "name": "npm-global-relink-pkg",
+  "version": "1.0.0",
+  "bin": {
+    "npm-global-relink-cli": "./cli.js"
+  }
+}
