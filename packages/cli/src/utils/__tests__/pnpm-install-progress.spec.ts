@@ -230,6 +230,10 @@ describe('formatPnpmInstallOutput', () => {
       'ERR_PNPM_OUTDATED_LOCKFILE',
       'Cannot install with "frozen-lockfile" because pnpm-lock.yaml is not up to date with <ROOT>/package.json',
     ],
+    [
+      'ERR_PNPM_LOCKFILE_CONFIG_MISMATCH',
+      'Cannot proceed with the frozen installation. The current "autoInstallPeers" configuration doesn\'t match the value found in the lockfile',
+    ],
   ])('shows the member named by %s', async (code, message) => {
     const cwd = resolve('workspace');
     const error = {
