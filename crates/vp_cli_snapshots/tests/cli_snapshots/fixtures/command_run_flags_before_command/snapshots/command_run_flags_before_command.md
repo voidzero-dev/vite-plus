@@ -2,17 +2,19 @@
 
 ## `vp --filter backend run dev`
 
-without a terminal, only the error is shown
+without a terminal, the corrected order is printed instead of a prompt
 
 **Exit code:** 2
 
 ```
 error: Unexpected argument '--filter'
+
+Did you mean `vp run --filter backend dev`?
 ```
 
 ## `CI=1 vp --filter backend run dev`
 
-CI exits without the prompt, also with a terminal
+CI prints the corrected order without a prompt, also with a terminal
 
 **Exit code:** 2
 
@@ -20,6 +22,8 @@ CI exits without the prompt, also with a terminal
 VITE+ - The Unified Toolchain for the Web
 
 error: Unexpected argument '--filter'
+
+Did you mean `vp run --filter backend dev`?
 ```
 
 ## `vp --filter backend run dev`

@@ -603,17 +603,28 @@ async fn run() -> ExitCode {
                         &invalid_argument,
                         has_pass_as_value_suggestion(&e),
                     );
-                    // Like a top-level typo, offer the corrected order only as a prompt.
                     // `-C` already changed `cwd` and left `raw_args`, so show it again.
                     let chdir = explicit_chdir.then(|| cwd.as_path().to_string_lossy());
-                    if let Some(corrected_raw_args) = move_package_flags_after_run(&raw_args, &cwd)
-                        && let Some(suggestion) =
-                            format_command_args(chdir.as_deref(), &corrected_raw_args)
-                        && prompt_to_run_suggested_command(&suggestion)
-                    {
-                        run_corrected_args(&cwd, &corrected_raw_args, explicit_chdir).await
-                    } else {
-                        clap_error_to_exit_code(&e)
+                    let correction = move_package_flags_after_run(&raw_args, &cwd).and_then(
+                        |corrected_raw_args| {
+                            let suggestion =
+                                format_command_args(chdir.as_deref(), &corrected_raw_args)?;
+                            Some((corrected_raw_args, suggestion))
+                        },
+                    );
+                    match correction {
+                        // Without a prompt, print the command, like the local CLI, so that
+                        // a CI log shows how to fix the script.
+                        Some((_, suggestion)) if !should_prompt_for_correction() => {
+                            print_subcommand_suggestion(&suggestion);
+                            clap_error_to_exit_code(&e)
+                        }
+                        Some((corrected_raw_args, suggestion))
+                            if prompt_to_run_suggested_command(&suggestion) =>
+                        {
+                            run_corrected_args(&cwd, &corrected_raw_args, explicit_chdir).await
+                        }
+                        _ => clap_error_to_exit_code(&e),
                     }
                 } else {
                     e.print().ok();
