@@ -53,7 +53,7 @@ The commands below describe project operations. Global mode is described under [
 
 | Option                       | npm             | pnpm             | Yarn Classic | Yarn Modern | Bun            | Notes                                              |
 | ---------------------------- | --------------- | ---------------- | ------------ | ----------- | -------------- | -------------------------------------------------- |
-| `-P, --save-prod`            | Yes             | Yes              | Yes          | Yes         | Yes            |                                                    |
+| `-P, --save-prod`            | Yes             | Yes              | Yes          | Yes         | Yes            | Yarn and Bun leave an existing entry in place.     |
 | `-D, --save-dev`             | Yes             | Yes              | Yes          | Yes         | Yes            |                                                    |
 | `--save-peer`                | Yes             | Yes              | Yes          | Yes         | Yes            |                                                    |
 | `-O, --save-optional`        | Yes             | Yes              | Yes          | Yes         | Yes            |                                                    |
