@@ -653,3 +653,172 @@ steps = [
   { argv = ["pnpm", "run", "release"], cwd = "packages/generator", snapshot = false },
   ["vpt", "stat-file", "packages/generator/release-out/index.mjs", "--assert", "file"],
 ]
+
+[[case]]
+name = "known_config_suffixed_output"
+vp = "global"
+local-registry = true
+skip-platforms = ["windows"]
+env = { VP_NODE_VERSION = "24.22.3", VP_SKIP_INSTALL = "1" }
+comment = "A literal suffix on a quoted output directory leaves the explicit tsdown config selected."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "scripts.bundle", "tsdown --config tsdown.custom.config.ts --out-dir \"$OUT_DIR/release\""], snapshot = false },
+  { argv = ["vpt", "json-edit", "packages/legacy-pack/package.json", "scripts.build", "tsdown"], snapshot = false },
+  { argv = ["vpt", "json-edit", "packages/legacy-pack/package.json", "devDependencies.tsdown", "catalog:build"], snapshot = false },
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  ["vpt", "print-file", "package.json", "packages/legacy-pack/package.json"],
+  { argv = ["pnpm", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["pnpm", "run", "bundle"], envs = [["OUT_DIR", "release-artifacts"]], snapshot = false },
+  ["vpt", "stat-file", "release-artifacts/release/root-library.mjs", "--assert", "file"],
+  { argv = ["pnpm", "run", "build"], cwd = "packages/legacy-pack", snapshot = false },
+  ["vpt", "stat-file", "packages/legacy-pack/lib-out/library.mjs", "--assert", "file"],
+]
+
+[[case]]
+name = "focused_direct_vpx_shebang"
+vp = "global"
+local-registry = true
+skip-platforms = ["windows"]
+env = { VP_NODE_VERSION = "24.22.3", VP_SKIP_INSTALL = "1" }
+comment = "A member install supplies vpx when CI runs the executable directly."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies", "{\"vite\":\"8.3.8\"}"], snapshot = false },
+  { argv = ["vpt", "write-file", "pnpm-workspace.yaml", "packages: ['packages/*']\nsharedWorkspaceLockfile: false\n"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "packages/generator/src", "packages/generator/scripts"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/package.json", "{\"name\":\"generator\",\"private\":true,\"type\":\"module\",\"scripts\":{\"release\":\"tsdown -c release.config.mts\"},\"devDependencies\":{\"tsdown\":\"0.22.14\",\"tsx\":\"4.20.3\"}}"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/src/index.ts", "export const release = true;"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/release.config.mts", "export default { entry: 'src/index.ts', outDir: 'release-out', dts: false };"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/scripts/generate.ts", "#!/usr/bin/env tsx\nconst value: string = 'TOOL_RAN';\nconsole.log(value);\n"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "packages/generator/scripts/generate.ts"], snapshot = false },
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  ["vpt", "print-file", "packages/generator/package.json"],
+  { argv = ["pnpm", "--filter", "generator", "install", "--ignore-scripts"], snapshot = false },
+  ["vpt", "stat-file", "node_modules/vite-plus", "--assert", "missing"],
+  ["vpt", "stat-file", "packages/generator/node_modules/vite-plus/package.json", "--assert", "file"],
+  ["vpt", "print-file", "packages/generator/scripts/generate.ts"],
+  { argv = ["pnpm", "exec", "./scripts/generate.ts"], cwd = "packages/generator" },
+  { argv = ["pnpm", "run", "release"], cwd = "packages/generator", snapshot = false },
+  ["vpt", "stat-file", "packages/generator/release-out/index.mjs", "--assert", "file"],
+]
+
+[[case]]
+name = "focused_vpx_subshell"
+vp = "global"
+local-registry = true
+skip-platforms = ["windows"]
+env = { VP_NODE_VERSION = "24.22.3", VP_SKIP_INSTALL = "1" }
+comment = "A member install supplies vpx inside a shell subshell."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies", "{\"vite\":\"8.3.8\"}"], snapshot = false },
+  { argv = ["vpt", "write-file", "pnpm-workspace.yaml", "packages: ['packages/*']\nsharedWorkspaceLockfile: false\n"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "packages/generator/src", "packages/generator/scripts"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/package.json", "{\"name\":\"generator\",\"private\":true,\"type\":\"module\",\"scripts\":{\"release\":\"tsdown -c release.config.mts\",\"generate\":\"(cd scripts && vpx ./generate.ts) && pwd\"},\"devDependencies\":{\"tsdown\":\"0.22.14\"}}"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/src/index.ts", "export const release = true;"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/release.config.mts", "export default { entry: 'src/index.ts', outDir: 'release-out', dts: false };"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/scripts/generate.ts", "const value: string = 'TOOL_RAN';\nconsole.log(value);\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  ["vpt", "print-file", "packages/generator/package.json"],
+  { argv = ["pnpm", "--filter", "generator", "install", "--ignore-scripts"], snapshot = false },
+  ["vpt", "stat-file", "node_modules/vite-plus", "--assert", "missing"],
+  ["vpt", "stat-file", "packages/generator/node_modules/vite-plus/package.json", "--assert", "file"],
+  { argv = ["pnpm", "run", "generate"], cwd = "packages/generator" },
+  { argv = ["pnpm", "run", "release"], cwd = "packages/generator", snapshot = false },
+  ["vpt", "stat-file", "packages/generator/release-out/index.mjs", "--assert", "file"],
+]
+
+[[case]]
+name = "focused_vpx_braces"
+vp = "global"
+local-registry = true
+skip-platforms = ["windows"]
+env = { VP_NODE_VERSION = "24.22.3", VP_SKIP_INSTALL = "1" }
+comment = "A member install supplies vpx inside a brace group."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies", "{\"vite\":\"8.3.8\"}"], snapshot = false },
+  { argv = ["vpt", "write-file", "pnpm-workspace.yaml", "packages: ['packages/*']\nsharedWorkspaceLockfile: false\n"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "packages/generator/src", "packages/generator/scripts"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/package.json", "{\"name\":\"generator\",\"private\":true,\"type\":\"module\",\"scripts\":{\"release\":\"tsdown -c release.config.mts\",\"generate\":\"{ cd scripts && vpx ./generate.ts; }\"},\"devDependencies\":{\"tsdown\":\"0.22.14\"}}"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/src/index.ts", "export const release = true;"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/release.config.mts", "export default { entry: 'src/index.ts', outDir: 'release-out', dts: false };"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/scripts/generate.ts", "const value: string = 'TOOL_RAN';\nconsole.log(value);\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  ["vpt", "print-file", "packages/generator/package.json"],
+  { argv = ["pnpm", "--filter", "generator", "install", "--ignore-scripts"], snapshot = false },
+  ["vpt", "stat-file", "node_modules/vite-plus", "--assert", "missing"],
+  ["vpt", "stat-file", "packages/generator/node_modules/vite-plus/package.json", "--assert", "file"],
+  { argv = ["pnpm", "run", "generate"], cwd = "packages/generator" },
+  { argv = ["pnpm", "run", "release"], cwd = "packages/generator", snapshot = false },
+  ["vpt", "stat-file", "packages/generator/release-out/index.mjs", "--assert", "file"],
+]
+
+[[case]]
+name = "focused_bunx_no_install"
+vp = "global"
+local-registry = true
+env = { VP_NODE_VERSION = "24.22.3", VP_SKIP_INSTALL = "1", VP_BUN_VERSION = "1.3.11" }
+comment = "Bun resolves the member's vp binary with downloads disabled."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies", "{\"vite\":\"8.3.8\"}"], snapshot = false },
+  { argv = ["vpt", "write-file", "pnpm-workspace.yaml", "packages: ['packages/*']\nsharedWorkspaceLockfile: false\n"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "packages/generator/src", "packages/generator/scripts"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/package.json", "{\"name\":\"generator\",\"private\":true,\"type\":\"module\",\"scripts\":{\"release\":\"tsdown -c release.config.mts\",\"generate\":\"bunx --no-install vp --version\"},\"devDependencies\":{\"tsdown\":\"0.22.14\"}}"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/src/index.ts", "export const release = true;"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/release.config.mts", "export default { entry: 'src/index.ts', outDir: 'release-out', dts: false };"], snapshot = false },
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  ["vpt", "print-file", "packages/generator/package.json"],
+  { argv = ["pnpm", "--filter", "generator", "install", "--ignore-scripts"], snapshot = false },
+  ["vpt", "stat-file", "node_modules/vite-plus", "--assert", "missing"],
+  ["vpt", "stat-file", "packages/generator/node_modules/vite-plus/package.json", "--assert", "file"],
+  { argv = ["bun", "--version"], snapshot = false },
+  { argv = ["pnpm", "run", "generate"], cwd = "packages/generator", snapshot = false },
+  { argv = ["pnpm", "run", "release"], cwd = "packages/generator", snapshot = false },
+  ["vpt", "stat-file", "packages/generator/release-out/index.mjs", "--assert", "file"],
+]
+
+[[case]]
+name = "focused_bunx_local"
+vp = "global"
+local-registry = true
+env = { VP_NODE_VERSION = "24.22.3", VP_SKIP_INSTALL = "1", VP_BUN_VERSION = "1.3.11" }
+comment = "The regular Bun script gets a member-local vp binary."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies", "{\"vite\":\"8.3.8\"}"], snapshot = false },
+  { argv = ["vpt", "write-file", "pnpm-workspace.yaml", "packages: ['packages/*']\nsharedWorkspaceLockfile: false\n"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "packages/generator/src", "packages/generator/scripts"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/package.json", "{\"name\":\"generator\",\"private\":true,\"type\":\"module\",\"scripts\":{\"release\":\"tsdown -c release.config.mts\",\"generate\":\"bunx vp --version\"},\"devDependencies\":{\"tsdown\":\"0.22.14\"}}"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/src/index.ts", "export const release = true;"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/release.config.mts", "export default { entry: 'src/index.ts', outDir: 'release-out', dts: false };"], snapshot = false },
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  ["vpt", "print-file", "packages/generator/package.json"],
+  { argv = ["pnpm", "--filter", "generator", "install", "--ignore-scripts"], snapshot = false },
+  ["vpt", "stat-file", "node_modules/vite-plus", "--assert", "missing"],
+  ["vpt", "stat-file", "packages/generator/node_modules/vite-plus/package.json", "--assert", "file"],
+  { argv = ["bun", "--version"], snapshot = false },
+  { argv = ["pnpm", "exec", "bunx", "--no-install", "vp", "--version"], cwd = "packages/generator", snapshot = false },
+  { argv = ["pnpm", "run", "release"], cwd = "packages/generator", snapshot = false },
+  ["vpt", "stat-file", "packages/generator/release-out/index.mjs", "--assert", "file"],
+]
+
+[[case]]
+name = "focused_bun_x_local"
+vp = "global"
+local-registry = true
+env = { VP_NODE_VERSION = "24.22.3", VP_SKIP_INSTALL = "1", VP_BUN_VERSION = "1.3.11" }
+comment = "The regular Bun script gets a member-local vp binary."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies", "{\"vite\":\"8.3.8\"}"], snapshot = false },
+  { argv = ["vpt", "write-file", "pnpm-workspace.yaml", "packages: ['packages/*']\nsharedWorkspaceLockfile: false\n"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "packages/generator/src", "packages/generator/scripts"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/package.json", "{\"name\":\"generator\",\"private\":true,\"type\":\"module\",\"scripts\":{\"release\":\"tsdown -c release.config.mts\",\"generate\":\"bun x vp --version\"},\"devDependencies\":{\"tsdown\":\"0.22.14\"}}"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/src/index.ts", "export const release = true;"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/release.config.mts", "export default { entry: 'src/index.ts', outDir: 'release-out', dts: false };"], snapshot = false },
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  ["vpt", "print-file", "packages/generator/package.json"],
+  { argv = ["pnpm", "--filter", "generator", "install", "--ignore-scripts"], snapshot = false },
+  ["vpt", "stat-file", "node_modules/vite-plus", "--assert", "missing"],
+  ["vpt", "stat-file", "packages/generator/node_modules/vite-plus/package.json", "--assert", "file"],
+  { argv = ["bun", "--version"], snapshot = false },
+  { argv = ["pnpm", "exec", "bun", "x", "--no-install", "vp", "--version"], cwd = "packages/generator", snapshot = false },
+  { argv = ["pnpm", "run", "release"], cwd = "packages/generator", snapshot = false },
+  ["vpt", "stat-file", "packages/generator/release-out/index.mjs", "--assert", "file"],
+]

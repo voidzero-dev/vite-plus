@@ -52,7 +52,7 @@ pub struct LiteralCommandToken {
 /// Read simple literal commands, optionally separated by `&&`, `||`, or `;`.
 /// Returns null for unsupported syntax. Assignments and wrappers stay in argv;
 /// callers must decide whether a command is safe to rewrite.
-/// Option analysis can replace quoted variables for listed options with empty values.
+/// Option analysis can replace double-quoted values with simple environment expansions.
 #[napi]
 pub fn parse_literal_commands(
     source: String,

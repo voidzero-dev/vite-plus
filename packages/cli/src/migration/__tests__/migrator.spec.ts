@@ -202,8 +202,11 @@ describe('explicit tsdown config selection', () => {
   it.each([
     ['tsdown --config packages/shared/tsdown.config.json', false],
     ['tsdown --config packages/shared/tsdown.config.json --out-dir "$OUT_DIR"', false],
+    ['tsdown --config packages/shared/tsdown.config.json --out-dir "$OUT_DIR/release"', false],
     ['tsdown -d="${OUT_DIR}" --config packages/shared/tsdown.config.json', false],
+    ['tsdown -d="dist/${OUT_DIR}" --config packages/shared/tsdown.config.json', false],
     ['tsdown --config packages/shared/tsdown.config.json --out-dir $OUT_DIR', true],
+    ['tsdown --config packages/shared/tsdown.config.json --out-dir "$@"', true],
     ['tsdown --out-dir "$OUT_DIR" --config "$TSDOWN_CONFIG"', true],
     ['tsdown --config "$TSDOWN_CONFIG"', true],
     ['tsdown --config "%TSDOWN_CONFIG%"', true],
@@ -531,6 +534,11 @@ describe('explicit tsdown config selection', () => {
     ['pnpm exec vp fmt', true],
     ['npx vp --version', true],
     ['npx --package another-command vp --version', false],
+    ['bunx --no-install vp --version', true],
+    ['bunx vp --version', true],
+    ['bun x vp --version', true],
+    ['bun x --no-install vp --version', true],
+    ['bunx --package another-command vp --version', false],
     ['echo vp fmt', false],
     ['vpx ./generate.ts', true],
     ['pnpm exec vpx ./generate.ts', true],
@@ -541,6 +549,9 @@ describe('explicit tsdown config selection', () => {
     ['BUILD_ENV=$NODE_ENV "$RUNNER" vpx', false],
     ['if [ -n "$CI" ]; then vpx ./generate.ts; fi', true],
     ['if true; then echo vpx; fi', false],
+    ['(cd scripts && vpx ./generate.ts) && pwd', true],
+    ['{ cd scripts && vpx ./generate.ts; }', true],
+    ['{ echo vpx; }', false],
     ['echo vpx > generated.json | tee vpx', false],
     ['pnpm dlx vpx ./generate.ts | tee generated.json', false],
     ['./generate.ts', true, '#!/usr/bin/env vpx'],
@@ -606,6 +617,44 @@ describe('explicit tsdown config selection', () => {
 
       // Repair a member migrated before the loader's dependency was recorded.
       fs.writeFileSync(manifest, JSON.stringify(pkg));
+      const workspace = makeWorkspaceInfo(tmpDir, PackageManager.pnpm, '12.11.2');
+      workspace.isMonorepo = true;
+      workspace.packages = [{ name: 'member', path: 'packages/member' }];
+      ensureVitePlusBootstrap(workspace);
+      expect(readJson(manifest)).toEqual(expected);
+      expect(ensureVitePlusBootstrap(workspace).changed).toBe(false);
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'adds a dependency for a member executable with a Vite+ shebang and no script entry',
+    () => {
+      const member = path.join(tmpDir, 'packages/member');
+      const manifest = path.join(member, 'package.json');
+      const original = {
+        scripts: { release: 'tsdown -c release.ts' },
+        devDependencies: { tsdown: '0.23.4' },
+      };
+      fs.mkdirSync(path.join(member, 'scripts'), { recursive: true });
+      fs.writeFileSync(
+        path.join(member, 'scripts/generate.ts'),
+        "#!/usr/bin/env vpx\nconsole.log('generated');\n",
+        { mode: 0o755 },
+      );
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        '{"devDependencies":{"vite-plus":"latest"}}',
+      );
+      fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'packages: [packages/*]\n');
+      fs.writeFileSync(manifest, JSON.stringify(original));
+      rewriteMonorepoProject(member, PackageManager.pnpm, false, true);
+      const expected = {
+        ...original,
+        devDependencies: { ...original.devDependencies, 'vite-plus': 'catalog:' },
+      };
+      expect(readJson(manifest)).toEqual(expected);
+
+      fs.writeFileSync(manifest, JSON.stringify(original));
       const workspace = makeWorkspaceInfo(tmpDir, PackageManager.pnpm, '12.11.2');
       workspace.isMonorepo = true;
       workspace.packages = [{ name: 'member', path: 'packages/member' }];
@@ -1707,14 +1756,22 @@ export default defineConfig(({ command }) => {
   );
 
   it.each([
-    "function configure(options: typeof base) { options.entry.push('src/cli.ts'); }",
-    "const configure = (options: typeof base) => options.entry.push('src/cli.ts');",
-  ])('redirects a pack import shared with a local entry helper (%s)', (helper) => {
+    ["function configure(options: typeof base) { options.entry.push('src/cli.ts'); }", 'base'],
+    ["const configure = (options: typeof base) => options.entry.push('src/cli.ts');", 'base'],
+    [
+      "function configure({ options }: { options: typeof base }) { options.entry.push('src/cli.ts'); options.outDir = 'release-out'; }",
+      '{ options: base }',
+    ],
+    [
+      "function configure({ options, mode }: { options: typeof base; mode: string }) { if (mode === 'release') { options.entry.push('src/cli.ts'); options.outDir = 'release-out'; } }",
+      "{ options: base, mode: 'release' }",
+    ],
+  ])('redirects a pack import shared with a local entry helper (%s)', (helper, argument) => {
     const tsdown = path.join(tmpDir, 'tsdown.config.ts');
     const original = "export default { entry: ['src/lib.ts'], publicDir: 'public' };\n";
     fs.writeFileSync(tsdown, original);
     const vite = path.join(tmpDir, 'vite.config.ts');
-    const config = `${helper}\nconfigure(base);\nexport default { pack: base };\n`;
+    const config = `${helper}\nconfigure(${argument});\nexport default { pack: base };\n`;
     fs.writeFileSync(vite, `import base from './tsdown.config.ts';\n${config}`);
 
     expect(mergeTsdownConfigFile(tmpDir, true, createMigrationReport(), true)).toBe(true);
@@ -1728,23 +1785,32 @@ export default defineConfig(({ command }) => {
   });
 
   it.each([
-    "function configure(options: typeof base) { if (options.publicDir) options.entry.push('src/cli.ts'); }",
-    "import { configure } from './configure.ts';",
-  ])('keeps options passed to a helper whose writes cannot be migrated (%s)', (helper) => {
-    fs.writeFileSync(
-      path.join(tmpDir, 'tsdown.config.ts'),
-      "export default { entry: ['src/lib.ts'], publicDir: 'public' };\n",
-    );
-    const vite = path.join(tmpDir, 'vite.config.ts');
-    const source = `import base from './tsdown.config.ts';\n${helper}\nconfigure(base);\nexport default { pack: base };\n`;
-    fs.writeFileSync(vite, source);
-    const report = createMigrationReport();
+    [
+      "function configure(options: typeof base) { if (options.publicDir) options.entry.push('src/cli.ts'); }",
+      'base',
+    ],
+    ["import { configure } from './configure.ts';", 'base'],
+    ["import { configure } from './configure.ts';", '{ options: base }'],
+  ])(
+    'keeps options passed to a helper whose writes cannot be migrated (%s)',
+    (helper, argument) => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'tsdown.config.ts'),
+        "export default { entry: ['src/lib.ts'], publicDir: 'public' };\n",
+      );
+      const vite = path.join(tmpDir, 'vite.config.ts');
+      const source = `import base from './tsdown.config.ts';\n${helper}\nconfigure(${argument});\nexport default { pack: base };\n`;
+      fs.writeFileSync(vite, source);
+      const report = createMigrationReport();
 
-    expect(mergeTsdownConfigFile(tmpDir, true, report, true)).toBe(false);
-    expect(fs.readFileSync(vite, 'utf8')).toBe(source);
-    expect(fs.existsSync(path.join(tmpDir, 'vite-pack.config.ts'))).toBe(false);
-    expect(report.warnings).toContainEqual(expect.stringContaining('changes the imported options'));
-  });
+      expect(mergeTsdownConfigFile(tmpDir, true, report, true)).toBe(false);
+      expect(fs.readFileSync(vite, 'utf8')).toBe(source);
+      expect(fs.existsSync(path.join(tmpDir, 'vite-pack.config.ts'))).toBe(false);
+      expect(report.warnings).toContainEqual(
+        expect.stringContaining('changes the imported options'),
+      );
+    },
+  );
 
   it('flags a copy whose overrides may change migrated resource options', () => {
     fs.writeFileSync(

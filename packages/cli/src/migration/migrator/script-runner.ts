@@ -531,13 +531,31 @@ function nodeOptionsLoadVitePlusRegister(args: readonly string[]): boolean {
 
 const vitePlusScriptCommands = new Set(['vp', 'vpr', 'vpx']);
 const envShebang = /^#![ \t]*\S*\benv[ \t]+(?:-S[ \t]+)?([^\r\n]+)/;
+const scriptExtensions = new Set(SCRIPT_EXTENSIONS);
+
+function readScriptPrefix(file: string): string {
+  const descriptor = fs.openSync(file, 'r');
+  try {
+    // An extensionless executable may be a native binary.
+    const prefix = Buffer.alloc(1024);
+    const bytesRead = fs.readSync(descriptor, prefix);
+    return prefix.toString('utf8', 0, bytesRead);
+  } finally {
+    fs.closeSync(descriptor);
+  }
+}
+
+function shebangRequiresVitePlus(source: string): boolean {
+  const command = envShebang.exec(source)?.[1];
+  return command !== undefined && scriptRequiresVitePlus(command);
+}
 
 function localScriptNeedsVitePlus(executable: string | undefined, projectPath: string): boolean {
   if (!executable?.includes('/') || path.isAbsolute(executable)) {
     return false;
   }
   const extension = path.extname(executable);
-  if (extension && !SCRIPT_EXTENSIONS.includes(extension)) {
+  if (extension && !scriptExtensions.has(extension)) {
     return false;
   }
   const file = path.resolve(projectPath, executable);
@@ -545,16 +563,7 @@ function localScriptNeedsVitePlus(executable: string | undefined, projectPath: s
     if (!fs.statSync(file, { throwIfNoEntry: false })?.isFile()) {
       return false;
     }
-    const descriptor = fs.openSync(file, 'r');
-    try {
-      // An extensionless executable may be a native binary.
-      const prefix = Buffer.alloc(1024);
-      const bytesRead = fs.readSync(descriptor, prefix);
-      const command = envShebang.exec(prefix.toString('utf8', 0, bytesRead))?.[1];
-      return command !== undefined && scriptRequiresVitePlus(command);
-    } finally {
-      fs.closeSync(descriptor);
-    }
+    return shebangRequiresVitePlus(readScriptPrefix(file));
   } catch {
     return false;
   }
@@ -618,14 +627,22 @@ function scriptRequiresVitePlus(command: string, projectPath?: string): boolean 
       if (loadsFromEnvironment) {
         return first < values.length;
       }
-      const start = first + getCommandStartIndex(values.slice(first));
+      const invocation = values.slice(first);
+      const bunPrefix =
+        invocation[0] === 'bunx' ? 1 : invocation[0] === 'bun' && invocation[1] === 'x' ? 2 : 0;
+      const bunNoInstall = bunPrefix > 0 && invocation[bunPrefix] === '--no-install';
+      const start = first + (bunNoInstall ? bunPrefix + 1 : getCommandStartIndex(invocation));
       const executable = values[start];
       const wrappers = values.slice(first, start);
-      const downloadsCommand = wrappers.some((word) => ['bunx', 'dlx', 'x'].includes(word));
+      const downloadsCommand =
+        bunPrefix === 0 && wrappers.some((word) => ['dlx', 'x'].includes(word));
       if (
         !downloadsCommand &&
         (vitePlusScriptCommands.has(executable) ||
-          (cwd && !wrappers.includes('npx') && localScriptNeedsVitePlus(executable, cwd)))
+          (cwd &&
+            bunPrefix === 0 &&
+            !wrappers.includes('npx') &&
+            localScriptNeedsVitePlus(executable, cwd)))
       ) {
         return true;
       }
@@ -645,8 +662,16 @@ export function packageCommandsRequireVitePlus(
   pkg: Record<string, unknown>,
   projectPath?: string,
 ): boolean {
-  return packageCommands(pkg, projectPath).some((command) =>
-    scriptRequiresVitePlus(command, projectPath),
+  return (
+    packageCommands(pkg, projectPath).some((command) =>
+      scriptRequiresVitePlus(command, projectPath),
+    ) ||
+    (!!projectPath &&
+      sourceTreeMatches(projectPath, shebangRequiresVitePlus, {
+        extensions: scriptExtensions,
+        includeExtensionless: true,
+        readText: (file) => ((fs.statSync(file).mode & 0o111) !== 0 ? readScriptPrefix(file) : ''),
+      }))
   );
 }
 

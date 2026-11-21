@@ -47,8 +47,8 @@ pub fn parse_literal_commands(
     parse_literal_commands_with_env_values(source, allow_lists, &[])
 }
 
-/// Read the same command syntax for option analysis. Replace a quoted variable
-/// used as the value of a listed option with an empty value.
+/// Read the same command syntax for option analysis. Replace a double-quoted
+/// value with simple environment expansions for a listed option with an empty value.
 pub fn parse_literal_commands_with_env_values(
     source: &str,
     allow_lists: bool,
@@ -201,7 +201,7 @@ fn collect_commands<'a>(
     let kind = node.kind();
     match kind.as_ref() {
         "program" | "list" | "pipeline" | "if_statement" | "elif_clause" | "else_clause"
-        | "while_statement" | "do_group"
+        | "while_statement" | "do_group" | "subshell" | "compound_statement"
             if detect_dependencies || matches!(kind.as_ref(), "program" | "list") =>
         {
             for child in node.children() {
@@ -243,22 +243,35 @@ fn expanded_option_value(
     }
     let text = word.text();
     for option in options {
-        if previous.is_some_and(|token| token.value == *option) && is_quoted_variable(&text) {
+        if previous.is_some_and(|token| token.value == *option) && is_quoted_env_value(word) {
             return Some(String::new());
         }
-        if text
-            .strip_prefix(option.as_str())
-            .and_then(|value| value.strip_prefix('='))
-            .is_some_and(is_quoted_variable)
-        {
+        if text.strip_prefix(option.as_str()).and_then(|value| value.strip_prefix('=')).is_some_and(
+            |value| {
+                word.children()
+                    .last()
+                    .is_some_and(|part| part.text() == value && is_quoted_env_value(&part))
+            },
+        ) {
             return Some(format!("{option}="));
         }
     }
     None
 }
 
-fn is_quoted_variable(value: &str) -> bool {
-    let Some(name) = value.strip_prefix("\"$").and_then(|value| value.strip_suffix('"')) else {
+// Double quotes keep a directory value in one argument. Special parameters such
+// as $@ and command substitutions do not provide the same guarantee.
+fn is_quoted_env_value(word: &BashNode<'_>) -> bool {
+    word.kind() == "string"
+        && word.children().all(|part| match part.kind().as_ref() {
+            "\"" | "string_content" => true,
+            "simple_expansion" | "expansion" => is_named_variable(&part.text()),
+            _ => false,
+        })
+}
+
+fn is_named_variable(value: &str) -> bool {
+    let Some(name) = value.strip_prefix('$') else {
         return false;
     };
     let name = name.strip_prefix('{').and_then(|name| name.strip_suffix('}')).unwrap_or(name);
@@ -378,6 +391,20 @@ mod tests {
         ] {
             assert_eq!(prefix_values(source), expected, "{source}");
             assert_eq!(parse_literal_commands(source, true), None, "{source}");
+        }
+    }
+
+    #[test]
+    fn reads_command_prefixes_in_shell_groups() {
+        for source in
+            ["(cd scripts && vpx ./generate.ts) && pwd", "{ cd scripts && vpx ./generate.ts; }"]
+        {
+            let commands = parse_literal_command_prefixes(source).unwrap();
+            assert!(!commands.success_chain, "{source}");
+            assert!(
+                commands.commands.iter().any(|command| command.values == ["vpx", "./generate.ts"])
+            );
+            assert!(parse_literal_commands(source, true).is_none());
         }
     }
 

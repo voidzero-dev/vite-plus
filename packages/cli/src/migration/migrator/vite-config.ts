@@ -1194,17 +1194,103 @@ function mutationExpressions(body: Node | null) {
     : [body?.type === 'ExpressionStatement' ? body.expression : body];
 }
 
-function packHelperParameter(node: FunctionNode | ArrowFunctionExpression) {
+function packHelperParameter(
+  node: FunctionNode | ArrowFunctionExpression,
+  mutation?: { name: string; guards: ReadonlySet<string> },
+) {
   const [parameter] = node.params;
-  if (node.async || node.generator || node.params.length !== 1 || parameter.type !== 'Identifier') {
+  if (node.async || node.generator || node.params.length !== 1) {
     return undefined;
   }
-  const type = parameter.typeAnnotation?.typeAnnotation;
+  let name: string;
+  let property: string | undefined;
+  let type: Node | undefined;
+  if (parameter.type === 'Identifier') {
+    name = parameter.name;
+    type = parameter.typeAnnotation?.typeAnnotation;
+    if (mutation && (mutation.name !== name || mutation.guards.size > 0)) {
+      return undefined;
+    }
+  } else if (mutation && parameter.type === 'ObjectPattern') {
+    const properties = new Map<string, string>();
+    for (const member of parameter.properties) {
+      if (member.type !== 'Property' || member.computed || member.value.type !== 'Identifier') {
+        return undefined;
+      }
+      const key = propertyName(member.key);
+      if (key === undefined) {
+        return undefined;
+      }
+      properties.set(member.value.name, key);
+    }
+    name = mutation.name;
+    property = properties.get(name);
+    if (
+      property === undefined ||
+      [...mutation.guards].some(
+        (guard) => !properties.has(guard) || properties.get(guard) === property,
+      )
+    ) {
+      return undefined;
+    }
+    const annotation = parameter.typeAnnotation?.typeAnnotation;
+    if (annotation) {
+      const signature =
+        annotation.type === 'TSTypeLiteral'
+          ? annotation.members.find(
+              (member) =>
+                member.type === 'TSPropertySignature' &&
+                !member.computed &&
+                propertyName(member.key) === property,
+            )
+          : undefined;
+      if (signature?.type !== 'TSPropertySignature' || !signature.typeAnnotation) {
+        return undefined;
+      }
+      type = signature.typeAnnotation.typeAnnotation;
+    }
+  } else {
+    return undefined;
+  }
   const typeReference =
     type?.type === 'TSTypeQuery' && type.exprName.type === 'Identifier'
       ? type.exprName.start
       : undefined;
-  return !type || typeReference !== undefined ? { name: parameter.name, typeReference } : undefined;
+  return !type || typeReference !== undefined ? { name, property, typeReference } : undefined;
+}
+
+function packHelperArgument(
+  node: Node,
+): { value: PackIdentifier; property?: string; unverified?: boolean } | undefined {
+  const argument = unwrapTypeExpression(node);
+  if (argument.type === 'Identifier') {
+    return { value: argument };
+  }
+  if (argument.type !== 'ObjectExpression') {
+    return undefined;
+  }
+  const properties = new Set<string>();
+  let reference;
+  let unverified = false;
+  for (const member of argument.properties) {
+    if (member.type !== 'Property' || member.computed || member.kind !== 'init') {
+      return undefined;
+    }
+    const property = propertyName(member.key);
+    if (property === undefined || properties.has(property)) {
+      return undefined;
+    }
+    properties.add(property);
+    if (member.value.type === 'Identifier') {
+      if (reference) {
+        return undefined;
+      }
+      reference = { value: member.value, property };
+    } else if (!sameStaticValue(member.value, member.value)) {
+      unverified = true;
+    }
+  }
+  return reference && { ...reference, unverified };
 }
 
 function packMappingHelper(node: Node): PackHelper | undefined {
@@ -1223,34 +1309,66 @@ function packMappingHelper(node: Node): PackHelper | undefined {
   return undefined;
 }
 
-function entryMutationHelper(node: FunctionNode | ArrowFunctionExpression) {
-  const parameter = packHelperParameter(node);
-  if (!parameter) {
+function mutatedPackOption(expression: Node): string | undefined {
+  const output = packOutputAssignment(expression);
+  if (output) {
+    return output.receiver.type === 'Identifier' && sameStaticValue(output.value, output.value)
+      ? output.receiver.name
+      : undefined;
+  }
+  if (expression.type !== 'CallExpression' || expression.callee.type !== 'MemberExpression') {
     return undefined;
   }
-  const expressions = mutationExpressions(node.body);
-  if (
-    expressions.length > 0 &&
-    expressions.every((expression) => {
-      if (expression?.type !== 'CallExpression' || expression.callee.type !== 'MemberExpression') {
+  const method = memberName(expression.callee);
+  const receiver = expression.callee.object;
+  return method &&
+    arrayMutators.has(method) &&
+    receiver.type === 'MemberExpression' &&
+    memberName(receiver) === 'entry' &&
+    receiver.object.type === 'Identifier' &&
+    expression.arguments.every((argument) => sameStaticValue(argument, argument))
+    ? receiver.object.name
+    : undefined;
+}
+
+function entryMutationHelper(node: FunctionNode | ArrowFunctionExpression) {
+  let name: string | undefined;
+  const guards = new Set<string>();
+  const visitsOnlyPackWrites = (statement: Node): boolean => {
+    if (statement.type === 'BlockStatement') {
+      return statement.body.every(visitsOnlyPackWrites);
+    }
+    if (statement.type === 'IfStatement') {
+      const test = unwrapTypeExpression(statement.test);
+      // A guard may compare a separate literal input to a constant.
+      if (
+        test.type !== 'BinaryExpression' ||
+        !['===', '!=='].includes(test.operator) ||
+        test.left.type !== 'Identifier' ||
+        test.right.type !== 'Literal'
+      ) {
         return false;
       }
-      const method = memberName(expression.callee);
-      const receiver = expression.callee.object;
+      guards.add(test.left.name);
       return (
-        !!method &&
-        arrayMutators.has(method) &&
-        receiver.type === 'MemberExpression' &&
-        memberName(receiver) === 'entry' &&
-        receiver.object.type === 'Identifier' &&
-        receiver.object.name === parameter.name &&
-        expression.arguments.every((argument) => sameStaticValue(argument, argument))
+        visitsOnlyPackWrites(statement.consequent) &&
+        (!statement.alternate || visitsOnlyPackWrites(statement.alternate))
       );
-    })
-  ) {
-    return { typeReference: parameter.typeReference };
+    }
+    const target = mutatedPackOption(
+      statement.type === 'ExpressionStatement' ? statement.expression : statement,
+    );
+    if (!target || (name !== undefined && name !== target)) {
+      return false;
+    }
+    name = target;
+    return true;
+  };
+  if (!node.body || !visitsOnlyPackWrites(node.body) || !name) {
+    return undefined;
   }
-  return undefined;
+  const parameter = packHelperParameter(node, { name, guards });
+  return parameter && { property: parameter.property, typeReference: parameter.typeReference };
 }
 
 function recordOutputReads(node: Node, references: Set<number>): void {
@@ -1318,6 +1436,7 @@ function packMutationReferences(
   mapperArguments: ReadonlyMap<number, PackHelper>,
   localArrays: ReadonlyMap<number, LocalPackArray>,
 ) {
+  const configValue = defaultConfigValue(program);
   const writes = new Set<number>();
   const reassignments = new Set<number>();
   const aliasInitializers = new Map<number, number>();
@@ -1331,7 +1450,7 @@ function packMutationReferences(
   const indexedOutputWrites = new Set<number>();
   const entryWrites = new Set<number>();
   const helpers = new Map<number, NonNullable<ReturnType<typeof entryMutationHelper>>>();
-  const calls = new Map<number, number>();
+  const calls = new Map<number, NonNullable<ReturnType<typeof packHelperArgument>>>();
   const rewritable = new Map<
     number,
     PackHelper & { array?: boolean; entry?: 'array' | 'optional' }
@@ -1553,20 +1672,22 @@ function packMutationReferences(
         }
         const assigned = objectAssignTarget(node) ?? receiver;
         if (!assigned) {
-          const [argument] = node.arguments;
-          if (
-            callee.type === 'Identifier' &&
-            node.arguments.length === 1 &&
-            argument.type === 'Identifier'
-          ) {
-            calls.set(callee.start, argument.start);
-          }
           // A function can change options passed by reference. Keep those
           // references together unless the local helper can be verified.
           for (const argument of node.arguments) {
-            const root = packRootIdentifier(
-              argument.type === 'SpreadElement' ? argument.argument : argument,
-            );
+            const value = argument.type === 'SpreadElement' ? argument.argument : argument;
+            // The default defineConfig argument describes the config itself.
+            const helperArgument =
+              unwrapTypeExpression(value) === configValue ? undefined : packHelperArgument(value);
+            if (
+              callee.type === 'Identifier' &&
+              node.arguments.length === 1 &&
+              argument.type !== 'SpreadElement' &&
+              helperArgument
+            ) {
+              calls.set(callee.start, helperArgument);
+            }
+            const root = helperArgument?.value ?? packRootIdentifier(value);
             if (root && !readOnlyArguments.has(root.start)) {
               writes.add(root.start);
             }
@@ -1623,8 +1744,14 @@ function packMutationReferences(
     }
     const helper = helpers.get(start);
     const argument = references.length === 1 ? calls.get(references[0]) : undefined;
-    if (constant && helper && argument !== undefined) {
-      rewritable.set(argument, helper);
+    if (
+      constant &&
+      helper &&
+      argument &&
+      !argument.unverified &&
+      helper.property === argument.property
+    ) {
+      rewritable.set(argument.value.start, helper);
     }
     const alias = aliasInitializers.get(start);
     const parents = alias !== undefined ? [alias] : arrayOrigins.get(start);
