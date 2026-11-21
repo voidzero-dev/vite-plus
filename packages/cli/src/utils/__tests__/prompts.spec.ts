@@ -94,7 +94,7 @@ describe('runViteInstall', () => {
     ]);
     expect(command?.idleTimeoutMs).toBe(2000);
     expect(command?.shouldWatchIdle).toBeTypeOf('function');
-    expect(command?.waitForGit).toBe(true);
+    expect(command?.waitForPackageFetch).toBe(true);
     expect(command?.stdoutToFile).toBe(true);
     expect(command?.envs.NODE_OPTIONS).toBe('--require=/preload.cjs');
     expect(result.status).toBe('installed');

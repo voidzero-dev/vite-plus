@@ -614,8 +614,9 @@ export async function formatPnpmInstallOutput(
         const requestUrl = asRecord(log.request).url ?? log.url;
         const displayed = redactPnpmDiagnostic(details, requestUrl);
         const headline = code ? `${code} ${displayed}` : displayed;
-        const warningPath =
-          log.level === 'warn' && typeof log.prefix === 'string'
+        const diagnosticPath =
+          typeof log.prefix === 'string' &&
+          (log.level === 'warn' || (log.level === 'error' && code === 'ERR_PNPM_NO_LOCKFILE'))
             ? displayRelative(log.prefix, cwd)
             : '';
         // pnpm logs each recursive failure at info level before it reports member paths.
@@ -625,7 +626,7 @@ export async function formatPnpmInstallOutput(
           indices.push(messages.length);
           infoErrorIndices.set(key, indices);
         }
-        messages.push(warningPath ? `${warningPath}: ${headline}` : headline);
+        messages.push(diagnosticPath ? `${diagnosticPath}: ${headline}` : headline);
         if (code === 'ERR_PNPM_RECURSIVE_FAIL' && Array.isArray(log.failures)) {
           for (const failure of log.failures) {
             const { prefix, message: reason, error: memberError } = asRecord(failure);

@@ -221,6 +221,29 @@ describe('formatPnpmInstallOutput', () => {
     );
   });
 
+  it('shows the member named by a frozen install error', async () => {
+    const cwd = resolve('workspace');
+    const error = {
+      name: 'pnpm',
+      level: 'error',
+      code: 'ERR_PNPM_NO_LOCKFILE',
+      prefix: join(cwd, 'packages', 'worker'),
+      err: {
+        name: 'pnpm',
+        message: 'Cannot install with "frozen-lockfile" because pnpm-lock.yaml is absent',
+      },
+      hint: 'Run pnpm install --no-frozen-lockfile',
+    };
+    const headline = `${error.code} ${error.err.message}\n${error.hint}`;
+
+    expect(await formatPnpmInstallOutput(JSON.stringify(error), cwd)).toBe(
+      `packages/worker: ${headline}`,
+    );
+    expect(await formatPnpmInstallOutput(JSON.stringify({ ...error, prefix: cwd }), cwd)).toBe(
+      headline,
+    );
+  });
+
   it.each(['info', 'debug', 'warn', 'error', 'silent', 'json', 'ndjson'] as const)(
     'replays direct optional dependency skips at the expected level in %s mode',
     async (mode) => {
