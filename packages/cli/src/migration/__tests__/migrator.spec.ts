@@ -539,6 +539,17 @@ describe('explicit tsdown config selection', () => {
     ['pnpm dlx vpx ./generate.ts | tee generated.json', false],
     ['./generate.ts', true, '#!/usr/bin/env vpx'],
     ['./generate.ts > generated.json', true, '#!/usr/bin/env -S node --import vite-plus/register'],
+    ['cd scripts && ./generate.ts', true, '#!/usr/bin/env vpx', 'scripts/generate.ts'],
+    [
+      'cd scripts && ./generate.ts > generated.txt',
+      true,
+      '#!/usr/bin/env vpx',
+      'scripts/generate.ts',
+    ],
+    ['cd "tool scripts" && ./generate.ts', true, '#!/usr/bin/env vpx', 'tool scripts/generate.ts'],
+    ['echo cd scripts && ./generate.ts', false, '#!/usr/bin/env vpx', 'scripts/generate.ts'],
+    ['for target in client worker; do vpx ./scripts/generate.ts "$target"; done', true],
+    ['for target in vp vpx; do echo "$target"; done', false],
     ['node ./generate.ts', false, '#!/usr/bin/env vpx'],
     ['echo "$MESSAGE" && pnpm exec vpx ./generate.ts "$TARGET"', true],
     ['"$RUNNER" vpx ./generate.ts', false],
@@ -554,42 +565,47 @@ describe('explicit tsdown config selection', () => {
     ['cross-env-shell MODE=ci "node --import vite-plus/register ./check.ts"', true],
     ['node ./check.cjs --import vite-plus/register', false],
     ['echo --import vite-plus/register', false],
-  ])('checks member dependencies for %s', (check, needsVitePlus, shebang?: string) => {
-    const member = path.join(tmpDir, 'packages/member');
-    const manifest = path.join(member, 'package.json');
-    fs.mkdirSync(member, { recursive: true });
-    if (shebang) {
-      fs.writeFileSync(path.join(member, 'generate.ts'), `${shebang}\nconsole.log('generated');\n`);
-    }
-    fs.writeFileSync(
-      path.join(tmpDir, 'package.json'),
-      '{"devDependencies":{"vite-plus":"latest"}}',
-    );
-    fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'packages: [packages/*]\n');
-    const pkg = {
-      scripts: { release: 'tsdown -c release.ts', check },
-      devDependencies: { tsdown: '0.23.4' },
-    };
-    const expected = {
-      ...pkg,
-      devDependencies: {
-        ...pkg.devDependencies,
-        ...(needsVitePlus && { 'vite-plus': 'catalog:' }),
-      },
-    };
-    fs.writeFileSync(manifest, JSON.stringify(pkg));
-    rewriteMonorepoProject(member, PackageManager.pnpm, false, true);
-    expect(readJson(manifest)).toEqual(expected);
+  ])(
+    'checks member dependencies for %s',
+    (check, needsVitePlus, shebang?: string, scriptFile = 'generate.ts') => {
+      const member = path.join(tmpDir, 'packages/member');
+      const manifest = path.join(member, 'package.json');
+      fs.mkdirSync(member, { recursive: true });
+      if (shebang) {
+        const executable = path.join(member, scriptFile);
+        fs.mkdirSync(path.dirname(executable), { recursive: true });
+        fs.writeFileSync(executable, `${shebang}\nconsole.log('generated');\n`);
+      }
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        '{"devDependencies":{"vite-plus":"latest"}}',
+      );
+      fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'packages: [packages/*]\n');
+      const pkg = {
+        scripts: { release: 'tsdown -c release.ts', check },
+        devDependencies: { tsdown: '0.23.4' },
+      };
+      const expected = {
+        ...pkg,
+        devDependencies: {
+          ...pkg.devDependencies,
+          ...(needsVitePlus && { 'vite-plus': 'catalog:' }),
+        },
+      };
+      fs.writeFileSync(manifest, JSON.stringify(pkg));
+      rewriteMonorepoProject(member, PackageManager.pnpm, false, true);
+      expect(readJson(manifest)).toEqual(expected);
 
-    // Repair a member migrated before the loader's dependency was recorded.
-    fs.writeFileSync(manifest, JSON.stringify(pkg));
-    const workspace = makeWorkspaceInfo(tmpDir, PackageManager.pnpm, '12.11.2');
-    workspace.isMonorepo = true;
-    workspace.packages = [{ name: 'member', path: 'packages/member' }];
-    ensureVitePlusBootstrap(workspace);
-    expect(readJson(manifest)).toEqual(expected);
-    expect(ensureVitePlusBootstrap(workspace).changed).toBe(false);
-  });
+      // Repair a member migrated before the loader's dependency was recorded.
+      fs.writeFileSync(manifest, JSON.stringify(pkg));
+      const workspace = makeWorkspaceInfo(tmpDir, PackageManager.pnpm, '12.11.2');
+      workspace.isMonorepo = true;
+      workspace.packages = [{ name: 'member', path: 'packages/member' }];
+      ensureVitePlusBootstrap(workspace);
+      expect(readJson(manifest)).toEqual(expected);
+      expect(ensureVitePlusBootstrap(workspace).changed).toBe(false);
+    },
+  );
 
   it.each(['lint-staged', undefined])(
     'adds vite-plus to a member that keeps tsdown and migrates staged config (script=%s)',
@@ -1781,6 +1797,28 @@ export default defineConfig(({ command }) => {
     const vite = path.join(tmpDir, 'vite.config.ts');
     const config =
       "const cli = { name: 'cli' };\n" + loop + '\nexport default { pack: [library, cli] };\n';
+    fs.writeFileSync(vite, `import library from './tsdown.config.ts';\n${config}`);
+
+    expect(mergeTsdownConfigFile(tmpDir, true, createMigrationReport(), true)).toBe(true);
+    expect(fs.readFileSync(vite, 'utf8')).toBe(
+      `import library from "./vite-pack.config.ts";\n${config}`,
+    );
+    expect(fs.readFileSync(tsdown, 'utf8')).toBe(original);
+    expect(fs.readFileSync(path.join(tmpDir, 'vite-pack.config.ts'), 'utf8')).toContain(
+      "copy: 'public'",
+    );
+  });
+
+  it('keeps output directory writes through a named array for either pack branch', () => {
+    const tsdown = path.join(tmpDir, 'tsdown.config.ts');
+    const original = "export default { name: 'library', publicDir: 'public' };\n";
+    fs.writeFileSync(tsdown, original);
+    const vite = path.join(tmpDir, 'vite.config.ts');
+    const config =
+      "const cli = { name: 'cli' };\n" +
+      'const formats = [library, cli];\n' +
+      "for (const options of formats) options.outDir = 'release-' + options.name;\n" +
+      "export default { pack: process.env.PACK_TARGET === 'cli' ? cli : library };\n";
     fs.writeFileSync(vite, `import library from './tsdown.config.ts';\n${config}`);
 
     expect(mergeTsdownConfigFile(tmpDir, true, createMigrationReport(), true)).toBe(true);

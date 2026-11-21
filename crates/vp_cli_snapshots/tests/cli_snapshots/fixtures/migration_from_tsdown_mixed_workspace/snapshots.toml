@@ -499,3 +499,55 @@ steps = [
   { argv = ["vp", "pack"], cwd = "packages/legacy-pack", snapshot = false },
   ["vpt", "stat-file", "packages/legacy-pack/lib-out/library.mjs", "--assert", "file"],
 ]
+
+[[case]]
+name = "focused_vpx_after_cd"
+vp = "global"
+local-registry = true
+skip-platforms = ["windows"]
+env = { VP_NODE_VERSION = "24.22.3", VP_SKIP_INSTALL = "1" }
+comment = "A member install supplies vpx after the script changes directories."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies", "{\"vite\":\"8.3.8\"}"], snapshot = false },
+  { argv = ["vpt", "write-file", "pnpm-workspace.yaml", "packages: ['packages/*']\nsharedWorkspaceLockfile: false\n"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "packages/generator/src", "packages/generator/scripts"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/package.json", "{\"name\":\"generator\",\"private\":true,\"type\":\"module\",\"scripts\":{\"generate\":\"cd scripts && ./generate.ts\",\"release\":\"tsdown -c release.config.mts\"},\"devDependencies\":{\"tsdown\":\"0.22.14\",\"tsx\":\"4.20.3\"}}"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/scripts/generate.ts", "#!/usr/bin/env tsx\nconst target: string = process.argv[2] ?? 'default';\nconsole.log('generator-' + target);\n"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "packages/generator/scripts/generate.ts"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/src/index.ts", "export const sample = true;"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/release.config.mts", "export default { entry: 'src/index.ts', outDir: 'release-out', dts: false };"], snapshot = false },
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  ["vpt", "print-file", "packages/generator/package.json"],
+  ["vpt", "print-file", "packages/generator/scripts/generate.ts"],
+  { argv = ["pnpm", "--filter", "generator", "install", "--ignore-scripts"], snapshot = false },
+  ["vpt", "stat-file", "node_modules/vite-plus", "--assert", "missing"],
+  ["vpt", "stat-file", "packages/generator/node_modules/vite-plus/package.json", "--assert", "file"],
+  { argv = ["pnpm", "run", "generate"], cwd = "packages/generator" },
+  { argv = ["pnpm", "run", "release"], cwd = "packages/generator", snapshot = false },
+  ["vpt", "stat-file", "packages/generator/release-out/index.mjs", "--assert", "file"],
+]
+
+[[case]]
+name = "focused_vpx_shell_loop"
+vp = "global"
+local-registry = true
+skip-platforms = ["windows"]
+env = { VP_NODE_VERSION = "24.22.3", VP_SKIP_INSTALL = "1" }
+comment = "A member install supplies vpx for both shell loop iterations."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies", "{\"vite\":\"8.3.8\"}"], snapshot = false },
+  { argv = ["vpt", "write-file", "pnpm-workspace.yaml", "packages: ['packages/*']\nsharedWorkspaceLockfile: false\n"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "packages/generator/src", "packages/generator/scripts"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/package.json", "{\"name\":\"generator\",\"private\":true,\"type\":\"module\",\"scripts\":{\"generate\":\"for target in client worker; do vpx ./scripts/generate.ts \\\"$target\\\"; done\",\"release\":\"tsdown -c release.config.mts\"},\"devDependencies\":{\"tsdown\":\"0.22.14\"}}"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/scripts/generate.ts", "const target: string = process.argv[2] ?? 'default';\nconsole.log('generator-' + target);\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/src/index.ts", "export const sample = true;"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/release.config.mts", "export default { entry: 'src/index.ts', outDir: 'release-out', dts: false };"], snapshot = false },
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  ["vpt", "print-file", "packages/generator/package.json"],
+  { argv = ["pnpm", "--filter", "generator", "install", "--ignore-scripts"], snapshot = false },
+  ["vpt", "stat-file", "node_modules/vite-plus", "--assert", "missing"],
+  ["vpt", "stat-file", "packages/generator/node_modules/vite-plus/package.json", "--assert", "file"],
+  { argv = ["pnpm", "run", "generate"], cwd = "packages/generator" },
+  { argv = ["pnpm", "run", "release"], cwd = "packages/generator", snapshot = false },
+  ["vpt", "stat-file", "packages/generator/release-out/index.mjs", "--assert", "file"],
+]

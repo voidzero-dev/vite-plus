@@ -84,10 +84,33 @@ pub fn parse_literal_commands(
         .collect()
 }
 
-/// Read the literal prefix of each simple command for dependency detection.
+#[napi(object)]
+pub struct LiteralCommandPrefix {
+    pub values: Vec<String>,
+    pub complete: bool,
+}
+
+#[napi(object)]
+pub struct LiteralCommandPrefixes {
+    pub commands: Vec<LiteralCommandPrefix>,
+    pub success_chain: bool,
+}
+
+/// Read command prefixes and identify a simple && chain for dependency detection.
 #[napi]
-pub fn parse_literal_command_prefixes(source: String) -> Option<Vec<Vec<String>>> {
-    vp_migration::parse_literal_command_prefixes(&source)
+pub fn parse_literal_command_prefixes(source: String) -> Option<LiteralCommandPrefixes> {
+    let parsed = vp_migration::parse_literal_command_prefixes(&source)?;
+    Some(LiteralCommandPrefixes {
+        commands: parsed
+            .commands
+            .into_iter()
+            .map(|command| LiteralCommandPrefix {
+                values: command.values,
+                complete: command.complete,
+            })
+            .collect(),
+        success_chain: parsed.success_chain,
+    })
 }
 
 /// Parse source and resolve lexical bindings for the TypeScript migration rules.

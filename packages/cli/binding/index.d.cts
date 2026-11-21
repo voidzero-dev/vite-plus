@@ -3861,6 +3861,16 @@ export interface JsCommandResolvedResult {
   envs: Record<string, string>;
 }
 
+export interface LiteralCommandPrefix {
+  values: Array<string>;
+  complete: boolean;
+}
+
+export interface LiteralCommandPrefixes {
+  commands: Array<LiteralCommandPrefix>;
+  successChain: boolean;
+}
+
 /** A literal argument with its original JavaScript UTF-16 source range. */
 export interface LiteralCommandToken {
   value: string;
@@ -4005,8 +4015,8 @@ export type ParseHooksArgsOutcome =
   | { status: 'exit'; code: number }
   | { status: 'error'; error: CliParseError };
 
-/** Read the literal prefix of each simple command for dependency detection. */
-export declare function parseLiteralCommandPrefixes(source: string): Array<Array<string>> | null;
+/** Read command prefixes and identify a simple && chain for dependency detection. */
+export declare function parseLiteralCommandPrefixes(source: string): LiteralCommandPrefixes | null;
 
 /**
  * Read simple literal commands, optionally separated by `&&`, `||`, or `;`.

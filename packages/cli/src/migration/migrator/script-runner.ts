@@ -552,6 +552,21 @@ function localScriptNeedsVitePlus(executable: string | undefined, projectPath: s
   }
 }
 
+function literalCdDirectory(values: readonly string[], cwd: string): string | undefined {
+  const directoryIndex = values[1] === '--' ? 2 : 1;
+  const directory = values[directoryIndex];
+  if (
+    values.length === directoryIndex + 1 &&
+    directory &&
+    !directory.startsWith('-') &&
+    !directory.startsWith('~') &&
+    !/%\w+%/.test(directory)
+  ) {
+    return path.resolve(cwd, directory);
+  }
+  return undefined;
+}
+
 function scriptRequiresVitePlus(command: string, projectPath?: string): boolean {
   if (
     !command.includes('vp') &&
@@ -560,9 +575,24 @@ function scriptRequiresVitePlus(command: string, projectPath?: string): boolean 
   ) {
     return false;
   }
+  const parsed = parseLiteralCommandPrefixes(command);
+  const followDirectories =
+    parsed?.successChain && parsed.commands.some(({ values }) => values[0] === 'cd');
+  let cwd = projectPath;
   return (
-    parseLiteralCommandPrefixes(command)?.some((values) => {
+    parsed?.commands.some(({ values, complete }) => {
       const { first, shell, unknownEnvironment } = scriptCommandPrefix(values);
+      if (followDirectories) {
+        const name = values[first];
+        if (name === 'cd') {
+          // Later commands in this chain run only after cd succeeds.
+          cwd = cwd && complete && first === 0 ? literalCdDirectory(values, cwd) : undefined;
+          return false;
+        }
+        if (SHELL_STATE_COMMANDS.includes(name) || name === 'chdir') {
+          cwd = undefined;
+        }
+      }
       if (unknownEnvironment) {
         return false;
       }
@@ -588,7 +618,7 @@ function scriptRequiresVitePlus(command: string, projectPath?: string): boolean 
       if (
         !downloadsCommand &&
         (vitePlusScriptCommands.has(executable) ||
-          (projectPath && localScriptNeedsVitePlus(executable, projectPath)))
+          (cwd && localScriptNeedsVitePlus(executable, cwd)))
       ) {
         return true;
       }
@@ -599,7 +629,7 @@ function scriptRequiresVitePlus(command: string, projectPath?: string): boolean 
       const commands = shell
         ? values.slice(start)
         : values.slice(start + 1).filter((_, index) => launcher?.(values[start + index]));
-      return commands.some((script) => scriptRequiresVitePlus(script, projectPath));
+      return commands.some((script) => scriptRequiresVitePlus(script, cwd));
     }) ?? false
   );
 }

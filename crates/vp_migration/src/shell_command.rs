@@ -10,6 +10,26 @@ pub struct LiteralCommandToken {
     pub range: Range<usize>,
 }
 
+pub struct LiteralCommandPrefix {
+    pub values: Vec<String>,
+    pub complete: bool,
+}
+
+pub struct LiteralCommandPrefixes {
+    pub commands: Vec<LiteralCommandPrefix>,
+    pub success_chain: bool,
+}
+
+struct ParsedCommand {
+    tokens: Vec<LiteralCommandToken>,
+    complete: bool,
+}
+
+struct ParsedCommands {
+    commands: Vec<ParsedCommand>,
+    success_chain: bool,
+}
+
 type BashNode<'a> = Node<'a, StrDoc<SupportLang>>;
 
 /// Read the restricted command syntax used by migrations, without evaluating
@@ -24,26 +44,37 @@ pub fn parse_literal_commands(
     source: &str,
     allow_lists: bool,
 ) -> Option<Vec<Vec<LiteralCommandToken>>> {
-    parse_commands(source, allow_lists, false)
-}
-
-/// Read command prefixes in lists, pipelines, redirections, and conditionals.
-/// Keep assignment names for unknown values and stop at an unknown argument.
-pub fn parse_literal_command_prefixes(source: &str) -> Option<Vec<Vec<String>>> {
-    let commands = parse_commands(source, true, true)?;
     Some(
-        commands
+        parse_commands(source, allow_lists, false)?
+            .commands
             .into_iter()
-            .map(|tokens| tokens.into_iter().map(|token| token.value).collect())
+            .map(|command| command.tokens)
             .collect(),
     )
+}
+
+/// Read command prefixes in lists, pipelines, redirections, conditionals, and loops.
+/// Keep assignment names for unknown values and stop at an unknown argument.
+pub fn parse_literal_command_prefixes(source: &str) -> Option<LiteralCommandPrefixes> {
+    let parsed = parse_commands(source, true, true)?;
+    Some(LiteralCommandPrefixes {
+        commands: parsed
+            .commands
+            .into_iter()
+            .map(|command| LiteralCommandPrefix {
+                values: command.tokens.into_iter().map(|token| token.value).collect(),
+                complete: command.complete,
+            })
+            .collect(),
+        success_chain: parsed.success_chain,
+    })
 }
 
 fn parse_commands(
     source: &str,
     allow_lists: bool,
     detect_dependencies: bool,
-) -> Option<Vec<Vec<LiteralCommandToken>>> {
+) -> Option<ParsedCommands> {
     let has_escapes = source.contains('\\');
     if has_escapes && !detect_dependencies {
         return None;
@@ -53,10 +84,14 @@ fn parse_commands(
     if root.dfs().any(|node| node.is_error() || node.is_missing()) {
         return None;
     }
+    let success_chain = detect_dependencies && is_success_chain(&root);
     let mut nodes = Vec::new();
     collect_commands(root, &mut nodes, detect_dependencies)?;
     if nodes.is_empty() {
-        return (!allow_lists && is_spacing(source)).then(|| vec![vec![]]);
+        return (!allow_lists && is_spacing(source)).then(|| ParsedCommands {
+            commands: vec![ParsedCommand { tokens: vec![], complete: true }],
+            success_chain,
+        });
     }
     if !allow_lists && nodes.len() != 1 {
         return None;
@@ -79,6 +114,7 @@ fn parse_commands(
         }
         let mut tokens = Vec::new();
         let mut word_end = range.start;
+        let mut complete = true;
         let words = if node.kind() == "variable_assignment" {
             vec![node.clone()]
         } else {
@@ -106,6 +142,7 @@ fn parse_commands(
             let value = match literal {
                 Some(value) => value,
                 None if detect_dependencies => {
+                    complete = false;
                     let Some(assignment) = assignment_prefix(&word) else { break };
                     assignment
                 }
@@ -116,16 +153,32 @@ fn parse_commands(
         if tokens.is_empty() && !detect_dependencies {
             return None;
         }
-        commands.push(tokens);
+        commands.push(ParsedCommand { tokens, complete });
         end = range.end;
     }
     // Reject comments, newlines and trailing separators, including a single
     // command followed by `;`, even when the parser accepts them.
-    (detect_dependencies || is_spacing(&source[end..])).then_some(commands)
+    (detect_dependencies || is_spacing(&source[end..]))
+        .then_some(ParsedCommands { commands, success_chain })
 }
 
 fn is_spacing(source: &str) -> bool {
     source.chars().all(|c| matches!(c, ' ' | '\t'))
+}
+
+// Only simple commands on the same successful && path share changes to the directory.
+fn is_success_chain(node: &BashNode<'_>) -> bool {
+    match node.kind().as_ref() {
+        "program" => {
+            let mut children = node.children();
+            children.next().is_some_and(|child| is_success_chain(&child))
+                && children.next().is_none()
+        }
+        "list" => node.children().all(|child| child.kind() == "&&" || is_success_chain(&child)),
+        "redirected_statement" => node.field("body").is_some_and(|body| is_success_chain(&body)),
+        "command" | "variable_assignment" | "variable_assignments" => true,
+        _ => false,
+    }
 }
 
 fn collect_commands<'a>(
@@ -136,13 +189,16 @@ fn collect_commands<'a>(
     let kind = node.kind();
     match kind.as_ref() {
         "program" | "list" | "pipeline" | "if_statement" | "elif_clause" | "else_clause"
+        | "while_statement" | "do_group"
             if detect_dependencies || matches!(kind.as_ref(), "program" | "list") =>
         {
             for child in node.children() {
                 collect_commands(child, commands, detect_dependencies)?;
             }
         }
-        "redirected_statement" if detect_dependencies => {
+        "redirected_statement" | "for_statement" | "c_style_for_statement"
+            if detect_dependencies =>
+        {
             if let Some(body) = node.field("body") {
                 collect_commands(body, commands, detect_dependencies)?;
             }
@@ -202,11 +258,20 @@ fn literal_value(node: &BashNode<'_>, reject_hash: bool) -> Option<String> {
 mod tests {
     use super::{parse_literal_command_prefixes, parse_literal_commands};
 
+    fn prefix_values(source: &str) -> Vec<Vec<String>> {
+        parse_literal_command_prefixes(source)
+            .unwrap()
+            .commands
+            .into_iter()
+            .map(|command| command.values)
+            .collect()
+    }
+
     #[test]
     fn reads_only_the_known_prefix_before_expansion() {
         let source =
             r#"echo "$LABEL" && pnpm exec vpx ./generate.ts "$TARGET" --force; "$RUNNER" vpx"#;
-        let prefixes = parse_literal_command_prefixes(source).unwrap();
+        let prefixes = prefix_values(source);
         assert_eq!(prefixes, [vec!["echo"], vec!["pnpm", "exec", "vpx", "./generate.ts"], vec![]]);
         assert_eq!(parse_literal_commands(source, true), None);
     }
@@ -224,7 +289,7 @@ mod tests {
             ),
             (r#"vpx .\generate.ts > build.json"#, vec![vec!["vpx"]]),
         ] {
-            assert_eq!(parse_literal_command_prefixes(source).unwrap(), expected, "{source}");
+            assert_eq!(prefix_values(source), expected, "{source}");
             assert_eq!(parse_literal_commands(source, true), None, "{source}");
         }
     }
@@ -250,8 +315,51 @@ mod tests {
                 vec![vec!["true"], vec!["echo", "vpx"], vec!["BUILD_ENV="]],
             ),
         ] {
-            assert_eq!(parse_literal_command_prefixes(source).unwrap(), expected, "{source}");
+            assert_eq!(prefix_values(source), expected, "{source}");
             assert_eq!(parse_literal_commands(source, true), None, "{source}");
+        }
+    }
+
+    #[test]
+    fn reads_loop_commands_without_treating_iteration_values_as_commands() {
+        for (source, expected) in [
+            (
+                r#"for target in client worker; do vpx ./generate.ts "$target"; done"#,
+                vec![vec!["vpx", "./generate.ts"]],
+            ),
+            (r#"for target in vp vpx; do echo "$target"; done"#, vec![vec!["echo"]]),
+            (r#"while true; do vp fmt; done"#, vec![vec!["true"], vec!["vp", "fmt"]]),
+        ] {
+            assert_eq!(prefix_values(source), expected, "{source}");
+            assert_eq!(parse_literal_commands(source, true), None, "{source}");
+        }
+    }
+
+    #[test]
+    fn identifies_success_chains_for_directory_tracking() {
+        for source in [
+            "cd scripts && ./generate.ts",
+            "cd scripts && ./generate.ts > generated.txt",
+            "cd scripts && ./generate.ts \"$TARGET\" > generated.txt && cat generated.txt",
+        ] {
+            let parsed = parse_literal_command_prefixes(source).unwrap();
+            assert!(parsed.success_chain, "{source}");
+            assert!(parsed.commands[0].complete, "{source}");
+            assert_eq!(parsed.commands[0].values, ["cd", "scripts"], "{source}");
+            assert_eq!(parsed.commands[1].values, ["./generate.ts"], "{source}");
+        }
+        let unknown =
+            parse_literal_command_prefixes("cd scripts \"$EXTRA\" && ./generate.ts").unwrap();
+        assert!(unknown.success_chain);
+        assert!(!unknown.commands[0].complete);
+        for source in [
+            "cd scripts || ./generate.ts",
+            "cd scripts; ./generate.ts",
+            "cd scripts\n./generate.ts",
+            "cd scripts | ./generate.ts",
+            "cd scripts && ./generate.ts || ./fallback.ts",
+        ] {
+            assert!(!parse_literal_command_prefixes(source).unwrap().success_chain, "{source}");
         }
     }
 
