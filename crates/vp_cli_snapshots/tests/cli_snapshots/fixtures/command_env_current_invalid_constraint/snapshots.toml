@@ -1,0 +1,9 @@
+[[case]]
+name = "command_env_current_invalid_constraint"
+vp = "global"
+comment = "vp env current and vp commands share one version selection, so they report the same invalid lower-priority constraints."
+seed-runtime = false
+prewarm-package-managers = false
+steps = [
+  { argv = ["vp", "env", "current", "node", "--json"], comment = "a valid .node-version selects the version, and the invalid engines.node below it warns" },
+]
