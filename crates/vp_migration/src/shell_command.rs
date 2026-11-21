@@ -27,8 +27,8 @@ pub fn parse_literal_commands(
     parse_commands(source, allow_lists, false)
 }
 
-/// Read literal command prefixes in lists, pipelines, and redirections.
-/// The first dynamic word ends that command's prefix.
+/// Read command prefixes in lists, pipelines, redirections, and conditionals.
+/// Keep assignment names for unknown values and stop at an unknown argument.
 pub fn parse_literal_command_prefixes(source: &str) -> Option<Vec<Vec<String>>> {
     let commands = parse_commands(source, true, true)?;
     Some(
@@ -98,12 +98,17 @@ fn parse_commands(
             {
                 continue;
             }
-            if has_escapes && word.text().contains('\\') {
-                break;
-            }
-            let value = match literal_value(&word, allow_lists) {
+            let literal = if has_escapes && word.text().contains('\\') {
+                None
+            } else {
+                literal_value(&word, allow_lists)
+            };
+            let value = match literal {
                 Some(value) => value,
-                None if detect_dependencies => break,
+                None if detect_dependencies => {
+                    let Some(assignment) = assignment_prefix(&word) else { break };
+                    assignment
+                }
                 None => return None,
             };
             tokens.push(LiteralCommandToken { value, range });
@@ -130,7 +135,9 @@ fn collect_commands<'a>(
 ) -> Option<()> {
     let kind = node.kind();
     match kind.as_ref() {
-        "program" | "list" | "pipeline" if detect_dependencies || kind != "pipeline" => {
+        "program" | "list" | "pipeline" | "if_statement" | "elif_clause" | "else_clause"
+            if detect_dependencies || matches!(kind.as_ref(), "program" | "list") =>
+        {
             for child in node.children() {
                 collect_commands(child, commands, detect_dependencies)?;
             }
@@ -148,6 +155,14 @@ fn collect_commands<'a>(
         _ => return None,
     }
     Some(())
+}
+
+fn assignment_prefix(word: &BashNode<'_>) -> Option<String> {
+    if word.kind() != "variable_assignment" {
+        return None;
+    }
+    let name = word.field("name")?;
+    (name.kind() == "variable_name").then(|| format!("{}=", name.text()))
 }
 
 fn literal_value(node: &BashNode<'_>, reject_hash: bool) -> Option<String> {
@@ -208,6 +223,32 @@ mod tests {
                 vec![vec!["pnpm", "exec", "vpx", "./generate.ts"], vec!["echo", "vpx"]],
             ),
             (r#"vpx .\generate.ts > build.json"#, vec![vec!["vpx"]]),
+        ] {
+            assert_eq!(parse_literal_command_prefixes(source).unwrap(), expected, "{source}");
+            assert_eq!(parse_literal_commands(source, true), None, "{source}");
+        }
+    }
+
+    #[test]
+    fn reads_commands_with_dynamic_assignments_and_conditionals() {
+        for (source, expected) in [
+            (
+                r#"BUILD_ENV=$NODE_ENV vpx ./generate.ts"#,
+                vec![vec!["BUILD_ENV=", "vpx", "./generate.ts"]],
+            ),
+            (
+                r#"if [ -n "$CI" ]; then vpx ./generate.ts; elif false; then pnpm exec vp fmt; else vpr prepare; fi"#,
+                vec![
+                    vec!["vpx", "./generate.ts"],
+                    vec!["false"],
+                    vec!["pnpm", "exec", "vp", "fmt"],
+                    vec!["vpr", "prepare"],
+                ],
+            ),
+            (
+                r#"if true; then echo vpx; fi && BUILD_ENV=$NODE_ENV "$RUNNER" vpx"#,
+                vec![vec!["true"], vec!["echo", "vpx"], vec!["BUILD_ENV="]],
+            ),
         ] {
             assert_eq!(parse_literal_command_prefixes(source).unwrap(), expected, "{source}");
             assert_eq!(parse_literal_commands(source, true), None, "{source}");

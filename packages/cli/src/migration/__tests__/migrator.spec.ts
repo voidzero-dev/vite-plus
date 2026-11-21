@@ -531,6 +531,10 @@ describe('explicit tsdown config selection', () => {
     ['vpx ./generate.ts "$TARGET"', true],
     ['vpx ./generate.ts > generated.json', true],
     ['vpx ./generate.ts | tee generated.json', true],
+    ['BUILD_ENV=$NODE_ENV vpx ./generate.ts', true],
+    ['BUILD_ENV=$NODE_ENV "$RUNNER" vpx', false],
+    ['if [ -n "$CI" ]; then vpx ./generate.ts; fi', true],
+    ['if true; then echo vpx; fi', false],
     ['echo vpx > generated.json | tee vpx', false],
     ['pnpm dlx vpx ./generate.ts | tee generated.json', false],
     ['./generate.ts', true, '#!/usr/bin/env vpx'],
@@ -1765,6 +1769,70 @@ export default defineConfig(({ command }) => {
     expect(fs.readFileSync(path.join(tmpDir, 'vite-pack.config.ts'), 'utf8')).toContain(
       "copy: 'public'",
     );
+  });
+
+  it.each([
+    "for (const options of [library, cli]) options.outDir = 'release-' + options.name;",
+    '[library, cli].forEach(options => { options.outDir = `release-${options.name}`; });',
+  ])('keeps output directory writes through a literal array (%s)', (loop) => {
+    const tsdown = path.join(tmpDir, 'tsdown.config.ts');
+    const original = "export default { name: 'library', publicDir: 'public' };\n";
+    fs.writeFileSync(tsdown, original);
+    const vite = path.join(tmpDir, 'vite.config.ts');
+    const config =
+      "const cli = { name: 'cli' };\n" + loop + '\nexport default { pack: [library, cli] };\n';
+    fs.writeFileSync(vite, `import library from './tsdown.config.ts';\n${config}`);
+
+    expect(mergeTsdownConfigFile(tmpDir, true, createMigrationReport(), true)).toBe(true);
+    expect(fs.readFileSync(vite, 'utf8')).toBe(
+      `import library from "./vite-pack.config.ts";\n${config}`,
+    );
+    expect(fs.readFileSync(tsdown, 'utf8')).toBe(original);
+    expect(fs.readFileSync(path.join(tmpDir, 'vite-pack.config.ts'), 'utf8')).toContain(
+      "copy: 'public'",
+    );
+  });
+
+  it.each([
+    "const withDefaults = (options: typeof base) => ({ ...options, format: 'esm' as const });",
+    "function withDefaults(options: typeof base) { return { ...options, format: 'esm' as const }; }",
+  ])('keeps a verified pack mapper and its type query (%s)', (helper) => {
+    const tsdown = path.join(tmpDir, 'tsdown.config.ts');
+    const original = "export default { entry: 'src/lib.ts', publicDir: 'public' };\n";
+    fs.writeFileSync(tsdown, original);
+    const vite = path.join(tmpDir, 'vite.config.ts');
+    const body = `${helper}\nexport default { pack: withDefaults(base) };\n`;
+    fs.writeFileSync(vite, `import base from './tsdown.config.ts';\n${body}`);
+
+    expect(mergeTsdownConfigFile(tmpDir, true, createMigrationReport(), true)).toBe(true);
+    expect(fs.readFileSync(vite, 'utf8')).toBe(
+      `import base from "./vite-pack.config.ts";\n${body}`,
+    );
+    expect(fs.readFileSync(tsdown, 'utf8')).toBe(original);
+    expect(fs.readFileSync(path.join(tmpDir, 'vite-pack.config.ts'), 'utf8')).toContain(
+      "copy: 'public'",
+    );
+  });
+
+  it.each([
+    "import { withDefaults } from './defaults.ts';",
+    'const withDefaults = (options: typeof base) => ({ ...options, name: options.publicDir });',
+  ])('reports a pack mapper that needs manual conversion (%s)', (helper) => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'tsdown.config.ts'),
+      "export default { publicDir: 'public' };\n",
+    );
+    const vite = path.join(tmpDir, 'vite.config.ts');
+    const source = `import base from './tsdown.config.ts';\n${helper}\nexport default { pack: withDefaults(base) };\n`;
+    fs.writeFileSync(vite, source);
+    const report = createMigrationReport();
+
+    expect(mergeTsdownConfigFile(tmpDir, true, report, true)).toBe(false);
+    expect(fs.readFileSync(vite, 'utf8')).toBe(source);
+    expect(report.warnings).toContainEqual(
+      expect.stringMatching(/vite\.config\.ts.*migrate the pack options manually/i),
+    );
+    expect(fs.existsSync(path.join(tmpDir, 'vite-pack.config.ts'))).toBe(false);
   });
 
   it('preserves the filter and mapping of a converted pack array', () => {

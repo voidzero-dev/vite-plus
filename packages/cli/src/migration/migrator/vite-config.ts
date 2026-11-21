@@ -694,9 +694,12 @@ function packProperties(program: Program, requireStatic = false): (ObjectPropert
 
 type PackIdentifier = Extract<Node, { type: 'Identifier' }>;
 type PackMapping = 'array' | 'copy' | 'unverified';
-type PackConcatCalls = {
+type PackHelper = { typeReference?: number };
+type PackValueContext = {
   localArrays: ReadonlySet<number>;
   readOnlyArguments: Set<number>;
+  localMappers: ReadonlyMap<number, PackHelper>;
+  mapperArguments: Map<number, PackHelper>;
 };
 type PackReference = {
   value: PackIdentifier;
@@ -745,7 +748,9 @@ function isStaticPackOverrideObject(node: Node): boolean {
 
 function packCallbackResult(callback: Node | undefined) {
   if (
-    (callback?.type !== 'ArrowFunctionExpression' && callback?.type !== 'FunctionExpression') ||
+    (callback?.type !== 'ArrowFunctionExpression' &&
+      callback?.type !== 'FunctionExpression' &&
+      callback?.type !== 'FunctionDeclaration') ||
     callback.async ||
     callback.generator ||
     callback.params.length > 2
@@ -829,10 +834,10 @@ function hasLiteralPackIndex(member: MemberExpression): boolean {
 function packValueReferences(
   node: Node,
   mapping?: PackMapping,
-  concatCalls?: PackConcatCalls,
+  context?: PackValueContext,
 ): PackReference[] {
   const follow = (expression: Node, kind?: PackMapping) =>
-    packValueReferences(expression, kind, concatCalls);
+    packValueReferences(expression, kind, context);
   const value = unwrapTypeExpression(node);
   const arrayMapping = mapping === 'unverified' ? 'unverified' : 'array';
   switch (value.type) {
@@ -870,9 +875,17 @@ function packValueReferences(
         ];
       }
       const { callee } = value;
+      if (context && callee.type === 'Identifier' && value.arguments.length === 1) {
+        const mapper = context.localMappers.get(callee.start);
+        const argument = unwrapTypeExpression(value.arguments[0]);
+        if (mapper && argument.type === 'Identifier') {
+          context.mapperArguments.set(argument.start, mapper);
+          return follow(argument, mapping === 'unverified' ? 'unverified' : 'copy');
+        }
+      }
       const method = memberName(callee);
       if (callee.type !== 'MemberExpression' || !method || !packArrayMethods.has(method)) {
-        return [];
+        return context ? value.arguments.flatMap((argument) => follow(argument, 'unverified')) : [];
       }
       const receiver = unwrapTypeExpression(callee.object);
       const knownReceiver =
@@ -881,9 +894,9 @@ function packValueReferences(
           packArrayMethods.has(memberName(receiver.callee) ?? ''));
       if (method === 'concat') {
         const literalReceiver =
-          concatCalls &&
+          context &&
           (receiver.type === 'ArrayExpression' ||
-            (receiver.type === 'Identifier' && concatCalls.localArrays.has(receiver.start)));
+            (receiver.type === 'Identifier' && context.localArrays.has(receiver.start)));
         if (!literalReceiver) {
           return follow(receiver, knownReceiver ? arrayMapping : 'unverified');
         }
@@ -895,7 +908,7 @@ function packValueReferences(
           );
           if (root) {
             // A local array literal concatenates its arguments without writing to them.
-            concatCalls.readOnlyArguments.add(root.start);
+            context.readOnlyArguments.add(root.start);
           }
           references.push(...follow(argument, argumentMapping));
         }
@@ -936,7 +949,25 @@ function mutationArrayReference(node: Node): PackReference | undefined {
   return undefined;
 }
 
-function privateConstInitializers(program: Program) {
+function iteratedPackReferences(node: Node): PackReference[] {
+  const array = unwrapTypeExpression(node);
+  if (array.type !== 'ArrayExpression') {
+    const reference = mutationArrayReference(array);
+    return reference ? [reference] : [];
+  }
+  return array.elements.flatMap<PackReference>((element) => {
+    const value = element && unwrapTypeExpression(element);
+    if (value?.type === 'Identifier') {
+      return [{ value, mapping: 'copy' }];
+    }
+    if (value?.type === 'SpreadElement' && value.argument.type === 'Identifier') {
+      return [{ value: value.argument, mapping: 'array' }];
+    }
+    return [];
+  });
+}
+
+function privatePackBindings(program: Program) {
   const initializers = new Map<number, Node>();
   const pending: unknown[] = [...program.body];
   while (pending.length > 0) {
@@ -955,6 +986,9 @@ function privateConstInitializers(program: Program) {
             initializers.set(id.start, init);
           }
         }
+      }
+      if (node.type === 'FunctionDeclaration' && node.id) {
+        initializers.set(node.id.start, node);
       }
       pending.push(...Object.values(node));
     }
@@ -999,7 +1033,7 @@ function sharedPackSpread(initializer: ObjectExpression): PackIdentifier | undef
         (!member.computed &&
           !member.method &&
           member.kind === 'init' &&
-          sameStaticValue(member.value, member.value)),
+          sameStaticValue(unwrapTypeExpression(member.value), unwrapTypeExpression(member.value))),
     )
   ) {
     return spread;
@@ -1012,13 +1046,15 @@ function packAssignments(
   packs: readonly (ObjectProperty | undefined)[],
 ) {
   const readOnlyArguments = new Set<number>();
+  const mapperArguments = new Map<number, PackHelper>();
   const uses: PackUse[] = [];
   if (!packs.some(Boolean)) {
-    return { uses, readOnlyArguments };
+    return { uses, readOnlyArguments, mapperArguments };
   }
-  const initializers = privateConstInitializers(program);
+  const initializers = privatePackBindings(program);
   const localArrays = new Set<number>();
-  const concatCalls = { localArrays, readOnlyArguments };
+  const localMappers = new Map<number, PackHelper>();
+  const context = { localArrays, readOnlyArguments, localMappers, mapperArguments };
   const aliasesByReference = new Map<
     number,
     { initializer: Node; references: number[]; remaining: number; mapping?: PackMapping }
@@ -1029,8 +1065,16 @@ function packAssignments(
       continue;
     }
     const alias = { initializer, references, remaining: references.length };
-    if (references.length === 1 && unwrapTypeExpression(initializer).type === 'ArrayExpression') {
-      localArrays.add(references[0]);
+    if (references.length === 1) {
+      const value = unwrapTypeExpression(initializer);
+      if (value.type === 'ArrayExpression') {
+        localArrays.add(references[0]);
+      } else {
+        const mapper = packMappingHelper(value);
+        if (mapper) {
+          localMappers.set(references[0], mapper);
+        }
+      }
     }
     for (const reference of references) {
       aliasesByReference.set(reference, alias);
@@ -1040,18 +1084,16 @@ function packAssignments(
   for (const property of packs) {
     if (property) {
       uses.push(
-        ...packValueReferences(property.value, undefined, concatCalls).map(
-          ({ value, mapping }) => ({
-            value,
-            mapping,
-            property,
-          }),
-        ),
+        ...packValueReferences(property.value, undefined, context).map(({ value, mapping }) => ({
+          value,
+          mapping,
+          property,
+        })),
       );
     }
   }
   if (uses.length === 0) {
-    return { uses, readOnlyArguments };
+    return { uses, readOnlyArguments, mapperArguments };
   }
 
   // Follow a constant only when every reference feeds pack. Add its initializer
@@ -1067,7 +1109,7 @@ function packAssignments(
       alias.mapping ??= mapping;
     }
     if (--alias.remaining === 0) {
-      uses.push(...packValueReferences(alias.initializer, alias.mapping, concatCalls));
+      uses.push(...packValueReferences(alias.initializer, alias.mapping, context));
     }
   }
   const packReferences = new Set(uses.map(({ value }) => value.start));
@@ -1086,7 +1128,7 @@ function packAssignments(
       ? [{ property, value, mapping, copy: { initializer: alias.initializer, reference } }]
       : [];
   });
-  return { uses: [...uses, ...copies], readOnlyArguments };
+  return { uses: [...uses, ...copies], readOnlyArguments, mapperArguments };
 }
 
 const arrayMutators = new Set([
@@ -1134,7 +1176,7 @@ function mutationExpressions(body: Node | null) {
     : [body?.type === 'ExpressionStatement' ? body.expression : body];
 }
 
-function entryMutationHelper(node: FunctionNode | ArrowFunctionExpression) {
+function packHelperParameter(node: FunctionNode | ArrowFunctionExpression) {
   const [parameter] = node.params;
   if (node.async || node.generator || node.params.length !== 1 || parameter.type !== 'Identifier') {
     return undefined;
@@ -1144,7 +1186,28 @@ function entryMutationHelper(node: FunctionNode | ArrowFunctionExpression) {
     type?.type === 'TSTypeQuery' && type.exprName.type === 'Identifier'
       ? type.exprName.start
       : undefined;
-  if (type && typeReference === undefined) {
+  return !type || typeReference !== undefined ? { name: parameter.name, typeReference } : undefined;
+}
+
+function packMappingHelper(node: Node): PackHelper | undefined {
+  if (
+    node.type !== 'ArrowFunctionExpression' &&
+    node.type !== 'FunctionExpression' &&
+    node.type !== 'FunctionDeclaration'
+  ) {
+    return undefined;
+  }
+  const parameter = packHelperParameter(node);
+  const result = packCallbackResult(node);
+  if (parameter && result && isStaticPackMapping(result.value, parameter.name)) {
+    return { typeReference: parameter.typeReference };
+  }
+  return undefined;
+}
+
+function entryMutationHelper(node: FunctionNode | ArrowFunctionExpression) {
+  const parameter = packHelperParameter(node);
+  if (!parameter) {
     return undefined;
   }
   const expressions = mutationExpressions(node.body);
@@ -1167,9 +1230,27 @@ function entryMutationHelper(node: FunctionNode | ArrowFunctionExpression) {
       );
     })
   ) {
-    return { typeReference };
+    return { typeReference: parameter.typeReference };
   }
   return undefined;
+}
+
+function recordOutputReads(node: Node, references: Set<number>): void {
+  const value = unwrapTypeExpression(node);
+  if (value.type === 'TemplateLiteral') {
+    for (const expression of value.expressions) {
+      recordOutputReads(expression, references);
+    }
+  } else if (value.type === 'BinaryExpression' && value.operator === '+') {
+    recordOutputReads(value.left, references);
+    recordOutputReads(value.right, references);
+  } else if (
+    value.type === 'MemberExpression' &&
+    value.object.type === 'Identifier' &&
+    stablePackOptions.has(memberName(value) ?? '')
+  ) {
+    references.delete(value.object.start);
+  }
 }
 
 function setsPackArrayOutput(
@@ -1182,27 +1263,33 @@ function setsPackArrayOutput(
   }
   const binding = bindings.find(({ start }) => start === options.start);
   const expressions = mutationExpressions(body);
-  // The body can compute the directory normally. Only the assignment may
-  // use the options object, so it cannot read a renamed option in the copy.
+  // The directory can use stable option values, such as the package name.
   const references = new Set(binding?.references);
   return (
     expressions.length > 0 &&
     expressions.every((expression) => {
-      const receiver = packOutputReceiver(expression);
-      return receiver?.type === 'Identifier' && references.delete(receiver.start);
+      const assignment = packOutputAssignment(expression);
+      if (
+        assignment?.receiver.type !== 'Identifier' ||
+        !references.delete(assignment.receiver.start)
+      ) {
+        return false;
+      }
+      recordOutputReads(assignment.value, references);
+      return true;
     }) &&
     references.size === 0
   );
 }
 
-function packOutputReceiver(node: Node | null | undefined): Node | undefined {
+function packOutputAssignment(node: Node | null | undefined) {
   if (
     node?.type === 'AssignmentExpression' &&
     node.operator === '=' &&
     node.left.type === 'MemberExpression' &&
     memberName(node.left) === 'outDir'
   ) {
-    return node.left.object;
+    return { receiver: node.left.object, value: node.right };
   }
   return undefined;
 }
@@ -1210,12 +1297,13 @@ function packOutputReceiver(node: Node | null | undefined): Node | undefined {
 function packMutationReferences(
   { program, bindings }: ReturnType<typeof parseSource>,
   readOnlyArguments: ReadonlySet<number>,
+  mapperArguments: ReadonlyMap<number, PackHelper>,
 ) {
   const writes = new Set<number>();
   const reassignments = new Set<number>();
   const aliasInitializers = new Map<number, number>();
   const entryAliases = new Map<number, { origin: number; fallback: boolean }>();
-  const arrayOrigins = new Map<number, number>();
+  const arrayOrigins = new Map<number, number[]>();
   const foundOptions = new Map<number, number>();
   const filteredOptions = new Map<number, number>();
   const guards = new Set<number>();
@@ -1227,17 +1315,27 @@ function packMutationReferences(
   const calls = new Map<number, number>();
   const rewritable = new Map<
     number,
-    { typeReference?: number; array?: boolean; entry?: 'array' | 'optional' }
-  >();
+    PackHelper & { array?: boolean; entry?: 'array' | 'optional' }
+  >(mapperArguments);
   const recordHelper = (start: number, node: FunctionNode | ArrowFunctionExpression) => {
     const helper = entryMutationHelper(node);
     if (helper) {
       helpers.set(start, helper);
     }
   };
-  const recordArrayBinding = (element: Node, array: PackIdentifier) => {
+  const recordArrayBinding = (element: Node, arrays: readonly PackReference[]) => {
+    const origins = arrays.map(({ value }) => value.start);
     for (const start of aliasBindingStarts(element)) {
-      arrayOrigins.set(start, array.start);
+      arrayOrigins.set(start, origins);
+    }
+  };
+  const recordIteration = (arrays: readonly PackReference[], updatesOutput: boolean) => {
+    if (updatesOutput) {
+      for (const { value, mapping } of arrays) {
+        if (mapping !== 'unverified') {
+          rewritable.set(value.start, { array: mapping !== 'copy' });
+        }
+      }
     }
   };
   for (const node of configNodes(program)) {
@@ -1260,24 +1358,19 @@ function packMutationReferences(
         continue;
       }
       case 'ForOfStatement': {
-        const selection = mutationArrayReference(node.right);
-        if (!selection) {
+        const arrays = iteratedPackReferences(node.right);
+        if (arrays.length === 0) {
           continue;
         }
-        const { value: array, mapping } = selection;
         if (node.left.type !== 'VariableDeclaration') {
-          writes.add(array.start);
+          for (const { value } of arrays) {
+            writes.add(value.start);
+          }
           continue;
         }
         const { id } = node.left.declarations[0];
-        recordArrayBinding(id, array);
-        if (
-          !node.await &&
-          mapping !== 'unverified' &&
-          setsPackArrayOutput(id, node.body, bindings)
-        ) {
-          rewritable.set(array.start, { array: true });
-        }
+        recordArrayBinding(id, arrays);
+        recordIteration(arrays, !node.await && setsPackArrayOutput(id, node.body, bindings));
         continue;
       }
       case 'MemberExpression':
@@ -1347,7 +1440,7 @@ function packMutationReferences(
         }
         continue;
       case 'AssignmentExpression': {
-        const receiver = packOutputReceiver(node);
+        const receiver = packOutputAssignment(node)?.receiver;
         if (receiver?.type === 'Identifier') {
           outputWrites.add(receiver.start);
         } else if (
@@ -1379,9 +1472,8 @@ function packMutationReferences(
         const { callee } = node;
         const method = memberName(callee);
         if (callee.type === 'MemberExpression' && (method === 'forEach' || method === 'find')) {
-          const selection = mutationArrayReference(callee.object);
-          if (selection) {
-            const { value: object, mapping } = selection;
+          const arrays = iteratedPackReferences(callee.object);
+          if (arrays.length > 0) {
             const [callback] = node.arguments;
             if (
               node.arguments.length === 1 &&
@@ -1394,22 +1486,22 @@ function packMutationReferences(
               // through the callback parameters to their source config.
               for (const parameter of [element, array]) {
                 if (parameter) {
-                  recordArrayBinding(parameter, object);
+                  recordArrayBinding(parameter, arrays);
                 }
               }
-              if (
+              recordIteration(
+                arrays,
                 method === 'forEach' &&
-                mapping !== 'unverified' &&
-                element &&
-                callback.params.length <= 2 &&
-                !callback.async &&
-                !callback.generator &&
-                setsPackArrayOutput(element, callback.body, bindings)
-              ) {
-                rewritable.set(object.start, { array: true });
-              }
+                  element !== undefined &&
+                  callback.params.length <= 2 &&
+                  !callback.async &&
+                  !callback.generator &&
+                  setsPackArrayOutput(element, callback.body, bindings),
+              );
             } else {
-              writes.add(object.start);
+              for (const { value } of arrays) {
+                writes.add(value.start);
+              }
             }
           }
         }
@@ -1456,7 +1548,7 @@ function packMutationReferences(
       writes.add(root.start);
     }
   }
-  const origins = new Map<number, number>();
+  const origins = new Map<number, readonly number[]>();
   const updatesFilteredOutput = (reference: number) =>
     indexedOutputWrites.has(reference) || rewritable.get(reference)?.array === true;
   for (const { start, references, constant } of bindings) {
@@ -1499,13 +1591,13 @@ function packMutationReferences(
       rewritable.set(argument, helper);
     }
     const alias = aliasInitializers.get(start);
-    const origin = alias ?? arrayOrigins.get(start);
-    if (origin !== undefined) {
+    const parents = alias !== undefined ? [alias] : arrayOrigins.get(start);
+    if (parents) {
       for (const reference of references) {
         // Assigning a local alias does not change the imported entry array.
         // Its other uses can still write through the initial alias.
         if (alias === undefined || !reassignments.has(reference)) {
-          origins.set(reference, origin);
+          origins.set(reference, parents);
         }
       }
     }
@@ -1513,8 +1605,7 @@ function packMutationReferences(
   // The initializer can itself reference an alias. Follow those links until
   // the write set contains every original binding reached by a mutation.
   for (const write of writes) {
-    const origin = origins.get(write);
-    if (origin !== undefined) {
+    for (const origin of origins.get(write) ?? []) {
       writes.add(origin);
     }
   }
@@ -1582,7 +1673,7 @@ function sharedPackEntryName(pack: ReturnType<typeof readPackEntry>): string | u
 
 function importedPackBindings(
   parsed: ReturnType<typeof parseSource>,
-  { uses: assignments, readOnlyArguments }: ReturnType<typeof packAssignments>,
+  { uses: assignments, readOnlyArguments, mapperArguments }: ReturnType<typeof packAssignments>,
   vitePath: string,
   packPath: string,
 ) {
@@ -1611,7 +1702,11 @@ function importedPackBindings(
   if (imports.length === 0) {
     return [];
   }
-  const { writes, rewritable, entryWrites } = packMutationReferences(parsed, readOnlyArguments);
+  const { writes, rewritable, entryWrites } = packMutationReferences(
+    parsed,
+    readOnlyArguments,
+    mapperArguments,
+  );
   const referencesByStart = new Map(bindings.map(({ start, references }) => [start, references]));
   const importWrites = imports.flatMap((statement) =>
     statement.specifiers.flatMap((specifier) => {
@@ -1895,7 +1990,11 @@ function mergeRetainedTsdownConfig(
   const parsed = hasPack ? parseSource(viteConfigPath, source) : undefined;
   const assignments = parsed
     ? packAssignments(parsed, packProperties(parsed.program))
-    : { uses: [], readOnlyArguments: new Set<number>() };
+    : {
+        uses: [],
+        readOnlyArguments: new Set<number>(),
+        mapperArguments: new Map<number, PackHelper>(),
+      };
   const originalImports = parsed
     ? importedPackBindings(parsed, assignments, viteConfigPath, tsdownConfigPath)
     : [];
