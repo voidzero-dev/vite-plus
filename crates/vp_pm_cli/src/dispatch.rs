@@ -10,6 +10,7 @@ use vt_path::AbsolutePath;
 use crate::{
     EnvironmentPackageManagerResolution, PackageManager, PackageManagerType,
     cli::PackageManagerCommand,
+    config::NpmConfig,
     download_package_manager_for_cwd,
     error::Error,
     package_manager_override,
@@ -68,9 +69,13 @@ pub async fn dispatch_with_resolved_package_manager(
 
 async fn dispatch_with_manager(
     cwd: &AbsolutePath,
-    command: PackageManagerCommand,
+    mut command: PackageManagerCommand,
     source: ManagerSource<'_>,
 ) -> Result<DispatchResult, Error> {
+    if let PackageManagerCommand::Dlx(args) = &mut command {
+        // Keep the user's npm install confirmation choice instead of overriding it with `--yes`.
+        args.npm_yes_configured = NpmConfig::load_for_cwd(cwd).values.contains_key("yes");
+    }
     let render_diagnostics = command.should_render_diagnostics();
     let manager = match source {
         ManagerSource::Detect { local_cli } => {

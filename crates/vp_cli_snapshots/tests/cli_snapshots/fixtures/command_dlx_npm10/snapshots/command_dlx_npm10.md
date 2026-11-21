@@ -23,6 +23,17 @@ Options:
 Documentation: https://viteplus.dev/guide/package-management/dlx
 ```
 
+## `npm_config_yes=false vp dlx vp-test-upper hello`
+
+npm_config_yes=false keeps npm from installing an uncached package
+
+**Exit code:** 1
+
+```
+npm error npx canceled due to missing packages and no YES option: ["vp-test-upper@1.0.0"]
+npm error A complete log of this run can be found in: <home>/.npm/_logs/<timestamp>-debug-0.log
+```
+
 ## `vp dlx -s vp-test-echo hello`
 
 should run vp-test-echo with npm exec

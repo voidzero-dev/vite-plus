@@ -211,7 +211,7 @@ impl PackageManagerCommand {
     /// Build a `dlx` command for callers that do not use the clap parser.
     #[must_use]
     pub fn dlx(package: Vec<String>, shell_mode: bool, silent: bool, args: Vec<String>) -> Self {
-        Self::Dlx(DlxArgs { package, shell_mode, silent, args })
+        Self::Dlx(DlxArgs { package, shell_mode, silent, args, ..Default::default() })
     }
 
     /// Resolve this parsed command for a detected package manager.
