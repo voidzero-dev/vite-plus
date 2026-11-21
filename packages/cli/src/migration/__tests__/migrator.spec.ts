@@ -201,6 +201,10 @@ describe('explicit tsdown config selection', () => {
 
   it.each([
     ['tsdown --config packages/shared/tsdown.config.json', false],
+    ['tsdown --config packages/shared/tsdown.config.json --out-dir "$OUT_DIR"', false],
+    ['tsdown -d="${OUT_DIR}" --config packages/shared/tsdown.config.json', false],
+    ['tsdown --config packages/shared/tsdown.config.json --out-dir $OUT_DIR', true],
+    ['tsdown --out-dir "$OUT_DIR" --config "$TSDOWN_CONFIG"', true],
     ['tsdown --config "$TSDOWN_CONFIG"', true],
     ['tsdown --config "%TSDOWN_CONFIG%"', true],
   ])('keeps packages that can own the config selected by %s', (script, keepIndependent) => {
@@ -525,6 +529,8 @@ describe('explicit tsdown config selection', () => {
     ['vp fmt', true],
     ['vpr fixture-check', true],
     ['pnpm exec vp fmt', true],
+    ['npx vp --version', true],
+    ['npx --package another-command vp --version', false],
     ['echo vp fmt', false],
     ['vpx ./generate.ts', true],
     ['pnpm exec vpx ./generate.ts', true],
@@ -539,6 +545,8 @@ describe('explicit tsdown config selection', () => {
     ['pnpm dlx vpx ./generate.ts | tee generated.json', false],
     ['./generate.ts', true, '#!/usr/bin/env vpx'],
     ['./generate.ts > generated.json', true, '#!/usr/bin/env -S node --import vite-plus/register'],
+    ['./bin/generate', true, '#!/usr/bin/env -S node --import vite-plus/register', 'bin/generate'],
+    ['./bin/generate', false, '#!/usr/bin/env node', 'bin/generate'],
     ['cd scripts && ./generate.ts', true, '#!/usr/bin/env vpx', 'scripts/generate.ts'],
     [
       'cd scripts && ./generate.ts > generated.txt',
@@ -606,6 +614,50 @@ describe('explicit tsdown config selection', () => {
       expect(ensureVitePlusBootstrap(workspace).changed).toBe(false);
     },
   );
+
+  it.each([
+    ['.lintstagedrc.json', 'vpx ./generate.ts', true],
+    ['.lintstagedrc', 'vpx ./generate.ts', true],
+    ['package.json', 'vpx ./generate.ts', true],
+    ['.lintstagedrc.json', 'echo vpx', false],
+  ])('checks retained lint-staged commands in %s (%s)', (filename, command, needsVitePlus) => {
+    const member = path.join(tmpDir, 'packages/member');
+    const manifest = path.join(member, 'package.json');
+    const staged = { '*.ts': ['echo checking', command] };
+    const pkg = {
+      scripts: { release: 'tsdown -c release.ts' },
+      devDependencies: { tsdown: '0.23.4', 'lint-staged': '16.3.1' },
+      ...(filename === 'package.json' && { 'lint-staged': staged }),
+    };
+    fs.mkdirSync(member, { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      '{"devDependencies":{"vite-plus":"latest"}}',
+    );
+    fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'packages: [packages/*]\n');
+    fs.writeFileSync(manifest, JSON.stringify(pkg));
+    if (filename !== 'package.json') {
+      fs.writeFileSync(path.join(member, filename), JSON.stringify(staged));
+    }
+    const expected = {
+      ...pkg,
+      devDependencies: {
+        ...pkg.devDependencies,
+        ...(needsVitePlus && { 'vite-plus': 'catalog:' }),
+      },
+    };
+
+    rewriteMonorepoProject(member, PackageManager.pnpm, true, true);
+    expect(readJson(manifest)).toEqual(expected);
+
+    fs.writeFileSync(manifest, JSON.stringify(pkg));
+    const workspace = makeWorkspaceInfo(tmpDir, PackageManager.pnpm, '12.11.2');
+    workspace.isMonorepo = true;
+    workspace.packages = [{ name: 'member', path: 'packages/member' }];
+    ensureVitePlusBootstrap(workspace);
+    expect(readJson(manifest)).toEqual(expected);
+    expect(ensureVitePlusBootstrap(workspace).changed).toBe(false);
+  });
 
   it.each(['lint-staged', undefined])(
     'adds vite-plus to a member that keeps tsdown and migrates staged config (script=%s)',
@@ -1809,7 +1861,10 @@ export default defineConfig(({ command }) => {
     );
   });
 
-  it('keeps output directory writes through a named array for either pack branch', () => {
+  it.each([
+    "for (const options of formats) options.outDir = 'release-' + options.name;",
+    "for (const [index, options] of formats.entries()) options.outDir = 'release-' + index + '-' + options.name;",
+  ])('keeps output directory writes through a named array (%s)', (loop) => {
     const tsdown = path.join(tmpDir, 'tsdown.config.ts');
     const original = "export default { name: 'library', publicDir: 'public' };\n";
     fs.writeFileSync(tsdown, original);
@@ -1817,7 +1872,7 @@ export default defineConfig(({ command }) => {
     const config =
       "const cli = { name: 'cli' };\n" +
       'const formats = [library, cli];\n' +
-      "for (const options of formats) options.outDir = 'release-' + options.name;\n" +
+      `${loop}\n` +
       "export default { pack: process.env.PACK_TARGET === 'cli' ? cli : library };\n";
     fs.writeFileSync(vite, `import library from './tsdown.config.ts';\n${config}`);
 

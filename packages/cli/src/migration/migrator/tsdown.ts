@@ -86,7 +86,8 @@ function scanTsdownScript(script: string, cwd: string | undefined): TsdownConfig
   if (!script.includes('tsdown')) {
     return usage;
   }
-  const commands = parseLiteralCommands(script, true);
+  // A quoted output directory value need not identify the selected config.
+  const commands = parseLiteralCommands(script, true, ['--out-dir', '-d']);
   if (!commands) {
     if (POSSIBLE_CONFIG_COMMAND.test(script)) {
       usage.selected.push(undefined);

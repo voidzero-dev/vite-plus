@@ -52,12 +52,18 @@ pub struct LiteralCommandToken {
 /// Read simple literal commands, optionally separated by `&&`, `||`, or `;`.
 /// Returns null for unsupported syntax. Assignments and wrappers stay in argv;
 /// callers must decide whether a command is safe to rewrite.
+/// Option analysis can replace quoted variables for listed options with empty values.
 #[napi]
 pub fn parse_literal_commands(
     source: String,
     allow_lists: bool,
+    env_value_options: Option<Vec<String>>,
 ) -> Option<Vec<Vec<LiteralCommandToken>>> {
-    let commands = vp_migration::parse_literal_commands(&source, allow_lists)?;
+    let commands = vp_migration::parse_literal_commands_with_env_values(
+        &source,
+        allow_lists,
+        env_value_options.as_deref().unwrap_or_default(),
+    )?;
     let mut byte_offset = 0;
     let mut utf16_offset = 0;
     // Ranges arrive in source order. Convert incrementally so non-ASCII scripts

@@ -808,3 +808,33 @@ steps = [
   ["vpt", "stat-file", "library-out/library.mjs", "--assert", "file"],
   ["vpt", "print-file", "library-out/public/resource.txt"],
 ]
+
+[[case]]
+name = "pack_array_entries"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+comment = "A named array enumerated with entries() keeps the original module and resource locations."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.vite-plus", "^1.7.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies.tsdown", "0.22.14"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "scripts.bundle", "tsdown -c tsdown.config.ts"], snapshot = false },
+  { argv = ["vpt", "write-file", "tsdown.config.ts", "export default { name: 'library', entry: 'src/library.ts', outDir: 'library-out', publicDir: 'public' };"], snapshot = false },
+  { argv = ["vpt", "write-file", "src/cli.ts", "export const cli = true;"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "import library from './tsdown.config.ts'; const cli = { name: 'cli', entry: 'src/cli.ts', outDir: 'cli-out' }; const formats = [library, cli]; for (const [index, options] of formats.entries()) options.outDir = 'release-' + index + '-' + options.name; export default { pack: process.env.PACK_TARGET === 'cli' ? cli : library };"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "public"], snapshot = false },
+  { argv = ["vpt", "write-file", "public/resource.txt", "library resource\n"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  { argv = ["vp", "pack"], envs = [["PACK_TARGET", "library"]], snapshot = false },
+  ["vpt", "stat-file", "release-0-library/library.mjs", "--assert", "file"],
+  ["vpt", "print-file", "release-0-library/public/resource.txt"],
+  ["vpt", "stat-file", "library-out", "cli-out", "release-1-cli", "--assert", "missing"],
+  { argv = ["vpt", "rm", "-r", "release-0-library"], snapshot = false },
+  { argv = ["vp", "pack"], envs = [["PACK_TARGET", "cli"]], snapshot = false },
+  ["vpt", "stat-file", "release-1-cli/cli.mjs", "--assert", "file"],
+  ["vpt", "stat-file", "library-out", "cli-out", "release-0-library", "--assert", "missing"],
+  { argv = ["pnpm", "run", "bundle"], snapshot = false },
+  ["vpt", "stat-file", "library-out/library.mjs", "--assert", "file"],
+  ["vpt", "print-file", "library-out/public/resource.txt"],
+]

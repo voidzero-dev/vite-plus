@@ -31,7 +31,7 @@ pub use import_rule::ImportRuleConfig;
 pub use package::{rewrite_eslint, rewrite_prettier, rewrite_scripts};
 pub use shell_command::{
     LiteralCommandPrefixes, LiteralCommandToken, parse_literal_command_prefixes,
-    parse_literal_commands,
+    parse_literal_commands, parse_literal_commands_with_env_values,
 };
 pub use source_analysis::analyze_migration_source;
 pub use task_cache::{TaskCacheMigrationResult, migrate_task_cache_config};

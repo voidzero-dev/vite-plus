@@ -533,11 +533,11 @@ const vitePlusScriptCommands = new Set(['vp', 'vpr', 'vpx']);
 const envShebang = /^#![ \t]*\S*\benv[ \t]+(?:-S[ \t]+)?([^\r\n]+)/;
 
 function localScriptNeedsVitePlus(executable: string | undefined, projectPath: string): boolean {
-  if (
-    !executable?.includes('/') ||
-    path.isAbsolute(executable) ||
-    !SCRIPT_EXTENSIONS.includes(path.extname(executable))
-  ) {
+  if (!executable?.includes('/') || path.isAbsolute(executable)) {
+    return false;
+  }
+  const extension = path.extname(executable);
+  if (extension && !SCRIPT_EXTENSIONS.includes(extension)) {
     return false;
   }
   const file = path.resolve(projectPath, executable);
@@ -545,8 +545,16 @@ function localScriptNeedsVitePlus(executable: string | undefined, projectPath: s
     if (!fs.statSync(file, { throwIfNoEntry: false })?.isFile()) {
       return false;
     }
-    const command = envShebang.exec(fs.readFileSync(file, 'utf8'))?.[1];
-    return command !== undefined && scriptRequiresVitePlus(command);
+    const descriptor = fs.openSync(file, 'r');
+    try {
+      // An extensionless executable may be a native binary.
+      const prefix = Buffer.alloc(1024);
+      const bytesRead = fs.readSync(descriptor, prefix);
+      const command = envShebang.exec(prefix.toString('utf8', 0, bytesRead))?.[1];
+      return command !== undefined && scriptRequiresVitePlus(command);
+    } finally {
+      fs.closeSync(descriptor);
+    }
   } catch {
     return false;
   }
@@ -612,13 +620,12 @@ function scriptRequiresVitePlus(command: string, projectPath?: string): boolean 
       }
       const start = first + getCommandStartIndex(values.slice(first));
       const executable = values[start];
-      const downloadsCommand = values
-        .slice(first, start)
-        .some((word) => ['npx', 'bunx', 'dlx', 'x'].includes(word));
+      const wrappers = values.slice(first, start);
+      const downloadsCommand = wrappers.some((word) => ['bunx', 'dlx', 'x'].includes(word));
       if (
         !downloadsCommand &&
         (vitePlusScriptCommands.has(executable) ||
-          (cwd && localScriptNeedsVitePlus(executable, cwd)))
+          (cwd && !wrappers.includes('npx') && localScriptNeedsVitePlus(executable, cwd)))
       ) {
         return true;
       }
@@ -634,12 +641,12 @@ function scriptRequiresVitePlus(command: string, projectPath?: string): boolean 
   );
 }
 
-export function scriptsRequireVitePlus(
-  scripts: Record<string, string> | undefined,
+export function packageCommandsRequireVitePlus(
+  pkg: Record<string, unknown>,
   projectPath?: string,
 ): boolean {
-  return Object.values(scripts ?? {}).some(
-    (command) => typeof command === 'string' && scriptRequiresVitePlus(command, projectPath),
+  return packageCommands(pkg, projectPath).some((command) =>
+    scriptRequiresVitePlus(command, projectPath),
   );
 }
 
@@ -1071,9 +1078,15 @@ function recordCommands(record: unknown): string[] {
     .filter((command): command is string => typeof command === 'string');
 }
 
-/** The commands a package.json runs: its scripts and lint-staged tasks. */
-function packageCommands(pkg: Record<string, unknown>): string[] {
-  return [...recordCommands(pkg.scripts), ...recordCommands(pkg['lint-staged'])];
+/** Package scripts and lint-staged tasks from the manifest or local JSON files. */
+function packageCommands(pkg: Record<string, unknown>, projectPath?: string): string[] {
+  return [
+    ...recordCommands(pkg.scripts),
+    ...recordCommands(pkg['lint-staged']),
+    ...(projectPath
+      ? lintStagedJsonFiles(projectPath).flatMap((file) => recordCommands(readJsonFile(file)))
+      : []),
+  ];
 }
 
 function lintStagedJsonFiles(dir: string): string[] {
@@ -1112,10 +1125,7 @@ export function detectScriptRunnerProject(
     if (!pkg || (!runner.detectKeptUses && ownsRunnerAtRuntime(runner, pkg))) {
       return false;
     }
-    const commands = [
-      ...packageCommands(pkg),
-      ...lintStagedJsonFiles(dir).flatMap((file) => recordCommands(readJsonFile(file))),
-    ];
+    const commands = packageCommands(pkg, dir);
     return (
       commands.some((command) =>
         runner.detectKeptUses

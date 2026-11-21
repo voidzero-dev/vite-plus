@@ -17,9 +17,9 @@ import {
   hasNuxtTestUtilsDependency,
   managedOverridePackages,
   normalizeVitestPeerCatalogSpec,
+  packageCommandsRequireVitePlus,
   pruneLegacyWrapperAliases,
   removeManagedVitestEntry,
-  scriptsRequireVitePlus,
   setDirectViteEdge,
 } from '../migrator.ts';
 import {
@@ -401,7 +401,7 @@ export function rewritePackageJson(
     (keepTsdownDependency &&
       (rewrittenScripts ||
         (pkg.optionalDependencies?.[VITE_PLUS_NAME] === undefined &&
-          scriptsRequireVitePlus(pkg.scripts, projectPath))))
+          packageCommandsRequireVitePlus(pkg, projectPath))))
   ) {
     // Retaining tsdown can leave all declared dependencies intact even when a
     // script has been rewritten to use a Vite+ command.

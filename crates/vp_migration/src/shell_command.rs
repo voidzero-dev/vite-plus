@@ -44,8 +44,18 @@ pub fn parse_literal_commands(
     source: &str,
     allow_lists: bool,
 ) -> Option<Vec<Vec<LiteralCommandToken>>> {
+    parse_literal_commands_with_env_values(source, allow_lists, &[])
+}
+
+/// Read the same command syntax for option analysis. Replace a quoted variable
+/// used as the value of a listed option with an empty value.
+pub fn parse_literal_commands_with_env_values(
+    source: &str,
+    allow_lists: bool,
+    options: &[String],
+) -> Option<Vec<Vec<LiteralCommandToken>>> {
     Some(
-        parse_commands(source, allow_lists, false)?
+        parse_commands(source, allow_lists, false, options)?
             .commands
             .into_iter()
             .map(|command| command.tokens)
@@ -56,7 +66,7 @@ pub fn parse_literal_commands(
 /// Read command prefixes in lists, pipelines, redirections, conditionals, and loops.
 /// Keep assignment names for unknown values and stop at an unknown argument.
 pub fn parse_literal_command_prefixes(source: &str) -> Option<LiteralCommandPrefixes> {
-    let parsed = parse_commands(source, true, true)?;
+    let parsed = parse_commands(source, true, true, &[])?;
     Some(LiteralCommandPrefixes {
         commands: parsed
             .commands
@@ -74,6 +84,7 @@ fn parse_commands(
     source: &str,
     allow_lists: bool,
     detect_dependencies: bool,
+    env_value_options: &[String],
 ) -> Option<ParsedCommands> {
     let has_escapes = source.contains('\\');
     if has_escapes && !detect_dependencies {
@@ -138,6 +149,7 @@ fn parse_commands(
                 None
             } else {
                 literal_value(&word, allow_lists)
+                    .or_else(|| expanded_option_value(&word, tokens.last(), env_value_options))
             };
             let value = match literal {
                 Some(value) => value,
@@ -219,6 +231,40 @@ fn assignment_prefix(word: &BashNode<'_>) -> Option<String> {
     }
     let name = word.field("name")?;
     (name.kind() == "variable_name").then(|| format!("{}=", name.text()))
+}
+
+fn expanded_option_value(
+    word: &BashNode<'_>,
+    previous: Option<&LiteralCommandToken>,
+    options: &[String],
+) -> Option<String> {
+    if options.is_empty() {
+        return None;
+    }
+    let text = word.text();
+    for option in options {
+        if previous.is_some_and(|token| token.value == *option) && is_quoted_variable(&text) {
+            return Some(String::new());
+        }
+        if text
+            .strip_prefix(option.as_str())
+            .and_then(|value| value.strip_prefix('='))
+            .is_some_and(is_quoted_variable)
+        {
+            return Some(format!("{option}="));
+        }
+    }
+    None
+}
+
+fn is_quoted_variable(value: &str) -> bool {
+    let Some(name) = value.strip_prefix("\"$").and_then(|value| value.strip_suffix('"')) else {
+        return false;
+    };
+    let name = name.strip_prefix('{').and_then(|name| name.strip_suffix('}')).unwrap_or(name);
+    let mut bytes = name.bytes();
+    bytes.next().is_some_and(|byte| byte.is_ascii_alphabetic() || byte == b'_')
+        && bytes.all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
 }
 
 fn literal_value(node: &BashNode<'_>, reject_hash: bool) -> Option<String> {

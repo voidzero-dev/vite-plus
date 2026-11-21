@@ -956,6 +956,7 @@ function mutationArrayReference(node: Node): PackReference | undefined {
 function iteratedPackReferences(
   node: Node,
   localArrays: ReadonlyMap<number, LocalPackArray>,
+  requireLiteral = false,
 ): PackReference[] {
   const expression = unwrapTypeExpression(node);
   const binding = expression.type === 'Identifier' ? localArrays.get(expression.start) : undefined;
@@ -964,6 +965,9 @@ function iteratedPackReferences(
   const exclusive = binding?.exclusive ?? true;
   if (array.type !== 'ArrayExpression') {
     const reference = mutationArrayReference(array);
+    if (reference && requireLiteral) {
+      reference.mapping = 'unverified';
+    }
     return reference ? [reference] : [];
   }
   return array.elements.flatMap<PackReference>((element) => {
@@ -1373,7 +1377,15 @@ function packMutationReferences(
         continue;
       }
       case 'ForOfStatement': {
-        const arrays = iteratedPackReferences(node.right, localArrays);
+        const iterable = unwrapTypeExpression(node.right);
+        const entries =
+          iterable.type === 'CallExpression' &&
+          iterable.arguments.length === 0 &&
+          iterable.callee.type === 'MemberExpression' &&
+          memberName(iterable.callee) === 'entries'
+            ? iterable.callee.object
+            : undefined;
+        const arrays = iteratedPackReferences(entries ?? iterable, localArrays, !!entries);
         if (arrays.length === 0) {
           continue;
         }
@@ -1384,8 +1396,17 @@ function packMutationReferences(
           continue;
         }
         const { id } = node.left.declarations[0];
-        recordArrayBinding(id, arrays);
-        recordIteration(arrays, !node.await && setsPackArrayOutput(id, node.body, bindings));
+        // Array.entries() supplies the config as the second tuple element.
+        const options = entries && id.type === 'ArrayPattern' ? id.elements[1] : id;
+        if (options) {
+          recordArrayBinding(options, arrays);
+          recordIteration(
+            arrays,
+            !node.await &&
+              (!entries || id.type === 'ArrayPattern') &&
+              setsPackArrayOutput(options, node.body, bindings),
+          );
+        }
         continue;
       }
       case 'MemberExpression':

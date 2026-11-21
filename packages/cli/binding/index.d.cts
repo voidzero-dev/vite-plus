@@ -4022,10 +4022,12 @@ export declare function parseLiteralCommandPrefixes(source: string): LiteralComm
  * Read simple literal commands, optionally separated by `&&`, `||`, or `;`.
  * Returns null for unsupported syntax. Assignments and wrappers stay in argv;
  * callers must decide whether a command is safe to rewrite.
+ * Option analysis can replace quoted variables for listed options with empty values.
  */
 export declare function parseLiteralCommands(
   source: string,
   allowLists: boolean,
+  envValueOptions?: Array<string> | undefined | null,
 ): Array<Array<LiteralCommandToken>> | null;
 
 export declare function parseMigrateArgs(argv: Array<string>): ParseMigrateArgsOutcome;
