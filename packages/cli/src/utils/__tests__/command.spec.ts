@@ -251,6 +251,32 @@ describe('command runners', () => {
     expect(result).toMatchObject({ exitCode: 124, idleTimedOut: true });
   });
 
+  it('gives resolution time to resume after a quiet Git subprocess', async () => {
+    const quietMs = process.platform === 'win32' ? 3500 : 1600;
+    const result = await runCommandSilently({
+      command: process.execPath,
+      args: [
+        '-e',
+        `
+          const git = require('node:child_process').spawn('git', ['hash-object', '--stdin']);
+          git.on('spawn', () => {
+            console.log('resolving');
+            setTimeout(() => git.stdin.end('fixture'), ${quietMs});
+          });
+          git.on('close', (code) => setTimeout(() => console.log('git exited ' + code), 850));
+          setInterval(() => {}, 1000);
+        `,
+      ],
+      cwd: process.cwd(),
+      envs: process.env,
+      idleTimeoutMs: 1000,
+      shouldWatchIdle: () => true,
+      waitForGit: true,
+    });
+    expect(result.stdout.toString()).toContain('git exited 0');
+    expect(result).toMatchObject({ exitCode: 124, idleTimedOut: true });
+  }, 15_000);
+
   it.each([false, true])('stops an idle tree (file: %s)', async (stdoutToFile) => {
     const cwd = mkdtempSync(join(tmpdir(), 'vp-install-command-'));
     const finished = join(cwd, 'finished');
