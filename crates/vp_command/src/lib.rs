@@ -21,6 +21,8 @@ use vt_path::{AbsolutePath, AbsolutePathBuf, RelativePathBuf};
 
 mod external_tool;
 mod ps1_shim;
+#[cfg(unix)]
+mod signal_forward;
 
 pub use external_tool::{
     ExternalToolQuery, FirstPathMatch, classify_first_path_match, find_external_tool,
@@ -141,7 +143,8 @@ pub fn exec_node_command(mut cmd: Command) -> Error {
 /// is interrupted (e.g., via Ctrl+C) while the terminal is in a non-standard state.
 ///
 /// On Unix, saves the terminal state before spawning the child process and restores
-/// it after the child exits, and ignores SIGINT meanwhile. On Windows, Ctrl+C is ignored
+/// it after the child exits, and ignores SIGINT meanwhile. It also forwards SIGTERM and
+/// SIGHUP to the child (`SignalForwardGuard`). On Windows, Ctrl+C is ignored
 /// meanwhile (`ConsoleCtrlGuard`), so this process waits for the child's own cleanup.
 pub async fn execute_with_terminal_guard(mut cmd: Command) -> Result<ExitStatus, Error> {
     // Save terminal state and ignore SIGINT (Unix) or Ctrl+C (Windows) until the child exits.
@@ -151,6 +154,8 @@ pub async fn execute_with_terminal_guard(mut cmd: Command) -> Result<ExitStatus,
     let _guard = ConsoleCtrlGuard::install();
 
     let mut child = cmd.spawn().map_err(|e| Error::Anyhow(e.into()))?;
+    #[cfg(unix)]
+    let _forward = child.id().and_then(signal_forward::SignalForwardGuard::install);
     child.wait().await.map_err(|e| Error::Anyhow(e.into()))
 }
 

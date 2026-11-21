@@ -11,3 +11,10 @@ vp = "local"
 skip-platforms = ["windows"]
 comment = "A Node Worker runs project-local vp dev without replacing its host process."
 steps = [{ argv = ["node", "probe.mjs", "--worker"], tty = false, timeout = 25000 }]
+
+[[case]]
+name = "command_dev_global_signal"
+vp = "global"
+skip-platforms = ["windows"]
+comment = "SIGTERM sent to the global vp dev PID passes through each wrapper and stops the listening Vite server."
+steps = [{ argv = ["node", "probe.mjs", "--global"], tty = false, timeout = 25000 }]

@@ -8,6 +8,9 @@ import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 
 const workerMode = process.argv[2] === '--worker';
+// The global vp runs `dist/bin.js`, which keeps Vite in a child process.
+const globalMode = process.argv[2] === '--global';
+const localMode = !workerMode && !globalMode;
 
 async function listenerInfo(stdout, launchPid) {
   let listener;
@@ -15,6 +18,10 @@ async function listenerInfo(stdout, launchPid) {
     const match = /^listening (\d+) (\d+)$/.exec(line);
     if (match) {
       listener = { port: Number(match[1]), pid: Number(match[2]) };
+      if (globalMode) {
+        assert.notEqual(listener.pid, launchPid, 'Vite runs below the global vp process');
+        return listener;
+      }
       if (!workerMode) {
         assert.equal(listener.pid, launchPid);
         return listener;
@@ -32,7 +39,7 @@ const cache = mkdtempSync(join(tmpdir(), 'vp-dev-cache-'));
 const cacheProof = join(cache, 'cache-before-vite');
 const env = { ...process.env, NODE_COMPILE_CACHE: cache };
 delete env.NODE_DISABLE_COMPILE_CACHE;
-if (!workerMode) {
+if (localMode) {
   env.NODE_OPTIONS = ['--require=./check-launcher-cache.cjs', env.NODE_OPTIONS]
     .filter(Boolean)
     .join(' ');
@@ -57,7 +64,7 @@ try {
   console.log('Vite served the project with the client under /probe/');
   if (workerMode) {
     console.log('The Worker host stayed alive while Vite ran as a child');
-  } else {
+  } else if (localMode) {
     assert.ok(
       existsSync(cacheProof),
       'Vite startup checked the launcher cache before loading its entry point',
@@ -65,7 +72,7 @@ try {
     console.log('vp saved its compile cache before starting Vite');
   }
 
-  process.kill(pid, 'SIGTERM');
+  process.kill(globalMode ? child.pid : pid, 'SIGTERM');
   const [code, signal] = await once(child, 'exit', { signal: AbortSignal.timeout(5_000) });
   const socket = connect(port, '127.0.0.1');
   try {
@@ -76,7 +83,7 @@ try {
     socket.destroy();
   }
   assert.deepEqual([code, signal], [143, null]);
-  const target = workerMode ? 'Vite child' : 'launch PID';
+  const target = workerMode ? 'Vite child' : globalMode ? 'global vp PID' : 'launch PID';
   console.log(`SIGTERM to the ${target} closed the port with exit code 143`);
 } catch (error) {
   console.error(error);
