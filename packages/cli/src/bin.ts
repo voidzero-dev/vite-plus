@@ -167,12 +167,15 @@ if (maybePrintCommandHelp(args)) {
       process.exit(0);
     }
 
-    // Limit process replacement to the standalone package launcher.
+    // Limit process replacement to the standalone package launcher. Node.js
+    // flags such as `--cpu-prof` apply only to the launcher, and an exec would
+    // drop their output, so keep Vite as a child when the launcher has any.
     const execDev =
       command === 'dev' &&
       isMainThread &&
       process.platform !== 'win32' &&
       path.basename(process.argv[1] ?? '') === 'vp' &&
+      process.execArgv.length === 0 &&
       process.send === undefined;
     if (execDev) {
       // Save the launcher's compile cache before handing its process to Vite.
