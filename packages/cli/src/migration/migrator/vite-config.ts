@@ -618,52 +618,69 @@ export function configNeedsVitePlus(
   keepTsdownDependency: boolean,
   options?: { wrapPlugins?: boolean; preserveVitestConfig?: boolean },
 ): boolean {
-  const { viteConfig, tsdownConfig } = detectConfigs(projectPath);
-  if (!viteConfig || (!tsdownConfig && !keepTsdownDependency)) {
+  const { viteConfig, vitestConfig, tsdownConfig } = detectConfigs(projectPath);
+  if (!tsdownConfig && !keepTsdownDependency) {
     return false;
   }
-  const vitePath = path.join(projectPath, viteConfig);
-  try {
-    const { program } = parseSource(vitePath, fs.readFileSync(vitePath, 'utf8'));
-    const specifiers = configImports(program).map(({ value }) => value);
-    for (const node of configNodes(program)) {
-      if (node.type === 'ImportExpression' && isString(node.source)) {
-        specifiers.push(node.source.value);
-      } else if (
-        node.type === 'CallExpression' &&
-        node.callee.type === 'Identifier' &&
-        node.callee.name === 'require' &&
-        node.arguments.length === 1 &&
-        isString(node.arguments[0])
-      ) {
-        specifiers.push(node.arguments[0].value);
+  for (const config of [viteConfig, keepTsdownDependency ? vitestConfig : undefined]) {
+    if (!config) {
+      continue;
+    }
+    const configPath = path.join(projectPath, config);
+    try {
+      const { program } = parseSource(configPath, fs.readFileSync(configPath, 'utf8'));
+      const specifiers = configImports(program).map(({ value }) => value);
+      for (const node of configNodes(program)) {
+        if (
+          (node.type === 'ImportExpression' ||
+            node.type === 'ExportNamedDeclaration' ||
+            node.type === 'ExportAllDeclaration') &&
+          isString(node.source)
+        ) {
+          specifiers.push(node.source.value);
+        } else if (
+          node.type === 'CallExpression' &&
+          node.callee.type === 'Identifier' &&
+          node.callee.name === 'require' &&
+          node.arguments.length === 1 &&
+          isString(node.arguments[0])
+        ) {
+          specifiers.push(node.arguments[0].value);
+        }
       }
+      const importsVitePlus = specifiers.some(
+        (specifier) => specifier === VITE_PLUS_NAME || specifier.startsWith(`${VITE_PLUS_NAME}/`),
+      );
+      // Workspace migration wraps Vite plugins after rewriting imports and manifests.
+      if (
+        keepTsdownDependency &&
+        (importsVitePlus ||
+          specifiers.some((specifier) => specifier === 'vite' || specifier.startsWith('vite/')) ||
+          (!options?.preserveVitestConfig && specifiers.includes('vitest/config')) ||
+          (config === viteConfig && options?.wrapPlugins && wrapLazyPlugins(configPath).updated))
+      ) {
+        return true;
+      }
+      if (config === viteConfig && tsdownConfig && hasConfigKey(configPath, 'pack')) {
+        const { convertedName, previousPath } = packConfigPaths(
+          path.join(projectPath, tsdownConfig),
+        );
+        const convertedImports = tsdownConfigImportPaths(convertedName);
+        if (previousPath) {
+          convertedImports.push(...tsdownConfigImportPaths(path.basename(previousPath)));
+        }
+        if (
+          importsVitePlus ||
+          specifiers.some((specifier) => convertedImports.includes(specifier))
+        ) {
+          return true;
+        }
+      }
+    } catch {
+      // The other config can still need a direct dependency.
     }
-    const importsVitePlus = specifiers.some(
-      (specifier) => specifier === VITE_PLUS_NAME || specifier.startsWith(`${VITE_PLUS_NAME}/`),
-    );
-    // Workspace migration wraps plugins after rewriting imports and manifests.
-    if (
-      keepTsdownDependency &&
-      (importsVitePlus ||
-        specifiers.some((specifier) => specifier === 'vite' || specifier.startsWith('vite/')) ||
-        (!options?.preserveVitestConfig && specifiers.includes('vitest/config')) ||
-        (options?.wrapPlugins && wrapLazyPlugins(vitePath).updated))
-    ) {
-      return true;
-    }
-    if (!tsdownConfig || !hasConfigKey(vitePath, 'pack')) {
-      return false;
-    }
-    const { convertedName, previousPath } = packConfigPaths(path.join(projectPath, tsdownConfig));
-    const convertedImports = tsdownConfigImportPaths(convertedName);
-    if (previousPath) {
-      convertedImports.push(...tsdownConfigImportPaths(path.basename(previousPath)));
-    }
-    return importsVitePlus || specifiers.some((specifier) => convertedImports.includes(specifier));
-  } catch {
-    return false;
   }
+  return false;
 }
 
 function packProperties(program: Program, requireStatic = false): (ObjectProperty | undefined)[] {
@@ -1128,7 +1145,9 @@ function packOutputWrite(node: Node | null | undefined): number | undefined {
 
 function packMutationReferences({ program, bindings }: ReturnType<typeof parseSource>) {
   const writes = new Set<number>();
+  const reassignments = new Set<number>();
   const aliasInitializers = new Map<number, number>();
+  const entryAliases = new Map<number, number>();
   const arrayOrigins = new Map<number, number>();
   const foundOptions = new Map<number, number>();
   const guards = new Set<number>();
@@ -1136,7 +1155,10 @@ function packMutationReferences({ program, bindings }: ReturnType<typeof parseSo
   const entryWrites = new Set<number>();
   const helpers = new Map<number, NonNullable<ReturnType<typeof entryMutationHelper>>>();
   const calls = new Map<number, number>();
-  const rewritable = new Map<number, { typeReference?: number; array?: boolean }>();
+  const rewritable = new Map<
+    number,
+    { typeReference?: number; array?: boolean; entry?: boolean }
+  >();
   const recordHelper = (start: number, node: FunctionNode | ArrowFunctionExpression) => {
     const helper = entryMutationHelper(node);
     if (helper) {
@@ -1184,7 +1206,7 @@ function packMutationReferences({ program, bindings }: ReturnType<typeof parseSo
         continue;
       }
       case 'VariableDeclaration':
-        if (node.kind === 'const') {
+        if (node.kind === 'const' || node.kind === 'let') {
           for (const { id, init } of node.declarations) {
             const initializer = init && unwrapTypeExpression(init);
             const find =
@@ -1203,6 +1225,14 @@ function packMutationReferences({ program, bindings }: ReturnType<typeof parseSo
             if (origin) {
               for (const start of aliasBindingStarts(id)) {
                 aliasInitializers.set(start, origin.start);
+              }
+              if (
+                id.type === 'Identifier' &&
+                initializer?.type === 'MemberExpression' &&
+                memberName(initializer) === 'entry' &&
+                initializer.object.type === 'Identifier'
+              ) {
+                entryAliases.set(id.start, origin.start);
               }
             }
             if (
@@ -1228,10 +1258,16 @@ function packMutationReferences({ program, bindings }: ReturnType<typeof parseSo
           outputWrites.add(reference);
         }
         target = node.left;
+        if (target.type === 'Identifier') {
+          reassignments.add(target.start);
+        }
         break;
       }
       case 'UpdateExpression':
         target = node.argument;
+        if (target.type === 'Identifier') {
+          reassignments.add(target.start);
+        }
         break;
       case 'UnaryExpression':
         if (node.operator !== 'delete') {
@@ -1320,6 +1356,15 @@ function packMutationReferences({ program, bindings }: ReturnType<typeof parseSo
   }
   const origins = new Map<number, number>();
   for (const { start, references, constant } of bindings) {
+    const entry = entryAliases.get(start);
+    if (
+      entry !== undefined &&
+      references.length > 0 &&
+      references.every((reference) => entryWrites.has(reference) || reassignments.has(reference))
+    ) {
+      // Keep mutations on either side of a local reassignment in their original order.
+      rewritable.set(entry, { entry: true });
+    }
     const found = foundOptions.get(start);
     if (
       constant &&
@@ -1335,10 +1380,15 @@ function packMutationReferences({ program, bindings }: ReturnType<typeof parseSo
     if (constant && helper && argument !== undefined) {
       rewritable.set(argument, helper);
     }
-    const origin = (constant ? aliasInitializers.get(start) : undefined) ?? arrayOrigins.get(start);
+    const alias = aliasInitializers.get(start);
+    const origin = alias ?? arrayOrigins.get(start);
     if (origin !== undefined) {
       for (const reference of references) {
-        origins.set(reference, origin);
+        // Assigning a local alias does not change the imported entry array.
+        // Its other uses can still write through the initial alias.
+        if (alias === undefined || !reassignments.has(reference)) {
+          origins.set(reference, origin);
+        }
       }
     }
   }
@@ -1353,17 +1403,26 @@ function packMutationReferences({ program, bindings }: ReturnType<typeof parseSo
   return { writes, rewritable, entryWrites };
 }
 
-/** Identify a literal entry array exported by name and used in the default config. */
-function sharedPackEntryName(file: string): string | undefined {
+function readPackEntry(file: string) {
   if (!fs.statSync(file, { throwIfNoEntry: false })?.isFile()) {
     return undefined;
   }
   const { program, bindings } = parseSource(file, fs.readFileSync(file, 'utf8'));
   const config = defaultConfigValue(program);
   const entry = staticObject(config) && objectProperty(config, 'entry')?.value;
-  if (!entry || entry.type !== 'Identifier') {
+  return entry ? { program, bindings, entry: unwrapTypeExpression(entry) } : undefined;
+}
+
+function isLiteralEntryArray(entry: Node | null | undefined): boolean {
+  return entry?.type === 'ArrayExpression' && entry.elements.every(isString);
+}
+
+/** Identify a literal entry array exported by name and used in the default config. */
+function sharedPackEntryName(pack: ReturnType<typeof readPackEntry>): string | undefined {
+  if (!pack || pack.entry.type !== 'Identifier') {
     return undefined;
   }
+  const { program, bindings, entry } = pack;
   const shared = bindings.find(({ references }) => references.includes(entry.start));
   if (!shared?.constant) {
     return undefined;
@@ -1379,11 +1438,7 @@ function sharedPackEntryName(file: string): string | undefined {
     const declaration = statement.declaration.declarations.find(
       ({ id }) => id.start === shared.start,
     );
-    if (
-      declaration?.id.type === 'Identifier' &&
-      declaration.init?.type === 'ArrayExpression' &&
-      declaration.init.elements.every(isString)
-    ) {
+    if (declaration?.id.type === 'Identifier' && isLiteralEntryArray(declaration.init)) {
       return declaration.id.name;
     }
   }
@@ -1453,12 +1508,24 @@ function importedPackBindings(
     const written = references.filter((reference) => writes.has(reference));
     const onlyPackUses = references.length === uses.length && uses.every(({ copy }) => !copy);
     const helperReferences = new Set(uses.map(({ value }) => value.start));
+    const siblingWrites = importWrites.filter(({ specifier }) => specifier !== binding);
+    const entryImport = siblingWrites.length === 1 ? siblingWrites[0] : undefined;
+    const sharedEntry =
+      entryImport?.specifier.type === 'ImportSpecifier' &&
+      entryImport.statement.specifiers.length === (entryImport.statement === statement ? 2 : 1) &&
+      entryImport.written.every((reference) => entryWrites.has(reference))
+        ? { statement: entryImport.statement, name: propertyName(entryImport.specifier.imported) }
+        : undefined;
+    const packEntry =
+      sharedEntry || written.some((reference) => rewritable.get(reference)?.entry)
+        ? readPackEntry(packPath)
+        : undefined;
     const canRedirectDirectWrites =
       written.length > 0 &&
       uses.every(({ copy }) => !copy) &&
       written.every((reference) => {
         const mutation = rewritable.get(reference);
-        if (!mutation) {
+        if (!mutation || (mutation.entry && !isLiteralEntryArray(packEntry?.entry))) {
           return false;
         }
         helperReferences.add(reference);
@@ -1470,15 +1537,11 @@ function importedPackBindings(
       }) &&
       references.every((reference) => helperReferences.has(reference));
     const onlyPack = onlyPackUses || canRedirectDirectWrites;
-    const siblingWrites = importWrites.filter(({ specifier }) => specifier !== binding);
-    const entryImport = siblingWrites.length === 1 ? siblingWrites[0] : undefined;
     const sharedImport =
       onlyPack &&
-      entryImport?.specifier.type === 'ImportSpecifier' &&
-      entryImport.statement.specifiers.length === (entryImport.statement === statement ? 2 : 1) &&
-      entryImport.written.every((reference) => entryWrites.has(reference)) &&
-      propertyName(entryImport.specifier.imported) === sharedPackEntryName(packPath)
-        ? entryImport.statement
+      sharedEntry?.name !== undefined &&
+      sharedEntry.name === sharedPackEntryName(packEntry)
+        ? sharedEntry.statement
         : undefined;
     const mutates = written.length > 0 || siblingWrites.length > 0;
     return [
