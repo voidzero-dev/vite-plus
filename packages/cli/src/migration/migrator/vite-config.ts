@@ -718,7 +718,7 @@ function objectAssignTarget(node: Node): Node | undefined {
 }
 
 const stablePackOptions = new Set(['entry', 'format', 'minify', 'name', 'outDir', 'sourcemap']);
-const packArrayMethods = new Set(['map', 'filter', 'find']);
+const packArrayMethods = new Set(['map', 'filter', 'find', 'concat']);
 
 function isStablePackOverride(member: ObjectProperty): boolean {
   const name = propertyName(member.key);
@@ -868,12 +868,16 @@ function packValueReferences(node: Node, mapping?: PackMapping): PackReference[]
         return [];
       }
       const receiver = unwrapTypeExpression(callee.object);
-      const callback =
-        value.arguments.length === 1 ? packCallbackResult(value.arguments[0]) : undefined;
       const knownReceiver =
         receiver.type === 'Identifier' ||
         (receiver.type === 'CallExpression' &&
           packArrayMethods.has(memberName(receiver.callee) ?? ''));
+      if (method === 'concat') {
+        // The receiver contributes its existing options in the same order.
+        return packValueReferences(receiver, knownReceiver ? arrayMapping : 'unverified');
+      }
+      const callback =
+        value.arguments.length === 1 ? packCallbackResult(value.arguments[0]) : undefined;
       const staticMapping =
         knownReceiver &&
         callback &&
@@ -1167,7 +1171,7 @@ function packMutationReferences({ program, bindings }: ReturnType<typeof parseSo
   const writes = new Set<number>();
   const reassignments = new Set<number>();
   const aliasInitializers = new Map<number, number>();
-  const entryAliases = new Map<number, number>();
+  const entryAliases = new Map<number, { origin: number; fallback: boolean }>();
   const arrayOrigins = new Map<number, number>();
   const foundOptions = new Map<number, number>();
   const filteredOptions = new Map<number, number>();
@@ -1180,7 +1184,7 @@ function packMutationReferences({ program, bindings }: ReturnType<typeof parseSo
   const calls = new Map<number, number>();
   const rewritable = new Map<
     number,
-    { typeReference?: number; array?: boolean; entry?: boolean }
+    { typeReference?: number; array?: boolean; entry?: 'array' | 'optional' }
   >();
   const recordHelper = (start: number, node: FunctionNode | ArrowFunctionExpression) => {
     const helper = entryMutationHelper(node);
@@ -1255,18 +1259,27 @@ function packMutationReferences({ program, bindings }: ReturnType<typeof parseSo
                         : undefined,
                   }
                 : undefined;
-            const origin = init && packRootIdentifier(find?.array ?? selection?.value ?? init);
+            const fallback =
+              initializer?.type === 'LogicalExpression' && initializer.operator === '??'
+                ? initializer
+                : undefined;
+            const member = fallback ? unwrapTypeExpression(fallback.left) : initializer;
+            const entryReceiver =
+              member?.type === 'MemberExpression' && memberName(member) === 'entry'
+                ? unwrapTypeExpression(member.object)
+                : undefined;
+            const entryAlias = entryReceiver?.type === 'Identifier' ? entryReceiver : undefined;
+            const origin =
+              init && packRootIdentifier(find?.array ?? selection?.value ?? entryAlias ?? init);
             if (origin) {
               for (const start of aliasBindingStarts(id)) {
                 aliasInitializers.set(start, origin.start);
               }
-              if (
-                id.type === 'Identifier' &&
-                initializer?.type === 'MemberExpression' &&
-                memberName(initializer) === 'entry' &&
-                initializer.object.type === 'Identifier'
-              ) {
-                entryAliases.set(id.start, origin.start);
+              if (id.type === 'Identifier' && entryAlias) {
+                entryAliases.set(id.start, {
+                  origin: origin.start,
+                  fallback: !!fallback && isLiteralEntryArray(unwrapTypeExpression(fallback.right)),
+                });
               }
             }
             if (
@@ -1410,7 +1423,7 @@ function packMutationReferences({ program, bindings }: ReturnType<typeof parseSo
       references.every((reference) => entryWrites.has(reference) || reassignments.has(reference))
     ) {
       // Keep mutations on either side of a local reassignment in their original order.
-      rewritable.set(entry, { entry: true });
+      rewritable.set(entry.origin, { entry: entry.fallback ? 'optional' : 'array' });
     }
     const found = foundOptions.get(start);
     if (
@@ -1470,8 +1483,25 @@ function readPackEntry(file: string) {
   }
   const { program, bindings } = parseSource(file, fs.readFileSync(file, 'utf8'));
   const config = defaultConfigValue(program);
-  const entry = staticObject(config) && objectProperty(config, 'entry')?.value;
-  return entry ? { program, bindings, entry: unwrapTypeExpression(entry) } : undefined;
+  if (!staticObject(config)) {
+    return undefined;
+  }
+  const value = objectProperty(config, 'entry')?.value;
+  return { program, bindings, entry: value && unwrapTypeExpression(value) };
+}
+
+function isUnsetPackEntry(pack: ReturnType<typeof readPackEntry>): boolean {
+  if (!pack) {
+    return false;
+  }
+  const { entry, bindings } = pack;
+  return (
+    !entry ||
+    (entry.type === 'Literal' && entry.value === null) ||
+    (entry.type === 'Identifier' &&
+      entry.name === 'undefined' &&
+      !bindings.some(({ references }) => references.includes(entry.start)))
+  );
 }
 
 function isLiteralEntryArray(entry: Node | null | undefined): boolean {
@@ -1480,7 +1510,7 @@ function isLiteralEntryArray(entry: Node | null | undefined): boolean {
 
 /** Identify a literal entry array exported by name and used in the default config. */
 function sharedPackEntryName(pack: ReturnType<typeof readPackEntry>): string | undefined {
-  if (!pack || pack.entry.type !== 'Identifier') {
+  if (pack?.entry?.type !== 'Identifier') {
     return undefined;
   }
   const { program, bindings, entry } = pack;
@@ -1586,7 +1616,12 @@ function importedPackBindings(
       uses.every(({ copy }) => !copy) &&
       written.every((reference) => {
         const mutation = rewritable.get(reference);
-        if (!mutation || (mutation.entry && !isLiteralEntryArray(packEntry?.entry))) {
+        if (
+          !mutation ||
+          (mutation.entry &&
+            !isLiteralEntryArray(packEntry?.entry) &&
+            !(mutation.entry === 'optional' && isUnsetPackEntry(packEntry)))
+        ) {
           return false;
         }
         helperReferences.add(reference);

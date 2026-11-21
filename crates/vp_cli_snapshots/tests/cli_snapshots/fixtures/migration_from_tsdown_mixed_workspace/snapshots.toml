@@ -159,6 +159,30 @@ steps = [
 ]
 
 [[case]]
+name = "focused_vpx_expanded_argument"
+vp = "global"
+local-registry = true
+env = { VP_NODE_VERSION = "24.22.3", VP_SKIP_INSTALL = "1" }
+comment = "A filtered member install supplies vpx for a script with a quoted environment variable."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies", '{"vite":"8.3.8"}'], snapshot = false },
+  { argv = ["vpt", "write-file", "pnpm-workspace.yaml", "packages: ['packages/*']\nsharedWorkspaceLockfile: false\nshellEmulator: true\n"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "packages/generator/src"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/package.json", '''{"name":"generator","private":true,"type":"module","scripts":{"generate":"vpx ./generate.ts \"$TARGET\"","release":"tsdown -c release.config.mts"},"devDependencies":{"tsdown":"0.22.14"}}'''], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/generate.ts", "const args: string[] = process.argv.slice(2); console.log(JSON.stringify(args));"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/src/index.ts", "export const sample = true;"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/release.config.mts", "export default { entry: 'src/index.ts', outDir: 'release-out', dts: false };"], snapshot = false },
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  ["vpt", "print-file", "packages/generator/package.json"],
+  { argv = ["pnpm", "--filter", "generator", "install", "--ignore-scripts"], snapshot = false },
+  ["vpt", "stat-file", "node_modules/vite-plus", "--assert", "missing"],
+  ["vpt", "stat-file", "packages/generator/node_modules/vite-plus/package.json", "--assert", "file"],
+  { argv = ["pnpm", "run", "generate"], cwd = "packages/generator", envs = [["TARGET", "preview release"]] },
+  { argv = ["pnpm", "run", "release"], cwd = "packages/generator", snapshot = false },
+  ["vpt", "stat-file", "packages/generator/release-out/index.mjs", "--assert", "file"],
+]
+
+[[case]]
 name = "focused_vp_vpr_install"
 vp = "global"
 local-registry = true

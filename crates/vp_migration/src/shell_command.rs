@@ -24,6 +24,26 @@ pub fn parse_literal_commands(
     source: &str,
     allow_lists: bool,
 ) -> Option<Vec<Vec<LiteralCommandToken>>> {
+    parse_commands(source, allow_lists, false)
+}
+
+/// Read the literal prefix of each simple command for dependency detection.
+/// The first dynamic word ends that command's prefix.
+pub fn parse_literal_command_prefixes(source: &str) -> Option<Vec<Vec<String>>> {
+    let commands = parse_commands(source, true, true)?;
+    Some(
+        commands
+            .into_iter()
+            .map(|tokens| tokens.into_iter().map(|token| token.value).collect())
+            .collect(),
+    )
+}
+
+fn parse_commands(
+    source: &str,
+    allow_lists: bool,
+    allow_dynamic_suffix: bool,
+) -> Option<Vec<Vec<LiteralCommandToken>>> {
     // Preserve the existing restriction on escapes, even in single quotes.
     if source.contains('\\') {
         return None;
@@ -65,11 +85,15 @@ pub fn parse_literal_commands(
             if !is_spacing(&source[word_end..range.start]) {
                 return None;
             }
-            let value = literal_value(&word, allow_lists)?;
+            let value = match literal_value(&word, allow_lists) {
+                Some(value) => value,
+                None if allow_dynamic_suffix => break,
+                None => return None,
+            };
             word_end = range.end;
             tokens.push(LiteralCommandToken { value, range });
         }
-        if tokens.is_empty() {
+        if tokens.is_empty() && !allow_dynamic_suffix {
             return None;
         }
         commands.push(tokens);
@@ -135,7 +159,16 @@ fn literal_value(node: &BashNode<'_>, reject_hash: bool) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_literal_commands;
+    use super::{parse_literal_command_prefixes, parse_literal_commands};
+
+    #[test]
+    fn reads_only_the_known_prefix_before_expansion() {
+        let source =
+            r#"echo "$LABEL" && pnpm exec vpx ./generate.ts "$TARGET" --force; "$RUNNER" vpx"#;
+        let prefixes = parse_literal_command_prefixes(source).unwrap();
+        assert_eq!(prefixes, [vec!["echo"], vec!["pnpm", "exec", "vpx", "./generate.ts"], vec![]]);
+        assert_eq!(parse_literal_commands(source, true), None);
+    }
 
     #[test]
     fn reads_literals_assignments_and_lists_with_original_ranges() {

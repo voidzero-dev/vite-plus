@@ -3,7 +3,11 @@ import path from 'node:path';
 
 import { parse as parseJsonc } from 'jsonc-parser';
 
-import { type LiteralCommandToken, parseLiteralCommands } from '../../../binding/index.js';
+import {
+  type LiteralCommandToken,
+  parseLiteralCommandPrefixes,
+  parseLiteralCommands,
+} from '../../../binding/index.js';
 import { type WorkspacePackage } from '../../types/index.ts';
 import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
 import { readNearestPackageJson } from '../../utils/package.ts';
@@ -532,8 +536,7 @@ function scriptRequiresVitePlus(command: string): boolean {
     return false;
   }
   return (
-    parseLiteralCommands(command, true)?.some((tokens) => {
-      const values = tokens.map(({ value }) => value);
+    parseLiteralCommandPrefixes(command)?.some((values) => {
       const { first, shell, unknownEnvironment } = scriptCommandPrefix(values);
       if (unknownEnvironment) {
         return false;

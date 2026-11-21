@@ -4005,6 +4005,9 @@ export type ParseHooksArgsOutcome =
   | { status: 'exit'; code: number }
   | { status: 'error'; error: CliParseError };
 
+/** Read the literal prefix of each simple command for dependency detection. */
+export declare function parseLiteralCommandPrefixes(source: string): Array<Array<string>> | null;
+
 /**
  * Read simple literal commands, optionally separated by `&&`, `||`, or `;`.
  * Returns null for unsupported syntax. Assignments and wrappers stay in argv;

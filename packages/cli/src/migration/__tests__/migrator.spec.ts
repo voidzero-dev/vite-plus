@@ -528,6 +528,11 @@ describe('explicit tsdown config selection', () => {
     ['echo vp fmt', false],
     ['vpx ./generate.ts', true],
     ['pnpm exec vpx ./generate.ts', true],
+    ['vpx ./generate.ts "$TARGET"', true],
+    ['echo "$MESSAGE" && pnpm exec vpx ./generate.ts "$TARGET"', true],
+    ['"$RUNNER" vpx ./generate.ts', false],
+    ['echo "$TARGET" vpx ./generate.ts', false],
+    ['pnpm dlx vpx ./generate.ts "$TARGET"', false],
     ['concurrently "vpx ./generate.ts" "echo ready"', true],
     ['echo vpx ./generate.ts', false],
     ['pnpm dlx vpx ./generate.ts', false],
@@ -1555,6 +1560,7 @@ export default defineConfig(({ command }) => {
     "export default { pack: Object.assign(base, { outDir: 'release' }) };\n",
     "base.entry.push('src/cli.ts');\nexport default { pack: base };\n",
     'let entries = base.entry;\nconfigure(entries);\nexport default { pack: base };\n',
+    'const entries = base.entry ?? [];\nconfigure(entries);\nexport default { pack: base };\n',
     "const config = base;\nconst { entry } = config;\nentry.push('src/cli.ts');\nexport default { pack: base };\n",
   ])('keeps the pack config modified by %s', (config) => {
     fs.writeFileSync(
@@ -1574,6 +1580,7 @@ export default defineConfig(({ command }) => {
 
   it.each([
     ['const entries = base.entry;', ''],
+    ['const entries = base.entry ?? [];', ''],
     ['let entries = base.entry;', ''],
     ['let entries = base.entry;', 'entries = [];\n'],
   ])('keeps pack entries with %s and reassignment %j', (alias, reassignment) => {
@@ -1593,6 +1600,28 @@ export default defineConfig(({ command }) => {
       "copy: 'public'",
     );
   });
+
+  it.each(['', 'entry: undefined, ', 'entry: null, '])(
+    'converts the config when %s uses the fallback entry array',
+    (entry) => {
+      const tsdown = path.join(tmpDir, 'tsdown.config.ts');
+      const original = `export default { ${entry}publicDir: 'public' };\n`;
+      fs.writeFileSync(tsdown, original);
+      const vite = path.join(tmpDir, 'vite.config.ts');
+      const body =
+        "const entries = base.entry ?? []; entries.push('src/cli.ts'); export default { pack: base };";
+      fs.writeFileSync(vite, `import base from './tsdown.config.ts';\n${body}`);
+
+      expect(mergeTsdownConfigFile(tmpDir, true, createMigrationReport(), true)).toBe(true);
+      expect(fs.readFileSync(vite, 'utf8')).toBe(
+        `import base from "./vite-pack.config.ts";\n${body}`,
+      );
+      expect(fs.readFileSync(tsdown, 'utf8')).toBe(original);
+      expect(fs.readFileSync(path.join(tmpDir, 'vite-pack.config.ts'), 'utf8')).toContain(
+        "copy: 'public'",
+      );
+    },
+  );
 
   it.each([
     "function configure(options: typeof base) { options.entry.push('src/cli.ts'); }",
@@ -1680,6 +1709,7 @@ export default defineConfig(({ command }) => {
     'map(config => ({ ...config, copy: config.publicDir }))',
     "map(config => ({ ...config, publicDir: 'other' }))",
     "filter(config => config.publicDir === 'public')",
+    "filter(config => config.publicDir === 'public').concat([])",
   ])('keeps the original pack options for an unverified selection (%s)', (selection) => {
     const tsdown = path.join(tmpDir, 'tsdown.config.ts');
     const original = "export default [{ entry: 'src/lib.ts', publicDir: 'public' }];\n";
@@ -1697,6 +1727,29 @@ export default defineConfig(({ command }) => {
     expect(fs.existsSync(path.join(tmpDir, 'vite-pack.config.ts'))).toBe(false);
     expect(report.warnings).toContainEqual(
       expect.stringContaining('Migrate the pack options manually'),
+    );
+  });
+
+  it.each([
+    'configs.concat(extraConfigs)',
+    "configs.concat(extraConfigs).filter(config => config.name !== 'demo')",
+  ])('preserves a converted pack array in %s', (pack) => {
+    const tsdown = path.join(tmpDir, 'tsdown.config.ts');
+    const original = "export default [{ name: 'library', publicDir: 'public' }];\n";
+    fs.writeFileSync(tsdown, original);
+    const vite = path.join(tmpDir, 'vite.config.ts');
+    const config =
+      "const extraConfigs = [{ name: 'cli', entry: 'src/cli.ts' }];\n" +
+      `export default { pack: ${pack} };\n`;
+    fs.writeFileSync(vite, `import configs from './tsdown.config.ts';\n${config}`);
+
+    expect(mergeTsdownConfigFile(tmpDir, true, createMigrationReport(), true)).toBe(true);
+    expect(fs.readFileSync(vite, 'utf8')).toBe(
+      `import configs from "./vite-pack.config.ts";\n${config}`,
+    );
+    expect(fs.readFileSync(tsdown, 'utf8')).toBe(original);
+    expect(fs.readFileSync(path.join(tmpDir, 'vite-pack.config.ts'), 'utf8')).toContain(
+      "copy: 'public'",
     );
   });
 

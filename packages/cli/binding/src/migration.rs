@@ -84,6 +84,12 @@ pub fn parse_literal_commands(
         .collect()
 }
 
+/// Read the literal prefix of each simple command for dependency detection.
+#[napi]
+pub fn parse_literal_command_prefixes(source: String) -> Option<Vec<Vec<String>>> {
+    vp_migration::parse_literal_command_prefixes(&source)
+}
+
 /// Parse source and resolve lexical bindings for the TypeScript migration rules.
 #[napi]
 pub fn analyze_migration_source(filename: String, source: String) -> Result<String> {

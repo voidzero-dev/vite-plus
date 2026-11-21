@@ -1122,6 +1122,7 @@ module.exports.normalizeTsdownJsonPackConfigs = nativeBinding.normalizeTsdownJso
 module.exports.parseConfigArgs = nativeBinding.parseConfigArgs;
 module.exports.parseCreateArgs = nativeBinding.parseCreateArgs;
 module.exports.parseHooksArgs = nativeBinding.parseHooksArgs;
+module.exports.parseLiteralCommandPrefixes = nativeBinding.parseLiteralCommandPrefixes;
 module.exports.parseLiteralCommands = nativeBinding.parseLiteralCommands;
 module.exports.parseMigrateArgs = nativeBinding.parseMigrateArgs;
 module.exports.parseStagedArgs = nativeBinding.parseStagedArgs;
