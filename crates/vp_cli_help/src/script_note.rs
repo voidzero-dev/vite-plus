@@ -6,8 +6,7 @@
 //! uses points at `vpr`.
 
 use console::style;
-use vp_shared::output;
-use vt::MARKER_ENV_NAME;
+use vp_shared::{env_vars, output};
 use vt_path::AbsolutePath;
 
 const NPM_LIFECYCLE_EVENT_ENV_NAME: &str = "npm_lifecycle_event";
@@ -18,12 +17,12 @@ const NPM_LIFECYCLE_EVENT_ENV_NAME: &str = "npm_lifecycle_event";
 /// `command` is the built-in as the user spelled it: the global binary forwards
 /// the invoked subcommand, so `vp format` stays `format` here. A direct local
 /// invocation takes the first argument before help normalization.
-pub(super) fn print(command: Option<&str>, cwd: &AbsolutePath) {
-    let Some(command) = command else { return };
+pub fn print(command: Option<&str>, cwd: &AbsolutePath) {
+    let Some(command) = command.filter(|command| !command.is_empty()) else { return };
     // A task spawned this command, so the user is already on a script-running
     // path. npm-compatible runners set `npm_lifecycle_event`; Vite Task uses
     // its own marker.
-    if std::env::var_os(MARKER_ENV_NAME).is_some()
+    if std::env::var_os(env_vars::VP_RUN).is_some()
         || std::env::var_os(NPM_LIFECYCLE_EVENT_ENV_NAME).is_some_and(|event| !event.is_empty())
     {
         return;

@@ -193,17 +193,21 @@ pub const VP_EMIT_MILESTONES: &str = "VP_EMIT_MILESTONES";
 /// before forwarding to the actual tool.
 pub const VP_SHIM_WRAPPER: &str = "VP_SHIM_WRAPPER";
 
+/// Vite Task sets this on spawned tasks (see `vt::MARKER_ENV_NAME`).
+pub const VP_RUN: &str = "VP_RUN";
+
 /// The subcommand as the user wrote it, passed from the global CLI to the local
 /// one.
 ///
 /// A command runs under its canonical name (`vp format` runs `fmt`), which loses
-/// the spelling. This carries the original alongside it.
+/// the spelling. An empty value means the global CLI has already handled
+/// the built-in script hint.
 pub const VP_RAW_SUBCOMMAND: &str = "VP_RAW_SUBCOMMAND";
 
-/// Set (to `1`) when the global CLI delegates a command that used `-C`.
+/// Set (to `1`) when `-C` or app target selection has fixed the working
+/// directory before global CLI delegation.
 ///
-/// The local CLI uses this marker to keep the explicit target after the global
-/// CLI changes the child process directory and removes `-C` from its arguments.
+/// The local CLI uses this marker to skip its own app target selection.
 pub const VP_EXPLICIT_CHDIR: &str = "VP_EXPLICIT_CHDIR";
 
 /// Path to the vp binary, passed to JS scripts so they can invoke CLI commands.

@@ -3,13 +3,11 @@
 //! This module contains all the CLI-related code.
 //! It handles argument parsing, command dispatching, and orchestration of the task execution.
 
-mod app_target;
 mod execution;
 mod handler;
 mod help;
 mod lifecycle_env;
 mod resolver;
-mod script_note;
 mod types;
 
 use std::{borrow::Cow, env, ffi::OsStr, sync::Arc};
@@ -24,6 +22,8 @@ pub use types::{
     ViteConfigResolverFn,
 };
 pub(crate) use types::{CapturedCommandOutput, EnvMap};
+use vp_app_target::AppTarget;
+use vp_cli_help::script_note;
 use vp_error::Error;
 pub use vp_shared::init_tracing;
 use vp_shared::{PrependOptions, env_vars, prepend_tools_to_path_env};
@@ -54,13 +54,15 @@ async fn execute_direct_subcommand(
     // A bare app command at a workspace root resolves its target first
     // (defaultPackage, package listing); the command then runs as if invoked
     // in the resolved directory (rfcs/cwd-flag.md).
-    let (target, workspace_root_hint) =
-        app_target::resolve_app_target(&subcommand, cwd, explicit_chdir)?;
-    let retargeted = matches!(&target, app_target::AppTarget::Dir(_));
+    let (target, workspace_root_hint) = match subcommand.bare_app_command(explicit_chdir) {
+        Some(command) => vp_app_target::resolve_app_target(command, cwd)?,
+        None => (AppTarget::CurrentDir, None),
+    };
+    let retargeted = matches!(&target, AppTarget::Dir(_));
     let cwd = match &target {
-        app_target::AppTarget::Exit(status) => return Ok(*status),
-        app_target::AppTarget::Dir(dir) => dir,
-        app_target::AppTarget::CurrentDir => cwd,
+        AppTarget::Exit(code) => return Ok(ExitStatus(*code)),
+        AppTarget::Dir(dir) => dir,
+        AppTarget::CurrentDir => cwd,
     };
 
     // A lone `--` uses bare-command target selection. Restore the separator
@@ -206,45 +208,10 @@ async fn envs_with_explicit_package_manager_path(
     cwd: &AbsolutePath,
     envs: Arc<EnvMap>,
 ) -> Result<Arc<EnvMap>, Error> {
-    let Some(resolution) = (match vp_pm_cli::resolve_package_manager_from_package_json(cwd) {
-        Ok(resolution) => resolution,
-        Err(error) => {
-            tracing::debug!(
-                ?error,
-                "failed to resolve explicit packageManager for direct command PATH setup"
-            );
-            return Ok(envs);
-        }
-    }) else {
-        return Ok(envs);
-    };
-
-    let manager = match vp_pm_cli::managed_for_local_cli(
-        cwd,
-        resolution.package_manager_type,
-        &resolution.version,
-        resolution.hash.as_deref(),
-    )
-    .await
-    {
-        Ok(Some(manager)) => manager,
-        // A system package manager is already on PATH.
-        Ok(None) => return Ok(envs),
-        // A missing package manager has other causes, such as no network or an
-        // unknown version. The command still runs from PATH, so those causes
-        // stay a debug log. An integrity failure is different. If vp hides it,
-        // the user sees only "command not found" further down.
-        Err(error) if error.is_integrity_failure() => return Err(error),
-        Err(error) => {
-            tracing::debug!(
-                ?error,
-                "failed to ensure managed package manager for direct command PATH setup"
-            );
-            return Ok(envs);
-        }
-    };
-
-    Ok(prepend_to_env_path(&envs, &manager.get_bin_prefix()))
+    match vp_pm_cli::managed_for_direct_command(cwd).await? {
+        Some(manager) => Ok(prepend_to_env_path(&envs, &manager.get_bin_prefix())),
+        None => Ok(envs),
+    }
 }
 
 /// A system package manager is already on PATH. Moving its directory to the front would also

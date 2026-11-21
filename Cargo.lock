@@ -8392,7 +8392,6 @@ version = "1.7.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "base64-simd",
  "clap",
  "console",
  "cow-utils",
@@ -8412,7 +8411,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
- "uuid",
+ "vp_app_target",
  "vp_cli_help",
  "vp_command",
  "vp_error",
@@ -8423,6 +8422,22 @@ dependencies = [
  "vp_toolchain",
  "vt",
  "vt_casefold",
+ "vt_path",
+ "vt_str",
+ "vt_workspace",
+]
+
+[[package]]
+name = "vp_app_target"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "base64-simd",
+ "serde_json",
+ "tempfile",
+ "uuid",
+ "vp_shared",
+ "vp_static_config",
  "vt_path",
  "vt_select",
  "vt_str",
@@ -8435,8 +8450,11 @@ version = "0.0.0"
 dependencies = [
  "clap",
  "console",
+ "serde_json",
  "terminal_size",
  "vp_shared",
+ "vt_path",
+ "vt_workspace",
 ]
 
 [[package]]
@@ -8534,6 +8552,7 @@ dependencies = [
  "tracing",
  "url",
  "uuid",
+ "vp_app_target",
  "vp_cli_help",
  "vp_command",
  "vp_error",

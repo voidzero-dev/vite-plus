@@ -1,0 +1,144 @@
+[[case]]
+name = "default_package_uses_target_toolchain"
+vp = "global"
+comment = "The implicit target uses the same local CLI, working directory, and Node.js runtime as an explicit -C."
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "app/node_modules/vite-plus/dist"], snapshot = false },
+  { argv = ["vpt", "write-file", "app/node_modules/vite-plus/package.json", '{"name":"vite-plus","version":"0.3.0","type":"module"}'], snapshot = false },
+  { argv = ["vpt", "cp", "probe.mjs", "app/node_modules/vite-plus/dist/bin.js"], snapshot = false },
+  ["vp", "build"],
+  ["vp", "build", "--"],
+  ["vp", "-C", "app", "build"],
+]
+
+[[case]]
+name = "fixed_target_keeps_legacy_tools"
+vp = "global"
+comment = "An explicit target keeps the installed legacy toolchain and forwards the original arguments."
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "app/node_modules/vite-plus/dist"], snapshot = false },
+  { argv = ["vpt", "write-file", "app/node_modules/vite-plus/package.json", '{"name":"vite-plus","version":"0.2.7","type":"module"}'], snapshot = false },
+  { argv = ["vpt", "cp", "legacy-probe.mjs", "app/node_modules/vite-plus/dist/bin.js"], snapshot = false },
+  { argv = ["vpt", "cp", "fixed-target-config.mjs", "app/vite.config.mjs"], snapshot = false },
+  ["vp", "-C", "app", "build"],
+  { argv = ["vpt", "write-file", "app/node_modules/vite-plus/package.json", '{"name":"vite-plus","version":"0.2.9","type":"module"}'], snapshot = false },
+  { argv = ["vpt", "write-file", "app/pnpm-workspace.yaml", "linkWorkspacePackages: false\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "app/vite.config.mjs", "export default { root: 'site' };\n"], snapshot = false },
+  ["vp", "-C", "app", "build"],
+  { argv = ["vpt", "mkdir", "-p", "app/node_modules/@voidzero-dev/vite-plus-core/dist"], snapshot = false },
+  { argv = ["vpt", "write-file", "app/node_modules/@voidzero-dev/vite-plus-core/package.json", '{"name":"@voidzero-dev/vite-plus-core","version":"0.3.0","type":"module","main":"dist/cli.js"}'], snapshot = false },
+  { argv = ["vpt", "write-file", "app/node_modules/@voidzero-dev/vite-plus-core/dist/cli.js", "throw new Error('The hoisted Core has the wrong version');\n"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "app/node_modules/vite-plus/node_modules/@voidzero-dev/vite-plus-core/dist"], snapshot = false },
+  { argv = ["vpt", "write-file", "app/node_modules/vite-plus/node_modules/@voidzero-dev/vite-plus-core/package.json", '{"name":"@voidzero-dev/vite-plus-core","version":"0.2.9","type":"module","main":"dist/cli.js"}'], snapshot = false },
+  { argv = ["vpt", "cp", "probe.mjs", "app/node_modules/vite-plus/node_modules/@voidzero-dev/vite-plus-core/dist/cli.js"], snapshot = false },
+  { argv = ["vpt", "cp", "probe.mjs", "app/node_modules/vite-plus/dist/pack-bin.js"], snapshot = false },
+  { argv = ["vpt", "write-file", "app/vite.config.mjs", "export default { defaultPackage: './nested' };\n"], snapshot = false },
+  ["vp", "-C", "app", "build"],
+  ["vp", "-C", "app", "build", "--mode", "staging"],
+  ["vp", "-C", "app", "build", "--config", "vite.config.mjs"],
+  ["vp", "-C", "app", "build", "--help"],
+  ["vp", "-C", "app", "build", "--", "--help"],
+  ["vp", "-C", "app", "pack", "--out-dir", "lib-out"],
+]
+
+[[case]]
+name = "workspace_uses_selected_members_runtime"
+vp = "global"
+comment = "Auto-selection and the picker use the member's Node.js pin with one shared Vite+ installation."
+steps = [
+  { argv = ["vpt", "rm", "vite.config.ts"], snapshot = false },
+  { argv = ["vpt", "write-file", "pnpm-workspace.yaml", "packages:\n  - app\n  - other\n"], snapshot = false },
+  { argv = ["vpt", "touch-file", "app/index.html"], snapshot = false },
+  { argv = ["vpt", "write-file", "other/package.json", '{"name":"other","private":true}'], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "node_modules/vite-plus/dist"], snapshot = false },
+  { argv = ["vpt", "write-file", "node_modules/vite-plus/package.json", '{"name":"vite-plus","version":"0.3.0","type":"module"}'], snapshot = false },
+  { argv = ["vpt", "cp", "probe.mjs", "node_modules/vite-plus/dist/bin.js"], snapshot = false },
+  ["vp", "-C", "app", "build"],
+  ["vp", "build"],
+  { argv = ["vpt", "touch-file", "other/index.html"], snapshot = false },
+  { argv = ["vp", "build"], interactions = [
+    { "expect-milestone" = "package-select::0" },
+    { "write" = "app" },
+    { "expect-milestone" = "package-select:app:0" },
+    { "write-key" = "enter" },
+  ] },
+]
+
+[[case]]
+name = "legacy_local_cli_selects_target"
+vp = "global"
+comment = "A local CLI that predates the fixed target marker receives the original directory and arguments."
+steps = [
+  { argv = ["vpt", "rm", "vite.config.ts"], snapshot = false },
+  { argv = ["vpt", "write-file", "pnpm-workspace.yaml", "packages:\n  - app\n"], snapshot = false },
+  { argv = ["vpt", "touch-file", "app/index.html"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "node_modules/vite-plus/dist"], snapshot = false },
+  { argv = ["vpt", "write-file", "node_modules/vite-plus/package.json", '{"name":"vite-plus","version":"0.2.9","type":"module"}'], snapshot = false },
+  { argv = ["vpt", "cp", "legacy-probe.mjs", "node_modules/vite-plus/dist/bin.js"], snapshot = false },
+  ["vp", "build"],
+  ["vp", "build", "--"],
+]
+
+[[case]]
+name = "legacy_cli_at_fixed_target"
+vp = "global"
+comment = "The global CLI keeps explicit arguments and falls back only when a legacy CLI would select another package."
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "app/node_modules/vite-plus/dist"], snapshot = false },
+  { argv = ["vpt", "write-file", "app/node_modules/vite-plus/package.json", '{"name":"vite-plus","version":"0.2.9","type":"module"}'], snapshot = false },
+  { argv = ["vpt", "cp", "legacy-probe.mjs", "app/node_modules/vite-plus/dist/bin.js"], snapshot = false },
+  { argv = ["vpt", "cp", "fixed-target-config.mjs", "app/vite.config.mjs"], snapshot = false },
+  { argv = ["vpt", "write-file", "app/pnpm-workspace.yaml", "packages:\n  - nested\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "app/nested/package.json", '{"name":"nested","private":true}'], snapshot = false },
+  { argv = ["vpt", "write-file", "app/nested/index.html", "<h1>Nested</h1>\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "app/index.html", "<h1>Selected app</h1>\n"], snapshot = false },
+  { argv = ["vp", "build"], envs = [["VP_GLOBAL_CLI_JS_SCRIPTS_DIR", "${workspace}/global-cli"]] },
+  { argv = ["vp", "-C", "app", "build"], envs = [["VP_GLOBAL_CLI_JS_SCRIPTS_DIR", "${workspace}/global-cli"]] },
+  ["vp", "-C", "app", "build", "--config", "vite.config.mjs"],
+  ["vp", "-C", "app", "build", "--", "--help"],
+  { argv = ["vpt", "rm", "app/vite.config.mjs"], snapshot = false },
+  ["vp", "-C", "app", "build"],
+]
+
+[[case]]
+name = "fixed_target_keeps_local_preview"
+vp = "global"
+comment = "A local preview that supports the fixed-target marker runs both explicit and selected targets."
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "app/node_modules/vite-plus/dist"], snapshot = false },
+  { argv = ["vpt", "write-file", "app/node_modules/vite-plus/package.json", '{"name":"vite-plus","version":"0.0.0-commit.preview","type":"module"}'], snapshot = false },
+  { argv = ["vpt", "cp", "probe.mjs", "app/node_modules/vite-plus/dist/bin.js"], snapshot = false },
+  { argv = ["vpt", "cp", "fixed-target-config.mjs", "app/vite.config.mjs"], snapshot = false },
+  { argv = ["vpt", "write-file", "app/index.html", "<h1>Selected app</h1>\n"], snapshot = false },
+  ["vp", "-C", "app", "build"],
+  ["vp", "build"],
+  { argv = ["vpt", "cp", "legacy-probe.mjs", "app/node_modules/vite-plus/dist/bin.js"], snapshot = false },
+  { argv = ["vp", "-C", "app", "build"], envs = [["VP_GLOBAL_CLI_JS_SCRIPTS_DIR", "${workspace}/global-cli"]] },
+]
+
+# Use the local flavor to require a JS build. Run its installed global vp for each build.
+[[case]]
+name = "fixed_target_build_artifacts"
+vp = "local"
+comment = "The bundled CLI builds the selected app when a legacy or preview CLI would select another package."
+steps = [
+  { argv = ["vpt", "mkdir", "-p", "app/node_modules/vite-plus/dist"], snapshot = false },
+  { argv = ["vpt", "write-file", "app/node_modules/vite-plus/package.json", '{"name":"vite-plus","version":"0.2.9","type":"module"}'], snapshot = false },
+  { argv = ["vpt", "cp", "legacy-probe.mjs", "app/node_modules/vite-plus/dist/bin.js"], snapshot = false },
+  { argv = ["vpt", "cp", "fixed-target-config.mjs", "app/vite.config.mjs"], snapshot = false },
+  { argv = ["vpt", "write-file", "app/pnpm-workspace.yaml", "packages:\n  - nested\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "app/nested/package.json", '{"name":"nested","private":true}'], snapshot = false },
+  { argv = ["vpt", "write-file", "app/nested/index.html", "<h1>Nested</h1>\n"], snapshot = false },
+  { argv = ["vpt", "write-file", "app/index.html", "<h1>Selected app</h1>\n"], snapshot = false },
+  { argv = ["vp", "build"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${PATH}"]], snapshot = false },
+  ["vpt", "print-file", "app/dist/index.html"],
+  ["vpt", "print-file", "app/build-args.json"],
+  { argv = ["vpt", "rm", "-r", "app/dist"], snapshot = false },
+  { argv = ["vp", "-C", "app", "build"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${PATH}"]], snapshot = false },
+  ["vpt", "print-file", "app/dist/index.html"],
+  { argv = ["vpt", "rm", "-r", "app/dist"], snapshot = false },
+  { argv = ["vpt", "write-file", "app/node_modules/vite-plus/package.json", '{"name":"vite-plus","version":"0.0.0-commit.preview","type":"module"}'], snapshot = false },
+  { argv = ["vp", "-C", "app", "build"], envs = [["PATH", "${VP_HOME}/bin${PATH_SEPARATOR}${PATH}"]], snapshot = false },
+  ["vpt", "print-file", "app/dist/index.html"],
+  ["vpt", "stat-file", "app/nested/dist", "--assert", "missing"],
+]
