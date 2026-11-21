@@ -8,7 +8,7 @@ import {
 } from '../../binding/index.js';
 import { PackageManager } from '../types/index.ts';
 import { isPnpmIgnoredBuildsError, parseInstallGatedBuilds } from './approve-builds.ts';
-import { getVpCommand, runCommandSilently } from './command.ts';
+import { getVpCommand, MAX_TIMER_DELAY_MS, runCommandSilently } from './command.ts';
 import {
   formatPnpmInstallOutput,
   getPnpmInstallReporting,
@@ -214,10 +214,20 @@ export async function runViteInstall(
   // exit status. Keep the native reporter when it cannot expose resolution events.
   const keepLegacyReporter =
     legacyReporter && (originalMode === 'silent' || originalMode === 'json');
-  const idleTimeoutMs =
+  let idleTimeoutMs =
     reporterUnknown || reporting?.useNativeReporter || keepLegacyReporter
       ? undefined
       : options?.idleTimeoutMs;
+  const fetchTimeoutMs = reporting?.fetchTimeoutMs;
+  if (
+    idleTimeoutMs !== undefined &&
+    fetchTimeoutMs !== undefined &&
+    fetchTimeoutMs >= idleTimeoutMs
+  ) {
+    // A long request may start after the last progress event. Give pnpm
+    // its whole request time plus an idle window to report what happened.
+    idleTimeoutMs = Math.min(MAX_TIMER_DELAY_MS, fetchTimeoutMs + idleTimeoutMs);
+  }
   const shouldWatchIdle = idleTimeoutMs === undefined ? undefined : watchPnpmResolution();
   if (idleTimeoutMs !== undefined) {
     // pnpm 9 normalizes these keys for the installer but skips underscore-prefixed

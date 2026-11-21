@@ -3,7 +3,7 @@ import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 import { resolveNpmRegistry } from '../../binding/index.js';
-import { runCommandSilently } from './command.ts';
+import { MAX_TIMER_DELAY_MS, runCommandSilently } from './command.ts';
 import { readJsonFile } from './json.ts';
 import { displayRelative } from './path.ts';
 import { formatDuration } from './terminal.ts';
@@ -118,6 +118,7 @@ interface PnpmLifecycleOutputOptions {
 interface PnpmInstallReporting extends PnpmLifecycleOutputOptions {
   mode: PnpmInstallOutputMode;
   useNativeReporter: boolean;
+  fetchTimeoutMs?: number;
 }
 
 export async function getPnpmInstallReporting(
@@ -155,17 +156,21 @@ export async function getPnpmInstallReporting(
     return undefined;
   }
 
-  const { reporter, loglevel, json, parseable, pnpmfile } = config;
+  const { reporter, loglevel, json, parseable, pnpmfile, 'fetch-timeout': fetchTimeout } = config;
+  const fetchTimeoutMs =
+    typeof fetchTimeout === 'number' && fetchTimeout >= 1 && fetchTimeout <= MAX_TIMER_DELAY_MS
+      ? fetchTimeout
+      : undefined;
   // pnpm tests the resolved values for truthiness. Its config parser converts
   // true and false to booleans and keeps environment values like "1" as strings.
   if (json || parseable) {
-    return { mode: 'json', useNativeReporter: false };
+    return { mode: 'json', useNativeReporter: false, fetchTimeoutMs };
   }
   if (reporter === 'silent' || loglevel === 'silent') {
-    return { mode: 'silent', useNativeReporter: false };
+    return { mode: 'silent', useNativeReporter: false, fetchTimeoutMs };
   }
   if (reporter === 'ndjson') {
-    return { mode: 'ndjson', useNativeReporter: false };
+    return { mode: 'ndjson', useNativeReporter: false, fetchTimeoutMs };
   }
 
   // pnpm runs filterLog inside its human reporters. Let pnpm own the output
@@ -187,6 +192,7 @@ export async function getPnpmInstallReporting(
   return {
     mode,
     useNativeReporter,
+    fetchTimeoutMs,
     aggregateOutput: appendOnly && Boolean(config['aggregate-output']),
     hideLifecyclePrefix:
       (appendOnly || Boolean(config.stream)) && Boolean(config['reporter-hide-prefix']),

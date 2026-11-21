@@ -24,6 +24,7 @@ export interface WorkspaceInfo {
   parentDirs: string[];
   packageManager: PackageManager;
   packageManagerVersion: string;
+  packageManagerHash?: string;
   downloadPackageManager: DownloadPackageManagerResult;
   // The `VP_PACKAGE_MANAGER` override pinned to the downloaded version, keeping any integrity hash
   packageManagerOverride?: string;

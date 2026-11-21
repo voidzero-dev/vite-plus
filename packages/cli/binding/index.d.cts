@@ -3710,6 +3710,7 @@ export interface CreateArgs {
  * Returns a `DetectWorkspaceResult` containing:
  * - The name of the package manager
  * - The version of the package manager
+ * - The integrity hash from the package manager pin, if present
  * - Whether the workspace is a monorepo
  * - The workspace root, where the package.json file is located.
  *
@@ -3728,6 +3729,7 @@ export declare function detectWorkspace(cwd: string): Promise<DetectWorkspaceRes
 export interface DetectWorkspaceResult {
   packageManagerName?: string;
   packageManagerVersion?: string;
+  packageManagerHash?: string;
   isMonorepo: boolean;
   root?: string;
 }

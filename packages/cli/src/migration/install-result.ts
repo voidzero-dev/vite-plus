@@ -18,6 +18,7 @@ export async function getMigrationInstallWatchOptions(
   interactive: boolean | undefined,
   packageManager: PackageManager | undefined,
   downloaded: Pick<DownloadPackageManagerResult, 'version' | 'binPaths'> | undefined,
+  projectManagerHash?: string,
 ): Promise<
   { idleTimeoutMs: number; effectivePnpmVersion: string; pnpmExecutable: string } | undefined
 > {
@@ -61,11 +62,18 @@ export async function getMigrationInstallWatchOptions(
       if (selection?.name !== PackageManager.pnpm) {
         return undefined;
       }
+      // A matching version in another cache may have a different integrity pin.
+      // Let the installer provision the selected path before relying on it.
+      if (selection.installed === false && !override) {
+        return undefined;
+      }
       // env current can see a system binary that failed the version probe.
       // The installer falls back to the package manager resolved for the project.
       const launcherVersion = selection.version === 'unknown' ? undefined : selection.version;
+      const expectedHash = override ? override.expectedHash : projectManagerHash;
       const launcherExecutable =
-        launcherVersion && selection.installed !== false
+        launcherVersion &&
+        (selection.installed === true || (!expectedHash && selection.installed !== false))
           ? (selection.bin_paths?.pnpm ?? selection.bin_path)
           : undefined;
       pnpmExecutable =

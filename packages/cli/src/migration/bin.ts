@@ -5,7 +5,7 @@ import { isDeepStrictEqual, styleText } from 'node:util';
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { satisfies } from 'verkit';
 
-import { parseMigrateArgs } from '../../binding/index.js';
+import { getPackageManagerOverride, parseMigrateArgs } from '../../binding/index.js';
 import {
   PackageManager,
   type WorkspaceInfo,
@@ -688,6 +688,7 @@ async function downloadSupportedPackageManager(options: {
   rootDir: string;
   packageManager: PackageManager;
   packageManagerVersion: string;
+  packageManagerHash?: string;
   interactive: boolean;
   updateMigrationProgress: (message: string) => void;
   failMigrationProgress: (message: string) => void;
@@ -696,18 +697,24 @@ async function downloadSupportedPackageManager(options: {
     rootDir,
     packageManager,
     packageManagerVersion,
+    packageManagerHash,
     interactive,
     updateMigrationProgress,
     failMigrationProgress,
   } = options;
 
   updateMigrationProgress('Preparing migration');
+  const expectedHash =
+    packageManager === PackageManager.pnpm && packageManagerHash && !getPackageManagerOverride()
+      ? packageManagerHash
+      : undefined;
   const downloadResult = await downloadPackageManager(
     packageManager,
     packageManagerVersion,
     interactive,
     true,
     rootDir,
+    expectedHash,
   );
 
   if (
@@ -807,10 +814,15 @@ async function executeMigrationPlan(
   applyVitestV5NodeMigration(vitestV5Plan);
 
   // 1. Download package manager + version validation
+  const packageManagerHash =
+    workspaceInfoOptional.packageManager === plan.packageManager
+      ? workspaceInfoOptional.packageManagerHash
+      : undefined;
   const downloadResult = await downloadSupportedPackageManager({
     rootDir: workspaceInfoOptional.rootDir,
     packageManager: plan.packageManager,
     packageManagerVersion: workspaceInfoOptional.packageManagerVersion,
+    packageManagerHash,
     interactive,
     updateMigrationProgress,
     failMigrationProgress,
@@ -818,6 +830,7 @@ async function executeMigrationPlan(
   const workspaceInfo: WorkspaceInfo = {
     ...workspaceInfoOptional,
     packageManager: plan.packageManager,
+    packageManagerHash,
     downloadPackageManager: downloadResult,
   };
 
@@ -857,6 +870,7 @@ async function executeMigrationPlan(
         interactive,
         workspaceInfo.packageManager,
         workspaceInfo.downloadPackageManager,
+        workspaceInfo.packageManagerHash,
       )),
       initialInstall: true,
     },
@@ -1045,6 +1059,7 @@ async function executeMigrationPlan(
         interactive,
         workspaceInfo.packageManager,
         workspaceInfo.downloadPackageManager,
+        workspaceInfo.packageManagerHash,
       )),
     },
   );
@@ -1221,6 +1236,7 @@ async function main() {
         rootDir: workspaceInfoOptional.rootDir,
         packageManager,
         packageManagerVersion,
+        packageManagerHash: workspaceInfoOptional.packageManagerHash,
         interactive: options.interactive,
         updateMigrationProgress,
         failMigrationProgress,
@@ -1693,6 +1709,7 @@ async function main() {
             options.interactive,
             packageManager,
             downloadedPackageManager,
+            workspaceInfoOptional.packageManagerHash,
           )),
         },
       );

@@ -7,6 +7,7 @@ import { parse as parseYaml } from 'yaml';
 
 import { DependencyType, PackageManager, type WorkspaceInfo } from '../../types/index.ts';
 import {
+  detectWorkspace,
   discoverWorkspacePackages,
   findPackageJsonFilesFromPatterns,
   updatePackageJsonWithDeps,
@@ -49,6 +50,19 @@ function makeWorkspaceInfo(overrides: Partial<WorkspaceInfo> = {}): WorkspaceInf
     ...overrides,
   };
 }
+
+it('keeps the integrity hash when detecting a pinned pnpm workspace', async () => {
+  const hash = `sha512.${'0'.repeat(128)}`;
+  writeJson(path.join(tmpDir, 'package.json'), {
+    name: 'pinned-project',
+    packageManager: `pnpm@9.15.9+${hash}`,
+  });
+  expect(await detectWorkspace(tmpDir)).toMatchObject({
+    packageManager: PackageManager.pnpm,
+    packageManagerVersion: '9.15.9',
+    packageManagerHash: hash,
+  });
+});
 
 describe('updateWorkspaceConfig pattern derivation', () => {
   it('derives "packages/*" from a nested project path (pnpm)', () => {

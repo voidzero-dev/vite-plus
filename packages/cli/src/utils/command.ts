@@ -20,6 +20,8 @@ import { fileURLToPath } from 'node:url';
 import spawn from 'cross-spawn';
 import { onExit } from 'signal-exit';
 
+export const MAX_TIMER_DELAY_MS = 0x7fff_ffff;
+
 export interface RunCommandOptions {
   command: string;
   args: string[];
@@ -281,7 +283,7 @@ function runCapturedCommand(
       timer.unref();
     };
     const deferIdleTimeout = (delayMs: number) => {
-      if (!Number.isFinite(delayMs) || delayMs <= 0 || delayMs > 0x7fff_ffff) {
+      if (!Number.isFinite(delayMs) || delayMs <= 0 || delayMs > MAX_TIMER_DELAY_MS) {
         return;
       }
       const until = performance.now() + delayMs;

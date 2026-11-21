@@ -101,6 +101,32 @@ describe('runViteInstall', () => {
   });
 
   it.each([
+    [{}, 300_000],
+    [{ 'fetch-timeout': 60_000 }, 300_000],
+    [{ 'fetch-timeout': 300_000 }, 600_000],
+    [{ 'fetch-timeout': 600_000 }, 900_000],
+    [{ 'fetch-timeout': 600_000, json: true }, 900_000],
+    [{ 'fetch-timeout': 0x7fff_ffff }, 0x7fff_ffff],
+    [{ 'fetch-timeout': 0x8000_0000 }, 300_000],
+  ])('honors the watched pm fetch configuration %j', async (config, expected) => {
+    const run = vi.mocked(runCommandSilently);
+    run.mockResolvedValueOnce({
+      exitCode: 0,
+      stdout: Buffer.from(JSON.stringify(config)),
+      stderr: Buffer.alloc(0),
+    });
+    run.mockResolvedValueOnce({ exitCode: 0, stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) });
+    await runViteInstall(cwd, false, undefined, {
+      idleTimeoutMs: 300_000,
+      packageManager: PackageManager.pnpm,
+      packageManagerVersion: '9.15.9',
+      pnpmExecutable,
+      silent: true,
+    });
+    expect(run.mock.lastCall?.[0].idleTimeoutMs).toBe(expected);
+  });
+
+  it.each([
     ['append-only', false, true],
     ['append-only', true, false],
     ['append-only', '1', false],
