@@ -84,11 +84,12 @@ export async function runRemoteTemplateCommand(
   // `--` keeps the global CLI from reading a template's `--help` as its own.
   const dlxArgs = ['dlx', '--', templateInfo.command, ...templateInfo.args];
   // `vp dlx` detects the package manager from cwd and defaults to pnpm outside a project.
-  // A user override is kept as given: its hash selects the verified install create downloaded.
+  // Pass the exact version so a tag such as `latest` is not resolved again from the new workspace's
+  // registry, and keep an override's hash so `dlx` reuses the verified install create downloaded.
   const envs = {
     ...templateInfo.envs,
     VP_PACKAGE_MANAGER:
-      templateInfo.envs.VP_PACKAGE_MANAGER?.trim() ||
+      workspaceInfo.packageManagerOverride ??
       `${workspaceInfo.packageManager}@${workspaceInfo.packageManagerVersion}`,
   };
   const { command, args } = getVpCommand(dlxArgs);

@@ -35,4 +35,26 @@ describe('runRemoteTemplateCommand', () => {
       envs: { VP_PACKAGE_MANAGER: 'pnpm@10.32.0' },
     });
   });
+
+  // The generator may run inside the new workspace, whose registry could resolve a tag differently.
+  it('forwards the resolved override instead of the tag the user gave', async () => {
+    vi.stubEnv('VP_CLI_BIN', 'vp');
+    const workspaceInfo = {
+      packageManager: 'pnpm',
+      packageManagerVersion: '10.18.0',
+      packageManagerOverride: 'pnpm@10.18.0+sha512.abc',
+    } as unknown as WorkspaceInfo;
+    const templateInfo = {
+      command: 'create-foo',
+      args: [],
+      envs: { VP_PACKAGE_MANAGER: 'pnpm@latest+sha512.abc' },
+    } as unknown as TemplateInfo;
+
+    await runRemoteTemplateCommand(workspaceInfo, '/workspace', templateInfo, false, true);
+    vi.unstubAllEnvs();
+
+    expect(runCommandSilently).toHaveBeenLastCalledWith(
+      expect.objectContaining({ envs: { VP_PACKAGE_MANAGER: 'pnpm@10.18.0+sha512.abc' } }),
+    );
+  });
 });
