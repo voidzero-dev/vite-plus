@@ -458,6 +458,7 @@ export async function formatPnpmInstallOutput(
   const showWarnings = showInfo || mode === 'warn';
   const deprecatedSubdependencies: string[] = [];
   const pendingScripts = new Map<string, string[]>();
+  const infoErrorIndices = new Map<string, number[]>();
   let seenPeerIssues = false;
   let terminalErrorIndex: number | undefined;
   const progress = { resolved: 0, found_in_store: 0, fetched: 0, imported: 0 };
@@ -617,20 +618,28 @@ export async function formatPnpmInstallOutput(
           log.level === 'warn' && typeof log.prefix === 'string'
             ? displayRelative(log.prefix, cwd)
             : '';
+        // pnpm logs each recursive failure at info level before it reports member paths.
+        if (log.name === 'pnpm' && log.level === 'info' && typeof error.message === 'string') {
+          const key = JSON.stringify([code, message]);
+          const indices = infoErrorIndices.get(key) ?? [];
+          indices.push(messages.length);
+          infoErrorIndices.set(key, indices);
+        }
         messages.push(warningPath ? `${warningPath}: ${headline}` : headline);
-        if (
-          code === 'ERR_PNPM_RECURSIVE_FAIL' &&
-          (mode === 'warn' || mode === 'error') &&
-          Array.isArray(log.failures)
-        ) {
-          // These modes omit the individual info records that precede the summary.
+        if (code === 'ERR_PNPM_RECURSIVE_FAIL' && Array.isArray(log.failures)) {
           for (const failure of log.failures) {
             const { prefix, message: reason, error: memberError } = asRecord(failure);
             if (typeof prefix === 'string' && typeof reason === 'string') {
               const member = redactRegistryUrls(displayRelative(prefix, cwd) || '.');
               const details = asRecord(memberError);
               const url = asRecord(details.request).url ?? details.url;
-              messages.push(`${member}: ${redactPnpmDiagnostic(reason, url)}`);
+              const memberCode = typeof details.code === 'string' ? details.code : '';
+              const index = infoErrorIndices.get(JSON.stringify([memberCode, reason]))?.shift();
+              if (index === undefined) {
+                messages.push(`${member}: ${redactPnpmDiagnostic(reason, url)}`);
+              } else {
+                messages[index] = `${member}: ${redactPnpmDiagnostic(messages[index], url)}`;
+              }
             }
           }
         }
