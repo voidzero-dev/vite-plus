@@ -11,31 +11,3 @@ vp = "local"
 skip-platforms = ["windows"]
 comment = "A Node Worker runs project-local vp dev without replacing its host process."
 steps = [{ argv = ["node", "probe.mjs", "--worker"], tty = false, timeout = 25000 }]
-
-[[case]]
-name = "command_dev_local_signal_hangup"
-vp = "local"
-skip-platforms = ["windows"]
-comment = "Interactive Vite prints config debug logs and restores the terminal mode on SIGHUP."
-steps = [{ argv = ["node", "probe.mjs", "--hangup"], timeout = 25000 }]
-
-[[case]]
-name = "command_dev_local_signal_reraised_sigint"
-vp = "local"
-skip-platforms = ["windows"]
-comment = "Interactive Vite restores the terminal when a plugin removes its last SIGINT listener and re-sends SIGINT."
-steps = [{ argv = ["node", "probe.mjs", "--reraise-sigint"], timeout = 25000 }]
-
-[[case]]
-name = "command_dev_local_signal_repeated_sigterm"
-vp = "local"
-skip-platforms = ["windows"]
-comment = "Interactive Vite restores the terminal when a second SIGTERM interrupts asynchronous shutdown."
-steps = [{ argv = ["node", "probe.mjs", "--repeat-sigterm"], timeout = 25000 }]
-
-[[case]]
-name = "command_dev_local_signal_during_config"
-vp = "local"
-skip-platforms = ["windows"]
-comment = "SIGINT, SIGTERM, and SIGHUP stop interactive Vite during synchronous config evaluation."
-steps = [{ argv = ["node", "probe-config-interrupt.mjs"], timeout = 25000 }]

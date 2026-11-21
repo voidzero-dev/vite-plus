@@ -5,6 +5,8 @@
     clippy::print_stderr
 )]
 
+#[cfg(unix)]
+use std::os::fd::{BorrowedFd, RawFd};
 use std::{
     collections::HashMap,
     ffi::{OsStr, OsString},
@@ -126,20 +128,11 @@ pub fn build_command(bin_path: &AbsolutePath, cwd: &AbsolutePath) -> Command {
 pub fn exec_node_command(mut cmd: Command) -> Error {
     use std::os::unix::process::CommandExt;
 
-    use nix::sys::signal::{SaFlags, SigAction, SigHandler, SigSet, Signal, sigaction};
-
+    // Exec keeps the O_NONBLOCK flag that Node.js sets on stdio pipes.
+    // The new Node.js process resets inherited signal dispositions and
+    // restores the terminal mode on exit, SIGINT, and SIGTERM.
     vp_shared::ensure_blocking_stdio();
-    // Rust's exec resets SIGPIPE. Restore SIGXFSZ too, since Node.js ignores it
-    // and ignored signal dispositions survive exec.
-    let default = SigAction::new(SigHandler::SigDfl, SaFlags::empty(), SigSet::empty());
-    // SAFETY: installs a valid signal disposition and records the previous one.
-    let original = unsafe { sigaction(Signal::SIGXFSZ, &default) }.ok();
-    let error = cmd.as_std_mut().exec();
-    if let Some(original) = original {
-        // SAFETY: restores the disposition captured before the failed exec.
-        let _ = unsafe { sigaction(Signal::SIGXFSZ, &original) };
-    }
-    Error::Anyhow(error.into())
+    Error::Anyhow(cmd.as_std_mut().exec().into())
 }
 
 /// Execute a command while preserving terminal state.
@@ -153,7 +146,7 @@ pub fn exec_node_command(mut cmd: Command) -> Error {
 pub async fn execute_with_terminal_guard(mut cmd: Command) -> Result<ExitStatus, Error> {
     // Save terminal state and ignore SIGINT (Unix) or Ctrl+C (Windows) until the child exits.
     #[cfg(unix)]
-    let _guard = TerminalStateGuard::save();
+    let _guard = TerminalStateGuard::save(nix::libc::STDIN_FILENO);
     #[cfg(windows)]
     let _guard = ConsoleCtrlGuard::install();
 
@@ -367,92 +360,35 @@ pub fn fix_stdio_streams() {
     clear_cloexec(unsafe { BorrowedFd::borrow_raw(STDERR_FILENO) });
 }
 
-/// The stdin terminal settings before an interactive command starts.
-#[cfg(unix)]
-pub struct StdinTerminalState(nix::libc::termios);
-
-#[cfg(unix)]
-static SIGNAL_TERMINAL_STATE: std::sync::OnceLock<nix::libc::termios> = std::sync::OnceLock::new();
-
-#[cfg(unix)]
-impl StdinTerminalState {
-    #[must_use]
-    pub fn capture() -> Option<Self> {
-        nix::sys::termios::tcgetattr(std::io::stdin()).ok().map(|state| Self(state.into()))
-    }
-
-    pub fn restore(&self) {
-        restore_stdin_terminal(&self.0);
-    }
-
-    /// Restore stdin before the default action for SIGHUP, SIGINT, or SIGTERM.
-    pub fn restore_on_default_signals(&self) {
-        use nix::{
-            libc,
-            sys::signal::{SaFlags, SigAction, SigHandler, SigSet, Signal, sigaction},
-        };
-
-        let action = SigAction::new(
-            SigHandler::Handler(restore_stdin_after_signal),
-            SaFlags::SA_RESETHAND,
-            SigSet::empty(),
-        );
-        for signal in [Signal::SIGHUP, Signal::SIGINT, Signal::SIGTERM] {
-            let mut previous = std::mem::MaybeUninit::<libc::sigaction>::uninit();
-            // SAFETY: passing a null action only queries the current disposition.
-            if unsafe {
-                libc::sigaction(signal as libc::c_int, std::ptr::null(), previous.as_mut_ptr())
-            } != 0
-            {
-                continue;
-            }
-            // SAFETY: the successful query initialized the disposition.
-            if unsafe { previous.assume_init() }.sa_sigaction != libc::SIG_DFL {
-                continue;
-            }
-            SIGNAL_TERMINAL_STATE.get_or_init(|| self.0);
-            // SAFETY: the handler uses immutable state and async-signal-safe operations.
-            let _ = unsafe { sigaction(signal, &action) };
-        }
-    }
-}
-
-#[cfg(unix)]
-fn restore_stdin_terminal(state: &nix::libc::termios) {
-    use nix::libc;
-
-    // SAFETY: these terminal operations are async-signal-safe. A background
-    // process must leave the terminal to its foreground job.
-    unsafe {
-        let foreground = libc::tcgetpgrp(libc::STDIN_FILENO);
-        if foreground >= 0 && foreground != libc::getpgrp() {
-            return;
-        }
-        libc::tcsetattr(libc::STDIN_FILENO, libc::TCSANOW, state);
-    }
-}
-
-#[cfg(unix)]
-extern "C" fn restore_stdin_after_signal(signal: nix::libc::c_int) {
-    if let Some(state) = SIGNAL_TERMINAL_STATE.get() {
-        restore_stdin_terminal(state);
-    }
-    // SAFETY: raise is async-signal-safe. SA_RESETHAND restored the default action.
-    unsafe { nix::libc::raise(signal) };
-}
-
-/// Restore the terminal and SIGINT disposition after an interactive child exits.
+/// Guard that saves terminal state and restores it on drop.
+/// This prevents escape sequences from appearing in the prompt when a child process
+/// is interrupted (e.g., via Ctrl+C) while the terminal is in a non-standard state.
 #[cfg(unix)]
 struct TerminalStateGuard {
-    terminal: StdinTerminalState,
+    fd: RawFd,
+    original: nix::sys::termios::Termios,
     original_sigint: Option<nix::sys::signal::SigAction>,
 }
 
 #[cfg(unix)]
 impl TerminalStateGuard {
-    fn save() -> Option<Self> {
-        let terminal = StdinTerminalState::capture()?;
-        Some(Self { terminal, original_sigint: Self::ignore_sigint() })
+    /// Save the current terminal state for the given file descriptor.
+    /// Returns None if the fd is not a terminal or if saving fails.
+    fn save(fd: RawFd) -> Option<Self> {
+        use nix::sys::termios::tcgetattr;
+
+        // SAFETY: fd comes from a valid stdin/stdout/stderr file descriptor
+        let borrowed_fd = unsafe { BorrowedFd::borrow_raw(fd) };
+
+        // Only save state if this is actually a terminal
+        if !nix::unistd::isatty(borrowed_fd).unwrap_or(false) {
+            return None;
+        }
+
+        match tcgetattr(borrowed_fd) {
+            Ok(original) => Some(Self { fd, original, original_sigint: Self::ignore_sigint() }),
+            Err(_) => None,
+        }
     }
 
     fn ignore_sigint() -> Option<nix::sys::signal::SigAction> {
@@ -468,9 +404,17 @@ impl TerminalStateGuard {
 #[cfg(unix)]
 impl Drop for TerminalStateGuard {
     fn drop(&mut self) {
-        use nix::sys::signal::{Signal, sigaction};
+        use nix::sys::{
+            signal::{Signal, sigaction},
+            termios::{SetArg, tcsetattr},
+        };
 
-        self.terminal.restore();
+        // SAFETY: fd comes from stdin/stdout/stderr and the guard does not outlive the process
+        let borrowed_fd = unsafe { BorrowedFd::borrow_raw(self.fd) };
+
+        // Best effort: ignore errors during cleanup
+        let _ = tcsetattr(borrowed_fd, SetArg::TCSANOW, &self.original);
+
         // SAFETY: restores the signal disposition captured by save().
         if let Some(original_sigint) = self.original_sigint.take() {
             let _ = unsafe { sigaction(Signal::SIGINT, &original_sigint) };

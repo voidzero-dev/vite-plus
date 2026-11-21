@@ -212,21 +212,11 @@ impl SubcommandResolver {
                 let js_path_str = js_path
                     .to_str()
                     .ok_or_else(|| anyhow::anyhow!("vite JS path is not valid UTF-8"))?;
-                let terminal_preload = (cfg!(unix)
-                    && cli_options.exec_dev
-                    && vp_shared::is_stdin_terminal())
-                .then(|| {
-                    Str::from(format!(
-                        "--require={}/dist/vite-dev-terminal.cjs",
-                        cli_options.vite_plus_package_path,
-                    ))
-                });
 
                 Ok(ResolvedSubcommand {
                     program: Arc::clone(&cli_options.node_exec_path),
-                    args: terminal_preload
-                        .into_iter()
-                        .chain([Str::from(js_path_str), Str::from("dev")])
+                    args: iter::once(Str::from(js_path_str))
+                        .chain(iter::once(Str::from("dev")))
                         .chain(args.into_iter().map(Str::from))
                         .collect(),
                     cache_config: UserCacheConfig::disabled(),
