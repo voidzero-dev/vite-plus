@@ -37,7 +37,7 @@ Run its binary through your package manager. For example:
 
 The documentation uses bare `vp` commands for readability. Without the global CLI, prefix interactive commands with your package manager's local-binary executor, such as `pnpm exec`.
 
-For build agents without public internet access, see [Offline CI with a private registry](/guide/ci#offline-ci-with-a-private-registry).
+See [how to install and run the local CLI without public internet access](/guide/ci#offline-ci-with-a-private-registry).
 
 ### Manual Installation
 

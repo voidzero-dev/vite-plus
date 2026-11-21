@@ -438,12 +438,9 @@ For example, `VP_VERSION=1.0.0 vp-setup.exe --version 2.0.0` installs version 2.
 
 ### Install from private mirrors
 
-On a machine without public internet access, use a local copy of `install.ps1` or `vp-setup.exe` on Windows, or `install.sh` on macOS and Linux. Configure both mirrors before you run the installer.
+To install the global CLI without public internet access, you need the URLs for a private npm registry and a Node.js mirror. Use a local copy of `install.ps1` or `vp-setup.exe` on Windows, or `install.sh` on macOS and Linux.
 
-- **npm registry** (`NPM_CONFIG_REGISTRY`). Mirror the release's global CLI package for your platform, such as `@voidzero-dev/vite-plus-cli-win32-x64-msvc` for Windows x64. Preserve its published `dist.integrity` and `dist.attestations.provenance.predicateType`, and make its `dist.tarball` URL reachable internally. The bootstrap scripts need read access to this package without credentials from `.npmrc`. Also mirror the installer's pinned pnpm and the dependencies for your platform listed in the global CLI package's `vp-install-lock.yaml`.
-- **Node.js mirror** (`VP_NODE_DIST_MIRROR`). Keep the Node.js distribution layout, including `index.json`, the archive for your platform, and the checksum files. Current global CLI packages specify the default Node.js version in `vpNodeVersion`. Older releases such as `1.4.0` select the latest LTS version from `index.json` by default. See [Custom Node.js Mirror](/guide/env#custom-node-js-mirror).
-
-For example, the Windows x64 installer for `1.7.0` uses `pnpm@10.34.9` and Node.js `24.22.3`. Mirror the packages for Windows x64 from the [published installation lockfile](https://unpkg.com/@voidzero-dev/vite-plus-cli-win32-x64-msvc@1.7.0/vp-install-lock.yaml), then run the local installer.
+For example, to install `1.7.0` on Windows, replace these URLs with the ones you use and run the installer.
 
 ```powershell
 $env:VP_VERSION = "1.7.0"
@@ -452,9 +449,18 @@ $env:VP_NODE_DIST_MIRROR = "https://artifacts.corp.example/nodejs/dist"
 .\install.ps1
 ```
 
+::: details Which files do the mirrors need?
+
+- **npm registry** (`NPM_CONFIG_REGISTRY`). The installer reads the global CLI package for your platform, such as `@voidzero-dev/vite-plus-cli-win32-x64-msvc` for Windows x64. The registry must preserve the published `dist.integrity` and `dist.attestations.provenance.predicateType` fields and serve the tarball at a URL your machine can reach. The bootstrap scripts need read access to this package without credentials from `.npmrc`. The registry must also serve the installer's pinned pnpm and the dependencies for your platform in the global CLI package's `vp-install-lock.yaml`.
+- **Node.js mirror** (`VP_NODE_DIST_MIRROR`). The installer expects the Node.js distribution layout, including `index.json`, the archive for your platform, and the checksum files. Current global CLI packages specify the default Node.js version in `vpNodeVersion`. Older releases such as `1.4.0` select the latest LTS version from `index.json` by default. See [Custom Node.js Mirror](/guide/env#custom-node-js-mirror).
+
+For the Windows x64 example above, the installer uses `pnpm@10.34.9` and Node.js `24.22.3`. The [published installation lockfile](https://unpkg.com/@voidzero-dev/vite-plus-cli-win32-x64-msvc@1.7.0/vp-install-lock.yaml) lists the toolchain dependencies.
+
+:::
+
 The development variables `VP_LOCAL_TGZ` and `VP_LOCAL_BINARY` supply only the local build. Setup still needs Node.js, pnpm, and the CLI's dependencies.
 
-For a build agent that runs the project's own `vite-plus` package, see [Offline CI with a private registry](/guide/ci#offline-ci-with-a-private-registry).
+If you only need the CLI in your project, you can [install `vite-plus` from a private registry](/guide/ci#offline-ci-with-a-private-registry).
 
 ### Homebrew
 

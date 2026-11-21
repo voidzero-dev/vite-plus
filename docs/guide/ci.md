@@ -167,13 +167,7 @@ If you are migrating an existing GitHub Actions workflow, you can often replace 
 
 ## Offline CI with a private registry
 
-If your build agents can reach an internal npm registry such as Verdaccio, you can use the [project-local CLI](/guide/local-cli) with Node.js and the project's package manager already on `PATH`. This setup needs no Node.js download mirror. If you also need `vp env`, see [Install from private mirrors](/guide/global-cli#install-from-private-mirrors).
-
-### What to mirror
-
-Start with the project's lockfile for the release you plan to install. With pnpm, `pnpm list --lockfile-only --depth Infinity --json` shows the locked dependency tree before installation. Mirror the package metadata and tarballs, including dev dependencies. Follow `optionalDependencies` through the tree and use the `os`, `cpu`, and Linux `libc` fields in `pnpm-lock.yaml` to select the native packages for your agent. Check that the tarball URLs point to a host the agent can reach.
-
-For example, on Windows x64, `vite-plus@1.4.0` uses `@oxlint-tsgolint/win32-x64` for type-aware linting. In `1.7.0` that binding is `@tsrs/win32-x64`. Check the lockfile again on each upgrade. The published `toolchain.json` lists tool versions and omits platform bindings.
+You can install the [project-local CLI](/guide/local-cli) from a private npm registry such as Verdaccio without public internet access. It uses Node.js and the project's package manager on your `PATH`, so you do not need a Node.js download mirror. If you also need `vp env`, see [Install from private mirrors](/guide/global-cli#install-from-private-mirrors).
 
 Set the registry in the project's `.npmrc`. Replace the example URL with your own.
 
@@ -189,7 +183,13 @@ pnpm install --frozen-lockfile
 .\node_modules\.bin\vp.cmd test run
 ```
 
-If the agent cannot reach even the private registry, run `pnpm fetch` on a machine with the same platform, pnpm version, and lockfile. Copy the populated pnpm store to the agent, then use `pnpm install --offline --frozen-lockfile`. Install scripts that download additional files need those files available separately.
+If you cannot reach the private registry from the machine where you install Vite+, run `pnpm fetch` on a connected machine with the same platform, pnpm version, and lockfile. Copy the populated pnpm store to the offline machine, then run `pnpm install --offline --frozen-lockfile` there. Install scripts that download additional files need those files available separately.
+
+### Which packages does my project need?
+
+Your project lockfile lists the packages the registry needs to serve. With pnpm, run `pnpm list --lockfile-only --depth Infinity --json` to see the dependency tree before installation. If you maintain the mirror, include the metadata and tarballs for dev dependencies as well as runtime dependencies. Follow `optionalDependencies` through the tree. The `os`, `cpu`, and Linux `libc` fields in `pnpm-lock.yaml` identify the native packages for your platform. Check that you can reach the tarball URLs from the machine where you install Vite+.
+
+For example, on Windows x64, `vite-plus@1.4.0` uses `@oxlint-tsgolint/win32-x64` for type-aware linting. In `1.7.0` that binding is `@tsrs/win32-x64`. Check the lockfile again on each upgrade. The published `toolchain.json` lists tool versions and omits platform bindings.
 
 ### Which commands can use the network?
 
@@ -197,4 +197,4 @@ If the agent cannot reach even the private registry, run `pnpm fetch` on a machi
 - `vp run` can replay a task from its local cache. On a cache miss the task runs its own command, which may use the network. A configured remote cache also needs network access.
 - `vp install`, `vp add`, and `vp dlx` can fetch packages. `vp migrate` can install dependencies. With `vp create`, the template determines the source. For example, `vite:application` uses `create-vite@latest` from the registry and `vite:library` downloads its template from GitHub.
 
-In Vite+ releases from `1.4.0` through `1.7.0`, even `vp lint` or `vp test` can try to download the project's pinned package manager if it is missing from Vite+'s cache. A command can still succeed after the request fails. Include the package manager pinned by `packageManager` or `devEngines.packageManager` in your mirror when using these releases.
+In Vite+ releases from `1.4.0` through `1.7.0`, even `vp lint` or `vp test` can try to download the project's pinned package manager if it is missing from Vite+'s cache. A command can still succeed after the request fails. If you use one of these releases, check that the registry serves the version in `packageManager` or `devEngines.packageManager`.
