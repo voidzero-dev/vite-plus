@@ -563,6 +563,14 @@ describe('explicit tsdown config selection', () => {
     ['vpx ./generate.ts > generated.json', true],
     ['vpx ./generate.ts | tee generated.json', true],
     ['BUILD_ENV=$NODE_ENV vpx ./generate.ts', true],
+    ['BUILD_VERSION=$(vpx ./scripts/version.ts) node ./build.mjs', true],
+    ['echo "$(pnpm exec vpx ./generate.ts)"', true],
+    ['echo "$(echo "$(vpx ./generate.ts)")"', true],
+    ['echo `vpx ./generate.ts`', true],
+    ["echo '$(vpx ./generate.ts)'", false],
+    ['echo "$(echo vpx)"', false],
+    ['cd scripts && echo "$(./generate.ts)"', true, '#!/usr/bin/env vpx', 'scripts/generate.ts'],
+    ['echo "$(cd scripts)" && ./generate.ts', false, '#!/usr/bin/env vpx', 'scripts/generate.ts'],
     ['BUILD_ENV=$NODE_ENV "$RUNNER" vpx', false],
     ['if [ -n "$CI" ]; then vpx ./generate.ts; fi', true],
     ['if true; then echo vpx; fi', false],
@@ -1780,6 +1788,10 @@ export default defineConfig(({ command }) => {
       '{ options: base }',
     ],
     [
+      "const targets = { options: base }; function configure(value: { options: typeof base }) { value.options.outDir = 'release-out'; }",
+      'targets',
+    ],
+    [
       "function configure({ options, mode }: { options: typeof base; mode: string }) { if (mode === 'release') { options.entry.push('src/cli.ts'); options.outDir = 'release-out'; } }",
       "{ options: base, mode: 'release' }",
     ],
@@ -1812,6 +1824,11 @@ export default defineConfig(({ command }) => {
     ],
     ["import { configure } from './configure.ts';", 'base'],
     ["import { configure } from './configure.ts';", '{ options: base }'],
+    ["import { configure } from './configure.ts'; const targets = { options: base };", 'targets'],
+    [
+      "const targets = { options: base }; expose(targets); function configure(value: { options: typeof base }) { value.options.outDir = 'release-out'; }",
+      'targets',
+    ],
     ["import { configure, mode } from './configure.ts';", '{ options: base, mode }'],
   ])(
     'keeps options passed to a helper whose writes cannot be migrated (%s)',
@@ -1944,6 +1961,41 @@ export default defineConfig(({ command }) => {
     expect(fs.readFileSync(path.join(tmpDir, 'vite-pack.config.ts'), 'utf8')).toContain(
       "copy: 'public'",
     );
+  });
+
+  it.each([
+    ['config.name === selected', true],
+    ['selected === config.name', true],
+    ['config.publicDir === selected', false],
+  ])('keeps the match and fallback options for %s', (predicate, convert) => {
+    const tsdown = path.join(tmpDir, 'tsdown.config.ts');
+    const original =
+      "import { defineConfig } from 'tsdown';\n" +
+      "export default defineConfig([{ name: 'lib', publicDir: 'public' }, { name: 'cli', publicDir: 'public' }]);\n";
+    fs.writeFileSync(tsdown, original);
+    const vite = path.join(tmpDir, 'vite.config.ts');
+    const config =
+      "const selected = process.env.PACK_TARGET || 'cli';\n" +
+      `export default { pack: configs.find(config => ${predicate}) ?? configs[0] };\n`;
+    const source = `import configs from './tsdown.config.ts';\n${config}`;
+    fs.writeFileSync(vite, source);
+
+    const report = createMigrationReport();
+    expect(mergeTsdownConfigFile(tmpDir, true, report, true)).toBe(convert);
+    expect(fs.readFileSync(tsdown, 'utf8')).toBe(original);
+    const generated = path.join(tmpDir, 'vite-pack.config.ts');
+    if (convert) {
+      expect(fs.readFileSync(vite, 'utf8')).toBe(
+        `import configs from "./vite-pack.config.ts";\n${config}`,
+      );
+      expect(fs.readFileSync(generated, 'utf8').match(/copy: 'public'/g)).toHaveLength(2);
+    } else {
+      expect(fs.readFileSync(vite, 'utf8')).toBe(source);
+      expect(fs.existsSync(generated)).toBe(false);
+      expect(report.warnings).toContainEqual(
+        expect.stringContaining('Migrate the pack options manually'),
+      );
+    }
   });
 
   it.each([

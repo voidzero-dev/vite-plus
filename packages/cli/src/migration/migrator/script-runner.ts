@@ -598,7 +598,10 @@ function scriptRequiresVitePlus(command: string, projectPath?: string): boolean 
     parsed?.successChain && parsed.commands.some(({ values }) => values[0] === 'cd');
   let cwd = projectPath;
   return (
-    parsed?.commands.some(({ values, complete }) => {
+    parsed?.commands.some(({ values, complete, substitutions }) => {
+      if (substitutions.some((script) => scriptRequiresVitePlus(script, cwd))) {
+        return true;
+      }
       const { first, shell, unknownEnvironment } = scriptCommandPrefix(values);
       if (followDirectories) {
         const name = values[first];

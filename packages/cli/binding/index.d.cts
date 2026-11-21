@@ -3864,6 +3864,7 @@ export interface JsCommandResolvedResult {
 export interface LiteralCommandPrefix {
   values: Array<string>;
   complete: boolean;
+  substitutions: Array<string>;
 }
 
 export interface LiteralCommandPrefixes {

@@ -94,6 +94,7 @@ pub fn parse_literal_commands(
 pub struct LiteralCommandPrefix {
     pub values: Vec<String>,
     pub complete: bool,
+    pub substitutions: Vec<String>,
 }
 
 #[napi(object)]
@@ -113,6 +114,7 @@ pub fn parse_literal_command_prefixes(source: String) -> Option<LiteralCommandPr
             .map(|command| LiteralCommandPrefix {
                 values: command.values,
                 complete: command.complete,
+                substitutions: command.substitutions,
             })
             .collect(),
         success_chain: parsed.success_chain,

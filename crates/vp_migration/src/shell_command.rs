@@ -13,6 +13,7 @@ pub struct LiteralCommandToken {
 pub struct LiteralCommandPrefix {
     pub values: Vec<String>,
     pub complete: bool,
+    pub substitutions: Vec<String>,
 }
 
 pub struct LiteralCommandPrefixes {
@@ -23,6 +24,7 @@ pub struct LiteralCommandPrefixes {
 struct ParsedCommand {
     tokens: Vec<LiteralCommandToken>,
     complete: bool,
+    substitutions: Vec<String>,
 }
 
 struct ParsedCommands {
@@ -74,6 +76,7 @@ pub fn parse_literal_command_prefixes(source: &str) -> Option<LiteralCommandPref
             .map(|command| LiteralCommandPrefix {
                 values: command.tokens.into_iter().map(|token| token.value).collect(),
                 complete: command.complete,
+                substitutions: command.substitutions,
             })
             .collect(),
         success_chain: parsed.success_chain,
@@ -100,7 +103,7 @@ fn parse_commands(
     collect_commands(root, &mut nodes, detect_dependencies)?;
     if nodes.is_empty() {
         return (!allow_lists && is_spacing(source)).then(|| ParsedCommands {
-            commands: vec![ParsedCommand { tokens: vec![], complete: true }],
+            commands: vec![ParsedCommand { tokens: vec![], complete: true, substitutions: vec![] }],
             success_chain,
         });
     }
@@ -165,7 +168,11 @@ fn parse_commands(
         if tokens.is_empty() && !detect_dependencies {
             return None;
         }
-        commands.push(ParsedCommand { tokens, complete });
+        let mut substitutions = Vec::new();
+        if detect_dependencies {
+            collect_command_substitutions(&node, &mut substitutions);
+        }
+        commands.push(ParsedCommand { tokens, complete, substitutions });
         end = range.end;
     }
     // Reject comments, newlines and trailing separators, including a single
@@ -223,6 +230,25 @@ fn collect_commands<'a>(
         _ => return None,
     }
     Some(())
+}
+
+// The nested commands run in their own scope. Let dependency detection
+// inspect them separately so a nested cd cannot change the outer directory.
+fn collect_command_substitutions(node: &BashNode<'_>, substitutions: &mut Vec<String>) {
+    if node.kind() == "command_substitution" {
+        let text = node.text();
+        let source = text
+            .strip_prefix("$(")
+            .and_then(|value| value.strip_suffix(')'))
+            .or_else(|| text.strip_prefix('`').and_then(|value| value.strip_suffix('`')));
+        if let Some(source) = source {
+            substitutions.push(source.to_owned());
+        }
+        return;
+    }
+    for child in node.children() {
+        collect_command_substitutions(&child, substitutions);
+    }
 }
 
 fn assignment_prefix(word: &BashNode<'_>) -> Option<String> {
@@ -406,6 +432,26 @@ mod tests {
             );
             assert!(parse_literal_commands(source, true).is_none());
         }
+    }
+
+    #[test]
+    fn provides_command_substitutions_separately_from_literal_prefixes() {
+        let source = r#"cd scripts && VERSION=$(vpx ./version.ts) node ./build.mjs && echo '$(vpx never.ts)'"#;
+        let parsed = parse_literal_command_prefixes(source).unwrap();
+        assert!(parsed.success_chain);
+        assert_eq!(parsed.commands.len(), 3);
+        assert_eq!(parsed.commands[1].values, ["VERSION=", "node", "./build.mjs"]);
+        assert_eq!(parsed.commands[1].substitutions, ["vpx ./version.ts"]);
+        assert!(parsed.commands[2].substitutions.is_empty());
+        assert!(parse_literal_commands(source, true).is_none());
+
+        let nested = r#"echo "$(echo "\$(literal)" "$(vpx ./script.ts)")" `vp --version`"#;
+        let parsed = parse_literal_command_prefixes(nested).unwrap();
+        assert_eq!(
+            parsed.commands[0].substitutions,
+            [r#"echo "\$(literal)" "$(vpx ./script.ts)""#, "vp --version"],
+        );
+        assert!(parse_literal_commands(nested, true).is_none());
     }
 
     #[test]
