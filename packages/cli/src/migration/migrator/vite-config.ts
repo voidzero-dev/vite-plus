@@ -8,6 +8,7 @@ import type {
   ArrowFunctionExpression,
   Function as FunctionNode,
   ImportDeclaration,
+  MemberExpression,
   Node,
   ObjectExpression,
   ObjectProperty,
@@ -810,6 +811,17 @@ function isStaticPackFilter(node: Node, parameter: string, index?: string): bool
   }
 }
 
+function hasLiteralPackIndex(member: MemberExpression): boolean {
+  const { property } = member;
+  return (
+    member.computed &&
+    property.type === 'Literal' &&
+    typeof property.value === 'number' &&
+    Number.isInteger(property.value) &&
+    property.value >= 0
+  );
+}
+
 function packValueReferences(node: Node, mapping?: PackMapping): PackReference[] {
   const value = unwrapTypeExpression(node);
   const arrayMapping = mapping === 'unverified' ? 'unverified' : 'array';
@@ -830,12 +842,7 @@ function packValueReferences(node: Node, mapping?: PackMapping): PackReference[]
       }
       // Keep the index expression. For a dynamic index, check the source array
       // before redirecting the import and keep the existing pack toolchain defaults.
-      const literalIndex =
-        value.property.type === 'Literal' &&
-        typeof value.property.value === 'number' &&
-        Number.isInteger(value.property.value) &&
-        value.property.value >= 0;
-      return packValueReferences(value.object, literalIndex ? mapping : arrayMapping);
+      return packValueReferences(value.object, hasLiteralPackIndex(value) ? mapping : arrayMapping);
     }
     case 'CallExpression': {
       const target = objectAssignTarget(value);
@@ -1137,22 +1144,21 @@ function setsPackArrayOutput(
   return (
     expressions.length > 0 &&
     expressions.every((expression) => {
-      const reference = packOutputWrite(expression);
-      return reference !== undefined && references.delete(reference);
+      const receiver = packOutputReceiver(expression);
+      return receiver?.type === 'Identifier' && references.delete(receiver.start);
     }) &&
     references.size === 0
   );
 }
 
-function packOutputWrite(node: Node | null | undefined): number | undefined {
+function packOutputReceiver(node: Node | null | undefined): Node | undefined {
   if (
     node?.type === 'AssignmentExpression' &&
     node.operator === '=' &&
     node.left.type === 'MemberExpression' &&
-    memberName(node.left) === 'outDir' &&
-    node.left.object.type === 'Identifier'
+    memberName(node.left) === 'outDir'
   ) {
-    return node.left.object.start;
+    return node.left.object;
   }
   return undefined;
 }
@@ -1164,8 +1170,11 @@ function packMutationReferences({ program, bindings }: ReturnType<typeof parseSo
   const entryAliases = new Map<number, number>();
   const arrayOrigins = new Map<number, number>();
   const foundOptions = new Map<number, number>();
+  const filteredOptions = new Map<number, number>();
   const guards = new Set<number>();
+  const arrayLengths = new Set<number>();
   const outputWrites = new Set<number>();
+  const indexedOutputWrites = new Set<number>();
   const entryWrites = new Set<number>();
   const helpers = new Map<number, NonNullable<ReturnType<typeof entryMutationHelper>>>();
   const calls = new Map<number, number>();
@@ -1224,10 +1233,16 @@ function packMutationReferences({ program, bindings }: ReturnType<typeof parseSo
         }
         continue;
       }
+      case 'MemberExpression':
+        if (node.object.type === 'Identifier' && memberName(node) === 'length') {
+          arrayLengths.add(node.object.start);
+        }
+        continue;
       case 'VariableDeclaration':
         if (node.kind === 'const' || node.kind === 'let') {
           for (const { id, init } of node.declarations) {
             const initializer = init && unwrapTypeExpression(init);
+            const selection = initializer && mutationArrayReference(initializer);
             const find =
               initializer?.type === 'CallExpression' &&
               initializer.callee.type === 'MemberExpression' &&
@@ -1240,7 +1255,7 @@ function packMutationReferences({ program, bindings }: ReturnType<typeof parseSo
                         : undefined,
                   }
                 : undefined;
-            const origin = init && packRootIdentifier(find?.array ?? init);
+            const origin = init && packRootIdentifier(find?.array ?? selection?.value ?? init);
             if (origin) {
               for (const start of aliasBindingStarts(id)) {
                 aliasInitializers.set(start, origin.start);
@@ -1262,6 +1277,9 @@ function packMutationReferences({ program, bindings }: ReturnType<typeof parseSo
             ) {
               foundOptions.set(id.start, find.array.start);
             }
+            if (id.type === 'Identifier' && selection?.mapping === 'array') {
+              filteredOptions.set(id.start, selection.value.start);
+            }
             if (
               id.type === 'Identifier' &&
               (init?.type === 'FunctionExpression' || init?.type === 'ArrowFunctionExpression')
@@ -1272,9 +1290,15 @@ function packMutationReferences({ program, bindings }: ReturnType<typeof parseSo
         }
         continue;
       case 'AssignmentExpression': {
-        const reference = packOutputWrite(node);
-        if (reference !== undefined) {
-          outputWrites.add(reference);
+        const receiver = packOutputReceiver(node);
+        if (receiver?.type === 'Identifier') {
+          outputWrites.add(receiver.start);
+        } else if (
+          receiver?.type === 'MemberExpression' &&
+          receiver.object.type === 'Identifier' &&
+          hasLiteralPackIndex(receiver)
+        ) {
+          indexedOutputWrites.add(receiver.object.start);
         }
         target = node.left;
         if (target.type === 'Identifier') {
@@ -1376,6 +1400,8 @@ function packMutationReferences({ program, bindings }: ReturnType<typeof parseSo
     }
   }
   const origins = new Map<number, number>();
+  const updatesFilteredOutput = (reference: number) =>
+    indexedOutputWrites.has(reference) || rewritable.get(reference)?.array === true;
   for (const { start, references, constant } of bindings) {
     const entry = entryAliases.get(start);
     if (
@@ -1395,6 +1421,20 @@ function packMutationReferences({ program, bindings }: ReturnType<typeof parseSo
     ) {
       // Both the selector and pack must use the same converted array.
       rewritable.set(found, { array: true });
+    }
+    const filtered = filteredOptions.get(start);
+    if (
+      constant &&
+      filtered !== undefined &&
+      references.some(updatesFilteredOutput) &&
+      references.every(
+        (reference) =>
+          updatesFilteredOutput(reference) ||
+          guards.has(reference) ||
+          (arrayLengths.has(reference) && !writes.has(reference)),
+      )
+    ) {
+      rewritable.set(filtered, { array: true });
     }
     const helper = helpers.get(start);
     const argument = references.length === 1 ? calls.get(references[0]) : undefined;

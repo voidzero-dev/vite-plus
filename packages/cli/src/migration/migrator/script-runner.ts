@@ -525,8 +525,10 @@ function nodeOptionsLoadVitePlusRegister(args: readonly string[]): boolean {
   return false;
 }
 
+const vitePlusScriptCommands = new Set(['vp', 'vpr', 'vpx']);
+
 function scriptRequiresVitePlus(command: string): boolean {
-  if (!command.includes('vpx') && !command.includes(VITE_PLUS_REGISTER)) {
+  if (!command.includes('vp') && !command.includes(VITE_PLUS_REGISTER)) {
     return false;
   }
   return (
@@ -552,7 +554,7 @@ function scriptRequiresVitePlus(command: string): boolean {
       }
       const start = first + getCommandStartIndex(values.slice(first));
       if (
-        values[start] === 'vpx' &&
+        vitePlusScriptCommands.has(values[start]) &&
         !values.slice(first, start).some((word) => ['npx', 'bunx', 'dlx', 'x'].includes(word))
       ) {
         return true;

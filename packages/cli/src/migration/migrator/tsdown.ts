@@ -245,6 +245,22 @@ export function collectPackagesKeepingTsdown(
   return keptPackages;
 }
 
+/** A runtime tsdown dependency shared with a member still owns the root config. */
+export function packagesKeepingTsdownConfig(
+  rootDir: string,
+  tsdownPackages: ReadonlySet<string>,
+): ReadonlySet<string> {
+  const root = path.resolve(rootDir);
+  if (tsdownPackages.size === 0 || tsdownPackages.has(root)) {
+    return tsdownPackages;
+  }
+  const pkg = readPackageJsonIfExists(path.join(root, 'package.json'));
+  // The import rewriter keeps standalone tsdown configs for these dependency groups.
+  return pkg?.dependencies?.tsdown !== undefined || pkg?.peerDependencies?.tsdown !== undefined
+    ? new Set([...tsdownPackages, root])
+    : tsdownPackages;
+}
+
 function findDefaultTsdownConfig(cwd: string, workspaceRoot: string): string | undefined {
   for (let directory = cwd; ; directory = path.dirname(directory)) {
     const config = detectDefaultTsdownConfig(directory);

@@ -98,6 +98,7 @@ import {
   prepareOxlintConfigs,
   removeMigratedOxlintConfigs,
   collectPackagesKeepingTsdown,
+  packagesKeepingTsdownConfig,
   shouldSkipStagedMigrationForHooks,
   warnPackageLevelPrettier,
   warnUnresolvedImportRuleConfig,
@@ -1190,6 +1191,10 @@ async function main() {
       workspaceInfoOptional.packages,
       tsdownAdvisories,
     );
+    const tsdownConfigPackages = packagesKeepingTsdownConfig(
+      workspaceInfoOptional.rootDir,
+      tsdownPackages,
+    );
     // Find the packages that supply preserved imports before bootstrap changes their
     // manifests. If the config needs missing dependencies, retry after the normal install.
     const importRuleConfig = await tryResolveImportRuleConfig(workspaceInfoOptional.rootDir);
@@ -1658,9 +1663,9 @@ async function main() {
             projectPath,
             true,
             report,
-            tsdownPackages.has(path.resolve(projectPath)),
+            tsdownConfigPackages.has(path.resolve(projectPath)),
             workspaceInfoOptional.rootDir,
-            tsdownPackages,
+            tsdownConfigPackages,
           );
         }
       }
@@ -1751,7 +1756,7 @@ async function main() {
         rewriteAllImports(workspaceInfoOptional.rootDir, true, report, {
           oxlintOwnerDirs: deferredOxlintOwnerDirs,
           importRuleConfig: resolvedImportRuleConfig ?? DISABLED_IMPORT_RULE_CONFIG,
-          preserveTsdownDirs: [...tsdownPackages],
+          preserveTsdownDirs: [...tsdownConfigPackages],
         }) || didMigrate;
       // The first install used the owners we could identify without loading
       // the config. Sync again only if the resolved rule changes dependencies.

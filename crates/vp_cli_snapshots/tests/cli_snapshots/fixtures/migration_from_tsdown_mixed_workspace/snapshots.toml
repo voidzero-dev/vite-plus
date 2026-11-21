@@ -159,6 +159,57 @@ steps = [
 ]
 
 [[case]]
+name = "focused_vp_vpr_install"
+vp = "global"
+local-registry = true
+env = { VP_NODE_VERSION = "24.22.3", VP_SKIP_INSTALL = "1" }
+comment = "A filtered install provides the member's existing vp and vpr commands and preserves its tsdown release."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies", '{"vite":"8.3.8"}'], snapshot = false },
+  { argv = ["vpt", "write-file", "pnpm-workspace.yaml", "packages: ['packages/*']\nsharedWorkspaceLockfile: false\n"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "packages/local-cli/src"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/local-cli/package.json", '{"name":"local-cli","private":true,"type":"module","scripts":{"format":"vp fmt","check":"vpr fixture-check","fixture-check":"node check.js","release":"tsdown -c release.config.mts"},"devDependencies":{"tsdown":"0.22.14"}}'], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/local-cli/check.js", "console.log('member-check');"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/local-cli/src/index.ts", "export const sample=true;"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/local-cli/release.config.mts", "export default { entry: 'src/index.ts', outDir: 'release-out', dts: false };"], snapshot = false },
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  ["vpt", "print-file", "packages/local-cli/package.json"],
+  { argv = ["pnpm", "--filter", "local-cli", "install", "--ignore-scripts"], snapshot = false },
+  ["vpt", "stat-file", "node_modules/vite-plus", "--assert", "missing"],
+  { argv = ["pnpm", "run", "format"], cwd = "packages/local-cli", snapshot = false },
+  ["vpt", "print-file", "packages/local-cli/src/index.ts"],
+  { argv = ["pnpm", "run", "check"], cwd = "packages/local-cli", snapshot = false },
+  { argv = ["pnpm", "run", "release"], cwd = "packages/local-cli", snapshot = false },
+  ["vpt", "stat-file", "packages/local-cli/release-out/index.mjs", "--assert", "file"],
+]
+
+[[case]]
+name = "root_pack_shared_tsdown"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+comment = "The workspace root packs its resources while the member still publishes with the root's tsdown dependency."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "dependencies", '{"tsdown":"0.22.14"}'], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies", '{"vite":"8.3.8"}'], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "scripts", '{"build":"tsdown"}'], snapshot = false },
+  { argv = ["vpt", "json-edit", "packages/legacy-pack/package.json", "scripts", '{"release":"tsdown -c release.config.mts"}'], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/legacy-pack/release.config.mts", "export default { entry: 'src/library.ts', outDir: 'release-out', dts: false };"], snapshot = false },
+  { argv = ["vpt", "write-file", "tsdown.config.ts", "export default { entry: 'src/root-library.ts', outDir: 'root-out', publicDir: 'public' };"], snapshot = false },
+  { argv = ["vpt", "write-file", "vite.config.ts", "import rootConfig from './tsdown.config.ts'; export default { pack: rootConfig };"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "public"], snapshot = false },
+  { argv = ["vpt", "write-file", "public/root.txt", "root pack asset\n"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  ["vpt", "print-file", "tsdown.config.ts"],
+  { argv = ["pnpm", "run", "build"], snapshot = false },
+  ["vpt", "stat-file", "root-out/root-library.mjs", "--assert", "file"],
+  ["vpt", "print-file", "root-out/public/root.txt"],
+  { argv = ["pnpm", "run", "release"], cwd = "packages/legacy-pack", snapshot = false },
+  ["vpt", "stat-file", "packages/legacy-pack/release-out/library.mjs", "--assert", "file"],
+]
+
+[[case]]
 name = "focused_dynamic_config_install"
 vp = "global"
 local-registry = true

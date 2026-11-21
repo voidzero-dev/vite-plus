@@ -349,6 +349,60 @@ describe('explicit tsdown config selection', () => {
     );
   });
 
+  it.each([false, true])(
+    'converts root pack options with a retained shared tsdown dependency (already on Vite+ = %s)',
+    (alreadyOnVitePlus) => {
+      const member = path.join(tmpDir, 'packages/release');
+      fs.mkdirSync(member, { recursive: true });
+      const rootManifest = path.join(tmpDir, 'package.json');
+      fs.writeFileSync(
+        rootManifest,
+        JSON.stringify({
+          type: 'module',
+          scripts: { build: 'tsdown' },
+          dependencies: { tsdown: '0.22.14' },
+          devDependencies: alreadyOnVitePlus ? { 'vite-plus': 'latest' } : { vite: '8.3.8' },
+        }),
+      );
+      const memberManifest = path.join(member, 'package.json');
+      fs.writeFileSync(memberManifest, '{"scripts":{"release":"tsdown -c release.config.mts"}}');
+      fs.writeFileSync(path.join(member, 'release.config.mts'), 'export default {};\n');
+      const original = "export default { entry: 'src/index.ts', publicDir: 'public' };\n";
+      fs.writeFileSync(path.join(tmpDir, 'tsdown.config.ts'), original);
+      fs.writeFileSync(
+        path.join(tmpDir, 'vite.config.ts'),
+        "import rootConfig from './tsdown.config.ts'; export default { pack: rootConfig };\n",
+      );
+      fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'packages: [packages/*]\n');
+      const workspace = makeWorkspaceInfo(tmpDir, PackageManager.pnpm, '12.11.2');
+      workspace.isMonorepo = true;
+      workspace.workspacePatterns = ['packages/*'];
+      workspace.packages = [{ name: 'release', path: 'packages/release' }];
+      const report = createMigrationReport();
+
+      if (alreadyOnVitePlus) {
+        finalizeCoreMigrationForExistingVitePlus(workspace, true, report);
+      } else {
+        rewriteMonorepo(workspace, true, true, report);
+      }
+
+      expect(readJson(rootManifest)).toMatchObject({
+        scripts: { build: 'vp pack' },
+        dependencies: { tsdown: '0.22.14' },
+      });
+      expect(readJson(memberManifest)).toMatchObject({
+        scripts: { release: 'tsdown -c release.config.mts' },
+      });
+      expect(fs.readFileSync(path.join(tmpDir, 'tsdown.config.ts'), 'utf8')).toBe(original);
+      expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).toContain(
+        'vite-pack.config.ts',
+      );
+      expect(fs.readFileSync(path.join(tmpDir, 'vite-pack.config.ts'), 'utf8')).toContain(
+        "copy: 'public'",
+      );
+    },
+  );
+
   it('adds vite-plus to a member that keeps tsdown and generates pack imports', () => {
     const manifest = path.join(tmpDir, 'package.json');
     fs.writeFileSync(
@@ -468,6 +522,10 @@ describe('explicit tsdown config selection', () => {
   });
 
   it.each([
+    ['vp fmt', true],
+    ['vpr fixture-check', true],
+    ['pnpm exec vp fmt', true],
+    ['echo vp fmt', false],
     ['vpx ./generate.ts', true],
     ['pnpm exec vpx ./generate.ts', true],
     ['concurrently "vpx ./generate.ts" "echo ready"', true],
@@ -1680,6 +1738,22 @@ export default defineConfig(({ command }) => {
     ],
     [
       'configs.filter(options => options.publicDir === "public").forEach(options => { options.outDir = "release"; });',
+      'retained',
+    ],
+    [
+      'const browser = configs.filter(options => options.name === "browser"); browser[0].outDir = "release";',
+      'converted',
+    ],
+    [
+      'const browser = configs.filter(options => options.name === "browser"); if (browser.length) browser[0].outDir = "release";',
+      'converted',
+    ],
+    [
+      'const browser = configs.filter(options => options.name === "browser"); browser.forEach(options => { options.outDir = "release"; });',
+      'converted',
+    ],
+    [
+      'const browser = configs.filter(options => options.publicDir === "public"); browser[0].outDir = "release";',
       'retained',
     ],
     [

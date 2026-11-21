@@ -27,6 +27,7 @@ import {
   injectFmtDefaults,
   injectLintTypeCheckDefaults,
   managedOverridePackages,
+  packagesKeepingTsdownConfig,
   mergeManagedPnpmOverrides,
   mergeManagedPnpmPeerDependencyRules,
   pnpmPeerDependencyRuleKeys,
@@ -462,13 +463,7 @@ export function rewriteMonorepo(
     workspaceInfo.packageManager,
     workspaceInfo.downloadPackageManager.version,
   );
-  const workspaceContext = {
-    retainedImportDependencies,
-    rootDir: workspaceInfo.rootDir,
-    packages: workspaceInfo.packages,
-    tsdownPackages,
-    oxlintConfigs: prepareOxlintConfigs(getWorkspaceProjectPaths(workspaceInfo)),
-  };
+  const oxlintConfigs = prepareOxlintConfigs(getWorkspaceProjectPaths(workspaceInfo));
   // rewrite root workspace
   if (workspaceInfo.packageManager === PackageManager.yarn) {
     rewriteYarnrcYml(
@@ -502,10 +497,18 @@ export function rewriteMonorepo(
     workspaceShouldAllowBrowserBuilds,
     workspaceUsesVitest,
     supportCatalog,
-    workspaceContext.oxlintConfigs,
+    oxlintConfigs,
     retainedImportDependencies,
     tsdownPackages,
   );
+  const tsdownConfigPackages = packagesKeepingTsdownConfig(workspaceInfo.rootDir, tsdownPackages);
+  const workspaceContext = {
+    retainedImportDependencies,
+    rootDir: workspaceInfo.rootDir,
+    packages: workspaceInfo.packages,
+    tsdownPackages: tsdownConfigPackages,
+    oxlintConfigs,
+  };
   if (workspaceInfo.packageManager === PackageManager.pnpm) {
     rewritePnpmWorkspaceYaml(
       workspaceInfo.rootDir,
@@ -574,15 +577,15 @@ export function rewriteMonorepo(
     workspaceInfo.rootDir,
     silent,
     report,
-    keepRootTsdown,
+    tsdownConfigPackages.has(path.resolve(workspaceInfo.rootDir)),
     workspaceInfo.rootDir,
-    tsdownPackages,
+    tsdownConfigPackages,
   );
   // rewrite imports in all TypeScript/JavaScript files before lazy plugin import merging
   rewriteAllImports(workspaceInfo.rootDir, silent, report, {
     oxlintOwnerDirs,
     importRuleConfig,
-    preserveTsdownDirs: [...tsdownPackages],
+    preserveTsdownDirs: [...tsdownConfigPackages],
   });
   dropDeadOxlintPluginsDependency(
     workspaceInfo.rootDir,

@@ -12,6 +12,7 @@ import {
   hasTsconfigTypesToRewrite,
   mergeTsdownConfigFile,
   migrateTaskCacheConfigInViteConfig,
+  packagesKeepingTsdownConfig,
   rewriteAllImports,
   rewriteTsconfigTypes,
 } from '../migrator.ts';
@@ -169,6 +170,7 @@ export function finalizeCoreMigrationForExistingVitePlus(
 ): CoreMigrationFinalizationResult {
   pending ??= detectPendingCoreMigration(workspaceInfo, tsdownPackages);
   const projectPaths = getWorkspaceProjectPaths(workspaceInfo);
+  const tsdownConfigPackages = packagesKeepingTsdownConfig(workspaceInfo.rootDir, tsdownPackages);
   const result: CoreMigrationFinalizationResult = {
     dependencies: false,
     scripts: false,
@@ -202,7 +204,7 @@ export function finalizeCoreMigrationForExistingVitePlus(
   if (importRuleConfig !== null) {
     result.imports = rewriteAllImports(workspaceInfo.rootDir, silent, report, {
       importRuleConfig,
-      preserveTsdownDirs: [...tsdownPackages],
+      preserveTsdownDirs: [...tsdownConfigPackages],
     });
   }
   result.dependencies = dropDeadOxlintPluginsDependency(
@@ -219,9 +221,9 @@ export function finalizeCoreMigrationForExistingVitePlus(
         projectPath,
         silent,
         report,
-        tsdownPackages.has(path.resolve(projectPath)),
+        tsdownConfigPackages.has(path.resolve(projectPath)),
         workspaceInfo.rootDir,
-        tsdownPackages,
+        tsdownConfigPackages,
       ) || result.tsdownConfig;
   }
 
