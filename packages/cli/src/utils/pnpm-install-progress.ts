@@ -459,6 +459,7 @@ export async function formatPnpmInstallOutput(
   const deprecatedSubdependencies: string[] = [];
   const pendingScripts = new Map<string, string[]>();
   const infoErrorIndices = new Map<string, number[]>();
+  let seenScope = false;
   let seenPeerIssues = false;
   let terminalErrorIndex: number | undefined;
   const emptyProgress = { resolved: 0, found_in_store: 0, fetched: 0, imported: 0 };
@@ -481,6 +482,25 @@ export async function formatPnpmInstallOutput(
         const message = redactRegistryUrls(error.message, asRecord(log.request).url);
         messages.push(JSON.stringify({ error: { code: error.code, message } }, null, 2));
       }
+    } else if (log.name === 'pnpm:scope') {
+      // The human reporter uses the first scope record for this install.
+      if (!showInfo || seenScope) {
+        continue;
+      }
+      seenScope = true;
+      const { selected, total, workspacePrefix } = log;
+      if (typeof selected !== 'number' || selected === 1) {
+        continue;
+      }
+      let count = String(selected);
+      if (selected === total) {
+        count = `all ${selected}`;
+      } else if (typeof total === 'number' && total > 0) {
+        count += ` of ${total}`;
+      }
+      const projects =
+        typeof workspacePrefix === 'string' && workspacePrefix ? 'workspace projects' : 'projects';
+      messages.push(`Scope: ${count} ${projects}`);
     } else if (log.name === 'pnpm:request-retry') {
       // pnpm's human reporter displays retry records as warnings.
       if (showWarnings) {
