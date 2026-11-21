@@ -618,14 +618,9 @@ export async function formatPnpmInstallOutput(
         const requestUrl = asRecord(log.request).url ?? log.url;
         const displayed = redactPnpmDiagnostic(details, requestUrl);
         const headline = code ? `${code} ${displayed}` : displayed;
-        const lockfileError =
-          log.level === 'error' &&
-          (code === 'ERR_PNPM_NO_LOCKFILE' ||
-            code === 'ERR_PNPM_OUTDATED_LOCKFILE' ||
-            code === 'ERR_PNPM_LOCKFILE_CONFIG_MISMATCH' ||
-            code === 'ERR_PNPM_LOCKFILE_MISSING_DEPENDENCY');
         const diagnosticPath =
-          typeof log.prefix === 'string' && (log.level === 'warn' || lockfileError)
+          typeof log.prefix === 'string' &&
+          (log.level === 'warn' || getPnpmTerminalError(log) !== undefined)
             ? displayRelative(log.prefix, cwd)
             : '';
         // pnpm logs each recursive failure at info level before it reports member paths.
