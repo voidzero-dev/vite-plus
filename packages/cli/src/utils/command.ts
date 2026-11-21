@@ -12,7 +12,7 @@ import {
   unlinkSync,
 } from 'node:fs';
 import { constants, tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
@@ -36,6 +36,8 @@ export interface RunCommandOptions {
   idleTimeoutMs?: number;
   /** Arm the idle timer while this handler returns true. It can defer the timer for a known wait. */
   shouldWatchIdle?: (line: string, deferIdleTimeout: (delayMs: number) => void) => boolean;
+  /** Allow a fresh idle window while Git runs and after an observed Git descendant exits. */
+  waitForGit?: boolean;
   /** Capture stdout through a regular file so a child can finish writing before process.exit(). */
   stdoutToFile?: boolean;
 }
@@ -77,17 +79,24 @@ export function exitCodeFromClose(code: number | null, signal: NodeJS.Signals | 
   return signalNumber ? 128 + signalNumber : 1;
 }
 
-function listProcfsParents(): [number, number][] | undefined {
+type ProcessEntry = [pid: number, parentPid: number, executable: string];
+
+const psArgs = ['-A', '-o', 'pid=', '-o', 'ppid='];
+const psOptions = { env: { PATH: '/usr/bin:/bin' }, timeout: 5000 };
+
+function listProcfsProcesses(): ProcessEntry[] | undefined {
   if (process.platform === 'linux') {
     try {
       // Minimal Linux images may not ship ps.
       return readdirSync('/proc')
         .filter((entry) => /^\d+$/.test(entry))
-        .flatMap((pid): [number, number][] => {
+        .flatMap((pid): ProcessEntry[] => {
           try {
             const status = readFileSync(`/proc/${pid}/status`, 'utf8');
             const parent = /^PPid:[ \t]+(\d+)$/m.exec(status);
-            return parent ? [[Number(pid), Number(parent[1])]] : [];
+            const name = /^Name:[ \t]+([^\n]+)/m.exec(status)?.[1] ?? '';
+            const executable = /^State:[ \t]+Z\b/m.test(status) ? '' : name;
+            return parent ? [[Number(pid), Number(parent[1]), executable]] : [];
           } catch {
             // An exited or inaccessible process has no readable status.
             return [];
@@ -100,29 +109,85 @@ function listProcfsParents(): [number, number][] | undefined {
   return undefined;
 }
 
+function parseProcessTable(stdout: string, hasState: boolean): ProcessEntry[] {
+  return stdout.split(/\r?\n/).flatMap((line): ProcessEntry[] => {
+    const row = /^\s*(\d+)\s+(\d+)(?:\s+(.*))?$/.exec(line);
+    if (!row) {
+      return [];
+    }
+    const details = row[3] ?? '';
+    const state = hasState ? /^(\S+)\s+/.exec(details) : null;
+    const executable = state?.[1].startsWith('Z')
+      ? ''
+      : details.slice(state?.[0].length ?? 0).trim();
+    return [[Number(row[1]), Number(row[2]), executable]];
+  });
+}
+
+function getCommandDescendants(pid: number, processes: ProcessEntry[]): ProcessEntry[] {
+  const childrenByParent = new Map<number, ProcessEntry[]>();
+  for (const process of processes) {
+    const [childPid, parentPid] = process;
+    if (!Number.isInteger(childPid) || childPid <= 1 || !Number.isInteger(parentPid)) {
+      continue;
+    }
+    const children = childrenByParent.get(parentPid) ?? [];
+    children.push(process);
+    childrenByParent.set(parentPid, children);
+  }
+  const visited = new Set([pid]);
+  const descendants: ProcessEntry[] = [];
+  for (const parent of visited) {
+    for (const process of childrenByParent.get(parent) ?? []) {
+      if (!visited.has(process[0])) {
+        visited.add(process[0]);
+        descendants.push(process);
+      }
+    }
+  }
+  return descendants;
+}
+
+async function hasRunningGitDescendant(pid: number, signal: AbortSignal): Promise<boolean> {
+  const windows = process.platform === 'win32';
+  let processes = listProcfsProcesses();
+  if (processes === undefined) {
+    const command = windows
+      ? join(
+          process.env.SystemRoot ?? 'C:\\Windows',
+          'System32/WindowsPowerShell/v1.0/powershell.exe',
+        )
+      : 'ps';
+    const args = windows
+      ? [
+          '-NoProfile',
+          '-NonInteractive',
+          '-Command',
+          'Get-CimInstance Win32_Process -Property ProcessId,ParentProcessId,Name | ' +
+            "ForEach-Object { '{0} {1} {2}' -f $_.ProcessId, $_.ParentProcessId, $_.Name }",
+        ]
+      : [...psArgs, '-o', 'state=', '-o', 'comm='];
+    const options = windows ? { timeout: 5000, windowsHide: true } : psOptions;
+    const stdout = await new Promise<string>((resolve) => {
+      execFile(command, args, { ...options, signal }, (error, output) =>
+        resolve(error ? '' : output),
+      );
+    });
+    processes = parseProcessTable(stdout, !windows);
+  }
+  const git = windows ? 'git.exe' : 'git';
+  return getCommandDescendants(pid, processes).some(
+    ([, , executable]) => basename(executable).toLowerCase() === git,
+  );
+}
+
 function stopPosixCommandTree(child: ChildProcess, pid: number, wait: boolean) {
-  const stopTree = (parents: [number, number][]) => {
+  const stopTree = (processes: ProcessEntry[]) => {
     // The process group belongs to the caller. Only stop this child's tree.
     if (child.exitCode !== null || child.signalCode !== null) {
       return;
     }
-    const childrenByParent = new Map<number, number[]>();
-    for (const [childPid, parentPid] of parents) {
-      if (!Number.isInteger(childPid) || childPid <= 1 || !Number.isInteger(parentPid)) {
-        continue;
-      }
-      const children = childrenByParent.get(parentPid) ?? [];
-      children.push(childPid);
-      childrenByParent.set(parentPid, children);
-    }
-    const tree = new Set([pid]);
-    for (const parent of tree) {
-      for (const childPid of childrenByParent.get(parent) ?? []) {
-        tree.add(childPid);
-      }
-    }
-    tree.delete(pid);
-    for (const childPid of Array.from(tree).toReversed()) {
+    for (const [childPid] of getCommandDescendants(pid, processes).toReversed()) {
       try {
         process.kill(childPid, 'SIGKILL');
       } catch {
@@ -131,30 +196,21 @@ function stopPosixCommandTree(child: ChildProcess, pid: number, wait: boolean) {
     }
     child.kill('SIGKILL');
   };
-  const parents = listProcfsParents();
-  if (parents !== undefined) {
-    stopTree(parents);
+  const processes = listProcfsProcesses();
+  if (processes !== undefined) {
+    stopTree(processes);
     return;
   }
-  const args = ['-A', '-o', 'pid=', '-o', 'ppid='];
-  const options = { env: { PATH: '/usr/bin:/bin' }, timeout: 5000 };
-  const stopFromPs = (stdout: string) => {
-    stopTree(
-      stdout.split('\n').map((line) => {
-        const [childPid, parentPid] = line.trim().split(/\s+/, 2);
-        return [Number(childPid), Number(parentPid)];
-      }),
-    );
-  };
+  const stopFromPs = (stdout: string) => stopTree(parseProcessTable(stdout, false));
   if (wait) {
-    const { stdout } = spawn.sync('ps', args, {
-      ...options,
+    const { stdout } = spawn.sync('ps', psArgs, {
+      ...psOptions,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
     });
     stopFromPs(stdout ?? '');
   } else {
-    execFile('ps', args, options, (_error, stdout) => stopFromPs(stdout));
+    execFile('ps', psArgs, psOptions, (_error, stdout) => stopFromPs(stdout));
   }
 }
 
@@ -228,6 +284,8 @@ function runCapturedCommand(
   const timeoutMs = idleTimeoutMs ?? options.timeoutMs;
   const hasDeadline = idleTimeoutMs === undefined && timeoutMs !== undefined;
   const shouldWatchIdle = idleTimeoutMs === undefined ? undefined : options.shouldWatchIdle;
+  const gitQuery =
+    idleTimeoutMs !== undefined && options.waitForGit ? new AbortController() : undefined;
   // Captured commands stay in the caller's group for terminal and CI cancellation.
   const child = spawn(options.command, options.args, {
     // No stdin pipe: leaving one open would deadlock any descendant `.ps1`
@@ -255,6 +313,7 @@ function runCapturedCommand(
     let settled = false;
     let timedOut = false;
     let watching = false;
+    let gitWasRunning = false;
     let filePoll: ReturnType<typeof setInterval> | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let deferredUntil = 0;
@@ -263,23 +322,50 @@ function runCapturedCommand(
       clearTimeout(timer);
       timer = undefined;
     };
-    const startTimer = () => {
-      timer = setTimeout(() => {
-        // Check for bytes written since the last poll before deciding it is idle.
-        if (idleTimeoutMs !== undefined && readFileOutput()) {
+    const expireTimer = async () => {
+      // Check for bytes written since the last poll before deciding it is idle.
+      if (idleTimeoutMs !== undefined && readFileOutput()) {
+        return;
+      }
+      if (
+        gitQuery &&
+        child.pid !== undefined &&
+        child.exitCode === null &&
+        child.signalCode === null
+      ) {
+        const timerAtCheck = timer;
+        const chunks = stdout.length + stderr.length;
+        const gitIsRunning = await hasRunningGitDescendant(child.pid, gitQuery.signal);
+        // Output can arrive or resolution can finish during the process query.
+        if (
+          settled ||
+          timer !== timerAtCheck ||
+          stdout.length + stderr.length !== chunks ||
+          readFileOutput()
+        ) {
           return;
         }
-        timedOut = true;
-        // Deadline callers can proceed while platform cleanup finishes.
-        stopCommandTree(child, { wait: !hasDeadline });
-        // A descendant may still hold a pipe open after the wrapper exits.
-        child.stdout?.destroy();
-        child.stderr?.destroy();
-        if (hasDeadline) {
-          cleanup();
-          reject(new Error(`Command timed out after ${timeoutMs}ms: ${options.command}`));
+        const allowGitToFinish = gitIsRunning || gitWasRunning;
+        gitWasRunning = gitIsRunning;
+        if (allowGitToFinish) {
+          // A Git child that disappeared between checks may have just finished.
+          startTimer();
+          return;
         }
-      }, timeoutMs);
+      }
+      timedOut = true;
+      // Deadline callers can proceed while platform cleanup finishes.
+      stopCommandTree(child, { wait: !hasDeadline });
+      // A descendant may still hold a pipe open after the wrapper exits.
+      child.stdout?.destroy();
+      child.stderr?.destroy();
+      if (hasDeadline) {
+        cleanup();
+        reject(new Error(`Command timed out after ${timeoutMs}ms: ${options.command}`));
+      }
+    };
+    const startTimer = () => {
+      timer = setTimeout(() => void expireTimer(), timeoutMs);
       timer.unref();
     };
     const deferIdleTimeout = (delayMs: number) => {
@@ -322,6 +408,7 @@ function runCapturedCommand(
       }
       watching = shouldWatchIdle?.(line, deferIdleTimeout) ?? false;
       if (!watching) {
+        gitWasRunning = false;
         stopTimer();
       } else if (timer === undefined && deferTimer === undefined) {
         startTimer();
@@ -329,6 +416,7 @@ function runCapturedCommand(
     });
     const cleanup = () => {
       settled = true;
+      gitQuery?.abort();
       clearInterval(filePoll);
       lines?.close();
       fileOutput?.destroy();
