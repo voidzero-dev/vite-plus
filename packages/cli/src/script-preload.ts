@@ -10,6 +10,10 @@
  * It uses the oxc-node hooks compiled into the Vite+ native binding (exported as
  * `oxcNode`). Adapted from oxc-node's `packages/core/register.mjs`; keep them in sync
  * when bumping the vendored oxc-node in `.upstream-versions.json`.
+ *
+ * With `VPX_BUNDLE_CACHE=1`, `script-bundle-hooks.cjs` wraps the ESM hooks: a run with a
+ * valid cached bundle loads the binding only when a module outside the bundle needs it.
+ * It is a separate file, loaded only then, so other runs do not read its code.
  */
 
 import type { LoadFnOutput, LoadHookSync, ResolveHookSync } from 'node:module';
@@ -20,6 +24,7 @@ import { isMainThread } from 'node:worker_threads';
 import { addHook } from 'pirates';
 
 import { installSignalAck } from '../../../oxc-node/packages/core/signal-ack.mjs';
+import type { BundleCacheRun } from './script-bundle-hooks.ts';
 import {
   canRegisterSyncHooks,
   flush,
@@ -32,6 +37,7 @@ import {
   SUPPORTED_NODE_RANGE,
   threadScriptConfig,
   threadWatchSink,
+  TYPESCRIPT_DEPENDENCY,
   withFlush,
   withRequireAsyncModuleCode,
 } from './script-hooks.ts';
@@ -49,25 +55,60 @@ if (isMainThread) {
   installSignalAck();
 }
 
-// Loaded after the version check so the native addon never loads on an
-// unsupported Node.js.
-const oxcNode = loadOxcNode();
-
 // Under `vpx --watch`, report what Node.js does not: the tsconfig files oxc-node read
-// and the paths a failed resolve looked for. Turned on before the first transform or
-// resolve, which is when tsconfig files are read.
+// and the paths a failed resolve looked for.
 const watch = threadWatchSink();
-if (watch) {
-  oxcNode.enableWatchReport();
-}
-
 // Pin this thread's config before its first transform or resolve. The ESM entry
 // passes the same choice to the off-thread hooks on older Node.js releases.
 const tsconfig = threadScriptConfig();
-oxcNode.initializeLoader(tsconfig.path, tsconfig.source);
-// Dependencies run as published, except TypeScript, which Node.js refuses to strip
-// under `node_modules`. Set the same way, before the first transform or resolve.
-oxcNode.setTransformDeps('typescript');
+const cwd = process.cwd();
+const bundleCache: BundleCacheRun | undefined =
+  watch || process.env.VPX_BUNDLE_CACHE !== '1'
+    ? undefined
+    : (
+        require(
+          path.join(__dirname, 'script-bundle-hooks.cjs'),
+        ) as typeof import('./script-bundle-hooks.ts')
+      ).startBundleCache(__dirname);
+
+type OxcNodeBinding = ReturnType<typeof loadOxcNode>;
+let oxcNodeBinding: OxcNodeBinding | undefined;
+/** While the binding loads, its own files are not the script's to transform. */
+let loadingBinding = false;
+
+/**
+ * The native loader, set up on first use: before the first transform or resolve, as
+ * `initializeLoader`, `setTransformDeps`, and `enableWatchReport` require. Loaded after the
+ * version check so the native addon never loads on an unsupported Node.js.
+ */
+function oxcNode(): OxcNodeBinding {
+  if (oxcNodeBinding === undefined) {
+    let binding;
+    loadingBinding = true;
+    try {
+      binding = loadOxcNode();
+    } finally {
+      loadingBinding = false;
+    }
+    if (watch) {
+      binding.enableWatchReport();
+    }
+    binding.initializeLoader(tsconfig.path, tsconfig.source);
+    // Dependencies run as published, except TypeScript, which Node.js refuses to strip
+    // under `node_modules`.
+    binding.setTransformDeps('typescript');
+    oxcNodeBinding = binding;
+  }
+  return oxcNodeBinding;
+}
+
+if (!bundleCache?.warm) {
+  oxcNode();
+} else {
+  bundleCache.reportBinding(() => oxcNodeBinding !== undefined);
+}
+
+const takeWatchDependencies = () => oxcNode().takeWatchDependencies();
 
 setSourceMapsSupport(true, { nodeModules: true, generatedCode: true });
 routeHelperRequires(Module as never);
@@ -76,19 +117,20 @@ const EXTENSIONS = ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.mts', '.cjs', '.cts'
 const NODE_MODULES = `${path.sep}node_modules${path.sep}`;
 const SOURCEMAP_PREFIX = '\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,';
 
-const transformer = new oxcNode.OxcTransformer(process.cwd(), HELPER_MODULE_NAME);
+let transformer: InstanceType<OxcNodeBinding['OxcTransformer']> | undefined;
 
 addHook(
   (code, filename) => {
     let output;
     try {
+      transformer ??= new (oxcNode().OxcTransformer)(cwd, HELPER_MODULE_NAME);
       output = transformer.transform(filename, code);
     } catch (error) {
       throw withRequireAsyncModuleCode(error);
     } finally {
       // A transform reads the tsconfig of the file it compiles.
       if (watch) {
-        flush(watch, oxcNode.takeWatchDependencies);
+        flush(watch, takeWatchDependencies);
       }
     }
     const source = output.source;
@@ -99,20 +141,25 @@ addHook(
   },
   {
     exts: EXTENSIONS,
-    // oxc-node decides which dependencies to transform, as for `import`.
+    // As oxc-node decides for `import`: dependencies run as published, except TypeScript.
     ignoreNodeModules: false,
-    matcher: (filename) => !filename.includes(NODE_MODULES) || oxcNode.transformsDep(filename),
+    matcher: (filename) =>
+      !loadingBinding && (!filename.includes(NODE_MODULES) || TYPESCRIPT_DEPENDENCY.test(filename)),
   },
 );
 
+// `require()` stays on Node.js' resolution without the binding, which itself loads
+// through `require()` (see `resolveWithOxcNode`).
 const resolve: ResolveHookSync = (specifier, context, nextResolve) =>
-  resolveWithOxcNode(oxcNode, specifier, context, nextResolve);
+  isCommonJsRequire(context)
+    ? nextResolve(specifier, context)
+    : resolveWithOxcNode(oxcNode(), specifier, context, nextResolve);
 
 const load: LoadHookSync = (url, context, nextLoad) => {
   if (isCommonJsRequire(context)) {
     return nextLoad(url, context);
   }
-  const result = oxcNode.load(
+  const result = oxcNode().load(
     url,
     context as never,
     nextLoad as never,
@@ -140,9 +187,9 @@ if (canRegisterSyncHooks(process.versions.node)) {
   registerHooks(
     watch
       ? {
-          resolve: withFlush(resolve, watch, oxcNode.takeWatchDependencies),
-          load: withFlush(load, watch, oxcNode.takeWatchDependencies),
+          resolve: withFlush(resolve, watch, takeWatchDependencies),
+          load: withFlush(load, watch, takeWatchDependencies),
         }
-      : { resolve, load },
+      : (bundleCache?.hooks({ resolve, load }) ?? { resolve, load }),
   );
 }
