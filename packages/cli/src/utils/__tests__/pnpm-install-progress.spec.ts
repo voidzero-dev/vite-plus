@@ -132,29 +132,39 @@ describe('formatPnpmInstallOutput', () => {
     });
   });
 
-  it.each(['info', 'warn', 'error', 'ndjson'] as const)(
-    'reports both recursive workspace failures in %s mode',
+  it.each([undefined, 'info', 'debug', 'warn', 'error', 'silent', 'json', 'ndjson'] as const)(
+    'reports recursive workspace failures in output mode %s',
     async (mode) => {
       const cwd = resolve('workspace');
       const url = 'https://user:fixture-secret@registry.example.com/archive.tgz?token=test';
       const archive = `GET ${url} failed\nAn authorization header was used: fixture-secret`;
       const workspace = 'No workspace package named fixture-absent';
-      const headline = 'ERR_PNPM_RECURSIVE_FAIL "pnpm recursive install" failed in 2 packages';
+      const archiveCode = 'ERR_PNPM_FETCH_404';
+      const workspaceCode = 'ERR_PNPM_WORKSPACE_PKG_NOT_FOUND';
+      const summary = {
+        code: 'ERR_PNPM_RECURSIVE_FAIL',
+        message: '"pnpm recursive install" failed in 2 packages',
+      };
+      const headline = `${summary.code} ${summary.message}`;
       const output = [
-        { name: 'pnpm', level: 'info', message: archive },
-        { name: 'pnpm', level: 'info', message: workspace },
+        { name: 'pnpm', level: 'info', err: { message: workspace, code: workspaceCode } },
+        { name: 'pnpm', level: 'info', err: { message: archive, code: archiveCode } },
         {
           name: 'pnpm',
           level: 'error',
-          code: 'ERR_PNPM_RECURSIVE_FAIL',
-          err: { name: 'pnpm', message: '"pnpm recursive install" failed in 2 packages' },
+          code: summary.code,
+          err: { name: 'pnpm', message: summary.message },
           failures: [
             {
               prefix: join(cwd, 'packages', 'archive'),
               message: archive,
-              error: { request: { url } },
+              error: { code: archiveCode, request: { url } },
             },
-            { prefix: join(cwd, 'packages', 'workspace'), message: workspace },
+            {
+              prefix: join(cwd, 'packages', 'workspace'),
+              message: workspace,
+              error: { code: workspaceCode },
+            },
           ],
         },
       ]
@@ -165,15 +175,51 @@ describe('formatPnpmInstallOutput', () => {
         'GET https://registry.example.com/archive.tgz failed\nAn authorization header was used: [hidden]';
       if (mode === 'ndjson') {
         expect(rendered).toBe(output);
-      } else if (mode === 'info') {
-        expect(rendered).toBe(`${safeArchive}\n${workspace}\n${headline}`);
-      } else {
+      } else if (mode === 'json') {
+        expect(JSON.parse(rendered)).toEqual({ error: summary });
+      } else if (mode === 'silent') {
+        expect(rendered).toBe('');
+      } else if (mode === 'warn' || mode === 'error') {
         expect(rendered).toBe(
           `${headline}\npackages/archive: ${safeArchive}\npackages/workspace: ${workspace}`,
+        );
+      } else {
+        expect(rendered).toBe(
+          `packages/workspace: ${workspaceCode} ${workspace}\npackages/archive: ${archiveCode} ${safeArchive}\n${headline}`,
         );
       }
     },
   );
+
+  it('labels both member errors when they share the same failure reason', async () => {
+    const cwd = resolve('workspace');
+    const error = {
+      code: 'ERR_PNPM_FETCH_404',
+      message: 'GET https://registry.example.com/missing: Not Found - 404',
+    };
+    const info = { name: 'pnpm', level: 'info', err: error };
+    const output = [
+      info,
+      info,
+      {
+        name: 'pnpm',
+        level: 'error',
+        code: 'ERR_PNPM_RECURSIVE_FAIL',
+        err: { name: 'pnpm', message: 'Installation failed' },
+        failures: ['client', 'worker'].map((member) => ({
+          prefix: join(cwd, 'packages', member),
+          message: error.message,
+          error,
+        })),
+      },
+    ]
+      .map((record) => JSON.stringify(record))
+      .join('\n');
+
+    expect(await formatPnpmInstallOutput(output, cwd)).toBe(
+      `packages/client: ${error.code} ${error.message}\npackages/worker: ${error.code} ${error.message}\nERR_PNPM_RECURSIVE_FAIL Installation failed`,
+    );
+  });
 
   it.each(['info', 'debug', 'warn', 'error', 'silent', 'json', 'ndjson'] as const)(
     'replays direct optional dependency skips at the expected level in %s mode',
