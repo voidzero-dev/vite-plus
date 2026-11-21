@@ -87,11 +87,15 @@ fn option_len(option: &clap::Arg, arg: &str) -> Option<usize> {
 ///
 /// `vp --filter app run dev` becomes `vp run --filter app dev`, the order pnpm users often type.
 /// Callers pass the options that `command` accepts, such as vite-task's `PackageQueryArgs`.
-/// Returns `None` unless every argument before `command` is one of those options.
+/// `is_valid` receives those options as `flags` parsed them, so callers can reject combinations
+/// that `command` refuses later, such as `--recursive` with `--filter`.
+/// Returns `None` unless every argument before `command` is one of those options, `flags`
+/// parses them, and `is_valid` accepts them.
 pub fn move_flags_after_command(
     args: &[String],
     command: &str,
     flags: &clap::Command,
+    is_valid: impl FnOnce(&clap::ArgMatches) -> bool,
 ) -> Option<Vec<String>> {
     let mut index = 0;
     while let Some(arg) = args.get(index)
@@ -101,6 +105,13 @@ pub fn move_flags_after_command(
     }
 
     if index == 0 || args.get(index).map(String::as_str) != Some(command) {
+        return None;
+    }
+    // The count above takes `-r` in `--filter -r` as the value, but clap rejects it.
+    // For example, `vp --filter -r run build` gets no suggestion, because clap reports a
+    // missing `--filter` value for `vp run --filter -r build` too.
+    let matches = flags.clone().no_binary_name(true).try_get_matches_from(&args[..index]).ok()?;
+    if !is_valid(&matches) {
         return None;
     }
 
@@ -215,7 +226,7 @@ mod tests {
     }
 
     fn moved(input: &[&str]) -> Option<Vec<String>> {
-        move_flags_after_command(&args(input), "run", &run_flags())
+        move_flags_after_command(&args(input), "run", &run_flags(), |_| true)
     }
 
     #[test]
@@ -229,7 +240,7 @@ mod tests {
             (&["-F", "backend", "run", "dev"], &["run", "-F", "backend", "dev"]),
             (&["-Fbackend", "run", "dev"], &["run", "-Fbackend", "dev"]),
             (&["-F=backend", "run", "dev"], &["run", "-F=backend", "dev"]),
-            (&["-t", "-r", "run", "build"], &["run", "-t", "-r", "build"]),
+            (&["-t", "-w", "run", "build"], &["run", "-t", "-w", "build"]),
             (
                 &[
                     "--filter",
@@ -276,9 +287,28 @@ mod tests {
             &["--filterx", "run", "build"],
             &["run", "--filter", "backend", "dev"],
             &[],
+            // `-r` is not a value of `--filter` for clap.
+            &["--filter", "-r", "run", "build"],
         ] {
             assert_eq!(moved(input), None, "{input:?}");
         }
+    }
+
+    #[test]
+    fn run_flags_that_the_caller_rejects_are_left_alone() {
+        let input = args(&["-r", "--filter", "backend", "run", "build"]);
+        let mut checked = None;
+        let corrected = move_flags_after_command(&input, "run", &run_flags(), |matches| {
+            checked = Some((
+                matches.get_flag("recursive"),
+                matches
+                    .get_many::<String>("filter")
+                    .map(|values| values.cloned().collect::<Vec<_>>()),
+            ));
+            false
+        });
+        assert_eq!(corrected, None);
+        assert_eq!(checked, Some((true, Some(args(&["backend"])))));
     }
 
     #[test]

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use clap::error::ErrorKind;
 use console::style;
 use vp_cli_help::error::{
@@ -8,6 +10,8 @@ use vp_cli_help::error::{
 use vp_error::Error;
 use vp_shared::output;
 use vt::ExitStatus;
+use vt_path::AbsolutePath;
+use vt_workspace::package_filter::PackageQueryArgs;
 
 use super::types::SynthesizableSubcommand;
 
@@ -18,9 +22,21 @@ use super::types::SynthesizableSubcommand;
 /// needs the names to point users at the global installation.
 const GLOBAL_ONLY_SUBCOMMANDS: &[&str] = &["env", "upgrade", "implode"];
 
+/// Moves vite-task's package-selection flags after `run` when `vp run` accepts them there.
+fn move_package_flags_after_run(args: &[String], cwd: &AbsolutePath) -> Option<Vec<String>> {
+    let run_flags = <PackageQueryArgs as clap::Args>::augment_args(clap::Command::new("run"));
+    let cwd = Arc::<AbsolutePath>::from(cwd);
+    move_flags_after_command(args, "run", &run_flags, |matches| {
+        // `vp run` checks combinations such as `-r` with `--filter` here, not in clap.
+        <PackageQueryArgs as clap::FromArgMatches>::from_arg_matches(matches)
+            .is_ok_and(|query| query.into_package_query(None, &cwd).is_ok())
+    })
+}
+
 pub(super) fn handle_cli_parse_error(
     err: clap::Error,
     args: &[String],
+    cwd: &AbsolutePath,
     chdir: Option<&str>,
 ) -> Result<ExitStatus, Error> {
     if matches!(err.kind(), ErrorKind::InvalidSubcommand) && print_invalid_subcommand_error(&err) {
@@ -30,11 +46,7 @@ pub(super) fn handle_cli_parse_error(
         && let Some(invalid_argument) = extract_unknown_argument(&err)
     {
         print_unknown_argument_error(&invalid_argument, has_pass_as_value_suggestion(&err));
-        let run_flags =
-            <vt_workspace::package_filter::PackageQueryArgs as clap::Args>::augment_args(
-                clap::Command::new("run"),
-            );
-        if let Some(corrected_args) = move_flags_after_command(args, "run", &run_flags)
+        if let Some(corrected_args) = move_package_flags_after_run(args, cwd)
             && let Some(suggestion) = format_command_args(chdir, &corrected_args)
         {
             print_subcommand_suggestion(&suggestion);
@@ -227,8 +239,8 @@ mod tests {
         // `vp_cli_help` tests a copy of these options; check each real one here.
         use clap::{Args, Command};
 
-        let command =
-            vt_workspace::package_filter::PackageQueryArgs::augment_args(Command::new("run"));
+        let command = PackageQueryArgs::augment_args(Command::new("run"));
+        let cwd = vt_path::current_dir().unwrap();
         let mut checked = 0;
         for arg in command.get_arguments() {
             let takes_value = arg.get_action().takes_values();
@@ -241,15 +253,25 @@ mod tests {
                 }
                 let input = [leading.clone(), vec!["run".to_owned(), "build".to_owned()]].concat();
                 let expected = [vec!["run".to_owned()], leading, vec!["build".to_owned()]].concat();
-                assert_eq!(
-                    move_flags_after_command(&input, "run", &command),
-                    Some(expected),
-                    "{flag}"
-                );
+                assert_eq!(move_package_flags_after_run(&input, &cwd), Some(expected), "{flag}");
                 checked += 1;
             }
         }
         assert!(checked > 0, "PackageQueryArgs exposes no flags");
+    }
+
+    #[test]
+    fn package_flags_that_vp_run_rejects_have_no_suggestion() {
+        let cwd = vt_path::current_dir().unwrap();
+        for input in [
+            &["-r", "--filter", "backend", "run", "build"][..],
+            &["-r", "-t", "run", "build"],
+            &["-t", "--filter", "backend", "run", "build"],
+            &["--filter", "-r", "run", "build"],
+        ] {
+            let input: Vec<String> = input.iter().map(|arg| (*arg).to_owned()).collect();
+            assert_eq!(move_package_flags_after_run(&input, &cwd), None, "{input:?}");
+        }
     }
 
     #[test]

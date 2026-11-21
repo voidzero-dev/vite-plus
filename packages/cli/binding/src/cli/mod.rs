@@ -414,7 +414,7 @@ pub async fn main(
         Err(err) => {
             // `bin.ts` already applied `-C` to `cwd` and removed it from `args_vec`.
             let chdir = explicit_chdir.then(|| cwd.as_path().to_string_lossy());
-            return handle_cli_parse_error(err, &args_vec, chdir.as_deref());
+            return handle_cli_parse_error(err, &args_vec, &cwd, chdir.as_deref());
         }
     };
 

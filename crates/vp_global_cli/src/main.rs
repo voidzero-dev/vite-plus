@@ -181,6 +181,22 @@ fn is_affirmative_response(input: &str) -> bool {
     matches!(input.trim().to_ascii_lowercase().as_str(), "y" | "yes" | "ok" | "true" | "1")
 }
 
+/// Moves vite-task's package-selection flags after `run` when `vp run` accepts them there.
+fn move_package_flags_after_run(
+    raw_args: &[String],
+    cwd: &vt_path::AbsolutePath,
+) -> Option<Vec<String>> {
+    use vt_workspace::package_filter::PackageQueryArgs;
+
+    let run_flags = <PackageQueryArgs as clap::Args>::augment_args(clap::Command::new("run"));
+    let cwd = std::sync::Arc::<vt_path::AbsolutePath>::from(cwd);
+    move_flags_after_command(raw_args, "run", &run_flags, |matches| {
+        // `vp run` checks combinations such as `-r` with `--filter` here, not in clap.
+        <PackageQueryArgs as clap::FromArgMatches>::from_arg_matches(matches)
+            .is_ok_and(|query| query.into_package_query(None, &cwd).is_ok())
+    })
+}
+
 fn should_prompt_for_correction() -> bool {
     !vp_shared::is_ci_environment()
         && vp_shared::is_stdin_terminal()
@@ -588,13 +604,9 @@ async fn run() -> ExitCode {
                         has_pass_as_value_suggestion(&e),
                     );
                     // Like a top-level typo, offer the corrected order only as a prompt.
-                    let run_flags = <vt_workspace::package_filter::PackageQueryArgs as clap::Args>::augment_args(
-                        clap::Command::new("run"),
-                    );
                     // `-C` already changed `cwd` and left `raw_args`, so show it again.
                     let chdir = explicit_chdir.then(|| cwd.as_path().to_string_lossy());
-                    if let Some(corrected_raw_args) =
-                        move_flags_after_command(&raw_args, "run", &run_flags)
+                    if let Some(corrected_raw_args) = move_package_flags_after_run(&raw_args, &cwd)
                         && let Some(suggestion) =
                             format_command_args(chdir.as_deref(), &corrected_raw_args)
                         && prompt_to_run_suggested_command(&suggestion)
