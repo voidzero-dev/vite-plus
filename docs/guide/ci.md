@@ -199,6 +199,8 @@ pnpm install --frozen-lockfile
 
 ### Which commands can use the network?
 
+On `1.6.x` and `1.7.x`, set `VP_ENV_FORBIDDEN=1` to prevent the local CLI from downloading the project's pinned package manager.
+
 - `vp lint`, `vp fmt --check`, `vp check`, and `vp test` use installed tools. Install any test environment, coverage provider, or browser binary your suite needs in advance. Project configuration, plugins, and tests can make their own requests.
 - `vp run` can replay a task from its local cache. On a cache miss the task runs its own command, which may use the network. A configured remote cache also needs network access.
 - `vp install`, `vp add`, and `vp dlx` can fetch packages. `vp migrate` can install dependencies. With `vp create`, the template determines the source. For example, `vite:application` uses `create-vite@latest` from the registry and `vite:library` downloads its template from GitHub.
