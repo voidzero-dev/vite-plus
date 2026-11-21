@@ -167,7 +167,7 @@ If you are migrating an existing GitHub Actions workflow, you can often replace 
 
 ## Offline CI with a private registry
 
-You can install the [project-local CLI](/guide/local-cli) from a private npm registry such as Verdaccio without public internet access. It uses Node.js and the project's package manager on your `PATH`, so you do not need a Node.js download mirror. If you also need `vp env`, see [Install from private mirrors](/guide/global-cli#install-from-private-mirrors).
+You can install the [project-local CLI](/guide/local-cli) from a private npm registry such as Verdaccio without public internet access. If Node.js is already installed, you do not need a Node.js download mirror. If you also need `vp env`, see [Install from private mirrors](/guide/global-cli#install-from-private-mirrors).
 
 Set the registry in the project's `.npmrc`. Replace the example URL with your own.
 
@@ -187,9 +187,11 @@ If you cannot reach the private registry from the machine where you install Vite
 
 ### Which packages does my project need?
 
-Your project lockfile lists the packages the registry needs to serve. With pnpm, run `pnpm list --lockfile-only --depth Infinity --json` to see the dependency tree before installation. If you maintain the mirror, include the metadata and tarballs for dev dependencies as well as runtime dependencies. Follow `optionalDependencies` through the tree. The `os`, `cpu`, and Linux `libc` fields in `pnpm-lock.yaml` identify the native packages for your platform. Check that you can reach the tarball URLs from the machine where you install Vite+.
+With pnpm, run `pnpm list --lockfile-only --depth Infinity --json` to see your project's dependencies before installation. If you maintain the mirror, include the metadata and tarballs for dev dependencies as well as runtime dependencies. Follow `optionalDependencies` through the tree. The `os`, `cpu`, and Linux `libc` fields in `pnpm-lock.yaml` identify the native packages for your platform. Check that you can reach the tarball URLs from the machine where you install Vite+.
 
 For example, Windows x64 bindings have `os: [win32]` and `cpu: [x64]` in the pnpm lockfile. Check the lockfile on each upgrade because the required packages can change. The published `toolchain.json` lists tool versions and omits platform bindings.
+
+`pnpm list` can omit pnpm itself. If your project pins pnpm 12, mirror `pnpm` and its platform executable at the pinned version. On Windows x64 the executable package is `@pnpm/exe.win32-x64`. pnpm records its own version under `packageManagerDependencies` when it writes a [lockfile with two documents](https://pnpm.io/lockfile#when-a-lockfile-has-two-documents).
 
 ### Which commands can use the network?
 
@@ -197,4 +199,4 @@ For example, Windows x64 bindings have `os: [win32]` and `cpu: [x64]` in the pnp
 - `vp run` can replay a task from its local cache. On a cache miss the task runs its own command, which may use the network. A configured remote cache also needs network access.
 - `vp install`, `vp add`, and `vp dlx` can fetch packages. `vp migrate` can install dependencies. With `vp create`, the template determines the source. For example, `vite:application` uses `create-vite@latest` from the registry and `vite:library` downloads its template from GitHub.
 
-With `vite-plus@1.7.0`, `vp lint` and `vp test` can try to download the project's pinned package manager if it is missing from Vite+'s cache. A command can still succeed after the request fails. Check that the registry serves the version in `packageManager` or `devEngines.packageManager`.
+With `vite-plus@1.7.0`, local commands such as `vp fmt --check`, `vp lint`, `vp check`, `vp test run`, and `vp run build` can try to download the project's pinned package manager even when it is on `PATH`. If Vite+'s cache is empty and the registry accepts a connection but never responds, the command can spend several minutes retrying and still succeed. For pnpm 12, use a reachable registry that [serves its platform executable](#which-packages-does-my-project-need). `vp --version` skips this lookup.
