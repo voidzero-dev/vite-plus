@@ -132,6 +132,49 @@ describe('formatPnpmInstallOutput', () => {
     });
   });
 
+  it.each(['info', 'warn', 'error', 'ndjson'] as const)(
+    'reports both recursive workspace failures in %s mode',
+    async (mode) => {
+      const cwd = resolve('workspace');
+      const url = 'https://user:fixture-secret@registry.example.com/archive.tgz?token=test';
+      const archive = `GET ${url} failed\nAn authorization header was used: fixture-secret`;
+      const workspace = 'No workspace package named fixture-absent';
+      const headline = 'ERR_PNPM_RECURSIVE_FAIL "pnpm recursive install" failed in 2 packages';
+      const output = [
+        { name: 'pnpm', level: 'info', message: archive },
+        { name: 'pnpm', level: 'info', message: workspace },
+        {
+          name: 'pnpm',
+          level: 'error',
+          code: 'ERR_PNPM_RECURSIVE_FAIL',
+          err: { name: 'pnpm', message: '"pnpm recursive install" failed in 2 packages' },
+          failures: [
+            {
+              prefix: join(cwd, 'packages', 'archive'),
+              message: archive,
+              error: { request: { url } },
+            },
+            { prefix: join(cwd, 'packages', 'workspace'), message: workspace },
+          ],
+        },
+      ]
+        .map((record) => JSON.stringify(record))
+        .join('\n');
+      const rendered = await formatPnpmInstallOutput(output, cwd, mode);
+      const safeArchive =
+        'GET https://registry.example.com/archive.tgz failed\nAn authorization header was used: [hidden]';
+      if (mode === 'ndjson') {
+        expect(rendered).toBe(output);
+      } else if (mode === 'info') {
+        expect(rendered).toBe(`${safeArchive}\n${workspace}\n${headline}`);
+      } else {
+        expect(rendered).toBe(
+          `${headline}\npackages/archive: ${safeArchive}\npackages/workspace: ${workspace}`,
+        );
+      }
+    },
+  );
+
   it.each(['info', 'debug', 'warn', 'error', 'silent', 'json', 'ndjson'] as const)(
     'replays direct optional dependency skips at the expected level in %s mode',
     async (mode) => {

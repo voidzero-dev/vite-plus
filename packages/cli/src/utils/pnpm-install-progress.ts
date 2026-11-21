@@ -618,6 +618,22 @@ export async function formatPnpmInstallOutput(
             ? displayRelative(log.prefix, cwd)
             : '';
         messages.push(warningPath ? `${warningPath}: ${headline}` : headline);
+        if (
+          code === 'ERR_PNPM_RECURSIVE_FAIL' &&
+          (mode === 'warn' || mode === 'error') &&
+          Array.isArray(log.failures)
+        ) {
+          // These modes omit the individual info records that precede the summary.
+          for (const failure of log.failures) {
+            const { prefix, message: reason, error: memberError } = asRecord(failure);
+            if (typeof prefix === 'string' && typeof reason === 'string') {
+              const member = redactRegistryUrls(displayRelative(prefix, cwd) || '.');
+              const details = asRecord(memberError);
+              const url = asRecord(details.request).url ?? details.url;
+              messages.push(`${member}: ${redactPnpmDiagnostic(reason, url)}`);
+            }
+          }
+        }
         const context: string[] = [];
         if (log.level === 'error') {
           appendDependencyContext(context, log, cwd);
