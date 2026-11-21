@@ -68,6 +68,7 @@ impl SubcommandResolver {
         envs: &Arc<EnvMap>,
         cwd: &AbsolutePath,
     ) -> anyhow::Result<ResolvedSubcommand> {
+        let cache_config = cache_config_for(&subcommand);
         match subcommand {
             SynthesizableSubcommand::Lint { args } => {
                 let cli_options = self.cli_options()?;
@@ -86,13 +87,7 @@ impl SubcommandResolver {
                     .into_iter()
                     .chain(args.into_iter().map(Str::from))
                     .collect(),
-                    cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
-                        env: Some(Box::new([Str::from("OXLINT_TSGOLINT_PATH")])),
-                        untracked_env: None,
-                        input: None,
-                        output: None,
-                        remote: None,
-                    }),
+                    cache_config,
                     envs: merge_resolved_envs_with_version(envs, resolved.envs),
                 })
             }
@@ -109,13 +104,7 @@ impl SubcommandResolver {
                     args: iter::once(Str::from(js_path_str))
                         .chain(args.into_iter().map(Str::from))
                         .collect(),
-                    cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
-                        env: None,
-                        untracked_env: None,
-                        input: None,
-                        output: None,
-                        remote: None,
-                    }),
+                    cache_config,
                     envs: merge_resolved_envs_with_version(envs, resolved.envs),
                 })
             }
@@ -133,19 +122,7 @@ impl SubcommandResolver {
                         .chain(iter::once(Str::from("build")))
                         .chain(args.into_iter().map(Str::from))
                         .collect(),
-                    // No synthetic cache config: vite reports its inputs/outputs/
-                    // envs to the runner via `@voidzero-dev/vite-task-client`.
-                    // All fields `None` keep caching enabled with auto input and
-                    // auto output inference (the latter drives output restoration);
-                    // vite's `ignoreInput`/`ignoreOutput`/`getEnv`/`getEnvs` refine
-                    // the fingerprint at runtime.
-                    cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
-                        env: None,
-                        untracked_env: None,
-                        input: None,
-                        output: None,
-                        remote: None,
-                    }),
+                    cache_config,
                     envs: merge_resolved_envs_with_version(envs, resolved.envs),
                 })
             }
@@ -166,19 +143,7 @@ impl SubcommandResolver {
                 Ok(ResolvedSubcommand {
                     program: Arc::clone(&cli_options.node_exec_path),
                     args: iter::once(Str::from(js_path_str)).chain(vitest_args).collect(),
-                    cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
-                        env: None,
-                        untracked_env: None,
-                        input: Some(vec![
-                            UserInputEntry::Auto(AutoTracking { auto: true }),
-                            exclude_glob(
-                                "!node_modules/.vite/vitest/**/results.json",
-                                InputBase::Package,
-                            ),
-                        ]),
-                        output: None,
-                        remote: None,
-                    }),
+                    cache_config,
                     envs: merge_resolved_envs_with_version(envs, resolved.envs),
                 })
             }
@@ -195,13 +160,7 @@ impl SubcommandResolver {
                     args: iter::once(Str::from(js_path_str))
                         .chain(args.into_iter().map(Str::from))
                         .collect(),
-                    cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
-                        env: None,
-                        untracked_env: None,
-                        input: Some(build_pack_cache_inputs()),
-                        output: None,
-                        remote: None,
-                    }),
+                    cache_config,
                     envs: merge_resolved_envs(envs, resolved.envs),
                 })
             }
@@ -219,7 +178,7 @@ impl SubcommandResolver {
                         .chain(iter::once(Str::from("dev")))
                         .chain(args.into_iter().map(Str::from))
                         .collect(),
-                    cache_config: UserCacheConfig::disabled(),
+                    cache_config,
                     envs: merge_resolved_envs_with_version(envs, resolved.envs),
                 })
             }
@@ -237,7 +196,7 @@ impl SubcommandResolver {
                         .chain(iter::once(Str::from("preview")))
                         .chain(args.into_iter().map(Str::from))
                         .collect(),
-                    cache_config: UserCacheConfig::disabled(),
+                    cache_config,
                     envs: merge_resolved_envs_with_version(envs, resolved.envs),
                 })
             }
@@ -254,13 +213,7 @@ impl SubcommandResolver {
                     args: iter::once(Str::from(js_path_str))
                         .chain(args.into_iter().map(Str::from))
                         .collect(),
-                    cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
-                        env: None,
-                        untracked_env: None,
-                        input: None,
-                        output: None,
-                        remote: None,
-                    }),
+                    cache_config,
                     envs: merge_resolved_envs(envs, resolved.envs),
                 })
             }
@@ -269,6 +222,59 @@ impl SubcommandResolver {
                     "Check is a composite command and cannot be resolved to a single subcommand"
                 );
             }
+        }
+    }
+}
+
+/// Cache metadata for a synthesizable subcommand. Separate from [`resolve`] so
+/// callers that must preserve the original invocation (a leading `-C`) can
+/// still attach the settings `resolve` would have produced.
+pub(super) fn cache_config_for(subcommand: &SynthesizableSubcommand) -> UserCacheConfig {
+    match subcommand {
+        SynthesizableSubcommand::Check { .. } => UserCacheConfig::with_config(EnabledCacheConfig {
+            env: Some(Box::new([
+                Str::from("OXLINT_TSGOLINT_PATH"),
+                Str::from(vp_shared::env_vars::VP_SKIP_STATIC_CONFIG),
+            ])),
+            untracked_env: None,
+            input: Some(check_cache_inputs()),
+            output: None,
+            remote: None,
+        }),
+        SynthesizableSubcommand::Lint { .. } => UserCacheConfig::with_config(EnabledCacheConfig {
+            env: Some(Box::new([Str::from("OXLINT_TSGOLINT_PATH")])),
+            untracked_env: None,
+            input: None,
+            output: None,
+            remote: None,
+        }),
+        SynthesizableSubcommand::Test { .. } => UserCacheConfig::with_config(EnabledCacheConfig {
+            env: None,
+            untracked_env: None,
+            input: Some(vec![
+                UserInputEntry::Auto(AutoTracking { auto: true }),
+                exclude_glob("!node_modules/.vite/vitest/**/results.json", InputBase::Package),
+            ]),
+            output: None,
+            remote: None,
+        }),
+        SynthesizableSubcommand::Pack { .. } => UserCacheConfig::with_config(EnabledCacheConfig {
+            env: None,
+            untracked_env: None,
+            input: Some(build_pack_cache_inputs()),
+            output: None,
+            remote: None,
+        }),
+        SynthesizableSubcommand::Dev { .. } | SynthesizableSubcommand::Preview { .. } => {
+            UserCacheConfig::disabled()
+        }
+        // All-`None` keeps caching enabled with auto input/output inference.
+        // Build's vite process refines the fingerprint at runtime through
+        // `@voidzero-dev/vite-task-client` (`ignoreInput`/`getEnv`/...).
+        SynthesizableSubcommand::Fmt { .. }
+        | SynthesizableSubcommand::Build { .. }
+        | SynthesizableSubcommand::Doc { .. } => {
+            UserCacheConfig::with_config(EnabledCacheConfig::default())
         }
     }
 }

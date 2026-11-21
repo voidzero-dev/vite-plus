@@ -3,14 +3,14 @@ use std::iter;
 use clap::{Parser, error::ErrorKind};
 use vt::{
     CommandHandler, HandledCommand, ScriptCommand,
-    config::user::{EnabledCacheConfig, UserCacheConfig, UserRunConfig},
+    config::user::{UserCacheConfig, UserRunConfig},
     loader::UserConfigLoader,
 };
 use vt_path::AbsolutePath;
 use vt_str::Str;
 
 use super::{
-    resolver::{SubcommandResolver, check_cache_inputs, resolve_vite_config_fields},
+    resolver::{SubcommandResolver, cache_config_for, resolve_vite_config_fields},
     types::{CLIArgs, SynthesizableSubcommand, ViteConfigResolverFn},
 };
 
@@ -57,14 +57,20 @@ impl CommandHandler for VitePlusCommandHandler {
             return Ok(HandledCommand::Verbatim);
         }
 
-        // A leading global `-C` runs verbatim: CLIArgs has no global flags, and
-        // the spawned vp/vpr binary applies the directory change (and target
-        // elicitation) exactly like a direct invocation.
-        if command.args.first().is_some_and(|arg| arg.starts_with("-C")) {
-            return Ok(HandledCommand::Verbatim);
-        }
         // "vpr <args>" is shorthand for "vp run <args>", so prepend "run" for parsing.
         let is_vpr = program == "vpr";
+        // A leading global `-C` keeps the child process (it applies the chdir
+        // and reports bad targets), but the command must still carry its
+        // subcommand's cache config. Verbatim skipped it, so `vp -C <dir>
+        // check` in a cached task never fingerprinted OXLINT_TSGOLINT_PATH.
+        if command.args.first().is_some_and(|arg| arg.starts_with("-C")) {
+            let Some(cache_config) = chdir_cache_config(command, is_vpr) else {
+                return Ok(HandledCommand::Verbatim);
+            };
+            return Ok(HandledCommand::Synthesized(
+                command.to_synthetic_plan_request(cache_config),
+            ));
+        }
         let cli_args = match CLIArgs::try_parse_from(
             iter::once("vp")
                 .chain(is_vpr.then_some("run"))
@@ -79,20 +85,11 @@ impl CommandHandler for VitePlusCommandHandler {
             Err(err) => return Err(err.into()),
         };
         match cli_args {
-            CLIArgs::Synthesizable(SynthesizableSubcommand::Check { .. }) => {
+            CLIArgs::Synthesizable(subcmd @ SynthesizableSubcommand::Check { .. }) => {
                 // Check is a composite command (fmt + lint) — run as a subprocess in task scripts
-                Ok(HandledCommand::Synthesized(command.to_synthetic_plan_request(
-                    UserCacheConfig::with_config(EnabledCacheConfig {
-                        env: Some(Box::new([
-                            Str::from("OXLINT_TSGOLINT_PATH"),
-                            Str::from(vp_shared::env_vars::VP_SKIP_STATIC_CONFIG),
-                        ])),
-                        untracked_env: None,
-                        input: Some(check_cache_inputs()),
-                        output: None,
-                        remote: None,
-                    }),
-                )))
+                Ok(HandledCommand::Synthesized(
+                    command.to_synthetic_plan_request(cache_config_for(&subcmd)),
+                ))
             }
             CLIArgs::Synthesizable(subcmd) => {
                 // Bare app commands in scripts get the same workspace-root
@@ -114,6 +111,41 @@ impl CommandHandler for VitePlusCommandHandler {
                 ))
             }
         }
+    }
+}
+
+/// Index of the first argument after a leading global `-C <dir>` /
+/// `-C<dir>` / `-C=<dir>`, matching the global CLI grammar. Returns `None` for
+/// a malformed flag or a missing target directory so the caller can fall back
+/// to the verbatim child process, which reports the error itself.
+fn leading_chdir_end(command: &ScriptCommand) -> Option<usize> {
+    let first = command.args.first().map(Str::as_str)?;
+    let inline = first.strip_prefix("-C")?;
+    let (dir, consumed) = if inline.is_empty() {
+        (command.args.get(1).map(Str::as_str)?, 2)
+    } else {
+        (inline.strip_prefix('=').unwrap_or(inline), 1)
+    };
+    if dir.is_empty() || !command.cwd.join(dir).as_path().is_dir() {
+        return None;
+    }
+    Some(consumed)
+}
+
+/// Cache config for the subcommand behind a leading `-C`. The command itself
+/// stays untouched: the child still applies the chdir, and a malformed target
+/// keeps the old verbatim fallback.
+fn chdir_cache_config(command: &ScriptCommand, is_vpr: bool) -> Option<UserCacheConfig> {
+    let consumed = leading_chdir_end(command)?;
+    let cli_args = CLIArgs::try_parse_from(
+        iter::once("vp")
+            .chain(is_vpr.then_some("run"))
+            .chain(command.args[consumed..].iter().map(Str::as_str)),
+    )
+    .ok()?;
+    match cli_args {
+        CLIArgs::Synthesizable(subcmd) => Some(cache_config_for(&subcmd)),
+        _ => None,
     }
 }
 
@@ -170,5 +202,104 @@ impl UserConfigLoader for VitePlusConfigLoader {
         // The task graph reads an absent config as the default, so `None` covers both.
         let config = resolve_vite_config_fields(package_path, &["run"], &self.resolve_fn).await?;
         Ok(config.run.map(serde_json::from_value).transpose()?)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use vt::{CommandHandler, HandledCommand, ScriptCommand, config::user::UserCacheConfig};
+    use vt_path::AbsolutePathBuf;
+    use vt_str::Str;
+
+    use super::{SubcommandResolver, leading_chdir_end};
+
+    fn command(args: &[&str], cwd: &AbsolutePathBuf) -> ScriptCommand {
+        ScriptCommand {
+            program: Str::from("vp"),
+            args: args.iter().map(|arg| Str::from(*arg)).collect::<Vec<_>>().into(),
+            envs: Arc::new(Default::default()),
+            cwd: Arc::from(cwd.clone()),
+        }
+    }
+
+    fn cache_env(command: &ScriptCommand) -> Vec<String> {
+        let UserCacheConfig::Config(config) =
+            super::chdir_cache_config(command, false).expect("expected cache config")
+        else {
+            panic!("expected enabled cache config");
+        };
+        config
+            .env
+            .expect("expected tracked env vars")
+            .iter()
+            .map(|name| name.as_str().to_owned())
+            .collect()
+    }
+
+    #[test]
+    fn finds_all_leading_chdir_forms() {
+        let cwd = AbsolutePathBuf::new(std::env::current_dir().unwrap()).unwrap();
+
+        for (args, expected) in [
+            (&["-C", ".", "check", "index.js"][..], 2),
+            (&["-C.", "check", "index.js"][..], 1),
+            (&["-C=.", "check", "index.js"][..], 1),
+        ] {
+            assert_eq!(leading_chdir_end(&command(args, &cwd)), Some(expected));
+        }
+    }
+
+    #[test]
+    fn malformed_chdir_falls_back_to_verbatim() {
+        let cwd = AbsolutePathBuf::new(std::env::current_dir().unwrap()).unwrap();
+
+        for args in [&["-C"][..], &["-C", ""][..], &["-C", "definitely-missing-dir"][..]] {
+            assert_eq!(leading_chdir_end(&command(args, &cwd)), None);
+            assert!(super::chdir_cache_config(&command(args, &cwd), false).is_none());
+        }
+    }
+
+    #[test]
+    fn chdir_carries_subcommand_cache_config() {
+        let cwd = AbsolutePathBuf::new(std::env::current_dir().unwrap()).unwrap();
+
+        assert_eq!(
+            cache_env(&command(&["-C", ".", "check", "index.js"], &cwd)),
+            ["OXLINT_TSGOLINT_PATH", "VP_SKIP_STATIC_CONFIG"]
+        );
+        assert_eq!(
+            cache_env(&command(&["-C", ".", "lint", "--type-aware"], &cwd)),
+            ["OXLINT_TSGOLINT_PATH"]
+        );
+    }
+
+    #[tokio::test]
+    async fn chdir_keeps_the_original_command() {
+        let cwd = AbsolutePathBuf::new(std::env::current_dir().unwrap()).unwrap();
+        let resolver = SubcommandResolver::new(Arc::from(cwd.clone()));
+        let mut handler = super::VitePlusCommandHandler::new(resolver);
+        let mut command = command(&["-C", ".", "check", "index.js"], &cwd);
+
+        let HandledCommand::Synthesized(request) =
+            handler.handle_command(&mut command).await.unwrap()
+        else {
+            panic!("expected check to be synthesized");
+        };
+        let UserCacheConfig::Config(config) = request.cache_config else {
+            panic!("expected check cache config");
+        };
+        assert!(
+            config
+                .env
+                .expect("check should track env vars")
+                .iter()
+                .any(|name| { name.as_str() == "OXLINT_TSGOLINT_PATH" })
+        );
+        assert_eq!(
+            request.args.iter().map(Str::as_str).collect::<Vec<_>>(),
+            ["-C", ".", "check", "index.js"]
+        );
     }
 }
