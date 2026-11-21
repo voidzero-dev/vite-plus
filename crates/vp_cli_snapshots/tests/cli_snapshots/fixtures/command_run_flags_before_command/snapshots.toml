@@ -1,0 +1,24 @@
+[[case]]
+name = "command_run_flags_before_command"
+vp = "global"
+local-registry = true
+steps = [
+  { argv = ["vp", "--filter", "backend", "run", "dev"], tty = false, comment = "without a terminal, the corrected order is printed instead of a prompt", continue-on-failure = true },
+  { argv = ["vp", "--filter", "backend", "run", "dev"], envs = [["CI", "1"]], comment = "CI prints the corrected order without a prompt, also with a terminal", continue-on-failure = true },
+  { argv = ["vp", "--filter", "backend", "run", "dev"], comment = "declining the corrected order keeps the error exit code", continue-on-failure = true, interactions = [
+    { "expect-milestone" = "text:suggested-command:ready" },
+    { "write-line" = "n" },
+  ] },
+  { argv = ["vp", "--filter", "backend", "run", "dev"], comment = "accepting runs `vp run --filter backend dev`", continue-on-failure = true, interactions = [
+    { "expect-milestone" = "text:suggested-command:ready" },
+    { "write-line" = "y" },
+  ] },
+]
+
+[[case]]
+name = "command_run_flags_before_command_local"
+vp = "local"
+comment = "The local CLI has no prompt, so it prints the corrected order."
+steps = [
+  { argv = ["vp", "--filter", "backend", "run", "dev"], tty = false },
+]
