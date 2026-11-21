@@ -2,6 +2,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
+import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout } from 'node:timers/promises';
@@ -271,11 +272,57 @@ describe('command runners', () => {
       envs: process.env,
       idleTimeoutMs: 1000,
       shouldWatchIdle: () => true,
-      waitForGit: true,
+      waitForPackageFetch: true,
     });
     expect(result.stdout.toString()).toContain('git exited 0');
     expect(result).toMatchObject({ exitCode: 124, idleTimedOut: true });
   }, 15_000);
+
+  it('lets a quiet package transfer finish before stopping idle resolution', async () => {
+    const transferMs = process.platform === 'win32' ? 3500 : 2200;
+    const server = createServer((socket) => {
+      const send = setInterval(() => socket.write('chunk'), 150);
+      const finish = globalThis.setTimeout(() => {
+        clearInterval(send);
+        socket.end();
+      }, transferMs);
+      socket.once('close', () => {
+        clearInterval(send);
+        clearTimeout(finish);
+      });
+    });
+    try {
+      const listening = once(server, 'listening');
+      server.listen(0, '127.0.0.1');
+      await listening;
+      const address = server.address();
+      if (!address || typeof address === 'string') {
+        throw new Error('Expected a TCP server address');
+      }
+      const result = await runCommandSilently({
+        command: process.execPath,
+        args: [
+          '-e',
+          `
+            const socket = require('node:net').connect(${address.port}, '127.0.0.1');
+            socket.on('connect', () => console.log('resolving'));
+            socket.on('end', () => console.log('transfer complete'));
+            socket.resume();
+            setInterval(() => {}, 1000);
+          `,
+        ],
+        cwd: process.cwd(),
+        envs: process.env,
+        idleTimeoutMs: 900,
+        shouldWatchIdle: () => true,
+        waitForPackageFetch: true,
+      });
+      expect(result.stdout.toString()).toContain('transfer complete');
+      expect(result).toMatchObject({ exitCode: 124, idleTimedOut: true });
+    } finally {
+      server.close();
+    }
+  }, 18_000);
 
   it.each([false, true])('stops an idle tree (file: %s)', async (stdoutToFile) => {
     const cwd = mkdtempSync(join(tmpdir(), 'vp-install-command-'));

@@ -249,7 +249,7 @@ export async function runViteInstall(
     cwd,
     idleTimeoutMs,
     shouldWatchIdle,
-    waitForGit: watchedVersion?.major === 9 && idleTimeoutMs !== undefined,
+    waitForPackageFetch: watchedVersion?.major === 9 && idleTimeoutMs !== undefined,
     // pnpm 9 can exit before a large error record drains through a pipe.
     stdoutToFile:
       watchedVersion?.major === 9 &&

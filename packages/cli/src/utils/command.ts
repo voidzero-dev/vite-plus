@@ -4,6 +4,7 @@ import {
   fstatSync,
   mkdtempSync,
   openSync,
+  readlinkSync,
   readdirSync,
   readFileSync,
   readSync,
@@ -36,8 +37,8 @@ export interface RunCommandOptions {
   idleTimeoutMs?: number;
   /** Arm the idle timer while this handler returns true. It can defer the timer for a known wait. */
   shouldWatchIdle?: (line: string, deferIdleTimeout: (delayMs: number) => void) => boolean;
-  /** Allow a fresh idle window while Git runs and after an observed Git descendant exits. */
-  waitForGit?: boolean;
+  /** Let package downloads and Git fetches finish before declaring the install idle. */
+  waitForPackageFetch?: boolean;
   /** Capture stdout through a regular file so a child can finish writing before process.exit(). */
   stdoutToFile?: boolean;
 }
@@ -148,7 +149,76 @@ function getCommandDescendants(pid: number, processes: ProcessEntry[]): ProcessE
   return descendants;
 }
 
-async function hasRunningGitDescendant(pid: number, signal: AbortSignal): Promise<boolean> {
+function hasProcfsTcpConnection(pids: number[]): boolean {
+  const sockets = new Set<string>();
+  for (const path of ['/proc/net/tcp', '/proc/net/tcp6']) {
+    try {
+      for (const line of readFileSync(path, 'utf8').split('\n')) {
+        const fields = line.trim().split(/\s+/);
+        if (fields[3] === '01' || fields[3] === '02') {
+          // ESTABLISHED or SYN_SENT.
+          sockets.add(`socket:[${fields[9]}]`);
+        }
+      }
+    } catch {
+      // A network namespace may not expose both address families.
+    }
+  }
+  return (
+    sockets.size > 0 &&
+    pids.some((pid) => {
+      const directory = `/proc/${pid}/fd`;
+      try {
+        return readdirSync(directory).some((fd) => {
+          try {
+            return sockets.has(readlinkSync(join(directory, fd)));
+          } catch {
+            // The descriptor may close during the check.
+            return false;
+          }
+        });
+      } catch {
+        // The process may have exited.
+        return false;
+      }
+    })
+  );
+}
+
+async function hasTcpConnection(pids: number[], signal: AbortSignal): Promise<boolean> {
+  if (process.platform === 'linux') {
+    return hasProcfsTcpConnection(pids);
+  }
+  const windows = process.platform === 'win32';
+  const command = windows
+    ? join(process.env.SystemRoot ?? 'C:\\Windows', 'System32/netstat.exe')
+    : '/usr/sbin/lsof';
+  const args = windows ? ['-ano'] : ['-nP', '-a', '-p', pids.join(','), '-iTCP', '-FT'];
+  return new Promise<boolean>((resolve) => {
+    execFile(command, args, { signal, timeout: 5000, windowsHide: true }, (error, output) => {
+      if (!windows) {
+        // lsof can report connections and return 1 when another selected PID has exited.
+        resolve(/^TST=(?:ESTABLISHED|SYN_SENT)$/m.test(output));
+        return;
+      }
+      if (error) {
+        resolve(false);
+        return;
+      }
+      const owners = new Set(pids);
+      resolve(
+        output.split(/\r?\n/).some((line) => {
+          const connection = /^\s*TCP\s+\S+\s+\S+\s+(?:ESTABLISHED|SYN_SEN[DT])\s+(\d+)\s*$/.exec(
+            line,
+          );
+          return connection !== null && owners.has(Number(connection[1]));
+        }),
+      );
+    });
+  });
+}
+
+async function hasActivePackageFetch(pid: number, signal: AbortSignal): Promise<boolean> {
   const windows = process.platform === 'win32';
   let processes = listProcfsProcesses();
   if (processes === undefined) {
@@ -176,8 +246,10 @@ async function hasRunningGitDescendant(pid: number, signal: AbortSignal): Promis
     processes = parseProcessTable(stdout, !windows);
   }
   const git = windows ? 'git.exe' : 'git';
-  return getCommandDescendants(pid, processes).some(
-    ([, , executable]) => basename(executable).toLowerCase() === git,
+  const descendants = getCommandDescendants(pid, processes);
+  return (
+    descendants.some(([, , executable]) => basename(executable).toLowerCase() === git) ||
+    hasTcpConnection([pid, ...descendants.map(([pid]) => pid)], signal)
   );
 }
 
@@ -284,8 +356,8 @@ function runCapturedCommand(
   const timeoutMs = idleTimeoutMs ?? options.timeoutMs;
   const hasDeadline = idleTimeoutMs === undefined && timeoutMs !== undefined;
   const shouldWatchIdle = idleTimeoutMs === undefined ? undefined : options.shouldWatchIdle;
-  const gitQuery =
-    idleTimeoutMs !== undefined && options.waitForGit ? new AbortController() : undefined;
+  const fetchQuery =
+    idleTimeoutMs !== undefined && options.waitForPackageFetch ? new AbortController() : undefined;
   // Captured commands stay in the caller's group for terminal and CI cancellation.
   const child = spawn(options.command, options.args, {
     // No stdin pipe: leaving one open would deadlock any descendant `.ps1`
@@ -313,7 +385,7 @@ function runCapturedCommand(
     let settled = false;
     let timedOut = false;
     let watching = false;
-    let gitWasRunning = false;
+    let fetchWasRunning = false;
     let filePoll: ReturnType<typeof setInterval> | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let deferredUntil = 0;
@@ -328,14 +400,14 @@ function runCapturedCommand(
         return;
       }
       if (
-        gitQuery &&
+        fetchQuery &&
         child.pid !== undefined &&
         child.exitCode === null &&
         child.signalCode === null
       ) {
         const timerAtCheck = timer;
         const chunks = stdout.length + stderr.length;
-        const gitIsRunning = await hasRunningGitDescendant(child.pid, gitQuery.signal);
+        const fetchIsRunning = await hasActivePackageFetch(child.pid, fetchQuery.signal);
         // Output can arrive or resolution can finish during the process query.
         if (
           settled ||
@@ -345,10 +417,11 @@ function runCapturedCommand(
         ) {
           return;
         }
-        const allowGitToFinish = gitIsRunning || gitWasRunning;
-        gitWasRunning = gitIsRunning;
-        if (allowGitToFinish) {
-          // A Git child that disappeared between checks may have just finished.
+        const allowFetchToFinish = fetchIsRunning || fetchWasRunning;
+        fetchWasRunning = fetchIsRunning;
+        if (allowFetchToFinish) {
+          // pnpm can transfer a package without reporting progress. Let its own
+          // network timeouts handle open connections and allow time after a fetch ends.
           startTimer();
           return;
         }
@@ -408,7 +481,7 @@ function runCapturedCommand(
       }
       watching = shouldWatchIdle?.(line, deferIdleTimeout) ?? false;
       if (!watching) {
-        gitWasRunning = false;
+        fetchWasRunning = false;
         stopTimer();
       } else if (timer === undefined && deferTimer === undefined) {
         startTimer();
@@ -416,7 +489,7 @@ function runCapturedCommand(
     });
     const cleanup = () => {
       settled = true;
-      gitQuery?.abort();
+      fetchQuery?.abort();
       clearInterval(filePoll);
       lines?.close();
       fileOutput?.destroy();
