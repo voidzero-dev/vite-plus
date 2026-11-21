@@ -19,7 +19,7 @@ import {
   normalizeVitestPeerCatalogSpec,
   pruneLegacyWrapperAliases,
   removeManagedVitestEntry,
-  scriptsLoadVitePlusRegister,
+  scriptsRequireVitePlus,
   setDirectViteEdge,
 } from '../migrator.ts';
 import {
@@ -400,7 +400,7 @@ export function rewritePackageJson(
     (keepTsdownDependency &&
       (rewrittenScripts ||
         (pkg.optionalDependencies?.[VITE_PLUS_NAME] === undefined &&
-          scriptsLoadVitePlusRegister(pkg.scripts))))
+          scriptsRequireVitePlus(pkg.scripts))))
   ) {
     // Retaining tsdown can leave all declared dependencies intact even when a
     // script has been rewritten to use a Vite+ command.

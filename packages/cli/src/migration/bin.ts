@@ -1566,7 +1566,7 @@ async function main() {
       }
     }
 
-    // A preloader rewritten by full setup can add a new package-local dependency.
+    // Script runner migration can add a new package-local dependency.
     if (
       tsdownPackages.size > 0 &&
       (report.tsxMigrated || report.oxnodeMigrated || report.tsNodeMigrated) &&

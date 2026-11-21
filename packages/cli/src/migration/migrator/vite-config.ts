@@ -886,6 +886,20 @@ function packValueReferences(node: Node, mapping?: PackMapping): PackReference[]
   }
 }
 
+function mutationArrayReference(node: Node): PackReference | undefined {
+  const array = unwrapTypeExpression(node);
+  if (array.type === 'Identifier') {
+    return { value: array };
+  }
+  if (array.type === 'CallExpression' && memberName(array.callee) === 'filter') {
+    const references = packValueReferences(array);
+    if (references.length === 1) {
+      return references[0];
+    }
+  }
+  return undefined;
+}
+
 function privateConstInitializers(program: Program) {
   const initializers = new Map<number, Node>();
   const pending: unknown[] = [...program.body];
@@ -1190,17 +1204,22 @@ function packMutationReferences({ program, bindings }: ReturnType<typeof parseSo
         continue;
       }
       case 'ForOfStatement': {
-        const array = unwrapTypeExpression(node.right);
-        if (array.type !== 'Identifier') {
+        const selection = mutationArrayReference(node.right);
+        if (!selection) {
           continue;
         }
+        const { value: array, mapping } = selection;
         if (node.left.type !== 'VariableDeclaration') {
           writes.add(array.start);
           continue;
         }
         const { id } = node.left.declarations[0];
         recordArrayBinding(id, array);
-        if (!node.await && setsPackArrayOutput(id, node.body, bindings)) {
+        if (
+          !node.await &&
+          mapping !== 'unverified' &&
+          setsPackArrayOutput(id, node.body, bindings)
+        ) {
           rewritable.set(array.start, { array: true });
         }
         continue;
@@ -1279,8 +1298,9 @@ function packMutationReferences({ program, bindings }: ReturnType<typeof parseSo
         const { callee } = node;
         const method = memberName(callee);
         if (callee.type === 'MemberExpression' && (method === 'forEach' || method === 'find')) {
-          const object = unwrapTypeExpression(callee.object);
-          if (object.type === 'Identifier') {
+          const selection = mutationArrayReference(callee.object);
+          if (selection) {
+            const { value: object, mapping } = selection;
             const [callback] = node.arguments;
             if (
               node.arguments.length === 1 &&
@@ -1289,8 +1309,8 @@ function packMutationReferences({ program, bindings }: ReturnType<typeof parseSo
               !callback.params.some((parameter) => parameter.type === 'RestElement')
             ) {
               const [element, , array] = callback.params;
-              // Writes to the element or the third callback argument affect
-              // the original array. A callback that only reads can stay split.
+              // A filter keeps the original options objects. Attribute writes
+              // through the callback parameters to their source config.
               for (const parameter of [element, array]) {
                 if (parameter) {
                   recordArrayBinding(parameter, object);
@@ -1298,6 +1318,7 @@ function packMutationReferences({ program, bindings }: ReturnType<typeof parseSo
               }
               if (
                 method === 'forEach' &&
+                mapping !== 'unverified' &&
                 element &&
                 callback.params.length <= 2 &&
                 !callback.async &&

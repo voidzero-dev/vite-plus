@@ -136,6 +136,29 @@ steps = [
 ]
 
 [[case]]
+name = "focused_vpx_install"
+vp = "global"
+local-registry = true
+env = { VP_NODE_VERSION = "24.22.3", VP_SKIP_INSTALL = "1" }
+comment = "A filtered member install provides the migrated vpx command and keeps the tsdown release."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies", '{"vite":"8.3.8"}'], snapshot = false },
+  { argv = ["vpt", "write-file", "pnpm-workspace.yaml", "packages: ['packages/*']\nsharedWorkspaceLockfile: false\n"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "packages/generator/src"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/package.json", '{"name":"generator","private":true,"type":"module","scripts":{"generate":"tsx generate.ts","release":"tsdown -c release.config.mts"},"devDependencies":{"tsx":"4.21.0","tsdown":"0.22.14"}}'], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/generate.ts", "const name: string = 'focused-vpx-marker'; console.log(name);"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/release.config.mts", "export default { entry: 'src/index.ts', outDir: 'release-out', dts: false };"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/src/index.ts", "export const sample = true;"], snapshot = false },
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  ["vpt", "print-file", "packages/generator/package.json"],
+  { argv = ["pnpm", "--filter", "generator", "install", "--ignore-scripts"], snapshot = false },
+  ["vpt", "stat-file", "node_modules/vite-plus", "--assert", "missing"],
+  { argv = ["pnpm", "run", "generate"], cwd = "packages/generator" },
+  { argv = ["pnpm", "run", "release"], cwd = "packages/generator", snapshot = false },
+  ["vpt", "stat-file", "packages/generator/release-out/index.mjs", "--assert", "file"],
+]
+
+[[case]]
 name = "focused_dynamic_config_install"
 vp = "global"
 local-registry = true

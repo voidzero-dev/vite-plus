@@ -52,7 +52,7 @@ import {
   rewriteBunCatalog,
   rewritePnpmWorkspaceYaml,
   rewriteYarnrcYml,
-  scriptsLoadVitePlusRegister,
+  scriptsRequireVitePlus,
   setDirectViteEdge,
   collectPackagesKeepingTsdown,
   configNeedsVitePlus,
@@ -315,7 +315,7 @@ function reconcileVitePlusBootstrapPackage(
     vitePlusVersion,
     ensureVitePlus ||
       (!hasDirectVitePlusInstallEntry(pkg) &&
-        ((keepTsdown && scriptsLoadVitePlusRegister(pkg.scripts)) ||
+        ((keepTsdown && scriptsRequireVitePlus(pkg.scripts)) ||
           configNeedsVitePlus(projectPath, keepTsdown, {
             preserveVitestConfig:
               pkg.dependencies?.vitest !== undefined || pkg.peerDependencies?.vitest !== undefined,

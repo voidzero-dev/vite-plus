@@ -468,6 +468,11 @@ describe('explicit tsdown config selection', () => {
   });
 
   it.each([
+    ['vpx ./generate.ts', true],
+    ['pnpm exec vpx ./generate.ts', true],
+    ['concurrently "vpx ./generate.ts" "echo ready"', true],
+    ['echo vpx ./generate.ts', false],
+    ['pnpm dlx vpx ./generate.ts', false],
     ['node --import vite-plus/register ./check.ts', true],
     ['pnpm exec node --import=vite-plus/register ./check.ts', true],
     ["NODE_OPTIONS='--import vite-plus/register' node ./check.ts", true],
@@ -1665,6 +1670,18 @@ export default defineConfig(({ command }) => {
       'retained',
     ],
     ['for (const options of configs) options.outDir = "release";', 'converted'],
+    [
+      'configs.filter(options => options.name === "browser").forEach(options => { options.outDir = "release"; });',
+      'converted',
+    ],
+    [
+      'for (const options of configs.filter(options => options.name === "browser")) options.outDir = "release";',
+      'converted',
+    ],
+    [
+      'configs.filter(options => options.publicDir === "public").forEach(options => { options.outDir = "release"; });',
+      'retained',
+    ],
     [
       'const cli = configs.find(config => config.name === "cli"); if (cli) cli.outDir = "release";',
       'converted',

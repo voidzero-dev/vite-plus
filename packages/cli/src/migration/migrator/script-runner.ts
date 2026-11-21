@@ -525,8 +525,8 @@ function nodeOptionsLoadVitePlusRegister(args: readonly string[]): boolean {
   return false;
 }
 
-function scriptLoadsVitePlusRegister(command: string): boolean {
-  if (!command.includes(VITE_PLUS_REGISTER)) {
+function scriptRequiresVitePlus(command: string): boolean {
+  if (!command.includes('vpx') && !command.includes(VITE_PLUS_REGISTER)) {
     return false;
   }
   return (
@@ -551,6 +551,12 @@ function scriptLoadsVitePlusRegister(command: string): boolean {
         return first < values.length;
       }
       const start = first + getCommandStartIndex(values.slice(first));
+      if (
+        values[start] === 'vpx' &&
+        !values.slice(first, start).some((word) => ['npx', 'bunx', 'dlx', 'x'].includes(word))
+      ) {
+        return true;
+      }
       if (values[start] === 'node') {
         return nodeOptionsLoadVitePlusRegister(values.slice(start + 1));
       }
@@ -558,14 +564,14 @@ function scriptLoadsVitePlusRegister(command: string): boolean {
       const commands = shell
         ? values.slice(start)
         : values.slice(start + 1).filter((_, index) => launcher?.(values[start + index]));
-      return commands.some(scriptLoadsVitePlusRegister);
+      return commands.some(scriptRequiresVitePlus);
     }) ?? false
   );
 }
 
-export function scriptsLoadVitePlusRegister(scripts: Record<string, string> | undefined): boolean {
+export function scriptsRequireVitePlus(scripts: Record<string, string> | undefined): boolean {
   return Object.values(scripts ?? {}).some(
-    (command) => typeof command === 'string' && scriptLoadsVitePlusRegister(command),
+    (command) => typeof command === 'string' && scriptRequiresVitePlus(command),
   );
 }
 
