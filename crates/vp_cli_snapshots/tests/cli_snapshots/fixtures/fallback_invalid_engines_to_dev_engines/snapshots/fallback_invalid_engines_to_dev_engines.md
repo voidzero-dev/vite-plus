@@ -18,6 +18,7 @@ Should show devEngines.runtime source
 ```
 VITE+ - The Unified Toolchain for the Web
 
+warning: invalid version 'invalid' in engines.node, ignoring
 <home>/.vite-plus/js_runtime/node/<version>/bin/node
   Version:    22.23.4
   Source:     <workspace>/package.json
