@@ -123,6 +123,7 @@ describe('formatPnpmInstallOutput', () => {
         name: 'pnpm',
         level: 'error',
         code: error.code,
+        prefix: '/project/packages/worker',
         err: { name: 'pnpm', message: error.message, stack: 'internal stack' },
       }),
     ].join('\n');
@@ -238,6 +239,7 @@ describe('formatPnpmInstallOutput', () => {
       'ERR_PNPM_LOCKFILE_MISSING_DEPENDENCY',
       "Broken lockfile: no entry for 'is-number@7.0.0' in pnpm-lock.yaml",
     ],
+    ['ERR_PNPM_PATCH_NOT_APPLIED', 'The following patches were not applied: is-number@7.0.0'],
   ])('shows the member named by %s', async (code, message) => {
     const cwd = resolve('workspace');
     const error = {
@@ -668,6 +670,7 @@ describe('formatPnpmInstallOutput', () => {
       level: 'error',
       code: 'EACCES',
       errno: -13,
+      prefix: '/project/packages/worker',
       err: { name: 'pnpm', code: 'EACCES', message: 'Store is not writable' },
     });
     expect(await formatPnpmInstallOutput(output, '/project', 'silent')).toBe('');
