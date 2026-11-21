@@ -583,9 +583,13 @@ export async function formatPnpmInstallOutput(
         scriptOutput.push(`${label}$ ${log.script}`);
       } else if (typeof log.line === 'string') {
         scriptOutput.push(lifecycle.hideLifecyclePrefix ? log.line : `${label}: ${log.line}`);
-      } else if (typeof log.exitCode === 'number' && log.exitCode !== 0) {
-        const optional = log.optional === true ? ' (optional dependency)' : '';
-        scriptOutput.push(`${label}: failed with exit code ${log.exitCode}${optional}`);
+      } else if (typeof log.exitCode === 'number') {
+        if (log.exitCode === 0) {
+          scriptOutput.push(`${label}: Done`);
+        } else {
+          const optional = log.optional === true ? ' (optional dependency)' : '';
+          scriptOutput.push(`${label}: failed with exit code ${log.exitCode}${optional}`);
+        }
       }
       if (key !== undefined) {
         if (typeof log.exitCode === 'number') {
@@ -614,9 +618,11 @@ export async function formatPnpmInstallOutput(
         const requestUrl = asRecord(log.request).url ?? log.url;
         const displayed = redactPnpmDiagnostic(details, requestUrl);
         const headline = code ? `${code} ${displayed}` : displayed;
+        const lockfileError =
+          log.level === 'error' &&
+          (code === 'ERR_PNPM_NO_LOCKFILE' || code === 'ERR_PNPM_OUTDATED_LOCKFILE');
         const diagnosticPath =
-          typeof log.prefix === 'string' &&
-          (log.level === 'warn' || (log.level === 'error' && code === 'ERR_PNPM_NO_LOCKFILE'))
+          typeof log.prefix === 'string' && (log.level === 'warn' || lockfileError)
             ? displayRelative(log.prefix, cwd)
             : '';
         // pnpm logs each recursive failure at info level before it reports member paths.

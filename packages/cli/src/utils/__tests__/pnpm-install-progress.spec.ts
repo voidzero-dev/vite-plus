@@ -221,17 +221,23 @@ describe('formatPnpmInstallOutput', () => {
     );
   });
 
-  it('shows the member named by a frozen install error', async () => {
+  it.each([
+    [
+      'ERR_PNPM_NO_LOCKFILE',
+      'Cannot install with "frozen-lockfile" because pnpm-lock.yaml is absent',
+    ],
+    [
+      'ERR_PNPM_OUTDATED_LOCKFILE',
+      'Cannot install with "frozen-lockfile" because pnpm-lock.yaml is not up to date with <ROOT>/package.json',
+    ],
+  ])('shows the member named by %s', async (code, message) => {
     const cwd = resolve('workspace');
     const error = {
       name: 'pnpm',
       level: 'error',
-      code: 'ERR_PNPM_NO_LOCKFILE',
+      code,
       prefix: join(cwd, 'packages', 'worker'),
-      err: {
-        name: 'pnpm',
-        message: 'Cannot install with "frozen-lockfile" because pnpm-lock.yaml is absent',
-      },
+      err: { name: 'pnpm', message },
       hint: 'Run pnpm install --no-frozen-lockfile',
     };
     const headline = `${error.code} ${error.err.message}\n${error.hint}`;
@@ -909,7 +915,7 @@ describe('formatPnpmInstallOutput', () => {
     },
   );
 
-  it('identifies the directories and failure of concurrent install scripts', async () => {
+  it('reports successful and failed concurrent install scripts at info level', async () => {
     const cwd = resolve('fixture');
     const lifecycleEvent = (pkg: string, event: Record<string, unknown>) =>
       JSON.stringify({
@@ -934,9 +940,11 @@ describe('formatPnpmInstallOutput', () => {
         'node_modules/b postinstall$ node postinstall.cjs',
         'node_modules/a postinstall: shared message',
         'node_modules/b postinstall: shared message',
+        'node_modules/a postinstall: Done',
         'node_modules/b postinstall: failed with exit code 7',
       ].join('\n'),
     );
+    expect(await formatPnpmInstallOutput(output, cwd, 'warn')).toBe('');
   });
 
   it('groups concurrent lifecycle output when requested and can hide script line prefixes', async () => {
@@ -970,6 +978,7 @@ describe('formatPnpmInstallOutput', () => {
         'packages/a postinstall$ node check.cjs',
         'packages/a postinstall: a early',
         'packages/a postinstall: a late',
+        'packages/a postinstall: Done',
       ].join('\n'),
     );
     expect(await formatPnpmInstallOutput(output, cwd, 'info', { hideLifecyclePrefix: true })).toBe(
@@ -981,6 +990,7 @@ describe('formatPnpmInstallOutput', () => {
         'b late',
         'packages/b postinstall: failed with exit code 7',
         'a late',
+        'packages/a postinstall: Done',
       ].join('\n'),
     );
   });
