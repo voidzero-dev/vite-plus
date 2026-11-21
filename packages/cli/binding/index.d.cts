@@ -3657,6 +3657,8 @@ export interface CliOptions {
   cwd?: string;
   /** Whether the user supplied the global `-C` option. */
   explicitChdir?: boolean;
+  /** Allow the local dev entry point to replace the launcher on Unix. */
+  execDev?: boolean;
   /** CLI arguments (should be process.argv.slice(2) from JavaScript) */
   args?: Array<string>;
   /**
