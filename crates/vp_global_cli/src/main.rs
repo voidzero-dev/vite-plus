@@ -182,7 +182,9 @@ fn is_affirmative_response(input: &str) -> bool {
 }
 
 fn should_prompt_for_correction() -> bool {
-    vp_shared::is_stdin_terminal() && vp_shared::is_stderr_terminal()
+    !vp_shared::is_ci_environment()
+        && vp_shared::is_stdin_terminal()
+        && vp_shared::is_stderr_terminal()
 }
 
 fn prompt_to_run_suggested_command(suggestion: &str) -> bool {

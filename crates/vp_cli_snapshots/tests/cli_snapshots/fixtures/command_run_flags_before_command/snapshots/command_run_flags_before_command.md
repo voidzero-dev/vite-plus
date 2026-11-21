@@ -10,6 +10,18 @@ without a terminal, only the error is shown
 error: Unexpected argument '--filter'
 ```
 
+## `CI=1 vp --filter backend run dev`
+
+CI exits without the prompt, also with a terminal
+
+**Exit code:** 2
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+error: Unexpected argument '--filter'
+```
+
 ## `vp --filter backend run dev`
 
 declining the corrected order keeps the error exit code
