@@ -48,8 +48,11 @@ npm error [--install-strategy <hoisted|nested|shallow|linked>] [--legacy-bundlin
 npm error [--global-style] [--omit <dev|optional|peer> [--omit <dev|optional|peer> ...]]
 npm error [--include <prod|dev|optional|peer> [--include <prod|dev|optional|peer> ...]]
 npm error [--strict-peer-deps] [--foreground-scripts] [--ignore-scripts]
-npm error [--allow-git <all|none|root>] [--no-audit] [--no-bin-links] [--no-fund]
-npm error [--dry-run]
+npm error [--allow-directory <all|none|root>] [--allow-file <all|none|root>]
+npm error [--allow-git <all|none|root>] [--allow-remote <all|none|root>]
+npm error [--allow-scripts <package-list> [--allow-scripts <package-list> ...]]
+npm error [--strict-allow-scripts] [--dangerously-allow-all-scripts] [--no-audit]
+npm error [--no-bin-links] [--no-fund] [--dry-run]
 npm error [-w|--workspace <workspace-name> [-w|--workspace <workspace-name> ...]]
 npm error [--workspaces] [--include-workspace-root] [--install-links]
 npm error
@@ -77,8 +80,26 @@ npm error
 npm error   --ignore-scripts
 npm error     If true, npm does not run scripts specified in package.json files.
 npm error
+npm error   --allow-directory
+npm error     Limits the ability for npm to install dependencies from directories.
+npm error
+npm error   --allow-file
+npm error     Limits the ability for npm to install dependencies from tarball files.
+npm error
 npm error   --allow-git
 npm error     Limits the ability for npm to fetch dependencies from git references.
+npm error
+npm error   --allow-remote
+npm error     Limits the ability for npm to fetch dependencies from urls.
+npm error
+npm error   --allow-scripts
+npm error     Comma-separated list of packages whose install-time lifecycle scripts
+npm error
+npm error   --strict-allow-scripts
+npm error     If `true`, turn the install-script policy from a warning into a hard
+npm error
+npm error   --dangerously-allow-all-scripts
+npm error     If `true`, bypass the `allowScripts` policy entirely and run every
 npm error
 npm error   --audit
 npm error     When "true" submit audit reports alongside the current npm command to the
@@ -108,7 +129,7 @@ npm error
 npm error aliases: clean-install, ic, install-clean, isntall-clean
 npm error
 npm error Run "npm help ci" for more info
-npm error A complete log of this run can be found in: <home>/.npm/_logs/<timestamp>-debug-0.log
+npm error A complete log of this run can be found in: <workspace>/.npm-cache/_logs/<timestamp>-debug-0.log
 ```
 
 ## `vpt stat-file node_modules/install-option-dep --assert-not missing`

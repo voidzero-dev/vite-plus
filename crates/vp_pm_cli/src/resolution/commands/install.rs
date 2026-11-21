@@ -241,9 +241,9 @@ impl Resolve<InstallArgs> for Npm {
         let use_ci = args.frozen_lockfile && !args.no_frozen_lockfile;
         // `npm ci --package-lock-only` still empties `node_modules`, so a lockfile check uses a script-free dry run.
         let check_lockfile = use_ci && args.lockfile_only;
-        if check_lockfile && !self.supports_ci_dry_run() {
+        if check_lockfile && !self.supports_read_only_ci_dry_run() {
             return CommandResolution::InvalidArgument(
-                "npm < 10.5.1 does not support --frozen-lockfile with --lockfile-only.".to_string(),
+                "--frozen-lockfile with --lockfile-only requires npm 11.16.0 or later.".to_string(),
             );
         }
         let mut cmd = CommandBuilder::new("npm");
@@ -592,15 +592,15 @@ mod tests {
     fn npm_frozen_lockfile_only_requires_non_destructive_ci_dry_run() {
         let args = InstallArgs { frozen_lockfile: true, lockfile_only: true, ..Default::default() };
 
-        let command = expect_run(resolve(&npm("10.5.1"), args.clone()).outcome);
+        let command = expect_run(resolve(&npm("11.16.0"), args.clone()).outcome);
         assert_eq!(command.args, vec!["ci", "--dry-run", "--ignore-scripts"]);
 
-        assert_eq!(
-            resolve(&npm("10.5.0"), args).outcome,
-            CommandResolution::InvalidArgument(
-                "npm < 10.5.1 does not support --frozen-lockfile with --lockfile-only.".to_string()
-            )
-        );
+        for manager in [npm("11.15.0"), Npm::unknown_version()] {
+            expect_unsupported(
+                resolve(&manager, args.clone()),
+                &["--frozen-lockfile with --lockfile-only requires npm 11.16.0 or later."],
+            );
+        }
     }
 
     #[test]

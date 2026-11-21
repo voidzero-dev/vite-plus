@@ -74,11 +74,10 @@ impl Npm {
         self.version.as_ref().is_none_or(|version| version >= &Version::new(9, 8, 0))
     }
 
-    /// `npm ci --dry-run` stopped removing `node_modules` in npm 10.5.1.
-    /// Unknown versions are treated as current.
-    // https://github.com/npm/cli/pull/7274
-    pub(crate) fn supports_ci_dry_run(&self) -> bool {
-        self.version.as_ref().is_none_or(|version| version >= &Version::new(10, 5, 1))
+    /// Earlier versions of `npm ci --dry-run` can rewrite `node_modules/.package-lock.json`.
+    // https://github.com/npm/cli/pull/9417
+    pub(crate) fn supports_read_only_ci_dry_run(&self) -> bool {
+        self.version.as_ref().is_some_and(|version| version >= &Version::new(11, 16, 0))
     }
 
     /// `stage` landed in npm 11.15.0. Unknown versions are treated as current.

@@ -11,6 +11,7 @@ steps = [
 [[case]]
 name = "npm_frozen_lockfile_only"
 vp = "global"
+env = { VP_PACKAGE_MANAGER = "npm@11.16.0", npm_config_cache = ".npm-cache" }
 steps = [
   { argv = ["vp", "install", "./dep"], snapshot = false },
   { argv = ["vp", "install", "--frozen-lockfile", "--lockfile-only"], comment = "an in-sync lockfile passes without reinstalling node_modules" },
