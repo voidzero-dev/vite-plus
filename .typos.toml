@@ -1,6 +1,10 @@
 [default]
-# Vitest v4 used this misspelled directory; the migrator must recognize it.
-extend-ignore-re = ['\.vitest-attachements\b']
+extend-ignore-re = [
+  # Vitest v4 used this misspelled directory; the migrator must recognize it.
+  '\.vitest-attachements\b',
+  # npm ci prints this alias in its help output.
+  '\bisntall-clean\b',
+]
 
 [default.extend-words]
 pn = "pn" # pnpm short alias
