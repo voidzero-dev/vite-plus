@@ -82,6 +82,7 @@ export function rewritePackageJson(
   keepTsdown = false,
   keepTsdownDependency = keepTsdown,
   needVitePlusForConfig = false,
+  projectPath?: string,
 ): Record<string, string | string[]> | null {
   const rewrittenScripts = pkg.scripts
     ? rewriteScripts(
@@ -400,7 +401,7 @@ export function rewritePackageJson(
     (keepTsdownDependency &&
       (rewrittenScripts ||
         (pkg.optionalDependencies?.[VITE_PLUS_NAME] === undefined &&
-          scriptsRequireVitePlus(pkg.scripts))))
+          scriptsRequireVitePlus(pkg.scripts, projectPath))))
   ) {
     // Retaining tsdown can leave all declared dependencies intact even when a
     // script has been rewritten to use a Vite+ command.

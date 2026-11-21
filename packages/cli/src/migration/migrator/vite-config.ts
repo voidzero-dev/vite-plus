@@ -694,6 +694,10 @@ function packProperties(program: Program, requireStatic = false): (ObjectPropert
 
 type PackIdentifier = Extract<Node, { type: 'Identifier' }>;
 type PackMapping = 'array' | 'copy' | 'unverified';
+type PackConcatCalls = {
+  localArrays: ReadonlySet<number>;
+  readOnlyArguments: Set<number>;
+};
 type PackReference = {
   value: PackIdentifier;
   mapping?: PackMapping;
@@ -822,7 +826,13 @@ function hasLiteralPackIndex(member: MemberExpression): boolean {
   );
 }
 
-function packValueReferences(node: Node, mapping?: PackMapping): PackReference[] {
+function packValueReferences(
+  node: Node,
+  mapping?: PackMapping,
+  concatCalls?: PackConcatCalls,
+): PackReference[] {
+  const follow = (expression: Node, kind?: PackMapping) =>
+    packValueReferences(expression, kind, concatCalls);
   const value = unwrapTypeExpression(node);
   const arrayMapping = mapping === 'unverified' ? 'unverified' : 'array';
   switch (value.type) {
@@ -830,19 +840,16 @@ function packValueReferences(node: Node, mapping?: PackMapping): PackReference[]
       return [{ value, mapping }];
     case 'ConditionalExpression':
       // The test still reads the original values used to choose a config.
-      return [
-        ...packValueReferences(value.consequent, mapping),
-        ...packValueReferences(value.alternate, mapping),
-      ];
+      return [...follow(value.consequent, mapping), ...follow(value.alternate, mapping)];
     case 'ArrayExpression':
-      return value.elements.flatMap((entry) => (entry ? packValueReferences(entry, mapping) : []));
+      return value.elements.flatMap((entry) => (entry ? follow(entry, mapping) : []));
     case 'MemberExpression': {
       if (!value.computed) {
         return [];
       }
       // Keep the index expression. For a dynamic index, check the source array
       // before redirecting the import and keep the existing pack toolchain defaults.
-      return packValueReferences(value.object, hasLiteralPackIndex(value) ? mapping : arrayMapping);
+      return follow(value.object, hasLiteralPackIndex(value) ? mapping : arrayMapping);
     }
     case 'CallExpression': {
       const target = objectAssignTarget(value);
@@ -855,11 +862,11 @@ function packValueReferences(node: Node, mapping?: PackMapping): PackReference[]
           unwrapTypeExpression(copies[0]).type === 'Identifier'
         ) {
           // Redirect only the copied options. Keep the order of all overrides.
-          return packValueReferences(copies[0], mapping ?? 'copy');
+          return follow(copies[0], mapping ?? 'copy');
         }
         return [
-          ...packValueReferences(target, mapping),
-          ...copies.flatMap((source) => packValueReferences(source, 'unverified')),
+          ...follow(target, mapping),
+          ...copies.flatMap((source) => follow(source, 'unverified')),
         ];
       }
       const { callee } = value;
@@ -873,8 +880,26 @@ function packValueReferences(node: Node, mapping?: PackMapping): PackReference[]
         (receiver.type === 'CallExpression' &&
           packArrayMethods.has(memberName(receiver.callee) ?? ''));
       if (method === 'concat') {
-        // The receiver contributes its existing options in the same order.
-        return packValueReferences(receiver, knownReceiver ? arrayMapping : 'unverified');
+        const literalReceiver =
+          concatCalls &&
+          (receiver.type === 'ArrayExpression' ||
+            (receiver.type === 'Identifier' && concatCalls.localArrays.has(receiver.start)));
+        if (!literalReceiver) {
+          return follow(receiver, knownReceiver ? arrayMapping : 'unverified');
+        }
+        const argumentMapping = mapping === 'unverified' ? 'unverified' : 'copy';
+        const references = follow(receiver, argumentMapping);
+        for (const argument of value.arguments) {
+          const root = packRootIdentifier(
+            argument.type === 'SpreadElement' ? argument.argument : argument,
+          );
+          if (root) {
+            // A local array literal concatenates its arguments without writing to them.
+            concatCalls.readOnlyArguments.add(root.start);
+          }
+          references.push(...follow(argument, argumentMapping));
+        }
+        return references;
       }
       const callback =
         value.arguments.length === 1 ? packCallbackResult(value.arguments[0]) : undefined;
@@ -884,14 +909,14 @@ function packValueReferences(node: Node, mapping?: PackMapping): PackReference[]
         (method === 'map'
           ? isStaticPackMapping(callback.value, callback.parameter)
           : isStaticPackFilter(callback.value, callback.parameter, callback.index));
-      return packValueReferences(receiver, staticMapping ? arrayMapping : 'unverified');
+      return follow(receiver, staticMapping ? arrayMapping : 'unverified');
     }
     case 'ObjectExpression':
       return value.properties.flatMap((member) =>
-        member.type === 'SpreadElement' ? packValueReferences(member.argument, mapping) : [],
+        member.type === 'SpreadElement' ? follow(member.argument, mapping) : [],
       );
     case 'SpreadElement':
-      return packValueReferences(value.argument, mapping);
+      return follow(value.argument, mapping);
     default:
       return [];
   }
@@ -986,19 +1011,14 @@ function packAssignments(
   { program, bindings }: ReturnType<typeof parseSource>,
   packs: readonly (ObjectProperty | undefined)[],
 ) {
-  const uses: PackUse[] = packs.flatMap((property) =>
-    property
-      ? packValueReferences(property.value).map(({ value, mapping }) => ({
-          property,
-          value,
-          mapping,
-        }))
-      : [],
-  );
-  if (uses.length === 0) {
-    return uses;
+  const readOnlyArguments = new Set<number>();
+  const uses: PackUse[] = [];
+  if (!packs.some(Boolean)) {
+    return { uses, readOnlyArguments };
   }
   const initializers = privateConstInitializers(program);
+  const localArrays = new Set<number>();
+  const concatCalls = { localArrays, readOnlyArguments };
   const aliasesByReference = new Map<
     number,
     { initializer: Node; references: number[]; remaining: number; mapping?: PackMapping }
@@ -1009,9 +1029,29 @@ function packAssignments(
       continue;
     }
     const alias = { initializer, references, remaining: references.length };
+    if (references.length === 1 && unwrapTypeExpression(initializer).type === 'ArrayExpression') {
+      localArrays.add(references[0]);
+    }
     for (const reference of references) {
       aliasesByReference.set(reference, alias);
     }
+  }
+
+  for (const property of packs) {
+    if (property) {
+      uses.push(
+        ...packValueReferences(property.value, undefined, concatCalls).map(
+          ({ value, mapping }) => ({
+            value,
+            mapping,
+            property,
+          }),
+        ),
+      );
+    }
+  }
+  if (uses.length === 0) {
+    return { uses, readOnlyArguments };
   }
 
   // Follow a constant only when every reference feeds pack. Add its initializer
@@ -1027,7 +1067,7 @@ function packAssignments(
       alias.mapping ??= mapping;
     }
     if (--alias.remaining === 0) {
-      uses.push(...packValueReferences(alias.initializer, alias.mapping));
+      uses.push(...packValueReferences(alias.initializer, alias.mapping, concatCalls));
     }
   }
   const packReferences = new Set(uses.map(({ value }) => value.start));
@@ -1046,7 +1086,7 @@ function packAssignments(
       ? [{ property, value, mapping, copy: { initializer: alias.initializer, reference } }]
       : [];
   });
-  return [...uses, ...copies];
+  return { uses: [...uses, ...copies], readOnlyArguments };
 }
 
 const arrayMutators = new Set([
@@ -1167,7 +1207,10 @@ function packOutputReceiver(node: Node | null | undefined): Node | undefined {
   return undefined;
 }
 
-function packMutationReferences({ program, bindings }: ReturnType<typeof parseSource>) {
+function packMutationReferences(
+  { program, bindings }: ReturnType<typeof parseSource>,
+  readOnlyArguments: ReadonlySet<number>,
+) {
   const writes = new Set<number>();
   const reassignments = new Set<number>();
   const aliasInitializers = new Map<number, number>();
@@ -1260,7 +1303,8 @@ function packMutationReferences({ program, bindings }: ReturnType<typeof parseSo
                   }
                 : undefined;
             const fallback =
-              initializer?.type === 'LogicalExpression' && initializer.operator === '??'
+              initializer?.type === 'LogicalExpression' &&
+              (initializer.operator === '??' || initializer.operator === '||')
                 ? initializer
                 : undefined;
             const member = fallback ? unwrapTypeExpression(fallback.left) : initializer;
@@ -1395,7 +1439,7 @@ function packMutationReferences({ program, bindings }: ReturnType<typeof parseSo
             const root = packRootIdentifier(
               argument.type === 'SpreadElement' ? argument.argument : argument,
             );
-            if (root) {
+            if (root && !readOnlyArguments.has(root.start)) {
               writes.add(root.start);
             }
           }
@@ -1538,7 +1582,7 @@ function sharedPackEntryName(pack: ReturnType<typeof readPackEntry>): string | u
 
 function importedPackBindings(
   parsed: ReturnType<typeof parseSource>,
-  assignments: ReturnType<typeof packAssignments>,
+  { uses: assignments, readOnlyArguments }: ReturnType<typeof packAssignments>,
   vitePath: string,
   packPath: string,
 ) {
@@ -1567,7 +1611,7 @@ function importedPackBindings(
   if (imports.length === 0) {
     return [];
   }
-  const { writes, rewritable, entryWrites } = packMutationReferences(parsed);
+  const { writes, rewritable, entryWrites } = packMutationReferences(parsed, readOnlyArguments);
   const referencesByStart = new Map(bindings.map(({ start, references }) => [start, references]));
   const importWrites = imports.flatMap((statement) =>
     statement.specifiers.flatMap((specifier) => {
@@ -1849,7 +1893,9 @@ function mergeRetainedTsdownConfig(
   const source = fs.readFileSync(viteConfigPath, 'utf8');
   const hasPack = hasConfigKey(viteConfigPath, 'pack');
   const parsed = hasPack ? parseSource(viteConfigPath, source) : undefined;
-  const assignments = parsed ? packAssignments(parsed, packProperties(parsed.program)) : [];
+  const assignments = parsed
+    ? packAssignments(parsed, packProperties(parsed.program))
+    : { uses: [], readOnlyArguments: new Set<number>() };
   const originalImports = parsed
     ? importedPackBindings(parsed, assignments, viteConfigPath, tsdownConfigPath)
     : [];

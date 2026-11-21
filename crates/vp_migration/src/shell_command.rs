@@ -27,7 +27,7 @@ pub fn parse_literal_commands(
     parse_commands(source, allow_lists, false)
 }
 
-/// Read the literal prefix of each simple command for dependency detection.
+/// Read literal command prefixes in lists, pipelines, and redirections.
 /// The first dynamic word ends that command's prefix.
 pub fn parse_literal_command_prefixes(source: &str) -> Option<Vec<Vec<String>>> {
     let commands = parse_commands(source, true, true)?;
@@ -42,10 +42,10 @@ pub fn parse_literal_command_prefixes(source: &str) -> Option<Vec<Vec<String>>> 
 fn parse_commands(
     source: &str,
     allow_lists: bool,
-    allow_dynamic_suffix: bool,
+    detect_dependencies: bool,
 ) -> Option<Vec<Vec<LiteralCommandToken>>> {
-    // Preserve the existing restriction on escapes, even in single quotes.
-    if source.contains('\\') {
+    let has_escapes = source.contains('\\');
+    if has_escapes && !detect_dependencies {
         return None;
     }
     let ast = SupportLang::Bash.ast_grep(source);
@@ -54,7 +54,7 @@ fn parse_commands(
         return None;
     }
     let mut nodes = Vec::new();
-    collect_commands(root, &mut nodes)?;
+    collect_commands(root, &mut nodes, detect_dependencies)?;
     if nodes.is_empty() {
         return (!allow_lists && is_spacing(source)).then(|| vec![vec![]]);
     }
@@ -65,13 +65,17 @@ fn parse_commands(
     let mut end = 0;
     for node in nodes {
         let range = node.range();
-        let gap = &source[end..range.start];
-        if commands.is_empty() {
-            if !is_spacing(gap) {
+        if !detect_dependencies {
+            let gap = &source[end..range.start];
+            let separator = gap.trim_matches([' ', '\t']);
+            let valid_gap = if commands.is_empty() {
+                is_spacing(gap)
+            } else {
+                matches!(separator, "&&" | "||" | ";")
+            };
+            if !valid_gap {
                 return None;
             }
-        } else if !matches!(gap.trim_matches([' ', '\t']), "&&" | "||" | ";") {
-            return None;
         }
         let mut tokens = Vec::new();
         let mut word_end = range.start;
@@ -85,15 +89,26 @@ fn parse_commands(
             if !is_spacing(&source[word_end..range.start]) {
                 return None;
             }
+            word_end = range.end;
+            if detect_dependencies
+                && matches!(
+                    word.kind().as_ref(),
+                    "file_redirect" | "heredoc_redirect" | "herestring_redirect"
+                )
+            {
+                continue;
+            }
+            if has_escapes && word.text().contains('\\') {
+                break;
+            }
             let value = match literal_value(&word, allow_lists) {
                 Some(value) => value,
-                None if allow_dynamic_suffix => break,
+                None if detect_dependencies => break,
                 None => return None,
             };
-            word_end = range.end;
             tokens.push(LiteralCommandToken { value, range });
         }
-        if tokens.is_empty() && !allow_dynamic_suffix {
+        if tokens.is_empty() && !detect_dependencies {
             return None;
         }
         commands.push(tokens);
@@ -101,24 +116,35 @@ fn parse_commands(
     }
     // Reject comments, newlines and trailing separators, including a single
     // command followed by `;`, even when the parser accepts them.
-    is_spacing(&source[end..]).then_some(commands)
+    (detect_dependencies || is_spacing(&source[end..])).then_some(commands)
 }
 
 fn is_spacing(source: &str) -> bool {
     source.chars().all(|c| matches!(c, ' ' | '\t'))
 }
 
-fn collect_commands<'a>(node: BashNode<'a>, commands: &mut Vec<BashNode<'a>>) -> Option<()> {
-    match node.kind().as_ref() {
-        "program" | "list" => {
+fn collect_commands<'a>(
+    node: BashNode<'a>,
+    commands: &mut Vec<BashNode<'a>>,
+    detect_dependencies: bool,
+) -> Option<()> {
+    let kind = node.kind();
+    match kind.as_ref() {
+        "program" | "list" | "pipeline" if detect_dependencies || kind != "pipeline" => {
             for child in node.children() {
-                collect_commands(child, commands)?;
+                collect_commands(child, commands, detect_dependencies)?;
+            }
+        }
+        "redirected_statement" if detect_dependencies => {
+            if let Some(body) = node.field("body") {
+                collect_commands(body, commands, detect_dependencies)?;
             }
         }
         // An assignment without an executable is still returned to the caller,
         // which decides whether it can reason about the resulting shell state.
         "command" | "variable_assignments" | "variable_assignment" => commands.push(node),
         "&&" | "||" | ";" => {}
+        _ if detect_dependencies => {}
         _ => return None,
     }
     Some(())
@@ -168,6 +194,24 @@ mod tests {
         let prefixes = parse_literal_command_prefixes(source).unwrap();
         assert_eq!(prefixes, [vec!["echo"], vec!["pnpm", "exec", "vpx", "./generate.ts"], vec![]]);
         assert_eq!(parse_literal_commands(source, true), None);
+    }
+
+    #[test]
+    fn reads_executables_in_pipelines_and_redirections() {
+        for (source, expected) in [
+            (
+                r#"vpx ./generate.ts "$TARGET" > vpx.json | tee copy.json"#,
+                vec![vec!["vpx", "./generate.ts"], vec!["tee", "copy.json"]],
+            ),
+            (
+                r#"<input pnpm exec vpx ./generate.ts | echo "vpx""#,
+                vec![vec!["pnpm", "exec", "vpx", "./generate.ts"], vec!["echo", "vpx"]],
+            ),
+            (r#"vpx .\generate.ts > build.json"#, vec![vec!["vpx"]]),
+        ] {
+            assert_eq!(parse_literal_command_prefixes(source).unwrap(), expected, "{source}");
+            assert_eq!(parse_literal_commands(source, true), None, "{source}");
+        }
     }
 
     #[test]

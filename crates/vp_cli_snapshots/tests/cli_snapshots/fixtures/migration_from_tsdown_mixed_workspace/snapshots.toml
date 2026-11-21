@@ -183,6 +183,61 @@ steps = [
 ]
 
 [[case]]
+name = "focused_vpx_shell_output"
+vp = "global"
+local-registry = true
+env = { VP_NODE_VERSION = "24.22.3", VP_SKIP_INSTALL = "1" }
+comment = "A filtered member install lets vpx write JSON through redirection and a pipeline."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies", "{\"vite\":\"8.3.8\"}"], snapshot = false },
+  { argv = ["vpt", "write-file", "pnpm-workspace.yaml", "packages: ['packages/*']\nsharedWorkspaceLockfile: false\nshellEmulator: true\n"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "packages/generator/src"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/package.json", "{\"name\":\"generator\",\"private\":true,\"type\":\"module\",\"scripts\":{\"redirect\":\"vpx ./generate.ts > generated.json\",\"pipeline\":\"vpx ./generate.ts | node write-pipe.cjs\",\"release\":\"tsdown -c release.config.mts\"},\"devDependencies\":{\"tsdown\":\"0.22.14\"}}"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/generate.ts", "const value: string = 'release config'; console.log(JSON.stringify({ value }));"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/write-pipe.cjs", "const fs = require('node:fs'); fs.writeFileSync('generated-pipe.json', fs.readFileSync(0));"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/src/index.ts", "export const sample = true;"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/release.config.mts", "export default { entry: 'src/index.ts', outDir: 'release-out', dts: false };"], snapshot = false },
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  ["vpt", "print-file", "packages/generator/package.json"],
+  { argv = ["pnpm", "--filter", "generator", "install", "--ignore-scripts"], snapshot = false },
+  ["vpt", "stat-file", "node_modules/vite-plus", "--assert", "missing"],
+  ["vpt", "stat-file", "packages/generator/node_modules/vite-plus/package.json", "--assert", "file"],
+  { argv = ["pnpm", "run", "redirect"], cwd = "packages/generator", snapshot = false },
+  { argv = ["pnpm", "run", "pipeline"], cwd = "packages/generator", snapshot = false },
+  ["vpt", "print-file", "packages/generator/generated.json"],
+  ["vpt", "print-file", "packages/generator/generated-pipe.json"],
+  { argv = ["pnpm", "run", "release"], cwd = "packages/generator", snapshot = false },
+  ["vpt", "stat-file", "packages/generator/release-out/index.mjs", "--assert", "file"],
+]
+
+[[case]]
+name = "focused_vpx_shebang"
+vp = "global"
+local-registry = true
+skip-platforms = ["windows"]
+env = { VP_NODE_VERSION = "24.22.3", VP_SKIP_INSTALL = "1" }
+comment = "A filtered member install supplies vpx for the migrated shebang."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "devDependencies", "{\"vite\":\"8.3.8\"}"], snapshot = false },
+  { argv = ["vpt", "write-file", "pnpm-workspace.yaml", "packages: ['packages/*']\nsharedWorkspaceLockfile: false\n"], snapshot = false },
+  { argv = ["vpt", "mkdir", "-p", "packages/generator/src"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/package.json", "{\"name\":\"generator\",\"private\":true,\"type\":\"module\",\"scripts\":{\"generate\":\"./generate.ts\",\"release\":\"tsdown -c release.config.mts\"},\"devDependencies\":{\"tsdown\":\"0.22.14\",\"tsx\":\"4.20.3\"}}"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/generate.ts", "#!/usr/bin/env tsx\nconst value: string = 'release config'; console.log(JSON.stringify({ value }));"], snapshot = false },
+  { argv = ["vpt", "chmod", "+x", "packages/generator/generate.ts"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/src/index.ts", "export const sample = true;"], snapshot = false },
+  { argv = ["vpt", "write-file", "packages/generator/release.config.mts", "export default { entry: 'src/index.ts', outDir: 'release-out', dts: false };"], snapshot = false },
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], snapshot = false },
+  ["vpt", "print-file", "packages/generator/package.json"],
+  ["vpt", "print-file", "packages/generator/generate.ts"],
+  { argv = ["pnpm", "--filter", "generator", "install", "--ignore-scripts"], snapshot = false },
+  ["vpt", "stat-file", "node_modules/vite-plus", "--assert", "missing"],
+  ["vpt", "stat-file", "packages/generator/node_modules/vite-plus/package.json", "--assert", "file"],
+  { argv = ["pnpm", "run", "generate"], cwd = "packages/generator" },
+  { argv = ["pnpm", "run", "release"], cwd = "packages/generator", snapshot = false },
+  ["vpt", "stat-file", "packages/generator/release-out/index.mjs", "--assert", "file"],
+]
+
+[[case]]
 name = "focused_vp_vpr_install"
 vp = "global"
 local-registry = true

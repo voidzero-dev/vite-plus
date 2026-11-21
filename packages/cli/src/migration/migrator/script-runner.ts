@@ -530,9 +530,34 @@ function nodeOptionsLoadVitePlusRegister(args: readonly string[]): boolean {
 }
 
 const vitePlusScriptCommands = new Set(['vp', 'vpr', 'vpx']);
+const envShebang = /^#![ \t]*\S*\benv[ \t]+(?:-S[ \t]+)?([^\r\n]+)/;
 
-function scriptRequiresVitePlus(command: string): boolean {
-  if (!command.includes('vp') && !command.includes(VITE_PLUS_REGISTER)) {
+function localScriptNeedsVitePlus(executable: string | undefined, projectPath: string): boolean {
+  if (
+    !executable?.includes('/') ||
+    path.isAbsolute(executable) ||
+    !SCRIPT_EXTENSIONS.includes(path.extname(executable))
+  ) {
+    return false;
+  }
+  const file = path.resolve(projectPath, executable);
+  try {
+    if (!fs.statSync(file, { throwIfNoEntry: false })?.isFile()) {
+      return false;
+    }
+    const command = envShebang.exec(fs.readFileSync(file, 'utf8'))?.[1];
+    return command !== undefined && scriptRequiresVitePlus(command);
+  } catch {
+    return false;
+  }
+}
+
+function scriptRequiresVitePlus(command: string, projectPath?: string): boolean {
+  if (
+    !command.includes('vp') &&
+    !command.includes(VITE_PLUS_REGISTER) &&
+    !(projectPath && command.includes('/'))
+  ) {
     return false;
   }
   return (
@@ -556,9 +581,14 @@ function scriptRequiresVitePlus(command: string): boolean {
         return first < values.length;
       }
       const start = first + getCommandStartIndex(values.slice(first));
+      const executable = values[start];
+      const downloadsCommand = values
+        .slice(first, start)
+        .some((word) => ['npx', 'bunx', 'dlx', 'x'].includes(word));
       if (
-        vitePlusScriptCommands.has(values[start]) &&
-        !values.slice(first, start).some((word) => ['npx', 'bunx', 'dlx', 'x'].includes(word))
+        !downloadsCommand &&
+        (vitePlusScriptCommands.has(executable) ||
+          (projectPath && localScriptNeedsVitePlus(executable, projectPath)))
       ) {
         return true;
       }
@@ -569,14 +599,17 @@ function scriptRequiresVitePlus(command: string): boolean {
       const commands = shell
         ? values.slice(start)
         : values.slice(start + 1).filter((_, index) => launcher?.(values[start + index]));
-      return commands.some(scriptRequiresVitePlus);
+      return commands.some((script) => scriptRequiresVitePlus(script, projectPath));
     }) ?? false
   );
 }
 
-export function scriptsRequireVitePlus(scripts: Record<string, string> | undefined): boolean {
+export function scriptsRequireVitePlus(
+  scripts: Record<string, string> | undefined,
+  projectPath?: string,
+): boolean {
   return Object.values(scripts ?? {}).some(
-    (command) => typeof command === 'string' && scriptRequiresVitePlus(command),
+    (command) => typeof command === 'string' && scriptRequiresVitePlus(command, projectPath),
   );
 }
 

@@ -710,6 +710,7 @@ export function rewriteMonorepoProject(
         preserveVitestConfig:
           pkg.dependencies?.vitest !== undefined || pkg.peerDependencies?.vitest !== undefined,
       }),
+      projectPath,
     );
     if (
       extractedStagedConfig &&

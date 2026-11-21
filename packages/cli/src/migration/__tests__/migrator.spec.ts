@@ -529,6 +529,13 @@ describe('explicit tsdown config selection', () => {
     ['vpx ./generate.ts', true],
     ['pnpm exec vpx ./generate.ts', true],
     ['vpx ./generate.ts "$TARGET"', true],
+    ['vpx ./generate.ts > generated.json', true],
+    ['vpx ./generate.ts | tee generated.json', true],
+    ['echo vpx > generated.json | tee vpx', false],
+    ['pnpm dlx vpx ./generate.ts | tee generated.json', false],
+    ['./generate.ts', true, '#!/usr/bin/env vpx'],
+    ['./generate.ts > generated.json', true, '#!/usr/bin/env -S node --import vite-plus/register'],
+    ['node ./generate.ts', false, '#!/usr/bin/env vpx'],
     ['echo "$MESSAGE" && pnpm exec vpx ./generate.ts "$TARGET"', true],
     ['"$RUNNER" vpx ./generate.ts', false],
     ['echo "$TARGET" vpx ./generate.ts', false],
@@ -543,10 +550,13 @@ describe('explicit tsdown config selection', () => {
     ['cross-env-shell MODE=ci "node --import vite-plus/register ./check.ts"', true],
     ['node ./check.cjs --import vite-plus/register', false],
     ['echo --import vite-plus/register', false],
-  ])('checks member dependencies for %s', (check, needsVitePlus) => {
+  ])('checks member dependencies for %s', (check, needsVitePlus, shebang?: string) => {
     const member = path.join(tmpDir, 'packages/member');
     const manifest = path.join(member, 'package.json');
     fs.mkdirSync(member, { recursive: true });
+    if (shebang) {
+      fs.writeFileSync(path.join(member, 'generate.ts'), `${shebang}\nconsole.log('generated');\n`);
+    }
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       '{"devDependencies":{"vite-plus":"latest"}}',
@@ -1581,6 +1591,7 @@ export default defineConfig(({ command }) => {
   it.each([
     ['const entries = base.entry;', ''],
     ['const entries = base.entry ?? [];', ''],
+    ['const entries = base.entry || [];', ''],
     ['let entries = base.entry;', ''],
     ['let entries = base.entry;', 'entries = [];\n'],
   ])('keeps pack entries with %s and reassignment %j', (alias, reassignment) => {
@@ -1733,6 +1744,9 @@ export default defineConfig(({ command }) => {
   it.each([
     'configs.concat(extraConfigs)',
     "configs.concat(extraConfigs).filter(config => config.name !== 'demo')",
+    'extraConfigs.concat(configs)',
+    'extraConfigs.concat(configs).filter(config => config.name !== "demo")',
+    '[{ entry: "src/cli.ts" }].concat(configs)',
   ])('preserves a converted pack array in %s', (pack) => {
     const tsdown = path.join(tmpDir, 'tsdown.config.ts');
     const original = "export default [{ name: 'library', publicDir: 'public' }];\n";

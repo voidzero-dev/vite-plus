@@ -315,7 +315,7 @@ function reconcileVitePlusBootstrapPackage(
     vitePlusVersion,
     ensureVitePlus ||
       (!hasDirectVitePlusInstallEntry(pkg) &&
-        ((keepTsdown && scriptsRequireVitePlus(pkg.scripts)) ||
+        ((keepTsdown && scriptsRequireVitePlus(pkg.scripts, projectPath)) ||
           configNeedsVitePlus(projectPath, keepTsdown, {
             preserveVitestConfig:
               pkg.dependencies?.vitest !== undefined || pkg.peerDependencies?.vitest !== undefined,
