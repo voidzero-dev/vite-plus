@@ -175,6 +175,18 @@ Set the registry in the project's `.npmrc`. Replace the example URL with your ow
 registry=https://npm.corp.example/
 ```
 
+::: tip Prevent package-manager downloads
+With `vite-plus` versions `1.6.x` and `1.7.x`, set `VP_ENV_FORBIDDEN=1` before running `vp` to prevent it from downloading the project's pinned package manager. In PowerShell, set it in the same session as the commands below.
+
+```powershell
+$env:VP_ENV_FORBIDDEN = '1'
+```
+
+This setting disables Vite+'s management of Node.js and package managers. Run `pnpm install` directly because `vp install` requires a managed package manager on these releases.
+
+Starting with `1.8.0`, you can omit the variable when you use only the project-local CLI. It uses the package manager on `PATH`.
+:::
+
 On Windows, run these commands in the package that declares `vite-plus`, with the project's pinned pnpm on `PATH` and a committed `pnpm-lock.yaml`.
 
 ```powershell
@@ -197,6 +209,4 @@ For example, Windows x64 bindings have `os: [win32]` and `cpu: [x64]` in the pnp
 - `vp run` can replay a task from its local cache. On a cache miss the task runs its own command, which may use the network. A configured remote cache also needs network access.
 - `vp install`, `vp add`, and `vp dlx` can fetch packages. `vp migrate` can install dependencies. With `vp create`, the template determines the source. For example, `vite:application` uses `create-vite@latest` from the registry and `vite:library` downloads its template from GitHub.
 
-With `vite-plus@1.7.0`, local commands such as `vp fmt --check`, `vp lint`, `vp check`, `vp test run`, and `vp run build` can try to download the project's pinned package manager even when it is on `PATH`. If Vite+'s cache is empty and the registry accepts a connection but never responds, the command can spend several minutes retrying and still succeed. `vp --version` skips this lookup.
-
-For pnpm 12 on Windows x64, this version of `vp` requests `@pnpm/exe.win32-x64` directly. If you encounter this delay, check that your registry serves that package at the project's pinned pnpm version.
+When Vite+ manages the project's pinned package manager, local commands such as `vp fmt --check`, `vp lint`, `vp check`, `vp test run`, and `vp run build` can fetch it even when it is on `PATH`. For pnpm 12 on Windows x64, `vp` requests `@pnpm/exe.win32-x64` at the pinned version. With an empty Vite+ cache, a registry that never responds can delay the command for several minutes. `vp --version` skips this lookup.
