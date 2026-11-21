@@ -5,14 +5,10 @@
 //! - Version resolution with priority order
 //! - Config file management
 
-use vp_js_runtime::{
-    NodeProvider, VersionSource, dev_engines_runtime_constraint, dev_engines_runtime_fallback,
-    read_nvmrc_file, read_package_json, resolve_node_version, validate_version,
-};
+use vp_js_runtime::{NodeProvider, ProjectNodeVersion, select_project_node_version};
 use vp_pm_cli::PackageManagerType;
 pub use vp_pm_cli::{Config, ShimMode, get_config_path, load_config, save_config};
 use vt_path::{AbsolutePath, AbsolutePathBuf};
-use vt_str::Str;
 
 use crate::error::Error;
 
@@ -201,116 +197,21 @@ pub async fn resolve_version(cwd: &AbsolutePath) -> Result<VersionResolution, Er
     resolve_version_from_files(cwd).await
 }
 
-pub(crate) struct ProjectVersionSource {
-    pub version: Str,
-    pub source: String,
-    pub source_path: AbsolutePathBuf,
-    pub project_root: AbsolutePathBuf,
-}
-
 /// Resolve the effective project-file Node.js version source.
 ///
-/// `warn_invalid` controls whether invalid version specs print user-facing
-/// warnings. Use `true` for env commands, and `false` for shim cache validation
-/// so wrapped tool output stays quiet.
+/// The selection is [`select_project_node_version`], the same one that
+/// `download_runtime_for_project` uses. `warn_invalid` controls whether invalid
+/// version specs print user-facing warnings. Use `true` for env commands, and
+/// `false` for shim cache validation so wrapped tool output stays quiet.
 pub(crate) async fn resolve_project_version_source(
     cwd: &AbsolutePath,
     warn_invalid: bool,
-) -> Result<Option<ProjectVersionSource>, Error> {
-    let Some(resolution) = resolve_node_version(cwd, true).await.map_err(config_error)? else {
-        return Ok(None);
-    };
-
-    if let Some(version) = resolution.validated_version(warn_invalid).map_err(config_error)? {
-        if let (Some(source_path), Some(project_root)) =
-            (resolution.source_path, resolution.project_root)
-        {
-            if warn_invalid && resolution.source == VersionSource::NodeVersionFile {
-                warn_invalid_shadowed_dev_engines_runtime(&project_root).await;
-            }
-            return Ok(Some(ProjectVersionSource {
-                version,
-                source: resolution.source.to_string(),
-                source_path,
-                project_root,
-            }));
-        }
-        return Ok(None);
-    }
-
-    // Invalid version from a project source: try lower-priority sources in the same directory.
-    // This mirrors the fallback logic in download_runtime_for_project().
-    if matches!(resolution.source, VersionSource::NvmrcFile) {
-        return Ok(None);
-    }
-
-    let Some(project_root) = resolution.project_root else {
-        return Ok(None);
-    };
-    let package_json_path = project_root.join("package.json");
-    let pkg = read_package_json(&package_json_path).await.ok().flatten();
-
-    if matches!(resolution.source, VersionSource::NodeVersionFile)
-        && let Some(pkg) = &pkg
-        && let Some(version) = dev_engines_runtime_fallback(pkg, &package_json_path, warn_invalid)
-            .map_err(config_error)?
-    {
-        return Ok(Some(ProjectVersionSource {
-            version,
-            source: "devEngines.runtime".into(),
-            source_path: package_json_path,
-            project_root,
-        }));
-    }
-
-    if matches!(
-        resolution.source,
-        VersionSource::NodeVersionFile | VersionSource::DevEnginesRuntime
-    ) && let Some(version) = pkg
-        .as_ref()
-        .and_then(|pkg| pkg.engines.as_ref())
-        .and_then(|e| e.node.as_ref())
-        .and_then(|v| validate_version(v, "engines.node", warn_invalid))
-    {
-        return Ok(Some(ProjectVersionSource {
-            version,
-            source: "engines.node".into(),
-            source_path: package_json_path,
-            project_root,
-        }));
-    }
-
-    if let Some(version) = read_nvmrc_file(&project_root)
+) -> Result<Option<ProjectNodeVersion>, Error> {
+    // A configuration error, not the download failure that `?` would report
+    // through `Error::RuntimeDownload`
+    select_project_node_version(cwd, warn_invalid)
         .await
-        .and_then(|v| validate_version(&v, ".nvmrc", warn_invalid))
-    {
-        return Ok(Some(ProjectVersionSource {
-            version,
-            source: ".nvmrc".into(),
-            source_path: project_root.join(".nvmrc"),
-            project_root,
-        }));
-    }
-
-    Ok(None)
-}
-
-/// Warn when a valid `.node-version` in `project_root` shadows a
-/// `devEngines.runtime` node entry with an invalid version.
-///
-/// The entry is only a compatibility constraint here, so it never fails
-/// (see `vp_js_runtime::dev_engines_runtime_constraint`).
-async fn warn_invalid_shadowed_dev_engines_runtime(project_root: &AbsolutePath) {
-    let package_json_path = project_root.join("package.json");
-    if let Some(pkg) = read_package_json(&package_json_path).await.ok().flatten() {
-        dev_engines_runtime_constraint(&pkg, &package_json_path, true);
-    }
-}
-
-/// Report a version resolution error as a configuration error, not as the
-/// download failure that `Error::RuntimeDownload` would print.
-fn config_error(error: vp_js_runtime::Error) -> Error {
-    Error::ConfigError(error.to_string().into())
+        .map_err(|error| Error::ConfigError(error.to_string().into()))
 }
 
 /// Resolve Node.js version from project files only (skipping session overrides).
@@ -325,7 +226,7 @@ pub async fn resolve_version_from_files(cwd: &AbsolutePath) -> Result<VersionRes
         let resolved = resolve_version_string(&project_source.version, &provider).await?;
         return Ok(VersionResolution {
             version: resolved,
-            source: project_source.source,
+            source: project_source.source.to_string(),
             source_path: Some(project_source.source_path),
             project_root: Some(project_source.project_root),
             is_range,
@@ -605,7 +506,7 @@ mod tests {
 
         let source = resolve_project_version_source(&temp_path, false).await.unwrap().unwrap();
         assert_eq!(source.version, "22.22.0");
-        assert_eq!(source.source, ".nvmrc");
+        assert_eq!(source.source.as_str(), ".nvmrc");
         assert_eq!(source.source_path, temp_path.join(".nvmrc"));
     }
 
@@ -619,7 +520,7 @@ mod tests {
 
         let source = resolve_project_version_source(&temp_path, false).await.unwrap().unwrap();
         assert_eq!(source.version, "24.0.0");
-        assert_eq!(source.source, ".node-version");
+        assert_eq!(source.source.as_str(), ".node-version");
         assert_eq!(source.source_path, temp_path.join(".node-version"));
     }
 
@@ -633,7 +534,7 @@ mod tests {
 
         let source = resolve_project_version_source(&child, false).await.unwrap().unwrap();
         assert_eq!(source.version, "22.22.0");
-        assert_eq!(source.source, ".nvmrc");
+        assert_eq!(source.source.as_str(), ".nvmrc");
         assert_eq!(source.source_path, parent.join(".nvmrc"));
     }
 
@@ -646,7 +547,7 @@ mod tests {
 
         let source = resolve_project_version_source(&temp_path, false).await.unwrap().unwrap();
         assert_eq!(source.version, "22.22.0");
-        assert_eq!(source.source, ".nvmrc");
+        assert_eq!(source.source.as_str(), ".nvmrc");
     }
 
     #[tokio::test]
@@ -873,7 +774,7 @@ mod tests {
 
         let source = resolve_project_version_source(&temp_path, false).await.unwrap().unwrap();
         assert_eq!(source.version, "22.22.0");
-        assert_eq!(source.source, "devEngines.runtime");
+        assert_eq!(source.source.as_str(), "devEngines.runtime");
         assert_eq!(source.source_path, temp_path.join("package.json"));
     }
 
@@ -893,7 +794,7 @@ mod tests {
 
         let source = resolve_project_version_source(&child, false).await.unwrap().unwrap();
         assert_eq!(source.version, "22.22.0");
-        assert_eq!(source.source, "devEngines.runtime");
+        assert_eq!(source.source.as_str(), "devEngines.runtime");
         assert_eq!(source.source_path, child.join("package.json"));
     }
 
@@ -911,7 +812,7 @@ mod tests {
 
         let source = resolve_project_version_source(&temp_path, false).await.unwrap().unwrap();
         assert_eq!(source.version, "22.22.0");
-        assert_eq!(source.source, "devEngines.runtime");
+        assert_eq!(source.source.as_str(), "devEngines.runtime");
     }
 
     #[tokio::test]
@@ -930,7 +831,7 @@ mod tests {
 
             let source = resolve_project_version_source(&temp_path, false).await.unwrap().unwrap();
             assert_eq!(source.version, "22.22.0", "{version}");
-            assert_eq!(source.source, "engines.node", "{version}");
+            assert_eq!(source.source.as_str(), "engines.node", "{version}");
         }
     }
 
@@ -983,7 +884,7 @@ mod tests {
 
         let source = resolve_project_version_source(&temp_path, false).await.unwrap().unwrap();
         assert_eq!(source.version, "22.22.0");
-        assert_eq!(source.source, ".node-version");
+        assert_eq!(source.source.as_str(), ".node-version");
     }
 
     #[tokio::test]
@@ -997,7 +898,7 @@ mod tests {
 
         let source = resolve_project_version_source(&child, false).await.unwrap().unwrap();
         assert_eq!(source.version, "24.18.0");
-        assert_eq!(source.source, ".node-version");
+        assert_eq!(source.source.as_str(), ".node-version");
         assert_eq!(source.source_path, parent.join(".node-version"));
     }
 

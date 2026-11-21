@@ -4,18 +4,10 @@ extend-ignore-re = ['\.vitest-attachements\b']
 
 [default.extend-words]
 pn = "pn" # pnpm short alias
-ratatui = "ratatui"
-PUNICODE = "PUNICODE"
 Jod = "Jod" # Node.js v22 LTS codename
 flate = "flate" # flate2 crate name (gzip/deflate compression)
-fpr = "fpr" # GPG colon-format record name for a key fingerprint
 
 [default.extend-identifiers]
-# Yarn Plug'n'Play — tokenizer splits `PnP` into the word `Pn`, which typos
-# otherwise wants to autocorrect to `On`. Whitelist the full identifier so
-# the parts aren't tokenized.
-PnP = "PnP"
-
 # Repository name and pinned commit in the ecosystem benchmark report.
 sigle = "sigle"
 "6b2b2ba86" = "6b2b2ba86"
@@ -27,9 +19,6 @@ extend-ignore-re = ['(?m)^index [0-9a-f]+\.\.[0-9a-f]+(?: [0-7]+)?$']
 
 [files]
 extend-exclude = [
-  "crates/fspy_detours_sys/detours",
-  "crates/fspy_detours_sys/src/generated_bindings.rs",
-  "packages/cli/src/oxfmt-config.ts",
   # Vendored PGP key/signature blobs: base64 armor trips the spell checker.
   "crates/vp_js_runtime/src/assets/**/*.asc",
   # Registry recordings contain upstream signatures and integrity hashes.
