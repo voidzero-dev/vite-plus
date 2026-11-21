@@ -13,6 +13,13 @@ import {
   type TsdownHandle,
 } from 'vite/pack';
 
+import {
+  bundledTsrsVersion,
+  createDtsGeneratorEnvironment,
+  hasExplicitDtsGenerator,
+  selectDtsGenerator,
+  withTsrsWarningSuppressed,
+} from './pack-dts.ts';
 import { resolveViteConfig } from './resolve-vite-config.ts';
 
 // Matches a `.d.ts` / `.d.mts` / `.d.cts` importer.
@@ -158,18 +165,47 @@ cli
       const packConfigs = Array.isArray(viteConfig?.pack)
         ? viteConfig.pack
         : [viteConfig?.pack ?? {}];
+      const dtsEnvironment = createDtsGeneratorEnvironment();
+      // The first config that uses bundled tsrs, and the `typescript` path that kept upstream selection.
+      let tsrsConfig: ResolvedConfig | undefined;
+      let typescriptPath: string | undefined;
       for (const packConfig of packConfigs) {
         const merged = { ...packConfig, ...flags };
         // Default after merging so `pack.envPrefix` from the config file is kept.
         merged.envPrefix ??= DEFAULT_ENV_PREFIXES;
+        // Vite+ can select tsrs below. Its experimental notice must not fail a
+        // `failOnWarn` build, and an info line replaces it. tsdown builds its
+        // logger during resolution, so add the entry before resolution.
+        if (!hasExplicitDtsGenerator(merged.dts)) {
+          merged.suppressWarnings = withTsrsWarningSuppressed(merged.suppressWarnings);
+        }
         // Keep postcss/lightningcss external to the dts bundle (see plugin doc)
         if (merged.dts) {
           const existingPlugins = Array.isArray(merged.plugins) ? merged.plugins : [];
           merged.plugins = [...existingPlugins, externalDtsTypeOnlyPlugin()];
         }
         const resolvedConfig = await resolveUserConfig(merged, flags, configDeps);
-        resolvedConfig.forEach((config) => config.configDeps.forEach((dep) => configDeps.add(dep)));
+        for (const config of resolvedConfig) {
+          config.configDeps.forEach((dep) => configDeps.add(dep));
+          // tsdown has resolved declaration enablement, including inference from package.json.
+          const selection = selectDtsGenerator(config, dtsEnvironment);
+          config.dts = selection.dts as ResolvedConfig['dts'];
+          if (selection.kind === 'tsrs') {
+            tsrsConfig ??= config;
+          } else if (selection.kind === 'unchanged') {
+            typescriptPath ??= selection.typescriptPath;
+          }
+        }
         configs.push(...resolvedConfig);
+      }
+      if (tsrsConfig) {
+        tsrsConfig.logger.info(
+          `Generating declarations with bundled tsrs ${bundledTsrsVersion()} (experimental) because \`typescript\` is not installed`,
+        );
+      } else if (typescriptPath && cli.options.debug) {
+        globalLogger.info(
+          `Declarations use the default generator selection because \`typescript\` resolves to ${typescriptPath}`,
+        );
       }
 
       return buildWithConfigs(configs, configDeps, runBuild);

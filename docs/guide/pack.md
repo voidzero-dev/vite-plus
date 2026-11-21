@@ -41,6 +41,24 @@ export default defineConfig({
 });
 ```
 
+## Declaration Files
+
+With `dts` enabled, tsdown selects the declaration generator. It uses the project's `typescript`, or Oxc when the tsconfig enables `isolatedDeclarations`.
+
+If `typescript` is not installed, `vp pack` generates declarations with the `tsrs` compiler that Vite+ ships for type-aware linting. This support is experimental. tsrs reads compiler options only from the tsconfig file, so `dts.compilerOptions` and `dts.tsconfigRaw` require `typescript`.
+
+To use tsrs also when the project installs `typescript`, set the generator:
+
+```ts [vite.config.ts]
+import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  pack: {
+    dts: { generator: 'tsrs' },
+  },
+});
+```
+
 ## Standalone Executables
 
 `vp pack` can also build standalone executables through tsdown's experimental [`exe` option](https://tsdown.dev/options/exe#executable).
