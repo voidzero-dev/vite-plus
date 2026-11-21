@@ -10,7 +10,7 @@ Vite+ passes --no-git-init to the generator and completes integration
 ● pnpm@10.18.0 installing...
 ● pnpm@10.18.0 installed
 ◇ Generating project…
-● Running: pnpm dlx create-react-router@8.5.1 app --template ./template --yes --no-install --no-agent-skills --no-motion --no-git-init
+● Running: vp dlx -- create-react-router@8.5.1 app --template ./template --yes --no-install --no-agent-skills --no-motion --no-git-init
 
          create-react-router <version>
       ◼  Directory: Using app as project directory

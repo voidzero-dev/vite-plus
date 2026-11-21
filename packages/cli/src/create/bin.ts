@@ -726,6 +726,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     packageManager,
     packageManagerVersion: downloadResult.version,
     downloadPackageManager: downloadResult,
+    packageManagerOverride: resolvedPackageManagerOverride,
   };
   const installOptions = {
     silent: compactOutput,
