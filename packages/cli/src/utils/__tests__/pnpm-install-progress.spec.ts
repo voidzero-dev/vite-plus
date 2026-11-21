@@ -134,7 +134,7 @@ describe('formatPnpmInstallOutput', () => {
   });
 
   it.each([undefined, 'info', 'debug', 'warn', 'error', 'silent', 'json', 'ndjson'] as const)(
-    'scopes workspace progress and reports recursive failures in output mode %s',
+    'reports workspace scope, progress, and recursive failures in output mode %s',
     async (mode) => {
       const cwd = resolve('workspace');
       const archivePrefix = join(cwd, 'packages', 'archive');
@@ -152,7 +152,15 @@ describe('formatPnpmInstallOutput', () => {
       };
       const headline = `${summary.code} ${summary.message}`;
       const progress = { name: 'pnpm:progress', level: 'debug' };
+      const scope = {
+        name: 'pnpm:scope',
+        level: 'debug',
+        workspacePrefix: cwd,
+        selected: 3,
+        total: 3,
+      };
       const output = [
+        scope,
         { name: 'pnpm', level: 'info', prefix: cwd, message: lockfile },
         { name: 'pnpm', level: 'info', prefix: archivePrefix, message: lockfile },
         { name: 'pnpm', level: 'info', prefix: workspacePrefix, message: lockfile },
@@ -192,6 +200,7 @@ describe('formatPnpmInstallOutput', () => {
             },
           ],
         },
+        scope,
       ]
         .map((record) => JSON.stringify(record))
         .join('\n');
@@ -211,6 +220,7 @@ describe('formatPnpmInstallOutput', () => {
       } else {
         expect(rendered).toBe(
           [
+            'Scope: all 3 workspace projects',
             lockfile,
             globalMessage,
             `packages/workspace: ${workspaceCode} ${workspace}`,
@@ -224,6 +234,15 @@ describe('formatPnpmInstallOutput', () => {
       }
     },
   );
+
+  it.each([
+    [{ selected: 2, total: 4, workspacePrefix: '/workspace' }, 'Scope: 2 of 4 workspace projects'],
+    [{ selected: 2 }, 'Scope: 2 projects'],
+    [{ selected: 1, total: 4, workspacePrefix: '/workspace' }, ''],
+  ])('formats the selected install scope %j', async (scope, expected) => {
+    const output = JSON.stringify({ name: 'pnpm:scope', level: 'debug', ...scope });
+    expect(await formatPnpmInstallOutput(output, '/workspace')).toBe(expected);
+  });
 
   it('labels both member errors when they share the same failure reason', async () => {
     const cwd = resolve('workspace');
