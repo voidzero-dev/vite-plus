@@ -24,6 +24,7 @@ import { lint } from './resolve-lint.ts';
 import { pack } from './resolve-pack.ts';
 import { test } from './resolve-test.ts';
 import { vite } from './resolve-vite.ts';
+import { launcherHasDiagnostics } from './utils/launcher-diagnostics.ts';
 import { accent, errorMsg, log } from './utils/terminal.ts';
 import { setUserAgent } from './utils/user-agent.ts';
 
@@ -167,16 +168,16 @@ if (maybePrintCommandHelp(args)) {
       process.exit(0);
     }
 
-    // Limit process replacement to the standalone package launcher. Node.js
-    // flags such as `--cpu-prof` apply only to the launcher, and an exec would
-    // drop their output, so keep Vite as a child when the launcher has any.
+    // Limit process replacement to the standalone package launcher. Keep Vite
+    // as a child when Node.js ties a debugger session or exit-time output,
+    // such as a CPU profile, to the launcher.
     const execDev =
       command === 'dev' &&
       isMainThread &&
       process.platform !== 'win32' &&
       path.basename(process.argv[1] ?? '') === 'vp' &&
-      process.execArgv.length === 0 &&
-      process.send === undefined;
+      process.send === undefined &&
+      !(await launcherHasDiagnostics());
     if (execDev) {
       // Save the launcher's compile cache before handing its process to Vite.
       module.flushCompileCache?.();

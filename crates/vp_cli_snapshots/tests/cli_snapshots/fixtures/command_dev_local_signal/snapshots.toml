@@ -18,3 +18,10 @@ vp = "local"
 skip-platforms = ["windows"]
 comment = "A launcher started with a Node.js flag such as --cpu-prof keeps Vite as a child and writes its profile."
 steps = [{ argv = ["node", "probe.mjs", "--cpu-prof"], tty = false, timeout = 25000 }]
+
+[[case]]
+name = "command_dev_local_signal_diagnostics_env"
+vp = "local"
+skip-platforms = ["windows"]
+comment = "NODE_OPTIONS=--inspect, NODE_OPTIONS=--cpu-prof, and NODE_V8_COVERAGE keep Vite as a child of the launcher."
+steps = [{ argv = ["node", "probe-diagnostics.mjs"], tty = false, timeout = 40000 }]
