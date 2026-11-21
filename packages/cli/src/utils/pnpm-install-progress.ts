@@ -620,7 +620,9 @@ export async function formatPnpmInstallOutput(
         const headline = code ? `${code} ${displayed}` : displayed;
         const lockfileError =
           log.level === 'error' &&
-          (code === 'ERR_PNPM_NO_LOCKFILE' || code === 'ERR_PNPM_OUTDATED_LOCKFILE');
+          (code === 'ERR_PNPM_NO_LOCKFILE' ||
+            code === 'ERR_PNPM_OUTDATED_LOCKFILE' ||
+            code === 'ERR_PNPM_LOCKFILE_CONFIG_MISMATCH');
         const diagnosticPath =
           typeof log.prefix === 'string' && (log.level === 'warn' || lockfileError)
             ? displayRelative(log.prefix, cwd)
