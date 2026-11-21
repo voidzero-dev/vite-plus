@@ -1,0 +1,11 @@
+{
+  "name": "pnpm9-lifecycle-config",
+  "private": true,
+  "packageManager": "pnpm@9.15.9",
+  "scripts": {
+    "postinstall": "node postinstall.cjs"
+  },
+  "devDependencies": {
+    "vite": "file:./local-vite"
+  }
+}

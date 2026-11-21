@@ -8,15 +8,22 @@ import {
 } from '../../binding/index.js';
 import { PackageManager } from '../types/index.ts';
 import { isPnpmIgnoredBuildsError, parseInstallGatedBuilds } from './approve-builds.ts';
-import { getVpCommand, runCommandSilently } from './command.ts';
+import { getVpCommand, MAX_TIMER_DELAY_MS, runCommandSilently } from './command.ts';
+import {
+  formatPnpmInstallOutput,
+  getPnpmInstallReporting,
+  watchPnpmResolution,
+} from './pnpm-install-progress.ts';
 import { reconcilePreviewBridgeRegistry } from './preview-registry.ts';
 import { getSilentSpinner, getSpinner } from './spinner.ts';
-import { accent } from './terminal.ts';
+import { accent, errorMsg, warnMsg } from './terminal.ts';
 
 export interface CommandRunSummary {
   durationMs: number;
   exitCode?: number;
   status: 'installed' | 'formatted' | 'failed' | 'skipped';
+  /** Failure already reported by the installer. */
+  failureMessage?: string;
   /**
    * Packages whose build (install/postinstall) scripts the package manager
    * gated during the install. Only populated when `runViteInstall` is called
@@ -137,6 +144,13 @@ export async function runViteInstall(
     silent?: boolean;
     packageManager?: PackageManager;
     packageManagerVersion?: string;
+    idleTimeoutMs?: number;
+    /** The pnpm actually running the install, for the resolution watchdog. */
+    effectivePnpmVersion?: string;
+    /** Path to the pnpm launcher selected for the migration install. */
+    pnpmExecutable?: string;
+    /** Report timeouts as part of the best-effort first migration install. */
+    initialInstall?: boolean;
     /** Keep creation's resolved version when installation runs in the generated project. */
     packageManagerOverride?: string;
     /**
@@ -179,17 +193,72 @@ export async function runViteInstall(
     installArgs.push('--ignore-scripts');
   }
 
+  const envs = options?.packageManagerOverride
+    ? { ...process.env, VP_PACKAGE_MANAGER: options.packageManagerOverride }
+    : process.env;
+  const effectivePnpmVersion = options?.effectivePnpmVersion ?? options?.packageManagerVersion;
+  const watchedVersion =
+    options?.idleTimeoutMs !== undefined && effectivePnpmVersion
+      ? coerce(effectivePnpmVersion)
+      : undefined;
+  const legacyReporter =
+    watchedVersion?.major === 9 && !isGreaterThanOrEqual(watchedVersion, '9.15.8');
+  const reporting =
+    watchedVersion?.major === 9 && options?.pnpmExecutable
+      ? await getPnpmInstallReporting(cwd, options.pnpmExecutable, envs)
+      : undefined;
+  const reporterUnknown = watchedVersion?.major === 9 && reporting === undefined;
+  const originalMode = reporting?.mode;
+  // pnpm < 9.15.8 waits for other scripts and exits 1 in silent, JSON and
+  // parseable modes. Its NDJSON reporter kills the scripts and can change the
+  // exit status. Keep the native reporter when it cannot expose resolution events.
+  const keepLegacyReporter =
+    legacyReporter && (originalMode === 'silent' || originalMode === 'json');
+  let idleTimeoutMs =
+    reporterUnknown || reporting?.useNativeReporter || keepLegacyReporter
+      ? undefined
+      : options?.idleTimeoutMs;
+  const fetchTimeoutMs = reporting?.fetchTimeoutMs;
+  if (
+    idleTimeoutMs !== undefined &&
+    fetchTimeoutMs !== undefined &&
+    fetchTimeoutMs >= idleTimeoutMs
+  ) {
+    // A long request may start after the last progress event. Give pnpm
+    // its whole request time plus an idle window to report what happened.
+    idleTimeoutMs = Math.min(MAX_TIMER_DELAY_MS, fetchTimeoutMs + idleTimeoutMs);
+  }
+  const shouldWatchIdle = idleTimeoutMs === undefined ? undefined : watchPnpmResolution();
+  if (idleTimeoutMs !== undefined) {
+    // pnpm 9 normalizes these keys for the installer but skips underscore-prefixed
+    // keys when exporting raw config to lifecycle scripts.
+    installArgs.push(
+      '--',
+      '--config._reporter=ndjson',
+      '--config._loglevel=info',
+      '--config._json=false',
+      '--config._parseable=false',
+    );
+  }
+
   const spinner = options?.silent ? getSilentSpinner() : getSpinner(interactive);
   const startTime = Date.now();
   spinner.start(`Installing dependencies...`);
-  const { exitCode, stderr, stdout } = await runCommandSilently({
+  const { exitCode, stderr, stdout, idleTimedOut } = await runCommandSilently({
     ...getVpCommand(['install', ...installArgs]),
     cwd,
-    envs: options?.packageManagerOverride
-      ? { ...process.env, VP_PACKAGE_MANAGER: options.packageManagerOverride }
-      : process.env,
+    idleTimeoutMs,
+    shouldWatchIdle,
+    waitForPackageFetch: watchedVersion?.major === 9 && idleTimeoutMs !== undefined,
+    // pnpm 9 can exit before a large error record drains through a pipe.
+    stdoutToFile:
+      watchedVersion?.major === 9 &&
+      idleTimeoutMs !== undefined &&
+      originalMode !== 'ndjson' &&
+      originalMode !== 'silent',
+    envs,
   });
-  const combinedOutput = `${stdout.toString()}\n${stderr.toString()}`;
+  const combinedOutput = detectIgnoredBuilds ? `${stdout.toString()}\n${stderr.toString()}` : '';
   const pendingBuilds = detectIgnoredBuilds
     ? parseInstallGatedBuilds(combinedOutput, options?.packageManager)
     : undefined;
@@ -197,7 +266,10 @@ export async function runViteInstall(
   // completed (deps are on disk). Treat that one case as success so callers can
   // offer to approve the builds rather than report a broken install.
   const ignoredBuildsOnly =
-    exitCode !== 0 && detectIgnoredBuilds && isPnpmIgnoredBuildsError(combinedOutput);
+    exitCode !== 0 &&
+    !idleTimedOut &&
+    detectIgnoredBuilds &&
+    isPnpmIgnoredBuildsError(combinedOutput);
   if (exitCode === 0 || ignoredBuildsOnly) {
     spinner.stop(`Dependencies installed`);
     return {
@@ -207,14 +279,40 @@ export async function runViteInstall(
       pendingBuilds,
     } satisfies CommandRunSummary;
   } else {
-    spinner.stop(`Install failed`);
-    prompts.log.info(stdout.toString());
-    prompts.log.error(stderr.toString());
-    prompts.log.info(`You may need to run "vp install" manually in ${cwd}`);
+    spinner.stop(idleTimedOut ? 'Install timed out' : 'Install failed');
+    const mode = originalMode ?? 'info';
+    const installOutput = stdout.toString();
+    const output = shouldWatchIdle
+      ? await formatPnpmInstallOutput(installOutput, cwd, mode, reporting)
+      : installOutput;
+    if (reporterUnknown || mode === 'json' || mode === 'ndjson') {
+      // The prompt logger wraps long lines, including JSON strings.
+      if (output) {
+        process.stdout.write(output.endsWith('\n') ? output : `${output}\n`);
+      }
+      process.stderr.write(stderr);
+    } else {
+      prompts.log.info(output);
+      prompts.log.error(stderr.toString());
+    }
+    let failureMessage: string | undefined;
+    if (idleTimedOut && idleTimeoutMs !== undefined) {
+      const reason = `stopped after ${idleTimeoutMs / 1000} seconds without output.`;
+      if (options?.initialInstall) {
+        failureMessage = `Initial dependency resolution ${reason}`;
+        warnMsg(failureMessage);
+      } else {
+        failureMessage = `Dependency resolution ${reason} If pnpm hangs again, update the project's pnpm pin. Run \`vp install --no-frozen-lockfile\` in ${cwd} to retry.`;
+        errorMsg(failureMessage);
+      }
+    } else {
+      prompts.log.info(`You may need to run "vp install" manually in ${cwd}`);
+    }
     return {
       durationMs: Date.now() - startTime,
       exitCode,
       status: 'failed',
+      ...(failureMessage && { failureMessage }),
     } satisfies CommandRunSummary;
   }
 }

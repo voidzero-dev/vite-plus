@@ -55,6 +55,9 @@ export async function detectWorkspace(rootDir: string): Promise<WorkspaceInfoOpt
   if (bindingResult.packageManagerVersion) {
     result.packageManagerVersion = bindingResult.packageManagerVersion;
   }
+  if (bindingResult.packageManagerHash) {
+    result.packageManagerHash = bindingResult.packageManagerHash;
+  }
   if (bindingResult.isMonorepo) {
     result.isMonorepo = bindingResult.isMonorepo;
   }

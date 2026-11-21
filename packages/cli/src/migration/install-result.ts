@@ -1,6 +1,125 @@
+import {
+  downloadPackageManager,
+  getPackageManagerOverride,
+  type DownloadPackageManagerResult,
+} from '../../binding/index.js';
+import { PackageManager } from '../types/index.ts';
+import { getVpCommand, runCommandSilently } from '../utils/command.ts';
+import { PNPM_PROBE_TIMEOUT_MS, pnpmProbeEnv } from '../utils/pnpm-install-progress.ts';
 import type { CommandRunSummary } from '../utils/prompts.ts';
 import { warnMsg } from '../utils/terminal.ts';
 import type { MigrationReport } from './report.ts';
+
+const PNPM_9_INSTALL_IDLE_TIMEOUT_MS = 5 * 60_000;
+
+/** Bound silent pnpm 9 dependency resolution during non-interactive migration. */
+export async function getMigrationInstallWatchOptions(
+  cwd: string,
+  interactive: boolean | undefined,
+  packageManager: PackageManager | undefined,
+  downloaded: Pick<DownloadPackageManagerResult, 'version' | 'binPaths'> | undefined,
+  projectManagerHash?: string,
+): Promise<
+  { idleTimeoutMs: number; effectivePnpmVersion: string; pnpmExecutable: string } | undefined
+> {
+  if (interactive || process.env.VP_SKIP_INSTALL) {
+    return undefined;
+  }
+  try {
+    const override = getPackageManagerOverride();
+    if ((override?.name ?? packageManager) !== PackageManager.pnpm) {
+      return undefined;
+    }
+    const probeOptions = { cwd, envs: pnpmProbeEnv(process.env), timeoutMs: PNPM_PROBE_TIMEOUT_MS };
+    let version = downloaded?.version;
+    let pnpmExecutable = downloaded?.binPaths.pnpm;
+    if (process.env.VP_CLI_BIN) {
+      // The global launcher can select a system binary ahead of the project pin.
+      let selectionResult = await runCommandSilently({
+        ...getVpCommand(['env', 'current', 'pm', '--json']),
+        ...probeOptions,
+      });
+      if (selectionResult.exitCode === 2) {
+        // Older launchers reject the pm argument but include the selection in the full report.
+        selectionResult = await runCommandSilently({
+          ...getVpCommand(['env', 'current', '--json']),
+          ...probeOptions,
+        });
+      }
+      const { exitCode, stdout } = selectionResult;
+      if (exitCode !== 0) {
+        return undefined;
+      }
+      const { package_manager: selection } = JSON.parse(stdout.toString()) as {
+        package_manager?: {
+          name: string;
+          version: string;
+          installed?: boolean;
+          bin_paths?: Record<string, string>;
+          bin_path?: string;
+        };
+      };
+      if (selection?.name !== PackageManager.pnpm) {
+        return undefined;
+      }
+      // A matching version in another cache may have a different integrity pin.
+      // Let the installer provision the selected path before relying on it.
+      if (selection.installed === false && !override) {
+        return undefined;
+      }
+      // env current can see a system binary that failed the version probe.
+      // The installer falls back to the package manager resolved for the project.
+      const launcherVersion = selection.version === 'unknown' ? undefined : selection.version;
+      const expectedHash = override ? override.expectedHash : projectManagerHash;
+      const launcherExecutable =
+        launcherVersion &&
+        (selection.installed === true || (!expectedHash && selection.installed !== false))
+          ? (selection.bin_paths?.pnpm ?? selection.bin_path)
+          : undefined;
+      pnpmExecutable =
+        launcherExecutable ??
+        (launcherVersion === undefined || launcherVersion === version ? pnpmExecutable : undefined);
+      version = launcherVersion ?? version;
+      if (override) {
+        // Use the installer provider for a missing or unusable launcher.
+        pnpmExecutable =
+          launcherExecutable ??
+          (
+            await downloadPackageManager({
+              ...override,
+              version: launcherVersion ?? override.version,
+              cwd,
+            })
+          ).binPaths.pnpm;
+      }
+    } else if (override) {
+      // The local launcher uses the same provider as this binding.
+      pnpmExecutable = (await downloadPackageManager({ ...override, cwd })).binPaths.pnpm;
+    }
+    if (override) {
+      if (!pnpmExecutable) {
+        return undefined;
+      }
+      // The override chooses a launcher. pnpm can then switch to the project pin.
+      const { exitCode, stdout } = await runCommandSilently({
+        command: pnpmExecutable,
+        args: ['--version'],
+        ...probeOptions,
+      });
+      version = exitCode === 0 ? stdout.toString().trim() : undefined;
+    }
+    return version?.startsWith('9.') && pnpmExecutable
+      ? {
+          idleTimeoutMs: PNPM_9_INSTALL_IDLE_TIMEOUT_MS,
+          effectivePnpmVersion: version,
+          pnpmExecutable,
+        }
+      : undefined;
+  } catch {
+    // Let the install command report any manager selection error.
+    return undefined;
+  }
+}
 
 /**
  * Reconcile a CommandRunSummary from `runViteInstall` with the migration's
@@ -28,8 +147,12 @@ export function handleInstallResult(
   }
   if (installSummary.status === 'failed') {
     const exitCode = installSummary.exitCode ?? 1;
-    const message = `Dependency installation failed (exit code ${exitCode}). Run \`vp install\` manually in ${rootDir} to resync node_modules.`;
-    warnMsg(message);
+    const message =
+      installSummary.failureMessage ??
+      `Dependency installation failed (exit code ${exitCode}). Run \`vp install\` manually in ${rootDir} to resync node_modules.`;
+    if (!installSummary.failureMessage) {
+      warnMsg(message);
+    }
     report.warnings.push(message);
     if (options?.propagateExitCode !== false) {
       process.exitCode = exitCode;

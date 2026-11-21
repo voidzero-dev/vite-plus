@@ -62,6 +62,29 @@ impl fmt::Display for PackageManagerType {
 impl PackageManagerType {
     pub const ALL: [Self; 4] = [Self::Npm, Self::Pnpm, Self::Yarn, Self::Bun];
 
+    /// Ask a system package manager for its effective version without loading pnpm hooks.
+    pub fn system_version_command(self, executable: &AbsolutePath) -> tokio::process::Command {
+        let mut command = tokio::process::Command::new(executable.as_path());
+        command.arg("--version");
+        if self == Self::Pnpm {
+            // pnpm 11 and later use pnpm_config_ instead of npm_config_.
+            let keys = ["npm_config_ignore_pnpmfile", "pnpm_config_ignore_pnpmfile"];
+            for (key, _) in env::vars_os() {
+                if key
+                    .to_str()
+                    .is_some_and(|name| keys.iter().any(|key| name.eq_ignore_ascii_case(key)))
+                {
+                    command.env_remove(key);
+                }
+            }
+            command.env_remove("NODE_OPTIONS");
+            for key in keys {
+                command.env(key, "true");
+            }
+        }
+        command
+    }
+
     /// Map an invoked shim tool name (including aliases like `npx`, `pn`, `pnpx`, `pnx`,
     /// `yarnpkg`, `bunx`) to the package-manager family that provides it.
     #[must_use]
@@ -574,8 +597,8 @@ impl PackageManager {
             version.to_string()
         } else {
             // Corepack rejects a manager that the current project does not pin.
-            let output = tokio::process::Command::new(executable.as_path())
-                .arg("--version")
+            let output = client
+                .system_version_command(executable)
                 .current_dir(cwd)
                 // User preloads can print to stdout; only the actual command should run them.
                 .env_remove("NODE_OPTIONS")
@@ -5893,24 +5916,38 @@ mod tests {
 
     #[cfg(unix)]
     #[tokio::test(flavor = "current_thread")]
-    async fn system_version_probe_ignores_node_preloads() {
+    async fn system_pnpm_version_probe_ignores_preloads_and_hooks() {
         use std::os::unix::fs::PermissionsExt;
 
-        // Like a `NODE_OPTIONS=--require` preload, the fake pnpm prints before its version.
         let dir = tempfile::tempdir().unwrap();
         let pnpm = dir.path().join("pnpm");
-        std::fs::write(&pnpm, "#!/bin/sh\n[ -n \"$NODE_OPTIONS\" ] && echo preload\necho 10.0.0\n")
-            .unwrap();
+        std::fs::write(
+            &pnpm,
+            "#!/bin/sh\n\
+             [ -n \"$NODE_OPTIONS\" ] && echo preload\n\
+             [ -n \"$NPM_CONFIG_IGNORE_PNPMFILE\" ] && echo hook\n\
+             [ \"$npm_config_ignore_pnpmfile\" != true ] && echo hook\n\
+             [ -n \"$PNPM_CONFIG_IGNORE_PNPMFILE\" ] && echo hook\n\
+             [ \"$pnpm_config_ignore_pnpmfile\" != true ] && echo hook\n\
+             echo 10.0.0\n",
+        )
+        .unwrap();
         std::fs::set_permissions(&pnpm, std::fs::Permissions::from_mode(0o755)).unwrap();
         let pnpm = vt_path::AbsolutePathBuf::new(pnpm).unwrap();
         let cwd = vt_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
 
-        let vars = [("NODE_OPTIONS", Some(std::ffi::OsStr::new("--require ./preload.js")))];
+        let vars = [
+            ("NODE_OPTIONS", Some(std::ffi::OsStr::new("--require ./preload.js"))),
+            ("NPM_CONFIG_IGNORE_PNPMFILE", Some(std::ffi::OsStr::new("false"))),
+            ("npm_config_ignore_pnpmfile", Some(std::ffi::OsStr::new("false"))),
+            ("PNPM_CONFIG_IGNORE_PNPMFILE", Some(std::ffi::OsStr::new("false"))),
+            ("pnpm_config_ignore_pnpmfile", Some(std::ffi::OsStr::new("false"))),
+        ];
         let manager = vp_shared::EnvConfig::with_vars_async(vars, |_| {
             PackageManager::from_system_executable(PackageManagerType::Pnpm, &pnpm, &cwd)
         })
         .await
-        .expect("the preload output is not part of the version");
+        .expect("the pnpm probe only prints its version");
         assert_eq!(manager.get_version(), "10.0.0");
     }
 
