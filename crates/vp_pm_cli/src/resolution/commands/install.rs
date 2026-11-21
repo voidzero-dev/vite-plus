@@ -181,6 +181,14 @@ impl InstallArgs {
                 );
             }
         }
+        // `vp add` rejects these through a clap group; install flags can't use one because `--prod` and `--dev` are also install filters.
+        let save_targets = [self.prod, self.dev, self.save_peer, self.save_optional];
+        if adding_packages && save_targets.into_iter().filter(|&supplied| supplied).count() > 1 {
+            diagnostics.warn(
+                DiagnosticKind::UnsupportedOption,
+                "install with package names accepts only one of --prod, --dev, --save-peer, --save-optional.",
+            );
+        }
         if let Some(message) = diagnostics.unsupported_options_error() {
             return Ok(Resolution {
                 outcome: CommandResolution::InvalidArgument(message),
@@ -411,6 +419,22 @@ mod tests {
             &[
                 "install with package names does not support --fix-lockfile.",
                 "install with package names does not support --resolution-only.",
+            ],
+        );
+    }
+
+    #[test]
+    fn install_with_packages_rejects_multiple_save_targets() {
+        let manager = crate::PackageManager::from_bin_prefix(
+            crate::PackageManagerType::Pnpm,
+            "11.24.0",
+            vt_path::current_dir().unwrap().join(".test-package-manager/bin"),
+        );
+        let args = parse_args::<InstallArgs>(["-O", "-D", "react"]).unwrap();
+        expect_unsupported(
+            args.resolve_for_manager(&manager).unwrap(),
+            &[
+                "install with package names accepts only one of --prod, --dev, --save-peer, --save-optional.",
             ],
         );
     }

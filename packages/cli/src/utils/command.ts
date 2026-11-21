@@ -32,6 +32,11 @@ export function getVpCommand(
   if (command !== undefined) {
     return { command, args };
   }
+  return getLocalVpCommand(args);
+}
+
+/** Run this `vite-plus` package with the current Node.js, even when an older global `vp` launched it. */
+export function getLocalVpCommand(args: string[]): Pick<RunCommandOptions, 'command' | 'args'> {
   return {
     command: process.execPath,
     args: [fileURLToPath(import.meta.resolve('vite-plus/bin')), ...args],
