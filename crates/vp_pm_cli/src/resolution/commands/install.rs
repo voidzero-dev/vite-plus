@@ -239,6 +239,13 @@ impl InstallArgs {
 impl Resolve<InstallArgs> for Npm {
     fn resolve(&self, args: &InstallArgs, _diag: &mut Diagnostics) -> CommandResolution {
         let use_ci = args.frozen_lockfile && !args.no_frozen_lockfile;
+        // `npm ci --package-lock-only` still empties `node_modules`, so a lockfile check uses a script-free dry run.
+        let check_lockfile = use_ci && args.lockfile_only;
+        if check_lockfile && !self.supports_ci_dry_run() {
+            return CommandResolution::InvalidArgument(
+                "npm < 10.5.1 does not support --frozen-lockfile with --lockfile-only.".to_string(),
+            );
+        }
         let mut cmd = CommandBuilder::new("npm");
         cmd.arg(if use_ci { "ci" } else { "install" });
         if self.supports_v7_commands() {
@@ -251,10 +258,11 @@ impl Resolve<InstallArgs> for Npm {
                 .arg_if("--no-optional", args.no_optional);
         }
         cmd.arg_if("--package-lock-only", args.lockfile_only && !use_ci)
+            .arg_if("--dry-run", check_lockfile)
             .arg_if("--prefer-offline", args.prefer_offline)
             .arg_if("--offline", args.offline)
             .arg_if("--force", args.force && !use_ci)
-            .arg_if("--ignore-scripts", args.ignore_scripts)
+            .arg_if("--ignore-scripts", args.ignore_scripts || check_lockfile)
             .arg_if("--no-package-lock", args.no_lockfile && !use_ci);
         if args.silent {
             cmd.arg("--loglevel").arg("silent");
@@ -578,6 +586,21 @@ mod tests {
         );
 
         assert_eq!(command.args, vec!["ci"]);
+    }
+
+    #[test]
+    fn npm_frozen_lockfile_only_requires_non_destructive_ci_dry_run() {
+        let args = InstallArgs { frozen_lockfile: true, lockfile_only: true, ..Default::default() };
+
+        let command = expect_run(resolve(&npm("10.5.1"), args.clone()).outcome);
+        assert_eq!(command.args, vec!["ci", "--dry-run", "--ignore-scripts"]);
+
+        assert_eq!(
+            resolve(&npm("10.5.0"), args).outcome,
+            CommandResolution::InvalidArgument(
+                "npm < 10.5.1 does not support --frozen-lockfile with --lockfile-only.".to_string()
+            )
+        );
     }
 
     #[test]
@@ -1071,7 +1094,6 @@ mod tests {
                     frozen_lockfile: true,
                     dev: true,
                     force: true,
-                    lockfile_only: true,
                     no_lockfile: true,
                     ..Default::default()
                 },

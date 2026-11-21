@@ -9,6 +9,19 @@ steps = [
 ]
 
 [[case]]
+name = "npm_frozen_lockfile_only"
+vp = "global"
+steps = [
+  { argv = ["vp", "install", "./dep"], snapshot = false },
+  { argv = ["vp", "install", "--frozen-lockfile", "--lockfile-only"], comment = "an in-sync lockfile passes without reinstalling node_modules" },
+  ["vpt", "stat-file", "node_modules/install-option-dep", "--assert-not", "missing"],
+  { argv = ["vpt", "json-edit", "package.json", "dependencies.install-option-dep", "file:dep-v2"], snapshot = false },
+  { argv = ["vp", "install", "--frozen-lockfile", "--lockfile-only"], comment = "a lockfile out of sync with package.json fails", continue-on-failure = true },
+  ["vpt", "stat-file", "node_modules/install-option-dep", "--assert-not", "missing"],
+  ["vpt", "print-file", "package-lock.json"],
+]
+
+[[case]]
 name = "npm_offline"
 vp = "global"
 # Keep registry configuration out of PowerShell shim arguments and use a fresh cache on every platform.

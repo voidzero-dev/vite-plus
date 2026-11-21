@@ -43,7 +43,7 @@ vp install react
 
 The commands below describe project operations. Global mode is described under [Options](#options).
 
-- **npm:** `npm install`, or `npm ci` with `--frozen-lockfile` and no package names. With package names: `npm install`.
+- **npm:** `npm install`, or `npm ci` with `--frozen-lockfile` and no package names. Adding `--lockfile-only` runs `npm ci --dry-run --ignore-scripts`, which checks the lockfile without changing `node_modules`. With package names: `npm install`.
 - **pnpm:** `pnpm install`. With package names: `pnpm add`.
 - **Yarn Classic:** `yarn install`. With package names: `yarn add`.
 - **Yarn Modern:** `yarn install`. With package names: `yarn add`.
@@ -56,7 +56,7 @@ The commands below describe project operations. Global mode is described under [
 | `--no-optional`          | Yes                       | Yes                   | Yes                   | No                    | Yes                              |                                                    |
 | `--frozen-lockfile`      | Without package names     | Without package names | Yes                   | Without package names | Yes                              |                                                    |
 | `--no-frozen-lockfile`   | Without package names     | Without package names | Without package names | Without package names | Yes                              |                                                    |
-| `--lockfile-only`        | Without --frozen-lockfile | Yes                   | No                    | 3 or later            | Yes                              | npm ignores this in CI mode.                       |
+| `--lockfile-only`        | Yes                       | Yes                   | No                    | 3 or later            | Yes                              | With --frozen-lockfile, needs npm 10.5.1 or later. |
 | `--prefer-offline`       | Yes                       | Yes                   | Yes                   | No                    | 1.4.1 or later                   |                                                    |
 | `--offline`              | Yes                       | Yes                   | Yes                   | No                    | 1.4.1 or later                   |                                                    |
 | `-f, --force`            | Without --frozen-lockfile | Yes                   | Yes                   | No                    | Yes                              | npm ignores this in CI mode.                       |
