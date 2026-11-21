@@ -85,6 +85,13 @@ type ProcessEntry = [pid: number, parentPid: number, executable: string];
 const psArgs = ['-A', '-o', 'pid=', '-o', 'ppid='];
 const psOptions = { env: { PATH: '/usr/bin:/bin' }, timeout: 5000 };
 
+function getWindowsPowerShellPath() {
+  return join(
+    process.env.SystemRoot ?? 'C:\\Windows',
+    'System32/WindowsPowerShell/v1.0/powershell.exe',
+  );
+}
+
 function listProcfsProcesses(): ProcessEntry[] | undefined {
   if (process.platform === 'linux') {
     try {
@@ -190,10 +197,17 @@ async function hasTcpConnection(pids: number[], signal: AbortSignal): Promise<bo
     return hasProcfsTcpConnection(pids);
   }
   const windows = process.platform === 'win32';
-  const command = windows
-    ? join(process.env.SystemRoot ?? 'C:\\Windows', 'System32/netstat.exe')
-    : '/usr/sbin/lsof';
-  const args = windows ? ['-ano'] : ['-nP', '-a', '-p', pids.join(','), '-iTCP', '-FT'];
+  const command = windows ? getWindowsPowerShellPath() : '/usr/sbin/lsof';
+  // PowerShell filters by TCP state and returns numeric PIDs in every locale.
+  const args = windows
+    ? [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        `Get-NetTCPConnection -State Established,SynSent -OwningProcess ${pids.join(',')} ` +
+          '-ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess',
+      ]
+    : ['-nP', '-a', '-p', pids.join(','), '-iTCP', '-FT'];
   return new Promise<boolean>((resolve) => {
     execFile(command, args, { signal, timeout: 5000, windowsHide: true }, (error, output) => {
       if (!windows) {
@@ -206,14 +220,7 @@ async function hasTcpConnection(pids: number[], signal: AbortSignal): Promise<bo
         return;
       }
       const owners = new Set(pids);
-      resolve(
-        output.split(/\r?\n/).some((line) => {
-          const connection = /^\s*TCP\s+\S+\s+\S+\s+(?:ESTABLISHED|SYN_SEN[DT])\s+(\d+)\s*$/.exec(
-            line,
-          );
-          return connection !== null && owners.has(Number(connection[1]));
-        }),
-      );
+      resolve(output.split(/\r?\n/).some((line) => owners.has(Number(line.trim()))));
     });
   });
 }
@@ -222,12 +229,7 @@ async function hasActivePackageFetch(pid: number, signal: AbortSignal): Promise<
   const windows = process.platform === 'win32';
   let processes = listProcfsProcesses();
   if (processes === undefined) {
-    const command = windows
-      ? join(
-          process.env.SystemRoot ?? 'C:\\Windows',
-          'System32/WindowsPowerShell/v1.0/powershell.exe',
-        )
-      : 'ps';
+    const command = windows ? getWindowsPowerShellPath() : 'ps';
     const args = windows
       ? [
           '-NoProfile',
