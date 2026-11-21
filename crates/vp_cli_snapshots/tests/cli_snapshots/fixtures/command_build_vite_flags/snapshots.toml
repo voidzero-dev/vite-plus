@@ -13,5 +13,5 @@ name = "command_build_profile"
 vp = "local"
 steps = [
   { argv = ["vp", "build", "--profile"], comment = "--profile records a CPU profile of the build" },
-  { argv = ["vpt", "stat-file", "vite-profile-0.cpuprofile", "--assert", "file"], comment = "the profile is written to the project root" },
+  { argv = ["vpt", "stat-file", "vite-profile.cpuprofile", "--assert", "file"], comment = "the profile is written to the project root" },
 ]

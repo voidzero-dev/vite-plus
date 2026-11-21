@@ -79,6 +79,7 @@ import {
   mergeTsdownConfigFile,
   mergeViteConfigFiles,
   migrateEslintToOxlint,
+  migrateNativePreviewPack,
   migrateNodeVersionManagerFile,
   migratePrettierToOxfmt,
   migrateSetupVpVersion,
@@ -949,6 +950,7 @@ async function executeMigrationPlan(
 
   // 7. Rewrite configs
   updateMigrationProgress('Rewriting configs');
+  report.warnings.push(...migrateNativePreviewPack(workspaceInfo, report).warnings);
   if (workspaceInfo.isMonorepo) {
     rewriteMonorepo(workspaceInfo, skipStagedMigration, true, report, importRuleConfig);
   } else {
@@ -1262,6 +1264,7 @@ async function main() {
     // so surface it first instead of leaving the spinner silent. The spinner paints
     // this message synchronously on start(), before the walk begins.
     updateMigrationProgress('Rewriting toolchain imports across the workspace');
+    const nativePreview = migrateNativePreviewPack(workspaceInfoOptional, report);
     const coreMigrationResult = finalizeCoreMigrationForExistingVitePlus(
       workspaceInfoOptional,
       true,
@@ -1270,6 +1273,7 @@ async function main() {
       importRuleConfig,
     );
     if (
+      nativePreview.changed ||
       coreMigrationResult.dependencies ||
       coreMigrationResult.scripts ||
       coreMigrationResult.tsconfigTypes ||
@@ -1328,7 +1332,7 @@ async function main() {
       if (vitestV5Preflight) {
         prompts.log.warn(vitestV5Preflight);
       }
-      for (const warning of coreMigrationResult.taskCacheWarnings) {
+      for (const warning of [...coreMigrationResult.taskCacheWarnings, ...nativePreview.warnings]) {
         prompts.log.warn(warning);
       }
       if (skippedSetupCandidates) {
@@ -1337,7 +1341,7 @@ async function main() {
       prompts.outro(`This project is already using Vite+! ${accent('Happy coding!')}`);
       return;
     }
-    report.warnings.push(...migrationWarnings);
+    report.warnings.push(...migrationWarnings, ...nativePreview.warnings);
     for (const warning of coreMigrationResult.taskCacheWarnings) {
       addMigrationWarning(report, warning);
     }
@@ -1359,7 +1363,8 @@ async function main() {
       : undefined;
 
     // Runtime metadata can participate in the package manager's lockfile.
-    let needsInstall = coreMigrationResult.dependencies || nodeUpgrades > 0;
+    let needsInstall =
+      nativePreview.changed || coreMigrationResult.dependencies || nodeUpgrades > 0;
     async function reconcileBootstrap(dependencies: RetainedImportDependencies): Promise<boolean> {
       const resolved = await ensureExistingPackageManager();
       updateMigrationProgress('Configuring package manager');

@@ -1,7 +1,7 @@
-import { defineConfig } from 'tsdown';
+import type { UserConfig } from 'tsdown';
 
-export default defineConfig({
+export default {
   deps: {
     onlyBundle: false,
   },
-});
+} satisfies UserConfig;

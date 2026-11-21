@@ -1,6 +1,6 @@
 {
   "name": "@voidzero-dev/vite-plus-core",
-  "version": "8.3.8000",
+  "version": "8.4.0",
   "description": "The Unified Toolchain for the Web",
   "homepage": "https://viteplus.dev/guide",
   "bugs": {
@@ -113,8 +113,8 @@
     "@oxc-project/runtime": "catalog:",
     "@oxc-project/types": "catalog:",
     "lightningcss": "catalog:",
-    "postcss": "^8.5.32",
-    "yuku-parser": "0.19.0"
+    "postcss": "^8.5.33",
+    "yuku": "0.28.1"
   },
   "devDependencies": {
     "@ast-grep/napi": "^0.51.0",
@@ -124,7 +124,6 @@
     "@oxc-node/cli": "catalog:",
     "@tsdown/css": "catalog:",
     "@tsdown/exe": "catalog:",
-    "@typescript/native-preview": "catalog:",
     "@vitejs/devtools": "^0.8.2",
     "es-module-lexer": "^3.0.0",
     "hookable": "^6.0.1",
@@ -141,13 +140,14 @@
     "tinyglobby": "^0.2.15",
     "tree-kill": "^1.2.2",
     "tsdown": "catalog:",
+    "tsrs": "catalog:",
     "typescript": "catalog:",
+    "verkit": "catalog:",
     "vite": "workspace:*"
   },
   "peerDependencies": {
     "@arethetypeswrong/core": "^0.18.1",
     "@types/node": "^20.19.0 || >=22.12.0",
-    "@typescript/native-preview": "*",
     "@vitejs/devtools": "^0.7.1 || ^0.8.0",
     "@volar/typescript": "~2.4.0",
     "@vue/language-core": "~3.2.0 || ~3.3.0",
@@ -160,21 +160,22 @@
     "stylus": ">=0.54.8",
     "sugarss": "^5.0.0",
     "terser": "^5.16.0",
+    "tsrs": "*",
     "tsx": "^4.8.1",
-    "typescript": "^5.0.0 || ^6.0.0 || ^7.0.0",
+    "typescript": "^5.0.0 || ^6.0.0 || ^7.0.0 || ~7.1.0-0",
     "unplugin-unused": ">=0.5.0",
     "unrun": "*",
     "vue-tsc": "~3.2.0 || ~3.3.0",
     "yaml": "^2.4.2"
   },
   "peerDependenciesMeta": {
-    "@typescript/native-preview": {
-      "optional": true
-    },
     "@volar/typescript": {
       "optional": true
     },
     "@vue/language-core": {
+      "optional": true
+    },
+    "tsrs": {
       "optional": true
     },
     "typescript": {
@@ -233,15 +234,16 @@
     }
   },
   "optionalDependencies": {
-    "fsevents": "~2.3.3"
+    "fsevents": "~2.3.3",
+    "napi-windows-process-start-time": "^0.1.0"
   },
   "engines": {
     "node": "^20.19.0 || ^22.18.0 || >=24.11.0"
   },
   "bundledVersions": {
-    "vite": "8.3.8",
-    "rolldown": "1.2.19",
-    "tsdown": "0.23.4"
+    "vite": "8.4.0-beta.1",
+    "rolldown": "1.3.3",
+    "tsdown": "0.23.7"
   },
   "vitePlusVersion": "1.7.0"
 }

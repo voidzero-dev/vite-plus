@@ -15,6 +15,7 @@ function toPosixPath(nativePath: string): string {
 import { build, type BuildOptions } from 'rolldown';
 import { dts } from 'rolldown-plugin-dts';
 import { glob } from 'tinyglobby';
+import { findMinimumForRange, isRangeSubset } from 'verkit';
 
 import { generateLicenseFile } from '../../scripts/generate-license.js';
 import viteRolldownConfig from '../../vite/packages/vite/rolldown.config.js';
@@ -155,13 +156,12 @@ async function buildVite() {
                 // (mod.url) instead of the raw URL parameter for relative path
                 // resolution. The raw `url` can be a file:// URL (e.g. from
                 // VitePress's `import(pathToFileURL(entryPath).href)`) which
-                // pathe.resolve cannot handle as an absolute path, producing
-                // malformed paths like "<cwd>/file:<path>".
+                // pathe.join normalizes into a malformed "file:/..." path.
                 // mod.url is always a server-normalized URL (e.g. /@fs/...)
-                // that posixResolve handles correctly.
+                // that posixJoin handles correctly.
                 magicString.replace(
-                  `if (dep[0] === '.') {\n        dep = posixResolve(posixDirname(url), dep)\n      }`,
-                  `if (dep[0] === '.') {\n        dep = posixResolve(posixDirname(mod.url), dep)\n      }`,
+                  'posixJoin(posixDirname(url), dep)',
+                  'posixJoin(posixDirname(mod.url), dep)',
                 );
                 return {
                   code: magicString,
@@ -475,16 +475,13 @@ async function bundleTsdown() {
   // in and they cannot be bundled. Both are core `dependencies`, so they resolve
   // at runtime and CSS bundling works without users installing anything.
   //
-  // `yuku-parser` (used by `rolldown-plugin-dts`) loads native bindings through
-  // `yuku-core`. Keep it external and declare it as a core dependency so the
-  // native loader resolves its platform package at runtime. Pin its version
-  // to the one resolved by the bundled plugin. `yuku-ast` and
-  // `yuku-codegen` are pure JavaScript in Yuku 0.19 and are bundled into core.
+  // The declaration plugin imports `yuku` and `yuku/utils`. Keep them external
+  // so Yuku can resolve its native binding for the user's platform.
   const tsdownExternal = [
     ...Object.keys(pkgJson.peerDependencies).filter((name) => !bundledTsdownPackages.has(name)),
     'lightningcss',
     'postcss',
-    'yuku-parser',
+    'yuku',
   ];
   const isExternal = (id: string) => tsdownExternal.some((e) => id === e || id.startsWith(`${e}/`));
 
@@ -541,7 +538,7 @@ async function bundleTsdown() {
       RewriteImportsPlugin,
       dts({
         generator: 'oxc',
-        dtsInput: true,
+        dtsOnly: true,
       }),
     ],
   });
@@ -754,16 +751,26 @@ async function mergePackageJson() {
   const dtsPkg = createRequire(join(realpathSync(tsdownSourceDir), 'package.json'))(
     'rolldown-plugin-dts/package.json',
   );
+  // tsdown declares stable TypeScript peers. Its declaration plugin also accepts
+  // prereleases that provide the native declaration emit API.
+  const typescriptRange = tsdownPkg.peerDependencies.typescript;
+  const compilerPrereleases = (dtsPkg.peerDependencies.typescript as string)
+    .split(/\s*\|\|\s*/)
+    .filter(
+      (range) =>
+        findMinimumForRange(range)?.prerelease?.length && !isRangeSubset(range, typescriptRange),
+    );
 
   // Merge peerDependencies from rolldown-plugin-dts, tsdown and vite. The bundled
   // dts plugin still resolves `vue-tsc`, `@volar/typescript`,
-  // `@vue/language-core` and `@typescript/native-preview` from core at runtime,
+  // `@vue/language-core` and `tsrs` from core at runtime,
   // and its declarations import their types, so isolated installs need them
   // declared here.
   destPkg.peerDependencies = {
     ...dtsPkg.peerDependencies,
     ...tsdownPkg.peerDependencies,
     ...vitePkg.peerDependencies,
+    typescript: [typescriptRange, ...compilerPrereleases].join(' || '),
   };
 
   // Merge peerDependenciesMeta from rolldown-plugin-dts, tsdown and vite

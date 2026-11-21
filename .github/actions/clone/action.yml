@@ -72,9 +72,9 @@ runs:
 
     # oxc-node compiles into the native binding, and Cargo.lock records the
     # patched manifest, so patch it before any cargo command reads it.
-    - name: Patch vendored oxc-node
+    - name: Patch vendored sources
       shell: bash
-      run: node packages/tools/src/patch-oxc-node.ts
+      run: node packages/tools/src/patch-vendored-sources.ts
 
     # Match the manifests used by sync-remote when it generated the root lockfile.
     # The later dependency installation uses --frozen-lockfile, so alignment must run first.

@@ -270,6 +270,7 @@ Options:
   -d, --debug [feat]            [string | boolean] show debug logs
   -f, --filter <filter>         [string] filter debug logs
   -m, --mode <mode>             [string] set env mode
+  --bypass-lock                 [boolean] disable process locks
   -h, --help                    Display this message
 
 Examples:
@@ -416,6 +417,7 @@ Options:
   -d, --debug [feat]      [string | boolean] show debug logs
   -f, --filter <filter>   [string] filter debug logs
   -m, --mode <mode>       [string] set env mode
+  --bypass-lock           [boolean] disable process locks
   -h, --help              Display this message
 
 Examples:
@@ -454,6 +456,7 @@ Options:
   -d, --debug [feat]      [string | boolean] show debug logs
   -f, --filter <filter>   [string] filter debug logs
   -m, --mode <mode>       [string] set env mode
+  --bypass-lock           [boolean] disable process locks
   -h, --help              Display this message
 
 Examples:
