@@ -151,11 +151,17 @@ describe('formatPnpmInstallOutput', () => {
         message: '"pnpm recursive install" failed in 2 packages',
       };
       const headline = `${summary.code} ${summary.message}`;
+      const progress = { name: 'pnpm:progress', level: 'debug' };
       const output = [
         { name: 'pnpm', level: 'info', prefix: cwd, message: lockfile },
         { name: 'pnpm', level: 'info', prefix: archivePrefix, message: lockfile },
         { name: 'pnpm', level: 'info', prefix: workspacePrefix, message: lockfile },
         { name: 'pnpm:global', level: 'info', message: globalMessage },
+        { ...progress, requester: cwd, status: 'resolved' },
+        { ...progress, requester: archivePrefix, status: 'resolved' },
+        { ...progress, requester: workspacePrefix, status: 'found_in_store' },
+        { ...progress, requester: archivePrefix, status: 'fetched' },
+        { ...progress, requester: workspacePrefix, status: 'imported' },
         {
           name: 'pnpm',
           level: 'info',
@@ -204,7 +210,16 @@ describe('formatPnpmInstallOutput', () => {
         );
       } else {
         expect(rendered).toBe(
-          `${lockfile}\n${globalMessage}\npackages/workspace: ${workspaceCode} ${workspace}\npackages/archive: ${archiveCode} ${safeArchive}\n${headline}`,
+          [
+            lockfile,
+            globalMessage,
+            `packages/workspace: ${workspaceCode} ${workspace}`,
+            `packages/archive: ${archiveCode} ${safeArchive}`,
+            headline,
+            'Progress: resolved 1, reused 0, downloaded 0, added 0',
+            'packages/archive | Progress: resolved 1, reused 0, downloaded 1, added 0',
+            'packages/workspace | Progress: resolved 0, reused 1, downloaded 0, added 1',
+          ].join('\n'),
         );
       }
     },

@@ -461,7 +461,8 @@ export async function formatPnpmInstallOutput(
   const infoErrorIndices = new Map<string, number[]>();
   let seenPeerIssues = false;
   let terminalErrorIndex: number | undefined;
-  const progress = { resolved: 0, found_in_store: 0, fetched: 0, imported: 0 };
+  const emptyProgress = { resolved: 0, found_in_store: 0, fetched: 0, imported: 0 };
+  const progressByRequester = new Map<string, typeof emptyProgress>();
   for (const line of output.split(/\r?\n/)) {
     const { text, log } = splitPnpmLine(line, parsePnpmDiagnostic);
     if (text || !log) {
@@ -569,8 +570,14 @@ export async function formatPnpmInstallOutput(
       // Its lifecycle warnings and messages remain in the structured stream.
       continue;
     } else if (log.name === 'pnpm:progress') {
-      if (showInfo && typeof log.status === 'string' && Object.hasOwn(progress, log.status)) {
-        progress[log.status as keyof typeof progress]++;
+      if (showInfo && typeof log.status === 'string' && Object.hasOwn(emptyProgress, log.status)) {
+        const requester = typeof log.requester === 'string' && log.requester ? log.requester : cwd;
+        let progress = progressByRequester.get(requester);
+        if (progress === undefined) {
+          progress = { ...emptyProgress };
+          progressByRequester.set(requester, progress);
+        }
+        progress[log.status as keyof typeof emptyProgress]++;
       }
     } else if (log.name === 'pnpm:lifecycle' && typeof log.stage === 'string') {
       const directory =
@@ -681,10 +688,10 @@ export async function formatPnpmInstallOutput(
       }
     }
   }
-  if (Object.values(progress).some((count) => count > 0)) {
-    messages.push(
-      `Progress: resolved ${progress.resolved}, reused ${progress.found_in_store}, downloaded ${progress.fetched}, added ${progress.imported}`,
-    );
+  for (const [requester, progress] of progressByRequester) {
+    const label = redactRegistryUrls(displayRelative(requester, cwd));
+    const summary = `Progress: resolved ${progress.resolved}, reused ${progress.found_in_store}, downloaded ${progress.fetched}, added ${progress.imported}`;
+    messages.push(label ? `${label} | ${summary}` : summary);
   }
   return messages.join('\n').trim();
 }
