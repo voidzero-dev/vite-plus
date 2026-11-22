@@ -2,8 +2,32 @@
 name = "global_wanted_range"
 vp = "global"
 steps = [
-  { argv = ["vp", "install", "-g", "testnpm2@^1", "range-alias@npm:testnpm2@^1"], snapshot = false },
-  { argv = ["vp", "list", "-g"], comment = "npm prefers the matching latest tag for both installs" },
+  { argv = ["vp", "install", "-g", "testnpm2@^01", "range-alias@npm:testnpm2@^1"], snapshot = false },
+  { argv = ["vp", "list", "-g"], comment = "npm accepts the loose range ^01 and prefers latest for both installs" },
   { argv = ["vp", "outdated", "-g", "--format", "json"] },
   { tty = false, argv = ["vp", "update", "-g"], comment = "both installed versions already satisfy the update" },
+]
+
+[[case]]
+name = "npm8_global_config"
+vp = "global"
+env = { VP_NODE_VERSION = "18.12.1" }
+steps = [
+  { argv = ["vpt", "write-file", "package.json", "{}"], snapshot = false },
+  { argv = ["vpt", "write-file", ".npmrc", "tag=next\n"], snapshot = false },
+  { argv = ["vp", "install", "-g", "testnpm2@^1"], snapshot = false },
+  { argv = ["vp", "list", "-g"], comment = "npm 8 ignores the project's default tag for global installs" },
+  { argv = ["vp", "outdated", "-g", "--format", "json"] },
+  { tty = false, argv = ["vp", "update", "-g"] },
+  { argv = ["vp", "outdated", "-g", "--format", "list"], envs = [["npm_config_tag", "next"]], comment = "A user-selected tag changes wanted while latest stays on the registry's latest tag" },
+]
+
+[[case]]
+name = "update_without_latest"
+vp = "global"
+steps = [
+  { argv = ["vp", "install", "-g", "is-number@npm:testnpm2@^1"], snapshot = false },
+  { tty = false, argv = ["vp", "outdated", "-g", "is-number@6", "--format", "list"], comment = "An explicit spec queries is-number, which has no latest tag", continue-on-failure = true },
+  { tty = false, argv = ["vp", "update", "-g", "is-number@6"], comment = "Updating only needs the wanted version", continue-on-failure = true },
+  { argv = ["vp", "list", "-g"] },
 ]

@@ -386,7 +386,7 @@ cases that do not need a different major.
 
 | Node major | Default fixed runtime | Required exceptions                                                                                                                   |
 | ---------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| 18         | `18.20.8`             | None; the oldest release that `vp env` must install and run.                                                                          |
+| 18         | `18.20.8`             | `18.12.1` bundles npm 8 for global package configuration tests.                                                                       |
 | 20         | `20.20.2`             | None; unsupported-runtime and migration cases share this version.                                                                     |
 | 22         | `22.23.4`             | `22.18.0` tests asynchronous loader and watcher hooks and the exact supported migration target. Synchronous hooks start at `22.22.3`. |
 | 24         | `24.22.1`             | `24.3.0` is the unsupported migration input; `24.11.0` is the exact supported upgrade target.                                         |

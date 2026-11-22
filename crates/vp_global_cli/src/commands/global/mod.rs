@@ -1,15 +1,12 @@
 //! Managed global package utilities.
 
-use std::{collections::HashMap, fs::File, io::Read, process::Stdio};
+use std::{fs::File, io::Read};
 
 use flate2::read::GzDecoder;
-use futures::{StreamExt, stream::FuturesUnordered};
 use tar::Archive;
-use tokio::process::Command;
-use vp_shared::{PrependOptions, ToolPathEnv, progress::Progress};
 use vt_path::{AbsolutePathBuf, current_dir};
 
-use crate::{commands::env::config::resolve_version, error::Error};
+use crate::error::Error;
 
 pub(crate) mod bin_lock;
 pub mod install;
@@ -18,118 +15,6 @@ pub mod packages;
 
 /// Legacy managed globals superseded by the default package-manager shims.
 pub(crate) const LEGACY_PACKAGE_MANAGER_PACKAGES: &[&str] = &["yarn", "pnpm", "bun", "corepack"];
-
-#[derive(Debug)]
-struct PackageVersion {
-    package_spec: String,
-    version: Result<String, Error>,
-}
-
-struct NpmRegistry {
-    npm_path: AbsolutePathBuf,
-    node_bin_dir: AbsolutePathBuf,
-}
-
-impl NpmRegistry {
-    async fn resolve() -> Result<Self, Error> {
-        let cwd = current_dir()?;
-        let resolution = resolve_version(&cwd).await?;
-        let runtime = vp_js_runtime::download_runtime(
-            vp_js_runtime::JsRuntimeType::Node,
-            &resolution.version,
-        )
-        .await?;
-
-        let node_bin_dir = runtime.get_bin_prefix();
-        let npm_path =
-            if cfg!(windows) { node_bin_dir.join("npm.cmd") } else { node_bin_dir.join("npm") };
-
-        Ok(Self { npm_path, node_bin_dir })
-    }
-
-    async fn latest_package_version(&self, package_spec: &str) -> Result<String, Error> {
-        let query = registry_query_spec(package_spec);
-        // npm view enumerates a range. Ask npm's install resolver which manifest it would pick.
-        let is_range = !is_local_package_spec(&query)
-            && parse_package_spec(&query)?.1.is_some_and(|version| {
-                js_semver::Range::parse(&version).is_ok()
-                    && js_semver::Version::parse(&version).is_err()
-            });
-        let mut command = if is_range {
-            let node = self.node_bin_dir.join(if cfg!(windows) { "node.exe" } else { "node" });
-            let mut command = Command::new(node.as_path());
-            command.args([
-                "--input-type=commonjs",
-                "-e",
-                include_str!("resolve-version.cjs"),
-                "--",
-                &query,
-            ]);
-            command
-        } else {
-            let mut command = Command::new(self.npm_path.as_path());
-            command.args(["view", "-g", &query, "version", "--json"]);
-            command
-        };
-
-        let mut env = ToolPathEnv::from_env();
-        env.prepend(&self.node_bin_dir, &["node", "npm", "npx"], PrependOptions::default())?;
-        // The spinner's raw stdin would be restored by Node when it exits.
-        let output = command.envs(env.into_envs()).stdin(Stdio::null()).output().await?;
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            let action = if is_range { "npm resolution" } else { "npm view" };
-            return Err(Error::Other(
-                format!("{action} failed for {query}: {}", stderr.trim()).into(),
-            ));
-        }
-
-        parse_npm_view_version(&output.stdout)
-    }
-}
-
-pub(crate) async fn latest_package_versions(
-    specs: &[String],
-    concurrency: usize,
-) -> Result<HashMap<String, Result<String, Error>>, Error> {
-    if specs.is_empty() {
-        return Ok(HashMap::new());
-    }
-
-    let registry = NpmRegistry::resolve().await?;
-    let concurrency = concurrency.max(1);
-    let mut package_specs = specs.iter();
-    let mut versions = HashMap::with_capacity(specs.len());
-
-    let progress = Progress::counter("Checking latest package versions", specs.len() as u64);
-
-    let mut queries = FuturesUnordered::new();
-
-    loop {
-        while queries.len() < concurrency {
-            let Some(package_spec) = package_specs.next() else { break };
-            queries.push(async {
-                let package_spec = package_spec.clone();
-                let version = registry.latest_package_version(&package_spec).await;
-                PackageVersion { package_spec, version }
-            });
-        }
-
-        if queries.is_empty() {
-            break;
-        }
-
-        if let Some(version) = queries.next().await {
-            if let Some(progress) = &progress {
-                progress.bar().inc(1);
-            }
-            versions.insert(version.package_spec, version.version);
-        }
-    }
-    drop(progress);
-
-    Ok(versions)
-}
 
 /// Return true for package specs that refer to local filesystem content.
 pub(crate) fn is_local_package_spec(spec: &str) -> bool {
@@ -219,17 +104,6 @@ pub(crate) fn alias_target(version_spec: &str) -> Option<String> {
     parse_package_spec(target).ok().map(|(name, _)| name).filter(|name| !name.is_empty())
 }
 
-/// `npm view` rejects alias specs, so query the aliased package itself.
-fn registry_query_spec(spec: &str) -> String {
-    if !is_local_package_spec(spec)
-        && let Ok((_, Some(version_spec))) = parse_package_spec(spec)
-        && let Some(target) = version_spec.strip_prefix("npm:")
-    {
-        return target.to_string();
-    }
-    spec.to_string()
-}
-
 fn resolve_local_package_path(spec: &str) -> Result<AbsolutePathBuf, Error> {
     let path_spec = spec.strip_prefix("file:").unwrap_or(spec);
     let path = std::path::Path::new(path_spec);
@@ -307,76 +181,9 @@ fn read_package_json_from_tarball(
     Err(Error::Other(format!("Package tarball {spec} must contain package/package.json").into()))
 }
 
-fn parse_npm_view_version(stdout: &[u8]) -> Result<String, Error> {
-    let raw = String::from_utf8_lossy(stdout);
-    let trimmed = raw.trim();
-    if trimmed.is_empty() {
-        return Err(Error::Other("npm view returned an empty version".into()));
-    }
-
-    match serde_json::from_str::<serde_json::Value>(trimmed) {
-        Ok(serde_json::Value::String(version)) => Ok(version),
-        Ok(serde_json::Value::Array(versions)) => {
-            // A range query lists matching versions in publish order, so a
-            // backport release can come last (e.g. vite 4.5.14 after 5.0.x);
-            // use semver precedence when npm returns multiple versions.
-            let max = versions
-                .iter()
-                .filter_map(|version| version.as_str())
-                .filter_map(|version| {
-                    js_semver::Version::parse(version).ok().map(|parsed| (parsed, version))
-                })
-                .max_by(|(a, _), (b, _)| a.cmp(b))
-                .map(|(_, version)| version)
-                .or_else(|| versions.iter().rev().find_map(|version| version.as_str()));
-            let Some(version) = max else {
-                return Err(Error::Other("npm view returned an empty version list".into()));
-            };
-            Ok(version.to_string())
-        }
-        _ => Ok(trimmed.to_string()),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn parses_json_string_version() {
-        let version = parse_npm_view_version(br#""5.0.0""#).unwrap();
-        assert_eq!(version, "5.0.0");
-    }
-
-    #[test]
-    fn parses_json_array_version() {
-        let version = parse_npm_view_version(br#"["4.9.5","5.0.0"]"#).unwrap();
-        assert_eq!(version, "5.0.0");
-    }
-
-    #[test]
-    fn parses_json_array_version_by_semver_not_publish_order() {
-        // A backport released after a higher version lists last in npm's
-        // publish-ordered output; the semver max must win.
-        let version = parse_npm_view_version(br#"["5.0.11","5.0.12","4.5.14"]"#).unwrap();
-        assert_eq!(version, "5.0.12");
-
-        let version =
-            parse_npm_view_version(br#"["2.0.0-beta.2","2.0.0-beta.10","2.0.0-beta.9"]"#).unwrap();
-        assert_eq!(version, "2.0.0-beta.10");
-    }
-
-    #[test]
-    fn parses_plain_version() {
-        let version = parse_npm_view_version(b"5.0.0").unwrap();
-        assert_eq!(version, "5.0.0");
-    }
-
-    #[test]
-    fn rejects_empty_output() {
-        let error = parse_npm_view_version(b"\n").unwrap_err();
-        assert!(error.to_string().contains("empty version"));
-    }
 
     #[test]
     fn update_version_spec_keeps_dist_tags() {
@@ -431,14 +238,5 @@ mod tests {
         );
         assert_eq!(update_version_spec("some-pkg@npm:"), None);
         assert_eq!(update_version_spec("some-pkg@npm:./local"), None);
-    }
-
-    #[test]
-    fn registry_query_spec_resolves_npm_aliases() {
-        assert_eq!(registry_query_spec("typescript@npm:cowsay"), "cowsay");
-        assert_eq!(registry_query_spec("typescript@npm:cowsay@^1.5"), "cowsay@^1.5");
-        assert_eq!(registry_query_spec("@scope/alias@npm:@types/node@20"), "@types/node@20");
-        assert_eq!(registry_query_spec("typescript@^5"), "typescript@^5");
-        assert_eq!(registry_query_spec("typescript"), "typescript");
     }
 }

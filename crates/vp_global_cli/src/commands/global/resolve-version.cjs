@@ -10,17 +10,23 @@ const npmRequire = createRequire(
   ),
 );
 
-async function resolveVersion(rawSpec) {
+async function resolveVersions(rawSpec, command) {
   const Npm = npmRequire('./lib/npm.js');
-  const npm = new Npm({ argv: ['--global'] });
+  // npm 8 reads --global directly from process.argv.
+  const npm = new Npm();
   await npm.config.load();
 
-  const spec = npmRequire('npm-package-arg')(rawSpec);
-  if (!spec.registry) {
-    throw new Error('Expected a registry package');
-  }
-
-  const options = npm.flatOptions;
+  const parsed = npmRequire('npm-package-arg')(rawSpec);
+  const spec = parsed.subSpec ?? parsed;
+  const pacote = npmRequire('pacote');
+  const options = {
+    ...npm.flatOptions,
+    fullMetadata: true,
+    preferOnline: true,
+    _isRoot: true,
+    // Both calls below use the same package metadata for a registry spec.
+    packumentCache: new Map(),
+  };
   // npm versions that support release-age exclusions apply them before fetching the manifest.
   if (options.before && options.minReleaseAgeExclude?.length) {
     const { isReleaseAgeExcluded } = npmRequire('@npmcli/arborist/lib/release-age-exclude.js');
@@ -29,16 +35,20 @@ async function resolveVersion(rawSpec) {
     }
   }
 
-  const manifest = await npmRequire('pacote').manifest(spec, {
-    ...options,
-    fullMetadata: true,
-    preferOnline: true,
-    _isRoot: true,
-  });
-  process.stdout.write(manifest.version);
+  const { version: wanted } = await pacote.manifest(spec, options);
+  let latest = wanted;
+  if (command === 'outdated') {
+    const metadata = await pacote.packument(spec.name, options);
+    latest = metadata['dist-tags']?.latest;
+    if (!latest) {
+      throw new Error(`No latest dist-tag for ${spec.name}`);
+    }
+  }
+  process.stdout.write(JSON.stringify({ alias_target: parsed.subSpec?.name, wanted, latest }));
 }
 
-resolveVersion(process.argv[1]).catch((error) => {
+const [, rawSpec, command] = process.argv;
+resolveVersions(rawSpec, command).catch((error) => {
   process.stderr.write(error.message);
   process.exitCode = 1;
 });

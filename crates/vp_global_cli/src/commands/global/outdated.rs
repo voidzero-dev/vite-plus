@@ -2,17 +2,25 @@
 
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
-    process::ExitStatus,
+    process::{ExitStatus, Stdio},
 };
 
 use console::style;
-use serde::Serialize;
+use futures::{StreamExt, stream};
+use serde::{Deserialize, Serialize};
+use tokio::process::Command;
+use vp_js_runtime::{JsRuntime, JsRuntimeType, download_runtime};
 use vp_pm_cli::OutdatedFormat;
+use vp_shared::{PrependOptions, ToolPathEnv, progress::Progress};
+use vt_path::current_dir;
 
-use super::{alias_target, latest_package_versions, parse_package_spec, update_version_spec};
+use super::parse_package_spec;
 use crate::{
     cli::exit_status,
-    commands::env::{config::get_node_modules_dir, package_metadata::PackageMetadata},
+    commands::env::{
+        config::{get_node_modules_dir, resolve_version},
+        package_metadata::PackageMetadata,
+    },
     error::Error,
 };
 
@@ -51,66 +59,50 @@ pub enum LookupMode {
     WantedAndLatest,
 }
 
-fn registry_specs(installed: &[(PackageMetadata, String)], mode: LookupMode) -> Vec<String> {
-    let mut specs = Vec::new();
-    let mut seen = HashSet::new();
-    for (package, wanted_query) in installed {
-        let latest_query = latest_query(&package.name, spec_alias_target(wanted_query).as_deref());
-        let queries = std::iter::once(wanted_query.clone()).chain(
-            (mode == LookupMode::WantedAndLatest && *wanted_query != latest_query)
-                .then_some(latest_query),
-        );
-        for query in queries {
-            if seen.insert(query.clone()) {
-                specs.push(query);
-            }
-        }
-    }
-    specs
+#[derive(Deserialize)]
+struct RegistryVersions {
+    alias_target: Option<String>,
+    wanted: String,
+    latest: String,
 }
 
-fn resolve_registry_version(
-    versions: &HashMap<String, Result<String, String>>,
-    key: &str,
-) -> Result<String, String> {
-    match versions.get(key) {
-        Some(Ok(version)) => Ok(version.trim().to_string()),
-        // Keep the first line: npm's stderr goes on to multi-line advice and
-        // a timestamped log path, which is noise in a one-line warning.
-        Some(Err(error)) => {
-            Err(error.lines().next().unwrap_or("registry lookup failed").to_string())
-        }
-        None => Err(format!("no registry response for {key}")),
-    }
-}
-
-fn resolve_package_versions(
-    versions: &HashMap<String, Result<String, String>>,
-    latest_key: &str,
-    wanted_key: &str,
+async fn lookup_versions(
+    runtime: &JsRuntime,
+    spec: &str,
     mode: LookupMode,
-) -> Result<(String, String), (String, String)> {
-    let wanted = resolve_registry_version(versions, wanted_key)
-        .map_err(|error| (wanted_key.to_string(), error))?;
-    let latest = match mode {
-        LookupMode::WantedOnly => wanted.clone(),
-        LookupMode::WantedAndLatest => resolve_registry_version(versions, latest_key)
-            .map_err(|error| (latest_key.to_string(), error))?,
+) -> Result<RegistryVersions, Error> {
+    let mut env = ToolPathEnv::from_env();
+    env.prepend(runtime.get_bin_prefix(), &["node", "npm", "npx"], PrependOptions::default())?;
+    let command = match mode {
+        LookupMode::WantedOnly => "update",
+        LookupMode::WantedAndLatest => "outdated",
     };
-    Ok((wanted, latest))
-}
-
-/// Package an install from `spec` resolves to, when it goes through an npm alias.
-fn spec_alias_target(spec: &str) -> Option<String> {
-    update_version_spec(spec).as_deref().and_then(alias_target)
-}
-
-/// `latest` follows the package the spec installs, so an explicit `name@6` drops the installed alias.
-fn latest_query(name: &str, alias_target: Option<&str>) -> String {
-    match alias_target {
-        Some(target) => format!("{name}@npm:{target}"),
-        None => name.to_string(),
+    let output = Command::new(runtime.get_binary_path().as_path())
+        .args([
+            "--input-type=commonjs",
+            "-e",
+            include_str!("resolve-version.cjs"),
+            "--",
+            spec,
+            command,
+            "--global",
+        ])
+        .envs(env.into_envs())
+        // The spinner's raw stdin would be restored by Node when it exits.
+        .stdin(Stdio::null())
+        .output()
+        .await?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(Error::Other(
+            format!(
+                "npm resolution failed for {spec}: {}",
+                stderr.lines().next().unwrap_or("registry lookup failed")
+            )
+            .into(),
+        ));
     }
+    Ok(serde_json::from_slice(&output.stdout)?)
 }
 
 fn aliased_version(alias_target: Option<&str>, version: &str) -> String {
@@ -177,40 +169,40 @@ pub async fn get_outdated_packages(
         return Ok(OutdatedReport { outdated: Vec::new(), failures: Vec::new() });
     }
 
-    // 2. Query the registry once per distinct spec. The wanted version comes
-    //    from the (possibly spec-qualified) query spec. Outdated reporting
-    //    additionally needs the bare package name for the `latest` dist-tag,
-    //    while updates deliberately skip that informational lookup.
-    //    A registry setup failure is fatal; per-package lookup failures are
-    //    collected so callers can warn and continue.
-    let specs = registry_specs(&installed, mode);
+    // 2. Resolve each distinct install spec once, even when a package is requested twice.
+    let specs: HashSet<_> = installed.iter().map(|(_, spec)| spec.as_str()).collect();
+    let resolution = resolve_version(&current_dir()?).await?;
+    let runtime = download_runtime(JsRuntimeType::Node, &resolution.version).await?;
+    let progress = Progress::counter("Checking latest package versions", specs.len() as u64);
+    let versions: HashMap<_, _> = stream::iter(specs)
+        .map(|spec| async {
+            let result = lookup_versions(&runtime, spec, mode).await;
+            if let Some(progress) = &progress {
+                progress.bar().inc(1);
+            }
+            (spec.to_owned(), result)
+        })
+        .buffer_unordered(concurrency.max(1))
+        .collect()
+        .await;
+    drop(progress);
 
-    let versions: HashMap<String, Result<String, String>> =
-        latest_package_versions(&specs, concurrency)
-            .await?
-            .into_iter()
-            .map(|(spec, version)| (spec, version.map_err(|error| error.to_string())))
-            .collect();
-
-    // 3. Compare installed metadata with registry versions. Packages whose
-    //    registry lookup failed are reported as failures because there is no
-    //    version to compare.
+    // 3. Compare successful lookups and report failures against their requested specs.
     let mut outdated = Vec::new();
     let mut failures = Vec::new();
     for (package, spec) in installed {
-        let target_alias = spec_alias_target(&spec);
-        let latest_key = latest_query(&package.name, target_alias.as_deref());
-        let (wanted, latest) = match resolve_package_versions(&versions, &latest_key, &spec, mode) {
+        let versions = match &versions[&spec] {
             Ok(versions) => versions,
-            Err(failure) => {
-                failures.push(failure);
+            Err(error) => {
+                failures.push((spec, error.to_string()));
                 continue;
             }
         };
+        let target_alias = versions.alias_target.as_deref();
         // Label alias versions like `npm outdated`, so switching the aliased package is a change too.
         let current = aliased_version(package.alias_target().as_deref(), package.version.trim());
-        let wanted = aliased_version(target_alias.as_deref(), &wanted);
-        let latest = aliased_version(target_alias.as_deref(), &latest);
+        let wanted = aliased_version(target_alias, &versions.wanted);
+        let latest = aliased_version(target_alias, &versions.latest);
         if current == wanted && current == latest {
             continue;
         }
@@ -421,79 +413,5 @@ fn print_table(packages: &[OutdatedPackage], long: bool) {
                 package.latest
             ));
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn installed(version_spec: Option<&str>) -> Vec<(PackageMetadata, String)> {
-        let mut package = PackageMetadata::new(
-            "some-pkg".into(),
-            "1.0.0".into(),
-            "22.0.0".into(),
-            None,
-            Vec::new(),
-            HashSet::new(),
-            "npm".into(),
-        );
-        package.version_spec = version_spec.map(str::to_string);
-        let query_spec = package.update_spec();
-        vec![(package, query_spec)]
-    }
-
-    #[test]
-    fn wanted_only_skips_the_bare_latest_lookup() {
-        let specs = registry_specs(&installed(Some("^1.0.0")), LookupMode::WantedOnly);
-        assert_eq!(specs, ["some-pkg@^1.0.0"]);
-    }
-
-    #[test]
-    fn wanted_and_latest_resolves_both_distinct_specs() {
-        let specs = registry_specs(&installed(Some("^1.0.0")), LookupMode::WantedAndLatest);
-        assert_eq!(specs, ["some-pkg@^1.0.0", "some-pkg"]);
-    }
-
-    #[test]
-    fn wanted_and_latest_deduplicates_the_bare_spec() {
-        let specs = registry_specs(&installed(None), LookupMode::WantedAndLatest);
-        assert_eq!(specs, ["some-pkg"]);
-    }
-
-    #[test]
-    fn npm_aliases_query_the_latest_alias_target() {
-        let specs =
-            registry_specs(&installed(Some("npm:other@^1.0.0")), LookupMode::WantedAndLatest);
-        assert_eq!(specs, ["some-pkg@npm:other@^1.0.0", "some-pkg@npm:other"]);
-
-        let specs = registry_specs(&installed(Some("npm:other")), LookupMode::WantedAndLatest);
-        assert_eq!(specs, ["some-pkg@npm:other"]);
-    }
-
-    #[test]
-    fn explicit_specs_query_latest_of_the_requested_package() {
-        let mut installed = installed(Some("npm:other"));
-        installed[0].1 = "some-pkg@latest".into();
-        let specs = registry_specs(&installed, LookupMode::WantedAndLatest);
-        assert_eq!(specs, ["some-pkg@latest", "some-pkg"]);
-    }
-
-    #[test]
-    fn wanted_and_latest_reports_a_failed_latest_lookup() {
-        let versions = HashMap::from([
-            ("some-pkg@^1.0.0".into(), Ok("1.2.0".into())),
-            ("some-pkg".into(), Err("latest lookup failed\nnpm log path".into())),
-        ]);
-
-        let failure = resolve_package_versions(
-            &versions,
-            "some-pkg",
-            "some-pkg@^1.0.0",
-            LookupMode::WantedAndLatest,
-        )
-        .unwrap_err();
-
-        assert_eq!(failure, ("some-pkg".into(), "latest lookup failed".into()));
     }
 }

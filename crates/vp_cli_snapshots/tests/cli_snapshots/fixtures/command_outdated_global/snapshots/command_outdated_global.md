@@ -61,7 +61,7 @@ should warn and skip when the recorded version spec no longer resolves
 
 ```
 All global packages are up to date.
-warn: npm view failed for testnpm2@no-such-tag: npm error code E404; skipping
+warn: npm resolution failed for testnpm2@no-such-tag: No matching version found for testnpm2@no-such-tag.; skipping
 ```
 
 ## `vpt json-edit $VP_HOME/packages/testnpm2.json versionSpec null`
@@ -168,7 +168,7 @@ should not persist an explicit spec that fails to resolve
 
 ```
 All global packages are up to date.
-warn: npm view failed for testnpm2@no-such-tag: npm error code E404; skipping
+warn: npm resolution failed for testnpm2@no-such-tag: No matching version found for testnpm2@no-such-tag.; skipping
 ```
 
 ## `vpt grep-file $VP_HOME/packages/testnpm2.json 'versionSpec": "1.0.1'`

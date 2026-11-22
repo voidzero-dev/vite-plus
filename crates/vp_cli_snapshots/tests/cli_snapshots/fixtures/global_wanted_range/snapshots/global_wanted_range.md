@@ -1,11 +1,11 @@
 # global_wanted_range
 
-## `vp install -g testnpm2@^1 range-alias@npm:testnpm2@^1`
+## `vp install -g testnpm2@^01 range-alias@npm:testnpm2@^1`
 
 
 ## `vp list -g`
 
-npm prefers the matching latest tag for both installs
+npm accepts the loose range ^01 and prefers latest for both installs
 
 ```
 Package                          Node version   Binaries
