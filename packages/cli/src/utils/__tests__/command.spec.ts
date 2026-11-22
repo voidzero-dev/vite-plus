@@ -377,6 +377,24 @@ describe('command runners', () => {
     expect(result).toMatchObject({ exitCode: 124, idleTimedOut: true });
   });
 
+  it.skipIf(process.platform !== 'win32')(
+    'expires an idle command with an empty TCP query on Windows',
+    async () => {
+      const result = await runCommandSilently({
+        command: process.execPath,
+        args: ['-e', 'console.log("resolving"); setTimeout(() => process.exit(7), 10_000);'],
+        cwd: process.cwd(),
+        envs: process.env,
+        idleTimeoutMs: 500,
+        shouldWatchIdle: () => true,
+        waitForPackageFetch: true,
+      });
+      expect(result).toMatchObject({ exitCode: 124, idleTimedOut: true });
+      expect(result.stdout.toString()).toBe('resolving\n');
+    },
+    15_000,
+  );
+
   it('gives resolution time to resume after a quiet Git subprocess', async () => {
     const quietMs = process.platform === 'win32' ? 3500 : 1600;
     const result = await runCommandSilently({

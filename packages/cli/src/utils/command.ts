@@ -250,14 +250,15 @@ async function hasTcpConnection(pids: number[], signal: AbortSignal): Promise<bo
   }
   const windows = process.platform === 'win32';
   const command = windows ? getWindowsPowerShellPath() : lsof;
-  // PowerShell filters by TCP state and returns numeric PIDs in every locale.
+  // Filter after reading the TCP table. Get-NetTCPConnection's own filters
+  // can report an error when an install has no matching sockets.
   const args = windows
     ? [
         '-NoProfile',
         '-NonInteractive',
         '-Command',
-        `Get-NetTCPConnection -State Established,SynSent -OwningProcess ${pids.join(',')} ` +
-          '-ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess',
+        "Get-NetTCPConnection -ErrorAction Stop | Where-Object { $_.State -in 'Established','SynSent' " +
+          `-and $_.OwningProcess -in @(${pids.join(',')}) } | Select-Object -ExpandProperty OwningProcess`,
       ]
     : ['-nP', '-a', '-p', pids.join(','), '-iTCP', '-FT'];
   return new Promise<boolean | undefined>((resolve) => {
