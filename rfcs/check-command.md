@@ -221,16 +221,11 @@ An explicit `OXLINT_TSGOLINT_PATH` takes precedence over the resolver default.
 The environment variable keeps its existing name because Oxlint uses it to
 select the type-aware backend.
 
-The [performance report](../bench/tsrs-lint.md) compares tsrs with the previous
-backend and records elapsed time, peak memory, and measurement conditions.
-
 The pinned tsrs release provides native packages for all supported Vite+
 platforms, including Windows ARM64. No platform uses a Go fallback.
 
 The backend switch preserves the existing formatting phase, lint configuration,
-and failure handling. Smoke fixtures compare diagnostics, suppression comments,
-and automatic fixes against Go. These checks do not establish complete
-compiler parity.
+and failure handling.
 
 ### Key Files
 

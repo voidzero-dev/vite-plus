@@ -41,6 +41,3 @@ The project's `typescript` dependency and standalone `tsc` tasks are unchanged.
   `vp migrate` adds an exception for the exact bundled `tsrs` version to
   `trustPolicyExclude` when that policy is enabled in `pnpm-workspace.yaml`.
   Other packages and versions remain subject to the policy.
-
-The [benchmark report](../bench/tsrs-lint.md) records timing, memory, and disk usage.
-The [ecosystem report](../bench/tsrs-lint-ecosystem.md) records compatibility results.
