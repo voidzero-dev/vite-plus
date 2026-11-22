@@ -5,7 +5,8 @@
 //! Berry follow different files and variables, so Vite+ does not repeat those
 //! rules. It only looks for any sign of delegation, asks the launcher with
 //! `yarn --version` when it finds one, and caches the answer under a key built
-//! from every input that can change it.
+//! from the rc files, the release metadata, the Yarn path variables, and the
+//! launcher version. The key does not see what a `yarnPath` script runs.
 
 use std::{ffi::OsString, fs, io, time::UNIX_EPOCH};
 
@@ -46,8 +47,9 @@ pub(crate) async fn effective_version(
     Ok(version)
 }
 
-/// Returns a key that changes whenever the launcher's effective version can
-/// change, or `None` when nothing can make the launcher delegate.
+/// Returns a cache key built from the rc files, the release metadata, the Yarn
+/// path variables, and the launcher version, or `None` when nothing can make
+/// the launcher delegate.
 fn delegation_key(
     cwd: &AbsolutePath,
     home: &AbsolutePath,
@@ -131,7 +133,7 @@ fn path_settings(content: &str) -> impl Iterator<Item = &str> {
 fn scalar_value(text: &str) -> Option<&str> {
     let value = if let Some(quote) = text.chars().next().filter(|c| matches!(c, '"' | '\'')) {
         let inner = &text[1..];
-        &inner[..inner.find(quote)?]
+        inner.split_once(quote)?.0
     } else {
         let comment = text
             .match_indices('#')
