@@ -51,7 +51,7 @@ pub struct RemoveArgs {
 impl Resolve<RemoveArgs> for Pnpm {
     fn resolve(&self, args: &RemoveArgs, _diag: &mut Diagnostics) -> CommandResolution {
         if args.global {
-            return Npm::resolve_remove(args);
+            return Npm::unknown_version().resolve_remove(args);
         }
 
         let mut cmd = CommandBuilder::new("pnpm");
@@ -69,7 +69,7 @@ impl Resolve<RemoveArgs> for Pnpm {
 }
 
 impl Npm {
-    fn resolve_remove(args: &RemoveArgs) -> CommandResolution {
+    fn resolve_remove(&self, args: &RemoveArgs) -> CommandResolution {
         let mut cmd = CommandBuilder::new("npm");
         if args.global {
             cmd.arg("uninstall")
@@ -79,7 +79,13 @@ impl Npm {
             return cmd.into();
         }
 
-        cmd.arg("uninstall").repeated("--workspace", args.filter.iter());
+        cmd.npm_workspace_edit(self.workspace_edit(
+            args.workspace_root && !args.recursive,
+            !args.filter.is_empty(),
+            &[],
+        ))
+        .arg("uninstall")
+        .repeated("--workspace", args.filter.iter());
         if args.workspace_root || args.recursive {
             cmd.arg("--include-workspace-root");
         }
@@ -95,14 +101,14 @@ impl Npm {
 
 impl Resolve<RemoveArgs> for Npm {
     fn resolve(&self, args: &RemoveArgs, _diag: &mut Diagnostics) -> CommandResolution {
-        Self::resolve_remove(args)
+        self.resolve_remove(args)
     }
 }
 
 impl Resolve<RemoveArgs> for Yarn {
     fn resolve(&self, args: &RemoveArgs, _diag: &mut Diagnostics) -> CommandResolution {
         if args.global {
-            return Npm::resolve_remove(args);
+            return Npm::unknown_version().resolve_remove(args);
         }
 
         let mut cmd = CommandBuilder::new("yarn");
@@ -132,7 +138,7 @@ impl Resolve<RemoveArgs> for Yarn {
 impl Resolve<RemoveArgs> for Bun {
     fn resolve(&self, args: &RemoveArgs, _diag: &mut Diagnostics) -> CommandResolution {
         if args.global {
-            return Npm::resolve_remove(args);
+            return Npm::unknown_version().resolve_remove(args);
         }
 
         let mut cmd = CommandBuilder::new("bun");

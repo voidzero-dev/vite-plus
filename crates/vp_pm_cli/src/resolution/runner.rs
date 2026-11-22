@@ -27,10 +27,15 @@ pub(crate) async fn run_resolution(
 }
 
 async fn run_command(cwd: &AbsolutePath, command: ResolvedCommand) -> Result<ExitStatus, Error> {
-    let ResolvedCommand { program, args, env, pre_run } = command;
+    let ResolvedCommand { program, args, env, pre_run, npm_workspace_edit } = command;
     run_pre_run_actions(cwd, pre_run).await?;
 
     let env = env.into_iter().collect::<HashMap<_, _>>();
+    let args = if let Some(edit) = npm_workspace_edit {
+        super::npm_workspace::edit_args(&program, cwd, edit, args, &env).await?
+    } else {
+        args
+    };
     Ok(vp_command::run_command(&program, args, &env, cwd).await?)
 }
 

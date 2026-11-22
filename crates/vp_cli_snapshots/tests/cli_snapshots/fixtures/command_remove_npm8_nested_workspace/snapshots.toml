@@ -1,0 +1,10 @@
+[[case]]
+name = "command_remove_npm8_nested_workspace"
+vp = "global"
+steps = [
+  { argv = ["vp", "remove", "-w", "testnpm2", "--", "--no-audit"], cwd = "packages/app", comment = "remove only the outer root declaration when the current member owns a workspace" },
+  { argv = ["vp", "remove", "-w", "--filter", "docs", "test-vite-plus-install", "--", "--no-audit"], cwd = "packages/app", comment = "select the outer docs package when the inner workspace also has a member named docs" },
+  ["vpt", "print-file", "package.json", "packages/app/package.json", "packages/docs/package.json", "packages/app/plugins/docs/package.json"],
+  ["node", "-p", "require('./package-lock.json').packages['packages/app'].dependencies"],
+  ["vpt", "stat-file", "packages/app/package-lock.json", "--assert", "missing"],
+]

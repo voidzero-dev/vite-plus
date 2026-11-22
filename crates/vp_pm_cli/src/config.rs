@@ -45,15 +45,8 @@ impl NpmConfig {
         project_root: Option<PathBuf>,
         cwd: Option<&AbsolutePath>,
     ) -> Self {
-        let mut project_values = HashMap::new();
-        if let Some(root) = project_root {
-            load_npmrc(root.join(".npmrc"), &mut project_values);
-        }
-        let user_config = npm_user_config_path(cwd)
-            .or_else(|| project_values.get("userconfig").map(|path| config_path(path, cwd)))
-            .unwrap_or_else(|| EnvConfig::get().user_home.join(".npmrc").into_path_buf());
-        let mut user_values = HashMap::new();
-        load_npmrc(user_config, &mut user_values);
+        let (project_values, user_values) =
+            project_and_user_npmrc(project_root, cwd, npm_user_config_path(cwd));
 
         // Higher-priority layers select config files; merge their values from low to high.
         // Default global paths require npm, so only explicitly selected files are loaded.
@@ -341,6 +334,23 @@ fn load_npmrc(path: PathBuf, values: &mut HashMap<String, String>) {
     }
 }
 
+fn project_and_user_npmrc(
+    project_root: Option<PathBuf>,
+    cwd: Option<&AbsolutePath>,
+    userconfig: Option<PathBuf>,
+) -> (HashMap<String, String>, HashMap<String, String>) {
+    let mut project = HashMap::new();
+    if let Some(root) = project_root {
+        load_npmrc(root.join(".npmrc"), &mut project);
+    }
+    let userconfig = userconfig
+        .or_else(|| project.get("userconfig").map(|path| config_path(path, cwd)))
+        .unwrap_or_else(|| EnvConfig::get().user_home.join(".npmrc").into_path_buf());
+    let mut user = HashMap::new();
+    load_npmrc(userconfig, &mut user);
+    (project, user)
+}
+
 fn parse_npmrc_value(value: &str) -> String {
     let value = value.trim();
     if value.len() >= 2 && value.starts_with('"') && value.ends_with('"') {
@@ -388,6 +398,35 @@ pub fn npm_registry_for_scope(cwd: &AbsolutePath, scope: Option<&str>) -> String
 #[must_use]
 pub fn npm_user_config_path(cwd: Option<&AbsolutePath>) -> Option<PathBuf> {
     env_value("userconfig").map(|path| config_path(&expand_value(&path), cwd))
+}
+
+/// Find the global npmrc selected before a workspace edit overrides npm's prefix.
+pub(crate) fn workspace_globalconfig(
+    root: &AbsolutePath,
+    cwd: &AbsolutePath,
+    cli_userconfig: Option<&str>,
+    env: &HashMap<String, String>,
+) -> Option<PathBuf> {
+    let from_env = |name: &str| {
+        let key = vt_str::format!("npm_config_{name}");
+        env.iter()
+            .find(|(name, _)| name.eq_ignore_ascii_case(&key))
+            .and_then(|(_, value)| (!value.is_empty()).then(|| expand_value(value)))
+            .or_else(|| env_value(name).map(|value| expand_value(&value)))
+    };
+    let userconfig = cli_userconfig
+        .map(expand_value)
+        .or_else(|| from_env("userconfig"))
+        .map(|value| config_path(&value, Some(cwd)));
+    let (project, user) =
+        project_and_user_npmrc(Some(root.as_path().to_path_buf()), Some(cwd), userconfig);
+    let configured = |key: &str| {
+        from_env(key)
+            .or_else(|| project.get(key).cloned())
+            .or_else(|| user.get(key).cloned())
+            .map(|value| config_path(&value, Some(cwd)))
+    };
+    configured("globalconfig").or_else(|| configured("prefix").map(|p| p.join("etc/npmrc")))
 }
 
 /// Resolve the `Authorization` header value npm would send to `url` from the npm config at `cwd`.
@@ -570,6 +609,42 @@ mod tests {
                 );
             }
         });
+    }
+
+    #[test]
+    fn workspace_globalconfig_resolves_project_and_user_paths_from_the_caller() {
+        let root = project_with_npmrc("userconfig=./user.npmrc\nprefix=./project-prefix\n");
+        let caller = root.path().join("child");
+        fs::create_dir(&caller).unwrap();
+        fs::write(caller.join("user.npmrc"), "globalconfig=./user-global.npmrc\n").unwrap();
+        let root = AbsolutePath::new(root.path()).unwrap();
+        let cwd = AbsolutePath::new(&caller).unwrap();
+        EnvConfig::with_vars(
+            [
+                ("npm_config_userconfig", None::<&std::ffi::OsStr>),
+                ("NPM_CONFIG_USERCONFIG", None),
+                ("npm_config_globalconfig", None),
+                ("NPM_CONFIG_GLOBALCONFIG", None),
+                ("npm_config_prefix", None),
+                ("NPM_CONFIG_PREFIX", None),
+            ],
+            |_| {
+                let mut env = HashMap::new();
+                assert_eq!(
+                    workspace_globalconfig(root, cwd, None, &env),
+                    Some(caller.join("user-global.npmrc")),
+                );
+                env.insert("NPM_CONFIG_USERCONFIG".into(), "missing".into());
+                assert_eq!(
+                    workspace_globalconfig(root, cwd, None, &env),
+                    Some(caller.join("project-prefix/etc/npmrc")),
+                );
+                assert_eq!(
+                    workspace_globalconfig(root, cwd, Some("user.npmrc"), &env),
+                    Some(caller.join("user-global.npmrc")),
+                );
+            },
+        );
     }
 
     #[test]

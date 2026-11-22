@@ -1,0 +1,7 @@
+{
+  "name": "docs",
+  "version": "1.0.0",
+  "dependencies": {
+    "test-vite-plus-install": "1.0.0"
+  }
+}

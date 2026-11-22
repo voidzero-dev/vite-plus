@@ -1,0 +1,12 @@
+{
+  "name": "root",
+  "private": true,
+  "packageManager": "npm@8.1.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "devDependencies": {
+    "testnpm2": "1.0.1",
+    "test-vite-plus-install": "1.0.0"
+  }
+}

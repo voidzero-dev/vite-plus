@@ -3,7 +3,7 @@ name = "command_add_npm11_with_workspace"
 vp = "global"
 skip-platforms = ["windows"]
 steps = [
-  { argv = ["vp", "add", "testnpm2", "-D", "-w", "--", "--no-audit"], comment = "should add package to workspace root" },
+  { argv = ["vp", "add", "testnpm2", "-D", "-w", "--", "--no-audit"], cwd = "packages/app", comment = "add to the root from a workspace member" },
   { argv = ["vpt", "print-file", "package.json", "packages/app/package.json", "packages/utils/package.json"], continue-on-failure = true },
   { argv = ["vp", "add", "@vite-plus-test/utils", "--workspace", "--", "--no-audit"], comment = "reject unsupported --workspace without adding packages to the root", continue-on-failure = true },
   { argv = ["vpt", "print-file", "package.json", "packages/app/package.json", "packages/utils/package.json"], continue-on-failure = true },
@@ -17,4 +17,7 @@ steps = [
   { argv = ["vpt", "print-file", "package.json", "packages/app/package.json", "packages/utils/package.json"], continue-on-failure = true },
   { argv = ["vp", "install", "test-vite-plus-package@1.0.0", "--filter", "*", "--workspace-root", "--", "--no-audit"], comment = "should install packages alias for add command" },
   { argv = ["vpt", "print-file", "package.json", "packages/app/package.json", "packages/utils/package.json"], continue-on-failure = true },
+  { argv = ["vp", "remove", "-w", "testnpm2", "--", "--no-audit"], cwd = "packages/app", comment = "remove the root devDependency and preserve the member dependencies" },
+  { argv = ["vpt", "print-file", "package.json", "packages/app/package.json", "packages/utils/package.json"] },
+  { argv = ["node", "-e", "const { packages } = require('./package-lock.json'); console.log(packages[''].devDependencies?.testnpm2, packages['packages/app'].dependencies.testnpm2)"], comment = "the lockfile records the same removal at the root and keeps the app dependency" },
 ]

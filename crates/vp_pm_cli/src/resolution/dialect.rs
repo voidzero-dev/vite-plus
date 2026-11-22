@@ -57,6 +57,30 @@ impl Npm {
         Self { version: None }
     }
 
+    pub(crate) fn workspace_edit(
+        &self,
+        enabled: bool,
+        has_filter: bool,
+        packages: &[String],
+    ) -> Option<super::command::NpmWorkspaceEdit> {
+        use super::command::NpmWorkspaceEdit;
+        if !enabled {
+            return None;
+        }
+        if self.version.as_ref().is_some_and(|v| v < &Version::new(8, 5, 0)) {
+            Some(NpmWorkspaceEdit::LegacyRoot {
+                local_dependency: packages
+                    .iter()
+                    .any(|spec| super::npm_workspace::is_local_dependency(spec)),
+            })
+        } else if has_filter {
+            // npm 8.5+ already resolves explicit selections from the calling directory.
+            None
+        } else {
+            Some(NpmWorkspaceEdit::AutomaticRoot)
+        }
+    }
+
     /// `--omit` and `--include` landed in npm 7. Unknown versions are treated as current.
     pub(crate) fn supports_v7_commands(&self) -> bool {
         self.version.as_ref().is_none_or(|version| version >= &Version::new(7, 0, 0))
