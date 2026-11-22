@@ -122,7 +122,6 @@ impl CommandHandler for VitePlusCommandHandler {
     }
 }
 
-/// Arguments after a leading `-C <dir>`, `-C=<dir>`, or `-C<dir>`.
 fn args_after_leading_chdir(args: &[Str]) -> Option<&[Str]> {
     let rest = args.first()?.as_str().strip_prefix("-C")?;
     let (dir, remaining) = if rest.is_empty() {
