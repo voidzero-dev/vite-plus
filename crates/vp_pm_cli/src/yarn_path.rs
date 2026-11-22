@@ -20,8 +20,6 @@ use crate::{PackageManager, error::Error};
 
 /// Classic reads `.yarnrc`, Berry reads `.yarnrc.yml` or `YARN_RC_FILENAME`.
 const RC_FILE_NAMES: [&str; 2] = [".yarnrc.yml", ".yarnrc"];
-/// Classic spells the setting `yarn-path`, Berry spells it `yarnPath`.
-const PATH_SETTINGS: [&str; 2] = ["yarnPath", "yarn-path"];
 const ENV_VARS: [&str; 3] = ["YARN_YARN_PATH", "YARN_IGNORE_PATH", "YARN_RC_FILENAME"];
 
 /// Returns the version that the Yarn launcher in `manager` runs for `cwd`.
@@ -85,9 +83,19 @@ fn delegation_key(
             hasher.update(rc_path.as_path().as_os_str().as_encoded_bytes());
             hasher.update([0]);
             hasher.update(&content);
-            for target in path_settings(&content) {
-                delegates = true;
-                hash_target(&mut hasher, &dir.join(target));
+            let target = if name == ".yarnrc" {
+                Ok(classic_yarn_path(&content).map(Str::from))
+            } else {
+                berry_yarn_path(&content)
+            };
+            match target {
+                Ok(Some(target)) => {
+                    delegates = true;
+                    hash_target(&mut hasher, &dir.join(target));
+                }
+                Ok(None) => {}
+                // Yarn cannot read this file either, so let it report the error.
+                Err(_) => delegates = true,
             }
         }
     }
@@ -111,38 +119,29 @@ fn yarn_env(
         .collect()
 }
 
-/// Values of `yarnPath` and `yarn-path` in an rc file. Both formats put the
-/// value after the setting name, separated by `:` or spaces, possibly quoted,
-/// and possibly followed by a `#` comment.
-fn path_settings(content: &str) -> impl Iterator<Item = &str> {
-    content.lines().filter_map(|line| {
-        let line = line.trim_start();
-        let line = line.strip_prefix(['"', '\'']).unwrap_or(line);
-        let rest = PATH_SETTINGS.iter().find_map(|setting| line.strip_prefix(setting))?;
-        let rest = rest.strip_prefix(['"', '\'']).unwrap_or(rest);
-        // A longer setting name, such as `yarnPathX`, is not this setting.
-        if !rest.starts_with([':', ' ', '\t']) {
-            return None;
-        }
-        scalar_value(rest.trim_start_matches([':', ' ', '\t']))
-    })
+/// The top-level `yarnPath` in a Berry rc file, which is YAML.
+fn berry_yarn_path(content: &str) -> Result<Option<Str>, serde_norway::Error> {
+    let config: serde_norway::Value = serde_norway::from_str(content)?;
+    Ok(config.get("yarnPath").and_then(serde_norway::Value::as_str).map(Str::from))
 }
 
-/// Reads a quoted value up to its closing quote, or a plain value up to a `#`
-/// that starts a comment, which YAML requires to follow whitespace.
-fn scalar_value(text: &str) -> Option<&str> {
-    let value = if let Some(quote) = text.chars().next().filter(|c| matches!(c, '"' | '\'')) {
-        let inner = &text[1..];
-        inner.split_once(quote)?.0
-    } else {
-        let comment = text
-            .match_indices('#')
-            .map(|(index, _)| index)
-            .find(|&index| index == 0 || text[..index].ends_with([' ', '\t']))
-            .unwrap_or(text.len());
-        text[..comment].trim_end()
-    };
-    (!value.is_empty()).then_some(value)
+/// The last `yarn-path` in a Classic `.yarnrc`, which is not YAML. A value is
+/// either a double-quoted string or a bare word, and the last one wins.
+fn classic_yarn_path(content: &str) -> Option<&str> {
+    content
+        .lines()
+        .filter_map(|line| {
+            let line = line.trim_start();
+            let rest =
+                line.strip_prefix("yarn-path").or_else(|| line.strip_prefix("\"yarn-path\""))?;
+            let rest = rest.strip_prefix([' ', '\t'])?.trim_start();
+            let value = match rest.strip_prefix('"') {
+                Some(quoted) => quoted.split_once('"')?.0,
+                None => rest.split_whitespace().next()?,
+            };
+            (!value.is_empty()).then_some(value)
+        })
+        .last()
 }
 
 /// A release can be replaced in place under the same name, so its metadata is
@@ -279,22 +278,32 @@ mod tests {
     }
 
     #[test]
-    fn path_settings_read_both_formats() {
-        let content = [
-            "yarnPath: \".yarn/releases/a.cjs\"",
-            "\"yarn-path\" 'b.js'",
-            "  yarnPath: c.cjs  ",
-            "yarnPath: d.cjs # pinned",
-            "yarnPath: \"e # f.cjs\" # pinned",
-            "yarn-path g#h.js",
-            "yarnPathX: ignored.cjs",
-            "# yarnPath: ignored.cjs",
-            "yarnPath: # empty",
-        ]
-        .join("\n");
-        assert_eq!(
-            path_settings(&content).collect::<Vec<_>>(),
-            [".yarn/releases/a.cjs", "b.js", "c.cjs", "d.cjs", "e # f.cjs", "g#h.js"]
-        );
+    fn berry_rc_files_are_read_as_yaml() {
+        let read = |content: &str| berry_yarn_path(content).unwrap();
+        assert_eq!(read("yarnPath: d.cjs # pinned\n").as_deref(), Some("d.cjs"));
+        assert_eq!(read("yarnPath: \"e # f.cjs\" # pinned\n").as_deref(), Some("e # f.cjs"));
+        assert_eq!(read("yarnPath: \"a\\u0062.cjs\"\n").as_deref(), Some("ab.cjs"));
+        assert_eq!(read("yarnPath: >-\n  folded.cjs\n").as_deref(), Some("folded.cjs"));
+        assert_eq!(read("{yarnPath: flow.cjs}\n").as_deref(), Some("flow.cjs"));
+        assert_eq!(read("yarnPathX: x.cjs\n# yarnPath: y.cjs\n"), None);
+        assert_eq!(read("packageExtensions:\n  yarnPath: nested.cjs\n"), None);
+        assert_eq!(read(""), None);
+        assert!(berry_yarn_path("yarnPath: [unclosed\n").is_err());
+    }
+
+    #[test]
+    fn classic_rc_files_use_the_last_yarn_path() {
+        assert_eq!(classic_yarn_path("yarn-path \"a b.js\"\n"), Some("a b.js"));
+        assert_eq!(classic_yarn_path("\"yarn-path\" b.js # pinned\n"), Some("b.js"));
+        assert_eq!(classic_yarn_path("yarn-path a.js\nyarn-path c.js\n"), Some("c.js"));
+        assert_eq!(classic_yarn_path("yarn-pathx d.js\n# yarn-path e.js\n"), None);
+    }
+
+    #[test]
+    fn an_unreadable_rc_file_is_left_to_yarn() {
+        let (_project, project) = temp_dir();
+        let (_home, home) = temp_dir();
+        fs::write(project.join(".yarnrc.yml"), "yarnPath: [unclosed\n").unwrap();
+        assert!(key(&project, &home, &[]).is_some());
     }
 }
