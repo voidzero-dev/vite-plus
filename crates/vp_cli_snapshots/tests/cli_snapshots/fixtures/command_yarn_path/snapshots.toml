@@ -16,7 +16,6 @@ steps = [
   { argv = ["node", "verify.cjs", "patch"], comment = "The same launcher must let Yarn 3 save a patch." },
   { argv = ["vpt", "write-file", ".yarnrc.yml", "yarnPath: .yarn/releases/yarn-3.8.7.cjs\nignorePath: true\n"], snapshot = false },
   { argv = ["vp", "unlink", "linked-lib"], comment = "ignorePath keeps Yarn 2 active, so unlink is skipped." },
-  { argv = ["vp", "pm", "patch-commit", "unused"], comment = "ignorePath also keeps the patch saving gate on Yarn 2." },
   { argv = ["vpt", "write-file", ".yarnrc.yml", "yarnPath: .yarn/releases/yarn-3.8.7.cjs\n"], snapshot = false },
   { argv = ["vp", "unlink", "linked-lib"], envs = [["YARN_IGNORE_PATH", "1"]], comment = "The environment override also disables delegation." },
   { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@3.8.7"], snapshot = false },

@@ -9,15 +9,18 @@ function vp(args) {
   return result.stdout;
 }
 
-if (process.argv[2] === 'linked') {
-  const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-  assert.match(pkg.resolutions?.['linked-lib'] ?? '', /^portal:/, 'link must add a portal resolution');
+function readPackage() {
+  return JSON.parse(fs.readFileSync('package.json', 'utf8'));
+}
+
+const mode = process.argv[2];
+if (mode === 'linked') {
+  assert.match(readPackage().resolutions?.['linked-lib'] ?? '', /^portal:/, 'link must add a portal resolution');
   console.log('The project has a portal resolution for linked-lib.');
-} else if (process.argv[2] === 'unlink') {
-  const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-  assert.equal(pkg.resolutions?.['linked-lib'], undefined, 'unlink must remove the portal resolution');
+} else if (mode === 'unlink') {
+  assert.equal(readPackage().resolutions?.['linked-lib'], undefined, 'unlink must remove the portal resolution');
   console.log('The delegated Yarn removed the portal resolution.');
-} else {
+} else if (mode === 'patch') {
   const output = vp(['pm', 'patch', 'is-number', '--', '--json']);
   const { path: patchDir } = JSON.parse(output.trim());
   try {
@@ -26,10 +29,11 @@ if (process.argv[2] === 'linked') {
     const patches = fs.readdirSync('.yarn/patches');
     assert.equal(patches.length, 1);
     assert.match(fs.readFileSync(path.join('.yarn/patches', patches[0]), 'utf8'), /patched by vp/);
-    const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-    assert.ok(Object.values(pkg.resolutions).some((value) => value.startsWith('patch:')));
+    assert.ok(Object.values(readPackage().resolutions).some((value) => value.startsWith('patch:')));
     console.log('The delegated Yarn saved and registered the patch.');
   } finally {
     fs.rmSync(patchDir, { recursive: true, force: true });
   }
+} else {
+  throw new Error(`Unknown verify mode: ${mode}`);
 }

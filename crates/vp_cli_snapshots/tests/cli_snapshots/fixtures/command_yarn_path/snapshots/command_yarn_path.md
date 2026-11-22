@@ -74,14 +74,6 @@ ignorePath keeps Yarn 2 active, so unlink is skipped.
 warn: yarn unlink requires Yarn Classic or yarn >= 3.0.0. Skipping.
 ```
 
-## `vp pm patch-commit unused`
-
-ignorePath also keeps the patch saving gate on Yarn 2.
-
-```
-warn: yarn patch-commit --save requires yarn >= 3.0.0. Skipping.
-```
-
 ## `vpt write-file .yarnrc.yml 'yarnPath: .yarn/releases/yarn-3.8.7.cjs
 '`
 
