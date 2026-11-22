@@ -1,16 +1,15 @@
 [default]
-# Vitest v4 used this misspelled directory; the migrator must recognize it.
-extend-ignore-re = ['\.vitest-attachements\b']
+extend-ignore-re = [
+  # Vitest v4 used this misspelled directory; the migrator must recognize it.
+  '\.vitest-attachements\b',
+  # npm ci prints this alias in its help output.
+  '\bisntall-clean\b',
+]
 
 [default.extend-words]
 pn = "pn" # pnpm short alias
 Jod = "Jod" # Node.js v22 LTS codename
 flate = "flate" # flate2 crate name (gzip/deflate compression)
-
-[default.extend-identifiers]
-# Repository name and pinned commit in the ecosystem benchmark report.
-sigle = "sigle"
-"6b2b2ba86" = "6b2b2ba86"
 
 [files]
 extend-exclude = [

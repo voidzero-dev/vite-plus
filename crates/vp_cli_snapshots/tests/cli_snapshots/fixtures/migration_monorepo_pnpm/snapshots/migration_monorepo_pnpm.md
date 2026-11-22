@@ -148,8 +148,6 @@ minimumReleaseAgeExclude:
   - '@voidzero-dev/*'
   - oxlint
   - '@oxlint/*'
-  - oxlint-tsgolint
-  - '@oxlint-tsgolint/*'
   - tsrs
   - '@tsrs/*'
   - oxfmt

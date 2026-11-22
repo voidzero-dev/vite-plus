@@ -120,9 +120,6 @@ test.each([false, true])(
       if (url === 'https://registry.npmjs.org/@oxlint/plugins/latest') {
         throw new Error('@oxlint/plugins must use the selected oxlint version');
       }
-      if (url === 'https://registry.npmjs.org/oxlint-tsgolint/latest') {
-        return Response.json({ version: '7.0.2004' });
-      }
       if (url === 'https://registry.npmjs.org/tsrs/next') {
         throw new Error('tsrs must use the latest dist-tag');
       }
@@ -178,7 +175,6 @@ test.each([false, true])(
     expect(readFileSync(workspacePath, 'utf8')).toContain('\n  lint-staged: ^17.5.1\n');
     expect(readFileSync(workspacePath, 'utf8')).toContain("\n  '@oxlint/plugins': =1.88.0\n");
     expect(readFileSync(workspacePath, 'utf8')).toContain('\n  oxlint: =1.88.0\n');
-    expect(readFileSync(workspacePath, 'utf8')).toContain('\n  oxlint-tsgolint: =7.0.2004\n');
     expect(readFileSync(workspacePath, 'utf8')).toContain('\n  tsrs: =7.1.0-beta.tsrs3\n');
     expect(readFileSync(nodeVersionPath, 'utf8')).toBe('24.10.2\n');
     expect(readFileSync(installerPath, 'utf8')).toContain(
@@ -207,7 +203,6 @@ test.each([false, true])(
     expect(versions['lint-staged']).toEqual({ old: '16.2.6', new: '17.5.1' });
     expect(versions['@oxlint/plugins'].new).toBe('1.88.0');
     expect(versions['@oxlint/plugins'].new).toBe(versions.oxlint.new);
-    expect(versions['oxlint-tsgolint'].new).toBe('7.0.2004');
     expect(versions.tsrs.new).toBe('7.1.0-beta.tsrs3');
     expect(versions).not.toHaveProperty('oxc-minify');
     expect(versions).not.toHaveProperty('oxc-transform');

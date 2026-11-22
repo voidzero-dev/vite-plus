@@ -16,7 +16,7 @@ vp = "local"
 steps = [
   { argv = ["vp", "toolchain", "vite"], comment = "a tool filter keeps its ownership and engine chain" },
   { argv = ["vp", "toolchain", "vite", "vitest"], comment = "multiple filters return a stable union" },
-  { argv = ["vp", "toolchain", "vite-plus-core", "tsgolint", "vite-task"], comment = "stable IDs and declared aliases resolve" },
+  { argv = ["vp", "toolchain", "vite-plus-core", "tsrs-lint", "vite-task"], comment = "stable IDs and declared aliases resolve" },
 ]
 
 [[case]]

@@ -440,7 +440,6 @@ const OXC_PACKAGE_PREFIXES = [
   '@oxc-resolver/',
   '@oxc-transform/',
   '@oxfmt/',
-  '@oxlint-tsgolint/',
 ];
 const SYNCED_PACKAGES = new Set([
   '@napi-rs/cli',
@@ -449,7 +448,6 @@ const SYNCED_PACKAGES = new Set([
   'oxc-transform',
   'oxfmt',
   'oxlint',
-  'oxlint-tsgolint',
   'tinybench',
 ]);
 // These packages should always use the highest version
