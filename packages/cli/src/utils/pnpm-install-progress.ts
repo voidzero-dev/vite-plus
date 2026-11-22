@@ -698,6 +698,20 @@ export async function formatPnpmInstallOutput(
         if (code === 'ERR_PNPM_NO_MATCHING_VERSION') {
           appendPublishedVersions(context, log.packageMeta);
         }
+        const specifier = asRecord(log.package).pref;
+        if (
+          log.level === 'error' &&
+          code === 'ERR_PNPM_SPEC_NOT_SUPPORTED_BY_ANY_RESOLVER' &&
+          typeof specifier === 'string' &&
+          specifier.startsWith('catalog:')
+        ) {
+          context.push(
+            '',
+            'Only packages in the pnpm workspace can use catalog dependencies.',
+            'pnpm publish replaces catalog references with dependency specifiers.',
+            'Report this error to the external package authors so they can fix their publishing setup.',
+          );
+        }
         if (typeof log.hint === 'string') {
           context.push(log.hint);
         } else if (log.level === 'error' && code === 'ERR_PNPM_LOCKFILE_BREAKING_CHANGE') {

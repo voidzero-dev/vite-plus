@@ -334,6 +334,39 @@ describe('formatPnpmInstallOutput', () => {
     expect(await formatPnpmInstallOutput(output, cwd, 'ndjson')).toBe(output);
   });
 
+  it.each([
+    ['catalog:', true],
+    ['catalog:shared', true],
+    ['unsupported:shared', false],
+  ])('adds publishing guidance only for catalog resolver errors (%s)', async (pref, catalog) => {
+    const code = 'ERR_PNPM_SPEC_NOT_SUPPORTED_BY_ANY_RESOLVER';
+    const message = `external-child@${pref} isn't supported by any available resolver.`;
+    const output = JSON.stringify({
+      name: 'pnpm',
+      level: 'error',
+      code,
+      package: { name: 'external-child', pref },
+      pkgsStack: [{ name: 'catalog-sample', version: '1.0.0' }],
+      err: { name: 'pnpm', message, code },
+    });
+    const headline = `${code} ${message}\nWhile installing the dependencies of catalog-sample@1.0.0`;
+    const guide =
+      'Only packages in the pnpm workspace can use catalog dependencies.\n' +
+      'pnpm publish replaces catalog references with dependency specifiers.\n' +
+      'Report this error to the external package authors so they can fix their publishing setup.';
+
+    for (const mode of ['debug', 'info', 'warn', 'error'] as const) {
+      expect(await formatPnpmInstallOutput(output, '/project', mode)).toBe(
+        catalog ? `${headline}\n\n${guide}` : headline,
+      );
+    }
+    expect(await formatPnpmInstallOutput(output, '/project', 'silent')).toBe('');
+    expect(JSON.parse(await formatPnpmInstallOutput(output, '/project', 'json'))).toEqual({
+      error: { code, message },
+    });
+    expect(await formatPnpmInstallOutput(output, '/project', 'ndjson')).toBe(output);
+  });
+
   it.each(['info', 'debug', 'warn', 'error', 'silent', 'json', 'ndjson'] as const)(
     'replays direct optional dependency skips at the expected level in %s mode',
     async (mode) => {
