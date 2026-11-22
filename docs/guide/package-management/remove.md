@@ -15,7 +15,7 @@ vp remove -g --dry-run typescript
 | `-D, --save-dev`       | On pnpm, target `devDependencies`.                       |                                                                              |
 | `-O, --save-optional`  | On pnpm, target `optionalDependencies`.                  |                                                                              |
 | `-P, --save-prod`      | On pnpm, target `dependencies`.                          |                                                                              |
-| `--filter <pattern>`   | Select workspaces.                                       | Can be repeated. See [npm workspace filters](./add#npm-workspace-filters).   |
+| `--filter <pattern>`   | Select workspaces by pattern.                            | Can be repeated.                                                             |
 | `-w, --workspace-root` | Remove from workspace root.                              |                                                                              |
 | `-r, --recursive`      | Remove recursively from all workspace packages.          |                                                                              |
 | `-g, --global`         | Remove global packages.                                  | Requires the global CLI. Uses the [global package store](./global-packages). |
@@ -44,11 +44,11 @@ The commands below describe project operations. Global mode is described under [
 
 When pnpm removes a dependency, it can also remove the same package from `peerDependencies`.
 
-In an npm workspace, suppose `web` lists `lodash` in `devDependencies` and `docs` lists it in `dependencies`.
-With npm 7.14.0 or later, the following command removes `lodash` from both workspaces.
+Suppose an npm project has two workspaces. `packages/web` lists `lodash` in `devDependencies`, and `packages/docs` lists it in `dependencies`.
+With npm 7.14.0 or later, the following command removes both declarations when run from the workspace root.
 
 ```bash
-vp remove -D --filter web --filter docs lodash
+vp remove -D --filter ./packages/web --filter ./packages/docs lodash
 ```
 
 ## Native Options
