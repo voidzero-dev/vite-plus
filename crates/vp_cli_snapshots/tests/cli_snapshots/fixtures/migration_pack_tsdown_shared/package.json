@@ -1,0 +1,9 @@
+{
+  "name": "shared-pack",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.11.2",
+  "devDependencies": {
+    "vite-plus": "latest"
+  }
+}

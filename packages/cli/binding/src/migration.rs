@@ -52,12 +52,18 @@ pub struct LiteralCommandToken {
 /// Read simple literal commands, optionally separated by `&&`, `||`, or `;`.
 /// Returns null for unsupported syntax. Assignments and wrappers stay in argv;
 /// callers must decide whether a command is safe to rewrite.
+/// Option analysis can replace double-quoted values with simple environment expansions.
 #[napi]
 pub fn parse_literal_commands(
     source: String,
     allow_lists: bool,
+    env_value_options: Option<Vec<String>>,
 ) -> Option<Vec<Vec<LiteralCommandToken>>> {
-    let commands = vp_migration::parse_literal_commands(&source, allow_lists)?;
+    let commands = vp_migration::parse_literal_commands_with_env_values(
+        &source,
+        allow_lists,
+        env_value_options.as_deref().unwrap_or_default(),
+    )?;
     let mut byte_offset = 0;
     let mut utf16_offset = 0;
     // Ranges arrive in source order. Convert incrementally so non-ASCII scripts
@@ -82,6 +88,37 @@ pub fn parse_literal_commands(
                 .collect()
         })
         .collect()
+}
+
+#[napi(object)]
+pub struct LiteralCommandPrefix {
+    pub values: Vec<String>,
+    pub complete: bool,
+    pub substitutions: Vec<String>,
+}
+
+#[napi(object)]
+pub struct LiteralCommandPrefixes {
+    pub commands: Vec<LiteralCommandPrefix>,
+    pub success_chain: bool,
+}
+
+/// Read command prefixes and identify a simple && chain for dependency detection.
+#[napi]
+pub fn parse_literal_command_prefixes(source: String) -> Option<LiteralCommandPrefixes> {
+    let parsed = vp_migration::parse_literal_command_prefixes(&source)?;
+    Some(LiteralCommandPrefixes {
+        commands: parsed
+            .commands
+            .into_iter()
+            .map(|command| LiteralCommandPrefix {
+                values: command.values,
+                complete: command.complete,
+                substitutions: command.substitutions,
+            })
+            .collect(),
+        success_chain: parsed.success_chain,
+    })
 }
 
 /// Parse source and resolve lexical bindings for the TypeScript migration rules.
@@ -266,6 +303,47 @@ pub fn has_config_key(vite_config_path: String, config_key: String) -> Result<bo
     Ok(vp_migration::has_config_key(&content, &config_key).map_err(anyhow::Error::from)?)
 }
 
+/// Convert a standalone tsdown JSON config to inline pack options.
+/// With no Vite config path, render a standalone object for comparison.
+#[napi]
+pub fn merge_tsdown_json_config(
+    json_config_path: String,
+    workspace_root: String,
+    vite_config_path: Option<String>,
+) -> Result<MergeJsonConfigResult> {
+    let result = vp_migration::merge_tsdown_json_config(
+        Path::new(&json_config_path),
+        Path::new(&workspace_root),
+        vite_config_path.as_deref().map(Path::new),
+    )
+    .map_err(anyhow::Error::from)?;
+    Ok(MergeJsonConfigResult { content: result.content, updated: result.updated })
+}
+
+#[napi(object)]
+pub struct NormalizedTsdownJsonPackConfigs {
+    pub existing: String,
+    pub expected: String,
+}
+
+/// Normalize each config with the defaults of the toolchain that reads it.
+#[napi]
+pub fn normalize_tsdown_json_pack_configs(
+    vite_config: String,
+    vite_config_path: String,
+    json_config_path: String,
+    workspace_root: String,
+) -> Result<NormalizedTsdownJsonPackConfigs> {
+    let (existing, expected) = vp_migration::normalize_tsdown_json_pack_configs(
+        &vite_config,
+        Path::new(&vite_config_path),
+        Path::new(&json_config_path),
+        Path::new(&workspace_root),
+    )
+    .map_err(anyhow::Error::from)?;
+    Ok(NormalizedTsdownJsonPackConfigs { existing, expected })
+}
+
 /// Remove a top-level key from a recognized Vite config object.
 #[napi]
 pub fn remove_config_key(
@@ -337,6 +415,28 @@ pub fn merge_tsdown_config(
     Ok(MergeJsonConfigResult { content: result.content, updated: result.updated })
 }
 
+#[napi(object)]
+pub struct TsdownConfigRewriteResult {
+    pub content: Option<String>,
+    pub warnings: Vec<String>,
+}
+
+/// Rewrite a retained tsdown config for vp pack without editing the source file.
+#[napi]
+pub fn rewrite_tsdown_config_for_pack(
+    config_path: String,
+    workspace_root: String,
+    vite_config_path: Option<String>,
+) -> Result<TsdownConfigRewriteResult> {
+    let (content, warnings) = vp_migration::rewrite_tsdown_config_for_pack(
+        Path::new(&config_path),
+        Path::new(&workspace_root),
+        vite_config_path.as_deref().map(Path::new),
+    )
+    .map_err(anyhow::Error::from)?;
+    Ok(TsdownConfigRewriteResult { content, warnings })
+}
+
 /// Wrap safe inline `plugins: [...]` arrays in recognized Vite config objects
 /// with `lazyPlugins(() => [...])` and add a `lazyPlugins` import from
 /// `vite-plus` when needed.
@@ -406,6 +506,7 @@ pub fn rewrite_imports_in_directory(
     preserve_vitest_in_nuxt_packages: Option<bool>,
     oxlint_owner_dirs: Option<Vec<String>>,
     import_rule_config: Option<String>,
+    preserve_tsdown_dirs: Option<Vec<String>>,
 ) -> Result<BatchRewriteResult> {
     let import_rule = match import_rule_config.as_deref() {
         Some(json) => ImportRuleConfig::from_json(json).map_err(anyhow::Error::from)?,
@@ -416,6 +517,11 @@ pub fn rewrite_imports_in_directory(
         vp_migration::RewriteImportsOptions {
             import_rule,
             preserve_vitest_in_nuxt_packages: preserve_vitest_in_nuxt_packages.unwrap_or(false),
+            preserve_tsdown_dirs: preserve_tsdown_dirs
+                .unwrap_or_default()
+                .into_iter()
+                .map(std::path::PathBuf::from)
+                .collect(),
             oxlint_owner_dirs: oxlint_owner_dirs
                 .unwrap_or_default()
                 .into_iter()

@@ -52,7 +52,10 @@ import {
   rewriteBunCatalog,
   rewritePnpmWorkspaceYaml,
   rewriteYarnrcYml,
+  packageCommandsRequireVitePlus,
   setDirectViteEdge,
+  collectPackagesKeepingTsdown,
+  configNeedsVitePlus,
   pnpmPeerDependencyRuleKeys,
   takePnpmWorkspaceSettings,
   trackVitePeerDependencyRuleRemoval,
@@ -83,6 +86,7 @@ import {
 } from './shared.ts';
 
 export type BootstrapPackageJson = {
+  scripts?: Record<string, string>;
   overrides?: Record<string, string>;
   resolutions?: Record<string, string>;
   devDependencies?: Record<string, string>;
@@ -300,12 +304,23 @@ function reconcileVitePlusBootstrapPackage(
   // An installed provider references the shared catalog entry added for a sibling.
   browserCatalogAdditions: ReadonlySet<string> = new Set(),
   retainedImportDependencies?: RetainedImportDependencies,
+  keepTsdown = false,
 ): boolean {
   const before = JSON.stringify(pkg);
   const usesVitest =
     retainedImportDependencies?.vitest.has(projectPath) ||
     projectUsesVitestDirectly(projectPath, pkg);
-  ensureVitePlusDependencySpecs(pkg, vitePlusVersion, ensureVitePlus);
+  ensureVitePlusDependencySpecs(
+    pkg,
+    vitePlusVersion,
+    ensureVitePlus ||
+      (!hasDirectVitePlusInstallEntry(pkg) &&
+        ((keepTsdown && packageCommandsRequireVitePlus(pkg, projectPath)) ||
+          configNeedsVitePlus(projectPath, keepTsdown, {
+            preserveVitestConfig:
+              pkg.dependencies?.vitest !== undefined || pkg.peerDependencies?.vitest !== undefined,
+          }))),
+  );
 
   const installGroups = [pkg.devDependencies, pkg.dependencies, pkg.optionalDependencies];
   const dependencyGroups = [...installGroups, pkg.peerDependencies];
@@ -393,6 +408,7 @@ function reconcileVitePlusBootstrapPackage(
   const ownsOxlintApi = packageOwnsOxlintApi(pkg);
   for (const bundledPackage of bundledPackagesToRemove(
     retainedImportDependencies?.browser.get(projectPath),
+    keepTsdown,
   )) {
     for (const dependencies of installGroups) {
       if (
@@ -625,6 +641,7 @@ export function detectVitePlusBootstrapPending(
   packages?: WorkspacePackage[],
   packageManagerVersion?: string,
   retainedImportDependencies?: RetainedImportDependencies,
+  tsdownPackages = collectPackagesKeepingTsdown(projectPath, packages),
 ): boolean {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
@@ -712,6 +729,7 @@ export function detectVitePlusBootstrapPending(
         catalogDependencyResolver,
         browserCatalogAdditions,
         retainedImportDependencies,
+        tsdownPackages.has(path.resolve(packagePath)) || (index === 0 && tsdownPackages.size > 0),
       )
     ) {
       return true;
@@ -969,7 +987,9 @@ export function ensureVitePlusBootstrap(
   workspaceInfo: WorkspaceInfo,
   report?: MigrationReport,
   retainedImportDependencies?: RetainedImportDependencies,
+  tsdownPackages = collectPackagesKeepingTsdown(workspaceInfo.rootDir, workspaceInfo.packages),
 ): VitePlusBootstrapResult {
+  const keepTsdownInCatalog = tsdownPackages.size > 0;
   const projectPath = workspaceInfo.rootDir;
   const packageJsonPath = path.join(projectPath, 'package.json');
   const result: VitePlusBootstrapResult = {
@@ -1069,6 +1089,7 @@ export function ensureVitePlusBootstrap(
         browserCatalogAdditions,
         usesWebdriverio,
         workspaceInfo.downloadPackageManager.version,
+        keepTsdownInCatalog,
       );
     }
   }
@@ -1090,6 +1111,8 @@ export function ensureVitePlusBootstrap(
       catalogDependencyResolver,
       browserCatalogAdditions,
       retainedImportDependencies,
+      // Workspace packages can run tsdown from the root dependency.
+      keepTsdownInCatalog,
     );
 
     if (workspaceInfo.packageManager === PackageManager.yarn) {
@@ -1187,8 +1210,7 @@ export function ensureVitePlusBootstrap(
     workspaceInfo.packageManager === PackageManager.yarn
       ? findYarnWorkspaceHoisting(projectPath)
       : undefined;
-  for (const workspacePackage of workspaceInfo.packages) {
-    const packagePath = path.join(projectPath, workspacePackage.path);
+  for (const packagePath of getWorkspaceProjectPaths(workspaceInfo).slice(1)) {
     const childPackageJsonPath = path.join(packagePath, 'package.json');
     if (!fs.existsSync(childPackageJsonPath)) {
       continue;
@@ -1208,6 +1230,7 @@ export function ensureVitePlusBootstrap(
           catalogDependencyResolver,
           browserCatalogAdditions,
           retainedImportDependencies,
+          tsdownPackages.has(path.resolve(packagePath)),
         );
         if (
           yarnHoisting &&
@@ -1268,6 +1291,7 @@ export function ensureVitePlusBootstrap(
           browserCatalogAdditions,
           usesWebdriverio,
           workspaceInfo.downloadPackageManager.version,
+          keepTsdownInCatalog,
         );
       }
       if (fs.existsSync(pnpmWorkspaceYamlPath)) {
@@ -1296,6 +1320,7 @@ export function ensureVitePlusBootstrap(
       browserCatalogAdditions,
       supportCatalog,
       yarnSupportsPreapprovedPackages(workspaceInfo.downloadPackageManager.version),
+      keepTsdownInCatalog,
     );
     const after = fs.readFileSync(yarnrcYmlPath, 'utf-8');
     result.packageManagerConfig = before !== after;
@@ -1311,6 +1336,7 @@ export function ensureVitePlusBootstrap(
       usesWebdriverio,
       workspaceInfo.downloadPackageManager.version,
       browserCatalogAdditions,
+      keepTsdownInCatalog,
     );
     const after = fs.readFileSync(packageJsonPath, 'utf-8');
     result.packageJson = result.packageJson || before !== after;

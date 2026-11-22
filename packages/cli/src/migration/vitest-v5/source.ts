@@ -9,6 +9,7 @@ import {
   memberName,
   isBoolean,
   isRegExp,
+  unwrapTypeExpression,
 } from '../ast-utils.ts';
 import {
   NODE_SOURCES,
@@ -380,18 +381,6 @@ function looksLikeConstructorMock(editor: SourceEditor, node: t.CallExpression):
     );
   }
   return false;
-}
-
-function unwrapTypeExpression(node: t.Node): t.Node {
-  while (
-    node.type === 'TSAsExpression' ||
-    node.type === 'TSSatisfiesExpression' ||
-    node.type === 'TSNonNullExpression' ||
-    node.type === 'TSTypeAssertion'
-  ) {
-    node = node.expression;
-  }
-  return node;
 }
 
 /** Recognize a local promise consumed by a later statement without crossing

@@ -575,6 +575,24 @@ describe('migrateTsxToVpx', () => {
     });
   });
 
+  it.each(['npx --no-install tsx scripts/seed.ts', 'npx --no-install -- tsx scripts/seed.ts'])(
+    'keeps the local runner dependency for %s',
+    (command) => {
+      const manifest = { scripts: { seed: command }, devDependencies: { tsx: '4.21.0' } };
+      write('package.json', manifest);
+      const report = createMigrationReport();
+
+      expect(migrateTsxToVpx(root, undefined, report)).toEqual({
+        changed: false,
+        dependencyRemoved: false,
+      });
+      expect(readJson('package.json')).toEqual(manifest);
+      expect(report.warnings).toContainEqual(
+        expect.stringContaining('requires the locally installed runner'),
+      );
+    },
+  );
+
   it('migrates a project that only uses preloads and removes the unused dependency', () => {
     write('package.json', {
       type: 'module',

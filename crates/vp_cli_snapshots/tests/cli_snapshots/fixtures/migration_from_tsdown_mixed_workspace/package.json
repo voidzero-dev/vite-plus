@@ -1,0 +1,13 @@
+{
+  "name": "migration-from-tsdown-mixed-workspace",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.11.2",
+  "scripts": {
+    "bundle": "tsdown --config tsdown.custom.config.ts"
+  },
+  "devDependencies": {
+    "tsdown": "catalog:build",
+    "vite-plus": "^1.7.0"
+  }
+}

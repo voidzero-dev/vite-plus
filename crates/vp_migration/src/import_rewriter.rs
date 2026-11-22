@@ -2079,6 +2079,7 @@ struct SkipPackages {
 struct PackageRewriteContext {
     skip_packages: SkipPackages,
     uses_nuxt_test_utils: bool,
+    preserve_tsdown: bool,
 }
 
 /// Options controlling directory-wide import rewriting.
@@ -2094,6 +2095,8 @@ pub struct RewriteImportsOptions {
     /// before migration. Capture these before manifest edits so ownership
     /// does not depend on which dependency declarations survive those edits.
     pub oxlint_owner_dirs: Vec<PathBuf>,
+    /// Package directories whose standalone tsdown imports and configs stay on tsdown.
+    pub preserve_tsdown_dirs: Vec<PathBuf>,
 }
 
 impl SkipPackages {
@@ -2299,6 +2302,7 @@ fn get_package_rewrite_context(package_json_path: &Path) -> PackageRewriteContex
         uses_nuxt_test_utils: ["dependencies", "devDependencies", "optionalDependencies"]
             .into_iter()
             .any(|key| has_package(key, "@nuxt/test-utils")),
+        preserve_tsdown: false,
     }
 }
 
@@ -2384,6 +2388,7 @@ pub fn rewrite_imports_in_directory_with_options(
     // Pre-compute package context for each file (requires mutable cache, done sequentially).
     let mut package_context_cache: HashMap<PathBuf, PackageRewriteContext> = HashMap::new();
     let oxlint_owner_dirs: HashSet<PathBuf> = options.oxlint_owner_dirs.into_iter().collect();
+    let preserve_tsdown_dirs: HashSet<PathBuf> = options.preserve_tsdown_dirs.into_iter().collect();
 
     let files_with_context: Vec<(PathBuf, PackageRewriteContext)> = walk_result
         .files
@@ -2393,10 +2398,10 @@ pub fn rewrite_imports_in_directory_with_options(
                 if let Some(package_json_path) = find_nearest_package_json(&file_path, root) {
                     *package_context_cache.entry(package_json_path.clone()).or_insert_with(|| {
                         let mut context = get_package_rewrite_context(&package_json_path);
-                        if let Some(package_dir) = package_json_path.parent()
-                            && oxlint_owner_dirs.contains(package_dir)
-                        {
-                            context.skip_packages.skip_oxlint = true;
+                        if let Some(package_dir) = package_json_path.parent() {
+                            context.skip_packages.skip_oxlint |=
+                                oxlint_owner_dirs.contains(package_dir);
+                            context.preserve_tsdown = preserve_tsdown_dirs.contains(package_dir);
                         }
                         context
                     })
@@ -2419,7 +2424,9 @@ pub fn rewrite_imports_in_directory_with_options(
                 skip_packages.skip_vitest = true;
                 skip_packages.skip_oxlint = true;
             }
-            if skip_packages.all_skipped() {
+            if skip_packages.all_skipped()
+                && !(package_context.preserve_tsdown && is_vite_config_file(&file_path))
+            {
                 return (file_path, FileResult::Unchanged(Vec::new()), false);
             }
 
@@ -2428,6 +2435,7 @@ pub fn rewrite_imports_in_directory_with_options(
                 root,
                 &skip_packages,
                 options.preserve_vitest_in_nuxt_packages && package_context.uses_nuxt_test_utils,
+                package_context.preserve_tsdown,
             ) {
                 Ok(rewrite_result) => {
                     if rewrite_result.updated {
@@ -2502,15 +2510,23 @@ fn rewrite_import(
     root: &Path,
     skip_packages: &SkipPackages,
     preserve_vitest_in_nuxt_package: bool,
+    preserve_tsdown: bool,
 ) -> Result<RewriteResult, Error> {
     let content = std::fs::read_to_string(file_path)?;
     let is_tsdown_config = file_path.file_stem().is_some_and(|stem| stem == "tsdown.config");
     let is_vite_config = is_vite_config_file(file_path);
-    let preserve_defaults = if !skip_packages.skip_tsdown && (is_tsdown_config || is_vite_config) {
-        Some(pack_config::preserve_legacy_defaults(file_path, root, is_tsdown_config, &content))
+    // A retained standalone dependency affects its imports, while the pack
+    // options in a Vite config are still read by the bundled toolchain.
+    let rewrite_pack_options = if is_vite_config {
+        preserve_tsdown || !skip_packages.skip_tsdown
     } else {
-        None
+        is_tsdown_config && !preserve_tsdown && !skip_packages.skip_tsdown
     };
+    let preserve_defaults = rewrite_pack_options.then(|| {
+        pack_config::preserve_legacy_defaults(file_path, root, is_tsdown_config, &content)
+    });
+    let mut skip_packages = *skip_packages;
+    skip_packages.skip_tsdown |= preserve_tsdown;
 
     // Issue #2004: `vite` specifiers are rewritten only in config entry files;
     // everything else keeps its `vite` imports (they still resolve through the
@@ -2522,19 +2538,48 @@ fn rewrite_import(
     // skip (a skipped package stays skipped).
     let mut result = rewrite_import_content_full(
         &content,
-        skip_packages,
+        &skip_packages,
         preserve_vitest_in_nuxt_package,
         is_vite_config,
         file_path.to_str(),
     )?;
     if let Some(preserve_defaults) = preserve_defaults {
-        let rewritten =
-            pack_config::rewrite_pack_config(&result.content, is_tsdown_config, preserve_defaults);
+        let with_pack_types = (preserve_tsdown && is_vite_config)
+            .then(|| pack_config::rewrite_inline_pack_types(&result.content, file_path))
+            .flatten();
+        let rewritten = pack_config::rewrite_pack_config(
+            with_pack_types.as_deref().unwrap_or(&result.content),
+            is_tsdown_config,
+            preserve_defaults,
+        );
         result.updated |= rewritten != result.content;
         result.content = rewritten;
         result.warnings = pack_config::pack_config_warnings(&result.content, is_tsdown_config);
     }
     Ok(result)
+}
+
+/// Adapt a retained standalone config for the bundled pack tool, without writing the source file.
+/// Use bundled defaults when the Vite config already maps the imported options.
+pub fn rewrite_tsdown_config_for_pack(
+    config_path: &Path,
+    workspace_root: &Path,
+    vite_config_path: Option<&Path>,
+) -> Result<(Option<String>, Vec<String>), Error> {
+    let original = std::fs::read_to_string(config_path)?;
+    let legacy_defaults = pack_config::preserve_legacy_defaults(
+        vite_config_path.unwrap_or(config_path),
+        workspace_root,
+        vite_config_path.is_none(),
+        &original,
+    );
+    let skip_packages =
+        SkipPackages { skip_vite: true, skip_vitest: true, skip_tsdown: false, skip_oxlint: true };
+    let rewritten =
+        rewrite_import_content_full(&original, &skip_packages, false, false, config_path.to_str())?;
+    let content = pack_config::rewrite_pack_config(&rewritten.content, true, legacy_defaults);
+    let warnings = pack_config::pack_config_warnings(&content, true);
+    Ok(((content != original).then_some(content), warnings))
 }
 
 /// Fast pre-filter to skip expensive AST parsing for files with no relevant imports.
@@ -2799,6 +2844,34 @@ import { defineConfig as pack } from 'tsdown';
             source.replace("tsdown", "vite-plus/pack")
         );
         assert_eq!(std::fs::read_to_string(root.join("plugin/vite.config.mjs")).unwrap(), source);
+    }
+
+    #[test]
+    fn retained_tsdown_dependency_does_not_skip_pack_options() {
+        let temp = tempdir().unwrap();
+        let root = temp.path();
+        let vite = "import type { UserConfig } from 'tsdown';\nexport default { pack: { publicDir: 'public' } satisfies UserConfig };";
+        let standalone = "export default { publicDir: 'public' };";
+        write_pack_fixture(root, "package.json", r#"{"dependencies":{"tsdown":"0.22.14"}}"#);
+        write_pack_fixture(root, "vite.config.ts", vite);
+        write_pack_fixture(root, "tsdown.config.ts", standalone);
+
+        let result = rewrite_imports_in_directory_with_options(
+            root,
+            RewriteImportsOptions {
+                import_rule: ImportRuleConfig::from_json(r#"{"enabled":false,"overrides":[]}"#)
+                    .unwrap(),
+                preserve_tsdown_dirs: vec![root.to_path_buf()],
+                ..RewriteImportsOptions::default()
+            },
+        )
+        .unwrap();
+
+        assert_eq!(result.modified_files, [root.join("vite.config.ts")]);
+        let actual = std::fs::read_to_string(root.join("vite.config.ts")).unwrap();
+        assert!(actual.contains("import type { UserConfig } from 'vite-plus/pack'"), "{actual}");
+        assert!(actual.contains("copy: 'public'"), "{actual}");
+        assert_eq!(std::fs::read_to_string(root.join("tsdown.config.ts")).unwrap(), standalone);
     }
 
     fn write_tsdown_fixture(root: &Path, version: &str) {
@@ -3250,9 +3323,14 @@ export default defineConfig({{
         .unwrap();
 
         // Run the rewrite
-        let result =
-            rewrite_import(&vite_config_path, temp_dir.path(), &SkipPackages::default(), false)
-                .unwrap();
+        let result = rewrite_import(
+            &vite_config_path,
+            temp_dir.path(),
+            &SkipPackages::default(),
+            false,
+            false,
+        )
+        .unwrap();
 
         assert!(result.updated);
         assert_eq!(

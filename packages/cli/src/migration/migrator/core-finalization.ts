@@ -6,11 +6,13 @@ import { type WorkspacePackage } from '../../types/index.ts';
 import { editJsonFile, readJsonFile } from '../../utils/json.ts';
 import { rulesDir } from '../../utils/path.ts';
 import {
+  collectPackagesKeepingTsdown,
   dropDeadOxlintPluginsDependency,
   getWorkspaceProjectPaths,
   hasTsconfigTypesToRewrite,
   mergeTsdownConfigFile,
   migrateTaskCacheConfigInViteConfig,
+  packagesKeepingTsdownConfig,
   rewriteAllImports,
   rewriteTsconfigTypes,
 } from '../migrator.ts';
@@ -22,7 +24,7 @@ const PREPARE_RULES_YAML_PATH = path.join(rulesDir, 'vite-prepare.yml');
 
 // Cache YAML content to avoid repeated disk reads (called once per package in monorepos)
 let cachedRulesYaml: string | undefined;
-let cachedRulesYamlNoLintStaged: string | undefined;
+const filteredScriptRulesYaml = new Map<string, string>();
 let cachedPrepareRulesYaml: string | undefined;
 
 export function readRulesYaml(): string {
@@ -54,15 +56,24 @@ function splitRuleDocuments(yaml: string): string[] {
   return documents;
 }
 
-export function getScriptRulesYaml(skipStagedMigration?: boolean): string {
+export function getScriptRulesYaml(skipStagedMigration = false, keepTsdown = false): string {
   const yaml = readRulesYaml();
-  if (!skipStagedMigration) {
+  if (!skipStagedMigration && !keepTsdown) {
     return yaml;
   }
-  cachedRulesYamlNoLintStaged ??= splitRuleDocuments(yaml)
-    .filter((document) => !document.includes('id: replace-lint-staged'))
-    .join('\n');
-  return cachedRulesYamlNoLintStaged;
+  const key = `${skipStagedMigration}:${keepTsdown}`;
+  let filtered = filteredScriptRulesYaml.get(key);
+  if (filtered === undefined) {
+    filtered = splitRuleDocuments(yaml)
+      .filter(
+        (document) =>
+          !(skipStagedMigration && document.includes('id: replace-lint-staged')) &&
+          !(keepTsdown && document.includes('id: replace-tsdown')),
+      )
+      .join('\n');
+    filteredScriptRulesYaml.set(key, filtered);
+  }
+  return filtered;
 }
 
 export function readPrepareRulesYaml(): string {
@@ -92,7 +103,7 @@ export type CoreMigrationFinalizationResult = {
   taskCacheWarnings: string[];
 };
 
-function hasCorePackageScriptRewrites(projectPath: string): boolean {
+function hasCorePackageScriptRewrites(projectPath: string, keepTsdown: boolean): boolean {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
     return false;
@@ -101,10 +112,10 @@ function hasCorePackageScriptRewrites(projectPath: string): boolean {
   if (!pkg.scripts) {
     return false;
   }
-  return !!rewriteScripts(JSON.stringify(pkg.scripts), getScriptRulesYaml(true));
+  return !!rewriteScripts(JSON.stringify(pkg.scripts), getScriptRulesYaml(true, keepTsdown));
 }
 
-function rewriteCorePackageScripts(projectPath: string): boolean {
+function rewriteCorePackageScripts(projectPath: string, keepTsdown: boolean): boolean {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
     return false;
@@ -115,7 +126,10 @@ function rewriteCorePackageScripts(projectPath: string): boolean {
     if (!pkg.scripts) {
       return undefined;
     }
-    const updated = rewriteScripts(JSON.stringify(pkg.scripts), getScriptRulesYaml(true));
+    const updated = rewriteScripts(
+      JSON.stringify(pkg.scripts),
+      getScriptRulesYaml(true, keepTsdown),
+    );
     if (!updated) {
       return undefined;
     }
@@ -128,11 +142,16 @@ function rewriteCorePackageScripts(projectPath: string): boolean {
 
 export function detectPendingCoreMigration(
   workspaceInfo: CoreMigrationWorkspace,
+  tsdownPackages = collectPackagesKeepingTsdown(workspaceInfo.rootDir, workspaceInfo.packages),
 ): PendingCoreMigration {
   const projectPaths = getWorkspaceProjectPaths(workspaceInfo);
   return {
-    scripts: projectPaths.some((projectPath) => hasCorePackageScriptRewrites(projectPath)),
-    tsconfigTypes: projectPaths.some((projectPath) => hasTsconfigTypesToRewrite(projectPath)),
+    scripts: projectPaths.some((projectPath) =>
+      hasCorePackageScriptRewrites(projectPath, tsdownPackages.has(path.resolve(projectPath))),
+    ),
+    tsconfigTypes: projectPaths.some((projectPath) =>
+      hasTsconfigTypesToRewrite(projectPath, tsdownPackages.has(path.resolve(projectPath))),
+    ),
   };
 }
 
@@ -140,11 +159,18 @@ export function finalizeCoreMigrationForExistingVitePlus(
   workspaceInfo: CoreMigrationWorkspace,
   silent = false,
   report?: MigrationReport,
-  pending = detectPendingCoreMigration(workspaceInfo),
+  pending?: PendingCoreMigration,
   // null defers import rewriting until dynamic lint settings can be resolved.
   importRuleConfig?: string | null,
+  tsdownPackages = collectPackagesKeepingTsdown(
+    workspaceInfo.rootDir,
+    workspaceInfo.packages,
+    report,
+  ),
 ): CoreMigrationFinalizationResult {
+  pending ??= detectPendingCoreMigration(workspaceInfo, tsdownPackages);
   const projectPaths = getWorkspaceProjectPaths(workspaceInfo);
+  const tsdownConfigPackages = packagesKeepingTsdownConfig(workspaceInfo.rootDir, tsdownPackages);
   const result: CoreMigrationFinalizationResult = {
     dependencies: false,
     scripts: false,
@@ -157,19 +183,29 @@ export function finalizeCoreMigrationForExistingVitePlus(
 
   if (pending.scripts) {
     for (const projectPath of projectPaths) {
-      result.scripts = rewriteCorePackageScripts(projectPath) || result.scripts;
+      result.scripts =
+        rewriteCorePackageScripts(projectPath, tsdownPackages.has(path.resolve(projectPath))) ||
+        result.scripts;
     }
   }
 
   if (pending.tsconfigTypes) {
     for (const projectPath of projectPaths) {
       result.tsconfigTypes =
-        rewriteTsconfigTypes(projectPath, silent, report) || result.tsconfigTypes;
+        rewriteTsconfigTypes(
+          projectPath,
+          silent,
+          report,
+          tsdownPackages.has(path.resolve(projectPath)),
+        ) || result.tsconfigTypes;
     }
   }
 
   if (importRuleConfig !== null) {
-    result.imports = rewriteAllImports(workspaceInfo.rootDir, silent, report, { importRuleConfig });
+    result.imports = rewriteAllImports(workspaceInfo.rootDir, silent, report, {
+      importRuleConfig,
+      preserveTsdownDirs: [...tsdownConfigPackages],
+    });
   }
   result.dependencies = dropDeadOxlintPluginsDependency(
     workspaceInfo.rootDir,
@@ -180,7 +216,15 @@ export function finalizeCoreMigrationForExistingVitePlus(
   // tsdown.config.* undiscoverable by vp pack. Finalize those configs on the
   // existing-Vite+ path just as the fresh migration path does.
   for (const projectPath of projectPaths) {
-    result.tsdownConfig = mergeTsdownConfigFile(projectPath, silent, report) || result.tsdownConfig;
+    result.tsdownConfig =
+      mergeTsdownConfigFile(
+        projectPath,
+        silent,
+        report,
+        tsdownConfigPackages.has(path.resolve(projectPath)),
+        workspaceInfo.rootDir,
+        tsdownConfigPackages,
+      ) || result.tsdownConfig;
   }
 
   for (const projectPath of projectPaths) {

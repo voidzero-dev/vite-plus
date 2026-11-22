@@ -1,0 +1,12 @@
+{
+  "name": "pack-member",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "release": "tsdown -c tsdown.config.ts"
+  },
+  "devDependencies": {
+    "tsdown": "0.23.4",
+    "vite-plus": "latest"
+  }
+}

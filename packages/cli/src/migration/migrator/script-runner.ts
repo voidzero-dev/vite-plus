@@ -3,7 +3,11 @@ import path from 'node:path';
 
 import { parse as parseJsonc } from 'jsonc-parser';
 
-import { type LiteralCommandToken, parseLiteralCommands } from '../../../binding/index.js';
+import {
+  type LiteralCommandToken,
+  parseLiteralCommandPrefixes,
+  parseLiteralCommands,
+} from '../../../binding/index.js';
 import { type WorkspacePackage } from '../../types/index.ts';
 import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
 import { readNearestPackageJson } from '../../utils/package.ts';
@@ -13,6 +17,7 @@ import { sourceTreeMatches } from '../migrator.ts';
 import { type MigrationReport } from '../report.ts';
 import {
   type DependencyBag,
+  dotenvCommandStart,
   getCommandStartIndex,
   isPlainRecord,
   LINT_STAGED_JSON_CONFIG_FILES,
@@ -85,6 +90,7 @@ const LOADER_OPTIONS = new Set([
   '-r',
 ]);
 const LOADER_SETTINGS = new Set(['import', 'loader', 'require']);
+const VITE_PLUS_REGISTER = 'vite-plus/register';
 const KEEP_REPL = '`vpx` does not start a TypeScript REPL';
 const KEEP_SHELL =
   'the command uses shell syntax that vp migrate does not rewrite, such as pipes, variables, or subshells';
@@ -220,12 +226,7 @@ export function rewriteScriptRunnerCommand(
   return { command: rewritten, kept: rewrite.kept };
 }
 
-function rewriteSegment(
-  runner: ScriptRunnerMigration,
-  rewrite: Rewrite,
-  tokens: LiteralCommandToken[],
-): void {
-  const values = tokens.map(({ value }) => value);
+function scriptCommandPrefix(values: readonly string[]) {
   // Environment assignments and cross-env stay in front of the command.
   let first = 0;
   const skipAssignments = () => {
@@ -254,6 +255,16 @@ function rewriteSegment(
     }
     skipAssignments();
   }
+  return { first, shell, unknownEnvironment };
+}
+
+function rewriteSegment(
+  runner: ScriptRunnerMigration,
+  rewrite: Rewrite,
+  tokens: LiteralCommandToken[],
+): void {
+  const values = tokens.map(({ value }) => value);
+  const { first, shell, unknownEnvironment } = scriptCommandPrefix(values);
   if (first >= values.length) {
     return;
   }
@@ -279,6 +290,8 @@ function rewriteSegment(
   }
   const launcher = COMMAND_LAUNCHERS.get(values[start]);
   if (values[start] === runner.name || runner.aliases?.includes(values[start])) {
+    // The caller explicitly requires a locally installed runner.
+    const localNpx = values[first] === 'npx' && values.slice(first, start).includes('--no-install');
     // Inherited startup hooks also matter when no register import needs replacing.
     rewriteRunner(
       runner,
@@ -286,7 +299,9 @@ function rewriteSegment(
       tokens,
       first,
       start,
-      envReason ?? environment.keepReason,
+      envReason ??
+        environment.keepReason ??
+        (localNpx ? '`npx --no-install` requires the locally installed runner' : undefined),
       assignments,
     );
   } else if (values[start] === 'node') {
@@ -498,6 +513,183 @@ function scanEnvironmentOptions(
 function optionName(arg: string): string {
   const name = arg.split('=', 1)[0];
   return name.startsWith('--') ? `--${name.slice(2).replaceAll('_', '-')}` : name;
+}
+
+function nodeOptionsLoadVitePlusRegister(args: readonly string[]): boolean {
+  for (let index = 0; index < args.length; index++) {
+    const value = args[index];
+    if (value === '--' || !value.startsWith('-')) {
+      return false;
+    }
+    const name = optionName(value);
+    const equals = value.indexOf('=');
+    const argument = equals === -1 ? args[index + 1] : value.slice(equals + 1);
+    if (name === '--import' && argument === VITE_PLUS_REGISTER) {
+      return true;
+    }
+    if (equals === -1 && NODE_OPTIONS_WITH_VALUE.has(name)) {
+      index++;
+    }
+  }
+  return false;
+}
+
+const vitePlusScriptCommands = new Set(['vp', 'vpr', 'vpx']);
+const envShebang = /^#![ \t]*\S*\benv[ \t]+(?:-S[ \t]+)?([^\r\n]+)/;
+const scriptExtensions = new Set(SCRIPT_EXTENSIONS);
+
+function readScriptPrefix(file: string): string {
+  const descriptor = fs.openSync(file, 'r');
+  try {
+    // An extensionless executable may be a native binary.
+    const prefix = Buffer.alloc(1024);
+    const bytesRead = fs.readSync(descriptor, prefix);
+    return prefix.toString('utf8', 0, bytesRead);
+  } finally {
+    fs.closeSync(descriptor);
+  }
+}
+
+function shebangRequiresVitePlus(source: string): boolean {
+  const command = envShebang.exec(source)?.[1];
+  return command !== undefined && scriptRequiresVitePlus(command);
+}
+
+function localScriptNeedsVitePlus(executable: string | undefined, projectPath: string): boolean {
+  if (!executable?.includes('/') || path.isAbsolute(executable)) {
+    return false;
+  }
+  const extension = path.extname(executable);
+  if (extension && !scriptExtensions.has(extension)) {
+    return false;
+  }
+  const file = path.resolve(projectPath, executable);
+  try {
+    if (!fs.statSync(file, { throwIfNoEntry: false })?.isFile()) {
+      return false;
+    }
+    return shebangRequiresVitePlus(readScriptPrefix(file));
+  } catch {
+    return false;
+  }
+}
+
+function literalCdDirectory(values: readonly string[], cwd: string): string | undefined {
+  const directoryIndex = values[1] === '--' ? 2 : 1;
+  const directory = values[directoryIndex];
+  if (
+    values.length === directoryIndex + 1 &&
+    directory &&
+    !directory.startsWith('-') &&
+    !directory.startsWith('~') &&
+    !/%\w+%/.test(directory)
+  ) {
+    return path.resolve(cwd, directory);
+  }
+  return undefined;
+}
+
+function scriptRequiresVitePlus(command: string, projectPath?: string): boolean {
+  if (
+    !command.includes('vp') &&
+    !command.includes(VITE_PLUS_REGISTER) &&
+    !(projectPath && command.includes('/'))
+  ) {
+    return false;
+  }
+  const parsed = parseLiteralCommandPrefixes(command);
+  const followDirectories =
+    parsed?.successChain && parsed.commands.some(({ values }) => values[0] === 'cd');
+  let cwd = projectPath;
+  return (
+    parsed?.commands.some(({ values, complete, substitutions }) => {
+      if (substitutions.some((script) => scriptRequiresVitePlus(script, cwd))) {
+        return true;
+      }
+      const { first, shell, unknownEnvironment } = scriptCommandPrefix(values);
+      if (followDirectories) {
+        const name = values[first];
+        if (name === 'cd') {
+          // Later commands in this chain run only after cd succeeds.
+          cwd = cwd && complete && first === 0 ? literalCdDirectory(values, cwd) : undefined;
+          return false;
+        }
+        if (SHELL_STATE_COMMANDS.includes(name) || name === 'chdir') {
+          cwd = undefined;
+        }
+      }
+      if (unknownEnvironment) {
+        return false;
+      }
+      // NODE_OPTIONS can load the register entry before a package-manager script starts.
+      const loadsFromEnvironment = values.slice(0, first).some((assignment) => {
+        if (!/^NODE_OPTIONS=/i.test(assignment)) {
+          return false;
+        }
+        const segments = parseLiteralCommands(assignment.slice(13), false);
+        return (
+          segments?.length === 1 &&
+          nodeOptionsLoadVitePlusRegister(segments[0].map(({ value }) => value))
+        );
+      });
+      if (loadsFromEnvironment) {
+        return first < values.length;
+      }
+      const wrapperStart = dotenvCommandStart(values, first);
+      const invocation = values.slice(wrapperStart);
+      const bunPrefix =
+        invocation[0] === 'bunx' ? 1 : invocation[0] === 'bun' && invocation[1] === 'x' ? 2 : 0;
+      let commandStart = getCommandStartIndex(invocation);
+      if (bunPrefix > 0) {
+        while (
+          invocation[commandStart] === '--bun' ||
+          invocation[commandStart] === '--no-install'
+        ) {
+          commandStart++;
+        }
+      }
+      const start = wrapperStart + commandStart;
+      const executable = values[start];
+      const wrappers = values.slice(wrapperStart, start);
+      const downloadsCommand =
+        bunPrefix === 0 && wrappers.some((word) => ['dlx', 'x'].includes(word));
+      if (
+        !downloadsCommand &&
+        (vitePlusScriptCommands.has(executable) ||
+          (cwd &&
+            bunPrefix === 0 &&
+            !wrappers.includes('npx') &&
+            localScriptNeedsVitePlus(executable, cwd)))
+      ) {
+        return true;
+      }
+      if (values[start] === 'node') {
+        return nodeOptionsLoadVitePlusRegister(values.slice(start + 1));
+      }
+      const launcher = COMMAND_LAUNCHERS.get(values[start]);
+      const commands = shell
+        ? values.slice(start)
+        : values.slice(start + 1).filter((_, index) => launcher?.(values[start + index]));
+      return commands.some((script) => scriptRequiresVitePlus(script, cwd));
+    }) ?? false
+  );
+}
+
+export function packageCommandsRequireVitePlus(
+  pkg: Record<string, unknown>,
+  projectPath?: string,
+): boolean {
+  return (
+    packageCommands(pkg, projectPath).some((command) =>
+      scriptRequiresVitePlus(command, projectPath),
+    ) ||
+    (!!projectPath &&
+      sourceTreeMatches(projectPath, shebangRequiresVitePlus, {
+        extensions: scriptExtensions,
+        includeExtensionless: true,
+        readText: (file) => ((fs.statSync(file).mode & 0o111) !== 0 ? readScriptPrefix(file) : ''),
+      }))
+  );
 }
 
 /** Remove `tokens[index]` with the space before it. */
@@ -824,7 +1016,7 @@ function scanOptions(
         if (runner.isRegister?.(name, loader)) {
           scanned.imports.push({
             token: tokens[inline ? index : index + 1],
-            value: inline ? '--import=vite-plus/register' : 'vite-plus/register',
+            value: inline ? `--import=${VITE_PLUS_REGISTER}` : VITE_PLUS_REGISTER,
             option: !inline && name !== '--import' ? tokens[index] : undefined,
           });
         }
@@ -928,9 +1120,15 @@ function recordCommands(record: unknown): string[] {
     .filter((command): command is string => typeof command === 'string');
 }
 
-/** The commands a package.json runs: its scripts and lint-staged tasks. */
-function packageCommands(pkg: Record<string, unknown>): string[] {
-  return [...recordCommands(pkg.scripts), ...recordCommands(pkg['lint-staged'])];
+/** Package scripts and lint-staged tasks from the manifest or local JSON files. */
+function packageCommands(pkg: Record<string, unknown>, projectPath?: string): string[] {
+  return [
+    ...recordCommands(pkg.scripts),
+    ...recordCommands(pkg['lint-staged']),
+    ...(projectPath
+      ? lintStagedJsonFiles(projectPath).flatMap((file) => recordCommands(readJsonFile(file)))
+      : []),
+  ];
 }
 
 function lintStagedJsonFiles(dir: string): string[] {
@@ -969,10 +1167,7 @@ export function detectScriptRunnerProject(
     if (!pkg || (!runner.detectKeptUses && ownsRunnerAtRuntime(runner, pkg))) {
       return false;
     }
-    const commands = [
-      ...packageCommands(pkg),
-      ...lintStagedJsonFiles(dir).flatMap((file) => recordCommands(readJsonFile(file))),
-    ];
+    const commands = packageCommands(pkg, dir);
     return (
       commands.some((command) =>
         runner.detectKeptUses

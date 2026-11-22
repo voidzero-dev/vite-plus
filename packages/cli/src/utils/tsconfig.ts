@@ -181,7 +181,7 @@ const TSCONFIG_TYPE_REPLACEMENTS: Record<string, string> = {
   ),
 };
 
-export function hasTypesToRewriteInTsconfig(filePath: string): boolean {
+export function hasTypesToRewriteInTsconfig(filePath: string, keepTsdown = false): boolean {
   let text: string;
   try {
     text = fs.readFileSync(filePath, 'utf-8');
@@ -196,7 +196,12 @@ export function hasTypesToRewriteInTsconfig(filePath: string): boolean {
   const types = parsed?.compilerOptions?.types;
   return (
     Array.isArray(types) &&
-    types.some((t) => typeof t === 'string' && t in TSCONFIG_TYPE_REPLACEMENTS)
+    types.some(
+      (t) =>
+        typeof t === 'string' &&
+        t in TSCONFIG_TYPE_REPLACEMENTS &&
+        !(keepTsdown && t === 'tsdown/client'),
+    )
   );
 }
 
@@ -221,7 +226,7 @@ export function hasVitestTypesInTsconfig(filePath: string): boolean {
   );
 }
 
-export function rewriteTypesInTsconfig(filePath: string): boolean {
+export function rewriteTypesInTsconfig(filePath: string, keepTsdown = false): boolean {
   let text: string;
   try {
     text = fs.readFileSync(filePath, 'utf-8');
@@ -240,7 +245,9 @@ export function rewriteTypesInTsconfig(filePath: string): boolean {
 
   const toReplace = types
     .map((t, i) =>
-      typeof t === 'string' && t in TSCONFIG_TYPE_REPLACEMENTS
+      typeof t === 'string' &&
+      t in TSCONFIG_TYPE_REPLACEMENTS &&
+      !(keepTsdown && t === 'tsdown/client')
         ? { i, newVal: TSCONFIG_TYPE_REPLACEMENTS[t] }
         : null,
     )

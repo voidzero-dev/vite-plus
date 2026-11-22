@@ -47,14 +47,31 @@ export function getCommandStartIndex(argv: readonly string[]): number {
   if (argv[start] === 'exec' || argv[start] === 'x' || argv[start] === 'dlx') {
     start++;
   }
-  // `npx --yes tsx`: skip the install prompt flag.
-  if (argv[start] === '-y' || argv[start] === '--yes') {
+  // The npx install policy comes before the executable.
+  if (
+    argv[start] === '-y' ||
+    argv[start] === '--yes' ||
+    (argv[0] === 'npx' && argv[start] === '--no-install')
+  ) {
     start++;
   }
   if (argv[start] === '--') {
     start++;
   }
   return start;
+}
+
+/** Find the command after an explicit dotenv argument separator. */
+export function dotenvCommandStart(argv: readonly string[], start: number): number {
+  const command = argv[start];
+  const argumentsStart =
+    command === 'dotenv'
+      ? start + 1
+      : command === 'dotenvx' && argv[start + 1] === 'run'
+        ? start + 2
+        : undefined;
+  const separator = argumentsStart === undefined ? -1 : argv.indexOf('--', argumentsStart);
+  return separator === -1 ? start : separator + 1;
 }
 
 // Scans that decide whether a removed tool is still used. Built output can still load
@@ -132,9 +149,14 @@ export const REMOVE_PACKAGES = [
   '@vitest/browser-preview',
 ] as const;
 
-// A preserved browser import still needs its original dependency and catalog entry.
-export function bundledPackagesToRemove(retained?: ReadonlySet<string>): readonly string[] {
-  return retained?.size ? REMOVE_PACKAGES.filter((name) => !retained.has(name)) : REMOVE_PACKAGES;
+// Preserve bundled dependencies and catalog entries that the project still uses.
+export function bundledPackagesToRemove(
+  retained?: ReadonlySet<string>,
+  keepTsdown = false,
+): readonly string[] {
+  return retained?.size || keepTsdown
+    ? REMOVE_PACKAGES.filter((name) => !retained?.has(name) && !(name === 'tsdown' && keepTsdown))
+    : REMOVE_PACKAGES;
 }
 
 // WebDriverIO is community-maintained. The versioned v5 preflight ensures its
@@ -349,7 +371,7 @@ export type PackageJsonDependencyField =
   | 'peerDependencies'
   | 'optionalDependencies';
 
-export function warnMigration(message: string, report?: MigrationReport) {
+export function warnMigration(message: string, report?: Pick<MigrationReport, 'warnings'>) {
   addMigrationWarning(report, message);
   if (!report) {
     prompts.log.warn(message);

@@ -17,8 +17,8 @@ import {
   hasNuxtTestUtilsDependency,
   managedOverridePackages,
   normalizeVitestPeerCatalogSpec,
+  packageCommandsRequireVitePlus,
   pruneLegacyWrapperAliases,
-  readRulesYaml,
   removeManagedVitestEntry,
   setDirectViteEdge,
 } from '../migrator.ts';
@@ -35,6 +35,15 @@ import {
   VITEST_IS_MANAGED_OVERRIDE,
   type PackageJsonDependencyField,
 } from './shared.ts';
+
+export function migratedVitePlusSpec(
+  supportCatalog: boolean,
+  catalogDependencyResolver?: CatalogDependencyResolver,
+): string {
+  return supportCatalog && !VITE_PLUS_VERSION.startsWith('file:')
+    ? (catalogDependencyResolver?.preferredCatalogSpec ?? 'catalog:')
+    : VITE_PLUS_VERSION;
+}
 
 export function rewritePackageJson(
   pkg: {
@@ -70,15 +79,19 @@ export function rewritePackageJson(
   browserCatalogAdditions: ReadonlySet<string> = new Set(),
   // Bundled browser packages that this package still imports.
   retainedBrowserPackages?: ReadonlySet<string>,
+  keepTsdown = false,
+  keepTsdownDependency = keepTsdown,
+  needVitePlusForConfig = false,
+  projectPath?: string,
 ): Record<string, string | string[]> | null {
-  if (pkg.scripts) {
-    const updated = rewriteScripts(
-      JSON.stringify(pkg.scripts),
-      getScriptRulesYaml(skipStagedMigration),
-    );
-    if (updated) {
-      pkg.scripts = JSON.parse(updated);
-    }
+  const rewrittenScripts = pkg.scripts
+    ? rewriteScripts(
+        JSON.stringify(pkg.scripts),
+        getScriptRulesYaml(skipStagedMigration, keepTsdown),
+      )
+    : undefined;
+  if (rewrittenScripts) {
+    pkg.scripts = JSON.parse(rewrittenScripts);
   }
   // Extract staged config from package.json (lint-staged) → will be merged into vite.config.ts.
   // The lint-staged key is NOT deleted here — it's removed by the caller only after
@@ -86,7 +99,7 @@ export function rewritePackageJson(
   let extractedStagedConfig: Record<string, string | string[]> | null = null;
   if (!skipStagedMigration && pkg['lint-staged']) {
     const config = pkg['lint-staged'];
-    const updated = rewriteScripts(JSON.stringify(config), readRulesYaml());
+    const updated = rewriteScripts(JSON.stringify(config), getScriptRulesYaml(false, keepTsdown));
     extractedStagedConfig = updated ? JSON.parse(updated) : config;
   }
   const supportCatalog = !!isMonorepo && packageManager !== PackageManager.npm;
@@ -193,7 +206,7 @@ export function rewritePackageJson(
     needVitePlus = true;
   }
   // remove packages that are replaced with vite-plus
-  for (const name of bundledPackagesToRemove(retainedBrowserPackages)) {
+  for (const name of bundledPackagesToRemove(retainedBrowserPackages, keepTsdownDependency)) {
     let wasRemoved = false;
     for (const { dependencyField, dependencies } of dependencyGroups) {
       if (
@@ -335,10 +348,7 @@ export function rewritePackageJson(
   // specs (catalog:named, workspace:*, link:, file:, npm:, github:, git+/git:,
   // http(s)://) so deliberate user pins survive; only vanilla version ranges
   // (e.g. `^0.1.20`, `latest`) are rewritten.
-  const canonicalVitePlusSpec =
-    supportCatalog && !VITE_PLUS_VERSION.startsWith('file:')
-      ? (catalogDependencyResolver?.preferredCatalogSpec ?? 'catalog:')
-      : VITE_PLUS_VERSION;
+  const canonicalVitePlusSpec = migratedVitePlusSpec(supportCatalog, catalogDependencyResolver);
   // Treat vite-plus as present when it lives in either `devDependencies` or
   // `dependencies` (devDeps wins when both exist). Re-pin/normalize happens in
   // whichever group already owns it so a `dependencies` entry is never
@@ -385,7 +395,16 @@ export function rewritePackageJson(
     if (shouldNormalizeExistingVitePlus) {
       existingVitePlusGroup[VITE_PLUS_NAME] = canonicalVitePlusSpec;
     }
-  } else if (needVitePlus) {
+  } else if (
+    needVitePlus ||
+    needVitePlusForConfig ||
+    (keepTsdownDependency &&
+      (rewrittenScripts ||
+        (pkg.optionalDependencies?.[VITE_PLUS_NAME] === undefined &&
+          packageCommandsRequireVitePlus(pkg, projectPath))))
+  ) {
+    // Retaining tsdown can leave all declared dependencies intact even when a
+    // script has been rewritten to use a Vite+ command.
     // Absent from both groups: add it to `devDependencies` as before.
     pkg.devDependencies = {
       ...pkg.devDependencies,

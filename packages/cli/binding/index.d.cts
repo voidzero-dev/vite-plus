@@ -3861,6 +3861,17 @@ export interface JsCommandResolvedResult {
   envs: Record<string, string>;
 }
 
+export interface LiteralCommandPrefix {
+  values: Array<string>;
+  complete: boolean;
+  substitutions: Array<string>;
+}
+
+export interface LiteralCommandPrefixes {
+  commands: Array<LiteralCommandPrefix>;
+  successChain: boolean;
+}
+
 /** A literal argument with its original JavaScript UTF-16 source range. */
 export interface LiteralCommandToken {
   value: string;
@@ -3940,6 +3951,16 @@ export declare function mergeTsdownConfig(
   tsdownConfigPath: string,
 ): MergeJsonConfigResult;
 
+/**
+ * Convert a standalone tsdown JSON config to inline pack options.
+ * With no Vite config path, render a standalone object for comparison.
+ */
+export declare function mergeTsdownJsonConfig(
+  jsonConfigPath: string,
+  workspaceRoot: string,
+  viteConfigPath?: string | undefined | null,
+): MergeJsonConfigResult;
+
 export interface MigrateArgs {
   path?: string;
   agent?: false | string | Array<string>;
@@ -3954,6 +3975,19 @@ export interface MigrateArgs {
  * each static `run.tasks` entry into its `cache` object.
  */
 export declare function migrateTaskCacheConfig(viteConfigPath: string): TaskCacheConfigResult;
+
+export interface NormalizedTsdownJsonPackConfigs {
+  existing: string;
+  expected: string;
+}
+
+/** Normalize each config with the defaults of the toolchain that reads it. */
+export declare function normalizeTsdownJsonPackConfigs(
+  viteConfig: string,
+  viteConfigPath: string,
+  jsonConfigPath: string,
+  workspaceRoot: string,
+): NormalizedTsdownJsonPackConfigs;
 
 export interface PackageManagerOverride {
   name: string;
@@ -3982,14 +4016,19 @@ export type ParseHooksArgsOutcome =
   | { status: 'exit'; code: number }
   | { status: 'error'; error: CliParseError };
 
+/** Read command prefixes and identify a simple && chain for dependency detection. */
+export declare function parseLiteralCommandPrefixes(source: string): LiteralCommandPrefixes | null;
+
 /**
  * Read simple literal commands, optionally separated by `&&`, `||`, or `;`.
  * Returns null for unsupported syntax. Assignments and wrappers stay in argv;
  * callers must decide whether a command is safe to rewrite.
+ * Option analysis can replace double-quoted values with simple environment expansions.
  */
 export declare function parseLiteralCommands(
   source: string,
   allowLists: boolean,
+  envValueOptions?: Array<string> | undefined | null,
 ): Array<Array<LiteralCommandToken>> | null;
 
 export declare function parseMigrateArgs(argv: Array<string>): ParseMigrateArgsOutcome;
@@ -4086,6 +4125,7 @@ export declare function rewriteImportsInDirectory(
   preserveVitestInNuxtPackages?: boolean | undefined | null,
   oxlintOwnerDirs?: Array<string> | undefined | null,
   importRuleConfig?: string | undefined | null,
+  preserveTsdownDirs?: Array<string> | undefined | null,
 ): BatchRewriteResult;
 
 /**
@@ -4124,6 +4164,13 @@ export declare function rewritePrettier(scriptsJson: string): string | null;
  * ```
  */
 export declare function rewriteScripts(scriptsJson: string, rulesYaml: string): string | null;
+
+/** Rewrite a retained tsdown config for vp pack without editing the source file. */
+export declare function rewriteTsdownConfigForPack(
+  configPath: string,
+  workspaceRoot: string,
+  viteConfigPath?: string | undefined | null,
+): TsdownConfigRewriteResult;
 
 /**
  * Main entry point for the CLI, called from JavaScript.
@@ -4238,6 +4285,11 @@ export interface TaskCacheConfigResult {
   updated: boolean;
   /** Tasks that set cache settings outside `cache` but could not be updated */
   manualTasks: Array<string>;
+}
+
+export interface TsdownConfigRewriteResult {
+  content?: string;
+  warnings: Array<string>;
 }
 
 /**

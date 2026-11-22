@@ -282,6 +282,12 @@ For commands launched through `bunx`, migration preserves `bunx` and its `--bun`
 
 Unrelated `bunx` commands and other package-executor forms remain unchanged.
 
+If a package script selects a tsdown config with `-c` or `--config`, migration keeps the standalone tsdown setup for that package and any workspace package that owns a selected config. It also keeps the shared workspace dependency when needed. If a script does not give migration enough information to locate the selected config, migration keeps the workspace's standalone tsdown setup. To switch to `vp pack`, move the selected config into `pack` in `vite.config.ts` and remove the flag when you change the command.
+
+Migration fills in missing `pack` configuration from each package's default tsdown config. Both direct `vp pack` calls and calls targeting the package with `-C` use that configuration. Migration keeps the original config file when a retained script can load it, including when tsdown finds the config in a parent directory. If a retained JavaScript or TypeScript config needs changes for `vp pack`, migration writes those changes to a separate `vite-pack.config.*` file. If the original config links to a shared file in the workspace, the converted copy stays next to that file so its relative imports still resolve.
+
+Migration keeps the original config in use if copying it would lose changes to imported options or change how an installed preset resolves files. Migration also keeps member configs when a retained tsdown config can select workspace packages. If migration cannot merge the default config or verify that the active `pack` config matches it, migration keeps the `tsdown` command and dependency. The migration report gives the steps for a manual merge.
+
 ### tsx to `vpx`
 
 When a `package.json` script, a lint-staged task, or a `#!/usr/bin/env tsx` shebang runs [tsx](https://tsx.is), migration offers to move it to [`vpx`](/guide/vpx), Vite+'s TypeScript script runner. It rewrites scripts and lint-staged tasks in `package.json` and JSON lint-staged files, and `#!/usr/bin/env tsx` shebangs in script files:

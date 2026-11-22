@@ -228,18 +228,31 @@ export function extractOverrideParentSegments(key: string): string[] | null {
 // PR #1588 this is left as a known, visible (the pin stays in the manifest)
 // limitation rather than risk over-deleting genuinely unrelated transitive
 // selectors (the behavior the posted P2 review asked us to keep).
-function providerKeyReachesVitePlus(key: string, ancestorChain: string[]): boolean {
+function providerKeyReachesVitePlus(
+  key: string,
+  ancestorChain: string[],
+  keepTsdown = false,
+): boolean {
   if (!isRemovePackageOverrideKey(key)) {
     return false;
   }
   const keyParents = extractOverrideParentSegments(key) ?? [];
+  // A global override or resolution can pin a retained direct tsdown dependency.
+  if (
+    keepTsdown &&
+    ancestorChain.length === 0 &&
+    keyParents.every((parent) => parent === '**') &&
+    extractOverrideTargetName(key) === 'tsdown'
+  ) {
+    return false;
+  }
   return parentChainReachesVitePlus([...ancestorChain, ...keyParents]);
 }
 
 // Flat-selector entry point (no enclosing object nesting): used by the
 // pnpm-workspace YAML sweep, where each key carries its whole parent chain.
-export function shouldDropProviderOverrideKey(key: string): boolean {
-  return providerKeyReachesVitePlus(key, []);
+export function shouldDropProviderOverrideKey(key: string, keepTsdown = false): boolean {
+  return providerKeyReachesVitePlus(key, [], keepTsdown);
 }
 
 // The ancestor segments a key contributes when the recursion descends into its
@@ -274,6 +287,7 @@ function childChainContribution(key: string): string[] {
 export function dropRemovePackageOverrideKeys(
   overrides: Record<string, unknown> | undefined,
   ancestorChain: string[] = [],
+  keepTsdown = false,
 ): boolean {
   if (!overrides) {
     return false;
@@ -285,7 +299,7 @@ export function dropRemovePackageOverrideKeys(
       value !== null && typeof value === 'object' && !Array.isArray(value)
         ? (value as Record<string, unknown>)
         : undefined;
-    if (providerKeyReachesVitePlus(key, ancestorChain)) {
+    if (providerKeyReachesVitePlus(key, ancestorChain, keepTsdown)) {
       if (child) {
         // Long-form provider override: drop the provider's own version pin (`.`)
         // but keep any unrelated child overrides scoped under it; still descend
