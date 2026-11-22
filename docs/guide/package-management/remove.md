@@ -10,6 +10,8 @@ vp remove -g --dry-run typescript
 
 ## Options
 
+With npm, `-D`, `-O`, and `-P` do not limit removal to the selected dependency section.
+
 | Option                 | Description                                              | Notes                                                                        |
 | ---------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | `-D, --save-dev`       | On pnpm, target `devDependencies`.                       |                                                                              |
@@ -44,12 +46,7 @@ The commands below describe project operations. Global mode is described under [
 
 When pnpm removes a dependency, it can also remove the same package from `peerDependencies`.
 
-Suppose an npm project has two workspaces. `packages/web` lists `lodash` in `devDependencies`, and `packages/docs` lists it in `dependencies`.
-With npm 7.14.0 or later, the following command removes both declarations when run from the workspace root.
-
-```bash
-vp remove -D --filter ./packages/web --filter ./packages/docs lodash
-```
+With npm, if `package.json` lists `vite` only in `dependencies`, `vp remove -D vite` removes it from `dependencies`.
 
 ## Native Options
 
