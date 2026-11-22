@@ -29,8 +29,10 @@ pub(crate) async fn effective_version(
 ) -> Result<Str, Error> {
     let config = vp_shared::EnvConfig::get();
     let env = yarn_env(std::env::vars_os());
-    let Some(key) = delegation_key(cwd, &config.user_home, &manager.version, &env) else {
-        return Ok(manager.version.clone());
+    let key = match delegation(cwd, &config.user_home, &manager.version, &env) {
+        Delegation::None => return Ok(manager.version.clone()),
+        Delegation::Uncached => return query_version(cwd, manager).await,
+        Delegation::Cached(key) => key,
     };
     let cache_path =
         config.dirs.cache.join("package_manager_effective_version").join("yarn").join(&*key);
@@ -45,15 +47,24 @@ pub(crate) async fn effective_version(
     Ok(version)
 }
 
-/// Returns a cache key built from the rc files, the release metadata, the Yarn
-/// path variables, and the launcher version, or `None` when nothing can make
-/// the launcher delegate.
-fn delegation_key(
+#[derive(Debug, PartialEq, Eq)]
+enum Delegation {
+    /// Nothing can make the launcher delegate, so it runs its own version.
+    None,
+    /// An rc file does not parse here, although Yarn may still accept it, so
+    /// the key cannot cover its `yarnPath`. Ask Yarn without caching.
+    Uncached,
+    /// A cache key built from the rc files, the release metadata, the Yarn
+    /// path variables, and the launcher version.
+    Cached(Str),
+}
+
+fn delegation(
     cwd: &AbsolutePath,
     home: &AbsolutePath,
     launcher_version: &str,
     env: &[(&str, OsString, OsString)],
-) -> Option<Str> {
+) -> Delegation {
     let mut hasher = Sha256::new();
     let mut delegates = false;
     hasher.update(launcher_version);
@@ -94,13 +105,17 @@ fn delegation_key(
                     hash_target(&mut hasher, &dir.join(target));
                 }
                 Ok(None) => {}
-                // Yarn cannot read this file either, so let it report the error.
-                Err(_) => delegates = true,
+                // Yarn accepts some files that serde_norway rejects, such as duplicate keys.
+                Err(_) => return Delegation::Uncached,
             }
         }
     }
 
-    delegates.then(|| hex::encode(hasher.finalize()).into())
+    if delegates {
+        Delegation::Cached(hex::encode(hasher.finalize()).into())
+    } else {
+        Delegation::None
+    }
 }
 
 /// The Yarn variables that can change the effective version, with the setting
@@ -210,9 +225,22 @@ mod tests {
         (dir, path)
     }
 
-    fn key(cwd: &AbsolutePath, home: &AbsolutePath, env: &[(&str, &str)]) -> Option<Str> {
+    fn delegation_for(
+        cwd: &AbsolutePath,
+        home: &AbsolutePath,
+        launcher_version: &str,
+        env: &[(&str, &str)],
+    ) -> Delegation {
         let env = yarn_env(env.iter().map(|(name, value)| (name.into(), value.into())));
-        delegation_key(cwd, home, "2.4.2", &env)
+        delegation(cwd, home, launcher_version, &env)
+    }
+
+    fn key(cwd: &AbsolutePath, home: &AbsolutePath, env: &[(&str, &str)]) -> Option<Str> {
+        match delegation_for(cwd, home, "2.4.2", env) {
+            Delegation::None => None,
+            Delegation::Cached(key) => Some(key),
+            Delegation::Uncached => panic!("every rc file in this test parses"),
+        }
     }
 
     #[test]
@@ -270,8 +298,8 @@ mod tests {
         let delegated_env = [("YARN_IGNORE_PATH", "1"), ("yarn_ignore_path", "0")];
         let ignored_env = [("YARN_IGNORE_PATH", "0"), ("yarn_ignore_path", "1")];
         assert_ne!(key(&project, &home, &delegated_env), key(&project, &home, &ignored_env));
-        let launcher = delegation_key(&project, &home, "3.0.0", &[]).unwrap();
-        assert_ne!(launcher, replaced, "another launcher version");
+        let launcher = delegation_for(&project, &home, "3.0.0", &[]);
+        assert_ne!(launcher, Delegation::Cached(replaced.clone()), "another launcher version");
 
         fs::write(home.join(".yarnrc.yml"), "ignorePath: true\n").unwrap();
         assert_ne!(key(&project, &home, &[]).unwrap(), replaced, "an rc file without yarnPath");
@@ -300,10 +328,15 @@ mod tests {
     }
 
     #[test]
-    fn an_unreadable_rc_file_is_left_to_yarn() {
+    fn an_unreadable_rc_file_is_asked_without_caching() {
         let (_project, project) = temp_dir();
         let (_home, home) = temp_dir();
-        fs::write(project.join(".yarnrc.yml"), "yarnPath: [unclosed\n").unwrap();
-        assert!(key(&project, &home, &[]).is_some());
+        // Yarn accepts duplicate keys, but serde_norway rejects them.
+        fs::write(
+            project.join(".yarnrc.yml"),
+            "nodeLinker: node-modules\nnodeLinker: node-modules\nyarnPath: current.cjs\n",
+        )
+        .unwrap();
+        assert_eq!(delegation_for(&project, &home, "4.18.1", &[]), Delegation::Uncached);
     }
 }
