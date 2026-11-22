@@ -24,6 +24,22 @@ function stopFixtureChild(pidFile: string) {
   }
 }
 
+function fixtureChildExists(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ESRCH') {
+      throw error;
+    }
+    return false;
+  }
+}
+
+function denyProcessUtility(): never {
+  throw Object.assign(new Error('spawn EPERM'), { code: 'EPERM' });
+}
+
 function fixtureProcessGroup(pid: string): number {
   if (process.platform === 'linux') {
     const stat = readFileSync(`/proc/${pid}/stat`, 'utf8');
@@ -77,64 +93,109 @@ describe('command runners', () => {
     ).rejects.toThrow(/timed out after 200ms/);
   });
 
-  it.skipIf(process.platform !== 'darwin').each(['hard deadline', 'idle timeout'] as const)(
-    'stops the direct child on a %s when process utilities cannot start',
-    async (timeout) => {
+  it.skipIf(process.platform !== 'darwin')(
+    'stops the direct child on a hard deadline when ps cannot start',
+    async () => {
       const cwd = mkdtempSync(join(tmpdir(), 'vp-denied-process-query-'));
       const pidFile = join(cwd, 'pid');
-      const spawnError = Object.assign(new Error('spawn EPERM'), { code: 'EPERM' });
-      const denySpawn = () => {
-        throw spawnError;
-      };
-      const exec = vi.mocked(execFile).mockImplementation(denySpawn);
-      const spawnSync = vi.spyOn(crossSpawn, 'sync').mockImplementation(denySpawn);
-      const idle = timeout === 'idle timeout';
+      const exec = vi.mocked(execFile).mockImplementationOnce(denyProcessUtility);
       try {
-        const result = runCommandSilently({
+        await expect(
+          runCommandSilently({
+            command: process.execPath,
+            args: [
+              '-e',
+              `require('node:fs').writeFileSync('pid', String(process.pid));
+              setTimeout(() => {}, 3500);`,
+            ],
+            cwd,
+            envs: process.env,
+            timeoutMs: 1200,
+          }),
+        ).rejects.toThrow('Command timed out after 1200ms');
+        expect(exec.mock.calls.map(([command]) => command)).toEqual(['ps']);
+        const pid = Number(readFileSync(pidFile, 'utf8'));
+        await expect.poll(() => fixtureChildExists(pid)).toBe(false);
+      } finally {
+        exec.mockReset();
+        stopFixtureChild(pidFile);
+        rmSync(cwd, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(process.platform !== 'darwin')(
+    'stops the idle command tree before returning when ps cannot start',
+    async () => {
+      const cwd = mkdtempSync(join(tmpdir(), 'vp-denied-process-tree-'));
+      const pidFile = join(cwd, 'pid');
+      const exec = vi.mocked(execFile).mockImplementationOnce(denyProcessUtility);
+      const spawnSync = vi.spyOn(crossSpawn, 'sync').mockImplementationOnce(denyProcessUtility);
+      const grandchild = `
+        setTimeout(() => require('node:fs').writeFileSync('finished', ''), 1800);
+      `;
+      try {
+        const result = await runCommandSilently({
           command: process.execPath,
           args: [
             '-e',
-            `require('node:fs').writeFileSync('pid', String(process.pid));
-            console.log('resolving');
-            setTimeout(() => {}, 3500);`,
+            `const child = require('node:child_process').spawn(
+              process.execPath, ['-e', ${JSON.stringify(grandchild)}], { stdio: 'inherit' }
+            );
+            child.on('spawn', () => {
+              require('node:fs').writeFileSync('pid', String(child.pid));
+              console.log('resolving');
+            });`,
           ],
           cwd,
           envs: process.env,
-          ...(idle
-            ? { idleTimeoutMs: 200, shouldWatchIdle: () => true, waitForPackageFetch: true }
-            : { timeoutMs: 1200 }),
+          idleTimeoutMs: 200,
+          shouldWatchIdle: () => true,
+          waitForPackageFetch: true,
         });
-        if (idle) {
-          await expect(result).resolves.toMatchObject({
-            exitCode: 124,
-            idleTimedOut: true,
-            stdout: Buffer.from('resolving\n'),
-          });
-          expect(exec.mock.calls.map(([command]) => command)).toEqual(['ps', '/usr/sbin/lsof']);
-          expect(spawnSync).toHaveBeenCalledWith('ps', expect.anything(), expect.anything());
-        } else {
-          await expect(result).rejects.toThrow('Command timed out after 1200ms');
-          expect(exec.mock.calls.map(([command]) => command)).toEqual(['ps']);
-        }
+        expect(result).toMatchObject({
+          exitCode: 124,
+          idleTimedOut: true,
+          stdout: Buffer.from('resolving\n'),
+        });
+        expect(exec.mock.calls.map(([command]) => command)).toContain('/usr/sbin/lsof');
+        expect(spawnSync).toHaveBeenCalledWith(
+          '/usr/sbin/lsof',
+          expect.anything(),
+          expect.anything(),
+        );
         const pid = Number(readFileSync(pidFile, 'utf8'));
-        await expect
-          .poll(() => {
-            try {
-              process.kill(pid, 0);
-              return true;
-            } catch (error) {
-              if ((error as NodeJS.ErrnoException).code !== 'ESRCH') {
-                throw error;
-              }
-              return false;
-            }
-          })
-          .toBe(false);
+        await expect.poll(() => fixtureChildExists(pid)).toBe(false);
+        expect(existsSync(join(cwd, 'finished'))).toBe(false);
       } finally {
         exec.mockReset();
         spawnSync.mockRestore();
         stopFixtureChild(pidFile);
         rmSync(cwd, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(process.platform !== 'darwin')(
+    'lets the command finish when process queries are unavailable',
+    async () => {
+      const exec = vi.mocked(execFile).mockImplementation(denyProcessUtility);
+      try {
+        const result = await runCommandSilently({
+          command: process.execPath,
+          args: ['-e', 'console.log("resolving"); setTimeout(() => console.log("done"), 600);'],
+          cwd: process.cwd(),
+          envs: process.env,
+          idleTimeoutMs: 150,
+          shouldWatchIdle: () => true,
+          waitForPackageFetch: true,
+        });
+        expect(result.exitCode).toBe(0);
+        expect(result.idleTimedOut).toBeUndefined();
+        expect(result.stdout.toString()).toBe('resolving\ndone\n');
+        expect(exec.mock.calls.map(([command]) => command)).toContain('/usr/sbin/lsof');
+      } finally {
+        exec.mockReset();
       }
     },
   );

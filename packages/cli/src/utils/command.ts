@@ -89,20 +89,22 @@ type ProcessEntry = [pid: number, parentPid: number, executable: string];
 
 const psArgs = ['-A', '-o', 'pid=', '-o', 'ppid='];
 const psOptions = { env: { PATH: '/usr/bin:/bin' }, timeout: 5000 };
+const lsof = '/usr/sbin/lsof';
 
 function execProcessUtility(
   command: string,
   args: string[],
   options: ExecFileOptions,
-  onComplete: (stdout: string, succeeded: boolean) => void,
+  onComplete: (stdout: string, status: number | undefined, stderr: string) => void,
 ) {
   try {
-    execFile(command, args, { ...options, encoding: 'utf8' }, (error, stdout) =>
-      onComplete(stdout, error === null),
-    );
+    execFile(command, args, { ...options, encoding: 'utf8' }, (error, stdout, stderr) => {
+      const status = error === null ? 0 : typeof error.code === 'number' ? error.code : undefined;
+      onComplete(stdout, status, stderr);
+    });
   } catch {
     // A sandbox can deny the spawn before Node registers the callback.
-    onComplete('', false);
+    onComplete('', undefined, '');
   }
 }
 
@@ -166,6 +168,22 @@ function parseProcessTable(stdout: string, hasState: boolean): ProcessEntry[] {
   });
 }
 
+function macProcessArgs(): string[] {
+  // Limit lsof to one descriptor per process and to the installer's user.
+  return ['-nP', '-a', '-u', String(process.getuid?.()), '-d', 'cwd', '-FpcR'];
+}
+
+function parseMacProcessTable(stdout: string, rootPid: number): ProcessEntry[] | undefined {
+  const processes = stdout.split(/(?=^p\d+$)/m).flatMap((record): ProcessEntry[] => {
+    const pid = /^p(\d+)$/m.exec(record)?.[1];
+    const parent = /^R(\d+)$/m.exec(record)?.[1];
+    const name = /^c([^\n]*)/m.exec(record)?.[1] ?? '';
+    return pid && parent ? [[Number(pid), Number(parent), name]] : [];
+  });
+  // An incomplete view must not be mistaken for a process tree with no children.
+  return processes.some(([pid]) => pid === rootPid) ? processes : undefined;
+}
+
 function getCommandDescendants(pid: number, processes: ProcessEntry[]): ProcessEntry[] {
   const childrenByParent = new Map<number, ProcessEntry[]>();
   for (const process of processes) {
@@ -226,12 +244,12 @@ function hasProcfsTcpConnection(pids: number[]): boolean {
   );
 }
 
-async function hasTcpConnection(pids: number[], signal: AbortSignal): Promise<boolean> {
+async function hasTcpConnection(pids: number[], signal: AbortSignal): Promise<boolean | undefined> {
   if (process.platform === 'linux') {
     return hasProcfsTcpConnection(pids);
   }
   const windows = process.platform === 'win32';
-  const command = windows ? getWindowsPowerShellPath() : '/usr/sbin/lsof';
+  const command = windows ? getWindowsPowerShellPath() : lsof;
   // PowerShell filters by TCP state and returns numeric PIDs in every locale.
   const args = windows
     ? [
@@ -242,19 +260,24 @@ async function hasTcpConnection(pids: number[], signal: AbortSignal): Promise<bo
           '-ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess',
       ]
     : ['-nP', '-a', '-p', pids.join(','), '-iTCP', '-FT'];
-  return new Promise<boolean>((resolve) => {
+  return new Promise<boolean | undefined>((resolve) => {
     execProcessUtility(
       command,
       args,
       { signal, timeout: 5000, windowsHide: true },
-      (output, ok) => {
+      (output, status, stderr) => {
         if (!windows) {
           // lsof can report connections and return 1 when another selected PID has exited.
-          resolve(/^TST=(?:ESTABLISHED|SYN_SENT)$/m.test(output));
+          if (/^TST=(?:ESTABLISHED|SYN_SENT)$/m.test(output)) {
+            resolve(true);
+          } else {
+            // lsof exits 1 without a diagnostic when none of the sockets match.
+            resolve(status === 0 || (status === 1 && !stderr) ? false : undefined);
+          }
           return;
         }
-        if (!ok) {
-          resolve(false);
+        if (status !== 0) {
+          resolve(undefined);
           return;
         }
         const owners = new Set(pids);
@@ -264,7 +287,10 @@ async function hasTcpConnection(pids: number[], signal: AbortSignal): Promise<bo
   });
 }
 
-async function hasActivePackageFetch(pid: number, signal: AbortSignal): Promise<boolean> {
+async function hasActivePackageFetch(
+  pid: number,
+  signal: AbortSignal,
+): Promise<boolean | undefined> {
   const windows = process.platform === 'win32';
   let processes = listProcfsProcesses();
   if (processes === undefined) {
@@ -279,12 +305,21 @@ async function hasActivePackageFetch(pid: number, signal: AbortSignal): Promise<
         ]
       : [...psArgs, '-o', 'state=', '-o', 'comm='];
     const options = windows ? { timeout: 5000, windowsHide: true } : psOptions;
-    const stdout = await new Promise<string>((resolve) => {
-      execProcessUtility(command, args, { ...options, signal }, (output, ok) =>
-        resolve(ok ? output : ''),
+    processes = await new Promise<ProcessEntry[] | undefined>((resolve) => {
+      execProcessUtility(command, args, { ...options, signal }, (output, status) =>
+        resolve(status === 0 ? parseProcessTable(output, !windows) : undefined),
       );
     });
-    processes = parseProcessTable(stdout, !windows);
+    if (!processes && process.platform === 'darwin' && !signal.aborted) {
+      processes = await new Promise<ProcessEntry[] | undefined>((resolve) => {
+        execProcessUtility(lsof, macProcessArgs(), { ...psOptions, signal }, (output, status) =>
+          resolve(status === 0 ? parseMacProcessTable(output, pid) : undefined),
+        );
+      });
+    }
+  }
+  if (!processes?.some(([processId]) => processId === pid)) {
+    return undefined;
   }
   const git = windows ? 'git.exe' : 'git';
   const descendants = getCommandDescendants(pid, processes);
@@ -294,58 +329,77 @@ async function hasActivePackageFetch(pid: number, signal: AbortSignal): Promise<
   );
 }
 
-function stopPosixCommandTree(child: ChildProcess, pid: number, wait: boolean) {
+function stopPosixCommandTree(
+  child: ChildProcess,
+  pid: number,
+  wait: boolean,
+  requireProcessTable: boolean,
+) {
   const stopTree = (processes: ProcessEntry[]) => {
     // The process group belongs to the caller. Only stop this child's tree.
     if (child.exitCode !== null || child.signalCode !== null) {
-      return;
+      return false;
     }
+    let stopped = true;
     for (const [childPid] of getCommandDescendants(pid, processes).toReversed()) {
       try {
         process.kill(childPid, 'SIGKILL');
-      } catch {
+      } catch (error) {
         // A descendant can exit while we walk the tree.
+        if ((error as NodeJS.ErrnoException).code !== 'ESRCH') {
+          stopped = false;
+        }
       }
     }
-    child.kill('SIGKILL');
+    return (!requireProcessTable || stopped) && child.kill('SIGKILL');
   };
-  const processes = listProcfsProcesses();
-  if (processes !== undefined) {
-    stopTree(processes);
-    return;
-  }
-  const stopFromPs = (stdout: string) => stopTree(parseProcessTable(stdout, false));
-  if (wait) {
-    const result = spawnProcessUtilitySync('ps', psArgs, {
+  let processes = listProcfsProcesses();
+  if (processes === undefined) {
+    if (!wait) {
+      execProcessUtility('ps', psArgs, psOptions, (stdout) =>
+        stopTree(parseProcessTable(stdout, false)),
+      );
+      return true;
+    }
+    const options: SpawnSyncOptionsWithStringEncoding = {
       ...psOptions,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
-    });
-    stopFromPs(result?.stdout ?? '');
-  } else {
-    execProcessUtility('ps', psArgs, psOptions, stopFromPs);
+    };
+    const result = spawnProcessUtilitySync('ps', psArgs, options);
+    if (result?.status === 0) {
+      processes = parseProcessTable(result.stdout, false);
+    } else if (process.platform === 'darwin') {
+      const fallback = spawnProcessUtilitySync(lsof, macProcessArgs(), options);
+      if (fallback?.status === 0) {
+        processes = parseMacProcessTable(fallback.stdout, pid);
+      }
+    }
   }
+  if (requireProcessTable && !processes?.some(([processId]) => processId === pid)) {
+    return false;
+  }
+  return stopTree(processes ?? []);
 }
 
-function stopCommandTree(child: ChildProcess, { wait = true } = {}) {
+function stopCommandTree(child: ChildProcess, { wait = true, requireProcessTable = false } = {}) {
   const pid = child.pid;
   if (pid === undefined || child.exitCode !== null || child.signalCode !== null) {
-    return;
+    return !requireProcessTable;
   }
   if (process.platform !== 'win32') {
-    stopPosixCommandTree(child, pid, wait);
-    return;
+    return stopPosixCommandTree(child, pid, wait, requireProcessTable);
   }
   const taskkill = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'taskkill.exe');
   const args = ['/pid', String(pid), '/t', '/f'];
   const options = { timeout: 5000, windowsHide: true };
   if (!wait) {
-    execProcessUtility(taskkill, args, options, (_stdout, ok) => {
-      if (!ok) {
+    execProcessUtility(taskkill, args, options, (_stdout, status) => {
+      if (status !== 0) {
         child.kill('SIGKILL');
       }
     });
-    return;
+    return true;
   }
   const result = spawnProcessUtilitySync(taskkill, args, {
     ...options,
@@ -355,6 +409,7 @@ function stopCommandTree(child: ChildProcess, { wait = true } = {}) {
   if (result?.status !== 0) {
     child.kill('SIGKILL');
   }
+  return true;
 }
 
 function openStdoutFile(): number | undefined {
@@ -462,8 +517,8 @@ function runCapturedCommand(
         ) {
           return;
         }
-        const allowFetchToFinish = fetchIsRunning || fetchWasRunning;
-        fetchWasRunning = fetchIsRunning;
+        const allowFetchToFinish = fetchIsRunning !== false || fetchWasRunning;
+        fetchWasRunning = fetchIsRunning ?? fetchWasRunning;
         if (allowFetchToFinish) {
           // pnpm can transfer a package without reporting progress. Let its own
           // network timeouts handle open connections and allow time after a fetch ends.
@@ -471,12 +526,22 @@ function runCapturedCommand(
           return;
         }
       }
-      timedOut = true;
       // Deadline callers can proceed while platform cleanup finishes.
-      stopCommandTree(child, { wait: !hasDeadline });
-      // A descendant may still hold a pipe open after the wrapper exits.
-      child.stdout?.destroy();
-      child.stderr?.destroy();
+      const requireProcessTable = !hasDeadline && process.platform !== 'win32';
+      if (
+        !stopCommandTree(child, { wait: !hasDeadline, requireProcessTable }) &&
+        requireProcessTable
+      ) {
+        // Keep waiting when the install's descendants cannot be checked.
+        startTimer();
+        return;
+      }
+      timedOut = true;
+      if (hasDeadline || process.platform === 'win32') {
+        // A descendant may still hold a pipe open after the wrapper exits.
+        child.stdout?.destroy();
+        child.stderr?.destroy();
+      }
       if (hasDeadline) {
         cleanup();
         reject(new Error(`Command timed out after ${timeoutMs}ms: ${options.command}`));
