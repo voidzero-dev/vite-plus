@@ -103,30 +103,38 @@ fn merge_json_config_content(
     // Strip "$schema" property — it's a JSON Schema annotation not valid in OxlintConfig
     let ts_config = strip_schema_property(ts_config);
 
-    // Config text is spliced in after the rules run so it never passes through
-    // YAML or a `fix` template, where `$NAME` is a metavariable.
+    // The rules insert a shorthand property on its own line. Choose a name absent
+    // from the source so only properties inserted by the rules are expanded.
     let mut placeholder = String::from("__VITE_PLUS_CONFIG__");
     while vite_config_content.contains(&placeholder) {
         placeholder.push('_');
     }
-    let rule_yaml = generate_merge_rule(&placeholder, config_key);
-
-    // Apply the transformation
-    let (content, updated) = ast_grep::apply_rules(vite_config_content, &rule_yaml)?;
-
-    Ok(MergeResult { content: splice_config(&content, &placeholder, &ts_config), updated })
-}
-
-fn splice_config(content: &str, placeholder: &str, ts_config: &str) -> String {
-    let mut parts = content.split(placeholder);
-    let mut out = parts.next().unwrap_or_default().to_owned();
-    for part in parts {
-        let line = &out[out.rfind('\n').map_or(0, |i| i + 1)..];
-        let indent = &line[..line.len() - line.trim_start().len()];
-        out.push_str(&indent_continuation_lines(ts_config, indent));
-        out.push_str(part);
+    let rules = MERGE_CONFIG_RULES.replace("__PROPERTY__", &placeholder);
+    let (content, updated) = ast_grep::apply_rules(vite_config_content, &rules)?;
+    if !updated {
+        return Ok(MergeResult { content, updated });
     }
-    out
+
+    // Config values can contain ast-grep metavariables such as `$200` and
+    // `$$$CONFIG`. Insert them as text after all the rules have run.
+    let mut out = String::with_capacity(content.len());
+    let mut remaining = content.as_str();
+    while let Some((before, after)) = remaining.split_once(&placeholder) {
+        out.push_str(before);
+        out.push_str(config_key);
+        out.push_str(": ");
+        let indent = before.rsplit('\n').next().unwrap_or_default();
+        let mut lines = ts_config.lines();
+        out.push_str(lines.next().unwrap_or_default());
+        for line in lines {
+            out.push('\n');
+            out.push_str(indent);
+            out.push_str(line);
+        }
+        remaining = after;
+    }
+    out.push_str(remaining);
+    Ok(MergeResult { content: out, updated })
 }
 
 /// Set the value of a top-level config key in vite.config.ts/js (upsert).
@@ -290,7 +298,7 @@ fn strip_schema_property(config: &str) -> Cow<'_, str> {
 /// Check whether `config_key` is already declared as a top-level property in
 /// the vite config's `defineConfig({...})` (or equivalent) object literal.
 ///
-/// Mirrors the six shapes the merger understands (see `generate_merge_rule`):
+/// Mirrors the six shapes the merger understands (see `MERGE_CONFIG_RULES`):
 /// `defineConfig({...})`, `defineConfig((p) => ({...}))`, `return {...}`
 /// inside a `defineConfig` callback, `export default {...}`, and the
 /// `satisfies` export variant. The `return $VAR` variant cannot be inspected
@@ -864,9 +872,7 @@ fn strip_import_comments(input: &str) -> String {
     output
 }
 
-/// Generate the ast-grep rules YAML for merging JSON config
-///
-/// This generates six rules:
+/// Rules for prepending a property to these Vite config shapes:
 /// 1. For object literal: `defineConfig({ ... })`
 /// 2. For arrow function with direct return: `defineConfig((env) => ({ ... }))`
 /// 3. For return object literal inside defineConfig callback: `return { ... }`
@@ -875,11 +881,7 @@ fn strip_import_comments(input: &str) -> String {
 /// 6. For satisfies pattern: `export default { ... } satisfies Type`
 ///
 /// The config is placed first to avoid trailing comma issues.
-fn generate_merge_rule(ts_config: &str, config_key: &str) -> String {
-    // Indent the config to match the YAML structure
-    let indented_config = indent_multiline(ts_config, 4);
-
-    let template = r"---
+const MERGE_CONFIG_RULES: &str = r"---
 id: merge-json-config-object
 language: TypeScript
 rule:
@@ -889,7 +891,7 @@ rule:
     })
 fix: |-
   defineConfig({
-    __CONFIG_KEY__: __JSON_CONFIG__,
+    __PROPERTY__,
     $$$CONFIG
   })
 ---
@@ -902,7 +904,7 @@ rule:
     }))
 fix: |-
   defineConfig(($PARAMS) => ({
-    __CONFIG_KEY__: __JSON_CONFIG__,
+    __PROPERTY__,
     $$$CONFIG
   }))
 ---
@@ -939,7 +941,7 @@ rule:
         pattern: defineConfig($$$ARGS)
 fix: |-
   return {
-    __CONFIG_KEY__: __JSON_CONFIG__,
+    __PROPERTY__,
     $$$CONFIG
   }
 ---
@@ -976,7 +978,7 @@ rule:
         pattern: defineConfig($$$ARGS)
 fix: |-
   return {
-    __CONFIG_KEY__: __JSON_CONFIG__,
+    __PROPERTY__,
     ...$VAR,
   }
 ---
@@ -989,7 +991,7 @@ rule:
     }
 fix: |-
   export default {
-    __CONFIG_KEY__: __JSON_CONFIG__,
+    __PROPERTY__,
     $$$CONFIG
   }
 ---
@@ -1002,32 +1004,10 @@ rule:
     } satisfies $TYPE
 fix: |-
   export default {
-    __CONFIG_KEY__: __JSON_CONFIG__,
+    __PROPERTY__,
     $$$CONFIG
   } satisfies $TYPE
 ";
-
-    template.replace("__CONFIG_KEY__", config_key).replace("__JSON_CONFIG__", &indented_config)
-}
-
-/// Indent each line of a multiline string
-fn indent_multiline(s: &str, spaces: usize) -> String {
-    indent_continuation_lines(s, &" ".repeat(spaces))
-}
-
-fn indent_continuation_lines(s: &str, indent: &str) -> String {
-    let lines: Vec<&str> = s.lines().collect();
-
-    // First line doesn't get indented (it's on the same line as the key)
-    // Subsequent lines get the specified indent
-    // Join even single-line input so the generated comma stays inside the YAML block.
-    lines
-        .iter()
-        .enumerate()
-        .map(|(i, line)| if i == 0 { line.to_string() } else { format!("{indent}{line}") })
-        .collect::<Vec<_>>()
-        .join("\n")
-}
 
 /// Merge tsdown config into vite.config.ts by importing it
 ///
@@ -1082,7 +1062,7 @@ fn merge_tsdown_config_content(
         format!("import tsdownConfig from '{import_path}';\n\n{vite_config_content}");
 
     // Step 2: Add pack: tsdownConfig to defineConfig
-    let pack_rule = generate_merge_rule("tsdownConfig", "pack");
+    let pack_rule = MERGE_CONFIG_RULES.replace("__PROPERTY__", "pack: tsdownConfig");
     let (final_content, _) = ast_grep::apply_rules(&content_with_import, &pack_rule)?;
 
     Ok(MergeResult { content: final_content, updated: true })
@@ -1687,34 +1667,6 @@ export default defineConfig(async ({ command, mode }) => {
     }
 
     #[test]
-    fn test_generate_merge_rule() {
-        let config = "{ rules: { 'no-console': 'warn' } }";
-
-        // Test with "lint" key
-        let rule = generate_merge_rule(config, "lint");
-        assert!(rule.contains("id: merge-json-config-object"));
-        assert!(rule.contains("id: merge-json-config-function"));
-        assert!(rule.contains("id: merge-json-config-return"));
-        assert!(rule.contains("id: merge-json-config-return-var"));
-        assert!(rule.contains("id: merge-json-config-plain-export"));
-        assert!(rule.contains("id: merge-json-config-satisfies"));
-        assert!(rule.contains("language: TypeScript"));
-        assert!(rule.contains("defineConfig"));
-        assert!(rule.contains("lint:"));
-        assert!(rule.contains("'no-console': 'warn'"));
-        assert!(rule.contains("($PARAMS) =>"));
-        assert!(rule.contains("inside:"));
-        assert!(rule.contains("defineConfig($$$ARGS)"));
-        assert!(rule.contains("export default {"));
-        assert!(rule.contains("...$VAR,"));
-
-        // Test with "format" key
-        let rule = generate_merge_rule(config, "format");
-        assert!(rule.contains("format:"));
-        assert!(!rule.contains("lint:"));
-    }
-
-    #[test]
     fn test_merge_json_config_content_arrow_wrapper() {
         // Arrow function that wraps defineConfig
         let vite_config = r#"import { defineConfig } from "vite";
@@ -2075,34 +2027,42 @@ export default defineConfig({});"#;
                 merge_json_config_content("export default defineConfig({});", &config, "fmt");
             assert!(result.unwrap().content.contains(&config));
         }
-        let vite_config = "export default defineConfig({ define: { X: '__VITE_PLUS_CONFIG__' } });";
-        let result = merge_json_config_content(vite_config, "{}", "fmt").unwrap();
-        assert!(result.content.contains("X: '__VITE_PLUS_CONFIG__'"));
     }
 
     #[test]
-    fn test_indent_multiline() {
-        // Single line - no change
-        assert_eq!(indent_multiline("single line", 4), "single line");
-
-        // Empty string
-        assert_eq!(indent_multiline("", 4), "");
-
-        // Multiple lines
-        let input = "first\nsecond\nthird";
-        let expected = "first\n    second\n    third";
-        assert_eq!(indent_multiline(input, 4), expected);
+    fn test_merge_literal_config_into_each_return() {
+        let source = r"const label = '__VITE_PLUS_CONFIG__';
+export default defineConfig(({ mode }) => {
+  if (mode === 'test') {
+    return base;
+  }
+  return { root: label };
+});";
+        let config =
+            "{\r\n  // costs $200\r\n  \"message\": \"$$$CONFIG __VITE_PLUS_CONFIG___\"\r\n}\r\n";
+        let result = merge_json_config_content(source, config, "lint").unwrap();
+        assert_eq!(
+            result.content,
+            r#"const label = '__VITE_PLUS_CONFIG__';
+export default defineConfig(({ mode }) => {
+  if (mode === 'test') {
+    return {
+      lint: {
+        // costs $200
+        "message": "$$$CONFIG __VITE_PLUS_CONFIG___"
+      },
+      ...base,
     }
-
-    #[test]
-    fn test_indent_multiline_trailing_line_endings() {
-        for ending in ["\n", "\r\n"] {
-            assert_eq!(indent_multiline(&format!("single line{ending}"), 4), "single line");
-            assert_eq!(
-                indent_multiline(&format!("first{ending}second{ending}"), 4),
-                "first\n    second"
-            );
-        }
+  }
+  return {
+    lint: {
+      // costs $200
+      "message": "$$$CONFIG __VITE_PLUS_CONFIG___"
+    },
+    root: label
+  }
+});"#
+        );
     }
 
     #[test]
