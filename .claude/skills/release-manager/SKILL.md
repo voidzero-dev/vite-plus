@@ -122,7 +122,7 @@ gh api repos/voidzero-dev/vite-plus/releases/generate-notes \
 
 git show origin/release/v<curr>:packages/core/package.json          # bundledVersions: vite, rolldown, tsdown
 git show origin/release/v<curr>:packages/tools/.upstream-versions.json  # vite/rolldown commit hashes
-git show origin/release/v<curr>:pnpm-workspace.yaml                 # vitest/oxlint/oxlint-tsgolint/oxfmt catalog pins
+git show origin/release/v<curr>:pnpm-workspace.yaml                 # vitest/oxlint/tsrs/oxfmt catalog pins
 ```
 
 ### Structure
@@ -177,15 +177,15 @@ Merging this PR will trigger the release workflow.
 
 ### Bundled Versions table
 
-| Tool            | Version | Source                                                                  | Changelog                                                              |
-| --------------- | ------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| vite            | `X.Y.Z` | [`<short-sha>`](https://github.com/vitejs/vite/commit/<full-sha>)       | [X.Y.Z](https://github.com/vitejs/vite/releases/tag/vX.Y.Z)            |
-| rolldown        | `X.Y.Z` | [`<short-sha>`](https://github.com/rolldown/rolldown/commit/<full-sha>) | [X.Y.Z](https://github.com/rolldown/rolldown/releases/tag/vX.Y.Z)      |
-| tsdown          | `X.Y.Z` | [npm](https://npmx.dev/package/tsdown/v/X.Y.Z)                          | [X.Y.Z](https://github.com/rolldown/tsdown/releases/tag/vX.Y.Z)        |
-| vitest          | `X.Y.Z` | [npm](https://npmx.dev/package/vitest/v/X.Y.Z)                          | [X.Y.Z](https://github.com/vitest-dev/vitest/releases/tag/vX.Y.Z)      |
-| oxlint          | `X.Y.Z` | [npm](https://npmx.dev/package/oxlint/v/X.Y.Z)                          | [X.Y.Z](https://github.com/oxc-project/oxc/releases/tag/oxlint_vX.Y.Z) |
-| oxlint-tsgolint | `X.Y.Z` | [npm](https://npmx.dev/package/oxlint-tsgolint/v/X.Y.Z)                 | [X.Y.Z](https://github.com/oxc-project/tsgolint/releases/tag/vX.Y.Z)   |
-| oxfmt           | `X.Y.Z` | [npm](https://npmx.dev/package/oxfmt/v/X.Y.Z)                           | [X.Y.Z](https://github.com/oxc-project/oxc/releases/tag/oxfmt_vX.Y.Z)  |
+| Tool     | Version | Source                                                                  | Changelog                                                              |
+| -------- | ------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| vite     | `X.Y.Z` | [`<short-sha>`](https://github.com/vitejs/vite/commit/<full-sha>)       | [X.Y.Z](https://github.com/vitejs/vite/releases/tag/vX.Y.Z)            |
+| rolldown | `X.Y.Z` | [`<short-sha>`](https://github.com/rolldown/rolldown/commit/<full-sha>) | [X.Y.Z](https://github.com/rolldown/rolldown/releases/tag/vX.Y.Z)      |
+| tsdown   | `X.Y.Z` | [npm](https://npmx.dev/package/tsdown/v/X.Y.Z)                          | [X.Y.Z](https://github.com/rolldown/tsdown/releases/tag/vX.Y.Z)        |
+| vitest   | `X.Y.Z` | [npm](https://npmx.dev/package/vitest/v/X.Y.Z)                          | [X.Y.Z](https://github.com/vitest-dev/vitest/releases/tag/vX.Y.Z)      |
+| oxlint   | `X.Y.Z` | [npm](https://npmx.dev/package/oxlint/v/X.Y.Z)                          | [X.Y.Z](https://github.com/oxc-project/oxc/releases/tag/oxlint_vX.Y.Z) |
+| tsrs     | `X.Y.Z` | [npm](https://npmx.dev/package/tsrs/v/X.Y.Z)                            | [X.Y.Z](https://github.com/oxc-project/tsrs/releases/tag/vX.Y.Z)       |
+| oxfmt    | `X.Y.Z` | [npm](https://npmx.dev/package/oxfmt/v/X.Y.Z)                           | [X.Y.Z](https://github.com/oxc-project/oxc/releases/tag/oxfmt_vX.Y.Z)  |
 
 vite and rolldown are built from pinned commits, so link the commit. The npm-installed tools link to npmx.dev. The Changelog column links the upstream release notes for every version in the upgraded range, comma-separated (for example the two patch releases between the previous and new pin); write `unchanged` when the version did not move.
 
@@ -364,7 +364,7 @@ Across the full catalog most failures are not regressions, and reporting them as
 
 Report the tally by cause, not just pass/fail, and state plainly which failures you controlled for and which you classified from the error text alone. Only a failure that reproduces on the candidate but not on the previous release is a regression.
 
-Before filing an upstream issue for a finding, search every repository that could own it, including closed issues and open PRs. For a type-aware oxlint diagnostic that means both `oxc-project/oxc` and `oxc-project/tsgolint`.
+Before filing an upstream issue for a finding, search every repository that could own it, including closed issues and open PRs. For a type-aware oxlint diagnostic that means both `oxc-project/oxc` and `oxc-project/tsrs`.
 
 When repairing timing-sensitive smoke tests, keep their assertions and make readiness or timing deterministic. Use a negative control when changing how a test observes behavior: temporarily remove or break that behavior, confirm the test fails, and restore it before committing.
 

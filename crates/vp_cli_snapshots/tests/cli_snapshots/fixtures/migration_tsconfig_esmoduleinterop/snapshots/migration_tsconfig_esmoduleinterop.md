@@ -11,8 +11,8 @@ VITE+ - The Unified Toolchain for the Web
 • Node <version>  pnpm <version>
 • 4 config updates applied
 ! Warnings:
-  - Removed `"esModuleInterop": false` from tsconfig.json — this option has been deprecated. See https://github.com/oxc-project/tsgolint/issues/351, https://github.com/microsoft/TypeScript/issues/62529
-  - Removed `"allowSyntheticDefaultImports": false` from tsconfig.json — this option has been deprecated. See https://github.com/oxc-project/tsgolint/issues/351, https://github.com/microsoft/TypeScript/issues/62529
+  - Removed `"esModuleInterop": false` from tsconfig.json — this option has been deprecated. See https://github.com/microsoft/TypeScript/issues/62529
+  - Removed `"allowSyntheticDefaultImports": false` from tsconfig.json — this option has been deprecated. See https://github.com/microsoft/TypeScript/issues/62529
 ```
 
 ## `vpt print-file tsconfig.json`

@@ -49,6 +49,7 @@ export async function lint(): Promise<{
     // TODO: provide envs inference API
     envs: {
       ...DEFAULT_ENVS,
+      // Oxlint uses this variable to find the type-aware backend, including tsrs-lint.
       OXLINT_TSGOLINT_PATH: tsrsLintPath,
       // oxlint loads vite.config.ts only to read the `lint` block, so skip the
       // user's Vite plugin factory (lazyPlugins) while it evaluates the config.

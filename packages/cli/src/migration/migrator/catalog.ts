@@ -86,8 +86,6 @@ const PNPM_MINIMUM_RELEASE_AGE_EXCLUDES = [
   '@voidzero-dev/*',
   'oxlint',
   '@oxlint/*',
-  'oxlint-tsgolint',
-  '@oxlint-tsgolint/*',
   'tsrs',
   '@tsrs/*',
   'oxfmt',

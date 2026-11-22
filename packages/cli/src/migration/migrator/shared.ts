@@ -125,7 +125,7 @@ export const LINT_STAGED_ALL_CONFIG_FILES = [
 // packages that are replaced with vite-plus
 export const REMOVE_PACKAGES = [
   'oxlint',
-  'oxlint-tsgolint',
+  'oxlint-tsgolint', // Older projects may still declare the previous lint backend.
   'oxfmt',
   'tsdown',
   '@vitest/browser',
