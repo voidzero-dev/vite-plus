@@ -3,9 +3,14 @@ name = "global_wanted_range"
 vp = "global"
 steps = [
   { argv = ["vp", "install", "-g", "testnpm2@^01", "range-alias@npm:testnpm2@^1"], snapshot = false },
-  { argv = ["vp", "list", "-g"], comment = "npm accepts the loose range ^01 and prefers latest for both installs" },
-  { argv = ["vp", "outdated", "-g", "--format", "json"] },
-  { tty = false, argv = ["vp", "update", "-g"], comment = "both installed versions already satisfy the update" },
+  { argv = ["vp", "outdated", "-g", "testnpm2", "range-alias", "--format", "list"], comment = "The highest matching version is newer than the latest tag for both ranges", continue-on-failure = true },
+  { argv = ["vp", "outdated", "-g", "testnpm2@*", "--format", "list"], comment = "An explicit wildcard includes all matching releases", continue-on-failure = true },
+  { tty = false, argv = ["vp", "update", "-g", "testnpm2", "range-alias"] },
+  { argv = ["vp", "list", "-g"] },
+  { argv = ["vpt", "grep-file", "$VP_HOME/packages/testnpm2.json", 'versionSpec": "^01"'] },
+  { argv = ["vpt", "grep-file", "$VP_HOME/packages/range-alias.json", 'versionSpec": "npm:testnpm2@^1"'] },
+  { tty = false, argv = ["vp", "update", "-g"] },
+  { tty = false, argv = ["vp", "update", "-g", "testnpm2", "--reinstall-node-mismatch"], envs = [["VP_NODE_VERSION", "18.12.1"]], comment = "Reinstalling for another Node version keeps the resolved version" },
 ]
 
 [[case]]
@@ -15,11 +20,25 @@ env = { VP_NODE_VERSION = "18.12.1" }
 steps = [
   { argv = ["vpt", "write-file", "package.json", "{}"], snapshot = false },
   { argv = ["vpt", "write-file", ".npmrc", "tag=next\n"], snapshot = false },
-  { argv = ["vp", "install", "-g", "testnpm2@^1"], snapshot = false },
+  { argv = ["vp", "install", "-g", "testnpm2"], snapshot = false },
   { argv = ["vp", "list", "-g"], comment = "npm 8 ignores the project's default tag for global installs" },
   { argv = ["vp", "outdated", "-g", "--format", "json"] },
   { tty = false, argv = ["vp", "update", "-g"] },
-  { argv = ["vp", "outdated", "-g", "--format", "list"], envs = [["npm_config_tag", "next"]], comment = "A user-selected tag changes wanted while latest stays on the registry's latest tag" },
+  { argv = ["vp", "outdated", "-g", "--format", "list"], envs = [["npm_config_tag", "next"]], comment = "The user can select a default tag for a bare spec", continue-on-failure = true },
+  { tty = false, argv = ["vp", "update", "-g", "testnpm2@next"] },
+  { argv = ["vpt", "grep-file", "$VP_HOME/packages/testnpm2.json", 'versionSpec": "next"'] },
+  { tty = false, argv = ["vp", "update", "-g", "--latest"], envs = [["npm_config_tag", "next"]], comment = "An explicit --latest follows the registry's latest tag" },
+]
+
+[[case]]
+name = "managed_install_prefix"
+vp = "global"
+env = { VP_NODE_VERSION = "16.9.1" }
+steps = [
+  { argv = ["vpt", "write-file", "other-prefix/etc/npmrc", "tag=next\n"], snapshot = false },
+  { argv = ["vp", "install", "-g", "testnpm2"], envs = [["npm_config_prefix", "${workspace}/other-prefix"]], snapshot = false },
+  { argv = ["vp", "outdated", "-g", "--format", "json"], envs = [["npm_config_prefix", "${workspace}/other-prefix"]] },
+  { tty = false, argv = ["vp", "update", "-g"], envs = [["npm_config_prefix", "${workspace}/other-prefix"]] },
 ]
 
 [[case]]

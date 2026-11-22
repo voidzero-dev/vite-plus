@@ -3,7 +3,11 @@
 //! This module defines the CLI structure using clap and routes commands
 //! to their appropriate handlers.
 
-use std::{collections::HashSet, ffi::OsStr, process::ExitStatus};
+use std::{
+    collections::{HashMap, HashSet},
+    ffi::OsStr,
+    process::ExitStatus,
+};
 
 use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
 use clap_complete::ArgValueCompleter;
@@ -796,7 +800,7 @@ async fn managed_install(
             force,
             ignore_scripts,
             concurrency: concurrency.unwrap_or(DEFAULT_GLOBAL_INSTALL_CONCURRENCY),
-            update: false,
+            resolved_specs: None,
         },
     )
     .await
@@ -913,7 +917,7 @@ async fn managed_update(
                     ));
                 }
                 if !is_same_node_version(&metadata.platform.node, &current_node_version) {
-                    // Match the spec `get_outdated_packages` resolves for this
+                    // Match the spec `resolve_package_versions` resolves for this
                     // package, so the dedup against outdated results holds.
                     let spec = if version_spec.is_some() {
                         package.clone()
@@ -937,8 +941,8 @@ async fn managed_update(
         Some(managed_specs)
     };
 
-    let report = global::outdated::get_outdated_packages(
-        &packages.unwrap_or_default(),
+    let report = global::outdated::resolve_package_versions(
+        packages.as_deref(),
         concurrency * 3,
         latest,
         global::outdated::LookupMode::WantedOnly,
@@ -950,18 +954,19 @@ async fn managed_update(
     // Skipped lookups make the update incomplete; keep going but exit
     // nonzero so scripts can tell.
     let incomplete = !report.failures.is_empty();
-    to_update.extend(
-        report
-            .outdated
-            .into_iter()
-            // A newer `latest` alone (e.g. a version-pinned package) is not
-            // updatable; only a newer wanted version is.
-            .filter(|package| package.wanted != package.current)
-            .map(|package| package.spec),
-    );
+    let mut resolved_specs = HashMap::new();
+    for package in report.packages {
+        if package.wanted != package.current {
+            to_update.push(package.spec.clone());
+        }
+        resolved_specs.insert(package.spec, package.install_spec);
+    }
 
     let outdated_specs = to_update.iter().map(String::as_str).collect::<HashSet<_>>();
-    node_mismatches.retain(|package| !outdated_specs.contains(package.spec.as_str()));
+    node_mismatches.retain(|package| {
+        resolved_specs.contains_key(&package.spec)
+            && !outdated_specs.contains(package.spec.as_str())
+    });
 
     if should_reinstall_node_mismatches(
         &node_mismatches,
@@ -974,11 +979,8 @@ async fn managed_update(
 
     // Installs save the new spec only after they succeed.
     let to_update_set = to_update.iter().map(String::as_str).collect::<HashSet<_>>();
-    let failed_specs =
-        report.failures.iter().map(|(spec, _)| spec.as_str()).collect::<HashSet<_>>();
     for (package_name, new_spec, query_spec) in &spec_rewrites {
-        if failed_specs.contains(query_spec.as_str()) || to_update_set.contains(query_spec.as_str())
-        {
+        if !resolved_specs.contains_key(query_spec) || to_update_set.contains(query_spec.as_str()) {
             continue;
         }
         if let Some(mut metadata) = PackageMetadata::load(package_name).await?
@@ -1002,7 +1004,7 @@ async fn managed_update(
             force: false,
             ignore_scripts: false,
             concurrency,
-            update: true,
+            resolved_specs: Some(&resolved_specs),
         },
     )
     .await

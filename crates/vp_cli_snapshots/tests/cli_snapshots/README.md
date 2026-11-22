@@ -392,6 +392,8 @@ cases that do not need a different major.
 | 24         | `24.22.1`             | `24.3.0` is the unsupported migration input; `24.11.0` is the exact supported upgrade target.                                         |
 | 26         | `26.12.1`             | None; script, bare config-file argument, and executable packaging cases share this version.                                           |
 
+The global package range fixture also uses Node.js `16.9.1` for npm 7 compatibility.
+
 CI prepares the exact versions and selectors in [`node-versions.txt`](node-versions.txt),
 the repository's `.node-version`, and both `lts` and `latest` before snapshot
 command timers start. The selectors `20`, `22`, `22.23`, and `24.22` cover cases

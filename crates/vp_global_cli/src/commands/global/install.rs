@@ -122,8 +122,8 @@ pub struct InstallOptions<'a> {
     pub ignore_scripts: bool,
     /// Number of packages to install in parallel.
     pub concurrency: usize,
-    /// Whether this is a `vp update -g` operation.
-    pub update: bool,
+    /// For updates, maps the requested specs to the exact versions to install.
+    pub resolved_specs: Option<&'a HashMap<String, String>>,
 }
 
 /// Install global packages in parallel.
@@ -131,11 +131,13 @@ pub async fn install(
     package_specs: &[String],
     options: InstallOptions<'_>,
 ) -> Result<(), InstallError> {
-    let InstallOptions { node_version, force, ignore_scripts, concurrency, update } = options;
+    let InstallOptions { node_version, force, ignore_scripts, concurrency, resolved_specs } =
+        options;
     if package_specs.is_empty() {
         return Ok(());
     }
 
+    let update = resolved_specs.is_some();
     let operation_progress = if update { "Updating" } else { "Installing" };
     let operation_past = if update { "Updated" } else { "Installed" };
 
@@ -233,7 +235,9 @@ pub async fn install(
                     package_name.clone(),
                     install_one(
                         package_name,
-                        package.spec,
+                        resolved_specs
+                            .and_then(|specs| specs.get(package.spec))
+                            .map_or(package.spec, String::as_str),
                         &npm_path,
                         &node_bin_dir,
                         ignore_scripts,
@@ -624,7 +628,7 @@ async fn install_one(
     ))
 }
 
-fn new_install_id() -> String {
+pub(super) fn new_install_id() -> String {
     Uuid::new_v4().to_string()
 }
 
@@ -1472,7 +1476,7 @@ touch "$npm_config_prefix/prepared"
                 force: false,
                 ignore_scripts: true,
                 concurrency: 5,
-                update: false,
+                resolved_specs: None,
             };
             let mut installs = Box::pin(async {
                 tokio::join!(install(&specs, options()), install(&specs, options()))
@@ -1544,7 +1548,7 @@ printf '#!/bin/sh\n' > "$package/cli"
                     force,
                     ignore_scripts: true,
                     concurrency: 1,
-                    update: false,
+                    resolved_specs: None,
                 };
 
                 install(&["pkg-a".to_string()], options(false)).await.unwrap();

@@ -10,7 +10,7 @@ An explicit spec queries is-number, which has no latest tag
 **Exit code:** 1
 
 ```
-warn: npm resolution failed for is-number@6: No latest dist-tag for is-number; skipping
+warn: npm view failed for is-number@6: no latest dist-tag; skipping
 ```
 
 ## `vp update -g is-number@6`

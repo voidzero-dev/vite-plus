@@ -7,14 +7,14 @@ use std::{
 
 use console::style;
 use futures::{StreamExt, stream};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use tokio::process::Command;
 use vp_js_runtime::{JsRuntime, JsRuntimeType, download_runtime};
 use vp_pm_cli::OutdatedFormat;
 use vp_shared::{PrependOptions, ToolPathEnv, progress::Progress};
 use vt_path::current_dir;
 
-use super::parse_package_spec;
+use super::{alias_target, install::new_install_id, parse_package_spec};
 use crate::{
     cli::exit_status,
     commands::env::{
@@ -34,20 +34,17 @@ pub struct OutdatedPackage {
     pub wanted: String,
     /// Newest version on the registry's `latest` dist-tag.
     pub latest: String,
-    /// Spec an update reinstalls the package with.
+    /// Requested spec retained for future updates.
     pub spec: String,
+    /// Exact npm install argument, including the alias name when applicable.
+    pub install_spec: String,
     install_id: String,
     node: String,
     bins: Vec<String>,
 }
 
-/// Outcome of a registry sweep over the managed global packages: the packages
-/// with a newer version, plus one `(query spec, message)` entry per package
-/// whose registry lookup failed (so callers can warn and continue instead of
-/// aborting, and can tell which packages were left unresolved).
-#[derive(Debug)]
-pub struct OutdatedReport {
-    pub outdated: Vec<OutdatedPackage>,
+pub struct VersionReport {
+    pub packages: Vec<OutdatedPackage>,
     pub failures: Vec<(String, String)>,
 }
 
@@ -59,7 +56,6 @@ pub enum LookupMode {
     WantedAndLatest,
 }
 
-#[derive(Deserialize)]
 struct RegistryVersions {
     alias_target: Option<String>,
     wanted: String,
@@ -71,24 +67,27 @@ async fn lookup_versions(
     spec: &str,
     mode: LookupMode,
 ) -> Result<RegistryVersions, Error> {
+    let (name, version_spec) = parse_package_spec(spec)?;
+    // npm view needs the registry target of an alias.
+    let query = version_spec.as_deref().and_then(|s| s.strip_prefix("npm:")).unwrap_or(spec);
+    // npm view treats a literal @* as an omitted spec in some releases. @x is the same range.
+    let wildcard = query.strip_suffix("@*").map(|name| format!("{name}@x"));
+    let query = wildcard.as_deref().unwrap_or(query);
+
+    let bin = runtime.get_bin_prefix();
     let mut env = ToolPathEnv::from_env();
-    env.prepend(runtime.get_bin_prefix(), &["node", "npm", "npx"], PrependOptions::default())?;
-    let command = match mode {
-        LookupMode::WantedOnly => "update",
-        LookupMode::WantedAndLatest => "outdated",
-    };
-    let output = Command::new(runtime.get_binary_path().as_path())
-        .args([
-            "--input-type=commonjs",
-            "-e",
-            include_str!("resolve-version.cjs"),
-            "--",
-            spec,
-            command,
-            "--global",
-        ])
+    env.prepend(&bin, &["node", "npm", "npx"], PrependOptions::default())?;
+    let npm = bin.join(if cfg!(windows) { "npm.cmd" } else { "npm" });
+    let mut command = Command::new(npm.as_path());
+    command.args(["view", "--global", "--json", query, "version"]);
+    if mode == LookupMode::WantedAndLatest {
+        command.arg("dist-tags.latest");
+    }
+    // A managed install overrides the caller's prefix with a fresh package installation directory.
+    let prefix = PackageMetadata::installation_dir_for(&name, &new_install_id())?;
+    let output = command
+        .env("npm_config_prefix", prefix.as_path())
         .envs(env.into_envs())
-        // The spinner's raw stdin would be restored by Node when it exits.
         .stdin(Stdio::null())
         .output()
         .await?;
@@ -96,13 +95,41 @@ async fn lookup_versions(
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(Error::Other(
             format!(
-                "npm resolution failed for {spec}: {}",
+                "npm view failed for {query}: {}",
                 stderr.lines().next().unwrap_or("registry lookup failed")
             )
             .into(),
         ));
     }
-    Ok(serde_json::from_slice(&output.stdout)?)
+
+    let (wanted, latest) = parse_view_versions(&output.stdout, mode)
+        .map_err(|error| Error::Other(format!("npm view failed for {query}: {error}").into()))?;
+    Ok(RegistryVersions {
+        alias_target: version_spec.as_deref().and_then(alias_target),
+        wanted,
+        latest,
+    })
+}
+
+fn parse_view_versions(stdout: &[u8], mode: LookupMode) -> Result<(String, String), Error> {
+    let data: serde_json::Value = serde_json::from_slice(stdout)?;
+    // npm returns one row or an array, and uses a string when only the version field exists.
+    let rows = data.as_array().map(Vec::as_slice).unwrap_or(std::slice::from_ref(&data));
+    let (_, wanted, row) = rows
+        .iter()
+        .filter_map(|row| {
+            let version = row.as_str().or_else(|| row["version"].as_str())?;
+            Some((js_semver::Version::parse(version).ok()?, version, row))
+        })
+        .max_by(|a, b| a.0.cmp(&b.0))
+        .ok_or_else(|| Error::Other("no matching version".into()))?;
+    let latest = match mode {
+        LookupMode::WantedOnly => wanted,
+        LookupMode::WantedAndLatest => row["dist-tags.latest"]
+            .as_str()
+            .ok_or_else(|| Error::Other("no latest dist-tag".into()))?,
+    };
+    Ok((wanted.to_string(), latest.to_string()))
 }
 
 fn aliased_version(alias_target: Option<&str>, version: &str) -> String {
@@ -124,15 +151,15 @@ struct OutdatedPackageJson {
     location: String,
 }
 
-pub async fn get_outdated_packages(
-    packages: &[String],
+pub async fn resolve_package_versions(
+    packages: Option<&[String]>,
     concurrency: usize,
     latest: bool,
     mode: LookupMode,
-) -> Result<OutdatedReport, Error> {
+) -> Result<VersionReport, Error> {
     // 1. Resolve the command arguments to vite-plus-managed global packages.
     //    A missing explicit package is a command result, not an internal error.
-    let installed = if !packages.is_empty() {
+    let installed = if let Some(packages) = packages {
         let mut installed = Vec::new();
         for package in packages {
             let Ok((package_name, version_spec)) = parse_package_spec(package) else {
@@ -166,7 +193,7 @@ pub async fn get_outdated_packages(
     };
 
     if installed.is_empty() {
-        return Ok(OutdatedReport { outdated: Vec::new(), failures: Vec::new() });
+        return Ok(VersionReport { packages: Vec::new(), failures: Vec::new() });
     }
 
     // 2. Resolve each distinct install spec once, even when a package is requested twice.
@@ -188,7 +215,7 @@ pub async fn get_outdated_packages(
     drop(progress);
 
     // 3. Compare successful lookups and report failures against their requested specs.
-    let mut outdated = Vec::new();
+    let mut packages = Vec::new();
     let mut failures = Vec::new();
     for (package, spec) in installed {
         let versions = match &versions[&spec] {
@@ -203,16 +230,18 @@ pub async fn get_outdated_packages(
         let current = aliased_version(package.alias_target().as_deref(), package.version.trim());
         let wanted = aliased_version(target_alias, &versions.wanted);
         let latest = aliased_version(target_alias, &versions.latest);
-        if current == wanted && current == latest {
-            continue;
-        }
+        let install_spec = match target_alias {
+            Some(_) => format!("{}@npm:{wanted}", package.name),
+            None => format!("{}@{wanted}", package.name),
+        };
 
-        outdated.push(OutdatedPackage {
+        packages.push(OutdatedPackage {
             name: package.name,
             current,
             wanted,
             latest,
             spec,
+            install_spec,
             install_id: package.install_id,
             node: package.platform.node,
             bins: package.bins,
@@ -221,7 +250,7 @@ pub async fn get_outdated_packages(
     // Lookups finish in nondeterministic order; keep warnings stable.
     failures.sort();
 
-    Ok(OutdatedReport { outdated, failures })
+    Ok(VersionReport { packages, failures })
 }
 
 pub async fn execute(
@@ -230,8 +259,8 @@ pub async fn execute(
     format: Option<OutdatedFormat>,
     concurrency: usize,
 ) -> Result<ExitStatus, Error> {
-    let OutdatedReport { outdated, failures } = match get_outdated_packages(
-        packages,
+    let VersionReport { packages: mut outdated, failures } = match resolve_package_versions(
+        (!packages.is_empty()).then_some(packages),
         concurrency,
         false,
         LookupMode::WantedAndLatest,
@@ -249,6 +278,8 @@ pub async fn execute(
         }
     };
 
+    outdated
+        .retain(|package| package.current != package.wanted || package.current != package.latest);
     for (_, message) in &failures {
         vp_shared::output::warn(&format!("{message}; skipping"));
     }
@@ -413,5 +444,26 @@ fn print_table(packages: &[OutdatedPackage], long: bool) {
                 package.latest
             ));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wanted_uses_semver_precedence_regardless_of_publish_order() {
+        let output = br#"["5.0.11","5.0.12","4.5.14"]"#;
+        assert_eq!(parse_view_versions(output, LookupMode::WantedOnly).unwrap().0, "5.0.12");
+
+        let output = br#"[
+            {"version":"2.0.0-beta.2","dist-tags.latest":"1.9.0"},
+            {"version":"2.0.0-beta.10","dist-tags.latest":"1.9.0"},
+            {"version":"2.0.0-beta.9","dist-tags.latest":"1.9.0"}
+        ]"#;
+        assert_eq!(
+            parse_view_versions(output, LookupMode::WantedAndLatest).unwrap(),
+            ("2.0.0-beta.10".to_string(), "1.9.0".to_string()),
+        );
     }
 }

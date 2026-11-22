@@ -7,7 +7,7 @@
 '`
 
 
-## `vp install -g testnpm2@^1`
+## `vp install -g testnpm2`
 
 
 ## `vp list -g`
@@ -34,11 +34,33 @@ All global packages are up to date.
 
 ## `npm_config_tag=next vp outdated -g --format list`
 
-A user-selected tag changes wanted while latest stays on the registry's latest tag
+The user can select a default tag for a bare spec
 
 **Exit code:** 1
 
 ```
 testnpm2 (global)
 1.0.0 => 1.0.1 (latest: 1.0.0)
+```
+
+## `vp update -g testnpm2@next`
+
+```
+info: Updating 1 global package with Node.js <version>
+ Updated testnpm2 to 1.0.1
+```
+
+## `vpt grep-file $VP_HOME/packages/testnpm2.json 'versionSpec": "next"'`
+
+```
+<home>/.vite-plus/packages/testnpm2.json: found "versionSpec\": \"next\""
+```
+
+## `npm_config_tag=next vp update -g --latest`
+
+An explicit --latest follows the registry's latest tag
+
+```
+info: Updating 1 global package with Node.js <version>
+ Updated testnpm2 to 1.0.0
 ```

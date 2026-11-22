@@ -110,9 +110,9 @@ impl PackageMetadata {
 
     /// Registry spec for the `latest` dist-tag of the installed package.
     pub fn latest_spec(&self) -> String {
-        match self.latest_version_spec() {
-            Some(spec) => format!("{}@{spec}", self.name),
-            None => self.name.clone(),
+        match self.alias_target() {
+            Some(target) => format!("{}@npm:{target}@latest", self.name),
+            None => format!("{}@latest", self.name),
         }
     }
 
@@ -317,7 +317,7 @@ mod tests {
 
         metadata.version_spec = Some("^1.0.0".to_string());
         assert_eq!(metadata.update_spec(), "some-pkg@^1.0.0");
-        assert_eq!(metadata.latest_spec(), "some-pkg");
+        assert_eq!(metadata.latest_spec(), "some-pkg@latest");
     }
 
     #[test]
@@ -336,7 +336,7 @@ mod tests {
         assert_eq!(metadata.alias_target().as_deref(), Some("cowsay"));
         assert_eq!(metadata.update_spec(), "typescript@npm:cowsay@^1.5");
         assert_eq!(metadata.latest_version_spec().as_deref(), Some("npm:cowsay"));
-        assert_eq!(metadata.latest_spec(), "typescript@npm:cowsay");
+        assert_eq!(metadata.latest_spec(), "typescript@npm:cowsay@latest");
     }
 
     #[test]

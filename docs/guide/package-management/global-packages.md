@@ -21,7 +21,7 @@ Without `--node`, a global install uses the Node.js version resolved for the cur
 
 ## Updating Packages
 
-Updates preserve the version specification recorded at installation. A package installed with `some-pkg@nightly` updates to the newest version of that tag. A version range stays within the range.
+Updates preserve the version specification recorded at installation. A package installed with `some-pkg@nightly` updates to the newest version of that tag. For a version range, `vp outdated -g` shows the highest matching version as `wanted`, and `vp update -g` installs that exact version. The registry’s `latest` tag can point to a lower version.
 
 ```bash
 vp update -g some-pkg
@@ -29,4 +29,4 @@ vp update -g some-pkg@latest
 vp update -g --latest
 ```
 
-With --latest, future updates follow the latest tag instead of the original tag or version range.
+With `--latest`, Vite+ installs the registry’s `latest` version and clears the saved range or tag. Future updates use the default npm tag, normally `latest`.
