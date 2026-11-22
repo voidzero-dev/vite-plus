@@ -1,0 +1,7 @@
+[[case]]
+name = "migration_eslint_dollar"
+vp = "global"
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "a `$` in a migrated rule option must not break the config merge", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "vite.config.ts"], comment = "check the rule message is merged verbatim", continue-on-failure = true },
+]

@@ -4,7 +4,9 @@
     "vite-plus": "latest"
   },
   "overrides": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vite": {
+      "rollup": "^4.0.0"
+    },
     "vitest": {
       "@vitest/runner": "4.0.0"
     }
