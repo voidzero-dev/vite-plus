@@ -700,6 +700,8 @@ export async function formatPnpmInstallOutput(
         }
         if (typeof log.hint === 'string') {
           context.push(log.hint);
+        } else if (log.level === 'error' && code === 'ERR_PNPM_LOCKFILE_BREAKING_CHANGE') {
+          context.push('', 'Run with the --force parameter to recreate the lockfile.');
         }
         if (authFailure) {
           appendRegistryAuthContext(context, log.pkgName, requestUrl, cwd);

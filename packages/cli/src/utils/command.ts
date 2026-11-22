@@ -1,4 +1,9 @@
-import { execFile, type ChildProcess } from 'node:child_process';
+import {
+  execFile,
+  type ChildProcess,
+  type ExecFileOptions,
+  type SpawnSyncOptionsWithStringEncoding,
+} from 'node:child_process';
 import {
   closeSync,
   fstatSync,
@@ -84,6 +89,35 @@ type ProcessEntry = [pid: number, parentPid: number, executable: string];
 
 const psArgs = ['-A', '-o', 'pid=', '-o', 'ppid='];
 const psOptions = { env: { PATH: '/usr/bin:/bin' }, timeout: 5000 };
+
+function execProcessUtility(
+  command: string,
+  args: string[],
+  options: ExecFileOptions,
+  onComplete: (stdout: string, succeeded: boolean) => void,
+) {
+  try {
+    execFile(command, args, { ...options, encoding: 'utf8' }, (error, stdout) =>
+      onComplete(stdout, error === null),
+    );
+  } catch {
+    // A sandbox can deny the spawn before Node registers the callback.
+    onComplete('', false);
+  }
+}
+
+function spawnProcessUtilitySync(
+  command: string,
+  args: string[],
+  options: SpawnSyncOptionsWithStringEncoding,
+) {
+  try {
+    return spawn.sync(command, args, options);
+  } catch {
+    // The caller can still signal the direct child.
+    return undefined;
+  }
+}
 
 function getWindowsPowerShellPath() {
   return join(
@@ -209,19 +243,24 @@ async function hasTcpConnection(pids: number[], signal: AbortSignal): Promise<bo
       ]
     : ['-nP', '-a', '-p', pids.join(','), '-iTCP', '-FT'];
   return new Promise<boolean>((resolve) => {
-    execFile(command, args, { signal, timeout: 5000, windowsHide: true }, (error, output) => {
-      if (!windows) {
-        // lsof can report connections and return 1 when another selected PID has exited.
-        resolve(/^TST=(?:ESTABLISHED|SYN_SENT)$/m.test(output));
-        return;
-      }
-      if (error) {
-        resolve(false);
-        return;
-      }
-      const owners = new Set(pids);
-      resolve(output.split(/\r?\n/).some((line) => owners.has(Number(line.trim()))));
-    });
+    execProcessUtility(
+      command,
+      args,
+      { signal, timeout: 5000, windowsHide: true },
+      (output, ok) => {
+        if (!windows) {
+          // lsof can report connections and return 1 when another selected PID has exited.
+          resolve(/^TST=(?:ESTABLISHED|SYN_SENT)$/m.test(output));
+          return;
+        }
+        if (!ok) {
+          resolve(false);
+          return;
+        }
+        const owners = new Set(pids);
+        resolve(output.split(/\r?\n/).some((line) => owners.has(Number(line.trim()))));
+      },
+    );
   });
 }
 
@@ -241,8 +280,8 @@ async function hasActivePackageFetch(pid: number, signal: AbortSignal): Promise<
       : [...psArgs, '-o', 'state=', '-o', 'comm='];
     const options = windows ? { timeout: 5000, windowsHide: true } : psOptions;
     const stdout = await new Promise<string>((resolve) => {
-      execFile(command, args, { ...options, signal }, (error, output) =>
-        resolve(error ? '' : output),
+      execProcessUtility(command, args, { ...options, signal }, (output, ok) =>
+        resolve(ok ? output : ''),
       );
     });
     processes = parseProcessTable(stdout, !windows);
@@ -277,14 +316,14 @@ function stopPosixCommandTree(child: ChildProcess, pid: number, wait: boolean) {
   }
   const stopFromPs = (stdout: string) => stopTree(parseProcessTable(stdout, false));
   if (wait) {
-    const { stdout } = spawn.sync('ps', psArgs, {
+    const result = spawnProcessUtilitySync('ps', psArgs, {
       ...psOptions,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
     });
-    stopFromPs(stdout ?? '');
+    stopFromPs(result?.stdout ?? '');
   } else {
-    execFile('ps', psArgs, psOptions, (_error, stdout) => stopFromPs(stdout));
+    execProcessUtility('ps', psArgs, psOptions, stopFromPs);
   }
 }
 
@@ -301,15 +340,19 @@ function stopCommandTree(child: ChildProcess, { wait = true } = {}) {
   const args = ['/pid', String(pid), '/t', '/f'];
   const options = { timeout: 5000, windowsHide: true };
   if (!wait) {
-    execFile(taskkill, args, options, (error) => {
-      if (error) {
+    execProcessUtility(taskkill, args, options, (_stdout, ok) => {
+      if (!ok) {
         child.kill('SIGKILL');
       }
     });
     return;
   }
-  const result = spawn.sync(taskkill, args, { ...options, stdio: 'ignore' });
-  if (result.status !== 0) {
+  const result = spawnProcessUtilitySync(taskkill, args, {
+    ...options,
+    encoding: 'utf8',
+    stdio: 'ignore',
+  });
+  if (result?.status !== 0) {
     child.kill('SIGKILL');
   }
 }

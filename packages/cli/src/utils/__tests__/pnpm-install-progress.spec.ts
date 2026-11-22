@@ -312,6 +312,28 @@ describe('formatPnpmInstallOutput', () => {
     ).toBe(headline);
   });
 
+  it('shows how to recreate an incompatible frozen lockfile in human-readable output', async () => {
+    const cwd = resolve('workspace');
+    const code = 'ERR_PNPM_LOCKFILE_BREAKING_CHANGE';
+    const message = `Lockfile ${join(cwd, 'pnpm-lock.yaml')} not compatible with current pnpm`;
+    const output = JSON.stringify({
+      name: 'pnpm',
+      level: 'error',
+      code,
+      err: { name: 'pnpm', message },
+    });
+    const diagnostic = `${code} ${message}\n\nRun with the --force parameter to recreate the lockfile.`;
+
+    for (const mode of ['debug', 'info', 'warn', 'error'] as const) {
+      expect(await formatPnpmInstallOutput(output, cwd, mode)).toBe(diagnostic);
+    }
+    expect(await formatPnpmInstallOutput(output, cwd, 'silent')).toBe('');
+    expect(JSON.parse(await formatPnpmInstallOutput(output, cwd, 'json'))).toEqual({
+      error: { code, message },
+    });
+    expect(await formatPnpmInstallOutput(output, cwd, 'ndjson')).toBe(output);
+  });
+
   it.each(['info', 'debug', 'warn', 'error', 'silent', 'json', 'ndjson'] as const)(
     'replays direct optional dependency skips at the expected level in %s mode',
     async (mode) => {
