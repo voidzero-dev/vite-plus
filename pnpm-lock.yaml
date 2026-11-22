@@ -302,9 +302,6 @@ catalogs:
     oxlint:
       specifier: '=1.94.0'
       version: 1.94.0
-    oxlint-tsgolint:
-      specifier: '=7.0.2008'
-      version: 7.0.2008
     pathe:
       specifier: ^2.0.3
       version: 2.0.3
@@ -370,6 +367,7 @@ catalogs:
       version: 4.6.7
 
 overrides:
+  oxlint-tsgolint: '-'
   rolldown: workspace:rolldown@*
   vite: workspace:@voidzero-dev/vite-plus-core@*
   vite-plus: workspace:vite-plus@*
@@ -390,7 +388,7 @@ importers:
     devDependencies:
       '@e18e/eslint-plugin':
         specifier: 'catalog:'
-        version: 0.8.1(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(oxlint@1.94.0(oxlint-tsgolint@7.0.2008)(vite-plus@packages+cli))
+        version: 0.8.1(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(oxlint@1.94.0(vite-plus@packages+cli))
       '@emnapi/core':
         specifier: 'catalog:'
         version: 2.0.0-beta.2
@@ -412,9 +410,6 @@ importers:
       '@voidzero-dev/vite-plus-tools':
         specifier: workspace:*
         version: link:packages/tools
-      oxlint-tsgolint:
-        specifier: 'catalog:'
-        version: 7.0.2008
       playwright:
         specifier: 'catalog:'
         version: 1.62.1
@@ -468,7 +463,7 @@ importers:
         version: 0.79.0(vite-plus@packages+cli)
       oxlint:
         specifier: 'catalog:'
-        version: 1.94.0(oxlint-tsgolint@7.0.2008)(vite-plus@packages+cli)
+        version: 1.94.0(vite-plus@packages+cli)
       playwright:
         specifier: '*'
         version: 1.62.1
@@ -881,7 +876,7 @@ importers:
     devDependencies:
       '@e18e/eslint-plugin':
         specifier: ^0.8.1
-        version: 0.8.1(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(oxlint@1.94.0(oxlint-tsgolint@7.0.2008)(vite-plus@packages+cli))
+        version: 0.8.1(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(oxlint@1.94.0(vite-plus@packages+cli))
       '@type-challenges/utils':
         specifier: ^0.1.1
         version: 0.1.1
@@ -932,10 +927,7 @@ importers:
         version: 0.77.0(vite-plus@packages+cli)
       oxlint:
         specifier: ^1.92.0
-        version: 1.94.0(oxlint-tsgolint@7.0.2008)(vite-plus@packages+cli)
-      oxlint-tsgolint:
-        specifier: ^7.0.2006
-        version: 7.0.2008
+        version: 1.94.0(vite-plus@packages+cli)
       picocolors:
         specifier: ^1.1.1
         version: 1.1.1
@@ -3088,36 +3080,6 @@ packages:
   '@oxfmt/binding-win32-x64-msvc@0.79.0':
     resolution: {integrity: sha512-JLaeaQ+4LkQiVXY06JIV1dBFEDJzssvDieK/3Poi6CsY+c4UxghZVrrsfcKGJ5R/0F2Sw3C5Lf5Hu0sM5qJfPw==}
     engines: {node: ^20.19.0 || >=22.12.0}
-    cpu: [x64]
-    os: [win32]
-
-  '@oxlint-tsgolint/darwin-arm64@7.0.2008':
-    resolution: {integrity: sha512-RXcQ439KXqspwHtw39825cyFmvrkOa1AA2CnqFNNG0pVJB0FdhpfQZsDLjRc/3Mt/uEG0MWOG50Hl09J2Ra9UA==}
-    cpu: [arm64]
-    os: [darwin]
-
-  '@oxlint-tsgolint/darwin-x64@7.0.2008':
-    resolution: {integrity: sha512-4FpkHVDF1I4W0Owgsff8rDdf/XVcI9aoqflqyh3JiMCg7zCzWNkB0hfKMNjMDYDAeK/k1CNawAb7Y7mYGr/Xhg==}
-    cpu: [x64]
-    os: [darwin]
-
-  '@oxlint-tsgolint/linux-arm64@7.0.2008':
-    resolution: {integrity: sha512-CmheyZowc+sbXlZ2ksFrbqR6Mnu+HHheZZKTP3FpDBe64eCp6DzSrjcR2VHRj6mC2UKF1ZO0J8Z1e9Bgji4kKw==}
-    cpu: [arm64]
-    os: [linux]
-
-  '@oxlint-tsgolint/linux-x64@7.0.2008':
-    resolution: {integrity: sha512-7by4bup5rF9q7i19G6zPDXgywBi3tFB6jGzefoc/BfleNS0Q/eleYpD2SDLmsXzN2hFpDrfAskx7H0WnUtKbtQ==}
-    cpu: [x64]
-    os: [linux]
-
-  '@oxlint-tsgolint/win32-arm64@7.0.2008':
-    resolution: {integrity: sha512-u12UqT/xG64vXclqfe3/7I4j2mWSMZmXsMRBxbgmGfHaEfZUEzxl1QCNyx3TDM5OfsWWKH4dAHJtDRxTAiYA7A==}
-    cpu: [arm64]
-    os: [win32]
-
-  '@oxlint-tsgolint/win32-x64@7.0.2008':
-    resolution: {integrity: sha512-Vjev4Ns8rdGa4Tb85ZsBkei0reLa77j3FNJsCKPo2gi5oTPK5O2eN42sim2ewoorgx7JQ3+49YuUKa1d6UKHPw==}
     cpu: [x64]
     os: [win32]
 
@@ -5803,20 +5765,13 @@ packages:
       vite-plus:
         optional: true
 
-  oxlint-tsgolint@7.0.2008:
-    resolution: {integrity: sha512-QuRK+gdriCwpOs+1PGq6/aImEEEK+EClNptdVtI0y4bDOhJ0uH/v3noz+yPKe+DYOTdkej75/5f3ouOGP5EGrQ==}
-    hasBin: true
-
   oxlint@1.94.0:
     resolution: {integrity: sha512-Fnt+3wSKRhtLmvgRfxgRX0excSPCoyiXRol4eWKZLtXxWMQtwQ3KjKQUYXOw5loyinfnZfGzh4RCYf7opfL0vw==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
     peerDependencies:
-      oxlint-tsgolint: '>=7.0.2007'
       vite-plus: workspace:vite-plus@*
     peerDependenciesMeta:
-      oxlint-tsgolint:
-        optional: true
       vite-plus:
         optional: true
 
@@ -7410,14 +7365,14 @@ snapshots:
       '@devframes/hub-ui': 1.3.3(@devframes/hub@1.3.3(@devframes/agentic@1.3.3)(crossws@0.4.17(srvx@1.0.6))(devframe@1.3.3))(@devframes/json-render@1.3.3(@devframes/hub@1.3.3(@devframes/agentic@1.3.3)(crossws@0.4.17(srvx@1.0.6))(devframe@1.3.3))(devframe@1.3.3))(devframe@1.3.3)
       vite: link:packages/core
 
-  '@e18e/eslint-plugin@0.8.1(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(oxlint@1.94.0(oxlint-tsgolint@7.0.2008)(vite-plus@packages+cli))':
+  '@e18e/eslint-plugin@0.8.1(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(oxlint@1.94.0(vite-plus@packages+cli))':
     dependencies:
       empathic: 2.1.0
       module-replacements: 3.3.0
       verkit: 0.4.0
     optionalDependencies:
       eslint: 9.39.5(jiti@2.7.0)(supports-color@8.1.1)
-      oxlint: 1.94.0(oxlint-tsgolint@7.0.2008)(vite-plus@packages+cli)
+      oxlint: 1.94.0(vite-plus@packages+cli)
 
   '@edge-runtime/primitives@6.0.0':
     optional: true
@@ -8737,24 +8692,6 @@ snapshots:
     optional: true
 
   '@oxfmt/binding-win32-x64-msvc@0.79.0':
-    optional: true
-
-  '@oxlint-tsgolint/darwin-arm64@7.0.2008':
-    optional: true
-
-  '@oxlint-tsgolint/darwin-x64@7.0.2008':
-    optional: true
-
-  '@oxlint-tsgolint/linux-arm64@7.0.2008':
-    optional: true
-
-  '@oxlint-tsgolint/linux-x64@7.0.2008':
-    optional: true
-
-  '@oxlint-tsgolint/win32-arm64@7.0.2008':
-    optional: true
-
-  '@oxlint-tsgolint/win32-x64@7.0.2008':
     optional: true
 
   '@oxlint/binding-android-arm-eabi@1.94.0':
@@ -11339,16 +11276,7 @@ snapshots:
       '@oxfmt/binding-win32-x64-msvc': 0.79.0
       vite-plus: link:packages/cli
 
-  oxlint-tsgolint@7.0.2008:
-    optionalDependencies:
-      '@oxlint-tsgolint/darwin-arm64': 7.0.2008
-      '@oxlint-tsgolint/darwin-x64': 7.0.2008
-      '@oxlint-tsgolint/linux-arm64': 7.0.2008
-      '@oxlint-tsgolint/linux-x64': 7.0.2008
-      '@oxlint-tsgolint/win32-arm64': 7.0.2008
-      '@oxlint-tsgolint/win32-x64': 7.0.2008
-
-  oxlint@1.94.0(oxlint-tsgolint@7.0.2008)(vite-plus@packages+cli):
+  oxlint@1.94.0(vite-plus@packages+cli):
     optionalDependencies:
       '@oxlint/binding-android-arm-eabi': 1.94.0
       '@oxlint/binding-android-arm64': 1.94.0
@@ -11369,7 +11297,6 @@ snapshots:
       '@oxlint/binding-win32-arm64-msvc': 1.94.0
       '@oxlint/binding-win32-ia32-msvc': 1.94.0
       '@oxlint/binding-win32-x64-msvc': 1.94.0
-      oxlint-tsgolint: 7.0.2008
       vite-plus: link:packages/cli
 
   p-limit@3.1.0:
