@@ -76,20 +76,7 @@ pub fn merge_json_config(
     merge_json_config_content(&vite_config_content, &js_config, config_key)
 }
 
-/// Merge JSON configuration into vite config content
-///
-/// This is the internal function that performs the actual merge using ast-grep.
-/// It takes the vite config content and the JSON config as a TypeScript object literal string.
-///
-/// # Arguments
-///
-/// * `vite_config_content` - The content of the vite.config.ts or vite.config.js file
-/// * `ts_config` - The config as a TypeScript object literal string
-/// * `config_key` - The key to use in the vite config (e.g., "lint", "fmt")
-///
-/// # Returns
-///
-/// Returns a `MergeResult` with the updated content and status flags.
+/// Prepend the JSON config under `config_key` in each supported Vite config object.
 fn merge_json_config_content(
     vite_config_content: &str,
     ts_config: &str,
@@ -99,9 +86,6 @@ fn merge_json_config_content(
     if has_unsupported_direct_return(vite_config_content) {
         return Ok(MergeResult { content: vite_config_content.to_owned(), updated: false });
     }
-
-    // Strip "$schema" property — it's a JSON Schema annotation not valid in OxlintConfig
-    let ts_config = strip_schema_property(ts_config);
 
     // The rules insert a shorthand property on its own line. Choose a name absent
     // from the source so only properties inserted by the rules are expanded.
@@ -117,24 +101,25 @@ fn merge_json_config_content(
 
     // Config values can contain ast-grep metavariables such as `$200` and
     // `$$$CONFIG`. Insert them as text after all the rules have run.
-    let mut out = String::with_capacity(content.len());
-    let mut remaining = content.as_str();
-    while let Some((before, after)) = remaining.split_once(&placeholder) {
-        out.push_str(before);
-        out.push_str(config_key);
-        out.push_str(": ");
-        let indent = before.rsplit('\n').next().unwrap_or_default();
-        let mut lines = ts_config.lines();
-        out.push_str(lines.next().unwrap_or_default());
-        for line in lines {
-            out.push('\n');
-            out.push_str(indent);
-            out.push_str(line);
+    let config = strip_schema_property(ts_config);
+    let mut config_lines = config.lines();
+    let property_start = format!("{config_key}: {}", config_lines.next().unwrap_or_default());
+    let mut merged = String::with_capacity(content.len());
+    for line in content.split_inclusive('\n') {
+        let Some((indent, suffix)) = line.split_once(&placeholder) else {
+            merged.push_str(line);
+            continue;
+        };
+        merged.push_str(indent);
+        merged.push_str(&property_start);
+        for continuation in config_lines.clone() {
+            merged.push('\n');
+            merged.push_str(indent);
+            merged.push_str(continuation);
         }
-        remaining = after;
+        merged.push_str(suffix);
     }
-    out.push_str(remaining);
-    Ok(MergeResult { content: out, updated })
+    Ok(MergeResult { content: merged, updated })
 }
 
 /// Set the value of a top-level config key in vite.config.ts/js (upsert).
@@ -2024,8 +2009,9 @@ export default defineConfig({});"#;
         for value in ["$OUT_DIR $200 $$$CONFIG", "a\u{2028}b\u{2029}c\u{85}d"] {
             let config = format!(r#"{{"a":"{value}"}}"#);
             let result =
-                merge_json_config_content("export default defineConfig({});", &config, "fmt");
-            assert!(result.unwrap().content.contains(&config));
+                merge_json_config_content("export default defineConfig({});", &config, "fmt")
+                    .unwrap();
+            assert!(result.content.contains(&config), "{value:?}");
         }
     }
 
@@ -2038,9 +2024,13 @@ export default defineConfig(({ mode }) => {
   }
   return { root: label };
 });";
-        let config =
-            "{\r\n  // costs $200\r\n  \"message\": \"$$$CONFIG __VITE_PLUS_CONFIG___\"\r\n}\r\n";
-        let result = merge_json_config_content(source, config, "lint").unwrap();
+        let config = r#"{
+  // costs $200
+  "message": "$$$CONFIG __VITE_PLUS_CONFIG___"
+}
+"#
+        .replace('\n', "\r\n");
+        let result = merge_json_config_content(source, &config, "lint").unwrap();
         assert_eq!(
             result.content,
             r#"const label = '__VITE_PLUS_CONFIG__';
