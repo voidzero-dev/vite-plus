@@ -29,9 +29,8 @@ pub(crate) async fn effective_version(
     manager: &PackageManager,
 ) -> Result<Str, Error> {
     let config = vp_shared::EnvConfig::get();
-    let Some(key) =
-        delegation_key(cwd, &config.user_home, &manager.version, |name| std::env::var_os(name))
-    else {
+    let env = yarn_env(std::env::vars_os());
+    let Some(key) = delegation_key(cwd, &config.user_home, &manager.version, &env) else {
         return Ok(manager.version.clone());
     };
     let cache_path =
@@ -53,28 +52,28 @@ fn delegation_key(
     cwd: &AbsolutePath,
     home: &AbsolutePath,
     launcher_version: &str,
-    env: impl Fn(&str) -> Option<OsString>,
+    env: &[(&str, OsString)],
 ) -> Option<Str> {
     let mut hasher = Sha256::new();
     let mut delegates = false;
     hasher.update(launcher_version);
 
-    for name in ENV_VARS {
-        if let Some(value) = env(name) {
-            hasher.update([0]);
-            hasher.update(name);
-            hasher.update([0]);
-            hasher.update(value.as_encoded_bytes());
+    let mut rc_names: Vec<OsString> = RC_FILE_NAMES.iter().map(OsString::from).collect();
+    for (name, value) in env {
+        hasher.update([0]);
+        hasher.update(name);
+        hasher.update([0]);
+        hasher.update(value.as_encoded_bytes());
+        match *name {
+            "YARN_YARN_PATH" => {
+                delegates = true;
+                hash_target(&mut hasher, &cwd.join(value));
+            }
+            "YARN_RC_FILENAME" => rc_names.push(value.clone()),
+            _ => {}
         }
     }
-    if let Some(yarn_path) = env("YARN_YARN_PATH") {
-        delegates = true;
-        hash_target(&mut hasher, &cwd.join(yarn_path));
-    }
 
-    let custom_rc = env("YARN_RC_FILENAME");
-    let rc_names = RC_FILE_NAMES.iter().map(OsString::from).chain(custom_rc);
-    let rc_names: Vec<OsString> = rc_names.collect();
     let dirs = std::iter::successors(Some(cwd), |dir| dir.parent()).chain(Some(home));
     for dir in dirs {
         for name in &rc_names {
@@ -94,16 +93,53 @@ fn delegation_key(
     delegates.then(|| hex::encode(hasher.finalize()).into())
 }
 
+/// The Yarn variables that can change the effective version, sorted so the key
+/// is stable. Berry matches `YARN_*` names without regard to case.
+fn yarn_env(vars: impl IntoIterator<Item = (OsString, OsString)>) -> Vec<(&'static str, OsString)> {
+    let mut env: Vec<_> = vars
+        .into_iter()
+        .filter_map(|(name, value)| {
+            let name = name.to_str()?;
+            let canonical = ENV_VARS.iter().find(|var| var.eq_ignore_ascii_case(name))?;
+            Some((*canonical, value))
+        })
+        .collect();
+    env.sort();
+    env
+}
+
 /// Values of `yarnPath` and `yarn-path` in an rc file. Both formats put the
-/// value after the setting name, separated by `:` or spaces and possibly quoted.
+/// value after the setting name, separated by `:` or spaces, possibly quoted,
+/// and possibly followed by a `#` comment.
 fn path_settings(content: &str) -> impl Iterator<Item = &str> {
     content.lines().filter_map(|line| {
-        let line = line.trim_start().trim_start_matches(['"', '\'']);
-        let value = PATH_SETTINGS.iter().find_map(|setting| line.strip_prefix(setting))?;
-        let value = value.trim_start_matches(['"', '\'', ':', ' ', '\t']);
-        let value = value.trim_end().trim_end_matches(['"', '\'']);
-        (!value.is_empty()).then_some(value)
+        let line = line.trim_start();
+        let line = line.strip_prefix(['"', '\'']).unwrap_or(line);
+        let rest = PATH_SETTINGS.iter().find_map(|setting| line.strip_prefix(setting))?;
+        let rest = rest.strip_prefix(['"', '\'']).unwrap_or(rest);
+        // A longer setting name, such as `yarnPathX`, is not this setting.
+        if !rest.starts_with([':', ' ', '\t']) {
+            return None;
+        }
+        scalar_value(rest.trim_start_matches([':', ' ', '\t']))
     })
+}
+
+/// Reads a quoted value up to its closing quote, or a plain value up to a `#`
+/// that starts a comment, which YAML requires to follow whitespace.
+fn scalar_value(text: &str) -> Option<&str> {
+    let value = if let Some(quote) = text.chars().next().filter(|c| matches!(c, '"' | '\'')) {
+        let inner = &text[1..];
+        &inner[..inner.find(quote)?]
+    } else {
+        let comment = text
+            .match_indices('#')
+            .map(|(index, _)| index)
+            .find(|&index| index == 0 || text[..index].ends_with([' ', '\t']))
+            .unwrap_or(text.len());
+        text[..comment].trim_end()
+    };
+    (!value.is_empty()).then_some(value)
 }
 
 /// A release can be replaced in place under the same name, so its metadata is
@@ -173,9 +209,8 @@ mod tests {
     }
 
     fn key(cwd: &AbsolutePath, home: &AbsolutePath, env: &[(&str, &str)]) -> Option<Str> {
-        delegation_key(cwd, home, "2.4.2", |name| {
-            env.iter().find(|(key, _)| *key == name).map(|(_, value)| OsString::from(value))
-        })
+        let env = yarn_env(env.iter().map(|(name, value)| (name.into(), value.into())));
+        delegation_key(cwd, home, "2.4.2", &env)
     }
 
     #[test]
@@ -202,6 +237,9 @@ mod tests {
         fs::write(project.join(".custom.yml"), "yarnPath: yarn.cjs\n").unwrap();
         assert!(key(&sub, &home, &[]).is_none());
         assert!(key(&sub, &home, &[("YARN_RC_FILENAME", ".custom.yml")]).is_some());
+        assert!(key(&sub, &home, &[("yarn_rc_filename", ".custom.yml")]).is_some());
+        fs::remove_file(project.join(".custom.yml")).unwrap();
+        assert!(key(&sub, &home, &[("yarn_yarn_path", "yarn.cjs")]).is_some());
     }
 
     #[test]
@@ -211,8 +249,11 @@ mod tests {
         let release = project.join(".yarn/releases/yarn-berry.cjs");
         fs::create_dir_all(release.parent().unwrap()).unwrap();
         fs::write(&release, "a").unwrap();
-        fs::write(project.join(".yarnrc.yml"), "yarnPath: .yarn/releases/yarn-berry.cjs\n")
-            .unwrap();
+        fs::write(
+            project.join(".yarnrc.yml"),
+            "yarnPath: .yarn/releases/yarn-berry.cjs # pinned\n",
+        )
+        .unwrap();
         let base = key(&project, &home, &[]).unwrap();
         assert_eq!(key(&project, &home, &[]).unwrap(), base);
 
@@ -220,8 +261,10 @@ mod tests {
         let replaced = key(&project, &home, &[]).unwrap();
         assert_ne!(replaced, base, "a release replaced in place");
 
-        assert_ne!(key(&project, &home, &[("YARN_IGNORE_PATH", "1")]).unwrap(), replaced);
-        let launcher = delegation_key(&project, &home, "3.0.0", |_| None).unwrap();
+        let ignored = key(&project, &home, &[("YARN_IGNORE_PATH", "1")]).unwrap();
+        assert_ne!(ignored, replaced);
+        assert_eq!(key(&project, &home, &[("yarn_ignore_path", "1")]).unwrap(), ignored);
+        let launcher = delegation_key(&project, &home, "3.0.0", &[]).unwrap();
         assert_ne!(launcher, replaced, "another launcher version");
 
         fs::write(home.join(".yarnrc.yml"), "ignorePath: true\n").unwrap();
@@ -230,11 +273,21 @@ mod tests {
 
     #[test]
     fn path_settings_read_both_formats() {
-        let content =
-            "yarnPath: \".yarn/releases/a.cjs\"\n\"yarn-path\" 'b.js'\n  yarnPath: c.cjs  \n";
+        let content = [
+            "yarnPath: \".yarn/releases/a.cjs\"",
+            "\"yarn-path\" 'b.js'",
+            "  yarnPath: c.cjs  ",
+            "yarnPath: d.cjs # pinned",
+            "yarnPath: \"e # f.cjs\" # pinned",
+            "yarn-path g#h.js",
+            "yarnPathX: ignored.cjs",
+            "# yarnPath: ignored.cjs",
+            "yarnPath: # empty",
+        ]
+        .join("\n");
         assert_eq!(
-            path_settings(content).collect::<Vec<_>>(),
-            [".yarn/releases/a.cjs", "b.js", "c.cjs"]
+            path_settings(&content).collect::<Vec<_>>(),
+            [".yarn/releases/a.cjs", "b.js", "c.cjs", "d.cjs", "e # f.cjs", "g#h.js"]
         );
     }
 }
