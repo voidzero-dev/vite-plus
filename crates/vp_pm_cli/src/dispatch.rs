@@ -97,10 +97,7 @@ async fn dispatch_with_manager(
         }
         ManagerSource::Resolved(manager) => manager,
     };
-    // A Yarn found on PATH already reported its version from this directory.
-    if manager.client == PackageManagerType::Yarn && manager.is_managed() {
-        manager.version = crate::yarn_path::effective_version(cwd, &manager).await?;
-    }
+    crate::yarn_path::apply_effective_version(cwd, &mut manager).await?;
     let package_manager = manager.client;
     let why_hint_packages = command.why_hint_packages(package_manager).map(<[String]>::to_vec);
     let mut resolution = command.resolve_for_manager(&manager)?;

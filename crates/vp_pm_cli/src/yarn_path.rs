@@ -13,24 +13,25 @@ use vp_shared::{PrependOptions, ToolPathEnv};
 use vt_path::AbsolutePath;
 use vt_str::Str;
 
-use crate::{PackageManager, error::Error};
+use crate::{PackageManager, PackageManagerType, error::Error};
 
 /// Classic reads `.yarnrc`, Berry reads `.yarnrc.yml` or `YARN_RC_FILENAME`.
 const RC_FILE_NAMES: [&str; 2] = [".yarnrc.yml", ".yarnrc"];
 /// Classic spells the setting `yarn-path`, Berry spells it `yarnPath`.
 const PATH_SETTINGS: [&[u8]; 2] = [b"yarnPath", b"yarn-path"];
 
-/// Returns the version that the Yarn launcher in `manager` runs for `cwd`.
-pub(crate) async fn effective_version(
+pub(crate) async fn apply_effective_version(
     cwd: &AbsolutePath,
-    manager: &PackageManager,
-) -> Result<Str, Error> {
+    manager: &mut PackageManager,
+) -> Result<(), Error> {
+    if manager.client != PackageManagerType::Yarn || !manager.is_managed() {
+        return Ok(());
+    }
     let home = &vp_shared::EnvConfig::get().user_home;
     if may_delegate(cwd, home, std::env::vars_os()) {
-        query_version(cwd, manager).await
-    } else {
-        Ok(manager.version.clone())
+        manager.version = query_version(cwd, manager).await?;
     }
+    Ok(())
 }
 
 /// Whether an rc file or variable can make the launcher delegate. A false match
@@ -74,7 +75,6 @@ async fn query_version(cwd: &AbsolutePath, manager: &PackageManager) -> Result<S
         .args(prefix_args)
         .arg("--version")
         .envs(env.into_envs())
-        // User preloads can print to stdout; only the actual command should run them.
         .env_remove("NODE_OPTIONS")
         .output()
         .await?;
@@ -137,7 +137,6 @@ mod tests {
         };
         assert!(rc(&home, ".yarnrc.yml", b"yarnPath: /yarn.cjs\n"));
         assert!(rc(&project, ".yarnrc", b"yarn-path: \".yarn/releases/yarn.cjs\"\n"));
-        // Forms that a parser could miss still lead to a query.
         assert!(rc(&project, ".yarnrc.yml", b"yarnPath:\n  onConflict: reset\n  value: a.cjs\n"));
         assert!(rc(&project, ".yarnrc.yml", b"# caf\xe9\nyarnPath: ${RELEASE:-a}.cjs\n"));
 
@@ -145,5 +144,25 @@ mod tests {
         assert!(!check(&sub, &home, &[]));
         assert!(check(&sub, &home, &[("YARN_RC_FILENAME", ".custom.yml")]));
         assert!(check(&sub, &home, &[("yarn_rc_filename", ".custom.yml")]));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test(flavor = "current_thread")]
+    async fn version_query_ignores_node_preloads() {
+        use std::os::unix::fs::PermissionsExt;
+
+        // Like a `NODE_OPTIONS=--require` preload, the fake yarn prints before its version.
+        let (_dir, dir) = temp_dir();
+        let yarn = dir.join("yarn");
+        fs::write(&yarn, "#!/bin/sh\n[ -n \"$NODE_OPTIONS\" ] && echo preload\necho 3.8.7\n")
+            .unwrap();
+        fs::set_permissions(&yarn, fs::Permissions::from_mode(0o755)).unwrap();
+        let manager =
+            PackageManager::from_bin_prefix(PackageManagerType::Yarn, "2.4.2", dir.clone());
+
+        let vars = [("NODE_OPTIONS", Some(std::ffi::OsStr::new("--require ./preload.js")))];
+        let version =
+            vp_shared::EnvConfig::with_vars_async(vars, |_| query_version(&dir, &manager)).await;
+        assert_eq!(version.unwrap(), "3.8.7");
     }
 }
