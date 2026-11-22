@@ -151,6 +151,7 @@ Related rules:
 
 - A direct `vite` declaration is never removed merely because a root override exists.
 - Plain or stale aliases are normalized; named catalog references are kept.
+- When migration sets or removes a package's own pin (`"."`) in an npm or Bun override, child entries such as `overrides.vite.postcss` stay in `package.json`.
 - Under pnpm the managed override keys use an explicit `@*` range (`vite@*`, `vitest@*`). pnpm applies an override by replacing the declared spec on every manifest, importer manifests included. A bare key matches any spec, including `catalog:`, and `vp up` then rewrites that reference to a concrete version. The `@*` range keeps the override on the semver ranges that transitive and peer declarations use. It leaves `catalog:` references to the catalog, which already resolves them to Vite+ core. Migration re-keys a project that still holds the bare key, and keeps its named-catalog choice.
 - Bun mirrors its core alias as a direct dependency for its peer resolver, and npm browser-provider layouts may need a top-level `vite` edge so nested Vitest packages can resolve `vite`.
 
@@ -192,8 +193,6 @@ For browser mode, Vite+ bundles the base `@vitest/browser` runtime and `@vitest/
 Migration detects Playwright usage before it rewrites imports, including legacy `vitest/browser-playwright`, `vitest/browser/providers/playwright`, and `vitest/plugins/browser-playwright` aliases.
 
 `vp migrate` restores removed Vite+ WebDriverIO aliases to `@vitest/browser-webdriverio` and adds `^5.0.0` if the provider is missing. It upgrades older versions, narrows ranges that allow versions below `5.0.0`, updates referenced catalog entries, and removes overrides that force an older provider. Versions and ranges that meet the minimum stay unchanged. Migration ensures the required `webdriverio` peer and adds an `@vitest/browser` override matching bundled Vitest (`resolutions` for Yarn). You manage later community provider upgrades. See [Community WebDriverIO provider](./vitest-v5.md#community-webdriverio-provider).
-
-Object-valued nested npm and Bun overrides are preserved: they are user-defined scopes rather than scalar version pins.
 
 ## Source Rewrite Rules
 

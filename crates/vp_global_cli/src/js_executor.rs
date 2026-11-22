@@ -223,10 +223,9 @@ impl JsExecutor {
             }
 
             // 3. Check if project has any *valid* version source.
-            //    resolve_node_version returns Some for any non-empty value,
-            //    even invalid ones. We must validate before routing to
-            //    download_runtime_for_project, which falls to LTS on all-invalid
-            //    and would skip the user's configured default.
+            //    download_runtime_for_project falls to LTS when every source
+            //    is missing or invalid, and would skip the user's configured
+            //    default, so check before routing to it.
             let has_valid_project_source = has_valid_version_source(project_path).await?;
 
             let runtime = if has_valid_project_source {
@@ -500,9 +499,9 @@ fn local_vite_plus_is_older(local: &str, global: &str) -> bool {
 
 /// Check whether a project directory has at least one valid version source.
 ///
-/// Uses `is_valid_version` (no warning side effects) to avoid duplicate
+/// Runs the selection quietly (`warn_invalid = false`) to avoid duplicate
 /// warnings when `download_runtime_for_project` or `config::resolve_version`
-/// later call `normalize_version` on the same values.
+/// later run it with warnings on.
 ///
 /// Returns `false` when all sources are missing or invalid, so the caller
 /// can fall through to the user's configured default instead of LTS.

@@ -29,6 +29,7 @@ import { type NpmWorkspaces } from '../../utils/workspace.ts';
 import { editYamlFile, readYamlFile, scalarString, type YamlDocument } from '../../utils/yaml.ts';
 import {
   dropRemovePackageOverrideKeys,
+  ensurePackageJsonOverrides,
   ensurePnpmExoticSubdepsSetting,
   hasDirectVitePlusInstallEntry,
   isAlignableVitestEcosystemPackage,
@@ -86,8 +87,6 @@ const PNPM_MINIMUM_RELEASE_AGE_EXCLUDES = [
   '@voidzero-dev/*',
   'oxlint',
   '@oxlint/*',
-  'oxlint-tsgolint',
-  '@oxlint-tsgolint/*',
   'tsrs',
   '@tsrs/*',
   'oxfmt',
@@ -1105,11 +1104,27 @@ export function rewriteBunCatalog(
   }
   const managed = managedOverridePackages(usesVitest, usesWebdriverioProvider);
 
+  function rewriteCatalog(
+    target: Record<string, string>,
+    addMissing: boolean,
+    otherDefaultCatalog?: Record<string, string>,
+  ): void {
+    rewriteCatalogObject(
+      target,
+      addMissing,
+      usesVitest,
+      vitestEcosystemPackages,
+      catalogAdditions,
+      otherDefaultCatalog,
+    );
+    pruneLegacyWrapperAliases(target);
+  }
+
   editJsonFile<{
     workspaces?: NpmWorkspaces;
     catalog?: Record<string, string>;
     catalogs?: Record<string, Record<string, string>>;
-    overrides?: Record<string, string>;
+    overrides?: Record<string, unknown>;
   }>(packageJsonPath, (pkg) => {
     // Bun supports catalogs in both workspaces.catalog and top-level catalog;
     // prefer the location the user already chose to avoid moving their config.
@@ -1126,21 +1141,6 @@ export function rewriteBunCatalog(
       preferredName || mergeDefaults
         ? activeCatalogs.catalogs?.[preferredName || 'default']
         : undefined;
-    function rewriteCatalog(
-      target: Record<string, string>,
-      addMissing: boolean,
-      otherDefaultCatalog?: Record<string, string>,
-    ): void {
-      rewriteCatalogObject(
-        target,
-        addMissing,
-        usesVitest,
-        vitestEcosystemPackages,
-        catalogAdditions,
-        otherDefaultCatalog,
-      );
-      pruneLegacyWrapperAliases(target);
-    }
     if (!namedTarget || activeCatalogs.catalog) {
       const catalog = { ...activeCatalogs.catalog };
       rewriteCatalog(catalog, !namedTarget);
@@ -1158,29 +1158,19 @@ export function rewriteBunCatalog(
       }
     }
 
-    // bun overrides support catalog: references
-    const overrides: Record<string, string> = { ...pkg.overrides };
-    pruneLegacyWrapperAliases(overrides);
-    // Common case (no direct vitest): strip a lingering managed `vitest`
-    // override (string-valued only — a nested user override is left intact;
-    // removeManagedVitestEntry also no-ops when vitest is not a managed key).
-    if (!usesVitest && typeof overrides.vitest === 'string') {
-      removeManagedVitestEntry(overrides);
-    }
-    for (const [key, value] of Object.entries(managed)) {
-      const current = overrides[key] as unknown;
-      // A nested object value is a user override scoped under this managed key,
-      // not a version pin — leave it intact (getCatalogDependencySpec expects a
-      // string and would otherwise clobber it / throw on `.startsWith`).
-      if (current !== undefined && typeof current !== 'string') {
-        continue;
+    pruneLegacyWrapperAliases(pkg.overrides);
+    // Keep a named reference if the updated catalog supplies the target.
+    const resolveCatalog = readBunCatalogDependencyResolver(pkg, packageManagerVersion);
+    pkg.overrides = ensurePackageJsonOverrides(pkg.overrides, managed, (name, current, target) => {
+      if (name === '@vitest/browser') {
+        return target;
       }
-      overrides[key] =
-        key === '@vitest/browser'
-          ? value
-          : getCatalogDependencySpec(current, value, true, { preferredCatalogSpec });
-    }
-    pkg.overrides = overrides;
+      const catalogSpec =
+        current?.startsWith('catalog:') && resolveCatalog(current, name) === target
+          ? current
+          : preferredCatalogSpec;
+      return getCatalogDependencySpec(catalogSpec, target, true);
+    }).overrides;
 
     return pkg;
   });
@@ -1225,7 +1215,7 @@ export function rewriteRootWorkspacePackageJson(
   let movedPnpmSettings: Record<string, unknown> | undefined;
   editJsonFile<{
     resolutions?: Record<string, string>;
-    overrides?: Record<string, string>;
+    overrides?: Record<string, unknown>;
     devDependencies?: Record<string, string>;
     dependencies?: Record<string, string>;
     peerDependencies?: Record<string, string>;
@@ -1255,19 +1245,10 @@ export function rewriteRootWorkspacePackageJson(
         ...managed,
       };
     } else if (packageManager === PackageManager.npm) {
-      pkg.overrides = {
-        ...pkg.overrides,
-        ...managed,
-      };
+      pkg.overrides = ensurePackageJsonOverrides(pkg.overrides, managed).overrides;
     } else if (packageManager === PackageManager.bun) {
-      // bun overrides are handled in rewriteBunCatalog() with catalog: references
-      // when the workspace supports a catalog. Otherwise they stay concrete.
-      // The browser override has no catalog entry and was pruned above with
-      // stale bundled-package pins. Restore its current concrete version.
       if (!supportCatalog) {
-        pkg.overrides = { ...pkg.overrides, ...managed };
-      } else if (managed['@vitest/browser']) {
-        pkg.overrides = { ...pkg.overrides, '@vitest/browser': managed['@vitest/browser'] };
+        pkg.overrides = ensurePackageJsonOverrides(pkg.overrides, managed).overrides;
       }
       // Bun walks transitive peer-deps before resolving overrides; vitest 4.1.9
       // declares peer `vite ^6 || ^7 || ^8` and aborts unless `vite` is a direct

@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseAllDocuments, parse as parseYaml } from 'yaml';
 
 import { rewriteScripts } from '../../../binding/index.js';
-import { PackageManager } from '../../types/index.js';
+import { PackageManager, type WorkspaceInfo } from '../../types/index.js';
 import {
   SETUP_VP_VERSION,
   VITE_PLUS_OVERRIDE_PACKAGES,
@@ -1348,9 +1348,11 @@ describe('mergeViteConfigFiles — Svelte rune globals', () => {
   });
 });
 
-function writePkgAt(dir: string, pkg: object): void {
+function writePkgAt(dir: string, pkg: object): string {
   fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify(pkg));
+  const packageJsonPath = path.join(dir, 'package.json');
+  fs.writeFileSync(packageJsonPath, JSON.stringify(pkg));
+  return packageJsonPath;
 }
 
 describe('detectIncompatibleEslintIntegration', () => {
@@ -1698,7 +1700,7 @@ function makeWorkspaceInfo(
   rootDir: string,
   packageManager: PackageManager,
   version = '10.33.0',
-): import('../../types/index.js').WorkspaceInfo {
+): WorkspaceInfo {
   return {
     rootDir,
     isMonorepo: false,
@@ -1717,6 +1719,18 @@ function makeWorkspaceInfo(
     },
     packages: [],
   };
+}
+
+function checkBootstrapPass(workspace: WorkspaceInfo, expectedChange: boolean): void {
+  const { rootDir, packageManager, packages, packageManagerVersion } = workspace;
+  const pending = detectVitePlusBootstrapPending(
+    rootDir,
+    packageManager,
+    packages,
+    packageManagerVersion,
+  );
+  expect(pending).toBe(expectedChange);
+  expect(ensureVitePlusBootstrap(workspace).changed).toBe(expectedChange);
 }
 
 function readJson(filePath: string): Record<string, unknown> {
@@ -2020,12 +2034,6 @@ describe('ensureVitePlusBootstrap', () => {
   });
 
   it('keeps a bun WORKSPACE `catalog:` override instead of inlining it against a stale catalog', () => {
-    // Same ordering as the pnpm < 10.6.2 case: the override is reconciled against
-    // the still-stale in-memory catalog, so it is transiently inlined to the core
-    // alias. Unlike pnpm < 10.6.2 (which skipped the workspace rewrite, leaving the
-    // inline stuck until that bug was fixed), `rewriteBunCatalog` then rewrites the
-    // catalog AND re-catalogs the now-matching override back to `catalog:`, so the
-    // final result is correct. This test guards that self-heal.
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -2049,8 +2057,6 @@ describe('ensureVitePlusBootstrap', () => {
       overrides: Record<string, string>;
       catalog: Record<string, string>;
     };
-    // The vite override references the catalog (rewritten below), so it stays
-    // `catalog:` rather than being inlined against the stale pre-rewrite catalog.
     expect(pkg.overrides.vite).toBe('catalog:');
     // The catalog is rewritten off the stale core@0.1.0 alias.
     expect(pkg.catalog.vite).toContain('@voidzero-dev/vite-plus-core');
@@ -2117,6 +2123,44 @@ describe('ensureVitePlusBootstrap', () => {
     }
     // A second pass is a no-op: the standalone project is already settled.
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.bun)).toBe(false);
+  });
+
+  it.each([
+    { alias: VITE_PLUS_OVERRIDE_PACKAGES.vite, pending: false },
+    { alias: 'npm:@voidzero-dev/vite-plus-core@0.1.0', pending: true },
+  ])('preserves nested Bun overrides on upgrade from $alias', ({ alias, pending }) => {
+    const workspace = makeWorkspaceInfo(tmpDir, PackageManager.bun, '1.4.5');
+    const packageJsonPath = writePkgAt(tmpDir, {
+      name: 'app',
+      devDependencies: { vite: VITE_PLUS_OVERRIDE_PACKAGES.vite, 'vite-plus': 'latest' },
+      overrides: { vite: { '.': alias, postcss: '8.5.32' } },
+    });
+
+    for (const changed of [pending, false]) {
+      checkBootstrapPass(workspace, changed);
+      expect(readJson(packageJsonPath).overrides).toEqual({
+        vite: { '.': VITE_PLUS_OVERRIDE_PACKAGES.vite, postcss: '8.5.32' },
+      });
+    }
+  });
+
+  it('keeps the named catalog reference in nested Bun overrides when its alias changes', () => {
+    const workspace = makeWorkspaceInfo(tmpDir, PackageManager.bun, '1.4.5');
+    const packageJsonPath = writePkgAt(tmpDir, {
+      name: 'app',
+      workspaces: ['packages/*'],
+      devDependencies: { vite: 'catalog:', 'vite-plus': 'catalog:' },
+      catalog: { vite: VITE_PLUS_OVERRIDE_PACKAGES.vite, 'vite-plus': 'latest' },
+      catalogs: { build: { vite: 'npm:@voidzero-dev/vite-plus-core@0.1.0' } },
+      overrides: { vite: { '.': 'catalog:build', postcss: '8.5.32' } },
+    });
+
+    for (const changed of [true, false]) {
+      checkBootstrapPass(workspace, changed);
+      const pkg = readJson(packageJsonPath);
+      expect(pkg.overrides).toEqual({ vite: { '.': 'catalog:build', postcss: '8.5.32' } });
+      expect(pkg.catalogs).toEqual({ build: { vite: VITE_PLUS_OVERRIDE_PACKAGES.vite } });
+    }
   });
 
   it('keeps `catalog:` specs in a bun project whose `workspaces.packages` is empty (#3375)', () => {
@@ -2565,6 +2609,54 @@ describe('ensureVitePlusBootstrap', () => {
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(false);
   });
 
+  it('adds the Vite alias to a nested npm override and preserves its child overrides', () => {
+    const workspace = makeWorkspaceInfo(tmpDir, PackageManager.npm);
+    const rollup = { '.': '^4.0.0', fsevents: '^2.3.3' };
+    const vitest = { '@vitest/expect': '4.0.0' };
+    const packageJsonPath = writePkgAt(tmpDir, {
+      name: 'test',
+      devDependencies: { 'vite-plus': 'latest' },
+      overrides: { vite: { rollup }, vitest },
+    });
+
+    checkBootstrapPass(workspace, true);
+    expect(readJson(packageJsonPath).overrides).toEqual({
+      vite: { '.': VITE_PLUS_OVERRIDE_PACKAGES.vite, rollup },
+      vitest,
+    });
+    checkBootstrapPass(workspace, false);
+  });
+
+  it.each([
+    {
+      usage: 'with Vitest coverage',
+      devDependencies: { vitest: VITEST_VERSION, '@vitest/coverage-v8': VITEST_VERSION },
+      expected: { '.': VITEST_VERSION, '@vitest/expect': '4.0.0' },
+    },
+    {
+      usage: 'without direct Vitest usage',
+      devDependencies: {},
+      expected: { '@vitest/expect': '4.0.0' },
+    },
+  ])('reconciles a stale nested npm vitest override $usage', ({ devDependencies, expected }) => {
+    const workspace = makeWorkspaceInfo(tmpDir, PackageManager.npm);
+    const packageJsonPath = writePkgAt(tmpDir, {
+      name: 'test',
+      devDependencies: { 'vite-plus': 'latest', ...devDependencies },
+      overrides: {
+        vite: VITE_PLUS_OVERRIDE_PACKAGES.vite,
+        vitest: { '.': 'npm:@voidzero-dev/vite-plus-test@0.1.0', '@vitest/expect': '4.0.0' },
+      },
+    });
+
+    checkBootstrapPass(workspace, true);
+    expect(readJson(packageJsonPath).overrides).toEqual({
+      vite: VITE_PLUS_OVERRIDE_PACKAGES.vite,
+      vitest: expected,
+    });
+    checkBootstrapPass(workspace, false);
+  });
+
   it('replaces protocol-pinned migration targets in force-override mode', () => {
     const savedForceMigrate = process.env.VP_FORCE_MIGRATE;
     process.env.VP_FORCE_MIGRATE = '1';
@@ -2812,15 +2904,7 @@ describe('ensureVitePlusBootstrap', () => {
     expect(workspace.catalog['vite-plus']).toBe('latest');
   });
 
-  it('strips bundled tool deps (oxlint/oxlint-tsgolint/oxfmt/tsdown) from an existing Vite+ pnpm project so no `catalog:` reference dangles after the catalog drops them', () => {
-    // Regression for the upgrade path: the catalog rewrite deletes EVERY
-    // REMOVE_PACKAGES entry from the workspace catalog (catalog.ts), but the
-    // existing-Vite+ package.json reconcile only stripped the `@vitest/*`
-    // subset. That left `oxlint-tsgolint` (and the other bundled tools) as a
-    // `catalog:` reference whose catalog entry was just deleted, so the next
-    // `pnpm install` aborts with
-    // `[ERR_PNPM_CATALOG_ENTRY_NOT_FOUND_FOR_SPEC] No catalog entry
-    // 'oxlint-tsgolint' was found for catalog 'default'`.
+  it('removes bundled tools and the old lint backend from the manifest and catalog of an existing pnpm project', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -2854,9 +2938,6 @@ describe('ensureVitePlusBootstrap', () => {
     const pkg = readJson(path.join(tmpDir, 'package.json')) as {
       devDependencies: Record<string, string>;
     };
-    // The bundled toolchain packages are owned by vite-plus and must be removed
-    // from package.json (matching the catalog removal and the fresh path), so
-    // they leave no dangling `catalog:` reference behind.
     expect(pkg.devDependencies.oxfmt).toBeUndefined();
     expect(pkg.devDependencies.oxlint).toBeUndefined();
     expect(pkg.devDependencies['oxlint-tsgolint']).toBeUndefined();
@@ -2864,8 +2945,6 @@ describe('ensureVitePlusBootstrap', () => {
     // vite-plus itself stays a managed catalog dependency.
     expect(pkg.devDependencies['vite-plus']).toBe('catalog:');
 
-    // Both sides are consistent: the catalog no longer defines the bundled
-    // tools either, confirming no surviving `catalog:` reference dangles.
     const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
       catalog: Record<string, string>;
     };
@@ -6112,6 +6191,34 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(overrides).not.toHaveProperty('@vitest/browser-preview');
   });
 
+  it.each(['standalone', 'workspace'])(
+    'preserves nested npm overrides during a fresh %s migration',
+    (layout) => {
+      const workspace = makeWorkspaceInfo(tmpDir, PackageManager.npm);
+      workspace.isMonorepo = layout === 'workspace';
+      const packageJsonPath = writePkgAt(tmpDir, {
+        name: 'app',
+        workspaces: workspace.isMonorepo ? ['packages/*'] : undefined,
+        devDependencies: { vite: '^7.0.0', '@vitest/coverage-v8': '^4.0.0' },
+        overrides: {
+          vite: { rollup: { picomatch: '^4.0.0' } },
+          vitest: { '.': '^4.0.0', chai: '^5.0.0' },
+        },
+      });
+
+      if (workspace.isMonorepo) {
+        rewriteMonorepo(workspace, true, true);
+      } else {
+        rewriteStandaloneProject(tmpDir, workspace, true, true);
+      }
+
+      expect(readJson(packageJsonPath).overrides).toEqual({
+        vite: { '.': VITE_PLUS_OVERRIDE_PACKAGES.vite, rollup: { picomatch: '^4.0.0' } },
+        vitest: { '.': VITEST_VERSION, chai: '^5.0.0' },
+      });
+    },
+  );
+
   it('preserves a provider override scoped under an unrelated parent', () => {
     // npm/bun nested overrides are SCOPED: a provider pin under `some-pkg`
     // forces the provider only within some-pkg's subtree, NOT vite-plus's own
@@ -6455,34 +6562,36 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(overrides['some-pkg']).toEqual({});
   });
 
-  it('does not crash on a nested object value under a managed bun catalog override key', () => {
-    // Bun monorepo: a nested object value under a MANAGED override key (e.g.
-    // `vitest`) is a user override scoped under that key, not a version pin.
-    // The bun catalog rewrite must not pass it to getCatalogDependencySpec
-    // (which calls `.startsWith` and would crash / clobber it to a string).
-    fs.writeFileSync(
-      path.join(tmpDir, 'package.json'),
-      JSON.stringify({
-        name: 'bun-monorepo',
-        workspaces: ['packages/*'],
+  it.each(['standalone', 'workspace'])(
+    'preserves nested Bun overrides during a fresh %s migration and the following upgrade',
+    (layout) => {
+      const workspace = makeWorkspaceInfo(tmpDir, PackageManager.bun, '1.4.5');
+      workspace.isMonorepo = layout === 'workspace';
+      const packageJsonPath = writePkgAt(tmpDir, {
+        name: 'app',
+        workspaces: workspace.isMonorepo ? ['packages/*'] : undefined,
         devDependencies: { vite: '^7.0.0' },
-        overrides: {
-          vitest: { '@vitest/runner': '4.0.0' },
+        overrides: { vite: { postcss: '8.5.32' }, vitest: { '@vitest/runner': '4.0.0' } },
+      });
+
+      if (workspace.isMonorepo) {
+        rewriteMonorepo(workspace, true, true);
+      } else {
+        rewriteStandaloneProject(tmpDir, workspace, true, true);
+      }
+
+      const expected = {
+        vite: {
+          '.': workspace.isMonorepo ? 'catalog:' : VITE_PLUS_OVERRIDE_PACKAGES.vite,
+          postcss: '8.5.32',
         },
-      }),
-    );
-
-    expect(() =>
-      rewriteMonorepo(makeWorkspaceInfo(tmpDir, PackageManager.bun), true),
-    ).not.toThrow();
-
-    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
-      overrides?: Record<string, unknown>;
-    };
-    const overrides = pkg.overrides ?? {};
-    // The nested override object is left intact, not clobbered to a string.
-    expect(overrides.vitest).toEqual({ '@vitest/runner': '4.0.0' });
-  });
+        vitest: { '@vitest/runner': '4.0.0' },
+      };
+      expect(readJson(packageJsonPath).overrides).toEqual(expected);
+      checkBootstrapPass(workspace, false);
+      expect(readJson(packageJsonPath).overrides).toEqual(expected);
+    },
+  );
 
   it('drops stale @vitest/browser* overrides from pnpm-workspace.yaml', () => {
     // The migration moves provider packages out of project manifests and adds

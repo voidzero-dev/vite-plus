@@ -181,6 +181,14 @@ impl InstallArgs {
                 );
             }
         }
+        // `vp add` rejects these through a clap group; install flags can't use one because `--prod` and `--dev` are also install filters.
+        let save_targets = [self.prod, self.dev, self.save_peer, self.save_optional];
+        if adding_packages && save_targets.into_iter().filter(|&supplied| supplied).count() > 1 {
+            diagnostics.warn(
+                DiagnosticKind::UnsupportedOption,
+                "install with package names accepts only one of --prod, --dev, --save-peer, --save-optional.",
+            );
+        }
         if let Some(message) = diagnostics.unsupported_options_error() {
             return Ok(Resolution {
                 outcome: CommandResolution::InvalidArgument(message),
@@ -239,6 +247,13 @@ impl InstallArgs {
 impl Resolve<InstallArgs> for Npm {
     fn resolve(&self, args: &InstallArgs, _diag: &mut Diagnostics) -> CommandResolution {
         let use_ci = args.frozen_lockfile && !args.no_frozen_lockfile;
+        // `npm ci --package-lock-only` still empties `node_modules`, so a lockfile check uses a script-free dry run.
+        let check_lockfile = use_ci && args.lockfile_only;
+        if check_lockfile && !self.supports_read_only_ci_dry_run() {
+            return CommandResolution::InvalidArgument(
+                "--frozen-lockfile with --lockfile-only requires npm 11.16.0 or later.".to_string(),
+            );
+        }
         let mut cmd = CommandBuilder::new("npm");
         cmd.arg(if use_ci { "ci" } else { "install" });
         if self.supports_v7_commands() {
@@ -251,10 +266,11 @@ impl Resolve<InstallArgs> for Npm {
                 .arg_if("--no-optional", args.no_optional);
         }
         cmd.arg_if("--package-lock-only", args.lockfile_only && !use_ci)
+            .arg_if("--dry-run", check_lockfile)
             .arg_if("--prefer-offline", args.prefer_offline)
             .arg_if("--offline", args.offline)
             .arg_if("--force", args.force && !use_ci)
-            .arg_if("--ignore-scripts", args.ignore_scripts)
+            .arg_if("--ignore-scripts", args.ignore_scripts || check_lockfile)
             .arg_if("--no-package-lock", args.no_lockfile && !use_ci);
         if args.silent {
             cmd.arg("--loglevel").arg("silent");
@@ -403,6 +419,22 @@ mod tests {
             &[
                 "install with package names does not support --fix-lockfile.",
                 "install with package names does not support --resolution-only.",
+            ],
+        );
+    }
+
+    #[test]
+    fn install_with_packages_rejects_multiple_save_targets() {
+        let manager = crate::PackageManager::from_bin_prefix(
+            crate::PackageManagerType::Pnpm,
+            "11.24.0",
+            vt_path::current_dir().unwrap().join(".test-package-manager/bin"),
+        );
+        let args = parse_args::<InstallArgs>(["-O", "-D", "react"]).unwrap();
+        expect_unsupported(
+            args.resolve_for_manager(&manager).unwrap(),
+            &[
+                "install with package names accepts only one of --prod, --dev, --save-peer, --save-optional.",
             ],
         );
     }
@@ -578,6 +610,21 @@ mod tests {
         );
 
         assert_eq!(command.args, vec!["ci"]);
+    }
+
+    #[test]
+    fn npm_frozen_lockfile_only_requires_non_destructive_ci_dry_run() {
+        let args = InstallArgs { frozen_lockfile: true, lockfile_only: true, ..Default::default() };
+
+        let command = expect_run(resolve(&npm("11.16.0"), args.clone()).outcome);
+        assert_eq!(command.args, vec!["ci", "--dry-run", "--ignore-scripts"]);
+
+        for manager in [npm("11.15.0"), Npm::unknown_version()] {
+            expect_unsupported(
+                resolve(&manager, args.clone()),
+                &["--frozen-lockfile with --lockfile-only requires npm 11.16.0 or later."],
+            );
+        }
     }
 
     #[test]
@@ -1071,7 +1118,6 @@ mod tests {
                     frozen_lockfile: true,
                     dev: true,
                     force: true,
-                    lockfile_only: true,
                     no_lockfile: true,
                     ..Default::default()
                 },
