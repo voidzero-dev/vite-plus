@@ -8,6 +8,8 @@ steps = [
   { argv = ["vpt", "list-dir", "vite-plus-monorepo"], comment = "check files created", continue-on-failure = true },
   { argv = ["vpt", "print-file", "vite-plus-monorepo/package.json"], comment = "check package.json", continue-on-failure = true },
   { argv = ["vpt", "print-file", "vite-plus-monorepo/vite.config.ts"], comment = "check vite config has cache enabled", continue-on-failure = true },
+  { argv = ["vpt", "write-file", "vite-plus-monorepo/equality.js", "export const isMissing = (value) => value == null;"], snapshot = false },
+  { argv = ["vp", "lint", "--format", "unix", "equality.js"], cwd = "vite-plus-monorepo", comment = "the Cloudflare preset rejects loose equality with null", continue-on-failure = true },
   { argv = ["vpt", "print-file", "vite-plus-monorepo/pnpm-workspace.yaml"], comment = "check workspace config", continue-on-failure = true },
   { argv = ["vpt", "stat-file", "vite-plus-monorepo/.gitignore", "--assert", "file"], comment = "verify gitignore renamed from _gitignore", continue-on-failure = true },
   { argv = ["vpt", "stat-file", "vite-plus-monorepo/.yarnrc.yml", "--assert-not", "file"], comment = "verify no yarn config for pnpm", continue-on-failure = true },

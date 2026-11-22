@@ -12,6 +12,9 @@
     "ready": "vp check && vp run -r test && vp run -r build",
     "dev": "vp run website#dev"
   },
+  "devDependencies": {
+    "@cloudflare/oxlint-config": "https://github.com/cloudflare/oxlint-config/archive/d6b32c7a334d6215a3eddc92f4d856a724f054ab.tar.gz"
+  },
   "engines": {
     "node": ">=22.18.0"
   }

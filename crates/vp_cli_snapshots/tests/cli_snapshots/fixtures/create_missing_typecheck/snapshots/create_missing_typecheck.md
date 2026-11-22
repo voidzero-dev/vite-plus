@@ -35,6 +35,7 @@ create monorepo
 check monorepo root vite.config.ts has typeAware and typeCheck
 
 ```
+import cloudflare from "@cloudflare/oxlint-config/vite-plus";
 import { defineConfig } from "vite-plus";
 
 export default defineConfig({
@@ -43,9 +44,19 @@ export default defineConfig({
   },
   fmt: {},
   lint: {
+    extends: [cloudflare],
+    env: cloudflare.env,
+    ignorePatterns: cloudflare.ignorePatterns,
+    options: { typeCheck: true },
     jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
     rules: { "vite-plus/prefer-vite-plus-imports": "error" },
-    options: { typeAware: true, typeCheck: true },
+    overrides: [
+      {
+        // The create-vite demo asserts that its two DOM elements exist.
+        files: ["apps/website/src/main.ts"],
+        rules: { "typescript/no-non-null-assertion": "off" },
+      },
+    ],
   },
   run: {
     cache: true,

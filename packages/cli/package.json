@@ -369,6 +369,7 @@
     "vitest": "catalog:"
   },
   "devDependencies": {
+    "@cloudflare/oxlint-config": "catalog:",
     "@emnapi/core": "catalog:",
     "@emnapi/runtime": "catalog:",
     "@napi-rs/cli": "catalog:",

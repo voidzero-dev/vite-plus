@@ -36,6 +36,7 @@ check package.json
     "prepare": "vp config"
   },
   "devDependencies": {
+    "@cloudflare/oxlint-config": "https://github.com/cloudflare/oxlint-config/archive/d6b32c7a334d6215a3eddc92f4d856a724f054ab.tar.gz",
     "vite-plus": "catalog:"
   },
   "devEngines": {
@@ -56,6 +57,7 @@ check package.json
 check vite config has cache enabled
 
 ```
+import cloudflare from "@cloudflare/oxlint-config/vite-plus";
 import { defineConfig } from "vite-plus";
 
 export default defineConfig({
@@ -64,14 +66,41 @@ export default defineConfig({
   },
   fmt: {},
   lint: {
+    extends: [cloudflare],
+    env: cloudflare.env,
+    ignorePatterns: cloudflare.ignorePatterns,
+    options: { typeCheck: true },
     jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
     rules: { "vite-plus/prefer-vite-plus-imports": "error" },
-    options: { typeAware: true, typeCheck: true },
+    overrides: [
+      {
+        // The create-vite demo asserts that its two DOM elements exist.
+        files: ["apps/website/src/main.ts"],
+        rules: { "typescript/no-non-null-assertion": "off" },
+      },
+    ],
   },
   run: {
     cache: true,
   },
 });
+```
+
+## `vpt write-file vite-plus-monorepo/equality.js 'export const isMissing = (value) => value == null;'`
+
+
+## `cd vite-plus-monorepo && vp lint --format unix equality.js`
+
+the Cloudflare preset rejects loose equality with null
+
+**Exit code:** 1
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+equality.js:1:43: Expected === and instead saw == [Error/eslint(eqeqeq)]
+
+1 problem
 ```
 
 ## `vpt print-file vite-plus-monorepo/pnpm-workspace.yaml`
@@ -408,6 +437,7 @@ check package.json
     "prepare": "vp config"
   },
   "devDependencies": {
+    "@cloudflare/oxlint-config": "https://github.com/cloudflare/oxlint-config/archive/d6b32c7a334d6215a3eddc92f4d856a724f054ab.tar.gz",
     "vite-plus": "catalog:"
   },
   "devEngines": {
