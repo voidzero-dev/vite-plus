@@ -10,8 +10,6 @@ vp remove -g --dry-run typescript
 
 ## Options
 
-With npm, `-D`, `-O`, and `-P` do not limit removal to the selected dependency section.
-
 | Option                 | Description                                              | Notes                                                                        |
 | ---------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | `-D, --save-dev`       | On pnpm, target `devDependencies`.                       |                                                                              |
@@ -33,20 +31,18 @@ The commands below describe project operations. Global mode is described under [
 - **Yarn Modern:** `yarn remove`.
 - **Bun:** `bun remove`.
 
-| Option                 | npm             | pnpm | Yarn Classic | Yarn Modern | Bun          | Notes                            |
-| ---------------------- | --------------- | ---- | ------------ | ----------- | ------------ | -------------------------------- |
-| `-D, --save-dev`       | Yes             | Yes  | No           | No          | No           | npm can remove across sections.  |
-| `-O, --save-optional`  | Yes             | Yes  | No           | No          | No           | npm can remove across sections.  |
-| `-P, --save-prod`      | Yes             | Yes  | No           | No          | No           | npm can remove across sections.  |
-| `--filter <pattern>`   | 7.14.0 or later | Yes  | One filter   | Yes         | 1.4 or later |                                  |
-| `-w, --workspace-root` | 8.1.0 or later  | Yes  | No           | No          | No           |                                  |
-| `-r, --recursive`      | 8.1.0 or later  | Yes  | No           | Yes         | No           | npm includes the workspace root. |
-| `-g, --global`         | Yes             | Yes  | Yes          | Yes         | Yes          |                                  |
-| `--dry-run`            | Yes             | Yes  | Yes          | Yes         | Yes          |                                  |
+| Option                 | npm             | pnpm | Yarn Classic | Yarn Modern | Bun          | Notes                                                                   |
+| ---------------------- | --------------- | ---- | ------------ | ----------- | ------------ | ----------------------------------------------------------------------- |
+| `-D, --save-dev`       | Yes             | Yes  | No           | No          | No           | npm also removes the package if it is listed only in `dependencies`.    |
+| `-O, --save-optional`  | Yes             | Yes  | No           | No          | No           | npm also removes the package if it is listed only in `dependencies`.    |
+| `-P, --save-prod`      | Yes             | Yes  | No           | No          | No           | npm also removes the package if it is listed only in `devDependencies`. |
+| `--filter <pattern>`   | 7.14.0 or later | Yes  | One filter   | Yes         | 1.4 or later |                                                                         |
+| `-w, --workspace-root` | 8.1.0 or later  | Yes  | No           | No          | No           |                                                                         |
+| `-r, --recursive`      | 8.1.0 or later  | Yes  | No           | Yes         | No           | npm includes the workspace root.                                        |
+| `-g, --global`         | Yes             | Yes  | Yes          | Yes         | Yes          |                                                                         |
+| `--dry-run`            | Yes             | Yes  | Yes          | Yes         | Yes          |                                                                         |
 
 When pnpm removes a dependency, it can also remove the same package from `peerDependencies`.
-
-With npm, if `package.json` lists `vite` only in `dependencies`, `vp remove -D vite` removes it from `dependencies`.
 
 ## Native Options
 
