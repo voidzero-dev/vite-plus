@@ -25,6 +25,10 @@ type MockNode =
   | { kind: 'file'; content: string }
   | { kind: 'symlink'; target: string };
 
+function enoent(filePath: fs.PathLike) {
+  return Object.assign(new Error(`ENOENT: no such file "${String(filePath)}"`), { code: 'ENOENT' });
+}
+
 class InMemoryFs {
   private readonly nodes = new Map<string, MockNode>();
 
@@ -32,8 +36,14 @@ class InMemoryFs {
     this.ensureDirectory(path.parse(process.cwd()).root);
   }
 
+  // Like fs.existsSync, follows symlinks: a dangling symlink does not exist.
   existsSync(filePath: fs.PathLike): boolean {
-    return this.nodes.has(this.normalize(filePath));
+    try {
+      this.resolvePath(filePath);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   lstatSync(filePath: fs.PathLike): fs.Stats {
@@ -58,7 +68,7 @@ class InMemoryFs {
     const resolvedPath = this.resolvePath(filePath);
     const node = this.nodes.get(resolvedPath);
     if (!node || node.kind !== 'file') {
-      throw new Error(`ENOENT: no such file "${String(filePath)}"`);
+      throw enoent(filePath);
     }
     return node.content;
   }
@@ -89,6 +99,11 @@ class InMemoryFs {
 
   async symlink(target: string, filePath: fs.PathLike): Promise<void> {
     const normalizedPath = this.normalize(filePath);
+    if (this.nodes.has(normalizedPath)) {
+      throw Object.assign(new Error(`EEXIST: file already exists "${String(filePath)}"`), {
+        code: 'EEXIST',
+      });
+    }
     this.ensureDirectory(path.dirname(normalizedPath));
     this.nodes.set(normalizedPath, { kind: 'symlink', target });
   }
@@ -104,7 +119,7 @@ class InMemoryFs {
   async unlink(filePath: fs.PathLike): Promise<void> {
     const normalizedPath = this.normalize(filePath);
     if (!this.nodes.has(normalizedPath)) {
-      throw new Error(`ENOENT: no such file "${String(filePath)}"`);
+      throw enoent(filePath);
     }
     this.nodes.delete(normalizedPath);
   }
@@ -113,7 +128,7 @@ class InMemoryFs {
     const resolvedPath = this.resolvePath(filePath);
     const node = this.nodes.get(resolvedPath);
     if (!node || node.kind !== 'file') {
-      throw new Error(`ENOENT: no such file "${String(filePath)}"`);
+      throw enoent(filePath);
     }
     return node.content;
   }
@@ -142,7 +157,7 @@ class InMemoryFs {
     const normalizedPath = this.normalize(filePath);
     const node = this.nodes.get(normalizedPath);
     if (!node) {
-      throw new Error(`ENOENT: no such file "${String(filePath)}"`);
+      throw enoent(filePath);
     }
     return node;
   }
@@ -174,7 +189,7 @@ class InMemoryFs {
     while (true) {
       const node = this.nodes.get(current);
       if (!node) {
-        throw new Error(`ENOENT: no such file "${String(filePath)}"`);
+        throw enoent(filePath);
       }
       if (node.kind !== 'symlink') {
         return current;
@@ -477,6 +492,23 @@ describe('writeAgentInstructions symlink behavior', () => {
       path.join(dir, 'AGENTS.md'),
       path.join(dir, '.github', 'copilot-instructions.md'),
     );
+  });
+
+  it('relinks a dangling agent file symlink to AGENTS.md', async () => {
+    const dir = await createProjectDir();
+    const claudePath = path.join(dir, 'CLAUDE.md');
+    await mockFs.symlink(path.join('..', 'shared', 'CLAUDE.md'), claudePath);
+    expect(mockFs.existsSync(claudePath)).toBe(false);
+
+    await writeAgentInstructions({
+      projectRoot: dir,
+      targetPaths: ['AGENTS.md', 'CLAUDE.md'],
+      interactive: false,
+    });
+
+    expect(mockFs.isSymlink(claudePath)).toBe(true);
+    expect(mockFs.readlinkSync(claudePath)).toBe('AGENTS.md');
+    expect(await mockFs.readText(claudePath)).toContain('template block');
   });
 
   it('does not replace existing non-symlink files with symlinks', async () => {
