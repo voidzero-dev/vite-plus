@@ -2,7 +2,7 @@
 
 ## `vp migrate --no-interactive`
 
-nested Vitest override is user-owned and not pending removal
+add the Vite alias to the nested override
 
 ```
 VITE+ - The Unified Toolchain for the Web
@@ -17,7 +17,7 @@ VITE+ - The Unified Toolchain for the Web
 
 ## `vpt print-file package.json`
 
-object-valued override is preserved
+preserve the Rollup and Vitest runner overrides
 
 ```
 {
@@ -26,7 +26,10 @@ object-valued override is preserved
     "vite-plus": "<version>"
   },
   "overrides": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@<version>",
+    "vite": {
+      "rollup": "^4.0.0",
+      ".": "npm:@voidzero-dev/vite-plus-core@<version>"
+    },
     "vitest": {
       "@vitest/runner": "<version>"
     }
