@@ -197,8 +197,6 @@ pub async fn install(
         };
 
     let node_bin_dir = runtime.get_bin_prefix();
-    let npm_path =
-        if cfg!(windows) { node_bin_dir.join("npm.cmd") } else { node_bin_dir.join("npm") };
 
     // 4. Install packages in parallel
     let packages_count = packages.len();
@@ -238,7 +236,6 @@ pub async fn install(
                         resolved_specs
                             .and_then(|specs| specs.get(package.spec))
                             .map_or(package.spec, String::as_str),
-                        &npm_path,
                         &node_bin_dir,
                         ignore_scripts,
                     )
@@ -520,7 +517,6 @@ pub async fn install(
 async fn install_one(
     package_name: &str,
     package_spec: &str,
-    npm_path: &AbsolutePathBuf,
     node_bin_dir: &AbsolutePathBuf,
     ignore_scripts: bool,
 ) -> Result<(InstalledPackage, File), Error> {
@@ -532,24 +528,13 @@ async fn install_one(
 
     // 2. Run npm install with prefix set to the final installation directory.
     //    Pipe stdout/stderr so npm output is hidden on success, shown on failure
-    let mut env = ToolPathEnv::from_env();
-    env.prepend(node_bin_dir, &["node", "npm", "npx"], PrependOptions::default())?;
-    let mut command = Command::new(npm_path.as_path());
+    let mut command = npm_global_command(node_bin_dir, &install_dir)?;
     command.args(["install", "-g", "--no-fund", &package_spec]);
     if ignore_scripts {
         command.arg("--ignore-scripts");
     }
-    let output = command
-        .env("npm_config_prefix", install_dir.as_path())
-        .env("npm_config_update_notifier", "false")
-        .envs(env.into_envs())
-        // The spinner's raw stdin would be restored by Node when npm exits.
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true)
-        .output()
-        .await?;
+    let output =
+        command.stdout(Stdio::piped()).stderr(Stdio::piped()).kill_on_drop(true).output().await?;
 
     if !output.status.success() {
         // Show captured output to help debug the failure. npm's stdout joins
@@ -626,6 +611,25 @@ async fn install_one(
         InstalledPackage { installed_version, bin_names, js_bins, install_id, install_dir },
         lock_file,
     ))
+}
+
+/// npm run from `node_bin_dir` against a managed global prefix, so commands
+/// read the same npm configuration as a managed install.
+pub(super) fn npm_global_command(
+    node_bin_dir: &AbsolutePathBuf,
+    prefix: &AbsolutePath,
+) -> Result<Command, Error> {
+    let mut env = ToolPathEnv::from_env();
+    env.prepend(node_bin_dir, &["node", "npm", "npx"], PrependOptions::default())?;
+    let npm = node_bin_dir.join(if cfg!(windows) { "npm.cmd" } else { "npm" });
+    let mut command = Command::new(npm.as_path());
+    command
+        .env("npm_config_prefix", prefix.as_path())
+        .env("npm_config_update_notifier", "false")
+        .envs(env.into_envs())
+        // The spinner's raw stdin would be restored by Node when npm exits.
+        .stdin(Stdio::null());
+    Ok(command)
 }
 
 pub(super) fn new_install_id() -> String {

@@ -2,19 +2,22 @@
 
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
-    process::{ExitStatus, Stdio},
+    process::ExitStatus,
 };
 
 use console::style;
 use futures::{StreamExt, stream};
 use serde::Serialize;
-use tokio::process::Command;
 use vp_js_runtime::{JsRuntime, JsRuntimeType, download_runtime};
 use vp_pm_cli::OutdatedFormat;
-use vp_shared::{PrependOptions, ToolPathEnv, progress::Progress};
+use vp_shared::progress::Progress;
 use vt_path::current_dir;
 
-use super::{alias_target, install::new_install_id, parse_package_spec};
+use super::{
+    alias_target,
+    install::{new_install_id, npm_global_command},
+    parse_package_spec,
+};
 use crate::{
     cli::exit_status,
     commands::env::{
@@ -25,7 +28,7 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub struct OutdatedPackage {
+pub struct ResolvedPackage {
     pub name: String,
     /// Versions of npm aliases carry the aliased package name (`other@1.0.0`).
     pub current: String,
@@ -44,7 +47,7 @@ pub struct OutdatedPackage {
 }
 
 pub struct VersionReport {
-    pub packages: Vec<OutdatedPackage>,
+    pub packages: Vec<ResolvedPackage>,
     pub failures: Vec<(String, String)>,
 }
 
@@ -74,35 +77,21 @@ async fn lookup_versions(
     let wildcard = query.strip_suffix("@*").map(|name| format!("{name}@x"));
     let query = wildcard.as_deref().unwrap_or(query);
 
-    let bin = runtime.get_bin_prefix();
-    let mut env = ToolPathEnv::from_env();
-    env.prepend(&bin, &["node", "npm", "npx"], PrependOptions::default())?;
-    let npm = bin.join(if cfg!(windows) { "npm.cmd" } else { "npm" });
-    let mut command = Command::new(npm.as_path());
+    // A managed install overrides the caller's prefix with a fresh package installation directory.
+    let prefix = PackageMetadata::installation_dir_for(&name, &new_install_id())?;
+    let mut command = npm_global_command(&runtime.get_bin_prefix(), &prefix)?;
     command.args(["view", "--global", "--json", query, "version"]);
     if mode == LookupMode::WantedAndLatest {
         command.arg("dist-tags.latest");
     }
-    // A managed install overrides the caller's prefix with a fresh package installation directory.
-    let prefix = PackageMetadata::installation_dir_for(&name, &new_install_id())?;
-    let output = command
-        .env("npm_config_prefix", prefix.as_path())
-        .envs(env.into_envs())
-        .stdin(Stdio::null())
-        .output()
-        .await?;
-    if !output.status.success() {
+    let output = command.output().await?;
+    let parsed = if output.status.success() {
+        parse_view_versions(&output.stdout, mode).map_err(|error| error.to_string())
+    } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(Error::Other(
-            format!(
-                "npm view failed for {query}: {}",
-                stderr.lines().next().unwrap_or("registry lookup failed")
-            )
-            .into(),
-        ));
-    }
-
-    let (wanted, latest) = parse_view_versions(&output.stdout, mode)
+        Err(stderr.lines().next().unwrap_or("registry lookup failed").to_string())
+    };
+    let (wanted, latest) = parsed
         .map_err(|error| Error::Other(format!("npm view failed for {query}: {error}").into()))?;
     Ok(RegistryVersions {
         alias_target: version_spec.as_deref().and_then(alias_target),
@@ -235,7 +224,7 @@ pub async fn resolve_package_versions(
             None => format!("{}@{wanted}", package.name),
         };
 
-        packages.push(OutdatedPackage {
+        packages.push(ResolvedPackage {
             name: package.name,
             current,
             wanted,
@@ -303,7 +292,7 @@ pub async fn execute(
     Ok(exit_status(1))
 }
 
-fn print_json(packages: &[OutdatedPackage]) -> Result<(), Error> {
+fn print_json(packages: &[ResolvedPackage]) -> Result<(), Error> {
     let mut output = BTreeMap::new();
 
     for package in packages {
@@ -328,7 +317,7 @@ fn print_json(packages: &[OutdatedPackage]) -> Result<(), Error> {
     Ok(())
 }
 
-fn print_list(packages: &[OutdatedPackage], long: bool) {
+fn print_list(packages: &[ResolvedPackage], long: bool) {
     for (index, package) in packages.iter().enumerate() {
         if index > 0 {
             vp_shared::output::print_stdout_line(format_args!(""));
@@ -373,7 +362,7 @@ fn print_list(packages: &[OutdatedPackage], long: bool) {
     }
 }
 
-fn print_table(packages: &[OutdatedPackage], long: bool) {
+fn print_table(packages: &[ResolvedPackage], long: bool) {
     let col_pkg = "Package";
     let col_current = "Current";
     let col_wanted = "Wanted";

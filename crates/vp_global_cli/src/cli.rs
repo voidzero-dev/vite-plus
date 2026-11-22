@@ -955,18 +955,18 @@ async fn managed_update(
     // nonzero so scripts can tell.
     let incomplete = !report.failures.is_empty();
     let mut resolved_specs = HashMap::new();
+    let mut up_to_date = HashSet::new();
     for package in report.packages {
-        if package.wanted != package.current {
+        if package.wanted == package.current {
+            up_to_date.insert(package.spec.clone());
+        } else {
             to_update.push(package.spec.clone());
         }
         resolved_specs.insert(package.spec, package.install_spec);
     }
 
-    let outdated_specs = to_update.iter().map(String::as_str).collect::<HashSet<_>>();
-    node_mismatches.retain(|package| {
-        resolved_specs.contains_key(&package.spec)
-            && !outdated_specs.contains(package.spec.as_str())
-    });
+    // Outdated packages already reinstall; failed lookups have no resolved version.
+    node_mismatches.retain(|package| up_to_date.contains(&package.spec));
 
     if should_reinstall_node_mismatches(
         &node_mismatches,
