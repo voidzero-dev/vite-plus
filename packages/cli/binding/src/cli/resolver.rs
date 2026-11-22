@@ -290,10 +290,8 @@ pub(super) fn cache_config_for(subcommand: &SynthesizableSubcommand) -> UserCach
     let enabled = |env: Option<&[&str]>, input: Option<Vec<UserInputEntry>>| {
         UserCacheConfig::with_config(EnabledCacheConfig {
             env: env.map(|names| names.iter().copied().map(Str::from).collect()),
-            untracked_env: None,
             input,
-            output: None,
-            remote: None,
+            ..EnabledCacheConfig::default()
         })
     };
     match subcommand {
