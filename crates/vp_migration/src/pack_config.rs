@@ -72,11 +72,10 @@ pub(crate) fn rewrite_inline_pack_types(content: &str, file: &Path) -> Option<St
         return None;
     }
     let grep = SupportLang::TypeScript.ast_grep(content);
-    let types = inline_pack_type_ranges(&grep.root());
+    let mut types = inline_pack_type_ranges(&grep.root());
     if types.is_empty() {
         return None;
     }
-    let contains = |start| types.iter().any(|range| range.contains(&(start as usize)));
     let allocator = Allocator::default();
     let parsed = Parser::new(&allocator, content, source_type.with_module(true)).parse();
     if !parsed.diagnostics.is_empty() {
@@ -88,6 +87,32 @@ pub(crate) fn rewrite_inline_pack_types(content: &str, file: &Path) -> Option<St
     }
     let semantic = analyzed.semantic;
     let scoping = semantic.scoping();
+    // Follow local aliases only when all their references already belong to
+    // pack. An alias used by standalone code still describes the old toolchain.
+    let contains = |ranges: &[Range<usize>], start| {
+        ranges.iter().any(|range| range.contains(&(start as usize)))
+    };
+    while let Some(span) = semantic.nodes().iter().find_map(|node| {
+        let AstKind::TSTypeAliasDeclaration(alias) = node.kind() else { return None };
+        if matches!(semantic.nodes().parent_kind(node.id()), AstKind::ExportNamedDeclaration(_)) {
+            return None;
+        }
+        let span = alias.type_annotation.span();
+        if contains(&types, span.start) {
+            return None;
+        }
+        let symbol = alias.id.symbol_id.get()?;
+        let mut references = scoping.get_resolved_references(symbol).peekable();
+        (references.peek().is_some()
+            && references.all(|reference| {
+                reference.is_type()
+                    && contains(&types, semantic.nodes().kind(reference.node_id()).span().start)
+            }))
+        .then_some(span)
+    }) {
+        types.push(span.start as usize..span.end as usize);
+    }
+    let contains = |start| contains(&types, start);
     let mut edits = Vec::new();
     for statement in &parsed.program.body {
         let Statement::ImportDeclaration(import) = statement else { continue };
@@ -935,6 +960,26 @@ export default defineConfig({ pack: [
         assert!(actual.contains("(options: Options) => build(options)"), "{actual}");
         assert!(!actual.contains("satisfies Options"), "{actual}");
         assert_eq!(actual.matches("import('vite-plus/pack').UserConfig").count(), 2, "{actual}");
+        assert!(rewrite_inline_pack_types(&actual, file).is_none(), "{actual}");
+    }
+
+    #[test]
+    fn uses_bundled_types_through_local_pack_aliases() {
+        let file = Path::new("vite.config.ts");
+        let input = "
+import type { UserConfig } from 'tsdown';
+export type ReleaseOptions = UserConfig;
+type BasePackOptions = Omit<UserConfig, 'workspace'>;
+type PackOptions = BasePackOptions;
+export default { pack: { entry: 'src/index.ts' } satisfies PackOptions };
+";
+        let actual = rewrite_inline_pack_types(input, file).unwrap();
+        assert!(actual.contains("export type ReleaseOptions = UserConfig"), "{actual}");
+        assert!(
+            actual.contains("Omit<import('vite-plus/pack').UserConfig, 'workspace'>"),
+            "{actual}"
+        );
+        assert!(actual.contains("satisfies PackOptions"), "{actual}");
         assert!(rewrite_inline_pack_types(&actual, file).is_none(), "{actual}");
     }
 

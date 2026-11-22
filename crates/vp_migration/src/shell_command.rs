@@ -208,7 +208,8 @@ fn collect_commands<'a>(
     let kind = node.kind();
     match kind.as_ref() {
         "program" | "list" | "pipeline" | "if_statement" | "elif_clause" | "else_clause"
-        | "while_statement" | "do_group" | "subshell" | "compound_statement"
+        | "while_statement" | "do_group" | "subshell" | "compound_statement" | "case_statement"
+        | "case_item"
             if detect_dependencies || matches!(kind.as_ref(), "program" | "list") =>
         {
             for child in node.children() {
@@ -418,6 +419,18 @@ mod tests {
             assert_eq!(prefix_values(source), expected, "{source}");
             assert_eq!(parse_literal_commands(source, true), None, "{source}");
         }
+    }
+
+    #[test]
+    fn reads_case_commands_without_treating_patterns_as_commands() {
+        let source =
+            r#"case "$TARGET" in vpx|legacy) echo vpx ;; web) vpx ./build.ts ;; *) vp fmt; esac"#;
+        assert_eq!(
+            prefix_values(source),
+            [vec!["echo", "vpx"], vec!["vpx", "./build.ts"], vec!["vp", "fmt"]]
+        );
+        assert!(!parse_literal_command_prefixes(source).unwrap().success_chain);
+        assert!(parse_literal_commands(source, true).is_none());
     }
 
     #[test]

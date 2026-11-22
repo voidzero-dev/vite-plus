@@ -1196,6 +1196,30 @@ export default defineConfig(({ command }) => {
   });
 
   it.each([
+    "import pack, { buildId } from './tsdown.config.ts';",
+    "import pack from './tsdown.config.ts'; import { buildId } from './tsdown.config.ts';",
+  ])('keeps an evaluated export in the same module as pack (%s)', (imports) => {
+    const tsdown = path.join(tmpDir, 'tsdown.config.ts');
+    const original =
+      "import { randomUUID } from 'node:crypto';\n" +
+      'export const buildId = JSON.stringify(randomUUID());\n' +
+      "export default { publicDir: 'public', define: { __BUILD_ID__: buildId } };\n";
+    fs.writeFileSync(tsdown, original);
+    const vite = path.join(tmpDir, 'vite.config.ts');
+    const source = `${imports}\nexport default { pack, define: { __BUILD_ID__: buildId } };\n`;
+    fs.writeFileSync(vite, source);
+    const report = createMigrationReport();
+
+    expect(mergeTsdownConfigFile(tmpDir, true, report, true)).toBe(false);
+    expect(fs.readFileSync(vite, 'utf8')).toBe(source);
+    expect(fs.readFileSync(tsdown, 'utf8')).toBe(original);
+    expect(fs.existsSync(path.join(tmpDir, 'vite-pack.config.ts'))).toBe(false);
+    expect(report.warnings).toContainEqual(
+      expect.stringContaining('without evaluating its shared exports again'),
+    );
+  });
+
+  it.each([
     ['pack', 'pack: vitePackConfig2'],
     ['pack: [pack, cliConfig]', 'pack: [vitePackConfig2, cliConfig]'],
     [
@@ -2243,6 +2267,18 @@ export default defineConfig(({ command }) => {
     ],
     [
       'const cli = configs.find(config => config.publicDir === "public"); if (cli) cli.outDir = "release";',
+      'retained',
+    ],
+    [
+      'const cli = configs.find(config => config.name === "cli") ?? configs[0]; cli.outDir = "release";',
+      'converted',
+    ],
+    [
+      'const cli = configs.find(config => config.name === "cli") || configs[0]; cli.outDir = "release";',
+      'converted',
+    ],
+    [
+      'const cli = configs.find(config => config.publicDir === "public") ?? configs[0]; cli.outDir = "release";',
       'retained',
     ],
     [

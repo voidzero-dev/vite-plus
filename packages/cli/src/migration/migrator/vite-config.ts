@@ -1620,7 +1620,7 @@ function packMutationReferences(
   const aliasInitializers = new Map<number, number>();
   const entryAliases = new Map<number, { origin: number; fallback: boolean }>();
   const arrayOrigins = new Map<number, number[]>();
-  const foundOptions = new Map<number, number>();
+  const foundOptions = new Map<number, number[]>();
   const filteredOptions = new Map<number, number>();
   const guards = new Set<number>();
   const arrayLengths = new Set<number>();
@@ -1717,24 +1717,31 @@ function packMutationReferences(
             const initializer = init && unwrapTypeExpression(init);
             const selection = initializer && mutationArrayReference(initializer);
             const at = initializer && packArrayAt(initializer);
-            const find =
-              initializer?.type === 'CallExpression' &&
-              initializer.callee.type === 'MemberExpression' &&
-              memberName(initializer.callee) === 'find'
-                ? {
-                    array: unwrapTypeExpression(initializer.callee.object),
-                    callback:
-                      initializer.arguments.length === 1
-                        ? packCallbackResult(initializer.arguments[0])
-                        : undefined,
-                  }
-                : undefined;
             const fallback =
               initializer?.type === 'LogicalExpression' &&
               (initializer.operator === '??' || initializer.operator === '||')
                 ? initializer
                 : undefined;
             const member = fallback ? unwrapTypeExpression(fallback.left) : initializer;
+            const find =
+              member?.type === 'CallExpression' &&
+              member.callee.type === 'MemberExpression' &&
+              memberName(member.callee) === 'find'
+                ? {
+                    array: unwrapTypeExpression(member.callee.object),
+                    callback:
+                      member.arguments.length === 1
+                        ? packCallbackResult(member.arguments[0])
+                        : undefined,
+                  }
+                : undefined;
+            const alternate = fallback && unwrapTypeExpression(fallback.right);
+            const fallbackArray =
+              alternate?.type === 'MemberExpression' &&
+              alternate.object.type === 'Identifier' &&
+              literalPackIndex(alternate) !== undefined
+                ? alternate.object
+                : undefined;
             const entryReceiver =
               member?.type === 'MemberExpression' && memberName(member) === 'entry'
                 ? unwrapTypeExpression(member.object)
@@ -1742,7 +1749,13 @@ function packMutationReferences(
             const entryAlias = entryReceiver?.type === 'Identifier' ? entryReceiver : undefined;
             const origin =
               init && packRootIdentifier(find?.array ?? selection?.value ?? entryAlias ?? init);
-            if (origin) {
+            if (fallback && find) {
+              // A write through the selection can affect either source.
+              recordArrayBinding(id, [
+                ...packValueReferences(fallback.left),
+                ...packValueReferences(fallback.right),
+              ]);
+            } else if (origin) {
               for (const start of aliasBindingStarts(id)) {
                 aliasInitializers.set(start, origin.start);
               }
@@ -1757,12 +1770,16 @@ function packMutationReferences(
               id.type === 'Identifier' &&
               find?.array.type === 'Identifier' &&
               find.callback &&
+              (!fallback || fallbackArray?.name === find.array.name) &&
               isStaticPackFilter(find.callback.value, find.callback.parameter, find.callback.index)
             ) {
-              foundOptions.set(id.start, find.array.start);
+              foundOptions.set(
+                id.start,
+                fallbackArray ? [find.array.start, fallbackArray.start] : [find.array.start],
+              );
             }
             if (id.type === 'Identifier' && at?.literalIndex && at.array.type === 'Identifier') {
-              foundOptions.set(id.start, at.array.start);
+              foundOptions.set(id.start, [at.array.start]);
             }
             if (id.type === 'Identifier' && selection?.mapping === 'array') {
               filteredOptions.set(id.start, selection.value.start);
@@ -1918,7 +1935,9 @@ function packMutationReferences(
       references.every((reference) => guards.has(reference) || outputWrites.has(reference))
     ) {
       // Both the selector and pack must use the same converted array.
-      rewritable.set(found, { array: true });
+      for (const reference of found) {
+        rewritable.set(reference, { array: true });
+      }
     }
     const filtered = filteredOptions.get(start);
     if (
@@ -2040,6 +2059,28 @@ function sharedPackEntryName(pack: ReturnType<typeof readPackEntry>): string | u
   return undefined;
 }
 
+function hasOnlyStaticPackExports(packPath: string, names: ReadonlySet<string>) {
+  if (names.size === 0) {
+    return true;
+  }
+  const { program } = parseSource(packPath, fs.readFileSync(packPath, 'utf8'));
+  const literals = new Set<string>();
+  for (const statement of program.body) {
+    const declaration =
+      statement.type === 'ExportNamedDeclaration' ? statement.declaration : undefined;
+    if (declaration?.type !== 'VariableDeclaration' || declaration.kind !== 'const') {
+      continue;
+    }
+    for (const { id, init } of declaration.declarations) {
+      const value = init && unwrapTypeExpression(init);
+      if (id.type === 'Identifier' && value?.type === 'Literal' && !('regex' in value)) {
+        literals.add(id.name);
+      }
+    }
+  }
+  return [...names].every((name) => literals.has(name));
+}
+
 function importedPackBindings(
   parsed: ReturnType<typeof parseSource>,
   {
@@ -2155,6 +2196,26 @@ function importedPackBindings(
       sharedEntry.name === sharedPackEntryName(packEntry)
         ? sharedEntry.statement
         : undefined;
+    const unredirectedExports = new Set<string>();
+    let hasUnredirectedModuleUse = false;
+    for (const sibling of imports) {
+      if (sibling === sharedImport) {
+        continue;
+      }
+      hasUnredirectedModuleUse ||= sibling.specifiers.length === 0;
+      for (const specifier of sibling.specifiers) {
+        if (specifier.type === 'ImportNamespaceSpecifier') {
+          hasUnredirectedModuleUse = true;
+        } else if (specifier.type === 'ImportSpecifier' && specifier.importKind !== 'type') {
+          const name = propertyName(specifier.imported);
+          if (name === undefined) {
+            hasUnredirectedModuleUse = true;
+          } else if (name !== 'default') {
+            unredirectedExports.add(name);
+          }
+        }
+      }
+    }
     const mutates = written.length > 0 || siblingWrites.length > 0;
     return [
       {
@@ -2169,6 +2230,8 @@ function importedPackBindings(
         mutatesArray: written.some((reference) => rewritable.get(reference)?.array),
         onlyPack,
         sharedImport,
+        hasUnredirectedModuleUse,
+        unredirectedExports,
       },
     ];
   });
@@ -2407,6 +2470,20 @@ function mergeRetainedTsdownConfig(
   }
   if (hasPack && !importsConverted && originalImports.length === 0) {
     return undefined;
+  }
+
+  if (
+    originalImports.some(
+      ({ hasUnredirectedModuleUse, unredirectedExports }) =>
+        hasUnredirectedModuleUse ||
+        !hasOnlyStaticPackExports(tsdownConfigPath, unredirectedExports),
+    )
+  ) {
+    warnMigration(
+      `Cannot copy ${displayRelative(tsdownConfigPath)} without evaluating its shared exports again. Migrate its pack options manually. See ${documentationUrl('/guide/migrate#tsdown')}`,
+      report,
+    );
+    return false;
   }
 
   const packImports = [...originalImports, ...convertedImports, ...previousImports];
