@@ -3,14 +3,14 @@ use std::iter;
 use clap::{Parser, error::ErrorKind};
 use vt::{
     CommandHandler, HandledCommand, ScriptCommand,
-    config::user::{EnabledCacheConfig, UserCacheConfig, UserRunConfig},
+    config::user::{UserCacheConfig, UserRunConfig},
     loader::UserConfigLoader,
 };
 use vt_path::AbsolutePath;
 use vt_str::Str;
 
 use super::{
-    resolver::{SubcommandResolver, check_cache_inputs, resolve_vite_config_fields},
+    resolver::{SubcommandResolver, cache_config_for, resolve_vite_config_fields},
     types::{CLIArgs, SynthesizableSubcommand, ViteConfigResolverFn},
 };
 
@@ -79,20 +79,11 @@ impl CommandHandler for VitePlusCommandHandler {
             Err(err) => return Err(err.into()),
         };
         match cli_args {
-            CLIArgs::Synthesizable(SynthesizableSubcommand::Check { .. }) => {
+            CLIArgs::Synthesizable(subcmd @ SynthesizableSubcommand::Check { .. }) => {
                 // Check is a composite command (fmt + lint) — run as a subprocess in task scripts
-                Ok(HandledCommand::Synthesized(command.to_synthetic_plan_request(
-                    UserCacheConfig::with_config(EnabledCacheConfig {
-                        env: Some(Box::new([
-                            Str::from("OXLINT_TSGOLINT_PATH"),
-                            Str::from(vp_shared::env_vars::VP_SKIP_STATIC_CONFIG),
-                        ])),
-                        untracked_env: None,
-                        input: Some(check_cache_inputs()),
-                        output: None,
-                        remote: None,
-                    }),
-                )))
+                Ok(HandledCommand::Synthesized(
+                    command.to_synthetic_plan_request(cache_config_for(&subcmd)),
+                ))
             }
             CLIArgs::Synthesizable(subcmd) => {
                 // Bare app commands in scripts get the same workspace-root
