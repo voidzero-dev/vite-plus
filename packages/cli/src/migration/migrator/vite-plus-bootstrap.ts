@@ -81,6 +81,7 @@ import {
 } from './shared.ts';
 
 export type BootstrapPackageJson = {
+  workspaces?: NpmWorkspaces;
   overrides?: Record<string, unknown>;
   resolutions?: Record<string, string>;
   devDependencies?: Record<string, string>;
@@ -125,7 +126,7 @@ function overrideSpecSatisfiesVitePlus(
   spec: unknown,
   catalogDependencyResolver?: CatalogDependencyResolver,
 ): boolean {
-  if (typeof spec !== 'string' || !spec) {
+  if (typeof spec !== 'string') {
     return false;
   }
   if (isSemanticVitePlusOverrideSpec(dependencyName, spec)) {
@@ -628,11 +629,7 @@ export function detectVitePlusBootstrapPending(
   if (!fs.existsSync(packageJsonPath)) {
     return false;
   }
-  const pkg = readJsonFile(packageJsonPath) as BootstrapPackageJson & {
-    workspaces?: NpmWorkspaces;
-    catalog?: Record<string, string>;
-    catalogs?: Record<string, Record<string, string>>;
-  };
+  const pkg = readJsonFile(packageJsonPath) as BootstrapPackageJson;
 
   // vite-plus counts as installed when it's a direct dependency/devDependency,
   // so a project that declares it in `dependencies` isn't reported as pending a
@@ -749,24 +746,22 @@ export function detectVitePlusBootstrapPending(
     );
   }
   if (packageManager === PackageManager.bun) {
-    // A standalone bun project (`supportCatalog === false`) cannot resolve
-    // `catalog:` references, so the catalog resolver must NOT be consulted —
-    // otherwise a dangling `catalog:` override resolves through the dead catalog
-    // field and is mistaken for satisfied, masking the pending rewrite.
+    if (
+      supportCatalog &&
+      workspaceCatalogVitePlusDependencyPending(projectPath, packages, catalogDependencyResolver)
+    ) {
+      return true;
+    }
+    // Only a Bun workspace can satisfy an override through its catalog.
     const bunCatalogResolver = supportCatalog ? catalogDependencyResolver : undefined;
-    // A `catalog:` vite-plus spec looks current, so judge its catalog value too.
-    return (
-      (supportCatalog &&
-        workspaceCatalogVitePlusDependencyPending(projectPath, packages, bunCatalogResolver)) ||
-      ensurePackageJsonOverrides(
-        pkg.overrides,
-        managedOverridePackages(usesVitest, usesWebdriverio),
-        (name, current, target) =>
-          current && overrideSpecSatisfiesVitePlus(name, current, bunCatalogResolver)
-            ? current
-            : target,
-      ).changed
-    );
+    return ensurePackageJsonOverrides(
+      pkg.overrides,
+      managedOverridePackages(usesVitest, usesWebdriverio),
+      (name, current, target) =>
+        current && overrideSpecSatisfiesVitePlus(name, current, bunCatalogResolver)
+          ? current
+          : target,
+    ).changed;
   }
   if (packageManager === PackageManager.pnpm) {
     if (!pnpmWorkspaceExoticSubdepsSettingSatisfied(projectPath)) {
@@ -1073,13 +1068,7 @@ export function ensureVitePlusBootstrap(
     }
   }
 
-  editJsonFile<
-    BootstrapPackageJson & {
-      workspaces?: NpmWorkspaces;
-      catalog?: Record<string, string>;
-      catalogs?: Record<string, Record<string, string>>;
-    }
-  >(packageJsonPath, (pkg) => {
+  editJsonFile<BootstrapPackageJson>(packageJsonPath, (pkg) => {
     let packageJsonChanged = reconcileVitePlusBootstrapPackage(
       projectPath,
       pkg,
@@ -1282,9 +1271,6 @@ export function ensureVitePlusBootstrap(
     const after = fs.readFileSync(yarnrcYmlPath, 'utf-8');
     result.packageManagerConfig = before !== after;
   } else if (isBunWorkspace) {
-    // Only a bun WORKSPACE writes a catalog (matching the fresh path, where
-    // rewriteBunCatalog runs only on monorepo roots). A standalone bun project
-    // keeps the concrete overrides set by `ensurePackageJsonOverrides` above.
     const before = fs.readFileSync(packageJsonPath, 'utf-8');
     rewriteBunCatalog(
       projectPath,

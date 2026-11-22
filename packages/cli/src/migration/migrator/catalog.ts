@@ -1159,18 +1159,17 @@ export function rewriteBunCatalog(
     }
 
     pruneLegacyWrapperAliases(pkg.overrides);
-    // Resolve against the updated catalogs so a stale named entry keeps its
-    // reference. A missing entry uses the catalog that now owns the package.
+    // Keep a named reference if the updated catalog supplies the target.
     const resolveCatalog = readBunCatalogDependencyResolver(pkg, packageManagerVersion);
     pkg.overrides = ensurePackageJsonOverrides(pkg.overrides, managed, (name, current, target) => {
       if (name === '@vitest/browser') {
         return target;
       }
-      const catalog =
+      const catalogSpec =
         current?.startsWith('catalog:') && resolveCatalog(current, name) === target
           ? current
-          : undefined;
-      return getCatalogDependencySpec(catalog, target, true, { preferredCatalogSpec });
+          : preferredCatalogSpec;
+      return getCatalogDependencySpec(catalogSpec, target, true);
     }).overrides;
 
     return pkg;
@@ -1248,7 +1247,6 @@ export function rewriteRootWorkspacePackageJson(
     } else if (packageManager === PackageManager.npm) {
       pkg.overrides = ensurePackageJsonOverrides(pkg.overrides, managed).overrides;
     } else if (packageManager === PackageManager.bun) {
-      // Catalog workspaces write their overrides after root cleanup.
       if (!supportCatalog) {
         pkg.overrides = ensurePackageJsonOverrides(pkg.overrides, managed).overrides;
       }

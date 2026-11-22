@@ -491,6 +491,7 @@ export function rewriteMonorepo(
       });
     }
   } else if (workspaceInfo.packageManager === PackageManager.bun && supportCatalog) {
+    // Restore managed overrides such as `@vitest/browser` after root cleanup.
     rewriteBunCatalog(
       workspaceInfo.rootDir,
       workspaceUsesVitest,
