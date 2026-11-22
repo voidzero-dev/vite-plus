@@ -15,9 +15,19 @@ VITE+ - The Unified Toolchain for the Web
 • Package manager settings configured
 ```
 
+## `vp migrate --no-interactive`
+
+the second migration finds the workspace up to date
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+This project is already using Vite+! Happy coding!
+```
+
 ## `vpt print-file package.json`
 
-the direct vite edge is catalog: (resolving through the bun catalog), not a concrete alias
+the direct Vite dependency and its override use the catalog, and the PostCSS pin survives both runs
 
 ```
 {
@@ -30,7 +40,10 @@ the direct vite edge is catalog: (resolving through the bun catalog), not a conc
     "vite-plus": "catalog:"
   },
   "overrides": {
-    "vite": "catalog:"
+    "vite": {
+      ".": "catalog:",
+      "postcss": "8.5.32"
+    }
   },
   "devEngines": {
     "packageManager": {
