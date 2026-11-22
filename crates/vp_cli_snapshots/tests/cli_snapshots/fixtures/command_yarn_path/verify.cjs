@@ -9,7 +9,11 @@ function vp(args) {
   return result.stdout;
 }
 
-if (process.argv[2] === 'unlink') {
+if (process.argv[2] === 'linked') {
+  const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+  assert.match(pkg.resolutions?.['linked-lib'] ?? '', /^portal:/, 'link must add a portal resolution');
+  console.log('The project has a portal resolution for linked-lib.');
+} else if (process.argv[2] === 'unlink') {
   const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
   assert.equal(pkg.resolutions?.['linked-lib'], undefined, 'unlink must remove the portal resolution');
   console.log('The delegated Yarn removed the portal resolution.');

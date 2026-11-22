@@ -27,6 +27,12 @@ yarnPath: .yarn/releases/yarn-3.8.7.cjs
 ## `vp link ../linked-lib`
 
 
+## `node verify.cjs linked`
+
+```
+The project has a portal resolution for linked-lib.
+```
+
 ## `vp unlink linked-lib`
 
 The Yarn 2 launcher delegates unlink to Yarn 3.
@@ -161,6 +167,12 @@ yarnPath: .yarn/releases/yarn-3.8.7.cjs
 ## `vp link ../linked-lib`
 
 
+## `node verify.cjs linked`
+
+```
+The project has a portal resolution for linked-lib.
+```
+
 ## `vp unlink linked-lib`
 
 The Classic launcher also delegates unlink to Yarn 3.
@@ -194,6 +206,12 @@ yarnPath: .yarn/releases/yarn-current.cjs
 
 ## `vp link ../linked-lib`
 
+
+## `node verify.cjs linked`
+
+```
+The project has a portal resolution for linked-lib.
+```
 
 ## `vp unlink linked-lib`
 
