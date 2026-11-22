@@ -2,7 +2,7 @@
 
 ## `vp migrate --no-interactive`
 
-existing Vite+ pnpm project declared bundled tools (oxlint/oxlint-tsgolint/oxfmt/tsdown) via catalog:
+Upgrade a project that declares bundled tools and the previous lint backend through the pnpm catalog.
 
 ```
 VITE+ - The Unified Toolchain for the Web
@@ -17,7 +17,7 @@ VITE+ - The Unified Toolchain for the Web
 
 ## `vpt print-file package.json`
 
-the bundled tools are removed (vite-plus provides them) so no dangling catalog: references survive
+Check that the manifest has no dangling catalog references.
 
 ```
 {
@@ -38,7 +38,7 @@ the bundled tools are removed (vite-plus provides them) so no dangling catalog: 
 
 ## `vpt print-file pnpm-workspace.yaml`
 
-the same bundled tools are dropped from the catalog, keeping package.json and the catalog consistent
+Check that the catalog entries are removed.
 
 ```
 packages:

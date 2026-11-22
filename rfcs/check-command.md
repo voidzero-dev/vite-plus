@@ -205,7 +205,7 @@ The check module reuses `SubcommandResolver` and `resolve_and_capture_output` fr
 See the [backend replacement RFC](./tsrs-lint-backend.md) for the rationale,
 dependency changes and compatibility considerations.
 
-Vite+ replaces the bundled Go backend with `tsrs@7.1.0-beta.tsrs2`,
+Vite+ bundles `tsrs`,
 a Rust port of the TypeScript 7 compiler. `resolve-lint.ts` selects the bundled
 `tsrs` package and passes its `bin/tsrs-lint` launcher to Oxlint through
 `OXLINT_TSGOLINT_PATH`. The same resolver serves `vp lint` and `vp check`.
@@ -213,8 +213,7 @@ Users do not need to set an environment variable for the default backend.
 
 With TypeScript diagnostics enabled, this release reports file-level errors only
 for files selected by Oxlint, after applying paths and ignore patterns.
-Other program files still provide type information. This matches tsgolint's
-diagnostic scope.
+Other program files still provide type information.
 Selected files outside the discovered tsconfigs use an inferred program with
 fallback compiler options.
 
@@ -222,19 +221,11 @@ An explicit `OXLINT_TSGOLINT_PATH` takes precedence over the resolver default.
 The environment variable keeps its existing name because Oxlint uses it to
 select the type-aware backend.
 
-`tsrs` is a production dependency. `oxlint-tsgolint` remains a development
-dependency for comparisons. The benchmark selects the Go executable explicitly,
-so a change to the default cannot make it compare tsrs against itself.
-See the [performance report](../bench/tsrs-lint.md) for elapsed time, peak memory,
-and measurement conditions.
-
 The pinned tsrs release provides native packages for all supported Vite+
 platforms, including Windows ARM64. No platform uses a Go fallback.
 
 The backend switch preserves the existing formatting phase, lint configuration,
-and failure handling. Smoke fixtures compare diagnostics, suppression comments,
-and automatic fixes against Go. These checks do not establish complete
-compiler parity.
+and failure handling.
 
 ### Key Files
 
@@ -307,7 +298,7 @@ pass: Found no warnings or lint errors in 2 files (452ms, 16 threads)
 
 The check command's cache fingerprint includes:
 
-- **Environment variable:** `OXLINT_TSGOLINT_PATH` (an explicit Go or tsrs backend override affects lint behavior)
+- **Environment variable:** `OXLINT_TSGOLINT_PATH` (an explicit backend override affects lint behavior)
 - **Input files:** Auto-tracked via fspy, excluding:
   - `node_modules/.vite/task-cache/**` — task runner state files that change after each run
 

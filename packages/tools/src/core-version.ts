@@ -31,9 +31,6 @@ import { parseArgs } from 'node:util';
 export const CORE_PACKAGE_NAME = '@voidzero-dev/vite-plus-core';
 /** The `vite` alias to the core: `npm:@voidzero-dev/vite-plus-core@<version>`. */
 export const CORE_ALIAS_PREFIX = `npm:${CORE_PACKAGE_NAME}@`;
-// Same convention as oxlint-tsgolint, which Vite+ bundles: `7.0.2000` is its
-// first release on TypeScript `7.0.2`, and `7.0.2001` the next one
-// (https://github.com/oxc-project/tsgolint#versioning).
 const PATCH_FACTOR = 1000;
 const MAX_RELEASE_COUNTER = 998;
 const LOCAL_BUILD_COUNTER = 999;

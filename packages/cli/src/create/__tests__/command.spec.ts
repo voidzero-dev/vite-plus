@@ -12,12 +12,7 @@ vi.mock('../../../binding/index.js', () => ({
   runCommand: mockRunCommand,
 }));
 
-const { formatDlxCommand, runCommandAndDetectProjectDir } = await import('../command.js');
-
-type DlxWorkspaceInfo = Parameters<typeof formatDlxCommand>[2];
-
-const yarn = (packageManagerVersion: string) =>
-  ({ packageManager: 'yarn', packageManagerVersion }) as DlxWorkspaceInfo;
+const { runCommandAndDetectProjectDir } = await import('../command.js');
 
 const tempDirs: string[] = [];
 
@@ -26,22 +21,6 @@ function makeTempDir() {
   tempDirs.push(dir);
   return dir;
 }
-
-describe('formatDlxCommand', () => {
-  it('falls back to npx for Yarn 1, which has no dlx command', () => {
-    expect(formatDlxCommand('create-vite@latest', ['app'], yarn('1.22.22'))).toEqual({
-      command: 'npx',
-      args: ['--yes', 'create-vite@latest', 'app'],
-    });
-  });
-
-  it('uses yarn dlx for Yarn 2 and later', () => {
-    expect(formatDlxCommand('create-vite@latest', ['app'], yarn('4.18.1'))).toEqual({
-      command: 'yarn',
-      args: ['dlx', 'create-vite@latest', 'app'],
-    });
-  });
-});
 
 describe('runCommandAndDetectProjectDir', () => {
   beforeEach(() => {

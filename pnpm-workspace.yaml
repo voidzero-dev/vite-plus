@@ -53,7 +53,6 @@ catalog:
   oxc-parser: =0.159.0
   oxfmt: =0.79.0
   oxlint: =1.94.0
-  oxlint-tsgolint: =7.0.2007
   pathe: ^2.0.3
   picocolors: ^1.1.1
   picomatch: ^4.0.2
@@ -67,7 +66,7 @@ catalog:
   source-map: 0.8.0
   tinyglobby: ^0.2.15
   tsdown: =0.23.4
-  tsrs: =7.1.0-beta.tsrs3
+  tsrs: =7.1.0-beta.tsrs4
   typescript: ~7.0.2
   valibot: 1.5.0
   validate-npm-package-name: ^8.0.0
@@ -91,7 +90,6 @@ minimumReleaseAgeExclude:
   - '@oxc-resolver/*'
   - '@oxc-transform/*'
   - '@oxfmt/*'
-  - '@oxlint-tsgolint/*'
   - '@oxlint/*'
   - '@rolldown/*'
   - '@tsdown/*'
@@ -106,7 +104,6 @@ minimumReleaseAgeExclude:
   - oxc-transform
   - oxfmt
   - oxlint
-  - oxlint-tsgolint
   - ast-kit
   - lightningcss
   - lightningcss-*
@@ -144,6 +141,8 @@ minimumReleaseAgeExclude:
   - resolve.exports@2.0.4
   - vitepress-plugin-group-icons@1.8.2
 overrides:
+  # tsrs provides the type-aware backend for Oxlint, including the vendored Vite workspace.
+  oxlint-tsgolint: '-'
   rolldown: workspace:rolldown@*
   vite: workspace:@voidzero-dev/vite-plus-core@*
   vite-plus: workspace:vite-plus@*
@@ -189,6 +188,5 @@ peerDependencyRules:
     - rolldown
   allowedVersions:
     oxc-minify: '*'
-    oxlint-tsgolint: '*'
     rolldown: '*'
     vite: '*'
