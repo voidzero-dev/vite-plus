@@ -42,8 +42,6 @@ The commands below describe project operations. Global mode is described under [
 | `-g, --global`         | Yes             | Yes  | Yes          | Yes         | Yes          |                                                                         |
 | `--dry-run`            | Yes             | Yes  | Yes          | Yes         | Yes          |                                                                         |
 
-When pnpm removes a dependency, it can also remove the same package from `peerDependencies`.
-
 ## Native Options
 
 For native options, see [npm uninstall](https://docs.npmjs.com/cli/v11/commands/npm-uninstall), [pnpm remove](https://pnpm.io/cli/remove), [Yarn remove](https://yarnpkg.com/cli/remove), [Yarn Classic remove](https://classic.yarnpkg.com/en/docs/cli/remove), and [Bun remove](https://bun.com/docs/pm/cli/remove). To pass these options through Vite+, see [Native Arguments](./#native-arguments).
