@@ -8418,6 +8418,7 @@ dependencies = [
  "vt_select",
  "vt_str",
  "vt_workspace",
+ "wax",
 ]
 
 [[package]]

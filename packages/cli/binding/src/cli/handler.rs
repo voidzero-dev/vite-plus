@@ -155,6 +155,7 @@ fn rebase_package_inputs(cache_config: &mut UserCacheConfig, target: Option<&str
         if !target.is_empty() {
             let (negation, pattern) =
                 glob.pattern.strip_prefix('!').map_or(("", glob.pattern.as_str()), |p| ("!", p));
+            let target = wax::escape(target);
             glob.pattern = Str::from(format!("{negation}{target}/{pattern}").as_str());
         }
         glob.base = InputBase::Workspace;
@@ -259,6 +260,10 @@ mod tests {
         assert_eq!(
             rebased_inputs(Some("packages/app")),
             [auto.clone(), glob("!packages/app/dist/**", InputBase::Workspace)]
+        );
+        assert_eq!(
+            rebased_inputs(Some("packages/(app)")),
+            [auto.clone(), glob(r"!packages/\(app\)/dist/**", InputBase::Workspace)]
         );
         assert_eq!(
             rebased_inputs(Some("")),
