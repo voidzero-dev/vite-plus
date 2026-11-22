@@ -236,7 +236,7 @@ function validateTargetDir(input?: string, cwd?: string): { directory: string; e
   if (path.isAbsolute(targetDir)) {
     return { directory: '', error: 'Absolute path is not allowed' };
   }
-  if (targetDir.includes('..')) {
+  if (targetDir.split(/[\\/]/).includes('..')) {
     return { directory: '', error: 'Relative path contains ".." which is not allowed' };
   }
   if (cwd && !isTargetDirAvailable(path.join(cwd, targetDir))) {

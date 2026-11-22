@@ -4,13 +4,15 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockSelect } = vi.hoisted(() => ({
+const { mockSelect, mockText } = vi.hoisted(() => ({
   mockSelect: vi.fn(),
+  mockText: vi.fn(),
 }));
 
 vi.mock('@voidzero-dev/vite-plus-prompts', () => ({
   isCancel: () => false,
   select: mockSelect,
+  text: mockText,
 }));
 
 vi.mock('../../utils/prompts.ts', () => ({
@@ -23,7 +25,7 @@ vi.mock('../../utils/terminal.ts', () => ({
   accent: (value: string) => value,
 }));
 
-const { checkProjectDirExists, isTargetDirAvailable, suggestAvailableTargetDir } =
+const { checkProjectDirExists, isTargetDirAvailable, promptTargetDir, suggestAvailableTargetDir } =
   await import('../prompts.js');
 
 const tempDirs: string[] = [];
@@ -74,6 +76,24 @@ describe('target directory helpers', () => {
     fs.symlinkSync(linkedDir, targetDir, process.platform === 'win32' ? 'junction' : 'dir');
 
     expect(isTargetDirAvailable(targetDir)).toBe(false);
+  });
+
+  it('rejects ".." path segments but accepts directory names that contain two dots', async () => {
+    const cwd = makeTempDir();
+    let validate: ((value: string | undefined) => string | undefined) | undefined;
+    mockText.mockImplementation((options: { validate: typeof validate }) => {
+      validate = options.validate;
+      return Promise.resolve('my..lib');
+    });
+
+    await expect(promptTargetDir('my-project', true, { cwd })).resolves.toBe('my..lib');
+
+    const parentError = 'Relative path contains ".." which is not allowed';
+    expect(validate?.('my..lib')).toBeUndefined();
+    expect(validate?.('foo/my..lib')).toBeUndefined();
+    expect(validate?.('..')).toBe(parentError);
+    expect(validate?.('../my-project')).toBe(parentError);
+    expect(validate?.('foo/../../my-project')).toBe(parentError);
   });
 
   it('suggests a different target directory when the default already exists', () => {
