@@ -1,5 +1,8 @@
 {
   "name": "command-init-inline-config",
   "version": "0.0.0",
-  "private": true
+  "private": true,
+  "scripts": {
+    "fmt:init": "vp -C . fmt --init"
+  }
 }

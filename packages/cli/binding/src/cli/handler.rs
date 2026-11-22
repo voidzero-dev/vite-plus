@@ -57,14 +57,28 @@ impl CommandHandler for VitePlusCommandHandler {
             return Ok(HandledCommand::Verbatim);
         }
 
-        // A leading global `-C` runs verbatim: CLIArgs has no global flags, and
-        // the spawned vp/vpr binary applies the directory change (and target
-        // elicitation) exactly like a direct invocation.
-        if command.args.first().is_some_and(|arg| arg.starts_with("-C")) {
-            return Ok(HandledCommand::Verbatim);
-        }
         // "vpr <args>" is shorthand for "vp run <args>", so prepend "run" for parsing.
         let is_vpr = program == "vpr";
+
+        // A leading global `-C <dir>` keeps running in a child vp, which applies the
+        // directory, runtime, and toolchain like a direct invocation. A built-in subcommand
+        // only adds its cache config, so its tracked envs and inputs apply (#3503).
+        if command.args.first().is_some_and(|arg| arg.starts_with("-C")) {
+            let subcommand = args_after_leading_chdir(&command.args).and_then(|rest| {
+                CLIArgs::try_parse_from(
+                    iter::once("vp")
+                        .chain(is_vpr.then_some("run"))
+                        .chain(rest.iter().map(Str::as_str)),
+                )
+                .ok()
+            });
+            return Ok(match subcommand {
+                Some(CLIArgs::Synthesizable(subcmd)) => HandledCommand::Synthesized(
+                    command.to_synthetic_plan_request(cache_config_for(&subcmd)),
+                ),
+                _ => HandledCommand::Verbatim,
+            });
+        }
         let cli_args = match CLIArgs::try_parse_from(
             iter::once("vp")
                 .chain(is_vpr.then_some("run"))
@@ -106,6 +120,17 @@ impl CommandHandler for VitePlusCommandHandler {
             }
         }
     }
+}
+
+/// Arguments after a leading `-C <dir>`, `-C=<dir>`, or `-C<dir>`.
+fn args_after_leading_chdir(args: &[Str]) -> Option<&[Str]> {
+    let rest = args.first()?.as_str().strip_prefix("-C")?;
+    let (dir, remaining) = if rest.is_empty() {
+        (args.get(1)?.as_str(), &args[2..])
+    } else {
+        (rest.strip_prefix('=').unwrap_or(rest), &args[1..])
+    };
+    (!dir.is_empty()).then_some(remaining)
 }
 
 /// Vite Task rewrites workspace `.bin` shims. Managed package managers live
@@ -161,5 +186,26 @@ impl UserConfigLoader for VitePlusConfigLoader {
         // The task graph reads an absent config as the default, so `None` covers both.
         let config = resolve_vite_config_fields(package_path, &["run"], &self.resolve_fn).await?;
         Ok(config.run.map(serde_json::from_value).transpose()?)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn rest(args: &[&str]) -> Option<Vec<String>> {
+        let args: Vec<Str> = args.iter().map(|arg| Str::from(*arg)).collect();
+        args_after_leading_chdir(&args).map(|rest| rest.iter().map(ToString::to_string).collect())
+    }
+
+    #[test]
+    fn skips_every_leading_chdir_form() {
+        let expected = Some(vec!["lint".to_owned()]);
+        assert_eq!(rest(&["-C", "apps/web", "lint"]), expected);
+        assert_eq!(rest(&["-C=apps/web", "lint"]), expected);
+        assert_eq!(rest(&["-Capps/web", "lint"]), expected);
+        assert_eq!(rest(&["-C"]), None);
+        assert_eq!(rest(&["-C=", "lint"]), None);
+        assert_eq!(rest(&["lint", "-C", "apps/web"]), None);
     }
 }

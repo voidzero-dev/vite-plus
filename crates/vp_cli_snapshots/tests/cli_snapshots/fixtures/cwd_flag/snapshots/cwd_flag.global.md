@@ -143,3 +143,50 @@ VITE+ - The Unified Toolchain for the Web
 ~/packages/hello$ node -e "console.log('cwd base: ' + require('node:path').basename(process.cwd()))" ⊘ cache disabled
 cwd base: hello
 ```
+
+## `vp run version:chdir`
+
+a script with --version after -C runs verbatim, so vp prints versions like a direct invocation
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+$ vp -C packages/hello --version ⊘ cache disabled
+VITE+ - The Unified Toolchain for the Web
+
+vp <version>
+
+Local vite-plus:
+  vite-plus  <version>
+
+Tools:
+  vite      <version>
+  rolldown  <version>
+  vitest    <version>
+  oxfmt     <version>
+  oxlint    <version>
+  tsrs      <version>
+  tsdown    <version>
+
+Environment:
+  Package manager  Not found
+  Node.js          <version>
+```
+
+## `vp run help:chdir`
+
+a script with only -C runs in a child vp, which shows help like a direct invocation
+
+
+## `vp run build:missing`
+
+a script with a missing -C directory runs in a child vp, which reports it like a direct invocation
+
+**Exit code:** 1
+
+```
+VITE+ - The Unified Toolchain for the Web
+
+$ vp -C packages/missing build ⊘ cache disabled
+directory not found: packages/missing
+```

@@ -21,6 +21,9 @@ steps = [
   { argv = ["vp", "pack", "packages/hello"], comment = "positional stays a tsdown entry resolved from the invocation directory" },
   { argv = ["vpt", "list-dir", "dist"], comment = "upstream semantics: output lands at the invocation directory" },
   { argv = ["vp", "run", "where:hello"], comment = "a script whose command starts with vp -C runs verbatim and honors the directory" },
+  { argv = ["vp", "run", "version:chdir"], comment = "a script with --version after -C runs verbatim, so vp prints versions like a direct invocation" },
+  { argv = ["vp", "run", "help:chdir"], snapshot = false, tty = false, comment = "a script with only -C runs in a child vp, which shows help like a direct invocation" },
+  { argv = ["vp", "run", "build:missing"], comment = "a script with a missing -C directory runs in a child vp, which reports it like a direct invocation", continue-on-failure = true },
 ]
 
 # Regression guard for the -C direct-exec PWD gap: a command run through
