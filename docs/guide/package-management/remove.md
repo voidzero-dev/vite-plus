@@ -12,9 +12,9 @@ vp remove -g --dry-run typescript
 
 | Option                 | Description                                              | Notes                                                                        |
 | ---------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `-D, --save-dev`       | Remove from devDependencies.                             |                                                                              |
-| `-O, --save-optional`  | Remove from optionalDependencies.                        |                                                                              |
-| `-P, --save-prod`      | Remove from dependencies.                                |                                                                              |
+| `-D, --save-dev`       | On pnpm, target `devDependencies`.                       |                                                                              |
+| `-O, --save-optional`  | On pnpm, target `optionalDependencies`.                  |                                                                              |
+| `-P, --save-prod`      | On pnpm, target `dependencies`.                          |                                                                              |
 | `--filter <pattern>`   | Select workspaces by pattern.                            | Can be repeated.                                                             |
 | `-w, --workspace-root` | Remove from workspace root.                              |                                                                              |
 | `-r, --recursive`      | Remove recursively from all workspace packages.          |                                                                              |
@@ -33,9 +33,9 @@ The commands below describe project operations. Global mode is described under [
 
 | Option                 | npm             | pnpm | Yarn Classic | Yarn Modern | Bun          | Notes                            |
 | ---------------------- | --------------- | ---- | ------------ | ----------- | ------------ | -------------------------------- |
-| `-D, --save-dev`       | Yes             | Yes  | No           | No          | No           |                                  |
-| `-O, --save-optional`  | Yes             | Yes  | No           | No          | No           |                                  |
-| `-P, --save-prod`      | Yes             | Yes  | No           | No          | No           |                                  |
+| `-D, --save-dev`       | Yes             | Yes  | No           | No          | No           | npm includes `dependencies`.     |
+| `-O, --save-optional`  | Yes             | Yes  | No           | No          | No           | npm includes `dependencies`.     |
+| `-P, --save-prod`      | Yes             | Yes  | No           | No          | No           | npm includes `devDependencies`.  |
 | `--filter <pattern>`   | 7.14.0 or later | Yes  | One filter   | Yes         | 1.4 or later |                                  |
 | `-w, --workspace-root` | 8.1.0 or later  | Yes  | No           | No          | No           |                                  |
 | `-r, --recursive`      | 8.1.0 or later  | Yes  | No           | Yes         | No           | npm includes the workspace root. |
