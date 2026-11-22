@@ -18,6 +18,7 @@ import {
   createCatalogDependencyResolver,
   dropDeadOxlintPluginsDependency,
   dropRemovePackageOverrideKeys,
+  ensureNpmOverrideEntries,
   ensurePnpmWorkspaceExoticSubdepsSetting,
   ensurePnpmWorkspacePackages,
   findYarnWorkspaceHoisting,
@@ -156,7 +157,7 @@ export function rewriteStandaloneProject(
     workspaceInfo.downloadPackageManager.version,
   );
   editJsonFile<{
-    overrides?: Record<string, string>;
+    overrides?: Record<string, unknown>;
     resolutions?: Record<string, string>;
     devDependencies?: Record<string, string>;
     dependencies?: Record<string, string>;
@@ -193,22 +194,22 @@ export function rewriteStandaloneProject(
         ...pkg.resolutions,
         ...managed,
       };
-    } else if (packageManager === PackageManager.npm || packageManager === PackageManager.bun) {
+    } else if (packageManager === PackageManager.npm) {
+      pkg.overrides = ensureNpmOverrideEntries(pkg.overrides, managed).overrides;
+    } else if (packageManager === PackageManager.bun) {
       pkg.overrides = {
         ...pkg.overrides,
         ...managed,
       };
-      if (packageManager === PackageManager.bun) {
-        // Bun walks transitive peer-deps before resolving overrides; vitest
-        // 4.1.9 declares peer `vite ^6 || ^7 || ^8` and aborts with
-        // "vite@... failed to resolve" if `vite` isn't a direct dep somewhere
-        // in the tree, even when the override would redirect it. Mirror the
-        // override as a devDep so bun's resolver sees `vite` immediately. A
-        // standalone bun project has no catalog (supportCatalog=false), so the
-        // shared helper resolves this to the concrete core alias. Verified on
-        // bun 1.3.11. See https://github.com/oven-sh/bun/issues/8406.
-        setDirectViteEdge(pkg, supportCatalog, catalogDependencyResolver);
-      }
+      // Bun walks transitive peer-deps before resolving overrides; vitest
+      // 4.1.9 declares peer `vite ^6 || ^7 || ^8` and aborts with
+      // "vite@... failed to resolve" if `vite` isn't a direct dep somewhere
+      // in the tree, even when the override would redirect it. Mirror the
+      // override as a devDep so bun's resolver sees `vite` immediately. A
+      // standalone bun project has no catalog (supportCatalog=false), so the
+      // shared helper resolves this to the concrete core alias. Verified on
+      // bun 1.3.11. See https://github.com/oven-sh/bun/issues/8406.
+      setDirectViteEdge(pkg, supportCatalog, catalogDependencyResolver);
     } else if (packageManager === PackageManager.pnpm) {
       if (usePnpmWorkspaceYaml) {
         shouldAddPnpmWorkspaceVitePlusOverride = isForceOverrideMode();

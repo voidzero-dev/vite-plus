@@ -2565,38 +2565,64 @@ describe('ensureVitePlusBootstrap', () => {
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(false);
   });
 
-  it('tolerates nested npm override objects under managed keys', () => {
+  it('adds the Vite alias to a nested npm override and preserves its child overrides', () => {
+    const packageJsonPath = path.join(tmpDir, 'package.json');
+    const workspace = makeWorkspaceInfo(tmpDir, PackageManager.npm);
+    const rollup = { '.': '^4.0.0', fsevents: '^2.3.3' };
+    const vitest = { '@vitest/expect': '4.0.0' };
     fs.writeFileSync(
-      path.join(tmpDir, 'package.json'),
+      packageJsonPath,
       JSON.stringify({
         name: 'test',
         devDependencies: { 'vite-plus': 'latest' },
-        // Nested npm override objects: user overrides scoped UNDER the managed
-        // keys. Neither aliases the package itself.
+        overrides: { vite: { rollup }, vitest },
+      }),
+    );
+
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(true);
+    expect(ensureVitePlusBootstrap(workspace).changed).toBe(true);
+    expect(readJson(packageJsonPath).overrides).toEqual({
+      vite: { '.': VITE_PLUS_OVERRIDE_PACKAGES.vite, rollup },
+      vitest,
+    });
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(false);
+    expect(ensureVitePlusBootstrap(workspace).changed).toBe(false);
+  });
+
+  it.each([
+    {
+      usage: 'with Vitest coverage',
+      devDependencies: { vitest: VITEST_VERSION, '@vitest/coverage-v8': VITEST_VERSION },
+      expected: { '.': VITEST_VERSION, '@vitest/expect': '4.0.0' },
+    },
+    {
+      usage: 'without direct Vitest usage',
+      devDependencies: {},
+      expected: { '@vitest/expect': '4.0.0' },
+    },
+  ])('reconciles a stale nested npm vitest override $usage', ({ devDependencies, expected }) => {
+    const packageJsonPath = path.join(tmpDir, 'package.json');
+    const workspace = makeWorkspaceInfo(tmpDir, PackageManager.npm);
+    fs.writeFileSync(
+      packageJsonPath,
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { 'vite-plus': 'latest', ...devDependencies },
         overrides: {
-          vite: { rollup: '^4.0.0' },
-          vitest: { '@vitest/expect': '4.0.0' },
-        },
-        devEngines: {
-          packageManager: { name: 'npm', version: '10.33.0', onFail: 'download' },
+          vite: VITE_PLUS_OVERRIDE_PACKAGES.vite,
+          vitest: { '.': 'npm:@voidzero-dev/vite-plus-test@0.1.0', '@vitest/expect': '4.0.0' },
         },
       }),
     );
 
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(true);
-    const result = ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.npm));
-
-    expect(result.changed).toBe(true);
+    expect(ensureVitePlusBootstrap(workspace).changed).toBe(true);
+    expect(readJson(packageJsonPath).overrides).toEqual({
+      vite: VITE_PLUS_OVERRIDE_PACKAGES.vite,
+      vitest: expected,
+    });
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(false);
-    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
-      overrides: Record<string, unknown>;
-    };
-    // The nested object under `vite` does not satisfy the managed alias, so it
-    // is replaced with the managed override.
-    expect(pkg.overrides.vite).toContain('@voidzero-dev/vite-plus-core');
-    // The project does NOT use vitest directly, so `vitest` is not managed; the
-    // user override scoped under it is left intact rather than removed.
-    expect(pkg.overrides.vitest).toEqual({ '@vitest/expect': '4.0.0' });
+    expect(ensureVitePlusBootstrap(workspace).changed).toBe(false);
   });
 
   it('replaces protocol-pinned migration targets in force-override mode', () => {
@@ -6132,6 +6158,38 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     // Owned-provider parent emptied by dropping its child pin is pruned too.
     expect(overrides).not.toHaveProperty('@vitest/browser-preview');
   });
+
+  it.each(['standalone', 'workspace'])(
+    'preserves nested npm overrides during a fresh %s migration',
+    (layout) => {
+      const packageJsonPath = path.join(tmpDir, 'package.json');
+      const workspace = makeWorkspaceInfo(tmpDir, PackageManager.npm);
+      workspace.isMonorepo = layout === 'workspace';
+      fs.writeFileSync(
+        packageJsonPath,
+        JSON.stringify({
+          name: 'app',
+          workspaces: workspace.isMonorepo ? ['packages/*'] : undefined,
+          devDependencies: { vite: '^7.0.0', '@vitest/coverage-v8': '^4.0.0' },
+          overrides: {
+            vite: { rollup: { picomatch: '^4.0.0' } },
+            vitest: { '.': '^4.0.0', chai: '^5.0.0' },
+          },
+        }),
+      );
+
+      if (workspace.isMonorepo) {
+        rewriteMonorepo(workspace, true, true);
+      } else {
+        rewriteStandaloneProject(tmpDir, workspace, true, true);
+      }
+
+      expect(readJson(packageJsonPath).overrides).toEqual({
+        vite: { '.': VITE_PLUS_OVERRIDE_PACKAGES.vite, rollup: { picomatch: '^4.0.0' } },
+        vitest: { '.': VITEST_VERSION, chai: '^5.0.0' },
+      });
+    },
+  );
 
   it('preserves a provider override scoped under an unrelated parent', () => {
     // npm/bun nested overrides are SCOPED: a provider pin under `some-pkg`

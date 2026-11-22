@@ -356,6 +356,40 @@ export function managedOverridePackages(
     : managed;
 }
 
+// In npm's object form, "." overrides the package itself. All other keys
+// constrain its children and must survive a change to the package's own pin.
+export function ensureNpmOverrideEntries(
+  overrides: Record<string, unknown> | undefined,
+  managed: Record<string, string>,
+): { overrides: Record<string, unknown>; changed: boolean } {
+  const next = { ...overrides };
+  let changed = false;
+  if (VITEST_IS_MANAGED_OVERRIDE && !('vitest' in managed)) {
+    const vitest = next.vitest;
+    if (isPlainRecord(vitest) && typeof vitest['.'] === 'string') {
+      const children = { ...vitest };
+      delete children['.'];
+      if (Object.keys(children).length) {
+        next.vitest = children;
+      } else {
+        delete next.vitest;
+      }
+      changed = true;
+    } else {
+      changed = removeManagedVitestEntry(next);
+    }
+  }
+
+  for (const [name, spec] of Object.entries(managed)) {
+    const current = next[name];
+    if ((isPlainRecord(current) ? current['.'] : current) !== spec) {
+      next[name] = isPlainRecord(current) ? { ...current, '.': spec } : spec;
+      changed = true;
+    }
+  }
+  return { overrides: next, changed };
+}
+
 // True iff a dependency field lists a vitest ecosystem package — any name that
 // contains `vitest` other than bare `vitest` itself (e.g. `@vitest/coverage-v8`,
 // `@vitest/browser-playwright`, `vitest-browser-svelte`). A bare `vitest`
@@ -501,7 +535,7 @@ export function projectUsesVitestDirectly(
 // `bare`. npm also accepts a range in an override key, so a user-authored
 // `"vitest@*"` in npm `overrides` belongs to the user. Do not delete it.
 export function removeManagedVitestEntry(
-  record: Record<string, string> | undefined,
+  record: Record<string, unknown> | undefined,
   keyStyle: ManagedOverrideKeyStyle = 'bare',
 ): boolean {
   if (!VITEST_IS_MANAGED_OVERRIDE || !record) {

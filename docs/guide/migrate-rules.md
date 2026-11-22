@@ -410,6 +410,7 @@ Migration converts the Volta `volta.node` pin to `.node-version`, because Vite+ 
 
 ### npm
 
+- If a managed package has a nested override, migration writes its version or alias to the `"."` entry and keeps the child overrides. For example, a pin in `overrides.vite.rollup` stays in place when migration sets `overrides.vite["."]`.
 - Direct aliases are normalized before the matching override is added, so npm does not fail with `EOVERRIDE`.
 - When a real Vite installation changes to the core alias, stale Vite install and lockfile state is removed before reinstalling.
 - Opt-in browser-provider layouts get a top-level `vite` edge when nested Vitest packages otherwise cannot resolve it.

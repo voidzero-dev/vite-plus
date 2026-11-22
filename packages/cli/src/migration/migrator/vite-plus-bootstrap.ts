@@ -23,6 +23,7 @@ import {
   collectProviderSourceModes,
   collectVitestEcosystemInstallDependencyNames,
   createCatalogDependencyResolver,
+  ensureNpmOverrideEntries,
   ensurePnpmWorkspacePackages,
   findYarnWorkspaceHoisting,
   getAlignedVitestEcosystemDependencySpec,
@@ -83,7 +84,7 @@ import {
 } from './shared.ts';
 
 export type BootstrapPackageJson = {
-  overrides?: Record<string, string>;
+  overrides?: Record<string, unknown>;
   resolutions?: Record<string, string>;
   devDependencies?: Record<string, string>;
   dependencies?: Record<string, string>;
@@ -124,12 +125,9 @@ function isSemanticVitePlusOverrideSpec(dependencyName: string, spec: string | u
 
 function overrideSpecSatisfiesVitePlus(
   dependencyName: string,
-  spec: string | undefined,
+  spec: unknown,
   catalogDependencyResolver?: CatalogDependencyResolver,
 ): boolean {
-  // npm/bun `overrides` may hold a nested object value — a user override scoped
-  // UNDER the dependency (e.g. `{"vite": {"rollup": "..."}}`) that does not
-  // alias the dependency itself, so it never satisfies the managed override.
   if (typeof spec !== 'string' || !spec) {
     return false;
   }
@@ -146,7 +144,7 @@ function overrideSpecSatisfiesVitePlus(
 }
 
 export function overridesSatisfyVitePlus(
-  overrides: Record<string, string> | undefined,
+  overrides: Record<string, unknown> | undefined,
   usesVitest: boolean,
   catalogDependencyResolver?: CatalogDependencyResolver,
   keyStyle: ManagedOverrideKeyStyle = 'bare',
@@ -746,7 +744,8 @@ export function detectVitePlusBootstrapPending(
   if (packageManager === PackageManager.npm) {
     return (
       vitePlusDependencyNeedsConcreteVersion(pkg) ||
-      !overridesSatisfyVitePlus(pkg.overrides, usesVitest, undefined, 'bare', usesWebdriverio) ||
+      ensureNpmOverrideEntries(pkg.overrides, managedOverridePackages(usesVitest, usesWebdriverio))
+        .changed ||
       npmVitePlusManagedDependenciesPending(pkg, usesVitest)
     );
   }
@@ -912,14 +911,14 @@ function readTextFileIfExists(filePath: string): string | undefined {
   return fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf-8') : undefined;
 }
 
-function ensureOverrideEntries(
-  overrides: Record<string, string> | undefined,
+function ensureOverrideEntries<T>(
+  overrides: Record<string, T> | undefined,
   usesVitest: boolean,
   catalogDependencyResolver?: CatalogDependencyResolver,
   keyStyle: ManagedOverrideKeyStyle = 'bare',
   usesWebdriverioProvider = false,
-): { overrides: Record<string, string>; changed: boolean } {
-  const next = { ...overrides };
+): { overrides: Record<string, T | string>; changed: boolean } {
+  const next: Record<string, T | string> = { ...overrides };
   let changed = false;
   // Common case: drop a lingering managed `vitest` override.
   if (!usesVitest && removeManagedVitestEntry(next, keyStyle)) {
@@ -1108,12 +1107,9 @@ export function ensureVitePlusBootstrap(
         packageJsonChanged = true;
       }
     } else if (workspaceInfo.packageManager === PackageManager.npm) {
-      const ensured = ensureOverrideEntries(
+      const ensured = ensureNpmOverrideEntries(
         pkg.overrides,
-        usesVitest,
-        undefined,
-        'bare',
-        usesWebdriverio,
+        managedOverridePackages(usesVitest, usesWebdriverio),
       );
       if (ensured.changed) {
         pkg.overrides = ensured.overrides;

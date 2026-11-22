@@ -29,6 +29,7 @@ import { type NpmWorkspaces } from '../../utils/workspace.ts';
 import { editYamlFile, readYamlFile, scalarString, type YamlDocument } from '../../utils/yaml.ts';
 import {
   dropRemovePackageOverrideKeys,
+  ensureNpmOverrideEntries,
   ensurePnpmExoticSubdepsSetting,
   hasDirectVitePlusInstallEntry,
   isAlignableVitestEcosystemPackage,
@@ -1223,7 +1224,7 @@ export function rewriteRootWorkspacePackageJson(
   let movedPnpmSettings: Record<string, unknown> | undefined;
   editJsonFile<{
     resolutions?: Record<string, string>;
-    overrides?: Record<string, string>;
+    overrides?: Record<string, unknown>;
     devDependencies?: Record<string, string>;
     dependencies?: Record<string, string>;
     peerDependencies?: Record<string, string>;
@@ -1253,10 +1254,7 @@ export function rewriteRootWorkspacePackageJson(
         ...managed,
       };
     } else if (packageManager === PackageManager.npm) {
-      pkg.overrides = {
-        ...pkg.overrides,
-        ...managed,
-      };
+      pkg.overrides = ensureNpmOverrideEntries(pkg.overrides, managed).overrides;
     } else if (packageManager === PackageManager.bun) {
       // bun overrides are handled in rewriteBunCatalog() with catalog: references
       // when the workspace supports a catalog. Otherwise they stay concrete.
