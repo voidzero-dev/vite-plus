@@ -209,19 +209,14 @@ Filters match a node's:
 
 Initial aliases include:
 
-| Query             | Node                           |
-| ----------------- | ------------------------------ |
-| `vite-plus-core`  | `@voidzero-dev/vite-plus-core` |
-| `tsrs-lint`       | `tsrs`                         |
-| `tsgolint`        | `tsrs`                         |
-| `oxlint-tsgolint` | `tsrs`                         |
-| `vite-task`       | Vite Task                      |
-| `oxc-resolver`    | Oxc Resolver                   |
+| Query            | Node                           |
+| ---------------- | ------------------------------ |
+| `vite-plus-core` | `@voidzero-dev/vite-plus-core` |
+| `tsrs-lint`      | `tsrs`                         |
+| `vite-task`      | Vite Task                      |
+| `oxc-resolver`   | Oxc Resolver                   |
 
 The manifest uses `tsrs` as the backend node ID and package name.
-It retains `tsgolint` and `oxlint-tsgolint` as aliases for existing queries.
-These aliases select the bundled tsrs node; they do not report a separate Go
-dependency. Older manifests retain their original `oxlint-tsgolint` node.
 
 Package and tool names are case-sensitive. This matches npm and Cargo names.
 
@@ -419,10 +414,8 @@ the local Vite+ release to use the command. To show the global release, run
 It reads tool rows from the manifest. Use `vp toolchain` to select tools and show
 relationships or engine details.
 
-The local version output and `vite-plus/versions`
-report the `tsrs` version. The generated export uses the `tsrs` key in place of
-`oxlint-tsgolint`. The global version command selects the tsrs row when the local
-manifest contains it. It retains the Go row for older local manifests.
+The local and global version commands report the `tsrs` version.
+The `vite-plus/versions` export uses the `tsrs` key.
 
 The manifest describes the bundled backend. An `OXLINT_TSGOLINT_PATH` override
 does not change its nodes or the version exports.
@@ -504,19 +497,19 @@ The documentation states that `vp why` is a package-manager operation.
 
 New cases belong in `crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/`:
 
-| Scenario                          | Expected coverage                                                          |
-| --------------------------------- | -------------------------------------------------------------------------- |
-| Full local manifest               | Complete tree and local source                                             |
-| `vp toolchain vite`               | Core, Vite, Rolldown, Oxc, and Oxc Resolver chain                          |
-| Multiple filters                  | Stable union of branches                                                   |
-| Alias filter                      | `vite-plus-core`, `vite-task`, `tsrs-lint`, and legacy Go alias resolution |
-| `--json`                          | Valid JSON without header, styling, or trailing text                       |
-| No local package                  | Global source selection                                                    |
-| `--global` inside a local project | Global source forced                                                       |
-| Old local Vite+ package           | Unknown-command failure from the local CLI                                 |
-| Unknown tool                      | Status 1 and `vp why` hint                                                 |
-| `vp why vite`                     | Package-manager output followed by toolchain hint                          |
-| `vp why vite --json`              | Unmodified JSON package-manager output                                     |
+| Scenario                          | Expected coverage                                    |
+| --------------------------------- | ---------------------------------------------------- |
+| Full local manifest               | Complete tree and local source                       |
+| `vp toolchain vite`               | Core, Vite, Rolldown, Oxc, and Oxc Resolver chain    |
+| Multiple filters                  | Stable union of branches                             |
+| Alias filter                      | `vite-plus-core`, `vite-task`, and `tsrs-lint`       |
+| `--json`                          | Valid JSON without header, styling, or trailing text |
+| No local package                  | Global source selection                              |
+| `--global` inside a local project | Global source forced                                 |
+| Old local Vite+ package           | Unknown-command failure from the local CLI           |
+| Unknown tool                      | Status 1 and `vp why` hint                           |
+| `vp why vite`                     | Package-manager output followed by toolchain hint    |
+| `vp why vite --json`              | Unmodified JSON package-manager output               |
 
 Release artifact tests load the same manifest with each platform binding. The
 tests compare native versions with the compiled release inputs.

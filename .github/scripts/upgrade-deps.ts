@@ -70,7 +70,6 @@ type PnpmWorkspaceVersions = {
   oxcNodeCore: string;
   oxfmt: string;
   oxlint: string;
-  oxlintTsgolint: string;
   tsrs: string;
   oxcProjectRuntime: string;
   oxcProjectTypes: string;
@@ -265,7 +264,6 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
   const filePath = path.join(ROOT, 'pnpm-workspace.yaml');
   let content = fs.readFileSync(filePath, 'utf8');
 
-  // oxlint's trailing \n in the pattern disambiguates from oxlint-tsgolint.
   // Official @vitest/* catalog entries (browser + core direct deps) stay pinned
   // to the same exact version as `vitest` itself, otherwise the catalog drifts
   // from VITEST_VERSION.
@@ -367,13 +365,6 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
       pattern: /'@oxlint\/plugins': =([\d.]+(?:-[\w.]+)?)/,
       replacement: `'@oxlint/plugins': =${versions.oxlint}`,
       newVersion: versions.oxlint,
-    },
-    {
-      // Tsgolint has its own release schedule and version series.
-      name: 'oxlint-tsgolint',
-      pattern: /oxlint-tsgolint: =([\d.]+(?:-[\w.]+)?)/,
-      replacement: `oxlint-tsgolint: =${versions.oxlintTsgolint}`,
-      newVersion: versions.oxlintTsgolint,
     },
     {
       name: 'tsrs',
@@ -597,7 +588,6 @@ async function upgradeDependencies(): Promise<void> {
     oxcNodeCoreVersion,
     oxfmtVersion,
     oxlintVersion,
-    oxlintTsgolintVersion,
     tsrsVersion,
     oxcProjectRuntimeVersion,
     oxcProjectTypesVersion,
@@ -614,7 +604,6 @@ async function upgradeDependencies(): Promise<void> {
     getNpmVersion('@oxc-node/core'),
     getNpmVersion('oxfmt'),
     getNpmVersion('oxlint'),
-    getNpmVersion('oxlint-tsgolint'),
     getNpmVersion('tsrs'),
     getNpmVersion('@oxc-project/runtime'),
     getNpmVersion('@oxc-project/types'),
@@ -632,7 +621,6 @@ async function upgradeDependencies(): Promise<void> {
   console.log(`oxfmt: ${oxfmtVersion}`);
   console.log(`oxlint: ${oxlintVersion}`);
   console.log(`@oxlint/plugins (from oxlint): ${oxlintVersion}`);
-  console.log(`oxlint-tsgolint: ${oxlintTsgolintVersion}`);
   console.log(`tsrs: ${tsrsVersion}`);
   console.log(`@oxc-project/runtime: ${oxcProjectRuntimeVersion}`);
   console.log(`@oxc-project/types: ${oxcProjectTypesVersion}`);
@@ -655,7 +643,6 @@ async function upgradeDependencies(): Promise<void> {
     oxcNodeCore: oxcNodeCoreVersion,
     oxfmt: oxfmtVersion,
     oxlint: oxlintVersion,
-    oxlintTsgolint: oxlintTsgolintVersion,
     tsrs: tsrsVersion,
     oxcProjectRuntime: oxcProjectRuntimeVersion,
     oxcProjectTypes: oxcProjectTypesVersion,

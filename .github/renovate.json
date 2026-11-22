@@ -94,7 +94,6 @@
         "lint-staged",
         "oxfmt",
         "oxlint",
-        "oxlint-tsgolint",
         "tsdown",
         "tsrs",
         "vite",

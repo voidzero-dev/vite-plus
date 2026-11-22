@@ -31,7 +31,6 @@
     "@types/node": "catalog:",
     "@typescript/native-preview": "catalog:",
     "@voidzero-dev/vite-plus-tools": "workspace:*",
-    "oxlint-tsgolint": "catalog:",
     "playwright": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",

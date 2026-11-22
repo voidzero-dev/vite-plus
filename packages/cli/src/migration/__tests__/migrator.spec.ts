@@ -2812,15 +2812,7 @@ describe('ensureVitePlusBootstrap', () => {
     expect(workspace.catalog['vite-plus']).toBe('latest');
   });
 
-  it('strips bundled tool deps (oxlint/oxlint-tsgolint/oxfmt/tsdown) from an existing Vite+ pnpm project so no `catalog:` reference dangles after the catalog drops them', () => {
-    // Regression for the upgrade path: the catalog rewrite deletes EVERY
-    // REMOVE_PACKAGES entry from the workspace catalog (catalog.ts), but the
-    // existing-Vite+ package.json reconcile only stripped the `@vitest/*`
-    // subset. That left `oxlint-tsgolint` (and the other bundled tools) as a
-    // `catalog:` reference whose catalog entry was just deleted, so the next
-    // `pnpm install` aborts with
-    // `[ERR_PNPM_CATALOG_ENTRY_NOT_FOUND_FOR_SPEC] No catalog entry
-    // 'oxlint-tsgolint' was found for catalog 'default'`.
+  it('removes bundled tools and the old lint backend from the manifest and catalog of an existing pnpm project', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -2854,9 +2846,6 @@ describe('ensureVitePlusBootstrap', () => {
     const pkg = readJson(path.join(tmpDir, 'package.json')) as {
       devDependencies: Record<string, string>;
     };
-    // The bundled toolchain packages are owned by vite-plus and must be removed
-    // from package.json (matching the catalog removal and the fresh path), so
-    // they leave no dangling `catalog:` reference behind.
     expect(pkg.devDependencies.oxfmt).toBeUndefined();
     expect(pkg.devDependencies.oxlint).toBeUndefined();
     expect(pkg.devDependencies['oxlint-tsgolint']).toBeUndefined();
@@ -2864,8 +2853,6 @@ describe('ensureVitePlusBootstrap', () => {
     // vite-plus itself stays a managed catalog dependency.
     expect(pkg.devDependencies['vite-plus']).toBe('catalog:');
 
-    // Both sides are consistent: the catalog no longer defines the bundled
-    // tools either, confirming no surviving `catalog:` reference dangles.
     const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
       catalog: Record<string, string>;
     };

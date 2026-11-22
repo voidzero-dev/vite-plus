@@ -16,7 +16,7 @@ VITE+ - The Unified Toolchain for the Web
 • Node <version>  pnpm <version>
 • 1 config update applied, 3 files had imports rewritten
 ! Warnings:
-  - Removed `"esModuleInterop": false` from templates/starter/tsconfig.json — this option has been deprecated. See https://github.com/oxc-project/tsgolint/issues/351, https://github.com/microsoft/TypeScript/issues/62529
+  - Removed `"esModuleInterop": false` from templates/starter/tsconfig.json — this option has been deprecated. See https://github.com/microsoft/TypeScript/issues/62529
 ```
 
 ## `vpt print-file templates/starter/vite.config.ts`
