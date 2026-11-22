@@ -3,15 +3,12 @@
 //! A Yarn launcher hands each command to the release in `yarnPath` unless
 //! `ignorePath` or `YARN_IGNORE_PATH` turns that off. Yarn Classic and Yarn
 //! Berry follow different files and variables, so Vite+ does not repeat those
-//! rules. It only looks for any sign of delegation, asks the launcher with
-//! `yarn --version` when it finds one, and caches the answer under a key built
-//! from the rc files, the release metadata, the Yarn path variables, and the
-//! launcher version. The key does not see what a `yarnPath` script runs.
+//! rules. It only looks for any sign of delegation and asks the launcher with
+//! `yarn --version` when it finds one.
 
-use std::{ffi::OsString, fs, io, time::UNIX_EPOCH};
+use std::{ffi::OsString, fs};
 
 use semver::Version;
-use sha2::{Digest, Sha256};
 use vp_shared::{PrependOptions, ToolPathEnv};
 use vt_path::AbsolutePath;
 use vt_str::Str;
@@ -20,157 +17,50 @@ use crate::{PackageManager, error::Error};
 
 /// Classic reads `.yarnrc`, Berry reads `.yarnrc.yml` or `YARN_RC_FILENAME`.
 const RC_FILE_NAMES: [&str; 2] = [".yarnrc.yml", ".yarnrc"];
-const ENV_VARS: [&str; 3] = ["YARN_YARN_PATH", "YARN_IGNORE_PATH", "YARN_RC_FILENAME"];
+/// Classic spells the setting `yarn-path`, Berry spells it `yarnPath`.
+const PATH_SETTINGS: [&[u8]; 2] = [b"yarnPath", b"yarn-path"];
 
 /// Returns the version that the Yarn launcher in `manager` runs for `cwd`.
 pub(crate) async fn effective_version(
     cwd: &AbsolutePath,
     manager: &PackageManager,
 ) -> Result<Str, Error> {
-    let config = vp_shared::EnvConfig::get();
-    let env = yarn_env(std::env::vars_os());
-    let key = match delegation(cwd, &config.user_home, &manager.version, &env) {
-        Delegation::None => return Ok(manager.version.clone()),
-        Delegation::Uncached => return query_version(cwd, manager).await,
-        Delegation::Cached(key) => key,
-    };
-    let cache_path =
-        config.dirs.cache.join("package_manager_effective_version").join("yarn").join(&*key);
-    if let Ok(version) = fs::read_to_string(&cache_path)
-        && Version::parse(&version).is_ok()
-    {
-        return Ok(version.into());
+    let home = &vp_shared::EnvConfig::get().user_home;
+    if may_delegate(cwd, home, std::env::vars_os()) {
+        query_version(cwd, manager).await
+    } else {
+        Ok(manager.version.clone())
     }
-    let version = query_version(cwd, manager).await?;
-    // A failed write only means the next command asks Yarn again.
-    let _ = write_cache(&cache_path, &version);
-    Ok(version)
 }
 
-#[derive(Debug, PartialEq, Eq)]
-enum Delegation {
-    /// Nothing can make the launcher delegate, so it runs its own version.
-    None,
-    /// An rc file does not parse here, although Yarn may still accept it, so
-    /// the key cannot cover its `yarnPath`. Ask Yarn without caching.
-    Uncached,
-    /// A cache key built from the rc files, the release metadata, the Yarn
-    /// path variables, and the launcher version.
-    Cached(Str),
-}
-
-fn delegation(
+/// Whether an rc file or variable can make the launcher delegate. A false match
+/// only costs one `yarn --version`, so this looks for the setting names in the
+/// current, parent, and home directories instead of parsing the files.
+fn may_delegate(
     cwd: &AbsolutePath,
     home: &AbsolutePath,
-    launcher_version: &str,
-    env: &[(&str, OsString, OsString)],
-) -> Delegation {
-    let mut hasher = Sha256::new();
-    let mut delegates = false;
-    hasher.update(launcher_version);
-
-    let mut rc_names: Vec<OsString> = RC_FILE_NAMES.iter().map(OsString::from).collect();
-    for (setting, name, value) in env {
-        hasher.update([0]);
-        hasher.update(name.as_encoded_bytes());
-        hasher.update([0]);
-        hasher.update(value.as_encoded_bytes());
-        match *setting {
-            "YARN_YARN_PATH" => {
-                delegates = true;
-                hash_target(&mut hasher, &cwd.join(value));
-            }
-            "YARN_RC_FILENAME" => rc_names.push(value.clone()),
-            _ => {}
-        }
-    }
-
-    let dirs = std::iter::successors(Some(cwd), |dir| dir.parent()).chain(Some(home));
-    for dir in dirs {
-        for name in &rc_names {
-            let rc_path = dir.join(name);
-            let Ok(content) = fs::read_to_string(&rc_path) else { continue };
-            hasher.update([0]);
-            hasher.update(rc_path.as_path().as_os_str().as_encoded_bytes());
-            hasher.update([0]);
-            hasher.update(&content);
-            let target = if name == ".yarnrc" {
-                Ok(classic_yarn_path(&content).map(Str::from))
-            } else {
-                berry_yarn_path(&content)
-            };
-            match target {
-                Ok(Some(target)) => {
-                    delegates = true;
-                    hash_target(&mut hasher, &dir.join(target));
-                }
-                Ok(None) => {}
-                // Yarn accepts some files that serde_norway rejects, such as duplicate keys.
-                Err(_) => return Delegation::Uncached,
-            }
-        }
-    }
-
-    if delegates {
-        Delegation::Cached(hex::encode(hasher.finalize()).into())
-    } else {
-        Delegation::None
-    }
-}
-
-/// The Yarn variables that can change the effective version, with the setting
-/// each one names. Berry matches `YARN_*` names without regard to case and lets
-/// a later spelling override an earlier one, so the original names and their
-/// order stay in the key.
-fn yarn_env(
     vars: impl IntoIterator<Item = (OsString, OsString)>,
-) -> Vec<(&'static str, OsString, OsString)> {
-    vars.into_iter()
-        .filter_map(|(name, value)| {
-            let text = name.to_str()?;
-            let setting = ENV_VARS.iter().find(|var| var.eq_ignore_ascii_case(text))?;
-            Some((*setting, name, value))
+) -> bool {
+    let mut rc_names: Vec<OsString> = RC_FILE_NAMES.iter().map(OsString::from).collect();
+    for (name, value) in vars {
+        // Berry matches `YARN_*` names without regard to case.
+        let Some(name) = name.to_str() else { continue };
+        if name.eq_ignore_ascii_case("YARN_YARN_PATH") {
+            return true;
+        }
+        if name.eq_ignore_ascii_case("YARN_RC_FILENAME") {
+            rc_names.push(value);
+        }
+    }
+    std::iter::successors(Some(cwd), |dir| dir.parent()).chain(Some(home)).any(|dir| {
+        rc_names.iter().any(|name| {
+            fs::read(dir.join(name)).is_ok_and(|content| {
+                PATH_SETTINGS
+                    .iter()
+                    .any(|setting| content.windows(setting.len()).any(|window| window == *setting))
+            })
         })
-        .collect()
-}
-
-/// The top-level `yarnPath` in a Berry rc file, which is YAML.
-fn berry_yarn_path(content: &str) -> Result<Option<Str>, serde_norway::Error> {
-    let config: serde_norway::Value = serde_norway::from_str(content)?;
-    Ok(config.get("yarnPath").and_then(serde_norway::Value::as_str).map(Str::from))
-}
-
-/// The last `yarn-path` in a Classic `.yarnrc`, which is not YAML. A value is
-/// either a double-quoted string or a bare word, and the last one wins.
-fn classic_yarn_path(content: &str) -> Option<&str> {
-    content
-        .lines()
-        .filter_map(|line| {
-            let line = line.trim_start();
-            let rest =
-                line.strip_prefix("yarn-path").or_else(|| line.strip_prefix("\"yarn-path\""))?;
-            let rest = rest.strip_prefix([' ', '\t'])?.trim_start();
-            let value = match rest.strip_prefix('"') {
-                Some(quoted) => quoted.split_once('"')?.0,
-                None => rest.split_whitespace().next()?,
-            };
-            (!value.is_empty()).then_some(value)
-        })
-        .last()
-}
-
-/// A release can be replaced in place under the same name, so its metadata is
-/// part of the key. Hashing the whole bundle would cost more than the cache saves.
-fn hash_target(hasher: &mut Sha256, target: &AbsolutePath) {
-    hasher.update([0]);
-    hasher.update(target.as_path().as_os_str().as_encoded_bytes());
-    let Ok(metadata) = fs::metadata(target) else {
-        hasher.update(b"missing");
-        return;
-    };
-    hasher.update(metadata.len().to_le_bytes());
-    let modified = metadata.modified().ok().and_then(|time| time.duration_since(UNIX_EPOCH).ok());
-    hasher.update(modified.unwrap_or_default().as_nanos().to_le_bytes());
+    })
 }
 
 async fn query_version(cwd: &AbsolutePath, manager: &PackageManager) -> Result<Str, Error> {
@@ -205,13 +95,6 @@ async fn query_version(cwd: &AbsolutePath, manager: &PackageManager) -> Result<S
     Ok(version.into())
 }
 
-fn write_cache(path: &AbsolutePath, version: &str) -> io::Result<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    fs::write(path, version)
-}
-
 #[cfg(test)]
 mod tests {
     use tempfile::TempDir;
@@ -225,22 +108,8 @@ mod tests {
         (dir, path)
     }
 
-    fn delegation_for(
-        cwd: &AbsolutePath,
-        home: &AbsolutePath,
-        launcher_version: &str,
-        env: &[(&str, &str)],
-    ) -> Delegation {
-        let env = yarn_env(env.iter().map(|(name, value)| (name.into(), value.into())));
-        delegation(cwd, home, launcher_version, &env)
-    }
-
-    fn key(cwd: &AbsolutePath, home: &AbsolutePath, env: &[(&str, &str)]) -> Option<Str> {
-        match delegation_for(cwd, home, "2.4.2", env) {
-            Delegation::None => None,
-            Delegation::Cached(key) => Some(key),
-            Delegation::Uncached => panic!("every rc file in this test parses"),
-        }
+    fn check(cwd: &AbsolutePath, home: &AbsolutePath, env: &[(&str, &str)]) -> bool {
+        may_delegate(cwd, home, env.iter().map(|(name, value)| (name.into(), value.into())))
     }
 
     #[test]
@@ -248,7 +117,7 @@ mod tests {
         let (_project, project) = temp_dir();
         let (_home, home) = temp_dir();
         fs::write(project.join(".yarnrc.yml"), "nodeLinker: node-modules\n").unwrap();
-        assert_eq!(key(&project, &home, &[("YARN_IGNORE_PATH", "1")]), None);
+        assert!(!check(&project, &home, &[("YARN_IGNORE_PATH", "1")]));
     }
 
     #[test]
@@ -257,86 +126,24 @@ mod tests {
         let (_home, home) = temp_dir();
         let sub = project.join("packages/app");
         fs::create_dir_all(&sub).unwrap();
-        assert!(key(&sub, &home, &[("YARN_YARN_PATH", "yarn.cjs")]).is_some());
-        fs::write(home.join(".yarnrc.yml"), "yarnPath: /yarn.cjs\n").unwrap();
-        assert!(key(&sub, &home, &[]).is_some());
-        fs::remove_file(home.join(".yarnrc.yml")).unwrap();
-        fs::write(project.join(".yarnrc"), "yarn-path \".yarn/releases/yarn.cjs\"\n").unwrap();
-        assert!(key(&sub, &home, &[]).is_some());
-        fs::remove_file(project.join(".yarnrc")).unwrap();
+        assert!(check(&sub, &home, &[("YARN_YARN_PATH", "yarn.cjs")]));
+        assert!(check(&sub, &home, &[("yarn_yarn_path", "yarn.cjs")]));
+
+        let rc = |dir: &AbsolutePath, name: &str, content: &[u8]| {
+            fs::write(dir.join(name), content).unwrap();
+            let found = check(&sub, &home, &[]);
+            fs::remove_file(dir.join(name)).unwrap();
+            found
+        };
+        assert!(rc(&home, ".yarnrc.yml", b"yarnPath: /yarn.cjs\n"));
+        assert!(rc(&project, ".yarnrc", b"yarn-path: \".yarn/releases/yarn.cjs\"\n"));
+        // Forms that a parser could miss still lead to a query.
+        assert!(rc(&project, ".yarnrc.yml", b"yarnPath:\n  onConflict: reset\n  value: a.cjs\n"));
+        assert!(rc(&project, ".yarnrc.yml", b"# caf\xe9\nyarnPath: ${RELEASE:-a}.cjs\n"));
+
         fs::write(project.join(".custom.yml"), "yarnPath: yarn.cjs\n").unwrap();
-        assert!(key(&sub, &home, &[]).is_none());
-        assert!(key(&sub, &home, &[("YARN_RC_FILENAME", ".custom.yml")]).is_some());
-        assert!(key(&sub, &home, &[("yarn_rc_filename", ".custom.yml")]).is_some());
-        fs::remove_file(project.join(".custom.yml")).unwrap();
-        assert!(key(&sub, &home, &[("yarn_yarn_path", "yarn.cjs")]).is_some());
-    }
-
-    #[test]
-    fn key_changes_with_each_input() {
-        let (_project, project) = temp_dir();
-        let (_home, home) = temp_dir();
-        let release = project.join(".yarn/releases/yarn-berry.cjs");
-        fs::create_dir_all(release.parent().unwrap()).unwrap();
-        fs::write(&release, "a").unwrap();
-        fs::write(
-            project.join(".yarnrc.yml"),
-            "yarnPath: .yarn/releases/yarn-berry.cjs # pinned\n",
-        )
-        .unwrap();
-        let base = key(&project, &home, &[]).unwrap();
-        assert_eq!(key(&project, &home, &[]).unwrap(), base);
-
-        fs::write(&release, "ab").unwrap();
-        let replaced = key(&project, &home, &[]).unwrap();
-        assert_ne!(replaced, base, "a release replaced in place");
-
-        let ignored = key(&project, &home, &[("YARN_IGNORE_PATH", "1")]).unwrap();
-        assert_ne!(ignored, replaced);
-        assert_ne!(key(&project, &home, &[("yarn_ignore_path", "1")]).unwrap(), replaced);
-        // Yarn applies whichever spelling comes last.
-        let delegated_env = [("YARN_IGNORE_PATH", "1"), ("yarn_ignore_path", "0")];
-        let ignored_env = [("YARN_IGNORE_PATH", "0"), ("yarn_ignore_path", "1")];
-        assert_ne!(key(&project, &home, &delegated_env), key(&project, &home, &ignored_env));
-        let launcher = delegation_for(&project, &home, "3.0.0", &[]);
-        assert_ne!(launcher, Delegation::Cached(replaced.clone()), "another launcher version");
-
-        fs::write(home.join(".yarnrc.yml"), "ignorePath: true\n").unwrap();
-        assert_ne!(key(&project, &home, &[]).unwrap(), replaced, "an rc file without yarnPath");
-    }
-
-    #[test]
-    fn berry_rc_files_are_read_as_yaml() {
-        let read = |content: &str| berry_yarn_path(content).unwrap();
-        assert_eq!(read("yarnPath: d.cjs # pinned\n").as_deref(), Some("d.cjs"));
-        assert_eq!(read("yarnPath: \"e # f.cjs\" # pinned\n").as_deref(), Some("e # f.cjs"));
-        assert_eq!(read("yarnPath: \"a\\u0062.cjs\"\n").as_deref(), Some("ab.cjs"));
-        assert_eq!(read("yarnPath: >-\n  folded.cjs\n").as_deref(), Some("folded.cjs"));
-        assert_eq!(read("{yarnPath: flow.cjs}\n").as_deref(), Some("flow.cjs"));
-        assert_eq!(read("yarnPathX: x.cjs\n# yarnPath: y.cjs\n"), None);
-        assert_eq!(read("packageExtensions:\n  yarnPath: nested.cjs\n"), None);
-        assert_eq!(read(""), None);
-        assert!(berry_yarn_path("yarnPath: [unclosed\n").is_err());
-    }
-
-    #[test]
-    fn classic_rc_files_use_the_last_yarn_path() {
-        assert_eq!(classic_yarn_path("yarn-path \"a b.js\"\n"), Some("a b.js"));
-        assert_eq!(classic_yarn_path("\"yarn-path\" b.js # pinned\n"), Some("b.js"));
-        assert_eq!(classic_yarn_path("yarn-path a.js\nyarn-path c.js\n"), Some("c.js"));
-        assert_eq!(classic_yarn_path("yarn-pathx d.js\n# yarn-path e.js\n"), None);
-    }
-
-    #[test]
-    fn an_unreadable_rc_file_is_asked_without_caching() {
-        let (_project, project) = temp_dir();
-        let (_home, home) = temp_dir();
-        // Yarn accepts duplicate keys, but serde_norway rejects them.
-        fs::write(
-            project.join(".yarnrc.yml"),
-            "nodeLinker: node-modules\nnodeLinker: node-modules\nyarnPath: current.cjs\n",
-        )
-        .unwrap();
-        assert_eq!(delegation_for(&project, &home, "4.18.1", &[]), Delegation::Uncached);
+        assert!(!check(&sub, &home, &[]));
+        assert!(check(&sub, &home, &[("YARN_RC_FILENAME", ".custom.yml")]));
+        assert!(check(&sub, &home, &[("yarn_rc_filename", ".custom.yml")]));
     }
 }
