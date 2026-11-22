@@ -60,28 +60,15 @@ pub(super) async fn edit_args(
 
     if matches!(edit, NpmWorkspaceEdit::LegacyRoot { .. }) {
         // Early npm 8 interprets even ./ and ../ workspace paths from its prefix.
-        let mut next_selector = false;
-        for arg in &mut args {
-            if arg == "--" {
-                break;
-            }
-            if next_selector {
-                *arg = caller_selector(arg, cwd);
-                next_selector = false;
-            } else if matches!(arg.as_str(), "--workspace" | "-w") {
-                next_selector = true;
-            } else if let Some((option, value)) = arg.split_once('=')
-                && matches!(option, "--workspace" | "-w")
-            {
-                *arg = vt_str::format!("{option}={}", caller_selector(value, cwd)).to_string();
-            }
-        }
+        args = rebase_workspace_selectors(args, cwd);
     }
+    // PowerShell -File splits an attached --option=C:\path at the drive colon.
+    // Keep each generated path in its own argument when forwarding it to npm.
     if !has_globalconfig {
         let globalconfig = original_globalconfig(&npm, root, cwd, &args, env).await?;
-        args.insert(1, vt_str::format!("--globalconfig={}", globalconfig.display()).to_string());
+        args.splice(1..1, ["--globalconfig".to_owned(), globalconfig.display().to_string()]);
     }
-    args.insert(1, vt_str::format!("--prefix={}", root.as_path().display()).to_string());
+    args.splice(1..1, ["--prefix".to_owned(), root.as_path().display().to_string()]);
     if matches!(edit, NpmWorkspaceEdit::LegacyRoot { local_dependency: true })
         && (has_selector || legacy_config_selects_members(&npm, cwd, &args, env).await?)
     {
@@ -201,13 +188,36 @@ pub(super) fn is_local_dependency(package: &str) -> bool {
     lower.ends_with(".tgz") || lower.ends_with(".tar") || lower.ends_with(".tar.gz")
 }
 
-fn caller_selector(value: &str, cwd: &AbsolutePath) -> String {
-    let path = Path::new(value);
-    if path.starts_with(".") || path.starts_with("..") {
-        cwd.as_path().join(path).to_string_lossy().into_owned()
-    } else {
-        value.to_owned()
+fn rebase_workspace_selectors(args: Vec<String>, cwd: &AbsolutePath) -> Vec<String> {
+    let mut result = Vec::with_capacity(args.len());
+    let mut args = args.into_iter();
+    let mut next_selector = false;
+    while let Some(arg) = args.next() {
+        if arg == "--" {
+            result.push(arg);
+            result.extend(args);
+            break;
+        }
+        if next_selector {
+            result.push(caller_relative_selector(&arg, cwd).unwrap_or(arg));
+            next_selector = false;
+        } else if let Some((option @ ("--workspace" | "-w"), value)) = arg.split_once('=')
+            && let Some(path) = caller_relative_selector(value, cwd)
+        {
+            result.push(option.to_owned());
+            result.push(path);
+        } else {
+            next_selector = matches!(arg.as_str(), "--workspace" | "-w");
+            result.push(arg);
+        }
     }
+    result
+}
+
+fn caller_relative_selector(value: &str, cwd: &AbsolutePath) -> Option<String> {
+    let path = Path::new(value);
+    (path.starts_with(".") || path.starts_with(".."))
+        .then(|| cwd.as_path().join(path).to_string_lossy().into_owned())
 }
 
 // Use the same Windows shim as the final install or uninstall command.

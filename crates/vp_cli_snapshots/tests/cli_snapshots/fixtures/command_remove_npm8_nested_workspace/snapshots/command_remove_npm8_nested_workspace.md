@@ -18,6 +18,15 @@ select the outer docs package when the inner workspace also has a member named d
 up to date in <duration>
 ```
 
+## `cd packages/app && vp remove -w testnpm2 -- --workspace=../docs --no-audit`
+
+resolve an attached workspace path from the calling member
+
+```
+
+up to date in <duration>
+```
+
 ## `vpt print-file package.json packages/app/package.json packages/docs/package.json packages/app/plugins/docs/package.json`
 
 ```
