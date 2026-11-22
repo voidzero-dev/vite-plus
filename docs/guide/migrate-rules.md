@@ -193,7 +193,7 @@ Migration detects Playwright usage before it rewrites imports, including legacy 
 
 `vp migrate` restores removed Vite+ WebDriverIO aliases to `@vitest/browser-webdriverio` and adds `^5.0.0` if the provider is missing. It upgrades older versions, narrows ranges that allow versions below `5.0.0`, updates referenced catalog entries, and removes overrides that force an older provider. Versions and ranges that meet the minimum stay unchanged. Migration ensures the required `webdriverio` peer and adds an `@vitest/browser` override matching bundled Vitest (`resolutions` for Yarn). You manage later community provider upgrades. See [Community WebDriverIO provider](./vitest-v5.md#community-webdriverio-provider).
 
-Object-valued nested npm and Bun overrides are preserved: they are user-defined scopes rather than scalar version pins.
+For npm and Bun, migration reads or updates the `"."` entry of a nested override for a managed package. It preserves child entries in `package.json`, including pins such as `overrides.vite.postcss`.
 
 ## Source Rewrite Rules
 
@@ -410,7 +410,6 @@ Migration converts the Volta `volta.node` pin to `.node-version`, because Vite+ 
 
 ### npm
 
-- If a managed package has a nested override, migration writes its version or alias to the `"."` entry and keeps the child overrides. For example, a pin in `overrides.vite.rollup` stays in place when migration sets `overrides.vite["."]`.
 - Direct aliases are normalized before the matching override is added, so npm does not fail with `EOVERRIDE`.
 - When a real Vite installation changes to the core alias, stale Vite install and lockfile state is removed before reinstalling.
 - Opt-in browser-provider layouts get a top-level `vite` edge when nested Vitest packages otherwise cannot resolve it.

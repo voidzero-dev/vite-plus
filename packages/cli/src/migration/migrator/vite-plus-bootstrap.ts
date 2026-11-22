@@ -2,10 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { PackageManager, type WorkspaceInfo, type WorkspacePackage } from '../../types/index.ts';
-import {
-  readBunCatalogDependencyResolver,
-  type CatalogDependencyResolver,
-} from '../../utils/catalog.ts';
+import type { CatalogDependencyResolver } from '../../utils/catalog.ts';
 import {
   VITEST_VERSION,
   VITE_PLUS_NAME,
@@ -23,7 +20,7 @@ import {
   collectProviderSourceModes,
   collectVitestEcosystemInstallDependencyNames,
   createCatalogDependencyResolver,
-  ensureNpmOverrideEntries,
+  ensurePackageJsonOverrides,
   ensurePnpmWorkspacePackages,
   findYarnWorkspaceHoisting,
   getAlignedVitestEcosystemDependencySpec,
@@ -744,8 +741,10 @@ export function detectVitePlusBootstrapPending(
   if (packageManager === PackageManager.npm) {
     return (
       vitePlusDependencyNeedsConcreteVersion(pkg) ||
-      ensureNpmOverrideEntries(pkg.overrides, managedOverridePackages(usesVitest, usesWebdriverio))
-        .changed ||
+      ensurePackageJsonOverrides(
+        pkg.overrides,
+        managedOverridePackages(usesVitest, usesWebdriverio),
+      ).changed ||
       npmVitePlusManagedDependenciesPending(pkg, usesVitest)
     );
   }
@@ -754,20 +753,19 @@ export function detectVitePlusBootstrapPending(
     // `catalog:` references, so the catalog resolver must NOT be consulted —
     // otherwise a dangling `catalog:` override resolves through the dead catalog
     // field and is mistaken for satisfied, masking the pending rewrite.
-    const bunCatalogResolver = supportCatalog
-      ? readBunCatalogDependencyResolver(pkg, resolvedPackageManagerVersion)
-      : undefined;
+    const bunCatalogResolver = supportCatalog ? catalogDependencyResolver : undefined;
     // A `catalog:` vite-plus spec looks current, so judge its catalog value too.
     return (
       (supportCatalog &&
         workspaceCatalogVitePlusDependencyPending(projectPath, packages, bunCatalogResolver)) ||
-      !overridesSatisfyVitePlus(
+      ensurePackageJsonOverrides(
         pkg.overrides,
-        usesVitest,
-        bunCatalogResolver,
-        'bare',
-        usesWebdriverio,
-      )
+        managedOverridePackages(usesVitest, usesWebdriverio),
+        (name, current, target) =>
+          current && overrideSpecSatisfiesVitePlus(name, current, bunCatalogResolver)
+            ? current
+            : target,
+      ).changed
     );
   }
   if (packageManager === PackageManager.pnpm) {
@@ -911,14 +909,14 @@ function readTextFileIfExists(filePath: string): string | undefined {
   return fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf-8') : undefined;
 }
 
-function ensureOverrideEntries<T>(
-  overrides: Record<string, T> | undefined,
+function ensureOverrideEntries(
+  overrides: Record<string, string> | undefined,
   usesVitest: boolean,
   catalogDependencyResolver?: CatalogDependencyResolver,
   keyStyle: ManagedOverrideKeyStyle = 'bare',
   usesWebdriverioProvider = false,
-): { overrides: Record<string, T | string>; changed: boolean } {
-  const next: Record<string, T | string> = { ...overrides };
+): { overrides: Record<string, string>; changed: boolean } {
+  const next = { ...overrides };
   let changed = false;
   // Common case: drop a lingering managed `vitest` override.
   if (!usesVitest && removeManagedVitestEntry(next, keyStyle)) {
@@ -1106,28 +1104,13 @@ export function ensureVitePlusBootstrap(
         pkg.resolutions = ensured.overrides;
         packageJsonChanged = true;
       }
-    } else if (workspaceInfo.packageManager === PackageManager.npm) {
-      const ensured = ensureNpmOverrideEntries(
+    } else if (
+      workspaceInfo.packageManager === PackageManager.npm ||
+      (workspaceInfo.packageManager === PackageManager.bun && !isBunWorkspace)
+    ) {
+      const ensured = ensurePackageJsonOverrides(
         pkg.overrides,
         managedOverridePackages(usesVitest, usesWebdriverio),
-      );
-      if (ensured.changed) {
-        pkg.overrides = ensured.overrides;
-        packageJsonChanged = true;
-      }
-    } else if (workspaceInfo.packageManager === PackageManager.bun) {
-      // Standalone bun (`supportCatalog === false`) has no catalog support, so a
-      // `catalog:` override must be rewritten to the concrete core alias rather
-      // than left dangling — the catalog resolver is only consulted for a real
-      // bun workspace where `rewriteBunCatalog` maintains the catalog field.
-      const ensured = ensureOverrideEntries(
-        pkg.overrides,
-        usesVitest,
-        supportCatalog
-          ? readBunCatalogDependencyResolver(pkg, workspaceInfo.downloadPackageManager.version)
-          : undefined,
-        'bare',
-        usesWebdriverio,
       );
       if (ensured.changed) {
         pkg.overrides = ensured.overrides;
@@ -1301,7 +1284,7 @@ export function ensureVitePlusBootstrap(
   } else if (isBunWorkspace) {
     // Only a bun WORKSPACE writes a catalog (matching the fresh path, where
     // rewriteBunCatalog runs only on monorepo roots). A standalone bun project
-    // keeps the concrete overrides set by `ensureOverrideEntries` above.
+    // keeps the concrete overrides set by `ensurePackageJsonOverrides` above.
     const before = fs.readFileSync(packageJsonPath, 'utf-8');
     rewriteBunCatalog(
       projectPath,

@@ -356,11 +356,12 @@ export function managedOverridePackages(
     : managed;
 }
 
-// In npm's object form, "." overrides the package itself. All other keys
+// In npm and Bun's object form, "." overrides the package itself. All other keys
 // constrain its children and must survive a change to the package's own pin.
-export function ensureNpmOverrideEntries(
+export function ensurePackageJsonOverrides(
   overrides: Record<string, unknown> | undefined,
   managed: Record<string, string>,
+  selectSpec?: (name: string, current: string | undefined, target: string) => string,
 ): { overrides: Record<string, unknown>; changed: boolean } {
   const next = { ...overrides };
   let changed = false;
@@ -380,10 +381,14 @@ export function ensureNpmOverrideEntries(
     }
   }
 
-  for (const [name, spec] of Object.entries(managed)) {
-    const current = next[name];
-    if ((isPlainRecord(current) ? current['.'] : current) !== spec) {
-      next[name] = isPlainRecord(current) ? { ...current, '.': spec } : spec;
+  for (const [name, target] of Object.entries(managed)) {
+    const entry = next[name];
+    const nested = isPlainRecord(entry);
+    const current = nested ? entry['.'] : entry;
+    const spec =
+      selectSpec?.(name, typeof current === 'string' ? current : undefined, target) ?? target;
+    if (current !== spec) {
+      next[name] = nested ? { ...entry, '.': spec } : spec;
       changed = true;
     }
   }
