@@ -9,7 +9,7 @@ import { compareReversed, isLessThanOrEqual, normalize } from 'verkit';
 
 import { ResolverFactory, rewriteEslint } from '../../../binding/index.js';
 import { type WorkspacePackage } from '../../types/index.ts';
-import { runCommandSilently } from '../../utils/command.ts';
+import { getVpCommand, runCommandSilently } from '../../utils/command.ts';
 import { editJsonFile, isJsonFile, readJsonFile } from '../../utils/json.ts';
 import { fetchNpmResource, getNpmRegistry } from '../../utils/npm-config.ts';
 import { displayRelative } from '../../utils/path.ts';
@@ -180,7 +180,6 @@ export async function resolveOxlintMigrateVersion(oxlintVersion: string): Promis
  * Returns true on success, false on failure (spawn error or non-zero exit).
  */
 async function runOxlintMigrateStep(
-  vpBin: string,
   cwd: string,
   migratePackage: string,
   args: string[],
@@ -190,8 +189,7 @@ async function runOxlintMigrateStep(
 ): Promise<{ ok: boolean; skippedRules?: string }> {
   try {
     const result = await runCommandSilently({
-      command: vpBin,
-      args: ['dlx', migratePackage, ...args],
+      ...getVpCommand(['dlx', migratePackage, ...args]),
       cwd,
       envs: process.env,
     });
@@ -219,7 +217,6 @@ export async function migrateEslintToOxlint(
   packages?: WorkspacePackage[],
   options?: { silent?: boolean; report?: MigrationReport },
 ): Promise<boolean> {
-  const vpBin = process.env.VP_CLI_BIN ?? 'vp';
   const spinner = options?.silent ? getSilentSpinner() : getSpinner(interactive);
 
   // Steps 1-2: Only run @oxlint/migrate if there's an eslint config at root
@@ -240,7 +237,6 @@ export async function migrateEslintToOxlint(
     // Step 1: Generate .oxlintrc.json from ESLint config
     spinner.start('Migrating ESLint config to Oxlint...');
     const migrateResult = await runOxlintMigrateStep(
-      vpBin,
       projectPath,
       migratePackage,
       migrateArgs,
@@ -259,7 +255,6 @@ export async function migrateEslintToOxlint(
     // Step 2: Replace eslint-disable comments with oxlint-disable
     spinner.start('Replacing ESLint comments with Oxlint equivalents...');
     const replaceResult = await runOxlintMigrateStep(
-      vpBin,
       projectPath,
       migratePackage,
       ['--replace-eslint-comments'],

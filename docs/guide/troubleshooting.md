@@ -22,7 +22,7 @@ Run `vp toolchain` to show the versions from the local Vite+ package. Run `vp to
 - Confirm that `lint.options.typeAware` and `lint.options.typeCheck` are enabled in `vite.config.ts`
 - Check whether your `tsconfig.json` still uses `compilerOptions.baseUrl`
 
-The Oxlint type checker path powered by `tsgolint` does not support `baseUrl`. `vp migrate` and `vp lint --init` try to run the `vp dlx @andrewbranch/ts5to6 --fixBaseUrl <tsconfig path>` fix before enabling type-aware linting. If that fix fails or is declined, Vite+ skips `typeAware` and `typeCheck`.
+The `tsrs` type checker used by Oxlint does not support `baseUrl`. `vp migrate` and `vp lint --init` try to run the `vp dlx @andrewbranch/ts5to6 --fixBaseUrl <tsconfig path>` fix before enabling type-aware linting. If that fix fails or is declined, Vite+ skips `typeAware` and `typeCheck`.
 
 ## Nested lint or format config is not applied
 
@@ -72,7 +72,7 @@ If `vp staged` fails or your pre-commit hook does not run:
 - if status shows `Preference: disabled (local)`, re-enable with `vp hooks enable`
 - check whether hooks were skipped intentionally through `VP_GIT_HOOKS=0`
 
-To stop hooks in this clone without deleting project policy files, run `vp hooks disable`. See the [Commit hooks guide](/guide/commit-hooks) for the full workflow.
+To stop hooks in this clone without deleting project policy files, run `vp hooks disable`. See the [Commit Hooks](/guide/commit-hooks) for the full workflow.
 
 A minimal staged config looks like this:
 

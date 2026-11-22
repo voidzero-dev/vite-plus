@@ -1,5 +1,6 @@
 [[case]]
 name = "command_env_package_manager_modes"
+prewarm-package-managers = false # Inspect configuration without downloading package managers.
 vp = "global"
 seed-runtime = false
 steps = [

@@ -12,7 +12,7 @@ pub struct PruneArgs {
     pub(crate) prod: bool,
 
     /// Remove optional dependencies
-    #[arg(long, not_supported(yarn, bun < "1.4"))]
+    #[arg(long, not_supported(npm < "7", yarn, bun < "1.4"))]
     pub(crate) no_optional: bool,
 
     /// Additional arguments
@@ -35,7 +35,10 @@ impl Resolve<PruneArgs> for Npm {
     fn resolve(&self, args: &PruneArgs, _diag: &mut Diagnostics) -> CommandResolution {
         let mut cmd = CommandBuilder::new("npm");
         cmd.arg("prune")
-            .arg_if("--omit=dev", args.prod)
+            .arg_if(
+                if self.supports_v7_commands() { "--omit=dev" } else { "--production" },
+                args.prod,
+            )
             .arg_if("--omit=optional", args.no_optional)
             .extend(args.pass_through_args.iter());
         cmd.into()
@@ -107,6 +110,30 @@ mod tests {
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["prune"]);
+    }
+
+    #[test]
+    fn npm_dependency_filter_version_boundaries() {
+        for (version, flag) in [("6.14.18", "--production"), ("7.0.0", "--omit=dev")] {
+            let args = PruneArgs {
+                prod: true,
+                pass_through_args: vec!["--no-audit".into()],
+                ..Default::default()
+            };
+            let resolution = resolve(&npm(version), args);
+            assert!(resolution.diagnostics.is_empty());
+            assert_eq!(expect_run(resolution.outcome).args, ["prune", flag, "--no-audit"]);
+        }
+
+        let args = parse_args::<PruneArgs>(["--no-optional"]).unwrap();
+        expect_unsupported(
+            resolve(&npm("6.14.18"), args),
+            &["npm < 7 does not support --no-optional."],
+        );
+        let args = parse_args::<PruneArgs>(["--no-optional"]).unwrap();
+        let resolution = resolve(&npm("7.0.0"), args);
+        assert!(resolution.diagnostics.is_empty());
+        assert_eq!(expect_run(resolution.outcome).args, ["prune", "--omit=optional"]);
     }
 
     #[test]

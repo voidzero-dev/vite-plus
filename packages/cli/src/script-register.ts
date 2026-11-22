@@ -17,12 +17,19 @@ import { canRegisterSyncHooks, createRelay, loadOxcNode, threadWatchSink } from 
 const { register } = NodeModule as Partial<typeof NodeModule>;
 
 if (!canRegisterSyncHooks(process.versions.node)) {
+  const oxcNode = loadOxcNode();
   // The hooks thread has no IPC channel, so under watch mode its reports come back
   // through this port, and this thread passes them on.
   const watch = threadWatchSink();
-  const watchPort = watch ? createRelay(watch, loadOxcNode().takeWatchDependencies) : undefined;
+  const watchPort = watch ? createRelay(watch, oxcNode.takeWatchDependencies) : undefined;
+  // The native loader context is thread-local. Freeze both choices here so ESM
+  // uses the same tsconfig and dependency policy as the CommonJS preload.
   register!(new URL('./script-esm-hooks.js', import.meta.url), {
-    data: { watchPort },
+    data: {
+      tsconfig: oxcNode.freezeTsconfig(process.cwd()),
+      transformDeps: oxcNode.freezeTransformDeps(),
+      watchPort,
+    },
     transferList: watchPort ? [watchPort] : [],
   });
 }

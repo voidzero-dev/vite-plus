@@ -556,7 +556,7 @@ describe('writeEditorConfigs', () => {
     expect(settings['npm.scriptRunner']).toBe('npm');
   });
 
-  it('writes zed settings that align formatter config with vite.config.ts', async () => {
+  it('writes zed settings that use the lint and formatter config from vite.config.ts', async () => {
     const projectRoot = createTempDir();
 
     await writeEditorConfigs({
@@ -570,6 +570,11 @@ describe('writeEditorConfigs', () => {
       fs.readFileSync(path.join(projectRoot, '.zed', 'settings.json'), 'utf8'),
     ) as {
       lsp?: {
+        oxlint?: {
+          initialization_options?: {
+            settings?: Record<string, unknown>;
+          };
+        };
         oxfmt?: {
           initialization_options?: {
             settings?: {
@@ -580,6 +585,10 @@ describe('writeEditorConfigs', () => {
       };
     };
 
+    const lintSettings = settings.lsp?.oxlint?.initialization_options?.settings;
+    expect(lintSettings).toBeDefined();
+    expect(lintSettings).not.toHaveProperty('typeAware');
+    expect(lintSettings).not.toHaveProperty('unusedDisableDirectives');
     expect(settings.lsp?.oxfmt?.initialization_options?.settings?.['fmt.configPath']).toBe(
       './vite.config.ts',
     );

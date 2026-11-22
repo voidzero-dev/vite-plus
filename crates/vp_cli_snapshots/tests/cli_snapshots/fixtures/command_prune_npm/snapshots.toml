@@ -1,0 +1,27 @@
+[[case]]
+name = "command_prune_npm10"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "install"], comment = "should install packages first", continue-on-failure = true },
+  { argv = ["vp", "pm", "prune", "--help"], comment = "should show help", continue-on-failure = true },
+  { argv = ["vp", "pm", "prune"], comment = "should prune extraneous dependencies", continue-on-failure = true },
+  { argv = ["vp", "pm", "prune", "--prod"], comment = "should prune dev dependencies (uses --omit=dev)", continue-on-failure = true },
+  { argv = ["vp", "pm", "prune", "--no-optional"], comment = "should prune optional dependencies (uses --omit=optional)", continue-on-failure = true },
+  { argv = ["vp", "pm", "prune", "--prod", "--no-optional"], comment = "should prune both dev and optional dependencies", continue-on-failure = true },
+  { argv = ["vp", "pm", "prune", "--", "--loglevel=warn"], comment = "should support pass through arguments", continue-on-failure = true },
+]
+
+[[case]]
+name = "npm6_dependency_filters_prune"
+vp = "global"
+env = { npm_config_audit = "false", npm_config_fund = "false" }
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "npm@6.14.18"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts", "--silent"], snapshot = false },
+  ["vpt", "stat-file", "node_modules/test-vite-plus-package/package.json", "--assert", "file"],
+  ["vp", "pm", "prune", "--prod", "--", "--silent"],
+  ["vpt", "stat-file", "node_modules/test-vite-plus-package/package.json", "--assert", "missing"],
+  ["vpt", "stat-file", "node_modules/testnpm2/package.json", "--assert", "file"],
+  ["vpt", "stat-file", "node_modules/test-vite-plus-package-optional/package.json", "--assert", "file"],
+]

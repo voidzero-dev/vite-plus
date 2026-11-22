@@ -1,0 +1,12 @@
+[[case]]
+name = "migration_tsx_preload"
+vp = "local"
+comment = "Plain tsx preloads keep Node.js and its flags. The local tsx stub keeps installation offline."
+steps = [
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "Migrate preload flags and literal NODE_OPTIONS assignments.", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "All commands keep Node.js or the tool launcher, and tsx is removed.", continue-on-failure = true },
+  { argv = ["vp", "run", "seed"], comment = "The migrated file command resolves the installed preload.", continue-on-failure = true },
+  { argv = ["vp", "run", "eval"], comment = "The migrated eval command keeps native Node.js behavior.", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "A second migration finds no remaining tsx use.", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "The scripts are unchanged on the second run.", continue-on-failure = true },
+]

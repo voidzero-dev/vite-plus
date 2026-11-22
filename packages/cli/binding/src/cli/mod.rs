@@ -45,7 +45,8 @@ use self::{
 /// Execute a synthesizable subcommand directly (not through vite-task Session).
 /// No caching, no task graph, no dependency resolution.
 async fn execute_direct_subcommand(
-    subcommand: SynthesizableSubcommand,
+    mut subcommand: SynthesizableSubcommand,
+    raw_args: &[String],
     cwd: &AbsolutePathBuf,
     options: Option<CliOptions>,
     explicit_chdir: bool,
@@ -61,6 +62,14 @@ async fn execute_direct_subcommand(
         app_target::AppTarget::Dir(dir) => dir,
         app_target::AppTarget::CurrentDir => cwd,
     };
+
+    // A lone `--` uses bare-command target selection. Restore the separator
+    // after selecting the target so Vite receives the original arguments.
+    if let SynthesizableSubcommand::Dev { args } | SynthesizableSubcommand::Build { args } =
+        &mut subcommand
+    {
+        vp_shared::restore_leading_arg_separator(raw_args, args);
+    }
 
     // The resolver hands back the workspace root it already found whenever the
     // command runs in the unchanged cwd (never after a -C/elicitation
@@ -97,7 +106,9 @@ async fn execute_direct_subcommand(
 
     let status = match subcommand {
         SynthesizableSubcommand::Check {
+            continue_on_error,
             fix,
+            fix_dangerously,
             quiet,
             deny_warnings,
             no_fmt,
@@ -107,7 +118,9 @@ async fn execute_direct_subcommand(
         } => {
             return crate::check::execute_check(
                 &resolver,
+                continue_on_error,
                 fix,
+                fix_dangerously,
                 quiet,
                 deny_warnings,
                 no_fmt,
@@ -206,7 +219,7 @@ async fn envs_with_explicit_package_manager_path(
         return Ok(envs);
     };
 
-    let (install_dir, _, _) = match vp_pm_cli::download_package_manager_for_cwd(
+    let manager = match vp_pm_cli::managed_for_local_cli(
         cwd,
         resolution.package_manager_type,
         &resolution.version,
@@ -214,7 +227,9 @@ async fn envs_with_explicit_package_manager_path(
     )
     .await
     {
-        Ok(result) => result,
+        Ok(Some(manager)) => manager,
+        // A system package manager is already on PATH.
+        Ok(None) => return Ok(envs),
         // A missing package manager has other causes, such as no network or an
         // unknown version. The command still runs from PATH, so those causes
         // stay a debug log. An integrity failure is different. If vp hides it,
@@ -229,7 +244,13 @@ async fn envs_with_explicit_package_manager_path(
         }
     };
 
-    Ok(prepend_to_env_path(&envs, &install_dir.join("bin")))
+    Ok(prepend_to_env_path(&envs, &manager.get_bin_prefix()))
+}
+
+/// A system package manager is already on PATH. Moving its directory to the front would also
+/// promote the other tools in it, such as a second `node`.
+pub(crate) fn package_manager_prepend(pm: &vp_pm_cli::PackageManager) -> PrependOptions {
+    PrependOptions { dedupe_anywhere: !pm.is_managed() }
 }
 
 /// Execute a vite-task command (run, cache) through Session.
@@ -262,10 +283,10 @@ async fn execute_vite_task_command(
     let mut config_loader = VitePlusConfigLoader::new(resolve_vite_config_fn);
 
     // Update PATH to include package manager bin directory BEFORE session init
-    match vp_pm_cli::PackageManager::builder(&cwd).build().await {
+    match vp_pm_cli::PackageManager::builder(&cwd).for_local_cli().build().await {
         Ok(pm) => {
             let bin_prefix = pm.get_bin_prefix();
-            prepend_tools_to_path_env(&bin_prefix, &pm.bin_names(), PrependOptions::default())?;
+            prepend_tools_to_path_env(&bin_prefix, &pm.bin_names(), package_manager_prepend(&pm))?;
 
             // Stamp the package-manager lifecycle env (`npm_execpath`,
             // `npm_config_user_agent`) like pnpm/npm/yarn would, so child
@@ -390,7 +411,11 @@ pub async fn main(
     let args_with_program = std::iter::once("vp".to_string()).chain(args_vec.iter().cloned());
     let cli_args = match CLIArgs::try_parse_from(args_with_program) {
         Ok(args) => args,
-        Err(err) => return handle_cli_parse_error(err),
+        Err(err) => {
+            // `bin.ts` already applied `-C` to `cwd` and removed it from `args_vec`.
+            let chdir = explicit_chdir.then(|| cwd.as_path().to_string_lossy());
+            return handle_cli_parse_error(err, &args_vec, &cwd, chdir.as_deref());
+        }
     };
 
     match cli_args {
@@ -401,7 +426,7 @@ pub async fn main(
             // through the package manager, so redirecting those to `vpr` would
             // be wrong; and `exec` names a binary rather than a task.
             script_note::print(raw_subcommand.as_deref(), &cwd);
-            execute_direct_subcommand(subcmd, &cwd, options, explicit_chdir).await
+            execute_direct_subcommand(subcmd, &args_vec, &cwd, options, explicit_chdir).await
         }
         CLIArgs::ViteTask(command) => execute_vite_task_command(command, cwd, options).await,
         CLIArgs::PackageManager(pm) => execute_pm_command(pm, &cwd, options.as_ref()).await,
@@ -427,7 +452,7 @@ async fn execute_pm_command(
             vp_shared::documentation_url("/guide/")
         )));
     }
-    let result = match vp_pm_cli::dispatch_with_metadata(cwd, command).await {
+    let result = match vp_pm_cli::dispatch_for_local_cli(cwd, command).await {
         Ok(result) => result,
         // Render `UserMessage` cleanly (no `error:` prefix) and exit non-zero —
         // matches the global CLI's `is_user_message()` branch in main.rs so the
@@ -560,18 +585,15 @@ mod tests {
 
     #[tokio::test]
     async fn stops_when_the_pinned_package_manager_fails_its_integrity_check() {
+        use httpmock::prelude::*;
+
         let suffix =
             SystemTime::now().duration_since(UNIX_EPOCH).expect("time should be valid").as_nanos();
         let temp_dir = std::env::temp_dir().join(format!("vite-plus-bad-hash-{suffix}"));
         let vp_home = temp_dir.join("vp-home");
-        // VP_HOME pins <DATA> to the root, so the cached install lands here.
-        let bin_dir =
-            vp_home.join("package_manager").join("yarn").join("4.17.1").join("yarn").join("bin");
-        fs::create_dir_all(&bin_dir).expect("cached package manager should be created");
-        for shim in ["yarn", "yarn.cmd", "yarn.ps1"] {
-            fs::write(bin_dir.join(shim), "shim").expect("shim should be written");
-        }
-        fs::write(bin_dir.join("yarn.js"), "corrupt").expect("CLI should be written");
+        fs::create_dir_all(&vp_home).expect("VP_HOME should be created");
+        // A global install in managed mode lets the local CLI use its package managers.
+        fs::write(vp_home.join("config.json"), "{}").expect("config should be written");
 
         let expected_hash = format!("sha512.{}", "0".repeat(128));
         fs::write(
@@ -579,20 +601,60 @@ mod tests {
             format!(r#"{{"name":"fixture","packageManager":"yarn@4.17.1+{expected_hash}"}}"#),
         )
         .expect("package.json should be written");
+
+        // A Yarn 2+ pin covers the CLI binary, verified when it is downloaded. Serve
+        // the `@yarnpkg/cli-dist` tarball from a local registry so the check runs
+        // offline; its CLI bytes cannot match the all-zeros pin, so the download must
+        // fail and the error must reach the caller instead of a missing command.
+        let server = MockServer::start();
+        let tarball = cli_dist_tgz(b"console.log('yarn');\n");
+        server.mock(|when, then| {
+            when.method(GET).path("/@yarnpkg/cli-dist/-/cli-dist-4.17.1.tgz");
+            then.status(200).body(tarball);
+        });
+        let registry = server.base_url();
+
         let cwd = AbsolutePathBuf::new(temp_dir.clone()).expect("temp dir should be absolute");
         let original_path = std::env::join_paths([temp_dir.join("old-bin")]).expect("valid PATH");
         let envs = envs_with_path(original_path.as_os_str());
 
-        vp_shared::EnvConfig::with_vars_async([(vp_shared::env_vars::VP_HOME, &vp_home)], |_| async {
-            let result = envs_with_explicit_package_manager_path(&cwd, envs).await;
+        vp_shared::EnvConfig::with_vars_async(
+            [
+                (vp_shared::env_vars::VP_HOME, vp_home.as_os_str()),
+                ("NPM_CONFIG_REGISTRY", std::ffi::OsStr::new(&registry)),
+            ],
+            |_| async {
+                let result = envs_with_explicit_package_manager_path(&cwd, envs).await;
 
-        assert!(
-            matches!(result, Err(Error::PackageManagerHashMismatch(_))),
-            "an integrity failure must reach the user instead of a missing command: {result:?}"
-        );
-        fs::remove_dir_all(temp_dir).expect("temp dir should be removed");
-            })
+                assert!(
+                    matches!(result, Err(Error::PackageManagerHashMismatch(_))),
+                    "an integrity failure must reach the user instead of a missing command: {result:?}"
+                );
+                fs::remove_dir_all(temp_dir).expect("temp dir should be removed");
+            },
+        )
         .await;
+    }
+
+    /// Build an `@yarnpkg/cli-dist` style gzip tarball holding `package/bin/yarn.js`.
+    fn cli_dist_tgz(yarn_js: &[u8]) -> Vec<u8> {
+        let mut builder = tar::Builder::new(Vec::new());
+        let mut header = tar::Header::new_gnu();
+        header.set_size(yarn_js.len() as u64);
+        header.set_mode(0o755);
+        header.set_cksum();
+        builder
+            .append_data(&mut header, "package/bin/yarn.js", std::io::Cursor::new(yarn_js))
+            .unwrap();
+        let tar_data = builder.into_inner().unwrap();
+        let mut gz = Vec::new();
+        {
+            let mut encoder =
+                flate2::write::GzEncoder::new(&mut gz, flate2::Compression::default());
+            std::io::Write::write_all(&mut encoder, &tar_data).unwrap();
+            encoder.finish().unwrap();
+        }
+        gz
     }
 
     #[tokio::test]

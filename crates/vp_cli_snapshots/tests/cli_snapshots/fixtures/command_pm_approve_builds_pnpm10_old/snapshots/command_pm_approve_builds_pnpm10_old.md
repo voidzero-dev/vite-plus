@@ -27,3 +27,14 @@ plain positional still works on old pnpm
 ```
 There are no packages awaiting approval
 ```
+
+## `vpt json-edit package.json packageManager pnpm@10.0.0`
+
+
+## `vp pm approve-builds`
+
+Before pnpm 10.1.0, the base command warns and skips execution.
+
+```
+warn: pnpm approve-builds requires pnpm >= 10.1.0. Skipping.
+```

@@ -16,7 +16,7 @@ Core tool - shows resolved Node.js binary path
 VITE+ - The Unified Toolchain for the Web
 
 <home>/.vite-plus/js_runtime/node/<version>/bin/node
-  Version:    20.18.0
+  Version:    20.20.2
   Source:     <workspace>/.node-version
 ```
 
@@ -28,7 +28,7 @@ Core tool - shows resolved npm binary path
 VITE+ - The Unified Toolchain for the Web
 
 <home>/.vite-plus/js_runtime/node/<version>/bin/npm
-  Version:    20.18.0
+  Version:    20.20.2
   Source:     <workspace>/.node-version
 ```
 
@@ -40,7 +40,7 @@ Core tool - shows resolved npx binary path
 VITE+ - The Unified Toolchain for the Web
 
 <home>/.vite-plus/js_runtime/node/<version>/bin/npx
-  Version:    20.18.0
+  Version:    20.20.2
   Source:     <workspace>/.node-version
 ```
 

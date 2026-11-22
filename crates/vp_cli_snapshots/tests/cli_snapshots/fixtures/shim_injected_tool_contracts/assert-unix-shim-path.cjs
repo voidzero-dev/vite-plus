@@ -4,7 +4,7 @@ const { copyFileSync, mkdirSync, symlinkSync, writeFileSync } = require('node:fs
 const path = require('node:path');
 
 const mode = process.argv[2];
-assert.equal(process.version, mode === 'system' ? 'v20.18.0' : 'v22.18.0');
+assert.equal(process.version, mode === 'system' ? 'v20.20.2' : 'v22.23.4');
 const bin = path.join(process.env.VP_HOME, 'bin');
 const paths = [];
 if (mode === 'multiple') {
@@ -26,7 +26,7 @@ if (mode === 'multiple') {
   if (mode === 'system') {
     const systemNode = execFileSync(
       'vp',
-      ['env', 'exec', '--node', '22.18.0', 'node', '-p', 'process.execPath'],
+      ['env', 'exec', '--node', '22.23.4', 'node', '-p', 'process.execPath'],
       { encoding: 'utf8' },
     ).trim();
     paths.push(path.dirname(systemNode));
@@ -48,7 +48,7 @@ if (mode === 'partial') {
   for (const tool of ['npm', 'npx']) {
     assert.equal(
       execFileSync(tool, ['--version'], { env, encoding: 'utf8', timeout: 10000 }).trim(),
-      process.argv[3] || '10.9.3',
+      process.argv[3] || '10.9.9',
     );
   }
 }

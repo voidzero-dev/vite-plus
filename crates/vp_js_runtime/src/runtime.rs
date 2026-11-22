@@ -3,6 +3,7 @@ use std::time::Duration;
 use backon::{ExponentialBuilder, Retryable};
 use js_semver::{Range, Version};
 use tempfile::TempDir;
+use vp_shared::OnFail;
 use vt_path::{AbsolutePath, AbsolutePathBuf};
 use vt_str::Str;
 
@@ -169,13 +170,27 @@ fn log_checksum_only(archive_filename: &str) {
     );
 }
 
+/// Fail when `VP_ENV_FORBIDDEN=1` stops Vite+ from managing Node.js.
+///
+/// # Errors
+///
+/// Returns [`Error::DisabledByEnvForbidden`] when `VP_ENV_FORBIDDEN=1`.
+pub fn ensure_managed_node_allowed() -> Result<(), Error> {
+    if vp_shared::EnvConfig::get().env_forbidden {
+        return Err(Error::DisabledByEnvForbidden);
+    }
+    Ok(())
+}
+
 /// Download and cache a JavaScript runtime using a provider
 ///
 /// This is the generic download function that works with any `JsRuntimeProvider`.
 ///
 /// # Errors
 ///
-/// Returns an error if download, verification, or extraction fails.
+/// Returns an error if download, verification, or extraction fails, or
+/// [`Error::DisabledByEnvForbidden`] for Node.js when `VP_ENV_FORBIDDEN=1`, even
+/// when the version is already cached.
 ///
 /// # Panics
 ///
@@ -185,6 +200,10 @@ pub async fn download_runtime_with_provider<P: JsRuntimeProvider>(
     runtime_type: JsRuntimeType,
     version: &str,
 ) -> Result<JsRuntime, Error> {
+    // Checked before the cache lookup: VP_ENV_FORBIDDEN also forbids cached installs.
+    match runtime_type {
+        JsRuntimeType::Node => ensure_managed_node_allowed()?,
+    }
     let platform = Platform::current();
     let cache_dir = crate::cache::get_cache_dir()?;
 
@@ -301,14 +320,22 @@ pub enum VersionSource {
     NvmrcFile,
 }
 
+impl VersionSource {
+    /// The source name shown to users, for example `.node-version`.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::NodeVersionFile => ".node-version",
+            Self::EnginesNode => "engines.node",
+            Self::DevEnginesRuntime => "devEngines.runtime",
+            Self::NvmrcFile => ".nvmrc",
+        }
+    }
+}
+
 impl std::fmt::Display for VersionSource {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::NodeVersionFile => write!(f, ".node-version"),
-            Self::EnginesNode => write!(f, "engines.node"),
-            Self::DevEnginesRuntime => write!(f, "devEngines.runtime"),
-            Self::NvmrcFile => write!(f, ".nvmrc"),
-        }
+        f.write_str(self.as_str())
     }
 }
 
@@ -323,6 +350,9 @@ pub struct VersionResolution {
     pub source_path: Option<AbsolutePathBuf>,
     /// Project root directory (the directory containing the version source)
     pub project_root: Option<AbsolutePathBuf>,
+    /// Effective `onFail` of the `devEngines.runtime` node entry: `Some`
+    /// exactly when `source` is [`VersionSource::DevEnginesRuntime`].
+    pub on_fail: Option<OnFail>,
 }
 
 /// Resolve Node.js version from project configuration.
@@ -351,6 +381,16 @@ pub async fn resolve_node_version(
     start_dir: &AbsolutePath,
     walk_up: bool,
 ) -> Result<Option<VersionResolution>, Error> {
+    Ok(walk_node_version_sources(start_dir, walk_up).await?.map(|(resolution, _)| resolution))
+}
+
+/// [`resolve_node_version`], plus the `package.json` that the walk parsed when
+/// the source is `devEngines.runtime` or `engines.node`. For the file sources
+/// (`.node-version`, `.nvmrc`) the manifest is `None`.
+async fn walk_node_version_sources(
+    start_dir: &AbsolutePath,
+    walk_up: bool,
+) -> Result<Option<(VersionResolution, Option<PackageJson>)>, Error> {
     let mut current = start_dir.to_owned();
 
     loop {
@@ -360,12 +400,14 @@ pub async fn resolve_node_version(
         // 1. Check .node-version file
         if let Some(version) = read_node_version_file(current).await {
             let node_version_path = current.join(".node-version");
-            return Ok(Some(VersionResolution {
+            let resolution = VersionResolution {
                 version,
                 source: VersionSource::NodeVersionFile,
                 source_path: Some(node_version_path),
                 project_root: Some(current.to_absolute_path_buf()),
-            }));
+                on_fail: None,
+            };
+            return Ok(Some((resolution, None)));
         }
 
         // 2-3. Check package.json (devEngines.runtime and engines.node)
@@ -374,17 +416,15 @@ pub async fn resolve_node_version(
             let content = tokio::fs::read_to_string(&package_json_path).await?;
             if let Ok(pkg) = serde_json::from_str::<PackageJson>(&content) {
                 // Check devEngines.runtime first (dev-environment requirement)
-                if let Some(dev_engines) = &pkg.dev_engines
-                    && let Some(runtime) = &dev_engines.runtime
-                    && let Some(node_rt) = runtime.find_by_name("node")
-                    && let Some(version) = &node_rt.version
-                {
-                    return Ok(Some(VersionResolution {
+                if let Some((version, on_fail)) = pkg.dev_engines_runtime_version("node") {
+                    let resolution = VersionResolution {
                         version: version.clone(),
                         source: VersionSource::DevEnginesRuntime,
                         source_path: Some(package_json_path),
                         project_root: Some(current.to_absolute_path_buf()),
-                    }));
+                        on_fail: Some(on_fail),
+                    };
+                    return Ok(Some((resolution, Some(pkg))));
                 }
 
                 // Check engines.node (consumer-facing support range)
@@ -392,12 +432,14 @@ pub async fn resolve_node_version(
                     && let Some(node) = &engines.node
                     && !node.is_empty()
                 {
-                    return Ok(Some(VersionResolution {
+                    let resolution = VersionResolution {
                         version: node.clone(),
                         source: VersionSource::EnginesNode,
                         source_path: Some(package_json_path),
                         project_root: Some(current.to_absolute_path_buf()),
-                    }));
+                        on_fail: None,
+                    };
+                    return Ok(Some((resolution, Some(pkg))));
                 }
             }
         }
@@ -405,12 +447,14 @@ pub async fn resolve_node_version(
         // 4. Check .nvmrc after the native Vite+ and package.json sources
         if let Some(version) = read_nvmrc_file(current).await {
             let nvmrc_path = current.join(".nvmrc");
-            return Ok(Some(VersionResolution {
+            let resolution = VersionResolution {
                 version,
                 source: VersionSource::NvmrcFile,
                 source_path: Some(nvmrc_path),
                 project_root: Some(current.to_absolute_path_buf()),
-            }));
+                on_fail: None,
+            };
+            return Ok(Some((resolution, None)));
         }
 
         // Move to parent directory if walk_up is enabled
@@ -428,6 +472,159 @@ pub async fn resolve_node_version(
     Ok(None)
 }
 
+/// A project's validated Node.js version requirement and its source
+/// (see [`select_project_node_version`]).
+#[derive(Debug, Clone)]
+pub struct ProjectNodeVersion {
+    /// The validated version requirement, for example `20.18.0`, `^20.18.0`,
+    /// or an alias such as `lts/*` from a source that allows one
+    pub version: Str,
+    /// The source that selects the version
+    pub source: VersionSource,
+    /// Path to the file of that source
+    pub source_path: AbsolutePathBuf,
+    /// The directory that contains the source
+    pub project_root: AbsolutePathBuf,
+    /// The valid `engines.node` below the selected source in `project_root`,
+    /// for the compatibility check
+    pub engines_node: Option<Str>,
+    /// The valid `devEngines.runtime` node version below the selected source
+    /// in `project_root`, for the compatibility check
+    pub dev_engines_runtime: Option<Str>,
+}
+
+/// Select a project's Node.js version requirement.
+///
+/// Walks up from `start_dir` to the first directory with a version source
+/// (see [`resolve_node_version`]) and validates that source. When it is
+/// invalid, the lower-priority sources in the same directory are tried in
+/// order: `.node-version`, `devEngines.runtime`, `engines.node`, `.nvmrc`.
+///
+/// `devEngines.runtime.version` must be semver. When the entry selects the
+/// version, an invalid value follows its effective `onFail`: `ignore` and
+/// `warn` skip it, and `error` and `download` fail. When a valid
+/// `.node-version` selects the version, the entry is only a constraint, so an
+/// invalid value is skipped with a warning (unless `onFail` is `ignore`).
+///
+/// With `diagnostics`, invalid values print warnings, and the valid sources
+/// below the selected one are returned as constraints for the compatibility
+/// check. Without it (for the shim cache check), invalid values are skipped
+/// silently, and a valid first source returns at once, without the
+/// constraints and without another file read.
+///
+/// Returns `None` when that directory has no valid source.
+///
+/// # Errors
+/// Returns an error if a file read fails, or
+/// [`Error::InvalidDevEnginesRuntimeVersion`] when an invalid
+/// `devEngines.runtime` version selects the version with an effective
+/// `onFail` of `error` or `download`.
+pub async fn select_project_node_version(
+    start_dir: &AbsolutePath,
+    diagnostics: bool,
+) -> Result<Option<ProjectNodeVersion>, Error> {
+    let Some((resolution, manifest)) = walk_node_version_sources(start_dir, true).await? else {
+        return Ok(None);
+    };
+    let VersionResolution {
+        version,
+        source: first,
+        source_path: Some(source_path),
+        project_root: Some(project_root),
+        on_fail,
+    } = resolution
+    else {
+        return Ok(None);
+    };
+    // A devEngines.runtime version follows its onFail. The other sources also
+    // accept Node.js aliases.
+    let first_version = match on_fail {
+        Some(on_fail) => {
+            validate_dev_engines_runtime_version(&version, on_fail, &source_path, diagnostics)?
+        }
+        None => validate_version(&version, first.as_str(), diagnostics),
+    };
+    let mut selected = first_version.map(|version| (version, first, source_path));
+    if !diagnostics && let Some((version, source, source_path)) = selected {
+        return Ok(Some(ProjectNodeVersion {
+            version,
+            source,
+            source_path,
+            project_root,
+            engines_node: None,
+            dev_engines_runtime: None,
+        }));
+    }
+
+    // The walk does not parse the package.json beside a `.node-version`
+    let package_json_path = project_root.join("package.json");
+    let manifest = match manifest {
+        None if first == VersionSource::NodeVersionFile => {
+            read_package_json(&package_json_path).await.ok().flatten()
+        }
+        manifest => manifest,
+    };
+
+    // Each lower-priority source either selects the version (when no source
+    // above it is valid) or is a constraint for the compatibility check
+    let mut dev_engines_runtime = None;
+    if first == VersionSource::NodeVersionFile
+        && let Some((version, on_fail)) =
+            manifest.as_ref().and_then(|pkg| pkg.dev_engines_runtime_version("node"))
+    {
+        // A constraint never fails: an invalid value only warns, like a
+        // version that does not satisfy it
+        let is_constraint = selected.is_some();
+        let on_fail = match on_fail {
+            OnFail::Ignore => OnFail::Ignore,
+            _ if is_constraint => OnFail::Warn,
+            on_fail => on_fail,
+        };
+        let version = validate_dev_engines_runtime_version(
+            version,
+            on_fail,
+            &package_json_path,
+            diagnostics,
+        )?;
+        if is_constraint {
+            dev_engines_runtime = version;
+        } else if let Some(version) = version {
+            selected = Some((version, VersionSource::DevEnginesRuntime, package_json_path.clone()));
+        }
+    }
+
+    let mut engines_node = None;
+    if matches!(first, VersionSource::NodeVersionFile | VersionSource::DevEnginesRuntime)
+        && let Some(node) =
+            manifest.as_ref().and_then(|pkg| pkg.engines.as_ref()).and_then(|e| e.node.as_ref())
+        && let Some(version) = validate_version(node, "engines.node", diagnostics)
+    {
+        if selected.is_some() {
+            engines_node = Some(version);
+        } else {
+            selected = Some((version, VersionSource::EnginesNode, package_json_path.clone()));
+        }
+    }
+
+    if selected.is_none()
+        && first != VersionSource::NvmrcFile
+        && let Some(version) = read_nvmrc_file(&project_root)
+            .await
+            .and_then(|v| validate_version(&v, ".nvmrc", diagnostics))
+    {
+        selected = Some((version, VersionSource::NvmrcFile, project_root.join(".nvmrc")));
+    }
+
+    Ok(selected.map(|(version, source, source_path)| ProjectNodeVersion {
+        version,
+        source,
+        source_path,
+        project_root,
+        engines_node,
+        dev_engines_runtime,
+    }))
+}
+
 /// Download runtime based on project's version configuration.
 ///
 /// Reads Node.js version from multiple sources with the following priority:
@@ -442,6 +639,9 @@ pub async fn resolve_node_version(
 /// When the resolved version from the highest priority source does NOT satisfy
 /// constraints from lower priority sources, a warning is emitted.
 ///
+/// The selection and its `devEngines.runtime` rules are those of
+/// [`select_project_node_version`].
+///
 /// # Arguments
 /// * `project_path` - The path to the project directory
 ///
@@ -449,7 +649,9 @@ pub async fn resolve_node_version(
 /// A `JsRuntime` instance with the installation path
 ///
 /// # Errors
-/// Returns an error if version resolution fails or download/extraction fails.
+/// Returns an error if the project's own package.json does not parse, if
+/// version selection fails (see [`select_project_node_version`]), or if
+/// download/extraction fails.
 ///
 /// # Note
 /// Currently only supports Node.js runtime.
@@ -457,58 +659,26 @@ pub async fn download_runtime_for_project(project_path: &AbsolutePath) -> Result
     let provider = NodeProvider::new();
     let cache_dir = crate::cache::get_cache_dir()?;
 
-    // Resolve version from the project directory, walking up to inherit from ancestors
-    let resolution = resolve_node_version(project_path, true).await?;
+    // A parse error in the project's own package.json fails. The walk skips a
+    // manifest that does not parse, so check this one explicitly.
+    read_package_json(&project_path.join("package.json")).await?;
 
-    // Validate the version from the resolved source
-    let version_req =
-        resolution.as_ref().and_then(|r| normalize_version(&r.version, &r.source.to_string()));
+    // Select the version, walking up to inherit from ancestors
+    let selected = select_project_node_version(project_path, true).await?;
+    let version_req = selected.as_ref().map_or("", |selected| selected.version.as_str());
 
-    // For compatibility checking, we need to read all sources from the local package.json
-    let package_json_path = project_path.join("package.json");
-    let pkg = read_package_json(&package_json_path).await?;
-
-    let engines_node = pkg
-        .as_ref()
-        .and_then(|p| p.engines.as_ref())
-        .and_then(|e| e.node.clone())
-        .and_then(|v| normalize_version(&v, "engines.node"));
-
-    let dev_engines_runtime = pkg
-        .as_ref()
-        .and_then(|p| p.dev_engines_runtime("node"))
-        .and_then(|r| r.version.clone())
-        .and_then(|v| normalize_version(&v, "devEngines.runtime"));
-
-    let nvmrc = if version_req.is_none() {
-        let root =
-            resolution.as_ref().and_then(|r| r.project_root.as_deref()).unwrap_or(project_path);
-        read_nvmrc_file(root).await.and_then(|v| normalize_version(&v, ".nvmrc"))
-    } else {
-        None
-    };
-
-    // Determine the actual version requirement to use
-    let (version_req, source) = if let Some(ref v) = version_req {
-        (v.clone(), resolution.as_ref().map(|r| r.source))
-    } else if let Some(ref v) = dev_engines_runtime {
-        // Fall through if primary source was invalid
-        (v.clone(), Some(VersionSource::DevEnginesRuntime))
-    } else if let Some(ref v) = engines_node {
-        (v.clone(), Some(VersionSource::EnginesNode))
-    } else if let Some(ref v) = nvmrc {
-        (v.clone(), Some(VersionSource::NvmrcFile))
-    } else {
-        (Str::default(), None)
-    };
-
-    tracing::debug!("Selected version source: {source:?}, version_req: {version_req:?}");
+    tracing::debug!(
+        "Selected version source: {:?}, version_req: {version_req:?}",
+        selected.as_ref().map(|selected| selected.source)
+    );
 
     // Resolve version (if range/partial → exact)
-    let version = resolve_version_for_project(&version_req, &provider, &cache_dir).await?;
+    let version = resolve_version_for_project(version_req, &provider, &cache_dir).await?;
 
     // Check compatibility with lower priority sources
-    check_version_compatibility(&version, source, &engines_node, &dev_engines_runtime);
+    if let Some(selected) = &selected {
+        check_version_compatibility(&version, selected);
+    }
 
     tracing::info!("Resolved Node.js version: {version}");
     let runtime = download_runtime(JsRuntimeType::Node, &version).await?;
@@ -560,31 +730,26 @@ async fn resolve_version_for_project(
     provider.resolve_version(version_req).await
 }
 
-/// Check if the resolved version is compatible with lower priority sources.
-/// Emit warnings if incompatible.
-fn check_version_compatibility(
-    resolved_version: &str,
-    source: Option<VersionSource>,
-    engines_node: &Option<Str>,
-    dev_engines_runtime: &Option<Str>,
-) {
-    let parsed = match Version::parse(resolved_version) {
-        Ok(v) => v,
-        Err(_) => return, // Can't check compatibility without a valid version
+/// Check if the resolved version satisfies the lower-priority constraints of
+/// the selected source. Emit warnings if incompatible.
+fn check_version_compatibility(resolved_version: &str, selected: &ProjectNodeVersion) {
+    let Ok(parsed) = Version::parse(resolved_version) else {
+        return; // Can't check compatibility without a valid version
     };
 
-    // Check engines.node if it's a lower priority source
-    if source != Some(VersionSource::EnginesNode)
-        && let Some(req) = engines_node
-    {
-        check_constraint(&parsed, req, "engines.node", resolved_version, source);
-    }
-
-    // Check devEngines.runtime if it's a lower priority source
-    if source != Some(VersionSource::DevEnginesRuntime)
-        && let Some(req) = dev_engines_runtime
-    {
-        check_constraint(&parsed, req, "devEngines.runtime", resolved_version, source);
+    for (constraint, constraint_source) in [
+        (&selected.engines_node, "engines.node"),
+        (&selected.dev_engines_runtime, "devEngines.runtime"),
+    ] {
+        if let Some(constraint) = constraint {
+            check_constraint(
+                &parsed,
+                constraint,
+                constraint_source,
+                resolved_version,
+                selected.source,
+            );
+        }
     }
 }
 
@@ -594,16 +759,15 @@ fn check_constraint(
     constraint: &str,
     constraint_source: &str,
     resolved_version: &str,
-    source: Option<VersionSource>,
+    source: VersionSource,
 ) {
     match Range::parse(constraint) {
         Ok(range) => {
             if !range.satisfies(version) {
-                let source_str = source.map_or("none".to_string(), |s| s.to_string());
                 // Warnings go to stderr: shims must keep the wrapped
                 // tool's stdout parseable.
                 eprintln!(
-                    "warning: Node.js version {resolved_version} (from {source_str}) does not \
+                    "warning: Node.js version {resolved_version} (from {source}) does not \
                      satisfy {constraint_source} constraint '{constraint}'"
                 );
             }
@@ -617,16 +781,23 @@ fn check_constraint(
 /// Check if a version string is valid (exact version, range, or LTS alias).
 /// Trims whitespace before checking. Does not print warnings.
 #[must_use]
-pub fn is_valid_version(version: &str) -> bool {
+fn is_valid_version(version: &str) -> bool {
+    let trimmed = version.trim();
+
+    // Accept version aliases (lts/*, lts/iron, lts/-1, latest)
+    NodeProvider::is_version_alias(trimmed) || is_valid_semver_version(trimmed)
+}
+
+/// Check if a version string is a semver exact version or range, the only
+/// syntax that `devEngines.runtime.version` allows. Unlike [`is_valid_version`],
+/// rejects Node.js aliases such as `lts/*`, `lts/iron`, and `latest`.
+/// Trims whitespace before checking. Does not print warnings.
+#[must_use]
+fn is_valid_semver_version(version: &str) -> bool {
     let trimmed = version.trim();
 
     if trimmed.is_empty() {
         return false;
-    }
-
-    // Accept version aliases (lts/*, lts/iron, lts/-1, latest)
-    if NodeProvider::is_version_alias(trimmed) {
-        return true;
     }
 
     // Try parsing as exact version (strip 'v' prefix for exact version check)
@@ -639,10 +810,61 @@ pub fn is_valid_version(version: &str) -> bool {
     Range::parse(trimmed).is_ok()
 }
 
+/// Validate a `devEngines.runtime` node version read from the manifest at `path`.
+///
+/// The devEngines spec allows only semver versions and ranges, so Node.js
+/// aliases such as `lts`, `lts/*`, `lts/iron`, and `latest` are invalid here,
+/// unlike in `.node-version` and `.nvmrc`. An invalid version follows the
+/// entry's effective `onFail`, as in npm: `ignore` skips the entry, `warn`
+/// skips it with a warning (printed only when `warn` is true), and `error`
+/// and `download` fail, because no version is available to download.
+fn validate_dev_engines_runtime_version(
+    version: &str,
+    on_fail: OnFail,
+    path: &AbsolutePath,
+    warn: bool,
+) -> Result<Option<Str>, Error> {
+    let trimmed = version.trim();
+    if is_valid_semver_version(trimmed) {
+        return Ok(Some(trimmed.into()));
+    }
+
+    match on_fail {
+        OnFail::Ignore => Ok(None),
+        OnFail::Warn => {
+            if warn {
+                vp_shared::output::warn(&format!(
+                    "devEngines.runtime.version \"{trimmed}\" in {} is not a valid semver \
+                     range (see devEngines spec), ignoring",
+                    path.as_path().display()
+                ));
+            }
+            Ok(None)
+        }
+        OnFail::Error | OnFail::Download => Err(Error::InvalidDevEnginesRuntimeVersion {
+            version: trimmed.into(),
+            path: path.into(),
+        }),
+    }
+}
+
+/// Validate a version from a source that accepts Node.js aliases
+/// (`.node-version`, `engines.node`, `.nvmrc`): an exact version, a range, or
+/// an alias. Returns the trimmed version. An invalid value returns `None`,
+/// with the [`normalize_version`] warning when `warn` is true.
+#[must_use]
+fn validate_version(version: &Str, source: &str, warn: bool) -> Option<Str> {
+    if warn {
+        return normalize_version(version, source);
+    }
+    let trimmed = version.trim();
+    is_valid_version(trimmed).then(|| trimmed.into())
+}
+
 /// Normalize and validate a version string as semver (exact version or range) or LTS alias.
 /// Trims whitespace and returns the normalized version, or None with a warning if invalid.
 #[must_use]
-pub fn normalize_version(version: &Str, source: &str) -> Option<Str> {
+fn normalize_version(version: &Str, source: &str) -> Option<Str> {
     let trimmed: Str = version.trim().into();
 
     if is_valid_version(&trimmed) {
@@ -657,7 +879,7 @@ pub fn normalize_version(version: &Str, source: &str) -> Option<Str> {
 }
 
 /// Read package.json contents.
-pub async fn read_package_json(
+async fn read_package_json(
     package_json_path: &AbsolutePathBuf,
 ) -> Result<Option<PackageJson>, Error> {
     if !tokio::fs::try_exists(package_json_path).await.unwrap_or(false) {
@@ -1037,14 +1259,13 @@ mod tests {
     /// signed checksums, top-level directory, and binary path match what the provider expects.
     #[tokio::test]
     async fn test_download_node_integration() {
-        // A fixed VP_HOME keeps the download cache warm across runs.
-        let vp_home = std::env::temp_dir().join("vp-js-runtime-tests-vp-home");
+        // Share immutable runtime installs with the global CLI integration tests.
+        let vp_home = std::env::temp_dir().join("vp-node-runtime-tests-vp-home");
         std::fs::create_dir_all(&vp_home).unwrap();
         vp_shared::EnvConfig::with_vars_async(
             [(env_vars::VP_HOME, vp_home.as_os_str())],
             |_| async {
-                // Use a small, old version for faster download
-                let version = "20.18.0";
+                let version = "20.20.2";
 
                 let runtime = download_runtime(JsRuntimeType::Node, version).await.unwrap();
 
@@ -1365,16 +1586,128 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_invalid_dev_engines_runtime_is_ignored() {
+    async fn test_invalid_dev_engines_runtime_with_ignore_falls_through() {
         with_mock_mirror(&["24.11.0"], |temp_path| async move {
             // Create package.json with invalid devEngines.runtime version
-            let package_json = r#"{"devEngines":{"runtime":{"name":"node","version":"invalid"}}}"#;
+            let package_json = r#"{"devEngines":{"runtime":{"name":"node","version":"invalid","onFail":"ignore"}}}"#;
             tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
 
             // Should fall through to fetch latest LTS since devEngines.runtime is invalid
             let runtime = download_runtime_for_project(&temp_path).await.unwrap();
             assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
             assert_eq!(runtime.version(), "24.11.0");
+        })
+        .await;
+    }
+
+    // npm and pnpm reject Node.js aliases in devEngines.runtime.version, and
+    // npm treats onFail "download" like "error" for an invalid version
+    #[tokio::test]
+    async fn test_invalid_dev_engines_runtime_fails_for_error_and_download() {
+        with_mock_mirror(&[], |temp_path| async move {
+            for version in ["invalid", "lts", "lts/*", "lts/iron", "lts/-1", "latest"] {
+                for on_fail in [None, Some("error"), Some("download")] {
+                    let mut entry = serde_json::json!({ "name": "node", "version": version });
+                    if let Some(on_fail) = on_fail {
+                        entry["onFail"] = on_fail.into();
+                    }
+                    let package_json = serde_json::json!({ "devEngines": { "runtime": entry } });
+                    tokio::fs::write(temp_path.join("package.json"), package_json.to_string())
+                        .await
+                        .unwrap();
+
+                    let error = download_runtime_for_project(&temp_path).await.unwrap_err();
+                    assert!(
+                        matches!(
+                            &error,
+                            Error::InvalidDevEnginesRuntimeVersion { version: v, .. } if v == version
+                        ),
+                        "{version} with onFail {on_fail:?}: {error}"
+                    );
+                    assert!(error.to_string().contains("package.json"), "{error}");
+                }
+            }
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn test_dev_engines_runtime_alias_with_warn_falls_through_to_engines_node() {
+        with_mock_mirror(&["20.19.0"], |temp_path| async move {
+            let package_json = r#"{
+  "devEngines": {"runtime": {"name": "node", "version": "lts/*", "onFail": "warn"}},
+  "engines": {"node": "^20.18.0"}
+}"#;
+            tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+
+            // The alias is not resolved: engines.node selects the version
+            let runtime = download_runtime_for_project(&temp_path).await.unwrap();
+            assert_eq!(runtime.version(), "20.19.0");
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn test_parent_dev_engines_runtime_alias_falls_through_to_parent_engines_node() {
+        with_mock_mirror(&["20.19.0"], |temp_path| async move {
+            let child = temp_path.join("child");
+            tokio::fs::create_dir(&child).await.unwrap();
+            let package_json = r#"{
+  "devEngines": {"runtime": {"name": "node", "version": "lts/*", "onFail": "warn"}},
+  "engines": {"node": "^20.18.0"}
+}"#;
+            tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+            tokio::fs::write(temp_path.join(".nvmrc"), "22.21.0\n").await.unwrap();
+
+            // The fallback uses the directory of the skipped entry, not the child,
+            // so engines.node wins over the lower-priority .nvmrc
+            let runtime = download_runtime_for_project(&child).await.unwrap();
+            assert_eq!(runtime.version(), "20.19.0");
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn test_parent_node_version_ignores_unparsable_parent_package_json() {
+        with_mock_mirror(&["20.18.0"], |temp_path| async move {
+            let child = temp_path.join("child");
+            tokio::fs::create_dir(&child).await.unwrap();
+            tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
+            tokio::fs::write(temp_path.join("package.json"), "not-json").await.unwrap();
+            tokio::fs::write(child.join("package.json"), r#"{"name":"child"}"#).await.unwrap();
+
+            // resolve_node_version skips the ancestor manifest that does not parse,
+            // so it must not block the valid inherited pin here
+            let runtime = download_runtime_for_project(&child).await.unwrap();
+            assert_eq!(runtime.version(), "20.18.0");
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn test_invalid_node_version_file_falls_through_to_dev_engines_alias_error() {
+        with_mock_mirror(&[], |temp_path| async move {
+            tokio::fs::write(temp_path.join(".node-version"), "invalid\n").await.unwrap();
+            let package_json = r#"{"devEngines":{"runtime":{"name":"node","version":"lts/*"}}}"#;
+            tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+
+            // devEngines.runtime would select the version, so its default onFail applies
+            let error = download_runtime_for_project(&temp_path).await.unwrap_err();
+            assert!(matches!(error, Error::InvalidDevEnginesRuntimeVersion { .. }), "{error}");
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn test_node_version_file_skips_invalid_dev_engines_constraint() {
+        with_mock_mirror(&["20.18.0"], |temp_path| async move {
+            tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
+            let package_json = r#"{"devEngines":{"runtime":{"name":"node","version":"lts/*"}}}"#;
+            tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+
+            // .node-version selects the version; the invalid constraint only warns
+            let runtime = download_runtime_for_project(&temp_path).await.unwrap();
+            assert_eq!(runtime.version(), "20.18.0");
         })
         .await;
     }
@@ -1521,6 +1854,20 @@ mod tests {
         assert_eq!(normalize_version(&"LATEST".into(), ".node-version"), Some("LATEST".into()));
     }
 
+    #[test]
+    fn test_is_valid_semver_version_rejects_aliases() {
+        for version in ["lts", "lts/*", "lts/iron", "lts/-1", "latest", "LATEST", "node", " "] {
+            assert!(!is_valid_semver_version(version), "{version:?}");
+        }
+    }
+
+    #[test]
+    fn test_is_valid_semver_version_accepts_semver() {
+        for version in ["20.18.0", "v20.18.0", " ^20.18.0 ", "20", "20.x", ">=20 <23", "*"] {
+            assert!(is_valid_semver_version(version), "{version:?}");
+        }
+    }
+
     #[tokio::test]
     async fn test_download_runtime_for_project_with_lts_alias_in_node_version() {
         with_mock_mirror(&["20.19.0"], |temp_path| async move {
@@ -1648,6 +1995,57 @@ mod tests {
         let resolution = resolve_node_version(&temp_path, false).await.unwrap().unwrap();
         assert_eq!(&*resolution.version, "20.18.0");
         assert_eq!(resolution.source, VersionSource::DevEnginesRuntime);
+        // A single entry without onFail defaults to error
+        assert_eq!(resolution.on_fail, Some(OnFail::Error));
+    }
+
+    #[tokio::test]
+    async fn test_select_project_node_version_returns_lower_constraints() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
+        let package_json = r#"{
+  "devEngines": {"runtime": {"name": "node", "version": "^20.0.0"}},
+  "engines": {"node": ">=18"}
+}"#;
+        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+
+        let selected = select_project_node_version(&temp_path, true).await.unwrap().unwrap();
+        assert_eq!(selected.version.as_str(), "20.18.0");
+        assert_eq!(selected.source, VersionSource::NodeVersionFile);
+        assert_eq!(selected.source_path, temp_path.join(".node-version"));
+        assert_eq!(selected.dev_engines_runtime.as_deref(), Some("^20.0.0"));
+        assert_eq!(selected.engines_node.as_deref(), Some(">=18"));
+
+        // Without diagnostics, a valid first source returns without the constraints
+        let selected = select_project_node_version(&temp_path, false).await.unwrap().unwrap();
+        assert_eq!(selected.source, VersionSource::NodeVersionFile);
+        assert!(selected.dev_engines_runtime.is_none());
+        assert!(selected.engines_node.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_select_project_node_version_fallback_keeps_lower_constraint() {
+        let temp_dir = TempDir::new().unwrap();
+        let parent = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let child = parent.join("child");
+        tokio::fs::create_dir(&child).await.unwrap();
+        tokio::fs::write(parent.join(".node-version"), "invalid\n").await.unwrap();
+        let package_json = r#"{
+  "devEngines": {"runtime": {"name": "node", "version": "^20.18.0"}},
+  "engines": {"node": ">=18"}
+}"#;
+        tokio::fs::write(parent.join("package.json"), package_json).await.unwrap();
+
+        // The invalid parent .node-version falls back to the parent devEngines.runtime,
+        // and engines.node below it stays a constraint
+        let selected = select_project_node_version(&child, true).await.unwrap().unwrap();
+        assert_eq!(selected.version.as_str(), "^20.18.0");
+        assert_eq!(selected.source, VersionSource::DevEnginesRuntime);
+        assert_eq!(selected.source_path, parent.join("package.json"));
+        assert_eq!(selected.project_root, parent);
+        assert!(selected.dev_engines_runtime.is_none());
+        assert_eq!(selected.engines_node.as_deref(), Some(">=18"));
     }
 
     #[tokio::test]
@@ -1812,5 +2210,37 @@ mod tests {
         let resolution = resolve_node_version(&child_path, true).await.unwrap().unwrap();
         assert_eq!(&*resolution.version, "20.18.0");
         assert_eq!(resolution.source, VersionSource::NvmrcFile);
+    }
+
+    /// `VP_ENV_FORBIDDEN=1` rejects a managed Node.js before the cache lookup,
+    /// so an already installed version is not used either.
+    #[tokio::test]
+    async fn test_env_forbidden_rejects_cached_runtime() {
+        let vp_home = TempDir::new().unwrap();
+        let provider = NodeProvider::new();
+        let install_dir = vp_home.path().join("js_runtime").join("node").join("24.0.0");
+        let binary = install_dir.join(provider.binary_relative_path(Platform::current()).as_str());
+        std::fs::create_dir_all(binary.parent().unwrap()).unwrap();
+        std::fs::write(&binary, "").unwrap();
+
+        for (forbidden, rejected) in [(None, false), (Some("true"), false), (Some("1"), true)] {
+            vp_shared::EnvConfig::with_vars_async(
+                [
+                    (env_vars::VP_HOME, Some(vp_home.path().as_os_str())),
+                    (env_vars::VP_ENV_FORBIDDEN, forbidden.map(std::ffi::OsStr::new)),
+                ],
+                |_| async {
+                    let result =
+                        download_runtime_with_provider(&provider, JsRuntimeType::Node, "24.0.0")
+                            .await;
+                    if rejected {
+                        assert!(matches!(result, Err(Error::DisabledByEnvForbidden)));
+                    } else {
+                        assert_eq!(result.unwrap().get_binary_path().as_path(), binary);
+                    }
+                },
+            )
+            .await;
+        }
     }
 }

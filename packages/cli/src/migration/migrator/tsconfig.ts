@@ -27,7 +27,7 @@ export function cleanupDeprecatedTsconfigOptions(
           prompts.log.success(`✔ Removed ${name}: false from ${displayRelative(filePath)}`);
         }
         warnMigration(
-          `Removed \`"${name}": false\` from ${displayRelative(filePath)} — this option has been deprecated. See https://github.com/oxc-project/tsgolint/issues/351, https://github.com/microsoft/TypeScript/issues/62529`,
+          `Removed \`"${name}": false\` from ${displayRelative(filePath)} — this option has been deprecated. See https://github.com/microsoft/TypeScript/issues/62529`,
           report,
         );
       }

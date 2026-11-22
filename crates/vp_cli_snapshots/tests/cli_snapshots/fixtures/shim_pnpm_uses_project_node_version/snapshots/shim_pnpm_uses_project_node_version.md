@@ -26,7 +26,7 @@ pnpm uses the project Node version
 pnpm child uses project Node version
 ```
 
-## `vp env exec --node 22.13 pnpm exec node -e 'if('\!'process.version.startsWith('\''v22.13.'\''))process.exit(1);console.log('\''explicit Node reaches pnpm child'\'')'`
+## `vp env exec --node 24.22 pnpm exec node -e 'if('\!'process.version.startsWith('\''v24.22.'\''))process.exit(1);console.log('\''explicit Node reaches pnpm child'\'')'`
 
 Explicit env exec version overrides the project version through the pnpm shim
 

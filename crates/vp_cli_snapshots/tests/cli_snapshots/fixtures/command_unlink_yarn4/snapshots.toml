@@ -15,4 +15,6 @@ steps = [
   { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
   { argv = ["vp", "unlink", "-r"], comment = "should work with -r short form" },
   { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
+  { argv = ["vpt", "json-edit", "package.json", "packageManager", "yarn@2.4.2"], snapshot = false, continue-on-failure = true },
+  { argv = ["vp", "unlink", "unlink-test-lib-yarn"], comment = "Yarn 2 has no unlink command, so warn and skip execution." },
 ]

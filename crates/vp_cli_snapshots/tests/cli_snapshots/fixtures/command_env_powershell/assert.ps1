@@ -58,12 +58,12 @@ if ($env:VP_NODE_VERSION -ne "18.20.0") {
     throw "vp env use --help changed VP_NODE_VERSION"
 }
 
-vp env use 20.18.0 --no-install
+vp env use 20.20.2 --no-install
 if (-not $? -or $LASTEXITCODE -ne 0) {
     throw "vp env use failed through the PowerShell wrapper"
 }
-if ($env:VP_NODE_VERSION -ne "20.18.0") {
-    throw "VP_NODE_VERSION mismatch: expected 20.18.0, got $env:VP_NODE_VERSION"
+if ($env:VP_NODE_VERSION -ne "20.20.2") {
+    throw "VP_NODE_VERSION mismatch: expected 20.20.2, got $env:VP_NODE_VERSION"
 }
 if ($ErrorActionPreference -ne 'Stop' -or (Test-Path Env:VP_ENV_USE_EVAL_ENABLE) -or (Test-Path Env:VP_SHELL)) {
     throw "vp env use did not restore the caller's preferences and environment"
@@ -72,7 +72,7 @@ if ($ErrorActionPreference -ne 'Stop' -or (Test-Path Env:VP_ENV_USE_EVAL_ENABLE)
 $env:VP_ENV_USE_EVAL_ENABLE = 'original'
 $env:VP_SHELL = 'powershell'
 vp env use invalid-version --no-install 6>$null
-if ($? -or $LASTEXITCODE -eq 0 -or $env:VP_NODE_VERSION -ne '20.18.0') {
+if ($? -or $LASTEXITCODE -eq 0 -or $env:VP_NODE_VERSION -ne '20.20.2') {
     throw "Failed vp env use changed the selected Node version or lost its failure status"
 }
 if ($ErrorActionPreference -ne 'Stop' -or $env:VP_ENV_USE_EVAL_ENABLE -ne 'original' -or $env:VP_SHELL -ne 'powershell') {
@@ -84,7 +84,7 @@ if ($ErrorActionPreference -ne 'Stop' -or $env:VP_ENV_USE_EVAL_ENABLE -ne 'origi
     function Write-Host { throw 'Simulated host output failure' }
     $caught = $false
     try {
-        vp env use 20.18.0 --no-install
+        vp env use 20.20.2 --no-install
     } catch {
         if ($_.Exception.Message -notlike '*Simulated host output failure*') { throw }
         $caught = $true
@@ -113,8 +113,8 @@ vp env use --no-install
 if (-not $? -or $LASTEXITCODE -ne 0) {
     throw "vp env use without a version failed through the PowerShell wrapper"
 }
-if ($env:VP_NODE_VERSION -ne "22.18.0") {
-    throw "file-based VP_NODE_VERSION mismatch: expected 22.18.0, got $env:VP_NODE_VERSION"
+if ($env:VP_NODE_VERSION -ne "22.23.4") {
+    throw "file-based VP_NODE_VERSION mismatch: expected 22.23.4, got $env:VP_NODE_VERSION"
 }
 
 . (Join-Path $PSScriptRoot "assert-arguments.ps1")

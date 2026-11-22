@@ -6,6 +6,10 @@
 `vpr` is available as a standalone shorthand for `vp run`. All examples below work with both `vp run` and `vpr`.
 :::
 
+::: info
+Vite Task parses simple commands and `&&` chains itself instead of passing them to a shell, so they behave the same on every platform. Other shell syntax, such as pipes or redirects, may behave differently across platforms.
+:::
+
 ## Overview
 
 Use `vp run` with existing `package.json` scripts:
@@ -232,7 +236,7 @@ vp run -w build
 
 ## Compound Commands
 
-Commands joined with `&&` are split into independent sub-tasks. Each sub-task is cached separately when [caching is enabled](/guide/cache#when-is-caching-enabled). This works for both `vite.config.ts` tasks and `package.json` scripts:
+Commands joined with `&&` are split into independent sub-tasks, unless they also use other shell syntax. Each sub-task is cached separately when [caching is enabled](/guide/cache#when-is-caching-enabled). This works for both `vite.config.ts` tasks and `package.json` scripts:
 
 ```json [package.json]
 {
@@ -265,6 +269,24 @@ $ vp build ○ cache miss: 'index.html' modified, executing
 ---
 vp run: 1/2 cache hit (50%), 2/2 successful, 120ms saved.
 ```
+
+### Environment Variable Prefixes
+
+Environment variable prefixes such as `FOO=bar command` work on every platform, without extra tools like `cross-env`:
+
+```json [package.json]
+{
+  "scripts": {
+    "build": "NODE_ENV=production node build.js"
+  }
+}
+```
+
+A prefix applies only to the command it directly precedes. In `FOO=1 a && b`, `FOO` is set for `a` but not for `b`.
+
+::: warning
+Prefixes may not work on every platform when the command also uses other shell syntax.
+:::
 
 ### Nested `vp run`
 
@@ -332,11 +354,33 @@ Task Details:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
+When a task misses the cache, the summary lists every change that caused the miss. Use `-vv` (or `--verbose --verbose`) to also list each cached run's unchanged inputs, under `Unchanged:`, and the files a cache hit restores, under `Outputs:`. If a run hits the cache when you expected a miss, `-vv` shows whether the file you edited is an input at all.
+
 Use `--last-details` to show the summary from the last run without running tasks again:
 
 ```bash
 vp run --last-details
 ```
+
+## Dry Runs And JSON Output
+
+`--dry-run` shows what a run would do without running anything. It prints each command with its cache status, then the summary. Vite Task checks the cache as a real run would, but writes nothing:
+
+```bash
+vp run --dry-run -r build
+```
+
+`--json` prints JSON instead of text, for scripts and agents:
+
+- `vp run --json`, with no task or other flags, prints every package and task in the workspace, with each task's `dependsOn` resolved, and runs nothing. See the [task graph schema](https://github.com/voidzero-dev/vite-task/blob/cb1ea8d214b26a0f3ca2b2ef3b6bc471b18ffacb/crates/vt/schemas/task-graph.json).
+- `vp run --dry-run --json build` prints the plan for a run: each task it would run, the tasks each one waits for, each step's command, and whether each step would hit the cache. With a task, `--json` only works together with `--dry-run`. See the [run plan schema](https://github.com/voidzero-dev/vite-task/blob/cb1ea8d214b26a0f3ca2b2ef3b6bc471b18ffacb/crates/vt/schemas/run-plan.json).
+
+Add `-v` or `-vv` for more detail:
+
+- On its own, `--dry-run` shows the first change it finds behind each miss. With `-v`, the summary lists every change.
+- `-vv` with `--dry-run --json` adds each step's `baseline.fingerprint` and `baseline.outputs`: the inputs its cached run recorded, and the outputs a hit would restore.
+
+Put these flags before the task name. Anything after the task name is passed to the task.
 
 ## Concurrency
 

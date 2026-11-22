@@ -41,8 +41,10 @@ Merge a child Cargo workspace (located in a subdirectory) into a parent root Car
 - From the child's `[workspace.dependencies]`, only include those that are actually used by the crates
 - Check for conflicts with existing root workspace dependencies:
   - Same dependency, same version: Skip (already exists)
-  - Same dependency, different version: Flag for manual resolution and suggest keeping the newer version
+  - Same dependency, different version: Use the requirement from the pinned upstream source, preserving documented integration constraints
 - Exclude dev-only dependencies that aren't needed for the merged crates
+
+For Rolldown and `oxc-node`, compare the pinned manifests with root `[workspace.dependencies]`. Rolldown declares workspace dependencies; `oxc-node` declares direct, build, and target-specific dependencies. Synchronize shared dependencies used by the vendored crates with upstream requirements. If both sources use a dependency, select a requirement compatible with both. Preserve root features and documented minimum versions, including `napi`'s security minimum. The shared `oxc` version follows Rolldown; keep the existing `patch-oxc-node.ts` integration. Do not import versions used only by upstream development tools into unrelated project crates.
 
 ### Step 5: Update Root Cargo.toml
 
@@ -50,6 +52,13 @@ Merge a child Cargo workspace (located in a subdirectory) into a parent root Car
 - Add filtered workspace dependencies to `[workspace.dependencies]`
 - Maintain alphabetical ordering within sections for cleanliness
 - Preserve any existing comments and formatting
+
+When synchronizing Rolldown or `oxc-node`, update the root Cargo dependency exclusion in `.github/renovate.json`:
+
+- Keep `matchPackageNames` aligned with the shared registry dependencies used by the vendored crates. Exclude dependencies used only by upstream development tools from this list.
+- Use the `package` name for renamed crates and keep the list in alphabetical order.
+- Keep the rule limited to the `cargo` manager and root `Cargo.toml`. Project-only crates and other manifests must remain enabled.
+- Leave `oxc` crates covered by the existing pattern rule. `.github/workflows/upgrade-deps.yml` manages these dependencies with the upstream sources.
 
 ## Output Format
 
@@ -66,7 +75,7 @@ Provide:
 - Ensure no duplicate entries are created
 - Validate that merged dependencies don't break existing crates
 - After modifications, suggest running `cargo check --workspace` to verify the merge
-- Use highest compatible semver versions (if not pinned) and merge features in crates
+- Check shared requirements against the pinned upstream sources and preserve the features needed by each crate
 
 ## Important Considerations
 

@@ -1,0 +1,49 @@
+[[case]]
+name = "migration_ts_node_class_fields"
+vp = ["local", "global"]
+local-registry = true
+env = { VP_NODE_VERSION = "22.23.4" }
+unset-env = ["NODE_OPTIONS", "VP_SCRIPT_TSCONFIG", "TSX_TSCONFIG_PATH", "OXC_TSCONFIG_PATH", "TS_NODE_PROJECT", "TS_NODE_TRANSPILE_ONLY", "TS_NODE_TYPE_CHECK"]
+comment = "The local registry fetches pinned ts-node 10.9.2 and TypeScript 5.9.3 to compare real class-field semantics. An existing tsconfig omits target and useDefineForClassFields."
+steps = [
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  ["vp", "run", "cli"],
+  ["vp", "run", "register"],
+  ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  { argv = ["vpt", "print-file", "package.json", "tsconfig.json"], comment = "Both commands and ts-node stay because the implicit class-field defaults differ." },
+  { argv = ["vpt", "rm", "-rf", "node_modules"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  ["vp", "run", "cli"],
+  ["vp", "run", "register"],
+  { argv = ["vpt", "json-edit", "tsconfig.json", "compilerOptions.useDefineForClassFields", "false"], comment = "Make assignment semantics explicit before retrying migration." },
+  ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "package.json", "tsconfig.json"],
+  { argv = ["vpt", "rm", "-rf", "node_modules"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  ["vpt", "stat-file", "node_modules/ts-node"],
+  { argv = ["vp", "run", "cli"], comment = "The migrated loader preserves the base-class value with the explicit setting." },
+  ["vp", "run", "register"],
+]
+
+[[case]]
+name = "migration_ts_node_named_commonjs"
+vp = ["local", "global"]
+local-registry = true
+env = { VP_NODE_VERSION = "22.23.4" }
+unset-env = ["NODE_OPTIONS", "VP_SCRIPT_TSCONFIG", "TSX_TSCONFIG_PATH", "OXC_TSCONFIG_PATH", "TS_NODE_PROJECT", "TS_NODE_TRANSPILE_ONLY", "TS_NODE_TYPE_CHECK"]
+comment = "Real ts-node compiles the named import to require() property access. The CommonJS export object is built dynamically so Node cannot infer the named export statically."
+steps = [
+  { argv = ["vpt", "json-edit", "tsconfig.json", "compilerOptions.target", "ES2022"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "scripts.cli", "ts-node -T named.ts"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "scripts.register", "TS_NODE_PROJECT=tsconfig.json node --require ts-node/register/transpile-only named.ts"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  ["vp", "run", "cli"],
+  ["vp", "run", "register"],
+  ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  { argv = ["vpt", "print-file", "package.json", "named.ts", "dep.cjs"], comment = "The named import keeps both commands and the ts-node dependency." },
+  { argv = ["vpt", "rm", "-rf", "node_modules"], snapshot = false },
+  { argv = ["vp", "install", "--ignore-scripts"], snapshot = false },
+  ["vpt", "stat-file", "node_modules/ts-node"],
+  { argv = ["vp", "run", "cli"], comment = "The preserved CommonJS compilation still prints 42 after a fresh install." },
+  ["vp", "run", "register"],
+]

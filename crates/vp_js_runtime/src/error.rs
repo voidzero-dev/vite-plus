@@ -9,6 +9,13 @@ pub enum Error {
     #[error("Version {version} not found for {runtime}")]
     VersionNotFound { runtime: Str, version: Str },
 
+    /// `VP_ENV_FORBIDDEN=1` forbids downloading or using a managed runtime
+    #[error(
+        "{var}=1: Vite+ does not manage Node.js; it neither downloads nor uses a managed Node.js",
+        var = vp_shared::env_vars::VP_ENV_FORBIDDEN
+    )]
+    DisabledByEnvForbidden,
+
     /// Platform not supported for this runtime
     #[error("Platform {platform} is not supported for {runtime}")]
     UnsupportedPlatform { platform: Str, runtime: Str },
@@ -44,6 +51,15 @@ pub enum Error {
     /// Failed to parse package.json
     #[error("Failed to parse {path}: {reason}")]
     PackageJsonParseFailed { path: Box<AbsolutePath>, reason: Str },
+
+    /// `devEngines.runtime.version` is not a semver version or range, and the
+    /// entry's effective `onFail` is `error` or `download`
+    #[error(
+        "devEngines.runtime.version \"{version}\" in {path} is not a valid semver range \
+         (see devEngines spec). Use a semver version or range instead, or run \
+         `vp env pin lts` in that directory to pin the current LTS version"
+    )]
+    InvalidDevEnginesRuntimeVersion { version: Str, path: Box<AbsolutePath> },
 
     /// No version matching the requirement found
     #[error("No version matching '{version_req}' found")]

@@ -6,7 +6,7 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { applyEdits, modify, parse as parseJsonc } from 'jsonc-parser';
 
 import vitestV5EntryPoints from '../vitest-v5-entry-points.json' with { type: 'json' };
-import { runCommandSilently } from './command.ts';
+import { getVpCommand, runCommandSilently } from './command.ts';
 import { BASEURL_TSCONFIG_FIX_PACKAGE, createBaseUrlTsconfigFixArgs } from './constants.ts';
 import { cancelAndExit } from './prompts.ts';
 
@@ -14,7 +14,7 @@ export type BaseUrlFixStatus = 'not-needed' | 'fixed' | 'declined' | 'failed';
 
 /**
  * Check if tsconfig.json has compilerOptions.baseUrl set.
- * oxlint's TypeScript checker (tsgolint) does not support baseUrl,
+ * Oxlint's TypeScript 7 backend does not support baseUrl,
  * so typeAware/typeCheck must be disabled when it is present.
  */
 export function hasBaseUrlInTsconfigFile(filePath: string): boolean {
@@ -103,8 +103,7 @@ export async function fixBaseUrlInTsconfig(
         prompts.log.info(`Running vp dlx ${BASEURL_TSCONFIG_FIX_PACKAGE} ${fixArgs.join(' ')}`);
       }
       const result = await runCommandSilently({
-        command: process.env.VP_CLI_BIN ?? 'vp',
-        args: ['dlx', BASEURL_TSCONFIG_FIX_PACKAGE, ...fixArgs],
+        ...getVpCommand(['dlx', BASEURL_TSCONFIG_FIX_PACKAGE, ...fixArgs]),
         cwd: projectPath,
         envs: process.env,
       });

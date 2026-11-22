@@ -1,7 +1,0 @@
-{
-  "scripts": {
-    "docs:dev": "vite doc dev",
-    "docs:build": "vite doc build",
-    "docs:preview": "vite doc preview"
-  }
-}

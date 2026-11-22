@@ -5,6 +5,12 @@
 Prepare isolated external install and VP_HOME
 
 
+## `vpt write-file home/.vp-owned 'vite-plus-owned-directory
+'`
+
+The fixture owns the preseeded runtime directory
+
+
 ## `vpt cp $VP_HOME/bin/vp external/bin/vp`
 
 Simulate a Homebrew-style vp outside VP_HOME

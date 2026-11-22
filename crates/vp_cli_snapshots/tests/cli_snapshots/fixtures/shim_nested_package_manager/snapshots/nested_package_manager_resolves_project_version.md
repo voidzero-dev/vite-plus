@@ -24,7 +24,7 @@ npm lifecycle scripts can invoke the project pnpm
 10.19.0
 ```
 
-## `npx --offline --call 'pnpm exec node assert-injected-tools.cjs pnpm 10.19.0 20.18.0'`
+## `npx --offline --call 'pnpm exec node assert-injected-tools.cjs pnpm 10.19.0 20.20.2'`
 
 Injected tools accumulate and an explicit shim invocation reuses them
 
@@ -40,7 +40,7 @@ Same-family child calls still reach the real binary
 10.19.0
 ```
 
-## `npx --offline --call 'pnpm exec node -e "require('\''node:assert/strict'\'').equal(process.version,'\''v20.18.0'\'');console.log('\''project Node version preserved'\'')"'`
+## `npx --offline --call 'pnpm exec node -e "require('\''node:assert/strict'\'').equal(process.version,'\''v20.20.2'\'');console.log('\''project Node version preserved'\'')"'`
 
 The nested package manager keeps the selected Node.js runtime
 

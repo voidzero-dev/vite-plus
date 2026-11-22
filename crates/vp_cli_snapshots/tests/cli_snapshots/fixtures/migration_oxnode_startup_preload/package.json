@@ -1,0 +1,16 @@
+{
+  "name": "migration-oxnode-startup-preload",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "oxnode build.ts",
+    "run": "oxnode -r ./setup.cjs entry.ts"
+  },
+  "devDependencies": {
+    "@oxc-node/cli": "1.0.1",
+    "@oxc-node/core": "1.0.1",
+    "jsx-dep": "file:.fixture/jsx-dep",
+    "vite-plus": "latest"
+  },
+  "packageManager": "pnpm@12.11.2"
+}

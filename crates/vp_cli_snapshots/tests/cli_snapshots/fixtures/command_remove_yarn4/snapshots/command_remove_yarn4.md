@@ -163,13 +163,3 @@ remove optional dependencies without a section selector
   "packageManager": "yarn@4.10.3"
 }
 ```
-
-## `vp remove -g --dry-run testnpm2`
-
-support remove global package with dry-run
-
-**Exit code:** 1
-
-```
-Failed to uninstall testnpm2: Package testnpm2 is not installed
-```

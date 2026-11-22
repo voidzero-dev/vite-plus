@@ -6,9 +6,9 @@ steps = [
   { argv = ["npx", "--offline", "--call", "pnpm --version"], comment = "A nested shim resolves and installs the pinned pnpm on first use", snapshot = false },
   { argv = ["npx", "--offline", "--call", "pnpm --version"], comment = "npx can invoke the project pnpm without a system pnpm" },
   { argv = ["npm", "run", "--silent", "probe"], comment = "npm lifecycle scripts can invoke the project pnpm" },
-  { argv = ["npx", "--offline", "--call", "pnpm exec node assert-injected-tools.cjs pnpm 10.19.0 20.18.0"], comment = "Injected tools accumulate and an explicit shim invocation reuses them" },
+  { argv = ["npx", "--offline", "--call", "pnpm exec node assert-injected-tools.cjs pnpm 10.19.0 20.20.2"], comment = "Injected tools accumulate and an explicit shim invocation reuses them" },
   { argv = ["pnpm", "exec", "pnpm", "--version"], comment = "Same-family child calls still reach the real binary" },
-  { argv = ["npx", "--offline", "--call", "pnpm exec node -e \"require('node:assert/strict').equal(process.version,'v20.18.0');console.log('project Node version preserved')\""], comment = "The nested package manager keeps the selected Node.js runtime" },
+  { argv = ["npx", "--offline", "--call", "pnpm exec node -e \"require('node:assert/strict').equal(process.version,'v20.20.2');console.log('project Node version preserved')\""], comment = "The nested package manager keeps the selected Node.js runtime" },
   { argv = ["npx", "--offline", "--call", "pnpm exec npx --offline --call \"pnpm --version\""], comment = "Repeated cross-family calls complete without a shim loop" },
 ]
 
@@ -55,6 +55,6 @@ vp = "global"
 env = { npm_config_manage_package_manager_versions = "false" }
 steps = [
   { argv = ["vp", "env", "on", "pnpm"], snapshot = false },
-  { argv = ["npx", "--offline", "--call", "pnpm exec vp env exec --node 22.18.0 --package-manager pnpm@10.18.0 node assert-injected-tools.cjs pnpm 10.18.0 22.18.0"], comment = "Explicit versions replace the inherited runtime and package manager", snapshot = false },
-  { argv = ["npx", "--offline", "--call", "pnpm exec vp env exec --node 22.18.0 --package-manager pnpm@10.18.0 node assert-injected-tools.cjs pnpm 10.18.0 22.18.0"], comment = "Re-entering a shim keeps the explicitly selected versions" },
+  { argv = ["npx", "--offline", "--call", "pnpm exec vp env exec --node 22.23.4 --package-manager pnpm@10.18.0 node assert-injected-tools.cjs pnpm 10.18.0 22.23.4"], comment = "Explicit versions replace the inherited runtime and package manager", snapshot = false },
+  { argv = ["npx", "--offline", "--call", "pnpm exec vp env exec --node 22.23.4 --package-manager pnpm@10.18.0 node assert-injected-tools.cjs pnpm 10.18.0 22.23.4"], comment = "Re-entering a shim keeps the explicitly selected versions" },
 ]

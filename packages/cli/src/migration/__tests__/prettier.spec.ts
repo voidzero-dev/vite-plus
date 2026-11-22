@@ -7,7 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@voidzero-dev/vite-plus-prompts', () => ({
   log: { info: vi.fn(), success: vi.fn(), warn: vi.fn() },
 }));
-vi.mock('../../utils/command.ts', () => ({
+vi.mock(import('../../utils/command.ts'), async (importOriginal) => ({
+  ...(await importOriginal()),
   runCommandSilently: vi.fn(),
 }));
 
@@ -27,11 +28,13 @@ describe('Prettier migration', () => {
   };
 
   beforeEach(() => {
+    vi.stubEnv('VP_CLI_BIN', undefined);
     projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-prettier-'));
     fs.writeFileSync(path.join(projectPath, 'package.json'), JSON.stringify(packageJson));
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     fs.rmSync(projectPath, { recursive: true, force: true });
     mockRunCommandSilently.mockReset();
   });
@@ -56,7 +59,10 @@ describe('Prettier migration', () => {
     ).resolves.toBe('skipped');
 
     expect(mockRunCommandSilently).toHaveBeenCalledWith(
-      expect.objectContaining({ args: ['fmt', '--migrate=prettier'], cwd: projectPath }),
+      expect.objectContaining({
+        args: [expect.any(String), 'fmt', '--migrate=prettier'],
+        cwd: projectPath,
+      }),
     );
     expect(fs.readFileSync(path.join(projectPath, configFile), 'utf8')).toBe(config);
     expect(fs.readFileSync(path.join(projectPath, 'package.json'), 'utf8')).toBe(
@@ -118,5 +124,82 @@ describe('Prettier migration', () => {
       'lint-staged': { '*.ts': 'vp fmt' },
     });
     expect(report.prettierMigrated).toBe(true);
+  });
+
+  // `vp fmt --migrate` converts nothing while the config declares `fmt`, and the
+  // first `vp migrate` injects `fmt: {}` even when Prettier stays.
+  it.each([
+    [0, 'migrated'],
+    [1, 'failed'],
+  ] as const)(
+    'clears the injected empty fmt block for the conversion (exit code %s)',
+    async (exitCode, outcome) => {
+      fs.writeFileSync(path.join(projectPath, '.prettierrc.json'), '{"semi":false}');
+      const viteConfigPath = path.join(projectPath, 'vite.config.ts');
+      const viteConfig = `import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  fmt: {},
+  lint: { rules: {} },
+});
+`;
+      fs.writeFileSync(viteConfigPath, viteConfig);
+      let configDuringConversion = '';
+      mockRunCommandSilently.mockImplementation(async () => {
+        configDuringConversion = fs.readFileSync(viteConfigPath, 'utf8');
+        return { exitCode, stdout: Buffer.alloc(0), stderr: Buffer.from('Invalid JSON') };
+      });
+
+      await expect(
+        migratePrettierToOxfmt(projectPath, false, '.prettierrc.json', undefined, { silent: true }),
+      ).resolves.toBe(outcome);
+
+      expect(configDuringConversion).not.toContain('fmt');
+      expect(configDuringConversion).toContain('lint: { rules: {} }');
+      // A failed conversion leaves the project as it was.
+      expect(fs.readFileSync(viteConfigPath, 'utf8')).toBe(
+        exitCode === 0 ? configDuringConversion : viteConfig,
+      );
+      expect(fs.existsSync(path.join(projectPath, '.prettierrc.json'))).toBe(exitCode !== 0);
+    },
+  );
+
+  it.each([
+    ['has user settings', 'fmt: { singleQuote: true },'],
+    // Vite+ prepends its empty block. One after a spread overrides the spread,
+    // and the converted options would land before it and lose to it.
+    ['follows a spread', '...{ fmt: { semi: true } },\n  fmt: {},'],
+  ])('keeps Prettier when the fmt block %s', async (_name, properties) => {
+    fs.writeFileSync(path.join(projectPath, '.prettierrc.json'), '{"semi":false}');
+    const viteConfigPath = path.join(projectPath, 'vite.config.ts');
+    const viteConfig = `import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  ${properties}
+});
+`;
+    fs.writeFileSync(viteConfigPath, viteConfig);
+    const report = createMigrationReport();
+
+    await expect(
+      migratePrettierToOxfmt(projectPath, false, '.prettierrc.json', undefined, {
+        silent: true,
+        report,
+      }),
+    ).resolves.toBe('skipped');
+
+    // The conversion would be skipped, so removing Prettier would lose its options.
+    expect(mockRunCommandSilently).not.toHaveBeenCalled();
+    expect(fs.readFileSync(viteConfigPath, 'utf8')).toBe(viteConfig);
+    expect(fs.readFileSync(path.join(projectPath, '.prettierrc.json'), 'utf8')).toBe(
+      '{"semi":false}',
+    );
+    expect(fs.readFileSync(path.join(projectPath, 'package.json'), 'utf8')).toBe(
+      JSON.stringify(packageJson),
+    );
+    expect(report.prettierMigrated).toBe(false);
+    expect(report.warnings).toEqual([
+      'Kept Prettier because vite.config.ts already has a fmt config. Move the Prettier options into it manually, then remove Prettier.',
+    ]);
   });
 });

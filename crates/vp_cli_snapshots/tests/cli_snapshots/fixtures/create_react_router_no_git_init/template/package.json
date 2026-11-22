@@ -1,0 +1,8 @@
+{
+  "name": "react-router-template",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "vite": "*"
+  }
+}

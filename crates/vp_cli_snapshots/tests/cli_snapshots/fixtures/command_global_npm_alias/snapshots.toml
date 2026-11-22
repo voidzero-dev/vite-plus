@@ -1,0 +1,16 @@
+[[case]]
+name = "command_global_npm_alias"
+vp = "global"
+skip-platforms = ["windows"]
+steps = [
+  { argv = ["vp", "install", "-g", "testnpm2-alias@npm:testnpm2@1.0.0"], comment = "should prepare a version-pinned npm alias", snapshot = false },
+  { argv = ["vp", "list", "-g"], comment = "should list the alias with its aliased package" },
+  { argv = ["vp", "outdated", "testnpm2-alias", "-g", "--format", "json"], comment = "should resolve versions of the aliased package", continue-on-failure = true },
+  { tty = false, argv = ["vp", "update", "-g"], comment = "should keep a pinned alias in place" },
+  { tty = false, argv = ["vp", "update", "-g", "testnpm2-alias", "--latest"], comment = "should update the aliased package instead of a package named after the alias" },
+  { argv = ["vpt", "grep-file", "$VP_HOME/packages/testnpm2-alias.json", 'versionSpec": "npm:testnpm2"'], comment = "should keep the alias after --latest drops the pin" },
+  { argv = ["vp", "list", "-g"] },
+]
+after = [
+  { argv = ["vp", "remove", "-g", "testnpm2-alias"], continue-on-failure = true },
+]

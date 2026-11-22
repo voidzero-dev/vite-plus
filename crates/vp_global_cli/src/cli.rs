@@ -220,7 +220,7 @@ pub enum Commands {
         json: bool,
 
         /// Use the global Vite+ toolchain
-        #[arg(long)]
+        #[arg(short = 'g', long)]
         global: bool,
     },
 
@@ -603,6 +603,42 @@ fn should_suppress_header_for_subcommand(command: &str, args: &[String]) -> bool
     }
 }
 
+fn is_valid_task_name(name: &str) -> bool {
+    let script = name.split_once('#').map_or(name, |(_, s)| s);
+    !name.starts_with('#')
+        && !script.is_empty()
+        && !script.starts_with('#')
+        && !script.starts_with("//")
+        && !name.contains(char::is_whitespace)
+}
+
+pub(crate) fn sanitize_task_current_prefix(current: &OsStr) -> String {
+    current
+        .to_string_lossy()
+        .replace("\\#", "#")
+        .replace("\\:", ":")
+        .trim_matches(|c| c == '"' || c == '\'')
+        .to_string()
+}
+
+pub(crate) fn parse_task_completion_lines(
+    stdout: &str,
+    current: &str,
+) -> Vec<clap_complete::CompletionCandidate> {
+    stdout
+        .lines()
+        .filter_map(|line| line.split_once(": "))
+        .map(|(name, desc)| (name.trim(), desc.trim()))
+        .filter(|(name, _)| {
+            is_valid_task_name(name) && (current.is_empty() || name.starts_with(current))
+        })
+        .map(|(name, desc)| {
+            clap_complete::CompletionCandidate::new(name.to_string())
+                .help((!desc.is_empty()).then(|| desc.to_string().into()))
+        })
+        .collect()
+}
+
 /// Get available tasks for shell completion.
 ///
 /// Delegates to the local vite-plus CLI to run `vp run` without arguments,
@@ -612,12 +648,7 @@ fn run_tasks_completions(current: &OsStr) -> Vec<clap_complete::CompletionCandid
         return vec![];
     };
 
-    // Unescape hashtag and trim quotes for better matching
-    let current = current
-        .to_string_lossy()
-        .replace("\\#", "#")
-        .trim_matches(|c| c == '"' || c == '\'')
-        .to_string();
+    let current = sanitize_task_current_prefix(current);
 
     let output = tokio::task::block_in_place(|| {
         Runtime::new().ok().and_then(|rt| {
@@ -628,13 +659,8 @@ fn run_tasks_completions(current: &OsStr) -> Vec<clap_complete::CompletionCandid
     output
         .filter(|o| o.status.success())
         .map(|output| {
-            String::from_utf8_lossy(&output.stdout)
-                .lines()
-                .filter_map(|line| line.split_once(": ").map(|(name, _)| name.trim()))
-                .filter(|name| !name.is_empty())
-                .filter(|name| name.starts_with(&current) || current.is_empty())
-                .map(|name| clap_complete::CompletionCandidate::new(name.to_string()))
-                .collect()
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            parse_task_completion_lines(&stdout, &current)
         })
         .unwrap_or_default()
 }
@@ -710,8 +736,12 @@ async fn run_package_manager_command(
             == commands::env::config::ShimMode::SystemFirst
         && let Some(system_path) =
             crate::shim::dispatch::find_system_tool(&selected.package_manager_type.to_string())
-        && let Some(manager) =
-            system_package_manager(selected.package_manager_type, &system_path).await
+        && let Some(manager) = vp_pm_cli::PackageManager::from_system_executable(
+            selected.package_manager_type,
+            &system_path,
+            &cwd,
+        )
+        .await
     {
         vp_pm_cli::dispatch_with_resolved_package_manager(&cwd, command, manager).await?
     } else {
@@ -750,21 +780,6 @@ fn active_toolchain_manifest(cwd: &vt_path::AbsolutePath) -> Option<vp_toolchain
             crate::js_executor::JsExecutor::new(None).get_scripts_dir().ok()?.join("toolchain.json")
         };
     vp_toolchain::load_manifest(&manifest_path).ok()
-}
-
-async fn system_package_manager(
-    kind: vp_pm_cli::PackageManagerType,
-    executable: &vt_path::AbsolutePath,
-) -> Option<vp_pm_cli::PackageManager> {
-    let output =
-        tokio::process::Command::new(executable.as_path()).arg("--version").output().await.ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let version = std::str::from_utf8(&output.stdout).ok()?.trim();
-    js_semver::Version::parse(version).ok()?;
-    let bin_prefix = executable.parent()?.to_absolute_path_buf();
-    Some(vp_pm_cli::PackageManager::from_bin_prefix(kind, version, bin_prefix))
 }
 
 async fn managed_install(
@@ -851,13 +866,17 @@ async fn managed_update(
         current_node_version = get_current_node_version().await?;
 
         for metadata in &all {
-            if latest && metadata.version_spec.is_some() {
-                spec_rewrites.push((metadata.name.clone(), None, metadata.name.clone()));
+            if latest && metadata.version_spec != metadata.latest_version_spec() {
+                spec_rewrites.push((
+                    metadata.name.clone(),
+                    metadata.latest_version_spec(),
+                    metadata.latest_spec(),
+                ));
             }
             if !is_same_node_version(&metadata.platform.node, &current_node_version) {
                 node_mismatches.push(NodeMismatchPackage {
                     name: metadata.name.clone(),
-                    spec: if latest { metadata.name.clone() } else { metadata.update_spec() },
+                    spec: if latest { metadata.latest_spec() } else { metadata.update_spec() },
                     installed_node: metadata.platform.node.clone(),
                 });
             }
@@ -885,9 +904,13 @@ async fn managed_update(
                     if new_spec != metadata.version_spec {
                         spec_rewrites.push((package_name.clone(), new_spec, package.clone()));
                     }
-                } else if latest && metadata.version_spec.is_some() {
+                } else if latest && metadata.version_spec != metadata.latest_version_spec() {
                     // `--latest` applies to bare names only; explicit specs win.
-                    spec_rewrites.push((package_name.clone(), None, package_name.clone()));
+                    spec_rewrites.push((
+                        package_name.clone(),
+                        metadata.latest_version_spec(),
+                        metadata.latest_spec(),
+                    ));
                 }
                 if !is_same_node_version(&metadata.platform.node, &current_node_version) {
                     // Match the spec `get_outdated_packages` resolves for this
@@ -895,7 +918,7 @@ async fn managed_update(
                     let spec = if version_spec.is_some() {
                         package.clone()
                     } else if latest {
-                        package_name.clone()
+                        metadata.latest_spec()
                     } else {
                         metadata.update_spec()
                     };
@@ -934,7 +957,7 @@ async fn managed_update(
             // A newer `latest` alone (e.g. a version-pinned package) is not
             // updatable; only a newer wanted version is.
             .filter(|package| package.wanted != package.current)
-            .map(|package| package.spec.unwrap_or(package.name)),
+            .map(|package| package.spec),
     );
 
     let outdated_specs = to_update.iter().map(String::as_str).collect::<HashSet<_>>();
@@ -1272,6 +1295,25 @@ fn maybe_print_runtime_header(command: &str, args: &[String], show_header: bool)
     print_runtime_header(show_header);
 }
 
+fn sanitize_subcommand_aliases_for_completion(cmd: &mut clap::Command) {
+    for subcmd in cmd.get_subcommands_mut() {
+        if subcmd.get_visible_aliases().next().is_some() {
+            let aliases: Vec<String> = subcmd.get_all_aliases().map(str::to_string).collect();
+            // Clear aliases and re-add them as hidden.
+            *subcmd = std::mem::take(subcmd).alias(None::<&str>).aliases(aliases);
+        }
+        sanitize_subcommand_aliases_for_completion(subcmd);
+    }
+}
+
+/// Build a completion command with hidden aliases so clap_complete's ID-based
+/// deduplication preserves canonical names.
+pub fn command_for_completion() -> clap::Command {
+    let mut cmd = Args::command();
+    sanitize_subcommand_aliases_for_completion(&mut cmd);
+    cmd
+}
+
 /// Build a clap Command with custom help formatting matching the JS CLI output.
 pub fn command_with_help() -> clap::Command {
     command_with_help_with_options(RenderOptions::default())
@@ -1311,8 +1353,13 @@ pub fn try_parse_args_from_with_options(
     render_options: RenderOptions,
 ) -> Result<Args, clap::error::Error> {
     let cmd = apply_custom_help(Args::command(), render_options);
-    let matches = cmd.try_get_matches_from(args)?;
-    Args::from_arg_matches(&matches).map_err(|e| e.into())
+    let argv: Vec<_> = args.into_iter().collect();
+    let matches = cmd.try_get_matches_from(&argv)?;
+    let mut parsed = Args::from_arg_matches(&matches)?;
+    if let Some(Commands::Dev { args } | Commands::Build { args }) = &mut parsed.command {
+        vp_shared::restore_leading_arg_separator(&argv, args);
+    }
+    Ok(parsed)
 }
 
 #[cfg(test)]
@@ -1325,6 +1372,85 @@ mod tests {
 
     fn argv(args: &[&str]) -> Vec<String> {
         args.iter().map(|arg| (*arg).to_string()).collect()
+    }
+
+    #[test]
+    fn command_for_completion_preserves_canonical_subcommands() {
+        let mut cmd = super::command_for_completion();
+        for (parent, alias, name) in [
+            (None, "i", "install"),
+            (None, "up", "update"),
+            (None, "rm", "remove"),
+            (None, "un", "remove"),
+            (None, "uninstall", "remove"),
+            (Some("pm"), "ls", "list"),
+        ] {
+            let cmd = match parent {
+                Some(name) => cmd.find_subcommand_mut(name).unwrap(),
+                None => &mut cmd,
+            };
+            let candidates =
+                clap_complete::engine::complete(cmd, vec!["vp".into(), "".into()], 1, None)
+                    .unwrap();
+
+            assert!(
+                candidates.iter().any(|c| c.get_value() == name),
+                "missing {name}: {candidates:?}"
+            );
+            assert!(
+                !candidates.iter().any(|c| c.get_value() == alias),
+                "alias {alias} should be hidden from candidates: {candidates:?}"
+            );
+            assert_eq!(cmd.find_subcommand(alias).unwrap().get_name(), name);
+        }
+    }
+
+    #[test]
+    fn test_sanitize_task_current_prefix() {
+        use std::ffi::OsStr;
+        for (input, expected) in [
+            ("test\\:u", "test:u"),
+            ("pkg\\#test\\:u", "pkg#test:u"),
+            ("'test:unit'", "test:unit"),
+            ("\"pkg#build\"", "pkg#build"),
+        ] {
+            assert_eq!(super::sanitize_task_current_prefix(OsStr::new(input)), expected);
+        }
+    }
+
+    #[test]
+    fn test_parse_task_completion_lines() {
+        let stdout = concat!(
+            "  build: Run project build: vite build --mode:prod\n",
+            "  test:unit: Run unit tests\n",
+            "  pkg#test:unit: Workspace unit tests\n",
+            "  //: Root comment\n",
+            "  pkg#//: Workspace comment\n",
+            "  rolldown## Scrips for docs #: echo 1\n",
+            "# Global comment: echo 2\n",
+            "  invalid task with spaces: echo 3\n",
+            "  empty_desc: \n",
+        );
+
+        let complete = |cur| {
+            super::parse_task_completion_lines(stdout, cur)
+                .into_iter()
+                .map(|c| c.get_value().to_string_lossy().to_string())
+                .collect::<Vec<_>>()
+        };
+
+        // Comments and space-separated task names are filtered
+        assert_eq!(complete(""), vec!["build", "test:unit", "pkg#test:unit", "empty_desc"]);
+        assert_eq!(complete("test:"), vec!["test:unit"]);
+        assert!(complete("nonexistent").is_empty());
+
+        // Help descriptions: colons preserved and empty desc omitted
+        let all = super::parse_task_completion_lines(stdout, "");
+        assert_eq!(
+            all[0].get_help().map(|h| h.to_string()),
+            Some("Run project build: vite build --mode:prod".into())
+        );
+        assert_eq!(all[3].get_help(), None);
     }
 
     #[test]
@@ -1342,6 +1468,20 @@ mod tests {
     fn raw_subcommand_is_none_without_a_subcommand() {
         assert_eq!(raw_subcommand(&argv(&["vp"])), None);
         assert_eq!(raw_subcommand(&argv(&["vp", "--version"])), None);
+    }
+
+    #[test]
+    fn parses_toolchain_global_flags() {
+        for flag in ["--global", "-g"] {
+            let parsed = try_parse_args_from(argv(&["vp", "toolchain", "vite", "--json", flag]))
+                .expect("toolchain global flag should parse");
+            let Some(Commands::Toolchain { tools, json, global }) = parsed.command else {
+                panic!("expected toolchain command");
+            };
+            assert_eq!(tools, vec!["vite"]);
+            assert!(json);
+            assert!(global);
+        }
     }
 
     #[test]

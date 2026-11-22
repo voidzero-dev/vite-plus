@@ -2,16 +2,6 @@
 
 ## `node install.mjs interactive failure`
 
-**→ expect-milestone:** `install:download:ready`
-
-```
-Before installation: preserve this output.
-info: installing vite-plus@<version>...
-⠿ Downloading pnpm <version>... <size> B (<size> B/s)
-```
-
-**← write-key:** `enter`
-
 **→ expect-milestone:** `install:prepare:ready`
 
 ```
@@ -36,6 +26,6 @@ info: installing vite-plus@<version>...
 Before installation: preserve this output.
 info: installing vite-plus@<version>...
 error: Setup error: Failed to install production dependencies (exit code: 17). See log for details: <workspace>/home/upgrade.log
-Failure log preserves pnpm stdout and stderr.
+Failure log records the exit code without registry output.
 After installation.
 ```

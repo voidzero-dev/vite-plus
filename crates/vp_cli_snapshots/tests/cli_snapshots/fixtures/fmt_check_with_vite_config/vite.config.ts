@@ -1,5 +1,6 @@
 export default {
   fmt: {
-    indentWidth: 4,
+    singleQuote: true,
+    semi: false,
   },
-};
+}

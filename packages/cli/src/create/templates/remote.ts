@@ -2,13 +2,9 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import colors from 'picocolors';
 
 import type { WorkspaceInfo } from '../../types/index.ts';
-import { runCommand, runCommandSilently } from '../../utils/command.ts';
+import { getLocalVpCommand, runCommand, runCommandSilently } from '../../utils/command.ts';
 import { checkNpmPackageExists } from '../../utils/package.ts';
-import {
-  type ExecutionWithProjectDir,
-  formatDlxCommand,
-  runCommandAndDetectProjectDir,
-} from '../command.ts';
+import { type ExecutionWithProjectDir, runCommandAndDetectProjectDir } from '../command.ts';
 import type { TemplateInfo } from './types.ts';
 
 const { gray, yellow } = colors;
@@ -85,12 +81,21 @@ export async function runRemoteTemplateCommand(
   silent = false,
 ): Promise<ExecutionWithProjectDir> {
   autoFixRemoteTemplateCommand(templateInfo, workspaceInfo);
-  const remotePackageName = templateInfo.command;
-  const execArgs = [...templateInfo.args];
-  const envs = templateInfo.envs;
-  const { command, args } = formatDlxCommand(remotePackageName, execArgs, workspaceInfo);
+  // `--` keeps the global CLI from reading a template's `--help` as its own.
+  const dlxArgs = ['dlx', '--', templateInfo.command, ...templateInfo.args];
+  // `vp dlx` detects the package manager from cwd and defaults to pnpm outside a project.
+  // Pass the exact version so a tag such as `latest` is not resolved again from the new workspace's
+  // registry, and keep an override's hash so `dlx` reuses the verified install create downloaded.
+  const envs = {
+    ...templateInfo.envs,
+    VP_PACKAGE_MANAGER:
+      workspaceInfo.packageManagerOverride ??
+      `${workspaceInfo.packageManager}@${workspaceInfo.packageManagerVersion}`,
+  };
+  // The global `vp` may be an older release and would pick its own Node.js outside a project.
+  const { command, args } = getLocalVpCommand(dlxArgs);
   if (!silent) {
-    prompts.log.info(`Running: ${gray(`${command} ${args.join(' ')}`)}`);
+    prompts.log.info(`Running: ${gray(`vp ${dlxArgs.join(' ')}`)}`);
   }
   if (detectCreatedProjectDir) {
     return await runCommandAndDetectProjectDir(
@@ -104,7 +109,10 @@ export async function runRemoteTemplateCommand(
   return await runCommand({ command, args, cwd, envs });
 }
 
-function autoFixRemoteTemplateCommand(templateInfo: TemplateInfo, workspaceInfo: WorkspaceInfo) {
+export function autoFixRemoteTemplateCommand(
+  templateInfo: TemplateInfo,
+  workspaceInfo: WorkspaceInfo,
+) {
   // @tanstack/cli@latest, create-vite@latest
   let packageName = templateInfo.command;
   const indexOfAt = packageName.indexOf('@', 2);
@@ -133,6 +141,11 @@ function autoFixRemoteTemplateCommand(templateInfo: TemplateInfo, workspaceInfo:
     }
     // don't run npm install after project creation
     templateInfo.args.push('--no-install');
+  } else if (packageName === 'create-react-router') {
+    // Vite+ owns repository initialization and hooks. create-react-router also
+    // creates an initial commit, which can fail when Git identity is unset and
+    // abort the rest of the Vite+ integration.
+    templateInfo.args.push('--no-git-init');
   }
 
   if (workspaceInfo.isMonorepo) {

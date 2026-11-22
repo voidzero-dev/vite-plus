@@ -19,3 +19,13 @@ steps = [
   { argv = ["vpt", "print-file", "vite.config.ts"] },
   { argv = ["vp", "migrate", "--no-interactive"] },
 ]
+
+[[case]]
+name = "migration_task_cache_fields_wrapped"
+vp = "global"
+comment = "Move task cache settings when the defineConfig callback is wrapped in a type assertion."
+steps = [
+  { argv = ["vpt", "write-file", "vite.config.ts", "import { defineConfig } from 'vite-plus';\nimport type { UserConfigFn } from 'vite-plus';\n\nexport default defineConfig((() => {\n  return {\n    run: { tasks: { build: { command: 'vp build', env: ['DEPLOY_TARGET'] } } },\n  };\n}) as UserConfigFn);\n"], snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive"] },
+  { argv = ["vpt", "print-file", "vite.config.ts"] },
+]

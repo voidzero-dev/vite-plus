@@ -4,11 +4,12 @@
  * `sync-remote` clones oxc-node into `oxc-node/`, and CI checks it out at the hash in
  * `.upstream-versions.json`. The binding links it with `default-features = false`, so it
  * registers no NAPI exports of its own; `packages/cli/binding/src/oxc_node.rs` forwards
- * the ones the loader uses under an `oxcNode` namespace. The source stays unpatched.
+ * the ones the loader uses under an `oxcNode` namespace.
  *
  * This script points the `oxc` dependency at the workspace version, so the binding links
- * one copy of oxc. It is idempotent. Keep it free of package imports: CI runs it right
- * after checkout, before dependencies are installed.
+ * one copy of oxc, and adapts an AST predicate for the workspace's Oxc version.
+ * It is idempotent. Keep it free of package imports: CI runs it right after checkout,
+ * before dependencies are installed.
  */
 
 import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
@@ -47,6 +48,18 @@ export function patchOxcNode(rootDir: string = process.cwd()): void {
   if (patched !== cargoToml) {
     writeFileSync(cargoTomlPath, patched, 'utf-8');
     log(`✓ Cargo.toml: oxc ${version}`);
+  }
+  const libPath = join(rootDir, OXC_NODE_DIR, 'src/lib.rs');
+  const source = readFileSync(libPath, 'utf-8');
+  // Oxc 0.156 renamed this predicate; the workspace still uses 0.155.
+  // Matching the variant preserves await-using detection with either version.
+  const patchedSource = source.replace(
+    'it.kind.is_await_using()',
+    'matches!(it.kind, oxc::ast::ast::VariableDeclarationKind::AwaitUsing)',
+  );
+  if (patchedSource !== source) {
+    writeFileSync(libPath, patchedSource, 'utf-8');
+    log('✓ lib.rs: compatible await-using detection');
   }
 }
 

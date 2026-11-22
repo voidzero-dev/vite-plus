@@ -51,7 +51,7 @@ const TOOL_SPECS: [ToolSpec; 7] = [
     ToolSpec { id: "vitest", package_name: "vitest", bundled_version_key: None },
     ToolSpec { id: "oxfmt", package_name: "oxfmt", bundled_version_key: None },
     ToolSpec { id: "oxlint", package_name: "oxlint", bundled_version_key: None },
-    ToolSpec { id: "oxlint-tsgolint", package_name: "oxlint-tsgolint", bundled_version_key: None },
+    ToolSpec { id: "tsrs", package_name: "tsrs", bundled_version_key: None },
     ToolSpec {
         id: "tsdown",
         package_name: "@voidzero-dev/vite-plus-core",
@@ -188,8 +188,8 @@ pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
     let manifest = local.as_ref().and_then(read_toolchain_manifest);
     let tool_rows = TOOL_SPECS
         .iter()
-        .map(|tool| {
-            let version = resolve_tool_version(local.as_ref(), manifest.as_ref(), *tool);
+        .map(|&tool| {
+            let version = resolve_tool_version(local.as_ref(), manifest.as_ref(), tool);
             (tool.id, format_version(version))
         })
         .collect::<Vec<_>>();
@@ -331,6 +331,10 @@ mod tests {
         fs::create_dir_all(&pnpm_pkg_dir).unwrap();
         fs::write(pnpm_pkg_dir.join("package.json"), r#"{"version":"1.0.0"}"#).unwrap();
 
+        let tsrs_pkg_dir = project.join("node_modules/.pnpm/vite-plus@1.0.0/node_modules/tsrs");
+        fs::create_dir_all(&tsrs_pkg_dir).unwrap();
+        fs::write(tsrs_pkg_dir.join("package.json"), r#"{"version":"7.1.0-beta.tsrs4"}"#).unwrap();
+
         let core_pkg_dir = project
             .join("node_modules/.pnpm/vite-plus@1.0.0/node_modules/@voidzero-dev/vite-plus-core");
         fs::create_dir_all(&core_pkg_dir).unwrap();
@@ -351,6 +355,11 @@ mod tests {
         assert_eq!(
             resolve_tool_version(Some(&local), None, TOOL_SPECS[0]).as_deref(),
             Some("8.0.0"),
+        );
+        let tsrs = TOOL_SPECS.into_iter().find(|tool| tool.id == "tsrs").unwrap();
+        assert_eq!(
+            resolve_tool_version(Some(&local), None, tsrs).as_deref(),
+            Some("7.1.0-beta.tsrs4")
         );
     }
 }

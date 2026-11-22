@@ -41,9 +41,11 @@ To select the project's Node.js version, Vite+ checks the current directory firs
 
 If no directory declares a version, Vite+ uses the global default (`vp env default`) and then the latest LTS.
 
-These rules select Node.js for project commands. The installer uses the latest LTS by default. Only [`VP_SETUP_NODE_VERSION`](/guide/global-cli#vp-setup-node-version) changes its dependency-installation runtime; [`setup-vp`](/guide/ci#node-js-during-installation) supplies this override from the CI inputs or project declarations.
+The `lts` alias selects the newest LTS release. The `latest` alias selects the newest stable release, LTS or not, and skips pre-releases such as `27.0.0-alpha.0.0.0`. To use a pre-release, specify its exact version.
 
 `devEngines.runtime` ranks above `engines.node` because it declares the development-environment requirement, while `engines.node` is a consumer-facing support range. `vp env doctor` warns when declared sources conflict.
+
+`devEngines.runtime.version` accepts only semver versions and ranges, as in npm and pnpm. Aliases such as `lts/*` and `latest` work in `.node-version`, `.nvmrc`, and CLI arguments, but not in this field. When this field selects the Node.js version, an alias makes the command fail with the default `onFail` (`error`) or `download`. With `warn` or `ignore`, Vite+ skips the entry and checks the next sources. When a valid `.node-version` in the same directory selects the version, an alias in this field only causes a warning, and no warning when its `onFail` is `ignore`. To pin the current LTS release there, run `vp env pin lts`.
 
 ::: tip Using pnpm with Vite+ runtime management
 pnpm can also manage the runtime declared in `devEngines.runtime`. When both pnpm and Vite+ manage Node.js, they can download the same version separately or select different versions, causing inconsistent behavior between commands.
@@ -99,7 +101,7 @@ A project selection applies only to its matching shims. For example, pnpm contro
 Package-manager specs follow npm's order: an exact version, then a semver range, then a dist-tag. `default` is an alias of `latest`, except for npm, where it selects the npm on `PATH`.
 
 ::: details Dist-tag caching
-When a package-manager dist-tag such as `latest` or `latest-10` is resolved, including a named shim falling back to the latest release, the resolved version is cached for one hour. An expired cache remains available when the registry cannot be reached.
+When a package-manager dist-tag such as `latest` or `latest-10` is resolved, including a named shim falling back to the latest release, the resolved version is cached for one hour. An expired cache remains available when the registry cannot be reached. Registries other than `https://registry.npmjs.org` that have credentials in `.npmrc` are queried on every resolution, because their responses can differ between users.
 :::
 
 `pn` runs the same managed binary as `pnpm`, and `pnx` runs the same managed binary as `pnpx` (`pnpm dlx`). These aliases also work with managed pnpm versions older than v11.
@@ -332,3 +334,64 @@ If a future keyring or certificate issue blocks downloads, set `VP_NODE_SKIP_SIG
 ```bash
 VP_NODE_SKIP_SIGNATURE_VERIFY=1 vp env install 22
 ```
+
+## Replacing nvm or fnm
+
+`vp env` can replace [nvm](https://github.com/nvm-sh/nvm) and [fnm](https://github.com/Schniz/fnm) for Node.js version management. It reads the version files that those tools use, so existing projects need no changes. The `vp env` commands do not run Node.js themselves, so projects that use older releases, such as Node.js 16 or 18, also work.
+
+### Similarities between nvm or fnm and Vite+
+
+- `.nvmrc` and `.node-version` files work as they are. Vite+ also reads `engines.node` and `devEngines.runtime` in `package.json`. See [Node.js Selection](#node-js-selection) for the order of these sources.
+- An `.nvmrc` file can contain an exact version such as `18.20.8` or `v18.20.8`, a major version such as `18`, an LTS alias such as `lts/*` or `lts/hydrogen`, or `node` for the latest release. Vite+ ignores `system`, `default`, and `iojs`, and then checks the next source.
+- You do not need a directory-change hook, such as `fnm env --use-on-cd` or an nvm auto-use script. The `node`, `npm`, and `npx` shims select the version for the current directory each time they run. An editor or a script gets the same version when the shim directory is on its `PATH`.
+- When a shim needs a version that is not installed, Vite+ installs it. To install a version in advance, use `vp env install`.
+
+### Command Equivalents
+
+| Task                               | nvm                       | fnm                               | Vite+                               |
+| ---------------------------------- | ------------------------- | --------------------------------- | ----------------------------------- |
+| Install a version                  | `nvm install 18`          | `fnm install 18`                  | `vp env install 18`                 |
+| Use a version in the current shell | `nvm use 18`              | `fnm use 18`                      | `vp env use 18`                     |
+| Set the default version            | `nvm alias default 18`    | `fnm default 18`                  | `vp env default 18`                 |
+| Pin the project version            | Edit `.nvmrc`             | Edit `.node-version`              | `vp env pin 18`                     |
+| Show the current version           | `nvm current`             | `fnm current`                     | `vp env current`                    |
+| List installed versions            | `nvm ls`                  | `fnm list`                        | `vp env list node`                  |
+| List available versions            | `nvm ls-remote`           | `fnm list-remote`                 | `vp env list-remote node`           |
+| Run a command with a version       | `nvm exec 18 node app.js` | `fnm exec --using=18 node app.js` | `vp env exec --node 18 node app.js` |
+| Show the path of `node`            | `nvm which current`       |                                   | `vp env which node`                 |
+| Uninstall a version                | `nvm uninstall 16.20.2`   | `fnm uninstall 16.20.2`           | `vp env uninstall 16.20.2`          |
+
+`vp env use` changes only the current shell, and it needs the shell setup from `vp env setup`. In Command Prompt, use `vp-use` instead. See [Setup](#setup).
+
+`vp env pin` updates an existing `.nvmrc` or `.node-version` file. See [Manage](#manage) for the other pin targets.
+
+### Migrating from nvm or fnm
+
+1. Install the Vite+ global CLI. See [Install `vp` Globally](/guide/#install-vp-globally).
+2. Make sure that Vite+ manages Node.js:
+
+   ```bash
+   vp env on node
+   ```
+
+3. Remove the lines that load nvm or fnm from your shell profile, such as `~/.zshrc`, `~/.bashrc`, or the PowerShell `$PROFILE`. These lines put the `node` of nvm or fnm before the Vite+ shims on `PATH`. For example:
+
+   ```bash
+   # nvm
+   export NVM_DIR="$HOME/.nvm"
+   [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
+   # fnm
+   eval "$(fnm env --use-on-cd)"
+   ```
+
+4. Open a new terminal and run `vp env doctor node`. In its `PATH` section, the `node` line must show the Vite+ shim. A warning such as `node ~/.nvm/... (not vp shim)` means that another `node` still comes first.
+5. In each project, run `node -v` to check the selected version.
+6. Install the global command-line tools that you need again with [`vp install -g`](/guide/package-management/global-packages). Packages that you installed with `npm install -g` under nvm or fnm stay in the directories of those tools.
+7. After you check your projects, you can uninstall nvm or fnm.
+
+### Older Node.js Releases
+
+`vp env` can install a Node.js release when the Node.js project publishes a binary for your operating system and CPU architecture.
+
+Package managers and other tools that you run keep their own Node.js requirements.

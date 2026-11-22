@@ -31,7 +31,7 @@ vite-plus@<version>
 └── depends on vitest@<version>
 ```
 
-## `vp toolchain vite-plus-core tsgolint vite-task`
+## `vp toolchain vite-plus-core tsrs-lint vite-task`
 
 stable IDs and declared aliases resolve
 
@@ -40,6 +40,6 @@ Vite+ toolchain (local)
 
 vite-plus@<version>
 ├── depends on @voidzero-dev/vite-plus-core@<version>
-├── depends on oxlint-tsgolint@<version>
+├── depends on tsrs@<version>
 └── compiles vite-task (built <build-time>, revision <revision>)
 ```

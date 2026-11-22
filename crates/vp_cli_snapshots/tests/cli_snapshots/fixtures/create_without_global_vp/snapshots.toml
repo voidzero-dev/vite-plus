@@ -1,0 +1,29 @@
+[[case]]
+name = "pnpm_without_global_vp"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL", "CI"]
+steps = [
+  { argv = ["node", "assert-create.mjs", "pnpm@12.11.2", "missing"], timeout = 240000 },
+]
+
+[[case]]
+name = "yarn_without_global_vp"
+vp = "local"
+local-registry = true
+# The packed checkout can depend on packages published less than 24 hours ago.
+# Disable Yarn's release-age gate so upstream bumps do not break this fixture.
+env = { YARN_NPM_MINIMAL_AGE_GATE = "0" }
+unset-env = ["VP_SKIP_INSTALL", "CI"]
+steps = [
+  { argv = ["node", "assert-create.mjs", "yarn@4.18.1", "missing"], timeout = 240000 },
+]
+
+[[case]]
+name = "ignores_unrelated_global_vp"
+vp = "local"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL", "CI"]
+steps = [
+  { argv = ["node", "assert-create.mjs", "pnpm@12.11.2", "unrelated"], timeout = 240000 },
+]

@@ -82,6 +82,17 @@ steps = [
 ]
 
 [[case]]
+name = "awaited_assertion_bindings"
+vp = "global"
+comment = "Do not review local assertion promises awaited or returned after type checks, including on a migration rerun."
+steps = [
+  { argv = ["vpt", "write-file", "example.test.ts", "import { expect, expectTypeOf, it } from 'vitest';\nit('awaits an assertion', async () => {\n  const assertion = expect(Promise.resolve(1)).resolves.toBe(1);\n  expectTypeOf(assertion).toEqualTypeOf<Promise<void>>();\n  await assertion;\n});\nit('returns an assertion', () => {\n  const assertion = (expect(Promise.resolve(2)).resolves.toBe(2) as Promise<void>) satisfies Promise<void>;\n  expectTypeOf(assertion).toEqualTypeOf<Promise<void>>();\n  return assertion!;\n});\n"], snapshot = false },
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+  ["vpt", "print-file", "example.test.ts"],
+  ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
+]
+
+[[case]]
 name = "review_only_rerun"
 vp = "global"
 comment = "Show a non-blocking review once in the final summary, and retain it on a no-op rerun without reconciling dependencies."
@@ -208,7 +219,7 @@ name = "node_preflight"
 vp = "global"
 comment = "Upgrade the unsupported runtime pin before installation, then keep it on rerun."
 steps = [
-  { argv = ["vpt", "write-file", ".node-version", "20.19.0\n"], snapshot = false },
+  { argv = ["vpt", "write-file", ".node-version", "20.20.2\n"], snapshot = false },
   ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
   ["vpt", "print-file", ".node-version"],
   ["vpt", "print-file", "package.json"],
@@ -222,7 +233,7 @@ name = "volta_runtime_upgrade"
 vp = "global"
 comment = "Upgrade the Volta pin before converting it to .node-version, including the cached setup decision."
 steps = [
-  { argv = ["vpt", "json-edit", "package.json", "volta.node", "20.19.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "package.json", "volta.node", "20.20.2"], snapshot = false },
   ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],
   ["vpt", "print-file", ".node-version", "package.json"],
   ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"],

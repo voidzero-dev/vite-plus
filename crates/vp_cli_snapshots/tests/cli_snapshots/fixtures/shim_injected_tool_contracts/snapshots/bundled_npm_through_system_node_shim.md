@@ -1,9 +1,9 @@
 # bundled_npm_through_system_node_shim
 
-## `vpt write-file .node-version 20.18.0`
+## `vpt write-file .node-version 20.20.2`
 
 
-## `vp env exec --node 22.18.0 node assert-system-node-shim.cjs setup`
+## `vp env exec --node 22.23.4 node assert-system-node-shim.cjs setup`
 
 
 ## `vp env off node`

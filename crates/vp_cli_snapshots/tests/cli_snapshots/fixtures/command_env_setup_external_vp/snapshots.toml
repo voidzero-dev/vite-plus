@@ -5,6 +5,7 @@ skip-platforms = ["windows"]
 env = { VP_NODE_MANAGER = "yes", VP_SELF_SETUP_NO_MODIFY_PATH = "1" }
 steps = [
   { argv = ["vpt", "mkdir", "-p", "external/bin", "home"], comment = "Prepare isolated external install and VP_HOME", snapshot = false },
+  { argv = ["vpt", "write-file", "home/.vp-owned", "vite-plus-owned-directory\n"], comment = "The fixture owns the preseeded runtime directory", snapshot = false },
   { argv = ["vpt", "cp", "$VP_HOME/bin/vp", "external/bin/vp"], comment = "Simulate a Homebrew-style vp outside VP_HOME", snapshot = false },
   { argv = ["vpt", "chmod", "+x", "external/bin/vp"], snapshot = false },
   { argv = ["vpt", "write-file", "external/node_modules/vite-plus/package.json", "{}"], snapshot = false },

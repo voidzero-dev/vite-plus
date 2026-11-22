@@ -1,6 +1,6 @@
 [package]
 name = "vp_global_cli"
-version = "1.3.0"
+version = "1.7.0"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -12,8 +12,7 @@ name = "vp"
 path = "src/main.rs"
 
 [dependencies]
-chrono = { workspace = true }
-clap = { workspace = true, features = ["derive"] }
+clap = { workspace = true, features = ["derive", "string"] }
 clap_complete = { workspace = true, features = ["unstable-dynamic"] }
 directories = { workspace = true }
 dialoguer = { workspace = true }
@@ -35,8 +34,8 @@ vt_pty_terminal_test_client = { workspace = true, features = ["testing"] }
 rustc-hash = { workspace = true }
 crossterm = { workspace = true }
 indexmap = { workspace = true }
-indicatif = { workspace = true }
 indoc = { workspace = true }
+jiff = { workspace = true }
 js-semver = { workspace = true }
 vp_error = { workspace = true }
 vp_js_runtime = { workspace = true }
@@ -55,6 +54,7 @@ uuid = { workspace = true, features = ["v4"] }
 [dev-dependencies]
 httpmock = { workspace = true }
 serial_test = { workspace = true }
+tar = { workspace = true }
 temp-env = { workspace = true }
 vp_shared = { workspace = true, features = ["test-utils"] }
 

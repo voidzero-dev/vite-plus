@@ -24,7 +24,7 @@ delete env.VP_PATH_INJECTED_TOOLS;
 delete env.VP_BYPASS;
 delete env.VP_SHELL;
 fs.mkdirSync(home, { recursive: true });
-fs.writeFileSync('.node-version', '22.18.0\n');
+fs.writeFileSync('.node-version', '22.23.4\n');
 
 /** @returns {string} */
 function captureVp(args, extra = {}) {

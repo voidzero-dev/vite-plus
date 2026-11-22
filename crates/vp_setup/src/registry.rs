@@ -3,7 +3,7 @@
 //! Queries the npm registry to resolve versions and get tarball URLs
 //! with integrity hashes for both the main package and platform-specific package.
 
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer, de};
 use vp_pm_cli::{HttpClient, npm_registry};
 
 use crate::{error::Error, is_commit_preview_version};
@@ -15,6 +15,29 @@ pub struct PackageVersionMetadata {
     pub dist: DistInfo,
     #[serde(default, rename = "vpInstallLockfile")]
     pub has_install_lockfile: bool,
+    #[serde(default, rename = "vpNodeVersion", deserialize_with = "deserialize_node_version")]
+    pub node_version: Option<String>,
+    #[serde(default)]
+    pub engines: Option<Engines>,
+}
+
+/// The `engines` field of a package version.
+#[derive(Debug, Deserialize)]
+pub struct Engines {
+    pub node: Option<String>,
+}
+
+fn deserialize_node_version<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<String>, D::Error> {
+    let version = String::deserialize(deserializer)?;
+    let is_exact = js_semver::Version::parse(&version).is_ok_and(|parsed| {
+        parsed.pre_release.is_empty() && parsed.build.is_empty() && parsed.to_string() == version
+    });
+    if !is_exact {
+        return Err(de::Error::custom("vpNodeVersion must be an exact Node.js version (x.y.z)"));
+    }
+    Ok(Some(version))
 }
 
 /// Distribution info from npm registry.
@@ -45,6 +68,10 @@ pub struct ResolvedVersion {
     pub platform_tarball_url: String,
     pub platform_integrity: String,
     pub has_install_lockfile: bool,
+    pub node_version: Option<String>,
+    /// `engines.node` of the main `vite-plus` package. Only [`resolve_version`]
+    /// sets it; the platform package declares a looser range.
+    pub node_engines: Option<String>,
 }
 
 const MAIN_PACKAGE_NAME: &str = "vite-plus";
@@ -89,6 +116,13 @@ pub async fn resolve_version_string(
     version_or_tag: &str,
     registry_override: Option<&str>,
 ) -> Result<String, Error> {
+    Ok(fetch_main_metadata(version_or_tag, registry_override).await?.version)
+}
+
+async fn fetch_main_metadata(
+    version_or_tag: &str,
+    registry_override: Option<&str>,
+) -> Result<PackageVersionMetadata, Error> {
     let default_registry = npm_registry();
     let registry_raw = registry_override.unwrap_or(&default_registry);
     let registry = registry_raw.trim_end_matches('/');
@@ -101,7 +135,7 @@ pub async fn resolve_version_string(
         Error::Setup(format!("Failed to fetch package metadata from {main_url}: {e}").into())
     })?;
 
-    Ok(main_meta.version)
+    Ok(main_meta)
 }
 
 /// Resolve the platform-specific package metadata for a given version.
@@ -141,6 +175,8 @@ pub async fn resolve_platform_package(
         platform_tarball_url: cli_meta.dist.tarball,
         platform_integrity: cli_meta.dist.integrity,
         has_install_lockfile: cli_meta.has_install_lockfile,
+        node_version: cli_meta.node_version,
+        node_engines: None,
     })
 }
 
@@ -154,8 +190,11 @@ pub async fn resolve_version(
     platform_suffix: &str,
     registry_override: Option<&str>,
 ) -> Result<ResolvedVersion, Error> {
-    let version = resolve_version_string(version_or_tag, registry_override).await?;
-    resolve_platform_package(&version, platform_suffix, registry_override).await
+    let main = fetch_main_metadata(version_or_tag, registry_override).await?;
+    let mut resolved =
+        resolve_platform_package(&main.version, platform_suffix, registry_override).await?;
+    resolved.node_engines = main.engines.and_then(|engines| engines.node);
+    Ok(resolved)
 }
 
 #[cfg(test)]
@@ -286,6 +325,75 @@ mod tests {
         assert!(result.is_err());
     }
 
+    #[test]
+    fn test_platform_node_version_rejects_non_exact_versions() {
+        for node_version in serde_json::json!([
+            null,
+            24,
+            false,
+            {},
+            "",
+            "lts",
+            "latest",
+            "24",
+            "24.22",
+            "^24.22.1",
+            "v24.22.1",
+            " 24.22.1",
+            "24.22.1\n",
+            "24.22.1-rc.1",
+            "24.22.1+build",
+            "024.22.1"
+        ])
+        .as_array()
+        .unwrap()
+        {
+            let metadata = serde_json::json!({
+                "version": TEST_VERSION,
+                "dist": dist_with_provenance("https://slsa.dev/provenance/v1"),
+                "vpNodeVersion": node_version,
+            });
+            assert!(
+                serde_json::from_value::<PackageVersionMetadata>(metadata).is_err(),
+                "accepted invalid vpNodeVersion: {node_version}",
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_resolve_node_version_from_exact_platform_metadata() {
+        for node_version in [Some("22.23.1"), None] {
+            let server = MockServer::start();
+            let main_mock = server.mock(|when, then| {
+                when.method(GET).path("/vite-plus/latest");
+                then.status(200).json_body(serde_json::json!({
+                    "version": TEST_VERSION,
+                    "dist": dist_with_provenance("https://slsa.dev/provenance/v1"),
+                    "vpNodeVersion": "24.22.1",
+                }));
+            });
+            let mut platform_metadata = serde_json::json!({
+                "version": TEST_VERSION,
+                "dist": dist_with_provenance("https://slsa.dev/provenance/v1"),
+            });
+            if let Some(node_version) = node_version {
+                platform_metadata["vpNodeVersion"] = node_version.into();
+            }
+            let platform_mock = server.mock(|when, then| {
+                when.method(GET).path(format!("/{TEST_PACKAGE_NAME}/{TEST_VERSION}"));
+                then.status(200).json_body(platform_metadata);
+            });
+
+            let resolved =
+                resolve_version("latest", "darwin-arm64", Some(&server.base_url())).await.unwrap();
+
+            main_mock.assert_calls(1);
+            platform_mock.assert_calls(1);
+            assert_eq!(resolved.version, TEST_VERSION);
+            assert_eq!(resolved.node_version.as_deref(), node_version);
+        }
+    }
+
     #[tokio::test]
     async fn test_resolve_platform_package_returns_verified_distribution() {
         let server = MockServer::start();
@@ -306,6 +414,7 @@ mod tests {
         assert_eq!(resolved.version, TEST_VERSION);
         assert_eq!(resolved.platform_tarball_url, "https://registry.example.test/platform.tgz");
         assert_eq!(resolved.platform_integrity, "sha512-test");
+        assert!(resolved.node_version.is_none());
     }
 
     #[tokio::test]
@@ -314,6 +423,7 @@ mod tests {
         let server = MockServer::start();
         let metadata = serde_json::json!({
             "version": version,
+            "vpNodeVersion": "24.22.1",
             "dist": {
                 "tarball": format!("{}/platform.tgz", server.base_url()),
                 "integrity": "sha512-preview",
@@ -336,6 +446,40 @@ mod tests {
         assert_eq!(resolved.version, version);
         assert_eq!(resolved.platform_tarball_url, format!("{}/platform.tgz", server.base_url()));
         assert_eq!(resolved.platform_integrity, "sha512-preview");
+        assert_eq!(resolved.node_version.as_deref(), Some("24.22.1"));
+        assert!(resolved.node_engines.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_resolve_version_reads_node_engines_from_the_main_package() {
+        let version = "0.0.0-commit.0123456789abcdef0123456789abcdef01234567";
+        let server = MockServer::start();
+        let dist = serde_json::json!({
+            "tarball": format!("{}/platform.tgz", server.base_url()),
+            "integrity": "sha512-preview",
+        });
+        server.mock(|when, then| {
+            when.method(GET).path("/vite-plus/preview");
+            then.status(200).json_body(serde_json::json!({
+                "version": version,
+                "engines": { "node": "^22.18.0 || >=24.11.0" },
+                "dist": dist,
+            }));
+        });
+        // The platform package declares a looser range, which must not be used.
+        server.mock(|when, then| {
+            when.method(GET).path(format!("/{TEST_PACKAGE_NAME}/{version}"));
+            then.status(200).json_body(serde_json::json!({
+                "version": version,
+                "engines": { "node": ">=20.0.0" },
+                "dist": dist,
+            }));
+        });
+
+        let resolved =
+            resolve_version("preview", "darwin-arm64", Some(&server.base_url())).await.unwrap();
+
+        assert_eq!(resolved.node_engines.as_deref(), Some("^22.18.0 || >=24.11.0"));
     }
 
     #[tokio::test]

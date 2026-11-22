@@ -1,0 +1,3 @@
+cd ./pkg
+printf 'init-loaded=%s\n' "$HOOK_INIT_LOADED"
+test-hook-cmd

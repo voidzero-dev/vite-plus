@@ -17,7 +17,7 @@ async function main() {
 
   switch (args.command) {
     case 'enable':
-      applyResult(enable(args.hooksDir));
+      applyResult(enable(args.hooksDir, { replaceHusky: args.replaceHusky }));
       return;
     case 'disable':
       applyResult(disable(args.hooksDir));

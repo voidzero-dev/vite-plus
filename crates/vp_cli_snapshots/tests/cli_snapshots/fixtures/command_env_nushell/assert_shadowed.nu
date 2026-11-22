@@ -18,21 +18,25 @@ def prepend [] { }
 def append [] { }
 def "str starts-with" [] { }
 def "str replace" [] { }
+def "str join" [] { }
+def describe [] { }
 def "path expand" [] { }
 def "path exists" [] { }
 def "from tsv" [] { }
 def rename [] { }
 def any [] { }
+def which [] { }
+def is-empty [] { }
 def fish [] { }
 
 source env.nu
 
-vp env use 20.18.0 --no-install
+vp env use 20.20.2 --no-install
 if ("VP_NODE_VERSION" not-in $env) {
   error make { msg: "vp env use did not set VP_NODE_VERSION" }
 }
-if $env.VP_NODE_VERSION != "20.18.0" {
-  error make { msg: $"VP_NODE_VERSION mismatch: expected 20.18.0, got ($env.VP_NODE_VERSION)" }
+if $env.VP_NODE_VERSION != "20.20.2" {
+  error make { msg: $"VP_NODE_VERSION mismatch: expected 20.20.2, got ($env.VP_NODE_VERSION)" }
 }
 
 vp env use --unset

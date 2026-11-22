@@ -6,3 +6,17 @@ steps = [
   { argv = ["vpt", "print-file", "package.json"], comment = "concrete specs: `vite` via the @voidzero-dev/vite-plus-core alias, no `catalog:` references", continue-on-failure = true },
   { argv = ["vpt", "print-file", ".yarnrc.yml"], comment = "node-modules linker is configured, but no catalog field is written", continue-on-failure = true },
 ]
+
+[[case]]
+name = "migration_standalone_yarn_below_catalog_install"
+vp = "global"
+local-registry = true
+unset-env = ["VP_SKIP_INSTALL"]
+env = { YARN_ENABLE_SCRIPTS = "0" }
+comment = "Yarn below 4.10.0 refuses to run with an rc key it does not know, so the migrated project must still install."
+steps = [
+  { argv = ["vpt", "write-file", ".yarnrc.yml", "nodeLinker: node-modules\n"], snapshot = false },
+  { argv = ["vpt", "write-file", ".gitignore", "node_modules\n"], comment = "keeps the import rewrite out of installed packages", snapshot = false },
+  { argv = ["vp", "migrate", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], timeout = 300000 },
+  ["vpt", "print-file", ".yarnrc.yml"],
+]

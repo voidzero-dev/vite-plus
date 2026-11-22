@@ -81,7 +81,7 @@ compatibility:
 1. Vite+ distribution packages, including `vite-plus` and
    `@voidzero-dev/vite-plus-core`.
 2. User-facing tools invoked or composed by Vite+, including Vite, Rolldown,
-   Vitest, Oxlint, Oxfmt, oxlint-tsgolint, tsdown, and Vite Task.
+   Vitest, Oxlint, Oxfmt, tsrs, tsdown, and Vite Task.
 3. Bundled or compiled engines whose versions affect tool behavior.
    Version 1 includes Oxc and Oxc Resolver.
 
@@ -108,7 +108,7 @@ Arguments:
 
 Options:
       --json    Print the graph as JSON
-      --global  Use the global Vite+ toolchain
+  -g, --global  Use the global Vite+ toolchain
   -h, --help    Print help
 ```
 
@@ -164,13 +164,13 @@ vite-plus@0.2.4
 │   └── bundles tsdown@0.22.3
 ├── depends on vitest@4.1.10
 ├── depends on oxlint@1.72.0
-├── depends on oxlint-tsgolint@0.24.0
+├── depends on tsrs@7.1.0-beta.tsrs2
 ├── depends on oxfmt@0.57.0
 └── compiles vite-task (built 2026-08-06T09:30:00Z, revision <revision>)
 ```
 
-These versions show the repository state when this RFC was written. They are
-not part of the command contract.
+These versions illustrate the output format. They are not part of the command
+contract. The tsrs row identifies the default backend.
 
 The readable tree can repeat a shared node to show two relationships. JSON has
 one entry for each node ID.
@@ -212,9 +212,11 @@ Initial aliases include:
 | Query            | Node                           |
 | ---------------- | ------------------------------ |
 | `vite-plus-core` | `@voidzero-dev/vite-plus-core` |
-| `tsgolint`       | `oxlint-tsgolint`              |
+| `tsrs-lint`      | `tsrs`                         |
 | `vite-task`      | Vite Task                      |
 | `oxc-resolver`   | Oxc Resolver                   |
+
+The manifest uses `tsrs` as the backend node ID and package name.
 
 Package and tool names are case-sensitive. This matches npm and Cargo names.
 
@@ -412,6 +414,13 @@ the local Vite+ release to use the command. To show the global release, run
 It reads tool rows from the manifest. Use `vp toolchain` to select tools and show
 relationships or engine details.
 
+The local and global version commands report the `tsrs` version.
+The `vite-plus/versions` export uses the `tsrs` key.
+
+The manifest describes the bundled backend. An `OXLINT_TSGOLINT_PATH` override
+does not change its nodes or the version exports.
+See the [backend design](./check-command.md#type-aware-backend).
+
 ## Relationship to `vp why`
 
 `vp why` sends the command to the detected package manager. It keeps the
@@ -486,21 +495,21 @@ The documentation states that `vp why` is a package-manager operation.
 
 ### CLI snapshot tests
 
-New cases belong in `crates/vite_cli_snapshots/tests/cli_snapshots/`:
+New cases belong in `crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/`:
 
-| Scenario                          | Expected coverage                                        |
-| --------------------------------- | -------------------------------------------------------- |
-| Full local manifest               | Complete tree and local source                           |
-| `vp toolchain vite`               | Core, Vite, Rolldown, Oxc, and Oxc Resolver chain        |
-| Multiple filters                  | Stable union of branches                                 |
-| Alias filter                      | `vite-plus-core`, `vite-task`, and `tsgolint` resolution |
-| `--json`                          | Valid JSON without header, styling, or trailing text     |
-| No local package                  | Global source selection                                  |
-| `--global` inside a local project | Global source forced                                     |
-| Old local Vite+ package           | Unknown-command failure from the local CLI               |
-| Unknown tool                      | Status 1 and `vp why` hint                               |
-| `vp why vite`                     | Package-manager output followed by toolchain hint        |
-| `vp why vite --json`              | Unmodified JSON package-manager output                   |
+| Scenario                          | Expected coverage                                    |
+| --------------------------------- | ---------------------------------------------------- |
+| Full local manifest               | Complete tree and local source                       |
+| `vp toolchain vite`               | Core, Vite, Rolldown, Oxc, and Oxc Resolver chain    |
+| Multiple filters                  | Stable union of branches                             |
+| Alias filter                      | `vite-plus-core`, `vite-task`, and `tsrs-lint`       |
+| `--json`                          | Valid JSON without header, styling, or trailing text |
+| No local package                  | Global source selection                              |
+| `--global` inside a local project | Global source forced                                 |
+| Old local Vite+ package           | Unknown-command failure from the local CLI           |
+| Unknown tool                      | Status 1 and `vp why` hint                           |
+| `vp why vite`                     | Package-manager output followed by toolchain hint    |
+| `vp why vite --json`              | Unmodified JSON package-manager output               |
 
 Release artifact tests load the same manifest with each platform binding. The
 tests compare native versions with the compiled release inputs.

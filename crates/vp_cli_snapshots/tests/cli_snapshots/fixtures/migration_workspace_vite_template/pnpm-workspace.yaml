@@ -1,0 +1,8 @@
+packages:
+  - packages/*
+  - examples/*
+catalog:
+  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@latest
+overrides:
+  vite: 'catalog:'

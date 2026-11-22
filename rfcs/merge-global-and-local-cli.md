@@ -102,7 +102,11 @@ This decouples the `vp` binary from vite-plus's internal file layout.
   Downloads the CLI platform archive with the binary and lockfile, generates the
   wrapper `package.json`, and restores the bundled lockfile before the frozen
   dependency install. pnpm downloads `vite-plus` and its dependencies using the
-  versions and integrity values recorded in that lockfile.
+  versions and integrity values recorded in that lockfile. The target's platform
+  metadata supplies its Node.js pin through `vpNodeVersion`; older packages
+  without this field use the running binary's installation default. See the
+  [upgrade flow](./upgrade-command.md#step-4-extract-and-install) for validation
+  and activation behavior.
 
 - **Local dev** (`pnpm bootstrap-cli`):
   Copies `vp` binary, generates wrapper `package.json`, symlinks

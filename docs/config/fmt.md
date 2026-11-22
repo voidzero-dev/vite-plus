@@ -21,4 +21,4 @@ export default defineConfig({
 
 For file- or package-specific formatting settings, use [`fmt.overrides`](/guide/monorepo#format-overrides) from the root `vite.config.ts`.
 
-Oxfmt disables nested configs in Vite+ mode, so nested format configs do not override settings for individual files. See [troubleshooting](/guide/troubleshooting#nested-lint-or-format-config-is-not-applied) for details.
+Oxfmt disables nested configs in Vite+ mode, so nested format configs do not override settings for individual files. See [Troubleshooting](/guide/troubleshooting#nested-lint-or-format-config-is-not-applied) for details.

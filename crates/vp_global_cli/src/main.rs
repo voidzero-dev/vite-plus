@@ -18,6 +18,7 @@ mod commands;
 mod error;
 mod help;
 mod homebrew;
+mod install_dirs;
 mod js_executor;
 mod self_setup;
 mod shim;
@@ -32,14 +33,15 @@ use std::{
 use clap_complete::env::CompleteEnv;
 use console::style;
 use vp_cli_help::error::{
-    extract_invalid_subcommand_details, extract_unknown_argument, has_pass_as_value_suggestion,
-    print_invalid_subcommand_error, print_subcommand_suggestion, print_unknown_argument_error,
+    extract_invalid_subcommand_details, extract_unknown_argument, format_command_args,
+    has_pass_as_value_suggestion, move_flags_after_command, print_invalid_subcommand_error,
+    print_subcommand_suggestion, print_unknown_argument_error,
 };
 use vp_shared::{exit_code_from_status, output};
 
 pub use crate::cli::try_parse_args_from;
 use crate::cli::{
-    RenderOptions, command_with_help, raw_subcommand, run_command, run_command_with_options,
+    RenderOptions, command_for_completion, raw_subcommand, run_command, run_command_with_options,
     try_parse_args_from_with_options,
 };
 
@@ -87,7 +89,7 @@ pub(crate) fn apply_chdir(
 /// Normalize CLI arguments:
 /// - `vp list ...` / `vp ls ...` → `vp pm list ...`
 /// - `vp rebuild ...` → `vp pm rebuild ...`
-/// - `vp help [command] [args...]` → `vp [command] [args...] --help`
+/// - `vp help [command] [args...]` → `vp [command] [args...]` with `--help`
 /// - `vp node [args...]` → `vp env exec node [args...]`
 fn normalize_args(args: Vec<String>) -> Vec<String> {
     let mut normalized = args;
@@ -116,11 +118,16 @@ fn normalize_args(args: Vec<String>) -> Vec<String> {
             Some("help") if normalized.len() == 2 => {
                 vec![normalized[0].clone(), "--help".to_string()]
             }
-            // `vp help [command] [args...]` -> `vp [command] [args...] --help`
             Some("help") if normalized.len() > 2 => {
                 let mut next = Vec::with_capacity(normalized.len());
                 next.push(normalized[0].clone());
                 next.extend(normalized[2..].iter().cloned());
+                if matches!(next[1].as_str(), "dev" | "build")
+                    && let Some(index) = next[2..].iter().position(|arg| arg == "--")
+                {
+                    // Bare help renders before project discovery.
+                    next.truncate(index + 2);
+                }
                 next.push("--help".to_string());
                 next
             }
@@ -174,8 +181,26 @@ fn is_affirmative_response(input: &str) -> bool {
     matches!(input.trim().to_ascii_lowercase().as_str(), "y" | "yes" | "ok" | "true" | "1")
 }
 
+/// Moves vite-task's package-selection flags after `run` when `vp run` accepts them there.
+fn move_package_flags_after_run(
+    raw_args: &[String],
+    cwd: &vt_path::AbsolutePath,
+) -> Option<Vec<String>> {
+    use vt_workspace::package_filter::PackageQueryArgs;
+
+    let run_flags = <PackageQueryArgs as clap::Args>::augment_args(clap::Command::new("run"));
+    let cwd = std::sync::Arc::<vt_path::AbsolutePath>::from(cwd);
+    move_flags_after_command(raw_args, "run", &run_flags, |matches| {
+        // `vp run` checks combinations such as `-r` with `--filter` here, not in clap.
+        <PackageQueryArgs as clap::FromArgMatches>::from_arg_matches(matches)
+            .is_ok_and(|query| query.into_package_query(None, &cwd).is_ok())
+    })
+}
+
 fn should_prompt_for_correction() -> bool {
-    vp_shared::is_stdin_terminal() && vp_shared::is_stderr_terminal()
+    !vp_shared::is_ci_environment()
+        && vp_shared::is_stdin_terminal()
+        && vp_shared::is_stderr_terminal()
 }
 
 fn prompt_to_run_suggested_command(suggestion: &str) -> bool {
@@ -189,6 +214,9 @@ fn prompt_to_run_suggested_command(suggestion: &str) -> bool {
     eprint!("Do you want to run {highlighted_suggestion}? (y/N): ");
     if std::io::stderr().flush().is_err() {
         return false;
+    }
+    if env::var(vp_shared::env_vars::VP_EMIT_MILESTONES).as_deref() == Ok("1") {
+        vt_pty_terminal_test_client::mark_milestone("text:suggested-command:ready");
     }
 
     let Some(input) = read_confirmation_input() else {
@@ -310,11 +338,58 @@ fn dump_dirs_from_env_config() -> bool {
     true
 }
 
-#[tokio::main]
-async fn main() -> ExitCode {
+fn is_homebrew_recovery_command(args: &[String]) -> bool {
+    // A shim's arguments belong to the wrapped tool, even when they look like vp commands.
+    if !args.first().is_some_and(|name| {
+        std::path::Path::new(name).file_name().is_some_and(|name| name == "vp" || name == "vp.exe")
+    }) {
+        return false;
+    }
+    let Ok(args) = try_parse_args_from(args.iter().cloned()) else { return false };
+    !args.version
+        && matches!(
+            args.command,
+            Some(cli::Commands::Implode { .. } | cli::Commands::Upgrade { .. })
+                | Some(cli::Commands::Env(cli::EnvArgs {
+                    command: Some(cli::EnvSubcommands::Doctor { .. }),
+                }))
+        )
+}
+
+fn main() -> ExitCode {
+    let args: Vec<String> = std::env::args().collect();
+
+    // Inspect shim mode without clearing its environment markers: Homebrew
+    // setup still needs them before the normal shim dispatch.
+    let argv0 = args.first().map(|s| s.as_str()).unwrap_or("vp");
+    let shim_tool = shim::peek_shim_tool(argv0);
+
+    // Identify Vite+ to child tools independently of `npm_config_user_agent`,
+    // which package managers replace with their own value.
+    //
+    // `vpr` and `vpx` are Vite+ entry points too. Ordinary tool shims (such as
+    // `npm`/`npx`/`node`) only inherit an existing marker from their parent.
+    //
+    // SAFETY: `set_var` must run while the process is still single-threaded.
+    // This runs before the async runtime (and its worker threads) are created.
+    if matches!(shim_tool.as_deref(), None | Some("vpr" | "vpx")) {
+        unsafe {
+            std::env::set_var(
+                vp_shared::env_vars::VP_USER_AGENT,
+                concat!("vp/", env!("CARGO_PKG_VERSION")),
+            );
+        }
+    }
+
+    tokio::runtime::Runtime::new().expect("failed to build tokio runtime").block_on(run())
+}
+
+async fn run() -> ExitCode {
     // Probe before tracing, directory resolution, or argument dispatch can emit output.
-    if env::var_os(vp_shared::env_vars::VP_SELF_SETUP_SUPPORT_CHECK).is_some() {
-        vp_shared::output::print_stdout_line(format_args!("vite-plus-self-setup-v1"));
+    if let Some(check) = env::var_os(vp_shared::env_vars::VP_SELF_SETUP_SUPPORT_CHECK) {
+        for line in vp_setup::support::support_response(&check) {
+            vp_shared::output::print_stdout_line(format_args!("{line}"));
+        }
         return ExitCode::SUCCESS;
     }
 
@@ -325,6 +400,7 @@ async fn main() -> ExitCode {
 
     vp_shared::ensure_blocking_stdio();
     vp_shared::ensure_windows_pathext();
+    vp_shared::set_user_agent_version(env!("CARGO_PKG_VERSION"));
 
     // Initialize tracing
     vp_shared::init_tracing();
@@ -334,16 +410,46 @@ async fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
-    match self_setup::maybe_run().await {
-        Ok(Some(code)) => return code,
-        Ok(None) => {}
-        Err(error) => {
+    let mut args: Vec<String> = std::env::args().collect();
+    // Homebrew owns the executable independently of the user's npm payload. Diagnostics and
+    // configured tool shims must remain available after interrupted CLI dependency setup.
+    let homebrew = homebrew::owns_current_exe();
+    let implicit_setup = [
+        vp_shared::env_vars::VP_SELF_SETUP_SHELL,
+        vp_shared::env_vars::VP_SELF_SETUP_REPLACE_EXISTING,
+        "VP_COMPLETE",
+    ]
+    .iter()
+    .all(|name| env::var_os(name).is_none());
+    let recovery = homebrew
+        && implicit_setup
+        && [vp_shared::env_vars::VP_SHIM_TOOL, "VITE_PLUS_SHIM_TOOL"]
+            .iter()
+            .all(|name| env::var_os(name).is_none())
+        && is_homebrew_recovery_command(&args);
+    let configured_shim = homebrew
+        && implicit_setup
+        && commands::env::config::get_config_path().is_ok_and(|path| path.as_path().is_file())
+        && args.first().and_then(|argv0| shim::peek_shim_tool(argv0)).is_some_and(|tool| {
+            // These aliases can execute the JavaScript CLI package. Other shims resolve their
+            // own runtime, package manager, or global package without that package.
+            !matches!(tool.as_str(), "vpr" | "vpx")
+        });
+    if recovery || configured_shim {
+        if let Err(error) = vp_shared::validate_vp_dir_env() {
             output::error(&error.to_string());
             return ExitCode::FAILURE;
         }
+    } else {
+        match self_setup::maybe_run().await {
+            Ok(Some(code)) => return code,
+            Ok(None) => {}
+            Err(error) => {
+                output::error(&error.to_string());
+                return ExitCode::FAILURE;
+            }
+        }
     }
-
-    let mut args: Vec<String> = std::env::args().collect();
 
     // Replace bash completion script to fix completion for items containing ':'
     if env::var_os("VP_COMPLETE").is_some_and(|shell| shell == "bash") && args.len() == 1 {
@@ -365,7 +471,7 @@ async fn main() -> ExitCode {
         // Best-effort and silent: mid-typing values are often not (yet) dirs.
         let _ = apply_chdir(&current, &dir);
     }
-    CompleteEnv::with_factory(command_with_help).var("VP_COMPLETE").complete();
+    CompleteEnv::with_factory(command_for_completion).var("VP_COMPLETE").complete();
 
     // Check for shim mode (invoked as node, npm, or npx)
     let argv0 = args.first().map(|s| s.as_str()).unwrap_or("vp");
@@ -497,10 +603,33 @@ async fn main() -> ExitCode {
                         &invalid_argument,
                         has_pass_as_value_suggestion(&e),
                     );
+                    // `-C` already changed `cwd` and left `raw_args`, so show it again.
+                    let chdir = explicit_chdir.then(|| cwd.as_path().to_string_lossy());
+                    let correction = move_package_flags_after_run(&raw_args, &cwd).and_then(
+                        |corrected_raw_args| {
+                            let suggestion =
+                                format_command_args(chdir.as_deref(), &corrected_raw_args)?;
+                            Some((corrected_raw_args, suggestion))
+                        },
+                    );
+                    match correction {
+                        // Without a prompt, print the command, like the local CLI, so that
+                        // a CI log shows how to fix the script.
+                        Some((_, suggestion)) if !should_prompt_for_correction() => {
+                            print_subcommand_suggestion(&suggestion);
+                            clap_error_to_exit_code(&e)
+                        }
+                        Some((corrected_raw_args, suggestion))
+                            if prompt_to_run_suggested_command(&suggestion) =>
+                        {
+                            run_corrected_args(&cwd, &corrected_raw_args, explicit_chdir).await
+                        }
+                        _ => clap_error_to_exit_code(&e),
+                    }
                 } else {
                     e.print().ok();
+                    clap_error_to_exit_code(&e)
                 }
-                clap_error_to_exit_code(&e)
             } else {
                 e.print().ok();
                 clap_error_to_exit_code(&e)
@@ -535,12 +664,38 @@ mod tests {
 
     use super::{
         extract_unknown_argument, has_pass_as_value_suggestion, is_affirmative_response,
-        normalize_args, parse_leading_chdir, replace_top_level_typoed_subcommand,
-        try_parse_args_from,
+        is_homebrew_recovery_command, normalize_args, parse_leading_chdir,
+        replace_top_level_typoed_subcommand, try_parse_args_from,
     };
 
     fn s(v: &[&str]) -> Vec<String> {
         v.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn homebrew_recovery_commands_do_not_require_the_js_payload() {
+        for args in [
+            s(&["vp", "env", "doctor"]),
+            s(&["vp", "-C", "project", "env", "doctor", "node"]),
+            s(&["vp", "-Cproject", "implode", "--yes"]),
+            s(&["vp", "-C=project", "upgrade", "--check"]),
+            s(&["/brew/bin/vp", "upgrade", "--rollback"]),
+        ] {
+            assert!(is_homebrew_recovery_command(&args), "{args:?}");
+        }
+        for args in [
+            s(&["vp", "--help"]),
+            s(&["vp", "env", "setup", "--refresh"]),
+            s(&["vp", "fmt"]),
+            s(&["vp", "--version", "upgrade"]),
+            s(&["vp", "implode", "--unknown"]),
+            s(&["vp", "run", "upgrade", "--check"]),
+            s(&["vpr", "upgrade", "--check"]),
+            s(&["/brew/bin/vpx", "env", "doctor"]),
+            s(&["node", "implode", "--yes"]),
+        ] {
+            assert!(!is_homebrew_recovery_command(&args), "{args:?}");
+        }
     }
 
     #[test]
@@ -607,6 +762,14 @@ mod tests {
         let input = s(&["vp", "help", "pm", "apprev-build"]);
         let normalized = normalize_args(input);
         assert_eq!(normalized, s(&["vp", "pm", "apprev-build", "--help"]));
+    }
+
+    #[test]
+    fn normalize_args_truncates_vite_help_at_separator() {
+        for command in ["dev", "build"] {
+            let input = s(&["vp", "help", command, "--mode", "staging", "--", "--app", "web"]);
+            assert_eq!(normalize_args(input), s(&["vp", command, "--mode", "staging", "--help"]));
+        }
     }
 
     #[test]

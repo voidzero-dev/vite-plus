@@ -1,12 +1,17 @@
+use std::sync::Arc;
+
 use clap::error::ErrorKind;
 use console::style;
 use vp_cli_help::error::{
-    extract_invalid_subcommand_details, extract_unknown_argument, has_pass_as_value_suggestion,
-    print_subcommand_suggestion, print_unknown_argument_error,
+    extract_invalid_subcommand_details, extract_unknown_argument, format_command_args,
+    has_pass_as_value_suggestion, move_flags_after_command, print_subcommand_suggestion,
+    print_unknown_argument_error,
 };
 use vp_error::Error;
 use vp_shared::output;
 use vt::ExitStatus;
+use vt_path::AbsolutePath;
+use vt_workspace::package_filter::PackageQueryArgs;
 
 use super::types::SynthesizableSubcommand;
 
@@ -17,7 +22,23 @@ use super::types::SynthesizableSubcommand;
 /// needs the names to point users at the global installation.
 const GLOBAL_ONLY_SUBCOMMANDS: &[&str] = &["env", "upgrade", "implode"];
 
-pub(super) fn handle_cli_parse_error(err: clap::Error) -> Result<ExitStatus, Error> {
+/// Moves vite-task's package-selection flags after `run` when `vp run` accepts them there.
+fn move_package_flags_after_run(args: &[String], cwd: &AbsolutePath) -> Option<Vec<String>> {
+    let run_flags = <PackageQueryArgs as clap::Args>::augment_args(clap::Command::new("run"));
+    let cwd = Arc::<AbsolutePath>::from(cwd);
+    move_flags_after_command(args, "run", &run_flags, |matches| {
+        // `vp run` checks combinations such as `-r` with `--filter` here, not in clap.
+        <PackageQueryArgs as clap::FromArgMatches>::from_arg_matches(matches)
+            .is_ok_and(|query| query.into_package_query(None, &cwd).is_ok())
+    })
+}
+
+pub(super) fn handle_cli_parse_error(
+    err: clap::Error,
+    args: &[String],
+    cwd: &AbsolutePath,
+    chdir: Option<&str>,
+) -> Result<ExitStatus, Error> {
     if matches!(err.kind(), ErrorKind::InvalidSubcommand) && print_invalid_subcommand_error(&err) {
         return Ok(ExitStatus(err.exit_code() as u8));
     }
@@ -25,6 +46,11 @@ pub(super) fn handle_cli_parse_error(err: clap::Error) -> Result<ExitStatus, Err
         && let Some(invalid_argument) = extract_unknown_argument(&err)
     {
         print_unknown_argument_error(&invalid_argument, has_pass_as_value_suggestion(&err));
+        if let Some(corrected_args) = move_package_flags_after_run(args, cwd)
+            && let Some(suggestion) = format_command_args(chdir, &corrected_args)
+        {
+            print_subcommand_suggestion(&suggestion);
+        }
         return Ok(ExitStatus(err.exit_code() as u8));
     }
 
@@ -116,9 +142,22 @@ fn print_invalid_subcommand_error(error: &clap::Error) -> bool {
     if GLOBAL_ONLY_SUBCOMMANDS.contains(&invalid_subcommand.as_str()) {
         let command =
             style(format!("`{invalid_subcommand}`")).for_stderr().blue().bright().to_string();
+        let install_command = if cfg!(windows) {
+            "powershell -c \"irm https://vite.plus/ps1 | iex\""
+        } else {
+            "curl -fsSL https://vite.plus | bash"
+        };
+        let install_command = style(install_command).for_stderr().blue().bright();
         output::error(&format!(
-            "The {command} command is only available in the global `vp` CLI. See {} to install it, then run the same command via the global `vp` binary.",
-            vp_shared::documentation_url("/guide/")
+            "The {command} command is only available in the global `vp` CLI.\n\n\
+             {}\n  {install_command}\n\n\
+             Then open a new terminal and run the command again.\n\
+             If it's already installed, run the command {} instead of through a package manager or package.json script.\n\n\
+             {} {}",
+            style("Install it with:").for_stderr().bold(),
+            style("directly in your terminal").for_stderr().bold(),
+            style("Installation Guide:").for_stderr().bold(),
+            style(vp_shared::documentation_url("/guide/")).for_stderr().underlined()
         ));
         return true;
     }
@@ -184,6 +223,55 @@ mod tests {
         let error = CLIArgs::try_parse_from(["vp", "--cache"]).expect_err("Expected parse error");
         assert_eq!(extract_unknown_argument(&error).as_deref(), Some("--cache"));
         assert!(!has_pass_as_value_suggestion(&error));
+    }
+
+    #[test]
+    fn run_flags_before_command_are_unknown_arguments() {
+        // `handle_cli_parse_error` suggests the corrected order only for this error kind.
+        let error = CLIArgs::try_parse_from(["vp", "--filter", "backend", "run", "dev"])
+            .expect_err("Expected parse error");
+        assert_eq!(error.kind(), ErrorKind::UnknownArgument);
+        assert_eq!(extract_unknown_argument(&error).as_deref(), Some("--filter"));
+    }
+
+    #[test]
+    fn every_vite_task_package_selection_flag_moves_after_run() {
+        // `vp_cli_help` tests a copy of these options; check each real one here.
+        use clap::{Args, Command};
+
+        let command = PackageQueryArgs::augment_args(Command::new("run"));
+        let cwd = vt_path::current_dir().unwrap();
+        let mut checked = 0;
+        for arg in command.get_arguments() {
+            let takes_value = arg.get_action().takes_values();
+            let long = arg.get_long().map(|long| format!("--{long}"));
+            let short = arg.get_short().map(|short| format!("-{short}"));
+            for flag in long.into_iter().chain(short) {
+                let mut leading = vec![flag.clone()];
+                if takes_value {
+                    leading.push("app".to_owned());
+                }
+                let input = [leading.clone(), vec!["run".to_owned(), "build".to_owned()]].concat();
+                let expected = [vec!["run".to_owned()], leading, vec!["build".to_owned()]].concat();
+                assert_eq!(move_package_flags_after_run(&input, &cwd), Some(expected), "{flag}");
+                checked += 1;
+            }
+        }
+        assert!(checked > 0, "PackageQueryArgs exposes no flags");
+    }
+
+    #[test]
+    fn package_flags_that_vp_run_rejects_have_no_suggestion() {
+        let cwd = vt_path::current_dir().unwrap();
+        for input in [
+            &["-r", "--filter", "backend", "run", "build"][..],
+            &["-r", "-t", "run", "build"],
+            &["-t", "--filter", "backend", "run", "build"],
+            &["--filter", "-r", "run", "build"],
+        ] {
+            let input: Vec<String> = input.iter().map(|arg| (*arg).to_owned()).collect();
+            assert_eq!(move_package_flags_after_run(&input, &cwd), None, "{input:?}");
+        }
     }
 
     #[test]

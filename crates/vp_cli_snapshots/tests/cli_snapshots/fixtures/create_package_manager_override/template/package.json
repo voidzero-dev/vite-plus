@@ -1,0 +1,5 @@
+{
+  "name": "override-template",
+  "version": "0.0.0",
+  "scripts": { "postinstall": "node record-install.cjs" }
+}

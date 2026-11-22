@@ -76,6 +76,17 @@ pub async fn execute(
         let args: Vec<String> = command[1..].to_vec();
         // stdout belongs to the dispatched tool; route vp's own output to stderr.
         vp_shared::output::route_user_output_to_stderr();
+        // Under VP_ENV_FORBIDDEN=1 a core tool comes from PATH here, not from
+        // dispatch: its shim fails without searching PATH, even when a system
+        // tool comes before it. The Node.js it runs on comes from the child PATH.
+        if !from_wrapper
+            && is_core_shim_tool(tool)
+            && let Some(path) = crate::shim::dispatch::resolve_env_forbidden_tool(tool)
+        {
+            let path = path?;
+            crate::shim::dispatch::ensure_env_forbidden_child_node(&env)?;
+            return Ok(exit_status(crate::shim::exec::exec_tool(&path, &args, env)));
+        }
         // Dispatch assumes the shell's PATH lookup already preferred system-first tools, so repeat it here.
         if !from_wrapper
             && is_core_shim_tool(tool)
@@ -137,7 +148,7 @@ async fn execute_with_version(
     let mut path_prefixes = Vec::new();
     let modes = config::load_config().await?;
     let (resolved_node, system_node_bin) = if let Some(node_version) = node_version {
-        (resolve_version(node_version, &NodeProvider::new()).await?, None)
+        (config::resolve_version_alias(node_version, &NodeProvider::new()).await?, None)
     } else if modes.node_shim_mode == config::ShimMode::SystemFirst
         && let Some(path) = crate::shim::dispatch::find_system_tool("node")
     {
@@ -149,13 +160,16 @@ async fn execute_with_version(
         (config::resolve_version(cwd).await?.version, None)
     };
     if let Some(bin_dir) = system_node_bin {
-        path_prefixes.push((bin_dir.into_path_buf(), vec!["node"]));
+        path_prefixes.push((bin_dir.into_path_buf(), vec!["node"], true));
     } else {
         let runtime =
             vp_js_runtime::download_runtime(vp_js_runtime::JsRuntimeType::Node, &resolved_node)
                 .await?;
-        path_prefixes
-            .push((runtime.get_bin_prefix().as_path().to_path_buf(), vec!["node", "npm", "npx"]));
+        path_prefixes.push((
+            runtime.get_bin_prefix().as_path().to_path_buf(),
+            vec!["node", "npm", "npx"],
+            false,
+        ));
     }
     let explicit_package_manager = package_manager.is_some();
     let mut system_package_manager = None;
@@ -184,6 +198,7 @@ async fn execute_with_version(
                             .package_manager_type
                             .bin_name_for_tool(&selected.package_manager_type.to_string()),
                     ],
+                    true,
                 ),
             );
             system_package_manager =
@@ -210,14 +225,20 @@ async fn execute_with_version(
             let system_version = read_tool_version(&path).await.unwrap_or(version);
             path_prefixes.insert(
                 0,
-                (bin_dir.as_path().to_path_buf(), vec![kind.bin_name_for_tool(&kind.to_string())]),
+                (
+                    bin_dir.as_path().to_path_buf(),
+                    vec![kind.bin_name_for_tool(&kind.to_string())],
+                    true,
+                ),
             );
             Some(format!("{kind}@{system_version}"))
         } else {
             let (install_dir, _, _) =
                 download_package_manager_for_cwd(cwd, kind, &version, hash.as_deref()).await?;
-            path_prefixes
-                .insert(0, (install_dir.join("bin").into_path_buf(), kind.bin_names().to_vec()));
+            path_prefixes.insert(
+                0,
+                (install_dir.join("bin").into_path_buf(), kind.bin_names().to_vec(), false),
+            );
             Some(format!("{kind}@{version}"))
         }
     } else {
@@ -225,8 +246,12 @@ async fn execute_with_version(
     };
 
     let mut child_env = ToolPathEnv::from_env();
-    for (dir, tools) in path_prefixes.into_iter().rev() {
-        child_env.prepend(dir, &tools, PrependOptions::default())?;
+    for (dir, tools, system) in path_prefixes.into_iter().rev() {
+        // Preserve system PATH order unless another selected component shadows this tool.
+        let already_selected = system
+            && vp_command::resolve_bin(tools[0], Some(child_env.path()), cwd)
+                .is_ok_and(|path| path.parent().is_some_and(|parent| parent.as_path() == dir));
+        child_env.prepend(dir, &tools, PrependOptions { dedupe_anywhere: already_selected })?;
     }
 
     // 5. Execute command
@@ -261,56 +286,15 @@ async fn read_tool_version(path: &AbsolutePath) -> Option<String> {
         .then(|| String::from_utf8_lossy(&output.stdout).trim().trim_start_matches('v').to_string())
 }
 
-/// Resolve version to an exact version.
-///
-/// Handles aliases (lts, latest) and version ranges.
-async fn resolve_version(version: &str, provider: &NodeProvider) -> Result<String, Error> {
-    match classify_version(version) {
-        VersionSelector::LatestLts => {
-            let resolved = provider.resolve_latest_version().await?;
-            Ok(resolved.to_string())
-        }
-        VersionSelector::AbsoluteLatest => {
-            let resolved = provider.resolve_absolute_latest_version().await?;
-            Ok(resolved.to_string())
-        }
-        VersionSelector::Exact(version) => Ok(version.to_string()),
-        VersionSelector::Range(version) => {
-            let resolved = provider.resolve_version(version).await?;
-            Ok(resolved.to_string())
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq)]
-enum VersionSelector<'a> {
-    LatestLts,
-    AbsoluteLatest,
-    Exact(&'a str),
-    Range(&'a str),
-}
-
-fn classify_version(version: &str) -> VersionSelector<'_> {
-    if version.eq_ignore_ascii_case("lts") {
-        VersionSelector::LatestLts
-    } else if version.eq_ignore_ascii_case("latest") {
-        VersionSelector::AbsoluteLatest
-    } else if NodeProvider::is_exact_version(version) {
-        VersionSelector::Exact(version.strip_prefix('v').unwrap_or(version))
-    } else {
-        VersionSelector::Range(version)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     /// Shared VP_HOME for tests that download a real Node.js runtime: pinning
     /// isolates them from concurrent scopes, and one shared root keeps the
-    /// download cache warm across tests and runs.
+    /// download cache warm across crates and runs.
     fn shared_vp_home() -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join("vp-global-cli-tests-vp-home");
+        let dir = std::env::temp_dir().join("vp-node-runtime-tests-vp-home");
         std::fs::create_dir_all(&dir).unwrap();
         dir
     }
@@ -326,52 +310,27 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_node_version() {
-        // Shared root keeps the downloaded Node 20.18.0 warm across runs.
+        // Shared root keeps the downloaded Node 20.20.2 warm across runs.
         let vp_home = shared_vp_home();
         vp_shared::EnvConfig::with_vars_async(
             [(env_vars::VP_HOME, vp_home.as_os_str())],
             |_| async {
-                // Run 'node --version' with a specific Node.js version
-                let command = vec!["node".to_string(), "--version".to_string()];
-                let cwd = vt_path::current_dir().unwrap();
-                let result = execute(&cwd, Some("20.18.0"), None, None, &command).await;
-                assert!(result.is_ok());
-                let status = result.unwrap();
-                assert!(status.success());
+                // Keep package-manager selection outside the repository so this
+                // Node-only test does not download the workspace's pnpm version.
+                let project = tempfile::tempdir().unwrap();
+                let cwd = vt_path::AbsolutePathBuf::new(project.path().to_path_buf()).unwrap();
+                tokio::fs::write(cwd.join("package.json"), "{}").await.unwrap();
+                let command = vec![
+                    "node".to_string(),
+                    "-e".to_string(),
+                    "require('node:assert/strict').equal(process.version, 'v20.20.2');".to_string(),
+                ];
+                let result = execute(&cwd, Some("20.20.2"), None, None, &command).await;
+                let status = result.expect("Node execution should succeed");
+                assert!(status.success(), "Node should run with the requested version");
             },
         )
         .await;
-    }
-
-    #[tokio::test]
-    async fn test_resolve_version_exact() {
-        let provider = NodeProvider::new();
-        let version = resolve_version("20.18.0", &provider).await.unwrap();
-        assert_eq!(version, "20.18.0");
-    }
-
-    #[tokio::test]
-    async fn test_resolve_version_with_v_prefix() {
-        let provider = NodeProvider::new();
-        let version = resolve_version("v20.18.0", &provider).await.unwrap();
-        assert_eq!(version, "20.18.0");
-    }
-
-    #[test]
-    fn test_classify_version_partial() {
-        assert_eq!(classify_version("20"), VersionSelector::Range("20"));
-    }
-
-    #[test]
-    fn test_classify_version_range() {
-        assert_eq!(classify_version("^20.0.0"), VersionSelector::Range("^20.0.0"));
-    }
-
-    #[test]
-    fn test_classify_version_aliases() {
-        assert_eq!(classify_version("lts"), VersionSelector::LatestLts);
-        assert_eq!(classify_version("LTS"), VersionSelector::LatestLts);
-        assert_eq!(classify_version("latest"), VersionSelector::AbsoluteLatest);
     }
 
     #[test]

@@ -176,7 +176,12 @@ pub(crate) fn is_pack_object<D: Doc>(object: &Node<'_, D>, standalone: bool) -> 
         }
         let Some(parent) = value.parent() else { break };
         match parent.kind().as_ref() {
-            "array" | "parenthesized_expression" | "satisfies_expression" | "as_expression" => {
+            "array"
+            | "parenthesized_expression"
+            | "satisfies_expression"
+            | "as_expression"
+            | "type_assertion"
+            | "non_null_expression" => {
                 value = parent;
             }
             _ => break,
@@ -890,6 +895,11 @@ mod tests {
             "export default defineConfig(() => ([{ bundle: false, dts: { tsgo: true } }]));",
             "export default defineConfig(() => (({ bundle: false, dts: { tsgo: true } }) satisfies UserConfig));",
             "export default defineConfig(() => { return { bundle: false, dts: { tsgo: true } }; });",
+            "export default defineConfig(() => ({ bundle: false, dts: { tsgo: true } }) as UserConfig);",
+            "export default defineConfig((() => ({ bundle: false, dts: { tsgo: true } })) as UserConfigFn);",
+            "export default defineConfig(<UserConfigFn>(() => ({ bundle: false, dts: { tsgo: true } })));",
+            "export default defineConfig((() => ({ bundle: false, dts: { tsgo: true } }))!);",
+            "export default defineConfig((() => { return { bundle: false, dts: { tsgo: true } }; }) satisfies UserConfigFn);",
         ] {
             let actual = rewrite_pack_config(input, true, true);
             assert!(actual.contains("unbundle: true"), "{actual}");
@@ -1075,6 +1085,34 @@ mod tests {
             ),
             ("export default { pack: ({ bundle: false } satisfies PackConfig) };", false),
             ("export default { pack: { \"bundle\": false, \"dts\": { \"tsgo\": true } } };", false),
+            ("export default defineConfig({ pack: { bundle: false } } as UserConfig);", false),
+            ("export default defineConfig(({ pack: { bundle: false } }));", false),
+            ("export default defineConfig(<UserConfig>{ pack: { bundle: false } });", false),
+            ("export default defineConfig({ pack: <PackConfig>{ bundle: false } });", false),
+            (
+                "export default defineConfig(() => ({ pack: { bundle: false } }) as UserConfig);",
+                false,
+            ),
+            (
+                "export default defineConfig(() => ({ pack: { bundle: false } } satisfies UserConfig));",
+                false,
+            ),
+            (
+                "export default defineConfig((() => ({ pack: { bundle: false } })) as UserConfigFn);",
+                false,
+            ),
+            (
+                "export default defineConfig(() => { return { pack: { bundle: false } } as UserConfig; });",
+                false,
+            ),
+            (
+                "export default defineConfig(() => { return ({ pack: { bundle: false } }); });",
+                false,
+            ),
+            (
+                "export default defineConfig(<UserConfigFn>((() => { return { pack: { bundle: false } }; }) satisfies UserConfigFn)!);",
+                false,
+            ),
         ] {
             let actual = rewrite_pack_config(input, standalone, true);
             assert!(!actual.contains("bundle: false"), "{actual}");
@@ -1086,6 +1124,8 @@ mod tests {
             "export default { test: { pack: { bundle: false } } };",
             "export default defineConfig({ plugins: [{ config() { return { pack: { bundle: false } }; } }] });",
             "const config = { bundle: false }; export default config;",
+            "export default defineConfig(() => { function* pack() { return { pack: { bundle: false } }; } return pack().next().value; });",
+            "export default defineConfig(wrap((() => ({ pack: { bundle: false } })) as Fn));",
         ] {
             assert_eq!(rewrite_pack_config(input, false, true), input);
         }

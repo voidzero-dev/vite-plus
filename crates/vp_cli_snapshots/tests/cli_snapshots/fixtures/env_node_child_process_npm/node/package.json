@@ -6,7 +6,7 @@
   "devEngines": {
     "runtime": {
       "name": "node",
-      "version": "20.18.0",
+      "version": "20.20.2",
       "onFail": "download"
     }
   }

@@ -20,6 +20,7 @@ describe('downloadPackageManager', () => {
       version: '11.24.0',
       installDir: '/cache/pnpm',
       binPrefix: '/cache/pnpm/bin',
+      binPaths: {},
       packageName: 'pnpm',
     };
     vi.mocked(downloadPackageManagerBinding).mockResolvedValueOnce(result);
@@ -30,6 +31,32 @@ describe('downloadPackageManager', () => {
       name: 'pnpm',
       version: 'latest',
       cwd: '/target/workspace',
+      expectedHash: undefined,
+    });
+  });
+
+  it('preserves the integrity hash from a package manager override', async () => {
+    vi.mocked(downloadPackageManagerBinding).mockResolvedValueOnce({
+      name: 'pnpm',
+      version: '10.6.1',
+      installDir: '/cache/pnpm',
+      binPrefix: '/cache/pnpm/bin',
+      binPaths: {},
+      packageName: 'pnpm',
+    });
+    await downloadPackageManager(
+      PackageManager.pnpm,
+      '10.6.1',
+      false,
+      true,
+      '/target/workspace',
+      'sha512.0123456789abcdef',
+    );
+    expect(downloadPackageManagerBinding).toHaveBeenLastCalledWith({
+      name: 'pnpm',
+      version: '10.6.1',
+      cwd: '/target/workspace',
+      expectedHash: 'sha512.0123456789abcdef',
     });
   });
 });

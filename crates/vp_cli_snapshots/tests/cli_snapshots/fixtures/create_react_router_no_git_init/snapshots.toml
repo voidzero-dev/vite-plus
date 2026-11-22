@@ -1,0 +1,11 @@
+[[case]]
+name = "create_react_router_no_git_init"
+vp = "local"
+local-registry = true
+comment = "Use the real pinned create-react-router CLI with a local template so no GitHub template download is needed. Git identity is disabled only for this case: the generator's initial commit would fail without --no-git-init."
+env = { GIT_CONFIG_NOSYSTEM = "1", GIT_CONFIG_COUNT = "2", GIT_CONFIG_KEY_0 = "user.name", GIT_CONFIG_VALUE_0 = "", GIT_CONFIG_KEY_1 = "user.email", GIT_CONFIG_VALUE_1 = "" }
+unset-env = ["VP_SKIP_INSTALL", "CI", "GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL"]
+steps = [
+  { argv = ["vp", "create", "react-router@8.5.1", "--no-interactive", "--no-agent", "--no-editor", "--no-hooks", "--git", "--", "app", "--template", "./template", "--yes", "--no-install", "--no-agent-skills", "--no-motion"], comment = "Vite+ passes --no-git-init to the generator and completes integration", timeout = 180000 },
+  ["node", "assert-project.cjs"],
+]

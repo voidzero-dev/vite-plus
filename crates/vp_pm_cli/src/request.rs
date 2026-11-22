@@ -389,6 +389,14 @@ impl HttpClient {
     }
 }
 
+/// Extract a tgz archive into `target_dir`, skipping symbolic and hard link
+/// entries.
+///
+/// Callers then build the install tree inside `target_dir` with
+/// `create_dir_all`, `rename` and shim writes, and those follow links, so an
+/// archive-supplied link could redirect them into another install or any
+/// existing directory. npm skips link entries in package tarballs the same way.
+/// Otherwise this matches `Archive::unpack`.
 fn extract_tgz(tgz_file: impl AsRef<Path>, target_dir: impl AsRef<Path>) -> Result<(), Error> {
     let tgz_file = tgz_file.as_ref();
     let target_dir = target_dir.as_ref();
@@ -397,7 +405,29 @@ fn extract_tgz(tgz_file: impl AsRef<Path>, target_dir: impl AsRef<Path>) -> Resu
     let file = std::fs::File::open(tgz_file)?;
     let tar_stream = GzDecoder::new(file);
     let mut archive = Archive::new(tar_stream);
-    archive.unpack(target_dir)?;
+    if target_dir.symlink_metadata().is_err() {
+        std::fs::create_dir_all(target_dir)?;
+    }
+    // Canonicalize as `Archive::unpack` does, so Windows accepts long paths.
+    let target_dir = target_dir.canonicalize().unwrap_or_else(|_| target_dir.to_path_buf());
+    // Apply directories last, deepest first, as `Archive::unpack` does, so a
+    // directory's permissions cannot block extracting its contents.
+    let mut directories = Vec::new();
+    for entry in archive.entries()? {
+        let mut entry = entry?;
+        let entry_type = entry.header().entry_type();
+        if entry_type.is_symlink() || entry_type.is_hard_link() {
+            tracing::debug!("Skip link entry {:?}", entry.path()?);
+        } else if entry_type.is_dir() {
+            directories.push(entry);
+        } else {
+            entry.unpack_in(&target_dir)?;
+        }
+    }
+    directories.sort_by(|a, b| b.path_bytes().cmp(&a.path_bytes()));
+    for mut directory in directories {
+        directory.unpack_in(&target_dir)?;
+    }
 
     tracing::debug!("Extract tgz finished");
 
@@ -407,7 +437,7 @@ fn extract_tgz(tgz_file: impl AsRef<Path>, target_dir: impl AsRef<Path>) -> Resu
 /// Extract exactly one regular file from a tgz archive.
 ///
 /// Unlike [`extract_tgz`], this function never writes an archive-controlled
-/// path or link. Use it when an integrity pin covers one file inside an
+/// path. Use it when an integrity pin covers one file inside an
 /// unauthenticated archive.
 fn extract_tgz_file(
     tgz_file: impl AsRef<Path>,
@@ -463,29 +493,11 @@ fn extract_tgz_file(
 ///   covers that one file instead of the tgz.
 /// * `expected_hash` - Optional expected hash, "algorithm.hex" or SRI "algorithm-base64" (see [`verify_file_hash`])
 /// * `message` - Optional message shown above a progress bar while downloading (see [`HttpClient::download_file`])
+/// * `npm_config` - npm configuration used for the download.
 ///
 /// # Returns
 /// * `Ok(())` - If the tgz file is downloaded, verified (if hash provided) and extracted successfully.
 /// * `Err(e)` - If the tgz file is not downloaded, verified or extracted successfully.
-#[cfg(test)]
-pub(crate) async fn download_and_extract_tgz_with_hash(
-    url: &str,
-    target_dir: impl AsRef<Path>,
-    archive_file: Option<&Path>,
-    expected_hash: Option<&str>,
-    message: Option<&str>,
-) -> Result<(), Error> {
-    download_and_extract_tgz_with_hash_and_config(
-        url,
-        target_dir,
-        archive_file,
-        expected_hash,
-        message,
-        &NpmConfig::load(),
-    )
-    .await
-}
-
 pub(crate) async fn download_and_extract_tgz_with_hash_and_config(
     url: &str,
     target_dir: impl AsRef<Path>,
@@ -1260,7 +1272,15 @@ mod tests {
         });
 
         let url = vt_str::format!("{}/test-package.tgz", server.base_url());
-        let result = download_and_extract_tgz_with_hash(&url, &target_dir, None, None, None).await;
+        let result = download_and_extract_tgz_with_hash_and_config(
+            &url,
+            &target_dir,
+            None,
+            None,
+            None,
+            &NpmConfig { values: Default::default() },
+        )
+        .await;
         assert!(result.is_ok(), "Failed to download and extract: {result:?}");
 
         assert!(target_dir.join("package/bin/yarn").exists());
@@ -1292,7 +1312,15 @@ mod tests {
         let target_dir = temp_dir.path().join("extracted");
         let url = vt_str::format!("{}/corrupt.tgz", server.base_url());
 
-        let result = download_and_extract_tgz_with_hash(&url, &target_dir, None, None, None).await;
+        let result = download_and_extract_tgz_with_hash_and_config(
+            &url,
+            &target_dir,
+            None,
+            None,
+            None,
+            &NpmConfig { values: Default::default() },
+        )
+        .await;
         assert!(result.is_err(), "corrupt archive should fail to extract: {result:?}");
         assert!(
             mock.hits() > 1,
@@ -1319,9 +1347,15 @@ mod tests {
         let wrong_hash = "sha512.0000000000000000000000000000000000000000000000000000000000000000\
              0000000000000000000000000000000000000000000000000000000000000000";
 
-        let result =
-            download_and_extract_tgz_with_hash(&url, &target_dir, None, Some(wrong_hash), None)
-                .await;
+        let result = download_and_extract_tgz_with_hash_and_config(
+            &url,
+            &target_dir,
+            None,
+            Some(wrong_hash),
+            None,
+            &NpmConfig { values: Default::default() },
+        )
+        .await;
         assert!(result.is_err(), "hash mismatch should fail: {result:?}");
         assert!(
             mock.hits() > 1,

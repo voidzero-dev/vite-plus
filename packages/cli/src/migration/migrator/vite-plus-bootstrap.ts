@@ -3,6 +3,10 @@ import path from 'node:path';
 
 import { PackageManager, type WorkspaceInfo, type WorkspacePackage } from '../../types/index.ts';
 import {
+  readBunCatalogDependencyResolver,
+  type CatalogDependencyResolver,
+} from '../../utils/catalog.ts';
+import {
   VITEST_VERSION,
   VITE_PLUS_NAME,
   VITE_PLUS_OVERRIDE_PACKAGES,
@@ -23,19 +27,24 @@ import {
   findYarnWorkspaceHoisting,
   getAlignedVitestEcosystemDependencySpec,
   getCatalogDependencySpec,
+  getWorkspaceProjectPaths,
   isAlignableVitestEcosystemPackage,
   isLegacyWrapperSpec,
   isProtocolPinnedSpec,
   managedOverridePackages,
+  mergeManagedPnpmPeerDependencyRules,
+  type PnpmPeerDependencyRuleKeys,
+  peerDependencyRulesHaveStaleEntry,
   migratePnpmSettingsToWorkspaceYaml,
   normalizeVitestPeerCatalogSpec,
   pnpmPackageJsonSettingsPending,
   pnpmSupportsWorkspaceSettings,
   supportsCatalog,
+  bunSupportsCatalog,
   pnpmWorkspaceMinimumReleaseAgeExemptionsPending,
+  pnpmWorkspaceTsrsTrustPolicyExceptionPending,
   projectUsesVitestDirectly,
   pruneLegacyWrapperAliases,
-  readBunCatalogDependencyResolver,
   readPnpmWorkspaceCatalogDependencyResolver,
   readPnpmWorkspaceOverrides,
   readPnpmWorkspacePeerDependencyRules,
@@ -44,12 +53,15 @@ import {
   rewritePnpmWorkspaceYaml,
   rewriteYarnrcYml,
   setDirectViteEdge,
+  pnpmPeerDependencyRuleKeys,
   takePnpmWorkspaceSettings,
+  trackVitePeerDependencyRuleRemoval,
   vitestEcosystemCatalogReferencesPending,
   workspaceUsesVitestDirectly,
   workspaceUsesWebdriverio,
   workspaceUsesWebdriverioProvider,
   yarnrcSatisfiesVitePlus,
+  yarnSupportsPreapprovedPackages,
 } from '../migrator.ts';
 import { type DependencyVersionChange, type MigrationReport } from '../report.ts';
 import {
@@ -57,33 +69,18 @@ import {
   hasProviderPeerDependency,
   resolveProviderPeerSpec,
   OPT_IN_BROWSER_PROVIDERS,
-  REMOVE_PACKAGES,
+  OXLINT_PLUGIN_API_PACKAGES,
+  packageOwnsOxlintApi,
+  bundledPackagesToRemove,
+  type RetainedImportDependencies,
   VITEST_IS_MANAGED_OVERRIDE,
   managedOverrideKey,
+  pinnedPackageManagerVersion,
   pnpmMajor,
   pnpmOverrideKey,
-  type CatalogDependencyResolver,
   type ManagedOverrideKeyStyle,
   type PnpmPackageJsonSettings,
 } from './shared.ts';
-
-// Bun resolves `catalog:` references (and a top-level `catalog` field) ONLY
-// inside a workspace: a root package.json declaring a non-empty `workspaces`
-// (the array form, or the object `{ packages: [...] }` form). A standalone bun
-// project has nowhere to resolve a catalog from, so converting its edges to
-// `catalog:` makes `bun install` abort with "vite@catalog: failed to resolve".
-// The upgrade path must keep standalone bun on concrete specs, mirroring the
-// fresh path: `supportCatalog` is false for standalone bun (orchestrators.ts)
-// and `rewriteBunCatalog` runs only on monorepo roots (orchestrators.ts).
-function bunWorkspaceDeclaresPackages(workspaces: NpmWorkspaces | undefined): boolean {
-  if (Array.isArray(workspaces)) {
-    return workspaces.length > 0;
-  }
-  if (workspaces && typeof workspaces === 'object') {
-    return Array.isArray(workspaces.packages) && workspaces.packages.length > 0;
-  }
-  return false;
-}
 
 export type BootstrapPackageJson = {
   overrides?: Record<string, string>;
@@ -184,26 +181,6 @@ export function overridesSatisfyVitePlus(
   );
 }
 
-function pinnedPackageManagerVersion(pkg: BootstrapPackageJson): string | undefined {
-  if (typeof pkg.packageManager === 'string') {
-    const separator = pkg.packageManager.indexOf('@');
-    if (separator !== -1) {
-      return pkg.packageManager.slice(separator + 1);
-    }
-  }
-  const devEngine = pkg.devEngines?.packageManager;
-  if (
-    typeof devEngine === 'object' &&
-    devEngine !== null &&
-    !Array.isArray(devEngine) &&
-    'version' in devEngine &&
-    typeof devEngine.version === 'string'
-  ) {
-    return devEngine.version;
-  }
-  return undefined;
-}
-
 function vitePlusDependencyNeedsConcreteVersion(pkg: BootstrapPackageJson): boolean {
   const dependencyGroups = [pkg.devDependencies, pkg.dependencies, pkg.optionalDependencies];
   return dependencyGroups.some(
@@ -229,20 +206,15 @@ function pnpmPeerDependencyRulesSatisfyVitePlus(
   peerDependencyRules:
     | { allowAny?: string[]; allowedVersions?: Record<string, string> }
     | undefined,
-  usesVitest: boolean,
+  { managed, stale }: PnpmPeerDependencyRuleKeys,
 ): boolean {
-  const allowAny = new Set(peerDependencyRules?.allowAny ?? []);
-  const allowedVersions = peerDependencyRules?.allowedVersions ?? {};
-  // Common case: a lingering managed `vitest` peer rule is NOT satisfied.
-  if (
-    !usesVitest &&
-    VITEST_IS_MANAGED_OVERRIDE &&
-    (allowAny.has('vitest') || allowedVersions.vitest !== undefined)
-  ) {
+  // A lingering managed `vitest` rule or a stale `vite` rule is NOT satisfied.
+  if (peerDependencyRulesHaveStaleEntry(peerDependencyRules, stale)) {
     return false;
   }
-  const overrideKeys = Object.keys(managedOverridePackages(usesVitest));
-  return overrideKeys.every((key) => allowAny.has(key) && allowedVersions[key] === '*');
+  const allowAny = new Set(peerDependencyRules?.allowAny ?? []);
+  const allowedVersions = peerDependencyRules?.allowedVersions ?? {};
+  return managed.every((key) => allowAny.has(key) && allowedVersions[key] === '*');
 }
 
 function npmVitePlusManagedDependenciesPending(
@@ -325,13 +297,14 @@ function reconcileVitePlusBootstrapPackage(
   supportCatalog: boolean,
   ensureVitePlus: boolean,
   catalogDependencyResolver?: CatalogDependencyResolver,
-  // Opt-in browser providers the workspace catalog is gaining (some package uses
-  // one only through source/a shim). An already-installed copy of such a provider
-  // must REFERENCE that catalog entry, not pin a concrete version. See #2005.
-  providerCatalogAdditions: ReadonlySet<string> = new Set(),
+  // An installed provider references the shared catalog entry added for a sibling.
+  browserCatalogAdditions: ReadonlySet<string> = new Set(),
+  retainedImportDependencies?: RetainedImportDependencies,
 ): boolean {
   const before = JSON.stringify(pkg);
-  const usesVitest = projectUsesVitestDirectly(projectPath, pkg, undefined, true);
+  const usesVitest =
+    retainedImportDependencies?.vitest.has(projectPath) ||
+    projectUsesVitestDirectly(projectPath, pkg);
   ensureVitePlusDependencySpecs(pkg, vitePlusVersion, ensureVitePlus);
 
   const installGroups = [pkg.devDependencies, pkg.dependencies, pkg.optionalDependencies];
@@ -389,7 +362,7 @@ function reconcileVitePlusBootstrapPackage(
           provider,
           installGroupEntry.dependencyField,
           packageManager,
-          providerCatalogAdditions.has(provider)
+          browserCatalogAdditions.has(provider)
             ? supportCatalog && packageManager !== PackageManager.bun
             : supportCatalog,
           catalogDependencyResolver,
@@ -415,17 +388,31 @@ function reconcileVitePlusBootstrapPackage(
     }
   }
 
-  // The full bundled set (oxlint/oxlint-tsgolint/oxfmt/tsdown plus the base
-  // `@vitest/browser`/preview runtime) is owned by vite-plus, so strip every
-  // REMOVE_PACKAGES entry from this package's install groups, matching the
-  // catalog removal (catalog.ts) and the fresh path (package-json.ts). Leaving
-  // any of them behind keeps a `catalog:` reference whose catalog entry the
-  // catalog rewrite just deleted, dangling the next `pnpm install`. A plain
-  // delete is correct here: none of these carry a project-owned peer (the
-  // browser-provider peer logic is for the opt-in `@vitest/browser-*`
-  // providers, which are deliberately NOT in REMOVE_PACKAGES).
-  for (const bundledPackage of REMOVE_PACKAGES) {
+  // Match the fresh migration and catalog cleanup. A preserved browser import
+  // still needs its declared browser dependency in this package.
+  const ownsOxlintApi = packageOwnsOxlintApi(pkg);
+  for (const bundledPackage of bundledPackagesToRemove(
+    retainedImportDependencies?.browser.get(projectPath),
+  )) {
     for (const dependencies of installGroups) {
+      if (
+        ownsOxlintApi &&
+        dependencies !== undefined &&
+        dependencies === pkg.dependencies &&
+        (OXLINT_PLUGIN_API_PACKAGES as readonly string[]).includes(bundledPackage)
+      ) {
+        // A published plugin keeps the runtime dependency that supplies its
+        // upstream imports, as the fresh path does. Its `catalog:` reference
+        // becomes the concrete range because the catalog entry is deleted.
+        const current = dependencies[bundledPackage];
+        if (current?.startsWith('catalog:')) {
+          const resolved = catalogDependencyResolver?.(current, bundledPackage);
+          if (resolved) {
+            dependencies[bundledPackage] = resolved;
+          }
+        }
+        continue;
+      }
       if (dependencies?.[bundledPackage] !== undefined) {
         delete dependencies[bundledPackage];
       }
@@ -511,12 +498,14 @@ export function bootstrapProjectPaths(
   rootDir: string,
   packages: WorkspacePackage[] | undefined,
 ): string[] {
-  return [rootDir, ...(packages ?? []).map((pkg) => path.join(rootDir, pkg.path))];
+  return getWorkspaceProjectPaths({ rootDir, packages });
 }
 
-export function collectInjectedProviderNames(
+/** Catalog entries needed for retained browser imports and newly installed providers. */
+export function collectBrowserCatalogAdditions(
   rootDir: string,
   packages?: WorkspacePackage[],
+  retainedBrowserPackages?: RetainedImportDependencies['browser'],
   // Optional precomputed provider source-scan results keyed by absolute package
   // path. Lets a caller that already scanned a path reuse the result instead of
   // re-traversing the source tree; unknown paths fall back to a fresh scan.
@@ -524,6 +513,9 @@ export function collectInjectedProviderNames(
 ): Set<string> {
   const names = new Set<string>();
   for (const packagePath of bootstrapProjectPaths(rootDir, packages)) {
+    for (const name of retainedBrowserPackages?.get(packagePath) ?? []) {
+      names.add(name);
+    }
     const packageJsonPath = path.join(packagePath, 'package.json');
     if (!fs.existsSync(packageJsonPath)) {
       continue;
@@ -532,15 +524,12 @@ export function collectInjectedProviderNames(
     const sourceModes =
       precomputedSourceModes?.get(packagePath) ?? collectProviderSourceModes(packagePath);
     const installGroups = [pkg.devDependencies, pkg.dependencies, pkg.optionalDependencies];
-    const dependencyGroups = [...installGroups, pkg.peerDependencies];
     for (const provider of OPT_IN_BROWSER_PROVIDERS) {
-      const used =
-        sourceModes[provider] ||
-        dependencyGroups.some((dependencies) => dependencies?.[provider] !== undefined);
+      const needsProvider = sourceModes[provider] || pkg.peerDependencies?.[provider] !== undefined;
       const installed = installGroups.some(
         (dependencies) => dependencies?.[provider] !== undefined,
       );
-      if (used && !installed) {
+      if (needsProvider && !installed) {
         names.add(provider);
       }
     }
@@ -635,6 +624,7 @@ export function detectVitePlusBootstrapPending(
   packageManager: PackageManager | undefined,
   packages?: WorkspacePackage[],
   packageManagerVersion?: string,
+  retainedImportDependencies?: RetainedImportDependencies,
 ): boolean {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
@@ -676,9 +666,14 @@ export function detectVitePlusBootstrapPending(
     supportsCatalog(
       packageManager,
       resolvedPackageManagerVersion,
-      packageManager === PackageManager.bun && bunWorkspaceDeclaresPackages(pkg.workspaces),
+      packageManager === PackageManager.bun &&
+        bunSupportsCatalog(pkg, resolvedPackageManagerVersion),
     );
-  const catalogDependencyResolver = createCatalogDependencyResolver(projectPath, packageManager);
+  const catalogDependencyResolver = createCatalogDependencyResolver(
+    projectPath,
+    packageManager,
+    resolvedPackageManagerVersion,
+  );
   const canonicalVitePlusSpec = supportCatalog
     ? (catalogDependencyResolver?.preferredCatalogSpec ?? 'catalog:')
     : VITE_PLUS_VERSION;
@@ -694,7 +689,11 @@ export function detectVitePlusBootstrapPending(
   // Match the actual reconcile so an already-installed provider whose catalog
   // entry the migration will add is reported pending (its spec must become
   // `catalog:`). See #2005.
-  const providerCatalogAdditions = collectInjectedProviderNames(projectPath, packages);
+  const browserCatalogAdditions = collectBrowserCatalogAdditions(
+    projectPath,
+    packages,
+    retainedImportDependencies?.browser,
+  );
   for (const [index, packagePath] of bootstrapProjectPaths(projectPath, packages).entries()) {
     const childPackageJsonPath = path.join(packagePath, 'package.json');
     if (!fs.existsSync(childPackageJsonPath)) {
@@ -711,7 +710,8 @@ export function detectVitePlusBootstrapPending(
         supportCatalog,
         index === 0,
         catalogDependencyResolver,
-        providerCatalogAdditions,
+        browserCatalogAdditions,
+        retainedImportDependencies,
       )
     ) {
       return true;
@@ -720,13 +720,23 @@ export function detectVitePlusBootstrapPending(
 
   // Shared override/catalog sinks must keep vitest managed when any package in
   // the workspace needs it. The direct dependency itself is localized above.
-  const usesVitest = workspaceUsesVitestDirectly(projectPath, packages, true);
+  const usesVitest = workspaceUsesVitestDirectly(
+    projectPath,
+    packages,
+    true,
+    retainedImportDependencies?.vitest,
+  );
   const usesWebdriverio = workspaceUsesWebdriverioProvider(projectPath, packages);
 
   if (packageManager === PackageManager.yarn) {
     return (
       !overridesSatisfyVitePlus(pkg.resolutions, usesVitest, undefined, 'bare', usesWebdriverio) ||
-      !yarnrcSatisfiesVitePlus(projectPath, usesVitest, supportCatalog) ||
+      !yarnrcSatisfiesVitePlus(
+        projectPath,
+        usesVitest,
+        supportCatalog,
+        yarnSupportsPreapprovedPackages(resolvedPackageManagerVersion),
+      ) ||
       yarnWorkspaceHoistingOptOutPending(projectPath, packageManager, packages)
     );
   }
@@ -742,12 +752,20 @@ export function detectVitePlusBootstrapPending(
     // `catalog:` references, so the catalog resolver must NOT be consulted —
     // otherwise a dangling `catalog:` override resolves through the dead catalog
     // field and is mistaken for satisfied, masking the pending rewrite.
-    return !overridesSatisfyVitePlus(
-      pkg.overrides,
-      usesVitest,
-      supportCatalog ? readBunCatalogDependencyResolver(pkg) : undefined,
-      'bare',
-      usesWebdriverio,
+    const bunCatalogResolver = supportCatalog
+      ? readBunCatalogDependencyResolver(pkg, resolvedPackageManagerVersion)
+      : undefined;
+    // A `catalog:` vite-plus spec looks current, so judge its catalog value too.
+    return (
+      (supportCatalog &&
+        workspaceCatalogVitePlusDependencyPending(projectPath, packages, bunCatalogResolver)) ||
+      !overridesSatisfyVitePlus(
+        pkg.overrides,
+        usesVitest,
+        bunCatalogResolver,
+        'bare',
+        usesWebdriverio,
+      )
     );
   }
   if (packageManager === PackageManager.pnpm) {
@@ -770,7 +788,10 @@ export function detectVitePlusBootstrapPending(
             'pnpm-ranged',
             usesWebdriverio,
           ) ||
-          !pnpmPeerDependencyRulesSatisfyVitePlus(pkg.pnpm?.peerDependencyRules, usesVitest)
+          !pnpmPeerDependencyRulesSatisfyVitePlus(
+            pkg.pnpm?.peerDependencyRules,
+            pnpmPeerDependencyRuleKeys(usesVitest, detectedPackageManagerVersion),
+          )
         );
       }
       return (
@@ -782,7 +803,10 @@ export function detectVitePlusBootstrapPending(
           'pnpm-ranged',
           usesWebdriverio,
         ) ||
-        !pnpmPeerDependencyRulesSatisfyVitePlus(pkg.pnpm?.peerDependencyRules, usesVitest)
+        !pnpmPeerDependencyRulesSatisfyVitePlus(
+          pkg.pnpm?.peerDependencyRules,
+          pnpmPeerDependencyRuleKeys(usesVitest, detectedPackageManagerVersion),
+        )
       );
     }
     const resolver = readPnpmWorkspaceCatalogDependencyResolver(projectPath);
@@ -797,9 +821,10 @@ export function detectVitePlusBootstrapPending(
       ) ||
       !pnpmPeerDependencyRulesSatisfyVitePlus(
         readPnpmWorkspacePeerDependencyRules(projectPath),
-        usesVitest,
+        pnpmPeerDependencyRuleKeys(usesVitest, detectedPackageManagerVersion),
       ) ||
-      pnpmWorkspaceMinimumReleaseAgeExemptionsPending(projectPath)
+      pnpmWorkspaceMinimumReleaseAgeExemptionsPending(projectPath) ||
+      pnpmWorkspaceTsrsTrustPolicyExceptionPending(projectPath)
     );
   }
 
@@ -920,41 +945,30 @@ function ensureOverrideEntries(
   return { overrides: next, changed };
 }
 
-function ensurePnpmPeerDependencyRules(pkg: BootstrapPackageJson, usesVitest: boolean): boolean {
-  const overrideKeys = Object.keys(managedOverridePackages(usesVitest));
+function ensurePnpmPeerDependencyRules(
+  pkg: BootstrapPackageJson,
+  peerRuleKeys: PnpmPeerDependencyRuleKeys,
+): boolean {
   pkg.pnpm ??= {};
-  // Common case: drop a lingering managed `vitest` peer rule from the source
-  // shape before re-deriving the managed rules.
-  const seed = { ...pkg.pnpm.peerDependencyRules } as {
-    allowAny?: string[];
-    allowedVersions?: Record<string, string>;
-  };
-  if (!usesVitest && VITEST_IS_MANAGED_OVERRIDE) {
-    if (Array.isArray(seed.allowAny)) {
-      seed.allowAny = seed.allowAny.filter((key) => key !== 'vitest');
-    }
-    if (seed.allowedVersions) {
-      seed.allowedVersions = { ...seed.allowedVersions };
-      delete seed.allowedVersions.vitest;
-    }
-  }
-  const peerDependencyRules = {
-    ...seed,
-    allowAny: [...new Set([...(seed.allowAny ?? []), ...overrideKeys])],
-    allowedVersions: {
-      ...seed.allowedVersions,
-      ...Object.fromEntries(overrideKeys.map((key) => [key, '*'])),
-    },
-  };
+  const peerDependencyRules = mergeManagedPnpmPeerDependencyRules(
+    pkg.pnpm.peerDependencyRules,
+    peerRuleKeys,
+  );
   const changed =
-    JSON.stringify(pkg.pnpm.peerDependencyRules ?? {}) !== JSON.stringify(peerDependencyRules);
-  pkg.pnpm.peerDependencyRules = peerDependencyRules;
+    JSON.stringify(pkg.pnpm.peerDependencyRules ?? {}) !==
+    JSON.stringify(peerDependencyRules ?? {});
+  if (peerDependencyRules) {
+    pkg.pnpm.peerDependencyRules = peerDependencyRules;
+  } else {
+    delete pkg.pnpm.peerDependencyRules;
+  }
   return changed;
 }
 
 export function ensureVitePlusBootstrap(
   workspaceInfo: WorkspaceInfo,
   report?: MigrationReport,
+  retainedImportDependencies?: RetainedImportDependencies,
 ): VitePlusBootstrapResult {
   const projectPath = workspaceInfo.rootDir;
   const packageJsonPath = path.join(projectPath, 'package.json');
@@ -967,11 +981,22 @@ export function ensureVitePlusBootstrap(
   if (!fs.existsSync(packageJsonPath)) {
     return result;
   }
+  const reportVitePeerDependencyRuleRemoval = trackVitePeerDependencyRuleRemoval(
+    projectPath,
+    workspaceInfo.packageManager,
+    report,
+    workspaceInfo.downloadPackageManager.version,
+  );
 
   // Shared override/catalog sinks are workspace-wide, so keep vitest managed
   // when any package needs it. Each package's direct vitest dependency is
   // reconciled independently below.
-  const usesVitest = workspaceUsesVitestDirectly(projectPath, workspaceInfo.packages, true);
+  const usesVitest = workspaceUsesVitestDirectly(
+    projectPath,
+    workspaceInfo.packages,
+    true,
+    retainedImportDependencies?.vitest,
+  );
   const usesWebdriverio = workspaceUsesWebdriverioProvider(projectPath, workspaceInfo.packages);
   const pnpmMajorVersion = pnpmMajor(workspaceInfo.downloadPackageManager.version);
   const shouldAllowBrowserBuilds = workspaceUsesWebdriverio(projectPath, workspaceInfo.packages);
@@ -979,15 +1004,13 @@ export function ensureVitePlusBootstrap(
     workspaceInfo.packageManager === PackageManager.pnpm &&
     pnpmSupportsWorkspaceSettings(workspaceInfo.downloadPackageManager.version);
   // Catalogs only resolve inside a bun WORKSPACE (a root package.json with a
-  // non-empty `workspaces`). Gate both the catalog edges (`supportCatalog`) and
+  // `workspaces` field, even an empty one). Gate both the catalog edges (`supportCatalog`) and
   // the `rewriteBunCatalog` sink below on this so a standalone bun project keeps
   // concrete specs and writes no catalog field — otherwise `bun install` aborts
   // with "vite@catalog: failed to resolve".
   const isBunWorkspace =
     workspaceInfo.packageManager === PackageManager.bun &&
-    bunWorkspaceDeclaresPackages(
-      (readJsonFile(packageJsonPath) as { workspaces?: NpmWorkspaces }).workspaces,
-    );
+    bunSupportsCatalog(readJsonFile(packageJsonPath), workspaceInfo.downloadPackageManager.version);
   const supportCatalog =
     !VITE_PLUS_VERSION.startsWith('file:') &&
     supportsCatalog(
@@ -998,6 +1021,7 @@ export function ensureVitePlusBootstrap(
   const catalogDependencyResolver = createCatalogDependencyResolver(
     projectPath,
     workspaceInfo.packageManager,
+    workspaceInfo.downloadPackageManager.version,
   );
   const canonicalVitePlusSpec = supportCatalog
     ? (catalogDependencyResolver?.preferredCatalogSpec ?? 'catalog:')
@@ -1011,9 +1035,10 @@ export function ensureVitePlusBootstrap(
     projectPath,
     workspaceInfo.packages,
   );
-  const providerCatalogAdditions = collectInjectedProviderNames(
+  const browserCatalogAdditions = collectBrowserCatalogAdditions(
     projectPath,
     workspaceInfo.packages,
+    retainedImportDependencies?.browser,
   );
   let movedPnpmSettings: Record<string, unknown> | undefined;
 
@@ -1041,8 +1066,9 @@ export function ensureVitePlusBootstrap(
         usesVitest,
         vitestEcosystemPackages,
         false,
-        providerCatalogAdditions,
+        browserCatalogAdditions,
         usesWebdriverio,
+        workspaceInfo.downloadPackageManager.version,
       );
     }
   }
@@ -1062,7 +1088,8 @@ export function ensureVitePlusBootstrap(
       supportCatalog,
       true,
       catalogDependencyResolver,
-      providerCatalogAdditions,
+      browserCatalogAdditions,
+      retainedImportDependencies,
     );
 
     if (workspaceInfo.packageManager === PackageManager.yarn) {
@@ -1097,7 +1124,9 @@ export function ensureVitePlusBootstrap(
       const ensured = ensureOverrideEntries(
         pkg.overrides,
         usesVitest,
-        supportCatalog ? readBunCatalogDependencyResolver(pkg) : undefined,
+        supportCatalog
+          ? readBunCatalogDependencyResolver(pkg, workspaceInfo.downloadPackageManager.version)
+          : undefined,
         'bare',
         usesWebdriverio,
       );
@@ -1121,7 +1150,11 @@ export function ensureVitePlusBootstrap(
         pkg.pnpm.overrides = ensured.overrides;
         packageJsonChanged = true;
       }
-      packageJsonChanged = ensurePnpmPeerDependencyRules(pkg, usesVitest) || packageJsonChanged;
+      packageJsonChanged =
+        ensurePnpmPeerDependencyRules(
+          pkg,
+          pnpmPeerDependencyRuleKeys(usesVitest, workspaceInfo.downloadPackageManager.version),
+        ) || packageJsonChanged;
       if (pnpmMajorVersion !== undefined && pkg.pnpm) {
         const beforePnpm = JSON.stringify(pkg.pnpm);
         applyBuildAllowanceToPackageJsonPnpm(pkg.pnpm, pnpmMajorVersion, shouldAllowBrowserBuilds);
@@ -1173,7 +1206,8 @@ export function ensureVitePlusBootstrap(
           supportCatalog,
           false,
           catalogDependencyResolver,
-          providerCatalogAdditions,
+          browserCatalogAdditions,
+          retainedImportDependencies,
         );
         if (
           yarnHoisting &&
@@ -1206,6 +1240,7 @@ export function ensureVitePlusBootstrap(
         ecosystemCatalogReferencesPending ||
         !pnpmWorkspaceExoticSubdepsSettingSatisfied(projectPath) ||
         pnpmWorkspaceMinimumReleaseAgeExemptionsPending(projectPath) ||
+        pnpmWorkspaceTsrsTrustPolicyExceptionPending(projectPath) ||
         workspaceCatalogVitePlusDependencyPending(
           projectPath,
           workspaceInfo.packages,
@@ -1220,7 +1255,7 @@ export function ensureVitePlusBootstrap(
         ) ||
         !pnpmPeerDependencyRulesSatisfyVitePlus(
           readPnpmWorkspacePeerDependencyRules(projectPath),
-          usesVitest,
+          pnpmPeerDependencyRuleKeys(usesVitest, workspaceInfo.downloadPackageManager.version),
         )
       ) {
         rewritePnpmWorkspaceYaml(
@@ -1230,8 +1265,9 @@ export function ensureVitePlusBootstrap(
           usesVitest,
           vitestEcosystemPackages,
           true,
-          providerCatalogAdditions,
+          browserCatalogAdditions,
           usesWebdriverio,
+          workspaceInfo.downloadPackageManager.version,
         );
       }
       if (fs.existsSync(pnpmWorkspaceYamlPath)) {
@@ -1257,8 +1293,9 @@ export function ensureVitePlusBootstrap(
       projectPath,
       usesVitest,
       vitestEcosystemPackages,
-      providerCatalogAdditions,
+      browserCatalogAdditions,
       supportCatalog,
+      yarnSupportsPreapprovedPackages(workspaceInfo.downloadPackageManager.version),
     );
     const after = fs.readFileSync(yarnrcYmlPath, 'utf-8');
     result.packageManagerConfig = before !== after;
@@ -1267,7 +1304,14 @@ export function ensureVitePlusBootstrap(
     // rewriteBunCatalog runs only on monorepo roots). A standalone bun project
     // keeps the concrete overrides set by `ensureOverrideEntries` above.
     const before = fs.readFileSync(packageJsonPath, 'utf-8');
-    rewriteBunCatalog(projectPath, usesVitest, vitestEcosystemPackages, usesWebdriverio);
+    rewriteBunCatalog(
+      projectPath,
+      usesVitest,
+      vitestEcosystemPackages,
+      usesWebdriverio,
+      workspaceInfo.downloadPackageManager.version,
+      browserCatalogAdditions,
+    );
     const after = fs.readFileSync(packageJsonPath, 'utf-8');
     result.packageJson = result.packageJson || before !== after;
   }
@@ -1276,6 +1320,7 @@ export function ensureVitePlusBootstrap(
   if (result.changed && report) {
     report.packageManagerBootstrapConfigured = true;
   }
+  reportVitePeerDependencyRuleRemoval();
   return result;
 }
 
@@ -1364,6 +1409,7 @@ function readInstalledRawViteVersion(projectPath: string): string | undefined {
  */
 export async function collectToolchainVersionChanges(
   projectPath: string,
+  hasProtectedVitestImports = false,
 ): Promise<DependencyVersionChange[]> {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
@@ -1418,7 +1464,7 @@ export async function collectToolchainVersionChanges(
   // reconcile uses to keep and align it).
   if (
     declaredRootSpec(pkg, 'vitest') !== undefined &&
-    projectUsesVitestDirectly(projectPath, pkg, undefined, true)
+    (hasProtectedVitestImports || projectUsesVitestDirectly(projectPath, pkg))
   ) {
     pushChange('vitest', VITEST_VERSION, fromFor('vitest'));
   }

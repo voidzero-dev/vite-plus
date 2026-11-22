@@ -121,10 +121,7 @@ cli
   .option('--from-vite [vitest]', 'Reuse config from Vite or Vitest')
   .option('--report', 'Size report', { default: true })
   .option('--env.* <value>', 'Define compile-time env variables')
-  .option(
-    '--env-file <file>',
-    'Load environment variables from a file, when used together with --env, variables in --env take precedence',
-  )
+  .option('--env-file <file>', 'Load environment variables from a file, can be repeated')
   .option('--env-prefix <prefix>', 'Prefix for env variables to inject into the bundle', {
     default: DEFAULT_ENV_PREFIXES,
   })
@@ -143,9 +140,6 @@ cli
   .action(async (input: string[], flags: InlineConfig) => {
     if (input.length > 0) {
       flags.entry = input;
-    }
-    if (flags.envPrefix === undefined) {
-      flags.envPrefix = DEFAULT_ENV_PREFIXES;
     }
 
     async function runBuild(): Promise<TsdownHandle> {
@@ -166,6 +160,8 @@ cli
         : [viteConfig?.pack ?? {}];
       for (const packConfig of packConfigs) {
         const merged = { ...packConfig, ...flags };
+        // Default after merging so `pack.envPrefix` from the config file is kept.
+        merged.envPrefix ??= DEFAULT_ENV_PREFIXES;
         // Keep postcss/lightningcss external to the dts bundle (see plugin doc)
         if (merged.dts) {
           const existingPlugins = Array.isArray(merged.plugins) ? merged.plugins : [];

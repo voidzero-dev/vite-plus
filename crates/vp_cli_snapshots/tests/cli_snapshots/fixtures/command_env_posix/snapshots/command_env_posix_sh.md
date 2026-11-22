@@ -6,7 +6,7 @@
 ## `vpt cp assert_posix.sh 'vp "$project\with `spaces`"/assert_posix.sh'`
 
 
-## `vpt write-file 'vp "$project\with `spaces`"/.node-version' '22.18.0
+## `vpt write-file 'vp "$project\with `spaces`"/.node-version' '22.23.4
 '`
 
 
@@ -15,7 +15,7 @@
 loads the generated env file in sh and verifies PATH, wrapper, and version switching
 
 ```
-Using Node.js <version> (resolved from 20.18.0)
+Using Node.js <version> (resolved from 20.20.2)
 Reverted selected components to project environment resolution
 Using Node.js <version> (resolved from .node-version)
 POSIX environment checks passed (sh)

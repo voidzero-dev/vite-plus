@@ -9,6 +9,7 @@ import {
   mkdirSync,
   readFileSync,
   readlinkSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -23,11 +24,19 @@ import { createArchive } from './archive.mjs';
 const exec = promisify(execFile);
 const bypass = process.argv.includes('bypass');
 const runnerHome = process.env.VP_HOME;
-const cli = join(runnerHome, 'current/node_modules/vite-plus');
+const cli = realpathSync(join(runnerHome, 'current/node_modules/vite-plus'));
+const installNode = readFileSync(resolve(cli, '../../.node-version'), 'utf8').trim();
 const { generateInstallLockfile, installManifest, INSTALL_PNPM_VERSION } = await import(
   pathToFileURL(join(cli, 'generate-install-lockfile.ts')).href
 );
 const version = JSON.parse(readFileSync(join(cli, 'package.json'), 'utf8')).version;
+// Setup installs the pinned pnpm under a content key derived from its integrity:
+// short_fingerprint(PINNED_PNPM_INTEGRITY) in crates/vp_setup/src/install.rs (the
+// first 32 hex of its SHA-256). Seed the install there so the pinned bootstrap
+// reuses it instead of downloading.
+const installer = readFileSync(resolve(cli, '../../crates/vp_setup/src/install.rs'), 'utf8');
+const pnpmIntegrity = /const PINNED_PNPM_INTEGRITY: &str = "([^"]+)";/.exec(installer)[1];
+const SETUP_PNPM_KEY = createHash('sha256').update(pnpmIntegrity).digest('hex').slice(0, 32);
 
 // Only the pinned pnpm distribution uses the runner's cached registry. Real pnpm
 // is necessary to exercise configuration precedence and frozen-lockfile checks.
@@ -190,7 +199,20 @@ function createInstallation(name, settings = []) {
   const nodeBin = join(home, 'js_runtime/node', process.versions.node, 'bin');
   mkdirSync(nodeBin, { recursive: true });
   symlinkSync(process.execPath, join(nodeBin, 'node'));
-  cpSync(pnpmRoot, join(home, 'package_manager/pnpm', INSTALL_PNPM_VERSION), { recursive: true });
+  // Upgrade uses the embedded installer pin, independently of the setup override.
+  if (installNode !== process.versions.node) {
+    const installNodeBin = join(home, 'js_runtime/node', installNode, 'bin');
+    mkdirSync(installNodeBin, { recursive: true });
+    copyFileSync(
+      join(runnerHome, 'js_runtime/node', installNode, 'bin/node'),
+      join(installNodeBin, 'node'),
+    );
+  }
+  cpSync(
+    join(pnpmRoot, 'pnpm'),
+    join(home, 'package_manager/pnpm/.verified-v1', INSTALL_PNPM_VERSION, SETUP_PNPM_KEY, 'pnpm'),
+    { recursive: true },
+  );
   return { directory, home, ...user };
 }
 
@@ -226,7 +248,16 @@ async function testBypass(lockfile) {
   for (const value of [undefined, '', '0', 'true']) {
     await assert.rejects(
       runSetup(installation, { VP_SETUP_SKIP_INSTALL_LOCKFILE: value }),
-      (error) => error.code === 1 && /ERR_PNPM_BROKEN_LOCKFILE/.test(error.message),
+      (error) =>
+        error.code === 1 && /Failed to install production dependencies/.test(error.message),
+    );
+    assert.equal(
+      readFileSync(join(installation.home, version, 'bin/vp-install-lock.yaml'), 'utf8'),
+      brokenLockfile,
+    );
+    assert.equal(
+      existsSync(join(installation.home, version, 'node_modules/.vp-install-complete')),
+      false,
     );
   }
   console.log('A broken lockfile still fails unless VP_SETUP_SKIP_INSTALL_LOCKFILE is exactly 1.');
@@ -315,7 +346,7 @@ async function testBypass(lockfile) {
   // A fresh offline store makes resolution fail without any external requests or retries.
   await assert.rejects(
     runSetup(failed, { ...override, npm_config_offline: 'true', NPM_CONFIG_OFFLINE: 'true' }),
-    (error) => error.code === 1 && /ERR_PNPM_NO_OFFLINE_META/.test(error.message),
+    (error) => error.code === 1 && /Failed to install production dependencies/.test(error.message),
   );
   assert.equal(existsSync(failedReceipt), false);
   assert.equal(existsSync(join(failedTarget, 'bin/.vp-setup-complete')), false);

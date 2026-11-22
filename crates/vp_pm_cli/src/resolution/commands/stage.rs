@@ -148,7 +148,14 @@ pub enum StageCommand {
 }
 
 impl Resolve<StageCommand> for Pnpm {
-    fn resolve(&self, args: &StageCommand, _diag: &mut Diagnostics) -> CommandResolution {
+    fn resolve(&self, args: &StageCommand, diag: &mut Diagnostics) -> CommandResolution {
+        if !self.supports_v11_3_commands() {
+            diag.warn(
+                DiagnosticKind::UnsupportedCommandNoop,
+                "pnpm stage requires pnpm >= 11.3.0. Skipping.",
+            );
+            return CommandResolution::Noop;
+        }
         let mut cmd = CommandBuilder::new("pnpm");
         if let StageCommand::Publish { filter: Some(filters), .. } = args {
             cmd.repeated("--filter", filters.iter());
@@ -189,7 +196,14 @@ impl Npm {
 }
 
 impl Resolve<StageCommand> for Npm {
-    fn resolve(&self, args: &StageCommand, _diag: &mut Diagnostics) -> CommandResolution {
+    fn resolve(&self, args: &StageCommand, diag: &mut Diagnostics) -> CommandResolution {
+        if !self.supports_v11_15_commands() {
+            diag.warn(
+                DiagnosticKind::UnsupportedCommandNoop,
+                "npm stage requires npm >= 11.15.0. Skipping.",
+            );
+            return CommandResolution::Noop;
+        }
         Self::resolve_stage(args)
     }
 }

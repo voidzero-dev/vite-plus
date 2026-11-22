@@ -15,5 +15,4 @@ steps = [
   { argv = ["vpt", "print-file", "package.json"], continue-on-failure = true },
   { argv = ["vp", "remove", "test-vite-plus-package-optional"], comment = "remove optional dependencies without a section selector" },
   ["vpt", "print-file", "package.json"],
-  { argv = ["vp", "remove", "-g", "--dry-run", "testnpm2"], comment = "support remove global package with dry-run" },
 ]

@@ -5,7 +5,7 @@
 activating a project with no package-manager selection clears the previous override
 
 ```
-export VP_NODE_VERSION=20.18.0
+export VP_NODE_VERSION=20.20.2
 unset VP_NPM_VERSION
 unset VP_PNPM_VERSION
 unset VP_YARN_VERSION

@@ -1,12 +1,7 @@
 import type * as t from '@oxc-project/types';
 
-import {
-  CONFIG_SOURCES,
-  SourceEditor,
-  importedName,
-  isModuleExports,
-  propertyName,
-} from './ast.ts';
+import { propertyName } from '../ast-utils.ts';
+import { CONFIG_SOURCES, SourceEditor, importedName, isModuleExports } from './ast.ts';
 
 const CONFIG_KEYS = new Set(['root', 'test', 'extends']);
 

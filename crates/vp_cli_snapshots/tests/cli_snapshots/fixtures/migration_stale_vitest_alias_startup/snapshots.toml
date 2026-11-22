@@ -2,6 +2,8 @@
 name = "migration_stale_vitest_alias_startup"
 vp = "global"
 link-node-modules = true
+# Node 26 follows cyclic workspace links in setup-local.mjs's recursive copy.
+env = { VP_NODE_VERSION = "24.22.1" }
 steps = [
   { argv = ["node", "setup-local.mjs"], snapshot = false, continue-on-failure = true },
   { argv = ["vp", "config", "--no-hooks", "--no-agent"], envs = [["npm_lifecycle_event", "prepare"]], comment = "prepare should report the stale alias instead of loading its native binding", continue-on-failure = true },

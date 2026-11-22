@@ -20,7 +20,7 @@ Options:
   -s, --silent          Suppress all output except the executed command's output
   -h, --help            Print help
 
-Documentation: https://viteplus.dev/guide/vpx
+Documentation: https://viteplus.dev/guide/package-management/dlx
 ```
 
 ## `vp dlx -s vp-test-echo hello`
@@ -34,6 +34,14 @@ hello
 ## `vp dlx -s vp-test-echo@1.0.0 hello`
 
 should run specific version
+
+```
+hello
+```
+
+## `vp dlx -s @vp-test/cli@npm:vp-test-echo@1.0.0 hello`
+
+npm selects the binary rather than using the scoped alias name
 
 ```
 hello

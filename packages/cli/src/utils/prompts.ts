@@ -1,10 +1,14 @@
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { coerce, isGreaterThanOrEqual } from 'verkit';
 
-import { downloadPackageManager as downloadPackageManagerBinding } from '../../binding/index.js';
+import {
+  availablePackageManagers,
+  downloadPackageManager as downloadPackageManagerBinding,
+  type DownloadPackageManagerResult,
+} from '../../binding/index.js';
 import { PackageManager } from '../types/index.ts';
 import { isPnpmIgnoredBuildsError, parseInstallGatedBuilds } from './approve-builds.ts';
-import { runCommandSilently } from './command.ts';
+import { getVpCommand, runCommandSilently } from './command.ts';
 import { reconcilePreviewBridgeRegistry } from './preview-registry.ts';
 import { getSilentSpinner, getSpinner } from './spinner.ts';
 import { accent } from './terminal.ts';
@@ -48,17 +52,42 @@ export function cancelAndExit(message = 'Operation cancelled', exitCode = 0): ne
   process.exit(exitCode);
 }
 
-export async function selectPackageManager(interactive?: boolean, silent = false) {
+// npm comes before yarn: it ships with Node.js, while a yarn on PATH is often Yarn Classic.
+const DEFAULT_PACKAGE_MANAGER_ORDER = [
+  PackageManager.pnpm,
+  PackageManager.npm,
+  PackageManager.yarn,
+  PackageManager.bun,
+];
+
+export async function selectPackageManager(interactive?: boolean, silent = false, cwd?: string) {
+  // Without a global install, Vite+ cannot download package managers, so only those on PATH work.
+  // Check from the directory the download will use, so relative PATH entries resolve the same way.
+  const available = new Set(await availablePackageManagers(cwd));
+  const defaultPackageManager = DEFAULT_PACKAGE_MANAGER_ORDER.find((packageManager) =>
+    available.has(packageManager),
+  );
+  if (!defaultPackageManager) {
+    cancelAndExit(
+      'No supported package manager found. Install pnpm, npm, yarn, or bun, or install the global `vp` CLI so Vite+ can manage one.',
+      1,
+    );
+  }
+
   if (interactive) {
     const selected = await prompts.select({
       message: 'Which package manager would you like to use?',
       options: [
-        { value: PackageManager.pnpm, hint: 'recommended' },
-        { value: PackageManager.yarn },
-        { value: PackageManager.npm },
-        { value: PackageManager.bun },
-      ],
-      initialValue: PackageManager.pnpm,
+        PackageManager.pnpm,
+        PackageManager.yarn,
+        PackageManager.npm,
+        PackageManager.bun,
+      ].map((value) =>
+        available.has(value)
+          ? { value, hint: value === PackageManager.pnpm ? 'recommended' : undefined }
+          : { value, hint: 'not installed', disabled: true },
+      ),
+      initialValue: defaultPackageManager,
     });
 
     if (prompts.isCancel(selected)) {
@@ -67,11 +96,14 @@ export async function selectPackageManager(interactive?: boolean, silent = false
 
     return selected;
   } else {
-    // --no-interactive: use pnpm as default
     if (!silent) {
-      prompts.log.info(`Using default package manager: ${accent(PackageManager.pnpm)}`);
+      prompts.log.info(
+        defaultPackageManager === PackageManager.pnpm
+          ? `Using default package manager: ${accent(PackageManager.pnpm)}`
+          : `${accent(PackageManager.pnpm)} is not installed, using ${accent(defaultPackageManager)}`,
+      );
     }
-    return PackageManager.pnpm;
+    return defaultPackageManager;
   }
 }
 
@@ -81,15 +113,19 @@ export async function downloadPackageManager(
   interactive?: boolean,
   silent = false,
   cwd?: string,
-) {
+  expectedHash?: string,
+  fallbackToNpm?: boolean,
+): Promise<DownloadPackageManagerResult> {
   const spinner = silent ? getSilentSpinner() : getSpinner(interactive);
   spinner.start(`${packageManager}@${version} installing...`);
   const downloadResult = await downloadPackageManagerBinding({
     name: packageManager,
     version,
     cwd,
+    expectedHash,
+    fallbackToNpm,
   });
-  spinner.stop(`${packageManager}@${downloadResult.version} installed`);
+  spinner.stop(`${downloadResult.name}@${downloadResult.version} installed`);
   return downloadResult;
 }
 
@@ -101,6 +137,8 @@ export async function runViteInstall(
     silent?: boolean;
     packageManager?: PackageManager;
     packageManagerVersion?: string;
+    /** Keep creation's resolved version when installation runs in the generated project. */
+    packageManagerOverride?: string;
     /**
      * Surface the package manager's gated build scripts instead of suppressing
      * them. When set, the auto `--ignore-scripts` workaround is skipped (so
@@ -111,7 +149,7 @@ export async function runViteInstall(
      */
     detectIgnoredBuilds?: boolean;
   },
-) {
+): Promise<CommandRunSummary> {
   // Reconcile the project's registry with this build before installing: a
   // preview/test build points it at the registry bridge so the
   // `0.0.0-commit.<sha>` versions migrate/create just pinned resolve (npmjs has
@@ -145,10 +183,11 @@ export async function runViteInstall(
   const startTime = Date.now();
   spinner.start(`Installing dependencies...`);
   const { exitCode, stderr, stdout } = await runCommandSilently({
-    command: process.env.VP_CLI_BIN ?? 'vp',
-    args: ['install', ...installArgs],
+    ...getVpCommand(['install', ...installArgs]),
     cwd,
-    envs: process.env,
+    envs: options?.packageManagerOverride
+      ? { ...process.env, VP_PACKAGE_MANAGER: options.packageManagerOverride }
+      : process.env,
   });
   const combinedOutput = `${stdout.toString()}\n${stderr.toString()}`;
   const pendingBuilds = detectIgnoredBuilds
@@ -191,8 +230,7 @@ export async function runViteFmt(
   spinner.start(`Formatting code...`);
 
   const { exitCode, stderr, stdout } = await runCommandSilently({
-    command: options?.command ?? process.env.VP_CLI_BIN ?? 'vp',
-    args: [...(options?.commandArgs ?? []), 'fmt', ...(paths ?? [])],
+    ...getVpCommand([...(options?.commandArgs ?? []), 'fmt', ...(paths ?? [])], options?.command),
     cwd,
     envs: process.env,
   });

@@ -5,6 +5,7 @@ import {
   lstatSync,
   mkdirSync,
   readdirSync,
+  readFileSync,
   realpathSync,
   rmSync,
   writeFileSync,
@@ -64,6 +65,11 @@ s=$(dirname "$(dirname "$0")")/$n
 
 [ ! -f "$s" ] && exit 0
 
+# A checkout path containing ':' cannot be part of a PATH entry.
+case "$PWD" in
+  *:*) __vp_hook_prefix= ;;
+  *) __vp_hook_prefix="$PWD/" ;;
+esac
 i="\${XDG_CONFIG_HOME:-$HOME/.config}/vite-plus/hooks-init.sh"
 [ ! -f "$i" ] && i="\${XDG_CONFIG_HOME:-$HOME/.config}/husky/init.sh"
 [ -f "$i" ] && . "$i"
@@ -71,6 +77,11 @@ i="\${XDG_CONFIG_HOME:-$HOME/.config}/vite-plus/hooks-init.sh"
 { [ "\${HUSKY-}" = "0" ] || [ "\${VP_GIT_HOOKS-}" = "0" ] || [ "\${VITE_GIT_HOOKS-}" = "0" ]; } && exit 0
 
 d=${rootExpr}
+# Root hooks follow cd. Only prefix relative subdirectories that fit in PATH.
+case "$d" in
+  .|/*|*:*) ;;
+  *) d="$__vp_hook_prefix$d" ;;
+esac
 __vp_shell=/bin/sh
 [ -x "$__vp_shell" ] || __vp_shell=$(command -v sh)
 
@@ -114,30 +125,34 @@ export function normalizeHooksPath(hooksPath: string): string {
   return normalized;
 }
 
-function getGitToplevel(): string | InstallResult {
-  const result = spawnSync('git', ['rev-parse', '--show-toplevel']);
+function gitRevParse(...flags: string[]): string | InstallResult {
+  const result = spawnSync('git', ['rev-parse', ...flags]);
   if (result.status == null) {
     return { message: 'git command not found', isError: true };
   }
   if (result.status !== 0) {
     return { message: ".git can't be found", isError: false };
   }
-  const toplevel = result.stdout.toString().trim();
+  return result.stdout.toString();
+}
+
+function getGitToplevel(): string | InstallResult {
+  const output = gitRevParse('--show-toplevel');
+  return typeof output === 'string' ? realpathOrSelf(output.trim()) : output;
+}
+
+function realpathOrSelf(path: string): string {
   try {
-    return realpathSync(toplevel);
+    return realpathSync(path);
   } catch {
-    return toplevel;
+    return path;
   }
 }
 
 /** Resolve a core.hooksPath value against the worktree root for ownership checks. */
 function resolveHooksPath(hooksPath: string, gitRoot: string): string {
   const resolved = isAbsolute(hooksPath) ? hooksPath : resolve(gitRoot, hooksPath);
-  try {
-    return normalizeHooksPath(realpathSync(resolved));
-  } catch {
-    return normalizeHooksPath(resolved);
-  }
+  return normalizeHooksPath(realpathOrSelf(resolved));
 }
 
 function hooksPathsEqual(a: string, b: string, gitRoot: string): boolean {
@@ -224,19 +239,60 @@ function gitConfigLocalMissing(key: string): boolean {
   return spawnSync('git', ['config', '--local', '--get-all', key]).status === 1;
 }
 
+// `git config` exits with CONFIG_NO_LOCK (-1) when it cannot take `config.lock`.
+// https://github.com/git/git/blob/47fdf2208c5b94c8cc01c106b8f7c85efb91c926/config.h#L30-L31
+// Git 2.37+ keeps the low 8 bits on every platform, so -1 becomes 255. Older Git for
+// Windows can keep the full 32-bit value.
+// https://github.com/git/git/blob/47fdf2208c5b94c8cc01c106b8f7c85efb91c926/common-exit.c#L14-L20
+const GIT_CONFIG_LOCK_STATUSES: ReadonlySet<number | null> = new Set([255, 0xffffffff]);
+
+// Git 2.56+ retries the lock for `core.configLockTimeout` (1s by default) and older Git
+// does not retry. Turn off the Git retry so the wait below is the same on every version.
+// https://git-scm.com/docs/git-config#Documentation/git-config.txt-coreconfigLockTimeout
+const GIT_CONFIG_NO_LOCK_RETRY = ['-c', 'core.configLockTimeout=0'];
+
+// Doubling delays: a writer holds the lock for a few ms, so most runs finish after
+// the first wait. The total (1.55s) is close to Git's own 1s default.
+const GIT_CONFIG_LOCK_RETRY_DELAYS_MS = [50, 100, 200, 400, 800];
+
+// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Atomics/wait
+function sleepSync(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+// First runs in linked worktrees race for the shared lock. Every worktree writes
+// the same values, so wait and stop as soon as another run has applied ours.
+function writeGitConfig(
+  args: string[],
+  isApplied: () => boolean,
+): { status: number | null; stderr: string } {
+  const gitArgs = [...GIT_CONFIG_NO_LOCK_RETRY, ...args];
+  let result = spawnSync('git', gitArgs);
+  for (const delay of GIT_CONFIG_LOCK_RETRY_DELAYS_MS) {
+    if (!GIT_CONFIG_LOCK_STATUSES.has(result.status)) {
+      break;
+    }
+    sleepSync(delay);
+    if (isApplied()) {
+      return { status: 0, stderr: '' };
+    }
+    result = spawnSync('git', gitArgs);
+  }
+  return { status: result.status, stderr: result.stderr?.toString().trim() ?? '' };
+}
+
 function gitConfigSet(key: string, value: string): { ok: boolean; error?: string } {
   if (gitConfigLocalHas(key, value)) {
     return { ok: true };
   }
-  const result = spawnSync('git', ['config', '--local', key, value]);
+  const result = writeGitConfig(['config', '--local', key, value], () =>
+    gitConfigLocalHas(key, value),
+  );
   if (result.status == null) {
     return { ok: false, error: 'git command not found' };
   }
   if (result.status !== 0) {
-    return {
-      ok: false,
-      error: result.stderr?.toString().trim() || `failed to set ${key}`,
-    };
+    return { ok: false, error: result.stderr || `failed to set ${key}` };
   }
   return { ok: true };
 }
@@ -245,16 +301,15 @@ function gitConfigUnset(key: string): { ok: boolean; error?: string } {
   if (gitConfigLocalMissing(key)) {
     return { ok: true };
   }
-  const result = spawnSync('git', ['config', '--local', '--unset-all', key]);
+  const result = writeGitConfig(['config', '--local', '--unset-all', key], () =>
+    gitConfigLocalMissing(key),
+  );
   if (result.status == null) {
     return { ok: false, error: 'git command not found' };
   }
   // status 5 = key not found
   if (result.status !== 0 && result.status !== 5) {
-    return {
-      ok: false,
-      error: result.stderr?.toString().trim() || `failed to unset ${key}`,
-    };
+    return { ok: false, error: result.stderr || `failed to unset ${key}` };
   }
   return { ok: true };
 }
@@ -321,19 +376,16 @@ function displayHooksDir(location: HooksLocation): string {
 }
 
 function getGitWorktree(): { toplevel: string; prefix: string } | InstallResult {
-  const toplevel = getGitToplevel();
-  if (typeof toplevel !== 'string') {
-    return toplevel;
+  // One git process prints both lines; the prefix line is empty at the worktree root.
+  const output = gitRevParse('--show-toplevel', '--show-prefix');
+  if (typeof output !== 'string') {
+    return output;
   }
-  const prefixResult = spawnSync('git', ['rev-parse', '--show-prefix']);
-  if (prefixResult.status == null) {
-    return { message: 'git command not found', isError: true };
-  }
-  if (prefixResult.status !== 0) {
-    return { message: ".git can't be found", isError: false };
-  }
-  const prefix = prefixResult.stdout.toString().trim().replace(/\/$/, '');
-  return { toplevel, prefix };
+  const [toplevel = '', prefix = ''] = output.split('\n');
+  return {
+    toplevel: realpathOrSelf(toplevel.trim()),
+    prefix: prefix.trim().replace(/\/$/, ''),
+  };
 }
 
 export type ResolveHooksLocationOptions = {
@@ -467,6 +519,120 @@ function getScopedHooksPath(scope: 'local' | 'worktree'): string {
   return result.status === 0 ? result.stdout?.toString().trim() : '';
 }
 
+type HuskyReplacement = 'automatic' | 'explicit' | 'non-empty' | null;
+
+/** Only reclaim a repository-local Husky setup after hooks were moved. */
+function getHuskyReplacement(
+  hooksPath: string,
+  location: HooksLocation,
+  replaceHusky: boolean,
+): HuskyReplacement {
+  const normalized = normalizeHooksPath(hooksPath);
+  if (normalized !== '.husky' && normalized !== join('.husky', '_')) {
+    return null;
+  }
+  // Never override a global, worktree, or command-scoped hook policy.
+  const scoped = spawnSync('git', ['config', '--show-scope', '--get', 'core.hooksPath']);
+  if (scoped.status !== 0 || !scoped.stdout.toString().startsWith('local\t')) {
+    return null;
+  }
+  // Local config is shared by linked worktrees. Inspecting only this checkout
+  // cannot establish whether the others have also migrated away from Husky.
+  const worktrees = spawnSync('git', ['worktree', 'list', '--porcelain', '-z']);
+  if (
+    worktrees.status !== 0 ||
+    worktrees.stdout
+      .toString()
+      .split('\0')
+      .filter((field) => field.startsWith('worktree ')).length !== 1
+  ) {
+    return null;
+  }
+  let hasEntries = false;
+  try {
+    const huskyDir = join(location.toplevel, '.husky');
+    const activeHooksDir = resolve(location.toplevel, normalized);
+    // Never inspect script contents or infer that leftover files are generated.
+    // An explicit replacement may stop custom checks, but must not bypass the
+    // path/link protections or write through any of the old files.
+    for (const directory of [huskyDir, join(huskyDir, '_')]) {
+      const stats = lstatSync(directory, { throwIfNoEntry: false });
+      if (!stats) {
+        continue;
+      }
+      if (!stats.isDirectory() || stats.isSymbolicLink()) {
+        return null;
+      }
+      const names = readdirSync(directory);
+      if (directory === activeHooksDir && names.length > 0) {
+        hasEntries = true;
+      }
+      for (const name of names) {
+        if (directory === huskyDir && name === '_') {
+          continue;
+        }
+        hasEntries = true;
+        const entry = lstatSync(join(directory, name));
+        if (!entry.isFile() || entry.isSymbolicLink() || entry.nlink > 1) {
+          return null;
+        }
+      }
+    }
+    // A dispatcher alone is not evidence of a completed migration.
+    if (
+      !SUPPORTED_GIT_HOOK_NAMES.some((hook) =>
+        lstatSync(join(location.baseDir, location.dir, hook), { throwIfNoEntry: false })?.isFile(),
+      ) ||
+      !existsSync(join(location.toplevel, 'package.json'))
+    ) {
+      return null;
+    }
+    // Include ancestor manifests when hooks are configured from a workspace package.
+    const relativeBase = relative(location.toplevel, location.baseDir);
+    const directories = [location.toplevel];
+    for (const segment of relativeBase.split(sep).filter(Boolean)) {
+      directories.push(join(directories.at(-1)!, segment));
+    }
+    for (const directory of directories) {
+      const manifest = join(directory, 'package.json');
+      if (!existsSync(manifest)) {
+        continue;
+      }
+      const pkg = JSON.parse(readFileSync(manifest, 'utf8')) as Record<string, unknown>;
+      if (!pkg || typeof pkg !== 'object' || Array.isArray(pkg) || 'husky' in pkg) {
+        return null;
+      }
+      for (const key of [
+        'dependencies',
+        'devDependencies',
+        'optionalDependencies',
+        'peerDependencies',
+      ]) {
+        const dependencies = pkg[key];
+        if (dependencies && typeof dependencies === 'object' && 'husky' in dependencies) {
+          return null;
+        }
+      }
+      if (
+        pkg.scripts &&
+        typeof pkg.scripts === 'object' &&
+        Object.values(pkg.scripts).some(
+          (script) => typeof script === 'string' && /\bhusky\b/.test(script),
+        )
+      ) {
+        return null;
+      }
+    }
+  } catch {
+    // Unreadable or invalid manifests are not evidence that Husky was removed.
+    return null;
+  }
+  if (replaceHusky) {
+    return 'explicit';
+  }
+  return hasEntries ? 'non-empty' : 'automatic';
+}
+
 function unsetScopedHooksPath(scope: 'local' | 'worktree'): InstallResult | null {
   const result = spawnSync('git', ['config', `--${scope}`, '--unset-all', 'core.hooksPath']);
   if (result.status == null) {
@@ -518,10 +684,15 @@ function unsetOwnedHooksPath(target: string): InstallResult | null {
 
 export interface InstallOptions {
   /**
-   * When true, ignore a user-disabled preference (used by `vp hooks enable`).
+   * When true, ignore a user-disabled preference (used by `vp hooks enable`,
+   * and by `vp config` after it has checked the preference itself).
    * Still honors `VP_GIT_HOOKS=0` / `HUSKY=0`.
    */
   ignoreUserPreference?: boolean;
+  /** Location the caller already resolved for the same `dir`, to skip repeating the git lookups. */
+  location?: HooksLocation;
+  /** Explicitly replace a local Husky path after migrating project checks. */
+  replaceHusky?: boolean;
 }
 
 export function isGitHooksEnvDisabled(): boolean {
@@ -543,7 +714,7 @@ export function install(dir?: string, options: InstallOptions = {}): InstallResu
       isError: false,
     };
   }
-  const location = resolveHooksLocation(dir);
+  const location = options.location ?? resolveHooksLocation(dir);
   if ('isError' in location) {
     return location;
   }
@@ -552,18 +723,43 @@ export function install(dir?: string, options: InstallOptions = {}): InstallResu
     return { message: describeUnsafeHookInstallPath(unsafeInstallPath), isError: false };
   }
 
+  if (options.replaceHusky) {
+    const oldRoot = resolveHooksPath('.husky', location.toplevel);
+    const targetRoot = resolveHooksPath(location.dir, location.baseDir);
+    const relativeTarget = relative(oldRoot, targetRoot);
+    if (
+      !isAbsolute(relativeTarget) &&
+      relativeTarget !== '..' &&
+      !relativeTarget.startsWith(`..${sep}`)
+    ) {
+      return {
+        message:
+          'Husky replacement requires a hooks directory outside .husky to preserve old files',
+        isError: true,
+      };
+    }
+  }
+
   const internal = (x = '') => join(location.baseDir, location.dir, '_', x);
   // Read the effective value so a worktree-scoped setting cannot silently
   // override the local value we are about to write.
   const existingHooksPath = getEffectiveHooksPath();
+  let replacement: HuskyReplacement = null;
   if (
     existingHooksPath &&
     !hooksPathsEqual(existingHooksPath, location.target, location.toplevel)
   ) {
-    return {
-      message: `core.hooksPath is already set to "${existingHooksPath}", skipping`,
-      isError: false,
-    };
+    replacement = getHuskyReplacement(existingHooksPath, location, options.replaceHusky === true);
+    if (replacement === null || replacement === 'non-empty') {
+      const guidance =
+        replacement === 'non-empty'
+          ? `. Vite+ hooks at ${displayHooksDir(location)} are not active. Migrate any custom Husky checks, then run \`vp hooks enable --replace-husky\` (with the same --hooks-dir if customized). Switching stops running hooks from "${existingHooksPath}"; the old files are preserved.`
+          : '';
+      return {
+        message: `core.hooksPath is already set to "${existingHooksPath}", skipping${guidance}`,
+        isError: false,
+      };
+    }
   }
 
   rmSync(internal('husky.sh'), { force: true });
@@ -575,14 +771,9 @@ export function install(dir?: string, options: InstallOptions = {}): InstallResu
     writeFileSync(internal(hook), HOOK_STUB_SCRIPT, { mode: 0o755 });
     chmodSync(internal(hook), 0o755);
   }
-  if (!gitConfigLocalHas('core.hooksPath', location.target)) {
-    const { status, stderr } = spawnSync('git', ['config', 'core.hooksPath', location.target]);
-    if (status == null) {
-      return { message: 'git command not found', isError: true };
-    }
-    if (status) {
-      return { message: '' + stderr, isError: true };
-    }
+  const storeHooksPath = gitConfigSet('core.hooksPath', location.target);
+  if (!storeHooksPath.ok) {
+    return { message: storeHooksPath.error || 'failed to set core.hooksPath', isError: true };
   }
 
   // Persist enabled state + directory for later enable/disable/status.
@@ -598,6 +789,12 @@ export function install(dir?: string, options: InstallOptions = {}): InstallResu
     return { message: storeDir.error || 'failed to store hooks directory', isError: true };
   }
 
+  if (replacement === 'explicit') {
+    return {
+      message: `Git hook dispatcher installed at ${displayHooksDir(location)}/_. Replaced core.hooksPath "${existingHooksPath}". Old Husky files were preserved, but hooks from "${existingHooksPath}" no longer run. Custom checks must be migrated to ${displayHooksDir(location)}.`,
+      isError: false,
+    };
+  }
   return { message: '', isError: false };
 }
 
@@ -605,17 +802,18 @@ export function install(dir?: string, options: InstallOptions = {}): InstallResu
  * Install (or refresh) the Vite+ hook dispatcher and mark hooks as enabled.
  * Clears a previous `vp hooks disable` preference.
  */
-export function enable(dir?: string): InstallResult {
+export function enable(dir?: string, options: { replaceHusky?: boolean } = {}): InstallResult {
   const location = resolveHooksLocation(dir);
   if ('isError' in location) {
     return location;
   }
-  const result = install(dir, { ignoreUserPreference: true });
-  if (result.isError) {
-    return result;
-  }
-  if (result.message) {
-    // Non-error skip messages (env disabled, foreign hooksPath, unsafe path, etc.)
+  const result = install(dir, {
+    ignoreUserPreference: true,
+    replaceHusky: options.replaceHusky,
+    location,
+  });
+  // Preserve errors, skip messages, and the explicit Husky replacement notice.
+  if (result.isError || result.message) {
     return result;
   }
   return {

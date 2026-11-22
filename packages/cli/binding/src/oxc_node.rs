@@ -4,7 +4,9 @@
 //! `enableWatchReport` and `takeWatchDependencies` feed watch mode the tsconfig files
 //! oxc-node read and the paths a failed resolve looked for.
 
-use ::oxc_node::{LoadContext, LoadFnOutput, OxcResolveOptions, ResolveContext, ResolveFnOutput};
+use ::oxc_node::{
+    FrozenTsconfig, LoadContext, LoadFnOutput, OxcResolveOptions, ResolveContext, ResolveFnOutput,
+};
 use napi::{
     Either, Env, Result,
     bindgen_prelude::{FnArgs, Function, Object, PromiseRaw},
@@ -24,9 +26,26 @@ pub fn set_tsconfig_path(path: Option<String>) -> Result<()> {
     ::oxc_node::set_tsconfig_path(path)
 }
 
+/// Freeze the effective config before registering the off-thread ESM hooks.
+#[napi(namespace = "oxcNode")]
+pub fn freeze_tsconfig(env: Env, cwd: String) -> Result<FrozenTsconfig> {
+    ::oxc_node::freeze_tsconfig_js(env, cwd)
+}
+
+/// Apply a frozen selection, including discovery without the receiving thread's env.
+#[napi(namespace = "oxcNode")]
+pub fn initialize_loader(path: Option<String>, source: Option<String>) -> Result<()> {
+    ::oxc_node::initialize_loader_js(path, source)
+}
+
 #[napi(namespace = "oxcNode")]
 pub fn set_transform_deps(mode: Option<String>) -> Result<()> {
     ::oxc_node::set_transform_deps(mode)
+}
+
+#[napi(namespace = "oxcNode")]
+pub fn freeze_transform_deps() -> String {
+    ::oxc_node::freeze_transform_deps()
 }
 
 #[napi(namespace = "oxcNode")]

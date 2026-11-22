@@ -1,0 +1,7 @@
+{
+  "name": "vite-integration-example",
+  "private": true,
+  "peerDependencies": {
+    "vite": "^8.0.0"
+  }
+}

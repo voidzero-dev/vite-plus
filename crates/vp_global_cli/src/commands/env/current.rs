@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, process::ExitStatus};
 
 use serde::Serialize;
-use vp_pm_cli::{package_manager_bin_path, package_manager_install_dir};
+use vp_pm_cli::{package_manager_bin_path, resolve_package_manager_install_dir};
 use vt_path::AbsolutePathBuf;
 
 use super::{
@@ -289,9 +289,14 @@ async fn resolve_package_manager_info(
     let source = resolution.source.to_string();
     let source_path = resolution.source_path.map(|path| path.as_path().display().to_string());
     let project_root = resolution.project_root.map(|path| path.as_path().display().to_string());
-    let Some(install_dir) = package_manager_install_dir(package_manager_type, &version) else {
-        return Ok(None);
-    };
+    // Report the directory the shim selects for this pin (an unpinned manager uses
+    // the version-directory root). `installed` below reflects whether the directory
+    // actually holds the binaries.
+    let install_dir = resolve_package_manager_install_dir(
+        package_manager_type,
+        &version,
+        resolution.hash.as_deref(),
+    )?;
     let bin_paths = package_manager_type
         .bin_names()
         .iter()

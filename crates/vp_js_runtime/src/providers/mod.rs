@@ -5,4 +5,7 @@
 
 mod node;
 
-pub use node::{LtsInfo, NodeProvider, NodeVersionEntry, resolve_version_from_list};
+pub use node::{
+    LtsInfo, NodeProvider, NodeVersionEntry, find_absolute_latest_version,
+    resolve_version_from_list,
+};

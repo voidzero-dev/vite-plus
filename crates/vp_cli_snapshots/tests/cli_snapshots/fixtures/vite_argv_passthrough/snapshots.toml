@@ -1,0 +1,70 @@
+[[case]]
+name = "build_forwards_separator"
+vp = ["local", "global"]
+comment = "Build forwards the separator and custom arguments, and builds the current directory's entry."
+steps = [
+  { argv = ["vp", "build", "--", "--app", "web"], snapshot = false },
+  ["vpt", "grep-file", "vite-argv.json", '["build","--","--app","web"]'],
+  ["vpt", "grep-file", "dist/index.html", "Build from the project root"],
+]
+
+[[case]]
+name = "dev_forwards_separator"
+vp = ["local", "global"]
+comment = "Dev forwards the separator and custom arguments to the config."
+steps = [
+  { argv = ["vp", "dev", "--", "--app", "web"], snapshot = false, interactions = [
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
+  ["vpt", "grep-file", "vite-argv.json", '["dev","--","--app","web"]'],
+]
+
+[[case]]
+name = "help_build_with_separator"
+vp = "global"
+steps = [
+  ["vp", "help", "build", "--"],
+  ["vpt", "stat-file", "vite-argv.json", "--assert", "missing"],
+  ["vpt", "stat-file", "dist/index.html", "--assert", "missing"],
+]
+
+[[case]]
+name = "help_dev_with_separator"
+vp = "global"
+steps = [
+  { argv = ["vp", "help", "dev", "--"], timeout = 30000 },
+  ["vpt", "stat-file", "vite-argv.json", "--assert", "missing"],
+]
+
+[[case]]
+name = "build_forwards_literal_help"
+vp = "global"
+steps = [
+  { argv = ["vp", "build", "--", "--help"], snapshot = false },
+  ["vpt", "grep-file", "vite-argv.json", '["build","--","--help"]'],
+  ["vpt", "grep-file", "dist/index.html", "Build from the project root"],
+]
+
+[[case]]
+name = "vite_options_and_defaults"
+vp = ["local", "global"]
+comment = "Dev and build still accept bare calls and apply Vite options before the separator."
+steps = [
+  { argv = ["vp", "dev"], snapshot = false, interactions = [
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
+  ["vpt", "grep-file", "vite-argv.json", '["dev"]'],
+  { argv = ["vp", "build"], snapshot = false },
+  ["vpt", "grep-file", "vite-argv.json", '["build"]'],
+  ["vpt", "grep-file", "dist/index.html", "Build from the project root"],
+  { argv = ["vp", "dev", "--mode", "staging", "--", "--app", "web"], snapshot = false, interactions = [
+    { "expect-milestone" = "dev-server:ready" },
+    { "write-line" = "q" },
+  ] },
+  ["vpt", "grep-file", "vite-argv.json", '["dev","--mode","staging","--","--app","web"]'],
+  { argv = ["vp", "build", "--outDir", "custom-dist", "--", "--app", "web", "--label", "two words"], snapshot = false },
+  ["vpt", "grep-file", "vite-argv.json", '["build","--outDir","custom-dist","--","--app","web","--label","two words"]'],
+  ["vpt", "grep-file", "custom-dist/index.html", "Build from the project root"],
+]

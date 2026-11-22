@@ -16,7 +16,7 @@ pub struct PackArgs {
     pub(crate) filter: Vec<String>,
 
     /// Output path for the tarball
-    #[arg(long, not_supported(npm))]
+    #[arg(long, not_supported(npm, pnpm < "10.0.0"))]
     pub(crate) out: Option<String>,
 
     /// Directory where the tarball will be saved
@@ -24,11 +24,11 @@ pub struct PackArgs {
     pub(crate) pack_destination: Option<String>,
 
     /// Gzip compression level (0-9)
-    #[arg(long, not_supported(npm, yarn))]
+    #[arg(long, not_supported(npm, pnpm < "8.3.0", yarn))]
     pub(crate) pack_gzip_level: Option<u8>,
 
     /// Output in JSON format
-    #[arg(long, not_supported(bun))]
+    #[arg(long, not_supported(pnpm < "9.14.0", bun))]
     pub(crate) json: bool,
 
     /// Additional arguments

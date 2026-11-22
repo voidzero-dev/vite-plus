@@ -6,7 +6,7 @@ use vp_error::Error;
 
 use crate::{
     pack_config::can_edit_object,
-    vite_config::{is_define_config_call, is_direct_recognized_config_object, pair_key_matches},
+    vite_config::{is_direct_recognized_config_object, pair_key_matches},
 };
 
 /// Task settings that Vite Task only accepts inside a task's `cache` object.
@@ -95,42 +95,10 @@ fn task_name<D: Doc>(object: &Node<'_, D>) -> Option<(String, bool)> {
         return None;
     }
     let key = task.field("key")?;
-    Some((key.text().trim_matches(['\'', '"']).to_owned(), is_direct_config(&config)))
-}
-
-/// Whether `object` is a direct config object, looking through parentheses and
-/// type assertions around it and around a `defineConfig` callback, as in
-/// `defineConfig((env) => ({ ... }) as UserConfig)` and
-/// `defineConfig(((env) => ({ ... })) as UserConfigFn)`.
-fn is_direct_config<D: Doc>(object: &Node<'_, D>) -> bool {
-    let outer = outermost_wrapper(object);
-    if is_direct_recognized_config_object(&outer) {
-        return true;
-    }
-    outer
-        .parent()
-        .filter(|arrow| {
-            arrow.kind() == "arrow_function"
-                && arrow.field("body").is_some_and(|body| body.range() == outer.range())
-        })
-        .and_then(|arrow| outermost_wrapper(&arrow).parent())
-        .filter(|arguments| arguments.kind() == "arguments")
-        .and_then(|arguments| arguments.parent())
-        .is_some_and(|call| is_define_config_call(&call))
-}
-
-/// The outermost parenthesized or type-asserted expression around `node`.
-fn outermost_wrapper<'a, D: Doc>(node: &Node<'a, D>) -> Node<'a, D> {
-    let mut outer = node.clone();
-    while let Some(parent) = outer.parent().filter(|parent| {
-        matches!(
-            parent.kind().as_ref(),
-            "parenthesized_expression" | "satisfies_expression" | "as_expression"
-        )
-    }) {
-        outer = parent;
-    }
-    outer
+    Some((
+        key.text().trim_matches(['\'', '"']).to_owned(),
+        is_direct_recognized_config_object(&config),
+    ))
 }
 
 /// Returns the pair whose value is `node`, looking through parentheses and
@@ -140,7 +108,11 @@ fn value_pair<'a, D: Doc>(node: &Node<'a, D>) -> Option<Node<'a, D>> {
     loop {
         let parent = value.parent()?;
         match parent.kind().as_ref() {
-            "parenthesized_expression" | "satisfies_expression" | "as_expression" => {
+            "parenthesized_expression"
+            | "satisfies_expression"
+            | "as_expression"
+            | "type_assertion"
+            | "non_null_expression" => {
                 value = parent;
             }
             "pair" => {
@@ -633,6 +605,13 @@ mod tests {
             "export default defineConfig(() => ({ run: { tasks: { build: { command: 'x', env: ['A'] } } } }) satisfies UserConfig);",
             "export default defineConfig(((env: Env) => ({ run: { tasks: { build: { command: 'x', env: ['A'] } } } })) as UserConfigFn);",
             "export default ({ run: { tasks: { build: { command: 'x', env: ['A'] } } } });",
+            "export default defineConfig(<UserConfig>{ run: { tasks: { build: { command: 'x', env: ['A'] } } } });",
+            "export default defineConfig({ run: { tasks: { build: { command: 'x', env: ['A'] } } } }!);",
+            "export default defineConfig(<UserConfigFn>(() => ({ run: { tasks: { build: { command: 'x', env: ['A'] } } } })));",
+            "export default defineConfig((() => ({ run: { tasks: { build: { command: 'x', env: ['A'] } } } }))!);",
+            "export default defineConfig((() => { return { run: { tasks: { build: { command: 'x', env: ['A'] } } } }; }));",
+            "export default defineConfig((function () { return { run: { tasks: { build: { command: 'x', env: ['A'] } } } }; }) as UserConfigFn);",
+            "export default defineConfig(<UserConfigFn>((() => { return { run: { tasks: { build: { command: 'x', env: ['A'] } } } }; }) satisfies UserConfigFn)!);",
         ] {
             let result = migrate(input);
             assert!(result.content.contains("cache: { env: ['A'] }"), "{}", result.content);
@@ -665,6 +644,8 @@ mod tests {
             "export default mergeConfig(base, { run: { tasks: { build: { command: 'x', env: ['A'] } } } });",
             "export default withTests((() => ({ run: { tasks: { build: { command: 'x', env: ['A'] } } } })) as Fn);",
             "export function withTasks() { return { run: { tasks: { build: { command: 'x', env: ['A'] } } } }; }",
+            "export default defineConfig(() => { function* tasks() { return { run: { tasks: { build: { command: 'x', env: ['A'] } } } }; } return tasks().next().value; });",
+            "export default defineConfig(() => { const tasks = function* () { return { run: { tasks: { build: { command: 'x', env: ['A'] } } } }; }; return tasks().next().value; });",
         ] {
             let result = migrate(input);
             assert_eq!(result.content, input);

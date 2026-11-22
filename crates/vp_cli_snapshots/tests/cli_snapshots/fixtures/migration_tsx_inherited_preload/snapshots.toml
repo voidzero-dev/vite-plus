@@ -1,0 +1,46 @@
+[[case]]
+name = "migration_tsx_inherited_node_run"
+vp = "local"
+local-registry = true
+skip-platforms = ["windows"]
+comment = "A Node.js script launcher passes NODE_OPTIONS to its retained tsx child. The local registry supplies published tsx so both commands execute its loader. The environment assignment uses POSIX shell syntax."
+steps = [
+  { argv = ["vp", "install"], snapshot = false },
+  { argv = ["vp", "run", "inherited"], comment = "The original inherited tsx preload executes the CommonJS TypeScript child." },
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "Full migration keeps the child script and its inherited tsx preload." },
+  { argv = ["vpt", "print-file", "package.json"], comment = "The compatible script moves to vpx; the retained child and NODE_OPTIONS keep tsx." },
+  { argv = ["vp", "run", "inherited"], comment = "The migrated project still prints function." },
+  { argv = ["vp", "run", "compatible"], comment = "The compatible TypeScript script executes through vpx." },
+]
+
+[[case]]
+name = "migration_tsx_inherited_npm_run"
+vp = "local"
+local-registry = true
+skip-platforms = ["windows"]
+comment = "An npm script launcher passes NODE_OPTIONS to its retained tsx child. Real tsx from the local registry executes the original and migrated commands. The environment assignment uses POSIX shell syntax."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "scripts.inherited", "NODE_OPTIONS=--import=tsx npm run generate"], snapshot = false },
+  { argv = ["vp", "install"], snapshot = false },
+  { argv = ["vp", "run", "inherited"], comment = "The original inherited tsx preload executes the CommonJS TypeScript child." },
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "Full migration keeps the child script and its inherited tsx preload." },
+  { argv = ["vpt", "print-file", "package.json"], comment = "The compatible script moves to vpx; the retained child and NODE_OPTIONS keep tsx." },
+  { argv = ["vp", "run", "inherited"], comment = "The migrated project still prints function." },
+  { argv = ["vp", "run", "compatible"], comment = "The compatible TypeScript script executes through vpx." },
+]
+
+[[case]]
+name = "migration_tsx_inherited_env_wrapper"
+vp = "local"
+local-registry = true
+skip-platforms = ["windows"]
+comment = "The env wrapper must preserve an inherited tsx preload for a CommonJS TypeScript file with imports. Real tsx from the local registry executes both commands. The wrapper and environment assignment require POSIX."
+steps = [
+  { argv = ["vpt", "json-edit", "package.json", "scripts.inherited", "NODE_OPTIONS=--import=tsx env node bad.cts"], snapshot = false },
+  { argv = ["vp", "install"], snapshot = false },
+  { argv = ["vp", "run", "inherited"], comment = "The original env-wrapped command prints function." },
+  { argv = ["vp", "migrate", "--full", "--no-interactive", "--no-hooks", "--no-agent", "--no-editor"], comment = "Full migration keeps tsx for the incompatible entry behind env." },
+  { argv = ["vpt", "print-file", "package.json"], comment = "The compatible script moves to vpx; the wrapper keeps its preload and tsx remains installed." },
+  { argv = ["vp", "run", "inherited"], comment = "The migrated project still prints function." },
+  { argv = ["vp", "run", "compatible"], comment = "The compatible TypeScript script executes through vpx." },
+]

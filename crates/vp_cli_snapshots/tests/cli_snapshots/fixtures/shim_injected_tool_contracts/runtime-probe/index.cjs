@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { execFileSync, execSync } = require('node:child_process');
 const path = require('node:path');
 
-assert.equal(process.version, 'v22.18.0');
+assert.equal(process.version, 'v22.23.4');
 assert.equal(execFileSync('node', ['--version'], { encoding: 'utf8' }).trim(), process.version);
 const shim = path.join(
   process.env.VP_HOME,
@@ -16,4 +16,4 @@ if (process.argv[2]) {
   assert.equal(npmVersion, process.argv[2]);
   console.log(`Pinned npm ${npmVersion} is preserved`);
 }
-console.log('The global package and its Node children use Node 22.18.0');
+console.log('The global package and its Node children use Node 22.23.4');

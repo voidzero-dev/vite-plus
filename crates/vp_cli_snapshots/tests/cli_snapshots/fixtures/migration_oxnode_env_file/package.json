@@ -1,0 +1,16 @@
+{
+  "name": "migration-oxnode-env-file",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "oxnode build.ts",
+    "run": "node --env-file=config/node.env run.mjs",
+    "run-optional": "node --env-file-if-exists config/runtime.conf run.mjs"
+  },
+  "devDependencies": {
+    "@oxc-node/cli": "file:.fixture/oxc-cli",
+    "@oxc-node/core": "file:.fixture/oxc-core",
+    "vite-plus": "latest"
+  },
+  "packageManager": "pnpm@12.11.2"
+}

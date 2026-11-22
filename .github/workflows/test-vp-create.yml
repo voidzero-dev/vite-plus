@@ -8,6 +8,7 @@ on:
     branches:
       - main
     paths:
+      - '.node-version'
       - 'packages/cli/src/create/**'
       - 'packages/cli/templates/**'
       - 'packages/cli/src/migration/**'
@@ -22,6 +23,9 @@ concurrency:
 defaults:
   run:
     shell: bash
+
+env:
+  VP_NODE_DIST_MIRROR: ${{ vars.VP_NODE_DIST_MIRROR || 'https://nodejs.org/dist' }}
 
 jobs:
   detect-changes:
@@ -38,6 +42,7 @@ jobs:
         with:
           filters: |
             related-files:
+              - '.node-version'
               - 'packages/cli/src/create/**'
               - 'packages/cli/templates/**'
               - 'packages/cli/src/migration/**'
@@ -88,6 +93,15 @@ jobs:
           path: ./rolldown/packages/rolldown/src
           merge-multiple: true
 
+      # Stamp the local core version (release counter 999, for example
+      # 8.3.5999) before the build, so the CLI build, its toolchain manifest,
+      # and the packed `vite` alias all read it from packages/core/package.json
+      # (rfcs/core-version-alignment.md). The native build cache key does not
+      # include that file. The local version still encodes the bundled Vite,
+      # so peer checks run as they do for a release.
+      - name: Set local core version
+        run: (cd packages/core && npm pkg set version="$(node ../tools/src/core-version.ts local)")
+
       - name: Build with upstream
         uses: ./.github/actions/build-upstream
         with:
@@ -102,11 +116,11 @@ jobs:
           # and installs them like a real release, with every package manager
           # (including bun) resolving the standard
           # `vite -> npm:@voidzero-dev/vite-plus-core@<version>` alias. Pin
-          # both packages to 0.0.0 so a correctly installed local build is
+          # the CLI to 0.0.0 (core already has its local version, see "Set
+          # local core version") so a correctly installed local build is
           # always distinguishable from any published version, even on a
           # release commit that leaves packages/{core,cli} at a published
           # version.
-          (cd packages/core && npm pkg set version=0.0.0)
           (cd packages/cli && npm pkg set version=0.0.0)
           cd packages/core && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
           cd packages/cli && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
@@ -175,7 +189,7 @@ jobs:
     env:
       # The local registry serves the packed 0.0.0 build, so create pins the
       # exact version like a real release. The vp binary was built before the
-      # pack step pinned the package versions, so align the version explicitly.
+      # pack step pinned the CLI version, so align the version explicitly.
       VP_VERSION: '0.0.0'
       # Force full dependency rewriting so the library template's existing
       # vite-plus dep gets overridden with the local build
@@ -191,7 +205,7 @@ jobs:
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 24
+          node-version-file: .node-version
 
       - name: Download vite-plus packages
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -233,8 +247,8 @@ jobs:
           echo "$handshake"
           echo "$handshake" | node -e 'const { env } = JSON.parse(require("node:fs").readFileSync(0, "utf8")); for (const [k, v] of Object.entries(env)) console.log(`${k}=${v}`)' >> "$GITHUB_ENV"
 
-      # No VP_OVERRIDE_PACKAGES: with VP_VERSION=0.0.0 the product default
-      # override map already pins `vite` to npm:@voidzero-dev/vite-plus-core@0.0.0
+      # No VP_OVERRIDE_PACKAGES: the build read the local core version, so the
+      # product default override map already pins `vite` to npm:@voidzero-dev/vite-plus-core@<local>
       # and `vitest` to the bundled version (see VITE_PLUS_OVERRIDE_PACKAGES in
       # packages/cli/src/utils/constants.ts), and stays correct across vitest
       # bumps without editing this workflow.
@@ -369,8 +383,9 @@ jobs:
           PACKAGE_MANAGER: ${{ matrix.package-manager }}
         run: |
           # Issue 1: packages/utils inherits `vite-plus: ^x.y.z` from the
-          # library template. In catalog-supporting monorepos (pnpm/yarn/bun)
-          # the migrator must normalize it so siblings don't drift.
+          # library template. The migrator must normalize it so siblings don't
+          # drift: to `catalog:` with catalogs, and to the concrete version
+          # without them (npm).
           # Issue 2: apps/website is scaffolded by create-vite which ships
           # `vite` (and sometimes `vitest`) in devDependencies. After
           # migration the scripts are rewritten to `vp ...` and `vite-plus`
@@ -420,7 +435,7 @@ jobs:
               process.exit(1);
             }
 
-            if (pm !== 'npm' && appDev['vite-plus'] !== utilsDev['vite-plus']) {
+            if (appDev['vite-plus'] !== utilsDev['vite-plus']) {
               console.error('✗ vite-plus spec drift: apps/website=' + appDev['vite-plus'] + ' packages/utils=' + utilsDev['vite-plus']);
               process.exit(1);
             }
@@ -474,23 +489,20 @@ jobs:
         if: matrix.template.name == 'monorepo'
         working-directory: ${{ runner.temp }}/test-project
         run: |
-          # Under npm and yarn, `vp run ready` reaches 100% cache hit only on
-          # the third invocation (#1638): vite-task's directory-listing
-          # fingerprint and fspy read/write tracking surface false-positive
-          # misses on run #2 because `packages/utils/node_modules/` is born
-          # during run #1. pnpm and bun pre-create per-package
-          # `node_modules/` at install time and reach 100% on run #2; Yarn
-          # Berry did too under the old file: overrides (per-package copies),
-          # but with registry-resolved semver specs it hoists the workspace
-          # deps like a real install, so it now behaves like npm here.
+          # `vp run ready` reaches 100% cache hit only on the third
+          # invocation. vite-task fingerprints the folders a task lists, and
+          # entries born during run #1 surface as misses on run #2:
+          # - `dist/` under every package manager: `vp check`, `vp test`, and
+          #   `tsc` list `packages/utils/` and `apps/website/` before
+          #   `vp pack` and `vp build` create `dist/` there. vite-task stopped
+          #   skipping `dist` entries in listings (voidzero-dev/vite-task#919).
+          # - `packages/utils/node_modules/` under npm and yarn (#1638): they
+          #   hoist workspace deps, so the folder only appears during run #1.
+          #   pnpm and bun create it at install time.
           # The preceding `Verify project builds` step already invoked
           # `vp run ready` once (verify-command for monorepo), so one
           # extra warm-up here is enough.
-          case "${{ matrix.package-manager }}" in
-            npm|yarn)
-              vp run ready >/dev/null 2>&1
-              ;;
-          esac
+          vp run ready >/dev/null 2>&1
           output=$(vp run ready 2>&1)
           echo "$output"
           if ! echo "$output" | grep -q 'cache hit (100%)'; then

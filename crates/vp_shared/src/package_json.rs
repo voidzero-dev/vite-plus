@@ -193,6 +193,17 @@ impl PackageJson {
     pub fn dev_engines_runtime(&self, name: &str) -> Option<&DevEngineDependency> {
         self.dev_engines.as_ref()?.runtime.as_ref()?.find_by_name(name)
     }
+
+    /// The `version` of the `devEngines.runtime` entry for the given runtime
+    /// name, with the entry's effective `onFail` (see
+    /// [`DevEngineField::effective_on_fail`]). `None` when the entry is missing
+    /// or declares no version.
+    #[must_use]
+    pub fn dev_engines_runtime_version(&self, name: &str) -> Option<(&Str, OnFail)> {
+        let field = self.dev_engines.as_ref()?.runtime.as_ref()?;
+        let (index, entry) = field.find_with_index(name)?;
+        Some((entry.version.as_ref()?, field.effective_on_fail(index)))
+    }
 }
 
 /// Build a `devEngines` dependency entry (`{ name, version, onFail: "download" }`)
@@ -413,6 +424,28 @@ mod tests {
     }
 
     #[test]
+    fn test_dev_engines_runtime_version_uses_entry_position() {
+        let json = r#"{
+            "devEngines": {
+                "runtime": [
+                    {"name": "node", "version": "^24.0.0"},
+                    {"name": "deno", "version": "^2.0.0"},
+                    {"name": "bun"}
+                ]
+            }
+        }"#;
+
+        let pkg: PackageJson = serde_json::from_str(json).unwrap();
+        let (version, on_fail) = pkg.dev_engines_runtime_version("node").unwrap();
+        assert_eq!(version.as_str(), "^24.0.0");
+        // A prior array element defaults to ignore
+        assert_eq!(on_fail, OnFail::Ignore);
+        // An entry without a version has no version requirement
+        assert!(pkg.dev_engines_runtime_version("bun").is_none());
+        assert!(pkg.dev_engines_runtime_version("yarn").is_none());
+    }
+
+    #[test]
     fn test_unknown_on_fail_treated_as_positional_default() {
         let json = r#"{
             "devEngines": {
@@ -446,32 +479,6 @@ mod tests {
     }
 
     #[test]
-    fn test_malformed_single_entry_parses_as_absent() {
-        let json = r#"{
-            "devEngines": {
-                "runtime": "node@24"
-            }
-        }"#;
-
-        let pkg: PackageJson = serde_json::from_str(json).unwrap();
-        assert!(pkg.dev_engines.unwrap().runtime.is_none());
-    }
-
-    #[test]
-    fn test_malformed_dev_engines_does_not_break_engines_parse() {
-        let json = r#"{
-            "engines": {"node": ">=20.0.0"},
-            "devEngines": "nonsense"
-        }"#;
-
-        let pkg: PackageJson = serde_json::from_str(json).unwrap();
-        assert_eq!(pkg.engines.unwrap().node, Some(">=20.0.0".into()));
-        let dev_engines = pkg.dev_engines.unwrap();
-        assert!(dev_engines.runtime.is_none());
-        assert!(dev_engines.package_manager.is_none());
-    }
-
-    #[test]
     fn test_on_fail_parse() {
         assert_eq!(OnFail::parse("ignore"), Some(OnFail::Ignore));
         assert_eq!(OnFail::parse("warn"), Some(OnFail::Warn));
@@ -479,13 +486,6 @@ mod tests {
         assert_eq!(OnFail::parse("download"), Some(OnFail::Download));
         assert_eq!(OnFail::parse("Download"), None);
         assert_eq!(OnFail::parse(""), None);
-    }
-
-    #[test]
-    fn test_parse_engines_node() {
-        let json = r#"{"engines":{"node":">=20.0.0"}}"#;
-        let pkg: PackageJson = serde_json::from_str(json).unwrap();
-        assert_eq!(pkg.engines.unwrap().node, Some(">=20.0.0".into()));
     }
 
     #[test]

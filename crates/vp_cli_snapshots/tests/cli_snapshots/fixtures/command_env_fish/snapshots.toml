@@ -17,6 +17,18 @@ requires = ["fish"]
 steps = [
   { argv = ["vp", "env", "setup", "--refresh"], envs = [["VP_HOME", '${workspace}/vp "$project\with spaces"']], snapshot = false },
   { argv = ["vpt", "cp", "assert_use.fish", 'vp "$project\with spaces"/assert_use.fish'], snapshot = false },
-  { argv = ["vpt", "write-file", 'vp "$project\with spaces"/.node-version', "22.18.0"], snapshot = false },
+  { argv = ["vpt", "write-file", 'vp "$project\with spaces"/.node-version', "22.23.4"], snapshot = false },
   { argv = ["fish", "--no-config", "assert_use.fish"], cwd = 'vp "$project\with spaces"', comment = "verifies the Fish wrapper help, explicit use, unset, file-based use, and failure branches", envs = [["PATH", "${workspace}/bin:${PATH}"]] },
+]
+
+[[case]]
+name = "command_env_fish_shadowed_builtins"
+vp = "global"
+skip-platforms = ["windows"]
+requires = ["fish"]
+steps = [
+  { argv = ["vp", "env", "setup", "--refresh"], envs = [["VP_HOME", "${workspace}/home"]], snapshot = false },
+  { argv = ["vpt", "cp", "assert_shadowed.fish", "home/assert_shadowed.fish"], snapshot = false },
+  { argv = ["vpt", "write-file", "home/package.json", '{ "name": "demo", "scripts": { "build": "echo build" } }'], snapshot = false },
+  { argv = ["fish", "--no-config", "assert_shadowed.fish"], cwd = "home", comment = "env.fish loads and runs `vp env use` and the vpr completion when user functions shadow the built-ins it calls (#3128)", envs = [["VP_HOME", "${workspace}/home"]] },
 ]

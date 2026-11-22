@@ -2,7 +2,6 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import { runCommand as runCommandWithFspy } from '../../binding/index.js';
-import type { WorkspaceInfo } from '../types/index.ts';
 import type { ExecutionResult, RunCommandOptions } from '../utils/command.ts';
 
 /** Set by `runCommandAndDetectProjectDir` and the template executors
@@ -84,40 +83,6 @@ export async function runCommandAndDetectProjectDir(
   return {
     exitCode: result.exitCode,
     projectDir,
-  };
-}
-
-// Get the package runner command for each package manager
-export function getPackageRunner(workspaceInfo: WorkspaceInfo) {
-  switch (workspaceInfo.packageManager) {
-    case 'pnpm':
-      return {
-        command: 'pnpm',
-        args: ['dlx'],
-      };
-    case 'yarn':
-      return {
-        command: 'yarn',
-        args: ['dlx'],
-      };
-    case 'bun':
-      return { command: 'bun', args: ['x'] };
-    case 'npm':
-    default:
-      return { command: 'npx', args: [] };
-  }
-}
-
-// TODO: will use `vp dlx` instead, see https://github.com/voidzero-dev/vite-task/issues/27
-export function formatDlxCommand(
-  packageName: string,
-  args: string[],
-  workspaceInfo: WorkspaceInfo,
-) {
-  const runner = getPackageRunner(workspaceInfo);
-  return {
-    command: runner.command,
-    args: [...runner.args, packageName, ...args],
   };
 }
 

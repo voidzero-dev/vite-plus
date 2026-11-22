@@ -7,6 +7,7 @@
 import type { InitializeHook, LoadHook, ResolveHook } from 'node:module';
 import { isMainThread, type MessagePort, MessageChannel } from 'node:worker_threads';
 
+import type { FrozenTsconfig } from '../binding/index.js';
 import { HELPER_MODULE_NAME, loadOxcNode, resolveWithOxcNode, withFlush } from './script-hooks.ts';
 
 const oxcNode = loadOxcNode();
@@ -30,9 +31,17 @@ const loadHook: LoadHook = (url, context, nextLoad) =>
 /** Under watch mode, the hooks wrapped to report what each call read or looked for. */
 let watchHooks: { resolve: ResolveHook; load: LoadHook } | undefined;
 
-/** Receives the port `script-register.ts` relays watch reports through. */
-export const initialize: InitializeHook<{ watchPort?: MessagePort } | undefined> = (data) => {
-  const port = data?.watchPort;
+/** Receives the frozen loader settings and watch relay from `script-register.ts`. */
+export const initialize: InitializeHook<{
+  tsconfig: FrozenTsconfig;
+  transformDeps: string;
+  watchPort?: MessagePort;
+}> = (data) => {
+  // An absent path explicitly selects discovery, without consulting a stale
+  // environment snapshot in the hooks thread.
+  oxcNode.initializeLoader(data.tsconfig.path, data.tsconfig.source);
+  oxcNode.setTransformDeps(data.transformDeps);
+  const port = data.watchPort;
   if (port) {
     port.unref();
     const sink = (message: unknown) => port.postMessage(message);
@@ -40,6 +49,7 @@ export const initialize: InitializeHook<{ watchPort?: MessagePort } | undefined>
       resolve: withFlush(resolveHook, sink, oxcNode.takeWatchDependencies),
       load: withFlush(loadHook, sink, oxcNode.takeWatchDependencies),
     };
+    oxcNode.enableWatchReport();
   }
 };
 

@@ -13,8 +13,6 @@ steps = [
 name = "env_clean_preserves_concrete_package_manager_fallback"
 vp = "global"
 comment = "System-first changes dispatch preference, not cache ownership; clean must retain the managed fallback used when no system manager is available."
-local-registry = true
-seed-runtime = false
 steps = [
   { argv = ["node", "prepare-pnpm-versions.cjs"], snapshot = false },
   { argv = ["vp", "env", "off", "pnpm"], snapshot = false },

@@ -11,6 +11,9 @@ You'll need the following tools installed on your system:
 - Rust and Cargo
 - cargo-binstall
 
+The root `.node-version` also supplies the Node.js version used to install the global CLI's JavaScript dependencies.
+The dependency-upgrade workflow keeps this shared development, CI, and installer pin on Node.js 24.
+
 If you haven't installed Node.js and pnpm, we recommend using Vite+ to manage them. See [environment management](https://viteplus.dev/guide/env) for details.
 
 ### macOS / Linux
@@ -112,6 +115,26 @@ To switch back to a release version, use `vp upgrade --force` (`current` points 
 vp upgrade --force
 ```
 
+### Isolated CLI installation
+
+For temporary local validation, use a separate installation and disable persistent shell/PATH changes. This applies to `pnpm bootstrap-cli`, `pnpm bootstrap-cli:ci`, and `pnpm install-global-cli`. `VP_HOME` alone and `CI=true` do not prevent shell profile changes.
+
+Apply the required build environment first. Run the installation and its checks in one subshell:
+
+```sh
+(
+  set -e
+  test_vp_home="$(mktemp -d)"
+  trap 'rm -rf -- "$test_vp_home"' EXIT
+  export VP_HOME="$test_vp_home"
+  export VP_SELF_SETUP_NO_MODIFY_PATH=1
+  pnpm bootstrap-cli
+  export PATH="$VP_HOME/bin:$PATH"
+  vp --version
+  # Run further checks that use this installation here.
+)
+```
+
 ## Validate the local build against a real project
 
 Automated tests don't cover everything. Complex flows such as prompts, pickers, and scaffolding are also worth validating by running your work-in-progress CLI inside a real Vite+ project.
@@ -160,6 +183,8 @@ pnpm local-registry --pack --serve
 ```
 
 `pnpm local-registry:ps` lists any registry processes still running; `pnpm local-registry:kill` stops them all and removes their leftover temp caches. See the [tool documentation](packages/tools/README.md#local-npm-registry) for implementation details and test integration.
+
+The core package has its own version, which encodes the bundled Vite version (see [Core Version](packages/core/BUNDLING.md#core-version)). Between releases, `packages/core/package.json` can hold a version that npm does not have yet, for example after a bundled Vite upgrade. A locally built `vp create` or `vp migrate` without the local registry then writes a `vite` alias that npm cannot install. Use the local registry, which serves the packed core at that version.
 
 ### Global CLI (Rust) changes
 

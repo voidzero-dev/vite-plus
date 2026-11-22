@@ -12,19 +12,19 @@ pub struct AddArgs {
     pub(crate) save_dependency: SaveDependencyArgs,
 
     /// Save exact version rather than semver range
-    #[arg(short = 'E', long)]
+    #[arg(short = 'E', long, conflicts_with = "global")]
     pub(crate) save_exact: bool,
 
     /// Save the new dependency to the specified catalog name
-    #[arg(long, value_name = "CATALOG_NAME", not_supported(npm, pnpm < "10.12.0", yarn, bun < "1.4"))]
+    #[arg(long, value_name = "CATALOG_NAME", conflicts_with = "global", not_supported(npm, pnpm < "10.12.0", yarn, bun < "1.4"))]
     pub(crate) save_catalog_name: Option<String>,
 
     /// Save the new dependency to the default catalog
-    #[arg(long, not_supported(npm, pnpm < "10.12.0", yarn, bun < "1.4"))]
+    #[arg(long, conflicts_with = "global", not_supported(npm, pnpm < "10.12.0", yarn, bun < "1.4"))]
     pub(crate) save_catalog: bool,
 
     /// A list of package names allowed to run postinstall
-    #[arg(long, value_name = "NAMES", not_supported(npm, pnpm < "10.4.0", yarn, bun))]
+    #[arg(long, value_name = "NAMES", conflicts_with = "global", not_supported(npm, pnpm < "10.4.0", yarn, bun))]
     pub(crate) allow_build: Option<String>,
 
     /// Do not run lifecycle scripts
@@ -82,15 +82,15 @@ pub struct AddArgs {
     pub(crate) silent: bool,
 
     /// Filter packages in monorepo (can be used multiple times)
-    #[arg(long, value_name = "PATTERN", not_supported(npm < "7.14.0", yarn < "2", bun < "1.4"))]
+    #[arg(long, value_name = "PATTERN", conflicts_with = "global", not_supported(npm < "7.14.0", yarn < "2", bun < "1.4"))]
     pub(crate) filter: Vec<String>,
 
     /// Add to workspace root
-    #[arg(short = 'w', long, not_supported(npm < "8.1.0", yarn >= "2", bun))]
+    #[arg(short = 'w', long, conflicts_with = "global", not_supported(npm < "8.1.0", yarn >= "2", bun))]
     pub(crate) workspace_root: bool,
 
     /// Only add if package exists in workspace (pnpm-specific)
-    #[arg(long, not_supported(npm, yarn, bun))]
+    #[arg(long, conflicts_with = "global", not_supported(npm, yarn, bun))]
     pub(crate) workspace: bool,
 
     /// Install globally
@@ -126,19 +126,19 @@ pub(crate) enum SaveDependencyTarget {
 #[group(id = "save_dependency_target", multiple = false)]
 pub(crate) struct SaveDependencyArgs {
     /// Save to `dependencies` (default)
-    #[arg(short = 'P', long)]
+    #[arg(short = 'P', long, conflicts_with = "global")]
     pub(crate) save_prod: bool,
 
     /// Save to `devDependencies`
-    #[arg(short = 'D', long)]
+    #[arg(short = 'D', long, conflicts_with = "global")]
     pub(crate) save_dev: bool,
 
     /// Save to `peerDependencies` and `devDependencies`
-    #[arg(long)]
+    #[arg(long, conflicts_with = "global")]
     pub(crate) save_peer: bool,
 
     /// Save to `optionalDependencies`
-    #[arg(short = 'O', long)]
+    #[arg(short = 'O', long, conflicts_with = "global")]
     pub(crate) save_optional: bool,
 }
 
@@ -166,7 +166,7 @@ impl SaveDependencyArgs {
 impl Resolve<AddArgs> for Pnpm {
     fn resolve(&self, args: &AddArgs, _diag: &mut Diagnostics) -> CommandResolution {
         if args.global {
-            return Npm::resolve_add(args);
+            return Npm::unknown_version().resolve_add(args);
         }
         let mut cmd = CommandBuilder::new("pnpm");
         cmd.repeated("--filter", args.filter.iter());
@@ -216,7 +216,7 @@ impl Resolve<AddArgs> for Pnpm {
 }
 
 impl Npm {
-    fn resolve_add(args: &AddArgs) -> CommandResolution {
+    fn resolve_add(&self, args: &AddArgs) -> CommandResolution {
         let mut cmd = CommandBuilder::new("npm");
         if args.global {
             cmd.arg("install")
@@ -232,7 +232,8 @@ impl Npm {
             .arg_if("--include-workspace-root", args.workspace_root);
         match args.save_dependency.target() {
             Some(SaveDependencyTarget::Production) => {
-                cmd.arg("--save");
+                // `--save` overrides npm's `save=false` setting when the user explicitly selects production.
+                cmd.arg("--save").arg("--save-prod");
             }
             Some(SaveDependencyTarget::Dev) => {
                 cmd.arg("--save-dev");
@@ -247,7 +248,10 @@ impl Npm {
         }
         cmd.arg_if("--save-exact", args.save_exact)
             .arg_if("--ignore-scripts", args.ignore_scripts)
-            .arg_if("--omit=optional", args.no_optional)
+            .arg_if(
+                if self.supports_v7_commands() { "--omit=optional" } else { "--no-optional" },
+                args.no_optional,
+            )
             .arg_if("--package-lock-only", args.lockfile_only)
             .arg_if("--prefer-offline", args.prefer_offline)
             .arg_if("--offline", args.offline)
@@ -263,14 +267,14 @@ impl Npm {
 
 impl Resolve<AddArgs> for Npm {
     fn resolve(&self, args: &AddArgs, _diag: &mut Diagnostics) -> CommandResolution {
-        Self::resolve_add(args)
+        self.resolve_add(args)
     }
 }
 
 impl Resolve<AddArgs> for Yarn {
     fn resolve(&self, args: &AddArgs, diag: &mut Diagnostics) -> CommandResolution {
         if args.global {
-            return Npm::resolve_add(args);
+            return Npm::unknown_version().resolve_add(args);
         }
 
         let mut cmd = CommandBuilder::new("yarn");
@@ -312,7 +316,7 @@ impl Resolve<AddArgs> for Yarn {
 impl Resolve<AddArgs> for Bun {
     fn resolve(&self, args: &AddArgs, _diag: &mut Diagnostics) -> CommandResolution {
         if args.global {
-            return Npm::resolve_add(args);
+            return Npm::unknown_version().resolve_add(args);
         }
         let mut cmd = CommandBuilder::new("bun");
         cmd.arg("add").repeated("--filter", args.filter.iter());
@@ -588,6 +592,18 @@ mod tests {
 
         assert_eq!(command.program, "npm");
         assert_eq!(command.args, vec!["install", "react"]);
+    }
+
+    #[test]
+    fn test_npm_add_save_prod() {
+        let mut options = add_args(&["react"]);
+        options.save_dependency.save_prod = true;
+        let resolution = resolve(&npm("11.0.0"), options);
+        let command = expect_run(resolution.outcome);
+
+        // `--save` would leave an existing devDependency in place; `--save-prod` moves it.
+        assert_eq!(command.program, "npm");
+        assert_eq!(command.args, vec!["install", "--save", "--save-prod", "react"]);
     }
 
     #[test]

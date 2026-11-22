@@ -1,12 +1,12 @@
 # command_upgrade_check
 
-## `vp upgrade --check --tag alpha`
+## `vp upgrade --check`
 
-alpha tag avoids release-day flake (dev version equals npm latest right after a release, hiding the Update-available branch)
+mock-manifest.json pins `latest` to 999.0.0, so the Update-available branch is deterministic.
 
 ```
 info: checking for updates...
-info: found vite-plus@0.1.21-alpha.7 (current: <version>)
-Update available: <version> → 0.1.21-alpha.7
+info: found vite-plus@999.0.0 (current: <version>)
+Update available: <version> → 999.0.0
 Run `vp upgrade` to update.
 ```

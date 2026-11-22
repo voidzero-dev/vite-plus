@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "dependencies": {
-    "tslib": "2.8.1"
+    "is-number": "7.0.0"
   },
   "packageManager": "pnpm@10.15.1"
 }

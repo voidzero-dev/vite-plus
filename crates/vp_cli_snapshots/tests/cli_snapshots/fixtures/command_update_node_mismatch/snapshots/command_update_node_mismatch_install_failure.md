@@ -1,6 +1,6 @@
 # command_update_node_mismatch_install_failure
 
-## `vp install -g --node 20 semver@7.7.2`
+## `vp install -g --node 20.20.2 semver@7.7.2`
 
 
 ## `vpt json-edit $VP_HOME/bins/semver.json package conflicting-package`

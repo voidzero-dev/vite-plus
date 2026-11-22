@@ -27,4 +27,4 @@ We recommend enabling both `options.typeAware` and `options.typeCheck` so `vp li
 
 For file- or package-specific lint rules, use [`lint.overrides`](/guide/monorepo#root-config-with-overrides) from the root `vite.config.ts`.
 
-Oxlint disables nested configs in Vite+ mode, so nested lint configs do not override settings for individual files. See [troubleshooting](/guide/troubleshooting#nested-lint-or-format-config-is-not-applied) for details.
+Oxlint disables nested configs in Vite+ mode, so nested lint configs do not override settings for individual files. See [Troubleshooting](/guide/troubleshooting#nested-lint-or-format-config-is-not-applied) for details.

@@ -82,7 +82,7 @@ Inline Configuration Comments:
 Available options:
   --rules       List all the rules that are currently registered
   --type-aware  Enable rules that require type information
-  --type-check  Enable experimental type checking (includes TypeScript compiler diagnostics)
+  --type-check  Enable type checking (includes TypeScript compiler diagnostics)
   -h, --help    Prints help information
 
 Examples:
@@ -175,7 +175,7 @@ Inline Configuration Comments:
 Available options:
   --rules       List all the rules that are currently registered
   --type-aware  Enable rules that require type information
-  --type-check  Enable experimental type checking (includes TypeScript compiler diagnostics)
+  --type-check  Enable type checking (includes TypeScript compiler diagnostics)
   -h, --help    Prints help information
 
 Examples:
@@ -268,7 +268,7 @@ Inline Configuration Comments:
 Available options:
   --rules       List all the rules that are currently registered
   --type-aware  Enable rules that require type information
-  --type-check  Enable experimental type checking (includes TypeScript compiler diagnostics)
+  --type-check  Enable type checking (includes TypeScript compiler diagnostics)
   -h, --help    Prints help information
 
 Examples:
