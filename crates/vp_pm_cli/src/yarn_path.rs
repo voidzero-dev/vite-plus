@@ -52,19 +52,19 @@ fn delegation_key(
     cwd: &AbsolutePath,
     home: &AbsolutePath,
     launcher_version: &str,
-    env: &[(&str, OsString)],
+    env: &[(&str, OsString, OsString)],
 ) -> Option<Str> {
     let mut hasher = Sha256::new();
     let mut delegates = false;
     hasher.update(launcher_version);
 
     let mut rc_names: Vec<OsString> = RC_FILE_NAMES.iter().map(OsString::from).collect();
-    for (name, value) in env {
+    for (setting, name, value) in env {
         hasher.update([0]);
-        hasher.update(name);
+        hasher.update(name.as_encoded_bytes());
         hasher.update([0]);
         hasher.update(value.as_encoded_bytes());
-        match *name {
+        match *setting {
             "YARN_YARN_PATH" => {
                 delegates = true;
                 hash_target(&mut hasher, &cwd.join(value));
@@ -93,19 +93,20 @@ fn delegation_key(
     delegates.then(|| hex::encode(hasher.finalize()).into())
 }
 
-/// The Yarn variables that can change the effective version, sorted so the key
-/// is stable. Berry matches `YARN_*` names without regard to case.
-fn yarn_env(vars: impl IntoIterator<Item = (OsString, OsString)>) -> Vec<(&'static str, OsString)> {
-    let mut env: Vec<_> = vars
-        .into_iter()
+/// The Yarn variables that can change the effective version, with the setting
+/// each one names. Berry matches `YARN_*` names without regard to case and lets
+/// a later spelling override an earlier one, so the original names and their
+/// order stay in the key.
+fn yarn_env(
+    vars: impl IntoIterator<Item = (OsString, OsString)>,
+) -> Vec<(&'static str, OsString, OsString)> {
+    vars.into_iter()
         .filter_map(|(name, value)| {
-            let name = name.to_str()?;
-            let canonical = ENV_VARS.iter().find(|var| var.eq_ignore_ascii_case(name))?;
-            Some((*canonical, value))
+            let text = name.to_str()?;
+            let setting = ENV_VARS.iter().find(|var| var.eq_ignore_ascii_case(text))?;
+            Some((*setting, name, value))
         })
-        .collect();
-    env.sort();
-    env
+        .collect()
 }
 
 /// Values of `yarnPath` and `yarn-path` in an rc file. Both formats put the
@@ -263,7 +264,11 @@ mod tests {
 
         let ignored = key(&project, &home, &[("YARN_IGNORE_PATH", "1")]).unwrap();
         assert_ne!(ignored, replaced);
-        assert_eq!(key(&project, &home, &[("yarn_ignore_path", "1")]).unwrap(), ignored);
+        assert_ne!(key(&project, &home, &[("yarn_ignore_path", "1")]).unwrap(), replaced);
+        // Yarn applies whichever spelling comes last.
+        let delegated_env = [("YARN_IGNORE_PATH", "1"), ("yarn_ignore_path", "0")];
+        let ignored_env = [("YARN_IGNORE_PATH", "0"), ("yarn_ignore_path", "1")];
+        assert_ne!(key(&project, &home, &delegated_env), key(&project, &home, &ignored_env));
         let launcher = delegation_key(&project, &home, "3.0.0", &[]).unwrap();
         assert_ne!(launcher, replaced, "another launcher version");
 
