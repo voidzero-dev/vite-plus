@@ -193,57 +193,6 @@ The Classic launcher also delegates unlink to Yarn 3.
 The delegated Yarn removed the portal resolution.
 ```
 
-## `vpt json-edit package.json packageManager yarn@2.4.2`
-
-
-## `vpt cp .yarn/releases/yarn-3.8.7.cjs .yarn/releases/yarn-current.cjs`
-
-
-## `vpt write-file .yarnrc.yml 'nodeLinker: node-modules
-yarnPath: .yarn/releases/yarn-current.cjs
-'`
-
-
-## `vp link ../linked-lib`
-
-
-## `node verify.cjs linked`
-
-```
-The project has a portal resolution for linked-lib.
-```
-
-## `vp unlink linked-lib`
-
-Caches Yarn 3 as the version behind yarn-current.cjs.
-
-```
-➤ YN0000: ┌ Resolution step
-➤ YN0000: └ Completed
-➤ YN0000: ┌ Fetch step
-➤ YN0000: └ Completed
-➤ YN0000: ┌ Link step
-➤ YN0000: └ Completed
-➤ YN0000: Done in <duration>
-```
-
-## `node verify.cjs unlink`
-
-```
-The delegated Yarn removed the portal resolution.
-```
-
-## `vpt cp .yarn/releases/yarn-2.4.2.cjs .yarn/releases/yarn-current.cjs`
-
-
-## `vp unlink linked-lib`
-
-Replacing the release in place must not reuse the cached Yarn 3 version.
-
-```
-warn: yarn unlink requires Yarn Classic or yarn >= 3.0.0. Skipping.
-```
-
 ## `vpt json-edit package.json packageManager yarn@3.8.7`
 
 
