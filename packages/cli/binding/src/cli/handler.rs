@@ -64,13 +64,12 @@ impl CommandHandler for VitePlusCommandHandler {
         // directory, runtime, and toolchain like a direct invocation. A built-in subcommand
         // only adds its cache config, so its tracked envs and inputs apply (#3503).
         if command.args.first().is_some_and(|arg| arg.starts_with("-C")) {
+            // `vpr` always means `vp run`, which has no built-in cache config to attach.
+            if is_vpr {
+                return Ok(HandledCommand::Verbatim);
+            }
             let subcommand = args_after_leading_chdir(&command.args).and_then(|rest| {
-                CLIArgs::try_parse_from(
-                    iter::once("vp")
-                        .chain(is_vpr.then_some("run"))
-                        .chain(rest.iter().map(Str::as_str)),
-                )
-                .ok()
+                CLIArgs::try_parse_from(iter::once("vp").chain(rest.iter().map(Str::as_str))).ok()
             });
             return Ok(match subcommand {
                 Some(CLIArgs::Synthesizable(subcmd)) => HandledCommand::Synthesized(
