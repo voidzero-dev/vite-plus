@@ -290,6 +290,8 @@ function rewriteSegment(
   }
   const launcher = COMMAND_LAUNCHERS.get(values[start]);
   if (values[start] === runner.name || runner.aliases?.includes(values[start])) {
+    // The caller explicitly requires a locally installed runner.
+    const localNpx = values[first] === 'npx' && values.slice(first, start).includes('--no-install');
     // Inherited startup hooks also matter when no register import needs replacing.
     rewriteRunner(
       runner,
@@ -297,7 +299,9 @@ function rewriteSegment(
       tokens,
       first,
       start,
-      envReason ?? environment.keepReason,
+      envReason ??
+        environment.keepReason ??
+        (localNpx ? '`npx --no-install` requires the locally installed runner' : undefined),
       assignments,
     );
   } else if (values[start] === 'node') {

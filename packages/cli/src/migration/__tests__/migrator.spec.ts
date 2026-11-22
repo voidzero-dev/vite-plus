@@ -1220,6 +1220,83 @@ export default defineConfig(({ command }) => {
   });
 
   it.each([
+    'export default { pack: options, define: options.define };\n',
+    'const define = options.define;\nexport default { pack: options, define };\n',
+  ])('uses the same default import for pack and Vite define (%s)', (body) => {
+    const tsdown = path.join(tmpDir, 'tsdown.config.ts');
+    const original =
+      "import { randomUUID } from 'node:crypto';\n" +
+      "export default { publicDir: 'public', define: { __BUILD_ID__: randomUUID() } };\n";
+    fs.writeFileSync(tsdown, original);
+    const vite = path.join(tmpDir, 'vite.config.ts');
+    fs.writeFileSync(vite, "import options from './tsdown.config.ts';\n" + body);
+
+    expect(mergeTsdownConfigFile(tmpDir, true, createMigrationReport(), true)).toBe(true);
+    expect(fs.readFileSync(vite, 'utf8')).toBe(
+      'import options from "./vite-pack.config.ts";\n' + body,
+    );
+    expect(fs.readFileSync(tsdown, 'utf8')).toBe(original);
+    const converted = fs.readFileSync(path.join(tmpDir, 'vite-pack.config.ts'), 'utf8');
+    expect(converted).toContain("copy: 'public'");
+    expect(converted).toContain('define: { __BUILD_ID__: randomUUID() }');
+  });
+
+  it('keeps one default import when an additional consumer cannot be redirected', () => {
+    const tsdown = path.join(tmpDir, 'tsdown.config.ts');
+    fs.writeFileSync(
+      tsdown,
+      "export default { publicDir: 'public', define: { ID: Date.now() }, outDir: 'out' };\n",
+    );
+    const vite = path.join(tmpDir, 'vite.config.ts');
+    const source =
+      "import options from './tsdown.config.ts';\n" +
+      'export default { pack: options, define: options.define, build: { outDir: options.outDir } };\n';
+    fs.writeFileSync(vite, source);
+    const report = createMigrationReport();
+
+    expect(mergeTsdownConfigFile(tmpDir, true, report, true)).toBe(false);
+    expect(fs.readFileSync(vite, 'utf8')).toBe(source);
+    expect(fs.existsSync(path.join(tmpDir, 'vite-pack.config.ts'))).toBe(false);
+    expect(report.warnings).toContainEqual(
+      expect.stringContaining('without evaluating its shared exports again'),
+    );
+  });
+
+  it.each([
+    ['pack.minify = true;', true],
+    ['pack.publicDir = "assets";', false],
+    ['configure(pack);', false],
+  ])('keeps the local spread and handles conditional writes (%s)', (write, convert) => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'tsdown.config.ts'),
+      "export default { entry: 'src/index.ts', publicDir: 'public' };\n",
+    );
+    const vite = path.join(tmpDir, 'vite.config.ts');
+    const body =
+      'const pack = { ...options };\n' +
+      `if (process.env.RELEASE) ${write}\n` +
+      'export default { pack };\n';
+    const source = "import options from './tsdown.config.ts';\n" + body;
+    fs.writeFileSync(vite, source);
+    const report = createMigrationReport();
+    const converted = path.join(tmpDir, 'vite-pack.config.ts');
+
+    expect(mergeTsdownConfigFile(tmpDir, true, report, true)).toBe(convert);
+    if (convert) {
+      expect(fs.readFileSync(vite, 'utf8')).toBe(
+        'import options from "./vite-pack.config.ts";\n' + body,
+      );
+      expect(fs.readFileSync(converted, 'utf8')).toContain("copy: 'public'");
+    } else {
+      expect(fs.readFileSync(vite, 'utf8')).toBe(source);
+      expect(fs.existsSync(converted)).toBe(false);
+      expect(report.warnings).toContainEqual(
+        expect.stringMatching(/migrate the pack options manually/i),
+      );
+    }
+  });
+
+  it.each([
     ['pack', 'pack: vitePackConfig2'],
     ['pack: [pack, cliConfig]', 'pack: [vitePackConfig2, cliConfig]'],
     [
@@ -2261,6 +2338,9 @@ export default defineConfig(({ command }) => {
       'const browser = configs.filter(options => options.publicDir === "public"); browser[0].outDir = "release";',
       'retained',
     ],
+    ['configs.find(config => config.name === "cli")!.outDir = "release";', 'converted'],
+    ['configs.find(config => config.publicDir === "public")!.outDir = "release";', 'retained'],
+    ['configs.find(config => config.name === "cli")!.entry = "src/other.ts";', 'retained'],
     [
       'const cli = configs.find(config => config.name === "cli"); if (cli) cli.outDir = "release";',
       'converted',

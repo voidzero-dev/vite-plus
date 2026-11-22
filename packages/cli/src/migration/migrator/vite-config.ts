@@ -880,6 +880,25 @@ function packArrayAt(node: Node) {
   };
 }
 
+function packArrayFind(node: Node) {
+  const value = unwrapTypeExpression(node);
+  if (
+    value.type !== 'CallExpression' ||
+    value.callee.type !== 'MemberExpression' ||
+    memberName(value.callee) !== 'find'
+  ) {
+    return undefined;
+  }
+  const callback =
+    value.arguments.length === 1 ? packCallbackResult(value.arguments[0]) : undefined;
+  return {
+    array: unwrapTypeExpression(value.callee.object),
+    verified:
+      callback !== undefined &&
+      isStaticPackFilter(callback.value, callback.parameter, callback.index),
+  };
+}
+
 function packValueReferences(
   node: Node,
   mapping?: PackMapping,
@@ -1094,6 +1113,26 @@ function viteConfigMemberReads(parsed: ReturnType<typeof parseSource>): Set<numb
   return reads;
 }
 
+function packMinifyWrites(program: Program): Set<number> {
+  const writes = new Set<number>();
+  for (const node of configNodes(program)) {
+    if (node.type !== 'AssignmentExpression' || node.operator !== '=') {
+      continue;
+    }
+    const { left, right } = node;
+    if (
+      left.type === 'MemberExpression' &&
+      left.object.type === 'Identifier' &&
+      memberName(left) === 'minify' &&
+      right.type === 'Literal' &&
+      typeof right.value === 'boolean'
+    ) {
+      writes.add(left.object.start);
+    }
+  }
+  return writes;
+}
+
 /** Copy a literal override without reevaluating the original constant. */
 function sharedPackSpread(initializer: ObjectExpression): PackIdentifier | undefined {
   const spreads = initializer.properties.filter((member) => member.type === 'SpreadElement');
@@ -1252,19 +1291,34 @@ function packAssignments(
   }
   const packReferences = new Set(uses.map(({ value }) => value.start));
   const propertyReads = viteConfigMemberReads(parsed);
-  const copies = uses.flatMap(({ property, value: reference, mapping }) => {
+  let minifyWrites: ReadonlySet<number> | undefined;
+  const copies = uses.flatMap<PackUse>(({ property, value: reference, mapping }) => {
     const alias = aliasesByReference.get(reference.start);
-    if (
-      !alias?.remaining ||
-      alias.initializer.type !== 'ObjectExpression' ||
-      !alias.references.every((start) => packReferences.has(start) || propertyReads.has(start))
-    ) {
+    if (!alias?.remaining || alias.initializer.type !== 'ObjectExpression') {
       return [];
     }
     const value = sharedPackSpread(alias.initializer);
-    return value
-      ? [{ property, value, mapping, copy: { initializer: alias.initializer, reference } }]
-      : [];
+    if (
+      value &&
+      alias.references.every((start) => packReferences.has(start) || propertyReads.has(start))
+    ) {
+      return [{ property, value, mapping, copy: { initializer: alias.initializer, reference } }];
+    }
+    if (
+      value &&
+      alias.initializer.properties.every(
+        (member) => member.type === 'SpreadElement' || isStablePackOverride(member),
+      ) &&
+      alias.references.every(
+        (start) =>
+          packReferences.has(start) || (minifyWrites ??= packMinifyWrites(program)).has(start),
+      )
+    ) {
+      // Change the spread source so pack still observes writes to the original copy.
+      return [{ value, mapping: mapping ?? 'copy' }];
+    }
+    // Report an unverified spread instead of ignoring the source config.
+    return packValueReferences(alias.initializer, 'unverified', context);
   });
   return {
     uses: [...uses, ...copies],
@@ -1290,7 +1344,10 @@ const arrayMutators = new Set([
 function packRootIdentifier(node: Node): PackIdentifier | undefined {
   let root = unwrapTypeExpression(node);
   while (root.type === 'MemberExpression' || root.type === 'CallExpression') {
-    const receiver = root.type === 'MemberExpression' ? root.object : packArrayAt(root)?.array;
+    const receiver =
+      root.type === 'MemberExpression'
+        ? root.object
+        : (packArrayAt(root) ?? packArrayFind(root))?.array;
     if (!receiver) {
       return undefined;
     }
@@ -1624,6 +1681,7 @@ function packMutationReferences(
   const filteredOptions = new Map<number, number>();
   const guards = new Set<number>();
   const arrayLengths = new Set<number>();
+  const defineReads = new Set<number>();
   const outputWrites = new Set<number>();
   const indexedOutputWrites = new Set<number>();
   const entryWrites = new Set<number>();
@@ -1707,8 +1765,13 @@ function packMutationReferences(
         continue;
       }
       case 'MemberExpression':
-        if (node.object.type === 'Identifier' && memberName(node) === 'length') {
-          arrayLengths.add(node.object.start);
+        if (node.object.type === 'Identifier') {
+          const name = memberName(node);
+          if (name === 'length') {
+            arrayLengths.add(node.object.start);
+          } else if (name === 'define') {
+            defineReads.add(node.object.start);
+          }
         }
         continue;
       case 'VariableDeclaration':
@@ -1723,18 +1786,7 @@ function packMutationReferences(
                 ? initializer
                 : undefined;
             const member = fallback ? unwrapTypeExpression(fallback.left) : initializer;
-            const find =
-              member?.type === 'CallExpression' &&
-              member.callee.type === 'MemberExpression' &&
-              memberName(member.callee) === 'find'
-                ? {
-                    array: unwrapTypeExpression(member.callee.object),
-                    callback:
-                      member.arguments.length === 1
-                        ? packCallbackResult(member.arguments[0])
-                        : undefined,
-                  }
-                : undefined;
+            const find = member && packArrayFind(member);
             const alternate = fallback && unwrapTypeExpression(fallback.right);
             const fallbackArray =
               alternate?.type === 'MemberExpression' &&
@@ -1769,9 +1821,8 @@ function packMutationReferences(
             if (
               id.type === 'Identifier' &&
               find?.array.type === 'Identifier' &&
-              find.callback &&
-              (!fallback || fallbackArray?.name === find.array.name) &&
-              isStaticPackFilter(find.callback.value, find.callback.parameter, find.callback.index)
+              find.verified &&
+              (!fallback || fallbackArray?.name === find.array.name)
             ) {
               foundOptions.set(
                 id.start,
@@ -1796,9 +1847,11 @@ function packMutationReferences(
       case 'AssignmentExpression': {
         const receiver = packOutputAssignment(node)?.receiver;
         const at = receiver && packArrayAt(receiver);
-        if (at?.literalIndex && at.array.type === 'Identifier') {
-          indexedOutputWrites.add(at.array.start);
-          rewritable.set(at.array.start, { array: true });
+        const find = receiver && packArrayFind(receiver);
+        const selectedArray = at?.literalIndex ? at.array : find?.verified ? find.array : undefined;
+        if (selectedArray?.type === 'Identifier') {
+          indexedOutputWrites.add(selectedArray.start);
+          rewritable.set(selectedArray.start, { array: true });
         } else if (receiver?.type === 'Identifier') {
           outputWrites.add(receiver.start);
         } else if (
@@ -1997,7 +2050,7 @@ function packMutationReferences(
       writes.add(origin);
     }
   }
-  return { writes, rewritable, entryWrites };
+  return { writes, rewritable, entryWrites, defineReads };
 }
 
 function readPackEntry(file: string) {
@@ -2118,7 +2171,7 @@ function importedPackBindings(
   if (imports.length === 0) {
     return [];
   }
-  const { writes, rewritable, entryWrites } = packMutationReferences(
+  const { writes, rewritable, entryWrites, defineReads } = packMutationReferences(
     parsed,
     readOnlyArguments,
     mapperArguments,
@@ -2154,8 +2207,10 @@ function importedPackBindings(
       return [];
     }
     const written = references.filter((reference) => writes.has(reference));
-    const onlyPackUses = references.length === uses.length && uses.every(({ copy }) => !copy);
     const helperReferences = new Set(uses.map(({ value }) => value.start));
+    const isRedirected = (reference: number) =>
+      helperReferences.has(reference) || (defineReads.has(reference) && !writes.has(reference));
+    const onlyPackUses = uses.every(({ copy }) => !copy) && references.every(isRedirected);
     const siblingWrites = importWrites.filter(({ specifier }) => specifier !== binding);
     const entryImport = siblingWrites.length === 1 ? siblingWrites[0] : undefined;
     const sharedEntry =
@@ -2188,7 +2243,7 @@ function importedPackBindings(
         }
         return type === undefined || references.includes(type);
       }) &&
-      references.every((reference) => helperReferences.has(reference));
+      references.every(isRedirected);
     const onlyPack = onlyPackUses || canRedirectDirectWrites;
     const sharedImport =
       onlyPack &&
@@ -2197,7 +2252,9 @@ function importedPackBindings(
         ? sharedEntry.statement
         : undefined;
     const unredirectedExports = new Set<string>();
-    let hasUnredirectedModuleUse = false;
+    // The pack conversion leaves define intact, but every consumer needs to
+    // move together if the same exported options supply a define value.
+    let hasUnredirectedModuleUse = !onlyPack && references.some((ref) => defineReads.has(ref));
     for (const sibling of imports) {
       if (sibling === sharedImport) {
         continue;
