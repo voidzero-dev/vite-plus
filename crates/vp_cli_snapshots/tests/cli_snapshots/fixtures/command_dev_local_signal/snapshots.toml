@@ -1,0 +1,20 @@
+[[case]]
+name = "command_dev_local_signal"
+vp = "local"
+skip-platforms = ["windows"]
+comment = "Project-local vp dev runs Vite in the launcher process, so SIGTERM to that PID stops the listening server."
+steps = [{ argv = ["node", "probe.mjs"], tty = false, timeout = 25000 }]
+
+[[case]]
+name = "command_dev_local_signal_worker"
+vp = "local"
+skip-platforms = ["windows"]
+comment = "A Node Worker runs project-local vp dev without replacing its host process."
+steps = [{ argv = ["node", "probe.mjs", "--worker"], tty = false, timeout = 25000 }]
+
+[[case]]
+name = "command_dev_local_signal_in_process"
+vp = "local"
+skip-platforms = ["windows"]
+comment = "Node.js options, a preload, --debug, and an IPC channel of the launcher apply once, to Vite in the launcher process."
+steps = [{ argv = ["node", "probe-in-process.mjs"], tty = false, timeout = 60000 }]

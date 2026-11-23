@@ -383,6 +383,7 @@ mod tests {
 
     fn cli_options(runtime: Arc<OsStr>) -> CliOptions {
         CliOptions {
+            in_process_dev: false,
             node_exec_path: runtime,
             node_version: None,
             lint: tool_resolver(),

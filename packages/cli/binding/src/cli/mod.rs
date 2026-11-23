@@ -20,8 +20,8 @@ pub(crate) use execution::resolve_and_capture_output;
 // Re-exports for lib.rs and check/mod.rs
 pub use resolver::SubcommandResolver;
 pub use types::{
-    BoxedResolverFn, CliOptions, ResolveCommandResult, SynthesizableSubcommand, ToolchainArgs,
-    ViteConfigResolverFn,
+    BoxedResolverFn, CliOptions, InProcessCommand, Outcome, ResolveCommandResult,
+    SynthesizableSubcommand, ToolchainArgs, ViteConfigResolverFn,
 };
 pub(crate) use types::{CapturedCommandOutput, EnvMap};
 use vp_error::Error;
@@ -50,7 +50,7 @@ async fn execute_direct_subcommand(
     cwd: &AbsolutePathBuf,
     options: Option<CliOptions>,
     explicit_chdir: bool,
-) -> Result<ExitStatus, Error> {
+) -> Result<Outcome, Error> {
     // A bare app command at a workspace root resolves its target first
     // (defaultPackage, package listing); the command then runs as if invoked
     // in the resolved directory (rfcs/cwd-flag.md).
@@ -58,7 +58,7 @@ async fn execute_direct_subcommand(
         app_target::resolve_app_target(&subcommand, cwd, explicit_chdir)?;
     let retargeted = matches!(&target, app_target::AppTarget::Dir(_));
     let cwd = match &target {
-        app_target::AppTarget::Exit(status) => return Ok(*status),
+        app_target::AppTarget::Exit(status) => return Ok(Outcome::Exit(*status)),
         app_target::AppTarget::Dir(dir) => dir,
         app_target::AppTarget::CurrentDir => cwd,
     };
@@ -80,6 +80,7 @@ async fn execute_direct_subcommand(
     };
     let workspace_path: Arc<AbsolutePath> = workspace_root.path.into();
 
+    let in_process_dev = options.as_ref().is_some_and(|options| options.in_process_dev);
     let resolver = if let Some(options) = options {
         SubcommandResolver::new(Arc::clone(&workspace_path)).with_cli_options(options)
     } else {
@@ -130,7 +131,8 @@ async fn execute_direct_subcommand(
                 &envs,
                 cwd,
             )
-            .await;
+            .await
+            .map(Outcome::Exit);
         }
         other => {
             if should_suppress_subcommand_stdout(&other) {
@@ -154,12 +156,12 @@ async fn execute_direct_subcommand(
                 )
                 .await?
             } else {
-                resolve_and_execute(&resolver, other, &envs, cwd).await?
+                return resolve_and_execute(&resolver, other, &envs, cwd, in_process_dev).await;
             }
         }
     };
 
-    Ok(status)
+    Ok(Outcome::Exit(status))
 }
 
 fn try_prepend_to_env_path(
@@ -395,7 +397,7 @@ pub async fn main(
     options: Option<CliOptions>,
     args: Option<Vec<String>>,
     explicit_chdir: bool,
-) -> Result<ExitStatus, Error> {
+) -> Result<Outcome, Error> {
     let raw_args: Vec<String> = args.unwrap_or_else(|| env::args().skip(1).collect());
     // The global CLI resolves aliases to their canonical names before
     // delegating, so prefer the original spelling it forwards. A direct local
@@ -405,7 +407,7 @@ pub async fn main(
     let args_vec = normalize_help_args(raw_args);
     if should_print_help(&args_vec) {
         print_help();
-        return Ok(ExitStatus::SUCCESS);
+        return Ok(Outcome::Exit(ExitStatus::SUCCESS));
     }
 
     let args_with_program = std::iter::once("vp".to_string()).chain(args_vec.iter().cloned());
@@ -414,7 +416,8 @@ pub async fn main(
         Err(err) => {
             // `bin.ts` already applied `-C` to `cwd` and removed it from `args_vec`.
             let chdir = explicit_chdir.then(|| cwd.as_path().to_string_lossy());
-            return handle_cli_parse_error(err, &args_vec, &cwd, chdir.as_deref());
+            return handle_cli_parse_error(err, &args_vec, &cwd, chdir.as_deref())
+                .map(Outcome::Exit);
         }
     };
 
@@ -428,10 +431,16 @@ pub async fn main(
             script_note::print(raw_subcommand.as_deref(), &cwd);
             execute_direct_subcommand(subcmd, &args_vec, &cwd, options, explicit_chdir).await
         }
-        CLIArgs::ViteTask(command) => execute_vite_task_command(command, cwd, options).await,
-        CLIArgs::PackageManager(pm) => execute_pm_command(pm, &cwd, options.as_ref()).await,
-        CLIArgs::Exec(exec_args) => crate::exec::execute(exec_args, &cwd).await,
-        CLIArgs::Toolchain(args) => execute_toolchain_command(args, options.as_ref()),
+        CLIArgs::ViteTask(command) => {
+            execute_vite_task_command(command, cwd, options).await.map(Outcome::Exit)
+        }
+        CLIArgs::PackageManager(pm) => {
+            execute_pm_command(pm, &cwd, options.as_ref()).await.map(Outcome::Exit)
+        }
+        CLIArgs::Exec(exec_args) => crate::exec::execute(exec_args, &cwd).await.map(Outcome::Exit),
+        CLIArgs::Toolchain(args) => {
+            execute_toolchain_command(args, options.as_ref()).map(Outcome::Exit)
+        }
     }
 }
 
