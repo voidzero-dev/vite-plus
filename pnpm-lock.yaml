@@ -204,11 +204,11 @@ catalogs:
       specifier: ^1.0.0
       version: 1.0.1
     '@tsdown/css':
-      specifier: '=0.23.5'
-      version: 0.23.5
+      specifier: '=0.23.4'
+      version: 0.23.4
     '@tsdown/exe':
-      specifier: '=0.23.5'
-      version: 0.23.5
+      specifier: '=0.23.4'
+      version: 0.23.4
     '@types/cross-spawn':
       specifier: ^6.0.6
       version: 6.0.6
@@ -339,8 +339,8 @@ catalogs:
       specifier: ^0.2.15
       version: 0.2.17
     tsdown:
-      specifier: '=0.23.5'
-      version: 0.23.5
+      specifier: '=0.23.4'
+      version: 0.23.4
     tsrs:
       specifier: '=7.1.0-beta.tsrs4'
       version: 7.1.0-beta.tsrs4
@@ -545,7 +545,7 @@ importers:
         version: 0.2.17
       tsdown:
         specifier: 'catalog:'
-        version: 0.23.5(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.5)(@tsdown/exe@0.23.5)(@vitejs/devtools@0.8.2(crossws@0.4.17(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsrs@7.1.0-beta.tsrs4)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2))
+        version: 0.23.4(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.4)(@tsdown/exe@0.23.4)(@typescript/native-preview@7.0.0-dev.20260707.2)(@vitejs/devtools@0.8.2(crossws@0.4.17(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2))
       validate-npm-package-name:
         specifier: 'catalog:'
         version: 8.0.0
@@ -612,9 +612,6 @@ importers:
       terser:
         specifier: ^5.16.0
         version: 5.51.2
-      tsrs:
-        specifier: '*'
-        version: 0.0.0
       tsx:
         specifier: ^4.8.1
         version: 4.23.15
@@ -630,9 +627,9 @@ importers:
       yaml:
         specifier: ^2.4.2
         version: 2.9.1
-      yuku:
-        specifier: 0.25.0
-        version: 0.25.0
+      yuku-parser:
+        specifier: 0.19.0
+        version: 0.19.0
     devDependencies:
       '@ast-grep/napi':
         specifier: ^0.51.0
@@ -651,10 +648,10 @@ importers:
         version: 1.0.2
       '@tsdown/css':
         specifier: 'catalog:'
-        version: 0.23.5(jiti@2.7.0)(postcss-import@16.2.0(postcss@8.5.32))(postcss-modules@9.0.1(postcss@8.5.32))(postcss@8.5.32)(sass-embedded@1.108.1(source-map-js@1.2.2))(sass@1.108.1)(tsdown@0.23.5)(tsx@4.23.15)(yaml@2.9.1)
+        version: 0.23.4(jiti@2.7.0)(postcss-import@16.2.0(postcss@8.5.32))(postcss-modules@9.0.1(postcss@8.5.32))(postcss@8.5.32)(sass-embedded@1.108.1(source-map-js@1.2.2))(sass@1.108.1)(tsdown@0.23.4)(tsx@4.23.15)(yaml@2.9.1)
       '@tsdown/exe':
         specifier: 'catalog:'
-        version: 0.23.5(tsdown@0.23.5)
+        version: 0.23.4(tsdown@0.23.4)
       '@typescript/native-preview':
         specifier: 'catalog:'
         version: 7.0.0-dev.20260707.2
@@ -705,7 +702,7 @@ importers:
         version: 1.2.2
       tsdown:
         specifier: 'catalog:'
-        version: 0.23.5(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.5)(@tsdown/exe@0.23.5)(@vitejs/devtools@0.8.2(crossws@0.4.17(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsrs@0.0.0)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2))
+        version: 0.23.4(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.4)(@tsdown/exe@0.23.4)(@typescript/native-preview@7.0.0-dev.20260707.2)(@vitejs/devtools@0.8.2(crossws@0.4.17(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2))
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -749,7 +746,7 @@ importers:
         version: 4.1.0
       tsdown:
         specifier: 'catalog:'
-        version: 0.23.5(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.5)(@tsdown/exe@0.23.5)(@vitejs/devtools@0.8.2(crossws@0.4.17(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsrs@0.0.0)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2))
+        version: 0.23.4(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.4)(@tsdown/exe@0.23.4)(@typescript/native-preview@7.0.0-dev.20260707.2)(@vitejs/devtools@0.8.2(crossws@0.4.17(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2))
 
   packages/tools:
     devDependencies:
@@ -3530,8 +3527,8 @@ packages:
   '@tootallnate/quickjs-emscripten@0.23.0':
     resolution: {integrity: sha512-C5Mc6rdnsaJDjO3UpGW/CQTHtCKaYlScZTly4JIu97Jxo/odCiH0ITnDXSJPTOrEKk/ycSZ0AOgTmkDtkOsvIA==}
 
-  '@tsdown/css@0.23.5':
-    resolution: {integrity: sha512-Zcobb3e4RTXcB3WijguGEXEfLJbhDxXq8Vce2PT1MR7E1JwMwwOevSXXAHFWTam5lJRBLyxrImcSQTqeZ2KCvA==}
+  '@tsdown/css@0.23.4':
+    resolution: {integrity: sha512-lkEj33E0r7KhmiTQC+UYkOUoe5W50eHsDXoloDkj52OMFxAUfRieF1k4QcOIqMFKd7s0BjFHD8PFElnThVLHGA==}
     engines: {node: ^22.18.0 || ^24.11.0 || >=26.0.0}
     peerDependencies:
       postcss: ^8.4.0
@@ -3539,7 +3536,7 @@ packages:
       postcss-modules: ^6.0.0 || ^7.0.0 || ^8.0.0 || ^9.0.0
       sass: '*'
       sass-embedded: '*'
-      tsdown: 0.23.5
+      tsdown: 0.23.4
     peerDependenciesMeta:
       postcss:
         optional: true
@@ -3552,11 +3549,11 @@ packages:
       sass-embedded:
         optional: true
 
-  '@tsdown/exe@0.23.5':
-    resolution: {integrity: sha512-10u+GOgcfenv4ZJ+2269W+RePRzRfWqi0fIjNd8nSzOhX9bcaSXXlU2q8brjsN5SCAARi7iq0t4vZTZ3V5rDiw==}
+  '@tsdown/exe@0.23.4':
+    resolution: {integrity: sha512-rU76qeRlEmDAD3wj03BIfN83GKCpqabe4IOuG09XLopngbwHUsxw14fSJYZqMliep6b/r8zm+tH3hP5361GUNw==}
     engines: {node: ^22.18.0 || ^24.11.0 || >=26.0.0}
     peerDependencies:
-      tsdown: 0.23.5
+      tsdown: 0.23.4
 
   '@tsrs/darwin-arm64@7.1.0-beta.tsrs4':
     resolution: {integrity: sha512-Be1McQGyHipWIjnkvytZmh7Wi4YVATvTfiEuPX34kfk+W7QCtTdUUHnuLZ7bzwy8LgL9VDCmyvQtWiF3MENxBQ==}
@@ -6670,14 +6667,14 @@ packages:
     peerDependencies:
       typescript: '>=4.0.0'
 
-  tsdown@0.23.5:
-    resolution: {integrity: sha512-nD6Dvg2oEPBaU1T/78TkAelU9ycYT7QosVOjDxpKI9I3LSnu7saBvL3u+urLSb4cwioqzqxeqGEjtKwc9TnOpQ==}
+  tsdown@0.23.4:
+    resolution: {integrity: sha512-AQQ/2Y7KBnf15GL4Ynjdltc94PkbKRI+arStyrp7inSQkRmTWNiXgfv50ESsjhBEsoVtiSloCAO2VyrqojWIOQ==}
     engines: {node: ^22.18.0 || ^24.11.0 || >=26.0.0}
     hasBin: true
     peerDependencies:
       '@arethetypeswrong/core': ^0.18.1
-      '@tsdown/css': 0.23.5
-      '@tsdown/exe': 0.23.5
+      '@tsdown/css': 0.23.4
+      '@tsdown/exe': 0.23.4
       '@vitejs/devtools': '*'
       publint: ^0.3.8
       tsx: '*'
@@ -7084,22 +7081,18 @@ packages:
   yuku-ast@0.19.0:
     resolution: {integrity: sha512-PyCsiScaelhxBGzL8dyeJkLqvRZycoh78R31Vrt/WqYrm0hMFoKwIw/X7Dx5mBKLWAMlV9I9HEyBOHnj2gZVyw==}
     engines: {node: '>=14.18.0'}
-    deprecated: 'Yuku is now one package with one core. Use "yuku" instead: https://yuku.fyi/javascript/. Existing installs keep working but get no more fixes.'
 
   yuku-codegen@0.19.0:
     resolution: {integrity: sha512-uymAKHjDuaP4BEpkXC/BSLz4DUEF5oArZ5AuD3888nb2miChjWSgpPdojEJxm3pjpXkgUaCRJQyNAbnMN33wHg==}
     engines: {node: '>=14.18.0'}
-    deprecated: 'Yuku is now one package with one core. Use "yuku" instead: https://yuku.fyi/javascript/. Existing installs keep working but get no more fixes.'
 
   yuku-core@0.19.0:
     resolution: {integrity: sha512-kYK9e1XdfirNhkipzW0wmMcSWcVF/CWnuugodfVYRCUwvoBefweL9HzB96OiKEhsx78V5WbUxbJqlizMX869Qg==}
     engines: {node: '>=14.18.0'}
-    deprecated: 'Yuku is now one package with one core. Use "yuku" instead: https://yuku.fyi/javascript/. Existing installs keep working but get no more fixes.'
 
   yuku-parser@0.19.0:
     resolution: {integrity: sha512-XrBh9ZiQK5mJVRxZBAvD6LwRyAYrK3MFtH3+onyuxFL5hFD44EC3QOmIC1FjTj6H2MMwq46/NAI+NZxLZPZgxg==}
     engines: {node: '>=14.18.0'}
-    deprecated: 'Yuku is now one package with one core. Use "yuku" instead: https://yuku.fyi/javascript/. Existing installs keep working but get no more fixes.'
 
   yuku@0.25.0:
     resolution: {integrity: sha512-iAlHlpPmcjRqUauDkW9xF33b+jsUzTrrv49FfPLBNxEAUWuU7XN8tBUGjBHYPCEF/d3632MhG6GjCZutecA8Ng==}
@@ -8989,12 +8982,12 @@ snapshots:
 
   '@tootallnate/quickjs-emscripten@0.23.0': {}
 
-  '@tsdown/css@0.23.5(jiti@2.7.0)(postcss-import@16.2.0(postcss@8.5.32))(postcss-modules@9.0.1(postcss@8.5.32))(postcss@8.5.32)(sass-embedded@1.108.1(source-map-js@1.2.2))(sass@1.108.1)(tsdown@0.23.5)(tsx@4.23.15)':
+  '@tsdown/css@0.23.4(jiti@2.7.0)(postcss-import@16.2.0(postcss@8.5.32))(postcss-modules@9.0.1(postcss@8.5.32))(postcss@8.5.32)(sass-embedded@1.108.1(source-map-js@1.2.2))(sass@1.108.1)(tsdown@0.23.4)(tsx@4.23.15)(yaml@2.9.1)':
     dependencies:
       lightningcss: 1.33.0
       postcss-load-config: 6.0.1(jiti@2.7.0)(postcss@8.5.32)(tsx@4.23.15)(yaml@2.9.1)
       rolldown: link:rolldown/packages/rolldown
-      tsdown: 0.23.5(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.5)(@tsdown/exe@0.23.5)(@vitejs/devtools@0.8.2(crossws@0.4.17(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsrs@0.0.0)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2))
+      tsdown: 0.23.4(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.4)(@tsdown/exe@0.23.4)(@typescript/native-preview@7.0.0-dev.20260707.2)(@vitejs/devtools@0.8.2(crossws@0.4.17(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2))
     optionalDependencies:
       postcss: 8.5.32
       postcss-import: 16.2.0(postcss@8.5.32)
@@ -9006,28 +8999,11 @@ snapshots:
       - tsx
       - yaml
 
-  '@tsdown/css@0.23.5(jiti@2.7.0)(postcss-import@16.2.0(postcss@8.5.32))(postcss-modules@9.0.1(postcss@8.5.32))(postcss@8.5.32)(sass-embedded@1.108.1(source-map-js@1.2.2))(sass@1.108.1)(tsdown@0.23.5)(tsx@4.23.15)(yaml@2.9.1)':
-    dependencies:
-      lightningcss: 1.33.0
-      postcss-load-config: 6.0.1(jiti@2.7.0)(postcss@8.5.32)(tsx@4.23.15)(yaml@2.9.1)
-      rolldown: link:rolldown/packages/rolldown
-      tsdown: 0.23.5(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.5)(@tsdown/exe@0.23.5)(@vitejs/devtools@0.8.2(crossws@0.4.17(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsrs@7.1.0-beta.tsrs4)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2))
-    optionalDependencies:
-      postcss: 8.5.32
-      postcss-import: 16.2.0(postcss@8.5.32)
-      postcss-modules: 9.0.1(postcss@8.5.32)
-      sass: 1.108.1
-      sass-embedded: 1.108.1(source-map-js@1.2.2)
-    transitivePeerDependencies:
-      - jiti
-      - tsx
-      - yaml
-
-  '@tsdown/exe@0.23.5(tsdown@0.23.5)':
+  '@tsdown/exe@0.23.4(tsdown@0.23.4)':
     dependencies:
       obug: 3.0.0
       tinyexec: 1.3.1
-      tsdown: 0.23.5(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.5)(@tsdown/exe@0.23.5)(@vitejs/devtools@0.8.2(crossws@0.4.17(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsrs@7.1.0-beta.tsrs4)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2))
+      tsdown: 0.23.4(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.4)(@tsdown/exe@0.23.4)(@typescript/native-preview@7.0.0-dev.20260707.2)(@vitejs/devtools@0.8.2(crossws@0.4.17(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2))
       verkit: 0.5.0
 
   '@tsrs/darwin-arm64@7.1.0-beta.tsrs4':
@@ -11738,23 +11714,6 @@ snapshots:
       - '@yuku-toolchain/wasm'
       - oxc-resolver
 
-  rolldown-plugin-dts@0.29.0(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(rolldown@rolldown+packages+rolldown)(tsrs@7.1.0-beta.tsrs4)(typescript@7.0.2)(vue-tsc@3.3.12(typescript@7.0.2)):
-    dependencies:
-      dts-resolver: 3.0.0(oxc-resolver@11.24.2)
-      get-tsconfig: 5.0.0-beta.6
-      obug: 3.0.0
-      rolldown: link:rolldown/packages/rolldown
-      yuku: 0.25.0
-    optionalDependencies:
-      '@volar/typescript': 2.4.28
-      '@vue/language-core': 3.3.12
-      tsrs: 7.1.0-beta.tsrs4
-      typescript: 7.0.2
-      vue-tsc: 3.3.12(typescript@7.0.2)
-    transitivePeerDependencies:
-      - '@yuku-toolchain/wasm'
-      - oxc-resolver
-
   rollup-plugin-license@3.7.1(picomatch@4.0.7)(rollup@4.63.1):
     dependencies:
       commenting: 1.1.0
@@ -12218,7 +12177,7 @@ snapshots:
       typescript: 7.0.2
     optional: true
 
-  tsdown@0.23.5(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.5)(@tsdown/exe@0.23.5)(@vitejs/devtools@0.8.2(crossws@0.4.17(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsrs@0.0.0)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2)):
+  tsdown@0.23.4(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.4)(@tsdown/exe@0.23.4)(@typescript/native-preview@7.0.0-dev.20260707.2)(@vitejs/devtools@0.8.2(crossws@0.4.17(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2)):
     dependencies:
       cac: 7.1.0
       defu: 6.1.7
@@ -12228,7 +12187,7 @@ snapshots:
       obug: 3.0.0
       picomatch: 4.0.7
       rolldown: link:rolldown/packages/rolldown
-      rolldown-plugin-dts: 0.29.0(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(rolldown@rolldown+packages+rolldown)(tsrs@0.0.0)(typescript@7.0.2)(vue-tsc@3.3.12(typescript@7.0.2))
+      rolldown-plugin-dts: 0.28.8(@typescript/native-preview@7.0.0-dev.20260707.2)(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(rolldown@rolldown+packages+rolldown)(typescript@7.0.2)(vue-tsc@3.3.12(typescript@7.0.2))
       tinyexec: 1.3.1
       tinyglobby: 0.2.17
       tinyps: 0.5.1
@@ -12236,8 +12195,8 @@ snapshots:
       verkit: 0.5.0
     optionalDependencies:
       '@arethetypeswrong/core': 0.18.2
-      '@tsdown/css': 0.23.5(jiti@2.7.0)(postcss-import@16.2.0(postcss@8.5.32))(postcss-modules@9.0.1(postcss@8.5.32))(postcss@8.5.32)(sass-embedded@1.108.1(source-map-js@1.2.2))(sass@1.108.1)(tsdown@0.23.5)(tsx@4.23.15)(yaml@2.9.1)
-      '@tsdown/exe': 0.23.5(tsdown@0.23.5)
+      '@tsdown/css': 0.23.4(jiti@2.7.0)(postcss-import@16.2.0(postcss@8.5.32))(postcss-modules@9.0.1(postcss@8.5.32))(postcss@8.5.32)(sass-embedded@1.108.1(source-map-js@1.2.2))(sass@1.108.1)(tsdown@0.23.4)(tsx@4.23.15)(yaml@2.9.1)
+      '@tsdown/exe': 0.23.4(tsdown@0.23.4)
       '@vitejs/devtools': 0.8.2(crossws@0.4.17(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core)
       publint: 0.3.24
       tsx: 4.23.15
@@ -12245,50 +12204,16 @@ snapshots:
       unplugin-unused: 0.5.6
       unrun: 0.3.1
     transitivePeerDependencies:
+      - '@typescript/native-preview'
       - '@volar/typescript'
       - '@vue/language-core'
-      - '@yuku-toolchain/wasm'
       - oxc-resolver
-      - tsrs
-      - vue-tsc
-
-  tsdown@0.23.5(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.23.5)(@tsdown/exe@0.23.5)(@vitejs/devtools@0.8.2(crossws@0.4.17(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core))(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(publint@0.3.24)(tsrs@7.1.0-beta.tsrs4)(tsx@4.23.15)(typescript@7.0.2)(unplugin-unused@0.5.6)(unrun@0.3.1)(vue-tsc@3.3.12(typescript@7.0.2)):
-    dependencies:
-      cac: 7.1.0
-      defu: 6.1.7
-      empathic: 2.1.0
-      hookable: 6.1.2
-      import-without-cache: 0.4.1
-      obug: 3.0.0
-      picomatch: 4.0.7
-      rolldown: link:rolldown/packages/rolldown
-      rolldown-plugin-dts: 0.29.0(@volar/typescript@2.4.28)(@vue/language-core@3.3.12)(oxc-resolver@11.24.2)(rolldown@rolldown+packages+rolldown)(tsrs@7.1.0-beta.tsrs4)(typescript@7.0.2)(vue-tsc@3.3.12(typescript@7.0.2))
-      tinyexec: 1.3.1
-      tinyglobby: 0.2.17
-      tinyps: 0.5.1
-      unconfig-core: 7.5.0
-      verkit: 0.5.0
-    optionalDependencies:
-      '@arethetypeswrong/core': 0.18.2
-      '@tsdown/css': 0.23.5(jiti@2.7.0)(postcss-import@16.2.0(postcss@8.5.32))(postcss-modules@9.0.1(postcss@8.5.32))(postcss@8.5.32)(sass-embedded@1.108.1(source-map-js@1.2.2))(sass@1.108.1)(tsdown@0.23.5)(tsx@4.23.15)(yaml@2.9.1)
-      '@tsdown/exe': 0.23.5(tsdown@0.23.5)
-      '@vitejs/devtools': 0.8.2(crossws@0.4.17(srvx@1.0.6))(srvx@1.0.6)(vite@packages+core)
-      publint: 0.3.24
-      tsx: 4.23.15
-      typescript: 7.0.2
-      unplugin-unused: 0.5.6
-      unrun: 0.3.1
-    transitivePeerDependencies:
-      - '@volar/typescript'
-      - '@vue/language-core'
-      - '@yuku-toolchain/wasm'
-      - oxc-resolver
-      - tsrs
       - vue-tsc
 
   tslib@2.8.1: {}
 
-  tsrs@0.0.0: {}
+  tsrs@0.0.0:
+    optional: true
 
   tsrs@7.1.0-beta.tsrs4:
     optionalDependencies:

@@ -1,9 +1,7 @@
-import { defineConfig, type UserConfig } from 'tsdown';
+import { defineConfig } from 'tsdown';
 
-const config: UserConfig = {
+export default defineConfig({
   deps: {
     onlyBundle: false,
   },
-};
-
-export default defineConfig(config);
+});
