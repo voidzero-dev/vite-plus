@@ -326,6 +326,7 @@ vt_snapshot_test = { git = "https://github.com/voidzero-dev/vite-task.git", rev 
 vt_str = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "6a23096aa2f04eb59225c6467b15c2965ee6ae33" }
 vt_workspace = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "6a23096aa2f04eb59225c6467b15c2965ee6ae33" }
 walkdir = "2.5.0"
+wax = "0.7.0"
 webpki-root-certs = "1.0.10"
 which = "8.0.6"
 winreg = "0.56.0"
