@@ -36,7 +36,7 @@ check package.json
     "prepare": "vp config"
   },
   "devDependencies": {
-    "@cloudflare/oxlint-config": "https://github.com/cloudflare/oxlint-config/archive/d6b32c7a334d6215a3eddc92f4d856a724f054ab.tar.gz",
+    "@cloudflare/oxlint-config": "^0.2.0",
     "vite-plus": "catalog:"
   },
   "devEngines": {
@@ -437,7 +437,7 @@ check package.json
     "prepare": "vp config"
   },
   "devDependencies": {
-    "@cloudflare/oxlint-config": "https://github.com/cloudflare/oxlint-config/archive/d6b32c7a334d6215a3eddc92f4d856a724f054ab.tar.gz",
+    "@cloudflare/oxlint-config": "^0.2.0",
     "vite-plus": "catalog:"
   },
   "devEngines": {
