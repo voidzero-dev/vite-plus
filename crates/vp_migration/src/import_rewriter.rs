@@ -2388,6 +2388,8 @@ pub fn rewrite_imports_in_directory_with_options(
     let files_with_context: Vec<(PathBuf, PackageRewriteContext)> = walk_result
         .files
         .into_iter()
+        // Writing through a symlink would modify its target, which may live outside the project.
+        .filter(|file_path| std::fs::symlink_metadata(file_path).is_ok_and(|m| m.is_file()))
         .map(|file_path| {
             let package_context =
                 if let Some(package_json_path) = find_nearest_package_json(&file_path, root) {
@@ -3937,6 +3939,31 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';"#,
         assert!(result.preserved_vitest_files.is_empty());
         let content = fs::read_to_string(temp.path().join("nuxt.spec.ts")).unwrap();
         assert!(content.contains("from 'vite-plus/test'"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_rewrite_imports_in_directory_skips_symlinked_files() {
+        use std::fs;
+
+        let project = tempdir().unwrap();
+        let outside = tempdir().unwrap();
+        let source = "import { describe } from 'vitest';\n";
+        let external = outside.path().join("external.test.ts");
+        fs::write(&external, source).unwrap();
+        fs::write(project.path().join("local.test.ts"), source).unwrap();
+        std::os::unix::fs::symlink(&external, project.path().join("linked.test.ts")).unwrap();
+
+        let result = rewrite_imports_in_directory(project.path()).unwrap();
+
+        assert!(result.errors.is_empty());
+        assert_eq!(result.modified_files, vec![project.path().join("local.test.ts")]);
+        assert_eq!(fs::read_to_string(&external).unwrap(), source);
+        assert!(
+            fs::read_to_string(project.path().join("local.test.ts"))
+                .unwrap()
+                .contains("vite-plus/test")
+        );
     }
 
     #[test]
