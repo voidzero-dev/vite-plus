@@ -484,25 +484,12 @@ fn extract_tgz_file(
 }
 
 /// Download a tgz file from a URL and extract it to a target directory with optional hash verification.
-///
-/// # Arguments
-/// * `url` - The URL of the tgz file to download.
-/// * `target_dir` - The directory to extract the tgz file to.
-/// * `archive_file` - Optional single entry to extract, as a relative path of
-///   normal components. vp ignores every other entry, and `expected_hash`
-///   covers that one file instead of the tgz.
-/// * `expected_hash` - Optional expected hash, "algorithm.hex" or SRI "algorithm-base64" (see [`verify_file_hash`])
-/// * `message` - Optional message shown above a progress bar while downloading (see [`HttpClient::download_file`])
-/// * `npm_config` - npm configuration used for the download.
-///
-/// # Returns
-/// * `Ok(())` - If the tgz file is downloaded, verified (if hash provided) and extracted successfully.
-/// * `Err(e)` - If the tgz file is not downloaded, verified or extracted successfully.
 pub(crate) async fn download_and_extract_tgz_with_hash_and_config(
     url: &str,
     target_dir: impl AsRef<Path>,
     archive_file: Option<&Path>,
     expected_hash: Option<&str>,
+    tarball_hash: Option<&str>,
     message: Option<&str>,
     npm_config: &NpmConfig,
 ) -> Result<(), Error> {
@@ -533,6 +520,7 @@ pub(crate) async fn download_and_extract_tgz_with_hash_and_config(
             &target_dir,
             archive_file,
             expected_hash,
+            tarball_hash,
             message,
             npm_config,
         )
@@ -557,6 +545,7 @@ async fn download_and_extract_tgz_once(
     target_dir: &Path,
     archive_file: Option<&Path>,
     expected_hash: Option<&str>,
+    tarball_hash: Option<&str>,
     message: Option<&str>,
     npm_config: &NpmConfig,
 ) -> Result<(), Error> {
@@ -573,6 +562,10 @@ async fn download_and_extract_tgz_once(
     let tgz_file = target_dir.join("package.tgz");
     let client = HttpClient::with_npm_config(0, 0, npm_config.clone());
     client.download_file(url, &tgz_file, message).await?;
+
+    if let Some(tarball_hash) = tarball_hash {
+        verify_file_hash(&tgz_file, tarball_hash).await?;
+    }
 
     if let Some(archive_file) = archive_file {
         // The hash covers one entry. The rest of the archive is unauthenticated,
@@ -1278,6 +1271,7 @@ mod tests {
             None,
             None,
             None,
+            None,
             &NpmConfig { values: Default::default() },
         )
         .await;
@@ -1318,6 +1312,7 @@ mod tests {
             None,
             None,
             None,
+            None,
             &NpmConfig { values: Default::default() },
         )
         .await;
@@ -1352,6 +1347,7 @@ mod tests {
             &target_dir,
             None,
             Some(wrong_hash),
+            None,
             None,
             &NpmConfig { values: Default::default() },
         )

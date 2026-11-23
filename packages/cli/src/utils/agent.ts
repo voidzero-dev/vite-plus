@@ -654,10 +654,17 @@ async function tryLinkTargetToAgents(projectRoot: string, targetPath: string, si
 }
 
 async function getExistingPathKind(filePath: string) {
-  if (!fs.existsSync(filePath)) {
+  // lstat rather than existsSync: existsSync follows symlinks, so it reports a
+  // dangling symlink as missing and the later symlink() call fails with EEXIST.
+  const stat = await fsPromises.lstat(filePath).catch((err: NodeJS.ErrnoException) => {
+    if (err.code === 'ENOENT') {
+      return undefined;
+    }
+    throw err;
+  });
+  if (!stat) {
     return 'missing' as const;
   }
-  const stat = await fsPromises.lstat(filePath);
   return stat.isSymbolicLink() ? ('symlink' as const) : ('file' as const);
 }
 

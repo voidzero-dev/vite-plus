@@ -22,6 +22,7 @@ const npmArchive = createArchive({
   'package/bin/npm-cli.js': '// fixture\n',
   'package/bin/npx-cli.js': '// fixture\n',
 });
+const npmIntegrity = `sha512-${createHash('sha512').update(npmArchive).digest('base64')}`;
 let downloads = 0;
 const server = createServer(function handleRequest(request, response) {
   if (request.url.endsWith('/SHASUMS256.txt.asc')) {
@@ -30,6 +31,11 @@ const server = createServer(function handleRequest(request, response) {
   }
   if (request.url.endsWith('/SHASUMS256.txt')) {
     response.end(`${createHash('sha256').update(nodeArchive).digest('hex')}  ${nodeRoot}.tar.gz\n`);
+    return;
+  }
+  if (request.url === `/npm/${version}`) {
+    response.setHeader('Content-Type', 'application/json');
+    response.end(JSON.stringify({ dist: { integrity: npmIntegrity } }));
     return;
   }
   let body;
