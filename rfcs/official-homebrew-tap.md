@@ -316,11 +316,12 @@ and synthetic credentials. In addition to the published-artifact checks, cover:
 - Upgrade and old-keg removal with both shim directories, including `pn` and `pnx`.
 - Independent account data, migration, `vp implode`, and Homebrew uninstall.
 
-PR installation checks require the `test: install-e2e` label and cover macOS ARM64
-and Linux ARM64/x64. The workflow also supports manual runs on these platforms.
-Pushes to `main` do not run this workflow. Formula-update PRs run published-artifact
-checks automatically on all four supported platforms, without that label or a
-source build. PR tests receive no publishing credentials.
+PRs that change the formula, Homebrew integration code, or its tests and workflows
+automatically build the CLI and test installation and upgrades on macOS ARM64 and
+Linux ARM64/x64. Maintainers can also run these checks on other PRs with the
+`test: install-e2e` label or start the workflow manually. Formula-update PRs also
+test published artifacts on all four supported platforms. Pushes to `main` do not
+run the installation workflow. PR tests receive no publishing credentials.
 
 ## Tradeoffs
 
