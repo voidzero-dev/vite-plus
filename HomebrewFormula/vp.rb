@@ -58,7 +58,8 @@ class Vp < Formula
       # the normal formula fetch reuses this archive from Homebrew's download cache.
       archive = resource.cached_download
       resource.fetch(verify_download_integrity: false, quiet: true) unless archive.file?
-      if "sha512-#{Digest::SHA512.file(archive).base64digest}" != integrity
+      digest = Digest::SHA512.file(archive).base64digest
+      if "sha512-#{digest}" != integrity
         resource.clear_cache
         raise "Vite+ preview checksum mismatch"
       end
@@ -103,7 +104,8 @@ class Vp < Formula
   if preview_ref
     os = OS.mac? ? "darwin" : "linux"
     arch = Hardware::CPU.arm? ? "arm64" : "x64"
-    platform = "#{os}-#{arch}#{"-gnu" if OS.linux?}"
+    gnu_suffix = "-gnu" if OS.linux?
+    platform = "#{os}-#{arch}#{gnu_suffix}"
     preview = Preview.resolve(preview_ref, platform)
     url preview.fetch(:url)
     version preview.fetch(:version)
