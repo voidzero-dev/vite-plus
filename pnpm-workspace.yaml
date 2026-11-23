@@ -19,8 +19,8 @@ catalog:
   # Kept at the oxlint version by .github/scripts/upgrade-deps.ts
   '@oxlint/plugins': =1.94.0
   '@rolldown/pluginutils': ^1.0.0
-  '@tsdown/css': =0.23.4
-  '@tsdown/exe': =0.23.4
+  '@tsdown/css': =0.23.5
+  '@tsdown/exe': =0.23.5
   '@types/cross-spawn': ^6.0.6
   '@types/node': 24.10.3
   '@types/validate-npm-package-name': ^4.0.2
@@ -47,7 +47,7 @@ catalog:
   jsonc-parser: ^3.3.1
   # Kept in lockstep with the bundled @tsdown/css by .github/scripts/upgrade-deps.ts
   lightningcss: ^1.33.0
-  lint-staged: ^17.6.1
+  lint-staged: ^17.6.2
   minimatch: ^11.0.0
   nanotar: ^0.3.0
   oxc-parser: =0.159.0
@@ -65,7 +65,7 @@ catalog:
   signal-exit: 4.1.0
   source-map: 0.8.0
   tinyglobby: ^0.2.15
-  tsdown: =0.23.4
+  tsdown: =0.23.5
   tsrs: =7.1.0-beta.tsrs4
   typescript: ~7.0.2
   valibot: 1.5.0

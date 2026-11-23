@@ -12,10 +12,14 @@ export function getBundledDependencyRanges(
   const tsdownRequire = createRequire(coreRequire.resolve('tsdown/package.json'));
   const pluginPath = tsdownRequire.resolve('rolldown-plugin-dts/package.json');
   const vitePath = join(root, 'vite/packages/vite/package.json');
+  const pluginPackage = JSON.parse(readFileSync(pluginPath, 'utf8')) as {
+    dependencies?: Record<string, string>;
+  };
+  const yukuPackage = typeof pluginPackage.dependencies?.yuku === 'string' ? 'yuku' : 'yuku-parser';
   // These packages stay external in packages/core/build.ts. Follow their
   // bundled consumers rather than independently selecting the latest releases.
   const sources: { path: string; field: DependencyField; names: string[] }[] = [
-    { path: pluginPath, field: 'dependencies', names: ['yuku-parser'] },
+    { path: pluginPath, field: 'dependencies', names: [yukuPackage] },
     { path: vitePath, field: 'dependencies', names: ['postcss'] },
     { path: vitePath, field: 'optionalDependencies', names: ['fsevents'] },
   ];
@@ -28,10 +32,10 @@ export function getBundledDependencyRanges(
       if (typeof range !== 'string' || range.trim() === '') {
         throw new Error(`Missing ${field}.${name} in ${path}; review core's externals`);
       }
-      if (name === 'yuku-parser') {
-        // The AST helpers and codegen are bundled. Pin the runtime parser to
-        // the exact version resolved by the same plugin so it cannot drift.
-        const parserPath = createRequire(path).resolve('yuku-parser/package.json');
+      if (name === 'yuku' || name === 'yuku-parser') {
+        // Pin the runtime to the exact version resolved by the same plugin so
+        // the bundled code and its native bindings cannot drift.
+        const parserPath = createRequire(path).resolve(`${name}/package.json`);
         const { version } = JSON.parse(readFileSync(parserPath, 'utf8')) as { version?: unknown };
         if (typeof version !== 'string' || version.trim() === '') {
           throw new Error(`Missing version in ${parserPath}; review core's externals`);

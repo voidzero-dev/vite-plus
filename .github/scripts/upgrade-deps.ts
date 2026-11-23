@@ -541,13 +541,21 @@ function syncBundledDependencies(): void {
   const ranges = getBundledDependencyRanges(ROOT);
   const filePath = path.join(ROOT, 'packages/core/package.json');
   const pkg = readJsonFile(filePath);
+  const yukuName = ranges.find(({ name }) => name === 'yuku' || name === 'yuku-parser')?.name;
+  const previousYukuName = yukuName === 'yuku' ? 'yuku-parser' : 'yuku';
+  const previousYukuRange = pkg.dependencies?.[previousYukuName];
+  if (yukuName) {
+    delete pkg.dependencies?.[previousYukuName];
+    changes.delete(previousYukuName);
+  }
   for (const { name, field, range } of ranges) {
-    const oldRange = pkg[field]?.[name];
-    if (typeof oldRange !== 'string') {
+    const oldRange = pkg[field]?.[name] ?? (name === yukuName ? previousYukuRange : undefined);
+    if (typeof oldRange !== 'string' && name !== yukuName) {
       throw new Error(`Missing ${field}.${name} in ${filePath}`);
     }
     // Preserve the original version if synchronization runs again after fixups.
     recordChange(name, changes.get(name)?.old ?? oldRange, range);
+    pkg[field] ??= {};
     pkg[field][name] = range;
   }
   syncCoreVersion(pkg);
