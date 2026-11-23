@@ -6833,9 +6833,9 @@ dependencies = [
 
 [[package]]
 name = "saphyr"
-version = "0.3.3"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3aa37a62b2a28868277e83b6f651dc9581751db73d1cb51132c73c0b4ec7f70a"
+checksum = "8150ae0f360ddf81a99e52d5d37071e06af29e7c004f955846e941418463cc48"
 dependencies = [
  "hashlink",
  "ordered-float 5.5.0",
@@ -6845,9 +6845,9 @@ dependencies = [
 
 [[package]]
 name = "saphyr-parser"
-version = "0.3.3"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "48cf5a82d41247a625f040af08e91008fec945bce3b0bffba992c44af092caa2"
+checksum = "9a425f8285f1321dd220c4d781a7f757eccd6639359f72bdeceec3cdaac8b3a7"
 dependencies = [
  "arraydeque",
  "thiserror 2.0.21",
