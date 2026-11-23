@@ -484,7 +484,7 @@ fn extract_tgz_file(
 }
 
 /// The entries of a downloaded tgz that vp writes, and the digest that covers them.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub(crate) enum Unpack<'a> {
     /// Write every entry except links. Only [`TgzDownload::archive_digest`]
     /// authenticates them.
@@ -498,7 +498,7 @@ pub(crate) enum Unpack<'a> {
 /// A tgz to download, verify, and extract.
 ///
 /// A digest is "algorithm.hex" or SRI "algorithm-base64" (see [`verify_file_hash`]).
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub(crate) struct TgzDownload<'a> {
     pub(crate) url: &'a str,
     /// The digest of the downloaded `.tgz` bytes. vp checks it before it reads any entry.
@@ -723,6 +723,9 @@ mod tests {
 
     use super::*;
 
+    /// The content of `package/bin/yarn` in [`create_mock_package_tgz`].
+    const MOCK_YARN_CLI: &[u8] = b"#!/usr/bin/env node\nconsole.log('mock yarn');";
+
     /// Helper function to create a mock package tar.gz that mimics npm package structure
     fn create_mock_package_tgz() -> Vec<u8> {
         let mut tar_builder = tar::Builder::new(Vec::new());
@@ -737,7 +740,7 @@ mod tests {
             .unwrap();
 
         // Add bin/yarn mock file
-        let yarn_content = b"#!/usr/bin/env node\nconsole.log('mock yarn');";
+        let yarn_content = MOCK_YARN_CLI;
         let mut header = tar::Header::new_gnu();
         header.set_size(yarn_content.len() as u64);
         header.set_mode(0o755);
@@ -1284,14 +1287,15 @@ mod tests {
 
     /// In single-entry mode, `archive_digest` covers the `.tgz` bytes and the
     /// entry `digest` covers the extracted file. A mismatch in either one fails
-    /// the download, and vp writes only the named entry.
+    /// the download, and vp writes only the named entry. The cases use one
+    /// attempt, so a mismatch does not wait for the retry delays.
     #[tokio::test]
     async fn single_entry_download_checks_both_digests() {
         let mock_tgz = create_mock_package_tgz();
         let sha512 =
             |bytes: &[u8]| vt_str::format!("sha512.{}", hex::encode(Sha512::digest(bytes)));
         let archive = sha512(&mock_tgz);
-        let entry = sha512(b"#!/usr/bin/env node\nconsole.log('mock yarn');");
+        let entry = sha512(MOCK_YARN_CLI);
         let wrong = sha512(b"other");
         let server = MockServer::start();
         server.mock(|when, then| {
@@ -1311,7 +1315,7 @@ mod tests {
         ] {
             let temp_dir = TempDir::new().unwrap();
             let target_dir = temp_dir.path().join("extracted");
-            let result = download_and_extract_tgz(
+            let result = download_and_extract_tgz_once(
                 TgzDownload {
                     url: &url,
                     archive_digest,
