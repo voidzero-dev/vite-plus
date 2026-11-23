@@ -2170,9 +2170,6 @@ pub fn find_retained_vitest_packages(
     import_rule: &ImportRuleConfig,
 ) -> Result<BTreeMap<PathBuf, BTreeSet<&'static str>>, Error> {
     let mut owners = BTreeMap::new();
-    if !import_rule.can_disable_rewrites() {
-        return Ok(owners);
-    }
 
     // An installed library's own test files cannot justify dependencies in the
     // project being migrated, even when it has no .gitignore.
@@ -2180,7 +2177,8 @@ pub fn find_retained_vitest_packages(
         entry.depth() == 0 || entry.file_name() != "node_modules"
     })?;
     for path in sources.files {
-        if import_rule.is_enabled_for(root, &path) {
+        // Symlinked sources keep their imports even when the rule is enabled.
+        if import_rule.is_enabled_for(root, &path) && is_rewritable_file(&path) {
             continue;
         }
         let Some(manifest) = find_nearest_package_json(&path, root) else { continue };
@@ -2194,6 +2192,11 @@ pub fn find_retained_vitest_packages(
     }
     owners.retain(|_, dependencies| !dependencies.is_empty());
     Ok(owners)
+}
+
+/// Writing through a symlink would modify its target, which may live outside the project.
+fn is_rewritable_file(path: &Path) -> bool {
+    std::fs::symlink_metadata(path).is_ok_and(|metadata| metadata.is_file())
 }
 
 /// Canonical Vite/Vitest config entry basenames, the single source shared with
@@ -2388,8 +2391,7 @@ pub fn rewrite_imports_in_directory_with_options(
     let files_with_context: Vec<(PathBuf, PackageRewriteContext)> = walk_result
         .files
         .into_iter()
-        // Writing through a symlink would modify its target, which may live outside the project.
-        .filter(|file_path| std::fs::symlink_metadata(file_path).is_ok_and(|m| m.is_file()))
+        .filter(|file_path| is_rewritable_file(file_path))
         .map(|file_path| {
             let package_context =
                 if let Some(package_json_path) = find_nearest_package_json(&file_path, root) {
@@ -2766,6 +2768,24 @@ mod tests {
         assert_eq!(
             find_retained_vitest_packages(&root, &config).unwrap(),
             BTreeMap::from([(root, BTreeSet::from(["vitest"]))])
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn retains_vitest_for_symlinked_sources_when_the_rule_is_enabled() {
+        let project = tempdir().unwrap();
+        let outside = tempdir().unwrap();
+        let root = project.path();
+        write_pack_fixture(root, "package.json", "{}");
+        write_pack_fixture(root, "local.test.ts", "import 'vitest';");
+        write_pack_fixture(outside.path(), "helper.ts", "import 'vitest/config';");
+        std::os::unix::fs::symlink(outside.path().join("helper.ts"), root.join("helper.ts"))
+            .unwrap();
+
+        assert_eq!(
+            find_retained_vitest_packages(root, &ImportRuleConfig::default()).unwrap(),
+            BTreeMap::from([(root.to_path_buf(), BTreeSet::from(["vitest"]))])
         );
     }
 

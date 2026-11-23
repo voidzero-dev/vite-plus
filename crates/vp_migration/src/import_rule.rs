@@ -45,10 +45,6 @@ impl ImportRuleConfig {
         Ok(config)
     }
 
-    pub(crate) fn can_disable_rewrites(&self) -> bool {
-        !self.enabled || self.overrides.iter().any(|entry| !entry.enabled)
-    }
-
     pub(crate) fn is_enabled_for(&self, root: &Path, path: &Path) -> bool {
         if self.overrides.is_empty() {
             return self.enabled;
