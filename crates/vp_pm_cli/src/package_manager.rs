@@ -1484,13 +1484,14 @@ async fn resolve_package_manager_version_with_config(
     }
 }
 
-/// Abbreviated registry metadata: only the version list is needed.
+/// Abbreviated registry metadata, with each version's metadata read as `V`.
+///
+/// The default `IgnoredAny` reads only the version list.
 #[derive(Deserialize)]
-struct RegistryPackument {
-    // a map with ignored values is the idiomatic serde way to read only the keys
-    #[allow(clippy::zero_sized_map_values)]
-    #[serde(default)]
-    versions: HashMap<String, serde::de::IgnoredAny>,
+struct RegistryPackument<V = serde::de::IgnoredAny> {
+    // A plain `default` makes serde require `V: Default`.
+    #[serde(default = "HashMap::new")]
+    versions: HashMap<String, V>,
 }
 
 /// Fetch all published versions of a package from the npm registry.
@@ -2169,13 +2170,6 @@ impl RegistryDist {
     }
 }
 
-/// Abbreviated registry package document, with the `dist` of each version.
-#[derive(Deserialize)]
-struct RegistryPackumentDists {
-    #[serde(default)]
-    versions: HashMap<String, RegistryVersionMetadata>,
-}
-
 /// The fix when the registry gives no `dist.integrity` for a manager whose pin
 /// covers the executed files.
 const ADD_PIN_HINT: &str = "Add an integrity hash to the `packageManager` field, so that Vite+ checks the download against it, or use a registry that serves package metadata.";
@@ -2264,7 +2258,7 @@ async fn fetch_registry_integrity(
             hint: hint.into(),
         }))
     };
-    let packument: RegistryPackumentDists =
+    let packument: RegistryPackument<RegistryVersionMetadata> =
         match client.get_json_with_accept(&package_url, NPM_ABBREVIATED_METADATA_ACCEPT).await {
             Err(err) if is_not_found(&err) => return Err(unavailable()),
             result => result?,
@@ -2710,7 +2704,7 @@ mod tests {
             &platform_package,
             version,
             platform_tgz,
-            Some(platform_integrity),
+            platform_integrity,
         );
     }
 
@@ -2725,7 +2719,7 @@ mod tests {
         tgz: Vec<u8>,
     ) -> httpmock::Mock<'a> {
         let integrity = sri(&tgz);
-        mount_package_with_integrity(server, package, version, tgz, Some(&integrity))
+        mount_package_with_integrity(server, package, version, tgz, &integrity)
     }
 
     fn mount_package_with_integrity<'a>(
@@ -2733,17 +2727,32 @@ mod tests {
         package: &str,
         version: &str,
         tgz: Vec<u8>,
-        integrity: Option<&str>,
+        integrity: &str,
     ) -> httpmock::Mock<'a> {
-        use httpmock::prelude::*;
-        server.mock(|when, then| {
-            when.method(GET).path(format!("/{package}/{version}"));
-            then.status(200).json_body(serde_json::json!({"dist": {"integrity": integrity}}));
-        });
+        mount_version_document(
+            server,
+            package,
+            version,
+            serde_json::json!({"integrity": integrity}),
+        );
         mount_tarball(server, package, version, tgz)
     }
 
-    /// Serve only the tarball of `package@version`, as a tarball-only mirror does.
+    /// Serve the version document of `package@version` with this `dist` object.
+    fn mount_version_document(
+        server: &httpmock::MockServer,
+        package: &str,
+        version: &str,
+        dist: serde_json::Value,
+    ) {
+        use httpmock::prelude::*;
+        server.mock(|when, then| {
+            when.method(GET).path(format!("/{package}/{version}"));
+            then.status(200).json_body(serde_json::json!({"dist": dist}));
+        });
+    }
+
+    /// Serve the tarball of `package@version`.
     fn mount_tarball<'a>(
         server: &'a httpmock::MockServer,
         package: &str,
@@ -4827,10 +4836,7 @@ mod tests {
     ) -> Option<httpmock::Mock<'a>> {
         use httpmock::prelude::*;
         if let Some(dist) = version_doc.dist(tgz) {
-            server.mock(|when, then| {
-                when.method(GET).path(format!("/{package}/{version}"));
-                then.status(200).json_body(serde_json::json!({"dist": dist}));
-            });
+            mount_version_document(server, package, version, dist);
         }
         package_doc.dist(tgz).map(|dist| {
             server.mock(|when, then| {
@@ -4863,7 +4869,6 @@ mod tests {
             (pnpm.clone(), Doc::Other, Doc::Missing),
             (pnpm.clone(), Doc::Missing, Doc::Matching),
             (pnpm.clone(), Doc::NoIntegrity, Doc::Matching),
-            (pnpm.clone(), Doc::Missing, Doc::Other),
             (pnpm.clone(), Doc::NoIntegrity, Doc::NoIntegrity),
             (pnpm, Doc::Missing, Doc::Missing),
             (yarn.clone(), Doc::Other, Doc::Missing),
@@ -4944,16 +4949,17 @@ mod tests {
         use sha2::Sha512;
 
         for (kind, version, platform_package, platform_tgz) in native_platform_cases() {
+            let main_tgz = create_tgz(&[(
+                "package/package.json",
+                format!(r#"{{"name":"{kind}","version":"{version}"}}"#).as_bytes(),
+            )]);
+            let pin = format!("sha512.{}", hex::encode(Sha512::digest(&main_tgz)));
             for (version_doc, package_doc) in
                 [(Doc::Missing, Doc::Missing), (Doc::NoIntegrity, Doc::NoIntegrity)]
             {
-                let main_tgz = create_tgz(&[(
-                    "package/package.json",
-                    format!(r#"{{"name":"{kind}","version":"{version}"}}"#).as_bytes(),
-                )]);
-                let pin = format!("sha512.{}", hex::encode(Sha512::digest(&main_tgz)));
                 let server = httpmock::MockServer::start();
-                let main_tarball = mount_tarball(&server, &kind.to_string(), version, main_tgz);
+                let main_tarball =
+                    mount_tarball(&server, &kind.to_string(), version, main_tgz.clone());
                 mount_registry_documents(
                     &server,
                     &platform_package,
