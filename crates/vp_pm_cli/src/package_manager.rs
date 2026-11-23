@@ -5919,12 +5919,8 @@ mod tests {
         let server = MockServer::start();
         // A 200 body that is not a valid gzip: the download succeeds but
         // extraction fails, so the install errors out after the temp dir exists.
-        server.mock(|when, then| {
-            when.method(GET).path("/pnpm/-/pnpm-10.0.0.tgz");
-            then.status(200)
-                .header("content-type", "application/octet-stream")
-                .body("this is not a valid gzip archive");
-        });
+        let tarball =
+            mount_package(&server, "pnpm", "10.0.0", b"this is not a valid gzip archive".to_vec());
 
         // VP_HOME pins <DATA> to the root, so installs land directly under it.
         let pnpm_dir = vp_home.path().join("package_manager").join("pnpm");
@@ -5937,6 +5933,7 @@ mod tests {
                 let result =
                     download_package_manager(PackageManagerType::Pnpm, "10.0.0", None).await;
                 assert!(result.is_err(), "corrupt tarball should fail the install, got {result:?}");
+                assert!(tarball.hits() > 0, "the install must fail at extraction: {result:?}");
 
                 // The per-install temp dir must be gone after the failure.
                 let leftovers: Vec<_> = fs::read_dir(&pnpm_dir)
