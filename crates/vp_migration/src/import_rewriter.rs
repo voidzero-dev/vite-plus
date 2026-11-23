@@ -2176,9 +2176,9 @@ pub fn find_retained_vitest_packages(
     let sources = file_walker::find_ts_files_filtered(root, |entry| {
         entry.depth() == 0 || entry.file_name() != "node_modules"
     })?;
+    let unrewritten_symlinks = find_unrewritten_symlinks(&sources.files);
     for path in sources.files {
-        // Symlinked sources keep their imports even when the rule is enabled.
-        if import_rule.is_enabled_for(root, &path) && is_rewritable_file(&path) {
+        if import_rule.is_enabled_for(root, &path) && !unrewritten_symlinks.contains(&path) {
             continue;
         }
         let Some(manifest) = find_nearest_package_json(&path, root) else { continue };
@@ -2194,10 +2194,27 @@ pub fn find_retained_vitest_packages(
     Ok(owners)
 }
 
-/// Writing through a symlink would modify its target, which may live outside the project.
-fn is_rewritable_file(path: &Path) -> bool {
-    std::fs::symlink_metadata(path).is_ok_and(|metadata| metadata.is_file())
+/// Find symlinked sources whose imports migration leaves unchanged. Writing
+/// through a symlink would modify its target, which may live outside the
+/// project. A link whose target is also a walked regular file changes when
+/// migration rewrites that target, so it is not included.
+fn find_unrewritten_symlinks(files: &[PathBuf]) -> HashSet<PathBuf> {
+    let (regular, links): (Vec<&PathBuf>, Vec<&PathBuf>) = files
+        .iter()
+        .partition(|path| std::fs::symlink_metadata(path).is_ok_and(|metadata| metadata.is_file()));
+    if links.is_empty() {
+        return HashSet::new();
+    }
+    let targets: HashSet<PathBuf> =
+        regular.into_iter().filter_map(|path| path.canonicalize().ok()).collect();
+    links
+        .into_iter()
+        .filter(|link| !link.canonicalize().is_ok_and(|target| targets.contains(&target)))
+        .cloned()
+        .collect()
 }
+
+const UNREWRITTEN_SYMLINK_WARNING: &str = "Imports were not rewritten because this file is a symbolic link to a file that migration does not update. Update the linked file manually if it should use Vite+.";
 
 /// Canonical Vite/Vitest config entry basenames, the single source shared with
 /// the `prefer-vite-plus-imports` oxlint rule. The list lives in
@@ -2383,6 +2400,7 @@ pub fn rewrite_imports_in_directory_with_options(
     options: RewriteImportsOptions,
 ) -> Result<BatchRewriteResult, Error> {
     let walk_result = file_walker::find_ts_files(root)?;
+    let unrewritten_symlinks = find_unrewritten_symlinks(&walk_result.files);
 
     // Pre-compute package context for each file (requires mutable cache, done sequentially).
     let mut package_context_cache: HashMap<PathBuf, PackageRewriteContext> = HashMap::new();
@@ -2391,7 +2409,10 @@ pub fn rewrite_imports_in_directory_with_options(
     let files_with_context: Vec<(PathBuf, PackageRewriteContext)> = walk_result
         .files
         .into_iter()
-        .filter(|file_path| is_rewritable_file(file_path))
+        .filter(|file_path| {
+            unrewritten_symlinks.contains(file_path)
+                || std::fs::symlink_metadata(file_path).is_ok_and(|metadata| metadata.is_file())
+        })
         .map(|file_path| {
             let package_context =
                 if let Some(package_json_path) = find_nearest_package_json(&file_path, root) {
@@ -2434,7 +2455,11 @@ pub fn rewrite_imports_in_directory_with_options(
                 options.preserve_vitest_in_nuxt_packages && package_context.uses_nuxt_test_utils,
             ) {
                 Ok(rewrite_result) => {
-                    if rewrite_result.updated {
+                    if rewrite_result.updated && unrewritten_symlinks.contains(&file_path) {
+                        let mut warnings = rewrite_result.warnings;
+                        warnings.push(UNREWRITTEN_SYMLINK_WARNING.to_string());
+                        (file_path, FileResult::Unchanged(warnings), false)
+                    } else if rewrite_result.updated {
                         if let Err(e) = std::fs::write(&file_path, &rewrite_result.content) {
                             (file_path, FileResult::Error(e.to_string()), false)
                         } else {
@@ -3978,12 +4003,37 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';"#,
 
         assert!(result.errors.is_empty());
         assert_eq!(result.modified_files, vec![project.path().join("local.test.ts")]);
+        assert_eq!(
+            result.warnings,
+            vec![(project.path().join("linked.test.ts"), UNREWRITTEN_SYMLINK_WARNING.to_string())]
+        );
         assert_eq!(fs::read_to_string(&external).unwrap(), source);
         assert!(
             fs::read_to_string(project.path().join("local.test.ts"))
                 .unwrap()
                 .contains("vite-plus/test")
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlinks_to_project_files_follow_the_rewritten_target() {
+        use std::fs;
+
+        let project = tempdir().unwrap();
+        let root = project.path();
+        write_pack_fixture(root, "package.json", "{}");
+        write_pack_fixture(root, "shared/setup.ts", "import 'vitest';");
+        fs::create_dir(root.join("app")).unwrap();
+        std::os::unix::fs::symlink("../shared/setup.ts", root.join("app/setup.ts")).unwrap();
+
+        assert!(
+            find_retained_vitest_packages(root, &ImportRuleConfig::default()).unwrap().is_empty()
+        );
+        let result = rewrite_imports_in_directory(root).unwrap();
+        assert!(result.errors.is_empty() && result.warnings.is_empty());
+        assert_eq!(result.modified_files, vec![root.join("shared/setup.ts")]);
+        assert!(fs::read_to_string(root.join("app/setup.ts")).unwrap().contains("vite-plus/test"));
     }
 
     #[test]
