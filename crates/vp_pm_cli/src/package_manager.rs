@@ -23,7 +23,7 @@ use vt_workspace::{WorkspaceFile, WorkspaceRoot, find_workspace_root};
 use crate::{
     config::{NpmConfig, is_default_registry},
     env_forbidden::ensure_managed_package_manager_allowed,
-    request::{HttpClient, download_and_extract_tgz_with_hash_and_config, is_not_found},
+    request::{HttpClient, TgzDownload, Unpack, download_and_extract_tgz, is_not_found},
     shim,
 };
 
@@ -1840,13 +1840,11 @@ async fn download_package_manager_inner(
     }
 
     // A pin covers the executed files and takes precedence. Without one, the
-    // registry's integrity still rejects a corrupted or swapped tarball.
+    // registry's `dist.integrity` still rejects a tarball that does not match
+    // the registry metadata.
     let registry_integrity = match expected_hash {
         Some(_) => None,
-        None => {
-            fetch_registry_integrity(package_manager_type, &package_name, &version, npm_config)
-                .await?
-        }
+        None => fetch_registry_integrity(&package_name, &version, npm_config).await?,
     };
 
     // Stage the download in a temp directory beside the version directory, not
@@ -1864,14 +1862,17 @@ async fn download_package_manager_inner(
     let download_message = format!("Downloading {package_manager_type} v{version}...");
     // A Yarn 2+ `packageManager` hash covers only the CLI. The rest of the archive
     // is not authenticated by that hash, so vp never writes it to disk.
-    let archive_file = is_modern_yarn.then(|| PathBuf::from(format!("package/{YARN_CLI_ENTRY}")));
-    download_and_extract_tgz_with_hash_and_config(
-        &tgz_url,
+    let yarn_cli_entry = is_modern_yarn.then(|| PathBuf::from(format!("package/{YARN_CLI_ENTRY}")));
+    // A pin covers the file it names. The registry integrity always covers the archive.
+    let (archive_digest, unpack) = match yarn_cli_entry.as_deref() {
+        Some(path) => {
+            (registry_integrity.as_deref(), Unpack::Entry { path, digest: expected_hash })
+        }
+        None => (expected_hash.or(registry_integrity.as_deref()), Unpack::All),
+    };
+    download_and_extract_tgz(
+        TgzDownload { url: &tgz_url, archive_digest, unpack, message: Some(&download_message) },
         &target_dir_tmp,
-        archive_file.as_deref(),
-        expected_hash,
-        registry_integrity.as_deref(),
-        Some(&download_message),
         npm_config,
     )
     .await
@@ -2029,13 +2030,14 @@ async fn download_bun_package_manager(
         let main_tgz_url = npm_config.package_tgz_url("bun", version);
         let verify_dir = tempfile::tempdir()?;
         let verify_message = format!("Verifying bun v{version}...");
-        download_and_extract_tgz_with_hash_and_config(
-            &main_tgz_url,
+        download_and_extract_tgz(
+            TgzDownload {
+                url: &main_tgz_url,
+                archive_digest: Some(expected_hash),
+                unpack: Unpack::All,
+                message: Some(&verify_message),
+            },
             verify_dir.path(),
-            None,
-            Some(expected_hash),
-            None,
-            Some(&verify_message),
             npm_config,
         )
         .await
@@ -2044,13 +2046,8 @@ async fn download_bun_package_manager(
 
     // The declared hash never covers the platform tarball, so verify it
     // against the registry's `dist.integrity` for the platform package.
-    let platform_hash = fetch_registry_integrity(
-        PackageManagerType::Bun,
-        &platform_package_name,
-        version,
-        npm_config,
-    )
-    .await?;
+    let platform_hash =
+        fetch_registry_integrity(&platform_package_name, version, npm_config).await?;
 
     // Stage the download in a temp directory beside the version directory, not
     // inside it, so a reader scanning key subdirectories never sees the staging
@@ -2066,13 +2063,14 @@ async fn download_bun_package_manager(
     let target_dir_tmp = tmp_dir.path().to_path_buf();
 
     let download_message = format!("Downloading bun v{version}...");
-    download_and_extract_tgz_with_hash_and_config(
-        &platform_tgz_url,
+    download_and_extract_tgz(
+        TgzDownload {
+            url: &platform_tgz_url,
+            archive_digest: platform_hash.as_deref(),
+            unpack: Unpack::All,
+            message: Some(&download_message),
+        },
         &target_dir_tmp,
-        None,
-        None,
-        platform_hash.as_deref(),
-        Some(&download_message),
         npm_config,
     )
     .await
@@ -2169,34 +2167,39 @@ struct RegistryDist {
     integrity: Option<Str>,
 }
 
+/// Fetch the registry `dist.integrity` (SRI) of a package version.
+///
+/// Returns `None` when the registry omits the field or does not serve the
+/// version document, for example a mirror that serves only tarballs. The
+/// install then continues without this check. The same registry serves the
+/// tarball and its integrity, so a hard failure here gives no extra security.
+/// If the version does not exist, the tarball request reports it.
 async fn fetch_registry_integrity(
-    package_manager_type: PackageManagerType,
     package_name: &str,
     version: &Str,
     npm_config: &NpmConfig,
 ) -> Result<Option<Str>, Error> {
     let metadata_url = npm_config.package_version_url(package_name, version);
-    let metadata: RegistryVersionMetadata = HttpClient::with_npm_config(3, 500, npm_config.clone())
-        .get_json(&metadata_url)
-        .await
-        .map_err(|err| {
-            if is_not_found(&err) {
-                Error::PackageManagerVersionNotFound {
-                    name: package_manager_type.to_string().into(),
-                    version: version.clone(),
-                    url: metadata_url.as_str().into(),
-                }
-            } else {
-                err
-            }
-        })?;
+    let client = HttpClient::with_npm_config(3, 500, npm_config.clone());
+    let metadata: RegistryVersionMetadata = match client.get_json(&metadata_url).await {
+        Ok(metadata) => metadata,
+        Err(err) if is_not_found(&err) => {
+            tracing::debug!(
+                "Registry has no version document for {package_name}@{version}, install it without registry integrity"
+            );
+            return Ok(None);
+        }
+        Err(err) => return Err(err),
+    };
     // SRI allows several space-separated hashes; npm registries serve one.
-    Ok(metadata
-        .dist
-        .integrity
-        .as_deref()
-        .and_then(|sri| sri.split_whitespace().next())
-        .map(Str::from))
+    let integrity =
+        metadata.dist.integrity.as_deref().and_then(|sri| sri.split_whitespace().next());
+    if integrity.is_none() {
+        tracing::debug!(
+            "Registry omits dist.integrity for {package_name}@{version}, install it without registry integrity"
+        );
+    }
+    Ok(integrity.map(Str::from))
 }
 
 /// Download pnpm >= 12 (native binary) via its platform-specific npm package.
@@ -2238,13 +2241,14 @@ async fn download_pnpm_native_package_manager(
         let main_tgz_url = npm_config.package_tgz_url("pnpm", version);
         let verify_dir = tempfile::tempdir()?;
         let verify_message = format!("Verifying pnpm v{version}...");
-        download_and_extract_tgz_with_hash_and_config(
-            &main_tgz_url,
+        download_and_extract_tgz(
+            TgzDownload {
+                url: &main_tgz_url,
+                archive_digest: Some(expected_hash),
+                unpack: Unpack::All,
+                message: Some(&verify_message),
+            },
             verify_dir.path(),
-            None,
-            Some(expected_hash),
-            None,
-            Some(&verify_message),
             npm_config,
         )
         .await
@@ -2253,13 +2257,8 @@ async fn download_pnpm_native_package_manager(
 
     // The declared hash never covers the platform tarball, so verify it
     // against the registry's `dist.integrity` for the platform package.
-    let platform_hash = fetch_registry_integrity(
-        PackageManagerType::Pnpm,
-        platform_package_name,
-        version,
-        npm_config,
-    )
-    .await?;
+    let platform_hash =
+        fetch_registry_integrity(platform_package_name, version, npm_config).await?;
 
     // Stage the download in a temp directory beside the version directory, not
     // inside it, so a reader scanning key subdirectories never sees the staging
@@ -2275,13 +2274,14 @@ async fn download_pnpm_native_package_manager(
     let target_dir_tmp = tmp_dir.path().to_path_buf();
 
     let download_message = format!("Downloading pnpm v{version}...");
-    download_and_extract_tgz_with_hash_and_config(
-        &platform_tgz_url,
+    download_and_extract_tgz(
+        TgzDownload {
+            url: &platform_tgz_url,
+            archive_digest: platform_hash.as_deref(),
+            unpack: Unpack::All,
+            message: Some(&download_message),
+        },
         &target_dir_tmp,
-        None,
-        None,
-        platform_hash.as_deref(),
-        Some(&download_message),
         npm_config,
     )
     .await
@@ -2680,6 +2680,17 @@ mod tests {
             when.method(GET).path(format!("/{package}/{version}"));
             then.status(200).json_body(serde_json::json!({"dist": {"integrity": integrity}}));
         });
+        mount_tarball(server, package, version, tgz)
+    }
+
+    /// Serve only the tarball of `package@version`, as a tarball-only mirror does.
+    fn mount_tarball<'a>(
+        server: &'a httpmock::MockServer,
+        package: &str,
+        version: &str,
+        tgz: Vec<u8>,
+    ) -> httpmock::Mock<'a> {
+        use httpmock::prelude::*;
         let basename = package.rsplit('/').next().unwrap();
         server.mock(|when, then| {
             when.method(GET).path(format!("/{package}/-/{basename}-{version}.tgz"));
@@ -4442,6 +4453,12 @@ mod tests {
             when.method(GET).path("/yarn/-/yarn-1.22.22.tgz");
             then.status(200).body(tarball.clone());
         });
+        // A pin takes precedence over the registry, so a pinned install never
+        // fetches the version document.
+        let metadata = server.mock(|when, then| {
+            when.method(GET).path("/yarn/1.22.22");
+            then.status(200).json_body(serde_json::json!({"dist": {"integrity": sri(b"other")}}));
+        });
 
         for pin in [
             format!("sha512.{}", hex::encode(Sha512::digest(&tarball))),
@@ -4467,6 +4484,7 @@ mod tests {
             assert_eq!(manager.client, PackageManagerType::Yarn);
             assert_eq!(manager.version, "1.22.22");
         }
+        metadata.assert_hits(0);
     }
 
     #[tokio::test]
@@ -4554,7 +4572,8 @@ mod tests {
         };
         assert_eq!(name, "yarn");
         assert_eq!(version, "10000000000.0.0");
-        assert!(url.ends_with("/@yarnpkg/cli-dist/10000000000.0.0"), "{url}");
+        // The version document 404s too, but only the tarball 404 reports a missing version.
+        assert!(url.ends_with("/@yarnpkg/cli-dist/-/cli-dist-10000000000.0.0.tgz"), "{url}");
     }
 
     #[tokio::test]
@@ -4711,6 +4730,57 @@ mod tests {
                 !vp_home.path().join(format!("package_manager/{kind}/{version}")).exists(),
                 "{case}: a failed download left an install"
             );
+        }
+    }
+
+    /// A registry that does not serve the version document, such as a mirror
+    /// that serves only tarballs, installs without registry integrity. This
+    /// matches a version document that omits `dist.integrity`.
+    #[tokio::test]
+    async fn unpinned_download_without_version_document_installs() {
+        let pnpm_native = if cfg!(windows) { "package/pnpm.exe" } else { "package/pnpm" };
+        let bun_native = if cfg!(windows) { "package/bin/bun.exe" } else { "package/bin/bun" };
+        let cases = [
+            (
+                PackageManagerType::Pnpm,
+                "10.0.0",
+                "pnpm".to_string(),
+                create_tgz(&[("package/bin/pnpm.cjs", &version_cli("10.0.0"))]),
+            ),
+            (
+                PackageManagerType::Yarn,
+                "4.9.2",
+                "@yarnpkg/cli-dist".to_string(),
+                create_yarn_package_tgz(&version_cli("4.9.2"), None),
+            ),
+            (
+                PackageManagerType::Pnpm,
+                "12.0.0-beta.0",
+                get_pnpm_platform_package_name().unwrap().to_string(),
+                create_tgz(&[(pnpm_native, b"mock pnpm executable")]),
+            ),
+            (
+                PackageManagerType::Bun,
+                "1.2.0",
+                get_bun_platform_package_name().unwrap(),
+                create_tgz(&[(bun_native, b"mock bun executable")]),
+            ),
+        ];
+        for (kind, version, package, tgz) in cases {
+            let server = httpmock::MockServer::start();
+            let tarball = mount_tarball(&server, &package, version, tgz);
+            let vp_home = create_temp_dir();
+            let result = EnvConfig::with_vars_async(
+                [
+                    (env_vars::VP_HOME, vp_home.path().as_os_str()),
+                    (env_vars::NPM_CONFIG_REGISTRY, std::ffi::OsStr::new(&server.base_url())),
+                ],
+                |_| async { download_package_manager(kind, version, None).await },
+            )
+            .await;
+
+            result.unwrap_or_else(|error| panic!("{kind}@{version}: {error}"));
+            tarball.assert_hits(1);
         }
     }
 
