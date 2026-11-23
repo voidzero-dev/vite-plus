@@ -1877,10 +1877,7 @@ async fn download_package_manager_inner(
     .await
     .map_err(|err| {
         // status 404 means the version is not found, convert to PackageManagerVersionNotFound error
-        if let Error::Reqwest(e) = &err
-            && let Some(status) = e.status()
-            && status == reqwest::StatusCode::NOT_FOUND
-        {
+        if is_not_found(&err) {
             Error::PackageManagerVersionNotFound {
                 name: package_manager_type.to_string().into(),
                 version: version.clone(),
@@ -2080,12 +2077,9 @@ async fn download_bun_package_manager(
     )
     .await
     .map_err(|err| {
-        if let Error::Reqwest(e) = &err
-            && let Some(status) = e.status()
-            && status == reqwest::StatusCode::NOT_FOUND
-        {
+        if is_not_found(&err) {
             Error::PackageManagerVersionNotFound {
-                name: "bun".into(),
+                name: PackageManagerType::Bun.to_string().into(),
                 version: version.clone(),
                 url: platform_tgz_url.into(),
             }
@@ -2186,10 +2180,7 @@ async fn fetch_registry_integrity(
         .get_json(&metadata_url)
         .await
         .map_err(|err| {
-            if let Error::Reqwest(e) = &err
-                && let Some(status) = e.status()
-                && status == reqwest::StatusCode::NOT_FOUND
-            {
+            if is_not_found(&err) {
                 Error::PackageManagerVersionNotFound {
                     name: package_manager_type.to_string().into(),
                     version: version.clone(),
@@ -2295,12 +2286,9 @@ async fn download_pnpm_native_package_manager(
     )
     .await
     .map_err(|err| {
-        if let Error::Reqwest(e) = &err
-            && let Some(status) = e.status()
-            && status == reqwest::StatusCode::NOT_FOUND
-        {
+        if is_not_found(&err) {
             Error::PackageManagerVersionNotFound {
-                name: "pnpm".into(),
+                name: PackageManagerType::Pnpm.to_string().into(),
                 version: version.clone(),
                 url: platform_tgz_url.into(),
             }
@@ -2648,27 +2636,22 @@ mod tests {
     ) {
         use httpmock::prelude::*;
         let bin = package_manager_type.to_string();
-        let (platform_package, prefix) = match package_manager_type {
-            PackageManagerType::Bun => (get_bun_platform_package_name().unwrap(), "@oven/"),
-            PackageManagerType::Pnpm => {
-                (get_pnpm_platform_package_name().unwrap().to_string(), "@pnpm/")
-            }
+        let platform_package = match package_manager_type {
+            PackageManagerType::Bun => get_bun_platform_package_name().unwrap(),
+            PackageManagerType::Pnpm => get_pnpm_platform_package_name().unwrap().to_string(),
             other => panic!("{other} is not a platform-binary manager"),
         };
-        let basename = platform_package.strip_prefix(prefix).unwrap();
         server.mock(|when, then| {
             when.method(GET).path(format!("/{bin}/-/{bin}-{version}.tgz"));
             then.status(200).body(main_tgz);
         });
-        server.mock(|when, then| {
-            when.method(GET).path(format!("/{platform_package}/{version}"));
-            then.status(200)
-                .json_body(serde_json::json!({"dist": {"integrity": platform_integrity}}));
-        });
-        server.mock(|when, then| {
-            when.method(GET).path(format!("/{platform_package}/-/{basename}-{version}.tgz"));
-            then.status(200).body(platform_tgz);
-        });
+        mount_package_with_integrity(
+            server,
+            &platform_package,
+            version,
+            platform_tgz,
+            Some(platform_integrity),
+        );
     }
 
     fn sri(bytes: &[u8]) -> String {
@@ -4719,8 +4702,6 @@ mod tests {
 
             let case = format!("{kind}@{version} integrity={integrity:?}");
             if integrity.is_none() {
-                // Like the bun and pnpm 12+ platform tarballs, a registry without
-                // `dist.integrity` installs unverified.
                 result.unwrap_or_else(|error| panic!("{case}: {error}"));
                 continue;
             }
@@ -4855,15 +4836,13 @@ mod tests {
     #[tokio::test]
     async fn test_download_package_manager_pnpm_v12_native() {
         use httpmock::prelude::*;
-        use sha2::Sha512;
 
         let binary = b"mock pnpm executable";
         let tarball = create_tgz(&[(
             if cfg!(windows) { "package/pnpm.exe" } else { "package/pnpm" },
             binary,
         )]);
-        let integrity =
-            format!("sha512-{}", base64_simd::STANDARD.encode_to_string(Sha512::digest(&tarball)));
+        let integrity = sri(&tarball);
         let platform_package = get_pnpm_platform_package_name().unwrap();
         let platform_basename = platform_package.strip_prefix("@pnpm/").unwrap();
         let server = MockServer::start();
@@ -4922,14 +4901,8 @@ mod tests {
         let other_binary = b"other pnpm binary".to_vec();
         let genuine_platform = create_tgz(&[(binary_path, genuine_binary.as_slice())]);
         let other_platform = create_tgz(&[(binary_path, other_binary.as_slice())]);
-        let genuine_integrity = format!(
-            "sha512-{}",
-            base64_simd::STANDARD.encode_to_string(Sha512::digest(&genuine_platform))
-        );
-        let other_integrity = format!(
-            "sha512-{}",
-            base64_simd::STANDARD.encode_to_string(Sha512::digest(&other_platform))
-        );
+        let genuine_integrity = sri(&genuine_platform);
+        let other_integrity = sri(&other_platform);
         let other_registry = MockServer::start();
         mount_platform_registry(
             &other_registry,
@@ -5444,12 +5417,8 @@ mod tests {
         let platform_tgz = create_tgz(&[(binary_path, binary)]);
         let main_hash = format!("sha512.{}", hex::encode(Sha512::digest(&main_tgz)));
         let wrong_hash = format!("sha512.{}", hex::encode(Sha512::digest(b"other")));
-        let platform_integrity = format!(
-            "sha512-{}",
-            base64_simd::STANDARD.encode_to_string(Sha512::digest(&platform_tgz))
-        );
-        let wrong_integrity =
-            format!("sha512-{}", base64_simd::STANDARD.encode_to_string(Sha512::digest(b"other")));
+        let platform_integrity = sri(&platform_tgz);
+        let wrong_integrity = sri(b"other");
         let platform_package = get_bun_platform_package_name().unwrap();
         let platform_basename = platform_package.strip_prefix("@oven/").unwrap();
         // Keep other tests from borrowing this server while its connections use this runtime.
@@ -5540,10 +5509,7 @@ mod tests {
         let binary_path = if cfg!(windows) { "package/bin/bun.exe" } else { "package/bin/bun" };
         let platform_tgz = create_tgz(&[(binary_path, binary)]);
         let wrong_hash = format!("sha512.{}", hex::encode(Sha512::digest(b"other")));
-        let platform_integrity = format!(
-            "sha512-{}",
-            base64_simd::STANDARD.encode_to_string(Sha512::digest(&platform_tgz))
-        );
+        let platform_integrity = sri(&platform_tgz);
 
         let server = MockServer::start();
         mount_platform_registry(
@@ -5597,14 +5563,8 @@ mod tests {
         let other_binary = b"other bun binary".to_vec();
         let genuine_platform = create_tgz(&[(binary_path, genuine_binary.as_slice())]);
         let other_platform = create_tgz(&[(binary_path, other_binary.as_slice())]);
-        let genuine_integrity = format!(
-            "sha512-{}",
-            base64_simd::STANDARD.encode_to_string(Sha512::digest(&genuine_platform))
-        );
-        let other_integrity = format!(
-            "sha512-{}",
-            base64_simd::STANDARD.encode_to_string(Sha512::digest(&other_platform))
-        );
+        let genuine_integrity = sri(&genuine_platform);
+        let other_integrity = sri(&other_platform);
         // Both registries serve the same main tarball, so the same main pin
         // matches both. They differ only in the platform binary they serve.
         let other_registry = MockServer::start();
@@ -5680,10 +5640,7 @@ mod tests {
         let main_pin = format!("sha512.{}", hex::encode(Sha512::digest(&main_tgz)));
         let binary_path = if cfg!(windows) { "package/bin/bun.exe" } else { "package/bin/bun" };
         let platform_tgz = create_tgz(&[(binary_path, b"bun binary")]);
-        let integrity = format!(
-            "sha512-{}",
-            base64_simd::STANDARD.encode_to_string(Sha512::digest(&platform_tgz))
-        );
+        let integrity = sri(&platform_tgz);
 
         let server = MockServer::start();
         mount_platform_registry(
@@ -5917,8 +5874,6 @@ mod tests {
 
         let vp_home = create_temp_dir();
         let server = MockServer::start();
-        // A 200 body that is not a valid gzip: the download succeeds but
-        // extraction fails, so the install errors out after the temp dir exists.
         let tarball =
             mount_package(&server, "pnpm", "10.0.0", b"this is not a valid gzip archive".to_vec());
 
@@ -6120,7 +6075,6 @@ mod tests {
 
     #[tokio::test]
     async fn platform_archive_symlink_cannot_write_into_another_pins_install() {
-        use sha2::Sha512;
         let vp_home = create_temp_dir();
         let (pinned, _, _) = install_pinned_pnpm(vp_home.path()).await;
         let shim_before = fs::read(pinned.as_path().join("bin/pnpm")).unwrap();
@@ -6133,10 +6087,7 @@ mod tests {
             &[(binary_path, b"#!/bin/sh\necho planted\n")],
             &[("pnpm", link.as_str())],
         );
-        let platform_integrity = format!(
-            "sha512-{}",
-            base64_simd::STANDARD.encode_to_string(Sha512::digest(&platform_tgz))
-        );
+        let platform_integrity = sri(&platform_tgz);
         let main_tgz = create_tgz(&[(
             "package/package.json",
             br#"{"name":"pnpm","version":"12.0.0-beta.0"}"#,

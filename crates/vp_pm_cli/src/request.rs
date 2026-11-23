@@ -484,20 +484,6 @@ fn extract_tgz_file(
 }
 
 /// Download a tgz file from a URL and extract it to a target directory with optional hash verification.
-///
-/// # Arguments
-/// * `url` - The URL of the tgz file to download.
-/// * `target_dir` - The directory to extract the tgz file to.
-/// * `archive_file` - Optional single entry to extract, as a relative path of
-///   normal components. vp ignores every other entry, and `expected_hash`
-///   covers that one file instead of the tgz.
-/// * `expected_hash` - Optional expected hash, "algorithm.hex" or SRI "algorithm-base64" (see [`verify_file_hash`])
-/// * `message` - Optional message shown above a progress bar while downloading (see [`HttpClient::download_file`])
-/// * `npm_config` - npm configuration used for the download.
-///
-/// # Returns
-/// * `Ok(())` - If the tgz file is downloaded, verified (if hash provided) and extracted successfully.
-/// * `Err(e)` - If the tgz file is not downloaded, verified or extracted successfully.
 pub(crate) async fn download_and_extract_tgz_with_hash_and_config(
     url: &str,
     target_dir: impl AsRef<Path>,

@@ -354,7 +354,6 @@ async fn archive_entries_cannot_escape_the_install_directory() {
                 let extraction =
                     download_package_manager(PackageManagerType::Pnpm, PINNED_PNPM_VERSION, None)
                         .await;
-                // The managed directory holding this version's installs.
                 let install = package_manager_install_dir(
                     PackageManagerType::Pnpm,
                     PINNED_PNPM_VERSION,
