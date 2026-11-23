@@ -210,7 +210,7 @@ export function formatTargetDir(input: string): {
       error: 'Absolute path is not allowed',
     };
   }
-  if (targetDir.includes('..')) {
+  if (targetDir.split(/[\\/]/).includes('..')) {
     return {
       directory: '',
       packageName: '',
