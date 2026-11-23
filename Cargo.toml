@@ -291,7 +291,7 @@ temp-env = "0.3.6"
 tempfile = "3.14.0"
 terminal_size = "0.4.4"
 test-log = { version = "0.2.18", features = ["trace"] }
-testing_macros = "2.0.0"
+testing_macros = "3.0.0"
 thiserror = "2"
 tokio = { version = "1.52.3", default-features = false }
 tokio-util = "0.7"
