@@ -18,13 +18,49 @@ defaults:
     shell: bash
 
 jobs:
+  detect-changes:
+    if: >-
+      github.event.action != 'labeled' || github.event.label.name == 'test: install-e2e'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      formula: ${{ steps.filter.outputs.formula }}
+      installation: ${{ steps.filter.outputs.installation }}
+    steps:
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        if: github.event_name == 'pull_request'
+        id: filter
+        with:
+          filters: |
+            formula:
+              - 'HomebrewFormula/**'
+            installation:
+              - '.github/workflows/test-homebrew*.yml'
+              - '.github/scripts/*homebrew*.mjs'
+              - 'crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/command_self_setup_external/archive.mjs'
+              - 'crates/vp_cli_snapshots/tests/cli_snapshots/fixtures/command_self_setup_external/homebrew.mjs'
+              - 'crates/vp_global_cli/src/commands/env/doctor.rs'
+              - 'crates/vp_global_cli/src/commands/env/setup.rs'
+              - 'crates/vp_global_cli/src/commands/implode.rs'
+              - 'crates/vp_global_cli/src/commands/upgrade/mod.rs'
+              - 'crates/vp_global_cli/src/homebrew.rs'
+              - 'crates/vp_global_cli/src/js_executor.rs'
+              - 'crates/vp_global_cli/src/main.rs'
+              - 'crates/vp_global_cli/src/self_setup.rs'
+              - 'crates/vp_global_cli/src/self_setup/**'
+              - 'crates/vp_global_cli/src/upgrade_check.rs'
+              - 'packages/cli/generate-install-lockfile.ts'
+              - 'packages/tools/src/local-npm-registry.ts'
+
   check-formula:
+    needs: detect-changes
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request' &&
-       contains(github.event.pull_request.labels.*.name, 'test: install-e2e') &&
-       (github.event.action != 'labeled' || github.event.label.name == 'test: install-e2e'))
-    runs-on: ubuntu-24.04
+      contains(github.event.pull_request.labels.*.name, 'test: install-e2e') ||
+      needs.detect-changes.outputs.formula == 'true' ||
+      needs.detect-changes.outputs.installation == 'true'
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     outputs:
@@ -39,9 +75,6 @@ jobs:
           node-version-file: .node-version
           package-manager-cache: false
 
-      - name: Check formula publication rules
-        run: node --test .github/scripts/__tests__/homebrew-formula.mjs
-
       - name: Check whether the candidate targets a published release
         id: formula
         run: |
@@ -55,8 +88,12 @@ jobs:
           JS
 
   published:
-    needs: check-formula
-    if: needs.check-formula.outputs.published == 'true'
+    needs: [detect-changes, check-formula]
+    # CI already tests published artifacts on all four platforms for formula PRs,
+    # but its pull_request trigger does not include reopened.
+    if: >-
+      needs.check-formula.outputs.published == 'true' &&
+      (needs.detect-changes.outputs.formula != 'true' || github.event.action == 'reopened')
     permissions:
       contents: read
     uses: ./.github/workflows/test-homebrew-published.yml
