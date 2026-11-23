@@ -503,6 +503,7 @@ pub(crate) async fn download_and_extract_tgz_with_hash_and_config(
     target_dir: impl AsRef<Path>,
     archive_file: Option<&Path>,
     expected_hash: Option<&str>,
+    tarball_hash: Option<&str>,
     message: Option<&str>,
     npm_config: &NpmConfig,
 ) -> Result<(), Error> {
@@ -533,6 +534,7 @@ pub(crate) async fn download_and_extract_tgz_with_hash_and_config(
             &target_dir,
             archive_file,
             expected_hash,
+            tarball_hash,
             message,
             npm_config,
         )
@@ -557,6 +559,7 @@ async fn download_and_extract_tgz_once(
     target_dir: &Path,
     archive_file: Option<&Path>,
     expected_hash: Option<&str>,
+    tarball_hash: Option<&str>,
     message: Option<&str>,
     npm_config: &NpmConfig,
 ) -> Result<(), Error> {
@@ -573,6 +576,10 @@ async fn download_and_extract_tgz_once(
     let tgz_file = target_dir.join("package.tgz");
     let client = HttpClient::with_npm_config(0, 0, npm_config.clone());
     client.download_file(url, &tgz_file, message).await?;
+
+    if let Some(tarball_hash) = tarball_hash {
+        verify_file_hash(&tgz_file, tarball_hash).await?;
+    }
 
     if let Some(archive_file) = archive_file {
         // The hash covers one entry. The rest of the archive is unauthenticated,
@@ -1278,6 +1285,7 @@ mod tests {
             None,
             None,
             None,
+            None,
             &NpmConfig { values: Default::default() },
         )
         .await;
@@ -1318,6 +1326,7 @@ mod tests {
             None,
             None,
             None,
+            None,
             &NpmConfig { values: Default::default() },
         )
         .await;
@@ -1352,6 +1361,7 @@ mod tests {
             &target_dir,
             None,
             Some(wrong_hash),
+            None,
             None,
             &NpmConfig { values: Default::default() },
         )
