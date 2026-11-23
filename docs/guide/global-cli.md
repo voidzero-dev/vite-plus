@@ -73,6 +73,8 @@ On Windows, you can instead download and run [`vp-setup.exe`](https://setup.vite
 
 For macOS and Linux, see the [Homebrew tap guide](/guide/homebrew) for installation instructions.
 
+If your firewall restricts outbound connections, see [Network Hosts](#network-hosts).
+
 The installer uses the Node.js version pinned in the Vite+ repository's [`.node-version`](https://github.com/voidzero-dev/vite-plus/blob/main/.node-version) to install its JavaScript dependencies. Each Vite+ release embeds this version at build time. Development and CI use the same file, which the dependency-upgrade workflow keeps up to date. CI integrations can select another compatible version through [`VP_SETUP_NODE_VERSION`](#vp-setup-node-version).
 
 After installation, open a new shell and run:
@@ -215,6 +217,15 @@ Low-priority managed shims live in `<DATA>/fallback-bin`, where `<DATA>` is the 
   curl -fsSL https://vite.plus | NPM_CONFIG_REGISTRY=https://registry.npmmirror.com bash
   ```
 
+#### `VP_LEGACY_INSTALLER_URL`
+
+- **Purpose**: URL of the fallback script for older binaries that cannot run their own setup. The installer uses this URL only if the matching legacy script is missing from the installer's directory.
+- **Default**: `https://viteplus.dev/install-legacy.sh` on macOS and Linux, or `https://viteplus.dev/install-legacy.ps1` on Windows.
+- **Example**:
+  ```bash
+  VP_LEGACY_INSTALLER_URL=file:///opt/vite-plus/install-legacy.sh bash ./install.sh
+  ```
+
 #### `VP_NODE_MANAGER`
 
 - **Purpose**: Control Node.js version manager setup during installation.
@@ -265,7 +276,7 @@ These variables configure the installed Vite+ CLI. `VP_HOME` (above) also applie
 #### `VP_NODE_DIST_MIRROR`
 
 - **Purpose**: Node.js distribution mirror URL
-- **Default**: `https://nodejs.org/dist`
+- **Default**: `https://nodejs.org/dist` on macOS, Windows, and glibc Linux, or `https://unofficial-builds.nodejs.org/download/release` on musl Linux.
 - **Details**: [Custom Node.js Mirror](/guide/env#custom-node-js-mirror)
 
 #### `VP_NODE_VERSION`
@@ -481,6 +492,36 @@ Use Homebrew to [upgrade](/guide/upgrade#homebrew) or [remove](/guide/implode#ho
 `vp env doctor` identifies the Homebrew source, formula name, and binary path. It checks the `vp` command and the user shim directory on `PATH` separately. If only the shim directory is missing, follow its shell setup instructions to enable the shims.
 
 See the [official tap guide](/guide/homebrew) for registry configuration and migration instructions.
+
+## Network Hosts
+
+On Linux, you can copy `install.sh` from a connected machine and run `bash ./install.sh`. For a stable release using npm or pnpm with public registry packages, allow outbound HTTPS to the npm registry and the Node.js host for your platform.
+
+### Setup and everyday use
+
+| Default host                                                                                                    | When you need it                                                                                                                                                   | Override                                                                                             |
+| --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| `registry.npmjs.org`                                                                                            | Setup and `vp upgrade` fetch the CLI, pnpm, and dependencies. `vp env` downloads package managers. `vp install`, `vp dlx`, and `vp create` can fetch npm packages. | [`NPM_CONFIG_REGISTRY`](#npm-config-registry). Managed package-manager downloads also read `.npmrc`. |
+| `nodejs.org` on macOS, Windows, and glibc Linux. `unofficial-builds.nodejs.org` on musl Linux (such as Alpine). | Setup and `vp env` resolve versions such as `lts` and download Node.js.                                                                                            | [`VP_NODE_DIST_MIRROR`](#vp-node-dist-mirror)                                                        |
+
+`vp env list-remote` lists Node.js and package-manager versions. Use `vp env list-remote node` to query only the Node.js index. [Node.js signature verification](/guide/env#node-js-signature-verification) uses bundled keys and needs no keyserver.
+
+Interactive `vp` commands can check npm for updates even with all tools installed. Vite+ caches the result for 24 hours. Set `VP_NO_UPDATE_CHECK=1` to disable [automatic update checks](/guide/upgrade#automatic-update-checks).
+
+### Hosts for specific features
+
+| Feature                                | Additional hosts                                                           | When you need them                                                                                                                                                                         |
+| -------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| One-line installer                     | `vite.plus`, `viteplus.dev`                                                | `vite.plus` redirects to `install.sh` or `install.ps1` on `viteplus.dev`. A local copy skips this download. Older binaries may also need the [legacy installer](#vp-legacy-installer-url). |
+| Windows standalone installer           | `setup.viteplus.dev`, `github.com`, `release-assets.githubusercontent.com` | The setup page links to GitHub Releases, which redirects to the asset host. You can copy the executable from a connected machine.                                                          |
+| Stable [Homebrew tap](/guide/homebrew) | `github.com`, `release-assets.githubusercontent.com`                       | Homebrew fetches the tap and release archive on install or upgrade. First use also needs the npm and Node.js hosts above.                                                                  |
+| [Preview builds](#vp-pr-version)       | `registry-bridge.viteplus.dev`                                             | The bridge serves preview packages. Other dependencies can still come from `registry.npmjs.org`.                                                                                           |
+| GitHub templates for `vp create`       | `github.com`, `codeload.github.com`                                        | For templates such as `vite:library`, `degit` resolves the revision on GitHub and downloads the archive from codeload.                                                                     |
+| Yarn projects                          | `registry.yarnpkg.com`                                                     | Yarn fetches project dependencies here by default. In modern Yarn, set [`npmRegistryServer`](https://yarnpkg.com/configuration/yarnrc#npmRegistryServer) in `.yarnrc.yml` to change it.    |
+
+Project dependencies, generators, and tasks can contact other hosts. Generators can call `api.github.com`. Vite+ disables these lookups for [workspace Bingo generators](/guide/create#run-a-generator) with `--skip-requests`. See [which commands can use the network](/guide/ci#which-commands-can-use-the-network).
+
+For machines without public internet access, see [Install from private mirrors](#install-from-private-mirrors).
 
 ## Use It Without a Local Package
 
