@@ -3,5 +3,6 @@ name = "migration_upgrade_bun_catalog"
 vp = "global"
 steps = [
   { argv = ["vp", "migrate", "--no-interactive"], comment = "existing bun Vite+ catalog WORKSPACE gains a direct vite edge for bun#8406 (bun resolves catalog: only inside a workspace)", continue-on-failure = true },
-  { argv = ["vpt", "print-file", "package.json"], comment = "the direct vite edge is catalog: (resolving through the bun catalog), not a concrete alias", continue-on-failure = true },
+  { argv = ["vp", "migrate", "--no-interactive"], comment = "the second migration finds the workspace up to date", continue-on-failure = true },
+  { argv = ["vpt", "print-file", "package.json"], comment = "the direct Vite dependency and its override use the catalog, and the PostCSS pin survives both runs", continue-on-failure = true },
 ]

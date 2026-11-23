@@ -256,7 +256,7 @@ These management variables are installation choices, saved in Vite+'s config. Th
 
 #### Development variables
 
-Use `VP_LOCAL_TGZ` and `VP_LOCAL_BINARY` when you develop Vite+ itself. `VP_LOCAL_TGZ` specifies a local `vite-plus.tgz` file. `VP_LOCAL_BINARY` specifies a local `vp` binary. The installers use these files for the local build.
+Use `VP_LOCAL_TGZ` and `VP_LOCAL_BINARY` when you develop Vite+ itself. They supply a local `vite-plus.tgz` and `vp` binary. For production installations without public internet access, [use private mirrors](#install-from-private-mirrors).
 
 ### Runtime Variables
 
@@ -435,6 +435,32 @@ If you have more than one Nushell installation, make sure that the `nu` on `PATH
 For example, `VP_VERSION=1.0.0 vp-setup.exe --version 2.0.0` installs version 2.0.0.
 
 :::
+
+### Install from private mirrors
+
+To install the global CLI without public internet access, you need the URLs for a private npm registry and a Node.js mirror. Use a local copy of `install.ps1` or `vp-setup.exe` on Windows, or `install.sh` on macOS and Linux.
+
+On Windows, set `VP_VERSION` to the exact Vite+ version in your registry and replace the example URLs with your mirror URLs.
+
+```powershell
+$env:VP_VERSION = "<vite-plus-version>"
+$env:NPM_CONFIG_REGISTRY = "https://npm.corp.example/"
+$env:VP_NODE_DIST_MIRROR = "https://artifacts.corp.example/nodejs/dist"
+.\install.ps1
+```
+
+::: details Which files do the mirrors need?
+
+- **npm registry** (`NPM_CONFIG_REGISTRY`). The installer reads the global CLI package for your platform, such as `@voidzero-dev/vite-plus-cli-win32-x64-msvc` for Windows x64. The registry must preserve the published `dist.integrity` and `dist.attestations.provenance.predicateType` fields and serve the tarball at a URL your machine can reach. The bootstrap scripts need read access to this package without credentials from `.npmrc`. The registry must also serve the installer's pinned pnpm and the dependencies for your platform in the global CLI package's `vp-install-lock.yaml`.
+- **Node.js mirror** (`VP_NODE_DIST_MIRROR`). The installer expects the Node.js distribution layout, including `index.json`, the archive for your platform, and the checksum files. The `vpNodeVersion` field in the global CLI package specifies the default Node.js version. See [Custom Node.js Mirror](/guide/env#custom-node-js-mirror).
+
+You can also find `vp-install-lock.yaml` next to the `vp` binary in the [release archive](https://github.com/voidzero-dev/vite-plus/releases) for the version you plan to install. To find the installer's pnpm version, check `PINNED_PNPM_VERSION` in `crates/vp_setup/src/install.rs` at the same release tag.
+
+:::
+
+The development variables `VP_LOCAL_TGZ` and `VP_LOCAL_BINARY` supply only the local build. Setup still needs Node.js, pnpm, and the CLI's dependencies.
+
+If you only need the CLI in your project, you can [install `vite-plus` from a private registry](/guide/ci#offline-ci-with-a-private-registry).
 
 ### Homebrew
 

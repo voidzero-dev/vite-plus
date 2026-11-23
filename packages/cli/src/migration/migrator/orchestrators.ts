@@ -18,6 +18,7 @@ import {
   createCatalogDependencyResolver,
   dropDeadOxlintPluginsDependency,
   dropRemovePackageOverrideKeys,
+  ensurePackageJsonOverrides,
   ensurePnpmWorkspaceExoticSubdepsSetting,
   ensurePnpmWorkspacePackages,
   findYarnWorkspaceHoisting,
@@ -156,7 +157,7 @@ export function rewriteStandaloneProject(
     workspaceInfo.downloadPackageManager.version,
   );
   editJsonFile<{
-    overrides?: Record<string, string>;
+    overrides?: Record<string, unknown>;
     resolutions?: Record<string, string>;
     devDependencies?: Record<string, string>;
     dependencies?: Record<string, string>;
@@ -194,10 +195,7 @@ export function rewriteStandaloneProject(
         ...managed,
       };
     } else if (packageManager === PackageManager.npm || packageManager === PackageManager.bun) {
-      pkg.overrides = {
-        ...pkg.overrides,
-        ...managed,
-      };
+      pkg.overrides = ensurePackageJsonOverrides(pkg.overrides, managed).overrides;
       if (packageManager === PackageManager.bun) {
         // Bun walks transitive peer-deps before resolving overrides; vitest
         // 4.1.9 declares peer `vite ^6 || ^7 || ^8` and aborts with
@@ -459,15 +457,6 @@ export function rewriteMonorepo(
       supportCatalog,
       yarnSupportsPreapprovedPackages(workspaceInfo.downloadPackageManager.version),
     );
-  } else if (workspaceInfo.packageManager === PackageManager.bun && supportCatalog) {
-    rewriteBunCatalog(
-      workspaceInfo.rootDir,
-      workspaceUsesVitest,
-      vitestEcosystemPackages,
-      usesWebdriverio,
-      workspaceInfo.downloadPackageManager.version,
-      browserCatalogAdditions,
-    );
   }
   rewriteRootWorkspacePackageJson(
     workspaceInfo.rootDir,
@@ -501,6 +490,16 @@ export function rewriteMonorepo(
         [VITE_PLUS_NAME]: VITE_PLUS_VERSION,
       });
     }
+  } else if (workspaceInfo.packageManager === PackageManager.bun && supportCatalog) {
+    // Restore managed overrides such as `@vitest/browser` after root cleanup.
+    rewriteBunCatalog(
+      workspaceInfo.rootDir,
+      workspaceUsesVitest,
+      vitestEcosystemPackages,
+      usesWebdriverio,
+      workspaceInfo.downloadPackageManager.version,
+      browserCatalogAdditions,
+    );
   }
   // (mergeViteConfigFiles below will sanitize the merged lint config
   // against this workspace's full package set.)

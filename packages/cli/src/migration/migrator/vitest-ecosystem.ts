@@ -356,6 +356,48 @@ export function managedOverridePackages(
     : managed;
 }
 
+function removePackageJsonVitestPin(overrides: Record<string, unknown>): boolean {
+  const vitest = overrides.vitest;
+  if (!isPlainRecord(vitest)) {
+    return removeManagedVitestEntry(overrides);
+  }
+  if (!VITEST_IS_MANAGED_OVERRIDE || typeof vitest['.'] !== 'string') {
+    return false;
+  }
+  const children = { ...vitest };
+  delete children['.'];
+  if (Object.keys(children).length > 0) {
+    overrides.vitest = children;
+  } else {
+    delete overrides.vitest;
+  }
+  return true;
+}
+
+// In npm and Bun's object form, "." overrides the package itself. All other keys
+// constrain its children and must survive a change to the package's own pin.
+export function ensurePackageJsonOverrides(
+  overrides: Record<string, unknown> | undefined,
+  managed: Record<string, string>,
+  selectSpec?: (name: string, current: string | undefined, target: string) => string,
+): { overrides: Record<string, unknown>; changed: boolean } {
+  const next = { ...overrides };
+  let changed = !('vitest' in managed) && removePackageJsonVitestPin(next);
+
+  for (const [name, target] of Object.entries(managed)) {
+    const entry = next[name];
+    const nested = isPlainRecord(entry);
+    const current = nested ? entry['.'] : entry;
+    const spec =
+      selectSpec?.(name, typeof current === 'string' ? current : undefined, target) ?? target;
+    if (current !== spec) {
+      next[name] = nested ? { ...entry, '.': spec } : spec;
+      changed = true;
+    }
+  }
+  return { overrides: next, changed };
+}
+
 // True iff a dependency field lists a vitest ecosystem package — any name that
 // contains `vitest` other than bare `vitest` itself (e.g. `@vitest/coverage-v8`,
 // `@vitest/browser-playwright`, `vitest-browser-svelte`). A bare `vitest`
@@ -501,7 +543,7 @@ export function projectUsesVitestDirectly(
 // `bare`. npm also accepts a range in an override key, so a user-authored
 // `"vitest@*"` in npm `overrides` belongs to the user. Do not delete it.
 export function removeManagedVitestEntry(
-  record: Record<string, string> | undefined,
+  record: Record<string, unknown> | undefined,
   keyStyle: ManagedOverrideKeyStyle = 'bare',
 ): boolean {
   if (!VITEST_IS_MANAGED_OVERRIDE || !record) {
