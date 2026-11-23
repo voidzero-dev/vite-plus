@@ -195,30 +195,14 @@ jobs:
           cache-key: windows-cross
           tools: cargo-nextest
 
-      # `cargo xwin env` resolves the rustflags configured in
-      # .cargo/config.toml (including the cfg-based Windows section), appends
-      # its -Lnative Windows SDK paths, and re-exports the result as
-      # CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS, so plain cargo
-      # invocations cross-compile exactly like `cargo xwin` would. It renders
-      # its intended *removal* of RUSTFLAGS as `export RUSTFLAGS="";`, which
-      # must become a real unset: a set RUSTFLAGS takes precedence over the
-      # target-specific rustflags and would shadow them.
+      # Unset the empty RUSTFLAGS from `cargo xwin env` so Cargo merges
+      # xwin's target flags with the Windows flags in .cargo/config.toml.
       - name: Check Windows target
         run: |
           eval "$(cargo xwin env --target x86_64-pc-windows-msvc | grep '^export ')"
           unset RUSTFLAGS
-          # Fail fast if cargo-xwin ever stops folding the repo's cfg-based
-          # Windows rustflags (--cfg tokio_unstable, /STACK:8388608) into the
-          # target env var; a dropped /STACK would be a silent runtime
-          # difference in the shipped test binaries.
-          case "$CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS" in
-            *tokio_unstable*STACK:8388608*) ;;
-            *)
-              echo "::error::cargo-xwin dropped the .cargo/config.toml Windows rustflags: $CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS"
-              exit 1
-              ;;
-          esac
           export CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS="$CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS -D warnings"
+          cargo rustc -Z unstable-options --target x86_64-pc-windows-msvc --print cfg | grep -Fx tokio_unstable
           cargo check --all-targets --all-features --target x86_64-pc-windows-msvc
 
       # Keep the package selection in sync with the `test` recipe in justfile.
@@ -252,6 +236,9 @@ jobs:
           unset RUSTFLAGS
           cargo nextest archive -p vp_cli_snapshots \
             --target x86_64-pc-windows-msvc --archive-file windows-snapshot-tests.tar.zst
+          # Verify that the linker applied /STACK:8388608 to the snapshot helper.
+          objdump -p "${CARGO_TARGET_DIR:-target}/x86_64-pc-windows-msvc/debug/vpt.exe" \
+            | grep -E '^SizeOfStackReserve[[:space:]]+0*800000$'
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
