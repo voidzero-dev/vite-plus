@@ -291,7 +291,7 @@ temp-env = "0.3.6"
 tempfile = "3.14.0"
 terminal_size = "0.4.4"
 test-log = { version = "0.2.18", features = ["trace"] }
-testing_macros = "2.0.0"
+testing_macros = "3.0.0"
 thiserror = "2"
 tokio = { version = "1.52.3", default-features = false }
 tokio-util = "0.7"
@@ -326,6 +326,7 @@ vt_snapshot_test = { git = "https://github.com/voidzero-dev/vite-task.git", rev 
 vt_str = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "6a23096aa2f04eb59225c6467b15c2965ee6ae33" }
 vt_workspace = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "6a23096aa2f04eb59225c6467b15c2965ee6ae33" }
 walkdir = "2.5.0"
+wax = "0.7.0"
 webpki-root-certs = "1.0.10"
 which = "8.0.6"
 winreg = "0.56.0"

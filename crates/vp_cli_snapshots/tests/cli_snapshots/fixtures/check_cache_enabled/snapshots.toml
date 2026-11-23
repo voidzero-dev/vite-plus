@@ -9,3 +9,13 @@ steps = [
   { argv = ["vp", "run", "check"], comment = "third run should be cache miss after new file added", continue-on-failure = true },
   { argv = ["vp", "run", "check"], envs = [["VP_SKIP_STATIC_CONFIG", "1"]], comment = "changing VP_SKIP_STATIC_CONFIG should be a cache miss", continue-on-failure = true },
 ]
+
+[[case]]
+name = "check_cache_chdir"
+vp = "local"
+skip-platforms = ["windows"]
+comment = "A leading -C keeps the cache config of vp check, so its tracked env still invalidates the cache (#3503)."
+steps = [
+  { argv = ["vp", "run", "check:chdir"], comment = "first run should be cache miss", continue-on-failure = true },
+  { argv = ["vp", "run", "check:chdir"], envs = [["VP_SKIP_STATIC_CONFIG", "1"]], comment = "changing VP_SKIP_STATIC_CONFIG should be a cache miss", continue-on-failure = true },
+]
