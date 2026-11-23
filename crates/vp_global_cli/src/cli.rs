@@ -937,13 +937,21 @@ async fn managed_update(
         Some(managed_specs)
     };
 
-    let report = global::outdated::get_outdated_packages(
-        &packages.unwrap_or_default(),
-        concurrency * 3,
-        latest,
-        global::outdated::LookupMode::WantedOnly,
-    )
-    .await?;
+    let report = match packages {
+        // Only local or not-yet-installed arguments: an empty list would make the lookup cover every package.
+        Some(specs) if specs.is_empty() => {
+            global::outdated::OutdatedReport { outdated: Vec::new(), failures: Vec::new() }
+        }
+        packages => {
+            global::outdated::get_outdated_packages(
+                &packages.unwrap_or_default(),
+                concurrency * 3,
+                latest,
+                global::outdated::LookupMode::WantedOnly,
+            )
+            .await?
+        }
+    };
     for (_, message) in &report.failures {
         output::warn(&format!("{message}; skipping"));
     }
