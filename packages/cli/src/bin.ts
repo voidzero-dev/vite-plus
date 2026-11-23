@@ -11,9 +11,10 @@
  */
 
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { isMainThread } from 'node:worker_threads';
 
-import { ensureBlockingStdio, run } from '../binding/index.js';
+import { type DevCommand, ensureBlockingStdio, run } from '../binding/index.js';
 import { maybePrintCommandHelp } from './help.ts';
 import { applyToolInitConfigToViteConfig, inspectInitCommand } from './init-config.ts';
 import { doc } from './resolve-doc.ts';
@@ -63,6 +64,28 @@ function getErrorMessage(err: unknown): string {
   }
 
   return String(err);
+}
+
+/**
+ * Run the dev server command in this process, as `vite` would run. The
+ * launcher's process ID is then the dev server's, so a signal to it reaches
+ * Vite, and Node.js options such as `--inspect` or `--cpu-prof` cover Vite.
+ */
+async function runInProcess(command: DevCommand): Promise<void> {
+  Object.assign(process.env, command.env);
+  process.chdir(command.cwd);
+  process.argv = [process.execPath, command.entry, ...command.args];
+  // Vite writes through this process's stdio. Let pipe writes queue, as they
+  // do when Vite opens its own stdio, so a slow reader cannot stall the server.
+  if (process.platform !== 'win32') {
+    for (const stream of [process.stdout, process.stderr]) {
+      if (!stream.isTTY) {
+        /* oxlint-disable-next-line no-underscore-dangle -- Node.js has no public API for this */
+        (stream as StdioStream)._handle?.setBlocking?.(false);
+      }
+    }
+  }
+  await import(pathToFileURL(command.entry).href);
 }
 
 // Parse command line arguments
@@ -165,7 +188,7 @@ if (maybePrintCommandHelp(args)) {
       process.exit(0);
     }
 
-    const exitCode = await run({
+    const { exitCode, devCommand } = await run({
       nodeExecPath: process.execPath,
       lint,
       pack,
@@ -176,8 +199,8 @@ if (maybePrintCommandHelp(args)) {
       toolchainManifestPath: path.join(cliDistDir, 'toolchain.json'),
       vitePlusPackagePath,
       // Only task/config-metadata commands need this resolver. Importing it
-      // eagerly also loads Vitest and Vite in the parent of `vp dev`, before
-      // the separate Vite process even starts.
+      // eagerly also loads Vitest and Vite before `vp dev` starts Vite in
+      // this process.
       resolveUniversalViteConfig: async (err, cwd) => {
         const { resolveUniversalViteConfig } = await import('./resolve-vite-config.js');
         const config = await resolveUniversalViteConfig(err, cwd);
@@ -187,6 +210,9 @@ if (maybePrintCommandHelp(args)) {
       },
       nodeVersion: process.version,
       explicitChdir,
+      // A Worker cannot change the working directory, so it keeps Vite in a
+      // child process. Rust decides which command can run in this process.
+      devInProcess: isMainThread,
       args: rustCliArgs,
     });
 
@@ -220,7 +246,12 @@ if (maybePrintCommandHelp(args)) {
       }
     }
 
-    process.exit(finalExitCode);
+    if (devCommand) {
+      // Vite keeps this process running and exits by itself.
+      await runInProcess(devCommand);
+    } else {
+      process.exit(finalExitCode);
+    }
   } catch (err) {
     errorMsg(getErrorMessage(err));
     process.exit(1);

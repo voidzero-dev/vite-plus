@@ -5,7 +5,7 @@ use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use vt::{Command, ExitStatus, config::user::UserCacheConfig, plan_request::SyntheticPlanRequest};
 use vt_casefold::EnvName;
-use vt_path::AbsolutePath;
+use vt_path::{AbsolutePath, AbsolutePathBuf};
 use vt_str::Str;
 
 /// Environment variables for a spawned command. Names compare by the platform's
@@ -171,6 +171,9 @@ pub type ViteConfigResolverFn = Arc<
 /// CLI options containing JavaScript resolver functions (using boxed futures for simplicity)
 pub struct CliOptions {
     pub node_exec_path: Arc<OsStr>,
+    /// When set, `vp dev` returns [`Outcome::InProcess`] and starts no
+    /// process, so the launcher can run Vite in its own process.
+    pub in_process_dev: bool,
     pub lint: BoxedResolverFn,
     pub fmt: BoxedResolverFn,
     pub vite: BoxedResolverFn,
@@ -183,6 +186,25 @@ pub struct CliOptions {
     /// Host Node.js version (`process.version`), used for the package-manager
     /// lifecycle env user agent.
     pub node_version: Option<String>,
+}
+
+/// A command that the launcher runs in its own process. The entry point is a
+/// JavaScript file for the launcher's Node.js.
+#[derive(Debug)]
+pub struct InProcessCommand {
+    pub entry: Str,
+    /// The arguments after the entry point.
+    pub args: Vec<Str>,
+    pub cwd: AbsolutePathBuf,
+    /// Environment variables that differ from the launcher's environment.
+    pub env: Vec<(Str, Str)>,
+}
+
+/// What a command did: it ran and exited, or it is for the launcher to run.
+#[derive(Debug)]
+pub enum Outcome {
+    Exit(ExitStatus),
+    InProcess(InProcessCommand),
 }
 
 /// A resolved subcommand ready for execution.
