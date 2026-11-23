@@ -1,0 +1,8 @@
+{
+  "name": "command-yarn-path",
+  "private": true,
+  "packageManager": "yarn@2.4.2",
+  "dependencies": {
+    "is-number": "7.0.0"
+  }
+}

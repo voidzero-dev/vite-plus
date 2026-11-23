@@ -1,0 +1,10 @@
+{
+  "name": "cwd-flag-script-runtime",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build:app": "vp -C packages/app build"
+  }
+}
