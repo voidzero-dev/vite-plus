@@ -138,7 +138,7 @@ mod tests {
         assert!(rc(&home, ".yarnrc.yml", b"yarnPath: /yarn.cjs\n"));
         assert!(rc(&project, ".yarnrc", b"yarn-path: \".yarn/releases/yarn.cjs\"\n"));
         assert!(rc(&project, ".yarnrc.yml", b"yarnPath:\n  onConflict: reset\n  value: a.cjs\n"));
-        assert!(rc(&project, ".yarnrc.yml", b"# caf\xe9\nyarnPath: ${RELEASE:-a}.cjs\n"));
+        assert!(rc(&project, ".yarnrc.yml", b"# \xff\nyarnPath: ${RELEASE:-a}.cjs\n"));
 
         fs::write(project.join(".custom.yml"), "yarnPath: yarn.cjs\n").unwrap();
         assert!(!check(&sub, &home, &[]));
