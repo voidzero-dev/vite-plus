@@ -2181,8 +2181,9 @@ enum MissingVersionDocument {
 /// pin against the main tarball and discards it, so a bad pin still fails, as
 /// it does for pnpm 11 and earlier. The registry integrity is then the only
 /// check of the platform executable. A pinned install therefore fails when the
-/// registry does not serve the platform version document, and never adds an
-/// unchecked executable to the verified namespace.
+/// registry does not serve the platform version document, so that case adds no
+/// unchecked executable to the verified namespace. A version document that
+/// omits `dist.integrity` still continues without the check (#3554).
 async fn verify_pin_and_fetch_platform_integrity(
     package_manager_type: PackageManagerType,
     platform_package_name: &str,
