@@ -405,9 +405,10 @@ describe('detectExistingAgentTargetPaths', () => {
 
   it('ignores symlinked agent files', async () => {
     const dir = await createProjectDir();
+    await mockFs.writeFile(path.join(dir, 'AGENTS.md'), '# Agents');
     await mockFs.symlink('AGENTS.md', path.join(dir, 'CLAUDE.md'));
 
-    expect(detectExistingAgentTargetPaths(dir)).toBeUndefined();
+    expect(detectExistingAgentTargetPaths(dir)).toEqual(['AGENTS.md']);
   });
 });
 
