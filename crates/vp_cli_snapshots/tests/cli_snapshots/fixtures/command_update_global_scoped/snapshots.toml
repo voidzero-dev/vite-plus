@@ -1,0 +1,13 @@
+[[case]]
+name = "command_update_global_scoped"
+vp = "global"
+local-registry = true
+steps = [
+  { tty = false, argv = ["vp", "install", "-g", "testnpm2@1.0.0"], snapshot = false },
+  { argv = ["vpt", "json-edit", "$VP_HOME/packages/testnpm2.json", "versionSpec", "null"], comment = "make testnpm2 outdated so an unscoped lookup would update it", snapshot = false },
+  { tty = false, argv = ["vp", "update", "-g", "./local-tool"], comment = "should update only the local package", continue-on-failure = true },
+  { argv = ["vp", "list", "-g", "testnpm2"], comment = "should keep testnpm2 at 1.0.0", continue-on-failure = true },
+]
+after = [
+  { tty = false, argv = ["vp", "remove", "-g", "testnpm2", "vp-snap-local-tool"], continue-on-failure = true },
+]

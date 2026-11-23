@@ -110,12 +110,14 @@ fn pin(tgz: &[u8]) -> String {
 /// mocks stay active without their handles, like the runner's other cases.
 fn mount_pnpm_registry(server: &MockServer, tgz: Vec<u8>) {
     let tarball_url = format!("{}/pnpm/-/pnpm-{PINNED_PNPM_VERSION}.tgz", server.base_url());
+    let integrity =
+        format!("sha512-{}", base64_simd::STANDARD.encode_to_string(Sha512::digest(&tgz)));
     server.mock(|when, then| {
         when.method(GET).path(format!("/pnpm/{PINNED_PNPM_VERSION}"));
         then.status(200).json_body(serde_json::json!({
             "name": "pnpm",
             "version": PINNED_PNPM_VERSION,
-            "dist": { "tarball": tarball_url },
+            "dist": { "tarball": tarball_url, "integrity": integrity },
         }));
     });
     server.mock(|when, then| {
@@ -347,16 +349,25 @@ async fn archive_entries_cannot_escape_the_install_directory() {
     for (vector, archive) in [("traversal", traversal), ("symlink", through_symlink)] {
         let server = MockServer::start();
         mount_pnpm_registry(&server, archive);
-        let ((escaped, extraction), _vp_home) = in_project_env(&server.base_url(), || async {
-            let extraction =
-                download_package_manager(PackageManagerType::Pnpm, PINNED_PNPM_VERSION, None).await;
-            // The managed directory holding this version's installs.
-            let install =
-                package_manager_install_dir(PackageManagerType::Pnpm, PINNED_PNPM_VERSION, None);
-            let manager_dir = install.parent().unwrap().parent().unwrap();
-            (manager_dir.join(escape_name).as_path().exists(), format!("{extraction:?}"))
-        })
-        .await;
+        let ((escaped, integrity_failed, extraction), _vp_home) =
+            in_project_env(&server.base_url(), || async {
+                let extraction =
+                    download_package_manager(PackageManagerType::Pnpm, PINNED_PNPM_VERSION, None)
+                        .await;
+                let install = package_manager_install_dir(
+                    PackageManagerType::Pnpm,
+                    PINNED_PNPM_VERSION,
+                    None,
+                );
+                let manager_dir = install.parent().unwrap().parent().unwrap();
+                (
+                    manager_dir.join(escape_name).as_path().exists(),
+                    matches!(&extraction, Err(error) if error.is_integrity_failure()),
+                    format!("{extraction:?}"),
+                )
+            })
+            .await;
+        assert!(!integrity_failed, "the {vector} archive must reach extraction: {extraction}");
         assert!(
             !escaped,
             "a {vector} entry wrote a file beside the version directory (extraction: {extraction})"
