@@ -95,6 +95,16 @@ pub enum Error {
     #[error(transparent)]
     PackageManagerHashMismatch(#[from] Box<PackageManagerHashMismatch>),
 
+    /// A pinned install of a platform-binary package manager (bun, pnpm >= 12)
+    /// has no integrity to verify against: the `packageManager` hash covers
+    /// only the main tarball, and the registry serves no `dist.integrity` for
+    /// the platform package whose executable the install runs.
+    #[error(
+        "The registry at {url} provides no `dist.integrity` for {name}@{version}, and the `packageManager` hash does not cover this platform executable\n\
+         Use a registry that serves `dist.integrity`, or remove the `packageManager` hash to install without the check"
+    )]
+    PackageManagerIntegrityUnavailable { name: Str, version: Str, url: Str },
+
     #[error("Invalid hash format: {0}")]
     InvalidHashFormat(Str),
 

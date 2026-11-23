@@ -2052,6 +2052,22 @@ async fn download_bun_package_manager(
     )
     .await?;
 
+    // A declared pin asks for a verified install, and this integrity is the
+    // only check of the executed binary. Without it the install would publish
+    // an unverified directory into the verified namespace, which later runs
+    // reuse with no check. Fail instead; an unpinned install keeps the
+    // tolerant fallback so a mirror without `dist.integrity` keeps working.
+    let platform_hash = match (expected_hash, platform_hash) {
+        (Some(_), None) => {
+            return Err(Error::PackageManagerIntegrityUnavailable {
+                name: platform_package_name.as_str().into(),
+                version: version.clone(),
+                url: npm_config.package_version_url(&platform_package_name, version),
+            });
+        }
+        (_, platform_hash) => platform_hash,
+    };
+
     // Stage the download in a temp directory beside the version directory, not
     // inside it, so a reader scanning key subdirectories never sees the staging
     // copy. Only create the manager directory now, so a failed install leaves no
@@ -2169,6 +2185,12 @@ struct RegistryDist {
     integrity: Option<Str>,
 }
 
+/// The registry's `dist.integrity` for one package version, if it serves one.
+///
+/// Returns `Ok(None)` when the version document omits the field. The caller
+/// decides whether a download without that check is acceptable: a pinned
+/// platform-binary install must not accept `None`, because its pin covers
+/// only the main tarball, not the executed platform binary.
 async fn fetch_registry_integrity(
     package_manager_type: PackageManagerType,
     package_name: &str,
@@ -2260,6 +2282,22 @@ async fn download_pnpm_native_package_manager(
         npm_config,
     )
     .await?;
+
+    // A declared pin asks for a verified install, and this integrity is the
+    // only check of the executed binary. Without it the install would publish
+    // an unverified directory into the verified namespace, which later runs
+    // reuse with no check. Fail instead; an unpinned install keeps the
+    // tolerant fallback so a mirror without `dist.integrity` keeps working.
+    let platform_hash = match (expected_hash, platform_hash) {
+        (Some(_), None) => {
+            return Err(Error::PackageManagerIntegrityUnavailable {
+                name: platform_package_name.into(),
+                version: version.clone(),
+                url: npm_config.package_version_url(platform_package_name, version),
+            });
+        }
+        (_, platform_hash) => platform_hash,
+    };
 
     // Stage the download in a temp directory beside the version directory, not
     // inside it, so a reader scanning key subdirectories never sees the staging
@@ -5403,6 +5441,109 @@ mod tests {
             assert_eq!(with_bun_baseline(name, true), expected);
         }
         assert_eq!(with_bun_baseline("@oven/bun-linux-x64", false), "@oven/bun-linux-x64");
+    }
+
+    /// A pinned native (platform-binary) install needs the registry's
+    /// `dist.integrity`, because the pin covers only the main tarball; without
+    /// the field it must not publish into the verified namespace. An unpinned
+    /// install keeps the tolerant fallback, so a mirror without
+    /// `dist.integrity` keeps working (#3547, #3553).
+    #[tokio::test]
+    async fn pinned_native_install_requires_platform_integrity() {
+        use httpmock::prelude::*;
+        use sha2::Sha512;
+
+        for (kind, version, binary_path, native_path) in [
+            (
+                PackageManagerType::Pnpm,
+                "12.0.0-beta.0",
+                if cfg!(windows) { "package/pnpm.exe" } else { "package/pnpm" },
+                if cfg!(windows) { "bin/pnpm.native.exe" } else { "bin/pnpm.native" },
+            ),
+            (
+                PackageManagerType::Bun,
+                "1.2.0",
+                if cfg!(windows) { "package/bin/bun.exe" } else { "package/bin/bun" },
+                if cfg!(windows) { "bin/bun.native.exe" } else { "bin/bun.native" },
+            ),
+        ] {
+            let bin = kind.to_string();
+            let main_tgz = create_tgz(&[("package/package.json", br#"{"name":"stub"}"#)]);
+            let main_pin = format!("sha512.{}", hex::encode(Sha512::digest(&main_tgz)));
+            let binary = b"platform executable".to_vec();
+            let platform_tgz = create_tgz(&[(binary_path, binary.as_slice())]);
+            let platform_package = match kind {
+                PackageManagerType::Pnpm => get_pnpm_platform_package_name().unwrap().to_string(),
+                PackageManagerType::Bun => get_bun_platform_package_name().unwrap(),
+                other => panic!("{other} is not a platform-binary manager"),
+            };
+            let platform_basename = platform_package.rsplit('/').next().unwrap();
+
+            let server = MockServer::start();
+            let main_tarball = server.mock(|when, then| {
+                when.method(GET).path(format!("/{bin}/-/{bin}-{version}.tgz"));
+                then.status(200).body(main_tgz.clone());
+            });
+            // The platform version document omits `dist.integrity`.
+            let metadata = server.mock(|when, then| {
+                when.method(GET).path(format!("/{platform_package}/{version}"));
+                then.status(200).json_body(serde_json::json!({"dist": {}}));
+            });
+            let platform_tarball = server.mock(|when, then| {
+                when.method(GET)
+                    .path(format!("/{platform_package}/-/{platform_basename}-{version}.tgz"));
+                then.status(200).body(platform_tgz.clone());
+            });
+
+            let vp_home = create_temp_dir();
+            EnvConfig::with_vars_async(
+                [
+                    (env_vars::VP_HOME, vp_home.path().as_os_str()),
+                    (env_vars::NPM_CONFIG_REGISTRY, std::ffi::OsStr::new(&server.base_url())),
+                ],
+                |_| async {
+                    // A pinned install fails instead of caching an unchecked
+                    // executable in the verified namespace.
+                    let Err(Error::PackageManagerIntegrityUnavailable {
+                        name,
+                        version: error_version,
+                        url,
+                    }) = download_package_manager(kind, version, Some(main_pin.as_str())).await
+                    else {
+                        panic!("a pinned {bin} install without `dist.integrity` must fail");
+                    };
+                    assert_eq!(name, platform_package.as_str());
+                    assert_eq!(error_version, version);
+                    assert_eq!(
+                        url.as_str(),
+                        format!("{}/{platform_package}/{version}", server.base_url())
+                    );
+                    assert!(
+                        installed_package_manager_dir(kind, version).is_none(),
+                        "a pinned install without a platform integrity must not be installed"
+                    );
+                    main_tarball.assert_hits(1);
+                    metadata.assert_hits(1);
+                    platform_tarball.assert_hits(0);
+
+                    // An unpinned install still proceeds without the check and
+                    // stays out of the verified namespace.
+                    let (install_dir, _, _) =
+                        download_package_manager(kind, version, None).await.unwrap_or_else(|err| {
+                            panic!("an unpinned {bin} install keeps the fallback: {err}")
+                        });
+                    assert!(
+                        !install_dir.to_string().contains(VERIFIED_NAMESPACE),
+                        "an unpinned install stays on the version directory: {install_dir:?}"
+                    );
+                    assert_eq!(fs::read(install_dir.join(native_path)).unwrap(), binary);
+                    main_tarball.assert_hits(1);
+                    metadata.assert_hits(2);
+                    platform_tarball.assert_hits(1);
+                },
+            )
+            .await;
+        }
     }
 
     #[tokio::test]
