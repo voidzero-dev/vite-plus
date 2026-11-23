@@ -1,0 +1,7 @@
+{
+  "name": "vp-snap-local-tool",
+  "version": "0.0.0",
+  "bin": {
+    "vp-snap-local-tool": "./bin.js"
+  }
+}
