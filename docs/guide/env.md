@@ -310,7 +310,10 @@ Selectors omit unselected top-level fields or PM families. Registry listing is a
 
 ## Custom Node.js Mirror
 
-By default, Vite+ downloads Node.js from `https://nodejs.org/dist`. If you're behind a corporate proxy or need to use an internal mirror (e.g., Artifactory), set the `VP_NODE_DIST_MIRROR` environment variable:
+Set `VP_NODE_DIST_MIRROR` to use a mirror for Node.js version lookups and downloads. The default URL depends on your platform.
+
+- macOS, Windows, and glibc Linux use `https://nodejs.org/dist`.
+- musl Linux uses `https://unofficial-builds.nodejs.org/download/release`.
 
 ```bash
 # Install a specific version from your custom mirror
@@ -322,6 +325,8 @@ VP_NODE_DIST_MIRROR=https://my-mirror.example.com/nodejs/dist vp env default lts
 # Set it permanently in your shell profile (.bashrc, .zshrc, etc.)
 echo 'export VP_NODE_DIST_MIRROR=https://my-mirror.example.com/nodejs/dist' >> ~/.zshrc
 ```
+
+For firewall rules, see [Network Hosts](/guide/global-cli#network-hosts).
 
 ## Node.js Signature Verification
 
